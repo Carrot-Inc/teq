@@ -53,9 +53,10 @@ pub struct Parser<'a> {
     package_blocks: Vec<Ast>,
     /// Set while a parent or the type after `new` is parsed, where braces start a class body.
     template_type: bool,
-    /// Inside the body of a single-line lambda after a `:` (dotty's `SingleLineLambda` region),
-    /// outside any brackets or block opened in it: a line's end closes it.
-    single_line: bool,
+    /// The token a single-line lambda's body after a `:` starts at, while it is parsed (dotty's
+    /// `SingleLineLambda` region): a line's end closes it outside the brackets and blocks
+    /// opened in it.
+    single_line: Option<usize>,
     /// How many quotes enclose the expression being parsed, less the splices inside them; an
     /// identifier `$x` is a splice where this is positive.
     quote_level: u32,
@@ -127,7 +128,7 @@ pub fn parse(text: &str, lexed: &LexResult, closed: &[u32], interner: &Interner,
         pending_derives: Vec::new(),
         package_blocks: Vec::new(),
         template_type: false,
-        single_line: false,
+        single_line: None,
         quote_level: 0,
         quote_pattern: false,
         boundaries: &lexed.boundaries,
