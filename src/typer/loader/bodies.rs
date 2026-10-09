@@ -4570,20 +4570,7 @@ impl<'a> Worker<'a> {
             cv.scope.extend(cd.template.params.iter().map(|p| (cv.locals[&p.addr], p.addr)));
             cv.parent_params = Some((cd.addr, names));
         }
-        let mut parents = self.conv_template_parents(cv, &cd.template.parents, !named);
-        // A product's local case class is read as the program's own: its pickle extends
-        // `Product` and `Serializable` as scalac's `Desugar` makes it, which teq's typer gives a
-        // case class by its rules, as the loader reads a top-level one.
-        if self.converts_product(cv) && named && !module && flags.has(tags::CASE) {
-            let product = self.b.product;
-            parents.retain(|p| match cv.ast.tys[p.ty.idx()] {
-                TyExpr::Resolved(t) => match self.types.get(t) {
-                    Type::Class(pc, _) => Some(pc) != product && !(self.name_str(self.syms.class(pc).name) == "Serializable" && matches!(self.syms.class(pc).owner, Owner::Package(k) if self.pkg_description(k) == "java.io")),
-                    _ => true,
-                },
-                _ => true,
-            });
-        }
+        let parents = self.conv_template_parents(cv, &cd.template.parents, !named);
         cv.parent_params = outer_params;
         cv.scope.truncate(scope_mark);
         // Inside the local class `C.this` of an enclosing class is an outer `this`.

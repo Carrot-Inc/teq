@@ -1713,36 +1713,23 @@ impl<'a> Worker<'a> {
             self.set_tparam_bounds(&mut cx, id, &tp.info);
         }
         let mut parents: Vec<TypeId> = sig.parents.iter().map(|p| self.map_type(&mut cx, p)).collect();
-        // An enum of another module is read as the program's own: that it is a
-        // `scala.reflect.Enum` is the typer's rule (`Typer::is_enum_value`), not a parent whose
-        // members it would take.
-        if matches!(kind, ClassKind::Enum | ClassKind::EnumCase) && self.loaded.as_ref().map_or(false, |l| l.is_product_class(c)) {
-            let reflect_enum = self.b.reflect_enum;
-            parents.retain(|&p| !matches!(self.types.get(p), Type::Class(pc, _) if Some(pc) == reflect_enum));
-        }
-        // A case class of another module is read as the program's own: its pickle extends
-        // `Product` and `Serializable` as scalac's `Desugar` makes it, which teq's typer gives a
-        // case class of source by its rules, not as parents (an inferred type over the classes
-        // of two modules is then the one it is within one program).
-        if sig.mods.flags.has(tags::CASE) && matches!(kind, ClassKind::Class | ClassKind::EnumCase) && self.loaded.as_ref().map_or(false, |l| l.is_product_class(c)) {
-            let product = self.b.product;
-            parents.retain(|&p| match self.types.get(p) {
-                Type::Class(pc, _) => Some(pc) != product && !(self.name_str(self.syms.class(pc).name) == "Serializable" && matches!(self.syms.class(pc).owner, Owner::Package(k) if self.pkg_description(k) == "java.io")),
-                _ => true,
-            });
-        }
-        // So are a case object and a companion: the parents teq's writer appends after the
-        // declared ones, as scalac's `Desugar` and `SyntheticMembers` do (a case object's
-        // `Product`, `Serializable` and `Mirror.Singleton`, a companion's mirror), which teq's
-        // typer gives by its rules, are taken off the end, as many as the pickle's origins
-        // record (kind 11); a parent the source declares stays.
+        // A case object and a companion of another module are read as the program's own: of the
+        // parents teq's writer appends after the declared ones, as many as the pickle's origins
+        // record (kind 11), the mirrors (a case object's `Mirror.Singleton`, a companion's), which
+        // teq's typer gives by its rules, are taken off; the `Product` and `Serializable` of
+        // dotty's `Desugar.classDef` stay, as a case class's and an enum's `Enum` do.
         if kind == ClassKind::Object && self.loaded.as_ref().map_or(false, |l| l.is_product_class(c)) {
             let appended = match &self.loaded.as_ref().unwrap().file(lc.file).provenance {
                 crate::tasty::origins::Found::Read(o) => o.appended.binary_search_by_key(&lc.addr, |&(a, _)| a).ok().map_or(0, |i| o.appended[i].1),
                 _ => 0,
             };
             let keep = parents.len().saturating_sub(appended as usize);
-            parents.truncate(keep);
+            let tail = parents.split_off(keep);
+            for p in tail {
+                if matches!(self.types.get(p), Type::Class(pc, _) if self.is_desugared_parent(pc)) {
+                    parents.push(p);
+                }
+            }
         }
         if let Some((_, t)) = sig.self_type.as_ref().filter(|_| !sig.mods.flags.has(tags::OBJECT)) {
             let declared = self.map_type(&mut cx, t);
