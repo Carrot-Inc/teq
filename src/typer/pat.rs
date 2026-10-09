@@ -2244,7 +2244,7 @@ impl<'a> Worker<'a> {
     /// Whether every ancestor of `c` is declared in full (the program's, or a library's from its
     /// class files and pickles): none a builtin class or one of the lean std's sources, but `Any`
     /// and `AnyRef`.
-    fn complete_ancestry(&mut self, c: ClassId) -> bool {
+    pub(super) fn complete_ancestry(&mut self, c: ClassId) -> bool {
         self.complete_class(c);
         let bases: Vec<ClassId> = self.syms.class(c).base_types.iter().map(|&(b, _)| b).collect();
         bases.into_iter().chain(std::iter::once(c)).all(|b| {

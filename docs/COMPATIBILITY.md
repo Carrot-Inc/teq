@@ -29,10 +29,7 @@ libraries compiled from their jars run against scalac's output. The remaining di
 - A failed member call is retried as an extension or a conversion of the receiver, as scalac retries it,
   except as a right-associative extension operator (`one() +: d` failing on `d`'s own `+:` is not taken by an
   `extension (x: Int) def +:(d: D)`); the member's error then stands.
-- Exhaustivity: a match with a sequence pattern of fixed length (`List(a, b)`) or a stable identifier that is
-  no enum case is not checked for missing cases, a type splits at most 64 times per match (beyond that nothing
-  is reported), and a nested pattern that can never match is not reported; a type test of a trait over a class
-  that is not final is warned unreachable (scalac: reachable, a subclass may mix the trait in).
+- Exhaustivity: a type splits at most 64 times per match; beyond that nothing is reported.
 
 ### Givens and implicits
 

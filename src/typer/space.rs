@@ -116,8 +116,8 @@ pub struct SpaceScratch {
     /// The classes the cases have to cover: the sealed scrutinee class, or the members of a
     /// union scrutinee, each with the scrutinee type when it fixes the type arguments.
     roots: Vec<(ClassId, Option<TypeId>)>,
-    /// The class of a scrutinee that is no sealed type: what a case has to relate to.
-    scrut_class: Option<ClassId>,
+    /// The scrutinee type, which a case's class has to relate to where no roots are.
+    scrut_type: Option<TypeId>,
     types: Vec<TypeId>,
 }
 
@@ -136,7 +136,7 @@ impl SpaceScratch {
         self.array_test = None;
         self.arrays.clear();
         self.roots.clear();
-        self.scrut_class = None;
+        self.scrut_type = None;
         self.types.clear();
     }
 }
@@ -328,7 +328,9 @@ impl<'a> Worker<'a> {
 
 impl<'t, 'a> Spaces<'t, 'a> {
     fn check(&mut self, scrut: TypeId, cases: &[TCase], clauses: &[CaseClause], partial: bool, span: Span) {
-        if self.collect_roots(scrut) {
+        // A `Boolean` is its two values, which the algebra takes apart: a stable identifier
+        // (`case K.b`) leaves both missing, as dotty's `Typ` of its singleton covers neither.
+        if scrut != self.t.b.t_boolean && self.collect_roots(scrut) {
             let all_plain = cases.iter().all(|c| {
                 let start = self.sc.classes.len();
                 self.sc.array_test = None;
@@ -353,6 +355,11 @@ impl<'t, 'a> Spaces<'t, 'a> {
         // meets what every case leaves (`case _: Apply` after it).
         let mut remaining = Space::Typ(scrut);
         let mut remaining_shapes = Space::Typ(scrut);
+        // What the cases leave with a type pattern over an abstract type taking its bound's
+        // children (`decompose_abstract`), once there is one: dotty's `isSubspace` of a case that
+        // is no type against two earlier cases or more subtracts them (`minus`), which decomposes
+        // an abstract type on its right; against one it is a subtype test (`computeIsSubspace`).
+        let mut remaining_abstract: Option<Space> = None;
         // The kinds of the earlier unguarded cases, an alternative's per arm, and of the cases
         // whole (a repetition of a case is judged on those).
         let mut kinds: Vec<(CaseKind, Space)> = Vec::new();
@@ -382,7 +389,11 @@ impl<'t, 'a> Spaces<'t, 'a> {
                         }
                         left
                     }
-                    _ => remaining,
+                    _ => match remaining_abstract {
+                        // A constructor pattern is dotty's `Prod` whatever its fields (`C()`).
+                        Some(abs) if (arm_kind == CaseKind::Shape || !matches!(arm, Space::Typ(_))) && self.sc.covered.iter().filter(|&&c| c != Space::Empty).count() >= 2 => abs,
+                        _ => remaining,
+                    },
                 };
                 if self.meets(arm, left) {
                     reachable = true;
@@ -401,6 +412,28 @@ impl<'t, 'a> Spaces<'t, 'a> {
             if case.guard.is_none() {
                 if let Some(left) = taken {
                     remaining = self.simplify(left);
+                }
+                let abstract_test = matches!(space, Space::Typ(t) if self.abstract_type(t));
+                if remaining_abstract.is_some() || abstract_test {
+                    let outer = std::mem::replace(&mut self.decompose_abstract, true);
+                    let mut left = match remaining_abstract {
+                        Some(abs) => abs,
+                        None => {
+                            // From the scrutinee again, every earlier case taken with the bound's children.
+                            let mut left = Space::Typ(scrut);
+                            for c in self.sc.covered.clone() {
+                                if let Some(l) = self.minus(left, c) {
+                                    left = self.simplify(l);
+                                }
+                            }
+                            left
+                        }
+                    };
+                    if let Some(l) = self.minus(left, space) {
+                        left = self.simplify(l);
+                    }
+                    self.decompose_abstract = outer;
+                    remaining_abstract = Some(left);
                 }
                 let has_extractor = arms.iter().any(|(k, _)| matches!(k, CaseKind::Extractor(..)));
                 if !extractors && !has_extractor {
@@ -494,13 +527,13 @@ impl<'t, 'a> Spaces<'t, 'a> {
 
     // ---- plain cases ----
 
-    /// Fills `roots` and `scrut_class`; false for a union with a member that is no class,
+    /// Fills `roots` and `scrut_type`; false for a union with a member that is no class,
     /// which only the algebra follows.
     fn collect_roots(&mut self, scrut: TypeId) -> bool {
+        self.sc.scrut_type = Some(scrut);
         let fixed = |s: &Self, t: TypeId, args: TList| (args != EMPTY_LIST && s.is_ground(t)).then_some(t);
         match self.t.types.get(scrut) {
             Type::Class(c, args) => {
-                self.sc.scrut_class = Some(c);
                 let info = self.t.syms.class(c);
                 let sealed = splits_into_children(&info);
                 if sealed && !info.children.is_empty() {
@@ -662,11 +695,39 @@ impl<'t, 'a> Spaces<'t, 'a> {
 
     /// Whether a value of the scrutinee type can be a `c`: `c` is a class of the scrutinee or
     /// under one, or above one, or a `Double` for an `Int` and the other way round.
-    fn relates_to_scrutinee(&self, c: ClassId) -> bool {
+    fn relates_to_scrutinee(&mut self, c: ClassId) -> bool {
         if self.sc.roots.is_empty() {
-            return self.sc.scrut_class.map_or(true, |s| self.related(c, s));
+            let Some(scrut) = self.sc.scrut_type else { return true };
+            return self.relates_to_type(c, scrut, 8);
         }
-        self.sc.roots.iter().any(|&(r, _)| self.related(c, r))
+        (0..self.sc.roots.len()).any(|i| {
+            let r = self.sc.roots[i].0;
+            self.related(c, r)
+        })
+    }
+
+    /// Whether a value of type `t` can be a `c`, as dotty's `provablyDisjoint` answers it of `c`
+    /// and `t`: a class by `related`, an intersection where every part can, a union where one
+    /// can, an abstract type through its upper bound (`T <: A & B` is no `Other`).
+    fn relates_to_type(&mut self, c: ClassId, t: TypeId, depth: u32) -> bool {
+        let t = self.t.deref(t);
+        if depth == 0 {
+            return true;
+        }
+        match self.t.types.get(t) {
+            Type::Class(k, _) => self.related(c, k),
+            Type::Inter(a, b) => self.relates_to_type(c, a, depth - 1) && self.relates_to_type(c, b, depth - 1),
+            Type::Union(a, b) => self.relates_to_type(c, a, depth - 1) || self.relates_to_type(c, b, depth - 1),
+            Type::Param(p) => {
+                let upper = self.t.syms.tparam(p).upper;
+                self.relates_to_type(c, upper, depth - 1)
+            }
+            Type::Member(..) | Type::AppMember(..) | Type::Decl(_) => {
+                let upper = self.t.match_type(t);
+                upper == t || self.relates_to_type(c, upper, depth - 1)
+            }
+            _ => true,
+        }
     }
 
     /// Whether `t` is a tuple class past 22 elements and `xxl` `scala.runtime.TupleXXL`, named
@@ -680,7 +741,7 @@ impl<'t, 'a> Spaces<'t, 'a> {
         self.t.interner.get(info.name) == "TupleXXL" && self.t.interner.get(self.t.syms.pkg(p).name) == "runtime" && self.t.syms.pkg(p).parent == Some(self.t.b.scala_pkg)
     }
 
-    fn related(&self, c: ClassId, r: ClassId) -> bool {
+    fn related(&mut self, c: ClassId, r: ClassId) -> bool {
         let b = &self.t.b;
         // The literals of a `Float` scrutinee are `Double`s.
         if c == r || (c == b.int && r == b.double) || (c == b.double && r == b.int) || (c == b.double && r == b.float) {
@@ -695,25 +756,30 @@ impl<'t, 'a> Spaces<'t, 'a> {
             let other = if r == b.any_val { c } else { r };
             return value_types.contains(&other) || self.t.syms.class(other).value_class;
         }
-        let bases = |k: ClassId| self.t.syms.class(k).info.base_types.iter().skip(1);
-        if bases(c).any(|&(x, _)| x == r) || bases(r).any(|&(x, _)| x == c) {
-            return true;
-        }
         // A tuple class past 22 elements is a type alone, whose values are TupleXXLs.
         if self.xxl_tuple_of(c, r) || self.xxl_tuple_of(r, c) {
             return true;
         }
-        // Two traits may be mixed into one class, and a trait into a class below the other.
-        let is_trait = |k: ClassId| matches!(self.t.syms.class(k).kind, ClassKind::Trait | ClassKind::Enum);
-        match (is_trait(c), is_trait(r)) {
-            (true, true) => return true,
-            (true, false) if self.extended_with(r, c) => return true,
-            (false, true) if self.extended_with(c, r) => return true,
-            _ => {}
+        !self.classes_disjoint(c, r)
+    }
+
+    /// dotty's `provablyDisjointClasses` (TypeComparer), which `Space` asks of a case's type
+    /// and what it is matched against (`intersectUnrelatedAtomicTypes`): the open world, where a
+    /// trait may be mixed into a subclass of a class that is not final whether the program has
+    /// one or not (`Worker::disjoint_classes`, the match types' rule). A final class whose
+    /// ancestors a builtin or the lean std lists in part (`String` is a `CharSequence`) tells
+    /// nothing against a trait it does not name.
+    fn classes_disjoint(&mut self, c1: ClassId, c2: ClassId) -> bool {
+        if c1 == c2 {
+            return false;
         }
-        let info = self.t.syms.class(r);
-        let sealed = splits_into_children(&info);
-        sealed && info.children.iter().any(|&child| self.related(c, child))
+        let is_trait = |s: &Self, c: ClassId| matches!(s.t.syms.class(c).kind, ClassKind::Trait | ClassKind::Enum);
+        for (fin, other) in [(c1, c2), (c2, c1)] {
+            if is_trait(self, other) && self.t.is_final_class(fin) && !self.derives(fin, other) && !self.t.complete_ancestry(fin) {
+                return false;
+            }
+        }
+        self.t.disjoint_classes(c1, c2)
     }
 
     /// Whether the covered classes take every value of `c`.
@@ -755,8 +821,12 @@ impl<'t, 'a> Spaces<'t, 'a> {
             };
             let classes_covered =
                 |s: &Self| !classes.is_empty() && classes.clone().all(|k| s.class_covered(s.sc.classes[k]));
-            let unrelated =
-                |s: &Self| !classes.is_empty() && !classes.clone().any(|k| s.relates_to_scrutinee(s.sc.classes[k]));
+            let unrelated = |s: &mut Self| {
+                !classes.is_empty() && !classes.clone().any(|k| {
+                    let c = s.sc.classes[k];
+                    s.relates_to_scrutinee(c)
+                })
+            };
             let array = self.sc.plain[i].array;
             let unreachable = match shape {
                 Plain::Total => nothing_left(self),
@@ -1109,6 +1179,54 @@ impl<'t, 'a> Spaces<'t, 'a> {
         }
     }
 
+    /// Whether `c` is the standard library's: in `scala` or a package under it
+    /// (`scala.collection.immutable.List` of scala-library, `scala.List` of the lean std).
+    fn in_scala_package(&self, c: ClassId) -> bool {
+        let Owner::Package(mut p) = self.t.syms.class(c).owner else { return false };
+        loop {
+            if p == self.t.b.scala_pkg {
+                return true;
+            }
+            match self.t.syms.pkg(p).parent {
+                Some(q) => p = q,
+                None => return false,
+            }
+        }
+    }
+
+    /// `List(a, b)` and `List(a, rest*)` as dotty's `projectSeq`: products of `::` around the
+    /// elements' spaces, ending in `Nil`, or in the list type itself after `rest*`, so that the
+    /// lengths the cases leave are what the match misses (`List(_)`, `Nil`).
+    fn list_space(&mut self, items: crate::ast::ListRef, rest: Option<TPatId>, class_space: Space) -> Option<Space> {
+        let Space::Typ(t) = class_space else { return None };
+        let Type::Class(list, args) = self.t.types.get(t) else { return None };
+        if self.t.name_ref(self.t.syms.class(list).name) != "List" || !self.in_scala_package(list) {
+            return None;
+        }
+        let elem = *self.t.types.items(args).first()?;
+        let children = self.t.syms.class(list).children.clone();
+        let named = |s: &Self, n: &str| children.iter().copied().find(|&c| s.t.name_ref(s.t.syms.class(c).name) == n);
+        let (cons, nil) = (named(self, "::")?, named(self, "Nil")?);
+        let cons_ty = self.t.types.class(cons, &[elem]);
+        let fields = self.field_types(cons_ty)?;
+        if fields.len != 2 {
+            return None;
+        }
+        let mut acc = match rest {
+            Some(_) => Space::Typ(t),
+            None => Space::Typ(self.t.types.class(nil, &[])),
+        };
+        let elems: Vec<TPatId> = items.range().map(|i| self.t.prog.pat_lists[i]).collect();
+        for &p in elems.iter().rev() {
+            let head = self.project(p, elem);
+            let base = self.sc.stack.len();
+            self.sc.stack.push(head);
+            self.sc.stack.push(acc);
+            acc = Space::Prod(cons, cons_ty, self.seal(base));
+        }
+        Some(acc)
+    }
+
     /// An extractor typed as a `Some` (`->`) covers its scrutinee where the pattern matched
     /// against its result covers that result, as scalac's irrefutable unapply.
     fn project_irrefutable(&mut self, inner: TPatId, sty: TypeId) -> Space {
@@ -1152,6 +1270,9 @@ impl<'t, 'a> Spaces<'t, 'a> {
     /// `Seq(rest*)` covers its class, `Seq(x, rest*)` the cases with elements; any other shape
     /// depends on lengths, which the algebra leaves alone.
     fn project_seq(&mut self, items: crate::ast::ListRef, rest: Option<TPatId>, class_space: Space) -> Space {
+        if let Some(list) = self.list_space(items, rest, class_space) {
+            return list;
+        }
         let items = items.range();
         let plain = |t: &Worker, p: TPatId| matches!(t.prog.pats[p.idx()], TPat::Wildcard | TPat::Bind(_, None));
         let covers = rest.map_or(false, |r| plain(self.t, r))
@@ -1249,28 +1370,31 @@ impl<'t, 'a> Spaces<'t, 'a> {
         }
     }
 
-    /// Two classes no value belongs to both of: classes of which neither extends the other, and
-    /// a class and a trait that neither it nor a class below it extends.
-    fn disjoint(&self, t1: TypeId, t2: TypeId) -> bool {
-        let (Type::Class(c1, _), Type::Class(c2, _)) = (self.t.types.get(t1), self.t.types.get(t2)) else {
-            return false;
-        };
-        let is_trait = |c: ClassId| matches!(self.t.syms.class(c).kind, ClassKind::Trait | ClassKind::Enum);
-        match (is_trait(c1), is_trait(c2)) {
-            (true, true) => false,
-            (false, false) => c1 != c2 && !self.derives(c1, c2) && !self.derives(c2, c1) && !self.xxl_tuple_of(c1, c2) && !self.xxl_tuple_of(c2, c1),
-            (false, true) => !self.extended_with(c1, c2),
-            (true, false) => !self.extended_with(c2, c1),
+    /// Two types no value belongs to both of, dotty's `provablyDisjoint` as `Space` asks it:
+    /// classes by `classes_disjoint`, an intersection where a part is.
+    fn disjoint(&mut self, t1: TypeId, t2: TypeId) -> bool {
+        match (self.t.types.get(t1), self.t.types.get(t2)) {
+            (_, Type::Inter(a, b)) => self.disjoint(t1, a) || self.disjoint(t1, b),
+            (Type::Inter(a, b), _) => self.disjoint(a, t2) || self.disjoint(b, t2),
+            (_, Type::Union(a, b)) => self.disjoint(t1, a) && self.disjoint(t1, b),
+            (Type::Union(a, b), _) => self.disjoint(a, t2) && self.disjoint(b, t2),
+            // An abstract type through its upper bound (dotty's `provablyDisjoint` of a type
+            // parameter's `superType`).
+            (_, Type::Param(p)) => {
+                let upper = self.t.syms.tparam(p).upper;
+                upper != t2 && self.disjoint(t1, upper)
+            }
+            (Type::Param(p), _) => {
+                let upper = self.t.syms.tparam(p).upper;
+                upper != t1 && self.disjoint(upper, t2)
+            }
+            (Type::Class(c1, _), Type::Class(c2, _)) => !self.xxl_tuple_of(c1, c2) && !self.xxl_tuple_of(c2, c1) && self.classes_disjoint(c1, c2),
+            _ => false,
         }
     }
 
     fn derives(&self, sub: ClassId, sup: ClassId) -> bool {
         self.t.syms.class(sub).base_types.iter().any(|&(b, _)| b == sup)
-    }
-
-    /// Whether `class` or a class below it extends `tr`.
-    fn extended_with(&self, class: ClassId, tr: ClassId) -> bool {
-        self.derives(class, tr) || self.t.syms.class(class).subclasses.iter().any(|&d| self.extended_with(d, tr))
     }
 
     fn is_singleton_type(&self, t: TypeId) -> bool {
@@ -1837,6 +1961,9 @@ impl<'t, 'a> Spaces<'t, 'a> {
             Space::Lit(l) => self.show_lit(l),
             Space::Typ(t) => self.show_type_space(t),
             Space::Prod(c, _, fields) => {
+                if let Some(shown) = self.show_list(s) {
+                    return shown;
+                }
                 let fields: Vec<String> =
                     (0..fields.len as usize).map(|i| self.show_field(self.part(fields, i))).collect();
                 self.wrap_fields(c, fields)
@@ -1847,6 +1974,33 @@ impl<'t, 'a> Spaces<'t, 'a> {
                 items.join(" | ")
             }
         }
+    }
+
+    /// A chain of `::` as dotty shows it: `List(_, _)` ending in `Nil`, `List(_, _*)` where the
+    /// tail is any list.
+    fn show_list(&mut self, s: Space) -> Option<String> {
+        let mut heads = Vec::new();
+        let mut at = s;
+        loop {
+            match at {
+                Space::Prod(c, _, fields) if fields.len == 2 && self.t.name_ref(self.t.syms.class(c).name) == "::" => {
+                    heads.push(self.show_field(self.part(fields, 0)));
+                    at = self.part(fields, 1);
+                }
+                Space::Typ(t) => {
+                    let Type::Class(c, _) = self.t.types.get(t) else { return None };
+                    match self.t.name_ref(self.t.syms.class(c).name) {
+                        "Nil" => {}
+                        "List" => heads.push("_*".to_string()),
+                        "::" => heads.extend(["_".to_string(), "_*".to_string()]),
+                        _ => return None,
+                    }
+                    break;
+                }
+                _ => return None,
+            }
+        }
+        (!heads.is_empty()).then(|| format!("List({})", heads.join(", ")))
     }
 
     fn show_field(&mut self, f: Space) -> String {
