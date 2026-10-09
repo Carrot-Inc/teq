@@ -1,6 +1,6 @@
 // teq: --werror
 // The `apply` dotty inserts on a case class's companion named where a function is expected is
-// warned (Typer.adaptNoArgsOther, `caseCompanion`), named as written; a companion that is a
+// warned (Typer.adaptNoArgsOther, `caseCompanion`), named by its static path; a companion that is a
 // function already, or one named where no function is expected, gets none.
 case class F(n: Int)
 case class C(n: Int)

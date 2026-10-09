@@ -2522,45 +2522,46 @@ impl<'a> Worker<'a> {
         span: Span,
         expected: Option<TypeId>,
     ) -> (TExprId, TypeId) {
-        if lists.is_empty() && targs.is_none() {
-            if let Some(typed) = self.inserted_companion_apply(&callee, span, expected) {
-                return typed;
-            }
-        }
         if self.deps.is_none() {
             return self.apply_callee(callee, targs, lists, span, expected);
         }
         self.apply_named_callee_recorded(callee, targs, lists, span, expected)
     }
 
-    /// A case class's companion named where a function is expected is its `apply`, with
-    /// scalac's warning (dotty's `adaptNoArgsOther`, `caseCompanion`): `val g: Int => F = F`,
-    /// `xs.map(F)`. The companion is the constructor's proxy (`Callee::Ctor`) or an object of its
-    /// own that no function class is a base of.
+    /// A case class's companion where a function is expected is its `apply`, with scalac's
+    /// warning (dotty's `adaptNoArgsOther`, `caseCompanion`): `val g: Int => F = F`, `xs.map(F)`,
+    /// `Scope.F` of an object of source or of products. The term is the resolved one, named or
+    /// selected: the constructor's proxy (`Callee::Ctor`), which stands for the companion a case
+    /// class without one has, or a module that no function class is a base of.
     fn inserted_companion_apply(&mut self, callee: &Callee, span: Span, expected: Option<TypeId>) -> Option<(TExprId, TypeId)> {
         match *callee {
-            Callee::Ctor(c) => self.inserted_proxy_apply(c, span, expected),
+            // A proxy is the companion's unless a `new` names the class, or it is reached through
+            // an outer instance, which the proxy's application takes in place.
+            Callee::Ctor(c) if !self.explicit_new && !self.new_prefixed => self.inserted_proxy_apply(c, span, expected),
             Callee::Value(te, ty) => {
-                let TExpr::Module(o) = self.prog.expr(te) else { return None };
-                let case = self.companion_class(o).map_or(false, |k| self.syms.class(k).mods & crate::ast::mods::CASE != 0);
-                if !case || !self.inserts_apply(expected) || self.function_base(self.types.class(o, &[])).is_some() {
+                let module = match self.prog.expr(te) {
+                    TExpr::Block(_, inner) => inner,
+                    _ => te,
+                };
+                let TExpr::Module(o) = self.prog.expr(module) else { return None };
+                let k = self.companion_class(o).filter(|&k| self.syms.class(k).mods & crate::ast::mods::CASE != 0)?;
+                if !self.inserts_apply(expected) || self.function_base(self.types.class(o, &[])).is_some() {
                     return None;
                 }
-                self.warn_inserted_apply(span);
+                self.warn_inserted_apply(k, span);
                 Some(self.apply_member(te, ty, names::APPLY, None, Vec::new(), span, expected))
             }
             _ => None,
         }
     }
 
-    /// `inserted_companion_apply` for the constructor proxy of the case class `c`, named bare
-    /// or selected from an object.
-    pub(super) fn inserted_proxy_apply(&mut self, c: ClassId, span: Span, expected: Option<TypeId>) -> Option<(TExprId, TypeId)> {
+    /// `inserted_companion_apply` for the constructor proxy of the case class `c`.
+    fn inserted_proxy_apply(&mut self, c: ClassId, span: Span, expected: Option<TypeId>) -> Option<(TExprId, TypeId)> {
         let info = self.syms.class(c);
         if info.mods & crate::ast::mods::CASE == 0 || info.kind != ClassKind::Class || !self.inserts_apply(expected) {
             return None;
         }
-        self.warn_inserted_apply(span);
+        self.warn_inserted_apply(c, span);
         Some(self.apply_companion_apply(c, None, Vec::new(), span, expected))
     }
 
@@ -2570,13 +2571,29 @@ impl<'a> Worker<'a> {
         expected.map_or(false, |t| self.as_function(t).is_some()) && !self.is_body_file(self.env.file)
     }
 
-    /// The warning at the name the selection or identifier `span` ends in, the tree shown as
-    /// written.
-    fn warn_inserted_apply(&mut self, span: Span) {
-        let text = self.source(self.env.file).text.get(span.start as usize..span.end as usize).unwrap_or("").to_string();
-        let name_len = text.rsplit('.').next().map_or(0, |n| n.len()) as u32;
+    /// The warning at the name the selection or identifier `span` ends in, with the tree of the
+    /// companion of the case class `k` as scalac shows it: its static path, or as written where
+    /// an instance reaches it.
+    fn warn_inserted_apply(&mut self, k: ClassId, span: Span) {
+        let written = self.source(self.env.file).text.get(span.start as usize..span.end as usize).unwrap_or("").to_string();
+        let name_len = written.rsplit('.').next().map_or(0, |n| n.len()) as u32;
         let at = Span { start: span.end - name_len.min(span.end - span.start), end: span.end };
+        let text = self.static_path_text(k).unwrap_or(written);
         self.warn(at, format!("The method `apply` is inserted. The auto insertion will be deprecated, please write `{}.apply` explicitly.", text));
+    }
+
+    /// The class `k`'s companion as scalac prints a tree that reaches it statically (dotty's
+    /// `RefinedPrinter.toTextPrefixOf`): its packages and enclosing objects, without the root,
+    /// `scala` and `java.lang` packages (`isOmittablePrefix`). None for one an instance owns.
+    fn static_path_text(&mut self, k: ClassId) -> Option<String> {
+        let info = self.syms.class(k);
+        let name = self.interner.get(info.name).to_string();
+        match info.owner {
+            Owner::Package(p) if p == crate::symbols::ROOT_PKG || p == self.b.scala_pkg || Some(p) == self.java_lang_pkg() => Some(name),
+            Owner::Package(p) => Some(format!("{}.{}", self.pkg_path(p), name)),
+            Owner::Class(o) if self.syms.class(o).kind == ClassKind::Object => Some(format!("{}.{}", self.static_path_text(o)?, name)),
+            _ => None,
+        }
     }
 
     #[cold]
@@ -2608,6 +2625,11 @@ impl<'a> Worker<'a> {
         span: Span,
         expected: Option<TypeId>,
     ) -> (TExprId, TypeId) {
+        if lists.is_empty() && targs.is_none() {
+            if let Some(typed) = self.inserted_companion_apply(&callee, span, expected) {
+                return typed;
+            }
+        }
         match callee {
             // A method whose header the parser could not complete takes any arguments: they are
             // typed on their own and the application has the error type.
@@ -6239,11 +6261,6 @@ impl<'a> Worker<'a> {
                     if inner && !self.is_stable_path(recv) {
                         let msg = format!("{} is not a valid class prefix, since it is not an immutable path", self.show(recv_ty));
                         self.error(span, msg);
-                    }
-                    if !inner && lists.is_empty() && targs.is_none() {
-                        if let Some(typed) = self.inserted_proxy_apply(nested, span, expected) {
-                            return typed;
-                        }
                     }
                     let prefixed = inner || self.new_prefixed;
                     let outer_prefixed = std::mem::replace(&mut self.new_prefixed, prefixed);
