@@ -1179,41 +1179,27 @@ impl<'t, 'a> Spaces<'t, 'a> {
         }
     }
 
-    /// Whether `c` is the standard library's: in `scala` or a package under it
-    /// (`scala.collection.immutable.List` of scala-library, `scala.List` of the lean std).
-    fn in_scala_package(&self, c: ClassId) -> bool {
-        let Owner::Package(mut p) = self.t.syms.class(c).owner else { return false };
-        loop {
-            if p == self.t.b.scala_pkg {
-                return true;
-            }
-            match self.t.syms.pkg(p).parent {
-                Some(q) => p = q,
-                None => return false,
-            }
-        }
-    }
-
-    /// `List(a, b)` and `List(a, rest*)` as dotty's `projectSeq`: products of `::` around the
-    /// elements' spaces, ending in `Nil`, or in the list type itself after `rest*`, so that the
-    /// lengths the cases leave are what the match misses (`List(_)`, `Nil`).
-    fn list_space(&mut self, items: crate::ast::ListRef, rest: Option<TPatId>, class_space: Space) -> Option<Space> {
-        let Space::Typ(t) = class_space else { return None };
-        let Type::Class(list, args) = self.t.types.get(t) else { return None };
-        if self.t.name_ref(self.t.syms.class(list).name) != "List" || !self.in_scala_package(list) {
-            return None;
-        }
-        let elem = *self.t.types.items(args).first()?;
+    /// The std's `List`, `::` and `Nil`, the classes of dotty's sequence space (`projectSeq`).
+    fn list_classes(&mut self) -> Option<(ClassId, ClassId, ClassId)> {
+        let list = self.t.std_class("List")?;
+        self.t.complete_class(list);
         let children = self.t.syms.class(list).children.clone();
         let named = |s: &Self, n: &str| children.iter().copied().find(|&c| s.t.name_ref(s.t.syms.class(c).name) == n);
-        let (cons, nil) = (named(self, "::")?, named(self, "Nil")?);
+        Some((list, named(self, "::")?, named(self, "Nil")?))
+    }
+
+    /// The elements of a sequence pattern as dotty's `projectSeq`: products of `::` around the
+    /// elements' spaces (of type `elem`), ending in `Nil`, or in `List[elem]` after `rest*`, so
+    /// that the lengths the cases leave are what the match misses (`List(_)`, `Nil`).
+    fn seq_space(&mut self, items: crate::ast::ListRef, rest: Option<TPatId>, elem: TypeId) -> Option<Space> {
+        let (list, cons, nil) = self.list_classes()?;
         let cons_ty = self.t.types.class(cons, &[elem]);
         let fields = self.field_types(cons_ty)?;
         if fields.len != 2 {
             return None;
         }
         let mut acc = match rest {
-            Some(_) => Space::Typ(t),
+            Some(_) => Space::Typ(self.t.types.class(list, &[elem])),
             None => Space::Typ(self.t.types.class(nil, &[])),
         };
         let elems: Vec<TPatId> = items.range().map(|i| self.t.prog.pat_lists[i]).collect();
@@ -1225,6 +1211,24 @@ impl<'t, 'a> Spaces<'t, 'a> {
             acc = Space::Prod(cons, cons_ty, self.seal(base));
         }
         Some(acc)
+    }
+
+    /// The element type of a sequence extractor's scrutinee `t`, which dotty's `signature` gives
+    /// the extractor's one component as `List[elem]` (an `unapplySeq`'s): a class of the std's
+    /// sequences or an array, no case class.
+    fn seq_element(&mut self, t: TypeId) -> Option<TypeId> {
+        let Type::Class(c, args) = self.t.types.get(t) else { return None };
+        if c == self.t.b.array {
+            return self.t.types.items(args).first().copied();
+        }
+        if self.t.syms.class(c).mods & mods::CASE != 0 {
+            return None;
+        }
+        let seq = self.t.seq_class()?;
+        match self.t.base_type(t, seq).map(|b| self.t.types.get(b)) {
+            Some(Type::Class(_, args)) => self.t.types.items(args).first().copied(),
+            _ => None,
+        }
     }
 
     /// An extractor typed as a `Some` (`->`) covers its scrutinee where the pattern matched
@@ -1267,40 +1271,28 @@ impl<'t, 'a> Spaces<'t, 'a> {
         }
     }
 
-    /// `Seq(rest*)` covers its class, `Seq(x, rest*)` the cases with elements; any other shape
-    /// depends on lengths, which the algebra leaves alone.
+    /// A sequence pattern (`List(a, b)`, `Vector(x, rest*)`, `Array(k, v)`) as dotty's
+    /// `project` takes an `unapplySeq` (Space.scala, `projectSeq`): the elements' sequence space,
+    /// of `List`'s `::` and `Nil`, which is the pattern's space where its type derives from
+    /// `List`, and otherwise the one component of the extractor's product, its signature's
+    /// `List[elem]` (`as_prod`). A tested space no class gives is left to the inexact path.
     fn project_seq(&mut self, items: crate::ast::ListRef, rest: Option<TPatId>, class_space: Space) -> Space {
-        if let Some(list) = self.list_space(items, rest, class_space) {
-            return list;
-        }
-        let items = items.range();
-        let plain = |t: &Worker, p: TPatId| matches!(t.prog.pats[p.idx()], TPat::Wildcard | TPat::Bind(_, None));
-        let covers = rest.map_or(false, |r| plain(self.t, r))
-            && items.clone().all(|i| plain(self.t, self.t.prog.pat_lists[i]));
-        let non_empty_cases = match (class_space, items.len()) {
-            (_, 0) if covers => return class_space,
-            (Space::Typ(t), 1) if covers => match self.decompose(t) {
-                Some(parts) => {
-                    let base = self.sc.stack.len();
-                    for i in 0..parts.len as usize {
-                        let p = self.part(parts, i);
-                        if !matches!(p, Space::Typ(t) if self.is_singleton_type(t)) {
-                            self.sc.stack.push(p);
-                        }
-                    }
-                    Some(self.seal(base))
-                }
-                None => None,
-            },
+        let seq = match class_space {
+            Space::Typ(t) => self.seq_element(t).and_then(|elem| Some((t, self.seq_space(items, rest, elem)?))),
             _ => None,
         };
-        match non_empty_cases {
-            Some(parts) => Space::Or(parts),
-            None => {
-                self.inexact = true;
-                Space::Opaque
-            }
+        let Some((t, seq)) = seq else {
+            self.inexact = true;
+            return Space::Opaque;
+        };
+        let derives_list = self.list_classes().is_some_and(|(list, ..)| self.t.base_type(t, list).is_some());
+        if derives_list {
+            return seq;
         }
+        let Type::Class(c, _) = self.t.types.get(t) else { unreachable!() };
+        let base = self.sc.stack.len();
+        self.sc.stack.push(seq);
+        Space::Prod(c, t, self.seal(base))
     }
 
     // ---- the algebra ----
@@ -1525,9 +1517,16 @@ impl<'t, 'a> Spaces<'t, 'a> {
         }
     }
 
-    /// `Typ(t)` as the product of its fields, when `t` is a case class or tuple.
+    /// `Typ(t)` as the product of its fields, when `t` is a case class or tuple, or of the
+    /// sequence a sequence extractor gives (dotty's `signature` of an `unapplySeq`, `List[elem]`).
     fn as_prod(&mut self, t: TypeId) -> Option<Space> {
         let Type::Class(c, _) = self.t.types.get(t) else { return None };
+        if let Some(elem) = self.seq_element(t) {
+            let (list, ..) = self.list_classes()?;
+            let base = self.sc.stack.len();
+            self.sc.stack.push(Space::Typ(self.t.types.class(list, &[elem])));
+            return Some(Space::Prod(c, t, self.seal(base)));
+        }
         let fields = self.field_types(t)?;
         let base = self.sc.stack.len();
         for k in fields.range() {
@@ -1763,6 +1762,13 @@ impl<'t, 'a> Spaces<'t, 'a> {
     fn minus(&mut self, a: Space, b: Space) -> Option<Space> {
         match (a, b) {
             (Space::Empty, _) | (Space::Opaque, _) | (_, Space::Empty) | (_, Space::Opaque) => None,
+            // dotty's `minus` of a type and an extractor's product: the type taken as the product
+            // of the extractor's signature first, which is what is left where nothing is taken
+            // from it (`Vector(_*)` after `case Vector(1)`); a sequence extractor's here.
+            (Space::Typ(t), Space::Prod(_, pt, _)) if self.seq_element(t).is_some() && (self.same_class(t, pt) || self.sub(t, pt)) => {
+                let p = self.as_prod(t)?;
+                Some(self.minus(p, b).unwrap_or(p))
+            }
             (Space::Typ(_), _) if self.cannot_cover(b) => None,
             (Space::Or(xs), _) => self.minus_each(xs, b),
             (_, Space::Or(ys)) => self.minus_all(a, ys),
@@ -1960,9 +1966,16 @@ impl<'t, 'a> Spaces<'t, 'a> {
             Space::Opaque => "_".to_string(),
             Space::Lit(l) => self.show_lit(l),
             Space::Typ(t) => self.show_type_space(t),
-            Space::Prod(c, _, fields) => {
-                if let Some(shown) = self.show_list(s) {
-                    return shown;
+            Space::Prod(c, t, fields) => {
+                if let Some(heads) = self.list_heads(s).filter(|h| !h.is_empty()) {
+                    return format!("List({})", heads.join(", "));
+                }
+                // A sequence extractor's product: its prefix and the sequence's elements (dotty's
+                // `show` of an `unapplySeq`, the list flattened).
+                if fields.len == 1 && self.seq_element(t).is_some() {
+                    if let Some(heads) = self.list_heads(self.part(fields, 0)) {
+                        return format!("{}({})", self.t.name_str(self.t.syms.class(c).name), heads.join(", "));
+                    }
                 }
                 let fields: Vec<String> =
                     (0..fields.len as usize).map(|i| self.show_field(self.part(fields, i))).collect();
@@ -1976,23 +1989,23 @@ impl<'t, 'a> Spaces<'t, 'a> {
         }
     }
 
-    /// A chain of `::` as dotty shows it: `List(_, _)` ending in `Nil`, `List(_, _*)` where the
-    /// tail is any list.
-    fn show_list(&mut self, s: Space) -> Option<String> {
+    /// The elements of a chain of `::` as dotty shows them: `_, _` ending in `Nil`, `_, _*`
+    /// where the tail is any list; none for what is no sequence space.
+    fn list_heads(&mut self, s: Space) -> Option<Vec<String>> {
+        let (list, cons, nil) = self.list_classes()?;
         let mut heads = Vec::new();
         let mut at = s;
         loop {
             match at {
-                Space::Prod(c, _, fields) if fields.len == 2 && self.t.name_ref(self.t.syms.class(c).name) == "::" => {
+                Space::Prod(c, _, fields) if fields.len == 2 && c == cons => {
                     heads.push(self.show_field(self.part(fields, 0)));
                     at = self.part(fields, 1);
                 }
                 Space::Typ(t) => {
-                    let Type::Class(c, _) = self.t.types.get(t) else { return None };
-                    match self.t.name_ref(self.t.syms.class(c).name) {
-                        "Nil" => {}
-                        "List" => heads.push("_*".to_string()),
-                        "::" => heads.extend(["_".to_string(), "_*".to_string()]),
+                    match self.t.types.get(t) {
+                        Type::Class(c, _) if c == nil => {}
+                        Type::Class(c, _) if c == list => heads.push("_*".to_string()),
+                        Type::Class(c, _) if c == cons => heads.extend(["_".to_string(), "_*".to_string()]),
                         _ => return None,
                     }
                     break;
@@ -2000,7 +2013,7 @@ impl<'t, 'a> Spaces<'t, 'a> {
                 _ => return None,
             }
         }
-        (!heads.is_empty()).then(|| format!("List({})", heads.join(", ")))
+        Some(heads)
     }
 
     fn show_field(&mut self, f: Space) -> String {
