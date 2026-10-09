@@ -1233,6 +1233,7 @@ impl<'t, 'a> Spaces<'t, 'a> {
     /// the extractor's one component as `List[elem]` (an `unapplySeq`'s): a class of the std's
     /// sequences or an array, no case class.
     fn seq_element(&mut self, t: TypeId) -> Option<TypeId> {
+        let t = self.t.deref_alias(t);
         let Type::Class(c, args) = self.t.types.get(t) else { return None };
         if c == self.t.b.array {
             return self.t.types.items(args).first().copied();
@@ -1429,7 +1430,9 @@ impl<'t, 'a> Spaces<'t, 'a> {
     /// The parts a type splits into: the cases of a sealed type or enum, `true` and `false`,
     /// the members of a union. None for a type without parts.
     fn decompose(&mut self, t: TypeId) -> Option<Items> {
-        let t = self.t.deref(t);
+        // Through an alias, applied or not (dotty's `decompose`, `rec(tp.dealias)`): an
+        // `Either[E, A]` named `EitherE[A]` splits into its `Left` and `Right`.
+        let t = self.t.deref_alias(t);
         if let Some(&(_, parts)) = self.sc.decomposed.iter().find(|(k, _)| *k == t) {
             return parts;
         }
@@ -1536,6 +1539,7 @@ impl<'t, 'a> Spaces<'t, 'a> {
     /// `Typ(t)` as the product of its fields, when `t` is a case class or tuple, or of the
     /// sequence a sequence extractor gives (dotty's `signature` of an `unapplySeq`, `List[elem]`).
     fn as_prod(&mut self, t: TypeId) -> Option<Space> {
+        let t = self.t.deref_alias(t);
         let Type::Class(c, _) = self.t.types.get(t) else { return None };
         if let Some(elem) = self.seq_element(t) {
             let (list, ..) = self.list_classes()?;

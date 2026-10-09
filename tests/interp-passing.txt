@@ -4,6 +4,7 @@ abstract_member_type_test
 abstract_var_accessors
 access_qualifiers
 adt
+alias_tuple_exhaustivity
 annotated_type_params
 annotations_ignored
 anon_classes
