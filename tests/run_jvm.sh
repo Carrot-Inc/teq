@@ -49,10 +49,26 @@ done
 rm -rf "$out"
 mkdir -p "$out"
 
+# A `// os: windows` or `// os: unix` line keeps a case to that system (Git's bash is Windows): on the other
+# it is skipped, and its line in the list stands as it is.
+case $(uname -s) in MINGW* | MSYS* | CYGWIN*) HERE_OS=windows ;; *) HERE_OS=unix ;; esac
+other_os() {
+  local os
+  os=$(grep -h -o '^// os: [a-z]*' "$1" "$1"/*.scala 2> /dev/null | head -1)
+  [ -n "$os" ] && [ "${os#// os: }" != "$HERE_OS" ]
+}
+export HERE_OS
+export -f other_os
+
 run_one() {
   src=$1
   name=$(basename "$src" .scala)
   expected="tests/cases/$name.expected"
+  if other_os "$src"; then
+    echo "skip $name" > "$out/$name.result"
+    echo "$name" > "$out/$name.otheros"
+    return
+  fi
   if grep -q -h '^//> using platform js' "$src" "$src"/*.scala 2>/dev/null; then
     expected="tests/jvm-expected/$name.expected"
     if [ ! -f "$expected" ]; then
@@ -108,14 +124,17 @@ for kind in backend compile verify exception output timeout; do
 done
 nojar=$(cat "$out"/*.nojar 2> /dev/null | tr '\n' ' ')
 [ -n "$nojar" ] && echo "counted as passed, a jar of theirs not in the coursier cache: $nojar"
-skipped=$(grep '^skip ' "$out/results.txt" | cut -d' ' -f2 | tr '\n' ' ')
+cat "$out"/*.otheros 2> /dev/null | sort > "$out/otheros.txt"
+skipped=$(grep '^skip ' "$out/results.txt" | cut -d' ' -f2 | sort | comm -23 - "$out/otheros.txt" | tr '\n' ' ')
 [ -n "$skipped" ] && echo "skipped (expectations from Scala.js): $skipped"
+otheros=$(tr '\n' ' ' < "$out/otheros.txt")
+[ -n "$otheros" ] && echo "skipped (another system's): $otheros"
 grep '^pass ' "$out/results.txt" | cut -d' ' -f2 | sort > "$out/passing.txt"
-if [ $update = 1 ]; then
-  cp "$out/passing.txt" "$LIST"
-fi
 touch "$LIST"
-regressions=$(comm -23 <(sort "$LIST") "$out/passing.txt" | tr '\n' ' ')
+if [ $update = 1 ]; then
+  sort -u "$out/passing.txt" <(sort "$LIST" | comm -12 - "$out/otheros.txt") > "$LIST.new" && mv "$LIST.new" "$LIST"
+fi
+regressions=$(comm -23 <(sort "$LIST") <(sort -u "$out/passing.txt" "$out/otheros.txt") | tr '\n' ' ')
 new=$(comm -13 <(sort "$LIST") "$out/passing.txt" | tr '\n' ' ')
 [ -n "$new" ] && echo "passing but not in $LIST: $new"
 if [ -n "$regressions" ]; then

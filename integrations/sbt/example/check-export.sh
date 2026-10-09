@@ -83,14 +83,15 @@ if export_to target-export-1.lock && export_to target-export-2.lock; then
   fi
   if cmp -s target-export-1.lock target-export-2.lock; then echo "export: two exports give the same bytes"; else echo "FAIL export: two exports differ"; status=1; fi
   if compare fixture target-export-1.lock target-export-fixture.lock; then echo "export: the committed fixture, but for its header"; else echo "FAIL export: the export is not the committed fixture"; status=1; fi
-  # The launchers the export wrote beside the lock, the plugin's own, and the compile of api through
-  # them over that export (TEQ naming the branch's binary, which no repository holds; the corpus's
-  # sources generated when missing and the main source api's tests use besides, as check.sh and
-  # check-stage.sh make them).
+  # The launchers the export wrote beside the lock, the plugin's own (and the repository's copies at its
+  # root, its scripts' launchers, the same), and the compile of api through them over that export (TEQ
+  # naming the branch's binary, which no repository holds; the corpus's sources generated when missing
+  # and the main source api's tests use besides, as check.sh and check-stage.sh make them).
   out=
   if { [ -d src ] || timeout 120 python3 ../../../bench/app/gen.py src > /dev/null; } && mkdir -p src/api/meridian/check &&
     printf 'package meridian.check\n\ntrait Action:\n  def run(): Int\n\nobject Actions:\n  inline def make(): Action = new Action:\n    def run(): Int = 42\n' > src/api/meridian/check/Actions.scala &&
     cmp -s teq ../../../tools/launcher/teq && cmp -s teq.cmd ../../../tools/launcher/teq.cmd && [ -x teq ] &&
+    cmp -s ../../../teq ../../../tools/launcher/teq && cmp -s ../../../teq.cmd ../../../tools/launcher/teq.cmd && [ -x ../../../teq ] &&
     out=$(TEQ=$teq timeout 300 ./teq compile api 2>&1); then
     echo "export: the launchers written beside the lock are teq's, and ./teq compile api runs through them"
   else

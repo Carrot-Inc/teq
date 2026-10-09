@@ -1,0 +1,19 @@
+written without a flush: 65
+the same stream again: true
+output shut: true
+the peer reads the end: -1
+output after its shutdown: java.net.SocketException: Socket output is shutdown
+shut again: java.net.SocketException: Socket output is already shutdown
+read: 66
+closing a stream closes the socket: true
+read when closed: java.net.SocketException: Socket closed
+stream when closed: java.net.SocketException: Socket is closed
+connected when closed: true
+timeout when closed: java.net.SocketException: Socket is closed
+closed server's port: true
+closed server accepting: java.net.SocketException: Socket is closed
+timeout before connecting: 50
+stream before connecting: java.net.SocketException: Socket is not connected
+the timeout at the connection: java.net.SocketTimeoutException: Read timed out
+connect again: java.net.SocketException: Already connected
+a negative connect timeout: java.lang.IllegalArgumentException: connect: timeout can't be negative

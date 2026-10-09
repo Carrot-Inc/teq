@@ -1,0 +1,26 @@
+socket c0: 65533 then waits
+socket c1: 65533 then waits
+socket f5: 65533 then waits
+socket ff: 65533 then waits
+socket 80: 65533 then waits
+socket e0 80: 65533 65533 then waits
+socket f0 8f: 65533 65533 then waits
+socket f4 90: 65533 65533 then waits
+socket f0 90 41: 65533 65 then waits
+socket ed a0 80: 65533 then waits
+socket e2 82, ac: 65 8364 then waits
+socket e2 82: then waits
+pieces c0: 65533 then would wait
+pieces c1: 65533 then would wait
+pieces f5: 65533 then would wait
+pieces ff: 65533 then would wait
+pieces 80: 65533 then would wait
+pieces e0 80: 65533 65533 then would wait
+pieces f0 8f: 65533 65533 then would wait
+pieces f4 90: 65533 65533 then would wait
+pieces f0 90 41: 65533 65 then would wait
+pieces ed a0 80: 65533 then would wait
+pieces 41 e2 82, ac: 65 8364 then would wait
+pieces f0 9f, 98, 80: 55357 56832 then would wait
+pieces e2 82 at the end: 65533 -1
+pieces f0 9f 98 at the end: 65533 -1

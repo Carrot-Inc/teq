@@ -1,0 +1,14 @@
+arguments: <a b><><"quoted"><back\slash><é ü 日本><$HOME><*>
+argument count: 2
+inherited: true
+same map: true
+the child's: added é|path|unset
+the interpreter's: true
+cleared: unset|unset
+relative directory: <dir>/target/process_environment
+absolute directory: <dir>/target/process_environment
+directory: target/process_environment
+missing directory: java.io.IOException: Cannot run program "sh" (in directory "target/process_environment/absent"): error=2, No such file or directory
+command: [a, b]
+command replaced: [c, d]
+null command: java.lang.NullPointerException: null

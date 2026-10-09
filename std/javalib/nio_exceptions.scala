@@ -40,6 +40,16 @@ package java.nio.file:
   @jvmClass("java/nio/file/DirectoryNotEmptyException")
   class DirectoryNotEmptyException(dir: String) extends FileSystemException(dir, null, null)
 
+  @jvmClass("java/nio/file/FileSystemLoopException")
+  class FileSystemLoopException(file: String) extends FileSystemException(file, null, null)
+
+  @jvmClass("java/nio/file/NotLinkException")
+  class NotLinkException(file: String, other: String, reason: String) extends FileSystemException(file, other, reason):
+    def this(file: String) = this(file, null, null)
+
+  @jvmClass("java/nio/file/AtomicMoveNotSupportedException")
+  class AtomicMoveNotSupportedException(source: String, target: String, reason: String) extends FileSystemException(source, target, reason)
+
 package java.nio.charset:
 
   @jvmClass("java/nio/charset/CharacterCodingException")
@@ -54,6 +64,12 @@ package java.nio.charset:
   class UnmappableCharacterException(inputLength: Int) extends CharacterCodingException:
     def getInputLength: Int = inputLength
     override def getMessage: String = "Input length = " + inputLength
+
+package java.nio.channels:
+
+  // What a closed channel's stream throws (`Files.newInputStream`, `newOutputStream`), no message.
+  @jvmClass("java/nio/channels/ClosedChannelException")
+  class ClosedChannelException extends java.io.IOException(null)
 
 package java.io:
 

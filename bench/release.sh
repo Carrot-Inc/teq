@@ -26,7 +26,9 @@
 # reads, pins the release's compiler and binaries and records the new build files among its inputs; checks that the
 # lock changed in those alone and that its binaries are exactly the release's as the GitHub release serves them
 # (check-export.py pin against release_records: each qualified classifier, its asset's canonical URL, the SHA-1 and
-# size the release's binary manifest gives, checked against its SHA256SUMS, each asset served at that size); moves
+# size the release's binary manifest gives, checked against its SHA256SUMS, each asset served at that size); copies
+# the lock's header and binaries into the repository's own teq.lock, which its scripts' launcher reads
+# (release_root_lock); moves
 # the documents' instructions for a new release to it (release_documents: the plugin's coordinates, `teqVersion` and
 # the download links, which name the last release on purpose until its files are served, each link named as
 # release_asset names its classifier's asset); and
@@ -102,16 +104,18 @@ if [ "$1" = --pin ]; then
   # The export under the pinned plugin, from the repository (TEQ_PLUGIN_VERSION unset), into the
   # committed teq.lock, even when the pin names the release already: the lock may not; the jar the
   # example's api lists made when missing, as check-export.sh makes it.
-  undo="git checkout -- $example $release_documents undoes the pin, the export and the documents' move"
+  undo="git checkout -- $example teq.lock $release_documents undoes the pin, the export and the documents' move"
   [ -f $example/api/lib/util.jar ] ||
     (cd $example && timeout 200 scala-cli --power package lib-src --library -o api/lib/util.jar -f -S 3.8.4 --server=false > target-util-jar.log 2>&1) ||
     fail "the example's api/lib/util.jar could not be made (see $example/target-util-jar.log); $undo"
   (cd $example && env -u TEQ_PLUGIN_VERSION -u TEQ_VERSION timeout 600 sbt --server --batch teqExportAll > target-pin-export.log 2>&1) ||
     fail "the example's export under $version failed (see $example/target-pin-export.log); $undo"
+  # The repository's own lock, which its scripts run under, the export's header and binaries.
+  release_root_lock $example/teq.lock teq.lock || fail "the repository's teq.lock could not be written; $undo"
   pinned=
   git diff --quiet -- $example/project/plugins.sbt || pinned=$example/project/plugins.sbt
   # shellcheck disable=SC2086
-  changed_alone $pinned -- $example/teq.lock $example/build.sbt
+  changed_alone $pinned -- $example/teq.lock $example/build.sbt teq.lock
   only $example/build.sbt '^[-+]ThisBuild / teqVersion := "' || fail "the example's build.sbt changed in other lines than its teqVersion; $undo"
   git show HEAD:$example/teq.lock > $example/target-export-pin-before.lock
   # The release's binaries as the repository serves them, which the lock must pin and nothing else.

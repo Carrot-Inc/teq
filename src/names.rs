@@ -1,5 +1,9 @@
 use crate::intern::{Interner, Name};
 
+/// The members of `Any` and `AnyRef`, which every type has: a lookup that misses one is answered
+/// by them, never by a Java class's members.
+pub const ANY_MEMBERS: &[&str] = &["==", "!=", "equals", "hashCode", "toString", "##", "getClass", "isInstanceOf", "asInstanceOf", "eq", "ne", "synchronized"];
+
 macro_rules! well_known {
     ($($id:ident = $s:expr),* $(,)?) => {
         well_known!(@consts 0u32; $($id,)*);

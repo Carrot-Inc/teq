@@ -30,7 +30,8 @@
 # tests/interop gets a comment inserted (which moves every position in the file) and its first
 # string literal changed, each followed by an incremental build and the comparison; a program's
 # `// jars:` line puts those jars on its class path (tests/support/jars.sh), and without one of
-# them in the coursier cache it counts as passed. Last the sessions of tests/support/retype.sh,
+# them in the coursier cache it counts as passed; one whose header includes sources (`//> using
+# file`, which teq interp alone follows) is left out. Last the sessions of tests/support/retype.sh,
 # in which one file is typed again after another, and every file of the realistic frontend in
 # turn.
 cd "$(dirname "$0")/.."
@@ -1272,6 +1273,8 @@ for case in tests/cases/*.scala tests/cases/*/ tests/interop/*.scala tests/inter
   suite=$(dirname "$case")
   [ "$case" = "$STUB" ] && continue
   [ -f "$suite/$name.expected" ] || continue
+  # A case whose header includes sources (`//> using file`, the scripts' library) is teq interp's alone.
+  grep -q -h '^//> using files\? ' "$case" "$case"/*.scala 2> /dev/null && continue
   rm -rf "$src" "$work/out"
   mkdir -p "$src"
   if [ -d "$case" ]; then cp -r "$case"/. "$src"; else cp "$case" "$src/"; fi

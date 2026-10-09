@@ -1,0 +1,10 @@
+copy onto itself, replacing: data before
+copy onto itself: data before
+copy onto another spelling: true
+copy onto a hard link: true
+move onto a hard link: true
+move onto itself: true
+move onto another spelling: true
+copy onto another file: java.nio.file.FileAlreadyExistsException
+copy onto a link to it: true
+cleaned: false

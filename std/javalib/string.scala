@@ -176,6 +176,8 @@ package java.lang:
     def newString(bytes: Array[scala.Byte], charsetName: String): String = java.nio.charset.decode(bytes, 0, bytes.length, java.nio.charset.Charset.forName(charsetName))
     @jvm("new java/lang/String dup rt $1:L rtcall javaBytes(Ljava/lang/Object;)Ljava/lang/Object; checkcast [B $2 invokespecial java/lang/String.<init>([BLjava/nio/charset/Charset;)V")
     def newString(bytes: Array[scala.Byte], charset: java.nio.charset.Charset): String = java.nio.charset.decode(bytes, 0, bytes.length, charset)
+    @jvm("new java/lang/String dup rt $1:L rtcall javaBytes(Ljava/lang/Object;)Ljava/lang/Object; checkcast [B $2:I $3:I invokespecial java/lang/String.<init>([BII)V")
+    def newString(bytes: Array[scala.Byte], offset: Int, length: Int): String = java.nio.charset.decode(bytes, offset, length, java.nio.charset.StandardCharsets.UTF_8)
     @jvm("new java/lang/String dup rt $1:L rtcall javaBytes(Ljava/lang/Object;)Ljava/lang/Object; checkcast [B $2:I $3:I $4 invokespecial java/lang/String.<init>([BIILjava/lang/String;)V")
     def newString(bytes: Array[scala.Byte], offset: Int, length: Int, charsetName: String): String = java.nio.charset.decode(bytes, offset, length, java.nio.charset.Charset.forName(charsetName))
     @jvm("new java/lang/String dup rt $1:L rtcall javaBytes(Ljava/lang/Object;)Ljava/lang/Object; checkcast [B $2:I $3:I $4 invokespecial java/lang/String.<init>([BIILjava/nio/charset/Charset;)V")

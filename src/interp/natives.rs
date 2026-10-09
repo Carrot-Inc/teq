@@ -148,6 +148,11 @@ pub(super) const NATIVES: &[(&str, Native)] = &[
     ("scala.IterableOps.nonEmpty", |it, this, _| iterable_empty(it, this, false)),
     ("scala.IterableOps.headOption", iterable_head_option),
     ("scala.IterableOps.mkString", iterable_mk_string),
+    ("java.nio.charset.decode", charset_decode),
+    ("java.nio.charset.encode", charset_encode),
+    ("java.io.utf8Underflow", utf8_underflow_native),
+    ("java.nio.file.Path.equals", path_equals),
+    ("java.nio.file.Path.hashCode", path_hash_code),
     ("scala.IterableOps.groupBy", iterable_group_by),
     ("scala.IterableOps.groupMap", iterable_group_map),
     ("scala.IterableOps.distinctBy", iterable_distinct_by),
@@ -1793,6 +1798,284 @@ fn iterable_head_option(it: &mut Interp, this: &Value, _a: &[Value]) -> R<Option
     Ok(Some(it.option_of(&option, items.into_iter().next())))
 }
 
+/// The name of a `Charset` the std's charset functions take.
+fn charset_name(it: &mut Interp, charset: &Value) -> R<Option<String>> {
+    if !matches!(charset, Value::Obj(_)) {
+        return Ok(None);
+    }
+    match it.call_by_name(charset.clone(), "name", Vec::new())? {
+        Value::Str(name) => Ok(Some(name.to_string())),
+        _ => Ok(None),
+    }
+}
+
+/// `java.nio.charset.decode(bytes, offset, length, charset)` for UTF-8, ISO-8859-1 and US-ASCII, as
+/// the JDK's decoders replace: a malformed UTF-8 sequence's maximal part by one U+FFFD, a byte past
+/// ASCII by one. Another charset, an offset out of range or a character of the range that stands for
+/// a lone surrogate (`crate::text`) leaves it to the body.
+fn charset_decode(it: &mut Interp, _this: &Value, a: &[Value]) -> R<Option<Value>> {
+    let [Value::Array(bytes), off, len, charset] = a else { return Ok(None) };
+    let (Some(off), Some(len)) = (off.as_i64(), len.as_i64()) else { return Ok(None) };
+    let Some(name) = charset_name(it, charset)? else { return Ok(None) };
+    let items = bytes.borrow();
+    if off < 0 || len < 0 || (off + len) as usize > items.len() {
+        return Ok(None);
+    }
+    let raw: Vec<u8> = items[off as usize..(off + len) as usize].iter().map(|v| v.as_i64().unwrap_or(0) as u8).collect();
+    drop(items);
+    let text = match name.as_str() {
+        "UTF-8" => jdk_utf8_decode(&raw),
+        "ISO-8859-1" => raw.iter().map(|&b| b as char).collect(),
+        "US-ASCII" => raw.iter().map(|&b| if b < 0x80 { b as char } else { '\u{fffd}' }).collect(),
+        _ => return Ok(None),
+    };
+    if text.chars().any(|c| crate::text::surrogate_of(c).is_some()) {
+        return Ok(None);
+    }
+    Ok(Some(Value::string(text)))
+}
+
+/// `Path.equals` and `hashCode` by the std's rules (`std/javalib/nio.scala`), natively: a build's
+/// macros call them as often as they key a map by a path. On Windows `WindowsPath`'s, the texts'
+/// UTF-16 units compared and hashed upper-cased; elsewhere the texts' own.
+fn path_equals(it: &mut Interp, this: &Value, a: &[Value]) -> R<Option<Value>> {
+    let Value::Obj(o) = this else { return Ok(None) };
+    let Some(Value::Str(text)) = it.field_of(o, "text") else { return Ok(None) };
+    let other = match a.first() {
+        Some(Value::Obj(p)) if p.class == o.class => match it.field_of(p, "text") {
+            Some(Value::Str(t)) => t,
+            _ => return Ok(None),
+        },
+        Some(Value::Obj(_)) | Some(Value::Null) => return Ok(Some(Value::Bool(false))),
+        _ => return Ok(None),
+    };
+    let same = if cfg!(windows) {
+        let (x, y): (Vec<u16>, Vec<u16>) = (text.encode_utf16().collect(), other.encode_utf16().collect());
+        x.len() == y.len() && x.iter().zip(&y).all(|(&c1, &c2)| c1 == c2 || upper_unit(c1) == upper_unit(c2))
+    } else {
+        text == other
+    };
+    Ok(Some(Value::Bool(same)))
+}
+
+fn path_hash_code(it: &mut Interp, this: &Value, _a: &[Value]) -> R<Option<Value>> {
+    let Value::Obj(o) = this else { return Ok(None) };
+    let Some(Value::Str(text)) = it.field_of(o, "text") else { return Ok(None) };
+    let hash = if cfg!(windows) {
+        text.encode_utf16().fold(0i32, |h, u| h.wrapping_mul(31).wrapping_add(upper_unit(u) as i32))
+    } else {
+        super::value::str_hash(&text)
+    };
+    Ok(Some(Value::Int(hash)))
+}
+
+/// `Character.toUpperCase` of a UTF-16 unit as the interpreter's builtin maps a character: its
+/// upper case where that is one character of the plane, else the unit itself.
+fn upper_unit(u: u16) -> u16 {
+    match char::from_u32(u as u32).map(|c| {
+        let mut up = c.to_uppercase();
+        (up.next(), up.next())
+    }) {
+        Some((Some(c), None)) if (c as u32) <= 0xffff => c as u32 as u16,
+        _ => u,
+    }
+}
+
+/// How many bytes at the end of `bytes` the JDK's UTF-8 decoder leaves for more input (the
+/// underflow of `UTF_8.Decoder.decodeArrayLoop`): the start of a sequence that more bytes can
+/// still complete. 0 where the bytes end at a sequence's end or inside one already malformed,
+/// which the decoder answers at once: a lead `c0`, `c1` or `f5` to `ff`, a continuation where a
+/// lead belongs, a three-byte prefix whose second byte is wrong (`isMalformed3_2`), a four-byte one
+/// whose second or third is (`isMalformed4_2`, `isMalformed4_3`). The streams' text reads
+/// (`process.rs`) and `InputStreamReader`'s own (`utf8Underflow` in `std/javalib/io.scala`) decide by it.
+pub(super) fn utf8_underflow(bytes: &[u8]) -> usize {
+    let cont = |b: u8| b & 0xc0 == 0x80;
+    let n = bytes.len();
+    for back in 1..=n.min(3) {
+        let b1 = bytes[n - back];
+        if cont(b1) {
+            continue;
+        }
+        let rest = &bytes[n - back..];
+        return match b1 {
+            0xc2..=0xdf if back < 2 => back,
+            0xe0..=0xef if back < 3 => {
+                if back > 1 && ((b1 == 0xe0 && rest[1] & 0xe0 == 0x80) || !cont(rest[1])) {
+                    0
+                } else {
+                    back
+                }
+            }
+            0xf0..=0xf4 => {
+                if back > 1 && ((b1 == 0xf0 && !(0x90..=0xbf).contains(&rest[1])) || (b1 == 0xf4 && rest[1] & 0xf0 != 0x80) || !cont(rest[1])) {
+                    0
+                } else if back > 2 && !cont(rest[2]) {
+                    0
+                } else {
+                    back
+                }
+            }
+            _ => 0,
+        };
+    }
+    0
+}
+
+/// `java.io.utf8Underflow(bytes, from, to)`: `utf8_underflow` of the bytes between.
+fn utf8_underflow_native(_it: &mut Interp, _this: &Value, a: &[Value]) -> R<Option<Value>> {
+    let [Value::Array(bytes), from, to] = a else { return Ok(None) };
+    let (Some(from), Some(to)) = (from.as_i64(), to.as_i64()) else { return Ok(None) };
+    let items = bytes.borrow();
+    if from < 0 || to < from || to as usize > items.len() {
+        return Ok(None);
+    }
+    let start = from.max(to - 3);
+    let tail: Vec<u8> = items[start as usize..to as usize].iter().map(|v| v.as_i64().unwrap_or(0) as u8).collect();
+    Ok(Some(Value::Int(utf8_underflow(&tail) as i32)))
+}
+
+/// UTF-8 decoded as the JDK's `String(bytes, UTF_8)` decodes (`String.decodeUTF8_UTF16`), a
+/// malformed sequence replaced by one U+FFFD for the bytes its rules take together: an encoded
+/// surrogate's three, an overlong lead alone, a truncated tail at the end as one.
+pub(super) fn jdk_utf8_decode(src: &[u8]) -> String {
+    jdk_utf8(src, &mut |_, _| true)
+}
+
+/// The length of the first malformed sequence of the bytes by the JDK's decoder's rules, none for
+/// none: what a decoder that reports (`CodingErrorAction.REPORT`) throws `MalformedInputException`
+/// with.
+pub(super) fn jdk_utf8_malformed(src: &[u8]) -> Option<usize> {
+    let mut found = None;
+    jdk_utf8(src, &mut |_, len| {
+        found = Some(len);
+        false
+    });
+    found
+}
+
+/// The decoding of `jdk_utf8_decode`, `malformed` told the place and the length of each sequence
+/// replaced, the decoding stopped when it answers false.
+fn jdk_utf8(src: &[u8], malformed: &mut dyn FnMut(usize, usize) -> bool) -> String {
+    const REPL: char = '\u{fffd}';
+    let not_cont = |b: u8| b & 0xc0 != 0x80;
+    let mut out = String::with_capacity(src.len());
+    let (mut sp, sl) = (0usize, src.len());
+    // A replacement for the `len` bytes at `at`; the decoding stops when `malformed` says so.
+    macro_rules! replaced {
+        ($at:expr, $len:expr) => {{
+            out.push(REPL);
+            if !malformed($at, $len) {
+                return out;
+            }
+        }};
+    }
+    while sp < sl {
+        let lead = sp;
+        let b1 = src[sp];
+        sp += 1;
+        if b1 < 0x80 {
+            out.push(b1 as char);
+        } else if b1 >> 5 == 0b110 && b1 & 0x1e != 0 {
+            if sp < sl {
+                let b2 = src[sp];
+                if not_cont(b2) {
+                    replaced!(lead, 1);
+                } else {
+                    sp += 1;
+                    out.push(char::from_u32(((b1 as u32 & 0x1f) << 6) | (b2 as u32 & 0x3f)).unwrap_or(REPL));
+                }
+                continue;
+            }
+            replaced!(lead, sl - lead);
+            break;
+        } else if b1 >> 4 == 0b1110 {
+            let malformed3_2 = |b2: u8| (b1 == 0xe0 && b2 & 0xe0 == 0x80) || not_cont(b2);
+            if sp + 1 < sl {
+                let (b2, b3) = (src[sp], src[sp + 1]);
+                if malformed3_2(b2) || not_cont(b3) {
+                    let len = if malformed3_2(b2) { 1 } else { 2 };
+                    sp = lead + len;
+                    replaced!(lead, len);
+                } else {
+                    sp += 2;
+                    let c = ((b1 as u32 & 0x0f) << 12) | ((b2 as u32 & 0x3f) << 6) | (b3 as u32 & 0x3f);
+                    if (0xd800..0xe000).contains(&c) {
+                        replaced!(lead, 3);
+                    } else {
+                        out.push(char::from_u32(c).unwrap_or(REPL));
+                    }
+                }
+                continue;
+            }
+            if sp < sl && malformed3_2(src[sp]) {
+                replaced!(lead, 1);
+                continue;
+            }
+            replaced!(lead, sl - lead);
+            break;
+        } else if b1 >> 3 == 0b11110 {
+            let malformed4_2 = |b2: u8| (b1 == 0xf0 && !(0x90..=0xbf).contains(&b2)) || (b1 == 0xf4 && b2 & 0xf0 != 0x80) || not_cont(b2);
+            if sp + 2 < sl {
+                let (b2, b3, b4) = (src[sp], src[sp + 1], src[sp + 2]);
+                let uc = ((b1 as u32 & 0x07) << 18) | ((b2 as u32 & 0x3f) << 12) | ((b3 as u32 & 0x3f) << 6) | (b4 as u32 & 0x3f);
+                if not_cont(b2) || not_cont(b3) || not_cont(b4) || !(0x10000..=0x10ffff).contains(&uc) {
+                    let len = if b1 > 0xf4 || malformed4_2(b2) {
+                        1
+                    } else if not_cont(b3) {
+                        2
+                    } else {
+                        3
+                    };
+                    sp = lead + len;
+                    replaced!(lead, len);
+                } else {
+                    sp += 3;
+                    out.push(char::from_u32(uc).unwrap_or(REPL));
+                }
+                continue;
+            }
+            if b1 > 0xf4 || sp < sl && malformed4_2(src[sp]) {
+                replaced!(lead, 1);
+                continue;
+            }
+            sp += 1;
+            if sp < sl && not_cont(src[sp]) {
+                replaced!(lead, 2);
+                continue;
+            }
+            replaced!(lead, sl - lead);
+            break;
+        } else {
+            replaced!(lead, 1);
+        }
+    }
+    out
+}
+
+/// `java.nio.charset.encode(s, charset)` for UTF-8: a lone surrogate as `?`, as the JDK's encoder
+/// replaces it. Another charset leaves it to the body.
+fn charset_encode(it: &mut Interp, _this: &Value, a: &[Value]) -> R<Option<Value>> {
+    let [Value::Str(s), charset] = a else { return Ok(None) };
+    if charset_name(it, charset)?.as_deref() != Some("UTF-8") {
+        return Ok(None);
+    }
+    let mut out = Vec::with_capacity(s.len());
+    let mut chars = s.chars().peekable();
+    while let Some(c) = chars.next() {
+        if let Some(unit) = crate::text::surrogate_of(c) {
+            // A high stand-in before a low one is a pair to `codePointAt`: the body's.
+            if (0xd800..0xdc00).contains(&unit) && chars.peek().and_then(|&n| crate::text::surrogate_of(n)).is_some_and(|u| u >= 0xdc00) {
+                return Ok(None);
+            }
+            out.push(Value::Byte(b'?' as i8));
+        } else {
+            let mut buf = [0u8; 4];
+            out.extend(c.encode_utf8(&mut buf).bytes().map(|b| Value::Byte(b as i8)));
+        }
+    }
+    Ok(Some(Value::array(out)))
+}
+
 fn iterable_mk_string(it: &mut Interp, this: &Value, a: &[Value]) -> R<Option<Value>> {
     if a.len() != 3 {
         return Ok(None);
@@ -1901,7 +2184,8 @@ fn new_path(it: &mut Interp, text: String) -> Option<Value> {
 }
 
 fn path_of(it: &mut Interp, _this: &Value, a: &[Value]) -> R<Option<Value>> {
-    let Value::Str(first) = arg(a, 0) else { return Ok(None) };
+    // `of(first, more*)` is its body's.
+    let [Value::Str(first)] = a else { return Ok(None) };
     Ok(new_path(it, super::files::path::normalized(&first, cfg!(windows))))
 }
 
@@ -2010,4 +2294,45 @@ fn expr_as_expr_of(it: &mut Interp, _this: &Value, a: &[Value]) -> R<Option<Valu
         return Ok(None);
     }
     Ok(Some(arg(a, 0)))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The JDK decoder's underflow and its malformed answers at the input's end (`decodeArrayLoop`):
+    /// a prefix more bytes can complete waits, whole, a malformed one or one already whole does not.
+    #[test]
+    fn utf8_underflow_is_the_decoders() {
+        let cases: &[(&[u8], usize)] = &[
+            (&[], 0),
+            (&[0x41], 0),
+            (&[0xc2], 1),
+            (&[0xc0], 0),
+            (&[0xc1], 0),
+            (&[0x80], 0),
+            (&[0xe2], 1),
+            (&[0xe2, 0x82], 2),
+            (&[0xe2, 0x82, 0xac], 0),
+            (&[0xe0, 0x80], 0),
+            (&[0xe0, 0xa0], 2),
+            (&[0xed, 0xa0], 2),
+            (&[0xe2, 0x41], 0),
+            (&[0xf0], 1),
+            (&[0xf0, 0x8f], 0),
+            (&[0xf0, 0x90], 2),
+            (&[0xf4, 0x8f], 2),
+            (&[0xf4, 0x90], 0),
+            (&[0xf0, 0x90, 0x41], 0),
+            (&[0xf0, 0x90, 0x80], 3),
+            (&[0xf0, 0x90, 0x80, 0x80], 0),
+            (&[0xf5], 0),
+            (&[0xff], 0),
+            (&[0x41, 0xe2, 0x82], 2),
+            (&[0xf0, 0xe2, 0x82], 2),
+        ];
+        for &(bytes, wait) in cases {
+            assert_eq!(utf8_underflow(bytes), wait, "{:02x?}", bytes);
+        }
+    }
 }

@@ -1,0 +1,47 @@
+jar entries: META-INF/MANIFEST.MF:8:25:27:false liba/A.tasty:8:649:594:false liba/A$.class:8:678:419:false liba/A.class:8:564:359:false
+jar size: 4
+an entry's bytes: 566ad1a80220026d05099562645ce968ff0e7c36cde22634332605bb34cc3eff
+an entry's crc: ee027fb2
+absent entry: null
+stream of entries: 4
+closed: java.lang.IllegalStateException: zip file closed
+streamed: META-INF/MANIFEST.MF:566ad1a80220 liba/A.tasty:a5be949cd388 liba/A$.class:0862b214cac3 liba/A.class:e070b89851eb
+not a zip: java.util.zip.ZipException: zip END header not found
+missing zip: java.nio.file.NoSuchFileException: target/zip_digest/absent.zip
+duplicate: java.util.zip.ZipException: duplicate entry: text/stored.txt
+zip bytes: 6393 f4e557e0f18eb5c67e3ebed675174582a880912ce117dcebd129d15a56da01f4
+sizes after the write: 5800 60 16dd3f
+read back: text/deflated.txt:8:5800:true text/stored.txt:0:5800:true text/empty/:8:0:true ünïcode-é.txt:8:2:true
+read back text: true
+stored without a size: java.util.zip.ZipException: STORED entry missing size, compressed size, or crc-32
+gzip bytes: 78 cfc2c27e16ead23ac91837374d8b7f68392d42ff63fa6fb6d6924b6333e65a31
+gunzip: true
+not gzip: java.util.zip.ZipException: Not in GZIP format
+deflate level 1 nowrap true: 89 d1deb38b8cc38bff 5800 true true
+deflate level 1 nowrap false: 95 c5d0ffa7f44c0e09 5800 true true
+deflate level 6 nowrap true: 60 f5323ec4b9253b3f 5800 true true
+deflate level 6 nowrap false: 66 433225683469ed26 5800 true true
+deflate level 9 nowrap true: 60 f5323ec4b9253b3f 5800 true true
+deflate level 9 nowrap false: 66 875a70bc9f36f3ad 5800 true true
+crc32: 352441c2
+crc32 more: ed82cd11
+MD5: 900150983cd24fb0d6963f7d28e17f72
+MD5 of nothing: d41d8cd98f00b204e9800998ecf8427e
+MD5 in pieces: 900150983cd24fb0d6963f7d28e17f72
+MD5 of a file: 7f7c0f5ce2df27ed21205e21f60fa9ee
+MD5 length: 16 MD5
+SHA-1: a9993e364706816aba3e25717850c26c9cd0d89d
+SHA-1 of nothing: da39a3ee5e6b4b0d3255bfef95601890afd80709
+SHA-1 in pieces: a9993e364706816aba3e25717850c26c9cd0d89d
+SHA-1 of a file: 1934ff54ff1feef349c5c93d7fcc89653e88da19
+SHA-1 length: 20 SHA-1
+SHA-256: ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad
+SHA-256 of nothing: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+SHA-256 in pieces: ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad
+SHA-256 of a file: 75cb12d4b184393d78b53db5976baeb1afc31cb594b863528f04b40ebe72f09d
+SHA-256 length: 32 SHA-256
+unknown digest: java.security.NoSuchAlgorithmException: SHA-999 MessageDigest not available
+hex upper: 000FFF7F
+hex delimited: 01:02:fd
+hex parsed: 0,-1,127,-128
+hex bad: java.lang.NumberFormatException: not a hexadecimal digit: "g" = 103

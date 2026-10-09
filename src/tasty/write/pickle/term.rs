@@ -126,7 +126,7 @@ impl ArrayElem {
 
 /// The members of `Any` and `AnyRef` the encoder writes: (owner's package, owner, type
 /// parameters, parameters, result, an argument clause).
-pub(super) const UNIVERSAL: &[&str] = &["==", "!=", "equals", "hashCode", "toString", "##", "getClass", "isInstanceOf", "asInstanceOf", "eq", "ne", "synchronized"];
+pub(super) const UNIVERSAL: &[&str] = crate::names::ANY_MEMBERS;
 
 #[allow(clippy::type_complexity)]
 pub(super) fn universal_member(name: &str) -> Option<(&'static str, &'static str, usize, &'static [&'static str], &'static str, bool)> {

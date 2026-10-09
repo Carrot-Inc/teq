@@ -800,13 +800,184 @@ fn java_number(sci: String, abs: f64) -> String {
 // character two, a lone surrogate's stand-in one; a slice that cuts a pair gives the half it keeps
 // as its stand-in.
 
+// ---- the index of long strings ----
+//
+// A view by UTF-16 index scans its string from the start (and `is_ascii` the whole of it), so that
+// a loop of `charAt` over a megabyte is quadratic. The last few long strings a builtin was handed
+// (`index_str`) are indexed instead: whether each is ASCII, and for one that is not the character
+// holding every `MARK`th unit, found as far as an index has reached, and the last character an
+// index found, from which a forward scan goes on. The table holds each string, so that no other
+// takes its address while it is listed: a `&str` of a listed string's address and length is it.
+
+/// The bytes from which a string is worth indexing.
+const INDEXED_MIN: usize = 512;
+/// The strings listed at once.
+const INDEXED: usize = 4;
+/// The units between two marks.
+const MARK: usize = 64;
+
+struct Indexed {
+    s: Rc<str>,
+    ascii: bool,
+    /// For a string that is not ASCII, the first unit and the byte offset of the character
+    /// holding unit `k * MARK`, for each `k` the scan has reached.
+    marks: Vec<(usize, usize)>,
+    /// Where the scan that writes the marks stands: a character's first unit and byte offset.
+    scan: (usize, usize),
+    /// The last character found, as a mark.
+    last: (usize, usize),
+}
+
+thread_local! {
+    static INDEX: RefCell<Vec<Indexed>> = const { RefCell::new(Vec::new()) };
+}
+
+/// Lists a long string first in the table, indexed when it is not yet; a short one, which every
+/// string builtin is handed, costs the length's test alone.
+#[inline]
+pub fn index_str(s: &Rc<str>) {
+    if s.len() >= INDEXED_MIN {
+        list_str(s);
+    }
+}
+
+#[inline(never)]
+fn list_str(s: &Rc<str>) {
+    INDEX.with(|t| {
+        let mut t = t.borrow_mut();
+        match t.iter().position(|x| Rc::ptr_eq(&x.s, s)) {
+            Some(0) => {}
+            Some(k) => {
+                let e = t.remove(k);
+                t.insert(0, e);
+            }
+            None => {
+                t.truncate(INDEXED - 1);
+                t.insert(0, Indexed { s: s.clone(), ascii: s.is_ascii(), marks: Vec::new(), scan: (0, 0), last: (0, 0) });
+            }
+        }
+    });
+}
+
+/// `f` of the listed string `s` is, `None` when it is not listed.
+fn indexed<T>(s: &str, f: impl FnOnce(&mut Indexed) -> T) -> Option<T> {
+    if s.len() < INDEXED_MIN {
+        return None;
+    }
+    INDEX.with(|t| {
+        let mut t = t.borrow_mut();
+        let e = t.iter_mut().find(|x| x.s.as_ptr() == s.as_ptr() && x.s.len() == s.len())?;
+        Some(f(e))
+    })
+}
+
+impl Indexed {
+    /// Moves the scan on by a character, marking the units it holds.
+    fn step(&mut self) -> bool {
+        let (u, b) = self.scan;
+        let Some(c) = self.s[b..].chars().next() else { return false };
+        let n = crate::text::len_utf16(c);
+        while self.marks.len() * MARK < u + n {
+            self.marks.push((u, b));
+        }
+        self.scan = (u + n, b + c.len_utf8());
+        true
+    }
+
+    /// The first unit, the byte offset and the character of the character holding unit `i` of a
+    /// string that is not ASCII, `None` past its end.
+    fn find(&mut self, i: usize) -> Option<(usize, usize, char)> {
+        let k = i / MARK;
+        while self.marks.len() <= k && self.step() {}
+        let mark = *self.marks.get(k)?;
+        let (mut u, mut b) = if self.last.0 <= i && self.last.0 >= mark.0 { self.last } else { mark };
+        loop {
+            let c = self.s[b..].chars().next()?;
+            let n = crate::text::len_utf16(c);
+            if u + n > i {
+                self.last = (u, b);
+                return Some((u, b, c));
+            }
+            u += n;
+            b += c.len_utf8();
+        }
+    }
+
+    fn units(&mut self) -> usize {
+        if self.ascii {
+            return self.s.len();
+        }
+        while self.step() {}
+        self.scan.0
+    }
+
+    fn unit_at(&mut self, i: usize) -> Option<u16> {
+        if self.ascii {
+            return self.s.as_bytes().get(i).map(|&b| b as u16);
+        }
+        let (u, _, c) = self.find(i)?;
+        let mut buf = [0u8; 4];
+        crate::text::utf16_units(c.encode_utf8(&mut buf)).nth(i - u)
+    }
+
+    /// `utf16_position`'s answer.
+    fn position(&mut self, i: usize) -> (usize, Option<char>) {
+        if self.ascii {
+            return (i.min(self.s.len()), None);
+        }
+        match self.find(i) {
+            Some((u, b, _)) if u == i => (b, None),
+            Some((_, b, c)) => (b, Some(c)),
+            None => (self.s.len(), None),
+        }
+    }
+
+    /// The units before the byte offset `at`, a character's start.
+    fn units_before(&mut self, at: usize) -> usize {
+        if self.ascii {
+            return at;
+        }
+        while self.scan.1 < at && self.step() {}
+        let k = self.marks.partition_point(|&(_, b)| b <= at);
+        let (mut u, mut b) = if k == 0 { (0, 0) } else { self.marks[k - 1] };
+        while b < at {
+            let Some(c) = self.s[b..].chars().next() else { break };
+            u += crate::text::len_utf16(c);
+            b += c.len_utf8();
+        }
+        u
+    }
+}
+
+/// Whether `s` is ASCII, from the index when it is listed.
+fn ascii(s: &str) -> bool {
+    indexed(s, |x| x.ascii).unwrap_or_else(|| s.is_ascii())
+}
+
 pub fn utf16_len(s: &str) -> usize {
+    if let Some(n) = indexed(s, Indexed::units) {
+        return n;
+    }
     if s.is_ascii() { s.len() } else { s.chars().map(crate::text::len_utf16).sum() }
+}
+
+/// The UTF-16 length of `s[..at]`, `at` a character's start.
+fn utf16_len_before(s: &str, at: usize) -> usize {
+    if let Some(n) = indexed(s, |x| x.units_before(at)) {
+        return n;
+    }
+    utf16_len(&s[..at])
 }
 
 /// The byte offset of the UTF-16 index `i`, clamped to the string; an index inside a pair is the
 /// character after it.
 pub fn utf16_offset(s: &str, i: usize) -> usize {
+    if let Some(at) = indexed(s, |x| match x.position(i) {
+        (b, Some(c)) => b + c.len_utf8(),
+        (b, None) => b,
+    }) {
+        return at;
+    }
     if s.is_ascii() {
         return i.min(s.len());
     }
@@ -823,6 +994,9 @@ pub fn utf16_offset(s: &str, i: usize) -> usize {
 /// The byte offset of the character that holds the UTF-16 index `i`, clamped to the string, and
 /// the pair it stands inside of when it is a pair's second unit.
 fn utf16_position(s: &str, i: usize) -> (usize, Option<char>) {
+    if let Some(p) = indexed(s, |x| x.position(i)) {
+        return p;
+    }
     let mut units = 0;
     for (at, c) in s.char_indices() {
         if units == i {
@@ -839,7 +1013,7 @@ fn utf16_position(s: &str, i: usize) -> (usize, Option<char>) {
 
 /// The units `from..to`, the stand-in of a pair's half at a cut end.
 pub fn utf16_slice(s: &str, from: usize, to: usize) -> Cow<'_, str> {
-    if s.is_ascii() {
+    if ascii(s) {
         let (a, b) = (from.min(s.len()), to.min(s.len()));
         return Cow::Borrowed(if a >= b { "" } else { &s[a..b] });
     }
@@ -870,6 +1044,9 @@ pub fn utf16_slice(s: &str, from: usize, to: usize) -> Cow<'_, str> {
 }
 
 pub fn char_at(s: &str, i: usize) -> Option<u16> {
+    if let Some(u) = indexed(s, |x| x.unit_at(i)) {
+        return u;
+    }
     if s.is_ascii() {
         return s.as_bytes().get(i).map(|&b| b as u16);
     }
@@ -902,7 +1079,7 @@ pub fn index_of(s: &str, part: &str, from: usize) -> i32 {
     }
     let start = utf16_offset(s, from);
     match s[start..].find(part) {
-        Some(at) => utf16_len(&s[..start + at]) as i32,
+        Some(at) => utf16_len_before(s, start + at) as i32,
         None => -1,
     }
 }
@@ -912,7 +1089,7 @@ pub fn last_index_of(s: &str, part: &str) -> i32 {
         return last_index_of_from(s, part, i32::MAX);
     }
     match s.rfind(part) {
-        Some(at) => utf16_len(&s[..at]) as i32,
+        Some(at) => utf16_len_before(s, at) as i32,
         None => -1,
     }
 }
@@ -929,7 +1106,7 @@ pub fn last_index_of_from(s: &str, part: &str, from: i32) -> i32 {
     }
     let end = utf16_offset(s, (from as usize).min(utf16_len(s)));
     match (0..=end).rev().find(|&at| s.is_char_boundary(at) && s[at..].starts_with(part)) {
-        Some(at) => utf16_len(&s[..at]) as i32,
+        Some(at) => utf16_len_before(s, at) as i32,
         None => -1,
     }
 }

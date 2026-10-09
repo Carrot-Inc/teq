@@ -1,0 +1,31 @@
+none on a file: XY
+WRITE on a file: XYcdef
+CREATE on a file: XYcdef
+CREATE_NEW on a file: java.nio.file.FileAlreadyExistsException
+TRUNCATE_EXISTING on a file: XY
+APPEND on a file: abcdefXY
+CREATE APPEND on a file: abcdefXY
+CREATE TRUNCATE_EXISTING on a file: XY
+CREATE_NEW TRUNCATE_EXISTING on a file: java.nio.file.FileAlreadyExistsException
+APPEND TRUNCATE_EXISTING on a file: IllegalArgumentException: APPEND + TRUNCATE_EXISTING not allowed
+READ on a file: IllegalArgumentException: READ not allowed
+READ APPEND on a file: IllegalArgumentException: READ not allowed
+WRITE APPEND on a file: abcdefXY
+none on no file: XY
+WRITE on no file: java.nio.file.NoSuchFileException
+CREATE on no file: XY
+CREATE_NEW on no file: XY
+TRUNCATE_EXISTING on no file: java.nio.file.NoSuchFileException
+APPEND on no file: java.nio.file.NoSuchFileException
+CREATE APPEND on no file: XY
+CREATE TRUNCATE_EXISTING on no file: XY
+CREATE_NEW TRUNCATE_EXISTING on no file: XY
+APPEND TRUNCATE_EXISTING on no file: IllegalArgumentException: APPEND + TRUNCATE_EXISTING not allowed
+READ on no file: IllegalArgumentException: READ not allowed
+READ APPEND on no file: IllegalArgumentException: READ not allowed
+WRITE APPEND on no file: java.nio.file.NoSuchFileException
+newBufferedWriter WRITE: XYcdef
+writeString WRITE: abcdef
+newOutputStream APPEND: abcdef!
+FileOutputStream appending: abcdef!?
+FileOutputStream: .

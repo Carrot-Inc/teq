@@ -1,0 +1,4 @@
+# The repository's own launchers and lock, as an application commits them (docs/DEVELOPING.md, "The launchers").
+/teq text eol=lf
+/teq.cmd text eol=crlf
+/teq.lock text eol=lf

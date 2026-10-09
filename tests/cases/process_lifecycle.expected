@@ -1,0 +1,35 @@
+timed wait: false
+alive: true
+exitValue running: java.lang.IllegalThreadStateException: process hasn't exited
+toString running: Process[pid=<pid>, exitValue="not exited"]
+handle: true
+handle alive: true
+info command: true
+info arguments: 30
+info command line: true
+among the children: true
+destroyed: 143
+destroyed again: 143
+toString ended: Process[pid=<pid>, exitValue=143]
+handle ended: false
+destroyForcibly: true
+forced: true
+forced status: 137
+forced again: 137
+deadline: false
+children: true
+descendants: true
+grandchild's parent: true
+parent: 137
+grandchild: true
+grandchild ended: true
+dropped children: 0
+current: true
+current listed: true
+destroy current: java.lang.IllegalStateException: destroy of current process not allowed
+of an absent pid: Optional.empty
+equal handles: true
+missing program: java.io.IOException: Cannot run program "no-such-program-of-teq": error=2, No such file or directory
+missing absolute: java.io.IOException: Cannot run program "/no/such/program": error=2, No such file or directory
+empty command: java.lang.ArrayIndexOutOfBoundsException: Index 0 out of bounds for length 0
+status 3: 3

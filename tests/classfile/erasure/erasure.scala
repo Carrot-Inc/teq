@@ -1,5 +1,5 @@
 // The descriptors of definitions whose erasure turns on a type parameter's bound, a value class's
-// type arguments or an array's element: tests/classfile.sh compiles this file with teq and compares
+// type arguments or an array's element: tests/classfile.scala compiles this file with teq and compares
 // `javap -s -p` of every class with expected.txt, which is scalac 3.8.4's (see the suite's comment).
 package erasure
 

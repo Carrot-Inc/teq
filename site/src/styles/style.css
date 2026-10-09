@@ -53,7 +53,7 @@ img { max-width: 100%; height: auto; }
 .skip { position: absolute; z-index: 10; top: 12px; left: 16px; padding: 10px 16px; background: var(--bg); border: 1px solid var(--rule); border-radius: 4px; transform: translateY(-180%); }
 .skip:focus { transform: none; }
 
-/* A code block captioned with its file name (stage.py lifts the name from the block's first comment), and the copy
+/* A code block captioned with its file name (stage.scala lifts the name from the block's first comment), and the copy
    button the page adds to every block: in the caption bar, or in the corner of a block without one. */
 figure.code { margin: 0 0 16px; border: 1px solid var(--code-rule); border-radius: 6px; overflow: hidden; background: var(--code-bg); }
 figure.code figcaption {

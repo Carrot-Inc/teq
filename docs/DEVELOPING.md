@@ -104,10 +104,13 @@ cargo test --release             # unit tests
 
 Recording expectations: `tests/run.sh --regen` (the `.expected` files from scala-cli),
 `--update` on `tests/run_jvm.sh`, `run_interp.sh`, `run_stdlib.sh`, `tests/scala3/run.sh` and
-`tests/scala3-typing/harness.py` (their allow-lists), `SIZE_RECORD=1 tests/size.sh`,
+`tests/scala3-typing/harness.py` (their allow-lists), `SIZE_RECORD=1 ./teq interp tests/size.scala`,
 `BUDGET_RECORD=1 bench/budget.sh`, `RUNTIME_RECORD=1 tests/runtime.sh`,
-`WATCH_MEMORY_RECORD=1 tests/watch-memory.sh`. A `// teq: <flags>` line in a test passes flags to teq.
-`bench/budget.sh` and `tests/runtime.sh` skip on any machine but the one that recorded their budgets.
+`WATCH_MEMORY_RECORD=1 tests/watch-memory.sh`. A `// teq: <flags>` line in a test passes flags to teq; a
+`// os: windows` or `// os: unix` line keeps a case of `run_interp.sh` and `run_jvm.sh` to that system, where
+Git's bash is Windows (the `windows_*` cases are the interpreter's acceptance on Windows, their expectations
+the Windows JDK's). `bench/budget.sh` and `tests/runtime.sh` skip on any machine but the one that recorded their
+budgets.
 
 Evidence that a change leaves the output alone, or what it moves:
 
@@ -235,6 +238,64 @@ cold by a lock, running it warm, refusing another sha1); between releases a chan
 `cmd` (10.0) cannot run it: a substring past a value's end gives its last character where Windows' gives nothing
 (`%sha1:~40%` of a sha1), so `teq.cmd` refuses every lock there.
 
+## The repository's scripts
+
+The repository's own scripts are Scala, run by teq's interpreter through the repository's launcher from its
+root: `./teq interp tests/size.scala -- <args>` (`teq.cmd interp tests\size.scala -- <args>` on Windows), the
+two entry points. The root holds what every project that takes teq as its build tool holds: `teq.lock`, the
+example's first three sections (the release, the lock's format, the binaries; `bench/release.sh --pin` copies
+them again at each release), and the two launchers, copies of `tools/launcher/`'s that
+`integrations/sbt/example/check-export.sh` keeps identical. The launcher's rule stands: `TEQ` names the binary
+when set, else the lock's release runs.
+
+A script is one `.scala` file with a `@main def` taking the arguments after `--` as `String*`, which brings the
+library of `tools/script/` with a directive whose path is relative to the script:
+
+```scala
+//> using file ../tools/script
+// What the script checks and how it runs: `./teq interp tests/x.scala [-- --teq <binary>]`.
+import java.nio.file.{Files, Paths}
+
+@main def x(argv: String*): Unit = Script.run {
+  val args = new Args(argv, "tests/x.scala [--teq <binary>]")
+  val teq = args.teq("./target/release/teq")
+  args.exactly(0)
+  val r = Sh(teq, "compiler", "check", "tests/x").timeout(60).check(false).run()
+  println(if r.ok then "x: passed" else s"FAIL x\n${r.errTail}")
+  Script.exit(if r.ok then 0 else 1)
+}
+```
+
+- `Sh`: children with the JDK's processes and no shell. `Sh(cmd*).run()` a finite command, its outputs spooled
+  to files, its stdin closed unless given, killed with its descendants at its deadline (status 124, as
+  `timeout` gives), a status other than 0 thrown unless `check(false)`; `start()` a resident child with its
+  pipes for a protocol (`Frames`, JSON-RPC's frames); `Sh.pool(n, jobs)` at most n children at once, each job
+  a chain of commands. The interpreter has no threads: what runs at once runs in children.
+- `Script.run { }`, `Script.exit(status)` and `Script.atExit`: handlers run once however the body ends,
+  SIGINT and SIGTERM included (a shutdown hook, which `teq interp` runs on its main thread).
+- `Args` (flags, options, positionals, a usage line on a mistake, `--teq` built in), `Json` (a parser and
+  a printer that writes what Python's `json.dumps` wrote), `Log` (a timestamped line, `die`).
+
+The compiler a script tests is `--teq <binary>`, else `$TEQ`, else `target/release/teq`. `tests/all.sh` and
+the gate set `TEQ` to the tree's build, so their scripts run under the binary they test; a harness that runs
+under one binary and tests another says so: `TEQ=<a master binary> ./teq interp tests/size.scala -- --teq
+target/fast/teq`.
+
+The lock pins 0.1.7, whose interpreter has none of the natives the library calls (processes, streams, file
+writes, archives, digests, the clock): until a release ships them and the lock moves to it, a script runs
+with `TEQ` naming a binary built from the tree, which the gate and the workflows build first, and a fresh
+clone's `./teq interp tests/size.scala` stops with a type error naming `ProcessBuilder`. `site/stage.scala`
+uses nothing 0.1.7 lacks and no library, so that the site builds under the pinned release.
+
+`teq compiler check` and the language server see a script alone; a check names the library:
+`teq compiler check tools/script tests/size.scala`. scala-cli runs the same file (`scala-cli run tests/size.scala
+-- <args>`), the directive being its own, which is how a script's behaviour is checked against the JDK.
+
+A new script is Scala, never Python, with one exception: the JDK has no pseudo-terminal, so a test that presses
+keys in a terminal (Ctrl-C, vite's `q`) keeps one Python helper that spawns the command under a pty and feeds it
+the keys, which the Scala test invokes. Today that is the `pty.spawn` call in `check-task-dev.mjs`; it becomes
+`tests/support/pty-run.py` when the terminal tests are converted.
+
 ## Releases
 
 **The changes.** `CHANGELOG.md` has a section per release, the newest first, `## <version> (<yyyy-mm-dd>)`
@@ -268,8 +329,9 @@ signing key into a fresh keyring that `GNUPGHOME` names). The order:
    with every asset, `SHA256SUMS` and the binary manifest; the plugin staged; the smoke against the staged set
    through a local mirror (`bench/release-smoke.sh --mirror`); with `--plugin`, the plugin's upload to the Portal, its
    validation, its promotion and its read-back; the draft published and read back; the public smoke.
-3. `bench/release.sh --pin --commit`: the example and the documents moved to the release and committed as the
-   workflow's identity, which pushes them; then the site built and deployed from them (`site/README.md`).
+3. `bench/release.sh --pin --commit`: the example, the repository's own lock and the documents moved to the
+   release and committed as the workflow's identity, which pushes them; then the site built and deployed from them
+   (`site/README.md`).
 
 A job that stops leaves `out/ship/<version>/record.json` (and the plugin's `out/central/sbt-teq-<plugin>/`, the
 staged set `out/github-release/`): the workflow keeps them as artifacts, and a rerun puts them back and runs

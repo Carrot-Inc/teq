@@ -1,0 +1,7 @@
+twice: Hook previously registered
+removed: true
+removed again: false
+main runs
+main ends
+finally
+the hook runs

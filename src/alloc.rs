@@ -1489,6 +1489,8 @@ mod tests {
         ("src/emit/mod.rs", 1, "alloc::spawn_in"),
         ("src/emit/outline.rs", 1, "alloc::spawn_in"),
         ("src/frontend.rs", 1, "alloc::spawn_in"),
+        ("src/interp/net.rs", 1, "a builder for the connect's waiter, alloc::enter the first statement of its closure"),
+        ("src/interp/process.rs", 2, "a builder for the reaper's small stack, alloc::enter the first statement of its closure; the other starts a program's child under teq interp"),
         ("src/jvm/classfile.rs", 1, "alloc::spawn_in"),
         ("src/jvm/kept.rs", 1, "alloc::spawn_in for the slices of the kept class files' facts"),
         ("src/jvm/mod.rs", 2, "alloc::spawn_in for the class generation and for the class files' writing"),

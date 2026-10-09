@@ -1,0 +1,46 @@
+instant: 2010-01-01T00:00:00Z
+instant millis: 2010-01-01T00:00:00.123Z
+instant micros: 2010-01-01T00:00:00.123456Z
+instant nanos: 2010-01-01T00:00:00.123456789Z
+instant negative: 1969-12-31T23:59:59.999Z
+epoch: 1970-01-01T00:00:00Z
+toEpochMilli: 5007
+compare: true
+now: true
+duration: PT25H1M1.5S
+durations: PT0S PT1.5S PT-1M-30S PT-1.5S PT25H PT0.000000001S
+duration millis: 3500
+utc: 2026-10-09T07:01:03.005Z
+utc fields: 2026,10,9,7,1,3,5000000
+utc stamp: 20261009T070103Z
+utc clock: 07:01:03
+utc minute stamp: 2026-10-09T07:01Z
+utc dashed: 20261009-070103
+names: Fri Friday Oct October 9 7 AM
+fraction: 03.005 03.005000
+quote: o'clock 07 h
+offset: 2026-10-09T12:31:03+05:30
+offset patterns: +0530 +0530 +05:30 +0530 +0530 +05:30
+utc patterns: Z Z +00 +0000
+offset of: +02:00 -07:30 Z -03:00
+bad offset: java.time.DateTimeException: Invalid ID for ZoneOffset, non numeric characters found: 02:00
+same instant: true
+zone utc: UTC
+zoned utc: 1970-01-01T00:00Z[UTC]
+local: 2010-01-01T00:00
+local seconds: 2010-01-01T00:00:05.000001
+local date: 2024-02-29
+bad date: java.time.DateTimeException: Invalid date 'February 29' as '2023' is not a leap year
+bad month: java.time.DateTimeException: Invalid value for MonthOfYear (valid values 1 - 12): 13
+at offset: 2010-01-01T00:00+02:00
+epoch day: 11017
+plus days: 2024-03-01
+iso date: 2026-10-09
+unknown letter: java.lang.IllegalArgumentException: Unknown pattern letter: b
+instant without a zone: java.time.temporal.UnsupportedTemporalTypeException: Unsupported field: HourOfDay
+instant with a zone: 00:00
+date without a time: java.time.temporal.UnsupportedTemporalTypeException: Unsupported field: HourOfDay
+machine offset: true
+machine zone: true
+machine clock: true
+local now: true

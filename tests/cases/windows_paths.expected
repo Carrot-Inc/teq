@@ -1,0 +1,36 @@
+os.name is Windows: true
+os.arch: true
+file.separator: \
+path.separator: ;
+separators: \ ;
+line.separator is CRLF: true
+user.home is USERPROFILE: true
+java.io.tmpdir ends with a backslash: true
+root: C:\
+file name: file.txt
+names: 3
+absolute: true
+parent: C:\a dir\sub
+slashes: C:\x\y
+relative: a\b\c
+normalized: C:\a\c\d
+resolved: C:\x\y z
+resolved absolute: D:\w
+relativized: ..\z\w
+rooted absolute: false
+rooted root: \
+drive relative root: C:
+same path, other case: true
+file of a path: C:\a\b
+written and read: true
+listed: true
+the directory's real path is itself: true
+a long path written and read: true
+a long path listed: 1
+moved: true
+time: 1700000000123
+deleted: false
+permissions read: java.lang.UnsupportedOperationException
+permissions set: java.lang.UnsupportedOperationException
+a link made, or refused for the privilege: true
+cleaned: false

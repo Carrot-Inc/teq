@@ -252,6 +252,15 @@ check "the word pass" "$(changelog_notes "$cl" 0.1.8 2>&1)" "$cl's section for 0
 printf '## 0.1.8 (2026-10-09)\n\n- An argument passed where a function is expected; a bypass and passes\n  of the typer.\n' > "$cl"
 check "passed and bypass are no pass; passes is" "$(changelog_notes "$cl" 0.1.8 2>&1)" "$cl's section for 0.1.8 names the work's process or its internal files: passes "
 
+# release_root_lock (bench/release.sh --pin): the repository's own lock, the example's header and binaries alone.
+. bench/ship-release.sh
+el=$work/example.lock
+printf 'teq: 0.1.8\nformat: 1\nbinaries:\n  linux-x86_64: https://example.invalid/teq-0.1.8-linux-x86_64 0123 12\n  windows-x86_64: https://example.invalid/teq-0.1.8-windows-x86_64.exe 4567 34\ninputs:\n  files:\n    build.sbt: 89ab\njars:\n  a:b:1: maven-central cdef 5\n' > "$el"
+(cd "$work" && release_root_lock "$el" root.lock)
+check "the repository's lock: the example's header and binaries" "$(cat "$work/root.lock")" \
+  "$(printf 'teq: 0.1.8\nformat: 1\nbinaries:\n  linux-x86_64: https://example.invalid/teq-0.1.8-linux-x86_64 0123 12\n  windows-x86_64: https://example.invalid/teq-0.1.8-windows-x86_64.exe 4567 34')"
+check "the repository's lock among the pins" "$(echo " $release_pins " | grep -c ' teq.lock ')" 1
+
 # bench/release.sh: refused without the section, its checkout untouched; with it, the bump and the notes.
 # release_case <name> <changelog text> <expected line>: the changelog committed, release.sh 0.1.7 refusing it.
 release_case() {

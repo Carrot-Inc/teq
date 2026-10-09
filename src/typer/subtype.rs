@@ -2530,7 +2530,9 @@ impl<'a> Worker<'a> {
                 let (bc, mut sym, bt) = match found {
                     Some(f) => f,
                     None => {
-                        if self.loaded.is_some() && !self.bare_lookup && self.java_member_miss(c) {
+                        // A member of `Any` is `universal_member`'s: reading a Java class for it
+                        // would give a std class the JDK's members where the JDK is open alone.
+                        if self.loaded.is_some() && !self.bare_lookup && !crate::names::ANY_MEMBERS.contains(&self.interner.get(name)) && self.java_member_miss(c) {
                             if self.loaded.as_ref().unwrap().detail {
                                 eprintln!("java members of {} read for {}", self.class_path(c), self.name_str(name));
                             }

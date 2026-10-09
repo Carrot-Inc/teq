@@ -3,9 +3,9 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "stage": "python3 stage.py",
-    "dev": "python3 stage.py && astro dev",
-    "build": "python3 stage.py && astro build",
+    "stage": "../teq interp stage.scala",
+    "dev": "../teq interp stage.scala && astro dev",
+    "build": "../teq interp stage.scala && astro build",
     "preview": "astro preview"
   },
   "dependencies": {

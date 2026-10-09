@@ -26,7 +26,7 @@
 # those times from this run. split-determinism, when the tree has it, compares with master's binary (REF), built on
 # its machine from master's sources, the revision --master names.
 #
-# Meanwhile on the reference machine, where the gate runs: tests/size.sh (its minified column is measured with its
+# Meanwhile on the reference machine, where the gate runs: tests/size.scala (its minified column is measured with its
 # esbuild, which the remote machines do not have) and the instruction comparison against master's binary
 # (bench/instr-compare.sh, five runs
 # on the five programs depth_1, gview_1, core-only, realistic-api and realistic-frontend, each within 0.5%, and on
@@ -93,7 +93,8 @@ for v in APP_MODULES APP_CLASSPATH APP_SCALAC_OPTIONS APP_TEST_MODULES APP_TEST_
 done
 [ -z "$manifest" ] || [ -f "$manifest" ] || { echo "gate: no manifest $manifest" >&2; exit 2; }
 
-# The machines' suites, as tests/all.sh names and runs them; a command's first path is the script the tree must have.
+# The machines' suites, as tests/all.sh names and runs them; a command's first path is the script the tree must have
+# (the repository's launcher, ./teq, aside: a suite written in Scala is the path it interprets).
 machine=(
   "cases ./tests/run.sh"
   "errors ./tests/run_errors.sh"
@@ -108,9 +109,9 @@ machine=(
   "watch-memory ./tests/watch-memory.sh"
   "tasty ./tests/tasty.sh"
   "modules ./tests/modules.sh"
-  "tasty-exec ./tests/tasty-exec.sh"
+  "tasty-exec ./teq interp tests/tasty-exec.scala"
   "analysis-bytes ./tests/analysis-bytes.sh"
-  "classfile ./tests/classfile.sh"
+  "classfile ./teq interp tests/classfile.scala"
   "classpath ./tests/classpath.sh"
   "stdlib ./tests/run_stdlib.sh"
   "app ./tests/app.sh"
@@ -150,7 +151,7 @@ lacking() { grep -E "$skips" "$1" 2> /dev/null | grep -v -E "$allowed" | head -1
 script_of() {
   local w
   for w in $1; do
-    case $w in *=*) ;; */*) echo "$w"; return ;; esac
+    case $w in *=* | ./teq) ;; */*) echo "$w"; return ;; esac
   done
 }
 now() { date +%s; }
@@ -275,7 +276,7 @@ local_half() {
   # the minified column of the size budgets is esbuild's output, measured with this machine's esbuild
   if selected size; then
     s=$(now)
-    (cd "$wt" && TEQ=$bin timeout 600 ./tests/size.sh) > "$out/size.log" 2>&1
+    (cd "$wt" && TEQ=$bin timeout 600 ./teq interp tests/size.scala) > "$out/size.log" 2>&1
     code=$?
     [ $code != 0 ] || [ -z "$(lacking "$out/size.log")" ] || { echo "gate: a skip: $(lacking "$out/size.log")" >> "$out/size.log"; code=1; }
     result size local $(($(now) - s)) $code "$(tail -1 "$out/size.log")" "$file"

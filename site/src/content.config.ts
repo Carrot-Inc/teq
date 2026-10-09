@@ -1,4 +1,4 @@
-// The site's content is staged from the repository's Markdown by stage.py (see site/README.md): the README's
+// The site's content is staged from the repository's Markdown by stage.scala (see site/README.md): the README's
 // sections as `readme`, the documents the README's table names as `docs`.
 import { defineCollection } from "astro:content";
 import { glob } from "astro/loaders";

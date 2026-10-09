@@ -9,6 +9,10 @@
 # bench/runtime-budgets.txt, the prop suite without the crates of proptests/ fetched, and the
 # test runner's classes without a javac (a javac other than 17's only notes a difference).
 cd "$(dirname "$0")/.."
+# The compiler the suites test, target/release/teq unless TEQ names another; the repository's launcher runs
+# the suites written in Scala (./teq interp tests/x.scala) under it too, as a release pinned in teq.lock
+# without their natives cannot (docs/DEVELOPING.md, "The repository's scripts").
+export TEQ=${TEQ:-$PWD/target/release/teq}
 # The default checkout sits next to the main working tree, which a linked worktree is not in.
 if [ -z "$SCALA3" ] && common=$(git rev-parse --path-format=absolute --git-common-dir 2> /dev/null); then
   export SCALA3="$(dirname "$common")/../teq-ref/scala3"
@@ -42,7 +46,7 @@ suite errors        ./tests/run_errors.sh
 suite parser        ./tests/parser.sh
 suite interop       ./tests/run_interop.sh
 suite dce           ./tests/dce.sh
-suite size          ./tests/size.sh
+suite size          ./teq interp tests/size.scala
 suite split         ./tests/split.sh
 suite split-watch   ./tests/split-watch.sh
 suite split-watch   ./tests/check-watch.sh
@@ -58,9 +62,9 @@ suite runtime       ./tests/runtime.sh
 suite asymptotics   ./tests/asymptotics.sh
 suite tasty         ./tests/tasty.sh
 suite modules       ./tests/modules.sh
-suite tasty-exec    ./tests/tasty-exec.sh
+suite tasty-exec    ./teq interp tests/tasty-exec.scala
 suite analysis-bytes ./tests/analysis-bytes.sh
-suite classfile     ./tests/classfile.sh
+suite classfile     ./teq interp tests/classfile.scala
 suite classpath     ./tests/classpath.sh
 suite stdlib        ./tests/run_stdlib.sh
 suite app           ./tests/app.sh

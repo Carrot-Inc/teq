@@ -1,6 +1,6 @@
 # teq.build
 
-The site has no text of its own: `stage.py` stages it from the repository's Markdown, so that the README and
+The site has no text of its own: `stage.scala` stages it from the repository's Markdown, so that the README and
 `docs/` are the one source. The front page is `README.md` (`src/pages/index.astro` places its sections by their
 headings' GitHub anchors; a section it does not place, a renamed one included, is appended, its subsections as
 cards or its text alone): the centred tagline is the eyebrow, the centred `<h1>` the headline (its lines after the
@@ -35,11 +35,15 @@ pages are under `src/pages/`, the one stylesheet is `src/styles/style.css`):
 ```
 cd site
 npm install
-npm run build      # stage.py, then astro build into dist/
-npm run dev        # stage.py, then astro's dev server at http://localhost:4321
+npm run build      # stage.scala, then astro build into dist/
+npm run dev        # stage.scala, then astro's dev server at http://localhost:4321
 ```
 
-`.staged/`, `dist/`, `node_modules/`, `.netlify/` and what `stage.py` writes into `public/` (the logo and the Markdown
+`stage.scala` runs under the repository's launcher (`../teq interp stage.scala`, the release `teq.lock` pins unless
+`TEQ` names a binary) and reads and writes files alone, which the pinned release's interpreter has, so that a build
+from a fresh clone runs it as it is.
+
+`.staged/`, `dist/`, `node_modules/`, `.netlify/` and what `stage.scala` writes into `public/` (the logo and the Markdown
 files) are git-ignored. The site deploys as the static directory `dist/`, from this directory:
 `npx -y netlify-cli deploy --prod --no-build --dir dist` (the CLI would otherwise run the build itself). The
 headers are `public/_headers`; their CSP admits scripts from the site only, so `astro.config.mjs` keeps the

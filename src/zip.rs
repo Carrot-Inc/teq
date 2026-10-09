@@ -7,10 +7,14 @@ pub struct Entry {
     name_start: u32,
     name_len: u16,
     pub method: u16,
+    /// The DOS date and time, the date in the high half.
+    pub dos_time: u32,
     pub crc32: u32,
     pub compressed_size: u32,
     pub size: u32,
     header_offset: u32,
+    extra_len: u16,
+    comment_len: u16,
 }
 
 pub struct Zip {
@@ -83,10 +87,13 @@ impl Zip {
                 name_start: (at + 46) as u32,
                 name_len,
                 method: u16_at(&directory, at + 10),
+                dos_time: u32_at(&directory, at + 12),
                 crc32: u32_at(&directory, at + 16),
                 compressed_size: u32_at(&directory, at + 20),
                 size: u32_at(&directory, at + 24),
                 header_offset: u32_at(&directory, at + 42),
+                extra_len: extra_len as u16,
+                comment_len: comment_len as u16,
             });
             at += 46 + name_len as usize + extra_len + comment_len;
         }
@@ -99,6 +106,17 @@ impl Zip {
     /// The index of the entry of that name, if any.
     pub fn find(&self, name: &str) -> Option<usize> {
         self.entries.iter().position(|e| self.name(e) == name)
+    }
+
+    /// The entry's extra field in the central directory, and its comment.
+    pub fn extra(&self, e: &Entry) -> &[u8] {
+        let at = e.name_start as usize + e.name_len as usize;
+        &self.directory[at..at + e.extra_len as usize]
+    }
+
+    pub fn comment(&self, e: &Entry) -> &[u8] {
+        let at = e.name_start as usize + e.name_len as usize + e.extra_len as usize;
+        &self.directory[at..at + e.comment_len as usize]
     }
 
     pub fn name(&self, e: &Entry) -> &str {
@@ -163,8 +181,13 @@ fn crc_tables() -> &'static [[u32; 256]; 8] {
 }
 
 pub fn crc32(data: &[u8]) -> u32 {
+    crc32_update(0, data)
+}
+
+/// The CRC-32 of the bytes that gave `crc` followed by `data`.
+pub fn crc32_update(crc: u32, data: &[u8]) -> u32 {
     let t = crc_tables();
-    let mut crc = !0u32;
+    let mut crc = !crc;
     let mut chunks = data.chunks_exact(8);
     for c in &mut chunks {
         let lo = u32::from_le_bytes([c[0], c[1], c[2], c[3]]) ^ crc;
@@ -368,6 +391,12 @@ fn dynamic_codes(bits: &mut Bits) -> Result<(Huffman, Huffman), &'static str> {
 }
 
 pub fn inflate(data: &[u8], size_hint: usize) -> Result<Vec<u8>, &'static str> {
+    inflate_counted(data, size_hint).map(|(out, _)| out)
+}
+
+/// `inflate`, and how many bytes of `data` the stream took: what follows it (a gzip member's
+/// trailer, the next entry of a zip stream) starts there.
+pub fn inflate_counted(data: &[u8], size_hint: usize) -> Result<(Vec<u8>, usize), &'static str> {
     let mut out: Vec<u8> = Vec::with_capacity(size_hint);
     let mut bits = Bits { data, pos: 0, buf: 0, n: 0 };
     loop {
@@ -434,8 +463,321 @@ pub fn inflate(data: &[u8], size_hint: usize) -> Result<Vec<u8>, &'static str> {
             _ => return Err("invalid block type"),
         }
         if last {
-            return Ok(out);
+            let used = bits.pos - (bits.n / 8) as usize;
+            return Ok((out, used));
         }
+    }
+}
+
+/// A DEFLATE stream inflated as its input comes, `java.util.zip.Inflater` under `teq interp`: a
+/// run decodes what the input holds and stops where it ends, before a block's header, inside a
+/// stored block or before a symbol, and the next run goes on from there, so that input fed in
+/// pieces is read once. zlib's wrapper (its header, the Adler-32 after the data) unless `raw`. The
+/// messages of a malformed stream are zlib's.
+pub struct Inflating {
+    raw: bool,
+    input: Vec<u8>,
+    /// The reader's place: the next byte of `input`, and the bits taken in ahead of it.
+    pos: usize,
+    buf: u64,
+    n: u32,
+    state: InflateState,
+    last: bool,
+    /// The last 32 KiB written, which a distance reaches back into.
+    window: Vec<u8>,
+    adler: u32,
+    /// Bytes given in all, and since the last run.
+    fed: u64,
+    fresh: u64,
+}
+
+enum InflateState {
+    Wrapper,
+    Block,
+    Stored(usize),
+    Fixed,
+    Dynamic(Box<(Huffman, Huffman)>),
+    Trailer,
+    Done,
+}
+
+const TRUNCATED: &str = "unexpected end of deflate stream";
+
+fn zlib_message(m: &'static str) -> &'static str {
+    match m {
+        "stored block length mismatch" => "invalid stored block lengths",
+        "distance too far back" => "invalid distance too far back",
+        "invalid length symbol" | "invalid Huffman code" => "invalid literal/length code",
+        "invalid distance symbol" => "invalid distance code",
+        "too many length or distance codes" => "too many length or distance symbols",
+        "repeat without a previous length" | "too many code lengths" => "invalid bit length repeat",
+        "no end-of-block code" => "invalid code -- missing end-of-block",
+        "over-subscribed Huffman code" => "invalid code lengths set",
+        m => m,
+    }
+}
+
+fn adler_update(adler: u32, data: &[u8]) -> u32 {
+    let (mut a, mut b) = (adler & 0xffff, adler >> 16);
+    for chunk in data.chunks(5552) {
+        for &x in chunk {
+            a += x as u32;
+            b += a;
+        }
+        a %= 65521;
+        b %= 65521;
+    }
+    (b << 16) | a
+}
+
+impl Inflating {
+    pub fn new(raw: bool) -> Inflating {
+        Inflating { raw, input: Vec::new(), pos: 0, buf: 0, n: 0, state: if raw { InflateState::Block } else { InflateState::Wrapper }, last: false, window: Vec::new(), adler: 1, fed: 0, fresh: 0 }
+    }
+
+    pub fn feed(&mut self, data: &[u8]) {
+        self.input.extend_from_slice(data);
+        self.fed += data.len() as u64;
+        self.fresh += data.len() as u64;
+    }
+
+    pub fn finished(&self) -> bool {
+        matches!(self.state, InflateState::Done)
+    }
+
+    /// The input not taken: past the stream's end once it is finished, else what came since the
+    /// last run.
+    pub fn remaining(&self) -> u64 {
+        if self.finished() {
+            (self.input.len() - (self.pos - (self.n / 8) as usize)) as u64
+        } else {
+            self.fresh
+        }
+    }
+
+    pub fn fed(&self) -> u64 {
+        self.fed
+    }
+
+    pub fn reset(&mut self) {
+        *self = Inflating::new(self.raw);
+    }
+
+    /// Decodes what the input holds: the bytes written, or zlib's message for a malformed stream.
+    pub fn run(&mut self) -> Result<Vec<u8>, &'static str> {
+        self.fresh = 0;
+        let start = self.window.len();
+        let mut hist = std::mem::take(&mut self.window);
+        let mut bits = Bits { data: &self.input, pos: self.pos, buf: self.buf, n: self.n };
+        let outcome: Result<(), &'static str> = loop {
+            let saved = (bits.pos, bits.buf, bits.n);
+            let restore = |bits: &mut Bits| (bits.pos, bits.buf, bits.n) = saved;
+            match &mut self.state {
+                InflateState::Done => break Ok(()),
+                InflateState::Wrapper => match (bits.take(8), bits.take(8)) {
+                    (Ok(cmf), Ok(flg)) => {
+                        if (cmf * 256 + flg) % 31 != 0 {
+                            break Err("incorrect header check");
+                        }
+                        if cmf & 0x0f != 8 {
+                            break Err("unknown compression method");
+                        }
+                        if flg & 0x20 != 0 {
+                            break Err("need dictionary");
+                        }
+                        self.state = InflateState::Block;
+                    }
+                    _ => {
+                        restore(&mut bits);
+                        break Ok(());
+                    }
+                },
+                InflateState::Block => {
+                    let header = (|| -> Result<(bool, InflateState), &'static str> {
+                        let last = bits.take(1)? == 1;
+                        let state = match bits.take(2)? {
+                            0 => {
+                                let skip = bits.n % 8;
+                                bits.take(skip)?;
+                                let len = bits.take(16)? as usize;
+                                let complement = bits.take(16)? as usize;
+                                if len != !complement & 0xffff {
+                                    return Err("stored block length mismatch");
+                                }
+                                InflateState::Stored(len)
+                            }
+                            1 => InflateState::Fixed,
+                            2 => InflateState::Dynamic(Box::new(dynamic_codes(&mut bits)?)),
+                            _ => return Err("invalid block type"),
+                        };
+                        Ok((last, state))
+                    })();
+                    match header {
+                        Ok((last, state)) => {
+                            self.last = last;
+                            self.state = state;
+                        }
+                        Err(TRUNCATED) => {
+                            restore(&mut bits);
+                            break Ok(());
+                        }
+                        Err(m) => break Err(zlib_message(m)),
+                    }
+                }
+                InflateState::Stored(left) => {
+                    // The bit buffer holds whole bytes here: handed back before the copy.
+                    let from = bits.pos - (bits.n / 8) as usize;
+                    let k = (*left).min(self.input.len() - from);
+                    hist.extend_from_slice(&self.input[from..from + k]);
+                    bits = Bits { data: &self.input, pos: from + k, buf: 0, n: 0 };
+                    *left -= k;
+                    if *left > 0 {
+                        break Ok(());
+                    }
+                    self.state = if !self.last { InflateState::Block } else if self.raw { InflateState::Done } else { InflateState::Trailer };
+                }
+                InflateState::Fixed | InflateState::Dynamic(_) => {
+                    let (lit, dist) = match &self.state {
+                        InflateState::Dynamic(codes) => (&codes.0, &codes.1),
+                        _ => {
+                            let f = fixed_codes();
+                            (&f.0, &f.1)
+                        }
+                    };
+                    // Each symbol whole or not at all: the input ending inside one is read again.
+                    let symbols = loop {
+                        let at = (bits.pos, bits.buf, bits.n);
+                        let symbol = (|| -> Result<Option<usize>, &'static str> {
+                            let sym = bits.decode(lit)? as usize;
+                            if sym < 256 {
+                                hist.push(sym as u8);
+                                return Ok(Some(0));
+                            }
+                            if sym == 256 {
+                                return Ok(None);
+                            }
+                            let li = sym - 257;
+                            if li >= 29 {
+                                return Err("invalid length symbol");
+                            }
+                            let len = LENGTH_BASE[li] as usize + bits.take(LENGTH_EXTRA[li] as u32)? as usize;
+                            let di = bits.decode(dist)? as usize;
+                            if di >= 30 {
+                                return Err("invalid distance symbol");
+                            }
+                            let distance = DIST_BASE[di] as usize + bits.take(DIST_EXTRA[di] as u32)? as usize;
+                            if distance > hist.len() {
+                                return Err("distance too far back");
+                            }
+                            let from = hist.len() - distance;
+                            if distance >= len {
+                                hist.extend_from_within(from..from + len);
+                            } else {
+                                for k in 0..len {
+                                    let b = hist[from + k];
+                                    hist.push(b);
+                                }
+                            }
+                            Ok(Some(0))
+                        })();
+                        match symbol {
+                            Ok(Some(_)) => {}
+                            Ok(None) => break Ok(true),
+                            Err(TRUNCATED) => {
+                                (bits.pos, bits.buf, bits.n) = at;
+                                break Ok(false);
+                            }
+                            Err(m) => break Err(zlib_message(m)),
+                        }
+                    };
+                    match symbols {
+                        Ok(true) => self.state = if !self.last { InflateState::Block } else if self.raw { InflateState::Done } else { InflateState::Trailer },
+                        Ok(false) => break Ok(()),
+                        Err(m) => break Err(m),
+                    }
+                }
+                InflateState::Trailer => {
+                    let check = (|| -> Result<u32, &'static str> {
+                        let skip = bits.n % 8;
+                        bits.take(skip)?;
+                        let mut v = 0u32;
+                        for _ in 0..4 {
+                            v = (v << 8) | bits.take(8)?;
+                        }
+                        Ok(v)
+                    })();
+                    match check {
+                        Ok(v) => {
+                            if v != adler_update(self.adler, &hist[start..]) {
+                                break Err("incorrect data check");
+                            }
+                            self.state = InflateState::Done;
+                        }
+                        Err(_) => {
+                            restore(&mut bits);
+                            break Ok(());
+                        }
+                    }
+                }
+            }
+        };
+        let (pos, buf, n) = (bits.pos, bits.buf, bits.n);
+        (self.pos, self.buf, self.n) = (pos, buf, n);
+        let out = hist[start..].to_vec();
+        self.adler = adler_update(self.adler, &out);
+        let keep = hist.len().saturating_sub(32 * 1024);
+        hist.drain(..keep);
+        self.window = hist;
+        // What every decoding is past goes, the reader's place moved with it.
+        let used = self.pos - (self.n / 8) as usize;
+        if used > 64 * 1024 && !self.finished() {
+            self.input.drain(..self.pos);
+            self.pos = 0;
+        }
+        outcome.map(|()| out)
+    }
+}
+
+#[cfg(test)]
+mod inflating_tests {
+    use super::Inflating;
+
+    /// A stream fed in pieces of every size from 1 byte, raw and with zlib's wrapper, at three
+    /// levels, decodes to what it encodes, the bytes past its end left over.
+    #[test]
+    fn pieces_decode_as_the_whole() {
+        let text: Vec<u8> = (0..60_000u32).map(|i| ((i * 7919) % 251) as u8 ^ if i % 3 == 0 { b'a' } else { 0 }).collect();
+        for wrap in [false, true] {
+            for level in [0, 1, 6, 9] {
+                let mut packed = crate::deflate::deflate(&text, level, wrap);
+                packed.extend_from_slice(b"TAIL");
+                for piece in [1usize, 2, 3, 7, 512, 4096, 1 << 20] {
+                    let mut inf = Inflating::new(!wrap);
+                    let mut out = Vec::new();
+                    for chunk in packed.chunks(piece) {
+                        if inf.finished() {
+                            inf.feed(chunk);
+                            continue;
+                        }
+                        inf.feed(chunk);
+                        out.extend(inf.run().unwrap());
+                    }
+                    assert!(inf.finished(), "level {level} wrap {wrap} piece {piece}");
+                    assert_eq!(out, text, "level {level} wrap {wrap} piece {piece}");
+                    assert_eq!(inf.remaining(), 4, "level {level} wrap {wrap} piece {piece}");
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn a_bad_stream_is_zlibs_message() {
+        let mut inf = Inflating::new(false);
+        inf.feed(&[0x78, 0x9d]);
+        assert_eq!(inf.run(), Err("incorrect header check"));
+        let mut raw = Inflating::new(true);
+        raw.feed(&[0x07]);
+        assert_eq!(raw.run(), Err("invalid block type"));
     }
 }
 

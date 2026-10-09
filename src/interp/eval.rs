@@ -12,10 +12,24 @@ impl<'a, 't> Interp<'a, 't> {
     #[inline]
     fn step(&mut self) -> R<()> {
         if self.steps == 0 {
-            return Err(Control::Fail(if self.halted { Failure::Withheld } else { Failure::Budget }));
+            return self.steps_out();
         }
         self.steps -= 1;
         Ok(())
+    }
+
+    /// The budget's slice is spent: the next one, a signal seen between them (`watch_signals`), or
+    /// the run's end.
+    #[cold]
+    #[inline(never)]
+    fn steps_out(&mut self) -> R<()> {
+        if self.reserve > 0 && !self.halted {
+            let n = self.reserve.min(SIGNAL_SLICE);
+            self.reserve -= n;
+            self.steps = n - 1;
+            return super::process::check_signal(self);
+        }
+        Err(Control::Fail(if self.halted { Failure::Withheld } else { Failure::Budget }))
     }
 
     /// The numeric kind the static type of `e` asks for, where the typer left a widening
@@ -1807,7 +1821,12 @@ impl<'a, 't> Interp<'a, 't> {
                         let r = b(self, &vals);
                         self.prof_exit(prof);
                         self.recycle_vec(vals);
-                        r
+                        // A builtin can be long (a scan of a long string): a signal is seen
+                        // after each, not only between slices of steps.
+                        match r {
+                            Ok(v) => super::process::check_signal(self).map(|()| v),
+                            e => e,
+                        }
                     }
                     Err(e) => Err(e),
                 };

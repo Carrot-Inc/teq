@@ -17,6 +17,24 @@ package scala.jdk:
       def asScala: Iterable[A] = new scala.collection.mutable.ArrayBuffer(buffered(c.toArray(untaggedArray(emptyArray[A]))))
     implicit class IteratorHasAsScala[A](i: java.util.Iterator[A]):
       def asScala: Iterator[A] = new scala.collection.convert.IteratorAsScala(i)
+    implicit class IterableHasAsScala[A](i: java.lang.Iterable[A]):
+      def asScala: Iterable[A] = scala.collection.mutable.ArrayBuffer.from(new scala.collection.convert.IteratorAsScala(i.iterator()))
+    implicit class EnumerationHasAsScala[A](e: java.util.Enumeration[A]):
+      def asScala: Iterator[A] = new scala.collection.convert.IteratorAsScala(new scala.collection.convert.EnumerationAsJava(e))
+    // A copy of the map's entries, in its order: a change of either side is not seen on the other.
+    implicit class MapHasAsScala[K, V](m: java.util.Map[K, V]):
+      def asScala: scala.collection.mutable.Map[K, V] =
+        val out = scala.collection.mutable.HashMap.empty[K, V]
+        val it = m.entrySet().iterator()
+        while it.hasNext do
+          val e = it.next()
+          out(e.getKey) = e.getValue
+        out
+    implicit class MapHasAsJava[K, V](m: scala.collection.Map[K, V]):
+      def asJava: java.util.Map[K, V] =
+        val out = new java.util.HashMap[K, V]()
+        m.foreach((k, v) => out.put(k, v))
+        out
 
 package scala.collection:
 
@@ -56,6 +74,10 @@ package scala.collection.convert:
     def get(index: Int): A =
       if index < 0 || index >= underlying.length then throw new IndexOutOfBoundsException(index.toString)
       underlying(index)
+
+  final class EnumerationAsJava[A](underlying: java.util.Enumeration[A]) extends java.util.Iterator[A]:
+    def hasNext: Boolean = underlying.hasMoreElements()
+    def next(): A = underlying.nextElement()
 
   final class IteratorAsJava[A](underlying: Iterator[A]) extends java.util.Iterator[A]:
     def hasNext: Boolean = underlying.hasNext

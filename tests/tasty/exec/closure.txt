@@ -1,4 +1,4 @@
-# The programs of tests/cases and tests/tasty/exec/cases the execution gate runs (tests/tasty-exec.sh --update).
+# The programs of tests/cases and tests/tasty/exec/cases the execution gate runs (tests/tasty-exec.scala -- --update).
 abstract_function
 abstract_member_type_test
 annotations_ignored

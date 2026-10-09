@@ -10,7 +10,9 @@ mod classfile;
 mod classpath;
 mod complete;
 mod crew;
+mod deflate;
 mod dialect;
+mod directives;
 mod emit;
 mod frontend;
 mod held;
@@ -92,7 +94,9 @@ const LINKED_LAYER: [&str; 2] = ["<std>/iarray.scala", "<std>/value_of.scala"];
 /// out of the build.
 pub(crate) fn std_layout(opts: &Options, cp: Option<&classpath::Classpath>) -> Vec<frontend::StdInput> {
     let jvm: &[(&str, &str)] = if opts.jvm { JVM_STD_SOURCES } else { &[] };
-    let base = std_sources(opts.std, opts.jvm).into_iter().chain(jvm.iter().copied()).chain(QUOTED_SOURCES.iter().copied());
+    let time_from_jar = cp.map_or(false, |cp| cp.holds_tasty_in(TIME_PACKAGE));
+    let time: &[(&str, &str)] = if opts.jvm || opts.std != StdMode::Lean || time_from_jar { &[] } else { TIME_STD_SOURCES };
+    let base = std_sources(opts.std, opts.jvm).into_iter().chain(time.iter().copied()).chain(jvm.iter().copied()).chain(QUOTED_SOURCES.iter().copied());
     let dom_from_jar = cp.map_or(false, |cp| cp.holds_tasty_in(DOM_PACKAGE));
     let facades = SCALAJS_SOURCES
         .iter()
@@ -172,12 +176,17 @@ fn scalajs_jar(classpath: &[String]) -> bool {
 }
 
 /// The platform layer written for JavaScript alone: the JVM has the JDK's own classes.
-const JS_ONLY_LAYER: [&str; 10] = [
+const JS_ONLY_LAYER: [&str; 15] = [
     "<std>/concurrent.scala",
+    "<std>/javalib/process.scala",
+    "<std>/javalib/io.scala",
+    "<std>/javalib/zip.scala",
+    "<std>/javalib/socket.scala",
     "<std>/reflect_selectable.scala",
     "<std>/javalib/net.scala",
     "<std>/javalib/nio.scala",
     "<std>/javalib/nio_exceptions.scala",
+    "<std>/javalib/io_exceptions.scala",
     "<std>/javalib/stream.scala",
     "<std>/javalib/spliterator.scala",
     "<std>/javalib/optional.scala",
@@ -259,6 +268,11 @@ pub(crate) const STD_SOURCES: &[(&str, &str)] = &[
     ("<std>/javalib/atomic.scala", include_str!("../std/javalib/atomic.scala")),
     ("<std>/javalib/nio.scala", include_str!("../std/javalib/nio.scala")),
     ("<std>/javalib/nio_exceptions.scala", include_str!("../std/javalib/nio_exceptions.scala")),
+    ("<std>/javalib/io_exceptions.scala", include_str!("../std/javalib/io_exceptions.scala")),
+    ("<std>/javalib/process.scala", include_str!("../std/javalib/process.scala")),
+    ("<std>/javalib/io.scala", include_str!("../std/javalib/io.scala")),
+    ("<std>/javalib/zip.scala", include_str!("../std/javalib/zip.scala")),
+    ("<std>/javalib/socket.scala", include_str!("../std/javalib/socket.scala")),
     ("<std>/javalib/stream.scala", include_str!("../std/javalib/stream.scala")),
     ("<std>/javalib/spliterator.scala", include_str!("../std/javalib/spliterator.scala")),
     ("<std>/javalib/optional.scala", include_str!("../std/javalib/optional.scala")),
@@ -311,6 +325,15 @@ pub(crate) const QUOTED_SOURCES: &[(&str, &str)] = &[
     ("<std>/quoted/quotes.scala", include_str!("../std/quoted/quotes.scala")),
     ("<std>/quoted/reflect.scala", include_str!("../std/quoted/reflect.scala")),
 ];
+
+/// `java.time` for the interpreter (and the types of a JavaScript build), left out where a jar on
+/// the class path holds the package's TASTy (scala-java-time, which a Scala.js build that runs
+/// with the package names), as the DOM's files are; the JVM has the JDK's.
+pub(crate) const TIME_STD_SOURCES: &[(&str, &str)] = &[
+    ("<std>/javalib/time.scala", include_str!("../std/javalib/time.scala")),
+    ("<std>/javalib/time_exceptions.scala", include_str!("../std/javalib/time_exceptions.scala")),
+];
+const TIME_PACKAGE: &str = "java/time";
 
 /// What generated JVM code calls and the JS runtime provides on the other side, linked against
 /// scala-library's collections.
@@ -1074,6 +1097,61 @@ fn collect_files(opts: &Options, path: &str, listed: bool, out: &mut Vec<(String
     }
 }
 
+/// `teq interp`'s sources that a source's header names (`//> using file` and `//> using files`,
+/// Scala CLI's inclusion; `src/directives.rs`): each path relative to the file that names it, a
+/// directory the `.scala` files under it but the hidden ones, as Scala CLI takes them. An included
+/// file's own directives are followed, which Scala CLI does not do, each file once. A path that
+/// names nothing ends the command with the directive's place.
+fn include_using_files(opts: &Options, paths: &mut Vec<(String, bool)>) {
+    let mut seen: std::collections::HashSet<String> = paths.iter().map(|(p, _)| file_identity(p)).collect();
+    let mut i = 0;
+    while i < paths.len() {
+        let declaring = paths[i].0.clone();
+        i += 1;
+        // A file that cannot be read is reported where the program's files are read.
+        let Ok(text) = std::fs::read_to_string(&declaring) else { continue };
+        let base = std::path::Path::new(&declaring).parent().map(std::path::Path::to_path_buf).unwrap_or_default();
+        for directive in directives::using_files(&text) {
+            for value in &directive.paths {
+                let target = base.join(value);
+                let shown = target.to_string_lossy().into_owned();
+                let mut found = Vec::new();
+                if target.is_dir() {
+                    included_sources(&target, &mut found);
+                } else if target.is_file() {
+                    found.push((shown, false));
+                } else {
+                    eprintln!("{}:{}: using file {}: there is no {}", declaring, directive.line, value, shown);
+                    exit_failed(opts, 2);
+                }
+                for (file, listed) in found {
+                    if seen.insert(file_identity(&file)) {
+                        paths.push((file, listed));
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// The `.scala` files under a directory a directive names, in the order of their paths, hidden
+/// files and directories left out.
+fn included_sources(dir: &std::path::Path, out: &mut Vec<(String, bool)>) {
+    let Ok(entries) = std::fs::read_dir(dir) else { return };
+    let mut entries: Vec<std::path::PathBuf> = entries.filter_map(|e| e.ok()).map(|e| e.path()).collect();
+    entries.sort();
+    for e in entries {
+        if e.file_name().is_some_and(|n| n.to_string_lossy().starts_with('.')) {
+            continue;
+        }
+        if e.is_dir() {
+            included_sources(&e, out);
+        } else if e.extension().is_some_and(|x| x == "scala") {
+            out.push((e.to_string_lossy().into_owned(), true));
+        }
+    }
+}
+
 /// The `--profile` report on stderr, and its table as JSON where `json` names a file.
 pub(crate) fn print_profile(typer: &mut typer::Worker, type_phase: std::time::Duration, json: Option<&str>) {
     eprint!("{}", typer.profile_report(type_phase, 20));
@@ -1093,6 +1171,9 @@ pub(crate) fn collect_program_paths(opts: &Options) -> Vec<String> {
     let mut paths = Vec::new();
     for input in &opts.inputs {
         collect_files(opts, input, false, &mut paths);
+    }
+    if opts.interp {
+        include_using_files(opts, &mut paths);
     }
     paths.retain(|(p, _)| !opts.excludes.iter().any(|x| p.starts_with(x.as_str()) || p.ends_with(x.as_str())));
     let paths = one_entry_per_file(paths);
@@ -2569,15 +2650,14 @@ fn run_interp(opts: &Options, mut typer: typer::Worker, lines: usize, t: [Instan
     let mut interp = interp::Interp::new(&mut typer, interp::Limits::unlimited());
     interp.stream = true;
     interp.content_hashes = false;
+    interp::process::handle_signals();
+    interp.watch_signals();
     let result = interp.run_main(&opts.program_args);
     interp.flush();
-    if std::env::var_os("TEQ_INTERP_TRACE").is_some() {
-        eprintln!("interp: {} steps", u64::MAX - interp.steps_left());
-    }
-    let t_run = Instant::now();
     let mut code = match result {
         Ok(()) => 0,
-        // A program's own status passes through, as the JVM's process exits with it.
+        // A program's own status passes through, as the JVM's process exits with it, and so does
+        // a signal's (128 + its number).
         Err(interp::Failure::Exit(status)) => status,
         Err(f) => {
             let message = interp.describe(&f);
@@ -2588,6 +2668,16 @@ fn run_interp(opts: &Options, mut typer: typer::Worker, lines: usize, t: [Instan
             }
         }
     };
+    // The shutdown hooks, after an uncaught exception's report as the JVM runs them after its
+    // main thread ended.
+    if let Some(status) = interp.shut_down() {
+        code = status;
+    }
+    interp.flush();
+    if std::env::var_os("TEQ_INTERP_TRACE").is_some() {
+        eprintln!("interp: {} steps", u64::MAX - interp.steps_left());
+    }
+    let t_run = Instant::now();
     // The profile after the run, which typed the std's bodies the program reached.
     if opts.profile {
         print_profile(&mut typer, t[3] - t[2], opts.profile_json.as_deref());

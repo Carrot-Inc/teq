@@ -127,6 +127,7 @@ charsequence_members
 charsequence_release
 charset_decode_writable
 charset_encode_consumes
+charset_utf8_replacement
 class_of
 class_tag_of_bottoms
 class_tag_of_compound
@@ -294,8 +295,11 @@ extractor_irrefutable_tested
 extractor_singleton_subpattern
 extractor_vals
 f_interpolator_linked
+files_open_options
+files_same_target
 files_stream_ops
 float_constants_jdk
+files_walk_copy
 float_decimal_literals
 float_decimal_rounding
 float_hex_minimal
@@ -834,6 +838,10 @@ primitive_stream_stages
 print_writer
 private_ctor
 private_param_reads
+process_environment
+process_lifecycle
+process_redirects
+process_streams
 product_element_names
 product_iterator
 projection_prefix
@@ -856,6 +864,8 @@ qualified_this_outer_alias
 quote_tag_collision
 random_subclass
 range_bounds_and_sum
+reader_utf8_boundary
+reader_utf8_pipe
 receiver_type_args_from_expected
 refined_aux_givens
 refined_projection_patterns
@@ -867,6 +877,7 @@ regex_case_properties
 regex_class_sets
 regex_comments
 regex_group_index_checked
+regex_lookbehind_long
 regex_lookbehind_supplementary
 regex_pattern_matcher
 regex_posix_ascii
@@ -1011,6 +1022,8 @@ scala3_virtpatmat_opt_sharing
 scala3_virtpatmat_tailcalls_verifyerror
 scala3_virtpatmat_typed
 scala3_z1720
+script_header
+script_header_block
 secondary_constructors
 secondary_constructors_anon
 secondary_ctor_parent
@@ -1026,6 +1039,7 @@ set_from_key_set
 setter_method
 shadow
 shadowed_locals
+shutdown_hooks
 signed_zero_abs
 singleton_alias_prefix
 singleton_bound
@@ -1034,6 +1048,10 @@ singleton_union_arg
 singleton_union_wide
 small_map_iterators
 small_maps_size_hint
+socket_accept
+socket_lifecycle
+socket_shutdown_input
+socket_write_signal
 soft_inline_name
 sorted_set_concat
 sourcecode
@@ -1073,8 +1091,11 @@ std_strings
 std_surface
 std_try
 stdextras
+stdin_lines
+stream_descriptors
 stream_ops
 stream_spread_and_collector_protocol
+streams_jdk_semantics
 strict_equality
 strict_equality_null_given
 strict_equality_std
@@ -1109,6 +1130,7 @@ symbolic_type_selection
 syntax_extras
 syntax_gaps
 sys_package
+system_properties
 tabulate_order
 tail_calls
 tailcalls
@@ -1118,6 +1140,9 @@ template_pattern_vals
 this_rooted_type_path
 this_type_intersection
 throwable_init_cause
+time_clock
+time_formatter_value_widths
+time_formatter_widths
 toplevel_init_cycle_a
 toplevel_init_cycle_b
 toplevel_init_eta
@@ -1286,3 +1311,6 @@ pf_lambda_map
 pf_lambda_seq_option
 pf_lambda_overload
 pf_lambda_block_werror
+zip_digest
+zip_entry_times
+zip_time_precision

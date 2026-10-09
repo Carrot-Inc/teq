@@ -202,8 +202,410 @@ pub(super) fn install(it: &mut Table) {
         let (p, other) = (it.str_arg(a, 0)?, it.str_arg(a, 1)?);
         Ok(Value::Bool(path::starts_with(&p, &other, cfg!(windows))))
     });
+    // What the path names: -1 nothing, 0 a regular file, 1 a directory, 2 a link (when the link is
+    // not followed), 3 anything else; `follow` follows a link as the JDK does without
+    // `NOFOLLOW_LINKS`.
+    reg!(it, "java.nio.file.fileKind", |it, a| {
+        let path = host_path(it, a, 0)?;
+        let follow = matches!(a.get(1), Some(Value::Bool(true)));
+        let meta = if follow { std::fs::metadata(os(&path)) } else { std::fs::symlink_metadata(os(&path)) };
+        Ok(Value::Int(match meta {
+            Ok(m) if m.file_type().is_symlink() => 2,
+            Ok(m) if m.is_dir() => 1,
+            Ok(m) if m.is_file() => 0,
+            Ok(_) => 3,
+            Err(_) => -1,
+        }))
+    });
+    reg!(it, "java.nio.file.fileSize", |it, a| {
+        let path = host_path(it, a, 0)?;
+        match std::fs::metadata(os(&path)) {
+            Ok(m) => Ok(Value::Long(m.len() as i64)),
+            Err(e) => fail(it, &e, &path),
+        }
+    });
+    // `Files.setLastModifiedTime`, in milliseconds since the epoch, following a link.
+    reg!(it, "java.nio.file.fileSetModified", |it, a| {
+        let path = written_path(it, a, 0)?;
+        let millis = a.get(1).and_then(|v| v.as_i64()).unwrap_or(0);
+        let time = if millis >= 0 { std::time::UNIX_EPOCH + std::time::Duration::from_millis(millis as u64) } else { std::time::UNIX_EPOCH - std::time::Duration::from_millis(millis.unsigned_abs()) };
+        match attributes_file(os(&path)).and_then(|f| f.set_modified(time)) {
+            Ok(()) => Ok(Value::Unit),
+            Err(e) => fail(it, &e, &path),
+        }
+    });
+    // `Files.copy` of one file: `replace` (REPLACE_EXISTING), `attributes` (COPY_ATTRIBUTES: the
+    // modification time too), `follow` (without NOFOLLOW_LINKS: a link's target copied, else the
+    // link). A directory copied is a new empty one, as the JDK copies it.
+    reg!(it, "java.nio.file.fileCopy", |it, a| {
+        let src = host_path(it, a, 0)?;
+        let dst = written_path(it, a, 1)?;
+        let flag = |i: usize| matches!(a.get(i), Some(Value::Bool(true)));
+        let (replace, attributes, follow) = (flag(2), flag(3), flag(4));
+        let meta = match if follow { std::fs::metadata(os(&src)) } else { std::fs::symlink_metadata(os(&src)) } {
+            Ok(m) => m,
+            Err(e) => return fail(it, &e, &src),
+        };
+        if same_file(&src, follow, &dst) {
+            return Ok(Value::Unit);
+        }
+        if let Err(r) = clear_target(&dst, replace) {
+            return r.throw(it, &dst);
+        }
+        let copied = if meta.file_type().is_symlink() {
+            std::fs::read_link(os(&src)).and_then(|target| make_link(&target.to_string_lossy(), os(&dst), false))
+        } else if meta.is_dir() {
+            std::fs::create_dir(os(&dst)).and_then(|()| std::fs::set_permissions(os(&dst), meta.permissions()))
+        } else {
+            std::fs::copy(os(&src), os(&dst)).map(|_| ())
+        };
+        if let Err(e) = copied {
+            return fail(it, &e, &dst);
+        }
+        if attributes && !meta.file_type().is_symlink() {
+            if let Ok(time) = meta.modified() {
+                let _ = attributes_file(os(&dst)).and_then(|f| f.set_modified(time));
+            }
+        }
+        Ok(Value::Unit)
+    });
+    // `Files.move`: a rename; across file systems, unless `atomic`, a copy and a removal (of a file,
+    // a link or an empty directory). A target that is the source itself leaves it as it is; another
+    // that is there is `FileAlreadyExistsException` without `replace`, and removed first with it.
+    reg!(it, "java.nio.file.fileMove", |it, a| {
+        let src = written_path(it, a, 0)?;
+        let dst = written_path(it, a, 1)?;
+        let (replace, atomic) = (matches!(a.get(2), Some(Value::Bool(true))), matches!(a.get(3), Some(Value::Bool(true))));
+        let meta = match std::fs::symlink_metadata(os(&src)) {
+            Ok(m) => m,
+            Err(e) => return fail(it, &e, &src),
+        };
+        if !atomic {
+            if same_file(&src, false, &dst) {
+                return Ok(Value::Unit);
+            }
+            if let Err(r) = clear_target(&dst, replace) {
+                return r.throw(it, &dst);
+            }
+        }
+        match std::fs::rename(os(&src), os(&dst)) {
+            Ok(()) => Ok(Value::Unit),
+            Err(e) if e.kind() == std::io::ErrorKind::CrossesDevices && atomic => {
+                it.throw_new(&["java", "nio", "file", "AtomicMoveNotSupportedException"], vec![Value::Str(src.clone()), Value::Str(dst.clone()), Value::string(reason(&e))])
+            }
+            Err(e) if e.kind() == std::io::ErrorKind::CrossesDevices => {
+                let copied = if meta.file_type().is_symlink() {
+                    std::fs::read_link(os(&src)).and_then(|t| make_link(&t.to_string_lossy(), os(&dst), false))
+                } else if meta.is_dir() {
+                    match std::fs::read_dir(os(&src)).map(|mut d| d.next().is_none()) {
+                        Ok(true) => std::fs::create_dir(os(&dst)),
+                        Ok(false) => return it.throw_new(&["java", "nio", "file", "DirectoryNotEmptyException"], vec![Value::Str(src.clone())]),
+                        Err(e) => Err(e),
+                    }
+                } else {
+                    std::fs::copy(os(&src), os(&dst)).map(|_| ())
+                };
+                let done = copied.and_then(|()| if meta.is_dir() && !meta.file_type().is_symlink() { std::fs::remove_dir(os(&src)) } else { std::fs::remove_file(os(&src)) });
+                match done {
+                    Ok(()) => Ok(Value::Unit),
+                    Err(e) => fail(it, &e, &src),
+                }
+            }
+            Err(e) => fail(it, &e, &src),
+        }
+    });
+    reg!(it, "java.nio.file.fileReadLink", |it, a| {
+        let path = host_path(it, a, 0)?;
+        match std::fs::symlink_metadata(os(&path)) {
+            Ok(m) if !m.file_type().is_symlink() => it.throw_new(&["java", "nio", "file", "NotLinkException"], vec![Value::Str(path.clone()), Value::Null, Value::Null]),
+            Ok(_) => match std::fs::read_link(os(&path)) {
+                Ok(target) => Ok(Value::string(target.to_string_lossy().into_owned())),
+                Err(e) => fail(it, &e, &path),
+            },
+            Err(e) => fail(it, &e, &path),
+        }
+    });
+    // `Files.createSymbolicLink(link, target)`: the target as written, relative to the link's
+    // directory; on Windows a directory's link when the target is a directory, as the JDK makes it.
+    reg!(it, "java.nio.file.fileCreateLink", |it, a| {
+        let link = written_path(it, a, 0)?;
+        let target = it.str_arg(a, 1)?;
+        if std::fs::symlink_metadata(os(&link)).is_ok() {
+            return it.throw_new(&["java", "nio", "file", "FileAlreadyExistsException"], vec![Value::Str(link.clone()), Value::Null, Value::Null]);
+        }
+        let dir = std::path::Path::new(os(&link)).parent().map(|p| p.join(&*target)).is_some_and(|t| t.is_dir());
+        match make_link(&target, os(&link), dir) {
+            Ok(()) => Ok(Value::Unit),
+            Err(e) => fail(it, &e, &link),
+        }
+    });
+    // `Files.createLink`: a hard link to `existing` (`link(2)`), `FileAlreadyExistsException` for a
+    // link that is there.
+    reg!(it, "java.nio.file.fileCreateHardLink", |it, a| {
+        let link = written_path(it, a, 0)?;
+        let existing = host_path(it, a, 1)?;
+        if std::fs::symlink_metadata(os(&link)).is_ok() {
+            return it.throw_new(&["java", "nio", "file", "FileAlreadyExistsException"], vec![Value::Str(link.clone()), Value::Null, Value::Null]);
+        }
+        match std::fs::hard_link(os(&existing), os(&link)) {
+            Ok(()) => Ok(Value::Unit),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => fail(it, &e, &existing),
+            Err(e) => fail(it, &e, &link),
+        }
+    });
+    // `Files.createTempDirectory` and `createTempFile`: under `dir`, the prefix, a random number
+    // and the suffix, as the JDK names them, made only for the program (0700, 0600).
+    reg!(it, "java.nio.file.fileTemp", |it, a| {
+        let dir = written_path(it, a, 0)?;
+        let prefix = it.str_arg(a, 1)?;
+        let suffix = match a.get(2) {
+            Some(Value::Str(s)) => Some(s.clone()),
+            _ => None,
+        };
+        loop {
+            let name = format!("{}{}{}", prefix, random_u64(), suffix.as_deref().unwrap_or(""));
+            let path = std::path::Path::new(os(&dir)).join(&name);
+            let made = match suffix {
+                None => make_private_dir(&path),
+                Some(_) => make_private_file(&path),
+            };
+            match made {
+                Ok(()) => return Ok(Value::string(if dir.is_empty() { name } else { path.to_string_lossy().into_owned() })),
+                Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => continue,
+                Err(e) => return fail(it, &e, &dir),
+            }
+        }
+    });
+    // Whether the program may read (`r`), write (`w`) or run (`x`) the file, as `access(2)`
+    // answers; on Windows, whether it is there (and for `w`, not read-only).
+    reg!(it, "java.nio.file.fileAccessible", |it, a| {
+        let path = host_path(it, a, 0)?;
+        let mode = it.str_arg(a, 1)?;
+        Ok(Value::Bool(accessible(os(&path), &mode)))
+    });
+    // The permission bits of a file (`Files.getPosixFilePermissions`), following a link; Windows
+    // has none, as the JDK's provider refuses them there.
+    reg!(it, "java.nio.file.filePermissions", |it, a| {
+        let path = host_path(it, a, 0)?;
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            match std::fs::metadata(os(&path)) {
+                Ok(m) => Ok(Value::Int((m.permissions().mode() & 0o777) as i32)),
+                Err(e) => fail(it, &e, &path),
+            }
+        }
+        #[cfg(not(unix))]
+        {
+            let _ = path;
+            it.throw_named("UnsupportedOperationException", "")
+        }
+    });
+    reg!(it, "java.nio.file.fileSetPermissions", |it, a| {
+        let path = written_path(it, a, 0)?;
+        let mode = a.get(1).and_then(|v| v.as_i32()).unwrap_or(0);
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            match std::fs::set_permissions(os(&path), std::fs::Permissions::from_mode(mode as u32 & 0o777)) {
+                Ok(()) => Ok(Value::Unit),
+                Err(e) => fail(it, &e, &path),
+            }
+        }
+        #[cfg(not(unix))]
+        {
+            let _ = (path, mode);
+            it.throw_named("UnsupportedOperationException", "")
+        }
+    });
+    // What tells a file from another (`isSameFile`, the walk's loop check): its device and inode
+    // on Unix, its resolved path elsewhere; following a link when `follow`.
+    reg!(it, "java.nio.file.fileKey", |it, a| {
+        let path = host_path(it, a, 0)?;
+        let follow = matches!(a.get(1), Some(Value::Bool(true)));
+        match file_key(os(&path), follow) {
+            Ok(key) => Ok(Value::string(key)),
+            Err(e) => fail(it, &e, &path),
+        }
+    });
+    // `Path.toRealPath`: absolute, links resolved (the last one too unless NOFOLLOW_LINKS), as the
+    // file system spells it; the JDK's exception for a path that is not there.
+    reg!(it, "java.nio.file.fileRealPath", |it, a| {
+        let path = host_path(it, a, 0)?;
+        let follow = matches!(a.get(1), Some(Value::Bool(true)));
+        let real = if follow {
+            std::fs::canonicalize(os(&path))
+        } else {
+            match std::fs::symlink_metadata(os(&path)) {
+                Err(e) => Err(e),
+                Ok(_) => {
+                    let p = std::path::Path::new(os(&path));
+                    match (p.parent().filter(|d| !d.as_os_str().is_empty()), p.file_name()) {
+                        (parent, Some(name)) => std::fs::canonicalize(parent.unwrap_or(std::path::Path::new("."))).map(|d| d.join(name)),
+                        _ => std::fs::canonicalize(p),
+                    }
+                }
+            }
+        };
+        match real {
+            Ok(r) => Ok(Value::string(real_spelling(&r))),
+            Err(e) => fail(it, &e, &path),
+        }
+    });
+    reg!(it, "java.nio.file.pathNames", |it, a| {
+        let p = it.str_arg(a, 0)?;
+        Ok(Value::array(path::names(&p, cfg!(windows)).into_iter().map(Value::str).collect()))
+    });
     reg!(it, "java.nio.file.absentPath", |_it, _a| Ok(Value::Null));
     reg!(it, "java.nio.file.windowsPaths", |_it, _a| Ok(Value::Bool(cfg!(windows))));
+}
+
+/// Why a target is in the way of a copy or a move: there without REPLACE_EXISTING, or a
+/// directory with entries.
+enum InTheWay {
+    There,
+    NotEmpty,
+    Failed(std::io::Error),
+}
+
+impl InTheWay {
+    fn throw<T>(self, it: &mut Interp, target: &str) -> R<T> {
+        match self {
+            InTheWay::There => it.throw_new(&["java", "nio", "file", "FileAlreadyExistsException"], vec![Value::str(target), Value::Null, Value::Null]),
+            InTheWay::NotEmpty => it.throw_new(&["java", "nio", "file", "DirectoryNotEmptyException"], vec![Value::str(target)]),
+            InTheWay::Failed(e) => fail(it, &e, target),
+        }
+    }
+}
+
+/// Clears the way for a copy or a move to `target`: nothing there, or with `replace` the file, the
+/// link or the empty directory there removed.
+fn clear_target(target: &str, replace: bool) -> Result<(), InTheWay> {
+    let Ok(meta) = std::fs::symlink_metadata(os(target)) else { return Ok(()) };
+    if !replace {
+        return Err(InTheWay::There);
+    }
+    let removed = if meta.is_dir() { std::fs::remove_dir(os(target)) } else { std::fs::remove_file(os(target)) };
+    match removed {
+        Ok(()) => Ok(()),
+        Err(e) if meta.is_dir() && matches!(e.kind(), std::io::ErrorKind::DirectoryNotEmpty | std::io::ErrorKind::AlreadyExists) => Err(InTheWay::NotEmpty),
+        Err(e) => Err(InTheWay::Failed(e)),
+    }
+}
+
+/// A file opened to set its times: read-only on Unix, with the right to write attributes (and to
+/// open a directory) on Windows.
+fn attributes_file(path: &str) -> std::io::Result<std::fs::File> {
+    #[cfg(windows)]
+    {
+        use std::os::windows::fs::OpenOptionsExt;
+        std::fs::OpenOptions::new().access_mode(0x100).custom_flags(0x0200_0000).open(path)
+    }
+    #[cfg(not(windows))]
+    std::fs::File::open(path)
+}
+
+fn make_link(target: &str, link: &str, dir: bool) -> std::io::Result<()> {
+    #[cfg(unix)]
+    {
+        let _ = dir;
+        std::os::unix::fs::symlink(target, link)
+    }
+    #[cfg(windows)]
+    {
+        if dir {
+            std::os::windows::fs::symlink_dir(target, link)
+        } else {
+            std::os::windows::fs::symlink_file(target, link)
+        }
+    }
+}
+
+/// A random number for a temporary file's name, as the JDK's `TempFileHelper` takes one.
+fn random_u64() -> u64 {
+    use std::hash::{BuildHasher, Hasher};
+    let mut h = std::collections::hash_map::RandomState::new().build_hasher();
+    h.write_u128(std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_nanos()));
+    h.write_u32(std::process::id());
+    h.finish()
+}
+
+fn make_private_dir(path: &std::path::Path) -> std::io::Result<()> {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::DirBuilderExt;
+        std::fs::DirBuilder::new().mode(0o700).create(path)
+    }
+    #[cfg(not(unix))]
+    std::fs::create_dir(path)
+}
+
+fn make_private_file(path: &std::path::Path) -> std::io::Result<()> {
+    let mut o = std::fs::OpenOptions::new();
+    o.write(true).create_new(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        o.mode(0o600);
+    }
+    o.open(path).map(|_| ())
+}
+
+fn accessible(path: &str, mode: &str) -> bool {
+    #[cfg(unix)]
+    {
+        extern "C" {
+            fn access(path: *const std::os::raw::c_char, mode: std::os::raw::c_int) -> std::os::raw::c_int;
+        }
+        let Ok(c) = std::ffi::CString::new(path) else { return false };
+        let bits = match mode {
+            "r" => 4,
+            "w" => 2,
+            _ => 1,
+        };
+        // SAFETY: a NUL-terminated path.
+        unsafe { access(c.as_ptr(), bits) == 0 }
+    }
+    #[cfg(not(unix))]
+    match std::fs::metadata(path) {
+        Ok(m) => mode != "w" || !m.permissions().readonly(),
+        Err(_) => false,
+    }
+}
+
+/// Whether the target of a copy or a move is there and is the source itself (its device and inode,
+/// whatever the paths' text, a hard link's too), when the JDK's `UnixCopyFile` does nothing: the
+/// source read as the operation reads it, the target not followed.
+fn same_file(src: &str, follow: bool, dst: &str) -> bool {
+    matches!((file_key(os(src), follow), file_key(os(dst), false)), (Ok(a), Ok(b)) if a == b)
+}
+
+fn file_key(path: &str, follow: bool) -> std::io::Result<String> {
+    let meta = if follow { std::fs::metadata(path)? } else { std::fs::symlink_metadata(path)? };
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt;
+        Ok(format!("(dev={:x},ino={})", meta.dev(), meta.ino()))
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = meta;
+        Ok(real_spelling(&if follow { std::fs::canonicalize(path)? } else { std::path::absolute(path)? }))
+    }
+}
+
+/// A resolved path as the JDK writes it: on Windows without the `\\?\` prefix of a verbatim path.
+fn real_spelling(p: &std::path::Path) -> String {
+    let text = p.to_string_lossy().into_owned();
+    if cfg!(windows) {
+        if let Some(unc) = text.strip_prefix(r"\\?\UNC\") {
+            return format!(r"\\{}", unc);
+        }
+        if let Some(rest) = text.strip_prefix(r"\\?\") {
+            return rest.to_string();
+        }
+    }
+    text
 }
 
 /// The text as the JDK's UTF-8 encoder without replacement takes it (`Files.writeString`): from
@@ -309,7 +711,7 @@ fn reason(e: &std::io::Error) -> String {
 }
 
 /// Throws the exception the JDK makes of the system error `e` on `file`.
-fn fail<T>(it: &mut Interp, e: &std::io::Error, file: &str) -> R<T> {
+pub(super) fn fail<T>(it: &mut Interp, e: &std::io::Error, file: &str) -> R<T> {
     let (class, reason) = translate(e);
     it.throw_new(&["java", "nio", "file", class], vec![Value::str(file), Value::Null, reason.map_or(Value::Null, Value::string)])
 }

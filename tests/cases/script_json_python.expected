@@ -1,0 +1,50 @@
+5e-324
+1.5e-323
+2.2250738585072014e-308
+1e-05
+0.0001
+0.1
+0.30000000000000004
+0.3333333333333333
+2.5
+100.0
+1000000000000000.0
+1e+16
+1e+22
+1e+23
+123456789.123
+9007199254740992.0
+4.9406564584e-314
+1.5e+300
+1.7976931348623157e+308
+-0.0
+6.675221575521604e-308
+1.152921504606847e+18
+NaN
+Infinity
+-Infinity
+repeated={"a": 3, "b": 2} 3
+sorted={"B": 4, "b": 3, "\ue000": 1, "\ud83d\ude00": 2}
+parse 01 = rejected
+parse -01 = rejected
+parse 0 = 0
+parse -0 = -0
+parse 0.5 = 0.5
+parse 1e5 = 1e5
+parse 1E+5 = 1E+5
+parse - = rejected
+parse 1. = rejected
+parse .5 = rejected
+parse "line\nline" = rejected
+parse "tab\tin" = rejected
+parse "esc\u0001" = "esc\u0001"
+parse { = rejected
+parse [1, = rejected
+parse [1,] = rejected
+parse NaN = NaN
+parse -Infinity = -Infinity
+parse [Infinity] = [Infinity]
+parse nan = rejected
+parse "\x" = rejected
+parse   [1, 2]   = [1, 2]
+parse [1] x = rejected

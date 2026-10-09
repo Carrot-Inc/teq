@@ -1,0 +1,48 @@
+{"name": "teq", "list": [1, -2.5, 3e2, true, null, "\u00e9\t\u0001"], "nested": {"empty": {}, "none": []}}
+{
+  "name": "teq",
+  "list": [
+    1,
+    -2.5,
+    3e2,
+    true,
+    null,
+    "\u00e9\t\u0001"
+  ],
+  "nested": {
+    "empty": {},
+    "none": []
+  }
+}
+{"list": [1, -2.5, 3e2, true, null, "é\t\u0001"], "name": "teq", "nested": {"empty": {}, "none": []}}
+"\u00e9\t\u0001" teq -2.5 0 true
+0.1 1.0 1e-05 0.0001 1.2345678901234568e+17 1e+16 9999999999999998.0 -0.0 1.5e+300 3.141592653589793
+{"a": false, "b": ["x", null], "c": "\u00fc"}
+bad {: expected a key at line 1, offset 1
+bad [1,]: unexpected character at line 1, offset 3
+bad "open: unterminated string at line 1, offset 1
+bad {"a" 1}: expected ':' at line 1, offset 5
+bad 01x: extra data at line 1, offset 1
+bad [1] 2: extra data at line 1, offset 4
+Some(4) true false /x/teq Vector(first, second)
+appended: one|two|
+merged: a|b|c|
+stdin text: given
+text
+stdin file: one|two
+stdin closed: end
+before the inheriting command
+from the command
+after it
+dir: true
+env: x é|unset
+failed: sh -c echo out; echo the reason >&2; exit 3 exited 3:
+the reason / 3
+unchecked: 4
+deadline: 124 true grandchild ended true
+missing: Cannot run program "no-such-program-of-teq": error=2, No such file or directory
+pool: 1:0:1 2:0:2 3:0:3 4:0:4 5:0:5 6:0:6 7:124: 8:0:8 9:0:9 10:0:10 11:0:11 12:0:12 at most 4
+chain: x! y!
+frame: Some({"é":1}) Some([]) None
+the body ends
+the second handler runs first

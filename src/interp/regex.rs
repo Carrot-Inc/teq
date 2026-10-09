@@ -37,7 +37,27 @@ enum Node {
     Alt(Vec<Node>),
     Repeat(Box<Node>, u32, Option<u32>, Greed),
     Backref(usize, Fold),
-    Look { ahead: bool, negative: bool, node: Box<Node> },
+    /// A lookaround; a lookbehind keeps the least and the most units its node takes (`span`), the
+    /// most none when unbounded, so that only the starts that can end at the position are tried.
+    Look { ahead: bool, negative: bool, node: Box<Node>, span: (usize, Option<usize>) },
+}
+
+/// The least and the most UTF-16 units a node matches, the most none when unbounded: what a
+/// lookbehind tries its node from (Java bounds a lookbehind; a backreference here is unbounded).
+fn span(node: &Node) -> (usize, Option<usize>) {
+    match node {
+        Node::Empty | Node::LineStart(_) | Node::LineEnd(_) | Node::InputStart | Node::InputEnd | Node::InputEndNl | Node::WordBoundary(_) | Node::Look { .. } => (0, Some(0)),
+        Node::Char(c, Fold::Exact) => (width(*c), Some(width(*c))),
+        Node::Char(..) | Node::Any(_) | Node::Class(..) => (1, Some(2)),
+        Node::Backref(..) => (0, None),
+        Node::Group(_, inner) => span(inner),
+        Node::Concat(items) => items.iter().map(span).fold((0, Some(0)), |(lo, hi), (a, b)| (lo + a, hi.zip(b).map(|(x, y)| x + y))),
+        Node::Alt(items) => items.iter().map(span).reduce(|(lo, hi), (a, b)| (lo.min(a), hi.zip(b).map(|(x, y)| x.max(y)))).unwrap_or((0, Some(0))),
+        Node::Repeat(inner, min, max, _) => {
+            let (lo, hi) = span(inner);
+            (lo * *min as usize, hi.zip(*max).map(|(h, m)| h * m as usize))
+        }
+    }
 }
 
 #[derive(Clone)]
@@ -440,7 +460,7 @@ impl<'a> Parser<'a> {
                     let mut inner = *flags;
                     let node = self.parse_alt(&mut inner)?;
                     self.close_group()?;
-                    return Ok(Some(Node::Look { ahead: true, negative, node: Box::new(node) }));
+                    return Ok(Some(Node::Look { ahead: true, negative, node: Box::new(node), span: (0, None) }));
                 }
                 Some('>') => {
                     let mut inner = *flags;
@@ -454,7 +474,8 @@ impl<'a> Parser<'a> {
                         let mut inner = *flags;
                         let node = self.parse_alt(&mut inner)?;
                         self.close_group()?;
-                        return Ok(Some(Node::Look { ahead: false, negative, node: Box::new(node) }));
+                        let span = span(&node);
+                        return Ok(Some(Node::Look { ahead: false, negative, node: Box::new(node), span }));
                     }
                     let mut name = String::new();
                     while let Some(c) = self.next() {
@@ -1088,13 +1109,16 @@ impl<'r, 's> Matcher<'r, 's> {
                 }
                 k(self, i + len)
             }
-            Node::Look { ahead, negative, node } => {
+            Node::Look { ahead, negative, node, span: (least, most) } => {
                 let saved = self.caps.clone();
                 let matched = if *ahead {
                     self.m(node, i, &mut |_, _| true)
                 } else {
                     let mut found = false;
-                    for j in (0..=i).rev() {
+                    // The starts the node can end at `i` from, the nearest first.
+                    let from = most.map_or(0, |m| i.saturating_sub(m));
+                    let starts = if i >= *least { from..=i - *least } else { 1..=0 };
+                    for j in starts.rev() {
                         if self.m(node, j, &mut |_, e| e == i) {
                             found = true;
                             break;

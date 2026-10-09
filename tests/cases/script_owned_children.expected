@@ -1,0 +1,6 @@
+finished: 0
+pool: a step failed
+running before the end: 3
+the spawned child alive: true
+running after the scope: 1
+the detached child alive: true

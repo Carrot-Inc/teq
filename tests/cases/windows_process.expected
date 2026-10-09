@@ -1,0 +1,20 @@
+inherited: inherited
+a key of another case: false
+one PATH: 2
+replaced: true
+set: set
+removed: set
+an inherited one removed: set
+working directory: true
+command line: "a b" "" plain "trail dir\\"
+available: 7
+partial read: 3
+the rest: lo\r\n
+end: -1
+deadline missed: false
+alive: true
+destroyed: 1
+status kept: 1
+destroyed forcibly: 1
+a copied .cmd: [a b] [c]
+cleaned: false

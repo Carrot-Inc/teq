@@ -1,0 +1,10 @@
+os.name: true
+os.arch: true
+file.separator: /
+path.separator: :
+line.separator: true
+user.dir: true
+user.home: true
+java.io.tmpdir: true
+absent: fallback
+processors: true

@@ -1,0 +1,19 @@
+port: true
+bound: localhost/127.0.0.1
+timeout: 100
+accept with nobody: java.net.SocketTimeoutException: Accept timed out
+connected: true
+peer: true
+peer address: /127.0.0.1
+request line: GET /a/path HTTP/1.1
+header: Host: localhost
+blank: true
+response: HTTP/1.1 200 OK|Content-Length: 6||héllo
+read timeout: java.net.SocketTimeoutException: Read timed out
+closed: true
+closed stream: java.net.SocketException: Socket is closed
+server closed: true
+accept closed: java.net.SocketException: Socket is closed
+refused: java.net.ConnectException: Connection refused
+unknown host: java.net.UnknownHostException
+loopback: localhost/127.0.0.1

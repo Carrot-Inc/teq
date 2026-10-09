@@ -1,0 +1,10 @@
+status: 1
+stderr file: 8388608
+stderr text: 1048602
+stderr tail: 16384
+failure's message: 16479
+stdout file: 1500001
+stdout text: 838886 1
+left out: [451425 bytes left out]
+whole: 1200001
+lines kept whole: true

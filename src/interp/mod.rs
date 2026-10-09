@@ -3,6 +3,7 @@
 //! as the typer produced it, typing the bodies of the standard library when it meets them, so
 //! it needs the `Worker` rather than a finished program, and it imports nothing of the emitters.
 
+mod archive;
 mod bignum;
 mod builtins;
 mod char_tables;
@@ -15,6 +16,8 @@ pub mod identity;
 mod jdk;
 mod maps;
 mod natives;
+mod net;
+pub mod process;
 pub mod profile;
 pub mod quoted;
 mod regex;
@@ -1187,11 +1190,16 @@ impl InterpCaches {
     }
 }
 
+/// The steps a run takes between two looks for a signal (`Interp::watch_signals`).
+const SIGNAL_SLICE: u64 = 1 << 20;
+
 pub struct Interp<'a, 't> {
     pub typer: &'a mut Worker<'t>,
     /// `registry::on()`, read once.
     resident: bool,
     steps: u64,
+    /// The budget past `steps`, granted a slice at a time when the run watches for signals.
+    reserve: u64,
     /// The typer's count of withheld bodies met when the run last looked (`note_withheld`), and
     /// whether one stopped the run.
     withheld_seen: u32,
@@ -1321,6 +1329,7 @@ impl<'a, 't> Interp<'a, 't> {
             typer,
             resident: registry::on(),
             steps: limits.steps,
+            reserve: 0,
             withheld_seen,
             halted: false,
             depth: 0,
@@ -1630,7 +1639,45 @@ impl<'a, 't> Interp<'a, 't> {
     }
 
     pub fn steps_left(&self) -> u64 {
-        self.steps
+        self.steps + self.reserve
+    }
+
+    /// Has the run see a signal to `teq interp` (`process::handle_signals`) between slices of its
+    /// budget, so that a loop that calls no native stops too.
+    pub fn watch_signals(&mut self) {
+        let total = self.steps + self.reserve;
+        self.steps = total.min(SIGNAL_SLICE);
+        self.reserve = total - self.steps;
+    }
+
+    /// The end of `teq interp`'s run, whatever ended it: the shutdown hooks the program registered
+    /// (`Runtime.addShutdownHook`) run in the order they were registered, as the JVM's would at its
+    /// exit, an exception in one printed as the JVM's thread prints it; a hook that calls
+    /// `System.exit` ends the run there, with its status.
+    pub fn shut_down(&mut self) -> Option<i32> {
+        let hooks = process::take_hooks();
+        for hook in hooks {
+            match self.call_by_name(hook.clone(), "run", Vec::new()) {
+                Ok(_) => {}
+                Err(Control::Fail(Failure::Exit(status))) => return Some(status),
+                Err(Control::Throw(e)) => {
+                    let name = match self.call_by_name(hook, "getName", Vec::new()) {
+                        Ok(Value::Str(n)) => n.to_string(),
+                        _ => "Thread-0".to_string(),
+                    };
+                    let text = self.to_str(&e).unwrap_or_else(|_| "<unprintable exception>".to_string());
+                    self.flush();
+                    eprintln!("Exception in thread \"{}\" {}", name, text);
+                }
+                Err(Control::Fail(f)) => {
+                    let message = self.describe(&f);
+                    self.flush();
+                    eprintln!("{}", message);
+                }
+                Err(_) => {}
+            }
+        }
+        None
     }
 
     /// Registers a builtin under the qualified name of the def it stands for

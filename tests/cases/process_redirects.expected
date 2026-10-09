@@ -1,0 +1,28 @@
+piped out: out
+
+piped err: err
+
+piped status: 4
+exitValue: 4
+merged: a|b|c|
+merged err: -1
+before the inheriting child
+from the child
+after the inheriting child
+inheritIO: INHERIT,INHERIT,INHERIT
+discarded read: -1
+discarded available: 0
+no pipe write: java.io.IOException: Stream closed
+appended: first|second|
+truncated: third|
+from a file: third|
+err to a file: to err
+missing input file: java.io.IOException: Cannot run program "cat": target/process_redirects/absent (No such file or directory)
+output under a missing directory: java.io.IOException: Cannot run program "sh": target/process_redirects/no/such/file (No such file or directory)
+redirects: PIPE | INHERIT | WRITE | redirect to write to file "a b" | redirect to append to file "x" | redirect to read from file "y"
+types: PIPE INHERIT WRITE WRITE APPEND READ
+files: null /dev/null a
+equal: true
+unequal: false
+input to a file: java.lang.IllegalArgumentException: Redirect invalid for reading: redirect to write to file "a"
+output from a file: java.lang.IllegalArgumentException: Redirect invalid for writing: redirect to read from file "a"

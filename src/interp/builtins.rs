@@ -75,7 +75,10 @@ fn boolean(it: &mut Interp, a: A, i: usize) -> R<bool> {
 /// A String or a Char, which JavaScript does not tell apart.
 fn text(it: &mut Interp, a: A, i: usize) -> R<Rc<str>> {
     match a.get(i) {
-        Some(Value::Str(s)) => Ok(s.clone()),
+        Some(Value::Str(s)) => {
+            index_str(s);
+            Ok(s.clone())
+        }
         Some(Value::Char(c)) => Ok(Rc::from(char_to_string(*c))),
         Some(Value::Null) => Ok(Rc::from("null")),
         Some(other) => {
@@ -533,6 +536,7 @@ pub fn table() -> Rc<Table> {
                 install_reflective(&mut table);
                 super::quoted::install(&mut table);
                 super::files::install(&mut table);
+                super::process::install(&mut table);
                 Rc::new(table)
             })
             .clone()
@@ -970,6 +974,27 @@ fn install_strings(it: &mut Table) {
         let (from, until) = (int(it, a, 1)?.max(0), int(it, a, 2)?.max(0));
         let (lo, hi) = slice_bounds(utf16_len(&s), from, until);
         Ok(Value::str(&utf16_slice(&s, lo, hi)))
+    });
+    // `getChars(srcBegin, srcEnd, dst, dstBegin)`: the UTF-16 units, the JDK's bounds checked.
+    reg!(it, "scala.String.getChars", |it, a| {
+        let s = text(it, a, 0)?;
+        let (begin, end) = (int(it, a, 1)?, int(it, a, 2)?);
+        let dst = array(it, a, 3)?;
+        let at = int(it, a, 4)?;
+        let units: Vec<u16> = crate::text::utf16_units(&s).collect();
+        let n = units.len() as i32;
+        if begin < 0 || begin > end || end > n {
+            return it.throw_named("StringIndexOutOfBoundsException", &format!("begin {}, end {}, length {}", begin, end, n));
+        }
+        let len = dst.borrow().len() as i32;
+        if at < 0 || at + (end - begin) > len {
+            return it.throw_named("ArrayIndexOutOfBoundsException", &format!("Range [{}, {} + {}) out of bounds for length {}", at, at, end - begin, len));
+        }
+        let mut items = dst.write();
+        for (i, &u) in units[begin as usize..end as usize].iter().enumerate() {
+            items[at as usize + i] = Value::Char(u);
+        }
+        Ok(Value::Unit)
     });
     reg!(it, "scala.String.toCharArray", |it, a| {
         let s = text(it, a, 0)?;
@@ -1786,7 +1811,8 @@ fn install_java(it: &mut Table) {
         });
         Ok(Value::Long(start.elapsed().as_nanos() as i64))
     });
-    reg!(it, "java.lang.System.lineSeparator", |_it, _a| Ok(Value::str("\n")));
+    // The host's, as the JVM's: `\r\n` on Windows.
+    reg!(it, "java.lang.System.lineSeparator", |_it, _a| Ok(Value::str(if cfg!(windows) { "\r\n" } else { "\n" })));
     // A resource bundle read from the class path's `.properties` file, for the messages a test
     // framework's macro formats at compile time; its pairs are the object's fields, which
     // `getString` reads (`class::jdk_member`).
@@ -1830,8 +1856,16 @@ fn install_java(it: &mut Table) {
         }
         let value = match &**key {
             "user.dir" => std::env::current_dir().ok().map(|d| d.to_string_lossy().into_owned()),
-            "user.home" => std::env::var("HOME").ok(),
-            "java.io.tmpdir" => Some(std::env::temp_dir().to_string_lossy().into_owned()),
+            "user.home" => if cfg!(windows) { std::env::var("USERPROFILE").ok() } else { std::env::var("HOME").ok() },
+            // The JDK's: `/tmp` on Linux whatever TMPDIR says, the system's elsewhere.
+            "java.io.tmpdir" => Some(if cfg!(target_os = "linux") { "/tmp".to_string() } else { std::env::temp_dir().to_string_lossy().into_owned() }),
+            "os.name" => Some(super::process::os_name()),
+            "os.arch" => Some(match std::env::consts::ARCH {
+                "x86_64" if !cfg!(target_os = "macos") => "amd64",
+                "x86" => "x86",
+                arch => arch,
+            }
+            .to_string()),
             "file.separator" => Some(std::path::MAIN_SEPARATOR.to_string()),
             "path.separator" => Some(if cfg!(windows) { ";" } else { ":" }.to_string()),
             "line.separator" => Some(if cfg!(windows) { "\r\n" } else { "\n" }.to_string()),

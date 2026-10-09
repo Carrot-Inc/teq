@@ -1,5 +1,5 @@
 // tests/tasty/exec/Launch.java: `Launch <class> <method>` runs the static method of the class, with an empty
-// argument array where it takes one; what tests/tasty-exec.sh runs a regenerated program by.
+// argument array where it takes one; what tests/tasty-exec.scala runs a regenerated program by.
 import java.lang.reflect.*;
 public class Launch {
   public static void main(String[] a) throws Throwable {

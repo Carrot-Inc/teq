@@ -1,0 +1,8 @@
+teq: 0.1.7
+format: 1
+binaries:
+  linux-aarch_64: https://github.com/Carrot-Inc/teq/releases/download/v0.1.7/teq-0.1.7-linux-aarch_64 efc41bbeddeaeeba9d9e31fa76326a2d5ff593ac 22040824
+  linux-x86_64: https://github.com/Carrot-Inc/teq/releases/download/v0.1.7/teq-0.1.7-linux-x86_64 84f92001896bd8b73432ede18075ee8db2c9f7c8 24758176
+  osx-aarch_64: https://github.com/Carrot-Inc/teq/releases/download/v0.1.7/teq-0.1.7-osx-aarch_64 7cd8817f041f8261e045926182901846ada72086 20432000
+  osx-x86_64: https://github.com/Carrot-Inc/teq/releases/download/v0.1.7/teq-0.1.7-osx-x86_64 97adc1f6b9be2e31cf12d0e372ef8db116b7d143 23416480
+  windows-x86_64: https://github.com/Carrot-Inc/teq/releases/download/v0.1.7/teq-0.1.7-windows-x86_64.exe 0fb5d94246221c7f0f978f3c5f65a81378cab45c 22478848

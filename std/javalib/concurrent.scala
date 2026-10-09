@@ -24,10 +24,26 @@ package java.lang:
     // The one thread runs; another was never started.
     def getState(): Thread.State = if this eq Thread.currentThread() then Thread.State.RUNNABLE else Thread.State.NEW
 
+  @js("$fail(\"UnsupportedOperationException\", \"Thread.sleep is not available on JavaScript\")")
+  private[lang] def threadSleep(millis: scala.Long, nanos: scala.Long): Unit
+  @js("$fail(\"UnsupportedOperationException\", \"shutdown hooks are not available on JavaScript\")")
+  private[lang] def hookAdd(hook: Thread): Unit
+  @js("$fail(\"UnsupportedOperationException\", \"shutdown hooks are not available on JavaScript\")")
+  private[lang] def hookRemove(hook: Thread): scala.Boolean
+
   @jvmClass("java/lang/Thread")
   object Thread:
     private val single = new Thread("main", null)
     def currentThread(): Thread = single
+    // The one thread waits: under `teq interp` for the time (a signal stops it), with the output
+    // so far flushed; JavaScript cannot wait.
+    def sleep(millis: scala.Long): Unit =
+      if millis < 0L then throw new IllegalArgumentException("timeout value is negative")
+      threadSleep(millis, 0L)
+    def sleep(millis: scala.Long, nanos: Int): Unit =
+      if millis < 0L then throw new IllegalArgumentException("timeout value is negative")
+      if nanos < 0 || nanos > 999999 then throw new IllegalArgumentException("nanosecond timeout value out of range")
+      threadSleep(millis, nanos.toLong)
     def interrupted(): scala.Boolean =
       val was = single.interruptedState
       single.interruptedState = false
@@ -60,7 +76,19 @@ package java.lang:
 
   @jvmClass("java/lang/Runtime")
   class Runtime private ():
-    def availableProcessors(): Int = 1
+    // One on JavaScript and in a macro; the machine's under `teq interp`.
+    @js("1")
+    def availableProcessors(): Int
+    // A thread whose `run` the end of a program under `teq interp` calls (`Interp::shut_down`):
+    // after main returns, an uncaught exception, `System.exit` or a signal, as the JVM's shutdown
+    // starts the hooks, here one after the other in the order they were added.
+    def addShutdownHook(hook: Thread): Unit =
+      if hook == null then throw new NullPointerException()
+      hookAdd(hook)
+    def removeShutdownHook(hook: Thread): scala.Boolean =
+      if hook == null then throw new NullPointerException()
+      hookRemove(hook)
+    def exit(status: Int): Unit = System.exit(status)
     def maxMemory(): scala.Long = scala.Long.MaxValue
     def freeMemory(): scala.Long = scala.Long.MaxValue
     def totalMemory(): scala.Long = scala.Long.MaxValue

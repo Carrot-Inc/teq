@@ -3203,6 +3203,11 @@ impl<'a> Worker<'a> {
                     let n = clause.params.len();
                     let sam_arity = n > 1 || (n == 1 && !clause.params[0].repeated);
                     if exp_fn.is_none() && eta.is_empty() && ctor.is_none() && sam_arity {
+                    // A method with `()` is expanded to a function type alone, never to a trait or
+                    // class with one method, as dotc's: named bare where one is expected, a Java
+                    // method is called (`new InputStreamReader(p.getInputStream)`, `InputStream`
+                    // having one abstract method) and a Scala one is reported.
+                    if exp_fn.is_none() && eta.is_empty() && ctor.is_none() && !clause.params.is_empty() {
                         if let Some(sam) = expected.and_then(|t| self.sam_method(t, clause.params.len())) {
                             let (_, _, sam_sig, sam_subst) = &sam;
                             // A by-name parameter of the method stays one, for the expansion to pass

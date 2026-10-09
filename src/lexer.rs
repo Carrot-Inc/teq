@@ -104,7 +104,8 @@ pub fn lex_closing(text: &str, interner: &Interner, close_parens: &[u32]) -> Lex
         let mut lx = Lexer {
             src: text.as_bytes(),
             text,
-            pos: 0,
+            // A script header (`#!/usr/bin/env -S teq interp`) is skipped as scalac skips it.
+            pos: crate::directives::script_header(text),
             tokens: Vec::with_capacity(text.len() / 4 + 16),
             regions: vec![Region::Indent(0)],
             interner,
@@ -149,6 +150,41 @@ pub fn lex_closing(text: &str, interner: &Interner, close_parens: &[u32]) -> Lex
             _ => return LexResult { tokens: lx.tokens, errors: lx.errors, end_markers: lx.end_markers, boundaries: lx.boundaries },
         }
     }
+}
+
+/// Where the block comment opening at `start` (its `/*`) ends, past its `*/`: comments nest, each
+/// `/*` inside one opening another that its own `*/` closes, as scalac reads them. None when the
+/// text ends first. The lexer and the header directives' scan (`crate::directives`) read comments
+/// by this one rule.
+pub(crate) fn block_comment_end(src: &[u8], start: usize) -> Option<usize> {
+    block_comment(src, start).0
+}
+
+/// `block_comment_end`, and where the comment's last line starts (past its last newline) when it
+/// holds one, found in the one pass.
+fn block_comment(src: &[u8], start: usize) -> (Option<usize>, Option<usize>) {
+    let mut pos = start + 2;
+    let mut depth = 1;
+    let mut line = None;
+    while depth > 0 {
+        let Some(&b) = src.get(pos) else { return (None, line) };
+        match b {
+            b'\n' => {
+                line = Some(pos + 1);
+                pos += 1;
+            }
+            b'/' if src.get(pos + 1) == Some(&b'*') => {
+                depth += 1;
+                pos += 2;
+            }
+            b'*' if src.get(pos + 1) == Some(&b'/') => {
+                depth -= 1;
+                pos += 2;
+            }
+            _ => pos += 1,
+        }
+    }
+    (Some(pos), line)
 }
 
 #[inline]
@@ -218,25 +254,16 @@ impl<'a> Lexer<'a> {
                 b'/' if self.peek(1) == b'*' => {
                     comment_on_line = true;
                     let start = self.pos;
-                    self.pos += 2;
-                    let mut depth = 1;
-                    while depth > 0 {
-                        if self.pos >= self.src.len() {
+                    let (end, line) = block_comment(self.src, start);
+                    if line.is_some() {
+                        new_line = line;
+                        in_comment = true;
+                    }
+                    match end {
+                        Some(end) => self.pos = end,
+                        None => {
+                            self.pos = self.src.len();
                             self.error(start, start + 2, "unterminated comment");
-                            break;
-                        }
-                        if self.peek(0) == b'/' && self.peek(1) == b'*' {
-                            depth += 1;
-                            self.pos += 2;
-                        } else if self.peek(0) == b'*' && self.peek(1) == b'/' {
-                            depth -= 1;
-                            self.pos += 2;
-                        } else {
-                            if self.peek(0) == b'\n' {
-                                new_line = Some(self.pos + 1);
-                                in_comment = true;
-                            }
-                            self.pos += 1;
                         }
                     }
                 }

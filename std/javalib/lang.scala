@@ -1348,6 +1348,10 @@ package java.lang:
     @js("\"err\"")
     @jvm("getstatic java/lang/System.err:Ljava/io/PrintStream;")
     def err: java.io.PrintStream
+    // The interpreter's stdin (`java.io.Stdin`); JavaScript has none.
+    @js("$fail(\"UnsupportedOperationException\", \"System.in is not available on JavaScript\")")
+    @jvm("getstatic java/lang/System.in:Ljava/io/InputStream;")
+    def in: java.io.InputStream
     @js("$arraycopy($1, $2, $3, $4, $5)")
     @jvm("$1:L $2:I $3:L $4:I $5:I invokestatic java/lang/System.arraycopy(Ljava/lang/Object;ILjava/lang/Object;II)V")
     def arraycopy(src: AnyRef, srcPos: Int, dest: AnyRef, destPos: Int, length: Int): Unit

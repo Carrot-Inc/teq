@@ -47,6 +47,29 @@ teq tasty --body lib.jar a.b.C.m  # a definition with its body in Scala-like syn
       --load lib.jar...           # enter every class and decode every signature through the typer
 ```
 
+`teq interp` runs a program in the compiler's interpreter: the files and directories named, one main among them
+(`@main def` or an object's `main`), the arguments after `--` its own. A file it runs can be a script:
+
+- A first line `#!/usr/bin/env -S teq interp` is skipped, as scalac skips it (with scalac's `!#` closing a longer
+  header), so that the same file runs under scala-cli. A script runs as `teq interp x.scala`, not by its path:
+  `env` finds no `teq` on a plain `PATH`, and a project's launcher there would run that project's release.
+- `//> using file <path>` and `//> using files <path> <path>...` among the comments that open a file bring other
+  sources in: each path relative to the file that names it, quoted or not; a directory, the `.scala` files below
+  it, hidden ones left out; each file once. A path that names nothing stops the run (status 2) with the file and
+  the line. An included file's own directives are followed, which scala-cli (1.17.1) refuses. Every other `using`
+  key stays a comment, as it is to scalac.
+- `teq compiler` and the language server read no directive and see a script alone: a check names what the
+  script includes, `teq compiler check tools/script scripts/x.scala`.
+- In a project the launcher runs its scripts (`./teq interp scripts/x.scala`), so the release `teq.lock` pins
+  interprets them as it compiles the project, the same on every machine; `TEQ` names another binary.
+
+The interpreter gives a script the JDK it needs: processes (`ProcessBuilder`, `Process`, `ProcessHandle`), their
+streams and the program's stdin, `java.nio.file.Files`, TCP sockets, zip and gzip archives, `MessageDigest`,
+`Thread.sleep`, shutdown hooks, `System.getProperty`'s platform values and the clock (`Instant`,
+`ZonedDateTime`, `DateTimeFormatter.ofPattern`), each as the JDK behaves; it has no threads, and runs a shutdown
+hook on its one thread when the program ends: at the end of its main, at `System.exit`, at an uncaught exception,
+or at SIGINT, SIGTERM or SIGHUP (status 128 plus the signal's number).
+
 An argument `@file` stands for the file's lines, one argument per line, up to the first `--`
 (what follows a `--` is the program's, as written): `teq @build.args`. teq's own tools start teq
 this way, since Windows refuses a command line over 32,767 characters, which a class path of a few

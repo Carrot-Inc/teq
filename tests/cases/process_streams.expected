@@ -1,0 +1,25 @@
+echoed: first line
+echoed: second, é
+after the close: null
+cat: 0
+write after the end: java.io.IOException: Stream closed
+both outputs: 200000 and 300000
+then stdin: the answer
+big: 0
+partial: no newline
+partial end: null
+split character: héllo
+lines: [a|b|c|d||e]
+lines(): x,y
+read into: 2 ab
+skip: 2
+readNBytes: efg
+rest: hij
+at the end: -1
+readNBytes at the end: 0
+read after close: java.io.IOException: Stream closed
+available after close: java.io.IOException: Stream closed
+transferTo: 12 twelve bytes
+chars: 97,241,98,-1
+char buffer: 3 xyz
+char buffer end: -1

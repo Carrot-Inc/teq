@@ -1,0 +1,13 @@
+n3=006
+n19=0000000000000000006
+n20=java.lang.IllegalArgumentException: The minimum width must be from 1 to 19 inclusive but was 20
+n21=java.lang.IllegalArgumentException: The minimum width must be from 1 to 19 inclusive but was 21
+y3=2024
+y19=0000000000000002024
+y20=java.lang.IllegalArgumentException: The minimum width must be from 1 to 19 inclusive but was 20
+y21=java.lang.IllegalArgumentException: The minimum width must be from 1 to 19 inclusive but was 21
+u3=2024
+u19=0000000000000002024
+u20=java.lang.IllegalArgumentException: The minimum width must be from 1 to 19 inclusive but was 20
+u21=java.lang.IllegalArgumentException: The minimum width must be from 1 to 19 inclusive but was 21
+The minimum width must be from 1 to 19 inclusive but was 20

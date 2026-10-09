@@ -124,9 +124,16 @@ release_inputs=(Cargo.toml Cargo.lock integrations/sbt ':(exclude)integrations/s
 release_outputs=(':(exclude,glob)integrations/sbt/**/target/**' ':(exclude)integrations/sbt/.bsp' ':(exclude)integrations/sbt/binary/binaries')
 
 # The example's pin of a release, moved to it once it is published and read back (bench/release.sh
-# --pin): the sbt example's plugin, and its teq.lock exported under it. The Zed extension's fallback
-# finds the newest release by itself.
-release_pins="integrations/sbt/example/project/plugins.sbt integrations/sbt/example/teq.lock"
+# --pin): the sbt example's plugin, its teq.lock exported under it, and the repository's own teq.lock
+# taken from that (release_root_lock). The Zed extension's fallback finds the newest release by itself.
+release_pins="integrations/sbt/example/project/plugins.sbt integrations/sbt/example/teq.lock teq.lock"
+
+# release_root_lock <example lock> <lock>: the repository's own lock (docs/DEVELOPING.md, "The repository's
+# scripts"), which its launchers read: the example's sections up to its inputs, the compiler's version, the lock's
+# format and the binaries; written whole by a rename.
+release_root_lock() {
+  awk '/^[^ ]/ && !/^(teq|format|binaries):/ { exit } { print }' "$1" > "$2.part" && mv "$2.part" "$2"
+}
 # The documents whose instructions name the newest release (`"build.teq" % "sbt-teq" % "<version>"`, the
 # download links under the Central root), moved with the pin, and the site built from them after it: until
 # then they name the release before, whose files are served.

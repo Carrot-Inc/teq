@@ -1,0 +1,34 @@
+written before the close: 1
+and more: 3
+Files' stream writes through: 6
+read: a
+skip 2: 2
+then read: d
+skip back 2: -2
+then read again: c
+available: 3
+skip past the end: 100
+read past the end: -1
+read when closed: java.io.IOException: Stream Closed
+channel read: a
+channel skip 2: 2
+channel read: d
+channel skip back 10: -4
+channel read: a
+channel skip past the end: 5
+channel skip at the end: 0
+channel read when closed: java.nio.channels.ClosedChannelException: null
+file write when closed: java.io.IOException: Stream Closed
+channel write when closed: java.nio.channels.ClosedChannelException: null
+child read: a
+child skip, buffered: 6
+child skip at the end: 0
+child read at the end: -1
+child status: 0
+read after its end: kept
+status again: 0
+Files reader: java.nio.charset.MalformedInputException: Input length = 1
+stream reader: 97 65533 40 98
+Files reader, a cut end: java.nio.charset.MalformedInputException: Input length = 2
+Files reader, a surrogate: java.nio.charset.MalformedInputException: Input length = 3
+readAllLines: java.nio.charset.MalformedInputException: Input length = 3

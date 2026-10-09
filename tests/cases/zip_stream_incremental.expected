@@ -1,0 +1,18 @@
+first entry from its header alone: first
+taken for the header: 44
+size before reading: -1 -1 -1
+read: 10400 true
+size after reading: 10400 70 1907499687
+second: second valid 5
+third, stored: third 0 5 plain
+no more: null
+skip in an entry: 30
+next without reading the rest: second
+gzip header alone: 10
+gzip members: one member, and another
+gzip trailer: java.util.zip.ZipException: Corrupt GZIP trailer
+not gzip: java.util.zip.ZipException: Not in GZIP format
+gzip cut short: java.io.EOFException: Unexpected end of ZLIB input stream
+inflated in pieces: 10400 true remaining 4 read 76 written 10400
+ended: java.lang.NullPointerException: Inflater has been closed
+corrupt: java.util.zip.DataFormatException: invalid block type

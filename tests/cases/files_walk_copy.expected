@@ -1,0 +1,87 @@
+walk: .,link-to-u,u,u/f
+walk following: .,link-to-u,link-to-u/f,u,u/f
+walk a loop: .,link-to-u,u,u/f,u/loop
+walk following a loop: java.nio.file.FileSystemLoopException true
+isSymbolicLink: true false
+readSymbolicLink: u
+readSymbolicLink of a file: java.nio.file.NotLinkException: target/files_walk_copy/a.txt
+link again: java.nio.file.FileAlreadyExistsException: target/files_walk_copy/t/link-to-u
+dangling exists: false true true
+dangling regular: false false
+directory through a link: true false
+size: 17
+size of absent: java.nio.file.NoSuchFileException: target/files_walk_copy/absent
+modified: 1262304000000
+modified absent: java.nio.file.NoSuchFileException: target/files_walk_copy/absent
+copy: target/files_walk_copy/b.txt
+copied: 17 false
+copy onto a file: java.nio.file.FileAlreadyExistsException: target/files_walk_copy/b.txt
+copy replacing: target/files_walk_copy/b.txt
+copied with attributes: 17 1262304000000
+copy a directory: target/files_walk_copy/t2
+copied directory: .
+copy absent: java.nio.file.NoSuchFileException: target/files_walk_copy/absent
+copy a link: target/files_walk_copy/link-copy
+copied link: true u
+copy to a stream: 17 17
+copy from a stream: 13
+streamed: from a stream
+copy from a stream onto a file: java.nio.file.FileAlreadyExistsException: target/files_walk_copy/streamed.txt
+move: target/files_walk_copy/moved.txt
+moved: false true
+move onto a file: java.nio.file.FileAlreadyExistsException: target/files_walk_copy/a.txt
+move replacing: target/files_walk_copy/streamed.txt
+move atomically: target/files_walk_copy/atomic.txt
+move a directory: target/files_walk_copy/t3
+move absent: java.nio.file.NoSuchFileException: target/files_walk_copy/absent
+delete: ()
+delete absent: java.nio.file.NoSuchFileException: target/files_walk_copy/atomic.txt
+delete a full directory: java.nio.file.DirectoryNotEmptyException: target/files_walk_copy/t
+deleteIfExists: true false
+temp directory: true true
+temp file: true 0
+temp file default suffix: true
+temp permissions: rwx------ rw-------
+default temp: true
+directory stream: a.txt,dangling,link-copy,t
+glob: a.txt
+lines: alpha|beta|gamma
+reader: alpha/beta
+writer: one|twö
+appended: one|twö|three
+write appending: target/files_walk_copy/w.txt
+written: 14
+create new over a file: java.nio.file.FileAlreadyExistsException: target/files_walk_copy/w.txt
+write to absent without create: java.nio.file.NoSuchFileException: target/files_walk_copy/absent.txt
+truncate: target/files_walk_copy/w.txt
+truncated: short
+write lines: target/files_walk_copy/l.txt
+lines written: x|y|
+streams: 1,2,3
+input of absent: java.nio.file.NoSuchFileException: target/files_walk_copy/absent
+readString charset: short
+executable: false true true
+permissions: rwxr-x--- true
+bad permissions: java.lang.IllegalArgumentException: Invalid mode
+readable absent: false
+same file: true true false
+same file absent: java.nio.file.NoSuchFileException: target/files_walk_copy/absent
+Paths.get: target/files_walk_copy/t/u
+names: 4 files_walk_copy files_walk_copy/t target|files_walk_copy|t|u
+bad name: java.lang.IllegalArgumentException: null
+endsWith: true true false false
+root: null /
+resolveSibling: target/files_walk_copy/t/v
+real path: <dir>/target/files_walk_copy/t/u
+real path of a link: <dir>/target/files_walk_copy/t/u
+real path not followed: <dir>/target/files_walk_copy/t/link-to-u
+real path absent: java.nio.file.NoSuchFileException: target/files_walk_copy/absent
+toFile: target/files_walk_copy/t/u
+compare: true
+file: target/files_walk_copy/a.txt a.txt target/files_walk_copy true true false 17
+file absolute: <dir>/target/files_walk_copy/a.txt false /x/y
+file list: link-to-u,u
+file mkdirs: true false
+file delete: true false
+file separators: / : /
+file equality: true

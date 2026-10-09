@@ -1,0 +1,2 @@
+tests/using/missing.scala:1: using file lib/Absent.scala: there is no tests/using/lib/Absent.scala
+exit 2

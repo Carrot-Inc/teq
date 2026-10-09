@@ -62,6 +62,26 @@ package java.io:
         out.write(c)
         c = read()
       out.toByteArray()
+    // At most `len` bytes, fewer only at the end.
+    @jvm("invokevirtual java/io/InputStream.readNBytes(I)[B")
+    def readNBytes(len: Int): Array[Byte] =
+      if len < 0 then throw new IllegalArgumentException("len < 0")
+      val out = new ByteArrayOutputStream()
+      var n = 0
+      var c = if len > 0 then read() else -1
+      while c != -1 do
+        out.write(c)
+        n += 1
+        c = if n < len then read() else -1
+      out.toByteArray()
+    @jvm("invokevirtual java/io/InputStream.readNBytes([BII)I")
+    def readNBytes(b: Array[Byte], off: Int, len: Int): Int =
+      var n = 0
+      var done = false
+      while n < len && !done do
+        val k = read(b, off + n, len - n)
+        if k < 0 then done = true else n += k
+      n
     @jvm("invokevirtual java/io/InputStream.skip(J)J")
     def skip(n: Long): Long =
       var left = n
@@ -526,6 +546,10 @@ package java.util:
         nextNextGaussian = v2 * multiplier
         haveNextNextGaussian = true
         v1 * multiplier
+  @jvmClass("java/util/Enumeration")
+  trait Enumeration[E]:
+    def hasMoreElements(): Boolean
+    def nextElement(): E
 
   // The stores behind the collections below, JS primitives of their own so that the layer
   // stands under `--std=scala-library` too, where the lean std's collections are absent: a

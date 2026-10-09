@@ -83,6 +83,14 @@ a JDK member as `not supported on JavaScript`. Beyond that:
   data as JavaScript objects, which the interpreter does not run.
 - `PartialFunction` cannot be extended, and `ClassTag` is a final class, so a program cannot define one with an
   overriding `unapply`.
+- `BigDecimal` and `BigInt` have no `until`/`to` ranges, no construction from a `Float` or an `Array[Char]`,
+  no `BigInt.probablePrime` or random constructors; `new java.lang.Integer(1)` is rejected.
+- `java.time` comes from scala-java-time's jar on the classpath, region zone ids from its tzdb jar, and the
+  system zone is the engine's offset; without the jar a build types the part of `java.time` the interpreter
+  has (`docs/CLI.md`), which throws `UnsupportedOperationException` when run, as the file system does.
+  `Locale` has no locale data; `Date.from` and `toInstant` are missing.
+- `FiniteDuration` is the only `Duration`, `Ordering` covers tuples up to 5, `PartialFunction` cannot be
+  extended, and `ClassTag` is a final class, so a program cannot define one with an overriding `unapply`.
 - Regular expressions run on the JS engine behind a translator of Java's syntax, which has no possessive
   quantifiers, atomic groups, flags switched inside a pattern (`a(?i)b`), `UNICODE_CHARACTER_CLASS` (`(?U)`),
   the POSIX classes but `\p{Lower}`, `\p{Upper}` and `\p{Alpha}`, Java's own property names
