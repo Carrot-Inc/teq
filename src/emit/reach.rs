@@ -75,6 +75,9 @@ pub struct Reach {
     /// `productArity` or `productElement` the class has a definition of (`$productToString`),
     /// sorted.
     pub product_to_string: Vec<ClassId>,
+    /// The classes whose `hashCode` by rule reads a `productArity` or `productElement` the class
+    /// has a definition of, its case class having no primitive field (`$productHash`), sorted.
+    pub product_hash: Vec<ClassId>,
     /// The classes with a definition of `canEqual` below a case class, which that class's
     /// `equals` by rule calls (`$productEquals`), sorted.
     pub can_equal_defined: Vec<ClassId>,
@@ -155,6 +158,7 @@ impl Reach {
             product: None,
             desugared: Vec::new(),
             product_to_string: Vec::new(),
+            product_hash: Vec::new(),
             can_equal_defined: Vec::new(),
             constant_vals: Vec::new(),
             enum_stores: Vec::new(),
@@ -556,7 +560,7 @@ fn differences(typer: &Worker, kept: &Reach, fresh: &Reach, out: &mut Vec<String
     same("JavaScript names", kept.js_names == fresh.js_names);
     same("globals", kept.globals == fresh.globals);
     same("the desugared parents", kept.desugared == fresh.desugared);
-    same("the products' dispatching members", kept.product_to_string == fresh.product_to_string && kept.can_equal_defined == fresh.can_equal_defined);
+    same("the products' dispatching members", kept.product_to_string == fresh.product_to_string && kept.product_hash == fresh.product_hash && kept.can_equal_defined == fresh.can_equal_defined);
     same("the enums' stored values", kept.enum_stores == fresh.enum_stores);
     same("the constant vals", kept.constant_vals == fresh.constant_vals);
     same("the uses of classOf", kept.uses_class_of == fresh.uses_class_of);
@@ -2080,10 +2084,9 @@ impl Walker {
         false
     }
 
-    /// Whether the member `name` without parameters of an instance of `d` is the one a case
-    /// class takes by rule (`TClass::synthesized`'s `bit`): no class before that case class in
-    /// the linearisation defines it.
-    fn takes_rule_member(&self, cx: Cx, d: ClassId, name: Name, bit: u16) -> bool {
+    /// The case class whose member `name` without parameters an instance of `d` takes by rule
+    /// (`TClass::synthesized`'s `bit`): no class before it in the linearisation defines it.
+    fn takes_rule_member(&self, cx: Cx, d: ClassId, name: Name, bit: u16) -> Option<ClassId> {
         for &(a, _) in &cx.syms.class(d).base_types {
             if cx.typer.is_desugared_parent(a) {
                 continue;
@@ -2099,14 +2102,14 @@ impl Walker {
                     si.owner == Owner::Class(a) && self.concrete(cx, s) && si.sig.as_ref().map_or(true, |sig| sig.clauses.iter().all(|cl| cl.params.is_empty()))
                 });
                 if defines {
-                    return false;
+                    return None;
                 }
             }
             if ai.mods & mods::CASE != 0 {
-                return index(self.tclass_of[a.idx()]).map_or(true, |i| cx.prog.classes[i].synthesized & bit != 0);
+                return index(self.tclass_of[a.idx()]).map_or(true, |i| cx.prog.classes[i].synthesized & bit != 0).then_some(a);
             }
         }
-        false
+        None
     }
 
     /// `super.m(...)`: the definitions of `m` above the one that runs are targets too.
@@ -2281,19 +2284,24 @@ impl Walker {
                 bi.mods & mods::CASE != 0 && matches!(bi.kind, ClassKind::Class | ClassKind::EnumCase)
             });
         if below_case {
-            let mut readers = false;
+            let (mut readers, mut elements) = (false, false);
             for n in SHAPE_CALLED {
                 let defined = self.mark_defined_dispatch(cx, c, n);
-                if n == names::CAN_EQUAL_METHOD {
-                    if defined {
-                        insert_sorted(&mut self.reach.can_equal_defined, c);
+                match n {
+                    names::CAN_EQUAL_METHOD if defined => insert_sorted(&mut self.reach.can_equal_defined, c),
+                    names::CAN_EQUAL_METHOD => {}
+                    names::PRODUCT_ARITY | names::PRODUCT_ELEMENT => {
+                        readers |= defined;
+                        elements |= defined;
                     }
-                } else {
-                    readers |= defined;
+                    _ => readers |= defined,
                 }
             }
-            if readers && self.takes_rule_member(cx, c, names::TO_STRING, synthetic::TO_STRING) {
+            if readers && self.takes_rule_member(cx, c, names::TO_STRING, synthetic::TO_STRING).is_some() {
                 insert_sorted(&mut self.reach.product_to_string, c);
+            }
+            if elements && self.takes_rule_member(cx, c, names::HASH_CODE, synthetic::HASH_CODE).is_some_and(|k| hashes_through_elements(cx.syms, &cx.typer.types, cx.interner, k)) {
+                insert_sorted(&mut self.reach.product_hash, c);
             }
         }
         for &(b, _) in info.base_types.iter().skip(1) {

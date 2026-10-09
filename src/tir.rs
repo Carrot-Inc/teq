@@ -813,6 +813,23 @@ pub fn constant_val(prog: &Program, syms: &crate::symbols::Symbols, types: &crat
     (untyped && literal && !prog.is_widened(init)).then_some(ConstVal::Literal)
 }
 
+/// dotty's `SyntheticMembers.chooseHashcode`: whether the case class `c` has fields and none of a
+/// primitive class (`isPrimitiveValueClass`), so that its `hashCode` by rule is
+/// `MurmurHash3.productHash`, through `productArity` and `productElement`, rather than the mix of
+/// its fields.
+pub fn hashes_through_elements(syms: &crate::symbols::Symbols, types: &crate::types::TypeStore, interner: &crate::intern::Interner, c: ClassId) -> bool {
+    use crate::symbols::ClassKind;
+    let fields: Vec<TypeId> = syms.class(c).ctor.first().map(|cl| cl.params.iter().map(|p| p.ty).collect()).unwrap_or_default();
+    let primitive = |t: TypeId| match types.get(t) {
+        crate::types::Type::Class(k, _) => {
+            let ki = syms.class(k);
+            ki.kind == ClassKind::Builtin && matches!(interner.get(ki.name), "Int" | "Long" | "Double" | "Float" | "Char" | "Byte" | "Short" | "Boolean" | "Unit")
+        }
+        _ => false,
+    };
+    !fields.is_empty() && !fields.into_iter().any(primitive)
+}
+
 #[derive(Clone)]
 pub struct TClass {
     pub id: ClassId,

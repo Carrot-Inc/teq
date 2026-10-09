@@ -2899,6 +2899,17 @@ impl<'a> Gen<'a> {
             } else if field_refs.is_empty() {
                 self.sconst(&display);
                 self.invoke(Invoke::Virtual, STRING, false, "hashCode", &[], &JType::I);
+            } else if hashes_through_elements(syms, cx.input.types, cx.input.interner, c) {
+                // dotty's `SyntheticMembers.chooseHashcode` for reference fields: `MurmurHash3.productHash`
+                // from the seed of the name, through `productArity` and `productElement`.
+                let murmur = "scala/util/hashing/MurmurHash3$";
+                let product = JType::L(Rc::from(PRODUCT));
+                self.getstatic(murmur, "MODULE$", &JType::L(Rc::from(murmur)));
+                self.load(0, &this);
+                let seed = crate::interp::value::mix(0xcafebabeu32 as i32, crate::interp::value::str_hash(&display));
+                self.iconst(seed);
+                self.iconst(1);
+                self.invoke(Invoke::Virtual, murmur, false, "productHash", &[product, JType::I, JType::Z], &JType::I);
             } else {
                 // MurmurHash3.productHash, as scalac's case classes hash.
                 self.iconst(0xcafebabeu32 as i32);

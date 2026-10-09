@@ -296,6 +296,23 @@ impl<'a, 't> Interp<'a, 't> {
             return Ok(str_hash(&prefix));
         }
         let mut h = mix(PRODUCT_SEED, str_hash(&prefix));
+        // dotty's `SyntheticMembers.chooseHashcode`: reference fields hash through `productArity`
+        // and `productElement` (`MurmurHash3.productHash`), which a class may define.
+        let class = o.class;
+        let defined = |it: &mut Self, n| it.defined_member(class, n).is_some();
+        let case_class = self.case_class_of(class);
+        if (defined(self, crate::names::PRODUCT_ARITY) || defined(self, crate::names::PRODUCT_ELEMENT)) && case_class.is_some_and(|c| crate::tir::hashes_through_elements(&self.typer.syms, &self.typer.types, self.typer.interner, c)) {
+            let n = self.product_arity(v)?;
+            if n == 0 {
+                return Ok(h);
+            }
+            for i in 0..n {
+                let x = self.product_element(v, i)?;
+                let k = self.hash(&x)?;
+                h = mix(h, k);
+            }
+            return Ok(finalize_hash(h, n));
+        }
         for &key in fields.iter() {
             let field = self.read_slot(v, key);
             let k = self.hash(&field)?;

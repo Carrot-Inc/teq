@@ -3062,6 +3062,10 @@ impl<'a> Emitter<'a> {
         if self.reach.product_to_string.binary_search(&tc.id).is_ok() {
             let _ = write!(self.out, " {}.prototype.toString = $productToString;", name);
         }
+        // So does its `hashCode` of reference fields, `MurmurHash3.productHash`.
+        if self.reach.product_hash.binary_search(&tc.id).is_ok() {
+            let _ = write!(self.out, " {}.prototype.hashCode = $productHash;", name);
+        }
         // An instance of a subclass may equal one of the case class itself, as under scalac, and
         // the rule's `equals` ends with `that.canEqual(this)`, which a definition below the class
         // answers.

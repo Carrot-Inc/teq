@@ -537,6 +537,16 @@ function $caseHash() {
   for (let i = 0; i < fields.length; i++) h = $mix(h, $hash(this[fields[i]]));
   return $finalizeHash(h, fields.length);
 }
+// `hashCode` of a case class of reference fields by rule, scala's `MurmurHash3.productHash` from
+// the seed of its name, where the class or one below defines `productArity` or `productElement`
+// (dotty's `SyntheticMembers.chooseHashcode`; `$caseHash` reads the fields).
+function $productHash() {
+  const n = $productArity(this);
+  let h = $mix($productSeed, $strHash(this.$className));
+  if (n === 0) return h;
+  for (let i = 0; i < n; i++) h = $mix(h, $hash($productElement(this, i)));
+  return $finalizeHash(h, n);
+}
 function $nameHash() { return $strHash(this.$name); }
 // The first n elements of a sequence as an array, with the rest of the sequence as element n
 // when `rest` is set; null when the sequence is shorter, or longer without `rest`.
