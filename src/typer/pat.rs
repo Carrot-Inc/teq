@@ -100,6 +100,9 @@ impl<'a> Worker<'a> {
         }
         self.soft_scrutinee = outer_soft;
         let e = self.prog.add(TExpr::Match(ts, l));
+        if let Some(record) = self.branch_types.as_mut() {
+            record.insert(e, body_types);
+        }
         if exp.is_none() {
             self.note_soft(e, result_ty);
         }

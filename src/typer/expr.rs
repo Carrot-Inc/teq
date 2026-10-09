@@ -2,7 +2,7 @@ use super::apply::{ArgList, ArgSrc, ForBinder, ForRest};
 use super::site::SiteOwner;
 use super::{Frame, Worker};
 use crate::ast::{self, mods, DefKind, Enumerator, Expr, ExprId, ListRef, Pat, Stmt, TyExpr, TyExprId};
-use crate::intern::Name;
+use crate::intern::{FxMap, Name};
 use crate::names;
 use crate::source::{FileId, Span};
 use crate::symbols::*;
@@ -23,12 +23,11 @@ enum PartialBody {
 
 /// What a block's definitions are, for whether the value of the match that ends it names one
 /// (`Worker::result_leaks`): the lambda at `outer`, the match at `inner`, the lambda's own
-/// parameters `own` (the closure's, not the block's), and the names the block defines.
+/// parameters `own` (the closure's, not the block's).
 struct BlockLocals {
     outer: Span,
     inner: Span,
     own: Vec<SymId>,
-    names: Vec<Name>,
 }
 
 /// The template a body withheld from its products is typed as.
@@ -1758,7 +1757,11 @@ impl<'a> Worker<'a> {
                     self.pop_tested(mark);
                     let (te, ty2) = self.type_expr_adapted(els, Some(exp));
                     let ty = self.joined_branches(exp, &[ty1, ty2]);
-                    return (self.prog.add(TExpr::If(tc, tt, Some(te))), ty);
+                    let e = self.prog.add(TExpr::If(tc, tt, Some(te)));
+                    if let Some(record) = self.branch_types.as_mut() {
+                        record.insert(e, vec![ty1, ty2]);
+                    }
+                    return (e, ty);
                 }
                 let guide = self.branch_guide(expected);
                 let mark = self.push_tested(tc);
@@ -1775,6 +1778,9 @@ impl<'a> Worker<'a> {
                 let l = self.lub(branches[0].1, branches[1].1);
                 let l = self.solve_bounded_in(l);
                 let e = self.prog.add(TExpr::If(tc, tt, Some(te)));
+                if let Some(record) = self.branch_types.as_mut() {
+                    record.insert(e, vec![branches[0].1, branches[1].1]);
+                }
                 self.note_soft(e, l);
                 (e, l)
             }
@@ -2940,6 +2946,10 @@ impl<'a> Worker<'a> {
         self.partial_match = matches_param;
         let match_mark = self.deferred_matches.len();
         let mut body_own = None;
+        let outer_branches = match shape {
+            PartialBody::BlockMatch(..) => Some(self.branch_types.replace(FxMap::default())),
+            _ => None,
+        };
         let (mut tb, bty) = match ret_expected {
             Some(r) => {
                 let (tb, own) = self.check_expr_own(body, r);
@@ -2955,7 +2965,11 @@ impl<'a> Worker<'a> {
             }
         };
         self.pop_scope();
-        if let PartialBody::BlockMatch(m, block) = shape {
+        let branches = match outer_branches {
+            Some(outer) => std::mem::replace(&mut self.branch_types, outer),
+            None => None,
+        };
+        if let PartialBody::BlockMatch(m, _) = shape {
             // The typed match: the body of a lambda of a tuple's elements, which binds them
             // around it below, or the result of the block.
             let typed = match (untupled, self.prog.expr(tb)) {
@@ -2965,21 +2979,10 @@ impl<'a> Worker<'a> {
             };
             // The lambda's own parameters are the closure's, outside the block; those bound from
             // a tuple are the block's vals.
-            let names: Vec<Name> = match (untupled, ast.expr(block)) {
-                (Some(_), _) => lps.iter().map(|p| p.name).collect(),
-                (None, Expr::Block(stmts)) => ast
-                    .stmt_list(stmts)
-                    .iter()
-                    .filter_map(|st| match st {
-                        Stmt::Def(d) => Some(ast.def(*d).name),
-                        _ => None,
-                    })
-                    .collect(),
-                _ => Vec::new(),
-            };
             let own = if untupled.is_some() { Vec::new() } else { syms.clone() };
-            let locals = BlockLocals { outer: span, inner: ast.expr_span(m), own, names };
-            if matches!(self.prog.expr(typed), TExpr::Match(..)) && !self.result_leaks(ast, m, typed, &locals) {
+            let locals = BlockLocals { outer: span, inner: ast.expr_span(m), own };
+            let branches = branches.unwrap_or_default();
+            if matches!(self.prog.expr(typed), TExpr::Match(..)) && !self.result_leaks(ast, m, typed, &locals, &branches) {
                 self.match_not_partial(m, match_mark);
             }
         }
@@ -3279,64 +3282,112 @@ impl<'a> Worker<'a> {
         }
     }
 
-    /// Whether the type of the value of the match `a` (typed `e`) that ends a block names one of the
-    /// block's definitions, as dotc types it: `ensureNoLocalRefs` (`typedBlock`) then ascribes
-    /// the block's result away from it, so that the block ends in no match and gets no E211.
-    /// The match's cases are read through blocks, conditionals and matches, written and typed
-    /// alike; an ascription's type is the written one (`(k: Int)`), anything else's is read
-    /// from its typed tree (`value_names_local`). A result that has another branch's wider type
-    /// in scalac's join counts as well, so that no warning is
-    /// given that scalac might not give.
-    fn result_leaks(&mut self, ast: &ast::Ast, a: ExprId, e: TExprId, locals: &BlockLocals) -> bool {
+    /// Whether the block a partial function's body is, ending in the match `a` (typed `e`), gets
+    /// an ascription from dotty's `Typer.ensureNoLocalRefs`: its type names one of the block's
+    /// definitions (`escapingRefs`), which `TypeOps.avoid` widens away, so that the block ends in
+    /// no match and gets no E211 (`ExpandSAMs.partialFunRHS`). The type is the one dotty's
+    /// `typedBlock` gives the result (`result_parts`), the parts of a join a part above them
+    /// absorbs left out (`TypeComparer.lub`): `k` of a `val k` is its singleton, and so no part
+    /// beside a `(2: Int)`, whose `Int` it is below.
+    fn result_leaks(&mut self, ast: &ast::Ast, a: ExprId, e: TExprId, locals: &BlockLocals, branches: &FxMap<TExprId, Vec<TypeId>>) -> bool {
+        let mut parts = Vec::new();
+        self.result_parts(ast, a, e, None, locals, branches, &mut parts);
+        let leaking: Vec<bool> = parts.iter().map(|&t| self.type_names_block_local(t, locals, 0)).collect();
+        (0..parts.len()).any(|i| {
+            leaking[i]
+                && !(0..parts.len()).any(|j| {
+                    if j == i || leaking[j] {
+                        return false;
+                    }
+                    let mark = self.snapshot();
+                    let below = self.is_sub(parts[i], parts[j]);
+                    self.rollback(mark);
+                    below
+                })
+        })
+    }
+
+    /// The parts of the type dotty's typer gives the result `a` (typed `e`, its own type `own`
+    /// where its match or conditional recorded it in `branches`) of the block, the branches of a
+    /// match or a conditional each (their join): a reference to a value of the block (a val, a
+    /// var, an object) its singleton, `TermRef`, and a val selected from one through it; a
+    /// literal its constant type; an ascription its written type; anything else the type it
+    /// was typed with, which an application's result is (`O.n()` an `Int`, `List(new C)` a
+    /// `List[C]`).
+    #[allow(clippy::too_many_arguments)]
+    fn result_parts(&mut self, ast: &ast::Ast, a: ExprId, e: TExprId, own: Option<TypeId>, locals: &BlockLocals, branches: &FxMap<TExprId, Vec<TypeId>>, out: &mut Vec<TypeId>) {
+        let recorded = branches.get(&e).cloned().unwrap_or_default();
         match (ast.expr(a), self.prog.expr(e)) {
-            (Expr::Typed(_, t), _) => ty_names_any(ast, t, &locals.names),
-            (Expr::Parens(x) | Expr::Unchecked(x), _) => self.result_leaks(ast, x, e, locals),
+            (Expr::Typed(..), _) => out.extend(own),
+            (Expr::Parens(x) | Expr::Unchecked(x), _) => self.result_parts(ast, x, e, own, locals, branches, out),
             (Expr::Block(stmts), TExpr::Block(_, r)) => match ast.stmt_list(stmts).last() {
-                Some(&Stmt::Expr(last)) => self.result_leaks(ast, last, r, locals),
-                _ => self.value_names_local(e, true, locals),
+                Some(&Stmt::Expr(last)) => self.result_parts(ast, last, r, own, locals, branches, out),
+                _ => out.extend(own),
             },
-            (Expr::If(_, t, Some(f)), TExpr::If(_, tt, Some(tf))) => self.result_leaks(ast, t, tt, locals) || self.result_leaks(ast, f, tf, locals),
-            (Expr::Match(_, cases), TExpr::Match(_, tcases)) if ast.case_list(cases).len() == tcases.len as usize => {
+            (Expr::If(_, t, Some(f)), TExpr::If(_, tt, Some(tf))) if recorded.len() == 2 => {
+                self.result_parts(ast, t, tt, Some(recorded[0]), locals, branches, out);
+                self.result_parts(ast, f, tf, Some(recorded[1]), locals, branches, out);
+            }
+            (Expr::Match(_, cases), TExpr::Match(_, tcases)) if ast.case_list(cases).len() == tcases.len as usize && recorded.len() == tcases.len as usize => {
                 let bodies: Vec<(ExprId, TExprId)> =
                     ast.case_list(cases).iter().zip(&self.prog.cases[tcases.range()]).map(|(c, t)| (c.body, t.body)).collect();
-                bodies.into_iter().any(|(c, t)| self.result_leaks(ast, c, t, locals))
+                for ((c, t), ty) in bodies.into_iter().zip(recorded) {
+                    self.result_parts(ast, c, t, Some(ty), locals, branches, out);
+                }
             }
-            _ => self.value_names_local(e, true, locals),
+            _ => {
+                let part = self.reference_type(e, locals).or_else(|| self.constant_part(e)).or(own);
+                out.extend(part);
+            }
         }
     }
 
-    /// Whether the type dotc gives the typed `e` names a definition of the block `locals`
-    /// describes: at the result's place (`top`) a reference to a val, var or parameterless def
-    /// of the block, or to a field of one, is its singleton (an application's type is its
-    /// result's: `k()`, `k(n)`); anywhere a class the block defines, in a construction, in a
-    /// method's declared result or a symbol's type, and inside the arguments of a generic one
-    /// (`List(new C)`) or the body of a function literal.
-    fn value_names_local(&mut self, e: TExprId, top: bool, locals: &BlockLocals) -> bool {
+    /// The constant type dotty gives a literal, or an operation it folds, which no other
+    /// branch's singleton is below (`if c then k else 0` keeps `k`): none for an ascribed one.
+    fn constant_part(&mut self, e: TExprId) -> Option<TypeId> {
+        if self.widened_constant(e) {
+            return None;
+        }
+        let v = self.fold_constant_as_typed(e)?;
+        Some(self.types.lit(v))
+    }
+
+    /// The `TermRef` dotty types a reference `e` to a term of the block with (a val, a var, an
+    /// object, a parameterless def), or a member of one selected through it (`O.v`, `O.m`);
+    /// none for what is no such reference.
+    fn reference_type(&mut self, e: TExprId, locals: &BlockLocals) -> Option<TypeId> {
         match self.prog.expr(e) {
-            TExpr::Local(s) => (top && self.block_term(s, locals)) || self.sym_names_local_class(s, locals),
-            TExpr::CallStatic(s, args) => {
-                let reference = self.syms.sym(s).sig.as_ref().map_or(false, |sig| sig.clauses.is_empty());
-                (top && reference && self.block_term(s, locals)) || self.call_names_local_class(None, s, args, locals)
+            TExpr::Local(s) if self.term_reference(s) && self.block_term(s, locals) => Some(self.types.mk(Type::Term(s))),
+            TExpr::CallStatic(s, args) if args.len == 0 && self.term_reference(s) && self.block_term(s, locals) => Some(self.types.mk(Type::Term(s))),
+            TExpr::Field(r, f) | TExpr::CallMethod(r, f, ListRef { len: 0, .. }) if self.term_reference(f) => {
+                let prefix = self.reference_type(r, locals)?;
+                Some(self.types.mk(Type::Select(prefix, f)))
             }
-            TExpr::CallMethod(r, s, args) => self.call_names_local_class(Some(r), s, args, locals),
-            TExpr::Field(r, f) => (top && self.value_names_local(r, true, locals)) || self.sym_names_local_class(f, locals),
-            TExpr::New(c, args) => self.class_names_local(c, args, locals),
-            TExpr::NewVia(ctor, args) => match self.syms.sym(ctor).owner {
-                Owner::Class(c) => self.class_names_local(c, args, locals),
-                _ => false,
-            },
-            TExpr::Block(_, r) => self.value_names_local(r, top, locals),
-            TExpr::If(_, t, Some(f)) => self.value_names_local(t, top, locals) || self.value_names_local(f, top, locals),
-            TExpr::Match(_, cases) => {
-                let bodies: Vec<TExprId> = self.prog.cases[cases.range()].iter().map(|c| c.body).collect();
-                bodies.into_iter().any(|b| self.value_names_local(b, top, locals))
-            }
-            TExpr::SeqLit(l) | TExpr::ArrayLit(l) => self.any_names_local(l, locals),
-            TExpr::Lambda(params, body) => {
-                let params: Vec<SymId> = self.prog.sym_list(params).to_vec();
-                params.into_iter().any(|p| self.sym_names_local_class(p, locals)) || self.value_names_local(body, false, locals)
-            }
+            _ => None,
+        }
+    }
+
+    /// A val, a var, an object or a parameterless def, whose reference dotty's tree types as a
+    /// `TermRef`.
+    fn term_reference(&mut self, s: SymId) -> bool {
+        let (kind, by_name) = (self.syms.sym(s).kind, self.syms.sym(s).by_name);
+        !by_name && match kind {
+            SymKind::Val | SymKind::Var | SymKind::Object(_) => true,
+            SymKind::Def => self.sig_arc(s).clauses.is_empty(),
             _ => false,
+        }
+    }
+
+    /// dotty's `escapingRefs` of a type: a singleton of one of the block's values, a path through
+    /// one, or a class the block defines, anywhere in it.
+    fn type_names_block_local(&mut self, t: TypeId, locals: &BlockLocals, depth: u32) -> bool {
+        if depth > 16 {
+            return false;
+        }
+        match self.types.get(t) {
+            Type::Term(s) => self.block_term(s, locals),
+            Type::Select(p, _) => self.type_names_block_local(p, locals, depth + 1),
+            _ => self.type_names_local_class(t, locals, depth),
         }
     }
 
@@ -3345,32 +3396,6 @@ impl<'a> Worker<'a> {
     fn block_term(&self, s: SymId, locals: &BlockLocals) -> bool {
         let sym = self.syms.sym(s);
         sym.file == self.env.file && within(sym.span, locals.outer) && !within(sym.span, locals.inner) && !locals.own.contains(&s)
-    }
-
-    fn any_names_local(&mut self, l: ListRef, locals: &BlockLocals) -> bool {
-        let items: Vec<TExprId> = self.prog.expr_list(l).to_vec();
-        items.into_iter().any(|a| self.value_names_local(a, false, locals))
-    }
-
-    /// A construction of class `c`: one the block defines, or a generic one of a value of one.
-    fn class_names_local(&mut self, c: ClassId, args: ListRef, locals: &BlockLocals) -> bool {
-        self.local_class(c, locals) || (!self.syms.class(c).tparams.is_empty() && self.any_names_local(args, locals))
-    }
-
-    /// A call of `s`: a declared result naming a class of the block, or a generic method or
-    /// receiver given a value of one.
-    fn call_names_local_class(&mut self, recv: Option<TExprId>, s: SymId, args: ListRef, locals: &BlockLocals) -> bool {
-        let Some(sig) = self.syms.sym(s).sig.clone() else { return false };
-        self.type_names_local_class(sig.ret, locals, 0)
-            || (!sig.tparams.is_empty() && self.any_names_local(args, locals))
-            || recv.map_or(false, |r| self.value_names_local(r, false, locals))
-    }
-
-    fn sym_names_local_class(&mut self, s: SymId, locals: &BlockLocals) -> bool {
-        match self.syms.sym(s).sig.clone() {
-            Some(sig) if sig.clauses.is_empty() => self.type_names_local_class(sig.ret, locals, 0),
-            _ => false,
-        }
     }
 
     fn local_class(&self, c: ClassId, locals: &BlockLocals) -> bool {
@@ -4619,22 +4644,4 @@ fn line_comment(b: &[u8]) -> Option<usize> {
         k += 1;
     }
     None
-}
-
-/// Whether the written type `t` mentions one of `names`: a class or alias the block defines, or
-/// a path through a value of it (`k.type`).
-fn ty_names_any(ast: &ast::Ast, t: TyExprId, names: &[Name]) -> bool {
-    let any = |l: ListRef| ast.ty_list(l).iter().any(|&x| ty_names_any(ast, x, names));
-    match ast.ty(t) {
-        TyExpr::Name(n) => names.contains(&n),
-        TyExpr::Select(q, _) | TyExpr::Project(q, _) | TyExpr::Singleton(q) | TyExpr::ByName(q) | TyExpr::Repeated(q) => ty_names_any(ast, q, names),
-        TyExpr::Unchecked(q) | TyExpr::UncheckedVariance(q) | TyExpr::Refined(q, _) => ty_names_any(ast, q, names),
-        TyExpr::Apply(f, l) => ty_names_any(ast, f, names) || any(l),
-        TyExpr::Fun(l, r) | TyExpr::CtxFun(l, r) => any(l) || ty_names_any(ast, r, names),
-        TyExpr::Tuple(l) => any(l),
-        TyExpr::NamedTuple(_, l) => any(l),
-        TyExpr::Union(a, b) | TyExpr::Inter(a, b) | TyExpr::BoundedWildcard(a, b) => ty_names_any(ast, a, names) || ty_names_any(ast, b, names),
-        TyExpr::Lambda(_, body) | TyExpr::PolyFun(_, body) => ty_names_any(ast, body, names),
-        _ => false,
-    }
 }
