@@ -13926,6 +13926,7 @@ scala	IArray	object
 scala	Int	object
 scala	Long	object
 scala	NamedTuple	object
+scala	NamedTupleDecomposition	object
 scala	None	object
 scala	Option	object
 scala	PartialFunction	object
@@ -14139,6 +14140,7 @@ scala.MatchError	printStackTrace	java.io.PrintWriter:scala.Unit
 scala.MatchError	setStackTrace	java.lang.StackTraceElement[]:scala.Unit
 scala.MatchError	toString	:java.lang.String
 scala.NamedTuple$	toTuple	[2],scala.Product:scala.Product
+scala.NamedTupleDecomposition$	size	[2],scala.Product:scala.Int
 scala.NonEmptyTuple	<init>	:scala.Product
 scala.NonEmptyTuple	toArray	-:java.lang.Object[]
 scala.NonEmptyTuple	toIArray	-:java.lang.Object[]
