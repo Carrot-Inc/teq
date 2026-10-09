@@ -24,10 +24,10 @@ libraries compiled from their jars run against scalac's output. The remaining di
 - `xs.foldLeft(List.empty)(...)` is rejected, `List.empty`'s type variable being solved before the lambda
   (`foldLeft(Nil)` works), and `val z: 1 = foo(1).zero` cannot take the literal type from the expected type.
 - `<:<` and `=:=` evidence is filled in, never reasoned from (with `ev: A <:< String`, `a.length` is written
-  `ev(a).length`); a type variable bound by a type test (`case l: List[t]`) is a wildcard the case cannot use.
+  `ev(a).length`).
 - A match whose expected type is a match type gets no dependent typing of its cases (write the cast); on a
   receiver typed `Tuple` or `X <: Tuple` the members of `Tuple` are typed by their bounds (`head: Any`,
-  `tail: Tuple`), `Tuple.Union` is not reduced, and a named tuple lacks `_1` and `NamedTuple`'s members.
+  `tail: Tuple`), and a named tuple lacks `NamedTuple`'s members.
 - A failed member call is retried as an extension or a conversion of the receiver, as scalac retries it,
   except as a right-associative extension operator (`one() +: d` failing on `d`'s own `+:` is not taken by an
   `extension (x: Int) def +:(d: D)`); the member's error then stands.
