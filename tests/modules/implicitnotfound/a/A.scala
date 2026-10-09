@@ -12,3 +12,6 @@ object Codec:
 
 def need[T](using @implicitNotFound("Bring a ${T} codec") c: Codec[T]): Int = 1
 def both(using c: Codec[Long] & Extra): Int = 2
+
+class Service[A]:
+  def use(using @implicitNotFound("Owner token ${A}") c: Codec[A]): Int = 1

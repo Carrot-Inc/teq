@@ -7,4 +7,7 @@ tests/modules/implicitnotfound/b/B.scala:8:28: error: Bring a Boolean codec
 tests/modules/implicitnotfound/b/B.scala:9:18: error: No codec for Long
     val meet = both
                    ^
-3 errors found
+tests/modules/implicitnotfound/b/B.scala:10:36: error: Owner token Char
+    val owner = new Service[Char].use
+                                     ^
+4 errors found

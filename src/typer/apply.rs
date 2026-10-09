@@ -1066,22 +1066,25 @@ impl<'a> Worker<'a> {
 
     /// dotty's `userDefinedImplicitNotFoundParamMessage`: the `@implicitNotFound` text of the
     /// using parameter `param` (named `name`) of `method`, or of the constructor of the class
-    /// `ctor`, which comes before the type's, its `${T}` the call's arguments `subst` of the
-    /// type parameters.
+    /// `ctor`, which comes before the type's, formatted in dotty's common context
+    /// (`formatAnnotationMessage`): its `${T}` the type parameters of the method and of the
+    /// classes enclosing it (`substitutableTypeSymbolsInScope`), as the call's `subst` gives
+    /// them, the receiver's arguments for its class's (`asSeenFrom(methodOwnerType, ..)`).
     fn param_not_found_message(&mut self, method: SymId, ctor: Option<ClassId>, param: SymId, name: Name, subst: &Subst) -> Option<String> {
-        let (file, def, tparams) = match ctor {
+        let (file, def, mut tparams, enclosing) = match ctor {
             Some(c) => {
                 let info = self.syms.class(c);
-                (info.file, info.def, info.tparams.clone())
+                (info.file, info.def, info.tparams.clone(), info.owner)
             }
             None => {
-                let (file, def) = {
+                let (file, def, owner) = {
                     let info = self.syms.sym(method);
-                    (info.file, info.def)
+                    (info.file, info.def, info.owner)
                 };
-                (file, def, self.sig_arc(method).tparams.clone())
+                (file, def, self.sig_arc(method).tparams.clone(), owner)
             }
         };
+        tparams.extend(self.enclosing_tparams(enclosing));
         let raw = match def {
             Some(d) => {
                 let ast = self.ast(file);
@@ -1128,8 +1131,31 @@ impl<'a> Worker<'a> {
             // A jar's class, whose annotation its pickle carries.
             None => self.loaded.as_ref()?.implicit_not_found.get(&c)?.clone(),
         };
-        let names: Vec<String> = self.syms.class(c).tparams.iter().map(|&p| self.name_ref(self.syms.tparam(p).name).to_string()).collect();
-        Some(self.format_not_found(&raw, &names, args))
+        let mut names: Vec<String> = self.syms.class(c).tparams.iter().map(|&p| self.name_ref(self.syms.tparam(p).name).to_string()).collect();
+        // The classes enclosing it (`substitutableTypeSymbolsInScope`): their parameters as
+        // they stand, the type's prefix not carrying their arguments here.
+        let owner = self.syms.class(c).owner;
+        let outer = self.enclosing_tparams(owner);
+        let mut args = args.to_vec();
+        args.truncate(names.len());
+        for p in outer {
+            names.push(self.name_ref(self.syms.tparam(p).name).to_string());
+            args.push(self.types.param(p));
+        }
+        Some(self.format_not_found(&raw, &names, &args))
+    }
+
+    /// The type parameters of the classes from `owner` out to its package, innermost first
+    /// (the classes' part of dotty's `substitutableTypeSymbolsInScope`).
+    fn enclosing_tparams(&mut self, mut owner: Owner) -> Vec<TParamId> {
+        let mut out = Vec::new();
+        for _ in 0..32 {
+            let Owner::Class(k) = owner else { break };
+            let info = self.syms.class(k);
+            out.extend(info.tparams.iter().copied());
+            owner = info.owner;
+        }
+        out
     }
 
     /// dotty's `formatAnnotationMessage` (`userDefinedErrorString`): `${A}` of the parameter
