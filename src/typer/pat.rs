@@ -32,6 +32,7 @@ impl<'a> Worker<'a> {
             Some(t) => t,
             None => self.solve_in(sty),
         };
+        let pty = self.selector_type(scrut, ts, sty);
         // A soft union scrutinee binds its cases' variables at the union, as dotc does, and
         // marks them soft for what is inferred from them.
         let soft = self.is_soft(ts).then_some(sty);
@@ -48,7 +49,7 @@ impl<'a> Worker<'a> {
             let binders_mark = self.case_binders.len();
             let was_open = std::mem::replace(&mut self.gadt_open, true);
             let was_dead = std::mem::replace(&mut self.dead_case, caught_all);
-            let pat = self.type_pattern(c.pat, sty);
+            let pat = self.type_pattern(c.pat, pty);
             self.dead_case = was_dead;
             caught_all |= c.guard.is_none() && self.catches_all(c.pat);
             self.gadt_open = was_open;
@@ -94,6 +95,44 @@ impl<'a> Worker<'a> {
             self.note_soft(e, result_ty);
         }
         (e, result_ty)
+    }
+
+    /// The type a match's patterns are typed against, dotty's `selType` (`typedMatch`): the
+    /// selector's type widened, a reference (a value, a parameter, a parameterless member) to
+    /// its underlying type and a constant type to its class, unless the selector's own type is
+    /// a constant one (a literal, an operation dotty's `ConstFold` folds, a call answering a
+    /// literal type), which stays. So `case _: T` over a parameter `x: 1` searches a
+    /// `TypeTest[Int, T]`, over the literal `1` a `TypeTest[1, T]`.
+    fn selector_type(&mut self, scrut: ExprId, ts: TExprId, sty: TypeId) -> TypeId {
+        if self.selector_is_reference(scrut, ts) {
+            let t = self.widen_path(sty);
+            return self.widen_lit(t);
+        }
+        if matches!(self.types.get(sty), Type::Lit(_)) || self.widened_constant(ts) {
+            return sty;
+        }
+        match self.fold_constant_as_typed(ts) {
+            Some(v) => self.types.lit(v),
+            None => sty,
+        }
+    }
+
+    /// Whether the selector `e`, typed to `te`, is a reference as dotty types one (a `TermRef`,
+    /// or `this`): a name or a selection that is no application, where `one` of a `def one():
+    /// 1` is one, adapted to `one()`.
+    fn selector_is_reference(&mut self, e: ExprId, te: TExprId) -> bool {
+        let ast = self.cur_ast();
+        let mut e = e;
+        while let Expr::Parens(inner) = ast.expr(e) {
+            e = inner;
+        }
+        if !matches!(ast.expr(e), Expr::Ident(_) | Expr::SymRef(_) | Expr::Select(..) | Expr::This | Expr::QualThis(_) | Expr::ThisOf(_)) {
+            return false;
+        }
+        match self.prog.expr(te) {
+            TExpr::CallStatic(s, _) | TExpr::CallMethod(_, s, _) => self.sig_arc(s).clauses.is_empty(),
+            _ => true,
+        }
     }
 
     fn resolve_type_quiet(&mut self, ty: crate::ast::TyExprId) -> Option<TypeId> {

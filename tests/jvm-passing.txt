@@ -1411,6 +1411,7 @@ type_test_selected_singleton
 type_test_synthesis
 type_test_tagged_inline
 type_test_tagged_patterns
+type_test_widened_selector
 typeclass_instance_extension
 typeclasses
 typed_pattern_capture
