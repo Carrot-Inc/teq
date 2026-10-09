@@ -2864,6 +2864,20 @@ impl<'a> Emitter<'a> {
     /// `classOf[C]`: the `Class` of an emitted Scala class is the one `getClass` gives its
     /// instances; a builtin or a class the output has no constructor for is named.
     pub(super) fn emit_class_of(&mut self, c: ClassId) {
+        let qualified = self.qualified_name(c);
+        let (pkg, simple) = qualified.rsplit_once('.').unwrap_or(("", &qualified));
+        // A JS char is a string.
+        let boxed = crate::tir::boxed::ancestor(pkg, simple) & !crate::tir::boxed::CHAR;
+        if boxed != 0 {
+            self.out.push_str("$boxedClass(");
+            self.emit_plain_class_of(c);
+            let _ = write!(self.out, ", {})", boxed);
+        } else {
+            self.emit_plain_class_of(c);
+        }
+    }
+
+    fn emit_plain_class_of(&mut self, c: ClassId) {
         let info = self.syms.class(c);
         let emitted = info.kind != ClassKind::Builtin && info.js == JsKind::Scala && self.reach.classes.get(c.idx()).copied().unwrap_or(false);
         if emitted {

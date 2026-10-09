@@ -643,6 +643,11 @@ pub struct Worker<'a> {
     /// The next argument typed is a varargs spread (`f(xs*)`): an array typed for it is marked
     /// as spread as it is written (`Program::spread_bits`). Taken by the argument it is for.
     pub spread_arg: bool,
+    /// Whether the last spread argument typed (`spread_arg`) was an array.
+    pub spread_was_array: bool,
+    /// The arguments typed are a Java method's (`apply_method`), whose varargs take a sequence
+    /// spread as a copy (`ElimRepeated.adaptToArray`).
+    pub java_varargs: bool,
     /// Under a member's application (`apply::apply_member_or_extension`, `logging` deep): each
     /// type mismatch reported, by its diagnostic's index and span, with the type it required.
     pub mismatches: Vec<(usize, Span, TypeId)>,
@@ -1970,6 +1975,8 @@ impl<'a> Worker<'a> {
             conversion_indexes: FxMap::default(),
             view_compat: false,
             spread_arg: false,
+            spread_was_array: false,
+            java_varargs: false,
             mismatches: Vec::new(),
             logging: 0,
             app_depth: 0,
@@ -2277,6 +2284,8 @@ impl<'a> Worker<'a> {
             conversion_indexes: self.conversion_indexes.clone(),
             view_compat: Default::default(),
             spread_arg: false,
+            spread_was_array: false,
+            java_varargs: false,
             mismatches: Vec::new(),
             logging: 0,
             app_depth: 0,

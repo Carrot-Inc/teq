@@ -1,0 +1,23 @@
+contains a 6 [a, b, c, b, d, e]
+contains b 6 [a, b, c, b, d, e]
+contains c 6 [a, b, c, b, d, e]
+contains b 6 [a, c, c, b, d, e]
+contains d 6 [a, c, c, b, d, e]
+stopped at d
+[a, c, d, e]
+contains a 4 [a, c, d, e]
+contains c 4 [a, c, d, e]
+contains d 4 [a, c, d, e]
+contains e 4 [a, d, d, e]
+true
+[a, d]
+contains a 2 [a, d]
+contains d 2 [a, d]
+false
+[a, d]
+null
+test p 3
+test q 3
+test r 3
+stopped
+[p, q, r]

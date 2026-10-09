@@ -2152,6 +2152,19 @@ impl<'a> Worker<'a> {
                 if let [len] = ast.expr_list(*l) {
                     return self.new_array(targs, *len, span, expected);
                 }
+                // Scala.js's `new js.Array[A]()`, an empty JavaScript array (`js.Array[A]` being
+                // `Array[A]`, whose own constructor takes a length).
+                if l.is_empty() && self.names_js_array(head) {
+                    let elem = match targs.map(|ta| self.cur_ast().ty_list(ta).to_vec()) {
+                        Some(ts) if ts.len() == 1 => self.resolve_type(ts[0]),
+                        _ => ANY,
+                    };
+                    let empty = self.prog.list(&[]);
+                    let te = self.prog.add(TExpr::ArrayLit(empty));
+                    let ty = self.types.class(self.b.array, &[elem]);
+                    self.prog.set_type(te, ty);
+                    return (te, ty);
+                }
             }
         }
         // `new C` before the lists of a constructor whose first clause is a using clause
@@ -2175,17 +2188,42 @@ impl<'a> Worker<'a> {
                 span,
             })
             .collect();
-        // `new String(chars, offset, count)` and the other constructors of the builtin string
-        // are the platform layer's `java.lang.String.newString`.
-        if class == self.b.string {
-            if let Some(c) = self.java_lang_object("String") {
+        // `new String(chars, offset, count)`, `new Integer(1)` and the other constructors of a
+        // class whose values are primitives are the platform layer's `new<Class>` of its
+        // companion (`java.lang.String.newString`), as Scala.js sends those of its hijacked
+        // classes to the companion's `new` (`JSCodeGen.genNewHijackedClass`).
+        if let Some(simple) = self.hijacked_class(class) {
+            if let Some(c) = self.java_lang_object(simple) {
                 let recv = self.prog.add(TExpr::Module(c));
                 let recv_ty = self.types.class(c, &[]);
-                let name = self.interner.intern("newString");
+                let name = self.interner.intern(&format!("new{}", simple));
                 return self.apply_member(recv, recv_ty, name, None, lists, span, expected);
             }
         }
         self.apply_callee(super::apply::Callee::Ctor(class), targs, lists, span, expected)
+    }
+
+    /// Whether the type written for a `new` is Scala.js's `js.Array`, the alias of `Array`.
+    fn names_js_array(&mut self, head: TyExprId) -> bool {
+        let found = match self.cur_ast().ty(head) {
+            TyExpr::Name(n) => self.lookup_type(n),
+            TyExpr::Select(q, n) => self.lookup_type_in_path(q, n),
+            _ => None,
+        };
+        let Some(super::resolve::TypeRef::Alias(a)) = found else { return false };
+        let info = &self.syms.aliases[a.idx()];
+        info.name == names::ARRAY && matches!(info.owner, Owner::Package(p) if self.pkg_is(p, "scala.scalajs.js"))
+    }
+
+    /// The simple name of a class of `java.lang` whose values are primitives: the builtin string
+    /// and the boxes.
+    fn hijacked_class(&mut self, class: ClassId) -> Option<&'static str> {
+        if class == self.b.string {
+            return Some("String");
+        }
+        let name = self.name_str(self.syms.class(class).name);
+        let simple = ["Integer", "Long", "Short", "Byte", "Double", "Float", "Boolean", "Character"].into_iter().find(|&n| n == name)?;
+        (self.entered_java_lang_class(simple) == Some(class)).then_some(simple)
     }
 
     fn new_arg_lists(&self, args: &[(ListRef, bool)], span: Span) -> Vec<ArgList> {

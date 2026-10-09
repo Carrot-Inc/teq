@@ -1,0 +1,37 @@
+60
+i0,i1,i2,i3,i4
+[1, 2, 3, 4]
+peek 3
+got 3
+peek 1
+peek 2
+got 2
+[1, 3, 5]
+31
+4
+24
+123
+2
+[3, 1]
+false
+true
+false
+4
+false
+4
+9000000000
+3.5
+4
+0
+12
+50
+9
+[1, 10, 100]
+8
+2
+5
+3
+0
+s1,s2
+Self-suppression not permitted
+Cannot suppress a null exception.

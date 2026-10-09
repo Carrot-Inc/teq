@@ -1,0 +1,16 @@
+2147483647
+-3
+List(2147483645, 2147483646, 2147483647)
+List(-2147483648, -2147483647)
+List(2147483647, 2147483645, 2147483643)
+2
+3
+true
+5050 0 22
+55 10
+List(1, 4, 7, 10) 10 7
+Range 3 to 5 List(8, 9, 10) List(1, 2)
+inexact Range 1 to 10 by 4 inexact Range 1 until 10 by 4 empty Range 5 to 1
+1 true List(9, 6, 3)
+2147483646 2147483647 false
+-2147483648 to 2147483647 by 1: seqs cannot contain more than Int.MaxValue elements.

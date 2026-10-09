@@ -316,6 +316,31 @@ pub enum TPat {
     Unapply(SymId, TExprId, TPatId),
 }
 
+/// The kinds of primitive whose box extends a JDK class: `java.lang.String`, the numeric boxes,
+/// `Long`, `Boolean`, `Character` and `BoxedUnit`, Scala.js's hijacked classes, whose ancestors'
+/// instance tests take the primitive by its kind (`Class.isInstance` too). A bit set.
+pub mod boxed {
+    pub const STR: u8 = 1;
+    pub const NUMBER: u8 = 2;
+    pub const LONG: u8 = 4;
+    pub const BOOL: u8 = 8;
+    pub const CHAR: u8 = 16;
+    pub const UNIT: u8 = 32;
+
+    /// The primitives whose box extends the class `name` of package `pkg` besides `Object`, as the
+    /// JDK declares the boxes (`String implements Serializable, Comparable<String>, CharSequence`;
+    /// `BoxedUnit` is `Serializable` alone).
+    pub fn ancestor(pkg: &str, name: &str) -> u8 {
+        match (pkg, name) {
+            ("java.lang", "CharSequence") => STR,
+            ("java.lang", "Comparable") => STR | NUMBER | LONG | BOOL | CHAR,
+            ("java.io", "Serializable") => STR | NUMBER | LONG | BOOL | CHAR | UNIT,
+            ("java.lang", "Number") => NUMBER | LONG,
+            _ => 0,
+        }
+    }
+}
+
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub enum TypeTest {
     Always,

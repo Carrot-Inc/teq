@@ -810,58 +810,97 @@ final class Range(val start: Int, val end: Int, val step: Int, val isInclusive: 
   def buildCC[B](items: RawBuffer[B]): IndexedSeq[B] = Vector.wrap(items)
   def by(newStep: Int): Range = new Range(start, end, newStep, isInclusive)
   def inclusive: Range = new Range(start, end, step, true)
-  // First value past the end in the direction of the step.
-  private def limit: Int = if !isInclusive then end else if step > 0 then end + 1 else end - 1
+  // scala-library's arithmetic: the number of elements of a non-empty range, an unsigned `Int`
+  // (0 for 2^32), and its last element, neither stepping past `Int.MaxValue`.
+  private def count: Int =
+    val stepSign = step >> 31
+    val gap = ((end - start) ^ stepSign) - stepSign
+    val absStep = (step ^ stepSign) - stepSign
+    val div = if absStep == 1 then gap else java.lang.Integer.divideUnsigned(gap, absStep)
+    if isInclusive || absStep * div != gap then div + 1 else div
+  private def lastElement: Int =
+    if step == 1 || step == -1 then (if isInclusive then end else end - step)
+    else start + step * (count - 1)
+  // Whether the non-negative `n` is at least the number of elements, compared unsigned.
+  private def atLeastCount(n: Int): Boolean = (n ^ Int.MinValue) > ((count - 1) ^ Int.MinValue)
   private def emptyAt(at: Int): Range = new Range(at, at, step)
-  override def isEmpty: Boolean = if step > 0 then start >= limit else start <= limit
+  override def isEmpty: Boolean =
+    if isInclusive then (if step >= 0 then start > end else start < end)
+    else if step >= 0 then start >= end
+    else start <= end
   def length: Int =
     if isEmpty then 0
-    else if step > 0 then (limit - start + step - 1) / step
-    else (start - limit - step - 1) / (-step)
+    else
+      val n = count
+      if n > 0 then n
+      else throw new IllegalArgumentException(start.toString + (if isInclusive then " to " else " until ") + end.toString + " by " + step.toString + ": seqs cannot contain more than Int.MaxValue elements.")
   def apply(i: Int): Int =
     if i < 0 || i >= length then indexOutOfBounds(i.toString)
     else start + i * step
-  override def head: Int = if isEmpty then noSuchElement("head on empty Range") else apply(0)
-  override def last: Int = if isEmpty then noSuchElement("last on empty Range") else apply(length - 1)
+  override def head: Int = if isEmpty then noSuchElement("head on empty Range") else start
+  override def last: Int = if isEmpty then noSuchElement("last on empty Range") else lastElement
   def foreach[U](f: Int => U): Unit =
-    var i = start
-    val stop = limit
-    if step > 0 then
-      while i < stop do
+    if !isEmpty then
+      val last = lastElement
+      var i = start
+      var more = true
+      while more do
         f(i)
-        i += step
-    else
-      while i > stop do
-        f(i)
-        i += step
+        if i == last then more = false else i += step
   override def iterator: Iterator[Int] =
+    var more = !isEmpty
     var i = start
-    val stop = limit
+    val last = lastElement
     def next(): Int =
-      i += step
-      i - step
-    new FnIterator(() => if step > 0 then i < stop else i > stop, () => next())
+      if !more then noSuchElement("next on empty iterator")
+      val v = i
+      if v == last then more = false else i += step
+      v
+    new FnIterator(() => more, () => next())
   override def toVector: Vector[Int] = Vector.tabulate(length)(i => start + i * step)
   override def toIndexedSeq: IndexedSeq[Int] = this
-  def sum: Int = foldLeft(0)((a, b) => a + b)
+  // The arithmetic series under the standard `Numeric`, a custom one's `plus` per element.
+  override def sum[B >: Int](implicit num: Numeric[B]): Int =
+    if num.asInstanceOf[AnyRef] eq Numeric.IntIsIntegral then
+      if isEmpty then 0
+      else if length == 1 then head
+      else ((length * (head.toLong + last)) / 2).toInt
+    else if isEmpty then num.toInt(num.zero)
+    else
+      var acc = num.zero
+      val last = lastElement
+      var i = start
+      var more = true
+      while more do
+        acc = num.plus(acc, i)
+        if i == last then more = false else i += step
+      num.toInt(acc)
   def contains(x: Int): Boolean =
-    if step > 0 then x >= start && x < limit && (x - start) % step == 0
-    else x <= start && x > limit && (start - x) % (-step) == 0
+    if isEmpty then false
+    else if step > 0 then x >= start && x <= lastElement && (step == 1 || java.lang.Integer.remainderUnsigned(x - start, step) == 0)
+    else x <= start && x >= lastElement && (step == -1 || java.lang.Integer.remainderUnsigned(start - x, -step) == 0)
   override def take(n: Int): Range =
     if n <= 0 || isEmpty then emptyAt(start)
-    else if n >= length then this
-    else new Range(start, start + (n - 1) * step, step, true)
+    else if atLeastCount(n) then this
+    else new Range(start, start + step * (n - 1), step, true)
   override def drop(n: Int): Range =
     if n <= 0 || isEmpty then this
-    else if n >= length then emptyAt(end)
-    else new Range(start + n * step, end, step, isInclusive)
+    else if atLeastCount(n) then emptyAt(end)
+    else new Range(start + step * n, end, step, isInclusive)
   override def slice(from: Int, until: Int): Range =
-    if from <= 0 then take(until)
-    else if until >= length then drop(from)
-    else if from >= until then emptyAt(apply(from))
-    else new Range(apply(from), apply(until - 1), step, true)
-  override def takeRight(n: Int): Range = if n <= 0 then emptyAt(start) else drop(length - n)
-  override def dropRight(n: Int): Range = if n <= 0 then this else take(length - n)
+    if isEmpty then this
+    else if from <= 0 then take(until)
+    else if until >= 0 && atLeastCount(until) then drop(from)
+    else if from >= until then emptyAt(start + step * from)
+    else new Range(start + step * from, start + step * (until - 1), step, true)
+  override def takeRight(n: Int): Range =
+    if n <= 0 || isEmpty then emptyAt(start)
+    else if atLeastCount(n) then this
+    else new Range(start + step * (count - n), end, step, isInclusive)
+  override def dropRight(n: Int): Range =
+    if n <= 0 || isEmpty then this
+    else if atLeastCount(n) then emptyAt(end)
+    else new Range(start, start + step * (count - 1 - n), step, true)
   override def takeWhile(p: Int => Boolean): Range =
     val n = indexWhere(x => !p(x))
     if n < 0 then this else take(n)
@@ -871,12 +910,15 @@ final class Range(val start: Int, val end: Int, val step: Int, val isInclusive: 
   override def span(p: Int => Boolean): (Range, Range) = (takeWhile(p), dropWhile(p))
   override def splitAt(n: Int): (Range, Range) = (take(n), drop(n))
   override def tail: Range =
-    if isEmpty then noSuchElement("tail on empty Range") else drop(1)
+    if isEmpty then noSuchElement("tail on empty Range")
+    else if count == 1 then emptyAt(end)
+    else new Range(start + step, end, step, isInclusive)
   override def init: Range =
     if isEmpty then noSuchElement("init on empty Range") else dropRight(1)
   override def reverse: Range = if isEmpty then this else new Range(last, start, -step, true)
   override def toString: String =
-    val prefix = if isEmpty then "empty " else if (end - start) % step != 0 then "inexact " else ""
+    val inexact = if isInclusive then lastElement != end else lastElement + step != end
+    val prefix = if isEmpty then "empty " else if inexact then "inexact " else ""
     prefix + "Range " + start.toString + (if isInclusive then " to " else " until ") + end.toString +
       (if step == 1 then "" else " by " + step.toString)
 

@@ -1,0 +1,27 @@
+tests/cases/scala2_auto_application.scala:14:11: warning: method next must be called with () argument
+    println(it.next)
+            ^^^^^^^
+tests/cases/scala2_auto_application.scala:15:11: warning: method next must be called with () argument
+    println(it.next)
+            ^^^^^^^
+tests/cases/scala2_auto_application.scala:16:3: warning: method println must be called with () argument
+    Console.println
+    ^^^^^^^^^^^^^^^
+tests/cases/scala2_auto_application.scala:19:11: warning: method result must be called with () argument
+    println(b.result)
+            ^^^^^^^^
+tests/cases/scala2_auto_application.scala:21:11: warning: method next must be called with () argument
+    println(c.next + c.next)
+            ^^^^^^
+tests/cases/scala2_auto_application.scala:21:20: warning: method next must be called with () argument
+    println(c.next + c.next)
+                     ^^^^^^
+tests/cases/scala2_auto_application.scala:23:11: warning: method next must be called with () argument
+    println(i.next)
+            ^^^^^^
+1
+2
+
+List(3)
+3
+3

@@ -17,6 +17,8 @@ libraries compiled from their jars run against scalac's output. The remaining di
   on an `o: O[Int]` is an `A`), and `o.Item` and `o2.Item` are one type, their givens found through `this`.
 - A wildcard or `given` import from a stable `val` of a package or object (`import dom.window.*`) reports
   the val as no object or package; a named selector works.
+- A secondary constructor of a class nested in a class is given no enclosing instance, on every target:
+  `new o.Inner()` through `def this() = this(2)`, or reflectively, fails where the class reads the instance.
 - Confirmed, fix queued: `c.copy(a = 1)(2)` drops the second argument list, a local `lazy val (a, b) = e` is
   eager, an overloaded `unapply` is taken by its first alternative, a companion's own `unapply` is bypassed by
   a constructor pattern, and a by-name method eta-expanded without an expected type runs its argument once.
@@ -75,42 +77,30 @@ On JavaScript and in the interpreter a program and the libraries it loads run on
 (`--std=scala-library` compiles the real one instead); a member it lacks is reported rather than emulated,
 a JDK member as `not supported on JavaScript`. Beyond that:
 
-- `BigDecimal` and `BigInt` have no `until`/`to` ranges, no construction from a `Float` or an `Array[Char]`,
-  no `BigInt.probablePrime` or random constructors; `new java.lang.Integer(1)` is rejected.
-- `java.time` comes from scala-java-time's jar on the classpath, region zone ids from its tzdb jar, and the
-  system zone is the engine's offset; `Locale` has no locale data; `Date.from` and `toInstant` are missing.
-- `FiniteDuration` is the only `Duration`, `Ordering` covers tuples up to 5, `PartialFunction` cannot be
-  extended, and `ClassTag` is a final class, so a program cannot define one with an overriding `unapply`.
+- `BigDecimal` and `BigInt` have no `until`/`to` ranges.
+- `Locale` has no locale data, and the system zone is the engine's offset (the interpreter's `Z`) where the
+  JVM names a region; in the interpreter a region zone id is not found, scala-java-time-tzdb building its
+  data as JavaScript objects, which the interpreter does not run.
+- `PartialFunction` cannot be extended, and `ClassTag` is a final class, so a program cannot define one with an
+  overriding `unapply`.
 - Regular expressions run on the JS engine behind a translator of Java's syntax, which has no possessive
-  quantifiers, atomic groups, flags switched inside a pattern (`a(?i)b`), POSIX classes or `\G`; an invalid
-  pattern throws `IllegalArgumentException` where it is first used.
-- `java.util.stream` is the JDK's sequential pipeline over `Stream.of`, `iterate`, `generate`, `builder`, a
-  collection's `stream` and the file system's: lazy stages each used once, `count` of a sized pipeline running
-  none of them, the JDK's exceptions; `Collectors`' `toList`, `toSet`, `joining`, `toMap`, `groupingBy` and
-  `counting`, and `Optional`. A `parallel` stream runs sequentially; the primitive streams have their terminal
-  operations and `boxed` but no intermediate one; `java.util.HashMap` and `HashSet` iterate in insertion order
-  rather than by hash, which a `toMap`, `groupingBy` or `toSet` result prints in; and an exception keeps no
-  suppressed exceptions (`getSuppressed` is empty).
+  quantifiers, atomic groups, flags switched inside a pattern (`a(?i)b`), `UNICODE_CHARACTER_CLASS` (`(?U)`),
+  the POSIX classes but `\p{Lower}`, `\p{Upper}` and `\p{Alpha}`, Java's own property names
+  (`\p{javaLowerCase}`, `\p{IsAlphabetic}`) or `\G`. An invalid pattern given to
+  `String`'s `matches`, `split` or `replaceAll` throws `IllegalArgumentException` where the JDK throws its
+  subclass `PatternSyntaxException`.
+- A `null` from an erased Java result of type `Int` (a missing key of a `java.util.HashMap[String, Int]`) stays
+  `null` where `Int` is demanded: `val i: Int = m.get(k)` prints `null` (scalac `0`), and the interpreter's
+  arithmetic on it fails.
 - Nothing blocks or runs in parallel: `Await.result` of an incomplete future throws `TimeoutException` at
   once, `synchronized` takes no monitor on any target, recursion has node's stack of about 10,000 frames
   (50,000 under Scala.js), there is no reflection, and `getStackTrace` is empty.
-- A bare call of another `def f()` of the standard library than `println` (`it.next`, `Console.println`,
-  `b.result`) is rejected, where scalac calls the Scala 2 method with a warning (the JVM calls it).
 
 ### Java and Scala.js interop
 
-- Java classes come from their class files and the JDK's `ct.sym`. Confirmed, fix queued: a JDK class the
-  standard library stands in for loses its static nested classes, a Scala class extending a Java interface
-  does not see its default methods. A type argument of a generic argument is not inferred from a parameter
-  that names the called method's own type parameters: `stream.collect(Collectors.toList())` against the
-  JDK's `Stream` on the JVM, or such a method of one's own on any target, needs `toList[String]()`.
-- `@JSExportTopLevel` in a jar is not exported; `js.constructorOf[C]` answers native classes only; a program's
-  own `new js.Array[A]()` is not supported yet, and `js.Array`'s in-place `reverse()` and `sort()` are missing
-  (`js.Array[A]` is Scala's `Array[A]`, one JavaScript array).
-- `reflectiveSelectable` serves library bodies on JavaScript only: a program's own structural call on a value
-  of no `Selectable` type does not apply it, and a bare refinement `{ def m: T }` is not read as a type.
-- Reflective instantiation: every array is one class (`Array[Int]` and `Array[String]` erase alike), a
-  secondary constructor of a nested class loses the outer instance, a misspelt annotation registers nothing.
+- `@JSExportTopLevel` in a jar is not exported, and `js.constructorOf[C]` answers native classes only.
+- Reflective instantiation: every array is one class (`Array[Int]` and `Array[String]` erase alike), and a
+  misspelt annotation registers nothing.
 
 ### The JVM target, sbt and warnings
 
@@ -136,10 +126,15 @@ a JDK member as `not supported on JavaScript`. Beyond that:
   `(1: Any).isInstanceOf[AnyRef]` is false; `Option(x)` is `None` for `undefined` as for `null`; the bare
   term `String` is accepted, `String` and `Integer` being objects; `Math.max` and its kind are one
   definition over `Int | Long | Double`; on JavaScript a value class is never unboxed, equal as its field.
-- `Map` and `Set` keep insertion order (scalac's `HashMap` orders by hash); `TreeSet` and `TreeMap` are the
-  classes of every sorted set and map; `x #:: xs` evaluates `xs` first (a self-referring `LazyList` is written
-  `LazyList.cons(x, xs)`); `"abc".toSeq` is a `Vector[Char]`; `"a.b".split(".")` splits on the character, a
-  `Char` and a one-character `String` being one value; a test against `Array[Int]` takes every array.
+- `Map` and `Set` keep insertion order (scalac's `HashMap` orders by hash), and so do `java.util.HashMap` and
+  `HashSet`, which a `toMap`, `groupingBy` or `toSet` result prints in; a `parallel` stream runs sequentially,
+  JavaScript having one thread, and a stream of the file system fails on JavaScript, which has none; `TreeSet`
+  and `TreeMap` are the classes of every sorted set and map; `x #:: xs` evaluates `xs` first (a self-referring
+  `LazyList` is written `LazyList.cons(x, xs)`); `"abc".toSeq` is a `Vector[Char]`; `"a.b".split(".")` splits
+  on the character, a `Char` and a one-character `String` being one value; a test against `Array[Int]` takes
+  every array.
+- `java.time` is scala-java-time's, from its jar on the class path, and the region zone ids its tzdb jar's,
+  as a Scala.js build takes them, rather than a copy of the JDK's in the standard library.
 - `Throwable` extends the native `Error`, and a value JavaScript throws reaches a `catch` as
   `js.JavaScriptException(value)`; the standard library's failures throw the JVM's classes with the JVM's
   messages, where Scala.js's differ; a member selected from `null` fails with the engine's `TypeError` (the
@@ -157,10 +152,11 @@ a JDK member as `not supported on JavaScript`. Beyond that:
   value discarded for a type variable bounded above by `Unit`, a macro defined and used in one compilation.
 - `println(())` and `print(())` print `undefined` on JavaScript and in the interpreter, as under Scala.js, and
   `()` on the JVM, as under scalac; a bare `println` prints an empty line on every target.
-- JVM: a `null` unboxed from an erased Java result (a missing key of a `java.util.HashMap[String, Int]`) is
-  the primitive's zero, as under scalac, and prints `0` where scalac prints `null` once passed on as a
-  reference; `(new W(Double.NaN): Any) == (new W(Double.NaN): Any)` is false for a value class `W`, where
-  scalac's elision says true. Interpreter: `TimeZone.getDefault` is `UTC`; `UUID.randomUUID` is `math.random`.
+- JVM: a `null` from an erased Java result of type `Int` (a missing key of a `java.util.HashMap[String, Int]`)
+  is `null` in a reference context and zero where `Int` is demanded, as under scalac, but an interpolation
+  demands the `Int` (`s"${m.get(k)}"` is `0`, scalac's `null`);
+  `(new W(Double.NaN): Any) == (new W(Double.NaN): Any)` is false for a value class `W`, where scalac's elision
+  says true. Interpreter: `TimeZone.getDefault` is `UTC`; `UUID.randomUUID` is `math.random`.
 
 ## Left out on purpose
 

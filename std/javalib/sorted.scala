@@ -76,7 +76,7 @@ package java.util:
       putAll(m)
     def this(m: SortedMap[K, ? <: V]) =
       this(m.comparator())
-      putAll(m)
+      buildFromSorted(m.size(), m.entrySet().iterator(), null)
 
     private[util] var root: TreeNode[K, V] = null
     private var count = 0
@@ -96,6 +96,41 @@ package java.util:
       whole
     // Whether a view is that one: the map's own key, value and entry sets, not a view's.
     private[util] def isWhole(view: SortedView[K, V]): Boolean = view eq whole
+
+    // The JDK's `putAll`: into an empty map, a sorted map of the same order is taken in linear
+    // time (`buildFromSorted`), its keys never compared.
+    override def putAll(m: Map[? <: K, ? <: V]): Unit =
+      val n = m.size()
+      m match
+        case sorted: SortedMap[?, ?] if count == 0 && n != 0 && Objects.equals(cmp, sorted.comparator()) =>
+          modCount += 1
+          buildFromSorted(n, sorted.entrySet().iterator(), null)
+        case _ => super.putAll(m)
+
+    // The JDK's `buildFromSorted`: a balanced tree of the `n` entries, or with `present` keys, the
+    // iterator gives in order, the nodes of an incomplete bottom level red; no key is compared.
+    private[util] def buildFromSorted(n: Int, it: Iterator[?], present: AnyRef): Unit =
+      count = n
+      root = build(0, 0, n - 1, 31 - Integer.numberOfLeadingZeros(n + 1), it.asInstanceOf[Iterator[Any]], present)
+    private def build(level: Int, lo: Int, hi: Int, redLevel: Int, it: Iterator[Any], present: AnyRef): TreeNode[K, V] =
+      if hi < lo then null
+      else
+        val mid = (lo + hi) >>> 1
+        val left = if lo < mid then build(level + 1, lo, mid - 1, redLevel, it, present) else null
+        val middle =
+          if present == null then
+            val e = it.next().asInstanceOf[Map.Entry[K, V]]
+            new TreeNode[K, V](e.getKey, e.getValue, null)
+          else new TreeNode[K, V](it.next().asInstanceOf[K], present.asInstanceOf[V], null)
+        middle.black = level != redLevel
+        if left != null then
+          middle.left = left
+          left.parent = middle
+        if mid < hi then
+          val right = build(level + 1, mid + 1, hi, redLevel, it, present)
+          middle.right = right
+          right.parent = middle
+        middle
 
     def comparator(): Comparator[? >: K] = cmp
     def size(): Int = count
@@ -215,7 +250,7 @@ package java.util:
     // nodes rather than moving keys between them, so that a node stays its mapping's entry for
     // as long as the mapping is in the map; a removed node keeps its key and value.
     private def red(n: TreeNode[K, V]): Boolean = n != null && !n.black
-    private def replace(n: TreeNode[K, V], by: TreeNode[K, V]): Unit =
+    private def relink(n: TreeNode[K, V], by: TreeNode[K, V]): Unit =
       val p = n.parent
       if p == null then root = by
       else if n eq p.left then p.left = by
@@ -225,14 +260,14 @@ package java.util:
       val y = x.right
       x.right = y.left
       if y.left != null then y.left.parent = x
-      replace(x, y)
+      relink(x, y)
       y.left = x
       x.parent = y
     private def rotateRight(x: TreeNode[K, V]): Unit =
       val y = x.left
       x.left = y.right
       if y.right != null then y.right.parent = x
-      replace(x, y)
+      relink(x, y)
       y.right = x
       x.parent = y
     private def balanceInserted(added: TreeNode[K, V]): Unit =
@@ -279,11 +314,11 @@ package java.util:
       if z.left == null then
         x = z.right
         parent = z.parent
-        replace(z, z.right)
+        relink(z, z.right)
       else if z.right == null then
         x = z.left
         parent = z.parent
-        replace(z, z.left)
+        relink(z, z.left)
       else
         val y = SortedOps.leftmost(z.right)
         removedBlack = y.black
@@ -291,10 +326,10 @@ package java.util:
         if y.parent eq z then parent = y
         else
           parent = y.parent
-          replace(y, y.right)
+          relink(y, y.right)
           y.right = z.right
           y.right.parent = y
-        replace(z, y)
+        relink(z, y)
         y.left = z.left
         y.left.parent = y
         y.black = z.black
@@ -576,7 +611,7 @@ package java.util:
 
   // The entry set of a view: an entry of a mapping in the range is a member, and removing one
   // removes the mapping.
-  private final class SortedEntries[K, V](view: SortedView[K, V]) extends Set[Map.Entry[K, V]]:
+  private final class SortedEntries[K, V](view: SortedView[K, V]) extends AbstractSet[Map.Entry[K, V]]:
     def size(): Int = view.size()
     override def isEmpty(): Boolean = view.isEmpty()
     def iterator(): Iterator[Map.Entry[K, V]] = view.walk[Map.Entry[K, V]](0, false)
@@ -586,9 +621,6 @@ package java.util:
       if n != null then view.tree.unlink(n)
       n != null
     override def clear(): Unit = view.clear()
-    override def removeAll(c: Collection[?]): Boolean = SortedOps.removeAll(this, c)
-    override def retainAll(c: Collection[?]): Boolean = SortedOps.filter(iterator(), c, false)
-    override def removeIf(test: java.util.function.Predicate[? >: Map.Entry[K, V]]): Boolean = SortedOps.removeIf(iterator(), test)
     override def toString: String = SortedOps.collectionString(this)
 
   // The values of a view, in its order, compared as the JDK's maps compare them (and so
@@ -614,13 +646,10 @@ package java.util:
           found = true
       found
     override def clear(): Unit = view.clear()
-    override def removeAll(c: Collection[?]): Boolean = SortedOps.filter(iterator(), c, true)
-    override def retainAll(c: Collection[?]): Boolean = SortedOps.filter(iterator(), c, false)
-    override def removeIf(test: java.util.function.Predicate[? >: V]): Boolean = SortedOps.removeIf(iterator(), test)
     override def toString: String = SortedOps.collectionString(this)
 
   // The keys of a view, a navigable set that removes from the map and adds nothing.
-  private final class SortedKeys[K, V](view: SortedView[K, V]) extends NavigableSet[K]:
+  private final class SortedKeys[K, V](view: SortedView[K, V]) extends AbstractSet[K], NavigableSet[K]:
     def size(): Int = view.size()
     override def isEmpty(): Boolean = view.isEmpty()
     def iterator(): Iterator[K] = view.walk[K](1, false)
@@ -628,9 +657,6 @@ package java.util:
     override def contains(o: Any): Boolean = view.containsKey(o)
     override def remove(o: Any): Boolean = view.removeKey(o)
     override def clear(): Unit = view.clear()
-    override def removeAll(c: Collection[?]): Boolean = SortedOps.removeAll(this, c)
-    override def retainAll(c: Collection[?]): Boolean = SortedOps.filter(iterator(), c, false)
-    override def removeIf(test: java.util.function.Predicate[? >: K]): Boolean = SortedOps.removeIf(iterator(), test)
     override def toString: String = SortedOps.collectionString(this)
     def comparator(): Comparator[? >: K] = view.comparator()
     def first(): K = view.firstKey()
@@ -653,7 +679,7 @@ package java.util:
   // The keys of a navigable map whose values are all one marker, as the JDK's: its subsets and
   // its descending set are tree sets over the map's views.
   @jvmClass("java/util/TreeSet")
-  class TreeSet[E] private (m: NavigableMap[E, AnyRef]) extends Set[E], NavigableSet[E]:
+  class TreeSet[E] private (m: NavigableMap[E, AnyRef]) extends AbstractSet[E], NavigableSet[E]:
     def this() = this(new TreeMap[E, AnyRef]())
     def this(comparator: Comparator[? >: E]) = this(new TreeMap[E, AnyRef](comparator))
     def this(c: Collection[? <: E]) =
@@ -668,11 +694,17 @@ package java.util:
     def descendingIterator(): Iterator[E] = m.descendingKeySet().iterator()
     override def contains(o: Any): Boolean = m.containsKey(o)
     override def add(e: E): Boolean = m.put(e, SortedOps.Present) == null
+    // The JDK's `addAll`: into an empty tree set, a sorted set of the same order goes in linear
+    // time (`TreeMap.addAllForTreeSet`).
+    override def addAll(c: Collection[? <: E]): Boolean =
+      (m, c) match
+        case (map: TreeMap[?, ?], sorted: SortedSet[?]) if m.size() == 0 && c.size() > 0 && Objects.equals(map.comparator(), sorted.comparator()) =>
+          map.modCount += 1
+          map.buildFromSorted(c.size(), sorted.iterator(), SortedOps.Present)
+          true
+        case _ => super.addAll(c)
     override def remove(o: Any): Boolean = m.remove(o) != null
     override def clear(): Unit = m.clear()
-    override def removeAll(c: Collection[?]): Boolean = SortedOps.removeAll(this, c)
-    override def retainAll(c: Collection[?]): Boolean = SortedOps.filter(iterator(), c, false)
-    override def removeIf(test: java.util.function.Predicate[? >: E]): Boolean = SortedOps.removeIf(iterator(), test)
     override def toString: String = SortedOps.collectionString(this)
     def comparator(): Comparator[? >: E] = m.comparator()
     def first(): E = m.firstKey()
@@ -702,13 +734,10 @@ package java.util:
 
     // A key's natural ordering, the JDK's cast to `Comparable`: a null key fails with a
     // `NullPointerException` and one that is not `Comparable` with a `ClassCastException`.
-    // Strings, numbers, characters and booleans are tested by kind, which on JavaScript a test
-    // for the trait does not see.
     def natural(key: Any): Comparable[Any] =
       if key == null then throw new NullPointerException()
       key match
-        case _: String | _: Int | _: Long | _: Double | _: Float | _: Short | _: Byte | _: Char | _: Boolean | _: Comparable[?] =>
-          key.asInstanceOf[Comparable[Any]]
+        case c: Comparable[?] => c.asInstanceOf[Comparable[Any]]
         case _ => throw new ClassCastException("the key is not a java.lang.Comparable")
     // `a.compareTo(b)` under natural ordering, failing as `natural(a)` does, and where the JDK's
     // `compareTo` of a string, a box or a boolean fails for its argument: with a
@@ -793,34 +822,3 @@ package java.util:
       sb.append("]").toString
     private def itself(x: Any, owner: AnyRef, text: String): Any = if x.asInstanceOf[AnyRef] eq owner then text else x
 
-    // Removes through the iterator what `c` contains (`dropContained`) or what it does not, as
-    // the JDK's `AbstractCollection` does; a null `c` fails before anything is removed.
-    def filter(it: Iterator[?], c: Collection[?], dropContained: Boolean): Boolean =
-      if c == null then throw new NullPointerException()
-      var changed = false
-      while it.hasNext do
-        val x = it.next()
-        if c.contains(x) == dropContained then
-          it.remove()
-          changed = true
-      changed
-    // The JDK's `Collection.removeIf`: each element the test selects removed through the
-    // iterator as it is met, so that of equal values the one tested goes.
-    def removeIf[E](it: Iterator[E], test: java.util.function.Predicate[? >: E]): Boolean =
-      if test == null then throw new NullPointerException()
-      var changed = false
-      while it.hasNext do
-        if test.test(it.next()) then
-          it.remove()
-          changed = true
-      changed
-    // The JDK's `AbstractSet.removeAll`: each element of `c` removed from the set when the set is
-    // the larger, otherwise the set's elements that `c` contains.
-    def removeAll(s: Set[?], c: Collection[?]): Boolean =
-      if c == null then throw new NullPointerException()
-      if s.size() > c.size() then
-        var changed = false
-        val it = c.iterator()
-        while it.hasNext do changed = s.remove(it.next()) | changed
-        changed
-      else filter(s.iterator(), c, true)

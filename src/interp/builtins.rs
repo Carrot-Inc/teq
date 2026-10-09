@@ -603,7 +603,7 @@ fn install_core(it: &mut Table) {
         let (x, y) = (dbl(it, a, 0)?, dbl(it, a, 1)?);
         Ok(Value::Int(compare_doubles(x, y)))
     });
-    reg!(it, "scala.util.freshSeed", |it, _a| {
+    reg!(it, "java.util.freshSeed", |it, _a| {
         if it.pure {
             return it.impure("a random seed");
         }
@@ -1005,13 +1005,6 @@ fn install_strings(it: &mut Table) {
         let s = text(it, a, 0)?;
         match parse_java_double(&s) {
             Some(d) => Ok(Value::Double(d)),
-            None => number_format(it, &s),
-        }
-    });
-    reg!(it, "scala.String.toFloat", |it, a| {
-        let s = text(it, a, 0)?;
-        match parse_java_double(&s) {
-            Some(d) => Ok(Value::Float(d as f32)),
             None => number_format(it, &s),
         }
     });
@@ -2225,6 +2218,14 @@ fn install_regex_engine(it: &mut Table) {
             None => Ok(Value::Null),
         },
         _ => Ok(Value::Null),
+    });
+    // Whether the pattern compiles: null, or the parser's message (`Regex::compile`).
+    reg!(it, "java.util.regex.Engine.check", |it, a| {
+        let src = it.to_str(&arg(a, 1))?;
+        Ok(match regex::Regex::compile(&src) {
+            Ok(_) => Value::Null,
+            Err(msg) => Value::string(msg),
+        })
     });
     let quote = it["scala.util.matching.Regex.quoteReplacement"].clone();
     it.insert("java.util.regex.Engine.quote".to_string(), quote);

@@ -6,15 +6,21 @@ package java.lang:
   @jvmClass("java/lang/Throwable")
   class Throwable(message: String = null, cause: Throwable = null):
     def this(cause: Throwable) = this(if cause == null then null else cause.toString, cause)
-    def this(message: String, cause: Throwable, enableSuppression: Boolean, writableStackTrace: Boolean) = this(message, cause)
+    def this(message: String, cause: Throwable, enableSuppression: scala.Boolean, writableStackTrace: scala.Boolean) =
+      this(message, cause)
+      if !enableSuppression then disableSuppression(this)
 
+    // The JDK's: the exceptions suppressed in favour of this one, in the order they were added.
     @jvm("invokevirtual java/lang/Throwable.addSuppressed(Ljava/lang/Throwable;)V")
     @javaDefined
-    def addSuppressed(other: Throwable): Unit = ()
+    def addSuppressed(other: Throwable): Unit =
+      if other eq this then throw new IllegalArgumentException("Self-suppression not permitted", other)
+      if other == null then throw new NullPointerException("Cannot suppress a null exception.")
+      suppress(this, other)
 
     @jvm("invokevirtual java/lang/Throwable.getSuppressed()[Ljava/lang/Throwable;")
     @javaDefined
-    def getSuppressed: Array[Throwable] = Array()
+    def getSuppressed: Array[Throwable] = suppressed(this)
 
     @jvm("invokevirtual java/lang/Throwable.getMessage()Ljava/lang/String;")
     @javaDefined
@@ -88,20 +94,55 @@ package java.lang:
   @js("($0.$causeGiven === true)")
   private[lang] def causeGiven(t: Throwable): Boolean
 
+  // An exception's suppressed ones, kept on it from the first (the interpreter: in a table), as
+  // the JDK's `suppressedExceptions`: none recorded once the constructor disabled suppression
+  // (`null` there, a key without a list here), `getSuppressed` then empty.
+  @js("$suppress($0, $1)")
+  private[lang] def suppress(t: Throwable, other: Throwable): Unit =
+    val list = Suppression.table.get(t)
+    if list == null then
+      if !Suppression.table.containsKey(t) then
+        val fresh = new java.util.ArrayList[Throwable]()
+        fresh.add(other)
+        Suppression.table.put(t, fresh)
+    else list.add(other)
+
+  @js("void ($0.$suppressed = null)")
+  private[lang] def disableSuppression(t: Throwable): Unit = Suppression.table.put(t, null)
+
+  @js("$suppressed($0)")
+  private[lang] def suppressed(t: Throwable): Array[Throwable] =
+    val list = Suppression.table.get(t)
+    val out = new Array[Throwable](if list == null then 0 else list.size())
+    var i = 0
+    while i < out.length do
+      out(i) = list.get(i)
+      i += 1
+    out
+
+  private[lang] object Suppression:
+    val table = new java.util.IdentityHashMap[Throwable, java.util.ArrayList[Throwable]]()
+
   @jvmClass("java/lang/Exception")
   class Exception(message: String = null, cause: Throwable = null) extends Throwable(message, cause):
     def this(cause: Throwable) = this(if cause == null then null else cause.toString, cause)
-    def this(message: String, cause: Throwable, enableSuppression: Boolean, writableStackTrace: Boolean) = this(message, cause)
+    def this(message: String, cause: Throwable, enableSuppression: scala.Boolean, writableStackTrace: scala.Boolean) =
+      this(message, cause)
+      if !enableSuppression then disableSuppression(this)
 
   @jvmClass("java/lang/Error")
   class Error(message: String = null, cause: Throwable = null) extends Throwable(message, cause):
     def this(cause: Throwable) = this(if cause == null then null else cause.toString, cause)
-    def this(message: String, cause: Throwable, enableSuppression: Boolean, writableStackTrace: Boolean) = this(message, cause)
+    def this(message: String, cause: Throwable, enableSuppression: scala.Boolean, writableStackTrace: scala.Boolean) =
+      this(message, cause)
+      if !enableSuppression then disableSuppression(this)
 
   @jvmClass("java/lang/RuntimeException")
   class RuntimeException(message: String = null, cause: Throwable = null) extends Exception(message, cause):
     def this(cause: Throwable) = this(if cause == null then null else cause.toString, cause)
-    def this(message: String, cause: Throwable, enableSuppression: Boolean, writableStackTrace: Boolean) = this(message, cause)
+    def this(message: String, cause: Throwable, enableSuppression: scala.Boolean, writableStackTrace: scala.Boolean) =
+      this(message, cause)
+      if !enableSuppression then disableSuppression(this)
 
   @jvmClass("java/lang/IllegalArgumentException")
   class IllegalArgumentException(message: String = null, cause: Throwable = null) extends RuntimeException(message, cause):

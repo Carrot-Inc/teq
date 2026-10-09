@@ -1608,6 +1608,23 @@ impl<'a> Worker<'a> {
         alts
     }
 
+    /// The alternative of the member set `set` of `recv_ty` that the argument lists select, with
+    /// its owner's type arguments, chosen without applying it: dotty types a structural call
+    /// before `addClassOfs` looks at the method its selection resolved to.
+    pub(super) fn selected_alternative(&mut self, set: SymId, recv_ty: TypeId, lists: &mut Vec<ArgList>) -> Option<(SymId, Subst)> {
+        let alts = self.alternatives_of(set, Some(recv_ty), None);
+        let i = if alts.len() == 1 {
+            0
+        } else {
+            let outer_base = std::mem::replace(&mut self.app_base, self.tvars.len() as u32);
+            let mut infos = Vec::new();
+            let choice = self.resolve_overloaded(&alts, None, lists, &mut infos, None, false, true);
+            self.app_base = outer_base;
+            choice.ok()?
+        };
+        Some((alts[i].sym, alts[i].owner_subst.clone()))
+    }
+
     /// Applies the alternative of `set` that the call means.
     #[inline(never)]
     pub(super) fn apply_overloaded(

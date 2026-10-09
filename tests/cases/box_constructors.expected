@@ -1,0 +1,18 @@
+1
+6
+2
+true
+7
+true
+true
+1.5
+2.5
+c
+true
+true
+For input string: "x"
+Value out of range. Value:"300" Radix:10
+List(true, false, false, false, false)
+List(false, true, false, false, false)
+List(i, -, d, z, -)
+true false true

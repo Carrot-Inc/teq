@@ -150,6 +150,13 @@ package java.lang:
   @javaDefined
   @jvmClass("java/lang/Integer")
   object Integer:
+    // `new Integer(...)`, the JDK's deprecated constructors: the typer sends them here, as Scala.js
+    // sends those of its hijacked classes to their companion (`JSCodeGen.genNewHijackedClass`).
+    @js("$1")
+    @jvm("new java/lang/Integer dup $1:I invokespecial java/lang/Integer.<init>(I)V")
+    def newInteger(value: Int): Integer = Integer.valueOf(value)
+    @jvm("new java/lang/Integer dup $1 invokespecial java/lang/Integer.<init>(Ljava/lang/String;)V")
+    def newInteger(s: String): Integer = Integer.valueOf(parseInt(s))
     @jvm("getstatic java/lang/Integer.TYPE:Ljava/lang/Class;")
     def TYPE: Class[?] = classOf[Int]
     @js("2147483647")
@@ -271,6 +278,13 @@ package java.lang:
   @javaDefined
   @jvmClass("java/lang/Long")
   object Long:
+    // `new Long(...)`, the JDK's deprecated constructors: the typer sends them here, as Scala.js
+    // sends those of its hijacked classes to their companion (`JSCodeGen.genNewHijackedClass`).
+    @js("$1")
+    @jvm("new java/lang/Long dup $1:J invokespecial java/lang/Long.<init>(J)V")
+    def newLong(value: scala.Long): Long = Long.valueOf(value)
+    @jvm("new java/lang/Long dup $1 invokespecial java/lang/Long.<init>(Ljava/lang/String;)V")
+    def newLong(s: String): Long = Long.valueOf(parseLong(s))
     @jvm("getstatic java/lang/Long.TYPE:Ljava/lang/Class;")
     def TYPE: Class[?] = classOf[scala.Long]
     @js("9223372036854775807n")
@@ -308,6 +322,14 @@ package java.lang:
     def compare(a: scala.Long, b: scala.Long): Int
     @jvm("invokestatic java/lang/Long.compareUnsigned(JJ)I")
     def compareUnsigned(a: scala.Long, b: scala.Long): Int = compare(a ^ MIN_VALUE, b ^ MIN_VALUE)
+    // The JDK's, after Hacker's Delight 9.3.
+    @jvm("invokestatic java/lang/Long.divideUnsigned(JJ)J")
+    def divideUnsigned(dividend: scala.Long, divisor: scala.Long): scala.Long =
+      if divisor >= 0 then
+        val q = (dividend >>> 1) / divisor << 1
+        val r = dividend - q * divisor
+        q + ((r | ~(r - divisor)) >>> 63)
+      else (dividend & ~(dividend - divisor)) >>> 63
     @js("$longBitCount($1)")
     @jvm("invokestatic java/lang/Long.bitCount(J)I")
     def bitCount(l: scala.Long): Int
@@ -362,6 +384,13 @@ package java.lang:
   @javaDefined
   @jvmClass("java/lang/Short")
   object Short:
+    // `new Short(...)`, the JDK's deprecated constructors: the typer sends them here, as Scala.js
+    // sends those of its hijacked classes to their companion (`JSCodeGen.genNewHijackedClass`).
+    @js("$1")
+    @jvm("new java/lang/Short dup $1:S invokespecial java/lang/Short.<init>(S)V")
+    def newShort(value: scala.Short): Short = Short.valueOf(value)
+    @jvm("new java/lang/Short dup $1 invokespecial java/lang/Short.<init>(Ljava/lang/String;)V")
+    def newShort(s: String): Short = Short.valueOf(parseShort(s))
     @jvm("getstatic java/lang/Short.TYPE:Ljava/lang/Class;")
     def TYPE: Class[?] = classOf[scala.Short]
     @js("32767")
@@ -373,9 +402,11 @@ package java.lang:
     @js("$1")
     @jvm("invokestatic java/lang/Short.valueOf(S)Ljava/lang/Short;")
     def valueOf(s: scala.Short): Short
-    @js("($parseInt($1) << 16 >> 16)")
     @jvm("invokestatic java/lang/Short.parseShort(Ljava/lang/String;)S")
-    def parseShort(s: String): scala.Short
+    def parseShort(s: String): scala.Short =
+      val i = Integer.parseInt(s)
+      if i < -32768 || i > 32767 then throw new NumberFormatException("Value out of range. Value:\"" + s + "\" Radix:10")
+      i.toShort
     @js("(\"\" + $1)")
     @jvm("invokestatic java/lang/Short.toString(S)Ljava/lang/String;")
     def toString(s: scala.Short): String
@@ -411,6 +442,13 @@ package java.lang:
   @javaDefined
   @jvmClass("java/lang/Byte")
   object Byte:
+    // `new Byte(...)`, the JDK's deprecated constructors: the typer sends them here, as Scala.js
+    // sends those of its hijacked classes to their companion (`JSCodeGen.genNewHijackedClass`).
+    @js("$1")
+    @jvm("new java/lang/Byte dup $1:B invokespecial java/lang/Byte.<init>(B)V")
+    def newByte(value: scala.Byte): Byte = Byte.valueOf(value)
+    @jvm("new java/lang/Byte dup $1 invokespecial java/lang/Byte.<init>(Ljava/lang/String;)V")
+    def newByte(s: String): Byte = Byte.valueOf(parseByte(s))
     @jvm("getstatic java/lang/Byte.TYPE:Ljava/lang/Class;")
     def TYPE: Class[?] = classOf[scala.Byte]
     @js("127")
@@ -422,9 +460,11 @@ package java.lang:
     @js("$1")
     @jvm("invokestatic java/lang/Byte.valueOf(B)Ljava/lang/Byte;")
     def valueOf(b: scala.Byte): Byte
-    @js("($parseInt($1) << 24 >> 24)")
     @jvm("invokestatic java/lang/Byte.parseByte(Ljava/lang/String;)B")
-    def parseByte(s: String): scala.Byte
+    def parseByte(s: String): scala.Byte =
+      val i = Integer.parseInt(s)
+      if i < -128 || i > 127 then throw new NumberFormatException("Value out of range. Value:\"" + s + "\" Radix:10")
+      i.toByte
     @js("(\"\" + $1)")
     @jvm("invokestatic java/lang/Byte.toString(B)Ljava/lang/String;")
     def toString(b: scala.Byte): String
@@ -469,6 +509,13 @@ package java.lang:
   @javaDefined
   @jvmClass("java/lang/Double")
   object Double:
+    // `new Double(...)`, the JDK's deprecated constructors: the typer sends them here, as Scala.js
+    // sends those of its hijacked classes to their companion (`JSCodeGen.genNewHijackedClass`).
+    @js("$1")
+    @jvm("new java/lang/Double dup $1:D invokespecial java/lang/Double.<init>(D)V")
+    def newDouble(value: scala.Double): Double = Double.valueOf(value)
+    @jvm("new java/lang/Double dup $1 invokespecial java/lang/Double.<init>(Ljava/lang/String;)V")
+    def newDouble(s: String): Double = Double.valueOf(parseDouble(s))
     @jvm("getstatic java/lang/Double.TYPE:Ljava/lang/Class;")
     def TYPE: Class[?] = classOf[scala.Double]
     @js("Number.MAX_VALUE")
@@ -554,6 +601,36 @@ package java.lang:
   @javaDefined
   @jvmClass("java/lang/Float")
   object Float:
+    // `new Float(...)`, the JDK's deprecated constructors: the typer sends them here, as Scala.js
+    // sends those of its hijacked classes to their companion (`JSCodeGen.genNewHijackedClass`).
+    @js("$1")
+    @jvm("new java/lang/Float dup $1:F invokespecial java/lang/Float.<init>(F)V")
+    def newFloat(value: scala.Float): Float = Float.valueOf(value)
+    @jvm("new java/lang/Float dup $1:D invokespecial java/lang/Float.<init>(D)V")
+    def newFloat(value: scala.Double): Float = Float.valueOf(value.toFloat)
+    @jvm("new java/lang/Float dup $1 invokespecial java/lang/Float.<init>(Ljava/lang/String;)V")
+    def newFloat(s: String): Float = Float.valueOf(parseFloat(s))
+    @jvm("invokestatic java/lang/Float.parseFloat(Ljava/lang/String;)F")
+    def parseFloat(s: String): scala.Float = FloatingDecimal.parseFloat(s)
+    // The JDK's constants, which scala-library's `scala.Float` reads.
+    @js("3.4028234663852886e+38")
+    @jvm("getstatic java/lang/Float.MAX_VALUE:F")
+    def MAX_VALUE: scala.Float = intBitsToFloat(0x7f7fffff)
+    @js("1.401298464324817e-45")
+    @jvm("getstatic java/lang/Float.MIN_VALUE:F")
+    def MIN_VALUE: scala.Float = intBitsToFloat(1)
+    @js("1.1754943508222875e-38")
+    @jvm("getstatic java/lang/Float.MIN_NORMAL:F")
+    def MIN_NORMAL: scala.Float = intBitsToFloat(0x00800000)
+    @js("Infinity")
+    @jvm("getstatic java/lang/Float.POSITIVE_INFINITY:F")
+    def POSITIVE_INFINITY: scala.Float = intBitsToFloat(0x7f800000)
+    @js("-Infinity")
+    @jvm("getstatic java/lang/Float.NEGATIVE_INFINITY:F")
+    def NEGATIVE_INFINITY: scala.Float = intBitsToFloat(0xff800000)
+    @js("NaN")
+    @jvm("getstatic java/lang/Float.NaN:F")
+    def NaN: scala.Float = intBitsToFloat(0x7fc00000)
     @jvm("getstatic java/lang/Float.TYPE:Ljava/lang/Class;")
     def TYPE: Class[?] = classOf[scala.Float]
     @js("$1")
@@ -590,6 +667,413 @@ package java.lang:
     @jvm("invokestatic java/lang/Float.toString(F)Ljava/lang/String;")
     def toString(f: scala.Float): String
 
+  // The JDK's `jdk.internal.math.FloatingDecimal` for a `float`: `readJavaFormatString(s).floatValue()`.
+  // The scan takes the decimal string's digits and exponent or goes to the hexadecimal one's
+  // `parseHexString`; the decimal's `floatValue` rounds to the nearest float directly, a candidate
+  // from float or double arithmetic corrected against the exact value in big integers, never through a
+  // double. `BigInteger` stands for `FDBigInteger`.
+  private[lang] object FloatingDecimal:
+    private final val SINGLE_MAX_DECIMAL_DIGITS = 7
+    private final val SINGLE_MAX_DECIMAL_EXPONENT = 38
+    private final val SINGLE_MIN_DECIMAL_EXPONENT = -45
+    private final val SINGLE_MAX_NDIGITS = 200
+    private final val MAX_DECIMAL_DIGITS = 15
+    private final val BIG_DECIMAL_EXPONENT = 324
+    private final val SINGLE_EXP_SHIFT = 23
+    private final val SINGLE_FRACT_HOB = 1 << 23
+    private final val SIGNIF_BIT_MASK = 0x7FFFFF
+    private final val EXP_BIAS = 127
+    private final val EXP_BIT_MASK = 0x7F800000
+    private final val SIGN_BIT_MASK = 0x80000000
+    private val SMALL_10_POW: Array[scala.Double] = Array(
+      1.0e0, 1.0e1, 1.0e2, 1.0e3, 1.0e4, 1.0e5, 1.0e6, 1.0e7, 1.0e8, 1.0e9, 1.0e10, 1.0e11,
+      1.0e12, 1.0e13, 1.0e14, 1.0e15, 1.0e16, 1.0e17, 1.0e18, 1.0e19, 1.0e20, 1.0e21, 1.0e22)
+    private val SINGLE_SMALL_10_POW: Array[scala.Float] = Array(
+      1.0e0f, 1.0e1f, 1.0e2f, 1.0e3f, 1.0e4f, 1.0e5f, 1.0e6f, 1.0e7f, 1.0e8f, 1.0e9f, 1.0e10f)
+    private val BIG_10_POW: Array[scala.Double] = Array(1e16, 1e32, 1e64, 1e128, 1e256)
+    private val TINY_10_POW: Array[scala.Double] = Array(1e-16, 1e-32, 1e-64, 1e-128, 1e-256)
+    private final val SINGLE_MAX_SMALL_TEN = 10
+
+    def parseFloat(s: String): scala.Float = readJavaFormatString(s)
+
+    private def signed(isNegative: scala.Boolean, f: scala.Float): scala.Float = if isNegative then -f else f
+
+    private def readJavaFormatString(s: String): scala.Float =
+      val in = s.trim
+      val len = in.length
+      if len == 0 then throw new NumberFormatException("empty String")
+      def invalid: Nothing = throw new NumberFormatException("For input string: \"" + in + "\"")
+      // `charAt` past the end, which the JDK's scan meets as a `StringIndexOutOfBoundsException`.
+      def at(k: Int): Char = if k < len then in.charAt(k) else invalid
+      var isNegative = false
+      var signSeen = false
+      var i = 0
+      in.charAt(0) match
+        case '-' =>
+          isNegative = true
+          i += 1
+          signSeen = true
+        case '+' =>
+          i += 1
+          signSeen = true
+        case _ =>
+      var c = at(i)
+      if c == 'N' then
+        if len - i == 3 && in.indexOf("NaN", i) == i then return scala.Float.NaN
+        invalid
+      if c == 'I' then
+        if len - i == 8 && in.indexOf("Infinity", i) == i then
+          return if isNegative then scala.Float.NegativeInfinity else scala.Float.PositiveInfinity
+        invalid
+      if c == '0' && len > i + 1 then
+        val ch = in.charAt(i + 1)
+        if ch == 'x' || ch == 'X' then return parseHexString(in)
+      val digits = new Array[scala.Byte](len)
+      var decSeen = false
+      var nDigits = 0
+      var decPt = 0
+      var nLeadZero = 0
+      var nTrailZero = 0
+      var scanning = true
+      while scanning && i < len do
+        c = in.charAt(i)
+        if c == '0' then nLeadZero += 1
+        else if c == '.' then
+          if decSeen then throw new NumberFormatException("multiple points")
+          decPt = i
+          if signSeen then decPt -= 1
+          decSeen = true
+        else scanning = false
+        if scanning then i += 1
+      scanning = true
+      while scanning && i < len do
+        c = in.charAt(i)
+        if c >= '1' && c <= '9' then
+          digits(nDigits) = c.toByte
+          nDigits += 1
+          nTrailZero = 0
+        else if c == '0' then
+          digits(nDigits) = c.toByte
+          nDigits += 1
+          nTrailZero += 1
+        else if c == '.' then
+          if decSeen then throw new NumberFormatException("multiple points")
+          decPt = i
+          if signSeen then decPt -= 1
+          decSeen = true
+        else scanning = false
+        if scanning then i += 1
+      nDigits -= nTrailZero
+      val isZero = nDigits == 0
+      if isZero && nLeadZero == 0 then invalid
+      var decExp = if decSeen then decPt - nLeadZero else nDigits + nTrailZero
+      if i < len && { c = in.charAt(i); c == 'e' || c == 'E' } then
+        var expSign = 1
+        var expVal = 0
+        val reallyBig = Int.MaxValue / 10
+        var expOverflow = false
+        i += 1
+        at(i) match
+          case '-' =>
+            expSign = -1
+            i += 1
+          case '+' => i += 1
+          case _ =>
+        val expAt = i
+        scanning = true
+        while scanning && i < len do
+          if expVal >= reallyBig then expOverflow = true
+          c = in.charAt(i)
+          i += 1
+          if c >= '0' && c <= '9' then expVal = expVal * 10 + (c - '0')
+          else
+            i -= 1
+            scanning = false
+        val expLimit = BIG_DECIMAL_EXPONENT + nDigits + nTrailZero
+        if expOverflow || expVal > expLimit then
+          if !expOverflow && (expSign == 1 && decExp < 0) && (expVal + decExp) < expLimit then decExp += expVal
+          else decExp = expSign * expLimit
+        else decExp = decExp + expSign * expVal
+        if i == expAt then invalid
+      if i < len && (i != len - 1 || (in.charAt(i) != 'f' && in.charAt(i) != 'F' && in.charAt(i) != 'd' && in.charAt(i) != 'D')) then
+        invalid
+      if isZero then return signed(isNegative, 0.0f)
+      floatValue(isNegative, decExp, digits, nDigits)
+
+    // `ASCIIToBinaryBuffer.floatValue`.
+    private def floatValue(isNegative: scala.Boolean, decExponent: Int, digits: Array[scala.Byte], digitCount: Int): scala.Float =
+      var nDigits = digitCount
+      val kDigits = Math.min(nDigits, SINGLE_MAX_DECIMAL_DIGITS + 1)
+      var iValue = digits(0) - '0'
+      var k = 1
+      while k < kDigits do
+        iValue = iValue * 10 + digits(k) - '0'
+        k += 1
+      var fValue: scala.Float = iValue.toFloat
+      var exp = decExponent - kDigits
+      if nDigits <= SINGLE_MAX_DECIMAL_DIGITS then
+        if exp == 0 || fValue == 0.0f then return signed(isNegative, fValue)
+        else if exp >= 0 then
+          if exp <= SINGLE_MAX_SMALL_TEN then
+            fValue *= SINGLE_SMALL_10_POW(exp)
+            return signed(isNegative, fValue)
+          val slop = SINGLE_MAX_DECIMAL_DIGITS - kDigits
+          if exp <= SINGLE_MAX_SMALL_TEN + slop then
+            fValue *= SINGLE_SMALL_10_POW(slop)
+            fValue *= SINGLE_SMALL_10_POW(exp - slop)
+            return signed(isNegative, fValue)
+        else if exp >= -SINGLE_MAX_SMALL_TEN then
+          fValue /= SINGLE_SMALL_10_POW(-exp)
+          return signed(isNegative, fValue)
+      else if decExponent >= nDigits && nDigits + decExponent <= MAX_DECIMAL_DIGITS then
+        var lValue = iValue.toLong
+        k = kDigits
+        while k < nDigits do
+          lValue = lValue * 10L + (digits(k) - '0')
+          k += 1
+        var exact = lValue.toDouble
+        exact *= SMALL_10_POW(decExponent - nDigits)
+        return signed(isNegative, exact.toFloat)
+      var dValue: scala.Double = fValue
+      if exp > 0 then
+        if decExponent > SINGLE_MAX_DECIMAL_EXPONENT + 1 then
+          return if isNegative then scala.Float.NegativeInfinity else scala.Float.PositiveInfinity
+        if (exp & 15) != 0 then dValue *= SMALL_10_POW(exp & 15)
+        exp >>= 4
+        var j = 0
+        while exp > 0 do
+          if (exp & 1) != 0 then dValue *= BIG_10_POW(j)
+          j += 1
+          exp >>= 1
+      else if exp < 0 then
+        exp = -exp
+        if decExponent < SINGLE_MIN_DECIMAL_EXPONENT - 1 then return signed(isNegative, 0.0f)
+        if (exp & 15) != 0 then dValue /= SMALL_10_POW(exp & 15)
+        exp >>= 4
+        var j = 0
+        while exp > 0 do
+          if (exp & 1) != 0 then dValue *= TINY_10_POW(j)
+          j += 1
+          exp >>= 1
+      val approximate = dValue.toFloat
+      fValue =
+        if approximate < scala.Float.MinPositiveValue then scala.Float.MinPositiveValue
+        else if approximate > scala.Float.MaxValue then scala.Float.MaxValue
+        else approximate
+      if nDigits > SINGLE_MAX_NDIGITS then
+        nDigits = SINGLE_MAX_NDIGITS + 1
+        digits(SINGLE_MAX_NDIGITS) = '1'.toByte
+      val text = new java.lang.StringBuilder(nDigits)
+      k = 0
+      while k < nDigits do
+        text.append(digits(k).toChar)
+        k += 1
+      exp = decExponent - nDigits
+      var ieeeBits = Float.floatToIntBits(fValue)
+      val B5 = Math.max(0, -exp)
+      val D5 = Math.max(0, exp)
+      val bigD0 = new java.math.BigInteger(text.toString).multiply(java.math.BigInteger.valueOf(5L).pow(D5))
+      val fiveB5 = java.math.BigInteger.valueOf(5L).pow(B5)
+      var bigD: java.math.BigInteger = null
+      var prevD2 = 0
+      var correcting = true
+      while correcting do
+        var binexp = ieeeBits >>> SINGLE_EXP_SHIFT
+        var bigBbits = ieeeBits & SIGNIF_BIT_MASK
+        if binexp > 0 then bigBbits |= SINGLE_FRACT_HOB
+        else
+          val shift = Integer.numberOfLeadingZeros(bigBbits) - (31 - SINGLE_EXP_SHIFT)
+          bigBbits <<= shift
+          binexp = 1 - shift
+        binexp -= EXP_BIAS
+        val lowOrderZeros = Integer.numberOfTrailingZeros(bigBbits)
+        bigBbits >>>= lowOrderZeros
+        val bigIntExp = binexp - SINGLE_EXP_SHIFT + lowOrderZeros
+        val bigIntNBits = SINGLE_EXP_SHIFT + 1 - lowOrderZeros
+        var B2 = B5
+        var D2 = D5
+        if bigIntExp >= 0 then B2 += bigIntExp else D2 -= bigIntExp
+        var Ulp2 = B2
+        val hulpbias = if binexp <= -EXP_BIAS then binexp + lowOrderZeros + EXP_BIAS else 1 + lowOrderZeros
+        B2 += hulpbias
+        D2 += hulpbias
+        val common2 = Math.min(B2, Math.min(D2, Ulp2))
+        B2 -= common2
+        D2 -= common2
+        Ulp2 -= common2
+        val bigB = java.math.BigInteger.valueOf(bigBbits.toLong).multiply(fiveB5).shiftLeft(B2)
+        if bigD == null || prevD2 != D2 then
+          bigD = bigD0.shiftLeft(D2)
+          prevD2 = D2
+        val cmpResult = bigB.compareTo(bigD)
+        if cmpResult == 0 then correcting = false
+        else
+          val overvalue = cmpResult > 0
+          var diff = if overvalue then bigB.subtract(bigD) else bigD.subtract(bigB)
+          if overvalue && bigIntNBits == 1 && bigIntExp > -EXP_BIAS + 1 then
+            Ulp2 -= 1
+            if Ulp2 < 0 then
+              Ulp2 = 0
+              diff = diff.shiftLeft(1)
+          val halfUlp = diff.compareTo(fiveB5.shiftLeft(Ulp2))
+          if halfUlp < 0 then correcting = false
+          else if halfUlp == 0 then
+            if (ieeeBits & 1) != 0 then ieeeBits += (if overvalue then -1 else 1)
+            correcting = false
+          else
+            ieeeBits += (if overvalue then -1 else 1)
+            if ieeeBits == 0 || ieeeBits == EXP_BIT_MASK then correcting = false
+      if isNegative then ieeeBits |= SIGN_BIT_MASK
+      Float.intBitsToFloat(ieeeBits)
+
+    // `parseHexString`'s float: `HexFloatPattern.VALUE`'s grammar,
+    // `([-+])?0[xX](((hex+)\.?)|((hex*)\.(hex+)))[pP]([-+])?(digit+)[fFdD]?`, scanned by hand
+    // into its groups, the significand's bits copied with round and sticky bits and rounded to a
+    // float's.
+    private def parseHexString(s: String): scala.Float =
+      def invalid: Nothing = throw new NumberFormatException("For input string: \"" + s + "\"")
+      def isHex(c: Char): scala.Boolean = (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F')
+      val len = s.length
+      var i = 0
+      var group1: String = null
+      if i < len && (s.charAt(i) == '-' || s.charAt(i) == '+') then
+        group1 = s.substring(i, i + 1)
+        i += 1
+      if !(i + 1 < len && s.charAt(i) == '0' && (s.charAt(i + 1) == 'x' || s.charAt(i + 1) == 'X')) then invalid
+      i += 2
+      val intStart = i
+      while i < len && isHex(s.charAt(i)) do i += 1
+      val intDigits = s.substring(intStart, i)
+      var group4: String = null
+      var group6: String = null
+      var group7: String = null
+      if i < len && s.charAt(i) == '.' then
+        i += 1
+        val fracStart = i
+        while i < len && isHex(s.charAt(i)) do i += 1
+        val fracDigits = s.substring(fracStart, i)
+        if fracDigits.isEmpty then
+          if intDigits.isEmpty then invalid
+          group4 = intDigits
+        else
+          group6 = intDigits
+          group7 = fracDigits
+      else
+        if intDigits.isEmpty then invalid
+        group4 = intDigits
+      if !(i < len && (s.charAt(i) == 'p' || s.charAt(i) == 'P')) then invalid
+      i += 1
+      var group8: String = null
+      if i < len && (s.charAt(i) == '-' || s.charAt(i) == '+') then
+        group8 = s.substring(i, i + 1)
+        i += 1
+      val expStart = i
+      while i < len && s.charAt(i) >= '0' && s.charAt(i) <= '9' do i += 1
+      if i == expStart then invalid
+      val group9 = s.substring(expStart, i)
+      if i < len && (s.charAt(i) == 'f' || s.charAt(i) == 'F' || s.charAt(i) == 'd' || s.charAt(i) == 'D') then i += 1
+      if i != len then invalid
+      val isNegative = group1 != null && group1 == "-"
+      var significandString: String = null
+      var exponentAdjust = 0
+      var leftDigits = 0
+      var rightDigits = 0
+      if group4 != null then
+        significandString = stripLeadingZeros(group4)
+        leftDigits = significandString.length
+      else
+        val g6 = stripLeadingZeros(group6)
+        leftDigits = g6.length
+        rightDigits = group7.length
+        significandString = g6 + group7
+      significandString = stripLeadingZeros(significandString)
+      val signifLength = significandString.length
+      exponentAdjust = if leftDigits >= 1 then 4 * (leftDigits - 1) else -4 * (rightDigits - signifLength + 1)
+      if signifLength == 0 then return signed(isNegative, 0.0f)
+      val positiveExponent = group8 == null || group8 == "+"
+      val unsignedRawExponent: scala.Long =
+        try Integer.parseInt(group9).toLong
+        catch
+          case _: NumberFormatException =>
+            return if positiveExponent then (if isNegative then scala.Float.NegativeInfinity else scala.Float.PositiveInfinity)
+            else signed(isNegative, 0.0f)
+      val rawExponent = (if positiveExponent then 1L else -1L) * unsignedRawExponent
+      var exponent = rawExponent + exponentAdjust
+      var round = false
+      var sticky = false
+      var nextShift = 0
+      var significand = 0L
+      val leadingDigit = hexDigit(significandString, 0).toLong
+      if leadingDigit == 1 then
+        significand |= leadingDigit << 52
+        nextShift = 52 - 4
+      else if leadingDigit <= 3 then
+        significand |= leadingDigit << 51
+        nextShift = 52 - 5
+        exponent += 1
+      else if leadingDigit <= 7 then
+        significand |= leadingDigit << 50
+        nextShift = 52 - 6
+        exponent += 2
+      else
+        significand |= leadingDigit << 49
+        nextShift = 52 - 7
+        exponent += 3
+      var k = 1
+      while k < signifLength && nextShift >= 0 do
+        significand |= hexDigit(significandString, k).toLong << nextShift
+        nextShift -= 4
+        k += 1
+      if k < signifLength then
+        val currentDigit = hexDigit(significandString, k).toLong
+        nextShift match
+          case -1 =>
+            significand |= (currentDigit & 0xEL) >> 1
+            round = (currentDigit & 0x1L) != 0L
+          case -2 =>
+            significand |= (currentDigit & 0xCL) >> 2
+            round = (currentDigit & 0x2L) != 0L
+            sticky = (currentDigit & 0x1L) != 0
+          case -3 =>
+            significand |= (currentDigit & 0x8L) >> 3
+            round = (currentDigit & 0x4L) != 0L
+            sticky = (currentDigit & 0x3L) != 0
+          case _ =>
+            round = (currentDigit & 0x8L) != 0
+            sticky = (currentDigit & 0x7L) != 0
+        k += 1
+        while k < signifLength && !sticky do
+          sticky = hexDigit(significandString, k) != 0
+          k += 1
+      var floatBits = if isNegative then SIGN_BIT_MASK else 0
+      if exponent >= -126 then
+        if exponent > 127 then floatBits |= EXP_BIT_MASK
+        else
+          val threshShift = 53 - 24 - 1
+          val floatSticky = (significand & ((1L << threshShift) - 1)) != 0 || round || sticky
+          var iValue = (significand >>> threshShift).toInt
+          if (iValue & 3) != 1 || floatSticky then iValue += 1
+          floatBits |= ((exponent.toInt + (EXP_BIAS - 1)) << SINGLE_EXP_SHIFT) + (iValue >> 1)
+      else if exponent >= -149 - 1 then
+        val threshShift = ((53 - 2 + -149) - exponent).toInt
+        val floatSticky = (significand & ((1L << threshShift) - 1)) != 0 || round || sticky
+        var iValue = (significand >>> threshShift).toInt
+        if (iValue & 3) != 1 || floatSticky then iValue += 1
+        floatBits |= iValue >> 1
+      if exponent > 1023 then return if isNegative then scala.Float.NegativeInfinity else scala.Float.PositiveInfinity
+      Float.intBitsToFloat(floatBits)
+
+    private def stripLeadingZeros(s: String): String =
+      if !s.isEmpty && s.charAt(0) == '0' then
+        var i = 1
+        while i < s.length && s.charAt(i) == '0' do i += 1
+        s.substring(i)
+      else s
+
+    private def hexDigit(s: String, position: Int): Int =
+      val c = s.charAt(position)
+      if c >= '0' && c <= '9' then c - '0' else if c >= 'a' && c <= 'f' then c - 'a' + 10 else c - 'A' + 10
+
   @javaDefined
   @jvmClass("java/lang/Boolean")
   final class Boolean private (value: scala.Boolean) extends Comparable[Boolean]:
@@ -603,6 +1087,13 @@ package java.lang:
   @javaDefined
   @jvmClass("java/lang/Boolean")
   object Boolean:
+    // `new Boolean(...)`, the JDK's deprecated constructors: the typer sends them here, as Scala.js
+    // sends those of its hijacked classes to their companion (`JSCodeGen.genNewHijackedClass`).
+    @js("$1")
+    @jvm("new java/lang/Boolean dup $1:Z invokespecial java/lang/Boolean.<init>(Z)V")
+    def newBoolean(value: scala.Boolean): Boolean = Boolean.valueOf(value)
+    @jvm("new java/lang/Boolean dup $1 invokespecial java/lang/Boolean.<init>(Ljava/lang/String;)V")
+    def newBoolean(s: String): Boolean = Boolean.valueOf(parseBoolean(s))
     @jvm("getstatic java/lang/Boolean.TYPE:Ljava/lang/Class;")
     def TYPE: Class[?] = classOf[scala.Boolean]
     @js("($1 === $2 ? 0 : $1 ? 1 : -1)")
@@ -634,6 +1125,11 @@ package java.lang:
   @javaDefined
   @jvmClass("java/lang/Character")
   object Character:
+    // `new Character(...)`, the JDK's deprecated constructors: the typer sends them here, as Scala.js
+    // sends those of its hijacked classes to their companion (`JSCodeGen.genNewHijackedClass`).
+    @js("$1")
+    @jvm("new java/lang/Character dup $1:C invokespecial java/lang/Character.<init>(C)V")
+    def newCharacter(value: Char): Character = Character.valueOf(value)
     @jvm("getstatic java/lang/Character.TYPE:Ljava/lang/Class;")
     def TYPE: Class[?] = classOf[Char]
     @js("65535")

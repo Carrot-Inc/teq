@@ -1,7 +1,10 @@
 // expect: method next in class Counter must be called with () argument
 // expect: method reset in class Counter must be called with () argument
-// expect: method next in class Iterator must be called with () argument
-// expect: method result in class StringBuilder must be called with () argument
+// expect: 32:11: warning: method next must be called with () argument
+// expect: 33:11: warning: method result must be called with () argument
+// expect: 39:3: warning: method println must be called with () argument
+// expect: 40:11: warning: method result must be called with () argument
+// expect: 41:11: warning: method next must be called with () argument
 // expect: method tick must be called with () argument
 // expect: method current in class Counter does not take parameters
 // expect: method size in trait SeqOps does not take parameters
@@ -17,6 +20,11 @@ class Counter:
 
 def tick(): Int = 1
 
+// A Scala 2 class's `def f()`, and one overriding it, called without `()`: scalac's E100 warning.
+class Once extends Iterator[Int]:
+  def hasNext = true
+  def next() = 1
+
 @main def main(): Unit =
   val c = Counter()
   println(c.next)
@@ -28,3 +36,6 @@ def tick(): Int = 1
   println(List(1).size())
   val f = (x: Int) => x
   println(f[Int](1))
+  Console.println
+  println(List.newBuilder[Int].result)
+  println(new Once().next)

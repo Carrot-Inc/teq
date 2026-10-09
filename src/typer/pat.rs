@@ -1799,8 +1799,68 @@ impl<'a> Worker<'a> {
 
     /// The run-time test for `t` on a value of type `sty`; a type argument the scrutinee does
     /// not settle and an abstract type cannot be tested, which is a warning unless `@unchecked`.
-    fn is_java_lang_number(&mut self, c: ClassId) -> bool {
-        self.name_ref(self.syms.class(c).name) == "Number" && self.entered_java_lang_class("Number") == Some(c)
+    fn boxed_kinds(&self, c: ClassId) -> u8 {
+        let info = self.syms.class(c);
+        let Owner::Package(p) = info.owner else { return 0 };
+        let pkg = if self.pkg_is(p, "java.lang") {
+            "java.lang"
+        } else if self.pkg_is(p, "java.io") {
+            "java.io"
+        } else {
+            return 0;
+        };
+        crate::tir::boxed::ancestor(pkg, self.interner.get(info.name))
+    }
+
+    /// A box of `java.lang` is tested as its primitive is (`case _: Int`), its values being the
+    /// primitives on JavaScript and in the interpreter and its class the JVM's box there.
+    fn box_test(&mut self, c: ClassId) -> Option<TypeTest> {
+        let info = self.syms.class(c);
+        let Owner::Package(p) = info.owner else { return None };
+        if !self.pkg_is(p, "java.lang") {
+            return None;
+        }
+        let test = match self.interner.get(info.name) {
+            "Integer" => TypeTest::Int,
+            "Long" => TypeTest::Long,
+            "Short" => TypeTest::Short,
+            "Byte" => TypeTest::Byte,
+            "Float" => TypeTest::Float,
+            "Double" => TypeTest::Number,
+            "Boolean" => TypeTest::Bool,
+            "Character" if self.jvm || self.interp => TypeTest::Char,
+            "Character" => TypeTest::Str,
+            _ => return None,
+        };
+        Some(test)
+    }
+
+    /// On JavaScript the box of a primitive is the primitive, a JS string, number, bigint or
+    /// boolean, so the test of a class the box extends (`CharSequence`, `Comparable`, `Number`)
+    /// takes the primitive by its kind too, as Scala.js tests an ancestor of a hijacked class.
+    fn boxed_test(&mut self, c: ClassId, test: TypeTest) -> TypeTest {
+        let kinds = if self.jvm || self.interp { 0 } else { self.boxed_kinds(c) };
+        if kinds == 0 {
+            return test;
+        }
+        let mut boxed: Option<TestId> = None;
+        for (bit, kind) in [
+            (crate::tir::boxed::STR, TypeTest::Str),
+            (crate::tir::boxed::NUMBER, TypeTest::Number),
+            (crate::tir::boxed::LONG, TypeTest::Long),
+            (crate::tir::boxed::BOOL, TypeTest::Bool),
+            (crate::tir::boxed::UNIT, TypeTest::Unit),
+        ] {
+            if kinds & bit != 0 {
+                let k = self.prog.add_test(kind);
+                boxed = Some(match boxed {
+                    Some(b) => self.prog.add_test(TypeTest::Or(b, k)),
+                    None => k,
+                });
+            }
+        }
+        let class = self.prog.add_test(test);
+        TypeTest::Or(boxed.unwrap(), class)
     }
 
     pub fn test_for(&mut self, t: TypeId, sty: TypeId, span: Span, unchecked: bool) -> TestId {
@@ -1858,6 +1918,7 @@ impl<'a> Worker<'a> {
                     );
                     self.warn(span, msg);
                 }
+                let boxed = self.box_test(c);
                 let b = &self.b;
                 if c == b.int {
                     TypeTest::Int
@@ -1889,6 +1950,8 @@ impl<'a> Worker<'a> {
                     TypeTest::AnyVal
                 } else if self.is_function_class(c) {
                     TypeTest::Function((self.syms.class(c).tparams.len() - 1) as u8)
+                } else if let Some(test) = boxed {
+                    test
                 } else if Some(c) == b.cons_tuple && b.non_empty_tuple.is_some() && !self.link_mode() {
                     // `h *: t` is any tuple of one element or more, as scalac tests it
                     // (`Tuples.isInstanceOfNonEmptyTuple`): the tuple classes extend `NonEmptyTuple`.
@@ -1924,16 +1987,8 @@ impl<'a> Worker<'a> {
                             self.error(span, msg);
                             TypeTest::Always
                         }
-                        (ClassKind::Trait | ClassKind::Enum, _) => TypeTest::Trait(c),
-                        // On JavaScript the boxes of the numeric primitives are JS numbers and bigints.
-                        _ if !self.jvm && !self.interp && self.is_java_lang_number(c) => {
-                            let number = self.prog.add_test(TypeTest::Number);
-                            let long = self.prog.add_test(TypeTest::Long);
-                            let boxed = self.prog.add_test(TypeTest::Or(number, long));
-                            let class = self.prog.add_test(TypeTest::Class(c));
-                            TypeTest::Or(boxed, class)
-                        }
-                        _ => TypeTest::Class(c),
+                        (ClassKind::Trait | ClassKind::Enum, _) => self.boxed_test(c, TypeTest::Trait(c)),
+                        _ => self.boxed_test(c, TypeTest::Class(c)),
                     }
                 }
             }

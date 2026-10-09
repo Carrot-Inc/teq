@@ -42,6 +42,15 @@ pub enum ArgSrc {
     ForLambda(ForBinder, ForRest),
 }
 
+
+/// How a bare `f` of a `def f()` is taken (`auto_applied`).
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum AutoApply {
+    No,
+    Silent,
+    Warned,
+}
+
 impl ArgSrc {
     pub(super) fn ast(self) -> Option<ExprId> {
         match self {
@@ -3004,7 +3013,7 @@ impl<'a> Worker<'a> {
         // are typed, whatever paths the parameters name (a `using trace: Tracer.instance.Type`).
         let constrain_by_expected = explicit_lists == normal_clauses && !self.types.has_paths(sig.ret);
         if constrain_by_expected && explicit_lists <= 1 {
-            open_expected = self.constrain_result_by_expected(ret_ty, expected);
+            open_expected = self.constrain_result_by_expected(&mut ret_ty, expected);
         }
 
         let mut call = call;
@@ -3074,7 +3083,11 @@ impl<'a> Worker<'a> {
                     given_site.end = list.span.end;
                     let first_arg = args_out.len();
                     let outer = std::mem::replace(&mut self.note_paths, dependent);
-                    if self.type_clause_args(clause, list, &subst, &mut args_out) {
+                    let is_java = self.is_java_method(call.sym);
+                    let java = std::mem::replace(&mut self.java_varargs, is_java);
+                    let hoisted = self.type_clause_args(clause, list, &subst, &mut args_out);
+                    self.java_varargs = java;
+                    if hoisted {
                         self.hoist_receiver(&mut call, hoist_mark, span);
                     }
                     self.note_paths = outer;
@@ -3152,14 +3165,18 @@ impl<'a> Worker<'a> {
                 Some(list) if !list.using || self.is_body_file(self.env.file) => {
                     normal_seen += 1;
                     if constrain_by_expected && explicit_lists > 1 && normal_seen == normal_clauses {
-                        open_expected = self.constrain_result_by_expected(ret_ty, expected);
+                        open_expected = self.constrain_result_by_expected(&mut ret_ty, expected);
                     }
                     given_site.end = list.span.end;
                     self.last_arg_types.clear();
                     let first_arg = args_out.len();
                     let outer = std::mem::replace(&mut self.note_paths, dependent);
                     let before = self.diags.items.len();
-                    if self.type_clause_args(clause, list, &subst, &mut args_out) {
+                    let is_java = self.is_java_method(call.sym);
+                    let java = std::mem::replace(&mut self.java_varargs, is_java);
+                    let hoisted = self.type_clause_args(clause, list, &subst, &mut args_out);
+                    self.java_varargs = java;
+                    if hoisted {
                         self.hoist_receiver(&mut call, hoist_mark, span);
                     }
                     self.note_paths = outer;
@@ -3180,7 +3197,12 @@ impl<'a> Worker<'a> {
                     // Missing argument list: eta-expand over this clause and the ones after it.
                     let outer_arity = eta.first().map_or(clause.params.len(), |(syms, _)| syms.len());
                     let mut exp_fn = expected.and_then(|t| self.expected_function(t, outer_arity));
-                    if exp_fn.is_none() && eta.is_empty() && ctor.is_none() {
+                    // Against a type that is no function type (a SAM), a method of no parameters
+                    // or of one repeated is not expanded: it is applied or is an error (dotty's
+                    // `adaptNoArgs`, its arity -1).
+                    let n = clause.params.len();
+                    let sam_arity = n > 1 || (n == 1 && !clause.params[0].repeated);
+                    if exp_fn.is_none() && eta.is_empty() && ctor.is_none() && sam_arity {
                         if let Some(sam) = expected.and_then(|t| self.sam_method(t, clause.params.len())) {
                             let (_, _, sam_sig, sam_subst) = &sam;
                             // A by-name parameter of the method stays one, for the expansion to pass
@@ -3201,7 +3223,8 @@ impl<'a> Worker<'a> {
                         exp_fn = exp_fn.and_then(|(_, ret)| self.as_function(ret));
                     }
                     let bare = exp_fn.is_none() && clause.params.is_empty() && eta.is_empty() && explicit_lists == 0;
-                    let auto_applied = bare && ctor.is_none() && (self.has_java_parens(call.sym) || self.scala2_library_member(call.sym));
+                    let auto = if bare && ctor.is_none() { self.auto_applied(call.sym) } else { AutoApply::No };
+                    let auto_applied = auto != AutoApply::No;
                     // The expansion's function evaluates the receiver and the arguments written
                     // once, as scalac's does: bound to temporaries in front of the lambda.
                     if eta.is_empty() && !auto_applied {
@@ -3310,6 +3333,10 @@ impl<'a> Worker<'a> {
                         self.error(span, msg);
                     }
                     if auto_applied {
+                        if auto == AutoApply::Warned {
+                            let msg = format!("method {} must be called with () argument", self.name_str(self.syms.sym(call.sym).name));
+                            self.warn(span, msg);
+                        }
                         continue;
                     }
                     if bare && ctor.is_none() {
@@ -3705,13 +3732,26 @@ impl<'a> Worker<'a> {
 
     /// Relates the result type of an application to what is expected before its arguments are
     /// typed, kept only where it holds; the open variable an expected variable is, for the
-    /// bounds to conform to once the arguments are in.
-    fn constrain_result_by_expected(&mut self, ret_ty: TypeId, expected: Option<TypeId>) -> Option<TVarId> {
+    /// bounds to conform to once the arguments are in. A result that holds only with its
+    /// wildcards captured becomes the captured type.
+    fn constrain_result_by_expected(&mut self, ret: &mut TypeId, expected: Option<TypeId>) -> Option<TVarId> {
+        let ret_ty = *ret;
         if let Some(exp) = self.concrete_expected(expected) {
             if exp != self.b.t_unit && exp != ANY {
                 let mark = self.snapshot();
                 let outer = std::mem::replace(&mut self.necessary_either, true);
-                let ok = self.is_sub(ret_ty, exp);
+                let mut ok = self.is_sub(ret_ty, exp);
+                if !ok && self.types.has_vars(exp) {
+                    // A wildcard argument of the result (`Collector[T, ?, List[T]]` against an
+                    // enclosing call's `Collector[? >: String, A, R]`) relates captured, as
+                    // dotty's argument check captures it (`Applications.captureWildcardsCompat`).
+                    self.rollback(mark);
+                    let captured = self.capture_wildcards(ret_ty);
+                    ok = captured != ret_ty && self.is_sub(captured, exp);
+                    if ok {
+                        *ret = captured;
+                    }
+                }
                 self.necessary_either = outer;
                 if !ok {
                     self.rollback(mark);
@@ -4120,8 +4160,13 @@ impl<'a> Worker<'a> {
                             None => ERROR,
                         };
                         self.spread_arg = true;
-                        let spliced = self.type_arg(slots[i][0], seq_ty, list.span);
+                        self.spread_was_array = false;
+                        let mut spliced = self.type_arg(slots[i][0], seq_ty, list.span);
                         self.spread_arg = false;
+                        // The JVM's backend passes a Java method an array of its own.
+                        if self.java_varargs && !self.spread_was_array && !self.jvm {
+                            spliced = self.java_varargs_copy(spliced, pty);
+                        }
                         if self.capturing() {
                             self.capture_wrap(spliced, Wrap::Splice(pty));
                         }
@@ -5409,11 +5454,20 @@ impl<'a> Worker<'a> {
         };
         let (parent, _) = self.types.refinements_of(recv_ty);
         let selectable = self.b.selectable.filter(|&s| self.base_type(parent, s).is_some());
+        let (mut recv, mut recv_ty) = (recv, recv_ty);
         if selectable.is_none() {
-            let found = self.path_of(recv).unwrap_or(recv_ty);
-            let msg = format!("type mismatch: found {}, required Selectable | Dynamic", self.show(found));
-            self.error(span, msg);
-            return failed(self, &lists);
+            // The qualifier adapted to `Selectable | Dynamic` first, where an imported conversion
+            // (`reflectiveSelectable`) makes it one (dotty's `Dynamic.handleStructural`).
+            let target = self.b.selectable.map(|s| self.types.class(s, &[]));
+            match target.and_then(|t| self.convert_to_typed(recv, recv_ty, t, span, false)) {
+                Some((te, ty)) if ty != ERROR => (recv, recv_ty) = (te, ty),
+                _ => {
+                    let found = self.path_of(recv).unwrap_or(recv_ty);
+                    let msg = format!("type mismatch: found {}, required Selectable | Dynamic", self.show(found));
+                    self.error(span, msg);
+                    return failed(self, &lists);
+                }
+            }
         }
         if !sig.tparams.is_empty() || targs.is_some() {
             self.error(span, "not supported yet: a structural member with type parameters");
@@ -5434,13 +5488,79 @@ impl<'a> Worker<'a> {
             self.type_clause_args(clause, list, &Vec::new(), &mut out);
             typed.extend(out.into_iter().zip(&clause.params).map(|(te, p)| ArgSrc::Typed(te, p.ty)));
         }
+        let mut selected: Option<(SymId, Subst)> = None;
         let dynamic = if sig.clauses.is_empty() {
             names::SELECT_DYNAMIC
         } else {
+            // dotty's `structuralCall`: the call `applyDynamic(name)(args)` is typed first, and
+            // where the method it selected has a second parameter `Class[?]*` (scala-library's
+            // reflective one), `addClassOfs` adds the classes of the parameters' erasures, which
+            // the parameter types alone must fix (`handleStructural`'s
+            // `TypeErasure.hasStableErasure` and `erasure`); the selected alternative is applied
+            // with them.
+            let class_class = self.java_lang_class("Class");
+            let mut takes_classes = false;
+            if let Some((set, _)) = self.find_member(recv_ty, names::APPLY_DYNAMIC) {
+                let mut call_lists = dynamic_lists.clone();
+                call_lists.push(ArgList { args: typed.clone(), using: false, span });
+                if let Some((sym, owner_subst)) = self.selected_alternative(set, recv_ty, &mut call_lists) {
+                    let classes_param = match &self.sig_of(sym).clauses[..] {
+                        [first, ..] if first.params.len() == 2 && first.params[1].repeated => Some(first.params[1].ty),
+                        _ => None,
+                    };
+                    if let Some(element) = classes_param {
+                        let element = self.types.subst(element, &owner_subst);
+                        let element = self.dealias(element);
+                        takes_classes = matches!(self.types.get(element), Type::Class(c, _) if Some(c) == class_class);
+                    }
+                    if self.syms.alternatives(set).is_some() {
+                        selected = Some((sym, owner_subst));
+                    }
+                }
+            }
+            if takes_classes {
+                let params: Vec<TypeId> = sig.clauses.iter().filter(|cl| !cl.is_using).flat_map(|cl| cl.params.iter().map(|p| p.ty)).collect();
+                let mut classes = Vec::with_capacity(params.len());
+                for p in params {
+                    match self.stable_erasure(p) {
+                        Some(super::site::Erased::Of(c, 0)) => classes.push(c),
+                        // `classOf` of an array is the array class on every target.
+                        Some(super::site::Erased::Of(..)) => classes.push(self.b.array),
+                        Some(super::site::Erased::Null(_)) => classes.push(self.b.null),
+                        Some(super::site::Erased::Nothing(_)) => classes.push(self.b.any_ref),
+                        None => {
+                            let msg = format!(
+                                "Structural access not allowed on method {} because it has a parameter type with an unstable erasure",
+                                self.name_str(name)
+                            );
+                            self.error(span, msg);
+                            return (self.prog.add(TExpr::Unit), ERROR);
+                        }
+                    }
+                }
+                let class_ty = match class_class {
+                    Some(k) => self.types.class(k, &[WILD]),
+                    None => ANY,
+                };
+                for c in classes {
+                    let class_of = self.prog.add(TExpr::ClassOf(c));
+                    self.prog.set_type(class_of, class_ty);
+                    dynamic_lists[0].args.push(ArgSrc::Typed(class_of, class_ty));
+                }
+            }
             dynamic_lists.push(ArgList { args: typed, using: false, span });
             names::APPLY_DYNAMIC
         };
-        let (te, _) = self.apply_member(recv, recv_ty, dynamic, None, dynamic_lists, span, None);
+        let (te, _) = match selected {
+            // The overloaded `applyDynamic`'s selected alternative, which dotty's tree keeps when
+            // the classes join its arguments.
+            Some((sym, owner_subst)) => {
+                self.check_access(sym, None, span);
+                let call = MethodCall { recv: Some(recv), sym, owner_subst, ext_recv: None, prefix: None };
+                self.apply_method(call, None, None, dynamic_lists, span, None, false).unwrap()
+            }
+            None => self.apply_member(recv, recv_ty, dynamic, None, dynamic_lists, span, None),
+        };
         let rest: Vec<ArgList> = lists.collect();
         if rest.is_empty() {
             return (te, sig.ret);
@@ -5627,7 +5747,7 @@ impl<'a> Worker<'a> {
 
     pub(super) fn has_java_parens(&self, sym: SymId) -> bool {
         let info = self.syms.sym(sym);
-        info.java_defined || matches!(info.name, names::TO_STRING | names::HASH_CODE | names::CLONE) || self.in_java_package(sym) || self.string_member_of_std(sym) || self.scala2_std_member(sym) || self.predef_println(sym)
+        info.java_defined || matches!(info.name, names::TO_STRING | names::HASH_CODE | names::CLONE) || self.in_java_package(sym) || self.string_member_of_std(sym) || self.scala2_std_member(sym)
     }
 
     /// The std's `println()`, which stands for scala-library's `Predef.println()`: a Scala 2
@@ -5656,6 +5776,26 @@ impl<'a> Worker<'a> {
         receiver == Some(self.b.t_string)
     }
 
+    /// A method of Java's, read from a class file or standing for one in a `java.*` package of the
+    /// std: dotty's `JavaDefined`, whose varargs take a spread sequence as an array.
+    fn is_java_method(&self, sym: SymId) -> bool {
+        sym.0 != u32::MAX && (self.syms.sym(sym).java_defined || self.in_java_package(sym))
+    }
+
+    /// `javaVarargs(xs)`: the copy of a sequence spread into a Java method's varargs.
+    fn java_varargs_copy(&mut self, spliced: TExprId, elem: TypeId) -> TExprId {
+        let Some(copy) = self.std_def("javaVarargs") else { return spliced };
+        let seq_ty = self.prog.type_of(spliced);
+        let args = self.prog.list(&[spliced]);
+        let subst = self.syms.sym(copy).sig.as_ref().map_or(Vec::new(), |sig| sig.tparams.iter().map(|&t| (t, elem)).collect());
+        let call = MethodCall { recv: None, sym: copy, owner_subst: subst, ext_recv: None, prefix: None };
+        let te = self.build_call(&call, args);
+        if let Some(t) = seq_ty {
+            self.prog.set_type(te, t);
+        }
+        te
+    }
+
     /// Whether `sym` is a member of a class of a `java.*` package: a JDK class read from its
     /// class file, the std's platform layer or a source stand-in for one, whose members all
     /// take the Java parentheses rule, as scalac takes the JDK's own members.
@@ -5681,11 +5821,43 @@ impl<'a> Worker<'a> {
         self.error(span, msg);
     }
 
-    /// A member of a class of a Scala 2 library (`Predef.println()`, `Iterator.next()` of
-    /// scala-library), whose `def f()` scalac's `matchNullaryLoosely` lets a bare `f` call, with
-    /// the E100 warning, which teq leaves out.
-    fn scala2_library_member(&self, sym: SymId) -> bool {
-        matches!(self.syms.sym(sym).owner, Owner::Class(c) if self.is_scala2_class(c))
+    /// Whether a bare `f` of a `def f()` calls it, as dotty's `isAutoApplied` decides
+    /// (`Typer.adaptNoArgsUnappliedMethod`): when `matchNullaryLoosely` holds of the method or of
+    /// one it overrides, a method of Java's, of `Any` or of a Scala 2 class; with the E100 warning
+    /// (`warnScala2`) where one of them is Scala 2's and none it overrides is Java's or `Any`'s.
+    fn auto_applied(&mut self, sym: SymId) -> AutoApply {
+        let mut roots = Vec::new();
+        if matches!(self.syms.sym(sym).owner, Owner::Class(_)) {
+            self.root_declarations(sym, 0, &mut roots);
+        }
+        let overridden: Vec<SymId> = roots.into_iter().filter(|&r| r != sym).collect();
+        // A member the std marks Java's (`@javaDefined`, `Math.random()` of the std's `Math`) is
+        // no Scala 2 class's, and `clone()`, `toString()` and `hashCode()` override `Object`'s.
+        let own_java = self.has_java_parens(sym);
+        let mut scala2 = !own_java && self.scala2_member(sym);
+        let mut java = matches!(self.syms.sym(sym).name, names::TO_STRING | names::HASH_CODE | names::CLONE);
+        for &r in &overridden {
+            let r_java = self.has_java_parens(r);
+            scala2 |= !r_java && self.scala2_member(r);
+            java |= r_java;
+        }
+        if scala2 && !java {
+            AutoApply::Warned
+        } else if scala2 || java || own_java {
+            AutoApply::Silent
+        } else {
+            AutoApply::No
+        }
+    }
+
+    /// A member of a Scala 2 class, which dotty flags `Scala2x`: of a Scala 2 library's
+    /// (`Iterator.next()` of scala-library), or of the lean std's standing for one, `Predef`'s
+    /// `println()` among them.
+    fn scala2_member(&self, sym: SymId) -> bool {
+        match self.syms.sym(sym).owner {
+            Owner::Class(c) => self.is_scala2_class(c) || self.is_std_scala2_class(c),
+            _ => self.predef_println(sym),
+        }
     }
 
     /// Whether `sym` is a right-associative extension method, the one kind of method whose
@@ -7689,8 +7861,11 @@ impl<'a> Worker<'a> {
     /// parameter's makes of it is the typer's, which a Java parameter takes as the array itself
     /// (`Program::spread_bits`); a sequence written in the program is no such array.
     fn mark_spread_array(&mut self, spread: bool, te: TExprId, ty: TypeId) {
-        if spread && self.array_element(ty).is_some() {
-            self.prog.mark_spread(te);
+        if spread {
+            self.spread_was_array = self.array_element(ty).is_some();
+            if self.spread_was_array {
+                self.prog.mark_spread(te);
+            }
         }
     }
 

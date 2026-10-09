@@ -895,6 +895,13 @@ impl<'a> Worker<'a> {
                 return Some(r);
             }
         }
+        // A std object standing for a JDK class takes the class's nested classes it leaves out
+        // (`AbstractMap.SimpleEntry` on the JVM) when one is asked for.
+        if self.loaded.is_some() && self.syms.class(c).def.is_some() && self.java_member_miss(c) {
+            if let Some(&n) = self.syms.class(c).nested.get(&name) {
+                return Some(TypeRef::Class(n));
+            }
+        }
         self.exports_of(c)?.types.get(&name).copied()
     }
 

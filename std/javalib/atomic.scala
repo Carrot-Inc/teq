@@ -181,6 +181,22 @@ package java.util.function:
   @jvmClass("java/util/function/Predicate")
   trait Predicate[T]:
     def test(t: T): scala.Boolean
+    // The JDK's default methods.
+    def and(other: Predicate[? >: T]): Predicate[T] =
+      java.util.Objects.requireNonNull(other)
+      t => test(t) && other.test(t)
+    def negate(): Predicate[T] = t => !test(t)
+    def or(other: Predicate[? >: T]): Predicate[T] =
+      java.util.Objects.requireNonNull(other)
+      t => test(t) || other.test(t)
+
+  @jvmClass("java/util/function/Predicate")
+  object Predicate:
+    def isEqual[T](targetRef: Any): Predicate[T] =
+      if targetRef == null then t => t == null else t => targetRef.equals(t)
+    def not[T](target: Predicate[? >: T]): Predicate[T] =
+      java.util.Objects.requireNonNull(target)
+      target.negate().asInstanceOf[Predicate[T]]
 
   @jvmClass("java/util/function/IntFunction")
   trait IntFunction[R]:

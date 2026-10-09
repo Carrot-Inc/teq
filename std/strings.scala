@@ -43,9 +43,9 @@ extension (s: String)
   @js("$parseDouble($0)")
   @jvm("invokestatic java/lang/Double.parseDouble(Ljava/lang/String;)D")
   def toDouble: Double
-  @js("Math.fround($parseDouble($0))")
+  // scala-library's: `java.lang.Float.parseFloat`, the JDK's `FloatingDecimal`.
   @jvm("invokestatic java/lang/Float.parseFloat(Ljava/lang/String;)F")
-  def toFloat: Float
+  def toFloat: Float = java.lang.Float.parseFloat(s)
   @js("$parseInt($0) << 24 >> 24")
   @jvm("invokestatic java/lang/Byte.parseByte(Ljava/lang/String;)B")
   def toByte: Byte

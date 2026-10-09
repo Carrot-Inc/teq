@@ -84,27 +84,41 @@ object chaining:
       f(self)
       self
 
-// java.util.Random: the same numbers for the same seed.
-trait RandomGenerator:
-  def next(bits: Int): Int
-  def setSeed(seed: Long): Unit
-  // Without an argument the default stands for "no bound".
-  def nextInt(bound: Int = -2147483648): Int =
-    if bound == -2147483648 then next(32)
-    else if bound <= 0 then illegalArgument("bound must be positive")
-    else if (bound & -bound) == bound then ((bound.toLong * next(31).toLong) >> 31).toInt
+// scala-library's: a wrapper of a `java.util.Random`, whose numbers it gives, the same for the
+// same seed as the JDK's.
+class Random(val self: java.util.Random):
+  def this(seed: Long) = this(new java.util.Random(seed))
+  def this(seed: Int) = this(seed.toLong)
+  def this() = this(new java.util.Random())
+  def nextBoolean(): Boolean = self.nextBoolean()
+  def nextBytes(bytes: Array[Byte]): Unit = self.nextBytes(bytes)
+  def nextDouble(): Double = self.nextDouble()
+  def nextFloat(): Float = self.nextFloat()
+  def nextGaussian(): Double = self.nextGaussian()
+  def nextInt(): Int = self.nextInt()
+  def nextInt(n: Int): Int = self.nextInt(n)
+  def between(minInclusive: Int, maxExclusive: Int): Int =
+    require(minInclusive < maxExclusive, "Invalid bounds")
+    val difference = maxExclusive - minInclusive
+    if difference >= 0 then nextInt(difference) + minInclusive
     else
-      var bits = next(31)
-      var value = bits % bound
-      while bits - value + (bound - 1) < 0 do
-        bits = next(31)
-        value = bits % bound
-      value
-  def nextLong(): Long = (next(32).toLong << 32) + next(32).toLong
-  def nextDouble(): Double = ((next(26).toLong << 27) + next(27).toLong).toDouble / 9007199254740992.0
-  def nextBoolean(): Boolean = next(1) != 0
-  def nextPrintableChar(): Char = (nextInt(94) + 33).toChar
-  def between(minInclusive: Int, maxExclusive: Int): Int = nextInt(maxExclusive - minInclusive) + minInclusive
+      var n = nextInt()
+      while n < minInclusive || n >= maxExclusive do n = nextInt()
+      n
+  def nextLong(): Long = self.nextLong()
+  def nextLong(n: Long): Long =
+    require(n > 0, "n must be positive")
+    var offset = 0L
+    var rest = n
+    while rest >= Int.MaxValue do
+      val bits = nextInt(2)
+      val half = rest >>> 1
+      val next = if (bits & 2) == 0 then half else rest - half
+      if (bits & 1) == 0 then offset += rest - next
+      rest = next
+    offset + nextInt(rest.toInt)
+  def nextPrintableChar(): Char = (self.nextInt(127 - 33) + 33).toChar
+  def setSeed(seed: Long): Unit = self.setSeed(seed)
   def shuffle[A, CC[_]](xs: IterableOps[A, CC, Any]): CC[A] =
     val items = rawItems(xs)
     var n = items.length
@@ -116,25 +130,8 @@ trait RandomGenerator:
       n -= 1
     xs.buildCC(items)
 
-def scrambleSeed(seed: Long): Long = (seed ^ 0x5DEECE66DL) & 0xFFFFFFFFFFFFL
-
-@js("BigInt(Math.floor(Math.random() * 281474976710656))")
-@jvm("invokestatic java/lang/System.nanoTime()J")
-def freshSeed(): Long
-
-final class Random(init: Long = freshSeed()) extends RandomGenerator:
-  private var seed = scrambleSeed(init)
-  def setSeed(value: Long): Unit = seed = scrambleSeed(value)
-  def next(bits: Int): Int =
-    seed = (seed * 0x5DEECE66DL + 0xBL) & 0xFFFFFFFFFFFFL
-    (seed >>> (48 - bits)).toInt
-
-object Random extends RandomGenerator:
-  private var seed = scrambleSeed(freshSeed())
-  def setSeed(value: Long): Unit = seed = scrambleSeed(value)
-  def next(bits: Int): Int =
-    seed = (seed * 0x5DEECE66DL + 0xBL) & 0xFFFFFFFFFFFFL
-    (seed >>> (48 - bits)).toInt
+object Random extends Random:
+  implicit def javaRandomToRandom(r: java.util.Random): Random = new Random(r)
 
 // scala-library's `Sorting`: sorts an array in place by an ordering; `stableSort` keeps equal
 // elements in their order, as the std's sort does.

@@ -7,6 +7,9 @@ object ScalaRunTime:
   def _toString(x: Product): String = x.productIterator.mkString(x.productPrefix + "(", ",", ")")
   def hash(x: Any): Int = x.##
   def isArray(x: Any): Boolean = x.isInstanceOf[Array[?]]
+  // scala-library's: `f` of a non-null `a` (its `Predef.wrapString` and the other wrappers).
+  private[scala] inline def mapNull[A, B](a: A, inline f: B): B =
+    if (a: A | Null) == null then null.asInstanceOf[B] else f
 
 object Scala3RunTime:
   def assertFailed(message: Any): Nothing = throw new AssertionError("assertion failed: " + message)

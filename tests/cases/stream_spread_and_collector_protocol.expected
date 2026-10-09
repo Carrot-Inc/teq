@@ -1,0 +1,41 @@
+before
+after
+1
+[x, y]
+supplier
+accumulator
+combiner
+asked UNORDERED
+asked IDENTITY_FINISH
+finisher
+2
+asked CONCURRENT
+supplier
+accumulator
+combiner
+asked UNORDERED
+asked IDENTITY_FINISH
+finisher
+2
+asked CONCURRENT
+asked UNORDERED
+supplier
+accumulator
+combiner
+asked UNORDERED
+asked IDENTITY_FINISH
+finisher
+2
+asked CONCURRENT
+asked UNORDERED
+supplier
+accumulator
+asked IDENTITY_FINISH
+finisher
+2
+asked CONCURRENT
+supplier
+accumulator
+asked IDENTITY_FINISH
+finisher
+2

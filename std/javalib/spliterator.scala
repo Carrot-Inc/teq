@@ -283,6 +283,99 @@ package java.util.function:
   trait DoubleConsumer:
     def accept(value: Double): Unit
 
+  @jvmClass("java/util/function/IntPredicate")
+  trait IntPredicate:
+    def test(value: Int): scala.Boolean
+    def and(other: IntPredicate): IntPredicate =
+      java.util.Objects.requireNonNull(other)
+      v => test(v) && other.test(v)
+    def negate(): IntPredicate = v => !test(v)
+    def or(other: IntPredicate): IntPredicate =
+      java.util.Objects.requireNonNull(other)
+      v => test(v) || other.test(v)
+
+  @jvmClass("java/util/function/IntBinaryOperator")
+  trait IntBinaryOperator:
+    def applyAsInt(left: Int, right: Int): Int
+
+  @jvmClass("java/util/function/ObjIntConsumer")
+  trait ObjIntConsumer[T]:
+    def accept(t: T, value: Int): Unit
+
+  @jvmClass("java/util/function/LongPredicate")
+  trait LongPredicate:
+    def test(value: Long): scala.Boolean
+    def and(other: LongPredicate): LongPredicate =
+      java.util.Objects.requireNonNull(other)
+      v => test(v) && other.test(v)
+    def negate(): LongPredicate = v => !test(v)
+    def or(other: LongPredicate): LongPredicate =
+      java.util.Objects.requireNonNull(other)
+      v => test(v) || other.test(v)
+
+  @jvmClass("java/util/function/LongBinaryOperator")
+  trait LongBinaryOperator:
+    def applyAsLong(left: Long, right: Long): Long
+
+  @jvmClass("java/util/function/ObjLongConsumer")
+  trait ObjLongConsumer[T]:
+    def accept(t: T, value: Long): Unit
+
+  @jvmClass("java/util/function/DoublePredicate")
+  trait DoublePredicate:
+    def test(value: Double): scala.Boolean
+    def and(other: DoublePredicate): DoublePredicate =
+      java.util.Objects.requireNonNull(other)
+      v => test(v) && other.test(v)
+    def negate(): DoublePredicate = v => !test(v)
+    def or(other: DoublePredicate): DoublePredicate =
+      java.util.Objects.requireNonNull(other)
+      v => test(v) || other.test(v)
+
+  @jvmClass("java/util/function/DoubleBinaryOperator")
+  trait DoubleBinaryOperator:
+    def applyAsDouble(left: Double, right: Double): Double
+
+  @jvmClass("java/util/function/ObjDoubleConsumer")
+  trait ObjDoubleConsumer[T]:
+    def accept(t: T, value: Double): Unit
+
+  @jvmClass("java/util/function/IntToLongFunction")
+  trait IntToLongFunction:
+    def applyAsLong(value: Int): Long
+
+  @jvmClass("java/util/function/IntToDoubleFunction")
+  trait IntToDoubleFunction:
+    def applyAsDouble(value: Int): Double
+
+  @jvmClass("java/util/function/LongToIntFunction")
+  trait LongToIntFunction:
+    def applyAsInt(value: Long): Int
+
+  @jvmClass("java/util/function/LongToDoubleFunction")
+  trait LongToDoubleFunction:
+    def applyAsDouble(value: Long): Double
+
+  @jvmClass("java/util/function/DoubleToIntFunction")
+  trait DoubleToIntFunction:
+    def applyAsInt(value: Double): Int
+
+  @jvmClass("java/util/function/DoubleToLongFunction")
+  trait DoubleToLongFunction:
+    def applyAsLong(value: Double): Long
+
+  @jvmClass("java/util/function/DoubleUnaryOperator")
+  trait DoubleUnaryOperator:
+    def applyAsDouble(operand: Double): Double
+
+  @jvmClass("java/util/function/LongFunction")
+  trait LongFunction[R]:
+    def apply(value: Long): R
+
+  @jvmClass("java/util/function/DoubleFunction")
+  trait DoubleFunction[R]:
+    def apply(value: Double): R
+
   @jvmClass("java/util/function/IntSupplier")
   trait IntSupplier:
     def getAsInt(): Int

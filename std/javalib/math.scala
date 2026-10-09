@@ -269,6 +269,9 @@ package java.math:
     def this(text: String, radix: Int) = this(parseBig(text, radix))
     def this(bytes: Array[Byte]) = this(
       if bytes.length == 0 then throw new java.lang.NumberFormatException("Zero length BigInteger") else bigOfBytes(bytes, false))
+    // The JDK's random and probable prime ones (`randomBits`, `BigInteger.probablePrime`'s).
+    def this(numBits: Int, rnd: java.util.Random) = this(Primes.random(numBits, rnd).bits)
+    def this(bitLength: Int, certainty: Int, rnd: java.util.Random) = this(Primes.prime(bitLength, certainty, rnd).bits)
     def this(signum: Int, magnitude: Array[Byte]) = this({
       if signum < -1 || signum > 1 then throw new java.lang.NumberFormatException("Invalid signum value")
       val m = bigOfBytes(magnitude, true)
@@ -411,6 +414,218 @@ package java.math:
     def TEN: BigInteger = tenValue
     @jvm("invokestatic java/math/BigInteger.valueOf(J)Ljava/math/BigInteger;")
     def valueOf(l: Long): BigInteger = new BigInteger(bigOfLong(l))
+    @jvm("invokestatic java/math/BigInteger.probablePrime(ILjava/util/Random;)Ljava/math/BigInteger;")
+    def probablePrime(bitLength: Int, rnd: java.util.Random): BigInteger = Primes.prime(bitLength, 100, rnd)
+
+  // The JDK's random and prime `BigInteger`s, drawing from a `java.util.Random` as the JDK's do,
+  // so that one seed gives the JDK's numbers: `randomBits`, `probablePrime`
+  // (`smallPrime` below 95 bits, `largePrime` over a `BitSieve` above), `primeToCertainty`.
+  object Primes:
+    private val smallPrimeProduct = BigInteger.valueOf(3L * 5 * 7 * 11 * 13 * 17 * 19 * 23 * 29 * 31 * 37 * 41)
+
+    def random(numBits: Int, rnd: java.util.Random): BigInteger =
+      if numBits < 0 then throw new IllegalArgumentException("numBits must be non-negative")
+      val numBytes = ((numBits.toLong + 7) / 8).toInt
+      val bytes = new Array[Byte](numBytes)
+      if numBytes > 0 then
+        rnd.nextBytes(bytes)
+        val excess = 8 * numBytes - numBits
+        bytes(0) = (bytes(0) & ((1 << (8 - excess)) - 1)).toByte
+      new BigInteger(1, bytes)
+
+    def prime(bitLength: Int, certainty: Int, rnd: java.util.Random): BigInteger =
+      if bitLength < 2 then throw new java.lang.ArithmeticException("bitLength < 2")
+      if bitLength < 95 then smallPrime(bitLength, certainty, rnd) else largePrime(bitLength, certainty, rnd)
+
+    private def smallPrime(bitLength: Int, certainty: Int, rnd: java.util.Random): BigInteger =
+      val magLen = (bitLength + 31) >>> 5
+      val temp = new Array[Int](magLen)
+      val highBit = 1 << ((bitLength + 31) & 0x1f)
+      val highMask = (highBit << 1) - 1
+      var found: BigInteger = null
+      while found == null do
+        var i = 0
+        while i < magLen do
+          temp(i) = rnd.nextInt()
+          i += 1
+        temp(0) = (temp(0) & highMask) | highBit
+        if bitLength > 2 then temp(magLen - 1) |= 1
+        var p = BigInteger.ZERO
+        i = 0
+        while i < magLen do
+          p = p.shiftLeft(32).or(BigInteger.valueOf(temp(i).toLong & 0xffffffffL))
+          i += 1
+        val composite = bitLength > 6 && {
+          val r = p.remainder(smallPrimeProduct).longValue
+          r % 3 == 0 || r % 5 == 0 || r % 7 == 0 || r % 11 == 0 || r % 13 == 0 || r % 17 == 0 || r % 19 == 0 ||
+            r % 23 == 0 || r % 29 == 0 || r % 31 == 0 || r % 37 == 0 || r % 41 == 0
+        }
+        if !composite && (bitLength < 4 || primeToCertainty(p, certainty, rnd)) then found = p
+      found
+
+    private def largePrime(bitLength: Int, certainty: Int, rnd: java.util.Random): BigInteger =
+      val searchLen = bitLength / 20 * 64
+      var p = random(bitLength, rnd).setBit(bitLength - 1).clearBit(0)
+      var candidate = sieve(p, searchLen).retrieve(p, certainty, rnd)
+      while candidate == null || candidate.bitLength != bitLength do
+        p = p.add(BigInteger.valueOf(2L * searchLen))
+        if p.bitLength != bitLength then p = random(bitLength, rnd).setBit(bitLength - 1)
+        p = p.clearBit(0)
+        candidate = sieve(p, searchLen).retrieve(p, certainty, rnd)
+      candidate
+
+    def primeToCertainty(p: BigInteger, certainty: Int, rnd: java.util.Random): Boolean =
+      val n = (Math.min(certainty, Int.MaxValue - 1) + 1) / 2
+      val size = p.bitLength
+      if size < 100 then passesMillerRabin(p, Math.min(n, 50), rnd)
+      else
+        val rounds = if size < 256 then 27 else if size < 512 then 15 else if size < 768 then 8 else if size < 1024 then 4 else 2
+        passesMillerRabin(p, Math.min(n, rounds), rnd) && passesLucasLehmer(p)
+
+    private def passesMillerRabin(p: BigInteger, iterations: Int, rnd: java.util.Random): Boolean =
+      val pMinusOne = p.subtract(BigInteger.ONE)
+      val a = pMinusOne.getLowestSetBit
+      val m = pMinusOne.shiftRight(a)
+      var passes = true
+      var i = 0
+      while passes && i < iterations do
+        var b = random(p.bitLength, rnd)
+        while b.compareTo(BigInteger.ONE) <= 0 || b.compareTo(p) >= 0 do b = random(p.bitLength, rnd)
+        var j = 0
+        var z = b.modPow(m, p)
+        var done = false
+        while !done && !((j == 0 && z == BigInteger.ONE) || z == pMinusOne) do
+          if (j > 0 && z == BigInteger.ONE) || { j += 1; j == a } then
+            passes = false
+            done = true
+          else z = z.modPow(BigInteger.TWO, p)
+        i += 1
+      passes
+
+    private def passesLucasLehmer(p: BigInteger): Boolean =
+      val pPlusOne = p.add(BigInteger.ONE)
+      var d = 5
+      while jacobiSymbol(d, p) != -1 do d = if d < 0 then Math.abs(d) + 2 else -(d + 2)
+      lucasLehmerSequence(d, pPlusOne, p).mod(p) == BigInteger.ZERO
+
+    private def jacobiSymbol(p0: Int, n: BigInteger): Int =
+      if p0 == 0 then return 0
+      var p = p0
+      var j = 1
+      var u = n.intValue
+      if p < 0 then
+        p = -p
+        val n8 = u & 7
+        if n8 == 3 || n8 == 7 then j = -j
+      while (p & 3) == 0 do p >>= 2
+      if (p & 1) == 0 then
+        p >>= 1
+        if ((u ^ (u >> 1)) & 2) != 0 then j = -j
+      if p == 1 then return j
+      if (p & u & 2) != 0 then j = -j
+      u = n.mod(BigInteger.valueOf(p.toLong)).intValue
+      while u != 0 do
+        while (u & 3) == 0 do u >>= 2
+        if (u & 1) == 0 then
+          u >>= 1
+          if ((p ^ (p >> 1)) & 2) != 0 then j = -j
+        if u == 1 then return j
+        val t = u
+        u = p
+        p = t
+        if (u & p & 2) != 0 then j = -j
+        u %= p
+      0
+
+    private def lucasLehmerSequence(z: Int, k: BigInteger, n: BigInteger): BigInteger =
+      val d = BigInteger.valueOf(z.toLong)
+      var u = BigInteger.ONE
+      var v = BigInteger.ONE
+      var i = k.bitLength - 2
+      while i >= 0 do
+        var u2 = u.multiply(v).mod(n)
+        var v2 = v.multiply(v).add(d.multiply(u.multiply(u))).mod(n)
+        if v2.testBit(0) then v2 = v2.subtract(n)
+        v2 = v2.shiftRight(1)
+        u = u2
+        v = v2
+        if k.testBit(i) then
+          u2 = u.add(v).mod(n)
+          if u2.testBit(0) then u2 = u2.subtract(n)
+          u2 = u2.shiftRight(1)
+          v2 = v.add(d.multiply(u)).mod(n)
+          if v2.testBit(0) then v2 = v2.subtract(n)
+          v2 = v2.shiftRight(1)
+          u = u2
+          v = v2
+        i -= 1
+      u
+
+    // The JDK's `BitSieve`: bit `i` stands for `base + 2i + 1`, set where a small prime divides it.
+    private final class Sieve(val length: Int):
+      val bits = new Array[Long](((length - 1) >>> 6) + 1)
+      def get(i: Int): Boolean = (bits(i >>> 6) & (1L << (i & 63))) != 0
+      def set(i: Int): Unit = bits(i >>> 6) |= 1L << (i & 63)
+      def search(limit: Int, start: Int): Int =
+        if start >= limit then -1
+        else
+          var index = start
+          var found = -1
+          while found < 0 && {
+            if !get(index) then found = index
+            index += 1
+            found < 0 && index < limit - 1
+          } do ()
+          found
+      def single(limit: Int, start0: Int, step: Int): Unit =
+        var start = start0
+        while start < limit do
+          set(start)
+          start += step
+      def retrieve(init: BigInteger, certainty: Int, rnd: java.util.Random): BigInteger =
+        var offset = 1
+        var i = 0
+        while i < bits.length do
+          var next = ~bits(i)
+          var j = 0
+          while j < 64 do
+            if (next & 1) == 1 then
+              val candidate = init.add(BigInteger.valueOf(offset.toLong))
+              if primeToCertainty(candidate, certainty, rnd) then return candidate
+            next >>>= 1
+            offset += 2
+            j += 1
+          i += 1
+        null
+
+    private lazy val smallSieve: Sieve =
+      val s = new Sieve(150 * 64)
+      s.set(0)
+      var nextIndex = 1
+      var nextPrime = 3
+      while {
+        s.single(s.length, nextIndex + nextPrime, nextPrime)
+        nextIndex = s.search(s.length, nextIndex + 1)
+        nextPrime = 2 * nextIndex + 1
+        nextIndex > 0 && nextPrime < s.length
+      } do ()
+      s
+
+    private def sieve(base: BigInteger, searchLen: Int): Sieve =
+      val s = new Sieve(searchLen)
+      val small = smallSieve
+      var step = small.search(small.length, 0)
+      var convertedStep = step * 2 + 1
+      while {
+        var start = base.mod(BigInteger.valueOf(convertedStep.toLong)).intValue
+        start = convertedStep - start
+        if start % 2 == 0 then start += convertedStep
+        s.single(searchLen, (start - 1) / 2, convertedStep)
+        step = small.search(small.length, step + 1)
+        convertedStep = step * 2 + 1
+        step > 0
+      } do ()
+      s
 
   // `[sign] digits [. digits] [E [sign] digits]`: the digits are the unscaled value, the
   // fraction's length less the exponent is the scale.
@@ -471,6 +686,9 @@ package java.math:
     def this(parsed: BigDecimal) = this(parsed.unscaledValue, parsed.scale)
     def this(text: String) = this(parseDecimal(text))
     def this(text: String, mc: MathContext) = this(parseDecimal(text).round(mc))
+    // The JDK's `BigDecimal(char[])` and `(char[], MathContext)`: the characters' number.
+    def this(in: Array[Char]) = this(new String(in))
+    def this(in: Array[Char], mc: MathContext) = this(new String(in), mc)
     def this(value: Int) = this(BigInteger.valueOf(value.toLong), 0)
     def this(value: Int, mc: MathContext) = this(BigDecimal.valueOf(value.toLong).round(mc))
     def this(value: Long) = this(BigInteger.valueOf(value), 0)

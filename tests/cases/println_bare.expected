@@ -1,3 +1,9 @@
+tests/cases/println_bare.scala:6:3: warning: method println must be called with () argument
+    println
+    ^^^^^^^
+tests/cases/println_bare.scala:9:5: warning: method println must be called with () argument
+      println
+      ^^^^^^^
 a
 
 b

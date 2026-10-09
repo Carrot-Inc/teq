@@ -21,6 +21,8 @@ package java.lang:
     final def isDaemon(): scala.Boolean = false
     final def isAlive(): scala.Boolean = true
     def getStackTrace(): Array[StackTraceElement] = new Array[StackTraceElement](0)
+    // The one thread runs; another was never started.
+    def getState(): Thread.State = if this eq Thread.currentThread() then Thread.State.RUNNABLE else Thread.State.NEW
 
   @jvmClass("java/lang/Thread")
   object Thread:
@@ -33,6 +35,28 @@ package java.lang:
     def onSpinWait(): Unit = ()
     trait UncaughtExceptionHandler:
       def uncaughtException(t: Thread, e: Throwable): Unit
+
+    @jvmClass("java/lang/Thread$State")
+    final class State private[lang] (label: String, position: Int) extends Enum[State]:
+      override def name(): String = label
+      override def ordinal(): Int = position
+      override def toString: String = label
+      override def compareTo(that: State): Int = position - that.ordinal()
+      override def hashCode: Int = label.hashCode
+      override def equals(that: Any): scala.Boolean = that.asInstanceOf[AnyRef] eq this
+
+    @jvmClass("java/lang/Thread$State")
+    object State:
+      val NEW: State = new State("NEW", 0)
+      val RUNNABLE: State = new State("RUNNABLE", 1)
+      val BLOCKED: State = new State("BLOCKED", 2)
+      val WAITING: State = new State("WAITING", 3)
+      val TIMED_WAITING: State = new State("TIMED_WAITING", 4)
+      val TERMINATED: State = new State("TERMINATED", 5)
+      def values(): Array[State] = Array(NEW, RUNNABLE, BLOCKED, WAITING, TIMED_WAITING, TERMINATED)
+      def valueOf(name: String): State =
+        if name == null then throw new NullPointerException("Name is null")
+        values().find(_.name() == name).getOrElse(throw new IllegalArgumentException("No enum constant java.lang.Thread.State." + name))
 
   @jvmClass("java/lang/Runtime")
   class Runtime private ():
@@ -82,8 +106,22 @@ package java.util:
     def descendingIterator(): Iterator[E]
     def reversed(): Deque[E]
 
+  // The JDK's `AbstractCollection.remove` and `clear`: through the iterator.
   @jvmClass("java/util/AbstractCollection")
-  abstract class AbstractCollection[E] extends Collection[E]
+  abstract class AbstractCollection[E] extends Collection[E]:
+    override def remove(o: Any): Boolean =
+      val it = iterator()
+      var found = false
+      while !found && it.hasNext do
+        if Objects.equals(o, it.next()) then
+          it.remove()
+          found = true
+      found
+    override def clear(): Unit =
+      val it = iterator()
+      while it.hasNext do
+        it.next()
+        it.remove()
 
   @jvmClass("java/util/AbstractQueue")
   abstract class AbstractQueue[E] extends AbstractCollection[E], Queue[E]:
@@ -167,15 +205,16 @@ package java.util:
       else false
     override def remove(o: Any): Boolean = removeFirstOccurrence(o)
     override def clear(): Unit = arrayClear(items)
+    // The JDK's `bulkRemove`: every element tested first, in order, those selected removed after.
+    override def removeIf(test: java.util.function.Predicate[? >: E]): Boolean =
+      Objects.requireNonNull(test)
+      bulkRemove(items, e => test.test(e))
+    override def removeAll(c: Collection[?]): Boolean =
+      Objects.requireNonNull(c)
+      bulkRemove(items, e => c.contains(e))
     override def retainAll(c: Collection[?]): Boolean =
-      var changed = false
-      var i = items.length - 1
-      while i >= 0 do
-        if !c.contains(items(i)) then
-          arrayRemove(items, i)
-          changed = true
-        i -= 1
-      changed
+      Objects.requireNonNull(c)
+      bulkRemove(items, e => !c.contains(e))
     def reversed(): Deque[E] =
       val out = new ArrayDeque[E]()
       var i = items.length - 1
@@ -244,15 +283,6 @@ package java.util.concurrent:
         true
       else false
     override def clear(): Unit = java.util.arrayClear(items)
-    override def retainAll(c: java.util.Collection[?]): Boolean =
-      var changed = false
-      var i = items.length - 1
-      while i >= 0 do
-        if !c.contains(items(i)) then
-          java.util.arrayRemove(items, i)
-          changed = true
-        i -= 1
-      changed
     def iterator(): java.util.Iterator[E] = new java.util.DequeIterator(items, false)
 
   // java.util.Random's generator, as Scala.js's `ThreadLocalRandom` extends it.
@@ -299,8 +329,5 @@ package java.util.concurrent:
 
   @jvmClass("java/util/concurrent/ThreadLocalRandom")
   object ThreadLocalRandom:
-    private val single = new ThreadLocalRandom((freshSeed() ^ 0x5DEECE66DL) & 0xFFFFFFFFFFFFL)
+    private val single = new ThreadLocalRandom((java.util.freshSeed() ^ 0x5DEECE66DL) & 0xFFFFFFFFFFFFL)
     def current(): ThreadLocalRandom = single
-
-  @js("BigInt(Math.floor(Math.random() * 281474976710656))")
-  private def freshSeed(): Long

@@ -458,6 +458,75 @@ package java.util:
   @jvmClass("java/util/RandomAccess")
   trait RandomAccess
 
+  // A seed for each generator made without one, where the JDK takes `seedUniquifier() ^ nanoTime()`
+  // (the interpreter: a builtin of its own).
+  @js("BigInt(Math.floor(Math.random() * 281474976710656))")
+  @jvm("invokestatic java/lang/System.nanoTime()J")
+  private[java] def freshSeed(): Long
+
+  // The JDK's linear congruential generator: the same numbers for the same seed, which its
+  // subclasses draw from through `next`.
+  @jvmClass("java/util/Random")
+  class Random(seed0: Long) extends java.io.Serializable:
+    private var seed = 0L
+    private var nextNextGaussian = 0.0
+    private var haveNextNextGaussian = false
+    setSeed(seed0)
+    def this() = this(freshSeed())
+    def setSeed(seed: Long): Unit =
+      this.seed = (seed ^ 0x5DEECE66DL) & 0xFFFFFFFFFFFFL
+      haveNextNextGaussian = false
+    protected def next(bits: Int): Int =
+      seed = (seed * 0x5DEECE66DL + 0xBL) & 0xFFFFFFFFFFFFL
+      (seed >>> (48 - bits)).toInt
+    // Four bytes of each `nextInt()`, the low one first.
+    def nextBytes(bytes: Array[Byte]): Unit =
+      var i = 0
+      while i < bytes.length do
+        var rnd = nextInt()
+        var n = java.lang.Math.min(bytes.length - i, 4)
+        while n > 0 do
+          bytes(i) = rnd.toByte
+          i += 1
+          rnd >>= 8
+          n -= 1
+    def nextInt(): Int = next(32)
+    def nextInt(bound: Int): Int =
+      if bound <= 0 then throw new IllegalArgumentException("bound must be positive")
+      var r = next(31)
+      val m = bound - 1
+      if (bound & m) == 0 then r = ((bound * r.toLong) >> 31).toInt
+      else
+        var u = r
+        r = u % bound
+        while u - r + m < 0 do
+          u = next(31)
+          r = u % bound
+      r
+    def nextLong(): Long = (next(32).toLong << 32) + next(32)
+    def nextBoolean(): Boolean = next(1) != 0
+    def nextFloat(): Float = next(24) / (1 << 24).toFloat
+    def nextDouble(): Double = ((next(26).toLong << 27) + next(27)) * (1.0 / (1L << 53))
+    // Knuth's polar method (TAOCP 3.4.1 C), a second number kept for the next call.
+    def nextGaussian(): Double =
+      if haveNextNextGaussian then
+        haveNextNextGaussian = false
+        nextNextGaussian
+      else
+        var v1 = 0.0
+        var v2 = 0.0
+        var s = 0.0
+        while
+          v1 = 2 * nextDouble() - 1
+          v2 = 2 * nextDouble() - 1
+          s = v1 * v1 + v2 * v2
+          s >= 1 || s == 0
+        do ()
+        val multiplier = java.lang.Math.sqrt(-2 * java.lang.Math.log(s) / s)
+        nextNextGaussian = v2 * multiplier
+        haveNextNextGaussian = true
+        v1 * multiplier
+
   // The stores behind the collections below, JS primitives of their own so that the layer
   // stands under `--std=scala-library` too, where the lean std's collections are absent: a
   // hash map keyed by Scala equality (`$HMap`, as `scala.RawMap`) and a JS array.
@@ -512,24 +581,33 @@ package java.util:
       while it.hasNext do changed = add(it.next()) | changed
       changed
     def remove(o: Any): Boolean = throw new UnsupportedOperationException("remove")
+    // The JDK's `Collection.removeIf` and `AbstractCollection.removeAll` and `retainAll`: the
+    // collection's elements in its iterator's order, each one selected removed through the
+    // iterator as it is met (an iterator that cannot remove throws).
     def removeIf(test: java.util.function.Predicate[? >: E]): Boolean =
-      val doomed = newArray[E]
+      Objects.requireNonNull(test)
+      var removed = false
+      val each = iterator()
+      while each.hasNext do
+        if test.test(each.next()) then
+          each.remove()
+          removed = true
+      removed
+    def clear(): Unit = throw new UnsupportedOperationException("clear")
+    def retainAll(c: Collection[?]): Boolean =
+      Objects.requireNonNull(c)
+      removeWhere(c, false)
+    def removeAll(c: Collection[?]): Boolean =
+      Objects.requireNonNull(c)
+      removeWhere(c, true)
+    private def removeWhere(c: Collection[?], contained: Boolean): Boolean =
+      var modified = false
       val it = iterator()
       while it.hasNext do
-        val e = it.next()
-        if test.test(e) then arrayPush(doomed, e)
-      var i = 0
-      while i < doomed.length do
-        remove(doomed(i))
-        i += 1
-      doomed.length > 0
-    def clear(): Unit = throw new UnsupportedOperationException("clear")
-    def retainAll(c: Collection[?]): Boolean = throw new UnsupportedOperationException("retainAll")
-    def removeAll(c: Collection[?]): Boolean =
-      var changed = false
-      val it = c.iterator()
-      while it.hasNext do changed = remove(it.next()) | changed
-      changed
+        if c.contains(it.next()) == contained then
+          it.remove()
+          modified = true
+      modified
     def containsAll(c: Collection[?]): Boolean =
       val it = c.iterator()
       var all = true
@@ -634,11 +712,20 @@ package java.util:
 
   private final class ListIterator[E](list: List[E]) extends Iterator[E]:
     private var i = 0
+    private var last = -1
     def hasNext: Boolean = i < list.size()
     def next(): E =
       if i >= list.size() then throw new NoSuchElementException()
+      last = i
       i += 1
-      list.get(i - 1)
+      list.get(last)
+    // The JDK's `AbstractList.Itr.remove`: the list's `remove(int)` of the element given last,
+    // the cursor back on the gap.
+    override def remove(): Unit =
+      if last < 0 then throw new IllegalStateException()
+      list.remove(last)
+      i = last
+      last = -1
 
   @jvmClass("java/util/ArrayList")
   class ArrayList[E](private val items: Array[E]) extends List[E], RandomAccess:
@@ -670,6 +757,57 @@ package java.util:
       i >= 0
     override def clear(): Unit = arrayClear(items)
     override def iterator(): Iterator[E] = new ListIterator(this)
+    // The JDK's `ArrayList.removeIf`: every element tested first, in order, and those selected
+    // removed together after.
+    override def removeIf(test: java.util.function.Predicate[? >: E]): Boolean =
+      Objects.requireNonNull(test)
+      bulkRemove(items, e => test.test(e))
+    override def removeAll(c: Collection[?]): Boolean = batchRemove(c, false)
+    override def retainAll(c: Collection[?]): Boolean = batchRemove(c, true)
+    // The JDK's `ArrayList.batchRemove`: the survivors compacted in place behind the read cursor as
+    // each element's membership is tested; where `contains` throws, the elements not yet read are
+    // kept after those kept so far and the removals before stand.
+    private def batchRemove(c: Collection[?], complement: Boolean): Boolean =
+      Objects.requireNonNull(c)
+      val end = items.length
+      var r = 0
+      while r < end && c.contains(items(r)) == complement do r += 1
+      if r == end then false
+      else
+        var w = r
+        r += 1
+        try
+          while r < end do
+            val e = items(r)
+            if c.contains(e) == complement then
+              items(w) = e
+              w += 1
+            r += 1
+        catch
+          case ex: Throwable =>
+            System.arraycopy(items, r, items, w, end - r)
+            w += end - r
+            throw ex
+        finally
+          while items.length > w do arrayRemove(items, items.length - 1)
+        true
+
+  // The JDK's two passes of `ArrayList.removeIf` and `ArrayDeque.bulkRemove`: each element of the
+  // array tested in order, then those selected removed.
+  private[util] def bulkRemove[E](items: Array[E], selected: E => Boolean): Boolean =
+    val doomed = new Array[Boolean](items.length)
+    var any = false
+    var i = 0
+    while i < doomed.length do
+      if selected(items(i)) then
+        doomed(i) = true
+        any = true
+      i += 1
+    i = doomed.length - 1
+    while i >= 0 do
+      if doomed(i) then arrayRemove(items, i)
+      i -= 1
+    any
 
   @jvmClass("java/util/Set")
   trait Set[E] extends Collection[E]:
@@ -677,7 +815,7 @@ package java.util:
     override def spliterator(): Spliterator[E] = Spliterators.spliterator(this, Spliterator.DISTINCT)
 
   @jvmClass("java/util/HashSet")
-  class HashSet[E](private val raw: Store[E, Boolean]) extends Set[E]:
+  class HashSet[E](private val raw: Store[E, Boolean]) extends AbstractSet[E]:
     def this() = this(newStore[E, Boolean])
     def this(initialCapacity: Int) = this(newStore[E, Boolean])
     def this(c: Collection[? <: E]) =
@@ -692,25 +830,32 @@ package java.util:
         true
     override def remove(o: Any): Boolean = raw.storeDelete(o.asInstanceOf[E])
     override def clear(): Unit = raw.storeClear()
-    def iterator(): Iterator[E] = new ArrayIterator(raw.storeKeys)
-    override def retainAll(c: Collection[?]): Boolean =
-      var changed = false
-      val keys = raw.storeKeys
-      var i = 0
-      while i < keys.length do
-        if !c.contains(keys(i)) then
-          raw.storeDelete(keys(i))
-          changed = true
-        i += 1
-      changed
+    def iterator(): Iterator[E] = new StoreIterator[E, Boolean, E](raw, StoreIterator.KEYS)
 
-  private final class ArrayIterator[E](items: Array[E]) extends Iterator[E]:
+  // The keys, values or entries of a store, from the keys it has when the iteration starts;
+  // `remove` removes the mapping of the key given last, as the JDK's `HashMap.HashIterator`.
+  private final class StoreIterator[K, V, E](raw: Store[K, V], kind: Int) extends Iterator[E]:
+    private val keys = raw.storeKeys
     private var i = 0
-    def hasNext: Boolean = i < items.length
+    private var last = -1
+    def hasNext: Boolean = i < keys.length
     def next(): E =
-      if i >= items.length then throw new NoSuchElementException()
+      if i >= keys.length then throw new NoSuchElementException()
+      last = i
       i += 1
-      items(i - 1)
+      val key = keys(last)
+      (if kind == StoreIterator.KEYS then key
+      else if kind == StoreIterator.VALUES then raw.storeGet(key)
+      else new AbstractMap.SimpleImmutableEntry[K, V](key, raw.storeGet(key))).asInstanceOf[E]
+    override def remove(): Unit =
+      if last < 0 then throw new IllegalStateException()
+      raw.storeDelete(keys(last))
+      last = -1
+
+  private object StoreIterator:
+    val KEYS = 0
+    val VALUES = 1
+    val ENTRIES = 2
 
   @jvmClass("java/util/Map")
   trait Map[K, V]:
@@ -729,14 +874,67 @@ package java.util:
     def values(): Collection[V]
     def entrySet(): Set[Map.Entry[K, V]]
     def containsValue(value: Any): Boolean = values().contains(value)
-    def getOrDefault(key: Any, default: V): V = if containsKey(key) then get(key) else default
-    def computeIfAbsent(key: K, mapping: java.util.function.Function[K, V]): V =
-      val present = get(key)
-      if present != null then present
+    // The JDK's default methods of `Map`, each calling the others as they do.
+    def getOrDefault(key: Any, default: V): V =
+      val v = get(key)
+      if v != null || containsKey(key) then v else default
+    def forEach(action: java.util.function.BiConsumer[? >: K, ? >: V]): Unit =
+      Objects.requireNonNull(action)
+      val it = entrySet().iterator()
+      while it.hasNext do
+        val e = it.next()
+        action.asInstanceOf[java.util.function.BiConsumer[K, V]].accept(e.getKey, e.getValue)
+    def putIfAbsent(key: K, value: V): V =
+      val v = get(key)
+      if v == null then put(key, value) else v
+    def remove(key: Any, value: Any): Boolean =
+      val current = get(key)
+      if !Objects.equals(current, value) || (current == null && !containsKey(key)) then false
       else
-        val computed = mapping.apply(key)
+        remove(key)
+        true
+    def replace(key: K, value: V): V =
+      val current = get(key)
+      if current != null || containsKey(key) then put(key, value) else current
+    def replace(key: K, oldValue: V, newValue: V): Boolean =
+      val current = get(key)
+      if !Objects.equals(current, oldValue) || (current == null && !containsKey(key)) then false
+      else
+        put(key, newValue)
+        true
+    def computeIfAbsent(key: K, mapping: java.util.function.Function[? >: K, ? <: V]): V =
+      Objects.requireNonNull(mapping)
+      val v = get(key)
+      if v != null then v
+      else
+        val computed: V = mapping.asInstanceOf[java.util.function.Function[K, V]].apply(key)
         if computed != null then put(key, computed)
         computed
+    def computeIfPresent(key: K, remapping: java.util.function.BiFunction[? >: K, ? >: V, ? <: V]): V =
+      Objects.requireNonNull(remapping)
+      val old = get(key)
+      if old == null then old
+      else
+        val computed: V = remapping.asInstanceOf[java.util.function.BiFunction[K, V, V]].apply(key, old)
+        if computed != null then put(key, computed) else remove(key)
+        computed
+    def compute(key: K, remapping: java.util.function.BiFunction[? >: K, ? >: V, ? <: V]): V =
+      Objects.requireNonNull(remapping)
+      val old = get(key)
+      val computed: V = remapping.asInstanceOf[java.util.function.BiFunction[K, V, V]].apply(key, old)
+      if computed == null then
+        if old != null || containsKey(key) then remove(key)
+        computed
+      else
+        put(key, computed)
+        computed
+    def merge(key: K, value: V, remapping: java.util.function.BiFunction[? >: V, ? >: V, ? <: V]): V =
+      Objects.requireNonNull(remapping)
+      Objects.requireNonNull(value)
+      val old = get(key)
+      val merged: V = if old == null then value else remapping.asInstanceOf[java.util.function.BiFunction[V, V, V]].apply(old, value)
+      if merged == null then remove(key) else put(key, merged)
+      merged
     def clear(): Unit
 
   @jvmClass("java/util/Map")
@@ -748,7 +946,7 @@ package java.util:
       def setValue(value: V): V
 
   @jvmClass("java/util/HashMap")
-  class HashMap[K, V](private val raw: Store[K, V]) extends Map[K, V]:
+  class HashMap[K, V](private val raw: Store[K, V]) extends AbstractMap[K, V]:
     def this() = this(newStore[K, V])
     def this(initialCapacity: Int) = this(newStore[K, V])
     def this(m: Map[? <: K, ? <: V]) =
@@ -766,33 +964,92 @@ package java.util:
       raw.storeDelete(key.asInstanceOf[K])
       old
     def clear(): Unit = raw.storeClear()
-    def keySet(): Set[K] =
-      val out = new HashSet[K]()
-      val keys = raw.storeKeys
-      var i = 0
-      while i < keys.length do
-        out.add(keys(i))
-        i += 1
-      out
-    def values(): Collection[V] = new ArrayList[V](raw.storeValues)
+    // The map's views, as the JDK's: a removal or a clear through one is the map's, and none
+    // adds. An entry is a copy, whose `setValue` is refused.
+    def keySet(): Set[K] = new HashKeys(raw)
+    def values(): Collection[V] = new HashValues(raw)
     // `AbstractMap.toString`'s `{k=v, ...}`.
     override def toString: String = SortedOps.mapString(this)
-    def entrySet(): Set[Map.Entry[K, V]] =
-      val out = new EntrySet[K, V]()
-      val keys = raw.storeKeys
-      var i = 0
-      while i < keys.length do
-        out.entries.add(new AbstractMap.SimpleImmutableEntry[K, V](keys(i), raw.storeGet(keys(i))))
-        i += 1
-      out
+    def entrySet(): Set[Map.Entry[K, V]] = new HashEntries(raw)
 
-  private final class EntrySet[K, V] extends Set[Map.Entry[K, V]]:
-    val entries: ArrayList[Map.Entry[K, V]] = new ArrayList[Map.Entry[K, V]]()
-    def size(): Int = entries.size()
-    def iterator(): Iterator[Map.Entry[K, V]] = entries.iterator()
+  private final class HashKeys[K, V](raw: Store[K, V]) extends AbstractSet[K]:
+    def size(): Int = raw.storeSize
+    override def contains(o: Any): Boolean = raw.storeHas(o.asInstanceOf[K])
+    override def remove(o: Any): Boolean = raw.storeDelete(o.asInstanceOf[K])
+    override def clear(): Unit = raw.storeClear()
+    def iterator(): Iterator[K] = new StoreIterator[K, V, K](raw, StoreIterator.KEYS)
 
+  private final class HashValues[K, V](raw: Store[K, V]) extends AbstractCollection[V]:
+    def size(): Int = raw.storeSize
+    override def clear(): Unit = raw.storeClear()
+    def iterator(): Iterator[V] = new StoreIterator[K, V, V](raw, StoreIterator.VALUES)
+
+  private final class HashEntries[K, V](raw: Store[K, V]) extends AbstractSet[Map.Entry[K, V]]:
+    def size(): Int = raw.storeSize
+    override def contains(o: Any): Boolean = o match
+      case e: Map.Entry[?, ?] =>
+        val key = e.getKey.asInstanceOf[K]
+        raw.storeHas(key) && Objects.equals(raw.storeGet(key), e.getValue)
+      case _ => false
+    override def remove(o: Any): Boolean = contains(o) && raw.storeDelete(o.asInstanceOf[Map.Entry[K, V]].getKey)
+    override def clear(): Unit = raw.storeClear()
+    def iterator(): Iterator[Map.Entry[K, V]] = new StoreIterator[K, V, Map.Entry[K, V]](raw, StoreIterator.ENTRIES)
+
+  // The JDK's `AbstractMap.equals`, `hashCode` and `toString`: a map equals another of the same
+  // mappings whatever its class (a key of the wrong kind for the other is no match), and hashes
+  // as the sum of its entries' hashes.
   @jvmClass("java/util/AbstractMap")
-  abstract class AbstractMap[K, V] extends Map[K, V]
+  abstract class AbstractMap[K, V] extends Map[K, V]:
+    override def equals(o: Any): Boolean =
+      if o.asInstanceOf[AnyRef] eq this then true
+      else o match
+        case m: Map[?, ?] if m.size() == size() =>
+          val other = m.asInstanceOf[Map[Any, Any]]
+          try
+            val it = entrySet().iterator()
+            var same = true
+            while same && it.hasNext do
+              val e = it.next()
+              val value = e.getValue
+              same =
+                if value == null then other.get(e.getKey) == null && other.containsKey(e.getKey)
+                else AbstractMap.valueEquals(value, other.get(e.getKey))
+            same
+          catch case _: ClassCastException | _: NullPointerException => false
+        case _ => false
+    override def hashCode: Int =
+      var h = 0
+      val it = entrySet().iterator()
+      while it.hasNext do h += it.next().hashCode
+      h
+    override def toString: String = SortedOps.mapString(this)
+
+  // The JDK's `AbstractSet.equals`, `hashCode` and `removeAll`: a set equals another of the same
+  // elements whatever its class, and hashes as the sum of its elements' hashes.
+  @jvmClass("java/util/AbstractSet")
+  abstract class AbstractSet[E] extends AbstractCollection[E], Set[E]:
+    override def equals(o: Any): Boolean =
+      if o.asInstanceOf[AnyRef] eq this then true
+      else o match
+        case c: Set[?] if c.size() == size() =>
+          try containsAll(c)
+          catch case _: ClassCastException | _: NullPointerException => false
+        case _ => false
+    override def hashCode: Int =
+      var h = 0
+      val it = iterator()
+      while it.hasNext do
+        val e = it.next()
+        h += Objects.hashCode(e)
+      h
+    override def removeAll(c: Collection[?]): Boolean =
+      Objects.requireNonNull(c)
+      if size() > c.size() then
+        var changed = false
+        val it = c.iterator()
+        while it.hasNext do changed = remove(it.next()) | changed
+        changed
+      else super.removeAll(c)
 
   // Keyed by reference (`eq`), in the order of insertion: the JDK's map of that name, which a
   // library keeps the objects it has visited in (munit's `StackTraces`).
@@ -873,7 +1130,7 @@ package java.util:
       cursor = last
       last = -1
 
-  private final class IdentityKeys[K, V](map: IdentityHashMap[K, V]) extends Set[K]:
+  private final class IdentityKeys[K, V](map: IdentityHashMap[K, V]) extends AbstractSet[K]:
     def size(): Int = map.size()
     override def contains(o: Any): Boolean = map.containsKey(o)
     override def remove(o: Any): Boolean =
@@ -896,7 +1153,7 @@ package java.util:
       def at(i: Int): V = map.valueAt(i)
 
   // Membership and removal by a mapping of the same key and value, by reference, as the JDK's.
-  private final class IdentityEntries[K, V](map: IdentityHashMap[K, V]) extends Set[Map.Entry[K, V]]:
+  private final class IdentityEntries[K, V](map: IdentityHashMap[K, V]) extends AbstractSet[Map.Entry[K, V]]:
     def size(): Int = map.size()
     override def clear(): Unit = map.clear()
     override def contains(o: Any): Boolean = o match
@@ -919,17 +1176,13 @@ package java.util:
     override def hashCode: Int = System.identityHashCode(key.asInstanceOf[AnyRef]) ^ System.identityHashCode(getValue.asInstanceOf[AnyRef])
 
   // A set over the keys of a map, whose `add` puts `true` under the element.
-  private final class SetFromMap[E](map: Map[E, java.lang.Boolean]) extends Set[E]:
+  private final class SetFromMap[E](map: Map[E, java.lang.Boolean]) extends AbstractSet[E]:
     def size(): Int = map.size()
     override def contains(o: Any): Boolean = map.containsKey(o)
     override def add(e: E): Boolean = map.put(e, java.lang.Boolean.valueOf(true)) == null
     override def remove(o: Any): Boolean = map.remove(o) != null
     override def clear(): Unit = map.clear()
-    def iterator(): Iterator[E] =
-      val out = new ArrayList[E]()
-      val it = map.entrySet().iterator()
-      while it.hasNext do out.add(it.next().getKey)
-      out.iterator()
+    def iterator(): Iterator[E] = map.keySet().iterator()
 
   @jvmClass("java/util/AbstractMap")
   object AbstractMap:
@@ -962,6 +1215,22 @@ package java.util:
     // What `objectEquals` calls `equals` through, a member call rather than an equality.
     private trait EqualsCall:
       def equals(o: Any): Boolean
+    // A mapping whose value `setValue` changes; equal to any entry of the same key and value, as
+    // the JDK's.
+    @jvmClass("java/util/AbstractMap$SimpleEntry")
+    class SimpleEntry[K, V](key: K, private var value: V) extends Map.Entry[K, V]:
+      def this(e: Map.Entry[? <: K, ? <: V]) = this(e.getKey, e.getValue)
+      def getKey: K = key
+      def getValue: V = value
+      def setValue(value: V): V =
+        val old = this.value
+        this.value = value
+        old
+      override def equals(o: Any): Boolean = o match
+        case e: Map.Entry[?, ?] => AbstractMap.valueEquals(key, e.getKey) && AbstractMap.valueEquals(value, e.getValue)
+        case _ => false
+      override def hashCode: Int = Objects.hashCode(key) ^ Objects.hashCode(value)
+      override def toString: String = "" + key + "=" + value
     // A copy of a mapping, which `setValue` cannot change; equal to any entry of the same key and
     // value, as the JDK's.
     @jvmClass("java/util/AbstractMap$SimpleImmutableEntry")
@@ -1214,10 +1483,22 @@ package java.util.regex:
     val MULTILINE: Int = 8
     val DOTALL: Int = 32
     val UNICODE_CASE: Int = 64
-    def compile(regex: String): Pattern = new Pattern(regex, 0)
+    val UNICODE_CHARACTER_CLASS: Int = 256
+    def compile(regex: String): Pattern = checked(regex, new Pattern(regex, 0))
     def compile(regex: String, flags: Int): Pattern =
-      val prefix = (if (flags & CASE_INSENSITIVE) != 0 then "(?i)" else "") + (if (flags & MULTILINE) != 0 then "(?m)" else "") + (if (flags & DOTALL) != 0 then "(?s)" else "") + (if (flags & UNICODE_CASE) != 0 then "(?u)" else "") + (if (flags & COMMENTS) != 0 then "(?x)" else "")
-      new Pattern(prefix + regex, flags)
+      val prefix = (if (flags & CASE_INSENSITIVE) != 0 then "(?i)" else "") + (if (flags & MULTILINE) != 0 then "(?m)" else "") + (if (flags & DOTALL) != 0 then "(?s)" else "") + (if (flags & UNICODE_CASE) != 0 then "(?u)" else "") + (if (flags & COMMENTS) != 0 then "(?x)" else "") + (if (flags & UNICODE_CHARACTER_CLASS) != 0 then "(?U)" else "")
+      checked(regex, new Pattern(prefix + regex, flags))
+    // As the JDK's `compile`, an invalid pattern fails here, with a `PatternSyntaxException` of the
+    // engine's description and the place it gives.
+    private def checked(regex: String, p: Pattern): Pattern =
+      val error = Engine.check(p.regex)
+      if error != null then
+        val at = error.indexOf(" near index ")
+        if at < 0 then throw new PatternSyntaxException(error, regex, -1)
+        val end = error.indexOf('\n', at)
+        val index = error.substring(at + 12, if end < 0 then error.length else end)
+        throw new PatternSyntaxException(error.substring(0, at), regex, java.lang.Integer.parseInt(index))
+      p
     def matches(regex: String, input: CharSequence): Boolean = compile(regex).matcher(input).matches()
     // An embedded `\E` closes the quote, and is matched as an escaped `\` and an `E`.
     def quote(s: String): String =
@@ -1230,9 +1511,31 @@ package java.util.regex:
         e = s.indexOf("\\E", at)
       sb.append(s.substring(at)).append("\\E").toString
 
+  // The JDK's: the description, the pattern and the index of the error, `-1` where unknown,
+  // making up the message.
+  @jvmClass("java/util/regex/PatternSyntaxException")
+  class PatternSyntaxException(desc: String, regex: String, index: Int) extends IllegalArgumentException(desc):
+    def getDescription(): String = desc
+    def getIndex(): Int = index
+    def getPattern(): String = regex
+    override def getMessage: String =
+      val sb = new java.lang.StringBuilder(desc)
+      if index >= 0 then sb.append(" near index ").append(index)
+      sb.append(System.lineSeparator()).append(regex)
+      if index >= 0 && regex != null && index < regex.length then
+        sb.append(System.lineSeparator())
+        var i = 0
+        while i < index do
+          sb.append(' ')
+          i += 1
+        sb.append('^')
+      sb.toString
+
   // The engine's matches, with the start and end of each group ("d"): what `scala.util.matching.Regex`
   // runs on in the lean std, which link mode replaces with scala-library's.
   private[regex] object Engine:
+    @js("$reCheck($1)")
+    def check(regex: String): String
     @js("$reExec($1, $2, $3)")
     def exec(regex: String, mode: String, source: String): Any
     @js("$reAll($1, $2, \"gd\")")

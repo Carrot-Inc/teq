@@ -31,6 +31,8 @@ enum Node {
     InputEndNl,
     WordBoundary(bool),
     Group(Option<usize>, Box<Node>),
+    /// `(?>X)`: the first way `X` matches, never taken back (Java's `X*+` is `(?>X*)`).
+    Atomic(Box<Node>),
     Concat(Vec<Node>),
     Alt(Vec<Node>),
     Repeat(Box<Node>, u32, Option<u32>, Greed),
@@ -70,6 +72,10 @@ enum Pred {
     Letter,
     Upper,
     Lower,
+    Title,
+    /// Lowercase, uppercase or titlecase: a case-insensitive `Lower`, `Upper` or `Title` of
+    /// Unicode's (the JDK's `CharPredicates`: `LOWERCASE().union(UPPERCASE(), TITLECASE())`).
+    Cased,
     Alnum,
     Punct,
     Cntrl,
@@ -79,6 +85,16 @@ enum Pred {
     Ascii,
     Numeric,
     Any,
+    // The POSIX classes, of ASCII characters alone but under `UNICODE_CHARACTER_CLASS`; under
+    // `CASE_INSENSITIVE` `\p{Lower}` and `\p{Upper}` take either case.
+    AsciiLower,
+    AsciiUpper,
+    AsciiCased,
+    AsciiAlpha,
+    AsciiAlnum,
+    AsciiCntrl,
+    AsciiGraph,
+    AsciiPrint,
 }
 
 /// The characters of `s` by UTF-16 index, as `Character.codePointAt` reads them: a supplementary
@@ -123,6 +139,12 @@ fn is_word_char(c: char) -> bool {
     c.is_alphanumeric() || c == '_'
 }
 
+/// `Character.isTitleCase` of JDK 24: the titlecase letters (`Lt`), which are neither lowercase
+/// nor uppercase.
+fn is_titlecase(c: char) -> bool {
+    matches!(c, '\u{1c5}' | '\u{1c8}' | '\u{1cb}' | '\u{1f2}' | '\u{1f88}'..='\u{1f8f}' | '\u{1f98}'..='\u{1f9f}' | '\u{1fa8}'..='\u{1faf}' | '\u{1fbc}' | '\u{1fcc}' | '\u{1ffc}')
+}
+
 fn eq_ci(a: char, b: char, fold: Fold) -> bool {
     match fold {
         Fold::Exact => a == b,
@@ -147,6 +169,8 @@ impl Pred {
             Pred::Letter => c.is_alphabetic(),
             Pred::Upper => c.is_uppercase(),
             Pred::Lower => c.is_lowercase(),
+            Pred::Title => is_titlecase(c),
+            Pred::Cased => c.is_lowercase() || c.is_uppercase() || is_titlecase(c),
             Pred::Alnum => c.is_alphanumeric(),
             Pred::Punct => c.is_ascii_punctuation(),
             Pred::Cntrl => c.is_control(),
@@ -156,6 +180,13 @@ impl Pred {
             Pred::Ascii => c.is_ascii(),
             Pred::Numeric => c.is_numeric(),
             Pred::Any => true,
+            Pred::AsciiLower => c.is_ascii_lowercase(),
+            Pred::AsciiUpper => c.is_ascii_uppercase(),
+            Pred::AsciiCased | Pred::AsciiAlpha => c.is_ascii_alphabetic(),
+            Pred::AsciiAlnum => c.is_ascii_alphanumeric(),
+            Pred::AsciiCntrl => c.is_ascii_control(),
+            Pred::AsciiGraph => c.is_ascii_graphic(),
+            Pred::AsciiPrint => c.is_ascii_graphic() || c == ' ',
         }
     }
 }
@@ -204,7 +235,7 @@ fn names_supplementary(node: &Node) -> bool {
     match node {
         Node::Char(c, _) => wide(*c),
         Node::Class(class, _) => class_wide(class, &wide),
-        Node::Group(_, inner) | Node::Repeat(inner, ..) | Node::Look { node: inner, .. } => names_supplementary(inner),
+        Node::Group(_, inner) | Node::Atomic(inner) | Node::Repeat(inner, ..) | Node::Look { node: inner, .. } => names_supplementary(inner),
         Node::Concat(items) | Node::Alt(items) => items.iter().any(names_supplementary),
         _ => false,
     }
@@ -214,6 +245,8 @@ fn names_supplementary(node: &Node) -> bool {
 struct Flags {
     ci: bool,
     unicode_case: bool,
+    /// `UNICODE_CHARACTER_CLASS` (`(?U)`): the POSIX classes are Unicode's.
+    unicode_class: bool,
     dotall: bool,
     multiline: bool,
     comments: bool,
@@ -235,6 +268,8 @@ struct Parser<'a> {
     groups: usize,
     names: Vec<(String, usize)>,
     src: &'a str,
+    /// The flags of the class being parsed, which its properties read.
+    class_flags: Flags,
 }
 
 type Parsed<T> = Result<T, String>;
@@ -378,7 +413,10 @@ impl<'a> Parser<'a> {
         let Some(c) = self.next() else { return Ok(None) };
         Ok(Some(match c {
             '(' => return self.parse_group(flags),
-            '[' => Node::Class(Box::new(self.parse_class(true, flags.fold())?), flags.fold()),
+            '[' => {
+                self.class_flags = *flags;
+                Node::Class(Box::new(self.parse_class(true, flags.fold())?), flags.fold())
+            }
             '.' => Node::Any(flags.dotall),
             '^' => Node::LineStart(flags.multiline),
             '$' => Node::LineEnd(flags.multiline),
@@ -408,7 +446,7 @@ impl<'a> Parser<'a> {
                     let mut inner = *flags;
                     let node = self.parse_alt(&mut inner)?;
                     self.close_group()?;
-                    return Ok(Some(Node::Group(None, Box::new(node))));
+                    return Ok(Some(Node::Atomic(Box::new(node))));
                 }
                 Some('<') => {
                     if matches!(self.peek(), Some('=') | Some('!')) {
@@ -445,7 +483,13 @@ impl<'a> Parser<'a> {
                             Some('m') => scoped.multiline = on,
                             Some('x') => scoped.comments = on,
                             Some('u') => scoped.unicode_case = on,
-                            Some('d') | Some('U') => {}
+                            // `UNICODE_CHARACTER_CLASS` sets and clears `UNICODE_CASE` with it
+                            // (the JDK's `Pattern.addFlag`, `subFlag`).
+                            Some('U') => {
+                                scoped.unicode_class = on;
+                                scoped.unicode_case = on;
+                            }
+                            Some('d') => {}
                             Some(')') => {
                                 *flags = scoped;
                                 return Ok(None);
@@ -514,7 +558,7 @@ impl<'a> Parser<'a> {
                 }
             }
             'p' | 'P' => {
-                let pred = self.parse_property()?;
+                let pred = self.parse_property(flags)?;
                 Node::Class(Box::new(Class { negated: c == 'P', items: vec![Item::Pred(pred)], intersections: Vec::new() }), Fold::Exact)
             }
             '1'..='9' => {
@@ -532,7 +576,7 @@ impl<'a> Parser<'a> {
         })
     }
 
-    fn parse_property(&mut self) -> Parsed<Pred> {
+    fn parse_property(&mut self, flags: &Flags) -> Parsed<Pred> {
         let name: String = if self.eat('{') {
             let mut name = String::new();
             while let Some(c) = self.next() {
@@ -548,11 +592,37 @@ impl<'a> Parser<'a> {
                 None => return self.error("Unknown character property"),
             }
         };
+        // The POSIX names (`Lower`, not `IsLowercase` or `Ll`) are ASCII classes, as the JDK's
+        // `CharPredicates.forPOSIXName`.
+        if !flags.unicode_class {
+            let posix = match name.as_str() {
+                "Lower" | "Upper" if flags.ci => Some(Pred::AsciiCased),
+                "Lower" => Some(Pred::AsciiLower),
+                "Upper" => Some(Pred::AsciiUpper),
+                "Alpha" => Some(Pred::AsciiAlpha),
+                "Digit" => Some(Pred::Digit),
+                "Alnum" => Some(Pred::AsciiAlnum),
+                "Cntrl" => Some(Pred::AsciiCntrl),
+                "Graph" => Some(Pred::AsciiGraph),
+                "Print" => Some(Pred::AsciiPrint),
+                _ => None,
+            };
+            if let Some(p) = posix {
+                return Ok(p);
+            }
+        }
+        // Unicode's otherwise (`forUnicodeProperty`, `getPosixPredicate`, `forProperty`): under
+        // `CASE_INSENSITIVE` lowercase, uppercase and titlecase each take all three.
         let name = name.strip_prefix("Is").unwrap_or(&name);
+        let cased = matches!(name, "Lu" | "Upper" | "Uppercase" | "javaUpperCase" | "Ll" | "Lower" | "Lowercase" | "javaLowerCase" | "Lt" | "Titlecase" | "javaTitleCase");
+        if cased && flags.ci {
+            return Ok(Pred::Cased);
+        }
         Ok(match name {
             "L" | "Letter" | "Alpha" | "Alphabetic" | "javaLetter" => Pred::Letter,
             "Lu" | "Upper" | "Uppercase" | "javaUpperCase" => Pred::Upper,
             "Ll" | "Lower" | "Lowercase" | "javaLowerCase" => Pred::Lower,
+            "Lt" | "Titlecase" | "javaTitleCase" => Pred::Title,
             "Nd" | "Digit" | "N" => Pred::Numeric,
             "Alnum" | "javaLetterOrDigit" => Pred::Alnum,
             "Punct" | "P" => Pred::Punct,
@@ -730,7 +800,8 @@ impl<'a> Parser<'a> {
         let lo = if self.eat('\\') {
             if let Some(e @ ('p' | 'P')) = self.peek() {
                 self.at += 1;
-                let p = self.parse_property()?;
+                let flags = self.class_flags;
+                let p = self.parse_property(&flags)?;
                 return Ok(Some(Class { negated: e == 'P', items: vec![Item::Pred(p)], intersections: Vec::new() }));
             }
             let is_range = self.peek_at(1) == Some('-');
@@ -952,6 +1023,21 @@ impl<'r, 's> Matcher<'r, 's> {
             Node::InputEndNl => self.at_line_end(i, false) && k(self, i),
             Node::WordBoundary(negated) => (self.word_boundary(i) != *negated) && k(self, i),
             Node::Group(None, inner) => self.m(inner, i, k),
+            Node::Atomic(inner) => {
+                let saved = self.caps.clone();
+                let mut end = None;
+                let matched = self.m(inner, i, &mut |_, j| {
+                    end = Some(j);
+                    true
+                });
+                match (matched, end) {
+                    (true, Some(j)) if k(self, j) => true,
+                    _ => {
+                        self.caps = saved;
+                        false
+                    }
+                }
+            }
             Node::Group(Some(idx), inner) => {
                 let idx = *idx;
                 let saved = self.caps[idx];
@@ -1106,8 +1192,8 @@ pub struct Found {
 
 impl Regex {
     pub fn compile(src: &str) -> Result<Regex, String> {
-        let mut flags = Flags { ci: false, unicode_case: false, dotall: false, multiline: false, comments: false };
-        let mut p = Parser { chars: remove_qe_quoting(src.chars().collect()), at: 0, groups: 0, names: Vec::new(), src };
+        let mut flags = Flags { ci: false, unicode_case: false, unicode_class: false, dotall: false, multiline: false, comments: false };
+        let mut p = Parser { chars: remove_qe_quoting(src.chars().collect()), at: 0, groups: 0, names: Vec::new(), src, class_flags: flags };
         let root = p.parse_alt(&mut flags)?;
         if p.at < p.chars.len() {
             return p.error("Unmatched closing ')'");

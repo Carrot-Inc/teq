@@ -81,3 +81,4 @@ polycurried js-run  the same as depfn js-run: the lean products withhold `P.both
 polycurried interp-run  the same as js-run
 polyval check-lean  teq's lean std has no `scala.PolyFunction`, so the Scala.js check build of `PolyFunction { def apply[A](a: A): A; val tag: Int }` reports `type PolyFunction not found`: master (`488d872c1`, release) the same for any `PolyFunction` written as a refinement, the lean std's classes, its own line
 polyval check-lean-whole  the same as check-lean
+batchremove bundle  the same as stdforms: the product body's calls of `java.util.ArrayList` members reach the lean std's `java.util.Collection`, whose members shift the release renaming's short names (`size` is `aX` in the whole build, `aY` in the split one); the runs agree

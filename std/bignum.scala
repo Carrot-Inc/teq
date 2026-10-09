@@ -177,6 +177,8 @@ package scala.math:
     def apply(d: Double): BigDecimal = decimal(d)
     def apply(d: Double, mc: MathContext): BigDecimal = decimal(d, mc)
     def apply(x: String): BigDecimal = exact(x)
+    def apply(x: Array[Char]): BigDecimal = exact(new BigDec(x))
+    def apply(x: Array[Char], mc: MathContext): BigDecimal = new BigDecimal(new BigDec(x, mc), mc)
     def apply(x: String, mc: MathContext): BigDecimal = new BigDecimal(new BigDec(x, mc), mc)
     def apply(x: BigInt): BigDecimal = exact(x)
     def apply(x: BigInt, mc: MathContext): BigDecimal = new BigDecimal(new BigDec(x.bigInteger, mc), mc)
@@ -318,6 +320,10 @@ package scala.math:
     def apply(x: String): BigInt = new BigInt(new BigInteger(x))
     def apply(x: String, radix: Int): BigInt = new BigInt(new BigInteger(x, radix))
     def apply(x: BigInteger): BigInt = new BigInt(x)
+    // scala-library's: the JDK's random constructors and `probablePrime` over the wrapped generator.
+    def apply(numbits: Int, rnd: scala.util.Random): BigInt = new BigInt(new BigInteger(numbits, rnd.self))
+    def apply(bitlength: Int, certainty: Int, rnd: scala.util.Random): BigInt = new BigInt(new BigInteger(bitlength, certainty, rnd.self))
+    def probablePrime(bitLength: Int, rnd: scala.util.Random): BigInt = new BigInt(BigInteger.probablePrime(bitLength, rnd.self))
     val MinLong: BigInt = BigInt(Long.MinValue)
     val MaxLong: BigInt = BigInt(Long.MaxValue)
     given ordering: Ordering[BigInt] with

@@ -1489,7 +1489,7 @@ impl<'a> Emitter<'a> {
             TExpr::Static(s) => self.walk_static(w, s),
             TExpr::Module(c) => self.walk_module(w, c),
             TExpr::ClassOf(c) => {
-                for helper in ["$traitClass", "$classValue", "$classNamed", "$classData"] {
+                for helper in ["$traitClass", "$boxedClass", "$classValue", "$classNamed", "$classData"] {
                     w.name(helper);
                 }
                 if self.syms.class(c).kind != ClassKind::Builtin && self.syms.class(c).js == JsKind::Scala && self.reach.classes.get(c.idx()).copied().unwrap_or(false) {

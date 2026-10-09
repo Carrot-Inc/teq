@@ -518,10 +518,15 @@ impl<'a> Worker<'a> {
     /// side (the companion) completes it here.
     pub(super) fn load_java_pkg_member(&mut self, p: PkgId, name: Name) -> bool {
         // The std is written against itself; `java.lang.String` and `Object` are the builtins.
-        // On the JVM a class of the JavaScript layer alone is the JDK's for the std too.
+        // On the JVM a class of the JavaScript layer alone, and a JDK class no std file defines
+        // (`java.time.Instant`, which JavaScript takes from scala-java-time's jar), are the JDK's
+        // for the std too.
         let file = self.env.file;
-        if self.source(file).is_std && !self.in_jar(file) && !(self.jvm && crate::js_only_class(self.interner.get(name), || self.pkg_path(p))) {
-            return false;
+        if self.source(file).is_std && !self.in_jar(file) {
+            let jdk_only = || self.pkg_path(p).starts_with("java.") && !self.std.index().by_name.contains_key(&(p, name));
+            if !(self.jvm && (crate::js_only_class(self.interner.get(name), || self.pkg_path(p)) || jdk_only())) {
+                return false;
+            }
         }
         if p == self.java_lang_pkg_id() && (name == names::STRING || self.interner.get(name) == "Object") {
             return false;
@@ -734,7 +739,7 @@ impl<'a> Worker<'a> {
         for (binary, simple) in nested {
             let (_, stem) = split_binary(&binary);
             let name = self.interner.intern(&simple);
-            if self.syms.class(c).nested.contains_key(&name) {
+            if self.syms.class(c).nested.contains_key(&name) || self.syms.class(obj).nested.contains_key(&name) {
                 continue;
             }
             let Some((source, ncf)) = self.locate_java_class(pkg, stem, false) else { continue };
@@ -1061,6 +1066,11 @@ impl<'a> Worker<'a> {
             self.java_mut().syms.insert(sym, JSym { class, member: JMember::Field(i as u32) });
             self.register_term(Owner::Class(owner), sym);
         }
+        // The class's own nested classes the std leaves out (`AbstractMap.SimpleEntry`), entered
+        // as a class file's are (dotty's `ClassfileParser.enterOwnInnerClasses`).
+        if let Some(o) = obj {
+            self.enter_java_nested(class, o, &cf, 1);
+        }
         true
     }
 
@@ -1198,6 +1208,16 @@ impl<'a> Worker<'a> {
             return self.loaded.as_ref().unwrap().scala_library && self.enter_java_builtin_members(c);
         }
         if self.absorb_java_class(c) {
+            return true;
+        }
+        // A class below one the std stands in for inherits the JDK class's members the std leaves
+        // out, its default methods (`Predicate.negate`) among them.
+        let stand_ins: Vec<ClassId> = self.syms.class(c).base_types.iter().skip(1).map(|&(b, _)| b).filter(|&b| self.std_jvm_class(b).is_some()).collect();
+        let mut absorbed = false;
+        for b in stand_ins {
+            absorbed |= self.absorb_java_class(b);
+        }
+        if absorbed {
             return true;
         }
         let pending: Vec<ClassId> = self
@@ -1418,20 +1438,36 @@ impl<'a> Worker<'a> {
             p = self.syms.sub_pkg(p, n);
         }
         let name = self.interner.intern(simple);
-        if let Some(c) = self.java_top_level(p, name, simple, read, arity) {
-            return Some(c);
+        // A class nested in one the std stands in for is the std's (`Map$Entry`, nested in its
+        // companion), or the JDK's the std's class takes in (`java_member_miss`), never read again
+        // as a class of its own.
+        let first = simple.split('$').find(|s| !s.is_empty())?;
+        let first_name = self.interner.intern(first);
+        let in_std = first.len() < simple.len()
+            && self.syms.pkg(p).entries.get(&first_name).and_then(|e| e.class).map_or(false, |o| self.std_jvm_class(o).is_some());
+        if !in_std {
+            if let Some(c) = self.java_top_level(p, name, simple, read, arity) {
+                return Some(c);
+            }
         }
         // A `$` in the simple name is the nesting of one class in another.
         let mut parts = simple.split('$').filter(|s| !s.is_empty());
-        let first = parts.next()?;
-        let first_name = self.interner.intern(first);
+        parts.next();
         let mut c = self.java_top_level(p, first_name, first, true, 0)?;
         for part in parts {
             if self.syms.class(c).state() == Completion::NotStarted {
                 self.complete_class(c);
             }
             let n = self.interner.intern(part);
-            c = *self.syms.class(c).nested.get(&n)?;
+            let nested = |w: &Self, c: ClassId| {
+                let own = w.syms.class(c).nested.get(&n).copied();
+                own.or_else(|| w.syms.class(c).companion.and_then(|o| w.syms.class(o).nested.get(&n).copied()))
+            };
+            c = match nested(self, c) {
+                Some(k) => k,
+                None if in_std && self.java_member_miss(c) => nested(self, c)?,
+                None => return None,
+            };
         }
         Some(c)
     }

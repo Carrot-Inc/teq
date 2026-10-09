@@ -27,8 +27,15 @@ extension [T](a: Array[T])
 // by (`iterableToArray`, `fromArray`), whichever of the two they take.
 
 // Scala.js's `js.Array` members that Scala's `Array` lacks, on the JS array both are, with the
-// JavaScript semantics: `reverse` and `sort` in place are left out, Scala's `reverse` has the name.
+// JavaScript semantics: `reverse` in place is `reverseInPlace` (Scala's `reverse` copies), and
+// `sort()` without a function compares as strings.
 extension [T](a: Array[T])
+  @js("$0.reverse()")
+  def reverseInPlace(): Array[T]
+  @js("$0.sort()")
+  def sort(): Array[T]
+  @js("$0.sort($1)")
+  def sort(compareFn: (T, T) => Int): Array[T]
   @js("$0.length = $1")
   def length_=(n: Int): Unit
   @js("$0.pop()")
@@ -100,3 +107,8 @@ def iterableToArray[A](xs: IterableOnce[A]): RawBuffer[A] =
 @js("$0.slice()")
 @jvm("new java/util/ArrayList dup $0 invokespecial java/util/ArrayList.<init>(Ljava/util/Collection;)V")
 def copyArray[A, B >: A](arr: RawBuffer[A]): RawBuffer[B]
+
+// A sequence spread into the varargs of a Java method (`Stream.of(xs*)`) is a copy of its elements,
+// the array dotty's `ElimRepeated.adaptToArray` makes of it (`Arrays.seqToArray`), where an array
+// spread is the array itself.
+def javaVarargs[A](xs: Seq[A]): Seq[A] = scala.collection.immutable.ArraySeq.unsafeWrapArray(untaggedArray(iterableToArray(xs)))

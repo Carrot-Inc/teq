@@ -1710,18 +1710,16 @@ impl<'a, 't> Interp<'a, 't> {
                 }
                 false
             }
-            Value::Str(_) => {
-                let info = self.syms().class(c);
-                matches!(self.name(info.name), "String" | "CharSequence" | "Comparable" | "Serializable" | "Object")
+            Value::Str(_) => c == self.typer.b.string || c == self.typer.b.any_ref || self.boxed_kinds(c) & crate::tir::boxed::STR != 0,
+            Value::Int(_) | Value::Double(_) | Value::Float(_) | Value::Short(_) | Value::Byte(_) => {
+                c == self.typer.b.any_ref || self.boxed_kinds(c) & crate::tir::boxed::NUMBER != 0 || self.is_own_box(v, c)
             }
-            Value::Int(_) | Value::Long(_) | Value::Double(_) | Value::Float(_) | Value::Short(_) | Value::Byte(_) => {
-                let info = self.syms().class(c);
-                matches!(self.name(info.name), "Number" | "Comparable" | "Serializable" | "Object")
-            }
-            Value::Bool(_) | Value::Char(_) => {
-                let info = self.syms().class(c);
-                matches!(self.name(info.name), "Comparable" | "Serializable" | "Object")
-            }
+            Value::Long(_) => c == self.typer.b.any_ref || self.boxed_kinds(c) & crate::tir::boxed::LONG != 0 || self.is_own_box(v, c),
+            Value::Bool(_) => c == self.typer.b.any_ref || self.boxed_kinds(c) & crate::tir::boxed::BOOL != 0 || self.is_own_box(v, c),
+            Value::Char(_) => c == self.typer.b.any_ref || self.boxed_kinds(c) & crate::tir::boxed::CHAR != 0 || self.is_own_box(v, c),
+            Value::Unit => self.boxed_kinds(c) & crate::tir::boxed::UNIT != 0,
+            // One class of every array (`docs/internal/DIFFERENCES.md`).
+            Value::Array(_) => c == self.typer.b.array || c == self.typer.b.any_ref,
             Value::Class(_) => self.name(self.syms().class(c).name) == "Class",
             Value::Tree(t) => {
                 let t = *t;
@@ -1736,6 +1734,20 @@ impl<'a, 't> Interp<'a, 't> {
             Value::Src(_) => self.reflect_class_named(c, "SourceFile"),
             _ => false,
         }
+    }
+
+    /// Whether `c` is the box of the primitive `v`, the class `getClass` gives it.
+    fn is_own_box(&mut self, v: &Value, c: ClassId) -> bool {
+        let Value::Class(own) = self.class_of_value(v) else { return false };
+        own.qname == self.runtime_class_name(c)
+    }
+
+    /// The primitives whose box extends `c` (`crate::tir::boxed::ancestor`).
+    fn boxed_kinds(&self, c: ClassId) -> u8 {
+        let info = self.syms().class(c);
+        let Owner::Package(p) = info.owner else { return 0 };
+        let pkg = self.package_path(p);
+        crate::tir::boxed::ancestor(pkg.strip_suffix('.').unwrap_or(&pkg), self.name(info.name))
     }
 
     pub(super) fn is_subclass(&self, k: ClassId, c: ClassId) -> bool {

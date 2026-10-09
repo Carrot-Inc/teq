@@ -842,11 +842,12 @@ impl Reach {
 
 /// The exception classes the JavaScript runtime throws (`$exc` in `rt.js`), by their names in
 /// `java.lang`, `java.util`, `scala` and `js`.
-pub const RUNTIME_THROWN: [&str; 14] = [
+pub const RUNTIME_THROWN: [&str; 15] = [
     "Throwable",
     "JavaScriptException",
     "MatchError",
     "ArithmeticException",
+    "NullPointerException",
     "NumberFormatException",
     "IndexOutOfBoundsException",
     "StringIndexOutOfBoundsException",

@@ -108,10 +108,50 @@ package java.util.stream:
     def count(): Long
     def average(): java.util.OptionalDouble
     def boxed(): Stream[java.lang.Integer]
+    def filter(predicate: java.util.function.IntPredicate): IntStream
+    def map(mapper: java.util.function.IntUnaryOperator): IntStream
+    def mapToObj[U](mapper: java.util.function.IntFunction[? <: U]): Stream[U]
+    def mapToLong(mapper: java.util.function.IntToLongFunction): LongStream
+    def mapToDouble(mapper: java.util.function.IntToDoubleFunction): DoubleStream
+    def flatMap(mapper: java.util.function.IntFunction[? <: IntStream]): IntStream
+    def distinct(): IntStream
+    def sorted(): IntStream
+    def peek(action: java.util.function.IntConsumer): IntStream
+    def limit(maxSize: Long): IntStream
+    def skip(n: Long): IntStream
+    def takeWhile(predicate: java.util.function.IntPredicate): IntStream
+    def dropWhile(predicate: java.util.function.IntPredicate): IntStream
+    def asLongStream(): LongStream
+    def asDoubleStream(): DoubleStream
+    def forEachOrdered(action: java.util.function.IntConsumer): Unit
+    def reduce(identity: Int, op: java.util.function.IntBinaryOperator): Int
+    def reduce(op: java.util.function.IntBinaryOperator): java.util.OptionalInt
+    def collect[R](supplier: java.util.function.Supplier[R], accumulator: java.util.function.ObjIntConsumer[R], combiner: java.util.function.BiConsumer[R, R]): R
+    def anyMatch(predicate: java.util.function.IntPredicate): Boolean
+    def allMatch(predicate: java.util.function.IntPredicate): Boolean
+    def noneMatch(predicate: java.util.function.IntPredicate): Boolean
+    def findFirst(): java.util.OptionalInt
+    def findAny(): java.util.OptionalInt
 
   @jvmClass("java/util/stream/IntStream")
   object IntStream:
     def empty(): IntStream = Pipes.ints(new Array[Any](0), Pipes.EMPTY)
+    def range(startInclusive: Int, endExclusive: Int): IntStream =
+      if startInclusive >= endExclusive then empty() else Pipes.intsOf(new RangeSpliterator(startInclusive, endExclusive - 1L, true))
+    def rangeClosed(startInclusive: Int, endInclusive: Int): IntStream =
+      if startInclusive > endInclusive then empty() else Pipes.intsOf(new RangeSpliterator(startInclusive, endInclusive, true))
+    def concat(a: IntStream, b: IntStream): IntStream =
+      val s = Pipes.intsOf(Pipes.concatenation(a, b))
+      (if a.isParallel() || b.isParallel() then s.parallel() else s).onClose(Pipes.closeBoth(a, b))
+    def iterate(seed: Int, f: java.util.function.IntUnaryOperator): IntStream =
+      if f == null then throw new NullPointerException()
+      Pipes.intsOf(new Iterating[Any](seed, t => f.applyAsInt(t.asInstanceOf[Int])))
+    def iterate(seed: Int, hasNext: java.util.function.IntPredicate, next: java.util.function.IntUnaryOperator): IntStream =
+      if next == null || hasNext == null then throw new NullPointerException()
+      Pipes.intsOf(new IteratingWhile[Any](seed, t => hasNext.test(t.asInstanceOf[Int]), t => next.applyAsInt(t.asInstanceOf[Int])))
+    def generate(s: java.util.function.IntSupplier): IntStream =
+      if s == null then throw new NullPointerException()
+      Pipes.intsOf(new Generating[Any](() => s.getAsInt()))
     def of(t: Int): IntStream = Pipes.ints(Array[Any](t))
     def of(values: Int*): IntStream = Pipes.ints(Pipes.arrayOf(values))
 
@@ -127,10 +167,57 @@ package java.util.stream:
     def count(): Long
     def average(): java.util.OptionalDouble
     def boxed(): Stream[java.lang.Long]
+    def filter(predicate: java.util.function.LongPredicate): LongStream
+    def map(mapper: java.util.function.LongUnaryOperator): LongStream
+    def mapToObj[U](mapper: java.util.function.LongFunction[? <: U]): Stream[U]
+    def mapToInt(mapper: java.util.function.LongToIntFunction): IntStream
+    def mapToDouble(mapper: java.util.function.LongToDoubleFunction): DoubleStream
+    def flatMap(mapper: java.util.function.LongFunction[? <: LongStream]): LongStream
+    def distinct(): LongStream
+    def sorted(): LongStream
+    def peek(action: java.util.function.LongConsumer): LongStream
+    def limit(maxSize: Long): LongStream
+    def skip(n: Long): LongStream
+    def takeWhile(predicate: java.util.function.LongPredicate): LongStream
+    def dropWhile(predicate: java.util.function.LongPredicate): LongStream
+    def asDoubleStream(): DoubleStream
+    def forEachOrdered(action: java.util.function.LongConsumer): Unit
+    def reduce(identity: Long, op: java.util.function.LongBinaryOperator): Long
+    def reduce(op: java.util.function.LongBinaryOperator): java.util.OptionalLong
+    def collect[R](supplier: java.util.function.Supplier[R], accumulator: java.util.function.ObjLongConsumer[R], combiner: java.util.function.BiConsumer[R, R]): R
+    def anyMatch(predicate: java.util.function.LongPredicate): Boolean
+    def allMatch(predicate: java.util.function.LongPredicate): Boolean
+    def noneMatch(predicate: java.util.function.LongPredicate): Boolean
+    def findFirst(): java.util.OptionalLong
+    def findAny(): java.util.OptionalLong
 
   @jvmClass("java/util/stream/LongStream")
   object LongStream:
     def empty(): LongStream = Pipes.longs(new Array[Any](0), Pipes.EMPTY)
+    // The JDK's: a range of more than `Long.MaxValue` numbers is two concatenated, split at the
+    // unsigned middle (that of `[MinValue, MaxValue)` and of its lower half split again), so that
+    // each piece is sized and the whole is not.
+    def range(startInclusive: Long, endExclusive: Long): LongStream =
+      if startInclusive >= endExclusive then empty()
+      else if endExclusive - startInclusive < 0 then
+        val m = startInclusive + java.lang.Long.divideUnsigned(endExclusive - startInclusive, 2) + 1
+        concat(range(startInclusive, m), range(m, endExclusive))
+      else Pipes.longsOf(new RangeSpliterator(startInclusive, endExclusive - 1L, false))
+    def rangeClosed(startInclusive: Long, endInclusive: Long): LongStream =
+      if startInclusive > endInclusive then empty()
+      else if endInclusive - startInclusive + 1 <= 0 then
+        val m = startInclusive + java.lang.Long.divideUnsigned(endInclusive - startInclusive, 2) + 1
+        concat(range(startInclusive, m), rangeClosed(m, endInclusive))
+      else Pipes.longsOf(new RangeSpliterator(startInclusive, endInclusive, false))
+    def concat(a: LongStream, b: LongStream): LongStream =
+      val s = Pipes.longsOf(Pipes.concatenation(a, b))
+      (if a.isParallel() || b.isParallel() then s.parallel() else s).onClose(Pipes.closeBoth(a, b))
+    def iterate(seed: Long, f: java.util.function.LongUnaryOperator): LongStream =
+      if f == null then throw new NullPointerException()
+      Pipes.longsOf(new Iterating[Any](seed, t => f.applyAsLong(t.asInstanceOf[Long])))
+    def generate(s: java.util.function.LongSupplier): LongStream =
+      if s == null then throw new NullPointerException()
+      Pipes.longsOf(new Generating[Any](() => s.getAsLong()))
     def of(t: Long): LongStream = Pipes.longs(Array[Any](t))
     def of(values: Long*): LongStream = Pipes.longs(Pipes.arrayOf(values))
 
@@ -146,10 +233,41 @@ package java.util.stream:
     def count(): Long
     def average(): java.util.OptionalDouble
     def boxed(): Stream[java.lang.Double]
+    def filter(predicate: java.util.function.DoublePredicate): DoubleStream
+    def map(mapper: java.util.function.DoubleUnaryOperator): DoubleStream
+    def mapToObj[U](mapper: java.util.function.DoubleFunction[? <: U]): Stream[U]
+    def mapToInt(mapper: java.util.function.DoubleToIntFunction): IntStream
+    def mapToLong(mapper: java.util.function.DoubleToLongFunction): LongStream
+    def flatMap(mapper: java.util.function.DoubleFunction[? <: DoubleStream]): DoubleStream
+    def distinct(): DoubleStream
+    def sorted(): DoubleStream
+    def peek(action: java.util.function.DoubleConsumer): DoubleStream
+    def limit(maxSize: Long): DoubleStream
+    def skip(n: Long): DoubleStream
+    def takeWhile(predicate: java.util.function.DoublePredicate): DoubleStream
+    def dropWhile(predicate: java.util.function.DoublePredicate): DoubleStream
+    def forEachOrdered(action: java.util.function.DoubleConsumer): Unit
+    def reduce(identity: Double, op: java.util.function.DoubleBinaryOperator): Double
+    def reduce(op: java.util.function.DoubleBinaryOperator): java.util.OptionalDouble
+    def collect[R](supplier: java.util.function.Supplier[R], accumulator: java.util.function.ObjDoubleConsumer[R], combiner: java.util.function.BiConsumer[R, R]): R
+    def anyMatch(predicate: java.util.function.DoublePredicate): Boolean
+    def allMatch(predicate: java.util.function.DoublePredicate): Boolean
+    def noneMatch(predicate: java.util.function.DoublePredicate): Boolean
+    def findFirst(): java.util.OptionalDouble
+    def findAny(): java.util.OptionalDouble
 
   @jvmClass("java/util/stream/DoubleStream")
   object DoubleStream:
     def empty(): DoubleStream = Pipes.doubles(new Array[Any](0), Pipes.EMPTY)
+    def concat(a: DoubleStream, b: DoubleStream): DoubleStream =
+      val s = Pipes.doublesOf(Pipes.concatenation(a, b))
+      (if a.isParallel() || b.isParallel() then s.parallel() else s).onClose(Pipes.closeBoth(a, b))
+    def iterate(seed: Double, f: java.util.function.DoubleUnaryOperator): DoubleStream =
+      if f == null then throw new NullPointerException()
+      Pipes.doublesOf(new Iterating[Any](seed, t => f.applyAsDouble(t.asInstanceOf[Double])))
+    def generate(s: java.util.function.DoubleSupplier): DoubleStream =
+      if s == null then throw new NullPointerException()
+      Pipes.doublesOf(new Generating[Any](() => s.getAsDouble()))
     def of(t: Double): DoubleStream = Pipes.doubles(Array[Any](t))
     def of(values: Double*): DoubleStream = Pipes.doubles(Pipes.arrayOf(values))
 
@@ -756,13 +874,22 @@ package java.util.stream:
     // `UNORDERED` once the stream is taken and before its source is (`ReduceOps.makeRef`'s
     // `getOpFlags`), the answer of no use to a sequential stream; and whether it finishes by
     // identity after the elements.
+    // A parallel stream first asks whether the collector is `CONCURRENT` and, ordered, whether it
+    // is `UNORDERED` (`ReferencePipeline.collect`); where both hold, the elements go into one
+    // container (one thread here runs that branch as any other).
     def collect[R, A](collector: Collector[? >: T, A, R]): R =
       if collector == null then throw new NullPointerException()
       val c = collector.asInstanceOf[Collector[Any, Any, Any]]
-      val supply = c.supplier()
-      val accumulate = c.accumulator()
-      c.combiner()
-      val container = collectRaw(() => supply.get(), (r, t) => accumulate.accept(r, t), () => Pipes.has(c, Collector.Characteristics.UNORDERED))
+      val container =
+        if isParallel() && Pipes.has(c, Collector.Characteristics.CONCURRENT) && (!ordered || Pipes.has(c, Collector.Characteristics.UNORDERED)) then
+          val one = c.supplier().get()
+          val accumulate = c.accumulator()
+          collectRaw(() => one, (r, t) => accumulate.accept(r, t))
+        else
+          val supply = c.supplier()
+          val accumulate = c.accumulator()
+          c.combiner()
+          collectRaw(() => supply.get(), (r, t) => accumulate.accept(r, t), () => Pipes.has(c, Collector.Characteristics.UNORDERED))
       if Pipes.has(c, Collector.Characteristics.IDENTITY_FINISH) then container.asInstanceOf[R]
       else c.finisher().apply(container).asInstanceOf[R]
     // An unmodifiable list, as `Stream.toList`'s.
@@ -836,6 +963,69 @@ package java.util.stream:
       }).asInstanceOf[Array[Long]]
       if avg(0) > 0 then java.util.OptionalDouble.of(avg(1).toDouble / avg(0)) else java.util.OptionalDouble.empty()
     def boxed(): Stream[java.lang.Integer] = new RefPipe[java.lang.Integer](this, Ops.map(t => t), 0)
+    // The JDK's intermediate operations, each a stage of the pipeline, and the rest of its terminal
+    // ones, over the elements boxed between the stages.
+    def filter(predicate: java.util.function.IntPredicate): IntStream =
+      if predicate == null then throw new NullPointerException()
+      new IntPipe(this, Ops.filter(t => predicate.test(t.asInstanceOf[Int])), 0)
+    def map(mapper: java.util.function.IntUnaryOperator): IntStream =
+      if mapper == null then throw new NullPointerException()
+      new IntPipe(this, Ops.map(t => mapper.applyAsInt(t.asInstanceOf[Int])), 0)
+    def mapToObj[U](mapper: java.util.function.IntFunction[? <: U]): Stream[U] =
+      if mapper == null then throw new NullPointerException()
+      new RefPipe[U](this, Ops.map(t => mapper.apply(t.asInstanceOf[Int])), 0)
+    def mapToLong(mapper: java.util.function.IntToLongFunction): LongStream =
+      if mapper == null then throw new NullPointerException()
+      new LongPipe(this, Ops.map(t => mapper.applyAsLong(t.asInstanceOf[Int])), 0)
+    def mapToDouble(mapper: java.util.function.IntToDoubleFunction): DoubleStream =
+      if mapper == null then throw new NullPointerException()
+      new DoublePipe(this, Ops.map(t => mapper.applyAsDouble(t.asInstanceOf[Int])), 0)
+    def flatMap(mapper: java.util.function.IntFunction[? <: IntStream]): IntStream =
+      if mapper == null then throw new NullPointerException()
+      new IntPipe(this, Ops.flatMap(t => mapper.apply(t.asInstanceOf[Int])), 0)
+    def distinct(): IntStream = new IntPipe(this, Ops.distinct, 0)
+    def sorted(): IntStream = new IntPipe(this, Ops.sorted((a, b) => java.lang.Integer.compare(a.asInstanceOf[Int], b.asInstanceOf[Int]), true), 0)
+    def peek(action: java.util.function.IntConsumer): IntStream =
+      if action == null then throw new NullPointerException()
+      new IntPipe(this, Ops.peek(t => action.accept(t.asInstanceOf[Int])), 0)
+    def limit(maxSize: Long): IntStream =
+      if maxSize < 0 then throw new IllegalArgumentException(java.lang.Long.toString(maxSize))
+      new IntPipe(this, Ops.slice(0, maxSize), 0)
+    def skip(n: Long): IntStream =
+      if n < 0 then throw new IllegalArgumentException(java.lang.Long.toString(n))
+      if n == 0 then this else new IntPipe(this, Ops.slice(n, -1), 0)
+    def takeWhile(predicate: java.util.function.IntPredicate): IntStream =
+      if predicate == null then throw new NullPointerException()
+      new IntPipe(this, Ops.takeWhile(t => predicate.test(t.asInstanceOf[Int])), 0)
+    def dropWhile(predicate: java.util.function.IntPredicate): IntStream =
+      if predicate == null then throw new NullPointerException()
+      new IntPipe(this, Ops.dropWhile(t => predicate.test(t.asInstanceOf[Int])), 0)
+    def asLongStream(): LongStream = new LongPipe(this, Ops.map(t => t.asInstanceOf[Int].toLong), 0)
+    def asDoubleStream(): DoubleStream = new DoublePipe(this, Ops.map(t => t.asInstanceOf[Int].toDouble), 0)
+    def forEachOrdered(action: java.util.function.IntConsumer): Unit = forEach(action)
+    def reduce(identity: Int, op: java.util.function.IntBinaryOperator): Int =
+      if op == null then throw new NullPointerException()
+      foldRaw(identity, (a, b) => op.applyAsInt(a.asInstanceOf[Int], b.asInstanceOf[Int])).asInstanceOf[Int]
+    def reduce(op: java.util.function.IntBinaryOperator): java.util.OptionalInt =
+      if op == null then throw new NullPointerException()
+      val r = reduceRaw((a, b) => op.applyAsInt(a.asInstanceOf[Int], b.asInstanceOf[Int]))
+      if r.found then java.util.OptionalInt.of(r.value.asInstanceOf[Int]) else java.util.OptionalInt.empty()
+    def collect[R](supplier: java.util.function.Supplier[R], accumulator: java.util.function.ObjIntConsumer[R], combiner: java.util.function.BiConsumer[R, R]): R =
+      if supplier == null || accumulator == null || combiner == null then throw new NullPointerException()
+      collectRaw(() => supplier.get(), (r, t) => accumulator.accept(r.asInstanceOf[R], t.asInstanceOf[Int])).asInstanceOf[R]
+    def anyMatch(predicate: java.util.function.IntPredicate): Boolean =
+      if predicate == null then throw new NullPointerException()
+      matchRaw(0, t => predicate.test(t.asInstanceOf[Int]))
+    def allMatch(predicate: java.util.function.IntPredicate): Boolean =
+      if predicate == null then throw new NullPointerException()
+      matchRaw(1, t => predicate.test(t.asInstanceOf[Int]))
+    def noneMatch(predicate: java.util.function.IntPredicate): Boolean =
+      if predicate == null then throw new NullPointerException()
+      matchRaw(2, t => predicate.test(t.asInstanceOf[Int]))
+    def findFirst(): java.util.OptionalInt =
+      val r = findRaw()
+      if r.found then java.util.OptionalInt.of(r.value.asInstanceOf[Int]) else java.util.OptionalInt.empty()
+    def findAny(): java.util.OptionalInt = findFirst()
 
   private[java] final class LongPipe(previous: Pipe, op: Op, headFlags: Int) extends Pipe(previous, op, headFlags), LongStream:
     def iterator(): java.util.PrimitiveIterator.OfLong =
@@ -882,6 +1072,68 @@ package java.util.stream:
       }).asInstanceOf[Array[Long]]
       if avg(0) > 0 then java.util.OptionalDouble.of(avg(1).toDouble / avg(0)) else java.util.OptionalDouble.empty()
     def boxed(): Stream[java.lang.Long] = new RefPipe[java.lang.Long](this, Ops.map(t => t), 0)
+    // The JDK's intermediate operations, each a stage of the pipeline, and the rest of its terminal
+    // ones, over the elements boxed between the stages.
+    def filter(predicate: java.util.function.LongPredicate): LongStream =
+      if predicate == null then throw new NullPointerException()
+      new LongPipe(this, Ops.filter(t => predicate.test(t.asInstanceOf[Long])), 0)
+    def map(mapper: java.util.function.LongUnaryOperator): LongStream =
+      if mapper == null then throw new NullPointerException()
+      new LongPipe(this, Ops.map(t => mapper.applyAsLong(t.asInstanceOf[Long])), 0)
+    def mapToObj[U](mapper: java.util.function.LongFunction[? <: U]): Stream[U] =
+      if mapper == null then throw new NullPointerException()
+      new RefPipe[U](this, Ops.map(t => mapper.apply(t.asInstanceOf[Long])), 0)
+    def mapToInt(mapper: java.util.function.LongToIntFunction): IntStream =
+      if mapper == null then throw new NullPointerException()
+      new IntPipe(this, Ops.map(t => mapper.applyAsInt(t.asInstanceOf[Long])), 0)
+    def mapToDouble(mapper: java.util.function.LongToDoubleFunction): DoubleStream =
+      if mapper == null then throw new NullPointerException()
+      new DoublePipe(this, Ops.map(t => mapper.applyAsDouble(t.asInstanceOf[Long])), 0)
+    def flatMap(mapper: java.util.function.LongFunction[? <: LongStream]): LongStream =
+      if mapper == null then throw new NullPointerException()
+      new LongPipe(this, Ops.flatMap(t => mapper.apply(t.asInstanceOf[Long])), 0)
+    def distinct(): LongStream = new LongPipe(this, Ops.distinct, 0)
+    def sorted(): LongStream = new LongPipe(this, Ops.sorted((a, b) => java.lang.Long.compare(a.asInstanceOf[Long], b.asInstanceOf[Long]), true), 0)
+    def peek(action: java.util.function.LongConsumer): LongStream =
+      if action == null then throw new NullPointerException()
+      new LongPipe(this, Ops.peek(t => action.accept(t.asInstanceOf[Long])), 0)
+    def limit(maxSize: Long): LongStream =
+      if maxSize < 0 then throw new IllegalArgumentException(java.lang.Long.toString(maxSize))
+      new LongPipe(this, Ops.slice(0, maxSize), 0)
+    def skip(n: Long): LongStream =
+      if n < 0 then throw new IllegalArgumentException(java.lang.Long.toString(n))
+      if n == 0 then this else new LongPipe(this, Ops.slice(n, -1), 0)
+    def takeWhile(predicate: java.util.function.LongPredicate): LongStream =
+      if predicate == null then throw new NullPointerException()
+      new LongPipe(this, Ops.takeWhile(t => predicate.test(t.asInstanceOf[Long])), 0)
+    def dropWhile(predicate: java.util.function.LongPredicate): LongStream =
+      if predicate == null then throw new NullPointerException()
+      new LongPipe(this, Ops.dropWhile(t => predicate.test(t.asInstanceOf[Long])), 0)
+    def asDoubleStream(): DoubleStream = new DoublePipe(this, Ops.map(t => t.asInstanceOf[Long].toDouble), 0)
+    def forEachOrdered(action: java.util.function.LongConsumer): Unit = forEach(action)
+    def reduce(identity: Long, op: java.util.function.LongBinaryOperator): Long =
+      if op == null then throw new NullPointerException()
+      foldRaw(identity, (a, b) => op.applyAsLong(a.asInstanceOf[Long], b.asInstanceOf[Long])).asInstanceOf[Long]
+    def reduce(op: java.util.function.LongBinaryOperator): java.util.OptionalLong =
+      if op == null then throw new NullPointerException()
+      val r = reduceRaw((a, b) => op.applyAsLong(a.asInstanceOf[Long], b.asInstanceOf[Long]))
+      if r.found then java.util.OptionalLong.of(r.value.asInstanceOf[Long]) else java.util.OptionalLong.empty()
+    def collect[R](supplier: java.util.function.Supplier[R], accumulator: java.util.function.ObjLongConsumer[R], combiner: java.util.function.BiConsumer[R, R]): R =
+      if supplier == null || accumulator == null || combiner == null then throw new NullPointerException()
+      collectRaw(() => supplier.get(), (r, t) => accumulator.accept(r.asInstanceOf[R], t.asInstanceOf[Long])).asInstanceOf[R]
+    def anyMatch(predicate: java.util.function.LongPredicate): Boolean =
+      if predicate == null then throw new NullPointerException()
+      matchRaw(0, t => predicate.test(t.asInstanceOf[Long]))
+    def allMatch(predicate: java.util.function.LongPredicate): Boolean =
+      if predicate == null then throw new NullPointerException()
+      matchRaw(1, t => predicate.test(t.asInstanceOf[Long]))
+    def noneMatch(predicate: java.util.function.LongPredicate): Boolean =
+      if predicate == null then throw new NullPointerException()
+      matchRaw(2, t => predicate.test(t.asInstanceOf[Long]))
+    def findFirst(): java.util.OptionalLong =
+      val r = findRaw()
+      if r.found then java.util.OptionalLong.of(r.value.asInstanceOf[Long]) else java.util.OptionalLong.empty()
+    def findAny(): java.util.OptionalLong = findFirst()
 
   private[java] final class DoublePipe(previous: Pipe, op: Op, headFlags: Int) extends Pipe(previous, op, headFlags), DoubleStream:
     def iterator(): java.util.PrimitiveIterator.OfDouble =
@@ -939,6 +1191,67 @@ package java.util.stream:
       }).asInstanceOf[Array[Double]]
       if avg(2) > 0 then java.util.OptionalDouble.of(Pipes.computeFinalSum(avg) / avg(2)) else java.util.OptionalDouble.empty()
     def boxed(): Stream[java.lang.Double] = new RefPipe[java.lang.Double](this, Ops.map(t => t), 0)
+    // The JDK's intermediate operations, each a stage of the pipeline, and the rest of its terminal
+    // ones, over the elements boxed between the stages.
+    def filter(predicate: java.util.function.DoublePredicate): DoubleStream =
+      if predicate == null then throw new NullPointerException()
+      new DoublePipe(this, Ops.filter(t => predicate.test(t.asInstanceOf[Double])), 0)
+    def map(mapper: java.util.function.DoubleUnaryOperator): DoubleStream =
+      if mapper == null then throw new NullPointerException()
+      new DoublePipe(this, Ops.map(t => mapper.applyAsDouble(t.asInstanceOf[Double])), 0)
+    def mapToObj[U](mapper: java.util.function.DoubleFunction[? <: U]): Stream[U] =
+      if mapper == null then throw new NullPointerException()
+      new RefPipe[U](this, Ops.map(t => mapper.apply(t.asInstanceOf[Double])), 0)
+    def mapToInt(mapper: java.util.function.DoubleToIntFunction): IntStream =
+      if mapper == null then throw new NullPointerException()
+      new IntPipe(this, Ops.map(t => mapper.applyAsInt(t.asInstanceOf[Double])), 0)
+    def mapToLong(mapper: java.util.function.DoubleToLongFunction): LongStream =
+      if mapper == null then throw new NullPointerException()
+      new LongPipe(this, Ops.map(t => mapper.applyAsLong(t.asInstanceOf[Double])), 0)
+    def flatMap(mapper: java.util.function.DoubleFunction[? <: DoubleStream]): DoubleStream =
+      if mapper == null then throw new NullPointerException()
+      new DoublePipe(this, Ops.flatMap(t => mapper.apply(t.asInstanceOf[Double])), 0)
+    def distinct(): DoubleStream = new DoublePipe(this, Ops.distinct, 0)
+    def sorted(): DoubleStream = new DoublePipe(this, Ops.sorted((a, b) => java.lang.Double.compare(a.asInstanceOf[Double], b.asInstanceOf[Double]), true), 0)
+    def peek(action: java.util.function.DoubleConsumer): DoubleStream =
+      if action == null then throw new NullPointerException()
+      new DoublePipe(this, Ops.peek(t => action.accept(t.asInstanceOf[Double])), 0)
+    def limit(maxSize: Long): DoubleStream =
+      if maxSize < 0 then throw new IllegalArgumentException(java.lang.Long.toString(maxSize))
+      new DoublePipe(this, Ops.slice(0, maxSize), 0)
+    def skip(n: Long): DoubleStream =
+      if n < 0 then throw new IllegalArgumentException(java.lang.Long.toString(n))
+      if n == 0 then this else new DoublePipe(this, Ops.slice(n, -1), 0)
+    def takeWhile(predicate: java.util.function.DoublePredicate): DoubleStream =
+      if predicate == null then throw new NullPointerException()
+      new DoublePipe(this, Ops.takeWhile(t => predicate.test(t.asInstanceOf[Double])), 0)
+    def dropWhile(predicate: java.util.function.DoublePredicate): DoubleStream =
+      if predicate == null then throw new NullPointerException()
+      new DoublePipe(this, Ops.dropWhile(t => predicate.test(t.asInstanceOf[Double])), 0)
+    def forEachOrdered(action: java.util.function.DoubleConsumer): Unit = forEach(action)
+    def reduce(identity: Double, op: java.util.function.DoubleBinaryOperator): Double =
+      if op == null then throw new NullPointerException()
+      foldRaw(identity, (a, b) => op.applyAsDouble(a.asInstanceOf[Double], b.asInstanceOf[Double])).asInstanceOf[Double]
+    def reduce(op: java.util.function.DoubleBinaryOperator): java.util.OptionalDouble =
+      if op == null then throw new NullPointerException()
+      val r = reduceRaw((a, b) => op.applyAsDouble(a.asInstanceOf[Double], b.asInstanceOf[Double]))
+      if r.found then java.util.OptionalDouble.of(r.value.asInstanceOf[Double]) else java.util.OptionalDouble.empty()
+    def collect[R](supplier: java.util.function.Supplier[R], accumulator: java.util.function.ObjDoubleConsumer[R], combiner: java.util.function.BiConsumer[R, R]): R =
+      if supplier == null || accumulator == null || combiner == null then throw new NullPointerException()
+      collectRaw(() => supplier.get(), (r, t) => accumulator.accept(r.asInstanceOf[R], t.asInstanceOf[Double])).asInstanceOf[R]
+    def anyMatch(predicate: java.util.function.DoublePredicate): Boolean =
+      if predicate == null then throw new NullPointerException()
+      matchRaw(0, t => predicate.test(t.asInstanceOf[Double]))
+    def allMatch(predicate: java.util.function.DoublePredicate): Boolean =
+      if predicate == null then throw new NullPointerException()
+      matchRaw(1, t => predicate.test(t.asInstanceOf[Double]))
+    def noneMatch(predicate: java.util.function.DoublePredicate): Boolean =
+      if predicate == null then throw new NullPointerException()
+      matchRaw(2, t => predicate.test(t.asInstanceOf[Double]))
+    def findFirst(): java.util.OptionalDouble =
+      val r = findRaw()
+      if r.found then java.util.OptionalDouble.of(r.value.asInstanceOf[Double]) else java.util.OptionalDouble.empty()
+    def findAny(): java.util.OptionalDouble = findFirst()
 
   // The operations' sinks, as the JDK's stages make them.
   private[java] object Ops:
@@ -1100,6 +1413,19 @@ package java.util.stream:
       case a: scala.collection.immutable.ArraySeq[?] => a.unsafeArray.asInstanceOf[Array[Any]]
       case _ => untaggedArray(iterableToArray(values)).asInstanceOf[Array[Any]]
     def refs[T](items: Array[Any]): Stream[T] = StreamSupport.stream(new java.util.ArraySpliterator[T](items, ARRAY), false)
+    // A stage of primitives over a source of its own.
+    def intsOf(sp: java.util.Spliterator[Any]): IntStream =
+      val head = new IntPipe(null, null, flagsOf(sp))
+      head.source = sp
+      head
+    def longsOf(sp: java.util.Spliterator[Any]): LongStream =
+      val head = new LongPipe(null, null, flagsOf(sp))
+      head.source = sp
+      head
+    def doublesOf(sp: java.util.Spliterator[Any]): DoubleStream =
+      val head = new DoublePipe(null, null, flagsOf(sp))
+      head.source = sp
+      head
     def ints(items: Array[Any], flags: Int = ARRAY): IntStream =
       val head = new IntPipe(null, null, flags)
       head.source = new java.util.ArraySpliterator[Any](items, flags)
@@ -1142,6 +1468,11 @@ package java.util.stream:
       b.run()
     }
     // `Streams.composedClose`: both streams closed, the second's exception suppressed by the first's.
+    // `IntStream.concat` and its kin: `Streams.ConcatSpliterator.OfInt` and its kin over the two
+    // streams' spliterators, taken now, both null-checked first.
+    def concatenation(a: BaseStream[?, ?], b: BaseStream[?, ?]): java.util.Spliterator[Any] =
+      if a == null || b == null then throw new NullPointerException()
+      new Concatenation[Any](a.spliterator().asInstanceOf[java.util.Spliterator[Any]], b.spliterator().asInstanceOf[java.util.Spliterator[Any]])
     def closeBoth(a: BaseStream[?, ?], b: BaseStream[?, ?]): Runnable = () => {
       try a.close()
       catch
@@ -1335,7 +1666,26 @@ package java.util.stream:
       if beforeSplit then throw new IllegalStateException() else b.getComparator()
 
   // `Stream.iterate(seed, f)`: the seed, then `f` of the element before, without end.
-  private final class Iterating[T](seed: T, f: java.util.function.UnaryOperator[T]) extends java.util.Spliterator[T]:
+  // `IntStream.range` and `LongStream.range`: the numbers from `first` to `last` inclusive, made as
+  // they are taken, with the JDK's characteristics of a range.
+  private[java] final class RangeSpliterator(private var next: Long, last: Long, ints: Boolean) extends java.util.Spliterator[Any]:
+    private var done = next > last
+    def tryAdvance(action: java.util.function.Consumer[? >: Any]): Boolean =
+      if action == null then throw new NullPointerException()
+      if done then false
+      else
+        val v: Any = if ints then next.toInt else next
+        if next == last then done = true else next += 1
+        action.asInstanceOf[java.util.function.Consumer[Any]].accept(v)
+        true
+    def trySplit(): java.util.Spliterator[Any] = null
+    def estimateSize(): Long = if done then 0L else last - next + 1
+    def characteristics(): Int =
+      java.util.Spliterator.ORDERED | java.util.Spliterator.SIZED | java.util.Spliterator.SUBSIZED | java.util.Spliterator.IMMUTABLE
+        | java.util.Spliterator.NONNULL | java.util.Spliterator.DISTINCT | java.util.Spliterator.SORTED
+    override def getComparator(): java.util.Comparator[? >: Any] = null
+
+  private[java] final class Iterating[T](seed: T, f: java.util.function.UnaryOperator[T]) extends java.util.Spliterator[T]:
     private var prev: T = null.asInstanceOf[T]
     private var started = false
     def tryAdvance(action: java.util.function.Consumer[? >: T]): Boolean =
@@ -1353,7 +1703,7 @@ package java.util.stream:
     def characteristics(): Int = java.util.Spliterator.ORDERED | java.util.Spliterator.IMMUTABLE
 
   // `Stream.iterate(seed, hasNext, next)`: as long as `hasNext` holds of the next element.
-  private final class IteratingWhile[T](seed: T, hasNext: java.util.function.Predicate[T], next: java.util.function.UnaryOperator[T]) extends java.util.Spliterator[T]:
+  private[java] final class IteratingWhile[T](seed: T, hasNext: java.util.function.Predicate[T], next: java.util.function.UnaryOperator[T]) extends java.util.Spliterator[T]:
     private var prev: T = null.asInstanceOf[T]
     private var started = false
     private var finished = false
@@ -1388,7 +1738,7 @@ package java.util.stream:
     def characteristics(): Int = java.util.Spliterator.ORDERED | java.util.Spliterator.IMMUTABLE
 
   // `Stream.generate`: the supplier's values without end, in no order.
-  private final class Generating[T](s: java.util.function.Supplier[T]) extends java.util.Spliterator[T]:
+  private[java] final class Generating[T](s: java.util.function.Supplier[T]) extends java.util.Spliterator[T]:
     def tryAdvance(action: java.util.function.Consumer[? >: T]): Boolean =
       if action == null then throw new NullPointerException()
       action.asInstanceOf[java.util.function.Consumer[T]].accept(s.get())

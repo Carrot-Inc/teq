@@ -397,6 +397,16 @@ impl<'a> Parser<'a> {
                 let n = self.bump().name;
                 self.ast.add_ty(TyExpr::Name(n), start)
             }
+            // `{ def m: T }` alone, a refinement of `AnyRef` (dotty's `simpleType1`: a
+            // `RefinedTypeTree` over an empty parent, typed as `Object`), which the lexer hands over
+            // as a block.
+            Tok::Indent if !self.template_type && matches!(self.kind_at(1), Tok::KwDef | Tok::KwVal | Tok::KwVar | Tok::KwType) => {
+                let members = self.refinement_members(1);
+                let root = self.ast.add_ty(TyExpr::Name(names::ROOT), start);
+                let scala = self.ast.add_ty(TyExpr::Select(root, names::SCALA), start);
+                let any_ref = self.ast.add_ty(TyExpr::Select(scala, names::ANY_REF), start);
+                self.ast.add_ty(TyExpr::Refined(any_ref, members), start.to(self.prev_span()))
+            }
             Tok::LParen => {
                 self.bump();
                 let mark = self.ty_scratch.len();
@@ -521,8 +531,14 @@ impl<'a> Parser<'a> {
 
     /// The members of a refinement, declarations without bodies.
     fn parse_refinement(&mut self) -> ListRef {
-        self.bump();
-        self.bump();
+        self.refinement_members(2)
+    }
+
+    /// The declarations of a refinement block, after its `opening` tokens.
+    fn refinement_members(&mut self, opening: usize) -> ListRef {
+        for _ in 0..opening {
+            self.bump();
+        }
         let mut defs = Vec::new();
         self.statements(RecoverySite::Refinement, |p| {
             if !p.at_def_start() {

@@ -274,8 +274,11 @@ impl<'a> Gen<'a> {
                 return;
             }
             // No instance of a class that the program never makes; a jar's classes are made by
-            // the jar's code in link mode.
-            TypeTest::Class(c) | TypeTest::Trait(c) if !cx.input.reach.classes[c.idx()] && cx.input.java_class(c).is_none() && !cx.linked_class(c) && !cx.input.open_world => {
+            // the jar's code in link mode, a JDK class's (`@jvmClass`, `CharSequence` of a string)
+            // by the JDK's.
+            TypeTest::Class(c) | TypeTest::Trait(c)
+                if !cx.input.reach.classes[c.idx()] && cx.input.java_class(c).is_none() && !cx.linked_class(c) && !cx.input.open_world && cx.jvm_class(c).is_none() =>
+            {
                 if !jump_if {
                     self.goto(target);
                 }

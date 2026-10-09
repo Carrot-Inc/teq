@@ -157,6 +157,8 @@ function $getClass(x) {
   if (qname === undefined && Array.isArray(x)) qname = "[Ljava.lang.Object;";
   if (qname !== undefined) return $primClasses[qname] ??= $makeClass(null, qname);
   const c = x.constructor;
+  // A plain object (`new Object()`) is of no Scala class.
+  if (typeof c !== "function" || c.prototype.$qname === undefined) return $classNamed("java.lang.Object");
   return Object.prototype.hasOwnProperty.call(c, "$class") ? c.$class : (c.$class = $makeClass(c, c.prototype.$qname));
 }
 // `classOf[C]`: the `Class` of a JS class, or of a name the output has no class for.
@@ -181,6 +183,10 @@ const $reflectedModules = new Map();
 function $withCause(e, cause) { e.getCause = () => cause; return e; }
 // `initCause`: the cause the instance answers from now on, given once.
 function $giveCause(e, cause) { e.$causeGiven = true; e.getCause = () => cause; }
+// `addSuppressed` and `getSuppressed`: the suppressed exceptions, kept on the exception from the first;
+// `null` once its constructor disabled suppression, which records none.
+function $suppress(e, s) { if (e.$suppressed !== null) (e.$suppressed ??= []).push(s); }
+function $suppressed(e) { return e.$suppressed == null ? [] : e.$suppressed.slice(); }
 // Under --hot each module's registrations run in its scope, which it clears when it runs again.
 let $reflectOwner;
 function $reflectScope(module) {
@@ -219,11 +225,30 @@ function $traitClass(c, n) {
   k.$trait = n;
   return k;
 }
+// The `Class` of a class a primitive's box extends (`CharSequence` a string's, `Number` a
+// number's): the kinds of primitive, a bit set of `$boxedKind`'s, that `isInstance` takes.
+function $boxedClass(k, boxed) {
+  k.$boxed = boxed;
+  return k;
+}
+function $boxedKind(x) {
+  switch (typeof x) {
+    case "string": return 1;
+    case "number": return 2;
+    case "bigint": return 4;
+    case "boolean": return 8;
+    case "undefined": return 32;
+  }
+  return 0;
+}
 function $classOfObject() { return $classNamed("java.lang.Object"); }
-// `Class.isInstance`: `null` is no instance; a trait's `Class` tests its number (`$isA`), as a
-// type test against the trait does; a class with a constructor tests it, and another its `Class`.
+// `Class.isInstance`: a primitive is an instance of its box and of what its box extends; `null` is no instance; a
+// trait's `Class` tests its number (`$isA`), as a type test against the trait does; a class with a
+// constructor tests it, and another its `Class`.
 function $isInstance(cls, x) {
+  if ((cls.$boxed & $boxedKind(x)) !== 0) return true;
   if (x == null) return false;
+  if (typeof x !== "object" && typeof x !== "function") return $getClass(x).$qname === cls.$qname;
   if (cls.$trait !== undefined) return $isA(x, cls.$trait);
   return cls.$ctor !== null ? x instanceof cls.$ctor : $getClass(x) === cls;
 }
@@ -1079,6 +1104,14 @@ function $reUnquote(src) {
 // by hand, each a class of its two cases, `(?iu)` takes the engine's folding, and under both
 // `Lu`, `Ll` and `Lt` are the three categories together, as for the JDK; under the engine's
 // folding a complemented property is a complemented class, which folds before it complements.
+// Whether a pattern compiles: null, or the message of what it fails at.
+function $reCheck(src) {
+  try {
+    const [body, flags] = $reTranslate(src);
+    new RegExp(body, flags);
+    return null;
+  } catch (e) { return e.message; }
+}
 // The flag groups at the head of a pattern become the engine's flags, and the result is the
 // pattern and its flags.
 function $reTranslate(source) {
@@ -1197,6 +1230,9 @@ function $reTranslate(source) {
       for (let c; (c = read()) !== "}"; ) if (c === undefined) fail("Unclosed character family");
       if (!(p = src.slice(i, at - 1))) fail("Empty character family");
     } else if ((p = read()) === undefined) fail("Unknown character property");
+    // Java's POSIX classes the engine would take as Unicode properties are ASCII ones, of either
+    // case under `(?i)`; the engine refuses the others.
+    if (/^(?:Lower|Upper|Alpha)$/.test(p)) return { k: "[", t: ci || p === "Alpha" ? "a-zA-Z" : p === "Lower" ? "a-z" : "A-Z", neg };
     if (ci && /^L[ult]$/.test(p.replace(/^(?:gc|general_category)=/i, ""))) p = "LC";
     const t = "\\p{" + p + "}";
     return neg && ci && uc ? { k: "[", t, neg } : { k: "[", t: neg ? "\\P" + t.slice(2) : t };
@@ -1347,8 +1383,7 @@ function $reTranslate(source) {
       const n = src[at + 1];
       if (n === "p" || n === "P") {
         at++;
-        const p = family(n === "P");
-        out += p.neg ? "[^" + p.t + "]" : p.t;
+        out += emit(family(n === "P"));
       } else {
         const e = escape(false);
         const o = e.cp === undefined ? -1 : fold(e.cp);

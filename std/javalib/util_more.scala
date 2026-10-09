@@ -444,7 +444,7 @@ package java.util.concurrent:
   // `java.util.Map` as the JDK's is, so that its constructors take what the JDK's take; the key
   // set, values and entries are copies where the JDK gives views.
   @jvmClass("java/util/concurrent/ConcurrentHashMap")
-  final class ConcurrentHashMap[K, V]() extends java.util.Map[K, V]:
+  final class ConcurrentHashMap[K, V]() extends java.util.AbstractMap[K, V]:
     def this(initialCapacity: Int) = this()
     def this(m: java.util.Map[? <: K, ? <: V]) =
       this()
@@ -457,7 +457,7 @@ package java.util.concurrent:
       val previous = get(key)
       entries.update(key, value)
       previous
-    def putIfAbsent(key: K, value: V): V = entries.get(key) match
+    override def putIfAbsent(key: K, value: V): V = entries.get(key) match
       case Some(v) => v
       case None =>
         entries.update(key, value)
@@ -468,14 +468,14 @@ package java.util.concurrent:
       val previous = get(key)
       entries.remove(key.asInstanceOf[K])
       previous
-    def compute(key: K, remapping: java.util.function.BiFunction[K, V, V]): V =
-      val next = remapping.apply(key, get(key))
+    override def compute(key: K, remapping: java.util.function.BiFunction[? >: K, ? >: V, ? <: V]): V =
+      val next: V = remapping.asInstanceOf[java.util.function.BiFunction[K, V, V]].apply(key, get(key))
       if js.isNull(next) then entries.remove(key) else entries.update(key, next)
       next
-    override def computeIfAbsent(key: K, mapping: java.util.function.Function[K, V]): V = entries.get(key) match
+    override def computeIfAbsent(key: K, mapping: java.util.function.Function[? >: K, ? <: V]): V = entries.get(key) match
       case Some(v) => v
       case None =>
-        val v = mapping.apply(key)
+        val v: V = mapping.asInstanceOf[java.util.function.Function[K, V]].apply(key)
         if !js.isNull(v) then entries.update(key, v)
         v
     def size(): Int = entries.size

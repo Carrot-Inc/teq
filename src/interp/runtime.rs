@@ -506,7 +506,11 @@ impl<'a, 't> Interp<'a, 't> {
             Value::Sym(_) => (Rc::from("scala.quoted.Quotes.reflectModule.Symbol"), None),
             Value::Pos(..) => (Rc::from("scala.quoted.Quotes.reflectModule.Position"), None),
             Value::Src(_) => (Rc::from("scala.quoted.Quotes.reflectModule.SourceFile"), None),
-            Value::Obj(o) => (self.runtime_class_name(o.class), Some(o.class)),
+            // A builtin's instance (`new Object()`) is named as its `classOf` is.
+            Value::Obj(o) => match crate::emit::class_of_name(self.syms(), self.typer.interner, o.class) {
+                Some(n) => (Rc::from(n), Some(o.class)),
+                None => (self.runtime_class_name(o.class), Some(o.class)),
+            },
         };
         if let Some(c) = self.class_values.get(&qname) {
             return Value::Class(c.clone());

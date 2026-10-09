@@ -201,6 +201,38 @@ impl<'a> Worker<'a> {
         self.loaded.as_ref().map_or(false, |l| l.is_scala2_class(c))
     }
 
+    /// Whether `c` is a class of the lean std standing for one of scala-library's compiled from
+    /// Scala 2's sources, which dotty flags `Scala2x` (`TreeUnpickler.readNewDef`, for a TASTy
+    /// file with the `SCALA2STANDARDLIBRARY` attribute), or for one of Scala.js's 2.13 library:
+    /// any class of a `scala` package but those of the Scala 3 library (`SCALA3_LIBRARY`).
+    pub fn is_std_scala2_class(&self, c: ClassId) -> bool {
+        let info = self.syms.class(c);
+        if !self.source(info.file).is_std || self.in_jar(info.file) {
+            return false;
+        }
+        let mut owner = info.owner;
+        let mut top = c;
+        while let Owner::Class(o) = owner {
+            top = o;
+            owner = self.syms.class(o).owner;
+        }
+        let Owner::Package(p) = owner else { return false };
+        let mut path = Vec::new();
+        let mut at = Some(p);
+        while let Some(k) = at.filter(|&k| k != ROOT_PKG) {
+            path.push(self.interner.get(self.syms.pkg(k).name));
+            at = self.syms.pkg(k).parent;
+        }
+        path.reverse();
+        if path.first() != Some(&"scala") {
+            return false;
+        }
+        let pkg = path.join(".");
+        let name = self.interner.get(self.syms.class(top).name);
+        let name = name.strip_suffix('$').unwrap_or(name);
+        !SCALA3_LIBRARY.iter().any(|&(k, n)| (n == "*" && (pkg == k || pkg.strip_prefix(k).map_or(false, |r| r.starts_with('.')))) || (pkg == k && n == name))
+    }
+
     pub fn is_library_member(&self, s: SymId) -> bool {
         self.loaded.as_ref().map_or(false, |l| l.syms.contains_key(&s))
     }
@@ -833,3 +865,21 @@ pub(in crate::typer) mod body_crossings {
         }
     }
 }
+
+/// The classes of scala-library 3.8.4 whose TASTy lacks the `SCALA2STANDARDLIBRARY` attribute,
+/// the Scala 3 library's own, by package (`*` for every class of the package and those below);
+/// annotations, which have no methods to call, are left out.
+const SCALA3_LIBRARY: &[(&str, &str)] = &[
+    ("scala", "$times$colon"), ("scala", "*:"), ("scala", "CanEqual"), ("scala", "CanThrow"), ("scala", "Conversion"),
+    ("scala", "IArray$package"), ("scala", "IArray"), ("scala", "NamedTuple"), ("scala", "NamedTupleDecomposition"),
+    ("scala", "NonEmptyTuple"), ("scala", "PolyFunction"), ("scala", "Precise"), ("scala", "Selectable"), ("scala", "Tuple"),
+    ("scala", "Tuple$package"), ("scala", "main"), ("scala", "unsafeExceptions"),
+    ("scala.annotation.internal", "*"), ("scala.caps", "*"), ("scala.compiletime", "*"), ("scala.deriving", "*"), ("scala.quoted", "*"),
+    ("scala.reflect", "Enum"), ("scala.reflect", "Selectable"), ("scala.reflect", "TypeTest"), ("scala.reflect", "Typeable$package"),
+    ("scala.runtime", "$throws$package"), ("scala.runtime", "Arrays"), ("scala.runtime", "EnumValue"), ("scala.runtime", "FunctionXXL"),
+    ("scala.runtime", "LazyVals"), ("scala.runtime", "MatchCase"), ("scala.runtime", "Scala3RunTime"), ("scala.runtime", "TupleMirror"),
+    ("scala.runtime", "TupleXXL"), ("scala.runtime", "TupledFunctions"), ("scala.runtime", "Tuples"), ("scala.runtime", "TypeBox"),
+    ("scala.runtime", "VarArgsBuilder"), ("scala.runtime.coverage", "*"), ("scala.runtime.stdLibPatches", "*"),
+    ("scala.util", "CommandLineParser"), ("scala.util", "FromDigits"), ("scala.util", "LowPriorityNotGiven"), ("scala.util", "NotGiven"),
+    ("scala.util", "TupledFunction"), ("scala.util", "boundary"), ("scala.util.control", "NonLocalReturns"),
+];

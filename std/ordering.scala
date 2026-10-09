@@ -102,6 +102,52 @@ object Ordering:
       val c = oa.compare(x._1, y._1)
       if c != 0 then c else Tuple4(using ob, oc, od, oe).compare((x._2, x._3, x._4, x._5), (y._2, y._3, y._4, y._5))
 
+  given Tuple6[A, B, C, D, E, F](using oa: Ordering[A], ob: Ordering[B], oc: Ordering[C], od: Ordering[D], oe: Ordering[E], of: Ordering[F]): Ordering[(A, B, C, D, E, F)] =
+    FunctionOrdering: (x, y) =>
+      var c = oa.compare(x._1, y._1)
+      if c == 0 then c = ob.compare(x._2, y._2)
+      if c == 0 then c = oc.compare(x._3, y._3)
+      if c == 0 then c = od.compare(x._4, y._4)
+      if c == 0 then c = oe.compare(x._5, y._5)
+      if c == 0 then c = of.compare(x._6, y._6)
+      c
+
+  given Tuple7[A, B, C, D, E, F, G](using oa: Ordering[A], ob: Ordering[B], oc: Ordering[C], od: Ordering[D], oe: Ordering[E], of: Ordering[F], og: Ordering[G]): Ordering[(A, B, C, D, E, F, G)] =
+    FunctionOrdering: (x, y) =>
+      var c = oa.compare(x._1, y._1)
+      if c == 0 then c = ob.compare(x._2, y._2)
+      if c == 0 then c = oc.compare(x._3, y._3)
+      if c == 0 then c = od.compare(x._4, y._4)
+      if c == 0 then c = oe.compare(x._5, y._5)
+      if c == 0 then c = of.compare(x._6, y._6)
+      if c == 0 then c = og.compare(x._7, y._7)
+      c
+
+  given Tuple8[A, B, C, D, E, F, G, H](using oa: Ordering[A], ob: Ordering[B], oc: Ordering[C], od: Ordering[D], oe: Ordering[E], of: Ordering[F], og: Ordering[G], oh: Ordering[H]): Ordering[(A, B, C, D, E, F, G, H)] =
+    FunctionOrdering: (x, y) =>
+      var c = oa.compare(x._1, y._1)
+      if c == 0 then c = ob.compare(x._2, y._2)
+      if c == 0 then c = oc.compare(x._3, y._3)
+      if c == 0 then c = od.compare(x._4, y._4)
+      if c == 0 then c = oe.compare(x._5, y._5)
+      if c == 0 then c = of.compare(x._6, y._6)
+      if c == 0 then c = og.compare(x._7, y._7)
+      if c == 0 then c = oh.compare(x._8, y._8)
+      c
+
+  given Tuple9[A, B, C, D, E, F, G, H, I](using oa: Ordering[A], ob: Ordering[B], oc: Ordering[C], od: Ordering[D], oe: Ordering[E], of: Ordering[F], og: Ordering[G], oh: Ordering[H], oi: Ordering[I]): Ordering[(A, B, C, D, E, F, G, H, I)] =
+    FunctionOrdering: (x, y) =>
+      var c = oa.compare(x._1, y._1)
+      if c == 0 then c = ob.compare(x._2, y._2)
+      if c == 0 then c = oc.compare(x._3, y._3)
+      if c == 0 then c = od.compare(x._4, y._4)
+      if c == 0 then c = oe.compare(x._5, y._5)
+      if c == 0 then c = of.compare(x._6, y._6)
+      if c == 0 then c = og.compare(x._7, y._7)
+      if c == 0 then c = oh.compare(x._8, y._8)
+      if c == 0 then c = oi.compare(x._9, y._9)
+      c
+
   // Implicits.* imports the operators as members and Implicits.infixOrderingOps as those of a given.
   trait InfixOrderingOps:
     extension [T](x: T)(using ord: Ordering[T])

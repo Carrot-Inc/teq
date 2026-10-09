@@ -392,12 +392,11 @@ impl<'a, 't> Interp<'a, 't> {
                 return Some((n - dead).max(0) as usize);
             }
         }
-        if let Some((start, limit, step)) = self.range_of(o) {
-            if step == 0 {
-                return None;
+        if let Some(r) = self.range_of(o) {
+            if r.empty {
+                return Some(0);
             }
-            let n = if step > 0 { if start >= limit { 0 } else { (limit as i64 - start as i64 + step as i64 - 1) / step as i64 } } else if start <= limit { 0 } else { (start as i64 - limit as i64 - step as i64 - 1) / (-(step as i64)) };
-            return Some(n as usize);
+            return (r.count != 0 && r.count <= i32::MAX as u32).then_some(r.count as usize);
         }
         None
     }
@@ -425,7 +424,10 @@ impl<'a, 't> Interp<'a, 't> {
         Some(items.clone())
     }
 
-    fn range_of(&mut self, o: &Rc<Object>) -> Option<(i32, i32, i32)> {
+    /// A range's start and step, whether it is empty, its number of elements (unsigned, 0 for
+    /// 2^32) and its last element, as `Range`'s body computes them (scala-library's arithmetic);
+    /// None for a step of 0, whose body fails.
+    fn range_of(&mut self, o: &Rc<Object>) -> Option<RangeShape> {
         if !self.known_class("Range").map_or(false, |c| c == o.class) {
             return None;
         }
@@ -434,8 +436,27 @@ impl<'a, 't> Interp<'a, 't> {
         else {
             return None;
         };
-        let limit = if !inclusive { end } else if step > 0 { end.wrapping_add(1) } else { end.wrapping_sub(1) };
-        Some((start, limit, step))
+        if step == 0 {
+            return None;
+        }
+        let empty = if inclusive {
+            if step >= 0 { start > end } else { start < end }
+        } else if step >= 0 {
+            start >= end
+        } else {
+            start <= end
+        };
+        let sign = step >> 31;
+        let gap = ((end.wrapping_sub(start) ^ sign).wrapping_sub(sign)) as u32;
+        let abs = ((step ^ sign).wrapping_sub(sign)) as u32;
+        let div = gap / abs;
+        let count = if inclusive || abs.wrapping_mul(div) != gap { div.wrapping_add(1) } else { div };
+        let last = if step == 1 || step == -1 {
+            if inclusive { end } else { end.wrapping_sub(step) }
+        } else {
+            start.wrapping_add(step.wrapping_mul(count.wrapping_sub(1) as i32))
+        };
+        Some(RangeShape { start, step, empty, count, last })
     }
 
     // ---- lists ----
@@ -554,18 +575,16 @@ impl<'a, 't> Interp<'a, 't> {
                 return Ok(store_entries(self, v));
             }
         }
-        if let Some((start, limit, step)) = self.range_of(o) {
+        if let Some(r) = self.range_of(o) {
             let mut out = Vec::new();
-            let mut i = start;
-            if step > 0 {
-                while i < limit {
+            if !r.empty {
+                let mut i = r.start;
+                loop {
                     out.push(Value::Int(i));
-                    i = i.wrapping_add(step);
-                }
-            } else {
-                while i > limit {
-                    out.push(Value::Int(i));
-                    i = i.wrapping_add(step);
+                    if i == r.last {
+                        break;
+                    }
+                    i = i.wrapping_add(r.step);
                 }
             }
             return Ok(Some(out));
@@ -1102,46 +1121,48 @@ fn option_to_list(it: &mut Interp, this: &Value, _a: &[Value]) -> R<Option<Value
 
 // ---- Range and the array-backed sequences ----
 
+pub(super) struct RangeShape {
+    start: i32,
+    step: i32,
+    empty: bool,
+    count: u32,
+    last: i32,
+}
+
 fn range_foreach(it: &mut Interp, this: &Value, a: &[Value]) -> R<Option<Value>> {
     let Value::Obj(o) = this else { return Ok(None) };
-    let Some((start, limit, step)) = it.range_of(o) else { return Ok(None) };
+    let Some(r) = it.range_of(o) else { return Ok(None) };
     let f = arg(a, 0);
-    let mut i = start;
-    if step > 0 {
-        while i < limit {
+    if !r.empty {
+        let mut i = r.start;
+        loop {
             it.call1(&f, Value::Int(i))?;
-            i = i.wrapping_add(step);
-        }
-    } else {
-        while i > limit {
-            it.call1(&f, Value::Int(i))?;
-            i = i.wrapping_add(step);
+            if i == r.last {
+                break;
+            }
+            i = i.wrapping_add(r.step);
         }
     }
     Ok(Some(Value::Unit))
 }
 
+/// The number of elements; one past `Int.MaxValue` is the body's to fail at.
 fn range_length(it: &mut Interp, this: &Value, _a: &[Value]) -> R<Option<Value>> {
     let Value::Obj(o) = this else { return Ok(None) };
-    let Some((start, limit, step)) = it.range_of(o) else { return Ok(None) };
-    if step == 0 {
+    let Some(r) = it.range_of(o) else { return Ok(None) };
+    if r.empty {
+        return Ok(Some(Value::Int(0)));
+    }
+    if r.count == 0 || r.count > i32::MAX as u32 {
         return Ok(None);
     }
-    let empty = if step > 0 { start >= limit } else { start <= limit };
-    let n = if empty {
-        0
-    } else if step > 0 {
-        (limit as i64 - start as i64 + step as i64 - 1) / step as i64
-    } else {
-        (start as i64 - limit as i64 - step as i64 - 1) / (-(step as i64))
-    };
-    Ok(Some(Value::Int(n as i32)))
+    Ok(Some(Value::Int(r.count as i32)))
 }
 
 fn range_is_empty(it: &mut Interp, this: &Value, _a: &[Value]) -> R<Option<Value>> {
     let Value::Obj(o) = this else { return Ok(None) };
-    let Some((start, limit, step)) = it.range_of(o) else { return Ok(None) };
-    Ok(Some(Value::Bool(if step > 0 { start >= limit } else { start <= limit })))
+    let Some(r) = it.range_of(o) else { return Ok(None) };
+    Ok(Some(Value::Bool(r.empty)))
 }
 
 fn items_foreach(it: &mut Interp, this: &Value, a: &[Value], class: &'static str) -> R<Option<Value>> {

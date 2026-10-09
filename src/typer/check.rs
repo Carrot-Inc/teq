@@ -4279,15 +4279,17 @@ impl<'a> Worker<'a> {
     /// inherits them: `m_owner` and `p_owner` are the ancestor types each comes from, `None` for
     /// `c` itself. The type parameters of `p` are read as those of the member. A member of an
     /// ancestor whose result is that ancestor's own type is read as returning `this.type`.
-    pub(super) fn compare_sigs(&mut self, c: ClassId, msig: Arc<MethodSig>, m_owner: Option<TypeId>, p: SymId, p_owner: TypeId) -> Agreement {
+    pub(super) fn compare_sigs(&mut self, c: ClassId, mut msig: Arc<MethodSig>, m_owner: Option<TypeId>, p: SymId, p_owner: TypeId) -> Agreement {
         let mut psig = self.sig_arc(p);
-        // A Java method's `()` matches a parameterless member or a val, as scalac's
-        // `matchNullaryLoosely` has it for Java-defined members; the std's classes of `java.*`
-        // stand for the JDK's.
-        let java_nullary = matches!(&psig.clauses[..], [cl] if cl.params.is_empty() && !cl.is_using);
+        // A Java method's `()` matches a parameterless member or a val, and a parameterless
+        // one (the std's `Iterator.hasNext`) a `()`, as scalac's `matchNullaryLoosely` has it for
+        // Java-defined members; the std's classes of `java.*` stand for the JDK's.
+        let empty = |sig: &MethodSig| matches!(&sig.clauses[..], [cl] if cl.params.is_empty() && !cl.is_using);
         let java_member = self.syms.sym(p).java_defined || (self.is_std_member(p) && !self.is_std_scala_member(p));
-        if msig.clauses.is_empty() && java_nullary && java_member {
+        if msig.clauses.is_empty() && empty(&psig) && java_member {
             psig = Arc::new(MethodSig { tparams: psig.tparams.clone(), clauses: Vec::new(), ret: psig.ret });
+        } else if psig.clauses.is_empty() && empty(&msig) && java_member && self.syms.sym(p).kind == SymKind::Def {
+            msig = Arc::new(MethodSig { tparams: msig.tparams.clone(), clauses: Vec::new(), ret: msig.ret });
         }
         let lenient_using = self.is_std_scala_member(p);
         self.compare_sig_pair(c, msig, m_owner, psig, p_owner, false, lenient_using)

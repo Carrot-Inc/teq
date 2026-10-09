@@ -455,9 +455,33 @@ impl<'a> Worker<'a> {
     }
 
     /// scalac's erasure of a type whose erasure the type alone says (its `hasStableErasure`):
-    /// a class type, a literal type, an array of such, and a union or an intersection of
-    /// such. A type parameter, an abstract type and an opaque type have none.
+    /// a class type, a literal type, an array of such, a union or an intersection of such, and a
+    /// proxy of such (a path, `C.this`, a refinement), which erases as what it stands for. A type
+    /// parameter, an abstract type and an opaque type have none.
     pub(super) fn stable_erasure(&mut self, t: TypeId) -> Option<Erased> {
+        // The cases `dealias` would see through to a bound: an abstract type and a type parameter
+        // have no erasure of their own, a match type one only once it reduces (dotty's
+        // `TypeBounds`, `TypeParamRef` and `MatchType` cases), and a path has its underlying
+        // type's (the `TypeProxy` case).
+        let t = self.deref(t);
+        match self.types.get(t) {
+            Type::Member(..) | Type::AppMember(..) | Type::Decl(_) => return None,
+            Type::Param(_) => {
+                let known = self.dealias(t);
+                return if known == t { None } else { self.stable_erasure(known) };
+            }
+            Type::Match(..) | Type::Alias(..) => {
+                return match self.reduce_head(t) {
+                    Some(r) if r != t => self.stable_erasure(r),
+                    _ => None,
+                };
+            }
+            Type::This(_) | Type::Term(_) | Type::Select(..) => {
+                let widened = self.widen_path(t);
+                return if widened == t { None } else { self.stable_erasure(widened) };
+            }
+            _ => {}
+        }
         let t = self.dealias(t);
         let t = self.deref(t);
         match self.types.get(t) {
@@ -491,6 +515,7 @@ impl<'a> Worker<'a> {
                 let (a, b) = (self.stable_erasure(a)?, self.stable_erasure(b)?);
                 Some(if self.compare_erased(a, b) != std::cmp::Ordering::Greater { a } else { b })
             }
+            Type::Refined(parent, _) => self.stable_erasure(parent),
             _ => None,
         }
     }
