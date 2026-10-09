@@ -923,6 +923,7 @@ named_default_branch
 named_then_positional
 named_tuple_linked
 named_tuple_map_values
+named_tuple_size
 named_tuples
 nan_comparisons
 negative_literal_space

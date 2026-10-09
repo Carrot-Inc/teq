@@ -24,7 +24,8 @@ libraries compiled from their jars run against scalac's output. The remaining di
   scalac's is an object (where a function is expected, `F` is `F.apply` as under scalac).
 - `val z: 1 = foo(1).zero` cannot take the literal type from the expected type.
 - On a receiver typed `Tuple` or `X <: Tuple` the members of `Tuple` are typed by their bounds (`head: Any`,
-  `tail: Tuple`), and a named tuple lacks `NamedTuple`'s members.
+  `tail: Tuple`), and a named tuple has only `toTuple` and `size` of `NamedTuple`'s members on JavaScript and
+  in the interpreter.
 - A failed member call is retried as an extension or a conversion of the receiver, as scalac retries it,
   except as a right-associative extension operator (`one() +: d` failing on `d`'s own `+:` is not taken by an
   `extension (x: Int) def +:(d: D)`); the member's error then stands.

@@ -9,3 +9,5 @@ object NamedTuple:
 
   extension [N <: Tuple, V <: Tuple](x: NamedTuple[N, V])
     def toTuple: V = x
+    /** scala-library's `NamedTupleDecomposition.size`: the size as a literal type. */
+    inline def size: Tuple.Size[V] = scala.runtime.Tuples.size(x.toTuple).asInstanceOf[Tuple.Size[V]]
