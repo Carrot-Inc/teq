@@ -1,0 +1,17 @@
+class_synthesis/C canEqual(Ljava/lang/Object;)Z public
+class_synthesis/C equals(Ljava/lang/Object;)Z public
+class_synthesis/C hashCode()I public
+class_synthesis/C productArity()I public
+class_synthesis/C productElement(I)Ljava/lang/Object; public
+class_synthesis/C productElementName(I)Ljava/lang/String; public
+class_synthesis/C productPrefix()Ljava/lang/String; public
+class_synthesis/C toString()Ljava/lang/String; public
+class_synthesis/E fromOrdinal(I)Lclass_synthesis/E; public,static
+class_synthesis/E valueOf(Ljava/lang/String;)Lclass_synthesis/E; public,static
+class_synthesis/E values()[Lclass_synthesis/E; public,static
+class_synthesis/E$ $values:[Lclass_synthesis/E; private,static,final
+class_synthesis/E$ fromOrdinal(I)Lclass_synthesis/E; public
+class_synthesis/E$ valueOf(Ljava/lang/String;)Lclass_synthesis/E; public
+class_synthesis/E$ values()[Lclass_synthesis/E; public
+class_synthesis/O$ K()I public,final
+class_synthesis/O$ L()I public,final
