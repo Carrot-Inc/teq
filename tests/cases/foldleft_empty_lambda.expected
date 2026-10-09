@@ -7,3 +7,4 @@ Set(4)
 3
 List()
 4
+List(Map(), List(1), Set(), Vector())

@@ -3518,6 +3518,12 @@ impl<'a> Worker<'a> {
             }
         }
         let Type::Class(c, args) = self.types.get(lower) else { return None };
+        // dotty improves an instance with no variable left open (`isFullyDefined(inst,
+        // ForceDegree.none)` before `improve`): `Map[K, Nothing]` of `Map()` keeps its `K` open.
+        let zonked = self.zonk(lower);
+        if self.types.has_vars(zonked) {
+            return None;
+        }
         let n = self.types.items(args).len();
         self.settle_class(c);
         // A covariant `Nothing` argument of a first-order parameter (dotty's `improve` leaves a

@@ -1,6 +1,6 @@
 // Type variables constrained across parameter lists, folds over empty collections, members of a union.
-// expect: 20:61: error: type mismatch: found (Int, Int), required (Nothing, V1)
-// expect: 21:31: error: type mismatch: found Map[Nothing, Nothing], required Map[Int, Int]
+// expect: 20:66: error: type mismatch: found Int, required
+// expect: 21:31: error: type mismatch: found Map[Any, Nothing], required Map[Int, Int]
 // expect: 33:12: error: method nullary in object F must be called with () argument
 trait Shape
 case class Circle(r: Int) extends Shape

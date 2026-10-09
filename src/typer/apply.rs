@@ -5172,7 +5172,12 @@ impl<'a> Worker<'a> {
                 // A transparent call a member's cache holds unexpanded is expanded as it is
                 // adapted (`expand_unadapted`).
                 let (te, ty) = match self.arg_slot(e) {
-                    ArgSlot::None => self.type_expr(e, Some(pty)),
+                    ArgSlot::None => {
+                        let vars_mark = self.tvars.len();
+                        let typed = self.type_expr(e, Some(pty));
+                        self.interpolate_applied_arg(e, typed.1, pty, vars_mark);
+                        typed
+                    }
                     ArgSlot::Cached(te, ty) => {
                         self.retry_typed.insert(te, ());
                         (te, self.expand_unadapted(te, pty).unwrap_or(ty))
@@ -5202,6 +5207,47 @@ impl<'a> Worker<'a> {
                 let (te, ty) = self.type_for_lambda(pat, rest, pty, span);
                 self.note_erroneous_arg(ty);
                 self.adapt(te, ty, pty, span)
+            }
+        }
+    }
+
+    /// An argument that is an application, typed against an open variable of the call: its own
+    /// variables are instantiated as dotty's `interpolateTypeVars` instantiates those of an
+    /// `Apply` tree, which nothing outside depends on yet (no `constrainResult` for an `Apply`):
+    /// a covariant one from below, a contravariant one from above, a nonvariant one left open.
+    /// `foldLeft(Map())` thus has a `Map[K, Nothing]` before the lambda, whose `K` the lambda's
+    /// parameter then maximizes (`Map[Any, Nothing]`), where `foldLeft(Map.empty)` leaves both open.
+    /// It is part of the argument's typing (`typedUnadapted`'s `simplify`), so the typing a
+    /// member's cache keeps (`type_arg_cached`) is interpolated already.
+    fn interpolate_applied_arg(&mut self, e: ExprId, ty: TypeId, pty: TypeId, vars_mark: usize) {
+        let ast = self.cur_ast();
+        let mut head = e;
+        while let Expr::Parens(inner) = ast.expr(head) {
+            head = inner;
+        }
+        if !matches!(ast.expr(head), Expr::Apply(..) | Expr::UsingApply(..)) || self.tvars.len() == vars_mark {
+            return;
+        }
+        let formal = self.deref(pty);
+        if !matches!(self.types.get(formal), Type::Var(_)) {
+            return;
+        }
+        let ty = self.zonk(ty);
+        for (w, sign) in self.var_variances(ty) {
+            if !self.tvars.made_since(w, vars_mark) || self.tvars[w].inst.is_some() {
+                continue;
+            }
+            match sign {
+                1 if self.tvars[w].lower.is_empty() => self.instantiate(w, NOTHING),
+                1 => {
+                    self.solve_var(w);
+                }
+                -1 => {
+                    let uppers = self.tvars[w].upper.clone();
+                    let top = uppers.into_iter().reduce(|a, b| self.types.inter(a, b)).unwrap_or(ANY);
+                    self.instantiate(w, top);
+                }
+                _ => {}
             }
         }
     }
@@ -5329,7 +5375,9 @@ impl<'a> Worker<'a> {
         let call = (!braced).then(|| (self.env.file, ast.expr_span(at)));
         let outer = std::mem::replace(&mut self.unadapted_call, call);
         let outer_node = self.unadapted_node.take();
+        let vars_mark = self.tvars.len();
         let typed = self.type_expr(e, Some(pty));
+        self.interpolate_applied_arg(e, typed.1, pty, vars_mark);
         self.unadapted_call = outer;
         let deferred = std::mem::replace(&mut self.unadapted_node, outer_node) == Some(typed.0);
         match self.cache_arg(e, typed) {
@@ -5347,7 +5395,9 @@ impl<'a> Worker<'a> {
     fn type_named_arg_cached(&mut self, e: ExprId, written: ExprId, pty: TypeId, spread: bool) -> TExprId {
         let retained = self.arg_typing_begin(e);
         let diags = self.diags.items.len();
+        let vars_mark = self.tvars.len();
         let (te, ty) = self.type_expr(e, Some(pty));
+        self.interpolate_applied_arg(e, ty, pty, vars_mark);
         let arg_span = self.cur_ast().expr_span(e);
         self.mark_spread_array(spread, te, ty);
         let adapted = self.typed_arg(te, ty, pty, arg_span);
