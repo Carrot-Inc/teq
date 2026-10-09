@@ -1844,10 +1844,14 @@ impl<'a> Worker<'a> {
     }
 
     /// The children of a sealed class are its `@Child[C]` annotations, so that a match over it
-    /// knows them before any of them is completed.
+    /// knows them before any of them is completed: in the order of their definitions, the
+    /// annotations' reversed, as dotty's `SymDenotation.children` reads them (each child's
+    /// annotation is prepended as it is entered). One a completed child entered already keeps
+    /// its place among them.
     fn enter_sealed_children(&mut self, c: ClassId, cx: &mut MapCx, annots: &[TType]) {
         let tasty = self.tasty(cx.file);
-        for a in annots {
+        let mut ordered: Vec<ClassId> = Vec::new();
+        for a in annots.iter().rev() {
             let TType::Applied(class, args) = a else { continue };
             let is_child = matches!(&**class, TType::TypeRef(_, n) if tasty.simple(*n) == Some("Child"));
             if !is_child || args.len() != 1 {
@@ -1871,10 +1875,17 @@ impl<'a> Worker<'a> {
                     }
                 }
             };
-            if k != c && !self.syms.class(c).children.contains(&k) {
-                self.syms.class_mut(c).children.push(k);
+            if k != c && !ordered.contains(&k) {
+                ordered.push(k);
             }
         }
+        let entered = std::mem::take(&mut self.syms.class_mut(c).children);
+        for k in entered {
+            if !ordered.contains(&k) {
+                ordered.push(k);
+            }
+        }
+        self.syms.class_mut(c).children = ordered;
     }
 
     /// The ordinal of a product's enum case, the case at `addr` of the enum's companion: its
