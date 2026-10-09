@@ -50,7 +50,7 @@ fn span(node: &Node) -> (usize, Option<usize>) {
         Node::Char(c, Fold::Exact) => (width(*c), Some(width(*c))),
         Node::Char(..) | Node::Any(_) | Node::Class(..) => (1, Some(2)),
         Node::Backref(..) => (0, None),
-        Node::Group(_, inner) => span(inner),
+        Node::Group(_, inner) | Node::Atomic(inner) => span(inner),
         Node::Concat(items) => items.iter().map(span).fold((0, Some(0)), |(lo, hi), (a, b)| (lo + a, hi.zip(b).map(|(x, y)| x + y))),
         Node::Alt(items) => items.iter().map(span).reduce(|(lo, hi), (a, b)| (lo.min(a), hi.zip(b).map(|(x, y)| x.max(y)))).unwrap_or((0, Some(0))),
         Node::Repeat(inner, min, max, _) => {
