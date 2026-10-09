@@ -4029,10 +4029,33 @@ impl<'a> Worker<'a> {
             self.is_sub(ret_b, sig_a.ret)
         };
         // `b`'s type parameters, instantiated to `a`'s, keep their bounds: a `C[X] <: Set[X]`
-        // takes no `C[X] <: Iterable[X]` of the other.
-        let ok = ok && self.hk_bounds_hold(&sig_b, &subst);
+        // takes no `C[X] <: Iterable[X]` of the other, and an `A <: Singleton` no `A` of the
+        // other (dotty's `instantiateWithTypeVars` in `Applications.isAsGood`).
+        let ok = ok && self.hk_bounds_hold(&sig_b, &subst) && self.first_order_bounds_hold(&sig_b, &subst);
         self.rollback(mark);
         ok
+    }
+
+    /// Whether each first-order type parameter of `sig`, opened by `subst`, can lie within its
+    /// bounds beside what the comparison constrained it to.
+    fn first_order_bounds_hold(&mut self, sig: &MethodSig, subst: &Subst) -> bool {
+        for &tp in &sig.tparams {
+            let info = self.syms.tparam(tp);
+            let (arity, upper, lower) = (info.arity, info.upper, info.lower);
+            if arity != 0 || (upper == ANY && lower == NOTHING) {
+                continue;
+            }
+            let var = self.types.param(tp);
+            let var = self.types.subst(var, subst);
+            if self.deref(var) == ERROR {
+                continue;
+            }
+            let (upper, lower) = (self.types.subst(upper, subst), self.types.subst(lower, subst));
+            if !((upper == ANY || self.is_sub(var, upper)) && (lower == NOTHING || self.is_sub(lower, var))) {
+                return false;
+            }
+        }
+        true
     }
 
     /// `t` with every argument at a contravariant parameter replaced by `arg => Unit`, as
