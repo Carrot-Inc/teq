@@ -577,7 +577,7 @@ neg/i1501.scala	same
 neg/i1501a.scala	same	
 neg/i1503.scala	same	
 neg/i15065.scala	same	
-neg/i15144.scala	different	cannot resolve import
+neg/i15144.scala	same	
 neg/i15158.scala	different	type {} not found
 neg/i15177.FakeEnum.min.alt1.scala	same	
 neg/i15177.constr-dep.scala	accepts	
@@ -775,7 +775,7 @@ neg/i18884.scala	same
 neg/i18922.scala	accepts	
 neg/i18933.scala	syntax	expected a definition, found {}
 neg/i1905.scala	accepts	
-neg/i1907.scala	superset	+2 lines: {} is not a member of the package
+neg/i1907.scala	same	
 neg/i19077.scala	subset	5/9 lines
 neg/i19100.scala	syntax	expected a pattern, found {}
 neg/i19198.scala	same	
@@ -2004,7 +2004,7 @@ neg/wildcard-match.scala	superset	+1 lines: type mismatch
 neg/with-type-operator-future.scala	syntax	expected {}, found {}
 neg/with-type-operator.scala	syntax	expected {}, found {}
 neg/yimports-custom	different	type {} not found
-neg/yimports-nojava.scala	subset	1/2 lines
+neg/yimports-nojava.scala	accepts	
 neg/yimports-nosuch.scala	accepts	
 neg/yimports-order.scala	std	Map
 neg/yimports-predef.scala	same	
@@ -3337,7 +3337,7 @@ pos/i20288.scala	accepts
 pos/i20296.scala	accepts	
 pos/i20297.scala	rejects	type mismatch
 pos/i20300.scala	accepts	
-pos/i20335.scala	rejects	cannot resolve import
+pos/i20335.scala	rejects	{} is not a member of the package
 pos/i20342.scala	accepts	
 pos/i20344.scala	syntax	expected {}, found {}
 pos/i20377.scala	rejects	cannot resolve import
@@ -3535,8 +3535,8 @@ pos/i23489.scala	rejects	a context bound needs a type constructor with one param
 pos/i23496	accepts	
 pos/i23526.scala	rejects	No ClassTag available for A
 pos/i23530.scala	rejects	cannot resolve import
-pos/i23611.scala	rejects	{} is not a member of the package
-pos/i23611a.scala	rejects	{} is not a member of the package
+pos/i23611.scala	rejects	type mismatch
+pos/i23611a.scala	rejects	type mismatch
 pos/i23616.scala	rejects	type mismatch
 pos/i23620.scala	accepts	
 pos/i23627.scala	rejects	cannot resolve import
@@ -3780,7 +3780,7 @@ pos/i3638.scala	std	CharArrayReader
 pos/i3647.scala	accepts	
 pos/i3658.scala	rejects	error overriding method subst in trait ModuleSig of type [F](fa: F[List]): F[[X] =>> ModuleSig.this.F[X]]: method subst of type [FF](fa: FF[List]): FF[[X] =>> ModuleSig.this.F[X]] has incompatible type
 pos/i3666-gadt.scala	syntax	expected {}, found {}
-pos/i3669.scala	rejects	too many arguments
+pos/i3669.scala	accepts	
 pos/i3692.scala	accepts	
 pos/i3702.scala	accepts	
 pos/i3703.scala	accepts	
@@ -4327,7 +4327,7 @@ pos/implicitNums.scala	accepts
 pos/implicit_cache.scala	accepts	
 pos/implicit_tparam.scala	rejects	no given instance
 pos/implicitonSelect.scala	accepts	
-pos/import-rewrite	rejects	{} is not a member of the package
+pos/import-rewrite	rejects	cannot resolve import
 pos/imports-pos.scala	rejects	cannot resolve import
 pos/indent-colons.scala	std	ArrowAssoc
 pos/indent-in-parens.scala	syntax	expected {}, found {}
