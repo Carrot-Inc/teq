@@ -884,7 +884,6 @@ qualified_this_outer_alias
 quote_tag_collision
 random_subclass
 range_bounds_and_sum
-reader_utf8_boundary
 reader_utf8_pipe
 receiver_type_args_from_expected
 refined_aux_givens
