@@ -393,6 +393,7 @@ float_nan_bits
 float_parse_decimal_hex
 float_strings
 fold_targets
+foldleft_empty_lambda
 foldleft_nil_lambda
 for_case
 for_in_parens

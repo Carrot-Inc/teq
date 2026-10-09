@@ -3481,6 +3481,11 @@ impl<'a> Worker<'a> {
                 self.instantiate(v, improved);
                 return improved;
             }
+            if let Some(lower) = self.open_lower_bound(v) {
+                self.instantiate(v, lower);
+                self.maximize_bottom_vars(lower);
+                return self.solve_in(lower);
+            }
         }
         let solved = self.solve_if_var(t);
         let head = self.deref(t);
@@ -3542,6 +3547,47 @@ impl<'a> Worker<'a> {
             }
         }
         Some(improved)
+    }
+
+    /// The lower bound of the parameter's variable where it holds variables still open
+    /// (`List[A]` of `foldLeft(List.empty)`, `A` the `empty`'s): dotty's
+    /// `isFullyDefined(formal, failBottom)` instantiates the variable to it, leaving them open,
+    /// and fails on one that nothing bounds below, which `inferredFromTarget`'s `flipBottom`
+    /// then maximizes (`acc: List[Any]`, Typer.typedFunctionValue).
+    fn open_lower_bound(&mut self, v: TVarId) -> Option<TypeId> {
+        let info = &self.tvars[v];
+        if info.inst.is_some() || info.lower.len() != 1 {
+            return None;
+        }
+        let uppers: Vec<TypeId> = info.upper.clone();
+        let lower = self.zonk(info.lower[0]);
+        if !self.types.has_vars(lower) {
+            return None;
+        }
+        let mark = self.snapshot();
+        for u in uppers {
+            if !self.is_sub(lower, u) {
+                self.rollback(mark);
+                return None;
+            }
+        }
+        Some(lower)
+    }
+
+    /// Instantiates the open variables of `t` that nothing bounds below to their upper bound,
+    /// as dotty's `ForceDegree.flipBottom` maximizes them (`IfBottom.flip`).
+    fn maximize_bottom_vars(&mut self, t: TypeId) {
+        let mut vars = Vec::new();
+        self.collect_vars(t, &mut vars);
+        for w in vars {
+            let info = &self.tvars[w];
+            if info.inst.is_some() || !info.lower.is_empty() {
+                continue;
+            }
+            let uppers = info.upper.clone();
+            let top = uppers.into_iter().reduce(|a, b| self.types.inter(a, b)).unwrap_or(ANY);
+            self.instantiate(w, top);
+        }
     }
 
     /// Solves a still-open inference variable from the bounds collected so far.
