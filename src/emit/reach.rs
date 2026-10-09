@@ -78,6 +78,8 @@ pub struct Reach {
     /// The classes with a definition of `canEqual` below a case class, which that class's
     /// `equals` by rule calls (`$productEquals`), sorted.
     pub can_equal_defined: Vec<ClassId>,
+    /// The vals of the reached classes no field holds (`tir::constant_val`), sorted.
+    pub constant_vals: Vec<SymId>,
     /// The enum companions whose `$values` a reached lookup reads (`$enumValues`,
     /// `$enumFromOrdinal`), sorted; every one where a lookup's companion is no module reference.
     pub enum_stores: Vec<ClassId>,
@@ -155,6 +157,7 @@ impl Reach {
             desugared: Vec::new(),
             product_to_string: Vec::new(),
             can_equal_defined: Vec::new(),
+            constant_vals: Vec::new(),
             enum_stores: Vec::new(),
             every_enum_store: false,
             uses_class_of: false,
@@ -557,6 +560,7 @@ fn differences(typer: &Worker, kept: &Reach, fresh: &Reach, out: &mut Vec<String
     same("the desugared parents", kept.desugared == fresh.desugared);
     same("the products' dispatching members", kept.product_to_string == fresh.product_to_string && kept.can_equal_defined == fresh.can_equal_defined);
     same("the enums' stored values", kept.enum_stores == fresh.enum_stores && kept.every_enum_store == fresh.every_enum_store);
+    same("the constant vals", kept.constant_vals == fresh.constant_vals);
     same("the uses of classOf", kept.uses_class_of == fresh.uses_class_of);
     same("the uses of element names", kept.uses_element_names == fresh.uses_element_names);
     same("the uses of isAssignableFrom", kept.uses_assignable_from == fresh.uses_assignable_from);
@@ -2378,6 +2382,13 @@ impl Walker {
             }
         }
         for init in &tc.init {
+            if let TInit::Field(s, e) = *init {
+                if constant_val(cx.prog, syms, &cx.typer.types, &cx.typer.asts, s, e).is_some() {
+                    if let Err(at) = self.reach.constant_vals.binary_search(&s) {
+                        self.reach.constant_vals.insert(at, s);
+                    }
+                }
+            }
             // A lazy val runs as a getter, the rest as the constructor or `$body`.
             self.in_init = !matches!(*init, TInit::Field(s, _) if syms.sym(s).mods & mods::LAZY != 0);
             match *init {

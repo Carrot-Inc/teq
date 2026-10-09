@@ -780,6 +780,39 @@ pub mod synthetic {
     ];
 }
 
+/// How a `final val` of a constant type is stored (`constant_val`): its initialiser is the
+/// literal, or the literal is the type it declares and the initialiser runs for its effects.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum ConstVal {
+    Literal,
+    Declared(crate::types::LitId),
+}
+
+/// dotty's `SymUtils.isConstExprFinalVal`, the storage `Memoize`, `Mixin` and `Constructors` give a
+/// `final val` of a constant type: no field holds it and its getter answers the constant, an
+/// initialiser that is no literal running for its effects alone. The constant type is the literal
+/// one the val declares (or a pickle's), or the literal an untyped val is initialised with, to
+/// which the typer folds its reads (`Worker::constant_step`). A member of a JavaScript type keeps
+/// its field (`sjsNeedsField`).
+pub fn constant_val(prog: &Program, syms: &crate::symbols::Symbols, types: &crate::types::TypeStore, asts: &crate::ast::Asts, s: SymId, init: TExprId) -> Option<ConstVal> {
+    use crate::ast::mods;
+    use crate::symbols::{JsKind, Owner, SymKind};
+    let info = syms.sym(s);
+    if info.kind != SymKind::Val || info.mods & mods::FINAL == 0 || info.mods & (mods::LAZY | mods::GIVEN | mods::INLINE) != 0 {
+        return None;
+    }
+    if !matches!(info.owner, Owner::Class(c) if syms.class(c).js == JsKind::Scala) {
+        return None;
+    }
+    let literal = matches!(prog.expr(init), TExpr::Int(_) | TExpr::Long(_) | TExpr::Double(_) | TExpr::Bool(_) | TExpr::Char(_) | TExpr::Str(_));
+    if let Some(crate::types::Type::Lit(l)) = info.sig.as_ref().map(|sig| types.get(sig.ret)) {
+        return Some(if literal { ConstVal::Literal } else { ConstVal::Declared(l) });
+    }
+    let file = info.file.0 as usize;
+    let untyped = file < asts.len() && info.def.is_some_and(|d| asts[file].defs.get(d.idx()).is_some_and(|def| matches!(def.kind, crate::ast::DefKind::Val { ty: None, .. })));
+    (untyped && literal && !prog.is_widened(init)).then_some(ConstVal::Literal)
+}
+
 #[derive(Clone)]
 pub struct TClass {
     pub id: ClassId,

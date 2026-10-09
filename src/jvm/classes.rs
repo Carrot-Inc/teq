@@ -58,6 +58,9 @@ struct FieldDef {
     lazy_owner: Option<ClassId>,
     init: Option<TExprId>,
     mutable: bool,
+    /// A `final val` of a constant type (`tir::constant_val`): no field, a getter answering the
+    /// constant, the initialiser run for its effects where it is no literal.
+    constant: Option<ConstVal>,
 }
 
 impl<'a> Gen<'a> {
@@ -438,22 +441,47 @@ impl<'a> Gen<'a> {
         self.end_method(ACC_PUBLIC | ACC_STATIC, &format!("{}$", name), &method_desc(&types, ret));
     }
 
-    /// A trait's `final val` of a constant type (`final val limit = 5`), whose getter scalac
-    /// writes in the trait itself, a default method answering the constant: no class mixing the
-    /// trait in has a field, a getter or a setter for it.
-    /// It is one as the typer's `constant_step` has it: written without a type or with a literal
-    /// one, its initialiser a literal.
-    fn is_trait_constant(&self, s: SymId, init: TExprId) -> bool {
-        let cx = self.cx;
-        let info = cx.input.syms.sym(s);
-        let untyped = info.def.map_or(false, |d| matches!(cx.input.asts[info.file.0 as usize].def(d).kind, crate::ast::DefKind::Val { ty: None, .. }))
-            || info.sig.as_ref().map_or(false, |sig| matches!(cx.input.types.get(sig.ret), Type::Lit(_)));
-        info.kind == SymKind::Val
-            && info.mods & mods::FINAL != 0
-            && info.mods & (mods::LAZY | mods::GIVEN) == 0
-            && matches!(info.owner, Owner::Class(t) if cx.is_interface(t))
-            && untyped
-            && matches!(cx.input.prog.expr(init), TExpr::Int(_) | TExpr::Long(_) | TExpr::Double(_) | TExpr::Bool(_) | TExpr::Char(_) | TExpr::Str(_))
+    /// dotty's `isConstExprFinalVal` of the val `s` initialised with `init` (`tir::constant_val`):
+    /// no field holds it, in its class or a class that mixes its trait in.
+    fn constant(&self, s: SymId, init: TExprId) -> Option<ConstVal> {
+        let input = &self.cx.input;
+        constant_val(input.prog, input.syms, input.types, input.asts, s, init)
+    }
+
+    /// The constant a constant val's getter answers: its literal initialiser, or the literal
+    /// type it declares (`Memoize.transformDefDef`).
+    fn constant_value(&mut self, constant: Option<ConstVal>, init: TExprId, ty: &JType) {
+        let Some(ConstVal::Declared(l)) = constant else {
+            self.expr(init, ty);
+            return;
+        };
+        let pushed = match self.cx.input.types.lit_val(l) {
+            LitVal::Int(v) => {
+                self.iconst(v);
+                JType::I
+            }
+            LitVal::Long(v) => {
+                self.lconst(v);
+                JType::J
+            }
+            LitVal::Double(bits) => {
+                self.dconst(f64::from_bits(bits));
+                JType::D
+            }
+            LitVal::Char(c) => {
+                self.iconst(c as i32);
+                JType::C
+            }
+            LitVal::Bool(b) => {
+                self.iconst(b as i32);
+                JType::Z
+            }
+            LitVal::Str(n) => {
+                self.sconst(self.cx.input.interner.get(n));
+                JType::L(Rc::from(STRING))
+            }
+        };
+        self.adapt(&pushed, ty);
     }
 
     /// The value of default `d` as its getter returns it: a by-name parameter's default is typed
@@ -743,7 +771,7 @@ impl<'a> Gen<'a> {
         }
 
         let fields = if is_trait { Vec::new() } else { self.class_fields(tc, n_captures) };
-        for f in &fields {
+        for f in fields.iter().filter(|f| f.constant.is_none()) {
             let mut d = String::new();
             let stored = if f.lazy { JType::object() } else { f.ty.clone() };
             stored.desc(&mut d);
@@ -1001,6 +1029,14 @@ impl<'a> Gen<'a> {
                     if f.lazy {
                         continue;
                     }
+                    // `Constructors`: a constant's initialiser that is no literal runs for its
+                    // effects alone.
+                    if let Some(constant) = f.constant {
+                        if let ConstVal::Declared(_) = constant {
+                            self.statement(e);
+                        }
+                        continue;
+                    }
                     self.load(slot, this);
                     self.expr(e, &f.ty);
                     self.putfield(&owner, &f.name, &f.ty);
@@ -1132,7 +1168,7 @@ impl<'a> Gen<'a> {
         for &p in &tc.ctor_params[captures..] {
             let ty = self.sym_type(p);
             let name = self.field_name(p);
-            out.push(FieldDef { sym: p, name, ty, lazy: false, lazy_owner: None, init: None, mutable: syms.sym(p).kind == SymKind::Var });
+            out.push(FieldDef { sym: p, name, ty, lazy: false, lazy_owner: None, init: None, mutable: syms.sym(p).kind == SymKind::Var, constant: None });
         }
         for init in &tc.init {
             let TInit::Field(s, e) = *init else { continue };
@@ -1144,7 +1180,8 @@ impl<'a> Gen<'a> {
             let ty = self.sym_type(s);
             let name = self.field_name(s);
             let lazy = self.is_lazy_member(s);
-            out.push(FieldDef { sym: s, name, ty, lazy, lazy_owner: None, init: Some(e), mutable: syms.sym(s).kind == SymKind::Var });
+            let constant = self.constant(s, e);
+            out.push(FieldDef { sym: s, name, ty, lazy, lazy_owner: None, init: Some(e), mutable: syms.sym(s).kind == SymKind::Var, constant });
         }
         let inherited = self.traits_implemented_above(tc.id);
         let bases: Vec<ClassId> = syms.class(tc.id).base_types.iter().skip(1).map(|&(b, _)| b).collect();
@@ -1168,7 +1205,7 @@ impl<'a> Gen<'a> {
                 held_syms.insert(p, ());
                 held_names.insert(name.clone(), ());
                 let ty = self.sym_type(p);
-                out.push(FieldDef { sym: p, name, ty, lazy: false, lazy_owner: None, init: None, mutable: syms.sym(p).kind == SymKind::Var });
+                out.push(FieldDef { sym: p, name, ty, lazy: false, lazy_owner: None, init: None, mutable: syms.sym(p).kind == SymKind::Var, constant: None });
             }
             if idx == u32::MAX {
                 let read = self.class_file_trait_fields(b);
@@ -1188,7 +1225,7 @@ impl<'a> Gen<'a> {
                 let TInit::Field(s, e) = *init else { continue };
                 // A constant is the trait's own getter, of no field, which overrides a val of
                 // its name further up as a val would (a trait parameter's: `Mixin` 301-303).
-                if self.is_trait_constant(s, e) {
+                if self.constant(s, e).is_some() {
                     let name = self.field_name(s);
                     held_names.entry(name).or_insert(());
                     continue;
@@ -1204,9 +1241,9 @@ impl<'a> Gen<'a> {
                 held_names.insert(name.clone(), ());
                 let ty = self.sym_type(s);
                 if self.is_lazy_member(s) {
-                    out.push(FieldDef { sym: s, name, ty, lazy: true, lazy_owner: Some(b), init: Some(e), mutable: false });
+                    out.push(FieldDef { sym: s, name, ty, lazy: true, lazy_owner: Some(b), init: Some(e), mutable: false , constant: None });
                 } else {
-                    out.push(FieldDef { sym: s, name, ty, lazy: false, lazy_owner: None, init: None, mutable: syms.sym(s).kind == SymKind::Var });
+                    out.push(FieldDef { sym: s, name, ty, lazy: false, lazy_owner: None, init: None, mutable: syms.sym(s).kind == SymKind::Var , constant: None });
                 }
             }
         }
@@ -1495,6 +1532,8 @@ impl<'a> Gen<'a> {
                 (None, None) => HolderInit::Unit,
             };
             self.lazy_holder_body(&f.name, &f.ty, init);
+        } else if let (Some(constant), Some(init)) = (f.constant, f.init) {
+            self.constant_value(Some(constant), init, &f.ty);
         } else {
             self.load(0, &this);
             self.getfield(&owner, &f.name, &f.ty);
@@ -1510,7 +1549,8 @@ impl<'a> Gen<'a> {
         // So is the implementation of a deferred given, as dotty's `implementDeferredGivens` makes it,
         // and the getter of a class's given object, scalac's module.
         let module = self.cx.inner_given_objects.contains_key(&f.sym);
-        let access = if (from_trait && fin) || module || self.implements_deferred(f.sym) { ACC_PUBLIC | ACC_FINAL } else { ACC_PUBLIC };
+        // A constant's getter is final, as the val is (`Memoize`).
+        let access = if (from_trait && fin) || module || self.implements_deferred(f.sym) || f.constant.is_some() { ACC_PUBLIC | ACC_FINAL } else { ACC_PUBLIC };
         self.end_method(access, &f.name, &getter_desc);
         let getter = MRef {
             owner: owner.clone(),
@@ -1681,14 +1721,19 @@ impl<'a> Gen<'a> {
                     self.return_value(&ty);
                     self.end_method(ACC_PUBLIC | ACC_STATIC, &format!("{}$", name), &method_desc(&[this.clone()], &ty));
                 }
-                TInit::Field(s, e) if self.is_trait_constant(s, e) => {
+                TInit::Field(s, e) if self.constant(s, e).is_some() => {
+                    let constant = self.constant(s, e);
                     let ty = self.sym_type(s);
                     let name = self.field_name(s);
                     self.begin_method(false, false, &[], ty.clone(), &[e]);
-                    self.expr(e, &ty);
+                    self.constant_value(constant, e, &ty);
                     self.return_value(&ty);
                     self.end_method(ACC_PUBLIC, &name, &method_desc(&[], &ty));
                     self.trait_static_forwarder(&name, &[], &ty);
+                    // `Constructors`: an initialiser that is no literal runs in `$init$`.
+                    if let Some(ConstVal::Declared(_)) = constant {
+                        runs.push((None, e));
+                    }
                 }
                 TInit::Field(s, e) => {
                     let ty = self.sym_type(s);
@@ -1782,7 +1827,7 @@ impl<'a> Gen<'a> {
                 self.class_file_trait_fields(b).fields.iter().map(|f| (f.sym, Some(f.ty.clone()))).collect()
             } else {
                 cx.input.prog.classes[idx as usize].init.iter().filter_map(|init| match *init {
-                    TInit::Field(s, e) if !self.is_trait_constant(s, e) => Some((s, None)),
+                    TInit::Field(s, e) if self.constant(s, e).is_none() => Some((s, None)),
                     _ => None,
                 }).collect()
             };
@@ -1803,7 +1848,7 @@ impl<'a> Gen<'a> {
                 // its value; nothing where the class's member is a lazy val or a constructor
                 // parameter (163-168), or a trait after this one holds the field.
                 let name = self.field_name(s);
-                let held = by_name.get(name.as_str()).map(|&i| &fields[i]).filter(|f| !f.lazy && !params.contains(&f.sym)).filter(|f| match syms.sym(f.sym).owner {
+                let held = by_name.get(name.as_str()).map(|&i| &fields[i]).filter(|f| !f.lazy && f.constant.is_none() && !params.contains(&f.sym)).filter(|f| match syms.sym(f.sym).owner {
                     Owner::Class(k) if k == c => true,
                     Owner::Class(t) => position(t) >= position(b),
                     _ => false,
@@ -1890,9 +1935,9 @@ impl<'a> Gen<'a> {
                 [p] => p.clone(),
                 _ => continue,
             };
-            out.push(FieldDef { sym: s, name: name.to_string(), ty, lazy, lazy_owner: lazy.then_some(b), init: None, mutable });
+            out.push(FieldDef { sym: s, name: name.to_string(), ty, lazy, lazy_owner: lazy.then_some(b), init: None, mutable , constant: None });
         }
-        // A val whose getter the trait defines, of no setter, is a constant (`is_trait_constant`).
+        // A val whose getter the trait defines, of no setter, is a constant (`constant`).
         let constants = members
             .iter()
             .filter(|&(_, &s)| syms.sym(s).kind == SymKind::Val && !self.is_lazy_member(s) && !out.iter().any(|f| f.sym == s))
@@ -2976,7 +3021,7 @@ impl<'a> Gen<'a> {
             }
             let ty = self.sym_type(s);
             let fname = self.field_name(s);
-            fields.push(FieldDef { sym: s, name: fname, ty, lazy: !eager, lazy_owner: None, init: Some(init), mutable: syms.sym(s).kind == SymKind::Var });
+            fields.push(FieldDef { sym: s, name: fname, ty, lazy: !eager, lazy_owner: None, init: Some(init), mutable: syms.sym(s).kind == SymKind::Var , constant: None });
         }
         for f in &fields {
             let mut d = String::new();
