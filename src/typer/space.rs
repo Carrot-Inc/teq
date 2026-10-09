@@ -533,10 +533,10 @@ impl<'t, 'a> Spaces<'t, 'a> {
         self.sc.scrut_type = Some(scrut);
         let fixed = |s: &Self, t: TypeId, args: TList| (args != EMPTY_LIST && s.is_ground(t)).then_some(t);
         match self.t.types.get(scrut) {
+            // Any checkable class (`isCheckable`, apart from what splits): a sealed one into
+            // its children where it is abstract, a concrete one whole (`missing_children`).
             Type::Class(c, args) => {
-                let info = self.t.syms.class(c);
-                let sealed = splits_into_children(&info);
-                if sealed && !info.children.is_empty() {
+                if self.is_checkable(scrut, 0) {
                     let fixed = fixed(self, scrut, args);
                     self.sc.roots.push((c, fixed));
                 }
@@ -780,8 +780,13 @@ impl<'t, 'a> Spaces<'t, 'a> {
             return false;
         }
         let is_trait = |s: &Self, c: ClassId| matches!(s.t.syms.class(c).kind, ClassKind::Trait | ClassKind::Enum);
+        // Final, or sealed with no subclass and instances of its own: what nothing extends.
+        let closed = |s: &Self, c: ClassId| {
+            let info = s.t.syms.class(c);
+            s.t.is_final_class(c) || (info.mods & mods::SEALED != 0 && info.mods & mods::ABSTRACT == 0 && info.kind == ClassKind::Class && info.children.is_empty())
+        };
         for (fin, other) in [(c1, c2), (c2, c1)] {
-            if is_trait(self, other) && self.t.is_final_class(fin) && !self.derives(fin, other) && !self.t.complete_ancestry(fin) {
+            if is_trait(self, other) && closed(self, fin) && !self.derives(fin, other) && !self.t.complete_ancestry(fin) {
                 return false;
             }
         }
@@ -1901,32 +1906,30 @@ impl<'t, 'a> Spaces<'t, 'a> {
         }
     }
 
-    /// Whether a match over the type is checked for missing cases: a sealed type or enum, a
-    /// `Boolean`, a union, or a case class or tuple with such a field.
+    /// Whether a match over the type is checked for missing cases (dotty's
+    /// `exhaustivityCheckable`, `isCheckable`): a sealed class or trait whatever its children
+    /// (a concrete one stays whole in the algebra, `isDecomposableToChildren`), an enum, a case
+    /// class or a tuple, `Boolean`, a union, an intersection with a checkable side, an abstract
+    /// type by its bound. Apart from what the algebra splits.
     fn is_checkable(&mut self, t: TypeId, depth: u32) -> bool {
+        if depth > 8 {
+            return false;
+        }
         let t = self.t.deref(t);
         match self.t.types.get(t) {
             Type::Union(..) => true,
+            Type::Inter(a, b) => self.is_checkable(a, depth + 1) || self.is_checkable(b, depth + 1),
             Type::Class(c, _) => {
-                if c == self.t.b.boolean {
+                if c == self.t.b.boolean || self.t.is_tuple_class(c) {
                     return true;
                 }
                 self.t.complete_class(c);
                 let info = self.t.syms.class(c);
-                let sealed = splits_into_children(&info);
-                if sealed && !info.children.is_empty() {
-                    return true;
-                }
-                if depth >= 2 {
-                    return false;
-                }
-                match self.field_types(t) {
-                    Some(fields) => fields.range().any(|k| {
-                        let f = self.sc.field_arena[k];
-                        self.is_checkable(f, depth + 1)
-                    }),
-                    None => false,
-                }
+                info.mods & (mods::SEALED | mods::CASE) != 0 || matches!(info.kind, ClassKind::Enum | ClassKind::EnumCase)
+            }
+            Type::Param(_) | Type::AppParam(..) | Type::Member(..) | Type::AppMember(..) | Type::Decl(_) | Type::Alias(..) => {
+                let under = self.t.match_type(t);
+                under != t && self.is_checkable(under, depth + 1)
             }
             _ => false,
         }
@@ -2035,9 +2038,12 @@ impl<'t, 'a> Spaces<'t, 'a> {
         if self.is_singleton_type(t) {
             return self.t.name_str(self.t.syms.class(c).name);
         }
+        // A class that is no case class is shown by a type test (dotty's `show` of a `Typ`,
+        // `_: Shape`).
         match self.field_types(t) {
             Some(fields) => self.wrap_fields(c, fields.range().map(|_| "_".to_string()).collect()),
-            None => self.t.show(t),
+            None if self.t.syms.class(c).mods & mods::CASE != 0 => self.wrap_fields(c, Vec::new()),
+            None => format!("_: {}", self.t.show(t)),
         }
     }
 

@@ -101,7 +101,7 @@ object Outer:
   val b = new OtherPrefix.O
   val x = a.I(1)
   try
-    println(x match
+    println((x: @unchecked) match
       case b.I(k) => k)
   catch case e: MatchError => println("MatchError")
 

@@ -30,10 +30,7 @@ libraries compiled from their jars run against scalac's output. The remaining di
 - A failed member call is retried as an extension or a conversion of the receiver, as scalac retries it,
   except as a right-associative extension operator (`one() +: d` failing on `d`'s own `+:` is not taken by an
   `extension (x: Int) def +:(d: D)`); the member's error then stands.
-- Exhaustivity: a type splits at most 64 times per match; beyond that nothing is reported. On JavaScript and
-  in the interpreter a match over a `Vector`, an `ArraySeq` or a `Queue` itself is not checked for missing
-  cases (the std's are final classes, scala-library's sealed); nor, on any target, is one over a sealed class
-  that is not abstract (scala-library's `Queue`).
+- Exhaustivity: a type splits at most 64 times per match; beyond that nothing is reported.
 
 ### Givens and implicits
 

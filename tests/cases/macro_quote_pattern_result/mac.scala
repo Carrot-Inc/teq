@@ -31,6 +31,7 @@ object Frag:
   def fromParts[A](s: String, e: Enc[A]): Frag[A] = Frag(s, e)
 
 object Mac:
+  @annotation.nowarn
   def impl(argsExpr: Expr[Seq[Any]])(using Quotes): Expr[Any] =
     val Varargs(args) = argsExpr: @unchecked
     val encoders: List[Expr[Any]] = args.toList.map {
