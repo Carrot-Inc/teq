@@ -1932,7 +1932,7 @@ impl<'a> Worker<'a> {
     /// The value of the stable path type `t` as an expression: an unqualified term through the
     /// scope (`stable_path_expr`), a selection through its prefix, kept whole (`other.token`,
     /// not the enclosing instance's `token`).
-    fn path_expr(&mut self, t: TypeId) -> Option<TExprId> {
+    pub(super) fn path_expr(&mut self, t: TypeId) -> Option<TExprId> {
         match self.types.get(t) {
             Type::Term(s) => self.stable_path_expr(s),
             Type::Select(p, s) => {

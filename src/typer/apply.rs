@@ -2106,7 +2106,7 @@ impl<'a> Worker<'a> {
 
     /// `final val x = 1` without a type is a constant in Scala: a use is replaced by the literal
     /// (`constant_value`), another worker's initialiser read through its chunk.
-    fn constant_of(&mut self, s: SymId) -> Option<TExpr> {
+    pub(super) fn constant_of(&mut self, s: SymId) -> Option<TExpr> {
         let mut s = s;
         for _ in 0..8 {
             if let Some(literal) = self.constant_by_signature(s) {

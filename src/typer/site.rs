@@ -683,8 +683,22 @@ impl<'a> Worker<'a> {
                 arg = self.deref(arg);
             }
         }
-        let Type::Lit(l) = self.types.get(arg) else { return None };
-        let value = self.literal_expr(self.types.lit_val(l));
+        // dotty's `Synthesizer.synthesizedValueOf`, of the argument dealiased: a constant, `Unit`,
+        // a stable path (`valueOf[x.type]`, its constant where it is one) or a `this` type.
+        let arg = self.deref_alias(arg);
+        let float = self.b.t_float;
+        let value = match self.types.get(arg) {
+            Type::Lit(l) => self.literal_expr(self.types.lit_val(l)),
+            _ if arg == self.b.t_unit => self.prog.add(TExpr::Unit),
+            // A `Float` constant is held as a `Double` literal (teq's literal types have no float):
+            // its path is read.
+            Type::Term(s) | Type::Select(_, s) if self.constant_of(s).is_some() && self.sig_of(s).ret != float && self.path_expr(arg).is_some() => {
+                let literal = self.constant_of(s)?;
+                self.prog.add(literal)
+            }
+            Type::Term(_) | Type::Select(..) | Type::This(_) => self.path_expr(arg)?,
+            _ => return None,
+        };
         let l = self.prog.list(&[value]);
         Some(self.prog.add(TExpr::New(class, l)))
     }
