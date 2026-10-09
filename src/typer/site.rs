@@ -697,6 +697,8 @@ impl<'a> Worker<'a> {
                 self.prog.add(literal)
             }
             Type::Term(_) | Type::Select(..) | Type::This(_) => self.path_expr(arg)?,
+            // An object's singleton type, which is its module class's type here.
+            Type::Class(c, _) if self.syms.class(c).kind == ClassKind::Object => self.prog.add(TExpr::Module(c)),
             _ => return None,
         };
         let l = self.prog.list(&[value]);
