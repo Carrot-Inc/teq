@@ -3126,10 +3126,27 @@ impl<'a> Worker<'a> {
         } else {
             0
         };
+        let superclass = self.syms.class(c).superclass;
         let mut synthesized = 0;
         for (bit, name, param) in synthetic::MEMBERS {
-            if wanted & bit != 0 && self.existing_def(c, name, param).is_none() {
-                synthesized |= bit;
+            if wanted & bit == 0 {
+                continue;
+            }
+            match self.existing_def(c, name, param) {
+                None => synthesized |= bit,
+                Some(s) if bit & (synthetic::HASH_CODE | synthetic::EQUALS | synthetic::TO_STRING) != 0 => {
+                    let definer = match self.syms.sym(s).owner {
+                        Owner::Class(k) => Some(k),
+                        _ => None,
+                    };
+                    let inherited = definer.is_some_and(|k| {
+                        k != c && superclass.is_some_and(|p| self.syms.class(p).base_types.iter().any(|&(x, _)| x == k))
+                    });
+                    if inherited {
+                        synthesized |= bit << synthetic::INHERITED;
+                    }
+                }
+                Some(_) => {}
             }
         }
         if synthesized & synthetic::EQUALS != 0 {

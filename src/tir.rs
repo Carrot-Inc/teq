@@ -752,6 +752,10 @@ pub mod synthetic {
     /// With `EQUALS`: the synthesized `equals` ends with `that.canEqual(this)`, the class not
     /// being final or having a `canEqual` of its own (`SyntheticMembers.equalsBody`).
     pub const EQUALS_CALLS_CAN_EQUAL: u16 = 1 << 15;
+    /// `HASH_CODE`, `EQUALS` or `TO_STRING` shifted by this: none is synthesized, the existing
+    /// definition (`existingDef`) being the superclass's or one it inherits, which the JS
+    /// registration of a shape leaves to the prototype chain.
+    pub const INHERITED: u32 = 9;
 
     /// A case class's (`caseSymbols`); a case object's lacks `equals` (`caseModuleSymbols`).
     pub const CASE: u16 = HASH_CODE | EQUALS | TO_STRING | CAN_EQUAL | PRODUCT_ARITY | PRODUCT_PREFIX | PRODUCT_ELEMENT | PRODUCT_ELEMENT_NAME;

@@ -3052,6 +3052,14 @@ impl<'a> Emitter<'a> {
         if Some(tc.id) == self.reach.product {
             let _ = write!(self.out, " $productBase({});", name);
         }
+        // Where the superclass's chain has the member the rule would make (`existingDef`), the
+        // inherited one shows: the registration copies the shape's when that chain is not linked
+        // yet, as in a module of the split output.
+        for (bit, method) in [(synthetic::TO_STRING, "toString"), (synthetic::EQUALS, "equals"), (synthetic::HASH_CODE, "hashCode")] {
+            if tc.synthesized & (bit << synthetic::INHERITED) != 0 {
+                let _ = write!(self.out, " delete {}.prototype.{};", name, method);
+            }
+        }
         // A trait's method that `$cls` copies first but an abstract redeclaration overrides is no
         // member of the class (`Symbols::member_declaration`): the member's, or the superclass's.
         if !matches!(info.kind, ClassKind::Trait | ClassKind::Enum) {
