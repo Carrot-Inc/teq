@@ -3963,6 +3963,12 @@ impl<'a> Worker<'a> {
             // call reaches the JS primitives that implement it; a default method has a body.
             return match s.owner {
                 Owner::Class(c) if Some(c) == self.b.reflect_enum => true,
+                // So are `Product`'s `productArity` and `productElement` and `Equals`'s
+                // `canEqual`, whose templates answer for the classes the rule gives them
+                // (`SyntheticMembers`): a trait's own `canEqual` implements it.
+                Owner::Class(c) if Some(c) == self.b.product || Some(c) == self.equals_class() => {
+                    matches!(s.name, names::PRODUCT_ARITY | names::PRODUCT_ELEMENT | names::CAN_EQUAL_METHOD) && declared_abstract()
+                }
                 Owner::Class(c) => s.java_defined && self.syms.class(c).kind == ClassKind::Trait && declared_abstract(),
                 _ => false,
             };
