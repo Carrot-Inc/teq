@@ -3655,7 +3655,7 @@ impl<'w, 'a> P<'w, 'a> {
     /// `PolyFunction` refinement, selected by its signature, applied to the type arguments the
     /// typer took (a contextual one's arguments are its using clause's).
     fn poly_function_apply(&mut self, f: TExprId, ps: TList, fun: TypeId, args: &[TExprId], e: TExprId) {
-        let ps: Vec<TypeId> = self.w.types.items(ps).to_vec();
+        let ps: Vec<TypeId> = self.w.types.poly_params(ps).to_vec();
         let targs: Vec<TypeId> = self.records(e).targs.map(|l| self.w.types.items(l).to_vec()).unwrap_or_default();
         if targs.len() != ps.len() {
             return self.fail("a polymorphic function's application without its type arguments".to_string());
@@ -4347,15 +4347,27 @@ impl<'w, 'a> P<'w, 'a> {
         // (`$anonfun[T](x: A): R`), the closure's type the `PolyFunction` refinement scalac infers.
         let head = self.w.deref_alias(fun_ty);
         let (poly, fun_ty): (Vec<TParamId>, TypeId) = match self.w.types.get(head) {
-            Type::Poly(ps, fun) => (self.w.types.items(ps).iter().filter_map(|&p| match self.w.types.get(p) {
+            // The lambda's own parameters, which its body names.
+            Type::Poly(ps, fun) => (self.w.types.poly_params(ps).iter().filter_map(|&p| match self.w.types.get(p) {
                 Type::Param(id) => Some(id),
                 _ => None,
             }).collect(), fun),
             _ => (Vec::new(), fun_ty),
         };
-        let ret = match self.w.types.get(fun_ty) {
-            Type::Class(_, args) | Type::Alias(_, args) => self.w.types.items(args).last().copied(),
-            _ => None,
+        // A function type with named parameters: its `apply`'s result over the closure's own
+        // parameters, which may name them (dotty's `Typer.decomposeProtoFunction`,
+        // `typedPolyFunctionValue`: `restpe.substParams(mt, syms.map(_.termRef))`).
+        let named = self.named_apply(fun_ty).filter(|sig| sig.clauses.len() == 1 && sig.clauses[0].params.len() == params.len());
+        let ret = match named {
+            Some(sig) => {
+                let ret = sig.ret;
+                let renamed: Vec<(SymId, TypeId)> = sig.clauses[0].params.iter().zip(params).filter(|(p, &s)| p.sym != s).map(|(p, &s)| (p.sym, self.w.types.mk(Type::Term(s)))).collect();
+                Some(if renamed.is_empty() { ret } else { self.w.subst_paths(ret, &renamed) })
+            }
+            None => match self.w.types.get(fun_ty) {
+                Type::Class(_, args) | Type::Alias(_, args) => self.w.types.items(args).last().copied(),
+                _ => None,
+            },
         };
         let Some(ret) = ret.or_else(|| self.node_type(body)) else {
             return self.fail("a closure of no known type".to_string());

@@ -10,7 +10,7 @@ use super::{Frame, Worker};
 use crate::ast::{ListRef, TyExpr, TyExprId};
 use crate::intern::Name;
 use crate::names;
-use crate::source::Span;
+use crate::source::{FileId, Span};
 use crate::symbols::*;
 use crate::types::*;
 use std::sync::Arc;
@@ -178,11 +178,16 @@ impl<'a> Worker<'a> {
     /// The function type with the parameters `params` and the result `ret`, which may name
     /// them: the refinement of the function class by an `apply` of that signature.
     pub fn named_fun_type(&mut self, ctx: bool, params: Vec<ParamSig>, ret: TypeId, span: Span) -> TypeId {
+        let file = self.env.file;
+        self.named_fun_type_in(file, ctx, params, ret, span)
+    }
+
+    /// `named_fun_type` with the `apply` a symbol of the file `file` (a library's, read).
+    pub fn named_fun_type_in(&mut self, file: FileId, ctx: bool, params: Vec<ParamSig>, ret: TypeId, span: Span) -> TypeId {
         let syms: Vec<SymId> = params.iter().map(|p| p.sym).collect();
         let ptys: Vec<TypeId> = params.iter().map(|p| p.ty).collect();
         let approx = self.non_dependent_approx(ret, &syms);
         let parent = if ctx { self.ctx_fun_type(&ptys, approx) } else { self.fun_type(&ptys, approx) };
-        let file = self.env.file;
         let apply = self.syms.new_sym(names::APPLY, SymKind::Def, crate::ast::mods::ABSTRACT, Owner::Local, file, None, span);
         let sig = MethodSig { tparams: Vec::new(), clauses: vec![ClauseSig { params, is_using: ctx, is_implicit: false }], ret };
         let l = self.sig_types(&sig);
@@ -236,6 +241,73 @@ impl<'a> Worker<'a> {
             return self.named_fun_type(ctx, params, ret, span);
         }
         if ctx { self.ctx_fun_type(ptys, ret) } else { self.fun_type(ptys, ret) }
+    }
+
+    /// The function type `fun` of a polymorphic function type with its parameters named, as
+    /// dotty's `Desugar.makePolyFunctionType` names an unnamed one's `x$1`, `x$2`, .. (a
+    /// context function's a using clause); one that names them already, or no function type,
+    /// as it is.
+    pub(super) fn poly_function_apply(&mut self, fun: TypeId, span: Span) -> TypeId {
+        if fun == ERROR || self.named_function(fun).is_some() {
+            return fun;
+        }
+        let (ctx, (ptys, ret)) = match self.as_function(fun) {
+            Some(parts) => (false, parts),
+            None => match self.as_context_function(fun) {
+                Some(parts) => (true, parts),
+                None => return fun,
+            },
+        };
+        let file = self.env.file;
+        let params: Vec<ParamSig> = ptys
+            .iter()
+            .enumerate()
+            .map(|(i, &ty)| {
+                let name = self.interner.intern(&format!("x${}", i + 1));
+                let sym = self.syms.new_sym(name, SymKind::Param, 0, Owner::Local, file, None, span);
+                {
+                    let mut s = self.syms.sym_mut(sym);
+                    s.sig = Some(Arc::new(MethodSig::value(ty)));
+                    s.state().set(Completion::Done);
+                }
+                ParamSig { name, ty, by_name: false, repeated: false, has_default: false, sym }
+            })
+            .collect();
+        self.named_fun_type(ctx, params, ret, span)
+    }
+
+    /// The function type `fun` of a polymorphic function literal of the parameters `syms` with
+    /// them named: its `apply`'s parameters are the literal's.
+    pub(super) fn literal_apply(&mut self, fun: TypeId, syms: &[SymId], span: Span) -> TypeId {
+        if fun == ERROR || self.named_function(fun).is_some() {
+            return fun;
+        }
+        let (ctx, (ptys, ret)) = match self.as_function(fun) {
+            Some(parts) => (false, parts),
+            None => match self.as_context_function(fun) {
+                Some(parts) => (true, parts),
+                None => return fun,
+            },
+        };
+        if ptys.len() != syms.len() {
+            return fun;
+        }
+        let params: Vec<ParamSig> = syms
+            .iter()
+            .zip(&ptys)
+            .map(|(&sym, &ty)| ParamSig { name: self.syms.sym(sym).name, ty, by_name: false, repeated: false, has_default: false, sym })
+            .collect();
+        self.named_fun_type(ctx, params, ret, span)
+    }
+
+    /// The signature of the `apply` a function type with named parameters is refined by, as
+    /// the refinement has it.
+    pub(super) fn named_apply_sig(&mut self, t: TypeId) -> Option<Arc<MethodSig>> {
+        let t = self.deref_alias(t);
+        self.named_fun_parent(t)?;
+        let Type::Refined(_, r) = self.types.get(t) else { return None };
+        let refinement = self.types.refinement(r);
+        Some(self.refinement_sig(refinement))
     }
 
     /// The function class a refinement by `apply` refines, for the views that read a function
@@ -441,7 +513,9 @@ impl<'a> Worker<'a> {
                 }
             }
             Type::Refined(p, r) => self.approx_refined(t, p, r, params, v, d),
-            Type::Poly(ps, fun) => match self.approx(fun, params, v, d) {
+            // Bounds that name a parameter leave no exact type, as their lambda's parameter
+            // infos would need approximating (`TypeMap.mapOverLambda`).
+            Type::Poly(ps, fun) if !self.types.poly_bounds(ps).iter().any(|&b| self.types.names_term(b, params)) => match self.approx(fun, params, v, d) {
                 Approx::Exact(f) => Approx::Exact(self.types.mk(Type::Poly(ps, f))),
                 _ => range(NOTHING, ANY, v),
             },
@@ -678,8 +752,13 @@ impl<'a> Worker<'a> {
     }
 
     /// scalac's implementation restriction: a lambda expected to be a function type with named
-    /// parameters whose result is a context function type.
+    /// parameters whose result is a context function type (dotty's `decomposeProtoFunction`).
+    /// A polymorphic function literal's own function is its `apply`, which dotty types by
+    /// `typedPolyFunctionValue` and never asks this of.
     pub fn check_curried_dependent(&mut self, expected: TypeId, span: Span) {
+        if self.poly_literal_fun == Some(expected) {
+            return;
+        }
         let Some(f) = self.named_function(expected) else { return };
         if self.as_context_function(f.ret).is_some() {
             let shown = self.show(expected);

@@ -1,0 +1,6 @@
+// tests/tasty/fixtures/DpFn.tasty (TASTy 28.8, 1067 bytes)
+package fix.depparams
+@SourceFile object DpFn extends Object {
+  <synthetic> private def writeReplace(): AnyRef = ...
+  def inspect[T](files: package.List[Predef.String])(fn: Predef.String ?=> List[Option[Nothing & Predef.String]] => T { def apply(using ctx: Predef.String): package.List[Option[ctx.type]] => T }): T = ...
+}

@@ -140,6 +140,9 @@ pub struct TryExpr {
 /// The entry of `Ast::lambda_bounds` for a parameter without a bound.
 pub const NO_BOUND: TyExprId = TyExprId(u32::MAX);
 
+/// A lambda's type parameter's lower and upper bound as written (dotty's `TypeBoundsTree`).
+pub type LambdaBounds = (Option<TyExprId>, Option<TyExprId>);
+
 #[derive(Clone, Copy, Debug)]
 pub struct LambdaParam {
     pub name: Name,
@@ -472,9 +475,12 @@ pub struct Ast {
     /// written, which the string an `s` interpolation's escapes were processed in does not keep.
     pub str_list_spans: Vec<Span>,
     pub name_lists: Vec<Name>,
-    /// The upper bounds of the parameters of a type lambda (`[x <: Node] =>> ...`, the `x` of an
-    /// `E[+x <: Node]`), a list in `ty_lists` parallel to its names with `NO_BOUND` for none.
+    /// The bounds of the parameters of a type lambda (`[x <: Node] =>> ...`, the `x` of an
+    /// `E[+x <: Node]`) or a polymorphic function type (`[A >: String] => ..`), a list in
+    /// `ty_lists` of each parameter's lower and upper bound, `NO_BOUND` for none.
     pub lambda_bounds: Vec<(TyExprId, ListRef)>,
+    /// The same of a polymorphic function literal's parameters (`[A <: Int] => (a: A) => ..`).
+    pub poly_lambda_bounds: Vec<(ExprId, ListRef)>,
     /// The parameter names of a function type that writes them (`(c: Ctx) => c.T`), a list in
     /// `name_lists` parallel to its parameters.
     pub fun_param_names: Vec<(TyExprId, ListRef)>,
@@ -744,6 +750,7 @@ impl Ast {
             str_list_spans: Vec::new(),
             name_lists: Vec::new(),
             lambda_bounds: Vec::new(),
+            poly_lambda_bounds: Vec::new(),
             fun_param_names: Vec::new(),
             param_annots: Vec::new(),
             lambda_params: Vec::new(),

@@ -60,6 +60,10 @@
 #            absent.txt in either;
 #   scalac-run  scalac 3.8.4 compiles the downstream over teq's products of the upstream, and
 #            its classes run with java over teq's class files and scala-library: run.txt.
+#   over-scalac  (a case with over-scalac.txt) the modules the file names built by scalac
+#            3.8.4, each over the ones before it, and the others by teq in the product mode over
+#            those: teq types a downstream against scalac's pickles and writes its own; with
+#            run.txt the last module's classes run with java over the others': run.txt.
 # Every case is checked by:
 #   keys     the keys and tokens every product records are the whole build's, and no token is
 #            two keys' (else its bundle leg is deferred as ineligible);
@@ -737,6 +741,33 @@ PY
       [ "$got" = "$expected" ] || { ok=0; detail="$main printed: $got"$'\n'"expected: $expected"; }
     fi
     result "$name" scalac-run $ok "$detail"
+  fi
+  # over-scalac: teq's downstream modules over scalac's upstream ones.
+  if [ -f "$dir/over-scalac.txt" ] && [ ! -f "$expect" ]; then
+    ok=1
+    detail=""
+    cp=""
+    for m in "${mods[@]}"; do
+      srcs=()
+      if grep -qx "$m" "$dir/over-scalac.txt"; then
+        while IFS= read -r f; do srcs+=("$root/$f"); done < <(sources "$dir/$m")
+        log=$(scalac "${cp:-$SL}" "$out/$name/over-$m" "${srcs[@]}") || { ok=0; detail="$detail$m by scalac: $log"$'\n'; break; }
+      else
+        while IFS= read -r f; do srcs+=("$f"); done < <(sources "$dir/$m")
+        "$teq" compiler build --target jvm --products "$out/$name/over-$m" --sourceroot "$(sroot "$m")" --classpath "$SL${cp:+:$cp}" "${srcs[@]}" > "$out/$name.over-$m.log" 2>&1 \
+          || { ok=0; detail="$detail$m by teq: $(cat "$out/$name.over-$m.log")"$'\n'; break; }
+      fi
+      cp=${cp:+$cp:}$out/$name/over-$m
+    done
+    if [ $ok = 1 ] && [ -f "$dir/run.txt" ] && [ $have_java = 1 ]; then
+      last=${mods[${#mods[@]}-1]}
+      lsrcs=()
+      while IFS= read -r f; do lsrcs+=("$f"); done < <(sources "$dir/$last")
+      main=$(main_class "${lsrcs[@]}")
+      got=$(timeout 60 java -cp "$cp:$SL" "$main" 2>&1)
+      [ "$got" = "$(cat "$dir/run.txt")" ] || { ok=0; detail="$main printed: $got"$'\n'"expected: $(cat "$dir/run.txt")"; }
+    fi
+    result "$name" over-scalac $ok "$detail"
   fi
   # And against the lean check build's pickles where they are not the scala-library build's.
   [ -n "$lean_differs" ] || continue

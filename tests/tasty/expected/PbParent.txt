@@ -1,0 +1,5 @@
+// tests/tasty/fixtures/PbParent.tasty (TASTy 28.8, 468 bytes)
+package fix.polybounds
+@SourceFile trait PbParent[T] extends Object {
+  def run[A >: T](a: A): Any
+}

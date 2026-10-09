@@ -1,0 +1,7 @@
+3,6c3
+<   def inspect[T](files: List[String])(fn: String ?=> List[Option[Nothing & String]] => T { def apply(using ctx: String): List[Option[ctx.type]] => T }): T = {
+<     given s: String = files.mkString{(java.lang.String): java.lang.String}(",")
+<     (fn.apply{(java.lang.String): Function1}(s)).apply{(java.lang.Object): java.lang.Object}(Nil)
+<   }
+---
+>   def inspect[T](files: List[String])(fn: String ?=> List[Option[Nothing]] => T { def apply(using ctx: String): List[Option[ctx.type]] => T }): T = <elided: T>

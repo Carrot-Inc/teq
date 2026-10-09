@@ -437,6 +437,63 @@ for t in $(cd "$twin/bodies" && find . -name '*.tasty'); do
   cmp -s "$twin/bodies/$t" "$twin/beside/$t" || { again_ok=0; echo "FAIL twin bodies: a build beside an unused file writes $t otherwise"; }
 done
 [ $again_ok = 1 ] && pass=$((pass + 1)) || fail=$((fail + 1))
+# The TASTy inspector's shape over its own jars (tests/tasty/inspector): Inspector.scala's
+# `(quotes: Quotes) ?=> List[Tasty[quotes.type]] => T` over scala-library's `Quotes` and
+# scala3-tasty-inspector's `Tasty`, built by teq in the product mode and by scalac 3.8.4: the two
+# signatures' printouts differ by what tests/tasty/inspector/Inspector.diff records, of section 7's
+# classes; UseInspector.scala is typed by scalac over teq's products (-Werror), and built by teq in
+# the product mode over scalac's classes and over its own products; scalac reads teq's pickles
+# below with the twin's. Without scala-cli or the jar a failure (incomplete validation).
+insp=tests/tasty/inspector
+insp_tmp=$(mktemp -d "${TMPDIR:-/tmp}/tasty-inspector.XXXXXX") || { echo "tasty: no temporary directory for the inspector's shape"; exit 1; }
+insp_jar=$(jar_of tasty-inspector)
+insp_cp=$(jar_of scala-library):$insp_jar
+insp_read=""
+insp_scalac() {
+  local dest=$1
+  shift
+  (cd "$insp_tmp" && COURSIER_MODE=offline timeout 300 scala-cli --power compile -S 3.8.4 --jvm system --server=false --offline -q \
+    --workspace "$insp_tmp" --scalac-option -Werror -d "$dest" "$@" 2>&1)
+}
+if ! command -v scala-cli > /dev/null || [ ! -f "$insp_jar" ]; then
+  fail=$((fail + 1))
+  echo "FAIL inspector: no scala-cli or no scala3-tasty-inspector 3.8.4 in the coursier cache (incomplete validation)"
+elif ! "$teq" compiler build --target jvm --products "$insp_tmp/tq" --classpath "$insp_cp" "$insp/Inspector.scala" > "$insp_tmp/tq.log" 2>&1; then
+  fail=$((fail + 1))
+  echo "FAIL inspector: teq's products: $(head -3 "$insp_tmp/tq.log")"
+elif ! log=$(insp_scalac "$insp_tmp/sc" --classpath "$insp_jar" "$PWD/$insp/Inspector.scala"); then
+  fail=$((fail + 1))
+  echo "FAIL inspector: scalac's classes: $log"
+else
+  insp_read=$insp_tmp/tq
+  actual=$(diff <("$teq" tasty "$insp_tmp/sc/tinsp/Inspector.tasty" | tail -n +2 | sed 's/<body@[0-9]*>/<body>/g') \
+                <("$teq" tasty "$insp_tmp/tq/tinsp/Inspector.tasty" | tail -n +2 | sed 's/<body@[0-9]*>/<body>/g'))
+  if [ "$1" = "--update" ]; then
+    printf '%s\n' "$actual" > "$insp/Inspector.diff"
+  elif [ "$actual" == "$(cat "$insp/Inspector.diff" 2> /dev/null)" ]; then
+    pass=$((pass + 1))
+  else
+    fail=$((fail + 1))
+    echo "FAIL inspector twin"
+    diff <(printf '%s\n' "$actual") "$insp/Inspector.diff" | head -20
+  fi
+  if [ "$1" != "--update" ]; then
+    if log=$(insp_scalac "$insp_tmp/sc-use" --classpath "$insp_tmp/tq:$insp_jar" "$PWD/$insp/UseInspector.scala"); then
+      pass=$((pass + 1))
+    else
+      fail=$((fail + 1))
+      echo "FAIL inspector: scalac over teq's products: $log"
+    fi
+    for up in sc tq; do
+      if "$teq" compiler build --target jvm --products "$insp_tmp/use-over-$up" --classpath "$insp_cp:$insp_tmp/$up" "$insp/UseInspector.scala" > "$insp_tmp/use-over-$up.log" 2>&1; then
+        pass=$((pass + 1))
+      else
+        fail=$((fail + 1))
+        echo "FAIL inspector: teq over the $up products: $(head -3 "$insp_tmp/use-over-$up.log")"
+      fi
+    done
+  fi
+fi
 # scalac 3.8.4 reads every twinned source's pickles as its own compilation units: -from-tasty
 # with the outline admitted, every right-hand side forced and the tree
 # checker run after readTasty, all of them in one JVM (tests/tasty/fromtasty/Gate.scala); without
@@ -458,10 +515,16 @@ if [ "$1" != "--update" ]; then
     for name in "${extra_units[@]}"; do
       printf 'readjs\t%s\t%s\t%s\n' "$name" "$extra/$name:$sjs" "$(find "$extra/$name" -name '*.tasty' | LC_ALL=C sort | tr '\n' '\t' | sed 's/\t$//')" >> "$twin/fromtasty.jobs"
     done
+    # The inspector's shape, its jar on the class path.
+    insp_units=()
+    if [ -n "$insp_read" ]; then
+      insp_units=(inspector)
+      printf 'read\tinspector\t%s\t%s\n' "$insp_read:$insp_jar" "$(find "$insp_read" -name '*.tasty' | LC_ALL=C sort | tr '\n' '\t' | sed 's/\t$//')" >> "$twin/fromtasty.jobs"
+    fi
     root=$PWD
     (cd "$twin" && COURSIER_MODE=offline timeout 300 scala-cli --power run -S 3.8.4 --jvm system --server=false --offline -q \
       "$root/tests/tasty/fromtasty/Gate.scala" --dep org.scala-lang:scala3-compiler_3:3.8.4 -- fromtasty.jobs > fromtasty.out 2> fromtasty.err)
-    for name in "${twin_units[@]}" "${js_units[@]}" "${extra_units[@]}"; do
+    for name in "${twin_units[@]}" "${js_units[@]}" "${extra_units[@]}" "${insp_units[@]}"; do
       if grep -qxF "ok $name" "$twin/fromtasty.out"; then
         pass=$((pass + 1))
       else
@@ -472,7 +535,7 @@ if [ "$1" != "--update" ]; then
     done
   fi
 fi
-rm -rf "$twin" "$extra"
+rm -rf "$twin" "$extra" "$insp_tmp"
 # The writer's allowlist of the std's selections: what
 # tests/tasty/stdshapes/generate.sh makes of the std as it is, the keys scala-library resolves.
 if [ "$1" != "--update" ]; then

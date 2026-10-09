@@ -121,9 +121,6 @@ a JDK member as `not supported on JavaScript`. Beyond that:
   `sb.length()` of a `StringBuilder` are rejected where scalac types them, `f"n=$n%04d"` fails with
   `NoSuchMethodError`, a derived `Show` prints a case object as `Nil()`, `eq` on strings compares by value.
 - A file's top-level `export` clauses are not written to a module's products.
-- A dependent function type in a definition's signature, such as `(q: Quotes) ?=> List[Tasty[q.type]] => T`,
-  cannot be written to a module's products yet: the build of that module fails naming the definition. A build
-  into a class directory accepts it.
 - `-deprecation`, `-feature` and `-Wtostring-interpolated` have no counterpart, `-Wconf` is not read, the
   `-Wunused` kinds other than `imports` report nothing, and `@nowarn("msg=...")` silences every warning of
   its definition, so a build with them and `-Werror` passes here where scalac fails it.

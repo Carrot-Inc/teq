@@ -1,0 +1,8 @@
+5c5
+<   def inferred(c: DbCtx): DbParent[c.T] { def run[A <: c.T](a: A): A } = make{(DbCtx)}(c)
+---
+>   def inferred(c: DbCtx): DbParent[c.T] { def run[A <: c.T](a: A): A } = make{(fix.depbounds.DbCtx): fix.depbounds.DbParent}(c)
+8c8
+<   def polyInferred(c: DbCtx): PolyFunction { def apply[A <: c.T](a: A): a.type } = poly{(DbCtx)}(c)
+---
+>   def polyInferred(c: DbCtx): PolyFunction { def apply[A <: c.T](a: A): a.type } = poly{(fix.depbounds.DbCtx): PolyFunction}(c)

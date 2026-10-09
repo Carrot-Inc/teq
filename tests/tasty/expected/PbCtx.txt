@@ -1,0 +1,5 @@
+// tests/tasty/fixtures/PbCtx.tasty (TASTy 28.8, 371 bytes)
+package fix.polybounds
+@SourceFile trait PbCtx extends Object {
+  type T
+}

@@ -1943,7 +1943,13 @@ fn classes_named(types: &TypeStore, t: TypeId, out: &mut Vec<ClassId>) {
                 classes_named(types, a, out);
             }
         }
-        Type::Lambda(_, body) | Type::Poly(_, body) => classes_named(types, body, out),
+        Type::Lambda(_, body) => classes_named(types, body, out),
+        Type::Poly(ps, body) => {
+            for &b in types.poly_bounds(ps) {
+                classes_named(types, b, out);
+            }
+            classes_named(types, body, out);
+        }
         Type::Union(a, b) | Type::Inter(a, b) => {
             classes_named(types, a, out);
             classes_named(types, b, out);

@@ -1,0 +1,8 @@
+// tests/tasty/fixtures/DpParent.tasty (TASTy 28.8, 690 bytes)
+package fix.depparams
+@SourceFile trait DpParent extends Object {
+  def run[A](a: A): Any
+  def unused[A](a: Int): Any
+  def gen[A]: Any
+  def rep(xs: Int*): Int
+}

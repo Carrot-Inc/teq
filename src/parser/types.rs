@@ -176,8 +176,8 @@ impl<'a> Parser<'a> {
         self.type_lambda(&params, &bounds, body, start)
     }
 
-    /// `[X, Y <: B]` of a type lambda or a polymorphic function type or literal.
-    pub(super) fn parse_type_params_of_lambda(&mut self) -> (Vec<Name>, Vec<Option<TyExprId>>) {
+    /// `[X, Y >: L <: U]` of a type lambda or a polymorphic function type or literal.
+    pub(super) fn parse_type_params_of_lambda(&mut self) -> (Vec<Name>, Vec<LambdaBounds>) {
         self.expect(Tok::LBracket);
         let mut params = Vec::new();
         let mut bounds = Vec::new();
@@ -196,21 +196,29 @@ impl<'a> Parser<'a> {
         (params, bounds)
     }
 
-    pub(super) fn record_lambda_bounds(&mut self, id: TyExprId, bounds: &[Option<TyExprId>]) {
-        if bounds.iter().any(|b| b.is_some()) {
-            let ids: Vec<TyExprId> = bounds.iter().map(|b| b.unwrap_or(crate::ast::NO_BOUND)).collect();
-            let bl = push_list(&mut self.ast.ty_lists, &ids);
+    pub(super) fn record_lambda_bounds(&mut self, id: TyExprId, bounds: &[LambdaBounds]) {
+        if let Some(bl) = self.lambda_bounds_list(bounds) {
             self.ast.lambda_bounds.push((id, bl));
         }
     }
 
-    /// The bounds of a type lambda's parameter, or of a higher-kinded parameter's own parameter
-    /// (`E[+x <: Node]`): the upper one is kept, a lower one read and dropped.
-    fn parse_inner_bounds(&mut self) -> Option<TyExprId> {
-        if self.eat(Tok::Supertype) {
-            self.parse_type();
+    /// The bounds of a clause's parameters as `Ast::lambda_bounds` lists them, None where no
+    /// parameter has one.
+    pub(super) fn lambda_bounds_list(&mut self, bounds: &[LambdaBounds]) -> Option<ListRef> {
+        if bounds.iter().all(|&(lo, hi)| lo.is_none() && hi.is_none()) {
+            return None;
         }
-        if self.eat(Tok::Subtype) { Some(self.parse_type()) } else { None }
+        let ids: Vec<TyExprId> = bounds.iter().flat_map(|&(lo, hi)| [lo.unwrap_or(crate::ast::NO_BOUND), hi.unwrap_or(crate::ast::NO_BOUND)]).collect();
+        Some(push_list(&mut self.ast.ty_lists, &ids))
+    }
+
+    /// The bounds of a type lambda's or a polymorphic function's parameter, or of a
+    /// higher-kinded parameter's own parameter (`E[+x <: Node]`): `>: L` and `<: U`, dotty's
+    /// `typeBounds` (`TypeBoundsTree(lower, upper)`).
+    fn parse_inner_bounds(&mut self) -> LambdaBounds {
+        let lower = if self.eat(Tok::Supertype) { Some(self.parse_type()) } else { None };
+        let upper = if self.eat(Tok::Subtype) { Some(self.parse_type()) } else { None };
+        (lower, upper)
     }
 
     /// Replaces each `*`, `+*` and `-*` among the type arguments from `mark` on with a fresh
@@ -231,7 +239,7 @@ impl<'a> Parser<'a> {
         params
     }
 
-    fn type_lambda(&mut self, params: &[Name], bounds: &[Option<TyExprId>], body: TyExprId, start: Span) -> TyExprId {
+    fn type_lambda(&mut self, params: &[Name], bounds: &[LambdaBounds], body: TyExprId, start: Span) -> TyExprId {
         let l = push_list(&mut self.ast.name_lists, params);
         let id = self.ast.add_ty(TyExpr::Lambda(l, body), start.to(self.prev_span()));
         self.record_lambda_bounds(id, bounds);
@@ -493,7 +501,7 @@ impl<'a> Parser<'a> {
                     let l = self.ty_list(mark);
                     t = self.ast.add_ty(TyExpr::Apply(t, l), start.to(self.prev_span()));
                     if !params.is_empty() {
-                        let bounds = vec![None; params.len()];
+                        let bounds = vec![(None, None); params.len()];
                         t = self.type_lambda(&params, &bounds, t, start);
                     }
                 }
@@ -569,7 +577,7 @@ impl<'a> Parser<'a> {
     }
 
     /// A bound of a type parameter; for a higher-kinded one, a type lambda over its parameters.
-    fn parse_hk_bound(&mut self, inner: &[Name], inner_bounds: &[Option<TyExprId>]) -> TyExprId {
+    fn parse_hk_bound(&mut self, inner: &[Name], inner_bounds: &[LambdaBounds]) -> TyExprId {
         let start = self.span();
         let bound = self.parse_type();
         if inner.is_empty() {

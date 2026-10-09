@@ -1537,7 +1537,8 @@ impl<'a> Worker<'a> {
         }
         match self.types.get(t) {
             Type::Term(x) => x == s,
-            Type::Select(p, _) | Type::Member(p, _) | Type::Lambda(_, p) | Type::Poly(_, p) => self.mentions_term(p, s),
+            Type::Select(p, _) | Type::Member(p, _) | Type::Lambda(_, p) => self.mentions_term(p, s),
+            Type::Poly(ps, p) => self.mentions_term(p, s) || self.types.poly_bounds(ps).to_vec().into_iter().any(|b| self.mentions_term(b, s)),
             Type::AppMember(m, args) => self.mentions_term(m, s) || self.types.items(args).iter().any(|&a| self.mentions_term(a, s)),
             Type::Class(_, args) | Type::AppParam(_, args) | Type::AppVar(_, args) | Type::Alias(_, args) => {
                 self.types.items(args).iter().any(|&a| self.mentions_term(a, s))

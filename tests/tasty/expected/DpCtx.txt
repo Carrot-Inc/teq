@@ -1,0 +1,6 @@
+// tests/tasty/fixtures/DpCtx.tasty (TASTy 28.8, 444 bytes)
+package fix.depparams
+@SourceFile trait DpCtx extends Object {
+  type T
+  val t: T
+}

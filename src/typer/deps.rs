@@ -2027,7 +2027,9 @@ impl<'c, 'a> Collector<'c, 'a> {
                 }
             }
             Type::Lambda(params, body) | Type::Poly(params, body) => {
-                let ps: Vec<TypeId> = self.w.types.items(params).to_vec();
+                let poly = matches!(self.w.types.get(t), Type::Poly(..));
+                let ps: Vec<TypeId> = if poly { self.w.types.poly_params(params).to_vec() } else { self.w.types.items(params).to_vec() };
+                let own_bounds: Vec<TypeId> = if poly { self.w.types.poly_bounds(params).to_vec() } else { Vec::new() };
                 let mut bound = Vec::new();
                 for &p in &ps {
                     if let Type::Param(id) = self.w.types.get(p) {
@@ -2035,10 +2037,17 @@ impl<'c, 'a> Collector<'c, 'a> {
                     }
                 }
                 let depth = self.bind(&bound);
-                for &id in &bound {
-                    let (lo, hi) = (self.w.syms.tparam(id).lower, self.w.syms.tparam(id).upper);
-                    self.type_deps(lo);
-                    self.type_deps(hi);
+                // A polymorphic function type's bounds are its own (`Types::poly_bounds`).
+                if poly {
+                    for &b in &own_bounds {
+                        self.type_deps(b);
+                    }
+                } else {
+                    for &id in &bound {
+                        let (lo, hi) = (self.w.syms.tparam(id).lower, self.w.syms.tparam(id).upper);
+                        self.type_deps(lo);
+                        self.type_deps(hi);
+                    }
                 }
                 self.type_deps(body);
                 self.bound.truncate(depth);

@@ -1,0 +1,5 @@
+// tests/tasty/fixtures/DbParent.tasty (TASTy 28.8, 475 bytes)
+package fix.depbounds
+@SourceFile trait DbParent[T] extends Object {
+  def run[A <: T](a: A): Any
+}

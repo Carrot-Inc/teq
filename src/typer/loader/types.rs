@@ -159,12 +159,17 @@ impl<'a> Worker<'a> {
             }
             TType::Annotated(u, _) => self.map_type_ctor(cx, u),
             TType::Refined(parent, members) => {
+                // `PolyFunction { def apply[A](a: A): A }` is a polymorphic function type; one
+                // refining more than its `apply` (`; val tag: Int`) is a refinement as any other,
+                // as the source's is.
                 let poly = matches!(&**parent, TType::TypeRef(_, n) if self.tasty(cx.file).simple(*n) == Some("PolyFunction"));
                 if poly {
-                    return match self.map_poly_function(cx, members) {
-                        Some(ty) => ty,
-                        None => self.blocked(cx, Shape::PolyFunction, t),
-                    };
+                    if let Some(ty) = self.map_poly_function(cx, members) {
+                        return ty;
+                    }
+                    if members.len() == 1 {
+                        return self.blocked(cx, Shape::PolyFunction, t);
+                    }
                 }
                 match self.map_refined(cx, parent, members) {
                     Some(ty) => ty,
@@ -458,49 +463,7 @@ impl<'a> Worker<'a> {
                     s.state().set(Completion::Done);
                     Refinement::Term(name, sym, self.types.list(&[ty]))
                 }
-                TType::Lambda { kind: LambdaKind::Method, .. } => {
-                    let mut clauses = Vec::new();
-                    let mut cur = info;
-                    let binders_mark = cx.term_binders.len();
-                    while let TType::Lambda { kind: LambdaKind::Method, binder, params, result } = cur {
-                        let mut ps = Vec::with_capacity(params.len());
-                        for p in params {
-                            let pname = self.intern_name(&tasty, p.name);
-                            let (ty, by_name, repeated) = match &p.info {
-                                TType::ByName(inner) => (self.map_type(cx, inner), true, false),
-                                other => match repeated_element(&tasty, other) {
-                                    Some(elem) => (self.map_type(cx, elem), false, true),
-                                    None => (self.map_type(cx, other), false, false),
-                                },
-                            };
-                            let psym = self.syms.new_sym(pname, SymKind::Param, 0, Owner::Local, file_id, None, crate::source::Span::default());
-                            let mut s = self.syms.sym_mut(psym);
-                            s.sig = Some(std::sync::Arc::new(MethodSig::value(ty)));
-                            s.state().set(Completion::Done);
-                            ps.push(ParamSig { name: pname, ty, by_name, repeated, has_default: false, sym: psym });
-                        }
-                        let flags = params.first().map(|p| p.flags);
-                        let is_using = flags.map_or(false, |f| f.has(crate::tasty::tags::GIVEN));
-                        let is_implicit = flags.map_or(false, |f| f.has(crate::tasty::tags::IMPLICIT));
-                        cx.term_binders.push((*binder, params.iter().zip(&ps).map(|(tp, p)| (tp.addr, p.sym)).collect()));
-                        clauses.push(ClauseSig { params: ps, is_using, is_implicit });
-                        cur = result;
-                    }
-                    if matches!(cur, TType::Lambda { .. }) {
-                        cx.term_binders.truncate(binders_mark);
-                        return None;
-                    }
-                    let ret = self.map_type(cx, cur);
-                    cx.term_binders.truncate(binders_mark);
-                    let sym = self.syms.new_sym(name, SymKind::Def, crate::ast::mods::ABSTRACT, Owner::Local, file_id, None, crate::source::Span::default());
-                    let sig = MethodSig { tparams: Vec::new(), clauses, ret };
-                    let l = self.sig_types(&sig);
-                    let mut s = self.syms.sym_mut(sym);
-                    s.sig = Some(std::sync::Arc::new(sig));
-                    s.state().set(Completion::Done);
-                    Refinement::Term(name, sym, l)
-                }
-                TType::Lambda { .. } => return None,
+                TType::Lambda { kind: LambdaKind::Method | LambdaKind::Poly, .. } => self.map_refined_method(cx, name, info)?,
                 other => {
                     let ty = self.map_type(cx, other);
                     let sym = self.syms.new_sym(name, SymKind::Val, crate::ast::mods::ABSTRACT, Owner::Local, file_id, None, crate::source::Span::default());
@@ -516,6 +479,99 @@ impl<'a> Worker<'a> {
             t = self.types.mk(Type::Refined(t, r));
         }
         Some(t)
+    }
+
+    /// A refinement's method, `def run(c: Ctx)(x: c.T): c.T` or `def run[A](a: A): a.type`: a
+    /// symbol carrying its signature, the type parameters bound while the clauses map and each
+    /// clause's parameters from its own parameter types on. None for a shape teq does not read.
+    fn map_refined_method(&mut self, cx: &mut MapCx, name: Name, info: &TType) -> Option<Refinement> {
+        let file_id = self.loaded_file(cx).file_id;
+        let (tparams, mut cur) = match info {
+            TType::Lambda { kind: LambdaKind::Poly, binder, params, result } => (self.map_lambda_tparams(cx, *binder, params), &**result),
+            _ => (Vec::new(), info),
+        };
+        let mark = (cx.binders.len(), cx.term_binders.len());
+        if !tparams.is_empty() {
+            let TType::Lambda { kind: LambdaKind::Poly, binder, .. } = info else { unreachable!() };
+            cx.binders.push((*binder, tparams.clone()));
+        }
+        let mut clauses = Vec::new();
+        while let TType::Lambda { kind: LambdaKind::Method, binder, params, result } = cur {
+            clauses.push(self.map_clause(cx, *binder, params));
+            cur = result;
+        }
+        let ret = if matches!(cur, TType::Lambda { .. }) { None } else { Some(self.map_type(cx, cur)) };
+        cx.binders.truncate(mark.0);
+        cx.term_binders.truncate(mark.1);
+        let ret = ret?;
+        let sym = self.syms.new_sym(name, SymKind::Def, crate::ast::mods::ABSTRACT, Owner::Local, file_id, None, crate::source::Span::default());
+        let sig = MethodSig { tparams, clauses, ret };
+        let l = self.sig_types(&sig);
+        let mut s = self.syms.sym_mut(sym);
+        s.sig = Some(std::sync::Arc::new(sig));
+        s.state().set(Completion::Done);
+        Some(Refinement::Term(name, sym, l))
+    }
+
+    /// A method type's clause: its parameters' symbols, in scope (`term_binders`) for their
+    /// own types, `(c: Ctx, x: c.T)`, and after them until the caller takes them out.
+    fn map_clause(&mut self, cx: &mut MapCx, binder: Addr, params: &[crate::tasty::tree::TParam]) -> ClauseSig {
+        let tasty = self.tasty(cx.file);
+        let file_id = self.loaded_file(cx).file_id;
+        let syms: Vec<(Name, SymId)> = params
+            .iter()
+            .map(|p| {
+                let pname = self.intern_name(&tasty, p.name);
+                (pname, self.syms.new_sym(pname, SymKind::Param, 0, Owner::Local, file_id, None, crate::source::Span::default()))
+            })
+            .collect();
+        cx.term_binders.push((binder, params.iter().zip(&syms).map(|(tp, &(_, s))| (tp.addr, s)).collect()));
+        let mut ps = Vec::with_capacity(params.len());
+        for (p, &(pname, psym)) in params.iter().zip(&syms) {
+            let (ty, by_name, repeated) = match &p.info {
+                TType::ByName(inner) => (self.map_type(cx, inner), true, false),
+                other => match repeated_element(&tasty, other) {
+                    Some(elem) => (self.map_type(cx, elem), false, true),
+                    None => (self.map_type(cx, other), false, false),
+                },
+            };
+            let mut s = self.syms.sym_mut(psym);
+            s.sig = Some(std::sync::Arc::new(MethodSig::value(ty)));
+            s.state().set(Completion::Done);
+            ps.push(ParamSig { name: pname, ty, by_name, repeated, has_default: false, sym: psym });
+        }
+        let flags = params.first().map(|p| p.flags);
+        let is_using = flags.map_or(false, |f| f.has(crate::tasty::tags::GIVEN));
+        let is_implicit = flags.map_or(false, |f| f.has(crate::tasty::tags::IMPLICIT));
+        ClauseSig { params: ps, is_using, is_implicit }
+    }
+
+    /// A polymorphic method type's type parameters, their bounds mapped with them in scope.
+    fn map_lambda_tparams(&mut self, cx: &mut MapCx, binder: Addr, params: &[crate::tasty::tree::TParam]) -> Vec<TParamId> {
+        let tasty = self.tasty(cx.file);
+        let ids: Vec<TParamId> = params
+            .iter()
+            .map(|p| {
+                let n = self.intern_name(&tasty, tasty.source_name(p.name));
+                let id = self.syms.new_tparam(n, 0);
+                self.syms.tparams[id.idx()].arity = hk_arity(&p.info);
+                if p.addr != 0 {
+                    self.loaded_tables_mut(cx).tparams.insert(p.addr, id);
+                }
+                id
+            })
+            .collect();
+        cx.binders.push((binder, ids.clone()));
+        for (p, &id) in params.iter().zip(&ids) {
+            if let TType::Bounds(lo, hi) = &p.info {
+                let (l, h) = (self.map_type(cx, lo), self.map_type(cx, hi));
+                let info = &mut self.syms.tparams[id.idx()];
+                info.lower = l;
+                info.upper = h;
+            }
+        }
+        cx.binders.pop();
+        ids
     }
 
     /// The std package of a Java class that scala-library's `scala` package object aliases
@@ -810,40 +866,31 @@ impl<'a> Worker<'a> {
             return None;
         }
         let TType::Lambda { kind: LambdaKind::Poly, binder, params, result } = info else { return None };
-        let ids: Vec<TParamId> = params
-            .iter()
-            .map(|p| {
-                let n = self.intern_name(&tasty, tasty.source_name(p.name));
-                let id = self.syms.new_tparam(n, 0);
-                self.syms.tparams[id.idx()].arity = hk_arity(&p.info);
-                if p.addr != 0 {
-                    self.loaded_tables_mut(cx).tparams.insert(p.addr, id);
-                }
-                id
-            })
-            .collect();
+        let ids = self.map_lambda_tparams(cx, *binder, params);
         cx.binders.push((*binder, ids.clone()));
-        for (p, &id) in params.iter().zip(&ids) {
-            if let TType::Bounds(lo, hi) = &p.info {
-                let (l, h) = (self.map_type(cx, lo), self.map_type(cx, hi));
-                let info = &mut self.syms.tparams[id.idx()];
-                info.lower = l;
-                info.upper = h;
-            }
-        }
         let fun = match &**result {
-            TType::Lambda { kind: LambdaKind::Method, params: term_params, result: ret, .. } => {
-                let ps: Vec<TypeId> = term_params.iter().map(|p| self.map_type(cx, &p.info)).collect();
+            TType::Lambda { kind: LambdaKind::Method, binder: m, params: term_params, result: ret } => {
+                let mark = cx.term_binders.len();
+                let clause = self.map_clause(cx, *m, term_params);
                 let r = self.map_type(cx, ret);
-                Some(if is_using_clause(term_params) { self.ctx_fun_type(&ps, r) } else { self.fun_type(&ps, r) })
+                cx.term_binders.truncate(mark);
+                Some(self.poly_apply_fun(cx, clause, r))
             }
             _ => None,
         };
         cx.binders.pop();
         let fun = fun?;
         let ps: Vec<TypeId> = ids.iter().map(|&p| self.types.param(p)).collect();
-        let l = self.types.list(&ps);
-        Some(self.types.mk(Type::Poly(l, fun)))
+        Some(self.poly_type(&ps, fun))
+    }
+
+    /// The function type of a polymorphic function's `apply` of the clause `clause` and the
+    /// result `r`, read whole: a function type with named parameters, the names the pickle
+    /// holds (scalac's `x$1` too, which a call may name), as `TreeUnpickler.readMethodic` keeps
+    /// what it reads and teq types `[A] => A => A` from the source (`makePolyFunctionType`).
+    fn poly_apply_fun(&mut self, cx: &MapCx, clause: ClauseSig, r: TypeId) -> TypeId {
+        let file = self.loaded_file(cx).file_id;
+        self.named_fun_type_in(file, clause.is_using, clause.params, r, crate::source::Span::default())
     }
 
     /// A type member `name` of the class `c` or its ancestors: a nested class or an alias. An

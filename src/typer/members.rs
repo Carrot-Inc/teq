@@ -671,7 +671,8 @@ impl<'a> Worker<'a> {
             }
             Type::Poly(ps, b) => {
                 let nb = self.specialise_aliases(b, subst);
-                self.types.mk(Type::Poly(ps, nb))
+                let nps = self.map_poly_bounds(ps, &mut |w, x| w.specialise_aliases(x, subst));
+                self.types.mk(Type::Poly(nps, nb))
             }
             Type::Union(x, y) => {
                 let (nx, ny) = (self.specialise_aliases(x, subst), self.specialise_aliases(y, subst));
@@ -733,7 +734,8 @@ impl<'a> Worker<'a> {
             }
             Type::Poly(ps, b) => {
                 let nb = self.redirect_alias(b, from, to);
-                self.types.mk(Type::Poly(ps, nb))
+                let nps = self.map_poly_bounds(ps, &mut |w, x| w.redirect_alias(x, from, to));
+                self.types.mk(Type::Poly(nps, nb))
             }
             Type::Union(x, y) => {
                 let (nx, ny) = (self.redirect_alias(x, from, to), self.redirect_alias(y, from, to));
@@ -941,7 +943,11 @@ impl<'a> Worker<'a> {
         v
     }
 
-    /// The signature a term refinement gives its member: a `val`'s is the refinement's type.
+    /// The signature a term refinement gives its member: a `val`'s is the refinement's type. A
+    /// generic member whose bounds the refinement's types no longer hold as its type parameters
+    /// do (a path substituted in `A <: c.T`) takes type parameters of those bounds, the types
+    /// over them (dotty's `derivedLambdaType` of the `PolyType` `TypeMap.mapOverLambda`
+    /// mapped), the same ones for the same refinement.
     pub fn refinement_sig(&mut self, r: Refinement) -> std::sync::Arc<MethodSig> {
         match r {
             Refinement::Val(_, _, ty) => self.value_sig(ty),
@@ -950,22 +956,131 @@ impl<'a> Worker<'a> {
                 if self.sig_types(&sig) == l {
                     return sig;
                 }
-                let mut items = self.types.items(l).to_vec().into_iter();
-                let mut seen = (*sig).clone();
-                for p in seen.clauses.iter_mut().flat_map(|c| c.params.iter_mut()) {
-                    p.ty = items.next().unwrap_or(p.ty);
+                if let Some(seen) = self.refinement_sigs.get(&(s, l)) {
+                    return seen.clone();
                 }
-                seen.ret = items.next().unwrap_or(seen.ret);
-                std::sync::Arc::new(seen)
+                let items = self.types.items(l).to_vec();
+                let k = sig.tparams.len();
+                let (bounds, rest) = items.split_at((2 * k).min(items.len()));
+                let mut seen = (*sig).clone();
+                let mut rebound: Subst = Vec::new();
+                if let Some((fresh, subst)) = self.rebind_tparams(&sig.tparams, bounds) {
+                    seen.tparams = fresh;
+                    rebound = subst;
+                }
+                let mut rest = rest.iter().copied();
+                for p in seen.clauses.iter_mut().flat_map(|c| c.params.iter_mut()) {
+                    let t = rest.next().unwrap_or(p.ty);
+                    p.ty = self.types.subst(t, &rebound);
+                }
+                let ret = rest.next().unwrap_or(seen.ret);
+                seen.ret = self.types.subst(ret, &rebound);
+                let seen = std::sync::Arc::new(seen);
+                self.refinement_sigs.insert((s, l), seen.clone());
+                seen
             }
             Refinement::Alias(..) | Refinement::Bounds(..) => unreachable!("a type refinement has no signature"),
         }
     }
 
-    /// A method signature's types as a refinement carries them: the parameters clause by
-    /// clause, then the result.
+    /// Type parameters of the bounds `bounds` (each one's lower and upper) for `tparams`, where
+    /// those are not their own: fresh ones, with the renaming of `tparams` to them, which the
+    /// bounds are read under too (an F-bound); None where the bounds are theirs. dotty's
+    /// `derivedLambdaType` of a lambda whose parameter infos a map changed.
+    fn rebind_tparams(&mut self, tparams: &[TParamId], bounds: &[TypeId]) -> Option<(Vec<TParamId>, Subst)> {
+        let unchanged = tparams.iter().enumerate().all(|(i, &p)| {
+            let info = self.syms.tparam(p);
+            bounds.get(2 * i) == Some(&info.lower) && bounds.get(2 * i + 1) == Some(&info.upper)
+        });
+        if unchanged {
+            return None;
+        }
+        let fresh: Vec<TParamId> = tparams
+            .iter()
+            .map(|&p| {
+                let info = self.syms.tparam(p).clone();
+                let q = self.syms.new_tparam(info.name, info.variance);
+                let new = &mut self.syms.tparams[q.idx()];
+                new.arity = info.arity;
+                new.hk_variances = info.hk_variances;
+                q
+            })
+            .collect();
+        let renaming: Subst = tparams.iter().zip(&fresh).map(|(&p, &q)| (p, self.types.param(q))).collect();
+        for (i, &q) in fresh.iter().enumerate() {
+            let lower = bounds.get(2 * i).map_or(NOTHING, |&b| self.types.subst(b, &renaming));
+            let upper = bounds.get(2 * i + 1).map_or(ANY, |&b| self.types.subst(b, &renaming));
+            let info = &mut self.syms.tparams[q.idx()];
+            info.lower = lower;
+            info.upper = upper;
+        }
+        Some((fresh, renaming))
+    }
+
+    /// A polymorphic function type's list with its bounds mapped by `f`, its parameters as they
+    /// are.
+    pub fn map_poly_bounds(&mut self, ps: TList, f: &mut dyn FnMut(&mut Self, TypeId) -> TypeId) -> TList {
+        let items = self.types.items(ps).to_vec();
+        let k = items.len() / 3;
+        let mut mapped = items.clone();
+        for x in mapped.iter_mut().skip(k) {
+            *x = f(self, *x);
+        }
+        if mapped == items { ps } else { self.types.list(&mapped) }
+    }
+
+    /// `[A <: B] => F`: the polymorphic function type over the parameters `params` (`Param`
+    /// types) with the bounds their symbols hold, which the type keeps from then on.
+    pub fn poly_type(&mut self, params: &[TypeId], fun: TypeId) -> TypeId {
+        let mut items = params.to_vec();
+        for &p in params {
+            match self.types.get(p) {
+                Type::Param(id) => {
+                    let info = self.syms.tparam(id);
+                    let (lower, upper) = (info.lower, info.upper);
+                    items.extend([lower, upper]);
+                }
+                _ => items.extend([NOTHING, ANY]),
+            }
+        }
+        let l = self.types.list(&items);
+        self.types.mk(Type::Poly(l, fun))
+    }
+
+    /// The parameters of the polymorphic function type `t` and its function type over them,
+    /// the parameters' symbols holding the type's bounds: rebound where the type's bounds are
+    /// not theirs (`rebind_tparams`), the same ones for the same type.
+    pub fn poly_binders(&mut self, t: TypeId) -> Option<(Vec<TParamId>, TypeId)> {
+        let Type::Poly(l, fun) = self.types.get(t) else { return None };
+        let params: Vec<TParamId> = self.types.poly_params(l).iter().filter_map(|&p| match self.types.get(p) {
+            Type::Param(id) => Some(id),
+            _ => None,
+        }).collect();
+        let bounds = self.types.poly_bounds(l).to_vec();
+        if params.len() * 2 != bounds.len() {
+            return Some((params, fun));
+        }
+        if let Some(seen) = self.poly_rebound.get(&t) {
+            return Some(seen.clone());
+        }
+        let seen = match self.rebind_tparams(&params, &bounds) {
+            Some((fresh, renaming)) => (fresh, self.types.subst(fun, &renaming)),
+            None => (params, fun),
+        };
+        self.poly_rebound.insert(t, seen.clone());
+        Some(seen)
+    }
+
+    /// A method signature's types as a refinement carries them: the bounds of its type
+    /// parameters, the parameters clause by clause, then the result. The bounds stand where
+    /// every map of the types reaches them, as a `PolyType`'s parameter infos do in dotty's
+    /// `TypeMap.mapOverLambda`, and before the parameters, a parameter's position.
     pub fn sig_types(&mut self, sig: &MethodSig) -> TList {
-        let items: Vec<TypeId> = sig.clauses.iter().flat_map(|c| c.params.iter().map(|p| p.ty)).chain([sig.ret]).collect();
+        let bounds = sig.tparams.iter().flat_map(|&p| {
+            let info = self.syms.tparam(p);
+            [info.lower, info.upper]
+        });
+        let items: Vec<TypeId> = bounds.collect::<Vec<_>>().into_iter().chain(sig.clauses.iter().flat_map(|c| c.params.iter().map(|p| p.ty))).chain([sig.ret]).collect();
         self.types.list(&items)
     }
 
@@ -1063,6 +1178,12 @@ impl<'a> Worker<'a> {
             Type::Lambda(ps, body) => {
                 let nb = self.rebase(body, r);
                 self.types.mk(Type::Lambda(ps, nb))
+            }
+            // The bounds with the function type, as `TypeMap.mapOverLambda` maps both.
+            Type::Poly(ps, body) => {
+                let nb = self.rebase(body, r);
+                let nps = self.map_poly_bounds(ps, &mut |w, x| w.rebase(x, r));
+                self.types.mk(Type::Poly(nps, nb))
             }
             Type::Union(a, b) => {
                 let (na, nb) = (self.rebase(a, r), self.rebase(b, r));
@@ -1365,9 +1486,25 @@ impl<'a> Worker<'a> {
                 if matches!(wanted_ref, Refinement::Val(..)) && matches!(self.syms.sym(found).kind, SymKind::Def | SymKind::Var) && self.syms.sym(found).sig.as_ref().map_or(true, |sg| sg.clauses.is_empty()) {
                     return false;
                 }
-                let subst = self.owner_subst(owner_ty);
+                let mut subst = self.owner_subst(owner_ty);
                 if sig.tparams.len() != wanted.tparams.len() {
                     return false;
+                }
+                // A generic member's type parameters are the wanted one's, whose bounds lie
+                // within its own (dotty's `TypeComparer.comparePoly`, `matchingPolyParams`).
+                for (&p, &q) in sig.tparams.iter().zip(&wanted.tparams) {
+                    if p != q {
+                        let to = self.types.param(q);
+                        subst.push((p, to));
+                    }
+                }
+                for (&p, &q) in sig.tparams.iter().zip(&wanted.tparams) {
+                    let (lo, hi) = (self.syms.tparam(p).lower, self.syms.tparam(p).upper);
+                    let (lo, hi) = (self.types.subst(lo, &subst), self.types.subst(hi, &subst));
+                    let (wlo, whi) = (self.syms.tparam(q).lower, self.syms.tparam(q).upper);
+                    if !(self.is_sub(lo, wlo) && self.is_sub(whi, hi)) {
+                        return false;
+                    }
                 }
                 let shape = |s: &MethodSig| s.clauses.iter().map(|c| c.params.len()).collect::<Vec<_>>();
                 if shape(&sig) != shape(&wanted) {
@@ -1388,6 +1525,11 @@ impl<'a> Worker<'a> {
                     .collect();
                 for (a, b) in sig.clauses.iter().zip(&wanted.clauses) {
                     for (x, y) in a.params.iter().zip(&b.params) {
+                        // A parameter's mode is part of its type, `=> T` and `T*` in dotty's
+                        // method types (`TypeComparer.matchingMethodParams`).
+                        if x.by_name != y.by_name || x.repeated != y.repeated {
+                            return false;
+                        }
                         let xt = self.subst_paths(x.ty, &renamed);
                         let xt = self.types.subst(xt, &subst);
                         let fits = if name == crate::names::APPLY { self.is_sub(y.ty, xt) } else { self.is_same(xt, y.ty) };
@@ -1401,6 +1543,42 @@ impl<'a> Worker<'a> {
                 self.is_sub(ret, wanted.ret)
             }
         }
+    }
+
+    /// Whether a refinement of the signature `sig` matches `member`, a member of the class seen
+    /// as `owner_ty`, which it then refines rather than overloads (dotty's `Denotation.matches`
+    /// of a refinement's symbol, `Typer.typedRefinedTypeTree`): as many type parameters, the
+    /// same clauses, each parameter of the same mode and type, the member's type parameters and
+    /// earlier parameters read as the refinement's.
+    pub fn refinement_matches(&mut self, member: SymId, owner_ty: TypeId, sig: &MethodSig) -> bool {
+        let theirs = self.sig_arc(member);
+        let shape = |s: &MethodSig| s.clauses.iter().map(|c| c.params.len()).collect::<Vec<_>>();
+        if theirs.tparams.len() != sig.tparams.len() || shape(&theirs) != shape(sig) {
+            return false;
+        }
+        let mut subst = self.owner_subst(owner_ty);
+        for (&p, &q) in theirs.tparams.iter().zip(&sig.tparams) {
+            if p != q {
+                let to = self.types.param(q);
+                subst.push((p, to));
+            }
+        }
+        let pairs: Vec<(ParamSig, ParamSig)> = theirs.clauses.iter().flat_map(|c| c.params.iter().cloned()).zip(sig.clauses.iter().flat_map(|c| c.params.iter().cloned())).collect();
+        let renamed: Vec<(SymId, TypeId)> = pairs.iter().filter(|(p, q)| p.sym != q.sym).map(|(p, q)| (p.sym, self.types.mk(Type::Term(q.sym)))).collect();
+        let mark = self.trail.len();
+        for (p, q) in &pairs {
+            if p.by_name != q.by_name || p.repeated != q.repeated {
+                self.rollback(mark);
+                return false;
+            }
+            let t = self.subst_paths(p.ty, &renamed);
+            let t = self.types.subst(t, &subst);
+            if !self.is_same(t, q.ty) {
+                self.rollback(mark);
+                return false;
+            }
+        }
+        true
     }
 
     /// The member `name` of `t`, where an intersection's parts declare it as an alias and as

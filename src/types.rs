@@ -52,8 +52,11 @@ pub enum Type {
     Ctor(ClassId),
     /// A type lambda; the first list holds its parameters as `Param` types.
     Lambda(TList, TypeId),
-    /// A polymorphic function type, `[T] => (A, B) => C`: the parameters as `Param` types and
-    /// the function type over them. It erases to the function type on every target.
+    /// A polymorphic function type, `[T] => (A, B) => C`: the parameters as `Param` types, then
+    /// each one's lower and upper bound (`poly_params`, `poly_bounds`), and the function type over
+    /// them. The bounds are the type's own, as a `PolyType`'s parameter infos are (dotty's
+    /// `TypeMap.mapOverLambda` maps them): what the parameters' symbols hold may be a former
+    /// type's. It erases to the function type on every target.
     Poly(TList, TypeId),
     Var(TVarId),
     AppVar(TVarId, TList),
@@ -411,7 +414,13 @@ impl TypeStore {
             Type::AppParam(p, args) => APP_PARAM_BIT | self.list_flags(args) | local_id(p.0),
             Type::Decl(a) => local_id(a.0),
             Type::Alias(a, args) => REDUCIBLE_BIT | self.list_flags(args) | local_id(a.0),
-            Type::Lambda(ps, b) | Type::Poly(ps, b) => self.entry_flag(b) | (self.list_flags(ps) & LOCAL_BIT),
+            Type::Lambda(ps, b) => self.entry_flag(b) | (self.list_flags(ps) & LOCAL_BIT),
+            Type::Poly(ps, b) => {
+                let items = self.entry_items(ps);
+                let (params, bounds) = items.split_at(items.len() / 3);
+                let local = params.iter().fold(0, |acc, &a| acc | self.entry_flag(a)) & LOCAL_BIT;
+                self.entry_flag(b) | bounds.iter().fold(local, |acc, &a| acc | self.entry_flag(a))
+            }
             Type::Union(a, b) | Type::Inter(a, b) => self.entry_flag(a) | self.entry_flag(b),
             Type::AppMember(m, args) => {
                 let args = self.list_flags(args);
@@ -517,6 +526,18 @@ impl TypeStore {
     #[inline]
     fn list_flags(&self, l: TList) -> u8 {
         self.entry_items(l).iter().fold(0, |acc, &a| acc | self.entry_flag(a))
+    }
+
+    /// A polymorphic function type's parameters, the first third of its list.
+    pub fn poly_params(&self, l: TList) -> &[TypeId] {
+        let items = self.items(l);
+        &items[..items.len() / 3]
+    }
+
+    /// A polymorphic function type's bounds, each parameter's lower and upper, after them.
+    pub fn poly_bounds(&self, l: TList) -> &[TypeId] {
+        let items = self.items(l);
+        &items[items.len() / 3..]
     }
 
     /// The match type over `scrutinee` with these cases and upper bound.
@@ -1130,7 +1151,8 @@ impl TypeStore {
                 self.items(args).iter().any(|&a| self.contains_error(a))
             }
             Type::AppMember(m, args) => self.contains_error(m) || self.items(args).iter().any(|&a| self.contains_error(a)),
-            Type::Lambda(_, body) | Type::Poly(_, body) => self.contains_error(body),
+            Type::Lambda(_, body) => self.contains_error(body),
+            Type::Poly(ps, body) => self.contains_error(body) || self.poly_bounds(ps).iter().any(|&a| self.contains_error(a)),
             Type::Union(a, b) | Type::Inter(a, b) | Type::BoundedWild(a, b) => self.contains_error(a) || self.contains_error(b),
             Type::Select(p, _) | Type::Member(p, _) => self.contains_error(p),
             Type::Refined(p, r) => self.contains_error(p) || self.refinement_types(r).into_iter().any(|a| self.contains_error(a)),
@@ -1249,10 +1271,14 @@ impl TypeStore {
             }
             Type::Poly(ps, body) => {
                 let b = self.subst(body, s);
-                if b == body {
+                let items = self.items(ps).to_vec();
+                let k = items.len() / 3;
+                let mapped: Vec<TypeId> = items.iter().enumerate().map(|(i, &x)| if i < k { x } else { self.subst(x, s) }).collect();
+                let nps = if mapped == items { ps } else { self.list(&mapped) };
+                if b == body && nps == ps {
                     t
                 } else {
-                    self.mk(Type::Poly(ps, b))
+                    self.mk(Type::Poly(nps, b))
                 }
             }
             Type::Union(a, b) => {

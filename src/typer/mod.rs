@@ -1235,6 +1235,15 @@ pub struct Worker<'a> {
     /// The members over a candidate's own parameters replaced by variables while its result
     /// is matched against a search's target, with the variable standing for each.
     pub path_approx: Vec<(TypeId, TypeId)>,
+    /// The signatures of term refinements whose types are not their symbols' own, by the
+    /// symbol and the types (`refinement_sig`), the type parameters rebound once.
+    pub refinement_sigs: FxMap<(SymId, TList), std::sync::Arc<MethodSig>>,
+    /// The parameters and function types of polymorphic function types whose bounds are not
+    /// their parameters' own (`poly_binders`), rebound once.
+    pub poly_rebound: FxMap<TypeId, (Vec<TParamId>, TypeId)>,
+    /// The function type a polymorphic function literal being typed is expected to have, its
+    /// `apply`, which `check_curried_dependent` leaves alone.
+    pub poly_literal_fun: Option<TypeId>,
     /// For a member selected on an inner-class value made by a call on the outer instance, the
     /// enclosing class and the prefix its `this` is seen from, by the receiver expression.
     pub outer_prefixes: FxMap<TExprId, Vec<(ClassId, TypeId)>>,
@@ -2176,6 +2185,9 @@ impl<'a> Worker<'a> {
             cycle_at_use: None,
             param_paths: Vec::new(),
             path_approx: Vec::new(),
+            refinement_sigs: FxMap::default(),
+            poly_rebound: FxMap::default(),
+            poly_literal_fun: None,
             outer_prefixes: FxMap::default(),
             sam_arity: FxMap::default(),
             member_cycles: Vec::new(),
@@ -2470,6 +2482,9 @@ impl<'a> Worker<'a> {
             lookups: Default::default(),
             param_paths: Default::default(),
             path_approx: Default::default(),
+            refinement_sigs: Default::default(),
+            poly_rebound: Default::default(),
+            poly_literal_fun: Default::default(),
             outer_prefixes: self.outer_prefixes.clone(),
             sam_arity: self.sam_arity.clone(),
             member_cycles: Default::default(),

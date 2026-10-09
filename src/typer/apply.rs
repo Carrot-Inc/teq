@@ -1803,7 +1803,8 @@ impl<'a> Worker<'a> {
         }
         match self.types.get(t) {
             Type::This(c) => c == k,
-            Type::Select(p, _) | Type::Member(p, _) | Type::Lambda(_, p) | Type::Poly(_, p) => self.mentions_this_of(p, k),
+            Type::Select(p, _) | Type::Member(p, _) | Type::Lambda(_, p) => self.mentions_this_of(p, k),
+            Type::Poly(ps, p) => self.mentions_this_of(p, k) || self.types.poly_bounds(ps).to_vec().into_iter().any(|b| self.mentions_this_of(b, k)),
             Type::AppMember(m, args) => self.mentions_this_of(m, k) || self.types.items(args).iter().any(|&a| self.mentions_this_of(a, k)),
             Type::Class(_, args) | Type::AppParam(_, args) | Type::AppVar(_, args) | Type::Alias(_, args) => {
                 self.types.items(args).iter().any(|&a| self.mentions_this_of(a, k))
@@ -2380,8 +2381,8 @@ impl<'a> Worker<'a> {
                 // A polymorphic function value applied: its type parameters take the explicit
                 // type arguments, or fresh variables the arguments settle.
                 let head = self.deref(ty);
-                if let Type::Poly(ps, fun) = self.types.get(head) {
-                    let ps = self.types.items(ps).to_vec();
+                if let Some((ids, fun)) = self.poly_binders(head) {
+                    let ps: Vec<TypeId> = ids.iter().map(|&p| self.types.param(p)).collect();
                     let explicit: Vec<TypeId> = match targs {
                         Some(l) => {
                             let ids = self.cur_ast().ty_list(l).to_vec();
@@ -4371,7 +4372,11 @@ impl<'a> Worker<'a> {
         if self.capturing() {
             self.capture_targs(call, targs);
         }
-        let ty = fun;
+        // The closure over fresh parameters is of the plain function type, its `apply`'s names
+        // and a result naming them left with the instance, as scalac's eta-expansion types it
+        // (`f[String]` of a `[A] => (a: A) => a.type` is a `String => String`).
+        let _ = fun;
+        let ty = self.fun_type(ptys, ret);
         let ps = self.prog.syms(&locals);
         let lambda = self.prog.add(TExpr::Lambda(ps, call));
         self.prog.set_type(lambda, ty);
@@ -4915,23 +4920,10 @@ impl<'a> Worker<'a> {
         if self.syms.alternatives(member).is_some() {
             return None;
         }
-        let theirs = self.sig_of(member);
-        let shape = |s: &MethodSig| s.clauses.iter().map(|c| c.params.len()).collect::<Vec<_>>();
-        if !theirs.tparams.is_empty() || shape(theirs) != shape(sig) {
+        if !self.sig_of(member).tparams.is_empty() {
             return None;
         }
-        let pairs: Vec<(TypeId, TypeId)> =
-            theirs.clauses.iter().flat_map(|c| c.params.iter()).zip(sig.clauses.iter().flat_map(|c| c.params.iter())).map(|(p, q)| (p.ty, q.ty)).collect();
-        let subst = self.owner_subst(owner_ty);
-        let mark = self.trail.len();
-        let same = pairs.into_iter().all(|(p, q)| {
-            let p = self.types.subst(p, &subst);
-            self.is_same(p, q)
-        });
-        if !same {
-            self.rollback(mark);
-        }
-        same.then_some(member)
+        self.refinement_matches(member, owner_ty, sig).then_some(member)
     }
 
     /// Whether the typed application `te` is a call or a read of `member` itself on `recv`, not

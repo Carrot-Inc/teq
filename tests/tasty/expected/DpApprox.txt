@@ -1,0 +1,6 @@
+// tests/tasty/fixtures/DpApprox.tasty (TASTy 28.8, 1113 bytes)
+package fix.depparams
+@SourceFile object DpApprox extends Object {
+  <synthetic> private def writeReplace(): AnyRef = ...
+  @ContextResultCount def widen[T](f: Predef.String ?=> List[Option[Nothing & Predef.String]] => T { def apply(using s: Predef.String): package.List[Option[s.type]] => T }): Predef.String ?=> package.List[Option[Nothing]] => T = ...
+}

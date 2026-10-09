@@ -1,0 +1,6 @@
+7,8c7,8
+<   def inferred(c: PbCtx): PolyFunction { def apply[A >: c.T](a: A): a.type } = poly{(PbCtx)}(c)
+<   val literal: PolyFunction { def apply[A <: Int](a: A): Int } = [A <: Int](a: A) => a +{(Int): Int} 1
+---
+>   def inferred(c: PbCtx): PolyFunction { def apply[A >: c.T](a: A): a.type } = poly{(fix.polybounds.PbCtx): PolyFunction}(c)
+>   val literal: PolyFunction { def apply[A <: Int](a: A): Int } = <elided: PolyFunction { def apply[A <: Int](a: A): Int }>

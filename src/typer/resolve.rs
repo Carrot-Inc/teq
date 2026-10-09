@@ -2471,18 +2471,22 @@ impl<'a> Worker<'a> {
                     None => ANY,
                 },
             },
+            // dotty's `Desugar.makePolyFunctionType`: the `apply` of the function type's
+            // parameters, `x$1`.. where it names none, checked as any `PolyFunction`'s
+            // (`Checking.checkPolyFunctionType`).
             TyExpr::PolyFun(params, fun) => {
-                if matches!(ast.ty(fun), TyExpr::Fun(ps, _) if ast.ty_list(ps).iter().any(|&p| matches!(ast.ty(p), TyExpr::ByName(_)))) {
-                    let span = ast.ty_spans[id.idx()];
-                    self.error(span, "Implementation restriction: PolyFunction apply must have exactly one parameter list and optionally type arguments. No by-name nor varags are allowed.");
-                }
+                let span = ast.ty_spans[id.idx()];
                 let names: Vec<Name> = ast.name_lists[params.range()].to_vec();
-                let (ids, ps) = self.poly_params(&names, Some(id));
+                let bounds = ast.lambda_bounds.iter().find(|(l, _)| *l == id).map(|&(_, bl)| bl);
+                let (ids, ps) = self.poly_params(&names, bounds);
                 let f = self.resolve_type(fun);
+                let f = self.poly_function_apply(f, span);
                 self.env.frames.pop();
                 let _ = ids;
-                let l = self.types.list(&ps);
-                self.types.mk(Type::Poly(l, f))
+                if let Some(sig) = self.named_apply_sig(f) {
+                    self.check_poly_function_apply(&sig, span);
+                }
+                self.poly_type(&ps, f)
             }
             TyExpr::Match(scrut, cases) => self.match_type_expr(scrut, cases),
             TyExpr::MatchCase(..) => ERROR,
@@ -2512,13 +2516,7 @@ impl<'a> Worker<'a> {
                 // The bounds of the parameters (`[x <: Node] =>> SynEv[x]`), which may name
                 // each other, so they are resolved with the parameters in scope.
                 if let Some(&(_, bl)) = ast.lambda_bounds.iter().find(|(l, _)| *l == id) {
-                    let bounds: Vec<TyExprId> = ast.ty_lists[bl.range()].to_vec();
-                    for (i, &bound) in bounds.iter().enumerate() {
-                        if bound != crate::ast::NO_BOUND {
-                            let u = self.resolve_type(bound);
-                            self.syms.tparams[ids[i].idx()].upper = u;
-                        }
-                    }
+                    self.resolve_lambda_bounds(bl, &ids);
                 }
                 let b = self.resolve_type(body);
                 self.env.frames.pop();
@@ -2570,8 +2568,10 @@ impl<'a> Worker<'a> {
         if t == ERROR {
             return ERROR;
         }
+        let parent_ty = t;
         let ast = self.cur_ast();
         let file = self.env.file;
+        let mut terms: Vec<(Name, SymId, Span)> = Vec::new();
         for &d in ast.def_list(members) {
             let def = ast.def(d);
             let r = match &def.kind {
@@ -2609,6 +2609,7 @@ impl<'a> Worker<'a> {
                     };
                     let sym = self.syms.new_sym(def.name, kind, def.mods | mods::ABSTRACT, Owner::Local, file, Some(d), def.span);
                     self.def_syms.insert(file.0 as usize, d, sym);
+                    terms.push((def.name, sym, def.span));
                     let sig = self.sig_arc(sym);
                     if kind == SymKind::Val {
                         let r = self.types.refine(Refinement::Val(def.name, sym, sig.ret));
@@ -2626,12 +2627,95 @@ impl<'a> Worker<'a> {
             let r = self.types.refine(r);
             t = self.types.mk(Type::Refined(t, r));
         }
+        self.check_refinement_members(parent_ty, &terms);
         t
     }
 
+    /// The term members of a refinement of `parent` as dotty's `Typer.typedRefinedTypeTree`
+    /// checks the class it makes of them: a generic member refines a member of the parent (but
+    /// an `apply` where the parent is `PolyFunction` itself, the parent's type symbol), and no
+    /// member's name is overloaded there, the refinement's members with the parent's that none
+    /// of them matches (`refinement_matches`); and, where the parent derives from
+    /// `PolyFunction` (through an intersection or an alias too), as
+    /// `Checking.checkPolyFunctionType` checks its method refinements: a `def`, and a `var`'s
+    /// getter and setter (`Desugar.refinedTypeToClass`), a `val` left alone.
+    fn check_refinement_members(&mut self, parent: TypeId, terms: &[(Name, SymId, Span)]) {
+        let class = self.class_of(parent);
+        let poly_function_class = self.std_class("PolyFunction");
+        let exact_poly_function = matches!(self.types.get(parent), Type::Class(c, _) if Some(c) == poly_function_class);
+        let derives_poly_function = poly_function_class.map_or(false, |c| self.base_type(parent, c).is_some());
+        let alternatives = |w: &mut Self, name: Name| -> Vec<(SymId, TypeId)> {
+            match w.find_member(parent, name) {
+                Some((m, owner)) => match w.syms.alternatives(m) {
+                    Some(alts) => alts.to_vec().into_iter().map(|a| (a, owner)).collect(),
+                    None => vec![(m, owner)],
+                },
+                None => Vec::new(),
+            }
+        };
+        for &(name, sym, span) in terms {
+            let sig = self.sig_arc(sym);
+            let theirs = alternatives(self, name);
+            let refines = theirs.iter().any(|&(m, owner)| self.refinement_matches(m, owner, &sig));
+            if !sig.tparams.is_empty() && !refines && !(exact_poly_function && name == names::APPLY) {
+                let parent_name = match class {
+                    Some(c) if c == self.b.any_ref => "type AnyRef".to_string(),
+                    Some(c) => format!("{} {}", if self.syms.class(c).kind == ClassKind::Trait { "trait" } else { "class" }, self.name_str(self.syms.class(c).name)),
+                    None => format!("type {}", self.show(parent)),
+                };
+                let msg = format!("Polymorphic refinement method {} without matching type in parent {} is no longer allowed", self.name_str(name), parent_name);
+                self.error(span, msg);
+                continue;
+            }
+            let own: Vec<SymId> = terms.iter().filter(|&&(n, ..)| n == name).map(|&(_, s, _)| s).collect();
+            let mut unmatched = 0;
+            for &(m, owner) in &theirs {
+                let mut matched = false;
+                for &s in &own {
+                    let other = self.sig_arc(s);
+                    if self.refinement_matches(m, owner, &other) {
+                        matched = true;
+                        break;
+                    }
+                }
+                if !matched {
+                    unmatched += 1;
+                }
+            }
+            if own.len() + unmatched > 1 {
+                self.error(span, "Refinements cannot introduce overloaded definitions");
+                continue;
+            }
+            // A `var` is its getter, then its setter, whose message the getter's hides at their
+            // one position (`UniqueMessagePositions`).
+            let info = self.syms.sym(sym);
+            let (def, var) = (info.kind == SymKind::Def, info.kind != SymKind::Def && info.mods & mods::MUTABLE != 0);
+            if derives_poly_function && (def || var) {
+                if name != names::APPLY {
+                    self.error(span, "PolyFunction only supports apply method refinements");
+                } else {
+                    let getter = MethodSig::value(sig.ret);
+                    self.check_poly_function_apply(if var { &getter } else { &sig }, span);
+                }
+            }
+        }
+    }
+
+    /// A `PolyFunction`'s `apply` takes exactly one parameter list, after its type parameters,
+    /// of no by-name or repeated parameter (dotty's `Definitions.isValidPolyFunctionInfo`, which
+    /// `Checking.checkPolyFunctionType` checks of the refinements a source writes or desugars).
+    pub(super) fn check_poly_function_apply(&mut self, sig: &MethodSig, span: Span) {
+        let by_name = |w: &Self, p: &ParamSig| p.by_name || matches!(w.types.get(p.ty), Type::Class(c, _) if Some(c) == w.b.by_name);
+        let valid = matches!(sig.clauses.as_slice(), [clause] if !clause.params.iter().any(|p| p.repeated || by_name(self, p)));
+        if !valid {
+            self.error(span, "Implementation restriction: PolyFunction apply must have exactly one parameter list and optionally type arguments. No by-name nor varags are allowed.");
+        }
+    }
+
     /// The type parameters of a polymorphic function type or literal, pushed as a frame the
-    /// caller pops, with the bounds `Ast::lambda_bounds` records for the type.
-    pub(super) fn poly_params(&mut self, names: &[Name], bounds_of: Option<TyExprId>) -> (Vec<TParamId>, Vec<TypeId>) {
+    /// caller pops, with the bounds `bounds` (`Ast::lambda_bounds`, `Ast::poly_lambda_bounds`)
+    /// resolved in their scope, as dotty's `typeParamClause` types each `TypeBoundsTree`.
+    pub(super) fn poly_params(&mut self, names: &[Name], bounds: Option<ListRef>) -> (Vec<TParamId>, Vec<TypeId>) {
         let mut frame_tparams = Vec::with_capacity(names.len());
         let mut ids = Vec::with_capacity(names.len());
         let mut ps = Vec::with_capacity(names.len());
@@ -2642,19 +2726,28 @@ impl<'a> Worker<'a> {
             ids.push(p);
         }
         self.env.frames.push(Frame::Locals { names: Vec::new(), tparams: frame_tparams, givens: Vec::new(), classes: Vec::new(), aliases: Vec::new() });
-        if let Some(id) = bounds_of {
-            let ast = self.cur_ast();
-            if let Some(&(_, bl)) = ast.lambda_bounds.iter().find(|(l, _)| *l == id) {
-                let bounds: Vec<TyExprId> = ast.ty_lists[bl.range()].to_vec();
-                for (i, &bound) in bounds.iter().enumerate() {
-                    if bound != crate::ast::NO_BOUND {
-                        let u = self.resolve_type(bound);
-                        self.syms.tparams[ids[i].idx()].upper = u;
-                    }
+        if let Some(bl) = bounds {
+            self.resolve_lambda_bounds(bl, &ids);
+        }
+        (ids, ps)
+    }
+
+    /// Each parameter's lower and upper bound of the list `bl` (`Ast::lambda_bounds`'s layout),
+    /// resolved where the parameters `ids` are in scope.
+    fn resolve_lambda_bounds(&mut self, bl: ListRef, ids: &[TParamId]) {
+        let bounds: Vec<TyExprId> = self.cur_ast().ty_lists[bl.range()].to_vec();
+        for (&id, pair) in ids.iter().zip(bounds.chunks(2)) {
+            if let [lower, upper] = *pair {
+                if lower != crate::ast::NO_BOUND {
+                    let l = self.resolve_type(lower);
+                    self.syms.tparams[id.idx()].lower = l;
+                }
+                if upper != crate::ast::NO_BOUND {
+                    let u = self.resolve_type(upper);
+                    self.syms.tparams[id.idx()].upper = u;
                 }
             }
         }
-        (ids, ps)
     }
 
     /// A type variable of a pattern that no `inline match` is binding reads as a wildcard.

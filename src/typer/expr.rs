@@ -1532,7 +1532,7 @@ impl<'a> Worker<'a> {
                 self.part_end(part);
                 typed
             }
-            Expr::PolyLambda(tparams, lambda) => self.type_poly_lambda(tparams, lambda, span, expected),
+            Expr::PolyLambda(tparams, lambda) => self.type_poly_lambda(e, tparams, lambda, span, expected),
             Expr::If(c, t, els) => self.type_plain_if(c, t, els, expected),
             Expr::InlineIf(c, t, els) => self.type_inline_if(c, t, els, span, expected),
             Expr::InlineMatch(scrut, cases) => self.type_inline_match(scrut, cases, span, expected),
@@ -2445,47 +2445,46 @@ impl<'a> Worker<'a> {
         (self.assignment(tl, tr), self.b.t_unit)
     }
 
-    /// `[T] => (x: A) => body`: the lambda typed under its own type parameters against the
-    /// function type an expected polymorphic function type gives, renamed to them; its value
-    /// is the lambda's, as the type erases to the function type.
-    fn type_poly_lambda(&mut self, tparams: ListRef, lambda: ExprId, span: Span, expected: Option<TypeId>) -> (TExprId, TypeId) {
+    /// `[T] => (x: A) => body`: the lambda typed under its own type parameters, of the bounds
+    /// it writes, against the function type an expected polymorphic function type gives,
+    /// renamed to them, which gives the parameters' and the result's types alone (dotty's
+    /// `typedPolyFunctionValue`, `makeClosure(tparams, ..)`); the expected type's bounds are
+    /// what the literal's type conforms to. Its value is the lambda's, as the type erases to
+    /// the function type.
+    fn type_poly_lambda(&mut self, e: ExprId, tparams: ListRef, lambda: ExprId, span: Span, expected: Option<TypeId>) -> (TExprId, TypeId) {
         let names: Vec<Name> = self.cur_ast().name_lists[tparams.range()].to_vec();
-        let (ids, ps) = self.poly_params(&names, None);
+        let bounds = self.cur_ast().poly_lambda_bounds.iter().find(|(l, _)| *l == e).map(|&(_, bl)| bl);
+        let (ids, ps) = self.poly_params(&names, bounds);
         if self.index.is_some() {
             self.index_poly_tparams(span, &names, &ids);
         }
         let exp_fun = expected.and_then(|e| {
             let e = self.deref(e);
-            match self.types.get(e) {
-                Type::Poly(qs, fun) => {
-                    let qs = self.types.items(qs).to_vec();
-                    if qs.len() != ps.len() {
-                        return None;
-                    }
-                    let renaming: Subst = qs.iter().zip(&ps).filter_map(|(&q, &p)| match self.types.get(q) {
-                        Type::Param(id) => Some((id, p)),
-                        _ => None,
-                    }).collect();
-                    for (&q, &id) in qs.iter().zip(&ids) {
-                        if let Type::Param(qid) = self.types.get(q) {
-                            let (upper, lower) = (self.syms.tparam(qid).upper, self.syms.tparam(qid).lower);
-                            self.syms.tparams[id.idx()].upper = self.types.subst(upper, &renaming);
-                            self.syms.tparams[id.idx()].lower = self.types.subst(lower, &renaming);
-                        }
-                    }
-                    Some(self.types.subst(fun, &renaming))
-                }
-                _ => None,
+            let (qs, fun) = self.poly_binders(e)?;
+            if qs.len() != ps.len() {
+                return None;
             }
+            let renaming: Subst = qs.iter().zip(&ps).map(|(&q, &p)| (q, p)).collect();
+            Some(self.types.subst(fun, &renaming))
         });
+        let outer = std::mem::replace(&mut self.poly_literal_fun, exp_fun);
         let (te, fun_ty) = match self.cur_ast().expr(lambda) {
             Expr::Lambda(params, body) => self.type_lambda(params, body, span, exp_fun),
             _ => self.type_expr(lambda, exp_fun),
         };
+        self.poly_literal_fun = outer;
         self.env.frames.pop();
         let fun_ty = self.solve_in(fun_ty);
-        let l = self.types.list(&ps);
-        (te, self.types.mk(Type::Poly(l, fun_ty)))
+        // The literal's `apply` takes its own parameters, with their names (dotty's
+        // `Typer.typedPolyFunctionValue`).
+        let fun_ty = match self.prog.expr(te) {
+            TExpr::Lambda(pl, _) => {
+                let syms = self.prog.sym_list(pl).to_vec();
+                self.literal_apply(fun_ty, &syms, span)
+            }
+            _ => fun_ty,
+        };
+        (te, self.poly_type(&ps, fun_ty))
     }
 
     /// Whether a function literal of a parameter without a type is typed where a member's

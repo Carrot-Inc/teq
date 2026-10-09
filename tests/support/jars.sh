@@ -32,7 +32,8 @@
 # class files of their sources for the JVM (`fixtures_jvm_jar`); fixtures-rdecl, those
 # (tests/tasty/src/reader_decl.scala and reader_java.scala), which the bodies of fix.reader reach in another jar; fixtures-shadow, those of
 # tests/tasty/fixtures-shadow, which define again what fixtures defines in fix.shadow; javafix, the Java class files of
-# tests/classfile/fixtures as a jar, and javafixdir, the same as a directory.
+# tests/classfile/fixtures as a jar, and javafixdir, the same as a directory; tasty-inspector, scala3-tasty-inspector
+# 3.8.4 from the coursier cache.
 M2=${COURSIER_CACHE:-$HOME/Library/Caches/Coursier/v1}/https/repo1.maven.org/maven2
 # The jars built here are named for the checkout, so that the suites of two worktrees running at
 # once do not rewrite each other's.
@@ -66,13 +67,16 @@ clash = {'ClashOverloaded', 'ClashSingle', 'ClashMaker'}
 hkb = {'HkStrm', 'HkLow', 'HkTarget', 'hkbounds$package', 'HkCompiler'}
 reader = {'RdCalls', 'RdLocal', 'RdEv', 'RdNow', 'RdMemo', 'RdFn', 'RdFM', 'RdEvs', 'RdCursor', 'RdPick', 'RdStart'}
 rdecl = {'RdBox', 'RdFoo', 'RdF1', 'RdFooBox', 'RdNamed', 'RdTraces', 'RdShape', 'RdSquare', 'RdTokA', 'RdTokB', 'RdWrap', 'RdTok', 'RdMarker', 'RdApi', 'RdIn', 'RdInBox', 'RdArr', 'RdCustom', 'RdJava', 'RdSub'}
+depparams = {'DpCtx', 'DpFn', 'DpTypes', 'DpBase', 'DpDerived', 'DpInherited', 'DpClauses', 'DpModes', 'DpParent', 'DpMembers', 'DpPoly', 'DpApprox'}
+depbounds = {'DbCtx', 'DbParent', 'DbBounds', 'DbPolyNames'}
+polybounds = {'PbCtx', 'PbParent', 'PbLower'}
 unmod = {'UmBodies', 'UmSyntax', 'UmReuse', 'UmDefine', 'UmMethod', 'UmNested', 'UmSetter33', 'UmArg', 'UmStep', 'UmSub', 'UmScope', 'UmAliases', 'UmPt', 'UmEq', 'UmSetterOnly', 'UmSetterUse'}
 with zipfile.ZipFile(sys.argv[1], 'w', zipfile.ZIP_DEFLATED) as z:
     for f in sorted(os.listdir('tests/tasty/fixtures')):
         stem = f[:-len('.tasty')]
         if stem in rdecl:
             continue
-        pkg = 'fix/reader' if stem in reader else pext[stem] if stem in pext else 'fix/q38' if stem == 'Quotes38' else 'fix/clash' if stem in clash else 'fix/hkb' if stem in hkb else 'fix/unmod' if stem in unmod else 'fix/wave6' if stem in wave6 else 'fix/retain' if stem in retain else 'fix/shadow' if stem in shadow else 'fix/guard' if stem in guard else 'fix/overloads' if stem in overloads else 'fix/tname' if stem in tname else 'fix/facades' if stem in facades else 'fix/members' if stem in members else 'fix/runtime' if stem in runtime else 'fix/rassoc' if stem in ('RightAssoc', 'Vec') else 'fix/bodies' if stem in bodies else 'fix/cake' if stem in cake else 'fix/qpat' if stem in ('LayerBox', 'LayerMacros', 'QpFns', 'QpProbe') else 'fix/qp38' if stem == 'Qp38' else 'fix/shapes'
+        pkg = 'fix/reader' if stem in reader else pext[stem] if stem in pext else 'fix/q38' if stem == 'Quotes38' else 'fix/clash' if stem in clash else 'fix/hkb' if stem in hkb else 'fix/unmod' if stem in unmod else 'fix/depparams' if stem in depparams else 'fix/depbounds' if stem in depbounds else 'fix/polybounds' if stem in polybounds else 'fix/wave6' if stem in wave6 else 'fix/retain' if stem in retain else 'fix/shadow' if stem in shadow else 'fix/guard' if stem in guard else 'fix/overloads' if stem in overloads else 'fix/tname' if stem in tname else 'fix/facades' if stem in facades else 'fix/members' if stem in members else 'fix/runtime' if stem in runtime else 'fix/rassoc' if stem in ('RightAssoc', 'Vec') else 'fix/bodies' if stem in bodies else 'fix/cake' if stem in cake else 'fix/qpat' if stem in ('LayerBox', 'LayerMacros', 'QpFns', 'QpProbe') else 'fix/qp38' if stem == 'Qp38' else 'fix/shapes'
         z.write(os.path.join('tests/tasty/fixtures', f), pkg + '/' + f)
 PY
   echo "$jar"
@@ -427,6 +431,7 @@ jar_of() {
     chimney-macro-commons-jvm) echo "$M2/io/scalaland/chimney-macro-commons_3/2.2.0/chimney-macro-commons_3-2.2.0.jar" ;;
     scala-collection-compat-jvm) echo "$M2/org/scala-lang/modules/scala-collection-compat_3/2.14.0/scala-collection-compat_3-2.14.0.jar" ;;
     scala-library) echo "$M2/org/scala-lang/scala-library/3.8.4/scala-library-3.8.4.jar" ;;
+    tasty-inspector) echo "$M2/org/scala-lang/scala3-tasty-inspector_3/3.8.4/scala3-tasty-inspector_3-3.8.4.jar" ;;
     scalajs-library) echo "$M2/org/scala-js/scalajs-library_2.13/1.22.0/scalajs-library_2.13-1.22.0.jar" ;;
     scalatest-core) echo "$M2/org/scalatest/scalatest-core_3/3.2.20/scalatest-core_3-3.2.20.jar" ;;
     scalatest-matchers-core) echo "$M2/org/scalatest/scalatest-matchers-core_3/3.2.20/scalatest-matchers-core_3-3.2.20.jar" ;;

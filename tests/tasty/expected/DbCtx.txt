@@ -1,0 +1,5 @@
+// tests/tasty/fixtures/DbCtx.tasty (TASTy 28.8, 377 bytes)
+package fix.depbounds
+@SourceFile trait DbCtx extends Object {
+  type T
+}

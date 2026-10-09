@@ -17,7 +17,7 @@ use crate::symbols::ClassKind;
 use crate::symbols::*;
 use crate::tasty::tags;
 use crate::tasty::terms::{tag_name, Case, ClassDef as TClassDef, MatchKind, Stat, Term, TermDecoder, TermKind};
-use crate::tasty::tree::{Addr, Clause, Const, Decoder, DefSig, LambdaKind, TType};
+use crate::tasty::tree::{Addr, Clause, Const, Decoder, DefSig, LambdaKind, TParam, TType};
 use crate::tasty::{NameRef, TName, TastyFile};
 use crate::tir::*;
 use crate::types::*;
@@ -1261,11 +1261,16 @@ impl<'a> Worker<'a> {
                 cv.poly_binders.push((*binder, names.clone()));
                 let ps: Vec<TyExprId> = term_params.iter().map(|p| self.conv_type(cv, &p.info)).collect();
                 let r = self.conv_type(cv, ret);
+                let bounds = self.conv_lambda_bounds(cv, params);
                 cv.poly_binders.pop();
                 let pl = push_list(&mut cv.ast.ty_lists, &ps);
                 let fun = cv.ty(if is_using_clause(term_params) { TyExpr::CtxFun(pl, r) } else { TyExpr::Fun(pl, r) });
                 let nl = push_list(&mut cv.ast.name_lists, &names);
-                cv.ty(TyExpr::PolyFun(nl, fun))
+                let id = cv.ty(TyExpr::PolyFun(nl, fun));
+                if let Some(bl) = bounds {
+                    cv.ast.lambda_bounds.push((id, bl));
+                }
+                id
             }
             // `[A] =>> Getter[x.Underlying, A]` over a binder of the body (chimney's
             // `Existential[Getter[fallback.Underlying, *]]`): the lambda's parameters by name,
@@ -2882,6 +2887,28 @@ impl<'a> Worker<'a> {
     /// they say more than `>: Nothing <: Any`: `Box[? >: String]`'s capture, whose bound
     /// neither the class's parameter nor the scrutinee gives. A bound over an outer case's
     /// variable, a type parameter or a path is converted as the body's types are.
+    /// The bounds of a polymorphic function's or literal's type parameters as `Ast::lambda_bounds`
+    /// lists them, `scala.Nothing` and `scala.Any` none; None where none has one. The
+    /// parameters are in scope.
+    fn conv_lambda_bounds(&mut self, cv: &mut Conv, params: &[TParam]) -> Option<ListRef> {
+        let scala = |cv: &Conv, t: &TType, which: &str| {
+            matches!(t, TType::TypeRef(prefix, n) if cv.tasty.simple(*n) == Some(which)
+                && matches!(&**prefix, TType::Package(p) if cv.tasty.simple(*p) == Some("scala")))
+        };
+        let mut ids = Vec::with_capacity(2 * params.len());
+        let mut any = false;
+        for p in params {
+            let (lo, hi) = match &p.info {
+                TType::Bounds(lo, hi) => ((!scala(cv, lo, "Nothing")).then(|| (**lo).clone()), (!scala(cv, hi, "Any")).then(|| (**hi).clone())),
+                _ => (None, None),
+            };
+            any |= lo.is_some() || hi.is_some();
+            ids.push(lo.map_or(crate::ast::NO_BOUND, |t| self.conv_type(cv, &t)));
+            ids.push(hi.map_or(crate::ast::NO_BOUND, |t| self.conv_type(cv, &t)));
+        }
+        any.then(|| push_list(&mut cv.ast.ty_lists, &ids))
+    }
+
     fn binder_bounds(&mut self, cv: &mut Conv, ty: &TType) -> Vec<(Name, Option<TyExprId>, Option<TyExprId>)> {
         let mut binds = Vec::new();
         type_binds(&cv.tasty, ty, &mut binds);
@@ -4743,8 +4770,16 @@ impl<'a> Worker<'a> {
         let l = push_list(&mut cv.ast.lambda_params, &params);
         let mut lambda = cv.expr(Expr::Lambda(l, body));
         if !tparams.is_empty() {
+            let tps: Vec<TParam> = sig.clauses.iter().flat_map(|c| match c {
+                Clause::Types(tps) => tps.clone(),
+                Clause::Terms(_) => Vec::new(),
+            }).collect();
+            let bounds = self.conv_lambda_bounds(cv, &tps);
             let tl = push_list(&mut cv.ast.name_lists, &tparams);
             lambda = cv.expr(Expr::PolyLambda(tl, lambda));
+            if let Some(bl) = bounds {
+                cv.ast.poly_lambda_bounds.push((lambda, bl));
+            }
         }
         match sam {
             Some(t) => {

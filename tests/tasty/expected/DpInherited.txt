@@ -1,0 +1,5 @@
+// tests/tasty/fixtures/DpInherited.tasty (TASTy 28.8, 532 bytes)
+package fix.depparams
+@SourceFile abstract class DpInherited() extends Object, DpBase {
+  val inferred: DpCtx => DpCtx#T { def apply(c: DpCtx): c.T } = ...
+}

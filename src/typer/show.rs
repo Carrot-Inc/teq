@@ -146,8 +146,25 @@ impl<'a> Worker<'a> {
                 self.show_into(body, out, false);
             }
             Type::Poly(ps, body) => {
-                self.show_args(ps, out);
-                out.push_str(" => ");
+                let params = self.types.poly_params(ps);
+                let bounds = self.types.poly_bounds(ps);
+                out.push('[');
+                for (i, &p) in params.iter().enumerate() {
+                    if i > 0 {
+                        out.push_str(", ");
+                    }
+                    self.show_into(p, out, false);
+                    let (lo, hi) = (bounds.get(2 * i).copied().unwrap_or(NOTHING), bounds.get(2 * i + 1).copied().unwrap_or(ANY));
+                    if lo != NOTHING {
+                        out.push_str(" >: ");
+                        self.show_into(lo, out, false);
+                    }
+                    if hi != ANY {
+                        out.push_str(" <: ");
+                        self.show_into(hi, out, false);
+                    }
+                }
+                out.push_str("] => ");
                 self.show_into(body, out, false);
             }
             Type::Var(v) => match self.tvars[v].name {
@@ -370,15 +387,43 @@ impl<'a> Worker<'a> {
                 out.push_str(if info.kind == SymKind::Def { "def " } else { "val " });
                 out.push_str(self.interner.get(n));
                 if let Some(sig) = &info.sig {
+                    // The refinement's types begin with its type parameters' bounds.
+                    if !sig.tparams.is_empty() {
+                        out.push('[');
+                        for (i, &t) in sig.tparams.iter().enumerate() {
+                            if i > 0 {
+                                out.push_str(", ");
+                            }
+                            out.push_str(self.interner.get(self.syms.tparam(t).name));
+                            let (lo, hi) = (types.next().unwrap_or(NOTHING), types.next().unwrap_or(ANY));
+                            if lo != NOTHING {
+                                out.push_str(" >: ");
+                                self.show_into(lo, out, false);
+                            }
+                            if hi != ANY {
+                                out.push_str(" <: ");
+                                self.show_into(hi, out, false);
+                            }
+                        }
+                        out.push(']');
+                    }
                     for cl in &sig.clauses {
                         out.push('(');
+                        if cl.is_using {
+                            out.push_str("using ");
+                        } else if cl.is_implicit {
+                            out.push_str("implicit ");
+                        }
                         for (i, p) in cl.params.iter().enumerate() {
                             if i > 0 {
                                 out.push_str(", ");
                             }
                             out.push_str(self.interner.get(p.name));
-                            out.push_str(": ");
+                            out.push_str(if p.by_name { ": => " } else { ": " });
                             self.show_into(types.next().unwrap_or(p.ty), out, false);
+                            if p.repeated {
+                                out.push('*');
+                            }
                         }
                         out.push(')');
                     }

@@ -271,6 +271,10 @@ struct P<'w, 'a> {
     local: FxMap<Key, ()>,
     tparams: Vec<(TParamId, TpRef)>,
     params: Vec<(SymId, usize)>,
+    /// The parameters of the method types being written (a refinement's method, a polymorphic
+    /// function type's `apply`), innermost last, each with its `METHODtype`'s address and its
+    /// position in the clause: a type names one by `PARAMtype`.
+    method_params: Vec<(SymId, usize, u32)>,
     /// The classes whose bodies are being written, innermost last: the `this` a type may name.
     enclosing: Vec<ClassId>,
     /// Types written once in a form that does not depend on where they stand.
@@ -493,6 +497,7 @@ impl<'w, 'a> P<'w, 'a> {
             local: FxMap::default(),
             tparams: Vec::new(),
             params: Vec::new(),
+            method_params: Vec::new(),
             enclosing: Vec::new(),
             shared: FxMap::default(),
             shared_prefixes: FxMap::default(),
@@ -5359,38 +5364,27 @@ impl<'w, 'a> P<'w, 'a> {
                 self.lambda_type(TYPELAMBDATYPE, &params, body);
             }
             // `[T] => (A, B) => R` as scalac has it: `PolyFunction { def apply[T](x$1: A, x$2: B): R }`,
-            // `[T] => A ?=> R` with the clause a using one.
-            Type::Poly(params, fun) => {
-                let params: Vec<TypeId> = self.w.types.items(params).to_vec();
-                let (contextual, parts) = match self.w.as_function(fun) {
-                    Some(parts) => (false, Some(parts)),
-                    None => (true, self.w.as_context_function(fun)),
-                };
-                let Some((args, ret)) = parts else {
-                    self.approximated("polymorphic function type");
-                    return self.ty(fun);
-                };
-                self.placed = true;
-                self.buf.byte(REFINEDTYPE);
-                let len = self.buf.begin_length();
-                let n = self.names.simple("apply");
-                self.buf.nat(n as u64);
-                self.external_typeref("scala", "PolyFunction");
-                self.lambda_type_with(POLYTYPE, &params, |p| {
-                    p.buf.byte(METHODTYPE);
-                    let m = p.buf.begin_length();
-                    p.ty(ret);
-                    for (i, &a) in args.iter().enumerate() {
-                        p.ty(a);
-                        let pn = p.names.simple(&format!("x${}", i + 1));
-                        p.buf.nat(pn as u64);
-                    }
-                    if contextual {
-                        p.buf.byte(GIVEN);
-                    }
-                    p.buf.end_length(m);
-                });
-                self.buf.end_length(len);
+            // `[T] => A ?=> R` with the clause a using one: the `apply` the function type is refined
+            // by, its parameters' names and the result that names them (`[T] => (a: T) => a.type`).
+            Type::Poly(..) => {
+                // Its parameters holding the type's bounds (`poly_binders`).
+                let Some((ids, fun)) = self.w.poly_binders(t) else { unreachable!() };
+                let params: Vec<TypeId> = ids.iter().map(|&p| self.w.types.param(p)).collect();
+                if let Some(sig) = self.named_apply(fun) {
+                    self.placed = true;
+                    self.buf.byte(REFINEDTYPE);
+                    let len = self.buf.begin_length();
+                    let n = self.names.simple("apply");
+                    self.buf.nat(n as u64);
+                    self.external_typeref("scala", "PolyFunction");
+                    self.lambda_type_with(POLYTYPE, &params, |p| p.method_clauses(&sig));
+                    self.buf.end_length(len);
+                    return;
+                }
+                // Its `apply` is the type's whole (`makePolyFunctionType`, the reader's alike).
+                let shown = self.w.show(fun);
+                self.fail(format!("a polymorphic function type over {}", shown));
+                self.external_typeref("scala", "Any");
             }
             Type::Var(_) | Type::AppVar(..) => {
                 self.approximated("uninstantiated type variable, written as Any");
@@ -5573,6 +5567,15 @@ impl<'w, 'a> P<'w, 'a> {
     /// `x.type` for a parameter, a local or a top-level val.
     fn term_ref(&mut self, s: SymId) {
         self.placed = true;
+        // A method type's own parameter, which the type is written inside of.
+        if let Some(&(_, binder, i)) = self.method_params.iter().rev().find(|(q, ..)| *q == s) {
+            self.buf.byte(PARAMTYPE);
+            let len = self.buf.begin_length();
+            self.buf.reference(binder);
+            self.buf.nat(i as u64);
+            self.buf.end_length(len);
+            return;
+        }
         if let Some(&(_, at)) = self.params.iter().rev().chain(self.case_binders.iter().rev()).find(|(q, _)| *q == s) {
             self.buf.byte(TERMREFDIRECT);
             self.buf.reference(at);
@@ -5734,49 +5737,82 @@ impl<'w, 'a> P<'w, 'a> {
                 self.buf.end_length(b);
             }
             Refinement::Val(_, _, t) => self.ty(t),
-            Refinement::Term(_, s, types) => {
-                let sig = self.w.sig_of(s).clone();
-                let types: Vec<TypeId> = self.w.types.items(types).to_vec();
-                self.refined_method(&sig, &types);
+            Refinement::Term(..) => {
+                let sig = self.w.refinement_sig(refinement);
+                self.refined_method(&sig);
             }
         }
         self.buf.end_length(len);
     }
 
-    /// A refinement's method: its clauses as nested `METHODtype`s over the refinement's own
-    /// types, a parameterless one as `=> R`.
-    fn refined_method(&mut self, sig: &MethodSig, types: &[TypeId]) {
-        let ret = types.last().copied().unwrap_or(sig.ret);
-        if sig.clauses.is_empty() {
-            self.buf.byte(BYNAMETYPE);
-            self.ty(ret);
-            return;
-        }
-        if !sig.tparams.is_empty() {
-            self.approximated("polymorphic method in a refinement");
-        }
-        let mut at = 0;
-        self.refined_clauses(sig, types, 0, &mut at, ret);
+    /// The signature of the `apply` that a function type with named parameters is refined by,
+    /// as the refinement has it.
+    pub(super) fn named_apply(&mut self, fun: TypeId) -> Option<std::sync::Arc<MethodSig>> {
+        self.w.named_function(fun)?;
+        let t = self.w.deref_alias(fun);
+        let Type::Refined(_, r) = self.w.types.get(t) else { return None };
+        let refinement = self.w.types.refinement(r);
+        Some(self.w.refinement_sig(refinement))
     }
 
-    fn refined_clauses(&mut self, sig: &MethodSig, types: &[TypeId], ci: usize, at: &mut usize, ret: TypeId) {
+    /// A refinement's method: its clauses as nested `METHODtype`s over the refinement's own
+    /// types, a parameterless one as `=> R`, a generic one inside the `POLYtype` of its type
+    /// parameters.
+    fn refined_method(&mut self, sig: &MethodSig) {
+        if sig.clauses.is_empty() && sig.tparams.is_empty() {
+            self.buf.byte(BYNAMETYPE);
+            self.ty(sig.ret);
+            return;
+        }
+        if sig.tparams.is_empty() {
+            return self.method_clauses(sig);
+        }
+        let tparams: Vec<TypeId> = sig.tparams.iter().map(|&p| self.w.types.param(p)).collect();
+        self.lambda_type_with(POLYTYPE, &tparams, |p| p.method_clauses(sig));
+    }
+
+    /// The clauses of `sig` as nested `METHODtype`s over its result. Each clause's parameters
+    /// are its type's from the clause's own types to the result.
+    fn method_clauses(&mut self, sig: &MethodSig) {
+        self.method_clause(sig, 0);
+    }
+
+    fn method_clause(&mut self, sig: &MethodSig, ci: usize) {
         if ci == sig.clauses.len() {
-            self.ty(ret);
+            self.ty(sig.ret);
             return;
         }
         self.placed = true;
+        let binder = self.buf.addr();
         self.buf.byte(METHODTYPE);
         let len = self.buf.begin_length();
         let clause = &sig.clauses[ci];
-        let start = *at;
-        *at += clause.params.len();
-        self.refined_clauses(sig, types, ci + 1, at, ret);
+        let mark = self.method_params.len();
         for (i, p) in clause.params.iter().enumerate() {
-            let t = types.get(start + i).copied().unwrap_or(p.ty);
-            self.ty(t);
+            self.method_params.push((p.sym, binder, i as u32));
+        }
+        self.method_clause(sig, ci + 1);
+        for p in clause.params.iter() {
+            let t = p.ty;
+            if p.repeated {
+                // `T*` in a method type is `<repeated>[T]`, where a parameter's tree has
+                // `Seq[T] @Repeated` (dotty's `MethodType.adaptParamInfo`, `annotatedToRepeated`).
+                self.buf.byte(APPLIEDTYPE);
+                let l = self.buf.begin_length();
+                self.external_typeref("scala", "<repeated>");
+                self.ty(t);
+                self.buf.end_length(l);
+            } else {
+                // `=> T`, which a function type's parameter holds as its type already.
+                if p.by_name && !matches!(self.w.types.get(t), Type::Class(c, _) if Some(c) == self.w.b.by_name) {
+                    self.buf.byte(BYNAMETYPE);
+                }
+                self.ty(t);
+            }
             let n = self.simple_name(p.name);
             self.buf.nat(n as u64);
         }
+        self.method_params.truncate(mark);
         if clause.is_implicit {
             self.buf.byte(IMPLICIT);
         } else if clause.is_using {

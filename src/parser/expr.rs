@@ -1104,14 +1104,18 @@ impl<'a> Parser<'a> {
             }
             Tok::LParen => self.parse_parens(),
             Tok::LBracket if self.bracket_followed_by(Tok::Arrow) => {
-                let (params, _) = self.parse_type_params_of_lambda();
+                let (params, bounds) = self.parse_type_params_of_lambda();
                 self.expect(Tok::Arrow);
                 let lambda = self.parse_expr();
                 if !matches!(self.ast.expr(lambda), Expr::Lambda(..)) {
                     self.error_at(start, "a polymorphic function literal takes a function literal after `=>`");
                 }
                 let l = push_list(&mut self.ast.name_lists, &params);
-                self.ast.add_expr(Expr::PolyLambda(l, lambda), start.to(self.prev_span()))
+                let id = self.ast.add_expr(Expr::PolyLambda(l, lambda), start.to(self.prev_span()));
+                if let Some(bl) = self.lambda_bounds_list(&bounds) {
+                    self.ast.poly_lambda_bounds.push((id, bl));
+                }
+                id
             }
             Tok::Indent => self.parse_block(),
             Tok::ColonEol if self.kind_at(1) == Tok::Indent => {

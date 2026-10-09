@@ -14,8 +14,9 @@ pub struct Printer<'a> {
     pub decoder: Decoder<'a>,
     /// Whether package prefixes are written out.
     pub full_names: bool,
-    /// The lambda types around the type being printed, for `ParamRef`.
-    binders: Vec<(Addr, Vec<NameRef>)>,
+    /// The lambda types around the type being printed, for `ParamRef`, each with whether it is
+    /// a method type, whose parameters are terms.
+    binders: Vec<(Addr, Vec<NameRef>, bool)>,
     pub out: String,
 }
 
@@ -100,6 +101,7 @@ impl<'a> Printer<'a> {
             },
             TType::TermRef(..) | TType::LocalTerm(..) => format!("{}.", self.path(t)),
             t if self.is_module_class(t) => format!("{}.", self.path(t)),
+            t if self.term_param(t).is_some() => format!("{}.", self.path(t)),
             other => format!("{}#", self.ty(other)),
         }
     }
@@ -141,8 +143,17 @@ impl<'a> Printer<'a> {
             }
             TType::This(inner) => format!("{}.this", self.type_name_of(inner)),
             TType::Package(p) => self.name(*p),
-            other => self.ty(other),
+            other => match self.term_param(other) {
+                Some(n) => self.name(n),
+                None => self.ty(other),
+            },
         }
+    }
+
+    /// The name of a method type's parameter that `t` refers to, a path.
+    fn term_param(&self, t: &TType) -> Option<NameRef> {
+        let TType::ParamRef(binder, num) = t else { return None };
+        self.binders.iter().rev().find(|(b, ..)| b == binder).filter(|(.., term)| *term).and_then(|(_, ns, _)| ns.get(*num as usize).copied())
     }
 
     fn args(&mut self, args: &[TType]) -> String {
@@ -258,7 +269,7 @@ impl<'a> Printer<'a> {
             TType::RecThis(_) => "this".to_string(),
             TType::Super(this, _) => format!("{}.super", self.path(this)),
             TType::Lambda { kind, binder, params, result } => {
-                self.binders.push((*binder, params.iter().map(|p| p.name).collect()));
+                self.binders.push((*binder, params.iter().map(|p| p.name).collect(), *kind == LambdaKind::Method));
                 let s = match kind {
                     LambdaKind::Type => format!("[{}] =>> {}", self.tparams(params), self.ty(result)),
                     LambdaKind::Poly => format!("[{}]{}", self.tparams(params), self.method_result(result)),
@@ -273,7 +284,10 @@ impl<'a> Printer<'a> {
                 s
             }
             TType::ParamRef(binder, num) => {
-                match self.binders.iter().rev().find(|(b, _)| b == binder).and_then(|(_, ns)| ns.get(*num as usize)) {
+                if let Some(n) = self.term_param(t) {
+                    return format!("{}.type", self.name(n));
+                }
+                match self.binders.iter().rev().find(|(b, ..)| b == binder).and_then(|(_, ns, _)| ns.get(*num as usize)) {
                     Some(&n) => self.name(n),
                     None => format!("<param {}>", num),
                 }
@@ -328,7 +342,7 @@ impl<'a> Printer<'a> {
         let rest = match &p.info {
             TType::Bounds(lo, hi) if self.is_scala_type(lo, "Nothing") && matches!(&**hi, TType::Lambda { kind: LambdaKind::Type, .. }) => {
                 let TType::Lambda { binder, params, result, .. } = &**hi else { unreachable!() };
-                self.binders.push((*binder, params.iter().map(|p| p.name).collect()));
+                self.binders.push((*binder, params.iter().map(|p| p.name).collect(), false));
                 let inner = self.tparams(params);
                 let b = if self.is_scala_type(result, "Any") { String::new() } else { format!(" <: {}", self.ty(result)) };
                 self.binders.pop();
@@ -336,7 +350,7 @@ impl<'a> Printer<'a> {
             }
             TType::Bounds(lo, hi) => self.bounds(lo, hi),
             TType::Lambda { kind: LambdaKind::Type, binder, params, result } => {
-                self.binders.push((*binder, params.iter().map(|p| p.name).collect()));
+                self.binders.push((*binder, params.iter().map(|p| p.name).collect(), false));
                 let inner = self.tparams(params);
                 let b = match &**result {
                     TType::Bounds(lo, hi) => self.bounds(lo, hi),
@@ -517,7 +531,7 @@ impl<'a> Printer<'a> {
         let mut rhs = &sig.rhs;
         let mut pushed = false;
         if let TType::Lambda { kind: LambdaKind::Type, binder, params, result } = rhs {
-            self.binders.push((*binder, params.iter().map(|p| p.name).collect()));
+            self.binders.push((*binder, params.iter().map(|p| p.name).collect(), false));
             pushed = true;
             line.push_str(&format!("[{}]", self.tparams(params)));
             rhs = result;

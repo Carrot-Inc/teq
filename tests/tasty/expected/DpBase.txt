@@ -1,0 +1,5 @@
+// tests/tasty/fixtures/DpBase.tasty (TASTy 28.8, 490 bytes)
+package fix.depparams
+@SourceFile trait DpBase extends Object {
+  def value: DpCtx => DpCtx#T { def apply(c: DpCtx): c.T }
+}

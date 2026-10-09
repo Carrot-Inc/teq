@@ -1199,20 +1199,22 @@ impl<'a> Worker<'a> {
     /// conforms to, as it erases to that.
     fn is_sub_poly(&mut self, a: TypeId, b: TypeId) -> bool {
         match (self.types.get(a), self.types.get(b)) {
-            (Type::Poly(ps, x), Type::Poly(qs, y)) => {
-                let ps: Vec<TypeId> = self.types.items(ps).to_vec();
-                let qs: Vec<TypeId> = self.types.items(qs).to_vec();
+            // The parameters renamed, the wanted bounds within the found ones (dotty's
+            // `TypeComparer.comparePoly`, `matchingPolyParams`).
+            (Type::Poly(..), Type::Poly(..)) => {
+                let (Some((ps, x)), Some((qs, y))) = (self.poly_binders(a), self.poly_binders(b)) else { return false };
                 if ps.len() != qs.len() {
                     return false;
                 }
-                let renaming: Subst = qs
-                    .iter()
-                    .zip(&ps)
-                    .filter_map(|(&q, &p)| match self.types.get(q) {
-                        Type::Param(id) => Some((id, p)),
-                        _ => None,
-                    })
-                    .collect();
+                let renaming: Subst = qs.iter().zip(&ps).map(|(&q, &p)| (q, self.types.param(p))).collect();
+                for (&p, &q) in ps.iter().zip(&qs) {
+                    let (lo, hi) = (self.syms.tparam(p).lower, self.syms.tparam(p).upper);
+                    let (wlo, whi) = (self.syms.tparam(q).lower, self.syms.tparam(q).upper);
+                    let (wlo, whi) = (self.types.subst(wlo, &renaming), self.types.subst(whi, &renaming));
+                    if !(self.is_sub(lo, wlo) && self.is_sub(whi, hi)) {
+                        return false;
+                    }
+                }
                 let y = self.types.subst(y, &renaming);
                 self.is_sub(x, y)
             }
