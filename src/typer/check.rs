@@ -3164,8 +3164,8 @@ impl<'a> Worker<'a> {
     /// concrete member over an abstract one), unless that is the declaration the rule implements
     /// (`Any`'s, `Product`'s, `Equals`'s, `Enum`'s).
     fn existing_def(&mut self, c: ClassId, name: Name, param: synthetic::Param) -> Option<SymId> {
-        let bases: Vec<ClassId> = self.syms.class(c).base_types.iter().map(|&(b, _)| b).collect();
-        for b in bases {
+        for i in 0..self.syms.class(c).base_types.len() {
+            let b = self.syms.class(c).base_types[i].0;
             let mut k = 0;
             while let Some(s) = self.own_alternative(b, name, k) {
                 k += 1;

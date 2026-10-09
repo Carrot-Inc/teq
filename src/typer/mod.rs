@@ -148,7 +148,7 @@ pub struct Builtins {
     pub t_product: TypeId,
     pub t_singleton: TypeId,
     pub t_equals: TypeId,
-    /// `scala.reflect.Enum`, which enum classes and cases are without extending it.
+    /// `scala.reflect.Enum`, the parent `Desugar.classDef` gives every enum.
     pub reflect_enum: Option<ClassId>,
     pub t_enum: TypeId,
     pub tuple_trait: Option<ClassId>,
