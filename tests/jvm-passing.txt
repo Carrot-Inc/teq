@@ -189,6 +189,7 @@ collection_map_hierarchy
 collection_partial_failure
 collections
 companion_apply_unqualified
+companion_as_function
 companion_init_order
 comparable_boxes
 concat_order

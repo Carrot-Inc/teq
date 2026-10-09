@@ -20,7 +20,8 @@ libraries compiled from their jars run against scalac's output. The remaining di
 
 ### Types and inference
 
-- `val g: Int => F = F` for a case class `F` is rejected (scalac inserts `.apply`); `F.apply` works.
+- The companion of a case class that has no object of its own is no value: `val o = F` is rejected, where
+  scalac's is an object (where a function is expected, `F` is `F.apply` as under scalac).
 - `xs.foldLeft(List.empty)(...)` is rejected, `List.empty`'s type variable being solved before the lambda
   (`foldLeft(Nil)` works), and `val z: 1 = foo(1).zero` cannot take the literal type from the expected type.
 - `<:<` and `=:=` evidence is filled in, never reasoned from (with `ev: A <:< String`, `a.length` is written
