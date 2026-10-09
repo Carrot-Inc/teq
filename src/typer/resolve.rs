@@ -5070,8 +5070,10 @@ impl<'a> Worker<'a> {
         let is_case_of_enum = kind == ClassKind::EnumCase;
         let mut superclass: Option<ClassId> = None;
         let mut trait_superclasses: Vec<(ClassId, ClassId, Span)> = Vec::new();
+        let mut parent_failed = false;
         for (pt, span) in parents {
             let pt = self.deref_alias(pt);
+            parent_failed |= pt == ERROR;
             // A class nested in a class, through its prefix (`extends H.o.I`, an alias of it): its
             // base types are seen from the prefix, as dotty's `baseType` of a parent `TypeRef`.
             let (class_pt, prefix) = match self.types.get(pt) {
@@ -5203,6 +5205,7 @@ impl<'a> Worker<'a> {
         });
         let mut info = self.syms.class_mut(c);
         info.parents = parent_types;
+        info.parent_failed = parent_failed;
         info.base_types = base;
         info.superclass = superclass;
         info.inherits_types = inherits_types;

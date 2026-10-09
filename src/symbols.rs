@@ -129,6 +129,9 @@ pub struct ClassInfo {
     /// How many of `parents`, at the end, dotty's `Desugar.classDef` gives the class rather than
     /// its source: `Product` and `Serializable` of a case class or object, an enum's `Enum`.
     pub desugared_parents: u8,
+    /// Whether a parent the source writes did not resolve (an error was reported there): what
+    /// the class inherits is unknown, so it is not held to implement it.
+    pub parent_failed: bool,
     /// The class this one extends, directly or through a trait that extends a class.
     pub superclass: Option<ClassId>,
     /// The classes that have this one as their superclass.
@@ -887,6 +890,7 @@ impl Symbols {
             inner_object: None,
             stateful: false,
             desugared_parents: 0,
+            parent_failed: false,
             has_exports: false,
             self_alias: crate::names::EMPTY,
             has_imports: false,

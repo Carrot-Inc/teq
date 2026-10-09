@@ -2973,7 +2973,7 @@ impl<'a> Worker<'a> {
         }
         self.check_overrides(c);
         self.check_variances(c);
-        if !matches!(kind, ClassKind::Trait | ClassKind::Enum) && def.mods & mods::ABSTRACT == 0 && !self.is_body_file(file) {
+        if !matches!(kind, ClassKind::Trait | ClassKind::Enum) && def.mods & mods::ABSTRACT == 0 && !self.is_body_file(file) && !self.syms.class(c).parent_failed {
             let implemented = tclass.synthesized | self.enum_value_parent_members(c) | self.inherited_synthesized(c);
             tclass.forwarders = self.check_implements_all(c, Abstracts::Declared, implemented);
         }
