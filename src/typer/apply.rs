@@ -3346,6 +3346,9 @@ impl<'a> Worker<'a> {
         let outer_base = std::mem::replace(&mut self.app_base, self.tvars.len() as u32);
         let r = self.apply_method_in(call, ctor, targs, lists, span, expected, trial);
         self.app_base = outer_base;
+        if self.app_depth == 0 && !self.mismatch_renders.is_empty() {
+            self.render_mismatches(0);
+        }
         r
     }
 
@@ -3376,6 +3379,36 @@ impl<'a> Worker<'a> {
         match &self.joint_sig {
             Some((r, s, _)) if *r == recv && *s == sym => self.joint_sig.take().map(|(_, _, info)| info),
             _ => None,
+        }
+    }
+
+    /// The type mismatches reported under the application at `depth` or deeper, its arguments
+    /// typed, rendered from the types their variables were instantiated to, what is still open by
+    /// `reported_mismatch`: dotty renders a `TypeMismatch` lazily with the constraint of the
+    /// attempt it was reported in (`TypeMismatch.msg`'s `mapCtx`), which the application's
+    /// interpolation, made after the attempt is committed, does not reach (`simpleApply` under
+    /// `tryEither`). What an application left (one that returned before solving) is rendered once
+    /// the outermost is typed.
+    fn render_mismatches(&mut self, depth: u32) {
+        let renders = std::mem::take(&mut self.mismatch_renders);
+        for (at, old, found, expected, note_len, at_depth) in renders {
+            if at_depth < depth {
+                self.mismatch_renders.push((at, old, found, expected, note_len, at_depth));
+                continue;
+            }
+            if self.diags.items.get(at).map_or(true, |d| d.msg != old) {
+                continue;
+            }
+            let (found, expected) = (self.zonk(found), self.zonk(expected));
+            // A variable the failure left at the error type keeps the message as reported.
+            if self.types.contains_error(found) || self.types.contains_error(expected) {
+                continue;
+            }
+            let (found, expected, _) = self.reported_mismatch(found, expected);
+            // What the message adds after the types (a match type's note) stays.
+            let note = &old[old.len() - note_len..];
+            let msg = format!("type mismatch: found {}, required {}{}", self.show(found), self.show(expected), note);
+            self.diags.items[at].msg = msg;
         }
     }
 
@@ -4394,6 +4427,10 @@ impl<'a> Worker<'a> {
         held: &[TVarId],
         span: Span,
     ) {
+        // What was reported under the application is rendered as its typing leaves it.
+        if !self.mismatch_renders.is_empty() {
+            self.render_mismatches(self.app_depth);
+        }
         // The variables of the result type with their variances, walked when an unconstrained
         // variable first asks and again after a solution that touched one of them (an
         // instantiation lets other variables show through). The variables between `first_var`

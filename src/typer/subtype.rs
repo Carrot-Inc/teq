@@ -2555,7 +2555,7 @@ impl<'a> Worker<'a> {
         vars && self.var_variances(result).iter().any(|&(w, s)| w == v && s == 1)
     }
 
-    fn occurs(&self, v: TVarId, t: TypeId) -> bool {
+    pub(super) fn occurs(&self, v: TVarId, t: TypeId) -> bool {
         let mut vars = Vec::new();
         self.collect_vars(t, &mut vars);
         vars.contains(&v)

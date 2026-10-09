@@ -685,6 +685,12 @@ pub struct Worker<'a> {
     /// Under a member's application (`apply::apply_member_or_extension`, `logging` deep): each
     /// type mismatch reported, by its diagnostic's index and span, with the type it required.
     pub mismatches: Vec<(usize, Span, TypeId)>,
+    /// The type mismatches reported under the applications under way, by their diagnostic's
+    /// index and text, with the types found and required, the length of the note after them and
+    /// the depth of the application they were reported under: rendered again from the types as
+    /// that application's typing leaves them, before it solves its variables
+    /// (`apply::render_mismatches`).
+    pub mismatch_renders: Vec<(usize, String, TypeId, TypeId, usize, u32)>,
     pub logging: u32,
     /// How many method applications are under way (`apply::apply_method_in`), and the depth at
     /// which a member's retry on the qualifier runs (`apply::retry_on_qualifier`): the application
@@ -2095,6 +2101,7 @@ impl<'a> Worker<'a> {
             interp_parts: None,
             interp_call: None,
             mismatches: Vec::new(),
+            mismatch_renders: Vec::new(),
             logging: 0,
             app_depth: 0,
             retry_depth: None,
@@ -2433,6 +2440,7 @@ impl<'a> Worker<'a> {
             interp_parts: None,
             interp_call: None,
             mismatches: Vec::new(),
+            mismatch_renders: Vec::new(),
             logging: 0,
             app_depth: 0,
             retry_depth: None,

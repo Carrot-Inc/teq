@@ -699,16 +699,97 @@ impl<'a> Worker<'a> {
             Some(p) if self.types.has_paths(exp) => p,
             _ => actual,
         };
-        let mut msg = format!("type mismatch: found {}, required {}", self.show(found), self.show(expected));
+        let (shown_found, shown_expected, fbounded) = self.reported_mismatch(found, expected);
+        let mut msg = format!("type mismatch: found {}, required {}", self.show(shown_found), self.show(shown_expected));
+        let mut note_len = 0;
         if let Some(note) = self.match_type_note(actual, expected) {
+            note_len = note.len();
             msg.push_str(&note);
         }
         let at = self.diags.items.len();
-        self.error_unless_unknown(span, msg, &[found, expected]);
+        self.error_unless_unknown(span, msg.clone(), &[found, expected]);
         if self.logging > 0 {
             self.mismatches.push((at, span, expected));
         }
+        // Under an application its variables may be instantiated yet: the message is rendered
+        // again when the application's typing ends, as dotty renders a message with the
+        // constraint of the attempt it was reported in, whose instances count and whose open
+        // variables show their bounds; one F-bounded shows the variable, as it does.
+        if self.app_depth > 0 && !fbounded && self.diags.items.len() > at && (self.types.has_vars(found) || self.types.has_vars(expected)) {
+            self.mismatch_renders.push((at, msg, found, expected, note_len, self.app_depth));
+        }
         (te, expected)
+    }
+
+    /// The types a mismatch is reported with (dotty's `TypeMismatch.msg`, its `reported` map):
+    /// an open variable of the required type its upper bound, of the found type its lower bound,
+    /// through the arguments by their variance (`Required: Nothing` for the `B` of `x -> x`
+    /// that the expected result bounds); the types as they are where the bounds conform or one
+    /// is F-bounded.
+    /// Whether the bounds were F-bounded comes third.
+    pub(super) fn reported_mismatch(&mut self, found: TypeId, expected: TypeId) -> (TypeId, TypeId, bool) {
+        if !self.types.has_vars(found) && !self.types.has_vars(expected) {
+            return (found, expected, false);
+        }
+        let mut fbounded = false;
+        let found1 = self.reported_type(found, 1, 0, &mut fbounded);
+        let expected1 = self.reported_type(expected, -1, 0, &mut fbounded);
+        let mark = self.snapshot();
+        let conforms = self.is_sub(found1, expected1);
+        self.rollback(mark);
+        if conforms || fbounded {
+            (found, expected, fbounded)
+        } else {
+            (found1, expected1, false)
+        }
+    }
+
+    /// `reported` of `t` at `variance`: an open variable its full upper bound below zero, its
+    /// full lower bound above, itself at zero.
+    fn reported_type(&mut self, t: TypeId, variance: i8, depth: u32, fbounded: &mut bool) -> TypeId {
+        if depth > 16 || !self.types.has_vars(t) {
+            return t;
+        }
+        let t = self.deref(t);
+        let d = depth + 1;
+        match self.types.get(t) {
+            Type::Var(v) if variance != 0 => {
+                let bounds = if variance < 0 { self.upper_bounds_through_vars(v) } else { self.tvars[v].lower.clone() };
+                let bounds: Vec<TypeId> = bounds.into_iter().map(|b| self.zonk(b)).collect();
+                if bounds.iter().any(|&b| self.occurs(v, b)) {
+                    *fbounded = true;
+                    return t;
+                }
+                let bound = if variance < 0 {
+                    bounds.into_iter().reduce(|a, b| self.types.inter(a, b)).unwrap_or(ANY)
+                } else {
+                    bounds.into_iter().reduce(|a, b| self.types.union(a, b)).unwrap_or(NOTHING)
+                };
+                self.reported_type(bound, variance, d, fbounded)
+            }
+            Type::Class(c, args) => {
+                let items = self.types.items(args).to_vec();
+                let tparams = self.syms.class(c).tparams.clone();
+                let mapped: Vec<TypeId> = items
+                    .iter()
+                    .enumerate()
+                    .map(|(i, &a)| {
+                        let own = tparams.get(i).map_or(0, |&p| self.syms.tparam(p).variance);
+                        self.reported_type(a, variance * own, d, fbounded)
+                    })
+                    .collect();
+                if mapped == items { t } else { self.types.class(c, &mapped) }
+            }
+            Type::Union(a, b) => {
+                let (x, y) = (self.reported_type(a, variance, d, fbounded), self.reported_type(b, variance, d, fbounded));
+                if (x, y) == (a, b) { t } else { self.types.union(x, y) }
+            }
+            Type::Inter(a, b) => {
+                let (x, y) = (self.reported_type(a, variance, d, fbounded), self.reported_type(b, variance, d, fbounded));
+                if (x, y) == (a, b) { t } else { self.types.inter(x, y) }
+            }
+            _ => t,
+        }
     }
 
     pub fn adapt(&mut self, te: TExprId, actual: TypeId, expected: TypeId, span: Span) -> TExprId {
