@@ -15,3 +15,7 @@ class_synthesis/E$ valueOf(Ljava/lang/String;)Lclass_synthesis/E; public
 class_synthesis/E$ values()[Lclass_synthesis/E; public
 class_synthesis/O$ K()I public,final
 class_synthesis/O$ L()I public,final
+class_synthesis/U$ cd(Ljava/io/Serializable;)I public
+class_synthesis/U$ cn(Ljava/io/Serializable;)I public
+class_synthesis/U$ ec(Ljava/io/Serializable;)I public
+class_synthesis/U$ sp(Ljava/io/Serializable;)I public

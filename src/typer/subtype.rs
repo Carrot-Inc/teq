@@ -2060,6 +2060,8 @@ impl<'a> Worker<'a> {
         }
     }
 
+    /// dotty's `isTransparent()`: a type deriving only from transparent classes, `Any`,
+    /// `Matchable`, `Object`, `AnyVal` and the transparent traits.
     fn transparent_join(&mut self, j: TypeId) -> bool {
         match self.types.get(j) {
             Type::Any => true,
@@ -2067,8 +2069,8 @@ impl<'a> Worker<'a> {
             Type::Class(c, _) => {
                 c == self.b.any_ref
                     || c == self.b.any_val
-                    || Some(c) == self.b.product
-                    || matches!(self.interner.get(self.syms.class(c).name), "Matchable" | "Serializable" | "Equals" | "Object")
+                    || matches!(self.interner.get(self.syms.class(c).name), "Matchable" | "Object")
+                    || self.is_transparent_trait_type(j)
             }
             _ => false,
         }
@@ -2143,6 +2145,11 @@ impl<'a> Worker<'a> {
         // that is none remains, as `Set(a, b)` of two case objects of `S` is a `Set[S]`.
         if minimal.iter().any(|&t| !self.is_transparent_trait_type(t)) {
             minimal.retain(|&t| !self.is_transparent_trait_type(t));
+        }
+        // dotty's `widenOr`: a join that is transparent (`Product & Serializable` of two case
+        // classes) leaves the union as it is.
+        if minimal.iter().all(|&t| self.transparent_join(t)) {
+            return None;
         }
         minimal.reverse();
         let (&first, rest) = minimal.split_first()?;
