@@ -5778,7 +5778,15 @@ impl<'a> Worker<'a> {
     /// other alternatives of its name, which the selection's denotation filtered alike. An error
     /// is reported once however many selections meet it; a member found sound is not checked
     /// again.
+    #[inline]
     pub(super) fn note_private_selection(&mut self, s: SymId, recv: TExprId, recv_ty: TypeId, assigned: bool) {
+        if self.syms.sym(s).mods & mods::PRIVATE != 0 {
+            self.note_private_selection_of(s, recv, recv_ty, assigned);
+        }
+    }
+
+    #[inline(never)]
+    fn note_private_selection_of(&mut self, s: SymId, recv: TExprId, recv_ty: TypeId, assigned: bool) {
         let (owner, s_mods, s_file, name) = {
             let info = self.syms.sym(s);
             (info.owner, info.mods, info.file, info.name)

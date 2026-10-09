@@ -733,7 +733,7 @@ impl<'t, 'a> Spaces<'t, 'a> {
     /// Whether `t` is a tuple class past 22 elements and `xxl` `scala.runtime.TupleXXL`, named
     /// rather than looked up, which would enter its std file.
     fn xxl_tuple_of(&self, t: ClassId, xxl: ClassId) -> bool {
-        if !self.t.is_tuple_class(t) || self.t.syms.class(t).tparams.len() <= 22 {
+        if self.t.syms.class(t).tparams.len() <= 22 || !self.t.is_tuple_class(t) {
             return false;
         }
         let info = self.t.syms.class(xxl);
@@ -755,6 +755,12 @@ impl<'t, 'a> Spaces<'t, 'a> {
         if r == b.any_val || c == b.any_val {
             let other = if r == b.any_val { c } else { r };
             return value_types.contains(&other) || self.t.syms.class(other).value_class;
+        }
+        // One class deriving from the other, the common case, is answered first, as
+        // `provablyDisjointClasses` starts with `derivesFrom`.
+        let bases = |s: &Self, k: ClassId| s.t.syms.class(k).base_types.iter().skip(1).any(|&(x, _)| x == if k == c { r } else { c });
+        if bases(self, c) || bases(self, r) {
+            return true;
         }
         // A tuple class past 22 elements is a type alone, whose values are TupleXXLs.
         if self.xxl_tuple_of(c, r) || self.xxl_tuple_of(r, c) {

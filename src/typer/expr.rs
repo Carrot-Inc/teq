@@ -2776,13 +2776,14 @@ impl<'a> Worker<'a> {
             let tr = self.check_expr(rhs, ANY);
             return (self.prog.add(TExpr::Assign(tl, tr)), self.b.t_unit);
         }
-        let target = match self.prog.expr(tl) {
-            TExpr::Local(s) | TExpr::Static(s) | TExpr::Field(_, s) => Some(s),
-            _ => None,
+        let (target, field_of) = match self.prog.expr(tl) {
+            TExpr::Local(s) | TExpr::Static(s) => (Some(s), None),
+            TExpr::Field(recv, s) => (Some(s), Some(recv)),
+            _ => (None, None),
         };
         match target {
             Some(s) if self.syms.sym(s).kind == SymKind::Var => {
-                if let TExpr::Field(recv, _) = self.prog.expr(tl) {
+                if let Some(recv) = field_of {
                     let recv_ty = self.prog.type_of(recv).unwrap_or(ANY);
                     self.note_private_selection(s, recv, recv_ty, true);
                 }

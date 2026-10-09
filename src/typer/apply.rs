@@ -2618,32 +2618,27 @@ impl<'a> Worker<'a> {
 
     /// A case class's companion where a function is expected is its `apply`, with scalac's
     /// warning (dotty's `adaptNoArgsOther`, `caseCompanion`): `val g: Int => F = F`, `xs.map(F)`,
-    /// `Scope.F` of an object of source or of products. The term is the resolved one, named or
-    /// selected: the constructor's proxy (`Callee::Ctor`), which stands for the companion a case
-    /// class without one has, or a module that no function class is a base of.
-    fn inserted_companion_apply(&mut self, callee: &Callee, span: Span, expected: Option<TypeId>) -> Option<(TExprId, TypeId)> {
-        match *callee {
-            // A proxy is the companion's unless a `new` names the class, or it is reached through
-            // an outer instance, which the proxy's application takes in place.
-            Callee::Ctor(c) if !self.explicit_new && !self.new_prefixed => self.inserted_proxy_apply(c, span, expected),
-            Callee::Value(te, ty) => {
-                let module = match self.prog.expr(te) {
-                    TExpr::Block(_, inner) => inner,
-                    _ => te,
-                };
-                let TExpr::Module(o) = self.prog.expr(module) else { return None };
-                let k = self.companion_class(o).filter(|&k| self.syms.class(k).mods & crate::ast::mods::CASE != 0)?;
-                if !self.inserts_apply(expected) || self.function_base(self.types.class(o, &[])).is_some() {
-                    return None;
-                }
-                self.warn_inserted_apply(k, span);
-                Some(self.apply_member(te, ty, names::APPLY, None, Vec::new(), span, expected))
-            }
-            _ => None,
+    /// `Scope.F` of an object of source or of products. `apply_callee` asks it of the resolved
+    /// term applied to nothing where a type is expected, named or selected: the module here,
+    /// reached through a block where its prefix is evaluated first, or the constructor's proxy
+    /// (`inserted_proxy_apply`), which stands for the companion a case class without one has.
+    #[inline(never)]
+    fn inserted_module_apply(&mut self, te: TExprId, ty: TypeId, span: Span, expected: Option<TypeId>) -> Option<(TExprId, TypeId)> {
+        let module = match self.prog.expr(te) {
+            TExpr::Block(_, inner) => inner,
+            _ => te,
+        };
+        let TExpr::Module(o) = self.prog.expr(module) else { return None };
+        let k = self.companion_class(o).filter(|&k| self.syms.class(k).mods & crate::ast::mods::CASE != 0)?;
+        if !self.inserts_apply(expected) || self.function_base(self.types.class(o, &[])).is_some() {
+            return None;
         }
+        self.warn_inserted_apply(k, span);
+        Some(self.apply_member(te, ty, names::APPLY, None, Vec::new(), span, expected))
     }
 
-    /// `inserted_companion_apply` for the constructor proxy of the case class `c`.
+    /// `inserted_module_apply` for the constructor proxy of the case class `c`.
+    #[inline(never)]
     fn inserted_proxy_apply(&mut self, c: ClassId, span: Span, expected: Option<TypeId>) -> Option<(TExprId, TypeId)> {
         let info = self.syms.class(c);
         if info.mods & crate::ast::mods::CASE == 0 || info.kind != ClassKind::Class || !self.inserts_apply(expected) {
@@ -2713,11 +2708,6 @@ impl<'a> Worker<'a> {
         span: Span,
         expected: Option<TypeId>,
     ) -> (TExprId, TypeId) {
-        if lists.is_empty() && targs.is_none() {
-            if let Some(typed) = self.inserted_companion_apply(&callee, span, expected) {
-                return typed;
-            }
-        }
         match callee {
             // A method whose header the parser could not complete takes any arguments: they are
             // typed on their own and the application has the error type.
@@ -2740,6 +2730,13 @@ impl<'a> Worker<'a> {
             }
             Callee::Selection { recv, recv_ty, name } => self.apply_member(recv, recv_ty, name, targs, lists, span, expected),
             Callee::Ctor(c) => {
+                // A proxy is the companion's unless a `new` names the class, or it is reached
+                // through an outer instance, which the proxy's application takes in place.
+                if lists.is_empty() && targs.is_none() && expected.is_some() && !self.explicit_new && !self.new_prefixed {
+                    if let Some(typed) = self.inserted_proxy_apply(c, span, expected) {
+                        return typed;
+                    }
+                }
                 if let (Some(ta), true) = (targs, lists.is_empty()) {
                     if let Some(r) = self.summon_type_application(c, None, ta, span, expected) {
                         return r;
@@ -2762,6 +2759,11 @@ impl<'a> Worker<'a> {
                     self.report_blocked_type(ty, span);
                 }
                 if lists.is_empty() && targs.is_none() {
+                    if expected.is_some() && matches!(self.prog.expr(te), TExpr::Module(_) | TExpr::Block(..)) {
+                        if let Some(typed) = self.inserted_module_apply(te, ty, span, expected) {
+                            return typed;
+                        }
+                    }
                     return (te, ty);
                 }
                 // A polymorphic function value applied: its type parameters take the explicit
@@ -5429,17 +5431,26 @@ impl<'a> Worker<'a> {
     /// parameter then maximizes (`Map[Any, Nothing]`), where `foldLeft(Map.empty)` leaves both open.
     /// It is part of the argument's typing (`typedUnadapted`'s `simplify`), so the typing a
     /// member's cache keeps (`type_arg_cached`) is interpolated already.
+    #[inline]
     fn interpolate_applied_arg(&mut self, e: ExprId, ty: TypeId, pty: TypeId, vars_mark: usize) {
+        // An argument that made no variable, or a formal that is none, is passed at a test.
+        if self.tvars.len() != vars_mark {
+            self.interpolate_applied_arg_now(e, ty, pty, vars_mark);
+        }
+    }
+
+    #[inline(never)]
+    fn interpolate_applied_arg_now(&mut self, e: ExprId, ty: TypeId, pty: TypeId, vars_mark: usize) {
+        let formal = self.deref(pty);
+        if !matches!(self.types.get(formal), Type::Var(_)) {
+            return;
+        }
         let ast = self.cur_ast();
         let mut head = e;
         while let Expr::Parens(inner) = ast.expr(head) {
             head = inner;
         }
-        if !matches!(ast.expr(head), Expr::Apply(..) | Expr::UsingApply(..)) || self.tvars.len() == vars_mark {
-            return;
-        }
-        let formal = self.deref(pty);
-        if !matches!(self.types.get(formal), Type::Var(_)) {
+        if !matches!(ast.expr(head), Expr::Apply(..) | Expr::UsingApply(..)) {
             return;
         }
         let ty = self.zonk(ty);
@@ -6228,8 +6239,11 @@ impl<'a> Worker<'a> {
                 return self.apply_overloaded_member(recv, recv_ty, sym, name, targs, lists, span, expected);
             }
             self.check_access(sym, Some(recv_ty), span);
-            self.note_private_selection(sym, recv, recv_ty, false);
-            if self.syms.sym(sym).mods & crate::ast::mods::PROTECTED != 0 {
+            let sym_mods = self.syms.sym(sym).mods;
+            if sym_mods & crate::ast::mods::PRIVATE != 0 {
+                self.note_private_selection(sym, recv, recv_ty, false);
+            }
+            if sym_mods & crate::ast::mods::PROTECTED != 0 {
                 self.check_protected_access(sym, recv, recv_ty, span);
             }
             let mut callee = self.member_callee_in(recv, recv_ty, Some(owner_ty), sym);
