@@ -114,12 +114,16 @@ capture_this
 capture_u
 capture_w
 capture_x
+case_class_inherited_members
 case_class_own_unapply
 case_class_selectors
 case_companion_nested
 case_copy_clauses
 case_copy_nested
 case_lambda_parameter
+case_class_parents
+case_class_synthesized_members
+case_class_tostring_overload
 case_lambda_pinned_constructor
 case_lambda_tuples
 cast_array_kinds
@@ -198,6 +202,7 @@ conditional_precedence
 conformance_extras
 cons_pattern_binders
 console_streams
+constant_final_vals
 constant_member_receiver
 constant_singleton_inferred
 constant_singleton_path
@@ -291,6 +296,7 @@ enum_category
 enum_extends_class
 enum_gadt
 enum_mixed_from_ordinal
+enum_lookups
 enum_nested
 enum_ordinal_dispatch
 enum_ordinal_null
@@ -303,6 +309,7 @@ equality_default
 equals_trait
 erasure_shapes
 eta_by_name_inferred
+equals_trait
 eta_sam_conversion
 eta_sam_widening
 eta_underscore_typevars
@@ -566,6 +573,7 @@ inline_arg_throwing_branch
 inline_arg_wrapped
 inline_bodies_scalac_product
 inline_body_import_nested_given
+inline_constant_final
 inline_definition_clean
 inline_definition_const_singleton
 inline_definition_conversion_targs
@@ -1463,6 +1471,7 @@ uuid
 val_implements_def_and_val
 val_overrides_tostring
 val_refinement_subst
+value_class_can_equal
 value_class_signature_only
 value_classes
 value_import
@@ -1470,6 +1479,7 @@ value_import_given_old_implicits
 value_import_given_shadows_own
 value_import_givens
 value_of
+value_of_singletons
 var_default_init
 var_setter_member
 vc_box_any
