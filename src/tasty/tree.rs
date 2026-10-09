@@ -213,6 +213,8 @@ pub struct Mods {
     pub within: Option<TType>,
     /// The name `@targetName("name")` gives the definition in the class file.
     pub target_name: Option<NameRef>,
+    /// The text of an `@implicitNotFound` annotation, which a missing given of the class reports.
+    pub implicit_not_found: Option<NameRef>,
     /// `@scala.volatile`, which a field of the definition carries as `ACC_VOLATILE`.
     pub volatile: bool,
 }
@@ -844,6 +846,13 @@ impl<'a> Decoder<'a> {
                     }
                     if matches!(&class, TType::TypeRef(_, n) if self.file.simple(*n) == Some("targetName")) && call < annot_end {
                         mods.target_name = match self.annotation_args().first() {
+                            Some(AnnotArg::Str(n)) => Some(*n),
+                            _ => None,
+                        };
+                        self.r.pos = call;
+                    }
+                    if matches!(&class, TType::TypeRef(_, n) if self.file.simple(*n) == Some("implicitNotFound")) && call < annot_end {
+                        mods.implicit_not_found = match self.annotation_args().first() {
                             Some(AnnotArg::Str(n)) => Some(*n),
                             _ => None,
                         };

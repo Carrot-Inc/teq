@@ -1007,6 +1007,70 @@ impl<'a> Worker<'a> {
         if p == ROOT_PKG { "<root>".to_string() } else { self.name_str(self.syms.pkg(p).name).to_string() }
     }
 
+    /// dotty's `MissingImplicitArgument.userDefinedImplicitNotFoundTypeMessage` (messages.scala):
+    /// the `@implicitNotFound` text of the class of the type no given was found for, its `${A}`
+    /// the class's arguments (`formatAnnotationMessage`), or else that of a base class, its
+    /// variables the type's arguments for it (`asSeenFrom`).
+    pub(super) fn implicit_not_found_message(&mut self, t: TypeId) -> Option<String> {
+        let t = self.deref(t);
+        let Type::Class(c, args) = self.types.get(t) else { return None };
+        let args = self.types.items(args).to_vec();
+        if let Some(m) = self.class_not_found_text(c, &args) {
+            return Some(m);
+        }
+        self.complete_class(c);
+        let bases: Vec<ClassId> = self.syms.class(c).base_types.iter().skip(1).map(|&(b, _)| b).collect();
+        bases.into_iter().find_map(|b| {
+            // The base class's parameters as seen from the type (`asSeenFrom(pt, sym)`).
+            let args: Vec<TypeId> = match self.base_type(t, b).map(|bt| self.types.get(bt)) {
+                Some(Type::Class(_, l)) => self.types.items(l).to_vec(),
+                _ => Vec::new(),
+            };
+            self.class_not_found_text(b, &args)
+        })
+    }
+
+    /// The `@implicitNotFound` text a source class declares, its type parameters' `${A}`
+    /// replaced by `args` (dotty's `userDefinedErrorString`, `?A` for one without an argument).
+    fn class_not_found_text(&mut self, c: ClassId, args: &[TypeId]) -> Option<String> {
+        let (file, def) = {
+            let info = self.syms.class(c);
+            (info.file, info.def)
+        };
+        let raw = match def {
+            Some(d) => {
+                let ast = self.ast(file);
+                let annot = ast.def(d).annots.iter().find(|a| self.name_ref(a.name) == "implicitNotFound")?;
+                ast.str(*ast.str_lists[annot.args.range()].first()?).to_string()
+            }
+            // A jar's class, whose annotation its pickle carries.
+            None => self.loaded.as_ref()?.implicit_not_found.get(&c)?.clone(),
+        };
+        let names: Vec<String> = self.syms.class(c).tparams.iter().map(|&p| self.name_ref(self.syms.tparam(p).name).to_string()).collect();
+        let mut out = String::with_capacity(raw.len());
+        let mut rest = raw.as_str();
+        while let Some(at) = rest.find("${") {
+            out.push_str(&rest[..at]);
+            let after = &rest[at + 2..];
+            let Some(end) = after.find('}') else {
+                out.push_str(&rest[at..]);
+                rest = "";
+                break;
+            };
+            let name = after[..end].trim();
+            match names.iter().position(|n| n == name).and_then(|i| args.get(i)) {
+                Some(&arg) => out.push_str(&self.show(arg)),
+                None => {
+                    out.push('?');
+                    out.push_str(name);
+                }
+            }
+            rest = &after[end + 1..];
+        }
+        out.push_str(rest);
+        Some(out)
+    }
+
     /// The class that `q` names in `q.apply`: `C`, `Obj.C` or `pkg.C`, with or without type
     /// arguments. A class with an explicit companion is named by the companion instead.
     pub(in crate::typer) fn ctor_ref(&mut self, q: ExprId) -> Option<(ClassId, Option<ListRef>)> {
@@ -1175,10 +1239,10 @@ impl<'a> Worker<'a> {
         let te = match self.resolve_given(ty, span) {
             Some(te) => te,
             None => {
-                let msg = self
-                    .given_ambiguity
-                    .take()
-                    .unwrap_or_else(|| format!("no given instance of type {} was found", self.show(ty)));
+                let msg = match self.given_ambiguity.take().or_else(|| self.implicit_not_found_message(ty)) {
+                    Some(m) => m,
+                    None => format!("no given instance of type {} was found", self.show(ty)),
+                };
                 let msg = msg + &self.given_failure_notes();
                 self.given_failure_error(span, msg, ty);
                 self.prog.add(TExpr::Unit)
@@ -3609,13 +3673,10 @@ impl<'a> Worker<'a> {
                             None => {
                                 let missing_tag = self.missing_tag(p.ty, target, open_tag);
                                 let target = self.solve_bounded_in(target);
-                                let msg = self.given_ambiguity.take().or(missing_tag).unwrap_or_else(|| {
-                                    format!(
-                                        "no given instance of type {} was found for parameter {}",
-                                        self.show(target),
-                                        self.name_str(p.name)
-                                    )
-                                });
+                                let msg = match self.given_ambiguity.take().or(missing_tag).or_else(|| self.implicit_not_found_message(target)) {
+                                    Some(m) => m,
+                                    None => format!("no given instance of type {} was found for parameter {}", self.show(target), self.name_str(p.name)),
+                                };
                                 let msg = msg + &self.given_failure_notes();
                                 // At the end of what is applied so far, as dotty's
                                 // `adaptNoArgsImplicitMethod` asks for the argument

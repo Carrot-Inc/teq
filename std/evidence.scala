@@ -3,6 +3,7 @@ package scala
 /** Evidence that `From` conforms to `To`. The compiler supplies it where a `using` parameter asks
   * for it, as the identity function.
   */
+@implicitNotFound("Cannot prove that ${From} <:< ${To}.")
 sealed trait <:<[-From, +To] extends Function1[From, To]
 
 object <:< :
@@ -22,6 +23,7 @@ object <:< :
 implicit def conforms[A]: A => A = a => a
 
 /** Evidence that `From` and `To` are the same type. */
+@implicitNotFound("Cannot prove that ${From} =:= ${To}.")
 sealed trait =:=[From, To] extends <:<[From, To]
 
 object =:= :

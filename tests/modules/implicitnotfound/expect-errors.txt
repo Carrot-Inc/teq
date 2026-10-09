@@ -1,0 +1,4 @@
+tests/modules/implicitnotfound/b/B.scala:7:53: error: No codec for String
+    val missing: Codec[String] = summon[Codec[String]]
+                                                      ^
+1 error found

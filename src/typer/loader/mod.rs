@@ -50,6 +50,8 @@ pub struct Loaded {
     /// The aliases a pickle flags `private` without a qualifier, which a subclass does not
     /// inherit (`Worker::private_alias`).
     pub private_aliases: SharedMap<AliasId, ()>,
+    /// The `@implicitNotFound` text of a jar's class (`Worker::implicit_not_found_message`).
+    pub implicit_not_found: SharedMap<ClassId, String>,
     /// The members of a jar declared `private[p]` or `protected[p]`, with the simple name of `p`
     /// and whether they are `protected`.
     pub access_within: SharedMap<SymId, (Name, bool)>,
@@ -296,6 +298,7 @@ impl Loaded {
             jar_files,
             qualified_private_aliases: SharedMap::new(),
             private_aliases: SharedMap::new(),
+            implicit_not_found: SharedMap::new(),
             access_within: SharedMap::new(),
             bridged: FxMap::default(),
             target_names: SharedMap::new(),
@@ -1743,6 +1746,9 @@ impl<'a> Worker<'a> {
         self.set_loaded_parents(c, parents);
         if sig.mods.flags.has(tags::SEALED) {
             self.enter_sealed_children(c, &mut cx, &sig.mods.annots);
+        }
+        if let Some(text) = sig.mods.implicit_not_found.and_then(|n| self.tasty(cx.file).simple(n).map(str::to_string)) {
+            self.loaded_mut().implicit_not_found.insert(c, text);
         }
         if let Some(ctor) = &sig.ctor {
             self.enter_loaded_ctor(c, &mut cx, ctor, &sig.accessors);
