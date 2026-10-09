@@ -4379,7 +4379,8 @@ impl<'a, 't> Interp<'a, 't> {
         }
     }
 
-    /// `Product`, `Equals` and `Serializable` of a case class or an enum, which `baseClasses` lists.
+    /// `Product`, `Equals` and `Serializable` of a product that does not take them as parents (a
+    /// tuple of the lean std), which `baseClasses` lists.
     fn product_base(&mut self, t: TypeId, c: ClassId) -> Option<TypeId> {
         let serializable = self.typer.class_at(&["java", "io", "Serializable"]);
         if (Some(c) == self.typer.b.product || Some(c) == self.typer.equals_class() || Some(c) == serializable) && self.typer.is_product(t) {
@@ -4662,22 +4663,15 @@ impl<'a, 't> Interp<'a, 't> {
             Some(c) => {
                 self.typer.complete_class(c);
                 let mut out: Vec<SymRef> = self.syms().class(c).base_types.iter().map(|&(b, _)| SymRef::Class(b)).collect();
-                // A case class or an enum extends `Product` and `Serializable`, which scalac adds
-                // to its parents and teq's typer knows by its kind.
-                if let Some(product) = self.typer.b.product.filter(|&p| !out.contains(&SymRef::Class(p))) {
-                    let own = self.typer.types.class(c, &[]);
-                    if self.typer.is_product(own) {
-                        let at = out.iter().position(|s| *s == SymRef::Class(self.typer.b.any_ref)).unwrap_or(out.len());
-                        let mut added = Vec::new();
-                        if let Some(ser) = self.typer.class_at(&["java", "io", "Serializable"]).filter(|&k| !out.contains(&SymRef::Class(k))) {
-                            added.push(SymRef::Class(ser));
-                        }
-                        added.push(SymRef::Class(product));
-                        if let Some(equals) = self.typer.equals_class().filter(|&k| !out.contains(&SymRef::Class(k))) {
-                            added.push(SymRef::Class(equals));
-                        }
-                        out.splice(at..at, added);
-                    }
+                // A tuple extends `Product` and `Serializable` in scala-library, the lean std's
+                // classes of the compiler and traits not all of them (a case class and an enum take
+                // them as parents, `Desugar.classDef`'s).
+                let own = self.typer.types.class(c, &[]);
+                if self.typer.is_product(own) {
+                    let at = out.iter().position(|s| *s == SymRef::Class(self.typer.b.any_ref)).unwrap_or(out.len());
+                    let candidates = [self.typer.class_at(&["java", "io", "Serializable"]), self.typer.b.product, self.typer.equals_class()];
+                    let added: Vec<SymRef> = candidates.into_iter().flatten().filter(|&k| !out.contains(&SymRef::Class(k))).map(SymRef::Class).collect();
+                    out.splice(at..at, added);
                 }
                 if !out.contains(&SymRef::Class(self.typer.b.any_ref)) && !self.syms().class(c).value_class {
                     let any_ref = self.typer.b.any_ref;
