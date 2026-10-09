@@ -49,13 +49,13 @@ pub(super) enum Erased {
 }
 
 impl Erased {
-    fn dims(self) -> u8 {
+    pub(super) fn dims(self) -> u8 {
         match self {
             Erased::Nothing(d) | Erased::Null(d) | Erased::Of(_, d) => d,
         }
     }
 
-    fn with_dims(self, dims: u8) -> Erased {
+    pub(super) fn with_dims(self, dims: u8) -> Erased {
         match self {
             Erased::Nothing(_) => Erased::Nothing(dims),
             Erased::Null(_) => Erased::Null(dims),
@@ -63,7 +63,7 @@ impl Erased {
         }
     }
 
-    fn element(self) -> Erased {
+    pub(super) fn element(self) -> Erased {
         self.with_dims(self.dims() - 1)
     }
 }
@@ -190,7 +190,7 @@ impl<'a> Worker<'a> {
             typer.prog.set_type(cond, typer.b.t_boolean);
             let value = typer.prog.add(TExpr::Local(x));
             typer.prog.set_type(value, x_ty);
-            let (cast, cast_ty) = typer.lower_cast(value, x_ty, t, false, false);
+            let (cast, cast_ty) = typer.lower_cast(value, x_ty, t, span);
             let l = typer.prog.list(&[cast]);
             let yes = typer.prog.add(TExpr::New(some, l));
             let some_ty = typer.types.class(some, &[cast_ty]);
@@ -522,7 +522,7 @@ impl<'a> Worker<'a> {
 
     /// The classes whose values are no references once erased; `Unit` is not one of them, its
     /// erasure being `BoxedUnit` wherever a value of it is held.
-    fn is_primitive_class(&self, c: ClassId) -> bool {
+    pub(super) fn is_primitive_class(&self, c: ClassId) -> bool {
         let b = &self.b;
         [b.int, b.long, b.double, b.byte, b.short, b.float, b.boolean, b.char].contains(&c)
     }

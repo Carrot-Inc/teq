@@ -1,0 +1,19 @@
+Integer: 7
+Long: 7
+Boolean: true
+Character: c
+Number: 7
+Integer of Long CCE
+true
+Comparable of Int: 7
+Comparable of String: ab
+CharSequence: ab
+Serializable of String: ab
+Product of a case class: 2
+Product of a tuple: 2
+Product of a list: 2
+Equals of a case class: Point(1,2)
+Product of an enum case: Red
+true
+true
+PartialFunction: 2

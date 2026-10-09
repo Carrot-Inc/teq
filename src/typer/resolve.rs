@@ -3199,13 +3199,11 @@ impl<'a> Worker<'a> {
                 };
                 let resolved = self.resolve_type(p.ty);
                 let spelled = self.spelled_cons(p.ty, resolved);
-                // The body reads a tuple parameter as the tuple class, which its value is, and a
-                // caller as it is spelled; an array of tuples is the spelled one's on both sides,
-                // `Product[]` where the chain is `Product`.
-                let ty = match spelled {
-                    Some(t) if matches!(self.types.get(t), Type::Class(c, _) if c == self.b.array) => t,
-                    _ => resolved,
-                };
+                // A tuple parameter spelled as a `*:` chain is the chain to its body and its
+                // callers, as scalac has it: a selection of its tuple class's members casts it
+                // to that class (`apply_member`, `Typer.trySmallGenericTuple`); an array of
+                // tuples is `Product[]` where the chain is `Product`.
+                let ty = spelled.unwrap_or(resolved);
                 let local_ty = if repeated {
                     match self.seq_class() {
                         Some(seq) => self.types.class(seq, &[ty]),

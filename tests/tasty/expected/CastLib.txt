@@ -1,0 +1,9 @@
+// tests/tasty/fixtures/CastLib.tasty (TASTy 28.8, 793 bytes)
+package fix.casts
+@SourceFile object CastLib extends Object {
+  <synthetic> private def writeReplace(): AnyRef = ...
+  inline def checked(x: Any): CastB = <body@103>
+  inline def generic[T](x: Any): T = <body@148>
+  def ordinary(x: Any): CastB = ...
+}
+

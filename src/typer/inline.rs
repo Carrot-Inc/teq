@@ -1078,13 +1078,23 @@ impl<'a> Worker<'a> {
                 if bound.result_names.is_none() && self.result_is_singleton_of(sig.ret, p.sym, declared) {
                     bound.result_names = self.parameter_named(te);
                 }
-                // The proxy takes the argument's own type, widened, as scalac's binding does:
-                // an `inline match` on the parameter then sees what was passed.
+                // The proxy takes the argument's own type, widened, as scalac's binding does
+                // (`Inliner.paramBindingDef`): an `inline match` on the parameter then sees what was
+                // passed. An argument of a type that is a bottom type after erasure, `Nothing` or
+                // `Null` (`isBottomTypeAfterErasure`), binds at the parameter's type, and a `*:` chain
+                // stays the chain it is spelled, whose erasure its spelling decides (`erasePair`).
                 let arg_ty = arg_types.iter().rev().find(|(e, _)| *e == te).map(|&(_, t)| t);
                 let local_ty = match arg_ty.filter(|_| !p.repeated) {
                     Some(t) => {
-                        let t = self.solve_inferred(t);
-                        if t == ERROR || t == NOTHING { local_ty } else { t }
+                        let solved = self.solve_in(t);
+                        let t = match self.types.get(solved) {
+                            Type::Class(c, _) if Some(c) == self.b.cons_tuple => solved,
+                            _ => {
+                                let normalized = self.normalize(solved);
+                                self.widen_lit(normalized)
+                            }
+                        };
+                        if t == ERROR || self.is_bottom_after_erasure(t) { local_ty } else { t }
                     }
                     None => local_ty,
                 };
@@ -1360,6 +1370,13 @@ impl<'a> Worker<'a> {
             }
         }
         out
+    }
+
+    /// Whether every value of `t` is `null` or none, as erased (`Types.isBottomTypeAfterErasure`):
+    /// `Nothing` and `Null`.
+    fn is_bottom_after_erasure(&mut self, t: TypeId) -> bool {
+        let t = self.dealias(t);
+        t == NOTHING || matches!(self.types.get(t), Type::Class(c, _) if c == self.b.null)
     }
 
     pub fn inline_arg(&mut self, s: SymId) -> Option<(TExprId, TypeId)> {
@@ -1823,6 +1840,7 @@ impl<'a> Worker<'a> {
             TExpr::ToStr(a, k) => TExpr::ToStr(self.copy_expr(a), k),
             TExpr::Js(s, args) => TExpr::Js(s, self.copy_list(args)),
             TExpr::TypeTest(a, t) => TExpr::TypeTest(self.copy_expr(a), t),
+            TExpr::Cast(a, op, t) => TExpr::Cast(self.copy_expr(a), op, t),
             TExpr::SeqLit(l) => TExpr::SeqLit(self.copy_list(l)),
             TExpr::ArrayLit(l) => TExpr::ArrayLit(self.copy_list(l)),
             TExpr::Index(a, i) => TExpr::Index(self.copy_expr(a), i),
@@ -2329,7 +2347,7 @@ impl<'a> Worker<'a> {
                 }
                 self.fold_candidate(a, bound, fractional)
             }
-            TExpr::TypeTest(a, _) | TExpr::Index(a, _) => self.fold_candidate(a, bound, fractional),
+            TExpr::TypeTest(a, _) | TExpr::Cast(a, ..) | TExpr::Index(a, _) => self.fold_candidate(a, bound, fractional),
             TExpr::StrConcat(l) | TExpr::SeqLit(l) | TExpr::ArrayLit(l) => list(self, l, bound, fractional),
             _ => false,
         }

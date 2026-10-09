@@ -175,28 +175,43 @@ impl<'a> Worker<'a> {
     /// Whether every value of `t` is a `Product`: a case class, a case object, an enum or one of
     /// its cases, a tuple, or a class that extends the trait.
     pub fn is_product(&mut self, t: TypeId) -> bool {
+        self.every_value_by_rule(t, |w, c| {
+            let b = &w.b;
+            if [b.product, b.tuple_trait, b.non_empty_tuple].contains(&Some(c)) || w.is_tuple_class(c) {
+                return true;
+            }
+            w.complete_class(c);
+            let info = w.syms.class(c);
+            info.is_product_by_rule() || info.base_types.iter().any(|&(base, _)| Some(base) == w.b.product || Some(base) == w.b.tuple_trait)
+        })
+    }
+
+    /// Whether every value of `t` is a `java.io.Serializable` by rule: a product by rule
+    /// (`ClassInfo::is_product_by_rule`) or a class that extends one, as `Desugar.classDef` makes
+    /// a case class extend the trait; not `Product`, `Tuple` or a class that extends them alone.
+    pub fn is_serializable_by_rule(&mut self, t: TypeId) -> bool {
+        self.every_value_by_rule(t, |w, c| {
+            w.complete_class(c);
+            let info = w.syms.class(c);
+            info.is_product_by_rule() || info.base_types.iter().any(|&(base, _)| w.syms.class(base).is_product_by_rule())
+        })
+    }
+
+    /// Whether every value of `t` is of a class `class_by_rule` takes: both sides of a union, one of
+    /// an intersection, a type parameter's bound, what a path or an alias stands for.
+    fn every_value_by_rule(&mut self, t: TypeId, class_by_rule: impl Fn(&mut Self, ClassId) -> bool + Copy) -> bool {
         let t = self.deref(t);
         match self.types.get(t) {
-            Type::Class(c, _) => {
-                let b = &self.b;
-                if [b.product, b.tuple_trait, b.non_empty_tuple].contains(&Some(c)) || self.is_tuple_class(c) {
-                    return true;
-                }
-                self.complete_class(c);
-                let info = self.syms.class(c);
-                info.mods & mods::CASE != 0
-                    || matches!(info.kind, ClassKind::Enum | ClassKind::EnumCase)
-                    || info.base_types.iter().any(|&(base, _)| Some(base) == self.b.product || Some(base) == self.b.tuple_trait)
-            }
-            Type::Union(x, y) => self.is_product(x) && self.is_product(y),
-            Type::Inter(x, y) => self.is_product(x) || self.is_product(y),
+            Type::Class(c, _) => class_by_rule(self, c),
+            Type::Union(x, y) => self.every_value_by_rule(x, class_by_rule) && self.every_value_by_rule(y, class_by_rule),
+            Type::Inter(x, y) => self.every_value_by_rule(x, class_by_rule) || self.every_value_by_rule(y, class_by_rule),
             Type::Param(p) => {
                 let upper = self.syms.tparam(p).upper;
-                upper != ANY && self.is_product(upper)
+                upper != ANY && self.every_value_by_rule(upper, class_by_rule)
             }
             Type::This(_) | Type::Term(_) | Type::Select(..) | Type::Member(..) | Type::AppMember(..) | Type::Decl(_) | Type::Refined(..) | Type::Match(..) | Type::Alias(..) => {
                 match self.dependent_underlying(t) {
-                    Some(u) => self.is_product(u),
+                    Some(u) => self.every_value_by_rule(u, class_by_rule),
                     None => false,
                 }
             }

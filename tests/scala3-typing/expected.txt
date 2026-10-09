@@ -2313,7 +2313,7 @@ pos/derive-eq.scala	rejects	no given instance
 pos/derives-obj.scala	accepts	
 pos/devalify.scala	accepts	
 pos/doWhile.scala	rejects	`do <body> while <cond>` is no longer supported, use `while <body> ; <cond> do ()` instead
-pos/duplicate-parents.scala	rejects	type mismatch
+pos/duplicate-parents.scala	accepts	
 pos/dynamicExtendsNoImport.scala	std	Dynamic
 pos/eff-compose.scala	syntax	expected {}, found {}
 pos/elidable-tparams.scala	rejects	cannot resolve import

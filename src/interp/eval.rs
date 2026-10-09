@@ -264,6 +264,10 @@ impl<'a, 't> Interp<'a, 't> {
                 let v = self.eval(inner, fr, cx)?;
                 Ok(Value::Bool(self.type_test(&v, test, fr, cx)?))
             }
+            TExpr::Cast(inner, op, _) => {
+                let v = self.eval(inner, fr, cx)?;
+                self.cast(v, op, fr, cx)
+            }
             TExpr::SeqLit(items) => {
                 let vals = self.eval_list(items, fr, cx)?;
                 self.array_seq_of(Value::array(vals))
@@ -1679,6 +1683,50 @@ impl<'a, 't> Interp<'a, 't> {
 
     // ---- type tests ----
 
+    /// `x.asInstanceOf[T]` as dotty's erasure leaves it (`CastOp`): `null` and a value that passes
+    /// the test of `T`'s erasure are the value, an unboxing's `null` the primitive's zero
+    /// (`BoxesRunTime.unboxToInt`); any other value throws `ClassCastException` with the JVM's
+    /// message.
+    fn cast(&mut self, v: Value, op: CastOp, fr: &Rc<Frame>, cx: &Ctx) -> R {
+        let test = match op {
+            CastOp::Written => return Ok(v),
+            CastOp::Nothing => return self.throw_named("ClassCastException", "Cannot cast to scala.Nothing"),
+            CastOp::Check(test, _) | CastOp::Unbox(test, _) => test,
+        };
+        if matches!(v, Value::Null) {
+            if let CastOp::Unbox(..) = op {
+                return Ok(match self.prog().tests[test.idx()] {
+                    TypeTest::Long => Value::Long(0),
+                    TypeTest::Number => Value::Double(0.0),
+                    TypeTest::Float => Value::Float(0.0),
+                    TypeTest::Byte => Value::Byte(0),
+                    TypeTest::Short => Value::Short(0),
+                    TypeTest::Char | TypeTest::Str => Value::Char(0),
+                    TypeTest::Bool => Value::Bool(false),
+                    _ => Value::Int(0),
+                });
+            }
+            return Ok(v);
+        }
+        if self.type_test(&v, test, fr, cx)? {
+            return Ok(v);
+        }
+        let Value::Class(from) = self.class_of_value(&v) else { unreachable!("a value's class") };
+        let to = self.cast_target_name(test);
+        self.throw_named("ClassCastException", &format!("class {} cannot be cast to class {}", from.qname, to))
+    }
+
+    /// The class a failed cast names as its target, as the JVM names it.
+    fn cast_target_name(&self, test: TestId) -> Rc<str> {
+        match self.prog().tests[test.idx()] {
+            TypeTest::Class(c) | TypeTest::Trait(c) => self.runtime_class_name(c),
+            TypeTest::Or(_, b) => self.cast_target_name(b),
+            TypeTest::Function(n) if n > 22 => Rc::from("scala.runtime.FunctionXXL"),
+            TypeTest::Function(n) => Rc::from(format!("scala.Function{}", n)),
+            t => Rc::from(t.boxed_class_name()),
+        }
+    }
+
     pub(super) fn type_test(&mut self, v: &Value, test: TestId, fr: &Rc<Frame>, cx: &Ctx) -> R<bool> {
         Ok(match self.prog().tests[test.idx()] {
             TypeTest::Always => true,
@@ -1694,6 +1742,8 @@ impl<'a, 't> Interp<'a, 't> {
             TypeTest::Char => matches!(v, Value::Char(_)),
             TypeTest::Bool => matches!(v, Value::Bool(_)),
             TypeTest::Unit => matches!(v, Value::Unit),
+            // Past 22 parameters every function is one erased class, `FunctionXXL`.
+            TypeTest::Function(n) if n > 22 => self.function_arity(v).is_some_and(|a| a > 22),
             TypeTest::Function(n) => self.function_arity(v) == Some(n as usize),
             TypeTest::Null => matches!(v, Value::Null),
             TypeTest::AnyRef => v.is_ref() && !matches!(v, Value::Null),
@@ -1710,7 +1760,7 @@ impl<'a, 't> Interp<'a, 't> {
     /// Whether the value is an instance of the class or trait `c`.
     pub(super) fn is_instance(&mut self, v: &Value, c: ClassId) -> bool {
         match v {
-            Value::Obj(o) => self.is_subclass(o.class, c) || self.clause_is_instance(v, c),
+            Value::Obj(o) => self.is_subclass(o.class, c) || self.clause_is_instance(v, c) || self.product_by_rule(o.class, c),
             Value::Fun(f) => {
                 let info = self.syms().class(c);
                 let name = self.name(info.name);
@@ -1762,6 +1812,13 @@ impl<'a, 't> Interp<'a, 't> {
         let Owner::Package(p) = info.owner else { return 0 };
         let pkg = self.package_path(p);
         crate::tir::boxed::ancestor(pkg.strip_suffix('.').unwrap_or(&pkg), self.name(info.name))
+    }
+
+    /// Whether `c` is a parent a product by rule has (`Symbols::is_synthetic_parent`: `Product`,
+    /// `Equals`, `java.io.Serializable`) and `k` such a product (`ClassInfo::is_product_by_rule`),
+    /// which extends none of them.
+    fn product_by_rule(&self, k: ClassId, c: ClassId) -> bool {
+        self.syms().is_synthetic_parent(&self.typer.interner, c) && (self.syms().class(k).is_product_by_rule() || self.syms().class(k).base_types.iter().any(|&(x, _)| self.syms().class(x).is_product_by_rule()))
     }
 
     pub(super) fn is_subclass(&self, k: ClassId, c: ClassId) -> bool {

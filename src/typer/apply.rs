@@ -5058,6 +5058,14 @@ impl<'a> Worker<'a> {
         let underlying = self.dealias(recv_ty);
         if underlying != recv_ty && !self.types.is_path(recv_ty) && self.has_member_like(underlying, name) {
             self.no_receiver_conversion = converted;
+            // A `*:` chain's member its tuple class has is selected from the chain cast to that
+            // class (`Typer.trySmallGenericTuple`), which its erasure checks where the chain
+            // erases to `Product` (a chain ending in the alias `EmptyTuple`).
+            let head = self.deref(recv_ty);
+            let recv = match self.types.get(head) {
+                Type::Class(c, _) if Some(c) == self.b.cons_tuple => self.lower_cast(recv, recv_ty, underlying, span).0,
+                _ => recv,
+            };
             return self.apply_member(recv, underlying, name, targs, lists, span, expected);
         }
         if let Some(r) = self.named_tuple_member(recv, recv_ty, name, targs, &lists, span, expected) {

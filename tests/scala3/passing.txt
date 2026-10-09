@@ -173,6 +173,7 @@ i15190
 i15302b
 i15315
 i15317
+i1533
 i15618
 i1569
 i1573
@@ -583,6 +584,7 @@ t7407
 t7407b
 t7436
 t7475b
+t7763
 t7859
 t8017
 t8133
@@ -621,9 +623,11 @@ transparentPrivates
 transpose
 triple-quoted-expr
 try-2
+tryPatternMatch
 tuple-accessors
 tuple-cons-2
 tuple-deconstruct-wildcard-sideeffect
+tuple-erased
 tuple-for-comprehension
 tuple-match
 tuple-patmat

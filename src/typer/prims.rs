@@ -9,6 +9,22 @@ use crate::tir::*;
 use crate::tir::capture::{Form, Wrap};
 use crate::types::*;
 
+/// What a cast is once erased (`Worker::cast_lowering`).
+#[derive(Clone, Copy, PartialEq, Debug)]
+pub(super) enum CastLowering {
+    /// The value itself: dotty's ascription of a cast its erasure makes redundant.
+    Same,
+    /// The value, then `()`.
+    Unit,
+    /// The numeric conversion to the rank.
+    Convert(u8),
+    /// A primitive to a primitive with no conversion between them (`tpd.primitiveConversion`
+    /// when the source has no `toX`): `throw new ClassCastException()`, the operand not run.
+    Fail,
+    /// A node that does something at run time.
+    Op(CastOp),
+}
+
 #[derive(Clone, Copy, PartialEq)]
 enum OpClass {
     Arith,
@@ -110,8 +126,8 @@ pub fn convert_ops(from: u8, to: u8) -> &'static [UnOp] {
     }
 }
 
-/// The template of a cast from a reference to a primitive type (`Typer::unboxes`) over the value
-/// and the type's zero, which the JVM backend and the interpreter know by its text.
+/// The template that unboxes a reflective call's result to a primitive type (`reflective.rs`), over
+/// the value and the type's zero, which the JVM backend and the interpreter know by its text.
 pub const UNBOX: &str = "($0 ?? $1)";
 
 /// What `prim_binop` made of `l op r`.
@@ -252,7 +268,7 @@ impl<'a> Worker<'a> {
                 let lists = vec![ArgList { args: self.infix_args(r), using: false, span }];
                 return self.apply_member(tl, lty, op, None, lists, span, expected);
             }
-            let tr = self.check_expr(r, t_bool);
+            let tr = self.check_right_operand(op, tl, r);
             let prim = if op == names::AMPAMP { PrimOp::BoolAnd } else { PrimOp::BoolOr };
             return (self.prog.add(TExpr::Prim(prim, tl, tr)), t_bool);
         }
@@ -327,7 +343,7 @@ impl<'a> Worker<'a> {
                 all.extend(lists);
                 return Some(self.apply_member(tl, lty, op, None, all, span, expected));
             }
-            let tr = self.check_expr(r, t_bool);
+            let tr = self.check_right_operand(op, tl, r);
             let prim = if op == names::AMPAMP { PrimOp::BoolAnd } else { PrimOp::BoolOr };
             let te = self.prog.add(TExpr::Prim(prim, tl, tr));
             return Some(self.apply_callee(super::apply::Callee::Value(te, t_bool), None, lists, span, expected));
@@ -1230,10 +1246,9 @@ impl<'a> Worker<'a> {
         let (false, [ArgSrc::Ast(r)]) = (list.using, &list.args[..]) else { return None };
         let r = *r;
         if matches!(name, names::AMPAMP | names::BARBAR) {
-            let t_bool = self.b.t_boolean;
-            let tr = self.check_expr(r, t_bool);
+            let tr = self.check_right_operand(name, te, r);
             let prim = if name == names::AMPAMP { PrimOp::BoolAnd } else { PrimOp::BoolOr };
-            return Some((self.prog.add(TExpr::Prim(prim, te, tr)), t_bool));
+            return Some((self.prog.add(TExpr::Prim(prim, te, tr)), self.b.t_boolean));
         }
         Some(self.binop_or_member(name, te, ty, ty, r, span, expected))
     }
@@ -1322,90 +1337,361 @@ impl<'a> Worker<'a> {
         Some((self.convert_rank(recv, recv_ty, to), self.rank_type(to)))
     }
 
-    /// `recv.asInstanceOf[t]` for a receiver of type `recv_ty`: `null`'s the zero of a value
-    /// type, as on the JVM; a number's the numeric conversion, as scalac compiles it
-    /// (scala-java-time's `Duration.toString`); a boxed value's the unboxing; any other the
-    /// receiver itself, marked as a cast. `of_call_site`: the type read a type argument of the
-    /// expansion under way; `written_as_param`: the type was written as a parameter's name.
-    pub(super) fn lower_cast(&mut self, recv: TExprId, recv_ty: TypeId, t: TypeId, of_call_site: bool, written_as_param: bool) -> (TExprId, TypeId) {
-        if recv_ty == self.b.t_null {
-            if let Some(zero) = self.zero_of(t) {
-                *self.expr_marks.entry(zero).or_default() |= super::MARK_CALL;
-                if self.capturing() {
-                    self.capture_form(zero, Form::Cast(t));
+    /// `recv.asInstanceOf[t]` for a receiver of type `recv_ty`, lowered as dotty's erasure lowers
+    /// a cast (`TypeTestsCasts.transformAsInstanceOf`, `cast_lowering`); a cast of a stored inline
+    /// body or of a quote is kept as written, its types filled in where it is instantiated.
+    pub(super) fn lower_cast(&mut self, recv: TExprId, recv_ty: TypeId, t: TypeId, span: Span) -> (TExprId, TypeId) {
+        if self.quote.level > 0 || self.checks_inline_definition() {
+            return self.cast_node(recv, CastOp::Written, t);
+        }
+        let lowering = self.cast_lowering(recv_ty, t);
+        if lowering == CastLowering::Fail {
+            // `tpd.primitiveConversion`'s warning, where scalac's erasure meets the cast.
+            let from = self.dealias(recv_ty);
+            let (from, to) = (self.widen_lit(from), self.dealias(t));
+            let msg = format!("conversion from {} to {} will always fail at runtime.", self.show(from), self.show(to));
+            self.warn(span, msg);
+        }
+        let lowering = self.untested_lowering(recv, lowering);
+        self.lower_cast_as(recv, recv_ty, t, lowering)
+    }
+
+    /// The tests a condition that holds passes, of stable locals, put in scope for the branch it
+    /// guards until `pop_tested`: the conjuncts of `&&` and `&` too.
+    pub(super) fn push_tested(&mut self, cond: TExprId) -> usize {
+        let mark = self.tested.len();
+        let mut work = vec![cond];
+        while let Some(c) = work.pop() {
+            match self.prog.expr(c) {
+                TExpr::TypeTest(x, test) => {
+                    if let TExpr::Local(s) = self.prog.expr(x) {
+                        let info = self.syms.sym(s);
+                        if matches!(info.kind, SymKind::Val | SymKind::Param) && !info.by_name {
+                            self.tested.push((s, test));
+                        }
+                    }
                 }
-                return (zero, t);
+                TExpr::Prim(PrimOp::BoolAnd | PrimOp::BoolStrictAnd, a, b) => work.extend([a, b]),
+                _ => {}
             }
         }
-        if let (Some(from), Some(to)) = (self.is_numeric(recv_ty), self.is_numeric(t)) {
-            if from != to {
+        mark
+    }
+
+    pub(super) fn pop_tested(&mut self, mark: usize) {
+        self.tested.truncate(mark);
+    }
+
+    /// The right operand of a Boolean's `&&` or `||`, `&&`'s typed where its left one passed
+    /// (`that.isInstanceOf[C] && that.asInstanceOf[C].x == x`).
+    fn check_right_operand(&mut self, op: Name, left: TExprId, r: ExprId) -> TExprId {
+        let mark = if op == names::AMPAMP { self.push_tested(left) } else { self.tested.len() };
+        let tr = self.check_expr(r, self.b.t_boolean);
+        self.pop_tested(mark);
+        tr
+    }
+
+    /// A cast that the condition around it proved, a test of the same stable local for the same
+    /// erasure having passed, is the value itself: its check cannot fail, as a pattern's binder
+    /// after the pattern's test is the value tested.
+    pub(super) fn untested_lowering(&self, recv: TExprId, lowering: CastLowering) -> CastLowering {
+        let (CastLowering::Op(CastOp::Check(test, _) | CastOp::Unbox(test, _)), TExpr::Local(s)) = (lowering, self.prog.expr(recv)) else { return lowering };
+        if self.tested.iter().any(|&(t, passed)| t == s && self.same_test(passed, test)) {
+            CastLowering::Same
+        } else {
+            lowering
+        }
+    }
+
+    /// Whether two tests take the same values.
+    fn same_test(&self, a: TestId, b: TestId) -> bool {
+        match (self.prog.tests[a.idx()], self.prog.tests[b.idx()]) {
+            (TypeTest::Or(a1, a2), TypeTest::Or(b1, b2)) | (TypeTest::And(a1, a2), TypeTest::And(b1, b2)) => self.same_test(a1, b1) && self.same_test(a2, b2),
+            (TypeTest::Value(_), _) | (_, TypeTest::Value(_)) => false,
+            (x, y) => x == y,
+        }
+    }
+
+    /// The node of `recv.asInstanceOf[t]` once `cast_lowering` decided it: the receiver retyped
+    /// for a cast its erasure makes redundant (dotty's `Typed`), marked as a cast written, which
+    /// is no path and no constant and does something in statement position (`TreeInfo.exprPurity`
+    /// of a `TypeApply`); the receiver then `()` for `Unit`; the numeric conversion; the zero of
+    /// the primitive for a `null` literal unboxed; else the cast's own node.
+    pub(super) fn lower_cast_as(&mut self, recv: TExprId, recv_ty: TypeId, t: TypeId, lowering: CastLowering) -> (TExprId, TypeId) {
+        match lowering {
+            CastLowering::Same => {
+                *self.expr_marks.entry(recv).or_default() |= super::MARK_CAST | super::MARK_CALL | super::MARK_RETYPED;
+                self.end_chain(recv, t);
+                if self.capturing() {
+                    self.capture_wrap(recv, Wrap::Cast(t));
+                }
+                (recv, t)
+            }
+            CastLowering::Unit => {
+                // `Erasure.Boxing.constant`: the operand's effects, if it has any, then `()`; a
+                // `null` literal is `()` alone, its zero.
+                let unit = self.prog.add(TExpr::Unit);
+                let te = if matches!(self.prog.expr(recv), TExpr::Null) {
+                    *self.expr_marks.entry(unit).or_default() |= super::MARK_CAST;
+                    unit
+                } else {
+                    let l = self.prog.stmts.push_slice(&[TStmt::Expr(recv)]);
+                    self.prog.add(TExpr::Block(l, unit))
+                };
+                *self.expr_marks.entry(te).or_default() |= super::MARK_CALL;
+                if self.capturing() {
+                    self.capture_form(te, Form::Cast(t));
+                }
+                (te, t)
+            }
+            CastLowering::Convert(to) => {
                 let converted = self.convert_rank(recv, recv_ty, to);
                 *self.expr_marks.entry(converted).or_default() |= super::MARK_CALL;
                 if self.capturing() {
                     self.capture_conversion(converted, recv, Form::Cast(t));
                 }
-                return (converted, self.rank_type(to));
+                (converted, self.rank_type(to))
             }
-        }
-        let zero = match self.unboxes(recv_ty, t) {
-            Some(zero) => Some(zero),
-            // A cast to the call site's type argument, written as the parameter, is the
-            // unboxing whatever the argument (a reference's zero is `null`), so that one
-            // outlined body serves every type.
-            None if of_call_site && self.records_expansions() && recv_ty != ERROR && written_as_param => {
+            CastLowering::Fail => {
+                // `Throw(New(ClassCastException))` of `tpd.primitiveConversion`, the operand
+                // dropped: no message, and nothing of the operand runs.
+                let Some(cce) = self.class_at(&["java", "lang", "ClassCastException"]) else {
+                    return (recv, t);
+                };
                 let null = self.prog.add(TExpr::Null);
-                self.prog.set_type(null, t);
-                Some(null)
+                self.prog.set_type(null, self.b.t_null);
+                let l = self.prog.list(&[null]);
+                let made = self.prog.add(TExpr::New(cce, l));
+                self.prog.set_type(made, self.types.class(cce, &[]));
+                let te = self.prog.add(TExpr::Throw(made, false));
+                *self.expr_marks.entry(te).or_default() |= super::MARK_CALL;
+                if self.capturing() {
+                    self.capture_conversion(te, recv, Form::Cast(t));
+                }
+                (te, t)
             }
-            None => None,
-        };
-        if let Some(zero) = zero {
-            // The zero is a leaf of the expansion, as a test of the argument is.
-            if of_call_site {
-                self.mark_leaf(zero);
+            CastLowering::Op(CastOp::Unbox(test, _)) if matches!(self.prog.expr(recv), TExpr::Null) => {
+                // `null.asInstanceOf[Int]`, `BoxesRunTime.unboxToInt(null)`: the zero, the literal
+                // having no effect to keep (`Erasure.Boxing.constant`).
+                let zero = self.zero_of_test(test);
+                self.prog.set_type(zero, t);
+                *self.expr_marks.entry(zero).or_default() |= super::MARK_CAST | super::MARK_CALL;
+                if self.capturing() {
+                    self.capture_form(zero, Form::Cast(t));
+                }
+                (zero, t)
             }
-            let s = self.prog.add_str(UNBOX);
-            let l = self.prog.list(&[recv, zero]);
-            let unboxed = self.prog.add(TExpr::Js(s, l));
-            *self.expr_marks.entry(unboxed).or_default() |= super::MARK_CALL;
-            if self.capturing() {
-                self.capture_form(unboxed, Form::Cast(t));
-            }
-            return (unboxed, t);
+            CastLowering::Op(op) => self.cast_node(recv, op, t),
         }
-        *self.expr_marks.entry(recv).or_default() |= super::MARK_CAST | super::MARK_CALL | super::MARK_RETYPED;
-        self.end_chain(recv, t);
-        if self.capturing() {
-            self.capture_wrap(recv, Wrap::Cast(t));
-        }
-        (recv, t)
     }
 
-    /// The zero of the primitive type `to` where `x.asInstanceOf[to]` of an `x` of type `from`
-    /// unboxes a reference: the value, or that zero for a null, as scalac's
-    /// `BoxesRunTime.unboxToInt` and its kin give.
-    fn unboxes(&mut self, from: TypeId, to: TypeId) -> Option<TExprId> {
-        if from == ERROR || self.primitive_of(from).is_some() {
+    fn cast_node(&mut self, recv: TExprId, op: CastOp, t: TypeId) -> (TExprId, TypeId) {
+        let te = self.prog.add(TExpr::Cast(recv, op, t));
+        self.prog.set_type(te, t);
+        self.end_chain(te, t);
+        if self.capturing() {
+            self.capture_form(te, Form::Cast(t));
+        }
+        (te, t)
+    }
+
+    /// What `x.asInstanceOf[to]` of an `x` of type `from` is at run time, decided on the erased
+    /// types as `TypeTestsCasts.transformAsInstanceOf` decides it (TypeTestsCasts.scala 281 to
+    /// 308): the value itself where `from`'s erasure conforms to `to`'s (an ascription, 287 to
+    /// 288; to `Unit` the ascription is adapted to it, the value then `()`); the value then `()`
+    /// where `to` erases to the box of `()` (289 to 291); a `ClassCastException` for `Nothing`
+    /// (299 to 304); for a source of a primitive class, `Unit` among them (`foundClasses`, 283 to
+    /// 285), the conversion to a primitive (`tpd.primitiveConversion`), a failure where it has
+    /// none, else the test of its box (292 to 294); a reference's unboxing to a primitive
+    /// (`Erasure.Boxing.unbox`, 295 to 296); and else the test of `to`'s erasure, which `null`
+    /// passes (`checkcast`, 306 to 307). `Nothing` comes before the primitive branch, where scalac
+    /// tests it after: its box's cast to `Nothing` would be a test of `Nothing$`, which a type
+    /// test cannot make here (`test_for`), so a primitive operand fails with `Nothing`'s own
+    /// message. A value class is tested as its box, which it always is outside the JVM; a
+    /// JavaScript type is never tested, as under Scala.js.
+    pub(super) fn cast_lowering(&mut self, from: TypeId, to: TypeId) -> CastLowering {
+        use super::site::Erased;
+        if from == ERROR || to == ERROR {
+            return CastLowering::Same;
+        }
+        let target = self.cast_erasure(to);
+        let source = self.cast_erasure(from);
+        let unit = Erased::Of(self.b.unit, 0);
+        // An ascription to `Unit` is adapted to the primitive (`Erasure.Typer.typedTyped`,
+        // `Boxing.adaptToType`): the value then `()`, `null` included.
+        if self.dealias(to) == self.b.t_unit {
+            return if source == unit { CastLowering::Same } else { CastLowering::Unit };
+        }
+        if self.erased_conforms(source, target) {
+            return CastLowering::Same;
+        }
+        if target == unit {
+            return CastLowering::Unit;
+        }
+        if target == Erased::Nothing(0) {
+            return CastLowering::Op(CastOp::Nothing);
+        }
+        let primitive_target = match target {
+            Erased::Of(c, 0) if self.is_primitive_class(c) => Some(c),
+            _ => None,
+        };
+        let erased = self.erased_type(target);
+        match (self.found_primitive(from), primitive_target) {
+            (Some(f), Some(t)) => {
+                let (from_ty, to_ty) = (self.types.class(f, &[]), self.types.class(t, &[]));
+                return match (self.is_numeric(from_ty), self.is_numeric(to_ty)) {
+                    (Some(_), Some(rank)) => CastLowering::Convert(rank),
+                    _ => CastLowering::Fail,
+                };
+            }
+            (None, Some(_)) => {
+                let test = self.test_for(erased, from, Span::default(), true);
+                return CastLowering::Op(CastOp::Unbox(test, erased));
+            }
+            _ => {}
+        }
+        if let Erased::Of(c, 0) = target {
+            if self.syms.class(c).js != JsKind::Scala {
+                return CastLowering::Same;
+            }
+        }
+        let test = self.test_for(erased, from, Span::default(), true);
+        CastLowering::Op(CastOp::Check(test, erased))
+    }
+
+    /// The primitive class of a cast's source, `Unit` among them, where its type has one class
+    /// (`TypeTestsCasts.foundClasses` of the widened source, 283 to 285, before erasure): an
+    /// abstract type's by its bound, a union of two classes none, an intersection the class of
+    /// the part that is not erased to `Object`.
+    fn found_primitive(&mut self, t: TypeId) -> Option<ClassId> {
+        self.found_primitive_at(t, 0)
+    }
+
+    fn found_primitive_at(&mut self, t: TypeId, depth: u32) -> Option<ClassId> {
+        if depth > 32 {
             return None;
         }
-        let to = self.primitive_of(to)?;
-        let zero = self.zero_of(to)?;
-        self.prog.set_type(zero, to);
-        Some(zero)
-    }
-
-    /// The primitive type `t` erases to: its alias's, its literal's, or a part's of an
-    /// intersection (`Int & AnyVal`).
-    fn primitive_of(&mut self, t: TypeId) -> Option<TypeId> {
-        let t = self.dealias(t);
-        let t = self.widen_lit(t);
-        if self.is_numeric(t).is_some() || t == self.b.t_boolean {
-            return Some(t);
-        }
+        let t = self.deref_alias(t);
         match self.types.get(t) {
-            Type::Inter(a, b) => self.primitive_of(a).or_else(|| self.primitive_of(b)),
+            Type::Class(c, _) if self.is_primitive_class(c) || c == self.b.unit => Some(c),
+            Type::Lit(_) => self.found_primitive_at(self.widen_lit(t), depth + 1),
+            Type::Param(p) => {
+                let hi = self.syms.tparam(p).upper;
+                if hi == t { None } else { self.found_primitive_at(hi, depth + 1) }
+            }
+            Type::Member(..) | Type::AppMember(..) | Type::Decl(_) => {
+                let (_, hi) = self.member_bounds(t);
+                if hi == t { None } else { self.found_primitive_at(hi, depth + 1) }
+            }
+            Type::Inter(a, b) => {
+                let object = super::site::Erased::Of(self.b.any_ref, 0);
+                match (self.found_primitive_at(a, depth + 1), self.found_primitive_at(b, depth + 1)) {
+                    (Some(x), Some(y)) if x == y => Some(x),
+                    (Some(x), None) if self.bound_erasure(b, 0) == Some(object) => Some(x),
+                    (None, Some(y)) if self.bound_erasure(a, 0) == Some(object) => Some(y),
+                    _ => None,
+                }
+            }
+            Type::Term(_) | Type::Select(..) | Type::This(_) | Type::Refined(..) => match self.dependent_underlying(t) {
+                Some(u) if u != t => self.found_primitive_at(u, depth + 1),
+                _ => None,
+            },
             _ => None,
         }
+    }
+
+    /// The erasure of a cast's type (`TypeErasure.erasure`, `bound_erasure`), `Object` where it has
+    /// none.
+    fn cast_erasure(&mut self, t: TypeId) -> super::site::Erased {
+        self.bound_erasure(t, 0).unwrap_or(super::site::Erased::Of(self.b.any_ref, 0))
+    }
+
+    /// Whether the cast of a value of the erasure `from` to `to` is the value itself with nothing
+    /// done: dotty's `erasure(expr.tpe) <:< testType` (TypeTestsCasts.scala 287), the strict
+    /// relation (`erased_sub`), and a primitive's cast to `Object`, its box's (292 to 294), which
+    /// passes whatever the value.
+    fn erased_conforms(&mut self, from: super::site::Erased, to: super::site::Erased) -> bool {
+        use super::site::Erased;
+        let primitive = matches!(from, Erased::Of(a, 0) if self.is_primitive_class(a));
+        self.erased_sub(from, to) || (primitive && to == Erased::Of(self.b.any_ref, 0))
+    }
+
+    /// Erased subtyping (`TypeComparer` on erased types): `Nothing` is the bottom, `Null` below
+    /// every reference, `Object` above every reference but no primitive; an array of `Nothing`
+    /// is an array, two arrays conform as their elements do and an array to `Object` alone
+    /// (TypeComparer.scala 1119 to 1122, `JavaArrayType`), so `int[]` is no `Object[]`; an array
+    /// of `Nothing` is none of a primitive, as its representation has it (below).
+    fn erased_sub(&mut self, from: super::site::Erased, to: super::site::Erased) -> bool {
+        use super::site::Erased;
+        let object = self.b.any_ref;
+        match (from, to) {
+            (Erased::Nothing(0), _) => true,
+            (Erased::Of(a, 0), Erased::Of(c, 0)) if c == object => !self.is_primitive_class(a),
+            (_, Erased::Of(c, 0)) if c == object => true,
+            (Erased::Null(0), Erased::Null(0)) => true,
+            (Erased::Null(0), Erased::Of(c, d)) => d > 0 || !self.is_primitive_class(c),
+            _ if from.dims() > 0 && to.dims() > 0 => {
+                // An array of `Nothing` is a `Nothing$[]` at run time, an array of references: the
+                // comparer takes `Nothing <: Int`, but the ascription it makes is adapted at erasure
+                // from the tree's own array type (`Erasure.Boxing.adaptToType`, then `cast`, Erasure
+                // .scala 333), which is no primitive array, so scalac's output checks and throws.
+                let (f, t) = (from.element(), to.element());
+                if f == Erased::Nothing(0) && matches!(t, Erased::Of(c, 0) if self.is_primitive_class(c)) {
+                    return false;
+                }
+                self.erased_sub(f, t)
+            }
+            (Erased::Of(a, 0), Erased::Of(b, 0)) => {
+                a == b
+                    || (self.function_xxl(a) && self.function_xxl(b))
+                    || (!self.is_primitive_class(a) && !self.is_primitive_class(b) && (self.derives_from(a, b) || self.product_by_rule(a, b)))
+            }
+            _ => false,
+        }
+    }
+
+    /// Whether `c` is a function class past 22 parameters, whose erasure is `FunctionXXL`
+    /// (`Definitions.functionTypeErasure`), one class for every such arity.
+    fn function_xxl(&self, c: ClassId) -> bool {
+        self.is_function_class(c) && self.syms.class(c).tparams.len() > 23
+    }
+
+    /// Whether `b` is a parent a product by rule has (`Symbols::is_synthetic_parent`: `Product`,
+    /// `Equals`, `java.io.Serializable`) and `a` such a product, which extends none of them.
+    fn product_by_rule(&mut self, a: ClassId, b: ClassId) -> bool {
+        self.syms.is_synthetic_parent(&self.interner, b) && {
+            self.complete_class(a);
+            let info = self.syms.class(a);
+            info.is_product_by_rule() || info.base_types.iter().any(|&(x, _)| self.syms.class(x).is_product_by_rule())
+        }
+    }
+
+    /// The type an erasure stands for, which its test is made of.
+    fn erased_type(&mut self, e: super::site::Erased) -> TypeId {
+        use super::site::Erased;
+        let (mut t, dims) = match e {
+            Erased::Of(c, d) => (self.types.class(c, &[]), d),
+            Erased::Null(d) => (self.b.t_null, d),
+            Erased::Nothing(d) => (NOTHING, d),
+        };
+        for _ in 0..dims {
+            t = self.types.class(self.b.array, &[t]);
+        }
+        t
+    }
+
+    /// The zero of the primitive an unboxing's test is of: what `null` unboxes to.
+    pub(super) fn zero_of_test(&mut self, test: TestId) -> TExprId {
+        let zero = match self.prog.tests[test.idx()] {
+            TypeTest::Long => TExpr::Long(0),
+            TypeTest::Number | TypeTest::Float => TExpr::Double(0.0),
+            TypeTest::Bool => TExpr::Bool(false),
+            TypeTest::Char => TExpr::Char(0),
+            // A `Char` on JavaScript, whose test is a string's.
+            TypeTest::Str => TExpr::Char(0),
+            _ => TExpr::Int(0),
+        };
+        self.prog.add(zero)
     }
 
     pub(super) fn zero_of(&mut self, t: TypeId) -> Option<TExprId> {
@@ -1502,8 +1788,13 @@ impl<'a> Worker<'a> {
                 }
                 Some((te, self.b.t_boolean))
             }
-            // `f.asInstanceOf[Int => Int](41)`: the cast, and its result applied.
-            names::IS_INSTANCE_OF | names::AS_INSTANCE_OF if !no_args => {
+            // `f.asInstanceOf[Int => Int](41)`: the cast, and its result applied, `()` too
+            // (`f.asInstanceOf[() => Int]()`, dotty's `Apply` of the `TypeApply` with no arguments).
+            names::AS_INSTANCE_OF if !lists.is_empty() => {
+                let (cast, cast_ty) = self.universal_member(recv, recv_ty, name, targs, &[], span)?;
+                Some(self.apply_callee(super::apply::Callee::Value(cast, cast_ty), None, lists.to_vec(), span, None))
+            }
+            names::IS_INSTANCE_OF if !no_args => {
                 let (cast, cast_ty) = self.universal_member(recv, recv_ty, name, targs, &[], span)?;
                 Some(self.apply_callee(super::apply::Callee::Value(cast, cast_ty), None, lists.to_vec(), span, None))
             }
@@ -1514,19 +1805,13 @@ impl<'a> Worker<'a> {
                     return Some((recv, ERROR));
                 }
                 let reads = self.inline.tparam_reads.get();
-                let t = self.resolve_type(ids[0]);
                 if name == names::AS_INSTANCE_OF {
-                    let of_call_site = self.inline.depth > 0 && self.inline.tparam_reads.get() != reads;
-                    let written_as_param = matches!(self.cur_ast().ty(ids[0]), crate::ast::TyExpr::Name(_));
-                    let cast = self.lower_cast(recv, recv_ty, t, of_call_site, written_as_param);
-                    // A cast kept as the receiver's node is typed again where the stored body is
-                    // instantiated, and lowered again where its type names a type parameter
-                    // (`substitution.rs`).
-                    if cast.0 == recv && self.checks_inline_definition() {
-                        self.note_cast(recv, t, recv_ty, written_as_param);
-                    }
-                    return Some(cast);
+                    // The type as written, a `*:` chain kept as its spelling erases it
+                    // (`TypeErasure.tupleArity`).
+                    let t = self.resolve_declared_type(ids[0]);
+                    return Some(self.lower_cast(recv, recv_ty, t, span));
                 }
+                let t = self.resolve_type(ids[0]);
                 let unchecked = self.expr_marks.get(&recv).map_or(false, |&m| m & super::MARK_UNCHECKED != 0);
                 let test = self.test_for(t, recv_ty, span, unchecked);
                 self.mark_leaf_test(test, reads);

@@ -1572,6 +1572,11 @@ impl<'a> Gen<'a> {
     /// a tree that is no subtype of the class (`Erasure.scala` 292-317); a box that is
     /// statically one, and a selection of the class's parameter, go through the accessor.
     fn adapt_vc_as(&mut self, c: ClassId, args: TList, t: JType, want: &JType, null_safe: bool) {
+        // A value dropped is adapted to nothing (dotty adapts toward a consumer alone,
+        // `Erasure.Boxing.adaptToType`): a cast to the class whose value is dropped tests nothing.
+        if *want == JType::V {
+            return self.pop_value(&t);
+        }
         let u = self.vc_erasure(c, args);
         // A reference wanted that the value class is not (a jar descriptor's `Encoder` for
         // circe's `Exported[ConfiguredEncoder[Mode]]`, scalac's erasure of the type the
@@ -2808,6 +2813,7 @@ impl<'a> Gen<'a> {
                 JType::L(Rc::from(STRING))
             }
             TExpr::Js(template, args) => self.intrinsic(e, template, args),
+            TExpr::Cast(inner, op, _) => self.cast(inner, op),
             TExpr::TypeTest(..) | TExpr::If(..) | TExpr::Match(..) | TExpr::Block(..) => {
                 let t = self.static_type(e);
                 match prog.expr(e) {
@@ -2892,6 +2898,61 @@ impl<'a> Gen<'a> {
 
     /// `throw e`, followed in the model by a value of the wanted type, as the code after an
     /// `athrow` is not reached but still verified against a frame.
+    /// `x.asInstanceOf[T]` as dotty's erasure leaves it, in the code `BCodeBodyBuilder.genTypeApply`
+    /// gives it: the operand as an `Object`, then the `checkcast` of `T`'s erasure, before what
+    /// consumes the value adapts or drops it, so that a cast discarded, widened or cast again is
+    /// checked; `checkcast scala/runtime/Null$` for `Null`, which teq's erasure of a type makes an
+    /// `Object`; the unboxing through `BoxesRunTime` (`Erasure.Boxing.unbox`); the failure of a
+    /// cast to `Nothing`. A value class's cast leaves its value boxed, the adaptation of what
+    /// consumes it as the class testing it there (`Erasure.Boxing.adaptToType`), as under dotty.
+    /// A cast as the typer decided it (`CastOp`): the unboxing to the primitive, or the
+    /// `checkcast` of the erasure the typer decided, the type's own (`TypeErasure.erasure`), not
+    /// the backend's erasure of the type written.
+    fn cast(&mut self, inner: TExprId, op: CastOp) -> JType {
+        let object = JType::object();
+        let (test, erased) = match op {
+            CastOp::Written => return self.expr_static(inner),
+            CastOp::Nothing => {
+                self.statement(inner);
+                let exception = "java/lang/ClassCastException";
+                self.new_object(exception);
+                self.sconst("Cannot cast to scala.Nothing");
+                self.invoke(Invoke::Special, exception, false, "<init>", &[JType::L(Rc::from(STRING))], &JType::V);
+                self.code.op(op::ATHROW);
+                self.code.pop();
+                self.code.end_path();
+                self.code.push(VT::Null);
+                return object;
+            }
+            CastOp::Unbox(_, erased) => {
+                let prim = self.erase(erased);
+                self.expr(inner, &object);
+                self.adapt(&object, &prim);
+                return prim;
+            }
+            CastOp::Check(test, erased) => (test, erased),
+        };
+        self.expr(inner, &object);
+        match self.cx.input.prog.tests[test.idx()] {
+            TypeTest::Null => {
+                let null = "scala/runtime/Null$";
+                self.checkcast(null);
+                return JType::L(Rc::from(null));
+            }
+            // `FunctionXXL`, which teq's output has no class of: a function past 22 parameters is
+            // an interface of its own arity here (docs/TARGETS.md), which no one class takes all of.
+            TypeTest::Function(n) if n > 22 => return object,
+            _ => {}
+        }
+        match self.erase(erased) {
+            JType::L(c) if &*c != OBJECT && self.value_class_type(erased).is_none() => {
+                self.checkcast(&c);
+                JType::L(c)
+            }
+            _ => object,
+        }
+    }
+
     fn throw_(&mut self, inner: TExprId, want: &JType) {
         let throwable = JType::L(Rc::from(THROWABLE));
         self.expr(inner, &throwable);

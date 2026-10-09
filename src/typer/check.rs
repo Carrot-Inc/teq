@@ -1781,7 +1781,7 @@ impl<'a> Worker<'a> {
                 self.nonlocal_returns(a, in_lambda, out);
                 self.nonlocal_returns(b, in_lambda, out);
             }
-            TExpr::Field(a, _) | TExpr::Unary(_, a) | TExpr::ToStr(a, _) | TExpr::TypeTest(a, _) | TExpr::Index(a, _)
+            TExpr::Field(a, _) | TExpr::Unary(_, a) | TExpr::ToStr(a, _) | TExpr::TypeTest(a, _) | TExpr::Cast(a, ..) | TExpr::Index(a, _)
             | TExpr::Spread(a) | TExpr::JsSelect(a, _) => self.nonlocal_returns(a, in_lambda, out),
             TExpr::CallMethod(r, _, args) | TExpr::CallClosure(r, args) => {
                 self.nonlocal_returns(r, in_lambda, out);

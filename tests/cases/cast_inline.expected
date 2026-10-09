@@ -1,0 +1,12 @@
+inline, discarded: class A cannot be cast to class B
+inline, used: class A cannot be cast to class B
+inline of B passed
+inline, fixed: class A cannot be cast to class B
+nested: class A cannot be cast to class B
+transparent: class A cannot be cast to class B
+inline to Int: class java.lang.String cannot be cast to class java.lang.Integer
+1
+Some(text)
+None
+Some(3)
+true

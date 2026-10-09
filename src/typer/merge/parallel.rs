@@ -23,23 +23,25 @@ use std::cell::{Cell, RefCell};
 use std::sync::Mutex;
 
 /// The kinds of record whose visitors hand types over, in the walk's order; the deferred tests'
-/// map stands between the patterns and the recorded types (`Remap::deferred_tests`).
+/// map stands between the patterns and the recorded types (`Remap::deferred_tests`). An
+/// expression hands over the type a cast names (`TExpr::Cast`).
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub(super) enum Kind {
     Syms,
     Classes,
     Aliases,
     TParams,
+    Exprs,
     Pats,
     ExprTypes,
     Quotes,
     QuotePats,
 }
 
-pub(super) const KINDS: [Kind; 8] = [Kind::Syms, Kind::Classes, Kind::Aliases, Kind::TParams, Kind::Pats, Kind::ExprTypes, Kind::Quotes, Kind::QuotePats];
+pub(super) const KINDS: [Kind; 9] = [Kind::Syms, Kind::Classes, Kind::Aliases, Kind::TParams, Kind::Exprs, Kind::Pats, Kind::ExprTypes, Kind::Quotes, Kind::QuotePats];
 
 /// The first kind after the deferred tests.
-pub(super) const AFTER_TESTS: usize = 5;
+pub(super) const AFTER_TESTS: usize = 6;
 
 /// The arenas the renumbering walks besides the kinds that hold types, none of whose records
 /// hands a type over.
@@ -47,7 +49,6 @@ pub(super) const AFTER_TESTS: usize = 5;
 pub(super) enum Other {
     Pkgs,
     Overloads,
-    Exprs,
     ExprLists,
     PatLists,
     SymLists,
@@ -59,14 +60,13 @@ pub(super) enum Other {
     TClasses,
 }
 
-pub(super) const OTHERS: [Other; 12] = [Other::Pkgs, Other::Overloads, Other::Exprs, Other::ExprLists, Other::PatLists, Other::SymLists, Other::Stmts, Other::Cases, Other::Tries, Other::Tests, Other::Funs, Other::TClasses];
+pub(super) const OTHERS: [Other; 11] = [Other::Pkgs, Other::Overloads, Other::ExprLists, Other::PatLists, Other::SymLists, Other::Stmts, Other::Cases, Other::Tries, Other::Tests, Other::Funs, Other::TClasses];
 
 impl Other {
     pub(super) fn name(self) -> &'static str {
         match self {
             Other::Pkgs => "packages",
             Other::Overloads => "overload sets",
-            Other::Exprs => "expressions",
             Other::ExprLists => "expression lists",
             Other::PatLists => "pattern lists",
             Other::SymLists => "symbol lists",
@@ -85,7 +85,6 @@ impl Other {
         let (from, to) = match self {
             Other::Pkgs => (0, l.pkgs),
             Other::Overloads => (walk.overloads, l.overloads),
-            Other::Exprs => (walk.exprs, l.exprs),
             Other::ExprLists => (walk.expr_lists, l.expr_lists),
             Other::PatLists => (walk.pat_lists, l.pat_lists),
             Other::SymLists => (walk.sym_lists, l.sym_lists),
@@ -108,7 +107,6 @@ pub(super) fn visit_other<M: Mapping>(o: Other, m: &M, a: &Arenas, walk: &super:
         match o {
             Other::Pkgs => return records::package(m, at(&a.pkgs, i), i >= walk.pkgs as usize),
             Other::Overloads => records::overload(m, at(&a.overloads, i)),
-            Other::Exprs => records::texpr(m, at(&a.exprs, i)),
             Other::ExprLists => {
                 let e = at(&a.expr_lists, i);
                 *e = m.expr(*e);
@@ -139,6 +137,7 @@ impl Kind {
             Kind::Classes => "classes",
             Kind::Aliases => "aliases",
             Kind::TParams => "type parameters",
+            Kind::Exprs => "expressions",
             Kind::Pats => "patterns",
             Kind::ExprTypes => "recorded expression types",
             Kind::Quotes => "quotes",
@@ -260,6 +259,7 @@ pub(super) fn visit<M: Mapping>(kind: Kind, m: &M, memo: &mut SigMemo, a: &Arena
             }
             Kind::Aliases => records::alias(m, at(&a.aliases, i)),
             Kind::TParams => records::tparam(m, at(&a.tparams, i)),
+            Kind::Exprs => records::texpr(m, at(&a.exprs, i)),
             Kind::Pats => records::tpat(m, at(&a.pats, i)),
             Kind::ExprTypes => {
                 let t = at(&a.expr_types, i);
@@ -468,6 +468,7 @@ impl Remap {
             Kind::Classes => (self.walk.classes, self.shared.classes, lens.classes),
             Kind::Aliases => (self.walk.aliases, self.shared.aliases, lens.aliases),
             Kind::TParams => (self.walk.tparams, self.shared.tparams, lens.tparams),
+            Kind::Exprs => (self.walk.exprs, self.shared.exprs, lens.exprs),
             Kind::Pats => (self.walk.pats, self.shared.pats, lens.pats),
             Kind::ExprTypes => (self.walk.exprs, self.shared.exprs, lens.exprs),
             Kind::Quotes => (self.walk.quotes, self.shared.quotes, lens.quotes),
@@ -563,22 +564,22 @@ impl Remap {
         crew.run(&|k| {
             let m = Renumber { ids, types, record: Cell::new(("", 0, 0)) };
             let mut memo = SigMemo::default();
+            let mut mine = Vec::new();
             for (kind, spans) in KINDS.into_iter().zip(spans) {
                 for span in spans.clone() {
                     for i in crew.share(k, span) {
+                        // SAFETY: this thread's share.
+                        if kind == Kind::Exprs && matches!(unsafe { at(&arenas.exprs, i) }, TExpr::Js(..)) {
+                            mine.push(i);
+                        }
                         m.at(kind.name(), i);
                         visit(kind, &m, &mut memo, arenas, i);
                     }
                 }
             }
             let mut count = 0u64;
-            let mut mine = Vec::new();
             for o in OTHERS {
                 for i in crew.share(k, o.range(walk, &arenas.lens)) {
-                    // SAFETY: this thread's share.
-                    if o == Other::Exprs && matches!(unsafe { at(&arenas.exprs, i) }, TExpr::Js(..)) {
-                        mine.push(i);
-                    }
                     count += visit_other(o, &m, arenas, walk, i);
                 }
             }

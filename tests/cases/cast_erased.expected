@@ -1,0 +1,17 @@
+List[String] of List[Int] passed
+List[String] of Object CCE
+unbounded passed
+bounded CCE
+false
+intersection passed
+intersection of B CCE
+false
+union passed
+2
+tuple passed
+tuple of A CCE
+Product of a case class passed
+Tuple of a case class passed
+Tuple of a pair passed
+Tuple of a String CCE
+Singleton of a String passed

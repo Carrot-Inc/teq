@@ -606,8 +606,13 @@ impl<'a> Gen<'a> {
                 interfaces.push(bname.clone());
             }
         }
-        if (is_case || is_case_object || is_enum || info.kind == ClassKind::EnumCase) && !interfaces.iter().any(|i| i == PRODUCT) {
-            interfaces.push(PRODUCT.to_string());
+        // The parents a product by rule has (`ClassInfo::is_product_by_rule`, `Desugar.classDef`).
+        if info.is_product_by_rule() {
+            for parent in [PRODUCT, SERIALIZABLE] {
+                if !interfaces.iter().any(|i| i == parent) {
+                    interfaces.push(parent.to_string());
+                }
+            }
         }
         // A case object is its own mirror, as scalac's: `Mirror.Singleton`.
         if is_case_object && !interfaces.iter().any(|i| i == super::callable::MIRROR_SINGLETON) {

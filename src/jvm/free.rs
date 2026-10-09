@@ -132,7 +132,7 @@ impl Collector<'_, '_> {
             | TExpr::Unit | TExpr::Static(_) | TExpr::Module(_) | TExpr::ClassOf(_) | TExpr::JsImport(_) | TExpr::JsGlobal(..) => {}
             TExpr::Local(s) => self.local(s),
             TExpr::This | TExpr::Super(_) => self.this = true,
-            TExpr::Field(r, _) | TExpr::Unary(_, r) | TExpr::ToStr(r, _) | TExpr::TypeTest(r, _) | TExpr::Index(r, _)
+            TExpr::Field(r, _) | TExpr::Unary(_, r) | TExpr::ToStr(r, _) | TExpr::TypeTest(r, _) | TExpr::Cast(r, ..) | TExpr::Index(r, _)
             | TExpr::Spread(r) | TExpr::JsSelect(r, _) | TExpr::Return(r) => self.expr(r),
             TExpr::CallStatic(s, args) => {
                 let info = self.cx.input.syms.sym(s);
@@ -317,7 +317,7 @@ impl CellWalk<'_, '_> {
             | TExpr::Unit | TExpr::Static(_) | TExpr::Module(_) | TExpr::ClassOf(_) | TExpr::JsImport(_) | TExpr::JsGlobal(..) | TExpr::This
             | TExpr::Super(_) => {}
             TExpr::Local(s) => self.reference(s),
-            TExpr::Field(r, _) | TExpr::Unary(_, r) | TExpr::ToStr(r, _) | TExpr::TypeTest(r, _) | TExpr::Index(r, _)
+            TExpr::Field(r, _) | TExpr::Unary(_, r) | TExpr::ToStr(r, _) | TExpr::TypeTest(r, _) | TExpr::Cast(r, ..) | TExpr::Index(r, _)
             | TExpr::Spread(r) | TExpr::JsSelect(r, _) | TExpr::Return(r) => self.expr(r),
             TExpr::CallStatic(s, args) => {
                 self.reference(s);

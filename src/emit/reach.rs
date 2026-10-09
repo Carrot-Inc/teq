@@ -40,6 +40,9 @@ pub struct Reach {
     /// Per class: a given class of such a file, whose instance's making runs the initialiser
     /// first (`layout::given_class_initialises_file`).
     pub trigger_classes: Vec<bool>,
+    /// Per class: a trait a reached type test or cast tests for (`TypeTest::Trait`), which the
+    /// output numbers and whose number goes where its members by rule carry it.
+    pub tested_traits: Vec<bool>,
     /// Per symbol: a top-level def that runs outside the initialised part of its file without a
     /// call there, as a function value made where the file is not known to be initialised
     /// (`(a) => f(a)`, written `f`) or as an export, which checks its file's initialiser itself.
@@ -112,6 +115,7 @@ impl Reach {
             files: Vec::new(),
             triggers: Vec::new(),
             trigger_classes: Vec::new(),
+            tested_traits: Vec::new(),
             forwarded: Vec::new(),
             imports: Vec::new(),
             asked: Vec::new(),
@@ -140,7 +144,7 @@ impl Reach {
     /// Covers the classes and symbols made after the walk (the pickles' writer completes library
     /// classes the program names), none of them reached.
     pub fn cover(&mut self, classes: usize, syms: usize) {
-        for v in [&mut self.classes, &mut self.trigger_classes, &mut self.library_classes, &mut self.product_classes] {
+        for v in [&mut self.classes, &mut self.trigger_classes, &mut self.tested_traits, &mut self.library_classes, &mut self.product_classes] {
             if v.len() < classes {
                 v.resize(classes, false);
             }
@@ -489,6 +493,7 @@ fn differences(typer: &Worker, kept: &Reach, fresh: &Reach, out: &mut Vec<String
     flags("files", &kept.files, &fresh.files, &|i| typer.source(crate::source::FileId(i as u32)).path.clone(), out);
     flags("triggers", &kept.triggers, &fresh.triggers, &sym, out);
     flags("trigger classes", &kept.trigger_classes, &fresh.trigger_classes, &class, out);
+    flags("tested traits", &kept.tested_traits, &fresh.tested_traits, &class, out);
     flags("forwarded", &kept.forwarded, &fresh.forwarded, &sym, out);
     flags("imports", &kept.imports, &fresh.imports, &|i| format!("import {}", i), out);
     flags("fields read", &kept.fields_read, &fresh.fields_read, &sym, out);
@@ -817,7 +822,7 @@ impl LoadedCounts {
 impl Reach {
     /// The bytes its tables hold.
     pub fn held(&self) -> usize {
-        let flags = [&self.classes, &self.funs, &self.bridged, &self.vals, &self.files, &self.triggers, &self.trigger_classes, &self.forwarded, &self.imports, &self.fields_read, &self.init_read, &self.abstract_syms, &self.declared, &self.library_classes, &self.product_classes];
+        let flags = [&self.classes, &self.funs, &self.bridged, &self.vals, &self.files, &self.triggers, &self.trigger_classes, &self.tested_traits, &self.forwarded, &self.imports, &self.fields_read, &self.init_read, &self.abstract_syms, &self.declared, &self.library_classes, &self.product_classes];
         flags.iter().map(|v| v.capacity()).sum::<usize>()
             + self.asked.capacity() * 4
             + self.js_names.iter().map(|n| n.capacity() + 24).sum::<usize>()
@@ -841,8 +846,9 @@ impl Reach {
 }
 
 /// The exception classes the JavaScript runtime throws (`$exc` in `rt.js`), by their names in
-/// `java.lang`, `java.util`, `scala` and `js`.
-pub const RUNTIME_THROWN: [&str; 15] = [
+/// `java.lang`, `java.util`, `scala` and `js`; the last, a failed cast's, only where a cast is
+/// reached.
+pub const RUNTIME_THROWN: [&str; 16] = [
     "Throwable",
     "JavaScriptException",
     "MatchError",
@@ -858,6 +864,7 @@ pub const RUNTIME_THROWN: [&str; 15] = [
     "UnsupportedOperationException",
     "AssertionError",
     "NotImplementedError",
+    "ClassCastException",
 ];
 
 fn runtime_exceptions(typer: &mut Worker) -> Vec<ClassId> {
@@ -1041,6 +1048,8 @@ struct Walker {
     wants_array_seq: bool,
     runtime_exceptions: Vec<ClassId>,
     runtime_exceptions_reached: bool,
+    /// Whether a cast that tests its value is reached, whose failure the runtime throws.
+    casts_reached: bool,
     /// A lookup of `Reflect` was met, and whether the registrations it needs were made.
     wants_reflect: bool,
     /// The templates of `Reach::templates`, by bit.
@@ -1156,6 +1165,7 @@ impl Walker {
             wants_array_seq: false,
             runtime_exceptions: Vec::new(),
             runtime_exceptions_reached: false,
+            casts_reached: false,
             reach: Reach { files: vec![false; n_files], ..Reach::empty() },
             place: None,
             local_places: FxMap::default(),
@@ -1268,6 +1278,7 @@ impl Walker {
         let n_classes = cx.syms.classes.len();
         self.reach.classes.resize(n_classes, false);
         self.reach.trigger_classes.resize(n_classes, false);
+        self.reach.tested_traits.resize(n_classes, false);
         self.layout.has_body.resize(n_classes, false);
         self.bases_registered.resize(n_classes, 0);
         self.tclass_of.resize(n_classes, NONE);
@@ -2241,8 +2252,15 @@ impl Walker {
         }
         self.runtime_exceptions_reached = true;
         for &c in &self.runtime_exceptions.clone() {
-            self.reach_class(cx, c);
+            if self.casts_reached || !self.is_cast_failure(cx, c) {
+                self.reach_class(cx, c);
+            }
         }
+    }
+
+    /// `ClassCastException`, which only a program with casts to test meets from the runtime.
+    fn is_cast_failure(&self, cx: Cx, c: ClassId) -> bool {
+        cx.interner.get(cx.syms.class(c).name) == RUNTIME_THROWN[RUNTIME_THROWN.len() - 1]
     }
 
     /// The std's templates of the symbols entered since the last look.
@@ -2337,6 +2355,8 @@ pub(super) trait Meet {
     fn local(&mut self, s: SymId);
     /// A class named as a value, a `super` target, a type test or a pattern.
     fn class(&mut self, cx: Cx, c: ClassId);
+    /// A trait a type test or a cast tests for.
+    fn test_trait(&mut self, cx: Cx, c: ClassId);
     fn static_ref(&mut self, cx: Cx, s: SymId);
     fn class_of(&mut self, cx: Cx, c: ClassId);
     fn field(&mut self, cx: Cx, of_this: bool, s: SymId);
@@ -2357,6 +2377,8 @@ pub(super) trait Meet {
     fn test_array(&mut self, cx: Cx);
     fn js_import(&mut self, i: u32);
     fn throw_unwrap(&mut self, cx: Cx);
+    /// A cast that tests its value, which may throw `ClassCastException`.
+    fn cast(&mut self, cx: Cx);
     fn try_end(&mut self, cx: Cx, wraps: bool);
     fn pat_seq(&mut self, cx: Cx);
     fn pat_rest(&mut self, cx: Cx);
@@ -2490,6 +2512,16 @@ pub(super) fn visit<M: Meet>(m: &mut M, cx: Cx, e: TExprId) {
             visit(m, cx, inner);
             visit_test(m, cx, test);
         }
+        TExpr::Cast(inner, op, _) => {
+            visit(m, cx, inner);
+            match op {
+                CastOp::Check(test, _) | CastOp::Unbox(test, _) => visit_test(m, cx, test),
+                CastOp::Written | CastOp::Nothing => {}
+            }
+            if op != CastOp::Written {
+                m.cast(cx);
+            }
+        }
         TExpr::JsImport(i) => m.js_import(i),
         TExpr::Throw(inner, unwrap) => {
             visit(m, cx, inner);
@@ -2519,6 +2551,7 @@ pub(super) fn visit<M: Meet>(m: &mut M, cx: Cx, e: TExprId) {
 fn visit_test<M: Meet>(m: &mut M, cx: Cx, test: TestId) {
     match cx.prog.tests[test.idx()] {
         TypeTest::Class(c) => m.class(cx, c),
+        TypeTest::Trait(c) => m.test_trait(cx, c),
         TypeTest::Array => m.test_array(cx),
         TypeTest::Value(e) => visit(m, cx, e),
         TypeTest::Or(a, b) | TypeTest::And(a, b) => {
@@ -2587,6 +2620,10 @@ impl Meet for Walker {
 
     fn class(&mut self, cx: Cx, c: ClassId) {
         self.reach_class(cx, c);
+    }
+
+    fn test_trait(&mut self, _cx: Cx, c: ClassId) {
+        self.reach.tested_traits[c.idx()] = true;
     }
 
     fn static_ref(&mut self, cx: Cx, s: SymId) {
@@ -2771,6 +2808,20 @@ impl Meet for Walker {
 
     fn throw_unwrap(&mut self, cx: Cx) {
         self.reach_js_exception(cx);
+    }
+
+    fn cast(&mut self, cx: Cx) {
+        if self.casts_reached {
+            return;
+        }
+        self.casts_reached = true;
+        if self.runtime_exceptions_reached {
+            for &c in &self.runtime_exceptions.clone() {
+                if self.is_cast_failure(cx, c) {
+                    self.reach_class(cx, c);
+                }
+            }
+        }
     }
 
     fn try_end(&mut self, cx: Cx, wraps: bool) {

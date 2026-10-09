@@ -251,6 +251,7 @@ const T_HOLE: u64 = 55;
 const T_CLOSURE: u64 = 56;
 const T_NESTED: u64 = 57;
 const T_HOLE_AGAIN: u64 = 58;
+const T_CAST: u64 = 59;
 
 /// An argument of an outlined expansion: where the call site's expression stands in its tree.
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
@@ -1164,6 +1165,22 @@ impl<'a> Enc<'a> {
                     self.test(t);
                 }
             }
+            TExpr::Cast(a, op, _) => {
+                self.tok(T_CAST);
+                self.expr(a);
+                match op {
+                    CastOp::Written => self.tok(0),
+                    CastOp::Nothing => self.tok(1),
+                    CastOp::Check(t, _) => {
+                        self.tok(2);
+                        self.test(t);
+                    }
+                    CastOp::Unbox(t, _) => {
+                        self.tok(3);
+                        self.test(t);
+                    }
+                }
+            }
             TExpr::ClassOf(c) => {
                 self.tok(T_CLASS_OF);
                 self.class(c);
@@ -1614,10 +1631,11 @@ impl<'a> Enc<'a> {
                 out.bound.extend_from_slice(prog.sym_list(ps));
                 self.scan(body, out);
             }
-            TExpr::TypeTest(r, t) => {
+            TExpr::TypeTest(r, t) | TExpr::Cast(r, CastOp::Check(t, _) | CastOp::Unbox(t, _), _) => {
                 self.scan(r, out);
                 self.scan_test(t, out);
             }
+            TExpr::Cast(r, ..) => self.scan(r, out),
             TExpr::CallStatic(s, args) => {
                 if self.syms.sym(s).owner == Owner::Local {
                     out.used.push(s);

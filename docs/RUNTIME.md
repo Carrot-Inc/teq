@@ -33,6 +33,13 @@ collect garbage about twice as often as Scala.js's output. adts spends its time 
 as repeated type tests, in case-class `==` and in small helpers that Scala.js's optimizer inlines away;
 boxing makes a virtual call per operation through its `Num[A]` instance, which that optimizer resolves.
 
+A cast is checked as scalac's `checkcast` checks it, through a runtime helper, where its erasure leaves a
+test to make: not an upcast, nor a cast of a local that a passed type test of the same erasure guards. The
+benchmark programs hold none. Measured apart (node 25 on an Intel Xeon 6737P, ten million casts that pass),
+a check costs about 2 ns for a class, 1.6 ns for a `String`, under 1 ns for an unboxing and 12 ns for a trait,
+whose test builds the trait's property key on each call as a trait's type test does. The application
+corpus's frontend holds 1,669 checks, 0.8% of its release output and 0.3% of it gzipped.
+
 ## The JVM output against scalac
 
 | program | teq, ms | scalac, ms | scalac `-opt`, ms | teq against scalac |

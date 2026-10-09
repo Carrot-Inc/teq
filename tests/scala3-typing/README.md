@@ -31,6 +31,12 @@ regression.
 - `proposed-cases/` are programs scalac accepts and teq rejects, with the output of
   `scala-cli run -S 3.8.4` as `.expected`, in the format of `tests/cases`.
 
+## A case class is a `java.io.Serializable` (2026-10-09)
+
+`pos/duplicate-parents` moved from `rejects` to `accepts`: a case class has the parents
+`Desugar.classDef` gives it, `Product` and `java.io.Serializable`, so `f: scala.Serializable` of a case
+class `Foo5` (which also extends a local class named `Serializable`) conforms, as under scalac.
+
 ## Types on the next line (2026-10-02)
 
 Thirty-seven tests moved when a type started on the next, indented line after the `=` of an

@@ -755,6 +755,12 @@ impl<'w, 'a> Walk<'w, 'a> {
                 self.count("type test", status, Some(e), ctx);
                 self.expr(a, inner);
             }
+            // The pickle writes a cast from its record, else from the node's own type.
+            TExpr::Cast(a, ..) => {
+                let status = if matches!(form, Some(Form::Cast(_))) { Status::Captured } else { Status::Derived };
+                self.count("cast", status, Some(e), ctx);
+                self.expr(a, inner);
+            }
             TExpr::ClassOf(_) => self.count("class literal", Status::Derived, Some(e), ctx),
             TExpr::SeqLit(l) => {
                 let status = if matches!(form, Some(Form::Repeated(_))) { Status::Captured } else { Status::Missing };

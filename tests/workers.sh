@@ -301,6 +301,10 @@ same_output alias_wait 4 run tests/workers/alias_wait
 # is typed again by one worker (the serial path) and reports what one worker reports.
 same_output inferred_pairs 3 run tests/workers/inferred_pairs
 
+# A cast names its target, a type a worker may make after the fork: the merge lists the
+# expressions' types with the other kinds' before it renumbers them (`parallel::Kind::Exprs`).
+same_output cast_target 3 run tests/workers/cast_target
+
 # A package's member another worker entered from the jars between this worker's look at the
 # package and its turn at the loader: the loader has nothing to enter for it, and the entries
 # are read again (without, "value Macros is not a member of sourcecode" at sixteen workers).

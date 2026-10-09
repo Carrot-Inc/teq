@@ -70,13 +70,14 @@ rdecl = {'RdBox', 'RdFoo', 'RdF1', 'RdFooBox', 'RdNamed', 'RdTraces', 'RdShape',
 depparams = {'DpCtx', 'DpFn', 'DpTypes', 'DpBase', 'DpDerived', 'DpInherited', 'DpClauses', 'DpModes', 'DpParent', 'DpMembers', 'DpPoly', 'DpApprox'}
 depbounds = {'DbCtx', 'DbParent', 'DbBounds', 'DbPolyNames'}
 polybounds = {'PbCtx', 'PbParent', 'PbLower'}
+casts = {'CastA', 'CastB', 'CastLib'}
 unmod = {'UmBodies', 'UmSyntax', 'UmReuse', 'UmDefine', 'UmMethod', 'UmNested', 'UmSetter33', 'UmArg', 'UmStep', 'UmSub', 'UmScope', 'UmAliases', 'UmPt', 'UmEq', 'UmSetterOnly', 'UmSetterUse'}
 with zipfile.ZipFile(sys.argv[1], 'w', zipfile.ZIP_DEFLATED) as z:
     for f in sorted(os.listdir('tests/tasty/fixtures')):
         stem = f[:-len('.tasty')]
         if stem in rdecl:
             continue
-        pkg = 'fix/reader' if stem in reader else pext[stem] if stem in pext else 'fix/q38' if stem == 'Quotes38' else 'fix/clash' if stem in clash else 'fix/hkb' if stem in hkb else 'fix/unmod' if stem in unmod else 'fix/depparams' if stem in depparams else 'fix/depbounds' if stem in depbounds else 'fix/polybounds' if stem in polybounds else 'fix/wave6' if stem in wave6 else 'fix/retain' if stem in retain else 'fix/shadow' if stem in shadow else 'fix/guard' if stem in guard else 'fix/overloads' if stem in overloads else 'fix/tname' if stem in tname else 'fix/facades' if stem in facades else 'fix/members' if stem in members else 'fix/runtime' if stem in runtime else 'fix/rassoc' if stem in ('RightAssoc', 'Vec') else 'fix/bodies' if stem in bodies else 'fix/cake' if stem in cake else 'fix/qpat' if stem in ('LayerBox', 'LayerMacros', 'QpFns', 'QpProbe') else 'fix/qp38' if stem == 'Qp38' else 'fix/shapes'
+        pkg = 'fix/reader' if stem in reader else 'fix/casts' if stem in casts else pext[stem] if stem in pext else 'fix/q38' if stem == 'Quotes38' else 'fix/clash' if stem in clash else 'fix/hkb' if stem in hkb else 'fix/unmod' if stem in unmod else 'fix/depparams' if stem in depparams else 'fix/depbounds' if stem in depbounds else 'fix/polybounds' if stem in polybounds else 'fix/wave6' if stem in wave6 else 'fix/retain' if stem in retain else 'fix/shadow' if stem in shadow else 'fix/guard' if stem in guard else 'fix/overloads' if stem in overloads else 'fix/tname' if stem in tname else 'fix/facades' if stem in facades else 'fix/members' if stem in members else 'fix/runtime' if stem in runtime else 'fix/rassoc' if stem in ('RightAssoc', 'Vec') else 'fix/bodies' if stem in bodies else 'fix/cake' if stem in cake else 'fix/qpat' if stem in ('LayerBox', 'LayerMacros', 'QpFns', 'QpProbe') else 'fix/qp38' if stem == 'Qp38' else 'fix/shapes'
         z.write(os.path.join('tests/tasty/fixtures', f), pkg + '/' + f)
 PY
   echo "$jar"
@@ -110,12 +111,12 @@ PY
 }
 # The class files of the fixtures of tests/tasty that programs run on the JVM, which runs a jar's
 # bytecode where the fixtures jar holds TASTy alone: tests/tasty/src compiled by scalac 3.8.4 as the
-# TASTy fixtures were (fix.cake, fix.guard, fix.retain, fix.runtime, fix.tname, fix.wave6, fix.shadow,
+# TASTy fixtures were (fix.cake, fix.guard, fix.retain, fix.runtime, fix.tname, fix.wave6, fix.shadow, fix.casts,
 # fix.rdecl and fix.rjava; fix.reader against reader_decl_v1.scala and reader_java_v1.scala), with
 # tests/classfile/fixtures' Java classes they reach. Built when missing or older than a source.
 fixtures_jvm_jar() {
   local jar=$scratch-fixtures-jvm.jar dir=$scratch-fixtures-jvm.$$ src=tests/tasty/src f stale=0
-  local main="cake.scala cake3.scala cake4.scala guard.scala retain.scala runtime.scala targetname.scala wave6.scala shadow.scala reader_decl.scala reader_java.scala"
+  local main="cake.scala cake3.scala cake4.scala guard.scala retain.scala runtime.scala targetname.scala wave6.scala shadow.scala reader_decl.scala reader_java.scala casts.scala"
   [ -f "$jar" ] || stale=1
   for f in $main reader.scala reader_decl_v1.scala reader_java_v1.scala; do [ "$src/$f" -nt "$jar" ] && stale=1; done
   if [ $stale = 1 ]; then

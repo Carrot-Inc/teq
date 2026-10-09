@@ -140,6 +140,9 @@ pub struct Builtins {
     pub t_product: TypeId,
     pub t_singleton: TypeId,
     pub t_equals: TypeId,
+    /// The interned name `Serializable` once the interner holds it, which `java.io.Serializable`'s
+    /// check by name compares first (`Worker::is_serializable_type`).
+    pub serializable_name: std::cell::Cell<Option<Name>>,
     /// `scala.reflect.Enum`, which enum classes and cases are without extending it.
     pub reflect_enum: Option<ClassId>,
     pub t_enum: TypeId,
@@ -771,6 +774,9 @@ pub struct Worker<'a> {
     /// Operands bound to temporaries so that they are evaluated once and in source order; the
     /// expression that caused them wraps the ones above its mark into a block (`Worker::hoist`).
     pub hoisted: Vec<TStmt>,
+    /// The type tests of stable locals that the conditions around the code being typed passed
+    /// (`Worker::push_tested`): a cast of such a local to what it was tested for cannot fail.
+    pub tested: Vec<(SymId, crate::tir::TestId)>,
     /// Pairs whose least upper bound is being computed; a self-referential base type such as
     /// `IterableOps[A, CC, C]` with `C` the collection itself leads back to the same pair.
     pub lub_in_progress: Vec<(TypeId, TypeId)>,
@@ -1919,6 +1925,7 @@ impl<'a> Worker<'a> {
             t_product: ERROR,
             t_singleton: ERROR,
             t_equals: ERROR,
+            serializable_name: std::cell::Cell::new(None),
             reflect_enum: None,
             t_enum: ERROR,
             tuple_trait: None,
@@ -2024,6 +2031,7 @@ impl<'a> Worker<'a> {
             last_arg_types: Vec::new(),
             pending_widenings: Vec::new(),
             hoisted: Vec::new(),
+            tested: Vec::new(),
             lub_in_progress: Vec::new(),
             join_wild: false,
             necessary_either: false,
@@ -2329,6 +2337,7 @@ impl<'a> Worker<'a> {
             last_arg_types: Default::default(),
             pending_widenings: Default::default(),
             hoisted: Default::default(),
+            tested: Default::default(),
             lub_in_progress: Default::default(),
             join_wild: Default::default(),
             soft_lub: Default::default(),

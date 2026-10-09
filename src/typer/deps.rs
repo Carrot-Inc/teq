@@ -3766,7 +3766,7 @@ impl<'c, 'a> Collector<'c, 'a> {
                     self.named_builtin_member("asInstanceOf");
                     self.named_builtin("Null");
                 }
-                TExpr::Js(..) => self.named_builtin_member("asInstanceOf"),
+                TExpr::Js(..) | TExpr::Cast(..) | TExpr::Block(..) => self.named_builtin_member("asInstanceOf"),
                 _ => {}
             }
         }
@@ -4012,7 +4012,7 @@ impl<'c, 'a> Collector<'c, 'a> {
                 self.throw_ref();
                 self.expr(a);
             }
-            TExpr::TypeTest(a, _) => self.expr(a),
+            TExpr::TypeTest(a, _) | TExpr::Cast(a, ..) => self.expr(a),
             TExpr::Js(template, l) => {
                 let sym = self.w.prog.template_syms.get(&template).copied();
                 if let Some(s) = sym {

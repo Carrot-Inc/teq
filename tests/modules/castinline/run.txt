@@ -1,0 +1,8 @@
+inline, discarded CCE
+inline, used CCE
+inline of B passed
+generic, discarded CCE
+generic, used CCE
+generic to Int CCE
+1
+ordinary CCE

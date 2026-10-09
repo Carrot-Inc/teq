@@ -213,6 +213,15 @@ impl ClassInfo {
         }
         name
     }
+
+    /// Whether the class has the parents scalac's desugaring adds by rule, without extending them
+    /// here (`std/prelude.scala`): a case class or object, a tuple, an enum or an enum case,
+    /// which scalac makes extend `Product` and `java.io.Serializable` (`Desugar.classDef` 969 to
+    /// 970, an enum through `scala.reflect.Enum`, which extends both). The parents are
+    /// `Symbols::is_synthetic_parent`'s.
+    pub fn is_product_by_rule(&self) -> bool {
+        self.mods & crate::ast::mods::CASE != 0 || matches!(self.kind, ClassKind::Enum | ClassKind::EnumCase)
+    }
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -806,6 +815,26 @@ impl Symbols {
         info
     }
     #[inline]
+    /// Whether `c` is one of the parents a product by rule has (`ClassInfo::is_product_by_rule`):
+    /// `scala.Product`, its parent `scala.Equals`, and `java.io.Serializable`, the std's or a
+    /// jar's. Conformance, the JVM's interfaces and the membership a test of one sees at run time
+    /// are derived from these.
+    pub fn is_synthetic_parent(&self, interner: &crate::intern::Interner, c: ClassId) -> bool {
+        // Each is a trait: a class, the most a test meets, is none of them at once.
+        let info = self.class(c);
+        if info.kind != ClassKind::Trait {
+            return false;
+        }
+        let Owner::Package(p) = info.owner else { return false };
+        let (pkg, name) = (self.pkg(p), interner.get(info.name));
+        let top = |q: &PkgInfo, n: &str| interner.get(q.name) == n && q.parent.map_or(false, |r| self.pkg(r).parent.is_none());
+        match name {
+            "Product" | "Equals" => top(pkg, "scala"),
+            "Serializable" => interner.get(pkg.name) == "io" && pkg.parent.map_or(false, |q| top(self.pkg(q), "java")),
+            _ => false,
+        }
+    }
+
     pub fn pkg(&self, p: PkgId) -> &PkgInfo {
         self.pkgs.get(p.0)
     }

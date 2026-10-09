@@ -177,7 +177,10 @@ impl std::fmt::Debug for StrConv {
     }
 }
 
+/// The tag is a byte of its own, first (`repr(u8)`): no variant's field lends the tag a niche, which
+/// would make every match on a node decode it (the interpreter's dispatch).
 #[derive(Clone, Copy, Debug)]
+#[repr(u8)]
 pub enum TExpr {
     Int(i32),
     Long(i64),
@@ -215,6 +218,10 @@ pub enum TExpr {
     ToStr(TExprId, StrConv),
     Js(StrRef, ListRef),
     TypeTest(TExprId, TestId),
+    /// `e.asInstanceOf[T]` that does something at run time, `T` as written: the operation dotty's
+    /// erasure leaves of the cast (`TypeTestsCasts.transformAsInstanceOf`), the operand evaluated
+    /// first. A cast its erasure makes redundant is the operand itself, retyped as an ascription is.
+    Cast(TExprId, CastOp, TypeId),
     /// `classOf[C]`: the class value of `C`, a builtin included.
     ClassOf(ClassId),
     /// Varargs packed into a runtime sequence.
@@ -249,6 +256,25 @@ pub enum TExpr {
 
 /// A `TExpr` stays three words: a wider node costs the interpreter's dispatch.
 const _: () = assert!(std::mem::size_of::<TExpr>() == 24);
+
+/// What a cast does, decided on the erased types of its operand and its target
+/// (`Worker::cast_lowering`), as `TypeTestsCasts.transformAsInstanceOf` and `Erasure.Boxing` decide it.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
+pub enum CastOp {
+    /// Not decided yet: a cast of a stored inline body or of a quote, decided where the body is
+    /// instantiated with the types that fill it.
+    Written,
+    /// The test of the target's erasure, which `null` passes; any other value that fails it throws
+    /// `ClassCastException` (the JVM's `checkcast`). The type is that erasure, as a class type or
+    /// an array of one: the destination the JVM checks, decided once with the test.
+    Check(TestId, TypeId),
+    /// The unboxing to the primitive the test is of (`BoxesRunTime.unboxToInt`): `null` is the
+    /// primitive's zero, a value that fails the test throws `ClassCastException`. The type is
+    /// the primitive's.
+    Unbox(TestId, TypeId),
+    /// A cast to `Nothing`, which throws `ClassCastException` whatever the value, `null` included.
+    Nothing,
+}
 
 #[derive(Clone)]
 pub struct TTry {
@@ -371,6 +397,28 @@ pub enum TypeTest {
     And(TestId, TestId),
 }
 
+impl TypeTest {
+    /// The JVM's class of the values a test of a primitive or a builtin takes, which a failed
+    /// cast names (`java.lang.Integer` for `Int`).
+    pub fn boxed_class_name(self) -> &'static str {
+        match self {
+            TypeTest::Number => "java.lang.Double",
+            TypeTest::Int => "java.lang.Integer",
+            TypeTest::Long => "java.lang.Long",
+            TypeTest::Byte => "java.lang.Byte",
+            TypeTest::Short => "java.lang.Short",
+            TypeTest::Float => "java.lang.Float",
+            TypeTest::Str => "java.lang.String",
+            TypeTest::Char => "java.lang.Character",
+            TypeTest::Bool => "java.lang.Boolean",
+            TypeTest::Unit => "scala.runtime.BoxedUnit",
+            TypeTest::Array => "[Ljava.lang.Object;",
+            TypeTest::Null => "scala.runtime.Null$",
+            _ => "java.lang.Object",
+        }
+    }
+}
+
 /// A quote `'{ ... }` or `'[T]`: the typed body with a hole local where each splice stands,
 /// the expressions whose `Expr` values fill the holes, and the type parameters free in the body
 /// with the expressions whose `Type` values they take. The quote appears in the IR as the
@@ -452,10 +500,6 @@ pub struct InlineDefinition {
     pub leaf_tests: Vec<TestId>,
     /// What typing the body reported, at the definition's positions.
     pub diagnostics: Vec<crate::source::Diagnostic>,
-    /// The casts of the body the typing kept as the receiver's node (`x.asInstanceOf[T]` of a
-    /// reference), which an expansion types at the cast's type whatever stands for the receiver,
-    /// and lowers again where the type names a type parameter (an unboxing, a zero).
-    pub casts: Vec<StoredCast>,
     /// The nodes of the body scalac types at a type that is no literal type, whatever constant
     /// they come to be (`Program::widened_bits`: `(i: Int)`), which an expansion's copies keep
     /// marked: a tuple's index of one is read at run time.
@@ -527,18 +571,6 @@ pub enum ReducibleSource {
     /// A `summonFrom` whose cases the definition check typed: the call and each case's pattern
     /// and guard.
     SummonFrom { whole: Span, cases: Vec<(Span, Option<Span>)> },
-}
-
-/// A cast of a stored inline body (`InlineDefinition::casts`): the node the cast is, the type
-/// cast to and the receiver's type before it, whether the type was written as a parameter's name
-/// and whether it names a type parameter, which the call's type arguments fix.
-#[derive(Clone, Copy, Debug)]
-pub struct StoredCast {
-    pub node: TExprId,
-    pub to: TypeId,
-    pub from: TypeId,
-    pub written_as_param: bool,
-    pub names_param: bool,
 }
 
 /// An import of a block of a stored inline body: the block, the statement it stands before, and
@@ -1529,10 +1561,11 @@ impl<'a> Iterator for Descendants<'a> {
             | TExpr::JsSelect(r, _) | TExpr::Return(r) | TExpr::Throw(r, _) | TExpr::Lambda(_, r) | TExpr::Splice(r) => {
                 self.exprs.push(r)
             }
-            TExpr::TypeTest(r, test) => {
+            TExpr::TypeTest(r, test) | TExpr::Cast(r, CastOp::Check(test, _) | CastOp::Unbox(test, _), _) => {
                 self.exprs.push(r);
                 self.tests.push(test);
             }
+            TExpr::Cast(r, CastOp::Written | CastOp::Nothing, _) => self.exprs.push(r),
             TExpr::CallStatic(_, args) | TExpr::New(_, args) | TExpr::NewVia(_, args) | TExpr::StrConcat(args)
             | TExpr::Js(_, args) | TExpr::SeqLit(args) | TExpr::ArrayLit(args) | TExpr::ObjLit(args) => {
                 self.exprs.extend_from_slice(prog.expr_list(args));

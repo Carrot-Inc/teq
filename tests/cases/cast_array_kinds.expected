@@ -1,0 +1,8 @@
+primitive-object-array CCE
+nested-primitive-object-array CCE
+nothing-scalar CCE
+nothing-primitive-array CCE
+unit-array CCE
+same kind ok
+strings as objects ok
+primitive as object ok

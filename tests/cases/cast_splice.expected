@@ -1,0 +1,6 @@
+splice, discarded: class A cannot be cast to class B
+splice, used: class A cannot be cast to class B
+splice of B passed
+splice to B: class A cannot be cast to class B
+splice to Int: class java.lang.String cannot be cast to class java.lang.Integer
+1

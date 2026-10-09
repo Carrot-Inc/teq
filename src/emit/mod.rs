@@ -185,6 +185,8 @@ pub struct Emitter<'a> {
     has_body: &'a [bool],
     /// Per class: the number its registration and type tests carry (`layout::Layout`).
     class_numbers: &'a [u32],
+    product_numbers: &'a [u32],
+    partial_function_number: Option<u32>,
     anon_parent_args: &'a crate::intern::FxMap<ClassId, u32>,
     local_captures: &'a crate::intern::FxMap<ClassId, u32>,
     /// The anonymous classes written as arrow functions where they are created (`layout::Layout`).
@@ -850,6 +852,8 @@ impl<'a> Emitter<'a> {
             file_inits: &layout.file_inits,
             has_body: &layout.has_body,
             class_numbers: &layout.class_numbers,
+            product_numbers: &layout.product_numbers,
+            partial_function_number: layout.partial_function_number,
             anon_parent_args: &layout.anon_parent_args,
             local_captures: &layout.local_captures,
             closure_anons: &layout.closure_anons,
@@ -2858,6 +2862,18 @@ impl<'a> Emitter<'a> {
                 traits.push('[');
             }
         }
+        // A product by rule is a `Product`, an `Equals` and a `java.io.Serializable` to a test, as
+        // the typer has it (`Symbols::is_synthetic_parent`).
+        if info.is_product_by_rule() {
+            for &n in self.product_numbers {
+                if !numbers.contains(&n) {
+                    numbers.push(n);
+                    if traits.is_empty() {
+                        traits.push('[');
+                    }
+                }
+            }
+        }
         let mut ids = String::new();
         if !traits.is_empty() {
             traits.push(']');
@@ -2893,8 +2909,13 @@ impl<'a> Emitter<'a> {
         if is_case && !info.subclasses.is_empty() && !defines_equals {
             let _ = write!(self.out, " {0}.prototype.equals = $subEquals({0});", name);
         }
+        // A partial function value takes the trait's prototype, and with it, where a test asks for
+        // the trait, its number.
         if prog.partial_function == Some(tc.id) {
             let _ = write!(self.out, " $pfInit({});", name);
+            if let Some(n) = self.partial_function_number {
+                let _ = write!(self.out, " {}.prototype.$i{} = true;", name, n);
+            }
         }
         // The field names `productElementName` answers, by their Scala names.
         if has_fields && self.reach.uses_element_names {
@@ -2994,7 +3015,7 @@ impl<'a> Emitter<'a> {
 
     /// The name `getClass.getName` gives: packages joined with dots, the enclosing classes with
     /// `$`, as scalac names classes.
-    fn qualified_name(&self, c: ClassId) -> String {
+    pub(super) fn qualified_name(&self, c: ClassId) -> String {
         let info = self.syms.class(c);
         let mut s = match info.owner {
             Owner::Package(p) => self.package_path(p),
@@ -3041,7 +3062,7 @@ impl<'a> Emitter<'a> {
     }
 
     /// The run-time number of a class, which its registration and the type tests carry.
-    fn class_number(&self, c: ClassId) -> u32 {
+    pub(super) fn class_number(&self, c: ClassId) -> u32 {
         let n = self.class_numbers[c.idx()];
         debug_assert!(n != layout::UNNUMBERED, "class {} is referred to but not numbered", self.interner.get(self.syms.class(c).name));
         n

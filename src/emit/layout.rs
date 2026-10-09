@@ -119,6 +119,13 @@ pub struct Layout {
     pub has_body: Vec<bool>,
     /// Per class: the number its registration and type tests use, `UNNUMBERED` for the rest.
     pub class_numbers: Vec<u32>,
+    /// The numbers of the parents a product by rule has (`Symbols::is_synthetic_parent`:
+    /// `scala.Product`, `scala.Equals`, `java.io.Serializable`) where a test asks for them, which
+    /// such a product (`ClassInfo::is_product_by_rule`) carries without extending them.
+    pub product_numbers: Vec<u32>,
+    /// The number of the partial functions' trait where a test asks for it, which a partial
+    /// function value carries on its prototype.
+    pub partial_function_number: Option<u32>,
     /// How many of the arguments that create an anonymous class go on to its superclass; they
     /// follow what the class captures.
     pub anon_parent_args: FxMap<ClassId, u32>,
@@ -173,6 +180,8 @@ impl Layout {
             file_inits,
             has_body: vec![false; syms.classes.len()],
             class_numbers: Vec::new(),
+            product_numbers: Vec::new(),
+            partial_function_number: None,
             anon_parent_args: FxMap::default(),
             local_captures: FxMap::default(),
             closure_anons: FxMap::default(),
@@ -297,25 +306,33 @@ impl Layout {
     }
 
     /// Numbers the classes the output refers to at run time, the reached ones and the traits of
-    /// type tests, in their canonical order.
+    /// the reached type tests and casts (`Reach::tested_traits`), in their canonical order: what
+    /// no reached code tests changes no number.
     pub fn number_classes(&mut self, prog: &Program, syms: &Symbols, interner: &Interner, reach: &Reach) {
+        let tested = |c: ClassId| reach.tested_traits.get(c.idx()).copied().unwrap_or(false);
         let mut numbered: Vec<ClassId> = (0..syms.classes.len())
             .map(|i| ClassId(i as u32))
-            .filter(|c| reach.classes[c.idx()] && !self.closure_anons.contains_key(c) && !self.shared.stands_for_another(*c))
+            .filter(|&c| (reach.classes[c.idx()] && !self.closure_anons.contains_key(&c) && !self.shared.stands_for_another(c)) || (tested(c) && !reach.classes[c.idx()]))
             .collect();
-        for (i, test) in prog.tests.iter().enumerate() {
-            if let TypeTest::Trait(c) = *test {
-                if !reach.classes[c.idx()] && !prog.stored_tests.contains_key(&TestId(i as u32)) {
-                    numbered.push(c);
-                }
-            }
-        }
         numbered.sort_by(|&a, &b| compare_classes(syms, interner, a, b));
         numbered.dedup();
         self.class_numbers = vec![UNNUMBERED; syms.classes.len()];
         for (n, c) in numbered.into_iter().enumerate() {
             self.class_numbers[c.idx()] = n as u32;
         }
+        // The parents of the products by rule and the partial functions' trait where a reached
+        // test of the output asks for them.
+        self.product_numbers.clear();
+        self.partial_function_number = None;
+        for c in (0..syms.classes.len()).map(|i| ClassId(i as u32)).filter(|&c| tested(c)) {
+            if prog.partial_function == Some(c) {
+                self.partial_function_number = Some(self.class_numbers[c.idx()]);
+            }
+            if syms.is_synthetic_parent(interner, c) && !self.product_numbers.contains(&self.class_numbers[c.idx()]) {
+                self.product_numbers.push(self.class_numbers[c.idx()]);
+            }
+        }
+        self.product_numbers.sort_unstable();
     }
 
     /// Everything in one module.

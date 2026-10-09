@@ -2104,7 +2104,7 @@ impl<'a> Worker<'a> {
         let list = |l: ListRef| self.prog.expr_list(l).iter().all(|&x| self.shareable_tree(x));
         match self.prog.expr(e) {
             TExpr::Int(_) | TExpr::Long(_) | TExpr::Double(_) | TExpr::Bool(_) | TExpr::Char(_) | TExpr::Str(_) | TExpr::Unit | TExpr::Null | TExpr::Static(_) | TExpr::Module(_) | TExpr::ClassOf(_) => true,
-            TExpr::Field(r, _) | TExpr::TypeTest(r, _) => self.shareable_tree(r),
+            TExpr::Field(r, _) | TExpr::TypeTest(r, _) | TExpr::Cast(r, ..) => self.shareable_tree(r),
             TExpr::CallStatic(_, args) | TExpr::New(_, args) | TExpr::NewVia(_, args) | TExpr::SeqLit(args) | TExpr::ArrayLit(args) => list(args),
             TExpr::CallMethod(r, _, args) => self.shareable_tree(r) && list(args),
             _ => false,

@@ -78,7 +78,6 @@ enum Undo {
     Local(Key),
     Written(ClassId),
     ByName(SymId),
-    Spelled(SymId),
 }
 
 /// Where a body began: what its rollback truncates to.
@@ -322,9 +321,6 @@ struct P<'w, 'a> {
     written_locals: FxMap<ClassId, ()>,
     /// The by-name parameters of the methods written, whose reads the typer made calls.
     by_name_params: FxMap<SymId, ()>,
-    /// The parameters written with the `*:` chain their signature spells, and the tuple class
-    /// the body reads each as, which every read casts to as scalac's typer does.
-    spelled_params: FxMap<SymId, TypeId>,
     /// The changes the bodies being written made, while one is (`bodies_open`).
     undo: Vec<Undo>,
     bodies_open: u32,
@@ -515,7 +511,6 @@ impl<'w, 'a> P<'w, 'a> {
             counted: Vec::new(),
             written_locals: FxMap::default(),
             by_name_params: FxMap::default(),
-            spelled_params: FxMap::default(),
             undo: Vec::new(),
             bodies_open: 0,
             fail_reasons: Vec::new(),
@@ -891,9 +886,6 @@ impl<'w, 'a> P<'w, 'a> {
                 }
                 Undo::ByName(s) => {
                     self.by_name_params.remove(&s);
-                }
-                Undo::Spelled(s) => {
-                    self.spelled_params.remove(&s);
                 }
             }
         }
@@ -1850,14 +1842,6 @@ impl<'w, 'a> P<'w, 'a> {
             self.params.push((s, addr));
         }
         self.params.push((p.sym, addr));
-        let read = self.w.sig_of(p.sym).ret;
-        if read != p.ty && !p.by_name && !p.repeated && matches!(self.w.types.get(p.ty), Type::Class(c, _) if Some(c) == self.w.b.cons_tuple) {
-            for s in std::iter::once(p.sym).chain(sym) {
-                if self.spelled_params.insert(s, read).is_none() && self.bodies_open > 0 {
-                    self.undo.push(Undo::Spelled(s));
-                }
-            }
-        }
         if clause.is_using {
             self.using_params.extend(std::iter::once(p.sym).chain(sym).map(|s| (s, ())));
         }

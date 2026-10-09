@@ -88,15 +88,11 @@ impl<'a> Gen<'a> {
         }
         let object = JType::object();
         match text {
-            // The zero has the cast's type, which a later ascription of the cast leaves alone.
+            // The zero has the primitive's type, which a later ascription of the value leaves alone.
             UNBOX => {
                 let prim = self.recorded_erasure(args[1]);
-                if prim.is_ref() {
-                    self.expr(args[0], &prim);
-                } else {
-                    self.expr(args[0], &object);
-                    self.unbox_or(&prim, args[1]);
-                }
+                self.expr(args[0], &object);
+                self.unbox_or(&prim, args[1]);
                 return prim;
             }
             "$hashCode($0)" => {

@@ -1,0 +1,5 @@
+// tests/tasty/fixtures/CastB.tasty (TASTy 28.8, 327 bytes)
+package fix.casts
+@SourceFile class CastB() extends Object {
+}
+

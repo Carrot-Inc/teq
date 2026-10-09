@@ -1,0 +1,21 @@
+direct Tuple ok
+bound Tuple ok
+bound Tuple, a string CCE
+nested bound Tuple ok
+union Tuple ok
+intersection Tuple ok
+bound Singleton ok
+bound context ok
+bound context, a string CCE
+spelled cons ok
+spelled cons, a string CCE
+cons of a tuple ok
+cons of a tuple, a pair CCE
+cons of EmptyTuple.type ok
+cons of EmptyTuple.type, a triple CCE
+true
+false
+pair as Big CCE
+23 as Big ok
+23
+24 as 23 ok

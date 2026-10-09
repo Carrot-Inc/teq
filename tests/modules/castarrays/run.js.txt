@@ -1,0 +1,4 @@
+primitive ok
+primitive-inline ok
+generic ok
+generic-inline CCE

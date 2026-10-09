@@ -903,6 +903,11 @@ impl<'w, 'a> P<'w, 'a> {
                 None => self.block(e, stmts, res),
                 Some(Form::Op(n)) => self.builtin_block(e, n, stmts, res),
                 Some(Form::CaseCopy) => self.case_copy(e, stmts, res, recs.targs),
+                // `x.asInstanceOf[Unit]`, the cast's operand then `()`.
+                Some(Form::Cast(t)) => match *self.w.prog.stmt_list(stmts) {
+                    [crate::tir::TStmt::Expr(x)] => self.cast_to(t, |p| p.term(x)),
+                    _ => self.fail("a cast to Unit's shape".to_string()),
+                },
                 Some(f) => self.unsupported_form(f),
             },
             TExpr::Assign(lhs, rhs) => {
@@ -1004,6 +1009,11 @@ impl<'w, 'a> P<'w, 'a> {
             TExpr::TypeTest(a, _) => match form {
                 Some(Form::Test(t)) => self.universal("isInstanceOf", |p| p.term(a), &[t], &[]),
                 _ => self.fail("a type test without its type".to_string()),
+            },
+            TExpr::Cast(a, _, to) => match form {
+                Some(Form::Cast(t)) => self.cast_to(t, |p| p.term(a)),
+                None => self.cast_to(to, |p| p.term(a)),
+                Some(f) => self.unsupported_form(f),
             },
             TExpr::Js(t, _) if self.w.prog.strings[t.idx()] == "$quoteMatch" => self.withhold(Withheld::Quote),
             TExpr::Splice(_) => self.fail("a splice that is no macro's".to_string()),
@@ -1168,12 +1178,6 @@ impl<'w, 'a> P<'w, 'a> {
             return;
         }
         if let Some(&(_, at)) = self.params.iter().rev().find(|(q, _)| *q == s) {
-            if let Some(&read) = self.spelled_params.get(&s) {
-                return self.dollar_cast(read, |p| {
-                    p.buf.byte(TERMREFDIRECT);
-                    p.buf.reference(at);
-                });
-            }
             self.buf.byte(TERMREFDIRECT);
             self.buf.reference(at);
             return;

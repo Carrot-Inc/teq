@@ -735,7 +735,7 @@ impl<'a> Worker<'a> {
         let list = super::apply::ArgList { args: vec![super::apply::ArgSrc::Typed(index, self.b.t_int)], using: false, span };
         let product = self.b.t_product;
         let (te, ty) = self.apply_member(recv, product, crate::names::PRODUCT_ELEMENT, None, vec![list], span, None);
-        self.lower_cast(te, ty, elems[i], false, false).0
+        self.lower_cast(te, ty, elems[i], span).0
     }
 
     /// A tuple of more than 22 elements as scalac makes one: `scala.runtime.TupleXXL.fromIArray`

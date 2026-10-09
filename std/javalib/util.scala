@@ -1231,14 +1231,10 @@ package java.util:
       case _: Array[?] => a.asInstanceOf[AnyRef] eq b.asInstanceOf[AnyRef]
       case null => b == null
       case _ => objectEquals(a, b)
-    // `a.equals(b)` as a call of `a`'s `equals`, which `a.equals(b)` written on a value is not
-    // here (it answers as Scala's `==`, true for `a` itself without the call). On JavaScript an
-    // object without an `equals` of its own is equal to itself alone, as under `Object.equals`.
+    // `a.equals(b)`, a call of `a`'s `equals`. On JavaScript an object without an `equals` of its
+    // own is equal to itself alone, as under `Object.equals`.
     @js("($1 != null && typeof $1.equals === \"function\" ? $1.equals($2) : $1 === $2)")
-    private def objectEquals(a: Any, b: Any): Boolean = a.asInstanceOf[EqualsCall].equals(b)
-    // What `objectEquals` calls `equals` through, a member call rather than an equality.
-    private trait EqualsCall:
-      def equals(o: Any): Boolean
+    private def objectEquals(a: Any, b: Any): Boolean = a.equals(b)
     // A mapping whose value `setValue` changes; equal to any entry of the same key and value, as
     // the JDK's.
     @jvmClass("java/util/AbstractMap$SimpleEntry")

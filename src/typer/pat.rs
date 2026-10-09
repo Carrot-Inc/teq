@@ -1496,15 +1496,19 @@ impl<'a> Worker<'a> {
         }
     }
 
-    /// The runtime erasure of a bound, as `TypeErasure.apply` erases it (TypeErasure.scala 763
-    /// to 819): an abstract type to its upper bound's erasure (767 to 769 and 773 to 779 through
-    /// `checkedSuperType`, 901 to 902), so that an abstract constituent of a union or an
-    /// intersection is erased before the union's erased lub (815 to 819) or the intersection's
-    /// erased glb (806 to 813) is taken; `Any` and an unbounded type to `Object`; an opaque type
-    /// to its underlying type's; a class, a literal, an array as `stable_erasure` has them.
-    /// `stable_erasure` keeps its own answer (none for an abstract type) for the `ClassTag`
-    /// synthesis, whose eligibility it decides.
-    fn bound_erasure(&mut self, t: TypeId, depth: u32) -> Option<super::site::Erased> {
+    /// dotty's erasure of a type (`TypeErasure.apply`, TypeErasure.scala 763 to 819), recursive
+    /// through every part, with the classes' own erasures at every step: an abstract type erases
+    /// to its upper bound's erasure (767 to 769 and 773 to 779 through `checkedSuperType`, 901
+    /// to 902), a path, a literal and a match type to what they stand for, a refinement to its
+    /// parent, an opaque type to its underlying type's, a polymorphic function to its function
+    /// type's; a union to its parts' erased lub (815 to 819), an intersection to their erased
+    /// glb (806 to 813); an array to the array of its element's erasure (`eraseArray`), `Object`
+    /// for a generic element; `h *: t` by its arity (`erasePair`); a class as `class_erasure`
+    /// erases it. `None` for what has no erasure here (an open variable, an error). The tests of
+    /// abstract types (TypeTestsCasts.scala 359 to 360) and the casts (`cast_lowering`) erase
+    /// with it; `stable_erasure` keeps its own answer (none for an abstract type) for the
+    /// `ClassTag` synthesis, whose eligibility it decides.
+    pub(super) fn bound_erasure(&mut self, t: TypeId, depth: u32) -> Option<super::site::Erased> {
         use super::site::Erased;
         if depth > 32 {
             return None;
@@ -1512,7 +1516,8 @@ impl<'a> Worker<'a> {
         let t = self.deref_alias(t);
         let object = Erased::Of(self.b.any_ref, 0);
         match self.types.get(t) {
-            Type::Any => Some(object),
+            Type::Any | Type::Wild => Some(object),
+            Type::Nothing => Some(Erased::Nothing(0)),
             Type::Param(p) => {
                 let hi = self.syms.tparam(p).upper;
                 if hi == t { Some(object) } else { self.bound_erasure(hi, depth + 1) }
@@ -1525,6 +1530,7 @@ impl<'a> Worker<'a> {
                 let (_, hi) = self.member_bounds(t);
                 if hi == t { Some(object) } else { self.bound_erasure(hi, depth + 1) }
             }
+            Type::BoundedWild(_, hi) => self.bound_erasure(hi, depth + 1),
             Type::Union(a, b) => {
                 let (a, b) = (self.bound_erasure(a, depth + 1)?, self.bound_erasure(b, depth + 1)?);
                 Some(self.erased_lub(a, b))
@@ -1537,8 +1543,162 @@ impl<'a> Worker<'a> {
                 Some(under) => self.bound_erasure(under, depth + 1),
                 None => Some(object),
             },
+            Type::Class(c, args) if c == self.b.array => {
+                let element = *self.types.items(args).first()?;
+                if self.generic_array_element(element) {
+                    return Some(object);
+                }
+                let e = self.bound_erasure(element, depth + 1)?;
+                Some(e.with_dims(e.dims() + 1))
+            }
+            Type::Class(c, _) if Some(c) == self.b.cons_tuple => Some(self.pair_erasure(t)),
+            Type::Class(c, _) => Some(self.class_erasure(c)),
+            Type::Lit(_) => self.bound_erasure(self.widen_lit(t), depth + 1),
+            Type::This(c) => Some(self.class_erasure(c)),
+            Type::Poly(_, body) => self.bound_erasure(body, depth + 1),
             Type::Refined(parent, _) => self.bound_erasure(parent, depth + 1),
-            _ => self.stable_erasure(t),
+            Type::Term(_) | Type::Select(..) | Type::Match(..) | Type::Alias(..) => match self.dependent_underlying(t) {
+                Some(u) if u != t => self.bound_erasure(u, depth + 1),
+                _ => Some(object),
+            },
+            _ => None,
+        }
+    }
+
+    /// The erasure of a class (`TypeErasure.eraseNormalClassRef` through `normalizeClass`, and
+    /// `Definitions.functionTypeErasure`): the classes of `Definitions.specialErasure` (2173), `Any`,
+    /// `AnyVal`, `Singleton` to `Object` and `Tuple` and `NonEmptyTuple` to `Product`; `Unit` and
+    /// `scala.runtime.BoxedUnit` to the box of `()`, which `Unit` stands for; a context function to
+    /// the function of its arity; a tuple class past 22 elements to `TupleXXL`, its class at run
+    /// time; `Null` and `Nothing` to themselves. A function class past 22 parameters is
+    /// `FunctionXXL`, which teq's output has no class of: it stays the function class, and every
+    /// such class is that one erased class to `erased_conforms` and to the test of a function.
+    pub(super) fn class_erasure(&mut self, c: ClassId) -> super::site::Erased {
+        use super::site::Erased;
+        let b = &self.b;
+        if c == b.null {
+            return Erased::Null(0);
+        }
+        if c == b.any_val || c == b.any_ref || matches!(self.types.get(b.t_singleton), Type::Class(k, _) if k == c) {
+            return Erased::Of(self.b.any_ref, 0);
+        }
+        if Some(c) == b.tuple_trait || Some(c) == b.non_empty_tuple {
+            return Erased::Of(b.product.unwrap_or(c), 0);
+        }
+        if c == b.unit || self.is_boxed_unit_class(c) {
+            return Erased::Of(self.b.unit, 0);
+        }
+        if self.is_context_function_class(c) {
+            let n = self.syms.class(c).tparams.len() - 1;
+            return Erased::Of(self.function_class(n), 0);
+        }
+        Erased::Of(self.runtime_tuple_class(c), 0)
+    }
+
+    /// `scala.runtime.BoxedUnit`, the std's or a jar's.
+    fn is_boxed_unit_class(&mut self, c: ClassId) -> bool {
+        let info = self.syms.class(c);
+        info.kind != ClassKind::Object && self.interner.get(info.name) == "BoxedUnit" && self.class_path(c) == "scala.runtime.BoxedUnit"
+    }
+
+    /// The erasure of `h *: t` (`TypeErasure.erasePair`, 940 to 945), by its arity as
+    /// `TypeErasure.tupleArity` (85 to 113) counts it: the tuple class of that many elements, up to
+    /// 22, `TupleXXL` past them, `Product` where the arity is unknown, as where the chain ends in
+    /// a type parameter or in the empty tuple named through scalac's alias `EmptyTuple`, which the
+    /// chain keeps as it is spelled (`resolve_declared_type`); a chain ending in
+    /// `EmptyTuple.type` is the tuple class already.
+    fn pair_erasure(&mut self, t: TypeId) -> super::site::Erased {
+        use super::site::Erased;
+        let Some(cons) = self.b.cons_tuple else { return Erased::Of(self.b.any_ref, 0) };
+        let arity = {
+            let w = &*self;
+            w.types.cons_arity(t, cons, &|k| w.is_tuple_class(k).then(|| w.syms.class(k).tparams.len()))
+        };
+        match arity {
+            Some(n) if n <= 22 => Erased::Of(self.tuple_class(n), 0),
+            Some(n) => {
+                let big = self.tuple_class(n);
+                Erased::Of(self.runtime_tuple_class(big), 0)
+            }
+            None => Erased::Of(self.b.product.unwrap_or(self.b.any_ref), 0),
+        }
+    }
+
+    /// Whether an array of the element type `t` erases to `Object` (`TypeErasure
+    /// .isGenericArrayElement`, 319 to 377): an abstract type no JVM array holds every value of,
+    /// its bound being `Any`, `AnyVal` or a mix of primitives and references; through a proxy
+    /// (a path, a refinement, an opaque type, a literal) what it stands for; a match type by its
+    /// cases' results together; an intersection where both parts are, a union where either is.
+    fn generic_array_element(&mut self, t: TypeId) -> bool {
+        self.generic_array_element_at(t, 0)
+    }
+
+    fn generic_array_element_at(&mut self, t: TypeId, depth: u32) -> bool {
+        if depth > 32 {
+            return false;
+        }
+        let t = self.deref_alias(t);
+        match self.types.get(t) {
+            Type::Param(_) | Type::AppParam(..) | Type::Member(..) | Type::AppMember(..) | Type::Decl(_) | Type::BoundedWild(..) | Type::Wild => {
+                self.array_upper_bound(t, 0).is_none()
+            }
+            Type::Class(c, _) if self.syms.class(c).kind == ClassKind::Opaque => match self.opaque_erasure(t) {
+                Some(under) => self.generic_array_element_at(under, depth + 1),
+                None => false,
+            },
+            Type::Match(_, m) => {
+                let bodies: Vec<TypeId> = self.types.match_info(m).cases.iter().map(|c| c.body).collect();
+                let Some(&first) = bodies.first() else { return false };
+                let union = bodies[1..].iter().fold(first, |acc, &b| self.types.union(acc, b));
+                self.array_upper_bound(union, 0).is_none()
+            }
+            Type::Refined(parent, _) => self.generic_array_element_at(parent, depth + 1),
+            Type::Term(_) | Type::Select(..) | Type::This(_) | Type::Alias(..) => match self.dependent_underlying(t) {
+                Some(u) if u != t => self.generic_array_element_at(u, depth + 1),
+                _ => false,
+            },
+            Type::Inter(a, b) => self.generic_array_element_at(a, depth + 1) && self.generic_array_element_at(b, depth + 1),
+            Type::Union(a, b) => self.generic_array_element_at(a, depth + 1) || self.generic_array_element_at(b, depth + 1),
+            _ => false,
+        }
+    }
+
+    /// The kind of JVM array that holds every value of `t` (`arrayUpperBound` in
+    /// `isGenericArrayElement`): `Object`'s or a primitive's, none for `Any` and its kin.
+    fn array_upper_bound(&mut self, t: TypeId, depth: u32) -> Option<ClassId> {
+        if depth > 32 {
+            return None;
+        }
+        let t = self.deref_alias(t);
+        let b = &self.b;
+        match self.types.get(t) {
+            Type::Class(c, _) if c == b.any_val || matches!(self.types.get(b.t_singleton), Type::Class(k, _) if k == c) => None,
+            Type::Class(c, _) if self.is_primitive_class(c) => Some(c),
+            Type::Class(..) | Type::Nothing => Some(self.b.any_ref),
+            Type::Lit(_) => self.array_upper_bound(self.widen_lit(t), depth + 1),
+            Type::Param(p) => {
+                let hi = self.syms.tparam(p).upper;
+                if hi == t { None } else { self.array_upper_bound(hi, depth + 1) }
+            }
+            Type::AppParam(p, args) => {
+                let hi = self.app_param_upper(p, args)?;
+                self.array_upper_bound(hi, depth + 1)
+            }
+            Type::Member(..) | Type::AppMember(..) | Type::Decl(_) => {
+                let (_, hi) = self.member_bounds(t);
+                if hi == t { None } else { self.array_upper_bound(hi, depth + 1) }
+            }
+            Type::BoundedWild(_, hi) => self.array_upper_bound(hi, depth + 1),
+            Type::Refined(parent, _) => self.array_upper_bound(parent, depth + 1),
+            Type::Union(a, b) => {
+                let (x, y) = (self.array_upper_bound(a, depth + 1), self.array_upper_bound(b, depth + 1));
+                if x == y { x } else { None }
+            }
+            Type::Inter(a, b) => {
+                let (x, y) = (self.array_upper_bound(a, depth + 1), self.array_upper_bound(b, depth + 1));
+                if x == y { x } else { x.or(y) }
+            }
+            _ => None,
         }
     }
 

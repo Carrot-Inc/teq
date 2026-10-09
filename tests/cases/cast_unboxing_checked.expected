@@ -1,0 +1,13 @@
+1
+8
+97
+a
+7
+Int as Int: 8
+Int as Long: class java.lang.Integer cannot be cast to class java.lang.Long
+Long as Int: class java.lang.Long cannot be cast to class java.lang.Integer
+String as Int: class java.lang.String cannot be cast to class java.lang.Integer
+String as Int, discarded: class java.lang.String cannot be cast to class java.lang.Integer
+String as Boolean: class java.lang.String cannot be cast to class java.lang.Boolean
+Boolean as Int: class java.lang.Boolean cannot be cast to class java.lang.Integer
+Boolean as Boolean: false

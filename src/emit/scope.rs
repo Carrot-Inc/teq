@@ -1720,11 +1720,6 @@ impl<'a> Emitter<'a> {
                 let free: Vec<String> = names.free.clone();
                 let around: Vec<(u8, Vec<String>)> = names.around.clone();
                 let args = prog.expr_list(args);
-                // A cast to a reference type is its value (`emit_expr_as`).
-                if prog.strings[t.idx()] == crate::typer::prims::UNBOX && matches!(self.peek(args[1]), TExpr::Null) && self.hole_of(args[1]).is_none() {
-                    self.walk(w, args[0]);
-                    return;
-                }
                 for name in &free {
                     w.name(name);
                 }
@@ -1758,6 +1753,33 @@ impl<'a> Emitter<'a> {
                         w.pop();
                     }
                     None => self.walk_test(w, test),
+                }
+                self.walk(w, inner);
+            }
+            TExpr::Cast(inner, op, _) => {
+                match op {
+                    CastOp::Written => {}
+                    CastOp::Nothing => w.name("$asNothing"),
+                    CastOp::Unbox(test, _) => w.name(super::expr::unbox_helper(prog.tests[test.idx()])),
+                    CastOp::Check(test, _) => match prog.tests[test.idx()] {
+                        TypeTest::Class(c) => {
+                            w.name("$as");
+                            self.walk_class(w, c);
+                        }
+                        TypeTest::Trait(_) => w.name("$asA"),
+                        TypeTest::Str => w.name("$asS"),
+                        // The test is written on the local, or on `$v` of `($v) => $asT(..)`.
+                        _ if matches!(self.peek(inner), TExpr::Local(_)) => {
+                            w.name("$asT");
+                            self.walk_test(w, test);
+                        }
+                        _ => {
+                            w.name("$asT");
+                            w.bind_fixed("$v");
+                            self.walk_test(w, test);
+                            w.pop();
+                        }
+                    },
                 }
                 self.walk(w, inner);
             }

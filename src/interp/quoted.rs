@@ -805,6 +805,7 @@ impl<'m> Matcher<'m> {
             (TExpr::ToStr(a1, _), TExpr::ToStr(a2, _)) | (TExpr::Spread(a1), TExpr::Spread(a2)) | (TExpr::Return(a1), TExpr::Return(a2)) | (TExpr::Throw(a1, _), TExpr::Throw(a2, _)) => self.expr(it, a1, a2),
             (TExpr::Js(s1, a1), TExpr::Js(s2, a2)) => it.prog().strings[s1.idx()] == it.prog().strings[s2.idx()] && self.list(it, a1, a2),
             (TExpr::TypeTest(a1, t1), TExpr::TypeTest(a2, t2)) => self.expr(it, a1, a2) && it.prog().tests[t1.idx()] == it.prog().tests[t2.idx()],
+            (TExpr::Cast(a1, _, t1), TExpr::Cast(a2, _, t2)) => t1 == t2 && self.expr(it, a1, a2),
             (TExpr::Index(a1, i1), TExpr::Index(a2, i2)) => i1 == i2 && self.expr(it, a1, a2),
             (TExpr::Block(st1, r1), TExpr::Block(st2, r2)) => {
                 if st1.len != st2.len {
@@ -1312,6 +1313,11 @@ impl<'a, 't> Interp<'a, 't> {
                 TExpr::TypeTest(x, test) => {
                     let ty = self.test_type(test);
                     let name = self.typer.interner.intern("isInstanceOf");
+                    let fun = self.pending(Pending { recv: Some(TreeRef::Expr(x)), kind: PendingKind::Named(name), targs: vec![ty] });
+                    View::TypeApply(fun, vec![ty])
+                }
+                TExpr::Cast(x, _, ty) => {
+                    let name = self.typer.interner.intern("asInstanceOf");
                     let fun = self.pending(Pending { recv: Some(TreeRef::Expr(x)), kind: PendingKind::Named(name), targs: vec![ty] });
                     View::TypeApply(fun, vec![ty])
                 }
@@ -2087,6 +2093,7 @@ impl<'a, 't> Interp<'a, 't> {
                     }
                     TExpr::StrConcat(_) | TExpr::ToStr(..) => self.typer.b.t_string,
                     TExpr::TypeTest(..) => self.typer.b.t_boolean,
+                    TExpr::Cast(_, _, ty) => ty,
                     TExpr::Block(_, r) => return self.tree_type(TreeRef::Expr(r)),
                     _ => ANY,
                 }
@@ -2157,7 +2164,7 @@ impl<'a, 't> Interp<'a, 't> {
                     None => "Apply",
                 },
                 TExpr::CallClosure(..) | TExpr::New(..) | TExpr::NewVia(..) | TExpr::Prim(..) | TExpr::StrConcat(_) | TExpr::Throw(..) => "Apply",
-                TExpr::TypeTest(..) => "TypeApply",
+                TExpr::TypeTest(..) | TExpr::Cast(..) => "TypeApply",
                 TExpr::SeqLit(_) | TExpr::ArrayLit(_) => "Repeated",
                 TExpr::Spread(_) => "Typed",
                 TExpr::Lambda(..) | TExpr::Block(..) => "Block",

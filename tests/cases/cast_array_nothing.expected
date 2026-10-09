@@ -1,0 +1,11 @@
+to class CCE
+to trait CCE
+to Int CCE
+nested to class CCE
+to array ok
+nested to array ok
+true
+to Any ok
+true
+to AnyRef ok
+nulls to strings ok

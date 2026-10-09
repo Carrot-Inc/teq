@@ -542,7 +542,7 @@ impl<'a> Worker<'a> {
             }
         };
         match prog.expr(e) {
-            TExpr::Field(r, _) | TExpr::Unary(_, r) | TExpr::ToStr(r, _) | TExpr::TypeTest(r, _) | TExpr::Index(r, _) | TExpr::Spread(r) | TExpr::Return(r) | TExpr::Throw(r, _) | TExpr::JsSelect(r, _) | TExpr::Splice(r) => {
+            TExpr::Field(r, _) | TExpr::Unary(_, r) | TExpr::ToStr(r, _) | TExpr::TypeTest(r, _) | TExpr::Cast(r, ..) | TExpr::Index(r, _) | TExpr::Spread(r) | TExpr::Return(r) | TExpr::Throw(r, _) | TExpr::JsSelect(r, _) | TExpr::Splice(r) => {
                 self.tree_binders(r, out)
             }
             TExpr::Lambda(params, body) => {
@@ -691,7 +691,7 @@ impl<'a> Worker<'a> {
             }
         };
         match prog.expr(e) {
-            TExpr::Field(r, _) | TExpr::Unary(_, r) | TExpr::ToStr(r, _) | TExpr::TypeTest(r, _) | TExpr::Index(r, _) | TExpr::Spread(r) | TExpr::Return(r) | TExpr::Throw(r, _) | TExpr::JsSelect(r, _) | TExpr::Lambda(_, r) => {
+            TExpr::Field(r, _) | TExpr::Unary(_, r) | TExpr::ToStr(r, _) | TExpr::TypeTest(r, _) | TExpr::Cast(r, ..) | TExpr::Index(r, _) | TExpr::Spread(r) | TExpr::Return(r) | TExpr::Throw(r, _) | TExpr::JsSelect(r, _) | TExpr::Lambda(_, r) => {
                 self.tree_type_params(r, out)
             }
             TExpr::CallStatic(_, args) | TExpr::New(_, args) | TExpr::NewVia(_, args) | TExpr::StrConcat(args) | TExpr::Js(_, args) | TExpr::SeqLit(args) | TExpr::ArrayLit(args) | TExpr::ObjLit(args) => {
@@ -2777,7 +2777,6 @@ impl<'c> Copier<'c> {
                     if t.prog.ends_chain(e) {
                         t.prog.mark_chain_end(id);
                     }
-                    let id = self.keep_cast(t, id, recorded);
                     if t.capturing() {
                         self.put_for(t, e, filled, id);
                     }
@@ -2911,6 +2910,39 @@ impl<'c> Copier<'c> {
             TExpr::TypeTest(a, test) => {
                 let a = self.expr(t, a);
                 TExpr::TypeTest(a, self.test(t, test))
+            }
+            TExpr::Cast(a, op, to) => {
+                let a = self.expr(t, a);
+                let to = self.ty(t, to);
+                let op = match op {
+                    CastOp::Check(test, erased) => CastOp::Check(self.test(t, test), self.ty(t, erased)),
+                    CastOp::Unbox(test, erased) => CastOp::Unbox(self.test(t, test), self.ty(t, erased)),
+                    CastOp::Written | CastOp::Nothing => op,
+                };
+                // A quote's cast is decided where the quote runs, its holes filled (a stored
+                // body's where the walk has its receiver).
+                match op {
+                    CastOp::Written if self.stored.is_none() => {
+                        let from = self.copy_type(t, a).unwrap_or(ANY);
+                        match t.cast_lowering(from, to) {
+                            super::prims::CastLowering::Op(op) if !matches!((op, t.prog.expr(a)), (CastOp::Unbox(..), TExpr::Null)) => TExpr::Cast(a, op, to),
+                            // The tree that fills a hole takes the cast's type where its own
+                            // does not conform to it (an abstract type member's cast its erasure
+                            // makes the value itself).
+                            lowering => {
+                                let (id, ty) = t.lower_cast_as(a, from, to, lowering);
+                                if id != a {
+                                    t.prog.copy_span(e, id);
+                                    self.set_copy_type(t, id, ty);
+                                } else if !t.is_sub(from, ty) {
+                                    self.set_copy_type(t, id, ty);
+                                }
+                                return id;
+                            }
+                        }
+                    }
+                    _ => TExpr::Cast(a, op, to),
+                }
             }
             TExpr::SeqLit(l) => TExpr::SeqLit(self.list(t, l)),
             TExpr::ArrayLit(l) => TExpr::ArrayLit(self.list(t, l)),
@@ -3098,17 +3130,6 @@ impl<'c> Copier<'c> {
         if let (TExpr::If(cond, ..), None, Some(ty)) = (t.prog.expr(id), t.prog.taken(e), t.prog.type_of(id)) {
             t.mark_taken_branch(cond, id, ty);
         }
-    }
-
-    /// A cast of a hole (`${e}.asInstanceOf[T]`) is the hole's node with the cast's type: the
-    /// tree that fills it takes that type where its own does not conform to it.
-    fn keep_cast(&mut self, t: &mut Worker, id: TExprId, recorded: Option<TypeId>) -> TExprId {
-        let (Some(cast), Some(own)) = (recorded, self.copy_type(t, id)) else { return id };
-        let cast = self.ty(t, cast);
-        if !t.is_sub(own, cast) {
-            self.set_copy_type(t, id, cast);
-        }
-        id
     }
 
     fn list(&mut self, t: &mut Worker, l: crate::ast::ListRef) -> crate::ast::ListRef {

@@ -551,10 +551,11 @@ impl<'a> Worker<'a> {
                                 }
                             }
                         }
-                        TExpr::TypeTest(e, t) => {
+                        TExpr::TypeTest(e, t) | TExpr::Cast(e, crate::tir::CastOp::Check(t, _) | crate::tir::CastOp::Unbox(t, _), _) => {
                             work.push(Node::Expr(e.0));
                             work.push(Node::Test(t.0));
                         }
+                        TExpr::Cast(e, ..) => work.push(Node::Expr(e.0)),
                         TExpr::Try(i) => work.push(Node::Try(i)),
                         TExpr::Int(_) | TExpr::Long(_) | TExpr::Double(_) | TExpr::Bool(_) | TExpr::Char(_) | TExpr::Unit | TExpr::This | TExpr::Super(crate::tir::SuperTarget::Chain) | TExpr::JsImport(_) | TExpr::JsGlobal(..) | TExpr::Null => {}
                     }

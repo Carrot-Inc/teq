@@ -474,8 +474,13 @@ impl<'a> Worker<'a> {
     }
 
     /// Whether evaluating the expression can have no effect: a literal, a value, `this`, a
-    /// function literal, or a tuple or block of such.
+    /// function literal, or a tuple or block of such; not a cast written, which dotty's
+    /// `TreeInfo.exprPurity` takes for an effect (an ordinary `TypeApply` is `Impure`) where its
+    /// erasure makes it the value itself.
     fn pure_value(&self, te: TExprId) -> bool {
+        if self.expr_marks.get(&te).map_or(false, |&m| m & super::MARK_CAST != 0) {
+            return false;
+        }
         match self.prog.expr(te) {
             TExpr::Int(_)
             | TExpr::Long(_)
@@ -1691,17 +1696,23 @@ impl<'a> Worker<'a> {
         {
             {
                 let Some(els) = els else {
+                    let mark = self.push_tested(tc);
                     let tt = self.check_expr(t, self.b.t_unit);
+                    self.pop_tested(mark);
                     return (self.prog.add(TExpr::If(tc, tt, None)), self.b.t_unit);
                 };
                 if let Some(exp) = self.branch_expected(expected) {
+                    let mark = self.push_tested(tc);
                     let (tt, ty1) = self.type_expr_adapted(t, Some(exp));
+                    self.pop_tested(mark);
                     let (te, ty2) = self.type_expr_adapted(els, Some(exp));
                     let ty = self.joined_branches(exp, &[ty1, ty2]);
                     return (self.prog.add(TExpr::If(tc, tt, Some(te))), ty);
                 }
                 let guide = self.branch_guide(expected);
+                let mark = self.push_tested(tc);
                 let (tt, ty1) = self.type_expr(t, Some(guide));
+                self.pop_tested(mark);
                 let (tt, ty1) = self.branch_to_var_bound(tt, ty1, expected, t);
                 self.guide_with(guide, ty1);
                 let (te, ty2) = self.type_expr(els, Some(guide));

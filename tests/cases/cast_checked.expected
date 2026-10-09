@@ -1,0 +1,18 @@
+class, discarded: class A cannot be cast to class B
+class, used: class A cannot be cast to class B
+chained: class A cannot be cast to class B
+widened: class A cannot be cast to class B
+0
+guard: class A cannot be cast to class B
+trait: class A cannot be cast to class T
+true
+boxed Int to String: class java.lang.Integer cannot be cast to class java.lang.String
+true
+null to B passed
+Nothing of null: Cannot cast to scala.Nothing
+Nothing: Cannot cast to scala.Nothing
+Null: class A cannot be cast to class scala.runtime.Null$
+Null of null passed
+true
+arity CCE
+Function0 passed

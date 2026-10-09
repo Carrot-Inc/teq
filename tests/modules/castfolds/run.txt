@@ -1,0 +1,37 @@
+F1 nested CCE
+F1 inline CCE
+F2 bound product ok
+F2 inline tuple ok
+F2 array generic ok
+F2 array bound CCE
+2
+F2 chain right ok
+F2 chain wrong CCE
+F2 chain inline wrong CCE
+F3 Boolean-Char CCE
+0
+F3 Unit-Boolean CCE
+0
+4
+F3 Short-Double ok
+false
+F4 bound ok
+false
+F4 inline ok
+true
+F4 static null ok
+100
+F5 inherited unit CCE
+F5 inline unit CCE
+F5 null ok
+F5 good ok
+true
+F6 inherited ok
+true
+F6 inline inherited ok
+true
+F6 object ok
+false
+F6 null ok
+F6 negative CCE
+true

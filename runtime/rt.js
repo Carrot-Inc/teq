@@ -254,6 +254,26 @@ function $isInstance(cls, x) {
 }
 function $isRef(x) { return x !== undefined && typeof x !== "number" && typeof x !== "boolean" && typeof x !== "bigint"; }
 function $isA(x, id) { return x != null && x["$i" + id] === true; }
+// `x.asInstanceOf[T]`: `null` and a value that passes the test of `T`'s erasure are the value, any
+// other fails with the JVM's message, the value's class and the target's named. A class is tested
+// by `instanceof`, a trait by its number as a type test of it is (`$isA`, which `()`, `undefined`,
+// fails), a `String` by its JS type, any other type by the test `ok` written at the cast.
+function $cce(x, to) { $fail("ClassCastException", "class " + $classOf(x) + " cannot be cast to class " + to); }
+function $as(x, c) { return x === null || x instanceof c ? x : $cce(x, $classOf(c.prototype)); }
+function $asA(x, n, to) { return x === null || $isA(x, n) ? x : $cce(x, to); }
+function $asT(x, ok, to) { return x === null || ok ? x : $cce(x, to); }
+function $asS(x) { return x === null || typeof x === "string" ? x : $cce(x, "java.lang.String"); }
+function $asNothing(x) { $fail("ClassCastException", "Cannot cast to scala.Nothing"); }
+// The unboxings of `x.asInstanceOf[Int]` and kin: `null` is the primitive's zero, a value of
+// another kind fails (`BoxesRunTime.unboxToInt`).
+function $uI(x) { return x === null ? 0 : $isInt(x) ? x : $cce(x, "java.lang.Integer"); }
+function $uJ(x) { return x === null ? 0n : typeof x === "bigint" ? x : $cce(x, "java.lang.Long"); }
+function $uD(x) { return x === null ? 0 : typeof x === "number" ? x : $cce(x, "java.lang.Double"); }
+function $uF(x) { return x === null ? 0 : $isFloat(x) ? x : $cce(x, "java.lang.Float"); }
+function $uB(x) { return x === null ? 0 : $isByte(x) ? x : $cce(x, "java.lang.Byte"); }
+function $uS(x) { return x === null ? 0 : $isShort(x) ? x : $cce(x, "java.lang.Short"); }
+function $uC(x) { return x === null ? "\0" : typeof x === "string" ? x : $cce(x, "java.lang.Character"); }
+function $uZ(x) { return x === null ? false : typeof x === "boolean" ? x : $cce(x, "java.lang.Boolean"); }
 // Doubles print as Scala.js prints them: the JS number format.
 function $dstr(d) { return String(d); }
 function $str(x) {

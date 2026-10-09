@@ -52,8 +52,10 @@ enum Event {
     SeqLit,
     Template(String, Vec<Option<String>>),
     TestArray,
+    TestTrait(Id),
     JsImport(u32),
     ThrowUnwrap,
+    Cast,
     TryEnd(bool),
     PatSeq,
     PatRest,
@@ -578,12 +580,21 @@ impl<'c> Meet for Recorder<'c> {
         self.events.push(Event::TestArray);
     }
 
+    fn test_trait(&mut self, _cx: Cx, c: ClassId) {
+        let id = Recorder::class(self, c);
+        self.events.push(Event::TestTrait(id));
+    }
+
     fn js_import(&mut self, i: u32) {
         self.events.push(Event::JsImport(i));
     }
 
     fn throw_unwrap(&mut self, _cx: Cx) {
         self.events.push(Event::ThrowUnwrap);
+    }
+
+    fn cast(&mut self, _cx: Cx) {
+        self.events.push(Event::Cast);
     }
 
     fn try_end(&mut self, _cx: Cx, wraps: bool) {
@@ -935,7 +946,7 @@ impl Kept {
             }
             for (&o, &n) in b.classes.iter().zip(&a.classes) {
                 classes.insert(o, n);
-                for v in [&mut r.classes, &mut r.trigger_classes] {
+                for v in [&mut r.classes, &mut r.trigger_classes, &mut r.tested_traits] {
                     let marked = std::mem::replace(&mut v[o.idx()], false);
                     v[n.idx()] |= marked;
                 }

@@ -1,0 +1,7 @@
+unit null=false
+any text null=false
+1
+primitive null=false
+any null null=false
+static null null=true
+true

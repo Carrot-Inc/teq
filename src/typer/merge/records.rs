@@ -293,6 +293,15 @@ pub(in crate::typer) fn texpr<M: Mapping + ?Sized>(m: &M, e: &mut TExpr) {
         ToStr(x, k) => ToStr(m.expr(x), k),
         Js(s, args) => Js(m.string(s), m.expr_list(args)),
         TypeTest(x, t) => TypeTest(m.expr(x), m.test(t)),
+        Cast(x, op, t) => Cast(
+            m.expr(x),
+            match op {
+                CastOp::Check(test, erased) => CastOp::Check(m.test(test), m.ty(erased)),
+                CastOp::Unbox(test, erased) => CastOp::Unbox(m.test(test), m.ty(erased)),
+                CastOp::Written | CastOp::Nothing => op,
+            },
+            m.ty(t),
+        ),
         ClassOf(c) => ClassOf(m.class(c)),
         SeqLit(items) => SeqLit(m.expr_list(items)),
         ArrayLit(items) => ArrayLit(m.expr_list(items)),

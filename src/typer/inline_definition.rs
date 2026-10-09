@@ -30,7 +30,6 @@ pub struct Notes {
     splices: Vec<TExprId>,
     leaf_tests: Vec<TestId>,
     imports: Vec<BlockImport>,
-    casts: Vec<StoredCast>,
     hoisted: Vec<SymId>,
     /// The imports of the blocks being typed, each with the statement it stands before, until
     /// the block's node is made.
@@ -162,14 +161,6 @@ impl<'a> Worker<'a> {
     pub(super) fn note_hoisted(&mut self, h: SymId) {
         if let Some(n) = self.level_notes() {
             n.hoisted.push(h);
-        }
-    }
-
-    /// A cast of the body kept as its receiver's node `e`, to `to` from `from`.
-    pub(super) fn note_cast(&mut self, e: TExprId, to: TypeId, from: TypeId, written_as_param: bool) {
-        let names_param = self.mentions_param(to);
-        if let Some(n) = self.level_notes() {
-            n.casts.push(StoredCast { node: e, to, from, written_as_param, names_param });
         }
     }
 
@@ -360,7 +351,7 @@ impl<'a> Worker<'a> {
         let env = self.env_at(file, owner, span.start);
         let sig = self.sig_arc(sym);
         let marks = (self.diags.items.len(), self.deferred_matches.len(), self.deferred_bounds.len());
-        let notes = Notes { sym, tparams: sig.tparams.clone(), pattern_tparams: Vec::new(), reducible: Vec::new(), deferred: Vec::new(), type_args: Vec::new(), splices: Vec::new(), leaf_tests: Vec::new(), imports: Vec::new(), casts: Vec::new(), hoisted: Vec::new(), pending_imports: Vec::new(), unplaced_aliases: Vec::new(), pending_aliases: Vec::new(), aliases: Vec::new(), classes: Vec::new(), class_bodies: Vec::new(), inline_vals: Vec::new(), inferred_vals: Vec::new(), held: None };
+        let notes = Notes { sym, tparams: sig.tparams.clone(), pattern_tparams: Vec::new(), reducible: Vec::new(), deferred: Vec::new(), type_args: Vec::new(), splices: Vec::new(), leaf_tests: Vec::new(), imports: Vec::new(), hoisted: Vec::new(), pending_imports: Vec::new(), unplaced_aliases: Vec::new(), pending_aliases: Vec::new(), aliases: Vec::new(), classes: Vec::new(), class_bodies: Vec::new(), inline_vals: Vec::new(), inferred_vals: Vec::new(), held: None };
         let case_binders = std::mem::take(&mut self.case_binders);
         let nowarn = std::mem::replace(&mut self.nowarn, 0);
         self.outside_annotation(|t| {
@@ -437,7 +428,7 @@ impl<'a> Worker<'a> {
         let keeps_index = self.index.is_some();
         let index = if keeps_index { None } else { self.index.take() };
         let index_mark = self.index_mark();
-        let notes = Notes { sym, tparams: sig.tparams.clone(), pattern_tparams: Vec::new(), reducible: Vec::new(), deferred: Vec::new(), type_args: Vec::new(), splices: Vec::new(), leaf_tests: Vec::new(), imports: Vec::new(), casts: Vec::new(), hoisted: Vec::new(), pending_imports: Vec::new(), unplaced_aliases: Vec::new(), pending_aliases: Vec::new(), aliases: Vec::new(), classes: Vec::new(), class_bodies: Vec::new(), inline_vals: Vec::new(), inferred_vals: Vec::new(), held: None };
+        let notes = Notes { sym, tparams: sig.tparams.clone(), pattern_tparams: Vec::new(), reducible: Vec::new(), deferred: Vec::new(), type_args: Vec::new(), splices: Vec::new(), leaf_tests: Vec::new(), imports: Vec::new(), hoisted: Vec::new(), pending_imports: Vec::new(), unplaced_aliases: Vec::new(), pending_aliases: Vec::new(), aliases: Vec::new(), classes: Vec::new(), class_bodies: Vec::new(), inline_vals: Vec::new(), inferred_vals: Vec::new(), held: None };
         let case_binders = std::mem::take(&mut self.case_binders);
         // The expansion by substitution reads the type of every node of the stored body, which
         // a build that keeps no types keeps aside for the record alone.
@@ -550,11 +541,6 @@ impl<'a> Worker<'a> {
             notes.splices.retain(|e| nodes.contains_key(e));
             notes.imports.retain(|i| nodes.contains_key(&i.block));
             notes.aliases.retain(|a| nodes.contains_key(&a.block));
-            notes.casts.retain(|c| nodes.contains_key(&c.node));
-            for c in notes.casts.iter_mut() {
-                c.to = self.zonk(c.to);
-                c.from = self.zonk(c.from);
-            }
             for &root in &roots {
                 self.tree_binders(root, &mut binders);
             }
@@ -601,7 +587,6 @@ impl<'a> Worker<'a> {
             leaves,
             leaf_tests: notes.leaf_tests,
             diagnostics: own,
-            casts: if body.is_some() { notes.casts } else { Vec::new() },
             widened,
             opaque,
             spread,
@@ -752,9 +737,6 @@ impl<'a> Worker<'a> {
         }
         for (i, &e) in def.leaves.iter().enumerate() {
             note(e, Meta::Leaf(i as u32));
-        }
-        for (i, c) in def.casts.iter().enumerate() {
-            note(c.node, Meta::Cast(i as u32));
         }
         for (i, &e) in def.widened.iter().enumerate() {
             note(e, Meta::Widened(i as u32));
@@ -938,7 +920,6 @@ impl<'a> Worker<'a> {
             inst.leaves => def.leaves.len(),
             inst.leaf_tests => def.leaf_tests.len(),
             inst.imports => def.imports.len(),
-            inst.casts => def.casts.len(),
             inst.aliases => def.aliases.len(),
         );
         let subst = demand.subst.clone();
@@ -1166,11 +1147,6 @@ impl<'a> Worker<'a> {
                     }
                     inst.leaves.push(copy);
                 }
-                Meta::Cast(i) => {
-                    let c = def.casts[i as usize];
-                    let (to, from) = (self.demand_type(d, subst, c.to), self.demand_type(d, subst, c.from));
-                    inst.casts.push(StoredCast { node: copy, to, from, ..c });
-                }
                 Meta::Widened(_) => self.prog.mark_widened(copy),
                 Meta::Opaque(_) => self.prog.mark_opaque(copy),
                 Meta::Spread(_) => self.prog.mark_spread(copy),
@@ -1222,7 +1198,7 @@ impl<'a> Worker<'a> {
             }
         };
         match prog.expr(e) {
-            TExpr::Field(r, _) | TExpr::Unary(_, r) | TExpr::ToStr(r, _) | TExpr::TypeTest(r, _) | TExpr::Index(r, _) | TExpr::Spread(r) | TExpr::Return(r) | TExpr::Throw(r, _) | TExpr::JsSelect(r, _) => {
+            TExpr::Field(r, _) | TExpr::Unary(_, r) | TExpr::ToStr(r, _) | TExpr::TypeTest(r, _) | TExpr::Cast(r, ..) | TExpr::Index(r, _) | TExpr::Spread(r) | TExpr::Return(r) | TExpr::Throw(r, _) | TExpr::JsSelect(r, _) => {
                 self.region_binders(r, reducible, classes, seen, out)
             }
             // A splice's code is copied whole, nothing left in it for the walk to demand.
@@ -1378,6 +1354,12 @@ impl<'a> Worker<'a> {
                         self.prog.exprs[e.idx()] = TExpr::TypeTest(a, specialised);
                     }
                 }
+                TExpr::Cast(a, op, to) => {
+                    let specialised = self.types.subst(to, subst);
+                    if specialised != to {
+                        self.prog.exprs[e.idx()] = TExpr::Cast(a, op, specialised);
+                    }
+                }
                 TExpr::Match(_, cases) => pats.extend(self.prog.case_list(cases).iter().map(|c| c.pat)),
                 TExpr::Try(i) => pats.extend(self.prog.case_list(self.prog.tries[i as usize].cases).iter().map(|c| c.pat)),
                 TExpr::Block(stmts, _) => pats.extend(self.prog.stmt_list(stmts).iter().filter_map(|s| match *s {
@@ -1392,12 +1374,6 @@ impl<'a> Worker<'a> {
                 for t in ts.iter_mut() {
                     *t = self.types.subst(*t, subst);
                 }
-            }
-        }
-        for c in inst.casts.iter_mut() {
-            if within.contains_key(&c.node) {
-                c.to = self.types.subst(c.to, subst);
-                c.from = self.types.subst(c.from, subst);
             }
         }
         while let Some(p) = pats.pop() {
@@ -1857,6 +1833,7 @@ impl<'a> Worker<'a> {
             TExpr::Long(_) => long,
             TExpr::Double(_) => double,
             TExpr::Bool(_) | TExpr::TypeTest(..) => boolean,
+            TExpr::Cast(_, _, to) => to,
             TExpr::Char(_) => char,
             TExpr::Unit | TExpr::While(..) | TExpr::Assign(..) => unit,
             TExpr::Throw(..) | TExpr::Return(_) => NOTHING,
@@ -1900,7 +1877,7 @@ impl<'a> Worker<'a> {
         let mut pats: Vec<TPatId> = Vec::new();
         for e in self.prog.descendants(root) {
             match self.prog.expr(e) {
-                TExpr::TypeTest(_, t) => tests.push(t),
+                TExpr::TypeTest(_, t) | TExpr::Cast(_, CastOp::Check(t, _) | CastOp::Unbox(t, _), _) => tests.push(t),
                 TExpr::Match(_, cases) => pats.extend(self.prog.case_list(cases).iter().map(|c| c.pat)),
                 TExpr::Try(i) => pats.extend(self.prog.case_list(self.prog.tries[i as usize].cases).iter().map(|c| c.pat)),
                 TExpr::Block(stmts, _) => pats.extend(self.prog.stmt_list(stmts).iter().filter_map(|s| match *s {
@@ -2034,8 +2011,6 @@ pub struct Instance {
     pub leaf_tests: Vec<TestId>,
     /// The record's block imports on the copy's blocks.
     pub imports: Vec<BlockImport>,
-    /// The record's casts on the copy's nodes, their types in the copy's terms.
-    pub casts: Vec<StoredCast>,
     /// The record's names bound to a value's member on the copy's blocks, their selections the
     /// stored trees, which the walk copies where it enters them.
     pub aliases: Vec<StoredAlias>,
@@ -2093,7 +2068,6 @@ impl Instance {
             leaves: Vec::new(),
             leaf_tests: Vec::new(),
             imports: Vec::new(),
-            casts: Vec::new(),
             aliases: Vec::new(),
         }
     }
@@ -2168,7 +2142,6 @@ enum Meta {
     TypeArgs(u32),
     Splice(u32),
     Leaf(u32),
-    Cast(u32),
     Widened(u32),
     Opaque(u32),
     Spread(u32),
@@ -2259,7 +2232,6 @@ impl InlineDefinition {
             leaves: Vec::new(),
             leaf_tests: Vec::new(),
             diagnostics: Vec::new(),
-            casts: Vec::new(),
             widened: Vec::new(),
             opaque: Vec::new(),
             spread: Vec::new(),

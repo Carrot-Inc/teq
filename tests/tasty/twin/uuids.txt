@@ -2,6 +2,9 @@ bodies/fix/bodies/Base.tasty 0015f1e5d307cdd2003cc94795b3f991
 bodies/fix/bodies/Bodies.tasty 0013922b3bd01cb6003c28431ee7acf5
 bodies/fix/bodies/Point.tasty 001a65b4fda50a92004694affdc6e1d0
 bodies/fix/bodies/Pretty.tasty 00ac072766647bec0074c2b833c9e9ca
+casts/fix/casts/CastA.tasty 00b636d295339fe400d0a00ad1da3295
+casts/fix/casts/CastB.tasty 00b536d295339fe400d0940aa1da3e99
+casts/fix/casts/CastLib.tasty 003f8d393df022dc005d25e6b084e5d8
 clash/fix/clash/ClashMaker.tasty 0033bd4799756b92006d178caeabc3d0
 clash/fix/clash/ClashOverloaded.tasty 0005f5f1b161d4e80080f14add0285d7
 clash/fix/clash/ClashSingle.tasty 000eb3359278e8e800095c00db11de9e

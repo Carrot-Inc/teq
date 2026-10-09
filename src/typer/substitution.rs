@@ -184,7 +184,6 @@ struct Absorbed {
     deferred: usize,
     imports: usize,
     aliases: usize,
-    casts: usize,
     classes: usize,
 }
 
@@ -200,7 +199,6 @@ struct CopyKinds {
 impl CopyKinds {
     const REDUCIBLE: u8 = 1;
     const DEFERRED: u8 = 2;
-    const CAST: u8 = 4;
 
     /// Empty, for a copy whose nodes begin at `base`, of a record of `nodes` nodes, its room kept.
     fn reset(&mut self, base: u32, nodes: usize) {
@@ -244,15 +242,6 @@ impl Walk {
             return None;
         }
         self.inst.reducible.iter().rposition(|&r| r == e).map(|i| self.inst.reducible_at[i])
-    }
-
-    /// The copy's cast kept as the receiver `e`'s node, the last the instance published for it
-    /// (a case's specialisation publishes it again).
-    fn cast_of(&self, e: TExprId) -> Option<StoredCast> {
-        if !self.kinds.is(e, CopyKinds::CAST) {
-            return None;
-        }
-        self.inst.casts.iter().rev().find(|c| c.node == e).copied()
     }
 }
 
@@ -765,7 +754,7 @@ impl<'a> Worker<'a> {
     fn reset_walk(&mut self, w: &mut Walk, def: &Arc<InlineDefinition>) {
         w.def = def.clone();
         w.absorbed = Absorbed::default();
-        let room = if def.reducible.is_empty() && def.deferred.is_empty() && def.casts.is_empty() { 0 } else { def.node_types.len() };
+        let room = if def.reducible.is_empty() && def.deferred.is_empty() { 0 } else { def.node_types.len() };
         w.kinds.reset(self.prog.exprs.len() as u32, room);
         w.imports = FxMap::default();
         w.aliases = FxMap::default();
@@ -840,10 +829,6 @@ impl<'a> Worker<'a> {
                 list.sort_by_key(|&(at, _)| at);
             }
         }
-        for c in &inst.casts[a.casts..] {
-            w.kinds.mark(c.node, CopyKinds::CAST);
-        }
-        a.casts = inst.casts.len();
         for &(stored, copy) in &inst.classes[a.classes..] {
             w.class_copies.insert(copy, stored);
         }
@@ -882,15 +867,6 @@ impl<'a> Worker<'a> {
         // A part the copy left, reached: copied now, the walk never writing into the stored body.
         let e = if w.demand.is_left(e) { self.demand_in_walk(w, e, None) } else { e };
         let walked = self.walk_node(w, e);
-        let walked = match w.cast_of(e) {
-            Some(c) if c.names_param => self.recast(w, e, walked, c),
-            // Whatever stands for the receiver, the node is the cast's.
-            Some(c) => {
-                self.set_walked_type(w, walked, c.to);
-                walked
-            }
-            None => walked,
-        };
         // Whatever the walk puts in a node's place (an argument for a parameter's read, a
         // by-name read's argument, the branch an `inline if` or `inline match` reduces to, a
         // kept call's expansion) stands for it where an ascription widened it, or it is a plain
@@ -912,22 +888,34 @@ impl<'a> Worker<'a> {
         walked
     }
 
-    /// A cast of the body to a type naming a type parameter, lowered again with the type the
-    /// copy has for it, as the retype path lowers it with the call's type arguments: an unboxing
-    /// where the value's type is boxed and the type a value type, a zero for `null`.
-    fn recast(&mut self, w: &mut Walk, e: TExprId, walked: TExprId, c: StoredCast) -> TExprId {
-        let (t, from, written_as_param) = (c.to, c.from, c.written_as_param);
-        // The receiver's type before the cast: a local's (a parameter's proxy has its
-        // argument's own type), a substituted argument's own, else the one the definition cast
-        // from.
-        let recv_ty = match (self.prog.expr(walked), w.inst.types.get(walked)) {
-            (TExpr::Local(s), _) => self.sig_of(s).ret,
-            (_, Some(own)) if walked != e => own,
-            _ => from,
+    /// A cast of the body, decided now that the copy fills its types in, as dotty's erasure
+    /// decides the casts of inlined code (`TypeTestsCasts.interceptTypeApply` after `Inlining`):
+    /// from the receiver's type as the copy has it, a local's its declared one (a parameter's
+    /// proxy has its argument's own type, as dotty's `paramBindingDef` gives it).
+    fn walk_cast(&mut self, w: &mut Walk, e: TExprId, recv: TExprId, op: CastOp, to: TypeId) -> TExprId {
+        let walked = self.walk(w, recv);
+        if op != CastOp::Written {
+            if walked != recv {
+                self.prog.exprs[e.idx()] = TExpr::Cast(walked, op, to);
+            }
+            return e;
+        }
+        let from = match self.prog.expr(walked) {
+            TExpr::Local(s) => self.sig_of(s).ret,
+            _ => self.walked_type(w, walked),
         };
-        let (cast, ty) = self.lower_cast(walked, recv_ty, t, true, written_as_param);
-        self.set_walked_type(w, cast, ty);
-        cast
+        let lowering = self.cast_lowering(from, to);
+        match self.untested_lowering(walked, lowering) {
+            super::prims::CastLowering::Op(op) if !matches!(op, CastOp::Unbox(..)) || !matches!(self.prog.expr(walked), TExpr::Null) => {
+                self.prog.exprs[e.idx()] = TExpr::Cast(walked, op, to);
+                e
+            }
+            lowering => {
+                let (cast, ty) = self.lower_cast_as(walked, from, to, lowering);
+                self.set_walked_type(w, cast, ty);
+                cast
+            }
+        }
     }
 
     fn walk_node(&mut self, w: &mut Walk, e: TExprId) -> TExprId {
@@ -1072,7 +1060,9 @@ impl<'a> Worker<'a> {
             }
             TExpr::Prim(op, a, b) => {
                 let a2 = self.walk(w, a);
+                let mark = if op == PrimOp::BoolAnd { self.push_tested(a2) } else { self.tested.len() };
                 let b2 = self.walk(w, b);
+                self.pop_tested(mark);
                 if (a2, b2) != (a, b) {
                     self.prog.exprs[e.idx()] = TExpr::Prim(op, a2, b2);
                 }
@@ -1102,6 +1092,7 @@ impl<'a> Worker<'a> {
                 e
             }
             TExpr::TypeTest(a, t) => self.walk_one(w, e, a, |x| TExpr::TypeTest(x, t)),
+            TExpr::Cast(a, op, to) => self.walk_cast(w, e, a, op, to),
             TExpr::Index(a, i) => self.walk_one(w, e, a, |x| TExpr::Index(x, i)),
             TExpr::JsSelect(a, n) => self.walk_one(w, e, a, |x| TExpr::JsSelect(x, n)),
             TExpr::Spread(a) => self.walk_one(w, e, a, TExpr::Spread),
@@ -1427,7 +1418,7 @@ impl<'a> Worker<'a> {
                 note(s, out);
                 list(self, args, out);
             }
-            TExpr::Field(r, _) | TExpr::Unary(_, r) | TExpr::ToStr(r, _) | TExpr::TypeTest(r, _) | TExpr::Index(r, _) | TExpr::Spread(r) | TExpr::Return(r) | TExpr::Throw(r, _) | TExpr::JsSelect(r, _) | TExpr::Splice(r) | TExpr::Lambda(_, r) => {
+            TExpr::Field(r, _) | TExpr::Unary(_, r) | TExpr::ToStr(r, _) | TExpr::TypeTest(r, _) | TExpr::Cast(r, ..) | TExpr::Index(r, _) | TExpr::Spread(r) | TExpr::Return(r) | TExpr::Throw(r, _) | TExpr::JsSelect(r, _) | TExpr::Splice(r) | TExpr::Lambda(_, r) => {
                 self.referenced_in_order(r, origin, key, out)
             }
             TExpr::New(_, args) | TExpr::NewVia(_, args) | TExpr::StrConcat(args) | TExpr::Js(_, args) | TExpr::SeqLit(args) | TExpr::ArrayLit(args) | TExpr::ObjLit(args) => list(self, args, out),
@@ -2355,7 +2346,9 @@ impl<'a> Worker<'a> {
             self.set_walked_type(w, unit, ERROR);
             return unit;
         }
+        let mark = self.push_tested(c2);
         let t2 = self.walk(w, t);
+        self.pop_tested(mark);
         let e2 = els.map(|x| self.walk(w, x));
         if (c2, t2, e2) != (c, t, els) {
             self.prog.exprs[e.idx()] = TExpr::If(c2, t2, e2);

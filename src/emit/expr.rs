@@ -31,7 +31,7 @@ impl<'a> Emitter<'a> {
             TExpr::Int(_) | TExpr::Long(_) | TExpr::Double(_) | TExpr::Bool(_) | TExpr::Char(_)
             | TExpr::Str(_) | TExpr::Unit | TExpr::Local(_) | TExpr::This | TExpr::Super(_) | TExpr::Static(_)
             | TExpr::Module(_) | TExpr::ClassOf(_) | TExpr::Lambda(..) | TExpr::JsImport(_) | TExpr::JsGlobal(..) => true,
-            TExpr::Field(r, _) | TExpr::Unary(_, r) | TExpr::ToStr(r, _) | TExpr::TypeTest(r, _)
+            TExpr::Field(r, _) | TExpr::Unary(_, r) | TExpr::ToStr(r, _) | TExpr::TypeTest(r, _) | TExpr::Cast(r, ..)
             | TExpr::Index(r, _) | TExpr::Spread(r) | TExpr::JsSelect(r, _) => self.is_simple(r),
             TExpr::New(c, _) if self.closure_anons.contains_key(&c) => true,
             TExpr::CallStatic(_, args) | TExpr::New(_, args) | TExpr::NewVia(_, args) | TExpr::StrConcat(args)
@@ -665,11 +665,6 @@ impl<'a> Emitter<'a> {
             TExpr::Js(template, args) => {
                 let t = &prog.strings[template.idx()];
                 let args = prog.expr_list(args);
-                // A cast to a reference type keeps its value: its zero, `null`, is written only
-                // as an outlined body's parameter.
-                if t == crate::typer::prims::UNBOX && matches!(self.peek(args[1]), TExpr::Null) && self.hole_of(args[1]).is_none() {
-                    return self.emit_expr_as(args[0], bare);
-                }
                 let wrap = !bare && matches!(template_shape(t), Shape::Compound { .. });
                 if wrap {
                     self.out.push('(');
@@ -736,6 +731,7 @@ impl<'a> Emitter<'a> {
                     self.out.push(')');
                 }
             }
+            TExpr::Cast(inner, op, _) => self.emit_cast(inner, op, bare),
             TExpr::SeqLit(items) => {
                 match self.array_seq {
                     Some(c) => {
@@ -994,6 +990,83 @@ impl<'a> Emitter<'a> {
             self.emit_expr(a);
         }
         self.out.push_str(post);
+    }
+
+    /// `x.asInstanceOf[T]` as dotty's erasure leaves it: the runtime's helper that tests the value
+    /// and gives it back (`$as` of a class, `$asA` of a trait by its number, `$asS` of a `String`,
+    /// `$asT` of what another test written at the cast tells), the unboxing (`$uI` and kin), the failure of a cast to
+    /// `Nothing`; the value itself for a cast left undecided, which no output holds.
+    fn emit_cast(&mut self, inner: TExprId, op: CastOp, bare: bool) {
+        let prog = self.prog;
+        let test = match op {
+            CastOp::Written => return self.emit_expr_as(inner, bare),
+            CastOp::Nothing => return self.emit_helper_call("$asNothing", inner),
+            CastOp::Unbox(test, _) => return self.emit_helper_call(unbox_helper(prog.tests[test.idx()]), inner),
+            CastOp::Check(test, _) => test,
+        };
+        match prog.tests[test.idx()] {
+            TypeTest::Class(c) => {
+                self.hold(c, Held::Tested);
+                self.note_text("$as");
+                self.out.push_str("$as(");
+                self.emit_value(inner);
+                let n = self.class_name(c);
+                let _ = write!(self.out, ", {})", n);
+            }
+            TypeTest::Str => self.emit_helper_call("$asS", inner),
+            TypeTest::Trait(c) => {
+                self.note_text("$asA");
+                self.out.push_str("$asA(");
+                self.emit_value(inner);
+                let _ = write!(self.out, ", {}, ", self.class_number(c));
+                // Named as a class's `$classOf` names it: qualified where the output carries the
+                // qualified names, else simple.
+                let name = if self.prog.uses_get_class() || self.reach.uses_class_of { self.qualified_name(c) } else { self.interner.get(self.syms.class(c).name).to_string() };
+                js_string(&name, &mut self.out);
+                self.out.push(')');
+            }
+            _ => {
+                self.note_text("$asT");
+                let name = self.cast_target_name(test);
+                if let TExpr::Local(s) = self.peek(inner) {
+                    let n = self.local_ref(s);
+                    let _ = write!(self.out, "$asT({}, ", n);
+                    self.emit_test_as(test, &n, true);
+                } else {
+                    self.out.push_str("(($v) => $asT($v, ");
+                    self.emit_test_as(test, "$v", true);
+                }
+                self.out.push_str(", ");
+                js_string(&name, &mut self.out);
+                self.out.push(')');
+                if !matches!(self.peek(inner), TExpr::Local(_)) {
+                    self.out.push_str(")(");
+                    self.emit_value(inner);
+                    self.out.push(')');
+                }
+            }
+        }
+    }
+
+    fn emit_helper_call(&mut self, helper: &str, arg: TExprId) {
+        self.note_text(helper);
+        self.out.push_str(helper);
+        self.out.push('(');
+        self.emit_value(arg);
+        self.out.push(')');
+    }
+
+    /// The class a failed cast names as its target, as the JVM names it, for a test other than a
+    /// class's or a trait's.
+    fn cast_target_name(&self, test: TestId) -> String {
+        let prog = self.prog;
+        match prog.tests[test.idx()] {
+            TypeTest::Class(c) | TypeTest::Trait(c) => self.qualified_name(c),
+            TypeTest::Or(_, b) => self.cast_target_name(b),
+            TypeTest::Function(n) if n > 22 => "scala.runtime.FunctionXXL".to_string(),
+            TypeTest::Function(n) => format!("scala.Function{}", n),
+            t => t.boxed_class_name().to_string(),
+        }
     }
 
     fn emit_test(&mut self, test: TestId, x: &str) {
@@ -2226,12 +2299,28 @@ pub(super) fn test_text(t: TypeTest) -> Option<(&'static str, bool)> {
         TypeTest::Str | TypeTest::Char => ("typeof $0 === \"string\"", true),
         TypeTest::Bool => ("typeof $0 === \"boolean\"", true),
         TypeTest::Unit => ("$0 === undefined", true),
+        // Past 22 parameters every function is one erased class, `FunctionXXL`.
+        TypeTest::Function(n) if n > 22 => ("typeof $0 === \"function\" && $0.length > 22", true),
         TypeTest::Function(_) => ("typeof $0 === \"function\" && $0.length === $1", true),
         TypeTest::Null => ("$0 === null", true),
         TypeTest::AnyRef => ("$isRef($0)", false),
         TypeTest::AnyVal => ("($0 !== null)", false),
         TypeTest::Class(_) | TypeTest::Value(_) | TypeTest::Or(..) | TypeTest::And(..) => return None,
     })
+}
+
+/// The runtime's unboxing of a cast to the primitive the test is of (`$uI` for `Int`).
+pub(super) fn unbox_helper(t: TypeTest) -> &'static str {
+    match t {
+        TypeTest::Long => "$uJ",
+        TypeTest::Number => "$uD",
+        TypeTest::Float => "$uF",
+        TypeTest::Byte => "$uB",
+        TypeTest::Short => "$uS",
+        TypeTest::Str | TypeTest::Char => "$uC",
+        TypeTest::Bool => "$uZ",
+        _ => "$uI",
+    }
 }
 
 /// The function a value is turned into a string with, before a concatenation.
@@ -2270,7 +2359,8 @@ pub(super) fn op_texts() -> impl Iterator<Item = &'static str> {
     .into_iter()
     .filter_map(|t| test_text(t).map(|(text, _)| text));
     let strs = [StrKind::Plain, StrKind::Double, StrKind::Generic].into_iter().map(to_str_text);
-    prim.chain(unary).chain(tests).chain(strs).chain([INT_DIV_BY_CONSTANT.0, INT_REM_BY_CONSTANT.0, "NaN", "Infinity", THROW, UNWRAP_JS])
+    let casts = ["$as", "$asA", "$asS", "$asT", "$asNothing", "$uI", "$uJ", "$uD", "$uF", "$uB", "$uS", "$uC", "$uZ"];
+    prim.chain(unary).chain(tests).chain(strs).chain([INT_DIV_BY_CONSTANT.0, INT_REM_BY_CONSTANT.0, "NaN", "Infinity", THROW, UNWRAP_JS]).chain(casts)
 }
 
 #[cfg(test)]

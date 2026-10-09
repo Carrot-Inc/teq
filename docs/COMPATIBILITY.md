@@ -40,8 +40,7 @@ libraries compiled from their jars run against scalac's output. The remaining di
   no enum case is not checked for missing cases, a type splits at most 64 times per match (beyond that nothing
   is reported), and a nested pattern that can never match is not reported; a type test of a trait over a class
   that is not final is warned unreachable (scalac: reachable, a subclass may mix the trait in).
-- `asInstanceOf` to a class type checks nothing (confirmed, fix queued); the variance check leaves private
-  members out.
+- The variance check leaves private members out.
 
 ### Givens and implicits
 
@@ -120,27 +119,33 @@ a JDK member as `not supported on JavaScript`. Beyond that:
   `NoSuchMethodError`, a derived `Show` prints a case object as `Nil()`, `eq` on strings compares by value.
 - A file's top-level `export` clauses are not written to a module's products.
 - `-deprecation`, `-feature` and `-Wtostring-interpolated` have no counterpart, `-Wconf` is not read, the
-  `-Wunused` kinds other than `imports` report nothing, and `@nowarn("msg=...")` silences every warning of
-  its definition, so a build with them and `-Werror` passes here where scalac fails it.
+  `-Wunused` kinds other than `imports` report nothing, `@nowarn("msg=...")` silences every warning of its
+  definition, and a cast between primitives that no conversion makes warns where it is written but not where
+  an inline method's expansion makes one, so a build with them and `-Werror` passes here where scalac fails it.
 
 ## Known differences
 
 - `Double` prints as Scala.js prints it (`3.0` as `3`, `1e21` as `1e+21`, `-0.0` as `0`), a `Float` as the
   `Double` it is; `Int` and `Double` share one runtime type and `Char` and `String` are both JS strings,
-  which only unions and `Any` see: an `Int` type test takes integral doubles, `('a': Any) == (97: Any)` is
-  false, and an `Any`-keyed `Map` compares keys as JavaScript does (`1` and `1.0` one key, `1L` another).
+  which only unions and `Any` see: an `Int` type test takes integral doubles, as a cast to `Int` does (an
+  `Any` holding `7` passes a cast to `Double` or `Byte`, one holding a `String` a cast to `Char`),
+  `('a': Any) == (97: Any)` is false, and an `Any`-keyed `Map` compares keys as JavaScript does (`1` and
+  `1.0` one key, `1L` another).
 - `hashCode` is `MurmurHash3` with Scala.js's hash of a `Double`; the unit is `()` in a concatenation and
   as `toString`, where Scala.js has `undefined`, which `println` and `print` show as Scala.js does;
   `(1: Any).isInstanceOf[AnyRef]` is false; `Option(x)` is `None` for `undefined` as for `null`; the bare
   term `String` is accepted, `String` and `Integer` being objects; `Math.max` and its kind are one
-  definition over `Int | Long | Double`; on JavaScript a value class is never unboxed, equal as its field.
+  definition over `Int | Long | Double`; on JavaScript a value class is never unboxed, equal as its field,
+  and there and in the interpreter a cast to one tests the value where its result is dropped or widened
+  too (scalac: where it is read as the class).
 - `Map` and `Set` keep insertion order (scalac's `HashMap` orders by hash), and so do `java.util.HashMap` and
   `HashSet`, which a `toMap`, `groupingBy` or `toSet` result prints in; a `parallel` stream runs sequentially,
   JavaScript having one thread, and a stream of the file system fails on JavaScript, which has none; `TreeSet`
   and `TreeMap` are the classes of every sorted set and map; `x #:: xs` evaluates `xs` first (a self-referring
   `LazyList` is written `LazyList.cons(x, xs)`); `"abc".toSeq` is a `Vector[Char]`; `"a.b".split(".")` splits
-  on the character, a `Char` and a one-character `String` being one value; a test against `Array[Int]` takes
-  every array.
+  on the character, a `Char` and a one-character `String` being one value; a test or a cast against
+  `Array[Int]` takes every array; a `Map`, a `Set` or a `Seq` is no function at run time (one is wrapped where
+  a function is expected), so a type test of a function type is false for it and a cast to one fails.
 - `java.time` is scala-java-time's, from its jar on the class path, and the region zone ids its tzdb jar's,
   as a Scala.js build takes them, rather than a copy of the JDK's in the standard library.
 - `Throwable` extends the native `Error`, and a value JavaScript throws reaches a `catch` as

@@ -1147,15 +1147,17 @@ impl Remap {
     fn program(&mut self, w: &mut Worker) {
         let clock = std::mem::take(&mut self.clock);
         let p = &mut w.prog;
-        let base = self.walk.exprs as usize;
+        // In the kinds' order (`parallel::KINDS`): a cast names a type.
+        let n = p.exprs.len();
         let mut templates = Vec::new();
-        for (i, e) in p.exprs[base..].iter_mut().enumerate() {
+        for i in Self::ranges(self.walk.exprs, self.shared.exprs, n).into_iter().flatten() {
+            let e = &mut p.exprs[i];
             if let TExpr::Js(..) = e {
-                templates.push(base + i);
+                templates.push(i);
             }
             records::texpr(&*self, e);
         }
-        self.walked += (p.exprs.len() - base) as u64;
+        self.walked += (n - self.walk.exprs as usize) as u64;
         clock.part("walk: expressions");
         let n = p.pats.len();
         for i in Self::ranges(self.walk.pats, self.shared.pats, n).into_iter().flatten() {
@@ -1330,11 +1332,6 @@ impl Remap {
             *t = self.test(*t);
         }
         self.syms_in(&mut d.hoisted);
-        for c in &mut d.casts {
-            c.node = self.expr(c.node);
-            c.to = self.ty(c.to);
-            c.from = self.ty(c.from);
-        }
         for e in d.widened.iter_mut().chain(d.opaque.iter_mut()).chain(d.spread.iter_mut()) {
             *e = self.expr(*e);
         }
@@ -1567,6 +1564,11 @@ impl Remap {
             match *pat {
                 TPat::Test(_, t, _) | TPat::Class(_, t, _, _) => note(t),
                 _ => {}
+            }
+        }
+        for e in &w.prog.exprs[p.exprs as usize..] {
+            if let TExpr::Cast(_, _, t) = *e {
+                note(t);
             }
         }
         (made, held.iter().filter(|&&h| h).count() as u32)
@@ -2754,7 +2756,6 @@ mod tests {
             leaves: Vec::new(),
             leaf_tests: Vec::new(),
             diagnostics: Vec::new(),
-            casts: Vec::new(),
             widened: Vec::new(),
             opaque: Vec::new(),
             spread: Vec::new(),

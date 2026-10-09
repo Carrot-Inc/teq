@@ -107,6 +107,7 @@ pub const OBJECT_ARRAY: &str = "[Ljava/lang/Object;";
 pub const SEQ: &str = "scala/collection/immutable/Seq";
 pub const SCALA_RUNTIME: &str = "scala/runtime/ScalaRunTime";
 pub const PRODUCT: &str = "scala/Product";
+pub const SERIALIZABLE: &str = "java/io/Serializable";
 pub const TUPLE_XXL: &str = "scala/runtime/TupleXXL";
 pub const EQUALS: &str = "scala/Equals";
 pub const RUNTIME_MODULE: &str = "scala/runtime/jvm$package$";

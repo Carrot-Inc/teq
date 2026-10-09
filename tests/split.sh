@@ -595,6 +595,18 @@ else
   ok
 fi
 
+# A test that no reached code makes, a cast in a package nothing calls, changes no module: the
+# numbers of the tested traits and the marks of the products by rule come from the reached tests
+# (`Reach::tested_traits`).
+work=$(mktemp -d)
+mkdir -p "$work/a" "$work/b"
+for v in a b; do printf 'package kept\ncase class P(n: Int)\n@main def run(): Unit = println(P(1))\n' > "$work/$v/Main.scala"; done
+printf 'package dead\ndef unused(x: Any): Any = x\n' > "$work/a/Dead.scala"
+printf 'package dead\ndef unused(x: Any): Any = x.asInstanceOf[Product]\n' > "$work/b/Dead.scala"
+for v in a b; do timeout 20 "$TEQ" compiler build "$work/$v" --split "$work/$v.out" > "$work/$v.log" 2>&1 || bad "unreached cast: the build of $v: $(head -2 "$work/$v.log")"; done
+expect "an unreached cast in another package changes no module" "$(diff -rq "$work/a.out" "$work/b.out" 2>&1 | sed 's/.*\/\([^ /]*\) differ/\1/' | tr '\n' ' ')" ""
+rm -rf "$work"
+
 # The same bytes whatever the number of workers.
 work=$(mktemp -d)
 timeout 60 python3 bench/gen.py "$work/src" 51 22 > /dev/null || bad "workers: the core corpus"
