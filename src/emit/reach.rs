@@ -2273,8 +2273,10 @@ impl Walker {
         // type test numbers what it asks for.
         let skips_desugared = !self.link;
         // The runtime's `toString` and `equals` of a case class call the definitions of
-        // `SHAPE_CALLED` an instance has, a subclass's among them, before the rule's.
+        // `SHAPE_CALLED` an instance has, a subclass's among them, before the rule's. A class the
+        // compiler makes (a tuple, whose `toString` is scala-library's own) defines none.
         let below_case = !self.link
+            && info.def.is_some()
             && info.singleton.is_none()
             && info.base_types.iter().any(|&(b, _)| {
                 let bi = syms.class(b);
