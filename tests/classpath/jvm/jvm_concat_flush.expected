@@ -1,0 +1,45 @@
+197 ints after the first
+  effect e
+  render x
+199
+198 ints after the first
+  render x
+  effect e
+200
+98 longs after the first
+  effect e
+  render x
+100
+99 longs after the first
+  render x
+  effect e
+101
+98 doubles after the first
+  effect e
+  render x
+296
+99 doubles after the first
+  render x
+  effect e
+299
+197 literals between, which take no slot
+  effect e
+  render x
+200
+198 ints and a literal at the boundary
+  render x
+  effect e
+201
+two calls and their join
+  render x
+  effect e
+  render y
+128
+three calls
+  render x
+  render y
+  effect e
+  render z
+404
+the text of the calls
+<11,1.5c1,1.5c1,1.5c1,1.5c1,1.5c1,1.5c1,1.5c1,1.5c1,1.5c1,1.5c1,1.5c1,1.5c1,1.5c1,1.5c1,1.5c1,1.5c1,1.5c1,1.5c1,1.5c1,1.5c1,1.5c1,1.5c1,1.5c1,1.5c1,1.5c1,1.5c1,1.5c1,1.5c1,1.5c1,1.5c1,1.5c1,1.5c1,1.5c1,1.5c1,1.5c1,1.5c1,1.5c1,1.5c1,1.5c1,1.5c1,1.5c1,1.5c1,1.5c1,1.5c1,1.5c1,1.5c1,1.5c1,1.5c1,1.5c1,1.5c1,1.5c1,1.5c1,1.5c1,1.5c1,1.5c>

@@ -1,0 +1,6 @@
+// tests/tasty/fixtures/Eps.tasty (TASTy 28.8, 611 bytes)
+package fix.overloads
+@SourceFile object Eps extends Object {
+  <synthetic> private def writeReplace(): AnyRef = ...
+  def start: Ep = ...
+}

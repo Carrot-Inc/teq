@@ -1,0 +1,22 @@
+catalog initialised
+not exported, initialised with its file
+harness start
+applyTwice basename catalog cheaperThan default describe fromJs greet label log product settings total version
+1.2 {"currency":"EUR","rounding":2}
+hello, node
+0 5 6
+p[] p[a|b]
+pencil costs 1 / pencil / 1 / Product(pencil,1)
+desk costs 250
+pen costs 3; ink costs 12
+pen
+for-of pen
+for-of ink
+2 List(3, 12)
+18
+List(A, B)
+y.txt
+hello, default export 1.2
+[shop] first
+between
+[shop] second

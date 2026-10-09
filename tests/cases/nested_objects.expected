@@ -1,0 +1,26 @@
+init #
+#22
+#22
+List(#21, #22)
+4
+#2:7#2:8
+dot
+box3
+Empty
+true
+#r
+List(text)
+2
+#2
+init *
+*6
+12
+false
+inner of a
+a!
+a!
+inner of b
+b!
+inner of a
+a!
+false

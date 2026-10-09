@@ -1,0 +1,6 @@
+// tests/tasty/fixtures/Fmt.tasty (TASTy 28.8, 419 bytes)
+package fix.retain
+@SourceFile trait Fmt extends Object {
+  def show(x: Int): Predef.String
+  def show(x: Predef.String): Predef.String
+}

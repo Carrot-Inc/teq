@@ -1,0 +1,8 @@
+2.50 true 3.5
+List(1, 2, 3)
+5 7 List(1, 2) Vector(1, 2) Set(1) Map(1 -> a)
+true 3 3 0 0
+-1 2 12 true
+List(1, 2, 3) Vector(1, 2) List(1) List(1, 2) true
+Map(a -> 3) Set(1, 2) List(1, 2, 3) 3
+List(1.5, 2.5) abc List(1) Some(2)

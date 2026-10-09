@@ -1,0 +1,55 @@
+package beb
+
+import bea.*
+
+object Use:
+  def main(args: Array[String]): Unit =
+    println(Api.p1(3))
+    println(Api.p3("abc"))
+    println(Api.p4(new FB))
+    println(Api.p5((1, "a")))
+    println(Api.p6(new V(5)))
+    println(Api.p9(List(1, 2, 3)))
+    println(Api.b2("t", "u"))
+    println(Api.b3("a", "b"))
+    println(Api.b5(Vector(1, 2)))
+    println(Api.b9(()) == ())
+    println(Api.b10(new W("w")))
+    println(Api.b11(new W(4)))
+    println(Api.boxed(new V(7)).isInstanceOf[V])
+    println(Api.a1(Array("x", "y")))
+    println(Api.a2(Array(8, 9)))
+    println(Api.a5(Array(new V(6))))
+    println(Api.w1(new W("s")).value)
+    println(Api.w2(new W(21)))
+    val box: Box[FB] = new FBBox
+    println(box.get.name)
+    println(box.put(new FB))
+    println(new Box[FB](new FB).get.name)
+    println(C3(3).copy(t = 4).t)
+    val c1 = new C1("a", "b")
+    c1.u = "c"
+    println(c1.t + c1.u)
+    val h: Holder = new FooHolder
+    println(h.get.name)
+    println(Cons.q1((1, "ab")))
+    println(Cons.q3((3, "x")))
+    println(Cons.q5(Tuple1(5)))
+    println(Cons.q7((4, "y", true)))
+    println(Cons.q9((1, "z", 9L)))
+    println(Cons.q10())
+    println(Cons.q22(Array(Tuple1(1), Tuple1(2))))
+    println(Cons.v)
+    println(Cons.call)
+    println(scala.util.Try(Bottoms.fail("failed")).failed.get.getMessage)
+    println(Bottoms.n == null)
+    println(Bottoms.orNull(true) + " " + Bottoms.orNull(false))
+    println(Bottoms.bn(null) == null)
+    println(Bottoms.takeNull(null))
+    println(Unions.u1(new UA) + Unions.u1(new UB))
+    println(Unions.u2("four") + Unions.u2(null))
+    println(Unions.u5(Array(new UA, new UB)))
+    println(Unions.u9[UA](new UB))
+    println(Unions.pick(false).name)
+    val vb: VBase[V] = new VImpl[V]
+    println(vb.f(new V(4)).n)

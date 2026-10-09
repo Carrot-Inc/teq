@@ -1,0 +1,5 @@
+// tests/tasty/fixtures/SelfDefs.tasty (TASTy 28.8, 473 bytes)
+package fix.cake
+@SourceFile trait SelfDefs extends Object {
+  type E[A]
+}

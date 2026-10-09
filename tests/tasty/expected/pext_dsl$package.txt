@@ -1,0 +1,7 @@
+// tests/tasty/fixtures/pext_dsl$package.tasty (TASTy 28.8, 632 bytes)
+package fix.pext.dsl
+@SourceFile <synthetic> object pext_dsl$package extends Object {
+  export pext.inlined.{shout}
+  <synthetic> private def writeReplace(): AnyRef = ...
+  <exported> final inline extension (s: Predef.String) def shout: Predef.String = <body@107>
+}

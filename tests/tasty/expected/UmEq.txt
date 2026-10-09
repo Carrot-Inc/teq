@@ -1,0 +1,6 @@
+// tests/tasty/fixtures/UmEq.tasty (TASTy 28.8, 726 bytes)
+package fix.unmod
+@SourceFile object UmEq extends Object {
+  <synthetic> private def writeReplace(): AnyRef = ...
+  def same(a: UmPt, b: UmPt): Boolean = ...
+}

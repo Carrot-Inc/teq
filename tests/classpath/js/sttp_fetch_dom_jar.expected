@@ -1,0 +1,21 @@
+fetch GET https://example.com/api/pets/42?name=rex+fido&tag=a redirect=follow plain
+  headers accept-encoding=gzip, deflate,x-trace=abc body []
+200 Right(echo:) OK Some(canned) Some(text/plain)
+fetch POST https://example.com/pets redirect=follow plain
+  headers accept-encoding=gzip, deflate,content-length=14,content-type=application/json body [{"name":"rex"}]
+200 Right(echo:{"name":"rex"})
+fetch PUT https://example.com/raw redirect=follow plain
+  headers accept-encoding=gzip, deflate,content-length=2,content-type=application/octet-stream body [hi]
+200 Right(List(101, 99, 104, 111, 58, 104, 105))
+fetch GET https://example.com/missing redirect=follow plain
+  headers accept-encoding=gzip, deflate body []
+404 Left(no pet) true true
+fetch GET https://example.com/nofollow redirect=manual plain
+  headers accept-encoding=gzip, deflate body []
+200 echo:
+fetch POST https://example.com/upload redirect=follow multipart
+  parts true true
+200 Right(echo:parts)
+fetch GET https://example.com/down redirect=follow plain
+other JavaScriptException TypeError: Failed to fetch
+finished true

@@ -1,0 +1,2 @@
+|p-4 flex
+|max-w-xs mx-auto

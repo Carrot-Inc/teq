@@ -1,0 +1,5 @@
+// tests/tasty/fixtures/ClashSingle.tasty (TASTy 28.8, 410 bytes)
+package fix.clash
+@SourceFile trait ClashSingle extends Object {
+  def pick(x: Int): Int
+}

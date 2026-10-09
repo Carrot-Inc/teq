@@ -1,0 +1,66 @@
+readString relative: héllo wörld ☃ 😀
+
+
+readAllLines relative: [<héllo wörld ☃ 😀>,<>]
+readAllBytes relative: 104 195 169 108 108 111 32 119 195 182 114 108 100 32 226 152 131 32 240 159 152 128 10 10
+readString absolute: héllo wörld ☃ 😀
+
+
+readAllLines absolute: [<héllo wörld ☃ 😀>,<>]
+readAllBytes absolute: 104 195 169 108 108 111 32 119 195 182 114 108 100 32 226 152 131 32 240 159 152 128 10 10
+readString absent: IOException java.nio.file.NoSuchFileException: target/files_read_write/absent.txt
+readAllLines absent: IOException java.nio.file.NoSuchFileException: target/files_read_write/absent.txt
+readAllBytes absent: IOException java.nio.file.NoSuchFileException: target/files_read_write/absent.txt
+getLastModifiedTime absent: IOException java.nio.file.NoSuchFileException: target/files_read_write/absent.txt
+readString absent absolute: IOException java.nio.file.NoSuchFileException: <dir>/target/files_read_write/absent.txt
+readAllLines absent absolute: IOException java.nio.file.NoSuchFileException: <dir>/target/files_read_write/absent.txt
+readAllBytes absent absolute: IOException java.nio.file.NoSuchFileException: <dir>/target/files_read_write/absent.txt
+getLastModifiedTime absent absolute: IOException java.nio.file.NoSuchFileException: <dir>/target/files_read_write/absent.txt
+readString directory: IOException java.io.IOException: Is a directory
+readAllLines directory: IOException java.io.IOException: Is a directory
+readAllBytes directory: IOException java.io.IOException: Is a directory
+getLastModifiedTime directory: true
+readString directory absolute: IOException java.io.IOException: Is a directory
+readAllLines directory absolute: IOException java.io.IOException: Is a directory
+readAllBytes directory absolute: IOException java.io.IOException: Is a directory
+getLastModifiedTime directory absolute: true
+readString malformed: IOException java.nio.charset.MalformedInputException: Input length = 1
+readAllLines malformed: IOException java.nio.charset.MalformedInputException: Input length = 1
+readAllBytes malformed: 65 195 40
+readString cut: IOException java.nio.charset.MalformedInputException: Input length = 1
+readAllLines cut: IOException java.nio.charset.MalformedInputException: Input length = 2
+readString surrogate: IOException java.nio.charset.MalformedInputException: Input length = 3
+readAllLines surrogate: IOException java.nio.charset.MalformedInputException: Input length = 3
+readString above: IOException java.nio.charset.MalformedInputException: Input length = 4
+readAllLines above: IOException java.nio.charset.MalformedInputException: Input length = 1
+readString lead: IOException java.nio.charset.MalformedInputException: Input length = 3
+readAllLines lead: IOException java.nio.charset.MalformedInputException: Input length = 2
+readString four: IOException java.nio.charset.MalformedInputException: Input length = 4
+readAllLines four: IOException java.nio.charset.MalformedInputException: Input length = 3
+caught as CharacterCodingException: Input length = 4
+lines trailing: [<héllo>,<>]
+lines cr: [<a>,<b>]
+lines crlf: [<a>,<>,<b>]
+lines none: [<x>]
+lines empty: []
+lines blank: [<>]
+lines crcrlf: [<>,<>]
+writeString new: true
+writeString truncates: 195 169 10
+writeString supplementary: 240 159 152 128
+writeString builder: built
+writeString lone surrogate: IOException java.nio.charset.UnmappableCharacterException: Input length = 1
+writeString lone low surrogate: IOException java.nio.charset.UnmappableCharacterException: Input length = 1
+left as it was: built, false
+writeString null: java.lang.NullPointerException: null
+write null: java.lang.NullPointerException: null
+kept: built
+UncheckedIOException without its cause: java.lang.NullPointerException: null
+writeString absolute: absolute
+writeString absent parent: IOException java.nio.file.NoSuchFileException: target/files_read_write/absent/child.txt
+writeString absent parent absolute: IOException java.nio.file.NoSuchFileException: <dir>/target/files_read_write/absent/child.txt
+writeString directory: IOException java.nio.file.FileSystemException: target/files_read_write: Is a directory
+writeString under a file: IOException java.nio.file.FileSystemException: target/files_read_write/written.txt/x: Not a directory
+write bytes: 0 255 10
+write absent parent: IOException java.nio.file.NoSuchFileException: target/files_read_write/absent/child.bin
+file target/files_read_write/absent.txt, other null, reason null

@@ -1,0 +1,73 @@
+# The ship's images (bench/actions/ship.Dockerfile), linux/amd64's and linux/arm64's, built and pushed to the
+# repository's packages under the recipe's tag, then recorded by bench/actions/image.sh, which prints the lines
+# bench/actions/ship-image.txt is then given by a commit; a dry run of the release workflow qualifies them
+# (docs/DEVELOPING.md, "Releases"). Run by hand, from master, when the recipe changes. With the repository variable
+# TEQ_DEPOT_PROJECT set (a Depot project's ID, which no file holds), Depot's builders build both natively, trusted by
+# the run's OIDC token, no secret; without it, buildx here, the arm64 image under emulation.
+name: ship-image
+on:
+  workflow_dispatch:
+permissions: {}
+jobs:
+  image:
+    if: github.repository == 'Carrot-Inc/teq' && github.ref == 'refs/heads/master' && vars.TEQ_DEPOT_PROJECT == ''
+    runs-on: ${{ vars.TEQ_RUNNER_LINUX_X64 || 'ubuntu-24.04' }}
+    timeout-minutes: 240
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # The emulator the arm64 image is built under, by its digest (tonistiigi/binfmt's qemu-v10.2.3-68).
+      - uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4.4.0
+        with:
+          image: docker.io/tonistiigi/binfmt@sha256:400a4873b838d1b89194d982c45e5fb3cda4593fbfd7e08a02e76b03b21166f0
+          platforms: arm64
+      # The builder, BuildKit v0.34.0 by its digest.
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+        with:
+          driver-opts: image=docker.io/moby/buildkit@sha256:b059f8d7226d0b326bc871af489a5dddf65e36af4d20d14251b072974d9ee87c
+      - run: timeout 13800 bench/actions/image.sh build
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+  # The same images by Depot's builders, linux/amd64 and linux/arm64 each on its own architecture, from the checkout's
+  # root as image.sh builds them (ship.Dockerfile.dockerignore keeps the context to the recipe), pushed under the same
+  # tag with the session image.sh logs in, recorded by image.sh as its own build is. The Depot CLI at a pinned version.
+  image-depot:
+    if: github.repository == 'Carrot-Inc/teq' && github.ref == 'refs/heads/master' && vars.TEQ_DEPOT_PROJECT != ''
+    runs-on: ${{ vars.TEQ_RUNNER_LINUX_X64 || 'ubuntu-24.04' }}
+    timeout-minutes: 120
+    permissions:
+      contents: read
+      id-token: write
+      packages: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - id: tag
+        run: echo "tag=$(bench/actions/image.sh tag)" >> "$GITHUB_OUTPUT"
+      - run: timeout 300 bench/actions/image.sh login
+        env:
+          GH_TOKEN: ${{ github.token }}
+      - uses: depot/setup-action@91bc8495a33ebfc504ffc89e5674379ccf23c29c # v1.7.2
+        with:
+          version: 2.102.16
+      - uses: depot/build-push-action@98e78adca7817480b8185f474a400b451d74e287 # v1.18.0
+        timeout-minutes: 90
+        with:
+          project: ${{ vars.TEQ_DEPOT_PROJECT }}
+          context: .
+          file: bench/actions/ship.Dockerfile
+          platforms: linux/amd64,linux/arm64
+          pull: true
+          push: true
+          provenance: false
+          sbom: false
+          tags: ${{ steps.tag.outputs.tag }}
+      - run: timeout 600 bench/actions/image.sh record
+        env:
+          GH_TOKEN: ${{ github.token }}

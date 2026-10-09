@@ -1,0 +1,25 @@
+{"keys":["title","body"],"threshold":0.4}
+keys,threshold
+2 0.4 false
+{"keys":["x"],"shouldSort":true}
+name
+{"name":"k"}
+k
+once
+{"once":true}
+true
+{}
+{"method":"POST"}
+{"method":"GET","body":"payload"}
+payload
+name,value
+tag,label
+tag,label
+{"name":"n","size":2}
+n 2
+{}
+
+{"a":1,"b":2,"c":3} 4
+Some(peeled)
+None
+6

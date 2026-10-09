@@ -1,0 +1,8 @@
+3c3
+<   <macro> inline def twice(inline n: Int): Int = (${ (using contextual$1: Quotes) => twiceImpl{(Expr[Int])(Quotes)}('{ n }.apply{(java.lang.Object): java.lang.Object}(contextual$1))(contextual$1) }: Int)
+---
+>   <macro> inline def twice(inline n: Int): Int = (${ (using contextual$1: Quotes) => twiceImpl{(scala.quoted.Expr, scala.quoted.Quotes): scala.quoted.Expr}('{ n }.apply{(java.lang.Object): java.lang.Object}(contextual$1))(contextual$1) }: Int)
+5c5
+<   <macro> inline def described(inline n: Int): String = (${ (using contextual$3: Quotes) => describedImpl{(Expr[Int])(Quotes)}('{ n }.apply{(java.lang.Object): java.lang.Object}(contextual$3))(contextual$3) }: String)
+---
+>   <macro> inline def described(inline n: Int): String = (${ (using contextual$3: Quotes) => describedImpl{(scala.quoted.Expr, scala.quoted.Quotes): scala.quoted.Expr}('{ n }.apply{(java.lang.Object): java.lang.Object}(contextual$3))(contextual$3) }: String)

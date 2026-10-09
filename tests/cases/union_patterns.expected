@@ -1,0 +1,20 @@
+string a
+tw t
+string pair a true
+tw pair t false
+triple 6
+string x
+int 2
+none
+string box 3
+int box 2
+plain 5
+left string a
+left int 1
+right int 2
+right string b
+string 1strue
+tw 2tfalse
+int first 1a
+string first a1
+string a, string pair b true, tw c, tw pair d false

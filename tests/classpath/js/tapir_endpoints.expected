@@ -1,0 +1,29 @@
+GET /pets /[id] ?q -> {body as text/plain (UTF-8)}/{body as text/plain (UTF-8)}
+Endpoint(securityin: -, in: GET /pets /[id] ?q, errout: {body as text/plain (UTF-8)}, out: {body as text/plain (UTF-8)})
+/pets/{id}?q={q}
+[listPets] GET /pets ?limit {header X-Trace} -> -/{header X-Count} {body as text/plain (UTF-8)}
+Vector(pets) Some(all the pets) Some(listPets) Some(List pets)
+POST /pets {body as text/plain (UTF-8)} -> -/status code (201) {body as text/plain (UTF-8)}
+Some(POST)
+/me {header Authorization} -> -/{body as text/plain (UTF-8)}
+Endpoint(securityin: auth(Bearer http, via {header Authorization}), in: /me, errout: -, out: {body as text/plain (UTF-8)})
+GET /a /[x] /b /[y] /[z] -> -/-
+/a/{x}/b/{y}/{z}
+GET /things /[id] -> one of(status code (404) {body as text/plain (UTF-8)}|status code (401) {body as text/plain (UTF-8)})/{body as text/plain (UTF-8)}
+Endpoint(securityin: -, in: GET /things /[id], errout: one of(status code (404) {body as text/plain (UTF-8)}|status code (401) {body as text/plain (UTF-8)}), out: {body as text/plain (UTF-8)})
+GET /status -> -/status code - possible codes (Map()) {body as text/plain (UTF-8)}
+GET /only /fixed -> -/-
+GET /pets /[id] /[name] ?tag -> -/-
+GET /[a] /[b] /[c] -> -/-
+GET /[a] /[b] /[c]
+/[i] ?s | {body as text/plain (UTF-8)} {header n}
+/[i] ?s -> -/{header n} {body as text/plain (UTF-8)}
+GET /pets /[id] ?q
+{body as text/plain (UTF-8)} {body as text/plain (UTF-8)}
+-, GET, /pets, ?limit, {header X-Trace}
+List(Vector(status code (404), {body as text/plain (UTF-8)}), Vector(status code (401), {body as text/plain (UTF-8)}))
+- -> -/-
+true false
+GET /pets /[id] ?q -> {body as text/plain (UTF-8)}/{body as text/plain (UTF-8)}
+GET /pets /[id] ?first ?q -> {body as text/plain (UTF-8)}/{body as text/plain (UTF-8)}
+{body as text/plain (UTF-8)}

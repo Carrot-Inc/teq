@@ -1,0 +1,5 @@
+# The dialect of this directory: everything of the strict dialect but overloading.
+dialect = "strict"
+
+[dialect]
+no-overloading = false

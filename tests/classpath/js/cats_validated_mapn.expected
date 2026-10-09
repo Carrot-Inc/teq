@@ -1,0 +1,9 @@
+Valid(Form(a,3,Some(e)))
+Valid(Form(x,3,None))
+Invalid(Chain(Empty))
+Valid((1,s))
+Invalid(Chain(Bad))
+true
+true
+true
+true

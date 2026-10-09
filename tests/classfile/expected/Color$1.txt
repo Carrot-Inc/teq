@@ -1,0 +1,6 @@
+// tests/classfile/fixtures/fix/Color$1.class (class file 65.0, 407 bytes)
+package fix
+private[fix] enum Color$1 extends Color {
+  private def this(x$1: Int) = ...
+  def label(): String = ...
+}

@@ -1,0 +1,5 @@
+Some(9) 10 9 false true
+41 -3 40 11 Some(35)
+41 true 40 false 141
+7 List(-1) None 14
+49 Some(39) 48 List(0, 1, 2)

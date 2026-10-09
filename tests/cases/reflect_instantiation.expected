@@ -1,0 +1,76 @@
+reflecttest.Point: reflecttest.Point
+  (int)
+  (int, java.lang.String)
+reflecttest.Hello: reflecttest.Hello
+  ()
+reflecttest.Shapes: reflecttest.Shapes
+  (double, long, boolean, char, java.lang.String, reflecttest.Point, reflecttest.Hello, scala.Function1)
+reflecttest.Generic: reflecttest.Generic
+  (java.lang.Object)
+reflecttest.Curried: reflecttest.Curried
+  (int, java.lang.String, double)
+reflecttest.Defaults: reflecttest.Defaults
+  (int, java.lang.String)
+reflecttest.Guarded: reflecttest.Guarded
+  (java.lang.String)
+reflecttest.Hidden: none
+reflecttest.Base: none
+reflecttest.Plugin: none
+reflecttest.Record: reflecttest.Record
+  (int, java.lang.String)
+reflecttest.Plain: none
+reflecttest.Multi: reflecttest.Multi
+  (double, double)
+  ()
+  (java.lang.String)
+  (int, int)
+reflecttest.Qualified: reflecttest.Qualified
+  (int)
+reflecttest.QualifiedProtected: none
+reflecttest.QualifiedSecondaries: reflecttest.QualifiedSecondaries
+  ()
+  (int)
+reflecttest.Shade$Tint: reflecttest.Shade$Tint
+  (int)
+reflecttest.Shade: none
+reflecttest.Outer$In: reflecttest.Outer$In
+  (reflecttest.Outer, int)
+reflecttest.Outer$Mixed$Deep: reflecttest.Outer$Mixed$Deep
+  (reflecttest.Outer$Mixed, int)
+reflecttest.Erasures: reflecttest.Erasures
+  (scala.Function0, double, reflecttest.Animal, reflecttest.Animal, scala.Function0)
+reflecttest.Unitary: reflecttest.Unitary
+  (java.lang.Void)
+reflecttest.Registry$Nested: reflecttest.Registry$Nested
+  (int)
+reflecttest.Registry: none
+reflecttest.Registry$: none
+reflecttest.Nope: none
+reflecttest.Registry$: reflecttest.Registry$ true
+reflecttest.Registry: no module
+reflecttest.Registry$Inner$: reflecttest.Registry$Inner$ inner
+reflecttest.Loner$: reflecttest.Loner$ loner
+reflecttest.Point: no module
+reflecttest.Record$: no module
+Some(Point(7, one))
+Some(Point(8, eight))
+None
+java.lang.InstantiationException: reflecttest.Point java.lang.NoSuchMethodException: reflecttest.Point.<init>()
+hello
+Record(1,r)
+nested 5
+java.lang.InstantiationException: reflecttest.Shapes
+java.lang.IllegalArgumentException: requirement failed
+curried 1 two 3.5
+defaults 4 d
+42
+null 0 0 0 false 0 null
+List(1110, 0110, 0010, 0011)
+List(true, true, false, true)
+List(double)
+measured 2 measured 0
+Some(varargs 1 5)
+Tint(4)
+false
+in 15
+deep 11

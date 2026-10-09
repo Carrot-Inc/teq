@@ -1,0 +1,7 @@
+// tests/tasty/fixtures/SelfImpl.tasty (TASTy 28.8, 707 bytes)
+package fix.cake
+@SourceFile final class SelfImpl() extends Object, SelfDefs, SelfUses, SelfOther {
+  type E[A] = package.List[A]
+  object Helper extends Object, Helper {
+  }
+}

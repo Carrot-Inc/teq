@@ -1,0 +1,10 @@
+scala.Any
+scala.Int
+B
+B
+B
+scala.collection.immutable.List[scala.Int]
+scala.collection.immutable.List[scala.Any]
+scala.Tuple2[scala.AnyVal, scala.AnyVal]
+scala.Tuple2[scala.Boolean, scala.Boolean]
+any int

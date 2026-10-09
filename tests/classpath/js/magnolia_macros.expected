@@ -1,0 +1,22 @@
+List((city,List(note(field))))
+List((city,List()), (street,List()), (tags,List()), (zip,List()))
+List()
+List((street,None), (city,None), (zip,Some(None)), (tags,None))
+TypeInfo(,Address,List())
+TypeInfo(scala,Option,List(TypeInfo(scala,Int,List())))
+TypeInfo(,Dot,List())
+TypeInfo(,Color,List())
+TypeInfo(,Red,List())
+false
+true
+true
+false
+false
+List(note(on the class))
+List()
+List()
+List()
+List((r,false))
+List((r,None))
+List()
+List()

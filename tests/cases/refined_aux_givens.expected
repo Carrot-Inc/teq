@@ -1,0 +1,10 @@
+passed(Greater(null))
+failed(Not(Passed(Greater(null))))
+passed(Not(Failed(Greater(null))))
+passed(Empty())
+passed(Not(Failed(Empty())))
+failed(Not(Passed(Empty())))
+5
+List(x, y)
+5 3 5
+mk 0

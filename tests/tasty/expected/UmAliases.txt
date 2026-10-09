@@ -1,0 +1,7 @@
+// tests/tasty/fixtures/UmAliases.tasty (TASTy 28.3, 824 bytes)
+package fix.unmod
+@SourceFile object UmAliases extends Object {
+  <synthetic> private def writeReplace(): AnyRef = ...
+  type Scope[P] = UmScope[[A] =>> Option[A], P]
+  def make[P](p: P): Scope[P] = ...
+}

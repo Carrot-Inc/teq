@@ -1,0 +1,10 @@
+Some(Money(1000))
+Some(Money(300))
+Wrap(Some(Money(400)))
+List(Money(100), Money(200))
+true
+true
+Loaded(Data(List(Page(Some(c),List(c!))),None))
+Loaded(Data(List(Page(Some(c),List(x))),None))
+2
+Right(Some(Money(700)))

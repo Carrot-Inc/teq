@@ -1,0 +1,144 @@
+true
+  tail
+  render x
+x!
+object final val
+  tail
+  render x
+x!
+object inline val
+  tail
+  render x
+x!
+object val
+  init Consts
+  render x
+  tail
+x!
+bare object final val
+  tail
+  render x
+x!
+other file's inline val
+  tail
+  render x
+x!
+other file's final val
+  tail
+  render x
+x!
+top-level final val
+  tail
+  render x
+x!
+top-level inline val
+  tail
+  render x
+x!
+own final val
+  tail
+  render x
+x!
+this.final val
+  tail
+  render x
+x!
+final val behind a val
+  tail
+  render x
+x!
+inline val behind a val
+  tail
+  render x
+x!
+val behind a val
+  render x
+  tail
+x!
+final val behind a var
+  render x
+  tail
+x!
+final val behind a lazy val
+  tail
+  render x
+x!
+inline val behind a lazy val
+  tail
+  render x
+x!
+final val behind a def
+  condition
+  render x
+  tail
+x!
+final val behind new
+  render x
+  tail
+x!
+final val behind a path
+  tail
+  render x
+x!
+a trait's final val
+  tail
+  render x
+x!
+local val
+  render x
+  tail
+x!
+comparison
+  tail
+  render x
+x!
+negation
+  tail
+  render x
+x!
+conjunction with a final val
+  tail
+  render x
+x!
+comparison of a final val
+  tail
+  render x
+x!
+arithmetic
+  tail
+  render x
+x!
+strings
+  tail
+  render x
+x!
+ascribed true
+  render x
+  tail
+x!
+block of true
+  tail
+  render x
+x!
+block with a statement
+  cond
+  render x
+  tail
+x!
+conjunction with a call
+  cond
+  render x
+  tail
+x!
+disjunction short of a call
+  tail
+  render x
+x!
+ascribed to an alias of Boolean
+  render x
+  tail
+x!
+negated ascription
+  tail
+  render x
+x!

@@ -1,0 +1,4 @@
+braces-mixed.scala:5:3: error: unmatched closing bracket
+braces-mixed.scala:7:23: error: type mismatch
+braces-mixed.scala:13:3: error: '}' expected, but 'object' found
+braces-mixed.scala:14:23: error: type mismatch

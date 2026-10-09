@@ -1,0 +1,7 @@
+// tests/classfile/fixtures/fix/Outer$Inner.class (class file 65.0, 468 bytes)
+package fix
+class Outer.Inner[B] extends Object {
+  var outerValue: A
+  var innerValue: B
+  def this() = ...
+}

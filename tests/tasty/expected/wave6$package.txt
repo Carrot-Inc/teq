@@ -1,0 +1,6 @@
+// tests/tasty/fixtures/wave6$package.tasty (TASTy 28.8, 908 bytes)
+package fix.wave6
+@SourceFile <synthetic> object wave6$package extends Object {
+  <synthetic> private def writeReplace(): AnyRef = ...
+  extension (using c: W6Ctx)(self: c.Term) def tagged[A](using ev: DummyImplicit): Predef.String = ...
+}

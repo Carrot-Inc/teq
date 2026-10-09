@@ -1,0 +1,2 @@
+def-untyped-no-eq.scala:4:17: error: '=' expected, but identifier found
+def-untyped-no-eq.scala:6:21: error: type mismatch

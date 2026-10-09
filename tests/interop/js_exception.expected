@@ -1,0 +1,14 @@
+ok Array(1, 2)
+js error: object SyntaxError
+js error: string a string
+js error: number 42
+throwable: scala side
+js.JavaScriptException
+js.JavaScriptException: plain / plain
+java.lang.ArithmeticException: / by zero / / by zero
+outer got passes through
+number
+raw again: string raw
+wrapped once
+finalizer
+1

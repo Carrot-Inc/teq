@@ -1,0 +1,77 @@
+// tests/tasty/fixtures/Bodies.tasty (TASTy 28.8)
+@SourceFile class Bodies() extends Base() {
+  def block(n: Int): Int = {
+    val doubled: Int = n * 2
+    var acc: Int = 0
+    acc = acc + doubled
+    (acc: Int)
+  }
+  def lambda(xs: package.List[Int]): package.List[Int] = xs.map[Int]((x: Int) => x + 1)
+  def matching(v: Any): Predef.String = v match {
+    case n: Int if n > 0 => { "positive" }
+    case 0 | -1 => { "zero or minus one" }
+    case Point(x, y) if x == y => { (_root_.scala.StringContext.apply(["diagonal ", ""]*)).s([x]*) }
+    case p @ Point(_, _) => { p.toString() }
+    case s: Predef.String => { (s: String) }
+    case _ => { "other" }
+  }
+  def trying(f: () => Int): Int = try f.apply() catch {
+    case e: package.IllegalArgumentException => { -1 }
+    case _: package.RuntimeException => { -2 }
+  } finally Predef.println("done")
+  def looping(n: Int): Int = {
+    var i: Int = 0
+    var sum: Int = 0
+    while i < n do {
+      sum = sum + i
+      i = i + 1
+    }
+    (sum: Int)
+  }
+  def localDef(n: Int): Int = {
+    def twice(k: Int): Int = k * 2
+    class Counter(start: Int) extends Object() {
+      def next: Int = start + 1
+    }
+    twice((new Counter(n)).next)
+  }
+  def byName(cond: Boolean, x: => Int): Int = if cond then x else 0
+  def usesByName: Int = Bodies.this.byName(true, Bodies.this.block(3))
+  def varargs(xs: Int*): Int = xs.sum[Int](Numeric.IntIsIntegral)
+  def callsVarargs: Int = (Bodies.this.varargs([1, 2, 3]*)) + (Bodies.this.varargs((package.List.apply[Int]([4, 5]*): Int*)))
+  inline def describe[T]: Predef.String = (inline package$package.erasedValue[T] match {
+    case _: Int => { "int" }
+    case _: Predef.String => { "string" }
+    case _ => { "other" }
+  }: Predef.String)
+  inline def showInline[A](a: A): Predef.String = (package$package.summonInline[Pretty[A]].show(a): Predef.String)
+  inline def choose(inline flag: Boolean): Int = (inline if flag then 1 else 2: Int)
+  transparent inline def pick(inline flag: Boolean): Any = inline if flag then Bodies.this.block(1) else "one"
+  def usesInline: Predef.String = (Bodies.this.describe[Int] + Bodies.this.showInline[Int](42)) + (Bodies.this.choose(true))
+  def usesTransparent: Int = inlined(Bodies) Bodies.this.block(1)
+  def usesGiven(xs: package.List[Int])(using s: Pretty[package.List[Int]]): Predef.String = s.show(xs)
+  def interpolated(name: Predef.String, n: Int): Predef.String = (_root_.scala.StringContext.apply(["", " has ", " items"]*)).s([name, n + 1]*)
+  def early(xs: package.List[Int]): Int = {
+    var rest: List[Int] = xs
+    while rest.nonEmpty do {
+      if rest.head > 10 then return rest.head else ()
+      rest = rest.tail
+    }
+    -1
+  }
+  def earlyFromLambda(xs: package.List[Int]): Int = {
+    xs.foreach[Unit]((x: Int) => if x > 10 then return x else ())
+    -1
+  }
+  def failing(msg: Predef.String): Nothing = throw new IllegalStateException(msg)
+  def nothingHere: Predef.String = null
+  def construct: package.List[Int] = new package.::[Int](1, package.Nil)
+  override def greet(name: Predef.String): Predef.String = (super.greet(name)).toUpperCase()
+  class Inner(val label: Predef.String) extends Object() {
+    def describeOuter: Predef.String = label + (Bodies.this.block(1))
+    class Innermost() extends Object() {
+      def reach: Int = Bodies.this.block(2)
+      def reachInlined: Int = inlined(Bodies) Bodies.this.block(1)
+    }
+  }
+}

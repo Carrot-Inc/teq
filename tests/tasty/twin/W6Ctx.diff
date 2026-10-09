@@ -1,0 +1,8 @@
+3c3
+<   class Term(val s: Predef.String) extends Object {
+---
+>   class Term(val s: String) extends Object {
+5c5
+<   def term(s: Predef.String): Term = ...
+---
+>   def term(s: String): Term = ...

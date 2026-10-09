@@ -1,0 +1,6 @@
+// tests/tasty/fixtures/CacheUses.tasty (TASTy 28.8, 608 bytes)
+package fix.cake
+@SourceFile trait CacheUses extends Object { _: CacheTypes =>
+  private[this] val cache: Ty.Cache = ...
+  def cached: Predef.String = ...
+}

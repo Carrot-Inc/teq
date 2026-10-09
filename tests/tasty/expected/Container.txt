@@ -1,0 +1,16 @@
+// tests/tasty/fixtures/Container.tasty (TASTy 28.8, 761 bytes)
+package fix.members
+@SourceFile opaque trait Container extends Object {
+  type Elem
+  type Alias = package.List[Int]
+  opaque type Id = Long
+  class Inner() extends Object {
+  }
+  def head: Elem
+  def viaAlias: Alias
+  def viaOpaque: Id
+  def viaInner: Inner
+  def put(e: Elem): Unit
+  def same(other: Container): other.Elem
+  def project(x: Container#Elem): Int
+}

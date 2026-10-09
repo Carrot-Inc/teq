@@ -1,0 +1,11 @@
+int
+3
+"bad"
+str'
+4
+1,2
+str
+7
+true
+List(3, 2, 1)
+List(Pair(1,0), Pair(2,0))

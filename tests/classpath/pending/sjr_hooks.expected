@@ -1,0 +1,2 @@
+<div class="counter">a: 1 clicks</div>
+<section><div class="counter">b: 7 clicks</div><span>raw 42</span></section>

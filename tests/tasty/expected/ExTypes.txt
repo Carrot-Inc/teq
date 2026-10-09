@@ -1,0 +1,6 @@
+// tests/tasty/fixtures/ExTypes.tasty (TASTy 28.8, 547 bytes)
+package fix.cake
+@SourceFile trait ExTypes extends Object {
+  type Type[A]
+  protected def show[A](t: Type[A]): Predef.String
+}

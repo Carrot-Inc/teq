@@ -1,0 +1,32 @@
+before D
+B body: 1
+Plain body
+D body
+g
+before E
+Plain body
+Deeper body
+E body
+Deeper.x
+before O
+Plain body
+Deeper body
+1
+before Color
+Plain body
+Plain body
+1
+before Shape
+Plain body
+Deeper body
+Plain body
+Deeper body
+4
+before anon
+Plain body
+1
+Sam body
+2
+before F
+B body: 1
+F body

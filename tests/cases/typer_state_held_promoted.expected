@@ -1,0 +1,4 @@
+tests/cases/typer_state_held_promoted/Use.scala:22:17: warning: warn w
+    def helperW = M.warnv + "!"
+                  ^^^^^^^
+i w!

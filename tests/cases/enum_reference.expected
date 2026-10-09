@@ -1,0 +1,65 @@
+Red
+1
+Blue
+List(Red, Green, Blue)
+Red
+BlueBlue
+List(warm, cold, cold)
+65280
+1193046
+Mix(7)
+3
+1
+List(Mercury: 3022, Venus: 7239, Earth: 8000)
+Earth
+3
+Sm(2)
+true
+false
+Sm(42)
+Nn
+2
+-1
+Sm(5)
+Nn
+Sm(deep)
+List(Sm(3), Nn)
+List(Full(f), Empty)
+refl
+const 3
+42
+(42,false)
+IfElse(Not(BoolLit(false)),Add(IntLit(40),IntLit(2)),IntLit(0))
+List(LParen, Number(12), Plus, Ident(x,false), Ident(y z,true), RParen)
+11
+List(Plus)
+List(3, 2, 0, 5, 5, 4)
+true
+false
+true
+true
+false
+true
+Number(4)
+Number
+12
+1
+High
+List(Low, High)
+Rect(2,3)
+3
+None
+one
+Some(key)
+None
+false
+3
+true
+false
+2
+day Tu
+true
+true
+List(day Mo, day Tu, day We)
+We
+Tue

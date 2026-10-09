@@ -1,0 +1,7 @@
+List(Pure(Shelves), Pure(Picks), Pure(Named(x)))
+1s
+2
+1a2b
+1s
+ShelvesNamed(y)
+List(Pure(Genres), Pure(InGenre(c,t)), Pure(Notice(b)))

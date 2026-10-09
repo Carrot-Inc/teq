@@ -1,0 +1,18 @@
+# scalac 3.8.4's spans of the trees of B's expansions (`teq tasty --positions` of scalac's
+# B.tasty), which the whole lean check build's B.tasty gives the same trees in this order. Left
+# out: the points (teq's are a tree's start where scalac's application has its `(`), scalac's
+# second `INLINED` at the splice's span (none in teq's form), its folding of `"run " + "first"`
+# into one string, the anonymous class's definition and template, whose spans teq writes as in
+# any body (queued), and the source of `pick`'s literal, B.scala in scalac's pickle.
+mtb/B.tasty INLINED 57 .. 69 b/B.scala
+mtb/B.tasty INTconst 368 .. 385 a/T.scala
+mtb/B.tasty INLINED 91 .. 104 b/B.scala
+mtb/B.tasty STRINGconst 368 .. 385 a/T.scala
+mtb/B.tasty INLINED 129 .. 146 b/B.scala
+mtb/B.tasty BLOCK 658 .. 715 a/T.scala
+mtb/B.tasty DEFDEF 673 .. 713 a/T.scala
+mtb/B.tasty APPLY 691 .. 713 a/T.scala
+mtb/B.tasty INLINED 172 .. 190 b/B.scala
+mtb/B.tasty BLOCK 658 .. 715 a/T.scala
+mtb/B.tasty DEFDEF 673 .. 713 a/T.scala
+mtb/B.tasty APPLY 691 .. 713 a/T.scala

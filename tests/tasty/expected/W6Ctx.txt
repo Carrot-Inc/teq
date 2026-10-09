@@ -1,0 +1,7 @@
+// tests/tasty/fixtures/W6Ctx.tasty (TASTy 28.8, 519 bytes)
+package fix.wave6
+@SourceFile class W6Ctx() extends Object {
+  class Term(val s: Predef.String) extends Object {
+  }
+  def term(s: Predef.String): Term = ...
+}

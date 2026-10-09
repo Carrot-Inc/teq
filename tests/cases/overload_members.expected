@@ -1,0 +1,13 @@
+entry=1, rent=2, entry=3, entry=4, 'text'
+5
+3
+Some(rent=2)
+Some(entry=4)
+int
+string
+list of 2
+int,int
+120
+int
+List(int, int)
+List(string)

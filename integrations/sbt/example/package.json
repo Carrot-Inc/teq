@@ -1,0 +1,14 @@
+{
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "vite": "8.1.5",
+    "vite-plugin-teq": "file:../../vite",
+    "puppeteer-core": "^23.11.1",
+    "@scala-js/vite-plugin-scalajs": "^1.1.0"
+  }
+}

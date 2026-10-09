@@ -1,0 +1,22 @@
+Fixtures of the TASTy reader tests (tests/tasty.sh).
+
+src/        the Scala sources the fixtures were compiled from; src-shadow/ the source of
+            fixtures-shadow/, second copies of what src/shadow.scala defines (the class path order)
+            and the `EffDefaults` that src-shadow/effects.scala links in the place of the one
+            src/effects.scala compiles its library against, whose TASTy is no fixture
+fixtures/   the .tasty files, compiled with Scala 3.8.4:
+              scala-cli compile -S 3.8.4 --server=false src/shapes.scala
+            and copied from .scala-build/*/classes/main/fix/shapes/; src/quotepat.scala with
+            Scala 3.3.8 (-S 3.3.8), for the TASTy 28.3 pickling of quote patterns (src/unmod33.scala with
+            Scala.js too, for its pickling of a setter call and of a reference to a synthesized member); src/facades.scala,
+            src/jsstack.scala, src/unmod.scala and src/effects.scala with Scala.js (`--js`), which puts the Scala.js library on the class path;
+            src/reader.scala against the classes of src/reader_decl_v1.scala and src/reader_java_v1.scala
+            (`--classpath`, with tests/classfile/fixtures for the Java classes the second reads), whose
+            own TASTy is no fixture, src/reader_decl.scala alone and src/reader_java.scala against
+            tests/classfile/fixtures: the bodies of fix.reader were compiled against earlier versions
+            of fix.rdecl and fix.rjava; their fixtures go into a jar of their own,
+            fixtures-rdecl (tests/support/jars.sh)
+expected/   what `teq tasty <fixture>` prints, and under bodies/ what `teq tasty --body` prints
+            for the definitions of src/bodies.scala; `tests/tasty.sh --update` rewrites them,
+            after which the diff has to be read against src/: the expectations pin the reader's
+            output, they are only as right as that review

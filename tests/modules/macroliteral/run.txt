@@ -1,0 +1,6 @@
+opsdesk@example.org
+A@B.C
+None
+Right(x@y)
+audit initialised
+1

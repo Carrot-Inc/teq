@@ -1,0 +1,3 @@
+incomplete-local-body.scala:4:9: error: '=' expected, but identifier found
+incomplete-local-body.scala:6:9: error: '=' expected, but identifier found
+incomplete-local-body.scala:6:15: error: operator + cannot be applied to Int and Boolean

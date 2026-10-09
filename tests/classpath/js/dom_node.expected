@@ -1,0 +1,9 @@
+console one
+probe
+false
+event ping
+probe
+Error
+status 200
+body hello
+timeout

@@ -1,0 +1,6 @@
+// tests/classfile/fixtures/fix/Outer$Nested.class (class file 65.0, 340 bytes)
+package fix
+static class Outer.Nested extends Object, Runnable {
+  def this() = ...
+  def run(): Unit = ...
+}

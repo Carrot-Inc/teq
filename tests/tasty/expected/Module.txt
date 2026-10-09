@@ -1,0 +1,20 @@
+// tests/tasty/fixtures/Module.tasty (TASTy 28.8, 1430 bytes)
+package fix.cake
+@SourceFile trait Module extends Object {
+  def tag: Predef.String
+  val Named: NamedModule
+  trait NamedModule extends Object {
+    def make(n: Predef.String): Predef.String
+    def hinted(n: Predef.String, loud: Boolean = <default>): Predef.String = ...
+    def hinted$default$2: Boolean @uncheckedVariance = ...
+  }
+  val Helper: HelperModule
+  trait HelperModule extends Object {
+    def help(n: Predef.String): Predef.String = ...
+    def box(n: Predef.String): Boxed = ...
+  }
+  class Boxed(val n: Predef.String) extends Object {
+    def show: Predef.String = ...
+  }
+  def useIt(n: Predef.String): Predef.String = ...
+}

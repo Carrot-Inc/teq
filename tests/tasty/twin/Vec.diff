@@ -1,0 +1,4 @@
+2c2
+< @SourceFile class Vec(val xs: package.List[Int]) extends Object {
+---
+> @SourceFile class Vec(val xs: List[Int]) extends Object {

@@ -1,0 +1,16 @@
+11:65 exhaustive
+12:79 exhaustive
+13:70 exhaustive
+14:64 not-partial
+15:60 exhaustive
+16:61 exhaustive
+17:61 exhaustive
+18:60 exhaustive
+19:80 exhaustive
+20:77 exhaustive
+21:62 not-partial
+22:61 not-partial
+23:71 not-partial
+24:65 not-partial
+25:63 not-partial
+26:67 not-partial

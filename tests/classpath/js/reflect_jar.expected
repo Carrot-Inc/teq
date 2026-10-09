@@ -1,0 +1,18 @@
+reflectlib.Hidden: reflectlib.Hidden () (int)
+reflectlib.Deep: reflectlib.Deep (java.lang.String)
+reflectlib.Middle: none
+reflectlib.Plugin: none
+reflectlib.NotPlugin: none
+Local: Local (int)
+reflectlib.QPriv: reflectlib.QPriv ()
+reflectlib.QProt: none
+reflectlib.QSec: reflectlib.QSec () (int)
+reflectlib.Box$Item: reflectlib.Box$Item (reflectlib.Box, int)
+hidden 7
+deep x
+item 5
+local 3
+reflectlib.Registry$: reflectlib.Registry$ object
+reflectlib.Registry$Inner$: reflectlib.Registry$Inner$ inner
+reflectlib.Loose$: reflectlib.Loose$ loose
+reflectlib.Hidden: no module

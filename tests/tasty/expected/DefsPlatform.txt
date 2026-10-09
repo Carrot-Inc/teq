@@ -1,0 +1,9 @@
+// tests/tasty/fixtures/DefsPlatform.tasty (TASTy 28.8, 889 bytes)
+package fix.cake
+@SourceFile trait DefsPlatform extends Object, Defs {
+  final override type Box[A] = package.List[A]
+  object Box extends Object, BoxModule {
+    def wrap[A](a: A): package.List[A] = ...
+  }
+  def unwrap[A](b: package.List[A]): A = ...
+}

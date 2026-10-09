@@ -1,0 +1,6 @@
+# Thin LTO imports a function into another codegen unit only below this many instructions; at
+# LLVM's 100, whether std's allocation path is inlined turned on how the units happened to be
+# partitioned (docs/SPEED.md, "The import limit"). bench/pgo.sh replaces it through RUSTFLAGS: the
+# profile-guided builds keep the default.
+[build]
+rustflags = ["-C", "llvm-args=-import-instr-limit=250"]

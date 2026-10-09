@@ -1,0 +1,31 @@
+# key	errors	cascade	baseline errors	baseline cascade	scalac errors	scalac cascade
+# def-eq's errors hold two that the recording before them did not: m0012's "class Loud needs to be abstract", scalac's own, and m0004's, which scalac does not report beside its typer's error (its RefChecks runs after an error-free typer alone), a departure of teq's to resolve, which raises the cascade by one
+def-eq	206	162	224	181	240	190
+def-result-type	55	5	53	3	90	40
+rparen	99	49	132	82	116	66
+rbracket	75	25	124	74	109	59
+rbrace	76	26	185	150	168	118
+case-pattern	80	30	81	31	100	50
+case-arrow	72	22	82	32	363	313
+class-name	283	233	391	341	271	221
+class-parent	122	72	152	102	208	158
+enum-comma	42	0	150	108	144	102
+import-trunc	67	17	313	263	243	193
+type-arg-comma	71	21	118	68	67	17
+op-eol	61	11	89	39	53	3
+indent-plus	0	0	0	0	0	0
+indent-minus	50	0	525	482	521	472
+end-rename	0	0	0	0	4	0
+colon-to-brace	50	0	809	772	567	517
+brace-to-colon	50	0	173	123	129	79
+del-token	97	48	217	168	106	58
+str-unterminated	170	120	152	102	228	178
+backquote	50	0	220	170	199	149
+bad-escape	50	0	50	0	51	1
+bad-char	50	0	159	109	125	75
+lit-string	33	1	33	1	33	1
+ref-rename	52	3	52	3	51	2
+class:syntactic	1556	721	3818	3019	3499	2656
+class:lexical	320	120	581	381	603	403
+class:valid	85	4	85	4	84	3
+all	1961	845	4484	3404	4186	3062

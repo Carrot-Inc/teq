@@ -1,0 +1,30 @@
+age 42
+parse error at 2: empty age
+rejected: negative
+not a number: For input string: "x1"
+checked ab
+AB
+checked abcd
+limit 3
+7
+outer saw empty age
+logging empty age
+caught again: empty age
+6
+-1
+5
+pf: empty age
+fell through
+List(ok 10, failed empty age, ok 20)
+List(1, negative, For input string: "z")
+ParseError: m
+Rejected: r
+longer than 2
+Rejected: inner
+true
+java.lang.IllegalArgumentException: bad
+1
+2
+2
+finally runs
+10

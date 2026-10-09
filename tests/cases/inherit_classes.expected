@@ -1,0 +1,49 @@
+Item(Dune)
+Book(Dune)
+Item(Tintin)
+Book(Tintin)
+Comic(Tintin)
+Item(Blue)
+Item(catalogue)
+book 'Dune' (1999) on fiction, book costs 60
+comic 'Tintin' (1999) on fiction, book costs 3
+disc 'Blue' (2000) on general, costs 18
+index 'catalogue' (2024) on general, costs 0
+code of Dune
+book-DUN
+comic-CMC
+code of Blue
+disc-BLU
+code of catalogue
+index-CAT
+s:Tintin
+Item(X)
+Book(X)
+Comic(X)
+s:X/s:X
+Item(Blue)
+Disc(Blue,9)
+Item(Blue)
+Item(Blue)
+true
+Item(Blue)
+Item(Blue)
+disc 'Blue' (2000) on general, costs 2
+book 600
+comic 40
+disc Blue 9
+other Catalogue
+Item(Y)
+Book(Y)
+Comic(Y)
+true
+true
+true
+false
+40
+14
+Box(7)
+Box(7)
+t:Box(x)
+Box((1,one))
+1.5

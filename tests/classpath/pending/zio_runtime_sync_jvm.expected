@@ -1,0 +1,12 @@
+15
+done
+Chunk(3,1,2)
+Right(2)
+Left(Missing(z))
+-1
+4
+7
+List(1, 4, 9)
+Some(big)
+true
+Some(List(bad))

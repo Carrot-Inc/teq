@@ -1,0 +1,16 @@
+eager a
+argument
+2
+eager b
+throwing argument
+caught boom
+eager c
+assigned value
+9
+eager d
+default
+1
+eager e
+receiver
+extension argument
+3

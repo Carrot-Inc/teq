@@ -1,0 +1,10 @@
+// tests/tasty/fixtures/InlRes.tasty (TASTy 28.8, 1118 bytes)
+package fix.inlres
+@SourceFile object InlRes extends Object {
+  <synthetic> private def writeReplace(): AnyRef = ...
+  inline def make(x: Int): () => Int = <body@105>
+  transparent inline def pick(inline b: Boolean): Int | String = <body@164>
+  inline def pickPlain(inline b: Boolean): Int | String = <body@191>
+  inline def lit: Int = <body@213>
+  inline def str(x: Int): Predef.String = <body@237>
+}

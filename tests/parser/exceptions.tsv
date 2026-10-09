@@ -1,0 +1,23 @@
+# The structural losses the mutation suite's gate allows (tests/parser/run.py --gate): per mutant, how
+# many of the original's definitions it loses (swallowed, under another owner or moved), and why the
+# loss is the edit's own and no recovery's. A mutant whose losses differ from the count fails.
+# id	losses	reason
+m0002	1	the `=` deleted before a body on the next line leaves a valid declaration, the body's lines statements of the enclosing region, as scalac parses them
+m0005	5	the `=` deleted before a body on the next line leaves a valid declaration, the body's lines statements of the enclosing region, as scalac parses them
+m0008	4	the `=` deleted before a body on the next line leaves a valid declaration, the body's lines statements of the enclosing region, as scalac parses them
+m0009	2	the `=` deleted before a body on the next line leaves a valid declaration, the body's lines statements of the enclosing region, as scalac parses them
+m0015	1	the `=` deleted before a body on the next line leaves a valid declaration, the body's lines statements of the enclosing region, as scalac parses them
+m0023	2	the `=` deleted before a body on the next line leaves a valid declaration, the body's lines statements of the enclosing region, as scalac parses them
+m0027	1	the `=` deleted before a body on the next line leaves a valid declaration, the body's lines statements of the enclosing region, as scalac parses them
+m0029	1	the `=` deleted before a body on the next line leaves a valid declaration, the body's lines statements of the enclosing region, as scalac parses them
+m0030	4	the `=` deleted before a body on the next line leaves a valid declaration, the body's lines statements of the enclosing region, as scalac parses them
+m0031	6	the `=` deleted before a body on the next line leaves a valid declaration, the body's lines statements of the enclosing region, as scalac parses them
+m0037	3	the `=` deleted before a body on the next line leaves a valid declaration, the body's lines statements of the enclosing region, as scalac parses them
+m0042	1	the `=` deleted before a body on the next line leaves a valid declaration, the body's lines statements of the enclosing region, as scalac parses them
+m0048	1	the `=` deleted before a body on the next line leaves a valid declaration, the body's lines statements of the enclosing region, as scalac parses them
+m0049	1	the `=` deleted before a body on the next line leaves a valid declaration, the body's lines statements of the enclosing region, as scalac parses them
+m0856	1	the edit deleted the type class of a derives clause, which the derived given is named after
+m0857	1	the edit deleted the definition's keyword (`val`)
+m0866	3	the edit deleted the `:` of a class's template body: the indented lines are statements of the enclosing region, a valid program as scalac parses it
+m0869	2	the edit deleted the definition's keyword (`def`)
+m0873	1	the edit deleted the definition's keyword (`def`)

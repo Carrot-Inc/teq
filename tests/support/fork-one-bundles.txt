@@ -1,0 +1,47 @@
+# The bundles' enforcement matrix (tests/fork-one.sh --bundles): a named case per line, its
+# fields apart by ` | `:
+#   <name> | <expected> | <cells> | <environment> | <teq arguments>
+# <expected> is `same`, the output (exit and streams) one worker's without the fork, or
+# `refuse:<text>`, the run ended by a refusal whose message holds <text>. <cells> are the bundles'
+# counts the case has to exercise in its own invocation at every worker count and repetition (a
+# cell at zero fails the run; `-` for none): `published.<class>` and `released.<class>` (stored by a
+# bundle or a hold's release), `entered.<class>` (a peer's entry point entered) with the class
+# `fun`, `val`, `class`, `done` or `template`; `read.direct` and `read.cache` (a peer's record read
+# by an id or from a cache, checked sealed); `waited.withheld` (a reader waited for a publication
+# TEQ_BUNDLE_PAUSE withheld). <environment> is the case's own (`-` for none); `{tmp}` is the run's
+# directory. An entry-point class a case cannot reach is not named for it: core-only reaches no
+# peer, a class check's entry is entered only where a reader came during the check
+# (`pause_done`), and a variance registration is the signatures' (the release's carrier).
+given_value | same | published.fun,published.val,published.class,entered.val,entered.class,read.direct | - | interp tests/workers/given_value
+mixin_program | same | published.val,published.class,published.done,entered.class,read.direct | - | run tests/workers/mixin_program -o {tmp}/main.js
+class_cells | same | published.fun,published.class,published.done | - | interp tests/workers/class_cells
+summon_before_fork | same | published.fun,published.template,published.class | - | compiler build tests/workers/summon_before_fork -o {tmp}/main.js
+inline_expansions_quiet | same | published.fun,published.class | - | compiler check tests/workers/inline_expansions_quiet --werror
+deferred_inline | same | published.fun,published.class | - | compiler check --products {tmp}/products tests/tasty/capture/deferred-inline
+definition_diagnostics | same | published.val | - | compiler check tests/errors/inline_definition_failed.scala
+analysis | same | published.fun,published.class,published.done | - | compiler check --target jvm --analysis-version 2 tests/analysis/cases/blocks
+bundle_entries | same | published.fun,entered.fun,entered.class,entered.template,read.direct,read.cache | - | interp tests/workers/bundle_entries
+pause_done | same | entered.done,waited.withheld | TEQ_BUNDLE_PAUSE=done:800 | interp tests/workers/bundle_entries
+pause_val | same | entered.val,waited.withheld | TEQ_BUNDLE_PAUSE=val:3000 | interp tests/workers/given_value
+refuse_read | refuse:before its records were sealed | - | TEQ_BUNDLE_FAULT=unsealed | interp tests/workers/given_value
+refuse_write | refuse:after a publication sealed it | - | TEQ_BUNDLE_FAULT=write | interp tests/workers/given_value
+# The writers the seal met: a worker's own local
+# class's inherited alternatives merged after the class was published, and an expansion's copies of
+# a stored body's classes settled after a publication nested in its walk registered them.
+local_case_classes | same | published.class,published.done,published.fun | - | run tests/cases/local_case_classes.scala -o {tmp}/main.js
+typeclass_derivation | same | published.class,published.fun | - | run tests/cases/scala3_typeclass-derivation3.scala -o {tmp}/main.js
+# A class nested in a local class published before the enclosing check
+# marked the field it reads.
+nested_in_check | same | published.fun,published.class | - | run tests/workers/nested_in_check -o {tmp}/main.js
+# A signature completed while an own class's merges are settled, published inside
+# the settle (the traits an anonymous class mixes in, after the object that makes it).
+merge_completes_signature | same | published.fun,published.class | - | run tests/workers/merge_completes_signature -o {tmp}/main.js
+# A signature's publication settles no merges: there the settle met the signature being published,
+# not yet stored, as a recursive one, and gave way at two workers.
+inherit_stackable | same | published.fun,published.class | - | run tests/cases/inherit_stackable.scala -o {tmp}/main.js
+# A body published inside a merge names a class it made, whose merge
+# that publication settles before its seal.
+class_made_in_merge | same | published.fun,published.class | - | interp tests/workers/class_made_in_merge
+# That publication leaves the class under merge alone, every entry of it, or
+# another entry's comparison reads the signature being completed and the build gives way.
+class_under_merge | same | published.fun,published.class | TEQ_IDLE_WORKERS=1 | interp tests/workers/class_under_merge

@@ -1,0 +1,3 @@
+def-result-type.scala:3:7: error: Declaration of method f not allowed here: only classes can have declared but undefined members
+def-result-type.scala:3:18: error: an identifier expected, but '=' found
+def-result-type.scala:5:21: error: type mismatch

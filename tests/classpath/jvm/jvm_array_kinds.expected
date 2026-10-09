@@ -1,0 +1,9 @@
+ints, doubles, chars, longs, booleans, strings, an array of Object, an array of Some, no array
+ints, strings, ints, strings, doubles, ints, strings, an array of Option
+ints, strings, chars, arrays of ints, an array of String[], ints
+ints, strings, doubles, an array of Object, an array of Tuple2, chars, strings, bytes
+ints, strings, doubles, ints, ints, ints, ints, ints, ints, ints, an array of Tuple2, an array of Tuple2
+doubles, chars, longs, ints, ints, strings, ints, strings
+ab int[][] int[] String[] Object[]
+ints, strings, ints, strings
+doubles, longs, arrays of ints, an array of Object

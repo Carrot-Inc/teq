@@ -1,0 +1,49 @@
+grows from none: a,b false 
+grows past a full array: a,b false a
+grows several times: a,b,c,d,e,f false a
+shrinks into a short array: a true a
+shrinks in a long array: a,null,x true a,null,x
+shrinks from none: a false 
+shrinks to nothing:  true 
+containsValue
+equals query
+true
+values contains
+equals query
+true
+view containsValue
+equals query
+true
+descending values contains
+equals query
+true
+entrySet contains
+equals stored
+true
+view entrySet contains
+equals stored
+true
+entrySet remove
+equals stored
+true
+view entrySet remove
+equals stored
+true
+values remove
+equals stored
+true
+view values remove
+equals query
+true
+descending values remove
+equals query
+true
+entry equals
+equals stored
+true
+entry equals itself
+equals query
+true
+true 1
+true 2 true 3 0
+false false false false false 1

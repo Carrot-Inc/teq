@@ -1,0 +1,2 @@
+unclosed-paren.scala:4:1: error: ')' expected, but 'object' found
+unclosed-paren.scala:6:19: error: type mismatch

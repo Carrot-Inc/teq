@@ -1,0 +1,10 @@
+Int
+java.lang.String
+Box
+List(0, 0, 0)
+List(null, null)
+true
+Some(3)
+None
+Some(1)
+List(0, 0)

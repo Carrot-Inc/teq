@@ -1,0 +1,17 @@
+Node(Leaf(1), Node(Leaf(2), Leaf(3))) Node(Leaf(2), Node(Leaf(4), Leaf(6))) true false
+6 List(1, 2, 3) 123 3 true Some(2) false
+Some(Node(Leaf(1), Node(Leaf(2), Leaf(3)))) None 8
+Node(Node(Leaf(1), Leaf(-1)), Node(Node(Leaf(2), Leaf(-2)), Node(Leaf(3), Leaf(-3)))) Node(Node(Leaf(1), Node(Leaf(2), Leaf(3))), Leaf(9)) Some(Node(Leaf(1), Leaf(2)))
+Right(()) 321 Some(6) Node(Leaf((1,0)), Node(Leaf((2,1)), Leaf((3,2))))
+Node(Leaf(100), Node(Leaf(201), Leaf(302))) Node(Leaf(()), Node(Leaf(()), Leaf(()))) Node(Leaf(x), Node(Leaf(x), Leaf(x))) List((1,2), (2,4), (3,6)) 6 Leaf(List(1, 1))
+Leaf(Some(2)) Node(Leaf(2), Node(Leaf(3), Leaf(4))) List(1, 2) Leaf(3)
+Box(4) Box(aaa) 3 List(3) Box(3) Box(7) Box(1) Box(())
+Box((3,true)) Box(List(3, 3)) Box(6) Box((3,4)) Box(9) Box(4) Box(()) Box(())
+Box(List(2, 4, 6)) Box(3) Box(List(1, 2)) Box((1,2,3)) 5
+Box(3) 4 3 Some(3) Some(3) List(3)
+Box(0) Box(ab) Box(Some(1)) Box(Box(1)) Node(Node(Leaf(1), Leaf(1)), Leaf(1))
+Box(3) Valid(3) Box(Some(3))
+List(1, 2) List() Some(2) Left(2) (2,a)
+Some(1) List(1, 0) Some(()) 1 1 Some(true)
+Left(e) Some(0) Left(none) Right(0) Right(Left(x))
+12 2 List((1,a), (0,b)) Some((1,a))

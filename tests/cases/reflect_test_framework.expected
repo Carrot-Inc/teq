@@ -1,0 +1,10 @@
+true
+mine
+List(MySuite)
+true
+false
+Failure 2 7
+a.B List(SuiteSelector, TestSelector(t)) false
+false
+boom true
+3

@@ -1,0 +1,7 @@
+private_params/Anon get()I public
+private_params/Anon x$1:I private,final
+private_params/Base b:I private,final
+private_params/Base show()I public
+private_params/Named get()I public
+private_params/Named x:I private,final
+private_params/Sub twice()I public

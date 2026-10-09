@@ -1,0 +1,8 @@
+// tests/tasty/fixtures/SpNode.tasty (TASTy 28.8, 1041 bytes)
+package fix.seqpat
+@SourceFile class SpNode(val name: Predef.String, val children: Int*) extends Object {
+}
+@SourceFile object SpNode extends Object {
+  <synthetic> private def writeReplace(): AnyRef = ...
+  def unapplySeq(n: SpNode): Option[(Predef.String, package.Seq[Int])] = ...
+}

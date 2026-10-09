@@ -1,0 +1,4 @@
+// tests/tasty/fixtures/FoEff.tasty (TASTy 28.8, 554 bytes)
+package fix.cake
+@SourceFile trait FoEff[F[_$8]] extends Object {
+}

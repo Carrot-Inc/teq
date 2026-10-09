@@ -1,0 +1,207 @@
+a hole
+  tail
+  render x
+x!
+an ascribed hole
+  render x
+  tail
+x!
+toString of a hole
+  render x
+  tail
+x!
+a cast hole
+  render x
+  tail
+x!
+an annotated hole
+  render x
+  tail
+x!
+a block ending in a hole
+  stat
+  tail
+  render x
+x!
+an ascribed block ending in a hole
+  stat
+  render x
+  tail
+x!
+a cast block ending in a hole
+  stat
+  render x
+  tail
+x!
+a constant if with a hole in its first branch
+  tail
+  render x
+x!
+a constant if with a hole in its second branch
+  tail
+  render x
+x!
+a constant if with holes in both
+  tail
+  render x
+x!
+an if on a hole
+  render x
+  tail
+x!
+an if on a hole filled with a constant
+  tail
+  render x
+x!
+a constant if around an ascribed hole
+  render x
+  tail
+x!
+an ascribed constant if around a hole
+  render x
+  tail
+x!
+a branch used again
+  tail
+other!
+a branch used again, taken
+  render x
+  tail
+x!
+a condition built from a quote
+  tail
+  render x
+x!
+a constant if used twice
+  tail
+  tail
+  render x
+  render x
+x!|x!
+a constant if as a branch
+  render x
+  tail
+x!
+a block over an ascription
+  stat
+  render x
+  tail
+x!
+an ascription over an ascription
+  render x
+  tail
+x!
+a constant if over an ascription
+  render x
+  tail
+x!
+an ascription over a constant if
+  render x
+  tail
+x!
+a block over a constant if
+  stat
+  tail
+  render x
+x!
+a constant if over a block
+  stat
+  tail
+  render x
+x!
+a quoted constant if spliced
+  tail
+  render x
+x!
+an ascribed inline parameter
+  render x
+  tail
+x!
+toString of an inline parameter
+  render x
+  tail
+x!
+a cast inline parameter
+  render x
+  tail
+x!
+an annotated inline parameter
+  render x
+  tail
+x!
+a block ending in an inline parameter
+  stat
+  tail
+  render x
+x!
+an ascribed block ending in an inline parameter
+  stat
+  render x
+  tail
+x!
+a constant if with an inline parameter in its first branch
+  tail
+  render x
+x!
+a constant if with an inline parameter in its second branch
+  tail
+  render x
+x!
+a constant if with inline parameters in both
+  tail
+  render x
+x!
+an if on an inline parameter
+  render x
+  tail
+x!
+an if on an inline parameter given a constant
+  tail
+  render x
+x!
+an ascribed hole as the condition
+  tail
+  render x
+x!
+a negated hole as the condition
+  tail
+  render x
+x!
+an ascribed inline parameter as the condition
+  tail
+  render x
+x!
+a discarded ascription of a transparent call
+  tail
+  render x
+x!
+a transparent call used ascribed and plain
+  tail
+  render x
+  tail
+  render x
+x!|x!
+a transparent condition in a quote
+  tail
+  render x
+x!
+a plain inline condition in a quote
+  tail
+  render x
+x!
+a negated transparent condition in a quote
+  tail
+  render x
+x!
+a transparent condition conjoined with a hole
+  render x
+  tail
+x!
+a transparent condition conjoined with a constant
+  tail
+  render x
+x!
+a transparent condition built by reflection
+  tail
+  render x
+x!

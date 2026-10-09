@@ -1,0 +1,1 @@
+List(IndexCollection(products,12,7,List(IndexField(id,string,None,Some(false),Some(true)), IndexField(price,int32,Some(true),None,None))))

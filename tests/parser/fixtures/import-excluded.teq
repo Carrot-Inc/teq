@@ -1,0 +1,3 @@
+import-excluded.scala:3:8: error: cannot resolve import: Missing not found
+import-excluded.scala:3:8: error: cannot resolve import: Missing not found
+import-excluded.scala:5:11: error: not found: gone

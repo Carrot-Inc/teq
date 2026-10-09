@@ -1,0 +1,14 @@
+sub01 threw java.lang.StringIndexOutOfBoundsException: Range [0, 1) out of bounds for length 0
+sub1 threw java.lang.StringIndexOutOfBoundsException: Range [1, 0) out of bounds for length 0
+sub-1 threw java.lang.StringIndexOutOfBoundsException: Range [-1, 3) out of bounds for length 3
+sub21 threw java.lang.StringIndexOutOfBoundsException: Range [2, 1) out of bounds for length 3
+sub04 threw java.lang.StringIndexOutOfBoundsException: Range [0, 4) out of bounds for length 3
+cpa0 threw java.lang.StringIndexOutOfBoundsException: Index 0 out of bounds for length 0
+cpa3 threw java.lang.StringIndexOutOfBoundsException: Index 3 out of bounds for length 3
+cpa-1 threw java.lang.StringIndexOutOfBoundsException: Index -1 out of bounds for length 3
+charAt3 threw java.lang.StringIndexOutOfBoundsException: Index 3 out of bounds for length 3
+sub33 = 
+sub3 = 
+sub12 = b
+cpa1 = 119070
+take = abcabc

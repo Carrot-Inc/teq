@@ -1,0 +1,6 @@
+Some(Email(a@b.c))
+Left(This is not an email)
+x@y.z
+x@y.z
+true
+Token(t!)

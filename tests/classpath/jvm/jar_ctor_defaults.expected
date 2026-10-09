@@ -1,0 +1,6 @@
+Printer(true,true,2,p)
+Printer(false,false,4,p)
+Printer(false,false,2,q)
+(1,7,8)
+3
+Inner(1,z)

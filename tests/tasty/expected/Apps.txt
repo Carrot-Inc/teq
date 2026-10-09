@@ -1,0 +1,12 @@
+// tests/tasty/fixtures/Apps.tasty (TASTy 28.8, 994 bytes)
+package fix.runtime
+@SourceFile object Apps extends Object {
+  <synthetic> private def writeReplace(): AnyRef = ...
+  trait App extends Object {
+    def bootstrap: Predef.String
+    def run: Predef.String = ...
+  }
+  trait DefaultApp extends Object, App {
+    val bootstrap: Predef.String = ...
+  }
+}

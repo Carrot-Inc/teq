@@ -1,0 +1,6 @@
+// tests/tasty/fixtures/PatchRef.tasty (TASTy 28.8, 908 bytes)
+package fix.runtime
+@SourceFile final class PatchRef[V0](v: V0) extends Object, Ref[V0] {
+  def initial: Value = ...
+  override def get: package.List[Value] = ...
+}

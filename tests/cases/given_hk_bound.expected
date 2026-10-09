@@ -1,0 +1,4 @@
+codec(box(str))
+iterable(string)
+iterable(codec(box(str)))
+ok

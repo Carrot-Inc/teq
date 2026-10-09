@@ -1,0 +1,5 @@
+// tests/tasty/fixtures/Shadowed.tasty (TASTy 28.8, 382 bytes)
+package fix.shadow
+@SourceFile class Shadowed() extends Object {
+  def which: Predef.String = ...
+}

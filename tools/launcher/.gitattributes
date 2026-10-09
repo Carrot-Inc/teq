@@ -1,0 +1,2 @@
+teq text eol=lf
+teq.cmd text eol=crlf

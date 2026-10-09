@@ -1,0 +1,6 @@
+// tests/tasty/fixtures/PonApi.tasty (TASTy 28.8, 615 bytes)
+package fix.ponapi
+@SourceFile object PonApi extends Object {
+  <synthetic> private def writeReplace(): AnyRef = ...
+  inline def ref: AnyRef = <body@104>
+}

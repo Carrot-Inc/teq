@@ -1,0 +1,5 @@
+// tests/tasty/fixtures/PromiseDefs.tasty (TASTy 28.8, 457 bytes)
+package fix.cake
+@SourceFile trait PromiseDefs extends Object {
+  type Name
+}

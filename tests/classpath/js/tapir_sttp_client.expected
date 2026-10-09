@@ -1,0 +1,16 @@
+GET https://api.example.com/v1/pets/42?expand=owner, response as: mapped(either(as string, as string)), headers: Accept-Encoding: gzip, deflate, body: empty
+GET List(v1, pets, 42) Map(expand -> owner)
+https://api.example.com/v1/pets/7
+POST https://api.example.com/v1/pets, response as: mapped(either(as string, as string)), headers: Accept-Encoding: gzip, deflate, X-Trace: t-1, Content-Length: 35, Content-Type: application/json, body: string: {"name":"rex","tags":["dog","big"]}
+GET https://api.example.com/v1/me, response as: mapped(either(ignore, as string)), headers: Accept-Encoding: gzip, deflate, Authorization: ***, body: empty Some(Bearer secret)
+Value(Right(Pet(42,rex,List(dog))))
+Value(Left(no such pet))
+Error({"id":9,"name":"bad"},java.lang.IllegalArgumentExcepti
+Value(Right((Pet(43,rex,List(dog, big)),/v1/pets/43)))
+Value(Left(Forbidden(not yours)))
+Value(Left(NotFound(unknown owner)))
+Value(Right(alice))
+Right(12)
+13
+Right(Pet(42,rex,List(dog)))
+RuntimeException: Endpoint GET /pets /[id] ?expand -> {bod

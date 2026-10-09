@@ -1,0 +1,4 @@
+Die(a,1)
+List(Die(b,2), Die(c,3))
+zero
+true

@@ -1,0 +1,6 @@
+// tests/tasty/fixtures/QaPolicy.tasty (TASTy 28.8, 708 bytes)
+package fix.shapes
+@SourceFile class QaPolicy() extends Object {
+  def apply[F[_$3]](x: F[Int])(using evidence$1: QaApplicative[F]): Predef.String = ...
+  protected[QaPolicy] def apply[F[_$4]](x: F[Int])(using evidence$1: QaFunctor[F]): Predef.String = ...
+}

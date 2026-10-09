@@ -1,0 +1,35 @@
+behind a def
+  getC
+  made
+true
+behind new
+  made
+3
+behind a var
+  getC
+  made
+c
+behind a val
+  getC
+  made
+true
+behind a lazy val
+true
+behind an object
+true
+in a condition
+  getC
+  made
+then
+in an argument
+  getC
+  made
+  made
+6
+a constant defined through a receiver
+true
+true
+chosen
+a null receiver
+  none
+  caught

@@ -1,0 +1,2 @@
+def-missing-eq.scala:3:7: error: Declaration of method f not allowed here: only classes can have declared but undefined members
+def-missing-eq.scala:3:22: error: end of statement expected, but '(' found

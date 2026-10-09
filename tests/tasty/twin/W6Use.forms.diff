@@ -1,0 +1,4 @@
+3c3
+<   def viaLib(using c: W6Ctx)(t: c.Term): String = wave6$tagged{(fix.wave6.W6Ctx, fix.wave6.W6Ctx.Term, [1], DummyImplicit): java.lang.String}(c)(t)[Int](DummyImplicit.dummyImplicit)
+---
+>   def viaLib(using c: W6Ctx)(t: W6Ctx#Term): String = wave6$tagged{(fix.wave6.W6Ctx, fix.wave6.W6Ctx.Term, [1], DummyImplicit): java.lang.String}(c)(t)[Int](DummyImplicit.dummyImplicit)

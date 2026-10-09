@@ -1,0 +1,30 @@
+M0(f0 = s1, f1 = 1, f2 = true) true 0 false
+M1(f0 = 2, f1 = true, f2 = Some(o2), f3 = List(2, 2)) true 0 false
+M2(f0 = true, f1 = Some(o3), f2 = List(3, 2), f3 = 3.5, f4 = 3, ref = M1(f0 = 2, f1 = true, f2 = Some(o2), f3 = List(2, 2))) true 0 false
+M3(f0 = Some(o4), f1 = List(4, 2), f2 = 4.5, f3 = 4, f4 = s4, f5 = 4) true 0 false
+M4(f0 = List(5, 2), f1 = 5.5, f2 = 5, f3 = s5, f4 = 5, f5 = true, f6 = Some(o5)) true 0 false
+M5(f0 = 6.5, f1 = 6, f2 = s6, f3 = 6, f4 = true, f5 = Some(o6), f6 = List(6, 2), f7 = 6.5, ref = M4(f0 = List(5, 2), f1 = 5.5, f2 = 5, f3 = s5, f4 = 5, f5 = true, f6 = Some(o5))) true 0 false
+M6(f0 = 7, f1 = s7, f2 = 7) true 0 false
+M7(f0 = s8, f1 = 8, f2 = true, f3 = Some(o8)) true 0 false
+M8(f0 = 9, f1 = true, f2 = Some(o9), f3 = List(9, 2), f4 = 9.5, ref = M7(f0 = s8, f1 = 8, f2 = true, f3 = Some(o8))) true 0 false
+M9(f0 = true, f1 = Some(o10), f2 = List(10, 2), f3 = 10.5, f4 = 10, f5 = s10) true 0 false
+M10(f0 = Some(o11), f1 = List(11, 2), f2 = 11.5, f3 = 11, f4 = s11, f5 = 11, f6 = true) true 0 false
+M11(f0 = List(12, 2), f1 = 12.5, f2 = 12, f3 = s12, f4 = 12, f5 = true, f6 = Some(o12), f7 = List(12, 2), ref = M10(f0 = Some(o11), f1 = List(11, 2), f2 = 11.5, f3 = 11, f4 = s11, f5 = 11, f6 = true)) true 0 false
+M12(f0 = 13.5, f1 = 13, f2 = s13) true 0 false
+M13(f0 = 14, f1 = s14, f2 = 14, f3 = true) true 0 false
+M14(f0 = s15, f1 = 15, f2 = true, f3 = Some(o15), f4 = List(15, 2), ref = M13(f0 = 14, f1 = s14, f2 = 14, f3 = true)) true 0 false
+M15(f0 = 16, f1 = true, f2 = Some(o16), f3 = List(16, 2), f4 = 16.5, f5 = 16) true 0 false
+M16(f0 = true, f1 = Some(o17), f2 = List(17, 2), f3 = 17.5, f4 = 17, f5 = s17, f6 = 17) true 0 false
+M17(f0 = Some(o18), f1 = List(18, 2), f2 = 18.5, f3 = 18, f4 = s18, f5 = 18, f6 = true, f7 = Some(o18), ref = M16(f0 = true, f1 = Some(o17), f2 = List(17, 2), f3 = 17.5, f4 = 17, f5 = s17, f6 = 17)) true 0 false
+M18(f0 = List(19, 2), f1 = 19.5, f2 = 19) true 0 false
+M19(f0 = 20.5, f1 = 20, f2 = s20, f3 = 20) true 0 false
+M20(f0 = 21, f1 = s21, f2 = 21, f3 = true, f4 = Some(o21), ref = M19(f0 = 20.5, f1 = 20, f2 = s20, f3 = 20)) true 0 false
+M21(f0 = s22, f1 = 22, f2 = true, f3 = Some(o22), f4 = List(22, 2), f5 = 22.5) true 0 false
+M22(f0 = 23, f1 = true, f2 = Some(o23), f3 = List(23, 2), f4 = 23.5, f5 = 23, f6 = s23) true 0 false
+M23(f0 = true, f1 = Some(o24), f2 = List(24, 2), f3 = 24.5, f4 = 24, f5 = s24, f6 = 24, f7 = true, ref = M22(f0 = 23, f1 = true, f2 = Some(o23), f3 = List(23, 2), f4 = 23.5, f5 = 23, f6 = s23)) true 0 false
+M24(f0 = Some(o25), f1 = List(25, 2), f2 = 25.5) true 0 false
+M25(f0 = List(26, 2), f1 = 26.5, f2 = 26, f3 = s26) true 0 false
+M26(f0 = 27.5, f1 = 27, f2 = s27, f3 = 27, f4 = true, ref = M25(f0 = List(26, 2), f1 = 26.5, f2 = 26, f3 = s26)) true 0 false
+M27(f0 = 28, f1 = s28, f2 = 28, f3 = true, f4 = Some(o28), f5 = List(28, 2)) true 0 false
+M28(f0 = s29, f1 = 29, f2 = true, f3 = Some(o29), f4 = List(29, 2), f5 = 29.5, f6 = 29) true 0 false
+M29(f0 = 30, f1 = true, f2 = Some(o30), f3 = List(30, 2), f4 = 30.5, f5 = 30, f6 = s30, f7 = 30, ref = M28(f0 = s29, f1 = 29, f2 = true, f3 = Some(o29), f4 = List(29, 2), f5 = 29.5, f6 = 29)) true 0 false

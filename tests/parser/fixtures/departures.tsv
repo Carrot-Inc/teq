@@ -1,0 +1,70 @@
+# Every difference between a fixture's teq list and its scalac list (tests/parser/run.py --fixtures), with
+# the reason it is a departure.
+# fixture	side	diagnostic (line, severity, normalised message)	reason
+braces-mixed	scalac	braces-mixed.scala:9: error: eof expected, but '}' found	braces
+braces-mixed	teq	braces-mixed.scala:13: error: '}' expected, but 'object' found	braces
+braces-mixed	teq	braces-mixed.scala:14: error: type mismatch	typed-after-skip
+braces-mixed	teq	braces-mixed.scala:5: error: unmatched closing bracket	braces
+broken-array	scalac	broken-array.scala:5: error: None of the overloaded alternatives of method * in class Int with types	wording
+broken-array	scalac	broken-array.scala:6: error: None of the overloaded alternatives of method * in class Int with types	wording
+broken-array	teq	broken-array.scala:5: error: operator * cannot be applied to Int and String	wording
+broken-array	teq	broken-array.scala:6: error: operator * cannot be applied to Int and String	wording
+broken-case	scalac	broken-case.scala:10: error: type mismatch	scalac-tree
+broken-case	scalac	broken-case.scala:11: error: pattern expected	wording
+broken-case	scalac	broken-case.scala:13: error: type mismatch	scalac-tree
+broken-case	scalac	broken-case.scala:9: error: pattern expected	wording
+broken-case	teq	broken-case.scala:11: error: a pattern expected, but '=>' found	wording
+broken-case	teq	broken-case.scala:13: warning: match may not be exhaustive; missing: B(_)	typed-after-skip
+broken-case	teq	broken-case.scala:9: error: a pattern expected, but '=>' found	wording
+broken-result	scalac	broken-result.scala:4: warning: Alphanumeric type L is not declared infix; it should not be used as infix operator.	unwarned
+broken-result	teq	broken-result.scala:4: error: not found: build	typed-after-skip
+broken-type	scalac	broken-type.scala:4: error: Declaration of value u not allowed here: only classes can have declared but undefined members	dependent
+broken-type	teq	broken-type.scala:5: error: type mismatch	typed-after-skip
+case-arrow	scalac	case-arrow.scala:4: error: type mismatch	scalac-tree
+case-arrow	scalac	case-arrow.scala:5: error: '=>' expected, but 'val' found	wording
+case-arrow	scalac	case-arrow.scala:6: error: not found: m	scalac-tree
+case-arrow	scalac	case-arrow.scala:7: error: Expected start of definition	scalac-tree
+case-arrow	scalac	case-arrow.scala:9: error: eof expected, but end of indented block found	scalac-tree
+case-arrow	teq	case-arrow.scala:5: error: '=>' expected, but new line found	wording
+class-header	scalac	Use.scala:2: error: too many arguments for constructor C in class C	dependent
+ctor-cut-list	scalac	ctor-cut-list.scala:4: error: too many arguments for constructor C in class C: (a: Int, b: Int)(c: Int): C	wording
+ctor-cut-list	teq	ctor-cut-list.scala:4: error: too many arguments: expected 2	wording
+def-missing-colon	scalac	def-missing-colon.scala:4: error: type mismatch	dependent
+def-missing-eq	scalac	def-missing-eq.scala:3: error: Declaration of method f not allowed here: only classes can have declared but undefined members	dependent
+def-missing-eq	scalac	def-missing-eq.scala:3: error: end of statement expected, but '(' found	bare-body
+def-missing-eq	teq	def-missing-eq.scala:3: error: '=' expected, but '(' found	bare-body
+def-missing-eq	teq	def-missing-eq.scala:5: error: type mismatch	typed-after-skip
+def-result-type	scalac	def-result-type.scala:3: error: Declaration of method f not allowed here: only classes can have declared but undefined members	dependent
+end-marker	scalac	end-marker.scala:5: error: misaligned end marker	end-marker
+enum-case	scalac	enum-case.scala:6: error: value Green is not a member of object Color	scalac-tree
+enum-case	scalac	enum-case.scala:7: error: missing argument for parameter y of method apply in object P	scalac-tree
+import-excluded	scalac	import-excluded.scala:3: error: not found: Missing	wording
+import-excluded	teq	import-excluded.scala:3: error: cannot resolve import: Missing not found	wording
+incomplete-consumers	scalac	Use.scala:3: error: missing argument for parameter x of method f in object Lib	dependent
+incomplete-consumers	scalac	Use.scala:4: error: type mismatch	dependent
+incomplete-consumers	scalac	Use.scala:7: error: too many arguments for constructor K in class K	dependent
+incomplete-consumers	scalac	Use.scala:9: error: missing argument for parameter y of method apply in object P	dependent
+incomplete-local-body	teq	incomplete-local-body.scala:6: error: operator + cannot be applied to Int and Boolean	typed-after-skip
+indentation	scalac	indentation.scala:4: error: type mismatch	scalac-tree
+indentation	scalac	indentation.scala:5: error: not found: a	scalac-tree
+overload-incomplete	scalac	overload-incomplete.scala:10: error: None of the overloaded alternatives of method g in object O with types	dependent
+overload-incomplete	scalac	overload-incomplete.scala:7: error: None of the overloaded alternatives of method f in object O with types	dependent
+tag-beside-error	scalac	tag-beside-error.scala:6: error: No ClassTag available for B	wording
+tag-beside-error	scalac	tag-beside-error.scala:7: error: No ClassTag available for B	wording
+tag-beside-error	scalac	tag-beside-error.scala:8: error: No ClassTag available for T	wording
+tag-beside-error	scalac	tag-beside-error.scala:9: error: No ClassTag available for B	wording
+tag-beside-error	teq	tag-beside-error.scala:6: error: No ClassTag available for Nothing	wording
+tag-beside-error	teq	tag-beside-error.scala:7: error: No ClassTag available for Nothing	wording
+tag-beside-error	teq	tag-beside-error.scala:8: error: No ClassTag available for Nothing	wording
+tag-beside-error	teq	tag-beside-error.scala:9: error: No ClassTag available for Nothing	wording
+unclosed-args	teq	unclosed-args.scala:5: error: type mismatch	typed-after-skip
+unclosed-brace	scalac	unclosed-brace.scala:11: warning: Line is indented too far to the left, or a `}` is missing	braces
+unclosed-brace	scalac	unclosed-brace.scala:12: error: indented definitions expected, eof found	braces
+unclosed-brace	scalac	unclosed-brace.scala:14: error: '}' expected, but end of file found	braces
+unclosed-brace	scalac	unclosed-brace.scala:5: warning: Line is indented too far to the left, or a `}` is missing	braces
+unclosed-brace	scalac	unclosed-brace.scala:6: warning: Line is indented too far to the left, or a `}` is missing	braces
+unclosed-brace	scalac	unclosed-brace.scala:8: warning: Line is indented too far to the left, or a `}` is missing	braces
+unclosed-brace	teq	unclosed-brace.scala:5: error: '}' expected, but 'def' found	braces
+unclosed-paren	teq	unclosed-paren.scala:6: error: type mismatch	typed-after-skip
+unterminated-string	teq	unterminated-string.scala:5: error: ')' expected, but 'val' found	typed-after-skip
+unterminated-string	teq	unterminated-string.scala:6: error: type mismatch	typed-after-skip

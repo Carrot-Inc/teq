@@ -1,0 +1,6 @@
+// tests/tasty/fixtures/EffAliases.tasty (TASTy 28.8, 747 bytes)
+package fix.shadow
+@SourceFile object EffAliases extends Object {
+  <synthetic> private def writeReplace(): AnyRef = ...
+  type Cell[X] = EffCell[EffDefaults.F, X]
+}

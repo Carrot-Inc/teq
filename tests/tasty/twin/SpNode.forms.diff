@@ -1,0 +1,4 @@
+5c5
+<   def unapplySeq(n: SpNode): Option[(String, Seq[Int])] = Some.apply{([1], java.lang.Object): Some}[(String, Seq[Int])](Tuple2.apply{([2], java.lang.Object, java.lang.Object): Tuple2}[String, Seq[Int]](n.name, n.children))
+---
+>   def unapplySeq(n: SpNode): Option[(String, Seq[Int])] = Some.apply{([1], java.lang.Object): Some}[(String, Seq[Int])](new (String, Seq[Int]){([2], java.lang.Object, java.lang.Object): Tuple2}(n.name, n.children))

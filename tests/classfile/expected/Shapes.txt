@@ -1,0 +1,7 @@
+// tests/classfile/fixtures/fix/Shapes.class (class file 65.0, 1044 bytes)
+package fix
+@Marker sealed trait Shapes permits Circle, Square {
+  def area(): Double
+  def describe(): String = ...
+  static def unit(): Shapes = ...
+}

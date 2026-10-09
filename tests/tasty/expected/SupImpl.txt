@@ -1,0 +1,5 @@
+// tests/tasty/fixtures/SupImpl.tasty (TASTy 28.8, 520 bytes)
+package fix.cake
+@SourceFile final class SupImpl() extends Object, SupP, CacheTypesPlatform, CacheUses {
+  def tag: Predef.String = ...
+}

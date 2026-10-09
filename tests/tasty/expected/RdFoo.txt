@@ -1,0 +1,5 @@
+// tests/tasty/fixtures/RdFoo.tasty (TASTy 28.8, 453 bytes)
+package fix.rdecl
+@SourceFile trait RdFoo extends Object {
+  def bar: Int
+}

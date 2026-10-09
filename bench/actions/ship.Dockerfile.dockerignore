@@ -1,0 +1,6 @@
+# The context of bench/actions/ship.Dockerfile, built from the checkout's root: the recipe's files alone.
+*
+!bench/actions/ship.Dockerfile
+!bench/actions/toolchain.sh
+!bench/zig.sh
+!bench/cross-ship.sh

@@ -1,0 +1,60 @@
+NonEmptyList(3, 1, 2)
+3 List(1, 2) 3 2
+NonEmptyList(6, 2, 4) NonEmptyList(1, 2, 3) NonEmptyList(2, 1, 3) List(3, 1, 2)
+6 6 true List(3, 2)
+NonEmptyList(3, 1, 2, 4, 5)
+NonEmptyList(3, 1, 2, 9) NonEmptyList(3, 1, 2, 7) NonEmptyList(0, 3, 1, 2)
+NonEmptyList((3,0), (1,1), (2,2)) TreeMap(0 -> NonEmptyList(2), 1 -> NonEmptyList(3, 1)) NonEmptyList(3, 1, 2) NonEmptyList(3, 2, 1)
+None Some(NonEmptyList(1)) Some(NonEmptyList(1, 2))
+Some(NonEmptyList(3, 1, 2)) [3;1;2] NonEmptyList(3, 1, 2)
+List(30, 20) Some(1) true
+NonEmptyList(3a, 3b, 3c, 1a, 1b, 1c, 2a, 2b, 2c) NonEmptyList((3,x), (1,y), (2,z))
+TreeMap(a -> 1, b -> 2) TreeSet(1, 2, 3)
+TreeSet(1, 2, 3) 1 true TreeSet(0, 1, 2, 3) TreeSet(1, 2, 3) 3
+TreeSet(2, 4, 6) TreeSet(2, 3) TreeSet(1, 2, 3, 9) NonEmptyList(1, 2, 3)
+Some(TreeSet(4, 5)) None
+TreeMap(a -> 1, b -> 2) (a,1) Some(1) None TreeSet(a, b) TreeMap(a -> 1, b -> 2)
+TreeMap(a -> 1, b -> 2, c -> 3) TreeMap(a -> 10, b -> 20) 2 true NonEmptyList((a,1), (b,2))
+TreeMap(a -> 6, b -> 2) TreeMap(aa -> 2, bb -> 3) 3
+Chain(1, 2, 3) 1 Chain(2, 3) 3 NonEmptyList(1, 2, 3) Chain(1, 2, 3)
+Chain(2, 3, 4) Chain(1, 2, 3, 4) Chain(0, 1, 2, 3) Chain(1, 2, 3, 9) Chain(3, 2, 1)
+List(1, 2, 3) Chain(1, 3) true 6 Chain(1, 2, 3)
+Some(Chain(1)) None Chain(3, 1, 2) NonEmptyChain(1, 2, 3)
+Valid(Person(ann,3)) Invalid(Chain(empty name, negative age -1))
+Right(Person(ann,3)) Left(List(empty name, negative age -1)) true true
+Valid(3) Invalid(2) Person(ann,3) None
+Invalid(Chain(negative age -4)) Valid(6)
+empty name|negative age -1 ann
+Invalid(e) Valid(2) Invalid(no)
+Invalid(x) Valid(1)
+Invalid(NonEmptyList(e, f))
+Invalid(ab) Valid(3) Valid(1)
+Valid(Chain(empty name, negative age -1)) Valid(ann) true true
+Invalid(Chain(negative age -3)) Valid(List(1, 2))
+Invalid(Chain(negative age -2, negative age -3)) Valid(3)
+Both(warn,1) Left(l) Right(2) Both(warn,2) Some(warn) Some(1)
+10 true Right(1) Valid(1) (Some(warn),Some(1))
+Both(ab,3) Both(a,2) Some(Left(x))
+Chain(1, 2, 3, 4) List(1, 2, 3, 4) 4 Some(1) Some(4) false
+Chain(2, 4, 6, 8) Chain(3, 4) Chain(4, 3, 2, 1) Chain(0, 1, 2, 3, 4) Some((1,Chain(2, 3, 4))) Some((Chain(1, 2, 3),4))
+Chain(1, 2) Chain() Chain(1) 10 Vector(1, 2, 3, 4)
+Chain((1,0), (2,1), (3,2), (4,3)) TreeMap(0 -> Chain(2, 4), 1 -> Chain(1, 3)) true true Some(2) Chain(1, 2)
+Chain(1, 2, 3, 4) true Chain(1, 2, 3, 4) Chain(4, 3, 2, 1) Some((2,Chain(1, 3, 4)))
+Some(Right(1)) Some(Right(2)) Some(Right(5)) Some(Right(1))
+Some(Left(bad)) Some(Left(none)) Some(Right(2))
+Some(true) Some(1) Some(101) Some(Some(1)) Some(Right(7))
+Some(Right(11)) Some(Right(1)) Some(Left(s))
+List(Some(1), None, Some(3)) List(Some(2), None, Some(6)) List(1, 0, 3) List(true, false, true) List(2, 0, 4)
+List(Some(5)) List(None) List(Some(1), Some(2)) List(Some(9))
+List(Some(2), None, Some(4)) List(None, None, Some(3)) List(Some(1), Some(0), Some(3)) List(Right(1), Left(l), Right(3))
+(22,1->23) 2->25 26
+(0,p) (7,List(1, 4, 12))
+Some(4) None Some(6) Some(3) Some(12)
+Some(c) Some(8) Some(4) Some(20)
+2 6 4 5
+(log,1) (ab,2)  ()
+c a xy
+Some(List(2, 3)) Some(1) Some(2)
+NonEmptyVector(1, 2, 3) None Vector(1, 2) 1
+6 NonEmptyList(1, 1, 2, 2) NonEmptyList(1, 2)
+6 NonEmptyList(3, 1, 2) Valid(1)

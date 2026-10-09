@@ -1,0 +1,13 @@
+// tests/tasty/fixtures/Atomics.tasty (TASTy 28.8, 1988 bytes)
+package fix.runtime
+@SourceFile object Atomics extends Object {
+  <synthetic> private def writeReplace(): AnyRef = ...
+  final class Token() extends Object {
+  }
+  trait UnsafeAPI[A] extends Object {
+    def get(implicit t: Token): A
+    def set(a: A)(implicit t: Token): Unit
+    def updateAndGet(f: A => A)(implicit t: Token): A
+  }
+  def make[A](initial: A): UnsafeAPI[A] = ...
+}

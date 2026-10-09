@@ -1,0 +1,3 @@
+f(=> Int): Int (=> Int): Int
+g(<repeated>[Int]): Int (<repeated>[Int]): Int
+h(String, => Long)(<repeated>[Boolean]): Int (String, => Long)(<repeated>[Boolean]): Int

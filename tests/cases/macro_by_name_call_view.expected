@@ -1,0 +1,9 @@
+getOrElse[scala.Option[scala.Int]](ident None)
+getOrElse[scala.Option[scala.Int]](ident None)
+true
+true
+0
+false
+1
+4
+long

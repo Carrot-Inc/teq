@@ -1,0 +1,17 @@
+List(1, 2, 3)
+6,8,10
+List((1,1), (2,2), (3,3))
+List(ArraySeq(1, 2), ArraySeq(3))
+List(3, 5, 7)
+(<iterator>,<iterator>)
+List(1, 2, 1, 2, 9)
+2
+Some(1)
+2
+List((a,1), (b,2), (c,3))
+List(b)
+true
+Map(a -> 10, b -> 20)
+0
+Map(2 -> y)
+Map(1 -> 1, 2 -> 2)

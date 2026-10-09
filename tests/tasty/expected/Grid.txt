@@ -1,0 +1,9 @@
+// tests/tasty/fixtures/Grid.tasty (TASTy 28.8, 1846 bytes)
+package fix.retain
+@SourceFile object Grid extends Object, Grids {
+  <synthetic> private def writeReplace(): AnyRef = ...
+  override inline def cells(x: Array[Array[Int]]): Predef.String = <body@126>
+  private def cells$retainedBody(x: Array[Array[Int]]): Predef.String = ...
+  override inline def cells(x: Array[Array[Predef.String]]): Predef.String = <body@445>
+  private def cells$retainedBody(x: Array[Array[Predef.String]]): Predef.String = ...
+}

@@ -1,0 +1,31 @@
+Add(Num(1),Mul(Num(2),Num(3)))
+7
+Num(7)
+Num(0)
+12
+7
+0
+Circle(1.5)
+Empty
+green
+Blue
+2
+true
+false
+zero
+small
+negative
+even 10
+odd
+zero with a
+5 with x
+(5,y) -> 5, y
+10
+ab
+a
+none
+true
+false
+true
+Num(5)
+4

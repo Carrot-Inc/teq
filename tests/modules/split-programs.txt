@@ -1,0 +1,29 @@
+# The programs of tests/split that the module harness takes as two modules:
+# <program>  <the upstream module's files>; the program's other files are the downstream module.
+# Their legs are js-run, bundle, keys and inits, the program's .expected the output.
+overloads  shapes.scala
+small  Left.scala Right.scala
+enum_shared  model.scala view.scala
+exceptions  shop.scala stock.scala
+inherit  shop.scala stock.scala
+held  logic.scala ui.scala views.scala
+taken  parts.scala use.scala
+publish  extra.scala greet.scala logic.scala text.scala
+cycle  a.scala b.scala
+# Out, each with its reason:
+#   anon_order, cycles, inferred, owned, quote_keys, inline_stored_tests, retype, retype_bridges,
+#     retype_cacheable, retype_errors, retype_jar_state, retype_quotes, retype_state  one package:
+#     nothing to take as another module
+#   inline, outline  the downstream expands the upstream's inline methods, whose bodies are
+#     ELIDED, which the TASTy writer does not write yet
+#   quote_copies  the downstream expands the upstream's macro, not written yet
+#   classpath  its upstream is a jar the program names, not a module of its own
+#   facade  no expected output: tests/split builds it alone
+#   reader  the reader's fixtures, a jar's bodies, no module of the program's
+#   reflect  `Reflect.lookupInstantiatableClass` finds the classes the build registers, which
+#     are the program's own (`reflective_registrations`): an upstream module's annotated classes
+#     would have to be read from every product class's annotations,
+#     a follow-up
+#   retype_kept, retype_reads, retype_roots, retype_state_pair  a watch session's programs
+#     (tests/split-watch.sh), whose packages the session edits; no .expected of their own
+#     outputs for the halves

@@ -1,0 +1,7 @@
+// tests/tasty/fixtures/RdFM.tasty (TASTy 28.8, 720 bytes)
+package fix.reader
+@SourceFile trait RdFM[A] extends Object {
+  type Start
+  def start(): RdEv[Start]
+  def run: Start => RdEv[A]
+}

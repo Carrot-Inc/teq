@@ -1,0 +1,7 @@
+screen(1)
+fancy(2)
+screen(3) plain(4)
+fancy(5)
+List(plain(6), plain(7))
+fancy(8)
+plain(9)

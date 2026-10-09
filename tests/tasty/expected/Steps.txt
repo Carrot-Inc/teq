@@ -1,0 +1,5 @@
+// tests/tasty/fixtures/Steps.tasty (TASTy 28.8, 676 bytes)
+package fix.guard
+@SourceFile class Steps() extends Object {
+  def twice(n: Int): guard$package.Step = ...
+}

@@ -1,0 +1,9 @@
+// tests/tasty/fixtures/Concurrents.tasty (TASTy 28.8, 1481 bytes)
+package fix.runtime
+@SourceFile abstract class Concurrents[R, E]() extends Effects[R, E] {
+  def hold[A](r: R, a: A): Keeper[F, A] = ...
+}
+@SourceFile object Concurrents extends Object {
+  <synthetic> private def writeReplace(): AnyRef = ...
+  def ints: Concurrents[Int, Predef.String] = ...
+}

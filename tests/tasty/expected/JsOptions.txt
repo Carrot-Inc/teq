@@ -1,0 +1,7 @@
+// tests/tasty/fixtures/JsOptions.tasty (TASTy 28.8, 842 bytes)
+package fix.facades
+@JSType @SourceFile trait JsOptions extends Object {
+  @ExposedJSMember val name: Predef.String
+  @JSOptional @ExposedJSMember var verbose: UndefOr[Boolean] = ...
+  @JSOptional @ExposedJSMember def verbose_=(x$1: package.UndefOr[Boolean]): Unit = ...
+}

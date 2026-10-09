@@ -1,0 +1,4 @@
+// tests/tasty/fixtures/Vec.tasty (TASTy 28.8, 440 bytes)
+package fix.rassoc
+@SourceFile class Vec(val xs: package.List[Int]) extends Object {
+}

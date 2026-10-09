@@ -1,0 +1,3 @@
+broken-type.scala:3:30: error: an identifier expected, but ']' found
+broken-type.scala:4:16: error: an identifier expected, but '=' found
+broken-type.scala:5:21: error: type mismatch

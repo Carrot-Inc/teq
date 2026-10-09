@@ -1,0 +1,8 @@
+3c3
+<   export pext.inlined.{shout}
+---
+>   export fix.pext.inlined.{shout}
+5c5
+<   <exported> final inline extension (s: Predef.String) def shout: Predef.String = <body>
+---
+>   <exported> final inline extension (s: String) def shout: String = <body>

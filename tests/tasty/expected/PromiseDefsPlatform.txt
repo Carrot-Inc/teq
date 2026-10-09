@@ -1,0 +1,5 @@
+// tests/tasty/fixtures/PromiseDefsPlatform.tasty (TASTy 28.8, 486 bytes)
+package fix.cake
+@SourceFile trait PromiseDefsPlatform extends Object, PromiseDefs {
+  final override type Name = Predef.String
+}

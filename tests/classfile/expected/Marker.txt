@@ -1,0 +1,6 @@
+// tests/classfile/fixtures/fix/Marker.class (class file 65.0, 376 bytes)
+package fix
+@Retention private[fix] annotation Marker extends Annotation {
+  def value(): String
+  def level(): Int
+}

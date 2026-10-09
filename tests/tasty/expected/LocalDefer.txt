@@ -1,0 +1,6 @@
+// tests/tasty/fixtures/LocalDefer.tasty (TASTy 28.8, 3173 bytes)
+package fix.shapes
+@SourceFile object LocalDefer extends Object {
+  <synthetic> private def writeReplace(): AnyRef = ...
+  implicit val deferFunction0: Deferring[[R] =>> () => R] = ...
+}

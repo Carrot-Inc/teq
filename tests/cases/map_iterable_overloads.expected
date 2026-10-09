@@ -1,0 +1,13 @@
+Map(aa -> 2, bb -> 4, cc -> 6)
+List(a, b, c)
+9
+List(1, 2, 3)
+Map(b -> 2, c -> 3)
+List(b, c)
+List((a,1), (a!,1), (b,2), (b!,2), (c,3), (c!,3))
+List(1, 1, 2, 2, 3, 3)
+List(a, b, c)
+List((a,2), (b,3), (c,4))
+1
+a
+List(a, b, c)

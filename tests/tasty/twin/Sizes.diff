@@ -1,0 +1,6 @@
+3,4c3,4
+<   def size(x: Array[Int]): Predef.String
+<   def size(x: Array[Predef.String]): Predef.String
+---
+>   def size(x: Array[Int]): String
+>   def size(x: Array[String]): String

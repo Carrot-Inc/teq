@@ -1,0 +1,23 @@
+https://example.com/api/pets/42?name=rex+fido&tag=a&tag=b
+Some(example.com) None Some(https) List(api, pets, 42) Map(name -> rex fido, tag -> b) Some(List(a, b))
+https://example.com/api/pets/42?name=rex+fido&tag=a&tag=b&page=2
+https://example.com/v2/pets?name=rex+fido&tag=a&tag=b https://example.com/api/pets/42/photos?name=rex+fido&tag=a&tag=b
+http://localhost:8080/a/b?x=1 false
+https://example.com/search?q=scala+3
+https://example.com?a=1&b=2 List(p)
+GET https://example.com/api/pets/42?name=rex+fido&tag=a&tag=b, response as: either(as string, as string), headers: Accept-Encoding: gzip, deflate, X-Trace: abc, Accept: application/json, body: empty
+GET https://example.com/api/pets/42?name=rex+fido&tag=a&tag=b | GET Accept-Encoding=gzip, deflate,X-Trace=abc,Accept=application/json
+POST https://example.com/pets, response as: either(as string, as string), headers: Accept-Encoding: gzip, deflate, Content-Length: 14, Content-Type: application/json, Authorization: ***, body: string: {"name":"rex"}
+StringBody({"name":"rex"},utf-8,text/plain) Some(application/json) Some(Bearer tok)
+PUT https://example.com/raw, response as: either(as string, as byte array), headers: Accept-Encoding: gzip, deflate, Content-Type: application/octet-stream, Content-Length: 3, body: byte array ByteArrayBody
+200 Right({"id":42,"name":"rex"}) true Ok
+201 created true 201
+404 Left(Not Found) true 404
+FALLBACK Some(any) List(X-Kind)
+Right(8)
+fal
+ResponseHandlingException: Exception when sending request: GET https://example.com/missing / statusCode: 404, response: Not Found
+Right(22) GET
+200 418 true true
+application/json Right(Some(utf-8)) true
+Content-Type: application/json Content-Length: 3 Accept

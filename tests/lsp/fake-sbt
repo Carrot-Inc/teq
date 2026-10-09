@@ -1,0 +1,114 @@
+#!/bin/sh
+# The sbt of tests/lsp/driver.mjs's sbt scenarios, put on the server's PATH as `sbt`: checks what
+# the server gives it (teqExportAll; TEQ in the environment; unless the build's own
+# project/plugins.sbt names sbt-teq, when there must be none, the plugin file naming sbt-teq at
+# FAKE_SBT_PLUGIN, the release of the plugin the server selects (integrations/sbt/plugin-version.txt,
+# which the driver reads), as Maven Central serves it, no resolver beside it, and TEQ_VERSION the
+# compiler TEQ prints; the current directory a build),
+# then does what the build's `fake-sbt-mode` file says, after a pause, appending the mode it ran
+# to `fake-sbt-runs`:
+#   one (the default)  teq.lock with the project root over `src`, plus `more` when a
+#                      `fake-sbt-more` file exists
+#   two                teq.lock with the projects a and b
+#   fail               a failure, nothing written
+#   client             nothing written, the thin client's greeting printed
+#   hang               a child process of its own that sleeps, waited for: the run never ends
+#   verbose            eight megabytes of output, then a failure whose last line is known
+# A `fake-sbt-target` file has the lock written under target/teq/, as without the native driver.
+file=""
+task=""
+for arg in "$@"; do
+  case "$arg" in
+    -addPluginSbtFile=*) file=${arg#-addPluginSbtFile=} ;;
+    teqExportAll) task=$arg ;;
+  esac
+done
+if [ -z "$task" ]; then
+  echo "fake sbt: no teqExportAll among the arguments: $*" >&2
+  exit 2
+fi
+if [ -z "${TEQ:-}" ]; then
+  echo "fake sbt: TEQ is not set" >&2
+  exit 2
+fi
+if [ -z "${FAKE_SBT_PLUGIN:-}" ]; then
+  echo "fake sbt: FAKE_SBT_PLUGIN does not name the plugin the server selects" >&2
+  exit 2
+fi
+release=$("$TEQ" --version | awk '{print $2}')
+if grep -qs 'sbt-teq' project/plugins.sbt; then
+  if [ -n "$file" ]; then
+    echo "fake sbt: a plugin file for a build that names sbt-teq itself: $*" >&2
+    exit 2
+  fi
+elif [ -z "$file" ] || [ "$(cat "$file")" != "addSbtPlugin(\"build.teq\" % \"sbt-teq\" % \"$FAKE_SBT_PLUGIN\")" ]; then
+  echo "fake sbt: no plugin file naming sbt-teq $FAKE_SBT_PLUGIN alone, as Maven Central serves it, among the arguments: $*" >&2
+  exit 2
+elif [ "${TEQ_VERSION:-}" != "$release" ]; then
+  echo "fake sbt: TEQ_VERSION is '${TEQ_VERSION:-}', not $release, the compiler TEQ prints" >&2
+  exit 2
+fi
+if [ ! -f build.sbt ]; then
+  echo "fake sbt: not run in a build: $PWD" >&2
+  exit 2
+fi
+mode=one
+[ -f fake-sbt-mode ] && mode=$(cat fake-sbt-mode)
+echo "$mode" >> fake-sbt-runs
+digest() { shasum -a 256 "$1" | cut -d' ' -f1; }
+# project <name> <base> <source root...>: the project's lines of the lock.
+project() {
+  printf '  %s:\n    base: %s\n    configurations:\n      compile:\n        classpath: []\n        sources:\n' "$1" "$2"
+  shift 2
+  for root in "$@"; do printf '          - %s\n' "$root"; done
+  printf '    platform: js\n'
+}
+write_export() {
+  {
+    printf 'teq: %s\nformat: 1\nbinaries: {}\ninputs:\n  files:\n    build.sbt: %s\n' "$release" "$(digest build.sbt)"
+    printf '    project/build.properties: %s\n' "$(digest project/build.properties)"
+    [ -f project/plugins.sbt ] && printf '    project/plugins.sbt: %s\n' "$(digest project/plugins.sbt)"
+    printf 'projects:\n%s\nrepositories: []\n' "$1"
+  } > teq.lock.part
+  out=teq.lock
+  if [ -f fake-sbt-target ]; then
+    mkdir -p target/teq
+    out=target/teq/teq.lock
+  fi
+  mv teq.lock.part "$out"
+  echo "[info] teq: wrote $PWD/$out"
+}
+echo "[info] loading project definition"
+sleep 0.3
+case "$mode" in
+  one)
+    if [ -f fake-sbt-more ]; then write_export "$(project root . src more)"; else write_export "$(project root . src)"; fi
+    ;;
+  two)
+    write_export "$(project a a a/src)
+$(project b b b/src)"
+    ;;
+  fail)
+    echo "[error] build.sbt:3: not found: value scalaVersio"
+    exit 1
+    ;;
+  client)
+    echo "[info] entering thin client - BEEP WHIRR"
+    echo "[info] starting sbt server in the background"
+    ;;
+  hang)
+    sleep 300 &
+    echo "$!" > fake-sbt-child
+    wait $!
+    ;;
+  verbose)
+    line=$(printf 'x%.0s' $(seq 1 1023))
+    for burst in $(seq 1 16); do
+      for n in $(seq 1 512); do echo "$line"; done
+      sleep 0.05
+    done
+    echo "[error] the last line of a verbose failure"
+    exit 1
+    ;;
+esac
+exit 0

@@ -1,0 +1,12 @@
+-12
+2.5
+ab
+abab
+List(1, 2, 3)
+List((1,a), (2,b))
+BufList(1)
+BufList(1, 2)
+BufList()
+BufList(7)
+BufList((1,2))
+BufList((1,2), (3,4))

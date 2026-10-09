@@ -1,0 +1,10 @@
+effect
+before call
+1
+List(2, 3, 3, 3, 3, 3)
+List(2, -6, 2, 3, 3, 3)
+List(3, 3)
+true
+List(true, true, false)
+List(true, true, false)
+List(1, 1, 1, 2)

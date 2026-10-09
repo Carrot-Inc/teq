@@ -1,0 +1,9 @@
+5
+23
+area 18 area 6
+area 32 area 8
+before init 2
+14
+r 0 Red 3 true | b 2 Blue 3 true
+false
+C(6,x) C(6,y) 6 true Z 1 1 | C(7,x) C(7,y) 7 true Z 2 1

@@ -1,0 +1,34 @@
+Tw(text-sm font-bold)
+Tw(w-4 px-4)
+Tw(grid-cols-5 gap-2)
+<div class="flex"></div>
+<div class="flex items-center font-bold"></div>
+<div class="b c"></div>
+<div class="only-pair"></div>
+<div class="maybe"></div>
+<div href="/home" title="Home"></div>
+<div class="p-2 selected"><button on:click>Save</button><span on:change on:click on:click></span></div>
+before: 0
+log: clicked
+log: done
+log: changed button
+log: span 1
+log: clicked
+log: done
+log: changed button
+log: span 2
+log: changed input
+after: 2
+log: one
+log: two
+log: three
+<span class="text-sm">plain</span>
+<span class="text-lg">styled</span>
+<span class="badge badge-default w-3">#3</span>
+<span class="badge badge-default w-5">no. 5</span>
+<section class="p-4">empty class</section>
+<section class="bg-white p-4"><span class="text-sm">a</span><span class="text-sm">b</span></section>
+<div key="k10" key="k20">12</div>
+true
+true
+true

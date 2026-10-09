@@ -1,0 +1,4 @@
+Append(Singleton(1),Singleton(2))
+Singleton(3)
+append
+single

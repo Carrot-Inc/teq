@@ -1,0 +1,5 @@
+i15503i: teq's std has no scala.compiletime.asMatchable ("asMatchable is not a member of the package"); the error withholds the report, as scalac's would.
+i16930: teq resolves no import of a val's type members in an object's body (`val outer: Outer; import outer.{Used, Unused}`: "outer is not an object or a package"); the error withholds the report.
+i19657: teq finds no given for `Schema[Foo]` through `import FooCodec.given` of a generic codec trait's object, and resolves no import from a val's nested object (`import c.N.*`); the errors withhold the report.
+i24562: teq resolves no export from a val of a class (`val c = new C; export c.*`); the errors withhold the report.
+unused-can-equal: teq does not derive `CanEqual[Box[Int], Box[Long]]` from `derives CanEqual` under strictEquality (`Box(1) == Box(1L)`); the error withholds the report.

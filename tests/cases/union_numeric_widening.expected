@@ -1,0 +1,17 @@
+Options(3, x)
+Options(3, x)
+Options(none, 4)
+long 4
+long 9
+string s
+double 1.5
+double 3.5
+double 1
+double 48.5
+1.5
+2.5
+7
+6
+Some(double 1.5)
+List(double 0.5, string a, double 1.25)
+List(long 2, string a, long 3)

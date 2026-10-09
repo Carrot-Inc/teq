@@ -1,0 +1,7 @@
+sync
+microtask 1
+microtask 2
+macrotask 1
+macrotask 2
+future 21
+promise 42

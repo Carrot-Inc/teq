@@ -1,0 +1,23 @@
+scala.runtime.RichInt
+RichInt 3
+5
+true
+scala.collection.StringOps
+StringOps 3
+cba
+true
+scala.Predef$ArrowAssoc
+(1,2)
+other java.lang.Integer
+List(1, 2, 3)
+3
+1
+List(V 1, V 2, V 3)
+4,5
+ab
+true
+List(CV(1), CV(2))
+2
+Vector(V 7)
+V 8
+Some(9)

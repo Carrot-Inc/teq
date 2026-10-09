@@ -1,0 +1,13 @@
+List(ArraySeq(1, 2), ArraySeq(2, 3), ArraySeq(3, 4), ArraySeq(4, 5))
+List(ArraySeq(1, 2), ArraySeq(4, 5))
+List(6, 9, 12)
+List(ArraySeq(1, 2), ArraySeq(3, 4), ArraySeq(5))
+List(ArraySeq(1, 2), ArraySeq(3, 4))
+List(ArraySeq(1, 2), ArraySeq(3, 4), ArraySeq(5, 0))
+List(ArraySeq(1, 2))
+List()
+List()
+Vector(3, 2, 1)
+Vector(a, b, c, d) 4
+List(1, 2, 3, 4)
+List(1, 2, 3)

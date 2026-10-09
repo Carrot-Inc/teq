@@ -1,0 +1,10 @@
+@main def main(): Unit =
+  val one = EmptyTuple.*:[Int, EmptyTuple.type](1)
+  println(one)
+  val three = (1, "a").*:[Boolean, (Int, String)](true)
+  println(three)
+  println((1, "a").head[(Int, String)])
+  println((1, "a").tail[(Int, String)])
+  println((1, "a", 2.5).size[(Int, String, Double)])
+  val wide: Any *: EmptyTuple = EmptyTuple.*:[Any, EmptyTuple](7)
+  println(wide.head)

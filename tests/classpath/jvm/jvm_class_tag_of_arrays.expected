@@ -1,0 +1,15 @@
+Array[Int] | Array[String]: java.lang.Object
+Array[Int] | Array[Int]: [I
+Array[String] | Array[A]: [Ljava.lang.Object;
+Array[B] | Array[C]: [LA;
+Array[Int] | Array[Long]: java.lang.Object
+Array[Int] | String: java.lang.Object
+Array[Int] & java.io.Serializable: [I
+java.io.Serializable & Array[Int]: [I
+Array[A] & Array[B]: [LB;
+Array[Array[Int]] | Array[Array[String]]: [Ljava.lang.Object;
+Array[B | C]: [LA;
+Array[A & T1]: [LA;
+Object[] 0
+A[][] int[][]
+A[] A[]

@@ -1,0 +1,6 @@
+// tests/tasty/fixtures/hkbounds$package.tasty (TASTy 28.8, 570 bytes)
+package fix.hkb
+@SourceFile <synthetic> object hkbounds$package extends Object {
+  <synthetic> private def writeReplace(): AnyRef = ...
+  type HkId[A] = A
+}

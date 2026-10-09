@@ -1,0 +1,7 @@
+// tests/classfile/fixtures/fix/Named.class (class file 65.0, 710 bytes)
+package fix
+abstract class Named[K, V <: List[K]] extends Object {
+  def lookup(key: K, limit: Int): V
+  static def join(separator: String, parts: String*): String = ...
+  protected def this(first: K) = ...
+}

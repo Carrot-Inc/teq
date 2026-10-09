@@ -1,0 +1,29 @@
+# The frozen batches and the named differences of the three scenarios beside this file, in the
+# form of tests/analysis/expected.txt's invalidation lines.
+
+inv-status result-type/default a both passed
+inv-status result-type/default b both passed
+inv-batch result-type/default a both 1 a/Lib.scala
+inv-batch result-type/default a both 2 a/UserA.scala
+inv-batch result-type/default b both 1 b/UserB.scala
+inv-status inline-body/default a both passed
+inv-batch inline-body/default a both 1 a/Macros.scala
+inv-batch inline-body/default a scalac 2 a/Caller.scala
+inv-diff inline-body/default - teq obligation - compiled_a/Caller.scala inline-body
+inv-diff inline-body/default a scalac batch 2 a/Caller.scala inline-body
+inv-diff inline-body/default a scalac change 1 iba.Macros:NamesChange inline-body
+inv-diff inline-body/default a scalac continues 1 True inline-body
+inv-diff inline-body/default a scalac continues 2 False inline-body
+inv-diff inline-body/default a scalac cycle-sources 2 a/Caller.scala inline-body
+inv-diff inline-body/default a scalac event 1 inheritance:iba.Macros>iba.Macros inline-body
+inv-diff inline-body/default a scalac event 1 member_reference:iba.Macros>iba.Caller inline-body
+inv-diff inline-body/default a scalac invalidated 2 iba.Caller inline-body
+inv-diff inline-body/default a scalac next 1 iba.Caller inline-body
+inv-diff inline-body/default a scalac recompiled 2 iba.Caller inline-body
+inv-diff inline-body/default a teq continues 1 False inline-body
+inv-diff inline-body/default a teq stale - iba/Caller$.class:differs inline-body
+inv-status package-object/default a both passed
+inv-status package-object/default b both passed
+inv-batch package-object/default a both 1 a/Obj.scala
+inv-batch package-object/default a both 2 a/UserA.scala
+inv-batch package-object/default b both 1 b/UserB.scala

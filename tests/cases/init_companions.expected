@@ -1,0 +1,44 @@
+main start
+  init fileA1
+  init fileA2
+2
+  init fileALazy
+3
+enum companion
+  Color companion body
+  init Color.default
+  init Color.all
+Green
+Green
+Sq(2)
+  Shape companion body
+  init Shape.unit
+Circle(1)
+  P companion body
+  init P.origin
+P(3)
+P(0)
+object cycle
+  Cyc1 body start
+  Cyc2 body start
+  init Cyc2.w
+  init Cyc2.back
+  Cyc2 body end
+  init Cyc1.v
+  Cyc1 body end
+11
+lazy failure
+  flaky attempt 1
+true
+  flaky attempt 2
+7
+2
+  reentrant body
+5
+  Planet companion body
+  init Planet.heaviest
+4.9
+Venus
+Q(4)
+Blue
+main end

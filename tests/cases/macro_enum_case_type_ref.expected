@@ -1,0 +1,5 @@
+CreditFee(term=true, case=true, enum=true) typeSymbol=CreditFee(term=true, case=true, enum=true) noTermSymbol=true sub=true
+CashFee(term=true, case=true, enum=true) typeSymbol=CashFee(term=true, case=true, enum=true) noTermSymbol=true sub=true
+Other(term=false, case=true, enum=true) typeSymbol=Other(term=false, case=true, enum=true) sub=true
+FeeKind CreditFee
+CreditFee

@@ -1,0 +1,72 @@
+Earth
+5.976E24
+3397200.0
+3.7030267229659395
+true
+true
+List(Mercury, Earth, Mars)
+List(0, 1, 2)
+Mars
+Mercury
+2
+Mars
+true
+false
+shape/0/true
+triangle/3/false
+polygon with 7 sides/7/false
+square/4/true
+Square(2.5)
+true
+2
+Polygon
+Dot
+10
+uid=42
+nick=sv
+flags=List(true, false)
+Some(8)
+Some(3)
+None
+1
+ANONYMOUS
+true
+List(uid, nick, flags)
+List()
+int 3
+List(init retries, init owner, init tags, companion body)
+string root
+[string a, string b]
+retries: int 5
+tags: [string x]
+boolean true
+flag: boolean false
+Custom(flag,true)
+List(retries, owner, tags)
+List(int input, text input, tag list)
+custom flag
+List(init retries, init owner, init tags, companion body, init flag)
+4
+200
+808
+int 404
+200
+List(Ok, NotFound)
+2
+Node(Node(Leaf,1,Leaf),2,Leaf)
+0
+2
+1
+x
+2.5
+3
+List()
+List(0, 2)
+false
+true
+flag
+flag 3
+flag
+false
+List(Earth)
+3

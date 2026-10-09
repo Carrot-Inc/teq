@@ -1,0 +1,5 @@
+broken-case.scala:9:13: error: pattern expected
+broken-case.scala:10:3: error: type mismatch
+broken-case.scala:11:10: error: pattern expected
+broken-case.scala:13:3: error: type mismatch
+broken-case.scala:15:21: error: type mismatch

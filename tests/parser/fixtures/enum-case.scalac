@@ -1,0 +1,5 @@
+enum-case.scala:3:12: error: end of statement expected, but identifier found
+enum-case.scala:4:25: error: an identifier expected, but ')' found
+enum-case.scala:6:24: error: value Green is not a member of object Color
+enum-case.scala:7:12: error: missing argument for parameter y of method apply in object P
+enum-case.scala:8:21: error: type mismatch

@@ -1,0 +1,2 @@
+broken-result.scala:4:83: error: not found: build
+broken-result.scala:4:88: error: ',' or ')' expected, but '(' found

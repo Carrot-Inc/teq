@@ -1,0 +1,22 @@
+a=int 1 (match, x)
+b=str s (match, y)
+c=? (other, z)
+d=? (other, w)
+31
+-1
+50
+15
+9
+describe a
+IntShow ready
+describe b
+describe c
+describe d
+firstOr of 2
+firstOr of 0
+firstOr of 2
+firstOr of 1
+firstOr of 0
+firstOr of 0
+first 0 -> 3
+second 3 -> 9

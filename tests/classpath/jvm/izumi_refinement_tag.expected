@@ -1,0 +1,3 @@
+(S {def n(): Int})
+(Branches {def get(Long): Option[+String], def name(Long): String})
+(S {def v(): String, type T = Int})

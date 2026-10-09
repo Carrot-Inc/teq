@@ -1,0 +1,6 @@
+// tests/tasty/fixtures/Cake.tasty (TASTy 28.8, 693 bytes)
+package fix.cake
+@SourceFile final class Cake() extends Object, DefsPlatform {
+  def boxed(n: Int): Box[Int] = ...
+  def twice(b: Box[Int]): Box[Int] = ...
+}

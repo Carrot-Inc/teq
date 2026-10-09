@@ -1,0 +1,24 @@
+not found
+api error 1
+email is invalid: empty
+wrapped(http 500)
+http 400
+timeout after 30 ms
+other: boom
+other: outer
+NotFound
+Forbidden
+Invalid(email,empty)
+Wrapped(Server(db down))
+HTTP 400
+Timeout(30)
+boom
+outer
+List(NotFound, Forbidden, Invalid(email,empty), Server(db down), BadRequest, Timeout(30), Failure: boom, Timeout(5))
+List(Left(Invalid(n,negative)), Left(BadRequest), Right(14), Left(Failure: too large))
+Attempt(first,Forbidden,None)
+Attempt(first,Forbidden,Some(Timeout(1)))
+true
+true
+List(BadRequest, Timeout(2), Server(x))
+500

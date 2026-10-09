@@ -1,0 +1,46 @@
+NANOSECONDS MICROSECONDS MILLISECONDS SECONDS MINUTES HOURS DAYS
+3000 4 120
+86400000000000 123 2
+120000 4
+9223372036854775807 106751
+-3000000 -1
+HOURS 5 HOURS
+-1
+[]  true
+[f] Zg== true
+[fo] Zm8= true
+[foo] Zm9v true
+[foob] Zm9vYg== true
+[fooba] Zm9vYmE= true
+[foobar] Zm9vYmFy true
+[héllo wörld] aOlsbG8gd/ZybGQ= true
++/+/AD4/f4A=
+-_-_AD4_f4A=
+-_-_AD4_f4A
+YWI
+-5,-1,-65,0,62,63,127,-128
+97,98
+eHl6
+120,121,122
+QUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFB
+QUFB
+IllegalArgumentException: Illegal base64 character 24
+IllegalArgumentException: Last unit does not have enough valid bits
+[en_US] en US en-US
+[en_GB] en GB en-GB
+[en] en  en
+[]   und
+[fr_FR] fr FR fr-FR
+[de_DE] de DE de-DE
+[de] de  de
+[en_CA] en CA en-CA
+[ja_JP] ja JP ja-JP
+[es_MX] es MX es-MX
+[pt] pt  pt
+[en_AU] en AU en-AU
+true
+true
+de_AT
+title TITLE
+America/Los_Angeles
+UTC

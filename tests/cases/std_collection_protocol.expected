@@ -1,0 +1,13 @@
+Bag(3,1,2)
+Vector(6, 2, 4)
+Vector(3, 2)
+3 2 3
+3 List(0, 3, 1, 2, 0)
+1 List(0, 3, 1, 3, 0)
+3 List(1, 2, 3, 3, 0)
+1 List(1, 2, 3, 3, 9)
+List(3, 1, 2)
+Bag(3,1,2) Vector(4, 5) Vector(4) Bag
+List(1, 2, 3, 0, 0)
+List(a)
+List(p, q, s, t)

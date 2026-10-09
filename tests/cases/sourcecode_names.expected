@@ -1,0 +1,25 @@
+plain1: plain | demo.names.sourcecode_names$package.plain | 13
+typed1: typed | demo.names.sourcecode_names$package.typed | 14
+pattern1: forVals | demo.names.sourcecode_names$package.forVals | 15
+yield1: forVals | demo.names.sourcecode_names$package.forVals | 16
+plain2: plain | demo.names.sourcecode_names$package.plain | 13
+typed2: typed | demo.names.sourcecode_names$package.typed | 14
+pattern2: forVals | demo.names.sourcecode_names$package.forVals | 15
+yield2: forVals | demo.names.sourcecode_names$package.forVals | 16
+beforeGuard3: beforeGuard | demo.names.sourcecode_names$package.beforeGuard | 21
+afterGuard3: afterGuard | demo.names.sourcecode_names$package.afterGuard | 23
+inDo: inDo | demo.names.sourcecode_names$package.inDo | 30
+doBody: forDo | demo.names.sourcecode_names$package.forDo | 31
+sum3: sum | demo.names.Forms.sum | 39
+demo.names.sourcecode_names$package.given_Show_Int.show
+demo.names.sourcecode_names$package.given_Show_List.show
+demo.names.sourcecode_names$package.given_Show_Box.show
+demo.names.sourcecode_names$package.given_Show_Int_String.show
+demo.names.sourcecode_names$package.given_Show_Function.show
+demo.names.sourcecode_names$package.given_Show_Map.show
+demo.names.sourcecode_names$package.given_Show_|.show
+Box(57)
+Box(demo.names.sourcecode_names$package.given_Box_String)
+Left(demo.names.sourcecode_names$package.given_Either_String_Box)
+true
+Box(List(31))

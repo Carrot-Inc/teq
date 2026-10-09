@@ -1,0 +1,14 @@
+// tests/tasty/fixtures/FoPaths.tasty (TASTy 28.8, 1510 bytes)
+package fix.cake
+@SourceFile trait FoPaths extends Object {
+  final class Path private(private val segments: package.Vector[Predef.String]) extends Object {
+    override def toString: Predef.String = ...
+  }
+  object Path extends Object {
+    val Root: Path = ...
+    def select(p: Path, name: Predef.String): Path = ...
+    object AtField extends Object {
+      def unapply(p: Path): Option[(Predef.String, Path)] = ...
+    }
+  }
+}

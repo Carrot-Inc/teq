@@ -1,0 +1,207 @@
+topVal:
+  macro [val,term] {Synthetic,Macro} demo.owners.main$package$._$macro
+  topVal [val,term] {} demo.owners.main$package$.topVal @7:4-7:4
+  main$package$ [class,type] {Synthetic,Module} demo.owners.main$package$
+  owners [class,pkg,type] {Module,Package} demo.owners
+  demo [class,pkg,type] {Module,Package} demo
+topTyped:
+  macro [val,term] {Synthetic,Macro} demo.owners.main$package$._$macro
+  topTyped [val,term] {} demo.owners.main$package$.topTyped @8:4-8:4
+  main$package$ [class,type] {Synthetic,Module} demo.owners.main$package$
+  owners [class,pkg,type] {Module,Package} demo.owners
+  demo [class,pkg,type] {Module,Package} demo
+topLazy:
+  macro [val,term] {Synthetic,Macro} demo.owners.main$package$._$macro
+  topLazy [val,term] {Lazy} demo.owners.main$package$.topLazy @9:9-9:9
+  main$package$ [class,type] {Synthetic,Module} demo.owners.main$package$
+  owners [class,pkg,type] {Module,Package} demo.owners
+  demo [class,pkg,type] {Module,Package} demo
+topDef:
+  macro [val,term] {Synthetic,Macro} demo.owners.main$package$._$macro
+  topDef [def,term] {Method} demo.owners.main$package$.topDef @10:4-10:4
+  main$package$ [class,type] {Synthetic,Module} demo.owners.main$package$
+  owners [class,pkg,type] {Module,Package} demo.owners
+  demo [class,pkg,type] {Module,Package} demo
+topLambda:
+  macro [val,term] {Synthetic,Macro} demo.owners.main$package$._$_$macro
+  $anonfun [def,term] {Synthetic,Method} demo.owners.main$package$._$$anonfun
+  topLambda [val,term] {} demo.owners.main$package$.topLambda @11:4-11:4
+  main$package$ [class,type] {Synthetic,Module} demo.owners.main$package$
+  owners [class,pkg,type] {Module,Package} demo.owners
+  demo [class,pkg,type] {Module,Package} demo
+given:
+  macro [val,term] {Synthetic,Macro} demo.owners.main$package$.given_Show_Int$._$macro
+  show [def,term] {Method} demo.owners.main$package$.given_Show_Int$.show @17:6-17:6
+  given_Show_Int$ [class,type] {Module} demo.owners.main$package$.given_Show_Int$ @16:6-16:6
+  main$package$ [class,type] {Synthetic,Module} demo.owners.main$package$
+  owners [class,pkg,type] {Module,Package} demo.owners
+  demo [class,pkg,type] {Module,Package} demo
+topGiven:
+  macro [val,term] {Synthetic,Macro} demo.owners.main$package$._$macro
+  topGiven [val,term] {Lazy,Given} demo.owners.main$package$.topGiven @22:6-22:6
+  main$package$ [class,type] {Synthetic,Module} demo.owners.main$package$
+  owners [class,pkg,type] {Module,Package} demo.owners
+  demo [class,pkg,type] {Module,Package} demo
+anon1:
+  macro [val,term] {Synthetic,Macro} demo.owners.main$package$._$macro
+  given_Ordering_T [def,term] {Method,Given} demo.owners.main$package$.given_Ordering_T @26:6-26:6
+  main$package$ [class,type] {Synthetic,Module} demo.owners.main$package$
+  owners [class,pkg,type] {Module,Package} demo.owners
+  demo [class,pkg,type] {Module,Package} demo
+anon2:
+  macro [val,term] {Synthetic,Macro} demo.owners.main$package$._$macro
+  given_Ordering_T [def,term] {Method,Given} demo.owners.main$package$.given_Ordering_T @29:6-29:6
+  main$package$ [class,type] {Synthetic,Module} demo.owners.main$package$
+  owners [class,pkg,type] {Module,Package} demo.owners
+  demo [class,pkg,type] {Module,Package} demo
+classBody:
+  macro [val,term] {Synthetic,Macro} demo.owners.Widget._$macro
+  <local Widget> [val,dummy,term] {} demo.owners.Widget.<local Widget> @1:0-1:0
+  Widget [class,type] {} demo.owners.Widget @33:6-33:6
+  owners [class,pkg,type] {Module,Package} demo.owners
+  demo [class,pkg,type] {Module,Package} demo
+lambdaInBody:
+  macro [val,term] {Synthetic,Macro} demo.owners.Widget._$_$macro
+  $anonfun [def,term] {Synthetic,Method} demo.owners.Widget._$$anonfun
+  <local Widget> [val,dummy,term] {} demo.owners.Widget.<local Widget> @1:0-1:0
+  Widget [class,type] {} demo.owners.Widget @33:6-33:6
+  owners [class,pkg,type] {Module,Package} demo.owners
+  demo [class,pkg,type] {Module,Package} demo
+field:
+  macro [val,term] {Synthetic,Macro} demo.owners.Widget._$macro
+  field [val,term] {} demo.owners.Widget.field @34:6-34:6
+  Widget [class,type] {} demo.owners.Widget @33:6-33:6
+  owners [class,pkg,type] {Module,Package} demo.owners
+  demo [class,pkg,type] {Module,Package} demo
+method:
+  macro [val,term] {Synthetic,Macro} demo.owners.Widget._$macro
+  method [def,term] {Method} demo.owners.Widget.method @37:6-37:6
+  Widget [class,type] {} demo.owners.Widget @33:6-33:6
+  owners [class,pkg,type] {Module,Package} demo.owners
+  demo [class,pkg,type] {Module,Package} demo
+withLocals:
+  macro [val,term] {Synthetic,Macro} demo.owners.Widget._$_$macro
+  local [def,term] {Method} demo.owners.Widget._$local @39:8-39:8
+  withLocals [def,term] {Method} demo.owners.Widget.withLocals @38:6-38:6
+  Widget [class,type] {} demo.owners.Widget @33:6-33:6
+  owners [class,pkg,type] {Module,Package} demo.owners
+  demo [class,pkg,type] {Module,Package} demo
+
+  macro [val,term] {Synthetic,Macro} demo.owners.Widget._$_$_$macro
+  deeper [def,term] {Method} demo.owners.Widget._$_$deeper @40:10-40:10
+  local [def,term] {Method} demo.owners.Widget._$local @39:8-39:8
+  withLocals [def,term] {Method} demo.owners.Widget.withLocals @38:6-38:6
+  Widget [class,type] {} demo.owners.Widget @33:6-33:6
+  owners [class,pkg,type] {Module,Package} demo.owners
+  demo [class,pkg,type] {Module,Package} demo
+
+  macro [val,term] {Synthetic,Macro} demo.owners.Widget._$_$macro
+  localVal [val,term] {} demo.owners.Widget._$localVal @42:8-42:8
+  withLocals [def,term] {Method} demo.owners.Widget.withLocals @38:6-38:6
+  Widget [class,type] {} demo.owners.Widget @33:6-33:6
+  owners [class,pkg,type] {Module,Package} demo.owners
+  demo [class,pkg,type] {Module,Package} demo
+
+  macro [val,term] {Synthetic,Macro} demo.owners.Widget._$_$_$macro
+  $anonfun [def,term] {Synthetic,Method} demo.owners.Widget._$_$$anonfun
+  lambda [val,term] {} demo.owners.Widget._$lambda @43:8-43:8
+  withLocals [def,term] {Method} demo.owners.Widget.withLocals @38:6-38:6
+  Widget [class,type] {} demo.owners.Widget @33:6-33:6
+  owners [class,pkg,type] {Module,Package} demo.owners
+  demo [class,pkg,type] {Module,Package} demo
+
+  macro [val,term] {Synthetic,Macro} demo.owners.Widget._$_$macro
+  first [val,term] {} demo.owners.Widget._$first @44:9-44:9
+  withLocals [def,term] {Method} demo.owners.Widget.withLocals @38:6-38:6
+  Widget [class,type] {} demo.owners.Widget @33:6-33:6
+  owners [class,pkg,type] {Module,Package} demo.owners
+  demo [class,pkg,type] {Module,Package} demo
+
+  macro [val,term] {Synthetic,Macro} demo.owners.Widget._$_$macro
+  <temp> [val,term] {Synthetic} demo.owners.Widget._$$N
+  withLocals [def,term] {Method} demo.owners.Widget.withLocals @38:6-38:6
+  Widget [class,type] {} demo.owners.Widget @33:6-33:6
+  owners [class,pkg,type] {Module,Package} demo.owners
+  demo [class,pkg,type] {Module,Package} demo
+
+  macro [val,term] {Synthetic,Macro} demo.owners.Widget._$_$macro
+  e [val,term] {} demo.owners.Widget._$e @46:13-46:13
+  withLocals [def,term] {Method} demo.owners.Widget.withLocals @38:6-38:6
+  Widget [class,type] {} demo.owners.Widget @33:6-33:6
+  owners [class,pkg,type] {Module,Package} demo.owners
+  demo [class,pkg,type] {Module,Package} demo
+
+  macro [val,term] {Synthetic,Macro} demo.owners.Widget._$_$_$macro
+  inner [val,term] {} demo.owners.Widget._$_$inner @47:24-47:24
+  inBlock [val,term] {} demo.owners.Widget._$inBlock @47:8-47:8
+  withLocals [def,term] {Method} demo.owners.Widget.withLocals @38:6-38:6
+  Widget [class,type] {} demo.owners.Widget @33:6-33:6
+  owners [class,pkg,type] {Module,Package} demo.owners
+  demo [class,pkg,type] {Module,Package} demo
+inFor:
+  macro [val,term] {Synthetic,Macro} demo.owners.Widget._$_$_$macro
+  y [val,term] {} demo.owners.Widget._$_$y @52:6-52:6
+  $anonfun [def,term] {Synthetic,Method} demo.owners.Widget._$$anonfun
+  inFor [def,term] {Method} demo.owners.Widget.inFor @49:6-49:6
+  Widget [class,type] {} demo.owners.Widget @33:6-33:6
+  owners [class,pkg,type] {Module,Package} demo.owners
+  demo [class,pkg,type] {Module,Package} demo
+localClass:
+  macro [val,term] {Synthetic,Macro} demo.owners.Widget._$Local._$macro
+  inLocal [val,term] {} demo.owners.Widget._$Local.inLocal @56:10-56:10
+  Local [class,type] {} demo.owners.Widget._$Local @55:10-55:10
+  withLocalClass [def,term] {Method} demo.owners.Widget.withLocalClass @54:6-54:6
+  Widget [class,type] {} demo.owners.Widget @33:6-33:6
+  owners [class,pkg,type] {Module,Package} demo.owners
+  demo [class,pkg,type] {Module,Package} demo
+objectBody:
+  macro [val,term] {Synthetic,Macro} demo.owners.Outer$._$macro
+  <local Outer$> [val,dummy,term] {} demo.owners.Outer$.<local Outer$> @1:0-1:0
+  Outer$ [class,type] {Module} demo.owners.Outer$ @59:7-59:7
+  owners [class,pkg,type] {Module,Package} demo.owners
+  demo [class,pkg,type] {Module,Package} demo
+inObject:
+  macro [val,term] {Synthetic,Macro} demo.owners.Outer$._$macro
+  inObject [val,term] {} demo.owners.Outer$.inObject @60:6-60:6
+  Outer$ [class,type] {Module} demo.owners.Outer$ @59:7-59:7
+  owners [class,pkg,type] {Module,Package} demo.owners
+  demo [class,pkg,type] {Module,Package} demo
+deep:
+  macro [val,term] {Synthetic,Macro} demo.owners.Outer$.Inner$._$macro
+  deep [def,term] {Method} demo.owners.Outer$.Inner$.deep @63:8-63:8
+  Inner$ [class,type] {Module} demo.owners.Outer$.Inner$ @62:9-62:9
+  Outer$ [class,type] {Module} demo.owners.Outer$ @59:7-59:7
+  owners [class,pkg,type] {Module,Package} demo.owners
+  demo [class,pkg,type] {Module,Package} demo
+inObjectGiven:
+  macro [val,term] {Synthetic,Macro} demo.owners.Outer$.given_Show_Boolean$._$macro
+  show [def,term] {Method} demo.owners.Outer$.given_Show_Boolean$.show @65:8-65:8
+  given_Show_Boolean$ [class,type] {Module} demo.owners.Outer$.given_Show_Boolean$ @64:8-64:8
+  Outer$ [class,type] {Module} demo.owners.Outer$ @59:7-59:7
+  owners [class,pkg,type] {Module,Package} demo.owners
+  demo [class,pkg,type] {Module,Package} demo
+ext:
+  macro [val,term] {Synthetic,Macro} demo.owners.main$package$._$macro
+  ext [def,term] {Method} demo.owners.main$package$.ext @68:6-68:6
+  main$package$ [class,type] {Synthetic,Module} demo.owners.main$package$
+  owners [class,pkg,type] {Module,Package} demo.owners
+  demo [class,pkg,type] {Module,Package} demo
+localGiven:
+  macro [val,term] {Synthetic,Macro} demo.owners.main$package$._$_$macro
+  given_String [val,term] {Lazy,Given} demo.owners.main$package$._$given_String @71:8-71:8
+  localGiven [def,term] {Method} demo.owners.main$package$.localGiven @70:4-70:4
+  main$package$ [class,type] {Synthetic,Module} demo.owners.main$package$
+  owners [class,pkg,type] {Module,Package} demo.owners
+  demo [class,pkg,type] {Module,Package} demo
+topVar:
+  macro [val,term] {Synthetic,Macro} demo.owners.main$package$._$macro
+  topVar [val,term] {Mutable} demo.owners.main$package$.topVar @74:4-74:4
+  main$package$ [class,type] {Synthetic,Module} demo.owners.main$package$
+  owners [class,pkg,type] {Module,Package} demo.owners
+  demo [class,pkg,type] {Module,Package} demo
+inMain:
+  macro [val,term] {Synthetic,Macro} demo.owners.main$package$._$macro
+  run [def,term] {Method} demo.owners.main$package$.run @83:10-83:10
+  main$package$ [class,type] {Synthetic,Module} demo.owners.main$package$
+  owners [class,pkg,type] {Module,Package} demo.owners
+  demo [class,pkg,type] {Module,Package} demo

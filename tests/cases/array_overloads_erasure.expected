@@ -1,0 +1,10 @@
+ints 3
+strings ab
+int grid 3
+string grid xy
+ints 3
+STRINGS AB
+int grid 3
+string grid xy
+STRINGS Q
+plain ints 3 / plain strings 1

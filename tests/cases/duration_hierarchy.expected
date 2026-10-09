@@ -1,0 +1,17 @@
+Duration.Inf Duration.MinusInf Duration.Undefined
+finite 5000 infinite Duration.Inf
+1500 milliseconds
+true
+true
+true false Duration.MinusInf
+8 seconds
+Duration.Inf
+finite 2 seconds, duration Duration.Inf
+Duration.Undefined Duration.Undefined true
+List(Duration.MinusInf, 1 second, 3 seconds, Duration.Inf)
+2.5
+3 seconds Duration.Inf
+5 seconds 2 minutes
+3 seconds Duration.Inf
+true
+3 MINUTES

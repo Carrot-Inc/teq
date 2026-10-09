@@ -1,0 +1,4 @@
+3c3
+<   def lookup(k: Registry.Key): Registry.Entry = Registry.make{(java.lang.String): fix.members.Registry$.Entry}(k)
+---
+>   def lookup(k: String): Registry.Entry = Registry.make{(java.lang.String): fix.members.Registry$.Entry}(k)

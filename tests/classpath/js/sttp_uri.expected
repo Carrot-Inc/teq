@@ -1,0 +1,14 @@
+https://api.example.com:8080/pets/42?name=rex+fido&tag=big#frag
+http://example.com/a/b?q=x%26y%3Dz
+http://example.com/users/john%20doe/ok
+http://example.com/list?tags=a&tags=b
+http://example.com/p?k1=v1&k2=v2
+http://example.com/p?a=1&x%26y=z
+https://example.com/base/more?x=1
+Some(https) Some(example.com) Some(9090) Some(UserInfo(user,Some(pw))) List(a, b c) Vector(KeyValue(x,1,[keyEncoding],[valueEncoding]), KeyValue(y,2,[keyEncoding],[valueEncoding]), KeyValue(y,3,[keyEncoding],[valueEncoding])) Some(top)
+Some(List(2, 3)) List((x,1), (y,2), (y,3)) List(a, b c)
+http://example.com http://example.com/ http://example.com? /relative/path?a=b
+http://example.com/a/b/c%20d?k=v+w#f%20g
+Right(https://example.com:1234/x?y=1) Some(h)
+http://example.com/new/path ftp://example.com/x
+https://dyn.example.com/v/one http://example.com/?empty=&x=y

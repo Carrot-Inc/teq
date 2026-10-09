@@ -1,0 +1,4 @@
+// tests/tasty/fixtures/PatImpl.tasty (TASTy 28.8, 461 bytes)
+package fix.cake
+@SourceFile final class PatImpl() extends Object, PatFlags, NameDefsPlatform {
+}

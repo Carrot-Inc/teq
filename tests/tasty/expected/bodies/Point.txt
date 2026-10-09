@@ -1,0 +1,45 @@
+// tests/tasty/fixtures/Point.tasty (TASTy 28.8)
+@SourceFile case class Point(val x: Int, val y: Int) extends Object(), scala.Product, scala.Serializable {
+  <synthetic> override def hashCode(): Int = {
+    <synthetic> var acc: Int = -889275714
+    acc = mix(acc, 77292912)
+    acc = mix(acc, x)
+    acc = mix(acc, y)
+    finalizeHash(acc, 2)
+  }
+  <synthetic> override def equals(x$0: Any): Boolean = (Point.this.eq(x$0.$asInstanceOf$[Object])) || (x$0 match {
+    case x$0: Point @unchecked => ((Point.this.x == x$0.x) && (Point.this.y == x$0.y)) && (x$0.canEqual(Point.this))
+    case _ => false
+  })
+  <synthetic> override def toString(): String = _toString(Point.this)
+  <synthetic> override def canEqual(that: Any): Boolean = that.isInstanceOf[Point @unchecked]
+  <synthetic> override def productArity: Int = 2
+  <synthetic> override def productPrefix: Predef.String = "Point"
+  <synthetic> override def productElement(n: Int): Any = n match {
+    case 0 => Point.this._1
+    case 1 => Point.this._2
+    case _ => throw new IndexOutOfBoundsException(n.toString())
+  }
+  <synthetic> override def productElementName(n: Int): Predef.String = n match {
+    case 0 => "x"
+    case 1 => "y"
+    case _ => throw new IndexOutOfBoundsException(n.toString())
+  }
+  <synthetic> def copy(x: Int = <default>, y: Int = <default>): Point = new Point(x, y)
+  <synthetic> def copy$default$1: Int @uncheckedVariance = x
+  <synthetic> def copy$default$2: Int @uncheckedVariance = y
+  <synthetic> def _1: Int = Point.this.x
+  <synthetic> def _2: Int = Point.this.y
+}
+@SourceFile <synthetic> object Point extends AnyRef(), Product {
+  <synthetic> private def writeReplace(): AnyRef = new ModuleSerializationProxy(classOf[Point.type])
+  <synthetic> def apply(x: Int, y: Int): Point = new Point(x, y)
+  <synthetic> def unapply(x$1: Point): Point = x$1
+  <synthetic> override def toString: String = "Point"
+  <synthetic> type MirroredMonoType = Point
+  <synthetic> def fromProduct(x$0: Product): MirroredMonoType = {
+    <synthetic> val x$1: Int = (x$0.productElement(0)).$asInstanceOf$[Int]
+    <synthetic> val y$1: Int = (x$0.productElement(1)).$asInstanceOf$[Int]
+    new Point(x$1, y$1)
+  }
+}

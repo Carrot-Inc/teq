@@ -1,0 +1,15 @@
+List.fill: List()
+Vector.fill: Vector()
+List.tabulate: List()
+Vector.tabulate: Vector()
+Array.fill: 0
+Array.tabulate: 0
+Array.ofDim threw NegativeArraySizeException
+new Array threw NegativeArraySizeException
+Array.range: 0
+ArrayBuffer.fill: ArrayBuffer()
+Seq.fill: List()
+IArray.fill: 0
+Array.copyOf threw NegativeArraySizeException
+take: 0
+List.fill 0: List()

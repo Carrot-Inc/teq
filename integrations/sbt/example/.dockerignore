@@ -1,0 +1,4 @@
+# The image copies the staged layers alone.
+*
+!api/target/docker/stage/2/opt/docker
+!api/target/docker/stage/4/opt/docker

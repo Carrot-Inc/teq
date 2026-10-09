@@ -1,0 +1,2 @@
+operator-eol.scala:3:18: error: end of statement expected, but identifier found
+operator-eol.scala:5:21: error: type mismatch

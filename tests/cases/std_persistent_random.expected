@@ -1,0 +1,4 @@
+failures 0, versions 3001, last size 8, sum 13912, first Some((7,130))
+failures 0, versions 3001, last size 7, sum 130, first Some((25,5))
+failures 0, versions 2001, last size 5, sum 2266, first Some((39,2))
+failures 0, versions 2001, last size 17, sum 7822, first Some((507,1))

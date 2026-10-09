@@ -1,0 +1,8 @@
+2c2
+< @SourceFile trait QaApplicative[F[_$2]] extends Object, QaFunctor[F] {
+---
+> @SourceFile trait QaApplicative[F[_$1]] extends Object, QaFunctor[F] {
+6c6
+<   given given_QaApplicative_Option: QaApplicative[[A] =>> Option[A]] = ...
+---
+>   given given_QaApplicative_Option: QaApplicative[Option] = ...

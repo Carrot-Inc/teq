@@ -1,0 +1,5 @@
+Some(List(1)) Some(List(2, 3)) Applicative
+Some(List(3)) SemigroupK
+Some(List(2)) Some(List(2)) Applicative
+Some(List(10)) Functor
+Invariant

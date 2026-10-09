@@ -1,0 +1,20 @@
+apart	origin	oa.UseA	pa	key Use29115316.scala	token 1589615084 recorded	definitions v1 (3 definitions)
+apart	origin	ob.UseB	pb	key Use56507032.scala	token 1589615084 recorded	definitions v1 (3 definitions)
+apart	token	1589615084	pa!Use29115316.scala	pb!Use56507032.scala
+together	origin	oa.UseA	pab	key Use29115316.scala	token 1589615084 recorded	definitions v1 (3 definitions)
+together	origin	ob.UseB	pab	key Use56507032.scala	token 1589615085 recorded	definitions v1 (3 definitions)
+displaced	origin	oa.UseA	pabz	key Use29115316.scala	token 1589615084 recorded	definitions v1 (3 definitions)
+displaced	origin	ob.UseB	pabz	key Use56507032.scala	token 1589615086 recorded	definitions v1 (3 definitions)
+displaced	origin	oz.UseZ	pabz	key ZZZ87kqi0.scala	token 1589615085 recorded	definitions v1 (3 definitions)
+same	origin	sa.SameA	sa	key Use.scala	token 306633504 recorded	definitions v1 (3 definitions)
+same	origin	sb.SameB	sb	key Use.scala	token 306633504 recorded	definitions v1 (3 definitions)
+same	token	306633504	sa!Use.scala	sb!Use.scala
+classes	origin	sa.SameA	classes	key Use.scala	token 306633504 recorded	definitions v1 (3 definitions)
+classes	origin	sb.SameB	classes	key Use.scala	token 306633504 recorded	definitions v1 (3 definitions)
+classes	token	306633504	classes!Use.scala	classes!Use.scala
+own	origin	oa.UseA	pa	key Use29115316.scala	token 1589615084 recorded	definitions v1 (3 definitions)
+own	token	1589615084	pa!Use29115316.scala	source Use56507032.scala
+several	origin	sv.Several	sv	key Several.scala	token 2711941751 recorded	definitions v1 (8 definitions)
+several	origin	sv.Several$package	sv	key Several.scala	token 2711941751 recorded	definitions v1 (2 definitions)
+unicode	origin	un.Notes	un	key Notes.scala	token 2696997938 recorded	definitions v1 (8 definitions)
+expand	origin	ex.Use	ex	key Use.scala	token 306633504 recorded	definitions v1, sources v1, anonymous classes v1, outlined callees v2 (4 definitions)

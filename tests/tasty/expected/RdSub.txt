@@ -1,0 +1,4 @@
+// tests/tasty/fixtures/RdSub.tasty (TASTy 28.8, 364 bytes)
+package fix.rjava
+@SourceFile class RdSub() extends Outer.Nested {
+}

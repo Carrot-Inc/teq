@@ -1,0 +1,63 @@
+split: [a;b;;c]4 | [;a]2 | []0 | []1 | [abc]1
+split char: [com;example;Name]3 | Name | [a;b]2
+split regex: [a;b;c]3 | [1;2;3]3 | [a;b;c]3 | [k;v]2
+split words: [;x]2 | [a;b;c]3 | [a;b;c]3
+split limit: [a;b,c,d]2 | [a;b;;]4 | [a;b;c3]3
+split then: List(x, y) | Set(1, 2)
+split array ops: List(a, b, c) | A+B | A B
+replaceAll: a#b# | Smith, John | ---
+replaceAll flags: Main St and St | ok | price USD 5
+replaceAll special: a+b | a\b | -a-b-c- | file.tar
+replaceAll spaces: +1(555)010 | 555 01099 | 12
+replaceFirst: 555+1 | baa | abc
+trace: 45:6 more
+matches: true | false | true | false | true
+findFirstIn: Some(activity/42) | None | Some(12)
+findFirstMatchIn: Some(42) | None
+optional group: Some(14.1) | None | None
+match: hsl(120.5, 50%, 25%) | 120.5 | 50 | 25 | 4 | 7 | 27 | color:  | ; | List(120.5, null, 50, 25)
+match null group: None | hsl(120.5, 50%, 25%)
+findAllIn: List(1, 22, 333) | List() | List(0, 2, 4, 6, 7)
+named group: Some(ba)
+regex matches: true | false | false | true
+replaceAllIn: some_camel_case_2 | some camel case 2 | xbay | a#b2
+replaceSomeIn: a<1>b2c<3>
+prefix: Some(12) | None | Some(1)
+unapplySeq: Some(List(wine)) | None | Some(List(1, 2))
+regex split: [a;b;c]3 | ab+ | ab+
+quote: Some(a.b) | None | a$1\b
+line end: true | false | true | false
+toIntOption: Some(12) | Some(-7) | Some(7) | None | None | None | Some(-2147483648) | None | None
+toLongOption: Some(9223372036854775807) | None | None | Some(-5)
+toDoubleOption: Some(true) | Some(true) | None | None | None | true | true | true | true | None
+toDoubleOption special: Some(true) | Some(true) | Some(true) | None | None | None
+toBooleanOption: Some(true) | Some(false) | None | true
+toLong: 123456789013 | -5 | 42 | true
+strip: body | body | file | file
+ignore case: true | false | true | true | -2
+repeat: ababab | abab |  | ->
+grouped: List(123, 456, 7) | List(ab, bc) | 1,234,567
+foldLeft: 96354 | olleh
+lines: List(a, b, c) | List(one)
+chars: Some(l) | 2 | Some(o) | None | he | llo
+chars more: (he,llo) | (he,llo) | (12,ab) | ab | ban | aaabnn
+conversions: List(a, b, c) | Vector(a, b, c) | 2 | cba | AB | 2
+misc: b | abc | ab.. | a__b | 3 | true | x
+margin: first
+  second
+third
+format: 3 items at 9.50 (ok) |    42|42   |00042 | ff FF 10 | b a
+f double: 1234.6 MB | 1235 | 1234.57 |   1234.568| | 1234.6    | | 1,234.57 | 1.234568e+03
+f rounding: 1.01 | 3 | 0.13 | -0.00 | 1000000000000000000000.0 | 0.000 | 100.00 |     1|
+f int: 07 | 007 | 000000000007 | -007 | +7 | 1,234,567,890,123 | 1234567890123 | ff | ffffffff |    10|
+f color: #ff0080 | #FF
+f mixed: MB and MB and 7% done |    MB|MB   | | true c | no args | a
+b
+f uuid: 00000000-0000-0000-0000-000000000042
+char: true | false | true | false | true | false | true | true | false
+char digit: 15 | 7 | 35 | b | A | q | 97
+builder: hello 42!? | 10 | e | 6 | true | hello 42!? | ?!24 olleh
+builder edits: >> hello | false | init1
+builder cleared: true | 
+mkString: a,b,c | abc | a-b-c-.-.
+java parens: abc | ABC | x| | List(A, B)

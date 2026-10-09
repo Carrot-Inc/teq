@@ -1,0 +1,5 @@
+List((street,None), (city,Some(Springfield)), (zip,Some(None)))
+List((x,None), (y,Some(3)))
+term Red
+type Color
+type Address

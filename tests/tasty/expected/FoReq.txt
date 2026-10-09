@@ -1,0 +1,4 @@
+// tests/tasty/fixtures/FoReq.tasty (TASTy 28.8, 597 bytes)
+package fix.cake
+@SourceFile class FoReq[T, -R](val v: T) extends Object {
+}

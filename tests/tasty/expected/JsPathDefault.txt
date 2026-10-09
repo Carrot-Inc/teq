@@ -1,0 +1,5 @@
+// tests/tasty/fixtures/JsPathDefault.tasty (TASTy 28.8, 851 bytes)
+package fix.facades
+@JSType @SourceFile @JSImport @native object JsPathDefault extends Object {
+  def extname(p: Predef.String): Predef.String = ...
+}

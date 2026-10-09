@@ -1,0 +1,69 @@
+a macro's own chains
+ab,a,a,a,ab,a
+quoted toString
+  render x
+  tail
+x!
+quoted ascription
+  render x
+  tail
+x!
+quoted cast
+  render x
+  tail
+x!
+quoted constant if
+  render x
+  tail
+x!
+quoted if
+  render x
+  tail
+x!
+cast of a splice
+  render x
+  tail
+x!
+plain splice
+  render x
+  tail
+x!
+ascribed splice
+  render x
+  tail
+x!
+inline call in a quote
+  render x
+  tail
+in:x!
+reflected ascription
+  render x
+  tail
+x!
+reflected constant if
+  render x
+  tail
+x!
+reflected toString
+  render x
+  tail
+x!
+reflected plain
+  render x
+  tail
+x!
+reflected block
+  stat
+  render x
+  tail
+x!
+asExprOf
+  render x
+  tail
+x!
+a tree used with an ascription and without
+  render x
+  tail
+  render x
+  tail
+x!x!

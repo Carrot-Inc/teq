@@ -1,0 +1,10 @@
+label New
+Props(Some(close),New,true,,w-full text-left,0)
+Props(None,,false,mt-4,,0)
+label Wide
+Props(None,Wide,false,p-6,,900)
+label x
+Props(Some(x),,true,mt-4,w-full text-left,0)
+Props(None,plain,false,p-6,,0)
+label y
+Props(Some(y),,false,,w-full text-left,900)

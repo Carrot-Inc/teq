@@ -1,0 +1,4 @@
+4c4
+<   def mk[A](a: A): Box[A] = List.apply{([1], scala.collection.immutable.Seq): java.lang.Object}[A]([a]*)
+---
+>   def mk[A](a: A): Box[A] = List.apply{([1], scala.collection.immutable.Seq): scala.collection.immutable.List}[A]([a]*)

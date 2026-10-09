@@ -1,0 +1,23 @@
+None
+Future(<not completed>)
+false
+Some(Success(20))
+Future(Success(20))
+true
+false
+20
+ready
+42
+86
+4
+List(1, 2, 3)
+Vector(10, 20, 30)
+(1,b)
+5
+Future.filter predicate is not satisfied
+5
+21
+7
+ArithmeticException
+T
+andThen 7

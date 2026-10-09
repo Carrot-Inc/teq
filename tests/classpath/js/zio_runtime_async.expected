@@ -1,0 +1,7 @@
+joined 42
+future 42
+async 40
+queue x,y,z
+schedule (3,3) 4
+timeout Some(slept)
+retry Left(once)

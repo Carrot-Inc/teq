@@ -1,0 +1,5 @@
+app.Color: sum=true of=true product=false
+app.Box: sum=false of=true product=true
+app.Color: sum=true of=true product=false
+app.Box: sum=false of=true product=true
+app.Late: sum=true of=true product=false

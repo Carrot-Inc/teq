@@ -1,0 +1,4 @@
+tests/modules/givenprivate/b/Outside.scala:4:20: error: x is private to C
+    val wrong: Int = new gpa.C(using 17).x
+                     ^^^^^^^^^^^^^^^^^^^^^
+1 error found

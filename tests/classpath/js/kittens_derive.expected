@@ -1,0 +1,14 @@
+true true Slot(index = 1, label = a) -1 false true
+Money(3,List(x, y)) Money(0,List()) Money(11,List(t)) Money(cents = 3, tags = List()) true
+Wrapper(slot = Slot(index = 1, label = a), money = Money(cents = 7, tags = List(q)), note = Some(n), scores = Map(k -> 1)) true false false
+Low High true true -1 List(Low, High)
+Circle(r = 1) Rect(w = 2, h = 3) Dot true false true
+Add(l = Num(n = 1), r = Neg(e = Add(l = Num(n = 2), r = Num(n = 3)))) true false true List(Num(n = 1), Neg(e = Num(n = 1)))
+Tree(10,List(Tree(20,List()), Tree(30,List(Tree(40,List()))))) 10 List(1, 2, 3, 4) Some(List(1, 2, 3, 4)) None 4 1234
+Pair(2,3) List(1, 2) Some(Pair(1,1)) true Pair(first = 1, second = 2) List(Pair(1,2), Pair(1,3)) 7
+Empty true Empty() Unit1 true
+Stats(3,15,Some(8),Set(a, b)) Stats(0,0,None,Set()) Stats(count = 1, total = 1, max = None, names = Set()) false
+true Manual(a = 2, b = b) -1 true
+true Gen(a = s, n = 3) Gen(2,2) Some(Gen(1,2)) List(Gen(2,0), Gen(4,0))
+List(Slot(1,a), Slot(1,z), Slot(2,b)) List(Slot(index = 1, label = a), Slot(index = 0, label = a)) Some(Slot(index = 1, label = a)) Map(1 -> Slot(index = 1, label = a)) Some(Slot(index = 1, label = a))
+true Some(Num(n = 4)) (Slot(index = 1, label = a),Low) -1

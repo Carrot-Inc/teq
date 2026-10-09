@@ -1,0 +1,43 @@
+p1 in: false
+p1 keys: y
+p1 json: {"y":"hello"}
+p2a in: true
+p2a keys: x,y
+p2a json: {"y":"hello"}
+p2b in: true
+p2b keys: y,x
+p2b json: {"y":"world"}
+p2c in: true
+p2c keys: y,x
+p2c json: {"y":"again"}
+o1 initial in shared: false
+o1 initial in v: false
+o1 initial keys: a,b
+o1 initial json: {"a":"aVal","b":"bVal"}
+o1 after v in: true
+o1 after v keys: a,b,v
+o1 after v json: {"a":"aVal","b":"bVal","v":42}
+o2 in common: true
+o2 keys: common,a,b
+o2 json: {"a":"a2","b":"b2"}
+gen opt in: false
+gen keys: item
+gen json: {"item":100}
+custom data-cy in: false
+custom keys: aria-label
+custom json: {"aria-label":"test-button"}
+dyn baz in: true
+dyn keys: foo,baz
+dyn json: {"foo":"bar"}
+p5 initial keys: first,second
+p5 after laterStr keys: first,second,laterStr
+p5 after '2' keys: 2,first,second,laterStr
+p5 after '10' keys: 2,10,first,second,laterStr
+p6a keys: y,x
+p6b side-effects: f,yVal
+p6b keys: y,x
+twice side-effects: f,g,h,k
+twice keys: y,w,x,z
+twice json: {"y":"y","w":"w","x":1,"z":3}
+proto keys: x
+proto json: {"x":1}

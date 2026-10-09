@@ -1,0 +1,4 @@
+// tests/tasty/fixtures/RdMarker.tasty (TASTy 28.8, 425 bytes)
+package fix.rdecl
+@SourceFile trait RdMarker extends Object {
+}

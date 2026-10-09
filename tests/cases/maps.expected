@@ -1,0 +1,60 @@
+Map(one -> 1, two -> 2, three -> 3)
+2
+None
+4
+true
+3
+4
+3
+List(two, three)
+100
+Map(ONE -> 10, TWO -> 20, THREE -> 30)
+Map(two -> 2, three -> 3)
+List(one, three, two)
+6
+List((one,1), (two,2), (three,3))
+one -> 1
+two -> 2
+three -> 3
+true
+false
+true
+first
+None
+true
+List(apple, avocado)
+List(banana, blueberry)
+List(a, b, c)
+Map(1 -> a, 2 -> b)
+List((5,1), (6,2), (7,1), (9,1))
+Set(1, 2, 3)
+true
+Set(1, 2, 3, 4)
+Set(1, 2, 3)
+Set(2, 3)
+Set(2, 4, 6)
+Set(2, 3)
+4
+Set(2, 3)
+true
+2
+true
+ArrayBuffer(10, 2, 3)
+3
+ArrayBuffer(11, 3, 4)
+2
+List(10, 3)
+112
+true
+11
+4
+4
+Some(2)
+false
+List(a, c, d)
+3
+Some(x)
+true
+false
+true
+2

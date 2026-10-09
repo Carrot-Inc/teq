@@ -1,0 +1,10 @@
+CA MP true false
+Ping Branch(branchId = 3, value = NewLoan(loan = Loan(id = 1, items = List(a)), count = 2)) Library(value = Changed(flag = true))
+Summary(Set(Agg(a,1), Agg(b,2)),5,4.0)
+Summary(Set(),0,0)
+true
+true
+false true mail:chat
+true true false
+true true false
+true false

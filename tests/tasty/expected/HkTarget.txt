@@ -1,0 +1,8 @@
+// tests/tasty/fixtures/HkTarget.tasty (TASTy 28.8, 857 bytes)
+package fix.hkb
+@SourceFile trait HkTarget[F[_$1]] extends Object {
+}
+@SourceFile object HkTarget extends Object {
+  <synthetic> private def writeReplace(): AnyRef = ...
+  given given_HkTarget_List: HkTarget[package.List] = ...
+}

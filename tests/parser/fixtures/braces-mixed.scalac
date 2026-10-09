@@ -1,0 +1,2 @@
+braces-mixed.scala:7:23: error: type mismatch
+braces-mixed.scala:9:1: error: eof expected, but '}' found

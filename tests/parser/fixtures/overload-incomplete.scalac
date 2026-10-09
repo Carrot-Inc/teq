@@ -1,0 +1,6 @@
+overload-incomplete.scala:4:17: error: '=' expected, but identifier found
+overload-incomplete.scala:5:20: error: '=' expected, but identifier found
+overload-incomplete.scala:7:11: error: None of the overloaded alternatives of method f in object O with types
+overload-incomplete.scala:8:18: error: '=' expected, but identifier found
+overload-incomplete.scala:9:24: error: '=' expected, but identifier found
+overload-incomplete.scala:10:11: error: None of the overloaded alternatives of method g in object O with types

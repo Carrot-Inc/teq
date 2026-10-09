@@ -1,0 +1,4 @@
+Set(1, 2)
+Map(3 -> 4)
+List(ArraySeq(1, 2), ArraySeq(2, 3), ArraySeq(3, 4))
+assertion failed: boom

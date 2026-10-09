@@ -1,0 +1,12 @@
+3c3
+<   <macro> inline def fields[T]: List[String] = (${ (using contextual$1: Quotes) => fieldsImpl{[1](Type[T], Quotes)}[T](Type.of{([1], scala.quoted.Quotes): scala.quoted.Type}[T](contextual$1), contextual$1) }: List[String])
+---
+>   <macro> inline def fields[T]: List[String] = (${ (using contextual$1: Quotes) => fieldsImpl{([1], scala.quoted.Type, scala.quoted.Quotes): scala.quoted.Expr}[T](Type.of{([1], scala.quoted.Quotes): scala.quoted.Type}[T](contextual$1), contextual$1) }: List[String])
+27c27
+<     ${ (using contextual$3: Quotes) => tenfold{(Expr[Int])(Quotes)}('{ y }.apply{(java.lang.Object): java.lang.Object}(contextual$3))(contextual$3) } +{(Int): Int} 1
+---
+>     ${ (using contextual$3: Quotes) => tenfold{(scala.quoted.Expr, scala.quoted.Quotes): scala.quoted.Expr}('{ y }.apply{(java.lang.Object): java.lang.Object}(contextual$3))(contextual$3) } +{(Int): Int} 1
+30c30
+<   <macro> inline def shape(inline e: Any): String = (${ (using contextual$5: Quotes) => shapeImpl{(Expr[Any])(Quotes)}('{ e }.apply{(java.lang.Object): java.lang.Object}(contextual$5))(contextual$5) }: String)
+---
+>   <macro> inline def shape(inline e: Any): String = (${ (using contextual$5: Quotes) => shapeImpl{(scala.quoted.Expr, scala.quoted.Quotes): scala.quoted.Expr}('{ e }.apply{(java.lang.Object): java.lang.Object}(contextual$5))(contextual$5) }: String)

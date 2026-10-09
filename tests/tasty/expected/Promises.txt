@@ -1,0 +1,12 @@
+// tests/tasty/fixtures/Promises.tasty (TASTy 28.8, 996 bytes)
+package fix.cake
+@SourceFile trait Promises extends Object { _: PromiseDefs =>
+  final class Promise[A](val name: Name) extends Object {
+  }
+  protected val Promise: PromiseModule
+  protected trait PromiseModule extends Object { _: Promise.type =>
+    final def promise[A](hint: Name): Promise[A] = ...
+    protected def fresh(hint: Name): Name
+  }
+  def run(hint: Name): Name = ...
+}

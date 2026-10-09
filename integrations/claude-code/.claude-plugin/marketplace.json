@@ -1,0 +1,15 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "teq",
+  "description": "teq, a Scala 3 compiler: its language server for Claude Code",
+  "owner": { "name": "Carrot", "url": "https://github.com/Carrot-Inc/teq" },
+  "plugins": [
+    {
+      "name": "teq-lsp",
+      "description": "Scala navigation and diagnostics from teq's language server",
+      "version": "0.1.0",
+      "source": "./teq-lsp",
+      "category": "development"
+    }
+  ]
+}

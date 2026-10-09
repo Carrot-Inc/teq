@@ -1,0 +1,4 @@
+6c6
+<   def make(k: Registry.Key): Registry.Entry = new Entry{(): fix.members.Registry$.Entry}()
+---
+>   def make(k: String): Entry = new Entry{(): fix.members.Registry$.Entry}()

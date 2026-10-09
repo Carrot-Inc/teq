@@ -1,0 +1,18 @@
+a+b%26c
+plain.text-with*under_score
+key%3Dvalue%2Fpath%3Fq%3D1%23frag
+h%C3%A9llo+w%C3%B6rld+%E2%82%AC+%F0%9F%98%80
+h%E9llo
+%7E%21%27%28%29
+a%3Fb+%E9%26c
+a%3F%26b
+a%00%2Fb
+ab | ab
+ab | ab
+a%26b | a%26b
+ab | ab
+a | a
+ | 
+%C3%A9 | %E9
+ab | ab
+unsupported: no-such-charset

@@ -1,0 +1,9 @@
+Point(1,2) Point(3,6) 3 6 true P(1,2)x3 P(3,6)x3 Point(1,9) Point
+Point(1,2) Point(10,20) 10 20 true P(1,2)x10 P(10,20)x10 Point(1,9) Point
+Amount(0,g) 105kg Amount(3,kg) None
+0,0,0,1,1
+0:a 1:b
+0:1.5
+2/10
+1/1
+Pair(1,9)2

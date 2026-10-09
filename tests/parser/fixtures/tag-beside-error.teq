@@ -1,0 +1,10 @@
+tag-beside-error.scala:5:17: error: No ClassTag available for Nothing
+tag-beside-error.scala:5:55: error: type mismatch
+tag-beside-error.scala:6:15: error: No ClassTag available for Nothing
+tag-beside-error.scala:6:54: error: type mismatch
+tag-beside-error.scala:7:16: error: No ClassTag available for Nothing
+tag-beside-error.scala:7:40: error: not found: nope
+tag-beside-error.scala:8:16: error: No ClassTag available for Nothing
+tag-beside-error.scala:8:44: error: type mismatch
+tag-beside-error.scala:9:16: error: No ClassTag available for Nothing
+tag-beside-error.scala:9:55: error: type mismatch

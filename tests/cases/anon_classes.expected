@@ -1,0 +1,28 @@
+Hello, r-1-2!
+Hello, r-2-2!
+10
+20
+4
+true
+false
+true
+true
+area 1
+area 1, area 9
+area 2.5 named-2.5
+List(1, 1)
+List(s, s)
+before
+computing
+Hello, LAZY!
+Hello, LAZY!
+List(Hello, g2-4!, Hello, g3-6!)
+inner of out! | out
+bonus computed
+111
+112
+int:42
+str:x
+Box(3)
+Box(9)
+List(3, 4)

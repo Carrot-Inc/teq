@@ -1,0 +1,5 @@
+// tests/tasty/fixtures/RdInBox.tasty (TASTy 28.8, 658 bytes)
+package fix.rdecl
+@SourceFile class RdInBox[A](val a: A) extends Object, RdIn[A] {
+  def put(x: A): Predef.String = ...
+}

@@ -1,0 +1,6 @@
+scala.Any scala.Nothing scala.Long
+scala.Long java.lang.Throwable scala.Int
+chained to scala.Int
+unrelated
+true
+false

@@ -1,0 +1,26 @@
+List(doorstep, via-post, front_desk)
+List(mirror:Doorstep, mirror:ViaPost, mirror:FrontDesk)
+Some(ViaPost)
+None
+1
+front_desk
+Doorstep
+List(small 3, pending, failed: x, failed 2 times: y, pending, big 30)
+Available(50)
+true
+List(a)
+true
+true
+true
+Failed(m,3)
+Failed Loading 1 3
+List(Op(+)=9, Op(*)=18, Op(-)=3)
++*-
+List(Available(1):2, Available(2):1, Loading:2, NotLoaded:1)
+2
+false
+10
+List(Doorstep, FrontDesk, ViaPost)
+{"a":[1,null],"b":true}
+true
+JNullJNum(1)

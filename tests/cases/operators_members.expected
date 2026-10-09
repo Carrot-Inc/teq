@@ -1,0 +1,12 @@
+3
+6
+105
+1
+Sched(List(recurs(3), exp(300)~))
+Sched(List(recurs(1)/recurs(2), exp(1)))
+left
+false
+left
+true
+true
+true

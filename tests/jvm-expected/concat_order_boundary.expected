@@ -1,0 +1,226 @@
+a throwing toString behind a boundary
+toString
+  render
+  caught
+ascription
+  render
+  caught
+cast
+  render
+  caught
+constant if
+  tail
+  render
+  caught
+if
+  render
+  caught
+parentheses
+  tail
+  render
+  caught
+a builder behind a boundary
+a
+a
+a
+ab
+a
+ab
+erased wrappers
+toString()
+  render x
+  tail
+x!
+alias ascription
+  render x
+  tail
+x!
+annotated
+  render x
+  tail
+x!
+cast to alias
+  render x
+  tail
+x!
+synchronized
+  render x
+  tail
+x!
+two wrappers
+  render x
+  tail
+x!
+toString in a block
+  stat
+  render x
+  tail
+x!
+ascribed block
+  stat
+  render x
+  tail
+x!
+cast of a block
+  stat
+  render x
+  tail
+x!
+interpolation ascribed
+  render x
+  tail
+x!!
+interpolation toString
+  render x
+  tail
+x!!
+chain after a boundary
+  render x
+  tail
+  render y
+xy!
+calls
+nn
+  render x
+  tail
+x!
+locally
+  render x
+  tail
+x!
+identity
+  render x
+  tail
+x!
+concat
+  render x
+  tail
+xc!
+f interpolator
+  render x
+  tail
+x!!
+match
+  render x
+  tail
+x!
+try
+  render x
+  finally
+  tail
+x!
+what the chain goes through
+double parentheses
+  tail
+  render x
+x!
+block without statements
+  tail
+  render x
+x!
+block in a block
+  outer
+  inner
+  tail
+  render x
+x!
+conditions
+if false
+  tail
+  render x
+x!
+if final val
+  tail
+  render x
+x!
+if inline val
+  tail
+  render x
+x!
+if val
+  render x
+  tail
+x!
+if folded
+  tail
+  render x
+x!
+if negated
+  tail
+  render x
+x!
+nested constant ifs
+  tail
+  render x
+x!
+constant if around toString
+  render x
+  tail
+x!
+toString of a constant if
+  render x
+  tail
+x!
+block ending in a constant if
+  stat
+  tail
+  render x
+x!
+constant if with a block as its condition
+  cond
+  render x
+  tail
+x!
+constant if whose branch is an interpolation
+  tail
+  render x
+x!!
+inline methods
+if on an inline parameter
+  tail
+  render x
+x!
+if on a bound parameter
+  tail
+  render x
+x!
+inline if
+  tail
+  render x
+x!
+inline match
+  tail
+  render x
+x!
+inline parameter ascribed
+  render x
+  tail
+x:!
+inline parameter toString
+  render x
+  tail
+x:!
+inline parameter cast
+  render x
+  tail
+x:!
+inline parameter constant if
+  tail
+  render x
+x:!
+inline parameter ascribed in the body
+  render x
+  tail
+x!
+inline parameter selected in the body
+  render x
+  tail
+x!
+a + written as a call, on a conversion to String
+  tail
+  render x
+s:x!
+summonFrom
+  tail
+  render x
+logx!

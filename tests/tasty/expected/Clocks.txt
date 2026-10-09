@@ -1,0 +1,18 @@
+// tests/tasty/fixtures/Clocks.tasty (TASTy 28.8, 1327 bytes)
+package fix.runtime
+@SourceFile object Clocks extends Object {
+  <synthetic> private def writeReplace(): AnyRef = ...
+  trait Clock extends Object {
+    trait UnsafeAPI extends Object {
+      def now(): Long
+    }
+    def unsafe: UnsafeAPI
+  }
+  object Clock extends Object {
+    <synthetic> private def writeReplace(): AnyRef = ...
+    object Live extends Object, Clock {
+      <synthetic> private def writeReplace(): AnyRef = ...
+      override val unsafe: UnsafeAPI = ...
+    }
+  }
+}

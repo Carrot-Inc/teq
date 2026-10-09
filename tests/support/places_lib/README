@@ -1,0 +1,4 @@
+The library of the positions' tests (tests/support/jars.sh `places-lib`): lib/
+compiled by scalac against decl_v1/, in which `PlBox` has the member `removed`, and read against
+decl/, in which it has not, so that the bodies that call it fail to type where teq compiles them;
+the jar's sources jar beside it holds lib/'s files under their package's directories.

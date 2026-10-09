@@ -1,0 +1,13 @@
+Some(ok)
+None
+true
+false
+true
+Some(Dog(rex))
+None
+Some(Dog(rex))
+None
+None
+true
+false
+matched Dog(rex)

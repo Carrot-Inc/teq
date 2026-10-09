@@ -1,0 +1,16 @@
+chain=true
+opaque=true
+opaque-union=true
+match=true
+box=true
+inter=true
+union=true
+null=false
+bottom=true
+enum=true
+abstract-union=true
+abstract-union-string=true
+abstract-inter=true
+abstract-inter-string=false
+nested=true
+nested-null=false

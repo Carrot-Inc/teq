@@ -1,0 +1,25 @@
+places-lib-1.0.jar!pl/Places.scala:7:49: error: not supported yet: value removed of PlBox (needed by pl.Places.direct)
+  body: "𝄞".length() + b.removed
+    def direct(b: PlBox): Int = "𝄞".length + b.removed
+                                                  ^
+places-lib-1.0.jar!pl/Places.scala:8:48: error: not supported yet: value removed of PlBox (needed by pl.Helpers.removedOf)
+  body: (b.removed: Int)
+  inlined from places-lib-1.0.jar!pl/Helpers.scala:4
+    def nested(b: PlBox): Int = Helpers.removedOf(b)
+                                                 ^
+places-lib-1.0.jar!pl/Helpers.scala:5:59: error: not supported yet: value removed of PlBox (needed by pl.Places.one)
+  body: inlined(Helpers.type) (PlBox.of(1)).removed
+    transparent inline def sharedRemoved: Int = PlBox.of(1).removed
+                                                            ^
+places-lib-1.0.jar!pl/Helpers.scala:5:59: error: not supported yet: value removed of PlBox (needed by pl.Places.two)
+  body: (inlined(Helpers.type) (PlBox.of(1)).removed) + 1
+    transparent inline def sharedRemoved: Int = PlBox.of(1).removed
+                                                            ^
+places-lib-1.0.jar!pl/Places.scala:11:34: error: not supported yet: value plus of PlBox (needed by pl.Places.applied)
+  body: b.plus(1)
+    def applied(b: PlBox): Int = b.plus(1)
+                                   ^
+places-lib-1.0.jar!pl/Places.scala:12:35: error: not supported yet: value ++ of PlBox (needed by pl.Places.operator)
+  body: b ++ 1
+    def operator(b: PlBox): Int = b ++ 1
+                                    ^

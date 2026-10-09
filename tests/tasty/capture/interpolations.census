@@ -1,0 +1,11 @@
+construct                             derived   captured  missing  unsupported   unplaced
+block                                       1          0        0            0          0
+call                                        3          0        0            0          0
+concatenation operand                     104          0        0            0        104
+interpolation                               0          3        0            0          0
+literal                                    77          0        0            0         74
+local reference                           104          0        0            0          0
+method call                                 3          0        0            0          0
+template call                               2          0        0            0          0
+this                                        3          0        0            0          3
+orphans 0, captured types with an unsolved variable 0

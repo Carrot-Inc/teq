@@ -1,0 +1,33 @@
+# Three scenarios of tests/analysis/invalidation/scenarios.txt, whose dumps beside this file
+# compare_test.py feeds invalidation.py.
+
+scenario result-type
+  change `Lib.f: Int` becomes `Long`; `g` stays
+  pad 3
+  edit replace a/Lib.scala
+  status pass
+  rule NamesChange of `f`; member references filtered by the used names (MemberRefInvalidator); external change through sbt's lookup
+  obligation the users of `f` are compiled again in the project and downstream, the users of `g` are not (the lookup's second proof)
+  expect compiled a/Lib.scala a/UserA.scala b/UserB.scala
+  expect not-compiled a/NonUserA.scala b/NonUserB.scala
+  expect change rta.Lib NamesChange
+
+scenario inline-body
+  change an inline method's body changes, its signature stays
+  pad 3
+  edit replace a/Macros.scala
+  status pass
+  rule an inline method's body hash in its API (ExtractAPI's marker): the callers holding its expansion are compiled again
+  obligation the caller of the inline method is compiled again; the caller of the plain method is not
+  expect compiled a/Caller.scala
+  expect not-compiled a/PlainUser.scala
+
+scenario package-object
+  change a package object's `f: Int` becomes `Long`
+  pad 3
+  edit replace a/Obj.scala
+  status pass
+  rule a package object's member changed: its class `p.package` on both sides, which zinc's rule for package objects invalidates, teq's class files `p/<File>$package` (the package-object mapping)
+  obligation the users of `f` are compiled again in the project and downstream, the user of `g` is not, the products compared through the mapping
+  expect compiled a/UserA.scala b/UserB.scala
+  expect not-compiled a/NonUserA.scala

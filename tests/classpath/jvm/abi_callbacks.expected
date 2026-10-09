@@ -1,0 +1,17 @@
+Function1 through apply$mcII$sp: 7
+Function2 through apply$mcIII$sp: 12
+Function1.andThen: 30
+Product members: Point 2 List(1, 2) List(x, y) true
+productElementNames: x,y
+canEqual: true
+hash value: -694993394
+equals and hash: true
+companion apply and unapply by reflection: Point(7,8) Point(7,8)
+static forwarder: hello from Greeter
+Function0 in a Seq: a,b
+Ordering: List(3, 2, 1)
+by-name default of a jar method: 1 none none
+its getter ran at each use: 2
+by-name argument written: 2 given given
+by-name default alone: 42
+by-name default of an instance method over the arguments before it: 3-t3

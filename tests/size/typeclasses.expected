@@ -1,0 +1,6 @@
+[1, 2, 3]
+Some("x")
+[Some(1), None]
+6
+ab
+1 ~ "one"

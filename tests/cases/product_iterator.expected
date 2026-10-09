@@ -1,0 +1,15 @@
+List(1, x)
+[1, x]
+List()
+List(1, a, true)
+List()
+2
+x
+P
+List(1, x)
+true
+false
+false
+true
+false
+List(2, 0, 2, 0)

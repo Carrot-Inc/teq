@@ -1,0 +1,4 @@
+tests/cases/typer_state_kept_promoted.scala:19:13: warning: A pure expression does nothing in statement position
+    def h = { 1; "b" }
+              ^
+s i2bz

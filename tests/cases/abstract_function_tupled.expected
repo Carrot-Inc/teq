@@ -1,0 +1,5 @@
+Die(a,1)
+List(Die(b,2), Die(c,3))
+Die(d,4)
+16
+16

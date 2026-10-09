@@ -1,0 +1,7 @@
+reader 1
+writer abab
+reader List(1, 2)
+writer Some(c)Some(c)Some(c)
+reader 2.5
+writer true
+writer 11

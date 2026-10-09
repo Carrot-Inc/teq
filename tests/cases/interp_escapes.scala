@@ -1,0 +1,10 @@
+case class K(i: Int)
+@main def run(): Unit =
+  val k = K(42)
+  println(raw"\k == \$k")
+  println(raw"a\\$k")
+  println(s"q\"$k\"")
+  println(s"bs\\$k")
+  println(raw"n\n$k")
+  println(s"$$k ${k.i}")
+  println(raw"$$k ${k.i}")

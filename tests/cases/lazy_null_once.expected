@@ -1,0 +1,17 @@
+class: null null 1
+array: null null 1
+generic: null null 1
+trait: null null 1
+object: null null 1
+given: null null 1
+top: null null 1
+local: null null 1
+local array: null null 1
+local class: null null 1
+threw first
+retry: null null 0
+2
+threw local first
+local retry: null null 0
+2
+10

@@ -1,0 +1,6 @@
+// tests/tasty/fixtures/SpWords.tasty (TASTy 28.8, 976 bytes)
+package fix.seqpat
+@SourceFile object SpWords extends Object {
+  <synthetic> private def writeReplace(): AnyRef = ...
+  def unapplySeq(s: Predef.String): Option[package.Seq[Predef.String]] = ...
+}

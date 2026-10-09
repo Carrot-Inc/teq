@@ -1,0 +1,24 @@
+List(1, 2, 3)
+List((1,a), (2,b))
+  f1
+  f2
+List(4, 2)
+List((a,12), (b,1))
+HashMap(k -> ArrayBuffer(1, 2))
+List(0, 1, 2)
+  i
+  r
+List(1, 7)
+List(Cell(3))
+  b
+ab
+3.0
+List(7, 8)
+  h
+  t
+List(1)
+  c
+  a
+  db
+132
+6

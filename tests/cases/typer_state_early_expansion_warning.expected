@@ -1,0 +1,5 @@
+tests/cases/typer_state_early_expansion_warning/Use.scala:14:11: warning: prefix warning
+    val a = M.warn
+            ^^^^^^
+V 1
+7

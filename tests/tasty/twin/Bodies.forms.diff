@@ -1,0 +1,11 @@
+40c40
+<   def callsVarargs: Int = varargs{(scala.collection.immutable.Seq): Int}([1, 2, 3]*) +{(Int): Int} varargs{(scala.collection.immutable.Seq): Int}((List.apply{([1], scala.collection.immutable.Seq): java.lang.Object}[Int]([4, 5]*): Int*))
+---
+>   def callsVarargs: Int = varargs{(scala.collection.immutable.Seq): Int}([1, 2, 3]*) +{(Int): Int} varargs{(scala.collection.immutable.Seq): Int}((List.apply{([1], scala.collection.immutable.Seq): scala.collection.immutable.List}[Int]([4, 5]*): Int*))
+73c73,76
+<       def reachInlined: Int = inlined(Bodies) block{(Int): Int}(1)
+---
+>       def reachInlined: Int = inlined(Bodies) {
+>         <synthetic> val this$0: Bodies = Bodies.this
+>         this$0.block{(Int): Int}(1)
+>       }

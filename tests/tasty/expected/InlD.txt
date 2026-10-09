@@ -1,0 +1,9 @@
+// tests/tasty/fixtures/InlD.tasty (TASTy 28.8, 817 bytes)
+package fix.inlres
+@SourceFile class InlD() extends Object, InlT {
+  inline def f: Any = <body@46>
+  private def f$retainedBody: Any = ...
+  inline def wrap(x: Int): Predef.String = <body@89>
+  override inline def plain(x: Int): Predef.String = <body@169>
+  private def plain$retainedBody(x: Int): Predef.String = ...
+}

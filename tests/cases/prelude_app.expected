@@ -1,0 +1,12 @@
+Tw(grid-cols-3 rounded shadow)
+Tw(mt-4)
+switch:debugLabel
+app.component.widget.SegmentedSwitch.segmentedSwitch (line 17)
+<div class="flex items-center font-bold w-4 rounded shadow" title="Dark mode" style="width: 40px; opacity: 1"><span class="label">Dark mode</span></div>
+app.component.widget.SegmentedSwitch.segmentedSwitch (line 17)
+<div class="flex items-center rounded shadow" title="Compact" style="width: 10px; opacity: 0.5"><span class="label">Compact</span></div>
+app.component.widget.SegmentedSwitch.itemList (line 25)
+<div class="p-2 m-4 items:label"><li key="k10" class="">1</li><li key="k20" class="item">2</li><li key="k30" class="item">3</li></div>
+main$package.banner (line 11)
+<div class="text-lg banner">hello</div>
+qualified:run

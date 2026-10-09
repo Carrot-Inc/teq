@@ -1,0 +1,4 @@
+0:x:scala.Int, 1:y:scala.Int
+0:flag:scala.Boolean, 1:tags:scala.collection.immutable.List[scala.Int], 2:scale:scala.Double
+
+sum, 0:Circle:app.Circle, 1:Dot:app.Dot.type

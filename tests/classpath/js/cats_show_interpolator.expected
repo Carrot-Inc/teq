@@ -1,0 +1,6 @@
+slot 2 named b is Slot(2, b)
+list List(1, 2) option Some(Slot(2, b)) none None map Map(k -> Slot(2, b))
+plain Slot(2, b) 1.5 true c 2 1.25
+(1,t) List(Slot(2, b), Slot(2, b)) Vector(1) Right(1) Set(3)
+n=42, n+1=43, nested=List(Some(42))
+Slot(2, b) Slot(2, b) x

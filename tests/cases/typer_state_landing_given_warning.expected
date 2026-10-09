@@ -1,0 +1,4 @@
+tests/cases/typer_state_landing_given_warning/Main.scala:8:41: warning: given warning
+  @main def run(): Unit = println(C().f(1))
+                                          ^
+41

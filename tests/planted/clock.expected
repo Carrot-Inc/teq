@@ -1,0 +1,5 @@
+System.nanoTime() is the clock
+read System.nanoTime() through it
+"java.lang.System.nanoTime()"
+ordered true
+sum 599994

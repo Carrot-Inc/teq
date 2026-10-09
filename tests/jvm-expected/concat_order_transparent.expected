@@ -1,0 +1,102 @@
+transparent
+  tail
+  render x
+x!
+plain
+  render x
+  tail
+x!
+transparent, inferred type
+  tail
+  render x
+x!
+transparent, bound parameter
+  tail
+  render x
+x!
+transparent, block
+  stat
+  tail
+  render x
+x!
+transparent, match
+  render x
+  tail
+x!
+transparent, if
+  render x
+  tail
+x!
+transparent, if on a constant argument
+  tail
+  render x
+x!
+transparent, constant if
+  tail
+  render x
+x!
+transparent, inline if
+  tail
+  render x
+x!
+transparent, inline match
+  tail
+  render x
+x!
+transparent calling plain
+  render x
+  tail
+x!
+plain calling transparent
+  render x
+  tail
+x!
+transparent calling transparent
+  tail
+  render x
+x!
+transparent, ascribed body
+  render x
+  tail
+x!
+transparent passing a chain
+  tail
+  render x
+x!
+plain passing a chain
+  render x
+  tail
+x!
+transparent, ascribed call
+  render x
+  tail
+x!
+transparent, toString of the call
+  render x
+  tail
+x!
+transparent with a tail inside
+  tail
+  tail
+  render x
+x!!
+transparent macro
+  tail
+  render x
+x!
+plain macro
+  render x
+  tail
+x!
+transparent in a quote
+  tail
+  render x
+x!
+plain in a quote
+  render x
+  tail
+x!
+ascribed transparent in a quote
+  render x
+  tail
+x!

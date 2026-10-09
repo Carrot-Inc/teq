@@ -1,0 +1,41 @@
+3
+Right(Id(7))
+Left((negative id))
+{"1":"a","2":"b"}
+Right(Map(Id(1) -> a, Id(2) -> b))
+Left(.-3(negative key))
+"w:x"
+Right(Wrapped(y))
+Left((no w:))
+Right(Circle(2))
+Right(Square(3))
+Left(.side(missing))
+Right(Circle(9))
+{"ids":[1,2,3],"byId":{"1":"one","2":"two"},"names":{"5":50},"e":{"Right":4},"u":"123e4567-e89b-12d3-a456-426614174000","w":"w:q"}
+Right(Bag(TreeSet(1, 2, 3),TreeMap(1 -> one, 2 -> two),Map(Id(5) -> 50),None,Right(4),123e4567-e89b-12d3-a456-426614174000,Wrapped(q)))
+false
+Left(.byId.b(Invalid Int: b))
+Left(.u(expected a UUID))
+Left(.e(missing fields))
+1 null null
+Right(None) Right(List(None)) Right(Some(1))
+{"Left":"l"} Right(Right(2))
+{
+  "ids" : [
+    1,
+    2,
+    3
+  ],
+  "byId" : {
+    "1" : "one",
+    "2" : "two"
+  },
+  "names" : {
+    "5" : 50
+  },
+  "e" : {
+    "Right" : 4
+  },
+  "u" : "123e4567-e89b-12d3-a456-426614174000",
+  "w" : "w:q"
+}

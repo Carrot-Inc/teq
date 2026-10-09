@@ -1,0 +1,35 @@
+Point(1, 2)
+Point(3, 0)
+made 7
+Point(7, 0)
+Point(2, 4)
+Point(4, 0)
+named k
+one-arg k
+k at Point(1, 0)
+named s
+one-arg s
+sub body
+s at Point(1, 0)
+named t
+one-arg t
+sub body
+subsub 9
+9
+x
+null
+3/1
+Money(500,USD)
+Money(600,USD)
+Money(1,EUR)
+abc
+cba
+chained 42
+from int 42
+List(42)
+code 404
+caught code 500
+15
+java.lang.IllegalStateException: inner
+true
+abc

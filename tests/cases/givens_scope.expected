@@ -1,0 +1,30 @@
+Zone north
+Some(3)
+nested 4
+true
+false
+shape Circle(2)
+true
+false
+false
+false
+true
+true
+true
+true
+false
+true
+shape Circle(1)
+Zone south
+5
+"s"
+"green"
+[1,2]
+"zone"
+/users 7
+/zones ["a","b"]
+/slugs null
+List(UserId(1), UserId(2), UserId(3))
+List(Slug(a), Slug(b))
+Slug(c)
+List(UserId(1), UserId(3))

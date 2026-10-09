@@ -1,0 +1,18 @@
+app.LoanId
+42
+LoanId(7)
+app.Color
+3
+List(Red, Green, Blue)
+Some(Green)
+Some(Blue)
+None
+Green
+2
+List(m, s)
+Some(Second)
+app.Shape
+Box
+Dot
+app.Tone
+soft

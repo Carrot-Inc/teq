@@ -1,0 +1,16 @@
+3c3
+<   def charLit(s: String): Int = s.indexOf{(Int): Int}(124)
+---
+>   def charLit(s: String): Int = s.indexOf{(Int): Int}(Char.char2int{(Char): Int}('|'))
+12c12
+<   def scala(l: util.List[String]): List[String] = CollectionConverters.ListHasAsScala{([1], java.util.List): scala.collection.convert.AsScalaExtensions.ListHasAsScala}[String](l).asScala.toList
+---
+>   def scala(l: List[String]): List[String] = CollectionConverters.ListHasAsScala{([1], java.util.List): scala.collection.convert.AsScalaExtensions.ListHasAsScala}[String](l).asScala.toList
+16c16
+<   def sorted(l: List[String]): List[String] = l.sorted{([1], scala.math.Ordering): java.lang.Object}[String](Ordering.String)
+---
+>   def sorted(l: List[String]): List[String] = l.sorted{([1], scala.math.Ordering): scala.collection.immutable.List}[String](Ordering.String)
+20c20
+<   def makeTriple(a: Int): (Int, String, Boolean) = Tuple3.apply{([3], java.lang.Object, java.lang.Object, java.lang.Object): Tuple3}[Int, String, Boolean](a, "t", true)
+---
+>   def makeTriple(a: Int): (Int, String, Boolean) = new (Int, String, Boolean){([3], java.lang.Object, java.lang.Object, java.lang.Object): Tuple3}(a, "t", true)

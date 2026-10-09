@@ -1,0 +1,16 @@
+put(T) 3
+put(Any) d
+8
+put(T) n n
+put(T) 5 put(Any) 6
+RdNow(40)
+22
+put[A] 9
+put(T) ok
+4
+outer 2
+put(T) 5
+put(T) 7
+put ok
+5
+put(T) Nothing(3)

@@ -1,0 +1,6 @@
+Address{"street":"Main St","number":12,"city":"Riga"}
+Person{"name":"Ada","age":36,"active":true,"tags":["a","b"]}
+Order{"id":"o1","count":2,"items":["x"],"gift":false,"recipient":"Bo"}
+Warehouse{"code":"w1","capacity":100,"open":true,"zones":[1,2],"manager":"Cy"}
+Shipment{"order":"o1","warehouse":"w1","boxes":3,"express":true,"tags":[],"weight":12}
+Invoice{"number":"i1","total":50,"paid":false,"lines":["l1","l2"],"customer":"Di","due":30}

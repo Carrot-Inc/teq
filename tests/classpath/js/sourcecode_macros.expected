@@ -1,0 +1,9 @@
+port at sourcecode_macros.scala:12
+host at sourcecode_macros.scala:13
+demo.app.Greeter#greet here says hello to world
+demo.app
+demo.app.Main.main
+main
+List(1, 2, 3).map(_ * 2) -> List(2, 4, 6)
+x=42, y=zzz
+true

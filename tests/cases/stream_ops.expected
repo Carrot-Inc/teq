@@ -1,0 +1,197 @@
+of: Optional[a]
+of null: java.lang.NullPointerException: null
+ofNullable null: Optional.empty
+empty: Optional.empty
+get empty: java.util.NoSuchElementException: No value present
+orElseThrow empty: java.util.NoSuchElementException: No value present
+orElseThrow supplier: java.lang.IllegalArgumentException: none
+present: true false false
+map: Optional[2]
+map to null: Optional.empty
+map null on empty: java.lang.NullPointerException: null
+flatMap: Optional[2]
+flatMap to null: java.lang.NullPointerException: null
+filter: Optional[3] Optional.empty
+or: Optional[b]
+orElse: c a
+ifPresent: done  [saw a]
+ifPresentOrElse: done  [none]
+stream: 1 0
+equals: true
+hashCode: 7 0
+OptionalInt: OptionalInt[3] OptionalInt.empty 3
+OptionalInt empty get: java.util.NoSuchElementException: No value present
+OptionalInt orElse: 5 6
+OptionalInt equals: true
+OptionalLong: OptionalLong[4] OptionalLong.empty 4
+OptionalDouble: OptionalDouble[2.5] OptionalDouble.empty
+OptionalDouble NaN equals: true
+OptionalInt ifPresent: done  [9]
+toList: [b, a]
+toList mutable: [b, c]
+toSet: [1, 2, 3]
+joining: abc
+joining delimiter: a, b, c
+joining all: [a, b]
+joining none: <>
+joining null element: a-null
+joining null delimiter: java.lang.NullPointerException: The delimiter must not be null
+counting: 3
+toMap: {a=aa, b=bb, c=cc}
+toMap duplicate: java.lang.IllegalStateException: Duplicate key a (attempted merging values 1 and 1)
+toMap null value: java.lang.NullPointerException: null
+toMap merge: {a=2, b=1}
+toMap merge to null: {b=b}
+toMap factory: {a=1, b=2}
+groupingBy: {1=[a, d], 2=[bb, cc]}
+groupingBy counting: {1=3, 2=2}
+groupingBy factory: {a=1, b=1, c=1}
+groupingBy null key: java.lang.NullPointerException: element cannot be mapped to a null key
+characteristics: [IDENTITY_FINISH] [UNORDERED, IDENTITY_FINISH] []
+Collector.of: [x, y] [IDENTITY_FINISH]
+Collector.of finisher: <xy> [UNORDERED]
+own collector: 2  [supplier accumulator combiner characteristics new p q characteristics finisher]
+Characteristics: CONCURRENT 2
+characteristics asked: [p]  [contains:UNORDERED supply acc contains:IDENTITY_FINISH]
+characteristics asked, finished: 1  [contains:UNORDERED supply acc contains:IDENTITY_FINISH]
+null characteristics: NullPointerException
+filter map: [n2, n4]
+flatMap: [a, b, c]
+flatMapToInt: 23
+flatMapToLong: 9000000000
+flatMapToDouble: 3.5
+mapMulti: [a1, b1, a2, b2]
+mapMultiToInt: 33
+mapMultiToLong: 7
+mapMultiToDouble: 0.5
+distinct: [3, 1, 2]
+distinct null: [a, null]
+sorted: [a, b, c]
+sorted comparator: [a, d, bb, cc]
+peek: [10, 20]  [p1 p2]
+limit skip: [2, 3, 4]
+takeWhile dropWhile: [1, 2] [5, 1]
+forEach: done  [1 2]
+forEachOrdered: done  [2 3]
+toArray: 1,2
+toArray generator: a,b
+reduce identity: 16
+reduce: Optional[6] Optional.empty
+reduce three: 3
+collect three: [x, y]
+toList: [a, null]
+min max: Optional[a] Optional[ccc]
+min max ties: Optional[a] Optional[a]
+count: 2
+matches: true false true
+matches empty: false true true
+findFirst findAny: Optional[4] Optional[6] Optional.empty
+iterator: 12
+spliterator: 3 3 true 2  [a]
+unsized spliterator: -1
+parallel: true false 2
+unordered: [2, 1]
+Function.identity: [a, b]
+BinaryOperator.minBy: Optional[1]
+sorted twice sorts once: [i1, i2] 1
+sorted then comparator sorts again: [i2, i1] 2
+sorted then distinct: 2
+stage characteristics: ordered+sorted+sized null ordered+distinct ordered+sized ordered+sized
+unsorted getComparator: java.lang.IllegalStateException: null
+sorted source: null 2
+unsorted source comparator: java.lang.IllegalStateException: null
+supplied source comparator: null
+concatenation comparator: IllegalStateException true null  [x a]
+list stream is ordered: false true 1
+list stream used once: java.lang.IllegalStateException: stream has already been operated upon or closed
+set stream is distinct: true
+Collector.of null: java.lang.NullPointerException: Cannot invoke "Object.getClass()" because "e" is null
+array spliced in: [after, second] 11
+int sum: 6
+int overflow: -2147483648
+int min max: OptionalInt[1] OptionalInt[3] OptionalInt.empty
+int average: OptionalDouble[1.5] true OptionalDouble.empty
+int count: 2
+int toArray: 3,4
+int boxed: [6, 8]
+int iterator: 5 6 false
+primitive spliterators: 1 3 1  [1]
+int forEach: done  [1 2]
+int empty: 0 8
+empty has no order: true 0 true 0
+optional streams: 3 0 4 0
+long: 12000000000 OptionalLong[2] OptionalLong[5] OptionalDouble[1.5]
+long toArray boxed: 1,2 [3]
+double: 3.5 OptionalDouble[-1.5] OptionalDouble[2.5] OptionalDouble[1.75]
+double compensated: true false
+double NaN infinity: true true -1
+double toArray boxed: 1.5,2.5 [0.5]
+nothing before the terminal: linked
+one element at a time: [1, 2]  [a1 f1 b1 a2 f2 b2]
+sized count runs nothing: 3
+sized count limit skip: 2 2
+unsized count runs: 2  [p1 p2 p3]
+concat sized count: 2
+limit stops the source: [1, 2]  [p1 p2]
+iterate limit: [1, 2, 4, 8]  [f1 f2 f4]
+generate filter limit: [2, 4] after 4
+sorted then findFirst: Optional[1]  [in3 in1 in2 out1]
+sorted then limit: [0, 1]  [0 1]
+anyMatch stops: true  [1 2]
+allMatch stops: false  [1 2]
+takeWhile stops: [1, 2]  [1 2 3]
+dropWhile: [2, 3, 1]  [1 2 3 1]
+flatMap closes each: [1, 10, 2, 20]  [closed1 closed2]
+flatMap stops early: true  [p1 p10 closed1]
+flatMap limit: [1, 2]  [in1 in2]
+flatMap null: [2]
+mapMulti limit: [1]  [m1]
+iterator on demand: true 2  [made p1 again]
+iterator of sorted: 1  [made 3 1 2]
+toArray generator first when sized: a,b  [array2 a b]
+toArray generator last when unsized: a,b  [a b array2]
+toArray generator too short: java.lang.IllegalStateException: Begin size 2 is not equal to fixed size 1
+toArray unsized too short: java.lang.IndexOutOfBoundsException: does not fit
+iterate three: [1, 2, 3]  [has1 next1 has2 next2 has3 next3 has4]
+iterate three findFirst: Optional[1]  [has1]
+map null: java.lang.NullPointerException: null
+after a refused map: [1, 2]
+second use: java.lang.IllegalStateException: stream has already been operated upon or closed
+terminal twice: java.lang.IllegalStateException: stream has already been operated upon or closed
+filter null: java.lang.NullPointerException: null
+peek null: java.lang.NullPointerException: null
+sorted null links: java.lang.IllegalStateException: stream has already been operated upon or closed  [npe]
+reduce null: java.lang.NullPointerException: null
+min null: java.lang.NullPointerException: null
+findFirst of null: java.lang.NullPointerException: null
+reduce to null: java.lang.NullPointerException: null
+forEach null on the source: java.lang.NullPointerException: null
+after it: java.lang.IllegalStateException: stream has already been operated upon or closed
+forEach null on a stage: java.lang.NullPointerException: null
+after that: 1
+skip 0 is the stream: true
+and stays usable: 2
+limit negative: java.lang.IllegalArgumentException: -1
+skip negative: java.lang.IllegalArgumentException: -2
+stage after its source closed: java.lang.IllegalStateException: source already consumed or closed
+source after its stage closed: java.lang.IllegalStateException: stream has already been operated upon or closed
+closed stage: java.lang.IllegalStateException: stream has already been operated upon or closed
+close handlers: closed  [root child]
+onClose after use: java.lang.IllegalStateException: stream has already been operated upon or closed
+onClose null: java.lang.NullPointerException: null
+close exceptions: one  [first second third]
+toList closes nothing: listed
+toList unmodifiable: java.lang.UnsupportedOperationException: null
+toList bounds: java.lang.ArrayIndexOutOfBoundsException: Index 3 out of bounds for length 1
+concat: [1, 2, 3]  [a b]
+concat takes both: java.lang.IllegalStateException: stream has already been operated upon or closed
+concat used: java.lang.IllegalStateException: stream has already been operated upon or closed
+builder: [x, y, z]
+builder after build: java.lang.IllegalStateException: null
+empty: 0 []
+of one: [a]
+ofNullable: 0 [a]
+generate limit: [g, g, g]
+ArrayList stream: 5 [ABC, DE]
+ArrayList stream binds late: 3
+HashSet stream: [10, 20]

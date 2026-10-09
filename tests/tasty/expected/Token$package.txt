@@ -1,0 +1,6 @@
+// tests/tasty/fixtures/Token$package.tasty (TASTy 28.8, 584 bytes)
+package fix.ponforeign
+@SourceFile object Token$package extends Object {
+  <synthetic> private def writeReplace(): AnyRef = ...
+  override def toString: Predef.String = ...
+}

@@ -1,0 +1,4 @@
+// tests/tasty/fixtures/FoGR.tasty (TASTy 28.8, 718 bytes)
+package fix.cake
+@SourceFile @Child[FoLeaf] @Child[FoIgnore.type] @Child[FoBoth] @Child[FoMapped] sealed trait FoGR[+T, -R] extends Object {
+}

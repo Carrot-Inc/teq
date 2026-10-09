@@ -1,0 +1,19 @@
+Says body
+made logger
+logger: a
+logger: b
+OnlyPrivate init
+cell init
+step
+priv init
+hidden init
+step
+15
+(true,true)
+23
+cell init
+step
+priv init
+hidden init
+7
+true

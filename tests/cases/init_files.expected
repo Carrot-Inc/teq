@@ -1,0 +1,20 @@
+  init fileB1
+  init fileB2
+main start
+  init fileA1
+  init fileA2
+  init fileAVar
+  init fileA3
+2
+  init fileALazy
+3
+40
+5
+3
+  init fileAGiven
+List(3, 2, 1)
+11
+  init fileC
+  init fileCUnused
+c
+main end

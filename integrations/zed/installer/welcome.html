@@ -1,0 +1,7 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><style>body { font: 13px -apple-system, sans-serif; margin: 16px; } code { font: 12px Menlo, monospace; }</style></head>
+<body>
+<p>This installs the Zed extension <b>Scala with teq</b> for your user: Scala file types, highlighting, outline and navigation, with teq as the language server.</p>
+<p>The extension goes into <code>~/Library/Application Support/Zed/extensions/installed/teq</code>, replacing an earlier copy; Zed lists it on its extensions page after the next start. The installer asks you to quit Zed if it is running, and stops if Zed's own Scala extension is installed: uninstall that one from Zed's extensions page first, since Zed runs one Scala language at a time.</p>
+<p>Nothing else is needed: when you open a Scala file, Zed fetches the teq binary from teq's GitHub release, checks it against the release's SHA256SUMS and starts it; the status bar shows "Downloading teq" meanwhile. An sbt project is exported by the server on the first open (the status bar shows "exporting the sbt build", a minute or two on a large one), then its projects are typed and navigation works.</p>
+</body></html>

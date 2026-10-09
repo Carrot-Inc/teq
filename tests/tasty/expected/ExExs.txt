@@ -1,0 +1,16 @@
+// tests/tasty/fixtures/ExExs.tasty (TASTy 28.8, 1645 bytes)
+package fix.cake
+@SourceFile trait ExExs extends Object { _: ExTypes =>
+  protected object Existential extends Object {
+    @Child[Bounded] sealed trait Bounded[L, U >: L, F[_$1 >: L <: U]] extends Object {
+      type Underlying >: L <: U
+      implicit val Underlying: Type[Underlying]
+      val value: F[Underlying]
+    }
+    def apply[F[_$2], A](value0: F[A])(implicit t: Type[A]): Bounded[Nothing, Any, F] = ...
+  }
+  protected object ExistentialType extends Object {
+    type UpperBounded[U] = Existential.Bounded[Nothing, U, Type]
+  }
+  type ?<[U] = ExistentialType.UpperBounded[U]
+}

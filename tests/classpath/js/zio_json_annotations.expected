@@ -1,0 +1,9 @@
+{"full_name":"Ann","age":3}
+Right(A(Bo,x,4))
+{"kind":"doggo","bark":1}
+{"kind":"Cat","lives":9}
+Right(Dog(2))
+Left((invalid extra field))
+{"foo_bar":1,"baz_qux":"x"}
+5
+Right(Wrap(7))

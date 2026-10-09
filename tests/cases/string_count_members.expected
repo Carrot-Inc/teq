@@ -1,0 +1,44 @@
+[]
+[]
+[]
+[ababab]
+[]
+[]
+threw java.lang.IllegalArgumentException
+threw java.lang.IllegalArgumentException
+[]
+[abc]
+[abc]
+[]
+[]
+[abc]
+[]
+[(,abc)]
+[(abc,)]
+[abc]
+[abcxx]
+[ab]
+[]
+[abc]
+[Xbc]
+[abcX]
+[aXabc]
+[axyc]
+[axyc]
+[Vector(a, 1, 2, c)]
+[abcd]
+threw java.lang.NegativeArraySizeException
+[aXc]
+threw java.lang.StringIndexOutOfBoundsException
+threw java.lang.StringIndexOutOfBoundsException
+[List(ab, bc)]
+[List(ab, c)]
+[List(abc)]
+threw java.lang.IllegalArgumentException: requirement failed: size=0 and step=1, but both must be positive
+threw java.lang.IllegalArgumentException: requirement failed: size=2 and step=0, but both must be positive
+threw java.lang.IllegalArgumentException: requirement failed: size=-1 and step=1, but both must be positive
+[List(abcd, ef)]
+threw java.lang.IllegalArgumentException: requirement failed: size=0 and step=1, but both must be positive
+threw java.lang.IllegalArgumentException: requirement failed: size=0 and step=0, but both must be positive
+threw java.lang.IllegalArgumentException: requirement failed: size=2 and step=-1, but both must be positive
+threw java.lang.IllegalArgumentException: requirement failed: size=-2 and step=-2, but both must be positive

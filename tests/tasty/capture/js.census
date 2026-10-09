@@ -1,0 +1,14 @@
+construct                             derived   captured  missing  unsupported   unplaced
+JavaScript dynamic call                     0          1        0            0          0
+JavaScript object literal                   0          2        0            0          0
+JavaScript selection                        0          2        0            0          1
+JavaScript spread                           1          0        0            0          1
+annotation                                  0          1        0            0          0
+assignment                                  1          0        0            0          0
+constructor call                            1          0        0            0          0
+literal                                    12          0        0            0          3
+local reference                             2          0        0            0          0
+method call                                 1          0        0            0          0
+module reference                            1          0        0            0          0
+repeated arguments                          0          1        0            0          1
+orphans 0, captured types with an unsolved variable 0

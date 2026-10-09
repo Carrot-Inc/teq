@@ -1,0 +1,10 @@
+# Members scalac writes and teq does not, or the reverse, whatever their erasure: left out of the
+# comparison so that it speaks of descriptors alone.
+_1
+_2
+productElementNames
+productIterator
+writeReplace
+<clinit>
+equals$extension
+hashCode$extension

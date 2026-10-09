@@ -1,0 +1,20 @@
+Wrap(Tag(a))
+int 1
+int 1
+str a
+List(Age, Nick)
+tag q
+str a
+int 2
+int 1
+str x
+tag q
+str a
+int 2
+tag z
+Some(str pos)
+2
+tag m
+Some(1)
+1
+Vector(Some(1), None, Some(2))

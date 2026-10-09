@@ -1,0 +1,6 @@
+case-arrow.scala:4:17: error: type mismatch
+case-arrow.scala:5:7: error: '=>' expected, but 'val' found
+case-arrow.scala:6:7: error: not found: m
+case-arrow.scala:7:5: error: Expected start of definition
+case-arrow.scala:8:21: error: type mismatch
+case-arrow.scala:9:1: error: eof expected, but end of indented block found

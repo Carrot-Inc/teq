@@ -1,0 +1,36 @@
+Tw(text-sm font-bold)
+Tw(w-3 px)
+Tw(w-3 h-6)
+Tw(inside-7)
+text-sm:a
+text-lg:b
+Tw(w-full)
+Tw()
+[plain]
+[]
+[]<3>[]
+[]<3>[]<x>[]
+[a ]<3>[ b ]<x!>[ c]
+[]<3>[ and ]<Point(1,2)>[]
+[tab\tnewline\nquote\"backslash\\ dollar$ ]<x>[ end]
+[triple "quoted" \t ]<3>[]
+[nested ]<[inner ]<3>[]>[ done]
+[this ]<big>[ one]
+302
+23
+1
+5
+50
+tab	quote" dollar$ 3
+tab\tquote\" dollar$ 3
+tab	quote" dollar$ 3
+tab\tquote\" dollar$ 3
+triple	quoted 3
+triple\tquoted 3
+3
+b\n
+a1b
+2c
+a1b\n2c
+x	y
+9

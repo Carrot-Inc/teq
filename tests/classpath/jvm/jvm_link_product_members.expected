@@ -1,0 +1,7 @@
+Circle [radius] true false
+Square [] true false
+Origin [] true false
+Pair [left,right] true false
+Tuple2 [_1,_2] true false
+right
+out of bounds

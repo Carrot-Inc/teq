@@ -1,0 +1,119 @@
+adapted	fix.reader.RdCalls	def arr	reader.scala:84:40	the ClassTag argument clause dropped
+adapted	fix.reader.RdCalls	def capturedArray	reader.scala:88:44	a Predef wrapper applied by the pickle, the wrapped value
+adapted	fix.reader.RdCalls	def tokens	reader.scala:17:67	the ClassTag argument clause dropped
+adapted	fix.reader.RdCalls	def unz	reader.scala:85:65	the type arguments and the <:< argument clause dropped
+address	fix.reader.RdPick	def same	reader.scala:108:28	fix.reader.RdPick.put(RdBox[A], A): String
+binder	fix.reader.RdCalls	def bounded	reader.scala:34:22	_$6	? <: RdFoo
+binder	fix.reader.RdCalls	def contraLower	reader.scala:71:21	_$13	? >: Predef.String
+binder	fix.reader.RdCalls	def customLower	reader.scala:77:19	_$15	? >: RdCustom.Nothing
+binder	fix.reader.RdCalls	def customUpper	reader.scala:74:19	_$14	? <: RdCustom.Any
+binder	fix.reader.RdCalls	def distinctCaptures	reader.scala:31:20	_$4	?
+binder	fix.reader.RdCalls	def distinctCaptures	reader.scala:31:33	_$5	?
+binder	fix.reader.RdCalls	def lowerBounded	reader.scala:50:19	_$8	? >: Predef.String
+binder	fix.reader.RdCalls	def namedAndAnon	reader.scala:43:20	t	?
+binder	fix.reader.RdCalls	def namedAndAnon	reader.scala:43:33	_$7	?
+binder	fix.reader.RdCalls	def nested	reader.scala:37:19	t	?
+binder	fix.reader.RdCalls	def outerBound	reader.scala:56:19	t	?
+binder	fix.reader.RdCalls	def outerBound	reader.scala:57:21	_$10	? <: t
+binder	fix.reader.RdCalls	def paramBound	reader.scala:63:19	_$11	? >: A
+binder	fix.reader.RdCalls	def pathBound	reader.scala:66:19	_$12	? >: h.Start
+binder	fix.reader.RdCalls	def sameCapture	reader.scala:28:19	_$3	?
+binder	fix.reader.RdCalls	def upperBounded	reader.scala:53:19	_$9	? <: Predef.String
+binder	fix.reader.RdEvs	def evalNow	reader.scala:141:15	A$2	? <: A
+binder	fix.reader.RdEvs	def evalNow	reader.scala:142:20	a	? <: A
+binder	fix.reader.RdEvs	def evalNow	reader.scala:143:19	a	?
+binder	fix.reader.RdEvs	def evaluate	reader.scala:132:20	a	? <: c.Start
+binder	fix.reader.RdEvs	def evaluate	reader.scala:136:15	A$1	? <: c.Start
+binder	fix.reader.RdEvs	def evaluate	reader.scala:137:19	a	?
+binder	fix.reader.RdPick	def same	reader.scala:108:19	_$16	?
+bounds	fix.reader.RdCalls	def bounded	reader.scala:34:13	_$6 >: Nothing <: fix.rdecl.RdFoo
+bounds	fix.reader.RdCalls	def contraLower	reader.scala:71:13	_$13 >: String | Int <: Any
+bounds	fix.reader.RdCalls	def customLower	reader.scala:77:13	_$15 >: fix.rdecl.RdCustom.Nothing <: Any
+bounds	fix.reader.RdCalls	def customUpper	reader.scala:74:13	_$14 >: Nothing <: fix.rdecl.RdCustom.Any
+bounds	fix.reader.RdCalls	def distinctCaptures	reader.scala:31:14	_$4 >: Nothing <: Any
+bounds	fix.reader.RdCalls	def distinctCaptures	reader.scala:31:27	_$5 >: Nothing <: Any
+bounds	fix.reader.RdCalls	def lowerBounded	reader.scala:50:13	_$8 >: String <: Any
+bounds	fix.reader.RdCalls	def namedAndAnon	reader.scala:43:14	t >: Nothing <: Any
+bounds	fix.reader.RdCalls	def namedAndAnon	reader.scala:43:27	_$7 >: Nothing <: Any
+bounds	fix.reader.RdCalls	def nested	reader.scala:37:13	t >: Nothing <: Any
+bounds	fix.reader.RdCalls	def outerBound	reader.scala:56:13	t >: Nothing <: Any
+bounds	fix.reader.RdCalls	def outerBound	reader.scala:57:15	_$10 >: Nothing <: t
+bounds	fix.reader.RdCalls	def paramBound	reader.scala:63:13	_$11 >: A <: Any
+bounds	fix.reader.RdCalls	def pathBound	reader.scala:66:13	_$12 >: h.Start <: Any
+bounds	fix.reader.RdCalls	def sameCapture	reader.scala:28:13	_$3 >: Nothing <: Any
+bounds	fix.reader.RdCalls	def upperBounded	reader.scala:53:13	_$9 >: Nothing <: String
+bounds	fix.reader.RdEvs	def evalNow	reader.scala:141:10	A$2 >: Nothing <: A
+bounds	fix.reader.RdEvs	def evalNow	reader.scala:142:13	a >: Nothing <: A
+bounds	fix.reader.RdEvs	def evalNow	reader.scala:143:14	a >: Nothing <: Any
+bounds	fix.reader.RdEvs	def evaluate	reader.scala:132:13	a >: Nothing <: c.Start
+bounds	fix.reader.RdEvs	def evaluate	reader.scala:136:10	A$1 >: Nothing <: c.Start
+bounds	fix.reader.RdEvs	def evaluate	reader.scala:137:14	a >: Nothing <: Any
+bounds	fix.reader.RdPick	def same	reader.scala:108:13	_$16 >: Nothing <: Any
+inlined	fix.reader.RdCalls	def expansions	reader.scala:81:40	#10	from fix.rdecl.RdTraces	1 bindings
+inlined	fix.reader.RdCalls	def expansions	reader.scala:81:48	#8	from fix.rdecl.RdTraces	1 bindings
+inlined	fix.reader.RdCalls	def expansions	reader.scala:81:69	#4	from fix.rdecl.RdTraces	1 bindings
+inlined	fix.reader.RdCalls	def expansions	reader_decl_v1.scala	#1	from the caller's scope	0 bindings
+inlined	fix.reader.RdCalls	def expansions	reader_decl_v1.scala	#2	from the caller's scope	0 bindings
+inlined	fix.reader.RdCalls	def expansions	reader_decl_v1.scala	#3	from fix.rdecl.RdTraces	1 bindings
+inlined	fix.reader.RdCalls	def expansions	reader_decl_v1.scala	#5	from the caller's scope	0 bindings
+inlined	fix.reader.RdCalls	def expansions	reader_decl_v1.scala	#6	from the caller's scope	0 bindings
+inlined	fix.reader.RdCalls	def expansions	reader_decl_v1.scala	#7	from fix.rdecl.RdTraces	1 bindings
+inlined	fix.reader.RdCalls	def expansions	reader_decl_v1.scala	#9	from the caller's scope	0 bindings
+inlined	fix.reader.RdCalls	def outerScope	reader.scala:82:44	#13	from fix.rdecl.RdTraces	1 bindings
+inlined	fix.reader.RdCalls	def outerScope	reader_decl_v1.scala	#11	from the caller's scope	0 bindings
+inlined	fix.reader.RdCalls	def outerScope	reader_decl_v1.scala	#12	from the caller's scope	0 bindings
+origin	fix.rdecl.RdApi	none: the pseudo files' tags and the converted text's offsets
+origin	fix.rdecl.RdBox	none: the pseudo files' tags and the converted text's offsets
+origin	fix.rdecl.RdCustom	none: the pseudo files' tags and the converted text's offsets
+origin	fix.rdecl.RdF1	none: the pseudo files' tags and the converted text's offsets
+origin	fix.rdecl.RdFoo	none: the pseudo files' tags and the converted text's offsets
+origin	fix.rdecl.RdFooBox	none: the pseudo files' tags and the converted text's offsets
+origin	fix.rdecl.RdIn	none: the pseudo files' tags and the converted text's offsets
+origin	fix.rdecl.RdInBox	none: the pseudo files' tags and the converted text's offsets
+origin	fix.rdecl.RdMarker	none: the pseudo files' tags and the converted text's offsets
+origin	fix.rdecl.RdSquare	none: the pseudo files' tags and the converted text's offsets
+origin	fix.rdecl.RdTokB	none: the pseudo files' tags and the converted text's offsets
+origin	fix.rdecl.RdTraces	none: the pseudo files' tags and the converted text's offsets
+origin	fix.rdecl.RdWrap	none: the pseudo files' tags and the converted text's offsets
+origin	fix.reader.RdCalls	none: the pseudo files' tags and the converted text's offsets
+origin	fix.reader.RdEv	none: the pseudo files' tags and the converted text's offsets
+origin	fix.reader.RdEvs	none: the pseudo files' tags and the converted text's offsets
+origin	fix.reader.RdFM	none: the pseudo files' tags and the converted text's offsets
+origin	fix.reader.RdFn	none: the pseudo files' tags and the converted text's offsets
+origin	fix.reader.RdMemo	none: the pseudo files' tags and the converted text's offsets
+origin	fix.reader.RdNow	none: the pseudo files' tags and the converted text's offsets
+origin	fix.reader.RdPick	none: the pseudo files' tags and the converted text's offsets
+origin	fix.reader.RdStart	none: the pseudo files' tags and the converted text's offsets
+origin	fix.rjava.RdSub	none: the pseudo files' tags and the converted text's offsets
+select	fix.rdecl.RdBox	def put	reader_decl.scala:11:37	java.lang.String.+(java.lang.Object): java.lang.String	by name (a builtin's member)	: String
+select	fix.rdecl.RdBox	def put	reader_decl.scala:12:63	java.lang.String.+(java.lang.Object): java.lang.String	by name (a builtin's member)	: String
+select	fix.rdecl.RdBox	def toString	reader_decl.scala:14:44	java.lang.String.+(java.lang.Object): java.lang.String	by name (a builtin's member)	: String
+select	fix.rdecl.RdBox	def toString	reader_decl.scala:14:52	java.lang.String.+(java.lang.Object): java.lang.String	by name (a builtin's member)	: String
+select	fix.rdecl.RdCustom	def toString	reader_decl.scala:82:48	java.lang.String.+(java.lang.Object): java.lang.String	by name (a builtin's member)	: String
+select	fix.rdecl.RdCustom	def toString	reader_decl.scala:82:52	java.lang.String.+(java.lang.Object): java.lang.String	by name (a builtin's member)	: String
+select	fix.rdecl.RdF1	def toString	reader_decl.scala:21:43	java.lang.String.+(java.lang.Object): java.lang.String	by name (a builtin's member)	: String
+select	fix.rdecl.RdF1	def toString	reader_decl.scala:21:47	java.lang.String.+(java.lang.Object): java.lang.String	by name (a builtin's member)	: String
+select	fix.rdecl.RdFooBox	def put	reader_decl.scala:25:30	scala.Int.+(scala.Int): scala.Int	by name (a builtin's member)	: Int
+select	fix.rdecl.RdInBox	def put	reader_decl.scala:71:34	java.lang.String.+(java.lang.Object): java.lang.String	by name (a builtin's member)	: String
+select	fix.reader.RdCalls	def bounded	reader.scala:34:30	fix.rdecl.RdFooBox.put(fix.rdecl.RdFoo): scala.Int	declared fix.rdecl.RdFooBox.put(D): Int	: Int
+select	fix.reader.RdCalls	def contraLower	reader.scala:71:39	fix.rdecl.RdInBox.put(java.lang.Object): java.lang.String	one member fix.rdecl.RdInBox.put(A): String	: String
+select	fix.reader.RdCalls	def customLower	reader.scala:77:47	fix.rdecl.RdBox.put(java.lang.Object): java.lang.String	declared fix.rdecl.RdBox.put(T): String	: String
+select	fix.reader.RdCalls	def distinctCaptures	reader.scala:31:42	fix.rdecl.RdBox.put(java.lang.Object): java.lang.String @putAny	declared fix.rdecl.RdBox.put(Any): String @putAny	: String
+select	fix.reader.RdCalls	def lowerBounded	reader.scala:50:37	fix.rdecl.RdBox.put(java.lang.Object): java.lang.String	declared fix.rdecl.RdBox.put(T): String	: String
+select	fix.reader.RdCalls	def namedAndAnon	reader.scala:45:16	java.lang.String.+(java.lang.Object): java.lang.String	by name (a builtin's member)	: String
+select	fix.reader.RdCalls	def namedAndAnon	reader.scala:45:22	java.lang.String.+(java.lang.Object): java.lang.String	by name (a builtin's member)	: String
+select	fix.reader.RdCalls	def namedAndAnon	reader.scala:45:26	fix.rdecl.RdBox.put(java.lang.Object): java.lang.String @putAny	declared fix.rdecl.RdBox.put(Any): String @putAny	: String
+select	fix.reader.RdCalls	def namedAndAnon	reader.scala:45:9	fix.rdecl.RdBox.put(java.lang.Object): java.lang.String	declared fix.rdecl.RdBox.put(T): String	: String
+select	fix.reader.RdCalls	def nested	reader.scala:39:29	fix.rdecl.RdBox.put(java.lang.Object): java.lang.String	declared fix.rdecl.RdBox.put(T): String	: String
+select	fix.reader.RdCalls	def nested	reader.scala:39:40	java.lang.String.+(java.lang.Object): java.lang.String	by name (a builtin's member)	: String
+select	fix.reader.RdCalls	def nested	reader.scala:39:46	java.lang.String.+(java.lang.Object): java.lang.String	by name (a builtin's member)	: String
+select	fix.reader.RdCalls	def outerBound	reader.scala:59:18	java.lang.String.+(java.lang.Object): java.lang.String	by name (a builtin's member)	: String
+select	fix.reader.RdCalls	def paramBound	reader.scala:63:32	fix.rdecl.RdBox.put(java.lang.Object): java.lang.String	declared fix.rdecl.RdBox.put(T): String	: String
+select	fix.reader.RdCalls	def pathBound	reader.scala:66:38	fix.rdecl.RdBox.put(java.lang.Object): java.lang.String	declared fix.rdecl.RdBox.put(T): String	: String
+select	fix.reader.RdCalls	def sameCapture	reader.scala:28:27	fix.rdecl.RdBox.put(java.lang.Object): java.lang.String	declared fix.rdecl.RdBox.put(T): String	: String
+select	fix.reader.RdCalls	def upperBounded	reader.scala:53:41	java.lang.String.length(): scala.Int	by name (a builtin's member)	: Int
+select	fix.reader.RdEvs	def evaluate	reader.scala:131:44	fix.reader.RdFM.start(): fix.reader.RdEv	one member fix.reader.RdFM.start(): RdEv[RdFM.this.Start]	: RdEv[c.Start]
+select	fix.reader.RdEvs	def program	reader.scala:146:19	fix.reader.RdMemo.<init>$default$2([1]): scala.None$	one member fix.reader.RdMemo.<init>$default$2: None	: None
+select	fix.reader.RdEvs	def program	reader.scala:147:29	scala.Int.*(scala.Int): scala.Int	by name (a builtin's member)	: Int
+select	fix.reader.RdEvs	def program	reader.scala:147:35	scala.Any.toString(): java.lang.String	by name (a builtin's member)	: String
+select	fix.reader.RdPick	def put	reader.scala:105:53	java.lang.String.+(java.lang.Object): java.lang.String	by name (a builtin's member)	: String

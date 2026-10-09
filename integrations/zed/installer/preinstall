@@ -1,0 +1,17 @@
+#!/bin/sh
+# $2 is the install destination, Zed's installed/teq under the user's home. An earlier copy goes
+# first, so that nothing of it lingers and Zed sees the directory change; a failure stops the
+# install rather than leaving the two mixed. Zed's own Scala extension is the installation
+# check's matter (installer/distribution.xml), not removed here.
+case "$2" in
+  */Zed/extensions/installed/teq) ;;
+  *)
+    echo "unexpected destination $2" >&2
+    exit 1
+    ;;
+esac
+if [ -e "$2" ] && ! rm -rf "$2"; then
+  echo "could not remove the earlier copy at $2" >&2
+  exit 1
+fi
+exit 0

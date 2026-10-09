@@ -1,0 +1,9 @@
+// tests/tasty/fixtures/RdWrap.tasty (TASTy 28.8, 1024 bytes)
+package fix.rdecl
+@SourceFile final class RdWrap[T](val v: T) extends AnyVal {
+  <synthetic> override def hashCode(): Int = ...
+  <synthetic> override def equals(x$0: Any): Boolean = ...
+}
+@SourceFile <synthetic> object RdWrap extends AnyRef {
+  <synthetic> private def writeReplace(): AnyRef = ...
+}

@@ -1,0 +1,30 @@
+toRight: Right(3) | Left(e) | Left(3) | Right(r)
+zip: Some((3,a)) | None | None
+unzip: (Some(1),Some(a)) | (None,None)
+flatten: Some(1) | None | None
+filterNot: None | Some(3)
+when: Some(1) | None | None | Some(1)
+iterator: List(3) | List() | List(3) | Set(3) | Vector(3) | 0
+in collections: List(1, 2, 3) | List(3, 5) | List(1, 3)
+vector of options: Vector(3) | Set(4, 5)
+for mixed: List(10, 30)
+map2: Some(7)
+fold: 3 | none
+contains: true | false | false | true | true
+orElse: Some(3) | Some(3) | 7 | 3 | true | false
+apply: Some(x) | Some(1) | Some(List(1))
+swap: Left(4) | Right(no)
+merge: 12 | bad: zz
+left: None | Some(no) | Left(2) | Right(4) | List(no)
+left more: no | d | true | false
+exists: true | false | false | true | true | false
+orElse: Right(0) | Right(4) | 9 | 4
+filterOrElse: Left(small) | Right(4) | Left(no)
+toSeq: List(4) | List() | Some(4) | None | true | true
+cond: Right(1) | Left(l)
+flatten: Right(1) | Left(in)
+fold: 8 | 2
+for: Right(3) | Left(bad: x)
+partitionMap: (List(bad: a),List(1, 2))
+option find: Some(3) | None | None | 1 | 0
+option fold: 4 | 1 | 3 | Some(3) | None

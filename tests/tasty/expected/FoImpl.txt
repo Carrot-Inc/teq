@@ -1,0 +1,9 @@
+// tests/tasty/fixtures/FoImpl.tasty (TASTy 28.8, 1134 bytes)
+package fix.cake
+@SourceFile final class FoImpl() extends Object, FoDeriv {
+  type Type[A] = Predef.String
+  def tpe[A](using t: Predef.String): Predef.String = ...
+  protected object SH extends Object, SHModule {
+    def parse[A](implicit t: Type[A]): Option[En[A]] = ...
+  }
+}

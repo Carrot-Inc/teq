@@ -1,0 +1,10 @@
+fetch GET https://api.example.com/pets/1?expand=owner accept-encoding=gzip, deflate []
+200 Value(Right(Pet(1,rex,List(good))))
+fetch GET https://api.example.com/pets/404 accept-encoding=gzip, deflate []
+404 Value(Left(no such pet))
+fetch GET https://api.example.com/pets/500 accept-encoding=gzip, deflate []
+200 Error true
+fetch POST https://api.example.com/pets accept-encoding=gzip, deflate,authorization=Bearer tok,content-length=30,content-type=application/json,x-trace=t-1 [{"name":"fido","tags":["new"]}]
+201 Value(Right(Pet(7,fido,List(new))))
+https://api.example.com/pets/2
+finished true

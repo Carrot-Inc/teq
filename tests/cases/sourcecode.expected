@@ -1,0 +1,50 @@
+topVal: topVal | demo.app.sourcecode$package.topVal | 22
+topDef: topDef | demo.app.sourcecode$package.topDef | 23
+topLambda1: topLambda | demo.app.sourcecode$package.topLambda | 24
+topLazy: topLazy | demo.app.sourcecode$package.topLazy | 25
+topVar: topVar | demo.app.sourcecode$package.topVar | 26
+anonymousGiven: show | demo.app.sourcecode$package.given_Show_Int.show | 32
+namedGiven: show | demo.app.sourcecode$package.namedShow.show | 35
+Tag(given_Tag | demo.app.sourcecode$package.given_Tag)
+Some(Tag(namedTag | demo.app.sourcecode$package.namedTag))
+classBody: Widget | demo.app.Widget | 64
+field: field | demo.app.Widget.field | 47
+lazyField: lazyField | demo.app.Widget.lazyField | 48
+method: method | demo.app.Widget.method | 49
+local: local | demo.app.Widget.local | 53
+deeper: deeper | demo.app.Widget.deeper | 52
+localVal: localVal | demo.app.Widget.localVal | 54
+localLambda: localLambda | demo.app.Widget.localLambda | 55
+patternVal: first | demo.app.Widget.first | 56
+inLambda: inLambda | demo.app.Widget.inLambda | 58
+List(inFor1: inFor | demo.app.Widget.inFor | 60, inFor2: inFor | demo.app.Widget.inFor | 60)
+inMatch: inMatch | demo.app.Widget.inMatch | 62
+inMatchNone: inMatch | demo.app.Widget.inMatch | 63
+Registered(7) as registered at 162, forwards registered
+objectBody: Outer | demo.app.Outer | 71
+inObject: inObject | demo.app.Outer.inObject | 70
+deep: deep | demo.app.Outer.Inner.deep | 73
+deepDef: deepDef | demo.app.Outer.Inner.deepDef | 74
+deepest: deepest | demo.app.Outer.Inner.Innermost.deepest | 76
+nestedClass: member | demo.app.Outer.Nested.member | 78
+givenInObject: show | demo.app.Outer.given_Show_Boolean.show | 80
+traitDefault: greet | demo.app.Greeter.greet | 83
+enumMethod: describe | demo.app.Color.describe | 89
+extension: ext | demo.app.sourcecode$package.ext | 92
+readMoreText:104 renders read more: 3
+demo.app.SegmentedSwitch.segmentedSwitch:109 renders switch 42
+multiLine: multiLine | demo.app.sourcecode$package.multiLine | 113
+block colonBlock:118 3
+outer inner: nestedCalls | demo.app.sourcecode$package.nestedCalls | 124: nestedCalls | demo.app.sourcecode$package.nestedCalls | 125
+130
+a132b
+held by viaGiven
+localGiven: explicit | demo.app.sourcecode$package.localGiven | 138 / explicit / forwarded localGivenForwarded: explicit | demo.app.sourcecode$package.localGiven | 15
+forwarded forwarded: run | demo.app.sourcecode$package.run | 15
+twice forwarded forwardedTwice: run | demo.app.sourcecode$package.run | 15
+passed
+explicit: a | b.a | -1
+Line(3)
+true
+sourcecode.scala
+true

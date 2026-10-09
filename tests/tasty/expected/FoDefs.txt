@@ -1,0 +1,4 @@
+// tests/tasty/fixtures/FoDefs.tasty (TASTy 28.8, 511 bytes)
+package fix.cake
+@SourceFile trait FoDefs extends Object, FoTypes, FoExs, FoHier, FoPaths {
+}

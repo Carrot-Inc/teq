@@ -1,0 +1,10 @@
+Order(1,15)
+order 1: rush
+Order(1,13)
+Order(1,30)
+Order(1,11)
+List(Order(1,11))
+List(pen, ink, ink, item#7)
+4
+abab
+ab-ab

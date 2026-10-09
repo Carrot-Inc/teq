@@ -1,0 +1,119 @@
+# The gate of tests/all.sh, one job per group of suites so that each stays within a bound. The
+# budget suites skip here: their numbers belong to the machine that recorded them.
+name: gate
+on:
+  push:
+    branches: [master]
+  pull_request:
+env:
+  CARGO_TERM_COLOR: always
+  # The scala/scala3 commit whose tests/run, tests/neg and tests/pos the harnesses walk; the
+  # baselines in tests/scala3/*.txt and tests/scala3-typing/expected.txt were recorded on it.
+  SCALA3_REF: 7414c83e175a27726eb3f9b18d4185d9c470d884
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo build --release
+      - run: tests/rust-warnings.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: teq
+          path: target/release/teq
+          if-no-files-found: error
+  suites:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: ${{ matrix.minutes }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - group: core
+            suites: cases errors parser interop dce size split fold
+            minutes: 20
+          - group: watch
+            suites: split-watch
+            minutes: 30
+          - group: interp
+            suites: interp
+            minutes: 20
+          - group: jvm
+            suites: jvm
+            minutes: 25
+            java: true
+          - group: libraries
+            suites: tasty classfile classpath stdlib
+            minutes: 20
+            java: true
+            jars: true
+          - group: scala3
+            suites: scala3-run scala3-interp scala3-macros scala3-macros-interp scala3-typing
+            minutes: 30
+            scala3: true
+    name: ${{ matrix.group }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: teq
+          path: target/release
+      - run: chmod +x target/release/teq
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - if: matrix.java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - if: matrix.jars
+        uses: coursier/setup-action@v1
+        with:
+          apps: cs
+      - if: matrix.jars
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/coursier/v1
+          key: jars-${{ hashFiles('tests/classpath.sh') }}
+      - if: matrix.jars
+        run: |
+          cs fetch --intransitive \
+            org.scala-lang:scala-library:3.8.4 \
+            org.typelevel:cats-kernel_3:2.13.0 \
+            org.typelevel:cats-core_3:2.13.0 \
+            dev.zio:zio-json_sjs1_3:0.9.2 \
+            com.softwaremill.magnolia1_3:magnolia_sjs1_3:1.3.18 \
+            dev.zio:zio_sjs1_3:2.1.26 \
+            com.lihaoyi:sourcecode_3:0.4.2 \
+            io.github.cquiroz:scala-java-time_sjs1_3:2.7.0 \
+            io.github.cquiroz:scala-java-time-tzdb_sjs1_3:2.7.0 \
+            org.typelevel:cats-free_3:2.13.0 \
+            dev.optics:monocle-core_sjs1_3:3.3.0 \
+            dev.optics:monocle-macro_sjs1_3:3.3.0 \
+            eu.timepit:refined_sjs1_3:0.11.4 \
+            org.tpolecat:atto-core_sjs1_3:0.9.5 \
+            org.typelevel:case-insensitive_sjs1_3:1.5.0
+      - if: matrix.scala3
+        uses: actions/cache@v4
+        with:
+          path: ~/teq-ref/scala3
+          key: scala3-${{ env.SCALA3_REF }}
+      - if: matrix.scala3
+        run: |
+          if [ ! -d ~/teq-ref/scala3/tests ]; then
+            git init -q ~/teq-ref/scala3
+            cd ~/teq-ref/scala3
+            git remote add origin https://github.com/scala/scala3.git
+            git sparse-checkout set tests
+            git fetch -q --depth 1 origin "$SCALA3_REF"
+            git checkout -q FETCH_HEAD
+          fi
+      - run: |
+          export COURSIER_CACHE="$HOME/.cache/coursier/v1"
+          export SCALA3="$HOME/teq-ref/scala3"
+          tests/all.sh ${{ matrix.suites }}

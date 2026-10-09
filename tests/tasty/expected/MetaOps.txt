@@ -1,0 +1,6 @@
+// tests/tasty/fixtures/MetaOps.tasty (TASTy 28.8, 447 bytes)
+package fix.overloads
+@SourceFile trait MetaOps extends Object {
+  def info: Predef.String
+  def show: Predef.String = ...
+}

@@ -1,0 +1,9 @@
+// tests/tasty/fixtures/ModulePlatform.tasty (TASTy 28.8, 827 bytes)
+package fix.cake
+@SourceFile trait ModulePlatform extends Object, Module {
+  object Named extends Object, NamedModule {
+    def make(n: Predef.String): Predef.String = ...
+  }
+  object Helper extends Object, HelperModule {
+  }
+}

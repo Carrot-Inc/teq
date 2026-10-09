@@ -1,0 +1,4 @@
+3c3
+<   def unapplySeq(s: String): Option[Seq[String]] = Some.apply{([1], java.lang.Object): Some}[List[String]](List.apply{([1], scala.collection.immutable.Seq): java.lang.Object}[String]([augmentString{(java.lang.String): java.lang.String}(s).take{(Int): java.lang.String}(1), augmentString{(java.lang.String): java.lang.String}(s).drop{(Int): java.lang.String}(2)]*))
+---
+>   def unapplySeq(s: String): Option[Seq[String]] = Some.apply{([1], java.lang.Object): Some}[List[String]](List.apply{([1], scala.collection.immutable.Seq): scala.collection.immutable.List}[String]([augmentString{(java.lang.String): java.lang.String}(s).take{(Int): java.lang.String}(1), augmentString{(java.lang.String): java.lang.String}(s).drop{(Int): java.lang.String}(2)]*))

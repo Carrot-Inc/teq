@@ -1,0 +1,4 @@
+Right(Address(Main St 1,None,Some(ring twice),1.5,-2.25))
+Left(no point)
+Preview(42,Tea,List(Price(small,2.50)),drinks,Some(small),Some(2.50),abc,Some(c1))
+Preview(42,Tea,List(),drinks,None,None,none,None)

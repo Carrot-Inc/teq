@@ -1,0 +1,72 @@
+  view defined
+  map 1
+  map 2
+  map 3
+List(2, 4, 6)
+  map 1
+2
+  map 1
+Some(2)
+SeqView(<not computed>)
+  map 1
+  map 2
+  map 3
+2,4,6
+  map 1
+  map 2
+  map 3
+246
+  fail
+  success
+Some(5)
+  fail
+  success
+  fail
+  success
+  fail
+  fail
+  success
+Some(5)
+  fail
+  success
+  fail
+  fail
+  success
+5
+SeqView(<not computed>)
+IndexedSeqView(<not computed>)
+IndexedSeqView(<not computed>)
+View(<not computed>)
+MapView(<not computed>)
+List(20, 30)
+View(<not computed>)
+List(2)
+List((1,4), (2,5))
+List((1,0), (2,1), (3,2))
+List(2)
+List(1, 2)
+List(3)
+List(0, 1, 3, 6)
+List(2, 3)
+List(1, 2, 3, 4)
+List(1, 8, 3)
+List(3, 2, 1)
+List(1, 2, 3)
+List(2, 3, 4)
+Vector(1, 2, 3)
+3 2 false 6
+Vector(1, 2, 3) Set(1, 2, 3) List(1, 2)
+Map(1 -> 1, 2 -> 2)
+Map(2 -> bb)
+Some(2) None None 1
+List((1,1), (2,2))
+Map(1 -> a)
+List(1, 2) List(1, 2)
+Map(1 -> 1, 2 -> 1)
+Map(1 -> 3)
+  mapValues defined
+  mapValues a
+Some(1)
+  mapValues a
+  mapValues bb
+Map(1 -> 1, 2 -> 2)

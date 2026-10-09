@@ -1,0 +1,4 @@
+// tests/tasty/fixtures/FoDeriv.tasty (TASTy 28.8, 534 bytes)
+package fix.cake
+@SourceFile trait FoDeriv extends Object, FoDefs, FoMod, FoOuters, FoMod2, FoHierUse {
+}

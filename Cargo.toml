@@ -1,0 +1,61 @@
+[package]
+name = "teq"
+version = "0.1.7"
+edition = "2021"
+license = "Apache-2.0"
+description = "A fast compiler for a subset of Scala 3 that emits JavaScript"
+
+[dependencies]
+
+# The system's allocator in the place of src/alloc.rs, for the system's tools to see every
+# block (`leaks`, `heap`, `vmmap` on macOS); never the build that is distributed.
+[features]
+system-alloc = []
+
+# Cold builds on the reference machine, `cargo build --profile <p>` into an empty target directory, twice
+# each: release 37 and 36 s, ship 113 and 106 s, profiling 48 and 49 s. A release build keeps no
+# incremental state, so an edit rebuilds in about as long. Release is thin LTO with the fewest
+# codegen units that rebuild in under 40 s and hold the instruction gate still (docs/SPEED.md,
+# "The release build"): the suites, the gates and every measurement use it.
+[profile.release]
+opt-level = 3
+lto = "thin"
+codegen-units = 8
+panic = "abort"
+debug = false
+
+# The binaries given off: `bench/pgo.sh ship`, which stage.sh distributes.
+[profile.ship]
+inherits = "release"
+lto = "fat"
+codegen-units = 1
+
+[profile.dev]
+opt-level = 1
+
+[profile.profiling]
+inherits = "release"
+debug = true
+lto = "thin"
+
+# For iterating: a code edit rebuilds in ~1.5 s against ~37 s for release (thin LTO, eight codegen
+# units). The binary types eight times slower (the README benchmark in 500 ms instead of 60), which
+# the cases suite does not notice (32 s, its time is node's); measurements and the gate use
+# release. With opt-level 3 and no LTO the same edit takes ~16 s for a binary ~10% slower.
+[profile.fast]
+inherits = "release"
+opt-level = 0
+debug = false
+lto = false
+codegen-units = 16
+incremental = true
+
+# The assertion-enabled build the suites run the parallel typer's checks under (docs/DEVELOPING.md,
+# "The assertion-enabled build"): release with debug assertions, so that the worker-view checks of
+# the type store (src/types/view.rs) and every other `debug_assert` are compiled in, and line
+# tables for the frames a check prints. The production release and the fast profile compile them
+# out.
+[profile.checks]
+inherits = "release"
+debug-assertions = true
+debug = "line-tables-only"

@@ -1,0 +1,173 @@
+#!/bin/sh
+# teq launcher 2: the teq this build pins, with nothing installed. Reads the first line of the
+# teq.lock beside it (the compiler's version) and the lock's binaries line of this machine's
+# classifier (URL, sha1, size), then runs that binary with the arguments as given: TEQ when set;
+# else teq's cache, bin/<sha1>/teq-<version>-<classifier>[.exe]; else coursier's copy of the URL,
+# copied into the cache; else fetched with curl into the cache. A file is taken only with the
+# pinned size, and placed only with the pinned sha1. A release before 0.1.7, the first served, is
+# refused, and so is a lock without this machine's binary, an empty table among them (a release not
+# published yet). Written by sbt-teq's teqExportAll, which replaces it only while it is unedited
+# (docs/TARGETS.md, "The launchers").
+
+fail() {
+  printf 'teq: %s\n' "$*" >&2
+  exit 1
+}
+
+exe=
+case $(uname -s) in
+  Darwin) os=osx ;;
+  Linux) os=linux ;;
+  MINGW* | MSYS* | CYGWIN*) os=windows exe=.exe ;;
+  *) os=$(uname -s | tr '[:upper:]' '[:lower:]' | tr -cd '[:lower:][:digit:]') ;;
+esac
+
+# MSYS would rewrite an argument such as /health into a Windows path on its way to teq.exe; its
+# rewriting stays on for the fetch, whose paths a native curl must read.
+launch() {
+  [ "$os" != windows ] || export MSYS_NO_PATHCONV=1 MSYS2_ARG_CONV_EXCL='*'
+  exec "$@"
+}
+
+if [ -n "${TEQ:-}" ]; then
+  command -v "$TEQ" > /dev/null 2>&1 || fail "TEQ names $TEQ, which is no program"
+  launch "$TEQ" "$@"
+fi
+
+lock=$(dirname "$0")/teq.lock
+[ -f "$lock" ] || fail "no teq.lock beside $0: export the build with sbt teqExportAll"
+cr=$(printf '\r')
+# A scalar of the lock as written: plain, or double-quoted without an escape.
+unquote() {
+  case $1 in
+    *\\*) return 1 ;;
+    \"*\") value=${1#\"} value=${value%\"} ;;
+    *\"*) return 1 ;;
+    *) value=$1 ;;
+  esac
+}
+IFS= read -r first < "$lock" || [ -n "$first" ] || fail "$lock is empty"
+first=${first%"$cr"}
+case $first in
+  "teq: "*) unquote "${first#teq: }" || fail "$lock's first line is not teq: <version>: $first" ;;
+  *) fail "$lock's first line is not teq: <version>: $first" ;;
+esac
+version=$value
+# The releases before 0.1.7 are served no longer, whatever URL the lock gives; a SNAPSHOT is no release.
+case $version in
+  *-SNAPSHOT) ;;
+  0.0.* | 0.1.[0-6] | 0.1.[0-6][!0-9]*)
+    fail "$lock pins teq $version, and releases before 0.1.7 are not served: pin 0.1.7 or later (sbt teqExportAll), or set TEQ to a local binary" ;;
+esac
+
+case $(uname -m) in
+  arm64 | aarch64) arch=aarch_64 ;;
+  x86_64 | amd64) arch=x86_64 ;;
+  *) arch=$(uname -m) ;;
+esac
+classifier=$os-$arch
+# The binaries line of the classifier, within the lock's binaries block.
+line=$(sed -n -e "s/$cr\$//" -e "/^binaries:/,/^[^ ]/s/^  $classifier: //p" "$lock")
+[ -n "$line" ] || fail "$lock pins no binary of teq $version for $classifier: set TEQ to a teq $version binary, or export the build (sbt teqExportAll) once the release $version serves one"
+unquote "$line" || fail "$lock's binaries line for $classifier is not <url> <sha1> <size>"
+set -f
+fields() {
+  url=$1 sha1=$2 size=$3
+  [ $# = 3 ]
+}
+# shellcheck disable=SC2086
+fields $value || fail "$lock's binaries line for $classifier is not <url> <sha1> <size>"
+set +f
+case $sha1 in *[!0-9a-fA-F]*) sha1= ;; esac
+[ ${#sha1} = 40 ] || fail "$lock's binaries line for $classifier has no sha1 of 40 hexadecimal digits"
+sha1=$(printf '%s' "$sha1" | tr 'A-F' 'a-f')
+case $size in '' | *[!0-9]*) fail "$lock's binaries line for $classifier has no size in bytes" ;; esac
+
+if [ -n "${TEQ_CACHE_DIR:-}" ]; then
+  root=$TEQ_CACHE_DIR
+elif [ -n "${XDG_CACHE_HOME:-}" ]; then
+  root=$XDG_CACHE_HOME/teq
+elif [ "$os" = windows ]; then
+  [ -n "${LOCALAPPDATA:-}" ] || fail "no LOCALAPPDATA to find teq's cache in"
+  root=$LOCALAPPDATA/teq
+elif [ -z "${HOME:-}" ]; then
+  fail "no HOME to find teq's cache in"
+elif [ "$os" = osx ]; then
+  root=$HOME/Library/Caches/teq
+else
+  root=$HOME/.cache/teq
+fi
+dir=$root/bin/$sha1
+binary=$dir/teq-$version-$classifier$exe
+
+size_of() { { wc -c < "$1"; } 2> /dev/null | tr -d ' '; }
+if [ "$(size_of "$binary")" = "$size" ]; then
+  launch "$binary" "$@"
+fi
+
+sha1_of() {
+  if command -v sha1sum > /dev/null 2>&1; then
+    set -- "$(sha1sum < "$1")"
+  elif command -v shasum > /dev/null 2>&1; then
+    set -- "$(shasum -a 1 < "$1")"
+  else
+    fail "no sha1sum or shasum to verify teq with"
+  fi
+  printf '%s' "${1%% *}"
+}
+
+mkdir -p "$dir" 2> /dev/null || fail "cannot create $dir"
+# Created afresh: a process id is no such name where containers share the cache.
+part=$(mktemp "$dir/.teq.XXXXXX") || fail "cannot create a file in $dir"
+trap 'rm -f "$part"' EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
+
+# Coursier's copy of the URL, `<cache>/<scheme>/<host>/<path>`, escaped as its CachePath.escape
+# does (a port's `:`, a version's `+`).
+if [ -n "${COURSIER_CACHE:-}" ]; then
+  coursier=$COURSIER_CACHE
+elif [ "$os" = windows ]; then
+  coursier=${LOCALAPPDATA:+$LOCALAPPDATA/Coursier/cache/v1}
+elif [ "$os" = osx ]; then
+  coursier=$HOME/Library/Caches/Coursier/v1
+else
+  coursier=$HOME/.cache/coursier/v1
+fi
+rest=${url#*://}
+rest=${rest%%[?#]*}
+authority=${rest%%/*}
+place=${authority##*@}${rest#"$authority"}
+place=$(printf '%s' "$place" | sed -e 's/%/%25/g' -e 's/ /%20/g' -e 's/\$/%24/g' -e 's/&/%26/g' -e 's/+/%2B/g' -e 's/,/%2C/g' \
+  -e 's/:/%3A/g' -e 's/;/%3B/g' -e 's/=/%3D/g' -e 's/?/%3F/g' -e 's/@/%40/g' -e 's/</%3C/g' -e 's/>/%3E/g' -e 's/#/%23/g')
+copy=$coursier/${url%%://*}/$place
+if [ -n "$coursier" ] && [ "$(size_of "$copy")" = "$size" ] && [ "$(sha1_of "$copy")" = "$sha1" ]; then
+  cp "$copy" "$part" || fail "cannot copy $copy to $part"
+else
+  case $url in
+    https://*) ;;
+    http://127.* | http://localhost[:/]* | http://\[::1\][:/]*) ;;
+    *) fail "$url is not https, which teq fetches over from every host but this one" ;;
+  esac
+  command -v curl > /dev/null 2>&1 || fail "no curl to fetch teq with"
+  printf 'teq: fetching teq %s for %s from %s\n' "$version" "$classifier" "$url" >&2
+  status=$(curl --disable --silent --show-error --location --proto-redir =https --max-filesize "$size" \
+    --connect-timeout 15 --speed-limit 1024 --speed-time 60 --max-time 1800 --write-out '%{http_code}' \
+    --output "$part" "$url" 2> "$part.log")
+  code=$?
+  said=$(tail -n 1 "$part.log" 2> /dev/null)
+  rm -f "$part.log"
+  [ $code != 63 ] || fail "$url has more than the $size bytes the lock pins: refused"
+  [ $code = 0 ] || fail "GET $url failed: ${said:-curl exited $code}"
+  case $status in '' | 000 | 200) ;; *) fail "GET $url answered $status" ;; esac
+  got=$(size_of "$part")
+  digest=$(sha1_of "$part")
+  [ "$got" = "$size" ] && [ "$digest" = "$sha1" ] ||
+    fail "$url has sha1 $digest and $got bytes where the lock pins $sha1 and $size bytes: refused"
+fi
+chmod 755 "$part" 2> /dev/null || fail "cannot make $part executable"
+# Another launcher may have placed it first, and Windows refuses to replace a running binary.
+mv -f "$part" "$binary" 2> /dev/null || [ "$(size_of "$binary")" = "$size" ] || fail "cannot move $part to $binary"
+rm -f "$part"
+trap - EXIT INT TERM
+launch "$binary" "$@"

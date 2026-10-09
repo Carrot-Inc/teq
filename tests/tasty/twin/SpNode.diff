@@ -1,0 +1,8 @@
+2c2
+< @SourceFile class SpNode(val name: Predef.String, val children: Int*) extends Object {
+---
+> @SourceFile class SpNode(val name: String, val children: Int*) extends Object {
+6c6
+<   def unapplySeq(n: SpNode): Option[(Predef.String, package.Seq[Int])] = ...
+---
+>   def unapplySeq(n: SpNode): Option[(String, Seq[Int])] = ...

@@ -1,0 +1,4 @@
+5c5
+<   def both: String = (extract{(List[Int])}(List.apply{([1], scala.collection.immutable.Seq): java.lang.Object}[Int]([1, 2]*)) +{(java.lang.Object): java.lang.String} " / ") +{(java.lang.Object): java.lang.String} extract{(List[String])}(List.apply{([1], scala.collection.immutable.Seq): java.lang.Object}[String](["a", "b"]*))
+---
+>   def both: String = (extract{(scala.collection.immutable.List): java.lang.String}(List.apply{([1], scala.collection.immutable.Seq): scala.collection.immutable.List}[Int]([1, 2]*)) +{(java.lang.Object): java.lang.String} " / ") +{(java.lang.Object): java.lang.String} extract{(scala.collection.immutable.List): java.lang.String @extractStrings}(List.apply{([1], scala.collection.immutable.Seq): scala.collection.immutable.List}[String](["a", "b"]*))

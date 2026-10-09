@@ -1,0 +1,5 @@
+21
+s0.54c
+true
+Consts initialised
+5

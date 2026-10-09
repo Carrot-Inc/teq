@@ -1,0 +1,11 @@
+t: matcher true
+t: matcher false
+t: factory true
+t: word Color
+t: compile Color
+t: factory true
+2
+4
+2
+1
+5

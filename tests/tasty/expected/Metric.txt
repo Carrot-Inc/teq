@@ -1,0 +1,16 @@
+// tests/tasty/fixtures/Metric.tasty (TASTy 28.8, 2356 bytes)
+package fix.runtime
+@SourceFile trait Metric[-In, +Out] extends Object { self: Metric[In, Out] =>
+  trait UnsafeAPI extends Object {
+    def update(in: In): Unit
+    def value: Out
+  }
+  val unsafe: UnsafeAPI
+  def contramap[In2](f: In2 => In): Metric[In2, Out] = ...
+}
+@SourceFile object Metric extends Object {
+  <synthetic> private def writeReplace(): AnyRef = ...
+  def counter(): Metric[Long, Long] = ...
+  def lengths(): Metric[Predef.String, Long] = ...
+  def track(m: Metric[Predef.String, Long], s: Predef.String): Long = ...
+}

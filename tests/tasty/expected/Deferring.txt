@@ -1,0 +1,5 @@
+// tests/tasty/fixtures/Deferring.tasty (TASTy 28.8, 534 bytes)
+package fix.shapes
+@SourceFile trait Deferring[F[_$1]] extends Object {
+  def defer[A](fa: => F[A]): F[A]
+}

@@ -1,0 +1,4 @@
+// tests/tasty/fixtures/Token.tasty (TASTy 28.8, 568 bytes)
+package fix.runtime
+@SourceFile final class Token(val n: Int) extends Object {
+}

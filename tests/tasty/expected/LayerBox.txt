@@ -1,0 +1,4 @@
+// tests/tasty/fixtures/LayerBox.tasty (TASTy 28.3, 543 bytes)
+package fix.qpat
+@SourceFile final class LayerBox[-I, +E, +O](val name: Predef.String) extends Object {
+}

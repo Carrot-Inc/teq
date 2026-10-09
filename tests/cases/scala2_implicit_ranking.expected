@@ -1,0 +1,5 @@
+int string list[int] option[string] list[option[int]]
+animal:woof
+dog:woof
+local-int list[local-int]
+bool 1 bool double list[bool]

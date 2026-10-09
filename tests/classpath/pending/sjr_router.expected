@@ -1,0 +1,8 @@
+'' [] Public(Home) <main class="layout"><p>home 3</p></main>
+'/item/7' [replace http://example.com] Public(Home) <main class="layout"><p>home 3</p></main>
+'/item/7/abc' [] Public(Item(7,Some(abc))) <main class="layout"><p>item 7 Some(abc) 3</p></main>
+'/desk' [] Desk(Dashboard) <main class="layout"><b>dash</b></main>
+'/desk/user/ann' [] Desk(User(ann)) <main class="layout"><b>user ann 3</b></main>
+'/nowhere' [replace http://example.com] Public(Home) <main class="layout"><p>home 3</p></main>
+Path(/item/5/x)
+Path(/desk/user/bob)

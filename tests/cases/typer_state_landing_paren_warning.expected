@@ -1,0 +1,8 @@
+tests/cases/typer_state_landing_paren_warning/Main.scala:11:22: warning: macro warning
+    println(Box().put((M.next), 3))
+                       ^^^^^^
+tests/cases/typer_state_landing_paren_warning/Main.scala:12:25: warning: macro warning
+    println(Box().put2(1, M.next, 3))
+                          ^^^^^^
+5
+6

@@ -1,0 +1,16 @@
+tuple: first | demo.desugar.Widget.first
+tuple3: third | demo.desugar.Widget.third
+tuple4: fourth | demo.desugar.Widget.fourth
+block: t | demo.desugar.Widget.t
+typed: withLocals | demo.desugar.Widget.withLocals
+some: e | demo.desugar.Widget.e
+wild: withLocals | demo.desugar.Widget.withLocals
+typedBinder: g | demo.desugar.Widget.g
+wildUnchecked: i | demo.desugar.Widget.i
+nested: withLocals | demo.desugar.Widget.withLocals
+nestedSingle: l | demo.desugar.Widget.l
+plain: q | demo.desugar.Widget.q
+lazy: m | demo.desugar.Widget.m
+2 s! ArrayBuffer(x, y)
+1.5 c 2 3 ArrayBuffer(x, y, p, r)
+3

@@ -1,0 +1,4 @@
+2c2
+< @SourceFile class QaUnorderedOps[A](xs: package.List[A]) extends Object {
+---
+> @SourceFile class QaUnorderedOps[A](xs: List[A]) extends Object {

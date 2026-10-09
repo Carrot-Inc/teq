@@ -1,0 +1,9 @@
+-1
+square 2
+tri 2 3
+dot
+List(4, 0)
+List(1, 0)
+List(Square(1), Dot)
+true
+true

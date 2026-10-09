@@ -1,0 +1,8 @@
+[component.widget.SegmentedSwitch.segmentedSwitch:10] switch 1
+readMoreText@10 read more
+inferredLabel: inferredLabel | shared.helpers$package.inferredLabel | helpers.scala:26 / label: label | component.widget.SegmentedSwitch.label | components.scala:15
+[component.widget.SegmentedSwitch.Parts.knob:20] knob 4
+topLevel: topLevel | component.widget.components$package.topLevel | components.scala:22
+rootVal: rootVal | main$package.rootVal | main.scala:3
+rootMember: member | RootClass.member | main.scala:6
+main: run | main$package.run | main.scala:16

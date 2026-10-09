@@ -1,0 +1,13 @@
+i1
+'a'
+[i1,i2]
+?['x']
+(i1, ['p'])
+Wrapper(List(2, 4))
+Some(2)
+Right(3)
+Left(big)
+7 -> Some(7)
+1;2;3 -> Some(Wrapper(List(1, 2, 3)))
+ -> Some(Wrapper(List()))
+None

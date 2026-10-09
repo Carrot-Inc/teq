@@ -1,0 +1,28 @@
+TypeRef[Int](TermRef[scala](ThisType(TypeRef[<root>](NoPrefix))))
+q: TermRef typeSym=scala pkg=true exists=true term=false full=scala
+owners: Int/false > scala/true > <root>
+full: scala.Int q-module-full=scala
+pkg-termref: TermRef[scala](ThisType(TypeRef[<root>](NoPrefix))) typeref: TypeRef[scala](ThisType(TypeRef[<root>](NoPrefix)))
+scala.collection.immutable.List[java.lang.String]
+scala.collection.immutable.Map[scala.Int, scala.collection.immutable.Seq[scala.Option[scala.Boolean]]]
+scala.util.Either[java.lang.Throwable, scala.collection.immutable.Vector[scala.Char]]
+TypeRef[Local](TermRef[inner](TermRef[pp](ThisType(TypeRef[<root>](NoPrefix)))))
+q: TermRef typeSym=inner pkg=true exists=true term=false full=pp.inner
+owners: Local/false > inner/true > pp/true > <root>
+full: pp.inner.Local q-module-full=pp.inner
+pkg-termref: TermRef[inner](ThisType(TypeRef[pp](NoPrefix))) typeref: TypeRef[inner](ThisType(TypeRef[pp](NoPrefix)))
+Applied(TypeRef[Svc](TermRef[inner](TermRef[pp](ThisType(TypeRef[<root>](NoPrefix))))))
+q: TermRef typeSym=inner pkg=true exists=true term=false full=pp.inner
+owners: Svc/false > inner/true > pp/true > <root>
+full: pp.inner.Svc q-module-full=pp.inner
+pkg-termref: TermRef[inner](ThisType(TypeRef[pp](NoPrefix))) typeref: TypeRef[inner](ThisType(TypeRef[pp](NoPrefix)))
+TypeRef[TopLevel](ThisType(TypeRef[<empty>](NoPrefix)))
+q: ThisType typeSym=<empty> pkg=true exists=true term=false full=<empty>
+owners: TopLevel/false > <empty>/true > <root>
+full: TopLevel q-module-full=<empty>
+pkg-termref: TermRef[<empty>](ThisType(TypeRef[<root>](NoPrefix))) typeref: TypeRef[<empty>](ThisType(TypeRef[<root>](NoPrefix)))
+Applied(TypeRef[Option](TermRef[scala](ThisType(TypeRef[<root>](NoPrefix)))))
+q: TermRef typeSym=scala pkg=true exists=true term=false full=scala
+owners: Option/false > scala/true > <root>
+full: scala.Option q-module-full=scala
+pkg-termref: TermRef[scala](ThisType(TypeRef[<root>](NoPrefix))) typeref: TypeRef[scala](ThisType(TypeRef[<root>](NoPrefix)))

@@ -1,0 +1,19 @@
+toOption: Some(12) | None | Some(1.5) | None
+state: true | false | true | true | true
+message: Success(boom) | Left(boom)
+getOrElse: 7 | 0 | Success(5) | Success(1)
+map: Success(6) | true | true
+flatMap: Success(3) | true | true
+for: Success(20) | true
+filter: Success(8080) | true | true
+fold: 6 | -1 | -1
+match: ok 3 | failed | ok 9
+toEither: Right(3) | true | Some(3)
+flatten: Success(1) | true
+transform: Success(2) | Success(0)
+failed: true | true
+foreach: 5
+get: 10 | v
+eager: 1 | true
+either toTry: Success(1) | Success(1)
+options: List(1, 3) | List(true, false)

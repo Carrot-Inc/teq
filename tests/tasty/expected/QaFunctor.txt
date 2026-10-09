@@ -1,0 +1,4 @@
+// tests/tasty/fixtures/QaFunctor.tasty (TASTy 28.8, 437 bytes)
+package fix.shapes
+@SourceFile trait QaFunctor[F[_$1]] extends Object {
+}

@@ -1,0 +1,33 @@
+init v
+v=1 w=w c=5
+v=1 w=w2 c=5
+23
+203
+init l
+82
+init pl
+q q! q!
+init v
+KO body 1
+init l
+52
+init n
+init m
+1 2 1 2 mid+ mid++
+7
+init v
+init l
+above v=1 w=w c=5 11 4141
+init v
+init pl
+own 11 q q! q!
+init v
+init mine
+init l
+2 1 2 11 41
+Says body
+hello
+init x
+(6,12)
+init Inner
+14

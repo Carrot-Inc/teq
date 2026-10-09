@@ -1,0 +1,6 @@
+// tests/tasty/fixtures/FoAbstract.tasty (TASTy 28.8, 971 bytes)
+package fix.cake
+@SourceFile abstract class FoAbstract[F[_$12], S]() extends Object, FoBackend[F, S & FoCap], FoCapBackend[F] {
+  type R = S & (FoCap & FoEff[F])
+  override def send[T](r: FoReq[T, R]): Predef.String = ...
+}

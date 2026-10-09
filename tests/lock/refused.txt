@@ -1,0 +1,121 @@
+# Documents every reader of teq.lock refuses, each after a line `=== <line> <why>` naming the line
+# its refusal names: tests/lock.sh holds lock.js and check-export.py to it, teq's unit test lock.rs.
+=== 4 a float where a string or an integer stands
+teq: 0.1.2
+format: 1
+binaries: {}
+a: 1.0
+=== 4 null
+teq: 0.1.2
+format: 1
+binaries: {}
+a: null
+=== 4 YAML 1.1's yes
+teq: 0.1.2
+format: 1
+binaries: {}
+a: yes
+=== 4 a tilde
+teq: 0.1.2
+format: 1
+binaries: {}
+a: ~
+=== 4 an integer of a leading zero
+teq: 0.1.2
+format: 1
+binaries: {}
+a: 007
+=== 5 a key twice
+teq: 0.1.2
+format: 1
+binaries: {}
+a: x
+a: z
+=== 5 an indentation of three spaces
+teq: 0.1.2
+format: 1
+binaries: {}
+a:
+   b: x
+=== 5 a tab in the indentation
+teq: 0.1.2
+format: 1
+binaries: {}
+a:
+	b: x
+=== 5 a blank line
+teq: 0.1.2
+format: 1
+binaries: {}
+a: x
+
+b: x
+=== 4 an escape the lock does not use
+teq: 0.1.2
+format: 1
+binaries: {}
+a: "x\by"
+=== 4 a flow list that is not empty
+teq: 0.1.2
+format: 1
+binaries: {}
+a: [x]
+=== 4 a flow mapping without its space
+teq: 0.1.2
+format: 1
+binaries: {}
+a: {b: x,c: z}
+=== 4 a key twice in a flow mapping
+teq: 0.1.2
+format: 1
+binaries: {}
+a: {b: x, b: z}
+=== 6 a mapping's entry among a list's elements
+teq: 0.1.2
+format: 1
+binaries: {}
+a:
+  - x
+  b: z
+=== 4 a comment
+teq: 0.1.2
+format: 1
+binaries: {}
+a: x #c
+=== 4 a bare key YAML reads as an integer
+teq: 0.1.2
+format: 1
+binaries: {}
+2: x
+=== 4 a key with a space
+teq: 0.1.2
+format: 1
+binaries: {}
+a b: x
+=== 4 a colon without its space
+teq: 0.1.2
+format: 1
+binaries: {}
+a:x
+=== 1 a document that is not a mapping
+- a
+=== 4 nothing below a key
+teq: 0.1.2
+format: 1
+binaries: {}
+a:
+=== 4 an integer past JavaScript's exact ones
+teq: 0.1.2
+format: 1
+binaries: {}
+a: -9223372036854775808
+=== 4 a unicode escape of a sign and three digits
+teq: 0.1.2
+format: 1
+binaries: {}
+a: "\u+041"
+=== 4 a key of a flow mapping past YAML's 1,024 characters
+teq: 0.1.2
+format: 1
+binaries: {}
+a: {kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk: 1}

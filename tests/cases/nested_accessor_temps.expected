@@ -1,0 +1,4 @@
+List(List(), List(), List(), List())
+List(List(), None, None, None, None, None, None, None, None, None)
+List(List(), Some(2), None, None, None, None, None, None, None, None)
+List(List(), List(), List(), List())

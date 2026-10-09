@@ -1,0 +1,6 @@
+List(int 1, int 1, other, double 2.5, char a, true, other)
+one two other
+a b via 98 other
+97 via 'a' other
+List(origin, name, big, one, one, sym a, other)
+1 2 3

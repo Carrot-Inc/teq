@@ -1,0 +1,8 @@
+// tests/tasty/fixtures/InfoOps.tasty (TASTy 28.8, 674 bytes)
+package fix.overloads
+@SourceFile trait InfoOps[A] extends Object {
+  def info: Predef.String
+  def withInfo(i: Predef.String): A
+  def info(i: Predef.String): A = ...
+  def tag(t: Predef.String): A = ...
+}

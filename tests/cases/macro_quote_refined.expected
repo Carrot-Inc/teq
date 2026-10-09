@@ -1,0 +1,2 @@
+x: Int, name: String
+flag: Boolean

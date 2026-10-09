@@ -1,0 +1,38 @@
+Right({"name":"Ann","age":30,"address":{"street":"1 Main","city":"Springfield"},"tags":["a","b"],"scores":{"x":1}})
+Right(Person(Ann,30,Address(1 Main,Springfield,None),List(a, b),Map(x -> 1)))
+{"name":"Bob","n":2,"ok":true,"none":null,"xs":[1,"s"]}
+{"name":"Bob","n":2,"ok":true,"none":null,"xs":[1,"s"]}
+{
+  "name" : "Bob",
+  "n" : 2,
+  "ok" : true,
+  "none" : null,
+  "xs" : [
+    1,
+    "s"
+  ]
+}
+Right("Bob")
+Right("s")
+Left(No such field: 'missing')
+Left(The array does not have index 5)
+Left(expected number)
+Chunk(name,n,ok,none,xs)
+Right(2)
+Right({"a":[1,2,{"b":null}],"c":"d"})
+Right({"a":[1,2,{"b":null}],"c":"d"})
+Right([1,2])
+Right(1.5)
+Left((expected '{' got '['))
+true
+false
+{"a":1,"b":2}
+1
+Right(1)
+Right({})
+true
+2
+Some(hello)
+Some(2.5)
+Some(false)
+Right(Some(Chunk(street,city)))

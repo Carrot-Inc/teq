@@ -1,0 +1,16 @@
+Math.abs +0 +0 NaN 2.5
+math.abs +0 NaN
+rich abs +0 +0 NaN 3.5
+Math.max +0 +0 NaN NaN
+Math.min -0 -0 NaN NaN
+math.max +0 -0 NaN
+rich max +0 +0 NaN NaN
+rich min -0 -0 NaN NaN
+int abs -2147483648 3 3 3 7 -9223372036854775808
+int max 3 -4 9 -9
+seq max +0 +0 -0 -0
+bits 0 0
+signum -0 -0 NaN
+float abs +0 +0 NaN 0
+float max +0 +0 -0 -0 NaN
+float bits -2147483648 0

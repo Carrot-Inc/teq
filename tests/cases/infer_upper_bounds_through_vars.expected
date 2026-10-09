@@ -1,0 +1,3 @@
+Item(CashFee(1),Some(CashFee(1)))
+Row(Some(2.5))
+Row(None)

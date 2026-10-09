@@ -1,0 +1,5 @@
+registry
+counter
+9
+between
+top a+b

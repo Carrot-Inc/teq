@@ -1,0 +1,5 @@
+// tests/tasty/fixtures/FoMod2.tasty (TASTy 28.8, 848 bytes)
+package fix.cake
+@SourceFile trait FoMod2 extends Object { self: FoDeriv =>
+  def mk[A](implicit t: Type[A]): Predef.String = ...
+}

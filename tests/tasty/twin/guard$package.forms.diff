@@ -1,0 +1,12 @@
+4c4
+<   val Step: Step.type = new Step.type{(): fix.guard.guard$package$.Step$}()
+---
+>   val Step: Step.type = new Step.type{(): fix.guard.Step$}()
+9c9
+<     val Guard: Guard.type = new Guard.type{(): fix.guard.guard$package$.Step$.Guard$}()
+---
+>     val Guard: Guard.type = new Guard.type{(): fix.guard.Step$.Guard$}()
+14c14
+<       val Proof: Proof.type = new Proof.type{(): fix.guard.guard$package$.Step$.Guard$.Proof$}()
+---
+>       val Proof: Proof.type = new Proof.type{(): fix.guard.Step$.Guard$.Proof$}()

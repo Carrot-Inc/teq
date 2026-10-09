@@ -1,0 +1,14 @@
+Right(List(db:select 1, db:select 2))
+Left(cannot run 'bad query')
+List(closed db, closed db)
+ok on 3
+List(attempt 1 failed: flaky 1, attempt 2 failed: flaky 2)
+gave up after 2 attempts
+List(attempt 1 failed: never)
+escaped: cannot run 'bad idea'
+List(finally before propagation)
+List(outer is closed)
+List(loop:a, skipped, loop:c)
+List(closed outer, closed loop, closed loop, closed loop)
+inner body, inner finally, outer catch from inner, outer finally
+1

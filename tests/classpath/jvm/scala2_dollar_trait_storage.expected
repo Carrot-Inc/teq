@@ -1,0 +1,7 @@
+A$B lazy init
+14
+C$D.T init
+C$D.T twice init
+13
+C$D.T cell init
+(true,true)

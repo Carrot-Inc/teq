@@ -1,0 +1,93 @@
+throws or: NumberFormatException
+throws and: NumberFormatException
+throws xor: ArithmeticException
+short or: true
+short and: false
+evaluated or
+true
+evaluated and
+false
+evaluated xor
+false
+true
+false
+evaluated left
+evaluated right
+false
+evaluated left
+evaluated right
+true
+evaluated l
+evaluated m
+evaluated r
+false
+evaluated true or
+true
+evaluated false and
+false
+evaluated K.T or
+true
+evaluated K.F and
+false
+constant division: ArithmeticException
+folded division: ArithmeticException
+folded
+false
+r=true true true
+List(false, true, true)
+1231 1237
+true
+evaluated box or
+true
+evaluated box and
+true
+evaluated any and
+false
+evaluated option or
+true
+evaluated lambda or
+true
+evaluated function argument
+true
+false
+evaluated a
+evaluated b
+true
+evaluated or-assign
+evaluated and-assign
+evaluated xor-assign
+true
+evaluated if or
+if or taken
+evaluated if and
+if and not
+evaluated if not and
+not taken
+evaluated if not or
+not not
+evaluated if xor
+xor not
+evaluated while 0
+evaluated while 1
+evaluated while 2
+i=2
+evaluated nested
+evaluated nested2
+not both
+evaluated chosen
+2
+evaluated inline or
+true
+evaluated inline and
+false
+evaluated inline xor
+false
+evaluated macro
+true
+t.&(Log.once("x"))
+t.|(Log.once("x"))
+t.&&(Log.once("x"))
+t.^(Log.once("x"))
+true
+true
+effects 40

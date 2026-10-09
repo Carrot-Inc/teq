@@ -1,0 +1,11 @@
+// tests/tasty/fixtures/IfEqv.tasty (TASTy 28.8, 1496 bytes)
+package fix.inlforms
+@SourceFile trait IfEqv[A] extends Object {
+  def eqv(x: A, y: A): Boolean
+}
+@SourceFile object IfEqv extends Object {
+  <synthetic> private def writeReplace(): AnyRef = ...
+  inline def by[A]: IfEqv[A] = <body@212>
+  inline def derived[A](using m: Mirror.Of[A]): IfEqv[A] = <body@305>
+  inline def arity[T <: Tuple]: Int = <body@444>
+}

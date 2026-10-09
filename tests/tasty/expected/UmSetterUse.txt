@@ -1,0 +1,6 @@
+// tests/tasty/fixtures/UmSetterUse.tasty (TASTy 28.3, 691 bytes)
+package fix.unmod
+@SourceFile object UmSetterUse extends Object {
+  <synthetic> private def writeReplace(): AnyRef = ...
+  def use(c: UmSetterOnly): Int = ...
+}

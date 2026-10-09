@@ -1,0 +1,6 @@
+Queue(1, 2, 3, 4, 5)
+1 Queue(2, 3, 4, 5) 4 5 Queue(5, 4, 3, 2)
+10
+Queue(3, 4)
+None
+true

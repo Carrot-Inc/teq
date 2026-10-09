@@ -1,0 +1,4 @@
+4c4
+<   inline extension (s: Predef.String) def shout: Predef.String = <body>
+---
+>   inline extension (s: String) def shout: String = <body>

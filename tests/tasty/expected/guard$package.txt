@@ -1,0 +1,23 @@
+// tests/tasty/fixtures/guard$package.tasty (TASTy 28.8, 1759 bytes)
+package fix.guard
+@SourceFile <synthetic> opaque object guard$package extends Object {
+  <synthetic> private def writeReplace(): AnyRef = ...
+  opaque type Step = () => Predef.String
+  object Step extends Object {
+    <synthetic> private def writeReplace(): AnyRef = ...
+    final class Guard[A] private[Step]() extends Object {
+    }
+    object Guard extends Object {
+      <synthetic> private def writeReplace(): AnyRef = ...
+      final class Proof[A] private[Step]() extends Object {
+      }
+      object Proof extends Object {
+        <synthetic> private def writeReplace(): AnyRef = ...
+        inline given legal[A](using inline ev1: NotGiven[<:<[A, Step]], inline ev2: NotGiven[() => A]): Proof[A] = <body@523>
+      }
+      inline given apply[A](using inline ev: Proof[A]): Guard[A] = <body@593>
+    }
+    inline def apply[A](inline f: A)(using inline ev: Guard[A]): Step = <body@663>
+    extension (s: Step) def run(): Predef.String = ...
+  }
+}

@@ -1,0 +1,12 @@
+ab-ab
+ab+ab
+ab-ab!
+bbb?
+1,2,3
+[1;2]
+4/5
+x yz
+x..|yz.
+c~c#
+6~7
+x~yzx#|yz

@@ -1,0 +1,7 @@
+names expected:<alpha [bet]a> but was:<alpha [gamm]a>
+null expected:<...aaaaaaaaaaaaaaaaaaaa[x]bbbbbbbbbbbbbbbbbbbb...> but was:<...aaaaaaaaaaaaaaaaaaaa[y]bbbbbbbbbbbbbbbbbbbb...>
+expected: java.lang.String<same> but was: java.lang.String<same>
+m expected:<null> but was:<x>
+m expected:<ab[]> but was:<ab[c]>
+e a true
+not today

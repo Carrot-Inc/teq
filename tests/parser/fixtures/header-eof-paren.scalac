@@ -1,0 +1,2 @@
+header-eof-paren.scala:3:18: error: type mismatch
+header-eof-paren.scala:4:15: error: '=' expected, but identifier found

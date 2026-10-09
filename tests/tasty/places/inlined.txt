@@ -1,0 +1,6 @@
+tests/tasty/places/Inl.scala:2:33: error: No given instance of type Ordering[NoOrd] was found. (in the body of pl.Places.less)
+  body: (package$package.summonInline[package.Ordering[T]].lt(x, y): Boolean)
+  inlined from places-lib-1.0.jar!pl/Places.scala:14
+  @main def run(): Unit = println(pl.Places.less(NoOrd(), NoOrd()))
+                                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+1 error found

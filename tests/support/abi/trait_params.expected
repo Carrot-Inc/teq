@@ -1,0 +1,53 @@
+trait_params/Anon class
+trait_params/Anon trait_params$Anon$$x$1()Lscala/math/Ordering; public,abstract
+trait_params/C class
+trait_params/C named()Ljava/lang/String; public
+trait_params/C named:Ljava/lang/String; private
+trait_params/C trait_params$Anon$$x$1()Lscala/math/Ordering; public
+trait_params/C trait_params$Anon$$x$1:Lscala/math/Ordering; private
+trait_params/C trait_params$Ev$$ord()Lscala/math/Ordering; public
+trait_params/C trait_params$Ev$$ord:Lscala/math/Ordering; private
+trait_params/C trait_params$T$$p()I public
+trait_params/C trait_params$T$$p:I private
+trait_params/C trait_params$Tagged$$x$2()I public
+trait_params/C trait_params$Tagged$$x$2:I private
+trait_params/C v()I public
+trait_params/C v:I private
+trait_params/C w()I public
+trait_params/C w:I private
+trait_params/C w_$eq(I)V public
+trait_params/D class
+trait_params/D o()I public
+trait_params/D o:I private
+trait_params/Ev class
+trait_params/Ev trait_params$Ev$$ord()Lscala/math/Ordering; public,abstract
+trait_params/Named $lessinit$greater$default$1()Ljava/lang/String; public,static
+trait_params/Named class
+trait_params/Named named()Ljava/lang/String; public,abstract
+trait_params/Named$ $lessinit$greater$default$1()Ljava/lang/String; public
+trait_params/Named$ class
+trait_params/Over class
+trait_params/Over o()I public,abstract
+trait_params/R class
+trait_params/R using$rate()I public
+trait_params/R using$rate:I private
+trait_params/Rate class
+trait_params/Rate using$rate()I public,abstract
+trait_params/S class
+trait_params/S trait_params$Spelled$$using$2()Ljava/lang/String; public
+trait_params/S trait_params$Spelled$$using$2:Ljava/lang/String; private
+trait_params/S using$1()I public
+trait_params/S using$1:I private
+trait_params/Spelled class
+trait_params/Spelled trait_params$Spelled$$using$2()Ljava/lang/String; public,abstract
+trait_params/Spelled using$1()I public,abstract
+trait_params/T $lessinit$greater$default$3()I public,static
+trait_params/T class
+trait_params/T trait_params$T$$p()I public,abstract
+trait_params/T v()I public,abstract
+trait_params/T w()I public,abstract
+trait_params/T w_$eq(I)V public,abstract
+trait_params/T$ $lessinit$greater$default$3()I public
+trait_params/T$ class
+trait_params/Tagged class
+trait_params/Tagged trait_params$Tagged$$x$2()I public,abstract

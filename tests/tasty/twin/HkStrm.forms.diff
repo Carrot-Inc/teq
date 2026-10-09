@@ -1,0 +1,4 @@
+2c2
+<   def compile[F2[x] >: F[x], G[_$]](implicit c: HkCompiler[F2, G]): String = c.name
+---
+>   def compile[F2 >: F <: [x] =>> Any, G[_$]](implicit c: HkCompiler[F2, G]): String = c.name

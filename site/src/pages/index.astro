@@ -1,0 +1,178 @@
+---
+// The front page is README.md (stage.py writes .staged/readme.json): the tagline as the eyebrow, the centred h1 as
+// the headline (its lines after the first in the accent colour), the intro's first paragraph as the lead and each
+// paragraph after it a point of the strip under it, its bold opening the title; then its sections as bands. Compilation
+// speed is a card per input of the README's table (.staged/speed.json), the input and its description over the three
+// times as bars and the ratio by teq's, its first paragraph beside the heading and the rest of its text under the
+// cards, a paragraph that is one link at the right. The ways to use teq (the section's `###` subsections) are a grid
+// of cards (src/components/Cards.astro); the status is an aside under them (src/components/Status.astro);
+// about-the-project and open-source stand side by side, each its title as a label over its one subsection (title,
+// first paragraph, the rest, its link); the footer's license line stands for the License section. Any other section
+// the README has is a band after these, in the README's order: its subsections as cards, or its text alone.
+import { getEntry, render } from "astro:content";
+import Base from "../layouts/Base.astro";
+import Cards from "../components/Cards.astro";
+import Status from "../components/Status.astro";
+import { inline } from "../text";
+import sections from "../../.staged/readme.json";
+import site from "../../.staged/site.json";
+import speed from "../../.staged/speed.json";
+
+// A staged fragment's rendered content, or undefined where the fragment is missing or empty.
+const content = async (id: string) => {
+  const entry = await getEntry("readme", id);
+  return entry && entry.body?.trim() ? (await render(entry)).Content : undefined;
+};
+type Section = (typeof sections)[number];
+const section = (slug: string) => sections.find((s) => s.slug === slug);
+// A section's subsections, each with its rendered detail.
+const items = async (s: Section | undefined) =>
+  Promise.all((s?.items ?? []).map(async (item) => ({ ...item, Detail: await content(`${s!.slug}--${item.slug}`) })));
+
+const Lead = await content("intro");
+const More = await content("intro-more");
+const speedSection = section("compilation-speed");
+const SpeedLead = await content("compilation-speed");
+const SpeedNotes = await content("compilation-speed-notes");
+const ways = section("ways-to-use-teq");
+const WaysIntro = await content("ways-to-use-teq");
+const wayCards = await items(ways);
+const status = section("status");
+const StatusContent = await content("status");
+const statusItems = await items(status);
+const about = await Promise.all(
+  ["about-the-project", "open-source"].map(async (slug) => {
+    const s = section(slug);
+    return { section: s, Content: await content(slug), items: await items(s) };
+  }),
+);
+// The sections placed above, the license (the footer's line) and the two the site shows elsewhere: the Documentation
+// table is the docs index (/docs/), the Libraries section the libraries document's summary (/docs/libraries/).
+const placed = ["compilation-speed", "ways-to-use-teq", "status", "about-the-project", "open-source", "license", "documentation", "libraries"];
+const rest = await Promise.all(
+  sections.filter((s) => !placed.includes(s.slug)).map(async (s) => ({ ...s, Content: await content(s.slug), items: await items(s) })),
+);
+
+// Each card its own scale: scalac's cold run is the full track.
+const width = (part: number, whole: number) => `${Math.round((part / whole) * 10000) / 100}%`;
+const measures = (r: (typeof speed)[number]) => [
+  { who: "scalac, cold JVM", label: r.coldLabel, width: "100%", teq: false },
+  { who: "scalac, warm server", label: r.warmLabel, width: width(r.warm, r.cold), teq: false },
+  { who: "teq", label: r.teqLabel, width: width(r.teq, r.cold), teq: true },
+];
+const release = [site.status, site.version].filter(Boolean).join(" · ");
+// The quick links under the ways' heading: a short name per way, by its slug; a way without one is named by its title.
+const short: Record<string, string> = {
+  "as-the-compiler-of-an-sbt-build": "sbt",
+  "as-a-native-build-tool": "native build tool",
+  "in-the-editor": "editors",
+  "as-an-interpreter": "interpreter",
+};
+---
+<Base bodyClass="home">
+  <section class="hero">
+    <p class="eyebrow">{site.tagline}</p>
+    {site.headline.length > 0 && (
+      <h1>{site.headline[0]}{site.headline.slice(1).map((line) => <>{" "}<span>{line}</span></>)}</h1>
+    )}
+    {Lead && <div class="lead prose"><Lead /></div>}
+    <div class="cta">
+      <a class="button" href="#ways-to-use-teq">Ways to use teq</a>
+      <a class="button ghost" href="/docs/">Documentation</a>
+    </div>
+    {(release || status) && (
+      <p class="release">
+        {release && <span class="badge">{release}</span>}
+        {status && <a href={`#${status.slug}`}>Check compatibility</a>}
+      </p>
+    )}
+  </section>
+  {More && <div class="strip"><More /></div>}
+
+  {speedSection && (
+    <div class="band alt">
+      <div class="inner">
+        <section id={speedSection.slug}>
+          <div class="section-heading">
+            <h2>{speedSection.title}</h2>
+            {SpeedLead && <div class="aside prose"><SpeedLead /></div>}
+          </div>
+          <div class="cards three">
+            {speed.map((r) => (
+              <article class="card bench">
+                <div class="head">
+                  <h3>{r.input}</h3>
+                  <p class="kind" set:html={inline(r.kind)} />
+                </div>
+                <div class="measures" role="img" aria-label={`${measures(r).map((m) => `${m.who}: ${m.label}`).join(", ")}; ${r.faster}`}>
+                  {measures(r).map((m) => (
+                    <div class={`measure${m.teq ? " teq" : ""}`}>
+                      <div class="label">
+                        <span>{m.who}</span>
+                        <span>{m.label}</span>
+                      </div>
+                      <div class="track"><span class="fill" style={`width:${m.width}`}></span></div>
+                    </div>
+                  ))}
+                </div>
+                {r.faster && <p class="faster">{r.faster}</p>}
+              </article>
+            ))}
+          </div>
+          {SpeedNotes && <div class="notes prose"><SpeedNotes /></div>}
+        </section>
+      </div>
+    </div>
+  )}
+
+  {(ways || status) && (
+    <div class="band">
+      <div class="inner">
+        {ways && <Cards section={ways} items={wayCards} Intro={WaysIntro} short={short} />}
+        {status && (StatusContent || statusItems.length > 0) && <Status section={status} Content={StatusContent} items={statusItems} />}
+      </div>
+    </div>
+  )}
+
+  {about.some((a) => a.section && (a.Content || a.items.length > 0)) && (
+    <div class="band alt">
+      <div class="inner about">
+        {about.map(({ section: s, Content, items }) => s && (Content || items.length > 0) && (
+          <section id={s.slug}>
+            {items.length > 0 ? (
+              <>
+                <p class="eyebrow">{s.title}</p>
+                {items.map((item) => (
+                  <>
+                    <h2>{item.title}</h2>
+                    <p class="lead" set:html={inline(item.lead)} />
+                    {item.Detail && <div class="prose"><item.Detail /></div>}
+                    {item.link && <a class="text-link" href={item.link.href}>{item.link.text}</a>}
+                  </>
+                ))}
+              </>
+            ) : (
+              <h2>{s.title}</h2>
+            )}
+            {Content && <div class="prose"><Content /></div>}
+          </section>
+        ))}
+      </div>
+    </div>
+  )}
+
+  {rest.map((s, i) => (
+    <div class={`band${i % 2 === 0 ? "" : " alt"}`}>
+      <div class="inner">
+        {s.items.length > 0 ? (
+          <Cards section={s} items={s.items} Intro={s.Content} />
+        ) : (
+          <section id={s.slug}>
+            <h2>{s.title}</h2>
+            {s.Content && <div class="prose"><s.Content /></div>}
+          </section>
+        )}
+      </div>
+    </div>
+  ))}
+</Base>

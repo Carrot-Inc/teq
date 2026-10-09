@@ -1,0 +1,5 @@
+// tests/tasty/fixtures/QaUnorderedOps.tasty (TASTy 28.8, 648 bytes)
+package fix.shapes
+@SourceFile class QaUnorderedOps[A](xs: package.List[A]) extends Object {
+  def contains_(a: A): Boolean = ...
+}

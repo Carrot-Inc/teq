@@ -1,0 +1,104 @@
+receiver then args
+  eval recv
+  eval a
+  eval b
+4
+named args out of order
+  eval c
+  eval a
+  eval default-b
+14
+  eval c
+  eval b
+  eval a
+6
+defaults
+  eval a
+  eval default-b
+  eval default-c
+31
+  eval a
+  eval default-c-from-a
+0
+  eval a
+15
+by-name
+  eval strict-b
+  in byName body
+  eval byname-a
+  eval byname-a
+4
+varargs
+  eval v1
+  eval v2
+  eval v3
+6
+interpolation
+  eval i1
+  eval i2
+1 and 2
+right assoc
+  eval left
+  eval right
+  +: called with 5
+6
+  eval left
+  eval right
+  :: called with 5
+6
+  eval l1
+  eval l2
+  eval rbox
+  :: called with 2
+  :: called with 1
+3
+  eval h
+  eval tl
+List(1, 2)
+  eval h
+  eval tl
+Vector(1, 2)
+  eval pre
+  eval post
+List(0, 2)
+  eval pre
+  eval post
+List(0, 2)
+assignment ops
+  getBox
+  eval rhs
+6
+  getBox
+  eval i
+  eval rhs
+  update(1, 99)
+99
+tuple / list literals
+  eval t1
+  eval t2
+(1,2)
+boolean short-circuit
+  eval f
+false
+  eval t
+true
+  eval t
+  eval always
+false
+if / match scrutinee
+  eval x
+  eval y
+  eval z
+7
+string concat
+  eval s1
+  eval s2
+  eval s3
+a12.0
+compare
+  eval c1
+  eval c2
+true
+  eval c1
+  eval c2
+true

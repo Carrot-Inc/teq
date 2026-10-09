@@ -1,0 +1,4 @@
+2c2
+<   <synthetic> override def hashCode(): Int = hashCode{(java.lang.Object): Int}(v)
+---
+>   <synthetic> override def hashCode(): Int = Objects.hashCode{(java.lang.Object): Int}(v)

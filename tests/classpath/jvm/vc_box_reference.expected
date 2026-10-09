@@ -1,0 +1,13 @@
+option=None
+getClass=java.lang.NullPointerException
+toString=java.lang.NullPointerException
+case-toString=java.lang.NullPointerException
+S-toString=java.lang.NullPointerException
+interpolated=null
+accept=null
+list=null
+take=0
+equal-nulls=true
+identity=true
+same-box=true
+count=11

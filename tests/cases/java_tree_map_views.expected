@@ -1,0 +1,78 @@
+{20=v2, 30=v3, 40=v4} {30=v3, 40=v4, 50=v5} {30=v3, 40=v4, 50=v5}
+{10=v1, 20=v2, 30=v3} {10=v1, 20=v2, 30=v3, 40=v4} {} {70=v7, 80=v8, 90=v9} {80=v8, 90=v9} {}
+{} {30=v3} {}
+subMap from above to: IllegalArgumentException(fromKey > toKey)
+subMap from above to, both inclusive: IllegalArgumentException(fromKey > toKey)
+5: null null 20 20 null 20=v2
+20: null 20 20 30 null 30=v3
+25: 20 20 30 30 20=v2 30=v3
+50: 40 50 50 null 40=v4 null
+55: 50 50 null null 50=v5 null
+60: 50 50 null null 50=v5 null
+65: 50 50 null null 50=v5 null
+95: 50 50 null null 50=v5 null
+20 50 20=v2 50=v5 4 false null
+put below: IllegalArgumentException(key out of range)
+put at the exclusive bound: IllegalArgumentException(key out of range)
+put above: IllegalArgumentException(key out of range)
+null false null null true v1 fifty-five
+{20=v2, 30=thirty, 40=v4, 50=v5, 55=fifty-five} 5
+{10=v1, 20=v2, 30=thirty, 40=v4, 50=v5, 55=fifty-five, 60=v6, 70=v7, 80=v8, 90=v9}
+{30=thirty, 40=v4, 45=forty-five, 50=v5, 55=fifty-five} 5 30
+{40=v4, 45=forty-five} {30=thirty, 40=v4, 45=forty-five, 50=v5, 55=fifty-five} {30=thirty, 40=v4, 45=forty-five, 50=v5, 55=fifty-five} {40=v4, 45=forty-five, 50=v5}
+headMap past the bound: IllegalArgumentException(toKey out of range)
+headMap at the exclusive bound, inclusive: IllegalArgumentException(toKey out of range)
+tailMap below the bound: IllegalArgumentException(fromKey out of range)
+subMap from out of range: IllegalArgumentException(fromKey out of range)
+subMap to out of range: IllegalArgumentException(toKey out of range)
+tailMap at an exclusive bound, inclusive: IllegalArgumentException(fromKey out of range)
+{40=v4, 45=forty-five} {40=v4, 45=forty-five}
+{90=v9, 80=v8, 70=v7, 60=v6, 55=fifty-five, 50=v5, 45=forty-five, 40=v4, 30=thirty, 10=v1} 90 10 90=v9 10=v1
+{90=v9, 80=v8, 70=v7, 60=v6, 55=fifty-five} {50=v5, 45=forty-five, 40=v4, 30=thirty, 10=v1} {90=v9, 80=v8, 70=v7, 60=v6, 55=fifty-five, 50=v5} {70=v7, 60=v6, 55=fifty-five, 50=v5, 45=forty-five, 40=v4} {60=v6, 55=fifty-five, 50=v5, 45=forty-five, 40=v4, 30=thirty}
+desc 5: 10 10 null null
+desc 10: 30 10 10 null
+desc 45: 50 45 45 40
+desc 50: 55 50 50 45
+desc 90: null 90 90 80
+desc 95: null null 90 90
+descending subMap from below to: IllegalArgumentException(fromKey > toKey)
+thirty-five thirty-five false
+{55=fifty-five, 50=v5, 45=forty-five, 40=v4, 30=thirty} 55 {30=thirty, 40=v4, 45=forty-five, 50=v5, 55=fifty-five} {55=fifty-five, 50=v5, 45=forty-five} {30=thirty}
+descending view put out of range: IllegalArgumentException(key out of range)
+[90, 80, 70, 60, 55, 50, 45, 40, 30, 10] [55, 50, 45, 40, 30] [90, 80, 70, 60, 55, 50, 45, 40, 30, 10]
+90 90 10 [80, 70] 70 55
+{30=thirty, 40=v4, 45=forty-five, 50=v5, 55=fifty-five, 60=v6, 70=v7, 80=v8}
+{30=thirty, 40=v4, 45=forty-five, 50=v5, 55=fifty-five, 60=v6, 70=v7} 70
+70 60 55 50 45 40 30
+true false false true false [20, 30, 50, 60] {10=v1, 20=v2, 30=v3, 50=v5, 60=v6, 70=v7, 80=v8, 90=v9}
+add to a view's key set: java.lang.UnsupportedOperationException
+add to the map's key set: java.lang.UnsupportedOperationException
+add to the map's navigable key set: java.lang.UnsupportedOperationException
+add to the descending key set: java.lang.UnsupportedOperationException
+add to the values: java.lang.UnsupportedOperationException
+add to the entries: java.lang.UnsupportedOperationException
+remove before next: java.lang.IllegalStateException
+remove twice: ()
+{10=v1, 30=v3, 50=v5, 70=v7}
+{50=v5, 70=v7}
+{50=v5} 1
+[30, 40] 20 50 20 50 [30, 40] 30 40
+{10=v1, 20=v2, 30=v3, 40=v4, 50=v5, 60=V6, 70=V7, 80=V8, 90=V9}
+true false false true false
+{10=v1, 20=v2, 30=v3, 40=v4, 50=v5, 60=V6, 80=V8, 90=V9} 3
+10=v1 30=v3 20=v2 null {40=v4, 50=v5, 60=V6, 80=V8, 90=V9}
+true {b=2, d=3, f=2, g=3}
+true false {a=1, c=1, d=3, e=1, f=2, g=3}
+true {a=1, c=1, e=1}
+true {b=2, d=3, f=2, g=3}
+true {a=1, b=2, c=1, d=3, f=2, g=3}
+true {a=1, b=2, d=3, f=2, g=3}
+true {a=1, c=1}
+true {a=1, c=1, f=2, g=3}
+true {a=1, b=2, c=1, e=1, g=3}
+true {a=1, c=1, e=1, f=2, g=3}
+true {a=1, d=3}
+true {a=1, d=3, f=2, g=3}
+true {b=2, c=1, e=1, f=2, g=3}
+true false {a=1}
+{a=1, f=2} true true true

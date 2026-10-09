@@ -1,0 +1,5 @@
+// tests/tasty/fixtures/UmScope.tasty (TASTy 28.3, 791 bytes)
+package fix.unmod
+@SourceFile class UmScope[F[_$4], P](val p: P) extends Object {
+  def show: Predef.String = ...
+}

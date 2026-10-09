@@ -1,0 +1,2 @@
+broken-array.scala:5:62: error: None of the overloaded alternatives of method * in class Int with types
+broken-array.scala:6:46: error: None of the overloaded alternatives of method * in class Int with types

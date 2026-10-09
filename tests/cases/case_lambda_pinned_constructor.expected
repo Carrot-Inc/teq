@@ -1,0 +1,5 @@
+OptT(List(None))
+OptT(List(Some(3)))
+OptT(List(None))
+OptT(Vector(Some(6)))
+OptT(Vector(None))

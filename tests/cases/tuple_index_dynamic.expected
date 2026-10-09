@@ -1,0 +1,29 @@
+ascribed throws java.lang.IndexOutOfBoundsException
+inline def throws java.lang.IndexOutOfBoundsException
+val throws java.lang.IndexOutOfBoundsException
+in range a
+def throws java.lang.IndexOutOfBoundsException
+final val throws java.lang.IndexOutOfBoundsException
+effect
+block throws java.lang.IndexOutOfBoundsException
+inline parameter throws java.lang.IndexOutOfBoundsException
+plain parameter throws java.lang.IndexOutOfBoundsException
+parameter final val throws java.lang.IndexOutOfBoundsException
+type parameter throws java.lang.IndexOutOfBoundsException
+42
+3
+abcd
+Any Any
+ascribed parameter throws java.lang.IndexOutOfBoundsException
+ascribed plain parameter throws java.lang.IndexOutOfBoundsException
+ascribed sum throws java.lang.IndexOutOfBoundsException
+ascribed final val throws java.lang.IndexOutOfBoundsException
+ascribed body throws java.lang.IndexOutOfBoundsException
+Any Any Any Any Any
+Int Any
+by-name throws java.lang.IndexOutOfBoundsException
+inline if throws java.lang.IndexOutOfBoundsException
+inline call operation throws java.lang.IndexOutOfBoundsException
+ascribed inline call operation throws java.lang.IndexOutOfBoundsException
+block of inline call throws java.lang.IndexOutOfBoundsException
+Any Any Any

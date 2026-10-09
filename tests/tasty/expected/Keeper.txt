@@ -1,0 +1,5 @@
+// tests/tasty/fixtures/Keeper.tasty (TASTy 28.8, 687 bytes)
+package fix.runtime
+@SourceFile trait Keeper[F[_$4], A] extends Object {
+  def held: F[A]
+}

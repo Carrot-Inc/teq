@@ -1,0 +1,671 @@
+# The mappings of tests/analysis.sh: a part of teq's graph that differs from scalac's, for a
+# reason docs/TARGETS.md ("The analysis graph", the mappings) states by construction.
+#
+#   <project> <class> <name> <mapping>     the definitions named <name> in <class> (or the class's
+#                                          companion) and the name hash of <name> may differ;
+#                                          <header>, <self>, <children>, <parents>, <products>
+#                                          name those parts of the class
+#   <project> <class> <class> <mapping>    the class, or its companion, is absent from one side
+#   <project> <part> <class> <name> <mapping> <side> <fields>
+#                                          a dependency of the referring <class> that the callback's
+#                                          <part> reports and <side> alone has: the used name <name>
+#                                          (usedName; <fields> its scopes), the class <name> depended
+#                                          on (classDependency; its context), the binary class <name>
+#                                          depended on (binaryDependency; its entry, source and
+#                                          context), the fields joined by commas
+#   exact <project>                        every class and every dependency matches exactly; no
+#                                          mapping applies
+#
+# A difference no line names fails, and so does a line that names nothing that differs; zinc's
+# apiHash and extraHash of a class may differ only where a line names a difference, and a stored
+# relation only where a line names a difference of the dependencies it comes from.
+#
+# The invalidation oracle's lines (tests/invalidation.sh, tests/analysis/invalidation.py), at the
+# end of the file:
+#
+#   inv-status <scenario>/<variant> <project> <side|both> <outcome>
+#   inv-batch <scenario>/<variant> <project> <side|both> <cycle> <source,...>
+#                                          each side's outcome and batches, frozen
+#   inv-diff <scenario>/<variant> <project> <side> <kind> <cycle|-> <source or class> <reason>
+#                                          a difference of the sides, or of a side's run and its
+#                                          fresh build, named exactly and with its reason
+
+# The exact-match projects: every class the same as scalac's, and every hash of zinc's.
+exact abstractoverride_a
+exact abstractoverride_b
+exact abstractvar_a
+exact access_a
+exact access_b
+exact aliasonly_a
+exact aliasonly_b
+exact basic_a
+exact byname_a
+exact byname_b
+exact caseapply_a
+exact dependent_a
+exact dependent_b
+exact diamond_a
+exact diamond_b
+exact diamond2_c
+exact encoded_a
+exact encoded_b
+exact export_a
+exact export_b
+exact exportgeneric_a
+exact exportgeneric_b
+exact exportpkg_a
+exact exporttypes_b
+exact exportwild_a
+exact exportwild_b
+exact extension_b
+exact given_b
+exact inherit_a
+exact inherit_b
+exact inline_b
+exact inner_a
+exact inner_b
+exact java_a
+exact java_b
+exact opaque_a
+exact opaquebound_a
+exact opaquebound_b
+exact privatepkg_a
+exact privatepkg_b
+exact refinement_a
+exact sealed_b
+exact stale_a
+exact stale_b
+exact symbolicpkg_a
+exact symbolicpkg_b
+exact targetname_b
+exact traitapi_a
+exact traitapi_b
+exact traitsuper_a
+exact traitsuper_b
+exact typemembers_a
+exact valueclass_b
+exact varargs_a
+exact varargs_b
+exact blocks
+exact qualified
+exact structures
+exact candidates_b
+exact exported_a
+exact twoblocks
+exact imports_a
+exact imports_b
+exact localclass_a
+exact localclass_b
+exact initialisers_a
+exact initialisers_b
+exact exportalias
+exact nestedjava
+exact patmatbound_a
+exact patmatbound_b
+exact localnested_a
+exact localnested_b
+exact importtypes_a
+exact importtypes_b
+exact forwardersig
+exact exportchain
+exact importrelative_a
+exact importrelative_b
+exact importvalue
+exact constants
+
+# The mapped projects.
+
+abstractoverride_main aom.Main$package run annotation-tree
+traitapi_main tam.Main$package run annotation-tree
+caseclass_a ca.Box copy$default$1 default-getter-type
+caseclass_a ca.Box copy$default$2 default-getter-type
+defaults_a da.Client query$default$2 default-getter-type
+diamond2_a d2a.Tone Tone enum-serializable
+diamond2_a d2a.Tone java;io;Serializable;init; enum-serializable
+enum_a na.Color Color enum-serializable
+enum_a na.Color java;io;Serializable;init; enum-serializable
+enum_a na.Opt Opt enum-serializable
+enum_a na.Opt java;io;Serializable;init; enum-serializable
+given_a ga.Show$.listShow ga;Show$;listShow;init; given-constructor
+hkbounds_a ha.Api$package lift hk-parameter-name
+hkbounds_a ha.Functor ha;Functor;init; hk-parameter-name
+hkbounds_a ha.Functor$.given_Functor_List ha;Functor;init; hk-parameter-name
+hkbounds_a ha.Functor$.given_Functor_List given_Functor_List alias-expanded
+inline_a ila.Macros pick inline-fingerprint
+inline_a ila.Macros twice inline-fingerprint
+inline_a ila.Tuner adjust inline-fingerprint
+matchtype_a mta.Elems first alias-expanded
+pkgobj_a pa.nested.package <products> package-object
+sealed_a sa.Expr Expr mirror-companion
+sealed_a sa.Expr MirroredElemLabels mirror-companion
+sealed_a sa.Expr MirroredLabel mirror-companion
+sealed_a sa.Expr MirroredMonoType mirror-companion
+sealed_a sa.Expr ordinal mirror-companion
+sealed_a sa.Expr scala;deriving;Mirror$;Sum;init; mirror-companion
+sealed_a sa.Expr scala;deriving;Mirror;init; mirror-companion
+targetname_a tna.Vec * annotation-tree
+targetname_a tna.Vec + annotation-tree
+annotations ann.Uses f annotation-tree
+annotations ann.Uses g annotation-tree
+annotations ann.Uses s annotation-tree
+annotations ann.Uses i annotation-tree
+annotations ann.Uses old annotation-tree
+abstractmirror_b amb.Use$package run annotation-tree
+aliaslambda_b alb.Use$package run annotation-tree
+collide_c clc.Main$package run annotation-tree
+companionmirror_b cbb.Use$package run annotation-tree
+companiontouch_b ctb.Use$package run annotation-tree
+constantpickle_b cpb.Use$package run annotation-tree
+ctororder_b cob.Use$package run annotation-tree
+custommirror_b cmb.Use$package run annotation-tree
+deepnesting_b dnb.Use$package run annotation-tree
+downstreammirror_b dmb.Use$package run annotation-tree
+dupnames_b dnb.Use$package run annotation-tree
+elidedinit_b elb.Use$package run annotation-tree
+elidedmethod_b elb.Use$package run annotation-tree
+elidedparent_b elb.Use$package run annotation-tree
+elidedstmt_b elb.Use$package run annotation-tree
+elidedunused_b elb.Use$package run annotation-tree
+elseunit_b eub.Use$package run annotation-tree
+enumorder_b eob.Use$package run annotation-tree
+erasedcallee_c erasedmain.Main$package run annotation-tree
+expandanon_b eab.Use$package run annotation-tree
+exportgivenobject_b gob.Use$package run annotation-tree
+exportgivenonly_b egb.Use$package run annotation-tree
+exportgivenrename_b grb.Use$package run annotation-tree
+exportinherit_b eib.B$package run annotation-tree
+exportinline_b eib.Use$package run annotation-tree
+exportoverdefault_b eob.Use$package run annotation-tree
+exportprelude_b epb.Use$package run annotation-tree
+exportrelay_c erc.C$package run annotation-tree
+exportrelaycase_b rcb.Use$package run annotation-tree
+exportrelayrename_b rrb.C$package run annotation-tree
+extensionoverload_b eob.B$package run annotation-tree
+givenfold_b gfb.Use$package run annotation-tree
+givenladder_b glb.Use$package run annotation-tree
+identityexpand_c idxmain.Main$package run annotation-tree
+initcall_b icallb.Use$package run annotation-tree
+initdef_b idb.Use$package run annotation-tree
+initread_b irb.Use$package run annotation-tree
+initwrite_b iwb.Use$package run annotation-tree
+inlinejdkctor_b ijb.Use$package run annotation-tree
+jarvalueclass_b jvb.Use$package run annotation-tree
+javavarargs_b jvb.Use$package run annotation-tree
+localcaseapply_b lcb.Use$package run annotation-tree
+localclass_b lcb.Use$package run annotation-tree
+localobject_b lob.Use$package run annotation-tree
+macrofresh_c mfc.Main$package run annotation-tree
+macrohelper_b mhb.Use$package run annotation-tree
+macronamedarg_b mnb.Use$package run annotation-tree
+macropattern_b mpb.Use$package run annotation-tree
+macroquote_b mqb.Use$package run annotation-tree
+macroseqpattern_b msb.Use$package run annotation-tree
+macrotransparent_c mtc.Main$package run annotation-tree
+macrowithheld_b mwb.Use$package run annotation-tree
+manyblocks_b mbb.Use$package run annotation-tree
+mixedparent_b pb.Use$package run annotation-tree
+nestedcallee_c main.Main$package run annotation-tree
+objinit_b oib.Use$package run annotation-tree
+opaquecompanion_b ocb.Use$package run annotation-tree
+opaquename_b onb.Use$package run annotation-tree
+overloadexpand_c oec.Main$package run annotation-tree
+perfile_b pfb.Main$package run annotation-tree
+pkgobjname_b ponb.Use$package run annotation-tree
+polycontext_b pcb.Use$package run annotation-tree
+polyfunction_b pfb.B$package run annotation-tree
+polyinfer_b pib.Use$package run annotation-tree
+repeatexpand_b reb.Main$package run annotation-tree
+returnedfunction_c returnedmain.Main$package run annotation-tree
+rollbackprefix_b rbb.Use$package run annotation-tree
+runtimewhole_b rwb.Use$package run annotation-tree
+samclasses_b sab.Use$package run annotation-tree
+seqpattern_b spb.Use$package run annotation-tree
+shadowbind_b sbb.Use$package run annotation-tree
+shadowlocal_b slb.Use$package run annotation-tree
+shadowparent_b spb.Use$package run annotation-tree
+stdforms_b sfb.Use$package run annotation-tree
+stdformsuser_b sub.Use$package run annotation-tree
+toplevelprefix_b tpb.Use$package run annotation-tree
+traitfields_b tfb.Use$package run annotation-tree
+traitinit_b tib.Use$package run annotation-tree
+twomains_b tmb.Use$package run annotation-tree
+unused_b unb.Use$package run annotation-tree
+valaccessor_b vab.Use$package run annotation-tree
+writtensetter_b wsb.Use$package run annotation-tree
+members mem.Base b_= var-parameter-setter
+members mem.Impl b_= var-parameter-setter
+members mem.Impl mem;Impl;init; secondary-constructor
+hkbounds_a ha.Functor$.given_Functor_Option ha;Functor;init; hk-parameter-name
+enum_a na.Opt$.Some MirroredMonoType mirror-prefix
+enum_a na.Opt$.Some fromProduct mirror-prefix
+enum_a na.Opt$.Some Some enum-serializable
+enum_a na.Opt$.Some java;io;Serializable;init; enum-serializable
+enum_a na.Opt$.Some copy$default$1 default-getter-type
+sealed_a sa.Expr$.Add MirroredMonoType mirror-prefix
+sealed_a sa.Expr$.Add fromProduct mirror-prefix
+sealed_a sa.Expr$.Num MirroredMonoType mirror-prefix
+sealed_a sa.Expr$.Num fromProduct mirror-prefix
+shapes sh.Shared h wildcard-simplified
+shapes sh.Shared w wildcard-simplified
+enum_a na.Planet Planet enum-serializable
+enum_a na.Planet java;io;Serializable;init; enum-serializable
+tparams_string tx.Tx$package f tparams-extra
+tparams_runnable tx.Tx$package f tparams-extra
+tparams_extra tx.Tx$package f tparams-extra
+diamond2_a d2a.Tone <parents> enum-serializable
+enum_a na.Color <parents> enum-serializable
+enum_a na.Opt <parents> enum-serializable
+enum_a na.Opt$.Some <parents> enum-serializable
+enum_a na.Planet <parents> enum-serializable
+enum_a na.Planet $new enum-new
+hkbounds_a ha.Functor$.given_Functor_List <parents> alias-expanded
+sealed_a sa.Expr <parents> mirror-companion
+typemembers_b tmb.MapRegistry entries_= private-var-setter
+
+# The fixtures' API mappings.
+fingerprint_literal fp.Fp inner inline-fingerprint
+fingerprint_literal fp.Fp outer inline-fingerprint
+fingerprint_literal fp.Fp s inline-fingerprint
+fingerprint_moved fp.Fp inner inline-fingerprint
+fingerprint_moved fp.Fp outer inline-fingerprint
+fingerprint_moved fp.Fp s inline-fingerprint
+fingerprint_nested fp.Fp inner inline-fingerprint
+fingerprint_nested fp.Fp outer inline-fingerprint
+fingerprint_nested fp.Fp s inline-fingerprint
+fingerprint_one fp.Fp inner inline-fingerprint
+fingerprint_one fp.Fp outer inline-fingerprint
+fingerprint_one fp.Fp s inline-fingerprint
+fingerprint_typearg_int fpt.A test inline-fingerprint
+fingerprint_typearg_string fpt.A test inline-fingerprint
+fingerprint_nested_l fpn.A make inline-fingerprint
+fingerprint_nested_r fpn.A make inline-fingerprint
+inlined ila2.Macros describe inline-fingerprint
+inlined ila2.Macros pick inline-fingerprint
+inlined ila2.Macros total inline-fingerprint
+inlined ila2.Macros twice inline-fingerprint
+
+# The dependencies' mappings, by referring class and part (docs/TARGETS.md, "The analysis
+# graph", the dependencies' mappings).
+anon_a usedName ana.Counters ImpureFunction1 impure-function scalac Default
+anon_b usedName anb.Use _$1 synthetic-local scalac Default
+basic_b usedName mb.Main $1$ synthetic-local scalac Default
+caseapply_b usedName cab.Use Predef alias-expanded scalac Default
+caseapply_b binaryDependency cab.Use scala.Predef$ alias-expanded scalac jar:scala-library,Use.scala,DependencyByMemberRef
+caseclass_b usedName cb.Use $1$ synthetic-local scalac Default
+caseclass_b usedName cb.Use $2$ synthetic-local scalac Default
+defaults_b usedName db.Use $1$ synthetic-local scalac Default
+diamond_c usedName dic.Top ImpureFunction1 impure-function scalac Default
+diamond2_b usedName d2b.Painter ImpureFunction1 impure-function scalac Default
+diamond2_b usedName d2b.Painter s synthetic-local scalac Default
+diamond2_b usedName d2b.Palette Product inferred-type teq Default
+diamond2_b usedName d2b.Palette Serializable inferred-type teq Default
+diamond2_b binaryDependency d2b.Palette scala.Product inferred-type teq jar:scala-library,Painter.scala,DependencyByMemberRef
+diamond2_b binaryDependency d2b.Palette java.io.Serializable inferred-type teq jrt:/modules/java.base/java/io/Serializable.class,Painter.scala,DependencyByMemberRef
+enum_b usedName nb.Use AnyRef alias-expanded scalac Default
+enum_b usedName nb.Use ImpureFunction1 impure-function scalac Default
+exportpkg_b usedName xpb.Use Base export-forwarder teq Default
+exportpkg_b usedName xpb.Use Inner$package export-forwarder teq Default
+exporttypes_a usedName eta.Api Box export-alias teq Default
+extension_a usedName ea.Ext$package Int primitive-operator scalac Default
+extension_a binaryDependency ea.Ext$package scala.Int primitive-operator scalac jar:scala-library,Ext.scala,DependencyByMemberRef
+given_a usedName ga.Show$.listShow ImpureFunction1 impure-function scalac Default
+given_a usedName ga.Show$.listShow a synthetic-local scalac Default
+hkbounds_a usedName ha.Functor$.given_Functor_List ImpureFunction1 impure-function scalac Default
+hkbounds_b usedName hb.Use _$1 synthetic-local scalac Default
+hkbounds_b usedName hb.Use _$2 synthetic-local scalac Default
+matchtype_a usedName mta.Elems MatchCase match-type scalac Default
+matchtype_a usedName mta.Elems _$1 synthetic-local scalac Default
+matchtype_a usedName mta.Elems t match-type teq Default
+matchtype_a binaryDependency mta.Elems scala.collection.IterableOps member-owner scalac jar:scala-library,Api.scala,DependencyByMemberRef
+matchtype_a binaryDependency mta.Elems scala.runtime.MatchCase match-type scalac jar:scala-library,Api.scala,DependencyByMemberRef
+matchtype_a binaryDependency mta.Elems scala.collection.LinearSeqOps member-owner teq jar:scala-library,Api.scala,DependencyByMemberRef
+matchtype_b usedName mtb.Use Api$package match-type scalac Default
+matchtype_b usedName mtb.Use Elem match-type scalac Default
+matchtype_b usedName mtb.Use MatchCase match-type scalac Default
+matchtype_b usedName mtb.Use t match-type teq Default
+matchtype_b binaryDependency mtb.Use scala.runtime.MatchCase match-type scalac jar:scala-library,Use.scala,DependencyByMemberRef
+matchtype_b binaryDependency mtb.Use mta.Api$package$ match-type scalac products:matchtype_a/mta/Api$package.class,Use.scala,DependencyByMemberRef
+opaque_b usedName ob.Use ImpureFunction2 impure-function scalac Default
+opaque_b usedName ob.Use _$1 synthetic-local scalac Default
+opaque_b usedName ob.Use _$2 synthetic-local scalac Default
+overload_a usedName ova.Container ImpureFunction1 impure-function scalac Default
+overload_a binaryDependency ova.Container scala.collection.IterableOps member-owner scalac jar:scala-library,Api.scala,DependencyByMemberRef
+overload_a binaryDependency ova.Container scala.collection.LinearSeqOps member-owner teq jar:scala-library,Api.scala,DependencyByMemberRef
+overload_b usedName ovb.Use _$1 synthetic-local scalac Default
+pkgobj_b usedName pb.Use package package-object scalac Default
+pkgobj_b usedName pb.Use Obj$package package-object teq Default
+pkgobj_b binaryDependency pb.Use pa.nested.package$ package-object scalac products:pkgobj_a/pa/nested/package.class,Use.scala,DependencyByMemberRef
+pkgobj_b binaryDependency pb.Use pa.nested.Obj$package$ package-object teq products:pkgobj_a/pa/nested/Obj$package.class,Use.scala,DependencyByMemberRef
+refinement_b usedName rb.Use Nothing refinement-member teq Default
+typemembers_b usedName tmb.Use Registry this-prefix teq Default
+valueclass_a usedName vca.Prices ImpureFunction2 impure-function scalac Default
+valueclass_a usedName vca.Prices _$1 synthetic-local scalac Default
+valueclass_a usedName vca.Prices _$2 synthetic-local scalac Default
+candidates_a usedName cna.Meters _$1 synthetic-local scalac Default
+exported_b usedName exb.Use Engine alias-expanded scalac Default
+exported_b binaryDependency exb.Use exa.Engine$ alias-expanded scalac products:exported_a/exa/Engine.class,Use.scala,DependencyByMemberRef
+inlined usedName ilb2.Use xs$proxy1 synthetic-local scalac Default
+inlined usedName ilb2.Use * inline-expansion teq Default
+inlined usedName ilb2.Use + inline-expansion teq Default
+inserted usedName ins.Celsius _$1 synthetic-local scalac Default
+inserted usedName ins.Codec ImpureFunction1 impure-function scalac Default
+inserted usedName ins.Codec a synthetic-local scalac Default
+
+# The invalidation oracle's frozen batches and outcomes, per scenario and variant (tests/invalidation.sh).
+
+inv-status no-op/default a both passed
+inv-status no-op/default b both passed
+inv-status result-type/default a both passed
+inv-status result-type/default b both passed
+inv-status member-added/default a both passed
+inv-status member-added/default b both passed
+inv-status member-removed/default a both failed
+inv-status member-removed-down/default a both passed
+inv-status member-removed-down/default b both failed
+inv-status param-type/default a both passed
+inv-status param-type/default b both passed
+inv-status parent-added/default a both passed
+inv-status parent-added/default b both passed
+inv-status parent-removed/default a both passed
+inv-status parent-removed/default b both passed
+inv-status sealed-child/optimized-sealed-off a both passed
+inv-status sealed-child/optimized-sealed-off b both passed
+inv-status sealed-child/optimized-sealed-on a both passed
+inv-status sealed-child/optimized-sealed-on b both passed
+inv-status given-added/default a both passed
+inv-status given-added/default b both passed
+inv-status given-removed-local/default a both failed
+inv-status given-removed/default a both passed
+inv-status given-removed/default b both failed
+inv-status import-renamed/default a both passed
+inv-status import-renamed/default b both passed
+inv-status export-wildcard/default a both passed
+inv-status export-wildcard/default b both passed
+inv-status private-member/default a both passed
+inv-status private-member/default b both passed
+inv-status private-trait-field/default a both passed
+inv-status private-trait-field/default b both passed
+inv-status body-only/default a both passed
+inv-status body-only/default b both passed
+inv-status local-class-edit/default a both passed
+inv-status local-class-edit/default b both passed
+inv-status local-parent/default a both passed
+inv-status local-parent/default b both passed
+inv-status constant-final/default a both passed
+inv-status constant-final/default b both passed
+inv-status constant-singleton/default a both passed
+inv-status constant-singleton/default b both passed
+inv-status constant-inline/default a both passed
+inv-status constant-inline/default b both passed
+inv-status inline-body/default a both passed
+inv-status inline-literal/default a both passed
+inv-status inline-nested/default a both passed
+inv-status inline-transparent/default a both passed
+inv-status inline-transparent/default b both passed
+inv-status inline-unrelated/default a both passed
+inv-status inline-modifier/default a both passed
+inv-status enum-case-parent/default a both passed
+inv-status inline-instance/default a both passed
+inv-status inline-accessor/default a both passed
+inv-status pickle-deleted/default a both passed
+inv-status match-type/default a both passed
+inv-status match-type/default b both passed
+inv-status match-type-body/default a both passed
+inv-status match-type-body/default b both failed
+inv-status exported-alias-target/default a both passed
+inv-status exported-alias-target/default b both passed
+inv-status exported-alias-original/default a both passed
+inv-status exported-alias-original/default b both passed
+inv-status macro/default a both passed
+inv-status collision/default a both failed
+inv-status source-removed/default a both failed
+inv-status source-removed-unused/default a both passed
+inv-status source-removed-unused/default b both passed
+inv-status source-added/default a both passed
+inv-status source-added/default b both passed
+inv-status chain-transitive/default a both passed
+inv-status chain-short/default a both passed
+inv-status fraction-trip/default a both passed
+inv-status fraction-under/default a both passed
+inv-status missing-product/default a both passed
+inv-status missing-product/default b both passed
+inv-status nested-class-file/default a both passed
+inv-status jar-replaced/default a both passed
+inv-status jar-replaced/default b both passed
+inv-status package-object/default a both passed
+inv-status package-object/default b both passed
+inv-status lookup-missing-classfile/default a both passed
+inv-status lookup-missing-classfile/default b both passed
+inv-status lookup-shadowing/default a both passed
+inv-status lookup-shadowing/default b both passed
+inv-status tasty-only/default a both passed
+inv-status tasty-only/default b both passed
+inv-status lookup-shadowing-literal/default a both passed
+inv-status lookup-shadowing-literal/default b both passed
+inv-batch result-type/default a both 1 a/Lib.scala
+inv-batch result-type/default a both 2 a/UserA.scala
+inv-batch result-type/default b both 1 b/UserB.scala
+inv-batch member-added/default a both 1 a/Box.scala
+inv-batch member-added/default a both 2 a/UserA.scala
+inv-batch member-added/default b both 1 b/UserB.scala
+inv-batch member-removed/default a both 1 a/Lib.scala
+inv-batch member-removed/default a both 2 a/UserA.scala
+inv-batch member-removed-down/default a both 1 a/Lib.scala
+inv-batch member-removed-down/default b both 1 b/UserB.scala
+inv-batch param-type/default a both 1 a/Lib.scala
+inv-batch param-type/default a both 2 a/UserA.scala
+inv-batch param-type/default b both 1 b/UserB.scala
+inv-batch parent-added/default a both 1 a/Fn.scala
+inv-batch parent-added/default a both 2 a/Local.scala,a/Ref.scala,a/Sam.scala,a/Sub.scala
+inv-batch parent-added/default b both 1 b/LocalB.scala,b/RefB.scala,b/SamB.scala,b/SubB.scala
+inv-batch parent-removed/default a both 1 a/Fn.scala
+inv-batch parent-removed/default a both 2 a/Local.scala,a/Ref.scala,a/Sam.scala,a/Sub.scala
+inv-batch parent-removed/default b both 1 b/LocalB.scala,b/RefB.scala,b/SamB.scala,b/SubB.scala
+inv-batch sealed-child/optimized-sealed-off a both 1 a/Shape.scala
+inv-batch sealed-child/optimized-sealed-off a both 2 a/Bounded.scala,a/Consumer.scala,a/Matcher.scala,a/Shape.scala
+inv-batch sealed-child/optimized-sealed-off b both 1 b/ConsumerB.scala,b/MatcherB.scala
+inv-batch sealed-child/optimized-sealed-on a both 1 a/Shape.scala
+inv-batch sealed-child/optimized-sealed-on a both 2 a/Bounded.scala,a/Matcher.scala,a/Shape.scala
+inv-batch sealed-child/optimized-sealed-on b both 1 b/MatcherB.scala
+inv-batch given-added/default a both 1 a/Givens.scala
+inv-batch given-added/default a both 2 a/UsesGiven.scala,a/UsesUnrelated.scala
+inv-batch given-added/default b both 1 b/UsesGivenB.scala,b/UsesUnrelatedB.scala
+inv-batch given-removed-local/default a both 1 a/Givens.scala
+inv-batch given-removed-local/default a both 2 a/UsesGiven.scala,a/UsesUnrelated.scala
+inv-batch given-removed/default a both 1 a/Givens.scala
+inv-batch given-removed/default a both 2 a/UsesUnrelated.scala
+inv-batch given-removed/default b both 1 b/UsesGivenB.scala,b/UsesUnrelatedB.scala
+inv-batch import-renamed/default a both 1 a/Lib.scala
+inv-batch import-renamed/default a both 2 a/Renamer.scala,a/Unused.scala
+inv-batch import-renamed/default b both 1 b/RenamerB.scala
+inv-batch export-wildcard/default a both 1 a/Impl.scala
+inv-batch export-wildcard/default a both 2 a/Direct.scala,a/Facade.scala,a/ViaExport.scala
+inv-batch export-wildcard/default b both 1 b/ViaExportB.scala
+inv-batch private-member/default a both 1 a/K.scala
+inv-batch private-trait-field/default a both 1 a/T.scala
+inv-batch private-trait-field/default a both 2 a/C.scala
+inv-batch private-trait-field/default b both 1 b/CB.scala
+inv-batch body-only/default a both 1 a/Lib.scala
+inv-batch local-class-edit/default a both 1 a/Holder.scala
+inv-batch local-parent/default a both 1 a/P.scala
+inv-batch local-parent/default a both 2 a/SubP.scala,a/WithLocal.scala
+inv-batch local-parent/default b both 1 b/WithLocalB.scala
+inv-batch constant-final/default a both 1 a/Consts.scala
+inv-batch constant-final/default a both 2 a/UsesK.scala
+inv-batch constant-final/default b both 1 b/UsesKB.scala
+inv-batch constant-singleton/default a both 1 a/Consts.scala
+inv-batch constant-singleton/default a both 2 a/UsesS.scala
+inv-batch constant-singleton/default b both 1 b/UsesSB.scala
+inv-batch constant-inline/default a both 1 a/Consts.scala
+inv-batch constant-inline/default a both 2 a/UsesI.scala
+inv-batch constant-inline/default b both 1 b/UsesIB.scala
+inv-batch inline-body/default a both 1 a/Macros.scala
+inv-batch inline-body/default a both 2 a/Caller.scala
+inv-batch inline-literal/default a both 1 a/Strings.scala
+inv-batch inline-literal/default a both 2 a/Greeter.scala
+inv-batch inline-nested/default a both 1 a/Inner.scala
+inv-batch inline-nested/default a both 2 a/Outer.scala
+inv-batch inline-nested/default a both 3 a/Caller.scala
+inv-batch inline-transparent/default a both 1 a/Lib.scala
+inv-batch inline-transparent/default a both 2 a/Holder.scala
+inv-batch inline-transparent/default b both 1 b/Down.scala
+inv-batch inline-unrelated/default a both 1 a/Macros.scala
+inv-batch inline-modifier/default a both 1 a/Lazy.scala
+inv-batch inline-modifier/default a teq 2 a/Caller.scala
+inv-batch enum-case-parent/default a both 1 a/Keys.scala
+inv-batch enum-case-parent/default a both 2 a/Setting.scala
+inv-batch inline-instance/default a both 1 a/Helper.scala
+inv-batch inline-instance/default a both 2 a/Lib.scala
+inv-batch inline-instance/default a both 3 a/Use.scala
+inv-batch inline-accessor/default a both 1 a/Lib.scala
+inv-batch inline-accessor/default a both 2 a/Caller.scala
+inv-batch pickle-deleted/default a teq 1 a/Lib.scala
+inv-batch match-type/default a both 1 a/Api.scala
+inv-batch match-type/default a both 2 a/SigA.scala,a/UseA.scala
+inv-batch match-type/default b both 1 b/SigB.scala,b/UseB.scala
+inv-batch match-type-body/default a both 1 a/Api.scala
+inv-batch match-type-body/default a both 2 a/BodyA.scala
+inv-batch match-type-body/default b both 1 b/BodyB.scala
+inv-batch exported-alias-target/default a both 1 a/Car.scala
+inv-batch exported-alias-target/default a both 2 a/UseA.scala
+inv-batch exported-alias-target/default b both 1 b/UseB.scala
+inv-batch exported-alias-original/default a both 1 a/Engines.scala
+inv-batch exported-alias-original/default a both 2 a/Car.scala,a/UseA.scala
+inv-batch exported-alias-original/default b both 1 b/UseB.scala
+inv-batch macro/default a both 1 a/Helper.scala
+inv-batch macro/default a both 2 a/Macros.scala
+inv-batch macro/default a both 3 a/Use.scala
+inv-batch collision/default a both 1 a/Two.scala
+inv-batch collision/default a both 2 a/One.scala,a/Two.scala
+inv-batch source-removed/default a both 1 a/Gone.scala,a/UsesGone.scala
+inv-batch source-removed-unused/default a both 1 a/Gone.scala
+inv-batch source-added/default a both 1 a/New.scala
+inv-batch chain-transitive/default a both 1 a/C1.scala
+inv-batch chain-transitive/default a both 2 a/C2.scala
+inv-batch chain-transitive/default a both 3 a/C3.scala
+inv-batch chain-transitive/default a both 4 a/C3.scala,a/C4.scala,a/C5.scala,a/C6.scala
+inv-batch chain-short/default a both 1 a/C1.scala
+inv-batch chain-short/default a both 2 a/C2.scala
+inv-batch fraction-trip/default a both 1 a/Lib.scala
+inv-batch fraction-trip/default a both 2 a/Lib.scala,a/U1.scala,a/U2.scala
+inv-batch fraction-under/default a both 1 a/Lib.scala
+inv-batch fraction-under/default a both 2 a/U1.scala,a/U2.scala
+inv-batch missing-product/default a both 1 a/Lib.scala
+inv-batch nested-class-file/default a both 1 a/Outer.scala
+inv-batch jar-replaced/default a both 1 a/UsesG.scala,a/UsesJar.scala
+inv-batch jar-replaced/default b both 1 b/UsesJarB.scala
+inv-batch package-object/default a both 1 a/Obj.scala
+inv-batch package-object/default a both 2 a/UserA.scala
+inv-batch package-object/default b both 1 b/UserB.scala
+inv-batch lookup-missing-classfile/default b both 1 b/UserB.scala
+inv-batch lookup-shadowing/default b both 1 b/Shadow.scala
+inv-batch tasty-only/default a both 1 a/Lib.scala
+inv-batch tasty-only/default b both 1 b/UserB.scala
+inv-batch lookup-shadowing-literal/default b both 1 b/Shadow.scala
+
+# The invalidation oracle's differences, by reason.
+
+# inline-modifier: teq's inline marker hashes a local definition's modifiers; scalac's tree hash
+# leaves the symbols' flags out, so a `lazy` dropped from a local val of an inline body (the
+# expansion returns 1 where it returned 0) changes no marker and leaves scalac's caller stale, where
+# teq compiles it again.
+inv-diff inline-modifier/default a scalac continues 1 False inline-modifier
+inv-diff inline-modifier/default a scalac stale - ilm/Caller$.class:differs inline-modifier
+inv-diff inline-modifier/default a teq batch 2 a/Caller.scala inline-modifier
+inv-diff inline-modifier/default a teq change 1 ilm.Lazy:NamesChange inline-modifier
+inv-diff inline-modifier/default a teq continues 1 True inline-modifier
+inv-diff inline-modifier/default a teq continues 2 False inline-modifier
+inv-diff inline-modifier/default a teq cycle-sources 2 a/Caller.scala inline-modifier
+inv-diff inline-modifier/default a teq event 1 inheritance:ilm.Lazy>ilm.Lazy inline-modifier
+inv-diff inline-modifier/default a teq event 1 member_reference:ilm.Lazy>ilm.Caller inline-modifier
+inv-diff inline-modifier/default a teq invalidated 2 ilm.Caller inline-modifier
+inv-diff inline-modifier/default a teq next 1 ilm.Caller inline-modifier
+inv-diff inline-modifier/default a teq recompiled 2 ilm.Caller inline-modifier
+
+# inline-resolved: teq's inline marker hashes the member a reference of the body resolves to;
+# scalac's tree hash its name alone, so a private val's type changed from Int to Long under an
+# unchanged `secret.toInt + 1` (now `Long.toInt`) changes teq's marker of `peek` and not scalac's.
+# Both sides compile the caller again through the accessor `inline$secret` the expansion calls.
+inv-diff inline-accessor/default a teq names 1 iac.Lib.peek:Default inline-resolved
+
+# zinc-auxiliary: scalac's pickle is an auxiliary file of its class files (sbt's `TastyFiles`), which
+# zinc deletes with them and never stamps, so a pickle deleted from the class directory goes
+# unnoticed and scalac's side leaves it missing; teq's check registers its pickle as a product of
+# the source (from the answer's journal), so teq's side compiles the source again.
+inv-diff pickle-deleted/default a scalac stale - pda/Lib.tasty:only-fresh zinc-auxiliary
+inv-diff pickle-deleted/default a teq batch 1 a/Lib.scala zinc-auxiliary
+inv-diff pickle-deleted/default a teq continues 1 False zinc-auxiliary
+inv-diff pickle-deleted/default a teq cycle-initialSources 1 a/Lib.scala zinc-auxiliary
+inv-diff pickle-deleted/default a teq cycle-sources 1 a/Lib.scala zinc-auxiliary
+inv-diff pickle-deleted/default a teq initial-removedProducts - a:pda/Lib.tasty zinc-auxiliary
+inv-diff pickle-deleted/default a teq recompiled 1 pda.Lib zinc-auxiliary
+
+# match-type (declared): a use of a match type in a signature or a member's inferred type names
+# `Elem` and depends on its file on both sides (match-type); one reduced in a body alone and read
+# from a pickle, a downstream's or a batch's compiled against its project's products
+# (match-type-body, tests/modules/matchtype's shape), names neither on teq's side and is compiled
+# again through the API of the method whose result the match type is, which teq states expanded
+# (the API's alias-expanded mapping): teq's extra API change of `Elems.first`, named; no stale
+# result. Repaired by the match types' model (the alias applied held in the API and the
+# dependencies).
+inv-diff match-type/default a teq change 1 mta.Elems:NamesChange match-type
+inv-diff match-type/default a teq event 1 inheritance:mta.Elems>mta.Elems match-type
+inv-diff match-type/default a teq event 1 member_reference:mta.Elems>mta.UseA match-type
+inv-diff match-type/default b teq initial-external - mta.Elems$:NamesChange:first/Default match-type
+inv-diff match-type-body/default a teq change 1 mta.Elems:NamesChange match-type
+inv-diff match-type-body/default a teq event 1 inheritance:mta.Elems>mta.Elems match-type
+inv-diff match-type-body/default a teq event 1 member_reference:mta.Elems>mta.BodyA match-type
+inv-diff match-type-body/default a teq relation - classes:fresh:mta.BodyA,internal,mta.Api$package,DependencyByMemberRef match-type
+inv-diff match-type-body/default a teq relation - names:fresh:mta.BodyA,Api$package,['Default'] match-type
+inv-diff match-type-body/default a teq relation - names:fresh:mta.BodyA,Elem,['Default'] match-type
+inv-diff match-type-body/default b scalac initial-external - mta.Api$package$:NamesChange:Elem/Default match-type
+inv-diff match-type-body/default b teq initial-external - mta.Elems$:NamesChange:first/Default match-type
+
+# scalac-incremental: scalac's own run against its fresh build: a source compiled against
+# another's pickle has two bytes of its own pickle's positions otherwise (and one used name of the
+# macro's caller), the class files equivalent.
+inv-diff local-parent/default a scalac inconsistent - lpa/WithLocal.tasty:differs scalac-incremental
+inv-diff macro/default a scalac inconsistent - mca/Macros.tasty:differs scalac-incremental
+inv-diff macro/default a scalac relation - names:run:mca.Use,mca,['Default'] scalac-incremental
+inv-diff chain-transitive/default a scalac inconsistent - cta/C2.tasty:differs scalac-incremental
+inv-diff chain-transitive/default a scalac inconsistent - cta/C3.tasty:differs scalac-incremental
+inv-diff chain-transitive/default a scalac inconsistent - cta/C4.tasty:differs scalac-incremental
+inv-diff chain-transitive/default a scalac inconsistent - cta/C5.tasty:differs scalac-incremental
+inv-diff chain-transitive/default a scalac inconsistent - cta/C6.tasty:differs scalac-incremental
+inv-diff chain-short/default a scalac inconsistent - csa/C2.tasty:differs scalac-incremental
+
+# lookup-probe: by construction, the upstream's class file deleted after the upstream's run.
+inv-diff lookup-missing-classfile/default a scalac stale - lma/Lib$.class:only-fresh lookup-probe
+inv-diff lookup-missing-classfile/default a teq stale - lma/Lib$.class:only-fresh lookup-probe
+
+# zinc-shadowing: zinc's design, on both sides: a class the downstream adds under an upstream
+# class's name leaves that class's users compiled against the upstream's (sbt's lookup finds it by
+# the upstream's analysis, and nothing invalidates its users).
+inv-diff lookup-shadowing/default b scalac relation - classes:fresh:lsb.UserB,internal,lsa.Lib,DependencyByMemberRef zinc-shadowing
+inv-diff lookup-shadowing/default b scalac relation - classes:run:lsb.UserB,external,lsa.Lib$,DependencyByMemberRef zinc-shadowing
+inv-diff lookup-shadowing/default b scalac relation - names:fresh:lsb.UserB,Long,['Default'] zinc-shadowing
+inv-diff lookup-shadowing/default b scalac stale - lsb/UserB$.class:differs zinc-shadowing
+inv-diff lookup-shadowing/default b scalac stale - lsb/UserB.class:differs zinc-shadowing
+inv-diff lookup-shadowing/default b scalac stale - lsb/UserB.tasty:differs zinc-shadowing
+inv-diff lookup-shadowing/default b teq relation - classes:fresh:lsb.UserB,internal,lsa.Lib,DependencyByMemberRef zinc-shadowing
+inv-diff lookup-shadowing/default b teq relation - classes:run:lsb.UserB,external,lsa.Lib$,DependencyByMemberRef zinc-shadowing
+inv-diff lookup-shadowing/default b teq relation - names:fresh:lsb.UserB,Long,['Default'] zinc-shadowing
+inv-diff lookup-shadowing/default b teq relation - names:run:lsb.UserB,Int,['Default'] zinc-shadowing
+inv-diff lookup-shadowing/default b teq stale - lsb/UserB$.class:differs zinc-shadowing
+inv-diff lookup-shadowing/default b teq stale - lsb/UserB.class:differs zinc-shadowing
+inv-diff lookup-shadowing/default b teq stale - lsb/UserB.tasty:differs zinc-shadowing
+inv-diff lookup-shadowing-literal/default b scalac relation - classes:fresh:llb.Held,internal,lla.Lib,DependencyByMemberRef zinc-shadowing
+inv-diff lookup-shadowing-literal/default b scalac relation - classes:fresh:llb.UserB,internal,lla.Lib,DependencyByMemberRef zinc-shadowing
+inv-diff lookup-shadowing-literal/default b scalac relation - classes:run:llb.Held,external,lla.Lib$,DependencyByMemberRef zinc-shadowing
+inv-diff lookup-shadowing-literal/default b scalac relation - classes:run:llb.UserB,external,lla.Lib$,DependencyByMemberRef zinc-shadowing
+inv-diff lookup-shadowing-literal/default b scalac stale - llb/Held$.class:differs zinc-shadowing
+inv-diff lookup-shadowing-literal/default b scalac stale - llb/Held.tasty:differs zinc-shadowing
+inv-diff lookup-shadowing-literal/default b scalac stale - llb/Tagged.class:differs zinc-shadowing
+inv-diff lookup-shadowing-literal/default b scalac stale - llb/UserB$.class:differs zinc-shadowing
+inv-diff lookup-shadowing-literal/default b teq relation - classes:fresh:llb.Held,internal,lla.Lib,DependencyByMemberRef zinc-shadowing
+inv-diff lookup-shadowing-literal/default b teq relation - classes:fresh:llb.UserB,internal,lla.Lib,DependencyByMemberRef zinc-shadowing
+inv-diff lookup-shadowing-literal/default b teq relation - classes:run:llb.Held,external,lla.Lib$,DependencyByMemberRef zinc-shadowing
+inv-diff lookup-shadowing-literal/default b teq relation - classes:run:llb.UserB,external,lla.Lib$,DependencyByMemberRef zinc-shadowing
+inv-diff lookup-shadowing-literal/default b teq stale - llb/Held$.class:differs zinc-shadowing
+inv-diff lookup-shadowing-literal/default b teq stale - llb/Held.tasty:differs zinc-shadowing
+inv-diff lookup-shadowing-literal/default b teq stale - llb/UserB$.class:differs zinc-shadowing

@@ -1,0 +1,588 @@
+# The scenarios of the invalidation oracle (tests/invalidation.sh; docs/TARGETS.md, "The
+# invalidation oracle"): per scenario a case of modules (`a`, `b`, ...: each a project over the
+# ones before it), an edit, and what it must do.
+#
+#   scenario <name>              the case is tests/analysis/invalidation/<name> unless
+#     fixture <dir>              names another directory under tests/
+#     modules <m>...             the projects in their order (the case's a, b, c, main by default;
+#                                none: the case's directory is one project)
+#     pad <n>                    n sources of their own per project, apart from the case's, so
+#                                that an edit stays under zinc's recompileAllFraction
+#     jar <lib>                  the case's <lib>/ compiled by scalac into a jar on every
+#                                project's class path
+#     variant <name> <opt=v>...  a run of its own with zinc's options (transitiveStep,
+#                                recompileAllFraction, useOptimizedSealed; zinc's defaults
+#                                otherwise); one `default` run without any variant line
+#     edit replace <path> [<from>]
+#                                <path> takes the text of the case's edit/<path>, or of <from>
+#     edit add <path>            the same, a source the case has not
+#     edit remove <path>         the source removed
+#     edit touch <path>          the source written again with the same text
+#     edit delete-product <m> <class file>
+#     edit replace-product <m> <class file> <other class file>
+#                                in both sides' class directories of project <m>
+#     edit replace-jar <lib>     the jar built again from the case's edit/<lib>/
+#     edit before <m> <edit>     a product edit applied to each side's class directories after the
+#                                runs of the projects before <m>, just before <m>'s
+#     teq-check <m>              teq builds project <m> with `teq compiler check --products`: its pickles,
+#                                no class files
+#     refuse <side> <m>          <side>'s build of <m> before the edit fails, and the side stops
+#     status pass | fail <path>...
+#                                what the edited case does when built afresh: it compiles, or it
+#                                fails with errors in those sources
+#     change <text>              the edit in words
+#     rule <text>                zinc's rule the scenario exercises
+#     obligation <text>          what it checks
+#     expect [<side>] compiled <path>...       compiled again by the run (each side, or <side>)
+#     expect [<side>] not-compiled <path>...   not compiled again
+#     expect [<side>] cycle <n> <path>...      the batch of cycle n of the source's project
+#     expect [<side>] change <class> <kind>    an API change zinc detects in a cycle
+#     expect [<side>] full <project>           a cycle compiles every source of the project
+#     expect [<side>] transitive <project> <path>...
+#                                              the cycle at transitiveStep invalidates
+#                                              transitively: the next cycle's batch holds every
+#                                              source named
+#     expect [<side>] event <kind> <class>     an invalidation event outputs the class (the kind's
+#                                              words joined by `_`: `local_inheritance`)
+#     expect [<side>] recompiled <class>...    a cycle compiles the class again
+#     expect [<side>] collision <m>:<product>  a batch reports the product from a source other
+#                                              than the one the analysis keeps as its owner
+#     expect @<variant> ...                    the expectation of one variant
+#     expect <side> refused <m> <text>         the side refused project <m>, its failure saying
+#                                              <text> (a word)
+#
+# The paths are the sources' under the case, `<project>/<file>`.
+
+scenario no-op
+  change the upstream source written again unchanged
+  edit touch a/Lib.scala
+  status pass
+  rule an unchanged source's content stamp; an upstream class whose class file and analysis are unchanged
+  obligation nothing is compiled again: zinc's lookup finds the upstream's classes in its analysis as before (the lookup's first proof)
+  expect not-compiled a/Lib.scala b/User.scala
+
+scenario result-type
+  change `Lib.f: Int` becomes `Long`; `g` stays
+  pad 3
+  edit replace a/Lib.scala
+  status pass
+  rule NamesChange of `f`; member references filtered by the used names (MemberRefInvalidator); external change through sbt's lookup
+  obligation the users of `f` are compiled again in the project and downstream, the users of `g` are not (the lookup's second proof)
+  expect compiled a/Lib.scala a/UserA.scala b/UserB.scala
+  expect not-compiled a/NonUserA.scala b/NonUserB.scala
+  expect change rta.Lib NamesChange
+
+scenario member-added
+  change `Box` gains `def h`, which `box.h` called as an extension method
+  pad 3
+  edit replace a/Box.scala
+  status pass
+  rule NamesChange of a name the class did not define: a call an extension method answered now selects the member
+  obligation the users of the name `h` are compiled again, in the project and downstream; a user of another member is not
+  expect compiled a/UserA.scala b/UserB.scala
+  expect not-compiled a/NonUserA.scala a/Ext.scala b/NonUserB.scala
+  expect change maa.Box NamesChange
+
+scenario member-removed
+  change `Lib.gone` removed, which a source of the project calls
+  pad 3
+  edit replace a/Lib.scala
+  status fail a/UserA.scala
+  rule NamesChange of a removed member; the batch that fails
+  obligation the user of the removed member is compiled again and fails; a user of another member is not compiled
+  expect cycle 2 a/UserA.scala
+  expect not-compiled a/NonUserA.scala
+
+scenario member-removed-down
+  change `Lib.gone` removed, which a downstream source calls
+  pad 3
+  edit replace a/Lib.scala
+  status fail b/UserB.scala
+  rule an external NamesChange of a removed member; the downstream batch that fails
+  obligation the downstream user of the removed member is compiled again and fails; a user of another member is not compiled
+  expect cycle 1 b/UserB.scala
+  expect not-compiled a/NonUserA.scala b/NonUserB.scala
+
+scenario param-type
+  change `Lib.f(x: Int)` takes a `Long`
+  pad 3
+  edit replace a/Lib.scala
+  status pass
+  rule NamesChange of a method whose parameter's type changed
+  obligation the callers of `f` are compiled again, the callers of `g` are not
+  expect compiled a/Lib.scala a/UserA.scala b/UserB.scala
+  expect not-compiled a/NonUserA.scala b/NonUserB.scala
+
+scenario parent-added
+  change `abstract class Fn` (a SAM) gains the parent `Marker`
+  pad 6
+  edit replace a/Fn.scala
+  status pass
+  rule a parent added: the class's own name and the inherited members' change; inheritance (transitive), local inheritance (a local class, a SAM closure), member references by the names
+  obligation the subclasses, the local subclass, the SAM closure's class and the users of the class's name are compiled again in the project and downstream; a user of the parent alone is not
+  expect compiled a/Sub.scala a/Local.scala a/Sam.scala a/Ref.scala b/SubB.scala b/LocalB.scala b/SamB.scala b/RefB.scala
+  expect not-compiled a/Other.scala
+  expect change paa.Fn NamesChange
+
+scenario parent-removed
+  change `abstract class Fn extends Marker` loses its parent
+  pad 4
+  edit replace a/Fn.scala
+  status pass
+  rule a parent removed: the class's own name and the inherited members' change; inheritance and local inheritance
+  obligation the subclasses, the local subclass, the SAM closure's class and the users of the class's name are compiled again, in the project and downstream; a user of the parent alone is not
+  expect compiled a/Sub.scala a/Local.scala a/Sam.scala a/Ref.scala b/SubB.scala b/LocalB.scala b/SamB.scala b/RefB.scala
+  expect not-compiled a/Other.scala
+
+scenario sealed-child
+  change the sealed `Shape` gains the case class `Tri`
+  pad 4
+  variant optimized-sealed-off useOptimizedSealed=false
+  variant optimized-sealed-on useOptimizedSealed=true
+  edit replace a/Shape.scala
+  status pass
+  rule a new child of a sealed class: the `PatMatTarget` scope of the matches' selectors; with useOptimizedSealed off the children are hashed into the class's name for every use
+  obligation the matches, on a bounded selector too, are compiled again under both options; a use without a match only with the option off
+  expect compiled a/Matcher.scala a/Bounded.scala b/MatcherB.scala
+  expect @optimized-sealed-off compiled a/Consumer.scala b/ConsumerB.scala
+  expect @optimized-sealed-on not-compiled a/Consumer.scala b/ConsumerB.scala
+
+scenario given-added
+  change `Givens` gains a `given String`
+  pad 3
+  edit replace a/Givens.scala
+  status pass
+  rule NamesChange of an implicit name: every member reference of the class invalidated (MemberRefInvalidator)
+  obligation the given's user and the unrelated member's user are compiled again, in the project and downstream; a source that refers to nothing of the class is not
+  expect compiled a/UsesGiven.scala a/UsesUnrelated.scala b/UsesGivenB.scala b/UsesUnrelatedB.scala
+  expect not-compiled a/Other.scala b/OtherB.scala
+
+scenario given-removed-local
+  change `Givens`' `given Int` removed, which a `summon[Int]` of the project needs
+  pad 3
+  edit replace a/Givens.scala
+  status fail a/UsesGiven.scala
+  rule an implicit removed: every member reference invalidated; the user of the given in the project fails
+  obligation the given's user and the unrelated member's user are compiled again, the given's user failing; a source that refers to nothing of the class is not
+  expect cycle 2 a/UsesGiven.scala a/UsesUnrelated.scala
+  expect not-compiled a/Other.scala
+
+scenario given-removed
+  change `Givens`' `given Int` removed, which a downstream `summon[Int]` needs
+  pad 3
+  edit replace a/Givens.scala
+  status fail b/UsesGivenB.scala
+  rule an implicit removed: every member reference invalidated; the downstream user of the given fails
+  obligation the unrelated member's users are compiled again, the given's user downstream fails
+  expect compiled a/UsesUnrelated.scala b/UsesGivenB.scala
+  expect not-compiled a/Other.scala
+
+scenario import-renamed
+  change `Lib.f: Int` becomes `Long`, imported renamed, unused and not at all
+  pad 4
+  edit replace a/Lib.scala
+  status pass
+  rule an import's selector is a used name whether the import renames it or nothing uses it
+  obligation the sources importing `f`, renamed or unused, are compiled again; one importing `g` is not
+  expect compiled a/Renamer.scala a/Unused.scala b/RenamerB.scala
+  expect not-compiled a/Other.scala b/OtherB.scala
+
+scenario export-wildcard
+  change `Impl.f: Int` becomes `Long`, which `Facade` exports with `export Impl.*`
+  pad 5
+  edit replace a/Impl.scala
+  status pass
+  rule a wildcard export depends on its class by inheritance; its forwarders' change reaches the forwarders' users
+  obligation the exporting object and the users of the exported `f` are compiled again, as is the direct user; the users of `g` are not
+  expect compiled a/Facade.scala a/ViaExport.scala a/Direct.scala b/ViaExportB.scala
+  expect not-compiled a/OtherName.scala b/OtherNameB.scala
+
+scenario private-member
+  change a class's `private def` changes its type
+  pad 3
+  edit replace a/K.scala
+  status pass
+  rule a private member of a class is in neither its API nor its extra hash
+  obligation nothing but the edited source is compiled again
+  expect compiled a/K.scala
+  expect not-compiled a/UserK.scala a/SubK.scala b/UserKB.scala b/SubKB.scala
+
+scenario private-trait-field
+  change a trait's `private val` changes its type
+  pad 3
+  edit replace a/T.scala
+  status pass
+  rule a trait's private field is in its extra hash: TraitPrivateMembersModified invalidates the inheritors, no member reference
+  obligation the classes mixing the trait in are compiled again, in the project and downstream; its users are not
+  expect compiled a/C.scala b/CB.scala
+  expect not-compiled a/UserT.scala b/UserTB.scala
+  expect change pfa.T TraitPrivateMembersModified
+
+scenario body-only
+  change a method's body changes, its declared type stays
+  pad 2
+  edit replace a/Lib.scala
+  status pass
+  rule a body changed, the signature written, no inline or macro dependence: no API change
+  obligation nothing but the edited source is compiled again
+  expect compiled a/Lib.scala
+  expect not-compiled a/UserA.scala b/UserB.scala
+
+scenario local-class-edit
+  change a local class's method body changes
+  pad 3
+  edit replace a/Holder.scala
+  status pass
+  rule a local class has no API: its source is compiled again whole, its sibling classes with it, and nothing else
+  obligation the source of the local class is compiled again with its sibling class; their users are not
+  expect cycle 1 a/Holder.scala
+  expect recompiled lca.Holder lca.Sibling
+  expect not-compiled a/UsesHolder.scala a/UsesSibling.scala b/UsesHolderB.scala
+
+scenario local-parent
+  change the parent of a local class gains a member
+  pad 4
+  edit replace a/P.scala
+  status pass
+  rule a local class's parent changed: LocalDependencyByInheritance invalidates the enclosing class whatever the names
+  obligation the source with the local subclass is compiled again in the project and downstream, as is the subclass; a member reference that does not use the new name is not
+  expect compiled a/WithLocal.scala a/SubP.scala b/WithLocalB.scala
+  expect not-compiled a/RefP.scala b/RefPB.scala
+  expect event local_inheritance lpa.WithLocal
+
+scenario constant-final
+  change `final val K = 1` becomes `2`
+  fixture analysis/invalidation/constants
+  pad 4
+  edit replace a/Consts.scala edit-final/a/Consts.scala
+  status pass
+  rule a final constant's constant type is its API: its users, which hold its value, are compiled again
+  obligation the users of `K` are compiled again in the project and downstream; the users of `S` and `I` are not
+  expect compiled a/UsesK.scala b/UsesKB.scala
+  expect not-compiled a/UsesS.scala a/UsesI.scala b/UsesSB.scala b/UsesIB.scala
+
+scenario constant-singleton
+  change `val S: 1 = 1` becomes `val S: 2 = 2`
+  fixture analysis/invalidation/constants
+  pad 4
+  edit replace a/Consts.scala edit-singleton/a/Consts.scala
+  status pass
+  rule a singleton-typed value's type is its API
+  obligation the users of `S` are compiled again in the project and downstream; the users of `K` and `I` are not
+  expect compiled a/UsesS.scala b/UsesSB.scala
+  expect not-compiled a/UsesK.scala a/UsesI.scala b/UsesKB.scala b/UsesIB.scala
+
+scenario constant-inline
+  change `inline val I = 1` becomes `2`
+  fixture analysis/invalidation/constants
+  pad 4
+  edit replace a/Consts.scala edit-inline/a/Consts.scala
+  status pass
+  rule an inline value's constant type is its API
+  obligation the users of `I` are compiled again in the project and downstream; the users of `K` and `S` are not
+  expect compiled a/UsesI.scala b/UsesIB.scala
+  expect not-compiled a/UsesK.scala a/UsesS.scala b/UsesKB.scala b/UsesSB.scala
+
+scenario inline-body
+  change an inline method's body changes, its signature stays
+  pad 3
+  edit replace a/Macros.scala
+  status pass
+  rule an inline method's body hash in its API (ExtractAPI's marker): the callers holding its expansion are compiled again
+  obligation the caller of the inline method is compiled again; the caller of the plain method is not
+  expect compiled a/Caller.scala
+  expect not-compiled a/PlainUser.scala
+
+scenario inline-literal
+  change an inline method's string literal changes, its signature stays
+  pad 3
+  edit replace a/Strings.scala
+  status pass
+  rule an inline method's body marker hashes its constants by value, not by the pickle's name table
+  obligation the caller holding the old literal is compiled again
+  expect compiled a/Greeter.scala
+
+scenario inline-nested
+  change the body of an inline method another file's inline method calls changes
+  pad 3
+  edit replace a/Inner.scala
+  status pass
+  rule an inline method's marker mixes in the inline definitions its body reaches, and an inline body's references are its class's
+  obligation the inline method that calls it and the caller of that one are compiled again; a bystander is not
+  expect compiled a/Outer.scala a/Caller.scala
+  expect not-compiled a/Bystander.scala
+
+scenario inline-transparent
+  change a transparent inline method's body changes the type of a final val that holds its expansion
+  pad 3
+  edit replace a/Lib.scala
+  status pass
+  rule a transparent inline method's API result is its widened type, its body the marker; the holder's constant type carries the change downstream
+  obligation the final val's holder is compiled again, and its users downstream; the users of the plain val are not
+  expect compiled a/Holder.scala b/Down.scala
+  expect not-compiled b/Other.scala
+
+scenario inline-unrelated
+  change a comment, whitespace in an inline body and an added member of the inline method's object
+  pad 3
+  edit replace a/Macros.scala
+  status pass
+  rule the body marker hashes no positions, and an added member is a name of its own
+  obligation the caller of the inline method is not compiled again
+  expect not-compiled a/Caller.scala
+
+scenario inline-modifier
+  change a local lazy val of an inline method's body loses its `lazy`, which changes what the expansion returns
+  pad 3
+  edit replace a/Lazy.scala
+  status pass
+  rule teq's inline marker hashes a local definition's modifiers; scalac's tree hash leaves the symbols' flags out
+  obligation the caller holding the old expansion is compiled again on teq's side
+  expect teq compiled a/Caller.scala
+
+scenario enum-case-parent
+  change the member a value case's parent call reads changes its API
+  pad 3
+  edit replace a/Keys.scala
+  status pass
+  rule a value case is an anonymous class of the enum's companion: its dependencies are the companion's, keyed by the enum
+  obligation the enum's file is compiled again; a bystander is not
+  expect compiled a/Setting.scala
+  expect not-compiled a/Bystander.scala
+
+scenario inline-instance
+  change an inline method's body that another file's inline method selects on its parameter's declared type
+  pad 3
+  edit replace a/Helper.scala
+  status pass
+  rule an inline method's marker mixes in the inline definitions its body reaches through a receiver's declared type, here a parameter's
+  obligation the calling inline method's file and its caller are compiled again, as on scalac's side; the bystander is not
+  expect compiled a/Lib.scala a/Use.scala
+  expect not-compiled a/Bystander.scala
+
+scenario inline-accessor
+  change a private val an inline body reads changes its type; the body's text stays
+  pad 3
+  edit replace a/Lib.scala
+  status pass
+  rule the expansion reads the member through the inline accessor, whose public signature changes; zinc's name hashing leaves the private member out
+  obligation the caller holding the expansion is compiled again; a bystander is not
+  expect compiled a/Caller.scala
+  expect not-compiled a/Bystander.scala
+
+scenario match-type
+  change a match type's case changes its result
+  pad 3
+  edit replace a/Api.scala
+  status pass
+  rule a match type's use names the alias and the file that defines it
+  obligation the uses of `Elem`, in a signature or through a method whose result is the match type, in the project and downstream, are compiled again
+  expect compiled a/UseA.scala a/SigA.scala b/UseB.scala b/SigB.scala
+
+scenario match-type-body
+  change a match type's case changes its result, which methods' bodies alone use (tests/modules/matchtype's shape)
+  pad 3
+  edit replace a/Api.scala
+  status fail b/BodyB.scala
+  rule a match type reduced in a body names the alias and the file that defines it on scalac's side; teq's use names neither and reaches the alias through the API of the method whose result it is
+  obligation the uses in bodies are compiled again, in the project and downstream, the downstream's expected `Char` failing
+  expect compiled a/BodyA.scala
+  expect cycle 1 b/BodyB.scala
+
+scenario exported-alias-target
+  change an object's `export Engine.Fuel` becomes `export Engine2.Fuel`
+  pad 3
+  edit replace a/Car.scala
+  status pass
+  rule a use of an exported alias depends on the exporting object by the forwarder's name
+  obligation the export retargeted: the users of `Car.Fuel` are compiled again, in the project and downstream
+  expect compiled a/UseA.scala b/UseB.scala
+
+scenario exported-alias-original
+  change the exported `Engine.Fuel = String` becomes `Int`
+  pad 3
+  edit replace a/Engines.scala
+  status pass
+  rule a use of an exported alias depends on the original through the forwarder's info
+  obligation the original alias changed: the users of the forwarders, of a class's wildcard export through a value and of an object's export, are compiled again in the project and downstream
+  expect compiled a/Car.scala a/UseA.scala b/UseB.scala
+
+scenario macro
+  change the body of a method a macro's implementation calls changes
+  pad 4
+  edit replace a/Helper.scala
+  status pass
+  rule a class with a macro downstream of a recompiled class is compiled again whatever its API, and a change of its transitive bytecode hash invalidates its users unconditionally
+  obligation the macro's class is compiled again after the helper's body changed, and the caller's expansion with it
+  expect compiled a/Macros.scala a/Use.scala
+  expect not-compiled a/Impl.scala
+  expect scalac change mca.Macros APIChangeDueToMacroDefinition
+
+scenario collision
+  change a source added that defines an object another source defines
+  pad 3
+  edit add a/Two.scala
+  status fail a/Two.scala
+  rule two sources of one product in the merged cycle: the classes of both invalidated
+  obligation the added source's duplicate class makes zinc compile both sources, which fails
+  expect cycle 1 a/Two.scala
+  expect cycle 2 a/One.scala a/Two.scala
+  expect collision a:cla/Dup$.class
+
+scenario source-removed
+  change a source removed whose object another source uses
+  pad 3
+  edit remove a/Gone.scala
+  status fail a/UsesGone.scala
+  rule a removed source: its classes' member references invalidated
+  obligation the user of the removed class is compiled again and fails; another source is not compiled
+  expect cycle 1 a/Gone.scala a/UsesGone.scala
+  expect not-compiled a/Other.scala
+
+scenario source-removed-unused
+  change a source removed that nothing uses
+  pad 2
+  edit remove a/Gone.scala
+  status pass
+  rule a removed source nothing uses: its products deleted, nothing compiled
+  obligation nothing is compiled again; the class directory is the fresh build's
+  expect not-compiled a/Other.scala b/OtherB.scala
+
+scenario source-added
+  change a source added
+  pad 2
+  edit add a/New.scala
+  status pass
+  rule an added source is compiled; nothing depends on it yet
+  obligation the added source alone is compiled
+  expect cycle 1 a/New.scala
+  expect not-compiled a/Old.scala b/UsesOld.scala
+
+scenario chain-transitive
+  change the first of six objects whose inferred types chain changes its type
+  pad 7
+  edit replace a/C1.scala
+  status pass
+  rule from cycle transitiveStep (3) on, zinc invalidates the dependents transitively
+  obligation the chain is compiled again to its end, the end at once from the transitive step
+  expect compiled a/C2.scala a/C3.scala a/C4.scala a/C5.scala a/C6.scala
+  expect transitive a a/C4.scala a/C5.scala a/C6.scala
+
+scenario chain-short
+  change the first of two such objects changes its type
+  pad 3
+  edit replace a/C1.scala
+  status pass
+  rule a chain that ends before transitiveStep
+  obligation the chain is compiled again one cycle per class
+  expect cycle 1 a/C1.scala
+  expect cycle 2 a/C2.scala
+
+scenario fraction-trip
+  change `Lib.f`'s type changes in a project of three sources, two its users
+  edit replace a/Lib.scala
+  status pass
+  rule more than recompileAllFraction (0.5) of the sources invalidated: every source compiled, the post-cycle checks skipped
+  obligation the second cycle compiles the whole project
+  expect full a
+
+scenario fraction-under
+  change the same, with three more sources
+  pad 3
+  edit replace a/Lib.scala
+  status pass
+  rule the same invalidation under recompileAllFraction
+  obligation the second cycle compiles the users alone
+  expect cycle 2 a/U1.scala a/U2.scala
+
+scenario missing-product
+  change an object's class file deleted
+  pad 2
+  edit delete-product a mpa/Lib$.class
+  status pass
+  rule a removed product: its source compiled again (removedProducts)
+  obligation the product's source alone is compiled again; downstream nothing
+  expect cycle 1 a/Lib.scala
+  expect not-compiled a/UserA.scala b/UserB.scala
+
+scenario pickle-deleted
+  change an object's pickle deleted from a check's products, its source unchanged
+  teq-check a
+  pad 2
+  edit delete-product a pda/Lib.tasty
+  status pass
+  rule a check's pickle is a product of its source (a local one, from the answer's journal), so its removal compiles the source again (removedProducts); scalac's pickle is an auxiliary file of its class files, which zinc does not stamp
+  obligation teq's side compiles the source again, the pickle back; its user is not compiled
+  expect teq cycle 1 a/Lib.scala
+  expect not-compiled a/UserA.scala
+
+scenario nested-class-file
+  change a nested class's class file overwritten with another's
+  pad 2
+  edit replace-product a nca/Outer$Inner.class nca/Outer.class
+  status pass
+  rule a nested class's class file replaced: its stamp changed, its source compiled again
+  obligation the outer class's source alone is compiled again
+  expect cycle 1 a/Outer.scala
+  expect not-compiled a/UsesOuter.scala
+
+scenario jar-replaced
+  change a library jar replaced by one whose `JarLib.f` returns a `Long`
+  pad 2
+  jar lib
+  edit replace-jar lib
+  status pass
+  rule a library jar changed: the class path's hash changed, each library's classes looked up on the class path (isLibraryModified)
+  obligation the users of the changed jar are compiled again
+  expect compiled a/UsesJar.scala b/UsesJarB.scala
+
+scenario package-object
+  change a package object's `f: Int` becomes `Long`
+  pad 3
+  edit replace a/Obj.scala
+  status pass
+  rule a package object's member changed: its class `p.package` on both sides, which zinc's rule for package objects invalidates, teq's class files `p/<File>$package` (the package-object mapping)
+  obligation the users of `f` are compiled again in the project and downstream, the user of `g` is not, the products compared through the mapping
+  expect compiled a/UserA.scala b/UserB.scala
+  expect not-compiled a/NonUserA.scala
+
+scenario lookup-missing-classfile
+  change a downstream body changes, the upstream's class file of the class it uses deleted after the upstream's run
+  pad 2
+  edit replace b/UserB.scala
+  edit before b delete-product a lma/Lib$.class
+  status pass
+  rule sbt's lookup (LookupImpl) finds an upstream class by the analysis whose products name it, whatever class file the class path holds; the class path's entry is asked for a library's class alone
+  obligation the downstream's edited source alone is compiled again against an upstream whose class file was taken away after the upstream's run; the upstream's class directory is left without it
+  expect cycle 1 b/UserB.scala
+
+scenario lookup-shadowing
+  change the downstream gains a source defining the upstream object `lsa.Lib` with `f: Long`
+  pad 2
+  edit add b/Shadow.scala
+  status pass
+  rule an added class of the downstream with an upstream class's name, first on the class path: sbt's lookup keeps resolving the upstream's by its analysis, and zinc compiles the added source alone
+  obligation the user of the shadowed class is not compiled again on either side, a stale result zinc's design leaves: afresh its reference is the added class's, of another type
+  expect cycle 1 b/Shadow.scala
+  expect not-compiled b/UserB.scala
+
+scenario tasty-only
+  change the upstream's `Lib.f: Int` becomes `Long`, its products teq's check's
+  teq-check a
+  edit replace a/Lib.scala
+  status pass
+  rule a product directory of TASTy files alone: teq names a class of it by its pickle, which zinc finds through the upstream's analysis by its binary name (docs/TARGETS.md, "The contract between the plugin and the compiler")
+  obligation the edit's user downstream is compiled again on both sides
+  expect compiled b/UserB.scala
+
+scenario lookup-shadowing-literal
+  change the downstream gains a source defining the upstream object `lla.Lib` whose constant `S` is `"#2"`, not `"#1"`
+  pad 2
+  edit add b/Shadow.scala
+  status pass
+  rule as lookup-shadowing, with the shadowing class's constant alone other: the downstream user, which holds the constant, keeps the upstream's
+  obligation the users of the shadowed constant are not compiled again on either side, their class files a string literal apart from the fresh build's (a `#` and digits in the literal, which the class files' comparison keeps): a method's, a `final val`'s and a Java annotation's argument, which `javap` prints quoted
+  expect cycle 1 b/Shadow.scala
+  expect not-compiled b/UserB.scala
+  expect not-compiled b/Tagged.scala
+  expect not-compiled b/Held.scala

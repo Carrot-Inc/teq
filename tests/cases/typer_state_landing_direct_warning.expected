@@ -1,0 +1,4 @@
+tests/cases/typer_state_landing_direct_warning/Main.scala:6:43: warning: macro warning
+  @main def run(): Unit = println(Box().put(M.next, 3))
+                                            ^^^^^^
+5

@@ -1,0 +1,25 @@
+negzeropos
+3
+22
+1
+2
+3
+101
+102
+103
+201
+202
+203
+3
+4
+5
+same 2
+same 3
+List(2, 3, 4, 6, 6, 9, 4, 5, 2, 4, 6)
+side
+not both,c,braces,indented,one,false,c2,new,paren-then,or,eq,double,small,lt
+not both,not c,other,indented-else,two,false,nc,old,paren-else,or,ne,parens,v=12,lt
+List(neg, zero, pos)
+3
+three
+not four

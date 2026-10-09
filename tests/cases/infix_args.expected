@@ -1,0 +1,32 @@
+flex bold on
+only
+plain
+pair
+pair2
+p r
+List(add:3, pair:(3,4), any:(5,6), gen:(7,8), rep:3, dflt:3, dflt:11)
+List(pairs:List((1,2)), pairs:List((1,2), (3,4)), lzy:(1,one), any:(1,2))
+List(<+>:1a, <*>:12, <~>:(5,6), put1:1, put1:4)
+7
+List(+::(1,x))
+List(++::2y, +::(3,z))
+(1,(2,3))
+((1,2),(3,4))
+List((1,2), (3,4))
+List((1,2), (3,4))
+List((1,2), (3,4))
+List(1, 2)
+List((0,z), (1,a), (2,b))
+s(1,2)
+true
+true
+3
+7
+(1,2)
+30
+<(1,two,3)>
+12
+Wrap((1,w))
+Wrap((2,v))
+Some((1,2))
+Some(2)

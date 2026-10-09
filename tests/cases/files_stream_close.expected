@@ -1,0 +1,28 @@
+walk: a a/b a/b/c a/b/c/leaf.txt [traversed] [closed]
+exception mid-traversal: java.lang.IllegalStateException: at a/b/c
+after the exception: [closed]
+toList: ArrayBuffer(a/b)
+closed after toList: 
+closed after close twice: 12
+toList after close: java.lang.IllegalStateException: stream has already been operated upon or closed
+iterator after close: java.lang.IllegalStateException: stream has already been operated upon or closed
+onClose after close: java.lang.IllegalStateException: stream has already been operated upon or closed
+iterator again: java.lang.IllegalStateException: stream has already been operated upon or closed
+toList after iterator: java.lang.IllegalStateException: stream has already been operated upon or closed
+first: true
+walk iterator after close: java.lang.IllegalStateException: null
+list iterator after close: false
+walk: hasNext before close: true
+walk: next after close: a
+walk: hasNext after that: java.lang.IllegalStateException: null
+list: hasNext before close: true
+list: next after close: a/b
+list: hasNext after that: false
+next past the end: java.util.NoSuchElementException: null
+throwing handlers: java.lang.IllegalStateException: first
+after them: second ran
+Stream.of: [x, y]
+count: 3
+toList is unmodifiable: java.lang.UnsupportedOperationException: null
+forEach null: java.lang.NullPointerException: null
+count after it: java.lang.IllegalStateException: stream has already been operated upon or closed

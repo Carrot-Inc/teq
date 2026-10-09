@@ -1,0 +1,5 @@
+// tests/tasty/fixtures/RdShape.tasty (TASTy 28.8, 549 bytes)
+package fix.rdecl
+@SourceFile class RdShape() extends Object {
+  def area(scale: Int): Predef.String = ...
+}

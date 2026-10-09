@@ -1,0 +1,11 @@
+42
+init a
+0 a:1 a:2:a:2 3 :
+init b
+0 b:1 b:2:b:2 3 :
+u
+short 2, other, short 3
+Marker true Marker start move 4 start Start
+x greets y
+10/5
+5

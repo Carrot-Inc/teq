@@ -1,0 +1,8 @@
+// tests/tasty/fixtures/QaApplicative.tasty (TASTy 28.8, 939 bytes)
+package fix.shapes
+@SourceFile trait QaApplicative[F[_$2]] extends Object, QaFunctor[F] {
+}
+@SourceFile object QaApplicative extends Object {
+  <synthetic> private def writeReplace(): AnyRef = ...
+  given given_QaApplicative_Option: QaApplicative[[A] =>> Option[A]] = ...
+}

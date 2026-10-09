@@ -1,0 +1,42 @@
+ab
+  effect y
+  render x
+  render z
+1:xyz
+  effect e
+  render x
+p:xe
+  render x
+  effect c
+abxc
+  effect c
+  render x
+h:xc
+  render x
+  effect c
+t:xc
+  render x
+  effect explicit
+xexplicit
+  effect inside
+  effect outside
+  render x
+xinsideoutside
+  effect in
+  render b
+  effect out
+  render a
+abinout
+15
+  effect unit
+  effect end
+  render meters
+3mc121.52.5true()()nullnull34end
+  effect numbers
+1253cnumbers
+  effect !
+  render x
+tags  and  in a literal, x !
+  render x
+2
+  threw operand

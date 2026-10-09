@@ -1,0 +1,42 @@
+def
+  eager def
+2
+extension
+  eager ext
+3
+lazy val
+  eager lazy
+  lazy
+3
+alias given
+  eager alias given
+1
+param given
+  eager param given
+-1
+literal val
+  eager val
+1
+final typed val
+  eager final typed
+1
+var read
+  eager var read
+1
+var write
+  eager var write
+inline reading eager
+  eager inline
+2
+inline const
+42
+type alias
+3
+class
+1
+object
+2
+nested object
+  inner
+5
+end

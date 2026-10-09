@@ -1,0 +1,21 @@
+# The tests a fork-one run through the fork fails otherwise than one worker, each known with what
+# exposes it: `<suite> <test> <giveways>`, the give-ways' setting under which it differs (`bypassed`,
+# the runner's default).
+# A macro that keeps state across its expansions (a `var` of the macro's object): each worker's
+# interpreter keeps its own, so a second expansion on another worker meets no first; the state
+# give-way (the default) types the build again by one worker.
+errors tests/errors/macro_records_stale bypassed
+errors tests/errors/macro_records_stale_shown bypassed
+# One worker's own output differs from run to run, which the comparison of every run meets: the
+# std's build of `symbol_name` reports its library bodies' errors in an order of the run's, and
+# `import_value_type_member`'s program overflows its stack at a frame of the run's.
+stdlib symbol_name bypassed
+stdlib symbol_name normal
+stdlib import_value_type_member bypassed
+stdlib import_value_type_member normal
+# `scala3_overloads`' program overflows its stack in `StringBuilder`'s constructor at a line of the
+# run's (405 or 406), its JavaScript the same: met once at two workers on a machine.
+stdlib scala3_overloads bypassed
+stdlib scala3_overloads normal
+# The JVM suite's `sourcecode` entries and the Scala 3 run tests' left with
+# their fixes.

@@ -1,0 +1,2 @@
+# The inline nesting limit of this directory.
+max-inlines = 36

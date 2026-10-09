@@ -1,0 +1,5 @@
+box 7 7 14 14
+pair a 1 a/1 1
+wide 2.5 3 (2.5,F1(3))
+other
+6

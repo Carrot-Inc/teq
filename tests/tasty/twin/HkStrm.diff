@@ -1,0 +1,6 @@
+2,3c2,3
+< @SourceFile final class HkStrm[+F[_$5], +O]() extends Object {
+<   def compile[F2[x] >: F[x], G[_$6]](implicit c: HkCompiler[F2, G]): Predef.String = ...
+---
+> @SourceFile final class HkStrm[+F[_$1], +O]() extends Object {
+>   def compile[F2 >: [x] =>> F[x] <: [x] =>> Any, G[_$3]](implicit c: HkCompiler[F2, G]): String = ...

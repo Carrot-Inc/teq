@@ -1,0 +1,9 @@
+// tests/tasty/fixtures/Sized.tasty (TASTy 28.8, 1176 bytes)
+package fix.retain
+@SourceFile object Sized extends Object, Sizes {
+  <synthetic> private def writeReplace(): AnyRef = ...
+  override inline def size(x: Array[Int]): Predef.String = <body@119>
+  private def size$retainedBody(x: Array[Int]): Predef.String = ...
+  override inline def size(x: Array[Predef.String]): Predef.String = <body@240>
+  private def size$retainedBody(x: Array[Predef.String]): Predef.String = ...
+}

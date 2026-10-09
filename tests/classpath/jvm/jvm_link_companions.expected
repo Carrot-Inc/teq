@@ -1,0 +1,15 @@
+List(Mix(1), Inner(1,a))
+Point(1,2) Point(1,2) Point(1,2)
+Point
+Gen(a,b) Gen(a,b) Gen(a,b)
+Gen(1,n)
+true
+Mix(4) Mix(4) Mix(4)
+Inner(5,c) Inner(5,c) Inner(5,c)
+3
+n
+true
+true
+Point(5,6)
+2
+Named(y)

@@ -1,0 +1,15 @@
+construct                             derived   captured  missing  unsupported   unplaced
+closure                                     2          0        0            0          2
+inline call                                 0          1        0            0          0
+inline call type arguments                  1          0        0            0          0
+inline method body                          0          4        0            0          0
+local reference                            14          0        0            0          0
+local val                                   2          0        0            0          0
+macro splice                                2          0        0            0          0
+method call                                 4          0        0            0          0
+quote                                       4          0        0            0          0
+splice in a quote                           2          0        0            0          0
+this                                        5          0        0            0          5
+transparent inline expansion                0          3        0            0          0
+type test                                   0          3        0            0          0
+orphans 0, captured types with an unsolved variable 0

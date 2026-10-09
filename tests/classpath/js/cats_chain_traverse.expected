@@ -1,0 +1,7 @@
+Some(Chain(2, 3, 4))
+8
+Chain(3, 2, 1) Chain(4) Chain(1, 2, 3, 9)
+123 Some(2) 3
+Some(30)
+-1 4 List(1, 2)
+-1 Some(List(1, 2, 3)) 8

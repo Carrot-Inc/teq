@@ -1,0 +1,4 @@
+// tests/tasty/fixtures/FoConcrete.tasty (TASTy 28.8, 566 bytes)
+package fix.cake
+@SourceFile final class FoConcrete() extends FoAbstract[[A] =>> Option[A], Nothing] {
+}

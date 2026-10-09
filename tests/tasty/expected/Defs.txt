@@ -1,0 +1,10 @@
+// tests/tasty/fixtures/Defs.tasty (TASTy 28.8, 603 bytes)
+package fix.cake
+@SourceFile trait Defs extends Object {
+  type Box[A]
+  val Box: BoxModule
+  trait BoxModule extends Object {
+    def wrap[A](a: A): Box[A]
+  }
+  def unwrap[A](b: Box[A]): A
+}

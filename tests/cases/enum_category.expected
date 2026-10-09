@@ -1,0 +1,10 @@
+  Active (active) List false No active waivers
+  Scheduled (scheduled) List false No scheduled waivers
+* All (all) Grid true Create triggered notices, waivers and reminders that send automatically
+  All (all) Grid false No all members
+* PATRON (patron) Grid true No patron members
+false
+true
+all
+No all members
+false

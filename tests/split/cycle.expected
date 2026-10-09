@@ -1,0 +1,11 @@
+red: hello from red
+green: hello from green, hello from mode-Slow, A+mode-Fast
+w/tagged/B+green
+List(Fast, Slow)
+0
+aTop sees hello from mode-Slow
+bTop sees hello from red
+hello from red
+hello from mode-Fast
+hello from green&mode-Slow
+false

@@ -1,0 +1,27 @@
+0000 3 5 5 5 false true 0
+0001 3 5 5 5 false true 0
+0009 3 3 4 4 true true 0
+000A 3 3 4 4 true true 0
+000D 3 3 4 4 true true 0
+001C 3 3 4 4 true true 0
+001F 3 3 4 4 true true 0
+0020 3 3 4 4 true true 0
+007F 5 5 5 5 false false 1
+0085 5 5 5 5 false false 1
+00A0 5 5 5 5 false false 1
+1680 5 3 4 4 true false 1
+180E 5 5 5 5 false false 1
+2000 5 3 4 4 true false 1
+2003 5 3 4 4 true false 1
+2007 5 5 5 5 false false 1
+200B 5 5 5 5 false false 1
+2028 5 3 4 4 true false 1
+2029 5 3 4 4 true false 1
+202F 5 5 5 5 false false 1
+205F 5 3 4 4 true false 1
+3000 5 3 4 4 true false 1
+FEFF 5 5 5 5 false false 1
+[x]
+true
+true
+false

@@ -1,0 +1,24 @@
+# Relations between the analyses of two projects of tests/analysis.sh, checked on both sides,
+# scalac's and teq's: zinc's name hash of <name> in <class> (its default scope) is the same in
+# the two projects, or differs.
+#
+#   same|differs <project> <project> <class> <name>
+
+# The bound of a type parameter of a later clause changes the hash; a class besides does not.
+differs tparams_string tparams_runnable tx.Tx$package f
+same tparams_string tparams_extra tx.Tx$package f
+
+# An inline method's body marker: a literal changes its own hash, a reached inline method's
+# change the hash of the method that reaches it, comments and whitespace none.
+differs fingerprint_one fingerprint_literal fp.Fp s
+same fingerprint_one fingerprint_literal fp.Fp outer
+differs fingerprint_one fingerprint_nested fp.Fp inner
+differs fingerprint_one fingerprint_nested fp.Fp outer
+same fingerprint_one fingerprint_nested fp.Fp s
+same fingerprint_one fingerprint_moved fp.Fp s
+same fingerprint_one fingerprint_moved fp.Fp outer
+same fingerprint_one fingerprint_moved fp.Fp inner
+# A type argument in an inline body changes its marker.
+differs fingerprint_typearg_string fingerprint_typearg_int fpt.A test
+# Two nested classes of one simple name: the class an inline body constructs changes its marker.
+differs fingerprint_nested_l fingerprint_nested_r fpn.A make

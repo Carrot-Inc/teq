@@ -1,0 +1,8 @@
+fetch GET https://example.com/pets/1
+200 Right(pet:1)
+fetch GET https://example.com/missing
+404 Left(no pet)
+fetch GET https://example.com/down
+Left(JavaScriptException)
+fetch GET https://example.com/pets/stream
+200 pet:stream

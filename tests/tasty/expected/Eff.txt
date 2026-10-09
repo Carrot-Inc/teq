@@ -1,0 +1,6 @@
+// tests/tasty/fixtures/Eff.tasty (TASTy 28.8, 712 bytes)
+package fix.shadow
+@SourceFile trait Eff[F[_$1]] extends Object {
+  def delay[A](a: => A): F[A]
+  def run[A](fa: F[A]): A
+}

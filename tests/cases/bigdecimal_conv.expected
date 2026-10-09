@@ -1,0 +1,77 @@
+10 2.5 7
+Price(12,Some(10))
+Price(0.5,None)
+Some(3)
+2.5
+0.625
+6.5
+12.501
+-0.0900
+List(-2, 0.001, 1.5, 3, 10)
+10
+-2
+List(10, 3, 1.5, 0.001, -2)
+3
+-1
+0.125
+1.1
+0.1
+1.0
+100.0
+1.0E-7
+1.0E+7
+123456789
+1.0E+23
+-0.001
+0.25
+0.1000000000000000055511151231257827021181583404541015625
+0.5
+2.5
+42
+123456789012345
+3.30
+1E+3
+-0.5
+1.5E-10
+1.20
+2
+1 hash=1 same=true whole=true int=true long=true dd=true ed=true bi=Some(1)
+1.0 hash=1 same=true whole=true int=true long=true dd=true ed=true bi=Some(1)
+1.5 hash=double's true same=true whole=false int=false long=false dd=true ed=true bi=None
+-3 hash=-3 same=true whole=true int=true long=true dd=true ed=true bi=Some(-3)
+100 hash=100 same=true whole=true int=true long=true dd=true ed=true bi=Some(100)
+1E+2 hash=100 same=true whole=true int=true long=true dd=true ed=true bi=Some(100)
+2147483648 hash=-2147483648 same=true whole=true int=false long=true dd=true ed=true bi=Some(2147483648)
+9223372036854775808 hash=-2147483648 same=true whole=true int=false long=false dd=false ed=true bi=Some(9223372036854775808)
+0.1 hash=double's true same=true whole=false int=false long=false dd=true ed=false bi=None
+1E-400 hash=352781416 same=true whole=false int=false long=false dd=false ed=false bi=None
+12345678901234567890.5 hash=1692944643 same=true whole=false int=false long=false dd=false ed=false bi=None
+true
+true
+true
+true
+true
+true
+true
+true
+false
+true
+true
+true
+true
+false
+1
+a
+12 -12 12.75
+7766279631452241920
+12 12 0.25
+12
+-12
+false
+5 300
+8.40
+4
+List(2.0, 1.00)
+6
+1.5
+7

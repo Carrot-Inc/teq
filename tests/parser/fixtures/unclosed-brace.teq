@@ -1,0 +1,4 @@
+unclosed-brace.scala:5:3: error: '}' expected, but 'def' found
+unclosed-brace.scala:6:21: error: type mismatch
+unclosed-brace.scala:9:19: error: type mismatch
+unclosed-brace.scala:13:16: error: type mismatch

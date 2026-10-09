@@ -1,0 +1,16 @@
+int 3
+some int
+a string
+some int
+list of scala.Double
+something else: 2.5
+Int
+List of Option of Int
+pair of Int and other: scala.Double
+List(10, 20, 30)
+List(7)
+(2,a!)
+(7,b)
+some 3
+none
+unknown

@@ -1,0 +1,5 @@
+// tests/tasty/fixtures/FoBackend.tasty (TASTy 28.8, 754 bytes)
+package fix.cake
+@SourceFile trait FoBackend[F[_$9], +P] extends Object {
+  def send[T](r: FoReq[T, P & FoEff[F]]): Predef.String
+}

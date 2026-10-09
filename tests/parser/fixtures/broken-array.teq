@@ -1,0 +1,2 @@
+broken-array.scala:5:60: error: operator * cannot be applied to Int and String
+broken-array.scala:6:44: error: operator * cannot be applied to Int and String

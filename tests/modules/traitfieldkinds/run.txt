@@ -1,0 +1,11 @@
+init v
+23
+init pl
+q q! q!
+8
+(2,true)
+make Label
+(true,k)
+Over init sees 10
+20
+Says body

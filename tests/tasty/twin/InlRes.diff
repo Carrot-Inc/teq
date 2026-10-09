@@ -1,0 +1,4 @@
+8c8
+<   inline def str(x: Int): Predef.String = <body>
+---
+>   inline def str(x: Int): String = <body>

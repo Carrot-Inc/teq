@@ -1,0 +1,7 @@
+// tests/tasty/fixtures/RdTokA.tasty (TASTy 28.8, 654 bytes)
+package fix.rdecl
+@SourceFile object RdTokA extends Object {
+  <synthetic> private def writeReplace(): AnyRef = ...
+  class Token() extends Object {
+  }
+}

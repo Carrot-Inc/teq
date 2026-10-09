@@ -1,0 +1,21 @@
+target/
+out/
+.scala-build/
+.bsp/
+.idea/
+*.js.map
+tests/scala3/results.json
+tests/scala3/results-interp.json
+tests/scala3/macros-results.json
+tests/scala3/macros-results-interp.json
+__pycache__/
+integrations/zed/extension.wasm
+integrations/zed/grammars/
+.metals/
+
+# the site is built from README.md and docs/ (site/build.sh)
+site/content/
+site/public/
+site/generated/
+integrations/vite/NOTICE
+integrations/vite/LICENSE

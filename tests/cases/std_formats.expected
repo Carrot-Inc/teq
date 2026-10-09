@@ -1,0 +1,26 @@
+Range 1 to 2 Range 3 to 5 Range 2 to 3 Range 1 to 2 Range 3 to 5
+Range 4 to 5 Range 1 to 3 Range 2 to 5 Range 1 to 4 empty Range 1 until 1 empty Range 5 until 5
+Range 1 to 2 Range 1 to 4 by 3 Range 4 to 10 by 3 Range 5 to 1 by -1 Vector(3, 4, 5) (Range 1 to 2,Range 3 to 5) (Range 1 to 2,Range 3 to 5)
+Vector(2, 4, 6) 6 List(1, 2) 12 Range 5 to 4 by -1 2
+NumericRange 1 to 3 NumericRange 1 until 3 NumericRange 1 to 10 by 3 empty NumericRange 3 to 1 Vector(2, 4, 6) 3 6 List(1, 2, 3) true List(10, 6, 2)
+NumericRange a to c NumericRange a until c List(a, b, c) Vector(A, B, C) 3 List(a, c, e) abc
+6
+ArraySeq(1, 2, 3, 4)
+ArraySeq(1, 2)
+ArraySeq(2, 3)
+true
+true
+true
+true
+true
+true true true
+Map(1 -> 1)
+Set(1)
+Map(1 -> 1, 2 -> 2)
+Set(1, 2)
+a
+b
+a
+b
+List(ArraySeq(1, 2), ArraySeq(3))
+List(ArraySeq(1, 2), ArraySeq(2, 3))

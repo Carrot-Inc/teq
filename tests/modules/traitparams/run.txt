@@ -1,0 +1,10 @@
+Counted c 3
+9
+c 6 2
+List(1, 2, 3)
+tag L
+tag F
+F L
+Counted o 5
+16
+A Doe

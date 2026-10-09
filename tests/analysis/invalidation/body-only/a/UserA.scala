@@ -1,0 +1,4 @@
+package boa
+
+object UserA:
+  def use: Int = Lib.f + 1

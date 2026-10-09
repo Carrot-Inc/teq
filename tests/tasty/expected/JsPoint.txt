@@ -1,0 +1,5 @@
+// tests/tasty/fixtures/JsPoint.tasty (TASTy 28.8, 760 bytes)
+package fix.facades
+@JSType @SourceFile class JsPoint(val x: Int, val y: Int) extends Object {
+  @ExposedJSMember def sum: Int = ...
+}

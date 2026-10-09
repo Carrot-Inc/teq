@@ -1,0 +1,35 @@
+\p{Lu} = A U+C9 U+130 U+1C4 U+212A K U+399 U+1D400
+(?i)\p{Lu} = a A z U+E9 U+C9 U+131 U+130 U+1C4 U+1C5 U+1C6 U+17F U+212A k K U+3B9 U+399 U+1FBE U+1D400 U+10428
+(?i)\p{Ll} = a A z U+E9 U+C9 U+131 U+130 U+1C4 U+1C5 U+1C6 U+17F U+212A k K U+3B9 U+399 U+1FBE U+1D400 U+10428
+(?i)\p{Lt} = a A z U+E9 U+C9 U+131 U+130 U+1C4 U+1C5 U+1C6 U+17F U+212A k K U+3B9 U+399 U+1FBE U+1D400 U+10428
+(?i)\P{Lu} = 1 U+AA U+2B0 U+2170 U+24B6 _
+(?i)[\p{Lu}] = a A z U+E9 U+C9 U+131 U+130 U+1C4 U+1C5 U+1C6 U+17F U+212A k K U+3B9 U+399 U+1FBE U+1D400 U+10428
+(?i)[^\p{Lu}] = 1 U+AA U+2B0 U+2170 U+24B6 _
+(?i)[^\P{Ll}] = a A z U+E9 U+C9 U+131 U+130 U+1C4 U+1C5 U+1C6 U+17F U+212A k K U+3B9 U+399 U+1FBE U+1D400 U+10428
+(?i)[\P{Lt}] = 1 U+AA U+2B0 U+2170 U+24B6 _
+(?i)\p{gc=Lu} = a A z U+E9 U+C9 U+131 U+130 U+1C4 U+1C5 U+1C6 U+17F U+212A k K U+3B9 U+399 U+1FBE U+1D400 U+10428
+(?i)\p{General_Category=Ll} = a A z U+E9 U+C9 U+131 U+130 U+1C4 U+1C5 U+1C6 U+17F U+212A k K U+3B9 U+399 U+1FBE U+1D400 U+10428
+(?i)\p{L} = a A z U+E9 U+C9 U+131 U+130 U+1C4 U+1C5 U+1C6 U+17F U+212A k K U+3B9 U+399 U+1FBE U+AA U+2B0 U+1D400 U+10428
+(?i)\p{Lm} = U+2B0
+(?i)\pL = a A z U+E9 U+C9 U+131 U+130 U+1C4 U+1C5 U+1C6 U+17F U+212A k K U+3B9 U+399 U+1FBE U+AA U+2B0 U+1D400 U+10428
+(?i)[\p{Lu}&&[^a-c]] = z U+E9 U+C9 U+131 U+130 U+1C4 U+1C5 U+1C6 U+17F U+212A k K U+3B9 U+399 U+1FBE U+1D400 U+10428
+(?i)[\p{Lu}\d] = a A z U+E9 U+C9 U+131 U+130 U+1C4 U+1C5 U+1C6 U+17F U+212A k K 1 U+3B9 U+399 U+1FBE U+1D400 U+10428
+(?i)[^\p{Lu}\d] = U+AA U+2B0 U+2170 U+24B6 _
+(?i)[a\P{Lu}] = a A 1 U+AA U+2B0 U+2170 U+24B6 _
+(?i)[k\p{Lo}] = k K U+AA
+(?i)[s-u\p{Lm}] = U+2B0
+(?iu)\p{Lu} = a A z U+E9 U+C9 U+131 U+130 U+1C4 U+1C5 U+1C6 U+17F U+212A k K U+3B9 U+399 U+1FBE U+1D400 U+10428
+(?iu)\P{Lu} = 1 U+AA U+2B0 U+2170 U+24B6 _
+(?iu)[^\p{Lt}] = 1 U+AA U+2B0 U+2170 U+24B6 _
+(?iu)[\P{Ll}] = 1 U+AA U+2B0 U+2170 U+24B6 _
+(?iu)[^\P{Lu}] = a A z U+E9 U+C9 U+131 U+130 U+1C4 U+1C5 U+1C6 U+17F U+212A k K U+3B9 U+399 U+1FBE U+1D400 U+10428
+(?iu)\p{L} = a A z U+E9 U+C9 U+131 U+130 U+1C4 U+1C5 U+1C6 U+17F U+212A k K U+3B9 U+399 U+1FBE U+AA U+2B0 U+1D400 U+10428
+(?iu)\P{L} = 1 U+2170 U+24B6 _
+(?iu)[\P{Ll}a] = a A 1 U+AA U+2B0 U+2170 U+24B6 _
+(?i)[\p{Lu}]k on U+E9 k = true
+(?i)[\p{Lu}]k on U+E9 K = true
+(?i)[\p{Lu}]k on U+E9 U+212A = false
+(?i)\p{Lu}s on U+E9 S = true
+(?i)\p{Lu}s on U+E9 U+17F = false
+(?iu)\p{Lu}k on U+E9 U+212A = true
+List(xy/12 )

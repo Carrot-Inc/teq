@@ -1,0 +1,5 @@
+// tests/tasty/fixtures/Functor.tasty (TASTy 28.8, 687 bytes)
+package fix.shapes
+@SourceFile trait Functor[F[_$4]] extends Object {
+  extension [A](fa: F[A]) def fmap[B](f: A => B): F[B]
+}

@@ -1,0 +1,4 @@
+4c4
+<   def plain(x: Int): Predef.String
+---
+>   def plain(x: Int): String

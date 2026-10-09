@@ -1,0 +1,9 @@
+// tests/tasty/fixtures/ExUses.tasty (TASTy 28.8, 955 bytes)
+package fix.cake
+@SourceFile trait ExUses extends Object { _: ExTypes & ExExs =>
+  def need[A](t: Type[A]): Type[A] = ...
+  def go(e: ?<[Any]): Predef.String = ...
+  object Inner extends Object {
+    def run(e: ?<[Any]): Predef.String = ...
+  }
+}

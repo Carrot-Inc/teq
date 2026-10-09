@@ -1,0 +1,44 @@
+[apple, date, fig, kiwi, pear] 5 null
+false true true false true false
+apple pear [apple, date, fig, lime, pear]
+a: null null apple apple
+apple: null apple apple date
+cherry: apple apple date date
+fig: date fig fig lime
+lime: fig lime lime pear
+pear: lime pear pear null
+zucchini: pear pear null null
+[apple, date] [apple, date, fig] [fig, lime, pear] [lime, pear]
+[date, fig, lime] [date, fig, lime] []
+subSet from above to: IllegalArgumentException(fromKey > toKey)
+true true false false [cherry, date, lime] [apple, cherry, date, lime, pear]
+add above: IllegalArgumentException(key out of range)
+add at the exclusive bound: IllegalArgumentException(key out of range)
+headSet past the bound: IllegalArgumentException(toKey out of range)
+cherry lime null null cherry lime
+cherry lime [date] [apple, date, pear]
+[pear, date, apple] pear apple pear apple [pear] [apple]
+[apple, date, pear] 1 [pear, date]
+[apple, banana, date, pear]
+pear date banana apple [apple, date, pear]
+remove before next: java.lang.IllegalStateException
+remove twice: java.lang.IllegalStateException
+[apple]
+only null null true []
+again [] null null
+first of none: java.util.NoSuchElementException
+last of none: java.util.NoSuchElementException
+add null: java.lang.NullPointerException
+[fig, date, kiwi, pear, apple, banana] fig date [fig, date] true
+[fig, date, kiwi, pear, plum, apple, banana] true [fig, date, kiwi, pear, apple, banana]
+[apple, banana, date, fig, kiwi, pear] null
+[a, b, c] 3
+[cherry, apple] cherry
+[9, 4, 0, -2] 0 9
+true [B, c]
+false [a, B, c]
+true [a] true
+false [a, B, c]
+true [a, c]
+[-40, -3, 0, 5, 7, 12] [-40, -3] 7 null
+[ , e, q, r, t] 5

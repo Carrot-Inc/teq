@@ -1,0 +1,4 @@
+Flags initialised
+names
+Flags(true,List(a))
+Flags

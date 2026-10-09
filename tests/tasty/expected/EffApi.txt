@@ -1,0 +1,6 @@
+// tests/tasty/fixtures/EffApi.tasty (TASTy 28.8, 561 bytes)
+package fix.shadow
+@SourceFile trait EffApi extends Object {
+  type F[A]
+  implicit def F: Eff[F]
+}

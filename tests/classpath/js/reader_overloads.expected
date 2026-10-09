@@ -1,0 +1,9 @@
+put(T) s, put(Any) 1
+put(T) 2
+203
+shape 2
+xyy
+local put(T) 7, local put(Any) o
+f(RdTokA.Token), g(A), h(Any)
+f(Any)
+f(Array[? <: AnyVal])

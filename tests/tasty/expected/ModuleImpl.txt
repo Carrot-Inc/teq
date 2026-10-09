@@ -1,0 +1,13 @@
+// tests/tasty/fixtures/ModuleImpl.tasty (TASTy 28.8, 1033 bytes)
+package fix.cake
+@SourceFile final class ModuleImpl(val tag: Predef.String) extends Object, Module {
+  object Named extends Object, NamedModule {
+    def make(n: Predef.String): Predef.String = ...
+    object Inner extends Object {
+      def get: Predef.String = ...
+    }
+  }
+  object Helper extends Object, HelperModule {
+  }
+  def inner: Predef.String = ...
+}

@@ -1,0 +1,10 @@
+// tests/tasty/fixtures/FoHierUse.tasty (TASTy 28.8, 2384 bytes)
+package fix.cake
+@SourceFile trait FoHierUse extends Object { self: FoDeriv =>
+  def names[A, B](a: Type[A], b: Type[B]): Predef.String = ...
+  def ctorOf[A](a: Type[A]): Predef.String = ...
+  def wrapped(es: package.List[ExistentialType]): package.List[Predef.String] = ...
+  abstract class Opt[V]() extends Object {
+    def of(value: Type[V]): Predef.String
+  }
+}

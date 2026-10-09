@@ -1,0 +1,5 @@
+// tests/tasty/fixtures/EffScope.tasty (TASTy 28.8, 838 bytes)
+package fix.shadow
+@SourceFile final class EffScope[F[_$3]](val n: Int)(using s: Eff[F]) extends Object {
+  def get: Int = ...
+}

@@ -1,0 +1,8 @@
+4c4
+<   opaque type Box[+A] = package.List[A]
+---
+>   opaque type Box[+A] = List[A]
+6c6
+<   extension [A](b: Box[A]) def items: package.List[A] = ...
+---
+>   extension [A](b: Box[A]) def items: List[A] = ...

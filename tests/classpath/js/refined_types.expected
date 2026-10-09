@@ -1,0 +1,72 @@
+-- refineV
+Right(5)
+Left(Predicate failed: (-5 > 0).)
+Left(Predicate failed: (0 > 0).)
+Right(0)
+Right(-1)
+Right(11)
+Left(Predicate failed: (10 > 10).)
+Left(Predicate failed: (5 < 3).)
+Right(3)
+Left(Right predicate of (!(6 < 1) && !(6 > 5)) failed: Predicate (6 > 5) did not fail.)
+Left(Left predicate of ((1 > 1) && (1 < 5)) failed: Predicate failed: (1 > 1).)
+Right(abc)
+Left(Predicate isEmpty() did not fail.)
+Right(List(1))
+Right(List(1, 2, 3))
+Left(Predicate taking size(List(1, 2, 3, 4)) = 4 failed: Right predicate of (!(4 < 0) && !(4 > 3)) failed: Predicate (4 > 3) did not fail.)
+Right(ab)
+Left(Predicate taking size(a) = 1 failed: Predicate (1 < 2) did not fail.)
+Right(Vector(1, 2))
+Right(me@home)
+Left(Predicate failed: "nope".matches("[a-z]+@[a-z]+").)
+Right(abc)
+Left(Predicate failed:  x  is trimmed.)
+Right(5)
+Left(Right predicate of ((50 > 0) && (50 < 10)) failed: Predicate failed: (50 < 10).)
+Left(Both predicates of ((5 < 0) || (5 > 10)) failed. Left: Predicate failed: (5 < 0). Right: Predicate failed: (5 > 10).)
+Right(0)
+Right(2.5)
+Left(Predicate failed: (-2 > 0).)
+Right(0.5)
+7
+-- companions
+Right(3)
+Left(Predicate failed: (0 > 0).)
+Right(0)
+Left(Predicate (-1 < 0) did not fail.)
+Left(Predicate (-1 < 0) did not fail.)
+Right(2.5)
+Right(12.50)
+Left(Predicate (-0.01 < 0) did not fail.)
+Left(Predicate failed: (0 > 0).)
+Right(hi)
+Left(Predicate isEmpty() did not fail.)
+Some(5)
+None
+x
+2
+IllegalArgumentException: Predicate failed: (-2 > 0).
+1 2147483647 0
+8
+-- Refined
+Price(3.10,book)
+6.20
+4
+Limits(1,50)
+51
+3.10
+Right(3)
+Right(3)
+Right(9)
+Right(5)
+Left(Predicate failed: (-5 > 0).)
+true
+List(1, 2)
+-- auto
+42
+AUTO
+-- Validate
+true false (4 > 0) Predicate passed: (4 > 0). Predicate failed: (-4 > 0).
+Predicate isEmpty() did not fail.
+Predicate taking size(List(1, 2, 3)) = 3 failed: Right predicate of (!(3 < 0) && !(3 > 2)) failed: Predicate (3 > 2) did not fail.

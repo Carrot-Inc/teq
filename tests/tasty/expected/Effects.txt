@@ -1,0 +1,6 @@
+// tests/tasty/fixtures/Effects.tasty (TASTy 28.8, 975 bytes)
+package fix.runtime
+@SourceFile abstract class Effects[R, E]() extends Object {
+  type F[A] = package.Either[E, (R, A)]
+  def pure[A](r: R, a: A): F[A] = ...
+}

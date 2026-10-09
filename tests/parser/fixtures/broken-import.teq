@@ -1,0 +1,2 @@
+broken-import.scala:3:1: error: an identifier expected, but 'object' found
+broken-import.scala:5:11: error: not found: bar

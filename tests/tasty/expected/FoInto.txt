@@ -1,0 +1,7 @@
+// tests/tasty/fixtures/FoInto.tasty (TASTy 28.8, 766 bytes)
+package fix.cake
+@SourceFile final class FoInto[A](val source: A, flag: Boolean) extends Object {
+  inline def get: A = <body@96>
+  inline def both: Predef.String = <body@116>
+  <synthetic> final def inline$flag: Boolean = ...
+}

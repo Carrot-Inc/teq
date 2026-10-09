@@ -1,0 +1,6 @@
+// tests/classfile/fixtures/fix/Outer$1.class (class file 65.0, 443 bytes)
+package fix
+private[fix] class Outer$1 extends Object, Runnable {
+  private[fix] def this(x$1: Outer) = ...
+  def run(): Unit = ...
+}

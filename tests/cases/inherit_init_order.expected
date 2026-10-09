@@ -1,0 +1,20 @@
+Shape body sees tri with 3 sides
+Polygon body, label TRI3
+TRI3
+Shape body sees square with 4 sides
+Polygon body, label SQUARE4
+Square body
+SQUARE4 16
+Shape body sees origin with 0 sides
+Polygon body, label ORIGIN0
+Origin body
+ORIGIN0
+Shape body sees anon with 9 sides
+Polygon body, label ANON9
+anon body ANON9
+9
+Audited body
+Ledger 2
+SubLedger t of 1
+Audited body
+Ledger 5

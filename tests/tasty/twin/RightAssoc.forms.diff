@@ -1,0 +1,4 @@
+4c4
+<   extension v def :+x: Vec = new Vec{(scala.collection.immutable.List): fix.rassoc.Vec}(v.xs.:+{([1], java.lang.Object): java.lang.Object}[Int](x))
+---
+>   extension v def :+x: Vec = new Vec{(scala.collection.immutable.List): fix.rassoc.Vec}(v.xs.:+{([1], java.lang.Object): scala.collection.immutable.List}[Int](x))

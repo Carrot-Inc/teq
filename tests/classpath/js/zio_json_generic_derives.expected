@@ -1,0 +1,6 @@
+{"a":"x","n":1}
+{"k":1,"v":"v"}
+{"box":{"a":7,"n":2},"pairs":[{"k":"a","v":true}]}
+Right(Box(y,3))
+Right(Wrapper(Box(1,2),List(Pair(z,false))))
+[{"a":"q","n":0}]

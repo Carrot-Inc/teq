@@ -1,0 +1,10 @@
+NoArgs body, args stored: false
+Delayed body
+Delayed args: [a,b]
+a,b
+Delayed args: []
+Runner body, started: true
+Runner args: 2
+x|y
+Runner args: 1
+z

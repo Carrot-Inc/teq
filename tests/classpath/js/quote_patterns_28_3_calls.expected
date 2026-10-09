@@ -1,0 +1,6 @@
+single 4
+pair 1 x
+many 1,2,3
+other
+string s
+other scala.Int true

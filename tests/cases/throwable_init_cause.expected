@@ -1,0 +1,7 @@
+true
+refused: Can't overwrite cause with java.lang.RuntimeException: again
+refused: Self-causation not permitted
+true
+null
+a.B true true
+gone true

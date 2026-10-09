@@ -1,0 +1,2 @@
+import-excluded.scala:3:8: error: not found: Missing
+import-excluded.scala:5:11: error: not found: gone

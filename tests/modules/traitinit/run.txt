@@ -1,0 +1,4 @@
+[logging] [service] log:1
+[logging] [local]
+log:1
+[logging] log:

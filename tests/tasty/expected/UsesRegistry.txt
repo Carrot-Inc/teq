@@ -1,0 +1,6 @@
+// tests/tasty/fixtures/UsesRegistry.tasty (TASTy 28.8, 651 bytes)
+package fix.members
+@SourceFile object UsesRegistry extends Object {
+  <synthetic> private def writeReplace(): AnyRef = ...
+  def lookup(k: Registry.Key): Registry.Entry = ...
+}

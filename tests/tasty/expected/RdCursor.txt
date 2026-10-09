@@ -1,0 +1,6 @@
+// tests/tasty/fixtures/RdCursor.tasty (TASTy 28.8, 935 bytes)
+package fix.reader
+@SourceFile final class RdCursor(n: Int) extends Object {
+  private[this] val stack: Array[Int] | Null = ...
+  def size: Int = ...
+}

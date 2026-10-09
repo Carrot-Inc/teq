@@ -1,0 +1,11 @@
+$4.30
+true
+12
+Map(a -> 3, b -> 3)
+Invalid(List(negative: -1, negative: -2))
+4
+Some(x)
+Some(42)
+Right(42)
+2
+42

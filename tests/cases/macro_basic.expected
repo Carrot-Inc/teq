@@ -1,0 +1,10 @@
+42
+42
+12
+constant 3
+not a constant: y
+scala.collection.immutable.List[scala.Int]
+scala.Predef.String
+6
+Show[Int]
+no Show for scala.Predef.String

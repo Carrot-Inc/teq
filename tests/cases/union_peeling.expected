@@ -1,0 +1,10 @@
+Some(n)
+None
+List(s)
+Some(n)
+None
+Some(o)
+List(1)
+(List(),s)
+List(e)
+Some(4)

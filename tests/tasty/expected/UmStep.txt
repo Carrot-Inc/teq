@@ -1,0 +1,14 @@
+// tests/tasty/fixtures/UmStep.tasty (TASTy 28.8, 2227 bytes)
+package fix.unmod
+@SourceFile trait UmStep[I, F[_$6]] extends Object {
+  type Next[H]
+  def next[H](s: Predef.String): Next[H]
+}
+@SourceFile object UmStep extends Object {
+  <synthetic> private def writeReplace(): AnyRef = ...
+  type To[I, F[_$7], N[_$8]] = UmStep[I, F] { def Next[A] =>> N[A] }
+  trait Dsl[I, H1] extends Object {
+    type Next[H2] = UmSub[I, Object { def F[A] =>> (I, H1, H2) => A }#F]
+  }
+  def atStep1[I, H1]: To[I, Object { def F[A] =>> (I, H1) => A }#F, Dsl[I, H1]#Next] = ...
+}

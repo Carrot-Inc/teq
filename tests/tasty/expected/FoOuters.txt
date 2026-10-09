@@ -1,0 +1,8 @@
+// tests/tasty/fixtures/FoOuters.tasty (TASTy 28.8, 826 bytes)
+package fix.cake
+@SourceFile trait FoOuters extends Object { self: FoDeriv =>
+  abstract class Tot[A](implicit ev: Type[A]) extends Object {
+    def label: Predef.String
+    def show: Predef.String = ...
+  }
+}

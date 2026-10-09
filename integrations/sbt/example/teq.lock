@@ -1,0 +1,1062 @@
+teq: 0.1.7
+format: 1
+binaries: {}
+inputs:
+  files:
+    build.sbt: 984af352fc5f1730989ffaa5864d66ae311540899a7235fcbb19b852dc967124
+    project/Mirror.scala: d7066899113707dba034f1575cd93a821f8b67a44ff04885d5d52f16a4353d5e
+    project/build.properties: 130d92ddf3cbfd0330ca6ec0e9aa88a65c8221ea9b47f0ed83095f52515ebcd3
+    project/plugins.sbt: fa152f0de7096552b1e5cda01933efea5c22f9c4ed3aaa5d170a764e04443190
+  sha256: 3dab8419e50238e6236a52215d45b5d95358e01e69c8973eac1657055bf85f29
+jars:
+  com.github.sbt:junit-interface:0.13.3: maven-central cc5178fdec607a63c045951f9ba5c7e7e5a1813e 35398
+  com.lihaoyi:sourcecode_3:0.4.2: maven-central e7445e5caa2003ce647370451e59615e0c222aba 110490
+  com.lihaoyi:sourcecode_sjs1_3:0.4.2: maven-central 172b340e47a3107cbad19a6af83f0af6898b9bff 174964
+  com.lihaoyi:sourcecode_sjs1_3:0.4.3-M5: maven-central 238782c86f518cfe2ab4009dd19727cbe63cae9f 187164
+  com.lihaoyi:utest_sjs1_3:0.9.1: maven-central 0801be9a13235baa3309e2c48e76a398e72c27da 1239197
+  dev.zio:izumi-reflect-thirdparty-boopickle-shaded_3:3.0.9: maven-central 42c50dcf296068915a66c2c79f850a88572ab092 136523
+  dev.zio:izumi-reflect-thirdparty-boopickle-shaded_sjs1_3:3.0.9: maven-central ebef90f1863cdce700837ff296ca174c527e5241 234109
+  dev.zio:izumi-reflect_3:3.0.9: maven-central 6a88f27dad53640876c5c8b6827199c3ec24a7a2 723505
+  dev.zio:izumi-reflect_sjs1_3:3.0.9: maven-central f1662ed482becf73f8ca0d4e1fd5dd6e389b1e3e 1155829
+  dev.zio:zio-internal-macros_3:2.1.26: maven-central 31545e1c101ce328e24f70c1c8fc92dcb625fa1a 59489
+  dev.zio:zio-internal-macros_sjs1_3:2.1.26: maven-central 7be27988ca0d6912db180fafcb6356c1ef3d0b70 100696
+  dev.zio:zio-stacktracer_3:2.1.26: maven-central 6cf806be2e08904f00e4fc7e015c4bb98daeaa14 36426
+  dev.zio:zio-stacktracer_sjs1_3:2.1.26: maven-central cb6f5995871650c6d35a0b307372286ea22eeccc 56319
+  dev.zio:zio-streams_3:2.1.26: maven-central cce473465cf5199573bd0d4dccece5d2bf98a6b1 1673597
+  dev.zio:zio-streams_sjs1_3:2.1.26: maven-central 74b0cb528811a1638876c8ed1bc81d306ae0cbeb 2772434
+  dev.zio:zio-test-sbt_3:2.1.26: maven-central 49b955bcb1cdd0ac1a4425cc1f8595d42a28e693 62789
+  dev.zio:zio-test-sbt_sjs1_3:2.1.26: maven-central feda0a71e1535640cb4d16cbb286fdd8e8c907cf 105437
+  dev.zio:zio-test_3:2.1.26: maven-central 285511b167e7dcbcf69b1fca6d9a018059ccbaa0 2055317
+  dev.zio:zio-test_sjs1_3:2.1.26: maven-central ebd2fdb8976d483b87e19e94a12aa96306e6debd 3266537
+  dev.zio:zio_3:2.1.26: maven-central a2fab05371704e2e446f686ffb27c151b57b8a33 5041936
+  dev.zio:zio_sjs1_3:2.1.26: maven-central 4d9fb15493bf42852650a498cb20387313c4f535 7885125
+  io.github.cquiroz:cldr-api_sjs1_3:4.5.0: maven-central 29cd00a0afb092907a835d4f2d5d01ac37ffd6ec 328767
+  io.github.cquiroz:scala-java-locales_sjs1_3:1.5.4: maven-central 06ab56b23ce137d1aa56591109e0394781631522 366958
+  io.github.cquiroz:scala-java-time-tzdb_sjs1_3:2.6.0: maven-central 901b88bf197f8c0c6f2f11d040945aecd5fc314d 1069525
+  io.github.cquiroz:scala-java-time_sjs1_3:2.6.0: maven-central c13fcda5774841ccbade56b0c45c491e4e82cbb7 2183721
+  junit:junit:4.13.2: maven-central 8ac9e16d933b6fb43bc7f576336b8f4d7eb5ba12 384581
+  org.hamcrest:hamcrest-core:1.3: maven-central 42a25dc3219429f0e5d060061f71acb49bf010a0 45024
+  org.portable-scala:portable-scala-reflect_2.13:1.1.3: maven-central f9295253915f13387e1d4e5b54d531c95e6e2197 29456
+  org.portable-scala:portable-scala-reflect_sjs1_2.13:1.1.3: maven-central 23b5127fe5ce0a04908960aa6721d8b03924ee1e 6989
+  org.scala-js:scala-js-macrotask-executor_sjs1_3:1.1.1: maven-central 9d4c793c5953b94c73f1608564376f38c10cea10 20587
+  org.scala-js:scalajs-dom_sjs1_3:2.8.1: maven-central da95320b6a75149c40cf0cf964abdcbb9ba3dae6 2681206
+  org.scala-js:scalajs-javalib:1.22.0: maven-central 1024c02368d1f74a3b80405608617fca12993d5e 1590338
+  org.scala-js:scalajs-junit-test-runtime_2.13:1.22.0: maven-central 9e9a6ab555fe1abf2b8f736f9077845595617818 215213
+  org.scala-js:scalajs-library_2.13:1.22.0: maven-central 2df5b688a22a05a1a3c5c90d79d7a119a5216846 1094620
+  org.scala-js:scalajs-scalalib_2.13:3.8.4: maven-central 33c241b00ae0e8fcaf8898bfb1ebf708ef78ef51 5275648
+  org.scala-js:scalajs-test-bridge_2.13:1.22.0: maven-central 825d48984d07ba39fc9a0587075c4b3bc84b9453 337421
+  org.scala-js:scalajs-test-interface_2.13:1.22.0: maven-central 5445e9be3ce29d22701c72c6d88628fbe4b870dc 37428
+  org.scala-js:scalajs-weakreferences_sjs1_2.13:1.0.0: maven-central 4fea40d3e87123328a180c7c78beb6afb8aa3c47 3355
+  org.scala-lang.modules:scala-collection-compat_3:2.14.0: maven-central 8086487b9662280dfe300498055674364fe1d5e1 9428
+  org.scala-lang.modules:scala-collection-compat_sjs1_3:2.14.0: maven-central c8e46625bfb4c4324cd8fae28dc95b09e780db89 13660
+  org.scala-lang.modules:scala-xml_3:2.1.0: maven-central 08825dfc740fdf5b0b3900ee7b62cdbfea3483b8 645935
+  org.scala-lang:scala-library:3.8.4: maven-central e44f14c38dba7da4d7050cbf72fbf9dcbb6f9e7d 9179090
+  org.scala-lang:scala3-library_3:3.8.4: maven-central ada8b099f5425afff3e9164afd6601bed4ef2e21 319
+  org.scala-lang:scala3-library_sjs1_3:3.8.4: maven-central f1cb186c2d39653324d60a9a6c4fa305bb7a10f2 312
+  org.scala-sbt:test-interface:1.0: maven-central 0a3f14d010c4cb32071f863d97291df31603b521 14755
+  org.scalacheck:scalacheck_3:1.19.0: maven-central 2e00b871ca4b5658a8e939c0875130202b0a9960 979283
+  org.scalactic:scalactic_3:3.2.20: maven-central bb7dec9c0fec006b871b9d94519b5fb70571f506 2023492
+  org.scalameta:junit-interface:1.3.4: maven-central 6e49b0c492c2ed7c1cacdee904ce176b585d74f3 53487
+  org.scalameta:munit-diff_3:1.3.4: maven-central 77b4d5a0816251ab38b7b4c28faac1737922d43d 82517
+  org.scalameta:munit-diff_sjs1_3:1.3.4: maven-central 6befd18229d00838b7ee5a7d35968f6e89a8b4bb 124396
+  org.scalameta:munit-scalacheck_3:1.3.0: maven-central 646f90846577b3aef8d079d75df5381c9acc1cfd 13059
+  org.scalameta:munit_3:1.3.4: maven-central bbdad7dcca9d6d7d5c13172135b760a2075f3dad 266059
+  org.scalameta:munit_sjs1_3:1.3.4: maven-central 21cb31eea90bc02d7c8d820388f976045c9ca20f 599321
+  org.scalatest:scalatest-compatible:3.2.20: maven-central 977b070f967647331c11fd0632e7f7c8b86984ca 1405
+  org.scalatest:scalatest-core_3:3.2.20: maven-central 8a2767dbd32783726251afa0cd0f65a0255b7cc9 5463753
+  org.scalatest:scalatest-diagrams_3:3.2.20: maven-central 81102d8cfaa4f7ce467033975d12cb47f69dd2b4 85149
+  org.scalatest:scalatest-featurespec_3:3.2.20: maven-central c1980c30f492f77a989723952b18f2b18c2a210c 172408
+  org.scalatest:scalatest-flatspec_3:3.2.20: maven-central cdf9ab8b951ebcb01154d157103dd925c836f4f4 284428
+  org.scalatest:scalatest-freespec_3:3.2.20: maven-central 0065578d501f2a8864fd6777f6423acb859f1547 213664
+  org.scalatest:scalatest-funspec_3:3.2.20: maven-central 4cfb750357f0855d35e8ed7c668bdb7067cc69ea 216538
+  org.scalatest:scalatest-funsuite_3:3.2.20: maven-central 6f05976bc328218221221f978531e6d50ee7691e 144942
+  org.scalatest:scalatest-matchers-core_3:3.2.20: maven-central a4c6781cbd3c9ef4d0fdea49b76aa9b86d006de9 2279166
+  org.scalatest:scalatest-mustmatchers_3:3.2.20: maven-central f7402af1d535067193724e02332a32102ac676c8 259092
+  org.scalatest:scalatest-propspec_3:3.2.20: maven-central b2315d084d45553ab14c5d384dd449da624c811e 64466
+  org.scalatest:scalatest-refspec_3:3.2.20: maven-central 84b77e22edeceb0c67aba933ab73795caf11c694 55026
+  org.scalatest:scalatest-shouldmatchers_3:3.2.20: maven-central 3eaf9ca3efbf24af11bad18fd7f4ea50f4d7d655 261208
+  org.scalatest:scalatest-wordspec_3:3.2.20: maven-central 49957310d42cde80ec326a9368643cbf4a59a1f7 259473
+  org.scalatest:scalatest_3:3.2.20: maven-central a70d4275cee9a70d7c53ca2caada70bb6fb75bd8 721
+  org.typelevel:cats-core_3:2.13.0: maven-central cafcdb23af26a0b2de13a1b362ae33c72fafcd6a 7123338
+  org.typelevel:cats-core_sjs1_3:2.13.0: maven-central d76aa8a01a28332841673ee47bee955a1865924d 11708893
+  org.typelevel:cats-kernel_3:2.13.0: maven-central b54ec5e7b865852b84856f5781c7b8426d3a73a4 1592447
+  org.typelevel:cats-kernel_sjs1_3:2.13.0: maven-central 84d29f72dfa69a0a19fe4b5d8d732ba5355b5b3c 2467397
+java:
+  outputVersion: 17
+projects:
+  api:
+    base: api
+    configurations:
+      compile:
+        classpath:
+          - {file: api/lib/util.jar}
+          - org.scala-lang:scala3-library_3:3.8.4
+          - org.typelevel:cats-core_3:2.13.0
+          - com.lihaoyi:sourcecode_3:0.4.2
+          - org.scala-lang:scala-library:3.8.4
+          - org.typelevel:cats-kernel_3:2.13.0
+        flags:
+          ignoredScalacOptions:
+            - "-Wconf:any:s"
+          kindProjector: false
+          maxInlines: 80
+          strictEquality: false
+          werror: false
+        generators:
+          - dynamic:
+              gitSha: gitSha
+              testClasses:
+                classDirectory:
+                  configuration: test
+                  project: api
+            kind: buildInfo
+            members:
+              - name
+              - version
+              - scalaVersion
+              - sbtVersion
+              - gitSha
+              - testClasses
+            object: BuildInfo
+            output: target/teq/api/compile/src_managed/sbt-buildinfo/BuildInfo.scala
+            package: meridian.build
+            static:
+              name: api
+              sbtVersion: 2.0.8
+              scalaVersion: 3.8.4
+              version: 0.1.0-SNAPSHOT
+        mainClasses:
+          - meridian.server.Main
+        resources:
+          - api/src/main/resources
+        sources:
+          - src/shared
+          - src/api
+          - target/teq/api/compile/src_managed
+      runtime:
+        classpath:
+          - {configuration: compile, project: api}
+          - {file: api/lib/util.jar}
+          - org.scala-lang:scala3-library_3:3.8.4
+          - org.typelevel:cats-core_3:2.13.0
+          - com.lihaoyi:sourcecode_3:0.4.2
+          - org.scala-lang:scala-library:3.8.4
+          - org.typelevel:cats-kernel_3:2.13.0
+        resources: []
+        sources: []
+      test:
+        baseDirectory: .
+        classpath:
+          - {configuration: compile, project: api}
+          - {file: api/lib/util.jar}
+          - org.scala-lang:scala3-library_3:3.8.4
+          - org.typelevel:cats-core_3:2.13.0
+          - com.lihaoyi:sourcecode_3:0.4.2
+          - dev.zio:zio-test_3:2.1.26
+          - dev.zio:zio-test-sbt_3:2.1.26
+          - org.scalameta:munit_3:1.3.4
+          - org.scalameta:munit-scalacheck_3:1.3.0
+          - org.scalatest:scalatest_3:3.2.20
+          - com.github.sbt:junit-interface:0.13.3
+          - org.scala-lang:scala-library:3.8.4
+          - org.typelevel:cats-kernel_3:2.13.0
+          - dev.zio:zio_3:2.1.26
+          - dev.zio:zio-streams_3:2.1.26
+          - org.portable-scala:portable-scala-reflect_2.13:1.1.3
+          - org.scala-sbt:test-interface:1.0
+          - org.scalameta:junit-interface:1.3.4
+          - org.scalameta:munit-diff_3:1.3.4
+          - junit:junit:4.13.2
+          - org.scalacheck:scalacheck_3:1.19.0
+          - org.scalatest:scalatest-core_3:3.2.20
+          - org.scalatest:scalatest-featurespec_3:3.2.20
+          - org.scalatest:scalatest-flatspec_3:3.2.20
+          - org.scalatest:scalatest-freespec_3:3.2.20
+          - org.scalatest:scalatest-funsuite_3:3.2.20
+          - org.scalatest:scalatest-funspec_3:3.2.20
+          - org.scalatest:scalatest-propspec_3:3.2.20
+          - org.scalatest:scalatest-refspec_3:3.2.20
+          - org.scalatest:scalatest-wordspec_3:3.2.20
+          - org.scalatest:scalatest-diagrams_3:3.2.20
+          - org.scalatest:scalatest-matchers-core_3:3.2.20
+          - org.scalatest:scalatest-shouldmatchers_3:3.2.20
+          - org.scalatest:scalatest-mustmatchers_3:3.2.20
+          - dev.zio:zio-internal-macros_3:2.1.26
+          - dev.zio:zio-stacktracer_3:2.1.26
+          - dev.zio:izumi-reflect_3:3.0.9
+          - org.scala-lang.modules:scala-collection-compat_3:2.14.0
+          - org.hamcrest:hamcrest-core:1.3
+          - org.scalactic:scalactic_3:3.2.20
+          - org.scalatest:scalatest-compatible:3.2.20
+          - org.scala-lang.modules:scala-xml_3:2.1.0
+          - dev.zio:izumi-reflect-thirdparty-boopickle-shaded_3:3.0.9
+        envVars: {}
+        exclude:
+          - meridian.apitest.JunitStyleSuite
+        flags:
+          ignoredScalacOptions:
+            - "-Wconf:any:s"
+          kindProjector: false
+          maxInlines: 80
+          strictEquality: false
+          werror: false
+        fork: false
+        frameworks:
+          - arguments: []
+            class: com.novocode.junit.JUnitFramework
+          - arguments: []
+            class: munit.Framework
+          - arguments: []
+            class: org.scalacheck.ScalaCheckFramework
+          - arguments: []
+            class: org.scalatest.tools.Framework
+          - arguments: []
+            class: zio.test.sbt.ZTestFramework
+        javaOptions: []
+        resources:
+          - api/src/test/resources
+        sources:
+          - api-test-src
+    description:
+      cacheableState: []
+      excludes: []
+      hot: false
+      keys: {}
+      macroState: ordered
+      modulePerFile: []
+      out: api/target/teq/out
+      production:
+        excludes: []
+        sources: []
+      release: false
+      sources:
+        - src/shared
+        - src/api
+        - target/teq/api/compile/src_managed
+    platform: jvm
+    run:
+      aliases:
+        server: meridian.server.Main
+      baseDirectory: .
+      envVars: {}
+      javaOptions: []
+      mainClass: meridian.server.Main
+    scalaVersion: 3.8.4
+    stage:
+      directory: api/target/docker/stage
+      exposedPorts:
+        - 8080
+      kind: docker
+      layers:
+        "2":
+          - {from: {file: api/lib/util.jar}, to: opt/docker/lib/util.jar}
+          - {from: org.scala-lang:scala3-library_3:3.8.4, to: opt/docker/lib/org.scala-lang.scala3-library_3-3.8.4.jar}
+          - {from: org.typelevel:cats-core_3:2.13.0, to: opt/docker/lib/org.typelevel.cats-core_3-2.13.0.jar}
+          - {from: com.lihaoyi:sourcecode_3:0.4.2, to: opt/docker/lib/com.lihaoyi.sourcecode_3-0.4.2.jar}
+          - {from: org.scala-lang:scala-library:3.8.4, to: opt/docker/lib/org.scala-lang.scala-library-3.8.4.jar}
+          - {from: org.typelevel:cats-kernel_3:2.13.0, to: opt/docker/lib/org.typelevel.cats-kernel_3-2.13.0.jar}
+        "4":
+          - {from: {configuration: compile, project: api}, manifest: {Implementation-Title: api, Implementation-Vendor: api, Implementation-Vendor-Id: api, Implementation-Version: 0.1.0-SNAPSHOT, Main-Class: meridian.server.Main, Specification-Title: api, Specification-Vendor: api, Specification-Version: 0.1.0-SNAPSHOT}, to: opt/docker/lib/api.api-0.1.0-SNAPSHOT.jar}
+          - classpath:
+              - lib/api.api-0.1.0-SNAPSHOT.jar
+              - lib/util.jar
+              - lib/org.scala-lang.scala3-library_3-3.8.4.jar
+              - lib/org.typelevel.cats-core_3-2.13.0.jar
+              - lib/com.lihaoyi.sourcecode_3-0.4.2.jar
+              - lib/org.scala-lang.scala-library-3.8.4.jar
+              - lib/org.typelevel.cats-kernel_3-2.13.0.jar
+            script: opt/docker/bin/api
+      mainClass: meridian.server.Main
+      name: api
+  browserdemo:
+    base: browserdemo
+    configurations:
+      compile:
+        classpath:
+          - org.scala-lang:scala3-library_sjs1_3:3.8.4
+          - org.scala-js:scalajs-library_2.13:1.22.0
+          - org.scala-js:scalajs-scalalib_2.13:3.8.4
+          - org.scala-lang:scala-library:3.8.4
+          - org.scala-js:scalajs-javalib:1.22.0
+          - org.scala-lang:scala3-library_3:3.8.4
+        flags:
+          ignoredScalacOptions:
+            - "-Wconf:any:s"
+            - "-scalajs"
+          kindProjector: false
+          maxInlines: 80
+          strictEquality: false
+          werror: false
+        generators:
+          - cwd: .
+            inputs:
+              - browserdemo-labels.txt
+            kind: command
+            outputs:
+              - target/teq/browserdemo/compile/src_managed
+            run:
+              - node
+              - generate-labels.mjs
+              - browserdemo-labels.txt
+              - target/teq/browserdemo/compile/src_managed
+          - cwd: .
+            inputs:
+              - "browserdemo-images/assets/images/**/*.svg"
+            kind: command
+            outputs:
+              - target/teq/browserdemo/compile/src_managed
+              - browserdemo-images/assets/images.js
+            run:
+              - teq
+              - interp
+              - scripts/images.scala
+              - "--"
+              - browserdemo-images
+              - target/teq/browserdemo/compile/src_managed
+        mainClasses:
+          - demo.run
+        resources:
+          - browserdemo/src/main/resources
+        sources:
+          - browserdemo-src
+          - target/teq/browserdemo/compile/src_managed
+      runtime:
+        classpath:
+          - {configuration: compile, project: browserdemo}
+          - org.scala-lang:scala3-library_sjs1_3:3.8.4
+          - org.scala-js:scalajs-library_2.13:1.22.0
+          - org.scala-js:scalajs-scalalib_2.13:3.8.4
+          - org.scala-lang:scala-library:3.8.4
+          - org.scala-js:scalajs-javalib:1.22.0
+          - org.scala-lang:scala3-library_3:3.8.4
+        resources: []
+        sources: []
+      test:
+        baseDirectory: .
+        classpath:
+          - {configuration: compile, project: browserdemo}
+          - org.scala-lang:scala3-library_sjs1_3:3.8.4
+          - org.scala-js:scalajs-library_2.13:1.22.0
+          - org.scala-js:scalajs-test-bridge_2.13:1.22.0
+          - dev.zio:zio-test_sjs1_3:2.1.26
+          - dev.zio:zio-test-sbt_sjs1_3:2.1.26
+          - org.scalameta:munit_sjs1_3:1.3.4
+          - com.lihaoyi:utest_sjs1_3:0.9.1
+          - org.scala-js:scalajs-scalalib_2.13:3.8.4
+          - org.scala-lang:scala-library:3.8.4
+          - org.scala-js:scalajs-javalib:1.22.0
+          - org.scala-js:scalajs-test-interface_2.13:1.22.0
+          - dev.zio:zio_sjs1_3:2.1.26
+          - dev.zio:zio-streams_sjs1_3:2.1.26
+          - org.portable-scala:portable-scala-reflect_sjs1_2.13:1.1.3
+          - io.github.cquiroz:scala-java-time_sjs1_3:2.6.0
+          - io.github.cquiroz:scala-java-time-tzdb_sjs1_3:2.6.0
+          - org.scalameta:munit-diff_sjs1_3:1.3.4
+          - org.scala-js:scalajs-junit-test-runtime_2.13:1.22.0
+          - com.lihaoyi:sourcecode_sjs1_3:0.4.3-M5
+          - org.scala-lang.modules:scala-collection-compat_sjs1_3:2.14.0
+          - org.scala-lang:scala3-library_3:3.8.4
+          - dev.zio:zio-internal-macros_sjs1_3:2.1.26
+          - dev.zio:zio-stacktracer_sjs1_3:2.1.26
+          - dev.zio:izumi-reflect_sjs1_3:3.0.9
+          - org.scala-js:scala-js-macrotask-executor_sjs1_3:1.1.1
+          - org.scala-js:scalajs-weakreferences_sjs1_2.13:1.0.0
+          - org.scala-js:scalajs-dom_sjs1_3:2.8.1
+          - io.github.cquiroz:scala-java-locales_sjs1_3:1.5.4
+          - dev.zio:izumi-reflect-thirdparty-boopickle-shaded_sjs1_3:3.0.9
+          - io.github.cquiroz:cldr-api_sjs1_3:4.5.0
+        envVars: {}
+        exclude: []
+        flags:
+          ignoredScalacOptions:
+            - "-Wconf:any:s"
+            - "-scalajs"
+          kindProjector: false
+          maxInlines: 80
+          strictEquality: false
+          werror: false
+        fork: false
+        frameworks:
+          - arguments: []
+            class: com.novocode.junit.JUnitFramework
+          - arguments: []
+            class: munit.Framework
+          - arguments: []
+            class: utest.runner.Framework
+          - arguments: []
+            class: zio.test.sbt.ZTestFramework
+        javaOptions: []
+        resources:
+          - browserdemo/src/test/resources
+        sources:
+          - browserdemo-test-src
+    description:
+      cacheableState: []
+      excludes: []
+      hot: false
+      keys: {}
+      macroState: ordered
+      modulePerFile:
+        - demo.widgets
+      out: browserdemo/target/teq/out
+      production:
+        excludes: []
+        sources: []
+      release: false
+      sources:
+        - browserdemo-src
+        - target/teq/browserdemo/compile/src_managed
+    dev:
+      command:
+        - npx
+        - vite
+        - "--config"
+        - vite.config.browserdemo.js
+      lockfile: package-lock.json
+      packageManager: npm
+    platform: js
+    scalaVersion: 3.8.4
+  frontend:
+    base: frontend
+    configurations:
+      compile:
+        classpath:
+          - {configuration: compile, project: shared}
+          - org.scala-lang:scala3-library_sjs1_3:3.8.4
+          - org.scala-js:scalajs-library_2.13:1.22.0
+          - org.typelevel:cats-core_sjs1_3:2.13.0
+          - com.lihaoyi:sourcecode_sjs1_3:0.4.2
+          - org.scala-js:scalajs-scalalib_2.13:3.8.4
+          - org.scala-lang:scala-library:3.8.4
+          - org.scala-js:scalajs-javalib:1.22.0
+          - org.typelevel:cats-kernel_sjs1_3:2.13.0
+          - org.scala-lang:scala3-library_3:3.8.4
+        flags:
+          ignoredScalacOptions:
+            - "-Wconf:any:s"
+            - "-scalajs"
+          kindProjector: false
+          maxInlines: 80
+          strictEquality: false
+          werror: false
+        generators: []
+        mainClasses:
+          - meridian.frontend.Main
+        resources:
+          - frontend/src/main/resources
+        sources:
+          - src/frontend
+      runtime:
+        classpath:
+          - {configuration: compile, project: frontend}
+          - {configuration: compile, project: shared}
+          - org.scala-lang:scala3-library_sjs1_3:3.8.4
+          - org.scala-js:scalajs-library_2.13:1.22.0
+          - org.typelevel:cats-core_sjs1_3:2.13.0
+          - com.lihaoyi:sourcecode_sjs1_3:0.4.2
+          - org.scala-js:scalajs-scalalib_2.13:3.8.4
+          - org.scala-lang:scala-library:3.8.4
+          - org.scala-js:scalajs-javalib:1.22.0
+          - org.typelevel:cats-kernel_sjs1_3:2.13.0
+          - org.scala-lang:scala3-library_3:3.8.4
+        resources: []
+        sources: []
+      test:
+        baseDirectory: .
+        classpath:
+          - {configuration: compile, project: shared}
+          - {configuration: compile, project: frontend}
+          - org.scala-lang:scala3-library_sjs1_3:3.8.4
+          - org.scala-js:scalajs-library_2.13:1.22.0
+          - org.scala-js:scalajs-test-bridge_2.13:1.22.0
+          - org.typelevel:cats-core_sjs1_3:2.13.0
+          - com.lihaoyi:sourcecode_sjs1_3:0.4.2
+          - org.scala-js:scalajs-scalalib_2.13:3.8.4
+          - org.scala-lang:scala-library:3.8.4
+          - org.scala-js:scalajs-javalib:1.22.0
+          - org.scala-js:scalajs-test-interface_2.13:1.22.0
+          - org.typelevel:cats-kernel_sjs1_3:2.13.0
+          - org.scala-lang:scala3-library_3:3.8.4
+        envVars: {}
+        exclude: []
+        flags:
+          ignoredScalacOptions:
+            - "-Wconf:any:s"
+            - "-scalajs"
+          kindProjector: false
+          maxInlines: 80
+          strictEquality: false
+          werror: false
+        fork: false
+        frameworks: []
+        javaOptions: []
+        resources:
+          - frontend/src/test/resources
+        sources:
+          - frontend/src/test/scala
+          - frontend/src/test/scala-3
+          - frontend/src/test/java
+    description:
+      cacheableState:
+        - meridian.web.css.Catalog
+      excludes: []
+      hot: false
+      keys: {}
+      macroState: ordered
+      modulePerFile:
+        - meridian.frontend.page
+        - meridian.frontend.component
+      out: frontend/target/teq/out
+      production:
+        excludes: []
+        sources: []
+      release: false
+      sources:
+        - src/shared
+        - src/frontend
+    dev:
+      command:
+        - npx
+        - vite
+        - "--config"
+        - vite.config.js
+      lockfile: package-lock.json
+      packageManager: npm
+    platform: js
+    scalaVersion: 3.8.4
+  jvmapp:
+    base: jvmapp
+    configurations:
+      compile:
+        classpath:
+          - {configuration: compile, project: jvmcore}
+          - org.scala-lang:scala3-library_3:3.8.4
+          - org.scala-lang:scala-library:3.8.4
+        flags:
+          ignoredScalacOptions:
+            - "-Wconf:any:s"
+          kindProjector: false
+          maxInlines: 80
+          strictEquality: false
+          werror: false
+        generators: []
+        mainClasses: []
+        resources:
+          - jvmapp/src/main/resources
+        sources:
+          - jvmapp/src/main/scala
+          - jvmapp/src/main/scala-3
+          - jvmapp/src/main/java
+      runtime:
+        classpath:
+          - {configuration: compile, project: jvmapp}
+          - {configuration: compile, project: jvmcore}
+          - org.scala-lang:scala3-library_3:3.8.4
+          - org.scala-lang:scala-library:3.8.4
+        resources: []
+        sources: []
+      test:
+        baseDirectory: .
+        classpath:
+          - {configuration: compile, project: jvmcore}
+          - {configuration: compile, project: jvmapp}
+          - org.scala-lang:scala3-library_3:3.8.4
+          - org.scalameta:munit_3:1.3.4
+          - org.scala-lang:scala-library:3.8.4
+          - org.scalameta:junit-interface:1.3.4
+          - org.scalameta:munit-diff_3:1.3.4
+          - junit:junit:4.13.2
+          - org.portable-scala:portable-scala-reflect_2.13:1.1.3
+          - org.scala-sbt:test-interface:1.0
+          - org.hamcrest:hamcrest-core:1.3
+        envVars: {}
+        exclude: []
+        flags:
+          ignoredScalacOptions:
+            - "-Wconf:any:s"
+          kindProjector: false
+          maxInlines: 80
+          strictEquality: false
+          werror: false
+        fork: false
+        frameworks:
+          - arguments: []
+            class: munit.Framework
+        javaOptions: []
+        resources:
+          - jvmapp/src/test/resources
+        sources:
+          - sjsapp-test-src
+    description:
+      cacheableState: []
+      excludes: []
+      hot: false
+      keys: {}
+      macroState: ordered
+      modulePerFile: []
+      out: jvmapp/target/teq/out
+      production:
+        excludes: []
+        sources: []
+      release: false
+      sources:
+        - sjscore-src
+        - jvmapp/src/main/scala
+        - jvmapp/src/main/scala-3
+        - jvmapp/src/main/java
+    platform: jvm
+    run:
+      aliases: {}
+      baseDirectory: .
+      envVars: {}
+      javaOptions: []
+    scalaVersion: 3.8.4
+  jvmcore:
+    base: jvmcore
+    configurations:
+      compile:
+        classpath:
+          - org.scala-lang:scala3-library_3:3.8.4
+          - org.scala-lang:scala-library:3.8.4
+        flags:
+          ignoredScalacOptions:
+            - "-Wconf:any:s"
+          kindProjector: false
+          maxInlines: 80
+          strictEquality: false
+          werror: false
+        generators: []
+        mainClasses: []
+        resources:
+          - jvmcore/src/main/resources
+        sources:
+          - sjscore-src
+      runtime:
+        classpath:
+          - {configuration: compile, project: jvmcore}
+          - org.scala-lang:scala3-library_3:3.8.4
+          - org.scala-lang:scala-library:3.8.4
+        resources: []
+        sources: []
+      test:
+        baseDirectory: .
+        classpath:
+          - {configuration: compile, project: jvmcore}
+          - org.scala-lang:scala3-library_3:3.8.4
+          - org.scala-lang:scala-library:3.8.4
+        envVars: {}
+        exclude: []
+        flags:
+          ignoredScalacOptions:
+            - "-Wconf:any:s"
+          kindProjector: false
+          maxInlines: 80
+          strictEquality: false
+          werror: false
+        fork: false
+        frameworks: []
+        javaOptions: []
+        resources:
+          - jvmcore/src/test/resources
+        sources:
+          - jvmcore/src/test/scala
+          - jvmcore/src/test/scala-3
+          - jvmcore/src/test/java
+    description:
+      cacheableState: []
+      excludes: []
+      hot: false
+      keys: {}
+      macroState: ordered
+      modulePerFile: []
+      out: jvmcore/target/teq/out
+      production:
+        excludes: []
+        sources: []
+      release: false
+      sources:
+        - sjscore-src
+    platform: jvm
+    run:
+      aliases: {}
+      baseDirectory: .
+      envVars: {}
+      javaOptions: []
+    scalaVersion: 3.8.4
+  mirrored:
+    base: mirrored
+    configurations:
+      compile:
+        classpath:
+          - org.scala-lang:scala3-library_sjs1_3:3.8.4
+          - org.scala-js:scalajs-library_2.13:1.22.0
+          - org.scala-js:scalajs-scalalib_2.13:3.8.4
+          - org.scala-lang:scala-library:3.8.4
+          - org.scala-js:scalajs-javalib:1.22.0
+          - org.scala-lang:scala3-library_3:3.8.4
+        flags:
+          ignoredScalacOptions:
+            - "-Wconf:any:s"
+            - "-scalajs"
+          kindProjector: false
+          maxInlines: 80
+          strictEquality: false
+          werror: false
+        generators:
+          - cwd: .
+            inputs:
+              - browserdemo-labels.txt
+            kind: command
+            outputs:
+              - target/teq/mirrored/compile/src_managed
+            run:
+              - node
+              - generate-labels.mjs
+              - browserdemo-labels.txt
+              - target/teq/mirrored/compile/src_managed
+        mainClasses:
+          - demo.run
+        resources:
+          - mirrored/src/main/resources
+        sources:
+          - browserdemo-src
+          - target/teq/mirrored/compile/src_managed
+      runtime:
+        classpath:
+          - {configuration: compile, project: mirrored}
+          - org.scala-lang:scala3-library_sjs1_3:3.8.4
+          - org.scala-js:scalajs-library_2.13:1.22.0
+          - org.scala-js:scalajs-scalalib_2.13:3.8.4
+          - org.scala-lang:scala-library:3.8.4
+          - org.scala-js:scalajs-javalib:1.22.0
+          - org.scala-lang:scala3-library_3:3.8.4
+        resources: []
+        sources: []
+      test:
+        baseDirectory: .
+        classpath:
+          - {configuration: compile, project: mirrored}
+          - org.scala-lang:scala3-library_sjs1_3:3.8.4
+          - org.scala-js:scalajs-library_2.13:1.22.0
+          - org.scala-js:scalajs-test-bridge_2.13:1.22.0
+          - org.scala-js:scalajs-scalalib_2.13:3.8.4
+          - org.scala-lang:scala-library:3.8.4
+          - org.scala-js:scalajs-javalib:1.22.0
+          - org.scala-js:scalajs-test-interface_2.13:1.22.0
+          - org.scala-lang:scala3-library_3:3.8.4
+        envVars: {}
+        exclude: []
+        flags:
+          ignoredScalacOptions:
+            - "-Wconf:any:s"
+            - "-scalajs"
+          kindProjector: false
+          maxInlines: 80
+          strictEquality: false
+          werror: false
+        fork: false
+        frameworks: []
+        javaOptions: []
+        resources:
+          - mirrored/src/test/resources
+        sources:
+          - mirrored/src/test/scala
+          - mirrored/src/test/scala-3
+          - mirrored/src/test/java
+    description:
+      cacheableState: []
+      excludes: []
+      hot: false
+      keys: {}
+      macroState: ordered
+      modulePerFile:
+        - demo.widgets
+      out: mirrored/target/teq/out
+      production:
+        excludes: []
+        sources: []
+      release: false
+      sources:
+        - browserdemo-src
+        - target/teq/mirrored/compile/src_managed
+    platform: js
+    scalaVersion: 3.8.4
+  shared:
+    base: shared
+    configurations:
+      compile:
+        classpath:
+          - org.scala-lang:scala3-library_sjs1_3:3.8.4
+          - org.scala-js:scalajs-library_2.13:1.22.0
+          - org.typelevel:cats-core_sjs1_3:2.13.0
+          - com.lihaoyi:sourcecode_sjs1_3:0.4.2
+          - org.scala-js:scalajs-scalalib_2.13:3.8.4
+          - org.scala-lang:scala-library:3.8.4
+          - org.scala-js:scalajs-javalib:1.22.0
+          - org.typelevel:cats-kernel_sjs1_3:2.13.0
+          - org.scala-lang:scala3-library_3:3.8.4
+        flags:
+          ignoredScalacOptions:
+            - "-Wconf:any:s"
+            - "-scalajs"
+          kindProjector: false
+          maxInlines: 80
+          strictEquality: false
+          werror: false
+        generators: []
+        mainClasses: []
+        resources:
+          - shared/src/main/resources
+        sources:
+          - src/shared
+      runtime:
+        classpath:
+          - {configuration: compile, project: shared}
+          - org.scala-lang:scala3-library_sjs1_3:3.8.4
+          - org.scala-js:scalajs-library_2.13:1.22.0
+          - org.typelevel:cats-core_sjs1_3:2.13.0
+          - com.lihaoyi:sourcecode_sjs1_3:0.4.2
+          - org.scala-js:scalajs-scalalib_2.13:3.8.4
+          - org.scala-lang:scala-library:3.8.4
+          - org.scala-js:scalajs-javalib:1.22.0
+          - org.typelevel:cats-kernel_sjs1_3:2.13.0
+          - org.scala-lang:scala3-library_3:3.8.4
+        resources: []
+        sources: []
+      test:
+        baseDirectory: .
+        classpath:
+          - {configuration: compile, project: shared}
+          - org.scala-lang:scala3-library_sjs1_3:3.8.4
+          - org.scala-js:scalajs-library_2.13:1.22.0
+          - org.scala-js:scalajs-test-bridge_2.13:1.22.0
+          - org.typelevel:cats-core_sjs1_3:2.13.0
+          - com.lihaoyi:sourcecode_sjs1_3:0.4.2
+          - org.scala-js:scalajs-scalalib_2.13:3.8.4
+          - org.scala-lang:scala-library:3.8.4
+          - org.scala-js:scalajs-javalib:1.22.0
+          - org.scala-js:scalajs-test-interface_2.13:1.22.0
+          - org.typelevel:cats-kernel_sjs1_3:2.13.0
+          - org.scala-lang:scala3-library_3:3.8.4
+        envVars: {}
+        exclude: []
+        flags:
+          ignoredScalacOptions:
+            - "-Wconf:any:s"
+            - "-scalajs"
+          kindProjector: false
+          maxInlines: 80
+          strictEquality: false
+          werror: false
+        fork: false
+        frameworks: []
+        javaOptions: []
+        resources:
+          - shared/src/test/resources
+        sources:
+          - shared/src/test/scala
+          - shared/src/test/scala-3
+          - shared/src/test/java
+    description:
+      cacheableState: []
+      excludes: []
+      hot: false
+      keys: {}
+      macroState: ordered
+      modulePerFile: []
+      out: shared/target/teq/out
+      production:
+        excludes: []
+        sources: []
+      release: false
+      sources:
+        - src/shared
+    platform: js
+    scalaVersion: 3.8.4
+  sjsapp:
+    base: sjsapp
+    configurations:
+      compile:
+        classpath:
+          - {configuration: compile, project: sjscore}
+          - org.scala-lang:scala3-library_sjs1_3:3.8.4
+          - org.scala-js:scalajs-library_2.13:1.22.0
+          - org.scala-js:scalajs-scalalib_2.13:3.8.4
+          - org.scala-lang:scala-library:3.8.4
+          - org.scala-js:scalajs-javalib:1.22.0
+          - org.scala-lang:scala3-library_3:3.8.4
+        flags:
+          ignoredScalacOptions:
+            - "-Wconf:any:s"
+            - "-scalajs"
+          kindProjector: false
+          maxInlines: 80
+          strictEquality: false
+          werror: false
+        generators: []
+        mainClasses: []
+        resources:
+          - sjsapp/src/main/resources
+        sources:
+          - sjsapp/src/main/scala
+          - sjsapp/src/main/scala-3
+          - sjsapp/src/main/java
+      runtime:
+        classpath:
+          - {configuration: compile, project: sjsapp}
+          - {configuration: compile, project: sjscore}
+          - org.scala-lang:scala3-library_sjs1_3:3.8.4
+          - org.scala-js:scalajs-library_2.13:1.22.0
+          - org.scala-js:scalajs-scalalib_2.13:3.8.4
+          - org.scala-lang:scala-library:3.8.4
+          - org.scala-js:scalajs-javalib:1.22.0
+          - org.scala-lang:scala3-library_3:3.8.4
+        resources: []
+        sources: []
+      test:
+        baseDirectory: .
+        classpath:
+          - {configuration: compile, project: sjscore}
+          - {configuration: compile, project: sjsapp}
+          - org.scala-lang:scala3-library_sjs1_3:3.8.4
+          - org.scala-js:scalajs-library_2.13:1.22.0
+          - org.scala-js:scalajs-test-bridge_2.13:1.22.0
+          - org.scalameta:munit_sjs1_3:1.3.4
+          - org.scala-js:scalajs-scalalib_2.13:3.8.4
+          - org.scala-lang:scala-library:3.8.4
+          - org.scala-js:scalajs-javalib:1.22.0
+          - org.scala-js:scalajs-test-interface_2.13:1.22.0
+          - org.scalameta:munit-diff_sjs1_3:1.3.4
+          - org.scala-js:scalajs-junit-test-runtime_2.13:1.22.0
+          - org.portable-scala:portable-scala-reflect_sjs1_2.13:1.1.3
+          - org.scala-lang:scala3-library_3:3.8.4
+        envVars: {}
+        exclude: []
+        flags:
+          ignoredScalacOptions:
+            - "-Wconf:any:s"
+            - "-scalajs"
+          kindProjector: false
+          maxInlines: 80
+          strictEquality: false
+          werror: false
+        fork: false
+        frameworks:
+          - arguments: []
+            class: com.novocode.junit.JUnitFramework
+          - arguments: []
+            class: munit.Framework
+        javaOptions: []
+        resources:
+          - sjsapp/src/test/resources
+        sources:
+          - sjsapp-test-src
+          - sjsapp-js-test-src
+    description:
+      cacheableState: []
+      excludes: []
+      hot: false
+      keys: {}
+      macroState: ordered
+      modulePerFile: []
+      out: sjsapp/target/teq/out
+      production:
+        excludes: []
+        sources: []
+      release: false
+      sources:
+        - sjscore-src
+        - sjscore-js-src
+        - sjsapp/src/main/scala
+        - sjsapp/src/main/scala-3
+        - sjsapp/src/main/java
+    platform: js
+    scalaVersion: 3.8.4
+  sjscore:
+    base: sjscore
+    configurations:
+      compile:
+        classpath:
+          - org.scala-lang:scala3-library_sjs1_3:3.8.4
+          - org.scala-js:scalajs-library_2.13:1.22.0
+          - org.scala-js:scalajs-scalalib_2.13:3.8.4
+          - org.scala-lang:scala-library:3.8.4
+          - org.scala-js:scalajs-javalib:1.22.0
+          - org.scala-lang:scala3-library_3:3.8.4
+        flags:
+          ignoredScalacOptions:
+            - "-Wconf:any:s"
+            - "-scalajs"
+          kindProjector: false
+          maxInlines: 80
+          strictEquality: false
+          werror: false
+        generators: []
+        mainClasses: []
+        resources:
+          - sjscore/src/main/resources
+        sources:
+          - sjscore-src
+          - sjscore-js-src
+      runtime:
+        classpath:
+          - {configuration: compile, project: sjscore}
+          - org.scala-lang:scala3-library_sjs1_3:3.8.4
+          - org.scala-js:scalajs-library_2.13:1.22.0
+          - org.scala-js:scalajs-scalalib_2.13:3.8.4
+          - org.scala-lang:scala-library:3.8.4
+          - org.scala-js:scalajs-javalib:1.22.0
+          - org.scala-lang:scala3-library_3:3.8.4
+        resources: []
+        sources: []
+      test:
+        baseDirectory: .
+        classpath:
+          - {configuration: compile, project: sjscore}
+          - org.scala-lang:scala3-library_sjs1_3:3.8.4
+          - org.scala-js:scalajs-library_2.13:1.22.0
+          - org.scala-js:scalajs-test-bridge_2.13:1.22.0
+          - org.scala-js:scalajs-scalalib_2.13:3.8.4
+          - org.scala-lang:scala-library:3.8.4
+          - org.scala-js:scalajs-javalib:1.22.0
+          - org.scala-js:scalajs-test-interface_2.13:1.22.0
+          - org.scala-lang:scala3-library_3:3.8.4
+        envVars: {}
+        exclude: []
+        flags:
+          ignoredScalacOptions:
+            - "-Wconf:any:s"
+            - "-scalajs"
+          kindProjector: false
+          maxInlines: 80
+          strictEquality: false
+          werror: false
+        fork: false
+        frameworks: []
+        javaOptions: []
+        resources:
+          - sjscore/src/test/resources
+        sources:
+          - sjscore/src/test/scala
+          - sjscore/src/test/scala-3
+          - sjscore/src/test/java
+    description:
+      cacheableState: []
+      excludes: []
+      hot: false
+      keys: {}
+      macroState: ordered
+      modulePerFile: []
+      out: sjscore/target/teq/out
+      production:
+        excludes: []
+        sources: []
+      release: false
+      sources:
+        - sjscore-src
+        - sjscore-js-src
+    platform: js
+    scalaVersion: 3.8.4
+repositories:
+  - id: maven-central
+    url: https://repo1.maven.org/maven2/

@@ -1,0 +1,7 @@
+// tests/tasty/fixtures/IfImpl.tasty (TASTy 28.8, 795 bytes)
+package fix.inlforms
+@SourceFile object IfImpl extends Object {
+  <synthetic> private def writeReplace(): AnyRef = ...
+  inline def twice(x: Int): Int = <body@116>
+  transparent inline def pick(inline b: Boolean): Any = <body@153>
+}

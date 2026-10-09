@@ -1,0 +1,33 @@
+----------- throw-catch-finally
+hi
+In Finally
+java.lang.RuntimeException: ouch
+
+----------- throw-catch
+java.lang.Exception
+in finally
+CAUGHT: java.lang.Exception
+
+----------- nested-finalies
+in finally 1
+in finally 2
+1
+
+----------- nested-finally-blocks
+in body
+in finally 1
+in finally 2
+2
+
+----------- throw-in-body
+in finally
+CAUGHT: java.lang.Exception: in body
+
+----------- throw-in-finally
+in body
+CAUGHT: java.lang.Exception: in finally
+
+----------- value-of-try
+finally with value
+5
+

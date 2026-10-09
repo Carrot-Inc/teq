@@ -1,0 +1,5 @@
+// tests/tasty/fixtures/UmMethod.tasty (TASTy 28.8, 631 bytes)
+package fix.unmod
+@JSType @SourceFile @native trait UmMethod extends Object, PropertyDescriptor {
+  val key: Predef.String = ...
+}

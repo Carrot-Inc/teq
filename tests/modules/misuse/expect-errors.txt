@@ -1,0 +1,7 @@
+tests/modules/misuse/b/Use.scala:8:15: error: type mismatch: found String, required Int
+      a.deposit("ten")
+                ^^^^^
+tests/modules/misuse/b/Use.scala:9:13: error: secret is private to Account
+      println(a.secret)
+              ^^^^^^^^
+2 errors found

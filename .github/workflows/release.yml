@@ -1,0 +1,1773 @@
+# A release of teq: built in the ship's image, qualified natively on the five platforms, and published as the
+# GitHub release v<version> (the binaries), sbt-teq on Maven Central when the release changes its version, then
+# pinned on master (docs/DEVELOPING.md, "Releases", has the order, the inputs, the secrets and the recovery). Every
+# shell step is a script of the tree that runs outside Actions too; every action is pinned by its commit; every job
+# checks out the release's commit, which the admission resolved, never a moving master.
+name: release
+run-name: "release ${{ inputs.version || github.event.head_commit.message }}${{ inputs.dry && ' (dry run)' || '' }}${{ inputs.resume_run && format(' (resuming run {0})', inputs.resume_run) || '' }}"
+on:
+  # The landing of the version bump, "Release <version>" (bench/release.sh), which changes Cargo.toml.
+  push:
+    branches: [master]
+    paths: [Cargo.toml]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "The version, <major>.<minor>.<patch>, whose commit 'Release <version>' master holds (a dry run: empty, or master's)"
+        type: string
+        required: false
+      dry:
+        description: "A dry run: master's version built, qualified and smoked through a scratch draft, nothing published"
+        type: boolean
+        default: false
+      resume_run:
+        description: "The id of the earlier run of this release whose binaries and record this one takes up"
+        type: string
+        required: false
+      train:
+        description: "Train the profiles afresh, taking up no earlier release's"
+        type: boolean
+        default: false
+      profiles:
+        description: "The release (its tag) whose profiles this one takes up (empty: the previous release's, v<its version>)"
+        type: string
+        required: false
+permissions: {}
+defaults:
+  run:
+    shell: bash
+# Every suite's diff shown whole in the job's log (tests/run.sh and tests/app.sh read it).
+env:
+  DIFF_LINES: "200"
+
+jobs:
+  # Whether the run releases, and what: bench/actions/admit.sh.
+  admit:
+    if: github.repository == 'Carrot-Inc/teq'
+    runs-on: ${{ vars.TEQ_RUNNER_LINUX_X64 || 'ubuntu-24.04' }}
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      actions: read
+    outputs:
+      go: ${{ steps.admit.outputs.go }}
+      version: ${{ steps.admit.outputs.version }}
+      commit: ${{ steps.admit.outputs.commit }}
+      tag: ${{ steps.admit.outputs.tag }}
+      dry: ${{ steps.admit.outputs.dry }}
+      mode: ${{ steps.admit.outputs.mode }}
+      source_run: ${{ steps.admit.outputs.source_run }}
+      image: ${{ steps.admit.outputs.image }}
+      image_arm64: ${{ steps.admit.outputs.image_arm64 }}
+      qualified: ${{ steps.admit.outputs.qualified }}
+      qualified_arm64: ${{ steps.admit.outputs.qualified_arm64 }}
+      train: ${{ steps.admit.outputs.train }}
+      profiles: ${{ steps.admit.outputs.profiles }}
+      plugin: ${{ steps.admit.outputs.plugin }}
+      plugin_publish: ${{ steps.admit.outputs.plugin_publish }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - id: admit
+        run: timeout 600 bench/actions/admit.sh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TEQ_VERSION: ${{ inputs.version }}
+          TEQ_DRY: ${{ inputs.dry }}
+          TEQ_RESUME_RUN: ${{ inputs.resume_run }}
+          TEQ_TRAIN: ${{ inputs.train }}
+          TEQ_PROFILES: ${{ inputs.profiles }}
+
+  # The profiles the builds are guided by (bench/actions/profiles.sh): the release before this one's, its asset
+  # teq-<version>-profiles.tar taken up, unless the dispatch asks for a training, the release or its asset is not
+  # there or not whole, its profiles are another compiler's, or the x86-64 profile's guided build of this tree finds
+  # it stale; then the release trains its own (train-arm, x86).
+  profiles:
+    needs: admit
+    if: needs.admit.outputs.go == 'true' && needs.admit.outputs.mode == 'fresh'
+    runs-on: ${{ vars.TEQ_RUNNER_LINUX_X64 || 'ubuntu-24.04' }}
+    timeout-minutes: 80
+    permissions:
+      contents: read
+      packages: read
+    container:
+      image: ${{ needs.admit.outputs.image }}
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ github.token }}
+    outputs:
+      train: ${{ steps.profiles.outputs.train }}
+      source: ${{ steps.profiles.outputs.source }}
+    env:
+      TEQ_SHIP_IMAGE: ${{ needs.admit.outputs.image }}
+      COURSIER_CACHE: /github/home/.cache/coursier/v1
+      TEQ_ZIG_CACHE: /github/home/.cache/zig
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.admit.outputs.commit }}
+          fetch-depth: 0
+          persist-credentials: false
+      - run: git config --global --add safe.directory '*'
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: /github/home/.cache/zig
+          key: zig-${{ runner.arch }}-${{ hashFiles('bench/zig.sh') }}-profiles
+      - run: timeout 300 bench/actions/toolchain.sh check
+      - id: profiles
+        run: timeout 3000 bench/actions/profiles.sh out/actions/carry out/actions/carry-profiles.tar
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TEQ_TRAIN: ${{ needs.admit.outputs.train }}
+          TEQ_PROFILES: ${{ needs.admit.outputs.profiles }}
+      - if: steps.profiles.outputs.train == 'false'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: carry-profiles
+          path: out/actions/carry-profiles.tar
+          if-no-files-found: error
+          retention-days: 7
+
+  # The builds, bench/ship.sh's steps in the images, each a job of its own that uploads its products (the binary with
+  # its manifest), each job bounded by its steps' own bounds and the setup. The aarch64 trainer and its training,
+  # natively on an arm64 runner in the arm64 image (the arm64 profile), when the release trains its profiles.
+  train-arm:
+    needs: [admit, profiles]
+    if: needs.profiles.outputs.train == 'true'
+    runs-on: ${{ vars.TEQ_RUNNER_LINUX_ARM64 || 'ubuntu-24.04-arm' }}
+    timeout-minutes: 190
+    permissions:
+      contents: read
+      packages: read
+    container:
+      image: ${{ needs.admit.outputs.image_arm64 }}
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ github.token }}
+    env:
+      TEQ_SHIP_IMAGE: ${{ needs.admit.outputs.image_arm64 }}
+      COURSIER_CACHE: /github/home/.cache/coursier/v1
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.admit.outputs.commit }}
+          fetch-depth: 0
+          persist-credentials: false
+      - run: git config --global --add safe.directory '*'
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: /github/home/.cache/coursier/v1
+          key: jars-linux-${{ hashFiles('tests/support/jars.sh') }}
+      - run: timeout 300 bench/actions/toolchain.sh check
+      - run: timeout 1200 bench/actions/jars.sh fetch
+      - run: bench/actions/step.sh cross-arm out/actions/carry out/actions/carry-train-arm.tar
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: carry-train-arm
+          path: out/actions/carry-train-arm.tar
+          if-no-files-found: error
+          retention-days: 7
+      - if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: logs-train-arm
+          path: |
+            out/ship/
+            target/ship-tree/target/cross/*.smoke
+            target/ship-tree/target/cross/*.suite
+            target/ship-tree/target/cross/*.log
+            target/ship-tree/out/tests*/*.actual
+            target/ship-tree/target/pgo/ship/*.txt
+          if-no-files-found: ignore
+          retention-days: 30
+
+  # The Linux x86-64 binary: the x86-64 trainer and its training when the release trains its profiles, the guided
+  # build and its suite (whose outputs and built jars the Linux aarch64 suite compares with and takes).
+  build-linux-x64:
+    needs: [admit, profiles]
+    if: needs.admit.outputs.go == 'true' && needs.admit.outputs.mode == 'fresh'
+    runs-on: ${{ vars.TEQ_RUNNER_LINUX_X64 || 'ubuntu-24.04' }}
+    timeout-minutes: 245
+    permissions:
+      contents: read
+      packages: read
+    container:
+      image: ${{ needs.admit.outputs.image }}
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ github.token }}
+    env:
+      TEQ_SHIP_IMAGE: ${{ needs.admit.outputs.image }}
+      COURSIER_CACHE: /github/home/.cache/coursier/v1
+      TEQ_ZIG_CACHE: /github/home/.cache/zig
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.admit.outputs.commit }}
+          fetch-depth: 0
+          persist-credentials: false
+      - run: git config --global --add safe.directory '*'
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: /github/home/.cache/coursier/v1
+          key: jars-linux-${{ hashFiles('tests/support/jars.sh') }}
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: /github/home/.cache/zig
+          key: zig-${{ runner.arch }}-${{ hashFiles('bench/zig.sh') }}-build-linux-x64
+      - if: needs.profiles.outputs.train != 'true'
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: carry-profiles
+          path: out/actions/in
+      - run: timeout 300 bench/actions/toolchain.sh check
+      - run: timeout 1200 bench/actions/jars.sh fetch
+      - if: needs.profiles.outputs.train == 'true'
+        run: bench/actions/step.sh pgo-gen,pgo-train,pgo-use out/actions/carry out/actions/carry-build-linux-x64.tar
+      - if: needs.profiles.outputs.train != 'true'
+        run: bench/actions/step.sh pgo-use out/actions/carry out/actions/carry-build-linux-x64.tar out/actions/in/carry-profiles.tar
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: carry-build-linux-x64
+          path: out/actions/carry-build-linux-x64.tar
+          if-no-files-found: error
+          retention-days: 7
+      - if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: logs-build-linux-x64
+          path: |
+            out/ship/
+            target/ship-tree/target/cross/*.smoke
+            target/ship-tree/target/cross/*.suite
+            target/ship-tree/target/cross/*.log
+            target/ship-tree/out/tests*/*.actual
+            target/ship-tree/target/pgo/ship/*.txt
+          if-no-files-found: ignore
+          retention-days: 30
+
+  # The identity reference of the Linux x86-64 binary and the jars the suites build, for the other platforms'
+  # qualifications, as soon as that binary exists.
+  reference:
+    needs: [admit, build-linux-x64]
+    if: needs.admit.outputs.mode == 'fresh'
+    runs-on: ${{ vars.TEQ_RUNNER_LINUX_X64 || 'ubuntu-24.04' }}
+    timeout-minutes: 185
+    permissions:
+      contents: read
+      packages: read
+    container:
+      image: ${{ needs.admit.outputs.image }}
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ github.token }}
+    env:
+      TEQ_SHIP_IMAGE: ${{ needs.admit.outputs.image }}
+      COURSIER_CACHE: /github/home/.cache/coursier/v1
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.admit.outputs.commit }}
+          fetch-depth: 0
+          persist-credentials: false
+      - run: git config --global --add safe.directory '*'
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: /github/home/.cache/coursier/v1
+          key: jars-linux-${{ hashFiles('tests/support/jars.sh') }}
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: carry-build-linux-x64
+          path: out/actions/in
+      - run: timeout 300 bench/actions/toolchain.sh check
+      - run: timeout 1200 bench/actions/jars.sh fetch
+      - run: |
+          mkdir -p out/actions/carry && timeout 300 tar -xf out/actions/in/carry-build-linux-x64.tar -C out/actions/carry
+          timeout 5400 tests/support/identity.sh --produce out/actions/carry/target/ship/teq out/actions/identity
+          timeout 600 tar -czf out/actions/identity.tgz -C out/actions identity
+          timeout 2100 bench/actions/jars.sh pack out/actions/fixtures.tgz
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: identity-reference
+          path: |
+            out/actions/identity.tgz
+            out/actions/fixtures.tgz
+          if-no-files-found: error
+          retention-days: 30
+
+  # The Windows binary, plain, and its smoke under wine, which its manifest keeps.
+  build-windows:
+    needs: [admit]
+    if: needs.admit.outputs.go == 'true' && needs.admit.outputs.mode == 'fresh'
+    runs-on: ${{ vars.TEQ_RUNNER_LINUX_X64 || 'ubuntu-24.04' }}
+    timeout-minutes: 115
+    permissions:
+      contents: read
+      packages: read
+    container:
+      image: ${{ needs.admit.outputs.image }}
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ github.token }}
+    env:
+      TEQ_SHIP_IMAGE: ${{ needs.admit.outputs.image }}
+      COURSIER_CACHE: /github/home/.cache/coursier/v1
+      TEQ_ZIG_CACHE: /github/home/.cache/zig
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.admit.outputs.commit }}
+          fetch-depth: 0
+          persist-credentials: false
+      - run: git config --global --add safe.directory '*'
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: /github/home/.cache/coursier/v1
+          key: jars-linux-${{ hashFiles('tests/support/jars.sh') }}
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: /github/home/.cache/zig
+          key: zig-${{ runner.arch }}-${{ hashFiles('bench/zig.sh') }}-build-windows
+      - run: timeout 300 bench/actions/toolchain.sh check
+      - run: timeout 1200 bench/actions/jars.sh fetch
+      - run: bench/actions/step.sh cross-windows out/actions/carry out/actions/carry-build-windows.tar
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: carry-build-windows
+          path: out/actions/carry-build-windows.tar
+          if-no-files-found: error
+          retention-days: 7
+      - if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: logs-build-windows
+          path: |
+            out/ship/
+            target/ship-tree/target/cross/*.smoke
+            target/ship-tree/target/cross/*.suite
+            target/ship-tree/target/cross/*.log
+            target/ship-tree/out/tests*/*.actual
+            target/ship-tree/target/pgo/ship/*.txt
+          if-no-files-found: ignore
+          retention-days: 30
+
+  # The guided builds from the profiles, all three on x86-64 (zig's cross links): Darwin arm64 and Linux aarch64 from
+  # the aarch64 trainer's, Darwin x86-64 from the x86-64 training's.
+  build-macos-arm64:
+    needs: [admit, profiles, train-arm]
+    if: >-
+      !cancelled() && needs.admit.outputs.mode == 'fresh' && needs.profiles.result == 'success' &&
+      (needs.train-arm.result == 'success' || (needs.train-arm.result == 'skipped' && needs.profiles.outputs.train == 'false'))
+    runs-on: ${{ vars.TEQ_RUNNER_LINUX_X64 || 'ubuntu-24.04' }}
+    timeout-minutes: 105
+    permissions:
+      contents: read
+      packages: read
+    container:
+      image: ${{ needs.admit.outputs.image }}
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ github.token }}
+    env:
+      TEQ_SHIP_IMAGE: ${{ needs.admit.outputs.image }}
+      COURSIER_CACHE: /github/home/.cache/coursier/v1
+      TEQ_ZIG_CACHE: /github/home/.cache/zig
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.admit.outputs.commit }}
+          fetch-depth: 0
+          persist-credentials: false
+      - run: git config --global --add safe.directory '*'
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: /github/home/.cache/zig
+          key: zig-${{ runner.arch }}-${{ hashFiles('bench/zig.sh') }}-build-macos-arm64
+      - if: needs.profiles.outputs.train == 'true'
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: carry-train-arm
+          path: out/actions/in
+      - if: needs.profiles.outputs.train != 'true'
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: carry-profiles
+          path: out/actions/in
+      - run: timeout 300 bench/actions/toolchain.sh check
+      - run: bench/actions/step.sh cross-use out/actions/carry out/actions/carry-build-macos-arm64.tar out/actions/in/*.tar
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: carry-build-macos-arm64
+          path: out/actions/carry-build-macos-arm64.tar
+          if-no-files-found: error
+          retention-days: 7
+      - if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: logs-build-macos-arm64
+          path: |
+            out/ship/
+            target/ship-tree/target/cross/*.smoke
+            target/ship-tree/target/cross/*.suite
+            target/ship-tree/target/cross/*.log
+            target/ship-tree/out/tests*/*.actual
+            target/ship-tree/target/pgo/ship/*.txt
+          if-no-files-found: ignore
+          retention-days: 30
+
+  build-macos-x64:
+    needs: [admit, profiles, build-linux-x64]
+    if: needs.admit.outputs.mode == 'fresh'
+    runs-on: ${{ vars.TEQ_RUNNER_LINUX_X64 || 'ubuntu-24.04' }}
+    timeout-minutes: 105
+    permissions:
+      contents: read
+      packages: read
+    container:
+      image: ${{ needs.admit.outputs.image }}
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ github.token }}
+    env:
+      TEQ_SHIP_IMAGE: ${{ needs.admit.outputs.image }}
+      COURSIER_CACHE: /github/home/.cache/coursier/v1
+      TEQ_ZIG_CACHE: /github/home/.cache/zig
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.admit.outputs.commit }}
+          fetch-depth: 0
+          persist-credentials: false
+      - run: git config --global --add safe.directory '*'
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: /github/home/.cache/zig
+          key: zig-${{ runner.arch }}-${{ hashFiles('bench/zig.sh') }}-build-macos-x64
+      - if: needs.profiles.outputs.train == 'true'
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: carry-build-linux-x64
+          path: out/actions/in
+      - if: needs.profiles.outputs.train != 'true'
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: carry-profiles
+          path: out/actions/in
+      - run: timeout 300 bench/actions/toolchain.sh check
+      - run: bench/actions/step.sh cross-intel out/actions/carry out/actions/carry-build-macos-x64.tar out/actions/in/*.tar
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: carry-build-macos-x64
+          path: out/actions/carry-build-macos-x64.tar
+          if-no-files-found: error
+          retention-days: 7
+      - if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: logs-build-macos-x64
+          path: |
+            out/ship/
+            target/ship-tree/target/cross/*.smoke
+            target/ship-tree/target/cross/*.suite
+            target/ship-tree/target/cross/*.log
+            target/ship-tree/out/tests*/*.actual
+            target/ship-tree/target/pgo/ship/*.txt
+          if-no-files-found: ignore
+          retention-days: 30
+
+  build-linux-arm64:
+    needs: [admit, profiles, train-arm]
+    if: >-
+      !cancelled() && needs.admit.outputs.mode == 'fresh' && needs.profiles.result == 'success' &&
+      (needs.train-arm.result == 'success' || (needs.train-arm.result == 'skipped' && needs.profiles.outputs.train == 'false'))
+    runs-on: ${{ vars.TEQ_RUNNER_LINUX_X64 || 'ubuntu-24.04' }}
+    timeout-minutes: 105
+    permissions:
+      contents: read
+      packages: read
+    container:
+      image: ${{ needs.admit.outputs.image }}
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ github.token }}
+    env:
+      TEQ_SHIP_IMAGE: ${{ needs.admit.outputs.image }}
+      COURSIER_CACHE: /github/home/.cache/coursier/v1
+      TEQ_ZIG_CACHE: /github/home/.cache/zig
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.admit.outputs.commit }}
+          fetch-depth: 0
+          persist-credentials: false
+      - run: git config --global --add safe.directory '*'
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: /github/home/.cache/zig
+          key: zig-${{ runner.arch }}-${{ hashFiles('bench/zig.sh') }}-build-linux-arm64
+      - if: needs.profiles.outputs.train == 'true'
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: carry-train-arm
+          path: out/actions/in
+      - if: needs.profiles.outputs.train != 'true'
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: carry-profiles
+          path: out/actions/in
+      - run: timeout 300 bench/actions/toolchain.sh check
+      - run: bench/actions/step.sh linux-arm-build out/actions/carry out/actions/carry-build-linux-arm64.tar out/actions/in/*.tar
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: carry-build-linux-arm64
+          path: out/actions/carry-build-linux-arm64.tar
+          if-no-files-found: error
+          retention-days: 7
+      - if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: logs-build-linux-arm64
+          path: |
+            out/ship/
+            target/ship-tree/target/cross/*.smoke
+            target/ship-tree/target/cross/*.suite
+            target/ship-tree/target/cross/*.log
+            target/ship-tree/out/tests*/*.actual
+            target/ship-tree/target/pgo/ship/*.txt
+          if-no-files-found: ignore
+          retention-days: 30
+
+  # The Linux aarch64 binary's suite natively on an arm64 runner, in the floor's container (Debian 10's arm64 image,
+  # its glibc package the floor's), its outputs against the x86-64 suite's: bench/cross-ship.sh linux-arm-suite, whose
+  # record the stage gives the binary's manifest. On the runner itself, which has docker: no image of ours.
+  suite-linux-arm64:
+    needs: [admit, build-linux-x64, build-linux-arm64]
+    if: "!cancelled() && needs.admit.outputs.mode == 'fresh' && needs.build-linux-x64.result == 'success' && needs.build-linux-arm64.result == 'success'"
+    runs-on: ${{ vars.TEQ_RUNNER_LINUX_ARM64 || 'ubuntu-24.04-arm' }}
+    timeout-minutes: 120
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.admit.outputs.commit }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/coursier/v1
+          key: jars-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('tests/support/jars.sh') }}
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: carry-build-linux-x64
+          path: out/actions/in
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: carry-build-linux-arm64
+          path: out/actions/in
+      - run: timeout 1200 bench/actions/jars.sh fetch
+      - run: bench/actions/step.sh linux-arm-suite out/actions/carry out/actions/carry-suite-linux-arm64.tar out/actions/in/carry-build-linux-x64.tar out/actions/in/carry-build-linux-arm64.tar
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: carry-suite-linux-arm64
+          path: out/actions/carry-suite-linux-arm64.tar
+          if-no-files-found: error
+          retention-days: 7
+      - if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: logs-suite-linux-arm64
+          path: |
+            out/ship/
+            target/ship-tree/target/cross/guided-linux-arm.suite
+            target/ship-tree/out/tests*/*.actual
+          if-no-files-found: ignore
+          retention-days: 30
+
+  # The five staged by one invocation from the builds' products, the trainings' corpora compared, the set checked, the
+  # profiles' asset written beside them; in parallel with the qualifications, which the draft waits for.
+  stage:
+    needs: [admit, build-linux-x64, build-windows, build-macos-arm64, build-macos-x64, build-linux-arm64, suite-linux-arm64]
+    if: >-
+      !cancelled() && needs.admit.outputs.mode == 'fresh' &&
+      needs.build-linux-x64.result == 'success' &&
+      needs.build-windows.result == 'success' &&
+      needs.build-macos-arm64.result == 'success' &&
+      needs.build-macos-x64.result == 'success' &&
+      needs.build-linux-arm64.result == 'success' &&
+      needs.suite-linux-arm64.result == 'success'
+    runs-on: ${{ vars.TEQ_RUNNER_LINUX_X64 || 'ubuntu-24.04' }}
+    timeout-minutes: 95
+    permissions:
+      contents: read
+      packages: read
+    container:
+      image: ${{ needs.admit.outputs.image }}
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ github.token }}
+    env:
+      TEQ_SHIP_IMAGE: ${{ needs.admit.outputs.image }}
+      COURSIER_CACHE: /github/home/.cache/coursier/v1
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.admit.outputs.commit }}
+          fetch-depth: 0
+          persist-credentials: false
+      - run: git config --global --add safe.directory '*'
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: /github/home/.cache/coursier/v1
+          key: jars-linux-${{ hashFiles('tests/support/jars.sh') }}
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: carry-*
+          path: out/actions/in
+          merge-multiple: true
+      - run: timeout 300 bench/actions/toolchain.sh check
+      - run: timeout 1200 bench/actions/jars.sh fetch
+      - run: bench/actions/step.sh stage out/actions/carry out/actions/staged.tar out/actions/in/*.tar
+      # The release's assets as the draft will hold them: the five or none (a dry run's held back among them).
+      - run: |
+          mkdir -p out/actions/staged && timeout 300 tar -xf out/actions/staged.tar -C out/actions/staged
+          timeout 600 bench/actions/release-step.sh assets out/actions/assets
+        env:
+          TEQ_VERSION: ${{ needs.admit.outputs.version }}
+          TEQ_COMMIT: ${{ needs.admit.outputs.commit }}
+          TEQ_DRY: ${{ needs.admit.outputs.dry }}
+          TEQ_RUN: ${{ github.run_id }}
+          TEQ_STAGED: out/actions/staged
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: staged
+          path: out/actions/staged.tar
+          if-no-files-found: error
+          retention-days: 90
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: release-assets
+          path: out/actions/assets/
+          if-no-files-found: error
+          retention-days: 90
+      - if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: logs-stage
+          path: |
+            out/ship/
+            target/ship-tree/target/cross/*.smoke
+            target/ship-tree/target/cross/*.suite
+            target/ship-tree/target/cross/*.log
+            target/ship-tree/out/tests*/*.actual
+            target/ship-tree/target/pgo/ship/*.txt
+          if-no-files-found: ignore
+          retention-days: 30
+
+  # Each binary run natively where it is for, as soon as its build made it: bench/actions/qualify.sh on the build's own
+  # products (the suite, the launchers, identity with the Linux x86-64 reference for the macOS and Linux aarch64 ones;
+  # on Windows tests/windows.sh). A failure fails the release before anything is published; the draft checks that
+  # the staged five are the bytes these ran.
+  qualify-linux-x64:
+    needs: [admit, build-linux-x64]
+    if: "!cancelled() && needs.admit.outputs.mode == 'fresh' && needs.build-linux-x64.result == 'success'"
+    runs-on: ${{ vars.TEQ_RUNNER_LINUX_X64 || 'ubuntu-24.04' }}
+    timeout-minutes: 190
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.admit.outputs.commit }}
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24.21.0
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/coursier/v1
+          key: jars-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('tests/support/jars.sh') }}
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: carry-build-linux-x64
+          path: out/actions
+      - run: |
+          mkdir -p out/actions/built && timeout 300 tar -xf out/actions/carry-build-linux-x64.tar -C out/actions/built
+          export COURSIER_CACHE=$HOME/.cache/coursier/v1
+          timeout 1200 bench/actions/jars.sh fetch
+          timeout 300 bench/actions/jars.sh restore out/actions/built/out/tests-jars.tgz
+          timeout 7200 bench/actions/qualify.sh linux-x86_64 out/actions/built
+      - if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: qualify-linux-x86_64
+          path: out/qualify/
+          if-no-files-found: ignore
+          retention-days: 30
+
+  qualify-linux-arm64:
+    needs: [admit, build-linux-arm64, reference]
+    if: "!cancelled() && needs.admit.outputs.mode == 'fresh' && needs.build-linux-arm64.result == 'success' && needs.reference.result == 'success'"
+    runs-on: ${{ vars.TEQ_RUNNER_LINUX_ARM64 || 'ubuntu-24.04-arm' }}
+    timeout-minutes: 190
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.admit.outputs.commit }}
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24.21.0
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/coursier/v1
+          key: jars-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('tests/support/jars.sh') }}
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: carry-build-linux-arm64
+          path: out/actions
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: identity-reference
+          path: out/actions
+      - run: |
+          mkdir -p out/actions/built && timeout 300 tar -xf out/actions/carry-build-linux-arm64.tar -C out/actions/built
+          export COURSIER_CACHE=$HOME/.cache/coursier/v1
+          timeout 1200 bench/actions/jars.sh fetch
+          timeout 300 bench/actions/jars.sh restore out/actions/fixtures.tgz
+          timeout 300 tar -xzf out/actions/identity.tgz -C out/actions
+          timeout 7200 bench/actions/qualify.sh linux-aarch_64 out/actions/built out/actions/identity
+      - if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: qualify-linux-aarch_64
+          path: out/qualify/
+          if-no-files-found: ignore
+          retention-days: 30
+
+  qualify-macos-arm64:
+    needs: [admit, build-macos-arm64, reference]
+    if: "!cancelled() && needs.admit.outputs.mode == 'fresh' && needs.build-macos-arm64.result == 'success' && needs.reference.result == 'success'"
+    runs-on: ${{ vars.TEQ_RUNNER_MACOS_ARM64 || 'macos-15' }}
+    timeout-minutes: 190
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.admit.outputs.commit }}
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24.21.0
+      - name: GNU coreutils (timeout)
+        run: |
+          command -v gtimeout > /dev/null || HOMEBREW_NO_AUTO_UPDATE=1 perl -e 'alarm 900; exec @ARGV' brew install coreutils
+          echo "$(brew --prefix coreutils)/libexec/gnubin" >> "$GITHUB_PATH"
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/coursier/v1
+          key: jars-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('tests/support/jars.sh') }}
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: carry-build-macos-arm64
+          path: out/actions
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: identity-reference
+          path: out/actions
+      - run: |
+          mkdir -p out/actions/built && timeout 300 tar -xf out/actions/carry-build-macos-arm64.tar -C out/actions/built
+          export COURSIER_CACHE=$HOME/.cache/coursier/v1
+          timeout 1200 bench/actions/jars.sh fetch
+          timeout 300 bench/actions/jars.sh restore out/actions/fixtures.tgz
+          timeout 300 tar -xzf out/actions/identity.tgz -C out/actions
+          timeout 7200 bench/actions/qualify.sh osx-aarch_64 out/actions/built out/actions/identity
+      - if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: qualify-osx-aarch_64
+          path: out/qualify/
+          if-no-files-found: ignore
+          retention-days: 30
+
+  qualify-macos-x64:
+    needs: [admit, build-macos-x64, reference]
+    if: "!cancelled() && needs.admit.outputs.mode == 'fresh' && needs.build-macos-x64.result == 'success' && needs.reference.result == 'success'"
+    runs-on: ${{ vars.TEQ_RUNNER_MACOS_X64 || 'macos-15-intel' }}
+    timeout-minutes: 190
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.admit.outputs.commit }}
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24.21.0
+      - name: GNU coreutils (timeout)
+        run: |
+          command -v gtimeout > /dev/null || HOMEBREW_NO_AUTO_UPDATE=1 perl -e 'alarm 900; exec @ARGV' brew install coreutils
+          echo "$(brew --prefix coreutils)/libexec/gnubin" >> "$GITHUB_PATH"
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/coursier/v1
+          key: jars-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('tests/support/jars.sh') }}
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: carry-build-macos-x64
+          path: out/actions
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: identity-reference
+          path: out/actions
+      - run: |
+          mkdir -p out/actions/built && timeout 300 tar -xf out/actions/carry-build-macos-x64.tar -C out/actions/built
+          export COURSIER_CACHE=$HOME/.cache/coursier/v1
+          timeout 1200 bench/actions/jars.sh fetch
+          timeout 300 bench/actions/jars.sh restore out/actions/fixtures.tgz
+          timeout 300 tar -xzf out/actions/identity.tgz -C out/actions
+          timeout 7200 bench/actions/qualify.sh osx-x86_64 out/actions/built out/actions/identity
+      - if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: qualify-osx-x86_64
+          path: out/qualify/
+          if-no-files-found: ignore
+          retention-days: 30
+
+  qualify-windows:
+    needs: [admit, build-windows]
+    if: "!cancelled() && needs.admit.outputs.mode == 'fresh' && needs.build-windows.result == 'success'"
+    runs-on: ${{ vars.TEQ_RUNNER_WINDOWS || 'windows-2025' }}
+    timeout-minutes: 190
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.admit.outputs.commit }}
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24.21.0
+      - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: temurin
+          java-version: 21
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: carry-build-windows
+          path: out/actions
+      - run: |
+          mkdir -p out/actions/built && timeout 300 tar -xf out/actions/carry-build-windows.tar -C out/actions/built
+          timeout 7200 bench/actions/qualify.sh windows-x86_64 out/actions/built
+      - if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: qualify-windows-x86_64
+          path: out/qualify/
+          if-no-files-found: ignore
+          retention-days: 30
+
+  # The publication, bench/ship-publish.sh's steps (bench/actions/release-step.sh) in jobs of their own, its record
+  # (out/ship/<version>/record.json) and the plugin's Central record (out/central/) carried between them as artifacts
+  # and kept before each step that writes outside the job, in steps that always run. A job run again, or a run resuming
+  # this one, takes up the record and the staged binaries of the run that built them. The draft of the GitHub release,
+  # its assets read back; a dry run's, the scratch draft of 0.0.0-dry.
+  draft:
+    needs: [admit, profiles, stage, qualify-linux-x64, qualify-linux-arm64, qualify-macos-arm64, qualify-macos-x64, qualify-windows]
+    if: >-
+      !cancelled() && needs.admit.outputs.go == 'true' &&
+      ((needs.admit.outputs.mode == 'fresh' && needs.stage.result == 'success' &&
+      needs.qualify-linux-x64.result == 'success' &&
+      needs.qualify-linux-arm64.result == 'success' &&
+      needs.qualify-macos-arm64.result == 'success' &&
+      needs.qualify-macos-x64.result == 'success' &&
+      needs.qualify-windows.result == 'success') ||
+      needs.admit.outputs.mode == 'resume')
+    runs-on: ${{ vars.TEQ_RUNNER_LINUX_X64 || 'ubuntu-24.04' }}
+    timeout-minutes: 290
+    environment: release
+    concurrency:
+      group: release-publication
+      cancel-in-progress: false
+    permissions:
+      contents: write
+      packages: read
+      actions: read
+    container:
+      image: ${{ needs.admit.outputs.image }}
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ github.token }}
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TEQ_VERSION: ${{ needs.admit.outputs.version }}
+      TEQ_COMMIT: ${{ needs.admit.outputs.commit }}
+      TEQ_DRY: ${{ needs.admit.outputs.dry }}
+      TEQ_RUN: ${{ needs.admit.outputs.source_run }}
+      TEQ_MODE: ${{ needs.admit.outputs.mode }}
+      TEQ_IMAGE: ${{ needs.admit.outputs.image }}
+      TEQ_IMAGE_ARM64: ${{ needs.admit.outputs.image_arm64 }}
+      TEQ_PROFILES_SOURCE: ${{ needs.profiles.outputs.source || 'trained' }}
+      TEQ_QUALIFIED: out/actions/qualified
+      TEQ_PLUGIN: ${{ needs.admit.outputs.plugin }}
+      TEQ_PLUGIN_PUBLISH: ${{ needs.admit.outputs.plugin_publish }}
+      TEQ_STAGED: out/actions/staged
+      COURSIER_CACHE: /github/home/.cache/coursier/v1
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.admit.outputs.commit }}
+          fetch-depth: 0
+          persist-credentials: false
+      - run: git config --global --add safe.directory '*'
+      - if: needs.admit.outputs.mode == 'fresh'
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: staged
+          path: out/actions
+      - if: needs.admit.outputs.mode == 'resume'
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: staged
+          path: out/actions
+          run-id: ${{ needs.admit.outputs.source_run }}
+          github-token: ${{ github.token }}
+      # A resume keeps in its own run what it took up, so that a resume of it finds the same binaries and records.
+      - if: needs.admit.outputs.mode == 'resume'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: staged
+          path: out/actions/staged.tar
+          if-no-files-found: error
+          overwrite: true
+          retention-days: 90
+      - id: record
+        continue-on-error: true
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: ship-record
+          path: out/ship
+      - if: steps.record.outcome != 'success' && needs.admit.outputs.mode == 'resume'
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: ship-record
+          path: out/ship
+          run-id: ${{ needs.admit.outputs.source_run }}
+          github-token: ${{ github.token }}
+      - id: central-record
+        continue-on-error: true
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: central-record
+          path: out/central
+      - if: steps.central-record.outcome != 'success' && needs.admit.outputs.mode == 'resume'
+        continue-on-error: true
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: central-record
+          path: out/central
+          run-id: ${{ needs.admit.outputs.source_run }}
+          github-token: ${{ github.token }}
+      - if: needs.admit.outputs.mode == 'fresh'
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: qualify-*
+          path: out/actions/qualified
+          merge-multiple: true
+      - run: mkdir -p out/actions/staged && timeout 300 tar -xf out/actions/staged.tar -C out/actions/staged
+      - name: The Central credentials
+        if: needs.admit.outputs.plugin_publish == 'true'
+        run: timeout 120 bench/actions/credentials.sh write "$RUNNER_TEMP/teq-credentials" >> "$GITHUB_ENV"
+        env:
+          CENTRAL_USER: ${{ secrets.CENTRAL_USER }}
+          CENTRAL_PASSWORD: ${{ secrets.CENTRAL_PASSWORD }}
+          GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+      - run: timeout 15600 bench/actions/release-step.sh draft
+      # The record, whatever the draft ended in (and on a resume, what it took up).
+      - if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: ship-record
+          path: out/ship/*/record.json
+          if-no-files-found: ignore
+          overwrite: true
+          retention-days: 90
+      - if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: central-record
+          path: out/central/
+          if-no-files-found: ignore
+          overwrite: true
+          retention-days: 90
+      - if: always()
+        run: timeout 120 bench/actions/credentials.sh remove "$RUNNER_TEMP/teq-credentials"
+
+  # The consumer's smoke before anything irreversible, against a local mirror of the release's files, for a release
+  # that publishes no plugin (one that does smokes its plugin's staging in the central job), and for a dry run.
+  smoke-local:
+    needs: [admit, draft]
+    if: "!cancelled() && needs.draft.result == 'success' && needs.admit.outputs.plugin_publish != 'true'"
+    runs-on: ${{ vars.TEQ_RUNNER_LINUX_X64 || 'ubuntu-24.04' }}
+    timeout-minutes: 95
+    permissions:
+      contents: read
+      packages: read
+      actions: read
+    container:
+      image: ${{ needs.admit.outputs.image }}
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ github.token }}
+    env:
+      TEQ_VERSION: ${{ needs.admit.outputs.version }}
+      TEQ_COMMIT: ${{ needs.admit.outputs.commit }}
+      TEQ_DRY: ${{ needs.admit.outputs.dry }}
+      TEQ_RUN: ${{ needs.admit.outputs.source_run }}
+      TEQ_MODE: ${{ needs.admit.outputs.mode }}
+      TEQ_IMAGE: ${{ needs.admit.outputs.image }}
+      TEQ_PLUGIN: ${{ needs.admit.outputs.plugin }}
+      TEQ_PLUGIN_PUBLISH: ${{ needs.admit.outputs.plugin_publish }}
+      TEQ_STAGED: out/actions/staged
+      COURSIER_CACHE: /github/home/.cache/coursier/v1
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.admit.outputs.commit }}
+          fetch-depth: 0
+          persist-credentials: false
+      - run: git config --global --add safe.directory '*'
+      - if: needs.admit.outputs.mode == 'fresh'
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: staged
+          path: out/actions
+      - if: needs.admit.outputs.mode == 'resume'
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: staged
+          path: out/actions
+          run-id: ${{ needs.admit.outputs.source_run }}
+          github-token: ${{ github.token }}
+      - if: needs.admit.outputs.dry != 'true'
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: ship-record
+          path: out/ship
+      - run: mkdir -p out/actions/staged && timeout 300 tar -xf out/actions/staged.tar -C out/actions/staged
+      - run: timeout 4200 bench/actions/release-step.sh smoke
+      - if: always() && needs.admit.outputs.dry != 'true'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: ship-record
+          path: out/ship/*/record.json
+          if-no-files-found: ignore
+          overwrite: true
+          retention-days: 90
+
+  # The plugin to Central when this release publishes it: its staging made once and the consumer's smoke against it
+  # and the release's files, the upload's intent, the upload; the staging and the intent persisted before the upload,
+  # the deployment after it. The credentials from the `release` environment's secrets into files of the runner's
+  # (bench/actions/credentials.sh), removed at the end.
+  central:
+    needs: [admit, draft]
+    if: "!cancelled() && needs.draft.result == 'success' && needs.admit.outputs.plugin_publish == 'true'"
+    runs-on: ${{ vars.TEQ_RUNNER_LINUX_X64 || 'ubuntu-24.04' }}
+    timeout-minutes: 175
+    environment: release
+    concurrency:
+      group: release-publication
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      packages: read
+      actions: read
+    container:
+      image: ${{ needs.admit.outputs.image }}
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ github.token }}
+    env:
+      TEQ_VERSION: ${{ needs.admit.outputs.version }}
+      TEQ_COMMIT: ${{ needs.admit.outputs.commit }}
+      TEQ_DRY: ${{ needs.admit.outputs.dry }}
+      TEQ_RUN: ${{ needs.admit.outputs.source_run }}
+      TEQ_MODE: ${{ needs.admit.outputs.mode }}
+      TEQ_IMAGE: ${{ needs.admit.outputs.image }}
+      TEQ_PLUGIN: ${{ needs.admit.outputs.plugin }}
+      TEQ_PLUGIN_PUBLISH: ${{ needs.admit.outputs.plugin_publish }}
+      TEQ_STAGED: out/actions/staged
+      COURSIER_CACHE: /github/home/.cache/coursier/v1
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.admit.outputs.commit }}
+          fetch-depth: 0
+          persist-credentials: false
+      - run: git config --global --add safe.directory '*'
+      - if: needs.admit.outputs.mode == 'fresh'
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: staged
+          path: out/actions
+      - if: needs.admit.outputs.mode == 'resume'
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: staged
+          path: out/actions
+          run-id: ${{ needs.admit.outputs.source_run }}
+          github-token: ${{ github.token }}
+      - id: record
+        continue-on-error: true
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: ship-record
+          path: out/ship
+      - if: steps.record.outcome != 'success' && needs.admit.outputs.mode == 'resume'
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: ship-record
+          path: out/ship
+          run-id: ${{ needs.admit.outputs.source_run }}
+          github-token: ${{ github.token }}
+      - id: central-record
+        continue-on-error: true
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: central-record
+          path: out/central
+      - if: steps.central-record.outcome != 'success' && needs.admit.outputs.mode == 'resume'
+        continue-on-error: true
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: central-record
+          path: out/central
+          run-id: ${{ needs.admit.outputs.source_run }}
+          github-token: ${{ github.token }}
+      - run: mkdir -p out/actions/staged && timeout 300 tar -xf out/actions/staged.tar -C out/actions/staged
+      - name: The Central credentials
+        run: timeout 120 bench/actions/credentials.sh write "$RUNNER_TEMP/teq-credentials" >> "$GITHUB_ENV"
+        env:
+          CENTRAL_USER: ${{ secrets.CENTRAL_USER }}
+          CENTRAL_PASSWORD: ${{ secrets.CENTRAL_PASSWORD }}
+          GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+      - run: timeout 6300 bench/actions/release-step.sh publish stage,smoke
+      # The signed staging, before anything goes to the Portal.
+      - if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: ship-record
+          path: out/ship/*/record.json
+          if-no-files-found: ignore
+          overwrite: true
+          retention-days: 90
+      - if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: central-record
+          path: out/central/
+          if-no-files-found: ignore
+          overwrite: true
+          retention-days: 90
+      - run: timeout 300 bench/actions/release-step.sh publish upload-begin
+      # The upload's intent, before the upload.
+      - if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: ship-record
+          path: out/ship/*/record.json
+          if-no-files-found: ignore
+          overwrite: true
+          retention-days: 90
+      - if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: central-record
+          path: out/central/
+          if-no-files-found: ignore
+          overwrite: true
+          retention-days: 90
+      - run: timeout 2100 bench/actions/release-step.sh publish upload
+      # The deployment, before its promotion (the next job).
+      - if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: ship-record
+          path: out/ship/*/record.json
+          if-no-files-found: ignore
+          overwrite: true
+          retention-days: 90
+      - if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: central-record
+          path: out/central/
+          if-no-files-found: ignore
+          overwrite: true
+          retention-days: 90
+      - if: always()
+        run: timeout 120 bench/actions/credentials.sh remove "$RUNNER_TEMP/teq-credentials"
+
+  # The recorded deployment promoted, once the draft verb found the draft of its default compiler whole on GitHub:
+  # validated, promoted, published.
+  central-promote:
+    needs: [admit, central]
+    if: "!cancelled() && needs.central.result == 'success'"
+    runs-on: ${{ vars.TEQ_RUNNER_LINUX_X64 || 'ubuntu-24.04' }}
+    timeout-minutes: 335
+    environment: release
+    concurrency:
+      group: release-publication
+      cancel-in-progress: false
+    permissions:
+      contents: write
+      packages: read
+      actions: read
+    container:
+      image: ${{ needs.admit.outputs.image }}
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ github.token }}
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TEQ_VERSION: ${{ needs.admit.outputs.version }}
+      TEQ_COMMIT: ${{ needs.admit.outputs.commit }}
+      TEQ_DRY: ${{ needs.admit.outputs.dry }}
+      TEQ_RUN: ${{ needs.admit.outputs.source_run }}
+      TEQ_MODE: ${{ needs.admit.outputs.mode }}
+      TEQ_IMAGE: ${{ needs.admit.outputs.image }}
+      TEQ_PLUGIN: ${{ needs.admit.outputs.plugin }}
+      TEQ_PLUGIN_PUBLISH: ${{ needs.admit.outputs.plugin_publish }}
+      TEQ_STAGED: out/actions/staged
+      COURSIER_CACHE: /github/home/.cache/coursier/v1
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.admit.outputs.commit }}
+          fetch-depth: 0
+          persist-credentials: false
+      - run: git config --global --add safe.directory '*'
+      - if: needs.admit.outputs.mode == 'fresh'
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: staged
+          path: out/actions
+      - if: needs.admit.outputs.mode == 'resume'
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: staged
+          path: out/actions
+          run-id: ${{ needs.admit.outputs.source_run }}
+          github-token: ${{ github.token }}
+      - id: record
+        continue-on-error: true
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: ship-record
+          path: out/ship
+      - if: steps.record.outcome != 'success' && needs.admit.outputs.mode == 'resume'
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: ship-record
+          path: out/ship
+          run-id: ${{ needs.admit.outputs.source_run }}
+          github-token: ${{ github.token }}
+      - id: central-record
+        continue-on-error: true
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: central-record
+          path: out/central
+      - if: steps.central-record.outcome != 'success' && needs.admit.outputs.mode == 'resume'
+        continue-on-error: true
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: central-record
+          path: out/central
+          run-id: ${{ needs.admit.outputs.source_run }}
+          github-token: ${{ github.token }}
+      - run: mkdir -p out/actions/staged && timeout 300 tar -xf out/actions/staged.tar -C out/actions/staged
+      - name: The Central credentials
+        run: timeout 120 bench/actions/credentials.sh write "$RUNNER_TEMP/teq-credentials" >> "$GITHUB_ENV"
+        env:
+          CENTRAL_USER: ${{ secrets.CENTRAL_USER }}
+          CENTRAL_PASSWORD: ${{ secrets.CENTRAL_PASSWORD }}
+          GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+      - run: timeout 18300 bench/actions/release-step.sh publish promote
+      # What the promotion recorded, whatever it ended in.
+      - if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: ship-record
+          path: out/ship/*/record.json
+          if-no-files-found: ignore
+          overwrite: true
+          retention-days: 90
+      - if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: central-record
+          path: out/central/
+          if-no-files-found: ignore
+          overwrite: true
+          retention-days: 90
+      - if: always()
+        run: timeout 120 bench/actions/credentials.sh remove "$RUNNER_TEMP/teq-credentials"
+
+  # The published plugin read back from Central (integrations/sbt/publish.sh resuming its deployment).
+  central-readback:
+    needs: [admit, central-promote]
+    if: "!cancelled() && needs.central-promote.result == 'success'"
+    runs-on: ${{ vars.TEQ_RUNNER_LINUX_X64 || 'ubuntu-24.04' }}
+    timeout-minutes: 325
+    environment: release
+    concurrency:
+      group: release-publication
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      packages: read
+      actions: read
+    container:
+      image: ${{ needs.admit.outputs.image }}
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ github.token }}
+    env:
+      TEQ_VERSION: ${{ needs.admit.outputs.version }}
+      TEQ_COMMIT: ${{ needs.admit.outputs.commit }}
+      TEQ_DRY: ${{ needs.admit.outputs.dry }}
+      TEQ_RUN: ${{ needs.admit.outputs.source_run }}
+      TEQ_MODE: ${{ needs.admit.outputs.mode }}
+      TEQ_IMAGE: ${{ needs.admit.outputs.image }}
+      TEQ_PLUGIN: ${{ needs.admit.outputs.plugin }}
+      TEQ_PLUGIN_PUBLISH: ${{ needs.admit.outputs.plugin_publish }}
+      TEQ_STAGED: out/actions/staged
+      COURSIER_CACHE: /github/home/.cache/coursier/v1
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.admit.outputs.commit }}
+          fetch-depth: 0
+          persist-credentials: false
+      - run: git config --global --add safe.directory '*'
+      - if: needs.admit.outputs.mode == 'fresh'
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: staged
+          path: out/actions
+      - if: needs.admit.outputs.mode == 'resume'
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: staged
+          path: out/actions
+          run-id: ${{ needs.admit.outputs.source_run }}
+          github-token: ${{ github.token }}
+      - id: record
+        continue-on-error: true
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: ship-record
+          path: out/ship
+      - if: steps.record.outcome != 'success' && needs.admit.outputs.mode == 'resume'
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: ship-record
+          path: out/ship
+          run-id: ${{ needs.admit.outputs.source_run }}
+          github-token: ${{ github.token }}
+      - id: central-record
+        continue-on-error: true
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: central-record
+          path: out/central
+      - if: steps.central-record.outcome != 'success' && needs.admit.outputs.mode == 'resume'
+        continue-on-error: true
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: central-record
+          path: out/central
+          run-id: ${{ needs.admit.outputs.source_run }}
+          github-token: ${{ github.token }}
+      - run: mkdir -p out/actions/staged && timeout 300 tar -xf out/actions/staged.tar -C out/actions/staged
+      - name: The Central credentials
+        run: timeout 120 bench/actions/credentials.sh write "$RUNNER_TEMP/teq-credentials" >> "$GITHUB_ENV"
+        env:
+          CENTRAL_USER: ${{ secrets.CENTRAL_USER }}
+          CENTRAL_PASSWORD: ${{ secrets.CENTRAL_PASSWORD }}
+          GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+      - run: timeout 17700 bench/actions/release-step.sh publish read-back
+      # What the read-back recorded.
+      - if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: ship-record
+          path: out/ship/*/record.json
+          if-no-files-found: ignore
+          overwrite: true
+          retention-days: 90
+      - if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: central-record
+          path: out/central/
+          if-no-files-found: ignore
+          overwrite: true
+          retention-days: 90
+      - if: always()
+        run: timeout 120 bench/actions/credentials.sh remove "$RUNNER_TEMP/teq-credentials"
+
+  # The draft published, every asset read back from its public URL.
+  publish:
+    needs: [admit, smoke-local, central-readback]
+    if: >-
+      !cancelled() && needs.admit.outputs.dry != 'true' &&
+      ((needs.smoke-local.result == 'success' && needs.central-readback.result == 'skipped') ||
+      (needs.smoke-local.result == 'skipped' && needs.central-readback.result == 'success'))
+    runs-on: ${{ vars.TEQ_RUNNER_LINUX_X64 || 'ubuntu-24.04' }}
+    timeout-minutes: 341
+    environment: release
+    concurrency:
+      group: release-publication
+      cancel-in-progress: false
+    permissions:
+      contents: write
+      packages: read
+      actions: read
+    container:
+      image: ${{ needs.admit.outputs.image }}
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ github.token }}
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TEQ_VERSION: ${{ needs.admit.outputs.version }}
+      TEQ_COMMIT: ${{ needs.admit.outputs.commit }}
+      TEQ_DRY: ${{ needs.admit.outputs.dry }}
+      TEQ_RUN: ${{ needs.admit.outputs.source_run }}
+      TEQ_MODE: ${{ needs.admit.outputs.mode }}
+      TEQ_IMAGE: ${{ needs.admit.outputs.image }}
+      TEQ_PLUGIN: ${{ needs.admit.outputs.plugin }}
+      TEQ_PLUGIN_PUBLISH: ${{ needs.admit.outputs.plugin_publish }}
+      TEQ_STAGED: out/actions/staged
+      COURSIER_CACHE: /github/home/.cache/coursier/v1
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.admit.outputs.commit }}
+          fetch-depth: 0
+          persist-credentials: false
+      - run: git config --global --add safe.directory '*'
+      - if: needs.admit.outputs.mode == 'fresh'
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: staged
+          path: out/actions
+      - if: needs.admit.outputs.mode == 'resume'
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: staged
+          path: out/actions
+          run-id: ${{ needs.admit.outputs.source_run }}
+          github-token: ${{ github.token }}
+      - id: record
+        continue-on-error: true
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: ship-record
+          path: out/ship
+      - if: steps.record.outcome != 'success' && needs.admit.outputs.mode == 'resume'
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: ship-record
+          path: out/ship
+          run-id: ${{ needs.admit.outputs.source_run }}
+          github-token: ${{ github.token }}
+      - run: mkdir -p out/actions/staged && timeout 300 tar -xf out/actions/staged.tar -C out/actions/staged
+      - run: timeout 18890 bench/actions/release-step.sh publish publish
+      - if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: ship-record
+          path: out/ship/*/record.json
+          if-no-files-found: ignore
+          overwrite: true
+          retention-days: 90
+
+  # The public release as a new build meets it, from a fresh runner.
+  smoke-public:
+    needs: [admit, publish]
+    if: "!cancelled() && needs.publish.result == 'success'"
+    runs-on: ${{ vars.TEQ_RUNNER_LINUX_X64 || 'ubuntu-24.04' }}
+    timeout-minutes: 90
+    permissions:
+      contents: read
+      packages: read
+      actions: read
+    container:
+      image: ${{ needs.admit.outputs.image }}
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ github.token }}
+    env:
+      TEQ_VERSION: ${{ needs.admit.outputs.version }}
+      TEQ_COMMIT: ${{ needs.admit.outputs.commit }}
+      TEQ_DRY: ${{ needs.admit.outputs.dry }}
+      TEQ_RUN: ${{ needs.admit.outputs.source_run }}
+      TEQ_MODE: ${{ needs.admit.outputs.mode }}
+      TEQ_IMAGE: ${{ needs.admit.outputs.image }}
+      TEQ_PLUGIN: ${{ needs.admit.outputs.plugin }}
+      TEQ_PLUGIN_PUBLISH: ${{ needs.admit.outputs.plugin_publish }}
+      TEQ_STAGED: out/actions/staged
+      COURSIER_CACHE: /github/home/.cache/coursier/v1
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.admit.outputs.commit }}
+          fetch-depth: 0
+          persist-credentials: false
+      - run: git config --global --add safe.directory '*'
+      - if: needs.admit.outputs.mode == 'fresh'
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: staged
+          path: out/actions
+      - if: needs.admit.outputs.mode == 'resume'
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: staged
+          path: out/actions
+          run-id: ${{ needs.admit.outputs.source_run }}
+          github-token: ${{ github.token }}
+      - id: record
+        continue-on-error: true
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: ship-record
+          path: out/ship
+      - if: steps.record.outcome != 'success' && needs.admit.outputs.mode == 'resume'
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: ship-record
+          path: out/ship
+          run-id: ${{ needs.admit.outputs.source_run }}
+          github-token: ${{ github.token }}
+      - run: mkdir -p out/actions/staged && timeout 300 tar -xf out/actions/staged.tar -C out/actions/staged
+      - run: timeout 3900 bench/actions/release-step.sh publish smoke-public
+      - if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: ship-record
+          path: out/ship/*/record.json
+          if-no-files-found: ignore
+          overwrite: true
+          retention-days: 90
+
+  # The pin on the release's commit (bench/release.sh --pin --commit), committed by the Actions bot and pushed onto
+  # master without force.
+  pin:
+    needs: [admit, smoke-public]
+    if: "!cancelled() && needs.smoke-public.result == 'success'"
+    runs-on: ${{ vars.TEQ_RUNNER_LINUX_X64 || 'ubuntu-24.04' }}
+    timeout-minutes: 110
+    environment: release
+    concurrency:
+      group: release-publication
+      cancel-in-progress: false
+    permissions:
+      contents: write
+      packages: read
+      actions: read
+    container:
+      image: ${{ needs.admit.outputs.image }}
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ github.token }}
+    outputs:
+      commit: ${{ steps.pin.outputs.commit }}
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TEQ_VERSION: ${{ needs.admit.outputs.version }}
+      TEQ_COMMIT: ${{ needs.admit.outputs.commit }}
+      TEQ_DRY: ${{ needs.admit.outputs.dry }}
+      TEQ_RUN: ${{ needs.admit.outputs.source_run }}
+      TEQ_MODE: ${{ needs.admit.outputs.mode }}
+      TEQ_IMAGE: ${{ needs.admit.outputs.image }}
+      TEQ_PLUGIN: ${{ needs.admit.outputs.plugin }}
+      TEQ_PLUGIN_PUBLISH: ${{ needs.admit.outputs.plugin_publish }}
+      TEQ_STAGED: out/actions/staged
+      COURSIER_CACHE: /github/home/.cache/coursier/v1
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.admit.outputs.commit }}
+          fetch-depth: 0
+          persist-credentials: false
+      - run: git config --global --add safe.directory '*'
+      - id: record
+        continue-on-error: true
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: ship-record
+          path: out/ship
+      - if: steps.record.outcome != 'success' && needs.admit.outputs.mode == 'resume'
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: ship-record
+          path: out/ship
+          run-id: ${{ needs.admit.outputs.source_run }}
+          github-token: ${{ github.token }}
+      - id: pin
+        run: timeout 5400 bench/actions/release-step.sh pin
+      - if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: ship-record
+          path: out/ship/*/record.json
+          if-no-files-found: ignore
+          overwrite: true
+          retention-days: 90
+
+  # The site of the pinned commit, when the environment holds its deploy's secrets.
+  site:
+    needs: [admit, pin]
+    if: "!cancelled() && needs.pin.result == 'success'"
+    runs-on: ${{ vars.TEQ_RUNNER_LINUX_X64 || 'ubuntu-24.04' }}
+    timeout-minutes: 70
+    environment: release
+    permissions:
+      contents: read
+      actions: read
+    env:
+      TEQ_VERSION: ${{ needs.admit.outputs.version }}
+      TEQ_COMMIT: ${{ needs.admit.outputs.commit }}
+      TEQ_DRY: ${{ needs.admit.outputs.dry }}
+      TEQ_RUN: ${{ needs.admit.outputs.source_run }}
+      TEQ_MODE: ${{ needs.admit.outputs.mode }}
+      TEQ_IMAGE: ${{ needs.admit.outputs.image }}
+      TEQ_PLUGIN: ${{ needs.admit.outputs.plugin }}
+      TEQ_PLUGIN_PUBLISH: ${{ needs.admit.outputs.plugin_publish }}
+      TEQ_STAGED: out/actions/staged
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.pin.outputs.commit }}
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24.21.0
+      - id: record
+        continue-on-error: true
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: ship-record
+          path: out/ship
+      - if: steps.record.outcome != 'success' && needs.admit.outputs.mode == 'resume'
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: ship-record
+          path: out/ship
+          run-id: ${{ needs.admit.outputs.source_run }}
+          github-token: ${{ github.token }}
+      - run: timeout 2800 bench/actions/release-step.sh site
+        env:
+          NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
+          NETLIFY_SITE_ID: ${{ secrets.NETLIFY_SITE_ID }}
+      - if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: ship-record
+          path: out/ship/*/record.json
+          if-no-files-found: ignore
+          overwrite: true
+          retention-days: 90
+
+  # After a failure: what stands and what the next run must do (bench/actions/release-step.sh conclude), the draft
+  # abandoned when nothing irreversible was done and the failing step did not abandon it.
+  conclude:
+    needs: [admit, profiles, train-arm, build-linux-x64, reference, build-windows, build-macos-arm64, build-macos-x64, build-linux-arm64,
+      suite-linux-arm64, stage, qualify-linux-x64, qualify-linux-arm64, qualify-macos-arm64, qualify-macos-x64, qualify-windows, draft, smoke-local, central, central-promote, central-readback, publish, smoke-public, pin, site]
+    if: "failure() && needs.admit.outputs.go == 'true'"
+    runs-on: ${{ vars.TEQ_RUNNER_LINUX_X64 || 'ubuntu-24.04' }}
+    timeout-minutes: 50
+    environment: release
+    concurrency:
+      group: release-publication
+      cancel-in-progress: false
+    permissions:
+      contents: write
+      actions: read
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TEQ_VERSION: ${{ needs.admit.outputs.version }}
+      TEQ_COMMIT: ${{ needs.admit.outputs.commit }}
+      TEQ_DRY: ${{ needs.admit.outputs.dry }}
+      TEQ_RUN: ${{ needs.admit.outputs.source_run }}
+      TEQ_MODE: ${{ needs.admit.outputs.mode }}
+      TEQ_IMAGE: ${{ needs.admit.outputs.image }}
+      TEQ_PLUGIN: ${{ needs.admit.outputs.plugin }}
+      TEQ_PLUGIN_PUBLISH: ${{ needs.admit.outputs.plugin_publish }}
+      TEQ_STAGED: out/actions/staged
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.admit.outputs.commit }}
+          fetch-depth: 0
+          persist-credentials: false
+      - id: record
+        continue-on-error: true
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: ship-record
+          path: out/ship
+      - if: steps.record.outcome != 'success' && needs.admit.outputs.mode == 'resume'
+        continue-on-error: true
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: ship-record
+          path: out/ship
+          run-id: ${{ needs.admit.outputs.source_run }}
+          github-token: ${{ github.token }}
+      - id: central-record
+        if: needs.admit.outputs.plugin_publish == 'true'
+        continue-on-error: true
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: central-record
+          path: out/central
+      - if: needs.admit.outputs.plugin_publish == 'true' && steps.central-record.outcome != 'success' && needs.admit.outputs.mode == 'resume'
+        continue-on-error: true
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: central-record
+          path: out/central
+          run-id: ${{ needs.admit.outputs.source_run }}
+          github-token: ${{ github.token }}
+      - name: The Central credentials
+        if: needs.admit.outputs.plugin_publish == 'true'
+        continue-on-error: true
+        run: timeout 120 bench/actions/credentials.sh write "$RUNNER_TEMP/teq-credentials" >> "$GITHUB_ENV"
+        env:
+          CENTRAL_USER: ${{ secrets.CENTRAL_USER }}
+          CENTRAL_PASSWORD: ${{ secrets.CENTRAL_PASSWORD }}
+          GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+      - run: timeout 1500 bench/actions/release-step.sh conclude
+      - if: always()
+        run: timeout 120 bench/actions/credentials.sh remove "$RUNNER_TEMP/teq-credentials"
+      - if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: ship-record
+          path: out/ship/*/record.json
+          if-no-files-found: ignore
+          overwrite: true
+          retention-days: 90

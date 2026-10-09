@@ -1,0 +1,305 @@
+/* teq.build: the README's own text on warm stone, the logo's vermilion a shade darker where it is text, one light
+   theme with dark code blocks. */
+:root {
+  --bg: #fbfaf8; --panel: #f3f1ee; --ink: #1c1917; --muted: #6b6560; --rule: #e2ddd7;
+  --accent: #c63d26; --accent-ink: #b3361f; --scalac: #938b83; --teq: #0a7d62; --code-bg: #17171a; --code-ink: #ebebee; --code-rule: #2e2e34;
+  --code-inline: rgb(28 25 23 / 0.07);
+  --display: "Schibsted Grotesk", "IBM Plex Sans", system-ui, sans-serif;
+  --sans: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  color-scheme: light;
+}
+
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; scroll-padding-top: 24px; }
+body {
+  margin: 0; background: var(--bg); color: var(--ink);
+  font-family: var(--sans); font-size: 16px; line-height: 1.6;
+  padding-block: 0 48px; padding-inline: 16px;
+}
+a { color: inherit; text-decoration-color: var(--accent); text-underline-offset: 3px; }
+a:hover { color: var(--accent-ink); }
+button { font: inherit; cursor: pointer; }
+:where(a, button, summary, [tabindex]):focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; border-radius: 3px; }
+main:focus { outline: none; }
+.wrap { max-width: 1100px; margin-inline: auto; }
+h1, h2, h3, h4 { font-family: var(--display); letter-spacing: -0.01em; text-wrap: balance; margin: 0; line-height: 1.2; }
+h1 { font-size: 30px; font-weight: 600; margin-block: 0 16px; }
+h2 { font-size: 24px; font-weight: 600; margin-block: 0 14px; }
+h3 { font-size: 18px; font-weight: 600; margin-block: 26px 8px; }
+h4 { font-size: 16px; font-weight: 600; margin-block: 20px 6px; }
+p { margin: 0 0 14px; }
+code, pre, kbd { font-family: var(--mono); }
+code { font-size: 0.92em; }
+:not(pre) > code { background: var(--code-inline); padding: 0.1em 0.3em; border-radius: 4px; -webkit-box-decoration-break: clone; box-decoration-break: clone; }
+pre {
+  background: var(--code-bg); color: var(--code-ink); border: 1px solid var(--code-rule); border-radius: 6px;
+  padding: 14px 16px; margin: 0 0 16px; overflow-x: auto; font-size: 13.5px; line-height: 1.55;
+}
+pre code { font-size: inherit; }
+/* Shiki's blocks keep the page's code background. */
+pre.astro-code { background: var(--code-bg) !important; }
+.dim { color: var(--muted); }
+.eyebrow { font-family: var(--mono); font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); margin-bottom: 8px; }
+.eyebrow a { text-decoration: none; }
+.eyebrow code { text-transform: none; letter-spacing: 0; }
+ul, ol { padding-left: 1.3em; margin: 0 0 14px; }
+li { margin-bottom: 6px; }
+li::marker { color: var(--accent); }
+hr { border: 0; border-top: 1px solid var(--rule); margin-block: 28px; }
+blockquote { margin: 0 0 14px; padding-left: 14px; border-left: 3px solid var(--rule); color: var(--muted); }
+img { max-width: 100%; height: auto; }
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; }
+.skip { position: absolute; z-index: 10; top: 12px; left: 16px; padding: 10px 16px; background: var(--bg); border: 1px solid var(--rule); border-radius: 4px; transform: translateY(-180%); }
+.skip:focus { transform: none; }
+
+/* A code block captioned with its file name (stage.py lifts the name from the block's first comment), and the copy
+   button the page adds to every block: in the caption bar, or in the corner of a block without one. */
+figure.code { margin: 0 0 16px; border: 1px solid var(--code-rule); border-radius: 6px; overflow: hidden; background: var(--code-bg); }
+figure.code figcaption {
+  display: flex; justify-content: space-between; align-items: center; gap: 12px; min-height: 38px;
+  padding: 4px 8px 4px 16px; border-bottom: 1px solid var(--code-rule); font-family: var(--mono); font-size: 12px; color: #babac3;
+}
+figure.code pre { border: 0; border-radius: 0; margin: 0; }
+.code-wrap { position: relative; margin: 0 0 16px; }
+.code-wrap pre { margin: 0; }
+.code-wrap .copy { position: absolute; top: 8px; right: 8px; opacity: 0; transition: opacity 0.15s ease; }
+.code-wrap:hover .copy, .code-wrap:focus-within .copy { opacity: 1; }
+@media (hover: none) { .code-wrap .copy { opacity: 1; } }
+.copy { min-width: 54px; padding: 3px 10px; font-family: var(--sans); font-size: 12px; line-height: 1.5; background: #252529; border: 1px solid #42424a; color: var(--code-ink); border-radius: 4px; }
+.copy:hover { background: #35353b; }
+.copy:focus-visible { outline-color: #f59b88; outline-offset: 1px; }
+
+header.top {
+  display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap;
+  min-height: 76px; padding-block: 18px 14px; border-bottom: 1px solid var(--rule);
+}
+header.top .brand { display: inline-flex; }
+header.top .brand img { height: 34px; width: auto; display: block; }
+nav { display: flex; gap: 24px; flex-wrap: wrap; font-size: 14px; }
+nav a { text-decoration: none; color: var(--muted); padding-block: 8px; }
+nav a:hover { color: var(--accent-ink); }
+
+/* The rendered Markdown. */
+.prose { max-width: 72ch; }
+.prose h2 { font-size: 22px; margin-block: 36px 12px; }
+.prose h2:first-child, .prose h1 + h2 { margin-top: 10px; }
+.prose table { border-collapse: collapse; width: 100%; font-size: 14.5px; margin-bottom: 16px; }
+.prose th, .prose td { text-align: left; padding: 8px 12px 8px 0; border-bottom: 1px solid var(--rule); vertical-align: top; }
+.prose th { font-weight: 600; font-size: 13px; color: var(--muted); }
+.prose td:not(:first-child), .prose th:not(:first-child) { font-variant-numeric: tabular-nums; }
+.tablewrap { overflow-x: auto; }
+.prose pre { max-width: 100%; }
+
+/* The front page: the hero and the strip under it, then full-width bands, each a README section or a few. */
+body.home { overflow-x: clip; }
+body.home .band { margin-inline: calc(50% - 50vw); padding-inline: calc(50vw - 50%); }
+body.home .band.alt { background: var(--panel); }
+body.home .band > .inner { padding-block: 56px; }
+body.home .band:has(> .about) { border-top: 1px solid var(--rule); }
+body.home section > h2 { font-size: 26px; margin-bottom: 16px; }
+
+.hero { text-align: center; padding-block: 56px 36px; }
+.hero .eyebrow { font-size: 11px; letter-spacing: 0.11em; margin-bottom: 14px; }
+.hero h1 { font-size: clamp(40px, 5.2vw, 68px); font-weight: 600; line-height: 1.04; letter-spacing: -0.045em; margin: 0 auto 22px; }
+.hero h1 span { display: block; color: var(--accent); }
+.hero .lead { max-width: 600px; margin-inline: auto; color: var(--muted); font-size: 18px; line-height: 1.55; text-wrap: pretty; }
+.hero .lead p { margin: 0; }
+.cta { display: flex; justify-content: center; gap: 12px; flex-wrap: wrap; margin-top: 26px; }
+.button {
+  display: inline-flex; align-items: center; justify-content: center; min-height: 46px; padding: 10px 20px;
+  border: 1px solid var(--accent); border-radius: 5px; background: var(--accent); color: #fff;
+  font-family: var(--display); font-size: 15px; font-weight: 600; text-decoration: none;
+}
+.button:hover { color: #fff; background: var(--accent-ink); border-color: var(--accent-ink); }
+.button.ghost { background: transparent; color: var(--ink); border-color: var(--rule); }
+.button.ghost:hover { border-color: var(--muted); color: var(--ink); }
+.release { display: flex; justify-content: center; align-items: center; flex-wrap: wrap; gap: 10px; margin: 16px 0 0; color: var(--muted); font-size: 12px; }
+.release .badge { display: inline-flex; align-items: center; gap: 7px; }
+.release .badge::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
+.strip { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 30px; padding: 25px 0 30px; border-top: 1px solid var(--rule); }
+.strip article { min-width: 0; }
+.strip h2 { font-size: 15px; letter-spacing: -0.01em; margin: 0 0 6px; }
+.strip p { color: var(--muted); font-size: 13px; line-height: 1.6; margin: 0; }
+@media (max-width: 760px) {
+  .strip { grid-template-columns: minmax(0, 1fr); gap: 18px; padding-block: 24px; }
+  .strip article { display: grid; grid-template-columns: 155px minmax(0, 1fr); gap: 16px; }
+  .strip h2 { margin: 0; line-height: 1.5; }
+}
+
+/* A section's heading with its first paragraph beside it. */
+.section-heading { display: flex; justify-content: space-between; align-items: end; gap: 24px; margin-bottom: 28px; }
+body.home .section-heading h2 { font-size: clamp(26px, 3vw, 34px); letter-spacing: -0.025em; margin: 0; }
+.section-heading .aside { margin: 0; color: var(--muted); font-size: 14px; max-width: 340px; text-align: right; }
+.section-heading .aside p { margin: 0; }
+
+/* Cards: the inputs of the speed table, the ways to use teq. */
+.cards { display: grid; gap: 24px; }
+.cards.three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.cards.two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.card { min-width: 0; padding: 24px; background: var(--bg); border: 1px solid var(--rule); border-radius: 6px; }
+
+/* Compilation speed: a card per input, the three times as bars on the card's scale, the ratio by teq's; the cards
+   share their rows, so the bars line up whatever their titles' length. */
+.cards.three { grid-template-rows: auto auto auto; }
+.bench { display: grid; grid-template-rows: subgrid; grid-row: span 3; row-gap: 0; }
+.bench h3 { font-size: 18px; line-height: 1.3; margin: 0 0 5px; }
+.bench .kind { color: var(--muted); font-size: 12px; margin: 0 0 24px; }
+.bench .kind code { font-size: 0.95em; }
+.measures { display: grid; gap: 14px; }
+.measure .label { display: flex; justify-content: space-between; gap: 8px; margin-bottom: 6px; color: var(--muted); font-size: 12px; }
+.measure .label > span:last-child { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.measure .track { box-sizing: border-box; height: 11px; background: var(--panel); border: 1px solid var(--scalac); border-radius: 3px; overflow: hidden; }
+.measure .fill { display: block; height: 100%; min-width: 3px; max-width: 100%; background: var(--scalac); }
+.measure.teq .track { border-color: var(--teq); }
+.measure.teq .fill { background: var(--teq); }
+.measure.teq .label { font-weight: 600; color: var(--teq); }
+.bench .faster { margin: 22px 0 0; font-size: 13.5px; color: var(--ink); }
+.notes { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: start; gap: 12px 32px; margin-top: 20px; font-size: 12px; color: var(--muted); max-width: none; }
+.notes p { flex: 1 1 420px; max-width: 660px; margin: 0; }
+.notes p:has(> a:only-child) { flex: 0 0 auto; margin-left: auto; white-space: nowrap; }
+.notes p:has(> a:only-child) a::after { content: " ↗" / ""; }
+
+/* The ways to use teq: links to the cards under the heading, then a card per way, its title, its first paragraph
+   and the rest. */
+.jump { display: flex; flex-wrap: wrap; gap: 8px 24px; margin: -8px 0 24px; font-size: 13px; }
+.jump a { padding-block: 6px; color: inherit; text-decoration: underline; text-decoration-color: var(--rule); }
+.jump a:hover { text-decoration-color: var(--accent); }
+.way {
+  --way-rule: #d5cec4;
+  display: flex; flex-direction: column; padding: 28px; background: #f0ede8;
+  border: 1px solid var(--way-rule); border-top: 3px solid var(--accent); border-radius: 8px; box-shadow: 0 2px 6px rgb(28 25 23 / 0.04);
+}
+.way h3 { font-size: 24px; letter-spacing: -0.02em; margin: 0 0 18px; padding-bottom: 18px; border-bottom: 1px solid var(--way-rule); }
+.way .lead { font-size: 15px; margin: 0 0 14px; }
+.way .prose { max-width: none; font-size: 14px; color: var(--muted); margin-bottom: 16px; }
+.way .prose p { margin-bottom: 12px; }
+.way .prose h4 { font-size: 14px; font-weight: 500; color: var(--ink); margin: 0 0 10px; }
+/* The editor steps' marks (src/icons, from Simple Icons and Devicon): Zed's after its label, a row of other
+   editors' after the other, drawn as masks in the muted ink. */
+.way .prose h4#open-your-project-in-zed::after, .way .prose h4#or-connect-another-editor::after {
+  content: ""; display: inline-block; vertical-align: -3px; margin-left: 10px; height: 16px; background: var(--muted);
+  -webkit-mask: var(--mark) no-repeat center / contain; mask: var(--mark) no-repeat center / contain;
+}
+.way .prose h4#open-your-project-in-zed::after { --mark: url(../icons/zed.svg); width: 16px; }
+.way .prose h4#or-connect-another-editor::after { --mark: url(../icons/editors.svg); width: 136px; }
+.way .prose ul { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 20px; margin: 0 0 22px; padding: 0 0 20px; list-style: none; border-bottom: 1px solid var(--way-rule); font-size: 13px; }
+.way .prose li { display: flex; align-items: baseline; gap: 8px; margin: 0; }
+.way .prose li::before { content: "·"; color: var(--accent); font-weight: 600; }
+/* A list of links is a row of buttons: the downloads. */
+.way .prose ul:has(> li > a) { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 12px; padding: 0; border: 0; font-size: 13px; }
+.way .prose ul:has(> li > a) li::before { content: none; }
+.way .prose ul:has(> li > a) a { display: inline-flex; padding: 9px 12px; background: var(--bg); border: 1px solid var(--way-rule); border-radius: 4px; color: var(--ink); text-decoration: none; }
+.way .prose ul:has(> li > a) a:hover { border-color: var(--accent); }
+.way .prose > :last-child { margin-bottom: 0; }
+.way > .text-link { align-self: stretch; margin-top: auto; padding-top: 16px; border-top: 1px solid var(--way-rule); }
+
+/* Status beside the ways, and the two about-the-project sections side by side. */
+.status { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.65fr); gap: 64px; border-top: 1px solid var(--rule); margin-top: 32px; padding-top: 28px; }
+.status > div { min-width: 0; }
+body.home .status h2 { font-size: 20px; margin: 0; }
+.status h3 { font-size: 18px; margin: 0 0 10px; }
+.status h3.badge { display: inline-flex; align-items: center; gap: 7px; }
+.status h3.badge::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
+.status p { font-size: 14px; color: var(--muted); margin: 0 0 12px; }
+.status .prose { max-width: none; }
+.status .prose > :last-child { margin-bottom: 0; }
+.status .prose ul { display: inline-flex; flex-wrap: wrap; list-style: none; gap: 7px; padding: 0; margin: 0 7px 0 0; vertical-align: middle; }
+.status .prose li { font-family: var(--mono); font-size: 11px; line-height: 1.6; padding: 4px 8px; margin: 0; background: var(--panel); border: 1px solid var(--rule); border-radius: 3px; }
+.status .prose ul + p { display: inline; }
+.text-link { font-size: 14px; }
+.text-link::after { content: " ↗" / ""; }
+body.home .band > .inner.about { padding-block: 40px; }
+.about { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 64px; }
+.about section { min-width: 0; }
+body.home .about h2 { font-size: 20px; margin-bottom: 14px; }
+.about p, .about .prose { max-width: none; font-size: 14px; color: var(--muted); }
+.about .prose > :last-child { margin-bottom: 0; }
+.about details { margin-top: 16px; font-size: 13px; }
+.about summary { cursor: pointer; text-decoration: underline; text-decoration-color: var(--rule); text-underline-offset: 4px; padding-block: 4px; }
+.about details[open] summary { margin-bottom: 14px; }
+.about details p { font-size: 13px; }
+
+/* Documentation. */
+.docs-index { padding-block: 40px; max-width: 72ch; }
+.doclist { list-style: none; padding: 0; margin: 20px 0 0; display: grid; gap: 14px; }
+.doclist li { padding-bottom: 14px; border-bottom: 1px solid var(--rule); }
+.doclist li a { font-family: var(--display); font-weight: 600; font-size: 17px; text-decoration: none; }
+.doclist li a:hover { text-decoration: underline; }
+.doclist .desc { color: var(--muted); font-size: 14.5px; }
+.doc-layout { display: grid; grid-template-columns: 230px minmax(0, 1fr); gap: 48px; padding-block: 32px; align-items: start; }
+.side { position: sticky; top: 16px; max-height: calc(100vh - 32px); overflow-y: auto; font-size: 13.5px; padding-right: 8px; }
+.side .eyebrow { margin-top: 18px; }
+.side .eyebrow:first-child { margin-top: 0; }
+.docnav, .toc { list-style: none; padding: 0; margin: 0; }
+.docnav li, .toc li { margin: 0; }
+.docnav a, .toc a { display: block; padding: 4px 0; text-decoration: none; color: var(--muted); }
+.docnav a:hover, .toc a:hover { color: var(--accent-ink); }
+.docnav li.here a { color: var(--ink); font-weight: 500; border-left: 2px solid var(--accent); padding-left: 8px; margin-left: -10px; }
+.toc a { font-size: 13px; }
+article.prose { max-width: 76ch; }
+article.prose h1 { margin-top: 2px; }
+
+/* The footer: the license, and the links. */
+footer { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 18px; padding-block: 24px 36px; border-top: 1px solid var(--rule); color: var(--muted); font-size: 12px; }
+body.home footer { border-top: 0; }
+footer p { margin: 0; }
+footer a { color: inherit; }
+.footer-links { display: flex; flex-wrap: wrap; gap: 16px; }
+
+@media (max-width: 1000px) {
+  .cards { gap: 14px; }
+  .card { padding: 20px 16px; }
+  .way { padding: 24px; }
+  .status, .about { gap: 32px; }
+}
+@media (max-width: 900px) {
+  .doc-layout { grid-template-columns: 1fr; gap: 24px; }
+  .side { position: static; max-height: none; overflow: visible; }
+  .toc { display: none; }
+  body.home .band > .inner { padding-block: 40px; }
+  .hero h1 { font-size: clamp(37px, 7vw, 52px); }
+  .section-heading { display: block; margin-bottom: 24px; }
+  .section-heading .aside { text-align: left; margin-top: 12px; max-width: 470px; }
+  .cards.three, .cards.two, .status, .about { grid-template-columns: minmax(0, 1fr); }
+  .status, .about { gap: 20px; }
+  .about { gap: 32px; }
+  /* A speed card with room beside its figure: the bars to the right of it. */
+  .cards.three { grid-template-rows: none; }
+  .bench { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); grid-template-rows: auto auto; grid-row: auto; column-gap: 24px; align-items: center; padding: 22px; }
+  .bench .faster { grid-column: 2; margin-top: 14px; }
+  .bench .kind { margin-bottom: 0; }
+}
+@media (max-width: 520px) {
+  .hero { padding-top: 36px; }
+  .hero .eyebrow { font-size: 10px; }
+  .hero h1 { font-size: clamp(35px, 9vw, 46px); }
+  .strip article { grid-template-columns: minmax(0, 1fr); gap: 3px; }
+  .strip h2 { font-size: 14px; }
+  .strip p { font-size: 12px; }
+  .hero .lead { font-size: 15px; }
+  .cta { gap: 8px; margin-top: 22px; }
+  .button { padding-inline: 15px; font-size: 14px; }
+  .bench { display: block; padding: 22px; }
+  .bench .kind { margin-bottom: 18px; }
+  .notes p:has(> a:only-child) { margin-left: 0; }
+  .way { padding: 20px; }
+  .way h3 { font-size: 22px; }
+  .way .prose ul:not(:has(> li > a)) { grid-template-columns: minmax(0, 1fr); gap: 6px; }
+  pre { padding: 12px; font-size: 12.5px; }
+  footer { display: block; }
+  .footer-links { margin-top: 12px; }
+}
+@media (prefers-reduced-motion: no-preference) {
+  html { scroll-behavior: smooth; }
+  .button, .copy { transition: background-color 0.15s ease, border-color 0.15s ease; }
+}
+
+/* Navigating between pages: the lockup stays in place in the header while the pages cross-fade (cross-document view
+   transitions; a browser without them just loads the next page). */
+@media (prefers-reduced-motion: no-preference) {
+  @view-transition { navigation: auto; }
+  header.top .brand .lockup { view-transition-name: lockup; }
+  ::view-transition-group(lockup) { animation-duration: 0.4s; animation-timing-function: cubic-bezier(0.2, 0, 0, 1); }
+  ::view-transition-old(root), ::view-transition-new(root) { animation-duration: 0.25s; }
+}

@@ -1,0 +1,3 @@
+10:5 not-partial
+14:5 not-partial
+17:7 exhaustive

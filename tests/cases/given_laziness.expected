@@ -1,0 +1,27 @@
+main
+O body start
+TI(val)
+O body end
+val
+TI(simple)
+true
+computing
+TI(computed)
+computed
+computed
+true
+TI(g)
+fromGiven = g
+g
+Alias start
+TI(other)
+Alias end
+other
+init Impl
+impl
+start
+after given
+computing local
+TI(local)
+local
+true

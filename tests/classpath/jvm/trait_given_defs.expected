@@ -1,0 +1,14 @@
+make plain
+(plain 1,true)
+(<2>,false)
+make alias
+make alias
+[3,4][]
+make pplain
+(pplain 1,true)
+({2},false)
+make palias
+make palias
+(3,4)()
+make plain
+true

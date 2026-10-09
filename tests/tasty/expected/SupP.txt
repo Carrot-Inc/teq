@@ -1,0 +1,16 @@
+// tests/tasty/fixtures/SupP.tasty (TASTy 28.8, 1058 bytes)
+package fix.cake
+@SourceFile trait SupP extends Object {
+  def tag: Predef.String
+  object Helpers extends Object {
+    abstract class Base(n: Int) extends Object {
+      def show: Predef.String = ...
+    }
+  }
+  object Lits extends Object {
+    object One extends Helpers.Base {
+    }
+  }
+  object Two extends Helpers.Base {
+  }
+}

@@ -1,0 +1,26 @@
+{
+  "name": "vite-plugin-teq",
+  "version": "0.1.0",
+  "description": "Builds a Scala.js project of the build's teq.lock with teq, with hot swaps in the dev server",
+  "type": "module",
+  "exports": {
+    ".": "./index.js"
+  },
+  "scripts": {
+    "test": "node test.mjs",
+    "prepack": "cp ../../NOTICE ../../LICENSE ."
+  },
+  "files": [
+    "index.js",
+    "binary.js",
+    "description.js",
+    "lock.js",
+    "teq.js",
+    "NOTICE",
+    "LICENSE"
+  ],
+  "peerDependencies": {
+    "vite": ">=6"
+  },
+  "license": "Apache-2.0"
+}

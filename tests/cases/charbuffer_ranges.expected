@@ -1,0 +1,6 @@
+sub out of bounds
+sub-neg out of bounds
+sub-rev out of bounds
+wrap out of bounds
+wrap-neg out of bounds
+ok b

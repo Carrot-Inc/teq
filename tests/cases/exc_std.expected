@@ -1,0 +1,45 @@
+division -> arithmetic: / by zero
+long division -> arithmetic: / by zero
+remainder -> arithmetic: / by zero
+toInt -> number: For input string: "12x"
+toLong -> number: For input string: ""
+toDouble -> number: For input string: "abc"
+Option.get -> missing: None.get
+head -> missing: head of empty list
+tail -> unsupported: tail of empty list
+last -> missing: last of empty list
+apply -> index: 5
+vector apply -> index: -1 is out of bounds (min 0, max 0)
+map apply -> missing: key not found: b
+reduce -> unsupported: empty.reduceLeft
+max -> unsupported: empty.max
+iterator -> missing: next on empty iterator
+sys.error -> runtime: boom
+require -> argument: requirement failed: zero is not positive
+require plain -> argument: requirement failed
+assert -> assertion: assertion failed: zero is not one
+??? -> todo: an implementation is missing
+match -> match: 0 (of class java.lang.Integer)
+charAt -> index: Index 9 out of bounds for length 3
+fromOrdinal -> missing: enum Color has no case with ordinal: 7
+valueOf -> argument: enum Color has no case with name: Pink
+fine -> value 1
+NumberFormatException
+RuntimeException
+Exception
+Error
+Throwable
+non-fatal RuntimeException
+fatal Error
+fatal Exception
+fatal Error
+/ by zero
+true
+Success(None.get)
+Predicate does not hold for 1
+Success.failed
+0 (of class java.lang.Integer)
+java.util.NoSuchElementException: gone
+java.lang.ArithmeticException: / by zero
+an implementation is missing
+cause

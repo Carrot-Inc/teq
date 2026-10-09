@@ -1,0 +1,16 @@
+Item(t,3,1,-)
+Item(t,3,25,-)
+Item(t,1,5,x)
+Item(u,1,35,y)
+1 20 30 40
+10 30 3 4
+1 2 3 40
+Box(Right(x),2)
+Box(Right(s),2)
+Box(Right(1.5),2)
+Box(Left(1),5)
+Box(Left(0),1)
+true
+4
+Sized(List(1, 2),2)
+Sized(List(1, 2),2)

@@ -1,0 +1,6 @@
+6,7c6,7
+<   type Key = Predef.String
+<   def make(k: Registry.Key): Registry.Entry = ...
+---
+>   type Key = String
+>   def make(k: String): Entry = ...

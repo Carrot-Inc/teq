@@ -1,0 +1,7 @@
+get Some(5) hashes 1 equalities 1
+contains true false 8 hashes 3
+update 41 40 hashes 2
+compaction 29 true false hashes 3
+reentrant 19 0 true
+set 2 true
+slice Vector() Vector() Vector(1, 2)

@@ -1,0 +1,19 @@
+// tests/tasty/fixtures/Outer.tasty (TASTy 28.8, 1856 bytes)
+package fix.cake
+@SourceFile class Outer(val tag: Predef.String) extends Object {
+  trait Named extends Object {
+    def name: Predef.String
+  }
+  object Named extends Object {
+    def make(n: Predef.String): Named = ...
+    def plain(n: Predef.String): Predef.String = ...
+  }
+  object Lone extends Object {
+    def get: Predef.String = ...
+  }
+  object Peel extends Object {
+    def unapply(s: Predef.String): Option[Predef.String] = ...
+  }
+  def run(n: Predef.String): Predef.String = ...
+  def peel(s: Predef.String): Predef.String = ...
+}

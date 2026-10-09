@@ -1,0 +1,6 @@
+// tests/tasty/fixtures/RdStart.tasty (TASTy 28.8, 591 bytes)
+package fix.reader
+@SourceFile trait RdStart extends Object {
+  type Start
+  def start: Start
+}

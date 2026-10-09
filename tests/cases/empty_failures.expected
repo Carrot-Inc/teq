@@ -1,0 +1,49 @@
+list head: java.util.NoSuchElementException: head of empty list
+list last: java.util.NoSuchElementException: last of empty list
+list tail: java.lang.UnsupportedOperationException: tail of empty list
+list init: java.lang.UnsupportedOperationException: init of empty list
+list apply: java.lang.IndexOutOfBoundsException: 5
+seq head: java.util.NoSuchElementException: head of empty list
+option head: java.util.NoSuchElementException: head of empty list
+option get: java.util.NoSuchElementException: None.get
+vector head: java.util.NoSuchElementException: empty.head
+vector last: java.util.NoSuchElementException: empty.tail
+vector tail: java.lang.UnsupportedOperationException: empty.tail
+vector init: java.lang.UnsupportedOperationException: empty.init
+vector apply: java.lang.IndexOutOfBoundsException: 0 is out of bounds (empty vector)
+vector apply 5: java.lang.IndexOutOfBoundsException: 5 is out of bounds (min 0, max 0)
+array head: java.util.NoSuchElementException: head of empty array
+array last: java.util.NoSuchElementException: last of empty array
+array tail: java.lang.UnsupportedOperationException: tail of empty array
+array init: java.lang.UnsupportedOperationException: init of empty array
+iarray head: java.util.NoSuchElementException: head of empty array
+iarray last: java.util.NoSuchElementException: last of empty array
+string head: java.util.NoSuchElementException: head of empty String
+string last: java.util.NoSuchElementException: last of empty String
+string tail: java.lang.UnsupportedOperationException: tail of empty String
+string init: java.lang.UnsupportedOperationException: init of empty String
+set head: java.util.NoSuchElementException: next on empty iterator
+set last: java.util.NoSuchElementException: next on empty iterator
+set tail: java.lang.UnsupportedOperationException: null
+set init: java.lang.UnsupportedOperationException: null
+map head: java.util.NoSuchElementException: next on empty iterator
+map last: java.util.NoSuchElementException: next on empty iterator
+map apply: java.util.NoSuchElementException: key not found: 3
+buffer head: java.util.NoSuchElementException: head of empty ArrayBuffer
+buffer last: java.util.NoSuchElementException: last of empty ArrayBuffer
+buffer tail: java.lang.UnsupportedOperationException: null
+buffer init: java.lang.UnsupportedOperationException: null
+buffer apply: java.lang.IndexOutOfBoundsException: 0 is out of bounds (min 0, max -1)
+buffer apply 5: java.lang.IndexOutOfBoundsException: 5 is out of bounds (min 0, max 0)
+range head: java.util.NoSuchElementException: head on empty Range
+range last: java.util.NoSuchElementException: last on empty Range
+range tail: java.util.NoSuchElementException: tail on empty Range
+range init: java.util.NoSuchElementException: init on empty Range
+lazy head: java.util.NoSuchElementException: head of empty lazy list
+lazy tail: java.lang.UnsupportedOperationException: tail of empty lazy list
+iterator next: java.util.NoSuchElementException: next on empty iterator
+iterator reduce: java.lang.UnsupportedOperationException: empty.reduceLeft
+set reduce: java.lang.UnsupportedOperationException: empty.reduceLeft
+list reduce: java.lang.UnsupportedOperationException: empty.reduceLeft
+list max: java.lang.UnsupportedOperationException: empty.max
+vector minBy: java.lang.UnsupportedOperationException: empty.minBy

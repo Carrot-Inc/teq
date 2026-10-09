@@ -1,0 +1,6 @@
+// tests/tasty/fixtures/FoTypes.tasty (TASTy 28.8, 615 bytes)
+package fix.cake
+@SourceFile trait FoTypes extends Object { self: FoExs =>
+  type Type[A]
+  def tpe[A](using t: Type[A]): Predef.String
+}

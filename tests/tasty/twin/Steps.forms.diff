@@ -1,0 +1,4 @@
+2c2
+<   def twice(n: Int): guard$Step = guard$Step.apply{([1], java.lang.Object, fix.guard.guard$package$.Step$.Guard): Function0}[Int](n *{(Int): Int} 2)(guard$Step.Guard.apply{([1], fix.guard.guard$package$.Step$.Guard$.Proof): fix.guard.guard$package$.Step$.Guard}[Int](guard$Step.Guard.Proof.legal{([1], scala.util.NotGiven, scala.util.NotGiven): fix.guard.guard$package$.Step$.Guard$.Proof}[Int](value, value)))
+---
+>   def twice(n: Int): guard$Step = guard$Step.apply{([1], java.lang.Object, fix.guard.Step$.Guard): Function0}[Int](n *{(Int): Int} 2)(guard$Step.Guard.apply{([1], fix.guard.Step$.Guard$.Proof): fix.guard.Step$.Guard}[Int](guard$Step.Guard.Proof.legal{([1], scala.util.NotGiven, scala.util.NotGiven): fix.guard.Step$.Guard$.Proof}[Int](value, value)))

@@ -1,0 +1,31 @@
+# bench/ship-qualified.txt: what the ship made on Linux publishes (docs/SPEED.md, "The ship from Linux"):
+# the toolchain the maintainer's comparison on the reference machine qualified, as the manifests of bench/ship-manifest.sh record it,
+# `<tool> <version...>`, and the routes whose binaries have run where they are for, `route <classifier>`.
+# integrations/sbt/binary/check.sh refuses a binary whose manifest records another toolchain or whose route
+# has no line, and every binary while a `pending` line stands; bench/ship.sh stages such a binary and holds
+# it back. rust-toolchain.toml floats on stable, so rustc, LLVM and cargo are the versions it resolved to;
+# zig links every binary, qemu-user runs the aarch64 trainer and the Linux aarch64 suite over the sysroot,
+# wine the Windows smoke (the tools of each route: bench/ship-release.sh). The file changes by a commit after
+# a new comparison on the reference machine, or after a route's binary
+# ran where it is for (its line), never to let a build through. `image <reference>` names the release
+# workflow's build environment (bench/actions/ship-image.txt), whose binaries every other line must describe;
+# once it stands, a binary built elsewhere is not published. A new image's line, with the tuple its binaries
+# record, comes in the commit after a dry run of the workflow (.github/workflows/release.yml) in which the
+# five binaries built there passed their qualification on their platforms (docs/DEVELOPING.md, "Releases").
+rustc 1.98.1 48a229ceaefd4985c50990b14116b6d856af0985
+llvm 22.1.8
+cargo 1.98.1 797e8a9bca276c1c9f9f738d2a20f484fa4eea9d
+os Ubuntu 26.04 resolute
+zig 0.16.0 70e49664a74374b48b51e6f3fdfbf437f6395d42509050588bd49abe52ba3d00
+qemu-user 10.2.1+ds-1ubuntu3.2 f0585a9676a039f46607f185b3657c1e78c1ba4187595724cc567fcc1ae0d1b9
+sysroot-aarch64 libc6_2.28-10+deb10u1_arm64.deb 09f5e92b1527cdc06b757499bb4d97ddf1b064fc3d163f978e5de18b131cd330
+wine wine-10.0 (Ubuntu 10.0~repack-12ubuntu1)
+route osx-aarch_64
+route linux-x86_64
+route windows-x86_64
+route osx-x86_64
+route linux-aarch_64
+floor-aarch64 docker.io/library/debian@sha256:fba020fe61e2b15959ef887ea67c7fc61f77943d074889debe8d92e29402191f
+image ghcr.io/carrot-inc/teq-ship@sha256:0edce2de7560538a07ba9476d0e03529082346c289251db8bdff964cb3851756
+image-aarch64 ghcr.io/carrot-inc/teq-ship@sha256:2e265a367df40efaed8935114ed5cdbf086a84835b1738e46602c77e322e9f4e
+node-aarch64 24.21.0 6ad1325edbdb5649c379b75a237147a666c95d4f9ae8d340fef2d1575d289ad2

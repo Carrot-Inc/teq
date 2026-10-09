@@ -1,0 +1,45 @@
+values removeAll null: java.lang.NullPointerException
+values retainAll null: java.lang.NullPointerException
+keys removeAll null: java.lang.NullPointerException
+keys retainAll null: java.lang.NullPointerException
+entries removeAll null: java.lang.NullPointerException
+entries retainAll null: java.lang.NullPointerException
+an empty view's keys removeAll null: java.lang.NullPointerException
+an empty view's values retainAll null: java.lang.NullPointerException
+values removeIf null: java.lang.NullPointerException
+set removeAll null: java.lang.NullPointerException
+set retainAll null: java.lang.NullPointerException
+{a=one} [x]
+true
+{a=same, c=other, e=same} 5
+true
+{a=same, c=other}
+true
+{a=same, g=same}
+true [1, 5, 7, 8] true [1, 5, 7, 8]
+{me=(this Map), n=1}
+{n=1, me={me=(this Map), n=1}}
+{me={me=(this Map), n=1}}
+[me={me=(this Map), n=1}, n=1]
+[1, (this Collection)]
+{a=1, b=[1, (this Collection)]}
+true true true true
+a
+true
+1 [b] two b
+2 {b=two, c=three}
+true true
+false true true
+false true false 2
+true true
+true [apple, cherry]
+true {corn=2}
+true one,two,null,x
+true a,b
+false b,a x
+toArray null: java.lang.NullPointerException
+reverse compare null first: java.lang.NullPointerException
+reverse compare null second: java.lang.NullPointerException
+put null into a reversed copy: java.lang.NullPointerException
+floorKey null of a reversed copy: java.lang.NullPointerException
+{a=one}

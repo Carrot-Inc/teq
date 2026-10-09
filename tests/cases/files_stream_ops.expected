@@ -1,0 +1,8 @@
+walk sorted names: [, a, a/b, a/b/three.txt, a/one.txt, a/two.md]
+walk files by length: 6
+list count runs: 3 after 3
+grouped by extension: {md=[two.md], txt=[one.txt, three.txt]}
+anyMatch stops the walk: true . a [closed]
+close through a stage: [closed][stage]
+source after a stage: java.lang.IllegalStateException: stream has already been operated upon or closed
+iterator of a stage: b false

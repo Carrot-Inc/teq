@@ -1,0 +1,9 @@
+unclosed-brace.scala:5:3: warning: Line is indented too far to the left, or a `}` is missing
+unclosed-brace.scala:6:3: warning: Line is indented too far to the left, or a `}` is missing
+unclosed-brace.scala:6:21: error: type mismatch
+unclosed-brace.scala:8:1: warning: Line is indented too far to the left, or a `}` is missing
+unclosed-brace.scala:9:19: error: type mismatch
+unclosed-brace.scala:11:1: warning: Line is indented too far to the left, or a `}` is missing
+unclosed-brace.scala:12:3: error: indented definitions expected, eof found
+unclosed-brace.scala:13:18: error: type mismatch
+unclosed-brace.scala:14:1: error: '}' expected, but end of file found

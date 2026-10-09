@@ -1,0 +1,11 @@
+size 132
+shape t1
+L:shape sour
+leftTop 10
+rightTop L:shape sour
+List(Loud, Quiet)
+1
+shape sweet
+shape x1
+size 1
+size 112

@@ -1,0 +1,8 @@
+alpha: 1.8 10
+beta: 2.8 z
+x: 1.4 2y: 2.5 3
+outerw: 3.6 4
+b: 4.7 6
+c: 6.9 12
+yes 1 sno 1 syes 2 s!
+no 1 5yes 1 5yes 2 5!

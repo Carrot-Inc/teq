@@ -1,0 +1,9 @@
+base:ab
+LOUD:abc
+base#7 LOUD#8
+11,53
+yes*2 no*10
+LOUD:x
+64 yes*10
+sub:a List(sub:a, sub:ab) sub:xy sub:abc
+12 24 c20

@@ -1,0 +1,23 @@
+#200 Ok **
+#404 NotFound ****
+#418 Custom ****
+402
+x
+true
+true
+2
+0
+Status.NotFound
+Status.Custom
+Ranked(2)
+Ranked(5)
+timed out after 3
+caught no
+unknown
+2
+PublishError$Timeout: timed out after 1
+PublishError.Unknown
+true
+*
+Ranked(1)
+2

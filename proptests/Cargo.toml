@@ -1,0 +1,17 @@
+# The properties are a crate of their own: teq has no dependencies, and this manifest, its lock
+# and its target directory are apart from the compiler's. The empty workspace table makes cargo
+# take this directory as a root whatever stands above it.
+[package]
+name = "teq-proptests"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[workspace]
+
+[dependencies]
+hegeltest = { version = "=0.48.1", features = ["static-engine"] }
+
+[profile.dev]
+opt-level = 1
+debug = "line-tables-only"

@@ -1,0 +1,6 @@
+// tests/tasty/fixtures/OvSized.tasty (TASTy 28.8, 505 bytes)
+package fix.overloads
+@SourceFile trait OvSized extends Object {
+  def size(unit: Predef.String): Predef.String = ...
+  def describe: Predef.String = ...
+}

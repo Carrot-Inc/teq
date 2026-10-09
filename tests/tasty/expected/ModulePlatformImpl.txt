@@ -1,0 +1,5 @@
+// tests/tasty/fixtures/ModulePlatformImpl.tasty (TASTy 28.8, 511 bytes)
+package fix.cake
+@SourceFile final class ModulePlatformImpl() extends Object, ModulePlatform {
+  def tag: Predef.String = ...
+}

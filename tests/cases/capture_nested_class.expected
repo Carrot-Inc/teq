@@ -1,0 +1,10 @@
+first/default first/plain second/default second/plain
+first/only second/only
+t:first,t:second,t:first
+0
+first,first,second
+2
+first,second,first
+first/obj1,<first1:1>,<first2:1>,subfirst1<q:1>,first/5/1,first2,anonfirst3,locfirst4,first/7/1,first/8/1,first/loc 2
+second/obj2,<second1:2>,<second2:2>,subsecond2<q:2>,second/5/2,second2,anonsecond3,locsecond4,second/7/2,second/8/2,second/loc 2
+first/obj1,<first1:1>,<first2:1>,subfirst1<q:1>,first/5/1,first2,anonfirst3,locfirst4,first/7/1,first/8/1,first/loc 4

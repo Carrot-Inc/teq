@@ -1,0 +1,10 @@
+== shapes ==
+circle with area 12.0
+square with area 1.0
+square with area 9.0
+List(square, square, circle)
+circle
+Point(1.5,2.5)
+1
+2
+== done ==

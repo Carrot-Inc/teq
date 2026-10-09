@@ -1,0 +1,7 @@
+tests/interop/overloads_rejected.scala:8:7: error: method handle is overloaded in class Handler, a JavaScript class: its instances have one method of that name, and choosing between the alternatives at run time is not supported
+    def handle(text: String): String = "text"
+        ^^^^^^
+tests/interop/overloads_rejected.scala:14:7: error: render is exported twice: JavaScript has one function of that name and nothing chooses between overloaded alternatives at run time, so each one needs a name of its own
+    def render(s: String): String = s
+        ^^^^^^
+2 errors found

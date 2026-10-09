@@ -1,0 +1,4 @@
+broken-case.scala:9:13: error: a pattern expected, but '=>' found
+broken-case.scala:11:10: error: a pattern expected, but '=>' found
+broken-case.scala:13:22: warning: match may not be exhaustive; missing: B(_)
+broken-case.scala:15:21: error: type mismatch

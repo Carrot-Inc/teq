@@ -1,0 +1,9 @@
+List(ello, there, and, h, o)
+Some(ello)
+13 12 34
+23 5 6
+no prefix
+List(Hello there, 12-34 and 5-6, hELLo)
+2 there, 12-34 and 5-6, 2
+Hello there, 34-12 and 5-6, hELLo
+true

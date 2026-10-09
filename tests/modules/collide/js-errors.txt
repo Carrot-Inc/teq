@@ -1,0 +1,2 @@
+error: the bundle would declare L$uwxftf_48 twice: L of x/Use.scala in the products of $OUT/collide/jsl-a and L of x/Use.scala in the products of $OUT/collide/jsl-b; their sources' keys give one token, which the products record as their producers assigned it
+1 error found

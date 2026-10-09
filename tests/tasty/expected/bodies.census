@@ -1,0 +1,50 @@
+$new                                                        5
+$values                                                     4
+annotation                                                  3
+annotation withheld: its `new` does not type                1
+canEqual                                                   25
+case class _N                                              30
+companion apply                                            20
+companion unapply                                          20
+copy                                                       19
+copy default getter                                        29
+default getter                                             15
+elided: unstated a body's Dynamic form                      1
+elided: unstated a body's JsSelect node                     1
+elided: unstated a body's ObjLit node                       1
+elided: unstated a body's Spread node                       1
+elided: unstated a default argument after arguments that are not paths          3
+elided: unstated a later clause's named arguments the typer hoists before an earlier clause's default          1
+elided: unstated a sequence pattern of an array on a scrutinee it tests          1
+elided: unstated a synthesized given of no class            4
+elided: unstated the std's List.withFilter, which scala-library has under another shape          1
+elided: unstated the std's sizeIs, whose scala-library result is wider than the lean std's, other than as a receiver          1
+elided: unstated the std's values, whose scala-library result is wider than the lean std's, other than as a receiver          5
+enum ordinal                                                7
+enum value                                                 11
+equals                                                     22
+export forwarder                                            8
+fromOrdinal                                                 7
+fromProduct                                                20
+given instance                                              2
+hashCode                                                   26
+inline method body                                          7
+js.native                                                   1
+macro body                                                 11
+module val                                                 92
+ordinal                                                     4
+parent constructor call                                   128
+parent constructor call with arguments                      5
+productArity                                               25
+productElement                                             25
+productElementName                                         25
+productPrefix                                              25
+secondary constructor                                       1
+setter stub                                                 4
+source body                                               223
+template statement                                          4
+toString                                                   42
+trait parent call with arguments                            1
+valueOf                                                     4
+values                                                      4
+writeReplace                                               92

@@ -1,0 +1,11 @@
+1 nan false,false,false,false,false,true 000001 1111
+nan 1 false,false,false,false,false,true 000001 1111
+nan nan false,false,false,false,false,true 000001 1111
+1 2 true,true,false,false,false,true 110001 0011
+2 2 false,true,false,true,true,false 010110 1010
+-0 0 false,true,false,true,true,false 010110 1010
+f 1 nan false,false,false,false,false,true 0000
+f nan 1 false,false,false,false,false,true 0000
+f 1 2 true,true,false,false,false,true 1100
+3
+1

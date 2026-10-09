@@ -1,0 +1,6 @@
+5,6c5,6
+<   <macro> inline def picked(inline n: Int): Predef.String = <body>
+<   def pickedImpl(n: Expr[Int])(using x$2: Quotes): Expr[Predef.String] = ...
+---
+>   <macro> inline def picked(inline n: Int): String = <body>
+>   def pickedImpl(n: Expr[Int])(using x$2: Quotes): Expr[String] = ...

@@ -1,0 +1,119 @@
+# Linux-x86_64: recorded 2026-09-29, teq 0.1.0 0d43a39d, the thin release build (a release build in the machine's mirror, which carries no hash: named by hand); where this record passes the 2026-09-28 one and that one is tighter, its limit is kept
+# Linux-x86_64: jvm-body, jvm-tenth and jvm-day recorded again 2026-10-01 with the release build of d8f8cf0fc, linked against scala-library, the JVM's one mode: master's link mode ends them at 475, 450 and 446 MB there, the lean mode at 217, 202 and 203
+Linux-x86_64 split-body edits 40 growth_kb_per_edit 156.5 memory_end_mb 303.6 metric Rss+Swap
+Linux-x86_64 check-body edits 40 growth_kb_per_edit 538.7 memory_end_mb 190.5 metric Rss+Swap
+Linux-x86_64 jvm-body edits 40 growth_kb_per_edit 2445.7 memory_end_mb 556.5 metric Rss+Swap
+Linux-x86_64 split-tenth edits 40 growth_kb_per_edit 34.4 memory_end_mb 273.2 metric Rss+Swap
+Linux-x86_64 check-tenth edits 40 growth_kb_per_edit 30.5 memory_end_mb 180.8 metric Rss+Swap
+Linux-x86_64 jvm-tenth edits 40 growth_kb_per_edit 263.9 memory_end_mb 526.1 metric Rss+Swap
+Linux-x86_64 split-day edits 40 growth_kb_per_edit 277.5 memory_end_mb 266.0 metric Rss+Swap
+Linux-x86_64 check-day edits 40 growth_kb_per_edit 216.3 memory_end_mb 181.9 metric Rss+Swap
+Linux-x86_64 jvm-day edits 40 growth_kb_per_edit 2338.6 memory_end_mb 517.2 metric Rss+Swap
+Linux-x86_64 hot-day edits 40 growth_kb_per_edit 229.6 memory_end_mb 269.2 metric Rss+Swap
+Linux-x86_64 hot-full edits 20 growth_kb_per_edit 126.7 memory_end_mb 269.3 metric Rss+Swap
+Linux-x86_64 index-day edits 40 growth_kb_per_edit 101.9 memory_end_mb 213.5 metric Rss+Swap
+Linux-x86_64 lsp-day edits 40 growth_kb_per_edit 8.9 memory_end_mb 7.9 metric Anonymous+Swap
+Linux-x86_64 lsp-day-child edits 40 growth_kb_per_edit 90.1 memory_end_mb 217.9 metric Rss+Swap
+Linux-x86_64 frontend-hot-day edits 40 growth_kb_per_edit 835.2 memory_end_mb 514.2 metric Rss+Swap
+Linux-x86_64 frontend-hot-full edits 20 growth_kb_per_edit 441.1 memory_end_mb 513.9 metric Rss+Swap
+Linux-x86_64 frontend-check-day edits 40 growth_kb_per_edit 526.4 memory_end_mb 360.7 metric Rss+Swap
+# Linux-x86_64: the parallel typer's rows recorded 2026-10-03 with the release build of d9dda86a7 (the machine's mirror carries no hash: named by hand), the worker rows raised to the largest of eight runs (WATCH_MEMORY_RECORD=max), the last four on the head rebased onto master's 8f5012098
+Linux-x86_64 frontend-hot-full@2 edits 20 growth_kb_per_edit 5875.8 memory_end_mb 739.7 metric Rss+Swap
+Linux-x86_64 frontend-check-day@2 edits 40 growth_kb_per_edit 507.4 memory_end_mb 464.9 metric Rss+Swap
+Linux-x86_64 lsp-day@2 edits 40 growth_kb_per_edit 11.6 memory_end_mb 7.9 metric Anonymous+Swap
+Linux-x86_64 lsp-day@2-child edits 40 growth_kb_per_edit 144.6 memory_end_mb 282.7 metric Rss+Swap
+Linux-x86_64 frontend-hot-full@8 edits 20 growth_kb_per_edit 1950.8 memory_end_mb 800.1 metric Rss+Swap
+Linux-x86_64 frontend-check-day@8 edits 40 growth_kb_per_edit 1549.0 memory_end_mb 675.8 metric Rss+Swap
+Linux-x86_64 lsp-day@8 edits 40 growth_kb_per_edit 8.7 memory_end_mb 7.9 metric Anonymous+Swap
+Linux-x86_64 lsp-day@8-child edits 40 growth_kb_per_edit 411.6 memory_end_mb 316.1 metric Rss+Swap
+Linux-x86_64 frontend-hot-full@16 edits 20 growth_kb_per_edit 1905.5 memory_end_mb 997.9 metric Rss+Swap
+Linux-x86_64 frontend-check-day@16 edits 40 growth_kb_per_edit 1610.6 memory_end_mb 900.2 metric Rss+Swap
+Linux-x86_64 lsp-day@16 edits 40 growth_kb_per_edit 6.2 memory_end_mb 7.9 metric Anonymous+Swap
+Linux-x86_64 lsp-day@16-child edits 40 growth_kb_per_edit 631.0 memory_end_mb 354.6 metric Rss+Swap
+Linux-x86_64 peak-frontend@1 metric VmHWM ceiling_mb 401.5 because 349.1 MB measured and the tolerance's 15% over it
+Linux-x86_64 peak-core@1 metric VmHWM ceiling_mb 197.6 because 171.8 MB measured and the tolerance's 15% over it
+Linux-x86_64 peak-frontend@fork metric VmHWM ceiling_mb 498.1 because 433.1 MB measured and the tolerance's 15% over it
+Linux-x86_64 peak-core@fork metric VmHWM ceiling_mb 267.6 because 232.7 MB measured and the tolerance's 15% over it
+Linux-x86_64 peak-frontend@8 metric VmHWM ceiling_ratio 2.0 of peak-frontend@1 because the parallel typer's memory aim, at most 2 times one worker's peak; 1.84 measured
+Linux-x86_64 peak-core@8 metric VmHWM ceiling_ratio 2.0 of peak-core@1 because the parallel typer's memory aim, at most 2 times one worker's peak; 1.54 measured
+Linux-x86_64 peak-frontend@16 metric VmHWM ceiling_ratio 3.0 of peak-frontend@1 because the parallel typer's memory aim, at most 3 times one worker's peak; 2.51 measured
+Linux-x86_64 peak-core@16 metric VmHWM ceiling_ratio 3.0 of peak-core@1 because the parallel typer's memory aim, at most 3 times one worker's peak; 1.72 measured
+# Linux-x86_64: frontend-hot-full@12 raised to the run's numbers where larger 2026-10-03, teq 0.1.0 e34be579d (a release build in the machine's mirror, which carries no hash: named by hand)
+Linux-x86_64 frontend-hot-full@12 edits 20 growth_kb_per_edit 1505.1 memory_end_mb 890.2 metric Rss+Swap
+# Linux-x86_64: peak-frontend@12, peak-core@12 recorded 2026-10-03, teq 0.1.0 e34be579d (a release build in the machine's mirror, which carries no hash: named by hand)
+Linux-x86_64 peak-frontend@12 metric VmHWM ceiling_ratio 2.5 of peak-frontend@1 because the parallel typer's provisional memory aim, at most 2.5 times one worker's peak at 12 while the cap stays 8; 2.09 to 2.12 measured
+Linux-x86_64 peak-core@12 metric VmHWM ceiling_ratio 2.5 of peak-core@1 because the parallel typer's provisional memory aim, at most 2.5 times one worker's peak at 12 while the cap stays 8; 1.44 to 1.52 measured
+# Linux-x86_64: index-std-day recorded 2026-10-07, teq 0.1.6 3b7191425: index-day's session asked besides the references of the std's List, which demand every std file after each full build; it ends at 274.0 MB where index-day ends at 231.3 MB on the same binary, the difference the std's typing
+Linux-x86_64 index-std-day edits 40 growth_kb_per_edit -4.2 memory_end_mb 274.0 metric Rss+Swap
+only Linux-x86_64 index-std-day because the reference machine recorded it on Linux alone; a platform without its row runs the suite without the session
+# Linux-x86_64: jvm-body recorded again 2026-10-04 with the release build of 604d7654e, the larger of two runs interleaved with master's (21a3a6eb7): master ends at 474.7 and 475.3 MB, 1,175 and 1,165 KB per edit, the branch at 556.5 and 555.0 MB, 2,446 and 2,186 KB per edit. The step is the eager mirror vals of the core corpus's 11,220 unsummoned mirror shapes (+48 MB after the first build; each retype rebuilds the edited file's ~220 mirrors), until the mirrors are made at the emitter from the class's shape or the companion implements Mirror itself, either of which retires it
+# Linux-x86_64: jvm-day recorded again 2026-10-08 from the release build of 27e402f9e, the largest of four runs at one job (2,191 to 2,339 KB per edit, 513.3 to 517.2 MB at the end). What grew since 2026-10-01, each measured against its parent: the end by the eager mirror vals (ffb3523d6: 434 to 443 MB before, 491 to 499 after, three runs each; the parallel typer's landings between moved nothing, 7f2122fc5 ending at 430 to 439) and by e04079194, from which the JVM erasure memo's pages are ones the allocator maps (f582af4f2 before it 494 and 497 MB, 526 and 528 after), and the growth by bf5febd10, from which the session keeps its JVM facts across the incremental builds (e04079194 before it: 406 and 505 KB per edit in two runs, 2,331 and 2,423 after): it holds 370 to 380 MB until the day's first full build after its parse errors (edit 13) and 500 to 516 MB from there on, a step the slope from edit 10 reads as growth. Two hundred edits end at 515.4 MB against 519.7 after the hundredth, 62.8 KB per edit once warm: no growth past the step
+# Linux-x86_64: jvm-tenth recorded again 2026-10-08 from the release build of 27e402f9e, the largest of four runs at one job (518.9 to 526.1 MB at the end, 54 to 264 KB per edit), after it had stood at its tolerance's edge (511 to 524 MB in seven runs of the whole suite against 519.9): its end rose by the eager mirror vals (ffb3523d6: 449 to 451 MB before, 506 to 509 after, three runs each) and by e04079194, the JVM erasure memo's pages made ones the allocator maps (f582af4f2 before it 497 and 499 MB, 524 and 530 after, the first-parent commits between the mirrors and it bisected), master ending at 522 to 526
+# Linux-x86_64: lsp-day recorded again 2026-10-01 from the release build of 8e88756d1: the language server's own process, which types nothing, ends with master's anonymous memory (7.6 MB) and master's six threads, the rest the binary's file-backed resident pages, which follow the file's page-cache state and not the revision (4.7 to 6.4 MB for a freshly linked or long-kept binary, 3.0 to 3.9 MB for a fresh copy, master's 7f2122fc5 alike); the row holds the freshly linked build's end, 13.4 MB (the gate's 13.5 and 13.6), and its growth
+# Linux-x86_64: lsp-day measured 2026-10-07 on 07265d8e5 against master (5cc7c9285) and the branch with the std files' records in the names-only mode: the server's anonymous memory 8.0 MB in all three, its file-backed pages 7.1 to 7.6 MB for a binary used where it was linked and 4.3 MB for a fresh copy, so the row ends at 14.8 to 15.3 MB or at 12.0 to 12.1 MB by that state alone, the child's anonymous memory within 0.8 MB across the three: two binaries are compared in one state
+# Linux-x86_64: lsp-day, lsp-day@2, lsp-day@8 and lsp-day@16, the language server's own process, measured by its anonymous memory plus swap since 2026-10-08 (metric Anonymous+Swap, the driver's header; the child rows keep Rss+Swap) and recorded again that day from the release build of 27e402f9e, the largest of four runs of the four at one job: 7.8 to 7.9 MB at the end in every run and at every worker count, 6.2 to 11.6 KB per edit, where the same runs' resident size ended at 13.1 to 13.6 MB; the notes above are of the resident size
+# Darwin-arm64: recorded 2026-09-29, teq 0.1.0 a43c7283 pgo; where this record passes the 2026-09-28 one and that one is tighter, its limit is kept
+# Darwin-arm64: jvm-body, jvm-tenth and jvm-day recorded again 2026-10-01 with the release build that retired the lean JVM mode, linked against scala-library, the JVM's one mode: master's link mode ends them at 460, 447 and 441 MB, the lean mode at 227, 191 and 191
+Darwin-arm64 split-body edits 40 growth_kb_per_edit 735.0 memory_end_mb 285.2 metric phys_footprint
+Darwin-arm64 check-body edits 40 growth_kb_per_edit 594.3 memory_end_mb 191.4 metric phys_footprint
+Darwin-arm64 jvm-body edits 40 growth_kb_per_edit 1835.7 memory_end_mb 524.1 metric phys_footprint
+Darwin-arm64 split-tenth edits 40 growth_kb_per_edit -158.9 memory_end_mb 244.9 metric phys_footprint
+Darwin-arm64 check-tenth edits 40 growth_kb_per_edit -313.6 memory_end_mb 166.0 metric phys_footprint
+Darwin-arm64 jvm-tenth edits 40 growth_kb_per_edit -156.6 memory_end_mb 442.9 metric phys_footprint
+Darwin-arm64 split-day edits 40 growth_kb_per_edit 170.3 memory_end_mb 232.4 metric phys_footprint
+Darwin-arm64 check-day edits 40 growth_kb_per_edit -146.0 memory_end_mb 168.8 metric phys_footprint
+Darwin-arm64 jvm-day edits 40 growth_kb_per_edit 207.1 memory_end_mb 440.2 metric phys_footprint
+Darwin-arm64 hot-day edits 40 growth_kb_per_edit 209.5 memory_end_mb 262.0 metric phys_footprint
+Darwin-arm64 hot-full edits 20 growth_kb_per_edit 472.0 memory_end_mb 263.3 metric phys_footprint
+Darwin-arm64 index-day edits 40 growth_kb_per_edit -127.7 memory_end_mb 190.2 metric phys_footprint
+Darwin-arm64 lsp-day edits 40 growth_kb_per_edit 16.9 memory_end_mb 9.8 metric phys_footprint
+Darwin-arm64 lsp-day-child edits 40 growth_kb_per_edit -153.7 memory_end_mb 209.0 metric phys_footprint
+Darwin-arm64 frontend-hot-day edits 40 growth_kb_per_edit -777.3 memory_end_mb 462.5 metric phys_footprint
+Darwin-arm64 frontend-hot-full edits 20 growth_kb_per_edit 1569.0 memory_end_mb 464.0 metric phys_footprint
+Darwin-arm64 frontend-check-day edits 40 growth_kb_per_edit -1039.3 memory_end_mb 319.5 metric phys_footprint
+# Darwin-arm64: the parallel typer's rows recorded 2026-10-03 with the release build of 21810d552, the worker rows raised to the largest of eight runs (WATCH_MEMORY_RECORD=max), the last four on the head rebased onto master's 8f5012098
+Darwin-arm64 frontend-hot-full@2 edits 20 growth_kb_per_edit 5579.7 memory_end_mb 621.3 metric phys_footprint
+Darwin-arm64 frontend-check-day@2 edits 40 growth_kb_per_edit 2409.8 memory_end_mb 539.5 metric phys_footprint
+Darwin-arm64 lsp-day@2 edits 40 growth_kb_per_edit 27.2 memory_end_mb 10.6 metric phys_footprint
+Darwin-arm64 lsp-day@2-child edits 40 growth_kb_per_edit 1338.3 memory_end_mb 307.4 metric phys_footprint
+Darwin-arm64 frontend-hot-full@8 edits 20 growth_kb_per_edit 3378.9 memory_end_mb 771.6 metric phys_footprint
+Darwin-arm64 frontend-check-day@8 edits 40 growth_kb_per_edit 1312.9 memory_end_mb 737.4 metric phys_footprint
+Darwin-arm64 lsp-day@8 edits 40 growth_kb_per_edit 39.4 memory_end_mb 10.6 metric phys_footprint
+Darwin-arm64 lsp-day@8-child edits 40 growth_kb_per_edit 2399.7 memory_end_mb 427.4 metric phys_footprint
+Darwin-arm64 frontend-hot-full@16 edits 20 growth_kb_per_edit 4160.0 memory_end_mb 1085.3 metric phys_footprint
+Darwin-arm64 frontend-check-day@16 edits 40 growth_kb_per_edit 1658.8 memory_end_mb 1020.7 metric phys_footprint
+Darwin-arm64 lsp-day@16 edits 40 growth_kb_per_edit 34.7 memory_end_mb 10.4 metric phys_footprint
+Darwin-arm64 lsp-day@16-child edits 40 growth_kb_per_edit 3344.8 memory_end_mb 506.9 metric phys_footprint
+Darwin-arm64 peak-frontend@1 metric phys_footprint_peak ceiling_mb 397.9 because 346.0 MB measured and the tolerance's 15% over it
+Darwin-arm64 peak-core@1 metric phys_footprint_peak ceiling_mb 187.9 because 163.4 MB measured and the tolerance's 15% over it
+Darwin-arm64 peak-frontend@fork metric phys_footprint_peak ceiling_mb 498.9 because 433.8 MB measured and the tolerance's 15% over it
+Darwin-arm64 peak-core@fork metric phys_footprint_peak ceiling_mb 263.3 because 229.0 MB measured and the tolerance's 15% over it
+Darwin-arm64 peak-frontend@8 metric phys_footprint_peak ceiling_ratio 2.0 of peak-frontend@1 because the parallel typer's memory aim, at most 2 times one worker's peak; 1.89 measured
+Darwin-arm64 peak-core@8 metric phys_footprint_peak ceiling_ratio 2.0 of peak-core@1 because the parallel typer's memory aim, at most 2 times one worker's peak; 1.74 measured
+Darwin-arm64 peak-frontend@16 metric phys_footprint_peak ceiling_ratio 3.0 of peak-frontend@1 because the parallel typer's memory aim, at most 3 times one worker's peak; 2.60 measured
+Darwin-arm64 peak-core@16 metric phys_footprint_peak ceiling_ratio 3.0 of peak-core@1 because the parallel typer's memory aim, at most 3 times one worker's peak; 1.97 measured
+# Darwin-arm64: frontend-hot-full@12 raised to the run's numbers where larger 2026-10-03, teq 0.1.0 d1628706f
+Darwin-arm64 frontend-hot-full@12 edits 20 growth_kb_per_edit 1607.7 memory_end_mb 928.1 metric phys_footprint
+# Darwin-arm64: peak-frontend@12, peak-core@12 recorded 2026-10-03, teq 0.1.0 d1628706f
+Darwin-arm64 peak-frontend@12 metric phys_footprint_peak ceiling_ratio 2.5 of peak-frontend@1 because the parallel typer's provisional memory aim, at most 2.5 times one worker's peak at 12 while the cap stays 8; 2.15 to 2.27 measured
+Darwin-arm64 peak-core@12 metric phys_footprint_peak ceiling_ratio 2.5 of peak-core@1 because the parallel typer's provisional memory aim, at most 2.5 times one worker's peak at 12 while the cap stays 8; 1.60 to 1.61 measured
+observed Darwin-arm64 peak-frontend@1 metric phys_footprint_peak peak_mb 346.0 recorded 2026-10-03, teq 0.1.0 21810d552
+observed Darwin-arm64 peak-core@1 metric phys_footprint_peak peak_mb 163.4 recorded 2026-10-03, teq 0.1.0 21810d552
+observed Darwin-arm64 peak-frontend@fork metric phys_footprint_peak peak_mb 433.8 recorded 2026-10-03, teq 0.1.0 21810d552
+observed Darwin-arm64 peak-core@fork metric phys_footprint_peak peak_mb 229.0 recorded 2026-10-03, teq 0.1.0 21810d552
+observed Darwin-arm64 peak-frontend@8 metric phys_footprint_peak peak_mb 652.8 ratio 1.89 of peak-frontend@1 recorded 2026-10-03, teq 0.1.0 21810d552
+observed Darwin-arm64 peak-core@8 metric phys_footprint_peak peak_mb 284.6 ratio 1.74 of peak-core@1 recorded 2026-10-03, teq 0.1.0 21810d552
+observed Darwin-arm64 peak-frontend@16 metric phys_footprint_peak peak_mb 897.9 ratio 2.60 of peak-frontend@1 recorded 2026-10-03, teq 0.1.0 21810d552
+observed Darwin-arm64 peak-core@16 metric phys_footprint_peak peak_mb 321.4 ratio 1.97 of peak-core@1 recorded 2026-10-03, teq 0.1.0 21810d552
+observed Linux-x86_64 peak-frontend@1 metric VmHWM peak_mb 349.1 recorded 2026-10-03, teq 0.1.0 d9dda86a7 (a release build in the machine's mirror, which carries no hash: named by hand)
+observed Linux-x86_64 peak-core@1 metric VmHWM peak_mb 171.8 recorded 2026-10-03, teq 0.1.0 d9dda86a7 (a release build in the machine's mirror, which carries no hash: named by hand)
+observed Linux-x86_64 peak-frontend@fork metric VmHWM peak_mb 433.1 recorded 2026-10-03, teq 0.1.0 d9dda86a7 (a release build in the machine's mirror, which carries no hash: named by hand)
+observed Linux-x86_64 peak-core@fork metric VmHWM peak_mb 232.7 recorded 2026-10-03, teq 0.1.0 d9dda86a7 (a release build in the machine's mirror, which carries no hash: named by hand)
+observed Linux-x86_64 peak-frontend@8 metric VmHWM peak_mb 643.3 ratio 1.84 of peak-frontend@1 recorded 2026-10-03, teq 0.1.0 d9dda86a7 (a release build in the machine's mirror, which carries no hash: named by hand)
+observed Linux-x86_64 peak-core@8 metric VmHWM peak_mb 264.9 ratio 1.54 of peak-core@1 recorded 2026-10-03, teq 0.1.0 d9dda86a7 (a release build in the machine's mirror, which carries no hash: named by hand)
+observed Linux-x86_64 peak-frontend@16 metric VmHWM peak_mb 877.9 ratio 2.51 of peak-frontend@1 recorded 2026-10-03, teq 0.1.0 d9dda86a7 (a release build in the machine's mirror, which carries no hash: named by hand)
+observed Linux-x86_64 peak-core@16 metric VmHWM peak_mb 295.7 ratio 1.72 of peak-core@1 recorded 2026-10-03, teq 0.1.0 d9dda86a7 (a release build in the machine's mirror, which carries no hash: named by hand)
+observed Darwin-arm64 peak-frontend@12 metric phys_footprint_peak peak_mb 764.3 recorded 2026-10-03, teq 0.1.0 d1628706f
+observed Darwin-arm64 peak-core@12 metric phys_footprint_peak peak_mb 264.5 recorded 2026-10-03, teq 0.1.0 d1628706f
+observed Linux-x86_64 peak-frontend@12 metric VmHWM peak_mb 742.6 recorded 2026-10-03, teq 0.1.0 e34be579d (a release build in the machine's mirror, which carries no hash: named by hand)
+observed Linux-x86_64 peak-core@12 metric VmHWM peak_mb 264.6 recorded 2026-10-03, teq 0.1.0 e34be579d (a release build in the machine's mirror, which carries no hash: named by hand)

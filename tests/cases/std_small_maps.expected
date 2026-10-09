@@ -1,0 +1,6 @@
+Map(a -> 1)
+Map(a -> 1, b -> 2)
+Some(2)
+2
+List(a, b, c, d)
+List(1, 2, 3)

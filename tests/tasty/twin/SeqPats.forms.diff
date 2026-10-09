@@ -1,0 +1,4 @@
+32c32
+<     case List[Any](a: Int, b: Int) => a +{(Int): Int} b
+---
+>     case List[Any](a, b) => a +{(Int): Int} b

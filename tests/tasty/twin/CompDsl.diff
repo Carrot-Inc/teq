@@ -1,0 +1,4 @@
+4c4
+<   final class RouteB[A](val name: Predef.String) extends Object {
+---
+>   final class RouteB[A](val name: String) extends Object {

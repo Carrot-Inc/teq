@@ -1,0 +1,151 @@
+appended 0: ok 0
+updated 0: ok 0
+prepended 0: ok 70
+take 0: ok 0
+drop 0: ok 0
+slice 0: ok 0
+drop then append 0: ok 2
+take then append 0: ok 2
+map 0: ok 0
+reverse 0: ok 0
+filter 0: ok 0
+fold 0: 0 0 None None -1 false
+appended 1: ok 1
+updated 1: ok 1
+prepended 1: ok 71
+take 1: ok 0
+drop 1: ok 1
+slice 1: ok 1
+drop then append 1: ok 3
+take then append 1: ok 2
+map 1: ok 1
+reverse 1: ok 1
+filter 1: ok 1
+fold 1: 0 0 Some(0) Some(0) 0 true
+appended 31: ok 31
+updated 31: ok 31
+prepended 31: ok 101
+take 31: ok 10
+drop 31: ok 21
+slice 31: ok 17
+drop then append 31: ok 18
+take then append 31: ok 17
+map 31: ok 31
+reverse 31: ok 31
+filter 31: ok 16
+fold 31: 465 465 Some(0) Some(30) 15 true
+appended 32: ok 32
+updated 32: ok 32
+prepended 32: ok 102
+take 32: ok 10
+drop 32: ok 22
+slice 32: ok 16
+drop then append 32: ok 18
+take then append 32: ok 18
+map 32: ok 32
+reverse 32: ok 32
+filter 32: ok 16
+fold 32: 496 496 Some(0) Some(31) 16 true
+appended 33: ok 33
+updated 33: ok 33
+prepended 33: ok 103
+take 33: ok 11
+drop 33: ok 22
+slice 33: ok 17
+drop then append 33: ok 19
+take then append 33: ok 18
+map 33: ok 33
+reverse 33: ok 33
+filter 33: ok 17
+fold 33: 528 528 Some(0) Some(32) 16 true
+appended 64: ok 64
+updated 64: ok 64
+prepended 64: ok 134
+take 64: ok 21
+drop 64: ok 43
+slice 64: ok 32
+drop then append 64: ok 34
+take then append 64: ok 34
+map 64: ok 64
+reverse 64: ok 64
+filter 64: ok 32
+fold 64: 2016 2016 Some(0) Some(63) 32 true
+appended 65: ok 65
+updated 65: ok 65
+prepended 65: ok 135
+take 65: ok 21
+drop 65: ok 44
+slice 65: ok 33
+drop then append 65: ok 35
+take then append 65: ok 34
+map 65: ok 65
+reverse 65: ok 65
+filter 65: ok 33
+fold 65: 2080 2080 Some(0) Some(64) 32 true
+appended 1023: ok 1023
+updated 1023: ok 1023
+prepended 1023: ok 1093
+take 1023: ok 341
+drop 1023: ok 682
+slice 1023: ok 513
+drop then append 1023: ok 514
+take then append 1023: ok 513
+map 1023: ok 1023
+reverse 1023: ok 1023
+filter 1023: ok 512
+fold 1023: 522753 522753 Some(0) Some(1022) 511 true
+appended 1024: ok 1024
+updated 1024: ok 1024
+prepended 1024: ok 1094
+take 1024: ok 341
+drop 1024: ok 683
+slice 1024: ok 512
+drop then append 1024: ok 514
+take then append 1024: ok 514
+map 1024: ok 1024
+reverse 1024: ok 1024
+filter 1024: ok 512
+fold 1024: 523776 523776 Some(0) Some(1023) 512 true
+appended 1025: ok 1025
+updated 1025: ok 1025
+prepended 1025: ok 1095
+take 1025: ok 341
+drop 1025: ok 684
+slice 1025: ok 513
+drop then append 1025: ok 515
+take then append 1025: ok 514
+map 1025: ok 1025
+reverse 1025: ok 1025
+filter 1025: ok 513
+fold 1025: 524800 524800 Some(0) Some(1024) 512 true
+appended 1500: ok 1500
+updated 1500: ok 1500
+prepended 1500: ok 1570
+take 1500: ok 500
+drop 1500: ok 1000
+slice 1500: ok 750
+drop then append 1500: ok 752
+take then append 1500: ok 752
+map 1500: ok 1500
+reverse 1500: ok 1500
+filter 1500: ok 750
+fold 1500: 1124250 1124250 Some(0) Some(1499) 750 true
+appended 33000: ok 33000
+updated 33000: ok 33000
+prepended 33000: ok 33070
+take 33000: ok 11000
+drop 33000: ok 22000
+slice 33000: ok 16500
+drop then append 33000: ok 16502
+take then append 33000: ok 16502
+map 33000: ok 33000
+reverse 33000: ok 33000
+filter 33000: ok 16500
+fold 33000: 544483500 544483500 Some(0) Some(32999) 16500 true
+queue 12007500 100 4900 4999
+stack 3000 2999 1999 0 Vector(1, 0)
+branches true 0 201 2 1
+Vector(1, 2, 3) Vector() Vector(1, 9, 3) Vector(0, 1) Vector(35, 36, 37, 38, 39) Vector(0, 1, 2)
+List(30, 30, 30, 10) List(Vector(0, 1), Vector(33, 34), Vector(66, 67)) (49,49) Vector(40, 41, 42, 43, 44, 45, 46, 47, 48, 49)
+caught 5 is out of bounds (min 0, max 1)
+caught 100 is out of bounds (min 0, max 99)

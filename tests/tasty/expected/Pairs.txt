@@ -1,0 +1,13 @@
+// tests/tasty/fixtures/Pairs.tasty (TASTy 28.8, 1567 bytes)
+package fix.runtime
+@SourceFile trait Pairs[A] extends Object {
+  class Pair[B](val a: A, val b: B) extends Object {
+    def show: Predef.String = ...
+  }
+  def first: A
+  def pair[B](b: B): Pair[B] = ...
+}
+@SourceFile object Pairs extends Object {
+  <synthetic> private def writeReplace(): AnyRef = ...
+  def ints: Pairs[Int] = ...
+}

@@ -1,0 +1,4 @@
+4c4
+<   def pick(x: Predef.String): Predef.String
+---
+>   def pick(x: String): String

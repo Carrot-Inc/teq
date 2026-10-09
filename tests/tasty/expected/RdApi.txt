@@ -1,0 +1,6 @@
+// tests/tasty/fixtures/RdApi.tasty (TASTy 28.8, 562 bytes)
+package fix.rdecl
+@SourceFile class RdApi() extends Object {
+  def f(x: Any): Predef.String = ...
+  def f(x: Predef.String): Predef.String = ...
+}

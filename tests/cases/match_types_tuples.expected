@@ -1,0 +1,23 @@
+1
+(a,true)
+a
+3
+(1,a,true,2.5,3)
+((1,1.5),(a,2))
+(Some(1),Some(x))
+(1,y)
+s
+2
+(1,(s,true))
+0
+4
+9
+List(Int, String, Boolean, other)
+((1,a),(2,b))
+0
+(x,1,true,2.5)
+List(1, two, true)
+List(1, s)
+List()
+List(a, b, c)
+a|b|c

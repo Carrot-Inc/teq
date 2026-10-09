@@ -1,0 +1,9 @@
+(java.lang.String, scala.Int) scala.Boolean
+(2, java.lang.Object, scala.collection.immutable.List, scala.Boolean) scala.Option
+(scala.Int[], app.Box) scala.Unit
+() scala.Unit
+(scala.collection.immutable.Seq) scala.Int
+(scala.Function0) scala.Long
+() 
+() 
+() 

@@ -1,0 +1,5 @@
+// tests/tasty/fixtures/HkLow.tasty (TASTy 28.8, 600 bytes)
+package fix.hkb
+@SourceFile trait HkLow extends Object {
+  implicit val idInstance: HkCompiler[hkbounds$package.HkId, hkbounds$package.HkId] = ...
+}

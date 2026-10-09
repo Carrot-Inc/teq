@@ -1,0 +1,5 @@
+// tests/tasty/fixtures/EffRunner.tasty (TASTy 28.8, 823 bytes)
+package fix.shadow
+@SourceFile final class EffRunner[G[_$2]](s: Eff[G]) extends Object {
+  def twice(x: Int): Int = ...
+}

@@ -1,0 +1,4 @@
+2c2
+< @SourceFile class QaFoldOps[A](xs: package.List[A]) extends Object {
+---
+> @SourceFile class QaFoldOps[A](xs: List[A]) extends Object {

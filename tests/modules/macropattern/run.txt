@@ -1,0 +1,8 @@
+add
+head of scala.Int
+some scala.Int
+plain 5
+other
+list of scala.Int
+int
+other

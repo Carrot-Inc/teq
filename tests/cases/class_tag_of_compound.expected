@@ -1,0 +1,44 @@
+B | C: A
+C | B: A
+A | B: A
+A & B: B
+B & A: B
+B & C: B
+C & B: B
+D | E: T1
+E | D: T1
+F | E: T2
+E | F: T2
+F | G: T2
+G | F: T1
+U1 | U2: T2
+U2 | U1: T1
+T1 | T2: java.lang.Object
+T3 | T1: T1
+T3 | T2: java.lang.Object
+A & T1: A
+T1 & A: A
+T1 & T2: T1
+T2 & T1: T1
+T3 & T1: T3
+T1 & T3: T3
+H & T1: H
+B | C | D: A
+B | D | H: java.lang.Object
+A & T1 & T2: A
+T2 & T1 & A: A
+(B | C) & T1: A
+(B & T1) | (C & T1): A
+String | Int: java.lang.Object
+Int | Long: java.lang.Object
+Int | Int: int
+String | Null: java.lang.String
+Null | A: A
+A | Nothing: A
+1 | 2: int
+"a" | "b": java.lang.String
+1 | "a": java.lang.Object
+Some[Int] | None.type: scala.Option
+Int | Boolean: java.lang.Object
+Unit | Int: java.lang.Object
+Any: java.lang.Object AnyRef: java.lang.Object AnyVal: java.lang.Object Unit: void

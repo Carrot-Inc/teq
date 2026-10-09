@@ -1,0 +1,7 @@
+forwarders/D equals(Ljava/lang/Object;)Z public
+forwarders/D hashCode()I public
+forwarders/D toString()Ljava/lang/String; public
+forwarders/E toString()Ljava/lang/String; public
+forwarders/F equals(Ljava/lang/Object;)Z public
+forwarders/F hashCode()I public
+forwarders/F toString()Ljava/lang/String; public

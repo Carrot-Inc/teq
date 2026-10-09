@@ -1,0 +1,114 @@
+---
+import "../styles/style.css";
+import site from "../../.staged/site.json";
+
+interface Props {
+  title?: string;
+  description?: string;
+  bodyClass?: string;
+  type?: "website" | "article";
+  noindex?: boolean;
+}
+// The front page is titled by the README's headline and described by its tagline and lead; a page with a title of
+// its own is named by it, after the site's name.
+const front = [site.tagline.replace(/\.$/, ""), site.lead].filter(Boolean).join(". ");
+const { title, description = front, bodyClass = "", type = "website", noindex = false } = Astro.props;
+const headline = (site.headline.join(" ") || site.tagline).replace(/\.$/, "");
+const fullTitle = title ? `${title} · ${site.name}` : `${site.name} · ${headline}`;
+const github = "https://github.com/Carrot-Inc/teq";
+const url = new URL(Astro.url.pathname, Astro.site).href;
+const card = new URL("/og.png", Astro.site).href;
+---
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>{fullTitle}</title>
+<meta name="description" content={description}>
+{noindex ? <meta name="robots" content="noindex"> : <link rel="canonical" href={url}>}
+<meta property="og:site_name" content={site.name}>
+<meta property="og:title" content={title ?? headline}>
+<meta property="og:description" content={description}>
+<meta property="og:url" content={url}>
+<meta property="og:type" content={type}>
+<meta property="og:image" content={card}>
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content={site.name}>
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+</head>
+<body class={bodyClass}>
+<a class="skip" href="#main">Skip to content</a>
+<div class="wrap">
+<header class="top" id="top">
+  <a href="/" class="brand" aria-label={site.name}>
+    <img class="lockup" src="/assets/logo/teq-lockup-light.svg" alt={site.name} width="209" height="83">
+  </a>
+  <nav aria-label="Sections">
+    <a href="/docs/">Docs</a>
+    <a href={github}>GitHub</a>
+  </nav>
+</header>
+<main id="main" tabindex="-1">
+<slot />
+</main>
+<footer id="license">
+  <p>{site.name} · <a href={`${github}/blob/HEAD/LICENSE`}>Apache License 2.0</a></p>
+  <div class="footer-links">
+    <a href="/docs/">Documentation</a>
+    <a href={github}>GitHub</a>
+    <a href={`${github}/blob/HEAD/NOTICE`}>Notices &amp; attribution</a>
+    <a href="#top">Back to top ↑</a>
+  </div>
+</footer>
+</div>
+<div class="sr-only" role="status" aria-live="polite" id="copied"></div>
+<script>
+  // A copy button on every code block: in the caption bar of a captioned block, in the corner of the others.
+  const live = document.getElementById("copied")!;
+  for (const pre of document.querySelectorAll("pre")) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "copy";
+    button.textContent = "Copy";
+    const caption = pre.parentElement?.matches("figure.code") ? pre.parentElement.querySelector("figcaption") : null;
+    if (caption) caption.append(button);
+    else {
+      const wrap = document.createElement("div");
+      wrap.className = "code-wrap";
+      pre.replaceWith(wrap);
+      wrap.append(pre, button);
+    }
+    let reset: ReturnType<typeof setTimeout> | undefined;
+    button.addEventListener("click", async () => {
+      let copied = false;
+      try {
+        await navigator.clipboard.writeText(pre.textContent ?? "");
+        copied = true;
+      } catch {}
+      if (!copied) {
+        // Without the clipboard API (a page served over http, an older browser): select the code, then the
+        // legacy command, and the selection stays for the keyboard where that fails too.
+        const range = document.createRange();
+        range.selectNodeContents(pre);
+        const selection = getSelection();
+        selection?.removeAllRanges();
+        selection?.addRange(range);
+        try { copied = document.execCommand("copy"); } catch {}
+        if (copied) selection?.removeAllRanges();
+      }
+      button.textContent = copied ? "Copied" : "Selected";
+      live.textContent = copied ? "Copied to the clipboard." : "The code is selected; copy it with the keyboard.";
+      clearTimeout(reset);
+      reset = setTimeout(() => { button.textContent = "Copy"; live.textContent = ""; }, 2000);
+    });
+  }
+</script>
+</body>
+</html>

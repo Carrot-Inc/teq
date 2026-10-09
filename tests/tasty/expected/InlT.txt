@@ -1,0 +1,6 @@
+// tests/tasty/fixtures/InlT.tasty (TASTy 28.8, 406 bytes)
+package fix.inlres
+@SourceFile trait InlT extends Object {
+  def f: Any
+  def plain(x: Int): Predef.String
+}

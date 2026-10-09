@@ -1,0 +1,7 @@
+#!/bin/bash
+# sbt for the stock Scala.js vite plugin under sbt 2: the plugin takes the last line sbt prints for
+# `print <task>` as the task's value, and sbt 2 follows the value with `[success] elapsed: N s`
+# and a terminal escape, which this wrapper, first on the PATH of check-scalajs-dev.mjs, drops
+# from stdout. SBT_REAL names the sbt behind it.
+"${SBT_REAL:-sbt}" "$@" | sed -e $'s/\x1b\\[[0-9;]*[A-Za-z]//g' -e '/^\[success\] /d'
+exit "${PIPESTATUS[0]}"

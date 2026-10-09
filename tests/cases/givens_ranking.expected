@@ -1,0 +1,43 @@
+int
+string
+fromCodec(boolean codec)
+list(int)
+list(fromCodec(boolean codec))
+list(list(string))
+set(int)
+any
+option(any)
+option of int
+option(option of int)
+single
+tuple2
+unitLeft
+unitRight
+animal
+dog
+printer of dogs
+printer of animals
+plain
+def level
+block level
+class level
+explicit
+from the enclosing object
+from the inner object
+one
+unit
+pair
+triple
+list
+list of options
+list of int options
+string1
+any2
+dog3
+animal4
+any5
+crate of 2
+nearer7
+email
+string
+List(s@x, long@x)

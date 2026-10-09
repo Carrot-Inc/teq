@@ -1,0 +1,6 @@
+// tests/tasty/fixtures/ClashOverloaded.tasty (TASTy 28.8, 459 bytes)
+package fix.clash
+@SourceFile trait ClashOverloaded extends Object {
+  def pick(x: Int): Int
+  def pick(x: Predef.String): Predef.String
+}

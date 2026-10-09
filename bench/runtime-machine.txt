@@ -1,0 +1,5 @@
+# The node and java of the remote machines (every one set up alike), which the runtime line of
+# bench/pairs.py checks at its start, as `<name> <resolved path> <version>`: a run under another pair says nothing
+# of these numbers. Recorded 2026-10-01 on a remote machine.
+node /usr/bin/node v25.9.0
+java /usr/lib/jvm/temurin-24-jdk-amd64/bin/java openjdk version "24.0.2" 2025-07-15

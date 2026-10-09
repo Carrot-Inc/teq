@@ -1,0 +1,4 @@
+entries/Run main([Ljava/lang/String;)V public,static
+entries/deep main([Ljava/lang/String;)V public,static
+entries/entry_points$package main([Ljava/lang/String;)V public,static
+entries/hello main([Ljava/lang/String;)V public,static

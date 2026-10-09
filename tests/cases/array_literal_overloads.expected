@@ -1,0 +1,16 @@
+Int 3 1,2,3
+Double 2 10,25
+Long 2 1,2
+Int 2 97,1
+Int 2 2,97
+Int 2 1,97
+Float 2 15,10
+Boolean 2 true,false
+Unit 2 (),()
+Object 2 1,x
+Long 2 1,2
+Byte 2 3,3 Short 1 Char 2 c,d
+Int 1 1 Boolean 1 true Long 2 1,2
+Long 2 1,2 Double 2 10,20
+1,2,3 7 Int 0 java.lang.String 2 scala.Option 2
+2 1,2;3 Int 2

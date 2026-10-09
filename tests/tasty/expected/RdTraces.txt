@@ -1,0 +1,8 @@
+// tests/tasty/fixtures/RdTraces.tasty (TASTy 28.8, 760 bytes)
+package fix.rdecl
+@SourceFile class RdTraces() extends Object {
+  def base(n: Int): Int = ...
+  transparent inline def one: Int = <body@77>
+  transparent inline def two: Int = <body@102>
+  transparent inline def wrap(inline x: Int): Int = <body@147>
+}

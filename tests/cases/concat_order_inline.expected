@@ -1,0 +1,33 @@
+a chain in an inline method
+  effect b
+  render x
+in:xb
+a chain an inline parameter supplies, one site
+  render x
+  effect !
+x:.,;!
+two sites
+  render x
+  effect 1
+x:.,;1
+  render x
+  effect 2
+x:.,;2
+an inline method with bound parameters as the head
+  effect b
+  render x
+  effect c
+in:xbc
+an inline method whose argument is stable as the head
+  render x
+  effect c
+in:xc
+an inline method with inline parameters as the head
+  render x
+  effect !
+  effect c
+x:.,;!c
+an inline method's call as an inline parameter's argument
+  render x
+  effect !
+in:x:.,;!

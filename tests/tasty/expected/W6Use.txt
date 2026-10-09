@@ -1,0 +1,6 @@
+// tests/tasty/fixtures/W6Use.tasty (TASTy 28.8, 749 bytes)
+package fix.wave6
+@SourceFile object W6Use extends Object {
+  <synthetic> private def writeReplace(): AnyRef = ...
+  def viaLib(using c: W6Ctx)(t: c.Term): Predef.String = ...
+}

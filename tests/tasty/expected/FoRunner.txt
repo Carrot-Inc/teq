@@ -1,0 +1,5 @@
+// tests/tasty/fixtures/FoRunner.tasty (TASTy 28.8, 2739 bytes)
+package fix.cake
+@SourceFile class FoRunner() extends Object {
+  def run[T](r: FoGR[T, ?]): Option[(T, Int)] = ...
+}

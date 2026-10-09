@@ -1,0 +1,16 @@
+// tests/tasty/fixtures/Pretty.tasty (TASTy 28.8)
+@SourceFile trait Pretty[A] extends Object {
+  def show(a: A): Predef.String
+}
+@SourceFile object Pretty extends Object() {
+  <synthetic> private def writeReplace(): AnyRef = new ModuleSerializationProxy(classOf[Pretty.type])
+  given given_Pretty_Int: given_Pretty_Int.type = new given_Pretty_Int.type()
+  object given_Pretty_Int extends Object(), Pretty[Int] {
+    <synthetic> private def writeReplace(): AnyRef = new ModuleSerializationProxy(classOf[given_Pretty_Int.type])
+    def show(a: Int): Predef.String = a.toString()
+  }
+  <synthetic> class given_Pretty_List[A](using protected val s: Pretty[A]) extends Object(), Pretty[package.List[A]] {
+    def show(as: package.List[A]): Predef.String = as.map[String]((a: A) => s.show(a)).mkString("[", ", ", "]")
+  }
+  given given_Pretty_List[A](using s: Pretty[A]): given_Pretty_List[A] = new given_Pretty_List[A](s)()
+}

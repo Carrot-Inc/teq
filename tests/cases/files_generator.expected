@@ -1,0 +1,32 @@
+first run: MarkImages.scala, ShapeImages.scala, images.js
+second run: 
+an image added: MarkImages.scala, images.js
+the module deleted: images.js
+== app/assets/images.js (333 bytes)
+// Written by the image generator — do not edit.
+
+export const shapes = {
+  circle: "/assets/images/shapes/circle.svg",
+  moreLine: "/assets/images/shapes/more/line.svg",
+  square: "/assets/images/shapes/square.svg",
+};
+
+export const marks = {
+  cross: "/assets/images/marks/cross.svg",
+  tick: "/assets/images/marks/tick.svg",
+};
+== out/images/ShapeImages.scala (292 bytes)
+package images
+
+// Written by the image generator from assets/images/shapes — do not edit.
+object ShapeImages:
+  val circle: String = "/assets/images/shapes/circle.svg"
+  val moreLine: String = "/assets/images/shapes/more/line.svg"
+  val square: String = "/assets/images/shapes/square.svg"
+== out/images/MarkImages.scala (219 bytes)
+package images
+
+// Written by the image generator from assets/images/marks — do not edit.
+object MarkImages:
+  val cross: String = "/assets/images/marks/cross.svg"
+  val tick: String = "/assets/images/marks/tick.svg"

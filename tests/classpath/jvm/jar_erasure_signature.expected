@@ -1,0 +1,3 @@
+passId(long): long
+passTags(scala.collection.immutable.List): scala.collection.immutable.List
+passCm(int): int

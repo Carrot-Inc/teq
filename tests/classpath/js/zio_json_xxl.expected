@@ -1,0 +1,5 @@
+Right(Hold(7,Ada,10000000001,true,12.5,None,3,Oslo,10000000002,false,1.25,Some(B),4,555,10000000003,true,2.25,None,9,Bo,10000000004,true,0.5,Some(G2),2,N,10000000005,false,1.5,Some(3),11,EU,10000000006,false))
+Right(EU)
+Right(2 2)
+Left(.lane(expected an Int))
+Right(true)

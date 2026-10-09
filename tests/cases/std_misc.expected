@@ -1,0 +1,37 @@
+option ordering: List(None, Some(1), Some(3)) | Some(2) | None
+tuple3: List((0,z,true), (1,a,false), (1,b,true))
+tuple4: List((0,9,9,9), (1,2,3,0), (1,2,3,4)) | List((false,false,3), (false,true,2), (true,false,1))
+tuple5: (1,1,1,1,1)
+boolean sort: List(libraryId, branchId, name)
+reverse: List(3, 2, 1) | List(b, a) | List(9, 2)
+by: List(Price(1), Price(5)) | Price(5) | true
+on: List(a, bb, ccc) | true
+orElse: List((0,z), (1,a), (1,b))
+ordering ops: true | 2 | a | true
+infix: true | false | Price(7) | true
+ordered: true | true | List(Version(1,5), Version(2,0))
+doubles: List(false, false, true) | true | true
+numeric: true | true | true
+sumIfAllKnown: Some(3) | None | Some(0)
+numeric ops: 3 | -3 | 3 | -1 | 4 | true | 2 | 1
+integral: 3 | 3 | true
+math: true | 2 | -2 | -4 | 2 | true | 1
+math round: 3 | -2 | 2 | 3 | 0 | 10000000000 | 3 | 2 | true
+math more: true | true | true | true | 4 | true
+double ops: false | true | true | true | true | true | true | 3 | -3
+pipe: 12 | aa
+tapped 2
+tap: List(2, 3)
+tupled: 3 | 6 | List(3, 7) | Some(#7x)
+curried: 3 | 6 | List(11, 12)
+function: 1 | List(k, k) | 12 | 5
+compose: 12 | 4 | 3 | (a,1)
+random ints: -1170105035 | 3 | 48 | 0 | 969970
+random more: -1068554554583376509 | true | true | 7 | g
+random double: true | 730699
+shuffle: List(3, 4, 2, 5, 1) | Vector(c, a, b)
+reseeded: 37 | 37
+global: true | true | List(1, 2, 3) | 3
+durations: 5 seconds | 1 second | 1 | 1 | 120 | 24 | 3 | 2
+duration math: 5500 milliseconds | 59 seconds | 6 seconds | 2500 milliseconds | true | true | 2 minutes
+duration sort: List(1500 milliseconds, 2 seconds, 1 minute) | 3 hours | 1 | 2000

@@ -1,0 +1,9 @@
+[{"Circle":{"center":{"x":1,"y":2,"label":"c"},"radius":3.5}},{"Rect":{"a":{"x":0,"y":0,"label":"a"},"b":{"x":4,"y":5,"label":"b"}}},{"Empty":{}}]
+Right(List(Circle(Point(1,2,c),3.5), Rect(Point(0,0,a),Point(4,5,b)), Empty))
+{"x":7,"y":8,"label":"p"}
+Right(Point(1,2,q))
+Left(DecodingFailure at .y: Missing required field)
+[{"Fast":{"level":3}},{"Idle":{}}]
+Right(List(Fast(3), Idle))
+{"name":"t","weight":2}
+Right(Tag(u,5))

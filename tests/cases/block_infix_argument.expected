@@ -1,0 +1,34 @@
+h:1!
+7
+List(7, 6, 14)
+five
+List(1, 2)
+true
+4
+List(10, 20)
+5
+1
+-1
+-4
+List(11, 12)
+15
+block then effect
+  stat
+  render x
+  effect
+x!
+annotated block then effect
+  stat
+  render x
+  effect
+x!
+ascribed block then effect
+  stat
+  render x
+  effect
+x!
+block then a longer chain
+  render x
+  render y
+  effect
+xy!

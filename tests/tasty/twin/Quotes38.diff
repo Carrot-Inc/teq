@@ -1,0 +1,6 @@
+6,7c6,7
+<   <macro> inline def described(inline n: Int): Predef.String = <body>
+<   def describedImpl(n: Expr[Int])(using x$2: Quotes): Expr[Predef.String] = ...
+---
+>   <macro> inline def described(inline n: Int): String = <body>
+>   def describedImpl(n: Expr[Int])(using x$2: Quotes): Expr[String] = ...

@@ -1,0 +1,8 @@
+5c5
+<     def /[B](next: RouteB[B])(implicit c: RouteB.Composition[A, B]): RouteB[c.C] = ~{([1], fix.shapes.CompDsl$.RouteB, fix.shapes.CompDsl$.RouteB$.Composition): fix.shapes.CompDsl$.RouteB}[Unit](RouteB.slash)(RouteB.Composition.Ato_{[1]}[A]).~{([1], fix.shapes.CompDsl$.RouteB, fix.shapes.CompDsl$.RouteB$.Composition): fix.shapes.CompDsl$.RouteB}[B](next)(c)
+---
+>     def /[B](next: RouteB[B])(implicit c: RouteB.Composition[A, B]): RouteB[c.C] = ~{([1], fix.shapes.CompDsl$.RouteB, fix.shapes.CompDsl$.RouteB$.Composition): fix.shapes.CompDsl$.RouteB}[Unit](RouteB.slash)(RouteB.Composition.Ato_{([1]): fix.shapes.CompDsl$.RouteB$.Composition}[A]).~{([1], fix.shapes.CompDsl$.RouteB, fix.shapes.CompDsl$.RouteB$.Composition): fix.shapes.CompDsl$.RouteB}[B](next)(c)
+25c25
+<         (new $anon{(): fix.shapes.CompDsl$.RouteB$.Composition$._$$anon}(): Composition[A, B] { type C = O })
+---
+>         (new $anon{(): fix.shapes.CompDsl$.RouteB$.Composition$._$$anon}(): Aux[A, B, O])

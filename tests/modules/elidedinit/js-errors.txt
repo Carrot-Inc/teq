@@ -1,0 +1,4 @@
+$OUT/elidedinit/jsl-a!a/Lib.scala:11:7: error: the body of ela.Init.withheld is withheld from the products of $OUT/elidedinit/jsl-a (elided: unstated the std's List.range, which scala-library has under another shape): the TASTy writer's queue of the shapes it withholds writes it (in the body of ela.Init.withheld)
+  body: <elided: List[Int]>
+    val withheld = { print("init "); List.range(0, 1) }
+        ^

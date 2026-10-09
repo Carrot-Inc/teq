@@ -1,0 +1,64 @@
+parsed a//b/: <a/b>
+parsed /: </>
+parsed //x//: </x>
+parsed : <>
+parsed a/./b: <a/./b>
+relativize assets assets/alpha.svg: <alpha.svg>
+relativize a/b a: <..>
+relativize a/b a/c: <../c>
+relativize a a: <>
+relativize  a: <a>
+relativize a : <..>
+relativize /a /a/b/c: <b/c>
+relativize /a/b /c: <../../c>
+relativize a/./b a/c: <../c>
+relativize a/b a/b/../c: <../c>
+relativize a ..: <../..>
+relativize . a: <a>
+relativize a .: <..>
+relativize a/.. b: <b>
+relativize a /a: java.lang.IllegalArgumentException: 'other' is different type of Path
+relativize .. a: java.lang.IllegalArgumentException: Unable to compute relative  path from .. to a
+relativize / /a: <a>
+normalize a/./b/../c: <a/c>
+normalize a/..: <>
+normalize ../a: <../a>
+normalize /..: </>
+normalize /../a: </a>
+normalize a/../..: <..>
+normalize .: <>
+normalize ./a: <a>
+normalize /a/./b/../../..: </>
+normalize ../../a/..: <../..>
+startsWith abc a: <false>
+startsWith a/b a: <true>
+startsWith a/b a/b/c: <false>
+startsWith /a/b /a: <true>
+startsWith /a/b a: <false>
+startsWith /a /: <true>
+startsWith a : <false>
+startsWith  : <true>
+startsWith a//b a/b/: <true>
+startsWith a path: <true>
+resolve a path: <a/b/c>
+resolve an absolute path: </b>
+resolve an operand as the parser writes it: <a/b/c>
+resolve an absolute operand so: </x/y>
+user.dir is absolute: <true>
+user.dir is the empty path's: <true>
+toAbsolutePath not/there.txt: <<dir>/not/there.txt>
+toAbsolutePath tests: <<dir>/tests>
+toAbsolutePath .: <<dir>/.>
+toAbsolutePath a/../b: <<dir>/a/../b>
+toAbsolutePath rel/: <<dir>/rel>
+toAbsolutePath absolute: </x/y>
+toAbsolutePath is absolute: <true>
+under user.dir: <true>
+relativized back: <tests/cases>
+PATH set: <true>
+PATH in sys.env: <true>
+PATH in the map: <true>
+unset: <null>
+user.dir in sys.props: <true>
+PATH through an inline argument: <yes>
+user.dir through an inline argument: <yes>

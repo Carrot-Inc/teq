@@ -1,0 +1,13 @@
+@main def run(): Unit =
+  println(C0.value)
+  println(C1.value)
+  println(C2.value)
+  println(C3.value)
+  println(C4.value)
+  println(C5.value)
+  println(C6.value)
+  println(C7.value)
+  println(C8.value)
+  println(C9.value)
+  println(C10.value)
+  println(C11.value)

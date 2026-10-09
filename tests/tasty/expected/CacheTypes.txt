@@ -1,0 +1,12 @@
+// tests/tasty/fixtures/CacheTypes.tasty (TASTy 28.8, 709 bytes)
+package fix.cake
+@SourceFile trait CacheTypes extends Object {
+  def tag: Predef.String
+  val Ty: TyModule
+  trait TyModule extends Object {
+    def name: Predef.String
+    class Cache(n: Int) extends Object {
+      def show: Predef.String = ...
+    }
+  }
+}

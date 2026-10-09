@@ -1,0 +1,17 @@
+41
+false
+true
+None
+10
+Acme
+general:desk_phone [String] = '' (Desk contact phone for members) text
+holds:max_count [Int] = '25' (Maximum holds per member) int
+system:large_text [Boolean] = 'false' (Large text) boolean
+fine_rounding [Option[Int]] = '' (Rounding) parameterized
+notice:from_name [String] = 'Acme'
+desks:max [Int] = '10'
+holds:max_count
+25
+25
+notice:from_name
+3

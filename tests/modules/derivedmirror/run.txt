@@ -1,0 +1,5 @@
+Email(ok)
+Point(3,4)
+Point(5,6)
+Email(direct)
+Email(in a macro) Point(1,2)

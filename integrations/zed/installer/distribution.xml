@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The installer's product definition: one invisible choice, the component package, installed
+     under the user's home alone (no administrator password), on Apple silicon, with Zed quit
+     first and Zed's own Scala extension (whose language ours replaces) refused rather than
+     removed behind Zed's back. installer.sh puts the version in. -->
+<installer-gui-script minSpecVersion="2">
+    <title>Scala with teq, for Zed</title>
+    <welcome file="welcome.html" mime-type="text/html"/>
+    <options customize="never" require-scripts="true" hostArchitectures="arm64"/>
+    <domains enable_currentUserHome="true" enable_localSystem="false" enable_anywhere="false"/>
+    <installation-check script="scalaExtensionAbsent()"/>
+    <script><![CDATA[
+    function scalaExtensionAbsent() {
+        var scala = system.env.HOME + '/Library/Application Support/Zed/extensions/installed/scala';
+        if (system.files.fileExistsAtPath(scala)) {
+            my.result.title = "Zed's Scala extension is installed";
+            my.result.message = "Uninstall it from Zed's extensions page first: Zed runs one Scala language at a time, and this extension brings its own. If auto_install_extensions in Zed's settings lists \"scala\", remove that too, or Zed installs it again. Then run this installer again.";
+            my.result.type = 'Fatal';
+            return false;
+        }
+        return true;
+    }
+    ]]></script>
+    <choices-outline>
+        <line choice="default">
+            <line choice="teq"/>
+        </line>
+    </choices-outline>
+    <choice id="default"/>
+    <choice id="teq" visible="false">
+        <pkg-ref id="build.teq.zed"/>
+    </choice>
+    <pkg-ref id="build.teq.zed" version="@VERSION@" onConclusion="none">zed-teq-component.pkg</pkg-ref>
+    <pkg-ref id="build.teq.zed">
+        <must-close>
+            <app id="dev.zed.Zed"/>
+            <app id="dev.zed.Zed-Preview"/>
+            <app id="dev.zed.Zed-Nightly"/>
+            <app id="dev.zed.Zed-Dev"/>
+        </must-close>
+    </pkg-ref>
+</installer-gui-script>

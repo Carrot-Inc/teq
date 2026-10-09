@@ -1,0 +1,11 @@
+List(a, b c)
+List(_1, _2, _3)
+List()
+List(x)
+List()
+List(, )
+List(only)
+out: 5
+out: 2 is out of bounds (min 0, max 1)
+b c
+List((a,1), (b c,x))

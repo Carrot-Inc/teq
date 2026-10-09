@@ -1,0 +1,10 @@
+true
+Some(3)
+true
+true
+Some(Some(5))
+true
+false
+Some(8)
+(Some(3),2)
+Some(9)

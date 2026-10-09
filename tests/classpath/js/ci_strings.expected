@@ -1,0 +1,47 @@
+-- equality
+true
+true
+false
+true
+true
+false
+true
+false
+true
+-- interpolator
+Content-Type
+true
+true
+xAccept2y
+-- members
+Content-Type
+12
+false true true
+padded
+CONTENT-TYPE
+true
+true
+false
+true
+false
+0
+true
+true
+true
+true
+-- collections
+List(Host, Accept)
+List(x, y)
+2
+Some(1)
+-- patterns
+content (Type)
+content (length)
+vendor Acme: Trace
+accept
+other
+HTTPS Example.org true
+-- cats
+true
+true
+true

@@ -1,0 +1,4 @@
+$OUT/elidedmethod/jsl-a!a/Lib.scala:7:7: error: the body of ela.Calls.range is withheld from the products of $OUT/elidedmethod/jsl-a (elided: unstated the std's List.range, which scala-library has under another shape): the TASTy writer's queue of the shapes it withholds writes it (in the body of ela.Calls.range)
+  body: <elided: Int>
+    def range: Int = List.range(0, 3).length
+        ^

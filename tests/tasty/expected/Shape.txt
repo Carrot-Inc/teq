@@ -1,0 +1,4 @@
+// tests/tasty/fixtures/Shape.tasty (TASTy 28.8, 657 bytes)
+package fix.shapes
+@SourceFile @Child[Empty.type] @Child[Rect] @Child[Circle] sealed abstract class Shape(val name: Predef.String) extends Object, Product, package.Serializable {
+}

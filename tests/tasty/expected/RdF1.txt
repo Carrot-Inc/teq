@@ -1,0 +1,6 @@
+// tests/tasty/fixtures/RdF1.tasty (TASTy 28.8, 632 bytes)
+package fix.rdecl
+@SourceFile final class RdF1(n: Int) extends Object, RdFoo {
+  def bar: Int = ...
+  override def toString: Predef.String = ...
+}

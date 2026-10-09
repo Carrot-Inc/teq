@@ -1,0 +1,7 @@
+// tests/tasty/fixtures/CacheTypesPlatform.tasty (TASTy 28.8, 604 bytes)
+package fix.cake
+@SourceFile trait CacheTypesPlatform extends Object, CacheTypes {
+  object Ty extends Object, TyModule {
+    def name: Predef.String = ...
+  }
+}

@@ -1,0 +1,4 @@
+# For a build on Netlify itself (a connected repository with this directory as its base); the CLI deploy of dist/ needs none of this.
+[build]
+  command = "npm run build"
+  publish = "dist"

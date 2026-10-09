@@ -1,0 +1,7 @@
+flex p-2
+grid text-sm p-3 hover:flex
+grid md:p-3 hover:flex
+flex p-2 text-sm
+flex
+grid p-3 flex md:flex
+grid p-2 hover:grid

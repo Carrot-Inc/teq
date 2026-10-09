@@ -1,0 +1,14 @@
+15:7 not-partial
+19:81 not-partial
+22:19 exhaustive
+24:7 not-partial
+28:37 not-partial
+29:66 not-partial
+31:66 exhaustive
+35:7 exhaustive
+38:37 exhaustive
+40:37 exhaustive
+43:7 not-partial
+48:7 exhaustive
+53:7 not-partial
+59:7 not-partial

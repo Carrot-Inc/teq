@@ -1,0 +1,14 @@
+node_modules/
+.staged/
+.astro/
+dist/
+public/assets/
+public/favicon.svg
+public/index.md
+public/docs/
+public/llms.txt
+public/llms-full.txt
+
+# Local Netlify folder
+.netlify
+deno.lock

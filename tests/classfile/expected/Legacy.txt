@@ -1,0 +1,7 @@
+// tests/classfile/fixtures/fix/Legacy.class (class file 65.0, 580 bytes)
+package fix
+@Deprecated @FunctionalInterface private[fix] trait Legacy[T] extends Serializable {
+  static val VERSION: Int = 1
+  def get(): T throws Exception
+  @Deprecated def reset(): Unit = ...
+}

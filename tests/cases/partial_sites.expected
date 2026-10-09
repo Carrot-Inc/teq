@@ -1,0 +1,26 @@
+List((Credits,true), (Volunteers,true))
+List(Day1, Day3)
+Some(15)
+None
+Map(a -> 9)
+List(north)
+Danger/Sm/Some(plus)/None
+Primary/Md/None/None
+Some(Trigger)
+None
+Some(Edge)
+Some(Firefox)
+None
+Some(WAIVE10)
+None
+List((brand,List(bg, fg)))
+List(Duplicate class 'm-2'., Duplicate class 'p-4'.)
+Some(variant 'md:' is repeated.)
+None
+Right(Some(flags: Credits))
+Right(None)
+Right(())
+Right(Right(Position(1.5,2.5)))
+Right(Left(PositionError(1,denied)))
+Left(JsException(0,unknown))
+Left(Timeout(3000))

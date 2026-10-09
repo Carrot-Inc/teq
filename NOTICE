@@ -1,0 +1,218 @@
+teq
+Copyright 2026 Sviat Chumakov
+
+Licensed under the Apache License, Version 2.0 (the "License"):
+http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+
+A program teq compiles for JavaScript or runs in its interpreter carries the parts of teq's standard library it
+uses, which may include the adaptations from Scala.js, the Scala standard library, scalajs-dom and
+scala-java-locales named below and the character tables made from the Unicode Character Database; a build with
+--hot carries the react-refresh runtime. Those entries' notices accompany a distribution of a program that
+contains them. The entries for the test programs, the Zed extension's files and the compiler's hash algorithm
+concern teq itself, not the programs it compiles.
+
+This product includes test programs adapted from the Scala 3 compiler
+(https://github.com/scala/scala3), Copyright 2012-2026 EPFL and
+Copyright 2012-2026 Lightbend, Inc. dba Akka, licensed under the Apache
+License, Version 2.0: every file under tests/ whose header comment names the
+test of the Scala 3 compiler it was adapted, copied or taken from, and the
+expected output beside such a file.
+
+This product includes code adapted from the Scala standard library
+(https://github.com/scala/scala), Copyright (c) 2002-2025 EPFL and
+Copyright (c) 2011-2025 Lightbend, Inc. dba Akka, licensed under the Apache
+License, Version 2.0: the parse of Duration(text) in std/duration.scala (from
+scala/concurrent/duration/Duration.scala of scala-library 2.13). Its NOTICE says:
+Scala includes software developed at LAMP/EPFL (https://lamp.epfl.ch/) and
+Akka (https://akka.io/).
+
+This product includes code adapted from Scala.js (https://www.scala-js.org/),
+Copyright EPFL, licensed under the Apache License, Version 2.0: the java.net.URI
+of std/javalib/net.scala, and sbt's test interface and the test bridge as Scala.js
+has them, std/scalajs/testing.scala and std/scalajs/test_bridge.scala, and JUnit's comparison and
+assumption failures as its test runtime has them, std/scalajs/junit.scala.
+
+This product includes code adapted from scala-java-locales
+(https://github.com/cquiroz/scala-java-locales, tag v1.5.4, commit
+4eb27b91cb154cd323bb2ea510056c5bb9665122), Copyright (c) 2015-2020 Carlos Quiroz, licensed
+under the BSD 3-Clause License: the java.text.DecimalFormat of std/javalib/text.scala. The
+Unicode CLDR data its generated code is built from, under a license of its own, is not read.
+Its license:
+
+    Copyright (c) 2015-2020 Carlos Quiroz
+
+    All rights reserved.
+
+    Redistribution and use in source and binary forms, with or without modification,
+    are permitted provided that the following conditions are met:
+
+        * Redistributions of source code must retain the above copyright notice,
+          this list of conditions and the following disclaimer.
+        * Redistributions in binary form must reproduce the above copyright notice,
+          this list of conditions and the following disclaimer in the documentation
+          and/or other materials provided with the distribution.
+        * Neither the name of Carlos Quiroz nor the names of its contributors
+          may be used to endorse or promote products derived from this software
+          without specific prior written permission.
+
+    THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+    "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+    LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+    A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR
+    CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+    EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+    PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+    PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF
+    LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
+    NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+    SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+This product includes the Scala language definition of metals-zed
+(https://github.com/scalameta/metals-zed, commit 5fe61bd8b9a221b5fd98523c99c4fcc21ddada52),
+by the metals-zed contributors, licensed under the Apache License, Version 2.0, whose
+LICENSE names no copyright holder and which has no NOTICE file: the eleven files of
+integrations/zed/languages/scala (brackets.scm, config.toml, highlights.scm, indents.scm,
+injections.scm, locals.scm, outline.scm, overrides.scm, runnables.scm, tags.scm and
+tasks.json), unchanged.
+
+This product includes queries of tree-sitter-scala
+(https://github.com/tree-sitter/tree-sitter-scala, commit
+97aead18d97708190a51d4f551ea9b05b60641c9), the grammar the Zed extension names, licensed
+under the MIT License: most of integrations/zed/languages/scala/highlights.scm, and
+locals.scm and tags.scm, which metals-zed took from it; the extension's bundle also carries
+the grammar compiled (grammars/scala.wasm). Its license:
+
+    The MIT License (MIT)
+
+    Copyright (c) 2018 Max Brunsfeld and GitHub
+
+    Permission is hereby granted, free of charge, to any person obtaining a copy
+    of this software and associated documentation files (the "Software"), to deal
+    in the Software without restriction, including without limitation the rights
+    to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+    copies of the Software, and to permit persons to whom the Software is
+    furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in all
+    copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+    OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+    SOFTWARE.
+
+This product includes code adapted from react-refresh, React's Fast Refresh runtime
+(https://github.com/facebook/react, packages/react-refresh), licensed under the MIT License:
+runtime/hot-refresh.mjs, which carries the notice below itself and which teq writes into the
+output of a build under --hot. Its license:
+
+    MIT License
+
+    Copyright (c) Meta Platforms, Inc. and affiliates.
+
+    Permission is hereby granted, free of charge, to any person obtaining a copy
+    of this software and associated documentation files (the "Software"), to deal
+    in the Software without restriction, including without limitation the rights
+    to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+    copies of the Software, and to permit persons to whom the Software is
+    furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in all
+    copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+    OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+    SOFTWARE.
+
+This product includes facades adapted from scalajs-dom 2.8.1
+(https://github.com/scala-js/scala-js-dom, tag v2.8.1, commit
+1da1115ee18bbbc1239f224dec3cb23df6222852), whose code is licensed under the MIT License:
+std/scalajs/dom.scala and std/scalajs/dom_*.scala, its org.scalajs.dom trimmed and the
+Seq-like reading of its lists. Its documentation comments, MDN's text under CC-BY-SA, are
+not copied. Its license for the code:
+
+    The MIT License (MIT)
+
+    Copyright (c) 2013 Li Haoyi
+
+    Permission is hereby granted, free of charge, to any person obtaining a copy
+    of this software and associated documentation files (the "Software"), to deal
+    in the Software without restriction, including without limitation the rights
+    to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+    copies of the Software, and to permit persons to whom the Software is
+    furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+    OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+    THE SOFTWARE.
+
+This product includes the hash algorithm of rustc-hash 1.1.0
+(https://github.com/rust-lang/rustc-hash), Copyright 2015 The Rust Project Developers,
+licensed under the Apache License, Version 2.0 or the MIT License at the user's option, here
+under the Apache License, Version 2.0: the FxHasher of src/intern.rs.
+
+This product includes data of the Unicode Character Database, version 16.0.0
+(https://www.unicode.org/ucd/), as JDK 24's java.lang.Character carries it, licensed under
+the Unicode License V3: the tables of decimal digits, numeric values and letters in
+src/interp/char_tables.rs and runtime/rt.js, which tests/support/CharTables.java generates.
+Its license, as the JDK carries it:
+
+    UNICODE LICENSE V3
+
+    COPYRIGHT AND PERMISSION NOTICE
+
+    Copyright © 1991-2024 Unicode, Inc.
+
+    NOTICE TO USER: Carefully read the following legal agreement. BY
+    DOWNLOADING, INSTALLING, COPYING OR OTHERWISE USING DATA FILES, AND/OR
+    SOFTWARE, YOU UNEQUIVOCALLY ACCEPT, AND AGREE TO BE BOUND BY, ALL OF THE
+    TERMS AND CONDITIONS OF THIS AGREEMENT. IF YOU DO NOT AGREE, DO NOT
+    DOWNLOAD, INSTALL, COPY, DISTRIBUTE OR USE THE DATA FILES OR SOFTWARE.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of data files and any associated documentation (the "Data Files") or
+    software and any associated documentation (the "Software") to deal in the
+    Data Files or Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, and/or sell
+    copies of the Data Files or Software, and to permit persons to whom the
+    Data Files or Software are furnished to do so, provided that either (a)
+    this copyright and permission notice appear with all copies of the Data
+    Files or Software, or (b) this copyright and permission notice appear in
+    associated Documentation.
+
+    THE DATA FILES AND SOFTWARE ARE PROVIDED "AS IS", WITHOUT WARRANTY OF ANY
+    KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+    MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT OF
+    THIRD PARTY RIGHTS.
+
+    IN NO EVENT SHALL THE COPYRIGHT HOLDER OR HOLDERS INCLUDED IN THIS NOTICE
+    BE LIABLE FOR ANY CLAIM, OR ANY SPECIAL INDIRECT OR CONSEQUENTIAL DAMAGES,
+    OR ANY DAMAGES WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS,
+    WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION,
+    ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THE DATA
+    FILES OR SOFTWARE.
+
+    Except as contained in this notice, the name of a copyright holder shall
+    not be used in advertising or otherwise to promote the sale, use or other
+    dealings in these Data Files or Software without prior written
+    authorization of the copyright holder.

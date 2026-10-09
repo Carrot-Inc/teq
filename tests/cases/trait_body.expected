@@ -1,0 +1,7 @@
+before D
+  B body: 1
+  Plain body
+g
+before O
+  Plain body
+1

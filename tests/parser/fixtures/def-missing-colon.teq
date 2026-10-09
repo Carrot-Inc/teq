@@ -1,0 +1,2 @@
+def-missing-colon.scala:3:17: error: '=' expected, but identifier found
+def-missing-colon.scala:5:21: error: type mismatch

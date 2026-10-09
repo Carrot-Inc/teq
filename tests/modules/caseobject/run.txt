@@ -1,0 +1,4 @@
+stop,go,amber
+true
+Go 0
+Amber

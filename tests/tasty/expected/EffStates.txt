@@ -1,0 +1,7 @@
+// tests/tasty/fixtures/EffStates.tasty (TASTy 28.8, 1192 bytes)
+package fix.shadow
+@SourceFile object EffStates extends Object {
+  <synthetic> private def writeReplace(): AnyRef = ...
+  type State = EffState[EffDefaults.F]
+  def bump(s: State): State = ...
+}

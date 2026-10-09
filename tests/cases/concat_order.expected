@@ -1,0 +1,113 @@
+builder
+a
+chain
+  render x
+  effect y
+  render z
+1:xyz
+var
+15
+  render before
+  render after
+beforeafter
+throwing toString after an effect
+  render thrower
+  threw toString
+throwing operand before a rendering
+  render x
+  threw operand
+parentheses
+  render x
+  effect e
+p:xe
+  render x
+  effect c
+abxc
+  render x
+  render inner
+  effect in
+  effect out
+axbinnerinout
+val
+  render x
+  effect t
+h:xt
++=
+  render x
+  effect e
+s:xe
+  render x
+  effect f
+s:xexf
+kinds
+  render meters
+  effect end
+c11.52.5234truenullnullnull3mend
+  render meters
+  effect c
+4mcc
+explicit and implicit
+  render x
+  effect explicit
+xexplicit
+  render x
+  effect implicit
+ximplicit
+  render x
+  effect explicit, typed
+xexplicit, typed
+  render x
+  effect implicit, typed
+ximplicit, typed
+  render thrower
+  threw toString
+  render thrower
+  threw toString
+  effect numbers
+11.52cnumbers
+lazy val
+  render x
+  effect lazy
+xlazy
+by-name
+  render x
+  effect by-name
+xby-name
+var read
+setterv1
+field read
+cellf1
+object
+  render x
+  init Holder
+  render Holder
+xHolder
+  render x
+  init Named
+xname
+heads
+  render x
+  effect plain
+plain:xplain
+  render x
+  effect if
+t:xif
+  render x
+  effect block
+b:xblock
+interpolation
+  render x
+  effect outside
+x!outside
+  render x
+  render x
+  effect two
+x-xtwo
+  render a
+  render b
+  effect out
+ab!out
+  render i
+  render x
+  effect after
+ixafter

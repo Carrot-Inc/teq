@@ -1,0 +1,20 @@
+forward: [1 -> double, 1 -> long] size 2
+backward: [1 -> int, 1 -> long] size 2
+lookups Some(double) Some(long) Some(double) Some(int) Some(long) Some(int)
+mixed set: [1, 1, 2] size 3
+nan set: [NaN] size 1
+nan map 1 true true
+zero set: [0] size 1
+zero map 1 Some(b) Some(b)
+null map 2 Some(1) true 1
+null set: [null, b] size 2
+case keys 1 Some(b) false 2
+char keys 2 Some(char) Some(int)
+constant hash 20 Some(23) None 19 false
+constant hash set 10 true 9
+stored key List(1) List(1, 1)
+slot kept: [a -> 5, b -> 2, c -> 3] size 3
+re-added: [b -> 2, c -> 3, a -> 9] size 3
+set re-added: [b, c, a] size 3
+hashes 2006323191 2006323191 1510543636 -1609326920 835491922 501149054
+equality true false true false

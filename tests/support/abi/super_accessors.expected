@@ -1,0 +1,11 @@
+super_accessors/Child super_accessors$Stack$$super$back(Ljava/lang/String;)Ljava/lang/String; public,synthetic
+super_accessors/Child super_accessors$Stack$$super$chain(Ljava/lang/String;)Ljava/lang/String; public,synthetic
+super_accessors/Child super_accessors$Stack$$super$id(Ljava/lang/String;)Ljava/lang/String; public,synthetic
+super_accessors/Child super_accessors$Stack$$super$narrow(Ljava/lang/String;)Ljava/lang/String; public,synthetic
+super_accessors/Child super_accessors$Stack$$super$pair(Ljava/lang/String;Ljava/lang/Object;)Lscala/Tuple2; public,synthetic
+super_accessors/Stack super_accessors$Stack$$super$back(Ljava/lang/String;)Ljava/lang/String; public,abstract,synthetic
+super_accessors/Stack super_accessors$Stack$$super$chain(Ljava/lang/String;)Ljava/lang/String; public,abstract,synthetic
+super_accessors/Stack super_accessors$Stack$$super$id(Ljava/lang/String;)Ljava/lang/String; public,abstract,synthetic
+super_accessors/Stack super_accessors$Stack$$super$narrow(Ljava/lang/String;)Ljava/lang/String; public,abstract,synthetic
+super_accessors/Stack super_accessors$Stack$$super$pair(Ljava/lang/String;Ljava/lang/Object;)Lscala/Tuple2; public,abstract,synthetic
+super_accessors/Twice super_accessors$Twice$$super$id(Ljava/lang/Object;)Ljava/lang/Object; public,abstract,synthetic

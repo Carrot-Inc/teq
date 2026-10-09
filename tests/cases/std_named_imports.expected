@@ -1,0 +1,2 @@
+ordering ops: true | false | Counter(7) | b | Counter(5)
+numeric ops: 42 | true | 8 | -4

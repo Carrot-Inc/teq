@@ -1,0 +1,26 @@
+23,24c23,24
+<           @tailrec def loop(f: () => () => A): () => A = f.apply{(): java.lang.Object}() match {
+<             case $Deferred[A$1](f) => loop{(() => () => A)}(f)
+---
+>           def loop(f: () => () => A): () => A = f.apply{(): java.lang.Object}() match {
+>             case $Deferred[A](f) => loop{(() => () => A)}(f)
+30c30
+<         <synthetic> def copy[A](fa: () => () => A = <default>): Deferred[A] = new Deferred[A]{([1], Function0): fix.shapes.LocalDefer$._$$anon.Deferred}(fa)
+---
+>         <synthetic> def copy[A](fa: () => () => A = <default>): Deferred[A] = new Deferred[A]{([1], Function0): LocalDefer$$anon$121qnc0_419.Deferred}(fa)
+34c34
+<       <synthetic> val Deferred: Deferred.type = new Deferred.type{(): fix.shapes.LocalDefer$._$$anon.Deferred$}()
+---
+>       <synthetic> val Deferred: Deferred.type = new Deferred.type{(): LocalDefer$$anon$121qnc0_419.Deferred$}()
+36c36
+<         <synthetic> def apply[A](fa: () => () => A): Deferred[A] = new Deferred[A]{([1], Function0): fix.shapes.LocalDefer$._$$anon.Deferred}(fa)
+---
+>         <synthetic> def apply[A](fa: () => () => A): Deferred[A] = new Deferred[A]{([1], Function0): LocalDefer$$anon$121qnc0_419.Deferred}(fa)
+42c42
+<           new Deferred[Any]{([1], Function0): fix.shapes.LocalDefer$._$$anon.Deferred}(fa$1)
+---
+>           new Deferred[Any]{([1], Function0): LocalDefer$$anon$121qnc0_419.Deferred}(fa$1)
+47c47
+<         $Deferred.apply{([1], Function0): fix.shapes.LocalDefer$._$$anon.Deferred}[A](() => cachedFa)
+---
+>         new Deferred[A]{([1], Function0): LocalDefer$$anon$121qnc0_419.Deferred}(() => cachedFa)

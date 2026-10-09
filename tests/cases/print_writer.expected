@@ -1,0 +1,7 @@
+a1
+xy
+
+java.lang.RuntimeException: outer|Caused by: java.lang.IllegalStateException: inner
+pq
+List(a, , b)
+(0,List(),List(x, y))

@@ -1,0 +1,5 @@
+// tests/tasty/fixtures/HkStrm.tasty (TASTy 28.8, 704 bytes)
+package fix.hkb
+@SourceFile final class HkStrm[+F[_$5], +O]() extends Object {
+  def compile[F2[x] >: F[x], G[_$6]](implicit c: HkCompiler[F2, G]): Predef.String = ...
+}

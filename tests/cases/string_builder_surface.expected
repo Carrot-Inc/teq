@@ -1,0 +1,38 @@
+appends: 1 2 1.5 2.5 true c s 3 4 <t> Some(1) () List(1, 2) | 50 | 50
+any: x42u7
+builder in builder: outer inner
+self: abab
+chained: abcdefghi | abcdefghi
+range appends: bcxyp | 5
+range append 1 2: x | Range [1, 3) out of bounds for length 2
+range append -1 0: x | Range [-1, -1) out of bounds for length 2
+range append 3 0: x | Range [3, 3) out of bounds for length 2
+range append 0 -1: x | Range [0, -1) out of bounds for length 2
+range append 1 2147483647: x | Range [1, -2147483648) out of bounds for length 2
+range append 2 0: x | none
+insert: 7truestr1.542 hello world<end>
+deleteCharAt: truestr1.542 hello world<end
+delete: str1.542 hello world<
+setLength shorter: str1. | 5
+setLength longer: 7 | true | 0
+update: XYZ1.
+replace: ^X--long--1!
+clear: true | false | 0 | []
+after clear: again | false | true
+chars: a | b | a | c | c
+indexOf: 1 | 4 | -1 | -1
+substring: bc | cab | 0
+startsWith: true | false | true | false
+toList: List(a, b, c, a, b, c) | List()
+foreach: ABCABC
+foreach over a snapshot: 6 | abcabc!!!!!!
+charAt past the end: out of bounds
+reverse: hello! | olleh?
+slices: hello!+ | he1 | llo!2 | lo!3 | hel4
+slices past the ends:  | hello!+ | hello!+ |  | hello!+ | 
+reverse keeps a surrogate pair: 4 | b | a
+capacity: 0 | x
+init: init | 4
+as a CharSequence: 4 | n | ni | init
+type test: true | false
+equality: true | false

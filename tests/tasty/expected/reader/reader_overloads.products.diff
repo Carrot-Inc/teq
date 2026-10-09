@@ -1,0 +1,59 @@
+36,52c36,52
+< origin	fix.rdecl.RdApi	decl.jar	key reader_decl.scala	token 2009555215 recorded	definitions v1 (5 definitions)
+< origin	fix.rdecl.RdArr	decl.jar	key reader_decl.scala	token 2009555215 recorded	definitions v1 (6 definitions)
+< origin	fix.rdecl.RdBox	decl.jar	key reader_decl.scala	token 2009555215 recorded	definitions v1 (9 definitions)
+< origin	fix.rdecl.RdCustom	decl.jar	key reader_decl.scala	token 2009555215 recorded	definitions v1 (9 definitions)
+< origin	fix.rdecl.RdFoo	decl.jar	key reader_decl.scala	token 2009555215 recorded	definitions v1 (2 definitions)
+< origin	fix.rdecl.RdFooBox	decl.jar	key reader_decl.scala	token 2009555215 recorded	definitions v1 (8 definitions)
+< origin	fix.rdecl.RdIn	decl.jar	key reader_decl.scala	token 2009555215 recorded	definitions v1 (1 definitions)
+< origin	fix.rdecl.RdInBox	decl.jar	key reader_decl.scala	token 2009555215 recorded	definitions v1 (5 definitions)
+< origin	fix.rdecl.RdMarker	decl.jar	key reader_decl.scala	token 2009555215 recorded	definitions v1 (1 definitions)
+< origin	fix.rdecl.RdNamed	decl.jar	key reader_decl.scala	token 2009555215 recorded	definitions v1 (6 definitions)
+< origin	fix.rdecl.RdShape	decl.jar	key reader_decl.scala	token 2009555215 recorded	definitions v1 (3 definitions)
+< origin	fix.rdecl.RdSquare	decl.jar	key reader_decl.scala	token 2009555215 recorded	definitions v1 (3 definitions)
+< origin	fix.rdecl.RdTok	decl.jar	key reader_decl.scala	token 2009555215 recorded	definitions v1 (14 definitions)
+< origin	fix.rdecl.RdTokA	decl.jar	key reader_decl.scala	token 2009555215 recorded	definitions v1 (3 definitions)
+< origin	fix.rdecl.RdTokB	decl.jar	key reader_decl.scala	token 2009555215 recorded	definitions v1 (3 definitions)
+< origin	fix.rdecl.RdTraces	decl.jar	key reader_decl.scala	token 2009555215 recorded	definitions v1 (7 definitions)
+< origin	fix.rdecl.RdWrap	decl.jar	key reader_decl.scala	token 2009555215 recorded	definitions v1 (5 definitions)
+---
+> origin	fix.rdecl.RdApi	none: the pseudo files' tags and the converted text's offsets
+> origin	fix.rdecl.RdArr	none: the pseudo files' tags and the converted text's offsets
+> origin	fix.rdecl.RdBox	none: the pseudo files' tags and the converted text's offsets
+> origin	fix.rdecl.RdCustom	none: the pseudo files' tags and the converted text's offsets
+> origin	fix.rdecl.RdFoo	none: the pseudo files' tags and the converted text's offsets
+> origin	fix.rdecl.RdFooBox	none: the pseudo files' tags and the converted text's offsets
+> origin	fix.rdecl.RdIn	none: the pseudo files' tags and the converted text's offsets
+> origin	fix.rdecl.RdInBox	none: the pseudo files' tags and the converted text's offsets
+> origin	fix.rdecl.RdMarker	none: the pseudo files' tags and the converted text's offsets
+> origin	fix.rdecl.RdNamed	none: the pseudo files' tags and the converted text's offsets
+> origin	fix.rdecl.RdShape	none: the pseudo files' tags and the converted text's offsets
+> origin	fix.rdecl.RdSquare	none: the pseudo files' tags and the converted text's offsets
+> origin	fix.rdecl.RdTok	none: the pseudo files' tags and the converted text's offsets
+> origin	fix.rdecl.RdTokA	none: the pseudo files' tags and the converted text's offsets
+> origin	fix.rdecl.RdTokB	none: the pseudo files' tags and the converted text's offsets
+> origin	fix.rdecl.RdTraces	none: the pseudo files' tags and the converted text's offsets
+> origin	fix.rdecl.RdWrap	none: the pseudo files' tags and the converted text's offsets
+56,65c56,66
+< origin	fix.rjava.RdSub	decl.jar	key reader_java.scala	token 108331611 recorded	definitions v1 (1 definitions)
+< select	fix.rdecl.RdBox	def put	reader_decl.scala:11:27	java.lang.String.+(java.lang.Object): java.lang.String	by name (a builtin's member)	: String
+< select	fix.rdecl.RdBox	def put	reader_decl.scala:12:51	java.lang.String.+(java.lang.Object): java.lang.String	by name (a builtin's member)	: String
+< select	fix.rdecl.RdBox	def toString	reader_decl.scala:14:35	java.lang.String.+(java.lang.Object): java.lang.String	by name (a builtin's member)	: String
+< select	fix.rdecl.RdNamed	def sum	reader_decl.scala:29:56	scala.List (the pickle's scala.collection.immutable.List).sum([1], scala.math.Numeric): java.lang.Object	one member scala.IterableOps.sum(Numeric[B]): B	: Int
+< select	fix.rdecl.RdNamed	def sum	reader_decl.scala:30:62	scala.Int.*(scala.Int): scala.Int	by name (a builtin's member)	: Int
+< select	fix.rdecl.RdNamed	def sum	reader_decl.scala:30:62	scala.List (the pickle's scala.collection.immutable.List).map([1], scala.Function1): scala.collection.immutable.List	one member scala.List.map(A => B): List[B]	: List[Int]
+< select	fix.rdecl.RdNamed	def sum	reader_decl.scala:30:62	scala.List (the pickle's scala.collection.immutable.List).sum([1], scala.math.Numeric): java.lang.Object	one member scala.IterableOps.sum(Numeric[B]): B	: Int
+< select	fix.rdecl.RdNamed	def sum	reader_decl.scala:30:69	java.lang.String.length(): scala.Int	by name (a builtin's member)	: Int
+< select	fix.rdecl.RdShape	def area	reader_decl.scala:39:34	java.lang.String.+(java.lang.Object): java.lang.String	by name (a builtin's member)	: String
+---
+> origin	fix.rjava.RdSub	none: the pseudo files' tags and the converted text's offsets
+> select	fix.rdecl.RdBox	def put	reader_decl.scala:11:37	java.lang.String.+(java.lang.Object): java.lang.String	by name (a builtin's member)	: String
+> select	fix.rdecl.RdBox	def put	reader_decl.scala:12:63	java.lang.String.+(java.lang.Object): java.lang.String	by name (a builtin's member)	: String
+> select	fix.rdecl.RdBox	def toString	reader_decl.scala:14:44	java.lang.String.+(java.lang.Object): java.lang.String	by name (a builtin's member)	: String
+> select	fix.rdecl.RdBox	def toString	reader_decl.scala:14:52	java.lang.String.+(java.lang.Object): java.lang.String	by name (a builtin's member)	: String
+> select	fix.rdecl.RdNamed	def sum	reader_decl.scala:29:59	scala.collection.IterableOnceOps.sum([1], scala.math.Numeric): java.lang.Object	one member scala.IterableOps.sum(Numeric[B]): B	: Int
+> select	fix.rdecl.RdNamed	def sum	reader_decl.scala:30:65	scala.List (the pickle's scala.collection.immutable.List).map([1], scala.Function1): scala.collection.immutable.List	one member scala.List.map(A => B): List[B]	: List[Int]
+> select	fix.rdecl.RdNamed	def sum	reader_decl.scala:30:71	java.lang.String.length(): scala.Int	by name (a builtin's member)	: Int
+> select	fix.rdecl.RdNamed	def sum	reader_decl.scala:30:79	scala.collection.IterableOnceOps.sum([1], scala.math.Numeric): java.lang.Object	one member scala.IterableOps.sum(Numeric[B]): B	: Int
+> select	fix.rdecl.RdNamed	def sum	reader_decl.scala:30:83	scala.Int.*(scala.Int): scala.Int	by name (a builtin's member)	: Int
+> select	fix.rdecl.RdShape	def area	reader_decl.scala:39:43	java.lang.String.+(java.lang.Object): java.lang.String	by name (a builtin's member)	: String

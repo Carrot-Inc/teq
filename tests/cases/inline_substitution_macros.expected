@@ -1,0 +1,11 @@
+scala.collection.immutable.List[scala.Int] / scala.collection.immutable.List[scala.Int]
+scala.Any / scala.Int
+apply(select(ident(k).+); lit(1))
+apply(select(apply(select(ident(k).*); lit(2)).-); lit(1))
+apply(select(ident(k).+); ident(k))
+scala.Tuple2[scala.Int, scala.Int] / scala.Tuple2[scala.Int, scala.Int]
+scala.Tuple2[scala.Boolean, scala.Boolean] / scala.Tuple2[scala.Boolean, scala.Boolean]
+main.scala:14:10
+main.scala:15:10
+k in run
+k in run

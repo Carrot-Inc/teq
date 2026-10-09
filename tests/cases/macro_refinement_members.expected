@@ -1,0 +1,3 @@
+S; n => Int | n => Int
+S; get (id: Long, k: String): Option[String]; pair (a: Int)(b: Boolean): Int | get (id: Long, k: String): Option[String]; pair (a: Int)(b: Boolean): Int
+S; v : String; T = Int; U >: Nothing <: AnyVal | v : String; T = Int; U >: Nothing <: AnyVal

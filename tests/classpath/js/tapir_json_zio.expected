@@ -1,0 +1,16 @@
+{body as application/json (UTF-8)}
+application/json StringBody(UTF-8)
+{"id":1,"name":"rex","tags":["a","b"],"address":{"street":"main"},"score":2.50}
+Value(Pet(1,rex,List(a, b),Address(main,None),2.50))
+Error({"id": "x"},JsonDecodeException(List(JsonError(expected an Int,List(FieldName(id,id)))),java.lang.Exception: .id(expected an Int)))
+Error
+72 expected string@List(address, street) .address.street(expected string)
+Some(SName(tapirjsonzio.Pet,List())) SProduct
+{"kind":"Cat","count":7} Value(Wrapper(Dog,3))
+Error({"kind":"Bird","count":3},JsonDecodeException(List(JsonError(invalid enumeration value,List(FieldName(kind,kind)))),java.lang.Exception: .kind(invalid enumeration value)))
+Value(None)  Value(None)
+[{"street":"a","zip":"1"},{"street":"b"}] Value(List())
+Value(42) 7 application/json
+POST /pets {body as application/json (UTF-8)} -> {body as application/json (UTF-8)}/{body as application/json (UTF-8)}
+Endpoint(securityin: -, in: POST /pets {body as application/json (UTF-8)}, errout: {body as application/json (UTF-8)}, out: {body as application/json (UTF-8)})
+Right(rex) {"id":1,"name":"rex","tags":["a","b"],"address":{"street":"main"},"score":2.50}

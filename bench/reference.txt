@@ -1,0 +1,44 @@
+# The sentinel of the gate (tests/gate.sh, docs/DEVELOPING.md "The timing lines on a machine"): the rows whose type
+# phase the head is compared with the reference revision's on the comparison machine, beside the comparison with
+# master, and the ceiling of each row's ratio over the reference, so that landings each within the gate's
+# tolerance cannot add up unseen. The reference changes by hand only, with a line here:
+#   advance <hash> <date> <row>=<ratio>...  the new reference, with each row's ratio over the previous one measured
+#                                           at the advance (bench/pairs.py advance); a row's ceiling is divided by it
+#   reference <hash> <date> ceiling <x> ... a reset to a ceiling, accepted with the reason that follows
+rows depth_1 gview_1 core-only realistic-api realistic-frontend inl_1 inl_4 inl_16 inlm_1 inlm_4 inlm_16 mac_1 mac_4 mac_16 macro-cls
+reference 595394327 2026-10-01 ceiling 1.20 the inline default's first master, the evening's baseline; allowance consumed 0
+# 2026-10-02, after the inline methods' performance work landed: the comparison of the old reference with master
+# (bench/pairs.py advance, over the gate's sentinel runs at 50d69db1e) measured depth_1 0.9956,
+# gview_1 0.9983, core-only 0.9958, realistic-api 0.9741, realistic-frontend 1.0168, inl_1 0.9398, inl_4 0.8315,
+# inl_16 0.7599, inlm_1 0.7801, inlm_4 0.7154, inlm_16 0.6582, mac_1 0.9638, mac_4 0.9874, mac_16 1.0149,
+# macro-cls 1.0416. The reference is reset rather than advanced, so that the rows that got faster hold their
+# gains instead of gaining allowance back (an advance would leave inlm_16 a ceiling of 1.82); the three rows that
+# got slower carry what they consumed through the advance line below, which names those rows alone
+# (two of them after the drift attribution).
+reference 50d69db1e 2026-10-02 ceiling 1.20 the first advance after the inline methods' performance work; the inline rows' gains held; allowance consumed 0 but the rows below
+# realistic-frontend=1.0168 was dropped from the advance after the drift attribution: the reset's +1.7%
+# was one reading of the noisiest row, the endpoints on a machine read -1.3% and -0.4%, so the row consumed nothing.
+advance 50d69db1e 2026-10-02 mac_16=1.0149 macro-cls=1.0416
+# 2026-10-03: reset to 7a81d766b (more of the parallel typer, the eval fix, the name capture and the writer's
+# first half in), so that the rows that got faster hold their gains (macro-cls -2.5%, mac_16 -0.9% against 50d69db1e).
+# The advance line carries what each slowed row has consumed since the first reference: the small rows' moves of
+# today (core-only +2.8%, depth_1 +2.2%, realistic-api +1.8%, gview_1 +1.7%, the inline rows under 1%) and the
+# remainder of the macro rows' earlier drift after the eval fix (macro-cls 1.0416 x 0.9753, mac_16 1.0149 x 0.9907).
+reference 7a81d766b 2026-10-03 ceiling 1.20 the reset to 7a81d766b; the sentinel line read 15 of 15 within the ceilings
+advance 7a81d766b 2026-10-03 depth_1=1.0224 gview_1=1.0172 core-only=1.0278 realistic-api=1.0182 inl_1=1.0056 inl_4=1.0029 inl_16=1.0081 inlm_16=1.0072 mac_16=1.0055 macro-cls=1.0159
+# 2026-10-03, after the parallel typer's default: reset to 025f437f4, the first reference at the default worker count (the sentinel's forked
+# rows against 7a81d766b: realistic-frontend 0.364, realistic-api 0.481, inl_16 0.600, inlm_1 to inlm_16 0.634 to 0.638,
+# core-only 0.884; the serial rows within noise), so that the parallel default's gains are held and a later drift at the
+# default is caught against a reference that forks too. The advance line carries what each still-slower row has
+# consumed since the first reference (7a81d766b's line multiplied by today's ratio; rows that are faster now drop).
+reference 025f437f4 2026-10-03 ceiling 1.20 the reset at the default worker count; the sentinel line read 15 of 15 within the ceilings
+advance 025f437f4 2026-10-03 depth_1=1.0447 inl_1=1.0185 mac_1=1.0059 mac_16=1.0016 macro-cls=1.0197
+reference 748986910 2026-10-03 ceiling 1.20 the reset after the parallel typer's lock spin and decode ahead; the sentinel line read 15 of 15 within the ceilings at a host load of 25, core-only -23.6%, realistic-api -11.5%, realistic-frontend -1.2%, the inline and macro rows +0 to +3.5%
+advance 748986910 2026-10-03 depth_1=1.0484 gview_1=1.0093 inl_1=1.0182 inl_4=1.0194 inl_16=1.0318 inlm_1=1.0351 inlm_4=1.0092 inlm_16=1.0350 mac_1=1.0398 mac_4=1.0151 mac_16=1.0166 macro-cls=1.0230
+# 2026-10-04, after the given search's cuts and the module model: reset to 222ca7934, so that the rows that got
+# faster hold their gains (inlm_4 -4.5%, core-only -4.2%, inlm_1 -3.9%, depth_1 -2.0%, inl_4 -1.8%, realistic-api -1.2%,
+# inl_1, mac_1 and mac_4 about -1% against 748986910); the advance line carries what each still-slower row has consumed
+# since the first reference (748986910's line multiplied by today's ratio; rows that are faster now drop;
+# realistic-frontend's +1.9% is one reading of the noisiest row at a host load of 18, kept).
+reference 222ca7934 2026-10-04 ceiling 1.20 the reset after the given search's cuts and the module model; the sentinel line read 15 of 15 within the ceilings at a host load of 18
+advance 222ca7934 2026-10-04 depth_1=1.0280 gview_1=1.0209 realistic-frontend=1.0191 inl_1=1.0067 inl_4=1.0015 inl_16=1.0358 inlm_16=1.0363 mac_1=1.0292 mac_4=1.0053 mac_16=1.0168 macro-cls=1.0316

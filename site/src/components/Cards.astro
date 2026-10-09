@@ -1,0 +1,34 @@
+---
+// A README section of `###` subsections as a grid of cards under its heading, with quick links to them: each card
+// its title, its first paragraph, the rest and its link at the foot, anchored by its heading's GitHub slug.
+import { inline } from "../text";
+
+interface Props {
+  section: { slug: string; title: string };
+  items: { slug: string; title: string; lead: string; link: { text: string; href: string } | null; Detail: any }[];
+  Intro?: any;
+  short?: Record<string, string>;
+}
+const { section, items, Intro, short = {} } = Astro.props;
+---
+<section id={section.slug}>
+  <div class="section-heading">
+    <h2>{section.title}</h2>
+    {Intro && <div class="aside prose"><Intro /></div>}
+  </div>
+  {items.length > 1 && (
+    <nav class="jump" aria-label={section.title}>
+      {items.map((item) => <a href={`#${item.slug}`}>{short[item.slug] ?? item.title}</a>)}
+    </nav>
+  )}
+  <div class="cards two">
+    {items.map((item) => (
+      <article class="card way" id={item.slug}>
+        <h3>{item.title}</h3>
+        <p class="lead" set:html={inline(item.lead)} />
+        {item.Detail && <div class="prose"><item.Detail /></div>}
+        {item.link && <a class="text-link" href={item.link.href}>{item.link.text}</a>}
+      </article>
+    ))}
+  </div>
+</section>

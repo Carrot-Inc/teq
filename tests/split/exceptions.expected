@@ -1,0 +1,7 @@
+ordered pen
+pen: 3 left
+ordered pen
+out: pen
+ordered pen
+stock: only 3 left
+Success(only 3 left)

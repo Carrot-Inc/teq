@@ -1,0 +1,10 @@
+State(2)
+Config(c1)
+state 1
+Set(Read, Write, Delete)
+Set(Read)
+Read
+btn red lg
+<small>
+header | footer 2
+63

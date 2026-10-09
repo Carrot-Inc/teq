@@ -1,0 +1,2 @@
+end-marker.scala:5:3: error: misaligned end marker
+end-marker.scala:6:21: error: type mismatch

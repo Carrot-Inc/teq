@@ -1,0 +1,6 @@
+// tests/tasty/fixtures/Grids.tasty (TASTy 28.8, 484 bytes)
+package fix.retain
+@SourceFile trait Grids extends Object {
+  def cells(x: Array[Array[Int]]): Predef.String
+  def cells(x: Array[Array[Predef.String]]): Predef.String
+}

@@ -1,0 +1,77 @@
+{
+  "url": "https://api.github.com/repos/Carrot-Inc/teq/releases/250000001",
+  "html_url": "https://github.com/Carrot-Inc/teq/releases/tag/v0.1.7",
+  "id": 250000001,
+  "tag_name": "v0.1.7",
+  "target_commitish": "master",
+  "name": "teq 0.1.7",
+  "draft": false,
+  "prerelease": false,
+  "created_at": "2026-10-09T10:00:00Z",
+  "published_at": "2026-10-09T10:20:00Z",
+  "assets": [
+    {
+      "url": "https://api.github.com/repos/Carrot-Inc/teq/releases/assets/300000001",
+      "id": 300000001,
+      "name": "teq-0.1.7-linux-aarch_64",
+      "content_type": "application/octet-stream",
+      "state": "uploaded",
+      "size": 22908416,
+      "browser_download_url": "https://github.com/Carrot-Inc/teq/releases/download/v0.1.7/teq-0.1.7-linux-aarch_64"
+    },
+    {
+      "url": "https://api.github.com/repos/Carrot-Inc/teq/releases/assets/300000002",
+      "id": 300000002,
+      "name": "teq-0.1.7-linux-x86_64",
+      "content_type": "application/octet-stream",
+      "state": "uploaded",
+      "size": 23801704,
+      "browser_download_url": "https://github.com/Carrot-Inc/teq/releases/download/v0.1.7/teq-0.1.7-linux-x86_64"
+    },
+    {
+      "url": "https://api.github.com/repos/Carrot-Inc/teq/releases/assets/300000003",
+      "id": 300000003,
+      "name": "teq-0.1.7-osx-aarch_64",
+      "content_type": "application/octet-stream",
+      "state": "uploaded",
+      "size": 20118272,
+      "browser_download_url": "https://github.com/Carrot-Inc/teq/releases/download/v0.1.7/teq-0.1.7-osx-aarch_64"
+    },
+    {
+      "url": "https://api.github.com/repos/Carrot-Inc/teq/releases/assets/300000004",
+      "id": 300000004,
+      "name": "teq-0.1.7-osx-x86_64",
+      "content_type": "application/octet-stream",
+      "state": "uploaded",
+      "size": 21409280,
+      "browser_download_url": "https://github.com/Carrot-Inc/teq/releases/download/v0.1.7/teq-0.1.7-osx-x86_64"
+    },
+    {
+      "url": "https://api.github.com/repos/Carrot-Inc/teq/releases/assets/300000005",
+      "id": 300000005,
+      "name": "teq-0.1.7-windows-x86_64.exe",
+      "content_type": "application/x-msdownload",
+      "state": "uploaded",
+      "size": 21934592,
+      "browser_download_url": "https://github.com/Carrot-Inc/teq/releases/download/v0.1.7/teq-0.1.7-windows-x86_64.exe"
+    },
+    {
+      "url": "https://api.github.com/repos/Carrot-Inc/teq/releases/assets/300000006",
+      "id": 300000006,
+      "name": "teq-0.1.7-binaries.txt",
+      "content_type": "text/plain",
+      "state": "uploaded",
+      "size": 712,
+      "browser_download_url": "https://github.com/Carrot-Inc/teq/releases/download/v0.1.7/teq-0.1.7-binaries.txt"
+    },
+    {
+      "url": "https://api.github.com/repos/Carrot-Inc/teq/releases/assets/300000007",
+      "id": 300000007,
+      "name": "SHA256SUMS",
+      "content_type": "text/plain",
+      "state": "uploaded",
+      "size": 540,
+      "browser_download_url": "https://github.com/Carrot-Inc/teq/releases/download/v0.1.7/SHA256SUMS"
+    }
+  ]
+}

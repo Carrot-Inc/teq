@@ -1,0 +1,41 @@
+computing default of max_holds
+max_holds [Int] = 25 (Maximum holds per member)
+25
+computing default of phone
+phone [String] = '' (Contact phone) String
+max_holds [Int] = 25 (Maximum holds per member) Int
+computing default of rounding
+rounding [Option[Int]] =  (Rounding) Option[Int]
+computing default of custom:limit
+custom:limit [Option[String]] = 'x' (Custom) Option[String]
+computing default of name
+name [String] = 'Acme' (Library name)
+rounding -> 5
+computing default of loc
+loc 7
+loc [Int] = 7 (loc 7)
+computing default of opt
+opt [Option[String]] =  (loc )
+computing default of fixed
+fixed [Int] = 3 (always an Int)
+computing default of motd
+motd [String] = 'hello' (Message of the day)
+motd -> 'bye'
+computing default of a
+audited a [String] = 'b' (audited)
+40
+30
+15
+in:x
+own item/y
+computing default of level
+level [Int] = 1 (A level)
+computing default of level
+List(1, 1)
+i1i1
+sxsx
+given i1
+given i2
+sa
+List(empty, i3, st)
+i5 i6 Wrapper(5,x)

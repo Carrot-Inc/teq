@@ -1,0 +1,12 @@
+4c4
+<   <macro> inline def isUnit(inline a: Any): Boolean = (${ (using contextual$1: Quotes) => isUnitImpl{(Expr[Any])(Quotes)}('{ a }.apply{(java.lang.Object): java.lang.Object}(contextual$1))(contextual$1) }: Boolean)
+---
+>   <macro> inline def isUnit(inline a: Any): Boolean = (${ (using contextual$1: Quotes) => isUnitImpl{(scala.quoted.Expr, scala.quoted.Quotes): scala.quoted.Expr}('{ a }.apply{(java.lang.Object): java.lang.Object}(contextual$1))(contextual$1) }: Boolean)
+9c9
+<   <macro> inline def kind(inline e: Any): String = (${ (using contextual$2: Quotes) => kindImpl{(Expr[Any])(Quotes)}('{ e }.apply{(java.lang.Object): java.lang.Object}(contextual$2))(contextual$2) }: String)
+---
+>   <macro> inline def kind(inline e: Any): String = (${ (using contextual$2: Quotes) => kindImpl{(scala.quoted.Expr, scala.quoted.Quotes): scala.quoted.Expr}('{ e }.apply{(java.lang.Object): java.lang.Object}(contextual$2))(contextual$2) }: String)
+23c23
+<   <macro> inline def typeKind[T]: String = (${ (using contextual$3: Quotes) => typeKindImpl{[1](Type[T], Quotes)}[T](Type.of{([1], scala.quoted.Quotes): scala.quoted.Type}[T](contextual$3), contextual$3) }: String)
+---
+>   <macro> inline def typeKind[T]: String = (${ (using contextual$3: Quotes) => typeKindImpl{([1], scala.quoted.Type, scala.quoted.Quotes): scala.quoted.Expr}[T](Type.of{([1], scala.quoted.Quotes): scala.quoted.Type}[T](contextual$3), contextual$3) }: String)

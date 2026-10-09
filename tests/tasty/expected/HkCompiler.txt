@@ -1,0 +1,9 @@
+// tests/tasty/fixtures/HkCompiler.tasty (TASTy 28.8, 1127 bytes)
+package fix.hkb
+@SourceFile @Child[HkCompiler] sealed trait HkCompiler[F[_$2], G[_$3]] extends Object {
+  def name: Predef.String
+}
+@SourceFile object HkCompiler extends Object, HkLow {
+  <synthetic> private def writeReplace(): AnyRef = ...
+  implicit def target[F[_$4]](implicit F: HkTarget[F]): HkCompiler[F, F] = ...
+}

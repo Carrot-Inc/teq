@@ -1,0 +1,4 @@
+// tests/tasty/fixtures/RdEv.tasty (TASTy 28.8, 693 bytes)
+package fix.reader
+@SourceFile @Child[RdFn] @Child[RdMemo] @Child[RdNow] sealed trait RdEv[+A] extends Object {
+}

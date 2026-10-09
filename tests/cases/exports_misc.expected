@@ -1,0 +1,24 @@
+3
+ab
+6
+List(12, 10, 0)
+circle 2
+rect 2 x 5
+nothing
+Money(250)
+Money(0)
+try 2 of 3
+99
+true
+false
+List(7, 7)
+6
+List(1, 1)
+45
+List(report, try 1 of 3, false)
+try 7 of 3
+making a report
+99
+Session(User(ann),List(Tag(new)))
+tracked
+User(bob)

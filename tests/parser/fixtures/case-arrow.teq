@@ -1,0 +1,2 @@
+case-arrow.scala:5:7: error: '=>' expected, but new line found
+case-arrow.scala:8:21: error: type mismatch

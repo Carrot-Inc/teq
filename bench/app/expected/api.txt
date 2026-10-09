@@ -1,0 +1,81 @@
+280 routes
+Get /v1/forecast/anemometer-54 [X-Token: token-1; X-Site-Key: north] -> 422 {"NotFound":{"what":"forecast anemometer-54"}}
+Get /v1/forecast?limit=3681&hourlyCredit=2021-05-12T22:33:25Z [X-Token: token-1; X-Site-Key: north] -> 200 [{"id":"verdict-1","hourlyCredit":"2025-03-07T13:35:33Z","cryostat":"declination dust","exposureIndex":"2024-05-2
+Post /v1/forecast [X-Token: token-1; X-Site-Key: north] {"id":"verdict-1","hourlyCredit":"2025-03-07T13:35:33Z","cryostat":"declination dust","exposureIndex":"2024-05-27T18:59:27Z","wideTheme":{"Error":{}},"ascensionKind
+Put /v1/forecast/manifest-1 [X-Token: token-1; X-Site-Key: north] {"id":"verdict-1","hourlyCredit":"2025-03-07T13:35:33Z","cryostat":"declination dust","exposureIndex":"2024-05-27T18:59:27Z","wideTheme":{"Error":{}},"asc
+Delete /v1/forecast/priority-53 [X-Token: token-1; X-Site-Key: north] -> 422 {"NotFound":{"what":"forecast priority-53"}}
+Get /v1/permit/6309 [X-Token: token-1; X-Site-Key: north] -> 422 {"NotFound":{"what":"permit 6309"}}
+Get /v1/permit?limit=2248 [X-Token: token-1; X-Site-Key: north] -> 200 [{"id":6239}]
+Post /v1/permit [X-Token: token-1; X-Site-Key: north] {"id":6239} -> 422 {"Conflict":{"message":"permit 6239 exists"}}
+Put /v1/permit/2295 [X-Token: token-1; X-Site-Key: north] {"id":6239} -> 422 {"NotFound":{"what":"permit 2295"}}
+Delete /v1/permit/2516 [X-Token: token-1; X-Site-Key: north] -> 422 {"NotFound":{"what":"permit 2516"}}
+Put /v1/permit/8139/cancel?page=3133 [X-Token: token-1; X-Site-Key: north] -> 400 "missing body"
+Get /v1/permit/2509/split?mode=3574 [X-Token: token-1; X-Site-Key: north] -> 422 {"NotFound":{"what":"permit 2509"}}
+Get /v1/permit/7785/forecast?page=pipeline [X-Token: token-1; X-Site-Key: north] -> 422 {"NotFound":{"what":"permit 7785"}}
+Get /v1/member/1834 [X-Token: token-1; X-Site-Key: north] -> 422 {"NotFound":{"what":"member 1834"}}
+Get /v1/member?limit=1397 [X-Token: token-1; X-Site-Key: north] -> 200 [{"id":5823,"upperLouver":"leg cooler rain"}]
+Post /v1/member [X-Token: token-1; X-Site-Key: north] {"id":5823,"upperLouver":"leg cooler rain"} -> 422 {"Conflict":{"message":"member 5823 exists"}}
+Put /v1/member/2054 [X-Token: token-1; X-Site-Key: north] {"id":5823,"upperLouver":"leg cooler rain"} -> 422 {"NotFound":{"what":"member 2054"}}
+Delete /v1/member/2456 [X-Token: token-1; X-Site-Key: north] -> 422 {"NotFound":{"what":"member 2456"}}
+Post /v1/member/5387/release [X-Token: token-1; X-Site-Key: north] {"limit":"2023-09-22T06:35:45Z","declination":"431.0300"} -> 400 ".id(missing)"
+Post /v1/member/1028/estimate [X-Token: token-1; X-Site-Key: north] {"narrowAccount":"Remote"} -> 400 ".id(missing)"
+Post /v1/member/5475/allocate [X-Token: token-1; X-Site-Key: north] {"narrowAccount":"Remote"} -> 400 ".id(missing)"
+Get /v1/calibration/1383 [X-Token: token-1; X-Site-Key: north] -> 422 {"NotFound":{"what":"calibration 1383"}}
+Get /v1/calibration?limit=2376&sequence=logbook checklist&panelDays=false [X-Token: token-1; X-Site-Key: north] -> 200 [{"id":805,"sequence":"rate flat","panelDays":true}]
+Post /v1/calibration [X-Token: token-1; X-Site-Key: north] {"id":805,"sequence":"rate flat","panelDays":true} -> 422 {"Conflict":{"message":"calibration 805 exists"}}
+Put /v1/calibration/3994 [X-Token: token-1; X-Site-Key: north] {"id":805,"sequence":"rate flat","panelDays":true} -> 422 {"NotFound":{"what":"calibration 3994"}}
+Delete /v1/calibration/8694 [X-Token: token-1; X-Site-Key: north] -> 422 {"NotFound":{"what":"calibration 8694"}}
+Post /v1/calibration/5095/confirm [X-Token: token-1; X-Site-Key: north] -> 400 "missing body"
+Post /v1/calibration/428/merge [X-Token: token-1; X-Site-Key: north] {"manualOverlay":"semester"} -> 400 ".id(missing)"
+Get /v1/leg/frame-83 [X-Token: token-1; X-Site-Key: north] -> 422 {"NotFound":{"what":"leg frame-83"}}
+Get /v1/leg?limit=3097 [X-Token: token-1; X-Site-Key: north] -> 200 [{"id":"table-67"}]
+Post /v1/leg [X-Token: token-1; X-Site-Key: north] {"id":"table-67"} -> 422 {"Conflict":{"message":"leg table-67 exists"}}
+Put /v1/leg/vacuum-25 [X-Token: token-1; X-Site-Key: north] {"id":"table-67"} -> 422 {"NotFound":{"what":"leg vacuum-25"}}
+Delete /v1/leg/proposal-33 [X-Token: token-1; X-Site-Key: north] -> 422 {"NotFound":{"what":"leg proposal-33"}}
+Get /v1/courier/6222 [X-Token: token-1; X-Site-Key: north] -> 422 {"NotFound":{"what":"courier 6222"}}
+Get /v1/courier [X-Token: token-1; X-Site-Key: north] -> 200 [{"id":3376,"grating":{"Broad":{}},"narrowLayout":"2027-10-06"}]
+Post /v1/courier [X-Token: token-1; X-Site-Key: north] {"id":3376,"grating":{"Broad":{}},"narrowLayout":"2027-10-06"} -> 422 {"Conflict":{"message":"courier 3376 exists"}}
+Put /v1/courier/102 [X-Token: token-1; X-Site-Key: north] {"id":3376,"grating":{"Broad":{}},"narrowLayout":"2027-10-06"} -> 422 {"NotFound":{"what":"courier 102"}}
+Delete /v1/courier/119 [X-Token: token-1; X-Site-Key: north] -> 422 {"NotFound":{"what":"courier 119"}}
+Post /v1/courier/890/notify [X-Token: token-1; X-Site-Key: north] {"outerBias":"vehicle"} -> 400 ".id(missing)"
+Post /v1/courier/4183/split [X-Token: token-1; X-Site-Key: north] {"window":4462,"load":{"internalTariff":false,"hazyInnerSensor":[{"id":3376,"grating":{"Broad":{}},"narrowLayout":"2027-10-06"},{"id":3376,"grating":{"Bro
+forecast: count=1 stored=1 statuses=[all=1] sums=[] flags=0 newest=verdict-1
+forecast report: bucket count share
+v      1     100%
+forecast create: error Fail(Conflict(forecast verdict-1 exists))
+forecast export: 158 csv chars, 134 fixed chars
+forecast digest: 57 chars, urgency 0
+forecast listing: verdict-1
+forecast change: 0 changes, 1 entries
+permit: count=1 stored=1 statuses=[all=1] sums=[] flags=0 newest=6239
+permit report: bucket count share
+6      1     100%
+permit create: error Fail(Conflict(permit 6239 exists))
+permit export: 7 csv chars, 8 fixed chars
+permit digest: 55 chars, urgency 0
+services checked: 140
+IronpeakLink: 2 stations, 2 readings, healthy
+HighcairnRelay: 2 stations, 2 readings, healthy
+BrightwaterFeed: 2 stations, 2 readings, healthy
+GreywickRelay: 2 stations, 2 readings, healthy
+providers healthy: true
+fixtures decoded: 2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2
+scheduled 6, pending 8, outcomes 27, done=11 retried=4 dropped=2
+nights=30 dark=8 planned=16200 charged=538.65 proposals=3
+plan 450 minutes, 0 faults
+charged: Right(alpha=1%,beta=1%,gamma=1%)
+3 quotas, 75h
+2026-03-09 bright
+settings: profile=Staging http=127.0.0.1:9090/v1 db=mem://meridian pool=8 auth=X-Token ttl=3600s feeds=a,b every=300s features=AuditTrail+,Metrics+
+features: AuditTrail=on BulkImport=off PublicReports=off FeedSync=off StrictValidation=off Metrics=on RateLimits=off Experimental=off
+auth: admitted operator-1[Operator,Scheduler]@north | denied: viewer-2 lacks Write | denied: retired-3 expired | denied: no token | denied: unknown token nope
+middleware: 200 X-Trace: trace-2; X-Server: meridian /v1/health
+health: Degraded bus=Up(1 events) database=Up(382 statements) disk=Degraded logger=Up(375 lines) -> 200
+metrics: requests=1 routes=1
+retry: gave up after boom,boom,boom (3 attempts, 1000ms, x2)
+access: access=43 routes=43 actors=1
+infra: sent #1 at 2023-11-14T23:03:30Z, bounced #2: no domain | 4 handled, 1 dropped | 16 sum, 2 kept
+statements: delete=43, select=338, update=1
+events: dark=1
+log lines: 375
+checksum -7805752476149473131 over 447 lines

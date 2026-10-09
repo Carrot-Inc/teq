@@ -1,0 +1,43 @@
+a/b/c.txt
+x/y
+report.pdf
+report
+/
+string
+{ a: 1 }
+2 true 2 false
+a Map of 2
+false
+number
+1970-01-01T00:00:00.000Z
+true
+number
+[1,2,3]
+on
+false
+42
+255
+1.5 2 3.5 pt
+11.5
+3.5 -1.5
+a,b,data-cy,type,extra
+{"a":1,"data-cy":"c","type":"t"}
+{"a":2,"b":"x","data-cy":"y","type":"t"}
+{"a":3,"b":"z","data-cy":"c","type":"t"}
+1 false c t false
+false
+true
+true
+false
+object
+{"value":2}
+1
+4 3 4
+{"n":2}
+size,name
+{"name":"square"}
+square
+null
+string text
+true
+false

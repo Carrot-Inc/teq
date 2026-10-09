@@ -1,0 +1,8 @@
+head: java.util.NoSuchElementException: head of empty list
+get: java.util.NoSuchElementException: None.get
+key: java.util.NoSuchElementException: key not found: 1
+index: java.lang.IndexOutOfBoundsException: 5
+next: java.util.NoSuchElementException: next on empty iterator
+tail: java.lang.UnsupportedOperationException: tail of empty list
+number: java.lang.NumberFormatException: For input string: "ab"
+throwable: java.util.NoSuchElementException: made

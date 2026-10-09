@@ -1,0 +1,9 @@
+// tests/tasty/fixtures/W6Tags.tasty (TASTy 28.8, 666 bytes)
+package fix.wave6
+@SourceFile trait W6Tags extends Object {
+  final def main: Predef.String = ...
+  final def div: Predef.String = ...
+}
+@SourceFile object W6Tags extends Object, W6Tags {
+  <synthetic> private def writeReplace(): AnyRef = ...
+}

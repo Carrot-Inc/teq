@@ -1,0 +1,35 @@
+# How long each suite of tests/gate.sh takes on a remote machine, in seconds, as its last run with --record measured
+# them; the gate deals the suites out to the machines by these times, longest first, so that the machines end
+# together. A suite missing here counts as 120.
+cases 129
+errors 35
+parser 3
+interop 4
+dce 1
+split 181
+split-watch 157
+check-watch 57
+jvm-watch 198
+lsp 75
+watch-memory 61
+tasty 67
+modules 129
+tasty-exec 37
+analysis-bytes 24
+classfile 12
+classpath 63
+stdlib 194
+app 12
+jvm 26
+jvm-21 26
+interp 13
+fold 1
+workers 54
+split-determinism 42
+scala3-run 10
+planted 8
+scala3-interp 42
+scala3-macros 0
+scala3-macros-interp 1
+scala3-typing 7
+cargo-test 0

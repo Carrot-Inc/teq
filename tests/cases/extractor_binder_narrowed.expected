@@ -1,0 +1,19 @@
+true
+false
+apply Name(x)
+none
+none
+apply 1 Name(x)
+tree
+tree
+apply apply 1
+none
+2 3
+none
+apply Name(x) Apply(Name(x),List(Name(x)))
+none
+apply List(Name(x)) Apply(Name(x),List(Name(x)))
+ab1
+none
+applyapply
+3

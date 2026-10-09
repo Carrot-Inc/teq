@@ -1,0 +1,42 @@
+plain
+  render x
+  tail
+x!
+constant if
+  render x
+  tail
+x!
+final val
+  render x
+  tail
+x!
+ascribed
+  render x
+  tail
+x!
+toString
+  render x
+  tail
+x!
+cast
+  render x
+  tail
+x!
+transparent head
+  render x
+  tail
+x!
+plain inline head
+  render x
+  tail
+x!
+block
+  stat
+  render x
+  tail
+x!
+a demanded body's chain as a head
+  render x
+  tail
+  tail
+x!!

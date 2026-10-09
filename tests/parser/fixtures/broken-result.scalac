@@ -1,0 +1,2 @@
+broken-result.scala:4:75: warning: Alphanumeric type L is not declared infix; it should not be used as infix operator.
+broken-result.scala:4:88: error: ',' or ')' expected, but '(' found

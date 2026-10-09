@@ -1,0 +1,2 @@
+def-missing-eq.scala:3:22: error: '=' expected, but '(' found
+def-missing-eq.scala:5:21: error: type mismatch

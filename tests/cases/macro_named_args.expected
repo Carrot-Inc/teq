@@ -1,0 +1,7 @@
+P(ann,31,List())
+P(bob,30,List())
+P(ann,30,List(x))
+P(c,2,List(t))
+a then b
+12
+count := 7 | count | 7 | count = 7 | scala.Int

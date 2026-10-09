@@ -1,0 +1,27 @@
+-- optics by hand
+Address(Street(Main,13),Paris)
+Some(ali) None
+Some(ALI) None
+Some(1) None Circle(3)
+Circle(4) Dot
+26.850000000000023 273.15 283.15
+List(2, 3) Rect(20,30)
+List(aa, bb) List(x)
+List(2, 3, 4) List(0, 0)
+12 1
+Some(b) None true 3
+-- function instances
+List(2, 3)
+List(3, 4)
+Some(42) List()
+Map(a -> 101, b -> 102)
+ListMap(z -> 0, y -> 1)
+Map(b -> 2)
+ListMap(b -> 2, a -> 1, c -> 3)
+Set(1, 3) Set(2)
+Map(a -> 1)
+List(first, b) List(a)
+Some(6) None
+Map(k -> 2) None
+ListMap(k -> 7, j -> 2)
+Some(1) Right(9) Left(no)

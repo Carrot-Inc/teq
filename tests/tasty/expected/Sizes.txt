@@ -1,0 +1,6 @@
+// tests/tasty/fixtures/Sizes.tasty (TASTy 28.8, 457 bytes)
+package fix.retain
+@SourceFile trait Sizes extends Object {
+  def size(x: Array[Int]): Predef.String
+  def size(x: Array[Predef.String]): Predef.String
+}

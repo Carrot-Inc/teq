@@ -1,0 +1,15 @@
+id = "teq"
+name = "Scala with teq"
+version = "0.6.0"
+schema_version = 1
+authors = ["Carrot <https://github.com/Carrot-Inc/teq>"]
+description = "Scala support with teq's language server"
+repository = "https://github.com/Carrot-Inc/teq"
+
+[grammars.scala]
+repository = "https://github.com/tree-sitter/tree-sitter-scala"
+commit = "97aead18d97708190a51d4f551ea9b05b60641c9"
+
+[language_servers.teq]
+name = "teq"
+languages = ["Scala"]

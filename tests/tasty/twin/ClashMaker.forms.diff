@@ -1,0 +1,8 @@
+10c10
+<   <macro> inline def picked(inline n: Int): String = (${ (using contextual$1: Quotes) => pickedImpl{(Expr[Int])(Quotes)}('{ n }.apply{(java.lang.Object): java.lang.Object}(contextual$1))(contextual$1) }: String)
+---
+>   <macro> inline def picked(inline n: Int): String = (${ (using contextual$1: Quotes) => pickedImpl{(scala.quoted.Expr, scala.quoted.Quotes): scala.quoted.Expr}('{ n }.apply{(java.lang.Object): java.lang.Object}(contextual$1))(contextual$1) }: String)
+12c12
+<     val m: ClashSingle & ClashOverloaded = make{}
+---
+>     val m: ClashSingle & ClashOverloaded = make

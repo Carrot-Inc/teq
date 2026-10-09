@@ -1,0 +1,10 @@
+2,3c2,3
+< @SourceFile @Child[HkCompiler] sealed trait HkCompiler[F[_$2], G[_$3]] extends Object {
+<   def name: Predef.String
+---
+> @SourceFile @Child[HkCompiler] sealed trait HkCompiler[F[_$1], G[_$2]] extends Object {
+>   def name: String
+7c7
+<   implicit def target[F[_$4]](implicit F: HkTarget[F]): HkCompiler[F, F] = ...
+---
+>   implicit def target[F[_$5]](implicit F: HkTarget[F]): HkCompiler[F, F] = ...

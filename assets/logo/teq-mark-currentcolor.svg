@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="6 0 88 92" width="88" height="92" role="img" aria-label="Teq">
+<g fill="currentColor">
+  <rect x="12" y="6" width="76" height="12" rx="4"/>
+  <rect x="37" y="52" width="26" height="34" rx="3" opacity="0.14"/>
+  <rect x="37" y="38" width="26" height="34" rx="3" opacity="0.3"/>
+  <path d="M40 24H48.25V58H40Q37 58 37 55V27Q37 24 40 24Z"/>
+  <path d="M51.75 24H60Q63 24 63 27V55Q63 58 60 58H51.75Z"/>
+</g>
+</svg>

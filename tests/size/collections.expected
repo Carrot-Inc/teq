@@ -1,0 +1,9 @@
+ann: 31
+bob: 16.5
+cy: 17.5
+jar, mug, tea
+[ann/mug, cy/tea]
+12
+bob
+List(tea, mug, jar)
+true

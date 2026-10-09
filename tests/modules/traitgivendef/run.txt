@@ -1,0 +1,4 @@
+Foo(42)
+Foo(42)
+List(s, s)
+Foo(2)

@@ -1,0 +1,23 @@
+// tests/tasty/fixtures/FoExs.tasty (TASTy 28.8, 3539 bytes)
+package fix.cake
+@SourceFile trait FoExs extends Object { self: FoTypes =>
+  object Existential extends Object {
+    trait Bounded[L, U >: L, F[_$1 >: L <: U]] extends Object {
+      type Underlying >: L <: U
+      implicit val Underlying: Type[Underlying]
+      val value: F[Underlying]
+      def mapK[G[_$2 >: L <: U]](f: Type[Underlying] => F[Underlying] => G[Underlying]): Bounded[L, U, G] = ...
+    }
+    def make[L, U >: L, G[_$3 >: L <: U], A >: L <: U](v: G[A])(t: Type[A]): Bounded[L, U, G] = ...
+    def apply[F[_$4], A](v: F[A])(using t: Type[A]): Bounded[Nothing, Any, F] = ...
+  }
+  private[this] class Impl[L, U >: L, F[_$5 >: L <: U], A >: L <: U](val Underlying: Type[A], val value: F[A]) extends Object, Existential.Bounded[L, U, F] {
+    type Underlying = A
+  }
+  def viaImpl[A](a: A)(using t: Type[A]): Predef.String = ...
+  type ExistentialType = ExistentialType.Bounded[Nothing, Any]
+  object ExistentialType extends Object {
+    type Bounded[L, U >: L] = Existential.Bounded[L, U, Type]
+    def apply[A](using t: Type[A]): Bounded[Nothing, Any] = ...
+  }
+}

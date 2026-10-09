@@ -1,0 +1,8 @@
+# bench/actions/ship-image.txt: the images the release workflow runs its Linux jobs in (bench/actions/ship.Dockerfile),
+# one line per architecture, `<reference by digest> <recipe digest> <platform>` (linux/amd64, where every build is
+# made; linux/arm64, where the aarch64 trainer trains natively), which bench/actions/image.sh prints once the
+# images are pushed, or `none` before the first; committed by hand, then qualified by a dry run of the workflow
+# (docs/DEVELOPING.md, "Releases").
+none
+ghcr.io/carrot-inc/teq-ship@sha256:0edce2de7560538a07ba9476d0e03529082346c289251db8bdff964cb3851756 3d73e0578b1ad065f58dd9ca9d6c558cba391cdf488d66b04c54a20edae699e7 linux/amd64
+ghcr.io/carrot-inc/teq-ship@sha256:2e265a367df40efaed8935114ed5cdbf086a84835b1738e46602c77e322e9f4e 3d73e0578b1ad065f58dd9ca9d6c558cba391cdf488d66b04c54a20edae699e7 linux/arm64

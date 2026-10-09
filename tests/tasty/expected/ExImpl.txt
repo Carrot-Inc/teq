@@ -1,0 +1,7 @@
+// tests/tasty/fixtures/ExImpl.tasty (TASTy 28.8, 840 bytes)
+package fix.cake
+@SourceFile final class ExImpl() extends Object, ExTypes, ExExs, ExUses {
+  type Type[A] = Predef.String
+  protected def show[A](t: Predef.String): Predef.String = ...
+  def make: ?<[Any] = ...
+}

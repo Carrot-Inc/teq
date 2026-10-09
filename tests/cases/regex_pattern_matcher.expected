@@ -1,0 +1,9 @@
+true
+false
+(?i)get(.)(.*)
+true b e
+No group with name <w>
+\$1\\x
+java.lang.NullPointerException
+java.lang.NullPointerException
+java.lang.NullPointerException

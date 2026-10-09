@@ -1,0 +1,2 @@
+indentation-continued.scala:7:7: error: The start of this line does not match any of the previous indentation widths.
+indentation-continued.scala:18:19: error: type mismatch

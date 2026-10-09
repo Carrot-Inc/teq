@@ -1,0 +1,6 @@
+// tests/tasty/fixtures/JsGlobals.tasty (TASTy 28.8, 866 bytes)
+package fix.facades
+@JSType @SourceFile @JSGlobalScope @native object JsGlobals extends Object {
+  def parseInt(s: Predef.String, radix: Int): Int = ...
+  val NaN: Double = ...
+}

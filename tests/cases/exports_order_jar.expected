@@ -1,0 +1,5 @@
+Some(1)
+Left(left)
+Some(List(1, 2, 3))
+NonEmptyList(1, 2, 3)
+1

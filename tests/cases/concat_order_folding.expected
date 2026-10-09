@@ -1,0 +1,193 @@
+ascribed to Boolean
+  render x
+  tail
+x!
+ascribed to the singleton
+  render x
+  tail
+x!
+ascribed to an alias of Boolean
+  render x
+  tail
+x!
+ascribed to an alias of the singleton
+  render x
+  tail
+x!
+ascribed to Boolean, compared
+  render x
+  tail
+x!
+ascribed to Boolean, negated
+  render x
+  tail
+x!
+ascribed to Boolean, conjunction
+  render x
+  tail
+x!
+ascribed to Any, compared
+  render x
+  tail
+x!
+ascribed Int, compared
+  render x
+  tail
+x!
+ascribed Int, arithmetic
+  render x
+  tail
+x!
+ascribed String, compared
+  render x
+  tail
+x!
+final val ascribed to Boolean
+  render x
+  tail
+x!
+final val ascribed, compared
+  render x
+  tail
+x!
+cast to Boolean
+  render x
+  tail
+x!
+cast to Boolean, compared
+  render x
+  tail
+x!
+cast Int, compared
+  render x
+  tail
+x!
+cast to the singleton
+  render x
+  tail
+x!
+toString of a string, compared
+  render x
+  tail
+x!
+toString of an int, compared
+  render x
+  tail
+x!
+null == null
+  render x
+  tail
+x!
+null != null
+  render x
+  tail
+x!
+concat of constants, compared
+  render x
+  tail
+x!
+concat with an int, compared
+  render x
+  tail
+x!
+concat with a boolean, compared
+  render x
+  tail
+x!
+block with a pure binding
+  render x
+  tail
+x!
+block with a binding of a call
+  tail
+  render x
+  tail
+x!
+block with a binding of a final val
+  render x
+  tail
+x!
+block with a binding of a val
+  render x
+  tail
+x!
+block with a lazy binding
+  render x
+  tail
+x!
+block with a def
+  render x
+  tail
+x!
+string equality of constants
+  render x
+  tail
+x!
+char comparison
+  render x
+  tail
+x!
+long comparison
+  render x
+  tail
+x!
+double comparison
+  render x
+  tail
+x!
+mixed comparison
+  render x
+  tail
+x!
+string length
+  render x
+  tail
+x!
+disjunction over a var
+  render x
+  tail
+x!
+strict disjunction over a var
+  render x
+  tail
+x!
+strict disjunction over constants
+  render x
+  tail
+x!
+conjunction over a var
+  render x
+  tail
+x!
+strict conjunction over a var
+  render x
+  tail
+x!
+strict conjunction over constants
+  render x
+  tail
+x!
+strict disjunction over a constant if
+  render x
+  tail
+x!
+strict conjunction over a constant if
+  render x
+  tail
+x!
+exclusive or over a constant if
+  render x
+  tail
+x!
+strict disjunction over a block
+  render x
+  tail
+x!
+negated strict disjunction over a constant if
+  render x
+  tail
+x!
+strict disjunction of a constant if and a var
+  render x
+  tail
+x!

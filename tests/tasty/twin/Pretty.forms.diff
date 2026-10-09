@@ -1,0 +1,4 @@
+12c12
+<     def show(as: List[A]): String = as.map{([1], Function1): scala.collection.immutable.List}[String](a => s.show{(java.lang.Object): java.lang.String}(a)).mkString{(java.lang.String, java.lang.String, java.lang.String): java.lang.String}("[", ", ", "]")
+---
+>     def show(as: List[A]): String = as.map{([1], Function1): scala.collection.immutable.List}[String](eta$0 => s.show{(java.lang.Object): java.lang.String}(eta$0)).mkString{(java.lang.String, java.lang.String, java.lang.String): java.lang.String}("[", ", ", "]")

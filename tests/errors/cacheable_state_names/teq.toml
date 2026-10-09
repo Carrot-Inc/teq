@@ -1,0 +1,2 @@
+# The objects declared to hold cacheable state, one of them named by a flag as well.
+cacheable-state = ["names.Plain", "names.Shape", "names.Holder.Inner", "names.Host.Inner", "names.Nowhere"]

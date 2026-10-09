@@ -1,0 +1,15 @@
+SArray(Schema(SInteger(),None,false,None,None,Some(int32),None,false,false,All(List()),AttributeMap(Map()))) Some(size>=1) false
+List()
+SArray(Schema(SString(),None,false,None,None,None,None,false,false,All(List()),AttributeMap(Map()))) Some(size>=1)
+Some(size>=1) Some(size>=1) SArray(Schema(SInteger(),None,false,None,None,Some(int32),None,false,false,All(List()),AttributeMap(Map())))
+?ids false
+Value(NonEmptyList(1, 2, 3))
+Missing
+Error
+List(4, 5)
+Value(TreeSet(1, 3)) List(1, 2)
+Value(Chain(a, b)) List(z)
+Value(NonEmptyVector(7)) Missing
+Value(Chain()) Value(Chain(1, 2)) List(9)
+GET /items ?ids -> -/{header X-Names}
+0 false

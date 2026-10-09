@@ -1,0 +1,22 @@
+main start
+Earth(1) g=9
+Mercury(0) g=3
+97
+age:int=#18
+nick:str="anon"
+x!:int=#3
+Other
+registry start
+registry done
+age:int=#18
+init #5 USD#5 USD
+#5 USD#5 USD
+init #7 USD#7 USD
+#7 USD#7 USD
+Money(5,USD)
+init #5 USD#5 USD
+true
+(8,6,12)
+List(3, 9)
+1
+Mercury

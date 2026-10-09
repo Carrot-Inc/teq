@@ -1,0 +1,6 @@
+// tests/tasty/fixtures/EffLenses.tasty (TASTy 28.8, 1109 bytes)
+package fix.shadow
+@SourceFile object EffLenses extends Object {
+  <synthetic> private def writeReplace(): AnyRef = ...
+  def slotL[F[_$8]]: EffLens[EffState[F], Option[Int]] = ...
+}

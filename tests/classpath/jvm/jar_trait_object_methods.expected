@@ -1,0 +1,5 @@
+List(shown, 123, true, false, true)
+List(shown last, 123, true)
+List(own, 123)
+List(shown base, 123, shown last, shown, 123)
+List(shown last, 123, true)

@@ -1,0 +1,6 @@
+Some(List(1, 2))
+None
+Some(List(10, 20))
+Left(short: a)
+Right(List(AA, BB))
+Left(three)

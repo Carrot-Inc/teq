@@ -1,0 +1,43 @@
+shadowbind bundle  development output differs in a name alone: the expansion's binding `x`, whose scope still reads the site's `x`, is renamed apart by the converter (`x$b117`), where the whole build's emitter numbers it (`x$1`); the run is the whole build's (js-run, interp-run): the converter's renaming, its own line
+shadowparent bundle  the same as shadowbind: the expansion's binding `x` in the parent's call, whose scope reads the constructor parameter `x`, is renamed apart by the converter (`x$b61`), where the whole build's emitter numbers it (`x$1`); the runs agree (111)
+shadowlocal bundle  the same, in a local class's parent's call (`x$b119` against `x$1`)
+ledgeroverride classes  scalac 3.8.4's inline rules, through a product: the split build's expansion of `member(O)` calls the definition's member (`loa/B.value()`), as the product's inline body is retyped, where the whole build's substitution names the argument's override (`loa/O$.value()`), scalac's; the runs print the same: deferred until the reading side keeps the stored form
+ledgerreceiver build  scalac 3.8.4's inline rules, through a product: the writer withholds `Derivation.derived`, whose `.map(_.name)` over `List[Subtype[Typeclass, A, ?]]` types the lambda at the wildcard's capture ("a reference to the type parameter _ outside its scope"), and `go`'s `sortBy`, the std's other shape: the writer's queue, as for an ordinary method
+macroquote scalac-b  scalac's compilation of the downstream expands the upstream's macros by calling their implementations in teq's class files, which do not have them (`Could not find method mqa.Mac$.twiceImpl with parameters (class scala.quoted.Expr, interface scala.quoted.Quotes)`): the JVM backend emitting the quoted layer's run-time calls (`QuoteUnpickler.unpickleExprV2` of each quote's pickled body), queued
+macroquote scalac-run  the same: scalac compiles no downstream to run
+macropattern scalac-b  the same as macroquote: scalac's compilation of the downstream calls the macros' implementations in teq's class files, which do not have them: the JVM backend emitting the quoted layer's run-time calls (`QuoteMatching.ExprMatch.unapply` of each pattern's pickled body), queued
+macropattern scalac-run  the same: scalac compiles no downstream to run
+macropattern scalac-lean-b  the same as macrowithheld's: scalac runs the downstream's expansion of the upstream's macros on the JVM, and the Scala.js check build's products are TASTy alone ("Macro code depends on object Pat found on the classpath, but could not be loaded"); with class files it is scalac-b's, the JVM prerequisite
+macrotransparent scalac-b  the same as macroquote: scalac's compilation of the middle module expands the upstream's transparent macros by calling their implementations in teq's class files, which do not have them, the JVM prerequisite, queued
+macrotransparent scalac-c  the same: scalac's compilation of the downstream expands the upstream's macro by calling its implementation in teq's class files
+macrotransparent scalac-run  the same: scalac compiles no downstream to run
+macrofresh scalac-b  the same as macroquote: scalac's compilation of the middle module calls the upstream macro's implementation in teq's class files, which do not have it, the JVM prerequisite, queued
+macrofresh scalac-c  the same: the downstream's own expansion of the upstream's macro
+macrofresh scalac-run  the same: scalac compiles no downstream to run
+macrofresh scalac-lean-b  the same as macropattern's: scalac runs the macro on the JVM and the Scala.js check build's products are TASTy alone ("Macro code depends on object F found on the classpath, but could not be loaded"); with class files it is scalac-b's, the JVM prerequisite
+macrofresh scalac-lean-c  the same as scalac-lean-b
+macroderive scalac-b  the same as macroquote: scalac's compilation of the downstream calls the macros' implementations in teq's class files, which do not have them, the JVM prerequisite
+macroderive scalac-run  the same: scalac compiles no downstream to run
+macroderive scalac-lean-b  the same as macropattern's: scalac runs the downstream's macros on the JVM and the Scala.js check build's products are TASTy alone
+localcaseapply scalac-b  the same as macroquote: scalac's compilation of the downstream calls the macro's implementation in teq's class files, which do not have it, the JVM prerequisite
+localcaseapply scalac-run  the same: scalac compiles no downstream to run
+localcaseapply scalac-lean-b  the same as macropattern's: scalac runs the downstream's macro on the JVM and the Scala.js check build's products are TASTy alone
+macroseqpattern scalac-b  the same as macroquote: scalac's compilation of the downstream calls the macro's implementation in teq's class files, which do not have it, the JVM prerequisite
+macroseqpattern scalac-run  the same: scalac compiles no downstream to run
+macroseqpattern scalac-lean-b  the same as macropattern's: scalac runs the downstream's macro on the JVM and the Scala.js check build's products are TASTy alone
+macronamedarg scalac-b  the same as macroquote: scalac's compilation of the downstream calls the macros' implementations in teq's class files, which do not have them, the JVM prerequisite
+macronamedarg scalac-run  the same: scalac compiles no downstream to run
+macronamedarg scalac-lean-b  the same as macropattern's: scalac runs the downstream's macros on the JVM and the Scala.js check build's products are TASTy alone
+opaquename scalac-b  the same as macroquote: scalac's compilation of the downstream calls the macro's implementation in teq's class files, which do not have it, the JVM prerequisite
+opaquename scalac-run  the same: scalac compiles no downstream to run
+macroliteral scalac-b  the same as macroquote: scalac's compilation of the downstream expands the upstream's interpolator by calling its implementation in teq's class files, which do not have it (`mla/Literals$EmailLiteral$` holds neither `validate` nor the inherited `apply`'s forwarder, and its constructor is private where scalac's of a nested object is public, which `Interpreter.loadModule` calls: `NoSuchMethodException: mla.Literals$EmailLiteral$.<init>()`), the JVM prerequisite
+macroliteral scalac-run  the same: scalac compiles no downstream to run
+macroliteral scalac-lean-b  the same as macropattern's: scalac runs the downstream's macro on the JVM and the Scala.js check build's products are TASTy alone
+ledgeroverride subset  the same as classes
+macrowithheldretry scalac-b  the same as macroquote: scalac's compilation of the downstream expands the upstream's interpolator by calling its implementation in teq's class files, which do not have it (`Could not find method mra.Mac$.addrImpl with parameters (class scala.quoted.Expr, interface scala.quoted.Quotes)`), the JVM prerequisite
+macrowithheldretry scalac-run  the same: scalac compiles no downstream to run
+macrowithheldretry scalac-lean-b  the same as macropattern's: scalac runs the downstream's macro on the JVM and the Scala.js check build's products are TASTy alone
+derivedmirror scalac-lean-b  the same as macropattern's: scalac runs the downstream's macro on the JVM and the Scala.js check build's products are TASTy alone ("Macro code depends on object Email found on the classpath, but could not be loaded")
+mirroroverride scalac-b  the same as macroquote: scalac's compilation of the downstream expands the upstream's macro by calling its implementation in teq's class files, which do not have it (`Could not find method mo.Mac$.impl with parameters (interface scala.quoted.Quotes)`), the JVM prerequisite
+mirroroverride scalac-run  the same: scalac compiles no downstream to run
+mirroroverride scalac-lean-b  the same as macropattern's: scalac runs the downstream's macro on the JVM and the Scala.js check build's products are TASTy alone

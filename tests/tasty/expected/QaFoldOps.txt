@@ -1,0 +1,5 @@
+// tests/tasty/fixtures/QaFoldOps.tasty (TASTy 28.8, 588 bytes)
+package fix.shapes
+@SourceFile class QaFoldOps[A](xs: package.List[A]) extends Object {
+  private[shapes] def contains_(a: A): Boolean = ...
+}

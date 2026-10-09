@@ -1,0 +1,16 @@
+{
+  "name": "teq-site",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "stage": "python3 stage.py",
+    "dev": "python3 stage.py && astro dev",
+    "build": "python3 stage.py && astro build",
+    "preview": "astro preview"
+  },
+  "dependencies": {
+    "@astrojs/sitemap": "3.7.4",
+    "@resvg/resvg-js": "2.6.2",
+    "astro": "7.3.6"
+  }
+}

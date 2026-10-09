@@ -1,0 +1,6 @@
+via Either
+Left(2)
+via Either
+Right(3)
+Left(no)
+Left(no)

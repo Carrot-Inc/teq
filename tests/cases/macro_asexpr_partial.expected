@@ -1,0 +1,6 @@
+true true Expected an expression. This is a partially applied Term. Try eta-expanding the term first. true
+3
+true true Expected an expression. This is a partially applied Term. Try eta-expanding the term first. true
+a-b
+true true Expected an expression. This is a partially applied Term. Try eta-expanding the term first. true
+false

@@ -1,0 +1,10 @@
+$OUT/macrowithheldretry/jsl-a!a/Lib.scala:7:7: error: the body of mra.Addresses.valid is withheld from the products of $OUT/macrowithheldretry/jsl-a (elided: unstated the std's List.range, which scala-library has under another shape): the TASTy writer's queue of the shapes it withholds writes it (in the body of mra.Addresses.valid)
+  body: <elided: Boolean>
+    def valid(s: String): Boolean = s.length > 2 && List.range(0, s.length).exists(i => s.charAt(i) == '@')
+        ^
+tests/modules/macrowithheldretry/b/Use.scala:6:11: error: the run needs a body withheld from its products and stops (the error below) (called by addr in object Mac) (in the body of mra.Mac.addr)
+  body: (${ (using contextual$1: Quotes) => (Mac.this.addrImpl('{ sc }.apply(contextual$1)))(contextual$1) }: Address)
+  inlined from $OUT/macrowithheldretry/jsl-a!a/Mac.scala:13
+    println(addr"a@b".text)
+            ^^^^^^^^^
+2 errors found

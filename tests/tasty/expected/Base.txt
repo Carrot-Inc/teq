@@ -1,0 +1,5 @@
+// tests/tasty/fixtures/Base.tasty (TASTy 28.8, 611 bytes)
+package fix.bodies
+@SourceFile class Base() extends Object {
+  def greet(name: Predef.String): Predef.String = ...
+}

@@ -1,0 +1,7 @@
+ListSet(3, 1, 2)
+ListSet(3, 1, 2, 5)
+Vector(3, 2)
+true
+ListSet(b, a)
+true
+2

@@ -1,0 +1,12 @@
+Fixtures of the class file reader tests (tests/classfile.sh).
+
+src/        the Java sources the fixtures were compiled from
+fixtures/   the .class files, compiled with javac 24:
+              javac --release 21 -d fixtures src/fix/Generics.java src/fix/Outer.java src/fix/Shapes.java
+              javac --release 21 -parameters -d fixtures src/fix/Named.java
+              javac --release 21 -d fixtures src/fix/Varargs.java
+            (-parameters writes the MethodParameters attribute, which the printer uses for names)
+expected/   what `teq classfile <fixture>` prints; `tests/classfile.sh --update` rewrites it,
+            after which the diff has to be read against src/: the expectations pin the reader's
+            output, they are only as right as that review
+javap_compare.py  reduces the printer's output and `javap -s -p` to one form and compares them

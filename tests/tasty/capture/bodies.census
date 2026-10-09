@@ -1,0 +1,48 @@
+construct                             derived   captured  missing  unsupported   unplaced
+alternative pattern                         1          0        0            0          0
+assignment                                  4          0        0            0          0
+binder pattern                              6          0        0            0          0
+block                                       8          0        0            0          0
+by-name argument                            0          1        0            0          1
+call                                        2          2        0            0          0
+case class pattern                          2          0        0            0          0
+closure                                     3          0        0            0          1
+concatenation operand                       4          0        0            0          4
+constructor call                            2          1        0            0          0
+default argument                            0          1        0            0          1
+field initialiser                           1          0        0            0          0
+field selection                             4          0        0            0          0
+function application                        2          0        0            0          0
+given call                                  1          0        0            0          1
+if                                          5          0        0            0          0
+inline call                                 0          3        0            0          0
+inline call type arguments                  1          2        0            0          0
+inline method body                          0          4        0            0          0
+interpolation                               0          2        0            0          0
+literal                                    53          0        0            0          4
+literal or stable pattern                   2          0        0            0          0
+local def                                   1          0        0            0          0
+local reference                            48          0        0            0          4
+local val                                   9          0        0            0          0
+match                                       2          0        0            0          0
+method call                                19          5        0            0          1
+module reference                            3          0        0            0          2
+operator                                   13          1        0            0          3
+outer this                                  2          0        0            0          2
+repeated arguments                          0          2        0            0          2
+return                                      0          2        0            0          0
+sequence argument                           0          1        0            0          0
+string concatenation                        4          0        0            0          0
+super                                       1          0        0            0          1
+synthesized definition                      0          0        0            2          0
+template call                               1          0        0            0          0
+this                                       12          0        0            0         12
+throw                                       1          0        0            0          0
+toString call                               2          0        0            0          0
+transparent expansion's bindings            0          1        0            0          0
+transparent inline expansion                0          2        0            0          0
+try                                         1          0        0            0          0
+typed pattern                               6          0        0            0          0
+while                                       2          0        0            0          0
+wildcard pattern                            7          0        0            0          0
+orphans 0, captured types with an unsolved variable 0

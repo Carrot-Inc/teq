@@ -1,0 +1,13 @@
+tailrec  Success(500000500000)
+noannot  Success(500000500000)
+local    Success(1000000)
+match    Success(1000000)
+if-chain Success(1500000)
+final    Success(0)
+private  Success(0)
+mutual5k Success(true)
+defaults 100 0
+closures List(1, 2, 3)
+block    1000000
+receiver 5 4 List(4, 3, 2, 1)
+operators true false true false

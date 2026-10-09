@@ -1,0 +1,9 @@
+// tests/tasty/fixtures/Loud.tasty (TASTy 28.8, 882 bytes)
+package fix.retain
+@SourceFile object Loud extends Object, Fmt {
+  <synthetic> private def writeReplace(): AnyRef = ...
+  override inline def show(x: Int): Predef.String = <body@111>
+  private def show$retainedBody(x: Int): Predef.String = ...
+  override inline def show(x: Predef.String): Predef.String = <body@196>
+  private def show$retainedBody(x: Predef.String): Predef.String = ...
+}

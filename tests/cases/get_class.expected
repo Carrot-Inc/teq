@@ -1,0 +1,18 @@
+shapes.Circle
+Circle
+Circle
+Square
+shapes.Registry$Entry
+class shapes.Circle
+true
+false
+true
+false
+Square
+java.lang.Integer
+java.lang.String
+java.lang.Boolean
+shapes.Failure
+true
+2
+Failure: boom

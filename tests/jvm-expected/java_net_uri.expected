@@ -1,0 +1,15 @@
+https|user:pw|Example.com|8080|/a/b/../c/./d|q=1%20x|q=1 x|frag
+https://user:pw@Example.com:8080/a/c/d?q=1%20x#frag
+https://user:pw@Example.com:8080/a/e?z#y
+https://user:pw@Example.com:8080/a/b/../c/./d?q=1%20x#only
+https://other.org/p
+true
+false
+y/z
+http://h.com/a%20b#f%20g
+true
+true
+true
+http://a.com/%C3%A9
+syntax true
+illegal

@@ -1,0 +1,116 @@
+List(10, 6, 16, 2, 18, 4)
+List(5, 3, 1, 9)
+28
+List(5, 3, 8, 1, 9, 2)
+9
+List(1, 2, 3, 5, 8, 9)
+List(9, 8, 5, 3, 2, 1)
+List(5, 3)
+List(9, 2)
+List(5, 3, 8)
+List(1, 9, 2)
+List(2, 9, 1, 8, 3, 5)
+5
+List(3, 8, 1, 9, 2)
+2
+6
+false
+true
+2
+Some(8)
+None
+true
+true
+4
+List((5,a), (3,b), (8,c))
+List((5,0), (3,1))
+(List(5, 8, 9),List(3, 1, 2))
+5, 3, 8, 1, 9, 2
+<5-3-8-1-9-2>
+28
+9
+1
+List(5, 3, 8, 1, 9, 2, 100)
+List(0, 5, 3, 8, 1, 9, 2)
+List(5, 3, 8, 1, 9, 2, 7)
+List(1, 2, 3)
+List(1, 2, 3)
+List(5, 5, 3, 3)
+List(z, z, z)
+List(0, 1, 4, 9)
+List(1, 2, 3, 4)
+8
+true
+Some(5)
+None
+List(Ann, Bob)
+310
+Ann
+List(Cid, Bob, Ann)
+List(1a, 1b, 3a, 3b)
+Vector(1, 4, 9, 16, 25)
+45
+1,1
+1,2
+2,1
+2,2
+0=x
+1=y
+Vector(4, 16, 36, 64, 100)
+Some(4)
+None
+Some(6)
+3
+7
+None
+Some(1)
+true
+true
+8
+List(1)
+Some(42)
+None
+None
+Some(42)
+Right(5)
+Left(division by zero)
+Right(6)
+Right(30)
+-1
+4
+(1,two,3.5)
+1
+two
+30
+(1,one)
+12
+HELLO, WORLD
+World
+Hello
+7
+true
+List(Hello, World)
+dlroW ,olleH
+Hell
+World
+true
+HeLLo, WorLd
+o
+H
+HW
+3
+padded
+ababab
+List(a, b, , c)
+43
+7
+true
+true
+List(H, e, l)
+multi
+line
+x1c
+13
+List(10, 1, 2)
+List(0, 0, 5)
+List(0, 2, 4, 6)

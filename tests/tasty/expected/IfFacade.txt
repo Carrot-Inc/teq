@@ -1,0 +1,8 @@
+// tests/tasty/fixtures/IfFacade.tasty (TASTy 28.8, 838 bytes)
+package fix.inlforms
+@SourceFile object IfFacade extends Object {
+  export IfImpl.{twice, pick}
+  <synthetic> private def writeReplace(): AnyRef = ...
+  <exported> final inline def twice(x: Int): Int = <body@122>
+  <exported> final transparent inline def pick(inline b: Boolean @InlineParam): Any = <body@168>
+}

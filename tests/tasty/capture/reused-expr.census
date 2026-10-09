@@ -1,0 +1,16 @@
+construct                             derived   captured  missing  unsupported   unplaced
+block                                       1          0        0            0          0
+closure                                     1          0        0            0          1
+copied record                               0          3        0            0          0
+inline method body                          0          1        0            0          0
+local reference                            10          0        0            0          0
+local val                                   2          0        0            0          0
+macro splice                                1          0        0            0          0
+method call                                 1          0        0            0          0
+operator                                    2          0        0            0          0
+quote                                       3          0        0            0          0
+splice in a quote                           3          0        0            0          0
+this                                        1          0        0            0          1
+transparent inline expansion                0          1        0            0          0
+tuple member                                0          3        0            0          0
+orphans 0, captured types with an unsolved variable 0

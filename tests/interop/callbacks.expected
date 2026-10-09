@@ -1,0 +1,22 @@
+[6,2,4]
+["0:3","1:1","2:2"]
+[3,2]
+6
+[1,2,3]
+item 1
+item 2
+item 3
+3
+[1,4,9]
+[5,10]
+true
+List(Item(pen,3), Item(pad,7))
+12
+true
+3
+true
+List(4, 6, 8)
+main done
+promise resolved with 7
+microtask
+timer fired

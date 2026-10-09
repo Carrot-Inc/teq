@@ -1,0 +1,45 @@
+scala.runtime.TupleXXL (1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23)
+1 23 23 1 23
+scala.Tuple22 (2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23)
+scala.Tuple22 22
+scala.runtime.TupleXXL 22 23
+scala.runtime.TupleXXL 24 -1 22
+scala.runtime.TupleXXL 23 50
+scala.runtime.TupleXXL (23,23)
+276
+36
+true
+122
+23 elements: 1 .. 23
+a pair 1 2
+23 elements: 0 .. 66
+36
+cons pattern 1 scala.Tuple22 22
+true
+true
+true
+1727479038
+-201374238
+true
+false
+scala.runtime.TupleXXL 24 n true 1
+true
+Tuple 23 [] 23
+scala.runtime.TupleXXL scala.runtime.TupleXXL
+List(23, 23)
+extracted 0 22
+a tuple type past 22 is any non-empty tuple to the test / a tuple type past 22 is any non-empty tuple to the test / other
+true
+24
+named pattern 2 22
+List(24, 24)
+24
+scala.runtime.TupleXXL l23
+161
+2.5(1,a)(2.5,a,1)(1,a,2.5,c)(1,a)(2.5)(1)(a,2.5)(1,a,2.5)()()
+23 scala.Tuple22 23 24 scala.runtime.TupleXXL
+scala.Tuple22 scala.Tuple22 2 (23)
+scala.runtime.TupleXXL 23
+Some(23) 93 end
+(1,a,true) (1) ((1),(a))
+true true

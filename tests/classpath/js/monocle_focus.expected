@@ -1,0 +1,44 @@
+-- GenLens
+Alice 31 Rome
+Street(Main,24)
+5
+-- Focus
+Street(Main,12) Address(Street(Rue,1),Paris,Some(3))
+Paris
+Box(2,one)
+Box(ONE,1)
+Pair(1,r)
+Pair(1,Box(20,b))
+-- some, withDefault
+Some(ali) None Some(ALI)
+Some(3) None
+ali none Some(bobby)
+Some(Alice) None Some(Alicia)
+-- each, at, index
+List(a, b) List(a!, b!) List()
+Some(9) Map(math -> 10, art -> 7) Map(art -> 7)
+Some(7) Map(math -> 9, art -> 8) None
+Some(b) List(a, z) None
+List(7, 9) Map(math -> 18, art -> 14)
+List(1, 2) List(Box(11,a), Box(12,b))
+Some(v) Some(3)
+-- as, GenPrism
+List(Some(Circle(3)), None, None) List(None, Some(Rect(1,2)), None)
+Circle(4) Dot
+Rect(7,2)
+8
+-- focus syntax
+Alice 35 Street(Rue,12)
+Some(ali) List() Map(math -> 9)
+None Some(Paris)
+List(Box(1,first), Box(2,b))
+-- typed lambdas, keyword chains, collections of optics
+Alice Oslo
+7 0 Map(art -> 3)
+List(A, B)
+List(List(), List())
+-- composed
+Main niaM
+Some(30) Some(31)
+2
+Alice Some(Circle(1)) Wrapper(2)

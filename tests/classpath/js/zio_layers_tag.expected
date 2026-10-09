@@ -1,0 +1,10 @@
+Int
+scala.collection.immutable.List[+java.lang.String]
+{ziolayers.Counter & ziolayers.Greeter}
+Either
+true
+true
+false
+env 3
+hi you / hi there / 2
+env

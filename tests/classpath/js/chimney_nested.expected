@@ -1,0 +1,3 @@
+OuterB(InnerB(1,a),Vector(InnerB(2,b), InnerB(3,c)),Some(InnerB(4,d)),Map(k -> InnerB(5,e)),Some(6),Vector(Small, Big(9)))
+OuterB(InnerB(1,a),Vector(),None,Map(k -> InnerB(5,e)),Some(6),Vector(Small, Big(9)))
+List(Big(1), Small)

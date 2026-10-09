@@ -1,0 +1,40 @@
+123e4567-e89b-12d3-a456-426614174000 -> 123e4567-e89b-12d3-a456-426614174000 msb=1314564453825188563 lsb=-6605018797301088256 v=1 var=2 hash=1256478162
+00000000-0000-0000-0000-000000000000 -> 00000000-0000-0000-0000-000000000000 msb=0 lsb=0 v=0 var=0 hash=0
+FFFFFFFF-FFFF-FFFF-FFFF-FFFFFFFFFFFF -> ffffffff-ffff-ffff-ffff-ffffffffffff msb=-1 lsb=-1 v=15 var=7 hash=0
+f47ac10b-58cc-4372-a567-0e02b2c3d479 -> f47ac10b-58cc-4372-a567-0e02b2c3d479 msb=-830138926817852558 lsb=-6528233730098342791 v=4 var=2 hash=-1156425726
+7fffffff-ffff-7fff-bfff-ffffffffffff -> 7fffffff-ffff-7fff-bfff-ffffffffffff msb=9223372036854743039 lsb=-4611686018427387905 v=7 var=2 hash=-1073709056
+80000000-0000-4000-8000-000000000000 -> 80000000-0000-4000-8000-000000000000 msb=-9223372036854759424 lsb=-9223372036854775808 v=4 var=2 hash=16384
+1-2-3-4-5 -> 00000001-0002-0003-0004-000000000005 msb=4295098371 lsb=1125899906842629 v=0 var=0 hash=393223
+0001-02-0003-04-000005 -> 00000001-0002-0003-0004-000000000005 msb=4295098371 lsb=1125899906842629 v=0 var=0 hash=393223
+80000000-0000-4000-8000-000000000000
+f47ac10b-58cc-4372-a567-0e02b2c3d479
+ffffffff-ffff-ffff-ffff-ffffffffffff
+00000000-0000-0000-0000-000000000000
+00000001-0002-0003-0004-000000000005
+00000001-0002-0003-0004-000000000005
+123e4567-e89b-12d3-a456-426614174000
+7fffffff-ffff-7fff-bfff-ffffffffffff
+7fffffff-ffff-7fff-bfff-ffffffffffff
+true
+false
+1 -1 0
+-1
+00000000-0000-0001-0000-000000000002
+ffffffff-ffff-ffff-8000-000000000000
+a
+1
+IllegalArgumentException: Invalid UUID string: 
+IllegalArgumentException: Invalid UUID string: not-a-uuid
+IllegalArgumentException: Invalid UUID string: 123e4567-e89b-12d3-a456
+IllegalArgumentException: Invalid UUID string: 123e4567e89b12d3a456426614174000
+IllegalArgumentException: Error at index 11 in: "42661417400g"
+IllegalArgumentException: UUID string too large
+IllegalArgumentException: Invalid UUID string: 1-2-3-4
+IllegalArgumentException: Error at index 16 in: "12345678901234567"
+IllegalArgumentException: Error at index 0 in: "x"
+IllegalArgumentException: For input string: "" under radix 16
+IllegalArgumentException: For input string: "" under radix 16
+50
+true
+true
+true

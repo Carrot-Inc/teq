@@ -1,0 +1,12 @@
+Int
+scala.collection.immutable.List[+java.lang.String]
+{Counter & Greeter}
+Either
+true
+true
+true
+false
+List[+Int]
+Either[+Int,+String]
+Builder[-Int,+List[+Int]]
+true

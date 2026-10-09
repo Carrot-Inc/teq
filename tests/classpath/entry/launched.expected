@@ -1,0 +1,5 @@
+entries.Run: run: a,b
+entries.deep: deep
+entries.entries$package: package main: a,b
+entries.hello: hello: a,b
+entries.hello$minusworld: hello-world

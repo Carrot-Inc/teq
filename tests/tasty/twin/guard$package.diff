@@ -1,0 +1,8 @@
+4c4
+<   opaque type Step = () => Predef.String
+---
+>   opaque type Step = () => String
+20c20
+<     extension (s: Step) def run(): Predef.String = ...
+---
+>     extension (s: Step) def run(): String = ...

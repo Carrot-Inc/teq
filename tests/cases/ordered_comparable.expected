@@ -1,0 +1,4 @@
+Money(3)
+List(Money(1), Money(2), Money(3))
+-1
+true

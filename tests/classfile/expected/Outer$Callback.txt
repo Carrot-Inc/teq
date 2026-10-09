@@ -1,0 +1,5 @@
+// tests/classfile/fixtures/fix/Outer$Callback.class (class file 65.0, 299 bytes)
+package fix
+protected static trait Outer.Callback[C] {
+  def call(x$1: C): Unit
+}

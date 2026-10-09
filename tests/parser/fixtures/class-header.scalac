@@ -1,0 +1,4 @@
+Shapes.scala:5:24: error: an identifier expected, but ')' found
+Shapes.scala:8:21: error: type mismatch
+Use.scala:2:23: error: too many arguments for constructor C in class C
+Use.scala:5:23: error: type mismatch

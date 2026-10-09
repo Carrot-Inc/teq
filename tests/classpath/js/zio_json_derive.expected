@@ -1,0 +1,84 @@
+{"name":"Ann","age":30,"address":{"street":"1 Main","city":"Springfield"},"tags":["a","b"],"scores":{"x":1,"y":2},"nick":"annie","favourite":"Green","shapes":[{"Circle":{"r":1}},{"Rect":{"w":2,"h":3}},{"Dot":{}}]}
+Right(Person(Ann,30,Address(1 Main,Springfield,None),List(a, b),Map(x -> 1, y -> 2),Some(annie),Green,List(Circle(1), Rect(2,3), Dot),None))
+true
+{"name":"core","lead":{"name":"Ann","age":30,"address":{"street":"1 Main","city":"Springfield"},"tags":["a","b"],"scores":{"x":1,"y":2},"nick":"annie","favourite":"Green","shapes":[{"Circle":{"r":1}},{"Rect":{"w":2,"h":3}},{"Dot":{}}]},"members":[{"name":"Bob","age":41,"address":{"street":"2 Side","city":"Shelbyville","zip":"12345"},"tags":[],"scores":{},"favourite":"Red","shapes":[],"home":{"street":"3 Back","city":"Ogdenville"}}],"byName":{"ann":{"street":"1 Main","city":"Springfield"}},"flags":[true,false],"id":1234567890123}
+true
+{
+  "name" : "core",
+  "lead" : {
+    "name" : "Ann",
+    "age" : 30,
+    "address" : {
+      "street" : "1 Main",
+      "city" : "Springfield"
+    },
+    "tags" : [
+      "a",
+      "b"
+    ],
+    "scores" : {
+      "x" : 1,
+      "y" : 2
+    },
+    "nick" : "annie",
+    "favourite" : "Green",
+    "shapes" : [
+      {
+        "Circle" : {
+          "r" : 1
+        }
+      },
+      {
+        "Rect" : {
+          "w" : 2,
+          "h" : 3
+        }
+      },
+      {
+        "Dot" : {}
+      }
+    ]
+  },
+  "members" : [
+    {
+      "name" : "Bob",
+      "age" : 41,
+      "address" : {
+        "street" : "2 Side",
+        "city" : "Shelbyville",
+        "zip" : "12345"
+      },
+      "tags" : [],
+      "scores" : {},
+      "favourite" : "Red",
+      "shapes" : [],
+      "home" : {
+        "street" : "3 Back",
+        "city" : "Ogdenville"
+      }
+    }
+  ],
+  "byName" : {
+    "ann" : {
+      "street" : "1 Main",
+      "city" : "Springfield"
+    }
+  },
+  "flags" : [
+    true,
+    false
+  ],
+  "id" : 1234567890123
+}
+[{"Circle":{"r":1}},{"Rect":{"w":2,"h":3}},{"Dot":{}}]
+Right(List(Circle(1), Rect(2,3), Dot))
+["Red","Green","Blue"]
+Right(List(Blue, Red))
+{"street":"x","city":"y","zip":"z"}
+Right(Address(x,y,None))
+Left(.age(expected an Int))
+Left(.age(missing))
+Left(.Circle.r(expected an Int))
+Left((invalid disambiguator))
+Left(.favourite(invalid enumeration value))
+Right(Person(Ann,30,Address(1 Main,Springfield,None),List(),Map(),None,Blue,List(),None))

@@ -1,0 +1,65 @@
+{a=1, c=3, m=13, q=17, x=24}
+5 a x a=1 x=24 null
+0: lower null none, floor null none, ceiling a a=1, higher a a=1
+a: lower null none, floor a a=1, ceiling a a=1, higher c c=3
+b: lower a a=1, floor a a=1, ceiling c c=3, higher c c=3
+c: lower a a=1, floor c c=3, ceiling c c=3, higher m m=13
+m: lower c c=3, floor m m=13, ceiling m m=13, higher q q=17
+n: lower m m=13, floor m m=13, ceiling q q=17, higher q q=17
+x: lower q q=17, floor x x=24, ceiling x x=24, higher null none
+z: lower x x=24, floor x x=24, ceiling null none, higher null none
+17 null true false true false
+17 null 3 null -1
+{a=1, m=13, q=170, r=18, x=24} [a, m, q, r, x] [1, 13, 170, 18, 24] [a=1, m=13, q=170, r=18, x=24]
+a=1 x=24 {m=13, q=170, r=18}
+a: lower null none, floor null none, ceiling null none, higher null none
+null null null null true {}
+firstKey of none: java.util.NoSuchElementException
+lastKey of none: java.util.NoSuchElementException
+only: lower null none, floor only only=1, ceiling only only=1, higher null none
+only=1 0 null
+only=2 true null
+setValue of a copy: java.lang.UnsupportedOperationException
+m=13 100
+100 m=200 {m=200, q=170, r=18}
+true true false
+false false
+setValue of a polled entry: java.lang.UnsupportedOperationException
+m=200 {q=170, r=18}
+{fig=3, date=4, kiwi=4, pear=4, apple=5, banana=6}
+apple pear null null {fig=3, date=4} true
+{fig=3, date=4, kiwi=4, pear=4, plum=4, apple=5, banana=6} true
+{apple=5, banana=6, date=4, fig=3, kiwi=4, pear=4} null
+{7=n7, 3=n3, 0=n0, -1=n-1} 7 3 7
+{alpha=5, bravo=5, charlie=7, delta=5, echo=4} {alpha=5, bravo=5, charlie=7, delta=5}
+[-9223372036854775808, -5, 0, 3000000000, 9007199254740992, 9007199254740993, 9223372036854775807]
+{-2147483648=i-2147483648, -1=i-1, 0=i0, 1=i1, 2147483647=i2147483647} null 1 null
+-Infinity -2.5 -0 +0 1.5 NaN 6 true -0 1.5
+put null into none: java.lang.NullPointerException
+get null of none: java.lang.NullPointerException
+containsKey null of none: java.lang.NullPointerException
+remove null of none: java.lang.NullPointerException
+ceilingKey null of none: null
+headMap null of none: java.lang.NullPointerException
+put null: java.lang.NullPointerException
+get null: java.lang.NullPointerException
+floorKey null: java.lang.NullPointerException
+tailMap null: java.lang.NullPointerException
+{a=1}
+put a point into none: java.lang.ClassCastException
+get a point of none: java.lang.ClassCastException
+lowerKey a point of none: null
+put a point: java.lang.ClassCastException
+higherKey a point: java.lang.ClassCastException
+{k=1}
+put a number among strings: java.lang.ClassCastException
+put a long among strings: java.lang.ClassCastException
+ceilingKey a number among strings: java.lang.ClassCastException
+put a string among numbers: java.lang.ClassCastException
+put a long among ints: java.lang.ClassCastException
+put a boolean among ints: java.lang.ClassCastException
+{1=1}
+{null=0, a=1, b=2}
+0 null a 0
+{a=1, b=2}
+true 1333 1333 1 1984 1000 1000

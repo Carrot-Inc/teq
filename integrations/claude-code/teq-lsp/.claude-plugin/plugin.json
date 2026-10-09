@@ -1,0 +1,13 @@
+{
+  "name": "teq-lsp",
+  "description": "Scala navigation and diagnostics from teq's language server (teq lsp)",
+  "version": "0.1.0",
+  "author": { "name": "Carrot", "url": "https://github.com/Carrot-Inc/teq" },
+  "lspServers": {
+    "teq": {
+      "command": "teq",
+      "args": ["lsp"],
+      "extensionToLanguage": { ".scala": "scala" }
+    }
+  }
+}

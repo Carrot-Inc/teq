@@ -1,0 +1,14 @@
+3c3
+<   def show(a: A): Predef.String
+---
+>   def show(a: A): String
+9c9
+<     def show(a: Int): Predef.String = ...
+---
+>     def show(a: Int): String = ...
+11,12c11,12
+<   <synthetic> class given_Pretty_List[A](using protected val s: Pretty[A]) extends Object, Pretty[package.List[A]] {
+<     def show(as: package.List[A]): Predef.String = ...
+---
+>   <synthetic> class given_Pretty_List[A](using protected val s: Pretty[A]) extends Object, Pretty[List[A]] {
+>     def show(as: List[A]): String = ...

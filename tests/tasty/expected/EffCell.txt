@@ -1,0 +1,5 @@
+// tests/tasty/fixtures/EffCell.tasty (TASTy 28.8, 832 bytes)
+package fix.shadow
+@SourceFile final class EffCell[F[_$6], X](val x: X)(using s: Eff[F]) extends Object {
+  def get: X = ...
+}

@@ -1,0 +1,11 @@
+Lib.scala:2:17: error: an identifier expected, but ':' found
+Lib.scala:3:17: error: '=' expected, but identifier found
+Lib.scala:5:24: error: ',' or ')' expected, but identifier found
+Lib.scala:6:26: error: an identifier expected, but ')' found
+Lib.scala:10:27: error: an identifier expected, but ')' found
+Lib.scala:11:19: error: ',' or ')' expected, but identifier found
+Use.scala:3:21: error: missing argument for parameter x of method f in object Lib
+Use.scala:4:22: error: type mismatch
+Use.scala:7:27: error: too many arguments for constructor K in class K
+Use.scala:9:16: error: missing argument for parameter y of method apply in object P
+Use.scala:11:21: error: type mismatch

@@ -1,0 +1,2 @@
+ctor-cut-list.scala:4:16: error: too many arguments: expected 2
+ctor-cut-list.scala:5:1: error: ')' expected, but end of file found

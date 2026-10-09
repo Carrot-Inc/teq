@@ -1,0 +1,2 @@
+ctor-cut-list.scala:4:28: error: too many arguments for constructor C in class C: (a: Int, b: Int)(c: Int): C
+ctor-cut-list.scala:5:1: error: ')' expected, but end of file found

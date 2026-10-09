@@ -1,0 +1,16 @@
+a chain a quote builds
+  render x
+  effect b
+  render x
+q:xbx
+a chain a fold over quotes builds
+  render x
+  effect 1
+  render y
+  effect 2
+x1y2
+a macro's call as the head
+  render x
+  effect 1
+  effect 2
+x12

@@ -1,0 +1,4 @@
+8c8
+<   def viaAlias: Alias
+---
+>   def viaAlias: List[Int]

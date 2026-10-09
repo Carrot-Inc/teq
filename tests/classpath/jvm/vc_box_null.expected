@@ -1,0 +1,10 @@
+pass-null-V=0
+pass-null-S=null
+count=2
+local-null-V=0
+ascribed-null=0
+typed-null-accessor=java.lang.NullPointerException
+nested-accessor=java.lang.NullPointerException
+block-accessor=java.lang.NullPointerException
+if-accessor=0
+match-accessor=0

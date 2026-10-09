@@ -1,0 +1,8 @@
+List(Copying(102), Empty(), Rep(1,ArraySeq(a)), Curried(3), Over(3), Over(4))
+Copying(105)
+7
+true
+Rep(2,ArraySeq(b))
+10
+(String) (int)
+(Empty)

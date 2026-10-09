@@ -1,0 +1,13 @@
+Int 1,2,3
+Double 1.0,2.5
+Long 1,2
+Int 97,1
+Int 2,97
+Int 1,97
+Float 1.5,1.0
+Boolean true,false
+Unit (),()
+Object 1,x
+Long 1,2
+Double 1.5,2.0
+Long 1,2 long[] double[] int[]

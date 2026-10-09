@@ -1,0 +1,11 @@
+// tests/tasty/fixtures/PatFlags.tasty (TASTy 28.8, 1563 bytes)
+package fix.cake
+@SourceFile trait PatFlags extends Object {
+  implicit class FlagInterpolator(sc: StringContext) extends Object {
+    object flag extends Object {
+      def unapplySeq(s: Predef.String): Option[package.Seq[Predef.String]] = ...
+    }
+  }
+  final implicit def FlagInterpolator(sc: StringContext): FlagInterpolator = ...
+  def read(s: Predef.String): Predef.String = ...
+}

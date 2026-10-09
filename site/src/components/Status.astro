@@ -1,0 +1,26 @@
+---
+// The README's Status section as an aside: its text, then its subsection's title as a badge, first paragraph and
+// link in the left column and the rest in the right; without a subsection, its heading and text alone.
+import { inline } from "../text";
+
+interface Props {
+  section: { slug: string; title: string };
+  Content?: any;
+  items: { slug: string; title: string; lead: string; link: { text: string; href: string } | null; Detail: any }[];
+}
+const { section, Content, items } = Astro.props;
+---
+<section id={section.slug} class="status">
+  {items.length === 0 && <h2>{section.title}</h2>}
+  {Content && <div class={`prose${items.length > 0 ? " intro" : ""}`}><Content /></div>}
+  {items.map((item) => (
+    <>
+      <div>
+        <h3 class="badge">{item.title}</h3>
+        <p set:html={inline(item.lead)} />
+        {item.link && <a class="text-link" href={item.link.href}>{item.link.text}</a>}
+      </div>
+      <div class="prose">{item.Detail && <item.Detail />}</div>
+    </>
+  ))}
+</section>

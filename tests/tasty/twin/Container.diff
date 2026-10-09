@@ -1,0 +1,8 @@
+4c4
+<   type Alias = package.List[Int]
+---
+>   type Alias = List[Int]
+9c9
+<   def viaAlias: Alias
+---
+>   def viaAlias: List[Int]

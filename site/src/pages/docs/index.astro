@@ -1,0 +1,22 @@
+---
+// The documentation index: the documents the README's table names, in its order, with the table's descriptions.
+import { getCollection } from "astro:content";
+import Base from "../../layouts/Base.astro";
+
+const docs = (await getCollection("docs")).sort((a, b) => a.data.weight - b.data.weight);
+const inline = (text: string) => text.replace(/`([^`]+)`/g, "<code>$1</code>");
+---
+<Base title="Documentation" description={docs.map((d) => d.data.title).join(" · ")}>
+  <div class="docs-index">
+    <h1>Documentation</h1>
+    <p class="dim">The documents of the repository, as they stand. Each page is one file under <code>docs/</code>.</p>
+    <ul class="doclist">
+      {docs.map((d) => (
+        <li>
+          <a href={`/docs/${d.id}/`}>{d.data.title}</a> <span class="dim">· <code>{d.data.source}</code></span><br>
+          <span class="desc" set:html={inline(d.data.description)} />
+        </li>
+      ))}
+    </ul>
+  </div>
+</Base>

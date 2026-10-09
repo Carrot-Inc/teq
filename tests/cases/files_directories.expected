@@ -1,0 +1,49 @@
+exists file: true
+isDirectory file: false
+isRegularFile file: true
+exists directory: true
+isDirectory directory: true
+isRegularFile directory: false
+exists absent: false
+isDirectory absent: false
+isRegularFile absent: false
+exists absolute file: true
+isDirectory absolute file: false
+isRegularFile absolute file: true
+exists absolute absent: false
+isDirectory absolute absent: false
+isRegularFile absolute absent: false
+exists the empty path: true
+the empty path lists the working directory: true
+createDirectories nested: target/files_directories/a/b/c
+createDirectories again: true
+createDirectories absolute: <dir>/target/files_directories/abs/x
+createDirectories dots: target/files_directories/d/./e/../f
+createDirectories dots made: target/files_directories/d/f
+createDirectories file: java.nio.file.FileAlreadyExistsException: target/files_directories/file.txt
+createDirectories under a file: java.nio.file.FileSystemException: <dir>/target/files_directories/file.txt/x: Not a directory
+createDirectory: target/files_directories/single
+createDirectory there: java.nio.file.FileAlreadyExistsException: target/files_directories/single
+createDirectory absent parent: java.nio.file.NoSuchFileException: target/files_directories/none/single
+list: target/files_directories/a, target/files_directories/abs, target/files_directories/d, target/files_directories/file.txt, target/files_directories/single
+list nested: target/files_directories/a/b
+list absolute: <dir>/target/files_directories/a/b
+list file: java.nio.file.NotDirectoryException: target/files_directories/file.txt
+list absent: java.nio.file.NoSuchFileException: target/files_directories/absent
+list empty: 
+walk: target/files_directories/a, target/files_directories/a/b, target/files_directories/a/b/c
+walk absolute: <dir>/target/files_directories/a, <dir>/target/files_directories/a/b, <dir>/target/files_directories/a/b/c
+walk file: target/files_directories/file.txt
+walk absent: java.nio.file.NoSuchFileException: target/files_directories/absent
+walk depth 0: target/files_directories/a
+walk depth 1: target/files_directories/a, target/files_directories/a/b
+walk negative depth: java.lang.IllegalArgumentException: 'maxDepth' is negative
+walk empty: target/files_directories/single
+walk all: , a, a/b, a/b/c, abs, abs/x, d, d/f, file.txt, single
+deleteIfExists file: true
+deleteIfExists again: false
+deleteIfExists empty directory: true
+deleteIfExists directory with entries: java.nio.file.DirectoryNotEmptyException: target/files_directories/a
+deleteIfExists absolute: true
+deleteIfExists under an absent directory: false
+left: target/files_directories/a, target/files_directories/abs, target/files_directories/d

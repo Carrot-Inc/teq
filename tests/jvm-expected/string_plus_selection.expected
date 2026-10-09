@@ -1,0 +1,67 @@
+selected chain
+  effect
+  render x
+x!
+infix then selected
+  effect
+  render x
+x!
+selected then infix
+  effect
+  render x
+x!
+on a val
+  effect
+  render x
+vx!
+on an alias
+  effect
+  render x
+ax!
+inline parameter
+  effect
+  render x
+x!
+toString
+  render x
+  effect
+x!
+ascription
+  render x
+  effect
+x!
+valueOf
+  render x
+  effect
+x!
+concat
+  render x
+  effect
+x!
+chain after a boundary
+  render x
+  effect
+  render y
+xy!
+operands
+a1c2truenull1.5
+named
+a1
+singletons
+a1v2
+quoted chain
+  effect
+  render x
+x!
+quoted toString
+  render x
+  effect
+x!
+spliced chain
+  effect
+  render x
+x!
+reflected
+  effect
+  render x
+x!

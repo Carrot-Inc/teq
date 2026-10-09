@@ -1,0 +1,27 @@
+listMap:2
+map:2
+map:1
+ListMap(b -> 2, a -> 1)
+ListMap(b -> 2, a -> 1, c -> 3)
+ListMap(a -> 1, d -> 4)
+true
+true
+List(1, 2)
+ListMap(b -> 20, a -> 10)
+treeSet:3
+sortedSet:3
+sortedSet:2
+TreeSet(0, 1, 2, 3)
+TreeSet(2, 3)
+true
+treeMap:2
+sortedMap:2
+sortedMap:1
+TreeMap(a -> 1, b -> 2)
+TreeMap(a -> 1, b -> 2, c -> 3)
+true
+TreeSet(1, 3)
+TreeMap(a -> 1, b -> 2)
+ListMap(c -> 3, d -> 40)
+ListMap(a -> 1) ListMap(d -> 4) ListMap(b -> 2, c -> 3) ListMap(b -> 2, c -> 3) ListMap(a -> 1)
+TreeMap(1 -> 2, 3 -> 4, 5 -> 6) TreeMap(3 -> 4, 5 -> 6, 7 -> 8) TreeSet(2, 3)

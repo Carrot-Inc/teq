@@ -1,0 +1,10 @@
+# generated
+class:flex|0
+class:grid|0
+class:p-2|1
+class:p-3|1
+class:text-sm|
+variant:hover
+variant:md
+sig:0|display
+sig:1|padding

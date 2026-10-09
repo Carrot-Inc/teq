@@ -1,0 +1,3 @@
+unterminated-string.scala:4:13: error: unclosed string literal
+unterminated-string.scala:5:3: error: ')' expected, but 'val' found
+unterminated-string.scala:6:21: error: type mismatch

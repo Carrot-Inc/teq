@@ -1,0 +1,11 @@
+Table((1,a), (2,b))
+List(a1, b2)
+Table((a,2), (b,4))
+List(a, bb)
+string handler
+pair handler
+predicate
+partial
+3
+3
+12

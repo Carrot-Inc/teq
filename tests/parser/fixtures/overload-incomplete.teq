@@ -1,0 +1,4 @@
+overload-incomplete.scala:4:17: error: '=' expected, but identifier found
+overload-incomplete.scala:5:20: error: '=' expected, but identifier found
+overload-incomplete.scala:8:18: error: '=' expected, but identifier found
+overload-incomplete.scala:9:24: error: '=' expected, but identifier found

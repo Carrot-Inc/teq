@@ -1,0 +1,9 @@
+{
+  "name": "teq-lock-conformance",
+  "private": true,
+  "description": "The YAML 1.2 core-schema reader teq.lock's readers are held to (docs/TARGETS.md, the export's format)",
+  "type": "module",
+  "dependencies": {
+    "yaml": "2.9.1"
+  }
+}

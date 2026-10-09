@@ -1,0 +1,10 @@
+// tests/tasty/fixtures/RdCustom.tasty (TASTy 28.8, 921 bytes)
+package fix.rdecl
+@SourceFile object RdCustom extends Object {
+  <synthetic> private def writeReplace(): AnyRef = ...
+  class Any(val n: Int) extends Object {
+  }
+  class Nothing(val m: Int) extends Any {
+    override def toString: Predef.String = ...
+  }
+}

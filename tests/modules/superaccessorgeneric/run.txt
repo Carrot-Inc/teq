@@ -1,0 +1,7 @@
+ok!
+(a?,1)
+narrow
+gen narrow
+gen!
+42
+via parent!

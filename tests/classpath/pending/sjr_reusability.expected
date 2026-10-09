@@ -1,0 +1,16 @@
+point same: true
+point diff: false
+shape same: true
+shape scale: false
+shape tags: false
+idle: true
+busy: true
+busy diff: false
+cross: false
+color: true
+custom: false
+tagged: true
+wide: true
+wide c: false
+42
+option: true

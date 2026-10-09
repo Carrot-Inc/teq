@@ -1,0 +1,1 @@
+missing-body.scala:3:7: error: class Loud needs to be abstract, since override def toString: String in class Loud is not defined

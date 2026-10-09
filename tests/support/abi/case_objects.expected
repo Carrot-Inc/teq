@@ -1,0 +1,54 @@
+case_objects/Lights class
+case_objects/Lights$ class
+case_objects/Lights$Amber$ canEqual(Ljava/lang/Object;)Z public
+case_objects/Lights$Amber$ class
+case_objects/Lights$Amber$ fromProduct(Lscala/Product;)Ljava/lang/Object; public,bridge,synthetic
+case_objects/Lights$Amber$ fromProduct(Lscala/Product;)Lscala/deriving/Mirror$Singleton; public
+case_objects/Lights$Amber$ hashCode()I public
+case_objects/Lights$Amber$ implements scala/deriving/Mirror$Singleton
+case_objects/Lights$Amber$ productArity()I public
+case_objects/Lights$Amber$ productElement(I)Ljava/lang/Object; public
+case_objects/Lights$Amber$ productElementName(I)Ljava/lang/String; public
+case_objects/Lights$Amber$ productPrefix()Ljava/lang/String; public
+case_objects/Lights$Amber$ toString()Ljava/lang/String; public
+case_objects/Signal class
+case_objects/Stop canEqual(Ljava/lang/Object;)Z public,static
+case_objects/Stop class
+case_objects/Stop fromProduct(Lscala/Product;)Lscala/deriving/Mirror$Singleton; public,static
+case_objects/Stop hashCode()I public,static
+case_objects/Stop productArity()I public,static
+case_objects/Stop productElement(I)Ljava/lang/Object; public,static
+case_objects/Stop productElementName(I)Ljava/lang/String; public,static
+case_objects/Stop productPrefix()Ljava/lang/String; public,static
+case_objects/Stop toString()Ljava/lang/String; public,static
+case_objects/Stop$ canEqual(Ljava/lang/Object;)Z public
+case_objects/Stop$ class
+case_objects/Stop$ fromProduct(Lscala/Product;)Ljava/lang/Object; public,bridge,synthetic
+case_objects/Stop$ fromProduct(Lscala/Product;)Lscala/deriving/Mirror$Singleton; public
+case_objects/Stop$ hashCode()I public
+case_objects/Stop$ implements scala/deriving/Mirror$Singleton
+case_objects/Stop$ productArity()I public
+case_objects/Stop$ productElement(I)Ljava/lang/Object; public
+case_objects/Stop$ productElementName(I)Ljava/lang/String; public
+case_objects/Stop$ productPrefix()Ljava/lang/String; public
+case_objects/Stop$ toString()Ljava/lang/String; public
+case_objects/X canEqual(Ljava/lang/Object;)Z public,static
+case_objects/X class
+case_objects/X fromProduct(Lscala/Product;)Lscala/deriving/Mirror$Singleton; public,static
+case_objects/X hashCode()I public,static
+case_objects/X productArity()I public,static
+case_objects/X productElement(I)Ljava/lang/Object; public,static
+case_objects/X productElementName(I)Ljava/lang/String; public,static
+case_objects/X productPrefix()Ljava/lang/String; public,static
+case_objects/X toString()Ljava/lang/String; public,static
+case_objects/X$ canEqual(Ljava/lang/Object;)Z public
+case_objects/X$ class
+case_objects/X$ fromProduct(Lscala/Product;)Ljava/lang/Object; public,bridge,synthetic
+case_objects/X$ fromProduct(Lscala/Product;)Lscala/deriving/Mirror$Singleton; public
+case_objects/X$ hashCode()I public
+case_objects/X$ implements scala/deriving/Mirror$Singleton
+case_objects/X$ productArity()I public
+case_objects/X$ productElement(I)Ljava/lang/Object; public
+case_objects/X$ productElementName(I)Ljava/lang/String; public
+case_objects/X$ productPrefix()Ljava/lang/String; public
+case_objects/X$ toString()Ljava/lang/String; public

@@ -1,0 +1,6 @@
+Rect(2,4) Rect(2,6) a rect 1x2 / level 1: shape rect 1x2
+Square(4) Rect(4,6) square a rect 2x2 / sq level 1: square shape rect 2x2
+tag#1'x'
+tag#1deep'x'
+tag#3deep'y'
+Square(6) sq level 0: square shape rect 3x3

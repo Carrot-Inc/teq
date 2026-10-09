@@ -1,0 +1,11 @@
+import scala.quoted.*
+
+object Counter:
+  private var n = 0
+  inline def next: Int = ${ nextImpl }
+  def nextImpl(using Quotes): Expr[Int] =
+    n += 1
+    Expr(n)
+
+class C:
+  inline def f(x: String): Int = Counter.next

@@ -1,0 +1,6 @@
+cake3      teq does not make an instance of a class nested in a class outside that class (`object Two extends Helpers.Base(2)`)
+cake       teq's typer rejects DefsPlatform's `def wrap[A](a: A): List[A]` as an override of `Box[A]`-typed `wrap` (an alias declared `final override type Box[A] = List[A]`)
+cake4      teq's typer does not find `En`, a case class a base trait nests, in an extractor pattern of a self-typed trait
+overloads  teq's typer does not let a case class field implement a parameterless member its trait overloads
+runtime    teq's typer does not see `update` of `UnsafeAPI` implemented by the anonymous class
+shapes     teq's typer exports from objects and packages alone (`export impl.{run, const as c}` of a val)

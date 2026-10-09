@@ -1,0 +1,3 @@
+jsl-a!ela.Stmt:3:1: error: a template statement of ela.Stmt is withheld from the products of $OUT/elidedstmt/jsl-a (elided: unstated the std's List.range, which scala-library has under another shape (a template statement)): the TASTy writer's queue of the shapes it withholds writes it (in the body of ela.Stmt.<statement>)
+  <statement>
+  ^^^^^^^^^^^

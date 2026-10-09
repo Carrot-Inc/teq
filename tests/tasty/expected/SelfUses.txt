@@ -1,0 +1,9 @@
+// tests/tasty/fixtures/SelfUses.tasty (TASTy 28.8, 736 bytes)
+package fix.cake
+@SourceFile trait SelfUses extends Object { _: SelfDefs =>
+  def f[A](e: E[A]): E[A] = ...
+  trait Helper extends Object {
+    def wrap[A](e: E[A]): E[A] = ...
+  }
+  val Helper: Helper
+}

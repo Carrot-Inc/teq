@@ -1,0 +1,6 @@
+main.scala:1:10
+main.scala:2:10
+main.scala:3:10 main.scala:3:10
+gen main.scala:4:10
+gen main.scala:5:10
+main.scala main.scala

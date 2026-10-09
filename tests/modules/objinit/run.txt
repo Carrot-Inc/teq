@@ -1,0 +1,5 @@
+init 0
+6
+stmt ran
+2
+base(p) 3

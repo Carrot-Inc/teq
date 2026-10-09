@@ -1,0 +1,252 @@
+teq: 0.1.2
+format: 1
+binaries:
+  linux-x86_64: https://repo.example/maven2/build/teq/teq/0.1.2/teq-0.1.2-linux-x86_64.exe ff15f2278065734035de325534184128c33eeba1 17334592
+  osx-aarch_64: "https://repo.example/a%20b/teq.exe ff15f2278065734035de325534184128c33eeba1 1"
+jars:
+  a:b:1: maven-central ff15f2278065734035de325534184128c33eeba1 0
+  a:b:1:jdk8: local ff15f2278065734035de325534184128c33eeba1 7 a/b/1/b-1-20261005.101010-3.jar
+  a:b:1@build: "local ff15f2278065734035de325534184128c33eeba1 9007199254740991 \"a/b/1@build/b 1.jar\""
+keys:
+  "": ""
+  " a": " a"
+  "!a": "!a"
+  "#a": "#a"
+  "%a": "%a"
+  "&a": "&a"
+  "*a": "*a"
+  "+a": "+a"
+  "-a": "-a"
+  ".5": ".5"
+  ".INF": ".INF"
+  ".Inf": ".Inf"
+  ".NAN": ".NAN"
+  ".NaN": ".NaN"
+  .a: .a
+  ".inf": ".inf"
+  ".nan": ".nan"
+  0a: 0a
+  "0b101": "0b101"
+  "0o17": "0o17"
+  "0x1F": "0x1F"
+  "1.0": "1.0"
+  "10:30": "10:30"
+  "17": "17"
+  "1_000": "1_000"
+  "1e3": "1e3"
+  "2": "2"
+  "2026-10-05": "2026-10-05"
+  "9z": "9z"
+  ":a": ":a"
+  ">a": ">a"
+  "?a": "?a"
+  "@a": "@a"
+  A9: A9
+  "FALSE": "FALSE"
+  "False": "False"
+  "N": "N"
+  "NO": "NO"
+  "NULL": "NULL"
+  "No": "No"
+  "Null": "Null"
+  "OFF": "OFF"
+  "ON": "ON"
+  "Off": "Off"
+  "On": "On"
+  "TRUE": "TRUE"
+  "True": "True"
+  "Y": "Y"
+  "YES": "YES"
+  "Yes": "Yes"
+  "[a]": "[a]"
+  _a: _a
+  "`a": "`a"
+  a: a
+  "a\tb": "a\tb"
+  "a\nb": "a\nb"
+  "a ": "a "
+  "a #b": "a #b"
+  "a b": a b
+  "a\"b": "a\"b"
+  "a'b": "a'b"
+  a+b: a+b
+  "a,b": "a,b"
+  a-b: a-b
+  a.b: a.b
+  a/b: a/b
+  "a:": "a:"
+  "a: b": "a: b"
+  a:b: a:b
+  "a=b": "a=b"
+  a@b: a@b
+  "a\\b": "a\\b"
+  "a\u0085b": "a\u0085b"
+  "a b": "a b"
+  "a\u2028b": "a\u2028b"
+  "false": "false"
+  "n": "n"
+  "no": "no"
+  "null": "null"
+  "off": "off"
+  "on": "on"
+  "true": "true"
+  "y": "y"
+  "yes": "yes"
+  "{a}": "{a}"
+  "|a": "|a"
+  "~": "~"
+  "é": "é"
+  "😀": "😀"
+nested:
+  flow:
+    projects: {}
+  lists:
+    - - a
+      - - b
+        - 1
+    - []
+    - {}
+    - k: v
+      l:
+        - x
+    - only:
+        deep:
+          er: true
+projects:
+  p:
+    configurations:
+      compile:
+        classpath:
+          - {configuration: compile, project: q}
+          - a:b:1
+          - {file: "lib/x y.jar"}
+          - {file: "true"}
+          - {a: {b: {c: d}}, e: {}}
+          - {"": "", k: "a: b", "on": "on"}
+    stage:
+      layers:
+        "2":
+          - {from: {configuration: compile, project: p}, manifest: {Implementation-URL: "https://x.example/a?b#c", Main-Class: M}, to: opt/docker/lib/p.jar}
+          - classpath:
+              - lib/a.jar
+            script: opt/docker/bin/p
+          - classpath: []
+            script: opt/docker/bin/q
+values:
+  empty:
+    - []
+    - {}
+  escapes:
+    - "\""
+    - "\\"
+    - "\n"
+    - "\r"
+    - "\t"
+    - "\u0000"
+    - "\u0001"
+    - "\u001f"
+    - "\u007f"
+    - "\u0080"
+    - "\u0085"
+    - "\u009f"
+    - "\u2028"
+    - "\u2029"
+    - "\ufeff"
+    - "\ufffe"
+    - "\uffff"
+    - " "
+    - "é"
+    - "😀"
+    - "a\"b\\c\nd"
+  integers:
+    - 0
+    - 1
+    - -1
+    - 123456789012
+    - 9007199254740991
+    - -9007199254740991
+  plain:
+    - x
+    - x.y/z:1@b
+    - https://repo1.maven.org/maven2/
+    - org.typelevel:cats-core_3:2.13.0
+    - 3.8.4
+    - 0.1.0-pre.1
+    - /abs/path
+    - _x
+    - .
+    - ..
+    - .gitignore
+    - a::b
+    - 1.2.3e4
+    - ff15f2278065734035de325534184128c33eeba1
+  quoted:
+    - ".INF"
+    - ".Inf"
+    - ".NAN"
+    - ".NaN"
+    - ".inf"
+    - ".nan"
+    - "FALSE"
+    - "False"
+    - "N"
+    - "NO"
+    - "NULL"
+    - "No"
+    - "Null"
+    - "OFF"
+    - "ON"
+    - "Off"
+    - "On"
+    - "TRUE"
+    - "True"
+    - "Y"
+    - "YES"
+    - "Yes"
+    - "false"
+    - "n"
+    - "no"
+    - "null"
+    - "off"
+    - "on"
+    - "true"
+    - "y"
+    - "yes"
+    - ""
+    - "2"
+    - "-1"
+    - "1.0"
+    - "1e3"
+    - "1E-3"
+    - ".5"
+    - "007"
+    - "0x1F"
+    - "0o17"
+    - "0b101"
+    - "2026-10-05"
+    - "2026-10-05T10:00:00Z"
+    - "10:30"
+    - "1_000"
+    - "-Xmx1g"
+    - "+1"
+    - "a: b"
+    - "a #b"
+    - "a:"
+    - "{a}"
+    - "[a]"
+    - "a,b"
+    - "~"
+  text:
+    - a few words
+    - maven-central ff15f2278065734035de325534184128c33eeba1 12
+    - a 2 true
+    - "x -y"
+    - "2 x"
+    - "true x"
+    - "a  b"
+    - " a"
+    - "a "
+    - "a b:"
+  truths:
+    - true
+    - false

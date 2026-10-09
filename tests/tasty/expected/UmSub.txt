@@ -1,0 +1,4 @@
+// tests/tasty/fixtures/UmSub.tasty (TASTy 28.8, 610 bytes)
+package fix.unmod
+@SourceFile final class UmSub[I, F[_$5]](val s: Predef.String) extends Object {
+}

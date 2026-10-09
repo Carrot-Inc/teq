@@ -1,0 +1,4 @@
+// tests/tasty/fixtures/FoCapBackend.tasty (TASTy 28.8, 653 bytes)
+package fix.cake
+@SourceFile trait FoCapBackend[F[_$11]] extends Object, FoPlain[F], FoBackend[F, FoCap] {
+}

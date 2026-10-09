@@ -1,0 +1,4 @@
+// tests/tasty/fixtures/FoCap.tasty (TASTy 28.8, 454 bytes)
+package fix.cake
+@SourceFile trait FoCap extends Object {
+}

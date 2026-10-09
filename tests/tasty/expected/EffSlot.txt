@@ -1,0 +1,9 @@
+// tests/tasty/fixtures/EffSlot.tasty (TASTy 28.8, 1307 bytes)
+package fix.shadow
+@SourceFile final class EffSlot[F[_$4]](val v: Option[F[Int]]) extends Object {
+  def size: Int = ...
+}
+@SourceFile object EffSlot extends Object {
+  <synthetic> private def writeReplace(): AnyRef = ...
+  def of[F[_$5]](s: Eff[F], n: Int): EffSlot[F] = ...
+}

@@ -1,0 +1,6 @@
+// tests/tasty/fixtures/pext_inlined$package.tasty (TASTy 28.8, 610 bytes)
+package fix.pext.inlined
+@SourceFile <synthetic> object pext_inlined$package extends Object {
+  <synthetic> private def writeReplace(): AnyRef = ...
+  inline extension (s: Predef.String) def shout: Predef.String = <body@101>
+}

@@ -1,0 +1,6 @@
+3,4c3,4
+<   def show(x: Int): Predef.String
+<   def show(x: Predef.String): Predef.String
+---
+>   def show(x: Int): String
+>   def show(x: String): String

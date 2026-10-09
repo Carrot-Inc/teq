@@ -1,0 +1,7 @@
+// tests/tasty/fixtures/PromisesPlatform.tasty (TASTy 28.8, 719 bytes)
+package fix.cake
+@SourceFile trait PromisesPlatform extends Object, Promises { _: PromiseDefsPlatform =>
+  protected object Promise extends Object, PromiseModule {
+    def fresh(hint: Predef.String): Predef.String = ...
+  }
+}

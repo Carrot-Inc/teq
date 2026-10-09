@@ -1,0 +1,6 @@
+// tests/tasty/fixtures/FoMaps.tasty (TASTy 28.8, 936 bytes)
+package fix.cake
+@SourceFile object FoMaps extends Object {
+  <synthetic> private def writeReplace(): AnyRef = ...
+  def single[K, V](k: K, v: V): Predef.Map[K, V] = ...
+}

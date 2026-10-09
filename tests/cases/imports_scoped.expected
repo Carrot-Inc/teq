@@ -1,0 +1,14 @@
+Loan(7,Cancel)
+20
+RELATIVE!
+1
+Cancel
+Loan(1,Create)
+20
+/api/v1
+/api/v1/loans
+/api/v1/renew
+404 /x
+403
+ROOTED!
+Forbidden

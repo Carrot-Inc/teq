@@ -1,0 +1,3 @@
+unclosed-args.scala:4:3: error: ')' expected, but 'def' found
+unclosed-args.scala:5:21: error: type mismatch
+unclosed-args.scala:7:19: error: type mismatch

@@ -1,0 +1,54 @@
+givens/Deep class
+givens/Deep$ MODULE$:Lgivens/Deep$; public,static,final
+givens/Deep$ class
+givens/Deep$Inner$ MODULE$:Lgivens/Deep$Inner$; public,static,final
+givens/Deep$Inner$ class
+givens/Deep$Inner$given_Show_Boolean$ MODULE$:Lgivens/Deep$Inner$given_Show_Boolean$; public,static,final
+givens/Deep$Inner$given_Show_Boolean$ class
+givens/Deep$Inner$given_Show_Boolean$ show(Ljava/lang/Object;)Ljava/lang/String; public,bridge,synthetic
+givens/Deep$Inner$given_Show_Boolean$ show(Z)Ljava/lang/String; public
+givens/Functor class
+givens/Functor map(Ljava/lang/Object;Lscala/Function1;)Ljava/lang/Object; public,abstract
+givens/Functors class
+givens/Functors eitherFunctor()Lgivens/Functors$eitherFunctor; public,static
+givens/Functors$ MODULE$:Lgivens/Functors$; public,static,final
+givens/Functors$ class
+givens/Functors$ eitherFunctor()Lgivens/Functors$eitherFunctor; public,final
+givens/Functors$eitherFunctor class
+givens/Functors$eitherFunctor map(Ljava/lang/Object;Lscala/Function1;)Ljava/lang/Object; public,bridge,synthetic
+givens/Functors$eitherFunctor map(Lscala/util/Either;Lscala/Function1;)Lscala/util/Either; public
+givens/Lists class
+givens/Lists listShow(Lgivens/Show;)Lgivens/Lists$listShow; public,static
+givens/Lists$ MODULE$:Lgivens/Lists$; public,static,final
+givens/Lists$ class
+givens/Lists$ listShow(Lgivens/Show;)Lgivens/Lists$listShow; public,final
+givens/Lists$listShow class
+givens/Lists$listShow show(Ljava/lang/Object;)Ljava/lang/String; public,bridge,synthetic
+givens/Lists$listShow show(Lscala/collection/immutable/List;)Ljava/lang/String; public
+givens/Show class
+givens/Show show(Ljava/lang/Object;)Ljava/lang/String; public,abstract
+givens/Show$ MODULE$:Lgivens/Show$; public,static,final
+givens/Show$ class
+givens/Show$ given_Show_Int:Lgivens/Show$given_Show_Int$; public,static,final
+givens/Show$ named:Lgivens/Show$named$; public,static,final
+givens/Show$given_Show_Int$ MODULE$:Lgivens/Show$given_Show_Int$; public,static,final
+givens/Show$given_Show_Int$ class
+givens/Show$given_Show_Int$ show(I)Ljava/lang/String; public
+givens/Show$given_Show_Int$ show(Ljava/lang/Object;)Ljava/lang/String; public,bridge,synthetic
+givens/Show$named$ MODULE$:Lgivens/Show$named$; public,static,final
+givens/Show$named$ class
+givens/Show$named$ show(J)Ljava/lang/String; public
+givens/Show$named$ show(Ljava/lang/Object;)Ljava/lang/String; public,bridge,synthetic
+givens/givens$package class
+givens/givens$package optShow(Lgivens/Show;)Lgivens/givens$package$optShow; public,static
+givens/givens$package$ MODULE$:Lgivens/givens$package$; public,static,final
+givens/givens$package$ class
+givens/givens$package$ given_Show_String:Lgivens/givens$package$given_Show_String$; public,static,final
+givens/givens$package$ optShow(Lgivens/Show;)Lgivens/givens$package$optShow; public,final
+givens/givens$package$given_Show_String$ MODULE$:Lgivens/givens$package$given_Show_String$; public,static,final
+givens/givens$package$given_Show_String$ class
+givens/givens$package$given_Show_String$ show(Ljava/lang/Object;)Ljava/lang/String; public,bridge,synthetic
+givens/givens$package$given_Show_String$ show(Ljava/lang/String;)Ljava/lang/String; public
+givens/givens$package$optShow class
+givens/givens$package$optShow show(Ljava/lang/Object;)Ljava/lang/String; public,bridge,synthetic
+givens/givens$package$optShow show(Lscala/Option;)Ljava/lang/String; public

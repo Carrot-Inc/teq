@@ -1,0 +1,4 @@
+// tests/tasty/fixtures/Base.tasty (TASTy 28.8)
+@SourceFile class Base() extends Object() {
+  def greet(name: Predef.String): Predef.String = "hello " + name
+}

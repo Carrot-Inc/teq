@@ -1,0 +1,5 @@
+true true false TreeSet(1, 3)
+TreeSet(0, 1, 2, 3, 5) 5 true false 0 5 List(0, 1, 2, 3, 5)
+true false TreeSet(1, 2, 3) TreeSet(2, 3) TreeSet(1) Some(2) Some(1)
+TreeSet(3, 2, 1) TreeSet(2, 4, 6) TreeSet(3, 2) List(3, 2, 1) true
+a,b true TreeSet(1)

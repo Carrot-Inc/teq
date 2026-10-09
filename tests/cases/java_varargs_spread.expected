@@ -1,0 +1,14 @@
+CharSequence... given String[]: changed
+CharSequence... given CharSequence[]: changed
+Number... given Integer[]: 3
+CharSequence... given a list: before
+CharSequence... given a copy written: before
+CharSequence... given String[] in an inline method: changed
+spread: [after, second]
+a copy written: [before, second]
+a wrapper written: [before, second]
+an unsafe wrapper written: [before, second]
+spread in an inline method: [after, second]
+a copy written in an inline method: [before, second]
+int... given int[]: 11
+T... given int[]: [1, 2]

@@ -1,0 +1,9 @@
+// tests/tasty/fixtures/Quotes38.tasty (TASTy 28.8, 1474 bytes)
+package fix.q38
+@SourceFile object Quotes38 extends Object {
+  <synthetic> private def writeReplace(): AnyRef = ...
+  <macro> inline def twice(inline n: Int): Int = <body@110>
+  def twiceImpl(n: Expr[Int])(using x$2: Quotes): Expr[Int] = ...
+  <macro> inline def described(inline n: Int): Predef.String = <body@291>
+  def describedImpl(n: Expr[Int])(using x$2: Quotes): Expr[Predef.String] = ...
+}

@@ -1,0 +1,7 @@
+// tests/tasty/fixtures/NameDefsPlatform.tasty (TASTy 28.8, 876 bytes)
+package fix.cake
+@SourceFile trait NameDefsPlatform extends Object, NameDefs {
+  protected object Namer extends Object, NamerModule {
+    def name(s: Strategy): Predef.String = ...
+  }
+}

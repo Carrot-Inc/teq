@@ -1,0 +1,8 @@
+5,7c5,7
+<   inline def wrap(x: Int): Predef.String = <body>
+<   override inline def plain(x: Int): Predef.String = <body>
+<   private def plain$retainedBody(x: Int): Predef.String = ...
+---
+>   inline def wrap(x: Int): String = <body>
+>   override inline def plain(x: Int): String = <body>
+>   private def plain$retainedBody(x: Int): String = ...

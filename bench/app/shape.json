@@ -1,0 +1,3279 @@
+{
+ "modules": {
+  "core": {
+   "files": 20,
+   "lines": 1995,
+   "blank_lines": 348,
+   "comment_lines": 87,
+   "file_lines": {
+    "1-50": 11,
+    "51-100": 5,
+    "201-400": 2,
+    "401-800": 2
+   },
+   "case_classes": {
+    "count": 3,
+    "fields": {
+     "1": 2,
+     "2": 1
+    },
+    "fields_total": 4,
+    "generic": 0,
+    "with_parent": 0,
+    "with_derives": 0,
+    "nested": 1
+   },
+   "case_objects": 0,
+   "enums": {
+    "count": 5,
+    "cases": {
+     "2": 2,
+     "4-6": 1,
+     "7-12": 2
+    },
+    "cases_total": 25,
+    "with_class_cases": 3,
+    "class_cases_total": 7,
+    "with_params": 1,
+    "with_extends_cases": 1,
+    "generic": 2,
+    "with_derives": 4,
+    "with_parent": 0
+   },
+   "sealed": {
+    "count": 1,
+    "traits": 1,
+    "children": {
+     "1": 1
+    },
+    "depth": {
+     "1": 1
+    }
+   },
+   "classes": {
+    "plain": 0,
+    "abstract": 0,
+    "traits": 7,
+    "objects": 30,
+    "companions": 12,
+    "generic_traits": 6,
+    "higher_kinded_params": 0,
+    "anonymous": 12,
+    "nested": 13
+   },
+   "inheritance": {
+    "with_parent": 0,
+    "depth": {},
+    "program_parents": 0,
+    "external_parents": 0,
+    "external_parent_kinds": 0
+   },
+   "derives": {
+    "clauses": 4,
+    "by_set": [
+     [
+      2,
+      1
+     ],
+     [
+      2,
+      1
+     ],
+     [
+      1,
+      1
+     ],
+     [
+      2,
+      1
+     ]
+    ],
+    "by_type_class": [
+     3,
+     2,
+     1,
+     1
+    ],
+    "type_classes": 4,
+    "on_generic": 2
+   },
+   "givens": {
+    "count": 61,
+    "alias": 57,
+    "instance": 4,
+    "conversion": 0,
+    "parameterised": 38,
+    "with_using": 0,
+    "named": 27,
+    "implicit_val": 0,
+    "implicit_def": 0,
+    "implicit_object": 0,
+    "implicit_class": 0,
+    "implicit_params": 0,
+    "using_clauses": 15,
+    "context_bounds": 116,
+    "summons": 3,
+    "given_imports": 1
+   },
+   "extensions": {
+    "clauses": 30,
+    "methods": 767,
+    "generic": 10,
+    "context_bound": 0
+   },
+   "types": {
+    "opaque": 0,
+    "aliases": 1,
+    "unions": 0
+   },
+   "inline": {
+    "defs": 8,
+    "transparent": 4,
+    "params": 0,
+    "givens": 0
+   },
+   "macros": {
+    "definitions": 4,
+    "sites": 2,
+    "rows": [
+     {
+      "kind": "derivation",
+      "sites": 2,
+      "inline_params": 0
+     },
+     {
+      "kind": "call",
+      "sites": 0,
+      "inline_params": 1
+     },
+     {
+      "kind": "derivation",
+      "sites": 0,
+      "inline_params": 0
+     },
+     {
+      "kind": "derivation",
+      "sites": 0,
+      "inline_params": 0
+     },
+     {
+      "kind": "derivation",
+      "sites": 0,
+      "inline_params": 0
+     },
+     {
+      "kind": "interpolator",
+      "sites": 0,
+      "inline_params": 1
+     },
+     {
+      "kind": "interpolator",
+      "sites": 0,
+      "inline_params": 1
+     },
+     {
+      "kind": "interpolator",
+      "sites": 0,
+      "inline_params": 1
+     },
+     {
+      "kind": "operator",
+      "sites": 0,
+      "inline_params": 1
+     }
+    ],
+    "files_with_quoted": 3
+   },
+   "matches": {
+    "match_keywords": 17,
+    "case_groups": 18,
+    "cases": 59,
+    "cases_per_group": {
+     "2": 13,
+     "4-6": 2,
+     "7-12": 3
+    },
+    "partial_function_literals": 0,
+    "patterns": {
+     "stable": 29,
+     "constructor": 14,
+     "guard": 9,
+     "wildcard": 6,
+     "variable": 5,
+     "other": 2,
+     "typed": 2,
+     "binder": 1,
+     "literal": 1
+    }
+   },
+   "fors": {
+    "count": 2,
+    "yield": 2,
+    "generators": {
+     "2": 1,
+     "4-5": 1
+    },
+    "generators_total": 6
+   },
+   "lambdas": {
+    "arrows": 149,
+    "placeholders": 46
+   },
+   "imports": {
+    "per_file": {
+     "0": 5,
+     "1-2": 4,
+     "3-5": 8,
+     "6-10": 1,
+     "11-20": 2
+    },
+    "total": 70,
+    "wildcard": 36,
+    "local": 7
+   },
+   "package_depth": {
+    "1": 13,
+    "2": 7
+   },
+   "strings": {
+    "s": 23,
+    "f": 3,
+    "raw": 0,
+    "custom": 9,
+    "triple_quoted": 0
+   },
+   "members": {
+    "vals": 121,
+    "lazy_vals": 0,
+    "vars": 0,
+    "defs": 242,
+    "top_level_defs": 0,
+    "by_name_params": 15,
+    "default_args": 2,
+    "varargs": 9,
+    "named_args": 0,
+    "tuple_vals": 15
+   },
+   "control": {
+    "ifs": 56,
+    "whiles": 0,
+    "try": 0,
+    "throw": 1,
+    "return": 0,
+    "assign_ops": 0
+   },
+   "annotations": {
+    "sites": 4,
+    "kinds": 1
+   }
+  },
+  "model": {
+   "files": 106,
+   "lines": 14450,
+   "blank_lines": 2327,
+   "comment_lines": 122,
+   "file_lines": {
+    "1-50": 41,
+    "51-100": 15,
+    "101-200": 30,
+    "201-400": 15,
+    "401-800": 3,
+    "801+": 2
+   },
+   "case_classes": {
+    "count": 606,
+    "fields": {
+     "1": 169,
+     "2": 139,
+     "3": 70,
+     "4": 56,
+     "5-8": 106,
+     "9-16": 46,
+     "17-32": 13,
+     "33+": 7
+    },
+    "fields_total": 2660,
+    "generic": 15,
+    "with_parent": 5,
+    "with_derives": 541,
+    "nested": 605
+   },
+   "case_objects": 0,
+   "enums": {
+    "count": 235,
+    "cases": {
+     "1": 6,
+     "2": 78,
+     "3": 59,
+     "4-6": 53,
+     "7-12": 27,
+     "13-24": 6,
+     "25-48": 4,
+     "49+": 2
+    },
+    "cases_total": 1249,
+    "with_class_cases": 94,
+    "class_cases_total": 253,
+    "with_params": 35,
+    "with_extends_cases": 32,
+    "generic": 4,
+    "with_derives": 212,
+    "with_parent": 2
+   },
+   "sealed": {
+    "count": 0,
+    "traits": 0,
+    "children": {},
+    "depth": {}
+   },
+   "classes": {
+    "plain": 1,
+    "abstract": 0,
+    "traits": 2,
+    "objects": 266,
+    "companions": 165,
+    "generic_traits": 2,
+    "higher_kinded_params": 0,
+    "anonymous": 5,
+    "nested": 1000
+   },
+   "inheritance": {
+    "with_parent": 9,
+    "depth": {
+     "2": 1
+    },
+    "program_parents": 5,
+    "external_parents": 4,
+    "external_parent_kinds": 2
+   },
+   "derives": {
+    "clauses": 753,
+    "by_set": [
+     [
+      2,
+      470
+     ],
+     [
+      1,
+      54
+     ],
+     [
+      2,
+      44
+     ],
+     [
+      1,
+      44
+     ],
+     [
+      3,
+      33
+     ],
+     [
+      1,
+      32
+     ],
+     [
+      1,
+      14
+     ],
+     [
+      2,
+      9
+     ],
+     [
+      4,
+      6
+     ],
+     [
+      3,
+      6
+     ],
+     [
+      5,
+      5
+     ],
+     [
+      3,
+      4
+     ],
+     [
+      3,
+      4
+     ],
+     [
+      4,
+      3
+     ],
+     [
+      3,
+      3
+     ],
+     [
+      2,
+      3
+     ],
+     [
+      1,
+      3
+     ],
+     [
+      4,
+      3
+     ],
+     [
+      2,
+      3
+     ],
+     [
+      1,
+      3
+     ],
+     [
+      3,
+      1
+     ],
+     [
+      4,
+      1
+     ],
+     [
+      2,
+      1
+     ],
+     [
+      2,
+      1
+     ],
+     [
+      2,
+      1
+     ],
+     [
+      1,
+      1
+     ],
+     [
+      3,
+      1
+     ]
+    ],
+    "by_type_class": [
+     553,
+     548,
+     120,
+     112,
+     44,
+     32,
+     21,
+     8,
+     6,
+     4
+    ],
+    "type_classes": 10,
+    "on_generic": 0
+   },
+   "givens": {
+    "count": 251,
+    "alias": 243,
+    "instance": 8,
+    "conversion": 0,
+    "parameterised": 32,
+    "with_using": 6,
+    "named": 69,
+    "implicit_val": 0,
+    "implicit_def": 0,
+    "implicit_object": 0,
+    "implicit_class": 0,
+    "implicit_params": 0,
+    "using_clauses": 8,
+    "context_bounds": 27,
+    "summons": 4,
+    "given_imports": 93
+   },
+   "extensions": {
+    "clauses": 7,
+    "methods": 29,
+    "generic": 0,
+    "context_bound": 0
+   },
+   "types": {
+    "opaque": 0,
+    "aliases": 5,
+    "unions": 0
+   },
+   "inline": {
+    "defs": 2,
+    "transparent": 0,
+    "params": 3,
+    "givens": 0
+   },
+   "macros": {
+    "definitions": 2,
+    "sites": 204,
+    "rows": [
+     {
+      "kind": "derivation",
+      "sites": 120,
+      "inline_params": 0
+     },
+     {
+      "kind": "derivation",
+      "sites": 44,
+      "inline_params": 0
+     },
+     {
+      "kind": "derivation",
+      "sites": 32,
+      "inline_params": 0
+     },
+     {
+      "kind": "derivation",
+      "sites": 8,
+      "inline_params": 0
+     },
+     {
+      "kind": "call",
+      "sites": 0,
+      "inline_params": 1
+     },
+     {
+      "kind": "interpolator",
+      "sites": 0,
+      "inline_params": 1
+     },
+     {
+      "kind": "interpolator",
+      "sites": 0,
+      "inline_params": 1
+     },
+     {
+      "kind": "interpolator",
+      "sites": 0,
+      "inline_params": 1
+     },
+     {
+      "kind": "operator",
+      "sites": 0,
+      "inline_params": 1
+     }
+    ],
+    "files_with_quoted": 0
+   },
+   "matches": {
+    "match_keywords": 161,
+    "case_groups": 224,
+    "cases": 910,
+    "cases_per_group": {
+     "1": 12,
+     "2": 125,
+     "3": 27,
+     "4-6": 30,
+     "7-12": 25,
+     "13-24": 1,
+     "25-48": 2,
+     "49+": 2
+    },
+    "partial_function_literals": 138,
+    "patterns": {
+     "stable": 616,
+     "constructor": 117,
+     "typed": 103,
+     "literal": 28,
+     "tuple": 22,
+     "wildcard": 16,
+     "alternative": 8,
+     "guard": 6,
+     "variable": 5,
+     "other": 3
+    }
+   },
+   "fors": {
+    "count": 1,
+    "yield": 1,
+    "generators": {
+     "4-5": 1
+    },
+    "generators_total": 5
+   },
+   "lambdas": {
+    "arrows": 167,
+    "placeholders": 193
+   },
+   "imports": {
+    "per_file": {
+     "1-2": 5,
+     "3-5": 18,
+     "6-10": 42,
+     "11-20": 37,
+     "21+": 4
+    },
+    "total": 1020,
+    "wildcard": 407,
+    "local": 6
+   },
+   "package_depth": {
+    "2": 71,
+    "3": 35
+   },
+   "strings": {
+    "s": 26,
+    "f": 1,
+    "raw": 0,
+    "custom": 31,
+    "triple_quoted": 21
+   },
+   "members": {
+    "vals": 391,
+    "lazy_vals": 18,
+    "vars": 0,
+    "defs": 456,
+    "top_level_defs": 0,
+    "by_name_params": 0,
+    "default_args": 23,
+    "varargs": 94,
+    "named_args": 299,
+    "tuple_vals": 1
+   },
+   "control": {
+    "ifs": 32,
+    "whiles": 0,
+    "try": 0,
+    "throw": 0,
+    "return": 0,
+    "assign_ops": 0
+   },
+   "annotations": {
+    "sites": 5,
+    "kinds": 1
+   }
+  },
+  "web": {
+   "files": 27,
+   "lines": 3139,
+   "blank_lines": 537,
+   "comment_lines": 357,
+   "file_lines": {
+    "1-50": 11,
+    "51-100": 6,
+    "101-200": 8,
+    "201-400": 1,
+    "801+": 1
+   },
+   "case_classes": {
+    "count": 27,
+    "fields": {
+     "2": 8,
+     "3": 8,
+     "4": 6,
+     "5-8": 2,
+     "9-16": 3
+    },
+    "fields_total": 112,
+    "generic": 15,
+    "with_parent": 0,
+    "with_derives": 1,
+    "nested": 25
+   },
+   "case_objects": 0,
+   "enums": {
+    "count": 5,
+    "cases": {
+     "2": 2,
+     "3": 1,
+     "4-6": 2
+    },
+    "cases_total": 17,
+    "with_class_cases": 3,
+    "class_cases_total": 4,
+    "with_params": 0,
+    "with_extends_cases": 0,
+    "generic": 2,
+    "with_derives": 1,
+    "with_parent": 0
+   },
+   "sealed": {
+    "count": 0,
+    "traits": 0,
+    "children": {},
+    "depth": {}
+   },
+   "classes": {
+    "plain": 16,
+    "abstract": 0,
+    "traits": 3,
+    "objects": 39,
+    "companions": 10,
+    "generic_traits": 2,
+    "higher_kinded_params": 2,
+    "anonymous": 7,
+    "nested": 58
+   },
+   "inheritance": {
+    "with_parent": 7,
+    "depth": {
+     "2": 2
+    },
+    "program_parents": 2,
+    "external_parents": 6,
+    "external_parent_kinds": 3
+   },
+   "derives": {
+    "clauses": 2,
+    "by_set": [
+     [
+      1,
+      2
+     ]
+    ],
+    "by_type_class": [
+     2
+    ],
+    "type_classes": 1,
+    "on_generic": 0
+   },
+   "givens": {
+    "count": 9,
+    "alias": 8,
+    "instance": 1,
+    "conversion": 0,
+    "parameterised": 1,
+    "with_using": 0,
+    "named": 3,
+    "implicit_val": 1,
+    "implicit_def": 0,
+    "implicit_object": 1,
+    "implicit_class": 14,
+    "implicit_params": 9,
+    "using_clauses": 18,
+    "context_bounds": 12,
+    "summons": 2,
+    "given_imports": 4
+   },
+   "extensions": {
+    "clauses": 5,
+    "methods": 77,
+    "generic": 2,
+    "context_bound": 0
+   },
+   "types": {
+    "opaque": 1,
+    "aliases": 11,
+    "unions": 5
+   },
+   "inline": {
+    "defs": 4,
+    "transparent": 0,
+    "params": 4,
+    "givens": 0
+   },
+   "macros": {
+    "definitions": 3,
+    "sites": 10,
+    "rows": [
+     {
+      "kind": "operator",
+      "sites": 7,
+      "inline_params": 1
+     },
+     {
+      "kind": "call",
+      "sites": 2,
+      "inline_params": 1
+     },
+     {
+      "kind": "interpolator",
+      "sites": 1,
+      "inline_params": 1
+     },
+     {
+      "kind": "derivation",
+      "sites": 0,
+      "inline_params": 0
+     },
+     {
+      "kind": "derivation",
+      "sites": 0,
+      "inline_params": 0
+     },
+     {
+      "kind": "derivation",
+      "sites": 0,
+      "inline_params": 0
+     },
+     {
+      "kind": "derivation",
+      "sites": 0,
+      "inline_params": 0
+     },
+     {
+      "kind": "interpolator",
+      "sites": 0,
+      "inline_params": 1
+     },
+     {
+      "kind": "interpolator",
+      "sites": 0,
+      "inline_params": 1
+     }
+    ],
+    "files_with_quoted": 3
+   },
+   "matches": {
+    "match_keywords": 64,
+    "case_groups": 76,
+    "cases": 186,
+    "cases_per_group": {
+     "1": 6,
+     "2": 49,
+     "3": 12,
+     "4-6": 8,
+     "7-12": 1
+    },
+    "partial_function_literals": 0,
+    "patterns": {
+     "stable": 57,
+     "constructor": 42,
+     "tuple": 28,
+     "wildcard": 26,
+     "guard": 12,
+     "typed": 12,
+     "literal": 10,
+     "variable": 9,
+     "alternative": 7,
+     "binder": 2,
+     "cons": 1,
+     "other": 1
+    }
+   },
+   "fors": {
+    "count": 3,
+    "yield": 3,
+    "generators": {
+     "3": 1,
+     "4-5": 2
+    },
+    "generators_total": 11
+   },
+   "lambdas": {
+    "arrows": 320,
+    "placeholders": 51
+   },
+   "imports": {
+    "per_file": {
+     "0": 8,
+     "1-2": 3,
+     "3-5": 10,
+     "6-10": 3,
+     "11-20": 2,
+     "21+": 1
+    },
+    "total": 121,
+    "wildcard": 41,
+    "local": 10
+   },
+   "package_depth": {
+    "1": 13,
+    "2": 14
+   },
+   "strings": {
+    "s": 37,
+    "f": 1,
+    "raw": 0,
+    "custom": 1,
+    "triple_quoted": 2
+   },
+   "members": {
+    "vals": 285,
+    "lazy_vals": 3,
+    "vars": 1,
+    "defs": 307,
+    "top_level_defs": 0,
+    "by_name_params": 21,
+    "default_args": 20,
+    "varargs": 27,
+    "named_args": 45,
+    "tuple_vals": 9
+   },
+   "control": {
+    "ifs": 109,
+    "whiles": 0,
+    "try": 2,
+    "throw": 1,
+    "return": 0,
+    "assign_ops": 16
+   },
+   "annotations": {
+    "sites": 11,
+    "kinds": 1
+   }
+  },
+  "frontend": {
+   "files": 761,
+   "lines": 71006,
+   "blank_lines": 9060,
+   "comment_lines": 380,
+   "file_lines": {
+    "1-50": 284,
+    "51-100": 252,
+    "101-200": 149,
+    "201-400": 66,
+    "401-800": 9,
+    "801+": 1
+   },
+   "case_classes": {
+    "count": 596,
+    "fields": {
+     "0": 3,
+     "1": 82,
+     "2": 130,
+     "3": 93,
+     "4": 78,
+     "5-8": 136,
+     "9-16": 62,
+     "17-32": 11,
+     "33+": 1
+    },
+    "fields_total": 2729,
+    "generic": 50,
+    "with_parent": 3,
+    "with_derives": 8,
+    "nested": 570
+   },
+   "case_objects": 1,
+   "enums": {
+    "count": 153,
+    "cases": {
+     "1": 9,
+     "2": 58,
+     "3": 33,
+     "4-6": 38,
+     "7-12": 11,
+     "13-24": 3,
+     "25-48": 1
+    },
+    "cases_total": 567,
+    "with_class_cases": 50,
+    "class_cases_total": 131,
+    "with_params": 17,
+    "with_extends_cases": 18,
+    "generic": 7,
+    "with_derives": 80,
+    "with_parent": 8
+   },
+   "sealed": {
+    "count": 1,
+    "traits": 1,
+    "children": {
+     "4-6": 1
+    },
+    "depth": {
+     "2": 1
+    }
+   },
+   "classes": {
+    "plain": 47,
+    "abstract": 0,
+    "traits": 33,
+    "objects": 790,
+    "companions": 70,
+    "generic_traits": 4,
+    "higher_kinded_params": 0,
+    "anonymous": 23,
+    "nested": 873
+   },
+   "inheritance": {
+    "with_parent": 106,
+    "depth": {
+     "2": 3
+    },
+    "program_parents": 13,
+    "external_parents": 94,
+    "external_parent_kinds": 4
+   },
+   "derives": {
+    "clauses": 88,
+    "by_set": [
+     [
+      1,
+      42
+     ],
+     [
+      2,
+      15
+     ],
+     [
+      2,
+      8
+     ],
+     [
+      1,
+      6
+     ],
+     [
+      1,
+      6
+     ],
+     [
+      1,
+      2
+     ],
+     [
+      1,
+      2
+     ],
+     [
+      2,
+      1
+     ],
+     [
+      2,
+      1
+     ],
+     [
+      2,
+      1
+     ],
+     [
+      1,
+      1
+     ],
+     [
+      1,
+      1
+     ],
+     [
+      1,
+      1
+     ],
+     [
+      1,
+      1
+     ]
+    ],
+    "by_type_class": [
+     68,
+     21,
+     9,
+     7,
+     3,
+     2,
+     1,
+     1,
+     1,
+     1
+    ],
+    "type_classes": 10,
+    "on_generic": 1
+   },
+   "givens": {
+    "count": 35,
+    "alias": 33,
+    "instance": 2,
+    "conversion": 0,
+    "parameterised": 3,
+    "with_using": 0,
+    "named": 0,
+    "implicit_val": 0,
+    "implicit_def": 0,
+    "implicit_object": 0,
+    "implicit_class": 0,
+    "implicit_params": 0,
+    "using_clauses": 73,
+    "context_bounds": 46,
+    "summons": 1,
+    "given_imports": 721
+   },
+   "extensions": {
+    "clauses": 5,
+    "methods": 8,
+    "generic": 1,
+    "context_bound": 1
+   },
+   "types": {
+    "opaque": 2,
+    "aliases": 26,
+    "unions": 12
+   },
+   "inline": {
+    "defs": 0,
+    "transparent": 0,
+    "params": 0,
+    "givens": 0
+   },
+   "macros": {
+    "definitions": 0,
+    "sites": 5376,
+    "rows": [
+     {
+      "kind": "operator",
+      "sites": 4269,
+      "inline_params": 1
+     },
+     {
+      "kind": "interpolator",
+      "sites": 1023,
+      "inline_params": 1
+     },
+     {
+      "kind": "call",
+      "sites": 53,
+      "inline_params": 1
+     },
+     {
+      "kind": "derivation",
+      "sites": 21,
+      "inline_params": 0
+     },
+     {
+      "kind": "derivation",
+      "sites": 9,
+      "inline_params": 0
+     },
+     {
+      "kind": "derivation",
+      "sites": 1,
+      "inline_params": 0
+     },
+     {
+      "kind": "derivation",
+      "sites": 0,
+      "inline_params": 0
+     },
+     {
+      "kind": "interpolator",
+      "sites": 0,
+      "inline_params": 1
+     },
+     {
+      "kind": "interpolator",
+      "sites": 0,
+      "inline_params": 1
+     }
+    ],
+    "files_with_quoted": 0
+   },
+   "matches": {
+    "match_keywords": 734,
+    "case_groups": 872,
+    "cases": 2694,
+    "cases_per_group": {
+     "1": 91,
+     "2": 412,
+     "3": 165,
+     "4-6": 152,
+     "7-12": 40,
+     "13-24": 10,
+     "25-48": 1,
+     "49+": 1
+    },
+    "partial_function_literals": 0,
+    "patterns": {
+     "stable": 1283,
+     "constructor": 798,
+     "typed": 191,
+     "wildcard": 154,
+     "literal": 121,
+     "guard": 96,
+     "tuple": 82,
+     "other": 37,
+     "variable": 28,
+     "alternative": 23,
+     "binder": 3
+    }
+   },
+   "fors": {
+    "count": 272,
+    "yield": 263,
+    "generators": {
+     "1": 10,
+     "2": 86,
+     "3": 89,
+     "4-5": 65,
+     "6-9": 20,
+     "10+": 2
+    },
+    "generators_total": 899
+   },
+   "lambdas": {
+    "arrows": 3677,
+    "placeholders": 2169
+   },
+   "imports": {
+    "per_file": {
+     "0": 4,
+     "1-2": 148,
+     "3-5": 242,
+     "6-10": 217,
+     "11-20": 117,
+     "21+": 33
+    },
+    "total": 5465,
+    "wildcard": 1361,
+    "local": 15
+   },
+   "package_depth": {
+    "1": 129,
+    "2": 303,
+    "3": 199,
+    "4-5": 104,
+    "6-9": 26
+   },
+   "strings": {
+    "s": 500,
+    "f": 22,
+    "raw": 26,
+    "custom": 1272,
+    "triple_quoted": 63
+   },
+   "members": {
+    "vals": 4608,
+    "lazy_vals": 64,
+    "vars": 0,
+    "defs": 2277,
+    "top_level_defs": 57,
+    "by_name_params": 4,
+    "default_args": 663,
+    "varargs": 758,
+    "named_args": 2074,
+    "tuple_vals": 529
+   },
+   "control": {
+    "ifs": 873,
+    "whiles": 0,
+    "try": 0,
+    "throw": 0,
+    "return": 0,
+    "assign_ops": 5638
+   },
+   "annotations": {
+    "sites": 113,
+    "kinds": 5
+   }
+  },
+  "server": {
+   "files": 77,
+   "lines": 11036,
+   "blank_lines": 1298,
+   "comment_lines": 75,
+   "file_lines": {
+    "1-50": 28,
+    "51-100": 10,
+    "101-200": 25,
+    "201-400": 9,
+    "401-800": 4,
+    "801+": 1
+   },
+   "case_classes": {
+    "count": 27,
+    "fields": {
+     "1": 4,
+     "2": 5,
+     "3": 8,
+     "4": 3,
+     "5-8": 4,
+     "17-32": 2,
+     "33+": 1
+    },
+    "fields_total": 185,
+    "generic": 0,
+    "with_parent": 1,
+    "with_derives": 7,
+    "nested": 12
+   },
+   "case_objects": 0,
+   "enums": {
+    "count": 13,
+    "cases": {
+     "2": 7,
+     "3": 2,
+     "4-6": 1,
+     "7-12": 2,
+     "25-48": 1
+    },
+    "cases_total": 71,
+    "with_class_cases": 8,
+    "class_cases_total": 19,
+    "with_params": 2,
+    "with_extends_cases": 2,
+    "generic": 0,
+    "with_derives": 6,
+    "with_parent": 0
+   },
+   "sealed": {
+    "count": 0,
+    "traits": 0,
+    "children": {},
+    "depth": {}
+   },
+   "classes": {
+    "plain": 18,
+    "abstract": 0,
+    "traits": 7,
+    "objects": 38,
+    "companions": 14,
+    "generic_traits": 0,
+    "higher_kinded_params": 10,
+    "anonymous": 11,
+    "nested": 39
+   },
+   "inheritance": {
+    "with_parent": 6,
+    "depth": {
+     "2": 4
+    },
+    "program_parents": 2,
+    "external_parents": 4,
+    "external_parent_kinds": 3
+   },
+   "derives": {
+    "clauses": 13,
+    "by_set": [
+     [
+      1,
+      6
+     ],
+     [
+      1,
+      2
+     ],
+     [
+      1,
+      2
+     ],
+     [
+      2,
+      2
+     ],
+     [
+      2,
+      1
+     ]
+    ],
+    "by_type_class": [
+     9,
+     2,
+     2,
+     2,
+     1
+    ],
+    "type_classes": 5,
+    "on_generic": 0
+   },
+   "givens": {
+    "count": 13,
+    "alias": 9,
+    "instance": 4,
+    "conversion": 0,
+    "parameterised": 0,
+    "with_using": 0,
+    "named": 0,
+    "implicit_val": 4,
+    "implicit_def": 0,
+    "implicit_object": 0,
+    "implicit_class": 4,
+    "implicit_params": 0,
+    "using_clauses": 2,
+    "context_bounds": 32,
+    "summons": 0,
+    "given_imports": 33
+   },
+   "extensions": {
+    "clauses": 1,
+    "methods": 13,
+    "generic": 0,
+    "context_bound": 0
+   },
+   "types": {
+    "opaque": 0,
+    "aliases": 8,
+    "unions": 6
+   },
+   "inline": {
+    "defs": 0,
+    "transparent": 0,
+    "params": 0,
+    "givens": 0
+   },
+   "macros": {
+    "definitions": 0,
+    "sites": 31,
+    "rows": [
+     {
+      "kind": "operator",
+      "sites": 20,
+      "inline_params": 1
+     },
+     {
+      "kind": "interpolator",
+      "sites": 7,
+      "inline_params": 1
+     },
+     {
+      "kind": "derivation",
+      "sites": 2,
+      "inline_params": 0
+     },
+     {
+      "kind": "derivation",
+      "sites": 2,
+      "inline_params": 0
+     },
+     {
+      "kind": "call",
+      "sites": 0,
+      "inline_params": 1
+     },
+     {
+      "kind": "derivation",
+      "sites": 0,
+      "inline_params": 0
+     },
+     {
+      "kind": "derivation",
+      "sites": 0,
+      "inline_params": 0
+     },
+     {
+      "kind": "interpolator",
+      "sites": 0,
+      "inline_params": 1
+     },
+     {
+      "kind": "interpolator",
+      "sites": 0,
+      "inline_params": 1
+     }
+    ],
+    "files_with_quoted": 0
+   },
+   "matches": {
+    "match_keywords": 82,
+    "case_groups": 121,
+    "cases": 385,
+    "cases_per_group": {
+     "1": 13,
+     "2": 75,
+     "3": 15,
+     "4-6": 9,
+     "7-12": 5,
+     "13-24": 2,
+     "25-48": 2
+    },
+    "partial_function_literals": 368,
+    "patterns": {
+     "stable": 188,
+     "constructor": 118,
+     "typed": 26,
+     "tuple": 19,
+     "wildcard": 18,
+     "literal": 8,
+     "variable": 6,
+     "guard": 4,
+     "alternative": 2,
+     "other": 2
+    }
+   },
+   "fors": {
+    "count": 246,
+    "yield": 242,
+    "generators": {
+     "1": 18,
+     "2": 100,
+     "3": 54,
+     "4-5": 43,
+     "6-9": 21,
+     "10+": 10
+    },
+    "generators_total": 858
+   },
+   "lambdas": {
+    "arrows": 833,
+    "placeholders": 250
+   },
+   "imports": {
+    "per_file": {
+     "1-2": 2,
+     "3-5": 3,
+     "6-10": 23,
+     "11-20": 22,
+     "21+": 27
+    },
+    "total": 1498,
+    "wildcard": 434,
+    "local": 46
+   },
+   "package_depth": {
+    "1": 40,
+    "2": 36,
+    "3": 1
+   },
+   "strings": {
+    "s": 61,
+    "f": 0,
+    "raw": 0,
+    "custom": 27,
+    "triple_quoted": 12
+   },
+   "members": {
+    "vals": 230,
+    "lazy_vals": 0,
+    "vars": 0,
+    "defs": 324,
+    "top_level_defs": 46,
+    "by_name_params": 2,
+    "default_args": 36,
+    "varargs": 36,
+    "named_args": 192,
+    "tuple_vals": 1
+   },
+   "control": {
+    "ifs": 71,
+    "whiles": 0,
+    "try": 0,
+    "throw": 1,
+    "return": 0,
+    "assign_ops": 26
+   },
+   "annotations": {
+    "sites": 0,
+    "kinds": 0
+   }
+  },
+  "business": {
+   "files": 222,
+   "lines": 38518,
+   "blank_lines": 4851,
+   "comment_lines": 134,
+   "file_lines": {
+    "1-50": 40,
+    "51-100": 57,
+    "101-200": 62,
+    "201-400": 43,
+    "401-800": 16,
+    "801+": 4
+   },
+   "case_classes": {
+    "count": 257,
+    "fields": {
+     "1": 32,
+     "2": 44,
+     "3": 39,
+     "4": 31,
+     "5-8": 62,
+     "9-16": 34,
+     "17-32": 12,
+     "33+": 3
+    },
+    "fields_total": 1542,
+    "generic": 2,
+    "with_parent": 0,
+    "with_derives": 44,
+    "nested": 255
+   },
+   "case_objects": 0,
+   "enums": {
+    "count": 21,
+    "cases": {
+     "2": 8,
+     "3": 5,
+     "4-6": 4,
+     "7-12": 4
+    },
+    "cases_total": 84,
+    "with_class_cases": 12,
+    "class_cases_total": 34,
+    "with_params": 2,
+    "with_extends_cases": 2,
+    "generic": 0,
+    "with_derives": 8,
+    "with_parent": 0
+   },
+   "sealed": {
+    "count": 0,
+    "traits": 0,
+    "children": {},
+    "depth": {}
+   },
+   "classes": {
+    "plain": 88,
+    "abstract": 0,
+    "traits": 62,
+    "objects": 295,
+    "companions": 90,
+    "generic_traits": 0,
+    "higher_kinded_params": 0,
+    "anonymous": 0,
+    "nested": 501
+   },
+   "inheritance": {
+    "with_parent": 64,
+    "depth": {
+     "2": 124
+    },
+    "program_parents": 62,
+    "external_parents": 2,
+    "external_parent_kinds": 2
+   },
+   "derives": {
+    "clauses": 52,
+    "by_set": [
+     [
+      1,
+      36
+     ],
+     [
+      1,
+      6
+     ],
+     [
+      1,
+      4
+     ],
+     [
+      2,
+      3
+     ],
+     [
+      2,
+      2
+     ],
+     [
+      1,
+      1
+     ]
+    ],
+    "by_type_class": [
+     39,
+     8,
+     6,
+     3,
+     1
+    ],
+    "type_classes": 5,
+    "on_generic": 0
+   },
+   "givens": {
+    "count": 24,
+    "alias": 23,
+    "instance": 1,
+    "conversion": 0,
+    "parameterised": 0,
+    "with_using": 0,
+    "named": 1,
+    "implicit_val": 41,
+    "implicit_def": 0,
+    "implicit_object": 0,
+    "implicit_class": 0,
+    "implicit_params": 10,
+    "using_clauses": 4,
+    "context_bounds": 11,
+    "summons": 0,
+    "given_imports": 221
+   },
+   "extensions": {
+    "clauses": 2,
+    "methods": 14,
+    "generic": 2,
+    "context_bound": 0
+   },
+   "types": {
+    "opaque": 0,
+    "aliases": 5,
+    "unions": 0
+   },
+   "inline": {
+    "defs": 0,
+    "transparent": 0,
+    "params": 0,
+    "givens": 0
+   },
+   "macros": {
+    "definitions": 0,
+    "sites": 8,
+    "rows": [
+     {
+      "kind": "derivation",
+      "sites": 7,
+      "inline_params": 0
+     },
+     {
+      "kind": "derivation",
+      "sites": 1,
+      "inline_params": 0
+     },
+     {
+      "kind": "call",
+      "sites": 0,
+      "inline_params": 1
+     },
+     {
+      "kind": "derivation",
+      "sites": 0,
+      "inline_params": 0
+     },
+     {
+      "kind": "derivation",
+      "sites": 0,
+      "inline_params": 0
+     },
+     {
+      "kind": "interpolator",
+      "sites": 0,
+      "inline_params": 1
+     },
+     {
+      "kind": "interpolator",
+      "sites": 0,
+      "inline_params": 1
+     },
+     {
+      "kind": "interpolator",
+      "sites": 0,
+      "inline_params": 1
+     },
+     {
+      "kind": "operator",
+      "sites": 0,
+      "inline_params": 1
+     }
+    ],
+    "files_with_quoted": 0
+   },
+   "matches": {
+    "match_keywords": 317,
+    "case_groups": 399,
+    "cases": 1266,
+    "cases_per_group": {
+     "1": 48,
+     "2": 207,
+     "3": 65,
+     "4-6": 47,
+     "7-12": 29,
+     "13-24": 2,
+     "49+": 1
+    },
+    "partial_function_literals": 0,
+    "patterns": {
+     "stable": 575,
+     "constructor": 344,
+     "typed": 124,
+     "tuple": 100,
+     "wildcard": 59,
+     "guard": 37,
+     "other": 24,
+     "literal": 20,
+     "variable": 20,
+     "binder": 18,
+     "alternative": 3
+    }
+   },
+   "fors": {
+    "count": 585,
+    "yield": 573,
+    "generators": {
+     "1": 33,
+     "2": 237,
+     "3": 115,
+     "4-5": 113,
+     "6-9": 62,
+     "10+": 25
+    },
+    "generators_total": 2192
+   },
+   "lambdas": {
+    "arrows": 1738,
+    "placeholders": 1020
+   },
+   "imports": {
+    "per_file": {
+     "1-2": 6,
+     "3-5": 10,
+     "6-10": 63,
+     "11-20": 98,
+     "21+": 45
+    },
+    "total": 3281,
+    "wildcard": 1357,
+    "local": 8
+   },
+   "package_depth": {
+    "1": 1,
+    "2": 108,
+    "3": 103,
+    "4-5": 10
+   },
+   "strings": {
+    "s": 127,
+    "f": 0,
+    "raw": 0,
+    "custom": 1123,
+    "triple_quoted": 1078
+   },
+   "members": {
+    "vals": 959,
+    "lazy_vals": 8,
+    "vars": 0,
+    "defs": 2904,
+    "top_level_defs": 0,
+    "by_name_params": 6,
+    "default_args": 1053,
+    "varargs": 215,
+    "named_args": 419,
+    "tuple_vals": 33
+   },
+   "control": {
+    "ifs": 240,
+    "whiles": 0,
+    "try": 0,
+    "throw": 33,
+    "return": 0,
+    "assign_ops": 0
+   },
+   "annotations": {
+    "sites": 10,
+    "kinds": 7
+   }
+  },
+  "infra": {
+   "files": 133,
+   "lines": 17328,
+   "blank_lines": 2481,
+   "comment_lines": 312,
+   "file_lines": {
+    "1-50": 34,
+    "51-100": 34,
+    "101-200": 36,
+    "201-400": 27,
+    "401-800": 2
+   },
+   "case_classes": {
+    "count": 423,
+    "fields": {
+     "0": 1,
+     "1": 98,
+     "2": 104,
+     "3": 62,
+     "4": 37,
+     "5-8": 73,
+     "9-16": 33,
+     "17-32": 12,
+     "33+": 3
+    },
+    "fields_total": 1879,
+    "generic": 22,
+    "with_parent": 5,
+    "with_derives": 268,
+    "nested": 417
+   },
+   "case_objects": 0,
+   "enums": {
+    "count": 59,
+    "cases": {
+     "1": 4,
+     "2": 17,
+     "3": 18,
+     "4-6": 9,
+     "7-12": 8,
+     "13-24": 1,
+     "25-48": 1,
+     "49+": 1
+    },
+    "cases_total": 296,
+    "with_class_cases": 8,
+    "class_cases_total": 21,
+    "with_params": 38,
+    "with_extends_cases": 35,
+    "generic": 3,
+    "with_derives": 35,
+    "with_parent": 0
+   },
+   "sealed": {
+    "count": 0,
+    "traits": 0,
+    "children": {},
+    "depth": {}
+   },
+   "classes": {
+    "plain": 39,
+    "abstract": 0,
+    "traits": 34,
+    "objects": 184,
+    "companions": 116,
+    "generic_traits": 4,
+    "higher_kinded_params": 9,
+    "anonymous": 12,
+    "nested": 601
+   },
+   "inheritance": {
+    "with_parent": 40,
+    "depth": {
+     "2": 52
+    },
+    "program_parents": 34,
+    "external_parents": 10,
+    "external_parent_kinds": 10
+   },
+   "derives": {
+    "clauses": 303,
+    "by_set": [
+     [
+      1,
+      238
+     ],
+     [
+      1,
+      16
+     ],
+     [
+      1,
+      15
+     ],
+     [
+      2,
+      11
+     ],
+     [
+      1,
+      7
+     ],
+     [
+      1,
+      6
+     ],
+     [
+      1,
+      5
+     ],
+     [
+      1,
+      3
+     ],
+     [
+      2,
+      2
+     ]
+    ],
+    "by_type_class": [
+     240,
+     27,
+     18,
+     15,
+     6,
+     5,
+     3,
+     2
+    ],
+    "type_classes": 8,
+    "on_generic": 0
+   },
+   "givens": {
+    "count": 59,
+    "alias": 57,
+    "instance": 2,
+    "conversion": 0,
+    "parameterised": 7,
+    "with_using": 0,
+    "named": 17,
+    "implicit_val": 73,
+    "implicit_def": 2,
+    "implicit_object": 0,
+    "implicit_class": 3,
+    "implicit_params": 49,
+    "using_clauses": 56,
+    "context_bounds": 76,
+    "summons": 0,
+    "given_imports": 47
+   },
+   "extensions": {
+    "clauses": 8,
+    "methods": 149,
+    "generic": 5,
+    "context_bound": 0
+   },
+   "types": {
+    "opaque": 1,
+    "aliases": 23,
+    "unions": 1
+   },
+   "inline": {
+    "defs": 1,
+    "transparent": 0,
+    "params": 0,
+    "givens": 0
+   },
+   "macros": {
+    "definitions": 0,
+    "sites": 38,
+    "rows": [
+     {
+      "kind": "derivation",
+      "sites": 27,
+      "inline_params": 0
+     },
+     {
+      "kind": "derivation",
+      "sites": 6,
+      "inline_params": 0
+     },
+     {
+      "kind": "derivation",
+      "sites": 5,
+      "inline_params": 0
+     },
+     {
+      "kind": "call",
+      "sites": 0,
+      "inline_params": 1
+     },
+     {
+      "kind": "derivation",
+      "sites": 0,
+      "inline_params": 0
+     },
+     {
+      "kind": "interpolator",
+      "sites": 0,
+      "inline_params": 1
+     },
+     {
+      "kind": "interpolator",
+      "sites": 0,
+      "inline_params": 1
+     },
+     {
+      "kind": "interpolator",
+      "sites": 0,
+      "inline_params": 1
+     },
+     {
+      "kind": "operator",
+      "sites": 0,
+      "inline_params": 1
+     }
+    ],
+    "files_with_quoted": 0
+   },
+   "matches": {
+    "match_keywords": 136,
+    "case_groups": 176,
+    "cases": 524,
+    "cases_per_group": {
+     "1": 14,
+     "2": 103,
+     "3": 28,
+     "4-6": 13,
+     "7-12": 16,
+     "13-24": 2
+    },
+    "partial_function_literals": 2,
+    "patterns": {
+     "stable": 209,
+     "constructor": 163,
+     "literal": 55,
+     "typed": 35,
+     "wildcard": 30,
+     "guard": 22,
+     "tuple": 15,
+     "alternative": 12,
+     "variable": 10,
+     "binder": 9,
+     "other": 7
+    }
+   },
+   "fors": {
+    "count": 203,
+    "yield": 194,
+    "generators": {
+     "1": 17,
+     "2": 75,
+     "3": 55,
+     "4-5": 40,
+     "6-9": 14,
+     "10+": 2
+    },
+    "generators_total": 612
+   },
+   "lambdas": {
+    "arrows": 662,
+    "placeholders": 467
+   },
+   "imports": {
+    "per_file": {
+     "0": 1,
+     "1-2": 14,
+     "3-5": 21,
+     "6-10": 30,
+     "11-20": 47,
+     "21+": 20
+    },
+    "total": 1561,
+    "wildcard": 580,
+    "local": 1
+   },
+   "package_depth": {
+    "1": 35,
+    "2": 52,
+    "3": 45,
+    "4-5": 1
+   },
+   "strings": {
+    "s": 126,
+    "f": 1,
+    "raw": 0,
+    "custom": 138,
+    "triple_quoted": 69
+   },
+   "members": {
+    "vals": 678,
+    "lazy_vals": 1,
+    "vars": 0,
+    "defs": 1128,
+    "top_level_defs": 0,
+    "by_name_params": 9,
+    "default_args": 161,
+    "varargs": 77,
+    "named_args": 272,
+    "tuple_vals": 10
+   },
+   "control": {
+    "ifs": 132,
+    "whiles": 0,
+    "try": 5,
+    "throw": 15,
+    "return": 0,
+    "assign_ops": 0
+   },
+   "annotations": {
+    "sites": 11,
+    "kinds": 2
+   }
+  },
+  "allocation": {
+   "files": 8,
+   "lines": 531,
+   "blank_lines": 99,
+   "comment_lines": 21,
+   "file_lines": {
+    "1-50": 5,
+    "51-100": 1,
+    "101-200": 1,
+    "201-400": 1
+   },
+   "case_classes": {
+    "count": 19,
+    "fields": {
+     "1": 6,
+     "2": 3,
+     "3": 4,
+     "4": 1,
+     "5-8": 3,
+     "9-16": 2
+    },
+    "fields_total": 71,
+    "generic": 1,
+    "with_parent": 0,
+    "with_derives": 3,
+    "nested": 19
+   },
+   "case_objects": 0,
+   "enums": {
+    "count": 9,
+    "cases": {
+     "1": 1,
+     "2": 5,
+     "3": 1,
+     "4-6": 2
+    },
+    "cases_total": 23,
+    "with_class_cases": 5,
+    "class_cases_total": 8,
+    "with_params": 0,
+    "with_extends_cases": 0,
+    "generic": 0,
+    "with_derives": 2,
+    "with_parent": 0
+   },
+   "sealed": {
+    "count": 0,
+    "traits": 0,
+    "children": {},
+    "depth": {}
+   },
+   "classes": {
+    "plain": 1,
+    "abstract": 0,
+    "traits": 0,
+    "objects": 12,
+    "companions": 5,
+    "generic_traits": 0,
+    "higher_kinded_params": 0,
+    "anonymous": 0,
+    "nested": 34
+   },
+   "inheritance": {
+    "with_parent": 0,
+    "depth": {},
+    "program_parents": 0,
+    "external_parents": 0,
+    "external_parent_kinds": 0
+   },
+   "derives": {
+    "clauses": 5,
+    "by_set": [
+     [
+      1,
+      5
+     ]
+    ],
+    "by_type_class": [
+     5
+    ],
+    "type_classes": 1,
+    "on_generic": 0
+   },
+   "givens": {
+    "count": 3,
+    "alias": 3,
+    "instance": 0,
+    "conversion": 0,
+    "parameterised": 0,
+    "with_using": 0,
+    "named": 0,
+    "implicit_val": 0,
+    "implicit_def": 0,
+    "implicit_object": 0,
+    "implicit_class": 1,
+    "implicit_params": 0,
+    "using_clauses": 0,
+    "context_bounds": 0,
+    "summons": 0,
+    "given_imports": 0
+   },
+   "extensions": {
+    "clauses": 0,
+    "methods": 0,
+    "generic": 0,
+    "context_bound": 0
+   },
+   "types": {
+    "opaque": 0,
+    "aliases": 0,
+    "unions": 0
+   },
+   "inline": {
+    "defs": 0,
+    "transparent": 0,
+    "params": 0,
+    "givens": 0
+   },
+   "macros": {
+    "definitions": 0,
+    "sites": 0,
+    "rows": [
+     {
+      "kind": "call",
+      "sites": 0,
+      "inline_params": 1
+     },
+     {
+      "kind": "derivation",
+      "sites": 0,
+      "inline_params": 0
+     },
+     {
+      "kind": "derivation",
+      "sites": 0,
+      "inline_params": 0
+     },
+     {
+      "kind": "derivation",
+      "sites": 0,
+      "inline_params": 0
+     },
+     {
+      "kind": "derivation",
+      "sites": 0,
+      "inline_params": 0
+     },
+     {
+      "kind": "interpolator",
+      "sites": 0,
+      "inline_params": 1
+     },
+     {
+      "kind": "interpolator",
+      "sites": 0,
+      "inline_params": 1
+     },
+     {
+      "kind": "interpolator",
+      "sites": 0,
+      "inline_params": 1
+     },
+     {
+      "kind": "operator",
+      "sites": 0,
+      "inline_params": 1
+     }
+    ],
+    "files_with_quoted": 0
+   },
+   "matches": {
+    "match_keywords": 15,
+    "case_groups": 17,
+    "cases": 43,
+    "cases_per_group": {
+     "1": 2,
+     "2": 10,
+     "3": 1,
+     "4-6": 4
+    },
+    "partial_function_literals": 0,
+    "patterns": {
+     "stable": 18,
+     "constructor": 12,
+     "guard": 4,
+     "tuple": 4,
+     "typed": 4,
+     "wildcard": 3,
+     "alternative": 2,
+     "binder": 2,
+     "other": 2
+    }
+   },
+   "fors": {
+    "count": 0,
+    "yield": 0,
+    "generators": {},
+    "generators_total": 0
+   },
+   "lambdas": {
+    "arrows": 27,
+    "placeholders": 13
+   },
+   "imports": {
+    "per_file": {
+     "1-2": 2,
+     "3-5": 2,
+     "6-10": 3,
+     "11-20": 1
+    },
+    "total": 48,
+    "wildcard": 23,
+    "local": 0
+   },
+   "package_depth": {
+    "1": 2,
+    "2": 6
+   },
+   "strings": {
+    "s": 0,
+    "f": 0,
+    "raw": 0,
+    "custom": 0,
+    "triple_quoted": 0
+   },
+   "members": {
+    "vals": 28,
+    "lazy_vals": 3,
+    "vars": 0,
+    "defs": 19,
+    "top_level_defs": 0,
+    "by_name_params": 0,
+    "default_args": 6,
+    "varargs": 0,
+    "named_args": 3,
+    "tuple_vals": 2
+   },
+   "control": {
+    "ifs": 5,
+    "whiles": 0,
+    "try": 0,
+    "throw": 0,
+    "return": 0,
+    "assign_ops": 0
+   },
+   "annotations": {
+    "sites": 1,
+    "kinds": 1
+   }
+  },
+  "public": {
+   "files": 10,
+   "lines": 901,
+   "blank_lines": 145,
+   "comment_lines": 0,
+   "file_lines": {
+    "1-50": 3,
+    "51-100": 3,
+    "101-200": 4
+   },
+   "case_classes": {
+    "count": 30,
+    "fields": {
+     "1": 14,
+     "2": 6,
+     "3": 3,
+     "4": 1,
+     "5-8": 4,
+     "9-16": 2
+    },
+    "fields_total": 97,
+    "generic": 2,
+    "with_parent": 0,
+    "with_derives": 10,
+    "nested": 30
+   },
+   "case_objects": 0,
+   "enums": {
+    "count": 9,
+    "cases": {
+     "1": 2,
+     "2": 2,
+     "3": 2,
+     "4-6": 2,
+     "7-12": 1
+    },
+    "cases_total": 30,
+    "with_class_cases": 2,
+    "class_cases_total": 7,
+    "with_params": 7,
+    "with_extends_cases": 7,
+    "generic": 0,
+    "with_derives": 7,
+    "with_parent": 1
+   },
+   "sealed": {
+    "count": 0,
+    "traits": 0,
+    "children": {},
+    "depth": {}
+   },
+   "classes": {
+    "plain": 1,
+    "abstract": 0,
+    "traits": 0,
+    "objects": 42,
+    "companions": 31,
+    "generic_traits": 0,
+    "higher_kinded_params": 0,
+    "anonymous": 0,
+    "nested": 72
+   },
+   "inheritance": {
+    "with_parent": 1,
+    "depth": {},
+    "program_parents": 0,
+    "external_parents": 1,
+    "external_parent_kinds": 1
+   },
+   "derives": {
+    "clauses": 17,
+    "by_set": [
+     [
+      1,
+      9
+     ],
+     [
+      2,
+      5
+     ],
+     [
+      1,
+      1
+     ],
+     [
+      3,
+      1
+     ],
+     [
+      1,
+      1
+     ]
+    ],
+    "by_type_class": [
+     15,
+     6,
+     2,
+     1
+    ],
+    "type_classes": 4,
+    "on_generic": 0
+   },
+   "givens": {
+    "count": 40,
+    "alias": 40,
+    "instance": 0,
+    "conversion": 0,
+    "parameterised": 2,
+    "with_using": 0,
+    "named": 6,
+    "implicit_val": 35,
+    "implicit_def": 0,
+    "implicit_object": 0,
+    "implicit_class": 1,
+    "implicit_params": 0,
+    "using_clauses": 0,
+    "context_bounds": 1,
+    "summons": 0,
+    "given_imports": 0
+   },
+   "extensions": {
+    "clauses": 0,
+    "methods": 0,
+    "generic": 0,
+    "context_bound": 0
+   },
+   "types": {
+    "opaque": 0,
+    "aliases": 2,
+    "unions": 0
+   },
+   "inline": {
+    "defs": 0,
+    "transparent": 0,
+    "params": 0,
+    "givens": 0
+   },
+   "macros": {
+    "definitions": 0,
+    "sites": 0,
+    "rows": [
+     {
+      "kind": "call",
+      "sites": 0,
+      "inline_params": 1
+     },
+     {
+      "kind": "derivation",
+      "sites": 0,
+      "inline_params": 0
+     },
+     {
+      "kind": "derivation",
+      "sites": 0,
+      "inline_params": 0
+     },
+     {
+      "kind": "derivation",
+      "sites": 0,
+      "inline_params": 0
+     },
+     {
+      "kind": "derivation",
+      "sites": 0,
+      "inline_params": 0
+     },
+     {
+      "kind": "interpolator",
+      "sites": 0,
+      "inline_params": 1
+     },
+     {
+      "kind": "interpolator",
+      "sites": 0,
+      "inline_params": 1
+     },
+     {
+      "kind": "interpolator",
+      "sites": 0,
+      "inline_params": 1
+     },
+     {
+      "kind": "operator",
+      "sites": 0,
+      "inline_params": 1
+     }
+    ],
+    "files_with_quoted": 0
+   },
+   "matches": {
+    "match_keywords": 2,
+    "case_groups": 2,
+    "cases": 6,
+    "cases_per_group": {
+     "1": 1,
+     "4-6": 1
+    },
+    "partial_function_literals": 7,
+    "patterns": {
+     "stable": 6
+    }
+   },
+   "fors": {
+    "count": 0,
+    "yield": 0,
+    "generators": {},
+    "generators_total": 0
+   },
+   "lambdas": {
+    "arrows": 17,
+    "placeholders": 32
+   },
+   "imports": {
+    "per_file": {
+     "1-2": 1,
+     "3-5": 1,
+     "6-10": 5,
+     "11-20": 3
+    },
+    "total": 84,
+    "wildcard": 59,
+    "local": 1
+   },
+   "package_depth": {
+    "2": 3,
+    "3": 7
+   },
+   "strings": {
+    "s": 0,
+    "f": 0,
+    "raw": 0,
+    "custom": 0,
+    "triple_quoted": 2
+   },
+   "members": {
+    "vals": 64,
+    "lazy_vals": 0,
+    "vars": 0,
+    "defs": 8,
+    "top_level_defs": 0,
+    "by_name_params": 0,
+    "default_args": 0,
+    "varargs": 0,
+    "named_args": 16,
+    "tuple_vals": 0
+   },
+   "control": {
+    "ifs": 0,
+    "whiles": 0,
+    "try": 0,
+    "throw": 0,
+    "return": 0,
+    "assign_ops": 0
+   },
+   "annotations": {
+    "sites": 0,
+    "kinds": 0
+   }
+  }
+ },
+ "total": {
+  "files": 1364,
+  "lines": 158904,
+  "blank_lines": 21146,
+  "comment_lines": 1488,
+  "file_lines": {
+   "1-50": 457,
+   "51-100": 383,
+   "201-400": 164,
+   "401-800": 36,
+   "101-200": 315,
+   "801+": 9
+  },
+  "case_classes": {
+   "count": 1988,
+   "fields": {
+    "1": 407,
+    "2": 440,
+    "3": 287,
+    "4": 213,
+    "5-8": 390,
+    "9-16": 182,
+    "17-32": 50,
+    "33+": 15,
+    "0": 4
+   },
+   "fields_total": 9279,
+   "generic": 107,
+   "with_parent": 14,
+   "with_derives": 882,
+   "nested": 1934
+  },
+  "case_objects": 1,
+  "enums": {
+   "count": 509,
+   "cases": {
+    "2": 179,
+    "4-6": 112,
+    "7-12": 55,
+    "1": 22,
+    "3": 121,
+    "13-24": 10,
+    "25-48": 7,
+    "49+": 3
+   },
+   "cases_total": 2362,
+   "with_class_cases": 185,
+   "class_cases_total": 484,
+   "with_params": 102,
+   "with_extends_cases": 97,
+   "generic": 18,
+   "with_derives": 355,
+   "with_parent": 11
+  },
+  "sealed": {
+   "count": 2,
+   "traits": 2,
+   "children": {
+    "1": 1,
+    "4-6": 1
+   },
+   "depth": {
+    "1": 1,
+    "2": 1
+   }
+  },
+  "classes": {
+   "plain": 211,
+   "abstract": 0,
+   "traits": 148,
+   "objects": 1696,
+   "companions": 513,
+   "generic_traits": 18,
+   "higher_kinded_params": 21,
+   "anonymous": 70,
+   "nested": 3191
+  },
+  "inheritance": {
+   "with_parent": 233,
+   "depth": {
+    "2": 186
+   },
+   "program_parents": 118,
+   "external_parents": 121,
+   "external_parent_kinds": 25
+  },
+  "derives": {
+   "clauses": 1237,
+   "by_set": [
+    [
+     2,
+     470
+    ],
+    [
+     1,
+     238
+    ],
+    [
+     1,
+     54
+    ],
+    [
+     2,
+     44
+    ],
+    [
+     1,
+     44
+    ],
+    [
+     1,
+     42
+    ],
+    [
+     1,
+     36
+    ],
+    [
+     3,
+     33
+    ],
+    [
+     1,
+     32
+    ],
+    [
+     1,
+     16
+    ],
+    [
+     2,
+     15
+    ],
+    [
+     1,
+     15
+    ],
+    [
+     1,
+     14
+    ],
+    [
+     2,
+     11
+    ],
+    [
+     2,
+     9
+    ],
+    [
+     1,
+     9
+    ],
+    [
+     2,
+     8
+    ],
+    [
+     1,
+     7
+    ],
+    [
+     4,
+     6
+    ],
+    [
+     3,
+     6
+    ],
+    [
+     1,
+     6
+    ],
+    [
+     1,
+     6
+    ],
+    [
+     1,
+     6
+    ],
+    [
+     1,
+     6
+    ],
+    [
+     1,
+     6
+    ],
+    [
+     5,
+     5
+    ],
+    [
+     2,
+     5
+    ],
+    [
+     1,
+     5
+    ],
+    [
+     1,
+     5
+    ],
+    [
+     3,
+     4
+    ],
+    [
+     3,
+     4
+    ],
+    [
+     1,
+     4
+    ],
+    [
+     4,
+     3
+    ],
+    [
+     4,
+     3
+    ],
+    [
+     3,
+     3
+    ],
+    [
+     2,
+     3
+    ],
+    [
+     2,
+     3
+    ],
+    [
+     2,
+     3
+    ],
+    [
+     1,
+     3
+    ],
+    [
+     1,
+     3
+    ],
+    [
+     1,
+     3
+    ],
+    [
+     2,
+     2
+    ],
+    [
+     2,
+     2
+    ],
+    [
+     2,
+     2
+    ],
+    [
+     1,
+     2
+    ],
+    [
+     1,
+     2
+    ],
+    [
+     1,
+     2
+    ],
+    [
+     1,
+     2
+    ],
+    [
+     1,
+     2
+    ],
+    [
+     4,
+     1
+    ],
+    [
+     3,
+     1
+    ],
+    [
+     3,
+     1
+    ],
+    [
+     3,
+     1
+    ],
+    [
+     2,
+     1
+    ],
+    [
+     2,
+     1
+    ],
+    [
+     2,
+     1
+    ],
+    [
+     2,
+     1
+    ],
+    [
+     2,
+     1
+    ],
+    [
+     2,
+     1
+    ],
+    [
+     2,
+     1
+    ],
+    [
+     2,
+     1
+    ],
+    [
+     2,
+     1
+    ],
+    [
+     2,
+     1
+    ],
+    [
+     1,
+     1
+    ],
+    [
+     1,
+     1
+    ],
+    [
+     1,
+     1
+    ],
+    [
+     1,
+     1
+    ],
+    [
+     1,
+     1
+    ],
+    [
+     1,
+     1
+    ],
+    [
+     1,
+     1
+    ],
+    [
+     1,
+     1
+    ],
+    [
+     1,
+     1
+    ]
+   ],
+   "by_type_class": [
+    553,
+    548,
+    240,
+    120,
+    112,
+    68,
+    44,
+    39,
+    32,
+    27,
+    21,
+    21,
+    18,
+    15,
+    15,
+    9,
+    9,
+    8,
+    8,
+    7,
+    6,
+    6,
+    6,
+    6,
+    5,
+    5,
+    4,
+    3,
+    3,
+    3,
+    3,
+    2,
+    2,
+    2,
+    2,
+    2,
+    2,
+    2,
+    2,
+    1,
+    1,
+    1,
+    1,
+    1,
+    1,
+    1,
+    1,
+    1
+   ],
+   "type_classes": 48,
+   "on_generic": 3
+  },
+  "givens": {
+   "count": 495,
+   "alias": 473,
+   "instance": 22,
+   "conversion": 0,
+   "parameterised": 83,
+   "with_using": 6,
+   "named": 123,
+   "implicit_val": 154,
+   "implicit_def": 2,
+   "implicit_object": 1,
+   "implicit_class": 23,
+   "implicit_params": 68,
+   "using_clauses": 176,
+   "context_bounds": 321,
+   "summons": 10,
+   "given_imports": 1120
+  },
+  "extensions": {
+   "clauses": 58,
+   "methods": 1057,
+   "generic": 20,
+   "context_bound": 1
+  },
+  "types": {
+   "opaque": 4,
+   "aliases": 81,
+   "unions": 24
+  },
+  "inline": {
+   "defs": 15,
+   "transparent": 4,
+   "params": 7,
+   "givens": 0
+  },
+  "macros": {
+   "definitions": 9,
+   "sites": 5669,
+   "rows": [
+    {
+     "kind": "operator",
+     "sites": 4296,
+     "inline_params": 1
+    },
+    {
+     "kind": "interpolator",
+     "sites": 1024,
+     "inline_params": 1
+    },
+    {
+     "kind": "derivation",
+     "sites": 179,
+     "inline_params": 0
+    },
+    {
+     "kind": "call",
+     "sites": 55,
+     "inline_params": 1
+    },
+    {
+     "kind": "derivation",
+     "sites": 49,
+     "inline_params": 0
+    },
+    {
+     "kind": "derivation",
+     "sites": 39,
+     "inline_params": 0
+    },
+    {
+     "kind": "derivation",
+     "sites": 20,
+     "inline_params": 0
+    },
+    {
+     "kind": "interpolator",
+     "sites": 7,
+     "inline_params": 1
+    },
+    {
+     "kind": "interpolator",
+     "sites": 0,
+     "inline_params": 1
+    }
+   ],
+   "files_with_quoted": 6
+  },
+  "matches": {
+   "match_keywords": 1528,
+   "case_groups": 1905,
+   "cases": 6073,
+   "cases_per_group": {
+    "2": 994,
+    "4-6": 266,
+    "7-12": 119,
+    "1": 187,
+    "3": 313,
+    "13-24": 17,
+    "25-48": 5,
+    "49+": 4
+   },
+   "partial_function_literals": 515,
+   "patterns": {
+    "stable": 2981,
+    "constructor": 1608,
+    "guard": 190,
+    "wildcard": 312,
+    "variable": 83,
+    "other": 78,
+    "typed": 497,
+    "binder": 35,
+    "literal": 243,
+    "tuple": 270,
+    "alternative": 57,
+    "cons": 1
+   }
+  },
+  "fors": {
+   "count": 1312,
+   "yield": 1278,
+   "generators": {
+    "2": 499,
+    "4-5": 265,
+    "3": 314,
+    "1": 78,
+    "6-9": 117,
+    "10+": 39
+   },
+   "generators_total": 4583
+  },
+  "lambdas": {
+   "arrows": 7590,
+   "placeholders": 4241
+  },
+  "imports": {
+   "per_file": {
+    "0": 18,
+    "1-2": 185,
+    "3-5": 315,
+    "6-10": 387,
+    "11-20": 329,
+    "21+": 130
+   },
+   "total": 13148,
+   "wildcard": 4298,
+   "local": 94
+  },
+  "package_depth": {
+   "1": 233,
+   "2": 600,
+   "3": 390,
+   "4-5": 115,
+   "6-9": 26
+  },
+  "strings": {
+   "s": 900,
+   "f": 28,
+   "raw": 26,
+   "custom": 2601,
+   "triple_quoted": 1247
+  },
+  "members": {
+   "vals": 7364,
+   "lazy_vals": 97,
+   "vars": 1,
+   "defs": 7665,
+   "top_level_defs": 103,
+   "by_name_params": 57,
+   "default_args": 1964,
+   "varargs": 1216,
+   "named_args": 3320,
+   "tuple_vals": 600
+  },
+  "control": {
+   "ifs": 1518,
+   "whiles": 0,
+   "try": 7,
+   "throw": 51,
+   "return": 0,
+   "assign_ops": 5680
+  },
+  "annotations": {
+   "sites": 155,
+   "kinds": 18
+  }
+ }
+}
