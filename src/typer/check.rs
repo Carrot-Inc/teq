@@ -3161,16 +3161,26 @@ impl<'a> Worker<'a> {
 
     /// dotty's `existingDef`: the member of `c` the synthesized one would be, `matchingMember`'s
     /// first concrete definition of its name and parameter in the linearisation (a lookup takes a
-    /// concrete member over an abstract one), unless that is the declaration the rule implements
-    /// (`Any`'s, `Product`'s, `Equals`'s, `Enum`'s).
+    /// concrete member over an abstract one of an unrelated parent, while an abstract
+    /// redeclaration hides what it overrides), unless that is the declaration the rule
+    /// implements (`Any`'s, `Product`'s, `Equals`'s, `Enum`'s).
     fn existing_def(&mut self, c: ClassId, name: Name, param: synthetic::Param) -> Option<SymId> {
+        let mut abstract_in: Vec<ClassId> = Vec::new();
         for i in 0..self.syms.class(c).base_types.len() {
             let b = self.syms.class(c).base_types[i].0;
             let mut k = 0;
             while let Some(s) = self.own_alternative(b, name, k) {
                 k += 1;
-                if self.is_private(s) || self.is_abstract_member(s) || !self.matches_synthesized(s, param) {
+                if self.is_private(s) || !self.matches_synthesized(s, param) {
                     continue;
+                }
+                if self.is_abstract_member(s) {
+                    abstract_in.push(b);
+                    continue;
+                }
+                // `trait R extends H { override def hashCode: Int }`: the member is R's, deferred.
+                if abstract_in.iter().any(|&a| self.syms.class(a).base_types.iter().any(|&(x, _)| x == b)) {
+                    return None;
                 }
                 let declares = b == self.b.any_ref
                     || Some(b) == self.b.product
