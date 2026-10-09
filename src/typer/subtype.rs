@@ -2147,8 +2147,8 @@ impl<'a> Worker<'a> {
             minimal.retain(|&t| !self.is_transparent_trait_type(t));
         }
         // dotty's `widenOr`: a join that is transparent (`Product & Serializable` of two case
-        // classes) leaves the union as it is.
-        if minimal.iter().all(|&t| self.transparent_join(t)) {
+        // classes) leaves the union as it is, where a member's selection joins it (`OrType.join`).
+        if !self.join_wild && minimal.iter().all(|&t| self.transparent_join(t)) {
             return None;
         }
         minimal.reverse();
