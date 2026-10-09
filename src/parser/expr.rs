@@ -832,9 +832,6 @@ impl<'a> Parser<'a> {
 
     fn parse_infix_rest(&mut self, mut lhs: ExprId, start: Span, min_prec: u8) -> ExprId {
         loop {
-            if self.single_line.is_some() && self.single_line_ends() {
-                return lhs;
-            }
             let t = self.tok();
             let is_op = match t.kind {
                 Tok::OpIdent => {
@@ -843,7 +840,7 @@ impl<'a> Parser<'a> {
                 Tok::Ident => t.name != names::EMPTY && self.ident_is_operator(),
                 _ => false,
             };
-            if !is_op {
+            if !is_op || (self.single_line.is_some() && self.single_line_ends()) {
                 return lhs;
             }
             let (prec, right) = op_precedence(self.interner.get(t.name));
@@ -1454,11 +1451,11 @@ impl<'a> Parser<'a> {
 
     pub(super) fn parse_postfix(&mut self, mut e: ExprId, start: Span) -> ExprId {
         loop {
-            if self.single_line.is_some() && self.single_line_ends() {
-                return e;
-            }
             match self.kind() {
                 Tok::Dot => {
+                    if self.single_line.is_some() && self.single_line_ends() {
+                        return e;
+                    }
                     self.bump();
                     if self.at(Tok::KwMatch) {
                         self.bump();
