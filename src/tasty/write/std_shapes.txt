@@ -1286,6 +1286,8 @@ java.lang.Thread$	State	object
 java.lang.Thread$	currentThread	:java.lang.Thread
 java.lang.Thread$	interrupted	:scala.Boolean
 java.lang.Thread$	onSpinWait	:scala.Unit
+java.lang.Thread$	sleep	scala.Long,scala.Int:scala.Unit
+java.lang.Thread$	sleep	scala.Long:scala.Unit
 java.lang.Thread$.State	compareTo	java.lang.Thread$.State:scala.Int
 java.lang.Thread$.State	equals	java.lang.Object:scala.Boolean
 java.lang.Thread$.State	hashCode	:scala.Int
@@ -1300,8 +1302,6 @@ java.lang.Thread$.State$	TIMED_WAITING	-:java.lang.Thread$.State
 java.lang.Thread$.State$	WAITING	-:java.lang.Thread$.State
 java.lang.Thread$.State$	valueOf	java.lang.String:java.lang.Thread$.State
 java.lang.Thread$.State$	values	:java.lang.Thread$.State[]
-java.lang.Thread$	sleep	scala.Long,scala.Int:scala.Unit
-java.lang.Thread$	sleep	scala.Long:scala.Unit
 java.lang.Thread$.UncaughtExceptionHandler	<init>	:java.lang.Thread$.UncaughtExceptionHandler
 java.lang.Thread$.UncaughtExceptionHandler	uncaughtException	java.lang.Thread,java.lang.Throwable:scala.Unit
 java.lang.ThreadLocal	<init>	[1]:java.lang.ThreadLocal
