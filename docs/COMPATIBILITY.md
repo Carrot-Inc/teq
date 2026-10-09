@@ -23,8 +23,6 @@ libraries compiled from their jars run against scalac's output. The remaining di
 - The companion of a case class that has no object of its own is no value: `val o = F` is rejected, where
   scalac's is an object (where a function is expected, `F` is `F.apply` as under scalac).
 - `val z: 1 = foo(1).zero` cannot take the literal type from the expected type.
-- `<:<` and `=:=` evidence is filled in, never reasoned from (with `ev: A <:< String`, `a.length` is written
-  `ev(a).length`).
 - A match whose expected type is a match type gets no dependent typing of its cases (write the cast); on a
   receiver typed `Tuple` or `X <: Tuple` the members of `Tuple` are typed by their bounds (`head: Any`,
   `tail: Tuple`), and a named tuple lacks `NamedTuple`'s members.

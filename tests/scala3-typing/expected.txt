@@ -2261,7 +2261,7 @@ pos/compile1.scala	accepts
 pos/complex-self-call.scala	accepts	
 pos/compound.scala	accepts	
 pos/concats.scala	accepts	
-pos/conforms.scala	rejects	type mismatch
+pos/conforms.scala	accepts	
 pos/conformsWild.scala	accepts	
 pos/constants.scala	accepts	
 pos/constfold.scala	std	App
@@ -2716,7 +2716,7 @@ pos/i12945	rejects	no given instance
 pos/i12949.scala	accepts	
 pos/i12950	accepts	
 pos/i12953.scala	accepts	
-pos/i12955.scala	rejects	type mismatch
+pos/i12955.scala	accepts	
 pos/i12958.scala	accepts	
 pos/i12973.scala	accepts	
 pos/i12991.scala	accepts	
