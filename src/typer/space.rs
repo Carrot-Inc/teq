@@ -164,6 +164,9 @@ struct Spaces<'t, 'a> {
     t: &'t mut Worker<'a>,
     sc: SpaceScratch,
     budget: u32,
+    /// Whether the scrutinee is a named tuple, matched as the tuple it erases to and checked
+    /// whatever its size (`isNamedTupleType`).
+    named: bool,
     /// Set when a pattern's coverage was approximated, which rules out exhaustivity warnings.
     inexact: bool,
     /// Whether a type pattern over an abstract type takes its bound's children from what it is
@@ -256,6 +259,8 @@ impl<'a> Worker<'a> {
             return;
         }
         let stated = sty;
+        let named = self.named_tuple_parts(sty).is_some();
+        let sty = self.erased_named_tuple(sty);
         let sty = self.match_type(sty);
         let scrut = self.deref(sty);
         if matches!(self.types.get(scrut), Type::Error | Type::Nothing) {
@@ -264,7 +269,7 @@ impl<'a> Worker<'a> {
         self.demand_match_hierarchy(scrut, cases);
         let mut sc = std::mem::take(&mut self.spaces);
         sc.clear();
-        let mut s = Spaces { t: self, sc, budget: DECOMPOSITIONS, inexact: false, decompose_abstract: false, prefixed: (stated, scrut) };
+        let mut s = Spaces { t: self, sc, budget: DECOMPOSITIONS, named, inexact: false, decompose_abstract: false, prefixed: (stated, scrut) };
         s.check(scrut, cases, clauses, partial, span);
         let Spaces { sc, .. } = s;
         self.spaces = sc;
@@ -1909,19 +1914,29 @@ impl<'t, 'a> Spaces<'t, 'a> {
     /// Whether a match over the type is checked for missing cases (dotty's
     /// `exhaustivityCheckable`, `isCheckable`): a sealed class or trait whatever its children
     /// (a concrete one stays whole in the algebra, `isDecomposableToChildren`), an enum, a case
-    /// class or a tuple, `Boolean`, a union, an intersection with a checkable side, an abstract
-    /// type by its bound. Apart from what the algebra splits.
+    /// class or a tuple of at most 22 elements, a named tuple, `Boolean`, a union, an
+    /// intersection with a checkable side, an abstract type by its bound. Apart from what the
+    /// algebra splits.
     fn is_checkable(&mut self, t: TypeId, depth: u32) -> bool {
         if depth > 8 {
             return false;
         }
         let t = self.t.deref(t);
+        // A named tuple is checked whatever its size (`isNamedTupleType`).
+        if depth == 0 && self.named {
+            return true;
+        }
         match self.t.types.get(t) {
             Type::Union(..) => true,
             Type::Inter(a, b) => self.is_checkable(a, depth + 1) || self.is_checkable(b, depth + 1),
             Type::Class(c, _) => {
-                if c == self.t.b.boolean || self.t.is_tuple_class(c) {
+                if c == self.t.b.boolean {
                     return true;
+                }
+                // A tuple past 22 elements is no case class but a generic tuple, which dotty
+                // leaves out (`isLargeGenericTuple`).
+                if self.t.is_tuple_class(c) {
+                    return self.t.syms.class(c).tparams.len() <= 22;
                 }
                 self.t.complete_class(c);
                 let info = self.t.syms.class(c);

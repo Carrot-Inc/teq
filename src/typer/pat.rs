@@ -94,7 +94,7 @@ impl<'a> Worker<'a> {
         };
         let l = self.prog.cases.push_slice(&out);
         if !matches!(ast.expr(scrut), Expr::Unchecked(_)) {
-            let sty = self.erased_named_tuple(sty);
+            // A named tuple is erased by the check, which notes it.
             let broken = ast.broken_cases_in(cases);
             self.defer_match_check(sty, out, clauses, partial, span, broken);
         }
