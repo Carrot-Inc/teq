@@ -1381,6 +1381,7 @@ tuple_member_extension
 tuple_named_arguments
 tuple_ops_type_args
 tuple_xxl
+tuple_xxl_product
 tuple_xxl_typed
 tupling_priority
 type_lambda_hk_binders
