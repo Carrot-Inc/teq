@@ -1170,6 +1170,10 @@ impl<'a> Parser<'a> {
                 self.ast.strict_equality = true;
             } else if matches!(out[i].sel, ImportSel::Name(names::FUTURE, r) if r != Some(names::WILDCARD)) {
                 self.ast.source_future = true;
+            } else if let ImportSel::Name(n, _) = out[i].sel {
+                if self.interner.get(n) == "relaxedLambdaSyntax" && out[i].path.last().map_or(false, |&q| self.interner.get(q) == "experimental") {
+                    self.ast.relaxed_lambdas = true;
+                }
             }
             self.language_scratch.push(out[i].clone());
         }

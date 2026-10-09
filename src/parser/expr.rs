@@ -1325,7 +1325,34 @@ impl<'a> Parser<'a> {
             }
             _ => return false,
         }
-        matches!(self.kind_at(i), Tok::Arrow | Tok::CtxArrow) && self.kind_at(i + 1) == Tok::Indent
+        if !matches!(self.kind_at(i), Tok::Arrow | Tok::CtxArrow) {
+            return false;
+        }
+        match self.kind_at(i + 1) {
+            Tok::Indent => true,
+            // dotty's case 1b under `relaxedLambdaSyntax`: the body on the colon's line, outside
+            // parentheses, where `(x: A => B)` is an ascription.
+            Tok::Newline | Tok::Outdent | Tok::Eof | Tok::Semi => false,
+            _ => self.ast.relaxed_lambdas && !self.in_parens(),
+        }
+    }
+
+    /// Whether the innermost region open at the current token is a `(...)`.
+    fn in_parens(&self) -> bool {
+        let mut depth = 0u32;
+        for i in (0..self.pos).rev() {
+            match self.toks[i].kind {
+                Tok::RParen | Tok::RBracket | Tok::RBrace | Tok::Outdent => depth += 1,
+                Tok::LParen | Tok::LBracket | Tok::LBrace | Tok::Indent => {
+                    if depth == 0 {
+                        return self.toks[i].kind == Tok::LParen;
+                    }
+                    depth -= 1;
+                }
+                _ => {}
+            }
+        }
+        false
     }
 
     pub(super) fn parse_postfix(&mut self, mut e: ExprId, start: Span) -> ExprId {
