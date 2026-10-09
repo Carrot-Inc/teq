@@ -3017,9 +3017,14 @@ impl<'a> Emitter<'a> {
         // the shape's prototype (`$productBase`); one the walk left unreached
         // (`process_class_from`) is no class of the output.
         let chained = (is_case || info.singleton.is_some()) && superclass.is_none();
+        // A tuple the compiler makes answers scala-library's `ProductN` members by its shape,
+        // which is what their bodies compute (`existingDef` finds them): the bodies read `_1` as
+        // a method, which the tuple holds as a field.
+        let made_tuple = info.def.is_none() && self.is_tuple_name(display);
         for &b in &own[1..] {
             let desugared = chained && self.reach.desugared.binary_search(&b).is_ok();
-            if self.reach.classes[b.idx()] && !desugared {
+            let product_n = made_tuple && self.interner.get(self.syms.class(b).name).strip_prefix("Product").is_some_and(|n| !n.is_empty() && n.bytes().all(|d| d.is_ascii_digit()));
+            if self.reach.classes[b.idx()] && !desugared && !product_n {
                 traits.push_str(if traits.is_empty() { "[" } else { ", " });
                 self.hold(b, Held::Parent);
                 traits.push_str(&self.class_name(b));
