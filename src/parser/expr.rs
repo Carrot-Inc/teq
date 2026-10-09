@@ -3,7 +3,7 @@ use crate::ast::*;
 use crate::intern::Name;
 use crate::names;
 use crate::source::Span;
-use crate::token::Tok;
+use crate::token::{Tok, Token};
 
 /// The lambda a `:` passes (`Parser::colon_lambda`): one before an indented body, one on the
 /// colon's line under `relaxedLambdaSyntax`, or a single case there.
@@ -821,7 +821,7 @@ impl<'a> Parser<'a> {
     fn symbolic_is_operator(&self) -> bool {
         let n = if self.kind_at(1) == Tok::Newline { 2 } else { 1 };
         !matches!(self.kind_at(n), Tok::KwIf | Tok::KwWhile | Tok::KwFor | Tok::KwTry | Tok::KwThrow)
-            && (self.expr_start_at(n) || matches!(self.kind_at(n), Tok::LBracket | Tok::Eof))
+            && (self.expr_start_at(n) || matches!(self.kind_at(n), Tok::LBracket | Tok::Eof | Tok::EndLambda))
     }
 
     fn parse_infix_prec(&mut self, min_prec: u8) -> ExprId {
@@ -840,7 +840,7 @@ impl<'a> Parser<'a> {
                 Tok::Ident => t.name != names::EMPTY && self.ident_is_operator(),
                 _ => false,
             };
-            if !is_op || (self.single_line.is_some() && self.single_line_ends()) {
+            if !is_op {
                 return lhs;
             }
             let (prec, right) = op_precedence(self.interner.get(t.name));
@@ -1366,68 +1366,79 @@ impl<'a> Parser<'a> {
         }
     }
 
-    /// Whether the current token starts a line after the one a single-line lambda's body stands
-    /// on, outside the brackets and blocks opened in the body, where dotty's scanner closes its
-    /// region: the body ends before it (a `.toMap` there continues what the lambda is an
-    /// argument of).
-    #[cold]
-    #[inline(never)]
-    fn single_line_ends(&self) -> bool {
-        let Some(from) = self.single_line else { return false };
-        let between = self.text.get(self.prev_span().end as usize..self.span().start as usize).unwrap_or("");
-        if !between.contains('\n') {
-            return false;
-        }
+    /// Opens a single-line lambda's region at the current token (dotty's `SingleLineLambda`): the
+    /// first token after a line break outside the brackets and blocks opened since, or a layout
+    /// token where the line ends, gives way to the region's end (`Tok::EndLambda`), as dotty's
+    /// scanner inserts `ENDlambda` there, so that nothing the body's parse reads crosses the
+    /// line. The token's index and the token come back for `leave_single_line`.
+    fn enter_single_line(&mut self) -> Option<(usize, Token)> {
+        let from = self.pos;
         let mut depth = 0i32;
-        for t in &self.toks[from.min(self.pos)..self.pos] {
+        let mut stop = None;
+        for i in from..self.toks.len() {
+            let t = self.toks[i];
+            if i > from && depth <= 0 {
+                let layout = matches!(t.kind, Tok::Newline | Tok::Indent | Tok::Outdent) && t.span.start == t.span.end;
+                let prev_end = self.toks[i - 1].span.end as usize;
+                let broke = self.text.get(prev_end..t.span.start as usize).is_some_and(|between| between.contains('\n'));
+                if layout || broke || t.kind == Tok::Eof {
+                    stop = Some(i);
+                    break;
+                }
+            }
             match t.kind {
                 Tok::LParen | Tok::LBracket | Tok::LBrace | Tok::Indent | Tok::InterpStart => depth += 1,
                 Tok::RParen | Tok::RBracket | Tok::RBrace | Tok::Outdent | Tok::InterpEnd => depth -= 1,
                 _ => {}
             }
         }
-        depth <= 0
+        let stop = stop?;
+        let saved = self.toks[stop];
+        let at = self.toks[stop - 1].span.end;
+        self.toks[stop] = Token { kind: Tok::EndLambda, span: Span::new(at, at), name: crate::names::EMPTY };
+        Some((stop, saved))
     }
 
-    /// The end of a single-line lambda's region (dotty's `SingleLineLambda`, closed by the
-    /// `ENDlambda` the scanner inserts at the line's end): a token after the body on its line
-    /// is an error.
-    fn end_single_line_lambda(&mut self) {
-        let t = self.toks[self.pos];
-        let line_break = matches!(t.kind, Tok::Newline | Tok::Eof) || (matches!(t.kind, Tok::Indent | Tok::Outdent) && t.span.start == t.span.end);
-        let between = self.text.get(self.prev_span().end as usize..t.span.start as usize).unwrap_or("");
-        if !line_break && !between.contains('\n') {
+    /// Closes the region `enter_single_line` opened, its token restored: a body that ended
+    /// before the line's end leaves a token there, an error (E040,
+    /// `end of single-line lambda expected, but ';' found`).
+    fn leave_single_line(&mut self, region: Option<(usize, Token)>) {
+        let Some((stop, saved)) = region else { return };
+        let ended = self.pos == stop;
+        let before = self.pos < stop;
+        if !ended && before {
             let (at, found) = self.found();
             self.error_at(at, format!("end of single-line lambda expected, but {} found", found));
         }
+        self.toks[stop] = saved;
     }
 
     /// `: case p if g => e` under `relaxedLambdaSyntax`: one case, its body an expression, as a
     /// function of it (dotty's `singleCaseMatch`), on its line.
     fn parse_single_case_lambda(&mut self) -> ExprId {
         let start = self.span();
+        let mut region = self.enter_single_line();
         self.expect(Tok::KwCase);
         let mark = self.error_events;
         let pat = self.parse_pattern();
         let guard = if self.eat(Tok::KwIf) { Some(self.parse_infix_expr()) } else { None };
         let broken = self.error_events != mark;
         self.expect(Tok::Arrow);
-        // A body on the lines after the arrow, indented, is the case's (`caseClause(exprOnly)`
-        // turns the region's end there into an indent).
-        let body = if self.at(Tok::Indent) && self.span().start == self.span().end {
+        // The region's end right after the arrow before an indented body is that indent
+        // (`caseClause(exprOnly)`): the body is the block, past the region.
+        let indented = region.is_some_and(|(stop, saved)| stop == self.pos && saved.kind == Tok::Indent && saved.span.start == saved.span.end);
+        let body = if indented {
+            self.leave_single_line(region.take());
             self.parse_block()
         } else {
-            let outer = self.single_line.replace(self.pos);
-            let body = self.parse_expr();
-            self.single_line = outer;
-            body
+            self.parse_expr()
         };
         let cases = push_list(&mut self.ast.cases, &[CaseClause { pat, guard, body }]);
         if broken {
             self.ast.broken_cases.push(cases.start);
         }
         let lambda = self.case_lambda(cases, start);
-        self.end_single_line_lambda();
+        self.leave_single_line(region);
         lambda
     }
 
@@ -1453,9 +1464,6 @@ impl<'a> Parser<'a> {
         loop {
             match self.kind() {
                 Tok::Dot => {
-                    if self.single_line.is_some() && self.single_line_ends() {
-                        return e;
-                    }
                     self.bump();
                     if self.at(Tok::KwMatch) {
                         self.bump();
@@ -1497,10 +1505,9 @@ impl<'a> Parser<'a> {
                     let lambda = match kind {
                         Some(ColonLambda::Case) => self.parse_single_case_lambda(),
                         Some(ColonLambda::SingleLine) => {
-                            let outer = self.single_line.replace(self.pos);
+                            let region = self.enter_single_line();
                             let lambda = self.parse_colon_lambda();
-                            self.single_line = outer;
-                            self.end_single_line_lambda();
+                            self.leave_single_line(region);
                             lambda
                         }
                         _ => self.parse_colon_lambda(),
