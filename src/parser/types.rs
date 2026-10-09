@@ -307,7 +307,7 @@ impl<'a> Parser<'a> {
     fn parse_infix_type(&mut self, bar: bool) -> TyExprId {
         let mut stack: Vec<(TyExprId, Token, Span)> = Vec::new();
         let mut top = self.parse_simple_type();
-        while self.at_infix_type_op(bar) && self.can_start_type(1) {
+        while self.at_infix_type_op(bar) && (self.can_start_type(1) || self.at_refinement_block(1)) {
             let op = self.bump();
             let (prec, right) = super::expr::op_precedence(self.interner.get(op.name));
             top = self.reduce_type_ops(&mut stack, top, prec, !right, op.name);
@@ -368,6 +368,12 @@ impl<'a> Parser<'a> {
             },
             _ => false,
         }
+    }
+
+    /// A refinement without a parent at token `n`: the region the lexer opens for a brace after
+    /// an operator (`A & { type T = Int }`), holding a declaration.
+    fn at_refinement_block(&self, n: usize) -> bool {
+        self.kind_at(n) == Tok::Indent && matches!(self.kind_at(n + 1), Tok::KwType | Tok::KwDef | Tok::KwVal | Tok::KwVar)
     }
 
     /// scalac's `canStartInfixTypeTokens`: what may follow an infix type operator.

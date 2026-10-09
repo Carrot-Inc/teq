@@ -1077,6 +1077,7 @@ refinement_member_meet
 refinement_member_scope
 refinement_member_variance
 refinement_nested_scope
+refinement_operand
 refinement_rec_anchor
 refinement_signature_exemptions
 refinement_term_scope
