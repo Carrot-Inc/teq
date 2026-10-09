@@ -144,6 +144,10 @@ impl<'a> Gen<'a> {
                 let cx = self.cx;
                 let module = match cx.input.prog.expr(args[0]) {
                     TExpr::Module(c) => Some(c),
+                    TExpr::Block(_, res) if matches!(cx.input.prog.expr(res), TExpr::Module(_)) => match cx.input.prog.expr(res) {
+                        TExpr::Module(c) => Some(c),
+                        _ => None,
+                    },
                     _ => self.recorded_type(args[0]).and_then(|t| match cx.input.types.get(t) {
                         Type::Class(c, _) => Some(c),
                         _ => None,

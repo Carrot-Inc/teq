@@ -3289,7 +3289,7 @@ impl<'a> Emitter<'a> {
     fn emit_enum_store(&mut self, companion: ClassId, this: &str) {
         let syms = self.syms;
         let Some(e) = syms.class(companion).companion.map(|e| syms.class(e)).filter(|e| e.kind == ClassKind::Enum) else { return };
-        let read = self.reach.every_enum_store || self.reach.enum_stores.binary_search(&companion).is_ok();
+        let read = self.reach.enum_stores.binary_search(&companion).is_ok();
         if !read || e.children.is_empty() || e.children.iter().any(|&c| syms.class(c).singleton.is_none() || !self.reach.classes[c.idx()]) {
             return;
         }

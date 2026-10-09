@@ -81,9 +81,8 @@ pub struct Reach {
     /// The vals of the reached classes no field holds (`tir::constant_val`), sorted.
     pub constant_vals: Vec<SymId>,
     /// The enum companions whose `$values` a reached lookup reads (`$enumValues`,
-    /// `$enumFromOrdinal`), sorted; every one where a lookup's companion is no module reference.
+    /// `$enumFromOrdinal`), sorted.
     pub enum_stores: Vec<ClassId>,
-    pub every_enum_store: bool,
     /// Whether a reached `classOf` needs every class to carry its qualified name.
     pub uses_class_of: bool,
     /// Whether a reached `productElementName` needs every case class to carry its field names.
@@ -159,7 +158,6 @@ impl Reach {
             can_equal_defined: Vec::new(),
             constant_vals: Vec::new(),
             enum_stores: Vec::new(),
-            every_enum_store: false,
             uses_class_of: false,
             uses_element_names: false,
             uses_assignable_from: false,
@@ -559,7 +557,7 @@ fn differences(typer: &Worker, kept: &Reach, fresh: &Reach, out: &mut Vec<String
     same("globals", kept.globals == fresh.globals);
     same("the desugared parents", kept.desugared == fresh.desugared);
     same("the products' dispatching members", kept.product_to_string == fresh.product_to_string && kept.can_equal_defined == fresh.can_equal_defined);
-    same("the enums' stored values", kept.enum_stores == fresh.enum_stores && kept.every_enum_store == fresh.every_enum_store);
+    same("the enums' stored values", kept.enum_stores == fresh.enum_stores);
     same("the constant vals", kept.constant_vals == fresh.constant_vals);
     same("the uses of classOf", kept.uses_class_of == fresh.uses_class_of);
     same("the uses of element names", kept.uses_element_names == fresh.uses_element_names);
@@ -3016,18 +3014,20 @@ impl Meet for Walker {
         }
         // An enum lookup reading the `$values` its companion stores.
         if text.starts_with("$enumValues(") || text.starts_with("$enumFromOrdinal(") {
-            match prog.expr_list(args).first().map(|&a| prog.expr(a)) {
-                Some(TExpr::Module(c)) => {
-                    insert_sorted(&mut self.reach.enum_stores, c);
-                    // The values the companion stores.
-                    let cases: Vec<SymId> = cx.syms.class(c).companion.map_or(Vec::new(), |e| {
-                        cx.syms.class(e).children.iter().filter_map(|&k| cx.syms.class(k).singleton).collect()
-                    });
-                    for s in cases {
-                        self.reach_static(cx, s);
-                    }
+            // The companion, after a receiver that is no path to it (`prims.rs`).
+            let module = prog.expr_list(args).first().map(|&a| match prog.expr(a) {
+                TExpr::Block(_, res) => prog.expr(res),
+                e => e,
+            });
+            if let Some(TExpr::Module(c)) = module {
+                insert_sorted(&mut self.reach.enum_stores, c);
+                // The values the companion stores.
+                let cases: Vec<SymId> = cx.syms.class(c).companion.map_or(Vec::new(), |e| {
+                    cx.syms.class(e).children.iter().filter_map(|&k| cx.syms.class(k).singleton).collect()
+                });
+                for s in cases {
+                    self.reach_static(cx, s);
                 }
-                _ => self.reach.every_enum_store = true,
             }
         }
         // A product's member the runtime answers: a class's own definition, an override of a

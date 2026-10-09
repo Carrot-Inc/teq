@@ -1895,6 +1895,14 @@ impl<'a> Worker<'a> {
                 let full = self.syms.scala_full_name(self.interner, enum_class);
                 let full = self.prog.add_str(&full);
                 let full = self.prog.add(TExpr::Str(full));
+                // The companion, after a receiver that is no path to it.
+                let module_ref = self.prog.add(TExpr::Module(module));
+                let recv = if self.is_path(recv) {
+                    module_ref
+                } else {
+                    let stmts = self.prog.stmts.push_slice(&[TStmt::Expr(recv)]);
+                    self.prog.add(TExpr::Block(stmts, module_ref))
+                };
                 if name == names::VALUES {
                     if !no_args {
                         return None;

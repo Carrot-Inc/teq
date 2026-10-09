@@ -1297,7 +1297,7 @@ impl<'a> Worker<'a> {
         }
     }
 
-    fn is_path(&self, e: TExprId) -> bool {
+    pub(super) fn is_path(&self, e: TExprId) -> bool {
         match self.prog.expr(e) {
             TExpr::Module(_) | TExpr::This | TExpr::Super(_) | TExpr::Local(_) | TExpr::Static(_) => true,
             TExpr::Field(recv, _) => self.is_path(recv),
