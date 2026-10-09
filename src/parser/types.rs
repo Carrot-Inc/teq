@@ -649,10 +649,33 @@ impl<'a> Parser<'a> {
         push_list(&mut self.ast.def_lists, &defs)
     }
 
-    /// A refinement's members are declarations: one with a body is an error.
+    /// A refinement's members are declarations without modifiers (dotty's `refineStatSeq`,
+    /// `checkLegal`): one with a modifier, or with a body, is an error.
     fn check_refinement_defs(&mut self, defs: &[DefId]) {
+        const NAMED: [(Mods, &str); 14] = [
+            (mods::PRIVATE, "private"),
+            (mods::PROTECTED, "protected"),
+            (mods::ABSTRACT, "abstract"),
+            (mods::FINAL, "final"),
+            (mods::SEALED, "sealed"),
+            (mods::IMPLICIT, "implicit"),
+            (mods::GIVEN, "given"),
+            (mods::LAZY, "lazy"),
+            (mods::OVERRIDE, "override"),
+            (mods::INLINE, "inline"),
+            (mods::TRANSPARENT, "transparent"),
+            (mods::INFIX, "infix"),
+            (mods::OPEN, "open"),
+            (mods::OPAQUE, "opaque"),
+        ];
         for &d in defs {
             let def = self.ast.def(d);
+            let named: Vec<&str> = NAMED.iter().filter(|&&(m, _)| def.mods & m != 0).map(|&(_, n)| n).collect();
+            if !named.is_empty() {
+                let span = def.span;
+                self.error_at(span, format!("refinement cannot be `{}`", named.join("`, `")));
+                continue;
+            }
             let has_body = match &def.kind {
                 DefKind::Val { rhs, .. } => rhs.is_some(),
                 DefKind::Fun(f) => f.body.is_some(),

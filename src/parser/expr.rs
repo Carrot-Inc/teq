@@ -133,7 +133,15 @@ impl<'a> Parser<'a> {
         self.ast.add_expr(Expr::Lambda(params, body), span)
     }
 
+    /// A block, which a single-line lambda's region does not reach into.
     pub(super) fn parse_block(&mut self) -> ExprId {
+        let outer = std::mem::replace(&mut self.single_line, false);
+        let block = self.parse_block_in();
+        self.single_line = outer;
+        block
+    }
+
+    fn parse_block_in(&mut self) -> ExprId {
         let start = self.span();
         if self.kind_at(1) == Tok::KwCase && !matches!(self.kind_at(2), Tok::KwClass | Tok::KwObject) {
             return self.parse_case_lambda();
@@ -546,8 +554,11 @@ impl<'a> Parser<'a> {
     }
 
     pub(super) fn parse_cases(&mut self) -> ListRef {
+        let outer = std::mem::replace(&mut self.single_line, false);
         let indented = self.eat(Tok::Indent);
-        self.parse_cases_from(indented)
+        let cases = self.parse_cases_from(indented);
+        self.single_line = outer;
+        cases
     }
 
     /// The cases, `indented` when they fill a region whose `Indent` is behind, up to and with
@@ -832,6 +843,9 @@ impl<'a> Parser<'a> {
 
     fn parse_infix_rest(&mut self, mut lhs: ExprId, start: Span, min_prec: u8) -> ExprId {
         loop {
+            if self.single_line_ends() {
+                return lhs;
+            }
             let t = self.tok();
             let is_op = match t.kind {
                 Tok::OpIdent => {
@@ -1224,6 +1238,13 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_parens(&mut self) -> ExprId {
+        let outer = std::mem::replace(&mut self.single_line, false);
+        let e = self.parse_parens_in();
+        self.single_line = outer;
+        e
+    }
+
+    fn parse_parens_in(&mut self) -> ExprId {
         let start = self.span();
         self.expect(Tok::LParen);
         let mark = self.expr_scratch.len();
@@ -1366,6 +1387,14 @@ impl<'a> Parser<'a> {
         }
     }
 
+    /// Whether the current token starts a line after the one a single-line lambda's body stands
+    /// on, where dotty's scanner closes its region: the body ends before it (a `.toMap` there
+    /// continues what the lambda is an argument of).
+    #[inline]
+    fn single_line_ends(&self) -> bool {
+        self.single_line && self.text.get(self.prev_span().end as usize..self.span().start as usize).is_some_and(|between| between.contains('\n'))
+    }
+
     /// The end of a single-line lambda's region (dotty's `SingleLineLambda`, closed by the
     /// `ENDlambda` the scanner inserts at the line's end): a token after the body on its line
     /// is an error.
@@ -1389,7 +1418,16 @@ impl<'a> Parser<'a> {
         let guard = if self.eat(Tok::KwIf) { Some(self.parse_infix_expr()) } else { None };
         let broken = self.error_events != mark;
         self.expect(Tok::Arrow);
-        let body = self.parse_expr();
+        // A body on the lines after the arrow, indented, is the case's (`caseClause(exprOnly)`
+        // turns the region's end there into an indent).
+        let body = if self.at(Tok::Indent) && self.span().start == self.span().end {
+            self.parse_block()
+        } else {
+            let outer = std::mem::replace(&mut self.single_line, true);
+            let body = self.parse_expr();
+            self.single_line = outer;
+            body
+        };
         let cases = push_list(&mut self.ast.cases, &[CaseClause { pat, guard, body }]);
         if broken {
             self.ast.broken_cases.push(cases.start);
@@ -1419,6 +1457,9 @@ impl<'a> Parser<'a> {
 
     pub(super) fn parse_postfix(&mut self, mut e: ExprId, start: Span) -> ExprId {
         loop {
+            if self.single_line_ends() {
+                return e;
+            }
             match self.kind() {
                 Tok::Dot => {
                     self.bump();
@@ -1462,7 +1503,9 @@ impl<'a> Parser<'a> {
                     let lambda = match kind {
                         Some(ColonLambda::Case) => self.parse_single_case_lambda(),
                         Some(ColonLambda::SingleLine) => {
+                            let outer = std::mem::replace(&mut self.single_line, true);
                             let lambda = self.parse_colon_lambda();
+                            self.single_line = outer;
                             self.end_single_line_lambda();
                             lambda
                         }
@@ -1489,6 +1532,13 @@ impl<'a> Parser<'a> {
     /// stopped short of its `)` is cut (`Ast::cut_args`): noted by its first argument, or, when
     /// it holds none, in `args_cut` for the application the caller makes.
     pub(super) fn parse_args(&mut self) -> (ListRef, bool) {
+        let outer = std::mem::replace(&mut self.single_line, false);
+        let args = self.parse_args_in();
+        self.single_line = outer;
+        args
+    }
+
+    fn parse_args_in(&mut self) -> (ListRef, bool) {
         self.expect(Tok::LParen);
         let mut cut = false;
         let using = self.at_soft(names::USING) && self.kind_at(1) != Tok::RParen

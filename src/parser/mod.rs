@@ -53,6 +53,9 @@ pub struct Parser<'a> {
     package_blocks: Vec<Ast>,
     /// Set while a parent or the type after `new` is parsed, where braces start a class body.
     template_type: bool,
+    /// Inside the body of a single-line lambda after a `:` (dotty's `SingleLineLambda` region),
+    /// outside any brackets or block opened in it: a line's end closes it.
+    single_line: bool,
     /// How many quotes enclose the expression being parsed, less the splices inside them; an
     /// identifier `$x` is a splice where this is positive.
     quote_level: u32,
@@ -124,6 +127,7 @@ pub fn parse(text: &str, lexed: &LexResult, closed: &[u32], interner: &Interner,
         pending_derives: Vec::new(),
         package_blocks: Vec::new(),
         template_type: false,
+        single_line: false,
         quote_level: 0,
         quote_pattern: false,
         boundaries: &lexed.boundaries,
@@ -263,7 +267,8 @@ impl<'a> Parser<'a> {
     /// or an initializer follows.
     #[inline]
     pub(super) fn at_header_end(&self) -> bool {
-        matches!(self.kind(), Tok::Newline | Tok::Semi | Tok::Outdent | Tok::Eof | Tok::Eq)
+        // A `}` closes the braces after a `:` a refinement's declarations stand in.
+        matches!(self.kind(), Tok::Newline | Tok::Semi | Tok::Outdent | Tok::RBrace | Tok::Eof | Tok::Eq)
             || (self.at(Tok::ColonEol) && self.kind_at(1) == Tok::Indent)
     }
 

@@ -11,9 +11,13 @@ trait B
 val empty: B & {} = new B {}
 val bare: {} = new B {}
 def h(b: B & {} & A): Boolean = b.isInstanceOf[B]
+class L:
+  def length: Int = 3
+val sized: { def length: Int } = new L
 
 @main def run() =
   val a = new A { type T = Int; def get = 3 }
   println(f(a)(41))
   println(g(new A { type T = String; def get = "s" }))
   println((empty.isInstanceOf[B], bare.isInstanceOf[B], h(new B with A { type T = Int; def get = 1 })))
+  println(sized.isInstanceOf[L])
