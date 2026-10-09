@@ -1067,7 +1067,13 @@ impl<'a> Worker<'a> {
         if pkg == self.b.scala_pkg {
             let text = self.interner.get(name);
             return match text {
-                "Any" | "Matchable" | "Singleton" => Some(ANY),
+                "Any" | "Matchable" => Some(ANY),
+                // A bound `A <: Singleton` stays one (kittens' `singleton[A <: Singleton]`).
+                "Singleton" => {
+                    self.demand_std(pkg, name, crate::stdindex::TYPE);
+                    self.note_singleton_class();
+                    Some(if self.b.t_singleton == ERROR { ANY } else { self.b.t_singleton })
+                }
                 "AnyRef" => Some(self.b.t_any_ref),
                 "AnyVal" => Some(self.b.t_any_val),
                 "Nothing" => Some(NOTHING),
