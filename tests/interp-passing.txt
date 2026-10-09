@@ -1273,6 +1273,7 @@ secondary_ctor_parent
 self_alias
 self_alias_anon
 self_alias_forms
+self_alias_override
 self_alias_shadowing
 self_alias_type_path
 self_type_member
