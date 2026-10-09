@@ -346,9 +346,20 @@ impl<'a> Worker<'a> {
     /// The place of the definition of a pseudo file whose span is `span`: the member a node of
     /// that span stands in.
     pub(in crate::typer) fn member_place(&mut self, file: FileId, span: Span) -> Option<LibPlace> {
-        let sym = self.def_syms.entries_in(file.0 as usize).into_iter().find(|(d, _)| self.ast(file).def(*d).span == span).map(|(_, s)| s)?;
-        let ls = self.loaded.as_ref()?.syms.get(&sym).copied()?;
+        let (_, ls) = self.library_member_at(file, span)?;
         Some(self.tasty_place(ls.file, ls.addr))
+    }
+
+    /// The member of the library a node of the pseudo file `file` spanning `span` stands in:
+    /// the member's line holds the definitions its body makes as well (an anonymous class's
+    /// members), so of the definitions of that span the one the pickle declares, the first in
+    /// the file's order, whatever order the table of definitions holds them in (one the worker
+    /// that converted the file gives).
+    pub(in crate::typer) fn library_member_at(&self, file: FileId, span: Span) -> Option<(crate::types::SymId, super::LSym)> {
+        let loaded = self.loaded.as_ref()?;
+        let mut defs: Vec<(crate::ast::DefId, crate::types::SymId)> = self.def_syms.entries_in(file.0 as usize).into_iter().filter(|(d, _)| self.ast(file).def(*d).span == span).collect();
+        defs.sort_unstable_by_key(|&(d, _)| d);
+        defs.into_iter().find_map(|(_, s)| loaded.syms.get(&s).copied().map(|ls| (s, ls)))
     }
 }
 

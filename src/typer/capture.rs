@@ -300,6 +300,15 @@ impl<'a> Worker<'a> {
         }
     }
 
+    /// The classes the block `block` defines, which the IR lifts out of it (`Capture::block_classes`).
+    #[cold]
+    #[inline(never)]
+    pub(super) fn capture_block_classes(&mut self, block: TExprId, classes: Vec<ClassId>) {
+        if let Some((unit, c)) = self.capture_of_unit() {
+            c.block_classes(unit, block, classes);
+        }
+    }
+
     /// `to`, a copy of `from` with the same symbols and types, takes its records.
     #[cold]
     #[inline(never)]
@@ -324,7 +333,20 @@ impl<'a> Worker<'a> {
     /// renamed alike.
     #[cold]
     #[inline(never)]
-    pub(super) fn capture_copy_renamed(&mut self, from: TExprId, to: TExprId, ty: &dyn Fn(&mut Worker<'a>, TypeId) -> TypeId, sym: &dyn Fn(SymId) -> SymId) {
+    pub(super) fn capture_copy_renamed(
+        &mut self,
+        from: TExprId,
+        to: TExprId,
+        ty: &dyn Fn(&mut Worker<'a>, TypeId) -> TypeId,
+        sym: &dyn Fn(SymId) -> SymId,
+        class: &dyn Fn(ClassId) -> Option<ClassId>,
+    ) {
+        let Some((_, c)) = self.capture_of_unit() else { return };
+        // A block's copy defines the copies of its classes the copier made.
+        if let Some(classes) = c.classes_of_block(from) {
+            let copies: Vec<ClassId> = classes.into_iter().filter_map(class).collect();
+            self.capture_block_classes(to, copies);
+        }
         let Some((_, c)) = self.capture_of_unit() else { return };
         let records = c.records_of(from);
         if records.is_empty() {
@@ -709,7 +731,7 @@ impl<'a> Worker<'a> {
                             l.ty = l.ty.map(|t| zonk(self, t));
                         }
                     }
-                    Key::Class(_) => {}
+                    Key::Class(_) | Key::BlockClasses(_) => {}
                 }
             }
             if let Some(keys) = c.made.get(&f) {
@@ -868,6 +890,7 @@ impl super::merge::Remap {
             moved(self, &mut p.receivers, e, |r| *r = e(*r));
             moved(self, &mut p.evidence, e, |v| v.iter_mut().for_each(|a| *a = e(*a)));
             moved(self, &mut p.trees, e, |_| {});
+            moved(self, &mut p.block_classes, e, |v| v.iter_mut().for_each(|k| *k = self.map_class(*k)));
         }
         moved(self, &mut c.targs, e, |l| *l = self.tlist(types, *l));
         moved(self, &mut c.forms, e, |f| *f = map_form(*f, types, &mut |x| t(x), &|s| self.map_sym(s)));
@@ -884,6 +907,7 @@ impl super::merge::Remap {
         moved(self, &mut c.locals, |s| self.map_sym(s), |l| l.ty = l.ty.map(t));
         moved(self, &mut c.inline_calls, e, |calls| calls.iter_mut().for_each(|call| self.inline_call(types, call)));
         moved(self, &mut c.expansion_classes, |k| self.map_class(k), |_| {});
+        moved(self, &mut c.block_classes, e, |v| v.iter_mut().for_each(|k| *k = self.map_class(*k)));
         moved(self, &mut c.block_stmts, |k| k, |stmts| {
             use crate::tir::capture::BlockStmt;
             use super::ImportTarget as T;
@@ -925,6 +949,7 @@ impl super::merge::Remap {
                     Key::Pat(p) => Key::Pat(self.pat(p)),
                     Key::Local(s) => Key::Local(self.map_sym(s)),
                     Key::Class(k) => Key::Class(self.map_class(k)),
+                    Key::BlockClasses(x) => Key::BlockClasses(e(x)),
                 };
             }
         }

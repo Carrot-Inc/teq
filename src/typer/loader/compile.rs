@@ -805,7 +805,16 @@ impl<'a> Worker<'a> {
         self.ensure_body(sym);
         let init = *self.val_init.get(&sym)?;
         let i = self.prog_index.class(&self.prog, c)?;
-        self.prog.classes[i].init.push(TInit::Field(sym, init));
+        // The field joins the class where its definition stands in the template (the loaded
+        // class's members, entered in its pickle's order), not after the fields the program read
+        // first, so that the class is written alike whatever reads it: scalac's `Memoize` makes
+        // a field and its accessor where the definition stands.
+        let rank = |order: &[SymId], s: SymId| order.iter().position(|&m| m == s).unwrap_or(usize::MAX);
+        let order = self.syms.class(c).member_order.clone();
+        let own = rank(&order, sym);
+        let fields = &mut self.prog.classes[i].init;
+        let at = fields.iter().position(|x| matches!(*x, TInit::Field(s, _) if rank(&order, s) > own)).unwrap_or(fields.len());
+        fields.insert(at, TInit::Field(sym, init));
         Some(init)
     }
 

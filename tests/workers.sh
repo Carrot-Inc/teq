@@ -813,5 +813,38 @@ else
   echo "workers: the watch's numbering across a session's full builds unproven: the evidence is the assertion-enabled build's TEQ_SESSION_INVENTORY"
 fi
 
+# A named local class an inline method's body defines, the definition checked on each worker whose
+# expansion asks for it first: the pickle of the body holds the class its block defines once
+# (`Capture::block_classes`), at every count as at one (before, the products at two workers held a
+# `TYPEDEF` of each worker's class, the definition reconstructed from the class's span).
+ledger=tests/modules/ledgerlocalclass
+# same_products <name> <sourceroot> <sources...>: the products a check writes at each count of COUNTS,
+# byte for byte, against one worker's.
+same_products() {
+  local name=$1
+  shift
+  rm -rf "$work/$name.one"
+  timeout 120 "$TEQ" compiler check --products "$work/$name.one" --sourceroot "$@" --threads 1 > /dev/null 2>&1
+  local t
+  for t in $COUNTS; do
+    rm -rf "$work/$name.$t"
+    timeout 120 "$TEQ" compiler check --products "$work/$name.$t" --sourceroot "$@" --threads $t > /dev/null 2>&1
+    if ! diff -rq "$work/$name.one" "$work/$name.$t" > "$work/$name.diff" 2>&1; then
+      bad "$name: $t workers write other products than one: $(head -2 "$work/$name.diff" | tr '\n' ' ' | cut -c1-200)"
+      return
+    fi
+  done
+  ok
+}
+same_products ledger_local_class "$ledger" "$ledger"/a/*.scala "$ledger"/b/*.scala
+
+# A body its upstream's products withhold, which a downstream's macro runs into: the diagnostic
+# names the member's place in the upstream's source at every count (before, at one worker the
+# place of a definition the member's body makes, which has none, and the pseudo file's line).
+withheld=tests/modules/macrowithheld
+rm -rf "$work/withheld_upstream"
+timeout 120 "$TEQ" compiler check --products "$work/withheld_upstream" --sourceroot "$withheld" "$withheld"/a/*.scala --threads 1 > /dev/null 2>&1
+same_output withheld_place 2 compiler check --sourceroot "$withheld" --classpath "$work/withheld_upstream" "$withheld"/b/*.scala
+
 echo "workers: $pass passed, $fail failed, $known known"
 [ $fail = 0 ]

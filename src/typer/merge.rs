@@ -1762,6 +1762,7 @@ pub(super) fn untyped_tables<'w>(w: &'w mut Worker, mode: TablesMode) -> Vec<Tab
                 Key::Pat(p) => Key::Pat(m.pat(p)),
                 Key::Local(s) => Key::Local(m.sym(s)),
                 Key::Class(c) => Key::Class(m.class(c)),
+                Key::BlockClasses(e) => Key::BlockClasses(m.expr(e)),
             };
         }
         syms_in(m, renamed_roots);

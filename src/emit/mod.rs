@@ -308,6 +308,9 @@ struct Frame {
     /// The spans of the frames nested in this one with the names each bound: a binding of this
     /// frame read inside one of them is named apart from its bindings, which would shadow it.
     nested: Vec<(usize, usize, String)>,
+    /// The scope the body is written in, by its index and id: its bindings are declared there,
+    /// named as the scope's temporaries are.
+    scope: Option<(usize, u32)>,
 }
 
 struct AccessorUse {
@@ -437,6 +440,9 @@ pub fn emit(
         syms,
         interner,
         reach,
+        &naming,
+        &layout.shared,
+        &layout.const_vals,
         &layout.file_inits,
         &runtime.helper_names(),
         expr::op_texts().chain(CTOR_TEXTS),
@@ -680,6 +686,105 @@ pub(crate) fn beside_companion(interner: &Interner, info: &ClassInfo) -> bool {
     info.inner_object.is_some() && info.companion.is_some() && !interner.get(info.name).ends_with('$')
 }
 
+/// The classes a definition is nested in, `Outer$Inner$`, without the package.
+fn class_prefix(syms: &Symbols, interner: &Interner, owner: Owner, out: &mut String) {
+    if let Owner::Class(c) = owner {
+        let info = syms.class(c);
+        class_prefix(syms, interner, info.owner, out);
+        out.push_str(&sanitize(interner.get(info.name)));
+        out.push('$');
+    }
+}
+
+/// Whether the output writes the name of the class `c` behind its owners' (`Outer$Inner`): every
+/// class but an opaque type's companion of another module's pickle, nested there in its file's
+/// `$package` object, which is a class of the package as the program's own is (a jar's keeps
+/// scalac's name).
+fn prefixed_by_owners(syms: &Symbols, interner: &Interner, reach: &reach::Reach, c: ClassId) -> bool {
+    !reach.product_classes.get(c.idx()).copied().unwrap_or(false) || syms.opaque_companion_package(c, interner).is_none()
+}
+
+/// The name the output gives the class `c`, the representative of its shared group if it has
+/// one, before the prefix of its package: what `Emitter::class_text` writes for a class without a
+/// JS binding, and what `Renderable` takes the stem of, so that the names the walk of a scope
+/// finds are the ones the stems were taken from.
+pub(super) fn bare_class_text(prog: &Program, syms: &Symbols, interner: &Interner, reach: &reach::Reach, naming: &Naming, shared: &share::Shared, c: ClassId) -> String {
+    if let Some(g) = shared.groups.get(&c) {
+        return g.name.clone();
+    }
+    let info = syms.class(c);
+    let mut s = String::new();
+    if prefixed_by_owners(syms, interner, reach, c) {
+        class_prefix(syms, interner, info.owner, &mut s);
+    }
+    s.push_str(&sanitize(interner.get(info.name)));
+    // A named local class is known by its position, like an anonymous one.
+    if info.owner == Owner::Local && info.kind != ClassKind::Anon {
+        match syms.product_position(info.file, info.def) {
+            Some((token, offset)) => {
+                let _ = write!(s, "${}_{}", crate::source::tag_text(token), offset);
+            }
+            None => {
+                let _ = write!(s, "${}", prog.position(info.file, info.span.start));
+            }
+        }
+    }
+    match module_suffix(interner, &info) {
+        Some(suffix) => s.push_str(suffix),
+        None if info.kind == ClassKind::EnumCase && info.singleton.is_some() => s.push_str("$V"),
+        None => naming.avoid_taken(&mut s),
+    }
+    s
+}
+
+/// The suffix the name of a class the output reaches as an instance (an object's, a given's)
+/// ends in: `accessor_of` makes the accessor of the instance in its place.
+fn module_suffix(interner: &Interner, info: &ClassInfo) -> Option<&'static str> {
+    match info.kind {
+        ClassKind::Object => Some("$M"),
+        // An object nested in a class is named apart from its companion class.
+        _ if beside_companion(interner, info) => Some("$M"),
+        ClassKind::GivenImpl => Some("$G"),
+        _ => None,
+    }
+}
+
+/// Whether the class `c` is reached as an instance, through an accessor its name gives.
+pub(super) fn is_module(syms: &Symbols, interner: &Interner, c: ClassId) -> bool {
+    module_suffix(interner, &syms.class(c)).is_some()
+}
+
+/// The accessor of the instance of a class named `name` (`Registry$` of `Registry$M`).
+pub(super) fn accessor_of(name: &str) -> String {
+    format!("{}$", &name[..name.len() - 2])
+}
+
+/// The variable that holds the instance its accessor `accessor` makes (`Registry$i`).
+pub(super) fn instance_of(accessor: &str) -> String {
+    format!("{}i", accessor)
+}
+
+/// The name the output gives the definition `s` of a package before the prefix of its package:
+/// what `Emitter::package_sym_name` writes and what `Renderable` takes the stem of.
+pub(super) fn bare_package_sym_text(syms: &Symbols, interner: &Interner, naming: &Naming, const_vals: &[bool], s: SymId) -> String {
+    let info = syms.sym(s);
+    let mut name = sanitize(interner.get(syms.dispatch_name(s)));
+    if info.is_extension {
+        let _ = write!(name, "$x{}", layout::extension_rank(syms, interner, s));
+    }
+    // The conversion of a top-level `implicit class` shares the class's name.
+    let class_named_alike =
+        info.kind == SymKind::Def && matches!(info.owner, Owner::Package(p) if syms.pkg(p).entries.get(&info.name).map_or(false, |e| e.class.is_some()));
+    if class_named_alike {
+        name.push_str("$f");
+    }
+    match info.kind {
+        SymKind::Val | SymKind::Var | SymKind::Given if !const_vals[s.idx()] => name.push('$'),
+        _ => naming.avoid_taken(&mut name),
+    }
+    name
+}
+
 /// The nested objects of `c` that implement a member of a parent trait, with the member each one
 /// stands for.
 pub(crate) fn implemented_nested_objects(syms: &Symbols, c: ClassId) -> Vec<(SymId, ClassId)> {
@@ -804,6 +909,7 @@ impl<'a> Emitter<'a> {
             uses: Vec::new(),
             edits: Vec::new(),
             nested: Vec::new(),
+            scope: self.scopes.last().map(|s| (self.scopes.len() - 1, s.id)),
         });
     }
 
@@ -919,8 +1025,13 @@ impl<'a> Emitter<'a> {
             bound.push((covered[0].span.0, class));
             i = j;
         }
-        // The bindings in the order of their first calls, named apart.
+        // The bindings in the order of their first calls, each named in the scope of the body as
+        // its temporaries are (`binding_captured`: apart from what the body reads that is no
+        // local of it and from a binder around a read of the instance) and declared there, and
+        // apart from the bindings of the frames nested in this one, whose scopes are closed.
         bound.sort_unstable();
+        let scope = frame.scope.filter(|&(at, id)| self.scopes.get(at).is_some_and(|s| s.id == id)).map(|(at, _)| at);
+        debug_assert!(bound.is_empty() || scope.is_some(), "a frame binds an instance outside the scope it opened in");
         let mut names: Vec<String> = Vec::new();
         for &(first, class) in &bound {
             let base = Self::binding_name(&self.module_accessor(class));
@@ -929,10 +1040,21 @@ impl<'a> Emitter<'a> {
             };
             let mut name = base.clone();
             let mut k = 1;
-            // Nor does it take the name of a local of the item, which it would hide or redeclare.
-            while names.contains(&name) || shadowed(&name) || self.named_as.contains_key(name.as_str()) {
+            loop {
+                let taken = names.contains(&name)
+                    || shadowed(&name)
+                    || match scope {
+                        Some(at) => self.binding_captured(&name, class, at),
+                        None => self.named_as.contains_key(name.as_str()),
+                    };
+                if !taken {
+                    break;
+                }
                 k += 1;
                 name = format!("{}${}", base, k);
+            }
+            if let Some(at) = scope {
+                self.declare_fixed_in(at, Rc::from(name.as_str()));
             }
             names.push(name);
         }
@@ -1058,12 +1180,7 @@ impl<'a> Emitter<'a> {
 
     /// The classes a definition is nested in, `Outer$Inner$`, without the package.
     fn class_prefix(&self, owner: Owner, out: &mut String) {
-        if let Owner::Class(c) = owner {
-            let info = self.syms.class(c);
-            self.class_prefix(info.owner, out);
-            out.push_str(&sanitize(self.interner.get(info.name)));
-            out.push('$');
-        }
+        class_prefix(self.syms, self.interner, owner, out);
     }
 
     fn package_of(&self, owner: Owner) -> Option<PkgId> {
@@ -1236,41 +1353,12 @@ impl<'a> Emitter<'a> {
         }
         let bare = match &self.class_names[c.idx()] {
             Some(n) => n.clone(),
-            None if self.shared.groups.contains_key(&c) => {
-                let rc: Rc<str> = Rc::from(self.shared.groups[&c].name.as_str());
-                self.class_names[c.idx()] = Some(rc.clone());
-                rc
-            }
             None => {
-                let mut s = String::new();
-                // An opaque type's companion of another module's pickle, nested there in its file's
-                // `$package` object: a class of the package, as the program's own (a jar's keeps
-                // scalac's name).
-                let product = self.reach.product_classes.get(c.idx()).copied().unwrap_or(false);
-                if !product || self.syms.opaque_companion_package(c, self.interner).is_none() {
-                    self.class_prefix(info.owner, &mut s);
-                }
-                s.push_str(&sanitize(self.interner.get(info.name)));
-                // A named local class is known by its position, like an anonymous one.
-                if info.owner == Owner::Local && info.kind != ClassKind::Anon {
-                    match self.syms.product_position(info.file, info.def) {
-                        Some((token, offset)) => {
-                            let _ = write!(s, "${}_{}", crate::source::tag_text(token), offset);
-                        }
-                        None => {
-                            let _ = write!(s, "${}", self.prog.position(info.file, info.span.start));
-                        }
-                    }
-                }
-                match info.kind {
-                    ClassKind::Object => s.push_str("$M"),
-                    // An object nested in a class is named apart from its companion class.
-                    _ if beside_companion(self.interner, &info) => s.push_str("$M"),
-                    ClassKind::GivenImpl => s.push_str("$G"),
-                    ClassKind::EnumCase if info.singleton.is_some() => s.push_str("$V"),
-                    _ => self.naming.avoid_taken(&mut s),
-                }
-                let rc: Rc<str> = Rc::from(s);
+                let rc: Rc<str> = match self.renderable.class_name(c) {
+                    Some(n) => Rc::from(n),
+                    // A class the output does not name otherwise (`Renderable::compute`).
+                    None => Rc::from(bare_class_text(self.prog, self.syms, self.interner, self.reach, self.naming, self.shared, c)),
+                };
                 self.class_names[c.idx()] = Some(rc.clone());
                 rc
             }
@@ -1332,7 +1420,7 @@ impl<'a> Emitter<'a> {
 
     pub(super) fn accessor_text(&mut self, c: ClassId) -> String {
         let name = self.class_text(c);
-        format!("{}$", &name[..name.len() - 2])
+        accessor_of(&name)
     }
 
     pub fn sym_name(&mut self, s: SymId) -> Rc<str> {
@@ -1424,21 +1512,7 @@ impl<'a> Emitter<'a> {
         let bare = match &self.sym_names[s.idx()] {
             Some(n) => n.clone(),
             None => {
-                let mut name = sanitize(self.interner.get(self.syms.dispatch_name(s)));
-                if info.is_extension {
-                    let _ = write!(name, "$x{}", layout::extension_rank(self.syms, self.interner, s));
-                }
-                // The conversion of a top-level `implicit class` shares the class's name.
-                let class_named_alike = info.kind == SymKind::Def
-                    && matches!(info.owner, Owner::Package(p) if self.syms.pkg(p).entries.get(&info.name).map_or(false, |e| e.class.is_some()));
-                if class_named_alike {
-                    name.push_str("$f");
-                }
-                match info.kind {
-                    SymKind::Val | SymKind::Var | SymKind::Given if !self.const_vals[s.idx()] => name.push('$'),
-                    _ => self.naming.avoid_taken(&mut name),
-                }
-                let rc: Rc<str> = Rc::from(name);
+                let rc: Rc<str> = Rc::from(bare_package_sym_text(self.syms, self.interner, self.naming, self.const_vals, s));
                 self.sym_names[s.idx()] = Some(rc.clone());
                 rc
             }
@@ -2209,7 +2283,7 @@ impl<'a> Emitter<'a> {
             self.ctor_locals = outer_locals;
             if is_object {
                 self.line();
-                let _ = write!(self.out, "{}i = {};", &name[..name.len() - 1], this);
+                let _ = write!(self.out, "{} = {};", instance_of(&accessor_of(&name)), this);
                 self.emit_stateful_enum_values(tc.id);
             }
             if is_enum_value {
@@ -2351,7 +2425,8 @@ impl<'a> Emitter<'a> {
         if is_object {
             let accessor = self.module_accessor(tc.id);
             self.line();
-            let _ = write!(self.out, "let {0}i; function {0}() {{ return {0}i ?? ", accessor);
+            let instance = instance_of(&accessor);
+            let _ = write!(self.out, "let {1}; function {0}() {{ return {1} ?? ", accessor, instance);
             if self.hot {
                 let _ = write!(self.out, "$hotObj(new {}(), ", name);
                 js_string(&self.qualified_name(tc.id), &mut self.out);

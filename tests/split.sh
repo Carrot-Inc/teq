@@ -577,6 +577,24 @@ expect "small: module rewritten by the edit, and the listing" "$(diff <(echo "$b
 expect "small: the edit runs" "$(timeout 20 node "$dir/main.mjs" | sed -n 3p)" "w/marked/B+green"
 rm -rf "$work"
 
+# A jar object's lazy vals are declared in its template's order whatever order the program reads
+# them in (tests/support/lazyorder_lib.scala): two programs reading them in other orders print what
+# scalac's do and write the library's module byte for byte alike. Without the jar it counts as passed.
+lib=$(lazyorder_lib_jar)
+if [ -f "$lib" ]; then
+  work=$(mktemp -d)
+  for order in abc cab; do
+    vals=$(echo "$order" | sed 's/./lazyorderlib.Library.& + /g; s/ + $//')
+    printf '@main def main(): Unit = println(%s)\n' "$vals" > "$work/$order.scala"
+    timeout 20 "$TEQ" compiler build "$work/$order.scala" --classpath "$lib" --split "$work/$order" > "$work/$order.log" 2>&1 || bad "lazy order: the build of $order: $(head -2 "$work/$order.log")"
+    expect "lazy order: $order runs as scalac's" "$(timeout 20 node "$work/$order/main.mjs" | tr '\n' ' ')" "$(echo "$order" | sed 's/./& /g')6 "
+  done
+  check "$work/abc/lazyorderlib.mjs" "$work/cab/lazyorderlib.mjs" "lazy order: the library's module differs with the order the program reads its vals in"
+  rm -rf "$work"
+else
+  ok
+fi
+
 # The same bytes whatever the number of workers.
 work=$(mktemp -d)
 timeout 60 python3 bench/gen.py "$work/src" 51 22 > /dev/null || bad "workers: the core corpus"

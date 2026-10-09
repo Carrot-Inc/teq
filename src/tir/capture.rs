@@ -51,6 +51,11 @@ pub struct Capture {
     /// The classes an expansion of an ordinary inline method made (an anonymous class of its
     /// body), which the pickle holds none of: it holds the call.
     pub expansion_classes: FxMap<ClassId, ()>,
+    /// The named classes a block defines among its statements, in source order, by the block:
+    /// the IR lifts them out of it into the program's classes, and the pickle writes each where
+    /// its block stands, as scalac's pickle holds a block's statements (`TreePickler.pickleTree`
+    /// of a `Block`'s `stats`). A copy of the block that copies its classes holds the copies.
+    pub block_classes: FxMap<TExprId, Vec<ClassId>>,
     /// The inline calls an expansion stands for, by the expression the expansion gave; nested
     /// expansions that gave one expression, innermost first.
     pub inline_calls: FxMap<TExprId, Vec<InlineCall>>,
@@ -114,6 +119,7 @@ pub struct Published {
     pub receivers: FxMap<TExprId, TExprId>,
     pub evidence: FxMap<TExprId, Vec<TExprId>>,
     pub trees: FxMap<TExprId, (u32, u32)>,
+    pub block_classes: FxMap<TExprId, Vec<ClassId>>,
 }
 
 /// The published `key` as `own` has it: dropped where it has none.
@@ -160,6 +166,7 @@ impl Published {
             Key::Pat(p) => self.pats.contains_key(&p),
             Key::Local(s) => self.locals.contains_key(&s),
             Key::Class(_) => false,
+            Key::BlockClasses(e) => self.block_classes.contains_key(&e),
         }
     }
 
@@ -179,6 +186,8 @@ impl Published {
             + table(&self.evidence)
             + self.evidence.values().map(array).sum::<usize>()
             + table(&self.trees)
+            + table(&self.block_classes)
+            + self.block_classes.values().map(array).sum::<usize>()
     }
 }
 
@@ -216,13 +225,14 @@ pub enum Key {
     Pat(TPatId),
     Local(SymId),
     Class(ClassId),
+    BlockClasses(TExprId),
 }
 
 impl Key {
     /// The expression the record is keyed by, where it is one.
     pub fn expr(self) -> Option<TExprId> {
         match self {
-            Key::Targs(e) | Key::Form(e) | Key::Wrap(e) | Key::Inline(e) | Key::Builtin(e) | Key::Receiver(e) | Key::Evidence(e) | Key::Tree(e) => Some(e),
+            Key::Targs(e) | Key::Form(e) | Key::Wrap(e) | Key::Inline(e) | Key::Builtin(e) | Key::Receiver(e) | Key::Evidence(e) | Key::Tree(e) | Key::BlockClasses(e) => Some(e),
             Key::Pat(_) | Key::Local(_) | Key::Class(_) => None,
         }
     }
@@ -490,6 +500,7 @@ impl Capture {
                 Key::Pat(x) => p.pats.extend(self.pats.get(&x).map(|&f| (x, f))),
                 Key::Local(s) => p.locals.extend(self.locals.get(&s).map(|&l| (s, l))),
                 Key::Class(_) => {}
+                Key::BlockClasses(e) => p.block_classes.extend(self.block_classes.get(&e).map(|v| (e, v.clone()))),
             }
         }
     }
@@ -707,6 +718,9 @@ impl Capture {
         if let Some(&t) = self.trees.get(&from) {
             self.tree(unit, to, t);
         }
+        if let Some(v) = self.block_classes.get(&from).cloned() {
+            self.block_classes(unit, to, v);
+        }
     }
 
     /// The published records under `keys` as this capture has them now: dropped where it
@@ -732,6 +746,7 @@ impl Capture {
                 Key::Pat(x) => sync(&mut p.pats, x, self.pats.get(&x).copied()),
                 Key::Local(s) => sync(&mut p.locals, s, self.locals.get(&s).copied()),
                 Key::Class(_) => {}
+                Key::BlockClasses(e) => sync(&mut p.block_classes, e, self.block_classes.get(&e).cloned()),
             }
         }
     }
@@ -751,6 +766,7 @@ impl Capture {
             + p.trees.keys().filter(|e| !self.trees.contains_key(e)).count()
             + p.pats.keys().filter(|x| !self.pats.contains_key(x)).count()
             + p.locals.keys().filter(|s| !self.locals.contains_key(s)).count()
+            + p.block_classes.keys().filter(|e| !self.block_classes.contains_key(e)).count()
     }
 
     /// Drops the records the typing of `file` made, the published ones among them: its bodies
@@ -856,6 +872,7 @@ impl Capture {
             Key::Pat(p) => self.pats.contains_key(&p),
             Key::Local(s) => self.locals.contains_key(&s),
             Key::Class(c) => self.expansion_classes.contains_key(&c),
+            Key::BlockClasses(e) => self.block_classes.contains_key(&e),
         }
     }
 
@@ -894,6 +911,9 @@ impl Capture {
             }
             Key::Class(c) => {
                 self.expansion_classes.remove(&c);
+            }
+            Key::BlockClasses(e) => {
+                self.block_classes.remove(&e);
             }
         }
     }
@@ -934,6 +954,18 @@ impl Capture {
         }
     }
 
+    /// The classes the block `e`, made once, defines.
+    pub fn block_classes(&mut self, unit: FileId, e: TExprId, classes: Vec<ClassId>) {
+        if self.block_classes.insert(e, classes).is_none() {
+            self.made_by(unit, Key::BlockClasses(e));
+        }
+    }
+
+    /// The classes the block `e` defines: this capture's record, else a published one.
+    pub fn classes_of_block(&self, e: TExprId) -> Option<Vec<ClassId>> {
+        self.block_classes.get(&e).cloned().or_else(|| self.read_published().block_classes.get(&e).cloned())
+    }
+
     /// The copies of other workers' nodes take their records, once every worker's are here.
     pub fn settle_copies(&mut self) {
         for (from, to, unit) in std::mem::take(&mut self.pending) {
@@ -955,6 +987,7 @@ impl Capture {
         self.evidence.extend(o.evidence.drain());
         self.trees.extend(o.trees.drain());
         self.expansion_classes.extend(o.expansion_classes.drain());
+        self.block_classes.extend(o.block_classes.drain());
         self.block_stmts.extend(o.block_stmts.drain());
         self.annotations.extend(o.annotations.drain());
         for (f, keys) in o.made.drain() {
@@ -978,7 +1011,7 @@ impl Capture {
 
     /// How many records there are.
     pub fn records(&self) -> usize {
-        self.targs.len() + self.forms.len() + self.wraps.len() + self.pats.len() + self.locals.len() + self.inline_calls.len() + self.builtin_calls.len() + self.receivers.len() + self.evidence.len() + self.trees.len()
+        self.targs.len() + self.forms.len() + self.wraps.len() + self.pats.len() + self.locals.len() + self.inline_calls.len() + self.builtin_calls.len() + self.receivers.len() + self.evidence.len() + self.trees.len() + self.block_classes.len()
     }
 
     pub fn held(&self) -> usize {
@@ -991,6 +1024,8 @@ impl Capture {
             + table(&self.locals)
             + table(&self.inline_calls)
             + table(&self.expansion_classes)
+            + table(&self.block_classes)
+            + self.block_classes.values().map(array).sum::<usize>()
             + table(&self.builtin_calls)
             + self.builtin_calls.values().map(|c| array(&c.args)).sum::<usize>()
             + table(&self.receivers)

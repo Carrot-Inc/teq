@@ -4494,7 +4494,7 @@ impl<'w, 'a> P<'w, 'a> {
                 return;
             }
         }
-        let classes = self.block_classes(e, &stmts, res);
+        let classes = self.block_classes(e);
         let unit = self.typed_unit(e);
         let l = self.open(BLOCK);
         // The context's type is the result's.
@@ -4781,66 +4781,19 @@ impl<'w, 'a> P<'w, 'a> {
         }
     }
 
-    /// The named classes the source defines directly in the block `e`: inside its span and
-    /// inside none of its statements', in source order.
-    fn block_classes(&mut self, e: TExprId, stmts: &[TStmt], res: TExprId) -> Vec<(u32, ClassId)> {
-        let Some((file, span)) = self.w.prog.span_of(e) else { return Vec::new() };
-        let Some(candidates) = self.index.local_classes.get(&file) else { return Vec::new() };
-        let inner: Vec<Span> = stmts
-            .iter()
-            .filter_map(|st| match *st {
-                TStmt::Expr(x) | TStmt::Val(_, x) | TStmt::Pat(_, x) => self.w.prog.span_of(x).map(|(_, s)| s),
-                TStmt::Fun(f) => {
-                    let s = self.w.prog.funs[f.idx()].sym;
-                    let info = self.w.syms.sym(s);
-                    Some(self.def_span(info.file, info.def, info.span))
-                }
+    /// The named classes the block `e` defines (`Capture::block_classes`), each with the start of
+    /// its definition, which places it among the block's statements; one written already (a
+    /// block copied with its classes) is not written again.
+    fn block_classes(&mut self, e: TExprId) -> Vec<(u32, ClassId)> {
+        let Some(classes) = self.w.prog.capture.as_deref().and_then(|c| c.classes_of_block(e)) else { return Vec::new() };
+        classes
+            .into_iter()
+            .filter(|c| !self.written_locals.contains_key(c))
+            .map(|c| {
+                let info = self.w.syms.class(c);
+                (self.def_span(info.file, info.def, info.span).start, c)
             })
-            .chain(self.w.prog.span_of(res).map(|(_, s)| s))
-            .collect();
-        // The copies an expansion makes of the callee's classes share their spans: a definition's
-        // body defines the originals, an expansion's block the copies it creates.
-        let copies = !self.inlined_open.is_empty();
-        let mut out: Vec<(u32, ClassId)> = candidates
-            .iter()
-            .filter(|&&(s, _)| span.start <= s.start && s.end <= span.end && !inner.iter().any(|i| i.start <= s.start && s.end <= i.end && *i != span))
-            .map(|&(s, c)| (s.start, c))
-            .filter(|&(_, c)| !self.written_locals.contains_key(&c) && self.w.syms.class(c).made_at.is_some() == copies)
-            .collect();
-        if copies && out.len() > 1 {
-            let made = self.classes_made_in(e);
-            out.retain(|(_, c)| made.contains(c));
-        }
-        out.sort();
-        out
-    }
-
-    /// The classes the tree `e` creates, with the classes each extends.
-    fn classes_made_in(&self, e: TExprId) -> Vec<ClassId> {
-        let mut made: Vec<ClassId> = Vec::new();
-        for x in self.w.prog.descendants(e) {
-            let c = match self.w.prog.expr(x) {
-                TExpr::New(c, _) => c,
-                TExpr::NewVia(s, _) => match self.w.syms.sym(s).owner {
-                    Owner::Class(c) => c,
-                    _ => continue,
-                },
-                _ => continue,
-            };
-            let mut pending = vec![c];
-            while let Some(k) = pending.pop() {
-                if made.contains(&k) {
-                    continue;
-                }
-                made.push(k);
-                for &p in &self.w.syms.class(k).parents {
-                    if let Type::Class(pc, _) = self.w.types.get(p) {
-                        pending.push(pc);
-                    }
-                }
-            }
-        }
-        made
+            .collect()
     }
 
     fn local_val(&mut self, s: SymId, init: TExprId) {

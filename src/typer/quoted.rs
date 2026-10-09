@@ -3072,7 +3072,7 @@ impl<'c> Copier<'c> {
     /// `id`, the copy of `e`, takes its records.
     fn captured(&mut self, t: &mut Worker, e: TExprId, id: TExprId) {
         let this = &*self;
-        t.capture_copy_renamed(e, id, &|w, ty| this.ty(w, ty), &|s| this.sym(s));
+        t.capture_copy_renamed(e, id, &|w, ty| this.ty(w, ty), &|s| this.sym(s), &|c| this.classes.get(&c).copied());
         if let Some(copies) = self.copies.as_mut() {
             copies.insert(e, id);
             self.occurrences.push((e, id));

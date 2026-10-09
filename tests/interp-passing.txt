@@ -84,12 +84,14 @@ capture_assign_target
 capture_c
 capture_ctor_param
 capture_d
+capture_dollar_names
 capture_e
 capture_elem
 capture_emitter_names
 capture_emitter_temporaries
 capture_eta
 capture_f
+capture_frame_nonlocal
 capture_inline_proxy
 capture_many_locals
 capture_nested_class

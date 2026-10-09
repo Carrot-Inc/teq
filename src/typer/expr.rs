@@ -3387,6 +3387,9 @@ impl<'a> Worker<'a> {
             self.inline.blocks.push(super::inline::BlockCursor { frame, file, stmts, at: 0, imports_scope });
         }
         let mut defined: Vec<(Name, &'static str)> = Vec::new();
+        // The named classes the block defines, which the IR lifts out of it: the pickle writes
+        // them among its statements (`Capture::block_classes`).
+        let mut classes: Vec<ClassId> = Vec::new();
         for s in &items {
             let Stmt::Def(d) = s else { continue };
             let def = ast.def(*d);
@@ -3433,6 +3436,7 @@ impl<'a> Worker<'a> {
                         }
                         self.enter_def(file, Owner::Local, *d);
                         let c = *self.def_classes.get(file.0 as usize, &d).expect("the local class was entered");
+                        classes.push(c);
                         if stores {
                             self.note_stored_class(c);
                         } else {
@@ -3444,18 +3448,21 @@ impl<'a> Worker<'a> {
                     }
                     ast::ClassKind::Object => {
                         self.enter_local_object(file, *d);
-                        if stores {
-                            if let Some(&c) = self.def_classes.get(file.0 as usize, d) {
+                        if let Some(&c) = self.def_classes.get(file.0 as usize, d) {
+                            classes.push(c);
+                            if stores {
                                 self.note_stored_class(c);
                             }
                         }
                     }
                     ast::ClassKind::Enum => {
                         self.enter_local_enum(file, *d);
-                        if stores {
-                            if let Some(&c) = self.def_classes.get(file.0 as usize, d) {
+                        if let Some(&c) = self.def_classes.get(file.0 as usize, d) {
+                            let companion = self.syms.class(c).companion;
+                            classes.extend(std::iter::once(c).chain(companion.filter(|&k| self.syms.class(k).owner == Owner::Local)));
+                            if stores {
                                 self.note_stored_class(c);
-                                if let Some(companion) = self.syms.class(c).companion {
+                                if let Some(companion) = companion {
                                     self.note_stored_class(companion);
                                 }
                             }
@@ -3532,6 +3539,9 @@ impl<'a> Worker<'a> {
         };
         let l = self.prog.stmts.push_slice(&out);
         let block = self.prog.add(TExpr::Block(l, res));
+        if !classes.is_empty() && self.capturing() {
+            self.capture_block_classes(block, classes);
+        }
         self.note_block_imports(block, pending_imports);
         (block, ty)
     }

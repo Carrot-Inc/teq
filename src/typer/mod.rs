@@ -3281,8 +3281,7 @@ impl<'a> Worker<'a> {
     /// The body of the library member whose definition spans `span` in the pseudo file `file`,
     /// printed from its TASTy as the diagnostics' context; empty when nothing is known.
     fn library_body_text(&mut self, file: FileId, span: Span) -> String {
-        let Some(sym) = self.def_syms.entries_in(file.0 as usize).into_iter().find(|(d, _)| self.ast(file).def(*d).span == span).map(|(_, s)| s) else { return String::new() };
-        let Some(ls) = self.loaded.as_ref().and_then(|l| l.syms.get(&sym).copied()) else { return String::new() };
+        let Some((_, ls)) = self.library_member_at(file, span) else { return String::new() };
         let tasty = self.loaded.as_ref().unwrap().file(ls.file).tasty.clone();
         let mut decoder = crate::tasty::tree::Decoder::new(&tasty);
         let mut terms = crate::tasty::terms::TermDecoder::new(&mut decoder);

@@ -429,20 +429,13 @@ pub(super) fn identifier_of(text: &str) -> &str {
 }
 
 /// The part of an identifier a capture can be told by without the whole set of names the output
-/// renders: the text up to the first `$` after its first character.
+/// renders: the text up to the first `$` after its first character. Every form the emitter writes
+/// for one definition (`Foo$M`, its accessor `Foo$` and instance `Foo$i`; `x$`, `x$v`, `x$set`)
+/// adds to its name after a `$`, so the forms share the stem of the name.
 pub(super) fn stem(id: &str) -> &str {
     match id.as_bytes().iter().skip(1).position(|&c| c == b'$') {
         Some(p) => &id[..p + 1],
         None => id,
-    }
-}
-
-/// A source name as the output writes it, sanitised only where it needs to be.
-fn source(text: &str) -> std::borrow::Cow<'_, str> {
-    if is_js_identifier(text) && !RESERVED.contains(&text) {
-        std::borrow::Cow::Borrowed(text)
-    } else {
-        std::borrow::Cow::Owned(sanitize(text))
     }
 }
 
@@ -456,6 +449,10 @@ pub struct Renderable<'a> {
     stems: FxMap<String, ()>,
     /// By text: a program holds a few hundred templates, each written in many places.
     templates: FxMap<&'a str, TextNames>,
+    /// By class, the name the output writes for each class it names, before its package's prefix
+    /// (`bare_class_text`): `Emitter::class_text` writes it, and the stems are taken from it and
+    /// from the accessor and instance an object's name gives (`accessor_of`, `instance_of`).
+    class_names: Vec<Option<Box<str>>>,
 }
 
 impl<'a> Renderable<'a> {
@@ -465,6 +462,9 @@ impl<'a> Renderable<'a> {
         syms: &Symbols,
         interner: &Interner,
         reach: &super::reach::Reach,
+        naming: &super::names::Naming,
+        shared: &super::share::Shared,
+        const_vals: &[bool],
         file_inits: &[bool],
         helpers: &[&str],
         written: impl Iterator<Item = &'static str>,
@@ -506,29 +506,43 @@ impl<'a> Renderable<'a> {
             }
         }
         // A reference to a definition bound to a global is the typer's `JsGlobal`, among
-        // `Reach::globals`.
+        // `Reach::globals`. The names of the program's definitions are the ones the emitter
+        // writes (`bare_package_sym_text`, `bare_class_text`), before their packages' prefixes.
         let funs = prog.top_funs.iter().filter(|&&f| reach.funs[f.idx()]).map(|&f| prog.funs[f.idx()].sym);
         for s in funs.chain(prog.top_vals.iter().map(|&(s, _)| s)) {
-            add(&mut r.stems, &source(interner.get(syms.dispatch_name(s))));
+            add(&mut r.stems, &super::bare_package_sym_text(syms, interner, naming, const_vals, s));
         }
+        r.class_names = vec![None; syms.classes.len()];
         for (i, info) in syms.classes.iter().enumerate() {
             // What the output names: a reached class, the accessor of an object, a native binding.
             if !reach.classes.get(i).copied().unwrap_or(false) && info.kind != ClassKind::Object && info.js_binding.is_none() {
                 continue;
             }
-            let mut outer = ClassId(i as u32);
-            while let Owner::Class(o) = syms.class(outer).owner {
-                outer = o;
-            }
-            add(&mut r.stems, &source(interner.get(syms.class(outer).name)));
             match info.js_binding {
+                None => {
+                    let c = shared.rep_of(ClassId(i as u32));
+                    if syms.class(c).js_binding.is_some() {
+                        continue;
+                    }
+                    if r.class_names[c.idx()].is_some() {
+                        continue;
+                    }
+                    let name = super::bare_class_text(prog, syms, interner, reach, naming, shared, c);
+                    add(&mut r.stems, &name);
+                    if super::is_module(syms, interner, c) {
+                        let accessor = super::accessor_of(&name);
+                        add(&mut r.stems, &super::instance_of(&accessor));
+                        add(&mut r.stems, &accessor);
+                    }
+                    r.class_names[c.idx()] = Some(name.into_boxed_str());
+                }
                 Some(JsBinding::Global(n)) => add(&mut r.stems, interner.get(n)),
                 Some(JsBinding::GlobalScope) => {
                     for &m in &info.member_order {
                         add(&mut r.stems, interner.get(syms.js_member_name(m)));
                     }
                 }
-                _ => {}
+                Some(JsBinding::Import(_)) => {}
             }
         }
         for &t in &reach.templates {
@@ -556,6 +570,11 @@ impl<'a> Renderable<'a> {
 
     pub(super) fn template(&self, text: &str) -> Option<&TextNames> {
         self.templates.get(text)
+    }
+
+    /// The name of the class `c` (a shared group's representative), where the output names it.
+    pub(super) fn class_name(&self, c: ClassId) -> Option<&str> {
+        self.class_names.get(c.idx()).and_then(|n| n.as_deref())
     }
 }
 
@@ -620,6 +639,9 @@ pub(super) struct RootInfo {
     fixed_nodes: FxMap<Rc<str>, Vec<u32>>,
     /// Per local it reads, the innermost binder around each of its reads, an index of `binders`.
     reads: FxMap<SymId, Vec<u32>>,
+    /// Per object whose instance it reads through the accessor, the innermost binder around each
+    /// read: what a binding of the instance (`Emitter::close_frame`) stands for.
+    modules: FxMap<ClassId, Vec<u32>>,
     /// The locals it declares.
     declared: FxMap<SymId, ()>,
 }
@@ -627,8 +649,17 @@ pub(super) struct RootInfo {
 impl RootInfo {
     /// Whether the binder `node` stands around a read of `s`.
     fn around(&self, node: u32, s: SymId) -> bool {
+        self.reads.get(&s).map_or(false, |tops| self.encloses(node, tops))
+    }
+
+    /// Whether the binder `node` stands around a read of the instance of the object `c`.
+    fn around_module(&self, node: u32, c: ClassId) -> bool {
+        self.modules.get(&c).map_or(false, |tops| self.encloses(node, tops))
+    }
+
+    fn encloses(&self, node: u32, tops: &[u32]) -> bool {
         let end = self.end[node as usize];
-        self.reads.get(&s).map_or(false, |tops| tops.iter().any(|&t| t != NONE && node <= t && t < end))
+        tops.iter().any(|&t| t != NONE && node <= t && t < end)
     }
 }
 
@@ -658,6 +689,16 @@ impl Walk {
     fn read(&mut self, s: SymId) {
         let top = self.top;
         let around = self.info.reads.entry(s).or_default();
+        if !around.contains(&top) {
+            around.push(top);
+        }
+    }
+
+    /// A read of the instance of the object `c` through its accessor, named `accessor`.
+    fn module(&mut self, c: ClassId, accessor: &str) {
+        self.name(accessor);
+        let top = self.top;
+        let around = self.info.modules.entry(c).or_default();
         if !around.contains(&top) {
             around.push(top);
         }
@@ -740,7 +781,7 @@ impl<'a> Emitter<'a> {
         }
     }
 
-    fn declare_fixed_in(&mut self, at: usize, name: Rc<str>) {
+    pub(super) fn declare_fixed_in(&mut self, at: usize, name: Rc<str>) {
         self.scopes[at].fixed.push(name.clone());
         self.declare_in(at, name);
     }
@@ -994,6 +1035,26 @@ impl<'a> Emitter<'a> {
             }
         }
         false
+    }
+
+    /// Whether a binding named `name` of the instance of the object `c`, which `close_frame`
+    /// declares in the scope at `at` and reads where the scope's text reads the instance, would
+    /// read or be read for something else: what `captured` says of a temporary of the scope, or a
+    /// binder of its root around a read of the instance, which would shadow the binding there.
+    pub(super) fn binding_captured(&mut self, name: &str, c: ClassId, at: usize) -> bool {
+        if self.captured(name, None, at) {
+            return true;
+        }
+        let info = self.root_info(self.scopes[at].root);
+        debug_assert!(info.modules.contains_key(&c), "the walk of {:?} reads no instance of the object it binds", self.scopes[at].root);
+        // Where the walk did not find the reads, any binder of the name may stand around one.
+        let around = |node: u32| !info.modules.contains_key(&c) || info.around_module(node, c);
+        if let Some(named) = self.named_as.get(name) {
+            if named.iter().any(|&t| self.bound_name(t) == Some(name) && info.node_of.get(&t).is_some_and(|&node| around(node))) {
+                return true;
+            }
+        }
+        info.fixed_nodes.get(name).is_some_and(|nodes| nodes.iter().any(|&node| around(node)))
     }
 
     /// The walk of a root, made once per item.
@@ -1326,7 +1387,7 @@ impl<'a> Emitter<'a> {
 
     fn walk_accessor(&mut self, w: &mut Walk, c: ClassId) {
         let accessor = self.accessor_text(c);
-        w.name(&accessor);
+        w.module(c, &accessor);
     }
 
     fn walk_module(&mut self, w: &mut Walk, c: ClassId) {
@@ -1388,7 +1449,7 @@ impl<'a> Emitter<'a> {
         self.walk_class(w, tc.id);
         if info.kind == ClassKind::Object {
             let accessor = self.accessor_text(tc.id);
-            w.name(&format!("{}i", accessor));
+            w.name(&super::instance_of(&accessor));
         }
         if let Some(s) = info.superclass {
             self.walk_class(w, s);

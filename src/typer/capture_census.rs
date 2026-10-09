@@ -1126,6 +1126,7 @@ impl<'a> Worker<'a> {
         orphans.extend(c.inline_calls.keys().filter(|e| !seen.has(e.0)).map(|&e| ("inline call", e)));
         orphans.extend(c.builtin_calls.keys().filter(|e| !seen.has(e.0)).map(|&e| ("tuple member", e)));
         orphans.extend(c.evidence.keys().filter(|e| !seen.has(e.0)).map(|&e| ("evidence", e)));
+        orphans.extend(c.block_classes.keys().filter(|e| !seen.has(e.0)).map(|&e| ("block's classes", e)));
         orphans.sort_by_key(|&(_, e)| e);
         let orphan_pats = c.pats.keys().filter(|p| !walk.seen_pats.contains_key(p)).count();
         let orphan_locals = c.locals.keys().filter(|s| !walk.seen_locals.contains_key(s)).count();

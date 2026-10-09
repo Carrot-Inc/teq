@@ -1,6 +1,13 @@
-jsl-a!mwa.Jobs:2:1: error: the body of mwa.Jobs.make is withheld from the products of $OUT/macrowithheld/jsl-a (elided: unstated the std's List.range, which scala-library has under another shape): the TASTy writer's queue of the shapes it withholds writes it (in the body of mwa.Jobs.make)
-  def make
-  ^^^^^^^^
+$OUT/macrowithheld/jsl-a!a/Lib.scala:10:7: error: the body of mwa.Jobs.make is withheld from the products of $OUT/macrowithheld/jsl-a (elided: unstated the std's List.range, which scala-library has under another shape): the TASTy writer's queue of the shapes it withholds writes it (in the body of mwa.Jobs.make)
+  body: {
+      <synthetic> final class $anon() extends Object(), Job {
+        def run(): Int = <elided: Int>
+        def name: String = "job"
+      }
+      (new $anon(): Job)
+    }
+    def make: Job = new Job:
+        ^
 tests/modules/macrowithheld/b/Use.scala:4:11: error: the run needs a body withheld from its products and stops (the error below) (called by count in object Mac)
   inlined from tests/modules/macrowithheld/b/Mac.scala:6
     println(Mac.count())

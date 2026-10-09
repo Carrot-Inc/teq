@@ -211,8 +211,6 @@ pub struct Index {
     pub product_sources_by_tag: FxMap<String, (String, u64)>,
     /// The signatures of the std's and the jars' members selections carry, as they are made.
     pub library_signatures: std::cell::RefCell<FxMap<SymId, Result<Option<(Vec<SigParam>, String)>, String>>>,
-    /// The named classes bodies define, by file, with their spans.
-    pub local_classes: FxMap<FileId, Vec<(Span, ClassId)>>,
     /// The context closures of each file, by their starts with their numbers of parameters,
     /// made when a pickle first numbers one (`quoted::contextual_closures`).
     pub contextual: std::cell::OnceCell<FxMap<FileId, Vec<(u32, u32)>>>,
@@ -246,10 +244,6 @@ impl Index {
             }
             if let Some(v) = info.inner_object {
                 index.inner_objects.insert(v, k);
-            }
-            if info.owner == Owner::Local && info.kind != ClassKind::Anon {
-                let span = info.def.map_or(info.span, |d| w.ast(info.file).def_range(d));
-                index.local_classes.entry(info.file).or_default().push((span, k));
             }
         }
         for (i, tc) in w.prog.classes.iter().enumerate() {
