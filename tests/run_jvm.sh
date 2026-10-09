@@ -34,6 +34,7 @@
 # tests/support/abi/expected.sh writes from scalac 3.8.4's.
 cd "$(dirname "$0")/.."
 TEQ=${TEQ:-./target/release/teq}
+export TZ=UTC  # an archive entry's DOS time is local time: the recorded bytes are UTC's
 JOBS=${JOBS:-$(getconf _NPROCESSORS_ONLN 2>/dev/null || echo 4)}
 LIST=tests/jvm-passing.txt
 out=out/jvm-tests

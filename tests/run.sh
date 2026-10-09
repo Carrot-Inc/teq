@@ -14,6 +14,7 @@
 # here (tests/run_interp.sh and tests/run_jvm.sh run it).
 cd "$(dirname "$0")/.."
 TEQ=${TEQ:-./target/release/teq}
+export TZ=UTC  # an archive entry's DOS time is local time: the recorded bytes are UTC's
 # Where the outputs and the actual results go, and a case's bound: a binary run under an emulator writes
 # beside the native run's and takes longer (bench/cross-ship.sh linux-arm).
 out=${TEQ_TEST_OUT:-out/tests}

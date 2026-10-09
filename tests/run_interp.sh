@@ -28,6 +28,7 @@
 # Several tests run at once (JOBS, by default the number of cores).
 cd "$(dirname "$0")/.."
 TEQ=${TEQ:-./target/release/teq}
+export TZ=UTC  # an archive entry's DOS time is local time: the recorded bytes are UTC's
 JOBS=${JOBS:-$(getconf _NPROCESSORS_ONLN 2>/dev/null || echo 4)}
 LIST=tests/interp-passing.txt
 update=0

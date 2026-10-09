@@ -7,6 +7,7 @@
 import java.io.{ByteArrayInputStream, ByteArrayOutputStream}
 import java.nio.file.Files
 import java.nio.file.attribute.FileTime
+import java.util.TimeZone
 import java.security.MessageDigest
 import java.util.HexFormat
 import java.util.concurrent.TimeUnit.*
@@ -18,6 +19,7 @@ object Main:
     "504b030414000808080000002100000000000000000000000000050024006d6963726f0a002000000000000100180080961668b868380200000000000000800000000000000080730400504b07088b9ed9d30300000001000000504b01021400140008080800000021008b9ed9d303000000010000000500240000000000000000000000000000006d6963726f0a002000000000000100180080961668b868380200000000000000800000000000000080504b05060000000001000100570000005a0000000000"
 
   def main(args: Array[String]): Unit =
+    TimeZone.setDefault(TimeZone.getTimeZone("UTC"))
     val t = 4354819200123456L
     val e = new ZipEntry("micro")
     e.setLastModifiedTime(FileTime.from(t, MICROSECONDS))
