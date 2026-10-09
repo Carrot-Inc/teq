@@ -4116,9 +4116,17 @@ impl<'a> Worker<'a> {
         let ty = self.deref(ty);
         // A constant an ascription or a plain inline call widened has the widened type for a
         // dependent parameter too (`Elem[T, n.type]` of `(1, "x")((g(0): Int))`).
-        let ty = if self.widened_constant(arg) { self.widen_lit(ty) } else { ty };
+        let widened = self.widened_constant(arg);
+        let ty = if widened { self.widen_lit(ty) } else { ty };
         if self.types.is_path(ty) {
             return ty;
+        }
+        // A constant's type is its literal type, a stable one that dotty's `safeSubstParam`
+        // substitutes as it is: `h(1)` of `def h(a: Int): a.type` is a `1`.
+        if !widened {
+            if let Some(v) = self.fold_constant_as_typed(arg) {
+                return self.types.lit(v);
+            }
         }
         let ty = self.solve_bounded_in(ty);
         self.widen_path(ty)
