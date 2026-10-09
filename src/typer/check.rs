@@ -2974,7 +2974,8 @@ impl<'a> Worker<'a> {
         self.check_overrides(c);
         self.check_variances(c);
         if !matches!(kind, ClassKind::Trait | ClassKind::Enum) && def.mods & mods::ABSTRACT == 0 && !self.is_body_file(file) {
-            tclass.forwarders = self.check_implements_all(c, Abstracts::Declared, tclass.synthesized);
+            let implemented = tclass.synthesized | self.enum_value_parent_members(c) | self.inherited_synthesized(c);
+            tclass.forwarders = self.check_implements_all(c, Abstracts::Declared, implemented);
         }
         if js == JsKind::Object {
             // scalac checked a jar's trait, whose vars come with their setters.
@@ -3157,6 +3158,33 @@ impl<'a> Worker<'a> {
             }
         }
         synthesized
+    }
+
+    /// The members the rule gives a case class, value class or enum case `c` derives from
+    /// (`class D extends K` of a case class `K`), which implement what `Product` declares.
+    fn inherited_synthesized(&mut self, c: ClassId) -> u16 {
+        let mut by_rule = 0;
+        for i in 1..self.syms.class(c).base_types.len() {
+            let b = self.syms.class(c).base_types[i].0;
+            let info = self.syms.class(b);
+            let synthesizes = matches!(info.kind, ClassKind::Class | ClassKind::Object | ClassKind::EnumCase)
+                && (info.mods & mods::CASE != 0 || info.value_class || info.kind == ClassKind::EnumCase);
+            if synthesizes {
+                by_rule |= self.synthesized_members(b) | self.enum_value_parent_members(b);
+            }
+        }
+        by_rule
+    }
+
+    /// The members `scala.runtime.EnumValue` gives a value case, a parent of every one
+    /// (`DesugarEnums.enumValueCreator`), which teq leaves to the runtime's rule.
+    fn enum_value_parent_members(&self, c: ClassId) -> u16 {
+        let info = self.syms.class(c);
+        if info.kind == ClassKind::EnumCase && info.singleton.is_some() {
+            synthetic::CAN_EQUAL | synthetic::PRODUCT_ARITY | synthetic::PRODUCT_ELEMENT | synthetic::PRODUCT_ELEMENT_NAME
+        } else {
+            0
+        }
     }
 
     /// dotty's `existingDef`: the member of `c` the synthesized one would be, `matchingMember`'s
