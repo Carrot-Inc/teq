@@ -38,6 +38,10 @@ impl<'a> Worker<'a> {
         let soft = self.is_soft(ts).then_some(sty);
         let outer_soft = std::mem::replace(&mut self.soft_scrutinee, soft);
         let clauses = ast.case_list(cases).to_vec();
+        // A match whose cases are the expected match type's (dotty's `isMatchTypeShaped`): each
+        // body is typed against its case's body, the match is the match type
+        // (`typedDependentMatchFinish`).
+        let dependent = self.match_type_shaped(expected, pty, &clauses);
         let exp = self.branch_expected(expected);
         let mut out: Vec<TCase> = Vec::with_capacity(clauses.len());
         let mut body_types: Vec<TypeId> = Vec::with_capacity(clauses.len());
@@ -54,7 +58,11 @@ impl<'a> Worker<'a> {
             caught_all |= c.guard.is_none() && self.catches_all(c.pat);
             self.gadt_open = was_open;
             let guard = c.guard.map(|g| self.check_expr(g, self.b.t_boolean));
-            let (body, bty) = match exp {
+            let case_body = match &dependent {
+                Some((_, mcases)) => self.dependent_case_body(mcases[out.len()], binders_mark),
+                None => None,
+            };
+            let (body, bty) = match case_body.or(exp) {
                 Some(t) => self.type_expr_adapted(c.body, Some(t)),
                 None => {
                     let (te, ty) = self.type_expr(c.body, guide);
@@ -69,9 +77,10 @@ impl<'a> Worker<'a> {
             out.push(TCase { pat, guard, body });
             body_types.push(bty);
         }
-        let result_ty = match exp {
-            Some(t) => self.joined_branches(t, &body_types),
-            None => {
+        let result_ty = match (&dependent, exp) {
+            (Some((mt, _)), _) => *mt,
+            (None, Some(t)) => self.joined_branches(t, &body_types),
+            (None, None) => {
                 let mut branches: Vec<(TExprId, TypeId)> =
                     out.iter().map(|c| c.body).zip(body_types.iter().copied()).collect();
                 self.harmonize_literals(&mut branches);
@@ -95,6 +104,84 @@ impl<'a> Worker<'a> {
             self.note_soft(e, result_ty);
         }
         (e, result_ty)
+    }
+
+    /// The expected match type and its cases where the match has their shape, dotty's
+    /// `isMatchTypeShaped`: as many cases, no guard, a scrutinee that conforms to the match
+    /// type's, and every pattern a typed pattern whose type is its case's pattern with the
+    /// case's binders taken by the pattern's own type variables (`instantiateMatchTypeProto`),
+    /// or a wildcard where the case's pattern is `Any`. The patterns are typed to tell, in an
+    /// attempt undone after.
+    fn match_type_shaped(&mut self, expected: Option<TypeId>, sty: TypeId, clauses: &[crate::ast::CaseClause]) -> Option<(TypeId, Vec<MatchCase>)> {
+        let exp = self.deref(expected?);
+        let mt = match self.types.get(exp) {
+            Type::Match(..) => exp,
+            Type::Alias(a, args) if self.is_match_alias(a) => self.alias_expansion(a, args)?,
+            _ => return None,
+        };
+        let Type::Match(scrut, m) = self.types.get(mt) else { return None };
+        let mcases: Vec<MatchCase> = self.types.match_info(m).cases.to_vec();
+        if mcases.len() != clauses.len() || clauses.iter().any(|c| c.guard.is_some()) {
+            return None;
+        }
+        let ast = self.cur_ast();
+        let unbound = |p: PatId| match ast.pat(p) {
+            Pat::Bind(_, Some(inner)) => inner,
+            _ => p,
+        };
+        if !clauses.iter().all(|c| matches!(ast.pat(unbound(c.pat)), Pat::Typed(..) | Pat::Wildcard)) {
+            return None;
+        }
+        let mark = self.snapshot();
+        let conforms = self.is_sub(sty, scrut);
+        self.rollback(mark);
+        if !conforms {
+            return None;
+        }
+        let attempt = self.attempt();
+        let mut shaped = true;
+        for (c, &mc) in clauses.iter().zip(&mcases) {
+            self.push_scope();
+            let binders_mark = self.case_binders.len();
+            let was_open = std::mem::replace(&mut self.gadt_open, true);
+            self.type_pattern(c.pat, sty);
+            self.gadt_open = was_open;
+            let fits = match ast.pat(unbound(c.pat)) {
+                Pat::Typed(_, ty) => match (self.resolve_type_quiet(ty), self.instantiated_case(mc, binders_mark)) {
+                    (Some(t), Some((pattern, _))) => self.is_same(t, pattern),
+                    _ => false,
+                },
+                _ => self.types.items(mc.binders).is_empty() && self.is_same(mc.pattern, ANY),
+            };
+            self.case_binders.truncate(binders_mark);
+            self.pop_scope();
+            if !fits {
+                shaped = false;
+                break;
+            }
+        }
+        self.retract(attempt);
+        shaped.then_some((mt, mcases))
+    }
+
+    /// The match type case `mc` with its binders taken by the type variables the case's pattern
+    /// bound since `binders_mark`, in order: its pattern and its body.
+    fn instantiated_case(&mut self, mc: MatchCase, binders_mark: usize) -> Option<(TypeId, TypeId)> {
+        let binders: Vec<TypeId> = self.types.items(mc.binders).to_vec();
+        let bound: Vec<TypeId> = self.case_binders[binders_mark..].iter().map(|&(_, t)| t).collect();
+        if binders.len() != bound.len() {
+            return None;
+        }
+        let subst: Subst = binders.iter().zip(&bound).filter_map(|(&b, &t)| match self.types.get(b) {
+            Type::Param(p) => Some((p, t)),
+            _ => None,
+        }).collect();
+        Some((self.types.subst(mc.pattern, &subst), self.types.subst(mc.body, &subst)))
+    }
+
+    /// The expected type of a dependent match's case body (`match_type_shaped`).
+    fn dependent_case_body(&mut self, mc: MatchCase, binders_mark: usize) -> Option<TypeId> {
+        self.instantiated_case(mc, binders_mark).map(|(_, body)| body)
     }
 
     /// The type a match's patterns are typed against, dotty's `selType` (`typedMatch`): the
