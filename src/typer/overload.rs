@@ -1083,6 +1083,11 @@ impl<'a> Worker<'a> {
                 if !matches!(self.types.get(rest), Type::Union(..)) {
                     return self.erased_name(rest, qualified, depth + 1, out);
                 }
+                // dotty's `erasedLub` of the parts' classes (`Tag | Other` is a `Serializable`).
+                if let Some(super::site::Erased::Of(c, 0)) = self.stable_erasure(rest) {
+                    let erased = self.types.class(c, &[]);
+                    return self.erased_name(erased, qualified, depth + 1, out);
+                }
                 match self.class_of(rest) {
                     Some(c) => {
                         let joined = self.types.class(c, &[]);
