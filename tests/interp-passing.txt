@@ -203,6 +203,7 @@ conditional_precedence
 conformance_extras
 console_streams
 cons_pattern_binders
+constant_final_val_accessor
 constant_final_vals
 constant_member_receiver
 constant_singleton_inferred

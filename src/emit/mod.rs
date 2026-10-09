@@ -2489,14 +2489,25 @@ impl<'a> Emitter<'a> {
             self.leave_scope();
             self.close("}");
         }
-        for &p in tc.ctor_params.iter().chain(tc.init.iter().filter_map(|i| match i {
-            TInit::Field(s, _) => Some(s),
+        let fields = tc.init.iter().filter_map(|i| match *i {
+            TInit::Field(s, e) => Some((s, Some(e))),
             _ => None,
-        })) {
+        });
+        for (p, init) in tc.ctor_params.iter().map(|&p| (p, None)).chain(fields) {
             if self.syms.sym(p).needs_accessor {
                 let n = self.sym_name(p);
                 self.line();
-                let _ = write!(self.out, "{0}() {{ return this.${0}; }}", n);
+                // `Memoize`'s getter of a constant val answers the constant, which no field holds.
+                match init.filter(|&e| self.reach.constant_vals.binary_search(&p).is_ok() && layout::is_literal_init(self.prog, e)) {
+                    Some(e) => {
+                        let _ = write!(self.out, "{}() {{ return ", n);
+                        self.emit_value(e);
+                        self.out.push_str("; }");
+                    }
+                    None => {
+                        let _ = write!(self.out, "{0}() {{ return this.${0}; }}", n);
+                    }
+                }
                 if self.syms.sym(p).needs_setter {
                     let setter = self.setter_name(p);
                     self.line();
