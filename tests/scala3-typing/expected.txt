@@ -4628,7 +4628,7 @@ pos/no-selftype.scala	accepts
 pos/nonlocal-unchecked.scala	accepts	
 pos/nontrivial-intersection-gadt.scala	rejects	type mismatch
 pos/not-looping-implicit.scala	accepts	
-pos/nowarnannot.scala	rejects	missing argument for parameter {}
+pos/nowarnannot.scala	accepts	
 pos/null-hashcode.scala	accepts	
 pos/null.scala	accepts	
 pos/nullarify.scala	accepts	
