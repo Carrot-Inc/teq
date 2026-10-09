@@ -2763,7 +2763,15 @@ impl<'a> Worker<'a> {
                         return typed;
                     }
                 }
+                // `Make[String]` of a case class: the proxy's `apply` with the type arguments,
+                // expanded as any method that needs arguments is (dotty's
+                // `tryInsertApplyOrImplicit` for a term applied to types, then eta-expansion),
+                // without the warning of an `apply` inserted on the companion itself.
                 if let (Some(ta), true) = (targs, lists.is_empty()) {
+                    let proxy = !self.explicit_new && !self.new_prefixed && self.syms.class(c).kind == ClassKind::Class && self.syms.class(c).mods & crate::ast::mods::CASE != 0;
+                    if proxy && Self::required_arity(&self.syms.class(c).ctor).is_some() {
+                        return self.apply_companion_apply(c, targs, Vec::new(), span, expected);
+                    }
                     if let Some(r) = self.summon_type_application(c, None, ta, span, expected) {
                         return r;
                     }
