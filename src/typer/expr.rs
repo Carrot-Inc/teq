@@ -3374,7 +3374,7 @@ impl<'a> Worker<'a> {
     fn result_leaks(&mut self, ast: &ast::Ast, a: ExprId, e: TExprId, locals: &BlockLocals, branches: &FxMap<TExprId, Vec<TypeId>>) -> bool {
         let mut parts = Vec::new();
         self.result_parts(ast, a, e, None, locals, branches, &mut parts);
-        let leaking: Vec<bool> = parts.iter().map(|&t| self.escapes_block(t, locals, 0)).collect();
+        let leaking: Vec<bool> = parts.iter().map(|&t| self.escapes_block(t, locals)).collect();
         (0..parts.len()).any(|i| {
             leaking[i]
                 && !(0..parts.len()).any(|j| {
@@ -3464,64 +3464,66 @@ impl<'a> Worker<'a> {
     /// named part anywhere in `t` is one of the block's definitions, a value's singleton or a
     /// class: in a prefix, a type argument, a refinement, a bound, a match type, or the type
     /// of a term a singleton names (`List[k.type]` of a `val k`).
-    fn escapes_block(&mut self, t: TypeId, locals: &BlockLocals, depth: u32) -> bool {
-        if depth > 16 {
-            return false;
+    fn escapes_block(&mut self, t: TypeId, locals: &BlockLocals) -> bool {
+        // The types seen, `NamedPartsAccumulator`'s set: a finite type however deep, a cycle
+        // through a term's type once.
+        let mut seen: FxMap<TypeId, ()> = FxMap::default();
+        let mut work = vec![t];
+        while let Some(t) = work.pop() {
+            let t = self.deref(t);
+            if seen.insert(t, ()).is_some() {
+                continue;
+            }
+            match self.types.get(t) {
+                Type::Term(s) => {
+                    if self.block_term(s, locals) {
+                        return true;
+                    }
+                    // The term's type where it is known: one whose result is being inferred has none.
+                    let under = match self.syms.sym_cells.get(s.0) {
+                        crate::symbols::Completion::Done => self.syms.sym(s).info.sig.as_ref().map(|g| g.ret),
+                        _ => None,
+                    };
+                    work.extend(under);
+                }
+                Type::Select(p, _) | Type::Member(p, _) => work.push(p),
+                Type::This(c) => {
+                    if self.local_class(c, locals) {
+                        return true;
+                    }
+                }
+                Type::Class(c, args) => {
+                    if self.local_class(c, locals) {
+                        return true;
+                    }
+                    work.extend_from_slice(self.types.items(args));
+                }
+                Type::AppParam(_, args) | Type::AppVar(_, args) | Type::Alias(_, args) => work.extend_from_slice(self.types.items(args)),
+                Type::AppMember(m, args) => {
+                    work.extend_from_slice(self.types.items(args));
+                    work.push(m);
+                }
+                Type::Union(a, b) | Type::Inter(a, b) | Type::BoundedWild(a, b) => work.extend([a, b]),
+                Type::Refined(p, r) => {
+                    work.push(p);
+                    match self.types.refinement(r) {
+                        Refinement::Alias(_, a) | Refinement::Val(_, _, a) => work.push(a),
+                        Refinement::Bounds(_, lo, hi) => work.extend([lo, hi]),
+                        Refinement::Term(_, _, l) => work.extend_from_slice(self.types.items(l)),
+                    }
+                }
+                Type::Match(scrutinee, m) => {
+                    let info = self.types.match_info(m);
+                    work.extend([scrutinee, info.bound]);
+                    work.extend(info.cases.iter().flat_map(|c| [c.pattern, c.body]));
+                }
+                // A recursive refinement through its parent, as dotty's accumulator folds a `RecType`.
+                Type::Rec(body) => work.push(body),
+                Type::Lambda(_, body) | Type::Poly(_, body) => work.push(body),
+                _ => {}
+            }
         }
-        let t = self.deref(t);
-        let d = depth + 1;
-        let any = |w: &mut Self, ts: Vec<TypeId>| ts.into_iter().any(|a| w.escapes_block(a, locals, d));
-        match self.types.get(t) {
-            Type::Term(s) => {
-                if self.block_term(s, locals) {
-                    return true;
-                }
-                // The term's type where it is known: one whose result is being inferred has none.
-                let under = match self.syms.sym_cells.get(s.0) {
-                    crate::symbols::Completion::Done => self.syms.sym(s).info.sig.as_ref().map(|g| g.ret),
-                    _ => None,
-                };
-                under.is_some_and(|u| u != t && self.escapes_block(u, locals, d))
-            }
-            Type::Select(p, _) | Type::Member(p, _) => self.escapes_block(p, locals, d),
-            Type::This(c) => self.local_class(c, locals),
-            Type::Class(c, args) => {
-                if self.local_class(c, locals) {
-                    return true;
-                }
-                let args = self.types.items(args).to_vec();
-                any(self, args)
-            }
-            Type::AppParam(_, args) | Type::AppVar(_, args) | Type::Alias(_, args) => {
-                let args = self.types.items(args).to_vec();
-                any(self, args)
-            }
-            Type::AppMember(m, args) => {
-                let mut parts = self.types.items(args).to_vec();
-                parts.push(m);
-                any(self, parts)
-            }
-            Type::Union(a, b) | Type::Inter(a, b) | Type::BoundedWild(a, b) => any(self, vec![a, b]),
-            Type::Refined(p, r) => {
-                let mut parts = vec![p];
-                match self.types.refinement(r) {
-                    Refinement::Alias(_, a) | Refinement::Val(_, _, a) => parts.push(a),
-                    Refinement::Bounds(_, lo, hi) => parts.extend([lo, hi]),
-                    Refinement::Term(_, _, l) => parts.extend(self.types.items(l).iter().copied()),
-                }
-                any(self, parts)
-            }
-            Type::Match(scrutinee, m) => {
-                let info = self.types.match_info(m);
-                let mut parts = vec![scrutinee, info.bound];
-                parts.extend(info.cases.iter().flat_map(|c| [c.pattern, c.body]));
-                any(self, parts)
-            }
-            // A recursive refinement through its parent, as dotty's accumulator folds a `RecType`.
-            Type::Rec(body) => self.escapes_block(body, locals, d),
-            Type::Lambda(_, body) | Type::Poly(_, body) => self.escapes_block(body, locals, d),
-            _ => false,
-        }
+        false
     }
 
     /// A val, var or def of the block: made in the lambda, outside the match, and no parameter
