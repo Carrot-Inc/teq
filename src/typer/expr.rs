@@ -3292,7 +3292,7 @@ impl<'a> Worker<'a> {
     fn result_leaks(&mut self, ast: &ast::Ast, a: ExprId, e: TExprId, locals: &BlockLocals, branches: &FxMap<TExprId, Vec<TypeId>>) -> bool {
         let mut parts = Vec::new();
         self.result_parts(ast, a, e, None, locals, branches, &mut parts);
-        let leaking: Vec<bool> = parts.iter().map(|&t| self.type_names_block_local(t, locals, 0)).collect();
+        let leaking: Vec<bool> = parts.iter().map(|&t| self.escapes_block(t, locals, 0)).collect();
         (0..parts.len()).any(|i| {
             leaking[i]
                 && !(0..parts.len()).any(|j| {
@@ -3378,16 +3378,67 @@ impl<'a> Worker<'a> {
         }
     }
 
-    /// dotty's `escapingRefs` of a type: a singleton of one of the block's values, a path through
-    /// one, or a class the block defines, anywhere in it.
-    fn type_names_block_local(&mut self, t: TypeId, locals: &BlockLocals, depth: u32) -> bool {
+    /// dotty's `escapingRefs` (`Type.namedPartsWith`, `NamedPartsAccumulator`): whether a
+    /// named part anywhere in `t` is one of the block's definitions, a value's singleton or a
+    /// class: in a prefix, a type argument, a refinement, a bound, a match type, or the type
+    /// of a term a singleton names (`List[k.type]` of a `val k`).
+    fn escapes_block(&mut self, t: TypeId, locals: &BlockLocals, depth: u32) -> bool {
         if depth > 16 {
             return false;
         }
+        let t = self.deref(t);
+        let d = depth + 1;
+        let any = |w: &mut Self, ts: Vec<TypeId>| ts.into_iter().any(|a| w.escapes_block(a, locals, d));
         match self.types.get(t) {
-            Type::Term(s) => self.block_term(s, locals),
-            Type::Select(p, _) => self.type_names_block_local(p, locals, depth + 1),
-            _ => self.type_names_local_class(t, locals, depth),
+            Type::Term(s) => {
+                if self.block_term(s, locals) {
+                    return true;
+                }
+                // The term's type where it is known: one whose result is being inferred has none.
+                let under = match self.syms.sym_cells.get(s.0) {
+                    crate::symbols::Completion::Done => self.syms.sym(s).info.sig.as_ref().map(|g| g.ret),
+                    _ => None,
+                };
+                under.is_some_and(|u| u != t && self.escapes_block(u, locals, d))
+            }
+            Type::Select(p, _) | Type::Member(p, _) => self.escapes_block(p, locals, d),
+            Type::This(c) => self.local_class(c, locals),
+            Type::Class(c, args) => {
+                if self.local_class(c, locals) {
+                    return true;
+                }
+                let args = self.types.items(args).to_vec();
+                any(self, args)
+            }
+            Type::AppParam(_, args) | Type::AppVar(_, args) | Type::Alias(_, args) => {
+                let args = self.types.items(args).to_vec();
+                any(self, args)
+            }
+            Type::AppMember(m, args) => {
+                let mut parts = self.types.items(args).to_vec();
+                parts.push(m);
+                any(self, parts)
+            }
+            Type::Union(a, b) | Type::Inter(a, b) | Type::BoundedWild(a, b) => any(self, vec![a, b]),
+            Type::Refined(p, r) => {
+                let mut parts = vec![p];
+                match self.types.refinement(r) {
+                    Refinement::Alias(_, a) | Refinement::Val(_, _, a) => parts.push(a),
+                    Refinement::Bounds(_, lo, hi) => parts.extend([lo, hi]),
+                    Refinement::Term(_, _, l) => parts.extend(self.types.items(l).iter().copied()),
+                }
+                any(self, parts)
+            }
+            Type::Match(scrutinee, m) => {
+                let info = self.types.match_info(m);
+                let mut parts = vec![scrutinee, info.bound];
+                parts.extend(info.cases.iter().flat_map(|c| [c.pattern, c.body]));
+                any(self, parts)
+            }
+            // A recursive refinement through its parent, as dotty's accumulator folds a `RecType`.
+            Type::Rec(body) => self.escapes_block(body, locals, d),
+            Type::Lambda(_, body) | Type::Poly(_, body) => self.escapes_block(body, locals, d),
+            _ => false,
         }
     }
 
@@ -3401,28 +3452,6 @@ impl<'a> Worker<'a> {
     fn local_class(&self, c: ClassId, locals: &BlockLocals) -> bool {
         let info = self.syms.class(c);
         info.file == self.env.file && within(info.span, locals.outer) && !within(info.span, locals.inner)
-    }
-
-    /// Whether the type `t` names a class the block defines, inside compound types too.
-    fn type_names_local_class(&mut self, t: TypeId, locals: &BlockLocals, depth: u32) -> bool {
-        if depth > 16 {
-            return false;
-        }
-        let t = self.deref(t);
-        let d = depth + 1;
-        match self.types.get(t) {
-            Type::Class(c, args) => {
-                self.local_class(c, locals) || self.types.items(args).to_vec().into_iter().any(|a| self.type_names_local_class(a, locals, d))
-            }
-            Type::AppParam(_, args) | Type::AppVar(_, args) | Type::Alias(_, args) => {
-                self.types.items(args).to_vec().into_iter().any(|a| self.type_names_local_class(a, locals, d))
-            }
-            Type::Union(a, b) | Type::Inter(a, b) => self.type_names_local_class(a, locals, d) || self.type_names_local_class(b, locals, d),
-            Type::Refined(p, _) => self.type_names_local_class(p, locals, d),
-            Type::Rec(body) => self.type_names_local_class(body, locals, d),
-            Type::Lambda(_, body) | Type::Poly(_, body) => self.type_names_local_class(body, locals, d),
-            _ => false,
-        }
     }
 
     /// The match `m` that ends a block a partial function is made of: scalac's E211 at it, and
