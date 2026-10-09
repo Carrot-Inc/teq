@@ -3193,6 +3193,15 @@ impl<'a> Worker<'a> {
     /// redeclaration hides what it overrides), unless that is the declaration the rule
     /// implements (`Any`'s, `Product`'s, `Equals`'s, `Enum`'s).
     fn existing_def(&mut self, c: ClassId, name: Name, param: synthetic::Param) -> Option<SymId> {
+        // Only a base that is no declaration the rule implements can hold the definition: where
+        // none has the name, there is none (a case class over `Product` and `Any` alone).
+        let candidate = (0..self.syms.class(c).base_types.len()).any(|i| {
+            let b = self.syms.class(c).base_types[i].0;
+            self.syms.class(b).members.contains_key(&name) && !self.declares_by_rule(b)
+        });
+        if !candidate {
+            return None;
+        }
         let mut abstract_in: Vec<ClassId> = Vec::new();
         for i in 0..self.syms.class(c).base_types.len() {
             let b = self.syms.class(c).base_types[i].0;
@@ -3210,15 +3219,16 @@ impl<'a> Worker<'a> {
                 if abstract_in.iter().any(|&a| self.syms.class(a).base_types.iter().any(|&(x, _)| x == b)) {
                     return None;
                 }
-                let declares = b == self.b.any_ref
-                    || Some(b) == self.b.product
-                    || Some(b) == self.equals_class()
-                    || Some(b) == self.b.reflect_enum
-                    || self.is_java_lang_object(b);
-                return (!declares).then_some(s);
+                return (!self.declares_by_rule(b)).then_some(s);
             }
         }
         None
+    }
+
+    /// Whether `b` is a class whose declarations the rule implements (`Any`'s, `Object`'s,
+    /// `Product`'s, `Equals`'s, `Enum`'s).
+    fn declares_by_rule(&self, b: ClassId) -> bool {
+        b == self.b.any_ref || Some(b) == self.b.product || Some(b) == self.equals_class() || Some(b) == self.b.reflect_enum || self.is_java_lang_object(b)
     }
 
     /// Whether `s` has the signature of a member taking `param` by rule: no type parameters, no
@@ -3268,7 +3278,7 @@ impl<'a> Worker<'a> {
     /// `java.lang.Object`, read from a jar or the std's.
     fn is_java_lang_object(&self, k: ClassId) -> bool {
         let info = self.syms.class(k);
-        self.interner.get(info.name) == "Object" && matches!(info.owner, Owner::Package(p) if self.pkg_path(p) == "java.lang")
+        info.name == names::OBJECT && matches!(info.owner, Owner::Package(p) if self.pkg_path(p) == "java.lang")
     }
 
     /// The parent clause that names the superclass of `c`, when the class names one itself rather
