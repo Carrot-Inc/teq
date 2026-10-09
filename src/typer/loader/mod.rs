@@ -52,6 +52,9 @@ pub struct Loaded {
     pub private_aliases: SharedMap<AliasId, ()>,
     /// The `@implicitNotFound` text of a jar's class (`Worker::implicit_not_found_message`).
     pub implicit_not_found: SharedMap<ClassId, String>,
+    /// The `@implicitNotFound` text of a parameter of a jar's method
+    /// (`Worker::param_not_found_message`).
+    pub param_not_found: SharedMap<SymId, String>,
     /// The members of a jar declared `private[p]` or `protected[p]`, with the simple name of `p`
     /// and whether they are `protected`.
     pub access_within: SharedMap<SymId, (Name, bool)>,
@@ -299,6 +302,7 @@ impl Loaded {
             qualified_private_aliases: SharedMap::new(),
             private_aliases: SharedMap::new(),
             implicit_not_found: SharedMap::new(),
+            param_not_found: SharedMap::new(),
             access_within: SharedMap::new(),
             bridged: FxMap::default(),
             target_names: SharedMap::new(),
@@ -2327,6 +2331,9 @@ impl<'a> Worker<'a> {
                 for addr in std::iter::once(p.addr).chain(accessor.map(|a| a.addr)) {
                     terms.entry(addr).or_insert(sym);
                 }
+                if let Some(text) = p.implicit_not_found.and_then(|n| tasty.simple(n).map(str::to_string)) {
+                    self.loaded_mut().param_not_found.insert(sym, text);
+                }
                 sig.params.push(ParamSig { name, ty, by_name, repeated, has_default: p.flags.has(tags::HASDEFAULT), sym });
                 syms.push(sym);
             }
@@ -2803,6 +2810,9 @@ impl<'a> Worker<'a> {
                     s.by_name = by_name;
                 }
                 self.loaded_mut().tables[ls.file as usize].terms.insert(p.addr, psym);
+                if let Some(text) = p.implicit_not_found.and_then(|n| tasty.simple(n).map(str::to_string)) {
+                    self.loaded_mut().param_not_found.insert(psym, text);
+                }
                 cs.params.push(ParamSig { name, ty, by_name, repeated, has_default: p.flags.has(tags::HASDEFAULT), sym: psym });
             }
             out.push(cs);

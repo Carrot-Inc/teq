@@ -1007,31 +1007,113 @@ impl<'a> Worker<'a> {
         if p == ROOT_PKG { "<root>".to_string() } else { self.name_str(self.syms.pkg(p).name).to_string() }
     }
 
-    /// dotty's `MissingImplicitArgument.userDefinedImplicitNotFoundTypeMessage` (messages.scala):
-    /// the `@implicitNotFound` text of the class of the type no given was found for, its `${A}`
-    /// the class's arguments (`formatAnnotationMessage`), or else that of a base class, its
-    /// variables the type's arguments for it (`asSeenFrom`).
+    /// dotty's `userDefinedImplicitNotFoundTypeMessage` (messages.scala, `MissingImplicitArgument`):
+    /// the `@implicitNotFound` text of the type `t` a given was searched for; one that starts
+    /// with `explain=` explains and is no message (`userDefinedImplicitNotFoundMessage`).
     pub(super) fn implicit_not_found_message(&mut self, t: TypeId) -> Option<String> {
-        let t = self.deref(t);
-        let Type::Class(c, args) = self.types.get(t) else { return None };
-        let args = self.types.items(args).to_vec();
-        if let Some(m) = self.class_not_found_text(c, &args) {
-            return Some(m);
-        }
-        self.complete_class(c);
-        let bases: Vec<ClassId> = self.syms.class(c).base_types.iter().skip(1).map(|&(b, _)| b).collect();
-        bases.into_iter().find_map(|b| {
-            // The base class's parameters as seen from the type (`asSeenFrom(pt, sym)`).
-            let args: Vec<TypeId> = match self.base_type(t, b).map(|bt| self.types.get(bt)) {
-                Some(Type::Class(_, l)) => self.types.items(l).to_vec(),
-                _ => Vec::new(),
-            };
-            self.class_not_found_text(b, &args)
-        })
+        let text = self.type_not_found_text(t, 0)?;
+        (!text.starts_with("explain=")).then_some(text)
     }
 
-    /// The `@implicitNotFound` text a source class declares, its type parameters' `${A}`
-    /// replaced by `args` (dotty's `userDefinedErrorString`, `?A` for one without an argument).
+    /// The `recur` of `userDefinedImplicitNotFoundTypeMessage`: a class's own text with its
+    /// arguments (`AppliedType`, `TypeRef`), else the first of its base classes', their
+    /// parameters as seen from it (`ClassInfo`); an alias, an abstract type, a parameter, a path
+    /// or a refinement through what it stands for (`TypeProxy`); the first side of an
+    /// intersection that has one, else the second (`AndType`).
+    fn type_not_found_text(&mut self, t: TypeId, depth: u32) -> Option<String> {
+        if depth > 16 {
+            return None;
+        }
+        let t = self.deref(t);
+        let d = depth + 1;
+        match self.types.get(t) {
+            Type::Class(c, args) => {
+                let args = self.types.items(args).to_vec();
+                if let Some(m) = self.class_not_found_text(c, &args) {
+                    return Some(m);
+                }
+                self.complete_class(c);
+                let bases: Vec<ClassId> = self.syms.class(c).base_types.iter().skip(1).map(|&(b, _)| b).collect();
+                bases.into_iter().find_map(|b| {
+                    // The base class's parameters as seen from the type (`asSeenFrom(pt, sym)`).
+                    let args: Vec<TypeId> = match self.base_type(t, b).map(|bt| self.types.get(bt)) {
+                        Some(Type::Class(_, l)) => self.types.items(l).to_vec(),
+                        _ => Vec::new(),
+                    };
+                    self.class_not_found_text(b, &args)
+                })
+            }
+            Type::Inter(a, b) => self.type_not_found_text(a, d).or_else(|| self.type_not_found_text(b, d)),
+            Type::Param(p) => {
+                let upper = self.syms.tparam(p).upper;
+                self.type_not_found_text(upper, d)
+            }
+            Type::AppParam(p, args) => {
+                let upper = self.app_param_upper(p, args)?;
+                self.type_not_found_text(upper, d)
+            }
+            Type::Lit(_) => {
+                let class = self.widen_lit(t);
+                self.type_not_found_text(class, d)
+            }
+            Type::This(_) | Type::Term(_) | Type::Select(..) | Type::Member(..) | Type::AppMember(..) | Type::Decl(_) | Type::Refined(..) | Type::Alias(..) | Type::Match(..) => {
+                let under = self.dependent_underlying(t)?;
+                self.type_not_found_text(under, d)
+            }
+            _ => None,
+        }
+    }
+
+    /// dotty's `userDefinedImplicitNotFoundParamMessage`: the `@implicitNotFound` text of the
+    /// using parameter `param` (named `name`) of `method`, or of the constructor of the class
+    /// `ctor`, which comes before the type's, its `${T}` the call's arguments `subst` of the
+    /// type parameters.
+    fn param_not_found_message(&mut self, method: SymId, ctor: Option<ClassId>, param: SymId, name: Name, subst: &Subst) -> Option<String> {
+        let (file, def, tparams) = match ctor {
+            Some(c) => {
+                let info = self.syms.class(c);
+                (info.file, info.def, info.tparams.clone())
+            }
+            None => {
+                let (file, def) = {
+                    let info = self.syms.sym(method);
+                    (info.file, info.def)
+                };
+                (file, def, self.sig_arc(method).tparams.clone())
+            }
+        };
+        let raw = match def {
+            Some(d) => {
+                let ast = self.ast(file);
+                let clauses = match &ast.def(d).kind {
+                    crate::ast::DefKind::Fun(f) => &f.clauses,
+                    crate::ast::DefKind::Class(k) => &k.clauses,
+                    _ => return None,
+                };
+                let p = clauses.iter().flat_map(|c| c.params.iter()).find(|p| p.name == name)?;
+                let annot = ast.param_annots(p).iter().find(|a| self.name_ref(a.name) == "implicitNotFound")?;
+                ast.str(*ast.str_lists[annot.args.range()].first()?).to_string()
+            }
+            // A jar's method or class, whose parameter's annotation its pickle carries.
+            None => self.loaded.as_ref()?.param_not_found.get(&param)?.clone(),
+        };
+        if raw.starts_with("explain=") {
+            return None;
+        }
+        let names: Vec<String> = tparams.iter().map(|&p| self.name_ref(self.syms.tparam(p).name).to_string()).collect();
+        let args: Vec<TypeId> = tparams
+            .iter()
+            .map(|&p| {
+                let t = self.types.param(p);
+                let t = self.types.subst(t, subst);
+                self.solve_in(t)
+            })
+            .collect();
+        Some(self.format_not_found(&raw, &names, &args))
+    }
+
+    /// The `@implicitNotFound` text a class declares, its type parameters' `${A}` replaced by
+    /// `args`.
     fn class_not_found_text(&mut self, c: ClassId, args: &[TypeId]) -> Option<String> {
         let (file, def) = {
             let info = self.syms.class(c);
@@ -1047,8 +1129,14 @@ impl<'a> Worker<'a> {
             None => self.loaded.as_ref()?.implicit_not_found.get(&c)?.clone(),
         };
         let names: Vec<String> = self.syms.class(c).tparams.iter().map(|&p| self.name_ref(self.syms.tparam(p).name).to_string()).collect();
+        Some(self.format_not_found(&raw, &names, args))
+    }
+
+    /// dotty's `formatAnnotationMessage` (`userDefinedErrorString`): `${A}` of the parameter
+    /// named `A` among `names` replaced by its argument among `args`, `?A` for one without.
+    fn format_not_found(&mut self, raw: &str, names: &[String], args: &[TypeId]) -> String {
         let mut out = String::with_capacity(raw.len());
-        let mut rest = raw.as_str();
+        let mut rest = raw;
         while let Some(at) = rest.find("${") {
             out.push_str(&rest[..at]);
             let after = &rest[at + 2..];
@@ -1068,7 +1156,7 @@ impl<'a> Worker<'a> {
             rest = &after[end + 1..];
         }
         out.push_str(rest);
-        Some(out)
+        out
     }
 
     /// The class that `q` names in `q.apply`: `C`, `Obj.C` or `pkg.C`, with or without type
@@ -3695,7 +3783,9 @@ impl<'a> Worker<'a> {
                             None => {
                                 let missing_tag = self.missing_tag(p.ty, target, open_tag);
                                 let target = self.solve_bounded_in(target);
-                                let msg = match self.given_ambiguity.take().or(missing_tag).or_else(|| self.implicit_not_found_message(target)) {
+                                let msg = self.given_ambiguity.take().or(missing_tag);
+                                let msg = msg.or_else(|| self.param_not_found_message(call.sym, ctor.as_ref().map(|&(c, _)| c), p.sym, p.name, &subst));
+                                let msg = match msg.or_else(|| self.implicit_not_found_message(target)) {
                                     Some(m) => m,
                                     None => format!("no given instance of type {} was found for parameter {}", self.show(target), self.name_str(p.name)),
                                 };

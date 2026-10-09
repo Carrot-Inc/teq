@@ -197,6 +197,8 @@ pub struct Param {
     /// Whether scalac inferred the type.
     pub inferred: bool,
     pub flags: Flags,
+    /// The text of the parameter's `@implicitNotFound`.
+    pub implicit_not_found: Option<NameRef>,
 }
 
 #[derive(Clone, Debug)]
@@ -899,7 +901,7 @@ impl<'a> Decoder<'a> {
             flags.clear(PRIVATE);
             flags.clear(PROTECTED);
         }
-        Param { addr, name, ty, inferred, flags }
+        Param { addr, name, ty, inferred, flags, implicit_not_found: mods.implicit_not_found }
     }
 
     pub(super) fn clauses(&mut self, end: usize) -> Vec<Clause> {
