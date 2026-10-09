@@ -41,7 +41,7 @@ pub struct Reach {
     /// first (`layout::given_class_initialises_file`).
     pub trigger_classes: Vec<bool>,
     /// Per class: a trait a reached type test or cast tests for (`TypeTest::Trait`), which the
-    /// output numbers and whose number goes where its members by rule carry it.
+    /// output numbers and whose number the registrations below it carry.
     pub tested_traits: Vec<bool>,
     /// Per symbol: a top-level def that runs outside the initialised part of its file without a
     /// call there, as a function value made where the file is not known to be initialised

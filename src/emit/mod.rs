@@ -3007,14 +3007,17 @@ impl<'a> Emitter<'a> {
         // (`process_class_from`) is no class of the output.
         let chained = (is_case || info.singleton.is_some()) && superclass.is_none();
         for &b in &own[1..] {
-            if self.reach.classes[b.idx()] && !(chained && self.reach.desugared.binary_search(&b).is_ok()) {
+            let desugared = chained && self.reach.desugared.binary_search(&b).is_ok();
+            if self.reach.classes[b.idx()] && !desugared {
                 traits.push_str(if traits.is_empty() { "[" } else { ", " });
                 self.hold(b, Held::Parent);
                 traits.push_str(&self.class_name(b));
             }
             // A base no type test asks for (a builtin the library's class stands behind) has no
-            // number, and no marker to set.
-            if let Some(n) = self.numbered(b) {
+            // number, and no marker to set; nor has a parent of the desugaring no reached test
+            // asks for (`Reach::tested_traits`), by a type test or a trait's `classOf`.
+            let asked = !desugared || self.reach.tested_traits.get(b.idx()).copied().unwrap_or(false) || self.reach.uses_assignable_from;
+            if let Some(n) = self.numbered(b).filter(|_| asked) {
                 numbers.push(n);
             }
         }
