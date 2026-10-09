@@ -751,7 +751,7 @@ neg/i18533	oos	java
 neg/i18545.scala	accepts	
 neg/i18552.scala	accepts	
 neg/i18584	oos	java
-neg/i18588.scala	accepts	
+neg/i18588.scala	same	
 neg/i18632.scala	accepts	
 neg/i18650.min.scala	same	
 neg/i18650.min2.scala	same	
@@ -887,7 +887,7 @@ neg/i22589c.scala	same
 neg/i22592.scala	accepts	
 neg/i22593a.scala	accepts	
 neg/i22593b	accepts	
-neg/i22620.scala	accepts	
+neg/i22620.scala	same	
 neg/i22660.scala	same	
 neg/i22670	accepts	
 neg/i22671.scala	same	

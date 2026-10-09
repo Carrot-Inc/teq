@@ -1201,6 +1201,9 @@ pub struct Worker<'a> {
     /// The secondary constructor whose self call is being typed, which is no alternative of it.
     pub excluded_ctor: Option<SymId>,
     pub variance_skip: Vec<TypeId>,
+    /// The private members, and whether as read alone, that a selection through another
+    /// instance checked and found sound (`note_private_selection`).
+    pub variance_checked: FxMap<(SymId, bool), ()>,
     /// The entry point named on the command line, by its object or its method.
     pub main_name: Option<Name>,
     /// Whether an entry point is chosen at all: a resident check has no program to run, so
@@ -2162,6 +2165,7 @@ impl<'a> Worker<'a> {
             unchecked_variance: Default::default(),
             excluded_ctor: None,
             variance_skip: Vec::new(),
+            variance_checked: FxMap::default(),
             for_packs: Vec::new(),
             for_bases: Vec::new(),
             given_indexes: FxMap::default(),
@@ -2594,6 +2598,7 @@ impl<'a> Worker<'a> {
             inference_failed: FxMap::default(),
             excluded_ctor: Default::default(),
             variance_skip: Default::default(),
+            variance_checked: FxMap::default(),
             main_name: self.main_name,
             choose_entry: self.choose_entry,
             open_world: self.open_world,

@@ -2694,7 +2694,12 @@ impl<'a> Worker<'a> {
             _ => None,
         };
         match target {
-            Some(s) if self.syms.sym(s).kind == SymKind::Var => {}
+            Some(s) if self.syms.sym(s).kind == SymKind::Var => {
+                if let TExpr::Field(recv, _) = self.prog.expr(tl) {
+                    let recv_ty = self.prog.type_of(recv).unwrap_or(ANY);
+                    self.note_private_selection(s, recv, recv_ty, true);
+                }
+            }
             Some(s) => {
                 let msg = format!("reassignment to val {}", self.name_str(self.syms.sym(s).name));
                 self.error(span, msg);

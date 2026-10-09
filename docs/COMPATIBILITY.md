@@ -35,7 +35,6 @@ libraries compiled from their jars run against scalac's output. The remaining di
   no enum case is not checked for missing cases, a type splits at most 64 times per match (beyond that nothing
   is reported), and a nested pattern that can never match is not reported; a type test of a trait over a class
   that is not final is warned unreachable (scalac: reachable, a subclass may mix the trait in).
-- The variance check leaves private members out.
 
 ### Givens and implicits
 

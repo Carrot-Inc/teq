@@ -5917,6 +5917,7 @@ impl<'a> Worker<'a> {
                 return self.apply_overloaded_member(recv, recv_ty, sym, name, targs, lists, span, expected);
             }
             self.check_access(sym, Some(recv_ty), span);
+            self.note_private_selection(sym, recv, recv_ty, false);
             if self.syms.sym(sym).mods & crate::ast::mods::PROTECTED != 0 {
                 self.check_protected_access(sym, recv, recv_ty, span);
             }

@@ -1836,6 +1836,9 @@ impl<'a> Worker<'a> {
                     Some(c) => self.apply_companion_apply(c, targs, lists, span, expected),
                     None => {
                         self.check_access(alt.sym, None, span);
+                        if let (Some(r), Some(rt)) = (recv, recv_ty) {
+                            self.note_private_selection(alt.sym, r, rt, false);
+                        }
                         // A deferred inline alternative of a parameter's member: the arguments
                         // chose it on the declared type, the argument's class implements it.
                         let dispatched = match (recv, recv_ty) {
