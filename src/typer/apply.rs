@@ -5839,20 +5839,6 @@ impl<'a> Worker<'a> {
                 declared = true;
             }
         }
-        if let Some(helper) = member.and_then(|(sym, _)| self.product_helper(sym)) {
-            match lists.first_mut() {
-                Some(first) if !first.using => first.args.insert(0, ArgSrc::Typed(recv, recv_ty)),
-                _ => lists.insert(0, ArgList { args: vec![ArgSrc::Typed(recv, recv_ty)], using: false, span }),
-            }
-            let callee = Callee::Method { recv: None, sym: helper, owner_subst: Vec::new(), prefix: None, refined: None };
-            let (te, ty) = self.apply_callee(callee, targs, lists, span, expected);
-            if self.capturing() {
-                if let Some((sym, _)) = member {
-                    self.capture_form(te, Form::Member(sym));
-                }
-            }
-            return (te, ty);
-        }
         if member.is_none() {
             // The receiver's path is taken where a recursive refinement is opened at it alone.
             if let Some(refined) = self.refined_alternatives_on(recv_ty, name, recv, recv_ty).ok().flatten() {

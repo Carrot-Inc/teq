@@ -468,12 +468,6 @@ impl<'a> Worker<'a> {
         if (b == self.b.t_product || b == self.b.t_equals) && !matches!(self.types.get(a), Type::Var(_) | Type::Error | Type::BoundedWild(..)) && self.is_product(a) {
             return true;
         }
-        if self.is_serializable_type(b) && !matches!(self.types.get(a), Type::Var(_) | Type::Error | Type::BoundedWild(..)) && self.is_serializable_by_rule(a) {
-            return true;
-        }
-        if b == self.b.t_enum && !matches!(self.types.get(a), Type::Var(_) | Type::Error | Type::BoundedWild(..)) && self.is_enum_value(a) {
-            return true;
-        }
         let (ta, tb) = (self.types.get(a), self.types.get(b));
         if let Type::BoundedWild(_, hi) = ta {
             return self.is_sub(hi, b);
@@ -1965,26 +1959,6 @@ impl<'a> Worker<'a> {
 
     /// The rank of a numeric primitive type (`prims::R_BYTE` to `R_DOUBLE`).
     #[inline]
-    /// Whether `t` is `java.io.Serializable`, which a product by rule is (`is_serializable_by_rule`):
-    /// its name compared first, as an id.
-    fn is_serializable_type(&self, t: TypeId) -> bool {
-        let Type::Class(c, args) = self.types.get(t) else { return false };
-        if args != EMPTY_LIST {
-            return false;
-        }
-        let name = match self.b.serializable_name.get() {
-            Some(n) => n,
-            None => match self.interner.lookup("Serializable") {
-                Some(n) => {
-                    self.b.serializable_name.set(Some(n));
-                    n
-                }
-                None => return false,
-            },
-        };
-        self.syms.class(c).name == name && self.syms.is_synthetic_parent(&self.interner, c)
-    }
-
     pub fn is_numeric(&self, t: TypeId) -> Option<u8> {
         match self.b.num_rank.get(t.idx()) {
             Some(&r) if r != super::NO_RANK => Some(r),
@@ -2164,9 +2138,34 @@ impl<'a> Worker<'a> {
                 minimal.push(t);
             }
         }
+        // dotty's `dropTransparentTraits` in `widenInferred`: a transparent trait (`Product`,
+        // `java.io.Serializable`, one declared `transparent`) leaves the intersection where a base
+        // that is none remains, as `Set(a, b)` of two case objects of `S` is a `Set[S]`.
+        if minimal.iter().any(|&t| !self.is_transparent_trait_type(t)) {
+            minimal.retain(|&t| !self.is_transparent_trait_type(t));
+        }
         minimal.reverse();
         let (&first, rest) = minimal.split_first()?;
         Some(rest.iter().fold(first, |acc, &t| self.types.inter(acc, t)))
+    }
+
+    /// dotty's `isTransparent(traitOnly = true)`: a trait declared `transparent` (`Product`,
+    /// `scala.reflect.Enum`) or assumed so (`java.io.Serializable`, `java.lang.Comparable`).
+    fn is_transparent_trait_type(&self, t: TypeId) -> bool {
+        let Type::Class(c, _) = self.types.get(t) else { return false };
+        let info = self.syms.class(c);
+        if info.kind != ClassKind::Trait {
+            return false;
+        }
+        if info.mods & crate::ast::mods::TRANSPARENT != 0 || Some(c) == self.b.product || Some(c) == self.b.reflect_enum {
+            return true;
+        }
+        let assumed = match self.interner.get(info.name) {
+            "Serializable" => "java.io",
+            "Comparable" => "java.lang",
+            _ => return false,
+        };
+        matches!(info.owner, Owner::Package(p) if self.pkg_path(p) == assumed)
     }
 
     fn lub_as_class(&mut self, a: TypeId, b: TypeId, c: ClassId) -> Option<TypeId> {

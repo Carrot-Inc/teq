@@ -65,6 +65,23 @@ pub struct Reach {
     /// the definitions (`scope::Renderable`).
     pub templates: Vec<StrRef>,
     pub globals: Vec<Name>,
+    /// `scala.Product`, whose concrete members a reached class's registration gives the shapes
+    /// of the runtime (`$productBase`).
+    pub product: Option<ClassId>,
+    /// The parents of a desugaring (`Worker::is_desugared_parent`) the walk met as bases of a
+    /// case class, case object or enum, sorted: the shapes' prototypes stand for them.
+    pub desugared: Vec<ClassId>,
+    /// The classes whose `toString` by rule reads a `productPrefix`, `productIterator`,
+    /// `productArity` or `productElement` the class has a definition of (`$productToString`),
+    /// sorted.
+    pub product_to_string: Vec<ClassId>,
+    /// The classes with a definition of `canEqual` below a case class, which that class's
+    /// `equals` by rule calls (`$productEquals`), sorted.
+    pub can_equal_defined: Vec<ClassId>,
+    /// The enum companions whose `$values` a reached lookup reads (`$enumValues`,
+    /// `$enumFromOrdinal`), sorted; every one where a lookup's companion is no module reference.
+    pub enum_stores: Vec<ClassId>,
+    pub every_enum_store: bool,
     /// Whether a reached `classOf` needs every class to carry its qualified name.
     pub uses_class_of: bool,
     /// Whether a reached `productElementName` needs every case class to carry its field names.
@@ -134,6 +151,12 @@ impl Reach {
             js_names: Vec::new(),
             templates: Vec::new(),
             globals: Vec::new(),
+            product: None,
+            desugared: Vec::new(),
+            product_to_string: Vec::new(),
+            can_equal_defined: Vec::new(),
+            enum_stores: Vec::new(),
+            every_enum_store: false,
             uses_class_of: false,
             uses_element_names: false,
             uses_assignable_from: false,
@@ -531,6 +554,9 @@ fn differences(typer: &Worker, kept: &Reach, fresh: &Reach, out: &mut Vec<String
     };
     same("JavaScript names", kept.js_names == fresh.js_names);
     same("globals", kept.globals == fresh.globals);
+    same("the desugared parents", kept.desugared == fresh.desugared);
+    same("the products' dispatching members", kept.product_to_string == fresh.product_to_string && kept.can_equal_defined == fresh.can_equal_defined);
+    same("the enums' stored values", kept.enum_stores == fresh.enum_stores && kept.every_enum_store == fresh.every_enum_store);
     same("the uses of classOf", kept.uses_class_of == fresh.uses_class_of);
     same("the uses of element names", kept.uses_element_names == fresh.uses_element_names);
     same("the uses of isAssignableFrom", kept.uses_assignable_from == fresh.uses_assignable_from);
@@ -609,6 +635,7 @@ fn rounds<'a, T: Typing<'a>>(t: &mut T, mut w: Walker, setup: &mut Setup, lap: &
     }
     w.library = t.w().loaded.is_some();
     w.products = t.w().open_world;
+    w.reach.product = t.w().b.product;
     w.open_world = w.link || w.products;
     if w.open_world {
         (w.link_root_members, w.link_root_funs) = link_root_members(t.w(), &w.std_files, w.products);
@@ -925,7 +952,6 @@ struct JvmHelpers {
     classes: FxMap<String, ClassId>,
     always: Vec<SymId>,
     seq_pattern: Option<SymId>,
-    enum_lookups: Vec<SymId>,
     partial_function: Option<ClassId>,
     /// In link mode, the jar's `StringContext.s` and `raw` with the runtime's definitions that
     /// stand for them (`Gen::call_interpolator`).
@@ -942,7 +968,6 @@ impl JvmHelpers {
             classes: FxMap::default(),
             always: Vec::new(),
             seq_pattern: None,
-            enum_lookups: Vec::new(),
             partial_function: None,
             interpolators: Vec::new(),
             jdk_classes: typer
@@ -967,7 +992,6 @@ impl JvmHelpers {
         };
         out.always = ["equal", "anyHash", "mix", "finalizeHash"].iter().filter_map(|n| term(n)).collect();
         out.seq_pattern = term("seqPattern");
-        out.enum_lookups = ["enumValueOf", "enumFromOrdinal"].iter().filter_map(|n| term(n)).collect();
         let n = typer.interner.intern("PartialFunctionImpl");
         out.partial_function = typer.syms.pkg(pkg).entries.get(&n).and_then(|e| e.class);
         if typer.link_mode() {
@@ -990,6 +1014,13 @@ pub(super) struct Cx<'a> {
 impl<'a> Cx<'a> {
     pub(super) fn of(typer: &'a Worker) -> Cx<'a> {
         Cx { prog: &typer.prog, syms: &typer.syms, interner: &*typer.interner, loaded: typer.loaded.as_ref().map(|l| &***l), typer }
+    }
+}
+
+/// Puts `c` into the sorted `v` once.
+fn insert_sorted(v: &mut Vec<ClassId>, c: ClassId) {
+    if let Err(at) = v.binary_search(&c) {
+        v.insert(at, c);
     }
 }
 
@@ -1017,6 +1048,10 @@ fn index(s: Slot) -> Option<usize> {
 const RUNTIME_FILES: [&str; 6] = ["<std>/jvm.scala", "<std>/jvm_scala_library.scala", "<std>/jvm_buffer.scala", "<std>/library/product.scala", "<std>/library/mirrors.scala", "<std>/javalib/string.scala"];
 
 /// The members the runtime calls on values of any class.
+/// What the runtime's `toString` and `equals` of a case class call on an instance where it has a
+/// definition (`$caseToString`, `$caseEquals`).
+const SHAPE_CALLED: [Name; 5] = [names::PRODUCT_PREFIX, names::PRODUCT_ITERATOR, names::PRODUCT_ARITY, names::PRODUCT_ELEMENT, names::CAN_EQUAL_METHOD];
+
 const RUNTIME_CALLED: [Name; 8] = [
     names::TO_STRING,
     names::EQUALS,
@@ -2015,9 +2050,61 @@ impl Walker {
             if found {
                 self.mark_extensions(cx, a, name);
             } else {
-                found = self.mark_member(cx, a, name) && !every;
+                let defines = self.mark_member(cx, a, name);
+                // A base the walk left to its members (`process_class_from`) is reached by one
+                // with a body; a template is the runtime's.
+                if defines && !self.reach.classes[a.idx()] && cx.syms.class(a).members.get(&name).is_some_and(|&m| cx.syms.sym(m).intrinsic.is_none()) {
+                    self.reach_class(cx, a);
+                }
+                found = defines && !every;
             }
         }
+    }
+
+    /// `mark_dispatch` of a name whose definition by rule the runtime gives: the first definition
+    /// of the program or a library in the linearisation, past the parents of the desugaring,
+    /// whose own the runtime answers for.
+    /// Whether `d` has such a definition.
+    fn mark_defined_dispatch(&mut self, cx: Cx, d: ClassId, name: Name) -> bool {
+        let info = cx.syms.class(d);
+        if info.kind == ClassKind::Trait || info.mods & mods::ABSTRACT != 0 {
+            return false;
+        }
+        for &(a, _) in &info.base_types {
+            if !cx.typer.is_desugared_parent(a) && self.mark_member(cx, a, name) {
+                return true;
+            }
+        }
+        false
+    }
+
+    /// Whether the member `name` without parameters of an instance of `d` is the one a case
+    /// class takes by rule (`TClass::synthesized`'s `bit`): no class before that case class in
+    /// the linearisation defines it.
+    fn takes_rule_member(&self, cx: Cx, d: ClassId, name: Name, bit: u16) -> bool {
+        for &(a, _) in &cx.syms.class(d).base_types {
+            if cx.typer.is_desugared_parent(a) {
+                continue;
+            }
+            let ai = cx.syms.class(a);
+            if let Some(&m) = ai.members.get(&name) {
+                let own: Vec<SymId> = match cx.syms.alternatives(m) {
+                    Some(alts) => alts.to_vec(),
+                    None => vec![m],
+                };
+                let defines = own.into_iter().any(|s| {
+                    let si = cx.syms.sym(s);
+                    si.owner == Owner::Class(a) && self.concrete(cx, s) && si.sig.as_ref().map_or(true, |sig| sig.clauses.iter().all(|cl| cl.params.is_empty()))
+                });
+                if defines {
+                    return false;
+                }
+            }
+            if ai.mods & mods::CASE != 0 {
+                return index(self.tclass_of[a.idx()]).map_or(true, |i| cx.prog.classes[i].synthesized & bit != 0);
+            }
+        }
+        false
     }
 
     /// `super.m(...)`: the definitions of `m` above the one that runs are targets too.
@@ -2176,8 +2263,41 @@ impl Walker {
         for n in RUNTIME_CALLED {
             self.mark_dispatch(cx, c, n);
         }
+        // On JavaScript a class reaches the parents a desugaring gives (`Product`, `Equals`,
+        // `Serializable`, `Enum`) only through a member it takes from one (`mark_dispatch`): the
+        // runtime's shapes stand for the rest of a case class's, the others are markers, and a
+        // type test numbers what it asks for.
+        let skips_desugared = !self.link;
+        // The runtime's `toString` and `equals` of a case class call the definitions of
+        // `SHAPE_CALLED` an instance has, a subclass's among them, before the rule's.
+        let below_case = !self.link
+            && info.singleton.is_none()
+            && info.base_types.iter().any(|&(b, _)| {
+                let bi = syms.class(b);
+                bi.mods & mods::CASE != 0 && matches!(bi.kind, ClassKind::Class | ClassKind::EnumCase)
+            });
+        if below_case {
+            let mut readers = false;
+            for n in SHAPE_CALLED {
+                let defined = self.mark_defined_dispatch(cx, c, n);
+                if n == names::CAN_EQUAL_METHOD {
+                    if defined {
+                        insert_sorted(&mut self.reach.can_equal_defined, c);
+                    }
+                } else {
+                    readers |= defined;
+                }
+            }
+            if readers && self.takes_rule_member(cx, c, names::TO_STRING, synthetic::TO_STRING) {
+                insert_sorted(&mut self.reach.product_to_string, c);
+            }
+        }
         for &(b, _) in info.base_types.iter().skip(1) {
-            self.reach_class(cx, b);
+            if !(skips_desugared && cx.typer.is_desugared_parent(b)) {
+                self.reach_class(cx, b);
+            } else if let Err(at) = self.reach.desugared.binary_search(&b) {
+                self.reach.desugared.insert(at, b);
+            }
         }
         let callable = !matches!(info.kind, ClassKind::Trait | ClassKind::Enum)
             && info.base_types.iter().skip(1).any(|&(b, _)| super::is_function_class(syms, cx.interner, b));
@@ -2881,10 +3001,26 @@ impl Meet for Walker {
         if text.starts_with("$withCause") {
             self.reach.js_names.push("getCause".to_string());
         }
-        // A product's element: a class's own `productElement`, an override of a case class's
-        // among them, is called by its name (`$productElement` in rt.js).
-        if text.starts_with("$productElement(") {
-            if let Some(n) = cx.interner.lookup("productElement") {
+        // An enum lookup reading the `$values` its companion stores.
+        if text.starts_with("$enumValues(") || text.starts_with("$enumFromOrdinal(") {
+            match prog.expr_list(args).first().map(|&a| prog.expr(a)) {
+                Some(TExpr::Module(c)) => {
+                    insert_sorted(&mut self.reach.enum_stores, c);
+                    // The values the companion stores.
+                    let cases: Vec<SymId> = cx.syms.class(c).companion.map_or(Vec::new(), |e| {
+                        cx.syms.class(e).children.iter().filter_map(|&k| cx.syms.class(k).singleton).collect()
+                    });
+                    for s in cases {
+                        self.reach_static(cx, s);
+                    }
+                }
+                _ => self.reach.every_enum_store = true,
+            }
+        }
+        // A product's member the runtime answers: a class's own definition, an override of a
+        // case class's among them, is called by its name (`$productElement` and kin in rt.js).
+        for (template, n) in [("$productElement(", names::PRODUCT_ELEMENT), ("$productArity(", names::PRODUCT_ARITY), ("$productPrefix(", names::PRODUCT_PREFIX), ("$canEqual(", names::CAN_EQUAL_METHOD)] {
+            if text.starts_with(template) {
                 self.call_name(cx, n, None);
             }
         }
@@ -2907,11 +3043,6 @@ impl Meet for Walker {
         }
         if text.starts_with("$isAssignableFrom") || text.starts_with("$isInstance") {
             self.reach.uses_assignable_from = true;
-        }
-        if text.starts_with("$enum") {
-            for s in self.jvm.as_ref().map_or(Vec::new(), |j| j.enum_lookups.clone()) {
-                self.reach_static(cx, s);
-            }
         }
     }
 

@@ -335,15 +335,35 @@ function $anyStr(x) { return (x.$className || "Object") + "@" + $identityHash(x)
 function $cloneObject(x) { return Object.assign(Object.create(Object.getPrototypeOf(x)), x); }
 function $throw(e) { throw e; }
 function $ref(get, set) { return { get v() { return get(); }, set v(x) { set(x); } }; }
-function $enumValueOf(values, name, enumName) {
-  for (const v of values) if (v.$name === name) return v;
-  $fail("IllegalArgumentException", "enum " + enumName + " has no case with name: " + name);
+// The lookups of an enum's companion `m` (dotty's `enumLookupMethods`): `values`, the clone of the
+// `$values` the companion stores after its cases; `valueOf`, the value case of the name, as the
+// call reads it; `fromOrdinal`, `$values(ordinal)` where every case is a value, any failure of
+// which is the `NoSuchElementException`, else the value case of the ordinal.
+function $enumValues(m) { return m.$values.slice(); }
+function $enumValueOf(m, name, enumName, values, names) {
+  const i = names.indexOf(name);
+  if (i < 0) $fail("IllegalArgumentException", "enum " + enumName + " has no case with name: " + name);
+  return values[i];
 }
-function $enumFromOrdinal(values, ordinal, enumName) {
-  if (ordinal < 0 || ordinal >= values.length || values[ordinal] === null) $fail("NoSuchElementException", "enum " + enumName + " has no case with ordinal: " + ordinal);
+function $enumFromOrdinal(m, ordinal, enumName) {
+  const values = m.$values;
+  if (values == null || ordinal < 0 || ordinal >= values.length) $fail("NoSuchElementException", "enum " + enumName + " has no case with ordinal: " + ordinal);
   return values[ordinal];
 }
-function $productPrefix(x) { return x.$name !== undefined ? x.$name : x.$className; }
+function $enumCaseOfOrdinal(m, ordinal, enumName, values, ordinals) {
+  const i = ordinals.indexOf(ordinal);
+  if (i < 0) $fail("NoSuchElementException", "enum " + enumName + " has no case with ordinal: " + ordinal);
+  return values[i];
+}
+// `productPrefix` of a product: the class's definition (dotty's `existingDef`), else what the rule
+// gives an enum value (its name) and a case class or object (its own name).
+function $productPrefix(x) {
+  const m = x.productPrefix;
+  if (m !== undefined) return typeof m === "function" ? x.productPrefix() : m;
+  if (x.$name !== undefined) return x.$name;
+  // A tuple is registered without a name.
+  return x.$className === "" ? "Tuple" + x.$fields.length : x.$className;
+}
 // ---- scala.util.hashing.MurmurHash3 ----
 function $mix(h, k) {
   k = Math.imul(k, 0xcc9e2d51);
@@ -465,6 +485,21 @@ function $caseToString() {
   }
   return s + ")";
 }
+// `toString` of a case class by rule, scalac's `ScalaRunTime._toString`:
+// `productIterator.mkString(productPrefix + "(", ",", ")")`, where the class or one below has a
+// definition of a member it reads (`$caseToString` reads the shape).
+function $productToString() {
+  let s = $productPrefix(this) + "(";
+  const it = this.productIterator;
+  if (it !== undefined && ($product === null || it !== $product.prototype.productIterator)) {
+    const elements = this.productIterator();
+    for (let first = true; elements.hasNext(); first = false) s += (first ? "" : ",") + $str(elements.next());
+  } else {
+    const n = $productArity(this);
+    for (let i = 0; i < n; i++) s += (i > 0 ? "," : "") + $str($productElement(this, i));
+  }
+  return s + ")";
+}
 function $caseEquals(that) {
   if (this === that) return true;
   if (that == null || that.constructor !== this.constructor) return false;
@@ -473,6 +508,16 @@ function $caseEquals(that) {
     if (!$eq(this[fields[i]], that[fields[i]])) return false;
   }
   return true;
+}
+// `equals` of a case class by rule (`SyntheticMembers.equalsBody`) where it or a class below
+// defines `canEqual`: an instance of the class, the fields equal, then `that.canEqual(this)`.
+function $productEquals(c) {
+  return function (that) {
+    if (this === that) return true;
+    if (!(that instanceof c)) return false;
+    for (const f of this.$fields) if (!$eq(this[f], that[f])) return false;
+    return $canEqual(that, this);
+  };
 }
 // `equals` of a case class that is extended: an instance of a subclass can be the equal one.
 function $subEquals(c) {
@@ -522,7 +567,8 @@ function $iterator() {
 // Registers a class: its name; its shape, the field names of a case class, 2 for a case object,
 // 3 for an enum value, 4 for a trait or enum; the traits and enums it takes members from, in
 // linearisation order (the first declaration wins); their numbers for type tests; an enum ordinal.
-// The methods of a shape come by prototype, or copied below a superclass, which scalac lets win.
+// The methods of a shape come by prototype, or copied below a superclass where the superclass
+// defines none: a definition the class has wins (dotty's `existingDef`).
 function $cls(c, name, shape, traits, ids, ordinal) {
   const p = c.prototype;
   if (shape === 4) p.$own = Object.getOwnPropertyDescriptors(p);
@@ -541,18 +587,42 @@ function $cls(c, name, shape, traits, ids, ordinal) {
   if (shape !== 3) p.$fields = shape === 2 ? [] : shape;
   const base = shape === 3 ? $enumValueProto : shape === 2 ? $caseObjectProto : $caseProto;
   if (Object.getPrototypeOf(p) === Object.prototype) Object.setPrototypeOf(p, base);
-  else for (const key in base) if (!Object.prototype.hasOwnProperty.call(p, key)) p[key] = base[key];
+  else for (const key in base) if (p[key] === Object.prototype[key]) p[key] = base[key];
   if (ordinal !== undefined) p.$ordinal = ordinal;
 }
 const $caseProto = { toString: $caseToString, equals: $caseEquals, hashCode: $caseHash };
+// `Product`'s class once the output has its concrete members: the prototypes of the shapes take
+// them, as the classes of the shapes extend it.
+let $product = null;
+function $productBase(product) {
+  $product = product;
+  Object.setPrototypeOf($caseProto, product.prototype);
+  Object.setPrototypeOf($enumValueProto, product.prototype);
+}
 // The members of Product on a case class, a case object, an enum case or a tuple, which the
-// registration above describes, or on a class that implements them (its own productElement first).
-function $productArity(p) { return p.$fields !== undefined ? p.$fields.length : typeof p.productArity === "function" ? p.productArity() : 0; }
+// registration above describes: the class's own definition first (dotty's `existingDef`), then
+// the rule's from its shape; on another product, the class's.
+function $productArity(p) {
+  const m = p.productArity;
+  if (m !== undefined) return typeof m === "function" ? p.productArity() : m;
+  return p.$fields !== undefined ? p.$fields.length : 0;
+}
+// `canEqual`: the class's definition, else what the rule gives a case class or object
+// (`that.isInstanceOf[C]`) and scala's `EnumValue` an enum value (`this eq that`); a product of no
+// shape compares classes.
+function $canEqual(p, that) {
+  if (typeof p.canEqual === "function") return p.canEqual(that);
+  if (p.$name !== undefined) return p === that;
+  if (p.$fields === undefined) return that != null && that.constructor === p.constructor;
+  let c = Object.getPrototypeOf(p);
+  while (!Object.prototype.hasOwnProperty.call(c, "$fields")) c = Object.getPrototypeOf(c);
+  return that instanceof c.constructor;
+}
 // A case class's names are on its prototype once the program asks for one (`$names`); a class
 // that defines the method answers itself; any other product's names are empty.
 function $productElementName(p, i) {
+  if (typeof p.productElementName === "function") return p.productElementName(i);
   const names = p.$names;
-  if (names === undefined && typeof p.productElementName === "function") return p.productElementName(i);
   const arity = names !== undefined ? names.length : $productArity(p);
   if (i < 0 || i >= arity) $fail("IndexOutOfBoundsException", names !== undefined ? "" + i : i + " is out of bounds (min 0, max " + (arity - 1) + ")");
   return names !== undefined ? names[i] : "";

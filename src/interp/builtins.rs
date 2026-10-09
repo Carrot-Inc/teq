@@ -570,6 +570,7 @@ fn install_core(it: &mut Table) {
         it.product_element(&arg(a, 0), i)
     });
     reg!(it, "scala.Product.productPrefix", |it, a| Ok(Value::string(it.product_prefix(&arg(a, 0))?)));
+    reg!(it, "scala.Equals.canEqual", |it, a| Ok(Value::Bool(it.can_equal(&arg(a, 0), &arg(a, 1))?)));
     reg!(it, "scala.Product.productElementName", |it, a| {
         let i = int(it, a, 1)?;
         it.product_element_name(&arg(a, 0), i)
@@ -2314,6 +2315,7 @@ fn install_typer_templates(it: &mut Table) {
         let i = int(it, a, 1)?;
         it.product_element_name(&arg(a, 0), i)
     });
+    reg!(it, "$canEqual($0, $1)", |it, a| Ok(Value::Bool(it.can_equal(&arg(a, 0), &arg(a, 1))?)));
     // An enum case's ordinal, which `null` has none of, as a call of `ordinal()` on it.
     fn case_ordinal(it: &mut Interp<'_, '_>, a: &[Value]) -> R {
         match arg(a, 0) {
@@ -2327,27 +2329,43 @@ fn install_typer_templates(it: &mut Table) {
     // its own (`Template::AbstractBuiltin` dispatches to one first): the synthesized ordinal
     // `DesugarEnums` gives the case, as `$0.$ordinal`.
     reg!(it, "scala.reflect.Enum.ordinal", |it, a| case_ordinal(it, a));
-    reg!(it, "$enumValueOf($0, $1, $2)", |it, a| {
-        let values = array(it, a, 0)?.borrow().clone();
+    // The lookups of an enum's companion (dotty's `enumLookupMethods`, `prims.rs`).
+    reg!(it, "$enumValues($0)", |it, a| match it.enum_values(&arg(a, 0))? {
+        Some(values) => Ok(Value::array(values)),
+        None => it.throw_named("NullPointerException", "Cannot invoke \"clone()\" because \"$values\" is null"),
+    });
+    reg!(it, "$enumValueOf($0, $1, $2, $3, $4)", |it, a| {
         let name = text(it, a, 1)?;
         let enum_name = text(it, a, 2)?;
-        for v in values {
-            if let Value::Obj(o) = &v {
-                if o.name.as_deref() == Some(&*name) {
-                    return Ok(v);
-                }
+        let values = array(it, a, 3)?.borrow().clone();
+        let names = array(it, a, 4)?.borrow().clone();
+        for (v, n) in values.into_iter().zip(names) {
+            if matches!(&n, Value::Str(s) if **s == *name) {
+                return Ok(if let Value::Absent = v { Value::Null } else { v });
             }
         }
         it.throw_named("IllegalArgumentException", &format!("enum {} has no case with name: {}", enum_name, name))
     });
     reg!(it, "$enumFromOrdinal($0, $1, $2)", |it, a| {
-        let values = array(it, a, 0)?.borrow().clone();
         let ordinal = int(it, a, 1)?;
         let enum_name = text(it, a, 2)?;
-        match values.get(ordinal.max(0) as usize) {
-            Some(v) if ordinal >= 0 && !matches!(v, Value::Null) => Ok(v.clone()),
+        let values = it.enum_values(&arg(a, 0))?;
+        match values.as_ref().and_then(|vs| vs.get(ordinal.max(0) as usize)) {
+            Some(v) if ordinal >= 0 => Ok(v.clone()),
             _ => it.throw_named("NoSuchElementException", &format!("enum {} has no case with ordinal: {}", enum_name, ordinal)),
         }
+    });
+    reg!(it, "$enumCaseOfOrdinal($0, $1, $2, $3, $4)", |it, a| {
+        let ordinal = int(it, a, 1)?;
+        let enum_name = text(it, a, 2)?;
+        let values = array(it, a, 3)?.borrow().clone();
+        let ordinals = array(it, a, 4)?.borrow().clone();
+        for (v, o) in values.into_iter().zip(ordinals) {
+            if matches!(o, Value::Int(k) if k == ordinal) {
+                return Ok(if let Value::Absent = v { Value::Null } else { v });
+            }
+        }
+        it.throw_named("NoSuchElementException", &format!("enum {} has no case with ordinal: {}", enum_name, ordinal))
     });
     reg!(it, "$pf($0, $1)", |_it, a| {
         Ok(Value::Fun(Rc::new(Closure {

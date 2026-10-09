@@ -1458,9 +1458,6 @@ impl Remap {
         ] {
             *c = c.map(|c| self.class(c));
         }
-        for (_, s) in &mut b.product_helpers {
-            *s = self.sym(*s);
-        }
         w.sites.class_tag = w.sites.class_tag.map(|c| self.class(c));
         w.sites.not_given_class = w.sites.not_given_class.map(|c| self.class(c));
         w.unit_ops = w.unit_ops.map(|o| o.map(|c| self.class(c)));
@@ -2197,11 +2194,6 @@ impl<'a> Worker<'a> {
         ] {
             if mine.is_none() {
                 *mine = theirs;
-            }
-        }
-        for (k, s) in &ob.product_helpers {
-            if !b.product_helpers.iter().any(|(k2, _)| k2 == k) {
-                b.product_helpers.push((k.clone(), *s));
             }
         }
         if self.sites.class_tag.is_none() {

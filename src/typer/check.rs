@@ -1246,10 +1246,10 @@ impl<'a> Worker<'a> {
         self.phase_end(p);
     }
 
-    /// A member of `Product`, whose defaults a class implements without `override`, as the
-    /// abstract members of scalac's `Product` are.
+    /// A member of `Product` or `Equals`, whose runtime templates a class implements without
+    /// `override`, as the abstract members of scalac's `Product` and `Equals` are.
     fn is_product_member(&self, s: SymId) -> bool {
-        matches!(self.syms.sym(s).owner, Owner::Class(c) if Some(c) == self.b.product)
+        matches!(self.syms.sym(s).owner, Owner::Class(c) if Some(c) == self.b.product || Some(c) == self.equals_class())
     }
 
     /// The signature of `sym`, completed on the way, as a borrow for the reads that follow at
@@ -2835,7 +2835,7 @@ impl<'a> Worker<'a> {
             parent_args: None,
             parent_via: None,
             parent_prelude: ast::ListRef::EMPTY,
-            inherited_case_members: 0,
+            synthesized: 0,
             retracted_unapply: false,
             init: Vec::new(),
             methods: Vec::new(),
@@ -2851,6 +2851,7 @@ impl<'a> Worker<'a> {
             tclass.ctor_defaults.insert(0, None);
             tclass.captures = 1;
         }
+        tclass.synthesized = self.synthesized_members(c);
         let Some(def_id) = def_id else {
             self.push_class_body(tclass);
             return;
@@ -2880,7 +2881,6 @@ impl<'a> Worker<'a> {
             tclass.parent_prelude = call.prelude;
         }
         if def.mods & mods::CASE != 0 {
-            tclass.inherited_case_members = self.inherited_case_members(c);
             tclass.retracted_unapply = self.synthetic_unapply_retracted(c);
         }
         self.selector_bodies(c, &mut tclass);
@@ -2962,9 +2962,10 @@ impl<'a> Worker<'a> {
             for child in children {
                 self.check_class(child);
             }
-            // A synthesized companion is only emitted when it holds the values.
+            // A synthesized companion holds the values of a stateful enum, and the `$values` and
+            // lookups of any (dotty's `enumScaffolding`); it is emitted where it is reached.
             let info = self.syms.class(c);
-            if let (true, Some(companion)) = (info.stateful, info.companion) {
+            if let (false, Some(companion)) = (info.children.is_empty(), info.companion) {
                 if self.syms.class(companion).def.is_none() {
                     self.check_class(companion);
                 }
@@ -2973,7 +2974,7 @@ impl<'a> Worker<'a> {
         self.check_overrides(c);
         self.check_variances(c);
         if !matches!(kind, ClassKind::Trait | ClassKind::Enum) && def.mods & mods::ABSTRACT == 0 && !self.is_body_file(file) {
-            tclass.forwarders = self.check_implements_all(c, Abstracts::Declared);
+            tclass.forwarders = self.check_implements_all(c, Abstracts::Declared, tclass.synthesized);
         }
         if js == JsKind::Object {
             // scalac checked a jar's trait, whose vars come with their setters.
@@ -3104,25 +3105,115 @@ impl<'a> Worker<'a> {
         call.filter(|_| self.syms.class(e).stateful)
     }
 
-    /// Which of `toString`, `equals` and `hashCode` (bits 0 to 2) a case class takes from its
-    /// superclass: it defines none itself, and the first concrete one behind it in the
-    /// linearisation belongs to the superclass or to what that class extends.
-    fn inherited_case_members(&self, c: ClassId) -> u8 {
-        let info = self.syms.class(c);
-        let Some(parent) = info.superclass else { return 0 };
-        let mut kept = 0;
-        for (bit, name) in [names::TO_STRING, names::EQUALS, names::HASH_CODE].into_iter().enumerate() {
-            if info.members.contains_key(&name) {
-                continue;
+    /// The members dotty's `SyntheticMembers.caseAndValueMethods` gives `c` (`TClass::synthesized`),
+    /// with an enum class case's `ordinal`: of its kind's set, those `existingDef` finds no
+    /// definition of.
+    pub(super) fn synthesized_members(&mut self, c: ClassId) -> u16 {
+        let (kind, is_case, singleton, value_class, is_module) = {
+            let i = self.syms.class(c);
+            let is_module = i.kind == ClassKind::Object || i.local_module.is_some() || i.inner_object.is_some();
+            (i.kind, i.mods & mods::CASE != 0, i.singleton.is_some(), i.value_class, is_module)
+        };
+        let wanted = if kind == ClassKind::EnumCase && singleton {
+            if self.is_java_enum_value(c) { synthetic::PRODUCT_PREFIX } else { synthetic::ENUM_VALUE }
+        } else if kind == ClassKind::EnumCase {
+            // A class case's `ordinal` is `Desugar.enumCaseMeths`'.
+            synthetic::CASE | synthetic::ORDINAL
+        } else if is_case {
+            if is_module { synthetic::CASE & !synthetic::EQUALS } else { synthetic::CASE }
+        } else if value_class {
+            synthetic::VALUE
+        } else {
+            0
+        };
+        let mut synthesized = 0;
+        for (bit, name, param) in synthetic::MEMBERS {
+            if wanted & bit != 0 && self.existing_def(c, name, param).is_none() {
+                synthesized |= bit;
             }
-            let definer = info.base_types.iter().skip(1).map(|&(b, _)| b).find(|&b| {
-                self.syms.class(b).members.get(&name).map_or(false, |&m| !self.is_abstract_member(m))
-            });
-            let from_superclass =
-                definer.map_or(false, |b| self.syms.class(parent).base_types.iter().any(|&(x, _)| x == b));
-            kept |= (from_superclass as u8) << bit;
         }
-        kept
+        if synthesized & synthetic::EQUALS != 0 {
+            // A value class is final (`Namer`).
+            let is_final = self.syms.class(c).mods & mods::FINAL != 0 || value_class;
+            if !is_final || self.existing_def(c, names::CAN_EQUAL_METHOD, synthetic::Param::Any).is_some() {
+                synthesized |= synthetic::EQUALS_CALLS_CAN_EQUAL;
+            }
+        }
+        synthesized
+    }
+
+    /// dotty's `existingDef`: the member of `c` the synthesized one would be, `matchingMember`'s
+    /// first concrete definition of its name and parameter in the linearisation (a lookup takes a
+    /// concrete member over an abstract one), unless that is the declaration the rule implements
+    /// (`Any`'s, `Product`'s, `Equals`'s, `Enum`'s).
+    fn existing_def(&mut self, c: ClassId, name: Name, param: synthetic::Param) -> Option<SymId> {
+        let bases: Vec<ClassId> = self.syms.class(c).base_types.iter().map(|&(b, _)| b).collect();
+        for b in bases {
+            let mut k = 0;
+            while let Some(s) = self.own_alternative(b, name, k) {
+                k += 1;
+                if self.is_private(s) || self.is_abstract_member(s) || !self.matches_synthesized(s, param) {
+                    continue;
+                }
+                let declares = b == self.b.any_ref
+                    || Some(b) == self.b.product
+                    || Some(b) == self.equals_class()
+                    || Some(b) == self.b.reflect_enum
+                    || self.is_java_lang_object(b);
+                return (!declares).then_some(s);
+            }
+        }
+        None
+    }
+
+    /// Whether `s` has the signature of a member taking `param` by rule: no type parameters, no
+    /// parameter or one empty list (`toString()`), or the one parameter of that type.
+    fn matches_synthesized(&mut self, s: SymId, param: synthetic::Param) -> bool {
+        let sig = self.sig_arc(s);
+        if !sig.tparams.is_empty() {
+            return false;
+        }
+        match (param, sig.clauses.as_slice()) {
+            (synthetic::Param::None, []) => true,
+            (synthetic::Param::None, [cl]) => cl.params.is_empty(),
+            (synthetic::Param::Any, [cl]) if !cl.is_using && cl.params.len() == 1 => {
+                let t = self.deref_alias(cl.params[0].ty);
+                t == ANY || t == self.b.t_any_ref || self.class_of(t).is_some_and(|k| self.is_java_lang_object(k))
+            }
+            (synthetic::Param::Int, [cl]) if !cl.is_using && cl.params.len() == 1 => self.deref_alias(cl.params[0].ty) == self.b.t_int,
+            _ => false,
+        }
+    }
+
+    /// Whether the value case `c` is one of an enum extending `java.lang.Enum`.
+    fn is_java_enum_value(&self, c: ClassId) -> bool {
+        let Owner::Class(companion) = self.syms.class(c).owner else { return false };
+        let Some(e) = self.syms.class(companion).companion else { return false };
+        self.syms.class(e).superclass.is_some_and(|s| {
+            let info = self.syms.class(s);
+            self.interner.get(info.name) == "Enum" && matches!(info.owner, Owner::Package(p) if self.pkg_path(p) == "java.lang")
+        })
+    }
+
+    /// Whether `Any`'s concrete `equals`, `hashCode` or `toString` implements the abstract member
+    /// `m` (scala's `Equals.equals`), as the member a lookup finds over a deferred one.
+    pub(super) fn implemented_by_any(&mut self, m: SymId) -> bool {
+        self.synthesized_by_rule(m, synthetic::HASH_CODE | synthetic::EQUALS | synthetic::TO_STRING)
+    }
+
+    /// Whether the member `m` is one of `synthesized`, by its name and parameter.
+    fn synthesized_by_rule(&mut self, m: SymId, synthesized: u16) -> bool {
+        if synthesized == 0 {
+            return false;
+        }
+        let name = self.syms.sym(m).name;
+        synthetic::MEMBERS.iter().any(|&(bit, n, param)| synthesized & bit != 0 && n == name && self.matches_synthesized(m, param))
+    }
+
+    /// `java.lang.Object`, read from a jar or the std's.
+    fn is_java_lang_object(&self, k: ClassId) -> bool {
+        let info = self.syms.class(k);
+        self.interner.get(info.name) == "Object" && matches!(info.owner, Owner::Package(p) if self.pkg_path(p) == "java.lang")
     }
 
     /// The parent clause that names the superclass of `c`, when the class names one itself rather
@@ -4012,6 +4103,19 @@ impl<'a> Worker<'a> {
                 Agreement::Params
             };
             let overrides_any = any == Agreement::Same;
+            // Another parameter list beside `Any`'s member of the name is an alternative of it,
+            // named apart in the output (`dispatch_name`).
+            let beside_any = matches!(name, names::TO_STRING | names::HASH_CODE | names::EQUALS)
+                && !is_ext
+                && self.syms.sym(m).kind == SymKind::Def
+                && any == Agreement::Params;
+            if beside_any {
+                if self.alternatives_named {
+                    self.dispatch_name(m);
+                } else {
+                    self.dispatch_pending.push(m);
+                }
+            }
             if any == Agreement::Result {
                 let msg = format!(
                     "error overriding method {} in class Any of type {}: {} of type {} has incompatible type",
@@ -4965,13 +5069,14 @@ impl<'a> Worker<'a> {
             }
             let nested = self.syms.class(c).base_types.iter().skip(1).any(|&(b, _)| self.outer_accessors.get(&b).is_some());
             if nested {
-                self.check_implements_all(c, Abstracts::OuterAccessors);
+                self.check_implements_all(c, Abstracts::OuterAccessors, 0);
             }
         }
     }
 
     /// Returns the abstract members that an export clause of `c` implements, with their targets.
-    fn check_implements_all(&mut self, c: ClassId, which: Abstracts) -> Vec<(SymId, SymId)> {
+    /// A member of `synthesized` (`TClass::synthesized`) is implemented by rule.
+    fn check_implements_all(&mut self, c: ClassId, which: Abstracts, synthesized: u16) -> Vec<(SymId, SymId)> {
         let bases: Vec<(ClassId, TypeId)> = self.syms.class(c).base_types.clone();
         let mut missing: Vec<(String, SymId, TypeId)> = Vec::new();
         // A member left unimplemented beside an incomplete definition of its name, whose body
@@ -4997,6 +5102,10 @@ impl<'a> Worker<'a> {
                 }
                 let name = self.syms.sym(m).name;
                 let is_ext = self.syms.sym(m).is_extension;
+                // A member the rule synthesizes (`TClass::synthesized`) is its implementation.
+                if !is_ext && self.synthesized_by_rule(m, synthesized) {
+                    continue;
+                }
                 // `Any`'s `toString`, `hashCode` and `equals` implement an abstract redeclaration of
                 // theirs (scala-library's `Equals.equals`), as dotty's `RefChecks.isImplemented`
                 // finds a concrete member matching it loosely with the parameter types compared

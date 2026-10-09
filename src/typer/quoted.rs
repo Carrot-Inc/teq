@@ -2635,6 +2635,7 @@ impl<'c> Copier<'c> {
         copy.has_overloads = info.has_overloads;
         copy.has_statements = info.has_statements;
         copy.stateful = info.stateful;
+        copy.desugared_parents = info.desugared_parents;
         drop(copy);
         if let Some(sup) = superclass.filter(|&k| Some(k) != info.superclass && !t.syms.class(k).subclasses.contains(&nc)) {
             t.syms.class_mut(sup).subclasses.push(nc);
@@ -2722,7 +2723,7 @@ impl<'c> Copier<'c> {
             parent_args,
             parent_via: tc.parent_via.map(|s| self.sym(s)),
             parent_prelude,
-            inherited_case_members: tc.inherited_case_members,
+            synthesized: tc.synthesized,
             retracted_unapply: tc.retracted_unapply,
             init,
             methods,

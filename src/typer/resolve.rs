@@ -4833,6 +4833,7 @@ impl<'a> Worker<'a> {
         if kind == ClassKind::Trait && parents.first().is_some_and(|&(t, _)| self.dealias(t) == ANY) {
             self.syms.class_mut(c).mods |= mods::UNIVERSAL;
         }
+        self.desugared_parents(c, kind, &mut parents);
         self.set_parents(c, parents);
         // The self type may name a class that extends this one (tapir's
         // `EndpointTransputMacros[T] { this: EndpointTransput[T] => }`), so it is resolved once
@@ -5030,6 +5031,30 @@ impl<'a> Worker<'a> {
             }
             ast::Stmt::Import(_) => false,
         })
+    }
+
+    /// The parents dotty's `Desugar.classDef` adds after the written ones: `Product` and
+    /// `Serializable` to a case class or case object that is no enum case, `scala.reflect.Enum`
+    /// to an enum. One the class writes itself is not written twice.
+    fn desugared_parents(&mut self, c: ClassId, kind: ClassKind, parents: &mut Vec<(TypeId, Span)>) {
+        let is_case = self.syms.class(c).mods & mods::CASE != 0;
+        let added: Vec<ClassId> = match kind {
+            ClassKind::Class | ClassKind::Object if is_case => {
+                [self.b.product, self.class_at(&["java", "io", "Serializable"])].into_iter().flatten().collect()
+            }
+            ClassKind::Enum => self.b.reflect_enum.into_iter().collect(),
+            _ => Vec::new(),
+        };
+        let span = self.syms.class(c).span;
+        let mut count = 0;
+        for p in added {
+            if !parents.iter().any(|&(t, _)| self.class_of(t) == Some(p)) {
+                let t = self.types.class(p, &[]);
+                parents.push((t, span));
+                count += 1;
+            }
+        }
+        self.syms.class_mut(c).desugared_parents = count;
     }
 
     pub(super) fn set_parents(&mut self, c: ClassId, parents: Vec<(TypeId, Span)>) {

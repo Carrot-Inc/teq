@@ -733,6 +733,53 @@ pub enum TInit {
     Parent(ClassId, ParentCall),
 }
 
+/// The members a class may take by rule (`TClass::synthesized`), dotty's `caseClassSynthesized`
+/// in its order and then an enum value's `ordinal`, each with the parameter it takes: `Any` for
+/// the two equalities, `Int` for the two element accessors.
+pub mod synthetic {
+    use crate::intern::Name;
+    use crate::names;
+
+    pub const HASH_CODE: u16 = 1 << 0;
+    pub const EQUALS: u16 = 1 << 1;
+    pub const TO_STRING: u16 = 1 << 2;
+    pub const CAN_EQUAL: u16 = 1 << 3;
+    pub const PRODUCT_ARITY: u16 = 1 << 4;
+    pub const PRODUCT_PREFIX: u16 = 1 << 5;
+    pub const PRODUCT_ELEMENT: u16 = 1 << 6;
+    pub const PRODUCT_ELEMENT_NAME: u16 = 1 << 7;
+    pub const ORDINAL: u16 = 1 << 8;
+    /// With `EQUALS`: the synthesized `equals` ends with `that.canEqual(this)`, the class not
+    /// being final or having a `canEqual` of its own (`SyntheticMembers.equalsBody`).
+    pub const EQUALS_CALLS_CAN_EQUAL: u16 = 1 << 15;
+
+    /// A case class's (`caseSymbols`); a case object's lacks `equals` (`caseModuleSymbols`).
+    pub const CASE: u16 = HASH_CODE | EQUALS | TO_STRING | CAN_EQUAL | PRODUCT_ARITY | PRODUCT_PREFIX | PRODUCT_ELEMENT | PRODUCT_ELEMENT_NAME;
+    /// An enum value's (`nonJavaEnumValueSymbols`); one of a Java enum takes `productPrefix` alone.
+    pub const ENUM_VALUE: u16 = PRODUCT_PREFIX | TO_STRING | ORDINAL | HASH_CODE;
+    /// A value class's (`valueSymbols`).
+    pub const VALUE: u16 = HASH_CODE | EQUALS;
+
+    #[derive(Clone, Copy, PartialEq, Eq)]
+    pub enum Param {
+        None,
+        Any,
+        Int,
+    }
+
+    pub const MEMBERS: [(u16, Name, Param); 9] = [
+        (HASH_CODE, names::HASH_CODE, Param::None),
+        (EQUALS, names::EQUALS, Param::Any),
+        (TO_STRING, names::TO_STRING, Param::None),
+        (CAN_EQUAL, names::CAN_EQUAL_METHOD, Param::Any),
+        (PRODUCT_ARITY, names::PRODUCT_ARITY, Param::None),
+        (PRODUCT_PREFIX, names::PRODUCT_PREFIX, Param::None),
+        (PRODUCT_ELEMENT, names::PRODUCT_ELEMENT, Param::Int),
+        (PRODUCT_ELEMENT_NAME, names::PRODUCT_ELEMENT_NAME, Param::Int),
+        (ORDINAL, names::ORDINAL, Param::None),
+    ];
+}
+
 #[derive(Clone)]
 pub struct TClass {
     pub id: ClassId,
@@ -749,9 +796,12 @@ pub struct TClass {
     /// Statements (in `Program::stmts`) that run before those arguments are passed: the
     /// temporaries of named arguments written out of parameter order.
     pub parent_prelude: ListRef,
-    /// Which of `toString`, `equals` and `hashCode` (bits 0 to 2) a case class or case object
-    /// inherits from its superclass, where scalac makes none of its own.
-    pub inherited_case_members: u8,
+    /// The members dotty's `SyntheticMembers.caseAndValueMethods` gives a case class, case object,
+    /// enum value or value class (`synthetic`'s bits), with the `ordinal` `Desugar` gives an enum
+    /// class case: those of its kind's set that `existingDef` finds no definition of, which the
+    /// targets and the products implement by rule. A class the compiler makes without a body (a
+    /// tuple) defines none of them.
+    pub synthesized: u16,
     /// Whether a case class's companion goes without the synthetic `unapply` (`unapplySeq`),
     /// withdrawn by one it declares or inherits (`Worker::synthetic_unapply_retracted`).
     pub retracted_unapply: bool,

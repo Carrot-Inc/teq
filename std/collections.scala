@@ -46,7 +46,8 @@ object ArraySeq:
       def fromSpecific(it: IterableOnce[A]): ArraySeq[A] = from(it)
       def newBuilder: scala.collection.mutable.Builder[A, ArraySeq[A]] = scala.collection.mutable.ArrayBuffer.empty[A].mapResult(b => from(b))
 
-sealed trait Option[+A] extends IterableOnce[A], Product:
+// `Product` and `Serializable`, as scala-library's `Option`.
+sealed trait Option[+A] extends IterableOnce[A], Product, java.io.Serializable:
   def isEmpty: Boolean = this match
     case None => true
     case _ => false
@@ -145,7 +146,7 @@ extension [A, B](o: Option[(A, B)])
     case Some((a, b)) => (Some(a), Some(b))
     case None => (None, None)
 
-sealed trait Either[+A, +B] extends Product:
+sealed trait Either[+A, +B] extends Product, java.io.Serializable:
   def isLeft: Boolean = this match
     case Left(_) => true
     case Right(_) => false
@@ -249,7 +250,7 @@ extension [A, B](e: Either[A, B])
     case Right(inner) => ev(inner)
     case Left(v) => Left(v)
 
-sealed trait List[+A] extends SeqOps[A, List, List[A]], Seq[A]:
+sealed trait List[+A] extends SeqOps[A, List, List[A]], Seq[A], java.io.Serializable:
   def isEmpty: Boolean
   def head: A
   def tail: List[A]

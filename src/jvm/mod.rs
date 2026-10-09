@@ -738,6 +738,15 @@ impl<'a> Cx<'a> {
     }
 
     /// An enum whose superclass is `java.lang.Enum`.
+    /// The members the rule gives class `c` (`TClass::synthesized`); every one for a class the
+    /// compiler makes without a body.
+    pub fn synthesized(&self, c: ClassId) -> u16 {
+        match self.tclass_of[c.idx()] {
+            u32::MAX => u16::MAX,
+            i => self.input.prog.classes[i as usize].synthesized,
+        }
+    }
+
     pub fn is_java_enum(&self, e: ClassId) -> bool {
         let info = self.input.syms.class(e);
         info.kind == ClassKind::Enum && info.superclass.map_or(false, |s| self.class_names[s.idx()] == "java/lang/Enum")

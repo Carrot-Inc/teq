@@ -1574,7 +1574,10 @@ impl<'w, 'a> P<'w, 'a> {
     /// `Serializable`, an enum `scala.reflect.Enum`, as `Desugar` does. A trait's parents are
     /// types.
     fn parents(&mut self, c: ClassId, info: &ClassInfo) {
-        let parents: Vec<TypeId> = info.parents.iter().copied().filter(|&p| p != self.w.b.t_any_ref).collect();
+        // The parents the desugaring gave the class (`ClassInfo::desugared_parents`) are written
+        // after the source's, below, in scalac's spelling.
+        let written = &info.parents[..info.parents.len() - info.desugared_parents as usize];
+        let parents: Vec<TypeId> = written.iter().copied().filter(|&p| p != self.w.b.t_any_ref).collect();
         let first_is_class = parents.first().map_or(false, |&p| !self.is_trait_type(p));
         let calls = info.kind != ClassKind::Trait;
         if info.value_class && !parents.iter().any(|&p| p == self.w.b.t_any_val) {
@@ -3971,7 +3974,15 @@ impl<'w, 'a> P<'w, 'a> {
         self.buf.byte(TEMPLATE);
         let len = self.buf.begin_length();
         // Parents.
-        let declared: Vec<TypeId> = obj.class.filter(|_| !obj.synthetic).map(|o| self.w.syms.class(o).parents.clone()).unwrap_or_default();
+        // The parents the desugaring gave the object are appended below, in scalac's spelling.
+        let declared: Vec<TypeId> = obj
+            .class
+            .filter(|_| !obj.synthetic)
+            .map(|o| {
+                let info = self.w.syms.class(o);
+                info.parents[..info.parents.len() - info.desugared_parents as usize].to_vec()
+            })
+            .unwrap_or_default();
         let declared: Vec<TypeId> = declared.into_iter().filter(|&t| t != self.w.b.t_any_ref).collect();
         if obj.synthetic {
             let t = self.w.b.t_any_ref;

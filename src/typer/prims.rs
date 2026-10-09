@@ -1691,7 +1691,7 @@ impl<'a> Worker<'a> {
             (Erased::Of(a, 0), Erased::Of(b, 0)) => {
                 a == b
                     || (self.function_xxl(a) && self.function_xxl(b))
-                    || (!self.is_primitive_class(a) && !self.is_primitive_class(b) && (self.derives_from(a, b) || self.product_by_rule(a, b)))
+                    || (!self.is_primitive_class(a) && !self.is_primitive_class(b) && self.derives_from(a, b))
             }
             _ => false,
         }
@@ -1701,16 +1701,6 @@ impl<'a> Worker<'a> {
     /// (`Definitions.functionTypeErasure`), one class for every such arity.
     fn function_xxl(&self, c: ClassId) -> bool {
         self.is_function_class(c) && self.syms.class(c).tparams.len() > 23
-    }
-
-    /// Whether `b` is a parent a product by rule has (`Symbols::is_synthetic_parent`: `Product`,
-    /// `Equals`, `java.io.Serializable`) and `a` such a product, which extends none of them.
-    fn product_by_rule(&mut self, a: ClassId, b: ClassId) -> bool {
-        self.syms.is_synthetic_parent(&self.interner, b) && {
-            self.complete_class(a);
-            let info = self.syms.class(a);
-            info.is_product_by_rule() || info.base_types.iter().any(|&(x, _)| self.syms.class(x).is_product_by_rule())
-        }
     }
 
     /// The type an erasure stands for, which its test is made of.
@@ -1874,6 +1864,12 @@ impl<'a> Worker<'a> {
                 }
                 Some((te, self.b.t_boolean))
             }
+            // dotty's `DesugarEnums.enumLookupMethods`: `values` and `valueOf` where every case is
+            // a value, `values` the clone of the companion's `$values`, stored after the cases
+            // (`enumScaffolding`), `valueOf` the value case of the name; `fromOrdinal` of every
+            // enum, `$values(ordinal)` where every case is a value, else the value case of the
+            // ordinal. The arguments: the companion, the key, the enum's full name, then the value
+            // cases with their names or ordinals; each target stores and reads `$values`.
             names::VALUES | names::VALUE_OF | names::FROM_ORDINAL => {
                 let Type::Class(module, _) = self.types.get(recv_ty) else { return None };
                 let info = self.syms.class(module);
@@ -1881,57 +1877,70 @@ impl<'a> Worker<'a> {
                 if self.syms.class(enum_class).kind != ClassKind::Enum {
                     return None;
                 }
-                // Only an enum whose cases are all values has `values` and `valueOf`; every enum has
-                // `fromOrdinal`, a class case's ordinal a hole that throws (dotty's
-                // `DesugarEnums.enumLookupMethods`), here a null in the values by ordinal.
                 let cases = self.syms.class(enum_class).children.clone();
-                let values: Option<Vec<SymId>> =
-                    cases.iter().map(|&c| self.syms.class(c).singleton).collect();
-                let items: Vec<TExprId> = match values {
-                    Some(values) => values.into_iter().map(|s| self.prog.add(TExpr::Static(s))).collect(),
-                    None if name == names::FROM_ORDINAL => {
-                        let mut by_ordinal: Vec<Option<SymId>> = Vec::new();
-                        for &c in &cases {
-                            let at = self.syms.class(c).ordinal as usize;
-                            if by_ordinal.len() <= at {
-                                by_ordinal.resize(at + 1, None);
-                            }
-                            by_ordinal[at] = self.syms.class(c).singleton;
-                        }
-                        by_ordinal.into_iter().map(|v| self.prog.add(v.map_or(TExpr::Null, TExpr::Static))).collect()
-                    }
-                    None => return None,
-                };
-                let items = self.prog.list(&items);
-                let all = self.prog.add(TExpr::ArrayLit(items));
-                if self.capturing() && name == names::VALUES {
-                    self.capture_form(all, Form::EnumMember(name));
+                let values: Vec<(SymId, u32, Name)> = cases
+                    .iter()
+                    .filter_map(|&c| {
+                        let ci = self.syms.class(c);
+                        ci.singleton.map(|s| (s, ci.ordinal, ci.name))
+                    })
+                    .collect();
+                let enumeration = !cases.is_empty() && values.len() == cases.len();
+                if cases.is_empty() || (name != names::FROM_ORDINAL && !enumeration) {
+                    return None;
                 }
                 // The type arguments differ from case to case, which is `E[?]` in Scala.
                 let arity = self.class_arity(enum_class);
                 let enum_ty = self.types.class(enum_class, &vec![WILD; arity]);
+                let full = self.syms.scala_full_name(self.interner, enum_class);
+                let full = self.prog.add_str(&full);
+                let full = self.prog.add(TExpr::Str(full));
                 if name == names::VALUES {
                     if !no_args {
                         return None;
                     }
+                    let s = self.prog.add_str("$enumValues($0)");
+                    let l = self.prog.list(&[recv]);
+                    let te = self.prog.add(TExpr::Js(s, l));
+                    if self.capturing() {
+                        self.capture_form(te, Form::EnumMember(name));
+                    }
                     let args = self.types.list(&[enum_ty]);
                     let array = self.types.mk(Type::Class(self.b.array, args));
-                    return Some((all, array));
+                    return Some((te, array));
                 }
                 if !one_arg {
                     return None;
                 }
-                let (expected, helper) = if name == names::VALUE_OF {
-                    (self.b.t_string, "$enumValueOf($0, $1, $2)")
-                } else {
-                    (self.b.t_int, "$enumFromOrdinal($0, $1, $2)")
-                };
+                let expected = if name == names::VALUE_OF { self.b.t_string } else { self.b.t_int };
                 let (key, _) = self.type_expr(arg(0)?, Some(expected));
-                let s = self.prog.add_str(helper);
-                let enum_name = self.prog.add_str(self.interner.get(self.syms.class(enum_class).name));
-                let enum_name = self.prog.add(TExpr::Str(enum_name));
-                let l = self.prog.list(&[all, key, enum_name]);
-                let te = self.prog.add(TExpr::Js(s, l));
+                let refs: Vec<TExprId> = values.iter().map(|&(s, _, _)| self.prog.add(TExpr::Static(s))).collect();
+                let refs = self.prog.list(&refs);
+                let refs = self.prog.add(TExpr::ArrayLit(refs));
+                let (template, keys): (&str, Vec<TExprId>) = if name == names::VALUE_OF {
+                    let names: Vec<TExprId> = values
+                        .iter()
+                        .map(|&(_, _, n)| {
+                            let n = self.prog.add_str(self.interner.get(n));
+                            self.prog.add(TExpr::Str(n))
+                        })
+                        .collect();
+                    ("$enumValueOf($0, $1, $2, $3, $4)", names)
+                } else if enumeration {
+                    ("$enumFromOrdinal($0, $1, $2)", Vec::new())
+                } else {
+                    let ordinals: Vec<TExprId> = values.iter().map(|&(_, o, _)| self.prog.add(TExpr::Int(o as i32))).collect();
+                    ("$enumCaseOfOrdinal($0, $1, $2, $3, $4)", ordinals)
+                };
+                let args = if template.starts_with("$enumFromOrdinal") {
+                    self.prog.list(&[recv, key, full])
+                } else {
+                    let keys = self.prog.list(&keys);
+                    let keys = self.prog.add(TExpr::ArrayLit(keys));
+                    self.prog.list(&[recv, key, full, refs, keys])
+                };
+                let s = self.prog.add_str(template);
+                let te = self.prog.add(TExpr::Js(s, args));
                 if self.capturing() {
                     self.capture_form(te, Form::EnumMember(name));
                 }

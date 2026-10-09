@@ -1192,7 +1192,7 @@ impl<'a> Worker<'a> {
                     .iter()
                     .filter_map(|&other| self.syms.class(other).members.get(&name).copied())
                     .any(|s| !self.is_abstract_member(s));
-                if implemented || !self.is_abstract_member(m) {
+                if implemented || !self.is_abstract_member(m) || self.implemented_by_any(m) {
                     continue;
                 }
                 if open.is_some() {
@@ -1454,7 +1454,7 @@ impl<'a> Worker<'a> {
             captures: captures.len(),
             parent_args: None,
             parent_prelude: ast::ListRef::EMPTY,
-            inherited_case_members: 0,
+            synthesized: 0,
             retracted_unapply: false,
             init: self.parent_inits(c, &mut Vec::new()),
             methods: vec![f],

@@ -148,9 +148,6 @@ pub struct Builtins {
     pub t_product: TypeId,
     pub t_singleton: TypeId,
     pub t_equals: TypeId,
-    /// The interned name `Serializable` once the interner holds it, which `java.io.Serializable`'s
-    /// check by name compares first (`Worker::is_serializable_type`).
-    pub serializable_name: std::cell::Cell<Option<Name>>,
     /// `scala.reflect.Enum`, which enum classes and cases are without extending it.
     pub reflect_enum: Option<ClassId>,
     pub t_enum: TypeId,
@@ -165,9 +162,6 @@ pub struct Builtins {
     pub tuple_member_bits: [u64; 4],
     /// The members of scala-library's `Predef`, which the lean std defines in package `scala`.
     pub predef_names: std::collections::HashSet<Name, crate::intern::FxBuild>,
-    /// The concrete members of `Product` with the std functions that stand in for them on a
-    /// receiver without the trait's body (`derive::product_helper`).
-    pub product_helpers: Vec<(Name, SymId)>,
     pub scala_pkg: PkgId,
     /// The numeric rank of the first type ids (`prims::R_BYTE` to `R_DOUBLE`), which the
     /// primitive types are among; `NO_RANK` for the others.
@@ -2021,7 +2015,6 @@ impl<'a> Worker<'a> {
             t_product: ERROR,
             t_singleton: ERROR,
             t_equals: ERROR,
-            serializable_name: std::cell::Cell::new(None),
             reflect_enum: None,
             t_enum: ERROR,
             tuple_trait: None,
@@ -2030,7 +2023,6 @@ impl<'a> Worker<'a> {
             tuple_members: Vec::new(),
             tuple_member_bits: [0; 4],
             predef_names: Default::default(),
-            product_helpers: Vec::new(),
             scala_pkg,
             num_rank,
         };
@@ -3762,10 +3754,6 @@ impl<'a> Worker<'a> {
             self.b.tuple_member_bits[(n.0 / 64 % 4) as usize] |= 1 << (n.0 % 64);
         }
         self.b.predef_names = crate::stdindex::STD_INDEX.iter().flat_map(|f| f.predef).map(|n| self.interner.intern(n)).collect();
-        self.b.product_helpers = [("productIterator", "productIteratorImpl"), ("productElementNames", "productElementNamesImpl"), ("canEqual", "canEqualImpl")]
-            .iter()
-            .filter_map(|&(member, helper)| Some((self.interner.intern(member), self.entered_std_def(helper)?)))
-            .collect();
         self.b.tuple_trait = self.entered_std_class("Tuple");
         self.b.non_empty_tuple = self.entered_std_class("NonEmptyTuple");
         self.b.empty_tuple = self.empty_tuple_class();
@@ -4105,11 +4093,6 @@ impl<'a> Worker<'a> {
         let name = self.interner.intern(name);
         let scala = self.b.scala_pkg;
         self.demand_term(scala, name)
-    }
-
-    fn entered_std_def(&mut self, name: &str) -> Option<SymId> {
-        let name = self.interner.intern(name);
-        self.syms.pkg(self.b.scala_pkg).entries.get(&name).and_then(|e| e.term)
     }
 
     pub(super) fn std_object(&mut self, name: &str) -> Option<ClassId> {

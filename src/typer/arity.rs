@@ -282,10 +282,11 @@ impl<'a> Worker<'a> {
         }
         let targs: Vec<TypeId> = tparams.iter().map(|&p| self.types.param(p)).collect();
         let self_ty = self.types.class(c, &targs);
-        // The supertypes teq's own std declares; under `--std=scala-library` the library's come through
+        // The supertypes teq's own std declares, with `Product` and its `Equals` as scala-library's
+        // tuples have them; under `--std=scala-library` the library's come through
         // `link_library_class`, and nothing is read from the classpath here.
         let mut base_types = vec![(c, self_ty)];
-        for parent in ["NonEmptyTuple", "Tuple"] {
+        for parent in ["NonEmptyTuple", "Tuple", "Product", "Equals"] {
             let name = self.interner.intern(parent);
             if let Some(p) = self.syms.pkg(scala).entries.get(&name).and_then(|e| e.class) {
                 let pt = self.types.class(p, &[]);

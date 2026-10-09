@@ -23,6 +23,7 @@ use super::names::*;
 use crate::ast::ListRef;
 use crate::symbols::Owner;
 use crate::tir::*;
+use crate::types::Type;
 use crate::typer::prims::UNBOX;
 use std::rc::Rc;
 
@@ -137,15 +138,46 @@ impl<'a> Gen<'a> {
                 self.invoke(Invoke::Virtual, OBJECT, false, "equals", &[object], &JType::Z);
                 return JType::Z;
             }
-            "$enumValueOf($0, $1, $2)" | "$enumFromOrdinal($0, $1, $2)" => {
-                let by_name = text.starts_with("$enumValueOf");
-                let array = JType::L(Rc::from(OBJECT_ARRAY));
+            // The lookups of an enum's companion (`prims.rs`): its own `values`, `valueOf` and
+            // `fromOrdinal`, scalac's (`enum_companion_members`).
+            "$enumValues($0)" | "$enumValueOf($0, $1, $2, $3, $4)" | "$enumFromOrdinal($0, $1, $2)" | "$enumCaseOfOrdinal($0, $1, $2, $3, $4)" => {
+                let cx = self.cx;
+                let module = match cx.input.prog.expr(args[0]) {
+                    TExpr::Module(c) => Some(c),
+                    _ => self.recorded_type(args[0]).and_then(|t| match cx.input.types.get(t) {
+                        Type::Class(c, _) => Some(c),
+                        _ => None,
+                    }),
+                };
+                let Some(module) = module else {
+                    self.unsupported("an enum lookup whose companion is not known");
+                    return JType::object();
+                };
+                let Some(e) = cx.input.syms.class(module).companion else {
+                    self.unsupported("an enum lookup whose companion is not known");
+                    return JType::object();
+                };
+                let owner = self.class_name(module);
+                let enum_type = self.class_type(e);
+                self.expr(args[0], &JType::L(owner.clone()));
                 let string = JType::L(Rc::from(STRING));
-                self.expr(args[0], &array);
-                let key = if by_name { string.clone() } else { JType::I };
-                self.expr(args[1], &key);
-                self.expr(args[2], &string);
-                return self.helper_call(if by_name { "enumValueOf" } else { "enumFromOrdinal" }, 3);
+                return match text {
+                    "$enumValues($0)" => {
+                        let array = JType::L(Rc::from(format!("[{}", self.desc_of(&enum_type))));
+                        self.invoke(Invoke::Virtual, &owner, false, "values", &[], &array);
+                        array
+                    }
+                    "$enumValueOf($0, $1, $2, $3, $4)" => {
+                        self.expr(args[1], &string);
+                        self.invoke(Invoke::Virtual, &owner, false, "valueOf", &[string], &enum_type);
+                        enum_type
+                    }
+                    _ => {
+                        self.expr(args[1], &JType::I);
+                        self.invoke(Invoke::Virtual, &owner, false, "fromOrdinal", &[JType::I], &enum_type);
+                        enum_type
+                    }
+                };
             }
             "$productPrefix($0)" => {
                 let product = JType::L(Rc::from(PRODUCT));

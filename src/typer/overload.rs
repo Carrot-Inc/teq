@@ -451,9 +451,12 @@ impl<'a> Worker<'a> {
             Owner::Class(_) if matches!(name, names::TO_STRING | names::HASH_CODE | names::EQUALS) && self.matches_any_member(m) => None,
             Owner::Class(c) => {
                 self.complete_class(c);
+                // Another parameter list than `Any`'s member of the name is an alternative of it,
+                // in a program's class, whose check names it (`check_overrides`).
+                let beside_any = matches!(name, names::TO_STRING | names::HASH_CODE | names::EQUALS) && self.program_file(self.syms.class(c).file);
                 match self.overridden_dispatch(c, m) {
                     Some(inherited) => inherited,
-                    None => (!self.keeps_plain_name(m)).then(|| {
+                    None => (beside_any || !self.keeps_plain_name(m)).then(|| {
                         let entry = self.settled_entry(c, name).unwrap_or(m);
                         self.suffixed_name(m, entry)
                     }),

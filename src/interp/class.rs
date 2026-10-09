@@ -47,8 +47,11 @@ impl<'a, 't> Interp<'a, 't> {
             return Some(i as usize);
         }
         if !self.typer.is_library_class(c) {
-            // A class the check pass has not reached yet, met while a macro runs.
-            if self.syms().class(c).def.is_none() || self.syms().class(c).owner == Owner::Local {
+            // A class the check pass has not reached yet, met while a macro runs; an enum's
+            // synthesized companion, which holds its lookups, is checked as any.
+            let info = self.syms().class(c);
+            let enum_companion = info.companion.is_some_and(|e| self.syms().class(e).kind == ClassKind::Enum);
+            if (info.def.is_none() && !enum_companion) || info.owner == Owner::Local {
                 return None;
             }
             // A class the interpreter reaches is every worker's: checked under the loader's
@@ -486,11 +489,19 @@ impl<'a, 't> Interp<'a, 't> {
             ordinal: Cell::new(ordinal),
             hash: Cell::new(0), slot: Cell::new(0), born: Cell::new(0), made: Cell::new(super::made_now()) });
         let v = Value::Obj(obj.clone());
-        self.made.insert_static(sym, v.clone(), self.records.runs);
+        // A stateful enum's case is its companion's field, set once the construction returns
+        // (`enum_value`), as scalac's `val A = $new(..)` is.
+        let stateful = self.enum_of_case(case).map_or(false, |e| self.syms().class(e).stateful);
+        if !stateful {
+            self.made.insert_static(sym, v.clone(), self.records.runs);
+        }
         self.enter()?;
         let r = self.construct(&obj, case, Vec::new());
         self.depth -= 1;
         r?;
+        if stateful {
+            self.made.insert_static(sym, v.clone(), self.records.runs);
+        }
         Ok(v)
     }
 
@@ -500,8 +511,14 @@ impl<'a, 't> Interp<'a, 't> {
         let Owner::Class(companion) = self.syms().sym(sym).owner else { return self.make_enum_value(case, sym) };
         let stateful = self.enum_of_case(case).map_or(false, |e| self.syms().class(e).stateful);
         if stateful {
-            self.module(companion)?;
-            return Ok(self.made.statics.get(&sym).cloned().unwrap_or(Value::Null));
+            // The companion's field of the case, which it sets once the case's construction
+            // returns (`create_stateful_enum_values`), as scalac's `val A = $new(..)` does.
+            let m = self.module(companion)?;
+            let key = self.field_key(sym);
+            return Ok(match self.read_slot(&m, key) {
+                Value::Absent => Value::Null,
+                v => v,
+            });
         }
         let v = self.make_enum_value(case, sym)?;
         if self.has_body(companion) {
@@ -870,6 +887,34 @@ impl<'a, 't> Interp<'a, 't> {
             self.write_slot(this, key, v);
         }
         Ok(())
+    }
+
+    /// The `$values` the companion `m` of an enum whose cases are all values stores after its
+    /// cases (dotty's `enumScaffolding`), as a new array: `None` before the last case of a
+    /// stateful enum is made, whose cases are the companion's slots, written in order
+    /// (`create_stateful_enum_values`).
+    pub(super) fn enum_values(&mut self, m: &Value) -> R<Option<Vec<Value>>> {
+        let Value::Obj(o) = m else { return Ok(None) };
+        let Some(e) = self.syms().class(o.class).companion else { return Ok(None) };
+        let (stateful, children) = {
+            let info = self.syms().class(e);
+            (info.stateful, info.children.clone())
+        };
+        let mut out = Vec::with_capacity(children.len());
+        for case in children {
+            let Some(sym) = self.syms().class(case).singleton else { return Ok(None) };
+            let v = if stateful {
+                let key = self.field_key(sym);
+                self.read_slot(m, key)
+            } else {
+                self.static_value(sym)?
+            };
+            if let Value::Absent = v {
+                return Ok(None);
+            }
+            out.push(v);
+        }
+        Ok(Some(out))
     }
 
     /// Whether the constructor of `c` runs statements or initialisers of the body.
@@ -1472,23 +1517,23 @@ impl<'a, 't> Interp<'a, 't> {
     }
 
     /// The `toString`, `equals` and `hashCode` a case class, case object or enum value gets by
-    /// rule, unless scalac lets it inherit them.
+    /// rule (`TClass::synthesized`), where it has no definition of its own or inherited.
     fn shape_member(&mut self, c: ClassId, name: Name) -> Option<Member> {
         let shape = self.shape(c);
-        let bit = match name {
-            crate::names::TO_STRING => 0,
-            crate::names::EQUALS => 1,
-            crate::names::HASH_CODE => 2,
+        let (bit, member) = match name {
+            crate::names::TO_STRING => (synthetic::TO_STRING, 0),
+            crate::names::EQUALS => (synthetic::EQUALS, 1),
+            crate::names::HASH_CODE => (synthetic::HASH_CODE, 2),
             _ => return None,
         };
         if matches!(shape, Shape::Plain) {
             return None;
         }
-        let inherited = self.tclass_field(c, |tc| tc.inherited_case_members).unwrap_or(0);
-        if inherited & (1 << bit) != 0 {
+        let synthesized = self.tclass_field(c, |tc| tc.synthesized).unwrap_or(u16::MAX);
+        if synthesized & bit == 0 {
             return None;
         }
-        Some(match (shape, bit) {
+        Some(match (shape, member) {
             (_, 0) => Member::CaseToString,
             (Shape::EnumValue, 1) => Member::AnyEquals,
             (_, 1) => Member::CaseEquals,

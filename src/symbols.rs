@@ -126,6 +126,9 @@ pub struct ClassInfo {
     pub made_at: Option<FileId>,
     pub tparams: Vec<TParamId>,
     pub parents: Vec<TypeId>,
+    /// How many of `parents`, at the end, dotty's `Desugar.classDef` gives the class rather than
+    /// its source: `Product` and `Serializable` of a case class or object, an enum's `Enum`.
+    pub desugared_parents: u8,
     /// The class this one extends, directly or through a trait that extends a class.
     pub superclass: Option<ClassId>,
     /// The classes that have this one as their superclass.
@@ -206,15 +209,6 @@ impl ClassInfo {
             return name.split('$').next().unwrap_or(name);
         }
         name
-    }
-
-    /// Whether the class has the parents scalac's desugaring adds by rule, without extending them
-    /// here (`std/prelude.scala`): a case class or object, a tuple, an enum or an enum case,
-    /// which scalac makes extend `Product` and `java.io.Serializable` (`Desugar.classDef` 969 to
-    /// 970, an enum through `scala.reflect.Enum`, which extends both). The parents are
-    /// `Symbols::is_synthetic_parent`'s.
-    pub fn is_product_by_rule(&self) -> bool {
-        self.mods & crate::ast::mods::CASE != 0 || matches!(self.kind, ClassKind::Enum | ClassKind::EnumCase)
     }
 }
 
@@ -811,10 +805,9 @@ impl Symbols {
         info
     }
     #[inline]
-    /// Whether `c` is one of the parents a product by rule has (`ClassInfo::is_product_by_rule`):
+    /// Whether `c` is one of the parents `Desugar.classDef` gives a case class or object:
     /// `scala.Product`, its parent `scala.Equals`, and `java.io.Serializable`, the std's or a
-    /// jar's. Conformance, the JVM's interfaces and the membership a test of one sees at run time
-    /// are derived from these.
+    /// jar's (the JVM's interfaces list them as scalac's backend does).
     pub fn is_synthetic_parent(&self, interner: &crate::intern::Interner, c: ClassId) -> bool {
         // Each is a trait: a class, the most a test meets, is none of them at once.
         let info = self.class(c);
@@ -893,6 +886,7 @@ impl Symbols {
             local_module: None,
             inner_object: None,
             stateful: false,
+            desugared_parents: 0,
             has_exports: false,
             self_alias: crate::names::EMPTY,
             has_imports: false,
@@ -978,6 +972,29 @@ impl Symbols {
         match info.dispatch {
             Dispatch::Named => *self.dispatch_names.get(&s).expect("a named method has its name"),
             _ => info.name,
+        }
+    }
+
+    /// dotty's `fullName` of a class: its owners' names outermost first, joined by `.`, an
+    /// object's class with its `$` (`pk.O$.E`), as a message names an enum.
+    pub fn scala_full_name(&self, interner: &crate::intern::Interner, c: ClassId) -> String {
+        let info = self.class(c);
+        let module = info.kind == ClassKind::Object || info.inner_object.is_some() || info.local_module.is_some();
+        let own = format!("{}{}", interner.get(info.name), if module { "$" } else { "" });
+        match info.owner {
+            Owner::Class(o) => format!("{}.{}", self.scala_full_name(interner, o), own),
+            Owner::Package(p) => {
+                let mut segs = Vec::new();
+                let mut at = Some(p);
+                while let Some(k) = at.filter(|&k| k != ROOT_PKG) {
+                    segs.push(interner.get(self.pkg(k).name).to_string());
+                    at = self.pkg(k).parent;
+                }
+                segs.reverse();
+                segs.push(own);
+                segs.join(".")
+            }
+            Owner::Local => own,
         }
     }
 
