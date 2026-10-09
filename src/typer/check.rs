@@ -3234,7 +3234,12 @@ impl<'a> Worker<'a> {
             (i.file, i.kind, i.superclass)
         };
         let clause = self.superclass_clause(c, parents);
-        let all_accepted = self.syms.class(c).parents.len() >= parents.len();
+        // The parents the class writes, which the desugaring's follow (`desugared_parents`).
+        let written = {
+            let info = self.syms.class(c);
+            info.parents.len() - info.desugared_parents as usize
+        };
+        let all_accepted = written >= parents.len();
         for p in parents.iter().filter(|_| all_accepted) {
             let of_trait = self.evidence_trait_of(c, p);
             let span = self.ast(file).ty_spans[p.ty.idx()];
