@@ -5116,11 +5116,12 @@ impl<'a> Worker<'a> {
                 // finds a concrete member matching it loosely with the parameter types compared
                 // (`matchesLoosely(.., alwaysCompareTypes = true)`, relaxed on the result): one of
                 // `Any`'s parameters, not an `equals(s: String)`, a type incompatible otherwise
-                // being the override check's error. An inherited one: the class's own hides `Any`'s
-                // among its members (`nonPrivateMembersNamed`), except in a case class, whose are
-                // synthesized over a deferred one (`SyntheticMembers.existingDef`).
-                let case_class = self.syms.class(c).mods & mods::CASE != 0;
-                if matches!(name, names::TO_STRING | names::HASH_CODE | names::EQUALS) && (b != c || case_class) && self.any_member_agreement(m) != Agreement::Params {
+                // being the override check's error. A trait's: its deferred member meets the
+                // concrete one of the superclass chain among the class's members, the concrete
+                // preferred (`Denotations.mergeSingleDenot`); the class's or a superclass's own
+                // hides `Any`'s (`computeMembersNamed`).
+                let from_trait = self.syms.class(b).kind == ClassKind::Trait;
+                if from_trait && matches!(name, names::TO_STRING | names::HASH_CODE | names::EQUALS) && self.any_member_agreement(m) != Agreement::Params {
                     continue;
                 }
                 // The class's own member is the most derived: whatever of its name it inherits it
