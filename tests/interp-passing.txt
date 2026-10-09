@@ -118,6 +118,7 @@ capture_x
 case_class_below_superclass
 case_class_hash_elements
 case_class_inherited_members
+case_class_join_union
 case_class_own_unapply
 case_class_parents
 case_class_selectors
