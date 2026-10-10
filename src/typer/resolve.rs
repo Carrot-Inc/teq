@@ -3211,8 +3211,8 @@ impl<'a> Worker<'a> {
     /// bounds as a lower and an upper bound, an upper part allowing cycles in nested refinements.
     fn own_info_cyclic(&mut self, r: Refinement, own: &[(Name, Refinement)], locked: &mut Vec<Name>, budget: &mut u32) -> bool {
         match r {
-            // A match type's alias names itself in its cases, guarded (`MatchAlias`).
-            Refinement::Alias(_, x) if self.is_match_rhs(x) => false,
+            // A match alias as an upper part at variance 0 (`MatchAlias`: `atVariance(0)(checkUpper(..))`).
+            Refinement::Alias(_, x) if self.is_match_rhs(x) => self.own_cyclic(x, 0, 0, false, true, own, locked, budget),
             Refinement::Alias(_, x) => self.own_cyclic(x, 0, -1, false, false, own, locked, budget) || self.own_cyclic(x, 0, 1, false, true, own, locked, budget),
             Refinement::Bounds(_, lo, hi) => self.own_cyclic(lo, 0, -1, false, false, own, locked, budget) || self.own_cyclic(hi, 0, 1, false, true, own, locked, budget),
             _ => false,
@@ -3239,7 +3239,7 @@ impl<'a> Worker<'a> {
                 }
                 locked.push(n);
                 let cyclic = match info {
-                    Refinement::Alias(_, x) if self.is_match_rhs(x) => false,
+                    Refinement::Alias(_, x) if self.is_match_rhs(x) => self.own_cyclic(x, 0, 0, cycle_ok, true, own, locked, budget),
                     Refinement::Alias(_, x) => self.own_cyclic(x, 0, -1, cycle_ok, nested_ok, own, locked, budget) || self.own_cyclic(x, 0, 1, cycle_ok, true, own, locked, budget),
                     Refinement::Bounds(_, lo, hi) => self.own_cyclic(lo, 0, -1, cycle_ok, nested_ok, own, locked, budget) || self.own_cyclic(hi, 0, 1, cycle_ok, true, own, locked, budget),
                     _ => false,
@@ -3249,8 +3249,23 @@ impl<'a> Worker<'a> {
             }
             Type::Member(p, _) => self.own_cyclic(p, depth, variance.max(0), false, false, own, locked, budget),
             Type::Rec(b) => self.own_cyclic(b, depth + 1, variance, cycle_ok, nested_ok, own, locked, budget),
-            // A match type's cases are reduced on demand: what they name is no cycle of the alias.
-            Type::Match(..) => false,
+            // `mapOver` of a match type: its scrutinee at variance 0, and each case as the
+            // arguments of a `MatchCase[Pat, +Body]` (`mapArg`). A member a case names under a
+            // match alias is legal (`checkUpper`'s `nestedCycleOK`); one the scrutinee names is a
+            // cycle (`type A = A match { .. }`). The bound teq gives a match type without a
+            // declared one is the union of its bodies (`match_type_expr`), dotty's `Any`: it is
+            // checked as the bodies are.
+            Type::Match(scrut, m) => {
+                let info = self.types.match_info(m).clone();
+                if self.own_cyclic(scrut, depth, 0, cycle_ok, nested_ok, own, locked, budget) {
+                    return true;
+                }
+                let args: Vec<(TypeId, i8)> = info.cases.iter().flat_map(|c| [(c.pattern, 0i8), (c.body, 1i8)]).chain([(info.bound, 1i8)]).collect();
+                args.into_iter().any(|(x, pv)| {
+                    let nested = nested_ok || (variance != 0 && variance != pv);
+                    self.own_cyclic(x, depth, variance * pv, nested_ok, nested, own, locked, budget)
+                })
+            }
             Type::Refined(p, r) => {
                 if self.own_cyclic(p, depth, variance, cycle_ok, nested_ok, own, locked, budget) {
                     return true;

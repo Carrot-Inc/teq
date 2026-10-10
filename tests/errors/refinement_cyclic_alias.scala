@@ -16,3 +16,11 @@ object Foo:
   type D = AnyRef { type M = List[N]; type N = Int }
   // through a nested recursive refinement:
   type N = AnyRef { type A = AnyRef { type D; type C = (A, D) } }
+  // through a match alias's scrutinee, directly and through another alias (`MatchAlias`,
+  // `atVariance(0)(checkUpper(..))`); a case's body may name the alias:
+  type MA = AnyRef { type A = A match { case String => Int } }
+  type MB = AnyRef { type A = B match { case String => Int }; type B = A }
+  type MC = AnyRef { type A[X] = X match { case String => Int; case List[t] => A[t] } }
+// expect: 21:27: error: illegal cyclic type reference: alias A of type A refers back to the type itself
+// expect: 22:27: error: illegal cyclic type reference: alias A of type A refers back to the type itself
+// absent: 23:27: error
