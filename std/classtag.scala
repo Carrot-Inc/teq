@@ -8,9 +8,9 @@ package scala.reflect
 trait ClassTag[T]:
   def runtimeClass: Class[?]
   // scala-library's bodies, each reading `runtimeClass` once: an array of the class (its elements
-  // the zero of the class), a value of the class (`isInstance`), an array's tag (the array class of
-  // the class), and the tag's equality, hash and name; their helpers and the tags' classes are in
-  // `classtag_kinds.scala`, which a program enters where it makes a tag.
+  // the zero of the class), a value of the class (`isInstance`), an array's tag (the one array
+  // class outside the JVM), and the tag's equality, hash and name; their helpers and the tags'
+  // classes are in `classtag_kinds.scala`, which a program enters where it makes a tag.
   @jvm("rt $0 $1:I rtcall newArrayOfTag(Lscala/reflect/ClassTag;I)Ljava/lang/Object; cast_result")
   @jvmLink("$0 $1:I invokeinterface scala/reflect/ClassTag.newArray(I)Ljava/lang/Object; cast_result")
   def newArray(len: Int): Array[T] = unsafeCast(scala.newArray[Any](len, zeroOf(runtimeClass)))

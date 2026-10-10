@@ -38,9 +38,8 @@ private[reflect] def zeroOf(c: Class[?]): Any = c.getName match
   case "void" => ()
   case _ => null
 
-// scala-library's `arrayClass`: the class of an array of the class's values, named by it as
-// `classOf[Array[T]]` is (`[I`, `[Ljava.lang.String;`).
-@js("$arrayClassOf($0)")
+// scala-library's `arrayClass`: the one array class outside the JVM, whatever the element, as an
+// array value is of it.
 private[reflect] def arrayClassOf(c: Class[?]): Class[?] = classOf[Array[Any]]
 
 // scala-library's `prettyprint`: an array's class as `Array[element]`.

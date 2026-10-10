@@ -3249,11 +3249,11 @@ impl<'a> Emitter<'a> {
     /// `classOf[C]`: the `Class` of an emitted Scala class is the one `getClass` gives its
     /// instances; a builtin or a class the output has no constructor for is named.
     pub(super) fn emit_class_of(&mut self, c: ClassId, dims: u8) {
+        // An array is of the one array class here, which no array value tells apart: the class
+        // of an array of a known element names it where the compiler reads it (a reflective
+        // call's proxy), not at run time.
         if dims > 0 {
-            let element = class_of_name(self.syms, self.interner, c).unwrap_or_else(|| self.qualified_name(c));
-            self.out.push_str("$classNamed(");
-            js_string(&array_class_name(&element, dims), &mut self.out);
-            self.out.push(')');
+            self.out.push_str("$classNamed(\"[Ljava.lang.Object;\")");
             return;
         }
         let qualified = self.qualified_name(c);

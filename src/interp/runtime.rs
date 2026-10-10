@@ -654,17 +654,11 @@ impl<'a, 't> Interp<'a, 't> {
     // ---- classes ----
 
     /// `classOf[C]`: the class value named as the JVM names it.
-    /// `classOf` of a class, or of an array of `dims` dimensions of it (`TExpr::ClassOf`), whose
-    /// value is the array class's, named by its element.
+    /// `classOf` of a class, or of an array of `dims` dimensions of it (`TExpr::ClassOf`): the one
+    /// array class, as an array value is of it (`Emitter::emit_class_of`).
     pub(super) fn class_literal(&mut self, c: ClassId, dims: u8) -> Value {
-        if dims == 0 {
-            return self.class_value_of(c);
-        }
-        let element: Rc<str> = match crate::emit::class_of_name(self.syms(), self.typer.interner, c) {
-            Some(n) => Rc::from(n),
-            None => self.runtime_class_name(c),
-        };
-        self.class_value_named(&crate::emit::array_class_name(&element, dims))
+        let c = if dims == 0 { c } else { self.typer.b.array };
+        self.class_value_of(c)
     }
 
     pub(super) fn class_value_of(&mut self, c: ClassId) -> Value {
@@ -685,9 +679,7 @@ impl<'a, 't> Interp<'a, 't> {
             return Value::Class(c.clone());
         }
         let qname: Rc<str> = Rc::from(qname);
-        // An array's class, whichever its element, is of the array class.
-        let class = qname.starts_with('[').then_some(self.typer.b.array);
-        let c = Rc::new(ClassValue { class, qname: qname.clone() });
+        let c = Rc::new(ClassValue { class: None, qname: qname.clone() });
         self.class_values.insert(qname, c.clone());
         Value::Class(c)
     }
