@@ -4776,7 +4776,7 @@ impl<'a> Worker<'a> {
             self.shared_write(p, |w| w.syms.sym_mut(p).overridden_by_param = true);
         }
         let msig = self.sig_arc(m);
-        let agreement = self.compare_sigs(c, msig, m_owner, p, p_owner);
+        let agreement = self.compare_sigs_of(c, Some(m), msig, m_owner, p, p_owner);
         // A val next to the alternatives of an overloaded name other than the one it implements.
         let overloads = p_kind == SymKind::Def && (m_kind == SymKind::Def || self.syms.sym(p).alternative);
         if agreement == Agreement::Params && (p_abstract || overloads) {
@@ -5037,24 +5037,20 @@ impl<'a> Worker<'a> {
     /// inherits them: `m_owner` and `p_owner` are the ancestor types each comes from, `None` for
     /// `c` itself. The type parameters of `p` are read as those of the member. A member of an
     /// ancestor whose result is that ancestor's own type is read as returning `this.type`.
-    pub(super) fn compare_sigs(&mut self, c: ClassId, mut msig: Arc<MethodSig>, m_owner: Option<TypeId>, p: SymId, p_owner: TypeId) -> Agreement {
+    pub(super) fn compare_sigs(&mut self, c: ClassId, msig: Arc<MethodSig>, m_owner: Option<TypeId>, p: SymId, p_owner: TypeId) -> Agreement {
+        self.compare_sigs_of(c, None, msig, m_owner, p, p_owner)
+    }
+
+    /// `compare_sigs` of the member `m` where it is known, whose own and overridden symbols count
+    /// for the loose match of a nullary pair as `p`'s do.
+    pub(super) fn compare_sigs_of(&mut self, c: ClassId, m: Option<SymId>, mut msig: Arc<MethodSig>, m_owner: Option<TypeId>, p: SymId, p_owner: TypeId) -> Agreement {
         let mut psig = self.sig_arc(p);
-        // A Java method's `()` matches a parameterless member or a val, and a parameterless
-        // one (the std's `Iterator.hasNext`) a `()`, as scalac's `matchNullaryLoosely` has it for
-        // Java-defined members; the std's classes of `java.*` stand for the JDK's.
-        // So does a member that overrides one of Java's or `Any`'s (`Function1.toString()`
-        // overrides `Any.toString`, which a `def toString` overrides in turn).
+        // `def x` and `def x()` are one member, either overriding the other, where either or a
+        // member either overrides is Java's, `Any`'s or `Object.clone`, or of a Scala 2 class
+        // (dotty's `matchNullaryLoosely`, `OverridingPairs.isOverridingPair`).
         let empty = |sig: &MethodSig| matches!(&sig.clauses[..], [cl] if cl.params.is_empty() && !cl.is_using);
-        let java = |t: &Self, s: SymId| t.syms.sym(s).java_defined || (t.is_std_member(s) && !t.is_std_scala_member(s));
         let nullary_pair = (msig.clauses.is_empty() && empty(&psig)) || (psig.clauses.is_empty() && empty(&msig));
-        let java_member = java(self, p)
-            || (nullary_pair && {
-                let mut roots = Vec::new();
-                matches!(self.syms.sym(p).name, names::TO_STRING | names::HASH_CODE) || {
-                    self.root_declarations(p, 0, &mut roots);
-                    roots.iter().any(|&r| r != p && java(self, r))
-                }
-            });
+        let java_member = nullary_pair && (self.matches_nullary_loosely(p) || m.is_some_and(|m| self.matches_nullary_loosely(m)));
         if msig.clauses.is_empty() && empty(&psig) && java_member {
             psig = Arc::new(MethodSig { tparams: psig.tparams.clone(), clauses: Vec::new(), ret: psig.ret });
         } else if psig.clauses.is_empty() && empty(&msig) && java_member && self.syms.sym(p).kind == SymKind::Def {
@@ -5069,6 +5065,54 @@ impl<'a> Worker<'a> {
     /// which the body allows for).
     pub(super) fn is_std_member(&self, s: SymId) -> bool {
         self.std.slot_of(self.syms.sym(s).file).is_some()
+    }
+
+    /// dotty's `SymDenotation.matchNullaryLoosely`: `s` or a member it overrides is Java's (the
+    /// std's classes of `java.*` stand for the JDK's), `Any`'s (`toString()`, `hashCode()`),
+    /// `Object.clone`, or a member of a Scala 2 class (scala-library's compiled from Scala 2's
+    /// sources, the std's standing for one, a Scala 2 jar's).
+    pub(super) fn matches_nullary_loosely(&mut self, s: SymId) -> bool {
+        let mut chain = vec![s];
+        self.overridden_chain(s, 0, &mut chain);
+        chain.into_iter().any(|o| self.loose_nullary_symbol(o))
+    }
+
+    fn loose_nullary_symbol(&mut self, s: SymId) -> bool {
+        let info = self.syms.sym(s);
+        if info.java_defined || (self.is_std_member(s) && !self.is_std_scala_member(s)) {
+            return true;
+        }
+        // `Any.toString()`, `Any.hashCode()` and `Object.clone()`, which every class's member of
+        // that name and no parameters, type parameters included, overrides.
+        if matches!(info.name, names::TO_STRING | names::HASH_CODE | names::CLONE) {
+            let sig = self.sig_arc(s);
+            if sig.tparams.is_empty() && sig.clauses.iter().all(|cl| cl.params.is_empty() && !cl.is_using) && sig.clauses.len() <= 1 {
+                return true;
+            }
+        }
+        match self.syms.sym(s).owner {
+            Owner::Class(c) => self.is_scala2_class(c) || self.is_std_scala2_class(c),
+            _ => false,
+        }
+    }
+
+    /// Every member `m` overrides, down the linearisation: `root_declarations`' walk, keeping
+    /// each step and not only the roots.
+    fn overridden_chain(&mut self, m: SymId, depth: u32, out: &mut Vec<SymId>) {
+        let (name, owner) = (self.syms.sym(m).name, self.syms.sym(m).owner);
+        let (Owner::Class(c), true) = (owner, depth < 64) else { return };
+        self.complete_class(c);
+        let bases: Vec<(ClassId, TypeId)> = self.syms.class(c).base_types.clone();
+        for &(b, bt) in bases.iter().skip(1) {
+            let mut k = 0;
+            while let Some(p) = self.own_alternative(b, name, k) {
+                k += 1;
+                if self.syms.sym(p).kind == SymKind::Def && !self.is_private(p) && !out.contains(&p) && self.same_parameters(c, &bases, m, p, bt) {
+                    out.push(p);
+                    self.overridden_chain(p, depth + 1, out);
+                }
+            }
+        }
     }
 
     /// A member of a Scala class of the lean std: a JDK class the std models has no using
