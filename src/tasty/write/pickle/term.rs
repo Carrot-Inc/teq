@@ -6030,10 +6030,30 @@ impl<'w, 'a> P<'w, 'a> {
         if !matches!(kind.as_str(), "s" | "raw") {
             return self.fail(format!("the interpolator {}", kind));
         }
-        // The parts are the strings the typer typed none of; the rest are the arguments.
-        let args: Vec<TExprId> = items.iter().filter(|&&x| !(matches!(self.w.prog.expr(x), TExpr::Str(_)) && self.w.prog.type_of(x).is_none())).map(|&x| self.rendered(x)).collect();
+        // The arguments by their places among the concatenation's items, which the record's parts
+        // tell (as `StringContext.apply(parts*).kind(args*)` keeps the two apart): each part the
+        // typer kept, the first always and another where it is not empty (`kept_part`), is one item,
+        // each argument the item after it; whatever types a copy of the record gives the items.
         let parts: Vec<TypeId> = self.w.types.items(parts).to_vec();
-        if args.len() + 1 != parts.len() {
+        let mut args: Vec<TExprId> = Vec::with_capacity(parts.len().saturating_sub(1));
+        let mut at = 0;
+        for (i, &part) in parts.iter().enumerate() {
+            let written_empty = match self.w.types.get(part) {
+                Type::Lit(l) => matches!(self.w.types.lit_val(l), LitVal::Str(n) if self.w.name_str(n).is_empty()),
+                _ => false,
+            };
+            if i == 0 || !written_empty {
+                at += 1;
+            }
+            if i + 1 < parts.len() {
+                match items.get(at) {
+                    Some(&x) => args.push(self.rendered(x)),
+                    None => return self.fail("an interpolation's arguments".to_string()),
+                }
+                at += 1;
+            }
+        }
+        if at != items.len() {
             return self.fail("an interpolation's arguments".to_string());
         }
         let string = self.w.b.t_string;
