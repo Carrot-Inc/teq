@@ -16,3 +16,4 @@ false,true,true
 false,true
 Boxed(3)
 Boxed(s)
+false,true,None,Some(s)

@@ -11,10 +11,12 @@
 // class constructs through its copied secondary constructors; a type pattern over the abstract type
 // the scrutinee has tests for null (`testNotNull`); a class's by-name members stay by-name in its copies.
 // scalac prints the lines of the .expected file.
-import inlinebodies.{Bodies, ByName, Counter, Ctors, Focus, K0, Quoted, Reduce, Tag, Tests}
+import inlinebodies.{Abstract, Bodies, ByName, Counter, Ctors, Focus, K0, Quoted, Reduce, Tag, Tests}
 var effects = 0
 case class P(a: Int, b: String)
 def effect(n: Int): Int = { effects += 1; n }
+def genCheck[T](d: Any): Boolean = Abstract.check[T](d)
+def genLazy[T](d: Any): Option[T] = Abstract.lazyCheck[T](d)()
 @main def run(): Unit =
   println(Bodies.value(3))
   val three: 3 = Bodies.value(3)
@@ -54,3 +56,4 @@ def effect(n: Int): Int = { effects += 1; n }
   println(s"${Tests.tester[String](true)(none)},${Tests.tester[String](true)("s")}")
   println(ByName.derive(3))
   println(ByName.derive2("s"))
+  println(s"${genCheck[String](null)},${genCheck[String](1)},${genLazy[String](null)},${genLazy[String]("s")}")

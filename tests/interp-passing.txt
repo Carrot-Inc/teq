@@ -553,6 +553,7 @@ init_companions
 init_field_zero
 init_files
 init_order
+inline_abstract_type_test
 inline_anon_by_name
 inline_anon_receiver_this
 inline_anon_shared

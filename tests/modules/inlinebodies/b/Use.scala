@@ -1,6 +1,9 @@
 package ibb
 
-import iba.{Bodies, ByName, Ctors, Tag, Tests}
+import iba.{Abstract, Bodies, ByName, Ctors, Tag, Tests}
+
+def genCheck[T](d: Any): Boolean = Abstract.check[T](d)
+def genLazy[T](d: Any): Option[T] = Abstract.lazyCheck[T](d)()
 
 @main def run(): Unit =
   println(Bodies.value(3))
@@ -24,3 +27,4 @@ import iba.{Bodies, ByName, Ctors, Tag, Tests}
   println(s"${Tests.tester[String](true)(none)},${Tests.tester[String](true)("s")}")
   println(ByName.derive(3))
   println(ByName.derive2("s"))
+  println(s"${genCheck[String](null)},${genCheck[String](1)},${genLazy[String](null)},${genLazy[String]("s")}")

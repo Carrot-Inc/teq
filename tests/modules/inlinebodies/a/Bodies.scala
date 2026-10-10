@@ -78,3 +78,11 @@ object ByName:
       private def cached[T](key: String)(f: => Boxed[T]): Boxed[T] = f
       def wrap[T](x: T): Boxed[T] = Boxed(x)
     new Cached().viaThunk[T](x)
+
+// An inline body's test of its own type parameter, which a caller's type parameter fills: the erased
+// test, everything but `null` (magnolia's default check).
+object Abstract:
+  inline def check[P](d: Any): Boolean = (d: @unchecked).isInstanceOf[P]
+  inline def lazyCheck[P](d: Any): () => Option[P] = () =>
+    val v: Any = d
+    if (v: @unchecked).isInstanceOf[P] then Some(v.asInstanceOf[P]) else None
