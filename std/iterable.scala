@@ -312,6 +312,22 @@ trait IterableOps[+A, +CC[_], +C] extends IterableOnce[A]:
     val arr = rawItems(this)
     buildC(arraySlice(arr, 0, Math.max(0, arr.length - Math.max(n, 0))))
   def splitAt(n: Int): (C, C) = (take(n), drop(n))
+  def tails: Iterator[C] =
+    val arr = rawItems(this)
+    Iterator.range(0, arr.length + 1).map(i => buildC(arraySlice(arr, i, arr.length)))
+  def inits: Iterator[C] =
+    val arr = rawItems(this)
+    Iterator.range(0, arr.length + 1).map(i => buildC(arraySlice(arr, 0, arr.length - i)))
+  def corresponds[B](that: IterableOnce[B])(p: (A, B) => Boolean): Boolean =
+    val a = iterator
+    val b = that.iterator
+    var same = true
+    while same && a.hasNext && b.hasNext do same = p(a.next(), b.next())
+    same && !a.hasNext && !b.hasNext
+  def ++:[B >: A](prefix: IterableOnce[B]): CC[B] =
+    val out: RawBuffer[B] = iterableToArray(prefix)
+    foreach(x => out.push(x))
+    buildCC(out)
   def takeWhile(p: A => Boolean): C =
     val out = emptyBuffer[A]
     val it = iterator
@@ -526,30 +542,17 @@ trait SeqOps[+A, +CC[_], +C] extends IterableOps[A, CC, C]:
     val out: RawBuffer[B] = iterableToArray(prefix)
     foreach(x => out.push(x))
     buildCC(out)
-  def ++:[B >: A](prefix: IterableOnce[B]): CC[B] = prependedAll(prefix)
+  override def ++:[B >: A](prefix: IterableOnce[B]): CC[B] = prependedAll(prefix)
   def padTo[B >: A](len: Int, elem: B): CC[B] =
     val out: RawBuffer[B] = copyArray(rawItems(this))
     while out.length < len do out.push(elem)
     buildCC(out)
-
-  def tails: Iterator[C] =
-    val arr = rawItems(this)
-    Iterator.range(0, arr.length + 1).map(i => buildC(arraySlice(arr, i, arr.length)))
-  def inits: Iterator[C] =
-    val arr = rawItems(this)
-    Iterator.range(0, arr.length + 1).map(i => buildC(arraySlice(arr, 0, arr.length - i)))
 
   def sameElements[B >: A](that: IterableOnce[B]): Boolean =
     val a = iterator
     val b = that.iterator
     var same = true
     while same && a.hasNext && b.hasNext do same = a.next() == b.next()
-    same && !a.hasNext && !b.hasNext
-  def corresponds[B](that: IterableOnce[B])(p: (A, B) => Boolean): Boolean =
-    val a = iterator
-    val b = that.iterator
-    var same = true
-    while same && a.hasNext && b.hasNext do same = p(a.next(), b.next())
     same && !a.hasNext && !b.hasNext
   def startsWith[B >: A](that: IterableOnce[B], offset: Int = 0): Boolean =
     val a = iterator.drop(offset)
@@ -984,6 +987,9 @@ trait View[+A] extends IterableOps[A, View, View[A]], Iterable[A]:
   override def concat[B >: A](suffix: IterableOnce[B]): View[B] = suffix match
     case xs: Iterable[?] => View.over(() => iterator ++ unsafeCast[Iterable[?], Iterable[B]](xs))
     case _ => View.from(iterator ++ suffix.iterator)
+  override def ++:[B >: A](prefix: IterableOnce[B]): View[B] = prefix match
+    case xs: Iterable[?] => View.over(() => unsafeCast[Iterable[?], Iterable[B]](xs).iterator ++ iterator)
+    case _ => View.from(prefix.iterator ++ iterator)
   override def tapEach[U](f: A => U): View[A] = View.over(() => iterator.tapEach(f))
   override def collectionClassName: String = "View"
   override def toString: String = collectionClassName + "(<not computed>)"
