@@ -741,6 +741,7 @@ lexical_extension_retry_leading
 list_fill_order
 list_map_conserve
 list_reverse_prepend
+local_alias_after_path
 local_alias_path
 local_case_classes
 local_class_capture_body
