@@ -532,6 +532,7 @@ impl<'a> Worker<'a> {
         let transparent = std::mem::take(&mut self.transparent);
         let ext_scope = self.ext_scope.take();
         let defining = self.defining.take();
+        let refine_scopes = std::mem::take(&mut self.refine_scopes);
         let walk_done = std::mem::replace(&mut self.walk.done, true);
         self.outside_inline(|t| {
             for &f in files {
@@ -539,6 +540,7 @@ impl<'a> Worker<'a> {
             }
         });
         self.walk.done = walk_done;
+        self.refine_scopes = refine_scopes;
         self.defining = defining;
         self.ext_scope = ext_scope;
         self.transparent = transparent;

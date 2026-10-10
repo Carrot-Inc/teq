@@ -20,6 +20,13 @@ pub struct RefineScope {
     types: Vec<(Name, usize)>,
     /// The term members' symbols, made when the refinement is indexed, each with its place.
     terms: Vec<(Name, SymId, usize)>,
+    /// The type members' definitions, each with its place: what a member's completer resolves.
+    type_defs: Vec<(Name, ast::DefId, usize)>,
+    /// The type members resolved, by their completer or in order.
+    resolved: Vec<(Name, Refinement)>,
+    /// The type members whose completers are running: one named again in its own info is
+    /// read as abstract meanwhile, the cycle checked once the members are closed.
+    completing: Vec<Name>,
     /// The place of the member being resolved: a type member at it or after it is a forward
     /// reference (`Checking.checkRefinementNonCyclic`).
     current: usize,
@@ -2336,8 +2343,10 @@ impl<'a> Worker<'a> {
     /// members `lookup_type_in_path` finds.
     fn dependent_type(&mut self, q: TyExprId, n: Name, span: Span) -> Option<TypeId> {
         let ast = self.cur_ast();
-        // In an inline expansion `this` and `C.this` are the receiver.
+        // In an inline expansion `this` and `C.this` are the receiver; inside a refinement `this`
+        // is the refined type's self.
         let prefix = match ast.ty(q) {
+            TyExpr::Name(names::THIS) if !self.refine_scopes.is_empty() => self.refinement_this(q)?,
             TyExpr::Name(names::THIS) => {
                 let c = self.this_class()?;
                 self.complete_class(c);
@@ -2826,6 +2835,13 @@ impl<'a> Worker<'a> {
             .filter(|&(_, &d)| matches!(ast.def(d).kind, DefKind::TypeAlias { .. }))
             .map(|(i, &d)| (ast.def(d).name, i))
             .collect();
+        let type_defs: Vec<(Name, ast::DefId, usize)> = ast
+            .def_list(members)
+            .iter()
+            .enumerate()
+            .filter(|&(_, &d)| matches!(ast.def(d).kind, DefKind::TypeAlias { .. }))
+            .map(|(i, &d)| (ast.def(d).name, d, i))
+            .collect();
         let mut term_syms: Vec<(Name, SymId, usize)> = Vec::new();
         for (i, &d) in ast.def_list(members).iter().enumerate() {
             let def = ast.def(d);
@@ -2838,55 +2854,30 @@ impl<'a> Worker<'a> {
             self.def_syms.insert(file.0 as usize, d, sym);
             term_syms.push((def.name, sym, i));
         }
-        self.refine_scopes.push(RefineScope { frame_depth: self.env.frames.len(), types, terms: term_syms.clone(), current: 0, parent: parent_ty, infos: Vec::new(), referenced: false });
+        self.refine_scopes.push(RefineScope {
+            frame_depth: self.env.frames.len(),
+            types,
+            terms: term_syms.clone(),
+            type_defs,
+            resolved: Vec::new(),
+            completing: Vec::new(),
+            current: 0,
+            parent: parent_ty,
+            infos: Vec::new(),
+            referenced: false,
+        });
         for (at, &d) in ast.def_list(members).iter().enumerate() {
             if let Some(scope) = self.refine_scopes.last_mut() {
                 scope.current = at;
             }
             let def = ast.def(d);
             let r = match &def.kind {
-                DefKind::TypeAlias { tparams, rhs, lower, upper } => {
-                    let ids = self.make_tparams(tparams);
-                    self.env.frames.push(Frame::Locals { names: Vec::new(), tparams: ids.clone(), givens: Vec::new(), classes: Vec::new(), aliases: Vec::new(), owner: self.sites.owners.len() as u32 });
-                    self.resolve_tparam_bounds(tparams, &ids);
-                    let over = |t: &mut Self, ty: TypeId| {
-                        if ids.is_empty() {
-                            return ty;
-                        }
-                        let ps: Vec<TypeId> = ids.iter().map(|&(_, p)| t.types.param(p)).collect();
-                        let l = t.types.list(&ps);
-                        t.types.mk(Type::Lambda(l, ty))
-                    };
-                    let r = match rhs {
-                        Some(rhs) => {
-                            // A member named in its own right-hand side (a recursive match type)
-                            // has the bound written for it there.
-                            if let Some(b) = upper {
-                                let hi = self.resolve_type(*b);
-                                let hi = over(self, hi);
-                                self.note_refinement_info(def.name, super::members::MemberInfo::Bounds(NOTHING, hi));
-                            }
-                            let ty = self.resolve_type_ctor(*rhs);
-                            Refinement::Alias(def.name, over(self, ty))
-                        }
-                        None => {
-                            let lo = lower.map_or(NOTHING, |b| self.resolve_type(b));
-                            let hi = upper.map_or(ANY, |b| self.resolve_type(b));
-                            // A higher-kinded member keeps its parameters in its upper bound,
-                            // `[A] =>> Any` where none is written, as dotty's `TypeBounds` over an
-                            // `HKTypeLambda`: their variances are the member's.
-                            let (lo, hi) = (if lo == NOTHING { lo } else { over(self, lo) }, if hi == ANY && ids.is_empty() { hi } else { over(self, hi) });
-                            Refinement::Bounds(def.name, lo, hi)
-                        }
-                    };
-                    self.env.frames.pop();
-                    let info = match r {
-                        Refinement::Alias(_, x) => super::members::MemberInfo::Alias(x),
-                        Refinement::Bounds(_, lo, hi) => super::members::MemberInfo::Bounds(lo, hi),
-                        _ => unreachable!(),
-                    };
-                    self.note_refinement_info(def.name, info);
-                    r
+                DefKind::TypeAlias { .. } => {
+                    let k = self.refine_scopes.len() - 1;
+                    match self.refine_scopes[k].resolved.iter().find(|&&(n, _)| n == def.name) {
+                        Some(&(_, r)) => r,
+                        None => self.complete_refinement_member(k, def.name, d),
+                    }
                 }
                 DefKind::Val { .. } | DefKind::Fun(_) => {
                     let kind = match &def.kind {
@@ -2921,6 +2912,87 @@ impl<'a> Worker<'a> {
         self.close_refinement(t, &spans)
     }
 
+    /// The completer of the type member `name` (definition `d`) of the `k`th open refinement
+    /// (dotty's refinement class's member completer, `typedRefinedTypeTree`'s class scope): its
+    /// info resolved in the refinement's own scope, at its own place, whichever member names it
+    /// first, and kept for the refinement.
+    fn complete_refinement_member(&mut self, k: usize, name: Name, d: ast::DefId) -> Refinement {
+        let at = self.refine_scopes[k].type_defs.iter().find(|&&(n, _, _)| n == name).map_or(self.refine_scopes[k].current, |&(_, _, i)| i);
+        let inner = self.refine_scopes.split_off(k + 1);
+        let frames = self.env.frames.split_off(self.refine_scopes[k].frame_depth.min(self.env.frames.len()));
+        let outer_at = std::mem::replace(&mut self.refine_scopes[k].current, at);
+        self.refine_scopes[k].completing.push(name);
+        let def = self.cur_ast().def(d);
+        let r = self.resolve_refinement_type_member(def.name, &def.kind);
+        let scope = &mut self.refine_scopes[k];
+        scope.completing.retain(|&n| n != name);
+        scope.current = outer_at;
+        scope.resolved.push((name, r));
+        let info = match r {
+            Refinement::Alias(_, x) => super::members::MemberInfo::Alias(x),
+            Refinement::Bounds(_, lo, hi) => super::members::MemberInfo::Bounds(lo, hi),
+            _ => super::members::MemberInfo::Bounds(NOTHING, ANY),
+        };
+        scope.infos.retain(|&(n, _)| n != name);
+        scope.infos.push((name, info));
+        self.env.frames.extend(frames);
+        self.refine_scopes.extend(inner);
+        r
+    }
+
+    /// A refinement's type member `name` of the definition `kind`, resolved in the refinement's
+    /// scope: an alias, or bounds, a parameterized one over its parameters.
+    fn resolve_refinement_type_member(&mut self, name: Name, kind: &DefKind) -> Refinement {
+        let DefKind::TypeAlias { tparams, rhs, lower, upper } = kind else { return Refinement::Bounds(name, NOTHING, ANY) };
+        let ids = self.make_tparams(tparams);
+        self.env.frames.push(Frame::Locals { names: Vec::new(), tparams: ids.clone(), givens: Vec::new(), classes: Vec::new(), aliases: Vec::new(), owner: self.sites.owners.len() as u32 });
+        self.resolve_tparam_bounds(tparams, &ids);
+        let over = |t: &mut Self, ty: TypeId| {
+            if ids.is_empty() {
+                return ty;
+            }
+            let ps: Vec<TypeId> = ids.iter().map(|&(_, p)| t.types.param(p)).collect();
+            let l = t.types.list(&ps);
+            t.types.mk(Type::Lambda(l, ty))
+        };
+        let r = match rhs {
+            Some(rhs) => {
+                // A member named in its own right-hand side (a recursive match type) has the
+                // bound written for it there.
+                if let Some(b) = upper {
+                    let hi = self.resolve_type(*b);
+                    let hi = over(self, hi);
+                    self.note_refinement_info(name, super::members::MemberInfo::Bounds(NOTHING, hi));
+                }
+                let ty = self.resolve_type_ctor(*rhs);
+                Refinement::Alias(name, over(self, ty))
+            }
+            None => {
+                let lo = lower.map_or(NOTHING, |b| self.resolve_type(b));
+                let hi = upper.map_or(ANY, |b| self.resolve_type(b));
+                // A higher-kinded member keeps its parameters in its upper bound, `[A] =>> Any`
+                // where none is written, as dotty's `TypeBounds` over an `HKTypeLambda`: their
+                // variances are the member's.
+                let (lo, hi) = (if lo == NOTHING { lo } else { over(self, lo) }, if hi == ANY && ids.is_empty() { hi } else { over(self, hi) });
+                Refinement::Bounds(name, lo, hi)
+            }
+        };
+        self.env.frames.pop();
+        r
+    }
+
+    /// `this` inside a refinement: the refinement class's own, its self (`TypeAssigner.assignType`
+    /// substitutes the class's `this` by the `RecThis` of the `RecType`).
+    fn refinement_this(&mut self, q: TyExprId) -> Option<TypeId> {
+        if self.refine_scopes.is_empty() || !matches!(self.cur_ast().ty(q), TyExpr::Name(names::THIS)) {
+            return None;
+        }
+        if let Some(scope) = self.refine_scopes.last_mut() {
+            scope.referenced = true;
+        }
+        Some(self.types.mk(Type::RecThis(0)))
+    }
+
     fn note_refinement_info(&mut self, name: Name, info: super::members::MemberInfo) {
         if let Some(scope) = self.refine_scopes.last_mut() {
             scope.infos.retain(|&(n, _)| n != name);
@@ -2934,6 +3006,18 @@ impl<'a> Worker<'a> {
         let i = self.refine_scopes.len().checked_sub(1 + k as usize)?;
         if let Some(&(_, info)) = self.refine_scopes[i].infos.iter().find(|&&(n, _)| n == name) {
             return Some(info);
+        }
+        // A later member named by an earlier one: its completer runs now; one already running
+        // is abstract meanwhile.
+        if let Some(&(_, d, _)) = self.refine_scopes[i].type_defs.iter().find(|&&(n, _, _)| n == name) {
+            if self.refine_scopes[i].completing.contains(&name) {
+                return Some(super::members::MemberInfo::Bounds(NOTHING, ANY));
+            }
+            return match self.complete_refinement_member(i, name, d) {
+                Refinement::Alias(_, x) => Some(super::members::MemberInfo::Alias(x)),
+                Refinement::Bounds(_, lo, hi) => Some(super::members::MemberInfo::Bounds(lo, hi)),
+                _ => None,
+            };
         }
         let parent = self.refine_scopes[i].parent;
         self.member_in_parent_of_scope(parent, name, prefix)
@@ -3694,6 +3778,9 @@ impl<'a> Worker<'a> {
     /// `x.type`: the singleton type of the path; `Obj.type` is the type of the object.
     #[cold]
     fn singleton_type(&mut self, path: TyExprId, span: Span) -> TypeId {
+        if let Some(this) = self.refinement_this(path) {
+            return this;
+        }
         let this_class = match self.cur_ast().ty(path) {
             TyExpr::Name(names::THIS) => self.this_class(),
             TyExpr::Select(k, names::THIS) => match self.cur_ast().ty(k) {
@@ -3759,6 +3846,9 @@ impl<'a> Worker<'a> {
             let s = r.sym()?;
             Some(t.path_of_ref(r).map_err(|_| s))
         };
+        if let Some(this) = self.refinement_this(q) {
+            return Some(Ok(this));
+        }
         match ast.ty(q) {
             TyExpr::Name(names::THIS) => {
                 let c = self.this_class()?;

@@ -4361,11 +4361,15 @@ impl<'a> Worker<'a> {
         let saved = std::mem::replace(&mut self.env, env);
         let saved_transparent = std::mem::take(&mut self.transparent);
         let saved_ext_scope = self.ext_scope.take();
+        // The refinements being resolved are the environment's being left: a definition
+        // completed in another names none of their members.
+        let saved_refine_scopes = std::mem::take(&mut self.refine_scopes);
         self.compute_transparent();
         let r = f(self);
         self.env = saved;
         self.transparent = saved_transparent;
         self.ext_scope = saved_ext_scope;
+        self.refine_scopes = saved_refine_scopes;
         r
     }
 
