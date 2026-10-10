@@ -780,7 +780,7 @@ fn install_core(it: &mut Table) {
         _ => Ok(Value::Bool(false)),
     });
     // scala-library's `arrayClass` (`std/classtag.scala`): the class of an array of the class's values.
-    reg!(it, "scala.reflect.ClassTag.arrayClassOf", |it, a| match arg(a, 1) {
+    reg!(it, "scala.reflect.arrayClassOf", |it, a| match arg(a, 0) {
         Value::Class(c) => Ok(it.class_value_named(&crate::emit::array_class_name(&c.qname, 1))),
         _ => Ok(Value::Null),
     });
