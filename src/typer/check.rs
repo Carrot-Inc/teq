@@ -4109,11 +4109,13 @@ impl<'a> Worker<'a> {
         };
         if s.intrinsic.is_some() {
             // `scala.reflect.Enum.ordinal` carries the template every enum answers with and
-            // is abstract to a class that extends the trait itself, as scalac declares it. A
-            // Java interface's method without a body is abstract too, its template being how a
-            // call reaches the JS primitives that implement it; a default method has a body.
+            // is abstract to a class that extends the trait itself, as scalac declares it, and
+            // so is `PartialFunction.apply`, scala-library's abstract `Function1.apply`, whose
+            // template calls the function a literal or a class instance is. A Java interface's
+            // method without a body is abstract too, its template being how a call reaches the
+            // JS primitives that implement it; a default method has a body.
             return match s.owner {
-                Owner::Class(c) if Some(c) == self.b.reflect_enum => true,
+                Owner::Class(c) if Some(c) == self.b.reflect_enum || Some(c) == self.b.partial_function => true,
                 // So are `Product`'s `productArity` and `productElement` and `Equals`'s
                 // `canEqual`, whose templates answer for the classes the rule gives them
                 // (`SyntheticMembers`): a trait's own `canEqual` implements it.

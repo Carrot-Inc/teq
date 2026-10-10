@@ -1,0 +1,34 @@
+apply 2
+12
+false
+fallback
+42
+defined 5
+apply 5
+15
+None
+defined 3
+apply 3
+Some(13)
+defined 2
+apply 2
+defined 3
+apply 3
+List(12, 13)
+applyOrElse 1
+applyOrElse 2
+applyOrElse 3
+applyOrElse 4
+List(own1:2, own1:4)
+applyOrElse 3
+default
+false
+apply 3
+13
+3
+Named(evens)
+List(None, Some(1), None, Some(2))
+10
+child
+true
+4
