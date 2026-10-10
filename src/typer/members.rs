@@ -584,6 +584,64 @@ impl<'a> Worker<'a> {
         }
     }
 
+    /// dotty's `ensureStableSingleton` for a comparison with a recursive type: a path is its own
+    /// anchor, any other type a skolem of it, a fresh stable value of the type (`SkolemType`; teq's
+    /// stand-in a synthetic val, `?`, whose type is `t`), through which its members are seen.
+    pub(super) fn rec_anchor(&mut self, t: TypeId) -> TypeId {
+        if self.types.is_path(t) {
+            return t;
+        }
+        let name = self.interner.intern("?");
+        let file = self.env.file;
+        let sym = self.syms.new_sym(name, SymKind::Val, 0, Owner::Local, file, None, crate::source::Span::default());
+        let sig = self.value_sig(t);
+        let mut s = self.syms.sym_mut(sym);
+        s.sig = Some(sig);
+        s.state().done_fresh();
+        self.types.mk(Type::Term(sym))
+    }
+
+    /// dotty's `TypeComparer.fixRecs`: `t` with each recursive type at its top (through
+    /// refinements' parents, intersections, unions and what a path or a parameter stands for)
+    /// opened at `anchor`; a path or a parameter whose underlying type has none stays itself.
+    pub(super) fn fix_recs(&mut self, anchor: TypeId, t: TypeId) -> TypeId {
+        match self.types.get(t) {
+            Type::Rec(body) => {
+                let opened = self.opened_rec(body, anchor);
+                self.fix_recs(anchor, opened)
+            }
+            Type::Refined(p, r) => {
+                let np = self.fix_recs(anchor, p);
+                if np == p { t } else { self.types.mk(Type::Refined(np, r)) }
+            }
+            Type::Inter(x, y) => {
+                let (nx, ny) = (self.fix_recs(anchor, x), self.fix_recs(anchor, y));
+                if nx == x && ny == y { t } else { self.types.inter(nx, ny) }
+            }
+            Type::Union(x, y) => {
+                let (nx, ny) = (self.fix_recs(anchor, x), self.fix_recs(anchor, y));
+                if nx == x && ny == y { t } else { self.types.union(nx, ny) }
+            }
+            Type::This(_) | Type::Term(_) | Type::Select(..) => {
+                let under = self.path_underlying(t);
+                if under == t {
+                    return t;
+                }
+                let fixed = self.fix_recs(anchor, under);
+                if fixed == under { t } else { fixed }
+            }
+            Type::Param(p) => {
+                let upper = self.syms.tparam(p).upper;
+                if upper == ANY {
+                    return t;
+                }
+                let fixed = self.fix_recs(anchor, upper);
+                if fixed == upper { t } else { fixed }
+            }
+            _ => t,
+        }
+    }
+
     /// The body of a `Rec` opened at `prefix`, each member the prefix fixes replaced by what it
     /// equals.
     pub(super) fn opened_rec(&mut self, body: TypeId, prefix: TypeId) -> TypeId {

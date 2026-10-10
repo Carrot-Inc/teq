@@ -519,16 +519,20 @@ impl<'a> Worker<'a> {
             (_, Type::Any) | (Type::Nothing, _) => return true,
             (Type::Union(x, y), _) => return self.is_sub(x, b) && self.is_sub(y, b),
             (_, Type::Inter(x, y)) => return self.is_sub(a, x) && self.is_sub(a, y),
-            // A recursive refinement on the right is its body with the left side as its self
-            // (`TypeComparer.compareRec`: `tp2.parent.substRecThis(tp2, tp1)`, the left side itself
-            // as the prefix where dotty takes a skolem of it); on the left, its body seen through
-            // the type itself, two of them thus sharing one self.
+            // A recursive refinement on the right is its body with the left side's anchor as its
+            // self, a path or a skolem of the left side (`TypeComparer.compareRec`:
+            // `ensureStableSingleton`), the left side's own recursive types opened at the same
+            // anchor (`fixRecs`); on the left, its body seen through a skolem of it (its
+            // `RecThis`, a singleton of the type).
             (_, Type::Rec(body)) => {
-                let opened = self.opened_rec(body, a);
-                return self.is_sub(a, opened);
+                let anchor = self.rec_anchor(a);
+                let left = self.fix_recs(anchor, anchor);
+                let right = self.opened_rec(body, anchor);
+                return self.is_sub(left, right);
             }
             (Type::Rec(body), _) => {
-                let opened = self.opened_rec(body, a);
+                let anchor = self.rec_anchor(a);
+                let opened = self.opened_rec(body, anchor);
                 return self.is_sub(opened, b);
             }
             _ => {}
