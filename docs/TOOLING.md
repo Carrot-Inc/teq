@@ -19,7 +19,7 @@ sbt-teq is an sbt 2 plugin, on Maven Central. A build switches to teq by adding 
 addSbtPlugin("build.teq" % "sbt-teq" % "1.0.0")
 
 // build.sbt
-teqVersion := "0.1.7"
+teqVersion := "0.1.8"
 teqCompiler := true
 ```
 

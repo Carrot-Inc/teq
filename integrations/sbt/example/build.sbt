@@ -11,7 +11,7 @@ ThisBuild / teqLinkIdle := 8.seconds
 // release, the plugin's version a line of its own), and the exemption that lets the export run with a branch's
 // plugin, published locally under a SNAPSHOT version of its own (TEQ_PLUGIN_VERSION, project/plugins.sbt), and
 // write the binaries table empty while the release it names is not published yet.
-ThisBuild / teqVersion := "0.1.7"
+ThisBuild / teqVersion := "0.1.8"
 ThisBuild / teqExportSnapshots := true
 // teq as the build tool: teqExportAll writes teq.lock and the launchers teq and teq.cmd at the root,
 // which the example commits and its checks run (`./teq ...`). Bare, as sbt 2 takes a setting

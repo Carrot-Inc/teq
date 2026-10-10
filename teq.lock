@@ -1,8 +1,8 @@
-teq: 0.1.7
+teq: 0.1.8
 format: 1
 binaries:
-  linux-aarch_64: https://github.com/Carrot-Inc/teq/releases/download/v0.1.7/teq-0.1.7-linux-aarch_64 efc41bbeddeaeeba9d9e31fa76326a2d5ff593ac 22040824
-  linux-x86_64: https://github.com/Carrot-Inc/teq/releases/download/v0.1.7/teq-0.1.7-linux-x86_64 84f92001896bd8b73432ede18075ee8db2c9f7c8 24758176
-  osx-aarch_64: https://github.com/Carrot-Inc/teq/releases/download/v0.1.7/teq-0.1.7-osx-aarch_64 7cd8817f041f8261e045926182901846ada72086 20432000
-  osx-x86_64: https://github.com/Carrot-Inc/teq/releases/download/v0.1.7/teq-0.1.7-osx-x86_64 97adc1f6b9be2e31cf12d0e372ef8db116b7d143 23416480
-  windows-x86_64: https://github.com/Carrot-Inc/teq/releases/download/v0.1.7/teq-0.1.7-windows-x86_64.exe 0fb5d94246221c7f0f978f3c5f65a81378cab45c 22478848
+  linux-aarch_64: https://github.com/Carrot-Inc/teq/releases/download/v0.1.8/teq-0.1.8-linux-aarch_64 5cb80d1a685f5b0c11246e7bab6d306e13b2ee9b 22948576
+  linux-x86_64: https://github.com/Carrot-Inc/teq/releases/download/v0.1.8/teq-0.1.8-linux-x86_64 920702b78eb8f6ddfc5c243a3429ea8454dcda11 25738696
+  osx-aarch_64: https://github.com/Carrot-Inc/teq/releases/download/v0.1.8/teq-0.1.8-osx-aarch_64 6139047bbdb649c86012e169a89ad3976adee405 21294064
+  osx-x86_64: https://github.com/Carrot-Inc/teq/releases/download/v0.1.8/teq-0.1.8-osx-x86_64 851f18c6ff037c0f2d3b16b2dfe61f5b3af09fe7 24312920
+  windows-x86_64: https://github.com/Carrot-Inc/teq/releases/download/v0.1.8/teq-0.1.8-windows-x86_64.exe f93304767201c77990cabbe02573b74482d7ca79 23411200

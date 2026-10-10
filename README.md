@@ -85,7 +85,7 @@ Enable scalac replacement:
 
 ```scala
 // build.sbt
-teqVersion := "0.1.7"
+teqVersion := "0.1.8"
 teqCompiler := true
 ```
 
@@ -163,11 +163,11 @@ Download teq, rename the file to `teq` (`teq.exe` on Windows), make it executabl
 browser download on macOS carries the quarantine attribute, which Gatekeeper enforces on a binary that is not
 notarized: `xattr -d com.apple.quarantine teq` clears it, and a download by `curl` never carries it.
 
-- [macOS · Apple silicon](https://github.com/Carrot-Inc/teq/releases/download/v0.1.7/teq-0.1.7-osx-aarch_64)
-- [macOS · Intel](https://github.com/Carrot-Inc/teq/releases/download/v0.1.7/teq-0.1.7-osx-x86_64)
-- [Linux · x86-64](https://github.com/Carrot-Inc/teq/releases/download/v0.1.7/teq-0.1.7-linux-x86_64)
-- [Linux · ARM64](https://github.com/Carrot-Inc/teq/releases/download/v0.1.7/teq-0.1.7-linux-aarch_64)
-- [Windows · x86-64](https://github.com/Carrot-Inc/teq/releases/download/v0.1.7/teq-0.1.7-windows-x86_64.exe)
+- [macOS · Apple silicon](https://github.com/Carrot-Inc/teq/releases/download/v0.1.8/teq-0.1.8-osx-aarch_64)
+- [macOS · Intel](https://github.com/Carrot-Inc/teq/releases/download/v0.1.8/teq-0.1.8-osx-x86_64)
+- [Linux · x86-64](https://github.com/Carrot-Inc/teq/releases/download/v0.1.8/teq-0.1.8-linux-x86_64)
+- [Linux · ARM64](https://github.com/Carrot-Inc/teq/releases/download/v0.1.8/teq-0.1.8-linux-aarch_64)
+- [Windows · x86-64](https://github.com/Carrot-Inc/teq/releases/download/v0.1.8/teq-0.1.8-windows-x86_64.exe)
 
 [Command-line reference](docs/CLI.md)
 
