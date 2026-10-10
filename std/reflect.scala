@@ -50,6 +50,12 @@ package java.lang:
     @js("$fail(\"UnsupportedOperationException\", \"reflection is not available on JavaScript\")")
     def getMethods: Array[java.lang.reflect.Method]
 
+    // A public field by name, which a class of the program never has (its vals are private
+    // fields behind their getters): scala-library's `Selectable.selectDynamic` goes on to the getter.
+    @javaDefined
+    @js("$fail(\"UnsupportedOperationException\", \"reflection is not available on JavaScript\")")
+    def getField(name: String): java.lang.reflect.Field
+
     // The element class of an array is not kept on JavaScript: `Object` stands for it.
     @javaDefined
     @js("$classOfObject()")

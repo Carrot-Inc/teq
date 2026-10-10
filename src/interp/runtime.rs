@@ -437,6 +437,31 @@ impl<'a, 't> Interp<'a, 't> {
         }
     }
 
+    /// The method `name` of the class `class` or the nearest of its ancestors whose parameters erase to
+    /// `classes` (`Worker::erased_parameter_classes`), the declaration a reflective call names.
+    pub(super) fn signature_alternative(&mut self, class: ClassId, name: &str, classes: &[ClassId]) -> Option<SymId> {
+        let n = self.typer.interner.lookup(name)?;
+        let bases: Vec<ClassId> = self.syms().class(class).base_types.iter().map(|&(b, _)| b).collect();
+        for k in bases {
+            let Some(&entry) = self.syms().class(k).members.get(&n) else { continue };
+            let alts: Vec<SymId> = match self.syms().alternatives(entry) {
+                Some(alts) => alts.to_vec(),
+                None => vec![entry],
+            };
+            for alt in alts {
+                // A val is its getter, a method of no parameters.
+                if !matches!(self.syms().sym(alt).kind, SymKind::Def | SymKind::Val | SymKind::Var) {
+                    continue;
+                }
+                let sig = self.typer.sig_arc(alt);
+                if self.typer.erased_parameter_classes(&sig).as_deref() == Some(classes) {
+                    return Some(alt);
+                }
+            }
+        }
+        None
+    }
+
     /// The method a reflective call by signature reaches: by the first of the names it goes by
     /// that the object's class has (`typer::reflective_names`), as the output's call tries them.
     pub(super) fn reflective_call(&mut self, recv: Value, names: &[String], args: Vec<Value>) -> R {

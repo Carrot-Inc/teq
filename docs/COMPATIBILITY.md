@@ -83,7 +83,7 @@ a JDK member as `not supported on JavaScript`. Beyond that:
   tag passed to `Array.fill` is typed and not evaluated, a program's own tag dispatched.
 - A structural call names its method by the classes of its parameters only where the call gives them as
   literals (as Scala.js's reflective proxies are named); under `--std=scala-library` scala-library's
-  `Selectable` reflects as on the JVM and does not compile for JavaScript.
+  `Selectable` reflects as on the JVM, which throws `UnsupportedOperationException` on JavaScript.
 - Regular expressions run on the JS engine behind a translator of Java's syntax, which has no possessive
   quantifiers, atomic groups, flags switched inside a pattern (`a(?i)b`), `UNICODE_CHARACTER_CLASS` (`(?U)`),
   the POSIX classes but `\p{Lower}`, `\p{Upper}` and `\p{Alpha}`, Java's own property names

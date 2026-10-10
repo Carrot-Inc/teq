@@ -669,18 +669,57 @@ fn install_core(it: &mut Table) {
         Value::Class(c) => Ok(Value::Str(c.qname.clone())),
         _ => Ok(Value::Null),
     });
+    // The method of the name and, where the call names them, of the parameters' classes (the
+    // signature `Selectable.applyDynamic` looks a structural call's method up by): the Method
+    // keeps them for its `invoke`.
     reg!(it, "java.lang.Class.getMethod", |it, a| {
         let Value::Class(c) = arg(a, 0) else { return Ok(Value::Null) };
         let name = it.to_str(&arg(a, 1))?;
         let n = it.typer.interner.intern(&name);
-        let found = c.class.map_or(false, |k| !matches!(it.member(k, n), Member::Missing)) || Interp::internal_methods(&c.qname).contains(&name.as_str());
+        let types = if a.len() > 2 { arg(a, 2) } else { Value::Null };
+        let classes: Option<Vec<ClassId>> = match &types {
+            Value::Null => None,
+            v => it.elements_of(v)?.iter().map(|c| match c {
+                Value::Class(c) => c.class,
+                _ => None,
+            }).collect(),
+        };
+        let found = match (c.class, &classes) {
+            (Some(k), Some(classes)) => it.signature_alternative(k, &name, classes).is_some(),
+            (Some(k), None) => !matches!(it.member(k, n), Member::Missing),
+            (None, _) => false,
+        } || Interp::internal_methods(&c.qname).contains(&name.as_str());
         if !found {
             return it.throw_named("NoSuchMethodException", &format!("{}.{}()", c.qname, name));
         }
         let Some(method) = it.typer.class_at(&["java", "lang", "reflect", "Method"]) else {
             return it.unsupported("java.lang.reflect.Method is missing from the standard library");
         };
-        it.construct_new(method, vec![Value::string(name)], &Frame::new(None))
+        let types = if classes.is_some() { types } else { Value::Null };
+        it.construct_new(method, vec![Value::string(name), types], &Frame::new(None))
+    });
+    reg!(it, "java.lang.Class.getField", |it, a| {
+        let name = it.to_str(&arg(a, 1))?;
+        it.throw_named("NoSuchFieldException", &name)
+    });
+    reg!(it, "java.lang.reflect.invokeBySignature", |it, a| {
+        let name = it.to_str(&arg(a, 1))?;
+        let args = it.list_items(&arg(a, 3))?;
+        let recv = arg(a, 0);
+        if let (Value::Obj(o), types @ (Value::Obj(_) | Value::Array(_))) = (&recv, arg(a, 2)) {
+            let classes: Option<Vec<ClassId>> = it.elements_of(&types)?.iter().map(|c| match c {
+                Value::Class(c) => c.class,
+                _ => None,
+            }).collect();
+            if let Some(alt) = classes.and_then(|classes| it.signature_alternative(o.class, &name, &classes)) {
+                return it.invoke(recv, alt, args);
+            }
+        }
+        if let Some(r) = it.internal_call(&recv, &name, &args) {
+            return r;
+        }
+        let n = it.typer.interner.intern(&name);
+        it.call_named(recv, n, args)
     });
     // The public methods by name: the members of a class of the program, and the internal
     // methods the interpreter answers on the reflection API's values.
@@ -697,7 +736,7 @@ fn install_core(it: &mut Table) {
         }
         let mut out = Vec::with_capacity(names.len());
         for n in names {
-            out.push(it.construct_new(method, vec![Value::string(n)], &Frame::new(None))?);
+            out.push(it.construct_new(method, vec![Value::string(n), Value::Null], &Frame::new(None))?);
         }
         Ok(Value::array(out))
     });
@@ -2327,11 +2366,20 @@ fn install_typer_templates(it: &mut Table) {
             Value::Class(c) => c.class,
             _ => None,
         }).collect();
+        let recv = arg(a, 0);
+        // The method of the name whose parameters erase to the classes, as scala-library's
+        // `Selectable.applyDynamic` finds it (`getMethod(name, paramTypes*)`), dispatched on the
+        // object's class; else the output's names of it, as the JavaScript call tries them.
+        if let (Some(classes), Value::Obj(o)) = (&classes, &recv) {
+            if let Some(alt) = it.signature_alternative(o.class, &name, classes) {
+                return it.invoke(recv, alt, args);
+            }
+        }
         let names = match classes {
             Some(classes) => crate::typer::reflective_names(it.syms(), it.typer.interner, &name, &classes),
             None => vec![name.to_string()],
         };
-        it.reflective_call(arg(a, 0), &names, args)
+        it.reflective_call(recv, &names, args)
     });
     reg!(it, "$productElementName($0, $1)", |it, a| {
         let i = int(it, a, 1)?;

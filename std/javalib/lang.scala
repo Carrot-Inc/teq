@@ -1619,14 +1619,30 @@ package java.lang.annotation:
     def annotationType(): Class[? <: Annotation]
 
 package java.lang.reflect:
-  // A method `Class.getMethod` found, invoked by name on the receiver in the interpreter.
-  final class Method(name: String):
+  // What scala-library's `ensureAccessible` asks of a member it reflects on (its `Selectable`, which
+  // a JVM build's macro runs): every member the interpreter finds is accessible.
+  abstract class AccessibleObject:
+    def isAccessible: scala.Boolean = true
+    def setAccessible(flag: scala.Boolean): Unit = ()
+
+  // A method `Class.getMethod` found, invoked on the receiver in the interpreter: by its name and
+  // the classes of its parameters where the lookup named them, as the JDK's, else by its name.
+  final class Method(name: String, parameterTypes: Seq[Class[?]]) extends AccessibleObject:
+    def this(name: String) = this(name, null)
     def getName: String = name
-    def invoke(obj: Any, args: Any*): AnyRef = invokeByName(obj, name, args.toList)
+    def invoke(obj: Any, args: Any*): AnyRef = invokeBySignature(obj, name, parameterTypes, args.toList)
     override def toString: String = "public method " + name
+
+  // A public field; a Scala class has none, its vals being private fields behind their getters.
+  final class Field(name: String) extends AccessibleObject:
+    def getName: String = name
+    def get(obj: Any): AnyRef = throw new NoSuchFieldException(name)
 
   @js("$fail(\"UnsupportedOperationException\", \"reflection is not available on JavaScript\")")
   def invokeByName(obj: Any, name: String, args: List[Any]): AnyRef
+
+  @js("$fail(\"UnsupportedOperationException\", \"reflection is not available on JavaScript\")")
+  def invokeBySignature(obj: Any, name: String, parameterTypes: Seq[Class[?]], args: List[Any]): AnyRef
 
   @javaDefined
   @jvmClass("java/lang/reflect/Array")

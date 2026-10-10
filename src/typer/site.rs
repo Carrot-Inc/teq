@@ -469,6 +469,24 @@ impl<'a> Worker<'a> {
         }
     }
 
+    /// The classes of the erasures of a method's parameters, its using clauses aside, as dotty's
+    /// `Dynamic.addClassOfs` gives a structural call and `Selectable.applyDynamic` looks a method up
+    /// by (`getMethod(name, paramTypes*)`); none where a parameter's erasure is not stable.
+    pub fn erased_parameter_classes(&mut self, sig: &MethodSig) -> Option<Vec<ClassId>> {
+        let params: Vec<TypeId> = sig.clauses.iter().filter(|cl| !cl.is_using).flat_map(|cl| cl.params.iter().map(|p| p.ty)).collect();
+        let mut classes = Vec::with_capacity(params.len());
+        for p in params {
+            classes.push(match self.stable_erasure(p)? {
+                Erased::Of(c, 0) => c,
+                // `classOf` of an array is the array class on every target.
+                Erased::Of(..) => self.b.array,
+                Erased::Null(_) => self.b.null,
+                Erased::Nothing(_) => self.b.any_ref,
+            });
+        }
+        Some(classes)
+    }
+
     /// scalac's erasure of a type whose erasure the type alone says (its `hasStableErasure`):
     /// a class type, a literal type, an array of such, a union or an intersection of such, and a
     /// proxy of such (a path, `C.this`, a refinement), which erases as what it stands for. A type
