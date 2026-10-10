@@ -2974,10 +2974,11 @@ impl<'a> Worker<'a> {
                 self.check_class(child);
             }
             // A synthesized companion holds the values of a stateful enum, and the `$values` and
-            // lookups of any (dotty's `enumScaffolding`); it is emitted where it is reached.
+            // lookups of any (dotty's `enumScaffolding`); it is emitted where it is reached. One
+            // read from the products is the library's, its body converted where it is reached.
             let info = self.syms.class(c);
             if let (false, Some(companion)) = (info.children.is_empty(), info.companion) {
-                if self.syms.class(companion).def.is_none() {
+                if self.syms.class(companion).def.is_none() && !self.is_library_class(companion) {
                     self.check_class(companion);
                 }
             }
