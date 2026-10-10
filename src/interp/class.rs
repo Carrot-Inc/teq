@@ -1527,10 +1527,18 @@ impl<'a, 't> Interp<'a, 't> {
 
     /// The `toString`, `equals` and `hashCode` a case class, case object or enum value gets by
     /// rule (`TClass::synthesized`), where it has no definition of its own or inherited.
-    /// The member the record of `c` names for `name`, the existing definition `existingDef` took
-    /// in place of the rule's.
+    /// The member the record of `c` names for `name`: the rule's where it synthesizes it, before
+    /// a base's body an abstract redeclaration hides (`Member::Missing` for a member of `Product`,
+    /// which the builtins answer by rule), else the existing definition `existingDef` took.
     fn record_member(&mut self, c: ClassId, name: Name) -> Option<Member> {
         let (bit, _, _) = synthetic::MEMBERS.iter().copied().find(|&(_, n, _)| n == name)?;
+        let synthesized = self.tclass_field(c, |tc| tc.synthesized).unwrap_or(0);
+        if synthesized & bit != 0 {
+            return match name {
+                crate::names::TO_STRING | crate::names::EQUALS | crate::names::HASH_CODE => self.shape_member(c, name),
+                _ => Some(Member::Missing),
+            };
+        }
         let existing = self.tclass_field(c, |tc| tc.existing_defs.iter().find(|&&(b, _)| b == bit).map(|&(_, s)| s)).flatten()?;
         let Owner::Class(k) = self.syms().sym(existing).owner else { return None };
         match self.own_member(k, name) {

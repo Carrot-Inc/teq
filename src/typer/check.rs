@@ -3181,6 +3181,18 @@ impl<'a> Worker<'a> {
         (synthesized, existing)
     }
 
+    /// Whether the rule gives `c` a member named `name` (`synthesized_members`), which is then the
+    /// class's own and overrides what it inherits of the name (dotty's synthesized
+    /// `productPrefix` over `Product`'s and a trait's).
+    pub(super) fn record_synthesizes(&mut self, c: ClassId, name: Name) -> bool {
+        let Some(&(bit, _, _)) = synthetic::MEMBERS.iter().find(|&&(_, n, _)| n == name) else { return false };
+        let info = self.syms.class(c);
+        if info.mods & mods::CASE == 0 && !info.value_class && info.kind != ClassKind::EnumCase {
+            return false;
+        }
+        self.synthesized_members(c) & bit != 0
+    }
+
     /// The members the rule gives a case class, value class or enum case `c` derives from
     /// (`class D extends K` of a case class `K`), which implement what `Product` declares.
     fn inherited_synthesized(&mut self, c: ClassId) -> u16 {

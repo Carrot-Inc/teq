@@ -5508,6 +5508,10 @@ impl<'a> Worker<'a> {
             self.add_joined_entry(c, like);
         }
         for (name, first, second, marked) in conflicts {
+            // A member the rule gives the class is its own, which overrides both.
+            if self.record_synthesizes(c, name) {
+                continue;
+            }
             let is_method = |t: &Self, k: ClassId| {
                 let entry = t.syms.sym(t.syms.class(k).members[&name]);
                 matches!(entry.kind, SymKind::Def | SymKind::Overloaded(_))
@@ -5528,6 +5532,9 @@ impl<'a> Worker<'a> {
     /// parameters of a concrete one of `second`.
     pub(super) fn check_inherited_conflicts(&mut self) {
         for (c, name, first, second, marked) in std::mem::take(&mut self.inherited_pairs) {
+            if self.record_synthesizes(c, name) {
+                continue;
+            }
             let bases: Vec<(ClassId, TypeId)> = self.syms.class(c).base_types.clone();
             let Some(&(_, second_ty)) = bases.iter().find(|&&(b, _)| b == second) else { continue };
             let mut conflict = false;

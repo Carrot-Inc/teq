@@ -3060,6 +3060,7 @@ impl<'a> Emitter<'a> {
             String::new()
         };
         let has_fields = shape.starts_with('[');
+        let shape_kind = shape.as_bytes().first().copied();
         let mut args: Vec<(String, &str)> = vec![(shape, "0"), (traits, "[]"), (ids, "[]"), (ordinal, "")];
         while args.last().map_or(false, |(a, _)| a.is_empty()) {
             args.pop();
@@ -3083,6 +3084,29 @@ impl<'a> Emitter<'a> {
         // member of the class (`Symbols::member_declaration`): the member's, or the superclass's.
         if !matches!(info.kind, ClassKind::Trait | ClassKind::Enum) {
             self.redeclared_trait_methods(&name, &own, info.superclass);
+        }
+        // A member the record gives by rule where a base the registration copies or the prototype
+        // chain reaches holds a definition, which an abstract redeclaration hides (dotty's
+        // `existingDef` finds a deferred member): the shape's member on the class's prototype,
+        // or none of `Product`'s so that the runtime answers by rule.
+        let proto = match shape_kind {
+            Some(b'3') => Some("$enumValueProto"),
+            Some(b'2') => Some("$caseObjectProto"),
+            Some(b'[') => Some("$caseProto"),
+            _ => None,
+        };
+        if let Some(proto) = proto {
+            for (bit, member, _) in synthetic::MEMBERS {
+                if tc.synthesized & bit == 0 || !self.base_defines(tc.id, member) {
+                    continue;
+                }
+                let method = self.interner.get(member);
+                if matches!(member, crate::names::TO_STRING | crate::names::EQUALS | crate::names::HASH_CODE) {
+                    let _ = write!(self.out, " {0}.prototype.{1} = {2}.{1};", name, method, proto);
+                } else {
+                    let _ = write!(self.out, " {}.prototype.{} = undefined;", name, method);
+                }
+            }
         }
         // The rule's `toString` of an instance of a class with a definition of a member it reads,
         // `ScalaRunTime._toString`, reads that member.
@@ -3263,6 +3287,21 @@ impl<'a> Emitter<'a> {
         let pkg = self.interner.get(self.syms.pkg(p).name);
         matches!(pkg, "lang" | "scala" | "js" | "util")
             && reach::RUNTIME_THROWN.contains(&self.interner.get(info.name))
+    }
+
+    /// Whether a base of `c` other than the classes whose declarations the rule implements
+    /// (`Any`, `Object`, `Product`, `Equals`, `Enum`, `Serializable`) has a concrete member named
+    /// `name`, which the prototype chain or the registration's copy of a trait would find.
+    fn base_defines(&self, c: ClassId, name: crate::intern::Name) -> bool {
+        self.syms.class(c).base_types.iter().skip(1).any(|&(b, _)| {
+            let info = self.syms.class(b);
+            let declarer = info.kind == ClassKind::Builtin || self.syms.is_synthetic_parent(self.interner, b) || {
+                let Owner::Package(p) = info.owner else { return false };
+                let (pkg, n) = (self.interner.get(self.syms.pkg(p).name), self.interner.get(info.name));
+                matches!((pkg, n), ("lang", "Object") | ("reflect", "Enum"))
+            };
+            !declarer && info.members.get(&name).is_some_and(|&s| !self.reach.abstract_syms.get(s.idx()).copied().unwrap_or(false))
+        })
     }
 
     /// The run-time number of a class the output tests for, if it is one.
