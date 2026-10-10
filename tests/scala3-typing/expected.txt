@@ -3723,7 +3723,7 @@ pos/i3083.scala	accepts
 pos/i3129.scala	accepts	
 pos/i3130a.scala	accepts	
 pos/i3130b.scala	std	App
-pos/i3130c.scala	rejects	type mismatch
+pos/i3130c.scala	accepts	
 pos/i3130d.scala	accepts	
 pos/i3139.scala	accepts	
 pos/i3149.scala	accepts	
@@ -5048,7 +5048,7 @@ pos/t1107a.scala	accepts
 pos/t1107b	accepts	
 pos/t1119.scala	accepts	
 pos/t1123.scala	accepts	
-pos/t112606A.scala	rejects	type mismatch
+pos/t112606A.scala	accepts	
 pos/t1131.scala	syntax	expected identifier, found {}
 pos/t1133.scala	accepts	
 pos/t1136.scala	accepts	
@@ -5666,7 +5666,7 @@ pos/t8364.scala	std	Dynamic
 pos/t8367.scala	accepts	
 pos/t8369a.scala	accepts	
 pos/t8376	oos	java
-pos/t839.scala	rejects	type mismatch
+pos/t839.scala	accepts	
 pos/t851.scala	accepts	
 pos/t873.scala	accepts	
 pos/t892.scala	accepts	
@@ -5790,7 +5790,7 @@ pos/typealiases.scala	accepts
 pos/typeclass-aggregates.scala	syntax	expected identifier, found {}
 pos/typeclass-encoding.scala	rejects	value {} is not a member of {}
 pos/typeclass-encoding3.scala	syntax	expected {}, found {}
-pos/typeclass-encoding3b.scala	rejects	operator {} cannot be applied
+pos/typeclass-encoding3b.scala	rejects	value {} is not a member of {}
 pos/typeclass-scaling.scala	syntax	expected identifier, found {}
 pos/typeclasses-arrow.scala	std	is
 pos/typeclasses-arrow0.scala	accepts	

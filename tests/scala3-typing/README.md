@@ -74,6 +74,15 @@ resolution (dotty's `ConstantType`), so `exprQuote[T <: Singleton](x: T)` applie
 asserted as scalac's (two `Any` results refused, one ambiguity among the refinements) by
 `tests/errors/intersection_member_i8736.scala`.
 
+## A path's member reloaded by its name (2026-10-10)
+
+Three tests moved from `rejects` to `accepts` when a member selected on a path started taking its info
+from the member of that name in the prefix's type, an override included, as dotty's `NamedType.withPrefix`
+reloads a member over a path prefix (`infoDependsOnPrefix`): `pos/t839`, `pos/t112606A` and `pos/i3130c`,
+whose `file.treeBuilder.global` is the object's `nsc.type`, not `TreeBuilder`'s `Global`. A detail moved
+within its category: `pos/typeclass-encoding3b` stays `rejects`, its `IntOps.this.commons.This` now `Int`
+through the override, so its first error is a later one (`value add is not a member of T`).
+
 ## Refinements as dotty's (2026-10-10)
 
 Twenty-six tests moved when a refinement's members became one scope closed over its self (dotty's
