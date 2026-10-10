@@ -1557,6 +1557,17 @@ impl<'a> Worker<'a> {
         }
         let ret = self.walked_type(w, e);
         let (tree, ty) = self.run_macro(super::quoted::MacroRun { quotes: q, code, ret, span, mark, t_pre });
+        // A tree the macro made without a place stands at its splice's, as the typing of a splice
+        // gives the node it returns (`Worker::type_expr`): the copy's place, and under the capture
+        // the tree a library's pickle has for the splice; so does a constant under the capture,
+        // where scalac's folding of the splice's `INLINED` leaves the literal.
+        let placeless = self.prog.records_spans() && self.prog.span_of(tree).is_none();
+        if placeless || self.capturing() && self.prog.expr(tree).is_constant() {
+            self.prog.copy_span(e, tree);
+            if let Some((file, addr)) = self.prog.capture.as_deref().and_then(|c| c.records_of(e).tree) {
+                self.capture_tree(tree, file, addr);
+            }
+        }
         if self.first_error_since(w.diag_mark).is_some() {
             w.failed = true;
         }
