@@ -291,16 +291,17 @@ impl<'a> Worker<'a> {
                 if ast.reader.is_some() && super::loader::declared::dump_path().is_some() {
                     self.dump_binder_bounds(&binders, span, p);
                 }
-                self.refine_gadt(t, sty);
                 // Conforming only by constraining an open variable of the scrutinee does not
-                // make the test certain. A scrutinee that conforms is tested as dotty's
-                // `TypeTestsCasts.transformIsInstanceOf` tests it in a match: `true` where its type
-                // is not null (`isNotNull`), else a test that it is not `null` (`testNotNull`), which
-                // no type pattern takes, whatever the type a stored body's abstract pattern type
-                // comes to at an expansion.
+                // make the test certain, nor does the refinement the case brings (`refine_gadt`):
+                // `TypeTestsCasts` sees the scrutinee's own type. A scrutinee that conforms is
+                // tested as dotty's `transformIsInstanceOf` tests it in a match: `true` where its
+                // type is not null (`isNotNull`), else a test that it is not `null`
+                // (`testNotNull`), which no type pattern takes, whatever the type a stored body's
+                // abstract pattern type comes to at an expansion.
                 let mark = self.snapshot();
                 let conforms = self.is_sub(sty, t) && self.snapshot() == mark;
                 self.rollback(mark);
+                self.refine_gadt(t, sty);
                 let always = conforms && !self.scrutinee_may_be_null(sty);
                 let not_null = conforms && !always;
                 // A scrutinee that equals the pattern's type only by the refinement (a captured
