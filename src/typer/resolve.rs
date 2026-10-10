@@ -2318,10 +2318,13 @@ impl<'a> Worker<'a> {
     }
 
     /// Whether the written type's head names an alias of the std's `scala.scalajs.js` package
-    /// (`js.Function2`), a JavaScript type a cast leaves untested, before the alias is expanded into
-    /// scala's function type.
+    /// (`js.Function2`, `js.Array[Int]`), a JavaScript type a cast leaves untested, before the alias
+    /// is expanded into scala's type; a library body's cast the loader recorded so (`js_alias_types`).
     pub(super) fn written_js_alias(&mut self, id: TyExprId) -> bool {
         let ast = self.cur_ast();
+        if ast.js_alias_types.contains(&id) {
+            return true;
+        }
         let head = match ast.ty(id) {
             TyExpr::Apply(f, _) => f,
             _ => id,

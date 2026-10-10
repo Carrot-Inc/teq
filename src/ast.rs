@@ -575,6 +575,10 @@ pub struct Ast {
     /// A library body's type argument lists that scalac inferred, by their start in
     /// `ty_lists`, ascending: where they do not check, the typer infers the arguments again.
     pub inferred_type_lists: Vec<u32>,
+    /// A library body's cast targets whose type, as written, names a member of Scala.js's
+    /// `scala.scalajs.js` package that the std holds as an alias (`js.Array[Int]`): what a
+    /// source's spelling tells the typer (`written_js_alias`), which the resolved type no longer does.
+    pub js_alias_types: Vec<TyExprId>,
     /// A library body's `new C[T](args)` with inferred type arguments whose using clause the
     /// AST leaves to the typer, with the call passing the body's own givens: what is typed where
     /// the type arguments are inferred again.
@@ -830,6 +834,7 @@ impl Ast {
             given_binds: Default::default(),
             new_empty_first: Vec::new(),
             inferred_type_lists: Vec::new(),
+            js_alias_types: Vec::new(),
             inferred_alternatives: Vec::new(),
             inferred_types: Vec::new(),
             def_ranges: Vec::new(),
