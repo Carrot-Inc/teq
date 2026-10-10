@@ -22,4 +22,4 @@ object Main:
     val f0: Any = () => 1
     try { f0.asInstanceOf[Int => Int]; println("arity passed") }
     catch case _: ClassCastException => println("arity CCE")
-    println(("s": Any).isInstanceOf[Int => Int])
+    println(("s": Any).isInstanceOf[Function1[?, ?]])
