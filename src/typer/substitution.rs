@@ -1045,6 +1045,10 @@ impl<'a> Worker<'a> {
                 e
             }
             TExpr::New(c, _) if w.class_copies.contains_key(&c) => self.finish_class_copy(w, e, c),
+            TExpr::NewVia(s, _) if matches!(self.syms.sym(s).owner, Owner::Class(c) if w.class_copies.contains_key(&c) && self.syms.class(c).kind != ClassKind::Anon) => {
+                let Owner::Class(c) = self.syms.sym(s).owner else { unreachable!() };
+                self.finish_local_copy_via(w, e, c)
+            }
             TExpr::New(_, args) | TExpr::NewVia(_, args) | TExpr::SeqLit(args) | TExpr::ArrayLit(args) | TExpr::ObjLit(args) => {
                 self.walk_list(w, args);
                 e
@@ -1251,6 +1255,22 @@ impl<'a> Worker<'a> {
         }
         let captures = self.settle_local_copy(w, c);
         self.local_copy_new(e, c, &captures, inside, &selfs, &own)
+    }
+
+    /// A creation of the copy of a named local class through one of its secondary constructors
+    /// (`new C()` for a `def this() = this(n)`), the constructor the copy's (`Copier::stored_class`
+    /// copies the constructors with the members): its arguments walked and the class settled
+    /// there, as a creation through the primary constructor settles it (`finish_local_copy`).
+    fn finish_local_copy_via(&mut self, w: &mut Walk, e: TExprId, c: ClassId) -> TExprId {
+        let TExpr::NewVia(s, args) = self.prog.expr(e) else { unreachable!() };
+        let items = self.prog.expr_list(args).to_vec();
+        let own: Vec<TExprId> = items.into_iter().map(|a| self.walk(w, a)).collect();
+        if !w.local_copies.contains_key(&c) {
+            self.settle_local_copy(w, c);
+        }
+        let l = self.prog.list(&own);
+        self.prog.exprs[e.idx()] = TExpr::NewVia(s, l);
+        e
     }
 
     /// The copy `c` of a named local class the stored body makes settled (`finish_local_copy`):

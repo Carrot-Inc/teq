@@ -2389,7 +2389,7 @@ impl<'c> Copier<'c> {
             let nk = self.classes[&k];
             let members: Vec<SymId> = {
                 let info = t.syms.class(k);
-                info.member_order.iter().chain(&info.extensions).copied().collect()
+                info.member_order.iter().chain(&info.extensions).chain(&info.ctors).chain(&info.primary_ctor).copied().collect()
             };
             for m in members {
                 self.member(t, m, nk);
@@ -2574,6 +2574,11 @@ impl<'c> Copier<'c> {
         let extensions: Vec<SymId> = info.extensions.iter().map(|&s| self.member(t, s, nc)).collect();
         // A case class's selectors, members copied above.
         let selectors: Vec<Option<SymId>> = info.selectors.iter().map(|s| s.map(|s| self.sym(s))).collect();
+        // The constructors are the copy's members too (`TreeTypeMap` maps a class's
+        // constructors with its other members): a secondary one, the primary one that stands next
+        // to it, their parameters, and every construction through them (`NewVia`).
+        let ctors: Vec<SymId> = info.ctors.iter().map(|&s| self.member(t, s, nc)).collect();
+        let primary_ctor = info.primary_ctor.map(|s| self.member(t, s, nc));
         let givens: Vec<SymId> = info.givens.iter().map(|&s| self.sym(s)).collect();
         let parents: Vec<TypeId> = info.parents.iter().map(|&p| self.ty(t, p)).collect();
         let base_types: Vec<(ClassId, TypeId)> =
@@ -2612,6 +2617,8 @@ impl<'c> Copier<'c> {
         copy.member_order = member_order;
         copy.selectors = selectors;
         copy.extensions = extensions;
+        copy.ctors = ctors;
+        copy.primary_ctor = primary_ctor;
         copy.givens = givens;
         copy.base_types = base_types;
         copy.this_type = this_type;
@@ -2987,7 +2994,16 @@ impl<'c> Copier<'c> {
                 return id;
             }
             TExpr::New(c, args) => TExpr::New(c, self.list(t, args)),
-            TExpr::NewVia(s, args) => TExpr::NewVia(s, self.list(t, args)),
+            TExpr::NewVia(s, args) => {
+                // A construction through a secondary constructor of a class the body makes
+                // builds the copy, whose constructors are its members (`stored_class`).
+                if let Owner::Class(c) = t.syms.sym(s).owner {
+                    if self.stored_class_body(c).is_some() {
+                        self.stored_class(t, c);
+                    }
+                }
+                TExpr::NewVia(self.sym(s), self.list(t, args))
+            }
             // A getter of a method the copy defines anew is its copy's, as the call's is.
             TExpr::Default(of, at, args) => {
                 let of = match of {
