@@ -1813,7 +1813,7 @@ mod tests {
 
 /// A name's bit in `ClassInfo::names_mask`.
 #[inline]
-pub fn name_bit(n: Name) -> u64 {
+pub const fn name_bit(n: Name) -> u64 {
     1 << (n.0.wrapping_mul(0x9E37_79B9) >> 26)
 }
 

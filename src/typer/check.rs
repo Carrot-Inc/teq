@@ -3264,24 +3264,24 @@ impl<'a> Worker<'a> {
     /// (`java.io.Serializable`). `existingDef` of another name is none (a case class over `Product`
     /// and `Any` alone), which is told without a lookup per name.
     fn held_rule_names(&self, c: ClassId) -> u16 {
+        // The rule's names as a names mask: a base whose mask has none of them holds none.
+        const RULE_NAMES: u64 = {
+            let (mut mask, mut i) = (0, 0);
+            while i < synthetic::MEMBERS.len() {
+                mask |= crate::symbols::name_bit(synthetic::MEMBERS[i].1);
+                i += 1;
+            }
+            mask
+        };
         let mut held = 0;
         for &(b, _) in &self.syms.class(c).base_types {
-            let members = &self.syms.class(b).members;
-            if members.is_empty() || self.declares_by_rule(b) {
+            let bi = self.syms.class(b);
+            if bi.names_mask & RULE_NAMES == 0 || self.declares_by_rule(b) {
                 continue;
             }
-            // A small table read whole, a large one asked for each name.
-            if members.len() <= synthetic::MEMBERS.len() {
-                for name in members.keys() {
-                    if let Some(&(bit, _, _)) = synthetic::MEMBERS.iter().find(|&&(_, n, _)| n == *name) {
-                        held |= bit;
-                    }
-                }
-            } else {
-                for &(bit, name, _) in &synthetic::MEMBERS {
-                    if members.contains_key(&name) {
-                        held |= bit;
-                    }
+            for &(bit, name, _) in &synthetic::MEMBERS {
+                if bi.may_have(name) && bi.members.contains_key(&name) {
+                    held |= bit;
                 }
             }
         }
@@ -4967,8 +4967,17 @@ impl<'a> Worker<'a> {
     /// scalac's check along the linearisation: what an earlier ancestor defines cannot override
     /// a final member of a later one.
     fn check_final_overrides(&mut self, c: ClassId) {
+        // The names of the bases before the one at hand: a final member no earlier base names
+        // meets nothing there (their names masks).
+        let mut earlier = self.syms.class(self.syms.class(c).base_types[1].0).names_mask;
         for j in 2..self.syms.class(c).base_types.len() {
             let (b, bt) = self.syms.class(c).base_types[j];
+            let mask = self.syms.class(b).names_mask;
+            let meets = mask & earlier != 0;
+            earlier |= mask;
+            if !meets {
+                continue;
+            }
             let finals: Vec<SymId> = self
                 .syms
                 .class(b)

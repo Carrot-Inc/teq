@@ -5584,6 +5584,15 @@ impl<'a> Worker<'a> {
             parents[k] = pc;
         }
         let parents = &parents[..info.parents.len()];
+        // Parents whose bases' names masks share no bit share no name.
+        let mut full = [0u64; 4];
+        for (k, &p) in parents.iter().enumerate() {
+            full[k] = self.syms.class(p).base_types.iter().fold(0, |m, &(b, _)| m | self.syms.class(b).names_mask);
+        }
+        let full = &full[..parents.len()];
+        if !(0..full.len()).any(|i| (i + 1..full.len()).any(|j| full[i] & full[j] != 0)) {
+            return false;
+        }
         // The bases that have members, each with the parent it is taken with.
         let mut holders = [(c, 0u32); 8];
         let mut n = 0;

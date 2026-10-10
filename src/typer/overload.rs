@@ -3567,7 +3567,8 @@ pub struct SubclassIndex {
 impl SubclassIndex {
     fn index(&mut self, syms: &Symbols, d: ClassId) {
         for &(b, _) in &syms.class(d).base_types {
-            if b != d {
+            // A base without members (`java.io.Serializable`) owns no root declaration.
+            if b != d && syms.class(b).names_mask != 0 {
                 let ds = self.below.entry(b).or_default();
                 if ds.last() != Some(&d) {
                     ds.push(d);
