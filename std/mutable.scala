@@ -144,6 +144,10 @@ object ArrayBuffer:
   def tabulate[A](n: Int)(f: Int => A): ArrayBuffer[A] = new ArrayBuffer(tabulatedBuffer(n)(f))
 
 type Buffer[A] = ArrayBuffer[A]
+
+// scala-library's deprecated name of the array's sequence (scala/collection/mutable/package.scala),
+// teq's one `ArraySeq`.
+type WrappedArray[A] = scala.ArraySeq[A]
 /** scala-library's `ListBuffer`: a buffer that builds a `List`, over an `ArrayBuffer`. */
 final class ListBuffer[A](private val buf: ArrayBuffer[A]) extends SeqOps[A, ListBuffer, ListBuffer[A]], IndexedSeq[A], Builder[A, List[A]]:
   def this() = this(ArrayBuffer.empty[A])
@@ -206,6 +210,9 @@ object ListBuffer:
   def newBuilder[A]: Builder[A, ListBuffer[A]] = ArrayBuffer.empty[A].mapResult(b => new ListBuffer(b))
 
 class HashMap[K, V](private val raw: RawMap[K, V] = newRawMap[K, V]) extends IterableOps[(K, V), Iterable, HashMap[K, V]], scala.collection.Map[K, V]:
+  // `collection.Map`'s, of this map's kind.
+  override def filter(p: ((K, V)) => Boolean): HashMap[K, V] = super[IterableOps].filter(p)
+  override def tail: HashMap[K, V] = super[IterableOps].tail
   def buildCC[B](items: RawBuffer[B]): Iterable[B] = fromArray(items)
   // A mutable map is its own builder, as scala-library's `MapOps` is.
   def result(): HashMap[K, V] = this
@@ -215,6 +222,12 @@ class HashMap[K, V](private val raw: RawMap[K, V] = newRawMap[K, V]) extends Ite
   override def isEmpty: Boolean = raw.rawSize == 0
   override def contains(key: K): Boolean = raw.rawHas(key)
   def get(key: K): Option[V] = if raw.rawHas(key) then Some(raw.rawGet(key)) else None
+  // A map of the entries and those after them, as scala-library's `MapOps.++` gives (ScalaTest's
+  // `Filter.mergeTestTags`).
+  def ++[V1 >: V](that: IterableOnce[(K, V1)]): HashMap[K, V1] =
+    val out = HashMap.from[K, V1](this)
+    out ++= that
+    out
   override def apply(key: K): V =
     if raw.rawHas(key) then raw.rawGet(key)
     else noSuchElement("key not found: " + key)

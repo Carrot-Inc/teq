@@ -1,13 +1,18 @@
 package scala.collection
 
-// The abstract classes a library's anonymous collection extends (cats' `toIterable`), over the
-// std's traits.
+// The abstract classes a library's anonymous collection extends (cats' `toIterable`, scalactic's
+// `prettyArray`), over the std's traits.
 abstract class AbstractIterable[+A] extends Iterable[A]
 abstract class AbstractIterator[+A] extends Iterator[A]
+abstract class AbstractSeq[+A] extends Seq[A]
 
 /** scala-library's `collection.Map`: what the immutable `Map` and the mutable `HashMap` share. */
 trait Map[K, +V] extends Iterable[(K, V)]:
   def get(key: K): Option[V]
+  // Of the map's kind, as scala-library's `MapOps` has them (scalactic's `GenMapDiffer` walks a
+  // `collection.Map` by them); each map class has them as its own.
+  def filter(p: ((K, V)) => Boolean): Map[K, V]
+  def tail: Map[K, V]
   def contains(key: K): Boolean = get(key).isDefined
   def isDefinedAt(key: K): Boolean = contains(key)
   def apply(key: K): V = get(key) match
@@ -32,6 +37,28 @@ trait Set[A] extends Iterable[A]:
   // `collection.SetOps`'s, deprecated since 2.13, which libraries built on it still call
   // (scalactic's `prettify`): the elements and the element, an immutable set.
   def +(elem: A): Set[A] = scala.Set.from(this) + elem
+
+object Set:
+  def empty[A]: Set[A] = scala.Set.empty[A]
+  def apply[A](elems: A*): Set[A] = scala.Set.from(elems)
+  def from[A](elems: IterableOnce[A]): Set[A] = scala.Set.from(elems)
+
+// scala-library's `BufferedIterator`: an iterator whose next element `head` reads without taking it.
+trait BufferedIterator[+A] extends Iterator[A]:
+  def head: A
+  def headOption: Option[A] = if hasNext then Some(head) else None
+
+// scala-library's value classes of `Predef`'s wrappers, whose operations teq's arrays and strings
+// have without one: what a library's type test of a wrapper names (scalactic's
+// `ArrayHelper.isArrayOps`, `ColCompatHelper.StringOps`), which no array or string passes, as
+// none does under scalac.
+final class ArrayOps[A](private val xs: Array[A]) extends AnyVal:
+  def iterator: Iterator[A] = xs.iterator
+  def size: Int = xs.length
+  def length: Int = xs.length
+
+final class StringOps(private val s: String) extends AnyVal:
+  def mkString: String = s
 
 /** scala-library's `BuildFrom`: builds a collection like `from` with elements of type `A`, which
   * `ZIO.foreach` and `Future.traverse` take to return the collection they were given.

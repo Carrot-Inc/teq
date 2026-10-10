@@ -68,7 +68,9 @@ object Ordering:
     val IeeeOrdering: Ordering[scala.Float] = DeprecatedFloatOrdering
     val TotalOrdering: Ordering[scala.Float] = DeprecatedFloatOrdering
 
-  def ordered[T <: Ordered[T]]: Ordering[T] = FunctionOrdering((a, b) => a.compare(b))
+  // scala-library's signature, the comparison through the evidence (`Ordering.ordered[Ordinal]($conforms)`
+  // in a library body).
+  def ordered[T](implicit asComparable: T => java.lang.Comparable[? >: T]): Ordering[T] = FunctionOrdering((a, b) => asComparable(a).compareTo(b))
 
   // scala-library's `Ordering.ordered`, for a class that is `Comparable` to a supertype of
   // itself (`LocalDate` compares as a `ChronoLocalDate`).

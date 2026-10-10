@@ -289,6 +289,9 @@ def rawMapHash(a: Any): Int
 // library implements the four, the std's own map is `PersistentMap` over the hash trie index.
 @predef
 abstract class Map[K, +V] extends IterableOps[(K, V), Iterable, Map[K, V]], scala.collection.Map[K, V]:
+  // `collection.Map`'s, of this map's kind.
+  override def filter(p: ((K, V)) => Boolean): Map[K, V] = super[IterableOps].filter(p)
+  override def tail: Map[K, V] = super[IterableOps].tail
   def get(key: K): Option[V]
   def iterator: Iterator[(K, V)]
   def updated[V1 >: V](key: K, value: V1): Map[K, V1]
