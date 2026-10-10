@@ -1653,7 +1653,24 @@ impl<'a, 't> Interp<'a, 't> {
     /// The case class whose fields and name an instance of `c` prints and hashes: `c` itself,
     /// or the case class it extends.
     pub(super) fn case_info(&mut self, c: ClassId) -> Option<(Rc<[FieldKey]>, Rc<str>)> {
-        self.case_shape(c).map(|(fields, display, _)| (fields, display))
+        let mut at = Some(c);
+        let mut steps = 0;
+        while let Some(k) = at {
+            match self.shape_ref(k) {
+                Shape::Case(fields, display, _) => return Some((fields.clone(), display.clone())),
+                Shape::CaseObject(name) => {
+                    let name = name.clone();
+                    return Some((Rc::from(Vec::new()), name));
+                }
+                _ => {}
+            }
+            steps += 1;
+            if steps > self.syms().classes.len() {
+                break;
+            }
+            at = self.syms().class(k).superclass;
+        }
+        None
     }
 
     /// The case class's fields in the order its `equals` by rule compares them.

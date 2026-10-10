@@ -185,8 +185,8 @@ impl<'a, 't> Interp<'a, 't> {
         let mut out = if display.is_empty() { String::new() } else { self.product_prefix(v)? };
         out.push('(');
         let class = o.class;
-        let defined = |it: &mut Self, n| it.defined_member(class, n).is_some();
-        if defined(self, crate::names::PRODUCT_ITERATOR) {
+        let defs = self.product_defs(class);
+        if defs & product_def_bit(crate::names::PRODUCT_ITERATOR) != 0 {
             let iterator = self.call_by_name(v.clone(), "productIterator", Vec::new())?;
             let mut first = true;
             while self.call_by_name(iterator.clone(), "hasNext", Vec::new())?.as_bool().unwrap_or(false) {
@@ -196,7 +196,7 @@ impl<'a, 't> Interp<'a, 't> {
                 }
                 out.push_str(&self.to_str(&x)?);
             }
-        } else if defined(self, crate::names::PRODUCT_ARITY) || defined(self, crate::names::PRODUCT_ELEMENT) {
+        } else if defs & (product_def_bit(crate::names::PRODUCT_ARITY) | product_def_bit(crate::names::PRODUCT_ELEMENT)) != 0 {
             let arity = self.product_arity(v)?;
             for i in 0..arity {
                 if i > 0 {
@@ -231,7 +231,7 @@ impl<'a, 't> Interp<'a, 't> {
     /// Which of the members `PRODUCT_DEFS` names `c` defines (`defined_member_now`), by bit,
     /// computed once per class: the rule's `toString`, `equals` and `hashCode` ask for them at
     /// every call.
-    fn product_defs(&mut self, c: ClassId) -> u16 {
+    pub(super) fn product_defs(&mut self, c: ClassId) -> u16 {
         let known = self.product_defs[c.idx()];
         if known != 0 {
             return known;
@@ -338,9 +338,9 @@ impl<'a, 't> Interp<'a, 't> {
         // dotty's `SyntheticMembers.chooseHashcode`: reference fields hash through `productArity`
         // and `productElement` (`MurmurHash3.productHash`), which a class may define.
         let class = o.class;
-        let defined = |it: &mut Self, n| it.defined_member(class, n).is_some();
-        let case_class = self.case_class_of(class);
-        if (defined(self, crate::names::PRODUCT_ARITY) || defined(self, crate::names::PRODUCT_ELEMENT)) && case_class.is_some_and(|c| crate::tir::hashes_through_elements(&self.typer.syms, &self.typer.types, self.typer.interner, c)) {
+        let defs = self.product_defs(class);
+        let reads_elements = defs & (product_def_bit(crate::names::PRODUCT_ARITY) | product_def_bit(crate::names::PRODUCT_ELEMENT)) != 0;
+        if reads_elements && self.case_class_of(class).is_some_and(|c| crate::tir::hashes_through_elements(&self.typer.syms, &self.typer.types, self.typer.interner, c)) {
             let n = self.product_arity(v)?;
             if n == 0 {
                 return Ok(h);
