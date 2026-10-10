@@ -1440,7 +1440,8 @@ fi
 
 # A Scala.js project's suites (tests/scalajs-test, whose run under sbt-scalajs tests/scalajs-oracle.scala records)
 # over an export of the fixture's projects, their jars the coursier cache's: `suites` (munit, ScalaTest, utest and
-# zio-test under node, no module, an excluded suite, a framework's argument), `dom` (ScalaTest under jsdom, installed from the fixture's lockfile), `esm` (an ES module
+# zio-test under node, no module, an excluded suite, a framework's argument; `suites120` the same under sbt-scalajs
+# 1.20.1's tuple, munit 1.2.1 without zio-test), `dom` (ScalaTest under jsdom, installed from the fixture's lockfile), `esm` (an ES module
 # importing node's `path`) and `cjs` (CommonJS, node's argument and a variable). Each run's events (`--events`) are
 # the oracle's, `--list` its suites; a pattern, `--changed` after an edit, a configuration with frameworks and no
 # suite, a node that ends in the middle of a run, a framework the link does not hold, jsdom under an ES module
@@ -1465,6 +1466,7 @@ lock = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(lock)
 js, m2 = sys.argv[1], sys.argv[2][: sys.argv[2].index("/maven2/") + len("/maven2/")]
 munit = ["org.scalameta:munit_sjs1_3:1.3.4", "org.scalameta:munit-diff_sjs1_3:1.3.4"]
+munit120 = ["org.scalameta:munit_sjs1_3:1.2.1", "org.scalameta:munit-diff_sjs1_3:1.2.1"]
 scalatest = ["org.scalatest:scalatest_sjs1_3:3.2.20", "org.scalatest:scalatest-core_sjs1_3:3.2.20", "org.scalactic:scalactic_sjs1_3:3.2.20",
              "org.scala-lang.modules:scala-xml_sjs1_3:2.1.0", "org.scala-js:scalajs-dom_sjs1_3:2.8.1"] + [
     f"org.scalatest:scalatest-{a}_sjs1_3:3.2.20" for a in ["diagrams", "featurespec", "flatspec", "freespec", "funspec", "funsuite", "matchers-core",
@@ -1475,7 +1477,7 @@ zio = [f"dev.zio:{a}_sjs1_3:2.1.26" for a in ["zio", "zio-test", "zio-test-sbt",
     "io.github.cquiroz:scala-java-time_sjs1_3:2.6.0", "io.github.cquiroz:scala-java-time-tzdb_sjs1_3:2.6.0", "io.github.cquiroz:scala-java-locales_sjs1_3:1.5.4",
     "io.github.cquiroz:cldr-api_sjs1_3:4.5.0", "org.scala-js:scala-js-macrotask-executor_sjs1_3:1.1.1"]
 table = {}
-for key in munit + scalatest + utest + zio:
+for key in munit + munit120 + scalatest + utest + zio:
     org, name, version = key.split(":")
     path = f"{m2}{org.replace('.', '/')}/{name}/{version}/{name}-{version}.jar"
     if not os.path.isfile(path):
@@ -1500,6 +1502,8 @@ MUNIT, SCALATEST, UTEST, ZIO = "munit.Framework", "org.scalatest.tools.Framework
 projects = {
     "suites": project("suites", ["suites/src/test/scala", "suites/src/test/zio"], munit + scalatest + utest + zio, [MUNIT, SCALATEST, UTEST, ZIO], "NoModule", node,
                       main=["suites/src/main/scala"], exclude=["fixture.MunitExcluded"], args={MUNIT: ["--exclude-tags=Slow"]}),
+    "suites120": project("suites120", ["suites/src/test/scala"], munit120 + scalatest + utest, [MUNIT, SCALATEST, UTEST], "NoModule", node,
+                         main=["suites/src/main/scala"], exclude=["fixture.MunitExcluded"], args={MUNIT: ["--exclude-tags=Slow"]}),
     "dom": project("dom", ["dom/src/test/scala"], munit + scalatest, [MUNIT, SCALATEST], "NoModule", jsdom),
     "esm": project("esm", ["esm/src/test/scala"], munit, [MUNIT], "ESModule", node),
     "cjs": project("cjs", ["cjs/src/test/scala"], munit, [MUNIT], "CommonJSModule", cjs),
@@ -1517,7 +1521,7 @@ PY
 [ $? = 0 ] || fail "scalajs tests: the export of tests/scalajs-test does not write"
 jstest() { (cd "$js" && timeout 300 "$TEQ" test "$@" 2>&1); }
 # The oracle's lines of a project, sorted: its events, or with `defined` its suites; a throwable's colours left out.
-oracle_of() { grep "^$1	" tests/scalajs-test/oracle-1.22.0.txt | if [ "${2:-}" = defined ]; then grep '	defined	'; else grep -v '	defined	'; fi | sed 's/\x1b\[[0-9;]*m//g' | sort; }
+oracle_of() { grep "^$1	" "tests/scalajs-test/oracle-${tuple:-1.22.0}.txt" | if [ "${2:-}" = defined ]; then grep '	defined	'; else grep -v '	defined	'; fi | sed 's/\x1b\[[0-9;]*m//g' | sort; }
 inventory() { sed 's/\x1b\[[0-9;]*m//g' "$1" | sort; }
 out=$(jstest suites --events "$js/suites.events")
 code=$?
@@ -1526,6 +1530,15 @@ if [ $code = 1 ] && [ "$(inventory "$js/suites.events")" = "$(oracle_of suites)"
   pass "scalajs tests: munit, ScalaTest, utest and zio-test suites under node give sbt-scalajs's events, every status, an error for a suite the framework cannot make, the excluded suite and the framework's argument honoured"
 else
   fail "scalajs tests: suites ($code): $(diff <(inventory "$js/suites.events") <(oracle_of suites) | head -10) $out"
+fi
+# The tuple of sbt-scalajs 1.20.1 (munit 1.2.1, no zio-test) over the same suites, sbt-scalajs 1.20.1's events.
+out=$(jstest suites120 --events "$js/suites120.events")
+code=$?
+if [ $code = 1 ] && [ "$(sed 's/^suites120	/suites	/' "$js/suites120.events" | inventory /dev/stdin)" = "$(tuple=1.20.1 oracle_of suites)" ] \
+   && [[ "$out" == *"suites120/test: 5 suites, 6 passed, 4 failed, 2 ignored, 1 pending, 1 canceled"* ]]; then
+  pass "scalajs tests: munit 1.2.1, ScalaTest and utest, sbt-scalajs 1.20.1's tuple, give its events"
+else
+  fail "scalajs tests: suites120 ($code): $(diff <(sed 's/^suites120	/suites	/' "$js/suites120.events" | inventory /dev/stdin) <(tuple=1.20.1 oracle_of suites) | head -10) $out"
 fi
 out=$(jstest suites --list)
 code=$?
