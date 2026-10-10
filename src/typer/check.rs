@@ -2857,11 +2857,9 @@ impl<'a> Worker<'a> {
         let (synthesized, existing_defs) = self.synthesized_record(c);
         tclass.synthesized = synthesized;
         tclass.existing_defs = existing_defs;
-        if tclass.synthesized & synthetic::EQUALS != 0 {
+        if tclass.synthesized & synthetic::EQUALS != 0 && crate::tir::equals_reorders(&self.syms, &self.types, self.interner, c) {
             let order = crate::tir::equals_order(&self.syms, &self.types, self.interner, c);
-            if order.iter().enumerate().any(|(i, &k)| i != k) {
-                tclass.equals_order = order.into_iter().map(|k| k as u16).collect();
-            }
+            tclass.equals_order = order.into_iter().map(|k| k as u16).collect();
         }
         let Some(def_id) = def_id else {
             self.push_class_body(tclass);

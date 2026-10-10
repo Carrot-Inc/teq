@@ -830,6 +830,22 @@ pub fn hashes_through_elements(syms: &crate::symbols::Symbols, types: &crate::ty
 /// `c`'s fields (its first parameter list, `Product`'s order) in the order its `equals` by rule
 /// compares them, those of a primitive class first (`isPrimitiveValueClass`), each group in
 /// declaration order, so that a cheap unequal field decides before an `equals` of a reference.
+/// Whether `equals_order` of `c` is another than the fields' order: a reference field comes
+/// before a primitive one.
+pub fn equals_reorders(syms: &crate::symbols::Symbols, types: &crate::types::TypeStore, interner: &crate::intern::Interner, c: ClassId) -> bool {
+    let info = syms.class(c);
+    let Some(cl) = info.ctor.first() else { return false };
+    let mut reference_seen = false;
+    for p in &cl.params {
+        let primitive = !p.repeated && syms.sym(p.sym).declared_alias().is_none() && is_primitive_value_class(syms, types, interner, p.ty);
+        if primitive && reference_seen {
+            return true;
+        }
+        reference_seen |= !primitive;
+    }
+    false
+}
+
 pub fn equals_order(syms: &crate::symbols::Symbols, types: &crate::types::TypeStore, interner: &crate::intern::Interner, c: ClassId) -> Vec<usize> {
     // The declared type's symbol (`accessor.info.typeSymbol`), an alias's being no class, where
     // the hash reads the class behind it (`hashes_through_elements`).

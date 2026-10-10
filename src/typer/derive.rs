@@ -213,7 +213,14 @@ impl<'a> Worker<'a> {
     /// enum, or one of its bases: `Product` with `Equals`, `java.io.Serializable`,
     /// `scala.reflect.Enum`.
     pub fn is_desugared_parent(&self, b: ClassId) -> bool {
-        Some(b) == self.b.reflect_enum || self.syms.is_synthetic_parent(self.interner, b)
+        if Some(b) == self.b.product || Some(b) == self.b.reflect_enum || Some(b) == self.equals_class() {
+            return true;
+        }
+        // The one `java.io.Serializable` of its package, once looked up (`java_serializable`).
+        match self.java_serializable {
+            Some(found) => found == Some(b),
+            None => self.syms.is_synthetic_parent(self.interner, b),
+        }
     }
 
     /// A class of package `scala.reflect` as the standard library defines it.
