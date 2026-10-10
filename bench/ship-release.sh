@@ -263,12 +263,19 @@ release_served() {
     [ "$code" = 200 ] || { echo "$release_github_root/v$version/$name answered ${code:-nothing}, not 200: $version is not released whole" >&2; return 1; }
   done
 }
+# The plugin's modules, one per sbt line, published together at one version (central.py's MODULES): sbt 2's
+# and sbt 1's.
+plugin_modules="sbt-teq_sbt2_3 sbt-teq_2.12_1.0"
+
 # plugin_paths <version>: what a release of sbt-teq puts on Maven Central that a build resolves, under
-# its root: the pom and the jar (central.py reads back the rest, the sources and javadoc jars and every
+# its root: each module's pom and jar (central.py reads back the rest, the sources and javadoc jars and every
 # file's signature and digests).
 plugin_paths() {
-  echo "build/teq/sbt-teq_sbt2_3/$1/sbt-teq_sbt2_3-$1.pom"
-  echo "build/teq/sbt-teq_sbt2_3/$1/sbt-teq_sbt2_3-$1.jar"
+  local module
+  for module in $plugin_modules; do
+    echo "build/teq/$module/$1/$module-$1.pom"
+    echo "build/teq/$module/$1/$module-$1.jar"
+  done
 }
 
 # Where a release of the plugin to Central is recorded, by its version (central.py): the staging, the
@@ -289,19 +296,26 @@ plugin_unserved() {
   fi
 }
 
-# plugin_default <version>: the compiler the plugin was released with, its default teqVersion, as the jar Central
-# serves names it in its manifest (Teq-Compiler); fails when it names none.
+# plugin_default <version>: the compiler the plugin was released with, its default teqVersion, as the jars Central
+# serves name it in their manifests (Teq-Compiler), one for both modules; fails when a jar names none or the two
+# name two.
 plugin_default() {
-  local jar compiler
+  local jar module compiler first=
   jar=$(mktemp) || return 1
-  curl -fsSL --max-time 120 -o "$jar" "$release_central_root/build/teq/sbt-teq_sbt2_3/$1/sbt-teq_sbt2_3-$1.jar" 2> /dev/null &&
-    compiler=$(unzip -p "$jar" META-INF/MANIFEST.MF 2> /dev/null | tr -d '\r' | sed -n 's/^Teq-Compiler: //p')
+  for module in $plugin_modules; do
+    compiler=
+    curl -fsSL --max-time 120 -o "$jar" "$release_central_root/build/teq/$module/$1/$module-$1.jar" 2> /dev/null &&
+      compiler=$(unzip -p "$jar" META-INF/MANIFEST.MF 2> /dev/null | tr -d '\r' | sed -n 's/^Teq-Compiler: //p')
+    [ -n "$compiler" ] || { rm -f "$jar"; echo "sbt-teq $1's jar on Central ($module) names no compiler (Teq-Compiler)" >&2; return 1; }
+    [ -z "$first" ] || [ "$compiler" = "$first" ] ||
+      { rm -f "$jar"; echo "sbt-teq $1's jars on Central name two compilers, $first and $compiler ($module)" >&2; return 1; }
+    first=$compiler
+  done
   rm -f "$jar"
-  [ -n "${compiler:-}" ] || { echo "sbt-teq $1's jar on Central names no compiler (Teq-Compiler)" >&2; return 1; }
-  echo "$compiler"
+  echo "$first"
 }
 
-# plugin_served <version>: whether Central serves the plugin at the version, its pom and jar; fails
+# plugin_served <version>: whether Central serves the plugin at the version, each module's pom and jar; fails
 # naming a file it does not.
 plugin_served() {
   local path code

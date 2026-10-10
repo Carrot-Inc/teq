@@ -833,8 +833,11 @@ unset IDENTITY_PROGRAMS
 # (bench/release-mirror.py) serving sbt-teq 1.0.0.
 gh=$work/github.git co=$work/admit
 git_ init -q --bare "$gh"
-mkdir -p "$co/bench/actions" "$co/integrations/sbt" "$work/central/releases" "$work/central/maven/build/teq/sbt-teq_sbt2_3/1.0.0"
-for f in pom jar; do echo "sbt-teq 1.0.0" > "$work/central/maven/build/teq/sbt-teq_sbt2_3/1.0.0/sbt-teq_sbt2_3-1.0.0.$f"; done
+mkdir -p "$co/bench/actions" "$co/integrations/sbt" "$work/central/releases"
+for m in sbt-teq_sbt2_3 sbt-teq_2.12_1.0; do
+  mkdir -p "$work/central/maven/build/teq/$m/1.0.0"
+  for f in pom jar; do echo "sbt-teq 1.0.0" > "$work/central/maven/build/teq/$m/1.0.0/$m-1.0.0.$f"; done
+done
 python3 -B bench/release-mirror.py "$work/central.port" "$work/central/releases" "$work/central/maven" 2> /dev/null &
 pids="$pids $!"
 for _ in $(seq 1 50); do [ -s "$work/central.port" ] && break; sleep 0.1; done
@@ -1200,7 +1203,7 @@ r=out/central/sbt-teq-1.0.0
 case ${1:-} in
   --preflight) exit 0 ;;
   # The staging recorded as central.py check records it, at the head.
-  --stage) mkdir -p "$r/staging/build/teq/sbt-teq_sbt2_3/1.0.0" && echo pom > "$r/staging/build/teq/sbt-teq_sbt2_3/1.0.0/sbt-teq_sbt2_3-1.0.0.pom" &&
+  --stage) for m in sbt-teq_sbt2_3 sbt-teq_2.12_1.0; do mkdir -p "$r/staging/build/teq/$m/1.0.0" && echo pom > "$r/staging/build/teq/$m/1.0.0/$m-1.0.0.pom"; done &&
     echo bundle > "$r/bundle.zip" && echo "{\"event\": \"staged\", \"head\": \"$(git rev-parse HEAD)\"}" >> "$r/deployment.log" ;;
   "")
     # The publish resumes the recorded deployment and reads it back; without one it would upload afresh.
@@ -1260,8 +1263,11 @@ qualified_reports() {
   done
 }
 qualified_reports
-mkdir -p "$work/github/releases" "$work/github/maven/build/teq/sbt-teq_sbt2_3/1.0.0"
-for f in pom jar; do echo "sbt-teq 1.0.0" > "$work/github/maven/build/teq/sbt-teq_sbt2_3/1.0.0/sbt-teq_sbt2_3-1.0.0.$f"; done
+mkdir -p "$work/github/releases"
+for m in sbt-teq_sbt2_3 sbt-teq_2.12_1.0; do
+  mkdir -p "$work/github/maven/build/teq/$m/1.0.0"
+  for f in pom jar; do echo "sbt-teq 1.0.0" > "$work/github/maven/build/teq/$m/1.0.0/$m-1.0.0.$f"; done
+done
 python3 -B bench/release-mirror.py "$work/github.port" "$work/github/releases" "$work/github/maven" 2> /dev/null &
 pids="$pids $!"
 for _ in $(seq 1 50); do [ -s "$work/github.port" ] && break; sleep 0.1; done

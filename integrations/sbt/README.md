@@ -1,7 +1,8 @@
 # sbt-teq
 
-An sbt 2 plugin that builds a Scala.js project, or a JVM project, with [teq](../../README.md) from
-what the sbt build already knows: the source roots, the resolved jars and the scalac options.
+An sbt plugin, for sbt 2 and sbt 1, that builds a Scala.js project, or a JVM project, with [teq](../../README.md)
+from what the sbt build already knows: the source roots, the resolved jars and the scalac options. One source tree
+builds both modules (below, "The two sbt lines").
 
 ## Adopting teq
 
@@ -33,7 +34,7 @@ later`), as is a lock pinning one, and moves to 0.1.7 with the plugin 1.0.0.
 ### The editor
 
 Nothing to add. teq's language server (`teq lsp`, which the Zed extension runs) reads the build's
-export, and on an sbt 2 build without one runs `sbt teqExportAll` by itself, adding this plugin to
+export, and on an sbt build without one runs `sbt teqExportAll` by itself, adding this plugin to
 that run alone when the build does not name it: the export lands in `target/teq/teq.lock`, under
 `target`, so that the repository gets no file, and runs once again when that file goes (an `sbt
 clean`). The export refuses no build for what `teq`
@@ -309,7 +310,8 @@ TEQ_COMPILER=1 sbt api/compile api/test        # or: sbt; set every teqCompiler 
   extends are Scala 2.13 artifacts with no TASTy, so teq's std carries ports of them
   (`std/scalajs/test_bridge.scala`, `testing.scala`, `junit.scala`); the JVM side, the adapter and
   the node environment are the stock ones.
-- The test cache: sbt 2's `test` is `testQuick` under either compiler, which runs the suites
+- The test cache: sbt 1's `test` runs every suite each time, and sbt 1 caches no task. sbt 2's `test` is
+  `testQuick` under either compiler, which runs the suites
   whose digest has no recorded success, and the digest walks zinc's dependencies of a suite's
   class and the products' hashes (a Scala.js project's stamps among them), so a change re-runs
   the suites it reaches. The successes are in sbt's disk cache, the machine's, which `clean`
@@ -380,7 +382,8 @@ on besides, which the adapter hands to the callback as scalac's `ExtractDependen
 the relations from. An answer of a failed build, one with `apiErrors`, or one whose graph or
 dependencies are missing or malformed is refused before anything reaches zinc. The compile under
 `teqCompiler` feeds zinc through it. `sbt testFull` here runs the adapter's tests over recorded answers
-(`src/test`), zinc's `Incremental.apply` among them, reading back the relations it stored.
+(`src/test`), zinc's `Incremental.apply` among them, reading back the relations it stored, and `sbt '^^1.13.0'
+testFull` runs them on the sbt 1 module (this build is sbt 2's, whose `test` is testQuick).
 [`analysis/`](analysis) is the oracle of `tests/analysis.sh`: an sbt build whose projects are the
 cases, each compiled by scalac and built by teq through the adapter, both through zinc's
 incremental compiler with its API storage on, whose two analyses and dependency callbacks the
@@ -391,6 +394,41 @@ Its `analysisCost` times the JVM's side of an answer (`bench/analysis-costs.sh`)
 `Incremental.apply` with sbt's lookup, teq through a test-only incremental adapter that builds the
 batch zinc asks for as the plugin's compile does (`project/TeqBatch.scala`), then built afresh as
 the reference.
+
+## The two sbt lines
+
+The plugin is published for sbt 2 as `sbt-teq_sbt2_3` (Scala 3) and for sbt 1 as `sbt-teq_2.12_1.0` (Scala
+2.12), both at the version of `plugin-version.txt`; a build's `addSbtPlugin` line names neither, and sbt resolves
+the one of the sbt that loads it. This build, an sbt 2 one, makes both: `crossSbtVersions` names sbt 2.0.8 and
+sbt 1.13.0, `^^1.13.0` selects the sbt 1 module (Scala 2.12.21, sbt 1's API jars) and `^` runs a command for each
+(`publish.sh` stages both with `^publishSigned`). The sources under `src/main/scala` are written in the syntax
+Scala 2.12 (with `-Xsource:3`) and Scala 3 both read; what each sbt's API has of its own is behind
+`dev.teq.sbt.Compat`, `BuildInfoCompat` and `sbt.internal.teq.InterDependencies`, one file of each per line,
+`src/main/scala-sbt-2` and `src/main/scala-sbt-1.0`, with the same members:
+
+| What | sbt 2 | sbt 1 |
+|---|---|---|
+| A classpath entry, an artifact's path | a virtual file, through `fileConverter` | a file |
+| A resolved module, its artifact and configuration on an entry | JSON strings (`moduleIDStr`, `artifactStr`, `configurationStr`) | typed attributes (`moduleID.key`, `artifact.key`, `configuration.key`) |
+| The build's settings | `Def.Settings`, by scoped key | `Settings[Scope]`, by scope and key |
+| The key a task was defined under | the task's attribute | its `info`'s attribute |
+| The project's platform | `platform` | the plugins enabled (`sjs1` with Scala.js's, else `jvm`) |
+| Credentials | `librarymanagement.Credentials`, a file read by `IvyCredentials` | `librarymanagement.ivy.Credentials` |
+| A task over a task's value | `flatMapTask` | `Def.taskDyn` |
+| A linker report's directory | the path's string under the key's label | the file under `scalaJSLinkerOutputDirectory` |
+| A task whose work sbt cannot see (a generator, zinc's compile, a link) | `Def.uncached` | a task (sbt 1 caches none) |
+| zinc's second inputs | teq's identity added under `teqCompiler` | none: `setup.extra` carries it on both |
+| sbt-buildinfo's keys | its public `Entry` | its package's own cases, read by `sbtbuildinfo.TeqBuildInfoAccess` |
+| A configuration's dependencies (`ClasspathImpl.interSort`) | over `Def.Settings` | over `Settings[Scope]` |
+
+The two give one build the same lockfile but where the sbts resolve the build differently, and then each export
+is its own sbt's: a Test class path of a project that depends on another holds the two in the order of each sbt's
+`ClasspathImpl.interSort` (sbt 1 visits the project's configurations before its dependencies, sbt 2 the
+dependencies of each configuration as it goes), the Docker stage's default directory is under each sbt's target,
+and BuildInfo's `sbtVersion` is the sbt that runs. [`axes/check.sh`](axes/check.sh) checks both modules over two
+fixtures under sbt 1.13.0 and sbt 2.0.8 (its header lists the cases): `equal/`, whose exports are its committed
+lock's bytes on both but for the digest of `project/build.properties` and the hash over the build's files, and
+`order/`, whose exports are each sbt's committed lock, every class path in its sbt's own order.
 
 ## The teq binary
 

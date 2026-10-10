@@ -13,15 +13,17 @@ import dev.teq.sbt.Json
 /** The adapter over graphs teq wrote: `basic-answer.json` is teq's answer for
   * `tests/modules/basic/a` (`teq compiler build --target jvm --products ... --analysis-version 2`), its
   * source beside it. */
-class ApiGraphSuite extends munit.FunSuite:
+class ApiGraphSuite extends munit.FunSuite {
   /** The recorded answer and its source, in a directory of their own. */
-  private val resources: File =
+  private val resources: File = {
     val dir = Files.createTempDirectory("teq-analysis-answer").toFile
-    for name <- Seq("basic-answer.json", "A.scala") do
+    for (name <- Seq("basic-answer.json", "A.scala")) {
       val in = getClass.getResourceAsStream(s"/analysis/$name")
       try Files.copy(in, new File(dir, name).toPath)
       finally in.close()
+    }
     dir
+  }
   private def answer: Json.Value = Json.parse(new String(Files.readAllBytes(new File(resources, "basic-answer.json").toPath), "UTF-8"))
   private def graph: Json.Value = answer("api")
 
@@ -77,15 +79,16 @@ class ApiGraphSuite extends munit.FunSuite:
   }
 
   test("a node that refers to itself eagerly is refused, not followed") {
-    for nodes <- Seq(
+    for (nodes <- Seq(
         """[["Projection",0,"X"]]""",
         """[["Parameterized",1,[]],["Annotated",0,[]]]""",
         """[["EmptyType"],["Structure",[],[2],[]],["Def","f","Public",0,[],[],[],3],["Constant",3,"c"]]""",
-      )
-    do
+      ))
+    {
       val g = Json.parse(s"""{"nodes":$nodes,"files":[]}""")
       val e = intercept[ApiGraph.Malformed](ApiGraph.read(g))
       assert(e.getMessage.contains("refers to itself"), e.getMessage)
+    }
   }
 
   test("an unknown node is refused with its name") {
@@ -112,17 +115,19 @@ class ApiGraphSuite extends munit.FunSuite:
   }
 
   /** A jar the dependencies name, which zinc stamps. */
-  private val lib: File =
+  private val lib: File = {
     val f = new File(resources, "lib.jar")
     Files.write(f.toPath, Array[Byte]())
     f
+  }
 
   /** The recorded answer as version 3, its file's dependencies `deps` and the answer's `entries`. */
-  private def withDeps(deps: String, entries: String = s"""["${lib.getPath}","jrt:/modules/java.base/java/lang/Object.class"]"""): Json.Value =
+  private def withDeps(deps: String, entries: String = s"""["${lib.getPath}","jrt:/modules/java.base/java/lang/Object.class"]"""): Json.Value = {
     val Json.Obj(fields) = answer: @unchecked
     val Json.Obj(api) = fields("api"): @unchecked
     val files = api("files").items.map { case Json.Obj(f) => Json.Obj(f.updated("deps", Json.parse(deps))); case other => other }
     Json.Obj(fields.updated("analysisVersion", Json.Num("3")).updated("api", Json.Obj(api.updated("files", Json.Arr(files)).updated("entries", Json.parse(entries)))))
+  }
 
   private def basicDeps = """{
     "ma.Util":{"names":["Base"],"patmat":["Expr"],"classes":[["ma.Base","DependencyByMemberRef"]],
@@ -190,10 +195,11 @@ class ApiGraphSuite extends munit.FunSuite:
         Json.Obj(fields.updated("analysisVersion", Json.Num("2")))
       }),
     )
-    for (what, (part, mutated)) <- mutations do
+    for ((what, (part, mutated)) <- mutations) {
       val (message, calls) = refusal(mutated)
       assert(message.contains(part), s"$what: $message")
       assertEquals(calls, 0, what)
+    }
   }
 
   test("a second file's malformed dependencies refuse the whole answer before any callback") {
@@ -218,17 +224,19 @@ class ApiGraphSuite extends munit.FunSuite:
   /** What `answer` hands a callback that counts its calls, refused or not. */
   private def refusal(answer: String): (String, Int) = refusal(Json.parse(answer))
 
-  private def refusal(answer: Json.Value): (String, Int) =
+  private def refusal(answer: Json.Value): (String, Int) = {
     var calls = 0
     val callback = java.lang.reflect.Proxy.newProxyInstance(getClass.getClassLoader, Array(classOf[xsbti.AnalysisCallback]), (_, _, _) => { calls += 1; null }).asInstanceOf[xsbti.AnalysisCallback]
     val e = intercept[ApiGraph.Malformed](TeqAnalysis.feed(answer, resources, resources, callback, PlainVirtualFileConverter.converter))
     (e.getMessage, calls)
+  }
 
   /** The recorded answer with node `i` replaced. */
-  private def withNode(i: Int, node: Json.Value): Json.Value =
+  private def withNode(i: Int, node: Json.Value): Json.Value = {
     val Json.Obj(fields) = answer: @unchecked
     val Json.Obj(api) = fields("api"): @unchecked
     Json.Obj(fields.updated("api", Json.Obj(api.updated("nodes", Json.Arr(api("nodes").items.updated(i, node))))))
+  }
 
   private def replaced(node: Json.Value, field: Int, value: Json.Value): Json.Value = Json.Arr(node.items.updated(field, value))
 
@@ -288,29 +296,31 @@ class ApiGraphSuite extends munit.FunSuite:
       "a class's top-level flag null" -> withNode(util, replaced(nodes(util), 10, Json.Null)),
       "a class's definition type unknown" -> withNode(util, replaced(nodes(util), 5, Json.Str("Object"))),
     )
-    for (what, mutated) <- mutations do
+    for ((what, mutated) <- mutations) {
       val (message, calls) = refusal(mutated)
       assert(message.nonEmpty, what)
       assertEquals(calls, 0, what)
+    }
   }
 
   test("a graph of the wrong shape is refused before any callback") {
-    for (answer, part) <- Seq(
+    for ((answer, part) <- Seq(
         """{"ok":true,"analysisVersion":2,"analysis":[],"api":{"files":[]}}""" -> "nodes",
         """{"ok":true,"analysisVersion":2,"analysis":[],"api":{"nodes":[]}}""" -> "files",
         """{"ok":true,"analysisVersion":2,"analysis":[],"api":{"nodes":[],"files":[{"file":"A.scala","classes":[0],"products":[],"local":[]}]}}""" -> "no node 0",
         """{"ok":true,"analysisVersion":2,"analysis":[],"api":{"nodes":[],"files":[{"file":"A.scala","classes":[],"products":[["p.C"]],"local":[]}]}}""" -> "product",
         """{"ok":true,"analysisVersion":2,"analysis":[],"api":{"nodes":[],"files":[{"file":"A.scala","classes":[]}]}}""" -> "products",
         """{"ok":true,"analysisVersion":2,"analysis":[],"api":{"nodes":[["EmptyType"],["Structure",[7],[],[]],["ClassLike","p.C","Public",0,[],"ClassDef",0,1,[],[],true,[]]],"files":[{"file":"A.scala","classes":[2],"products":[],"local":[]}]}}""" -> "no node 7",
-      )
-    do
+      ))
+    {
       val (message, calls) = refusal(answer)
       assert(message.contains(part), s"$part: $message")
       assertEquals(calls, 0)
+    }
   }
 
   /** The answer through the adapter and zinc's incremental compiler, which calls it once. */
-  private def throughZinc(answer: Json.Value): Analysis =
+  private def throughZinc(answer: Json.Value): Analysis = {
     val converter = PlainVirtualFileConverter.converter
     val classes = Files.createTempDirectory("teq-analysis").toFile
     val sources = answer("api")("files").items.map(f => converter.toVirtualFile(TeqAnalysis.absolute(resources, f("file").str).toPath)).toSet
@@ -320,9 +330,11 @@ class ApiGraphSuite extends munit.FunSuite:
     val (_, analysis) = Incremental.apply(
       sources, converter, TeqAnalysis.noLookup, Analysis.empty, IncOptions.of().withApiDebug(true), setup, Stamps.timeWrapBinaryStamps(converter), output,
       JarUtils.createOutputJarContent(output), None, None, None, Logger.Null,
-    ) { (_, _, callback, _) =>
+    ) { case (_, _, callback, _) =>
       try TeqAnalysis.feed(answer, resources, classes, callback, converter)
-      catch case e: Throwable => thrown = Some(e)
+      catch { case e: Throwable => thrown = Some(e) }
     }
     thrown.foreach(throw _)
     analysis
+  }
+}

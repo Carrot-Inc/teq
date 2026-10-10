@@ -8,7 +8,6 @@ import org.scalajs.sbtplugin.ScalaJSPlugin
 import org.scalajs.sbtplugin.ScalaJSPlugin.autoImport.*
 import sbt.*
 import sbt.Keys.*
-import sbt.internal.util.StringAttributeKey
 
 import TeqPlugin.autoImport.*
 
@@ -25,28 +24,28 @@ import TeqPlugin.autoImport.*
   * link of the test sources whose entry point starts Scala.js's test bridge, so that
   * sbt-scalajs's `test`, `testOnly` and `testQuick` run the suites teq compiled under its own
   * test adapter; `compile` of both configurations is teq's check (`TeqPlugin.compilerSettings`). */
-object TeqScalaJSPlugin extends AutoPlugin:
+object TeqScalaJSPlugin extends AutoPlugin {
   override def trigger = allRequirements
   override def requires = TeqPlugin && ScalaJSPlugin
 
   override def projectSettings: Seq[Setting[?]] =
-    Seq(fastLinkJS -> false, fullLinkJS -> true).flatMap { (task, full) =>
+    Seq(fastLinkJS -> false, fullLinkJS -> true).flatMap { case (task, full) =>
       val directory = Def.setting((Compile / task / scalaJSLinkerOutputDirectory).value)
-      val teq = (if full then TeqPlugin.fullLink(directory) else TeqPlugin.link(directory)).map(report)
+      val teq = (if (full) TeqPlugin.fullLink(directory) else TeqPlugin.link(directory)).map(report)
       Seq(
-        Compile / task := Def.uncached(Def.taskIf {
-          if teqCompiler.value then teq.value
+        Compat.uncached(Compile / task, Def.taskIf {
+          if (teqCompiler.value) teq.value
           else stock(Compile, task, directory).value
-        }.value),
+        }),
       ) ++ inConfig(Compile)(TeqPlugin.watched(task, directory, Def.setting(teqCompiler.value && !full)))
-    } ++ Seq(fastLinkJS -> false, fullLinkJS -> true).flatMap { (task, full) =>
+    } ++ Seq(fastLinkJS -> false, fullLinkJS -> true).flatMap { case (task, full) =>
       val directory = Def.setting((Test / task / scalaJSLinkerOutputDirectory).value)
-      val teq = (if full then TeqPlugin.testFullLink(directory) else TeqPlugin.testLink(directory)).map(report)
+      val teq = (if (full) TeqPlugin.testFullLink(directory) else TeqPlugin.testLink(directory)).map(report)
       Seq(
-        Test / task := Def.uncached(Def.taskIf {
-          if teqCompiler.value then teq.value
+        Compat.uncached(Test / task, Def.taskIf {
+          if (teqCompiler.value) teq.value
           else stock(Test, task, directory).value
-        }.value),
+        }),
       )
     }
 
@@ -58,7 +57,7 @@ object TeqScalaJSPlugin extends AutoPlugin:
 
   private def linking(config: Configuration, task: TaskKey[?]): Def.Initialize[String] =
     Def.setting {
-      val scope = if config == Compile then "" else s"${config.name}/"
+      val scope = if (config == Compile) "" else s"${config.name}/"
       s"the Scala.js linker (${thisProject.value.id}/$scope${task.key.label})"
     }
 
@@ -68,13 +67,14 @@ object TeqScalaJSPlugin extends AutoPlugin:
     val log = streams.value.log
     val record = (config / task / streams).value.cacheDirectory / "linking-report.bin"
     Directory.claim(directory.value, linking(config, task).value, teqLinkWait.value, log) { dir =>
-      if Directory.takeOver(dir, None, log) then IO.delete(record)
+      if (Directory.takeOver(dir, None, log)) IO.delete(record)
     }
   }
 
   /** The linker's report of a directory teq served: one ES module, `main.js`, and the directory
     * under the attribute `fastLinkJSOutput` and `fullLinkJSOutput` read it from. */
-  private def report(out: File): Attributed[org.scalajs.linker.interface.Report] =
+  private def report(out: File): Attributed[org.scalajs.linker.interface.Report] = {
     val module = new ReportImpl.ModuleImpl("main", "main.js", None, ModuleKind.ESModule)
-    val report = new ReportImpl(List(module))
-    Attributed.blank(report).put(StringAttributeKey(scalaJSLinkerOutputDirectory.key.label), out.getAbsolutePath)
+    Compat.linkReport(new ReportImpl(List(module)), out)
+  }
+}

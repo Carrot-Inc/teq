@@ -4,6 +4,7 @@ import java.io.File
 import java.nio.file.Path
 import scala.annotation.nowarn
 import scala.util.control.NonFatal
+import scala.collection.compat.*
 
 import sbt.*
 import sbt.Keys.*
@@ -34,7 +35,7 @@ final case class NativeStage(
 /** sbt-native-packager's Docker stage for the export's `stage` block (native-packager 1.11's
   * rules). native-packager is a dependency of the plugin's compile alone: this object is reached
   * only for a project that enables `JavaAppPackaging` and its `DockerPlugin`. */
-private[sbt] object DockerStage:
+private[sbt] object DockerStage {
   /** The plugins that change the stage in ways `teq stage` does not reproduce. */
   private val Unsupported = Seq(
     "com.typesafe.sbt.packager.archetypes.jar.ClasspathJarPlugin",
@@ -54,12 +55,14 @@ private[sbt] object DockerStage:
     val project = thisProjectRef.value
     val inDocker = Scope(Select(project), Select(ConfigKey(Docker.name)), Zero, Zero)
     val inProject = Scope(Select(project), Zero, Zero, Zero)
-    Seq(inDocker, inProject).find(scope => Export.setByBuild(structure, root, scope, dockerGroupLayers.key)) match
+    Seq(inDocker, inProject).find(scope => Export.setByBuild(structure, root, scope, dockerGroupLayers.key)) match {
       case None => native(Def.task(Right(None)))
       case Some(scope) =>
-        Export.taskDependencies(structure, data, scope, dockerGroupLayers.key) match
+        Export.taskDependencies(structure, data, scope, dockerGroupLayers.key) match {
           case Nil => native(Def.task(Right(Some((Docker / dockerGroupLayers).value))))
           case tasks => native(Def.task(Left(s"the build's dockerGroupLayers reads ${tasks.mkString(", ")}, which the export does not run, since it may take a build: make it a function of the paths alone")))
+        }
+    }
   }
 
   @nowarn("cat=deprecation")
@@ -79,7 +82,7 @@ private[sbt] object DockerStage:
     /** A file a reason names, as the lock records it on every machine and in every checkout:
       * relative to the build's root, and outside it by the setting that names it. */
     def named(file: File, setting: String) =
-      if file.toPath.toAbsolutePath.normalize.startsWith(root) then Export.relativeTo(root, file) else s"$setting, outside the build's root,"
+      if (file.toPath.toAbsolutePath.normalize.startsWith(root)) Export.relativeTo(root, file) else s"$setting, outside the build's root,"
     def setHere(key: AttributeKey[?], config: Option[String] = None) =
       Export.setInBuild(structure, root, project, key, scope => config.forall(c => scope.config == Select(ConfigKey(c))))
     val refusals =
@@ -104,23 +107,24 @@ private[sbt] object DockerStage:
         } ++
         Option.when((templates / "bash-template").isFile)(s"$name: ${named(templates / "bash-template", "the bash-template of sourceDirectory / templates")} replaces the start script, which teq writes itself")
 
-    val layer: (File, String, Boolean) => Either[String, Option[Int]] = built match
+    val layer: (File, String, Boolean) => Either[String, Option[Int]] = built match {
       case Left(why) => (_, _, _) => Left(why)
       case Right(Some(function)) =>
         (file, path, _) =>
           try Right(function.lift((PluginCompat.toFileRef(file)(using converter), path)))
           // The exception by its class: its message may name a file of this machine, and the
           // reason is recorded in the lock.
-          catch case NonFatal(e) => Left(s"the build's dockerGroupLayers fails on $path (${e.getClass.getName}): it reads the file, which exists only after a build")
+          catch { case NonFatal(e) => Left(s"the build's dockerGroupLayers fails on $path (${e.getClass.getName}): it reads the file, which exists only after a build") }
       case Right(None) =>
         (_, path, artifact) =>
           Right(legacy(path).orElse {
-            if artifact || path.startsWith(s"$install/bin/") then Some(4)
-            else if path.startsWith(s"$install/jre/") then Some(3)
-            else if path.startsWith(s"$install/lib/") then Some(2)
-            else if path.startsWith(s"$install/conf/") then Some(1)
+            if (artifact || path.startsWith(s"$install/bin/")) Some(4)
+            else if (path.startsWith(s"$install/jre/")) Some(3)
+            else if (path.startsWith(s"$install/lib/")) Some(2)
+            else if (path.startsWith(s"$install/conf/")) Some(1)
             else None
           })
+    }
 
     NativeStage(
       packageName = (Docker / packageName).value,
@@ -133,3 +137,4 @@ private[sbt] object DockerStage:
       refusals = refusals,
     )
   }
+}

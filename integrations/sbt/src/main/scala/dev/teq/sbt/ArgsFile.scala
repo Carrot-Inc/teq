@@ -3,6 +3,7 @@ package dev.teq.sbt
 import java.io.File
 import java.nio.charset.StandardCharsets
 import java.nio.file.{Files, StandardCopyOption}
+import scala.collection.compat.*
 
 import sbt.MessageOnlyException
 
@@ -13,7 +14,7 @@ import sbt.MessageOnlyException
   * it starts. A file is named by its project's configuration and kind and by a digest of its
   * whole contents: two commands with other arguments never share one, and none is replaced with
   * other contents, so that no process reads another's arguments and no lock is needed. */
-object ArgsFile:
+object ArgsFile {
   /** Where the files of a project's commands of one configuration and kind go: `dir`, each named
     * `<stem>-<digest of its contents>.args`. */
   final case class Place(dir: File, stem: String)
@@ -28,10 +29,11 @@ object ArgsFile:
     * `directory`: their stem names the directory and a digest of its canonical path, the name
     * cut at a code point under a budget of UTF-8 bytes (`NameBytes`), so that a file's name and
     * the temporary one beside it stay under a file system's 255 bytes. */
-  def into(base: File, configuration: String, kind: String, directory: File): Place =
+  def into(base: File, configuration: String, kind: String, directory: File): Place = {
     val fixed = s"$configuration-$kind--${"0" * 8}-${"0" * Digits}.args".getBytes(StandardCharsets.UTF_8).length
     val name = truncated(directory.getName, (NameBytes - fixed).min(64).max(0))
     of(base, configuration, s"$kind-$name-${hex(sha256(directory.getCanonicalPath.getBytes(StandardCharsets.UTF_8))).take(8)}")
+  }
 
   /** The most bytes a file's name takes: 255 less the temporary name's suffix
     * (`Files.createTempFile`'s `.<at most 20 digits>.tmp`). */
@@ -42,19 +44,22 @@ object ArgsFile:
 
   /** The longest prefix of `s` whose UTF-8 encoding fits in `budget` bytes, cut between two code
     * points. */
-  def truncated(s: String, budget: Int): String =
+  def truncated(s: String, budget: Int): String = {
     val out = new java.lang.StringBuilder
     var used = 0
     val points = s.codePoints.iterator
     var full = false
-    while !full && points.hasNext do
+    while (!full && points.hasNext) {
       val point = points.next()
       val bytes = new String(Character.toChars(point)).getBytes(StandardCharsets.UTF_8).length
-      if used + bytes > budget then full = true
-      else
+      if (used + bytes > budget) full = true
+      else {
         out.appendCodePoint(point)
         used += bytes
+      }
+    }
     out.toString
+  }
 
   /** The file the arguments go to at `place`. */
   def file(place: Place, args: Seq[String]): File =
@@ -70,20 +75,23 @@ object ArgsFile:
     * meets a part of it; when it holds them already, left as it is but for its time, which a sweep
     * reads. An argument with a line end in it is refused, since the file would read it as two.
     * Then the other files of the place's stem older than `Kept` go (`sweep`). */
-  def write(place: Place, args: Seq[String]): File =
+  def write(place: Place, args: Seq[String]): File = {
     val bytes = serialized(args)
     val target = file(place, args)
-    if target.isFile && java.util.Arrays.equals(Files.readAllBytes(target.toPath), bytes) then target.setLastModified(System.currentTimeMillis)
-    else
+    if (target.isFile && java.util.Arrays.equals(Files.readAllBytes(target.toPath), bytes)) target.setLastModified(System.currentTimeMillis)
+    else {
       val dir = target.getAbsoluteFile.getParentFile
       Files.createDirectories(dir.toPath)
       val written = Files.createTempFile(dir.toPath, target.getName + ".", ".tmp")
-      try
+      try {
         Files.write(written, bytes)
         Files.move(written, target.toPath, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING)
+      }
       finally Files.deleteIfExists(written)
+    }
     sweep(place, target)
     target
+  }
 
   /** How long a file stays once another of its stem is written: a child reads its file at its
     * start (a batch again at its retry by one worker, within its run), and nothing holds one longer
@@ -93,31 +101,34 @@ object ArgsFile:
   /** Removes the files of the place's stem, and the temporary ones of a write that did not end,
     * whose time is older than `Kept`, all but `written`; each is named by other contents, so no
     * process started within the hour reads it. */
-  def sweep(place: Place, written: File): Unit =
+  def sweep(place: Place, written: File): Unit = {
     val ofStem = (java.util.regex.Pattern.quote(place.stem) + s"-[0-9a-f]{$Digits}\\.args(\\.[0-9]+\\.tmp)?").r
     val before = System.currentTimeMillis - Kept
-    for
+    for {
       f <- Option(place.dir.listFiles).toSeq.flatten
-      if f.getName != written.getName && ofStem.matches(f.getName) && f.lastModified < before
-    do
+      if f.getName != written.getName && ofStem.pattern.matcher(f.getName).matches && f.lastModified < before
+    }
       try Files.deleteIfExists(f.toPath)
-      catch case _: java.io.IOException => ()
+      catch { case _: java.io.IOException => () }
+  }
 
   /** The argument files under a project's `target/teq/`, of every stem and of earlier versions'
     * names, which `clean` removes; what else the plugin keeps there (the lock `teq.lock` where the
     * export writes it there, the binary's copy in `bin/`, the link directories with their `.lock`
     * and `.backend` files, `out/`, `test-entry/`) stays. */
   def files(base: File): Seq[File] =
-    Option(new File(new File(base, "target"), "teq").listFiles((_, name) => name.matches(".*\\.args(\\.[0-9]+\\.tmp)?"))).toSeq.flatten
+    Option(new File(new File(base, "target"), "teq").listFiles((_: File, name: String) => name.matches(".*\\.args(\\.[0-9]+\\.tmp)?"))).toSeq.flatten
 
   /** The file's contents: each argument and a line end, in UTF-8; an argument holding a line end
     * is refused. */
-  private def serialized(args: Seq[String]): Array[Byte] =
+  private def serialized(args: Seq[String]): Array[Byte] = {
     args.find(a => a.contains('\n') || a.contains('\r')).foreach { a =>
       throw new MessageOnlyException(s"teq: cannot pass ${a.replace("\n", "\\n").replace("\r", "\\r")} in an argument file: it holds a line end")
     }
     args.map(_ + "\n").mkString.getBytes(StandardCharsets.UTF_8)
+  }
 
   private def sha256(bytes: Array[Byte]): Array[Byte] = java.security.MessageDigest.getInstance("SHA-256").digest(bytes)
 
   private def hex(bytes: Array[Byte]): String = bytes.map(b => f"${b & 0xff}%02x").mkString
+}

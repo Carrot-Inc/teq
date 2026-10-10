@@ -30,6 +30,17 @@
 #     them, with the reason) and sbt's managed directories among its sources, its test generator,
 #     its resource generator and mirrored's, its test options and the stage it does not reproduce,
 #     without a stage block; every other project's block the before export's.
+#   axes <sbt 1 export> <sbt 2 export> [header]: the two exports of one build under sbt 1 and sbt 2
+#     (integrations/sbt/axes/check.sh) are the same bytes but for the digest of project/build.properties, whose
+#     sbt.version differs, and the hash over the build's files; with `header`, the sbt 1 export's header (teq and
+#     binaries) taken as the sbt 2 one's, as `fixture` takes it.
+#   headerless <export> <file>: the export with an empty binaries table written to the file (a committed fixture of
+#     integrations/sbt/axes/check.sh, whose mirror's URLs change at each run).
+#   internal <export> <sbt log>: each configuration's projects on its classpath are, in order, the products sbt's
+#     `export <project>/<Configuration>/fullClasspath` printed for it (one line per configuration, in the order of
+#     `configurations`), the configuration's own products aside: sbt 2's jars under ${OUT}/<platform>/scala-<v>/
+#     <project>/ and sbt 1's class directories under <project>/target/scala-<v>/ (`-tests.jar`, `test-classes` a
+#     project's test products).
 import difflib
 import hashlib
 import os
@@ -599,8 +610,7 @@ def classpaths(export_path, log_path):
             if entry.startswith(placeholder):
                 return os.path.normpath(place + entry[len(placeholder):])
         return os.path.normpath(entry)
-    printed = [line.strip() for line in read(log_path).splitlines() if line.startswith("List(")]
-    lists = [[local(e) for e in line[len("List("):-1].split(", ") if e] for line in printed]
+    lists = [[local(e) for e in entries] for entries in printed_classpaths(log_path)]
     named = configurations(export)
     if len(lists) != len(named):
         print(f"sbt printed {len(lists)} classpaths for the export's {len(named)} configurations")
@@ -630,6 +640,87 @@ def classpaths(export_path, log_path):
             if (hashlib.sha1(data).hexdigest(), len(data)) != (sha1, size):
                 failures.append(f"{where}[{i}]: {file} is not the bytes the export pins for {entry}")
     print("\n".join(failures[:40]) if failures else f"{len(named)} configurations, {jars} jars")
+    return not failures
+
+
+def printed_classpaths(log_path):
+    """The classpaths sbt's `export` printed, in order: sbt 2's `List(<entry>, ...)`, sbt 1's entries joined by the
+    path separator, each a line of its own."""
+    lists = []
+    for line in read(log_path).splitlines():
+        line = line.strip()
+        if line.startswith("List("):
+            lists.append([e for e in line[len("List("):-1].split(", ") if e])
+        elif line.startswith(os.sep) and not line.startswith(os.sep + "*"):
+            lists.append([e for e in line.split(os.pathsep) if e])
+    return lists
+
+
+def headerless(export_path, out_path):
+    export = load(export_path)
+    export["binaries"] = {}
+    with open(out_path, "w", encoding="utf-8", newline="") as f:
+        f.write(canonical(export))
+    return True
+
+
+def axes(sbt1_path, sbt2_path, *header):
+    one, two = load(sbt1_path), load(sbt2_path)
+    if header == ("header",):
+        one.update({"teq": two["teq"], "binaries": table(two)})
+    for lock in (one, two):
+        if "project/build.properties" not in lock["inputs"]["files"]:
+            print("an export records no project/build.properties")
+            return False
+    if one["inputs"]["files"]["project/build.properties"] == two["inputs"]["files"]["project/build.properties"]:
+        print("the two exports record one project/build.properties: the builds are not the two axes")
+        return False
+    one["inputs"]["files"]["project/build.properties"] = two["inputs"]["files"]["project/build.properties"]
+    one["inputs"]["sha256"] = two["inputs"]["sha256"]
+    text, wanted = canonical(one), read(sbt2_path)
+    if text != wanted:
+        show_diff(wanted, text, sbt2_path, sbt1_path)
+        return False
+    return True
+
+
+def internal(export_path, log_path):
+    export = load(export_path)
+    root = os.path.normpath(os.path.dirname(os.path.abspath(export_path)))
+    names = set(export["projects"])
+    def product(entry):
+        """The (project, configuration) whose products the entry is, None for one outside the build."""
+        # sbt 2 prints a product with its digest and size after a `>`.
+        entry = entry.split(">", 1)[0]
+        for placeholder in ("${OUT}", "${BASE}"):
+            if entry.startswith(placeholder):
+                parts = entry[len(placeholder):].strip("/").split("/")
+                break
+        else:
+            if not os.path.normpath(entry).startswith(root + os.sep):
+                return None
+            parts = os.path.relpath(entry, root).split(os.sep)
+        scala = [i for i, part in enumerate(parts) if part.startswith("scala-")]
+        candidates = [parts[scala[0] + 1]] if scala and scala[0] + 1 < len(parts) else []
+        candidates += [part for part in parts if part in names]
+        project = next((c for c in candidates if c in names), None)
+        test = parts[-1] == "test-classes" or parts[-1].endswith("-tests.jar")
+        return (project, "test" if test else "compile")
+    lists = printed_classpaths(log_path)
+    named = configurations(export)
+    if len(lists) != len(named):
+        print(f"sbt printed {len(lists)} classpaths for the export's {len(named)} configurations")
+        return False
+    failures, compared = [], 0
+    for (project, configuration), sbts in zip(named, lists):
+        ours = [(e["project"], e["configuration"]) for e in export["projects"][project]["configurations"][configuration]["classpath"] if isinstance(e, dict) and "project" in e]
+        theirs = [p for p in map(product, sbts) if p is not None and p != (project, configuration)]
+        if None in (p for p, _ in theirs):
+            failures.append(f"{project}/{configuration}: sbt's classpath has products of no project of the export: {sbts}")
+        elif ours != theirs:
+            failures.append(f"{project}/{configuration}: the export's projects {ours}, sbt's {theirs}")
+        compared += len(ours) > 1
+    print("\n".join(failures) if failures else f"{len(named)} configurations, {compared} of several projects")
     return not failures
 
 
@@ -675,5 +766,5 @@ def recorded(export_path, before_path):
 
 if __name__ == "__main__":
     command, args = sys.argv[1], sys.argv[2:]
-    commands = {"fixture": fixture, "header": header, "binaries": binaries, "pin": pin, "dependency": dependency, "alias": alias, "mirror": mirror, "classpaths": classpaths, "projects": projects, "configurations": scopes, "recorded": recorded}
+    commands = {"fixture": fixture, "header": header, "binaries": binaries, "pin": pin, "dependency": dependency, "alias": alias, "mirror": mirror, "classpaths": classpaths, "projects": projects, "configurations": scopes, "recorded": recorded, "axes": axes, "internal": internal, "headerless": headerless}
     sys.exit(0 if commands[command](*args) else 1)

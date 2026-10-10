@@ -293,6 +293,66 @@ check "release.sh --plugin moves the plugin's line alone" "$(cd "$repo" && git s
 (cd "$repo" && timeout 300 bench/release.sh --plugin 1.0.0 > "$work/release-plugin.out" 2>&1)
 check "release.sh --plugin refuses a version not after the line's" "$?" 1
 has "release.sh --plugin refuses a version not after the line's" "$work/release-plugin.out" "1.0.0 does not come after the checkout's plugin 1.0.0"
+
+# The plugin's two modules, sbt 2's sbt-teq_sbt2_3 and sbt 1's sbt-teq_2.12_1.0, one release at one version
+# (bench/ship-release.sh's plugin_modules, central.py's MODULES). A version Central serves either module of is no
+# next release, a partial publication included; the pin waits for both; the compiler the release selects is the
+# one both jars name.
+# central_serve <version> <module> [<compiler>]: the Central stand-in serves the module's pom, and its jar, whose
+# manifest names the compiler.
+central_serve() {
+  local dir=$work/www/maven2/build/teq/$2/$1
+  mkdir -p "$dir" && echo "<project/>" > "$dir/$2-$1.pom" &&
+    python3 -c 'import sys, zipfile; z = zipfile.ZipFile(sys.argv[1], "w"); z.writestr("META-INF/MANIFEST.MF", "Manifest-Version: 1.0\r\n" + ("Teq-Compiler: %s\r\n" % sys.argv[2] if sys.argv[2] else "")); z.close()' "$dir/$2-$1.jar" "${3:-}"
+}
+ship() { (cd "$repo" && bash -c ". bench/ship-release.sh && $1" 2>&1); }
+for module in sbt-teq_sbt2_3 sbt-teq_2.12_1.0; do
+  rm -rf "$work/www/maven2/build"
+  central_serve 1.0.1 "$module" 0.1.7
+  (cd "$repo" && timeout 300 bench/release.sh --plugin 1.0.1 > "$work/release-plugin.out" 2>&1)
+  check "release.sh --plugin refuses a version Central serves $module of alone" "$?" 1
+  has "release.sh --plugin names the module Central serves" "$work/release-plugin.out" "build/teq/$module/1.0.1/$module-1.0.1.pom is served: sbt-teq 1.0.1 is released"
+  check "the pin waits for the module Central does not serve beside $module" "$(ship 'plugin_served 1.0.1' > /dev/null; echo $?)" 1
+done
+has "plugin_served names the missing module's file" <(ship 'plugin_served 1.0.1') "build/teq/sbt-teq_sbt2_3/1.0.1/sbt-teq_sbt2_3-1.0.1.pom answered 404, not 200: sbt-teq 1.0.1 is not on Central"
+central_serve 1.0.1 sbt-teq_sbt2_3 0.1.7
+check "plugin_served: both modules served" "$(ship 'plugin_served 1.0.1' > /dev/null; echo $?)" 0
+check "plugin_default: the compiler both jars name" "$(ship 'plugin_default 1.0.1')" 0.1.7
+central_serve 1.0.1 sbt-teq_2.12_1.0 0.1.6
+check "plugin_default: two compilers refused" "$(ship 'plugin_default 1.0.1')" "sbt-teq 1.0.1's jars on Central name two compilers, 0.1.7 and 0.1.6 (sbt-teq_2.12_1.0)"
+central_serve 1.0.1 sbt-teq_2.12_1.0
+check "plugin_default: a jar naming none refused" "$(ship 'plugin_default 1.0.1')" "sbt-teq 1.0.1's jar on Central (sbt-teq_2.12_1.0) names no compiler (Teq-Compiler)"
+rm -rf "$work/www/maven2/build"
+# central.py over the two modules: a staging of one module alone is not the release's files (the axis missing);
+# a read-back resumed reads what the last run did not.
+record=$work/central-record
+mkdir -p "$record/staging"
+mkdir -p "$record/staging/build/teq/sbt-teq_sbt2_3/1.0.1"
+for name in .pom .jar -sources.jar -javadoc.jar; do
+  f=$record/staging/build/teq/sbt-teq_sbt2_3/1.0.1/sbt-teq_sbt2_3-1.0.1$name
+  echo "$name" > "$f" && for s in asc md5 sha1; do echo x > "$f.$s"; done
+done
+python3 -B integrations/sbt/central.py check "$record" 1.0.1 0000 0000 > "$work/central-check.out" 2>&1
+check "central.py check refuses a staging of sbt 2's module alone" "$?" 1
+has "central.py check names sbt 1's missing files" "$work/central-check.out" "missing build/teq/sbt-teq_2.12_1.0/1.0.1/sbt-teq_2.12_1.0-1.0.1-javadoc.jar"
+rm -rf "$record" && mkdir -p "$record"
+for module in sbt-teq_sbt2_3 sbt-teq_2.12_1.0; do
+  for f in "$module-1.0.1.pom" "$module-1.0.1.jar"; do
+    mkdir -p "$work/staged/build/teq/$module/1.0.1" && echo "$f" > "$work/staged/build/teq/$module/1.0.1/$f"
+    file=$work/staged/build/teq/$module/1.0.1/$f
+    printf 'build/teq/%s/1.0.1/%s\t%s\t%s\t%s\t%s\n' "$module" "$f" "$(wc -c < "$file")" "$(sha1sum "$file" | cut -d' ' -f1)" "$(md5sum "$file" | cut -d' ' -f1)" "$(sha256sum "$file" | cut -d' ' -f1)" >> "$record/manifest.tsv"
+  done
+done
+printf '{"event": "promoted", "at": "2026-10-10T00:00:00Z"}\n' > "$record/deployment.log"
+mkdir -p "$work/www/maven2/build/teq" && cp -R "$work/staged/build/teq/sbt-teq_sbt2_3" "$work/www/maven2/build/teq/"
+python3 -B integrations/sbt/central.py readback "$record" "http://127.0.0.1:$port/maven2/" 5 > "$work/central-readback.out" 2>&1
+check "central.py readback: sbt 1's module not served yet, a failure" "$?" 1
+has "central.py readback names what is not served" "$work/central-readback.out" "2 files are not served yet (first build/teq/sbt-teq_2.12_1.0/1.0.1/sbt-teq_2.12_1.0-1.0.1.jar)"
+cp -R "$work/staged/build/teq/sbt-teq_2.12_1.0" "$work/www/maven2/build/teq/"
+python3 -B integrations/sbt/central.py readback "$record" "http://127.0.0.1:$port/maven2/" 5 > "$work/central-readback.out" 2>&1
+check "central.py readback resumed: every file of both modules read back" "$?" 0
+check "central.py readback resumed: each file read once" "$(grep -c '"event": "served"' "$record/deployment.log")/$(grep -c '"event": "read-back"' "$record/deployment.log")" 4/1
+rm -rf "$work/www/maven2/build" "$work/staged" "$record"
 release=$(cd "$repo" && git rev-parse HEAD)
 initial=$(cd "$repo" && git rev-parse HEAD~2)
 # The profiles that guided the binaries (bench/ship-profiles.sh), as the stage writes them from the ship's tree: a

@@ -11,8 +11,8 @@ and in the Zed bundle.
 
 ## The sbt plugin
 
-sbt-teq is an sbt 2 plugin, on Maven Central. A build switches to teq by adding the plugin and setting
-`teqCompiler`; the plugin fetches the compiler for the machine's platform from teq's GitHub release:
+sbt-teq is a plugin for sbt 2 and for sbt 1, on Maven Central. A build switches to teq by adding the plugin and
+setting `teqCompiler`; the plugin fetches the compiler for the machine's platform from teq's GitHub release:
 
 ```scala
 // project/plugins.sbt
@@ -22,6 +22,12 @@ addSbtPlugin("build.teq" % "sbt-teq" % "1.0.0")
 teqVersion := "0.1.8"
 teqCompiler := true
 ```
+
+The line is the same under both sbts. Each release of the plugin publishes a module per sbt line at its one
+version, `sbt-teq_sbt2_3` for sbt 2 and `sbt-teq_2.12_1.0` for sbt 1 (built against sbt 1.13; its export checked
+on 1.12 and 1.13), and sbt resolves the module of the sbt that loads the build, as it resolves every plugin. The two are
+built from one source tree: the same tasks and settings, and the same `teqExportAll`, lockfile and launchers for
+the same build. sbt 1's module comes with the plugin's first release after 1.0.0, which is sbt 2's alone.
 
 `teqCompiler := true` puts teq in the place of zinc's incremental compiler. For a JVM project `compile`,
 `test`, `testOnly`, `run` and `packageBin` then run through sbt's own tasks, with sbt's own reporting, over
@@ -39,7 +45,8 @@ teq's, through TASTy, and scalac reads teq's in the other direction. What stays 
 sources is refused with an error naming them, and takes `teqCompiler := false` or a project of its own. JUnit
 suites are found by their `@Test` methods but not run yet.
 
-sbt 2's `test` is `testQuick`, under either compiler: it runs a suite only if no run has passed it at its
+sbt 1's `test` runs every suite each time, as sbt 1 runs it (`testQuick` is a task of its own there), and sbt 1
+caches no task. sbt 2's `test` is `testQuick`, under either compiler: it runs a suite only if no run has passed it at its
 current digest, a hash of the suite's class files, those of the classes it uses, its libraries and its test
 options. sbt records the successes in its disk cache, which every build and checkout on the machine shares
 (`~/.cache/sbt/v2` on Linux, `~/Library/Caches/sbt/v2` on macOS, `%LOCALAPPDATA%\sbt\v2` on Windows, under
@@ -342,7 +349,8 @@ written is a warning on `build.sbt` naming `sbt teqExportAll` (a build file git 
 the server itself, once: it runs `sbt teqExportAll` with the published sbt-teq of its own version loaded for
 that run alone, which writes `teq.lock` under the build's `target/teq/` (at its root under the driver), and
 again when that file goes, after an `sbt clean`; a run that fails is a diagnostic
-on `build.sbt` and runs again once a build file changes. It needs sbt 2 on the `PATH`, fails under a
+on `build.sbt` and runs again once a build file changes. It needs sbt on the `PATH` (its launcher runs the
+build's sbt, 2 or 1 once the plugin's release carries sbt 1's module), fails under a
 `--client` in `.sbtopts` (a server JVM without the plugin), and does not run on Windows. A folder that is no
 sbt build is one session of every `.scala` file under it, on the lean standard library without a class path.
 
