@@ -657,10 +657,10 @@ function $productElementName(p, i) {
 // called, a field read. A name no member has is a TypeError, as under Scala.js.
 // A reflective call: the receiver's reflective proxy of the method's name and the classes of its
 // parameters' erasures (`typer::reflective_proxy_name`), else `fail`'s NoSuchMethodException of
-// the receiver's class, the method's name and the classes.
+// the receiver's class (`$classOf`), the method's name and the classes.
 function $callProxy(x, proxy, args, signature, fail) {
   const m = x === null || x === undefined ? undefined : x[proxy];
-  return typeof m === "function" ? m.apply(x, args) : fail(x, signature);
+  return typeof m === "function" ? m.apply(x, args) : fail($classOf(x) + "." + signature);
 }
 // One whose classes are no literals names the proxy by the classes' names at run time.
 function $callBySignature(x, name, classes, args, fail) {

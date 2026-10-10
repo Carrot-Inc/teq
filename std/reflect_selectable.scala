@@ -21,7 +21,7 @@ object Selectable:
 // the erasures, a value class's its own, an array's of its element and dimensions
 // (`typer::reflective_proxy_name`).
 @js("$callBySignature($0, $1, $2, $3, $4)")
-private[reflect] def callBySignature(x: Any, name: String, paramTypes: Seq[Class[?]], args: Array[Any], fail: (Any, String) => Nothing): Any
+private[reflect] def callBySignature(x: Any, name: String, paramTypes: Seq[Class[?]], args: Array[Any], fail: String => Nothing): Any
 
-private[reflect] def noSuchMethod(x: Any, signature: String): Nothing =
-  throw new NoSuchMethodException(x.getClass.getName + "." + signature)
+// The failure, its message the receiver's class's name, the method's and the classes.
+private[reflect] def noSuchMethod(message: String): Nothing = throw new NoSuchMethodException(message)

@@ -473,8 +473,11 @@ impl<'a, 't> Interp<'a, 't> {
                 };
             }
         }
-        let signature = format!("{}({})", name, classes.join(","));
-        self.apply_value(fail, vec![recv, Value::string(signature)])
+        let class = match self.class_of_value(&recv) {
+            Value::Class(c) => c.qname.to_string(),
+            _ => "null".to_string(),
+        };
+        self.apply_value(fail, vec![Value::string(format!("{}.{}({})", class, name, classes.join(",")))])
     }
 
     /// The value class `t` is an instance of.
