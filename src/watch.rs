@@ -1333,6 +1333,8 @@ fn finish_jvm(
         return false;
     }
     let t_emit = Instant::now();
+    // Ranked as a fresh JVM build ranks them before it writes its classes.
+    t.rank_files();
     let all_sources = t.all_sources();
     let owned = crate::owned_files(opts, &all_sources);
     let stackable = crate::stackable_overrides(t, reach);
@@ -1877,6 +1879,9 @@ fn finish_file(t: &mut Worker, sources: &Sources, file: &str, opts: &Options, re
     }
     let t_emit = Instant::now();
     let array_seq = crate::typer::thread::run(|| t.array_seq_class());
+    // The files ranked as a fresh build ranks them after its reach (the library bodies the reach
+    // demanded among them), so that the one file is written alike.
+    t.rank_files();
     let options = emit::Options { release: opts.release, size_report: None, outline: !opts.no_outline };
     let (output, _) = emit::emit(&t.prog, &t.syms, &t.types, t.interner, array_seq, reach, None, options, None);
     report.ms.emit = t_emit.elapsed();

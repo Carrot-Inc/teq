@@ -1540,6 +1540,26 @@ if [ $code = 1 ] && [ "$(sed 's/^suites120	/suites	/' "$js/suites120.events" | i
 else
   fail "scalajs tests: suites120 ($code): $(diff <(sed 's/^suites120	/suites	/' "$js/suites120.events" | inventory /dev/stdin) <(tuple=1.20.1 oracle_of suites) | head -10) $out"
 fi
+# The resident's one-file test link is a fresh build's, byte for byte: the session's recorded arguments
+# (target/teq/<project>/test/resident.args) built once, its files ranked alike; each project's link as its
+# first build wrote it.
+fresh_link() {
+  local p=$1 a b=() i link fresh
+  mapfile -t a < "$js/target/teq/$p/test/resident.args"
+  link=$(ls "$js/target/teq/$p/test/link/"main.*)
+  fresh="$js/fresh-$p-$(basename "$link")"
+  for ((i = 0; i < ${#a[@]}; i++)); do
+    case "${a[$i]}" in
+      watch) b+=(build) ;;
+      --analysis-version) i=$((i + 1)) ;;
+      -o) b+=(-o "$fresh"); i=$((i + 1)) ;;
+      *) b+=("${a[$i]}") ;;
+    esac
+  done
+  (cd "$js" && timeout 300 "$TEQ" "${b[@]}" > /dev/null 2>&1) && cmp -s "$link" "$fresh"
+}
+differ=""
+for p in suites suites120; do fresh_link "$p" || differ="$differ $p"; done
 out=$(jstest suites --list)
 code=$?
 listed=$(printf '%s\n' "$out" | sed -nE 's/^Test (fixture\.[A-Za-z]+) : .*/\1/p' | sort)
@@ -1612,6 +1632,12 @@ if [ $? = 2 ] && [[ "$out" == *"cjs/test: 1 suite, 2 passed, 0 failed"* ]] && [[
   pass "scalajs tests: test over every project runs the Scala.js ones and names the one left out"
 else
   fail "scalajs tests: every project: $out"
+fi
+for p in esm cjs; do fresh_link "$p" || differ="$differ $p"; done
+if [ -z "$differ" ]; then
+  pass "scalajs tests: the resident's first test links of suites, suites120, esm and cjs are a fresh build's, byte for byte"
+else
+  fail "scalajs tests: a resident's test link differs from a fresh build's:$differ"
 fi
 (cd "$js" && timeout 30 "$TEQ" stop > /dev/null 2>&1)
 
