@@ -550,6 +550,28 @@ def maven_path(key):
     return f"{organization.replace('.', '/')}/{name}/{version}/{name}-{version}{''.join('-' + c for c in parts[3:])}.jar"
 
 
+def coursier_file(cache, url):
+    """The file coursier keeps for a URL, as its CachePath.localFile names it with no user: the scheme, a `/`, then
+    the URL after the scheme's `:` with its leading `/`s taken off and a trailing `/` made `/.directory`, the whole
+    escaped by coursier_escape (the authority's user, a port, the query and the fragment kept); None for a URL
+    coursier refuses: no scheme, no `/` after it, or a `.` or `..` segment (tests/support/coursier-files.txt)."""
+    scheme, colon, rest = url.partition(":")
+    if not colon:
+        return None
+    if rest.startswith("///"):
+        rest = rest[3:]
+    elif rest.startswith("/"):
+        rest = rest[1:]
+    else:
+        return None
+    if rest.endswith("/"):
+        rest += ".directory"
+    place = coursier_escape(scheme + "/" + rest.lstrip("/"))
+    if any(segment in (".", "..") for segment in place.split("/")):
+        return None
+    return os.path.join(cache, *place.split("/"))
+
+
 def coursier_escape(text):
     """coursier's CachePath.escape: every UTF-16 unit above 128 and each of ` %$&+,:;=?@<>#` as `%`
     and two digits of its value in base 16 (a repository's port, a version's `+`)."""
@@ -599,8 +621,7 @@ def classpaths(export_path, log_path):
                 continue
             jars += 1
             repository, sha1, size, path = fields(export, entry)
-            scheme, rest = (urls[repository] + path).split("://", 1)
-            derived = os.path.normpath(os.path.join(cache, scheme, coursier_escape(rest)))
+            derived = os.path.normpath(coursier_file(cache, urls[repository] + path))
             if file.startswith(os.path.normpath(cache) + os.sep) and file != derived:
                 failures.append(f"{where}[{i}]: {entry} at {derived}, sbt's {file}")
             elif not file.startswith(os.path.normpath(cache) + os.sep) and not entry.startswith("org.scala-lang:"):

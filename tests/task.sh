@@ -29,9 +29,12 @@
 # recording generators sbt alone runs: the verbs that need them refused, the others run, a compile of
 # every project naming those it left out and exiting 2. Then an artifact fetched
 # over loopback http into the shared cache, verified, and one whose pinned sha1 is wrong refused.
-# Then a Scala.js project's `build` and `dev` over an export of their own (needs node), and
-# vite-plugin-teq's own test. Without scala-library or munit's jars in the coursier cache it fails
-# as incomplete validation.
+# Then a Scala.js project's `build` and `dev` over an export of their own (needs node). Then the
+# launcher tools/launcher/teq under each shell present, coursier's copy of each URL of
+# tests/support/coursier-files.txt among its checks, and teq.cmd under wine's cmd where wine is
+# installed (its section says what wine cannot show); then vite-plugin-teq's own test and
+# bench/ptyper-vite-loop.mjs's six steps over the Scala.js export. Without scala-library or munit's
+# jars in the coursier cache it fails as incomplete validation.
 cd "$(dirname "$0")/.."
 TEQ=${TEQ:-./target/release/teq}
 TEQ=$(cd "$(dirname "$TEQ")" && pwd)/$(basename "$TEQ")
@@ -1375,6 +1378,54 @@ cp "$l/stand-in" "$l/coursier/http/127.0.0.1%3A$lport/coursier-only/teq.exe"
 before=$(requests)
 out=$(launch "$sh" cache-coursier compile)
 if [ "$out" = "stand-in compile" ] && [ "$(requests)" = "$before" ] && [ -x "$l/cache-coursier/bin/$lsha1/teq-9.9.9-$lc" ]; then pass "launcher: coursier's copy of the URL is copied into teq's cache, nothing fetched"; else fail "launcher, coursier's copy: $out"; fi
+# The table is coursier's own: coursier-paths' CachePath.localFile called on each URL (scala-cli, where present).
+if command -v scala-cli > /dev/null; then
+  if out=$(timeout 300 scala-cli run tests/support/coursier-files.scala --server=false -- --check 2>&1); then
+    pass "launcher: tests/support/coursier-files.txt is coursier's own answers ($(tail -1 <<< "$out"))"
+  else
+    fail "launcher, tests/support/coursier-files.txt against coursier: $(grep 'coursier-files' <<< "$out" | tail -5)"
+  fi
+else
+  echo "task: note: no scala-cli here, tests/support/coursier-files.txt not checked against coursier"
+fi
+# The export checker's coursier_file (integrations/sbt/example/check-export.py), the example's checks', on the table.
+if out=$(python3 - <<'PY'
+import importlib.util, os
+spec = importlib.util.spec_from_file_location("lock", "integrations/sbt/example/check-export.py")
+lock = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(lock)
+cases = [l.rstrip("\n").split(" ", 1) for l in open("tests/support/coursier-files.txt") if l.strip() and not l.startswith("#")]
+wrong = [(url, lock.coursier_file("/c", url)) for url, file in cases if lock.coursier_file("/c", url) != (None if file == "-" else os.path.join("/c", *file.split("/")))]
+print(len(cases), wrong)
+PY
+) && [[ "$out" =~ ^[0-9]+\ \[\]$ ]]; then
+  pass "launcher: the export checker's coursier_file gives coursier's place of each URL of tests/support/coursier-files.txt (${out%% *})"
+else
+  fail "launcher, the export checker's coursier_file: $out"
+fi
+# coursier's copy of each URL of tests/support/coursier-files.txt (coursier's own answers), at its place alone,
+# copied into teq's cache and run; for a URL coursier refuses (`-`), a copy where its path's `.` segment taken
+# away would put it is not taken, and the fetch from a host that resolves nowhere fails.
+# naive <url>: that place, the scheme's `//` and the path's `./` taken away.
+naive() { printf '%s' "$1" | sed -e 's|^\([a-z]*\):/*|\1/|' -e 's|/\./|/|g'; }
+cases=0
+missed=
+while read -r url place; do
+  case $url in '' | '#'*) continue ;; esac
+  cases=$((cases + 1))
+  at=$place
+  [ "$place" != - ] || at=$(naive "$url")
+  rm -rf "$l/places" && mkdir -p "$(dirname "$l/places/coursier/$at")" && cp "$l/stand-in" "$l/places/coursier/$at"
+  printf 'teq: 9.9.9\nformat: 1\nbinaries:\n  %s: %s %s %s\nprojects: {}\n' "$lc" "$url" "$lsha1" "$lsize" > "$l/build/teq.lock"
+  out=$(cd "$l/build" && env -u TEQ TEQ_CACHE_DIR="$l/places/teq" COURSIER_CACHE="$l/places/coursier" timeout 60 "$sh" ./teq x 2>&1)
+  code=$?
+  if [ "$place" = - ]; then
+    [ $code = 1 ] && [[ "$out" == *"GET $url failed"* ]] && [ ! -e "$l/places/teq/bin/$lsha1/teq-9.9.9-$lc" ] || missed="$missed [$url, refused by coursier: $out]"
+  else
+    [ "$out" = "stand-in x" ] && [ -x "$l/places/teq/bin/$lsha1/teq-9.9.9-$lc" ] || missed="$missed [$url: $out]"
+  fi
+done < tests/support/coursier-files.txt
+if [ -z "$missed" ] && [ $cases -gt 0 ]; then pass "launcher: coursier's copy of each URL of tests/support/coursier-files.txt ($cases) found at coursier's place, nothing fetched; none for a URL coursier refuses"; else fail "launcher, coursier's places:$missed"; fi
 lock_of "http://127.0.0.1:$lport/slow/teq.exe $lsha1 $lsize"
 launch "$sh" cache-both one > "$l/both-1" &
 first=$!
@@ -1452,8 +1503,150 @@ else
 fi
 kill "$lserver" 2> /dev/null
 
+# The launcher tools/launcher/teq.cmd under wine's cmd where wine is installed, in tests/wine.sh's prefix, over a
+# stand-in for the binary, a copy of wine's cmd.exe (`/c echo stand-in <args>` prints its arguments): a lock with
+# its copy in teq's cache runs it, the arguments and the exit code passed through; a sha1 of 39 or 41 characters
+# or of another character than a hexadecimal digit, a first line `teq: ` alone and a release before 0.1.7 are
+# refused before the cache is looked in; TEQ runs the program it names; then coursier's copy of each URL of
+# tests/support/coursier-files.txt is found at its place alone, copied into teq's cache and run. Wine's certutil
+# is a stub that prints nothing, so the launcher of those cases has its two certutil lines answer the stand-in's
+# sha1 (the digests are Windows' to check, tests/windows.sh), and wine has no curl.exe, so a copy not found ends
+# in the fetch's refusal. Wine's cmd is not Windows': past a value's end its substring is the last character
+# where Windows' is empty, an offset teq.cmd never takes. This is wine's evidence; the release's Windows job runs
+# teq.cmd on Windows.
+if command -v wine > /dev/null; then
+  wd=$work/wine
+  mkdir -p "$wd/build" "$wd/none"
+  wprefix=${WINEPREFIX:-$PWD/target/wine}
+  win() {
+    local path
+    path=$(realpath -m "$1")
+    echo "Z:${path//\//\\}"
+  }
+  # wlaunch <cache> <args...>: the build's launcher ($WLAUNCHER, else teq.cmd) under wine's cmd, TEQ unset and
+  # coursier's cache $WCOURSIER (else an empty one), its output with cmd's line ends taken off.
+  wlaunch() {
+    local cache=$1
+    shift
+    (cd "$wd/build" && env -u TEQ WINEPREFIX="$wprefix" WINEDEBUG=-all TEQ_CACHE_DIR="$(win "$wd/$cache")" COURSIER_CACHE="$(win "$wd/${WCOURSIER:-none}")" \
+      timeout 60 wine cmd /c "$(win "$wd/build/${WLAUNCHER:-teq.cmd}")" "$@" > "$wd/out" 2>&1)
+    local code=$?
+    tr -d '\r' < "$wd/out"
+    return $code
+  }
+  # The prefix made on the first run, and one wine server for the section.
+  warch=$(env WINEPREFIX="$wprefix" WINEDEBUG=-all timeout 300 wine cmd /c 'echo %PROCESSOR_ARCHITECTURE%' 2> /dev/null | tr -d '\r')
+  env WINEPREFIX="$wprefix" wineserver -p 2> /dev/null
+  case $warch in AMD64) wclass=windows-x86_64 ;; ARM64) wclass=windows-aarch_64 ;; *) wclass=windows-$warch ;; esac
+  cp tools/launcher/teq.cmd "$wd/build/teq.cmd"
+  cp "$wprefix/drive_c/windows/system32/cmd.exe" "$wd/stand-in.exe"
+  wsha1=$(shasum "$wd/stand-in.exe" | cut -d' ' -f1)
+  wsize=$(wc -c < "$wd/stand-in.exe" | tr -d ' ')
+  # wlock <version> <binaries line's fields>; wcopy <cache> <sha1> <version>: the stand-in in teq's cache.
+  wlock() { printf 'teq: %s\nformat: 1\nbinaries:\n  %s: %s\nprojects: {}\n' "$1" "$wclass" "$2" > "$wd/build/teq.lock"; }
+  wcopy() { mkdir -p "$wd/$1/bin/$2" && cp "$wd/stand-in.exe" "$wd/$1/bin/$2/teq-$3-$wclass.exe"; }
+  wlock 9.9.9 "https://repo.invalid/teq.exe $wsha1 $wsize"
+  wcopy cache-warm "$wsha1" 9.9.9
+  out=$(wlaunch cache-warm /c echo stand-in x)
+  code=$?
+  seven=$(wlaunch cache-warm /c exit 7)
+  sevens=$?
+  if [ $code = 0 ] && [ "$out" = "stand-in x" ] && [ $sevens = 7 ] && [ -z "$seven" ]; then
+    pass "teq.cmd (wine): a lock of forty hexadecimal digits runs the pinned binary from teq's cache, the arguments and the exit code passed through"
+  else
+    fail "teq.cmd (wine), the pinned binary from teq's cache ($code): $out $seven"
+  fi
+  wrong=
+  for bad in "${wsha1%?}" "${wsha1}0" "${wsha1%?}g"; do
+    wlock 9.9.9 "https://repo.invalid/teq.exe $bad $wsize"
+    wcopy cache-bad "$bad" 9.9.9
+    out=$(wlaunch cache-bad /c echo stand-in x)
+    [ $? = 1 ] && [ "$out" = "teq: $(win "$wd/build/teq.lock")'s binaries line for $wclass is not <url> <sha1> <size>" ] || wrong="$wrong [$bad: $out]"
+  done
+  if [ -z "$wrong" ]; then pass "teq.cmd (wine): a sha1 of 39 or 41 characters or with a g is refused, its copy in the cache not run"; else fail "teq.cmd (wine), the sha1s:$wrong"; fi
+  printf 'teq: \nformat: 1\nbinaries:\n  %s: https://repo.invalid/teq.exe %s %s\nprojects: {}\n' "$wclass" "$wsha1" "$wsize" > "$wd/build/teq.lock"
+  out=$(wlaunch cache-warm /c echo stand-in x)
+  if [ $? = 1 ] && [ "$out" = "teq: $(win "$wd/build/teq.lock")'s first line is not teq: <version>" ]; then pass "teq.cmd (wine): a first line teq: without a version is refused"; else fail "teq.cmd (wine), teq: alone: $out"; fi
+  wlock 0.1.6 "https://repo.invalid/teq.exe $wsha1 $wsize"
+  wcopy cache-old "$wsha1" 0.1.6
+  out=$(wlaunch cache-old /c echo stand-in x)
+  if [ $? = 1 ] && [[ "$out" == *"pins teq 0.1.6, and releases before 0.1.7 are not served"* ]]; then pass "teq.cmd (wine): a lock of 0.1.6 is refused, its copy not run"; else fail "teq.cmd (wine), 0.1.6: $out"; fi
+  rm "$wd/build/teq.lock"
+  out=$(cd "$wd/build" && env WINEPREFIX="$wprefix" WINEDEBUG=-all TEQ="$(win "$wd/stand-in.exe")" timeout 60 wine cmd /c "$(win "$wd/build/teq.cmd")" /c echo stand-in x 2>&1 | tr -d '\r')
+  if [ "$out" = "stand-in x" ]; then pass "teq.cmd (wine): TEQ runs the program it names, no lock read"; else fail "teq.cmd (wine), TEQ: $out"; fi
+  printf 'SHA1 hash of the stand-in:\r\n%s\r\nCertUtil: -hashfile command completed successfully.\r\n' "$wsha1" > "$wd/digest.txt"
+  digest=$(win "$wd/digest.txt")
+  sed "s|certutil -hashfile \"%[a-z]*%\" SHA1|type \"${digest//\\/\\\\}\"|" tools/launcher/teq.cmd > "$wd/build/hashed.cmd"
+  # Files in the launcher's working directory, the build's, named as each variable teq.cmd sets and as host and
+  # path, the states of launcher 3's first parser, which took the partial file's name: each with the suffixes the
+  # launcher's steps add to that name, and a directory `.d`. Every resolution below, found in coursier's cache or
+  # fetched and refused, leaves them as they were and nothing else there, and leaves the binary alone where teq's
+  # cache keeps it (nothing after a refusal), coursier's copy in place.
+  wnames="host path $(sed -n 's/.*set "\([A-Za-z0-9]*\)=.*/\1/p' tools/launcher/teq.cmd | sort -u | tr '\n' ' ')"
+  for n in $wnames; do
+    for f in "$n" "$n.sha1" "$n.status" "$n.log" "$n.part"; do printf 'sentinel %s\n' "$f" > "$wd/build/$f"; done
+    mkdir -p "$wd/build/$n.d"
+  done
+  wlock 9.9.9 "https://repo.invalid/teq.exe $wsha1 $wsize"
+  wlisting=$(ls -A "$wd/build" | LC_ALL=C sort)
+  # wkept: whether the build's directory is as above.
+  wkept() {
+    local n f
+    [ "$(ls -A "$wd/build" | LC_ALL=C sort)" = "$wlisting" ] || return 1
+    for n in $wnames; do
+      for f in "$n" "$n.sha1" "$n.status" "$n.log" "$n.part"; do [ "$(cat "$wd/build/$f")" = "sentinel $f" ] || return 1; done
+      [ -z "$(ls -A "$wd/build/$n.d")" ] || return 1
+    done
+  }
+  cases=0
+  missed=
+  while read -r url place; do
+    case $url in '' | '#'*) continue ;; esac
+    cases=$((cases + 1))
+    at=$place
+    [ "$place" != - ] || at=$(naive "$url")
+    rm -rf "$wd/places" && mkdir -p "$(dirname "$wd/places/coursier/$at")" && cp "$wd/stand-in.exe" "$wd/places/coursier/$at"
+    wlock 9.9.9 "$url $wsha1 $wsize"
+    out=$(WLAUNCHER=hashed.cmd WCOURSIER=places/coursier wlaunch places/teq /c echo stand-in x)
+    code=$?
+    if [ "$place" = - ]; then
+      [ $code = 1 ] && [ "$out" = "teq: no curl.exe to fetch teq with" ] && [ -z "$(ls -A "$wd/places/teq/bin/$wsha1" 2> /dev/null)" ] || missed="$missed [$url, refused by coursier: $out]"
+    else
+      [ $code = 0 ] && [ "$out" = "stand-in x" ] && [ "$(ls -A "$wd/places/teq/bin/$wsha1")" = "teq-9.9.9-$wclass.exe" ] && [ -f "$wd/places/coursier/$at" ] || missed="$missed [$url: $out]"
+    fi
+    wkept || missed="$missed [$url: the working directory changed: $(ls -A "$wd/build" | LC_ALL=C sort | diff <(printf '%s\n' "$wlisting") - | tr '\n' ' ')]"
+  done < tests/support/coursier-files.txt
+  # A URL's percent sign is the cache's %25: its copy at the URL's own spelling is not taken, and the fetch then
+  # refused (no curl.exe) leaves no file.
+  rm -rf "$wd/places" && mkdir -p "$wd/places/coursier/https/repo.invalid/a%20b" && cp "$wd/stand-in.exe" "$wd/places/coursier/https/repo.invalid/a%20b/teq.exe"
+  wlock 9.9.9 "https://repo.invalid/a%20b/teq.exe $wsha1 $wsize"
+  out=$(WLAUNCHER=hashed.cmd WCOURSIER=places/coursier wlaunch places/teq /c echo stand-in x)
+  code=$?
+  wkept
+  kept=$?
+  if [ -z "$missed" ] && [ $cases -gt 0 ] && [ "$(grep -c '^type "' "$wd/build/hashed.cmd")" = 2 ] && [ $code = 1 ] && [ $kept = 0 ] &&
+    [ -z "$(ls -A "$wd/places/teq/bin/$wsha1" 2> /dev/null)" ]; then
+    pass "teq.cmd (wine): coursier's copy of each URL of tests/support/coursier-files.txt ($cases) found at coursier's place alone and run, none for a URL coursier refuses; the working directory's files named as the launcher's variables kept, the partial file gone, across each"
+  else
+    fail "teq.cmd (wine), coursier's places:$missed; the unescaped place ($code, working directory kept: $kept): $out"
+  fi
+  env WINEPREFIX="$wprefix" wineserver -k 2> /dev/null
+else
+  echo "task: note: no wine here, teq.cmd not run"
+fi
+
 [ -d integrations/vite/node_modules/yaml ] || timeout 120 npm --prefix integrations/vite install --legacy-peer-deps --prefer-offline --no-audit --no-fund > "$work/vite-npm.log" 2>&1 || fail "vite-plugin-teq: npm install in integrations/vite: $(tail -3 "$work/vite-npm.log")"
 if timeout 60 node integrations/vite/test.mjs > "$work/vite.out" 2>&1; then pass "vite-plugin-teq reads the export and finds the binary it pins (integrations/vite/test.mjs)"; else fail "vite-plugin-teq: $(grep FAIL "$work/vite.out" || tail -5 "$work/vite.out")"; fi
+# The parallel typer's vite loop (bench/ptyper-vite-loop.mjs) over web's export: each step's answer, the error's
+# failing, the body edits incremental.
+web_export 0.1.7-check.1 a a
+rm -f "$work/vite-loop.jsonl"
+if timeout 120 node bench/ptyper-vite-loop.mjs "$w" web 1 "$w/web/src/web/Main.scala" "$work/vite-loop.jsonl" > "$work/vite-loop.out" 2>&1 &&
+  [ "$(python3 -c 'import json, sys; print(" ".join(f"{l["step"]}:{l["ok"]}:{l["incremental"]}" for l in map(json.loads, open(sys.argv[1]))))' "$work/vite-loop.jsonl")" = "first:True:False edit:True:True error:False:True recovery:True:True added:True:False removed:True:False" ]; then
+  pass "bench/ptyper-vite-loop.mjs: the vite plugin's session over a project of teq.lock, its six steps answered"
+else
+  fail "bench/ptyper-vite-loop.mjs: $(cat "$work/vite-loop.out" "$work/vite-loop.jsonl" 2> /dev/null | tail -8)"
+fi
 
 [ $status = 0 ] && echo "task: all passed"
 exit $status

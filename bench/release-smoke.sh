@@ -69,8 +69,15 @@ case "$(uname -s)-$(uname -m)" in
 esac
 echo "smoke: teq $version from $releases and sbt-teq $plugin from $central on $host, in $run"
 
-# The directory of a repository root in coursier's cache: its scheme, then its host and path, a colon escaped.
-cached() { python3 -c 'import sys; scheme, rest = sys.argv[1].split("://", 1); print(scheme + "/" + rest.replace(":", "%3A"))' "$1"; }
+# The directory of a repository root in coursier's cache, relative to it, as coursier's CachePath.localFile names it
+# (integrations/sbt/example/check-export.py's coursier_file: a port's colon escaped, a user, a query kept).
+cached() {
+  python3 -c 'import importlib.util, sys
+spec = importlib.util.spec_from_file_location("lock", "integrations/sbt/example/check-export.py")
+lock = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(lock)
+print(lock.coursier_file("", sys.argv[1]))' "$1"
+}
 
 # build <dir> <plugins.sbt> <build.sbt>: a build of the run's, its sources one main.
 build() {

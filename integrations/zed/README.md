@@ -78,7 +78,9 @@ writes on stderr and every message exchanged.
 For a machine without the Rust toolchain. `package.sh` here packs what Zed wrote into this
 directory when it built the dev extension (`extension.wasm`, `grammars/scala.wasm`; it refuses
 when either is older than the sources it was built from) with the manifest, the language files,
-the licences (the grammar's MIT notice, `LICENSE-tree-sitter-scala`, included) and the repository's `NOTICE` into
+the licences (the grammar's MIT notice, `LICENSE-tree-sitter-scala`, included), the repository's `NOTICE` and
+`NOTICE-crates`, the licences and notices of the crates `extension.wasm` links (`notices.scala` writes it from
+`Cargo.lock`, and `package.sh` refuses to pack one that is not current), into
 `out/zed-teq-<version>.tar.gz`: WebAssembly and text, so one bundle serves macOS and Linux alike.
 Unpack it where Zed keeps its installed extensions, under a directory named after the extension,
 replacing an earlier one so that Zed notices the change, and restart Zed:

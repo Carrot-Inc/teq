@@ -33,7 +33,8 @@
 # (tests/tasty/src/reader_decl.scala and reader_java.scala), which the bodies of fix.reader reach in another jar; fixtures-shadow, those of
 # tests/tasty/fixtures-shadow, which define again what fixtures defines in fix.shadow; javafix, the Java class files of
 # tests/classfile/fixtures as a jar, and javafixdir, the same as a directory; tasty-inspector, scala3-tasty-inspector
-# 3.8.4 from the coursier cache.
+# 3.8.4 from the coursier cache. maven_extras lists the other Maven files the suites read (sources jars, the example's
+# test class path), which bench/actions/jars.sh fetch fetches with these.
 M2=${COURSIER_CACHE:-$HOME/Library/Caches/Coursier/v1}/https/repo1.maven.org/maven2
 # The jars built here are named for the checkout, so that the suites of two worktrees running at
 # once do not rewrite each other's.
@@ -588,6 +589,25 @@ jars_of() {
   done
   JARS_CP=${JARS_CP#:}
 }
+# The Maven files the suites read beside the jars jar_of names, which bench/actions/jars.sh fetch fetches as it fetches
+# those (every quoted `$M2/...` path of this file): the sources jars tests/lsp.sh's libraries scenario reads beside
+# sourcecode's two versions and scala-library's; scala3-library, which tests/task.sh's export pins; and the class
+# path of the example's jvmapp tests (integrations/sbt/example/teq.lock's), over which tests/task.sh runs munit's
+# suites.
+maven_extras() {
+  printf '%s\n' \
+    "$M2/com/lihaoyi/sourcecode_3/0.4.2/sourcecode_3-0.4.2-sources.jar" \
+    "$M2/com/lihaoyi/sourcecode_3/0.4.4/sourcecode_3-0.4.4-sources.jar" \
+    "$M2/org/scala-lang/scala-library/3.8.4/scala-library-3.8.4-sources.jar" \
+    "$M2/org/scala-lang/scala3-library_3/3.8.4/scala3-library_3-3.8.4.jar" \
+    "$M2/org/scalameta/munit_3/1.3.4/munit_3-1.3.4.jar" \
+    "$M2/org/scalameta/munit-diff_3/1.3.4/munit-diff_3-1.3.4.jar" \
+    "$M2/org/scalameta/junit-interface/1.3.4/junit-interface-1.3.4.jar" \
+    "$M2/junit/junit/4.13.2/junit-4.13.2.jar" \
+    "$M2/org/hamcrest/hamcrest-core/1.3/hamcrest-core-1.3.jar" \
+    "$M2/org/scala-sbt/test-interface/1.0/test-interface-1.0.jar" \
+    "$M2/org/portable-scala/portable-scala-reflect_2.13/1.1.3/portable-scala-reflect_2.13-1.1.3.jar"
+}
 # The scala-library jar a JVM build links against when --classpath names none, for `run_jvm`: the newest 3.x
 # release of the coursier caches, found as the compiler's `classpath::find_scala_library` (src/classpath.rs) finds
 # it. The two must agree, so a change of either is a change of both: the caches COURSIER_CACHE when it is set (even
@@ -667,12 +687,20 @@ run_jvm() {
     exec java -Xss512m -Xshare:auto -cp "$out:$cp" TeqMain "$@"' run_jvm "$out" "$cp" "$@"
 }
 # jars_warm: every jar this file builds (the cases of jar_of that call a builder), built now rather than at its first
-# use inside a suite's bound, as a fresh machine needs (bench/ship.sh before its steps); fails naming those that could
-# not be built.
+# use inside a suite's bound, as a fresh machine needs (bench/ship.sh before its steps); then the dependencies the
+# suites' scala-cli runs resolve offline (`--dep`, `//> using dep`), which need their poms in coursier's cache as well
+# as their jars, resolved here with the network: junit 4.13.2 (tests/tasty/annotations/check.sh) and
+# scala3-tasty-inspector 3.8.4 (tests/tasty/positions/Oracle.scala). Fails naming what could not be built or resolved.
 jars_warm() {
   local name path failed=
   for name in $(sed -n 's/^    \([a-z0-9-]*\)) [a-z0-9_]*_jar ;;$/\1/p' "${BASH_SOURCE[0]}"); do
     path=$(jar_of "$name") && [ -e "$path" ] || failed="$failed $name"
   done
+  local deps=$scratch-deps.$$
+  mkdir -p "$deps" && printf 'object Deps\n' > "$deps/Deps.scala" &&
+    (cd "$deps" && timeout 300 scala-cli --power compile -S 3.8.4 --jvm system --server=false -q \
+      --dep junit:junit:4.13.2 --dep org.scala-lang::scala3-tasty-inspector:3.8.4 Deps.scala > deps.log 2>&1) ||
+    failed="$failed scala-cli's-dependencies($(tail -3 "$deps/deps.log" 2> /dev/null | tr '\n' ' '))"
+  rm -rf "$deps"
   [ -z "$failed" ] || { echo "jars: not built:$failed" >&2; return 1; }
 }

@@ -18,7 +18,8 @@
 # teq's own driver, no sbt: the suites `teq test <project> --list` finds in the analysis are those
 # sbt's definedTests finds under scalac, for each JVM project with test frameworks, api and
 # jvmapp; then api's suites run on the warm runner, all of them passing, and an edit to a suite
-# between two runs changes the outcome, its revert changing it back.
+# between two runs changes the outcome, its revert changing it back; and `./teq test jvmapp` through the
+# example's launcher, TEQ's binary (the override path).
 #
 # The corpus is generated into src/, with check.sh's Actions.scala, and api's test jar packaged
 # with scala-cli as check.sh does. Needs sbt, scala-cli and sbt-teq published locally
@@ -206,5 +207,9 @@ if [ $code = 1 ] && [[ "$out" == *"[fail] meridian.apitest.MunitSuite"* ]] && [[
 else
   fail "the edit between runs ($code): $out // $again"
 fi
+# The verb through the example's launcher, which runs the binary TEQ names (its override path; the pinned
+# release's path is check.sh's generator section's): jvmapp's suites, as `teq test` runs them.
+out=$(timeout 300 sh ./teq test jvmapp 2>&1)
+if [ $? = 0 ] && [[ "$out" == *"jvmapp/test: 1 suite, 2 passed, 0 failed in "* ]]; then pass "./teq test jvmapp through the launcher, TEQ's binary: its suite passes"; else fail "./teq test jvmapp through the launcher: $out"; fi
 [ $status = 0 ] && echo "tests: all passed"
 exit $status

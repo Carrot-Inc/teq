@@ -144,6 +144,10 @@ try {
   served.length = 0
   check((await resolveTeq(fromCoursier)) === join(cacheRoot(), "bin", sha1, name) && served.length === 0, "coursier's copy of the URL, its sha1 the pinned one, is copied into the cache without a request", served)
   check(kept === join(process.env.COURSIER_CACHE, "http", `127.0.0.1%3A${server.address().port}`, "coursier", "teq"), "coursier's copy is at its escaped place", kept)
+  // The cases every implementation of the mapping is tested on (src/task/fetch.rs, the launchers).
+  const cases = readFileSync(new URL("../../tests/support/coursier-files.txt", import.meta.url), "utf-8").split("\n").filter((l) => l && !l.startsWith("#")).map((l) => l.split(" "))
+  const misplaced = cases.filter(([url, file]) => coursierFile("/c/v1", url) !== (file === "-" ? undefined : join("/c/v1", ...file.split("/"))))
+  check(cases.length > 10 && misplaced.length === 0, `coursier's place of each URL of tests/support/coursier-files.txt (${cases.length})`, misplaced)
 
   rmSync(join(cacheRoot(), "bin"), { recursive: true, force: true })
   const hosts = ["http://127.repo.invalid/", "http://127.0.0.1@repo.invalid/", "http://localhost.repo.invalid/"]

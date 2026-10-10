@@ -19,7 +19,9 @@
 # build kept at one worker, and as many sessions at sixteen as at two. The first pass types every
 # session's full builds at the automatic count (tests/support/sessions.sh), its line saying which
 # forked. After it, once, the driver's `idleMinute` alone: an idle session's polls over a minute,
-# read from the server's trace against the rule, its line giving their count and spacing.
+# read from the server's trace against the rule, its line giving their count and spacing; and its `jarFetch`
+# alone: a pinned jar fetched from a repository on the loopback interface, the fetch told in the client's log
+# before the transfer ends, and nothing asked of the repository by a second server over the same cache.
 cd "$(dirname "$0")/.."
 TEQ=${TEQ:-./target/release/teq}
 TEQ=$(cd "$(dirname "$TEQ")" && pwd)/$(basename "$TEQ")
@@ -63,6 +65,12 @@ timeout 150 env LSP_ONLY=idleMinute node tests/lsp/driver.mjs "$TEQ" "$work/idle
 code=$?
 grep -E '^(lsp: an idle|FAIL)' "$work/idle.log"
 echo "lsp: the idle minute: $(tail -1 "$work/idle.log")"
+[ $code = 0 ] || status=1
+# A jar fetched for a session from a repository on the loopback interface, once: the transfer is no worker count's.
+timeout 150 env LSP_ONLY=jarFetch node tests/lsp/driver.mjs "$TEQ" "$work/fetch" "$jar" "$jar2" > "$work/fetch.log" 2>&1
+code=$?
+grep -E '^FAIL' "$work/fetch.log"
+echo "lsp: a jar fetched over the loopback interface: $(tail -1 "$work/fetch.log")"
 [ $code = 0 ] || status=1
 if [ "${TEQ_FORK:-}" = 1 ]; then
   if "$TEQ" --version | grep -q assertions; then

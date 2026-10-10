@@ -22,8 +22,8 @@ for src in tests/cases/*.scala tests/cases/*/ tests/split/*/ tests/analysis/case
 done > "$work/names"
 build() {
   name=$1; src=$2; work=$3; teq=$4; sjs=$5
-  if grep -q -h '^// jars:\|^// teq:.*--target interp' "$src" "$src"/*.scala 2> /dev/null; then
-    echo "jars or the interpreter" > "$work/why/$name"; return
+  if grep -q -h '^// jars:' "$src" "$src"/*.scala 2> /dev/null; then
+    echo "jars" > "$work/why/$name"; return
   fi
   flags=$(grep -h -o '^// teq: .*' "$src" "$src"/*.scala 2> /dev/null | head -1 | sed 's|^// teq: ||')
   kept=()
