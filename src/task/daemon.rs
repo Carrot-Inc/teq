@@ -50,6 +50,9 @@ struct Changes {
     /// Of a Scala.js test configuration, whose link names no class file: the digest of each source
     /// file of the last full run's view.
     sources: BTreeMap<String, String>,
+    /// The classes of the source files removed since, and of those that depended on them then,
+    /// which no class file written and no digest compared tells (`Answer::removed_reach`).
+    removed: BTreeSet<String>,
 }
 
 struct State {
@@ -796,7 +799,8 @@ fn test_configuration(state: &Arc<State>, export: &Arc<Export>, request: &Reques
         match (why_every, changes.get(key)) {
             (Some(why), _) => reply.err(&format!("teq: {}: every suite, {}\n", key, why)),
             (None, Some(c)) => {
-                let affected = view.affected(&c.files);
+                let mut affected = view.affected(&c.files);
+                affected.extend(c.removed.iter().cloned());
                 selected.retain(|s| affected.contains(&s.name));
             }
             (None, None) => {}
@@ -807,7 +811,7 @@ fn test_configuration(state: &Arc<State>, export: &Arc<Export>, request: &Reques
         let why = if asked.changed { "no suite depends on what changed" } else { "no suite to run" };
         reply.out(&format!("{}: {}\n", key, why));
         if every && incomplete == 0 {
-            state.changes.lock().unwrap_or_else(|e| e.into_inner()).insert(key.clone(), Changes { resident: owner, all: false, files: BTreeSet::new(), sources: BTreeMap::new() });
+            state.changes.lock().unwrap_or_else(|e| e.into_inner()).insert(key.clone(), Changes { resident: owner, all: false, files: BTreeSet::new(), sources: BTreeMap::new(), removed: BTreeSet::new() });
         }
         return incomplete;
     }
@@ -830,7 +834,7 @@ fn test_configuration(state: &Arc<State>, export: &Arc<Export>, request: &Reques
     match result {
         Ok(ms) => {
             if every && incomplete == 0 {
-                state.changes.lock().unwrap_or_else(|e| e.into_inner()).insert(key.clone(), Changes { resident: owner, all: false, files: BTreeSet::new(), sources: BTreeMap::new() });
+                state.changes.lock().unwrap_or_else(|e| e.into_inner()).insert(key.clone(), Changes { resident: owner, all: false, files: BTreeSet::new(), sources: BTreeMap::new(), removed: BTreeSet::new() });
             }
             reply.out(&summary(key, selected.len(), &tally, ms, built_ms));
             write_events(asked, key, &tally, reply);
@@ -1007,7 +1011,8 @@ fn test_js_configuration(state: &Arc<State>, export: &Arc<Export>, request: &Req
             (Some(why), _) => reply.err(&format!("teq: {}: every suite, {}\n", key, why)),
             (None, Some(c)) => {
                 let edited: BTreeSet<String> = digests.iter().filter(|(f, d)| c.sources.get(*f) != Some(*d)).map(|(f, _)| f.clone()).collect();
-                let affected = view.affected_by_sources(&edited);
+                let mut affected = view.affected_by_sources(&edited);
+                affected.extend(c.removed.iter().cloned());
                 selected.retain(|s| affected.contains(&s.name));
             }
             (None, None) => {}
@@ -1015,7 +1020,7 @@ fn test_js_configuration(state: &Arc<State>, export: &Arc<Export>, request: &Req
     }
     let every = asked.patterns.is_empty();
     let record = |state: &State| {
-        state.changes.lock().unwrap_or_else(|e| e.into_inner()).insert(key.clone(), Changes { resident: key.clone(), all: false, files: BTreeSet::new(), sources: digests.clone() });
+        state.changes.lock().unwrap_or_else(|e| e.into_inner()).insert(key.clone(), Changes { resident: key.clone(), all: false, files: BTreeSet::new(), sources: digests.clone(), removed: BTreeSet::new() });
     };
     if selected.is_empty() {
         let _ = run.finish();
@@ -1340,6 +1345,12 @@ fn build_in(state: &State, export: &Export, key: &Key, env: &BTreeMap<String, St
         }
     }
     let answer = resident.as_mut().expect("started").build();
+    // What a removal reaches counts whether or not the build passed: the view has dropped it.
+    if let Ok(a) = &answer {
+        for c in state.changes.lock().unwrap_or_else(|e| e.into_inner()).values_mut().filter(|c| c.resident == *key) {
+            c.removed.extend(a.removed_reach.iter().cloned());
+        }
+    }
     match &answer {
         Ok(a) if a.ok => {
             if a.first {

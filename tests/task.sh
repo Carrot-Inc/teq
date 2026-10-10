@@ -1449,7 +1449,37 @@ fi
 js=$work/js
 mkdir -p "$js"
 (cd tests/scalajs-test && tar cf - --exclude=node_modules --exclude=target --exclude='oracle-*' .) | (cd "$js" && tar xf -)
-mkdir -p "$js/none/src/test/scala/fixture" "$js/early/src/test/scala/fixture"
+mkdir -p "$js/none/src/test/scala/fixture" "$js/early/src/test/scala/fixture" "$js/removal/src/test/scala/fixture"
+# `removal`: a suite whose given comes from a file of its own, which a later step deletes, the companion's
+# fallback taking its place; and a suite that depends on nothing of it.
+cat > "$js/removal/src/test/scala/fixture/Greeting.scala" <<'EOF'
+package fixture
+
+trait Greeting:
+  def text: String
+
+object Greeting:
+  given fallback: Greeting with
+    def text = "fallback"
+EOF
+cat > "$js/removal/src/test/scala/fixture/Preferred.scala" <<'EOF'
+package fixture
+
+given preferred: Greeting with
+  def text = "preferred"
+EOF
+cat > "$js/removal/src/test/scala/fixture/GreetingSuite.scala" <<'EOF'
+package fixture
+
+class GreetingSuite extends munit.FunSuite:
+  test("greets") { assertEquals(summon[Greeting].text, "preferred") }
+EOF
+cat > "$js/removal/src/test/scala/fixture/OtherSuite.scala" <<'EOF'
+package fixture
+
+class OtherSuite extends munit.FunSuite:
+  test("other") { assertEquals(1 + 1, 2) }
+EOF
 printf 'package fixture\n\nobject NotASuite:\n  val x = 1\n' > "$js/none/src/test/scala/fixture/NotASuite.scala"
 cat > "$js/early/src/test/scala/fixture/EarlySuite.scala" <<'EOF'
 package fixture
@@ -1509,6 +1539,7 @@ projects = {
     "cjs": project("cjs", ["cjs/src/test/scala"], munit, [MUNIT], "CommonJSModule", cjs),
     "none": project("none", ["none/src/test/scala"], munit, [MUNIT], "NoModule", node),
     "early": project("early", ["early/src/test/scala"], munit, [MUNIT], "NoModule", node),
+    "removal": project("removal", ["removal/src/test/scala"], munit, [MUNIT], "NoModule", node),
     "missing": project("missing", ["cjs/src/test/scala"], munit, [MUNIT, SCALATEST], "CommonJSModule", cjs),
     "domesm": project("domesm", ["esm/src/test/scala"], munit, [MUNIT], "ESModule", jsdom),
 }
@@ -1580,6 +1611,15 @@ if [ $? = 1 ] && [ "$(cut -f2 "$js/changed.events" | sort -u)" = "fixture.UtestS
   pass "scalajs tests: --changed after an edit runs the suite the edit reaches alone"
 else
   fail "scalajs tests: --changed: $(cut -f2 "$js/changed.events" | sort -u) $out"
+fi
+jstest removal > /dev/null
+rm "$js/removal/src/test/scala/fixture/Preferred.scala"
+out=$(jstest removal --changed --events "$js/removal.events")
+code=$?
+if [ $code = 1 ] && grep -q "GreetingSuite" "$js/removal.events" && ! grep -q "OtherSuite" "$js/removal.events" && [[ "$out" == *"removal/test: 1 suite, 0 passed, 1 failed"* ]]; then
+  pass "scalajs tests: --changed after a source is deleted runs the suites that depended on it, the others left"
+else
+  fail "scalajs tests: --changed after a deletion ($code): $(cut -f2,4 "$js/removal.events" 2> /dev/null | tr '\n' ' ') $out"
 fi
 out=$(jstest esm --events "$js/esm.events")
 if [ $? = 0 ] && [ "$(inventory "$js/esm.events")" = "$(oracle_of esm)" ] && [ -f "$js/target/teq/esm/test/link/main.mjs" ]; then

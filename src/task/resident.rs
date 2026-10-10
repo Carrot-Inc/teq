@@ -51,6 +51,9 @@ pub struct Answer {
     pub fallback: Option<String>,
     /// What the build says beside its diagnostics (the overlays' refused mappings).
     pub notes: Vec<String>,
+    /// The classes of the source files the build found removed and the classes that depended on
+    /// them, by the dependencies before it (`View::removed_reach`).
+    pub removed_reach: std::collections::BTreeSet<String>,
 }
 
 impl Resident {
@@ -106,6 +109,7 @@ impl Resident {
         let raw = |key: &str| fields.iter().find(|(k, _)| k == key).map(|(_, raw)| *raw);
         let strings = |key: &str| parsed(key).map(|v| v.arr().iter().filter_map(Json::str).map(str::to_string).collect::<Vec<_>>()).unwrap_or_default();
         let removed = strings("removed");
+        let removed_reach = self.analysis.removed_reach(&removed);
         let merged = self.analysis.merge(&Fields {
             analysis: raw("analysis"),
             api: raw("api"),
@@ -129,6 +133,7 @@ impl Resident {
             ms: parsed("ms").and_then(|v| v.get("total").and_then(Json::num)).unwrap_or(0.0),
             fallback: parsed("fallback").and_then(|v| v.str().map(str::to_string)),
             notes: strings("notes"),
+            removed_reach,
         })
     }
 

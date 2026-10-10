@@ -351,7 +351,7 @@ each such project left out and exits 2.
 Suites are found as sbt's `definedTests` finds them (`--list` prints them), against the fingerprints the
 frameworks give, and the patterns applied as `testOnly` applies them; `--changed` keeps the suites whose
 classes depend, transitively, on a class rewritten since the configuration's last full run (on Scala.js, on a
-source file edited since). A Scala.js configuration with frameworks whose sources define no suite fails: a run
+source file edited since), or depended on a source file deleted since, by the dependencies before the deletion. A Scala.js configuration with frameworks whose sources define no suite fails: a run
 of nothing is no pass. Each failure is reported as `[fail] <test>: <message>` with the frames in the suite's
 code (none on Scala.js, where a throwable's stack is empty: docs/COMPATIBILITY.md), `--verbose` adds a line for
 every other event (`[ignored] <test>`) and the whole trace of a failure, and a line per project ends the run
