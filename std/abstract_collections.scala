@@ -174,7 +174,7 @@ trait SeqView[+A] extends SeqOps[A, View, View[A]], View[A]:
     case xs: Iterable[?] => View.over(() => unsafeCast[Iterable[?], Iterable[B]](xs).iterator ++ iterator)
     case _ => View.from(prefix.iterator ++ iterator)
   def prependedAll[B >: A](prefix: SeqOps[B, AnyConstr, ?]): SeqView[B] = new SeqView.Concat(prefix, this)
-  override def sorted[B >: A](implicit ord: Ordering[B]): SeqView[A] = new SeqView.Sorted(this, ord)
+  override def sorted[B >: A](implicit ord: Ordering[B]): SeqView[A] = new SeqView.Sorted(this, length, ord)
   // scala-library's `SeqOps.isEmpty` and `lengthCompare` (`IterableOps.sizeCompare`): a known size,
   // else the elements walked as far as the comparison needs; `size` is the length.
   override def isEmpty: Boolean = lengthCompare(0) == 0
@@ -248,20 +248,51 @@ object SeqView:
     private val len = Math.max(underlying.size - Math.max(n, 0), 0)
     def length: Int = len
     def apply(i: Int): A = underlying.apply(i)
-  // The source's length taken at once, its elements sorted once, when one is first asked for.
-  class Sorted[A, B >: A](underlying: SeqOps[A, AnyConstr, ?], ord: Ordering[B]) extends SeqView[A]:
-    private val len = underlying.length
-    private lazy val sortedElems: Seq[A] = underlying.toList.sorted(unsafeCast[Ordering[B], Ordering[A]](ord))
+  // scala-library's `Sorted`: the source's length taken at once, its elements sorted once, when one
+  // is first asked for. Sorted again by its order's reverse it is the same elements reversed
+  // (`ReverseSorted`), by another order the source while it is unsorted (`elems`): neither sorts.
+  class Sorted[A, B >: A](underlying0: SeqOps[A, AnyConstr, ?], len: Int, ord: Ordering[B]) extends SeqView[A]:
+    outer =>
+    private var underlying: SeqOps[A, AnyConstr, ?] = underlying0
+    private var evaluated = false
+    private lazy val sortedElems: Seq[A] =
+      val res: Seq[A] =
+        if len == 0 then Nil
+        else if len == 1 then List(underlying.head)
+        else underlying.toList.sorted(unsafeCast[Ordering[B], Ordering[A]](ord))
+      evaluated = true
+      underlying = null
+      res
+    private def elems: SeqOps[A, AnyConstr, ?] = if evaluated then sortedElems else underlying
     def apply(i: Int): A = sortedElems.apply(i)
     def length: Int = len
     def iterator: Iterator[A] = Iterator.empty ++ sortedElems.iterator
     override def knownSize: Int = len
     override def isEmpty: Boolean = len == 0
+    override def reverse: SeqView[A] = new ReverseSorted
     override def sorted[B1 >: A](implicit ord1: Ordering[B1]): SeqView[A] =
-      if ord1 == ord then this else new Sorted(sortedElems, ord1)
+      if ord1 == ord then this
+      else if ord1.isReverseOf(ord) then reverse
+      else new Sorted(elems, len, ord1)
+    private class ReverseSorted extends SeqView[A]:
+      private lazy val reversedElems = new SeqView.Reverse(sortedElems)
+      def apply(i: Int): A = reversedElems.apply(i)
+      def length: Int = len
+      def iterator: Iterator[A] = Iterator.empty ++ reversedElems.iterator
+      override def knownSize: Int = len
+      override def isEmpty: Boolean = len == 0
+      override def reverse: SeqView[A] = outer
+      override def sorted[B1 >: A](implicit ord1: Ordering[B1]): SeqView[A] =
+        if ord1 == ord then outer
+        else if ord1.isReverseOf(ord) then this
+        else new Sorted(elems, len, ord1)
 
 trait IndexedSeqView[+A] extends IndexedSeqOps[A, View, View[A]], SeqView[A]:
   override def view: IndexedSeqView[A] = this
+  // scala-library's `IndexedSeqOps.knownSize` and `lengthCompare`, which its `SeqView` leaves to
+  // `IndexedSeqOps`: the size is the length, compared without reading an element.
+  override def knownSize: Int = length
+  override def lengthCompare(len: Int): Int = Integer.compare(length, len)
   def view(from: Int, until: Int): IndexedSeqView[A] = slice(from, until)
   override def iterator: Iterator[A] = new IndexedSeqView.IndexedSeqViewIterator(this)
   override def reverseIterator: Iterator[A] = new IndexedSeqView.IndexedSeqViewReverseIterator(this)

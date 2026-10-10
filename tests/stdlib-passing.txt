@@ -1366,6 +1366,7 @@ vc_stable_pattern
 vdom_dsl
 vector_trie
 view_operations
+view_sizes_sorted
 widened_double_text
 wildcard_bounds
 wildcard_lower_bound

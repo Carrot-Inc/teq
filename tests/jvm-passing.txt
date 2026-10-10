@@ -1546,6 +1546,7 @@ view_kinds
 view_lib_alias
 view_lib_quotes
 view_operations
+view_sizes_sorted
 views
 widened_double_text
 wildcard_bounds
