@@ -5069,17 +5069,19 @@ impl<'a> Worker<'a> {
     /// to an enum. One the class writes itself is not written twice.
     fn desugared_parents(&mut self, c: ClassId, kind: ClassKind, parents: &mut Vec<(TypeId, Span)>) {
         let is_case = self.syms.class(c).mods & mods::CASE != 0;
-        let added: Vec<ClassId> = match kind {
-            ClassKind::Class | ClassKind::Object if is_case => {
-                [self.b.product, self.java_serializable_class()].into_iter().flatten().collect()
-            }
-            ClassKind::Enum => self.b.reflect_enum.into_iter().collect(),
-            _ => Vec::new(),
+        let added: [Option<ClassId>; 2] = match kind {
+            ClassKind::Class | ClassKind::Object if is_case => [self.b.product, self.java_serializable_class()],
+            ClassKind::Enum => [self.b.reflect_enum, None],
+            _ => [None, None],
         };
         let span = self.syms.class(c).span;
         let mut count = 0;
-        for p in added {
-            if !parents.iter().any(|&(t, _)| self.class_of(t) == Some(p)) {
+        for p in added.into_iter().flatten() {
+            let written = parents.iter().any(|&(t, _)| match self.types.get(t) {
+                Type::Class(k, _) => k == p,
+                _ => self.class_of(t) == Some(p),
+            });
+            if !written {
                 let t = self.types.class(p, &[]);
                 parents.push((t, span));
                 count += 1;
@@ -5428,7 +5430,8 @@ impl<'a> Worker<'a> {
         parents: Vec<Vec<(ClassId, TypeId)>>,
         checked: bool,
     ) -> (Vec<(ClassId, TypeId)>, bool) {
-        let mut base: Vec<(ClassId, TypeId)> = vec![(c, self_ty)];
+        let mut base: Vec<(ClassId, TypeId)> = Vec::with_capacity(1 + parents.iter().map(Vec::len).sum::<usize>());
+        base.push((c, self_ty));
         for lin in parents.iter().rev() {
             base.extend_from_slice(lin);
         }
