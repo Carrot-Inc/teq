@@ -574,9 +574,8 @@ final class ArrayWithFilter[T](a: Array[T], p: T => Boolean):
 // scala-library's `ArrayOps.ArrayView`: an array's view, indexed as the array is, printed with
 // its elements.
 final class ArrayView[A](a: Array[A]) extends scala.collection.IndexedSeqView[A]:
-  def iterator: Iterator[A] = arrayIterator(a)
-  override def length: Int = a.length
-  override def apply(i: Int): A = a(i)
+  def length: Int = a.length
+  def apply(i: Int): A = a(i)
   override def toString: String = mkString("ArrayView(", ", ", ")")
 
 extension [T](a: Array[T])

@@ -1,0 +1,25 @@
+apply: 30, 1 calls
+length: 3, 0 calls
+toList: List(10, 20, 30), 3 calls
+reverse apply: 30, 1 calls
+take length: 2, 0 calls
+drop apply: 20, 1 calls
+takeRight apply: 30, 1 calls
+dropRight length: 2, 0 calls
+appended apply: 7, 0 calls
+prepended apply: 10, 1 calls
+concat apply: 5, 0 calls
+sorted twice: (List(10, 20, 30),List(10, 20, 30),20), 3 calls
+sorted reverse: List(30, 20, 10), 3 calls
+tails: List(3, 2, 1, 0), 9 calls
+inits: List(3, 2, 1, 0), 9 calls
+isEmpty: false, 0 calls
+indexed apply: 20, 1 calls
+indexed slice apply: 20, 1 calls
+indexed iterator: 10, 1 calls
+indexed reverse: List(30, 20, 10), 3 calls
+List(0, 1, 4, 9)
+List(1, 2, 5, 10)
+List(9, 4)
+(9,4,List(1, 4),14)
+List(0, 4)
