@@ -36,6 +36,7 @@ private[sbt] object Export {
   /** A Scala.js project's test run as the lock records it beside its frameworks: the test link's module kind
     * and the JavaScript environment (`TeqScalaJSPlugin`); none on the JVM. */
   @transient val teqExportScalaJSTest = taskKey[Map[String, Json.Value]]("A Scala.js project's test link and JavaScript environment, for teq.lock")
+  @transient val teqExportScalaJSTestRefusals = taskKey[Seq[String]]("Why teq cannot run a Scala.js project's suites as sbt-scalajs does, for teq.lock")
 
   /** The settings of `teqExportAll` and of its parts: the task at the build's level, a part per
     * project, the binaries resolved by the build's first project with the plugin. */
@@ -48,6 +49,7 @@ private[sbt] object Export {
     teqExportPart := part.value,
     teqExportBinaries := binaries.value,
     teqExportScalaJSTest := Map.empty,
+    teqExportScalaJSTestRefusals := Nil,
   )
 
   private val all: Def.Initialize[Task[File]] = Def.taskDyn {
@@ -304,6 +306,7 @@ private[sbt] object Export {
       val testBase = (Test / baseDirectory).value
       val testEnv = (Test / Keys.envVars).value
       val testJavaOptions = (Test / javaOptions).value
+      val scalaJSTestRefusals = teqExportScalaJSTestRefusals.value
       val runFork = (Compile / run / fork).value
       val runBase = (Compile / run / baseDirectory).value
       val runEnv = (Compile / run / Keys.envVars).value
@@ -460,6 +463,7 @@ private[sbt] object Export {
           record("test", "Test / testOptions holds a Tests.Setup or Tests.Cleanup, a function the export cannot carry")
         case _ => ()
       }
+      scalaJSTestRefusals.foreach(record("test", _))
       val frameworks = loadedFrameworks(frameworksDeclared, test, converter, js).map { case (framework, implementation) =>
         val arguments = testOptions.flatMap {
           case Tests.Argument(None, args) => args
