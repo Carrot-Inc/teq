@@ -5106,6 +5106,11 @@ impl<'a> Worker<'a> {
     }
 
     pub(super) fn set_parents(&mut self, c: ClassId, parents: Vec<(TypeId, Span)>) {
+        // A class linearised again: what `base_type` kept of it goes (dotty invalidates a
+        // class's `baseTypeCache` when its parents change).
+        if !self.syms.class(c).base_types.is_empty() {
+            self.base_type_cache.clear();
+        }
         let targs: Vec<TypeId> =
             self.syms.class(c).tparams.clone().iter().map(|&p| self.types.param(p)).collect();
         let self_ty = self.types.class(c, &targs);

@@ -1075,6 +1075,8 @@ impl<'a> Worker<'a> {
                 bases.push((b, t));
             }
         }
+        // The builtin, complete before, meets more bases (`base_type_cache`).
+        self.base_type_cache.clear();
         self.syms.class_mut(c).base_types = bases;
         if self.syms.class(c).base_types.len() > 1 {
             self.mark_members_meeting_inherited(c);
@@ -2008,6 +2010,9 @@ impl<'a> Worker<'a> {
     /// Base types through the linearisation, without the checks a source class gets: the
     /// library was checked by scalac.
     fn set_loaded_parents(&mut self, c: ClassId, parents: Vec<TypeId>) {
+        if !self.syms.class(c).base_types.is_empty() {
+            self.base_type_cache.clear();
+        }
         let targs: Vec<TypeId> = self.syms.class(c).tparams.clone().iter().map(|&p| self.types.param(p)).collect();
         let self_ty = self.types.class(c, &targs);
         let mut linearisations: Vec<Vec<(ClassId, TypeId)>> = Vec::with_capacity(parents.len());

@@ -949,6 +949,10 @@ pub struct Worker<'a> {
     /// A candidate's declared result as the head rejection reads it against a class, per
     /// candidate and class (`implicits::HeadSig`): kept like `given_fits`, cleared by a retype.
     pub head_sigs: FxMap<(SymId, ClassId), std::sync::Arc<implicits::HeadSig>>,
+    /// dotty's `baseTypeCache`: `base_type` of a class type without inference variables, per type
+    /// and base class, once the class is complete; forgotten where a class's base types are made
+    /// again (`forget_base_types`), by a retype and at the merge.
+    pub base_type_cache: FxMap<(TypeId, ClassId), Option<TypeId>>,
     /// A match-type alias of a generic class seen through a prefix (`K0.LiftP` for `Kind`'s
     /// `LiftP`), copied with the class's parameters as the prefix instantiates them, per
     /// alias and prefix.
@@ -2178,6 +2182,7 @@ impl<'a> Worker<'a> {
             trace_starts: Vec::new(),
             given_fits: FxMap::default(),
             head_sigs: FxMap::default(),
+            base_type_cache: FxMap::default(),
             derived_aliases: FxMap::default(),
             derived_opaques: Default::default(),
             function_targets: Vec::new(),
@@ -2506,6 +2511,7 @@ impl<'a> Worker<'a> {
             trace_starts: Default::default(),
             given_fits: self.given_fits.clone(),
             head_sigs: self.head_sigs.clone(),
+            base_type_cache: FxMap::default(),
             derived_aliases: self.derived_aliases.clone(),
             derived_opaques: self.derived_opaques.attach(),
             arity_classes: self.arity_classes.attach(),

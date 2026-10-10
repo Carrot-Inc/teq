@@ -2525,6 +2525,7 @@ impl<'a> Worker<'a> {
         self.given_fast.clear();
         self.given_fits.clear();
         self.head_sigs.clear();
+        self.base_type_cache.clear();
         self.given_preferences.clear();
         self.given_orders.clear();
         self.implicit_scopes.clear();

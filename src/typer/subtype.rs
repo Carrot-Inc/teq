@@ -1655,27 +1655,20 @@ impl<'a> Worker<'a> {
                 if c == target {
                     return Some(t);
                 }
+                // dotty's `baseTypeCache`: the base type of a class type, kept per type and base
+                // class once the class is complete and where the type has no inference variable.
+                if let Some(&kept) = self.base_type_cache.get(&(t, target)) {
+                    return kept;
+                }
                 if self.loaded.is_some() && self.jdk_class_unrelated(c, target) {
                     return None;
                 }
                 self.complete_class(c);
-                let found = self.syms.class(c).base_types.iter().find(|(bc, _)| *bc == target).map(|&(_, t)| t);
-                let bt = match found {
-                    Some(bt) => bt,
-                    None if c == self.b.string => self.string_interface(target)?,
-                    None if c == self.b.array => self.array_interface(target)?,
-                    None if self.b.js_dynamic.is_some() && !self.jvm && matches!(self.syms.class(target).name, crate::names::FUNCTION | crate::names::OBJECT) && self.is_function_class(c) => self.function_interface(target)?,
-                    None => return None,
-                };
-                let subst: Subst = self
-                    .syms
-                    .class(c)
-                    .tparams
-                    .iter()
-                    .copied()
-                    .zip(self.types.items(args).iter().copied())
-                    .collect();
-                Some(self.types.subst(bt, &subst))
+                let found = self.class_base_type(c, args, target);
+                if self.syms.class(c).state() == Completion::Done && !self.types.has_vars(t) {
+                    self.base_type_cache.insert((t, target), found);
+                }
+                found
             }
             Type::Param(p) => {
                 let upper = self.syms.tparam(p).upper;
@@ -1714,6 +1707,20 @@ impl<'a> Worker<'a> {
             }
             _ => None,
         }
+    }
+
+    /// `base_type` of the class type `c[args]`, `c` complete.
+    fn class_base_type(&mut self, c: ClassId, args: TList, target: ClassId) -> Option<TypeId> {
+        let found = self.syms.class(c).base_types.iter().find(|(bc, _)| *bc == target).map(|&(_, t)| t);
+        let bt = match found {
+            Some(bt) => bt,
+            None if c == self.b.string => self.string_interface(target)?,
+            None if c == self.b.array => self.array_interface(target)?,
+            None if self.b.js_dynamic.is_some() && !self.jvm && matches!(self.syms.class(target).name, crate::names::FUNCTION | crate::names::OBJECT) && self.is_function_class(c) => self.function_interface(target)?,
+            None => return None,
+        };
+        let subst: Subst = self.syms.class(c).tparams.iter().copied().zip(self.types.items(args).iter().copied()).collect();
+        Some(self.types.subst(bt, &subst))
     }
 
     /// The type a path's value has, the upper bound of an abstract member, the parent of a

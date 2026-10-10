@@ -409,6 +409,7 @@ macro_rules! inventory_maps {
             $f!(w, given_fast),
             $f!(w, given_fits),
             $f!(w, head_sigs),
+            $f!(w, base_type_cache),
             $f!(w, package_levels),
             $f!(w, derived_aliases),
             $f!(w, sam_classes),
