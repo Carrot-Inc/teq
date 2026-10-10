@@ -101,6 +101,8 @@ reader_decl/fix/rdecl/RdTokA.tasty 00c1e393ce6bb1d4006cfd4977b82ca0
 reader_decl/fix/rdecl/RdTokB.tasty 00857199e05ab1df009a77bfc41f8ec8
 reader_decl/fix/rdecl/RdTraces.tasty 00d656e29fd44bd6009618f2b5a2e38a
 reader_decl/fix/rdecl/RdWrap.tasty 00c8d7d1a2af8cdc00c3e6e00cef80f4
+recrefine/fix/recrefine/RrBox.tasty 00f9377ea50f7cef001d2e457a66238a
+recrefine/fix/recrefine/RrShapes.tasty 000d1e7515ba76c000b4e0fe1f5d148d
 reflect38/fix/r38/Reflect38.tasty 0055ede8b91d85be0077f042bf8168e1
 retain/fix/retain/Fmt.tasty 00a13032ba2bb4eb00fd340b15cb03aa
 retain/fix/retain/Grid.tasty 008f2c1e3698b2af0081523ddccff5d7

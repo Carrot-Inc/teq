@@ -1,0 +1,8 @@
+// tests/tasty/fixtures/RrBox.tasty (TASTy 28.8, 445 bytes)
+package fix.recrefine
+@SourceFile class RrBox() extends Object {
+  type T = Predef.String
+  def f(): T = ...
+  def g(): Predef.String = ...
+}
+

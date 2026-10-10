@@ -1,0 +1,4 @@
+3c3
+<   def f(): T = "own"
+---
+>   def f(): String = "own"
