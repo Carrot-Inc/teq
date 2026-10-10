@@ -508,7 +508,15 @@ impl<'a> Worker<'a> {
                     };
                     check(from.targs.is_some(), &|to| c.targs.contains_key(&to), "type arguments");
                     check(from.receiver.is_some(), &|to| c.receivers.contains_key(&to), "receiver");
-                    check(from.tree.is_some(), &|to| c.trees.contains_key(&to), "tree");
+                    // A converted body's place goes with each copy of its node; a node the copy
+                    // substitutes (`this` by the receiver's proxy, a parameter by its argument's)
+                    // stands at the place of what stands for it.
+                    let substituted = match (self.prog.expr(e), to.map(|t| self.prog.expr(t))) {
+                        (TExpr::This, Some(_)) => true,
+                        (TExpr::Local(a), Some(TExpr::Local(b))) => a != b && !locals.contains(&(a, b)),
+                        _ => false,
+                    };
+                    check(from.tree.is_some() && !substituted, &|to| c.trees.contains_key(&to), "tree");
                     let form = from.form.as_ref().map(std::mem::discriminant);
                     check(form.is_some(), &|to| c.forms.get(&to).map(std::mem::discriminant) == form, "form");
                     let ws = &from.wraps;
