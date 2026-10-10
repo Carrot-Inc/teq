@@ -5493,7 +5493,18 @@ impl<'a> Worker<'a> {
         let info = self.syms.class(c);
         let mut named = [(Name(0), 0u32); 64];
         let mut n = 0;
+        // The parents `Desugar.classDef` gives (`Product` with `Equals`, `Serializable`, `Enum`) share
+        // no name in a way either walk acts on: one extends the other, or holds no member, and
+        // all are the std's. Only the other bases' names are collected, each also looked up in
+        // theirs.
+        let mut desugared: [ClassId; 4] = [c; 4];
+        let mut d = 0;
         for (i, &(b, _)) in info.base_types.iter().enumerate().skip(1) {
+            if d < desugared.len() && self.is_desugared_parent(b) {
+                desugared[d] = b;
+                d += 1;
+                continue;
+            }
             let bi = self.syms.class(b);
             let own = if extensions { &bi.extensions[..] } else { &[] };
             if n + bi.member_order.len() + own.len() > named.len() {
@@ -5505,6 +5516,16 @@ impl<'a> Worker<'a> {
             }
         }
         let named = &mut named[..n];
+        let in_desugared = |name: Name| {
+            desugared[..d].iter().any(|&k| {
+                let ki = self.syms.class(k);
+                let own = if extensions { &ki.extensions[..] } else { &[] };
+                ki.member_order.iter().chain(own).any(|&m| self.syms.sym(m).name == name)
+            })
+        };
+        if named.iter().any(|&(name, _)| in_desugared(name)) {
+            return true;
+        }
         named.sort_unstable();
         named.windows(2).any(|w| w[0].0 == w[1].0 && w[0].1 != w[1].1)
     }
