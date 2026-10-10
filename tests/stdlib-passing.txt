@@ -764,6 +764,7 @@ macro_reflective_call
 macro_std_body_return
 macro_std_ext_shared
 macro_string_from_bytes
+macro_structural_calls
 macro_symbol_signature
 macro_sys_env
 macro_asexpr_partial
