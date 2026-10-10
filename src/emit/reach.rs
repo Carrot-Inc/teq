@@ -24,6 +24,9 @@ use crate::typer::check::DeferredBody;
 use crate::typer::Worker;
 use crate::types::*;
 
+/// A reflective call by its method's name and its class literals' classes and dimensions.
+pub type ReflectiveCall = (String, Vec<(ClassId, u8)>);
+
 /// A reflective proxy of a class: its name, the member it calls, per parameter the value class
 /// whose instance the member takes for the underlying value the call passes, and the field of
 /// the value class the member gives whose value the proxy gives.
@@ -74,9 +77,10 @@ pub struct Reach {
     /// Per class, the reflective proxies it declares: the proxy's name and the member it calls
     /// (Scala.js's reflective proxies; `typer::reflective_proxy_name`).
     pub reflective_proxies: FxMap<ClassId, Vec<ReflectiveProxy>>,
-    /// Per reflective call whose classes are literals, by the expression of its classes: the
-    /// proxy it calls and the signature a missing one's exception names.
-    pub reflective_calls: FxMap<TExprId, (String, String)>,
+    /// Per reflective call whose classes are literals, by the method's name and the class
+    /// literals (`TExpr::ClassOf`): the proxy it calls and the signature a missing one's
+    /// exception names.
+    pub reflective_calls: FxMap<ReflectiveCall, (String, String)>,
     /// The `@js` templates the reached code writes and the globals it names (`JsGlobal`, a
     /// selection of the global scope), each once: what a local of the output may meet besides
     /// the definitions (`scope::Renderable`).
@@ -594,6 +598,13 @@ fn differences(typer: &Worker, kept: &Reach, fresh: &Reach, out: &mut Vec<String
     same("the enums' stored values", kept.enum_stores == fresh.enum_stores);
     same("the constant vals", kept.constant_vals == fresh.constant_vals);
     same("the uses of classOf", kept.uses_class_of == fresh.uses_class_of);
+    same("reflective calls", kept.reflective_calls == fresh.reflective_calls);
+    let proxies = |r: &Reach| -> Vec<(ClassId, String, SymId, Vec<Option<ClassId>>, Option<SymId>)> {
+        let mut v: Vec<_> = r.reflective_proxies.iter().flat_map(|(&c, ps)| ps.iter().map(move |p| (c, p.name.clone(), p.member, p.boxes.clone(), p.unbox))).collect();
+        v.sort_unstable_by(|a, b| (a.0, &a.1).cmp(&(b.0, &b.1)));
+        v
+    };
+    same("reflective proxies", proxies(kept) == proxies(fresh));
     same("the uses of element names", kept.uses_element_names == fresh.uses_element_names);
     same("the uses of isAssignableFrom", kept.uses_assignable_from == fresh.uses_assignable_from);
     same("interpolators", kept.interpolators == fresh.interpolators);
@@ -3145,9 +3156,13 @@ impl Meet for Walker {
                 };
                 let call = literals.and_then(|l| cx.typer.reflective_call_classes(l));
                 let text = &prog.strings[k.idx()];
-                if let Some(call) = &call {
+                if let (Some(call), Some(literals)) = (&call, literals) {
+                    let key = literals.iter().filter_map(|&e| match prog.expr(e) {
+                        TExpr::ClassOf(c, dims) => Some((c, dims)),
+                        _ => None,
+                    });
                     let proxy = crate::typer::reflective_proxy_name(text, call);
-                    self.reach.reflective_calls.insert(*classes, (proxy, format!("{}({})", text, call.join(","))));
+                    self.reach.reflective_calls.insert((text.clone(), key.collect()), (proxy, format!("{}({})", text, call.join(","))));
                 }
                 if let Some(source) = cx.interner.lookup(text) {
                     if !self.reflective_sigs.iter().any(|(n, c)| *n == source && *c == call) {

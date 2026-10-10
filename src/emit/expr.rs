@@ -417,10 +417,17 @@ impl<'a> Emitter<'a> {
             return None;
         }
         let hole = |e: TExprId| self.hole_of(e).is_some();
-        if hole(args[1]) || hole(args[2]) || self.seq_literal_items(args[2]).is_some_and(|items| items.iter().any(|&i| hole(i))) {
+        let items = self.seq_literal_items(args[2])?;
+        if hole(args[1]) || hole(args[2]) || items.iter().any(|&i| hole(i)) {
             return None;
         }
-        self.reach.reflective_calls.get(&args[2])
+        let TExpr::Str(name) = self.peek(args[1]) else { return None };
+        let mut classes = Vec::with_capacity(items.len());
+        for &i in items {
+            let TExpr::ClassOf(c, dims) = self.peek(i) else { return None };
+            classes.push((c, dims));
+        }
+        self.reach.reflective_calls.get(&(self.prog.strings[name.idx()].clone(), classes))
     }
 
     pub(super) fn seq_literal_items(&self, e: TExprId) -> Option<&'a [TExprId]> {

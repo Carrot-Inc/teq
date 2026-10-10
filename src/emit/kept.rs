@@ -997,6 +997,25 @@ impl Kept {
                 Place::Val => {}
             }
         }
+        // The reflective calls and proxies name the classes and members the retype made anew.
+        let class = |c: ClassId| classes.get(&c).copied().unwrap_or(c);
+        let sym = |s: SymId| syms.get(&s).copied().unwrap_or(s);
+        r.reflective_calls = std::mem::take(&mut r.reflective_calls)
+            .into_iter()
+            .map(|((name, call), v)| ((name, call.into_iter().map(|(c, dims)| (class(c), dims)).collect()), v))
+            .collect();
+        r.reflective_proxies = std::mem::take(&mut r.reflective_proxies)
+            .into_iter()
+            .map(|(c, proxies)| {
+                let proxies = proxies.into_iter().map(|mut p| {
+                    p.member = sym(p.member);
+                    p.unbox = p.unbox.map(sym);
+                    p.boxes = p.boxes.into_iter().map(|b| b.map(class)).collect();
+                    p
+                });
+                (class(c), proxies.collect())
+            })
+            .collect();
         Ok(())
     }
 
