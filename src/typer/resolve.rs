@@ -5083,16 +5083,23 @@ impl<'a> Worker<'a> {
             });
             if !written {
                 // `Product` and `Enum` have their class types among the builtins.
+                // `java.io.Serializable`'s, once complete, is the first of its base types.
                 let t = match p {
                     _ if Some(p) == self.b.product => self.b.t_product,
                     _ if Some(p) == self.b.reflect_enum => self.b.t_enum,
-                    _ => self.types.class(p, &[]),
+                    _ => match self.syms.class(p).base_types.first() {
+                        Some(&(k, t)) if k == p && self.syms.class(p).tparams.is_empty() => t,
+                        _ => self.types.class(p, &[]),
+                    },
                 };
+                debug_assert_eq!(t, self.types.class(p, &[]), "the class type of {}", self.class_path(p));
                 parents.push((t, span));
                 count += 1;
             }
         }
-        self.syms.class_mut(c).desugared_parents = count;
+        if self.syms.class(c).desugared_parents != count {
+            self.syms.class_mut(c).desugared_parents = count;
+        }
     }
 
     /// `java.io.Serializable`, looked up once.
@@ -5154,6 +5161,20 @@ impl<'a> Worker<'a> {
                 continue;
             }
             self.complete_class(pc);
+            let pinfo = self.syms.class(pc);
+            // A complete trait without type parameters, superclass, seal or private constructor
+            // (`Product`, `Serializable`): every check below holds of it, and its base types are
+            // its linearisation as they stand.
+            let plain_trait = pinfo.kind == ClassKind::Trait
+                && pinfo.tparams.is_empty()
+                && pinfo.superclass.is_none()
+                && pinfo.mods & (mods::SEALED | mods::PRIVATE_CTOR) == 0
+                && pinfo.state() == Completion::Done;
+            if plain_trait && prefix.is_none() && !self.is_partial_function(pc) {
+                parent_types.push(pt);
+                linearisations.push(ParentBases::Of(pc));
+                continue;
+            }
             let pinfo = self.syms.class(pc);
             // Nothing is emitted for a native JS class, so extending one costs no inheritance.
             let is_class = pinfo.kind == ClassKind::Class && pinfo.js != JsKind::Native;
