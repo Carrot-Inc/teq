@@ -3199,11 +3199,15 @@ impl<'a> Worker<'a> {
 
     /// The members the rule gives a case class, value class or enum case `c` derives from
     /// (`class D extends K` of a case class `K`), which implement what `Product` declares.
+    /// Such a base is a class, an enum case or an object being no parent, so it is one of the
+    /// superclasses of `c`.
     fn inherited_synthesized(&mut self, c: ClassId) -> u16 {
         let mut by_rule = 0;
-        for i in 1..self.syms.class(c).base_types.len() {
-            let b = self.syms.class(c).base_types[i].0;
+        let mut next = self.syms.class(c).superclass;
+        for _ in 1..self.syms.class(c).base_types.len() {
+            let Some(b) = next else { break };
             let info = self.syms.class(b);
+            next = info.superclass;
             let synthesizes = matches!(info.kind, ClassKind::Class | ClassKind::Object | ClassKind::EnumCase)
                 && (info.mods & mods::CASE != 0 || info.value_class || info.kind == ClassKind::EnumCase);
             if synthesizes {
