@@ -339,32 +339,36 @@ impl<'a> Emitter<'a> {
     /// evaluates it, each of them is bound, in order, as a parameter of an arrow function the
     /// call applies to them. A spread argument, the last, is written as it stands.
     pub(super) fn template_binds(&self, text: &str, args: &[TExprId]) -> u64 {
-        let impure: Vec<bool> = args.iter().map(|&a| !self.is_idempotent_arg(a)).collect();
-        if !impure.iter().any(|&i| i) {
+        let mut impure = 0u64;
+        for (k, &a) in args.iter().enumerate().take(64) {
+            if !self.is_idempotent_arg(a) {
+                impure |= 1 << k;
+            }
+        }
+        if impure == 0 {
             return 0;
         }
-        let mut written = 0u64;
+        let (mut written, mut spread) = (0u64, 0u64);
         let mut last = None;
         let mut linear = true;
-        for (k, cond, spread) in template_slots(text) {
-            if k >= args.len() || !impure[k] {
-                continue;
+        template_slots(text, |k, cond, spreads| {
+            if k >= 64 || impure & (1 << k) == 0 {
+                return;
             }
-            if (cond && !spread) || written & (1 << k) != 0 || last.map_or(false, |l| k < l) {
+            if spreads {
+                spread |= 1 << k;
+            } else if cond {
+                linear = false;
+            }
+            if written & (1 << k) != 0 || last.map_or(false, |l| k < l) {
                 linear = false;
             }
             written |= 1 << k;
             last = Some(k);
-        }
-        let spread = |k: usize| text.contains(&format!("...${}", k));
-        let mut binds = 0u64;
-        for k in 0..args.len().min(64) {
-            if impure[k] && !spread(k) {
-                binds |= 1 << k;
-                if written & (1 << k) == 0 {
-                    linear = false;
-                }
-            }
+        });
+        let binds = impure & !spread;
+        if binds & !written != 0 {
+            linear = false;
         }
         if linear { 0 } else { binds }
     }
@@ -2282,16 +2286,15 @@ enum Shape {
 /// them: the argument, whether the text may skip it or evaluate it again there (past a
 /// conditional operator, `?`, `&&`, `||`, or an arrow function's `=>`, outside a string), and
 /// whether it is spread.
-fn template_slots(t: &str) -> Vec<(usize, bool, bool)> {
+fn template_slots(t: &str, mut slot: impl FnMut(usize, bool, bool)) {
     let b = t.as_bytes();
-    let mut slots = Vec::new();
     let mut cond = false;
     let mut quote = 0u8;
     let mut i = 0;
     while i < b.len() {
         let c = b[i];
         if c == b'$' && b.get(i + 1).map_or(false, |d| d.is_ascii_digit()) {
-            slots.push(((b[i + 1] - b'0') as usize, cond, t[..i].ends_with("...")));
+            slot((b[i + 1] - b'0') as usize, cond, t[..i].ends_with("..."));
             i += 2;
             continue;
         }
@@ -2312,7 +2315,6 @@ fn template_slots(t: &str) -> Vec<(usize, bool, bool)> {
         }
         i += 1;
     }
-    slots
 }
 
 fn template_shape(t: &str) -> Shape {
