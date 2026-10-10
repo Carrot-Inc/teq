@@ -1885,11 +1885,45 @@ impl<'w, 'a> P<'w, 'a> {
                 let outer = std::mem::replace(&mut self.expected_fn, u.expected);
                 // An argument is typed against the parameter's type as the call instantiates
                 // it, which an anonymous class's instance is ascribed where its class's bound
-                // does not conform (`Typer.ensureNoLocalRefs`).
-                let outer_anon = std::mem::replace(&mut self.expected_anon, u.ty.map(|t| (a, t)));
+                // does not conform (`Typer.ensureNoLocalRefs`); a formal that still names the
+                // callee's or its class's type parameters (a function value's `apply`) is no
+                // defined type (`isFullyDefined`).
+                let pt = u.ty.filter(|&t| !self.names_formals(t, getter));
+                let outer_anon = std::mem::replace(&mut self.expected_anon, pt.map(|t| (a, t)));
                 self.term(a);
                 self.expected_anon = outer_anon;
                 self.expected_fn = outer;
+            }
+        }
+    }
+
+    /// Whether `t` names a type parameter of the callee `getter` calls or of its class: a formal
+    /// the call did not instantiate.
+    fn names_formals(&mut self, t: TypeId, getter: Getter) -> bool {
+        let (s, c) = match getter {
+            Getter::Method(s, _) | Getter::Forwarder(s, ..) => (Some(s), match self.w.syms.sym(s).owner {
+                Owner::Class(c) => Some(c),
+                _ => None,
+            }),
+            Getter::Ctor(c) => (None, Some(c)),
+        };
+        let mut formals: Vec<TParamId> = s.map(|s| self.w.sig_of(s).tparams.clone()).unwrap_or_default();
+        if let Some(c) = c {
+            formals.extend(self.w.syms.class(c).tparams.iter().copied());
+        }
+        !formals.is_empty() && self.names_any_param(t, &formals)
+    }
+
+    fn names_any_param(&self, t: TypeId, formals: &[TParamId]) -> bool {
+        match self.w.types.get(t) {
+            Type::Param(p) | Type::AppParam(p, _) if formals.contains(&p) => true,
+            _ => {
+                let mut found = false;
+                self.w.types.map_parts(t, &mut |x| {
+                    found = found || self.names_any_param(x, formals);
+                    x
+                });
+                found
             }
         }
     }

@@ -1047,8 +1047,11 @@ impl<'a> Worker<'a> {
             if abstract_member || rhs == ERROR {
                 continue;
             }
+            // The class's own declaration (`TypeOps.classBound` refines by `decl.info`): only
+            // its own `this` moves, an enclosing class's `C.this` staying the enclosing instance
+            // where the class derives from `C` too.
             let this = self.this_prefix(c);
-            let rhs = self.as_seen_from(rhs, this, c);
+            let rhs = self.own_seen_from(rhs, this, c);
             let rhs = if tparams.is_empty() {
                 rhs
             } else {
