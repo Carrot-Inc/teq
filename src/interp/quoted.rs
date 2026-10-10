@@ -37,6 +37,10 @@ pub struct MacroCtx {
     pub owner_class: Option<ClassId>,
     /// The argument each proxy of the inline method's parameters stands for.
     pub params: FxMap<SymId, TExprId>,
+    /// The argument each parameter of the inline methods under expansion, and its proxy, is bound
+    /// to, a local's included, which `underlyingArgument` takes as dotty's `MapToUnderlying`
+    /// takes an inline proxy's right-hand side.
+    pub bindings: FxMap<SymId, TExprId>,
     /// The positions of the inline calls under expansion, the outermost first, and the info
     /// messages the run gave so far: what orders its messages among the build's
     /// (`Worker::flush_infos`).
@@ -1503,7 +1507,12 @@ impl<'a, 't> Interp<'a, 't> {
                     let fun = self.pending(Pending { recv: Some(TreeRef::Expr(x)), kind: PendingKind::Named(name), targs: vec![ty] });
                     View::TypeApply(fun, vec![ty])
                 }
-                TExpr::SeqLit(l) | TExpr::ArrayLit(l) => {
+                // A vararg: its sequence literal ascribed the repeated type.
+                TExpr::SeqLit(_) => {
+                    let elem = self.seq_elem_type(e);
+                    View::Typed(TreeRef::SeqLiteral(e), self.typer.repeated_type(elem))
+                }
+                TExpr::ArrayLit(l) => {
                     let items: Vec<TreeRef> = self.prog().expr_list(l).iter().map(|&x| TreeRef::Expr(x)).collect();
                     let elem = self.seq_elem_type(e);
                     View::Repeated(items, elem)
@@ -1637,6 +1646,11 @@ impl<'a, 't> Interp<'a, 't> {
                 let (fun, args) = self.partial_of(i)?;
                 View::Apply(fun, args)
             }
+            TreeRef::SeqLiteral(e) => {
+                let TExpr::SeqLit(l) = self.prog().expr(e) else { unreachable!("a sequence literal") };
+                let items: Vec<TreeRef> = self.prog().expr_list(l).iter().map(|&x| TreeRef::Expr(x)).collect();
+                View::Repeated(items, self.seq_elem_type(e))
+            }
             TreeRef::Pending(i) => {
                 let p = self.pending_of(i)?;
                 if !p.targs.is_empty() {
@@ -1645,7 +1659,8 @@ impl<'a, 't> Interp<'a, 't> {
                 }
                 match (p.recv, p.kind) {
                     (Some(r), PendingKind::Sym(s)) => View::Select(r, SymRef::Term(s), self.syms().sym(s).name),
-                    (Some(r), PendingKind::Named(n) | PendingKind::Operator(n, _)) => View::Select(r, SymRef::None, n),
+                    (Some(r), PendingKind::Named(n)) => View::Select(r, SymRef::None, n),
+                    (Some(r), PendingKind::Operator(n, _)) => View::Select(r, SymRef::Operator(i), n),
                     (None, PendingKind::Sym(s)) => View::Ident(SymRef::Term(s)),
                     (None, PendingKind::Named(n) | PendingKind::Operator(n, _)) => {
                         let _ = n;
@@ -1840,7 +1855,7 @@ impl<'a, 't> Interp<'a, 't> {
     /// A tree as an expression of the IR: a pending selection becomes the call it stands for.
     pub(super) fn materialize(&mut self, t: TreeRef) -> R<TExprId> {
         match t {
-            TreeRef::Expr(e) => Ok(e),
+            TreeRef::Expr(e) | TreeRef::SeqLiteral(e) => Ok(e),
             TreeRef::Stmt(i) => match self.prog().stmts[i as usize] {
                 TStmt::Expr(e) => Ok(e),
                 _ => self.unsupported("a definition where a term was expected"),
@@ -2238,6 +2253,7 @@ impl<'a, 't> Interp<'a, 't> {
     /// The static type of a tree.
     pub(super) fn tree_type(&mut self, t: TreeRef) -> R<TypeId> {
         Ok(match t {
+            TreeRef::SeqLiteral(e) => self.prog().type_of(e).map_or(ANY, |ty| self.typer.zonk(ty)),
             TreeRef::Expr(e) => {
                 // A stable val's reference has its singleton type, as scalac's `Ident` has,
                 // which `widen` takes to the declared type.
@@ -2357,7 +2373,8 @@ impl<'a, 't> Interp<'a, 't> {
                 },
                 TExpr::CallClosure(..) | TExpr::New(..) | TExpr::NewVia(..) | TExpr::Prim(..) | TExpr::StrConcat(_) | TExpr::Throw(..) => "Apply",
                 TExpr::TypeTest(..) | TExpr::Cast(..) => "TypeApply",
-                TExpr::SeqLit(_) | TExpr::ArrayLit(_) => "Repeated",
+                TExpr::SeqLit(_) => "Typed",
+                TExpr::ArrayLit(_) => "Repeated",
                 TExpr::Spread(_) => "Typed",
                 TExpr::Lambda(..) | TExpr::Block(..) => "Block",
                 TExpr::If(..) => "If",
@@ -2399,6 +2416,7 @@ impl<'a, 't> Interp<'a, 't> {
             TreeRef::Alias(_) => "TypeDef",
             TreeRef::NamedArg(_) => "NamedArg",
             TreeRef::Partial(_) => "Apply",
+            TreeRef::SeqLiteral(_) => "Repeated",
             TreeRef::Pending(i) => {
                 let p = self.pending_of(i)?;
                 if !p.targs.is_empty() {
@@ -2597,6 +2615,19 @@ impl<'a, 't> Interp<'a, 't> {
         }
     }
 
+    /// The initialiser of a local val (no parameter, no var, no lazy val), as its definition in
+    /// the program has it, which dotty keeps as the local's `defTree`.
+    fn local_val_rhs(&self, s: SymId) -> Option<TExprId> {
+        let info = self.syms().sym(s);
+        if info.kind != SymKind::Val || info.owner != Owner::Local || info.mods & crate::ast::mods::LAZY != 0 {
+            return None;
+        }
+        self.prog().stmts.iter().find_map(|st| match *st {
+            TStmt::Val(v, init) if v == s => Some(init),
+            _ => None,
+        })
+    }
+
     fn tree_symbol(&mut self, t: TreeRef) -> R<SymRef> {
         Ok(match t {
             TreeRef::Expr(e) => match self.prog().expr(e) {
@@ -2625,10 +2656,11 @@ impl<'a, 't> Interp<'a, 't> {
             TreeRef::Pending(i) => match self.pending_of(i)?.kind {
                 PendingKind::Sym(s) => SymRef::Term(s),
                 PendingKind::New(ty) | PendingKind::Ctor(ty) => self.ctor_sym(ty),
-                PendingKind::Named(_) | PendingKind::Operator(..) => SymRef::None,
+                PendingKind::Operator(..) => SymRef::Operator(i),
+                PendingKind::Named(_) => SymRef::None,
                 PendingKind::Ref(r) => r,
             },
-            TreeRef::Case(_) | TreeRef::NamedArg(_) | TreeRef::Partial(_) => SymRef::None,
+            TreeRef::Case(_) | TreeRef::NamedArg(_) | TreeRef::Partial(_) | TreeRef::SeqLiteral(_) => SymRef::None,
             TreeRef::LambdaDef(e) | TreeRef::LambdaClosure(e) | TreeRef::LambdaRef(e) => SymRef::Lambda(e),
             TreeRef::Ctor(c) => SymRef::Ctor(c),
             TreeRef::Alias(a) => SymRef::Alias(a),
@@ -2668,6 +2700,10 @@ impl<'a, 't> Interp<'a, 't> {
             SymRef::Default(c, i) => {
                 let init = self.default_init(c, i)?;
                 return Ok(TreeRef::Expr(init));
+            }
+            SymRef::Operator(i) => {
+                let PendingKind::Operator(name, method) = self.pending_of(i)?.kind else { unreachable!("an operator's symbol is of its selection") };
+                return Ok(self.pending(Pending { recv: Some(qual), kind: PendingKind::Operator(name, method), targs: Vec::new() }));
             }
             other => {
                 let shown = self.symbol_name(other);
@@ -2842,13 +2878,16 @@ fn install_trees(it: &mut Table) {
             None => Ok(Value::Type(it.tree_type(t)?)),
         }
     });
+    // dotty's `MapToUnderlying`: a local's reference is its binding's right-hand side, an inline
+    // parameter's or proxy's its argument's, a local val's its initialiser's.
     q!(it, "Reflect.TermMethods.Term.underlyingArgument", |it, a| {
         let t = it.tree_arg(a, 0)?;
         let mut e = it.materialize(t)?;
         if let Some(ctx) = it.macro_ctx.clone() {
-            while let TExpr::Local(s) = it.prog().expr(e) {
-                match ctx.params.get(&s) {
-                    Some(&arg) if arg != e => e = arg,
+            for _ in 0..64 {
+                let TExpr::Local(s) = it.prog().expr(e) else { break };
+                match ctx.params.get(&s).or_else(|| ctx.bindings.get(&s)).copied().or_else(|| it.local_val_rhs(s)) {
+                    Some(arg) if arg != e => e = arg,
                     _ => break,
                 }
             }
@@ -3139,6 +3178,10 @@ fn install_trees(it: &mut Table) {
         }
         let e = it.expr_arg(a, 1)?;
         let ty = it.type_tree_arg(a, 2)?;
+        // A sequence literal ascribed the repeated type is the vararg itself.
+        if matches!(it.typer.types.get(ty), Type::Class(c, _) if Some(c) == it.typer.b.repeated) && matches!(it.prog().expr(e), TExpr::SeqLit(_)) {
+            return Ok(Value::Tree(TreeRef::Expr(e)));
+        }
         Ok(Value::Tree(TreeRef::Expr(it.chain_end(e, ty))))
     });
     q!(it, "Reflect.Typed.unapply", |it, a| {
@@ -3209,7 +3252,7 @@ fn install_trees(it: &mut Table) {
             None => ANY,
         };
         it.typer.prog.set_type(te, ty);
-        Ok(Value::Tree(TreeRef::Expr(te)))
+        Ok(Value::Tree(TreeRef::SeqLiteral(te)))
     });
     q!(it, "Reflect.Repeated.unapply", |it, a| {
         let t = it.tree_arg(a, 1)?;
@@ -5775,6 +5818,10 @@ impl<'a, 't> Interp<'a, 't> {
             SymRef::Any => "Any".to_string(),
             SymRef::Nothing => "Nothing".to_string(),
             SymRef::None => "<none>".to_string(),
+            SymRef::Operator(i) => match self.pending_of(i).map(|p| p.kind) {
+                Ok(PendingKind::Operator(name, _)) => self.typer.name_ref(name).to_string(),
+                _ => "<none>".to_string(),
+            },
         }
     }
 
@@ -5850,6 +5897,14 @@ impl<'a, 't> Interp<'a, 't> {
             SymRef::Lambda(_) => self.innermost_site_sym().map_or(SymRef::None, SymRef::Term),
             SymRef::TParam(_) | SymRef::Any | SymRef::Nothing => SymRef::PkgClass(self.typer.b.scala_pkg),
             SymRef::None => SymRef::None,
+            // The primitive class of the operator's receiver.
+            SymRef::Operator(i) => match self.pending_of(i).map(|p| p.recv) {
+                Ok(Some(recv)) => match self.tree_type(recv) {
+                    Ok(ty) => self.type_symbol(ty),
+                    Err(_) => SymRef::None,
+                },
+                _ => SymRef::None,
+            },
         }
     }
 
@@ -6050,6 +6105,7 @@ impl<'a, 't> Interp<'a, 't> {
             }
             SymRef::Pkg(_) | SymRef::PkgClass(_) | SymRef::Root => f |= F_PACKAGE | F_MODULE,
             SymRef::Splice(_) => f |= F_SYNTHETIC | F_MACRO,
+            SymRef::Operator(_) => f |= F_METHOD,
             SymRef::Site(run, i) => match self.site_entry(run, i as usize) {
                 Some(SiteOwner::Lambda(_)) => f |= F_METHOD | F_SYNTHETIC,
                 Some(SiteOwner::PatternTemp(_)) => f |= F_SYNTHETIC,

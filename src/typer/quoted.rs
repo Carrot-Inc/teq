@@ -1446,8 +1446,13 @@ impl<'a> Worker<'a> {
         // body expands, as the retype path's typing of the parameter's name gives the quote a
         // tree of the argument's own type (a constant the binding folded to has none of its own).
         let mut params: FxMap<SymId, TExprId> = FxMap::default();
+        let mut bindings: FxMap<SymId, TExprId> = FxMap::default();
         let proxies: Vec<(SymId, SymId)> = self.inline.param_proxies.iter().map(|(&p, &x)| (p, x)).collect();
         for (param, proxy) in proxies {
+            if let Some(&(arg, _)) = self.inline.param_bindings.get(&proxy) {
+                bindings.insert(param, arg);
+                bindings.insert(proxy, arg);
+            }
             if let (Some(&(arg, _)), Some(bound)) = (self.inline.param_bindings.get(&proxy), self.inline.args.get(&proxy).copied()) {
                 let arg = if self.prog.type_of(arg).is_none() { self.prog.typed(arg, bound.ty) } else { arg };
                 params.insert(param, arg);
@@ -1479,7 +1484,7 @@ impl<'a> Worker<'a> {
         interp.pure = true;
         let run = interp.next_run();
         let infos = std::cell::Cell::new(0);
-        interp.macro_ctx = Some(std::rc::Rc::new(MacroCtx { run, site_file, site_span, expansion_file, expansion_span, unit_file, unit_span, owners, owner_class, params, inline_path, infos }));
+        interp.macro_ctx = Some(std::rc::Rc::new(MacroCtx { run, site_file, site_span, expansion_file, expansion_span, unit_file, unit_span, owners, owner_class, params, bindings, inline_path, infos }));
         if prof.is_some() {
             interp.start_profile();
         }

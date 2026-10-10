@@ -83,6 +83,10 @@ pub enum TreeRef {
     /// A call applied to the arguments of one parameter clause, with more clauses to come, in
     /// `Interp::partials`: the inner `Apply` of a call with several clauses.
     Partial(u32),
+    /// The sequence literal of a vararg (`TExpr::SeqLit`), a `Repeated`, which the vararg holds
+    /// in an ascription to the repeated type as dotty's does (`Typed(SeqLiteral(args, elemtpt),
+    /// TypeTree(T*))`, `Applications.makeVarArg`, `seqToRepeated`).
+    SeqLiteral(TExprId),
 }
 
 /// What a `quotes.reflect.Symbol` stands for.
@@ -111,6 +115,12 @@ pub enum SymRef {
     /// its own: a lambda, a local dummy, a pattern binder or the temporary of a pattern
     /// definition.
     Site(u32, u32),
+    /// An operator of a primitive class (`Int.==`, `Int.<`), which dotty selects by the class's
+    /// method symbol and teq's std declares no member for: the operator's selection the symbol
+    /// was read from, by its number in the run (a pending selection), whose name and method type
+    /// a selection of the symbol on another receiver takes, as `left.select(sel.symbol)` takes
+    /// dotty's (scalactic's `BooleanMacro`).
+    Operator(u32),
     /// The root package, which the packages hang off; `Pkg(ROOT_PKG)` is the empty package
     /// of the definitions outside any package clause.
     Root,
