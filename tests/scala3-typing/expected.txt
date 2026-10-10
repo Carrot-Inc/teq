@@ -3516,7 +3516,7 @@ pos/i23158.scala	oos	extractors
 pos/i23194.scala	accepts	
 pos/i23217.scala	accepts	
 pos/i23225.scala	syntax	expected {}, found {}
-pos/i23237a.scala	rejects	PartialFunction cannot be extended; write a { case ... } literal, PartialFunction.fromFunction or Function.unlift
+pos/i23237a.scala	accepts	
 pos/i23237b.scala	rejects	type mismatch
 pos/i2324.scala	accepts	
 pos/i23261.scala	rejects	no given instance
