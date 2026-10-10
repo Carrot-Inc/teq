@@ -1457,6 +1457,7 @@ impl<'a> Worker<'a> {
             synthesized: 0,
             retracted_unapply: false,
             equals_order: Vec::new(),
+            existing_defs: Vec::new(),
             init: self.parent_inits(c, &mut Vec::new()),
             methods: vec![f],
             forwarders: Vec::new(),

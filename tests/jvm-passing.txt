@@ -115,6 +115,7 @@ capture_u
 capture_w
 capture_x
 case_class_below_superclass
+case_class_generic_member
 case_class_hash_elements
 case_class_inherited_members
 case_class_join_union

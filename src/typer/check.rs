@@ -2838,6 +2838,7 @@ impl<'a> Worker<'a> {
             synthesized: 0,
             retracted_unapply: false,
             equals_order: Vec::new(),
+            existing_defs: Vec::new(),
             init: Vec::new(),
             methods: Vec::new(),
             ctors: Vec::new(),
@@ -2852,7 +2853,9 @@ impl<'a> Worker<'a> {
             tclass.ctor_defaults.insert(0, None);
             tclass.captures = 1;
         }
-        tclass.synthesized = self.synthesized_members(c);
+        let (synthesized, existing_defs) = self.synthesized_record(c);
+        tclass.synthesized = synthesized;
+        tclass.existing_defs = existing_defs;
         if tclass.synthesized & synthetic::EQUALS != 0 {
             let order = crate::tir::equals_order(&self.syms, &self.types, self.interner, c);
             if order.iter().enumerate().any(|(i, &k)| i != k) {
@@ -3117,6 +3120,12 @@ impl<'a> Worker<'a> {
     /// with an enum class case's `ordinal`: of its kind's set, those `existingDef` finds no
     /// definition of.
     pub(super) fn synthesized_members(&mut self, c: ClassId) -> u16 {
+        self.synthesized_record(c).0
+    }
+
+    /// `synthesized_members` with, for each member of the kind's set that is not synthesized, the
+    /// existing definition `existingDef` found (`TClass::existing_defs`).
+    pub(super) fn synthesized_record(&mut self, c: ClassId) -> (u16, Vec<(u16, SymId)>) {
         let (kind, is_case, singleton, value_class, is_module) = {
             let i = self.syms.class(c);
             let is_module = i.kind == ClassKind::Object || i.local_module.is_some() || i.inner_object.is_some();
@@ -3136,11 +3145,16 @@ impl<'a> Worker<'a> {
         };
         let superclass = self.syms.class(c).superclass;
         let mut synthesized = 0;
+        let mut existing = Vec::new();
         for (bit, name, param) in synthetic::MEMBERS {
             if wanted & bit == 0 {
                 continue;
             }
-            match self.existing_def(c, name, param) {
+            let found = self.existing_def(c, name, param);
+            if let Some(s) = found {
+                existing.push((bit, s));
+            }
+            match found {
                 None => synthesized |= bit,
                 Some(s) if bit & (synthetic::HASH_CODE | synthetic::EQUALS | synthetic::TO_STRING) != 0 => {
                     let definer = match self.syms.sym(s).owner {
@@ -3164,7 +3178,7 @@ impl<'a> Worker<'a> {
                 synthesized |= synthetic::EQUALS_CALLS_CAN_EQUAL;
             }
         }
-        synthesized
+        (synthesized, existing)
     }
 
     /// The members the rule gives a case class, value class or enum case `c` derives from
@@ -3211,11 +3225,11 @@ impl<'a> Worker<'a> {
         }
         let mut abstract_in: Vec<ClassId> = Vec::new();
         for i in 0..self.syms.class(c).base_types.len() {
-            let b = self.syms.class(c).base_types[i].0;
+            let (b, bt) = self.syms.class(c).base_types[i];
             let mut k = 0;
             while let Some(s) = self.own_alternative(b, name, k) {
                 k += 1;
-                if self.is_private(s) || !self.matches_synthesized(s, param) {
+                if self.is_private(s) || !self.matches_synthesized_at(s, param, b, bt) {
                     continue;
                 }
                 if self.is_abstract_member(s) {
@@ -3241,18 +3255,37 @@ impl<'a> Worker<'a> {
     /// Whether `s` has the signature of a member taking `param` by rule: no type parameters, no
     /// parameter or one empty list (`toString()`), or the one parameter of that type.
     fn matches_synthesized(&mut self, s: SymId, param: synthetic::Param) -> bool {
+        self.matches_synthesized_under(s, param, &Subst::default())
+    }
+
+    /// `matches_synthesized` of `s`, a member of the base `b` that the class sees as `bt`: its
+    /// signature at the class site, `b`'s type parameters taken as `bt`'s arguments (dotty's
+    /// `matchingMember`, `trait T[A] { def productElement(i: A) }` under `T[Int]`).
+    fn matches_synthesized_at(&mut self, s: SymId, param: synthetic::Param, b: ClassId, bt: TypeId) -> bool {
+        let subst: Subst = match self.types.get(bt) {
+            Type::Class(_, args) => self.syms.class(b).tparams.iter().copied().zip(self.types.items(args).iter().copied()).collect(),
+            _ => Subst::default(),
+        };
+        self.matches_synthesized_under(s, param, &subst)
+    }
+
+    fn matches_synthesized_under(&mut self, s: SymId, param: synthetic::Param, subst: &Subst) -> bool {
         let sig = self.sig_arc(s);
         if !sig.tparams.is_empty() {
             return false;
         }
+        let param_ty = |w: &mut Self, t: TypeId| {
+            let t = if subst.is_empty() { t } else { w.types.subst(t, subst) };
+            w.deref_alias(t)
+        };
         match (param, sig.clauses.as_slice()) {
             (synthetic::Param::None, []) => true,
             (synthetic::Param::None, [cl]) => cl.params.is_empty(),
             (synthetic::Param::Any, [cl]) if !cl.is_using && cl.params.len() == 1 => {
-                let t = self.deref_alias(cl.params[0].ty);
+                let t = param_ty(self, cl.params[0].ty);
                 t == ANY || t == self.b.t_any_ref || self.class_of(t).is_some_and(|k| self.is_java_lang_object(k))
             }
-            (synthetic::Param::Int, [cl]) if !cl.is_using && cl.params.len() == 1 => self.deref_alias(cl.params[0].ty) == self.b.t_int,
+            (synthetic::Param::Int, [cl]) if !cl.is_using && cl.params.len() == 1 => param_ty(self, cl.params[0].ty) == self.b.t_int,
             _ => false,
         }
     }

@@ -1393,6 +1393,15 @@ impl<'a, 't> Interp<'a, 't> {
             if self.declares_abstractly(k, name) {
                 declared.push((k, false));
             }
+            // Past the class's own declarations, the record decides a member of the rule's set
+            // (`TClass::existing_defs`): the definition `existingDef` took, which the bases'
+            // order would not find first (`Product`'s abstract `productElement` before
+            // `T[Int]`'s).
+            if k == c {
+                if let Some(m) = self.record_member(c, name) {
+                    return m;
+                }
+            }
             if k == c && value_class && matches!(name, crate::names::EQUALS | crate::names::HASH_CODE) {
                 let defines = self.syms().class(c).members.contains_key(&name);
                 if !defines {
@@ -1518,6 +1527,18 @@ impl<'a, 't> Interp<'a, 't> {
 
     /// The `toString`, `equals` and `hashCode` a case class, case object or enum value gets by
     /// rule (`TClass::synthesized`), where it has no definition of its own or inherited.
+    /// The member the record of `c` names for `name`, the existing definition `existingDef` took
+    /// in place of the rule's.
+    fn record_member(&mut self, c: ClassId, name: Name) -> Option<Member> {
+        let (bit, _, _) = synthetic::MEMBERS.iter().copied().find(|&(_, n, _)| n == name)?;
+        let existing = self.tclass_field(c, |tc| tc.existing_defs.iter().find(|&&(b, _)| b == bit).map(|&(_, s)| s)).flatten()?;
+        let Owner::Class(k) = self.syms().sym(existing).owner else { return None };
+        match self.own_member(k, name) {
+            Member::Missing => None,
+            m => Some(m),
+        }
+    }
+
     fn shape_member(&mut self, c: ClassId, name: Name) -> Option<Member> {
         let shape = self.shape(c);
         let (bit, member) = match name {

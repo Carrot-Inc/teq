@@ -880,6 +880,10 @@ pub struct TClass {
     /// The indices of a case class's fields in the order its synthesized `equals` compares them
     /// (`equals_order`), where that is not their declaration order; empty otherwise.
     pub equals_order: Vec<u16>,
+    /// For each member of the kind's set the class does not get by rule, the definition dotty's
+    /// `existingDef` takes in its place (`synthetic`'s bit, the member), which a lookup of the name
+    /// finds before the bases' other definitions.
+    pub existing_defs: Vec<(u16, SymId)>,
     pub init: Vec<TInit>,
     pub methods: Vec<FunId>,
     /// The secondary constructors: the body of each is a block whose one statement is the
