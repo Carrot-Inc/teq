@@ -6069,8 +6069,22 @@ impl<'a> Worker<'a> {
                 }
             }
         }
-        if !sig.tparams.is_empty() || targs.is_some() {
-            self.error(span, "not supported yet: a structural member with type parameters");
+        // `Dynamic.handleStructural`: a polymorphic member, or a method whose parameter or result
+        // types name its parameters, is no structural call.
+        if !sig.tparams.is_empty() {
+            let msg = format!("Structural access not allowed on method {} because it is polymorphic", self.name_str(name));
+            self.error(span, msg);
+            return failed(self, &lists);
+        }
+        if targs.is_some() {
+            let msg = format!("method {} does not take type parameters", self.name_str(name));
+            self.error(span, msg);
+            return failed(self, &lists);
+        }
+        let params: Vec<SymId> = sig.clauses.iter().flat_map(|c| c.params.iter().map(|p| p.sym)).collect();
+        if !params.is_empty() && (sig.clauses.iter().flat_map(|c| c.params.iter()).any(|p| self.types.names_term(p.ty, &params)) || self.types.names_term(sig.ret, &params)) {
+            let msg = format!("Structural access not allowed on method {} because it has a method type with inter-parameter dependencies", self.name_str(name));
+            self.error(span, msg);
             return failed(self, &lists);
         }
         let key = self.prog.add_str(&self.name_str(name));
