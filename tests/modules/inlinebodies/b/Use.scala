@@ -1,6 +1,6 @@
 package ibb
 
-import iba.{Bodies, Ctors, Tag}
+import iba.{Bodies, ByName, Ctors, Tag, Tests}
 
 @main def run(): Unit =
   println(Bodies.value(3))
@@ -19,3 +19,8 @@ import iba.{Bodies, Ctors, Tag}
   println(Bodies.both(l))
   println(Ctors.make(7))
   println(Ctors.make2(4))
+  val none: String = null
+  println(s"${Tests.matches[String](none, true)},${Tests.matches[String]("s", true)},${Tests.matches[Int](3, true)}")
+  println(s"${Tests.tester[String](true)(none)},${Tests.tester[String](true)("s")}")
+  println(ByName.derive(3))
+  println(ByName.derive2("s"))

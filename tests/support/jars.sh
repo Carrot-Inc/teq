@@ -13,7 +13,8 @@
 # compile-time and types 4.2.1 from the coursier cache; scalatest 3.2.20's core, matchers-core,
 # shouldmatchers, mustmatchers and compatible jars with scalactic (scalatest-<artifact>, scalactic); junit 4.13.2; the JVM `_3` artifacts of the ZIO runtime's
 # set (zio-jvm, zio-stacktracer-jvm, zio-internal-macros-jvm, izumi-reflect-jvm,
-# izumi-reflect-boopickle-jvm, scala-collection-compat-jvm, zio-test-jvm), chimney-jvm and chimney-macro-commons-jvm; abi-callbacks-lib,
+# izumi-reflect-boopickle-jvm, scala-collection-compat-jvm, zio-test-jvm), chimney-jvm and chimney-macro-commons-jvm, tapir-core-jvm (1.13.29) with magnolia123-jvm,
+# sttp-model-core-jvm, sttp-shared-core-jvm and sttp-shared-ws-jvm; abi-callbacks-lib,
 # tests/support/abi_callbacks_lib.scala compiled by scalac (scala-cli) into a jar; typetest-lib,
 # tests/support/typetest_lib.scala compiled the same way; predef-lib,
 # tests/support/predef_lib.scala compiled the same way; depfun-lib, tests/support/depfun_lib.scala
@@ -564,6 +565,11 @@ jar_of() {
     izumi-reflect-boopickle-jvm) echo "$M2/dev/zio/izumi-reflect-thirdparty-boopickle-shaded_3/3.0.9/izumi-reflect-thirdparty-boopickle-shaded_3-3.0.9.jar" ;;
     chimney-jvm) echo "$M2/io/scalaland/chimney_3/1.11.0/chimney_3-1.11.0.jar" ;;
     chimney-macro-commons-jvm) echo "$M2/io/scalaland/chimney-macro-commons_3/2.2.0/chimney-macro-commons_3-2.2.0.jar" ;;
+    tapir-core-jvm) echo "$M2/com/softwaremill/sttp/tapir/tapir-core_3/1.13.29/tapir-core_3-1.13.29.jar" ;;
+    magnolia123-jvm) echo "$M2/com/softwaremill/magnolia1_3/magnolia_3/1.3.23/magnolia_3-1.3.23.jar" ;;
+    sttp-model-core-jvm) echo "$M2/com/softwaremill/sttp/model/core_3/1.7.18/core_3-1.7.18.jar" ;;
+    sttp-shared-core-jvm) echo "$M2/com/softwaremill/sttp/shared/core_3/1.5.2/core_3-1.5.2.jar" ;;
+    sttp-shared-ws-jvm) echo "$M2/com/softwaremill/sttp/shared/ws_3/1.5.2/ws_3-1.5.2.jar" ;;
     scala-collection-compat-jvm) echo "$M2/org/scala-lang/modules/scala-collection-compat_3/2.14.0/scala-collection-compat_3-2.14.0.jar" ;;
     scala-library) echo "$M2/org/scala-lang/scala-library/3.8.4/scala-library-3.8.4.jar" ;;
     tasty-inspector) echo "$M2/org/scala-lang/scala3-tasty-inspector_3/3.8.4/scala3-tasty-inspector_3-3.8.4.jar" ;;

@@ -8,9 +8,10 @@
 // tests is consumed; a generic class's match-type alias is seen from the receiver; a quote applying an
 // inline parameter sees the argument's closure reduced (monocle's `Focus`), a curried one at each list, an
 // effect bound once (`BetaReduce`); a lazy val's path binds its singleton, its initialiser run once; a local
-// class constructs through its copied secondary constructors. scalac prints the lines
-// of the .expected file.
-import inlinebodies.{Bodies, Counter, Ctors, Focus, K0, Quoted, Reduce, Tag}
+// class constructs through its copied secondary constructors; a type pattern over the abstract type
+// the scrutinee has tests for null (`testNotNull`); a class's by-name members stay by-name in its copies.
+// scalac prints the lines of the .expected file.
+import inlinebodies.{Bodies, ByName, Counter, Ctors, Focus, K0, Quoted, Reduce, Tag, Tests}
 var effects = 0
 case class P(a: Int, b: String)
 def effect(n: Int): Int = { effects += 1; n }
@@ -48,3 +49,8 @@ def effect(n: Int): Int = { effects += 1; n }
   println(Reduce.runEffect(x => { println("b"); x + x }))
   println(Ctors.make(7))
   println(Ctors.make2(4))
+  val none: String = null
+  println(s"${Tests.matches[String](none, true)},${Tests.matches[String]("s", true)},${Tests.matches[Int](3, true)}")
+  println(s"${Tests.tester[String](true)(none)},${Tests.tester[String](true)("s")}")
+  println(ByName.derive(3))
+  println(ByName.derive2("s"))

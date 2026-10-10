@@ -553,6 +553,7 @@ init_companions
 init_field_zero
 init_files
 init_order
+inline_anon_by_name
 inline_anon_receiver_this
 inline_anon_shared
 inline_arg_conversion
@@ -654,6 +655,7 @@ inline_summon_body_givens
 inline_summon_from_guards
 inline_this_receiver
 inline_tuples
+inline_type_test_null
 inline_val_expansion_check
 inline_val_pure_path
 inner_class_creators

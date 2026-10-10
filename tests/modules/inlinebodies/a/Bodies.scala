@@ -45,3 +45,36 @@ object Ctors:
       def this() = this("d")
       def get: String = w + v
     new D().get + new D("e").get + new D(1, "f").get
+
+// A type pattern over an abstract type the scrutinee has: a null test where the type filled in may
+// be null.
+object Tests:
+  inline def matches[A](a: A, ok: Boolean): Boolean = a match
+    case _: A if ok => true
+    case _ => false
+  inline def tester[A](ok: Boolean): A => Boolean = (x: A) => x match
+    case _: A if ok => true
+    case _ => false
+
+// Classes an inline body makes whose members take by-name parameters (magnolia's type classes, tapir's
+// `Derivation`): each expansion's copy keeps them by-name, its reads applying the thunks callers pass.
+case class Boxed[T](v: T)
+trait Joins[F[_]]:
+  def join[T](name: String, inner: => F[T]): F[T]
+  def wrap[T](x: T): F[T]
+  inline def derived[T](x: T): F[T] = join("n", wrap(x))
+  def viaThunk[T](x: T): F[T] = join("t", wrap(x))
+object ByName:
+  inline def derive[T](x: T): Boxed[T] =
+    class Lazy extends Joins[Boxed]:
+      def join[T](name: String, inner: => Boxed[T]): Boxed[T] =
+        lazy val l = inner
+        Boxed(l.v)
+      def wrap[T](x: T): Boxed[T] = Boxed(x)
+    new Lazy().derived[T](x)
+  inline def derive2[T](x: T): Boxed[T] =
+    class Cached extends Joins[Boxed]:
+      def join[T](name: String, inner: => Boxed[T]): Boxed[T] = cached(name)(inner)
+      private def cached[T](key: String)(f: => Boxed[T]): Boxed[T] = f
+      def wrap[T](x: T): Boxed[T] = Boxed(x)
+    new Cached().viaThunk[T](x)
