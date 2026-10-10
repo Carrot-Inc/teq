@@ -2717,6 +2717,13 @@ fn visit_args<M: Meet>(m: &mut M, cx: Cx, call: TExprId, l: ListRef) {
     }
 }
 
+/// Whether a template call is a reflective call by signature whose classes are class literals.
+pub(super) fn reflective_literals(prog: &Program, template: StrRef, args: &[TExprId]) -> bool {
+    prog.strings[template.idx()].starts_with("$callBySignature")
+        && args.len() == 5
+        && matches!(prog.expr(args[2]), TExpr::SeqLit(items) if prog.expr_list(items).iter().all(|&i| matches!(prog.expr(i), TExpr::ClassOf(..))))
+}
+
 pub(super) fn visit<M: Meet>(m: &mut M, cx: Cx, e: TExprId) {
     let prog = cx.prog;
     if prog.is_expansion(e) {
@@ -2851,7 +2858,18 @@ pub(super) fn visit<M: Meet>(m: &mut M, cx: Cx, e: TExprId) {
             m.seq_lit(cx);
         }
         TExpr::Js(template, args) => {
-            visit_list(m, cx, args);
+            // A reflective call's class literals name its proxy where it is compiled
+            // (`Reach::reflective_calls`); the output does not write them.
+            let list = prog.expr_list(args);
+            if reflective_literals(prog, template, list) {
+                for (k, &a) in list.iter().enumerate() {
+                    if k != 2 {
+                        visit(m, cx, a);
+                    }
+                }
+            } else {
+                visit_list(m, cx, args);
+            }
             m.template(cx, template, args);
         }
         TExpr::TypeTest(inner, test) => {
