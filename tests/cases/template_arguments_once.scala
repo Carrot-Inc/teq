@@ -23,3 +23,15 @@ def show(label: String, v: Any): Unit = println(s"$label $v $n")
   def at(c: Char, i: Int): Int = { order += c; i }
   show("order", java.lang.Integer.compare(at('a', 3), at('b', 2)))
   println(order)
+  // An effect that runs the first time alone (a lazy val, an object's initialiser) comes in its
+  // place among the arguments' effects.
+  lazy val lazyOne: Int = { println("lazy"); 1 }
+  def two(): Int = { println("two"); 2 }
+  show("lazy first", java.lang.Integer.compare(lazyOne, two()))
+  show("lazy again", java.lang.Integer.compare(lazyOne, two()))
+  show("object first", java.lang.Integer.compare(Init.value, two()))
+  show("sum", java.lang.Integer.compare(two() + 1, lazyOne))
+
+object Init:
+  println("init")
+  val value: Int = 5

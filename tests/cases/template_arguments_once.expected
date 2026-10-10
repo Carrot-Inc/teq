@@ -10,3 +10,13 @@ capitalize Abc 11
 named abkept 12
 order 1 12
 ab
+lazy
+two
+lazy first -1 12
+two
+lazy again -1 12
+init
+two
+object first 1 12
+two
+sum 1 12

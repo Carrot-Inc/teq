@@ -1782,7 +1782,7 @@ impl<'a> Emitter<'a> {
                 }
                 // An argument evaluated before the text is written once, outside the arrow
                 // function whose parameters name it there (`Emitter::template_binds`).
-                let binds = self.template_binds(&prog.strings[t.idx()], args);
+                let binds = self.template_binds(t, args);
                 let binders: Vec<String> = (0..args.len()).filter(|&k| binds & (1 << k) != 0).map(|k| format!("$t{}", k)).collect();
                 for (k, &a) in args.iter().enumerate() {
                     if binds & (1 << k) != 0 {

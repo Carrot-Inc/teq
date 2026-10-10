@@ -296,77 +296,112 @@ impl<'a> Emitter<'a> {
         }
     }
 
-    /// Whether an argument may be written wherever a template puts it, twice, never or behind a
-    /// condition, with the effect of evaluating it once where the call stands: scalac's
-    /// `exprPurity` at least `Idempotent`, below which `tpd.evalOnce` binds a tree before
-    /// using it again. A literal, `this`, an object, a class literal, a function (a by-name
-    /// argument is one), a stable local, field or getter over such a receiver, a cast of one; a
-    /// parameter of an outlined function goes by value or as a thunk to call. A primitive
-    /// operation over such operands that cannot throw is one too: scalac binds it (`isPureApply`
-    /// asks for a constant), but evaluating it again has no effect, so the text stays as written.
-    fn is_idempotent_arg(&self, e: TExprId) -> bool {
+    /// The purity of a template's argument, as scalac's `exprPurity` ranks the tree: `Pure`
+    /// evaluates to the same value and has no effect, so it may be written anywhere, twice or
+    /// never; `Idempotent` has an effect the first time alone (a lazy val, an object with an
+    /// initialiser, a top-level val whose file is initialised first, a checked cast), so it may
+    /// be written again but not before an effect that precedes it; anything else is `Impure`: a
+    /// call, a primitive operation that does not fold to a constant (`isPureApply`), a var, a
+    /// by-name parameter. A literal, `this`, a class literal and a function are `Pure`, a stable
+    /// local or field `Pure` over a `Pure` receiver; an outlined function's parameter goes by
+    /// value or as a thunk to call.
+    fn arg_purity(&self, e: TExprId) -> Purity {
         if let Some((_, kind)) = self.hole_of(e) {
-            return kind == HoleKind::Value;
+            return if kind == HoleKind::Value { Purity::Pure } else { Purity::Impure };
         }
-        let stable = |s: SymId| {
+        let reference = |s: SymId| {
             let info = self.syms.sym(s);
-            matches!(info.kind, SymKind::Val | SymKind::Param | SymKind::Given | SymKind::Object(_) | SymKind::EnumValue(_))
-                && info.mods & mods::MUTABLE == 0
-                && !info.by_name
+            if info.mods & mods::MUTABLE != 0 || info.by_name || (info.kind == SymKind::Param && info.mods & mods::INLINE != 0) {
+                return Purity::Impure;
+            }
+            match info.kind {
+                SymKind::Val | SymKind::Param if info.mods & mods::LAZY != 0 => Purity::Idempotent,
+                SymKind::Val | SymKind::Param => Purity::Pure,
+                SymKind::Given | SymKind::Object(_) | SymKind::EnumValue(_) => Purity::Idempotent,
+                _ => Purity::Impure,
+            }
         };
+        let file_init = |p: Purity| if self.init_before(e).is_some() { p.min(Purity::Idempotent) } else { p };
         match self.peek(e) {
             TExpr::Int(_) | TExpr::Long(_) | TExpr::Double(_) | TExpr::Bool(_) | TExpr::Char(_) | TExpr::Str(_) | TExpr::Unit
-            | TExpr::Null | TExpr::This | TExpr::Super(_) | TExpr::Module(_) | TExpr::ClassOf(_) | TExpr::Lambda(..) => true,
-            TExpr::Local(s) | TExpr::Static(s) => stable(s),
-            TExpr::CallStatic(s, args) => args.len == 0 && stable(s),
-            TExpr::Field(r, s) => stable(s) && self.is_idempotent_arg(r),
-            TExpr::CallMethod(r, s, args) => args.len == 0 && stable(s) && self.is_idempotent_arg(r),
-            TExpr::Cast(r, ..) | TExpr::Unary(_, r) => self.is_idempotent_arg(r),
-            // Structural equality calls `equals`.
-            TExpr::Prim(op, a, b) => {
-                use PrimOp::*;
-                !matches!(op, IntDiv | IntRem | LongDiv | LongRem | Eq | Ne) && self.is_idempotent_arg(a) && self.is_idempotent_arg(b)
-            }
-            _ => self.is_closure(e),
+            | TExpr::Null | TExpr::This | TExpr::Super(_) | TExpr::ClassOf(_) | TExpr::Lambda(..) => Purity::Pure,
+            // An object's first access runs its initialiser, where it has one (`refPurity`: a
+            // module of a no-inits class is a pure path).
+            TExpr::Module(c) => file_init(if self.has_body.get(c.idx()).copied().unwrap_or(true) { Purity::Idempotent } else { Purity::Pure }),
+            TExpr::Local(s) => reference(s),
+            // A constant is a literal (`refPurity`: a constant type is a pure path), whatever the
+            // object it is read through.
+            TExpr::Static(s) | TExpr::Field(_, s) if self.const_vals.get(s.idx()).copied().unwrap_or(false) => Purity::Pure,
+            TExpr::Static(s) => file_init(reference(s)),
+            TExpr::Field(r, s) => reference(s).min(self.arg_purity(r)),
+            TExpr::Cast(r, op, _) => match op {
+                CastOp::Written | CastOp::Nothing => self.arg_purity(r),
+                CastOp::Check(..) | CastOp::Unbox(..) => self.arg_purity(r).min(Purity::Idempotent),
+            },
+            _ if self.is_closure(e) => Purity::Pure,
+            _ => Purity::Impure,
         }
     }
 
-    /// The arguments a template call binds before its text, a bit per argument. The text writes
-    /// an argument where it puts it, which may be twice, never, behind a condition or out of
-    /// order, where a call evaluates each strict argument once, in order, before its body
-    /// (`tpd.evalOnce`; Scala.js's `genApply` keeps one tree per argument). Unless every
-    /// argument that is not idempotent is written once, in order and where the text always
-    /// evaluates it, each of them is bound, in order, as a parameter of an arrow function the
-    /// call applies to them. A spread argument, the last, is written as it stands.
-    pub(super) fn template_binds(&self, text: &str, args: &[TExprId]) -> u64 {
-        let mut impure = 0u64;
+    /// The arguments a template call binds before its text, a bit per argument. A call evaluates
+    /// each strict argument once, in order, before its body (`tpd.evalOnce`; Scala.js's `genApply`
+    /// keeps one tree per argument), where the text writes an argument where it puts it: twice,
+    /// never, behind a condition or out of order. The text stands as written where every argument
+    /// with an effect comes first, in order, where the text always evaluates it, an impure one
+    /// once (an idempotent one may come again); else each of them, `Pure` ones aside, is bound,
+    /// in order, as a parameter of an arrow function the call applies to them, so that all of
+    /// them run before the text. A spread argument, the last, is written as it stands.
+    pub(super) fn template_binds(&self, template: StrRef, args: &[TExprId]) -> u64 {
+        let text = &self.prog.strings[template.idx()];
+        // The receiver of a member of a static object is no argument: an inline method's body
+        // reads such an object where it names `this` (`Inliner.canElideThis`, a static owner).
+        let static_receiver = self.prog.template_syms.get(&template).is_some_and(|&s| {
+            let info = self.syms.sym(s);
+            matches!(info.owner, Owner::Class(_)) && !info.is_extension
+        }) && args.first().is_some_and(|&a| matches!(self.peek(a), TExpr::Module(_)));
+        let (mut effects, mut impure) = (0u64, 0u64);
         for (k, &a) in args.iter().enumerate().take(64) {
-            if !self.is_idempotent_arg(a) {
-                impure |= 1 << k;
+            if k == 0 && static_receiver {
+                continue;
+            }
+            match self.arg_purity(a) {
+                Purity::Pure => {}
+                Purity::Idempotent => effects |= 1 << k,
+                Purity::Impure => {
+                    effects |= 1 << k;
+                    impure |= 1 << k;
+                }
             }
         }
-        if impure == 0 {
+        if effects == 0 {
             return 0;
         }
         let (mut written, mut spread) = (0u64, 0u64);
         let mut last = None;
         let mut linear = true;
         template_slots(text, |k, cond, spreads| {
-            if k >= 64 || impure & (1 << k) == 0 {
+            if k >= 64 || effects & (1 << k) == 0 {
                 return;
             }
+            let again = written & (1 << k) != 0;
             if spreads {
                 spread |= 1 << k;
-            } else if cond {
+            } else if cond && (!again || impure & (1 << k) != 0) {
                 linear = false;
             }
-            if written & (1 << k) != 0 || last.map_or(false, |l| k < l) {
+            if again {
+                if impure & (1 << k) != 0 {
+                    linear = false;
+                }
+                return;
+            }
+            if last.map_or(false, |l| k < l) {
                 linear = false;
             }
             written |= 1 << k;
             last = Some(k);
         });
-        let binds = impure & !spread;
+        let binds = effects & !spread;
         if binds & !written != 0 {
             linear = false;
         }
@@ -789,7 +824,7 @@ impl<'a> Emitter<'a> {
                     return;
                 }
                 // The arguments evaluated once before the text: `(($t0) => text)(a0)`.
-                let binds = self.template_binds(t, args);
+                let binds = self.template_binds(template, args);
                 let bound = || (0..args.len()).filter(move |&k| binds & (1 << k) != 0);
                 if binds != 0 {
                     self.out.push_str("((");
@@ -2640,4 +2675,13 @@ mod tests {
             assert_eq!(template_shape(t), Shape::Compound { conditional: true }, "{}", t);
         }
     }
+}
+
+/// scalac's purity levels of an expression (`TreeInfo.PurityLevel`), as a template's argument
+/// needs them, the weakest first.
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug)]
+pub(super) enum Purity {
+    Impure,
+    Idempotent,
+    Pure,
 }
