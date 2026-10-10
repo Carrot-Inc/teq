@@ -147,6 +147,8 @@ pub struct Builtins {
     /// `Product` as a type; `ERROR` without the standard library.
     pub t_product: TypeId,
     pub t_singleton: TypeId,
+    /// `Equals`, `Product`'s parent, and its type.
+    pub equals: Option<ClassId>,
     pub t_equals: TypeId,
     /// `scala.reflect.Enum`, the parent `Desugar.classDef` gives every enum.
     pub reflect_enum: Option<ClassId>,
@@ -2018,6 +2020,7 @@ impl<'a> Worker<'a> {
             js_exception: None,
             cons_tuple: None,
             product: None,
+            equals: None,
             t_product: ERROR,
             t_singleton: ERROR,
             t_equals: ERROR,
@@ -3755,7 +3758,8 @@ impl<'a> Worker<'a> {
         self.b.product = self.entered_std_class("Product");
         self.b.t_product = self.b.product.map_or(ERROR, |p| self.types.class(p, &[]));
         self.note_singleton_class();
-        self.b.t_equals = self.entered_std_class("Equals").map_or(ERROR, |e| self.types.class(e, &[]));
+        self.b.equals = self.entered_std_class("Equals");
+        self.b.t_equals = self.b.equals.map_or(ERROR, |e| self.types.class(e, &[]));
         self.b.reflect_enum = self.entered_scala_reflect_class("Enum");
         self.b.t_enum = self.b.reflect_enum.map_or(ERROR, |e| self.types.class(e, &[]));
         self.b.tuple_members = crate::typer::arity::TUPLE_MEMBERS.iter().map(|n| self.interner.intern(n)).collect();

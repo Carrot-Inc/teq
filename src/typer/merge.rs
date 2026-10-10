@@ -1451,6 +1451,7 @@ impl Remap {
             &mut b.js_exception,
             &mut b.cons_tuple,
             &mut b.product,
+            &mut b.equals,
             &mut b.reflect_enum,
             &mut b.tuple_trait,
             &mut b.non_empty_tuple,
