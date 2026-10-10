@@ -301,6 +301,22 @@ impl<'a> Worker<'a> {
         self.is_library_member(sym) || self.is_product_top_def(sym)
     }
 
+    /// Whether `subst` binds a type parameter of the class the method `sym` is a member of or of
+    /// a class enclosing it (the receiver's type arguments), through which a copy sees those
+    /// classes' match-type aliases (`specialise_aliases`): the copies of other methods' bodies
+    /// skip the walk over their types.
+    pub(super) fn binds_owner_params(&self, sym: SymId, subst: &Subst) -> bool {
+        let mut owner = self.syms.sym(sym).owner;
+        while let Owner::Class(k) = owner {
+            let info = self.syms.class(k);
+            if subst.iter().any(|(p, _)| info.tparams.contains(p)) {
+                return true;
+            }
+            owner = info.owner;
+        }
+        false
+    }
+
     /// The record of the library method `sym`, made from its converted body on the first call
     /// (`demand_library_definition`), or the retype path where the check did not give one: a
     /// body the check fails is teq's limit, not the program's error (scalac typed it), and a
@@ -623,7 +639,8 @@ impl<'a> Worker<'a> {
         let bound_nodes = (bound_from, self.prog.exprs.len() as u32);
         this_paths.extend_from_slice(&self.inline.this_paths[bound.this_paths_mark..]);
         let (call_subst, call_paths) = (targs.len(), paths.len());
-        let bindings = Bindings { args: bargs, subst: targs, paths, this, this_paths, mark_leaves: false };
+        let owner_params = self.binds_owner_params(call.sym, &targs);
+        let bindings = Bindings { args: bargs, subst: targs, paths, this, this_paths, mark_leaves: false, owner_params };
         let deferred_mark = self.quote.copied_deferred.len();
         let body_root = def.body.expect("a checked record has a body");
         // Under the capture the copy is made whole, the capture's check reading every node of it.
@@ -708,7 +725,7 @@ impl<'a> Worker<'a> {
     /// dropped: the parameters bound to fresh locals, the type arguments the call's, the copy's
     /// tests and patterns left out of the output's and its deferred calls unregistered, the nodes
     /// counted as copied.
-    pub(super) fn copy_for_measure(&mut self, def: &InlineDefinition, subst: &Subst, owner_subst: &Subst) {
+    pub(super) fn copy_for_measure(&mut self, sym: SymId, def: &InlineDefinition, subst: &Subst, owner_subst: &Subst) {
         let mut args: FxMap<SymId, TExprId> = FxMap::default();
         for &p in &def.params {
             let fresh = self.clone_local(p);
@@ -716,7 +733,8 @@ impl<'a> Worker<'a> {
         }
         let paths = def.params.iter().filter_map(|&p| args.get(&p).and_then(|&a| self.argument_path(a)).map(|path| (p, path))).collect();
         let targs: Subst = subst.iter().chain(owner_subst).map(|&(p, t)| (p, self.zonk(t))).collect();
-        let bindings = Bindings { args, subst: targs, paths, this: None, this_paths: Vec::new(), mark_leaves: false };
+        let owner_params = self.binds_owner_params(sym, &targs);
+        let bindings = Bindings { args, subst: targs, paths, this: None, this_paths: Vec::new(), mark_leaves: false, owner_params };
         let deferred_mark = self.quote.copied_deferred.len();
         let copied_mark = self.prog.exprs.len();
         if let Some(inst) = self.instantiate_definition(def, &bindings) {

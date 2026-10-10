@@ -847,7 +847,7 @@ impl<'a> Worker<'a> {
         let case_binders = std::mem::take(&mut self.case_binders);
         let result = self.with_env(env, |t| match &entry {
             Ok(def) if super::substitution::measures_copy() => {
-                t.copy_for_measure(def, subst, &call.owner_subst);
+                t.copy_for_measure(call.sym, def, subst, &call.owner_subst);
                 t.expand_in_scope(call, sig, subst, args, &body, ret_ty, span, expected)
             }
             Ok(def) => {

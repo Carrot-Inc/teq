@@ -1945,6 +1945,9 @@ pub struct StoredCopy<'c> {
     /// Whether the copies of those classes take the output's names (the walk's) or none (the
     /// census's), which consumes none of the counters of the names.
     pub names_classes: bool,
+    /// Whether the substitution binds the method's class's type parameters
+    /// (`Bindings::owner_params`).
+    pub owner_params: bool,
 }
 
 struct Copier<'c> {
@@ -2053,7 +2056,7 @@ impl<'c> Copier<'c> {
         let mut ty = t.types.subst(ty, subst);
         // A match-type alias of a generic class the substitution instantiates is the class's copy
         // seen through it (`Worker::specialise_aliases`), as the retype path's types are.
-        if t.types.is_reducible(ty) {
+        if self.stored.is_some_and(|s| s.owner_params) && t.types.is_reducible(ty) {
             ty = t.specialise_aliases(ty, subst);
         }
         if self.stored.is_some() && !self.classes.is_empty() {
