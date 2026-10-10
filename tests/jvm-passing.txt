@@ -1526,3 +1526,4 @@ inline_type_test_null
 macro_quoted_application_reduce
 pattern_array_gadt
 type_test_null_shapes
+case_class_nested_hidden

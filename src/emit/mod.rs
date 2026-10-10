@@ -3300,11 +3300,17 @@ impl<'a> Emitter<'a> {
     fn base_defines(&self, c: ClassId, name: crate::intern::Name) -> bool {
         self.syms.class(c).base_types.iter().skip(1).any(|&(b, _)| {
             let info = self.syms.class(b);
-            let declarer = info.kind == ClassKind::Builtin || self.syms.is_synthetic_parent(self.interner, b) || {
-                let Owner::Package(p) = info.owner else { return false };
-                let (pkg, n) = (self.interner.get(self.syms.pkg(p).name), self.interner.get(info.name));
-                matches!((pkg, n), ("lang", "Object") | ("reflect", "Enum"))
-            };
+            // A base of any owner, a nested one too (`existingDef` looks at every base): the rule's
+            // declarers alone hold no definition.
+            let declarer = info.kind == ClassKind::Builtin
+                || self.syms.is_synthetic_parent(self.interner, b)
+                || match info.owner {
+                    Owner::Package(p) => {
+                        let (pkg, n) = (self.interner.get(self.syms.pkg(p).name), self.interner.get(info.name));
+                        matches!((pkg, n), ("lang", "Object") | ("reflect", "Enum"))
+                    }
+                    _ => false,
+                };
             !declarer && info.members.get(&name).is_some_and(|&s| !self.reach.abstract_syms.get(s.idx()).copied().unwrap_or(false))
         })
     }
