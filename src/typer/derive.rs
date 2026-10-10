@@ -212,6 +212,7 @@ impl<'a> Worker<'a> {
     /// Whether `b` is a parent dotty's `Desugar.classDef` gives a case class, a case object or an
     /// enum, or one of its bases: `Product` with `Equals`, `java.io.Serializable`,
     /// `scala.reflect.Enum`.
+    #[inline]
     pub fn is_desugared_parent(&self, b: ClassId) -> bool {
         if Some(b) == self.b.product || Some(b) == self.b.reflect_enum || Some(b) == self.equals_class() {
             return true;

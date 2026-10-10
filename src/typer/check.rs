@@ -3147,14 +3147,15 @@ impl<'a> Worker<'a> {
             return (0, Vec::new());
         }
         let superclass = self.syms.class(c).superclass;
-        let mut synthesized = 0;
-        let mut existing = Vec::new();
         let held = self.held_rule_names(c);
+        // A member no base can hold a definition of is synthesized without a lookup.
+        let mut synthesized = wanted & !held;
+        let mut existing = Vec::new();
         for (bit, name, param) in synthetic::MEMBERS {
-            if wanted & bit == 0 {
+            if wanted & held & bit == 0 {
                 continue;
             }
-            let found = if held & bit != 0 { self.existing_def_among(c, name, param) } else { None };
+            let found = self.existing_def_among(c, name, param);
             if let Some(s) = found {
                 existing.push((bit, s));
             }
