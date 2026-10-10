@@ -1258,6 +1258,9 @@ pub struct Interp<'a, 't> {
     /// Per class: its and its bases' constant vals (`tir::constant_val`) with their constants,
     /// which a new instance holds before any constructor runs (`Interp::construct`).
     constant_slots: crate::arena::Dense<Option<Rc<[(FieldKey, Value)]>>>,
+    /// Per enum: its companion's `$values` once its last case is made (dotty's
+    /// `enumScaffolding`), which `values` clones and `fromOrdinal` indexes.
+    enum_values: FxMap<ClassId, Rc<[Value]>>,
     has_body: crate::arena::Dense<Option<bool>>,
     tail_of: crate::arena::Dense<u8>,
     builtins: Rc<FxMap<String, Builtin>>,
@@ -1381,6 +1384,7 @@ impl<'a, 't> Interp<'a, 't> {
             lazy_seen: (0, 0),
             shapes: crate::arena::Dense::new(None),
             constant_slots: crate::arena::Dense::new(None),
+            enum_values: FxMap::default(),
             has_body: crate::arena::Dense::new(None),
             tail_of: crate::arena::Dense::new(0),
             builtins: builtins::table(),

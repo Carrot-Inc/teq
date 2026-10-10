@@ -905,6 +905,10 @@ impl<'a, 't> Interp<'a, 't> {
     pub(super) fn enum_values(&mut self, m: &Value) -> R<Option<Vec<Value>>> {
         let Value::Obj(o) = m else { return Ok(None) };
         let Some(e) = self.syms().class(o.class).companion else { return Ok(None) };
+        // The array is made once, when the last case exists, and kept (`$values`).
+        if let Some(values) = self.enum_values.get(&e) {
+            return Ok(Some(values.to_vec()));
+        }
         let (stateful, children) = {
             let info = self.syms().class(e);
             (info.stateful, info.children.clone())
@@ -923,6 +927,7 @@ impl<'a, 't> Interp<'a, 't> {
             }
             out.push(v);
         }
+        self.enum_values.insert(e, Rc::from(out.clone()));
         Ok(Some(out))
     }
 

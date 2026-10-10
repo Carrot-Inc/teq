@@ -1743,11 +1743,17 @@ impl<'a> Worker<'a> {
             self.enter_loaded_ctor(c, &mut cx, ctor, &sig.accessors);
             self.enter_loaded_ctor_access(c, &ctor.mods);
         }
-        // As in source: the values of an enum with parameters or a superclass are created by
-        // its companion, with the arguments their cases pass.
+        // As in source (`resolve.rs`): the values of an enum with parameters, a superclass or an
+        // initialiser in its body (a val with a right side, a statement) are created by its
+        // companion, in order, with the arguments their cases pass, so that a lookup while they
+        // are made answers as `DesugarEnums.enumScaffolding`'s `$values` does.
         if kind == ClassKind::Enum {
             let info = self.syms.class(c);
-            if info.superclass.is_some() || info.ctor.iter().any(|cl| !cl.params.is_empty()) {
+            let initialisers = sig.index.statements
+                || sig.index.members.iter().any(|m| {
+                    (m.tag == tags::VALDEF && m.has_body && !m.flags.has(tags::LAZY)) || (m.tag == tags::DEFDEF && m.flags.has(tags::GIVEN))
+                });
+            if info.superclass.is_some() || info.ctor.iter().any(|cl| !cl.params.is_empty()) || initialisers {
                 self.syms.class_mut(c).stateful = true;
             }
         }
