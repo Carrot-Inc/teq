@@ -877,7 +877,9 @@ impl<'a> Worker<'a> {
                 }
                 Some(Scope::Pkg(p)) => self.type_in_pkg(cx, p, name, t),
                 None => {
-                    // `C[A]#Inner` names the class nested in `C`, with `C`'s arguments.
+                    // `C[A]#Inner` names the class nested in `C`, with `C`'s arguments; a nested
+                    // class of parameters of its own is its constructor, as a class of a package
+                    // is (`Outer#Inner[t]`).
                     if let Some(nested) = self.projected_class(cx, other, name) {
                         if self.is_inner_class(nested) {
                             let prefix = self.map_type(cx, other);
@@ -885,7 +887,7 @@ impl<'a> Worker<'a> {
                                 return ty;
                             }
                         }
-                        return self.types.class(nested, &[]);
+                        return self.class_ref(nested);
                     }
                     // `C[?]#T` for a type parameter `T` of `C`: the argument at its position, a
                     // wildcard read as its upper bound (`EndpointInput[?]#T`, which scalac
