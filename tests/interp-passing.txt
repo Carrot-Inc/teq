@@ -608,6 +608,7 @@ inline_named_local_class_twice
 inline_nested_anon_capture
 inline_ops
 inline_outline
+inline_parameter_pure_block
 inline_recursive_proxies
 inline_reduce_local_extractor
 inline_reduce_local_value

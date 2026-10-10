@@ -10,3 +10,4 @@ import iba.Bodies
   println(s"${a()},${b()}")
   println(s"${Bodies.kindOf[Int]},${Bodies.kindOf[String]}")
   println(s"${Bodies.known(1)},${Bodies.known((1: Int))}")
+  println(Bodies.value({ def y: Int = 3; 5 }))

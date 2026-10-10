@@ -1279,7 +1279,7 @@ impl<'a> Worker<'a> {
         // the interpreter can evaluate is bound to its value too, marked so that the
         // typing of the body does not read it as a constant of the language.
         let fold = self.part(Part::Fold);
-        let constant = (!repeated).then(|| if is_macro { self.fold_structural(te) } else { self.fold_constant(te) }).flatten();
+        let constant = (!repeated).then(|| if is_macro { self.fold_structural(te) } else { self.binding_constant(te) }).flatten();
         let te = match constant {
             Some(v) => {
                 let lit = self.literal_expr(v);
@@ -2074,6 +2074,23 @@ impl<'a> Worker<'a> {
 
     /// The constant a typed expression evaluates to: one made of literals is folded here, one
     /// made of literals and calls of the standard library is run by the interpreter.
+    /// The constant an ordinary argument binds its parameter to, as scalac's
+    /// `Inliner.computeParamBindings` binds the parameter to the argument's type where that type is a
+    /// singleton and the argument an idempotent path (`isIdempotentPath`): the constant the
+    /// argument's type is, a block's its result's (dotty's block takes its result's type), where
+    /// evaluating the argument is idempotent (`TreeInfo.exprPurity`: a `var` or an effect in the
+    /// block is not, a local method is). teq's typer gives a literal argument the parameter's type,
+    /// so the constant type is the folded constant, which the marks of an ascription or a plain
+    /// inline call widen (`widened_constant`).
+    fn binding_constant(&mut self, e: TExprId) -> Option<LitVal> {
+        let mut res = e;
+        while let TExpr::Block(_, r) = self.prog.expr(res) {
+            res = r;
+        }
+        let constant = self.fold_constant(res)?;
+        self.is_idempotent(e).then_some(constant)
+    }
+
     /// A constant as scalac's constant folder sees one: a literal, a value of a literal type,
     /// a primitive operation over constants and the concatenation or comparison of constant
     /// strings. What the interpreter evaluated an argument to is not one, unless the dialect

@@ -2493,7 +2493,7 @@ impl<'a> Worker<'a> {
     /// literal (`isPureApply`), over such operands; a block of vals and local methods over
     /// those. A conditional, a string conversion of a value (its `toString` runs) and any
     /// other application are not.
-    fn is_idempotent(&mut self, e: TExprId) -> bool {
+    pub(super) fn is_idempotent(&mut self, e: TExprId) -> bool {
         match self.prog.expr(e) {
             TExpr::Int(_) | TExpr::Long(_) | TExpr::Double(_) | TExpr::Bool(_) | TExpr::Char(_) | TExpr::Str(_) | TExpr::Unit | TExpr::Null | TExpr::This | TExpr::Module(_) => true,
             TExpr::Local(s) | TExpr::Static(s) => self.idempotent_ref(s),

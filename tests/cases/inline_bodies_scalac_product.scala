@@ -30,3 +30,4 @@ def effect(n: Int): Int = { effects += 1; n }
   println(new Counter(10).plus(2))
   println(K0.count[Option, P])
   println(Focus[P](_.a))
+  println(Bodies.value({ def y: Int = 3; 5 }))
