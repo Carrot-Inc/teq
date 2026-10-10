@@ -712,7 +712,7 @@ fn install_core(it: &mut Table) {
                 Value::Class(c) => Some(c.qname.to_string()),
                 _ => None,
             }).collect();
-            if let Some(alt) = classes.and_then(|classes| it.signature_member(o.class, &name, &classes)) {
+            if let Some((alt, _)) = classes.and_then(|classes| it.signature_member(o.class, &name, &classes)) {
                 return it.invoke(recv, alt, args);
             }
         }

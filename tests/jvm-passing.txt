@@ -1353,6 +1353,7 @@ string_utf16_units
 structural_custom_selectable
 structural_dispatch_selected
 structural_erased_signatures
+structural_erasure_lists
 structural_members
 structural_overload
 structural_reflective_calls

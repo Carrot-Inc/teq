@@ -428,7 +428,7 @@ impl<'a, 't> Interp<'a, 't> {
 
     /// A reflective call by signature (`std/reflect_selectable.scala`): the method of the name of
     /// the receiver's class or its nearest ancestor whose parameters erase to the classes the call
-    /// names (`Worker::reflective_signature`), called as the output's reflective proxy calls it, a
+    /// names (`Worker::reflective_sig`), called as the output's reflective proxy calls it, a
     /// value class's argument its underlying value and its result so erased; else the call's
     /// failure, a `NoSuchMethodException`. The classes are the call's literals' where it gives
     /// literals (`Worker::reflective_call_classes`), else the run-time classes' names.
@@ -455,19 +455,16 @@ impl<'a, 't> Interp<'a, 't> {
             _ => Vec::new(),
         };
         if let Value::Obj(o) = &recv {
-            if let Some(m) = self.signature_member(o.class, &name, &classes) {
-                let Some(sig) = self.syms().sym(m).sig.clone() else { return self.unsupported(format!("the signature of {}", name)) };
-                let params: Vec<_> = sig.clauses.iter().filter(|cl| !cl.is_using).flat_map(|cl| cl.params.iter().cloned()).collect();
+            if let Some((m, sig)) = self.signature_member(o.class, &name, &classes) {
                 let mut passed = Vec::with_capacity(call_args.len());
-                for (p, a) in params.iter().zip(call_args) {
-                    passed.push(match self.value_class_of(p.ty) {
-                        Some(v) if !p.by_name && !p.repeated => self.construct_new(v, vec![a], fr)?,
-                        _ => a,
+                for (b, a) in sig.boxes.iter().zip(call_args) {
+                    passed.push(match b {
+                        Some(v) => self.construct_new(*v, vec![a], fr)?,
+                        None => a,
                     });
                 }
                 let result = self.invoke(recv, m, passed)?;
-                let field = self.value_class_of(sig.ret).and_then(|v| self.syms().class(v).ctor.first().and_then(|cl| cl.params.first()).map(|p| p.sym));
-                return match field {
+                return match sig.unbox {
                     Some(field) => self.get_field(result, field),
                     None => Ok(result),
                 };
@@ -480,18 +477,10 @@ impl<'a, 't> Interp<'a, 't> {
         self.apply_value(fail, vec![Value::string(format!("{}.{}({})", class, name, classes.join(",")))])
     }
 
-    /// The value class `t` is an instance of.
-    fn value_class_of(&self, t: crate::types::TypeId) -> Option<ClassId> {
-        match self.typer.types.get(t) {
-            crate::types::Type::Class(v, _) if self.syms().class(v).value_class => Some(v),
-            _ => None,
-        }
-    }
-
     /// The method `name` of the class `class` or the nearest of its ancestors whose parameters erase
-    /// to the classes `classes` (`Worker::reflective_signature`), the declaration a reflective call
-    /// names.
-    pub(super) fn signature_member(&mut self, class: ClassId, name: &str, classes: &[String]) -> Option<SymId> {
+    /// to the classes `classes` (`Worker::reflective_sig`), the declaration a reflective call names,
+    /// with its signature.
+    pub(super) fn signature_member(&mut self, class: ClassId, name: &str, classes: &[String]) -> Option<(SymId, crate::typer::ReflectiveSig)> {
         let n = self.typer.interner.lookup(name)?;
         let bases: Vec<ClassId> = self.syms().class(class).base_types.iter().map(|&(b, _)| b).collect();
         for k in bases {
@@ -502,12 +491,9 @@ impl<'a, 't> Interp<'a, 't> {
             };
             for alt in alts {
                 // A val is its getter, a method of no parameters.
-                if !matches!(self.syms().sym(alt).kind, SymKind::Def | SymKind::Val | SymKind::Var) {
-                    continue;
-                }
-                self.typer.sig_arc(alt);
-                if self.typer.reflective_signature(alt).as_deref() == Some(classes) {
-                    return Some(alt);
+                match self.typer.reflective_sig(alt) {
+                    Some(sig) if sig.classes == classes => return Some((alt, sig)),
+                    _ => {}
                 }
             }
         }

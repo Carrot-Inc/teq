@@ -457,13 +457,14 @@ impl<'a> Worker<'a> {
         }
     }
 
-    /// The classes of the erasures of a method's parameters, its using clauses aside, as dotty's
+    /// The classes of the erasures of a method's parameters, every list of them (`TypeErasure`'s
+    /// erasure of a method type joins its lists, contextual ones included), as dotty's
     /// `Dynamic.addClassOfs` gives a structural call (`clsOf` of the erasure) and
     /// `Selectable.applyDynamic` looks a method up by them (`getMethod(name, paramTypes*)`): a
     /// class, an array by its element's class and its dimensions (`TExpr::ClassOf`); none where a
     /// parameter's erasure is not stable.
     pub fn erased_parameter_classes(&mut self, sig: &MethodSig) -> Option<Vec<(ClassId, u8)>> {
-        let params: Vec<TypeId> = sig.clauses.iter().filter(|cl| !cl.is_using).flat_map(|cl| cl.params.iter().map(|p| p.ty)).collect();
+        let params: Vec<TypeId> = sig.clauses.iter().flat_map(|cl| cl.params.iter().map(|p| p.ty)).collect();
         let mut classes = Vec::with_capacity(params.len());
         for p in params {
             classes.push(match self.stable_erasure(p)? {

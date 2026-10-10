@@ -6700,9 +6700,24 @@ impl<'a> Worker<'a> {
         let key = self.prog.add_str(&self.name_str(name));
         let key = self.prog.add(TExpr::Str(key));
         let mut dynamic_lists = vec![ArgList { args: vec![ArgSrc::Typed(key, self.b.t_string)], using: false, span }];
-        let mut lists = lists.into_iter();
+        let mut lists = lists.into_iter().peekable();
         let mut typed: Vec<ArgSrc> = Vec::new();
-        for clause in sig.clauses.iter().filter(|cl| !cl.is_using) {
+        // Every list's arguments, a contextual one's resolved where the call gives none, as dotty's
+        // `handleStructural` passes the call's arguments (`vargss.flatten`).
+        for clause in sig.clauses.iter() {
+            if clause.is_using && !lists.peek().is_some_and(|l| l.using) {
+                for p in &clause.params {
+                    match self.resolve_given_typed(p.ty, span) {
+                        Some((te, _)) => typed.push(ArgSrc::Typed(te, p.ty)),
+                        None => {
+                            let msg = format!("no given instance of type {} was found for parameter {}", self.show(p.ty), self.name_str(p.name));
+                            self.error(Span::new(span.end, span.end), msg);
+                            return failed(self, &[]);
+                        }
+                    }
+                }
+                continue;
+            }
             let Some(list) = lists.next() else {
                 let msg = format!("missing argument list for method {}", self.name_str(name));
                 self.error(span, msg);

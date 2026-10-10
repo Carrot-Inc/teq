@@ -1004,6 +1004,17 @@ impl Kept {
             .into_iter()
             .map(|((name, call), v)| ((name, call.into_iter().map(|(c, dims)| (class(c), dims)).collect()), v))
             .collect();
+        r.reflective_member_sigs = std::mem::take(&mut r.reflective_member_sigs)
+            .into_iter()
+            .map(|(m, sig)| {
+                let sig = sig.map(|mut sig| {
+                    sig.boxes = sig.boxes.into_iter().map(|b| b.map(class)).collect();
+                    sig.unbox = sig.unbox.map(sym);
+                    sig
+                });
+                (sym(m), sig)
+            })
+            .collect();
         r.reflective_proxies = std::mem::take(&mut r.reflective_proxies)
             .into_iter()
             .map(|(c, proxies)| {

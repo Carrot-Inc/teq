@@ -81,6 +81,9 @@ pub struct Reach {
     /// literals (`TExpr::ClassOf`): the proxy it calls and the signature a missing one's
     /// exception names.
     pub reflective_calls: FxMap<ReflectiveCall, (String, String)>,
+    /// The reflective signatures of the members a reflective call's name met, as the typer gave
+    /// them (`Worker::reflective_sig`), none for a member that has none.
+    pub reflective_member_sigs: FxMap<SymId, Option<crate::typer::ReflectiveSig>>,
     /// The `@js` templates the reached code writes and the globals it names (`JsGlobal`, a
     /// selection of the global scope), each once: what a local of the output may meet besides
     /// the definitions (`scope::Renderable`).
@@ -176,6 +179,7 @@ impl Reach {
             js_names: Vec::new(),
             reflective_proxies: FxMap::default(),
             reflective_calls: FxMap::default(),
+            reflective_member_sigs: FxMap::default(),
             templates: Vec::new(),
             globals: Vec::new(),
             product: None,
@@ -307,6 +311,8 @@ trait Typing<'a> {
     fn renamed_roots(&mut self) -> Vec<(SymId, Name)>;
     fn reflective_registrations(&mut self) -> Vec<(ClassId, TExprId)>;
     fn complete_erased_jar_classes(&mut self);
+    /// The reflective signatures of members a reflective call's name meets.
+    fn reflective_sigs(&mut self, members: &[SymId]) -> Vec<Option<crate::typer::ReflectiveSig>>;
 }
 
 impl<'a> Typing<'a> for Worker<'a> {
@@ -368,6 +374,10 @@ impl<'a> Typing<'a> for Worker<'a> {
 
     fn complete_erased_jar_classes(&mut self) {
         Worker::complete_erased_jar_classes(self);
+    }
+
+    fn reflective_sigs(&mut self, members: &[SymId]) -> Vec<Option<crate::typer::ReflectiveSig>> {
+        members.iter().map(|&m| self.reflective_sig(m)).collect()
     }
 }
 
@@ -449,6 +459,21 @@ impl<'w, 'a> Typing<'a> for Unchanged<'w, 'a> {
     }
 
     fn complete_erased_jar_classes(&mut self) {}
+
+    /// The kept reach's signatures, which the typer gave its walk; a member it did not ask for
+    /// is a divergence.
+    fn reflective_sigs(&mut self, members: &[SymId]) -> Vec<Option<crate::typer::ReflectiveSig>> {
+        members
+            .iter()
+            .map(|m| match self.kept.reflective_member_sigs.get(m) {
+                Some(sig) => sig.clone(),
+                None => {
+                    self.divergences.push(format!("the reflective signature of symbol {} was not asked for", m.0));
+                    None
+                }
+            })
+            .collect()
+    }
 }
 
 /// In link mode the output stands where scalac's class files would, which the jars' bytecode,
@@ -599,6 +624,7 @@ fn differences(typer: &Worker, kept: &Reach, fresh: &Reach, out: &mut Vec<String
     same("the constant vals", kept.constant_vals == fresh.constant_vals);
     same("the uses of classOf", kept.uses_class_of == fresh.uses_class_of);
     same("reflective calls", kept.reflective_calls == fresh.reflective_calls);
+    same("reflective signatures", kept.reflective_member_sigs == fresh.reflective_member_sigs);
     let proxies = |r: &Reach| -> Vec<(ClassId, String, SymId, Vec<Option<ClassId>>, Option<SymId>)> {
         let mut v: Vec<_> = r.reflective_proxies.iter().flat_map(|(&c, ps)| ps.iter().map(move |p| (c, p.name.clone(), p.member, p.boxes.clone(), p.unbox))).collect();
         v.sort_unstable_by(|a, b| (a.0, &a.1).cmp(&(b.0, &b.1)));
@@ -735,6 +761,19 @@ fn rounds<'a, T: Typing<'a>>(t: &mut T, mut w: Walker, setup: &mut Setup, lap: &
             t.demand_extenders(c);
         }
         lap.done("std extenders entered", extenders.len());
+        // The members a reflective call's name met: their signatures, then the proxies again.
+        if !w.pending_sigs.is_empty() {
+            let mut members = std::mem::take(&mut w.pending_sigs);
+            members.sort_unstable();
+            members.dedup();
+            members.retain(|m| !w.reach.reflective_member_sigs.contains_key(m));
+            let sigs = t.reflective_sigs(&members);
+            w.grow(Cx::of(t.w()));
+            w.reach.reflective_member_sigs.extend(members.into_iter().zip(sigs));
+            for (c, i) in std::mem::take(&mut w.pending_proxy_checks) {
+                w.reflective_proxies_in(Cx::of(t.w()), c, i);
+            }
+        }
         // A product's top-level definition reached: checked with its file (an eager val with
         // the file's group), then reached again as the whole program's.
         let packages = std::mem::take(&mut w.pending_packages);
@@ -839,7 +878,7 @@ fn rounds<'a, T: Typing<'a>>(t: &mut T, mut w: Walker, setup: &mut Setup, lap: &
             w.reach.reflective = registrations;
             w.reach.reflective_reached = true;
         }
-        if w.work.is_empty() && w.pending.is_empty() && w.pending_getters.is_empty() && w.pending_classes.is_empty() && w.pending_extenders.is_empty() && w.pending_packages.is_empty() && !(w.wants_runtime_exceptions && !w.runtime_exceptions_found) && !(w.wants_reflect && !w.reflect_found) {
+        if w.work.is_empty() && w.pending.is_empty() && w.pending_getters.is_empty() && w.pending_classes.is_empty() && w.pending_extenders.is_empty() && w.pending_packages.is_empty() && w.pending_sigs.is_empty() && !(w.wants_runtime_exceptions && !w.runtime_exceptions_found) && !(w.wants_reflect && !w.reflect_found) {
             w.reach.js_names.sort_unstable();
             w.reach.js_names.dedup();
             w.reach.globals.sort_unstable();
@@ -1213,6 +1252,10 @@ struct Walker {
     /// The signatures reflective calls name, by the method's name and the classes of its
     /// parameters, any where the call's classes are no literals.
     reflective_sigs: Vec<(Name, Option<Vec<String>>)>,
+    /// The members whose reflective signatures the typer is asked for after this walk, and the
+    /// classes and signatures of `reflective_sigs` to check again with them.
+    pending_sigs: Vec<SymId>,
+    pending_proxy_checks: Vec<(ClassId, usize)>,
     /// The source name of each called alternative of an overloaded method, by its name in the
     /// output, which is what calls are recorded under.
     overloaded: FxMap<Name, Name>,
@@ -1312,6 +1355,8 @@ impl Walker {
             called_through: Links::new(),
             called_any: Vec::new(),
             reflective_sigs: Vec::new(),
+            pending_sigs: Vec::new(),
+            pending_proxy_checks: Vec::new(),
             overloaded: FxMap::default(),
             descendants: Links::new(),
             abstract_syms: Vec::new(),
@@ -1711,23 +1756,28 @@ impl Walker {
             if info.owner != Owner::Class(c) || !matches!(info.kind, SymKind::Def | SymKind::Val | SymKind::Var) || info.mods & mods::PRIVATE != 0 {
                 continue;
             }
-            let Some(signature) = cx.typer.reflective_signature(m) else { continue };
-            if classes.as_ref().is_some_and(|classes| *classes != signature) {
+            // The member's signature, which the typer gives between two walks (`Typing::reflective_sigs`).
+            let sig = match self.reach.reflective_member_sigs.get(&m) {
+                Some(Some(sig)) => sig.clone(),
+                Some(None) => continue,
+                None => {
+                    self.pending_sigs.push(m);
+                    self.pending_proxy_checks.push((c, i));
+                    continue;
+                }
+            };
+            if classes.as_ref().is_some_and(|classes| *classes != sig.classes) {
                 continue;
             }
-            let proxy = crate::typer::reflective_proxy_name(cx.interner.get(name), &signature);
+            let proxy = crate::typer::reflective_proxy_name(cx.interner.get(name), &sig.classes);
             if self.reach.reflective_proxies.get(&c).is_some_and(|found| found.iter().any(|p| p.name == proxy)) {
                 continue;
             }
-            let Some(sig) = cx.syms.sym(m).sig.clone() else { continue };
-            let value_class = |t| match cx.typer.types.get(t) {
-                crate::types::Type::Class(v, _) if cx.syms.class(v).value_class => Some(v),
+            let crate::typer::ReflectiveSig { boxes, unbox, .. } = sig;
+            let result = unbox.and_then(|f| match cx.syms.sym(f).owner {
+                Owner::Class(v) => Some(v),
                 _ => None,
-            };
-            let params = sig.clauses.iter().filter(|cl| !cl.is_using).flat_map(|cl| cl.params.iter());
-            let boxes: Vec<Option<ClassId>> = params.map(|p| value_class(p.ty).filter(|_| !p.by_name && !p.repeated)).collect();
-            let result = value_class(sig.ret);
-            let unbox = result.and_then(|v| cx.syms.class(v).ctor.first().and_then(|cl| cl.params.first()).map(|p| p.sym));
+            });
             for v in boxes.iter().flatten().chain(result.iter()) {
                 self.reach_class(cx, *v);
             }

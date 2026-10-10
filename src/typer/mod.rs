@@ -35,7 +35,7 @@ mod members;
 mod namedtuple;
 mod namer;
 mod overload;
-pub use reflective::reflective_proxy_name;
+pub use reflective::{reflective_proxy_name, ReflectiveSig};
 mod pat;
 pub mod prep;
 pub mod prims;
