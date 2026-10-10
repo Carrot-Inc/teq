@@ -2688,19 +2688,6 @@ impl<'a, 't> Interp<'a, 't> {
         }
     }
 
-    /// The initialiser of a local val (no parameter, no var, no lazy val), as its definition in
-    /// the program has it, which dotty keeps as the local's `defTree`.
-    fn local_val_rhs(&self, s: SymId) -> Option<TExprId> {
-        let info = self.syms().sym(s);
-        if info.kind != SymKind::Val || info.owner != Owner::Local || info.mods & crate::ast::mods::LAZY != 0 {
-            return None;
-        }
-        self.prog().stmts.iter().find_map(|st| match *st {
-            TStmt::Val(v, init) if v == s => Some(init),
-            _ => None,
-        })
-    }
-
     fn tree_symbol(&mut self, t: TreeRef) -> R<SymRef> {
         Ok(match t {
             TreeRef::Expr(e) => match self.prog().expr(e) {
@@ -2957,10 +2944,13 @@ fn install_trees(it: &mut Table) {
     q!(it, "Reflect.TermMethods.Term.underlyingArgument", |it, a| {
         let t = it.tree_arg(a, 0)?;
         let mut e = it.materialize(t)?;
+        // dotty's `MapToUnderlying` restricted to `InlineProxy | Synthetic` bindings: an inline
+        // method's parameter proxy gives the argument it is bound to; a user's local stays a
+        // reference, whose right side a splice would evaluate again.
         if let Some(ctx) = it.macro_ctx.clone() {
             for _ in 0..64 {
                 let TExpr::Local(s) = it.prog().expr(e) else { break };
-                match ctx.params.get(&s).or_else(|| ctx.bindings.get(&s)).copied().or_else(|| it.local_val_rhs(s)) {
+                match ctx.params.get(&s).or_else(|| ctx.bindings.get(&s)).copied() {
                     Some(arg) if arg != e => e = arg,
                     _ => break,
                 }
