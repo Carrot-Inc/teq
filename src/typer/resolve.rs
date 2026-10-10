@@ -5082,7 +5082,12 @@ impl<'a> Worker<'a> {
                 _ => self.class_of(t) == Some(p),
             });
             if !written {
-                let t = self.types.class(p, &[]);
+                // `Product` and `Enum` have their class types among the builtins.
+                let t = match p {
+                    _ if Some(p) == self.b.product => self.b.t_product,
+                    _ if Some(p) == self.b.reflect_enum => self.b.t_enum,
+                    _ => self.types.class(p, &[]),
+                };
                 parents.push((t, span));
                 count += 1;
             }
@@ -5556,32 +5561,37 @@ impl<'a> Worker<'a> {
             parents[k] = pc;
         }
         let parents = &parents[..info.parents.len()];
-        let mut group_of = [0u32; 32];
-        let mut holding = [false; 4];
-        if info.base_types.len() > group_of.len() {
-            return true;
-        }
-        for (i, &(b, _)) in info.base_types.iter().enumerate().skip(1) {
+        // The bases that have members, each with the parent it is taken with.
+        let mut holders = [(c, 0u32); 8];
+        let mut n = 0;
+        for &(b, _) in &info.base_types[1..] {
+            let bi = self.syms.class(b);
+            if bi.member_order.is_empty() && (!extensions || bi.extensions.is_empty()) {
+                continue;
+            }
             let Some(g) = parents.iter().position(|&p| p == b || self.syms.class(p).base_types.iter().any(|&(x, _)| x == b)) else {
                 return true;
             };
-            group_of[i] = g as u32;
-            let bi = self.syms.class(b);
-            holding[g] |= !bi.member_order.is_empty() || (extensions && !bi.extensions.is_empty());
+            if n == holders.len() {
+                return true;
+            }
+            holders[n] = (b, g as u32);
+            n += 1;
         }
-        if holding.iter().filter(|&&h| h).count() < 2 {
+        let holders = &holders[..n];
+        if holders.iter().all(|&(_, g)| g == holders[0].1) {
             return false;
         }
         let mut named = [(Name(0), 0u32); 64];
         let mut n = 0;
-        for (i, &(b, _)) in info.base_types.iter().enumerate().skip(1) {
+        for &(b, g) in holders {
             let bi = self.syms.class(b);
             let own = if extensions { &bi.extensions[..] } else { &[] };
             if n + bi.member_order.len() + own.len() > named.len() {
                 return true;
             }
             for &m in bi.member_order.iter().chain(own) {
-                named[n] = (self.syms.sym(m).name, group_of[i]);
+                named[n] = (self.syms.sym(m).name, g);
                 n += 1;
             }
         }
