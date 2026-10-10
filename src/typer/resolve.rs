@@ -5543,8 +5543,34 @@ impl<'a> Worker<'a> {
     /// class over one trait, `Product` and `Serializable`). A class with many members is taken to.
     pub(super) fn bases_share_a_name(&self, c: ClassId, extensions: bool) -> bool {
         let info = self.syms.class(c);
+        // Bases whose names masks share no bit, no two of them, share no name.
+        let mut seen = 0u64;
+        if info.base_types[1..].iter().all(|&(b, _)| {
+            let mask = self.syms.class(b).names_mask;
+            let apart = seen & mask == 0;
+            seen |= mask;
+            apart
+        }) {
+            return false;
+        }
         if info.desugared_parents > 0 && info.parents.len() <= info.desugared_parents as usize + 1 {
             return self.parents_share_a_name(c, extensions);
+        }
+        // Bases whose names masks share no bit share no name: no two of the others, and none of
+        // them with the desugared parents.
+        let (mut seen, mut sugared, mut meets, mut d) = (0u64, 0u64, false, 0);
+        for &(b, _) in info.base_types.iter().skip(1) {
+            let mask = self.syms.class(b).names_mask;
+            if d < 4 && self.is_desugared_parent(b) {
+                d += 1;
+                sugared |= mask;
+                continue;
+            }
+            meets |= seen & mask != 0;
+            seen |= mask;
+        }
+        if !meets && seen & sugared == 0 {
+            return false;
         }
         let mut named = [(Name(0), 0u32); 64];
         let mut n = 0;
