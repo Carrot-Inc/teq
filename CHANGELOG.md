@@ -5,6 +5,69 @@ support, and the platforms the binaries run on. The newest release comes first; 
 notes of its GitHub release, which carries the binaries (`teq-<version>-<classifier>`, the Windows one with `.exe`) beside their
 `SHA256SUMS`.
 
+## 0.1.8 (2026-10-09)
+
+- A build file git ignores, such as Metals' `project/metals.sbt`, no longer makes `teq.lock` stale: the warning
+  naming `sbt teqExportAll` comes only for the build's own files.
+- A command generator runs again only when its inputs changed or an output its last run made is gone; one whose
+  managed-sources directory stays empty, a script writing its files elsewhere, no longer runs on every check of
+  `teq dev` ([generators](https://github.com/Carrot-Inc/teq/blob/master/docs/TOOLING.md)).
+- Every teq process raises its open-files limit at start, so a build whose class path holds hundreds of jars runs
+  from a macOS shell's default of 256 descriptors.
+- `teq interp` runs programs with the JDK's processes, pipes and signals, sockets, files and directories, digests,
+  zip archives and date-time formatting, and takes a shebang line and `//> using file`; a repository can run its own
+  scripts as Scala programs through its `teq.lock` ([`teq interp`](https://github.com/Carrot-Inc/teq/blob/master/docs/CLI.md)).
+- vite-plugin-teq reads `teq.lock` through the `yaml` package; an install from a checkout with npm runs
+  `npm install --legacy-peer-deps` once in the plugin's directory ([the vite plugin](https://github.com/Carrot-Inc/teq/blob/master/docs/TOOLING.md#the-vite-plugin)).
+- The dev server's hot swap survives a local and a non-local binding of one name, and a library module's output
+  no longer changes with the order a program reads its values.
+- Products a downstream module compiles against: a refinement method's parameter references, a polymorphic
+  function type's signature and a by-name parameter are written as scalac writes them, so scalac reads teq's
+  products and teq scalac's for those shapes; a block's classes and a withheld library body's diagnostic are the
+  same at every worker count ([products](https://github.com/Carrot-Inc/teq/blob/master/docs/TARGETS.md)).
+- `asInstanceOf` is checked on JavaScript and in the interpreter, and on the JVM before the value is used, as
+  scalac's erasure checks it; `null` goes through a cast to a reference type and unboxes to a primitive's zero. A cast to a function type takes a function of any arity outside the JVM, where
+  Scala.js's `js.FunctionN` are scala's function types and a JavaScript function's `length` is not its arity
+  ([conformance](https://github.com/Carrot-Inc/teq/blob/master/docs/COMPATIBILITY.md)).
+
+<details>
+<summary>Conformance with scalac and the JDK</summary>
+
+- An explicit `toString` call keeps its value, `null` included, and a value is rendered where the library
+  renders it, as `String.valueOf` and `addString` do.
+- `Enum.ordinal` dispatches to the receiver's implementation before the case's, with `null`'s ordinary failure,
+  and a jar enum's cases are numbered as its pickle encodes them.
+- A Java `final` field with a constant value is typed by its constant and folded, `Math.PI` among them.
+- A given with type parameters is a def; a concrete `var`'s setter is a member; an inline accessor is named as
+  scalac names it, in the pickle and the class file.
+- A macro's source path is the path the build was given; a quote pattern's type variables are solved under one
+  constraint within their declared bounds.
+- A package's members include its package object's inherited ones over the products too; an anonymous class's
+  definition sits at its `new`; a synthesized mirror leaves out the members its companion declares; a
+  `Char`-bounded type parameter erases as scalac erases it.
+- A cast is decided after inline substitution on the erased types: a redundant one is an ascription, a cast to
+  `Unit` evaluates its operand, a primitive converts, a value class is tested as its box outside the JVM, a cast
+  to `Nothing` throws; a cast a type test on the same local proved is free.
+- Case classes, tuples and enum cases are `Product`, `Equals` and `Serializable` at run time on every target; a
+  string or number is `Comparable` and `CharSequence` on JavaScript as under Scala.js.
+- The JDK's collections on JavaScript and in the interpreter: removal through an iterator and `removeIf`, the map
+  and set equalities, `IdentityHashMap`, the primitive streams, `addSuppressed`, `java.util.Random` and
+  `BigInteger`'s random and prime constructors, the boxes' constructors, `Float` from a string as the JDK parses it.
+- Regular expressions: the POSIX classes are ASCII, atomic groups and `(?U)` work in the interpreter, a bad pattern
+  fails at `Pattern.compile`.
+- Structural calls through `reflectiveSelectable` carry their class arguments; a sequence spread into Java varargs
+  reaches the method; `new js.Array[A]()`, `sort()` and `reverseInPlace()` are Scala.js's.
+- A refinement member is checked as scalac checks it: `PolyFunction` refinements with a method member alone, no
+  overload and no by-name `apply`; a parameter's mode is part of a refinement's conformance.
+- A tuple `Ordering` exists to arity nine; `Range` reaches `Int.MaxValue`; `Date.toInstant` on the JVM; the
+  Scala 2 bare calls with scalac's error.
+- A local `$$X` beside a non-local `$$X` and an all-dollar object's accessor beside an all-dollar local run on
+  JavaScript as named.
+- `TimeZone.setDefault` reaches `java.time` on the JVM; the interpreter's archive times take the machine's zone
+  ([compatibility](https://github.com/Carrot-Inc/teq/blob/master/docs/COMPATIBILITY.md)).
+
+</details>
+
 ## 0.1.7 (2026-10-08)
 
 - Binaries are published as GitHub releases, five platforms beside `SHA256SUMS` and a manifest; the sbt plugin is on
