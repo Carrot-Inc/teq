@@ -8,3 +8,8 @@ sub string b
 int 2
 the named
 namednamed
+any
+int
+list
+anyref
+any
