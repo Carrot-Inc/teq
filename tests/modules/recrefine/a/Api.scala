@@ -11,4 +11,8 @@ object Api:
     type U = String
 
   def make(s: String): R = Box(s)
+  // An inferred result scalac pickles as `RECtype`, its self references `RECthis`.
+  def inferred(s: String) =
+    val r: AnyRef { type T = String; type U <: T } = Box(s)
+    r
   def same(r: R)(x: r.T): r.U = x

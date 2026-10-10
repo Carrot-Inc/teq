@@ -10,3 +10,7 @@ object Use:
     val r: Api.R { type T = String } = b
     val s: String = test(r)(b.value)
     println(s)
+    val i = Api.inferred("inferred")
+    val widen: i.U => String = x => x
+    val u: String = (b.value: i.T)
+    println(u + widen.toString.take(0))
