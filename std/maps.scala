@@ -516,9 +516,9 @@ extension [K, V](m: Map[K, V])
   def transform[W](f: (K, V) => W): Map[K, W] = m.map(e => (e._1, f(e._1, e._2)))
   def mapValues[W](f: V => W): Map[K, W] = m.map(e => (e._1, f(e._2)))
 
-// A map traversed and looked up on demand: mapValues and filterKeys apply their function when
-// an entry is asked for, and toMap materialises the result.
-final class MapView[K, +V](entries: () => Iterator[(K, V)], lookup: K => Option[V]) extends IterableOps[(K, V), View, MapView[K, V]], Iterable[(K, V)]:
+// A map traversed and looked up on demand, a `View` of its entries as scala-library's: mapValues
+// and filterKeys apply their function when an entry is asked for, and toMap materialises the result.
+final class MapView[K, +V](entries: () => Iterator[(K, V)], lookup: K => Option[V]) extends IterableOps[(K, V), View, MapView[K, V]], View[(K, V)]:
   def buildCC[B](items: RawBuffer[B]): View[B] = View.over(() => Iterator.over(items))
   override def buildC(items: RawBuffer[(K, V)]): MapView[K, V] = Map.from(Vector.wrap(items)).view
   override def iterator: Iterator[(K, V)] = entries()
@@ -541,6 +541,7 @@ final class MapView[K, +V](entries: () => Iterator[(K, V)], lookup: K => Option[
   override def filter(p: ((K, V)) => Boolean): MapView[K, V] =
     new MapView(() => entries().filter(p), k => lookup(k).filter(v => p((k, v))))
   override def toMap[K2, V2](implicit ev: ((K, V)) <:< (K2, V2)): Map[K2, V2] = unsafeCast(Map.from(this))
+  override def collectionClassName: String = "MapView"
   override def toString: String = "MapView(<not computed>)"
 
 /** The companion of a map: scala-library's `scala.collection.MapFactory`. */

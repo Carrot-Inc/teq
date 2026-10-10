@@ -10,3 +10,4 @@ List(SeqView List(1, 2, 3, 4), IndexedSeqView List(1, 2, 3, 4), IndexedSeqView L
 List(2, 3)
 List(SeqView List(1, 2, 3, 7), SeqView List(1, 2, 3, 8), SeqView List(1, 2, 3, 7), IndexedSeqView List(1, 2, 3, 7))
 List(IndexedSeqView List(1, 2, 3, 2, 4, 6), IndexedSeqView List(1, 2, 3, 1, 2))
+View List((a,1), (b,2)) List((b,2)) List((a,1)) MapView(<not computed>)

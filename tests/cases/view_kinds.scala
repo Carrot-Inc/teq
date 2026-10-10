@@ -1,6 +1,7 @@
 // The three views keep scala-library's types: a sequence's view is a `SeqView`, an indexed
 // sequence's an `IndexedSeqView`, and an operation keeps the kind of the view where
-// scala-library's result type does (`map`, `take`, `reverse`), a `View` otherwise (`filter`).
+// scala-library's result type does (`map`, `take`, `reverse`), a `View` otherwise (`filter`); a map's
+// view is a `View` of its entries.
 import scala.collection.{View, SeqView, IndexedSeqView}
 
 def kind(v: View[?]): String = v match
@@ -53,3 +54,5 @@ def kind(v: View[?]): String = v match
   val ii: IndexedSeqView[Int] = i.concat(i.map(_ * 2))
   val ir2: IndexedSeqView[Int] = i.appendedAll(1 to 2)
   println(List(ii, ir2).map(x => s"${kind(x)} ${x.toList}"))
+  val mv: View[(String, Int)] = Map("a" -> 1, "b" -> 2).view
+  println(s"${kind(mv)} ${mv.toList} ${mv.filter(_._2 > 1).toList} ${mv.take(1).toList} $mv")
