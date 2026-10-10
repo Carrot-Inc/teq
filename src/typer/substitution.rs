@@ -611,7 +611,12 @@ impl<'a> Worker<'a> {
         for i in 0..bound.params.len() {
             let p = bound.params[i];
             bargs.insert(p.sym, self.prog.add(TExpr::Local(p.proxy)));
-            let path = self.parameter_path(p.arg, p.constant, p.proxy);
+            // A constant argument's type is the parameter's path where it is a literal type; an
+            // ascribed constant or a plain inline call is typed at its widened type, which binds
+            // the proxy (`Inliner.computeParamBindings`: `arg.tpe` where it is a `SingletonType`
+            // of an idempotent path, else `paramBindingDef`'s symbol).
+            let constant = if self.widened_constant(p.arg) { None } else { p.constant };
+            let path = self.parameter_path(p.arg, constant, p.proxy);
             paths.push((p.sym, path));
         }
         let this = bound.this_proxy.map(|p| self.prog.add(TExpr::Local(p)));
