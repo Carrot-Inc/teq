@@ -1235,7 +1235,8 @@ pub(super) enum View {
     Apply(TreeRef, Vec<TreeRef>),
     TypeApply(TreeRef, Vec<TypeId>),
     New(TypeId),
-    This,
+    /// `this`, or `C.this` of an enclosing class `C` (dotty's `This(Some(C))`).
+    This(Option<ClassId>),
     Super,
     Typed(TreeRef, TypeId),
     Repeated(Vec<TreeRef>, TypeId),
@@ -1263,6 +1264,58 @@ pub(super) enum View {
 }
 
 impl<'a, 't> Interp<'a, 't> {
+    /// The class `C` when the expression is the local the typer reads an enclosing class's `this`
+    /// through (`$this…`, typed `C.this`): dotty's tree has `This(Some(C))` there, as teq's
+    /// pickle writes it (`QUALTHIS`).
+    fn outer_this_of(&mut self, e: TExprId) -> Option<ClassId> {
+        let TExpr::Local(s) = self.prog().expr(e) else { return None };
+        if !self.typer.name_ref(self.syms().sym(s).name).starts_with("$this") {
+            return None;
+        }
+        let ret = self.typer.sig_of(s).ret;
+        let t = self.typer.zonk(ret);
+        match self.typer.types.get(t) {
+            Type::This(c) => Some(c),
+            _ => None,
+        }
+    }
+
+    /// The class whose `this` the expression is, by its type: an inline argument's `this` is its
+    /// call site's, not the class the expansion stands in.
+    fn this_class(&mut self, e: TExprId) -> Option<ClassId> {
+        let site = self.macro_ctx.as_ref().and_then(|m| m.owner_class);
+        let Some(t) = self.prog().type_of(e) else { return site };
+        let t = self.typer.zonk(t);
+        match self.typer.types.get(t) {
+            Type::This(c) => Some(c),
+            _ => self.typer.class_of(t).or(site),
+        }
+    }
+
+    /// Whether a member `s` selected on `r` is dotty's `Ident`: `typedIdent` keeps the identifier
+    /// where `prefixIsElidable` holds (tpd.scala), for a member of a static owner, or a parameter
+    /// or parameter accessor of a class other than a trait, read in that class; a member of any
+    /// other class (`this`'s, or an enclosing class's) is `ref`'s `Select(This(C), name)`.
+    fn member_ident(&mut self, r: TExprId, s: SymId) -> bool {
+        let (c, enclosing) = match self.prog().expr(r) {
+            TExpr::This => match self.this_class(r) {
+                Some(c) => (c, true),
+                None => return true,
+            },
+            _ => match self.outer_this_of(r) {
+                Some(c) => (c, false),
+                None => return false,
+            },
+        };
+        if self.typer.is_static_owner(Owner::Class(c)) {
+            return true;
+        }
+        let Owner::Class(owner) = self.syms().sym(s).owner else { return true };
+        let param = self.syms().class(owner).ctor_syms.iter().any(|clause| clause.contains(&s));
+        let trait_ = |k: ClassKind| k == ClassKind::Trait;
+        param && enclosing && !trait_(self.syms().class(c).kind) && !trait_(self.syms().class(owner).kind)
+    }
+
     /// Whether a method symbol takes arguments: a selection of it awaits an `Apply`.
     fn takes_arguments(&mut self, s: SymId) -> bool {
         let info = self.syms().sym(s);
@@ -1334,11 +1387,12 @@ impl<'a, 't> Interp<'a, 't> {
                     let ty = self.typer.types.class(c, &vec![ANY; n]);
                     View::Literal(Value::Type(ty))
                 }
+                TExpr::Local(_) if self.outer_this_of(e).is_some() => View::This(self.outer_this_of(e)),
                 TExpr::Local(s) | TExpr::Static(s) => View::Ident(SymRef::Term(s)),
                 TExpr::Module(c) => View::Ident(self.module_sym(c)),
-                TExpr::This => View::This,
+                TExpr::This => View::This(self.this_class(e)),
                 TExpr::Super(_) => View::Super,
-                TExpr::Field(r, s) if matches!(self.prog().expr(r), TExpr::This) => View::Ident(SymRef::Term(s)),
+                TExpr::Field(r, s) if self.member_ident(r, s) => View::Ident(SymRef::Term(s)),
                 TExpr::Field(r, s) => View::Select(TreeRef::Expr(r), SymRef::Term(s), self.syms().sym(s).name),
                 TExpr::CallMethod(r, s, args) if self.assigned_var(s).is_some() && args.len == 1 && self.prog().is_setter_assign(e) => {
                     // An assignment through an abstract var, which scalac's tree keeps as one; a
@@ -1353,7 +1407,7 @@ impl<'a, 't> Interp<'a, 't> {
                 TExpr::CallMethod(r, s, args) => {
                     let exprs = self.prog().expr_list(args).to_vec();
                     let items: Vec<TreeRef> = exprs.iter().map(|&x| TreeRef::Expr(x)).collect();
-                    let recv = if matches!(self.prog().expr(r), TExpr::This) { None } else { Some(TreeRef::Expr(r)) };
+                    let recv = if self.member_ident(r, s) { None } else { Some(TreeRef::Expr(r)) };
                     match (recv, items.is_empty() && !self.takes_arguments(s)) {
                         (Some(r), true) => View::Select(r, SymRef::Term(s), self.syms().sym(s).name),
                         (None, true) => View::Ident(SymRef::Term(s)),
@@ -2354,16 +2408,17 @@ impl<'a, 't> Interp<'a, 't> {
         Ok(match t {
             TreeRef::Expr(e) => match self.prog().expr(e) {
                 TExpr::Int(_) | TExpr::Long(_) | TExpr::Double(_) | TExpr::Bool(_) | TExpr::Char(_) | TExpr::Str(_) | TExpr::Unit | TExpr::Null | TExpr::ClassOf(_) => "Literal",
+                TExpr::Local(_) if self.outer_this_of(e).is_some() => "This",
                 TExpr::Local(_) | TExpr::Static(_) | TExpr::Module(_) | TExpr::JsImport(_) | TExpr::JsGlobal(..) | TExpr::ObjLit(_) => "Ident",
                 TExpr::This => "This",
                 TExpr::Super(_) => "Super",
                 // A member of `this` named unqualified, which the view shows as an `Ident`.
-                TExpr::Field(r, _) if matches!(self.prog().expr(r), TExpr::This) => "Ident",
+                TExpr::Field(r, s) if self.member_ident(r, s) => "Ident",
                 TExpr::Field(..) | TExpr::Unary(..) | TExpr::ToStr(..) | TExpr::Index(..) | TExpr::JsSelect(..) => "Select",
                 TExpr::CallMethod(_, s, args) if args.len == 1 && self.assigned_var(s).is_some() && self.prog().is_setter_assign(e) => "Assign",
                 TExpr::CallMethod(_, s, args) | TExpr::CallStatic(s, args) => {
                     if args.is_empty() && !self.takes_arguments(s) {
-                        if matches!(self.prog().expr(e), TExpr::CallMethod(..)) { "Select" } else { "Ident" }
+                        if matches!(self.prog().expr(e), TExpr::CallMethod(r, s, _) if !self.member_ident(r, s)) { "Select" } else { "Ident" }
                     } else {
                         "Apply"
                     }
@@ -2649,6 +2704,7 @@ impl<'a, 't> Interp<'a, 't> {
     fn tree_symbol(&mut self, t: TreeRef) -> R<SymRef> {
         Ok(match t {
             TreeRef::Expr(e) => match self.prog().expr(e) {
+                TExpr::Local(_) if self.outer_this_of(e).is_some() => self.outer_this_of(e).map_or(SymRef::None, SymRef::Class),
                 TExpr::Local(s) | TExpr::Static(s) | TExpr::Field(_, s) | TExpr::CallMethod(_, s, _) | TExpr::CallStatic(s, _) => SymRef::Term(s),
                 TExpr::Module(c) => self.module_sym(c),
                 TExpr::New(c, _) => SymRef::Ctor(c),
@@ -7360,7 +7416,12 @@ impl<'a, 't> Interp<'a, 't> {
                 out.push_str("new ");
                 out.push_str(&self.show_type_repr(ty));
             }
-            View::This => out.push_str("this"),
+            View::This(None) => out.push_str("this"),
+            View::This(Some(c)) => {
+                let name = self.typer.name_ref(self.syms().class(c).name).trim_end_matches('$').to_string();
+                out.push_str(&name);
+                out.push_str(".this");
+            }
             View::Super => out.push_str("super"),
             View::Typed(e, ty) => {
                 out.push('(');
@@ -7634,7 +7695,11 @@ impl<'a, 't> Interp<'a, 't> {
                 out.push_str("))");
             }
             View::New(ty) => out.push_str(&format!("New(Inferred({}))", self.show_type_structure(ty))),
-            View::This => out.push_str("This(None)"),
+            View::This(None) => out.push_str("This(None)"),
+            View::This(Some(c)) => {
+                let name = self.typer.name_ref(self.syms().class(c).name).trim_end_matches('$').to_string();
+                out.push_str(&format!("This(Some(\"{}\"))", name));
+            }
             View::Super => out.push_str("Super(This(None), None)"),
             View::Typed(e, ty) => {
                 out.push_str("Typed(");
