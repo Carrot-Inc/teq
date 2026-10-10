@@ -745,7 +745,10 @@ impl<'a> Worker<'a> {
         let std: Vec<(PkgId, Name, u8)> = self.std.index().by_name.iter().map(|(&(p, n), slots)| (p, n, slots.iter().fold(0, |k, &(_, x)| k | x))).collect();
         for (p, n, k) in std {
             let name = self.name_ref(n);
-            if p == ROOT_PKG || !importable(name) {
+            // A private or protected definition is not offered for import outside its package
+            // (`java.util.zip`'s `private[zip] def local`), as an inaccessible one is no
+            // candidate (dotty's completion keeps the symbols `isAccessibleFrom` the site).
+            if p == ROOT_PKG || !importable(name) || k & crate::stdindex::PUBLIC == 0 {
                 continue;
             }
             let kind = if k & crate::stdindex::TYPE != 0 { kind::CLASS } else { kind::FUNCTION };
@@ -1390,7 +1393,12 @@ impl<'a> Worker<'a> {
                     self.push_candidate(n, target, rank, out);
                 }
             } else {
-                let Some(r) = self.resolved_term(n, at) else { continue };
+                // A name finds an extension method of the scope too, as dotty's completion lists
+                // the scope's extensions by name (`ext(recv)(args)` calls one).
+                let outer = std::mem::replace(&mut self.extension_call_head, true);
+                let r = self.resolved_term(n, at);
+                self.extension_call_head = outer;
+                let Some(r) = r else { continue };
                 let target = match r {
                     TermRef::Class(c) => Cand::Class(c),
                     TermRef::Package(p) => Cand::Package(p),
@@ -1440,6 +1448,9 @@ impl<'a> Worker<'a> {
             } else {
                 out.extend(info.members.keys().copied());
                 out.extend(info.nested.keys().copied());
+                // An extension method is no member: the class keeps it apart.
+                let extensions: Vec<Name> = info.extensions.iter().map(|&m| self.syms.sym(m).name).collect();
+                out.extend(extensions);
             }
         }
         let info = self.syms.class(c);
@@ -1474,6 +1485,9 @@ impl<'a> Worker<'a> {
                 out.extend(info.type_aliases.keys().copied());
             } else {
                 out.extend(info.members.keys().copied());
+                // An extension method is no member: the class keeps it apart.
+                let extensions: Vec<Name> = info.extensions.iter().map(|&m| self.syms.sym(m).name).collect();
+                out.extend(extensions);
             }
         }
         if let Some(exports) = self.exports_of(c) {
@@ -1649,11 +1663,35 @@ impl<'a> Worker<'a> {
     /// constructors (secondary ones, a Java class's), of which the one item cannot choose.
     fn ctor_clauses(&mut self, c: ClassId) -> Vec<CallClause> {
         self.complete_class(c);
-        if self.syms.class(c).kind != ClassKind::Class || !self.syms.class(c).ctors.is_empty() || !self.ctor_accessible(c) {
+        if self.loaded.is_some() {
+            self.absorb_java_ctors(c);
+        }
+        if self.syms.class(c).kind != ClassKind::Class {
             return Vec::new();
         }
-        let sig = MethodSig { tparams: Vec::new(), clauses: self.syms.class(c).ctor.clone(), ret: ERROR };
+        // The primary constructor, or a Java class's single one, where the site may call it;
+        // none where several are overloaded, which no one call stands for.
+        let clauses = match self.syms.class(c).ctors.clone().as_slice() {
+            [] if self.ctor_accessible(c) => self.syms.class(c).ctor.clone(),
+            &[only] if self.is_java_class(c) && self.ctor_callable_here(only) => self.sig_arc(only).clauses.clone(),
+            _ => return Vec::new(),
+        };
+        let sig = MethodSig { tparams: Vec::new(), clauses, ret: ERROR };
         self.call_clauses(&sig, &Vec::new(), 0)
+    }
+
+    /// The class an alias after `new` stands for (`type Alias = C`), whose constructor it calls.
+    fn aliased_class_of(&mut self, a: AliasId) -> Option<ClassId> {
+        self.complete_alias(a);
+        let rhs = self.syms.aliases[a.idx()].rhs;
+        let head = match self.types.get(rhs) {
+            Type::Lambda(_, body) => body,
+            _ => rhs,
+        };
+        match self.types.get(head) {
+            Type::Class(c, _) | Type::Ctor(c) => Some(c),
+            _ => None,
+        }
     }
 
     /// After `new`: the classes and traits, a class's term (its object) left out, each class
@@ -1668,8 +1706,14 @@ impl<'a> Worker<'a> {
             if c.kind == kind::CLASS {
                 c.kind = kind::CONSTRUCTOR;
             }
-            if let (Cand::Class(k), true) = (c.target, calls) {
-                c.clauses = self.ctor_clauses(k);
+            match (c.target, calls) {
+                (Cand::Class(k), true) => c.clauses = self.ctor_clauses(k),
+                (Cand::Alias(a), true) => {
+                    if let Some(k) = self.aliased_class_of(a) {
+                        c.clauses = self.ctor_clauses(k);
+                    }
+                }
+                _ => {}
             }
         }
     }
@@ -2316,7 +2360,7 @@ impl<'a> Worker<'a> {
     /// no class after `new`, an operator, no clause written, a constructor without parameters.
     fn call_snippet(&self, c: &Candidate, label: &str, new: bool) -> Option<String> {
         let method = matches!(c.target, Cand::Sym(s) if self.syms.sym(s).kind == SymKind::Def);
-        let class = new && matches!(c.target, Cand::Class(_) | Cand::Unimported);
+        let class = new && matches!(c.target, Cand::Class(_) | Cand::Alias(_) | Cand::Unimported);
         if !(method || class) {
             return None;
         }

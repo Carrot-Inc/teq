@@ -100,3 +100,35 @@ object Receivers4:
 object Receivers5:
   def fixed[A <: Base, B <: Left](x: Carrier { type Item = A } & Carrier { type Item = B }): Int = x.get.value
   def fixedReverse[A <: Base, B <: Left](x: Carrier { type Item = B } & Carrier { type Item = A }): Int = x.get.value
+trait PartA:
+  def n: Int
+trait PartB:
+  def n: Int
+object Meets:
+  def both(x: PartA & PartB): Int = x.n
+  opaque type Both <: PartA & PartB = PartA & PartB
+object MeetsOutside:
+  def opaqueBoth(x: Meets.Both): Int = x.n
+  def locals: Int =
+    trait L:
+      def n: Int
+    trait R:
+      def n: Int
+    def read(x: L & R): Int = x.n
+    1
+object Builtins:
+  def any(x: Any): Int = x.hashCode()
+  def instance(using i: Int): Int = summon[Int]
+object Constructed:
+  def inferred: Int = new Box(new Left).get.value
+  def matchedNew(n: Int): Int = (n match { case 0 => new Box(new Left); case _ => new Box(new Right) }).get.value
+object Transparent:
+  transparent inline def first(inline x: Int): Int = x
+  def other(x: Int): Int = x + 1
+  inline def `+!`(x: Int): Int = x
+object InlineCalls:
+  def aliased: Int = { import Transparent.{first as other}; other(1) }
+  def renamedSummon(using i: Int): Int = { import scala.Predef.{summon as obtain}; obtain[Int](using i) }
+  def qualifiedSummon(using i: Int): Int = scala.Predef.summon[Int]
+  def operator: Int = Transparent.`+!`(1)
+  def renamedPlain: Int = { import Transparent.{other as plus}; plus(1) }

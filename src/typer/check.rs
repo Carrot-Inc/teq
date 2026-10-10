@@ -4064,11 +4064,11 @@ impl<'a> Worker<'a> {
                         continue;
                     }
                     match (self.is_abstract_member(earlier), self.is_abstract_member(m)) {
-                        (true, false) => {
+                        (true, false) if !self.overridden_before(c, m, b, bt) => {
                             self.check_override(c, m, Some(bt), earlier, ebt);
                             self.reach_through_accessor(m, earlier);
                         }
-                        (false, true) => {
+                        (false, true) if !self.overridden_before(c, earlier, eb, ebt) => {
                             self.check_override(c, earlier, Some(ebt), m, bt);
                             self.reach_through_accessor(earlier, m);
                         }
@@ -4077,6 +4077,33 @@ impl<'a> Worker<'a> {
                 }
             }
         }
+    }
+
+    /// Whether the concrete member `s` of the ancestor `b` (of type `bt` in `c`) is overridden by
+    /// a concrete member of its name and parameters that a class before `b` in `c`'s
+    /// linearization declares, `c` itself included: dotty's `OverridingPairs` cursor has visited
+    /// `s` as overridden then, and pairs it as overriding nothing (`visited`), so that a class
+    /// overriding both of two inherited members checks each against its own alone.
+    fn overridden_before(&mut self, c: ClassId, s: SymId, b: ClassId, bt: TypeId) -> bool {
+        let name = self.syms.sym(s).name;
+        let bases: Vec<(ClassId, TypeId)> = self.syms.class(c).base_types.clone();
+        for (i, &(k, kt)) in bases.iter().enumerate() {
+            if k == b {
+                return false;
+            }
+            let mut j = 0;
+            while let Some(o) = self.inherited_member(k, name, false, j) {
+                j += 1;
+                if self.syms.sym(o).owner != Owner::Class(k) || self.is_private(o) || self.is_abstract_member(o) {
+                    continue;
+                }
+                let osig = self.sig_arc(o);
+                if self.compare_sigs(c, osig, (i > 0).then_some(kt), s, bt) != Agreement::Params {
+                    return true;
+                }
+            }
+        }
+        false
     }
 
     /// Checks `m` against `p`, a member of an ancestor that it overrides or implements, both seen

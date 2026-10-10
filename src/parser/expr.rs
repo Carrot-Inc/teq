@@ -1139,10 +1139,13 @@ impl<'a> Parser<'a> {
                 self.template_type = true;
                 let ty = self.parse_simple_type();
                 self.template_type = false;
+                let ty_end = self.prev_span();
                 let mut args = Vec::new();
+                let mut ends = Vec::new();
                 let mut cut = false;
                 while self.at(Tok::LParen) {
                     args.push(self.parse_args());
+                    ends.push(self.prev_span());
                     cut |= self.args_cut;
                 }
                 let has_body = self.at(Tok::ColonEol) && self.kind_at(1) == Tok::Indent;
@@ -1153,7 +1156,11 @@ impl<'a> Parser<'a> {
                     // A first list that is a using list stays an application of it.
                     let first_using = args.first().map_or(false, |&(_, using)| using);
                     let first = if first_using { ListRef::EMPTY } else { args.first().map_or(ListRef::EMPTY, |&(l, _)| l) };
-                    let mut e = self.ast.add_expr(Expr::New(ty, first), start.to(self.prev_span()));
+                    // The `new` ends with its own list and each further application with its
+                    // list, as the applications of dotty's tree do (`new C(1)` of `new C(1)(2)`).
+                    let skip = if first_using { 0 } else { 1 };
+                    let own_end = if skip == 1 { ends.first().copied().unwrap_or(ty_end) } else { ty_end };
+                    let mut e = self.ast.add_expr(Expr::New(ty, first), start.to(own_end));
                     self.note_cut_args(e, cut);
                     if let Some(outer) = self.prefix_value(ty, start.to(self.prev_span())) {
                         self.ast.new_outers.insert(e, outer);
@@ -1161,9 +1168,9 @@ impl<'a> Parser<'a> {
                     if args.len() > 1 && !first_using && first.is_empty() {
                         self.ast.new_empty_first.push(e);
                     }
-                    for &(list, using) in args.iter().skip(if first_using { 0 } else { 1 }) {
+                    for (&(list, using), &end) in args.iter().zip(&ends).skip(skip) {
                         let node = if using { Expr::UsingApply(e, list) } else { Expr::Apply(e, list) };
-                        e = self.ast.add_expr(node, start.to(self.prev_span()));
+                        e = self.ast.add_expr(node, start.to(end));
                     }
                     e
                 }

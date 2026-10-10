@@ -387,10 +387,12 @@ impl<'a> Worker<'a> {
         let scoped = |level: &mut Vec<SymId>| -> Vec<ConvRef> { level.drain(..).map(|g| (g, Via::Scope)).collect() };
         for frame in (0..self.env.frames.len()).rev() {
             match &self.env.frames[frame] {
+                // Every given of the scope, a using parameter's included, as dotty's view
+                // candidates are the context's implicit references (`Implicits.candidateKind`).
                 Frame::Locals { givens, .. } => {
                     let locals: Vec<SymId> = givens.iter().rev().copied().collect();
                     for g in locals {
-                        if self.syms.is_given(g) && (self.is_conversion_def(g) || self.is_conversion_given(g)) {
+                        if self.is_conversion_def(g) || self.is_conversion_given(g) {
                             level.push(g);
                         }
                     }
@@ -791,8 +793,13 @@ impl<'a> Worker<'a> {
             };
             let lists = vec![ArgList { args: vec![ArgSrc::Typed(recv, recv_ty)], using: false, span }];
             let blocked = std::mem::replace(&mut self.no_receiver_conversion, true);
+            let recorded = self.index_mark();
             let (te, applied) = self.apply_member(instance, inst_ty, names::APPLY, None, lists, span, None);
             self.no_receiver_conversion = blocked;
+            // The application to the value is no list the program wrote (signature help's).
+            if self.index.is_some() {
+                self.index_forget_applied(recorded);
+            }
             // What the instance's using clauses fixed (`Step3[P, S, Unit]` with `P` and `S` from
             // `ev`) is the result, where the shape alone left them open.
             let applied = self.zonk(applied);

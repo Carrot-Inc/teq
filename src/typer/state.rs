@@ -1204,6 +1204,9 @@ impl<'a> Worker<'a> {
             if ix.conversions.contains_key(&from) {
                 ix.conversions.insert(to, ());
             }
+            if let Some(&sym) = ix.selected.get(&from) {
+                ix.selected.insert(to, sym);
+            }
         }
     }
 

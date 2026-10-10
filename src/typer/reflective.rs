@@ -409,7 +409,7 @@ impl<'a> Worker<'a> {
     /// for, an opaque type and a value class to the underlying type, an intersection to its
     /// class component before a trait (the first of two alike), a union to `Object`. Arrays
     /// are one class on JavaScript, whatever their elements.
-    fn erased_class(&mut self, t: TypeId, depth: u32) -> ClassId {
+    pub(super) fn erased_class(&mut self, t: TypeId, depth: u32) -> ClassId {
         let t = self.deref(t);
         if depth > 16 {
             return self.b.any_ref;

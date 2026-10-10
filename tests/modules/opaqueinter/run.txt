@@ -1,0 +1,7 @@
+cup
+3
+hello cup
+cup:3
+List(2, 3, 4)
+3
+1

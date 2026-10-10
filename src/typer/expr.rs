@@ -2155,7 +2155,7 @@ impl<'a> Worker<'a> {
         let outer_prefixed = std::mem::replace(&mut self.new_prefixed, prefixed);
         let outer_new = std::mem::replace(&mut self.explicit_new, true);
         let journal = self.unused.journal_len();
-        let typed = self.type_new(ty, &[(args, false)], false, span, expected);
+        let typed = self.type_new(ty, &[(args, false, span)], false, span, expected);
         if self.unused.defs_on() {
             self.ignore_self_construction_args(typed.0, journal);
         }
@@ -2177,7 +2177,7 @@ impl<'a> Worker<'a> {
     pub fn type_new(
         &mut self,
         ty: TyExprId,
-        args: &[(ListRef, bool)],
+        args: &[(ListRef, bool, Span)],
         first_written: bool,
         span: Span,
         expected: Option<TypeId>,
@@ -2223,7 +2223,7 @@ impl<'a> Worker<'a> {
         ctor: TypeId,
         head: TyExprId,
         targs: Option<ListRef>,
-        args: &[(ListRef, bool)],
+        args: &[(ListRef, bool, Span)],
         first_written: bool,
         span: Span,
         expected: Option<TypeId>,
@@ -2306,11 +2306,11 @@ impl<'a> Worker<'a> {
             }
         };
         // `new AnyRef`, the plain object of a lock or a token.
-        if class == self.b.any_ref && args.iter().all(|(l, _)| l.is_empty()) {
+        if class == self.b.any_ref && args.iter().all(|(l, _, _)| l.is_empty()) {
             return (self.prog.add(TExpr::New(class, ListRef::EMPTY)), self.b.t_any_ref);
         }
         if class == self.b.array {
-            if let [(l, false)] = args {
+            if let [(l, false, _)] = args {
                 if let [len] = ast.expr_list(*l) {
                     return self.new_array(targs, *len, span, expected);
                 }
@@ -2333,7 +2333,7 @@ impl<'a> Worker<'a> {
         // (`new C(using q)(a)`, and a jar body's `new C(q)(a)` once its given list is
         // dropped): nothing is written for the first clause.
         let args = match args {
-            [(first, false), rest @ ..] if first.is_empty() && !rest.is_empty() && !first_written => {
+            [(first, false, _), rest @ ..] if first.is_empty() && !rest.is_empty() && !first_written => {
                 self.complete_class(class);
                 match self.syms.class(class).ctor.first() {
                     Some(clause) if clause.is_using && !clause.params.is_empty() => rest,
@@ -2344,7 +2344,7 @@ impl<'a> Worker<'a> {
         };
         let lists: Vec<ArgList> = args
             .iter()
-            .map(|&(l, using)| ArgList {
+            .map(|&(l, using, span)| ArgList {
                 args: ast.expr_list(l).iter().map(|&a| ArgSrc::Ast(a)).collect(),
                 using,
                 span,
@@ -2388,9 +2388,11 @@ impl<'a> Worker<'a> {
         (self.entered_java_lang_class(simple) == Some(class)).then_some(simple)
     }
 
-    fn new_arg_lists(&self, args: &[(ListRef, bool)], span: Span) -> Vec<ArgList> {
+    /// The written lists of a `new`, each with the span of its application (the `new` with the
+    /// lists up to it).
+    fn new_arg_lists(&self, args: &[(ListRef, bool, Span)], _span: Span) -> Vec<ArgList> {
         let ast = self.cur_ast();
-        args.iter().map(|&(l, using)| ArgList { args: ast.expr_list(l).iter().map(|&a| ArgSrc::Ast(a)).collect(), using, span }).collect()
+        args.iter().map(|&(l, using, span)| ArgList { args: ast.expr_list(l).iter().map(|&a| ArgSrc::Ast(a)).collect(), using, span }).collect()
     }
 
     /// `new Array[T](n)`: `n` elements holding the zero of `T`, through `scala.newArray`.

@@ -246,3 +246,49 @@ object Applied:
   object Ex3:
     extension (e3: Ex3) def apply(n: Int): Ex3 = e3
   def nestedExtension(e3: Ex3): Ex3 = e3(1)(2)
+  // An intersection's member as dotty's meet takes it, the second part's, whose class comes first
+  // in the intersection's base classes; through an opaque type's bound that is one.
+  trait PartA:
+    def n: Int
+  trait PartB:
+    def n: Int
+  def both(x: PartA & PartB): Int = x.n
+  object Parts:
+    opaque type Both <: PartA & PartB = PartA & PartB
+  def opaqueBoth(x: Parts.Both): Int = x.n
+  // A branching expression's member: met against its branches' union, the join searched, as
+  // dotty's `findMember` keeps the union as the prefix of its join; the first part's here.
+  class PartAB extends PartA with PartB { def n = 7 }
+  class PartBA extends PartB with PartA { def n = 8 }
+  def joined(flag: Boolean, a: PartAB, b: PartBA): Int = (if flag then a else b).n
+  // dotty's `Denotation.meet` of an intersection's members: two whose signatures differ stay
+  // alternatives (the more specific taken), one symbol through two instances of its owner meets
+  // its information, an overloaded name meets its matching alternatives, an ascription is the
+  // prefix of a branching expression.
+  trait PolyC:
+    def f[T](x: T): Any = x
+  trait PolyR:
+    def f[U <: String](x: U): U
+  def polyMeet(x: PolyC & PolyR): String = x.f("ok")
+  trait GBox[A]:
+    def get: A
+  def sameMeet(x: GBox[Any] & GBox[String]): String = x.get
+  trait OverC:
+    def g(x: Int): Any = "ok"
+    def g(x: Boolean): Any = "b"
+  trait OverR:
+    def g(x: Int): String
+    def g(x: String): String
+  def overMeet(x: OverC & OverR): String = x.g(1)
+  def ascribedJoin(flag: Boolean, a: PartAB, b: PartBA): Int = ((if flag then a else b): PartA & PartB).n
+  // A value a using parameter's `Conversion` makes a function of; an extension `apply` with a
+  // leading using clause, whose call passes the given before the receiver.
+  def usingConversion(x: Int)(using c: Conversion[Int, Int => Int]): Int = x(1)
+  class Ex6
+  trait Exts6:
+    extension (using dummy: String)(x: Ex6) def apply(n: Int): Int = n
+  object E6 extends Exts6:
+    given dummy6: String = ""
+    def test(x: Ex6): Int = x(1)
+  // A lambda applied at once by a written `apply`, its body reduced in place.
+  def lambdaApplied: Int = ((x: Int) => x + 1).apply(95)

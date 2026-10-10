@@ -65,6 +65,10 @@ pub enum Kind {
     /// A name typed in a body where a function is expected, at the name's span, its target the
     /// node: what a completion of the name inserts without arguments.
     Function,
+    /// A written argument list a method was applied to, at the span of its application (the
+    /// callee with the list), its target the method: the alternative the typer chose, which
+    /// signature help shows active (dotty's `Signatures` read it off the typed `Apply`).
+    Applied,
 }
 
 /// Where the index's journal and the unused-import marks stand (`Worker::index_mark`).
@@ -98,6 +102,9 @@ pub struct Index {
     /// Per program file the names its bodies typed where a function was expected
     /// (`Kind::Function`), by span: a retype of the file replaces them.
     functions: Vec<Vec<Span>>,
+    /// Per program file the methods its bodies applied to written lists (`Kind::Applied`), by
+    /// the application's span, the last of a span the latest: a retype of the file replaces them.
+    applied: Vec<Vec<(Span, SymId)>>,
     /// Per file, as a bit per expression of its tree, the receivers of its selections: the nodes
     /// recorded, made on the first node a typing of the file records, dropped when the typing is
     /// settled.
@@ -109,6 +116,10 @@ pub struct Index {
     /// The implicit conversions the typer applied, by the node of each application: a
     /// conversion no source wrote, as against a written call of the conversion's method.
     pub(super) conversions: FxMap<TExprId, ()>,
+    /// The members the typer selected for the nodes it made where the node names another or
+    /// none (a tuple's `head` read as its element): the denotation of the written name, which
+    /// dotty's tree keeps on the selection.
+    pub(super) selected: FxMap<TExprId, SymId>,
     /// The prefix operators the typer read as a builtin's identity (`+n` of a number), by file
     /// and start: their node is the operand's, which `index_expr` would take for a member's call.
     pub(super) identity_prefixes: FxMap<(FileId, u32), ()>,
@@ -158,10 +169,12 @@ impl Index {
             files: Vec::new(),
             nodes: Vec::new(),
             functions: Vec::new(),
+            applied: Vec::new(),
             receivers: Vec::new(),
             tparams: self.tparams.clone(),
             expansions: self.expansions.clone(),
             conversions: self.conversions.clone(),
+            selected: self.selected.clone(),
             identity_prefixes: FxMap::default(),
             bodies: self.bodies.clone(),
             fresh: self.fresh.clone(),
@@ -207,6 +220,7 @@ impl Index {
         union(&mut self.tparams, o.tparams);
         union(&mut self.expansions, o.expansions);
         union(&mut self.conversions, o.conversions);
+        union(&mut self.selected, o.selected);
         union(&mut self.bodies, o.bodies);
         union(&mut self.fresh, o.fresh);
         union(&mut self.locals, o.locals);
@@ -256,9 +270,15 @@ impl Index {
                 *e = expr(*e);
             }
         }
+        for f in self.applied.iter_mut() {
+            for (_, s) in f.iter_mut() {
+                *s = sym(*s);
+            }
+        }
         self.tparams = std::mem::take(&mut self.tparams).into_iter().map(|(p, v)| (tparam(p), v)).collect();
         self.expansions = std::mem::take(&mut self.expansions).into_iter().map(|(e, s)| (expr(e), sym(s))).collect();
         self.conversions = std::mem::take(&mut self.conversions).into_iter().map(|(e, ())| (expr(e), ())).collect();
+        self.selected = std::mem::take(&mut self.selected).into_iter().map(|(e, s)| (expr(e), sym(s))).collect();
         self.bodies = std::mem::take(&mut self.bodies)
             .into_iter()
             .map(|(s, mut rs)| {
@@ -292,11 +312,13 @@ impl Index {
             + owners(&self.files, array)
             + owners(&self.nodes, array)
             + owners(&self.functions, array)
+            + owners(&self.applied, array)
             + array(&self.receivers)
             + self.receivers.iter().flatten().map(array).sum::<usize>()
             + table(&self.tparams)
             + table(&self.expansions)
             + table(&self.conversions)
+            + table(&self.selected)
             + table(&self.bodies)
             + self.bodies.values().map(array).sum::<usize>()
             + table(&self.fresh)
@@ -338,6 +360,19 @@ fn document_offset(q: &crate::index::Query) -> Option<u32> {
     match q {
         Query::Definition(_, o) | Query::References(_, o, _) | Query::Hover(_, o) | Query::Implementation(_, o) => Some(*o),
         Query::PrepareCall(_, o) | Query::Incoming(_, o) | Query::Outgoing(_, o) => Some(*o),
+        _ => None,
+    }
+}
+
+/// The elements of the tuple an expression's value is, through parentheses and a block's result.
+pub(super) fn tuple_elements(ast: &ast::Ast, e: ExprId) -> Option<Vec<ExprId>> {
+    match ast.expr(e) {
+        Expr::Tuple(items) => Some(ast.expr_list(items).to_vec()),
+        Expr::Parens(x) | Expr::Unchecked(x) => tuple_elements(ast, x),
+        Expr::Block(stmts) => match ast.stmt_list(stmts).last() {
+            Some(&ast::Stmt::Expr(r)) => tuple_elements(ast, r),
+            _ => None,
+        },
         _ => None,
     }
 }
@@ -470,7 +505,7 @@ impl<'a> Worker<'a> {
     pub(super) fn index_keep_body(&mut self, sym: SymId, mark: Recorded) {
         if let Some(ix) = self.index.as_mut() {
             // The body's nodes are the definition's own, which its expansions do not repeat.
-            let (nodes, records): (Vec<_>, Vec<_>) = ix.journal.split_off(mark.records).into_iter().partition(|(_, r)| matches!(r.kind, Kind::Node | Kind::Function));
+            let (nodes, records): (Vec<_>, Vec<_>) = ix.journal.split_off(mark.records).into_iter().partition(|(_, r)| matches!(r.kind, Kind::Node | Kind::Function | Kind::Applied));
             ix.journal.extend(nodes);
             ix.bodies.insert(sym, records);
         }
@@ -642,9 +677,10 @@ impl<'a> Worker<'a> {
         let implied = applied && !(name == crate::names::APPLY && self.selects_own_name(head, name));
         // A written `apply` that a closure call stands for is the function class's, before any
         // walk down the lists (`Cfg.cfg(c).apply(x)` reads no `Conversion.apply` of `Cfg.cfg(c)`).
-        let Some(mut target) = self.written_function_apply(te, name, lists, head).or_else(|| self.named_target(te, name, lists, implied, head)) else { return };
+        let found = self.selected_member(te, name, lists).or_else(|| self.written_function_apply(te, name, lists, head));
+        let Some(mut target) = found.or_else(|| self.named_target(te, name, lists, implied, head)) else { return };
         // `(Obj: Base).f`: the member the ascribed type names, as scalac's tree does, not the
-        // object's override that runs (which `definition` adds: `ascribed_override`).
+        // object's override that runs (an implementation of it).
         if let (Target::Sym(o), Some(_)) = (target, self.ascribed_qualifier(self.cur_ast(), head)) {
             let node = if implied || lists == 0 { self.applied_head(te, lists).map(|(n, _)| n) } else { Some(te) };
             if let Some(TExpr::Field(r, m) | TExpr::CallMethod(r, m, _)) = node.map(|n| self.prog.expr(self.peel(n))) {
@@ -695,13 +731,21 @@ impl<'a> Worker<'a> {
     }
 
     /// Whether a value of type `t` may be a function, which a method's name alone gives: a
-    /// function type through aliases and the opaque types the site sees through, a union or an
-    /// intersection with one, an unsolved variable or a type parameter bounded by one, `depth`
-    /// levels down.
+    /// function type through aliases and the opaque types the site sees through, a trait whose
+    /// single abstract method takes one clause of parameters, however many (`Comparator[Int]`,
+    /// the `SAMType` eta-expansion adapts a method to; one that takes none a nullary method
+    /// never becomes, dotty's E100), a
+    /// union or an intersection with one, an unsolved variable or a type parameter bounded by
+    /// one, `depth` levels down.
     pub(super) fn expects_function(&mut self, t: TypeId, depth: u32) -> bool {
         let t = self.deref_alias(t);
         if self.as_function(t).is_some() {
             return true;
+        }
+        if let Type::Class(c, _) = self.types.get(t) {
+            if matches!(self.syms.class(c).kind, ClassKind::Trait | ClassKind::Class) && self.sam_method_of(t, None).is_some() {
+                return true;
+            }
         }
         match self.types.get(t) {
             // A union's or an intersection's parts are finite, unlike a chain of bounds.
@@ -748,6 +792,44 @@ impl<'a> Worker<'a> {
         };
         if let Some(ix) = self.index.as_mut() {
             ix.journal.push((file, Record { span, target: Target::Node(te), kind: Kind::Function }));
+        }
+    }
+
+    /// The names of a yield's value `body`, typed as `tb`, a variable `ret` stands for, where its
+    /// bounds expect a function (`yield_function_names`). What a completion of the name reads,
+    /// the value not typed against the variable.
+    #[cold]
+    #[inline(never)]
+    pub(super) fn index_yield_functions(&mut self, body: ExprId, tb: TExprId, ret: TypeId) {
+        let mut names = Vec::new();
+        self.yield_function_names(body, ret, &mut names);
+        for name in names {
+            self.index_function_name(name, tb);
+        }
+    }
+
+    /// The names the value `e` expected as `expected` comes out of where a function is expected
+    /// of them: the value's own, or each element's of a tuple it is, against the element the
+    /// expected tuple type gives, nested tuples element by element (dotty's `typedTuple` passes
+    /// each element its expected type). A variable's tuple bound stands for the tuple expected
+    /// (`yield ((inc, i), "x")` for a `((Int => Int, Int), String)`).
+    fn yield_function_names(&mut self, e: ExprId, expected: TypeId, out: &mut Vec<ExprId>) {
+        if self.expects_function(expected, 4) {
+            result_names(self.cur_ast(), e, out);
+            return;
+        }
+        let Some(items) = tuple_elements(self.cur_ast(), e) else { return };
+        let t = self.deref(expected);
+        let tuples: Vec<TypeId> = match self.types.get(t) {
+            Type::Var(v) => self.tvars[v].upper.clone(),
+            _ => vec![t],
+        };
+        for b in tuples {
+            let Some(elems) = self.tuple_expected_elements(Some(b), items.len()) else { continue };
+            for (&item, &elem) in items.iter().zip(&elems) {
+                self.yield_function_names(item, elem, out);
+            }
+            break;
         }
     }
 
@@ -821,6 +903,47 @@ impl<'a> Worker<'a> {
         }
     }
 
+    /// Records that the typer applied the method `sym`, an overloaded name's alternative, to the
+    /// list `list`, whose application (the callee with the list) it spans, in a recorded body
+    /// (`completes`) outside an inline expansion: the alternative signature help shows active. A
+    /// method of no other alternative is what its name's record names.
+    #[cold]
+    #[inline(never)]
+    pub(super) fn index_applied(&mut self, list: &super::apply::ArgList, sym: SymId) {
+        let (file, span) = (self.env.file, list.span);
+        if !self.syms.sym(sym).alternative || self.inline.depth > 0 || span.end <= span.start || !self.completes(file) {
+            return;
+        }
+        if let Some(ix) = self.index.as_mut() {
+            ix.journal.push((file, Record { span, target: Target::Sym(sym), kind: Kind::Applied }));
+        }
+    }
+
+    /// Drops the applications recorded since `mark`: the typer's own application of a
+    /// conversion to a value, at the span of the written list the value is an argument of.
+    #[cold]
+    #[inline(never)]
+    pub(super) fn index_forget_applied(&mut self, mark: Recorded) {
+        if let Some(ix) = self.index.as_mut() {
+            let since = ix.journal.split_off(mark.records);
+            ix.journal.extend(since.into_iter().filter(|(_, r)| r.kind != Kind::Applied));
+        }
+    }
+
+    /// The method the latest typing of `files` applied to the written list that follows the
+    /// callee spanning `callee`: of the applications that start with it, the one that ends first
+    /// past it (`f(a)(b)`'s second list follows the callee `f(a)`).
+    pub(super) fn index_applied_after(&self, files: &[FileId], callee: Span) -> Option<SymId> {
+        let ix = self.index.as_ref()?;
+        files.iter().find_map(|f| {
+            let applied = ix.applied.get(f.0 as usize)?;
+            let from = applied.partition_point(|(s, _)| (s.start, s.end) <= (callee.start, callee.end));
+            let first = applied[from..].iter().take_while(|(s, _)| s.start == callee.start).next()?;
+            let end = first.0.end;
+            applied[from..].iter().take_while(|(s, _)| s.start == callee.start && s.end == end).last().map(|&(_, s)| s)
+        })
+    }
+
     /// The target and kind of the record of one of `files` whose span is `span`.
     pub(super) fn index_record_at(&self, files: &[FileId], span: Span) -> Option<(Target, Kind)> {
         let ix = self.index.as_ref()?;
@@ -871,9 +994,16 @@ impl<'a> Worker<'a> {
         match t {
             Target::Sym(s) if self.syms.sym(s).name == crate::names::APPLY => {
                 // Down the receivers of the `apply`s the written lists call, one list each
-                // (`m(0)(1)` of an array of arrays), to the one the head names.
+                // (`m(0)(1)` of an array of arrays), to the one the head names. An extension's
+                // `apply` the lists imply is what dotty's tree names there, its receiver an
+                // argument (`apply(ex)(85)`): the outermost one, where the receivers lead to the
+                // head (`ex(85)`, `e3(1)(2)`); a member's `apply` names its receiver (`f(x)`).
                 let (mut node, mut call, mut left) = (head, s, left);
+                let mut extension = None;
                 for _ in 0..64 {
+                    if implied && extension.is_none() && self.syms.sym(call).is_extension && !matches!(self.prog.expr(self.peel(node)), TExpr::Js(..)) {
+                        extension = Some(Target::Sym(call));
+                    }
                     // A plain inline call still pending answers as the
                     // expansion it becomes: no receiver read off it.
                     let pending = self.is_pending_call(self.peel(node));
@@ -883,14 +1013,10 @@ impl<'a> Worker<'a> {
                     };
                     let Some((r, rest)) = receiver else { break };
                     if let Some(rt) = self.target_named(r, name, ident) {
-                        return Some(rt);
+                        return Some(extension.unwrap_or(rt));
                     }
-                    // On through the `apply` of a member or of the std's intrinsics (an array's), not
-                    // a source extension's, which dotty's lookup names itself (`ex(1)(2)`).
                     match self.target_of(r) {
-                        Some(Target::Sym(next)) if rest > 0 && self.syms.sym(next).name == crate::names::APPLY && (!self.syms.sym(next).is_extension || matches!(self.prog.expr(self.peel(r)), TExpr::Js(..))) => {
-                            (node, call, left) = (r, next, rest)
-                        }
+                        Some(Target::Sym(next)) if rest > 0 && self.syms.sym(next).name == crate::names::APPLY => (node, call, left) = (r, next, rest),
                         _ => break,
                     }
                 }
@@ -907,6 +1033,44 @@ impl<'a> Worker<'a> {
                 }
             }
             _ => None,
+        }
+    }
+
+    /// The member the typer selected for the written name `name` (`Worker::index_selected`),
+    /// on the node `te` of its application with `lists` argument lists or on a function value
+    /// the lists after the member's own apply (`t.apply(0)(x)` of a tuple of functions).
+    fn selected_member(&self, te: TExprId, name: Name, lists: u32) -> Option<Target> {
+        let ix = self.index.as_ref()?;
+        if ix.selected.is_empty() {
+            return None;
+        }
+        let mut node = te;
+        for _ in 0..=lists.min(64) {
+            let node_peeled = self.peel(node);
+            if let Some(&s) = ix.selected.get(&node).or_else(|| ix.selected.get(&node_peeled)) {
+                return (self.syms.sym(s).name == name).then_some(Target::Sym(s));
+            }
+            match self.prog.expr(node_peeled) {
+                TExpr::CallClosure(f, _) => node = f,
+                _ => return None,
+            }
+        }
+        None
+    }
+
+    /// Notes that the node `te` the typer made for the written member `name` of a receiver of
+    /// type `recv_ty` stands for that member, which the node does not name (a tuple's `head`,
+    /// `apply(n)`, ... read or made as the elements they stand for): the receiver's member as
+    /// dotty selects it.
+    #[cold]
+    #[inline(never)]
+    pub(super) fn index_selected(&mut self, te: TExprId, recv_ty: TypeId, name: Name) {
+        if self.inline.depth > 0 || !self.indexed(self.env.file) {
+            return;
+        }
+        let Some((s, _)) = self.find_member(recv_ty, name) else { return };
+        if let Some(ix) = self.index.as_mut() {
+            ix.selected.insert(te, s);
         }
     }
 
@@ -980,11 +1144,15 @@ impl<'a> Worker<'a> {
         for _ in 0..64 {
             let (target, node) = (self.target_of(te), self.prog.expr(self.peel(te)));
             // A conversion the typer applied, never a written call of the conversion's method
-            // (`C conv v`, the eta-expanded `C.conv`), whatever lists are left.
-            if let Some((_, value)) = self.conversion_call(target, node) {
-                if self.inserted_conversion(te) {
-                    te = value;
-                    continue;
+            // (`C conv v`, the eta-expanded `C.conv`), whatever lists are left: the value it
+            // converts, its application's argument, whatever value the conversion is (a given,
+            // an implicit method, a using parameter's `Conversion`).
+            if self.inserted_conversion(te) {
+                if let TExpr::CallStatic(_, args) | TExpr::CallMethod(_, _, args) | TExpr::CallClosure(_, args) = node {
+                    if let Some(&value) = self.prog.expr_list(args).first() {
+                        te = value;
+                        continue;
+                    }
                 }
             }
             match (target, node) {
@@ -1003,24 +1171,6 @@ impl<'a> Worker<'a> {
         None
     }
 
-    /// An implicit conversion's application `node`, of target `target`: the conversion (an
-    /// implicit method of one plain parameter, a given `Conversion`) and the value it converts.
-    /// The lean std's `Conversion` is a function type, a given's closure call.
-    fn conversion_call(&self, target: Option<Target>, node: TExpr) -> Option<(SymId, TExprId)> {
-        let (conversion, args) = match (target, node) {
-            (Some(Target::Sym(s)), TExpr::CallStatic(_, args) | TExpr::CallMethod(_, _, args)) if self.syms.sym(s).mods & crate::ast::mods::IMPLICIT != 0 => {
-                let info = self.syms.sym(s);
-                let clauses = &self.syms.sig(s).clauses;
-                let plain = clauses.first().map_or(false, |c| !c.is_using && c.params.len() == 1 && !c.params[0].repeated) && clauses[1..].iter().all(|c| c.is_using);
-                (info.kind == SymKind::Def && !info.is_extension && plain).then_some((s, args))?
-            }
-            (Some(Target::Sym(s)), TExpr::CallMethod(r, _, args)) if self.syms.sym(s).name == crate::names::APPLY => (self.conversion_value(r)?, args),
-            (None, TExpr::CallClosure(f, args)) => (self.conversion_value(f)?, args),
-            _ => return None,
-        };
-        Some((conversion, self.prog.expr_list(args).first().copied()?))
-    }
-
     /// Whether the conversion's application `te` is one the typer applied (`try_conversion`), no
     /// written call of the conversion: an implicit conversion of the value the head names
     /// (`spec(0)(x)` of a tuple `spec`, `Spec.spec()(x)` of a nullary `spec` beside the
@@ -1029,30 +1179,18 @@ impl<'a> Worker<'a> {
         self.index.as_ref().is_some_and(|ix| ix.conversions.contains_key(&te) || ix.conversions.contains_key(&self.peel(te)))
     }
 
-    fn is_conversion_class(&self, c: ClassId) -> bool {
-        Some(c) == self.b.conversion || self.syms.class(c).base_types.iter().any(|&(b, _)| Some(b) == self.b.conversion)
-    }
-
-    /// The given or implicit value `te` stands for where it is a `Conversion`.
-    fn conversion_value(&self, te: TExprId) -> Option<SymId> {
-        let Some(Target::Sym(g)) = self.target_of(te) else { return None };
-        let info = self.syms.sym(g);
-        if info.kind != SymKind::Given && info.mods & crate::ast::mods::IMPLICIT == 0 {
-            return None;
-        }
-        match self.types.get(self.syms.sig(g).ret) {
-            Type::Class(c, _) if self.is_conversion_class(c) => Some(g),
-            _ => None,
-        }
-    }
-
-    /// The receiver of the call `te` of the member `apply`: a method call's, an extension's first
-    /// argument (`ex(5)` of an `extension (e: Ex) def apply`), or the first operand of its
-    /// intrinsic (`PartialFunction.apply` as `$0($1)`).
+    /// The receiver of the call `te` of the member `apply`: a method call's, an extension's
+    /// receiver argument, the first of its first clause that is no using clause (`ex(5)` of an
+    /// `extension (e: Ex) def apply`, `x(1)` of an `extension (using s: S)(x: X) def apply`, whose
+    /// call passes the given first), or the first operand of its intrinsic
+    /// (`PartialFunction.apply` as `$0($1)`).
     fn apply_receiver(&self, te: TExprId, apply: SymId) -> Option<TExprId> {
         let extension = self.syms.sym(apply).is_extension;
         match self.prog.expr(te) {
-            TExpr::CallStatic(m, l) | TExpr::CallMethod(_, m, l) if extension && m == apply => self.prog.expr_list(l).first().copied(),
+            TExpr::CallStatic(m, l) | TExpr::CallMethod(_, m, l) if extension && m == apply => {
+                let given_first: usize = self.syms.sig(apply).clauses.iter().take_while(|c| c.is_using).map(|c| c.params.len()).sum();
+                self.prog.expr_list(l).get(given_first).copied()
+            }
             TExpr::CallMethod(r, m, _) if !extension && self.static_override(r, m) == apply => Some(r),
             // `$0` of a member's template is the receiver, of an extension's its parameter.
             TExpr::Js(template, l) if self.prog.template_syms.get(&template) == Some(&apply) && (extension || matches!(self.syms.sym(apply).owner, Owner::Class(_))) => {
@@ -1193,42 +1331,6 @@ impl<'a> Worker<'a> {
             p = inner;
         }
         matches!(ast.expr(p), Expr::Ident(_) | Expr::Select(..)).then_some(p)
-    }
-
-    /// Where the record of the member `s` at `span` of `file` names a selection on an object or
-    /// a class-backed given ascribed a base type (`(Obj: Base).f`), the object's own member that
-    /// overrides `s`, which the call runs: `definition` answers both, as dotty's lookup does.
-    fn ascribed_override(&self, file: FileId, span: Span, s: SymId) -> Option<SymId> {
-        let ast = self.ast(file);
-        let &(head, _) = ast.name_spans.iter().find(|&&(_, at)| at == span)?;
-        let path = self.ascribed_qualifier(ast, head)?;
-        let at = match ast.expr(path) {
-            Expr::Ident(_) => ast.expr_span(path),
-            _ => ast.name_span(path)?,
-        };
-        let class = match self.index_record_at(&[file], at)?.0 {
-            Target::Class(c) if self.syms.class(c).kind == ClassKind::Object => c,
-            Target::Sym(g) => self.syms.sym(g).impl_class?,
-            _ => return None,
-        };
-        // A member of the class's own that the override check found to override `s`, through
-        // the overrides between them (an extension, which no member overrides, has none).
-        let ix = self.index.as_ref()?;
-        let mut queue = vec![s];
-        let mut seen = 0;
-        while let Some(m) = queue.pop() {
-            seen += 1;
-            if seen > 64 {
-                break;
-            }
-            for &o in ix.overrides.get(&m).map_or(&[][..], |v| v.as_slice()) {
-                if self.syms.sym(o).owner == Owner::Class(class) && self.fresh_sym(o) {
-                    return Some(o);
-                }
-                queue.push(o);
-            }
-        }
-        None
     }
 
     fn index_target_name(&self, t: Target) -> Option<Name> {
@@ -1553,6 +1655,9 @@ impl<'a> Worker<'a> {
         if let Some(functions) = ix.functions.get_mut(file.0 as usize) {
             functions.clear();
         }
+        if let Some(applied) = ix.applied.get_mut(file.0 as usize) {
+            applied.clear();
+        }
         if let Some(receivers) = ix.receivers.get_mut(file.0 as usize) {
             *receivers = None;
         }
@@ -1613,10 +1718,11 @@ impl<'a> Worker<'a> {
     fn index_file_journal(&mut self) {
         let Some(ix) = self.index.as_mut() else { return };
         ix.inverse = None;
-        // The expansions and conversions are read while the calls they stand for are typed, which
-        // is over, and so are the receivers' marks.
+        // The expansions, conversions and selections are read while the calls they stand for are
+        // typed, which is over, and so are the receivers' marks.
         ix.expansions.clear();
         ix.conversions.clear();
+        ix.selected.clear();
         ix.identity_prefixes.clear();
         ix.receivers = Vec::new();
         let mut last = None;
@@ -1632,6 +1738,13 @@ impl<'a> Worker<'a> {
                     ix.functions.resize_with(f + 1, Vec::new);
                 }
                 ix.functions[f].push(r.span);
+                continue;
+            }
+            if let (Kind::Applied, Target::Sym(s)) = (r.kind, r.target) {
+                if ix.applied.len() <= f {
+                    ix.applied.resize_with(f + 1, Vec::new);
+                }
+                ix.applied[f].push((r.span, s));
                 continue;
             }
             if let Target::Node(e) = r.target {
@@ -1674,6 +1787,11 @@ impl<'a> Worker<'a> {
             if let Some(functions) = ix.functions.get_mut(f.0 as usize) {
                 functions.sort_unstable_by_key(|s| (s.start, s.end));
                 functions.dedup();
+            }
+            if let Some(applied) = ix.applied.get_mut(f.0 as usize) {
+                // Stable: of the records of one span the last is the latest.
+                applied.sort_by_key(|(s, _)| (s.start, s.end));
+                applied.shrink_to_fit();
             }
             let Some(records) = ix.files.get_mut(f.0 as usize) else { continue };
             // Stable: of the records of one span the last is the latest.
@@ -2291,16 +2409,10 @@ impl<'a> Worker<'a> {
         let mut lines = LineCache { by_file: FxMap::default() };
         match q {
             Query::Definition(_, offset) => {
-                let Some((file, span, t, kind)) = self.target_at(&ids, *offset) else { return Json::Null };
-                let mut out: Vec<Json> = self.decl_location(t, files, &mut lines).into_iter().collect();
-                if let (Target::Sym(s), true) = (t, kind != Kind::Def) {
-                    if let Some(own) = self.ascribed_override(file, span, s) {
-                        out.extend(self.decl_location(Target::Sym(own), files, &mut lines));
-                    }
-                }
-                match out.is_empty() {
-                    true => Json::Null,
-                    false => Json::Arr(out),
+                let Some((_, _, t, _)) = self.target_at(&ids, *offset) else { return Json::Null };
+                match self.decl_location(t, files, &mut lines) {
+                    Some(loc) => Json::Arr(vec![loc]),
+                    None => Json::Null,
                 }
             }
             Query::References(_, offset, declaration) => {
@@ -2377,6 +2489,8 @@ impl<'a> Worker<'a> {
                     ("stdRecords", std.into()),
                     ("records", ix.files.iter().map(Vec::len).sum::<usize>().into()),
                     ("nodes", ix.nodes.iter().map(Vec::len).sum::<usize>().into()),
+                    ("applied", ix.applied.iter().map(Vec::len).sum::<usize>().into()),
+                    ("selected", ix.selected.len().into()),
                     ("catalogue", ix.catalogue.as_ref().map_or(0, |c| c.len()).into()),
                     ("journal", ix.journal.len().into()),
                     ("expansions", ix.expansions.len().into()),

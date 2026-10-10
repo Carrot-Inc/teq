@@ -37,6 +37,13 @@ impl Json {
         }
     }
 
+    pub fn get_mut(&mut self, key: &str) -> Option<&mut Json> {
+        match self {
+            Json::Obj(fields) => fields.iter_mut().find(|(k, _)| k == key).map(|(_, v)| v),
+            _ => None,
+        }
+    }
+
     /// The value at a path of keys, `None` where one is missing or `null`.
     pub fn at(&self, path: &[&str]) -> Option<&Json> {
         let mut v = self;

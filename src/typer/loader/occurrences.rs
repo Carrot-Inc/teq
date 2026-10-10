@@ -13,7 +13,12 @@
 //! occurrence whose source is not the document's (an inline expansion from another file, a
 //! source switch), one inside the expansion of an inline call (a copy of trees that stand
 //! elsewhere), and one whose span does not spell the written name in the document's text (a
-//! synthetic tree, an inferred type) make no record. Where trees share a position the innermost
+//! synthetic tree, an inferred type) make no record, but for a name an import visible there
+//! renames (`import p.{x as y}`, `y` where the tree names `x`). An inline call's trace (the
+//! callee's top-level class alone) is resolved by what the path written at the call is bound to
+//! where it stands (`Lexical`: the blocks', templates' and package's imports, locals, members,
+//! the root imports), recorded only where that is an inline method of the trace's class. A
+//! backquoted name's record holds its backquotes. Where trees share a position the innermost
 //! written identifier wins, an explicit point before a reconstructed start, a use before a
 //! declaration.
 //!
@@ -27,6 +32,7 @@
 //! occurrence left unresolved on its stderr as an index is built.
 
 use super::super::index::{Kind, Target};
+use super::super::subtype::Meet;
 use super::super::Worker;
 use super::attach::name_span;
 use super::types::{MapCx, Scope};
@@ -159,6 +165,116 @@ enum Pending {
     Local(Addr, bool),
     Def(Addr),
     Resolved(Option<DocTarget>, bool),
+}
+
+/// The stable identifier written at the byte offset `at` of `text`: its names with their spans,
+/// backquotes included (`scala.Predef.summon`, `` Calls.`+!` ``, `other`), up to what is no
+/// part of one (a type argument list, an argument list, a blank). None where no name starts.
+fn written_path(text: &str, at: usize) -> Option<Vec<(String, Span)>> {
+    let op = |c: char| !c.is_alphanumeric() && !c.is_whitespace() && !"()[]{}`'\".,;".contains(c) && c != '_' && c != '$';
+    let ident = |c: char| c.is_alphanumeric() || c == '_' || c == '$';
+    let mut out = Vec::new();
+    let mut i = at;
+    loop {
+        let rest = text.get(i..)?;
+        let (name, len) = if let Some(inner) = rest.strip_prefix('`') {
+            let close = inner.find('`')?;
+            (inner[..close].to_string(), close + 2)
+        } else {
+            let first = rest.chars().next()?;
+            let mut name: String = if ident(first) && !first.is_ascii_digit() {
+                rest.chars().take_while(|&c| ident(c)).collect()
+            } else {
+                rest.chars().take_while(|&c| op(c)).collect()
+            };
+            // An identifier ending in `_` goes on with an operator (`foo_+`).
+            if name.ends_with('_') {
+                name.extend(rest[name.len()..].chars().take_while(|&c| op(c)));
+            }
+            let len = name.len();
+            (name, len)
+        };
+        if name.is_empty() {
+            break;
+        }
+        out.push((name, Span::new(i as u32, (i + len) as u32)));
+        i += len;
+        let b = text.as_bytes();
+        if b.get(i) == Some(&b'.') && b.get(i + 1).is_some_and(|&c| c != b'.') {
+            // Blanks and comments may stand after the dot (`Predef./* x */summon`).
+            i = super::super::signature::skip_trivia(text, i as u32 + 1, text.len() as u32) as usize;
+            continue;
+        }
+        break;
+    }
+    (!out.is_empty()).then_some(out)
+}
+
+/// What binds names lexically in a file's trees, read where a tree does not say what its
+/// written name is bound to: an inline call's trace (dotty's `Inlined.call`, the callee's
+/// top-level class alone, `Inlines.inlineCallTrace`) and a reference an import's rename spells.
+struct Lexical {
+    imports: Vec<ScopedImport>,
+    /// Blocks and templates: their addresses and ends.
+    scopes: Vec<(Addr, Addr, u8)>,
+    /// Parameters, with the method they bind in, and local definitions, with their block.
+    names: Vec<(String, Addr, Addr)>,
+}
+
+/// An import with the block or template that holds it (none at a package's level), visible
+/// from its statement to that scope's end, the file's at a package's level, and in a block's
+/// result, which the pickle writes before the block's statements (`BLOCK Length expr stat*`).
+struct ScopedImport {
+    at: Addr,
+    to: Addr,
+    scope: Option<Addr>,
+    result: Option<(Addr, Addr)>,
+    path: TType,
+    selectors: Vec<(String, Option<String>)>,
+}
+
+/// What a lexical name is bound to: a package, a class (an object's), or a member.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Bound {
+    Pkg(PkgId),
+    Class(ClassId),
+    Sym(SymId),
+}
+
+/// A scope around an address, innermost first: a block, a method, a class's template.
+enum Frame {
+    Block(Addr, Addr),
+    Method(Addr, Addr),
+    Template(Addr, Option<ClassId>),
+}
+
+impl ScopedImport {
+    fn visible_at(&self, addr: Addr) -> bool {
+        (self.at < addr && addr < self.to) || self.result.is_some_and(|(s, e)| s <= addr && addr < e)
+    }
+}
+
+impl Lexical {
+    /// The import visible at `addr` that renames `name` to `alias` (`import p.{name as alias}`),
+    /// the innermost one.
+    fn renaming_import(&self, addr: Addr, name: &str, alias: &str) -> Option<usize> {
+        if name == alias {
+            return None;
+        }
+        let visible = |i: &&ScopedImport| i.visible_at(addr);
+        let mut found: Option<(usize, Addr)> = None;
+        for (k, i) in self.imports.iter().enumerate().filter(|(_, i)| visible(i)) {
+            if i.selectors.iter().any(|(orig, ren)| orig == name && ren.as_deref() == Some(alias)) && found.map_or(true, |(_, at)| i.at > at) {
+                found = Some((k, i.at));
+            }
+        }
+        found.map(|(k, _)| k)
+    }
+
+    /// Whether a parameter or local definition named `name` binds in the scope `[start, end)`.
+    fn binds_local(&self, name: &str, start: Addr, end: Addr) -> bool {
+        self.names.iter().any(|(n, s, e)| n == name && *s == start && *e == end)
+    }
 }
 
 /// The byte offset of each UTF-16 offset of `text`, one entry past its end.
@@ -333,16 +449,24 @@ impl<'a> Worker<'a> {
         let nodes = positions.spans().sorted();
         stats.trees += nodes.len();
         let decoder = Decoder::new(&tasty);
-        // The expansions of inline calls: copies of trees that stand elsewhere.
+        // The expansions of inline calls: copies of trees that stand elsewhere. The call after
+        // one is its trace (dotty's `Inlined.call`): the callee's top-level class, placed at the
+        // call, which the written name selects in (`summon` of `Predef$`).
         let mut skip: Vec<(Addr, Addr)> = Vec::new();
+        let mut traces: FxMap<Addr, ()> = FxMap::default();
+        let mut has_imports = false;
         for &(addr, p) in &nodes {
+            has_imports |= p.tag == IMPORT;
             if p.tag == INLINED && p.target.is_none() {
                 let mut r = tasty.trees().at(addr as usize);
                 r.byte();
-                r.end();
+                let inlined_end = r.end() as Addr;
                 let expansion = r.pos as Addr;
                 let end = Decoder::new(&tasty).skip_at(expansion);
                 skip.push((expansion, end));
+                if end < inlined_end && matches!(decoder.tag_at(end), IDENT | IDENTTPT | TYPEREF | TYPEREFSYMBOL | TYPEREFDIRECT | TERMREF) {
+                    traces.insert(end, ());
+                }
             }
         }
         skip.sort_unstable();
@@ -371,6 +495,8 @@ impl<'a> Worker<'a> {
         // The opaque types transparent inside the classes of this file that define them.
         let scopes = self.opaque_scopes(f, defs);
         let resolved = self.term_pass(&mut cx, f, &tasty, defs, &scopes, &skipped);
+        // The lexical bindings, read where a trace or a renamed reference needs them.
+        let lexical = (has_imports || !traces.is_empty()).then(|| self.lexical(f, &tasty, &nodes, defs));
         let mut last_import: Option<DocTarget> = None;
         for &(addr, p) in &nodes {
             let Some(pos) = p.pos else { continue };
@@ -451,14 +577,48 @@ impl<'a> Worker<'a> {
                 _ => continue,
             };
             let Some((written, pending)) = found else { continue };
+            // An inline call's trace: the path written at the call, bound where it is written
+            // (`Lexical`), the callee proven by the trace's class, else no record.
+            if let (true, Pending::Type(at, _)) = (traces.contains_key(&addr), &pending) {
+                stats.candidates += 1;
+                let byte = units.get(pos.start as usize).copied().unwrap_or(text.len() as u32) as usize;
+                let traced = match (written_path(text, byte), lexical.as_ref()) {
+                    (Some(path), Some(lex)) => {
+                        let ty = Decoder::new(&tasty).type_at(*at);
+                        let class = match self.resolve_type_target(&mut cx, f, &ty, defs) {
+                            Some(DocTarget::Shared(Target::Class(c))) => Some(c),
+                            _ => None,
+                        };
+                        let span = path.last().map(|(_, s)| *s);
+                        class.and_then(|c| self.traced_callee(&mut cx, f, &tasty, lex, defs, addr, &path, c)).zip(span)
+                    }
+                    _ => None,
+                };
+                match traced {
+                    Some((target, span)) => out.push(Candidate { file: f, addr, span, target, kind: Kind::Call, prio: 0 }),
+                    None => stats.unresolved += 1,
+                }
+                continue;
+            }
             if written == "_" || written.is_empty() || written.starts_with('<') {
                 continue;
             }
             // A prefix operator is pickled as `unary_!`, written `!`.
             let written = written.strip_prefix("unary_").filter(|op| !op.is_empty()).map_or(written.clone(), str::to_string);
             stats.candidates += 1;
-            // The span before the target: a synthetic tree is not resolved.
-            let Some((span, at_start)) = placed_span(text, units, pos.point, pos.start, &written) else {
+            // The span before the target: a synthetic tree is not resolved. A name an import
+            // renames is spelled as the rename (`import p.{x as y}`, `y` where the tree names
+            // `x`): its span, the import checked to bind it to the target below.
+            let mut renamed: Option<(usize, String)> = None;
+            let placed = placed_span(text, units, pos.point, pos.start, &written).or_else(|| {
+                let lex = lexical.as_ref()?;
+                let byte = units.get(pos.point.unwrap_or(pos.start) as usize).copied()? as usize;
+                let (alias, span) = written_path(text, byte)?.into_iter().next()?;
+                let i = lex.renaming_import(addr, &written, &alias)?;
+                renamed = Some((i, alias));
+                Some((span, false))
+            });
+            let Some((span, at_start)) = placed else {
                 stats.unspelled += 1;
                 continue;
             };
@@ -478,6 +638,11 @@ impl<'a> Worker<'a> {
                     (t, if is_type { Kind::Type } else { self.term_kind(t) })
                 }
                 Pending::Def(at) => (self.definition_target(f, at, defs), Kind::Def),
+            };
+            // The renaming import binds the written name to the target, or no record is made.
+            let target = match (&renamed, lexical.as_ref()) {
+                (Some((i, alias)), Some(lex)) => target.filter(|&t| self.lexical_import_binding(&mut cx, &tasty, &lex.imports[*i], alias).and_then(|b| self.bound_target(b)) == Some(t)),
+                _ => target,
             };
             let Some(target) = target else {
                 stats.unresolved += 1;
@@ -691,9 +856,10 @@ impl<'a> Worker<'a> {
     /// (`goRefined`, 900: the refinement's info meets the parent's member), `narrow` carrying
     /// the narrowest met; a this-type reads its class and its self type as dotty's
     /// `ClassInfo.selfType` has them, `givenSelf & cls` (5597 to 5610); an intersection's two
-    /// members are merged (`goAnd`, 996) by `merge_members`, or decline where the merge's score
-    /// is not certain; a class gives the member and its result seen from `pre`
-    /// (`member_result_type`).
+    /// members are merged (`goAnd`, 996) by `merge_members`, the typer's `meet_members`; a
+    /// union's member is its join's (`goOr`, `OrType.join`), the typer's `union_join`; a class
+    /// gives the member and its result seen from `pre` (`member_result_type`), an opaque type
+    /// outside its scope its bound's.
     fn select_member(&mut self, cx: &mut MapCx, pre: TypeId, t: TypeId, name: Name, signed: Option<NameRef>, tasty: &TastyFile, depth: u32) -> Option<(DocTarget, TypeId)> {
         self.select_narrowed(cx, pre, t, None, name, signed, tasty, depth)
     }
@@ -738,14 +904,25 @@ impl<'a> Worker<'a> {
                     (Some(l), Some(r)) => {
                         // Scored against the whole receiver's base classes at every merge, as
                         // `goAnd` passes `pre` down (996) and `linearScore` searches it (427).
-                        let bases = self.base_classes(pre, 0);
+                        let bases = self.receiver_base_classes(pre, 0);
                         self.merge_members(&bases, l, r)
                     }
                     (l, r) => l.or(r),
                 }
             }
+            // dotty's `goOr`: the member of the union's join (`OrType.join`,
+            // `TypeOps.orDominator`), the typer's join for a selection.
+            Type::Union(..) => {
+                let joined = self.union_join(t)?;
+                self.select_narrowed(cx, pre, joined, narrow, name, signed, tasty, depth + 1)
+            }
             Type::Class(c, _) | Type::Ctor(c) | Type::This(c) => {
-                let target = self.member_target(c, name, signed, tasty)?;
+                let Some(target) = self.member_target(c, name, signed, tasty) else {
+                    // An opaque type outside its scope is dotty's abstract type: its bound's
+                    // member (`superType`), as the typer reads it (`find_member_from`).
+                    let bound = self.opaque_bound(t)?;
+                    return self.select_narrowed(cx, pre, bound, narrow, name, signed, tasty, depth + 1);
+                };
                 let ty = match target {
                     DocTarget::Shared(Target::Sym(s)) => self.member_result_type(pre, t, s),
                     DocTarget::Shared(other) => self.target_value_type(other)?,
@@ -782,122 +959,35 @@ impl<'a> Worker<'a> {
         }
     }
 
-    /// The base classes of a receiver's type in the order scalac's `baseClasses` gives them
-    /// (`Types.scala` 728 to 741 at 3.8.4: a class's own linearisation; a proxy its super
-    /// type's, here a parameter's bound and a refinement's parent; an intersection's
-    /// (`AndType.baseClasses`, 3544 to 3560) the second component's classes not among the
-    /// first's, up to their first common class, then the first's; a this-type's its
-    /// `givenSelf & cls`), `Nil` for a type with none.
-    fn base_classes(&mut self, t: TypeId, depth: u32) -> Vec<ClassId> {
-        if depth > 8 {
-            return Vec::new();
-        }
-        if let Type::This(c) = self.types.get(t) {
-            if let Some(given) = self.syms.class(c).declared_self {
-                let cls = self.types.class(c, &[]);
-                let inter = self.types.mk(Type::Inter(given, cls));
-                return self.base_classes(inter, depth + 1);
-            }
-        }
-        let t = self.widen_path(t);
-        let t = self.dealias(t);
-        match self.types.get(t) {
-            Type::Class(c, _) | Type::Ctor(c) | Type::This(c) => {
-                self.complete_class(c);
-                self.syms.class(c).base_types.iter().map(|&(b, _)| b).collect()
-            }
-            Type::Param(p) | Type::AppParam(p, _) => {
-                let upper = self.syms.tparam(p).upper;
-                self.base_classes(upper, depth + 1)
-            }
-            Type::Refined(parent, _) => self.base_classes(parent, depth + 1),
-            Type::Inter(a, b) => {
-                let bcs1 = self.base_classes(a, depth + 1);
-                let bcs2 = self.base_classes(b, depth + 1);
-                let mut out = Vec::new();
-                for bc2 in bcs2 {
-                    if bcs1.contains(&bc2) {
-                        if self.syms.class(bc2).kind == ClassKind::Trait {
-                            continue;
-                        }
-                        break;
-                    }
-                    out.push(bc2);
-                }
-                out.extend(bcs1);
-                out
-            }
-            _ => Vec::new(),
-        }
-    }
-
-    /// The members an intersection's two components give one name, merged as scalac's
-    /// `mergeSingleDenot` merges their denotations (`Denotations.scala` 420 to 500 at 3.8.4):
-    /// the symbol score prefers a member as concrete as the other (`isAsConcrete`,
-    /// `SymDenotations.scala` 997: not deferred, or the other deferred too; 462 to 469), else
-    /// the owner that comes first in the receiver's base classes (`linearScore`, 427 to 440: an
-    /// owner deriving from the other, else the first found in `bases`); the member whose type
-    /// overrides the other's wins where the score allows (488 to 491); else the joint member is
-    /// the scoring symbol with the meet of the types (493 to 496). `None` where the score is
-    /// not certain: a member whose deferredness the tables do not tell, or owners found in
-    /// neither order among the base classes.
+    /// The members an intersection's two components give one name, merged as the typer merges
+    /// them (`meet_members`, dotty's `mergeSingleDenot`); one symbol through both components
+    /// has the meet of the information each gives it (`infoMeet`, `Denotations.scala` 541).
+    /// `None` where a member is a definition the tables do not know (a local trait's), whose
+    /// deferredness and owner they do not tell.
     fn merge_members(&mut self, bases: &[ClassId], left: (DocTarget, TypeId), right: (DocTarget, TypeId)) -> Option<(DocTarget, TypeId)> {
         let ((sa, ta), (sb, tb)) = (left, right);
-        // One symbol through both components, with the information each gives it: the meet
-        // (`infoMeet`, 541), as for two denotations of one symbol.
         if sa == sb {
             let meet = self.meet_types(ta, tb);
             return Some((sa, meet));
         }
-        let owner_of = |w: &Self, t: DocTarget| match t {
-            DocTarget::Shared(Target::Sym(s)) => match w.syms.sym(s).owner {
-                Owner::Class(c) => Some(c),
-                _ => None,
-            },
-            _ => None,
-        };
-        // Deferred: a member declared without a body (the loader marks it abstract, a
-        // constructor parameter's accessor is not), a program's by its definition.
-        let deferred = |w: &Self, t: DocTarget| -> Option<bool> {
-            match t {
-                DocTarget::Shared(Target::Sym(s)) => Some(w.is_abstract_member(s)),
-                _ => None,
-            }
-        };
-        let (da, db) = (deferred(self, sa)?, deferred(self, sb)?);
-        let (oa, ob) = (owner_of(self, sa)?, owner_of(self, sb)?);
-        let score: i32 = if da && !db {
-            -1
-        } else if db && !da {
-            1
-        } else if oa == ob {
-            0
+        let (DocTarget::Shared(Target::Sym(a)), DocTarget::Shared(Target::Sym(b))) = (sa, sb) else { return None };
+        // The second's type parameters read as the first's, as the typer's meet compares them
+        // (`tp2.resType.subst(tp2, tp1)`).
+        let (pa, pb) = (self.sig_arc(a).tparams.clone(), self.sig_arc(b).tparams.clone());
+        let tb = if !pa.is_empty() && pa.len() == pb.len() {
+            let renaming: Subst = pb.iter().zip(&pa).map(|(&p, &q)| (p, self.types.param(q))).collect();
+            self.types.subst(tb, &renaming)
         } else {
-            self.complete_class(oa);
-            self.complete_class(ob);
-            if self.syms.class(oa).base_types.iter().any(|&(c, _)| c == ob) {
-                1
-            } else if self.syms.class(ob).base_types.iter().any(|&(c, _)| c == oa) {
-                -1
-            } else {
-                match bases.iter().find(|&&c| c == oa || c == ob) {
-                    Some(&c) if c == oa => 1,
-                    Some(_) => -1,
-                    None => return None,
-                }
-            }
+            tb
         };
-        if score <= 0 && self.is_sub(tb, ta) {
-            return Some((sb, tb));
-        }
-        if score >= 0 && self.is_sub(ta, tb) {
-            return Some((sa, ta));
-        }
-        if score == 0 {
-            return None;
-        }
-        let meet = self.meet_types(ta, tb);
-        Some((if score > 0 { sa } else { sb }, meet))
+        Some(match self.meet_members(bases, (a, ta), (b, tb), (false, false)) {
+            Meet::First => (sa, ta),
+            Meet::Second => (sb, tb),
+            Meet::Joint(first) => {
+                let meet = self.meet_types(ta, tb);
+                (if first { sa } else { sb }, meet)
+            }
+        })
     }
 
     /// The type of a term of a body, from the declared types the pickle holds: a path's as a
@@ -928,7 +1018,11 @@ impl<'a> Worker<'a> {
                 let (_, ty) = self.selection_target(cx, f, tasty, q, *n, owner, defs)?;
                 ty
             }
-            TermKind::Apply(fun, _) | TermKind::ApplySigPoly(fun, _, _) => self.term_type(cx, f, tasty, fun, defs),
+            TermKind::Apply(fun, _) | TermKind::ApplySigPoly(fun, _, _) => match self.constructed_type(cx, tasty, fun) {
+                Some(t) => Some(t),
+                None => self.term_type(cx, f, tasty, fun, defs),
+            },
+            TermKind::TypeApply(..) if self.constructed_type(cx, tasty, t).is_some() => self.constructed_type(cx, tasty, t),
             TermKind::TypeApply(fun, targs, _) => {
                 let callee = self.callee_of(cx, f, tasty, fun, defs);
                 // `x.asInstanceOf[T]`, the builtin of `Any` that no declaration stands behind: `T`.
@@ -952,19 +1046,19 @@ impl<'a> Worker<'a> {
             TermKind::New(ty) | TermKind::Elided(ty) => Some(self.map_type(cx, ty)),
             TermKind::Typed(_, ty, _) => Some(self.map_type(cx, ty)),
             TermKind::Block(_, e) | TermKind::Inlined { expansion: e, .. } => self.term_type(cx, f, tasty, e, defs),
-            // The branches' join, as scalac types the expression: the first class every branch
-            // conforms to, in the first branch's linearisation; none where a branch tells nothing.
+            // The branches' union, whose members are its join's (`select_narrowed`); none where
+            // a branch tells nothing.
             TermKind::If { then, els, .. } => {
                 let a = self.term_type(cx, f, tasty, then, defs)?;
                 let b = self.term_type(cx, f, tasty, els, defs)?;
-                self.join_types(a, b)
+                Some(self.branches_union(a, b))
             }
             TermKind::Match { cases, .. } => {
                 let mut joined: Option<TypeId> = None;
                 for c in cases {
                     let t = self.term_type(cx, f, tasty, &c.body, defs)?;
                     joined = Some(match joined {
-                        Some(j) => self.join_types(j, t)?,
+                        Some(j) => self.branches_union(j, t),
                         None => t,
                     });
                 }
@@ -974,7 +1068,7 @@ impl<'a> Worker<'a> {
                 let mut joined = self.term_type(cx, f, tasty, body, defs)?;
                 for c in cases {
                     let t = self.term_type(cx, f, tasty, &c.body, defs)?;
-                    joined = self.join_types(joined, t)?;
+                    joined = self.branches_union(joined, t);
                 }
                 Some(joined)
             }
@@ -988,48 +1082,44 @@ impl<'a> Worker<'a> {
         }
     }
 
-    /// The join of two types for the members selected from a branching expression: the type
-    /// itself where both are the same type, `Nothing` yielding the other; else the one common
-    /// base class every other common one derives from, where it takes no type arguments (the
-    /// join of two instances of a generic class, `GA` and `GB` both `GIndirect[Left]`, needs the
-    /// arguments' join, which is not built: no record then); two dominant common parents
-    /// (`Mix1 extends Wide, Narrow` and `Mix2 extends Narrow, Wide`) or a meet at `AnyRef` or
-    /// `AnyVal`, whose members have no symbols, give none.
-    fn join_types(&mut self, a: TypeId, b: TypeId) -> Option<TypeId> {
-        let wa = self.widen_path(a);
-        let da = self.dealias(wa);
-        let wb = self.widen_path(b);
-        let db = self.dealias(wb);
-        if da == db {
-            return Some(a);
+    /// The instance a constructor's selection `fun` makes when applied: the class `NEW` names,
+    /// applied to the type arguments the call gives it (`new Box(1)` is
+    /// `APPLY(TYPEAPPLY(SELECTin(NEW Box, <init>), Int), 1)`).
+    fn constructed_type(&mut self, cx: &mut MapCx, tasty: &TastyFile, fun: &Term) -> Option<TypeId> {
+        let (select, targs) = match &fun.kind {
+            TermKind::TypeApply(inner, targs, _) => (&**inner, &targs[..]),
+            _ => (fun, &[][..]),
+        };
+        let (TermKind::Select(q, n) | TermKind::SelectIn(q, n, _, _)) = &select.kind else { return None };
+        let TermKind::New(ty) = &q.kind else { return None };
+        if tasty.name(tasty.source_name(*n)) != "<init>" {
+            return None;
+        }
+        // The class `NEW` names is a constructor (an inferred call's type constructor, eta-expanded
+        // in the pickle) until the type arguments apply it, as dotty's `typedNew` types it.
+        let t = self.map_type_ctor(cx, ty);
+        match self.types.get(t) {
+            Type::Ctor(c) | Type::Class(c, EMPTY_LIST) if !targs.is_empty() => {
+                let args: Vec<TypeId> = targs.iter().map(|a| self.map_type(cx, a)).collect();
+                Some(self.types.class(c, &args))
+            }
+            Type::Ctor(_) => Some(self.map_type(cx, ty)),
+            _ => Some(t),
+        }
+    }
+
+    /// The type of a branching expression of two branches, as dotty's typer leaves it before
+    /// widening: their union, one branch's type where the other's is the same or `Nothing`.
+    fn branches_union(&mut self, a: TypeId, b: TypeId) -> TypeId {
+        let (da, db) = (self.widen_path(a), self.widen_path(b));
+        let (da, db) = (self.dealias(da), self.dealias(db));
+        if da == db || matches!(self.types.get(db), Type::Nothing) {
+            return a;
         }
         if matches!(self.types.get(da), Type::Nothing) {
-            return Some(b);
+            return b;
         }
-        if matches!(self.types.get(db), Type::Nothing) {
-            return Some(a);
-        }
-        let ka = self.class_of_prefix_type(a, 0)?;
-        let kb = self.class_of_prefix_type(b, 0)?;
-        if ka == kb {
-            // One class applied to different arguments: neither branch's arguments stand for
-            // the join's (`Box[Left]` and `Box[Right]` join at `Box[? <: Base]`).
-            return None;
-        }
-        self.complete_class(ka);
-        self.complete_class(kb);
-        let bases_b: Vec<ClassId> = self.syms.class(kb).base_types.iter().map(|&(c, _)| c).collect();
-        let common: Vec<ClassId> = self.syms.class(ka).base_types.iter().map(|&(c, _)| c).filter(|c| bases_b.contains(c)).collect();
-        let dominant: Vec<ClassId> = common
-            .iter()
-            .copied()
-            .filter(|&c| !common.iter().any(|&o| o != c && self.syms.class(o).base_types.iter().any(|&(d, _)| d == c)))
-            .collect();
-        let [d] = dominant[..] else { return None };
-        if d == self.b.any_ref || d == self.b.any_val || !self.syms.class(d).tparams.is_empty() {
-            return None;
-        }
-        Some(self.types.class(d, &[]))
+        self.types.union(a, b)
     }
 
     /// The selectors of an import or export clause at `addr`: each a record of what the
@@ -1599,6 +1689,284 @@ impl<'a> Worker<'a> {
         None
     }
 
+    /// The lexical bindings of the file `f` (`Lexical`): each import with its scope, the blocks
+    /// and templates, the parameters with their method and the local definitions with their
+    /// block.
+    fn lexical(&mut self, f: u32, tasty: &TastyFile, nodes: &[(Addr, crate::tasty::positions::Placed)], defs: &[DefRange]) -> Lexical {
+        let decoder = Decoder::new(tasty);
+        let mut scopes: Vec<(Addr, Addr, u8)> = nodes.iter().filter(|(_, p)| p.target.is_none() && matches!(p.tag, BLOCK | TEMPLATE)).map(|&(a, p)| (a, decoder.tree_end(a), p.tag)).collect();
+        scopes.sort_unstable();
+        let innermost = |addr: Addr, tags: &[u8]| -> Option<(Addr, Addr)> { scopes.iter().filter(|&&(s, e, t)| s < addr && addr < e && tags.contains(&t)).max_by_key(|s| s.0).map(|&(s, e, _)| (s, e)) };
+        let mut imports = Vec::new();
+        let mut names = Vec::new();
+        for &(a, p) in nodes {
+            if p.target.is_some() {
+                continue;
+            }
+            match p.tag {
+                IMPORT => {
+                    let stat = {
+                        let mut d = Decoder::new(tasty);
+                        TermDecoder::new(&mut d).stat_at(a)
+                    };
+                    let Stat::Import { path, selectors } = stat else { continue };
+                    let (scope, to) = match innermost(a, &[BLOCK, TEMPLATE]) {
+                        Some((s, e)) => (Some(s), e),
+                        None => (None, Addr::MAX),
+                    };
+                    let result = scope.filter(|&s| decoder.tag_at(s) == BLOCK).map(|s| {
+                        let mut r = tasty.trees().at(s as usize);
+                        r.byte();
+                        r.end();
+                        let expr = r.pos as Addr;
+                        (expr, Decoder::new(tasty).skip_at(expr))
+                    });
+                    let selectors = selectors.iter().map(|&(n, r)| (tasty.name(n), r.map(|r| tasty.name(r)))).collect();
+                    imports.push(ScopedImport { at: a, to, scope, result, path, selectors });
+                }
+                // A parameter binds in its method, the innermost definition of one around it.
+                PARAM => {
+                    let method = defs.iter().filter(|d| d.file == f && d.start < a && a < d.end && decoder.tag_at(d.start) == DEFDEF).max_by_key(|d| d.start);
+                    if let (Some(m), Some(n)) = (method, decoder.name_at(a)) {
+                        names.push((tasty.name(n), m.start, m.end));
+                    }
+                }
+                // A definition in a block binds in the block.
+                VALDEF | DEFDEF | TYPEDEF => {
+                    let Some((s, e)) = innermost(a, &[BLOCK, TEMPLATE]) else { continue };
+                    if decoder.tag_at(s) != BLOCK {
+                        continue;
+                    }
+                    if let Some(n) = decoder.name_at(a) {
+                        names.push((tasty.name(n), s, e));
+                    }
+                }
+                _ => {}
+            }
+        }
+        Lexical { imports, scopes, names }
+    }
+
+    /// The callee of the inline call whose trace at `addr` names the top-level class `class`:
+    /// what the path written at the call (`other`, `scala.Predef.summon`, `` Calls.`+!` ``) is
+    /// bound to where it stands, as dotty's typer bound the call's name before the call was
+    /// inlined (`Interactive.enclosingSourceSymbols` reads `Inlined.call`'s symbol; the pickle
+    /// keeps its top-level class alone). Proven by the trace: an inline method of that class, or
+    /// none, never another of the written name.
+    #[allow(clippy::too_many_arguments)]
+    fn traced_callee(&mut self, cx: &mut MapCx, f: u32, tasty: &TastyFile, lex: &Lexical, defs: &[DefRange], addr: Addr, path: &[(String, Span)], class: ClassId) -> Option<DocTarget> {
+        let (first, rest) = path.split_first()?;
+        let mut bound = self.lexical_binding(cx, f, tasty, lex, defs, addr, &first.0)?;
+        for (name, _) in rest {
+            bound = self.bound_member(cx, tasty, bound, name)?;
+        }
+        let Bound::Sym(m) = bound else { return None };
+        if self.syms.sym(m).mods & crate::ast::mods::INLINE == 0 || self.top_level_class_of(m) != Some(class) {
+            return None;
+        }
+        Some(self.shared(Target::Sym(m)))
+    }
+
+    /// What `name` is bound to at `addr` of the file `f`, the scopes around it innermost first
+    /// (Scala's binding precedence; a program that compiled binds no name twice at one level):
+    /// a block's local definitions, then its imports before `addr`; a method's parameters; a
+    /// class's members, its own and inherited, then its template's imports; at the package's
+    /// level its imports, explicit before wildcard, and its members; the root imports last
+    /// (`scala.Predef`, `scala`, `java.lang`). A local binding has no shared target: none.
+    #[allow(clippy::too_many_arguments)]
+    fn lexical_binding(&mut self, cx: &mut MapCx, f: u32, tasty: &TastyFile, lex: &Lexical, defs: &[DefRange], addr: Addr, name: &str) -> Option<Bound> {
+        let decoder = Decoder::new(tasty);
+        let mut frames: Vec<(Addr, Frame)> = Vec::new();
+        for &(s, e, tag) in lex.scopes.iter().filter(|&&(s, e, _)| s < addr && addr < e) {
+            frames.push((s, if tag == BLOCK { Frame::Block(s, e) } else { Frame::Template(s, None) }));
+        }
+        for d in defs.iter().filter(|d| d.file == f && d.start < addr && addr < d.end) {
+            match (decoder.tag_at(d.start), d.target) {
+                (DEFDEF, _) => frames.push((d.start, Frame::Method(d.start, d.end))),
+                // A class's template: its members.
+                (TYPEDEF, DocTarget::Shared(Target::Class(c))) => {
+                    for (_, fr) in frames.iter_mut() {
+                        if let Frame::Template(t, k @ None) = fr {
+                            if d.start < *t && *t < d.end {
+                                *k = Some(c);
+                            }
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+        frames.sort_by_key(|&(s, _)| std::cmp::Reverse(s));
+        let mut package: Option<PkgId> = None;
+        for (_, frame) in &frames {
+            match *frame {
+                Frame::Block(s, e) => {
+                    if lex.binds_local(name, s, e) {
+                        return None;
+                    }
+                    if let Some(b) = self.imports_binding(cx, tasty, lex, Some(s), addr, name) {
+                        return Some(b);
+                    }
+                }
+                Frame::Method(s, e) => {
+                    if lex.binds_local(name, s, e) {
+                        return None;
+                    }
+                }
+                Frame::Template(t, k) => {
+                    let Some(c) = k else { return None };
+                    if name == "this" {
+                        return Some(Bound::Class(c));
+                    }
+                    let n = self.interner.intern(name);
+                    if let Some(found) = self.class_member_named(c, n, None, Some(tasty)) {
+                        return self.target_bound(found);
+                    }
+                    if let Some(b) = self.imports_binding(cx, tasty, lex, Some(t), addr, name) {
+                        return Some(b);
+                    }
+                    let mut top = c;
+                    while let Owner::Class(o) = self.syms.class(top).owner {
+                        top = o;
+                    }
+                    if let Owner::Package(p) = self.syms.class(top).owner {
+                        package = Some(p);
+                    }
+                }
+            }
+        }
+        if let Some(b) = self.imports_binding(cx, tasty, lex, None, addr, name) {
+            return Some(b);
+        }
+        let n = self.interner.intern(name);
+        if let Some(p) = package {
+            if let Some(r) = self.pkg_term(p, n) {
+                return self.term_bound(r);
+            }
+        }
+        // The root imports: `scala.Predef`'s members, `scala`'s, `java.lang`'s.
+        let scala = self.b.scala_pkg;
+        let predef = self.interner.intern("Predef");
+        if let Some(Bound::Class(c)) = self.pkg_term(scala, predef).and_then(|r| self.term_bound(r)) {
+            if let Some(found) = self.class_member_named(c, n, None, Some(tasty)) {
+                return self.target_bound(found);
+            }
+        }
+        if let Some(r) = self.pkg_term(scala, n) {
+            return self.term_bound(r);
+        }
+        if let Some(lang) = self.java_lang_pkg() {
+            if let Some(r) = self.pkg_term(lang, n) {
+                return self.term_bound(r);
+            }
+        }
+        // A top-level package (`scala` of `scala.Predef.summon`).
+        self.demand_pkg(ROOT_PKG, n).map(Bound::Pkg)
+    }
+
+    /// What the imports of the scope `scope` (the package's level for none) visible at `addr`
+    /// bind `name` to: the last one's that binds it, explicit selectors before wildcards.
+    fn imports_binding(&mut self, cx: &mut MapCx, tasty: &TastyFile, lex: &Lexical, scope: Option<Addr>, addr: Addr, name: &str) -> Option<Bound> {
+        let visible: Vec<usize> = (0..lex.imports.len()).rev().filter(|&i| lex.imports[i].scope == scope && lex.imports[i].visible_at(addr)).collect();
+        for wildcard in [false, true] {
+            for &i in &visible {
+                let imp = &lex.imports[i];
+                let explicit = imp.selectors.iter().any(|(orig, ren)| (ren.as_deref() == Some(name) && orig != "_") || (ren.is_none() && orig == name));
+                if explicit != !wildcard {
+                    continue;
+                }
+                if let Some(b) = self.lexical_import_binding(cx, tasty, imp, name) {
+                    return Some(b);
+                }
+            }
+        }
+        None
+    }
+
+    /// What the import `imp` binds `name` to: the member a selector names it as (`x as name`,
+    /// `name`), or the path's member of the name a wildcard brings, unless a selector renames or
+    /// hides it.
+    fn lexical_import_binding(&mut self, cx: &mut MapCx, tasty: &TastyFile, imp: &ScopedImport, name: &str) -> Option<Bound> {
+        let mut wildcard = false;
+        for (orig, ren) in &imp.selectors {
+            match ren.as_deref() {
+                Some(r) if r == name && orig != "_" => return self.path_member(cx, tasty, &imp.path, orig),
+                Some(_) if orig == name => return None,
+                None if orig == name => return self.path_member(cx, tasty, &imp.path, name),
+                None if orig == "_" => wildcard = true,
+                _ => {}
+            }
+        }
+        if wildcard {
+            self.path_member(cx, tasty, &imp.path, name)
+        } else {
+            None
+        }
+    }
+
+    /// The member `name` of the package or the object an import's path names.
+    fn path_member(&mut self, cx: &mut MapCx, tasty: &TastyFile, path: &TType, name: &str) -> Option<Bound> {
+        let bound = match self.scope_of(cx, path)? {
+            Scope::Pkg(p) => Bound::Pkg(p),
+            Scope::Class(c) => Bound::Class(c),
+        };
+        self.bound_member(cx, tasty, bound, name)
+    }
+
+    /// The member `name` of a package or of a class; a value's members are its type's, which a
+    /// lexical binding does not give: none.
+    fn bound_member(&mut self, _cx: &mut MapCx, tasty: &TastyFile, bound: Bound, name: &str) -> Option<Bound> {
+        let n = self.interner.intern(name);
+        match bound {
+            Bound::Pkg(p) => {
+                let r = self.pkg_term(p, n)?;
+                self.term_bound(r)
+            }
+            Bound::Class(c) => {
+                let found = self.class_member_named(c, n, None, Some(tasty))?;
+                self.target_bound(found)
+            }
+            Bound::Sym(_) => None,
+        }
+    }
+
+    fn term_bound(&self, r: super::super::resolve::TermRef) -> Option<Bound> {
+        match r {
+            super::super::resolve::TermRef::Package(p) => Some(Bound::Pkg(p)),
+            super::super::resolve::TermRef::Class(c) => Some(Bound::Class(c)),
+            other => self.target_bound(Target::Sym(other.sym()?)),
+        }
+    }
+
+    fn target_bound(&self, t: Target) -> Option<Bound> {
+        match t {
+            Target::Class(c) => Some(Bound::Class(c)),
+            Target::Sym(s) => Some(match self.syms.sym(s).kind {
+                SymKind::Object(c) => Bound::Class(c),
+                _ => Bound::Sym(s),
+            }),
+            _ => None,
+        }
+    }
+
+    /// The shared target a binding names.
+    fn bound_target(&self, b: Bound) -> Option<DocTarget> {
+        match b {
+            Bound::Class(c) => Some(DocTarget::Shared(Target::Class(c))),
+            Bound::Sym(s) => Some(self.shared(Target::Sym(s))),
+            Bound::Pkg(_) => None,
+        }
+    }
+
+    /// The top-level class a member stands in, an object's module class for an object's.
+    fn top_level_class_of(&self, m: SymId) -> Option<ClassId> {
+        let Owner::Class(mut k) = self.syms.sym(m).owner else { return None };
+        while let Owner::Class(o) = self.syms.class(k).owner {
+            k = o;
+        }
+        Some(k)
+    }
+
     /// The member `name` of the class `c` or of its ancestors: among several alternatives the
     /// one the signed name `signed` states, else none where the name alone does not tell.
     pub(in crate::typer) fn class_member_named(&mut self, c: ClassId, name: Name, signed: Option<NameRef>, tasty: Option<&TastyFile>) -> Option<Target> {
@@ -1788,6 +2156,22 @@ fn type_ref_target(r: super::super::resolve::TypeRef) -> Option<DocTarget> {
 /// it there, else at its start (a reconstructed span, a `NAMEDARG` whose point is at `=`), with
 /// whether the start was taken.
 fn placed_span(text: &str, units: &[u32], point: Option<u32>, start: u32, name: &str) -> Option<(Span, bool)> {
+    placed_name(text, units, point, start, name).map(|(span, at_start)| (with_backquotes(text, span), at_start))
+}
+
+/// A name's span with the backquotes it is written in, the whole of its token (a query at the
+/// opening one is a query of the name, as in a program's own index).
+fn with_backquotes(text: &str, span: Span) -> Span {
+    let b = text.as_bytes();
+    let (s, e) = (span.start as usize, span.end as usize);
+    if s > 0 && b.get(s - 1) == Some(&b'`') && b.get(e) == Some(&b'`') {
+        Span::new(span.start - 1, span.end + 1)
+    } else {
+        span
+    }
+}
+
+fn placed_name(text: &str, units: &[u32], point: Option<u32>, start: u32, name: &str) -> Option<(Span, bool)> {
     let unit = |u: u32| -> usize { units.get(u as usize).copied().unwrap_or(text.len() as u32) as usize };
     if let Some(p) = point {
         if let Some(span) = name_span(text, unit(p), name) {
@@ -1804,8 +2188,25 @@ fn placed_span(text: &str, units: &[u32], point: Option<u32>, start: u32, name: 
 
 #[cfg(test)]
 mod tests {
-    use super::{placed_span, utf16_table};
+    use super::{placed_span, utf16_table, written_path};
     use crate::source::Span;
+
+    #[test]
+    fn a_written_path_is_read_to_its_last_name() {
+        let names = |text: &str| written_path(text, 0).map(|p| p.into_iter().map(|(n, s)| (n, s.start, s.end)).collect::<Vec<_>>());
+        assert_eq!(names("other(1)"), Some(vec![("other".to_string(), 0, 5)]));
+        assert_eq!(names("scala.Predef./* x */summon[Int]"), Some(vec![("scala".to_string(), 0, 5), ("Predef".to_string(), 6, 12), ("summon".to_string(), 20, 26)]));
+        assert_eq!(names("Calls.`+!`(1)"), Some(vec![("Calls".to_string(), 0, 5), ("+!".to_string(), 6, 10)]));
+        assert_eq!(names("foo_+(1)"), Some(vec![("foo_+".to_string(), 0, 5)]));
+        assert_eq!(names("(1)"), None);
+    }
+
+    #[test]
+    fn a_backquoted_name_is_placed_with_its_backquotes() {
+        let text = "Calls.`+!`(1)";
+        let units = utf16_table(text);
+        assert_eq!(placed_span(text, &units, Some(6), 6, "+!"), Some((Span::new(6, 10), false)));
+    }
 
     #[test]
     fn utf16_offsets_map_to_bytes() {

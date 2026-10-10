@@ -207,6 +207,17 @@ impl<'a> Worker<'a> {
         if self.index.is_some() {
             if let Pat::Ctor(path, _) = self.cur_ast().pat(p) {
                 self.index_pattern(path, tp);
+                // A generic case class's instance the pattern matches (`Pair[Int]`), whose
+                // fields signature help shows at the scrutinee's types, as an extractor's result;
+                // another's fields are at their types already.
+                if let TPat::Class(c, class_ty, ..) = self.prog.pats[tp.idx()] {
+                    if !self.syms.class(c).tparams.is_empty() {
+                        let span = self.cur_ast().pat_spans[p.idx()];
+                        let ty = self.zonk(class_ty);
+                        let te = self.prog.add(crate::tir::TExpr::Unit);
+                        self.index_value(span, te, ty);
+                    }
+                }
             }
         }
         tp
