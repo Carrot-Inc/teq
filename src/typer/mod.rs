@@ -749,6 +749,15 @@ pub struct Worker<'a> {
     /// selection typed, for a setter call (`assign_op_through_setter`).
     pub assign_op_target: Option<crate::ast::ExprId>,
     pub assign_op_receiver: Option<(TExprId, TypeId)>,
+    /// The qualifier of the selection being typed with the type its written tree gives it, where
+    /// that is not the type it was typed as (`written_prefix`): the prefix its member is looked
+    /// up through.
+    pub written_qualifier: Option<(TExprId, TypeId)>,
+    /// The joint signature of an intersection's member (`subtype::JointInfo`) that a selection's
+    /// lookup or an overload's alternative leaves for the application of the symbol on the
+    /// receiver it names, which takes it in the place of the symbol's signature
+    /// (`take_joint_sig`); another receiver or symbol leaves it be.
+    pub joint_sig: Option<(Option<TExprId>, SymId, std::sync::Arc<MethodSig>)>,
     /// Set while the receiver of a member selection is typed, until the application it is
     /// takes it (an inline expansion under it clears it): a bare reference to a polymorphic method leaves the type arguments its result
     /// does not fix open, and says so in `receiver_left_open`.
@@ -2059,6 +2068,8 @@ impl<'a> Worker<'a> {
             dropped_type_list: None,
             assign_op_target: None,
             assign_op_receiver: None,
+            written_qualifier: None,
+            joint_sig: None,
             open_receiver: false,
             receiver_left_open: false,
             open_applied_receiver: None,
@@ -2377,6 +2388,8 @@ impl<'a> Worker<'a> {
             dropped_type_list: Default::default(),
             assign_op_target: None,
             assign_op_receiver: None,
+            written_qualifier: None,
+            joint_sig: None,
             open_receiver: Default::default(),
             receiver_left_open: Default::default(),
             open_applied_receiver: Default::default(),

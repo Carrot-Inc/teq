@@ -617,7 +617,9 @@ interpolator_patterns
 interpolators
 intersection_alias_outside_bounds
 intersection_bounds_over_params
+intersection_denotation_meet
 intersection_generic_overloads
+intersection_joint_member
 intersection_member_bounds_meet
 irrefutable_extractor_exhaustive
 iterable_to_iterator
@@ -861,6 +863,7 @@ object_inherited_protected
 object_member
 objects_deep_equals
 opaque_bound
+opaque_intersection_bound
 opaque_into_union
 opaque_trait_prefix
 opaque_type_test
@@ -1397,6 +1400,7 @@ union_widening_local
 unions
 unreachable_deep_split
 untupled_partial_lambda
+using_conversion_param
 using_default
 util_sorting
 uuid

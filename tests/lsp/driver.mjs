@@ -810,11 +810,8 @@ const appliedRows = [
   ["(as before) the receiver of an explicit apply, a val named `apply`", ["apply.apply(30)", 0, 0], ["val apply:", 0, 4, 5]],
   ["(as before) the receiver of a tuple's `head`, a val named `head`", ["head.head(31)", 0, 0], ["val head", 0, 4, 4]],
   ["(as before) the receiver of a tuple's explicit apply, a val named `apply`", ["apply.apply(0)(34)", 0, 0], ["val apply =", 0, 4, 5]],
-  ["(as before, nothing) the `head` of a tuple named `head`", ["head.head(31)", 0, 5], null],
-  ["(as before, nothing) the explicit apply of a tuple named `apply`", ["apply.apply(0)(34)", 0, 6], null],
   ["(as before) an ascribed receiver of an explicit apply", ["(apply: Int => Int).apply(44)", 0, 1], ["val apply: Int => Int = x => x + 2", 0, 4, 5]],
   ["(as before) a block's result before a tuple's `head`", ["{ head }.head(45)", 0, 2], ["val head = (f, (x", 0, 4, 4]],
-  ["(as before, nothing) the `head` after a block's result", ["{ head }.head(45)", 0, 9], null],
   ["a tuple an import renames, beside a value of its original name", ["head(0)(54)", 0, 0, 4], ["val pair: (Int => Int, Int => Int) = (x => x, x => x)", 0, 4, 4]],
   ["a function value an import renames", ["apply(55)", 0, 0, 5], ["val g: Int => Int = x => x\n", 0, 4, 1]],
   ["(as before) an import's selector, `pair`", ["{pair as head", 0, 1], ["val pair: (Int => Int, Int => Int) = (x => x, x => x)", 0, 4, 4]],
@@ -822,7 +819,6 @@ const appliedRows = [
   ["(as before) an import's selector, `g`", ["g as apply", 0, 0], ["val g: Int => Int = x => x\n", 0, 4, 1]],
   ["(as before) an import's rename, `apply`", ["g as apply", 0, 5, 5], ["val g: Int => Int = x => x\n", 0, 4, 1]],
   ["(as before) a tuple's `head` receiver, an import renaming another value to `head`", ["pair.head(50)", 0, 0], ["val pair = (f, f)", 0, 4, 4]],
-  ["(as before, nothing) the tuple's `head` beside that import", ["pair.head(50)", 0, 5], null],
   ["(as before) an explicit apply's receiver, an import renaming another value to `apply`", ["g.apply(51)", 0, 0], ["val g: Int => Int = x => x + 1", 0, 4, 1]],
   ["(as before) a tuple of tuples, its written member's receiver", ["tuples._1(0)(52)", 0, 0], ["val tuples", 0, 4, 6]],
   ["(as before) a tuple of tuples, another member's receiver", ["tuples._2(1)(53)", 0, 0], ["val tuples", 0, 4, 6]],
@@ -853,7 +849,7 @@ const appliedRows = [
   ["a parameter a given converts, in its object's scope", ["cfg(82)", 0, 0], ["go(spec: Spec, cfg", 0, 15, 3]],
   ["a parameter a given converts to a SAM value", ["ob(83)", 0, 0], ["ob: Ob,", 0, 0, 2]],
   ["a parameter an implicit class gives an apply", ["ri(84)", 0, 0], ["ri: Ri,", 0, 0, 2]],
-  ["a parameter an extension gives an apply", ["ex(85)", 0, 0], ["ex: Ex)", 0, 0, 2]],
+  ["a parameter an extension gives an apply: the extension, as dotty's tree names it", ["ex(85)", 0, 0, 2], ["extension (e: Ex) def apply", 0, 22, 5]],
   ["an object's val an implicit def converts, spelled like it", ["UseC.spec(86)", 0, 5], ["val spec: Spec = Spec(1)", 0, 4, 4]],
   ["a tuple of values an implicit def converts", ["specs(0)(87)", 0, 0], ["val specs", 0, 4, 5]],
   ["a tuple of values a given converts", ["cfgs(1)(88)", 0, 0], ["val cfgs", 0, 4, 4]],
@@ -876,7 +872,7 @@ const appliedRows = [
   ["a generator's binder spelled as `fo`, at its pattern", ["f(fo)", 0, 2], ["fo <- List", 0, 0, 2]],
   ["a given's own method, as scalac names it", ["counter.count(5)", 0, 8], ["def count(x: Int): Int = x", 0, 4, 5]],
   ["(as before) a given", ["counter.count(5)", 0, 0], ["given counter", 0, 6, 7]],
-  ["an ascribed object's member: the base's, and the object's that the call runs", ["(Square: Shape).area(2)", 0, 16], [["def area(x: Int): Int\n", 0, 4, 4], ["def area(x: Int): Int = x * x", 0, 4, 4]]],
+  ["an ascribed object's member: the base's alone, as dotty's tree names it", ["(Square: Shape).area(2)", 0, 16], ["def area(x: Int): Int\n", 0, 4, 4]],
   ["(as before) the ascribed object", ["(Square: Shape).area(2)", 0, 1], ["object Square", 0, 7, 6]],
   ["(as before) the object's own member", ["Square.area(3)", 0, 7], ["def area(x: Int): Int = x * x", 0, 4, 4]],
   ["a nullary method beside a conversion of its name, its result converted", ["Spec2.spec2()(4)", 0, 6], ["def spec2(): Spec2", 0, 4, 5]],
@@ -893,7 +889,16 @@ const appliedRows = [
   ["(as before) a conversion's method value", ["= Conv.conv", 0, 7], ["implicit infix def conv", 0, 19, 4]],
   ["(as before) an extension on an ascribed object's base: the extension alone", ["(PlainObj: Plain).pf(2)", 0, 18], ["extension (p: Plain) def pf", 0, 25, 2]],
   ["(as before) the object ascribed its base", ["(PlainObj: Plain).pf(2)", 0, 1], ["object PlainObj", 0, 7, 8]],
-  ["(as before, nothing) a source extension's `apply` applied twice", ["e3(1)(2)", 0, 0], null],
+  ["a source extension's `apply` applied twice: the extension", ["e3(1)(2)", 0, 0, 2], ["extension (e3: Ex3) def apply", 0, 24, 5]],
+  ["an intersection's member: the second part's, its class first in the intersection's base classes", ["PartB): Int = x.n", 0, 16], ["trait PartB:\n    def n", 0, 21, 1]],
+  ["an intersection's member through an opaque type's bound", ["Parts.Both): Int = x.n", 0, 21], ["trait PartB:\n    def n", 0, 21, 1]],
+  ["a branching expression's member: the first in its branches' union's base classes", ["then a else b).n", 0, 15], ["trait PartA:\n    def n", 0, 21, 1]],
+  ["an intersection's members whose signatures differ: two alternatives, the more specific taken", ["PolyR): String = x.f", 0, 19], ["trait PolyR:\n    def f", 0, 21, 1]],
+  ["one symbol through two instances of its owner: its information met", ["GBox[String]): String = x.get", 0, 26], ["trait GBox[A]:\n    def get", 0, 23, 3]],
+  ["an overloaded name's matching alternatives met, the concrete one's symbol", ["OverR): String = x.g", 0, 19], ["trait OverC:\n    def g", 0, 21, 1]],
+  ["an ascribed branching expression: the ascription the prefix", ["PartA & PartB).n", 0, 15], ["trait PartB:\n    def n", 0, 21, 1]],
+  ["a value a using parameter's `Conversion` makes a function of: the value", ["Int => Int]): Int = x(1)", 0, 20], ["usingConversion(x: Int)", 0, 16, 1]],
+  ["an extension `apply` with a leading using clause: the extension", ["test(x: Ex6): Int = x(1)", 0, 20, 1], ["(x: Ex6) def apply", 0, 13, 5]],
 ]
 
 /** The `apply` written after a function value: `Function1.apply`, whose declaration is in
@@ -909,6 +914,7 @@ const appliedFunctionApplies = [
   ["the explicit apply of a parameter", ["w.apply(6)", 0, 2]],
   ["the explicit apply of a call's result", ["curried(1).apply(7)", 0, 11]],
   ["the explicit apply of a curried value, a list after it", ["curried.apply(2)(8)", 0, 8]],
+  ["the explicit apply of a lambda, its body reduced in place", ["x + 1).apply(95)", 0, 7]],
 ]
 
 /** Written members of a tuple that the element reads of their applications follow, which name
@@ -992,6 +998,20 @@ async function appliedValues() {
       const file = appliedIn[project]
       std[project] = await c.result("textDocument/definition", at_(file, "PartialFunction[Int", 0, 0))
       await appliedChecks(`the ${project} project`, file, lspAsk(c), project !== "js")
+      // A tuple's written `head` and `apply` are `Tuple`'s, as dotty's tree names them (the typer
+      // reads them as the elements): the lean std's in its `prelude.scala`, scala-library's in
+      // its `Tuple.scala`.
+      for (const [needle, delta, member] of [["head.head(31)", 5, "head"], ["apply.apply(0)(34)", 6, "apply"], ["{ head }.head(45)", 9, "head"], ["pair.head(50)", 5, "head"]]) {
+        const r = await c.result("textDocument/definition", at_(file, needle, 0, delta))
+        const where = r?.length === 1 && fileURLToPath(r[0].uri)
+        const document = where && (project === "js" ? /\/std-[^/]+\/prelude\.scala$/.test(where) : where.endsWith("/scala-library-3.8.4-sources.jar/scala/Tuple.scala"))
+        const spelled = document && readFileSync(where, "utf-8").split("\n")[r[0].range.start.line].slice(r[0].range.start.character, r[0].range.end.character)
+        check(`the ${project} project: a tuple's written \`${member}\` at \`${needle}\`: \`Tuple\`'s`, spelled === member, r)
+      }
+      // The member an ascribed object's call names is the base's; the object's that runs is one
+      // of its implementations.
+      const impls = await c.result("textDocument/implementation", at_(file, "(Square: Shape).area(2)", 0, 16))
+      check(`the ${project} project: implementations of an ascribed object's member: the object's override`, sameLocs(impls, [at(file, "def area(x: Int): Int = x * x", 0, 4, 4)]), impls)
       // The written name of a function value applied is no call: the hierarchy there is the
       // enclosing method's; a method whose result is applied is a call of it.
       const [item, ...more] = (await c.result("textDocument/prepareCallHierarchy", at_(file, "h(1)"))) ?? []
@@ -1028,8 +1048,8 @@ async function appliedValues() {
       )
       const fromCollisions = await outgoingOf("collisions")
       check(
-        `the ${project} project: outgoingCalls: an inline method whose result is applied, and the written \`apply\``,
-        same((fromCollisions ?? []).filter((o) => o.to.name !== "apply").map((o) => [o.to.name, o.fromRanges.map((x) => x.start)]), [["factory", [pos(file, "factory()(33)")]]]) && writtenApply(fromCollisions, [["apply.apply(30)", 6]]),
+        `the ${project} project: outgoingCalls: an inline method whose result is applied, a tuple's written \`head\` (\`Tuple\`'s), and the written \`apply\``,
+        same((fromCollisions ?? []).filter((o) => o.to.name !== "apply").map((o) => [o.to.name, o.to.detail, o.fromRanges.map((x) => x.start)]), [["head", "scala.Tuple", [pos(file, "head.head(31)", 0, 5)]], ["factory", `${project === "jvm" ? "app" : "web"}.Applied`, [pos(file, "factory()(33)")]]]) && writtenApply(fromCollisions, [["apply.apply(30)", 6]]),
         fromCollisions,
       )
       for (const [name, needle, use, useDelta, caller] of [["mk", "def mk", "mk()(11)", 0, "run"], ["fun", "def fun", "1.fun(14)", 2, "run"], ["factory", "def factory()", "factory()(33)", 0, "collisions"]]) {
@@ -1547,6 +1567,16 @@ async function signatureCases() {
     ["a function type's arrow in an ascription, the cursor before or in a written type", "object A {\n  def f(g: Int => Int, n: Int): Int = n\n  val x: Int => Int = i => i\n  val a = f(x: Int => |Int, 2)\n  val b = f(x: Int => I|nt, 2)\n  val c = f(i => |i, 2)\n}", [["f(g: Int => Int, n: Int): Int", "g: Int => Int"], ["f(g: Int => Int, n: Int): Int", "g: Int => Int"], null]],
     ["a polymorphic function literal's body", "object A {\n  def f(g: [T] => T => T): Int = 1\n  val a = f([T] => |)\n  val b = f([T] => (x: T) => |x)\n}", [null, null]],
     ["outside any list: after a call, in a type argument list, in a block argument", "object A { def f(a: Int): Int = a; val x = f(1)|; val y = List[|Int](); val z = Some(1).map { x => |x } }", [null, null, null]],
+    // Dotty's `Signatures` read the typed application: the alternative it applied (a value's
+    // `apply` after an argument's conversion), the value a list applies (a context function's
+    // result, the instance a constructor's inferred type arguments make), a parent's constructor
+    // in `extends`, a generic case class's fields at the scrutinee's type.
+    ["a value's overloaded `apply` the build chose through a conversion of the argument", "import scala.language.implicitConversions\nclass Value { def apply(x: Int): Int = x; def apply(x: String): String = x }\nobject A {\n  given Conversion[Boolean, String] = _.toString\n  val v = new Value\n  val r = v(|true)\n}", [["apply(x: String): String", "x: String", 2]]],
+    ["a returned or constructed value's overloaded `apply` the build chose, the value any expression", "import scala.language.implicitConversions\nclass V { def apply(x: Int): Int = x; def apply(x: String): String = x }\nobject A {\n  given Conversion[Boolean, String] = _.toString\n  def get(): V = new V\n  val a = get()(|true)\n  val b = List(new V).head(|true)\n  val c = (new V)(|true)\n  val d = ({ new V })(|true)\n}", [["apply(x: String): String", "x: String", 2], ["apply(x: String): String", "x: String", 2], ["apply(x: String): String", "x: String", 2], ["apply(x: String): String", "x: String", 2]]],
+    ["a context function's result applied, the givens inserted", "object A {\n  def contextual(): String ?=> Int => Int = x => x\n  given String = \"\"\n  val r = contextual()(|1)\n}", [["apply(v1: Int): Int", "v1: Int"]]],
+    ["a constructed instance's apply at the inferred type arguments", "class C[T](x: T) { def apply(y: T): T = y }\nobject A { val r = new C(1)(|2) }", [["apply(y: Int): Int", "y: Int"]]],
+    ["a parent's constructor in `extends`", "class Parent(x: Int, y: String)\nclass Child extends Parent(1, |\"a\")", [["Parent(x: Int, y: String)", "y: String"]]],
+    ["a generic case class pattern, its fields at the scrutinee's type", "case class Pair[T](x: T, y: Int)\nobject A { def f(p: Pair[String]) = p match { case Pair(a, |b) => a } }", [["Pair(x: String, y: Int)", "y: Int"]]],
   ]
   let k = 0
   for (const [name, marked, wanted] of cases) {
@@ -1574,8 +1604,11 @@ async function signatureCases() {
         const range = sig?.parameters?.[help.activeParameter]?.label
         const entry = [sig?.label, range ? sig.label.slice(range[0], range[1]) : undefined]
         if (help.signatures.length > 1) entry.push(help.signatures.length)
-        // Each signature's own active parameter is the answer's for the active one.
+        // Each signature's own active parameter is the answer's for the active one, and names
+        // one of its parameters or none (`null`), never an index past them (a client takes that
+        // for the first).
         if (sig?.activeParameter !== help.activeParameter) entry.push("activeParameter differs")
+        if (help.signatures.some((x) => x.activeParameter !== null && !(x.activeParameter < x.parameters.length))) entry.push("an active parameter out of range")
         got.push(entry)
       }
       check(`signature help: ${name}`, same(got, wanted), got)
@@ -1589,7 +1622,8 @@ async function signatureCases() {
 
 /** `textDocument/signatureHelp` through the server: its capability, an answer in the document's
  * own positions, null outside a call, and `ContentModified` for a request behind a build that an
- * edit cancels, never the later text's answer. */
+ * edit cancels, never the later text's answer; a parameter's label a range of the signature's
+ * label for a client with `labelOffsetSupport`, its text for one without. */
 async function signatureHelp() {
   const root = join(work, "link/signature-help")
   mkdirSync(root, { recursive: true })
@@ -1605,7 +1639,8 @@ async function signatureHelp() {
   const helpAt = (text, needle) => c.request("textDocument/signatureHelp", { ...doc(file), position: positionAt(text, text.indexOf(needle.replace("|", "")) + needle.indexOf("|")) }, { timeout: 20000 }).catch((e) => ({ error: { message: e.message } }))
   try {
     encoding = "utf-16"
-    const init = await c.result("initialize", { processId: null, rootUri: uriOf(root), capabilities: {} })
+    const offsets = { textDocument: { signatureHelp: { signatureInformation: { parameterInformation: { labelOffsetSupport: true } } } } }
+    const init = await c.result("initialize", { processId: null, rootUri: uriOf(root), capabilities: offsets })
     const provider = init.capabilities.signatureHelpProvider
     check("initialize: signature help triggered by `(` and `,`, retriggered by `,`", same(provider, { triggerCharacters: ["(", ","], retriggerCharacters: [","] }), init.capabilities)
     c.notify("initialized", {})
@@ -1635,6 +1670,22 @@ async function signatureHelp() {
     c.proc.kill()
   } finally {
     rmSync(`${barrier}.start`, { force: true })
+  }
+  // A client that declares no `labelOffsetSupport` takes each parameter's label as its text.
+  const plain = new Client(root)
+  try {
+    await plain.result("initialize", { processId: null, rootUri: uriOf(root), capabilities: {} })
+    plain.notify("initialized", {})
+    plain.notify("textDocument/didOpen", { textDocument: { uri: uriOf(file), languageId: "scala", version: 1, text: t1 } })
+    const at = t1.indexOf("pick(1, \"x\")") + "pick(1, ".length
+    const a = await plain.request("textDocument/signatureHelp", { ...doc(file), position: positionAt(t1, at) }, { timeout: 20000 })
+    const sig = a.result?.signatures?.[0]
+    check("signature help without labelOffsetSupport: each parameter's label its text", sig?.label === "pick(first: Int, second: String): Int" && same(sig.parameters.map((p) => p.label), ["first: Int", "second: String"]) && a.result.activeParameter === 1, a)
+    await plain.result("shutdown", null)
+    plain.notify("exit", null)
+  } catch (e) {
+    check("the signature help scenario without labelOffsetSupport ran to its end", false, `${e.stack}\nstderr: ${plain.stderr.slice(-1000)}`)
+    plain.proc.kill()
   }
 }
 
@@ -1719,6 +1770,17 @@ async function completionSnippets() {
     ["a qualified alias of a function type as a type argument", "val a67 = identity[Lib.Fn](|)", "inc", [null]],
     ["a context function value's using argument", "val a68 = Lib.ctxFn(using |)", "inc", [null]],
     ["the function after a context function's using argument", "val a69 = Lib.ctxThen(using 1)(|)", "inc", [null]],
+    // The expected type the program gives the name: an aggregate's element by its variable's
+    // bound, a trait of a single method that takes parameters (eta-expanded to it), and not one
+    // that takes none (a nullary method there is E100); an extension in scope by its name; an
+    // alias's class after `new`.
+    ["a tuple's element a yield's variable bound expects a function of", "val a70: List[(Int => Int, Int)] = for (i <- List(1)) yield (Lib.in|, i)", "inc", [null]],
+    ["an argument a trait of one method taking parameters is expected of", "val a71 = Lib.takeCmp(Lib.cm|)", "cmp", [null]],
+    ["an argument a trait of one method taking none is expected of", "val a72 = Lib.takeJob(Lib.wor|)", "work", ["work()$0"]],
+    ["an extension in scope by its name, its receiver's clause written", "val a73 = appe|", "append", ["append(${1:s})(${2:y})$0"]],
+    ["an alias of a case class after `new`: its class's constructor", "val a74 = new PointAl|", "PointAlias", ["PointAlias(${1:x}, ${2:y})$0"]],
+    ["an argument a trait of one method taking five parameters is expected of", "val a75 = Lib.takeFive(Lib.sum|)", "sum5", [null]],
+    ["a nested tuple's element a yield's variable bound expects a function of", "val a76: List[((Int => Int, Int), String)] = for (i <- List(1)) yield ((Lib.in|, i), \"x\")", "inc", [null]],
   ]
   const header = [
     "package use",
@@ -1760,8 +1822,21 @@ async function completionSnippets() {
     "  def take(x: String): Int = 2",
     "  def id[T](x: T): T = x",
     "  extension (s: String) def append(y: String): String = s + y",
+    "  trait Cmp:",
+    "    def compare(a: Int, b: Int): Int",
+    "  def takeCmp(c: Cmp): Int = c.compare(1, 2)",
+    "  def cmp(a: Int, b: Int): Int = a - b",
+    "  trait Job:",
+    "    def run(): Unit",
+    "  def takeJob(j: Job): Int = 1",
+    "  def work(): Unit = ()",
+    "  trait Five:",
+    "    def run(a: Int, b: Int, c: Int, d: Int, e: Int): Int",
+    "  def takeFive(f: Five): Int = f.run(1, 2, 3, 4, 5)",
+    "  def sum5(a: Int, b: Int, c: Int, d: Int, e: Int): Int = a + b + c + d + e",
     "",
     "case class Point(x: Int, y: Int)",
+    "type PointAlias = Point",
     "class Plain",
     "class Ctor(a: Int)(using s: String)",
     "",
@@ -1803,6 +1878,30 @@ async function completionSnippets() {
     check("snippets: the check session ran", false, e.stack)
   } finally {
     s.child.stdin.end("quit\n")
+  }
+  // A Java class's single constructor after `new`, on the JVM's class path (scala-library's jar
+  // beside the sourcecode jar the run is given): a placeholder for its parameter, which the
+  // class file names synthetically.
+  const m2 = jar?.includes("/maven2/") ? jar.slice(0, jar.indexOf("/maven2/") + "/maven2/".length) : null
+  const library = m2 && join(m2, "org/scala-lang/scala-library/3.8.4/scala-library-3.8.4.jar")
+  if (library && existsSync(library)) {
+    const jroot = join(work, "link/completion-snippets-jvm")
+    mkdirSync(jroot, { recursive: true })
+    const jtext = "object J:\n  val r = new java.io.StringRea\n  val b = new java.lang.StringBuild\n"
+    writeFileSync(join(jroot, "J.scala"), jtext)
+    const js = session(realpathSync(jroot), ["--target", "jvm", "--classpath", library])
+    try {
+      await js.next()
+      const item = async (needle, label) => ((await js.ask(`complete ${realpathSync(join(jroot, "J.scala"))} ${Buffer.byteLength(jtext.slice(0, jtext.indexOf(needle) + needle.length))} 3`)).result?.items ?? []).find((i) => i.label === label)
+      const reader = await item("new java.io.StringRea", "StringReader")
+      check("snippets: a Java class's single constructor after `new`", reader?.insertTextFormat === 2 && /^StringReader\(\$\{1:[^}]+\}\)\$0$/.test(reader.textEdit.newText), reader)
+      const builder = await item("new java.lang.StringBuild", "StringBuilder")
+      check("snippets: a Java class's overloaded constructors after `new`: the name alone", builder?.textEdit?.newText === "StringBuilder" && builder.insertTextFormat === undefined, builder)
+    } catch (e) {
+      check("snippets: the JVM check session ran", false, e.stack)
+    } finally {
+      js.child.stdin.end("quit\n")
+    }
   }
   // Through the server: the capability read, the item's snippet, its resolve keeping it.
   const c = new Client(root)
@@ -2897,12 +2996,14 @@ async function libraries() {
       check("a fixture document: incoming calls of a local method", same((inner2In ?? []).map((i) => i.from?.name), ["localCall"]), inner2In)
       r = await c.result("textDocument/definition", at_(casesDoc, "inner2(x = 1)", 0, 7))
       check("a fixture document: a named argument to a local method names its parameter", sameLocs(r, [at(casesDoc, "def inner2(x: Int)", 0, 11, 1)]), r)
-      // The receiver's type as scalac has it: a join of one class applied differently keeps no
-      // branch's arguments, a type parameter's bound and a refinement's parent carry their
-      // arguments, an intersection selects in its more specific component, a user-defined
-      // `asInstanceOf` is no cast.
+      // The receiver's type as scalac has it: a join of one class applied differently is the
+      // class over its arguments' join (dotty's `OrType.join`), a type parameter's bound and a
+      // refinement's parent carry their arguments, an intersection selects in its more specific
+      // component, a user-defined `asInstanceOf` is no cast.
+      r = await c.result("textDocument/definition", at_(casesDoc, "(if flag then l else r).get.value", 0, 24))
+      check("a fixture document: a selection on the join of one class applied differently, the class's member", sameLocs(r, [at(casesDoc, "class Box[+A](val get: A)", 0, 18, 3)]), r)
       r = await c.result("textDocument/definition", at_(casesDoc, "(if flag then l else r).get.value", 0, 28))
-      check("a fixture document: a selection on the join of one class applied differently makes no record", r === null, r)
+      check("a fixture document: a selection on its result, the arguments' join's member", sameLocs(r, [at(casesDoc, "  def value: Int = 0", 0, 6, 5)]), r)
       r = await c.result("textDocument/definition", at_(casesDoc, "def bounded2[T <: Box[Left]](x: T): Int = x.get.value", 0, 50))
       check("a fixture document: a selection through a type parameter's bound keeps its arguments", sameLocs(r, [at(casesDoc, "override def value: Int = 1", 0, 13, 5)]), r)
       r = await c.result("textDocument/definition", at_(casesDoc, "def meet(x: Base & Left): Int = x.value", 0, 34))
@@ -2962,8 +3063,10 @@ async function libraries() {
       check("a fixture document: one member inherited with different arguments, the narrower result", sameLocs(r, [leftValue]), r)
       r = await c.result("textDocument/definition", at_(casesDoc, "def generic3(x: GIndirect[Base] & GIndirect[Left]): Int = x.get.value", 0, 67))
       check("a fixture document: one member through an intermediate generic base, the narrower result", sameLocs(r, [leftValue]), r)
+      r = await c.result("textDocument/definition", at_(casesDoc, "def genericJoin(flag: Boolean, a: GA, b: GB): Int = (if flag then a else b).get.value", 0, 76))
+      check("a fixture document: the join of two instances of a generic class, the generic class's member", sameLocs(r, [at(casesDoc, "trait Generic[A <: Base]:\n  def get", 0, 32, 3)]), r)
       r = await c.result("textDocument/definition", at_(casesDoc, "def genericJoin(flag: Boolean, a: GA, b: GB): Int = (if flag then a else b).get.value", 0, 83))
-      check("a fixture document: the join of two instances of a generic class makes no record", r === null, r)
+      check("a fixture document: a selection on its result, of the argument both instances give", sameLocs(r, [leftValue]), r)
       r = await c.result("textDocument/definition", at_(casesDoc, "def typeMeet(x: Carrier { type Item = Base } & Carrier { type Item = Left }): Int = x.get.value", 0, 93))
       check("a fixture document: a type member two components fix differently, the narrower result", sameLocs(r, [leftValue]), r)
       r = await c.result("textDocument/definition", at_(casesDoc, "def fixed[A <: Base, B <: Left](x: Carrier { type Item = A } & Carrier { type Item = B }): Int = x.get.value", 0, 108))
@@ -2974,10 +3077,47 @@ async function libraries() {
       check("a fixture document: a nested intersection scores the owners against the whole receiver's base classes", sameLocs(r, [at(casesDoc, "trait Narrow:\n  def get", 0, 20, 3)]), r)
       r = await c.result("textDocument/definition", at_(casesDoc, "def n6(x: (Narrow & Wide) & (SubOther & SubNarrow)): Int = x.get.value", 0, 64))
       check("a fixture document: the other nesting, the member of the component whose classes come first", sameLocs(r, [at(casesDoc, "trait OtherGet:\n  def get", 0, 22, 3)]), r)
+      r = await c.result("textDocument/definition", at_(casesDoc, "def mix(flag: Boolean, a: Mix1, b: Mix2): Int = (if flag then a else b).get.value", 0, 72))
+      check("a fixture document: a join with two dominant common parents, their meet's member, the first in the union's base classes", sameLocs(r, [at(casesDoc, "trait Wide:\n  def get", 0, 18, 3)]), r)
       r = await c.result("textDocument/definition", at_(casesDoc, "def mix(flag: Boolean, a: Mix1, b: Mix2): Int = (if flag then a else b).get.value", 0, 79))
-      check("a fixture document: a join with two dominant common parents makes no record", r === null, r)
-      r = await c.result("textDocument/definition", at_(casesDoc, "def mix(flag: Boolean, a: Mix1, b: Mix2): Int = (if flag then a else b).get.value", 0, 83))
-      check("a fixture document: nor does a selection on it", r === null, r)
+      check("a fixture document: a selection on its result, of the meet's type", sameLocs(r, [leftValue]), r)
+      // The program's own intersections (`Applied.scala`) in a document: dotty's meet takes the
+      // second part's member, whose class comes first in the base classes; an opaque type's
+      // bound that is an intersection is read outside its scope.
+      const partB = at(casesDoc, "trait PartB:\n  def n", 0, 19, 1)
+      r = await c.result("textDocument/definition", at_(casesDoc, "def both(x: PartA & PartB): Int = x.n", 0, 36))
+      check("a fixture document: an intersection's member, the second part's (dotty's meet)", sameLocs(r, [partB]), r)
+      r = await c.result("textDocument/definition", at_(casesDoc, "def opaqueBoth(x: Meets.Both): Int = x.n", 0, 39))
+      check("a fixture document: an intersection's member through an opaque type's bound", sameLocs(r, [partB]), r)
+      // A constructor whose type arguments the call infers (`NEW` of the type constructor, then
+      // `TYPEAPPLY`): its instance at those arguments, alone and joined with another.
+      r = await c.result("textDocument/definition", at_(casesDoc, "def inferred: Int = new Box(new Left).get.value", 0, 42))
+      check("a fixture document: an inferred constructor's instance, its argument's member", sameLocs(r, [leftValue]), r)
+      r = await c.result("textDocument/definition", at_(casesDoc, "case _ => new Box(new Right) }).get.value", 0, 36))
+      check("a fixture document: the join of two inferred constructions, the join's member", sameLocs(r, [at(casesDoc, "trait Base:\n  def value", 0, 18, 5)]), r)
+      // An inline call's trace (dotty's `Inlined.call`): the callee the written name selects in
+      // the trace's class, the expansion standing elsewhere.
+      r = await c.result("textDocument/definition", at_(casesDoc, "summon[Int]", 0, 0))
+      const callee = r?.length === 1 && fileURLToPath(r[0].uri)
+      const spelled = callee && readFileSync(callee, "utf-8").split("\n")[r[0].range.start.line].slice(r[0].range.start.character, r[0].range.end.character)
+      check("a fixture document: an inline call, the callee its trace's class has of the written name", spelled === "summon" && /\/(scala\/Predef|prelude)\.scala$/.test(callee), r)
+      // The path written at an inline call bound where it stands (an import's rename, a
+      // qualified path, a backquoted operator), the callee proven by the trace's class; an
+      // ordinary call an import renames.
+      const summoned = (r) => {
+        const file = r?.length === 1 && fileURLToPath(r[0].uri)
+        return file && /\/(scala\/Predef|prelude)\.scala$/.test(file) && readFileSync(file, "utf-8").split("\n")[r[0].range.start.line].slice(r[0].range.start.character, r[0].range.end.character) === "summon"
+      }
+      r = await c.result("textDocument/definition", at_(casesDoc, "first as other}; other(1)", 0, 18))
+      check("a fixture document: a transparent inline call an import renames, the method renamed", sameLocs(r, [at(casesDoc, "transparent inline def first", 0, 23, 5)]), r)
+      r = await c.result("textDocument/definition", at_(casesDoc, "obtain[Int](using i)", 0, 0))
+      check("a fixture document: `summon` an import renames", summoned(r), r)
+      r = await c.result("textDocument/definition", at_(casesDoc, "scala.Predef.summon[Int]", 0, 13))
+      check("a fixture document: `summon` by its qualified path", summoned(r), r)
+      r = await c.result("textDocument/definition", at_(casesDoc, "Transparent.`+!`(1)", 0, 12))
+      check("a fixture document: a backquoted operator, from its opening backquote", sameLocs(r, [at(casesDoc, "inline def `+!`", 0, 12, 2)]), r)
+      r = await c.result("textDocument/definition", at_(casesDoc, "other as plus}; plus(1)", 0, 16))
+      check("a fixture document: an ordinary call an import renames", sameLocs(r, [at(casesDoc, "  def other(x: Int): Int = x + 1", 0, 6, 5)]), r)
       // One document under two dependency versions: p3 reads the same `libb` over `liba` 2.0.
       // Its own navigation reaches `liba` 2.0's document; `libb`'s document is the one p1
       // produced, and the session that produced it answers inside it, with its version of `A`.
@@ -3330,14 +3470,14 @@ async function leanStd() {
     const negDef = await c.result("textDocument/definition", at_(app, "-Neg(1)"))
     check("lean std: a prefix operator in the app, its hover and its declaration", negHover?.contents?.value === "```scala\ndef L.Neg.unary_-: Neg\n```" && same(negHover.range, at(app, "-Neg(1)", 0, 0, 1).range) && sameLocs(negDef, [at(app, "def unary_- : Neg", 0, 4, 7)]), { negHover, negDef })
     // `+(+new Plus)`: the inner `+` is `Plus.unary_+`, the outer a builtin's on its `Int`, whose
-    // node is the operand's; `-(Obj: Base)` names the ascribed `Base.unary_-`, and definition adds
-    // the object's override, which runs.
+    // node is the operand's; `-(Obj: Base)` names the ascribed `Base.unary_-` alone, as dotty's tree
+    // does (the object's override, which runs, is among its implementations).
     const outer = await c.request("textDocument/hover", at_(app, "+(+new Plus)"))
     const inner = await c.result("textDocument/hover", at_(app, "+(+new Plus)", 0, 2))
     check("lean std: a builtin's prefix `+` over a member's names nothing, the member's names its method", outer.result === null && inner?.contents?.value === "```scala\ndef L.Plus.unary_+: Int\n```", { outer, inner })
     const ascHover = await c.result("textDocument/hover", at_(app, "-(Obj: Base)"))
     const ascDef = await c.result("textDocument/definition", at_(app, "-(Obj: Base)"))
-    check("lean std: a prefix operator on an ascribed object, the parent's method and the override", ascHover?.contents?.value === "```scala\ndef L.Base.unary_-: Int\n```" && sameLocs(ascDef, [at(app, "def unary_- : Int = 1", 0, 4, 7), at(app, "override def unary_- : Int = 2", 0, 13, 7)]), { ascHover, ascDef })
+    check("lean std: a prefix operator on an ascribed object, the parent's method", ascHover?.contents?.value === "```scala\ndef L.Base.unary_-: Int\n```" && sameLocs(ascDef, [at(app, "def unary_- : Int = 1", 0, 4, 7)]), { ascHover, ascDef })
     const listRefs = await c.result("textDocument/references", { ...at_(collections, "object List:", 0, 7), context: { includeDeclaration: true } })
     const appList = at(app, "List(1", 0, 0, 4)
     check(

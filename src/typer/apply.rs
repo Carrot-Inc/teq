@@ -470,8 +470,8 @@ impl<'a> Worker<'a> {
             }
             // `new C(a)(b)`: the further argument lists of the constructor.
             Expr::New(ty, first) if targs.is_none() => {
-                let mut clauses = vec![(first, false)];
-                clauses.extend(raw_lists.iter().map(|&(_, args, using)| (args, using)));
+                let mut clauses = vec![(first, false, ast.expr_span(head))];
+                clauses.extend(raw_lists.iter().map(|&(app, args, using)| (args, using, ast.expr_span(app))));
                 let first_written = ast.new_empty_first.contains(&head);
                 return self.type_new(ty, &clauses, first_written, span, expected);
             }
@@ -589,7 +589,20 @@ impl<'a> Worker<'a> {
                 let selected = name == names::APPLY && matches!(receiver, Expr::TypeApply(..));
                 let bare = matches!(receiver, Expr::Ident(_) | Expr::Select(..) | Expr::TypeApply(..));
                 let (tq, qty) = self.type_receiver(q, selected, bare);
-                let typed = self.apply_member(tq, qty, name, targs, lists, span, expected);
+                // The qualifier's type as the written tree gives it (`written_prefix`), the prefix
+                // its members are selected through: read once, here, and only of a tree whose type
+                // `TypeAssigner` gives otherwise than teq's typing does (an `if`, a match, a block
+                // ending in one); any other qualifier's is the type it was typed as.
+                let branching = matches!(receiver, Expr::If(..) | Expr::Match(..) | Expr::Block(_));
+                let pre = if branching { self.written_prefix(q, tq, qty) } else { qty };
+                let typed = if pre != qty {
+                    let outer = std::mem::replace(&mut self.written_qualifier, Some((tq, pre)));
+                    let typed = self.apply_member(tq, qty, name, targs, lists, span, expected);
+                    self.written_qualifier = outer;
+                    typed
+                } else {
+                    self.apply_member(tq, qty, name, targs, lists, span, expected)
+                };
                 if self.assign_op_target == Some(e) {
                     self.assign_op_receiver = Some((tq, qty));
                 }
@@ -1252,6 +1265,23 @@ impl<'a> Worker<'a> {
         }
     }
 
+    /// The member `name` a selection on `recv` (of type `recv_ty`) finds: its class's, or, on an
+    /// intersection, its parts' met against the qualifier's type as written (`written_prefix`),
+    /// the joint information a meet makes left for the member's application (`joint_sig`).
+    #[inline]
+    fn selection_member(&mut self, recv: TExprId, recv_ty: TypeId, name: Name) -> Option<(SymId, TypeId)> {
+        let pre = match self.written_qualifier {
+            Some((r, p)) if r == recv => p,
+            _ => recv_ty,
+        };
+        let mut joint = None;
+        let found = self.find_member_joint(pre, recv_ty, name, &mut joint);
+        if let (Some(info), Some((s, _))) = (joint, found) {
+            self.joint_sig = Some((Some(recv), s, info));
+        }
+        found
+    }
+
     fn member_callee(&mut self, recv: TExprId, recv_ty: TypeId, s: SymId) -> Callee {
         let name = self.syms.sym(s).name;
         match self.find_member(recv_ty, name) {
@@ -1583,8 +1613,11 @@ impl<'a> Worker<'a> {
             }
             return Callee::Method { recv: Some(recv), sym: s, owner_subst, prefix };
         }
-        let ret = self.sig_of(s).ret;
-        let ret = self.given_object_type(s).unwrap_or(ret);
+        // An intersection's joint member's result (`joint_sig`), else its symbol's.
+        let ret = match self.take_joint_sig(Some(recv), s) {
+            Some(info) => info.ret,
+            None => self.given_object_type(s).unwrap_or_else(|| self.sig_of(s).ret),
+        };
         let mut ty = self.types.subst(ret, &owner_subst);
         if self.types.has_paths(ty) {
             let prefix = self.prefix_of(recv, recv_ty);
@@ -2863,6 +2896,15 @@ impl<'a> Worker<'a> {
         applied
     }
 
+    /// The joint signature left for the application of `sym` on `recv` (`joint_sig`), taken.
+    #[inline]
+    pub(super) fn take_joint_sig(&mut self, recv: Option<TExprId>, sym: SymId) -> Option<Arc<MethodSig>> {
+        match &self.joint_sig {
+            Some((r, s, _)) if *r == recv && *s == sym => self.joint_sig.take().map(|(_, _, info)| info),
+            _ => None,
+        }
+    }
+
     fn apply_method_in(
         &mut self,
         call: MethodCall,
@@ -2921,7 +2963,10 @@ impl<'a> Worker<'a> {
             None => match call.prefix {
                 Some(prefix) => {
                     // The signature is kept through the application, which types the arguments.
-                    let sig = self.sig_arc(call.sym);
+                    let sig = match self.take_joint_sig(call.recv, call.sym) {
+                        Some(info) => info,
+                        None => self.sig_arc(call.sym),
+                    };
                     let sig = self.sig_seen_from(sig, prefix, call.sym);
                     if self.member_of_inner_class(call.sym) {
                         let sig = match call.recv.and_then(|r| self.outer_prefixes.get(&r).cloned()) {
@@ -2933,7 +2978,11 @@ impl<'a> Worker<'a> {
                         sig
                     }
                 }
-                None => self.sig_arc(call.sym),
+                // An intersection's joint member's signature (`joint_sig`).
+                None => match self.take_joint_sig(call.recv, call.sym) {
+                    Some(info) => info,
+                    None => self.sig_arc(call.sym),
+                },
             },
         };
         if !trial && ctor.is_none() && self.in_jar(self.syms.sym(call.sym).file) && self.report_blocked_sig(call.sym, span) {
@@ -3177,6 +3226,9 @@ impl<'a> Worker<'a> {
                         self.warn(list.span, "Implicit parameters should be provided with a `using` clause.");
                     }
                     given_site.end = list.span.end;
+                    if self.index.is_some() && ctor.is_none() {
+                        self.index_applied(&list, call.sym);
+                    }
                     let first_arg = args_out.len();
                     let outer = std::mem::replace(&mut self.note_paths, dependent);
                     let is_java = self.is_java_method(call.sym);
@@ -3264,6 +3316,9 @@ impl<'a> Worker<'a> {
                         open_expected = self.constrain_result_by_expected(&mut ret_ty, expected);
                     }
                     given_site.end = list.span.end;
+                    if self.index.is_some() && ctor.is_none() {
+                        self.index_applied(&list, call.sym);
+                    }
                     self.last_arg_types.clear();
                     let first_arg = args_out.len();
                     let outer = std::mem::replace(&mut self.note_paths, dependent);
@@ -3463,6 +3518,9 @@ impl<'a> Worker<'a> {
             let written = lists.next_if(|l| l.using);
             if let Some(list) = &written {
                 given_site.end = list.span.end;
+                if self.index.is_some() {
+                    self.index_applied(&list, call.sym);
+                }
             }
             let erroneous_arg = self.erroneous_args[erroneous_mark..].contains(&self.app_depth);
             evidence = self.erased_evidence(call.sym, &sig, &subst, written, erroneous_arg, given_site, span);
@@ -3684,14 +3742,16 @@ impl<'a> Worker<'a> {
                 }
             }
         }
-        // The result the next list applies, which signature help reads at the span of the
-        // application so far (`factory()(|)`), where some list was applied.
-        if self.index.is_some() && given_site.end < span.end {
-            self.index_value(Span::new(span.start, given_site.end), te, ty);
-        }
         let applied = self.apply_callee(Callee::Value(te, ty), None, rest, span, expected);
         let widen_mark = self.pending_widenings.len();
         self.solve_application_vars(first_var, widen_mark, applied.1, &[], &[], span);
+        // The result the next list applies, which signature help reads at the span of the
+        // application so far (`factory()(|)`), where some list was applied: its type as the
+        // application's variables are solved (`new C(1)(|)` applies a `C[Int]`).
+        if self.index.is_some() && given_site.end < span.end {
+            let ty = self.zonk(ty);
+            self.index_value(Span::new(span.start, given_site.end), te, ty);
+        }
         Some(applied)
     }
 
@@ -5037,12 +5097,8 @@ impl<'a> Worker<'a> {
         // bounds may expect a function of it: what a completion of a name there reads.
         if let (true, None, ForRest::Rest { idx, end, body, is_yield: true }) = (self.index.is_some(), ret_expected, rest) {
             let generators = (idx..end).any(|i| matches!(self.cur_ast().enumerators[i as usize], crate::ast::Enumerator::Gen(..) | crate::ast::Enumerator::CaseGen(..)));
-            if !generators && self.expects_function(ret, 4) {
-                let mut names = Vec::new();
-                super::index::result_names(self.cur_ast(), body, &mut names);
-                for name in names {
-                    self.index_function_name(name, tb);
-                }
+            if !generators {
+                self.index_yield_functions(body, tb, ret);
             }
         }
         let params = self.prog.syms(&[sym]);
@@ -5169,7 +5225,13 @@ impl<'a> Worker<'a> {
         }
         if let Some((params, ret)) = self.as_function(recv_ty) {
             if name == names::APPLY {
-                return self.apply_callee(Callee::Value(recv, recv_ty), targs, lists, span, expected);
+                let applied = self.apply_callee(Callee::Value(recv, recv_ty), targs, lists, span, expected);
+                // The function class's `apply` the written name selects, which a lambda applied
+                // at once leaves no call of (its body reduced in place).
+                if self.index.is_some() {
+                    self.index_selected(applied.0, recv_ty, name);
+                }
+                return applied;
             }
             // A function of more than 22 parameters has neither, as scalac's FunctionXXL.
             if targs.is_none() && matches!(name, names::TUPLED | names::CURRIED) && (2..=22).contains(&params.len()) {
@@ -5229,6 +5291,9 @@ impl<'a> Worker<'a> {
         }
         if matches!(tuple_targs.as_deref(), None | Some([_])) {
             if let Some(r) = self.tuple_member(recv, recv_ty, name, &lists, span) {
+                if self.index.is_some() {
+                    self.index_selected(r.0, recv_ty, name);
+                }
                 return r;
             }
         }
@@ -5236,7 +5301,7 @@ impl<'a> Worker<'a> {
         // implementation the one its own type's class has.
         let mut member = match self.parameter_member(recv, recv_ty, name) {
             Some(m) => Some(m),
-            None => self.find_member(recv_ty, name).or_else(|| self.product_member(recv_ty, name)),
+            None => self.selection_member(recv, recv_ty, name).or_else(|| self.product_member(recv_ty, name)),
         };
         // A library body's selection of an overloaded name calls the alternative its TASTy
         // declares, seen from the receiver's type at the class that declares it.

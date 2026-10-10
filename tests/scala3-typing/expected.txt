@@ -64,8 +64,8 @@ neg/EmptyCaseClassParams.scala	accepts
 neg/EmptyEnum.scala	same	
 neg/EqualityStrawman1.scala	same	
 neg/IsInstanceOfClassTag.scala	syntax	expected an expression, found {}
-neg/Iter2.scala	different	type mismatch
-neg/Iter3.scala	different	class ArrayBuffer has conflicting base types FromIterator[Iterable] and FromIterator[ArrayBuffer]
+neg/Iter2.scala	superset	+1 lines: type mismatch
+neg/Iter3.scala	subset	1/3 lines
 neg/NoneMatch.scala	same	
 neg/OpaqueEscape.scala	superset	+1 lines: {} needs to be abstract
 neg/OrType.scala	same	
@@ -2101,7 +2101,7 @@ pos/FromString-typeparam.scala	accepts
 pos/FromString.scala	std	is
 pos/HelloWorld.scala	accepts	
 pos/IArrayToArraySeq.scala	accepts	
-pos/Iter2.scala	rejects	type mismatch
+pos/Iter2.scala	accepts	
 pos/Iterable.scala	std	TraversableOnce
 pos/KillLambdaLift.scala	std	Predef
 pos/Labels.scala	accepts	
@@ -3941,7 +3941,7 @@ pos/i5938.scala	syntax	'erased' is not part of the supported Scala subset
 pos/i5966.scala	accepts	
 pos/i5970.scala	accepts	
 pos/i5978.scala	rejects	TokenParser is a trait; it cannot be instantiated
-pos/i5980.scala	rejects	type mismatch
+pos/i5980.scala	accepts	
 pos/i5997.scala	accepts	
 pos/i6003.scala	accepts	
 pos/i6009a.scala	syntax	expected {}, found {}

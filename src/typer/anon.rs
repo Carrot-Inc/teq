@@ -38,7 +38,8 @@ impl<'a> Worker<'a> {
                 if cls.parents.len() == 1 && cls.body.is_empty() && self.syms.class(k).mods & mods::ABSTRACT == 0 =>
             {
                 let first_written = matches!(first.args.as_slice(), [(_, false), _, ..]);
-                return self.type_new(first.ty, &first.args, first_written, span, expected);
+                let args: Vec<(ast::ListRef, bool, Span)> = first.args.iter().map(|&(l, using)| (l, using, span)).collect();
+                return self.type_new(first.ty, &args, first_written, span, expected);
             }
             Ok(k) => k,
         };
@@ -1100,13 +1101,20 @@ impl<'a> Worker<'a> {
     /// of `List(x => ...)`). The trait carries no evidence and its members leave exactly one
     /// method open, which takes `arity` plain parameters and no type parameters.
     pub fn sam_method(&mut self, t: TypeId, arity: usize) -> Option<(TypeId, SymId, Arc<MethodSig>, Subst)> {
+        self.sam_method_of(t, Some(arity))
+    }
+
+    /// The trait's single abstract method as `sam_method` finds it, of one plain clause of
+    /// `arity` parameters, or of any number but none where `arity` is `None`: what the expected
+    /// type's `SAMType` adapts a method of its parameters to (dotty's eta-expansion to a SAM).
+    pub fn sam_method_of(&mut self, t: TypeId, arity: Option<usize>) -> Option<(TypeId, SymId, Arc<MethodSig>, Subst)> {
         let t = self.deref_alias(t);
         if let Type::Var(v) = self.types.get(t) {
             let mut found = None;
             for u in self.tvars[v].upper.clone() {
                 let u = self.deref(u);
                 if matches!(self.types.get(u), Type::Class(..)) {
-                    match (self.sam_method(u, arity), &found) {
+                    match (self.sam_method_of(u, arity), &found) {
                         (Some(sam), None) => found = Some(sam),
                         (Some(_), Some(_)) => return None,
                         (None, _) => {}
@@ -1175,7 +1183,7 @@ impl<'a> Worker<'a> {
         let fits = sig.tparams.is_empty()
             && sig.clauses.len() == 1
             && !sig.clauses[0].is_using
-            && sig.clauses[0].params.len() == arity;
+            && arity.map_or(!sig.clauses[0].params.is_empty(), |n| sig.clauses[0].params.len() == n);
         if !fits {
             return None;
         }

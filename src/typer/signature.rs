@@ -48,8 +48,8 @@ pub(super) enum Head {
     /// `super.m(..)`, `super[P].m(..)`.
     Super { qualifier: Option<String>, name: String },
     /// `new C(..)`: the class's path; an anonymous class's parent (`new C(..) { .. }`), which
-    /// may be abstract.
-    New { path: Vec<String>, anonymous: bool },
+    /// may be abstract; `implied` where no list of its own is written (`(new C)(..)`).
+    New { path: Vec<String>, anonymous: bool, implied: bool },
     /// `a op (..)`: the operator, a member of the left operand, whose node spans `recv`, or
     /// which is a literal, a name or `this` (`left`).
     Infix { recv: Span, name: String, left: Fact },
@@ -94,6 +94,9 @@ pub(super) struct List {
     pub using: bool,
     /// The span of the expression the list applies to.
     pub callee: Span,
+    /// Where the application of the list starts: the callee's start, or a parenthesis the
+    /// tree keeps no node of before it (`(new C)(..)`).
+    pub start: u32,
     /// Its arguments; of the cursor's list, those before the cursor's argument.
     pub args: Vec<Arg>,
 }
@@ -246,9 +249,12 @@ pub(super) fn call_at(text: &str, offset: u32) -> Option<Call> {
     }
     let marked = if mark { format!("{}{}{}", &text[..at], fake, &text[at..]) } else { text.to_string() };
     let (asts, _) = crate::frontend::parse_one(&marked, &interner, crate::parser::Syntax { index: true, ..Default::default() });
-    // Each `(` before the cursor with the end of its `)`, which bounds a `new`'s first list.
+    // Each `(` before the cursor with the end of its `)`, which bounds a `new`'s first list, and
+    // each `{` with its `}`, around a callee the tree keeps without them (`({ new C })(..)`).
     let mut closes: Vec<(u32, u32)> = Vec::new();
+    let mut blocks: Vec<(u32, u32)> = Vec::new();
     let mut open: Vec<u32> = Vec::new();
+    let mut open_braces: Vec<u32> = Vec::new();
     for t in tokens.iter().take_while(|t| t.span.start < offset) {
         match t.kind {
             Tok::LParen => open.push(t.span.start),
@@ -257,12 +263,19 @@ pub(super) fn call_at(text: &str, offset: u32) -> Option<Call> {
                     closes.push((o, t.span.end));
                 }
             }
+            // The lexer gives a brace as the indentation region it opens and closes.
+            Tok::LBrace | Tok::Indent => open_braces.push(t.span.start),
+            Tok::RBrace | Tok::Outdent => {
+                if let Some(o) = open_braces.pop() {
+                    blocks.push((o, t.span.end));
+                }
+            }
             _ => {}
         }
     }
     for f in parens {
         for ast in &asts {
-            if let Some(mut call) = owner(ast, &marked, f.at, offset, &closes, &interner) {
+            if let Some(mut call) = owner(ast, &marked, f.at, offset, &closes, &blocks, &interner) {
                 // The cursor in a function literal's body that the list holds: no call's.
                 if in_lambda_body(ast, &marked, f.at, offset) {
                     return None;
@@ -364,7 +377,7 @@ fn comment_end(b: &[u8], i: usize, to: usize) -> Option<usize> {
 
 /// The call of the tree `ast` (of the text `text`, the cursor at `offset`) whose argument list
 /// opens at `paren`.
-fn owner(ast: &Ast, text: &str, paren: u32, offset: u32, closes: &[(u32, u32)], interner: &Interner) -> Option<Call> {
+fn owner(ast: &Ast, text: &str, paren: u32, offset: u32, closes: &[(u32, u32)], blocks: &[(u32, u32)], interner: &Interner) -> Option<Call> {
     let opens = |callee: Span, whole: Span| callee.end <= paren && whole.end > paren && blank(text, callee.end, paren);
     // Where the expression a list applies ends: a `new`'s span holds its further lists, its own
     // ends with the `)` of its first.
@@ -376,11 +389,12 @@ fn owner(ast: &Ast, text: &str, paren: u32, offset: u32, closes: &[(u32, u32)], 
         let end = closes.iter().find(|&&(o, _)| o >= after && blank(text, after, o)).map_or(span.end, |&(_, end)| end);
         Span::new(span.start, end)
     };
-    // A callee in parentheses ends with the `)` of those that open before it.
+    // A callee in parentheses ends with the `)` of those that open before it, and in braces the
+    // tree drops around a single expression with their `}`.
     let callee_end = |f: ExprId| -> Span {
         let span = ast.expr_span(f);
         let mut end = new_end(f).end;
-        while let Some(&(_, close)) = closes.iter().find(|&&(o, c)| o <= span.start && c > end && c <= paren && blank(text, end, c - 1)) {
+        while let Some(&(_, close)) = closes.iter().chain(blocks).find(|&&(o, c)| o <= span.start && c > end && c <= paren && blank(text, end, c - 1)) {
             end = close;
         }
         Span::new(span.start, end)
@@ -410,7 +424,7 @@ fn owner(ast: &Ast, text: &str, paren: u32, offset: u32, closes: &[(u32, u32)], 
                     head_span: Span::new(span.start, paren),
                     name_span: ast.name_span(id),
                     targs: false,
-                    lists: vec![List { using: false, callee: Span::new(span.start, paren), args: args(ast, &items, offset, interner) }],
+                    lists: vec![List { using: false, callee: Span::new(span.start, paren), start: span.start, args: args(ast, &items, offset, interner) }],
                     arg: 0,
                     named: None,
                     current: None,
@@ -420,38 +434,39 @@ fn owner(ast: &Ast, text: &str, paren: u32, offset: u32, closes: &[(u32, u32)], 
             _ => {}
         }
     }
-    // `new C(..) { .. }`: the parent's constructor lists, the one that opens at `paren` found by
-    // walking them from the class's name.
-    for e in &ast.exprs {
-        let Expr::NewAnon(d) = *e else { continue };
-        let crate::ast::DefKind::Class(cls) = &ast.def(d).kind else { continue };
-        let Some(parent) = cls.parents.first() else { continue };
-        let span = ast.ty_spans[parent.ty.idx()];
-        if span.end > paren {
-            continue;
-        }
-        let mut pos = span.end;
-        for (j, &(items, _)) in parent.args.iter().enumerate() {
-            let Some(open) = text.get(pos as usize..).and_then(|t| t.find('(')).map(|k| pos + k as u32) else { break };
-            if !blank(text, pos, open) {
-                break;
+    // A parent's constructor lists, of `new C(..) { .. }` or of a class's `extends P(..)` (dotty's
+    // signature help reads the parent's constructor application there too), the one that opens
+    // at `paren` found by walking them from the parent's name. The parent may be abstract.
+    for d in &ast.defs {
+        let crate::ast::DefKind::Class(cls) = &d.kind else { continue };
+        for parent in cls.parents.iter().filter(|p| !p.args.is_empty()) {
+            let span = ast.ty_spans[parent.ty.idx()];
+            if span.end > paren {
+                continue;
             }
-            if open == paren {
-                let class = match ast.ty(parent.ty) {
-                    TyExpr::Apply(f, _) => f,
-                    _ => parent.ty,
-                };
-                let path = ty_path(ast, class, interner)?;
-                let name_span = match ast.ty(class) {
-                    TyExpr::Name(_) => Some(ast.ty_spans[class.idx()]),
-                    _ => ast.ty_name_span(class),
-                };
-                let lists = parent.args[..=j].iter().map(|&(l, using)| List { using, callee: span, args: args(ast, ast.expr_list(l), offset, interner) }).collect();
-                return Some(Call { head: Head::New { path, anonymous: true }, head_span: span, name_span, targs: false, lists, arg: 0, named: None, current: None, written: all_args(ast, ast.expr_list(items), interner) });
-            }
-            match closes.iter().find(|&&(o, _)| o == open) {
-                Some(&(_, end)) => pos = end,
-                None => break,
+            let mut pos = span.end;
+            for (j, &(items, _)) in parent.args.iter().enumerate() {
+                let Some(open) = text.get(pos as usize..).and_then(|t| t.find('(')).map(|k| pos + k as u32) else { break };
+                if !blank(text, pos, open) {
+                    break;
+                }
+                if open == paren {
+                    let class = match ast.ty(parent.ty) {
+                        TyExpr::Apply(f, _) => f,
+                        _ => parent.ty,
+                    };
+                    let path = ty_path(ast, class, interner)?;
+                    let name_span = match ast.ty(class) {
+                        TyExpr::Name(_) => Some(ast.ty_spans[class.idx()]),
+                        _ => ast.ty_name_span(class),
+                    };
+                    let lists = parent.args[..=j].iter().map(|&(l, using)| List { using, callee: span, start: span.start, args: args(ast, ast.expr_list(l), offset, interner) }).collect();
+                    return Some(Call { head: Head::New { path, anonymous: true, implied: false }, head_span: span, name_span, targs: false, lists, arg: 0, named: None, current: None, written: all_args(ast, ast.expr_list(items), interner) });
+                }
+                match closes.iter().find(|&&(o, _)| o == open) {
+                    Some(&(_, end)) => pos = end,
+                    None => break,
+                }
             }
         }
     }
@@ -469,7 +484,7 @@ fn owner(ast: &Ast, text: &str, paren: u32, offset: u32, closes: &[(u32, u32)], 
         };
         let all: Vec<Arg> = ast.pat_list(subs).iter().map(|&s| Arg { span: ast.pat_spans[s.idx()], name: None, fact: Fact::Other }).collect();
         let before = all.iter().filter(|a| a.span.end <= offset).cloned().collect();
-        return Some(Call { head: Head::Pattern { path: names }, head_span: callee, name_span, targs: false, lists: vec![List { using: false, callee, args: before }], arg: 0, named: None, current: None, written: all });
+        return Some(Call { head: Head::Pattern { path: names }, head_span: callee, name_span, targs: false, lists: vec![List { using: false, callee, start: callee.start, args: before }], arg: 0, named: None, current: None, written: all });
     }
     None
 }
@@ -493,7 +508,7 @@ fn application(ast: &Ast, app: ExprId, offset: u32, new_end: &dyn Fn(ExprId) -> 
                     Expr::New(..) => new_end(f),
                     _ => receiver(ast, f),
                 };
-                lists.push(List { using, callee, args: args(ast, ast.expr_list(items), offset, interner) });
+                lists.push(List { using, callee, start: ast.expr_span(at).start.min(callee.start), args: args(ast, ast.expr_list(items), offset, interner) });
                 at = f;
             }
             Expr::TypeApply(f, _) => {
@@ -507,14 +522,20 @@ fn application(ast: &Ast, app: ExprId, offset: u32, new_end: &dyn Fn(ExprId) -> 
                     _ => (ty, false),
                 };
                 let span = ast.ty_spans[ty.idx()];
-                lists.push(List { using: false, callee: span, args: args(ast, ast.expr_list(items), offset, interner) });
+                // `(new C)(..)`: no list of its own written (the `new` ends with its type), the
+                // lists apply the instance, the constructor's empty clause implied (dotty's
+                // `new C` is `new C()`).
+                let implied = ast.expr_span(at).end == span.end;
+                if !implied {
+                    lists.push(List { using: false, callee: span, start: span.start, args: args(ast, ast.expr_list(items), offset, interner) });
+                }
                 lists.reverse();
                 let path = ty_path(ast, class, interner)?;
                 let name_span = match ast.ty(class) {
                     TyExpr::Name(_) => Some(ast.ty_spans[class.idx()]),
                     _ => ast.ty_name_span(class),
                 };
-                return Some(Call { head: Head::New { path, anonymous: false }, head_span: span, name_span, targs: applied, lists, arg: 0, named: None, current: None, written });
+                return Some(Call { head: Head::New { path, anonymous: false, implied }, head_span: span, name_span, targs: applied, lists, arg: 0, named: None, current: None, written });
             }
             _ => break at,
         }
@@ -666,8 +687,10 @@ struct Facts {
     /// The value of the head, and per list of the expression it applies to.
     head: Option<TypeId>,
     callees: Vec<Option<TypeId>>,
-    /// The alternative the build chose, by the record of the head's name.
+    /// The alternative the build chose: the one it applied to the cursor's list (`applied`), else
+    /// the one the record of the head's name names.
     chosen: Option<SymId>,
+    applied: Option<SymId>,
     /// The types the build gave the arguments, per list, per argument.
     args: Vec<Vec<Option<TypeId>>>,
     /// An extractor's result at the pattern.
@@ -711,10 +734,15 @@ impl<'a> Worker<'a> {
             _ => None,
         };
         let head = node_type(self, call.head_span);
-        let callees = call.lists.iter().map(|l| node_type(self, l.callee)).collect();
-        let chosen = call.name_span.and_then(|s| self.index_record_at(ids, s)).and_then(|(t, k)| match (t, k) {
-            (Target::Sym(s), Kind::Call | Kind::Ref) => Some(s),
-            _ => None,
+        let callees: Vec<Option<TypeId>> = call.lists.iter().map(|l| node_type(self, l.callee)).collect();
+        // The alternative the typer applied to the cursor's list, else the one the head's name
+        // records (a list the build did not apply).
+        let applied = call.lists.last().and_then(|l| self.index_applied_after(ids, Span::new(l.start, l.callee.end)));
+        let chosen = applied.or_else(|| {
+            call.name_span.and_then(|s| self.index_record_at(ids, s)).and_then(|(t, k)| match (t, k) {
+                (Target::Sym(s), Kind::Call | Kind::Ref) => Some(s),
+                _ => None,
+            })
         });
         let args = call.lists.iter().map(|l| l.args.iter().map(|a| node_type(self, a.span)).collect()).collect();
         // The pattern's span in the build's tree, which the extractor's result is recorded at.
@@ -744,7 +772,7 @@ impl<'a> Worker<'a> {
             }
             _ => Vec::new(),
         };
-        Facts { recv, head, callees, chosen, args, extracted, current, new_targs }
+        Facts { recv, head, callees, chosen, applied, args, extracted, current, new_targs }
     }
 
     // ---- what the head names ----
@@ -811,9 +839,17 @@ impl<'a> Worker<'a> {
                 let Some(c) = class else { return Vec::new() };
                 self.super_signatures(c, qualifier.as_deref(), n)
             }
-            Head::New { path, anonymous } => match self.new_class_at(path, at) {
+            Head::New { path, anonymous, implied } => match self.new_class_at(path, at) {
                 Some(c) => {
                     let mut shown = self.constructor_signatures(c, *anonymous);
+                    // The empty clause a `new` without a list implies is applied.
+                    if *implied {
+                        for s in &mut shown {
+                            if s.clauses.first().is_some_and(|c| c.params.is_empty() && !c.using) {
+                                s.clauses.remove(0);
+                            }
+                        }
+                    }
                     // The instance a further list applies at the type arguments written.
                     let tparams = self.syms.class(c).tparams.clone();
                     if !facts.new_targs.is_empty() && facts.new_targs.len() == tparams.len() {
@@ -1136,6 +1172,19 @@ impl<'a> Worker<'a> {
         }
     }
 
+    /// The value a context function value `t` gives applied to the givens, through every
+    /// context function layer (`String ?=> Int => Int` gives `Int => Int`).
+    fn context_applied(&mut self, t: TypeId) -> TypeId {
+        let mut t = self.zonk(t);
+        for _ in 0..8 {
+            match self.as_context_function(t) {
+                Some((_, ret)) => t = self.zonk(ret),
+                None => break,
+            }
+        }
+        t
+    }
+
     /// `C(..)` of a class's name: its companion's `apply` alternatives, the one the compiler
     /// makes for a case class shown as the constructor; else the constructors.
     fn class_apply_signatures(&mut self, c: ClassId) -> Vec<Shown> {
@@ -1245,14 +1294,30 @@ impl<'a> Worker<'a> {
         let Some(r) = r else { return Vec::new() };
         let name = super::complete::spelled(path.last().map_or("", |s| s.as_str()));
         let case_class = |w: &Self, c: ClassId| w.syms.class(c).mods & crate::ast::mods::CASE != 0 || w.syms.class(c).kind == ClassKind::EnumCase;
-        let fields = |w: &mut Self, c: ClassId| -> Vec<Shown> {
+        // A case class's fields, at the instance the pattern matches where the build recorded
+        // it (`Pair[Int]`'s `x: Int`, as dotty's `unapplyCallInfo` instantiates them).
+        let fields = |w: &mut Self, c: ClassId, instance: Option<TypeId>| -> Vec<Shown> {
             w.complete_class(c);
-            let first = w.syms.class(c).ctor.first().map(clause_of).unwrap_or(Clause { using: false, implicit: false, params: Vec::new() });
-            let tparams = w.syms.class(c).tparams.clone();
+            let mut first = w.syms.class(c).ctor.first().map(clause_of).unwrap_or(Clause { using: false, implicit: false, params: Vec::new() });
+            let mut tparams = w.syms.class(c).tparams.clone();
+            if let Some(Type::Class(k, args)) = instance.map(|t| w.types.get(t)) {
+                if k == c && !tparams.is_empty() && w.types.items(args).len() == tparams.len() {
+                    let subst: Subst = tparams.iter().copied().zip(w.types.items(args).iter().copied()).collect();
+                    for p in &mut first.params {
+                        p.ty = w.types.subst(p.ty, &subst);
+                    }
+                    tparams.clear();
+                }
+            }
             vec![Shown { name: name.clone(), sym: None, tparams: tparams.clone(), open: tparams, clauses: vec![first], ret: None, instance: None, subst: Vec::new(), pattern: false, of_value: None }]
         };
+        let extracted = extracted.map(|t| self.zonk(t));
+        let instance_of = |w: &Self, c: ClassId| extracted.filter(|&t| matches!(w.types.get(t), Type::Class(k, _) if k == c));
         let module = match r {
-            TermRef::Class(c) if case_class(self, c) && extracted.is_none() => return fields(self, c),
+            TermRef::Class(c) if case_class(self, c) && (extracted.is_none() || instance_of(self, c).is_some()) => {
+                let instance = instance_of(self, c);
+                return fields(self, c, instance);
+            }
             TermRef::Class(c) => self.syms.class(c).companion.filter(|&k| self.syms.class(k).kind == ClassKind::Object),
             other => self.path_object(other),
         };
@@ -1262,9 +1327,12 @@ impl<'a> Worker<'a> {
         let Some(((s, owner_ty), seq)) = found else { return Vec::new() };
         let s = self.syms.alternatives(s).and_then(|a| a.first().copied()).unwrap_or(s);
         // The case class's own extractor, which the compiler makes: its fields, by name.
-        if self.syms.sym(s).def.is_none() && !self.in_jar(self.syms.sym(s).file) && extracted.is_none() {
+        if self.syms.sym(s).def.is_none() && !self.in_jar(self.syms.sym(s).file) {
             if let Some(c) = self.syms.class(module).companion.filter(|&c| case_class(self, c)) {
-                return fields(self, c);
+                if extracted.is_none() || instance_of(self, c).is_some() {
+                    let instance = instance_of(self, c);
+                    return fields(self, c, instance);
+                }
             }
         }
         let rty = match extracted {
@@ -1357,6 +1425,10 @@ impl<'a> Worker<'a> {
                     applied.clear();
                     break;
                 };
+                // A context function's value that a list applies is applied to the givens first,
+                // as dotty's adaptation inserts them: the list applies its result
+                // (`contextual()(1)` of a `String ?=> Int => Int`).
+                let t = if lists[from].using { t } else { self.context_applied(t) };
                 applied = self.value_signatures(t);
                 let rest: Vec<&List> = lists[from..].to_vec();
                 match applied.first().map(|s| self.mapped(s, &rest)) {
@@ -1370,7 +1442,10 @@ impl<'a> Worker<'a> {
             shown = applied;
             lists = lists.split_off(from);
             arg_types = arg_types.split_off(from);
-            chosen = None;
+            // The value's alternative the build applied to the cursor's list stays the chosen one
+            // (dotty's `applyCallInfo` reads the typed application's symbol); the head name's
+            // record names what the head applied, no `apply` of its result.
+            chosen = facts.applied;
         }
         if shown.is_empty() {
             return Json::Null;
@@ -1395,10 +1470,11 @@ impl<'a> Worker<'a> {
             let (label, ranges) = self.label(s);
             let parameters: Vec<Json> = ranges.iter().map(|&(a, b)| obj([("label", Json::Arr(vec![a.into(), b.into()]))])).collect();
             let count = ranges.len() as u32;
-            // A parameter out of the label's range marks none active: an empty clause's, an
-            // argument past every parameter's, a list the signature does not take.
-            let active = active.unwrap_or(count);
-            signatures.push(obj([("label", label.into()), ("parameters", Json::Arr(parameters)), ("activeParameter", active.into())]));
+            // None is active (`null`, which a client reads as no parameter, where an index out of
+            // the label's range it reads as the first): an empty clause's, an argument past every
+            // parameter's, a list the signature does not take.
+            let active = active.filter(|&a| a < count);
+            signatures.push(obj([("label", label.into()), ("parameters", Json::Arr(parameters)), ("activeParameter", active.map_or(Json::Null, Json::from))]));
             actives.push(active);
             fitting.push(shape && types);
             shaped.push(shape);
@@ -1407,7 +1483,7 @@ impl<'a> Worker<'a> {
         // their number and names fit it, whatever their types are before conversion.
         let recorded = chosen.and_then(|c| shown.iter().position(|s| s.sym == Some(c))).filter(|&i| shaped[i]);
         let active = recorded.or_else(|| fitting.iter().position(|&f| f)).unwrap_or(0);
-        obj([("signatures", Json::Arr(signatures)), ("activeSignature", (active as u32).into()), ("activeParameter", actives[active].into())])
+        obj([("signatures", Json::Arr(signatures)), ("activeSignature", (active as u32).into()), ("activeParameter", actives[active].map_or(Json::Null, Json::from))])
     }
 
     /// The active parameter of `s` and whether the written lists fit it by their shape and by
@@ -1725,7 +1801,9 @@ mod tests {
         assert!(matches!(c.head, Head::Member { ref name, .. } if name == "m"));
         assert_eq!(c.lists[0].args[0].fact, Fact::Int);
         let c = at("object A { new C(|) }").unwrap();
-        assert_eq!(c.head, Head::New { path: vec!["C".into()], anonymous: false });
+        assert_eq!(c.head, Head::New { path: vec!["C".into()], anonymous: false, implied: false });
+        let c = at("object A { val c = ({ new V })(|) }").unwrap();
+        assert_eq!((c.head, c.lists.len(), c.lists[0].start), (Head::New { path: vec!["V".into()], anonymous: false, implied: true }, 1, 19));
         let c = at("object A { factory()(|) }").unwrap();
         assert_eq!((c.lists.len(), c.lists[1].callee), (2, Span::new(11, 20)));
         let c = at("object A { 1 match { case E(a, |) => } }").unwrap();
@@ -1749,9 +1827,9 @@ mod tests {
         assert_eq!((c.head, c.head_span), (name("g"), Span::new(12, 13)));
         assert_eq!(at("object A { (g())(|1) }").unwrap().lists[1].callee, Span::new(12, 15));
         let c = at("object A { new C(1)(|2) }").unwrap();
-        assert_eq!((c.head, c.lists.len()), (Head::New { path: vec!["C".into()], anonymous: false }, 2));
+        assert_eq!((c.head, c.lists.len()), (Head::New { path: vec!["C".into()], anonymous: false, implied: false }, 2));
         let c = at("object A { new C(1)(|2) {} }").unwrap();
-        assert_eq!((c.head, c.lists.len()), (Head::New { path: vec!["C".into()], anonymous: true }, 2));
+        assert_eq!((c.head, c.lists.len()), (Head::New { path: vec!["C".into()], anonymous: true, implied: false }, 2));
         assert!(matches!(head("object A { f(c op (|1)) }"), Some((Head::Infix { .. }, 0, 0))));
         assert!(matches!(head("object A { f(c +: (|1)) }"), Some((Head::Name(_), 0, 0))));
         // No marker before a written argument, which keeps its fact; a function type's arrow is

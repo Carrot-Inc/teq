@@ -604,6 +604,10 @@ struct Server {
     /// Whether the client takes a workspace edit as document changes, each naming the version of
     /// the document it edits.
     document_changes: bool,
+    /// Whether the client takes a signature's parameter label as a range of the signature's
+    /// label (`labelOffsetSupport`); else as the label's text, as dotty's presentation compiler
+    /// gives it (`SignatureHelpProvider.paramToParameterInformation`).
+    label_offsets: bool,
 }
 
 
@@ -656,6 +660,7 @@ pub fn run(args: &[String]) -> ! {
         insert_replace: false,
         snippets: false,
         document_changes: false,
+        label_offsets: false,
     };
     server.serve(inbox)
 }
@@ -1249,6 +1254,7 @@ impl Server {
         self.insert_replace = params.at(&["capabilities", "textDocument", "completion", "completionItem", "insertReplaceSupport"]).and_then(Json::bool) == Some(true);
         self.snippets = params.at(&["capabilities", "textDocument", "completion", "completionItem", "snippetSupport"]).and_then(Json::bool) == Some(true);
         self.document_changes = params.at(&["capabilities", "workspace", "workspaceEdit", "documentChanges"]).and_then(Json::bool) == Some(true);
+        self.label_offsets = params.at(&["capabilities", "textDocument", "signatureHelp", "signatureInformation", "parameterInformation", "labelOffsetSupport"]).and_then(Json::bool) == Some(true);
         self.watch_files = params.at(&["capabilities", "workspace", "didChangeWatchedFiles", "dynamicRegistration"]).and_then(Json::bool) == Some(true);
         self.progress = params.at(&["capabilities", "window", "workDoneProgress"]).and_then(Json::bool) == Some(true);
         respond(id, obj([("capabilities", capabilities), ("serverInfo", obj([("name", "teq".into()), ("version", env!("CARGO_PKG_VERSION").into())]))]));
@@ -2460,8 +2466,35 @@ impl Server {
         if let Some(r) = &p.revision {
             name_version(&mut answer, r.version);
         }
+        if p.method == "textDocument/signatureHelp" && !self.label_offsets {
+            label_texts(&mut answer);
+        }
         self.respell(&mut answer);
         respond(&p.id, answer);
+    }
+}
+
+/// A signature help's parameter labels as the text each range of its signature's label holds,
+/// for a client without `labelOffsetSupport`: the ranges are in UTF-16 units of the label.
+fn label_texts(answer: &mut Json) {
+    let Some(Json::Arr(signatures)) = answer.get_mut("signatures") else { return };
+    for sig in signatures {
+        let units: Vec<u16> = sig.get("label").and_then(Json::str).unwrap_or("").encode_utf16().collect();
+        let Some(Json::Arr(params)) = sig.get_mut("parameters") else { continue };
+        for p in params {
+            let Some(Json::Arr(range)) = p.get_mut("label") else { continue };
+            let bounds = match range.as_slice() {
+                [a, b] => a.uint().zip(b.uint()).map(|(a, b)| (a as usize, b as usize)),
+                _ => None,
+            };
+            let text = match bounds {
+                Some((a, b)) if a <= b && b <= units.len() => String::from_utf16_lossy(&units[a..b]),
+                _ => String::new(),
+            };
+            if let Some(label) = p.get_mut("label") {
+                *label = Json::Str(text);
+            }
+        }
     }
 }
 

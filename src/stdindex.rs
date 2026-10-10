@@ -10,7 +10,7 @@ pub(crate) struct StdFileIndex {
     /// The packages the file has members in.
     pub packages: &'static [&'static str],
     /// The top-level definitions, as (package path, name, what a lookup asks for it as: `TYPE`,
-    /// `TERM` or both): classes, objects, traits, enums, type aliases, vals, defs, named givens,
+    /// `TERM` or both, with `PUBLIC` where one is neither private nor protected): classes, objects, traits, enums, type aliases, vals, defs, named givens,
     /// extension methods and what its exports bring in.
     pub defines: &'static [(&'static str, &'static str, u8)],
     /// The parents its classes, objects and enums extend, as (package, name) resolved among the
@@ -27,6 +27,9 @@ pub(crate) struct StdFileIndex {
 
 pub(crate) const TYPE: u8 = 1;
 pub(crate) const TERM: u8 = 2;
+/// Beside `TYPE` and `TERM`: a definition of the name has no `private` or `protected` modifier,
+/// so that completion offers to import it outside its package.
+pub(crate) const PUBLIC: u8 = 4;
 
 // `STD_INDEX`, and `STD_IDENTITY`: a hash of every std file's path and text, which names the
 // std's documents in the language server (`typer/loader/attach.rs`).

@@ -320,17 +320,21 @@ edit, CheckUnused's, which deletes the statement, keeps its one used selector or
 their commas). A definition into a library goes to its source, read from the sources jar beside the jar, or
 into teq's own standard library, shown in read-only documents where navigation works as in a source, and
 completion and signature help too in the standard library's. A member called on an object seen as one of its
-parents (`(Obj: Base).f`) answers both declarations, the parent's and the object's that runs, as scalac's own
-lookup does. Formatting, other code actions and rename are not offered; hover shows a name's signature or
+parents (`(Obj: Base).f`) is the parent's, as scalac's tree names it; the object's that runs is among its
+implementations. Formatting, other code actions and rename are not offered; hover shows a name's signature or
 type, not yet an expression's.
 
-Completion lists the members of a receiver (extension methods and conversions included), the names in scope,
-types, the class after `new`, imports and keywords, filtered by the prefix case-insensitively and cut at
-1,000. With a prefix of two characters or more, names out of scope follow, each with the import that brings
-it, written after the file's last top-level import; merging into an existing braced import is a later part. A
-client with snippet support gets a method's call with a placeholder per parameter (`inc(${1:x})$0`). Signature
-help triggers on `(` and `,` and lists every overload with the active one as the build chose it; inside a type
-argument list it is a later part.
+Completion lists the members of a receiver (extension methods and conversions included), the names in scope
+(the extension methods in scope among them), types, the class after `new`, imports and keywords, filtered by
+the prefix case-insensitively and cut at 1,000. With a prefix of two characters or more, names out of scope
+follow, each with the import that brings it, written after the file's last top-level import; merging into an
+existing braced import is a later part. A client with snippet support gets a method's call with a placeholder
+per parameter (`inc(${1:x})$0`), and after `new` a constructor's (an alias's class's, a Java class's single
+one); where the program expects a function of the name (a function type, a trait of one method that takes
+parameters, the element of a tuple whose type expects one) the name alone, as no call would type there.
+Signature help triggers on `(` and `,` and lists every overload with the active one as the build applied it
+(through a conversion of an argument too), at the types the call instantiated; inside a type argument list it
+is a later part.
 
 The server works from the folder's `teq.lock`, at or above the folder, else at the roots of the sbt builds up
 to three levels below. Each project configuration is a session, one `teq compiler watch --check` process, started when

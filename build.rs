@@ -125,6 +125,9 @@ fn collect(dir: &Path, out: &mut Vec<PathBuf>) {
 /// What a definition can be asked for as: a type, a term, or either.
 const TYPE: u8 = 1;
 const TERM: u8 = 2;
+/// Set for a definition with no `private` or `protected` modifier, which completion may offer
+/// to import outside its package (`stdindex::PUBLIC`).
+const PUBLIC: u8 = 4;
 
 #[derive(Default)]
 struct Scanned {
@@ -246,7 +249,8 @@ fn scan(text: &str) -> Scanned {
                 extension_at = None;
             } else if indent == ext + 2 {
                 if let Some(name) = def_name(&words, "def") {
-                    out.define(&block.path.clone(), &name, TERM);
+                    let public = if definition_of(&words).is_some_and(|d| d.3) { 0 } else { PUBLIC };
+                    out.define(&block.path.clone(), &name, TERM | public);
                 }
                 continue;
             } else {
@@ -268,7 +272,8 @@ fn scan(text: &str) -> Scanned {
             out.imports.extend(import_clauses(&words[1..]));
             continue;
         }
-        let Some((keyword, rest, implicit)) = definition_of(&words) else { continue };
+        let Some((keyword, rest, implicit, hidden)) = definition_of(&words) else { continue };
+        let public = if hidden { 0 } else { PUBLIC };
         if implicit {
             out.unnamed_given(&pkg);
         }
@@ -280,17 +285,17 @@ fn scan(text: &str) -> Scanned {
         match keyword.as_str() {
             "class" | "trait" | "enum" => {
                 if let Some(name) = rest.first() {
-                    out.define(&pkg, &identifier(name), TYPE | TERM);
+                    out.define(&pkg, &identifier(name), TYPE | TERM | public);
                 }
             }
             "type" => {
                 if let Some(name) = rest.first() {
-                    out.define(&pkg, &identifier(name), TYPE);
+                    out.define(&pkg, &identifier(name), TYPE | public);
                 }
             }
             "object" | "def" | "val" | "var" => {
                 if let Some(name) = rest.first() {
-                    out.define(&pkg, &identifier(name), TERM);
+                    out.define(&pkg, &identifier(name), TERM | public);
                 }
             }
             // A given is found by its type whether or not it has a name: the package's given
@@ -298,14 +303,14 @@ fn scan(text: &str) -> Scanned {
             "given" => {
                 out.unnamed_given(&pkg);
                 if let Some(name) = given_name(&rest) {
-                    out.define(&pkg, &name, TERM);
+                    out.define(&pkg, &name, TERM | public);
                 }
             }
             "extension" => {
                 // `extension (x: T) def m` on one line, or the methods on the lines below.
                 if let Some(pos) = rest.iter().position(|w| w == "def") {
                     if let Some(name) = rest.get(pos + 1) {
-                        out.define(&pkg, &identifier(name), TERM);
+                        out.define(&pkg, &identifier(name), TERM | public);
                     }
                 } else {
                     extension_at = Some(indent);
@@ -313,7 +318,7 @@ fn scan(text: &str) -> Scanned {
             }
             "export" => {
                 for name in exported_names(&rest) {
-                    out.define(&pkg, &name, TYPE | TERM);
+                    out.define(&pkg, &name, TYPE | TERM | public);
                 }
             }
             _ => {}
@@ -428,15 +433,18 @@ const MODIFIERS: &[&str] = &[
     "infix", "erased",
 ];
 
-/// The definition keyword of a line, the words after it past the modifiers, and whether it is
-/// `implicit`; none for a line that is no definition (an annotation, an import, a statement).
-fn definition_of(words: &[String]) -> Option<(String, Vec<String>, bool)> {
+/// The definition keyword of a line, the words after it past the modifiers, whether it is
+/// `implicit`, and whether it is `private` or `protected` (qualified or not); none for a line
+/// that is no definition (an annotation, an import, a statement).
+fn definition_of(words: &[String]) -> Option<(String, Vec<String>, bool, bool)> {
     let mut i = 0;
     let mut implicit = false;
+    let mut hidden = false;
     while i < words.len() {
         let w = words[i].as_str();
         if MODIFIERS.contains(&w) {
             implicit |= w == "implicit";
+            hidden |= w == "private" || w == "protected";
             i += 1;
             // `private[pkg]`
             if words.get(i).map(String::as_str) == Some("[") {
@@ -452,7 +460,7 @@ fn definition_of(words: &[String]) -> Option<(String, Vec<String>, bool)> {
         }
         return match w {
             "class" | "trait" | "object" | "enum" | "type" | "def" | "val" | "var" | "given" | "extension" | "export" => {
-                Some((w.to_string(), words[i + 1..].to_vec(), implicit))
+                Some((w.to_string(), words[i + 1..].to_vec(), implicit, hidden))
             }
             _ => None,
         };
@@ -462,7 +470,7 @@ fn definition_of(words: &[String]) -> Option<(String, Vec<String>, bool)> {
 
 /// The name of a `def` on a line of an extension block, past its modifiers and annotations.
 fn def_name(words: &[String], keyword: &str) -> Option<String> {
-    let (k, rest, _) = definition_of(words)?;
+    let (k, rest, _, _) = definition_of(words)?;
     (k == keyword).then(|| rest.first().map(|n| identifier(n))).flatten()
 }
 

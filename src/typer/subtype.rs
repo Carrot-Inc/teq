@@ -6,6 +6,22 @@ use crate::tir::{TExpr, TExprId};
 
 const CLASS_OF_DEPTH: u32 = 64;
 
+/// What an intersection's member of one name is, of the members its two parts give
+/// (`Worker::meet_members`): the first's, the second's, or one member of both whose symbol is
+/// the first's (`true`) or the second's.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub(super) enum Meet {
+    First,
+    Second,
+    Joint(bool),
+}
+
+/// The information an intersection's member carries where its parts' members make one member
+/// (dotty's `JointRefDenotation` of the symbol the meet takes and `infoMeet`'s info): that
+/// symbol's signature in its own terms with the results met, the other part's result seen from
+/// its owner; `None` where the member is one part's as it stands.
+pub type JointInfo = Option<std::sync::Arc<MethodSig>>;
+
 impl<'a> Worker<'a> {
     pub fn fresh_var(&mut self) -> TypeId {
         let index = self.tvars.len();
@@ -311,6 +327,16 @@ impl<'a> Worker<'a> {
         let under = self.syms.class(c).underlying?;
         let subst: Subst = self.syms.class(c).tparams.iter().copied().zip(self.types.items(args).iter().copied()).collect();
         Some(self.types.subst(under, &subst))
+    }
+
+    /// The base types an opaque type has outside its scope through its bound `bound` that is no
+    /// class (`opaque type O <: A & B`), which dotty reads as an abstract type's upper bound
+    /// (`superType`): each class of the bound's base classes in dotty's order
+    /// (`receiver_base_classes`) with its base type, as a class bound's base types are copied
+    /// (`set_opaque_bound`).
+    pub(super) fn opaque_bound_bases(&mut self, bound: TypeId) -> Vec<(ClassId, TypeId)> {
+        let classes = self.receiver_base_classes(bound, 0);
+        classes.into_iter().filter_map(|k| Some((k, self.base_type(bound, k)?))).collect()
     }
 
     pub(crate) fn opaque_underlying(&mut self, t: TypeId) -> Option<TypeId> {
@@ -2693,77 +2719,106 @@ impl<'a> Worker<'a> {
     /// Finds a declared member by name, returning the symbol and the owner type as seen from `t`.
     #[inline]
     pub fn find_member(&mut self, t: TypeId, name: Name) -> Option<(SymId, TypeId)> {
-        self.find_member_from(t, name, 1)
+        let d = self.deref(t);
+        if let Type::Class(c, args) = self.types.get(d) {
+            return self.find_class_member(d, c, args, name, 1);
+        }
+        self.find_member_from(t, t, name, 1, &mut None)
+    }
+
+    /// The member `name` of `t` selected on a receiver whose type dotty's typer leaves as `pre`
+    /// (`written_prefix`), the members of an intersection met against `pre`'s base classes,
+    /// the joint information the meet gives it in `joint`: what a selection types the member by.
+    #[inline]
+    pub fn find_member_joint(&mut self, pre: TypeId, t: TypeId, name: Name, joint: &mut JointInfo) -> Option<(SymId, TypeId)> {
+        let d = self.deref(t);
+        if let Type::Class(c, args) = self.types.get(d) {
+            return self.find_class_member(d, c, args, name, 1);
+        }
+        self.find_member_from(pre, t, name, 1, joint)
+    }
+
+    /// The type dotty's typer gives the qualifier `e` as written, typed as `te` of type `ty`,
+    /// where teq's typing of a branching expression keeps the join of its branches:
+    /// `TypeAssigner`'s rules by the written tree (`TypeAssigner.scala` at the 3.8.4 tag), an
+    /// `if` the union of its branches' types (`thenp.tpe | elsep.tpe`, 428), a match its cases',
+    /// a block its expression's, read through the typed nodes that correspond; any other tree
+    /// the type it was typed as, an ascription its ascribed type (`Typed`, 413). A selection on
+    /// it searches the join, which dotty's `findMember` searches too (`goOr`), with this as the
+    /// prefix whose base classes an intersection's members meet against.
+    pub fn written_prefix(&mut self, e: crate::ast::ExprId, te: TExprId, ty: TypeId) -> TypeId {
+        self.written_type(e, te, 0).unwrap_or(ty)
+    }
+
+    fn written_type(&mut self, e: crate::ast::ExprId, te: TExprId, depth: u32) -> Option<TypeId> {
+        use crate::ast::{Expr, Stmt};
+        if depth > 8 {
+            return None;
+        }
+        let ast = self.cur_ast();
+        let branches: Vec<(crate::ast::ExprId, TExprId)> = match (ast.expr(e), self.prog.expr(te)) {
+            (Expr::If(_, t, Some(f)), TExpr::If(_, tt, Some(tf))) => vec![(t, tt), (f, tf)],
+            (Expr::Match(_, cases), TExpr::Match(_, tcases)) => {
+                let bodies: Vec<crate::ast::ExprId> = ast.case_list(cases).iter().map(|c| c.body).collect();
+                let typed: Vec<TExprId> = self.prog.case_list(tcases).iter().map(|c| c.body).collect();
+                if bodies.len() != typed.len() {
+                    return None;
+                }
+                bodies.into_iter().zip(typed).collect()
+            }
+            (Expr::Block(stmts), TExpr::Block(_, res)) => match ast.stmt_list(stmts).last() {
+                Some(&Stmt::Expr(r)) => return self.written_type(r, res, depth + 1),
+                _ => return None,
+            },
+            _ => return None,
+        };
+        let mut acc: Option<TypeId> = None;
+        for (b, tb) in branches {
+            let t = match self.written_type(b, tb, depth + 1) {
+                Some(t) => t,
+                None => self.prog.type_of(tb)?,
+            };
+            let d = self.deref(t);
+            if matches!(self.types.get(d), Type::Nothing) {
+                continue;
+            }
+            acc = Some(match acc {
+                Some(a) if a == t => a,
+                Some(a) => self.types.union(a, t),
+                None => t,
+            });
+        }
+        acc
     }
 
     /// The member that is left when the private one of the class itself cannot be accessed: a
     /// constructor parameter may share its name with a member the class inherits.
     pub fn find_inherited_member(&mut self, t: TypeId, name: Name) -> Option<(SymId, TypeId)> {
-        self.find_member_from(t, name, 0)
+        self.find_member_from(t, t, name, 0, &mut None)
     }
 
-    fn find_member_in_bound(&mut self, p: TParamId, upper: TypeId, name: Name, private_until: usize) -> Option<(SymId, TypeId)> {
+    fn find_member_in_bound(&mut self, pre: TypeId, p: TParamId, upper: TypeId, name: Name, private_until: usize, joint: &mut JointInfo) -> Option<(SymId, TypeId)> {
         if let Type::Inter(a, b) = self.types.get(upper) {
             let mentions = |t: &mut Self, part: TypeId| t.mentions_tparam_of(part, Some(&[p]));
             if !mentions(self, a) && mentions(self, b) {
-                if let Some(found) = self.find_member_from(b, name, 0) {
+                if let Some(found) = self.find_member_from(pre, b, name, 0, joint) {
                     return Some(found);
                 }
             }
         }
-        self.find_member_from(upper, name, private_until)
+        self.find_member_from(pre, upper, name, private_until, joint)
     }
 
     /// Private members count in the first `private_until` classes of the linearisation; one of
-    /// an ancestor is not inherited.
-    fn find_member_from(&mut self, t: TypeId, name: Name, private_until: usize) -> Option<(SymId, TypeId)> {
+    /// an ancestor is not inherited. `pre` is the receiver the lookup started from, which a
+    /// join, a proxy's underlying type and an intersection's parts are searched for: the members
+    /// of an intersection meet against its base classes (dotty's `findMember`, whose `goOr` and
+    /// `goAnd` keep `pre` while they search `tp.join` and the parts).
+    /// `joint` takes the joint information of the member found (`JointInfo`).
+    fn find_member_from(&mut self, pre: TypeId, t: TypeId, name: Name, private_until: usize, joint: &mut JointInfo) -> Option<(SymId, TypeId)> {
         let t = self.deref(t);
         match self.types.get(t) {
-            Type::Class(c, args) => {
-                self.complete_class(c);
-                let info = self.syms.class(c);
-                let mut found = None;
-                for (i, &(bc, bt)) in info.base_types.iter().enumerate() {
-                    if let Some(&sym) = self.syms.class(bc).members.get(&name) {
-                        // A private member of an ancestor class is not inherited.
-                        if i >= private_until && self.is_private(sym) {
-                            continue;
-                        }
-                        found = Some((bc, sym, bt));
-                        break;
-                    }
-                }
-                let (bc, mut sym, bt) = match found {
-                    Some(f) => f,
-                    None => {
-                        // A member of `Any` is `universal_member`'s: reading a Java class for it
-                        // would give a std class the JDK's members where the JDK is open alone.
-                        if self.loaded.is_some() && !self.bare_lookup && !crate::names::ANY_MEMBERS.contains(&self.interner.get(name)) && self.java_member_miss(c) {
-                            if self.loaded.as_ref().unwrap().detail {
-                                eprintln!("java members of {} read for {}", self.class_path(c), self.name_str(name));
-                            }
-                            return self.find_member_from(t, name, private_until);
-                        }
-                        return None;
-                    }
-                };
-                match self.settled(bc, name, sym) {
-                    Some(settled) => sym = settled,
-                    None => return self.find_member_from(t, name, private_until),
-                }
-                if self.types.items(args).is_empty() {
-                    return Some((sym, bt));
-                }
-                let subst: Subst = self
-                    .syms
-                    .class(c)
-                    .tparams
-                    .iter()
-                    .copied()
-                    .zip(self.types.items(args).iter().copied())
-                    .collect();
-                Some((sym, self.types.subst(bt, &subst)))
-            }
+            Type::Class(c, args) => self.find_class_member(t, c, args, name, private_until),
             // Of an F-bounded parameter, `C <: LinearSeq[A] & LinearSeqOps[A, CC, C]`, the part
             // that names `C` gives the member its most specific type (`tail: C`), as the
             // intersection's member has under scalac.
@@ -2773,40 +2828,27 @@ impl<'a> Worker<'a> {
                     return None;
                 }
                 self.bound_path.push(p);
-                let found = self.find_member_in_bound(p, upper, name, private_until);
+                let found = self.find_member_in_bound(pre, p, upper, name, private_until, joint);
                 self.bound_path.pop();
                 found
             }
             Type::AppParam(p, args) => {
                 let upper = self.app_param_upper(p, args)?;
-                self.find_member_from(upper, name, private_until)
+                self.find_member_from(pre, upper, name, private_until, joint)
             }
-            // The second member of a self type's intersection is another class, whose private
-            // members are its own; a method of another shape there overloads the first's.
-            Type::Inter(a, b) => {
-                let first = self.find_member_from(a, name, private_until);
-                let second = self.find_member_from(b, name, 0);
-                match (first, second) {
-                    (Some((sa, ta)), Some((sb, tb))) if sa != sb && self.overloads_across(sa, ta, sb, tb) => {
-                        Some((self.merged_overload(sa, ta, sb, tb), ta))
-                    }
-                    (Some(fa), Some(fb)) if fa.0 != fb.0 => Some(self.narrower_part_member(fa, fb)),
-                    (Some(f), _) => Some(f),
-                    (None, f) => f,
-                }
-            }
+            Type::Inter(a, b) => self.find_member_meet(pre, (a, b), name, private_until, false, joint),
             Type::Union(..) => {
                 let j = self.union_join(t)?;
-                self.find_member_from(j, name, private_until)
+                self.find_member_from(pre, j, name, private_until, joint)
             }
             Type::Lit(_) => {
                 let class = self.widen_lit(t);
-                self.find_member_from(class, name, private_until)
+                self.find_member_from(pre, class, name, private_until, joint)
             }
             // The class's member, its owner's type the base type of `p.C` (`base_type`), so
             // that the enclosing classes are seen from the prefix.
             Type::Nested(p, class) => {
-                let (sym, owner_ty) = self.find_member_from(class, name, private_until)?;
+                let (sym, owner_ty) = self.find_member_from(pre, class, name, private_until, joint)?;
                 let Type::Class(c, _) = self.types.get(class) else { return Some((sym, owner_ty)) };
                 let owner_ty = match self.types.get(owner_ty) {
                     Type::Class(k, _) if k == c => self.nested_type(p, owner_ty),
@@ -2814,11 +2856,386 @@ impl<'a> Worker<'a> {
                 };
                 Some((sym, owner_ty))
             }
+            // A class's `this` with a self type is teq's `cls & self`, dotty's `givenSelf & cls`
+            // (`ClassInfo.selfType`): its members are merged in dotty's order.
+            Type::This(c) if self.syms.class(c).declared_self.is_some() => {
+                let under = self.dependent_underlying(t)?;
+                let Type::Inter(cls, given) = self.types.get(under) else { return self.find_member_from(pre, under, name, private_until, joint) };
+                self.find_member_meet(pre, (cls, given), name, private_until, true, joint)
+            }
             Type::This(_) | Type::Term(_) | Type::Select(..) | Type::Member(..) | Type::AppMember(..) | Type::Decl(_) | Type::Refined(..) | Type::Alias(..) | Type::Match(..) => {
                 let under = self.dependent_underlying(t)?;
-                self.find_member_from(under, name, private_until)
+                self.find_member_from(pre, under, name, private_until, joint)
             }
             _ => None,
+        }
+    }
+
+    /// The member `name` of the class type `t` (`c` applied to `args`), seen from `t`: the first
+    /// class of its linearisation that declares it, a private member of an ancestor passed over.
+    /// A class's lookup meets nothing: no prefix or joint information takes part.
+    fn find_class_member(&mut self, t: TypeId, c: ClassId, args: TList, name: Name, private_until: usize) -> Option<(SymId, TypeId)> {
+        self.complete_class(c);
+        let info = self.syms.class(c);
+        let mut found = None;
+        for (i, &(bc, bt)) in info.base_types.iter().enumerate() {
+            if let Some(&sym) = self.syms.class(bc).members.get(&name) {
+                // A private member of an ancestor class is not inherited.
+                if i >= private_until && self.is_private(sym) {
+                    continue;
+                }
+                found = Some((bc, sym, bt));
+                break;
+            }
+        }
+        let (bc, mut sym, bt) = match found {
+            Some(f) => f,
+            None => {
+                // A member of `Any` is `universal_member`'s: reading a Java class for it
+                // would give a std class the JDK's members where the JDK is open alone.
+                if self.loaded.is_some() && !self.bare_lookup && !crate::names::ANY_MEMBERS.contains(&self.interner.get(name)) && self.java_member_miss(c) {
+                    if self.loaded.as_ref().unwrap().detail {
+                        eprintln!("java members of {} read for {}", self.class_path(c), self.name_str(name));
+                    }
+                    return self.find_class_member(t, c, args, name, private_until);
+                }
+                return None;
+            }
+        };
+        match self.settled(bc, name, sym) {
+            Some(settled) => sym = settled,
+            None => return self.find_class_member(t, c, args, name, private_until),
+        }
+        if self.types.items(args).is_empty() {
+            return Some((sym, bt));
+        }
+        let subst: Subst = self
+            .syms
+            .class(c)
+            .tparams
+            .iter()
+            .copied()
+            .zip(self.types.items(args).iter().copied())
+            .collect();
+        Some((sym, self.types.subst(bt, &subst)))
+    }
+
+    /// The member `name` of an intersection's parts `a` and `b`, merged as dotty's `goAnd`
+    /// merges `go(a)` and `go(b)` (`Types.scala`, `findMember`, at the 3.8.4 tag) against the
+    /// whole receiver `pre`'s base classes, a part that is an intersection itself folded in with
+    /// them, the joint information of the member it makes in `joint`. The second part is another
+    /// class, whose private members are its own; a method of another shape there overloads the
+    /// first's (dotty's `MultiDenotation` of members whose signatures do not match). `reversed`:
+    /// `b` is dotty's first part (a self type's).
+    fn find_member_meet(&mut self, pre: TypeId, (a, b): (TypeId, TypeId), name: Name, private_until: usize, reversed: bool, joint: &mut JointInfo) -> Option<(SymId, TypeId)> {
+        let (mut ja, mut jb) = (None, None);
+        let first = self.find_member_in_part(pre, a, name, private_until, &mut ja);
+        let second = self.find_member_in_part(pre, b, name, 0, &mut jb);
+        let (found, info) = match (first, second) {
+            // The same denotation through both parts (dotty's `denot1 eq denot2`).
+            (Some(fa), Some(fb)) if fa == fb => (Some(fa), ja),
+            (Some((sa, ta)), Some((sb, tb))) => {
+                let overloaded = self.syms.alternatives(sa).is_some() || self.syms.alternatives(sb).is_some();
+                if (sa != sb || overloaded) && self.overloads_across(sa, ta, sb, tb) {
+                    (Some((self.merged_overload(sa, ta, sb, tb), ta)), None)
+                } else if overloaded {
+                    // Each alternative of the second matches one of the first's: the first's set,
+                    // whose alternatives the receiver meets with their matches where it applies
+                    // one (`intersection_denotations`).
+                    (Some((sa, ta)), None)
+                } else {
+                    // Two matching members, one symbol through two instances of its owner
+                    // included (`G[Any] & G[String]`'s `get`).
+                    let (found, info) = match reversed {
+                        false => self.meet_parts(pre, ((sa, ta), ja), ((sb, tb), jb)),
+                        true => self.meet_parts(pre, ((sb, tb), jb), ((sa, ta), ja)),
+                    };
+                    (Some(found), info)
+                }
+            }
+            (Some(f), _) => (Some(f), ja),
+            (None, f) => (f, jb),
+        };
+        *joint = info;
+        found
+    }
+
+    fn find_member_in_part(&mut self, pre: TypeId, t: TypeId, name: Name, private_until: usize, joint: &mut JointInfo) -> Option<(SymId, TypeId)> {
+        let t = self.deref(t);
+        match self.types.get(t) {
+            Type::Inter(a, b) => self.find_member_meet(pre, (a, b), name, private_until, false, joint),
+            _ => self.find_member_from(pre, t, name, private_until, joint),
+        }
+    }
+
+    /// The alternatives of `name` on the receiver `t` where it is an intersection, each with
+    /// the instance of its owner it is seen as and its joint information: dotty's
+    /// `Denotation.meet` of the parts' denotations (`Denotations.scala`, `meet` and `mergeDenot`,
+    /// at the 3.8.4 tag), each alternative of one part merged with the alternative of the other
+    /// that matches it (`members_match`) as `meet_parts` takes them, the unmatched kept. What an
+    /// overloaded selection on an intersection resolves among (`C & R` whose `f(x: Int): Any`
+    /// and `f(x: Int): String` make one alternative of the met result beside the others). None
+    /// where `t` is no intersection.
+    pub(super) fn intersection_denotations(&mut self, t: TypeId, name: Name) -> Option<Vec<((SymId, TypeId), JointInfo)>> {
+        let d = self.deref(t);
+        let d = self.dealias(d);
+        if !matches!(self.types.get(d), Type::Inter(..)) {
+            return None;
+        }
+        Some(self.part_denotations(t, d, name, 1))
+    }
+
+    fn part_denotations(&mut self, pre: TypeId, t: TypeId, name: Name, private_until: usize) -> Vec<((SymId, TypeId), JointInfo)> {
+        let t = self.deref(t);
+        let t = self.dealias(t);
+        if let Type::Inter(a, b) = self.types.get(t) {
+            let mut acc = self.part_denotations(pre, a, name, private_until);
+            for d in self.part_denotations(pre, b, name, 0) {
+                self.merge_denotation(pre, &mut acc, d);
+            }
+            return acc;
+        }
+        let mut joint = None;
+        let Some((s, owner)) = self.find_member_from(pre, t, name, private_until, &mut joint) else { return Vec::new() };
+        match self.syms.alternatives(s).map(|alts| alts.to_vec()) {
+            Some(alts) => alts
+                .into_iter()
+                .map(|alt| {
+                    let owner_ty = match self.syms.sym(alt).owner {
+                        Owner::Class(c) => self.base_type(t, c).unwrap_or(owner),
+                        _ => owner,
+                    };
+                    ((alt, owner_ty), None)
+                })
+                .collect(),
+            None => vec![((s, owner), joint)],
+        }
+    }
+
+    /// `mergeDenot` of the denotations so far and one more: merged with the first that matches
+    /// it, kept apart where none does; the same denotation again is dropped.
+    fn merge_denotation(&mut self, pre: TypeId, acc: &mut Vec<((SymId, TypeId), JointInfo)>, d: ((SymId, TypeId), JointInfo)) {
+        for i in 0..acc.len() {
+            if acc[i].0 == d.0 {
+                return;
+            }
+            let ((s1, t1), _) = acc[i];
+            let ((s2, t2), _) = d;
+            if self.members_match(s1, t1, s2, t2) {
+                let first = acc[i].clone();
+                acc[i] = self.meet_parts(pre, first, d);
+                return;
+            }
+        }
+        acc.push(d);
+    }
+
+    /// Of two members of one name and matching parameters, found on an intersection's first
+    /// and second part each with the type its owner is seen as and the joint information it
+    /// carries, the one `meet_members` takes, with the joint member's information where the two
+    /// make one (dotty's `infoMeet`): the scoring symbol's signature, its result met with the
+    /// other's. The results are compared and met with the second's type parameters renamed to
+    /// the first's (`tp2.resType.subst(tp2, tp1)`); members of different numbers of them make
+    /// no joint information.
+    fn meet_parts(&mut self, pre: TypeId, ((sa, ta), ja): ((SymId, TypeId), JointInfo), ((sb, tb), jb): ((SymId, TypeId), JointInfo)) -> ((SymId, TypeId), JointInfo) {
+        let ia = ja.clone().unwrap_or_else(|| self.sig_arc(sa));
+        let ib = jb.clone().unwrap_or_else(|| self.sig_arc(sb));
+        let renaming = |w: &Self, from: &MethodSig, to: &MethodSig| -> Option<Subst> {
+            (from.tparams.len() == to.tparams.len()).then(|| from.tparams.iter().zip(&to.tparams).map(|(&p, &q)| (p, w.types.param(q))).collect())
+        };
+        let (sub_a, sub_b) = (self.owner_subst(ta), self.owner_subst(tb));
+        let ra = self.types.subst(ia.ret, &sub_a);
+        let rb = self.types.subst(ib.ret, &sub_b);
+        let b_in_a = renaming(self, &ib, &ia);
+        let rb_a = match &b_in_a {
+            Some(r) if !r.is_empty() => self.types.subst(rb, r),
+            _ => rb,
+        };
+        if self.types.contains_error(ra) || self.types.contains_error(rb_a) {
+            return ((sa, ta), ja);
+        }
+        let hidden = (!self.is_accessible(sa), !self.is_accessible(sb));
+        let bases = self.receiver_base_classes(pre, 0);
+        match self.meet_members(&bases, (sa, ra), (sb, rb_a), hidden) {
+            Meet::First => ((sa, ta), ja),
+            Meet::Second => ((sb, tb), jb),
+            Meet::Joint(first) if b_in_a.is_none() => match first {
+                true => ((sa, ta), ja),
+                false => ((sb, tb), jb),
+            },
+            Meet::Joint(true) => {
+                let ret = self.types.inter(ia.ret, rb_a);
+                ((sa, ta), Some(std::sync::Arc::new(MethodSig { tparams: ia.tparams.clone(), clauses: ia.clauses.clone(), ret })))
+            }
+            Meet::Joint(false) => {
+                let a_in_b = renaming(self, &ia, &ib).unwrap_or_default();
+                let ra_b = if a_in_b.is_empty() { ra } else { self.types.subst(ra, &a_in_b) };
+                let ret = self.types.inter(ra_b, ib.ret);
+                ((sb, tb), Some(std::sync::Arc::new(MethodSig { tparams: ib.tparams.clone(), clauses: ib.clauses.clone(), ret })))
+            }
+        }
+    }
+
+    /// Which of two members of one name and matching parameters the member of an intersection
+    /// is, as dotty's `mergeSingleDenot` decides it (`Denotations.scala`, `meet`, at the 3.8.4
+    /// tag): `s1` of type `r1` from the first part, `s2` of type `r2` from the second, `bases`
+    /// the whole receiver's base classes (`receiver_base_classes`). An inaccessible member gives
+    /// way to an accessible one (`hidden`); else the symbol score prefers the member at least
+    /// as concrete as the other (`isAsConcrete`), then the one whose owner derives from the
+    /// other's or comes first in `bases` (`linearScore`), then the wider access boundary, then a
+    /// method over a value; the member whose type conforms to the other's, unconstrained, wins
+    /// where the score allows it (`overrides`); else the two make one member, the scoring
+    /// symbol's with the meet of the types (`infoMeet`), the first's where the score is even.
+    /// The selection of the program's typer and of a library document's index alike.
+    pub(super) fn meet_members(&mut self, bases: &[ClassId], (s1, r1): (SymId, TypeId), (s2, r2): (SymId, TypeId), hidden: (bool, bool)) -> Meet {
+        match hidden {
+            (true, false) => return Meet::Second,
+            (false, true) => return Meet::First,
+            _ => {}
+        }
+        let score = self.meet_score(bases, s1, s2);
+        let mark = self.snapshot();
+        let second = score <= 0 && self.is_sub(r2, r1) && self.snapshot() == mark;
+        self.rollback(mark);
+        if second {
+            return Meet::Second;
+        }
+        let first = score >= 0 && self.is_sub(r1, r2) && self.snapshot() == mark;
+        self.rollback(mark);
+        if first {
+            return Meet::First;
+        }
+        Meet::Joint(score >= 0)
+    }
+
+    /// `mergeSingleDenot`'s `symScore` of two existing symbols, neither a bridge: above zero for
+    /// `s1`, below for `s2`.
+    fn meet_score(&mut self, bases: &[ClassId], s1: SymId, s2: SymId) -> i32 {
+        // dotty's `Deferred`: a member without a body, which an `abstract override` one (a trait's
+        // stackable member, `ABSTRACT` and `OVERRIDE` from a pickle) is not.
+        let deferred = |w: &Self, s: SymId| {
+            let stackable = crate::ast::mods::ABSTRACT | crate::ast::mods::OVERRIDE;
+            w.is_abstract_member(s) && w.syms.sym(s).mods & stackable != stackable
+        };
+        let (d1, d2) = (deferred(self, s1), deferred(self, s2));
+        if d1 && !d2 {
+            return -1;
+        }
+        if d2 && !d1 {
+            return 1;
+        }
+        let owner = |w: &Self, s: SymId| match w.syms.sym(s).owner {
+            Owner::Class(c) => Some(c),
+            _ => None,
+        };
+        if let (Some(o1), Some(o2)) = (owner(self, s1), owner(self, s2)) {
+            if o1 != o2 {
+                self.complete_class(o1);
+                self.complete_class(o2);
+                let derives = |w: &Self, a: ClassId, b: ClassId| w.syms.class(a).base_types.iter().any(|&(c, _)| c == b);
+                if derives(self, o1, o2) {
+                    return 1;
+                }
+                if derives(self, o2, o1) {
+                    return -1;
+                }
+                if let Some(&c) = bases.iter().find(|&&c| c == o1 || c == o2) {
+                    return if c == o1 { 1 } else { -1 };
+                }
+            }
+        }
+        // `accessBoundary`: a private member's is its owner, a protected or qualified one's
+        // a package, a public one's the root; the one properly contained in the other's loses.
+        let boundary = |w: &Self, s: SymId| {
+            let m = w.syms.sym(s).mods;
+            if m & crate::ast::mods::PRIVATE != 0 && !w.has_access_scope(w.syms.sym(s).file, w.syms.sym(s).span.start) {
+                2
+            } else if m & (crate::ast::mods::PRIVATE | crate::ast::mods::PROTECTED) != 0 {
+                1
+            } else {
+                0
+            }
+        };
+        let (b1, b2) = (boundary(self, s1), boundary(self, s2));
+        if b1 != b2 {
+            return if b1 > b2 { -1 } else { 1 };
+        }
+        match (self.is_method_sym(s1), self.is_method_sym(s2)) {
+            (false, true) => -1,
+            (true, false) => 1,
+            _ => 0,
+        }
+    }
+
+    /// The base classes of a receiver's type in the order dotty's `baseClasses` gives them
+    /// (`Types.scala` at the 3.8.4 tag: a class's linearisation; a proxy its super type's, here
+    /// a path's underlying type, an alias's expansion, a parameter's bound, a refinement's
+    /// parent, an opaque type's bound outside its scope; an intersection's, `AndType.baseClasses`,
+    /// the second part's classes not among the first's, up to their first common class, then
+    /// the first's; a union's, `OrType.baseClasses`, the second part's classes the first shares,
+    /// traits up to the first common class, then the rest of the second's; a class's `this` with a
+    /// self type its `givenSelf & cls`), none for a type with no class.
+    pub(super) fn receiver_base_classes(&mut self, t: TypeId, depth: u32) -> Vec<ClassId> {
+        if depth > 8 {
+            return Vec::new();
+        }
+        if let Type::This(c) = self.types.get(t) {
+            if let Some(given) = self.syms.class(c).declared_self {
+                let cls = self.types.class(c, &[]);
+                let inter = self.types.mk(Type::Inter(given, cls));
+                return self.receiver_base_classes(inter, depth + 1);
+            }
+        }
+        let t = self.widen_path(t);
+        let t = self.dealias(t);
+        match self.types.get(t) {
+            Type::Class(c, _) if self.syms.class(c).kind == ClassKind::Opaque && !self.transparent.contains(&c) => match self.opaque_bound(t) {
+                Some(bound) => self.receiver_base_classes(bound, depth + 1),
+                None => vec![c],
+            },
+            Type::Class(c, _) | Type::Ctor(c) | Type::This(c) => {
+                self.complete_class(c);
+                self.syms.class(c).base_types.iter().map(|&(b, _)| b).collect()
+            }
+            Type::Param(p) | Type::AppParam(p, _) => {
+                let upper = self.syms.tparam(p).upper;
+                self.receiver_base_classes(upper, depth + 1)
+            }
+            // A nested class seen through its prefix (`p.C`): the class's.
+            Type::Nested(_, class) => self.receiver_base_classes(class, depth + 1),
+            Type::Refined(parent, _) => self.receiver_base_classes(parent, depth + 1),
+            Type::Inter(a, b) => {
+                let bcs1 = self.receiver_base_classes(a, depth + 1);
+                let bcs2 = self.receiver_base_classes(b, depth + 1);
+                let mut out = Vec::new();
+                for bc2 in bcs2 {
+                    if bcs1.contains(&bc2) {
+                        if self.syms.class(bc2).kind == ClassKind::Trait {
+                            continue;
+                        }
+                        break;
+                    }
+                    out.push(bc2);
+                }
+                out.extend(bcs1);
+                out
+            }
+            Type::Union(a, b) => {
+                let bcs1 = self.receiver_base_classes(a, depth + 1);
+                let bcs2 = self.receiver_base_classes(b, depth + 1);
+                let mut out = Vec::new();
+                for (i, &bc2) in bcs2.iter().enumerate() {
+                    if bcs1.contains(&bc2) {
+                        if self.syms.class(bc2).kind != ClassKind::Trait {
+                            out.extend_from_slice(&bcs2[i..]);
+                            break;
+                        }
+                        out.push(bc2);
+                    }
+                }
+                out
+            }
+            _ => Vec::new(),
         }
     }
 
@@ -2826,28 +3243,6 @@ impl<'a> Worker<'a> {
     /// name rather than one overriding the other: some alternative of the second takes
     /// parameters that none of the first does (`body(file: File)` of a trait next to
     /// `body(b: SttpFile)` of its self type).
-    /// Of a member both parts of an intersection declare with one shape, the part whose result
-    /// type is the narrower (`value: String` of `A` over `value: Any` of `B` in a `B & A`), as
-    /// scalac's member of an intersection has the meet of the two; the first part's where
-    /// neither result conforms to the other.
-    fn narrower_part_member(&mut self, (sa, ta): (SymId, TypeId), (sb, tb): (SymId, TypeId)) -> (SymId, TypeId) {
-        let result = |t: &mut Self, s: SymId, owner: TypeId| {
-            let ret = t.sig_of(s).ret;
-            let subst = t.owner_subst(owner);
-            t.types.subst(ret, &subst)
-        };
-        let (ra, rb) = (result(self, sa, ta), result(self, sb, tb));
-        if ra == rb || self.types.contains_error(ra) || self.types.contains_error(rb) {
-            return (sa, ta);
-        }
-        let mark = self.snapshot();
-        let b_narrower = self.is_sub(rb, ra) && self.snapshot() == mark;
-        self.rollback(mark);
-        let a_narrower = b_narrower && self.is_sub(ra, rb);
-        self.rollback(mark);
-        if b_narrower && !a_narrower { (sb, tb) } else { (sa, ta) }
-    }
-
     fn overloads_across(&mut self, a: SymId, ta: TypeId, b: SymId, tb: TypeId) -> bool {
         let alts = |t: &mut Self, s: SymId| -> Vec<SymId> { t.syms.alternatives(s).map_or_else(|| vec![s], |l| l.to_vec()) };
         let (xs, ys) = (alts(self, a), alts(self, b));
@@ -2859,11 +3254,61 @@ impl<'a> Worker<'a> {
         if ys.iter().any(|&s| !arities.contains(&self.arity_shape(s))) {
             return true;
         }
-        let shapes: Vec<_> = xs.iter().map(|&s| self.parameter_shape(s, ta)).collect();
-        ys.iter().any(|&s| {
-            let sh = self.parameter_shape(s, tb);
-            !shapes.contains(&sh)
-        })
+        ys.iter().any(|&y| !self.matches_among(y, tb, &xs, ta))
+    }
+
+    /// Whether some alternative of `xs` (on `ta`) matches `y` (on `tb`): `members_match`.
+    fn matches_among(&mut self, y: SymId, tb: TypeId, xs: &[SymId], ta: TypeId) -> bool {
+        xs.iter().any(|&x| self.members_match(x, ta, y, tb))
+    }
+
+    /// Whether `x`, a member of the instance `ta` of its owner, and `y`, of `tb`, match as one
+    /// member, as dotty's `SingleDenotation.matches` has it (`Denotations.scala`, `matchesLoosely`,
+    /// at the 3.8.4 tag) before any information is merged: their signatures, the type parameters'
+    /// number and the parameters' erasures (a type parameter's its bound's), are consistent, and
+    /// where their results erase differently (`ParamMatch`) their parameter types are the same,
+    /// `y`'s type parameters read as `x`'s (`matchingMethodParams`). `f[T](x: T)` and `f[U <:
+    /// String](x: U)` do not match: their parameters erase to `Object` and `String`.
+    pub(super) fn members_match(&mut self, x: SymId, ta: TypeId, y: SymId, tb: TypeId) -> bool {
+        if x == y && ta == tb {
+            return true;
+        }
+        if self.arity_shape(x) != self.arity_shape(y) {
+            return false;
+        }
+        let (px, rx) = self.erased_signature_of(x, ta);
+        let (py, ry) = self.erased_signature_of(y, tb);
+        if px != py {
+            return false;
+        }
+        if rx == ry {
+            return true;
+        }
+        let own = self.parameters_of(x).tparams.clone();
+        let shape = self.parameter_shape(x, ta, None);
+        self.parameter_shape(y, tb, Some(&own)) == shape
+    }
+
+    /// The classes the parameters and the result of `s` erase to, seen from its owner's
+    /// instance `owner_ty`: a by-name parameter a `Function0`, a repeated one a `Seq`, a type
+    /// parameter its bound (dotty's `Signature`, `paramsSig` and `resSig`).
+    fn erased_signature_of(&mut self, s: SymId, owner_ty: TypeId) -> (Vec<ClassId>, ClassId) {
+        let sig = self.sig_arc(s);
+        let subst = self.owner_subst(owner_ty);
+        let mut params = Vec::new();
+        for p in sig.clauses.iter().flat_map(|c| c.params.iter()) {
+            let erased = if p.by_name {
+                self.b.functions.first().copied().flatten().unwrap_or(self.b.any_ref)
+            } else if p.repeated {
+                self.b.seq.unwrap_or(self.b.any_ref)
+            } else {
+                let t = self.types.subst(p.ty, &subst);
+                self.erased_class(t, 0)
+            };
+            params.push(erased);
+        }
+        let ret = self.types.subst(sig.ret, &subst);
+        (params, self.erased_class(ret, 0))
     }
 
     fn arity_shape(&mut self, s: SymId) -> (usize, Vec<usize>) {
@@ -2876,12 +3321,17 @@ impl<'a> Worker<'a> {
     /// Every input of the shape is in the reader's view before the shape is made of it (the
     /// canonicalisation rule): the parameters through
     /// `parameters_of`, the owner's arguments by the caller, the owner's bounds, read raw from
-    /// its type parameters, translated here.
-    fn parameter_shape(&mut self, s: SymId, owner_ty: TypeId) -> (usize, Vec<(TypeId, bool, bool)>) {
+    /// its type parameters, translated here. `renamed`: type parameters of another method its
+    /// own are read as, by position, where they are as many.
+    fn parameter_shape(&mut self, s: SymId, owner_ty: TypeId, renamed: Option<&[TParamId]>) -> (usize, Vec<(TypeId, bool, bool)>) {
         let sig = self.parameters_of(s);
         let tparams = sig.tparams.len();
+        let own = sig.tparams.clone();
         let mut params: Vec<(TypeId, bool, bool)> = sig.clauses.iter().flat_map(|c| c.params.iter()).map(|p| (p.ty, p.by_name, p.repeated)).collect();
         let mut subst = self.owner_subst(owner_ty);
+        if let Some(to) = renamed.filter(|to| to.len() == tparams && tparams > 0) {
+            subst.extend(own.into_iter().zip(to).map(|(p, &q)| (p, self.types.param(q))));
+        }
         let view = self.types.view_here();
         if view != View::None {
             for (_, t) in &mut subst {
@@ -2911,9 +3361,9 @@ impl<'a> Worker<'a> {
         let view = self.types.view_here();
         let (ta, tb) = (self.types.translate(view, ta), self.types.translate(view, tb));
         let mut alts: Vec<SymId> = self.syms.alternatives(a).map_or_else(|| vec![a], |l| l.to_vec());
-        let shapes: Vec<_> = alts.iter().map(|&s| self.parameter_shape(s, ta)).collect();
+        let own = alts.clone();
         for s in self.syms.alternatives(b).map_or_else(|| vec![b], |l| l.to_vec()) {
-            if !shapes.contains(&self.parameter_shape(s, tb)) {
+            if !self.matches_among(s, tb, &own, ta) {
                 alts.push(s);
             }
         }

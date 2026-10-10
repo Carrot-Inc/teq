@@ -27,6 +27,9 @@ pub(super) struct Alt {
     /// `C(args)` and `C.apply` mean next to the `apply` methods of the companion, as the `apply`
     /// scalac synthesizes; `sym` is an `apply` of the companion then.
     pub ctor: Option<ClassId>,
+    /// The joint information `sig` is, of an intersection's alternative met with its match
+    /// (`subtype::intersection_denotations`), which its application types it by.
+    pub info: super::subtype::JointInfo,
 }
 
 fn overload_outcome(choice: &Result<usize, Failure>) -> Outcome {
@@ -1556,9 +1559,19 @@ impl<'a> Worker<'a> {
     // ---- resolution ----
 
     fn alternatives_of(&mut self, set: SymId, recv_ty: Option<TypeId>, ctor: Option<ClassId>) -> Vec<Alt> {
-        let syms: Vec<SymId> = match self.syms.alternatives(set) {
-            Some(alts) => alts.to_vec(),
-            None => vec![set],
+        // On an intersection the parts' alternatives met (dotty's `Denotation.meet`): each with
+        // the owner's instance it is seen as and the information it carries.
+        let denoted = match (recv_ty, ctor) {
+            (Some(rt), None) => {
+                let name = self.syms.sym(set).name;
+                self.intersection_denotations(rt, name).filter(|d| !d.is_empty())
+            }
+            _ => None,
+        };
+        let syms: Vec<SymId> = match (&denoted, self.syms.alternatives(set)) {
+            (Some(d), _) => d.iter().map(|&((s, _), _)| s).collect(),
+            (None, Some(alts)) => alts.to_vec(),
+            (None, None) => vec![set],
         };
         // An alternative the call site cannot access is no candidate: zio's `protected
         // someOrElse[B]`, kept for binary compatibility beside the public one.
@@ -1582,6 +1595,14 @@ impl<'a> Worker<'a> {
         let mut alts: Vec<Alt> = syms
             .into_iter()
             .map(|sym| {
+                if let Some(((_, owner_ty), info)) = denoted.as_ref().and_then(|d| d.iter().find(|((s, _), _)| *s == sym)).cloned() {
+                    let owner_subst = self.owner_subst(owner_ty);
+                    let sig = match &info {
+                        Some(i) => i.clone(),
+                        None => self.sig_arc(sym),
+                    };
+                    return Alt { sym, sig, owner_subst, ctor: None, info };
+                }
                 let owner_subst = match (recv_ty, self.syms.sym(sym).owner) {
                     (Some(rt), Owner::Class(oc)) => match self.base_type(rt, oc) {
                         Some(bt) => self.owner_subst(bt),
@@ -1589,7 +1610,7 @@ impl<'a> Worker<'a> {
                     },
                     _ => Vec::new(),
                 };
-                Alt { sym, sig: self.sig_arc(sym), owner_subst, ctor: None }
+                Alt { sym, sig: self.sig_arc(sym), owner_subst, ctor: None, info: None }
             })
             .collect();
         if let Some(c) = ctor {
@@ -1614,7 +1635,7 @@ impl<'a> Worker<'a> {
                 }
             }
             if !replaced {
-                alts.push(Alt { sym: set, sig, owner_subst: Vec::new(), ctor: Some(c) });
+                alts.push(Alt { sym: set, sig, owner_subst: Vec::new(), ctor: Some(c), info: None });
             }
         }
         alts
@@ -1777,6 +1798,10 @@ impl<'a> Worker<'a> {
                                     self.note_outer_prefix(alt.sym, r);
                                 }
                                 let call = MethodCall { recv, sym: alt.sym, owner_subst: alt.owner_subst.clone(), ext_recv: None, prefix };
+                                // An intersection's alternative met with its match: its joint signature.
+                                if let Some(info) = alt.info.clone() {
+                                    self.joint_sig = Some((recv, alt.sym, info));
+                                }
                                 self.apply_method(call, None, targs, lists, span, expected, false).unwrap()
                             }
                         }
@@ -1837,10 +1862,10 @@ impl<'a> Worker<'a> {
         let first_var = self.tvars.len();
         let mut alts: Vec<Alt> = Vec::new();
         if let Some((sym, sig)) = &primary {
-            alts.push(Alt { sym: *sym, sig: sig.clone(), owner_subst: Vec::new(), ctor: Some(c) });
+            alts.push(Alt { sym: *sym, sig: sig.clone(), owner_subst: Vec::new(), ctor: Some(c), info: None });
         }
         for (s, sig) in secondaries {
-            alts.push(Alt { sym: s, sig, owner_subst: Vec::new(), ctor: None });
+            alts.push(Alt { sym: s, sig, owner_subst: Vec::new(), ctor: None, info: None });
         }
         let mut lists = lists;
         let mut infos: Vec<Option<ListInfo>> = Vec::new();
@@ -1918,7 +1943,7 @@ impl<'a> Worker<'a> {
         }
         let alts: Vec<Alt> = distinct
             .iter()
-            .map(|&(sym, bt)| Alt { sym, sig: self.sig_arc(sym), owner_subst: self.owner_subst(bt), ctor: None })
+            .map(|&(sym, bt)| Alt { sym, sig: self.sig_arc(sym), owner_subst: self.owner_subst(bt), ctor: None, info: None })
             .collect();
         let mut infos = Vec::new();
         match self.resolve_overloaded(&alts, targs, lists, &mut infos, expected, false, false) {
@@ -1956,7 +1981,7 @@ impl<'a> Worker<'a> {
     ) -> Result<usize, String> {
         let alts: Vec<Alt> = calls
             .iter()
-            .map(|call| Alt { sym: call.sym, sig: self.sig_arc(call.sym), owner_subst: call.owner_subst.clone(), ctor: None })
+            .map(|call| Alt { sym: call.sym, sig: self.sig_arc(call.sym), owner_subst: call.owner_subst.clone(), ctor: None, info: None })
             .collect();
         let span = lists.first().map_or(Span::default(), |l| l.span);
         lists.insert(0, ArgList { args: vec![ArgSrc::Typed(recv, recv_ty)], using: false, span });

@@ -3160,7 +3160,7 @@ impl<'a> Worker<'a> {
 
     /// Outside its scope, an opaque type with a bound (`opaque type Name <: String`) is seen as
     /// that bound where the primitive operators are dispatched; its members and supertypes come
-    /// through the bound's base types.
+    /// through the bound's base types, or the bound itself where it is no class (`A & B`).
     pub(crate) fn opaque_bound(&mut self, t: TypeId) -> Option<TypeId> {
         let Type::Class(c, args) = self.types.get(t) else { return None };
         if self.syms.class(c).kind != ClassKind::Opaque || self.transparent.contains(&c) {
@@ -3336,14 +3336,19 @@ impl<'a> Worker<'a> {
     }
 
     /// `opaque type Name <: String = String`: outside its scope the opaque type has the members
-    /// and the supertypes of its bound.
+    /// and the supertypes of its bound, its base types, a class's copied, another bound's the
+    /// classes it gives (`opaque_bound_bases`).
     fn set_opaque_bound(&mut self, c: ClassId, under: TypeId, bound: TypeId, span: Span) {
         if !self.is_sub(under, bound) {
             let msg = format!("the underlying type {} does not conform to the bound {}", self.show(under), self.show(bound));
             self.error(span, msg);
         }
-        let Type::Class(bc, bargs) = self.types.get(bound) else { return };
         self.syms.class_mut(c).parents = vec![bound];
+        let Type::Class(bc, bargs) = self.types.get(bound) else {
+            let bases = self.opaque_bound_bases(bound);
+            self.syms.class_mut(c).base_types.extend(bases);
+            return;
+        };
         self.complete_class(bc);
         let subst: Subst =
             self.syms.class(bc).tparams.iter().copied().zip(self.types.items(bargs).iter().copied()).collect();

@@ -5,7 +5,7 @@ bodies/fix/bodies/Pretty.tasty 00ac072766647bec0074c2b833c9e9ca
 casts/fix/casts/CastA.tasty 00b636d295339fe400d0a00ad1da3295
 casts/fix/casts/CastB.tasty 00b536d295339fe400d0940aa1da3e99
 casts/fix/casts/CastLib.tasty 003f8d393df022dc005d25e6b084e5d8
-clash/fix/clash/ClashMaker.tasty 0033bd4799756b92004bcbc7515dd5d0
+clash/fix/clash/ClashMaker.tasty 0033bd4799496b92004bcbc7515dd5d0
 clash/fix/clash/ClashOverloaded.tasty 0005f5f1b161d4e80080f14add0285d7
 clash/fix/clash/ClashSingle.tasty 000eb3359278e8e800095c00db11de9e
 compdsl/fix/shapes/CompDsl.tasty 00ffe7fcd9787ea500b0ab873a68c2e7

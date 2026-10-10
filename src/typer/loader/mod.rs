@@ -1628,7 +1628,13 @@ impl<'a> Worker<'a> {
         if kind == ClassKind::Opaque {
             let sig = decoder.type_def_sig(lc.addr);
             let mut cx = MapCx::new(lc.file);
-            let under = self.map_type(&mut cx, strip_lambda(&sig.rhs));
+            // A generic opaque type's bounds stand inside its lambda (`[T] =>> (? <: B[T]) =
+            // U[T]`), its parameters named by their definitions as the class's are.
+            let (alias, bounds) = match (strip_lambda(&sig.rhs), &sig.opaque_bounds) {
+                (TType::BoundedAlias(bounds, alias), None) => (&**alias, Some(&**bounds)),
+                (alias, bounds) => (alias, bounds.as_ref()),
+            };
+            let under = self.map_type(&mut cx, alias);
             self.syms.class_mut(c).underlying = Some(under);
             let targs: Vec<TypeId> = self.syms.class(c).tparams.clone().iter().map(|&p| self.types.param(p)).collect();
             let self_ty = self.types.class(c, &targs);
@@ -1636,14 +1642,20 @@ impl<'a> Worker<'a> {
             // An opaque type conforms to its declared bound; an abstract type read so, whose
             // definition is its bounds (`type +[X <: Int, Y <: Int] <: Int` of
             // `scala.compiletime.ops.int`), to its upper one.
-            let upper = match (&sig.opaque_bounds, strip_lambda(&sig.rhs)) {
+            let upper = match (bounds, alias) {
                 (Some(TType::Bounds(_, hi)), _) | (None, TType::Bounds(_, hi)) => Some(&**hi),
                 _ => None,
             };
             if let Some(hi) = upper {
                 let bound = self.map_type(&mut cx, hi);
+                // A bound that is no class (`A & B`) gives the base types of the classes it
+                // gives (`opaque_bound_bases`).
+                self.syms.class_mut(c).parents = vec![bound];
+                if !matches!(self.types.get(bound), Type::Class(..)) {
+                    let bases = self.opaque_bound_bases(bound);
+                    self.syms.class_mut(c).base_types.extend(bases);
+                }
                 if let Type::Class(bc, bargs) = self.types.get(bound) {
-                    self.syms.class_mut(c).parents = vec![bound];
                     self.complete_class(bc);
                     let subst: Subst = self.syms.class(bc).tparams.iter().copied().zip(self.types.items(bargs).iter().copied()).collect();
                     let inherited: Vec<(ClassId, TypeId)> = self.syms.class(bc).base_types.clone();
