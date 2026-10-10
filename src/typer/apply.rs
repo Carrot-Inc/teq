@@ -5423,8 +5423,9 @@ impl<'a> Worker<'a> {
     /// the parameters' names and the result, and the two infos met elsewhere (`Denotations.meet`,
     /// `infoMeet`: the member's parameters, the results intersected, `A & Z`). The call is typed
     /// by it; the class's member is the one called, its defaults its own. None for an overloaded
-    /// member and for a refinement of another signature (an overload of the name).
-    fn refined_denotation(&mut self, recv: TExprId, recv_ty: TypeId, name: Name, sym: SymId, owner_ty: TypeId) -> Option<(Refinement, Arc<MethodSig>)> {
+    /// member and for a refinement of another signature (an overload of the name); `Err` with
+    /// the alternatives where the parts' refinements make an overload (`refined_alternatives`).
+    fn refined_denotation(&mut self, recv: TExprId, recv_ty: TypeId, name: Name, sym: SymId, owner_ty: TypeId) -> Option<Result<(Refinement, Arc<MethodSig>), Vec<Refinement>>> {
         if !self.types.term_refinements() || matches!(self.types.get(recv_ty), Type::Class(..) | Type::Lit(_) | Type::Error) {
             return None;
         }
@@ -5438,7 +5439,10 @@ impl<'a> Worker<'a> {
             _ => self.widen_path(recv_ty),
         };
         let prefix = self.path_of(recv).unwrap_or(under);
-        let r = self.refined_term_through(under, name, prefix)?;
+        let r = match self.refined_alternatives(under, name, prefix) {
+            Ok(r) => r?,
+            Err(alts) => return Some(Err(alts)),
+        };
         let rsig = self.refinement_sig(r);
         let theirs = self.sig_arc(sym);
         let theirs = match self.dependent_prefix(sym, recv, recv_ty) {
@@ -5451,6 +5455,9 @@ impl<'a> Worker<'a> {
         } else {
             let met = self.met_denotation(&theirs, owner_ty, &rsig)?;
             let r = match r {
+                // A generic meet's types stand over the member's type parameters, which the
+                // refinement's symbol does not bind: the refinement as declared.
+                Refinement::Term(..) if !met.tparams.is_empty() => r,
                 Refinement::Term(n, s, _) => Refinement::Term(n, s, self.sig_types(&met)),
                 Refinement::Val(n, s, _) => Refinement::Val(n, s, met.ret),
                 other => other,
@@ -5469,34 +5476,97 @@ impl<'a> Worker<'a> {
         } else {
             rsig
         };
-        Some((r, rsig))
+        Some(Ok((r, rsig)))
+    }
+
+    /// The arguments `lists` as they fit the refinement alternative `alt`, typed against its
+    /// parameters and taken back, each shown; None where they do not fit. The first parameter
+    /// list, positional arguments.
+    fn refinement_alternative_fits(&mut self, alt: Refinement, lists: &[ArgList]) -> Option<Vec<String>> {
+        let sig = self.refinement_sig(alt);
+        let (Some(clause), Some(list)) = (sig.clauses.iter().find(|c| !c.is_using), lists.iter().find(|l| !l.using)) else {
+            return Some(Vec::new());
+        };
+        if !clause_accepts(clause, list.args.len(), false) || clause.params.iter().any(|p| p.repeated) {
+            return None;
+        }
+        let vars: Subst = sig.tparams.iter().map(|&p| (p, self.fresh_var())).collect();
+        let mark = self.attempt();
+        let mut shown = Some(Vec::new());
+        for (arg, p) in list.args.iter().zip(&clause.params) {
+            let pty = self.types.subst(p.ty, &vars);
+            let ty = match arg {
+                ArgSrc::Ast(e) | ArgSrc::Hoisted(e) => self.type_expr(*e, Some(pty)).1,
+                ArgSrc::Typed(_, ty) => *ty,
+                _ => {
+                    shown = None;
+                    break;
+                }
+            };
+            if self.attempt_failed(&mark) || !self.is_sub(ty, pty) {
+                shown = None;
+                break;
+            }
+            let t = self.solve_bounded_in(ty);
+            let text = self.show(t);
+            if let Some(v) = shown.as_mut() {
+                v.push(text);
+            }
+        }
+        self.retract(mark);
+        shown
+    }
+
+    /// scalac's E051 for a call among the alternatives that a refinement overload makes:
+    /// dotty builds each as `TermRef(prefix, name, denot)`, interned by the member's symbol
+    /// (`designatorFor`), so they are one reference holding the last one's denotation
+    /// (`withDenot`), the rightmost part's. Arguments that fit it fit every alternative, which
+    /// `adaptOverloaded` reports ambiguous; others leave the call to the member's info.
+    fn refinement_overload_ambiguity(&mut self, sym: SymId, owner_ty: TypeId, alts: &[Refinement], lists: &[ArgList], span: Span) -> bool {
+        let Some(&last) = alts.last() else { return false };
+        let Some(args) = self.refinement_alternative_fits(last, lists) else { return false };
+        let theirs = self.sig_arc(sym);
+        let subst = self.owner_subst(owner_ty);
+        let mut seen = (*theirs).clone();
+        for p in seen.clauses.iter_mut().flat_map(|c| c.params.iter_mut()) {
+            p.ty = self.types.subst(p.ty, &subst);
+        }
+        seen.ret = self.types.subst(seen.ret, &subst);
+        let mut out = format!("Ambiguous overload. The overloaded alternatives of {} with types\n {}", self.method_description_of(sym), self.sig_text(&seen));
+        for &a in alts {
+            let sig = self.refinement_sig(a);
+            out.push_str("\n ");
+            out.push_str(&self.sig_text(&sig));
+        }
+        out.push_str(&format!("\nall match arguments ({})\n\nNote: Overloaded definitions introduced by refinements cannot be resolved", args.join(", ")));
+        self.error(span, out);
+        true
     }
 
     /// The member's info `theirs` (its owner seen as `owner_ty`) met with the refinement's `rsig`
-    /// of one signature (`Denotations.meet` of the two, `TypeComparer.andType` of two method
-    /// types with matching parameters): the member's parameters, its result `&` the
-    /// refinement's, the refinement's parameters read as the member's. None where the two do not
-    /// match (an overload).
+    /// of one signature (`Denotations.meet` of the two, `infoMeet`): the member's parameters
+    /// and type parameters, the refinement's read as them, the bounds met, its result `&` the
+    /// refinement's (`A & Z`). Type parameters whose bounds the meet changes are fresh ones of
+    /// those bounds. None where the two do not match (an overload).
     fn met_denotation(&mut self, theirs: &MethodSig, owner_ty: TypeId, rsig: &MethodSig) -> Option<MethodSig> {
-        let shape = |s: &MethodSig| s.clauses.iter().map(|c| (c.params.len(), c.is_using)).collect::<Vec<_>>();
-        if !theirs.tparams.is_empty() || !rsig.tparams.is_empty() || shape(theirs) != shape(rsig) {
-            return None;
-        }
         let subst = self.owner_subst(owner_ty);
-        let mut met = theirs.clone();
-        let renamed: Vec<(SymId, TypeId)> = rsig.clauses.iter().flat_map(|c| c.params.iter()).zip(theirs.clauses.iter().flat_map(|c| c.params.iter())).filter(|(q, p)| q.sym != p.sym).map(|(q, p)| (q.sym, self.types.mk(Type::Term(p.sym)))).collect();
-        let mark = self.trail.len();
-        for (p, q) in met.clauses.iter_mut().flat_map(|c| c.params.iter_mut()).zip(rsig.clauses.iter().flat_map(|c| c.params.iter())) {
+        let mut seen = theirs.clone();
+        for p in seen.clauses.iter_mut().flat_map(|c| c.params.iter_mut()) {
             p.ty = self.types.subst(p.ty, &subst);
-            let qt = self.subst_paths(q.ty, &renamed);
-            if p.by_name != q.by_name || p.repeated != q.repeated || !self.is_same(p.ty, qt) {
-                self.rollback(mark);
-                return None;
-            }
         }
-        let ret = self.types.subst(theirs.ret, &subst);
-        let rret = self.subst_paths(rsig.ret, &renamed);
-        met.ret = self.types.inter(ret, rret);
+        seen.ret = self.types.subst(seen.ret, &subst);
+        let (bounds, params, ret) = self.meet_method_infos(&seen, rsig, &theirs.tparams)?;
+        let bounds: Vec<TypeId> = bounds.into_iter().map(|b| self.types.subst(b, &subst)).collect();
+        let (tparams, rebound) = match self.rebind_tparams(&theirs.tparams, &bounds) {
+            Some((fresh, renaming)) => (fresh, renaming),
+            None => (theirs.tparams.clone(), Vec::new()),
+        };
+        let mut met = seen;
+        met.tparams = tparams;
+        for (p, t) in met.clauses.iter_mut().flat_map(|c| c.params.iter_mut()).zip(params) {
+            p.ty = self.types.subst(t, &rebound);
+        }
+        met.ret = self.types.subst(ret, &rebound);
         Some(met)
     }
 
@@ -5735,7 +5805,17 @@ impl<'a> Worker<'a> {
                 self.check_protected_access(sym, recv, recv_ty, span);
             }
             let mut callee = self.member_callee_in(recv, recv_ty, Some(owner_ty), sym);
-            let refined = self.refined_denotation(recv, recv_ty, name, sym, owner_ty);
+            let refined = match self.refined_denotation(recv, recv_ty, name, sym, owner_ty) {
+                Some(Err(alts)) => {
+                    if self.refinement_overload_ambiguity(sym, owner_ty, &alts, &lists, span) {
+                        self.type_args_for_errors(&lists);
+                        return (self.prog.add(TExpr::Unit), ERROR);
+                    }
+                    None
+                }
+                Some(Ok(r)) => Some(r),
+                None => None,
+            };
             match (&mut callee, &refined) {
                 (Callee::Method { refined: slot, .. }, Some((_, sig))) => *slot = Some(sig.clone()),
                 // A value's type is the refinement's (`Base { val v: Int }`).

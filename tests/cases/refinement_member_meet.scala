@@ -21,8 +21,18 @@ def use(p: P { def f[T](t: List[T]): T }): String = p.f[String](List("poly"))
 trait G { def f[T <: A1 & Z1](x: T): Any }
 class GI extends G { def f[T <: A1 & Z1](x: T): String = "erasure" }
 def same(g: G { def f[T <: A1](x: T): String }): String = g.f(AZ())
+// Two generic refinements of one signature join (`infoMeet`'s `PolyType`: the binders read as
+// one, the bounds met), and a generic parent's result meets a refinement's.
+trait GB { def f[T](x: T): Any }
+class GS extends GB { def f[T](x: T): String = "joined" }
+def joined(x: GB { def f[T](x: T): String } & GB { def f[U](x: U): String }): String = x.f[Int](1)
+trait GP { def f[T](x: T): A1 }
+class GQ extends GP { def f[T](x: T): AZ = AZ() }
+def parentMet(x: GP { def f[U](x: U): Z1 }): A1 & Z1 = x.f[Int](1)
 @main def run(): Unit =
   println(g(new C))
   println(h(new C))
   println(use((new Q).asInstanceOf[P { def f[T](t: List[T]): T }]))
   println(same((new GI).asInstanceOf[G { def f[T <: A1](x: T): String }]))
+  println(joined((new GS).asInstanceOf[GB { def f[T](x: T): String } & GB { def f[U](x: U): String }]))
+  println(parentMet((new GQ).asInstanceOf[GP { def f[U](x: U): Z1 }]).z)

@@ -3514,7 +3514,7 @@ impl<'a> Worker<'a> {
         out
     }
 
-    fn method_description_of(&self, sym: SymId) -> String {
+    pub(super) fn method_description_of(&self, sym: SymId) -> String {
         let info = self.syms.sym(sym);
         match info.owner {
             Owner::Class(c) if info.name == names::INIT => {

@@ -1385,7 +1385,7 @@ impl<'a> Worker<'a> {
     /// those are not their own: fresh ones, with the renaming of `tparams` to them, which the
     /// bounds are read under too (an F-bound); None where the bounds are theirs. dotty's
     /// `derivedLambdaType` of a lambda whose parameter infos a map changed.
-    fn rebind_tparams(&mut self, tparams: &[TParamId], bounds: &[TypeId]) -> Option<(Vec<TParamId>, Subst)> {
+    pub(super) fn rebind_tparams(&mut self, tparams: &[TParamId], bounds: &[TypeId]) -> Option<(Vec<TParamId>, Subst)> {
         let unchanged = tparams.iter().enumerate().all(|(i, &p)| {
             let info = self.syms.tparam(p);
             bounds.get(2 * i) == Some(&info.lower) && bounds.get(2 * i + 1) == Some(&info.upper)
@@ -2243,58 +2243,59 @@ impl<'a> Worker<'a> {
 
     /// The structural member `name` of the refined type `t` selected through `prefix`, the
     /// receiver's path or `t`: a recursive refinement is opened at it (`goRec`). Refinements
-    /// that make an overload give none.
+    /// that make an overload give none (`refined_alternatives` keeps them).
     pub fn refined_term_through(&mut self, t: TypeId, name: Name, prefix: TypeId) -> Option<Refinement> {
-        self.refined_denotation_through(t, name, prefix).ok().flatten()
+        self.refined_alternatives(t, name, prefix).ok().flatten()
     }
 
-    /// `refined_term_through` as a denotation: the refinement, none, or `Err` where the parts'
-    /// refinements make an overload, which stays one whatever another part refines
+    /// `refined_term_through` as a denotation: the refinement, none, or `Err` with the
+    /// alternatives where the parts' refinements make an overload, in the order the meet makes
+    /// them, the rightmost part's last. An overload stays one whatever another part refines
     /// (`MultiDenotation.meet`: `R["k"] & R["v"] & R["z"]`'s three `get`s).
-    fn refined_denotation_through(&mut self, t: TypeId, name: Name, prefix: TypeId) -> Result<Option<Refinement>, ()> {
+    pub fn refined_alternatives(&mut self, t: TypeId, name: Name, prefix: TypeId) -> Result<Option<Refinement>, Vec<Refinement>> {
         let mut t = self.deref(t);
         loop {
             match self.types.get(t) {
                 Type::Rec(body) => t = self.opened_rec(body, prefix),
                 // `goAnd`: the two sides' denotations met (`Denotation.meet`): one side's where
-                // the other refines no member of the name, two vals' types intersected; two
-                // different methods are an overload, which no refinement narrows (`Overloaded
-                // definitions introduced by refinements cannot be resolved`): the class's member.
+                // the other refines no member of the name, two vals' types intersected, two
+                // methods' infos met (`infoMeet`); two methods whose infos do not meet are an
+                // overload, which no refinement narrows (`Overloaded definitions introduced by
+                // refinements cannot be resolved`).
                 Type::Inter(a, b) => {
-                    let (x, y) = (self.refined_denotation_through(a, name, prefix)?, self.refined_denotation_through(b, name, prefix)?);
+                    let (x, y) = (self.refined_alternatives(a, name, prefix), self.refined_alternatives(b, name, prefix));
+                    let (x, y) = match (x, y) {
+                        (Err(mut xs), Err(ys)) => {
+                            xs.extend(ys);
+                            return Err(xs);
+                        }
+                        (Err(mut xs), Ok(y)) => {
+                            xs.extend(y);
+                            return Err(xs);
+                        }
+                        (Ok(x), Err(ys)) => return Err(x.into_iter().chain(ys).collect()),
+                        (Ok(x), Ok(y)) => (x, y),
+                    };
                     return match (x, y) {
                         (None, None) => Ok(None),
                         (Some(x), None) | (None, Some(x)) => Ok(Some(x)),
                         (Some(x), Some(y)) if x == y => Ok(Some(x)),
                         (Some(Refinement::Val(n, s, tx)), Some(Refinement::Val(_, _, ty))) => Ok(Some(Refinement::Val(n, s, if tx == ty { tx } else { self.types.inter(tx, ty) }))),
-                        // Two refinements of one signature, declared apart, join: the first's
-                        // parameters, the results intersected (`TypeComparer.andType` of two
-                        // method types with matching parameters).
-                        (Some(x @ Refinement::Term(n, s, lx)), Some(Refinement::Term(_, sy, ly))) => {
-                            let (xs, ys) = (self.refinement_sig(x), self.refinement_sig(Refinement::Term(n, sy, ly)));
-                            let shape = |s: &MethodSig| s.clauses.iter().map(|c| (c.params.len(), c.is_using)).collect::<Vec<_>>();
-                            if !xs.tparams.is_empty() || !ys.tparams.is_empty() || shape(&xs) != shape(&ys) {
-                                return Err(());
-                            }
-                            let renamed: Vec<(SymId, TypeId)> = ys.clauses.iter().flat_map(|c| c.params.iter()).zip(xs.clauses.iter().flat_map(|c| c.params.iter())).filter(|(q, p)| q.sym != p.sym).map(|(q, p)| (q.sym, self.types.mk(Type::Term(p.sym)))).collect();
-                            let pairs: Vec<(TypeId, TypeId)> = xs.clauses.iter().flat_map(|c| c.params.iter()).zip(ys.clauses.iter().flat_map(|c| c.params.iter())).map(|(p, q)| (p.ty, q.ty)).collect();
-                            let mark = self.trail.len();
-                            for (pt, qt) in pairs {
-                                let qt = self.subst_paths(qt, &renamed);
-                                if !self.is_same(pt, qt) {
-                                    self.rollback(mark);
-                                    return Err(());
+                        // Two refinements of one signature, declared apart, join (`infoMeet`): the
+                        // first's parameters, the second's type parameters read as the first's and
+                        // the bounds met, the results intersected.
+                        (Some(x @ Refinement::Term(n, s, _)), Some(y @ Refinement::Term(..))) => {
+                            let (xs, ys) = (self.refinement_sig(x), self.refinement_sig(y));
+                            let declared = self.sig_arc(s).tparams.clone();
+                            match self.meet_method_infos(&xs, &ys, &declared) {
+                                Some((bounds, params, ret)) => {
+                                    let items: Vec<TypeId> = bounds.into_iter().chain(params).chain([ret]).collect();
+                                    Ok(Some(Refinement::Term(n, s, self.types.list(&items))))
                                 }
+                                None => Err(vec![x, y]),
                             }
-                            let yret = self.subst_paths(ys.ret, &renamed);
-                            let ret = if xs.ret == yret { xs.ret } else { self.types.inter(xs.ret, yret) };
-                            let mut items: Vec<TypeId> = self.types.items(lx).to_vec();
-                            if let Some(last) = items.last_mut() {
-                                *last = ret;
-                            }
-                            Ok(Some(Refinement::Term(n, s, self.types.list(&items))))
                         }
-                        _ => Err(()),
+                        (Some(x), Some(y)) => Err(vec![x, y]),
                     };
                 }
                 Type::Refined(p, r) => {
@@ -2311,6 +2312,48 @@ impl<'a> Worker<'a> {
                 _ => return Ok(None),
             }
         }
+    }
+
+    /// dotty's `infoMeet` of two method infos `xs` and `ys`, over the type parameters `onto`
+    /// (as many as each has; `xs`'s and `ys`'s read as them, `tp2.resType.subst(tp2, tp1)`): the
+    /// bounds met (`paramInfos.zipWithConserve(_ & _)`), each a lower and an upper, then the
+    /// parameter types, which have to be the same (`matchingMethodParams`), `ys`'s parameters
+    /// read as `xs`'s, then the results intersected. None where they do not meet (`NoType`): a
+    /// different number of type parameters or another shape or parameter.
+    pub fn meet_method_infos(&mut self, xs: &MethodSig, ys: &MethodSig, onto: &[TParamId]) -> Option<(Vec<TypeId>, Vec<TypeId>, TypeId)> {
+        let shape = |s: &MethodSig| s.clauses.iter().map(|c| (c.params.len(), c.is_using)).collect::<Vec<_>>();
+        if xs.tparams.len() != ys.tparams.len() || xs.tparams.len() != onto.len() || shape(xs) != shape(ys) {
+            return None;
+        }
+        let to = |w: &Self, from: &[TParamId]| -> Subst { from.iter().zip(onto).filter(|(p, q)| p != q).map(|(&p, &q)| (p, w.types.param(q))).collect() };
+        let (sx, sy) = (to(self, &xs.tparams), to(self, &ys.tparams));
+        let renamed: Vec<(SymId, TypeId)> = ys.clauses.iter().flat_map(|c| c.params.iter()).zip(xs.clauses.iter().flat_map(|c| c.params.iter())).filter(|(q, p)| q.sym != p.sym).map(|(q, p)| (q.sym, self.types.mk(Type::Term(p.sym)))).collect();
+        let mut bounds = Vec::with_capacity(2 * onto.len());
+        for (&p, &q) in xs.tparams.iter().zip(&ys.tparams) {
+            let (xl, xh) = (self.syms.tparam(p).lower, self.syms.tparam(p).upper);
+            let (yl, yh) = (self.syms.tparam(q).lower, self.syms.tparam(q).upper);
+            let (xl, xh) = (self.types.subst(xl, &sx), self.types.subst(xh, &sx));
+            let (yl, yh) = (self.types.subst(yl, &sy), self.types.subst(yh, &sy));
+            bounds.push(if xl == yl { xl } else { self.types.union(xl, yl) });
+            bounds.push(if xh == yh { xh } else { self.types.inter(xh, yh) });
+        }
+        let mark = self.trail.len();
+        let mut params = Vec::new();
+        for (p, q) in xs.clauses.iter().flat_map(|c| c.params.iter()).zip(ys.clauses.iter().flat_map(|c| c.params.iter())) {
+            let pt = self.types.subst(p.ty, &sx);
+            let qt = self.subst_paths(q.ty, &renamed);
+            let qt = self.types.subst(qt, &sy);
+            if p.by_name != q.by_name || p.repeated != q.repeated || !self.is_same(pt, qt) {
+                self.rollback(mark);
+                return None;
+            }
+            params.push(pt);
+        }
+        let xret = self.types.subst(xs.ret, &sx);
+        let yret = self.subst_paths(ys.ret, &renamed);
+        let yret = self.types.subst(yret, &sy);
+        let ret = if xret == yret { xret } else { self.types.inter(xret, yret) };
+        Some((bounds, params, ret))
     }
 }
 
