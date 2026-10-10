@@ -1,0 +1,12 @@
+fallback
+given
+NPE defaultObj
+made
+given
+1
+NPE supplier.get()
+none
+List(1)
+1
+2
+Index 3 out of bounds for length 3

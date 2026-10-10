@@ -1922,7 +1922,11 @@ fn install_java(it: &mut Table) {
         }
         v => Ok(v),
     });
-    reg!(it, "java.util.Objects.toString", |it, a| Ok(Value::string(it.to_str(&arg(a, 1))?)));
+    // `toString(o, nullDefault)` as well, which the JDK's class gives a JVM build's macro.
+    reg!(it, "java.util.Objects.toString", |it, a| match arg(a, 1) {
+        Value::Null if a.len() > 2 => Ok(arg(a, 2)),
+        v => Ok(Value::string(it.to_str(&v)?)),
+    });
     reg!(it, "java.util.Objects.isNull", |_it, a| Ok(Value::Bool(matches!(arg(a, 1), Value::Null))));
     reg!(it, "java.util.Objects.nonNull", |_it, a| Ok(Value::Bool(!matches!(arg(a, 1), Value::Null))));
     reg!(it, "java.util.Arrays.copyOf", |it, a| {
