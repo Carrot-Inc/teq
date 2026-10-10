@@ -66,6 +66,7 @@ alive() { kill -0 "$1" 2> /dev/null; }
 cleanup() {
   [ -f "$b/teq.lock" ] && (cd "$b" && timeout 30 "$TEQ" stop > /dev/null 2>&1)
   [ -f "$work/r/target/teq/teq.lock" ] && (cd "$work/r" && timeout 30 "$TEQ" stop > /dev/null 2>&1)
+  [ -f "$work/js/teq.lock" ] && (cd "$work/js" && timeout 30 "$TEQ" stop > /dev/null 2>&1)
   [ -n "${server:-}" ] && kill "$server" 2> /dev/null
   rm -rf "$work"
 }
@@ -1436,6 +1437,170 @@ else
   fail "mill, the test run: ($code) $out; again ($again_code): $again"
 fi
 (cd "$mb" && timeout 30 "$TEQ" stop > /dev/null 2>&1)
+
+# A Scala.js project's suites (tests/scalajs-test, whose run under sbt-scalajs tests/scalajs-oracle.scala records)
+# over an export of the fixture's projects, their jars the coursier cache's: `suites` (munit, ScalaTest, utest and
+# zio-test under node, no module, an excluded suite, a framework's argument), `dom` (ScalaTest under jsdom, installed from the fixture's lockfile), `esm` (an ES module
+# importing node's `path`) and `cjs` (CommonJS, node's argument and a variable). Each run's events (`--events`) are
+# the oracle's, `--list` its suites; a pattern, `--changed` after an edit, a configuration with frameworks and no
+# suite, a node that ends in the middle of a run, a framework the link does not hold, jsdom under an ES module
+# (refused) and `test` over every project.
+js=$work/js
+mkdir -p "$js"
+(cd tests/scalajs-test && tar cf - --exclude=node_modules --exclude=target --exclude='oracle-*' .) | (cd "$js" && tar xf -)
+mkdir -p "$js/none/src/test/scala/fixture" "$js/early/src/test/scala/fixture"
+printf 'package fixture\n\nobject NotASuite:\n  val x = 1\n' > "$js/none/src/test/scala/fixture/NotASuite.scala"
+cat > "$js/early/src/test/scala/fixture/EarlySuite.scala" <<'EOF'
+package fixture
+
+import scala.scalajs.js
+
+class EarlySuite extends munit.FunSuite:
+  test("ends node") { js.Dynamic.global.process.exit(0) }
+EOF
+python3 - "$js" "$(dirname "$(dirname "$(dirname "$(jar_of munit)")")")" <<'PY'
+import hashlib, importlib.util, os, sys
+spec = importlib.util.spec_from_file_location("lock", os.environ["LOCK_PY"])
+lock = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(lock)
+js, m2 = sys.argv[1], sys.argv[2][: sys.argv[2].index("/maven2/") + len("/maven2/")]
+munit = ["org.scalameta:munit_sjs1_3:1.3.4", "org.scalameta:munit-diff_sjs1_3:1.3.4"]
+scalatest = ["org.scalatest:scalatest_sjs1_3:3.2.20", "org.scalatest:scalatest-core_sjs1_3:3.2.20", "org.scalactic:scalactic_sjs1_3:3.2.20",
+             "org.scala-lang.modules:scala-xml_sjs1_3:2.1.0", "org.scala-js:scalajs-dom_sjs1_3:2.8.1"] + [
+    f"org.scalatest:scalatest-{a}_sjs1_3:3.2.20" for a in ["diagrams", "featurespec", "flatspec", "freespec", "funspec", "funsuite", "matchers-core",
+                                                           "mustmatchers", "propspec", "refspec", "shouldmatchers", "wordspec"]]
+utest = ["com.lihaoyi:utest_sjs1_3:0.9.1", "com.lihaoyi:sourcecode_sjs1_3:0.4.3-M5"]
+zio = [f"dev.zio:{a}_sjs1_3:2.1.26" for a in ["zio", "zio-test", "zio-test-sbt", "zio-streams", "zio-stacktracer", "zio-internal-macros"]] + [
+    "dev.zio:izumi-reflect_sjs1_3:3.0.9", "dev.zio:izumi-reflect-thirdparty-boopickle-shaded_sjs1_3:3.0.9", "org.scala-lang.modules:scala-collection-compat_sjs1_3:2.14.0",
+    "io.github.cquiroz:scala-java-time_sjs1_3:2.6.0", "io.github.cquiroz:scala-java-time-tzdb_sjs1_3:2.6.0", "io.github.cquiroz:scala-java-locales_sjs1_3:1.5.4",
+    "io.github.cquiroz:cldr-api_sjs1_3:4.5.0", "org.scala-js:scala-js-macrotask-executor_sjs1_3:1.1.1"]
+table = {}
+for key in munit + scalatest + utest + zio:
+    org, name, version = key.split(":")
+    path = f"{m2}{org.replace('.', '/')}/{name}/{version}/{name}-{version}.jar"
+    if not os.path.isfile(path):
+        sys.exit("missing from the coursier cache: " + path)
+    data = open(path, "rb").read()
+    table[key] = f"maven-central {hashlib.sha1(data).hexdigest()} {len(data)}"
+flags = {"ignoredScalacOptions": [], "kindProjector": False, "maxInlines": 32, "strictEquality": False, "werror": False}
+def description(p, sources):
+    return {"cacheableState": [], "excludes": [], "hot": False, "keys": {}, "macroState": "ordered", "modulePerFile": [], "out": p + "/target/teq/out", "production": {"excludes": [], "sources": []}, "release": False, "sources": sources}
+node = {"kind": "node", "executable": "node", "args": [], "env": {}, "sourceMap": "enableIfAvailable"}
+jsdom = {"kind": "jsdom", "executable": "node", "args": [], "env": {}, "packageRoot": ".", "lockfile": "package-lock.json"}
+cjs = dict(node, args=["--max-old-space-size=300"], env={"FIXTURE_GREETING": "hello"})
+def project(p, tests, jars, frameworks, kind, env, main=(), exclude=(), args=None):
+    framework = lambda f: {"arguments": (args or {}).get(f, []), "class": f}
+    return {"base": p, "platform": "js", "scalaVersion": "3.8.4", "description": description(p, list(main)),
+            "configurations": {
+                "compile": {"classpath": [], "flags": flags, "generators": [], "mainClasses": [], "resources": [], "sources": list(main)},
+                "test": {"classpath": [{"configuration": "compile", "project": p}] + jars, "flags": flags, "resources": [], "sources": tests, "generators": [],
+                         "baseDirectory": ".", "envVars": {}, "exclude": list(exclude), "fork": False, "javaOptions": [],
+                         "frameworks": [framework(f) for f in frameworks], "moduleKind": kind, "jsEnv": env}}}
+MUNIT, SCALATEST, UTEST, ZIO = "munit.Framework", "org.scalatest.tools.Framework", "utest.runner.Framework", "zio.test.sbt.ZTestFramework"
+projects = {
+    "suites": project("suites", ["suites/src/test/scala", "suites/src/test/zio"], munit + scalatest + utest + zio, [MUNIT, SCALATEST, UTEST, ZIO], "NoModule", node,
+                      main=["suites/src/main/scala"], exclude=["fixture.MunitExcluded"], args={MUNIT: ["--exclude-tags=Slow"]}),
+    "dom": project("dom", ["dom/src/test/scala"], munit + scalatest, [MUNIT, SCALATEST], "NoModule", jsdom),
+    "esm": project("esm", ["esm/src/test/scala"], munit, [MUNIT], "ESModule", node),
+    "cjs": project("cjs", ["cjs/src/test/scala"], munit, [MUNIT], "CommonJSModule", cjs),
+    "none": project("none", ["none/src/test/scala"], munit, [MUNIT], "NoModule", node),
+    "early": project("early", ["early/src/test/scala"], munit, [MUNIT], "NoModule", node),
+    "missing": project("missing", ["cjs/src/test/scala"], munit, [MUNIT, SCALATEST], "CommonJSModule", cjs),
+    "domesm": project("domesm", ["esm/src/test/scala"], munit, [MUNIT], "ESModule", jsdom),
+}
+inputs = {f: hashlib.sha256(open(os.path.join(js, f), "rb").read()).hexdigest() for f in ["build.sbt", "project/build.properties", "project/plugins.sbt"]}
+export = {"teq": "0.1.7-check.1", "format": 1, "binaries": {},
+          "inputs": {"files": inputs, "sha256": hashlib.sha256("".join(f"{k}\0{v}\n" for k, v in sorted(inputs.items())).encode()).hexdigest()},
+          "projects": projects, "jars": table, "repositories": [{"id": "maven-central", "url": "https://repo1.maven.org/maven2/"}]}
+open(os.path.join(js, "teq.lock"), "w", encoding="utf-8").write(lock.canonical(export))
+PY
+[ $? = 0 ] || fail "scalajs tests: the export of tests/scalajs-test does not write"
+jstest() { (cd "$js" && timeout 300 "$TEQ" test "$@" 2>&1); }
+# The oracle's lines of a project, sorted: its events, or with `defined` its suites; a throwable's colours left out.
+oracle_of() { grep "^$1	" tests/scalajs-test/oracle-1.22.0.txt | if [ "${2:-}" = defined ]; then grep '	defined	'; else grep -v '	defined	'; fi | sed 's/\x1b\[[0-9;]*m//g' | sort; }
+inventory() { sed 's/\x1b\[[0-9;]*m//g' "$1" | sort; }
+out=$(jstest suites --events "$js/suites.events")
+code=$?
+if [ $code = 1 ] && [ "$(inventory "$js/suites.events")" = "$(oracle_of suites)" ] && [[ "$out" == *"suites/test: 6 suites, 7 passed, 5 failed, 3 ignored, 1 pending, 1 canceled"* ]] \
+   && [[ "$out" == *"[fail] fixture.ScalatestNeedsArgument crashed"* ]] && [[ "$out" == *"[fail] fixture.MunitSuite.fails: munit.ComparisonFailException: suites/src/test/scala/fixture/MunitSuite.scala:11"* ]]; then
+  pass "scalajs tests: munit, ScalaTest, utest and zio-test suites under node give sbt-scalajs's events, every status, an error for a suite the framework cannot make, the excluded suite and the framework's argument honoured"
+else
+  fail "scalajs tests: suites ($code): $(diff <(inventory "$js/suites.events") <(oracle_of suites) | head -10) $out"
+fi
+out=$(jstest suites --list)
+code=$?
+listed=$(printf '%s\n' "$out" | sed -nE 's/^Test (fixture\.[A-Za-z]+) : .*/\1/p' | sort)
+if [ $code = 0 ] && [ "$listed" = "$(oracle_of suites defined | cut -f2 | sort)" ]; then
+  pass "scalajs tests: --list names the suites sbt's discovery defines, the abstract and the nested left out"
+else
+  fail "scalajs tests: --list: $listed // $(oracle_of suites defined | cut -f2) // $out"
+fi
+out=$(jstest suites fixture.UtestSuite --events "$js/pattern.events")
+if [ $? = 1 ] && [ "$(cut -f2 "$js/pattern.events" | sort -u)" = "fixture.UtestSuite" ] && [[ "$out" == *"suites/test: 1 suite, 2 passed, 1 failed"* ]]; then
+  pass "scalajs tests: a pattern runs the suites it names"
+else
+  fail "scalajs tests: a pattern: $(cat "$js/pattern.events") $out"
+fi
+printf '\n// an edit\n' >> "$js/suites/src/test/scala/fixture/UtestSuite.scala"
+out=$(jstest suites --changed --events "$js/changed.events")
+if [ $? = 1 ] && [ "$(cut -f2 "$js/changed.events" | sort -u)" = "fixture.UtestSuite" ]; then
+  pass "scalajs tests: --changed after an edit runs the suite the edit reaches alone"
+else
+  fail "scalajs tests: --changed: $(cut -f2 "$js/changed.events" | sort -u) $out"
+fi
+out=$(jstest esm --events "$js/esm.events")
+if [ $? = 0 ] && [ "$(inventory "$js/esm.events")" = "$(oracle_of esm)" ] && [ -f "$js/target/teq/esm/test/link/main.mjs" ]; then
+  pass "scalajs tests: an ES module's link, imported by node, its import of node's path resolved"
+else
+  fail "scalajs tests: esm: $out"
+fi
+out=$(jstest cjs --events "$js/cjs.events")
+if [ $? = 0 ] && [ "$(inventory "$js/cjs.events")" = "$(oracle_of cjs)" ] && [ -f "$js/target/teq/cjs/test/link/main.cjs" ]; then
+  pass "scalajs tests: a CommonJS module's link, required by node with the environment's argument and variable"
+else
+  fail "scalajs tests: cjs: $out"
+fi
+if command -v npm > /dev/null; then
+  out=$(jstest dom --events "$js/dom.events")
+  if [ $? = 0 ] && [ "$(inventory "$js/dom.events")" = "$(oracle_of dom)" ] && [ -f "$js/node_modules/jsdom/package.json" ]; then
+    pass "scalajs tests: ScalaTest under jsdom, installed from the lockfile, in the window's realm at http://localhost/ with storage"
+  else
+    fail "scalajs tests: dom: $out"
+  fi
+else
+  echo "task: note: no npm here, the jsdom run not checked"
+fi
+out=$(jstest none)
+if [ $? = 1 ] && [[ "$out" == *"no suite of the test frameworks (munit.Framework) among the test sources: a run of nothing is no pass"* ]]; then
+  pass "scalajs tests: a configuration with frameworks and no suite fails"
+else
+  fail "scalajs tests: no suite: $out"
+fi
+out=$(jstest early)
+if [ $? = 1 ] && [[ "$out" == *"node ended before the run completed"* ]]; then
+  pass "scalajs tests: a node that ends in the middle of the run fails it"
+else
+  fail "scalajs tests: an early end: $out"
+fi
+out=$(jstest missing)
+if [ $? = 1 ] && [[ "$out" == *"the test framework org.scalatest.tools.Framework is not in the test link"* ]] && [[ "$out" == *"missing/test: 1 suite, 2 passed, 0 failed"* ]]; then
+  pass "scalajs tests: a framework the link does not hold fails the run, the other's suites run"
+else
+  fail "scalajs tests: a missing framework: $out"
+fi
+out=$(jstest domesm)
+if [ $? = 2 ] && [[ "$out" == *"Test / jsEnv is JSDOMNodeJSEnv, which runs a script alone, and the test link is a ESModule"* ]]; then
+  pass "scalajs tests: jsdom under an ES module is refused, as sbt-scalajs refuses it"
+else
+  fail "scalajs tests: jsdom and ESModule: $out"
+fi
+out=$(jstest)
+if [ $? = 2 ] && [[ "$out" == *"cjs/test: 1 suite, 2 passed, 0 failed"* ]] && [[ "$out" == *"suites/test: 6 suites"* ]] && [[ "$out" == *"teq: test left out domesm"* ]]; then
+  pass "scalajs tests: test over every project runs the Scala.js ones and names the one left out"
+else
+  fail "scalajs tests: every project: $out"
+fi
+(cd "$js" && timeout 30 "$TEQ" stop > /dev/null 2>&1)
 
 # The launcher tools/launcher/teq (docs/TARGETS.md, "The launchers") under each POSIX shell
 # present, over a repository on the loopback interface that serves a stand-in for the binary, which

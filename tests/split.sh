@@ -622,6 +622,36 @@ for v in a b; do timeout 20 "$TEQ" compiler build "$work/$v" --split "$work/$v.o
 expect "an unreached cast in another package changes no module" "$(diff -rq "$work/a.out" "$work/b.out" 2>&1 | sed 's/.*\/\([^ /]*\) differ/\1/' | tr '\n' ' ')" ""
 rm -rf "$work"
 
+# The one file of a resident watch (`watch -o`, how `teq test` links a Scala.js test configuration): the bytes of
+# `build -o` at its first build, nothing written by a build of an unchanged program, the bytes of a fresh build
+# after an edit; the answer says whether the file is an ES module and carries the analysis asked for.
+work=$(mktemp -d)
+mkdir -p "$work/src"
+printf 'package one\n\nobject Main:\n  def main(args: Array[String]): Unit = println(Value.text)\n' > "$work/src/Main.scala"
+printf 'package one\n\nobject Value:\n  val text = "a"\n' > "$work/src/Value.scala"
+coproc ONEFILE { cd "$work" && exec timeout 120 "$TEQ" compiler watch src -o out/main.js --analysis-version 3 2> "$work/watch.err"; }
+read -r -t 60 first <&"${ONEFILE[0]}"
+timeout 30 "$TEQ" compiler build "$work/src" -o "$work/fresh1.js" > /dev/null 2>&1 || bad "one file: the build"
+check "$work/out/main.js" "$work/fresh1.js" "one file: the watch's first build is not build -o's"
+echo build >&"${ONEFILE[1]}"
+read -r -t 60 unchanged <&"${ONEFILE[0]}"
+printf 'package one\n\nobject Value:\n  val text = "b"\n' > "$work/src/Value.scala"
+printf 'build src/Value.scala\n\n' >&"${ONEFILE[1]}"
+read -r -t 60 edited <&"${ONEFILE[0]}"
+echo quit >&"${ONEFILE[1]}"
+wait "$ONEFILE_PID" 2> /dev/null
+timeout 30 "$TEQ" compiler build "$work/src" -o "$work/fresh2.js" > /dev/null 2>&1 || bad "one file: the build after the edit"
+check "$work/out/main.js" "$work/fresh2.js" "one file: the watch's build after an edit is not build -o's"
+expect "one file: the first answer" "$(printf '%s' "$first" | grep -o '"esModule":false' | head -1)$(printf '%s' "$first" | grep -c '"analysis":\[')" '"esModule":false1'
+expect "one file: an unchanged program writes nothing" "$(printf '%s' "$unchanged" | grep -o '"changed":\[[^]]*\]')" '"changed":[]'
+expect "one file: an edit rewrites the file" "$(printf '%s' "$edited" | grep -o '"changed":\[[^]]*\]')" '"changed":["out/main.js"]'
+printf 'package one\n\n@scala.scalajs.js.annotation.JSExportTopLevel("shown")\ndef shown(): String = "x"\n' > "$work/src/Exported.scala"
+printf 'build\nquit\n' | (cd "$work" && timeout 60 "$TEQ" compiler watch src -o out/module.mjs > "$work/module.answer" 2>&1)
+timeout 30 "$TEQ" compiler build "$work/src" -o "$work/fresh3.mjs" > /dev/null 2>&1 || bad "one file: the module's build"
+check "$work/out/module.mjs" "$work/fresh3.mjs" "one file: the watch's ES module is not build -o's"
+expect "one file: an exporting program's file is an ES module" "$(grep -o '"esModule":true' "$work/module.answer" | head -1)" '"esModule":true'
+rm -rf "$work"
+
 # The same bytes whatever the number of workers.
 work=$(mktemp -d)
 timeout 60 python3 bench/gen.py "$work/src" 51 22 > /dev/null || bad "workers: the core corpus"
