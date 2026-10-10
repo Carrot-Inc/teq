@@ -1028,13 +1028,26 @@ impl<'a> Emitter<'a> {
             _ => {
                 self.note_text("$asT");
                 let name = self.cast_target_name(test);
+                // A cast to a function type asks for a function of any arity, where a type test asks for the
+                // arity: a function's `length` is not its Scala arity (a bound or a rest-parameter function, a
+                // JavaScript function converted to a Scala one), and Scala.js's `js.FunctionN` are scala's
+                // function types here, whose cast Scala.js leaves unchecked (docs/COMPATIBILITY.md).
+                let any_function = matches!(self.prog.tests[test.idx()], TypeTest::Function(_));
                 if let TExpr::Local(s) = self.peek(inner) {
                     let n = self.local_ref(s);
                     let _ = write!(self.out, "$asT({}, ", n);
-                    self.emit_test_as(test, &n, true);
+                    if any_function {
+                        let _ = write!(self.out, "typeof {} === \"function\"", n);
+                    } else {
+                        self.emit_test_as(test, &n, true);
+                    }
                 } else {
                     self.out.push_str("(($v) => $asT($v, ");
-                    self.emit_test_as(test, "$v", true);
+                    if any_function {
+                        self.out.push_str("typeof $v === \"function\"");
+                    } else {
+                        self.emit_test_as(test, "$v", true);
+                    }
                 }
                 self.out.push_str(", ");
                 js_string(&name, &mut self.out);

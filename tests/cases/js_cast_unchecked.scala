@@ -19,3 +19,7 @@ object Main:
     val anyFn: Any = mod
     val f2 = anyFn.asInstanceOf[js.Function2[Int, String, Int]]
     println(f2 != null)
+    val f0: Any = () => 1
+    try { f0.asInstanceOf[Int => Int]; println("arity passed") }
+    catch case _: ClassCastException => println("arity CCE")
+    println(("s": Any).isInstanceOf[Int => Int])

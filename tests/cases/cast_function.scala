@@ -1,5 +1,6 @@
-// A cast to a function type tests the arity, as the JVM's `checkcast` of `scala.Function1` does,
-// a context function type and a polymorphic one being the function type of their arity
+// A cast to a function type is the function type's test (the JVM's `checkcast` of `scala.Function1`;
+// outside the JVM a function of any arity, tests/cases/js_cast_unchecked), a context function type
+// and a polymorphic one being the function type of their arity
 // (`TypeErasure.apply`), and `f.asInstanceOf[() => Int]()` applies the cast's value to the empty
 // argument list (dotty's `Apply` of the `TypeApply`), which calls the function.
 trait F extends (() => Int)
@@ -9,10 +10,6 @@ given Int = 2
 
 @main def run(): Unit =
   val f: Any = () => { calls += 1; 7 }
-  try
-    f.asInstanceOf[Int => Int]
-    println("arity passed")
-  catch case _: ClassCastException => println("arity CCE")
   println(f.asInstanceOf[() => Int]())
   println(calls)
   f.asInstanceOf[() => Int]()

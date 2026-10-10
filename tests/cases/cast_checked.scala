@@ -37,8 +37,4 @@ var effects = 0
   attempt("Null of null") { val n: Any = null; n.asInstanceOf[Null] }
   println(("x": Any).asInstanceOf[Unit] == ())
   val f: Any = () => 1
-  try
-    f.asInstanceOf[Int => Int]
-    println("arity passed")
-  catch case _: ClassCastException => println("arity CCE")
   attempt("Function0") { f.asInstanceOf[() => Int]; () }

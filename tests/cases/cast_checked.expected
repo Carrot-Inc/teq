@@ -14,5 +14,4 @@ Nothing: Cannot cast to scala.Nothing
 Null: class A cannot be cast to class scala.runtime.Null$
 Null of null passed
 true
-arity CCE
 Function0 passed

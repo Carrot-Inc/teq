@@ -145,9 +145,10 @@ a JDK member as `not supported on JavaScript`. Beyond that:
   on the character, a `Char` and a one-character `String` being one value; a test or a cast against
   `Array[Int]` takes every array; a `Map`, a `Set` or a `Seq` is no function at run time (one is wrapped where
   a function is expected), so a type test of a function type is false for it and a cast to one fails; a cast
-  from a function type to a function type of another arity is not tested, since Scala.js's `js.FunctionN` are
-  scala's function types here and a cast to one is unchecked under Scala.js (a cast written to `js.FunctionN`
-  is unchecked whatever its source).
+  of a function type takes a function of any arity (a type test asks for the arity), since a JavaScript
+  function's `length` is not its Scala arity and Scala.js's `js.FunctionN` are scala's function types here,
+  where a cast to one is unchecked under Scala.js (a cast written to `js.FunctionN` is unchecked whatever its
+  source).
 - `java.time` is scala-java-time's, from its jar on the class path, and the region zone ids its tzdb jar's,
   as a Scala.js build takes them, rather than a copy of the JDK's in the standard library.
 - `Throwable` extends the native `Error`, and a value JavaScript throws reaches a `catch` as

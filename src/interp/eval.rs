@@ -1725,6 +1725,11 @@ impl<'a, 't> Interp<'a, 't> {
             }
             return Ok(v);
         }
+        // A cast to a function type takes a function of any arity, as the JavaScript target's does
+        // (docs/COMPATIBILITY.md); a type test asks for the arity.
+        if matches!(self.prog().tests[test.idx()], TypeTest::Function(_)) && self.function_arity(&v).is_some() {
+            return Ok(v);
+        }
         if self.type_test(&v, test, fr, cx)? {
             return Ok(v);
         }
