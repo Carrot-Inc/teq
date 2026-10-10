@@ -1419,6 +1419,7 @@ target_name_unrelated_value
 target_name_unrelated_value_written
 target_name_wildcard_dispatch
 template_arguments_once
+template_arguments_throwing
 template_pattern_vals
 this_rooted_type_path
 this_type_intersection

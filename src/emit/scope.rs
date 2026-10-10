@@ -1435,7 +1435,14 @@ impl<'a> Emitter<'a> {
                 TStmt::Fun(f) => self.walk_fun(w, f),
                 TStmt::Expr(x) if self.is_idle(x) => {}
                 TStmt::Expr(x) => self.walk(w, x),
-                TStmt::Val(_, init) => self.walk(w, init),
+                TStmt::Val(sym, init) => {
+                    self.walk(w, init);
+                    // A plan's temporary written at its use, or not at all, is no local the
+                    // output reads (`Emitter::emit_block_stmts`' `sunk` and `dropped`).
+                    if !moved.contains(&sym) {
+                        self.note_val_init(sym, init);
+                    }
+                }
                 TStmt::Pat(p, init) => {
                     w.name("$matchError");
                     self.walk(w, init);

@@ -1,0 +1,7 @@
+drop caught n
+substring caught nn
+indexOf caught w
+startsWith caught w
+charAt caught n
+non-null drop ello n
+non-null indexOf 2 w

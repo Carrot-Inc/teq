@@ -346,11 +346,66 @@ impl<'a> Emitter<'a> {
     /// The arguments a template call binds before its text, a bit per argument. A call evaluates
     /// each strict argument once, in order, before its body (`tpd.evalOnce`; Scala.js's `genApply`
     /// keeps one tree per argument), where the text writes an argument where it puts it: twice,
-    /// never, behind a condition or out of order. The text stands as written where every argument
-    /// with an effect comes first, in order, where the text always evaluates it, an impure one
-    /// once (an idempotent one may come again); else each of them, `Pure` ones aside, is bound,
-    /// in order, as a parameter of an arrow function the call applies to them, so that all of
-    /// them run before the text. A spread argument, the last, is written as it stands.
+    /// never, behind a condition, out of order, or after something of the text that can throw
+    /// (`$0.substring($1)` reads `null`'s property before `$1`; `template_slots`). The text stands
+    /// as written where every argument with an effect comes first, in order, where the text
+    /// always evaluates it and nothing before it can throw, an impure one once (an idempotent one
+    /// may come again); else each of them, `Pure` ones aside, is bound, in order, as a parameter
+    /// of an arrow function the call applies to them, so that all of them run before the text. A
+    /// spread argument, the last, is written as it stands.
+    /// Whether the value of `e` cannot be `null`: `this`, a literal, an object, an instance being
+    /// made, a closure, an array or object literal of a template, and a local `val` such a value
+    /// initialised (`never_null_locals`, which the walks note at the definition, before any use).
+    pub(super) fn never_null(&self, e: TExprId) -> bool {
+        match self.peek(e) {
+            TExpr::This | TExpr::Str(_) | TExpr::Int(_) | TExpr::Long(_) | TExpr::Double(_) | TExpr::Bool(_) | TExpr::Char(_) | TExpr::Module(_) | TExpr::New(..)
+            | TExpr::Lambda(..) | TExpr::ArrayLit(_) | TExpr::SeqLit(_) => true,
+            TExpr::Js(t, _) => {
+                let text = self.prog.strings[t.idx()].trim_start();
+                text.starts_with('[') || text.starts_with('{') || text.starts_with("new ")
+            }
+            TExpr::Local(s) => self.never_null_locals.contains_key(&s),
+            _ => self.is_closure(e),
+        }
+    }
+
+    /// Notes a local `val` whose initialiser cannot be `null` (`never_null`).
+    pub(super) fn note_val_init(&mut self, sym: SymId, init: TExprId) {
+        let info = self.syms.sym(sym);
+        if info.mods & (mods::MUTABLE | mods::LAZY) == 0 && self.never_null(init) {
+            self.never_null_locals.insert(sym, ());
+        }
+    }
+
+    /// Whether evaluating `e` can neither have an effect nor throw, so that whether it runs before
+    /// a template's text fails cannot be told: a literal, a constant, a local's or `this`'s field's
+    /// value, a closure, an array literal of such, and arithmetic and comparisons of such, an
+    /// integral division aside.
+    fn arg_quiet(&self, e: TExprId) -> bool {
+        if let Some((_, kind)) = self.hole_of(e) {
+            return kind == HoleKind::Value;
+        }
+        let plain = |s: SymId| {
+            let info = self.syms.sym(s);
+            !info.by_name && info.mods & mods::LAZY == 0 && matches!(info.kind, SymKind::Val | SymKind::Var | SymKind::Param)
+        };
+        match self.peek(e) {
+            TExpr::Int(_) | TExpr::Long(_) | TExpr::Double(_) | TExpr::Bool(_) | TExpr::Char(_) | TExpr::Str(_) | TExpr::Unit
+            | TExpr::Null | TExpr::This | TExpr::ClassOf(..) | TExpr::Lambda(..) => true,
+            TExpr::Static(s) | TExpr::Field(_, s) if self.const_vals.get(s.idx()).copied().unwrap_or(false) => true,
+            TExpr::Local(s) => plain(s),
+            TExpr::Field(r, s) => matches!(self.peek(r), TExpr::This) && plain(s) && !self.syms.sym(s).needs_accessor,
+            TExpr::Prim(op, a, b) => {
+                !matches!(op, PrimOp::IntDiv | PrimOp::IntRem | PrimOp::LongDiv | PrimOp::LongRem | PrimOp::Eq | PrimOp::Ne)
+                    && self.arg_quiet(a)
+                    && self.arg_quiet(b)
+            }
+            TExpr::Unary(_, a) => self.arg_quiet(a),
+            TExpr::ArrayLit(items) => self.prog.expr_list(items).iter().all(|&i| self.arg_quiet(i)),
+            _ => self.is_closure(e),
+        }
+    }
+
     pub(super) fn template_binds(&self, template: StrRef, args: &[TExprId]) -> u64 {
         let text = &self.prog.strings[template.idx()];
         // The receiver of a member of a static object is no argument: an inline method's body
@@ -376,12 +431,21 @@ impl<'a> Emitter<'a> {
         if effects == 0 {
             return 0;
         }
+        // The arguments whose evaluation can be told from its absence, which something of the text
+        // that throws before them would skip.
+        let loud = (0..args.len().min(64)).filter(|&k| effects & (1 << k) != 0 && !self.arg_quiet(args[k])).fold(0u64, |m, k| m | 1 << k);
         let (mut written, mut spread) = (0u64, 0u64);
         let mut last = None;
         let mut linear = true;
-        template_slots(text, |k, cond, spreads| {
+        // A placeholder's argument that cannot be `null` is accessed without a throw.
+        let non_null = |k: usize| args.get(k).is_some_and(|&a| self.never_null(a));
+        template_slots(text, non_null, |k, cond, spreads, throws| {
             if k >= 64 || effects & (1 << k) == 0 {
                 return;
+            }
+            // Something before it can throw, which the call's arguments, evaluated first, precede.
+            if throws && loud & (1 << k) != 0 {
+                linear = false;
             }
             let again = written & (1 << k) != 0;
             if spreads {
@@ -1532,7 +1596,10 @@ impl<'a> Emitter<'a> {
                 TStmt::Fun(_) => {}
                 TStmt::Expr(x) => self.emit_stmt(x, &Ctx::Discard),
                 TStmt::Val(sym, _) if self.sunk.contains_key(&sym) || self.dropped.contains_key(&sym) => {}
-                TStmt::Val(sym, init) => self.emit_local_val(sym, init),
+                TStmt::Val(sym, init) => {
+                    self.emit_local_val(sym, init);
+                    self.note_val_init(sym, init);
+                }
                 TStmt::Pat(pat, init) => self.emit_pattern_val(pat, init),
             }
         }
@@ -2326,15 +2393,49 @@ enum Shape {
 /// them: the argument, whether the text may skip it or evaluate it again there (past a
 /// conditional operator, `?`, `&&`, `||`, or an arrow function's `=>`, outside a string), and
 /// whether it is spread.
-fn template_slots(t: &str, mut slot: impl FnMut(usize, bool, bool)) {
+/// The placeholders of a template's text in the order JavaScript evaluates them, each with
+/// whether it stands behind a condition, whether it is spread, and whether something that can
+/// throw has run before it: a property read on a value the text was given or computed
+/// (`$0.substring($1)` reads `null`'s property before evaluating `$1`), an index read once its
+/// key is evaluated (`$0[$1]` evaluates `$1` first), or a call that has returned. A property or an
+/// index assigned (`$0.f = $1`, `$0[$1] = $2`) fails only after the value is evaluated. A name's
+/// property (`Math.imul`) is a namespace's, which cannot be `null`, and so is a placeholder's whose
+/// argument `non_null` says cannot be.
+fn template_slots(t: &str, non_null: impl Fn(usize) -> bool, mut slot: impl FnMut(usize, bool, bool, bool)) {
+    #[derive(Clone, Copy, PartialEq)]
+    enum Prev {
+        None,
+        Slot(usize),
+        Name,
+        Number,
+        Close,
+        Other,
+    }
+    #[derive(Clone, Copy, PartialEq)]
+    enum Open {
+        Call,
+        Group,
+        Index(bool),
+        Array,
+    }
     let b = t.as_bytes();
+    // Whether what follows `at` assigns (`=`, not `==` or `=>`).
+    let assigned = |at: usize| {
+        let rest = t[at..].trim_start().as_bytes();
+        rest.first() == Some(&b'=') && !matches!(rest.get(1), Some(b'=' | b'>'))
+    };
     let mut cond = false;
+    let mut throws = false;
     let mut quote = 0u8;
+    let mut prev = Prev::None;
+    let mut open: Vec<Open> = Vec::new();
     let mut i = 0;
     while i < b.len() {
         let c = b[i];
         if c == b'$' && b.get(i + 1).map_or(false, |d| d.is_ascii_digit()) {
-            slot((b[i + 1] - b'0') as usize, cond, t[..i].ends_with("..."));
+            let k = (b[i + 1] - b'0') as usize;
+            slot(k, cond, t[..i].ends_with("..."), throws);
+            prev = Prev::Slot(k);
             i += 2;
             continue;
         }
@@ -2343,15 +2444,60 @@ fn template_slots(t: &str, mut slot: impl FnMut(usize, bool, bool)) {
                 i += 1;
             } else if c == quote {
                 quote = 0;
+                prev = Prev::Other;
             }
-        } else {
-            match c {
-                b'"' | b'\'' | b'`' => quote = c,
-                b'?' => cond = true,
-                b'&' | b'|' if b.get(i + 1) == Some(&c) => cond = true,
-                b'=' if b.get(i + 1) == Some(&b'>') => cond = true,
-                _ => {}
+            i += 1;
+            continue;
+        }
+        let maybe_null = |prev: Prev| match prev {
+            Prev::Slot(k) => !non_null(k),
+            Prev::Close => true,
+            _ => false,
+        };
+        match c {
+            b'"' | b'\'' | b'`' => quote = c,
+            b'?' => cond = true,
+            b'&' | b'|' if b.get(i + 1) == Some(&c) => cond = true,
+            b'=' if b.get(i + 1) == Some(&b'>') => cond = true,
+            b'.' if !t[i..].starts_with("...") => {
+                let mut end = i + 1;
+                while end < b.len() && (b[end].is_ascii_alphanumeric() || b[end] == b'_' || b[end] == b'$') {
+                    end += 1;
+                }
+                if !assigned(end) {
+                    throws |= maybe_null(prev);
+                }
             }
+            b'[' => open.push(if matches!(prev, Prev::Slot(_) | Prev::Name | Prev::Close) { Open::Index(maybe_null(prev)) } else { Open::Array }),
+            b'(' => open.push(if matches!(prev, Prev::Slot(_) | Prev::Name | Prev::Close) { Open::Call } else { Open::Group }),
+            b')' | b']' => {
+                match open.pop() {
+                    Some(Open::Call) => throws = true,
+                    Some(Open::Index(maybe_null)) if !assigned(i + 1) => throws |= maybe_null,
+                    _ => {}
+                }
+                prev = Prev::Close;
+                i += 1;
+                continue;
+            }
+            _ => {}
+        }
+        if c.is_ascii_digit() && !matches!(prev, Prev::Name) {
+            while i < b.len() && (b[i].is_ascii_alphanumeric() || b[i] == b'.' && b.get(i + 1).map_or(false, |d| d.is_ascii_digit())) {
+                i += 1;
+            }
+            prev = Prev::Number;
+            continue;
+        }
+        if c.is_ascii_alphabetic() || c == b'_' || c == b'$' {
+            while i < b.len() && (b[i].is_ascii_alphanumeric() || b[i] == b'_' || b[i] == b'$') {
+                i += 1;
+            }
+            prev = Prev::Name;
+            continue;
+        }
+        if !c.is_ascii_whitespace() && c != b'.' {
+            prev = Prev::Other;
         }
         i += 1;
     }

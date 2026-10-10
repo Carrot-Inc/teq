@@ -183,6 +183,9 @@ enum Template {
     /// A reflective call by signature, which reads the types of its class literals
     /// (`Interp::call_by_signature`).
     Reflective,
+    /// A builtin of a member of `String`, whose receiver, the first argument, `null` makes
+    /// throw as the JVM's call does, after the arguments; the member's name.
+    StringMember(Builtin, Rc<str>),
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]

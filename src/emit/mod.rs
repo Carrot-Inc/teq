@@ -187,6 +187,9 @@ pub struct Emitter<'a> {
     chunk: u32,
     simple_cache: &'a [AtomicU8],
     tmp_counter: u32,
+    /// The local `val`s whose initialisers cannot be `null`, noted where the walks meet their
+    /// definitions (`never_null`).
+    never_null_locals: crate::intern::FxMap<SymId, ()>,
     array_seq: Option<ClassId>,
     /// Top-level vals whose initializer is a literal are plain consts.
     const_vals: &'a [bool],
@@ -889,6 +892,7 @@ impl<'a> Emitter<'a> {
             chunk: 1,
             simple_cache,
             tmp_counter: 0,
+            never_null_locals: Default::default(),
             array_seq,
             const_vals: &layout.const_vals,
             file_inits: &layout.file_inits,
