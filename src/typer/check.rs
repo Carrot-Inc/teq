@@ -3328,7 +3328,7 @@ impl<'a> Worker<'a> {
             if !evidence_only && !lists.iter().any(|l| !l.using) {
                 lists.insert(0, ArgList { args: Vec::new(), using: false, span });
             }
-            let call = MethodCall { recv: None, sym: SymId(u32::MAX), owner_subst, ext_recv: None, prefix: None };
+            let call = MethodCall { recv: None, sym: SymId(u32::MAX), owner_subst, ext_recv: None, prefix: None, refined: None };
             let applied = self.with_env(outside.clone(), |t| {
                 let outer = t.parent_args_of.replace(c);
                 let r = t.apply_method(call, Some((b, sig.clone())), None, lists, span, None, false);
@@ -3554,7 +3554,7 @@ impl<'a> Worker<'a> {
         let secondaries: Vec<SymId> =
             self.syms.class(parent).ctors.iter().copied().filter(|&s| Some(s) != self.excluded_ctor && self.ctor_callable_here(s)).collect();
         if secondaries.is_empty() {
-            let call = MethodCall { recv: None, sym: SymId(u32::MAX), owner_subst, ext_recv: None, prefix: None };
+            let call = MethodCall { recv: None, sym: SymId(u32::MAX), owner_subst, ext_recv: None, prefix: None, refined: None };
             return self.apply_method(call, Some((parent, sig)), None, lists, span, None, false).unwrap();
         }
         // Every alternative, the primary included, takes the parent's type arguments.

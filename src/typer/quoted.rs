@@ -1639,7 +1639,7 @@ impl<'a> Worker<'a> {
                 TExpr::Field(r, _) => (Some(r), Vec::new()),
                 _ => continue,
             };
-            let call = super::apply::MethodCall { recv, sym: d.sym, owner_subst: d.owner_subst.clone(), ext_recv: None, prefix: d.prefix };
+            let call = super::apply::MethodCall { recv, sym: d.sym, owner_subst: d.owner_subst.clone(), ext_recv: None, prefix: d.prefix, refined: None };
             self.inline.site_at_end = d.at_end;
             let expanded = match self.inline.site_env.clone() {
                 Some(env) => {

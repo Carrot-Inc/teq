@@ -1,7 +1,8 @@
-// expect: 11:19: error: type mismatch: found Any, required String
-// A `def` refinement narrows the member it describes only: a call of another overload of the
-// name keeps its own result. scalac rejects the call too, and before it the refinement itself
-// (`Refinements cannot introduce overloaded definitions`), which teq does not report.
+// expect: 9:21: error: Refinements cannot introduce overloaded definitions
+// expect: 12:19: error: type mismatch: found Any, required String
+// A `def` refinement is the denotation of the member it describes only: a call of another
+// overload of the name keeps its own result. scalac rejects the call too, and before it the
+// refinement itself (`Typer.typedRefinedTypeTree`).
 class Base:
   def m(x: Int): Any = x
   def m(x: String): Any = x

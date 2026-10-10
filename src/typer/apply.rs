@@ -196,7 +196,9 @@ enum RetryTry {
 }
 
 pub enum Callee {
-    Method { recv: Option<TExprId>, sym: SymId, owner_subst: Subst, prefix: Option<TypeId> },
+    /// `refined`: the member as the receiver's refinement declares it, which the call is typed
+    /// by (`MethodCall::refined`).
+    Method { recv: Option<TExprId>, sym: SymId, owner_subst: Subst, prefix: Option<TypeId>, refined: Option<Arc<MethodSig>> },
     /// An overloaded name with the type of the receiver, which the owners of the alternatives
     /// are seen from.
     Overloaded { recv: Option<TExprId>, recv_ty: Option<TypeId>, set: SymId },
@@ -245,6 +247,11 @@ pub struct MethodCall {
     pub ext_recv: Option<(TExprId, TypeId)>,
     /// The prefix the member's signature is seen from, where it depends on `this`.
     pub prefix: Option<TypeId>,
+    /// The member's signature as a refinement of the receiver's type declares it, seen from the
+    /// receiver, where it conforms to the class's member: the call is typed by it, its
+    /// parameters' names and its result, and the class's member called (dotty's
+    /// `Types.findMember` `goRefined`, the joint denotation with the refinement's info).
+    pub refined: Option<Arc<MethodSig>>,
 }
 
 impl<'a> Worker<'a> {
@@ -802,7 +809,7 @@ impl<'a> Worker<'a> {
             let sym = self.any_member_of(c, name, span);
             self.note_mixin_super(c, sym);
             let recv = self.prog.add(TExpr::Super(SuperTarget::Mixin(c)));
-            let callee = Callee::Method { recv: Some(recv), sym, owner_subst: Vec::new(), prefix: None };
+            let callee = Callee::Method { recv: Some(recv), sym, owner_subst: Vec::new(), prefix: None, refined: None };
             return self.apply_callee(callee, targs, lists, span, expected);
         }
         let this = self.prog.add(TExpr::This);
@@ -1303,7 +1310,7 @@ impl<'a> Worker<'a> {
             return Callee::Overloaded { recv: None, recv_ty: None, set: s };
         }
         if self.is_method_sym(s) {
-            return Callee::Method { recv: None, sym: s, owner_subst: Vec::new(), prefix: None };
+            return Callee::Method { recv: None, sym: s, owner_subst: Vec::new(), prefix: None, refined: None };
         }
         let ty = self.sig_of(s).ret;
         let ty = self.given_object_type(s).unwrap_or(ty);
@@ -1693,7 +1700,7 @@ impl<'a> Worker<'a> {
             if self.is_inline_callee(s) {
                 self.inline.recv_types.insert(recv, recv_ty);
             }
-            return Callee::Method { recv: Some(recv), sym: s, owner_subst, prefix };
+            return Callee::Method { recv: Some(recv), sym: s, owner_subst, prefix, refined: None };
         }
         // An intersection's joint member's result (`joint_sig`), else its symbol's.
         let ret = match self.take_joint_sig(Some(recv), s) {
@@ -2305,7 +2312,7 @@ impl<'a> Worker<'a> {
                         (info.kind, info.mods & crate::ast::mods::LAZY != 0, info.by_name)
                     };
                     match (kind, lazy) {
-                        (SymKind::Def, _) => Callee::Method { recv: None, sym: s, owner_subst: Vec::new(), prefix: None },
+                        (SymKind::Def, _) => Callee::Method { recv: None, sym: s, owner_subst: Vec::new(), prefix: None, refined: None },
                         // A local object's lazy val read inside its class.
                         (_, true) if self.enclosing_module_class(s).is_some() => self.local_module_read_callee(s)?,
                         _ => {
@@ -2496,11 +2503,11 @@ impl<'a> Worker<'a> {
             Callee::Method { sym, .. } if self.is_dynamic_literal_with_names(sym, &lists) => {
                 self.dynamic_literal(sym, lists, span, expected)
             }
-            Callee::Method { recv, sym, owner_subst, prefix } => {
+            Callee::Method { recv, sym, owner_subst, prefix, refined } => {
                 if self.is_right_assoc_extension(sym) {
                     return self.apply_right_assoc_method(recv, sym, owner_subst, prefix, targs, lists, span, expected);
                 }
-                let call = MethodCall { recv, sym, owner_subst, ext_recv: None, prefix };
+                let call = MethodCall { recv, sym, owner_subst, ext_recv: None, prefix, refined };
                 self.apply_method(call, None, targs, lists, span, expected, false).unwrap()
             }
             Callee::Overloaded { recv, recv_ty, set } => {
@@ -2940,7 +2947,7 @@ impl<'a> Worker<'a> {
                 .collect();
             return self.construct_overloaded(c, primary, secondaries, targs, lists, span, expected);
         }
-        let call = MethodCall { recv: None, sym: SymId(u32::MAX), owner_subst: Vec::new(), ext_recv: None, prefix: None };
+        let call = MethodCall { recv: None, sym: SymId(u32::MAX), owner_subst: Vec::new(), ext_recv: None, prefix: None, refined: None };
         let (mut te, precise) = self.apply_method(call, Some((c, sig)), targs, lists, span, expected, false).unwrap();
         if self.syms.class(c).js == JsKind::Native {
             if let TExpr::New(_, args) = self.prog.expr(te) {
@@ -3091,6 +3098,7 @@ impl<'a> Worker<'a> {
             // the enclosing instance deriving from it where it is constructed or extended.
             Some((c, s)) if self.loaded.is_some() && self.class_in_class(*c) => self.sig_seen_from_enclosing(s.clone()),
             Some((_, s)) => s.clone(),
+            None if call.refined.is_some() => call.refined.clone().expect("the refined signature"),
             None => match call.prefix {
                 Some(prefix) => {
                     // The signature is kept through the application, which types the arguments.
@@ -5405,60 +5413,49 @@ impl<'a> Worker<'a> {
         span: Span,
         expected: Option<TypeId>,
     ) -> (TExprId, TypeId) {
-        let (te, ty) = self.apply_member_of_class(recv, recv_ty, name, targs, lists, span, expected);
-        self.narrowed_by_refinement(te, ty, recv, recv_ty, name)
+        self.apply_member_of_class(recv, recv_ty, name, targs, lists, span, expected)
     }
 
-    /// A member of a receiver whose type refines it (`Base { val v: Int }`, `Ops { def m(x:
-    /// Int): A }`) has the refinement's result: the class's member is called, the refinement
-    /// gives its type.
-    fn narrowed_by_refinement(&mut self, te: TExprId, ty: TypeId, recv: TExprId, recv_ty: TypeId, name: Name) -> (TExprId, TypeId) {
-        if ty == ERROR || !self.types.term_refinements() || matches!(self.types.get(recv_ty), Type::Class(..) | Type::Lit(_) | Type::Param(_) | Type::Error) {
-            return (te, ty);
+    /// The member `sym` of the receiver's class (seen as `owner_ty`) as a refinement of the
+    /// receiver's type declares it, opened at the receiver: dotty's `Types.findMember`
+    /// `goRefined`, whose joint denotation keeps the refinement's info where it conforms to the
+    /// member's (`rinfo <:< joint.info`) or is the `apply` of a function type's refinement, for
+    /// the parameters' names and the result. The call is typed by it; the class's member is the
+    /// one called, its defaults its own. None for an overloaded member and where the refinement
+    /// does not conform.
+    fn refined_denotation(&mut self, recv: TExprId, recv_ty: TypeId, name: Name, sym: SymId, owner_ty: TypeId) -> Option<(Refinement, Arc<MethodSig>)> {
+        if !self.types.term_refinements() || matches!(self.types.get(recv_ty), Type::Class(..) | Type::Lit(_) | Type::Param(_) | Type::Error) {
+            return None;
+        }
+        if self.syms.alternatives(sym).is_some() {
+            return None;
         }
         let under = self.widen_path(recv_ty);
-        let Some(r) = self.refined_term(under, name) else { return (te, ty) };
-        let sig = self.refinement_sig(r);
-        if !sig.tparams.is_empty() || sig.ret == ty {
-            return (te, ty);
-        }
-        // Only a call of the member the refinement describes: an extension or a conversion the
-        // call fell back to has its own result.
-        match self.refined_member(under, name, &sig) {
-            Some(member) if self.calls_member(te, recv, member) => {}
-            _ => return (te, ty),
-        }
-        let mark = self.trail.len();
-        if !self.is_sub(sig.ret, ty) {
-            self.rollback(mark);
-            return (te, ty);
-        }
-        self.prog.set_type(te, sig.ret);
-        (te, sig.ret)
-    }
-
-    /// The member the refinement `sig` of `name` describes: the one member of that name the
-    /// class of `under` has, with its parameter types. An overload the refinement does not
-    /// describe keeps its own result.
-    fn refined_member(&mut self, under: TypeId, name: Name, sig: &MethodSig) -> Option<SymId> {
-        let (member, owner_ty) = self.find_member(under, name)?;
-        if self.syms.alternatives(member).is_some() {
+        let prefix = self.path_of(recv).unwrap_or(under);
+        let r = self.refined_term_through(under, name, prefix)?;
+        let rsig = self.refinement_sig(r);
+        let theirs = self.sig_arc(sym);
+        let theirs = match self.dependent_prefix(sym, recv, recv_ty) {
+            Some(p) => self.sig_seen_from(theirs, p, sym),
+            None => theirs,
+        };
+        let function_apply = name == names::APPLY && self.class_of(under).is_some_and(|c| self.is_function_class(c) || self.is_context_function_class(c));
+        if !function_apply && !self.refined_info_conforms(&theirs, owner_ty, &rsig) {
             return None;
         }
-        if !self.sig_of(member).tparams.is_empty() {
-            return None;
-        }
-        self.refinement_matches(member, owner_ty, sig).then_some(member)
-    }
-
-    /// Whether the typed application `te` is a call or a read of `member` itself on `recv`, not
-    /// on something a conversion made of it.
-    fn calls_member(&self, te: TExprId, recv: TExprId, member: SymId) -> bool {
-        let mut e = te;
-        while let TExpr::Block(_, inner) = self.prog.expr(e) {
-            e = inner;
-        }
-        matches!(self.prog.expr(e), TExpr::Field(r, s) | TExpr::CallMethod(r, s, _) if s == member && r == recv)
+        // The defaults are the member's: scalac finds the getters by the symbol the joint
+        // denotation keeps.
+        let defaults: Vec<bool> = theirs.clauses.iter().flat_map(|c| c.params.iter().map(|p| p.has_default)).collect();
+        let rsig = if defaults.iter().any(|&d| d) {
+            let mut own = (*rsig).clone();
+            for (p, &d) in own.clauses.iter_mut().flat_map(|c| c.params.iter_mut()).zip(&defaults) {
+                p.has_default = d;
+            }
+            Arc::new(own)
+        } else {
+            rsig
+        };
+        Some((r, rsig))
     }
 
     fn apply_member_of_class(
@@ -5613,7 +5610,7 @@ impl<'a> Worker<'a> {
                 Some(first) if !first.using => first.args.insert(0, ArgSrc::Typed(recv, recv_ty)),
                 _ => lists.insert(0, ArgList { args: vec![ArgSrc::Typed(recv, recv_ty)], using: false, span }),
             }
-            let callee = Callee::Method { recv: None, sym: helper, owner_subst: Vec::new(), prefix: None };
+            let callee = Callee::Method { recv: None, sym: helper, owner_subst: Vec::new(), prefix: None, refined: None };
             let (te, ty) = self.apply_callee(callee, targs, lists, span, expected);
             if self.capturing() {
                 if let Some((sym, _)) = member {
@@ -5695,12 +5692,27 @@ impl<'a> Worker<'a> {
             if self.syms.sym(sym).mods & crate::ast::mods::PROTECTED != 0 {
                 self.check_protected_access(sym, recv, recv_ty, span);
             }
-            let callee = self.member_callee_in(recv, recv_ty, Some(owner_ty), sym);
-            let fits = || lists.iter().all(|l| l.args.is_empty());
-            if declared || self.written_targs(targs) || without_lists || (fits() && self.member_accepts(sym, &lists, false, expected)) {
-                return self.apply_callee(callee, targs, lists, span, expected);
+            let mut callee = self.member_callee_in(recv, recv_ty, Some(owner_ty), sym);
+            let refined = self.refined_denotation(recv, recv_ty, name, sym, owner_ty);
+            match (&mut callee, &refined) {
+                (Callee::Method { refined: slot, .. }, Some((_, sig))) => *slot = Some(sig.clone()),
+                // A value's type is the refinement's (`Base { val v: Int }`).
+                (Callee::Value(te, ty), Some((_, sig))) if sig.clauses.is_empty() && sig.tparams.is_empty() => {
+                    self.prog.set_type(*te, sig.ret);
+                    *ty = sig.ret;
+                }
+                _ => {}
             }
-            return self.apply_member_or_extension(callee, (sym, owner_ty), recv, resolved_ty, name, targs, lists, span, expected, converted);
+            let fits = || lists.iter().all(|l| l.args.is_empty());
+            let (te, ty) = if declared || self.written_targs(targs) || without_lists || (fits() && self.member_accepts(sym, &lists, false, expected)) {
+                self.apply_callee(callee, targs, lists, span, expected)
+            } else {
+                self.apply_member_or_extension(callee, (sym, owner_ty), recv, resolved_ty, name, targs, lists, span, expected, converted)
+            };
+            if let (Some((r, _)), true) = (refined, self.capturing()) {
+                self.capture_refined_selection(te, recv, sym, r);
+            }
+            return (te, ty);
         }
         // A right-associative extension's arguments bound ahead of its call are placed here.
         let mark = self.hoisted.len();
@@ -6170,7 +6182,7 @@ impl<'a> Worker<'a> {
             // the classes join its arguments.
             Some((sym, owner_subst)) => {
                 self.check_access(sym, None, span);
-                let call = MethodCall { recv: Some(recv), sym, owner_subst, ext_recv: None, prefix: None };
+                let call = MethodCall { recv: Some(recv), sym, owner_subst, ext_recv: None, prefix: None, refined: None };
                 self.apply_method(call, None, None, dynamic_lists, span, None, false).unwrap()
             }
             None => self.apply_member(recv, recv_ty, dynamic, None, dynamic_lists, span, None),
@@ -6419,7 +6431,7 @@ impl<'a> Worker<'a> {
         let seq_ty = self.prog.type_of(spliced);
         let args = self.prog.list(&[spliced]);
         let subst = self.syms.sym(copy).sig.as_ref().map_or(Vec::new(), |sig| sig.tparams.iter().map(|&t| (t, elem)).collect());
-        let call = MethodCall { recv: None, sym: copy, owner_subst: subst, ext_recv: None, prefix: None };
+        let call = MethodCall { recv: None, sym: copy, owner_subst: subst, ext_recv: None, prefix: None, refined: None };
         let te = self.build_call(&call, args);
         if let Some(t) = seq_ty {
             self.prog.set_type(te, t);
@@ -6528,7 +6540,7 @@ impl<'a> Worker<'a> {
             self.hoist_before(mark, &mut r, span);
             recv = Some(r[0]);
         }
-        let call = MethodCall { recv, sym, owner_subst, ext_recv: None, prefix };
+        let call = MethodCall { recv, sym, owner_subst, ext_recv: None, prefix, refined: None };
         let (te, ty) = self.apply_method(call, None, targs, lists, span, expected, false).unwrap();
         match hoisted {
             true => (self.wrap_hoisted(mark, te), ty),
@@ -6757,7 +6769,7 @@ impl<'a> Worker<'a> {
         let ext = if exts.len() > 1 {
             let calls: Vec<MethodCall> = exts
                 .iter()
-                .map(|&sym| MethodCall { recv: Some(recv), sym, owner_subst: owner_subst.clone(), ext_recv: Some((te, ty)), prefix: None })
+                .map(|&sym| MethodCall { recv: Some(recv), sym, owner_subst: owner_subst.clone(), ext_recv: Some((te, ty)), prefix: None, refined: None })
                 .collect();
             match self.resolve_extension_overload(&calls, targs, te, ty, &mut rest, expected) {
                 Ok(i) => exts[i],
@@ -6769,7 +6781,7 @@ impl<'a> Worker<'a> {
         } else {
             exts[0]
         };
-        let call = MethodCall { recv: Some(recv), sym: ext, owner_subst, ext_recv: Some((te, ty)), prefix: None };
+        let call = MethodCall { recv: Some(recv), sym: ext, owner_subst, ext_recv: Some((te, ty)), prefix: None, refined: None };
         // The explicit type arguments of a direct call cover the extension's own parameters too.
         self.direct_ext_targs = targs.is_some();
         self.apply_method(call, None, targs, rest, span, expected, false)
@@ -6897,7 +6909,7 @@ impl<'a> Worker<'a> {
                 list.args.push(ArgSrc::Named(p.name, field, kept));
             }
         }
-        let call = MethodCall { recv: None, sym: SymId(u32::MAX), owner_subst: Vec::new(), ext_recv: None, prefix: None };
+        let call = MethodCall { recv: None, sym: SymId(u32::MAX), owner_subst: Vec::new(), ext_recv: None, prefix: None, refined: None };
         // `copyMeths`' `creatorExpr` constructs inside the class: a class nested in a class is
         // made with the receiver's own enclosing instance, wherever the copy is written, the
         // construction under the eta-expansion of a copy applied in part included.
@@ -7342,7 +7354,7 @@ impl<'a> Worker<'a> {
             self.syms.pkg(scala_pkg).entries.get(&name).map(|e| e.extensions.clone()).unwrap_or_default();
         candidates.into_iter().any(|sym| {
             let mark = self.snapshot();
-            let call = MethodCall { recv: None, sym, owner_subst: Vec::new(), ext_recv: None, prefix: None };
+            let call = MethodCall { recv: None, sym, owner_subst: Vec::new(), ext_recv: None, prefix: None, refined: None };
             let ok = self.extension_applicable(&call, t);
             self.rollback(mark);
             ok
@@ -9124,7 +9136,7 @@ impl<'a> Worker<'a> {
                 continue;
             }
             let mark = self.snapshot();
-            let call = MethodCall { recv: owner, sym, owner_subst, ext_recv: Some((recv, recv_ty)), prefix };
+            let call = MethodCall { recv: owner, sym, owner_subst, ext_recv: Some((recv, recv_ty)), prefix, refined: None };
             let applicable = self.extension_applicable(&call, recv_ty);
             self.rollback(mark);
             if !applicable {
@@ -9209,7 +9221,7 @@ impl<'a> Worker<'a> {
                 Some(GivenScope::Path(p)) => Some(p),
                 _ => self.inherited_extension_prefix(module.and_then(GivenScope::module)),
             };
-            let call = MethodCall { recv: None, sym, owner_subst: Vec::new(), ext_recv: None, prefix };
+            let call = MethodCall { recv: None, sym, owner_subst: Vec::new(), ext_recv: None, prefix, refined: None };
             // The receiver converted for each extension is an attempt of its own.
             let mark = self.attempt();
             let Some(pty) = self.receiver_param_type(&call, true) else {
@@ -9305,7 +9317,7 @@ impl<'a> Worker<'a> {
                     Some(bt) => self.owner_subst(bt),
                     None => Vec::new(),
                 };
-                let call = MethodCall { recv: Some(instance), sym: ext, owner_subst, ext_recv: Some((recv, recv_ty)), prefix: None };
+                let call = MethodCall { recv: Some(instance), sym: ext, owner_subst, ext_recv: Some((recv, recv_ty)), prefix: None, refined: None };
                 if !self.extension_applicable(&call, recv_ty) {
                     self.retract(mark);
                     continue;
@@ -9343,7 +9355,7 @@ impl<'a> Worker<'a> {
                 (Some(GivenScope::Module(m)), _) => (Vec::new(), self.inherited_extension_prefix(Some(m))),
                 _ => (Vec::new(), None),
             };
-            let call = MethodCall { recv: None, sym, owner_subst, ext_recv: None, prefix };
+            let call = MethodCall { recv: None, sym, owner_subst, ext_recv: None, prefix, refined: None };
             let mark = self.snapshot();
             let applicable = self.extension_applicable(&call, t);
             self.rollback(mark);
@@ -9369,7 +9381,7 @@ impl<'a> Worker<'a> {
     /// Whether an extension method of that name in lexical scope takes such a receiver.
     pub fn has_lexical_extension_for(&mut self, recv_ty: TypeId, name: Name) -> bool {
         for sym in self.lexical_extensions(name) {
-            let call = MethodCall { recv: None, sym, owner_subst: Vec::new(), ext_recv: None, prefix: None };
+            let call = MethodCall { recv: None, sym, owner_subst: Vec::new(), ext_recv: None, prefix: None, refined: None };
             let mark = self.snapshot();
             let applicable = self.extension_applicable(&call, recv_ty);
             self.rollback(mark);

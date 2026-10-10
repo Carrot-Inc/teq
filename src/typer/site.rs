@@ -426,7 +426,7 @@ impl<'a> Worker<'a> {
         let wrap = self.interner.intern("wrap");
         let sym = *self.syms.class(class).members.get(&wrap)?;
         let none = self.prog.list(&[]);
-        let call = super::apply::MethodCall { recv: Some(element), sym, owner_subst: Vec::new(), ext_recv: None, prefix: None };
+        let call = super::apply::MethodCall { recv: Some(element), sym, owner_subst: Vec::new(), ext_recv: None, prefix: None, refined: None };
         Some(self.build_call(&call, none))
     }
 

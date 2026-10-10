@@ -1117,7 +1117,7 @@ impl<'a> Worker<'a> {
             if !self.syms.sym(e).is_extension || offered.contains(&e) {
                 continue;
             }
-            let call = MethodCall { recv: None, sym: e, owner_subst: subst, ext_recv: None, prefix };
+            let call = MethodCall { recv: None, sym: e, owner_subst: subst, ext_recv: None, prefix, refined: None };
             let mark = self.snapshot();
             let applies = self.extension_applicable(&call, t);
             self.rollback(mark);

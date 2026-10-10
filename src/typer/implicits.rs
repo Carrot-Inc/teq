@@ -4689,7 +4689,7 @@ impl<'a> Worker<'a> {
                 TExpr::CallMethod(r, _, _) | TExpr::Field(r, _) => Some(r),
                 _ => None,
             };
-            let call = super::apply::MethodCall { recv, sym: g, owner_subst: Vec::new(), ext_recv: None, prefix: None };
+            let call = super::apply::MethodCall { recv, sym: g, owner_subst: Vec::new(), ext_recv: None, prefix: None, refined: None };
             let ret_ty = self.zonk(ret);
             self.read_in_progress(InProgress::InlineExpansion);
             self.defer_inline(&call, &sig, &subst, te, ret_ty, span, Some(ret_ty));
@@ -4702,7 +4702,7 @@ impl<'a> Worker<'a> {
                 TExpr::CallMethod(r, _, _) | TExpr::Field(r, _) => Some(r),
                 _ => None,
             };
-            let call = super::apply::MethodCall { recv, sym: g, owner_subst: Vec::new(), ext_recv: None, prefix: None };
+            let call = super::apply::MethodCall { recv, sym: g, owner_subst: Vec::new(), ext_recv: None, prefix: None, refined: None };
             let ret_ty = self.zonk(ret);
             self.read_in_progress(InProgress::InlineExpansion);
             // The using arguments' own types go with the call, as the expansion below takes them
@@ -4732,7 +4732,7 @@ impl<'a> Worker<'a> {
                 TExpr::CallMethod(r, _, _) | TExpr::Field(r, _) => Some(r),
                 _ => None,
             };
-            let call = super::apply::MethodCall { recv, sym: g, owner_subst: Vec::new(), ext_recv: None, prefix: None };
+            let call = super::apply::MethodCall { recv, sym: g, owner_subst: Vec::new(), ext_recv: None, prefix: None, refined: None };
             let ret_ty = self.zonk(ret);
             // A pending plain call among the arguments is expanded first, outside the
             // candidate's failure.

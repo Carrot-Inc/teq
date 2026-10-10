@@ -1967,6 +1967,53 @@ impl<'a> Worker<'a> {
         true
     }
 
+    /// Whether the refinement's signature `sig` conforms to the member's `theirs` (seen from the
+    /// receiver, its owner's parameters bound by `owner_ty`), as dotty's `TypeComparer` compares
+    /// two method types (`compareMethod`, `comparePoly`): the same type parameters with the same
+    /// bounds, the same parameters, and a result below the member's.
+    pub fn refined_info_conforms(&mut self, theirs: &MethodSig, owner_ty: TypeId, sig: &MethodSig) -> bool {
+        let shape = |s: &MethodSig| s.clauses.iter().map(|c| (c.params.len(), c.is_using)).collect::<Vec<_>>();
+        if theirs.tparams.len() != sig.tparams.len() || shape(theirs) != shape(sig) {
+            return false;
+        }
+        let mut subst = self.owner_subst(owner_ty);
+        for (&p, &q) in theirs.tparams.iter().zip(&sig.tparams) {
+            if p != q {
+                let to = self.types.param(q);
+                subst.push((p, to));
+            }
+        }
+        let pairs: Vec<(ParamSig, ParamSig)> = theirs.clauses.iter().flat_map(|c| c.params.iter().cloned()).zip(sig.clauses.iter().flat_map(|c| c.params.iter().cloned())).collect();
+        let renamed: Vec<(SymId, TypeId)> = pairs.iter().filter(|(p, q)| p.sym != q.sym).map(|(p, q)| (p.sym, self.types.mk(Type::Term(q.sym)))).collect();
+        let mark = self.trail.len();
+        let seen = |w: &mut Self, t: TypeId| {
+            let t = w.subst_paths(t, &renamed);
+            w.types.subst(t, &subst)
+        };
+        for (&p, &q) in theirs.tparams.iter().zip(&sig.tparams) {
+            let (lo, hi) = (self.syms.tparam(p).lower, self.syms.tparam(p).upper);
+            let (lo, hi) = (seen(self, lo), seen(self, hi));
+            let (qlo, qhi) = (self.syms.tparam(q).lower, self.syms.tparam(q).upper);
+            if !self.is_same(lo, qlo) || !self.is_same(hi, qhi) {
+                self.rollback(mark);
+                return false;
+            }
+        }
+        for (p, q) in &pairs {
+            let t = seen(self, p.ty);
+            if p.by_name != q.by_name || p.repeated != q.repeated || !self.is_same(t, q.ty) {
+                self.rollback(mark);
+                return false;
+            }
+        }
+        let ret = seen(self, theirs.ret);
+        if !self.is_sub(sig.ret, ret) {
+            self.rollback(mark);
+            return false;
+        }
+        true
+    }
+
     /// The member `name` of `t`, where an intersection's parts declare it as an alias and as
     /// bounds the alias does not meet: the two infos intersected, `>: x | lo <: x & hi`, as
     /// scalac's `&` of a `TypeAlias` and `TypeBounds` (`ProductOf[B] { type MirroredElemTypes

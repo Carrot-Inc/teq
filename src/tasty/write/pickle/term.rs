@@ -823,6 +823,13 @@ impl<'w, 'a> P<'w, 'a> {
                     }
                     self.call(s, Qual::Expr(r), recs.targs, &args)
                 }
+                // The member a refinement of the receiver's type declares: selected by the
+                // refinement's own signature, as the selection's denotation has no class.
+                Some(Form::Refined(rsym, list)) => {
+                    self.receive_by_name(e, r, s);
+                    let args = self.w.prog.expr_list(args).to_vec();
+                    self.applied(s, recs.targs, &args, |p| p.refined_select(s, rsym, list, |p| p.term(r)), Some(Qual::Expr(r)))
+                }
                 Some(f) => self.unsupported_form(f),
             },
             TExpr::CallClosure(f, args) => match form {
@@ -2213,6 +2220,25 @@ impl<'w, 'a> P<'w, 'a> {
         self.buf.end_length(l);
     }
 
+    /// The selection of the class member `s` through the refinement member `rsym` of the
+    /// receiver's type, whose signature's types are `list`: `SELECT` with the refinement's
+    /// signed name (`TreePickler.pickleTree`: a refined method has no defining class, so it is
+    /// selected from the qualifier, by `tree.tpe.signature`).
+    fn refined_select(&mut self, s: SymId, rsym: SymId, list: TList, qual: impl FnOnce(&mut Self)) {
+        let name = self.w.syms.sym(s).name;
+        let sig = self.w.refinement_sig(Refinement::Term(name, rsym, list));
+        let local = self.local_prefix();
+        let Some((params, result)) = self.w.pickled_refinement_signature(&sig, &local) else {
+            return self.fail("the erasure of a refinement's member in a signature".to_string());
+        };
+        self.select_receiver = None;
+        let original = self.sym_name(s);
+        self.buf.byte(SELECT);
+        let n = self.names.signed_of(original, None, &sig_params(params), &result);
+        self.buf.nat(n as u64);
+        qual(self);
+    }
+
     /// A member of a local anonymous class selected outside the class's body, where scalac's
     /// typer avoids the class's type to its parents (`(new $anon(): Runnable).run()` of an
     /// expansion): the member of the nearest parent the selection reaches, else the member itself.
@@ -3559,6 +3585,27 @@ impl<'w, 'a> P<'w, 'a> {
             TExpr::CallStatic(s, _) | TExpr::CallMethod(_, s, _) => Some(self.w.sig_of(s).ret),
             _ => None,
         });
+        // A function type with named parameters is a refinement of the function class by its
+        // `apply`, which scalac's typer selects (`goRefined`) and the pickle names by the
+        // refinement's signature (`isRefinedMethod`): `fun.apply{(dc.Ctx): Object}(c)`.
+        if let Some(sig) = ft.and_then(|t| self.named_apply(t)) {
+            if sig.clauses.first().map_or(false, |c| c.params.len() == n) {
+                let local = self.local_prefix();
+                let Some((params, result)) = self.w.pickled_refinement_signature(&sig, &local) else {
+                    return self.fail("the erasure of a function type's apply in a signature".to_string());
+                };
+                let a = self.open(APPLY);
+                self.buf.byte(SELECT);
+                let name = self.names.signed("apply", None, &sig_params(params), &result);
+                self.buf.nat(name as u64);
+                self.term(f);
+                for &x in args {
+                    self.term(x);
+                }
+                self.buf.end_length(a);
+                return;
+            }
+        }
         let context = ft.map_or(false, |t| self.w.as_context_function(t).is_some());
         let fc = if context { self.w.context_function_class(n) } else { self.w.function_class(n) };
         let own = ft.and_then(|t| {

@@ -2110,7 +2110,7 @@ impl<'a> Worker<'a> {
         let values_ty = self.types.class(array, &[ANY]);
         self.prog.set_type(values_array, values_ty);
         let call_args = self.prog.list(&[parts_array, values_array]);
-        let call = super::apply::MethodCall { recv: None, sym: format, owner_subst: Vec::new(), ext_recv: None, prefix: None };
+        let call = super::apply::MethodCall { recv: None, sym: format, owner_subst: Vec::new(), ext_recv: None, prefix: None, refined: None };
         (self.build_call(&call, call_args), t_string)
     }
 
@@ -2466,7 +2466,7 @@ impl<'a> Worker<'a> {
         }
         let zero = self.zero_of(elem).unwrap_or_else(|| self.prog.add(TExpr::Null));
         let lists = vec![ArgList { args: vec![ArgSrc::Ast(len), ArgSrc::Typed(zero, elem)], using: false, span }];
-        let callee = super::apply::Callee::Method { recv: None, sym, owner_subst: Vec::new(), prefix: None };
+        let callee = super::apply::Callee::Method { recv: None, sym, owner_subst: Vec::new(), prefix: None, refined: None };
         self.apply_callee(callee, None, lists, span, expected)
     }
 
@@ -2499,7 +2499,7 @@ impl<'a> Worker<'a> {
         let (len, _) = self.type_expr(len, Some(int));
         let args = self.prog.list(&[len]);
         let array = self.types.class(self.b.array, &[elem]);
-        let call = super::apply::MethodCall { recv: Some(evidence), sym, owner_subst: Vec::new(), ext_recv: None, prefix: None };
+        let call = super::apply::MethodCall { recv: Some(evidence), sym, owner_subst: Vec::new(), ext_recv: None, prefix: None, refined: None };
         let call = self.build_call(&call, args);
         self.prog.set_type(call, array);
         Some((call, array))

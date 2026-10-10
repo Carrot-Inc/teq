@@ -5684,7 +5684,7 @@ pub fn inline_bodies_report(paths: &[String]) -> Result<String, String> {
             let subst: Subst = sig.tparams.iter().map(|&p| (p, typer.syms.tparam(p).upper)).collect();
             let args: Vec<TExprId> = sig.clauses.iter().flat_map(|c| c.params.iter()).map(|_| typer.prog.add(TExpr::Unit)).collect();
             let ret = typer.types.subst(sig.ret, &subst);
-            let call = super::super::apply::MethodCall { recv: None, sym: s, owner_subst: Vec::new(), ext_recv: None, prefix: None };
+            let call = super::super::apply::MethodCall { recv: None, sym: s, owner_subst: Vec::new(), ext_recv: None, prefix: None, refined: None };
             let mark = typer.diags.items.len();
             typer.expand_inline(&call, &sig, &subst, &args, ret, Span::default(), None);
             let errors: Vec<String> = typer.diags.items[mark..].iter().filter(|d| !d.is_warning).map(|d| d.msg.lines().next().unwrap_or("").to_string()).collect();

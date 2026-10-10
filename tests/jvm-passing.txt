@@ -1034,8 +1034,9 @@ receiver_type_args_from_expected
 refined_aux_givens
 refined_projection_patterns
 refinement_alias_meets_bounds
-refinement_member_variance
+refinement_member_denotation
 refinement_member_scope
+refinement_member_variance
 refinement_nested_scope
 reflective_selectable
 regex_beyond_javascript
