@@ -231,7 +231,9 @@ pub struct Setup {
     js_visible: bool,
     thrown: Vec<ClassId>,
     helpers: Option<JvmHelpers>,
-    exported: Vec<String>,
+    /// The members JavaScript may call (`exported_members`), as symbols: each walk roots them by
+    /// the dispatch names they have when it runs, which a name read once would not follow.
+    exported: Vec<SymId>,
     found_array_seq: Option<ClassId>,
     found_runtime_exceptions: Option<Vec<ClassId>>,
     /// The symbols the reflective registrations made, which every walk that reaches a lookup
@@ -252,6 +254,15 @@ impl Setup {
 
     pub fn registered_syms(&self) -> usize {
         self.registered_syms
+    }
+
+    /// The exported members of the program's files a retype typed again, by their new symbols.
+    pub fn remap_syms(&mut self, syms: &FxMap<SymId, SymId>) {
+        for s in &mut self.exported {
+            if let Some(&n) = syms.get(s) {
+                *s = n;
+            }
+        }
     }
 }
 
@@ -635,9 +646,9 @@ fn compute_now(typer: &mut Worker, array_seq: Option<ClassId>, js_visible: bool,
 /// The walk from the roots over the typer's rounds, to the fixed point; the walker with it, for
 /// its size.
 fn rounds<'a, T: Typing<'a>>(t: &mut T, mut w: Walker, setup: &mut Setup, lap: &mut crate::measure::Lap, stop: &dyn Fn() -> bool) -> Option<(Reach, Walker)> {
-    let exported_names: Vec<Name> = setup.exported.iter().map(|n| t.w().interner.intern(n)).collect();
     if setup.js_visible {
-        w.reach.js_names = setup.exported.clone();
+        let w0 = t.w();
+        w.reach.js_names = setup.exported.iter().map(|&s| w0.interner.get(w0.syms.sym(s).name).to_string()).collect();
     }
     w.library = t.w().loaded.is_some();
     w.products = t.w().open_world;
@@ -649,8 +660,10 @@ fn rounds<'a, T: Typing<'a>>(t: &mut T, mut w: Walker, setup: &mut Setup, lap: &
     }
     w.reach.exports = setup.exports.clone();
     w.roots(Cx::of(t.w()));
-    for n in exported_names {
-        w.call_name(Cx::of(t.w()), n, None);
+    // Called on any receiver by the name each has as this walk runs (`+$Any` for `Set.+`).
+    for &s in &setup.exported {
+        let name = w.output_name(Cx::of(t.w()), s);
+        w.call_name(Cx::of(t.w()), name, None);
     }
     lap.done("walk", 0);
     loop {
@@ -3204,10 +3217,10 @@ impl Walker {
     }
 }
 
-/// The member names of the classes an exported definition takes or returns, and of the classes
-/// those take or return in turn. The signatures are completed here, so that the set does not
-/// depend on what an earlier build in watch mode happened to complete.
-fn exported_members(typer: &mut Worker) -> Vec<String> {
+/// The members of the classes an exported definition takes or returns, and of the classes those
+/// take or return in turn, as symbols. The signatures are completed here, so that the set does
+/// not depend on what an earlier build in watch mode happened to complete.
+fn exported_members(typer: &mut Worker) -> Vec<SymId> {
     let mut classes: Vec<ClassId> = Vec::new();
     let mut seen = vec![false; typer.syms.classes.len()];
     let mut types: Vec<TypeId> = Vec::new();
@@ -3226,7 +3239,7 @@ fn exported_members(typer: &mut Worker) -> Vec<String> {
             classes.push(c);
         }
     }
-    let mut names: Vec<String> = Vec::new();
+    let mut members_out: Vec<SymId> = Vec::new();
     loop {
         while let Some(t) = types.pop() {
             match typer.types.get(t) {
@@ -3276,11 +3289,14 @@ fn exported_members(typer: &mut Worker) -> Vec<String> {
             if sym.mods & mods::PRIVATE != 0 {
                 continue;
             }
-            names.push(typer.interner.get(sym.name).to_string());
+            // Its dispatch name resolved before any walk roots it, so that every walk calls the
+            // name it is written under, however much of the program was typed before.
+            typer.output_name_of(m);
+            members_out.push(m);
             add_sig(typer, m, &mut types);
         }
     }
-    names
+    members_out
 }
 
 fn has_repeated_param(cx: Cx, sym: SymId) -> bool {
