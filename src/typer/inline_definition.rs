@@ -1502,7 +1502,10 @@ impl<'a> Worker<'a> {
             if filled == tested {
                 return test;
             }
-            let derived = if matches!(self.types.get(filled), Type::Param(_) | Type::AppParam(..)) {
+            // A type parameter still is one where the expansion is itself a stored body's (an inline
+            // definition's, a quote's), which derives the test again; elsewhere it is erased to its
+            // upper bound, as `TypeTestsCasts` erases the tested type (`test_for`).
+            let derived = if matches!(self.types.get(filled), Type::Param(_) | Type::AppParam(..)) && (self.quote.level > 0 || self.checks_inline_definition()) {
                 let copy = self.prog.add_test(TypeTest::Always);
                 self.prog.deferred_tests.insert(copy, filled);
                 copy

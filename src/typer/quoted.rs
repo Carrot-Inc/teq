@@ -3503,8 +3503,17 @@ impl<'c> Copier<'c> {
         if let Some(&tested) = t.prog.deferred_tests.get(&test) {
             let filled = self.ty(t, tested);
             // A stored body's test of a type variable of its patterns stays deferred on the copy's
-            // fresh variable, which the case that binds it specialises (`specialise_instance`).
-            if self.stored.is_some() && filled != tested && matches!(t.types.get(filled), Type::Param(_) | Type::AppParam(..)) {
+            // fresh variable, which the case that binds it specialises (`specialise_instance`). One
+            // of the method's own type parameters is the call's type argument: where that is the
+            // caller's type parameter, the test is its erased one (`test_for`, as `TypeTestsCasts`
+            // erases the tested type), unless the expansion is itself a stored body's, which
+            // derives it again.
+            let method_param = match t.types.get(tested) {
+                Type::Param(p) | Type::AppParam(p, _) => self.subst.iter().any(|&(q, _)| q == p),
+                _ => false,
+            };
+            let derived_again = !method_param || t.quote.level > 0 || t.checks_inline_definition();
+            if self.stored.is_some() && filled != tested && derived_again && matches!(t.types.get(filled), Type::Param(_) | Type::AppParam(..)) {
                 let copy = t.prog.add_test(TypeTest::Always);
                 t.prog.deferred_tests.insert(copy, filled);
                 return copy;
