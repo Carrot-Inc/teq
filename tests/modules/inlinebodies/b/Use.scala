@@ -1,6 +1,6 @@
 package ibb
 
-import iba.Bodies
+import iba.{Bodies, Tag}
 
 @main def run(): Unit =
   println(Bodies.value(3))
@@ -11,3 +11,5 @@ import iba.Bodies
   println(s"${Bodies.kindOf[Int]},${Bodies.kindOf[String]}")
   println(s"${Bodies.known(1)},${Bodies.known((1: Int))}")
   println(Bodies.value({ def y: Int = 3; 5 }))
+  println(Tag.derived(3))
+  println(Tag.derived(300))

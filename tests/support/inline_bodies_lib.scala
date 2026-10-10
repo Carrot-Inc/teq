@@ -73,3 +73,16 @@ object Quoted:
   def shapeImpl(f: Expr[Int])(using Quotes): Expr[String] =
     import quotes.reflect.*
     Expr(f.asTerm.show)
+
+trait Der:
+  def join(x: Int): String
+
+trait Tagged:
+  def tag: String = "smd"
+  inline def derived(x: Int): String =
+    val d: Der = new Der:
+      def join(x: Int): String = if x > 100 then "big" + prod(x) else prod(x)
+      private def prod(x: Int): String = "p" + x + tag
+    d.join(x)
+
+object Tag extends Tagged

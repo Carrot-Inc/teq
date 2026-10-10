@@ -2667,6 +2667,13 @@ impl<'c> Copier<'c> {
             .collect();
         let methods: Vec<FunId> = tc.methods.iter().map(|&f| self.fun(t, f)).collect();
         let ctors: Vec<FunId> = tc.ctors.iter().map(|&f| self.fun(t, f)).collect();
+        // Each copy is its member's function, as the class's typing registers its methods: a call
+        // dispatched by the member (the interpreter's) runs the copy, never a typing of the stored
+        // definition again, where the enclosing class's `this` is the stored body's local.
+        for &f in methods.iter().chain(&ctors) {
+            let s = t.prog.funs[f.idx()].sym;
+            t.fun_of_sym.insert(s, f);
+        }
         let named = std::mem::replace(&mut self.locals, outer).unwrap_or_default();
         let mut bound: Vec<SymId> = ctor_params.clone();
         for &f in methods.iter().chain(&ctors) {

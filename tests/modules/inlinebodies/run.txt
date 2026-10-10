@@ -4,3 +4,5 @@
 1,2
 true,false
 5
+p3smd
+bigp300smd

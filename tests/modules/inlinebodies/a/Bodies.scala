@@ -15,3 +15,18 @@ object Bodies:
     () => c.value
   inline def kindOf[T]: Int = inline erasedValue[T] match { case _: Int => 1; case _ => 2 }
   inline def known(n: Int): Boolean = inline erasedValue[n.type] match { case _: 1 => true; case _ => false }
+
+trait Der:
+  def join(x: Int): String
+
+// A class the body makes reads a member of the method's enclosing trait: the copy reads it on the
+// receiver (`Inliner.computeThisBindings`) and is the member's function wherever a call dispatches.
+trait Tagged:
+  def tag: String = "smd"
+  inline def derived(x: Int): String =
+    class D extends Der:
+      def join(x: Int): String = if x > 100 then "big" + prod(x) else prod(x)
+      private def prod(x: Int): String = "p" + x + tag
+    new D().join(x)
+
+object Tag extends Tagged
