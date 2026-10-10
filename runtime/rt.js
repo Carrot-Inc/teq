@@ -247,6 +247,8 @@ function $classOfObject() { return $classNamed("java.lang.Object"); }
 // constructor tests it, and another its `Class`.
 function $isInstance(cls, x) {
   if ((cls.$boxed & $boxedKind(x)) !== 0) return true;
+  // Every value but `null` is an `Object`, `()` the boxed unit.
+  if (cls.$qname === "java.lang.Object") return x !== null;
   if (x == null) return false;
   if (typeof x !== "object" && typeof x !== "function") return $getClass(x).$qname === cls.$qname;
   if (cls.$trait !== undefined) return $isA(x, cls.$trait);

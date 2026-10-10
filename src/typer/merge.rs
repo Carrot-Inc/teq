@@ -1460,7 +1460,6 @@ impl Remap {
             *c = c.map(|c| self.class(c));
         }
         w.sites.class_tag = w.sites.class_tag.map(|c| self.class(c));
-        w.sites.generic_class_tag = w.sites.generic_class_tag.map(|c| self.class(c));
         w.sites.not_given_class = w.sites.not_given_class.map(|c| self.class(c));
         w.unit_ops = w.unit_ops.map(|o| o.map(|c| self.class(c)));
         w.java_serializable = w.java_serializable.map(|o| o.map(|c| self.class(c)));
@@ -2201,9 +2200,6 @@ impl<'a> Worker<'a> {
         }
         if self.sites.class_tag.is_none() {
             self.sites.class_tag = o.sites.class_tag;
-        }
-        if self.sites.generic_class_tag.is_none() {
-            self.sites.generic_class_tag = o.sites.generic_class_tag;
         }
         if self.sites.not_given_class.is_none() {
             self.sites.not_given_class = o.sites.not_given_class;

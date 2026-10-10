@@ -15,7 +15,8 @@ unapply q
 unapply Q
 List(plain q, tag Q)
 Upper
-List(Int, java.lang.String, Long, Unit)
+List(Int, java.lang.String, Long, Unit, Any, AnyVal)
+true
 true
 true
 true
@@ -23,3 +24,10 @@ List(0, 0)
 Some(1)
 None
 1
+unapply None reads 1
+toString int reads 1
+equals true reads 2
+equals Int true reads 1
+hashCode true reads 1
+wrap true reads 1
+string unapply Some(s) reads 1
