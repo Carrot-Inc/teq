@@ -2321,6 +2321,7 @@ impl<'c> Copier<'c> {
             }
             None => {
                 let nc = t.syms.new_class(name, info.kind, info.mods, info.owner, info.file, info.def, info.span);
+                t.mark_inner_class(nc);
                 self.classes.insert(c, nc);
                 nc
             }
@@ -2370,6 +2371,7 @@ impl<'c> Copier<'c> {
                 other => other,
             };
             let nk = t.syms.new_class(name, info.kind, info.mods, owner, info.file, info.def, info.span);
+            t.mark_inner_class(nk);
             self.classes.insert(k, nk);
         }
         // The members of each, and the local that stands for an owner's `C.this` in the classes
@@ -2533,6 +2535,7 @@ impl<'c> Copier<'c> {
     fn copy_class(&mut self, t: &mut Worker, c: ClassId, name: Name, tc: TClass) -> ClassId {
         let info = t.syms.class(c).info.clone();
         let nc = t.syms.new_class(name, info.kind, info.mods, info.owner, info.file, info.def, info.span);
+        t.mark_inner_class(nc);
         self.fill_class(t, c, nc, tc)
     }
 
@@ -3370,7 +3373,7 @@ impl<'c> Copier<'c> {
             return false;
         }
         match t.prog.tests[test.idx()] {
-            TypeTest::Value(_) => false,
+            TypeTest::Value(_) | TypeTest::Outer(..) => false,
             TypeTest::Or(a, b) | TypeTest::And(a, b) => self.shared_test(t, a) && self.shared_test(t, b),
             TypeTest::Class(c) | TypeTest::Trait(c) => self.stored_trigger(t, c).is_none(),
             _ => true,
@@ -3412,6 +3415,7 @@ impl<'c> Copier<'c> {
                 let a = self.test(t, a);
                 TypeTest::And(a, self.test(t, b))
             }
+            TypeTest::Outer(accessor, inner) => TypeTest::Outer(accessor, self.test(t, inner)),
             TypeTest::Class(c) if self.stored_trigger(t, c).is_some() => TypeTest::Class(self.outside_reduction(|k| k.stored_class_copy(t, c))),
             TypeTest::Trait(c) if self.stored_trigger(t, c).is_some() => TypeTest::Trait(self.outside_reduction(|k| k.stored_class_copy(t, c))),
             other if self.map.is_some() => other,

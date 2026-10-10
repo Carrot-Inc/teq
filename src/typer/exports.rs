@@ -142,6 +142,8 @@ pub enum TraitMemberSite {
     Module(ClassId),
     /// A stable value whose members an import brings (`import dsl.*`).
     Value(super::ValueImport),
+    /// A path of the implicit scope whose members are candidates (`o` of `summon[o.Item]`).
+    Path(TypeId),
 }
 
 #[derive(Clone, Copy, PartialEq)]
@@ -168,6 +170,8 @@ impl ExportScope {
                 TermRef::Class(c) => TermRef::Class(class(c)),
                 TermRef::Package(p) => TermRef::Package(pkg(p)),
                 TermRef::ValueMember(v, s) => TermRef::ValueMember(v, sym(s)),
+                TermRef::ValueClass(v, c) => TermRef::ValueClass(v, class(c)),
+                TermRef::ModuleClass(m, c) => TermRef::ModuleClass(class(m), class(c)),
                 TermRef::SelfAlias(c) => TermRef::SelfAlias(class(c)),
             };
         }
@@ -196,7 +200,11 @@ impl ExportScope {
                     class(c);
                     sym(s);
                 }
-                TermRef::Class(c) | TermRef::SelfAlias(c) => class(c),
+                TermRef::Class(c) | TermRef::SelfAlias(c) | TermRef::ValueClass(_, c) => class(c),
+                TermRef::ModuleClass(m, c) => {
+                    class(m);
+                    class(c);
+                }
                 TermRef::Package(p) => pkg(p),
             }
         }
@@ -1441,6 +1449,7 @@ impl<'a> Worker<'a> {
                 .iter()
                 .filter_map(|&t| match self.types.get(t) {
                     Type::Class(pc, _) => Some(pc),
+                    Type::Nested(_, class) => self.types.named_class(class),
                     _ => None,
                 })
                 .collect();
@@ -1488,7 +1497,10 @@ impl<'a> Worker<'a> {
         };
         match found {
             TypeRef::Class(c) => Some(c),
-            TypeRef::Member(..) | TypeRef::ValueMember(..) => None,
+            // A class nested in a class that `c` inherits, through `c`'s `this`
+            // (`inherited_type_member`).
+            TypeRef::Member(c, n) => self.inherited_inner_class(c, n),
+            TypeRef::ValueMember(..) => None,
             TypeRef::Alias(a) => {
                 self.complete_alias(a);
                 match self.types.get(self.syms.aliases[a.idx()].rhs) {
@@ -1584,6 +1596,12 @@ impl<'a> Worker<'a> {
 
     /// The type arguments that the class at the site gives to the trait `owner`.
     pub fn trait_member_subst(&mut self, site: TraitMemberSite, owner: ClassId) -> Subst {
+        if let TraitMemberSite::Path(p) = site {
+            return match self.base_type(p, owner) {
+                Some(bt) => self.owner_subst(bt),
+                None => Vec::new(),
+            };
+        }
         if let TraitMemberSite::Value(v) = site {
             let ty = self.import_value_ret(v);
             let ty = self.zonk(ty);
@@ -1605,6 +1623,7 @@ impl<'a> Worker<'a> {
             TraitMemberSite::Module(m) => self.prog.add(TExpr::Module(m)),
             TraitMemberSite::This(Some(k)) => self.this_ref(k),
             TraitMemberSite::This(None) => self.prog.add(TExpr::This),
+            TraitMemberSite::Path(p) => self.prefix_value(p).unwrap_or_else(|| self.prog.add(TExpr::Unit)),
             TraitMemberSite::Value(v) => {
                 let span = self.syms.sym(self.import_values[v.0 as usize].0).span;
                 match self.import_value_ref(v, span) {

@@ -544,6 +544,9 @@ impl<'a> Gen<'a> {
                 None => JType::object(),
             },
             Type::AppMember(m, _) => self.erase(m),
+            // A class through its prefix erases to the class (dotty's `TypeErasure` of a
+            // class `TypeRef`).
+            Type::Nested(_, class) => self.erase(class),
             Type::Decl(a) => match cx.input.syms.aliases[a.idx()].bounds {
                 Some((_, upper)) => self.erase(upper),
                 None => JType::object(),
@@ -878,7 +881,7 @@ impl<'a> Gen<'a> {
                 let ret = cx.input.syms.sym(s).sig.as_ref()?.ret;
                 self.array_bound(ret)
             }
-            Type::Refined(parent, _) | Type::Lambda(_, parent) => self.array_bound(parent),
+            Type::Refined(parent, _) | Type::Lambda(_, parent) | Type::Nested(_, parent) => self.array_bound(parent),
             Type::Alias(a, args) => {
                 let x = self.alias_expansion(a, args)?;
                 self.array_bound(x)
@@ -1140,7 +1143,7 @@ impl<'a> Gen<'a> {
             match cx.input.types.get(t) {
                 Type::This(c) | Type::Class(c, _) => break c,
                 Type::Term(s) | Type::Select(_, s) => t = cx.input.syms.sym(s).sig.as_ref()?.ret,
-                Type::Refined(p, _) => t = p,
+                Type::Refined(p, _) | Type::Nested(_, p) => t = p,
                 Type::Var(v) => t = cx.input.insts.inst(v)?,
                 Type::Inter(a, _) => t = a,
                 _ => return None,
@@ -1173,6 +1176,7 @@ impl<'a> Gen<'a> {
                     Some(inst) => t = inst,
                     None => return JType::object(),
                 },
+                Type::Nested(_, class) => t = class,
                 // `Array[Id[Int]]` is an `int[]`, `Array[Id[V]]` a `V[]`.
                 Type::Alias(a, args) => match self.alias_expansion(a, args) {
                     Some(x) => t = x,
@@ -1235,7 +1239,7 @@ impl<'a> Gen<'a> {
                 "Nothing" => self.array_marker(0),
                 _ => self.storage(t),
             },
-            Type::Class(..) | Type::Lit(_) => self.storage(t),
+            Type::Class(..) | Type::Lit(_) | Type::Nested(..) => self.storage(t),
             _ => return JType::object(),
         };
         let mut d = String::from("[");
@@ -2286,6 +2290,10 @@ impl<'a> Gen<'a> {
         if let Some(&g) = cx.inner_given_object_classes.get(&f) {
             let declared = syms.sym(g).sig.as_ref().and_then(|sig| match cx.input.types.get(sig.ret) {
                 crate::types::Type::Class(d, _) => Some(d),
+                crate::types::Type::Nested(_, class) => match cx.input.types.get(class) {
+                    crate::types::Type::Class(d, _) => Some(d),
+                    _ => None,
+                },
                 _ => None,
             });
             if declared.map_or(false, |d| d == t || syms.class(d).base_types.iter().any(|&(b, _)| b == t)) {
@@ -3703,6 +3711,10 @@ impl<'a> Gen<'a> {
         }
         let mut c = match cx.input.types.get(self.recorded_type(r)?) {
             Type::This(c) | Type::Class(c, _) => c,
+            Type::Nested(_, class) => match cx.input.types.get(class) {
+                Type::Class(c, _) => c,
+                _ => return None,
+            },
             _ => return None,
         };
         loop {
@@ -4513,10 +4525,32 @@ impl<'a> Gen<'a> {
         let cx = self.cx;
         let Owner::Class(c) = cx.input.syms.sym(s).owner else { return JType::V };
         let Some(name) = self.new_object_of(c) else { return JType::V };
-        let params = self.param_types(s);
-        self.ctor_arguments_of(c, Some(s), args, &params);
+        let params = self.via_arguments(c, s, args);
         self.invoke(Invoke::Special, &name, false, "<init>", &params, &JType::V);
         JType::L(name)
+    }
+
+    /// Loads the arguments of the secondary constructor `s` of `c` and gives its parameter
+    /// types: a class nested in a class takes the enclosing instance first, as every one of its
+    /// constructors does (dotty's `ExplicitOuter`, the typer's `new_outer_arg`).
+    pub fn via_arguments(&mut self, c: ClassId, s: SymId, args: ListRef) -> Vec<JType> {
+        let cx = self.cx;
+        let params = self.param_types(s);
+        let info = cx.input.syms.class(c);
+        let outer = match info.owner {
+            Owner::Class(o) if matches!(info.kind, ClassKind::Class | ClassKind::GivenImpl) && !matches!(cx.input.syms.class(o).kind, ClassKind::Object | ClassKind::Builtin) && args.len as usize == params.len() + 1 => Some(o),
+            _ => None,
+        };
+        let Some(o) = outer else {
+            self.ctor_arguments_of(c, Some(s), args, &params);
+            return params;
+        };
+        let outer_ty = self.class_type(o);
+        let first = cx.input.prog.expr_list(args)[0];
+        self.expr(first, &outer_ty);
+        let rest = ListRef { start: args.start + 1, len: args.len - 1 };
+        self.ctor_arguments_of(c, Some(s), rest, &params);
+        std::iter::once(outer_ty).chain(params).collect()
     }
 
     /// `new C` with its companion touched first, as an instance creation starts.

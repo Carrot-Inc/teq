@@ -589,7 +589,7 @@ impl<'w, 'a> P<'w, 'a> {
         match self.w.types.get(t) {
             Type::Ctor(_) | Type::Lambda(..) => true,
             Type::Param(p) => self.w.syms.tparam(p).arity > 0,
-            Type::Class(c, args) => self.w.types.items(args).is_empty() && !self.w.syms.class(c).own_tparams().is_empty(),
+            Type::Class(c, args) => self.w.types.items(args).is_empty() && !self.w.syms.class(c).tparams.is_empty(),
             Type::Member(..) | Type::Decl(_) => true,
             _ => false,
         }
@@ -616,7 +616,7 @@ impl<'w, 'a> P<'w, 'a> {
         let Type::Class(c, _) = self.w.types.get(t) else { return t };
         self.w.complete_class(c);
         let info = self.w.syms.class(c);
-        if info.kind != ClassKind::Opaque || !info.own_tparams().is_empty() {
+        if info.kind != ClassKind::Opaque || !info.tparams.is_empty() {
             return t;
         }
         let candidates: Vec<TypeId> = info.underlying.into_iter().chain(info.parents.iter().copied()).collect();
@@ -1165,7 +1165,7 @@ impl<'w, 'a> P<'w, 'a> {
 
     /// A class applied to wildcards, `classOf`'s argument.
     fn class_applied_wild(&mut self, c: ClassId) -> TypeId {
-        let n = self.w.syms.class(c).own_tparams().len();
+        let n = self.w.syms.class(c).tparams.len();
         let args: Vec<TypeId> = (0..n).map(|_| WILD).collect();
         self.w.types.class(c, &args)
     }
@@ -2150,7 +2150,7 @@ impl<'w, 'a> P<'w, 'a> {
                 self.w.complete_class(c);
                 let info = self.w.syms.class(c);
                 let n = info.ctor.len();
-                ("<init>".to_string(), info.own_tparams().len(), info.ctor.clone(), (0..n).collect(), None)
+                ("<init>".to_string(), info.tparams.len(), info.ctor.clone(), (0..n).collect(), None)
             }
         };
         // The clauses in the declaration's order (a right-associative extension's swapped), the
@@ -3817,7 +3817,7 @@ impl<'w, 'a> P<'w, 'a> {
     /// arguments after those a local class's captures take; `prelude` the temporaries of named
     /// arguments, before the call in a block.
     fn ctor_call(&mut self, c: ClassId, via: Option<SymId>, targs: &[TypeId], args: &[TExprId], new_ty: TypeId, prelude: Option<ListRef>) {
-        let own = self.w.syms.class(c).own_tparams().len();
+        let own = self.w.syms.class(c).tparams.len();
         if targs.len() != own && c != self.w.b.any_ref {
             return self.fail(format!("a constructor call of {} with {} of its {} type arguments", self.name(self.w.syms.class(c).name), targs.len(), own));
         }
@@ -3836,7 +3836,9 @@ impl<'w, 'a> P<'w, 'a> {
             Owner::Class(o) if skip >= 1 && self.w.syms.class(o).kind != ClassKind::Object => {
                 // The enclosing instance itself: `this`, or its path from a class nested in it
                 // (`Outer.this` reached from `object Helper`), whose type is `O.this`.
-                let this = matches!(self.w.prog.expr(args[0]), TExpr::This) || self.term_type(args[0]).map_or(false, |t| matches!(self.w.types.get(t), Type::This(k) if k == o));
+                // A secondary constructor's `this(...)` passes its own outer parameter, which
+                // `ExplicitOuter` adds after pickling (`OuterOps.args` for the `This` call).
+                let this = self.self_init || matches!(self.w.prog.expr(args[0]), TExpr::This) || self.term_type(args[0]).map_or(false, |t| matches!(self.w.types.get(t), Type::This(k) if k == o));
                 // Inside the outer class teq's types name the instance `O.this.I` whatever its
                 // outer instance: one of another instance there is not stated.
                 if !this && self.enclosing.contains(&o) {
@@ -4052,7 +4054,7 @@ impl<'w, 'a> P<'w, 'a> {
     /// defaults', the references to them filled.
     fn lifted_ctor_args(&mut self, c: ClassId, via: Option<SymId>, targs: &[TypeId], args: &[TExprId], params: &[ParamSig], binds: Vec<(TExprId, usize)>, lifting: Option<crate::tasty::write::buf::Slot>) {
         let Some(b) = lifting else { return };
-        let own: Vec<TParamId> = self.w.syms.class(c).own_tparams().to_vec();
+        let own: Vec<TParamId> = self.w.syms.class(c).tparams.to_vec();
         let subst: Subst = own.iter().copied().zip(targs.iter().copied()).collect();
         for &(e, i) in &binds {
             let default = matches!(self.records(e).form, Some(Form::Default));
@@ -4131,7 +4133,7 @@ impl<'w, 'a> P<'w, 'a> {
             _ => return self.fail("a secondary constructor's call".to_string()),
         };
         let args = self.w.prog.expr_list(args).to_vec();
-        let own: Vec<TypeId> = self.w.syms.class(c).own_tparams().to_vec().into_iter().map(|tp| self.w.types.param(tp)).collect();
+        let own: Vec<TypeId> = self.w.syms.class(c).tparams.to_vec().into_iter().map(|tp| self.w.types.param(tp)).collect();
         let this_ty = self.w.types.class(c, &own);
         let (src, ctx) = (self.src_ctx, self.span_ctx);
         self.src_ctx = self.file;
@@ -4164,7 +4166,9 @@ impl<'w, 'a> P<'w, 'a> {
     /// The first parent of a class: its constructor call with what the class passes it.
     pub(super) fn parent_call(&mut self, c: ClassId, parent: TypeId) {
         let parent = self.w.zonk(parent);
-        let (k, targs) = match self.w.types.get(parent) {
+        // A parent through a prefix (`extends mid.T`) is classified by its class, and its type,
+        // the prefix with it, is the constructor's (dotty's `TreePickler` pickles the typed parent).
+        let (k, targs) = match self.w.types.get(self.w.types.strip_nested(parent)) {
             Type::Class(k, args) => (k, self.w.types.items(args).to_vec()),
             _ => return self.fail("a parent that is no class".to_string()),
         };
@@ -4179,8 +4183,7 @@ impl<'w, 'a> P<'w, 'a> {
                 None => (Vec::new(), None, None),
             },
         };
-        let outer_args = self.w.syms.class(k).outer_tparams as usize;
-        let own: Vec<TypeId> = targs.iter().skip(outer_args).copied().collect();
+        let own: Vec<TypeId> = targs.clone();
         self.term_at(None);
         let outside = std::mem::replace(&mut self.in_parent_args, true);
         self.ctor_call(k, via, &own, &args, parent, prelude);
@@ -4190,12 +4193,13 @@ impl<'w, 'a> P<'w, 'a> {
     /// A trait parent's constructor call with what the class passes it.
     pub(super) fn trait_parent_call(&mut self, parent: TypeId, args: &[TExprId], via: Option<SymId>, prelude: Option<ListRef>) {
         let parent = self.w.zonk(parent);
-        let (k, targs) = match self.w.types.get(parent) {
+        // A parent through a prefix (`extends mid.T`) is classified by its class, and its type,
+        // the prefix with it, is the constructor's (dotty's `TreePickler` pickles the typed parent).
+        let (k, targs) = match self.w.types.get(self.w.types.strip_nested(parent)) {
             Type::Class(k, args) => (k, self.w.types.items(args).to_vec()),
             _ => return self.fail("a trait parent that is no class".to_string()),
         };
-        let outer_args = self.w.syms.class(k).outer_tparams as usize;
-        let own: Vec<TypeId> = targs.iter().skip(outer_args).copied().collect();
+        let own: Vec<TypeId> = targs.clone();
         self.term_at(None);
         let outside = std::mem::replace(&mut self.in_parent_args, true);
         self.ctor_call(k, via, &own, args, parent, prelude);
@@ -4889,7 +4893,7 @@ impl<'w, 'a> P<'w, 'a> {
         // A result naming the type parameters of the callee's class, which the call's receiver
         // instantiates, is left as the local's own type.
         let owner_tparams: Vec<TParamId> = match self.w.syms.sym(call.callee).owner {
-            Owner::Class(c) => self.w.syms.class(c).own_tparams().to_vec(),
+            Owner::Class(c) => self.w.syms.class(c).tparams.to_vec(),
             _ => Vec::new(),
         };
         if self.w.mentions_tparam_of(t, Some(&owner_tparams)) {
@@ -5263,7 +5267,7 @@ impl<'w, 'a> P<'w, 'a> {
             cls.clone()
         };
         let subst: Subst = {
-            let own = self.w.syms.class(c).own_tparams().to_vec();
+            let own = self.w.syms.class(c).tparams.to_vec();
             own.into_iter().zip(targs.iter().copied()).collect()
         };
         let scrut = self.w.zonk(scrut);
@@ -6443,7 +6447,7 @@ impl<'w, 'a> P<'w, 'a> {
         }
         self.ty(t);
         let subst: Subst = {
-            let own = self.w.syms.class(c).own_tparams().to_vec();
+            let own = self.w.syms.class(c).tparams.to_vec();
             own.into_iter().zip(targs.iter().copied()).collect()
         };
         for (f, p) in fields.iter().zip(subs) {

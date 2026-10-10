@@ -140,7 +140,7 @@ pub struct Unused {
 /// What an attribution looks for, the key of its memo.
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 enum Target {
-    Sym(SymId, bool, u32),
+    Sym(SymId, bool, u64),
     Class(ClassId),
     Package(PkgId),
 }
@@ -642,7 +642,7 @@ impl<'a> Worker<'a> {
     fn attribute_prefixes(&mut self, g: SymId, via: GivenScope) {
         let mut at = match via {
             GivenScope::Module(m) => Owner::Class(m),
-            GivenScope::Value(_) => return,
+            GivenScope::Value(_) | GivenScope::Path(_) => return,
             GivenScope::Lexical => self.syms.sym(g).owner,
         };
         for _ in 0..10 {
@@ -910,11 +910,7 @@ impl<'a> Worker<'a> {
         }
         // Past the frames that may define it, with no import of a block or a class visible, the
         // answer is the file's imports': memoised.
-        let via_code = match via {
-            GivenScope::Lexical => u32::MAX,
-            GivenScope::Module(m) => m.0,
-            GivenScope::Value(v) => u32::MAX - 1 - v.0,
-        };
+        let via_code = via.memo_code();
         let key = Target::Sym(sym, renamed, via_code);
         let given = self.syms.is_given(sym);
         let scala3_given = self.syms.sym(sym).mods & crate::ast::mods::GIVEN != 0 || self.syms.sym(sym).kind == SymKind::Given;
@@ -991,18 +987,18 @@ impl<'a> Worker<'a> {
         // one the search read it on where that is known.
         let member_of = |t: &mut Self, c: ClassId| match (owner, via) {
             (_, GivenScope::Module(m)) => c == m,
-            (_, GivenScope::Value(_)) => false,
+            (_, GivenScope::Value(_) | GivenScope::Path(_)) => false,
             (Owner::Class(o), GivenScope::Lexical) => o == c || t.derives_from(c, o),
             _ => false,
         };
         let in_pkg = |t: &Self, p: PkgId| match via {
             GivenScope::Module(m) => t.syms.pkg(p).package_object == Some(m),
-            GivenScope::Value(_) => false,
+            GivenScope::Value(_) | GivenScope::Path(_) => false,
             GivenScope::Lexical => owner == Owner::Package(p),
         };
         let of_value = |t: &mut Self, v: crate::typer::ValueImport| match via {
             GivenScope::Value(w) => v == w,
-            GivenScope::Module(_) => false,
+            GivenScope::Module(_) | GivenScope::Path(_) => false,
             GivenScope::Lexical => t.import_value_class(v).is_some_and(|c| matches!(owner, Owner::Class(o) if o == c || t.derives_from(c, o))),
         };
         let brings = match imp.target {

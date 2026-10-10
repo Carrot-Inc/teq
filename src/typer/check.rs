@@ -2138,7 +2138,17 @@ impl<'a> Worker<'a> {
         self.env.frames.push(Frame::Locals { names: Vec::new(), tparams: Vec::new(), givens: Vec::new(), classes: Vec::new(), aliases: Vec::new(), owner: self.sites.owners.len() as u32 });
         let default_exprs: Vec<Option<ast::ExprId>> = f.clauses.iter().flat_map(|cl| cl.params.iter().map(|p| p.default)).collect();
         let defaults = self.enter_params(&sig, &default_exprs, frame);
-        let params: Vec<SymId> = sig.clauses.iter().flat_map(|cl| cl.params.iter().map(|p| p.sym)).collect();
+        let mut params: Vec<SymId> = sig.clauses.iter().flat_map(|cl| cl.params.iter().map(|p| p.sym)).collect();
+        // A class nested in a class takes the enclosing instance as every constructor's first
+        // parameter, which stands for that instance's `this` in the body and is passed on to the
+        // constructor called first (dotty's `ExplicitOuter`, `OuterOps.args` of a `This`).
+        let outer_param = self.outer_class(c).map(|o| {
+            let name = self.interner.intern("$outer");
+            let p = self.new_local(name, SymKind::Param, self.syms.this_type(o), span);
+            params.insert(0, p);
+            (o, p)
+        });
+        let outer_ctor = std::mem::replace(&mut self.ctor_outer, outer_param);
         let outer_return = self.return_to.take();
         let outer_returns = std::mem::take(&mut self.returns);
         let outer_excluded = self.excluded_ctor.replace(sym);
@@ -2147,6 +2157,7 @@ impl<'a> Worker<'a> {
         self.parent_args_of = outer_args;
         self.excluded_ctor = outer_excluded;
         let (after, _) = if rest.len == 0 { (self.prog.add(TExpr::Unit), self.b.t_unit) } else { self.type_block(rest, None, None) };
+        self.ctor_outer = outer_ctor;
         self.env.frames.pop();
         self.return_to = outer_return;
         self.returns = outer_returns;
@@ -3227,7 +3238,12 @@ impl<'a> Worker<'a> {
                 by_trait.push((b, call));
                 continue;
             }
-            let Type::Class(_, targs) = self.types.get(base_ty) else { continue };
+            // A trait through a prefix (`H.o.I`) takes its own arguments as the bare trait does.
+            let class_ty = match self.types.get(base_ty) {
+                Type::Nested(_, class) => class,
+                _ => base_ty,
+            };
+            let Type::Class(_, targs) = self.types.get(class_ty) else { continue };
             self.settle_class(b);
             let owner_subst: Subst =
                 self.syms.class(b).tparams.iter().copied().zip(self.types.items(targs).iter().copied()).collect();
@@ -3362,7 +3378,11 @@ impl<'a> Worker<'a> {
         };
         let ast = self.ast(file);
         self.settle_class(parent);
-        let (sig_tparams, owner_subst, ret) = match parent_ty.map(|t| (t, self.types.get(t))) {
+        let class_of_parent = |w: &Self, t: TypeId| match w.types.get(t) {
+            Type::Nested(_, class) => w.types.get(class),
+            other => other,
+        };
+        let (sig_tparams, owner_subst, ret) = match parent_ty.map(|t| (t, class_of_parent(self, t))) {
             Some((t, Type::Class(_, targs))) => {
                 let tparams = self.syms.class(parent).info.tparams.iter().copied();
                 (Vec::new(), tparams.zip(self.types.items(targs).iter().copied()).collect(), t)
@@ -3370,6 +3390,17 @@ impl<'a> Worker<'a> {
             _ => (self.syms.class(parent).tparams.clone(), Vec::new(), self.syms.class(parent).base_types[0].1),
         };
         let sig = Arc::new(MethodSig { tparams: sig_tparams, clauses: self.syms.class(parent).ctor.clone(), ret });
+        // A parent through a prefix (`Ops` of `Num[T]` in `Integ[T] extends Num[T]`, which is
+        // `Integ.this.Ops`) takes its constructor's parameters seen from that prefix, the
+        // enclosing classes' arguments the prefix's, as dotty's parent constructor type.
+        let prefix = match parent_ty.map(|t| self.types.get(t)) {
+            Some(Type::Nested(p, _)) => Some(p),
+            _ => None,
+        };
+        let sig = match prefix {
+            Some(p) => self.ctor_sig_through(sig, p, parent),
+            None => sig,
+        };
         let span = clause.map_or(class_span, |p| ast.ty_spans[p.ty.idx()]);
         let mut lists: Vec<ArgList> = clause
             .map(|p| {
@@ -3394,7 +3425,7 @@ impl<'a> Worker<'a> {
             lists.remove(0);
         }
         let (te, ty) = if in_place {
-            self.construct_parent(parent, sig, owner_subst, lists, span)
+            self.construct_parent(parent, sig, owner_subst, prefix, lists, span)
         } else {
             let mut names = Vec::new();
             let mut givens = Vec::new();
@@ -3413,7 +3444,7 @@ impl<'a> Worker<'a> {
             env.frames.push(Frame::Locals { names, tparams, givens, classes: Vec::new(), aliases: Vec::new(), owner: self.sites.owners.len() as u32 });
             self.with_env(env, |t| {
                 let outer_case = t.parent_args_of.replace(c);
-                let r = t.construct_parent(parent, sig, owner_subst, lists, span);
+                let r = t.construct_parent(parent, sig, owner_subst, prefix, lists, span);
                 t.parent_args_of = outer_case;
                 r
             })
@@ -3432,7 +3463,23 @@ impl<'a> Worker<'a> {
 
     /// The constructor call of a parent clause, an overload resolution where the parent has
     /// secondary constructors: their signatures under the parent's type arguments, as `sig` is.
-    fn construct_parent(&mut self, parent: ClassId, sig: Arc<MethodSig>, owner_subst: Subst, lists: Vec<ArgList>, span: Span) -> (TExprId, TypeId) {
+    fn construct_parent(&mut self, parent: ClassId, sig: Arc<MethodSig>, owner_subst: Subst, prefix: Option<TypeId>, lists: Vec<ArgList>, span: Span) -> (TExprId, TypeId) {
+        // A class nested in a class through a path (`extends H.o.I`) takes the path's value as
+        // its enclosing instance, as a `new` through it does (dotty's `ExplicitOuter.OuterOps.args`
+        // for `Super` as for `New`, the outer from `outerPrefix` of the parent's type); through
+        // a `this` the enclosing class's instance is the one `new_outer_arg` finds.
+        let path = prefix.filter(|&p| !matches!(self.types.get(p), Type::This(_)) && self.outer_class(parent).is_some());
+        let prefixed = self.new_prefixed;
+        self.new_prefixed |= path.is_some();
+        let r = self.construct_parent_now(parent, sig, owner_subst, prefix, lists, span);
+        self.new_prefixed = prefixed;
+        if let Some(outer) = path.and_then(|p| self.prefix_value(p)) {
+            self.pass_outer(r.0, outer);
+        }
+        r
+    }
+
+    fn construct_parent_now(&mut self, parent: ClassId, sig: Arc<MethodSig>, owner_subst: Subst, prefix: Option<TypeId>, lists: Vec<ArgList>, span: Span) -> (TExprId, TypeId) {
         // A parent whose header the parser could not complete takes any arguments.
         if self.syms.class(parent).mods & mods::INCOMPLETE != 0 {
             self.type_args_for_errors(&lists);
@@ -3448,7 +3495,12 @@ impl<'a> Worker<'a> {
             return self.apply_method(call, Some((parent, sig)), None, lists, span, None, false).unwrap();
         }
         // Every alternative, the primary included, takes the parent's type arguments.
-        let fix = |t: &mut Self, own: Arc<MethodSig>| -> Arc<MethodSig> {
+        // `sig` is seen from the prefix already, a secondary constructor's own signature not.
+        let fix = |t: &mut Self, own: Arc<MethodSig>, through: bool| -> Arc<MethodSig> {
+            let own = match prefix.filter(|_| through) {
+                Some(p) => t.ctor_sig_through(own, p, parent),
+                None => own,
+            };
             if owner_subst.is_empty() {
                 return own;
             }
@@ -3463,11 +3515,11 @@ impl<'a> Worker<'a> {
                 .collect();
             Arc::new(MethodSig { tparams: own.tparams.clone(), clauses, ret: sig.ret })
         };
-        let primary = self.syms.class(parent).primary_ctor.filter(|_| self.ctor_accessible(parent)).map(|s| (s, fix(self, sig.clone())));
+        let primary = self.syms.class(parent).primary_ctor.filter(|_| self.ctor_accessible(parent)).map(|s| (s, fix(self, sig.clone(), false)));
         let mut alts = Vec::with_capacity(secondaries.len());
         for s in secondaries {
             let own = self.sig_arc(s);
-            let fixed = fix(self, own);
+            let fixed = fix(self, own, true);
             alts.push((s, fixed));
         }
         self.construct_overloaded(parent, primary, alts, None, lists, span, None)
@@ -4369,6 +4421,10 @@ impl<'a> Worker<'a> {
             let (mu, ml) = (self.syms.tparam(mt).upper, self.syms.tparam(mt).lower);
             let (pu, pl) = (self.types.subst(pu, &psubst), self.types.subst(pl, &psubst));
             let (mu, ml) = (self.types.subst(mu, &msubst), self.types.subst(ml, &msubst));
+            // The bounds are seen from `c` as the signatures are (`X <: Z.this.Y` of `Z` is
+            // `X <: A.this.Y` in `A`).
+            let (pu, pl) = (seen(self, pu), seen(self, pl));
+            let (mu, ml) = if m_owner.is_some() { (seen(self, mu), seen(self, ml)) } else { (mu, ml) };
             if (pu != mu && !self.is_same(pu, mu)) || (pl != ml && !self.is_same(pl, ml)) {
                 return Agreement::Params;
             }

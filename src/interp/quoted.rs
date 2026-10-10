@@ -1796,6 +1796,8 @@ impl<'a, 't> Interp<'a, 't> {
             TypeTest::AnyRef => self.typer.b.t_any_ref,
             TypeTest::AnyVal => self.typer.b.t_any_val,
             TypeTest::Null => self.typer.b.t_null,
+            // A class test with its outer test is the class's.
+            TypeTest::And(a, b) if matches!(self.prog().tests[b.idx()], TypeTest::Outer(..)) => self.test_type(a),
             _ => ANY,
         }
     }
@@ -4120,6 +4122,7 @@ impl<'a, 't> Interp<'a, 't> {
             }
             Type::Lambda(_, b) | Type::Poly(_, b) => self.type_symbol(b),
             Type::Refined(p, _) | Type::AppMember(p, _) => self.type_symbol(p),
+            Type::Nested(_, c) => self.type_symbol(c),
             Type::Blocked(_) => self.pkg_form(t).map_or(SymRef::None, |(_, p)| p),
             Type::Member(..)
             | Type::Union(..)
@@ -6605,7 +6608,7 @@ fn install_symbols(it: &mut Table) {
         let s = it.sym_arg(a, 0)?;
         let Some(c) = it.member_holder(s) else { return it.make_list(Vec::new()) };
         it.typer.complete_class(c);
-        let mut out: Vec<SymRef> = it.syms().class(c).own_tparams().iter().map(|&p| SymRef::TParam(p)).collect();
+        let mut out: Vec<SymRef> = it.syms().class(c).tparams.iter().map(|&p| SymRef::TParam(p)).collect();
         out.extend(it.syms().class(c).nested.values().map(|&k| SymRef::Class(k)));
         out.extend(it.syms().class(c).type_aliases.values().map(|&al| SymRef::Alias(al)));
         it.sym_values(out)

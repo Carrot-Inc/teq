@@ -339,6 +339,7 @@ pub(in crate::typer) fn type_test<M: Mapping + ?Sized>(m: &M, t: &mut TypeTest) 
         Value(e) => Value(m.expr(e)),
         Or(a, b) => Or(m.test(a), m.test(b)),
         And(a, b) => And(m.test(a), m.test(b)),
+        Outer(s, t) => Outer(m.sym(s), m.test(t)),
         other => other,
     };
 }

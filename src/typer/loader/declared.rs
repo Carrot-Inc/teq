@@ -371,6 +371,8 @@ impl<'a> Worker<'a> {
                 }
                 self.sig_name(w, in_array, depth + 1, lib)
             }
+            // `p.C[Ts]` erases as its class, whatever the prefix (`TypeErasure` of a `TypeRef`).
+            Type::Nested(_, class) => self.sig_name(class, in_array, depth + 1, lib),
             // The writer's erasures of the shapes the reader matches any name against.
             Type::Refined(parent, _) if lib.is_some() => self.sig_name(parent, in_array, depth + 1, lib),
             Type::Inter(a, b) if lib.is_some() => self.sig_glb(a, b, in_array, depth, lib),
@@ -426,6 +428,7 @@ impl<'a> Worker<'a> {
         let d = self.dealias(t);
         match self.types.get(d) {
             Type::Class(c, _) => Some(c),
+            Type::Nested(_, class) => self.sig_erased_class(class),
             Type::Refined(p, _) => self.sig_erased_class(p),
             Type::Param(p) | Type::AppParam(p, _) => {
                 let u = self.syms.tparam(p).upper;
@@ -637,7 +640,7 @@ impl<'a> Worker<'a> {
         // A secondary constructor takes its class's type parameters.
         if info.name == crate::names::INIT && sig.tparams.is_empty() {
             if let Owner::Class(c) = info.owner {
-                let n = self.syms.class(c).own_tparams().len();
+                let n = self.syms.class(c).tparams.len();
                 push_tparams(&mut params, n);
             }
         }
@@ -733,7 +736,7 @@ impl<'a> Worker<'a> {
         self.complete_class(c);
         let info = (*self.syms.class(c)).clone();
         let mut params = Vec::new();
-        let n = info.own_tparams().len();
+        let n = info.tparams.len();
         if n > 0 {
             params.push(PickledSigParam::Types(n));
         }

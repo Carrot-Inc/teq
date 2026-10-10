@@ -5,7 +5,8 @@
 # typed program survives an error), a parse error and its fix, a warning (and the same program
 # under --werror), a file added, the UTF-16 columns of a line with a non-ASCII character, a first
 # build with an error followed by its fix, a constant val's value changed where its singleton
-# type is read (the full path, as a fresh check), a first build with a file that fails to parse (its
+# type is read (the full path, as a fresh check), a nested class's prefix changed under a client
+# (scalac's error, as a fresh check), a first build with a file that fails to parse (its
 # recovered tree typed with the rest) followed by its fix, and the `text` command: an unsaved
 # text standing in for the file on disk for a named and for a plain `build`, and its withdrawal;
 # and that a text of megabytes with a parse error leaves no mapping kept once two more builds
@@ -272,6 +273,26 @@ printf 'object C:\n  final val one = 1\n' > "$cdir/A.scala"
 build "$cdir/A.scala"
 expect "a constant again" "$(field ok),$(count error)" 'true,0'
 as_fresh "a constant again" "$cdir/A.scala" "$cdir/B.scala"
+stop
+
+# A class nested in a class is a type of its own through each prefix: a result moved from
+# `a.Item` to `b.Item` breaks a client of `a.Item` where scalac reports it (E007, `Found:
+# API.b.Item, Required: API.a.Item`), as a fresh check answers, and moving it back fixes it.
+pdir=$work/prefix
+mkdir -p "$pdir"
+printf 'class O:\n  class Item\nobject API:\n  val a = new O\n  val b = new O\n  def make: a.Item = new a.Item\n' > "$pdir/A.scala"
+printf 'def use: API.a.Item = API.make\n' > "$pdir/B.scala"
+start "$pdir/A.scala" "$pdir/B.scala"
+expect "a nested class through a prefix: the first build" "$(field ok),$(count error)" 'true,0'
+sed -i.bak 's/a\.Item = new a\.Item/b.Item = new b.Item/' "$pdir/A.scala"
+build "$pdir/A.scala"
+expect "a nested class's prefix changed" "$(field ok),$(count error)" 'false,1'
+if has 'found b.Item, required a.Item'; then ok; else bad "a nested class's prefix changed: $RESULT"; fi
+as_fresh "a nested class's prefix changed" "$pdir/A.scala" "$pdir/B.scala"
+mv "$pdir/A.scala.bak" "$pdir/A.scala"
+build "$pdir/A.scala"
+expect "a nested class's prefix back" "$(field ok),$(count error)" 'true,0'
+as_fresh "a nested class's prefix back" "$pdir/A.scala" "$pdir/B.scala"
 stop
 
 # A first build with an error keeps the typed program: the fix is typed incrementally.

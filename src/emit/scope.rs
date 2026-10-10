@@ -1313,6 +1313,7 @@ impl<'a> Emitter<'a> {
                 self.walk_test(w, a);
                 self.walk_test(w, b);
             }
+            TypeTest::Outer(_, inner) => self.walk_test(w, inner),
             _ => {}
         }
     }

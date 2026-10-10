@@ -492,6 +492,27 @@ impl<'a> Worker<'a> {
                     }
                 }
             },
+            // `p.C`: through a prefix that names a parameter the class as a member of the
+            // prefix's upper bound, `Bar#C`, as scalac's `derivedSelect` of a range prefix.
+            Type::Nested(p, class) => {
+                let c = self.approx(class, params, v, d);
+                match self.approx(p, params, v.max(0), d) {
+                    Approx::Exact(np) => match c {
+                        Approx::Exact(c) => Approx::Exact(self.types.mk(Type::Nested(np, c))),
+                        c => {
+                            let (lo, hi) = (self.types.mk(Type::Nested(np, c.lo())), self.types.mk(Type::Nested(np, c.hi())));
+                            range(lo, hi, v)
+                        }
+                    },
+                    pre => match self.types.get(pre.hi()) {
+                        Type::Class(..) | Type::Nested(..) => {
+                            let hi = self.types.mk(Type::Nested(pre.hi(), c.hi()));
+                            range(NOTHING, hi, v)
+                        }
+                        _ => range(NOTHING, ANY, v),
+                    },
+                }
+            }
             Type::AppMember(m, args) => self.approx_applied_member(m, args, params, v, d),
             Type::AppParam(p, args) => {
                 let items: Vec<TypeId> = self.types.items(args).to_vec();

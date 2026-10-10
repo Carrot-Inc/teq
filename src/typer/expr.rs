@@ -1777,15 +1777,71 @@ impl<'a> Worker<'a> {
     #[inline(never)]
     pub(super) fn pass_new_outer(&mut self, e: ExprId, te: TExprId) {
         let Some(&outer) = self.cur_ast().new_outers.get(&e) else { return };
-        let TExpr::New(c, args) = self.prog.expr(te) else { return };
+        let mut at = te;
+        while let TExpr::Block(_, value) = self.prog.expr(at) {
+            at = value;
+        }
+        let (c, args) = match self.prog.expr(at) {
+            TExpr::New(c, args) => (c, args),
+            TExpr::NewVia(s, args) => match self.syms.sym(s).owner {
+                Owner::Class(c) => (c, args),
+                _ => return,
+            },
+            _ => return,
+        };
         if self.outer_class(c).is_none() || args.len == 0 {
             return;
         }
         let (outer_te, _) = self.type_expr(outer, None);
+        self.pass_outer(te, outer_te);
+    }
+
+    /// The construction `te` of a class nested in a class (under the blocks of its arguments'
+    /// temporaries) takes `outer` as its enclosing instance.
+    pub(super) fn pass_outer(&mut self, te: TExprId, outer: TExprId) {
+        let mut at = te;
+        while let TExpr::Block(_, value) = self.prog.expr(at) {
+            at = value;
+        }
+        let (TExpr::New(_, args) | TExpr::NewVia(_, args)) = self.prog.expr(at) else { return };
+        if args.len == 0 {
+            return;
+        }
         let mut items = self.prog.expr_list(args).to_vec();
-        items[0] = outer_te;
+        items[0] = outer;
         let l = self.prog.list(&items);
-        self.prog.exprs[te.idx()] = TExpr::New(c, l);
+        self.prog.exprs[at.idx()] = match self.prog.expr(at) {
+            TExpr::NewVia(s, _) => TExpr::NewVia(s, l),
+            TExpr::New(c, _) => TExpr::New(c, l),
+            _ => unreachable!(),
+        };
+    }
+
+    /// The construction `te` of a class through the prefix `p` of its type where the `new` writes
+    /// none (`import o.*; new Inner(1)`, `new A` for `type A = o.Inner`) takes the prefix's value
+    /// as its enclosing instance, dotty's outer argument from `tpt.tpe.prefix`.
+    pub(super) fn prefix_outer(&mut self, te: TExprId, p: TypeId) {
+        if let Some(outer) = self.prefix_value(p) {
+            self.pass_outer(te, outer);
+        }
+    }
+
+    /// The value of the path `p` as an expression where the typer stands, dotty's `ref` of a
+    /// prefix: `C.this`, a local or a top-level val, a val selected through a path, an object.
+    pub(super) fn prefix_value(&mut self, p: TypeId) -> Option<TExprId> {
+        match self.types.get(p) {
+            Type::This(k) => Some(self.this_ref(k)),
+            Type::Term(s) => self.stable_path_expr(s),
+            Type::Select(q, s) => {
+                let recv = self.prefix_value(q)?;
+                Some(self.prog.add(TExpr::Field(recv, s)))
+            }
+            Type::Class(k, _) if self.syms.class(k).kind == ClassKind::Object => {
+                let enclosing = self.env.frames.iter().any(|f| matches!(f, Frame::Class(x) if *x == k));
+                Some(if enclosing { self.this_ref(k) } else { self.prog.add(TExpr::Module(k)) })
+            }
+            _ => None,
+        }
     }
 
     /// The types the elements of a tuple of `n` are typed against where `expected` is expected:
@@ -2083,13 +2139,18 @@ impl<'a> Worker<'a> {
         self.explicit_new = outer_new;
         self.new_prefixed = outer_prefixed;
         self.part_end(part);
-        if !self.cur_ast().new_outers.is_empty() {
+        if prefixed {
             self.pass_new_outer(e, typed.0);
+        } else if let Type::Nested(p, _) = self.types.get(typed.1) {
+            self.prefix_outer(typed.0, p);
         }
         typed
     }
 
     /// `new C[T](args)`, also with the argument lists an anonymous class expression collects.
+    /// A class nested in a class is constructed through the prefix of its type (`new o.I`, `new
+    /// I` imported from `o`, an alias of `o.I`), its type that class through that prefix, as
+    /// dotty's `newExpr` types it; the prefix's value is its outer instance (`prefix_outer`).
     pub fn type_new(
         &mut self,
         ty: TyExprId,
@@ -2108,6 +2169,43 @@ impl<'a> Worker<'a> {
             _ => (ty, None),
         };
         let ctor = self.resolve_type_ctor(head);
+        let (ctor, prefix) = match self.types.get(ctor) {
+            Type::Nested(p, class) => (class, Some(p)),
+            Type::Lambda(ps, body) => match self.types.get(body) {
+                Type::Nested(p, class) => (self.types.mk(Type::Lambda(ps, class)), Some(p)),
+                _ => (ctor, None),
+            },
+            _ => (ctor, None),
+        };
+        let Some(prefix) = prefix else { return self.type_new_class(ctor, head, targs, args, first_written, span, expected) };
+        // The prefix of a `new`'s class is an immutable path (dotty's `checkClassType`, E083).
+        if !self.types.is_path(prefix) && !matches!(self.types.get(prefix), Type::Class(k, _) if self.syms.class(k).kind == ClassKind::Object) {
+            let msg = format!("{} is not a valid class prefix, since it is not an immutable path", self.show(prefix));
+            self.error(span, msg);
+        }
+        let outer_prefixed = std::mem::replace(&mut self.new_prefixed, true);
+        self.ctor_prefix = Some(prefix);
+        let (te, t) = self.type_new_class(ctor, head, targs, args, first_written, span, expected);
+        self.ctor_prefix = None;
+        self.new_prefixed = outer_prefixed;
+        if t == ERROR {
+            return (te, t);
+        }
+        (te, self.nested_type(prefix, t))
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn type_new_class(
+        &mut self,
+        ctor: TypeId,
+        head: TyExprId,
+        targs: Option<ListRef>,
+        args: &[(ListRef, bool)],
+        first_written: bool,
+        span: Span,
+        expected: Option<TypeId>,
+    ) -> (TExprId, TypeId) {
+        let ast = self.cur_ast();
         let alias_class = match self.types.get(ctor) {
             Type::Lambda(_, rhs) => {
                 let rhs = self.dealias(rhs);

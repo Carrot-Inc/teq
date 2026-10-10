@@ -33,22 +33,88 @@ impl<'a> Worker<'a> {
         }
     }
 
-    /// `p.Inner` for a class nested in a generic class that `p`'s type derives from.
+    /// `p.Inner` for a class nested in a class or trait that `p`'s type derives from: the class
+    /// through the prefix (`inner_class_through`).
     #[cold]
     fn inner_class_member(&mut self, prefix: TypeId, name: Name) -> Option<TypeId> {
         let under = if self.types.is_path(prefix) { self.path_underlying(prefix) } else { prefix };
         let under = self.dealias(under);
-        let c = match self.types.get(under) {
-            Type::Class(c, _) | Type::This(c) => c,
-            _ => return None,
-        };
-        self.complete_class(c);
-        let bases: Vec<ClassId> = self.syms.class(c).base_types.iter().map(|&(b, _)| b).collect();
-        let inner = bases.into_iter().find_map(|b| self.syms.class(b).nested.get(&name).copied())?;
-        if self.syms.class(inner).outer_tparams == 0 {
+        // Each part of an intersection, a self type's (`this: Derivation =>`) included.
+        let mut parts = vec![under];
+        let mut classes = Vec::new();
+        while let Some(t) = parts.pop() {
+            match self.types.get(t) {
+                Type::Inter(a, b) => parts.extend([b, a]),
+                _ => classes.extend(self.class_of(t)),
+            }
+        }
+        let inner = classes.into_iter().find_map(|c| {
+            self.complete_class(c);
+            let bases: Vec<ClassId> = self.syms.class(c).base_types.iter().map(|&(b, _)| b).collect();
+            bases.into_iter().find_map(|b| self.syms.class(b).nested.get(&name).copied())
+        })?;
+        if !self.is_inner_class(inner) {
             return None;
         }
         self.inner_class_through(inner, prefix)
+    }
+
+    /// Whether `c` is a class or trait nested in a class or trait (an object nested there is
+    /// such a class, `ClassInfo::inner_object`): dotty's non-static class, whose type through an
+    /// instance of its owner carries that instance as its prefix (`Type::Nested`) and whose bare
+    /// `Class` is its type through the owner's `this`. An enum nested in a class keeps a single
+    /// companion (DIFFERENCES), and with it one type.
+    pub fn is_inner_class(&self, c: ClassId) -> bool {
+        let info = self.syms.class(c);
+        matches!(info.kind, ClassKind::Class | ClassKind::Trait)
+            && info.mods & crate::ast::mods::JAVA_STATIC == 0
+            && matches!(info.owner, Owner::Class(o) if !matches!(self.syms.class(o).kind, ClassKind::Object | ClassKind::Builtin))
+    }
+
+    /// Whether the prefix of an occurrence of `c` is the instance of its enclosing class that it
+    /// was made in, as dotty's `toPrefix` walks any class that is not static: an inner class, and
+    /// a given's class nested in a class (`po.given_Conversion_I_Int`, whose members name `P.this`).
+    #[inline]
+    fn has_outer_prefix(&self, c: ClassId) -> bool {
+        self.is_inner_class(c) || self.syms.class(c).kind == ClassKind::GivenImpl && self.enclosing_instance_class(c).is_some()
+    }
+
+    /// The class nested in a class that `c` inherits under `name`, which `inherited_type_member`
+    /// names through `c`'s `this` (`TypeRef::Member`): a parent clause, a constructor pattern,
+    /// a completion candidate and a definition's target read it as that class.
+    pub fn inherited_inner_class(&self, c: ClassId, name: Name) -> Option<ClassId> {
+        let bases = &self.syms.class(c).base_types;
+        let k = bases.iter().skip(1).find_map(|&(b, _)| self.syms.class(b).nested.get(&name).copied())?;
+        self.is_inner_class(k).then_some(k)
+    }
+
+    /// Marks an inner class in the store as naming its owner's `this`, as an opaque type of a
+    /// class is (`mark_opaque_in_class`), before any type over it is made: a type reads the
+    /// marks once, when it is made, and `rebase` visits the bare class then.
+    pub(super) fn mark_inner_class(&self, c: ClassId) {
+        if self.is_inner_class(c) {
+            self.types.mark_path_class(c);
+        }
+    }
+
+    /// Whether `c` is an opaque type declared in a class or trait, the store's other kind of
+    /// class that names its owner's `this`.
+    pub fn is_opaque_path_class(&self, c: ClassId) -> bool {
+        self.syms.class(c).kind == ClassKind::Opaque && self.types.is_path_class(c)
+    }
+
+    /// `prefix.C[Ts]` for `class`, the `Class` of an inner class with its own arguments: the
+    /// bare class where the prefix is its owner's `this`, which is what the bare class stands
+    /// for, so that one occurrence has one type. Through the `this` of a class deriving from the
+    /// owner it is that class's (`Sub.this.Inner`, whose enclosing arguments `Sub` fixes).
+    pub fn nested_type(&mut self, prefix: TypeId, class: TypeId) -> TypeId {
+        let Type::Class(c, _) = self.types.get(class) else { return class };
+        if let (Type::This(k), Owner::Class(o)) = (self.types.get(prefix), self.syms.class(c).owner) {
+            if k == o {
+                return class;
+            }
+        }
+        self.types.mk(Type::Nested(prefix, class))
     }
 
     /// `p.A` for a type parameter `A` of the class of `p`'s type, which only a library body
@@ -67,28 +133,126 @@ impl<'a> Worker<'a> {
         self.types.items(args).get(index).copied()
     }
 
-    /// A class nested in a generic class seen through `prefix`: the enclosing class's
-    /// arguments as the prefix gives them, then the class's own parameters, over which it is a
-    /// lambda when it has any. None where the prefix is no instance of the enclosing class.
+    /// An inner class seen through `prefix`, an instance of its owner: `prefix.C` (`nested_type`),
+    /// a lambda over the class's own parameters where it has any; the enclosing classes'
+    /// arguments are the prefix's (`outer_seen_from`), a jar's class's as a source class's. None
+    /// where the prefix is no instance of the enclosing class.
     pub fn inner_class_through(&mut self, c: ClassId, prefix: TypeId) -> Option<TypeId> {
+        // A class defined further down the file has its parameters entered first.
+        self.complete_class_tparams(c);
         let info = self.syms.class(c);
-        let n = info.outer_tparams as usize;
         let Owner::Class(o) = info.owner else { return None };
-        let own: Vec<TParamId> = info.tparams[n..].to_vec();
-        let base = self.base_type(prefix, o)?;
-        let Type::Class(_, args) = self.types.get(base) else { return None };
-        let mut all = self.types.items(args).to_vec();
-        if all.len() != n {
-            return None;
-        }
+        let own: Vec<TParamId> = info.tparams.clone();
+        self.base_type(prefix, o)?;
         let own_types: Vec<TypeId> = own.iter().map(|&p| self.types.param(p)).collect();
-        all.extend_from_slice(&own_types);
-        let class = self.types.class(c, &all);
+        let class = self.types.class(c, &own_types);
+        let class = self.nested_type(prefix, class);
         if own.is_empty() {
             return Some(class);
         }
         let l = self.types.list(&own_types);
         Some(self.types.mk(Type::Lambda(l, class)))
+    }
+
+    /// Whether `k`, or a class `k` derives from, encloses the inner class `b`.
+    fn encloses(&self, k: ClassId, b: ClassId) -> bool {
+        let mut cls = b;
+        for _ in 0..MAX_DEPTH {
+            if !self.is_inner_class(cls) {
+                return false;
+            }
+            let Owner::Class(o) = self.syms.class(cls).owner else { return false };
+            if o == k || self.syms.class(o).base_types.iter().any(|&(x, _)| x == k) {
+                return true;
+            }
+            cls = o;
+        }
+        false
+    }
+
+    /// `t`, a type of the body of the inner class `c` (its enclosing classes' `this`, type
+    /// parameters and inner classes), as seen from the occurrence `prefix.C`: dotty's
+    /// `asSeenFrom` of the enclosing classes, their parameters taking the arguments of the
+    /// prefix's base types (`outer_subst`) and their `this` the prefix (`AsSeenFromMap.toPrefix`).
+    pub fn outer_seen_from(&mut self, t: TypeId, prefix: TypeId, c: ClassId) -> TypeId {
+        let Owner::Class(o) = self.syms.class(c).owner else { return t };
+        let subst = self.outer_subst(prefix, c);
+        let t = self.types.subst(t, &subst);
+        if !self.types.has_paths(t) {
+            return t;
+        }
+        self.rebase(t, &Rebase { this_of: Some((o, prefix)), terms: &[], approx: false, own: false })
+    }
+
+    /// The type parameters of the classes enclosing the inner class `c`, mapped to the arguments
+    /// of the base types of the prefix `prefix.C` gives them, walking outward through each
+    /// prefix's own (dotty's `toPrefix` through `baseType(cls).normalizedPrefix`).
+    pub fn outer_subst(&mut self, prefix: TypeId, c: ClassId) -> Subst {
+        let mut subst = Subst::new();
+        let (mut cls, mut pre) = (c, prefix);
+        for _ in 0..MAX_DEPTH {
+            let Owner::Class(o) = self.syms.class(cls).owner else { break };
+            if !self.has_outer_prefix(cls) {
+                break;
+            }
+            let Some(base) = self.base_type(pre, o) else { break };
+            let (next, class) = match self.types.get(base) {
+                Type::Nested(p, class) => (Some(p), class),
+                _ => (None, base),
+            };
+            if let Type::Class(_, args) = self.types.get(class) {
+                self.settle_class(o);
+                let tparams = self.syms.class(o).tparams.clone();
+                subst.extend(tparams.into_iter().zip(self.types.items(args).iter().copied()));
+            }
+            match next {
+                Some(p) => (cls, pre) = (o, p),
+                None => break,
+            }
+        }
+        subst
+    }
+
+    /// `C.this` of a class `k` enclosing `c`, whose instance `prefix` is, or enclosing a base
+    /// class of `c` (the class declaring the member the type is of), dotty's `toPrefix`: the
+    /// prefix of the occurrence of that class the prefix's type gives (its `normalizedPrefix`,
+    /// the owner's `this` for a bare class), outward until a class deriving from `k`.
+    fn enclosing_this(&mut self, k: ClassId, c: ClassId, prefix: TypeId) -> Option<TypeId> {
+        if let Some(found) = self.to_prefix(k, c, prefix) {
+            return Some(found);
+        }
+        let bases: Vec<ClassId> = self.syms.class(c).base_types.iter().skip(1).map(|&(b, _)| b).collect();
+        let enclosed: Vec<ClassId> = bases.into_iter().filter(|&b| self.encloses(k, b)).collect();
+        enclosed.into_iter().find_map(|b| self.to_prefix(k, b, prefix))
+    }
+
+    /// The walk of `enclosing_this` from the inner class `cls`.
+    fn to_prefix(&mut self, k: ClassId, cls: ClassId, prefix: TypeId) -> Option<TypeId> {
+        let (mut cls, mut pre) = (cls, prefix);
+        for _ in 0..MAX_DEPTH {
+            if !self.has_outer_prefix(cls) {
+                return None;
+            }
+            let Owner::Class(o) = self.syms.class(cls).owner else { return None };
+            // A path to an object nested in a class (`PTP.this.Product`) is its own instance:
+            // its prefix is what the object is selected on, as dotty's `normalizedPrefix` of
+            // the object's `TermRef` is.
+            let next = match self.types.get(pre) {
+                Type::Select(q, v) if self.syms.class(cls).inner_object == Some(v) => q,
+                _ => {
+                    let base = self.base_type(pre, cls)?;
+                    match self.types.get(base) {
+                        Type::Nested(p, _) => p,
+                        _ => self.types.mk(Type::This(o)),
+                    }
+                }
+            };
+            if o == k || self.syms.class(o).base_types.iter().any(|&(b, _)| b == k) {
+                return Some(next);
+            }
+            (cls, pre) = (o, next);
+        }
+        None
     }
 
     /// A type another module's class exports (`car.Fuel` of `class Car: export Engine.*`): its
@@ -172,10 +336,7 @@ impl<'a> Worker<'a> {
     pub fn nested_class_through(&mut self, prefix: TypeId, name: Name) -> Option<ClassId> {
         let under = if self.types.is_path(prefix) { self.path_underlying(prefix) } else { prefix };
         let under = self.dealias(under);
-        let c = match self.types.get(under) {
-            Type::Class(c, _) | Type::This(c) => c,
-            _ => return None,
-        };
+        let c = self.types.named_class(under)?;
         self.complete_class(c);
         if let Some(&n) = self.syms.class(c).nested.get(&name) {
             return Some(n);
@@ -187,10 +348,43 @@ impl<'a> Worker<'a> {
             self.complete_class(b);
             self.syms.class(b).nested.get(&name).copied()
         })?;
-        if self.types.is_path_class(n) && self.syms.class(c).kind == ClassKind::Object {
+        if self.is_opaque_path_class(n) && self.syms.class(c).kind == ClassKind::Object {
             return Some(self.derived_opaque(n, c));
         }
         Some(n)
+    }
+
+    /// A class that a base of `c` declares, which `c` names as a member: dotty's constructor
+    /// proxy for it is a member of that base (`NamerOps.addConstructorProxies`), inherited as
+    /// any (`Box(x)` in an object extending the trait that declares `class Box`). Only a class
+    /// that needs a proxy has one (`needs_constructor_proxy`). A base not yet completed is not
+    /// completed for it; an opaque type's stand-in is none.
+    pub fn inherited_nested_class(&mut self, c: ClassId, name: Name) -> Option<ClassId> {
+        // No base declares a class or a type member: nothing to look for (`inherits_types`).
+        if !self.syms.class(c).inherits_types {
+            return None;
+        }
+        let n = self.syms.class(c).base_types.len();
+        for i in 1..n {
+            let b = self.syms.class(c).base_types[i].0;
+            let info = self.syms.class(b);
+            if info.nested.is_empty() {
+                continue;
+            }
+            if let Some(&k) = info.nested.get(&name) {
+                return self.needs_constructor_proxy(k).then_some(k);
+            }
+        }
+        None
+    }
+
+    /// Whether the class `k` is applied through its constructor where its name is a term, dotty's
+    /// `NamerOps.needsConstructorProxies`: no trait, abstract class or object, none with a companion
+    /// object. A case class nested in a class has no companion object in teq; its creator
+    /// application is what the companion's synthetic `apply` would make.
+    pub fn needs_constructor_proxy(&self, k: ClassId) -> bool {
+        let info = self.syms.class(k);
+        info.kind == ClassKind::Class && info.mods & crate::ast::mods::ABSTRACT == 0 && info.companion.is_none() && !self.is_opaque_path_class(k)
     }
 
     /// The path a path stands for: a val declared with a singleton type (`val b: a.type`)
@@ -292,6 +486,17 @@ impl<'a> Worker<'a> {
             },
             Type::Class(c, args) => self.member_in_class(c, args, name, prefix),
             Type::This(c) => self.member_in_class(c, EMPTY_LIST, name, prefix),
+            // The class's member, its enclosing classes' parameters the prefix's arguments; their
+            // `this` the lookup's prefix leads to (`enclosing_this`).
+            Type::Nested(p, class) => {
+                let Type::Class(c, args) = self.types.get(class) else { return None };
+                let found = self.member_in_class(c, args, name, prefix)?;
+                let subst = self.outer_subst(p, c);
+                Some(match found {
+                    MemberInfo::Alias(t) => MemberInfo::Alias(self.types.subst(t, &subst)),
+                    MemberInfo::Bounds(lo, hi) => MemberInfo::Bounds(self.types.subst(lo, &subst), self.types.subst(hi, &subst)),
+                })
+            }
             Type::Param(p) => {
                 let upper = self.syms.tparam(p).upper;
                 (upper != ANY).then(|| self.member_in_type(upper, name, prefix)).flatten()
@@ -865,14 +1070,21 @@ impl<'a> Worker<'a> {
                     Some((_, owner_ty)) => {
                         let subst = self.owner_subst(owner_ty);
                         let ty = self.types.subst(ret, &subst);
+                        // A member of the prefix's own class keeps an enclosing class's `this`
+                        // it names, whatever the class derives from (dotty's `asSeenFrom` from
+                        // the member's owner: `A.this.C` of `class B(x: C) extends A` in `A`).
                         let ty = match self.class_of(under) {
-                            Some(c) => self.as_seen_from(ty, p, c),
+                            Some(c) => self.member_seen_from(ty, p, c, s),
                             None => ty,
                         };
                         // The outer class's `this` left by a member of an inner class, as a
                         // selection of it is typed (`x.Underlying.type` of a pattern's `x`).
                         if self.types.has_paths(ty) && self.member_of_inner_class(s) {
-                            self.seen_from_enclosing_this(ty)
+                            let owner = match self.syms.sym(s).owner {
+                                Owner::Class(o) => Some(o),
+                                _ => None,
+                            };
+                            self.seen_from_enclosing_this_of(ty, owner)
                         } else {
                             ty
                         }
@@ -1099,6 +1311,13 @@ impl<'a> Worker<'a> {
             Type::This(k) => match r.this_of {
                 Some((c, prefix)) if k == c => prefix,
                 Some((c, prefix)) if !r.own && (self.syms.class(c).base_types.iter().any(|&(b, _)| b == k) || self.self_type_derives(c, k)) => prefix,
+                // An enclosing class's `this`, through the prefix of the occurrence of `c` the
+                // prefix's type gives (dotty's `toPrefix`), or of a base class of `c` that `k`
+                // encloses (`context.InitState` a class extends: `Context.this` in its members
+                // is `context`). An object's `this` is no prefix of anything.
+                Some((c, prefix)) if self.is_inner_class(c) || self.syms.class(k).kind != ClassKind::Object => {
+                    self.enclosing_this(k, c, prefix).unwrap_or(t)
+                }
                 _ => t,
             },
             // The innermost binding of a parameter wins where an inline method expands inside
@@ -1114,14 +1333,26 @@ impl<'a> Worker<'a> {
                     self.types.mk(Type::Select(np, s))
                 } else {
                     // The path was replaced by a type: the selection is its member's type, the
-                    // one a refinement gives it first (`C { val q: p.type }`).
+                    // one a refinement gives it first (`C { val q: p.type }`), and the member the
+                    // type has under the name, as dotty's `TermRef(pre, name)` denotes it: the
+                    // object `D1.M` that overrides `val M: Manifest`.
                     let name = self.syms.sym(s).name;
                     if let Some(refined) = self.refined_term(np, name) {
                         return self.refinement_sig(refined).ret;
                     }
+                    let object = matches!(self.types.get(np), Type::Class(c, _) if self.syms.class(c).kind == ClassKind::Object);
                     match self.find_member(np, name) {
-                        Some((_, owner_ty)) => {
-                            let ret = self.sig_of(s).ret;
+                        // A member of an object is one value wherever it is reached from, the
+                        // path `member_path` gives it (`D2.M`).
+                        Some((found, _)) if object && matches!(self.syms.sym(found).kind, SymKind::Val | SymKind::Given | SymKind::EnumValue(_)) && !self.syms.sym(found).by_name => {
+                            self.types.mk(Type::Term(found))
+                        }
+                        Some((found, _)) if object && matches!(self.syms.sym(found).kind, SymKind::Object(_)) => {
+                            let SymKind::Object(c) = self.syms.sym(found).kind else { unreachable!() };
+                            self.types.class(c, &[])
+                        }
+                        Some((found, owner_ty)) => {
+                            let ret = self.sig_of(found).ret;
                             let subst = self.owner_subst(owner_ty);
                             let ty = self.types.subst(ret, &subst);
                             self.widen_path(ty)
@@ -1162,12 +1393,49 @@ impl<'a> Worker<'a> {
             Type::Class(c, args) => {
                 let items: Vec<TypeId> = self.types.items(args).to_vec();
                 let nargs: Vec<TypeId> = items.iter().map(|&a| self.rebase(a, r)).collect();
-                let seen = if self.types.is_path_class(c) { self.opaque_seen_from(c, r) } else { c };
+                if self.types.is_path_class(c) && self.syms.class(c).kind != ClassKind::Opaque {
+                    // An inner class's bare type is its type through its owner's `this`, which
+                    // the rebase may move.
+                    if let Owner::Class(o) = self.syms.class(c).owner {
+                        let this = self.types.mk(Type::This(o));
+                        let np = self.rebase(this, r);
+                        if np != this {
+                            let class = self.types.class(c, &nargs);
+                            return self.nested_type(np, class);
+                        }
+                    }
+                }
+                let seen = if self.is_opaque_path_class(c) { self.opaque_seen_from(c, r) } else { c };
                 if nargs == items && seen == c {
                     t
                 } else {
                     self.types.class(seen, &nargs)
                 }
+            }
+            // An inner class as a type constructor (`Bounded[.., Parameter]`) is its type through
+            // its owner's `this` as well: through another prefix, the constructor of `p.C`.
+            Type::Ctor(c) if self.syms.class(c).kind != ClassKind::Opaque => {
+                let Owner::Class(o) = self.syms.class(c).owner else { return t };
+                let this = self.types.mk(Type::This(o));
+                let np = self.rebase(this, r);
+                if np == this {
+                    return t;
+                }
+                self.inner_class_through(c, np).unwrap_or(t)
+            }
+            Type::Nested(p, class) => {
+                let np = self.rebase(p, r);
+                if r.approx && np != p && matches!(self.types.get(np), Type::Var(_)) {
+                    return self.approx_member(t);
+                }
+                let Type::Class(c, args) = self.types.get(class) else { return t };
+                let items: Vec<TypeId> = self.types.items(args).to_vec();
+                let nargs: Vec<TypeId> = items.iter().map(|&a| self.rebase(a, r)).collect();
+                if np == p && nargs == items {
+                    return t;
+                }
+                let class = self.types.class(c, &nargs);
+                self.nested_type(np, class)
             }
             Type::AppParam(p, args) => {
                 let items: Vec<TypeId> = self.types.items(args).to_vec();
@@ -1453,7 +1721,7 @@ impl<'a> Worker<'a> {
                 self.complete_class(c);
                 Ok(self.inline_this_of(c).unwrap_or_else(|| self.this_prefix(c)))
             }
-            TermRef::Class(_) => Err("a class"),
+            TermRef::Class(_) | TermRef::ValueClass(..) | TermRef::ModuleClass(..) => Err("a class"),
             TermRef::Package(_) => Err("a package"),
         }
     }

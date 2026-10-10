@@ -663,6 +663,7 @@ impl<'a> Worker<'a> {
                             work.push(Node::Test(b.0));
                         }
                         TypeTest::Class(c) | TypeTest::Trait(c) => work.push(Node::Class(c.0)),
+                        TypeTest::Outer(_, inner) => work.push(Node::Test(inner.0)),
                         _ => {}
                     }
                 }

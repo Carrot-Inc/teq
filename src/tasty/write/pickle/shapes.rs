@@ -188,7 +188,7 @@ impl<'w, 'a> P<'w, 'a> {
     /// returning `Option`.
     pub(super) fn std_unapply_key(&mut self, c: ClassId) -> (String, String) {
         let cls = self.w.library_class_name(c, "");
-        let n = self.w.syms.class(c).own_tparams().len();
+        let n = self.w.syms.class(c).tparams.len();
         let mut sig = Vec::new();
         if n > 0 {
             sig.push(SigParam::Types(n));
@@ -212,7 +212,7 @@ impl<'w, 'a> P<'w, 'a> {
     /// `case_apply`): the constructor's one clause, returning the class.
     pub(super) fn case_apply_key(&mut self, c: ClassId) -> (String, Vec<SigParam>, String) {
         let cls = self.w.library_class_name(c, "");
-        let n = self.w.syms.class(c).own_tparams().len();
+        let n = self.w.syms.class(c).tparams.len();
         let mut sig = Vec::new();
         if n > 0 {
             sig.push(SigParam::Types(n));
@@ -316,7 +316,7 @@ impl<'w, 'a> P<'w, 'a> {
             return None;
         }
         self.w.complete_class(c);
-        let own: Vec<TypeId> = self.w.syms.class(c).own_tparams().iter().map(|&p| self.w.types.param(p)).collect();
+        let own: Vec<TypeId> = self.w.syms.class(c).tparams.iter().map(|&p| self.w.types.param(p)).collect();
         let this = self.w.types.class(c, &own);
         let base = self.w.base_type(this, d)?;
         let subst = self.w.owner_subst(base);
@@ -609,7 +609,7 @@ impl<'w, 'a> P<'w, 'a> {
         for (ci, clause) in info.ctor.iter().enumerate() {
             for p in &clause.params {
                 if p.has_default && !java {
-                    self.getter_shape(&companion, "<init>", index, info.own_tparams().len(), &info.ctor, ci, p.ty);
+                    self.getter_shape(&companion, "<init>", index, info.tparams.len(), &info.ctor, ci, p.ty);
                 }
                 index += 1;
             }

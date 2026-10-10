@@ -3,7 +3,7 @@
 //! (locals, using evidence, the `this` of enclosing classes) is passed to the constructor, so the
 //! class itself can be emitted at the top level like any other.
 
-use super::{Env, Frame, TermRef, Worker};
+use super::{Env, Frame, Worker};
 use crate::ast::{self, mods, DefId, DefKind, TyExpr};
 use crate::source::{FileId, Span};
 use crate::symbols::*;
@@ -118,11 +118,10 @@ impl<'a> Worker<'a> {
             _ => ty,
         };
         let ctor = self.resolve_type_ctor(head);
-        let class = match self.types.get(ctor) {
-            Type::Ctor(c) | Type::Class(c, _) => c,
-            Type::Error => return Err(()),
-            _ => return Ok(None),
-        };
+        if ctor == ERROR {
+            return Err(());
+        }
+        let Some(class) = self.ctor_class(ctor) else { return Ok(None) };
         self.complete_class(class);
         Ok(matches!(self.syms.class(class).kind, ClassKind::Class | ClassKind::EnumCase).then_some(class))
     }
@@ -134,13 +133,20 @@ impl<'a> Worker<'a> {
             _ => ty,
         };
         let ctor = self.resolve_type_ctor(head);
-        let class = match self.types.get(ctor) {
-            Type::Ctor(c) | Type::Class(c, _) => c,
-            _ => return false,
-        };
+        let Some(class) = self.ctor_class(ctor) else { return false };
         self.complete_class(class);
         let info = self.syms.class(class);
         info.kind == ClassKind::Trait && info.js != JsKind::Scala
+    }
+
+    /// The class a resolved type constructor names: a class, a class through its prefix, a
+    /// generic one through its prefix (`[A] =>> o.C[A]`).
+    fn ctor_class(&self, ctor: TypeId) -> Option<ClassId> {
+        match self.types.get(ctor) {
+            Type::Ctor(c) => Some(c),
+            Type::Lambda(_, body) if matches!(self.types.get(body), Type::Nested(..)) => self.types.named_class(body),
+            _ => self.types.named_class(ctor).filter(|_| !matches!(self.types.get(ctor), Type::This(_))),
+        }
     }
 
     /// `new T { val a = e }` for a JS trait `T`: an object literal of the members the body gives,
@@ -345,7 +351,28 @@ impl<'a> Worker<'a> {
             return self.resolve_type(ty);
         }
         let ctor = self.resolve_type_ctor(ty);
-        let Type::Ctor(c) = self.types.get(ctor) else { return ctor };
+        let c = match self.types.get(ctor) {
+            Type::Ctor(c) => c,
+            // A generic class through its prefix (`[S] =>> context.NonAcceptingState[S]`) takes
+            // the arguments of the expected type over that prefix.
+            Type::Lambda(_, body) if matches!(self.types.get(body), Type::Nested(..)) => {
+                let c = self.types.named_class(body);
+                let from_expected = self.concrete_expected(expected).map(|t| self.dealias(t));
+                if let (Some(c), Some(t)) = (c, from_expected) {
+                    if let Type::Class(ec, args) = self.types.get(self.types.strip_nested(t)) {
+                        if ec == c {
+                            let args = self.types.items(args).to_vec();
+                            return self.types.apply_ctor(ctor, &args);
+                        }
+                    }
+                }
+                match c {
+                    Some(c) => c,
+                    None => return ctor,
+                }
+            }
+            _ => return ctor,
+        };
         let from_expected = self.concrete_expected(expected).map(|t| self.dealias(t));
         if let Some(t) = from_expected {
             if let Type::Class(ec, _) = self.types.get(t) {
@@ -675,16 +702,8 @@ impl<'a> Worker<'a> {
     /// checked and they are known; a `new` typed before that is completed then.
     pub fn new_instance(&mut self, c: ClassId, args: ast::ListRef, span: Span) -> TExprId {
         if let Some(o) = self.outer_class(c) {
-            let outer = self.outer_this_sym(o);
             let inside = self.inside_class(c);
-            let holder = self.holder_of(o);
-            let enclosed = self.env.frames.iter().any(|f| matches!(f, Frame::Class(k) if *k == holder));
-            // A jar's `new p.C` gets its prefix as the enclosing instance once typed.
-            if !inside && !enclosed && !self.new_prefixed && !self.is_library_class(c) {
-                let msg = format!("not supported yet: an instance of {}, a class nested in a class, made outside that class", self.name_str(self.syms.class(c).name));
-                self.error(span, msg);
-            }
-            let mut items = if !inside && enclosed { vec![self.this_ref(holder)] } else { self.capture_args(&[outer], inside, &[]) };
+            let mut items = vec![self.new_outer_arg(c, o, span)];
             // What the class takes of its lifted owner's captures, passed here where the owner
             // is done; inside the owner they are given once it is (`capture_through_nested`).
             if let Some(captures) = self.anon_captures.get(&c).cloned() {
@@ -716,6 +735,26 @@ impl<'a> Worker<'a> {
                 e
             }
         }
+    }
+
+    /// The enclosing instance an instance of `c`, a class nested in the class `o`, is made
+    /// with, its constructors' first argument (dotty's `ExplicitOuter.OuterOps.args`): `this` of
+    /// the enclosing instance deriving from `o`, the outer instance inside `c` itself (the outer
+    /// parameter in one of its secondary constructors, `ctor_outer`), a placeholder that the
+    /// prefix's value takes the place of where it is made through one (`prefix_outer`).
+    pub(super) fn new_outer_arg(&mut self, c: ClassId, o: ClassId, span: Span) -> TExprId {
+        let outer = self.outer_this_sym(o);
+        let inside = self.inside_class(c);
+        let holder = self.holder_of(o);
+        let enclosed = self.env.frames.iter().any(|f| matches!(f, Frame::Class(k) if *k == holder));
+        if !inside && !enclosed && !self.new_prefixed && !self.is_library_class(c) {
+            let msg = format!("not supported yet: an instance of {}, a class nested in a class, made outside that class", self.name_str(self.syms.class(c).name));
+            self.error(span, msg);
+        }
+        if !inside && enclosed {
+            return self.this_ref(holder);
+        }
+        self.capture_args(&[outer], inside, &[])[0]
     }
 
     /// The local class `c` has been checked: what its body captures leads its constructor
@@ -1651,7 +1690,8 @@ impl<'a> Worker<'a> {
     pub(super) fn outer_class(&self, c: ClassId) -> Option<ClassId> {
         let info = self.syms.class(c);
         let Owner::Class(o) = info.owner else { return None };
-        (matches!(info.kind, ClassKind::Class | ClassKind::GivenImpl) && self.syms.class(o).kind != ClassKind::Object).then_some(o)
+        // A Java class's static member class is static: it takes no outer (`cls.isStatic`).
+        (matches!(info.kind, ClassKind::Class | ClassKind::GivenImpl) && info.mods & mods::JAVA_STATIC == 0 && self.syms.class(o).kind != ClassKind::Object).then_some(o)
     }
 
     /// `C.this` from inside a class or trait nested in `C` whose instance does not hold it in a
@@ -1706,7 +1746,7 @@ impl<'a> Worker<'a> {
     pub(super) fn enclosing_instance_class(&self, c: ClassId) -> Option<ClassId> {
         let info = self.syms.class(c);
         let Owner::Class(o) = info.owner else { return None };
-        let nested = matches!(info.kind, ClassKind::Class | ClassKind::Trait | ClassKind::GivenImpl) && self.syms.class(o).kind != ClassKind::Object;
+        let nested = matches!(info.kind, ClassKind::Class | ClassKind::Trait | ClassKind::GivenImpl) && info.mods & mods::JAVA_STATIC == 0 && self.syms.class(o).kind != ClassKind::Object;
         nested.then_some(o)
     }
 
@@ -1770,12 +1810,6 @@ impl<'a> Worker<'a> {
             if !self.has_outer_accessor_bases(c) {
                 return Vec::new();
             }
-            // A parent's path is typed here first, where a wait for what it names is allowed, so
-            // that typing it again under the lock finds it done.
-            let nested: Vec<(ClassId, ClassId)> = self.syms.class(c).base_types.iter().filter(|&&(b, _)| b != c).filter_map(|&(b, _)| Some((b, self.enclosing_instance_class(b)?))).collect();
-            for (b, o) in nested {
-                self.parent_path_outer(c, b, o);
-            }
             self.with_loader(|w| w.define_outer_accessors_unlocked(c))
         } else {
             self.define_outer_accessors_unlocked(c)
@@ -1799,7 +1833,12 @@ impl<'a> Worker<'a> {
             if b != c && self.superclass_mixes_in(c, b) {
                 continue;
             }
-            let path = if b == c { None } else { self.parent_path_outer(c, b, o) };
+            // A pure interface takes no outer (`ExplicitOuter.needsOuterIfReferenced`): no
+            // body of it reads one, and no outer test asks for one (`outer_tested`).
+            if b != c && self.pure_interface(b) {
+                continue;
+            }
+            let path = if b == c { None } else { self.parent_path_outer(c, b) };
             let Some(body) = path.or_else(|| self.outer_instance_for(c, o)) else { continue };
             let declared = self.outer_accessor(b);
             let s = if b == c {
@@ -1846,87 +1885,19 @@ impl<'a> Worker<'a> {
         Some(self.prog.add(TExpr::Field(recv, val)))
     }
 
-    /// The enclosing instance the parent clause of `c` naming the trait `b` gives where it is
-    /// written through a path (`object Z extends C.D`, `class I extends Test.a.Inner`, `new
-    /// b.Inner {}`, `this.a.X`, `p.H.a.X`): the path's value where it is an instance of `o`, as
-    /// scalac takes the parent type's prefix for the outer of the trait it names. The clause is
-    /// the one whose type, dealiased, is `b`; the path is resolved where the clause stands, among the
-    /// class's type parameters but outside its members and its body's imports, and its value read
-    /// from inside the class, which reaches an enclosing instance as its members do. What is no such
-    /// value (a method, another class's instance) is typed and dropped, its diagnostics with it.
-    fn parent_path_outer(&mut self, c: ClassId, b: ClassId, o: ClassId) -> Option<TExprId> {
-        let (file, def, span) = {
-            let info = self.syms.class(c);
-            (info.file, info.def?, info.span)
-        };
-        let ast = self.ast(file);
-        let DefKind::Class(cls) = &ast.def(def).kind else { return None };
-        let clauses: Vec<(ast::TyExprId, (PathHead, Vec<crate::intern::Name>))> = cls.parents.iter().filter_map(|p| Some((p.ty, clause_path(ast, p.ty)?))).collect();
-        if clauses.is_empty() {
+    /// The enclosing instance the parents of `c` give the trait `b` nested in a class: the
+    /// prefix of `c`'s base type of `b` (`object Z extends C.D`, `class I extends Test.a.Inner`,
+    /// `new b.Inner {}`, an alias of one), its value read from inside the class, as dotty's
+    /// `ExplicitOuter.outerPrefix` reads the parent type's prefix. None where the base type is
+    /// the bare trait or the trait through an enclosing class's `this`, whose enclosing instance
+    /// is the one in scope (`outer_instance_for`).
+    fn parent_path_outer(&mut self, c: ClassId, b: ClassId) -> Option<TExprId> {
+        let base = self.syms.class(c).base_types.iter().find(|&&(k, _)| k == b).map(|&(_, t)| t)?;
+        let Type::Nested(p, _) = self.types.get(base) else { return None };
+        if matches!(self.types.get(p), Type::This(_)) {
             return None;
         }
-        let mut clause_env = self.env_at(file, Owner::Class(c), ast.def(def).span.start);
-        if matches!(clause_env.frames.last(), Some(Frame::Class(k)) if *k == c) {
-            clause_env.frames.pop();
-        }
-        let tparams = self.syms.class(c).tparams.iter().map(|&p| (self.syms.tparam(p).name, p)).collect();
-        clause_env.frames.push(Frame::Locals { names: Vec::new(), tparams, givens: Vec::new(), classes: Vec::new(), aliases: Vec::new(), owner: self.sites.owners.len() as u32 });
-        // The path's typing is an attempt: kept where it gives the enclosing instance, gone
-        // otherwise.
-        let mark = self.attempt();
-        let found = self.with_env(clause_env.clone(), |t| {
-            clauses.into_iter().find_map(|(ty, path)| {
-                let before = t.diags.items.len();
-                let resolved = t.resolve_type(ty);
-                let resolved = t.dealias(resolved);
-                if matches!(t.types.get(resolved), Type::Class(k, _) if k == b) {
-                    return Some(path);
-                }
-                t.discard_diagnostics(before);
-                None
-            })
-        });
-        let value = found.and_then(|(head, names)| self.path_value(clause_env, head, &names, span));
-        if let Some((te, ty)) = value {
-            let clean = ty != ERROR && !self.attempt_failed(&mark);
-            if clean && self.class_of(ty).is_some_and(|k| k == o || self.derives_from(k, o)) {
-                self.close(mark);
-                return Some(te);
-            }
-        }
-        self.retract(mark);
-        None
-    }
-
-    /// A path's value read here, its head resolved in `clause_env`: `this` or `C.this` the
-    /// enclosing instance, a name the term it binds there, packages walked to their first term,
-    /// then each name selected in turn.
-    fn path_value(&mut self, clause_env: Env, head: PathHead, names: &[crate::intern::Name], span: Span) -> Option<(TExprId, TypeId)> {
-        let (mut te, mut ty, mut rest) = match head {
-            PathHead::This | PathHead::QualThis(_) => {
-                let k = self.with_env(clause_env, |t| match head {
-                    PathHead::QualThis(n) => t.qualified_this_class(n),
-                    _ => t.this_class(),
-                })?;
-                (self.this_ref(k), self.this_prefix(k), names)
-            }
-            PathHead::Name(n) => {
-                let mut r = self.with_env(clause_env, |t| t.lookup_term(n))?;
-                let (mut name, mut rest) = (n, names);
-                while let TermRef::Package(p) = r {
-                    let (&next, more) = rest.split_first()?;
-                    r = self.pkg_term(p, next)?;
-                    (name, rest) = (next, more);
-                }
-                let super::apply::Callee::Value(te, ty) = self.term_callee(r, name, span)? else { return None };
-                (te, ty, rest)
-            }
-        };
-        while let Some((&n, more)) = rest.split_first() {
-            (te, ty) = self.apply_member(te, ty, n, None, Vec::new(), span, None);
-            rest = more;
-        }
-        Some((te, ty))
+        self.prefix_value(p)
     }
 
     /// Whether the superclass of `c`, a class teq checks, mixes in the trait `b`, whose outer
@@ -1939,6 +1910,10 @@ impl<'a> Worker<'a> {
     /// when the class is every worker's, since the class's check and
     /// the bodies that name the enclosing instance may run on different workers.
     pub(super) fn outer_this_sym(&mut self, c: ClassId) -> SymId {
+        if let Some((o, p)) = self.ctor_outer.filter(|&(o, _)| o == c) {
+            debug_assert_eq!(o, c);
+            return p;
+        }
         if let Some(&s) = self.outer_this.get(&c) {
             return s;
         }
@@ -1974,43 +1949,6 @@ impl<'a> Worker<'a> {
         let s = self.new_local(name, SymKind::Val, ty, span);
         self.outer_this.insert(c, s);
         s
-    }
-}
-
-/// The head of a path written as a type's prefix.
-#[derive(Clone, Copy)]
-enum PathHead {
-    This,
-    QualThis(crate::intern::Name),
-    Name(crate::intern::Name),
-}
-
-/// The path a parent clause writes before the class it names (`H.a` of `H.a.X[T]`).
-fn clause_path(ast: &ast::Ast, ty: ast::TyExprId) -> Option<(PathHead, Vec<crate::intern::Name>)> {
-    let written = match ast.ty(ty) {
-        TyExpr::Apply(f, _) => f,
-        _ => ty,
-    };
-    let TyExpr::Select(q, _) = ast.ty(written) else { return None };
-    path_parts(ast, q)
-}
-
-/// A path written as a type's prefix (`Test.a` of `Test.a.Inner`, `this.a`, `O.this.a`): its
-/// head and the names selected after it.
-fn path_parts(ast: &ast::Ast, t: ast::TyExprId) -> Option<(PathHead, Vec<crate::intern::Name>)> {
-    match ast.ty(t) {
-        TyExpr::Name(crate::names::THIS) => Some((PathHead::This, Vec::new())),
-        TyExpr::Name(n) => Some((PathHead::Name(n), Vec::new())),
-        TyExpr::Select(k, crate::names::THIS) => match ast.ty(k) {
-            TyExpr::Name(n) => Some((PathHead::QualThis(n), Vec::new())),
-            _ => None,
-        },
-        TyExpr::Select(q, n) => {
-            let (head, mut names) = path_parts(ast, q)?;
-            names.push(n);
-            Some((head, names))
-        }
-        _ => None,
     }
 }
 

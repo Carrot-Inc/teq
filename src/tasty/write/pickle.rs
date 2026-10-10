@@ -236,8 +236,10 @@ impl Index {
             if let Owner::Class(o) = info.owner {
                 index.nested.entry(o).or_default().push(k);
             }
+            // A child registers with its parent's class whatever the parent's prefix
+            // (`Namer.registerIfChildInCreationContext`, `parent.classSymbol`).
             for &p in &info.parents {
-                if let Type::Class(pc, _) = w.types.get(p) {
+                if let Type::Class(pc, _) = w.types.get(w.types.strip_nested(p)) {
                     index.children.entry(pc).or_default().push(k);
                 }
             }
@@ -1410,7 +1412,7 @@ impl<'w, 'a> P<'w, 'a> {
         self.buf.byte(TEMPLATE);
         let len = self.buf.begin_length();
         let tmark = self.tparams.len();
-        let own: Vec<TParamId> = info.own_tparams().to_vec();
+        let own: Vec<TParamId> = info.tparams.to_vec();
         for &tp in &own {
             let at = self.buf.addr();
             self.tparams.push((tp, TpRef::InClass(at, c)));
@@ -1636,7 +1638,7 @@ impl<'w, 'a> P<'w, 'a> {
     /// the class sets as the trait's fields.
     fn trait_args(&mut self, c: ClassId, p: TypeId) -> Option<(Vec<crate::tir::TExprId>, Option<SymId>, Option<crate::ast::ListRef>)> {
         let p = self.w.zonk(p);
-        let Type::Class(k, _) = self.w.types.get(p) else { return None };
+        let Type::Class(k, _) = self.w.types.get(self.w.types.strip_nested(p)) else { return None };
         let &i = self.index.tclasses.get(&c)?;
         let init = self.w.prog.classes[i as usize].init.clone();
         if let Some(pc) = init.iter().find_map(|x| match x {
@@ -1696,7 +1698,7 @@ impl<'w, 'a> P<'w, 'a> {
         self.buf.nat(n as u64);
         let tmark = self.tparams.len();
         let pmark = self.params.len();
-        let own: Vec<TParamId> = info.own_tparams().to_vec();
+        let own: Vec<TParamId> = info.tparams.to_vec();
         let ids = self.bind_tparams(&own);
         self.write_bound_tparams(&own, &ids, false);
         let ctor = info.ctor.clone();
@@ -1779,7 +1781,7 @@ impl<'w, 'a> P<'w, 'a> {
             self.buf.nat(n as u64);
             let tmark = self.tparams.len();
             let pmark = self.params.len();
-            let own: Vec<TParamId> = info.own_tparams().to_vec();
+            let own: Vec<TParamId> = info.tparams.to_vec();
             let ids = self.bind_tparams(&own);
             self.write_bound_tparams(&own, &ids, false);
             let sig = self.w.sig_of(s).clone();
@@ -2378,9 +2380,18 @@ impl<'w, 'a> P<'w, 'a> {
     /// them.
     fn exported_type(&mut self, n: Name, t: crate::typer::TypeRef) {
         use crate::typer::TypeRef;
+        // An alias the qualifier inherits, read through its `this` (`TypeRef(Vocab.this, Label)`):
+        // the forwarder refers to the alias it names, as for one the qualifier declares.
+        let t = match t {
+            TypeRef::Member(c, m) => {
+                let bases: Vec<ClassId> = self.w.syms.class(c).base_types.iter().map(|&(b, _)| b).collect();
+                bases.into_iter().find_map(|b| self.w.syms.class(b).type_aliases.get(&m).copied()).map_or(t, TypeRef::Alias)
+            }
+            _ => t,
+        };
         match t {
             TypeRef::Class(k) => {
-                let ty = if self.w.syms.class(k).own_tparams().is_empty() { self.w.types.class(k, &[]) } else { self.w.types.mk(Type::Ctor(k)) };
+                let ty = if self.w.syms.class(k).tparams.is_empty() { self.w.types.class(k, &[]) } else { self.w.types.mk(Type::Ctor(k)) };
                 self.ty(ty);
             }
             TypeRef::Alias(a) => {
@@ -2793,7 +2804,7 @@ impl<'w, 'a> P<'w, 'a> {
             DefKind::Given(g) => (&g.tparams, &g.clauses),
             _ => return,
         };
-        let own = info.own_tparams();
+        let own = &info.tparams;
         if tparams.len() == own.len() {
             for (tp, &id) in tparams.iter().zip(own) {
                 if !tp.annots.is_empty() {
@@ -4019,7 +4030,7 @@ impl<'w, 'a> P<'w, 'a> {
         if let Some(k) = companion_case {
             let ki = self.class_info(k);
             if self.has_product_mirror(k) && ki.mods & mods::ABSTRACT == 0 {
-                let tparams: Vec<TParamId> = ki.own_tparams().to_vec();
+                let tparams: Vec<TParamId> = ki.tparams.to_vec();
                 self.mirror_members(k, &tparams);
             }
         }
@@ -4035,7 +4046,7 @@ impl<'w, 'a> P<'w, 'a> {
     }
 
     fn is_trait_type(&self, t: TypeId) -> bool {
-        match self.w.types.get(t) {
+        match self.w.types.get(self.w.types.strip_nested(t)) {
             Type::Class(c, _) => self.w.syms.class(c).kind == ClassKind::Trait && !self.library_class_of_std_trait(c),
             _ => false,
         }
@@ -4069,7 +4080,7 @@ impl<'w, 'a> P<'w, 'a> {
         if !matches!(info.kind, ClassKind::Class | ClassKind::EnumCase | ClassKind::Enum | ClassKind::Trait) {
             return;
         }
-        let tparams: Vec<TParamId> = info.own_tparams().to_vec();
+        let tparams: Vec<TParamId> = info.tparams.to_vec();
         let clauses = info.ctor.clone();
         // The typed defaults after the captures, parallel to the constructor's parameters.
         let typed: Vec<Option<crate::tir::TExprId>> = self.index.tclasses.get(&k).map(|&i| {
@@ -4151,7 +4162,7 @@ impl<'w, 'a> P<'w, 'a> {
     /// A value case scalac's `DesugarEnums` makes with `$new`: of an enum without type
     /// parameters, without a parent of its own.
     fn simple_enum_case(&self, e: ClassId, k: ClassId) -> bool {
-        if !self.w.syms.class(e).own_tparams().is_empty() {
+        if !self.w.syms.class(e).tparams.is_empty() {
             return false;
         }
         let info = self.w.syms.class(k);
@@ -4172,7 +4183,7 @@ impl<'w, 'a> P<'w, 'a> {
         self.mark_tree();
         self.buf.byte(TYPEBOUNDS);
         let b = self.buf.begin_length();
-        let n_tparams = self.w.syms.class(e).own_tparams().len();
+        let n_tparams = self.w.syms.class(e).tparams.len();
         self.mono_type(e, n_tparams);
         self.buf.end_length(b);
         self.write_flags(&[SYNTHETIC]);
@@ -4205,7 +4216,7 @@ impl<'w, 'a> P<'w, 'a> {
 
     /// The enum's type with a wildcard for each type parameter.
     fn enum_wild_type(&mut self, e: ClassId) -> TypeId {
-        let n = self.w.syms.class(e).own_tparams().len();
+        let n = self.w.syms.class(e).tparams.len();
         let args: Vec<TypeId> = (0..n).map(|_| WILD).collect();
         self.w.types.class(e, &args)
     }
@@ -4444,7 +4455,7 @@ impl<'w, 'a> P<'w, 'a> {
                 self.copy_method(c, info, private_ctor);
             }
             // The default getters stay when the class defines its own `copy`.
-            let tparams: Vec<TParamId> = info.own_tparams().to_vec();
+            let tparams: Vec<TParamId> = info.tparams.to_vec();
             let first: Vec<ParamSig> = info.ctor.first().map(|c| c.params.clone()).unwrap_or_default();
             let user_copy = self.user_defines(c, "copy");
             for (i, p) in first.iter().enumerate() {
@@ -4531,7 +4542,7 @@ impl<'w, 'a> P<'w, 'a> {
         self.buf.nat(n as u64);
         let tmark = self.tparams.len();
         let pmark = self.params.len();
-        let tparams: Vec<TParamId> = info.own_tparams().to_vec();
+        let tparams: Vec<TParamId> = info.tparams.to_vec();
         let mut clauses = info.ctor.clone();
         if let Some(first) = clauses.first_mut() {
             for p in &mut first.params {
@@ -4564,7 +4575,7 @@ impl<'w, 'a> P<'w, 'a> {
     /// `apply`, `unapply` (`unapplySeq` for a repeated last parameter) and, in a companion the
     /// source does not write, `toString`, which `Desugar` gives a case class's companion.
     fn case_companion_head(&mut self, c: ClassId, info: &ClassInfo, synthetic_companion: bool) {
-        let tparams: Vec<TParamId> = info.own_tparams().to_vec();
+        let tparams: Vec<TParamId> = info.tparams.to_vec();
         let private_ctor = info.mods & mods::PRIVATE_CTOR != 0;
         let abstract_class = info.mods & mods::ABSTRACT != 0;
         let companion = info.companion;
@@ -4841,7 +4852,7 @@ impl<'w, 'a> P<'w, 'a> {
         self.buf.byte(TEMPLATE);
         let len = self.buf.begin_length();
         let tmark = self.tparams.len();
-        let own: Vec<TParamId> = info.own_tparams().to_vec();
+        let own: Vec<TParamId> = info.tparams.to_vec();
         for &tp in &own {
             let at = self.buf.addr();
             self.tparams.push((tp, TpRef::InClass(at, k)));
@@ -5074,6 +5085,21 @@ impl<'w, 'a> P<'w, 'a> {
             "iarray" if std => "IArray".to_string(),
             _ => stem,
         }
+    }
+
+    /// A class nested in a class, through `prefix`: `TYPEREF name prefix`, or `TYPEREFsymbol
+    /// addr prefix` for a class of this file.
+    fn nested_typeref(&mut self, c: ClassId, prefix: TypeId) {
+        self.placed = true;
+        if self.is_local(Key::Class(c)) {
+            self.buf.byte(TYPEREFSYMBOL);
+            self.def_ref(Key::Class(c));
+        } else {
+            let n = self.simple_name(self.w.syms.class(c).name);
+            self.buf.byte(TYPEREF);
+            self.buf.nat(n as u64);
+        }
+        self.ty(prefix);
     }
 
     /// A class unapplied: `TYPEREF name prefix`, or `TYPEREFsymbol addr prefix` for a class of
@@ -5385,10 +5411,7 @@ impl<'w, 'a> P<'w, 'a> {
                 self.buf.byte(APPLIEDTYPE);
                 let len = self.buf.begin_length();
                 self.class_typeref(c);
-                // A class nested in a generic class of a jar takes the outer's arguments
-                // first; the reference names the class's own.
-                let outer = self.w.syms.class(c).outer_tparams as usize;
-                for a in args.into_iter().skip(outer) {
+                for a in args {
                     self.ty_arg(a);
                 }
                 self.buf.end_length(len);
@@ -5511,6 +5534,22 @@ impl<'w, 'a> P<'w, 'a> {
                 self.buf.byte(TYPEREF);
                 self.buf.nat(n as u64);
                 self.ty(prefix);
+            }
+            // `TYPEREF C p`, its own arguments applied, as scalac pickles `p.C[Ts]`.
+            Type::Nested(prefix, class) => {
+                let Type::Class(c, args) = self.w.types.get(class) else { return self.ty(class) };
+                let args: Vec<TypeId> = self.w.types.items(args).to_vec();
+                let len = (!args.is_empty()).then(|| {
+                    self.buf.byte(APPLIEDTYPE);
+                    self.buf.begin_length()
+                });
+                self.nested_typeref(c, prefix);
+                if let Some(len) = len {
+                    for a in args {
+                        self.ty_arg(a);
+                    }
+                    self.buf.end_length(len);
+                }
             }
             Type::AppMember(m, args) => {
                 let args: Vec<TypeId> = self.w.types.items(args).to_vec();

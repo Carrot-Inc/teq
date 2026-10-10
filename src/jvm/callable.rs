@@ -1387,6 +1387,10 @@ impl<'a> Gen<'a> {
         let syms = cx.input.syms;
         let (Owner::Class(k), Some(sig)) = (syms.sym(member).owner, syms.sym(member).info.sig.clone()) else { return accessor };
         let base = syms.class(t).base_types.iter().find(|&&(b, _)| b == k).map(|&(_, ty)| ty);
+        let base = base.map(|b| match cx.input.types.get(b) {
+            Type::Nested(_, class) => class,
+            _ => b,
+        });
         let Some(Type::Class(_, args)) = base.map(|b| cx.input.types.get(b)) else { return accessor };
         let mut subst: Subst = syms.class(k).tparams.iter().copied().zip(cx.input.types.items(args).iter().copied()).collect();
         if subst.is_empty() {

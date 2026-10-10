@@ -1,5 +1,6 @@
 use super::profile::{About, Kind, Outcome};
 use super::resolve::TermRef;
+use super::implicits::GivenScope;
 use super::state::{ArgSlot, Cache, Dual};
 use super::{Worker, Undo};
 use crate::ast::{Expr, ExprId, ListRef, Pat, PatId, TyExpr, TyExprId};
@@ -1585,7 +1586,11 @@ impl<'a> Worker<'a> {
             ty = self.seen_from_prefix(ty, prefix, s);
             if self.member_of_inner_class(s) {
                 ty = self.seen_from_outer_steps(s, recv, ty);
-                ty = self.seen_from_enclosing_this(ty);
+                let owner = match self.syms.sym(s).owner {
+                    Owner::Class(o) => Some(o),
+                    _ => None,
+                };
+                ty = self.seen_from_enclosing_this_of(ty, owner);
             }
         }
         if let Some(c) = self.module_alias(s, ty) {
@@ -1790,7 +1795,7 @@ impl<'a> Worker<'a> {
     /// The type of `member` seen from `prefix` of class `c`. A member declared in `c` itself
     /// moves only `c.this`: an ancestor's `this` written in it is an enclosing instance
     /// (`lState: Schedule.this.State` in an anonymous `Schedule`).
-    fn member_seen_from(&mut self, t: TypeId, prefix: TypeId, c: ClassId, member: SymId) -> TypeId {
+    pub(super) fn member_seen_from(&mut self, t: TypeId, prefix: TypeId, c: ClassId, member: SymId) -> TypeId {
         if self.syms.sym(member).owner == Owner::Class(c) {
             self.own_seen_from(t, prefix, c)
         } else {
@@ -1870,6 +1875,14 @@ impl<'a> Worker<'a> {
     #[cold]
     #[inline(never)]
     pub(super) fn seen_from_enclosing_this(&mut self, t: TypeId) -> TypeId {
+        self.seen_from_enclosing_this_of(t, None)
+    }
+
+    /// `seen_from_enclosing_this` for a member of the class `owner`: an enclosing class that
+    /// is the owner or encloses it sees an outer class's `this` of the member as that outer
+    /// instance, whatever the class derives from (dotty's `toPrefix` from the member's owner:
+    /// `A.this.C` of `x` in `class B(x: C) extends A` nested in `A`, read inside `B`).
+    pub(super) fn seen_from_enclosing_this_of(&mut self, t: TypeId, owner: Option<ClassId>) -> TypeId {
         if !self.types.has_paths(t) {
             return t;
         }
@@ -1877,8 +1890,21 @@ impl<'a> Worker<'a> {
             super::Frame::Class(d) => Some(*d),
             _ => None,
         }).collect();
+        let encloses_owner = |w: &Self, d: ClassId| {
+            let mut at = owner.map(Owner::Class);
+            while let Some(Owner::Class(k)) = at {
+                if k == d {
+                    return true;
+                }
+                at = Some(w.syms.class(k).owner);
+            }
+            false
+        };
         let mut t = t;
         for d in classes {
+            if encloses_owner(self, d) {
+                continue;
+            }
             if self.syms.class(d).base_types.len() > 1 || self.syms.class(d).declared_self.is_some() {
                 let prefix = self.this_prefix(d);
                 t = self.as_seen_from(t, prefix, d);
@@ -2183,6 +2209,16 @@ impl<'a> Worker<'a> {
                 self.member_callee(recv, recv_ty, m)
             }
             TermRef::Class(c) => Callee::Ctor(c),
+            // The imported proxy applies as its selection on the value: `o.Inner(args)`.
+            TermRef::ValueClass(v, c) => {
+                let (recv, recv_ty) = self.import_value_ref(v, span)?;
+                Callee::Selection { recv, recv_ty, name: self.syms.class(c).name }
+            }
+            TermRef::ModuleClass(m, c) => {
+                let recv = self.module_ref(m, span)?;
+                let recv_ty = self.types.class(m, &[]);
+                Callee::Selection { recv, recv_ty, name: self.syms.class(c).name }
+            }
             TermRef::Package(_) => {
                 let msg = format!("{} is a package, not a value", self.name_str(name));
                 self.error(span, msg);
@@ -2661,6 +2697,7 @@ impl<'a> Worker<'a> {
         expected: Option<TypeId>,
         as_function: bool,
     ) -> (TExprId, TypeId) {
+        let prefix = self.ctor_prefix.take();
         self.complete_class(c);
         // A class whose completion is under way has no parents yet: one constructed from an
         // initialiser that its own completion reads (`class C { val a = new D; import a.*;
@@ -2717,6 +2754,10 @@ impl<'a> Worker<'a> {
         }
         let enum_parent = info.parents.first().copied().filter(|_| kind == ClassKind::EnumCase);
         let sig = Arc::new(MethodSig { tparams, clauses: info.ctor.clone(), ret: self_ty });
+        let sig = match prefix {
+            Some(p) => self.ctor_sig_through(sig, p, c),
+            None => sig,
+        };
         let mut lists = lists;
         // A Java class has its constructors as alternatives only, each with a parameter list.
         let has_normal_clause = sig.clauses.iter().any(|c| !c.is_using) || (!secondaries.is_empty() && self.is_java_class(c));
@@ -2729,7 +2770,16 @@ impl<'a> Worker<'a> {
         }
         if !secondaries.is_empty() && !as_function {
             let primary = self.syms.class(c).primary_ctor.filter(|_| self.ctor_accessible(c)).map(|s| (s, sig));
-            let secondaries = secondaries.into_iter().map(|s| (s, self.sig_arc(s))).collect();
+            let secondaries = secondaries
+                .into_iter()
+                .map(|s| {
+                    let sig = self.sig_arc(s);
+                    (s, match prefix {
+                        Some(p) => self.ctor_sig_through(sig, p, c),
+                        None => sig,
+                    })
+                })
+                .collect();
             return self.construct_overloaded(c, primary, secondaries, targs, lists, span, expected);
         }
         let call = MethodCall { recv: None, sym: SymId(u32::MAX), owner_subst: Vec::new(), ext_recv: None, prefix: None };
@@ -2754,6 +2804,18 @@ impl<'a> Worker<'a> {
         }
         self.enum_case_new = Some((te, precise));
         (te, widened)
+    }
+
+    /// A constructor's signature for an instance of the inner class `c` made through `prefix`
+    /// (`new o.I(a)`): its parameters and its result seen from the prefix, the constructor of
+    /// dotty's `o.I` (`outer_seen_from`).
+    pub(super) fn ctor_sig_through(&mut self, sig: Arc<MethodSig>, prefix: TypeId, c: ClassId) -> Arc<MethodSig> {
+        let mut seen = (*sig).clone();
+        for p in seen.clauses.iter_mut().flat_map(|cl| cl.params.iter_mut()) {
+            p.ty = self.outer_seen_from(p.ty, prefix, c);
+        }
+        seen.ret = self.outer_seen_from(seen.ret, prefix, c);
+        Arc::new(seen)
     }
 
     /// Applies a method (or constructor when `ctor` is set). In trial mode an inapplicable
@@ -2942,6 +3004,10 @@ impl<'a> Worker<'a> {
         };
         if let (Some(idx), Some((_, recv_ty))) = (recv_clause, call.ext_recv) {
             let pty = self.types.subst(sig.clauses[idx].params[0].ty, &subst);
+            // Through a leading using parameter the receiver's type is open until that given is
+            // found (`receiver_param_type`).
+            let leading: Vec<SymId> = sig.clauses[..idx].iter().flat_map(|c| c.params.iter().map(|p| p.sym)).collect();
+            let pty = self.approx_paths(pty, &leading, &mut Vec::new());
             let mark = self.snapshot();
             if !self.is_sub(recv_ty, pty) {
                 self.rollback(mark);
@@ -2978,9 +3044,15 @@ impl<'a> Worker<'a> {
         // several of them only when the last is reached, as scalac constrains the outermost
         // application after the inner ones typed their arguments: `fold("-")(f)` against a
         // `Shown` takes `B` from the first argument, and the whole result converts.
-        // A result that names no path is matched with the expected type before the arguments
-        // are typed, whatever paths the parameters name (a `using trace: Tracer.instance.Type`).
-        let constrain_by_expected = explicit_lists == normal_clauses && !self.types.has_paths(sig.ret);
+        // A result that names no parameter is matched with the expected type before the
+        // arguments are typed, whatever paths the parameters name (a `using trace:
+        // Tracer.instance.Type`) and whatever other paths it names (an inner class's `Test.this`
+        // in `Tree[A]`), as dotty constrains a result that is not dependent (`isResultDependent`).
+        let names_param = self.types.has_paths(sig.ret) && {
+            let params: Vec<SymId> = sig.clauses.iter().flat_map(|c| c.params.iter().map(|p| p.sym)).collect();
+            self.types.names_term(sig.ret, &params)
+        };
+        let constrain_by_expected = explicit_lists == normal_clauses && !names_param;
         if constrain_by_expected && explicit_lists <= 1 {
             open_expected = self.constrain_result_by_expected(&mut ret_ty, expected);
         }
@@ -3017,6 +3089,27 @@ impl<'a> Worker<'a> {
         for (ci, clause) in sig.clauses.iter().enumerate() {
             if Some(ci) == recv_clause {
                 let (recv, recv_ty) = call.ext_recv.unwrap();
+                // Through a leading using parameter the receiver was taken at an approximation
+                // of its type; with the givens found it is checked at the type their paths give
+                // it, as dotty's `extMethodApply` types the receiver as the next argument of the
+                // method applied to them (Applications.scala 2969, `tryApplyingExtensionMethod`).
+                if ci > 0 && self.param_paths.len() > paths_mark {
+                    let leading: Vec<SymId> = sig.clauses[..ci].iter().flat_map(|c| c.params.iter().map(|p| p.sym)).collect();
+                    let pty = self.param_type(clause.params[0].ty, &subst);
+                    if self.types.has_paths(pty) && !self.types.names_term(pty, &leading) {
+                        let mark = self.snapshot();
+                        if !self.is_sub(recv_ty, pty) {
+                            self.rollback(mark);
+                            let msg = format!(
+                                "value {} is not a member of {}: the extension method takes {}",
+                                self.name_str(self.syms.sym(call.sym).name),
+                                self.show(recv_ty),
+                                self.show(pty)
+                            );
+                            self.error(span, msg);
+                        }
+                    }
+                }
                 // A by-name receiver (`extension (n: => Int)`) is passed as its thunk, each use
                 // evaluating it.
                 args_out.push(if clause.params[0].by_name { self.by_name_thunk(recv) } else { recv });
@@ -3914,6 +4007,20 @@ impl<'a> Worker<'a> {
             }
         }
         if self.syms.sym(call.sym).name == names::INIT {
+            // A secondary constructor of a class nested in a class takes the enclosing instance
+            // first, as the primary one does (`new_instance`).
+            let args = match self.syms.sym(call.sym).owner {
+                Owner::Class(c) => match self.outer_class(c) {
+                    Some(o) => {
+                        let at = self.syms.sym(call.sym).span;
+                        let outer = self.new_outer_arg(c, o, at);
+                        let items: Vec<TExprId> = std::iter::once(outer).chain(self.prog.expr_list(args).iter().copied()).collect();
+                        self.prog.list(&items)
+                    }
+                    None => args,
+                },
+                _ => args,
+            };
             return self.prog.add(TExpr::NewVia(call.sym, args));
         }
         if let Some(te) = self.companion_widening(call, args) {
@@ -5235,29 +5342,50 @@ impl<'a> Worker<'a> {
                 return self.apply_member(array, array_ty, names::APPLY, None, lists, span, expected);
             }
         }
-        if let Type::Class(c, _) = self.types.get(recv_ty) {
-            if self.is_module_class(c) {
-                if let Some(&nested) = self.syms.class(c).nested.get(&name) {
+        if let Some(c) = self.types.named_class(recv_ty) {
+            let module = self.is_module_class(c);
+            // A class nested in the receiver's class or in one it derives from applies through
+            // its constructor proxy, a member of the class that declares it
+            // (`NamerOps.addConstructorProxies`): on an object, or on an instance whose class it is
+            // nested in, which it takes as its outer one (`o.Inner(1)` is `new o.Inner(1)`).
+            let nested = match self.syms.class(c).nested.get(&name) {
+                Some(&n) => Some(n),
+                None => self.inherited_nested_class(c, name),
+            };
+            if module || nested.is_some_and(|n| self.outer_class(n).is_some() && self.needs_constructor_proxy(n)) {
+                if let Some(nested) = nested {
                     // A class nested in an object nested in a class takes the object, the
                     // receiver, as its outer instance (`Product.Getter(n, f)`).
                     let inner = self.outer_class(nested).is_some();
+                    // The prefix of a creator application is an immutable path, as dotty's
+                    // `newExpr` asks of a `new`'s class type (E083).
+                    if inner && !self.is_stable_path(recv) {
+                        let msg = format!("{} is not a valid class prefix, since it is not an immutable path", self.show(recv_ty));
+                        self.error(span, msg);
+                    }
                     let prefixed = inner || self.new_prefixed;
                     let outer_prefixed = std::mem::replace(&mut self.new_prefixed, prefixed);
+                    if inner && self.is_inner_class(nested) {
+                        self.ctor_prefix = Some(self.path_of(recv).unwrap_or(recv_ty));
+                    }
                     let (te, ty) = self.apply_callee(Callee::Ctor(nested), targs, lists, span, expected);
+                    self.ctor_prefix = None;
                     self.new_prefixed = outer_prefixed;
                     let case = self.syms.class(nested).mods & crate::ast::mods::CASE != 0 || self.syms.class(nested).kind == ClassKind::EnumCase;
                     if self.deps.is_some() && case {
                         self.deps_node(te, super::deps::Node::Apply(nested));
                     }
+                    // The instance's type is the class through the receiver, as dotty's
+                    // `applyProxyResultType` gives the proxy's `new` the prefix's type.
                     if inner {
-                        if let TExpr::New(k, args) = self.prog.expr(te) {
-                            if args.len > 0 {
-                                let mut items = self.prog.expr_list(args).to_vec();
-                                items[0] = recv;
-                                let l = self.prog.list(&items);
-                                self.prog.exprs[te.idx()] = TExpr::New(k, l);
+                        self.pass_outer(te, recv);
+                        let ty = match self.types.get(ty) {
+                            Type::Class(..) => {
+                                let prefix = self.path_of(recv).unwrap_or(recv_ty);
+                                self.nested_type(prefix, ty)
                             }
-                        }
+                            _ => ty,
+                        };
                         return (te, ty);
                     }
                     if self.is_path(recv) {
@@ -7898,7 +8026,7 @@ impl<'a> Worker<'a> {
             if let Some(m) = alt.module {
                 for &s in &alt.syms {
                     if matches!(self.syms.sym(s).owner, Owner::Class(c) if c != m) {
-                        self.ext_modules.push((s, m));
+                        self.ext_modules.push((s, GivenScope::Module(m)));
                     }
                 }
             }
@@ -7932,19 +8060,9 @@ impl<'a> Worker<'a> {
     /// types as `f(qual)` (Typer.scala 4285), which selects the extension under a member's retry.
     /// Nothing else is resolved ahead of the application.
     fn receiver_fits(&mut self, call: &MethodCall, recv_ty: TypeId) -> bool {
-        let sig = self.sig_arc(call.sym);
         let mark = self.snapshot();
-        let mut subst = call.owner_subst.clone();
-        for &tp in &sig.tparams {
-            let v = self.fresh_var();
-            subst.push((tp, v));
-        }
-        let ext_clauses = self.syms.sym(call.sym).ext_clauses as usize;
-        let fits = match sig.clauses.iter().take(ext_clauses).position(|c| !c.is_using) {
-            Some(idx) => {
-                let pty = self.types.subst(sig.clauses[idx].params[0].ty, &subst);
-                self.is_sub(recv_ty, pty)
-            }
+        let fits = match self.receiver_param_type(call, true) {
+            Some(pty) => self.is_sub(recv_ty, pty),
             None => true,
         };
         self.rollback(mark);
@@ -8085,7 +8203,36 @@ impl<'a> Worker<'a> {
     /// until the caller truncates it.
     pub(super) fn implicit_scope_extensions(&mut self, t: TypeId, name: Name) -> Vec<SymId> {
         let mut out = Vec::new();
-        for m in self.implicit_scope_objects(t) {
+        for found in self.implicit_scope_objects(t) {
+            let m = match found {
+                GivenScope::Module(m) => m,
+                // A path of the scope: the extensions of its class and bases, read on it (dotty's
+                // `OfTypeImplicits.refs` of the `addPath` references, `filterMatching`).
+                GivenScope::Path(p) if self.scope_accessible(found) => {
+                    let under = self.path_underlying(p);
+                    let Some(c) = self.class_of(under) else { continue };
+                    self.complete_class(c);
+                    let start = out.len();
+                    let bases: Vec<ClassId> = self.syms.class(c).base_types.iter().map(|&(b, _)| b).collect();
+                    for b in bases {
+                        self.complete_class(b);
+                        out.extend(self.syms.class(b).extensions.iter().copied().filter(|&s| self.syms.sym(s).name == name));
+                    }
+                    let mut k = start;
+                    while k < out.len() {
+                        if self.is_given_accessible(out[k]) {
+                            k += 1;
+                        } else {
+                            out.remove(k);
+                        }
+                    }
+                    for &s in &out[start..] {
+                        self.ext_modules.push((s, GivenScope::Path(p)));
+                    }
+                    continue;
+                }
+                _ => continue,
+            };
             let start = out.len();
             self.module_extensions(m, name, &mut out);
             // A private or protected extension is a candidate where its member is reachable.
@@ -8100,7 +8247,7 @@ impl<'a> Worker<'a> {
             for &s in &out[start..] {
                 if let Owner::Class(c) = self.syms.sym(s).owner {
                     if c != m {
-                        self.ext_modules.push((s, m));
+                        self.ext_modules.push((s, GivenScope::Module(m)));
                     }
                 }
             }
@@ -8108,16 +8255,27 @@ impl<'a> Worker<'a> {
         out
     }
 
+    /// The substitution of the owner `c`'s parameters and the prefix the signature is seen from,
+    /// of an extension the implicit scope reaches through `scope`: an object inheriting it, or a
+    /// path whose class has it (`o`'s `extension (i: I)` for an `o.I`).
+    pub(super) fn scope_extension_site(&mut self, scope: GivenScope, c: ClassId) -> (Subst, Option<TypeId>) {
+        match scope {
+            GivenScope::Module(m) => (self.trait_member_subst(super::exports::TraitMemberSite::Module(m), c), self.inherited_extension_prefix(Some(m))),
+            GivenScope::Path(p) => (self.trait_member_subst(super::exports::TraitMemberSite::Path(p), c), Some(p)),
+            _ => (Vec::new(), None),
+        }
+    }
+
     /// The object of the implicit scope the `i`-th of `candidates`, an extension inherited from
     /// a trait, was found in. One method reached through two objects (`Html` and `Svg` of one
     /// trait) is two candidates in the order the search pushed their objects, which are the last
     /// entries for it.
-    fn extension_module_at(&self, candidates: &[SymId], i: usize) -> Option<ClassId> {
+    fn extension_module_at(&self, candidates: &[SymId], i: usize) -> Option<GivenScope> {
         let i = i % candidates.len();
         let sym = candidates[i];
         let total = candidates.iter().filter(|&&s| s == sym).count();
         let before = candidates[..i].iter().filter(|&&s| s == sym).count();
-        let found: Vec<ClassId> = self.ext_modules.iter().filter(|&&(s, _)| s == sym).map(|&(_, m)| m).collect();
+        let found: Vec<GivenScope> = self.ext_modules.iter().filter(|&&(s, _)| s == sym).map(|&(_, m)| m).collect();
         found.len().checked_sub(total).map(|start| found[start + before])
     }
 
@@ -8180,11 +8338,15 @@ impl<'a> Worker<'a> {
                 Owner::Class(c) => {
                     let module = if implicit_scope { self.extension_module_at(&all[..strict_count], i) } else { None };
                     let site = match module {
-                        Some(m) => super::exports::TraitMemberSite::Module(m),
-                        None => self.trait_member_site(sym, c),
+                        Some(GivenScope::Module(m)) => super::exports::TraitMemberSite::Module(m),
+                        Some(GivenScope::Path(p)) => super::exports::TraitMemberSite::Path(p),
+                        _ => self.trait_member_site(sym, c),
                     };
                     owner_subst = self.trait_member_subst(site, c);
-                    prefix = self.inherited_extension_prefix(module);
+                    prefix = match module {
+                        Some(GivenScope::Path(p)) => Some(p),
+                        _ => self.inherited_extension_prefix(module.and_then(GivenScope::module)),
+                    };
                     Some(self.trait_member_receiver(site))
                 }
                 _ => None,
@@ -8278,7 +8440,10 @@ impl<'a> Worker<'a> {
         }
         for (j, &sym) in all.iter().enumerate() {
             let module = if implicit_scope { self.extension_module_at(&all[..strict_count], j) } else { None };
-            let prefix = self.inherited_extension_prefix(module);
+            let prefix = match module {
+                Some(GivenScope::Path(p)) => Some(p),
+                _ => self.inherited_extension_prefix(module.and_then(GivenScope::module)),
+            };
             let call = MethodCall { recv: None, sym, owner_subst: Vec::new(), ext_recv: None, prefix };
             // The receiver converted for each extension is an attempt of its own.
             let mark = self.attempt();
@@ -8404,14 +8569,14 @@ impl<'a> Worker<'a> {
         let lexical = self.lexical_extensions(names::APPLY);
         let mark = self.ext_modules.len();
         let from_scope = self.implicit_scope_extensions(t, names::APPLY);
-        let modules: Vec<Option<ClassId>> = (0..from_scope.len()).map(|i| self.extension_module_at(&from_scope, i)).collect();
-        let candidates: Vec<(SymId, Option<ClassId>)> = lexical.into_iter().map(|s| (s, None)).chain(from_scope.into_iter().zip(modules)).collect();
+        let modules: Vec<Option<GivenScope>> = (0..from_scope.len()).map(|i| self.extension_module_at(&from_scope, i)).collect();
+        let candidates: Vec<(SymId, Option<GivenScope>)> = lexical.into_iter().map(|s| (s, None)).chain(from_scope.into_iter().zip(modules)).collect();
         self.ext_modules.truncate(mark);
         let declared = candidates.into_iter().any(|(sym, module)| {
-            let prefix = self.inherited_extension_prefix(module);
-            let owner_subst = match (module, self.syms.sym(sym).owner) {
-                (Some(m), Owner::Class(c)) => self.trait_member_subst(super::exports::TraitMemberSite::Module(m), c),
-                _ => Vec::new(),
+            let (owner_subst, prefix) = match (module, self.syms.sym(sym).owner) {
+                (Some(scope), Owner::Class(c)) => self.scope_extension_site(scope, c),
+                (Some(GivenScope::Module(m)), _) => (Vec::new(), self.inherited_extension_prefix(Some(m))),
+                _ => (Vec::new(), None),
             };
             let call = MethodCall { recv: None, sym, owner_subst, ext_recv: None, prefix };
             let mark = self.snapshot();
@@ -8509,13 +8674,18 @@ impl<'a> Worker<'a> {
         let ext_clauses = self.syms.sym(call.sym).ext_clauses as usize;
         let idx = sig.clauses.iter().take(ext_clauses).position(|c| !c.is_using)?;
         let mut subst = call.owner_subst.clone();
-        if fresh {
-            for &tp in &sig.tparams {
-                let v = self.fresh_var();
-                subst.push((tp, v));
-            }
+        if !fresh {
+            return Some(self.types.subst(sig.clauses[idx].params[0].ty, &subst));
         }
-        Some(self.types.subst(sig.clauses[idx].params[0].ty, &subst))
+        for &tp in &sig.tparams {
+            let v = self.fresh_var();
+            subst.push((tp, v));
+        }
+        let pty = self.types.subst(sig.clauses[idx].params[0].ty, &subst);
+        // A receiver's type through a leading using parameter (`self: c.Term` of
+        // `extension (using c: Ctx)`) is open until that given is found.
+        let leading: Vec<SymId> = sig.clauses[..idx].iter().flat_map(|c| c.params.iter().map(|p| p.sym)).collect();
+        Some(self.approx_paths(pty, &leading, &mut Vec::new()))
     }
 
     /// Whether every receiver of `a` is a receiver of `b` and not the other way round.

@@ -2558,6 +2558,11 @@ fn visit_test<M: Meet>(m: &mut M, cx: Cx, test: TestId) {
             visit_test(m, cx, a);
             visit_test(m, cx, b);
         }
+        // The outer accessor is called on the tested instance.
+        TypeTest::Outer(accessor, inner) => {
+            m.call_method(cx, false, accessor);
+            visit_test(m, cx, inner);
+        }
         _ => {}
     }
 }

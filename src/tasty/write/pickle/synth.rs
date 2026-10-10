@@ -178,7 +178,7 @@ impl<'w, 'a> P<'w, 'a> {
                 if at != params.len() {
                     return self.fail("a constructor call's parameters".to_string());
                 }
-                let targs: Vec<TypeId> = self.w.syms.class(c).own_tparams().to_vec().into_iter().map(|p| self.w.types.param(p)).collect();
+                let targs: Vec<TypeId> = self.w.syms.class(c).tparams.to_vec().into_iter().map(|p| self.w.types.param(p)).collect();
                 self.synth_new(c, &targs, &clauses);
             }
             Synth::Param => self.param_ref(params[0]),
@@ -292,7 +292,7 @@ impl<'w, 'a> P<'w, 'a> {
 
     /// The class applied to its own type parameters.
     fn synth_class_type(&mut self, c: ClassId) -> TypeId {
-        let tps: Vec<TParamId> = self.w.syms.class(c).own_tparams().to_vec();
+        let tps: Vec<TParamId> = self.w.syms.class(c).tparams.to_vec();
         let args: Vec<TypeId> = tps.iter().map(|&p| self.w.types.param(p)).collect();
         self.w.types.class(c, &args)
     }
@@ -717,7 +717,7 @@ impl<'w, 'a> P<'w, 'a> {
         // The clauses as scalac's constructor has them (`normalizeIfConstructor`), a repeated
         // parameter's argument spliced.
         let mut clauses: Vec<Vec<usize>> = args.to_vec();
-        let subst: Subst = self.w.syms.class(c).own_tparams().iter().copied().zip(targs.iter().copied()).collect();
+        let subst: Subst = self.w.syms.class(c).tparams.iter().copied().zip(targs.iter().copied()).collect();
         let mut repeated: Vec<Vec<Option<TypeId>>> = ctor.iter().map(|cl| cl.params.iter().map(|p| p.repeated.then(|| self.w.types.subst(p.ty, &subst))).collect()).collect();
         if ctor.is_empty() {
             clauses = vec![Vec::new()];
@@ -778,7 +778,7 @@ impl<'w, 'a> P<'w, 'a> {
         if self.w.syms.class(c).ctor.len() > 1 {
             return self.fail("fromProduct of a class of several clauses".to_string());
         }
-        let tps: Vec<TParamId> = self.w.syms.class(c).own_tparams().to_vec();
+        let tps: Vec<TParamId> = self.w.syms.class(c).tparams.to_vec();
         let subst: Subst = tps.iter().map(|&tp| (tp, ANY)).collect();
         let targs: Vec<TypeId> = tps.iter().map(|_| ANY).collect();
         let fields: Vec<(String, TypeId)> = self.case_fields(c).into_iter().map(|(n, t)| (n, self.w.types.subst(t, &subst))).collect();
@@ -938,7 +938,7 @@ impl<'w, 'a> P<'w, 'a> {
 
     /// `Array.apply[E](values*)(ClassTag.apply[E](classOf[E]))`.
     fn enum_array(&mut self, e: ClassId) {
-        if !self.w.syms.class(e).own_tparams().is_empty() {
+        if !self.w.syms.class(e).tparams.is_empty() {
             return self.fail("the values of an enum of type parameters".to_string());
         }
         let et = self.w.types.class(e, &[]);
@@ -1277,7 +1277,7 @@ impl<'w, 'a> P<'w, 'a> {
     /// `expandEnumModule` with the members `SyntheticMembers` gives an enum value's class: `P` the
     /// enum's constructor call, or the case's parent with what the case passes it.
     fn enum_value_class(&mut self, e: ClassId, et: TypeId, case: Option<ClassId>, label: EnumLabel) {
-        if case.is_none() && !self.w.syms.class(e).own_tparams().is_empty() {
+        if case.is_none() && !self.w.syms.class(e).tparams.is_empty() {
             return self.fail("the values of an enum of type parameters".to_string());
         }
         let Some(&k) = self.enclosing.last() else { return self.fail("an enum's companion".to_string()) };

@@ -415,7 +415,7 @@ impl<'a> Worker<'a> {
             Type::Term(s) => self.syms.sym(s).sig.as_ref().map(|sig| sig.ret),
             _ => Some(prefix),
         };
-        let Some(Type::Class(c, _) | Type::This(c)) = widened.map(|t| self.types.get(t)) else { return };
+        let Some(c) = widened.and_then(|t| self.types.named_class(t)) else { return };
         if let Some(&a) = self.syms.class(c).type_aliases.get(&name) {
             if let Some(d) = self.deps.as_mut() {
                 d.record(Ev::Alias(a));
@@ -2090,6 +2090,11 @@ impl<'c, 'a> Collector<'c, 'a> {
                     self.type_deps(a);
                 }
             }
+            // The class and its whole prefix, as `TypeDependencyTraverser` follows a `TypeRef`'s.
+            Type::Nested(prefix, class) => {
+                self.type_deps(class);
+                self.type_deps(prefix);
+            }
             Type::Decl(a) => self.named_alias(a),
             Type::Alias(a, args) => {
                 self.named_alias(a);
@@ -2359,10 +2364,7 @@ impl<'c, 'a> Collector<'c, 'a> {
             Type::Term(s) => self.w.syms.sym(s).sig.as_ref().map(|sig| sig.ret),
             _ => Some(prefix),
         }?;
-        let c = match self.w.types.get(widened) {
-            Type::Class(c, _) | Type::This(c) => c,
-            _ => return None,
-        };
+        let c = self.w.types.named_class(widened)?;
         if let Some(&a) = self.w.syms.class(c).type_aliases.get(&name) {
             return Some(a);
         }
@@ -2443,7 +2445,7 @@ impl<'c, 'a> Collector<'c, 'a> {
         let (tparams, parents, ctor, kind, declared_self, own_members, aliases) = {
             let info = self.w.syms.class(c);
             (
-                info.tparams[info.outer_tparams as usize..].to_vec(),
+                info.tparams.clone(),
                 info.parents.clone(),
                 info.ctor.clone(),
                 info.kind,
@@ -2931,11 +2933,11 @@ impl<'c, 'a> Collector<'c, 'a> {
     }
 
     fn ctor_info_written(&mut self, c: ClassId, replayed: bool) {
-        let (ctor, tparams, outer) = {
+        let (ctor, tparams) = {
             let info = self.w.syms.class(c);
-            (info.ctor.clone(), info.tparams.clone(), info.outer_tparams as usize)
+            (info.ctor.clone(), info.tparams.clone())
         };
-        let own = &tparams[outer.min(tparams.len())..];
+        let own = &tparams[..];
         let depth = self.bind(own);
         for &p in own {
             let (lo, hi) = (self.w.syms.tparam(p).lower, self.w.syms.tparam(p).upper);

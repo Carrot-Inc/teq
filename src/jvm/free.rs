@@ -217,6 +217,20 @@ impl Collector<'_, '_> {
         }
     }
 
+    /// The values a test compares with (a path's, an outer's), which may read locals.
+    fn test(&mut self, t: crate::tir::TestId) {
+        let prog = self.cx.input.prog;
+        match prog.tests[t.idx()] {
+            crate::tir::TypeTest::Value(e) => self.expr(e),
+            crate::tir::TypeTest::Or(a, b) | crate::tir::TypeTest::And(a, b) => {
+                self.test(a);
+                self.test(b);
+            }
+            crate::tir::TypeTest::Outer(_, inner) => self.test(inner),
+            _ => {}
+        }
+    }
+
     fn pat(&mut self, p: TPatId) {
         let prog = self.cx.input.prog;
         match prog.pats[p.idx()] {
@@ -227,7 +241,10 @@ impl Collector<'_, '_> {
                     self.pat(i);
                 }
             }
-            TPat::Test(_, _, inner) => self.pat(inner),
+            TPat::Test(test, _, inner) => {
+                self.test(test);
+                self.pat(inner);
+            }
             TPat::Equals(e, _) => self.expr(e),
             TPat::Unapply(s, call, inner) => {
                 self.declared.push(s);
@@ -416,6 +433,20 @@ impl CellWalk<'_, '_> {
         }
     }
 
+    /// The values a test compares with (a path's, an outer's), which may read locals.
+    fn test(&mut self, t: crate::tir::TestId) {
+        let prog = self.cx.input.prog;
+        match prog.tests[t.idx()] {
+            crate::tir::TypeTest::Value(e) => self.expr(e),
+            crate::tir::TypeTest::Or(a, b) | crate::tir::TypeTest::And(a, b) => {
+                self.test(a);
+                self.test(b);
+            }
+            crate::tir::TypeTest::Outer(_, inner) => self.test(inner),
+            _ => {}
+        }
+    }
+
     fn pat(&mut self, p: TPatId) {
         let prog = self.cx.input.prog;
         match prog.pats[p.idx()] {
@@ -428,7 +459,10 @@ impl CellWalk<'_, '_> {
                     self.pat(i);
                 }
             }
-            TPat::Test(_, _, inner) => self.pat(inner),
+            TPat::Test(test, _, inner) => {
+                self.test(test);
+                self.pat(inner);
+            }
             TPat::Equals(e, _) => self.expr(e),
             TPat::Unapply(s, call, inner) => {
                 if self.depth == 0 {

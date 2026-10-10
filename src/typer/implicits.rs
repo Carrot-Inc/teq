@@ -18,6 +18,12 @@ struct ScopeSeen {
     params: Vec<TParamId>,
     /// The abstract type members walked through their bounds (`type T >: Box[T]` names itself).
     members: Vec<TypeId>,
+    /// The paths in the scope as references whose members hold givens (dotty's `addPath`): the
+    /// prefixes of the inner classes the type names and the companions reached through them.
+    paths: Vec<TypeId>,
+    /// The inner classes the type names through a path, with that path: their companion is
+    /// reached through it, not as an object of its own.
+    through: Vec<(ClassId, TypeId)>,
 }
 
 const MAX_IMPLICIT_DEPTH: u32 = 32;
@@ -229,7 +235,7 @@ struct TreeMarks {
 
 /// Whether a type argument depends on a prefix, which `head_rejects` leaves to the shape pass.
 fn head_dependent(w: &Worker, t: TypeId) -> bool {
-    matches!(w.types.get(t), Type::This(_) | Type::Term(_) | Type::Select(..) | Type::Member(..) | Type::AppMember(..) | Type::Decl(_))
+    matches!(w.types.get(t), Type::This(_) | Type::Term(_) | Type::Select(..) | Type::Member(..) | Type::AppMember(..) | Type::Decl(_) | Type::Nested(..))
 }
 
 /// A given and, when it came out of the index of a class, that class: an object through which
@@ -237,12 +243,14 @@ fn head_dependent(w: &Worker, t: TypeId) -> bool {
 pub type GivenRef = (SymId, GivenScope);
 
 /// Where a given candidate is read: in lexical scope, on an object of the implicit scope that
-/// inherits it, or on the stable value an import brought it from.
+/// inherits it, on the stable value an import brought it from, or on a path of the implicit
+/// scope it is a member of (dotty's `TermRef(o, item)` of `addPath`, `summon[o.Item]`).
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum GivenScope {
     Lexical,
     Module(ClassId),
     Value(super::ValueImport),
+    Path(TypeId),
 }
 
 impl GivenScope {
@@ -253,11 +261,12 @@ impl GivenScope {
         }
     }
 
-    fn memo_code(self) -> u32 {
+    pub(super) fn memo_code(self) -> u64 {
         match self {
-            GivenScope::Lexical => u32::MAX,
-            GivenScope::Module(m) => m.0,
-            GivenScope::Value(v) => u32::MAX - 1 - v.0,
+            GivenScope::Lexical => u64::MAX,
+            GivenScope::Module(m) => m.0 as u64,
+            GivenScope::Value(v) => 1 << 32 | v.0 as u64,
+            GivenScope::Path(p) => 2 << 32 | p.0 as u64,
         }
     }
 
@@ -829,8 +838,26 @@ impl<'a> Worker<'a> {
             }
             Frame::Class(c) => {
                 let c = *c;
+                let start = out.len();
                 if let Some(index) = self.class_given_index(c) {
                     index.select(wanted, GivenScope::Lexical, out);
+                }
+                // An inherited given the class overrides with a member that is no given is no
+                // implicit member of its `this` (dotty's `implicitMembers` reads the member the
+                // class has under the name: `val Underlying: Type[A]` over an `implicit val`).
+                let mut k = start;
+                while k < out.len() {
+                    let g = out[k].0;
+                    let overridden = self.syms.sym(g).owner != Owner::Class(c)
+                        && self.syms.class(c).members.get(&self.syms.sym(g).name).is_some_and(|&m| {
+                            let info = self.syms.sym(m);
+                            m != g && info.kind != SymKind::Given && info.mods & (crate::ast::mods::GIVEN | crate::ast::mods::IMPLICIT) == 0
+                        });
+                    if overridden {
+                        out.remove(k);
+                    } else {
+                        k += 1;
+                    }
                 }
             }
         }
@@ -1174,25 +1201,42 @@ impl<'a> Worker<'a> {
                 if list.plain {
                     out.extend_from_slice(&list.givens);
                 } else {
-                    out.extend(list.givens.iter().copied().filter(|&(g, _)| self.is_given_accessible(g)));
+                    out.extend(list.givens.iter().copied().filter(|&(g, scope)| self.is_given_accessible(g) && (!matches!(scope, GivenScope::Path(_)) || self.scope_accessible(scope))));
                 }
                 return;
             }
         }
         let mut selected = Vec::new();
-        for m in self.implicit_scope_objects(t) {
-            if let Some(index) = self.class_given_index(m) {
-                index.select(wanted, GivenScope::Module(m), &mut selected);
+        for scope in self.implicit_scope_objects(t) {
+            let class = match scope {
+                GivenScope::Module(m) => Some(m),
+                GivenScope::Path(p) => {
+                    let under = self.path_underlying(p);
+                    self.class_of(under)
+                }
+                _ => None,
+            };
+            if let Some(index) = class.and_then(|c| self.class_given_index(c)) {
+                index.select(wanted, scope, &mut selected);
             }
         }
-        selected.sort_by_key(|&(g, _)| g);
-        selected.dedup_by_key(|&mut (g, _)| g);
+        // A given is one candidate per path it is reached through, dotty's `TermRefSet` (a
+        // symbol under each prefix): `o.item` and `o2.item` are two; one an object of the scope
+        // inherits stays one, read on the first object.
+        if selected.iter().any(|&(_, scope)| matches!(scope, GivenScope::Path(_))) {
+            let key = |&(g, scope): &GivenRef| (g, if let GivenScope::Path(p) = scope { p.0 + 1 } else { 0 });
+            selected.sort_by_key(key);
+            selected.dedup_by_key(|r| key(r));
+        } else {
+            selected.sort_by_key(|&(g, _)| g);
+            selected.dedup_by_key(|&mut (g, _)| g);
+        }
         self.given_tree.restricted += selected.iter().any(|&(g, _)| self.restricted_visibility(g)) as u32;
-        out.extend(selected.iter().copied().filter(|&(g, _)| self.is_given_accessible(g)));
+        out.extend(selected.iter().copied().filter(|&(g, scope)| self.is_given_accessible(g) && (!matches!(scope, GivenScope::Path(_)) || self.scope_accessible(scope))));
         if ground {
             let list = ScopeList {
                 restricted: selected.iter().any(|&(g, _)| self.restricted_visibility(g)),
-                plain: selected.iter().all(|&(g, _)| self.plainly_accessible(g)),
+                plain: selected.iter().all(|&(g, scope)| self.plainly_accessible(g) && self.scope_plainly_accessible(scope)),
                 givens: selected.into_boxed_slice(),
             };
             self.implicit_scope_givens.insert((t, tag, id), Arc::new(list));
@@ -1201,6 +1245,66 @@ impl<'a> Worker<'a> {
 
     /// Whether a given is accessible from any search (`is_given_accessible` reads nothing of
     /// the context for it): neither private nor protected, and no qualified access.
+    /// Whether the path a candidate is read on is accessible where the search stands: each value
+    /// it selects (a private companion through `i.C`, scalac's access check of the reference
+    /// the candidate's tree makes, `SymDenotations.isAccessibleFrom`).
+    pub(super) fn scope_accessible(&mut self, scope: GivenScope) -> bool {
+        let GivenScope::Path(mut p) = scope else { return true };
+        loop {
+            match self.types.get(p) {
+                Type::Select(q, s) => {
+                    if !self.is_accessible(s) {
+                        return false;
+                    }
+                    // A protected member through an instance of the class the access stands in
+                    // (`Test.E` inside `Test`), not through another (`t.E` of a `t: T`).
+                    if self.syms.sym(s).mods & crate::ast::mods::PROTECTED != 0 && !self.protected_through(q) {
+                        return false;
+                    }
+                    p = q;
+                }
+                Type::Term(s) => return self.is_accessible(s),
+                _ => return true,
+            }
+        }
+    }
+
+    /// Whether `q` is an instance of a class the search stands in: its `this`, the object itself,
+    /// or a value of a type deriving from such a class.
+    fn protected_through(&mut self, q: TypeId) -> bool {
+        let k = match self.types.get(q) {
+            Type::This(k) | Type::Class(k, _) => Some(k),
+            _ => {
+                let under = self.widen_path(q);
+                self.class_of(under)
+            }
+        };
+        let Some(k) = k else { return false };
+        let classes: Vec<ClassId> = self.env.frames.iter().filter_map(|f| match f {
+            super::Frame::Class(x) => Some(*x),
+            _ => None,
+        }).collect();
+        classes.into_iter().any(|x| x == k || self.derives_from(k, x))
+    }
+
+    /// Whether the path a candidate is read on selects no value of restricted visibility, so
+    /// that its accessibility reads nothing of the search's site.
+    fn scope_plainly_accessible(&self, scope: GivenScope) -> bool {
+        let GivenScope::Path(mut p) = scope else { return true };
+        loop {
+            match self.types.get(p) {
+                Type::Select(q, s) => {
+                    if !self.plainly_accessible(s) {
+                        return false;
+                    }
+                    p = q;
+                }
+                Type::Term(s) => return self.plainly_accessible(s),
+                _ => return true,
+            }
+        }
+    }
+
     fn plainly_accessible(&self, g: SymId) -> bool {
         self.syms.sym(g).mods & (crate::ast::mods::PRIVATE | crate::ast::mods::PROTECTED | crate::ast::mods::QUALIFIED) == 0
     }
@@ -1209,10 +1313,16 @@ impl<'a> Worker<'a> {
         self.syms.sym(g).mods & (crate::ast::mods::PRIVATE | crate::ast::mods::PROTECTED) != 0
     }
 
-    /// The objects whose members make up the implicit scope of `t`, computed once for a type
+    /// The objects of the implicit scope of `t` (`implicit_scope_objects`), where the extensions
+    /// and conversions of the scope are looked up.
+    pub fn implicit_scope_modules(&mut self, t: TypeId) -> Vec<ClassId> {
+        self.implicit_scope_objects(t).into_iter().filter_map(GivenScope::module).collect()
+    }
+
+    /// The objects and paths whose members make up the implicit scope of `t`, computed once for a type
     /// without variables: the classes it mentions are completed on the way, so their bases and
     /// companions do not change afterwards.
-    pub fn implicit_scope_objects(&mut self, t: TypeId) -> Vec<ClassId> {
+    pub fn implicit_scope_objects(&mut self, t: TypeId) -> Vec<GivenScope> {
         let ground = !self.types.has_vars(t);
         if ground {
             if let Some(scopes) = self.implicit_scopes.get(&t) {
@@ -1226,14 +1336,27 @@ impl<'a> Worker<'a> {
         scopes
     }
 
-    fn implicit_scope_objects_now(&mut self, t: TypeId) -> Vec<ClassId> {
+    fn implicit_scope_objects_now(&mut self, t: TypeId) -> Vec<GivenScope> {
         let mut classes = Vec::new();
-        self.classes_in(t, &mut classes, &mut ScopeSeen::default());
+        let mut seen = ScopeSeen::default();
+        self.classes_in(t, &mut classes, &mut seen);
         let mut scopes: Vec<ClassId> = Vec::new();
+        let mut paths = seen.paths;
         for c in classes {
             // A Java class holds no givens: one nothing has read yet stays unread.
             if !self.is_java_placeholder(c) {
                 self.complete_class(c);
+            }
+            // The companion of an inner class the type names through a path is reached through
+            // that path (dotty's `addCompanion(pre, companion)`): one per enclosing instance.
+            let through: Vec<TypeId> = seen.through.iter().filter(|&&(k, _)| k == c).map(|&(_, p)| p).collect();
+            if let Some(val) = self.syms.class(c).companion.and_then(|m| self.syms.class(m).inner_object).filter(|_| !through.is_empty()) {
+                for p in through {
+                    let path = self.types.mk(Type::Select(p, val));
+                    if !paths.contains(&path) {
+                        paths.push(path);
+                    }
+                }
             }
             let n_bases = self.syms.class(c).base_types.len();
             for i in 0..n_bases {
@@ -1241,6 +1364,7 @@ impl<'a> Worker<'a> {
                 loop {
                     let info = self.syms.class(b);
                     let module = if self.is_module_class(b) { Some(b) } else { info.companion };
+                    let module = module.filter(|&m| !(b == c && seen.through.iter().any(|&(k, _)| k == c) && self.syms.class(m).inner_object.is_some()));
                     if let Some(m) = module.filter(|&m| self.is_module_class(m)) {
                         if !scopes.contains(&m) {
                             scopes.push(m);
@@ -1260,7 +1384,38 @@ impl<'a> Worker<'a> {
                 }
             }
         }
-        scopes
+        scopes.into_iter().map(GivenScope::Module).chain(paths.into_iter().map(GivenScope::Path)).collect()
+    }
+
+    /// The path `p` and the paths it is selected on as references of the implicit scope, dotty's
+    /// `addPath`: a val declared with a singleton type is the path it names, an object's is its
+    /// object's scope (the classes it mentions give it), any other val the path itself.
+    fn add_scope_path(&mut self, p: TypeId, out: &mut Vec<ClassId>, seen: &mut ScopeSeen) {
+        let mut p = p;
+        for _ in 0..8 {
+            let (Type::Term(_) | Type::Select(..)) = self.types.get(p) else { return };
+            let under = self.path_underlying(p);
+            if self.types.is_path(under) {
+                p = under;
+                continue;
+            }
+            match self.class_of(under) {
+                Some(c) if self.syms.class(c).kind == ClassKind::Object => {
+                    if !out.contains(&c) {
+                        out.push(c);
+                    }
+                }
+                _ => {
+                    if !seen.paths.contains(&p) {
+                        seen.paths.push(p);
+                    }
+                }
+            }
+            match self.types.get(p) {
+                Type::Select(q, _) => p = q,
+                _ => return,
+            }
+        }
     }
 
     /// An object, top level or nested in a class or trait: what holds givens of the implicit
@@ -1315,6 +1470,35 @@ impl<'a> Worker<'a> {
             Type::Union(a, b) | Type::Inter(a, b) => {
                 self.classes_in(a, out, seen);
                 self.classes_in(b, out, seen);
+            }
+            // `p.C`: the class and its prefix's parts (dotty's `collectParts` traverses a class
+            // reference's prefix); a path prefix is itself a reference of the scope (`addPath`),
+            // and the class's companion is reached through it.
+            Type::Nested(p, class) => {
+                self.classes_in(class, out, seen);
+                // An object is a prefix the class's companion is reached through too (`Test.E`
+                // of a trait's `E` in `object Test extends T`).
+                if matches!(self.types.get(p), Type::Class(k, _) if self.syms.class(k).kind == ClassKind::Object) {
+                    if let Some(c) = self.class_of(class) {
+                        if !seen.through.contains(&(c, p)) {
+                            seen.through.push((c, p));
+                        }
+                    }
+                    self.classes_in(p, out, seen);
+                } else if self.types.is_path(p) {
+                    if let Some(c) = self.class_of(class) {
+                        if !seen.through.contains(&(c, p)) {
+                            seen.through.push((c, p));
+                        }
+                    }
+                    self.add_scope_path(p, out, seen);
+                    let under = self.path_underlying(p);
+                    if under != p {
+                        self.classes_in(under, out, seen);
+                    }
+                } else {
+                    self.classes_in(p, out, seen);
+                }
             }
             Type::Refined(parent, r) => {
                 self.classes_in(parent, out, seen);
@@ -2484,13 +2668,16 @@ impl<'a> Worker<'a> {
         heads: &mut TargetHeads,
     ) -> Vec<u32> {
         let defining = levels.defining.filter(|_| level > 0);
+        // The given being defined is not in scope in its own right-hand side, nor what it
+        // overrides: a trait's given its class implements, which the class's `this` reaches as
+        // the definition itself.
         // The implicit scope's candidates are its own eligible list, which no name of the
         // context's hides (`searchImplicit`'s `implicitScope(wildProto).eligible`).
         let hide = level > 0 && !hidden.is_empty();
         let mut fits: Vec<u32> = Vec::new();
         for i in 0..buf.cands.len() as u32 {
             let given = buf.cands[i as usize];
-            if defining == Some(given.0) || hide && hidden.contains(&self.level_name(buf, i)) {
+            if defining.is_some_and(|d| self.defined_here(d, given.0)) || hide && hidden.contains(&self.level_name(buf, i)) {
                 continue;
             }
             if self.fit_decision(given, target, target_class, memoised, heads) {
@@ -2510,6 +2697,17 @@ impl<'a> Worker<'a> {
             }
         }
         self.compose_level(buf, fits)
+    }
+
+    /// Whether `g` is the given `d` being defined or one `d` overrides: a member of a base class
+    /// of `d`'s class under its name.
+    fn defined_here(&self, d: SymId, g: SymId) -> bool {
+        if g == d {
+            return true;
+        }
+        let (name, owner) = (self.syms.sym(d).name, self.syms.sym(d).owner);
+        let info = self.syms.sym(g);
+        info.name == name && matches!((owner, info.owner), (Owner::Class(k), Owner::Class(b)) if k != b && self.syms.class(k).base_types.iter().any(|&(x, _)| x == b))
     }
 
     /// The levels a search walks from the innermost, as `search_given` documents them.
@@ -3815,6 +4013,9 @@ impl<'a> Worker<'a> {
             if let GivenScope::Value(v) = scope {
                 return (TraitMemberSite::Value(v), c);
             }
+            if let GivenScope::Path(p) = scope {
+                return (TraitMemberSite::Path(p), c);
+            }
             let scope = scope.module();
             let through = scope.and_then(|m| self.exports_of(m)).and_then(|e| e.via.get(&g).copied());
             // An object of the implicit scope that extends the trait (`K0 extends Kind[..]`
@@ -3834,10 +4035,20 @@ impl<'a> Worker<'a> {
             Some((site, c)) => self.trait_member_subst(site, c),
             None => Vec::with_capacity(sig.tparams.len()),
         };
-        // `Kind.this` in the signature is the module the given is reached through.
+        // `Kind.this` in the signature is the module or path the given is reached through.
         let sig = match site {
-            Some((TraitMemberSite::Module(m), c)) if self.types.has_paths(sig.ret) || sig.clauses.iter().any(|cl| cl.params.iter().any(|p| self.types.has_paths(p.ty))) => {
-                let prefix = self.types.class(m, &[]);
+            // A given a class in scope inherits sees its owner's `this` as that class's (dotty's
+            // `TermRef(Sub.this, given)` seen from `Sub.this`).
+            Some((site @ (TraitMemberSite::Module(_) | TraitMemberSite::Path(_) | TraitMemberSite::This(Some(_))), c))
+                if !matches!(site, TraitMemberSite::This(Some(k)) if k == c)
+                    && (self.types.has_paths(sig.ret) || sig.clauses.iter().any(|cl| cl.params.iter().any(|p| self.types.has_paths(p.ty)))) =>
+            {
+                let (prefix, c) = match site {
+                    TraitMemberSite::Path(p) => (p, c),
+                    TraitMemberSite::Module(m) => (self.types.class(m, &[]), c),
+                    TraitMemberSite::This(Some(k)) => (self.this_prefix(k), k),
+                    _ => unreachable!(),
+                };
                 let mut seen = (*sig).clone();
                 seen.ret = self.as_seen_from(seen.ret, prefix, c);
                 for cl in seen.clauses.iter_mut() {
@@ -4072,7 +4283,17 @@ impl<'a> Worker<'a> {
                     GivenScope::Value(v) if self.syms.class(c).inner_object.is_some() && self.import_value_class(v) == Some(c) => Some(v),
                     _ => None,
                 };
-                let recv = if let Some(v) = imported {
+                let path = match scope {
+                    GivenScope::Path(p) => Some(p),
+                    _ => None,
+                };
+                let recv = if let Some(p) = path {
+                    // A given of the implicit scope's path is read on the path's value.
+                    match self.prefix_value(p) {
+                        Some(e) => e,
+                        None => return Attempt::Mismatch,
+                    }
+                } else if let Some(v) = imported {
                     // A given imported from an object nested in a class (`import a.R.given`)
                     // is read on the imported value.
                     match self.import_value_ref(v, span) {
@@ -4240,9 +4461,14 @@ impl<'a> Worker<'a> {
             te = self.prog.add(TExpr::Block(stmts, result));
         }
         // A given object is its module: the instance is of its class, as a reference to it by its
-        // name is (`given_object_type`), whichever of the two a body read from a pickle holds.
+        // name is (`given_object_type`), whichever of the two a body read from a pickle holds;
+        // through the path of the implicit scope it is reached on, the class through that path
+        // (dotty's `TypeRef(p, C$)` under the module's `TermRef(p, given)`).
         let ty = match self.given_object_type(g) {
-            Some(class) => class,
+            Some(class) => match site {
+                Some((TraitMemberSite::Path(p), _)) => self.nested_type(p, class),
+                _ => class,
+            },
             None => self.zonk(ret),
         };
         if self.given_trace() {
