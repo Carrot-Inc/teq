@@ -2300,7 +2300,7 @@ impl Walker {
             if readers && self.takes_rule_member(cx, c, names::TO_STRING, synthetic::TO_STRING).is_some() {
                 insert_sorted(&mut self.reach.product_to_string, c);
             }
-            if elements && self.takes_rule_member(cx, c, names::HASH_CODE, synthetic::HASH_CODE).is_some_and(|k| hashes_through_elements(cx.syms, &cx.typer.types, cx.interner, k)) {
+            if elements && self.takes_rule_member(cx, c, names::HASH_CODE, synthetic::HASH_CODE).is_some_and(|k| hashes_through_elements(cx.syms, &cx.typer.types, k)) {
                 insert_sorted(&mut self.reach.product_hash, c);
             }
         }

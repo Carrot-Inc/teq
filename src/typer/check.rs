@@ -2857,8 +2857,8 @@ impl<'a> Worker<'a> {
         if !existing_defs.is_empty() {
             tclass.lists_mut().existing_defs = existing_defs;
         }
-        if tclass.synthesized & synthetic::EQUALS != 0 && crate::tir::equals_reorders(&self.syms, &self.types, self.interner, c) {
-            let order = crate::tir::equals_order(&self.syms, &self.types, self.interner, c);
+        if tclass.synthesized & synthetic::EQUALS != 0 && crate::tir::equals_reorders(&self.syms, &self.types, c) {
+            let order = crate::tir::equals_order(&self.syms, &self.types, c);
             tclass.lists_mut().equals_order = order.into_iter().map(|k| k as u16).collect();
         }
         let Some(def_id) = def_id else {

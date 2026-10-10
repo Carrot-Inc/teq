@@ -340,7 +340,7 @@ impl<'a, 't> Interp<'a, 't> {
         let class = o.class;
         let defs = self.product_defs(class);
         let reads_elements = defs & (product_def_bit(crate::names::PRODUCT_ARITY) | product_def_bit(crate::names::PRODUCT_ELEMENT)) != 0;
-        if reads_elements && self.case_class_of(class).is_some_and(|c| crate::tir::hashes_through_elements(&self.typer.syms, &self.typer.types, self.typer.interner, c)) {
+        if reads_elements && self.case_class_of(class).is_some_and(|c| crate::tir::hashes_through_elements(&self.typer.syms, &self.typer.types, c)) {
             let n = self.product_arity(v)?;
             if n == 0 {
                 return Ok(h);

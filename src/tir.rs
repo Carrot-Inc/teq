@@ -821,9 +821,9 @@ pub fn constant_val(prog: &Program, syms: &crate::symbols::Symbols, types: &crat
 /// primitive class (`isPrimitiveValueClass`), so that its `hashCode` by rule is
 /// `MurmurHash3.productHash`, through `productArity` and `productElement`, rather than the mix of
 /// its fields.
-pub fn hashes_through_elements(syms: &crate::symbols::Symbols, types: &crate::types::TypeStore, interner: &crate::intern::Interner, c: ClassId) -> bool {
+pub fn hashes_through_elements(syms: &crate::symbols::Symbols, types: &crate::types::TypeStore, c: ClassId) -> bool {
     let fields = case_field_types(syms, c);
-    !fields.is_empty() && !fields.into_iter().any(|t| t.is_some_and(|t| is_primitive_value_class(syms, types, interner, t)))
+    !fields.is_empty() && !fields.into_iter().any(|t| t.is_some_and(|t| is_primitive_value_class(syms, types, t)))
 }
 
 /// dotty's `SyntheticMembers.equalsBody`'s `sortedAccessors`: the indices of the case class
@@ -832,12 +832,12 @@ pub fn hashes_through_elements(syms: &crate::symbols::Symbols, types: &crate::ty
 /// declaration order, so that a cheap unequal field decides before an `equals` of a reference.
 /// Whether `equals_order` of `c` is another than the fields' order: a reference field comes
 /// before a primitive one.
-pub fn equals_reorders(syms: &crate::symbols::Symbols, types: &crate::types::TypeStore, interner: &crate::intern::Interner, c: ClassId) -> bool {
+pub fn equals_reorders(syms: &crate::symbols::Symbols, types: &crate::types::TypeStore, c: ClassId) -> bool {
     let info = syms.class(c);
     let Some(cl) = info.ctor.first() else { return false };
     let mut reference_seen = false;
     for p in &cl.params {
-        let primitive = !p.repeated && syms.sym(p.sym).declared_alias().is_none() && is_primitive_value_class(syms, types, interner, p.ty);
+        let primitive = !p.repeated && syms.sym(p.sym).declared_alias().is_none() && is_primitive_value_class(syms, types, p.ty);
         if primitive && reference_seen {
             return true;
         }
@@ -846,14 +846,14 @@ pub fn equals_reorders(syms: &crate::symbols::Symbols, types: &crate::types::Typ
     false
 }
 
-pub fn equals_order(syms: &crate::symbols::Symbols, types: &crate::types::TypeStore, interner: &crate::intern::Interner, c: ClassId) -> Vec<usize> {
+pub fn equals_order(syms: &crate::symbols::Symbols, types: &crate::types::TypeStore, c: ClassId) -> Vec<usize> {
     // The declared type's symbol (`accessor.info.typeSymbol`), an alias's being no class, where
     // the hash reads the class behind it (`hashes_through_elements`).
     let primitive: Vec<bool> = syms
         .class(c)
         .ctor
         .first()
-        .map(|cl| cl.params.iter().map(|p| !p.repeated && syms.sym(p.sym).declared_alias().is_none() && is_primitive_value_class(syms, types, interner, p.ty)).collect())
+        .map(|cl| cl.params.iter().map(|p| !p.repeated && syms.sym(p.sym).declared_alias().is_none() && is_primitive_value_class(syms, types, p.ty)).collect())
         .unwrap_or_default();
     let fields = primitive.len();
     let mut order: Vec<usize> = (0..fields).collect();
@@ -872,11 +872,12 @@ fn case_field_types(syms: &crate::symbols::Symbols, c: ClassId) -> Vec<Option<Ty
 
 /// dotty's `isPrimitiveValueClass` of a field's declared type's `typeSymbol`, a literal type's
 /// being its class's (`x: 1` is an `Int`).
-fn is_primitive_value_class(syms: &crate::symbols::Symbols, types: &crate::types::TypeStore, interner: &crate::intern::Interner, t: TypeId) -> bool {
+fn is_primitive_value_class(syms: &crate::symbols::Symbols, types: &crate::types::TypeStore, t: TypeId) -> bool {
     match types.get(t) {
         crate::types::Type::Class(k, _) => {
             let ki = syms.class(k);
-            ki.kind == crate::symbols::ClassKind::Builtin && matches!(interner.get(ki.name), "Int" | "Long" | "Double" | "Float" | "Char" | "Byte" | "Short" | "Boolean" | "Unit")
+            use crate::names::*;
+            ki.kind == crate::symbols::ClassKind::Builtin && matches!(ki.name, INT | LONG | DOUBLE | FLOAT | CHAR | BYTE | SHORT | BOOLEAN | UNIT)
         }
         crate::types::Type::Lit(l) => !matches!(types.lit_val(l), crate::types::LitVal::Str(_)),
         _ => false,

@@ -365,7 +365,7 @@ impl<'w, 'a> P<'w, 'a> {
             return self.int_literal(h);
         }
         // The targets' decision (`tir::hashes_through_elements`).
-        if crate::tir::hashes_through_elements(&self.w.syms, &self.w.types, self.w.interner, c) {
+        if crate::tir::hashes_through_elements(&self.w.syms, &self.w.types, c) {
             // MurmurHash3.productHash(this, Statics.mix(0xcafebabe, "C".hashCode), true)
             self.term_at(None);
             let l = self.open_tree(APPLY);

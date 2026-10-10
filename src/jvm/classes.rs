@@ -2899,7 +2899,7 @@ impl<'a> Gen<'a> {
             } else if field_refs.is_empty() {
                 self.sconst(&display);
                 self.invoke(Invoke::Virtual, STRING, false, "hashCode", &[], &JType::I);
-            } else if hashes_through_elements(syms, cx.input.types, cx.input.interner, c) {
+            } else if hashes_through_elements(syms, cx.input.types, c) {
                 // dotty's `SyntheticMembers.chooseHashcode` for reference fields: `MurmurHash3.productHash`
                 // from the seed of the name, through `productArity` and `productElement`.
                 let murmur = "scala/util/hashing/MurmurHash3$";

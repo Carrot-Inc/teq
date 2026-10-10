@@ -4074,14 +4074,14 @@ impl<'a> Worker<'a> {
                 };
                 // A case class's field whose type names an alias of a primitive class
                 // (`SymInfo::declared_alias`), which its equality orders.
-                let primitive = match self.types.get(ty) {
-                    Type::Class(k, _) if self.syms.class(k).kind == ClassKind::Builtin => Some(self.syms.class(k).name),
+                let primitive = match (ci, class_owner) {
+                    (0, Some(c)) if self.syms.class(c).mods & mods::CASE != 0 => match self.types.get(ty) {
+                        Type::Class(k, _) if self.syms.class(k).kind == ClassKind::Builtin => Some(self.syms.class(k).name),
+                        _ => None,
+                    },
                     _ => None,
                 };
-                let declared_alias = match primitive {
-                    Some(k) if ci == 0 && class_owner.is_some_and(|c| self.syms.class(c).mods & mods::CASE != 0) => self.written_alias(p.ty, k),
-                    _ => None,
-                };
+                let declared_alias = primitive.and_then(|k| self.written_alias(p.ty, k));
                 {
                     let mut s = self.syms.sym_mut(sym);
                     s.sig = Some(Arc::new(MethodSig::value(local_ty)));
