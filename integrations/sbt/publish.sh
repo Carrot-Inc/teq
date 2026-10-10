@@ -1,7 +1,8 @@
 #!/bin/bash
 # publish.sh [--check | --preflight | --stage | --rehearse [<version>]]: publishes sbt-teq, the plugin, to Maven Central at its
 # own version, plugin-version.txt's (docs/TARGETS.md, "Releases"; bench/ship-release.sh). The compiler's binaries never go
-# to Central: this publishes the plugin alone. sbt's publishSigned stages it into the release's record,
+# to Central: this publishes the plugin alone, its two modules (sbt 2's and sbt 1's, one deployment at the one
+# version). sbt's publishSigned stages them into the release's record,
 # out/central/sbt-teq-<version>/ (central.py), every file with its signature by the release's key and its digests,
 # with the sources and javadoc jars Central requires; the staging is checked against the plugin's files and bundled;
 # the bundle goes to the Central Portal as one USER_MANAGED deployment, which the Portal validates and nothing
@@ -85,14 +86,14 @@ central_ready() {
   timeout 120 python3 -B central.py keyserver "$key"
 }
 
-# stage <version> <record>: the plugin staged afresh into <record>/staging by publishSigned, the version and
-# the key set, sbt-pgp's passphrase variable unset.
+# stage <version> <record>: the plugin staged afresh into <record>/staging by publishSigned on each sbt line (`^`:
+# sbt 2's module and sbt 1's, central.py's MODULES), the version and the key set, sbt-pgp's passphrase variable unset.
 stage() {
   local staging=$2/staging
   rm -rf "$2" && mkdir -p "$staging" || return 1
   echo "publish: staging build.teq:sbt-teq $1 into $staging"
   env -u PGP_PASSPHRASE timeout 600 sbt --server --batch "set version := \"$1\"" "set Global / stagingDirectory := file(\"$staging\")" \
-    "set pgpSigningKey := Some(\"$key\")" publishSigned < /dev/null 9>&- 2>&1 | grep -E "published|error|success" | tail -4
+    "set pgpSigningKey := Some(\"$key\")" "^publishSigned" < /dev/null 9>&- 2>&1 | grep -E "published|error|success" | tail -8
   [ "${PIPESTATUS[0]}" -eq 0 ] || { echo "publish: the plugin's staging failed"; return 1; }
 }
 

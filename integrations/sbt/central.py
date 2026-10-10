@@ -19,13 +19,15 @@ Commands:
   preflight [--version <v>]         the token file (~/.sbt/sonatype_central_credentials, Java properties: host
                                     central.sonatype.com, user, password; TEQ_CENTRAL_CREDENTIALS another) and
                                     the Portal taking it for the namespace build.teq; with a version, that the
-                                    Portal does not publish the plugin at it and holds no live deployment of it
+                                    Portal publishes neither module at it and holds no live deployment of it
   keyserver <fingerprint>           the public key on keyserver.ubuntu.com, which the Portal reads signatures by
   check <record> <version> <fingerprint> <head>
-                                    the staged tree is the plugin's files exactly (its pom, jar, sources and
-                                    javadoc jars), each with its .asc (a signature by the key), .md5 and .sha1
-                                    (its digests), the pom with what Central requires, the jar built from the
-                                    head at the version; writes manifest.tsv and bundle.zip
+                                    the staged tree is the plugin's files exactly, each module's (MODULES:
+                                    sbt-teq_sbt2_3 for sbt 2, sbt-teq_2.12_1.0 for sbt 1) pom, jar, sources and
+                                    javadoc jars, each with its .asc (a signature by the key), .md5 and .sha1
+                                    (its digests), each pom with what Central requires, each jar built from the
+                                    head at the version, both naming one compiler (Teq-Compiler); writes
+                                    manifest.tsv and bundle.zip
   upload <record> <mode>            uploads bundle.zip, USER_MANAGED; mode `release` or `rehearsal`
   wait <record> <state> <seconds>   polls the deployment until it is VALIDATED or PUBLISHED, within the bound
   promote <record> <head>           publishes the recorded deployment: a release's, validated, its bundle and
@@ -77,7 +79,9 @@ PORTAL = os.environ.get("TEQ_CENTRAL_PORTAL") or "https://central.sonatype.com/a
 HOST = "central.sonatype.com"
 NAMESPACE = "build.teq"
 GROUP_PATH = "build/teq"
-MODULE = "sbt-teq_sbt2_3"
+# The plugin's two modules, one per sbt line, published together at the plugin's one version (build.sbt's
+# crossSbtVersions): sbt 2's, then sbt 1's.
+MODULES = ("sbt-teq_sbt2_3", "sbt-teq_2.12_1.0")
 RELEASE = re.compile(r"^[0-9]+\.[0-9]+\.[0-9]+$")
 REHEARSAL = re.compile(r"^[0-9]+\.[0-9]+\.[0-9]+-rehearsal$")
 LIVE = ("PENDING", "VALIDATING", "VALIDATED", "PUBLISHING")
@@ -260,11 +264,12 @@ def preflight(version=None):
         raise Refused(f"the Portal refuses the token for the namespace {NAMESPACE} ({code}: {text})")
     say(f"the token in its file reaches the Portal, which lists {NAMESPACE}'s deployments")
     if version:
-        code, text = portal.request("GET", "published", {"namespace": NAMESPACE, "name": MODULE, "version": version})
-        if code != 200:
-            raise Refused(f"whether {NAMESPACE}:{MODULE}:{version} is published cannot be told ({code}: {text})")
-        if json.loads(text).get("published") is not False:
-            raise Refused(f"the Portal says {NAMESPACE}:{MODULE}:{version} is published ({text.strip()}): a release is never published again")
+        for module in MODULES:
+            code, text = portal.request("GET", "published", {"namespace": NAMESPACE, "name": module, "version": version})
+            if code != 200:
+                raise Refused(f"whether {NAMESPACE}:{module}:{version} is published cannot be told ({code}: {text})")
+            if json.loads(text).get("published") is not False:
+                raise Refused(f"the Portal says {NAMESPACE}:{module}:{version} is published ({text.strip()}): a release is never published again")
         live = [d for d in portal.deployments(f"{NAMESPACE} sbt-teq {version} ") if d.get("deploymentState") in LIVE]
         if live:
             raise Refused(f"the Portal holds live deployments of {version}: "
@@ -285,14 +290,15 @@ def keyserver(fingerprint):
     say(f"keyserver.ubuntu.com serves the public key {fingerprint}")
 
 
-# check: what is staged, against the release's files.
+# check: what is staged, against the release's files: each module's.
 def expected(version):
     files = {}
-    base = f"{GROUP_PATH}/{MODULE}/{version}/{MODULE}-{version}"
-    for p in (f"{base}.pom", f"{base}.jar", f"{base}-sources.jar", f"{base}-javadoc.jar"):
-        files[p] = "primary"
-        for sidecar in ("asc", "md5", "sha1"):
-            files[f"{p}.{sidecar}"] = sidecar
+    for module in MODULES:
+        base = f"{GROUP_PATH}/{module}/{version}/{module}-{version}"
+        for p in (f"{base}.pom", f"{base}.jar", f"{base}-sources.jar", f"{base}-javadoc.jar"):
+            files[p] = "primary"
+            for sidecar in ("asc", "md5", "sha1"):
+                files[f"{p}.{sidecar}"] = sidecar
     return files
 
 
@@ -308,10 +314,10 @@ def signed_by(signature, data):
 POM = "{http://maven.apache.org/POM/4.0.0}"
 
 
-def pom_problems(path, version):
+def pom_problems(path, module, version):
     root = ET.parse(path).getroot()
     text = lambda p: (root.findtext("/".join(POM + part for part in p.split("/"))) or "").strip()
-    wanted = {"groupId": NAMESPACE, "artifactId": MODULE, "version": version, "packaging": "jar"}
+    wanted = {"groupId": NAMESPACE, "artifactId": module, "version": version, "packaging": "jar"}
     problems = [f"{k} is '{text(k)}', not '{v}'" for k, v in wanted.items() if text(k) != v]
     for required in ("name", "description", "url", "licenses/license/name", "developers/developer/name", "scm/url", "scm/connection"):
         if not text(required):
@@ -349,13 +355,21 @@ def check(record, version, fingerprint, head):
             want = rows[primary][1] if kind == "sha1" else rows[primary][2]
             if stated != [want]:
                 problems.append(f"{p} states {stated[0] if stated else 'nothing'}, the file's {kind} is {want}")
-    pom = f"{GROUP_PATH}/{MODULE}/{version}/{MODULE}-{version}.pom"
-    problems += [f"{pom}: {why}" for why in pom_problems(os.path.join(staging, pom), version)]
-    jar = os.path.join(staging, f"{GROUP_PATH}/{MODULE}/{version}/{MODULE}-{version}.jar")
-    with zipfile.ZipFile(jar) as z:
-        info = z.read("dev/teq/sbt/BuildInfo$.class")
-    if head.encode() not in info or version.encode() not in info:
-        problems.append(f"the plugin's jar does not carry the head {head[:12]} and the version {version} (BuildInfo)")
+    compilers = {}
+    for module in MODULES:
+        pom = f"{GROUP_PATH}/{module}/{version}/{module}-{version}.pom"
+        problems += [f"{pom}: {why}" for why in pom_problems(os.path.join(staging, pom), module, version)]
+        jar = f"{GROUP_PATH}/{module}/{version}/{module}-{version}.jar"
+        with zipfile.ZipFile(os.path.join(staging, jar)) as z:
+            info = z.read("dev/teq/sbt/BuildInfo$.class")
+            manifest = z.read("META-INF/MANIFEST.MF").decode("utf-8", "replace").replace("\r\n", "\n")
+        if head.encode() not in info or version.encode() not in info:
+            problems.append(f"{jar} does not carry the head {head[:12]} and the version {version} (BuildInfo)")
+        compilers[module] = next((line[len("Teq-Compiler: "):].strip() for line in manifest.split("\n") if line.startswith("Teq-Compiler: ")), "")
+    # The compiler the plugin selects, which a later release reads from the jar's manifest (bench/ship-release.sh,
+    # plugin_default): one for both modules.
+    if "" in compilers.values() or len(set(compilers.values())) != 1:
+        problems.append("the modules' jars name " + ", ".join(f"{m} {c or 'no compiler'}" for m, c in compilers.items()) + " (Teq-Compiler), not one compiler")
     if problems:
         raise Refused("the staging does not check out:\n  " + "\n  ".join(problems))
     with open(os.path.join(record, "manifest.tsv"), "w", encoding="utf-8") as f:

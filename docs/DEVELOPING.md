@@ -52,7 +52,7 @@ runtime/rt.js      the JavaScript runtime
 tests/             the suites (tests/all.sh lists them); tests/support/ what the runners share
 bench/             generators, budgets and measurements; bench/app the application corpus (below)
 proptests/         the property-based tests, a crate of its own (proptests/README.md)
-integrations/      sbt/ the sbt 2 plugin, vite/ and vite-scalajs/, zed/ the Zed extension, claude-code/
+integrations/      sbt/ the sbt plugin (for sbt 2 and sbt 1), vite/ and vite-scalajs/, zed/ the Zed extension, claude-code/
 tools/             launcher/ (the launchers, below)
 ```
 
@@ -136,13 +136,18 @@ one; each directory has a README. The checkout is at scala3's `main`, not the 3.
 `main` added is no difference from scalac 3.8.4. Running the output needs node (`Long` is a `BigInt`) and Java 21 or
 later for the JVM target (the runtime calls `MatchResult.group(String)`).
 
-The sbt plugin is a Scala 3 project of its own, built by sbt 2, outside `tests/all.sh`:
+The sbt plugin is a project of its own, built by sbt 2, outside `tests/all.sh`: one source tree, two modules,
+sbt 2's (Scala 3) and sbt 1's (Scala 2.12, `^^1.13.0`; `integrations/sbt/README.md`, "The two sbt lines"):
 
 ```
-(cd integrations/sbt && sbt testFull)
-(cd integrations/sbt && sbt --batch 'set version := "0.1.1-<branch>-SNAPSHOT"; publishLocal')
+(cd integrations/sbt && sbt testFull '^^1.13.0' testFull)
+(cd integrations/sbt && sbt --batch 'set version := "0.1.1-<branch>-SNAPSHOT"; ^publishLocal')
 TEQ_PLUGIN_VERSION=0.1.1-<branch>-SNAPSHOT TEQ=$PWD/target/release/teq integrations/sbt/example/check.sh
+TEQ=$PWD/target/release/teq integrations/sbt/axes/check.sh
 ```
+
+`example/check.sh` is sbt 2's; `axes/check.sh` publishes the checkout's plugin on both lines into a repository of
+its own and checks the two over the fixtures under `axes/`.
 
 A branch publishes the plugin only under a SNAPSHOT version of its own, never a release's:
 `~/.ivy2/local` comes before every repository, so a local publish of a release's version would stand in

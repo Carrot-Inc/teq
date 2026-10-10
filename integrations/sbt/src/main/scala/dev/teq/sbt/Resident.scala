@@ -19,7 +19,7 @@ import sbt.util.Logger
   * been idle for its bound with no watch holding it (`Life`).
   * The registry is keyed by the directory's canonical path, and a process that is stopped or
   * replaced is waited for, so that a directory never has two. */
-object Resident:
+object Resident {
   /** How long a link's process stays: it ends `idle` after its last build unless a watch holds
     * it. A build that a watch asked for brings the question whether that watch is still under
     * way (`watch`): the hold lasts as long as the answer is yes, whichever task the watch is of,
@@ -30,11 +30,12 @@ object Resident:
   @volatile private var closed = false
 
   /** Called with the directory of a process that ended without a successor. */
-  @volatile var onStopped: File => Unit = _ => ()
+  @volatile var onStopped: File => Unit = (_: File) => ()
 
-  def running(out: File): Boolean =
+  def running(out: File): Boolean = {
     val session = sessions.get(out.getCanonicalFile)
     session != null && session.alive
+  }
 
   /** Sends the output directory's process a plain `build` (the resident checks every file's
     * modification time itself, which finds an edit, a file added or removed), starting one first
@@ -43,48 +44,54 @@ object Resident:
     * the request is replaced and the build sent once more. A process starts as `teq @<file>`, the
     * rest of `command` written to its file at `argsPlace` (`ArgsFile`); the session keeps the
     * command itself. */
-  def build(out: File, command: Seq[String], argsPlace: ArgsFile.Place, root: File, log: Logger, life: Life): String =
+  def build(out: File, command: Seq[String], argsPlace: ArgsFile.Place, root: File, log: Logger, life: Life): String = {
     val key = out.getCanonicalFile
-    def current(): Session =
+    def current(): Session = {
       val stamp = (binaryStamp(command), classpathStamp(command))
       val session = sessions.compute(
         key,
         (_, old) =>
-          if closed then { if old != null then old.stop(); null }
-          else if old != null && old.alive && old.command == command && old.stamp == stamp then old
-          else { if old != null then old.stop(); Session.start(command, argsPlace, stamp, root, log) },
+          if (closed) { if (old != null) old.stop(); null }
+          else if (old != null && old.alive && old.command == command && old.stamp == stamp) old
+          else { if (old != null) old.stop(); Session.start(command, argsPlace, stamp, root, log) },
       )
-      if session == null then throw new MessageOnlyException("teq: the build is being unloaded")
+      if (session == null) throw new MessageOnlyException("teq: the build is being unloaded")
       session
-    def built(): String =
+    }
+    def built(): String = {
       val session = current()
       try session.build()
       finally session.used(life.watch, life.idle, () => stopIdle(key, session))
+    }
     try built()
-    catch case _: DeadSession => built()
+    catch { case _: DeadSession => built() }
+  }
 
   /** Ends the output directory's process and waits for it, so that the next build starts one
     * afresh. */
-  def stop(out: File): Unit =
+  def stop(out: File): Unit = {
     val key = out.getCanonicalFile
     val session = sessions.remove(key)
-    if session != null then
+    if (session != null) {
       session.stop()
       onStopped(key)
+    }
+  }
 
   /** The session's timer has run: the session ends when it is idle and no watch holds it,
     * and is looked at again after another bound while one does. */
   private def stopIdle(key: File, session: Session): Unit =
-    if !session.idle then session.lookAgain(() => stopIdle(key, session))
-    else if sessions.remove(key, session) then
+    if (!session.idle) session.lookAgain(() => stopIdle(key, session))
+    else if (sessions.remove(key, session)) {
       session.stop()
       onStopped(key)
+    }
 
   /** Stops every process when the build is unloaded (`reload`, a `set`, exit); a build under
     * way, woken by its process dying, finds the registry closed and starts no replacement. The
     * registry opens again once the processes are gone, since a `set` reloads the build and the
     * builds after it start their residents afresh. */
-  def stopAll(): Unit =
+  def stopAll(): Unit = {
     closed = true
     val stopped = new java.util.ArrayList[File]()
     sessions.forEach { (key, session) =>
@@ -94,12 +101,14 @@ object Resident:
     sessions.clear()
     stopped.forEach(key => onStopped(key))
     closed = false
+  }
 
   /** The size and modification time of the binary a command runs: a binary rebuilt at the same
     * path is another compiler. */
-  private def binaryStamp(command: Seq[String]): (Long, Long) =
+  private def binaryStamp(command: Seq[String]): (Long, Long) = {
     val binary = new File(command.head)
-    if binary.isFile then (binary.length, binary.lastModified) else (0L, 0L)
+    if (binary.isFile) (binary.length, binary.lastModified) else (0L, 0L)
+  }
 
   /** The entries of the command's `--classpath`, each with its size and modification time (a
     * directory's over its class files): the resident holds what it read from them, so an entry
@@ -113,17 +122,18 @@ object Resident:
 
 
   private def stampOver(f: File, counts: String => Boolean): (String, Long, Long) =
-    if f.isDirectory then
+    if (f.isDirectory) {
       val files = sbt.io.Path.allSubpaths(f).map(_._1).filter(x => x.isFile && counts(x.getName)).toSeq
       (f.getPath, files.map(_.length).sum, files.map(_.lastModified).foldLeft(0L)(_ max _))
-    else if f.isFile then (f.getPath, f.length, f.lastModified)
+    }
+    else if (f.isFile) (f.getPath, f.length, f.lastModified)
     else (f.getPath, 0L, 0L)
 
   /** The process died between two builds or under one, or teq exited on its own (a crash, a
     * `quit` sent by another session sharing the JVM). */
   private final class DeadSession extends Exception
 
-  private final class Session(val command: Seq[String], val stamp: ((Long, Long), Seq[(String, Long, Long)]), process: java.lang.Process, log: Logger):
+  private final class Session(val command: Seq[String], val stamp: ((Long, Long), Seq[(String, Long, Long)]), process: java.lang.Process, log: Logger) {
     private val stdin = new java.io.OutputStreamWriter(process.getOutputStream, "UTF-8")
     private val stdout = new java.io.BufferedReader(new java.io.InputStreamReader(process.getInputStream, "UTF-8"))
     private var answered = false
@@ -145,85 +155,96 @@ object Resident:
 
     /** After a build: the session is looked at once `idle` has passed. */
     def used(watch: Option[() => Boolean], idle: scala.concurrent.duration.FiniteDuration, look: () => Unit): Unit = synchronized {
-      if watch.isDefined then heldBy = watch
+      if (watch.isDefined) heldBy = watch
       idleAfter = idle.toNanos
       lookAgain(look)
     }
 
     def lookAgain(look: () => Unit): Unit = synchronized {
-      if alive then
-        if timer == null then timer = new java.util.Timer("teq-resident-idle", true)
-        if pending != null then pending.cancel()
+      if (alive) {
+        if (timer == null) timer = new java.util.Timer("teq-resident-idle", true)
+        if (pending != null) pending.cancel()
         pending = new java.util.TimerTask { def run(): Unit = look() }
         timer.schedule(pending, idleAfter / 1000000 + 50)
+      }
     }
 
     /** Idle for its bound, and held by no watch that is still under way. */
     def idle: Boolean = synchronized {
-      val held = heldBy.exists(underWay => try underWay() catch case _: Exception => false)
-      if !held then heldBy = None
+      val held = heldBy.exists(underWay => try underWay() catch { case _: Exception => false })
+      if (!held) heldBy = None
       !held && System.nanoTime - lastUsed >= idleAfter
     }
 
-    private def cancelTimer(): Unit =
+    private def cancelTimer(): Unit = {
       val running = timer
       timer = null
-      if running != null then running.cancel()
+      if (running != null) running.cancel()
+    }
 
     /** Reads the answer of the build the process made on start, for the request that comes
       * first, else sends `build` and reads its answer. Two sbt clients of one resident process
       * (two terminals running `~fastLinkJS`) are serialised. */
     def build(): String = synchronized {
-      if !alive then throw new DeadSession
-      try
-        if answered then
+      if (!alive) throw new DeadSession
+      try {
+        if (answered) {
           stdin.write("build\n")
           stdin.flush()
+        }
         val line = read()
         answered = true
         lastUsed = System.nanoTime
         line
-      catch
+      }
+      catch {
         case _: java.io.IOException => died()
         case e: InterruptedException =>
           // The task was cancelled under the request: the answer will arrive unread, so the
           // process goes, and the next build starts afresh.
           stop()
           throw e
+      }
     }
 
-    private def died(): Nothing =
+    private def died(): Nothing = {
       dead = true
       throw new DeadSession
+    }
 
-    private def read(): String =
+    private def read(): String = {
       val line = stdout.readLine()
-      if line == null then died()
+      if (line == null) died()
       line
+    }
 
     /** Ends the process and returns once it is gone: `quit`, which an idle process obeys at
       * once, then the kill, for one in the middle of a build. */
-    def stop(): Unit =
+    def stop(): Unit = {
       dead = true
       cancelTimer()
       try
-        if process.isAlive then
+        if (process.isAlive) {
           stdin.write("quit\n")
           stdin.flush()
-      catch case _: java.io.IOException => ()
+        }
+      catch { case _: java.io.IOException => () }
       try
-        if !process.waitFor(500, java.util.concurrent.TimeUnit.MILLISECONDS) then
+        if (!process.waitFor(500, java.util.concurrent.TimeUnit.MILLISECONDS)) {
           process.destroyForcibly()
           process.waitFor(StopBound.toMillis, java.util.concurrent.TimeUnit.MILLISECONDS)
-      catch case _: InterruptedException => process.destroyForcibly()
+        }
+      catch { case _: InterruptedException => process.destroyForcibly() }
       try java.lang.Runtime.getRuntime.removeShutdownHook(hook)
-      catch case _: IllegalStateException => () // the JVM is shutting down: this is the hook
+      catch { case _: IllegalStateException => () } // the JVM is shutting down: this is the hook
+    }
+  }
 
   /** How long a stopped process is waited for after its kill. */
   val StopBound: scala.concurrent.duration.FiniteDuration = scala.concurrent.duration.DurationInt(5).seconds
 
-  private object Session:
-    def start(command: Seq[String], argsPlace: ArgsFile.Place, stamp: ((Long, Long), Seq[(String, Long, Long)]), root: File, log: Logger): Session =
+  private object Session {
+    def start(command: Seq[String], argsPlace: ArgsFile.Place, stamp: ((Long, Long), Seq[(String, Long, Long)]), root: File, log: Logger): Session = {
       log.debug(s"teq: starting ${command.mkString(" ")} (its arguments in ${ArgsFile.file(argsPlace, command.tail)})")
       val builder = new ProcessBuilder(ArgsFile.command(command, argsPlace)*)
       builder.directory(root)
@@ -231,5 +252,8 @@ object Resident:
       builder.redirectError(ProcessBuilder.Redirect.INHERIT)
       val process =
         try builder.start()
-        catch case e: java.io.IOException => throw new MessageOnlyException(s"teq could not be started as ${command.head} (teqBinary or TEQ overrides it): ${e.getMessage}")
+        catch { case e: java.io.IOException => throw new MessageOnlyException(s"teq could not be started as ${command.head} (teqBinary or TEQ overrides it): ${e.getMessage}") }
       new Session(command, stamp, process, log)
+    }
+  }
+}

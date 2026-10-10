@@ -5,6 +5,7 @@ import java.nio.file.Path
 import scala.collection.mutable
 import scala.sys.process.{Process, ProcessLogger}
 import scala.util.control.NonFatal
+import scala.collection.compat.*
 
 import sbt.*
 import sbt.Keys.*
@@ -14,11 +15,11 @@ import sbt.nio.Keys.{allInputFiles, fileInputs, watchOnTermination, watchTrigger
 import sbt.nio.file.Glob
 import sbt.util.Logger
 
-object TeqPlugin extends AutoPlugin:
+object TeqPlugin extends AutoPlugin {
   override def trigger = allRequirements
   override def requires = plugins.JvmPlugin
 
-  object autoImport:
+  object autoImport {
     val teqBinary = settingKey[File]("The teq binary overriding the resolved one, by default $TEQ; a bare name is looked up on the PATH")
     val teqVersion = settingKey[String]("The version of the teq compiler resolved when teqBinary is not set: by default the compiler this plugin was released with, or $TEQ_VERSION")
     val teqReleases = settingKey[String]("Where the compiler's releases are, from 0.1.7: <base>/v<version>/ holds each platform's binary, SHA256SUMS and the binary manifest (GitHub's releases of teq by default)")
@@ -62,6 +63,7 @@ object TeqPlugin extends AutoPlugin:
     val teqMainClasses = settingKey[Seq[String]]("The project's main classes for teqExportAll besides Compile / mainClass and the aliases' targets: declared, since finding them takes a compile")
     type TeqCommand = dev.teq.sbt.TeqCommand
     val TeqCommand = dev.teq.sbt.TeqCommand
+  }
 
   import autoImport.*
 
@@ -92,18 +94,20 @@ object TeqPlugin extends AutoPlugin:
   val SnapshotGroup = "build.teq"
 
   /** The classifier in the convention of protoc's artifacts, which sbt-protoc reads the same way. */
-  def platformClassifier(osName: String, osArch: String): String =
+  def platformClassifier(osName: String, osArch: String): String = {
     val name = osName.toLowerCase
     val os =
-      if name.startsWith("mac") || name.startsWith("darwin") then "osx"
-      else if name.startsWith("windows") then "windows"
-      else if name.startsWith("linux") then "linux"
+      if (name.startsWith("mac") || name.startsWith("darwin")) "osx"
+      else if (name.startsWith("windows")) "windows"
+      else if (name.startsWith("linux")) "linux"
       else name.replaceAll("[^a-z0-9]+", "")
-    val arch = osArch.toLowerCase match
+    val arch = osArch.toLowerCase match {
       case "amd64" | "x86_64" | "x64" => "x86_64"
       case "aarch64" | "arm64" => "aarch_64"
       case other => other
+    }
     s"$os-$arch"
+  }
 
   /** The build's defaults a project reads where it sets none: `ThisBuild / teqThreads` reaches every project.
     * Without the driver the lock is this machine's description, not a committed one that a later
@@ -118,7 +122,7 @@ object TeqPlugin extends AutoPlugin:
     build.allProjectRefs.collect { case (ref, project) if project.autoPlugins.contains(TeqPlugin) => ref }
 
   override def projectSettings: Seq[Setting[?]] = Seq(
-    teqTarget := (if platform.value == "jvm" then Jvm else "js"),
+    teqTarget := (if (Compat.platform.value == "jvm") Jvm else "js"),
     teqMainClass := None,
     teqOutput := baseDirectory.value / "target" / "teq" / "out",
     teqModulePerFile := Nil,
@@ -129,9 +133,10 @@ object TeqPlugin extends AutoPlugin:
     teqSources := Def.settingDyn(sourceDirectories(configDependencies(buildDependencies.value, thisProjectRef.value, Compile))).value,
     teqClasspath := {
       val converter = fileConverter.value
-      val jars = (Compile / externalDependencyClasspath).value.map(entry => converter.toPath(entry.data).toFile)
-      if teqTarget.value == Jvm then jars.filter(_.getName.endsWith(".jar"))
-      else jars.filter(isTastyJar(platform.value))
+      val sbtPlatform = Compat.platform.value
+      val jars = (Compile / externalDependencyClasspath).value.map(entry => Compat.file(entry.data, converter))
+      if (teqTarget.value == Jvm) jars.filter(_.getName.endsWith(".jar"))
+      else jars.filter(isTastyJar(sbtPlatform))
     },
     teqScalacOptions := (Compile / scalacOptions).value,
     teqExtraSources := Nil,
@@ -141,7 +146,7 @@ object TeqPlugin extends AutoPlugin:
     teqProductionExcludes := Nil,
     teqDescriptionKeys := Map.empty,
     teqResolvedBinary := Def.taskIf {
-      if teqBinary.value != Unset then teqBinary.value
+      if (teqBinary.value != Unset) teqBinary.value
       else resolveBinary.value
     }.value,
     teqBuild := {
@@ -162,19 +167,24 @@ object TeqPlugin extends AutoPlugin:
     teqRunAliases := Map.empty,
     teqMainClasses := Nil,
     teqGenerators := Nil,
-    // The build's own binary for a command whose first word is `teq`, resolved only then.
-    Compile / teqGenerate := Def.uncached(Def.taskIf {
-      if (Compile / teqGenerators).value.exists(_.runsTeq) then
-        val _ = (Compile / teqGenerate / allInputFiles).value
-        Export.generate((Compile / teqGenerators).value, (LocalRootProject / baseDirectory).value, (Compile / sourceManaged).value / "teq", Some(teqResolvedBinary.value), streams.value.log)
-      else
-        val _ = (Compile / teqGenerate / allInputFiles).value
-        Export.generate((Compile / teqGenerators).value, (LocalRootProject / baseDirectory).value, (Compile / sourceManaged).value / "teq", None, streams.value.log)
-    }.value),
+    Compat.uncached(Compile / teqGenerate, generate),
     Compile / teqGenerate / fileInputs ++= Export.generatorInputs((Compile / teqGenerators).value, (LocalRootProject / baseDirectory).value),
-    Compile / sourceGenerators ++= (if (Compile / teqGenerators).value.nonEmpty then Seq((Compile / teqGenerate).taskValue) else Nil),
+    Compile / sourceGenerators ++= (if ((Compile / teqGenerators).value.nonEmpty) Seq((Compile / teqGenerate).taskValue) else Nil),
   ) ++ Export.projectSettings ++ Inputs.projectSettings ++ watched(teqLinkJS, teqServedOutput, Def.setting(true)) ++
     inConfig(Compile)(compilerSettings) ++ inConfig(Test)(compilerSettings)
+
+  /** `Compile / teqGenerate`: the configuration's generators run, the build's own binary for a command whose first
+    * word is `teq`, resolved only then. */
+  private val generate: Def.Initialize[Task[Seq[File]]] = Def.taskIf {
+    if ((Compile / teqGenerators).value.exists(_.runsTeq)) {
+      val _ = (Compile / teqGenerate / allInputFiles).value
+      Export.generate((Compile / teqGenerators).value, (LocalRootProject / baseDirectory).value, (Compile / sourceManaged).value / "teq", Some(teqResolvedBinary.value), streams.value.log)
+    }
+    else {
+      val _ = (Compile / teqGenerate / allInputFiles).value
+      Export.generate((Compile / teqGenerators).value, (LocalRootProject / baseDirectory).value, (Compile / sourceManaged).value / "teq", None, streams.value.log)
+    }
+  }
 
   /** The dev link into a directory, which `teqLinkJS` runs into `teqServedOutput` and a
     * Scala.js project's `fastLinkJS` under `teqCompiler` into the linker's own: the split build
@@ -239,7 +249,7 @@ object TeqPlugin extends AutoPlugin:
       val test = description.copy(out = relativeTo(description.root.toPath, out), hot = false)
       linkBuild(out, test.teq +: test.watchArgs, ArgsFile.into(baseDirectory.value, "test", "link", out), test.root, log, life)
       val stub = out / "main.js"
-      if !stub.exists || IO.read(stub) != TestStub then IO.write(stub, TestStub)
+      if (!stub.exists || IO.read(stub) != TestStub) IO.write(stub, TestStub)
       Directory.mark(out, identity)
     }
     out
@@ -286,10 +296,10 @@ object TeqPlugin extends AutoPlugin:
       val root = description.root.toPath
       val entryRoot = baseDirectory.value / "target" / "teq" / "test-entry"
       val entry = entryRoot / "dev" / "teq" / "sbt" / "TestMain.scala"
-      if !entry.exists || IO.read(entry) != TestEntrySource then IO.write(entry, TestEntrySource)
+      if (!entry.exists || IO.read(entry) != TestEntrySource) IO.write(entry, TestEntrySource)
       val roots = (sourceDirectories(pairs).value ++ teqExtraSources.value).filter(_.isDirectory).distinct :+ entryRoot
       val converter = fileConverter.value
-      val jars = (Test / externalDependencyClasspath).value.map(entry => converter.toPath(entry.data).toFile).filter(isTastyJar(platform.value))
+      val jars = (Test / externalDependencyClasspath).value.map(entry => Compat.file(entry.data, converter)).filter(isTastyJar(Compat.platform.value))
       description.copy(
         sources = roots.map(relativeTo(root, _)),
         classpath = jars.map(_.getAbsolutePath),
@@ -306,13 +316,13 @@ object TeqPlugin extends AutoPlugin:
     * watched task alone: the resident of a link that a watch of another task asked for ends
     * by its idle bound, once that watch is over (`Resident.Life`). */
   private[sbt] def watched(task: TaskKey[?], directory: Def.Initialize[File], when: Def.Initialize[Boolean]): Seq[Setting[?]] = Seq(
-    task / watchTriggers ++= Def.settingDyn(if when.value then linkTriggers else Def.setting(Seq.empty[Glob])).value,
+    task / watchTriggers ++= Def.settingDyn(if (when.value) linkTriggers else Def.setting(Seq.empty[Glob])).value,
     task / watchOnTermination := {
       val outer = watchOnTermination.?.value.getOrElse(Watching.defaultOnTermination)
       val out = directory.value
       val teq = when.value
       (action, command, count, state) =>
-        if teq then Resident.stop(out)
+        if (teq) Resident.stop(out)
         outer(action, command, count, state)
     },
   )
@@ -347,37 +357,40 @@ object TeqPlugin extends AutoPlugin:
     * (`IntegrationTest`) takes them with `inConfig(IntegrationTest)(TeqPlugin.compilerSettings)`. */
   def compilerSettings: Seq[Setting[?]] = Seq(
     teqCompilerCommand := compilerCommand.value,
-    compileIncremental := Def.uncached(Def.taskIf {
-      if teqCompiler.value then
-        val result = compileIncremental.value
-        TeqCompile.reconcile(teqCompilerCommand.value, streams.value.log)
-        result
-      else compileIncremental.value
-    }.value),
-    compile / compileInputs := Def.uncached(Def.taskIf {
-      if teqCompiler.value then
-        val inputs = (compile / compileInputs).value
-        val cmd = teqCompilerCommand.value
-        TeqCompile.refuseJava(cmd.sources)
-        TeqCompile.Marker.check(classDirectory.value, compileAnalysisFile.value, teq = true, streams.value.log)
-        val journal = new TeqCompile.Journal(cmd.classes)
-        val compilers = inputs.compilers.withScalac(new TeqCompile.Compiler(cmd, inputs.compilers.scalac, journal))
-        val setup = inputs.setup
-          .withIncrementalCompilerOptions(TeqCompile.withJournal(inputs.setup.incrementalCompilerOptions, journal))
-          .withExtra(inputs.setup.extra :+ pair("teq", cmd.identity))
-        inputs.withCompilers(compilers).withSetup(setup)
-      else
-        val inputs = (compile / compileInputs).value
-        TeqCompile.Marker.check(classDirectory.value, compileAnalysisFile.value, teq = false, streams.value.log)
-        inputs
-    }.value),
-    compile / compileInputs2 := Def.uncached(Def.taskIf {
-      if teqCompiler.value then
-        val inputs = (compile / compileInputs2).value
-        inputs.copy(incrementalOptions = inputs.incrementalOptions :+ ("teq" -> teqCompilerCommand.value.identity))
-      else (compile / compileInputs2).value
-    }.value),
-  )
+    Compat.uncached(compileIncremental, incremental),
+    Compat.uncached(compile / compileInputs, compileInputsWithTeq),
+  ) ++ Compat.compileInputsSettings
+
+  /** zinc's incremental compile, and under `teqCompiler` the manifest of the products reconciled after it. */
+  private val incremental = Def.taskIf {
+    if (teqCompiler.value) {
+      val result = compileIncremental.value
+      TeqCompile.reconcile(teqCompilerCommand.value, streams.value.log)
+      result
+    }
+    else compileIncremental.value
+  }
+
+  /** zinc's inputs, with teq as the Scala compiler under `teqCompiler`; the class directory's marker checked. */
+  private val compileInputsWithTeq = Def.taskIf {
+    if (teqCompiler.value) {
+      val inputs = (compile / compileInputs).value
+      val cmd = teqCompilerCommand.value
+      TeqCompile.refuseJava(cmd.sources)
+      TeqCompile.Marker.check(classDirectory.value, compileAnalysisFile.value, teq = true, streams.value.log)
+      val journal = new TeqCompile.Journal(cmd.classes)
+      val compilers = inputs.compilers.withScalac(new TeqCompile.Compiler(cmd, inputs.compilers.scalac, journal))
+      val setup = inputs.setup
+        .withIncrementalCompilerOptions(TeqCompile.withJournal(inputs.setup.incrementalCompilerOptions, journal))
+        .withExtra(inputs.setup.extra :+ pair("teq", cmd.identity))
+      inputs.withCompilers(compilers).withSetup(setup)
+    }
+    else {
+      val inputs = (compile / compileInputs).value
+      TeqCompile.Marker.check(classDirectory.value, compileAnalysisFile.value, teq = false, streams.value.log)
+      inputs
+    }
+  }
 
   /** The configuration's compile by teq: the binary, the build's root, the class directory, a
     * JVM build or a Scala.js project's check (`teqTarget`), the flags of `teqThreads`,
@@ -389,51 +402,56 @@ object TeqPlugin extends AutoPlugin:
     val root = (LocalRootProject / baseDirectory).value.toPath.toAbsolutePath.normalize.toFile
     val jvm = teqTarget.value == Jvm
     val options = ScalacOptions(scalacOptions.value)
-    if options.ignored.nonEmpty then log.debug(s"teq: scalac options without a teq flag: ${options.ignored.mkString(" ")}")
+    if (options.ignored.nonEmpty) log.debug(s"teq: scalac options without a teq flag: ${options.ignored.mkString(" ")}")
     val binary = teqResolvedBinary.value
-    val teq = if binary.getParentFile == null then binary.getName else binary.getAbsolutePath
+    val teq = if (binary.getParentFile == null) binary.getName else binary.getAbsolutePath
     val flags = teqCacheableState.value.flatMap(Seq("--cacheable-state", _)) ++ macroStateFlags(teqMacroState.value) ++ options.flags(jvm)
     val threads = teqThreads.value.toSeq.flatMap(n => Seq("--threads", n.toString))
     val converter = fileConverter.value
-    val classpath = dependencyClasspath.value.map(entry => converter.toPath(entry.data).toFile)
-    val identity = (Seq(binaryDigest(binary), if jvm then "jvm" else "check") ++ flags).mkString(" ")
+    val classpath = dependencyClasspath.value.map(entry => Compat.file(entry.data, converter))
+    val identity = (Seq(binaryDigest(binary), if (jvm) "jvm" else "check") ++ flags).mkString(" ")
     val argsPlace = ArgsFile.of(baseDirectory.value, configuration.value.name, "batch")
-    TeqCompile.Command(teq, root, classDirectory.value, check = !jvm, platform.value, threads ++ flags, sources.value, classpath, identity, argsPlace)
+    TeqCompile.Command(teq, root, classDirectory.value, check = !jvm, Compat.platform.value, threads ++ flags, sources.value, classpath, identity, argsPlace)
   }
 
-  private def pair(key: String, value: String): xsbti.T2[String, String] = new xsbti.T2[String, String]:
+  private def pair(key: String, value: String): xsbti.T2[String, String] = new xsbti.T2[String, String] {
     def get1(): String = key
     def get2(): String = value
+  }
 
   private val digests = new java.util.concurrent.ConcurrentHashMap[(String, Long, Long), String]()
 
   /** The SHA-256 of the binary, once per binary (path, size, modification time), a bare name's as
     * the PATH resolves it; one found nowhere is named by what it prints to `--version`. */
-  private def binaryDigest(named: File): String =
+  private def binaryDigest(named: File): String = {
     val binary =
-      if named.getParentFile != null then named
+      if (named.getParentFile != null) named
       else sys.env.getOrElse("PATH", "").split(File.pathSeparator).iterator.map(new File(_, named.getName)).find(f => f.isFile && f.canExecute).getOrElse(named)
-    if !binary.isFile then binaryVersion(named)
+    if (!binary.isFile) binaryVersion(named)
     else
       digests.computeIfAbsent((binary.getPath, binary.length, binary.lastModified), _ => {
         val digest = java.security.MessageDigest.getInstance("SHA-256")
         val in = new java.io.FileInputStream(binary)
-        try
+        try {
           val buffer = new Array[Byte](1 << 16)
           var n = in.read(buffer)
-          while n > 0 do
+          while (n > 0) {
             digest.update(buffer, 0, n)
             n = in.read(buffer)
+          }
+        }
         finally in.close()
         digest.digest().map(b => f"${b & 0xff}%02x").mkString
       })
+  }
 
   private val versions = new java.util.concurrent.ConcurrentHashMap[(String, Long, Long), String]()
 
   /** What the binary prints to `--version`, once per binary (path, size, modification time). */
-  private def binaryVersion(binary: File): String =
+  private def binaryVersion(binary: File): String = {
     val key = (binary.getPath, binary.length, binary.lastModified)
-    versions.computeIfAbsent(key, _ => try Process(Seq(binary.getPath, "--version")).!!.trim catch case _: Exception => "unknown")
+    versions.computeIfAbsent(key, _ => try Process(Seq(binary.getPath, "--version")).!!.trim catch { case _: Exception => "unknown" })
+  }
 
   /** `scalajs:main.js` (the Scala.js vite plugin's own convention) resolves into this one-line
     * module, which re-exports teq's own `main.mjs`: teq's naming (`docs/TARGETS.md`, "Module
@@ -442,9 +460,10 @@ object TeqPlugin extends AutoPlugin:
     * Scala.js-style plugin expects instead of teq gaining a naming flag of its own for one
     * consumer. teq's own directory bookkeeping (`docs/TARGETS.md`, "Module splitting": stale
     * modules removed) only touches `.mjs` files, so this file is never disturbed by a rebuild. */
-  private def writeDevStub(out: File): Unit =
+  private def writeDevStub(out: File): Unit = {
     val stub = out / "main.js"
-    if !stub.exists || IO.read(stub) != DevStub then IO.write(stub, DevStub)
+    if (!stub.exists || IO.read(stub) != DevStub) IO.write(stub, DevStub)
+  }
 
   /** The stub of a dev build carries what an application's entry would otherwise have to: the
     * refresh runtime ahead of the program, so that its module body runs before React DOM's
@@ -465,8 +484,8 @@ object TeqPlugin extends AutoPlugin:
 
   private def generatedSourcesOf(pairs: Seq[(ProjectRef, Configuration)]): Def.Initialize[Task[Unit]] =
     pairs
-      .map((ref, config) => ref / config / managedSources)
-      .foldLeft(Def.task(()))((before, sources) => Def.task { before.value; sources.value; () })
+      .map{ case (ref, config) => ref / config / managedSources}
+      .foldLeft(Def.task(())){ case (before, sources) => Def.task { before.value; sources.value; () }}
 
   private val describe: Def.Initialize[Task[Description]] = Def.task {
     generatedSources.value
@@ -475,9 +494,10 @@ object TeqPlugin extends AutoPlugin:
     val existing = (teqSources.value ++ teqExtraSources.value).filter(_.isDirectory).distinct
     Description(
       root = root.toFile,
-      teq = teqResolvedBinary.value match
+      teq = teqResolvedBinary.value match {
         case bare if bare.getParentFile == null => bare.getName
-        case binary => binary.getAbsolutePath,
+        case binary => binary.getAbsolutePath
+      },
       lib = teqLib.value.map(path),
       sources = existing.map(path),
       excludes = teqExcludes.value,
@@ -498,38 +518,43 @@ object TeqPlugin extends AutoPlugin:
 
   /** Runs `teq` to completion, its arguments in their file at `argsPlace`, its diagnostics going
     * to sbt's log; a non-zero exit fails the task. */
-  private def runTeq(teq: String, args: Seq[String], argsPlace: ArgsFile.Place, root: File, log: Logger): Unit =
+  private def runTeq(teq: String, args: Seq[String], argsPlace: ArgsFile.Place, root: File, log: Logger): Unit = {
     val stderr = mutable.ArrayBuffer.empty[String]
     val code =
       try Process(ArgsFile.command(teq +: args, argsPlace), root).!(ProcessLogger(line => log.info(line), line => stderr += line))
-      catch case e: java.io.IOException => throw new MessageOnlyException(s"teq could not be started as $teq (teqBinary or TEQ overrides it): ${e.getMessage}")
-    if code != 0 then
+      catch { case e: java.io.IOException => throw new MessageOnlyException(s"teq could not be started as $teq (teqBinary or TEQ overrides it): ${e.getMessage}") }
+    if (code != 0) {
       stderr.foreach(line => log.error(line))
       throw new MessageOnlyException(s"teq compiler build exited with code $code")
-    stderr.foreach(line => if line.contains(": warning: ") then log.warn(line) else log.info(line))
+    }
+    stderr.foreach(line => if (line.contains(": warning: ")) log.warn(line) else log.info(line))
+  }
 
   /** A build of the resident `teq compiler watch` behind `teqLinkJS`: the answer's total and the modules
     * written go to the log, an error fails the task, with its diagnostics in the log as teq
     * prints them, and leaves the process for the next build. */
-  private def linkBuild(served: File, command: Seq[String], argsPlace: ArgsFile.Place, root: File, log: Logger, life: Resident.Life): Unit =
+  private def linkBuild(served: File, command: Seq[String], argsPlace: ArgsFile.Place, root: File, log: Logger, life: Resident.Life): Unit = {
     val line = Resident.build(served, command, argsPlace, root, log, life)
-    if line.contains("\"ok\":false") then
-      val errors = try Json.parse(line)("errors").items catch case _: Json.Malformed => Nil
-      if errors.isEmpty then log.error(s"teq: $line")
-      for error <- errors do
+    if (line.contains("\"ok\":false")) {
+      val errors = try Json.parse(line)("errors").items catch { case _: Json.Malformed => Nil }
+      if (errors.isEmpty) log.error(s"teq: $line")
+      for (error <- errors) {
         val at = Seq(error("file"), error("line"), error("col")).map(_.str).filter(_.nonEmpty).mkString(":")
-        log.error(s"${if at.isEmpty then "teq" else at}: error: ${error("message").str}")
-        for text <- Seq(error("source").str, error("caret").str) if text.nonEmpty do log.error(text)
-      throw new MessageOnlyException(s"teq: ${errors.size max 1} error${if errors.size > 1 then "s" else ""}")
+        log.error(s"${if (at.isEmpty) "teq" else at}: error: ${error("message").str}")
+        for (text <- Seq(error("source").str, error("caret").str) if text.nonEmpty) log.error(text)
+      }
+      throw new MessageOnlyException(s"teq: ${errors.size max 1} error${if (errors.size > 1) "s" else ""}")
+    }
     val total = "\"total\":([0-9.]+)".r.findFirstMatchIn(line).map(_.group(1))
     val changed = "\"changed\":(\\[[^\\]]*\\])".r.findFirstMatchIn(line).map(_.group(1)).getOrElse("[]")
     log.info(s"teq: ${total.fold("built")(ms => s"built in ${ms}ms")}; changed $changed")
+  }
 
   /** One body of `resolveBinary` at a time for a copy, across the projects' tasks and the commands of a session. */
   private val copyLocks = scala.collection.concurrent.TrieMap.empty[String, AnyRef]
 
   private val resolveBinary: Def.Initialize[Task[File]] = Def.taskDyn {
-    if Export.isSnapshot(teqVersion.value) then resolveSnapshot else resolveRelease
+    if (Export.isSnapshot(teqVersion.value)) resolveSnapshot else resolveRelease
   }
 
   /** The binary of a release from 0.1.7 on, verified (`Release.binary`) before anything runs it, then copied under
@@ -542,27 +567,30 @@ object TeqPlugin extends AutoPlugin:
     val pin = lock.flatMap(Release.pinIn(_, version, classifier))
     val cache = Export.cacheRoot().getOrElse(baseDirectory.value / "target" / "teq")
     val served = Served(allCredentials.value, log)
-    val verified = Release.floor(version).toLeft(()).flatMap(_ => Release.binary(base, version, classifier, cache, pin, served, log)) match
+    val verified = Release.floor(version).toLeft(()).flatMap(_ => Release.binary(base, version, classifier, cache, pin, served, log)) match {
       case Right(v) => v
       case Left(why) => throw new MessageOnlyException(
         s"teq: $why. Set teqBinary (or TEQ in the environment) to a local binary, or teqVersion to a released compiler")
+    }
     val name = teqArtifact.value
     val binary = baseDirectory.value / "target" / "teq" / "bin" / s"$name-$version-$classifier${Release.executableSuffix(classifier)}"
     copyLocks.getOrElseUpdate(binary.getAbsolutePath, new AnyRef).synchronized {
       // The copy that runs, by its bytes (Release.digestOf, which no write that keeps a file's date escapes).
-      if !Release.digestOf(binary).exists(_._2 == verified.sha1) then
+      if (!Release.digestOf(binary).exists(_._2 == verified.sha1)) {
         IO.copyFile(verified.file, binary, preserveLastModified = true)
         binary.setExecutable(true)
         val wanted = s"teq $version"
         val printed =
           try Process(Seq(binary.getAbsolutePath, "--version")).!!.trim
-          catch case e: Exception => s"nothing (${e.getMessage})"
-        if printed != wanted && !printed.startsWith(wanted + " ") then
+          catch { case e: Exception => s"nothing (${e.getMessage})" }
+        if (printed != wanted && !printed.startsWith(wanted + " ")) {
           IO.delete(binary)
           IO.delete(Sha1.stamp(binary))
           throw new MessageOnlyException(s"teq: the release v$version's binary for $classifier printed $printed to --version instead of $wanted")
+        }
         Sha1.writeStamp(binary)
         log.info(s"teq: $printed from ${Release.assetUrl(base, version, classifier)}, sha256 ${verified.sha256}")
+      }
       Export.share(binary, verified.sha1, binary.getName, Export.cacheRoot(), log)
       binary
     }
@@ -581,40 +609,45 @@ object TeqPlugin extends AutoPlugin:
     def failed(e: Throwable) = s"resolution failed (${Option(e.getMessage).getOrElse(e.toString).linesIterator.mkString(" ")})"
     def resolve(): Either[String, File] =
       try
-        lm.update(lm.wrapDependencyInModule(module), librarymanagement.UpdateConfiguration(), librarymanagement.UnresolvedWarningConfiguration(), log) match
+        lm.update(lm.wrapDependencyInModule(module), librarymanagement.UpdateConfiguration(), librarymanagement.UnresolvedWarningConfiguration(), log) match {
           case Left(warning) => Left(failed(warning.resolveException))
           case Right(report) =>
-            val files = for
+            val files = for {
               conf <- report.configurations
               m <- conf.modules
               (artifact, file) <- m.artifacts
               if artifact.classifier.contains(classifier)
+            }
             yield file
             files.headOption.toRight("resolution found no file")
-      catch case NonFatal(e) => Left(failed(e))
+        }
+      catch { case NonFatal(e) => Left(failed(e)) }
     val binary = baseDirectory.value / "target" / "teq" / "bin" / s"$name-$version-$classifier${Release.executableSuffix(classifier)}"
     copyLocks.getOrElseUpdate(binary.getAbsolutePath, new AnyRef).synchronized {
-      resolve().flatMap(file => Sha1.of(file).map(digest => (file, digest)).toRight(s"$file cannot be read")) match
+      resolve().flatMap(file => Sha1.of(file).map(digest => (file, digest)).toRight(s"$file cannot be read")) match {
         case Left(why) if binary.isFile =>
           log.warn(s"teq: $why; the copy $binary serves")
           binary
         case Left(why) => fail(why)
         case Right((file, digest)) =>
-          if !Sha1.stamped(binary).contains(digest) then
+          if (!Sha1.stamped(binary).contains(digest)) {
             IO.copyFile(file, binary, preserveLastModified = true)
             binary.setExecutable(true)
             val wanted = s"teq ${version.stripSuffix("-SNAPSHOT")}"
             val printed =
               try Process(Seq(binary.getAbsolutePath, "--version")).!!.trim
-              catch case e: Exception => s"nothing (${e.getMessage})"
-            if printed != wanted && !printed.startsWith(wanted + " ") then
+              catch { case e: Exception => s"nothing (${e.getMessage})" }
+            if (printed != wanted && !printed.startsWith(wanted + " ")) {
               IO.delete(binary)
               IO.delete(Sha1.stamp(binary))
               fail(s"$file printed $printed to --version instead of $wanted")
+            }
             Sha1.writeStamp(binary)
             log.info(s"teq: $printed from $coordinates")
+          }
           Export.share(binary, digest, binary.getName, Export.cacheRoot(), log)
           binary
+      }
     }
   }
 
@@ -622,55 +655,61 @@ object TeqPlugin extends AutoPlugin:
     * dependencies first: the configuration and the ones it extends (`Test` holds `Compile`),
     * and for each project depended on the configurations its mapping names for these
     * (`compile->compile;test->test`), with their own dependencies in turn. */
-  private def configDependencies(deps: BuildDependencies, project: ProjectRef, config: Configuration): Seq[(ProjectRef, Configuration)] =
+  private def configDependencies(deps: BuildDependencies, project: ProjectRef, config: Configuration): Seq[(ProjectRef, Configuration)] = {
     val order = mutable.ArrayBuffer.empty[(ProjectRef, Configuration)]
     val seen = mutable.Set.empty[(ProjectRef, String)]
     def extended(c: Configuration): Seq[Configuration] = (c +: c.extendsConfigs.flatMap(extended)).distinct
     def visit(ref: ProjectRef, c: Configuration): Unit =
-      if seen.add((ref, c.name)) then
+      if (seen.add((ref, c.name))) {
         val own = extended(c).map(_.name).toSet
-        for dep <- deps.classpath.getOrElse(ref, Nil) do
-          for target <- mappedConfigs(dep.configuration, own) do
+        for (dep <- deps.classpath.getOrElse(ref, Nil))
+          for (target <- mappedConfigs(dep.configuration, own))
             visit(dep.project, Configuration.of(target.capitalize, target))
-        for c <- extended(c).reverse do
-          if !order.exists((r, x) => r == ref && x.name == c.name) then order += ((ref, c))
+        for (c <- extended(c).reverse)
+          if (!order.exists{ case (r, x) => r == ref && x.name == c.name}) order += ((ref, c))
+      }
     visit(project, config)
     order.toSeq
+  }
 
   /** The configurations of a dependency that a mapping such as `compile->compile;test->test`
     * gives the configurations `from` (by default `compile` for `compile`). */
   private def mappedConfigs(mapping: Option[String], from: Set[String]): Seq[String] =
     mapping.getOrElse("compile").split(";").toSeq.flatMap { part =>
-      val (sources, targets) = part.split("->") match
+      val (sources, targets) = part.split("->") match {
         case Array(s, t) => (s.split(",").map(_.trim).toSeq, t.split(",").map(_.trim).toSeq)
         case Array(s) => (s.split(",").map(_.trim).toSeq, s.split(",").map(_.trim).toSeq)
         case _ => (Nil, Nil)
-      if sources.exists(from) then targets.filter(_.nonEmpty) else Nil
+      }
+      if (sources.exists(from)) targets.filter(_.nonEmpty) else Nil
     }.distinct
 
   private def sourceDirectories(pairs: Seq[(ProjectRef, Configuration)]): Def.Initialize[Seq[File]] =
     pairs
-      .map((ref, config) => (ref / config / unmanagedSourceDirectories).zipWith(ref / config / managedSourceDirectories)(_ ++ _))
-      .foldLeft(Def.setting(Seq.empty[File]))((all, dirs) => all.zipWith(dirs)(_ ++ _))
+      .map{ case (ref, config) => (ref / config / unmanagedSourceDirectories).zipWith(ref / config / managedSourceDirectories)(_ ++ _)}
+      .foldLeft(Def.setting(Seq.empty[File])){ case (all, dirs) => all.zipWith(dirs)(_ ++ _)}
 
   private[teq] val Jvm = "jvm"
 
   private val stdJars = Seq("scala-library-", "scala3-library_", "scalajs-library_", "scalajs-scalalib_")
 
   /** A Scala 3 library of the project's platform: `_sjs1_3-*.jar` on Scala.js, `_3-*.jar` on the JVM. */
-  private def isTastyJar(platform: String)(jar: File): Boolean =
+  private def isTastyJar(platform: String)(jar: File): Boolean = {
     val name = jar.getName
     val ofPlatform =
-      if platform == "jvm" then name.contains("_3-") && !name.contains("_sjs") && !name.contains("_native")
+      if (platform == "jvm") name.contains("_3-") && !name.contains("_sjs") && !name.contains("_native")
       else name.contains(s"_${platform}_3-")
     name.endsWith(".jar") && ofPlatform && !stdJars.exists(name.startsWith)
+  }
 
-  private def relativeTo(root: Path, file: File): String =
+  private def relativeTo(root: Path, file: File): String = {
     val path = file.toPath.toAbsolutePath.normalize
-    if path.startsWith(root) then root.relativize(path).toString.replace('\\', '/') match
+    if (path.startsWith(root)) root.relativize(path).toString.replace('\\', '/') match {
       case "" => "."
       case relative => relative
+    }
     else path.toString
+  }
 
   private[sbt] final case class ScalacOptions(
     maxInlines: Option[Int],
@@ -685,7 +724,7 @@ object TeqPlugin extends AutoPlugin:
     wtostringInterpolated: Boolean = false,
     wconf: Seq[String] = Nil,
     language: Seq[String] = Nil,
-  ):
+  ) {
     /** Whether the unused imports are reported, as scalac's `WunusedHas.imports` reads the kinds. */
     def wunusedImports: Boolean =
       (wunused.contains("all") || wunused.contains("imports") || wunused.contains("linted")) && !wunused.contains("strict-no-implicit-warn")
@@ -693,23 +732,24 @@ object TeqPlugin extends AutoPlugin:
     /** The teq flags the options map onto; the output version is a JVM build's alone. */
     def flags(jvm: Boolean): Seq[String] =
       maxInlines.toSeq.flatMap(n => Seq("--max-inlines", n.toString)) ++
-        (if strictEquality then Seq("--strict-equality") else Nil) ++
-        (if kindProjector then Seq("--kind-projector") else Nil) ++
-        (if language.nonEmpty then Seq("--language", language.mkString(",")) else Nil) ++
-        (if werror then Seq("--werror") else Nil) ++
-        (if wunused.nonEmpty then Seq("--wunused", wunused.mkString(",")) else Nil) ++
-        (if deprecation then Seq("--deprecation") else Nil) ++
-        (if feature then Seq("--feature") else Nil) ++
-        (if wtostringInterpolated then Seq("--wtostring-interpolated") else Nil) ++
+        (if (strictEquality) Seq("--strict-equality") else Nil) ++
+        (if (kindProjector) Seq("--kind-projector") else Nil) ++
+        (if (language.nonEmpty) Seq("--language", language.mkString(",")) else Nil) ++
+        (if (werror) Seq("--werror") else Nil) ++
+        (if (wunused.nonEmpty) Seq("--wunused", wunused.mkString(",")) else Nil) ++
+        (if (deprecation) Seq("--deprecation") else Nil) ++
+        (if (feature) Seq("--feature") else Nil) ++
+        (if (wtostringInterpolated) Seq("--wtostring-interpolated") else Nil) ++
         wconf.flatMap(rules => Seq("--wconf", rules)) ++
-        (if jvm then javaOutputVersion.toSeq.flatMap(n => Seq("--java-output-version", n.toString)) else Nil)
+        (if (jvm) javaOutputVersion.toSeq.flatMap(n => Seq("--java-output-version", n.toString)) else Nil)
+  }
 
-  private[sbt] object ScalacOptions:
+  private[sbt] object ScalacOptions {
     private val withArgument = Set("-source", "-release", "-encoding", "-java-output-version")
     /** `-release` names the class files' version too, unless `-java-output-version` does. */
     private val outputVersion = Seq("-java-output-version", "-release")
 
-    def apply(options: Seq[String]): ScalacOptions =
+    def apply(options: Seq[String]): ScalacOptions = {
       var maxInlines = Option.empty[Int]
       var strictEquality = false
       var kindProjector = false
@@ -723,16 +763,16 @@ object TeqPlugin extends AutoPlugin:
       val versions = mutable.Map.empty[String, Int]
       val ignored = mutable.ArrayBuffer.empty[String]
       var rest = options.toList
-      while rest.nonEmpty do
-        rest match
+      while (rest.nonEmpty)
+        rest match {
           case option :: n :: tail if outputVersion.contains(option) && n.toIntOption.isDefined =>
             versions(option) = n.toInt
-            if option == "-release" then ignored += s"$option $n"
+            if (option == "-release") ignored += s"$option $n"
             rest = tail
           case option :: tail if outputVersion.exists(name => option.startsWith(name + ":")) && option.dropWhile(_ != ':').drop(1).toIntOption.isDefined =>
             val name = option.takeWhile(_ != ':')
             versions(name) = option.dropWhile(_ != ':').drop(1).toInt
-            if name == "-release" then ignored += option
+            if (name == "-release") ignored += option
             rest = tail
           case "-Xmax-inlines" :: n :: tail if n.toIntOption.isDefined =>
             maxInlines = n.toIntOption
@@ -776,7 +816,7 @@ object TeqPlugin extends AutoPlugin:
             rest = tail
           case option :: tail if option.startsWith("-language:") =>
             val (strict, others) = option.stripPrefix("-language:").split(",").toSeq.map(_.trim).filter(_.nonEmpty).partition(_ == "strictEquality")
-            if strict.nonEmpty then strictEquality = true
+            if (strict.nonEmpty) strictEquality = true
             language ++= others
             rest = tail
           case option :: argument :: tail if withArgument(option) =>
@@ -786,8 +826,11 @@ object TeqPlugin extends AutoPlugin:
             ignored += option
             rest = tail
           case Nil => ()
+        }
       val javaOutputVersion = outputVersion.collectFirst { case name if versions.contains(name) => versions(name) }
       ScalacOptions(maxInlines, strictEquality, kindProjector, werror, javaOutputVersion, ignored.distinct.toSeq, wunused.distinct.toSeq, deprecation, feature, wtostringInterpolated, wconf.toSeq, language.distinct.toSeq)
+    }
+  }
 
   private final case class Description(
     root: File,
@@ -808,33 +851,36 @@ object TeqPlugin extends AutoPlugin:
     productionSources: Seq[String],
     productionExcludes: Seq[String],
     main: Option[String] = None,
-  ):
+  ) {
     /** The arguments of `teq compiler build`, from `root`. */
-    def buildArgs(production: Boolean): Seq[String] =
-      val inputs = lib.toSeq ++ sources ++ (if production then productionSources else Nil)
-      val left = excludes ++ (if production then productionExcludes else Nil)
-      val output = jvm match
+    def buildArgs(production: Boolean): Seq[String] = {
+      val inputs = lib.toSeq ++ sources ++ (if (production) productionSources else Nil)
+      val left = excludes ++ (if (production) productionExcludes else Nil)
+      val output = jvm match {
         case Some(build) =>
           Seq("--target", Jvm, "--std=scala-library", "-o", out) ++ build.mainClass.toSeq.flatMap(Seq("--main", _))
         case None =>
           Seq("--split", out) ++
-            (if small.nonEmpty then Seq("--module-per-file", small.mkString(",")) else Nil) ++
-            (if hot then Seq("--hot") else Nil) ++
-            (if production then Seq("--release") else Nil)
+            (if (small.nonEmpty) Seq("--module-per-file", small.mkString(",")) else Nil) ++
+            (if (hot) Seq("--hot") else Nil) ++
+            (if (production) Seq("--release") else Nil)
+      }
       Seq("compiler", "build") ++ inputs ++ left.flatMap(Seq("--exclude", _)) ++
-        (if classpath.nonEmpty then Seq("--classpath", classpath.mkString(File.pathSeparator)) else Nil) ++
+        (if (classpath.nonEmpty) Seq("--classpath", classpath.mkString(File.pathSeparator)) else Nil) ++
         output ++ cacheableState.flatMap(name => Seq("--cacheable-state", name)) ++ macroStateFlags(macroState) ++ threadsFlags ++ options.flags(jvm.isDefined) ++ Seq("--time")
+    }
 
     /** The arguments of `teq compiler build` into the one file `out`, as vite-plugin-teq builds it for
       * `vite build`. */
-    def fileArgs(production: Boolean): Seq[String] =
-      if jvm.isDefined then throw new MessageOnlyException("teqFullLinkJS builds JavaScript; this project's teqTarget is jvm")
-      val inputs = lib.toSeq ++ sources ++ (if production then productionSources else Nil)
-      val left = excludes ++ (if production then productionExcludes else Nil)
+    def fileArgs(production: Boolean): Seq[String] = {
+      if (jvm.isDefined) throw new MessageOnlyException("teqFullLinkJS builds JavaScript; this project's teqTarget is jvm")
+      val inputs = lib.toSeq ++ sources ++ (if (production) productionSources else Nil)
+      val left = excludes ++ (if (production) productionExcludes else Nil)
       Seq("compiler", "build") ++ inputs ++ left.flatMap(Seq("--exclude", _)) ++
-        (if classpath.nonEmpty then Seq("--classpath", classpath.mkString(File.pathSeparator)) else Nil) ++
+        (if (classpath.nonEmpty) Seq("--classpath", classpath.mkString(File.pathSeparator)) else Nil) ++
         cacheableState.flatMap(name => Seq("--cacheable-state", name)) ++ macroStateFlags(macroState) ++ main.toSeq.flatMap(Seq("--main", _)) ++
-        threadsFlags ++ options.flags(jvm = false) ++ Seq("-o", out) ++ (if production || release then Seq("--release") else Nil) ++ Seq("--time")
+        threadsFlags ++ options.flags(jvm = false) ++ Seq("-o", out) ++ (if (production || release) Seq("--release") else Nil) ++ Seq("--time")
+    }
 
     /** `--threads` for `teqThreads`, given to every build of the description, the resident's too. */
     private def threadsFlags: Seq[String] = threads.toSeq.flatMap(n => Seq("--threads", n.toString))
@@ -843,21 +889,25 @@ object TeqPlugin extends AutoPlugin:
       * `buildArgs(production = false)`, without `--time` (the JSON reply already carries the
       * timings) and without a JVM build, which has no Scala.js-style dev loop to serve; `--hot`
       * where the description asks for it, the entry point it names. */
-    def watchArgs: Seq[String] =
-      if jvm.isDefined then throw new MessageOnlyException("teqLinkJS builds JavaScript; this project's teqTarget is jvm")
+    def watchArgs: Seq[String] = {
+      if (jvm.isDefined) throw new MessageOnlyException("teqLinkJS builds JavaScript; this project's teqTarget is jvm")
       val inputs = lib.toSeq ++ sources
       Seq("compiler", "watch") ++ inputs ++ excludes.flatMap(Seq("--exclude", _)) ++
-        (if classpath.nonEmpty then Seq("--classpath", classpath.mkString(File.pathSeparator)) else Nil) ++
+        (if (classpath.nonEmpty) Seq("--classpath", classpath.mkString(File.pathSeparator)) else Nil) ++
         Seq("--split", out) ++
-        (if small.nonEmpty then Seq("--module-per-file", small.mkString(",")) else Nil) ++
+        (if (small.nonEmpty) Seq("--module-per-file", small.mkString(",")) else Nil) ++
         cacheableState.flatMap(name => Seq("--cacheable-state", name)) ++ macroStateFlags(macroState) ++ main.toSeq.flatMap(Seq("--main", _)) ++
-        threadsFlags ++ (if hot then Seq("--hot") else Nil) ++ options.flags(jvm = false)
+        threadsFlags ++ (if (hot) Seq("--hot") else Nil) ++ options.flags(jvm = false)
+    }
+  }
 
   /** `--macro-state` for `teqMacroState`: nothing for the default, `ordered`. */
-  private def macroStateFlags(state: String): Seq[String] = state match
+  private def macroStateFlags(state: String): Seq[String] = state match {
     case "ordered" => Nil
     case "per-worker" => Seq("--macro-state", "per-worker")
     case other => throw new MessageOnlyException(s"teqMacroState is ordered or per-worker, not $other")
+  }
 
   /** A JVM build: class files in `out`, linked against the jars (`--std=scala-library`). */
   private final case class JvmBuild(mainClass: Option[String])
+}

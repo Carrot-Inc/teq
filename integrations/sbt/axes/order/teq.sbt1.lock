@@ -1,0 +1,389 @@
+teq: 0.1.8
+format: 1
+binaries: {}
+inputs:
+  files:
+    build.sbt: c4b5ace608d9f99e43b034e93f8d46b2d145e7ff738707fcba20e99daa24335a
+    project/build.properties: 2aa36619b308c66c61f629a6fc3d69d03e46ee3a334933819dc6e59adc0e1479
+    project/plugins.sbt: 91d3f3f605b86c50bcadd270241c51bc72dde08ab2a5870e2731a25cf74aa144
+  sha256: 7abc4c89ce39c98a09c13a85a1ff23668522ea94822079756eebfd28b7bf1051
+jars:
+  junit:junit:4.13.2: maven-central 8ac9e16d933b6fb43bc7f576336b8f4d7eb5ba12 384581
+  org.hamcrest:hamcrest-core:1.3: maven-central 42a25dc3219429f0e5d060061f71acb49bf010a0 45024
+  org.portable-scala:portable-scala-reflect_2.13:1.1.3: maven-central f9295253915f13387e1d4e5b54d531c95e6e2197 29456
+  org.portable-scala:portable-scala-reflect_sjs1_2.13:1.1.3: maven-central 23b5127fe5ce0a04908960aa6721d8b03924ee1e 6989
+  org.scala-js:scalajs-javalib:1.22.0: maven-central 1024c02368d1f74a3b80405608617fca12993d5e 1590338
+  org.scala-js:scalajs-junit-test-runtime_2.13:1.22.0: maven-central 9e9a6ab555fe1abf2b8f736f9077845595617818 215213
+  org.scala-js:scalajs-library_2.13:1.22.0: maven-central 2df5b688a22a05a1a3c5c90d79d7a119a5216846 1094620
+  org.scala-js:scalajs-scalalib_2.13:3.8.4: maven-central 33c241b00ae0e8fcaf8898bfb1ebf708ef78ef51 5275648
+  org.scala-js:scalajs-test-bridge_2.13:1.22.0: maven-central 825d48984d07ba39fc9a0587075c4b3bc84b9453 337421
+  org.scala-js:scalajs-test-interface_2.13:1.22.0: maven-central 5445e9be3ce29d22701c72c6d88628fbe4b870dc 37428
+  org.scala-lang:scala-library:3.8.4: maven-central e44f14c38dba7da4d7050cbf72fbf9dcbb6f9e7d 9179090
+  org.scala-lang:scala3-library_3:3.8.4: maven-central ada8b099f5425afff3e9164afd6601bed4ef2e21 319
+  org.scala-lang:scala3-library_sjs1_3:3.8.4: maven-central f1cb186c2d39653324d60a9a6c4fa305bb7a10f2 312
+  org.scala-sbt:test-interface:1.0: maven-central 0a3f14d010c4cb32071f863d97291df31603b521 14755
+  org.scalameta:junit-interface:1.3.4: maven-central 6e49b0c492c2ed7c1cacdee904ce176b585d74f3 53487
+  org.scalameta:munit-diff_3:1.3.4: maven-central 77b4d5a0816251ab38b7b4c28faac1737922d43d 82517
+  org.scalameta:munit-diff_sjs1_3:1.3.4: maven-central 6befd18229d00838b7ee5a7d35968f6e89a8b4bb 124396
+  org.scalameta:munit_3:1.3.4: maven-central bbdad7dcca9d6d7d5c13172135b760a2075f3dad 266059
+  org.scalameta:munit_sjs1_3:1.3.4: maven-central 21cb31eea90bc02d7c8d820388f976045c9ca20f 599321
+java:
+  outputVersion: 17
+projects:
+  app:
+    base: app
+    configurations:
+      compile:
+        classpath:
+          - {configuration: compile, project: lib}
+          - org.scala-lang:scala3-library_3:3.8.4
+          - org.scala-lang:scala-library:3.8.4
+        flags:
+          ignoredScalacOptions: []
+          kindProjector: false
+          strictEquality: false
+          werror: false
+        generators:
+          - dynamic: {}
+            kind: buildInfo
+            members:
+              - name
+              - version
+              - scalaVersion
+              - sbtVersion
+            object: BuildInfo
+            output: target/teq/app/compile/src_managed/sbt-buildinfo/BuildInfo.scala
+            package: app
+            static:
+              name: app
+              sbtVersion: 1.13.0
+              scalaVersion: 3.8.4
+              version: 0.1.0-SNAPSHOT
+        mainClasses:
+          - app.Main
+        resources:
+          - app/src/main/resources
+        sources:
+          - app/src
+          - target/teq/app/compile/src_managed
+      runtime:
+        classpath:
+          - {configuration: compile, project: app}
+          - {configuration: compile, project: lib}
+          - org.scala-lang:scala3-library_3:3.8.4
+          - org.scala-lang:scala-library:3.8.4
+        resources: []
+        sources: []
+      test:
+        baseDirectory: .
+        classpath:
+          - {configuration: compile, project: app}
+          - {configuration: compile, project: lib}
+          - org.scala-lang:scala3-library_3:3.8.4
+          - org.scalameta:munit_3:1.3.4
+          - org.scala-lang:scala-library:3.8.4
+          - org.scalameta:junit-interface:1.3.4
+          - org.scalameta:munit-diff_3:1.3.4
+          - junit:junit:4.13.2
+          - org.portable-scala:portable-scala-reflect_2.13:1.1.3
+          - org.scala-sbt:test-interface:1.0
+          - org.hamcrest:hamcrest-core:1.3
+        envVars: {}
+        exclude: []
+        flags:
+          ignoredScalacOptions: []
+          kindProjector: false
+          strictEquality: false
+          werror: false
+        fork: false
+        frameworks:
+          - arguments: []
+            class: munit.Framework
+        javaOptions: []
+        resources:
+          - app/src/test/resources
+        sources:
+          - app/test
+    description:
+      cacheableState: []
+      excludes: []
+      hot: false
+      keys: {}
+      macroState: ordered
+      modulePerFile: []
+      out: app/target/teq/out
+      production:
+        excludes: []
+        sources: []
+      release: false
+      sources:
+        - lib/src
+        - app/src
+        - target/teq/app/compile/src_managed
+    platform: jvm
+    run:
+      aliases: {}
+      baseDirectory: .
+      envVars: {}
+      javaOptions: []
+      mainClass: app.Main
+    scalaVersion: 3.8.4
+    stage:
+      directory: app/target/docker/stage
+      exposedPorts: []
+      kind: docker
+      layers:
+        "2":
+          - {from: org.scala-lang:scala3-library_3:3.8.4, to: opt/docker/lib/org.scala-lang.scala3-library_3-3.8.4.jar}
+          - {from: org.scala-lang:scala-library:3.8.4, to: opt/docker/lib/org.scala-lang.scala-library-3.8.4.jar}
+        "4":
+          - {from: {configuration: compile, project: app}, manifest: {Implementation-Title: app, Implementation-Vendor: app, Implementation-Vendor-Id: app, Implementation-Version: 0.1.0-SNAPSHOT, Main-Class: app.Main, Specification-Title: app, Specification-Vendor: app, Specification-Version: 0.1.0-SNAPSHOT}, to: opt/docker/lib/app.app-0.1.0-SNAPSHOT.jar}
+          - {from: {configuration: compile, project: lib}, manifest: {Implementation-Title: lib, Implementation-Vendor: lib, Implementation-Vendor-Id: lib, Implementation-Version: 0.1.0-SNAPSHOT, Specification-Title: lib, Specification-Vendor: lib, Specification-Version: 0.1.0-SNAPSHOT}, to: opt/docker/lib/lib.lib-0.1.0-SNAPSHOT.jar}
+          - classpath:
+              - lib/app.app-0.1.0-SNAPSHOT.jar
+              - lib/lib.lib-0.1.0-SNAPSHOT.jar
+              - lib/org.scala-lang.scala3-library_3-3.8.4.jar
+              - lib/org.scala-lang.scala-library-3.8.4.jar
+            script: opt/docker/bin/app
+      mainClass: app.Main
+      name: app
+  lib:
+    base: lib
+    configurations:
+      compile:
+        classpath:
+          - org.scala-lang:scala3-library_3:3.8.4
+          - org.scala-lang:scala-library:3.8.4
+        flags:
+          ignoredScalacOptions: []
+          kindProjector: false
+          strictEquality: false
+          werror: false
+        generators: []
+        mainClasses: []
+        resources:
+          - lib/src/main/resources
+        sources:
+          - lib/src
+      runtime:
+        classpath:
+          - {configuration: compile, project: lib}
+          - org.scala-lang:scala3-library_3:3.8.4
+          - org.scala-lang:scala-library:3.8.4
+        resources: []
+        sources: []
+      test:
+        baseDirectory: .
+        classpath:
+          - {configuration: compile, project: lib}
+          - org.scala-lang:scala3-library_3:3.8.4
+          - org.scala-lang:scala-library:3.8.4
+        envVars: {}
+        exclude: []
+        flags:
+          ignoredScalacOptions: []
+          kindProjector: false
+          strictEquality: false
+          werror: false
+        fork: false
+        frameworks: []
+        javaOptions: []
+        resources:
+          - lib/src/test/resources
+        sources:
+          - lib/src/test/scala
+          - lib/src/test/scala-3
+          - lib/src/test/java
+    description:
+      cacheableState: []
+      excludes: []
+      hot: false
+      keys: {}
+      macroState: ordered
+      modulePerFile: []
+      out: lib/target/teq/out
+      production:
+        excludes: []
+        sources: []
+      release: false
+      sources:
+        - lib/src
+    platform: jvm
+    run:
+      aliases: {}
+      baseDirectory: .
+      envVars: {}
+      javaOptions: []
+    scalaVersion: 3.8.4
+  sjsapp:
+    base: sjsapp
+    configurations:
+      compile:
+        classpath:
+          - {configuration: compile, project: sjscore}
+          - org.scala-lang:scala3-library_sjs1_3:3.8.4
+          - org.scala-js:scalajs-library_2.13:1.22.0
+          - org.scala-js:scalajs-scalalib_2.13:3.8.4
+          - org.scala-lang:scala-library:3.8.4
+          - org.scala-js:scalajs-javalib:1.22.0
+          - org.scala-lang:scala3-library_3:3.8.4
+        flags:
+          ignoredScalacOptions:
+            - "-scalajs"
+          kindProjector: false
+          strictEquality: false
+          werror: false
+        generators: []
+        mainClasses: []
+        resources:
+          - sjsapp/src/main/resources
+        sources:
+          - sjsapp/src
+      runtime:
+        classpath:
+          - {configuration: compile, project: sjsapp}
+          - {configuration: compile, project: sjscore}
+          - org.scala-lang:scala3-library_sjs1_3:3.8.4
+          - org.scala-js:scalajs-library_2.13:1.22.0
+          - org.scala-js:scalajs-scalalib_2.13:3.8.4
+          - org.scala-lang:scala-library:3.8.4
+          - org.scala-js:scalajs-javalib:1.22.0
+          - org.scala-lang:scala3-library_3:3.8.4
+        resources: []
+        sources: []
+      test:
+        baseDirectory: .
+        classpath:
+          - {configuration: compile, project: sjsapp}
+          - {configuration: compile, project: sjscore}
+          - org.scala-lang:scala3-library_sjs1_3:3.8.4
+          - org.scala-js:scalajs-library_2.13:1.22.0
+          - org.scala-js:scalajs-test-bridge_2.13:1.22.0
+          - org.scalameta:munit_sjs1_3:1.3.4
+          - org.scala-js:scalajs-scalalib_2.13:3.8.4
+          - org.scala-lang:scala-library:3.8.4
+          - org.scala-js:scalajs-javalib:1.22.0
+          - org.scala-js:scalajs-test-interface_2.13:1.22.0
+          - org.scalameta:munit-diff_sjs1_3:1.3.4
+          - org.scala-js:scalajs-junit-test-runtime_2.13:1.22.0
+          - org.portable-scala:portable-scala-reflect_sjs1_2.13:1.1.3
+          - org.scala-lang:scala3-library_3:3.8.4
+        envVars: {}
+        exclude: []
+        flags:
+          ignoredScalacOptions:
+            - "-scalajs"
+          kindProjector: false
+          strictEquality: false
+          werror: false
+        fork: false
+        frameworks:
+          - arguments: []
+            class: com.novocode.junit.JUnitFramework
+          - arguments:
+              - "-b"
+            class: munit.Framework
+        javaOptions: []
+        resources:
+          - sjsapp/src/test/resources
+        sources:
+          - sjsapp/test
+    description:
+      cacheableState: []
+      excludes: []
+      hot: false
+      keys: {}
+      macroState: ordered
+      modulePerFile: []
+      out: sjsapp/target/teq/out
+      production:
+        excludes: []
+        sources: []
+      release: false
+      sources:
+        - sjscore/src
+        - sjsapp/src
+    platform: js
+    scalaVersion: 3.8.4
+  sjscore:
+    base: sjscore
+    configurations:
+      compile:
+        classpath:
+          - org.scala-lang:scala3-library_sjs1_3:3.8.4
+          - org.scala-js:scalajs-library_2.13:1.22.0
+          - org.scala-js:scalajs-scalalib_2.13:3.8.4
+          - org.scala-lang:scala-library:3.8.4
+          - org.scala-js:scalajs-javalib:1.22.0
+          - org.scala-lang:scala3-library_3:3.8.4
+        flags:
+          ignoredScalacOptions:
+            - "-scalajs"
+          kindProjector: false
+          strictEquality: false
+          werror: false
+        generators: []
+        mainClasses: []
+        resources:
+          - sjscore/src/main/resources
+        sources:
+          - sjscore/src
+      runtime:
+        classpath:
+          - {configuration: compile, project: sjscore}
+          - org.scala-lang:scala3-library_sjs1_3:3.8.4
+          - org.scala-js:scalajs-library_2.13:1.22.0
+          - org.scala-js:scalajs-scalalib_2.13:3.8.4
+          - org.scala-lang:scala-library:3.8.4
+          - org.scala-js:scalajs-javalib:1.22.0
+          - org.scala-lang:scala3-library_3:3.8.4
+        resources: []
+        sources: []
+      test:
+        baseDirectory: .
+        classpath:
+          - {configuration: compile, project: sjscore}
+          - org.scala-lang:scala3-library_sjs1_3:3.8.4
+          - org.scala-js:scalajs-library_2.13:1.22.0
+          - org.scala-js:scalajs-test-bridge_2.13:1.22.0
+          - org.scala-js:scalajs-scalalib_2.13:3.8.4
+          - org.scala-lang:scala-library:3.8.4
+          - org.scala-js:scalajs-javalib:1.22.0
+          - org.scala-js:scalajs-test-interface_2.13:1.22.0
+          - org.scala-lang:scala3-library_3:3.8.4
+        envVars: {}
+        exclude: []
+        flags:
+          ignoredScalacOptions:
+            - "-scalajs"
+          kindProjector: false
+          strictEquality: false
+          werror: false
+        fork: false
+        frameworks: []
+        javaOptions: []
+        resources:
+          - sjscore/src/test/resources
+        sources:
+          - sjscore/src/test/scala
+          - sjscore/src/test/scala-3
+          - sjscore/src/test/java
+    description:
+      cacheableState: []
+      excludes: []
+      hot: false
+      keys: {}
+      macroState: ordered
+      modulePerFile: []
+      out: sjscore/target/teq/out
+      production:
+        excludes: []
+        sources: []
+      release: false
+      sources:
+        - sjscore/src
+    platform: js
+    scalaVersion: 3.8.4
+repositories:
+  - id: maven-central
+    url: https://repo1.maven.org/maven2/

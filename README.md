@@ -74,7 +74,8 @@ The realistic benchmark is a 104k-line synthetic application generated to the sh
 sbt's own `compile`, `test`, `run` and `packageBin` run over teq's output, with sbt's own reporting,
 and nothing else in the build changes.
 
-Add the plugin to an sbt 2 build (the plugin is published for sbt 2):
+Add the plugin to an sbt 2 or sbt 1 build (the same line under both; the sbt 1 module comes with the plugin's first
+release after 1.0.0):
 
 ```scala
 // project/plugins.sbt

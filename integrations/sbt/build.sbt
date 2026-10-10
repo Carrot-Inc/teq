@@ -5,14 +5,14 @@ name := "sbt-teq"
 // the compiler as the plugin it selects), apart from the compiler's: a compiler release that changes no plugin
 // publishes none.
 version := IO.read(baseDirectory.value / "plugin-version.txt").trim
-description := "An sbt 2 plugin that compiles, links and exports a Scala build with teq"
+description := "An sbt plugin that compiles, links and exports a Scala build with teq"
 // The pom, the signing and the staging of a release for Maven Central (project/Central.scala): the jar, its
 // sources and a javadoc jar holding a README, since scaladoc gives the plugin's users nothing to read.
 Central.settings
 Compile / packageDoc / mappings := Central.placeholder("javadoc", Def.setting(
   s"""# build.teq:sbt-teq ${version.value}
     |
-    |The sbt 2 plugin of teq, the compiler for Scala 3. It has no API documentation: https://teq.build says how
+    |The sbt plugin of teq, the compiler for Scala 3. It has no API documentation: https://teq.build says how
     |a build uses it, and its sources are the sources jar beside this one, and ${Central.repository} at the
     |commit `${Central.commit(baseDirectory.value)}`.
     |""".stripMargin)).value
@@ -32,7 +32,7 @@ def compilerOf(base: File): String =
 Compile / sourceGenerators += Def.task {
   val file = (Compile / sourceManaged).value / "dev" / "teq" / "sbt" / "BuildInfo.scala"
   val commit = scala.util.Try(scala.sys.process.Process(Seq("git", "rev-parse", "HEAD"), baseDirectory.value).!!.trim).getOrElse("")
-  IO.write(file, s"package dev.teq.sbt\n\nprivate[sbt] object BuildInfo:\n  val version = \"${version.value}\"\n  val compiler = \"${compilerOf(baseDirectory.value)}\"\n  val commit = \"$commit\"\n")
+  IO.write(file, s"package dev.teq.sbt\n\nprivate[sbt] object BuildInfo {\n  val version = \"${version.value}\"\n  val compiler = \"${compilerOf(baseDirectory.value)}\"\n  val commit = \"$commit\"\n}\n")
   Seq(file)
 }.taskValue
 // The same compiler in the jar's manifest, which a later compiler's release reads from Central (bench/ship-release.sh,
@@ -71,3 +71,12 @@ publishLocalConfiguration := {
 
 // The adapter's tests (src/test): recorded graphs of teq's through the adapter into zinc.
 libraryDependencies += "org.scalameta" %% "munit" % "1.3.4" % Test
+
+// The plugin's two axes from one source tree: sbt 2 (`sbt-teq_sbt2_3`, Scala 3), the build's own, and sbt 1
+// (`sbt-teq_2.12_1.0`, Scala 2.12), which `^^1.13.0` selects and `^` crosses. src/main/scala holds what both
+// compile, in the syntax both read; src/main/scala-sbt-2 and src/main/scala-sbt-1.0 what each sbt's API has of its
+// own (Compat). The axis is `pluginCrossBuild / sbtVersion`'s: `sbtBinaryVersion` stays the running sbt's.
+crossSbtVersions := Seq("2.0.8", "1.13.0")
+def sbt1 = Def.setting((pluginCrossBuild / sbtVersion).value.startsWith("1."))
+libraryDependencies ++= (if (sbt1.value) Seq("org.scala-lang.modules" %% "scala-collection-compat" % "2.14.0") else Nil)
+scalacOptions ++= (if (sbt1.value) Seq("-Xsource:3") else Nil)

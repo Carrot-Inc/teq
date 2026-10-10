@@ -7,8 +7,8 @@ import sbt.io.IO
 
 /** The rollback of a run (`TeqCompile.Journal`) over a class directory sbt's cache restored as links
   * into its store, one of whose blobs the store has lost. */
-class JournalSuite extends munit.FunSuite:
-  test("a link whose blob is gone is left as it is: the run begins, and a failed one puts back the rest"):
+class JournalSuite extends munit.FunSuite {
+  test("a link whose blob is gone is left as it is: the run begins, and a failed one puts back the rest") {
     val base = Files.createTempDirectory("teq-journal").toFile
     val classes = new File(base, "classes")
     val store = new File(base, "cas")
@@ -29,3 +29,5 @@ class JournalSuite extends munit.FunSuite:
     assert(Files.isSymbolicLink(gone) && !Files.exists(gone))
     assert(!new File(classes.getPath + ".teq-run").exists)
     IO.delete(base)
+  }
+}
