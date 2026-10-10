@@ -3509,7 +3509,7 @@ impl<'c> Copier<'c> {
             // erases the tested type), unless the expansion is itself a stored body's, which
             // derives it again.
             let method_param = match t.types.get(tested) {
-                Type::Param(p) | Type::AppParam(p, _) => self.subst.iter().any(|&(q, _)| q == p),
+                Type::Param(p) | Type::AppParam(p, _) => self.subst.iter().any(|&(q, _)| q == p) && !self.stored.map_or(false, |s| s.index.local_tparams.contains(&p)),
                 _ => false,
             };
             let derived_again = !method_param || t.quote.level > 0 || t.checks_inline_definition();

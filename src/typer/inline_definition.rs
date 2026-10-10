@@ -2252,7 +2252,7 @@ pub(super) struct StoredIndex {
     sizes: std::sync::Mutex<FxMap<TExprId, u64>>,
     reducible: FxMap<TExprId, ()>,
     leaf_tests: FxMap<TestId, ()>,
-    local_tparams: Vec<TParamId>,
+    pub(super) local_tparams: Vec<TParamId>,
     /// The first of the record's nodes and how far they run (`StoredTable`).
     nodes: (u32, u32),
     /// Each node of that range as a copy reads it (`Worker::stored_nodes`).
