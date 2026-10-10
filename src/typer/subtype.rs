@@ -40,23 +40,6 @@ impl<'a> Worker<'a> {
         }
     }
 
-    /// Like `rollback`, but what is undone can be brought back with `replay`, and the variables
-    /// made since the first `vars` keep their instances (the owner rule):
-    /// their entries are listed, so that a position in the list is one of the trail, and `replay`
-    /// sets the same instance again.
-    pub fn rollback_saving_owned(&mut self, mark: usize, vars: usize) -> Vec<Redo> {
-        let mut undone = Vec::with_capacity(self.trail.len() - mark);
-        while self.trail.len() > mark {
-            undone.push(match self.trail.pop().unwrap() {
-                Undo::Inst(v) if self.tvars.made_since(v, vars) => Redo::Inst(v, self.tvars[v].inst.unwrap()),
-                Undo::Inst(v) => Redo::Inst(v, self.tvars[v].inst.take().unwrap()),
-                Undo::Lower(v) => Redo::Lower(v, self.tvars[v].lower.pop().unwrap()),
-                Undo::Upper(v) => Redo::Upper(v, self.tvars[v].upper.pop().unwrap()),
-            });
-        }
-        undone
-    }
-
     pub fn replay(&mut self, undone: Vec<Redo>) {
         for redo in undone.into_iter().rev() {
             match redo {

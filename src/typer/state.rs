@@ -268,20 +268,6 @@ pub(super) struct SetAside {
     pending: Vec<PendingInline>,
 }
 
-/// What `set_aside_journals` took out of an attempt whose trail, diagnostics and index records
-/// its caller takes out and puts back itself (a member's retry on the qualifier, `apply.rs`): the
-/// rarely written journals, the late errors' positions and the error nodes counted.
-pub(super) struct JournalsAside {
-    diags_at: u32,
-    late: Vec<u32>,
-    error_nodes: u32,
-    infos: Vec<InfoMessage>,
-    matches: Vec<DeferredMatch>,
-    bounds: Vec<DeferredBound>,
-    rewrites: Vec<Rewrite>,
-    pending: Vec<PendingInline>,
-}
-
 /// The journal positions work done on demand began at (`Worker::promote_begin`).
 pub(super) struct PromoteMark {
     keep: Keep,
@@ -296,17 +282,86 @@ pub(super) struct PromoteMark {
 
 /// The typed arguments of an application that several attempts apply, dotty's `FunProtoState`
 /// (`ProtoTypes` 368 to 498): each argument typed against the first attempt's formal and
-/// cached unadapted while that attempt has reported no error, then adapted by every attempt to
-/// its own formal, so that nothing the typing made (a macro's run, an anonymous class) is made
-/// again.
+/// cached unadapted while that attempt has reported no error (`cacheTypedArg`, 471), then
+/// adapted by every attempt to its own formal (`typedArg`, 556), so that nothing the typing made
+/// (a macro's run, an anonymous class) is made again; an argument typed where the attempt had
+/// reported an error is not cached, and is an error argument where an error lies inside it
+/// (`errorArgs`, `hasInnerErrors`, 450), which ends a member's retry on its qualifier
+/// (`hasErrorArg`).
 pub(super) struct ArgCache {
     /// The last attempt's sequence number when the cache opened.
     seq: u32,
     file: crate::source::FileId,
-    args: crate::intern::FxMap<crate::ast::ExprId, Option<(crate::tir::TExprId, crate::types::TypeId)>>,
+    /// The depth of applications (`Worker::app_depth`) the arguments are typed at: the first
+    /// application under the cache claims it (`UNCLAIMED` until then), as a `FunProto` is its
+    /// application's, so that an application nested in an argument types its own arguments
+    /// afresh; `ANY_DEPTH` where the attempts apply the arguments through applications of their
+    /// own (the extensions of an instance tried in turn).
+    depth: u32,
+    /// Whether the cache holds `typedArg`'s unadapted typings (ProtoTypes.scala 556), a member's
+    /// `FunProto`'s: a literal typed against the formal and cached as any argument is (dotty's
+    /// `typedNumber` types `1` for a `Long` formal as a `Long` literal, which a member's retry
+    /// adapts as it is), and a transparent call that is the argument itself left unexpanded, its
+    /// expansion each adaptation's (`expand_unadapted`). The extensions of an instance stand for
+    /// dotty's overload resolution on the arguments typed alone (`typedArgs`), where each attempt
+    /// types a literal against its own formal (`literal_arg`).
+    unadapted: bool,
+    args: Vec<CachedArg>,
+    /// The tupled dual's typing of the arguments, a prototype of its own whose one argument is
+    /// their tuple (`FunProto.tupledDual`): one where the application auto-tupled them.
+    dual: Dual,
     /// The attempt under way over the arguments.
     attempt: Option<Mark>,
 }
+
+/// An argument of an `ArgCache`.
+#[derive(Clone, Copy)]
+pub(super) struct CachedArg {
+    /// The tree typed: a named argument's value, a spliced argument's sequence.
+    pub(super) key: crate::ast::ExprId,
+    /// The argument as written (`n = v`, `xs*`), whose tree `hasInnerErrors` judges.
+    pub(super) written: crate::ast::ExprId,
+    /// A named argument, whose typing is cached adapted to the formal, as `typedNamedArg` types
+    /// the value (Typer.scala 1409).
+    pub(super) named: bool,
+    pub(super) typed: Option<(crate::tir::TExprId, crate::types::TypeId)>,
+    /// Typed with an error inside it (`errorArgs`).
+    pub(super) error: bool,
+}
+
+/// The tupled dual's typing in an `ArgCache`.
+#[derive(Clone, Copy, PartialEq)]
+pub(super) enum Dual {
+    /// Not typed, or typed where the attempt had reported an error.
+    None,
+    Typed(crate::tir::TExprId, crate::types::TypeId),
+    /// Typed with an error inside the tuple, an element's (`errorArgs`).
+    Error,
+}
+
+/// Where an argument stands in the caches: cached by an earlier attempt, held by a cache that
+/// has no typing of it yet (named or not), or in none.
+pub(super) enum ArgSlot {
+    Cached(crate::tir::TExprId, crate::types::TypeId),
+    /// Held, with the argument as written, whether it is named and whether the cache holds
+    /// unadapted typings (`ArgCache::unadapted`).
+    Held { named: bool, written: crate::ast::ExprId, unadapted: bool },
+    None,
+}
+
+/// What `cache_arg` did with a typing.
+#[derive(PartialEq)]
+pub(super) enum Cache {
+    /// Cached: the attempt had reported no error.
+    Kept,
+    /// Not cached: the attempt had reported an error, the typing's own or an earlier one's.
+    Failed,
+    /// No cache holds the argument, or holds it for each attempt to type (a literal).
+    Not,
+}
+
+const UNCLAIMED: u32 = 0;
+const ANY_DEPTH: u32 = u32::MAX;
 
 /// Takes the entries of `v` from `from` on out, but those at the positions `kept` (ascending),
 /// which stay in their order.
@@ -337,17 +392,51 @@ fn moved(i: u32, from: u32, kept: &[usize]) -> u32 {
 }
 
 impl<'a> Worker<'a> {
-    /// Opens the cache of the source arguments of `lists`, for the attempts that apply them.
+    /// Opens the cache of the source arguments of `lists`, for the attempts that apply them
+    /// through applications of their own (the extensions of an instance tried in turn).
     pub(super) fn arg_cache_open(&mut self, lists: &[super::apply::ArgList]) {
-        let mut args = crate::intern::FxMap::default();
+        let mut args = self.cache_buffers.pop().unwrap_or_default();
         for l in lists {
             for a in &l.args {
                 if let super::apply::ArgSrc::Ast(e) = *a {
-                    args.insert(e, None);
+                    args.push(CachedArg { key: e, written: e, named: false, typed: None, error: false });
                 }
             }
         }
-        self.attempt_caches.push(ArgCache { seq: self.attempts.seq, file: self.env.file, args, attempt: None });
+        self.attempt_caches.push(ArgCache { seq: self.attempts.seq, file: self.env.file, depth: ANY_DEPTH, unadapted: false, args, dual: Dual::None, attempt: None });
+    }
+
+    /// Opens the cache of the arguments of a member's first plain list, `FunProto`'s for the
+    /// member's application and the extensions and conversions its retry on the qualifier tries
+    /// (`tryWithImplicitOnQualifier`, Applications.scala 1373): each by the tree typed, a named
+    /// one's value and a spliced one's sequence.
+    pub(super) fn arg_cache_open_member(&mut self, list: Option<&super::apply::ArgList>) {
+        use crate::ast::{Expr, TyExpr};
+        let mut args = self.cache_buffers.pop().unwrap_or_default();
+        if let Some(l) = list {
+            let ast = self.cur_ast();
+            for a in &l.args {
+                let (super::apply::ArgSrc::Ast(e) | super::apply::ArgSrc::Hoisted(e)) = *a else { continue };
+                let (key, named) = match ast.expr(e) {
+                    Expr::NamedArg(_, v) => (v, true),
+                    Expr::Typed(inner, t) if matches!(ast.ty(t), TyExpr::Repeated(_)) => (inner, false),
+                    _ => (e, false),
+                };
+                args.push(CachedArg { key, written: e, named, typed: None, error: false });
+            }
+        }
+        self.attempt_caches.push(ArgCache { seq: self.attempts.seq, file: self.env.file, depth: UNCLAIMED, unadapted: true, args, dual: Dual::None, attempt: None });
+    }
+
+    /// The application at `depth` begins: the innermost cache, where no application claimed it,
+    /// is its.
+    #[inline]
+    pub(super) fn arg_cache_claim(&mut self, depth: u32) {
+        if let Some(c) = self.attempt_caches.last_mut() {
+            if c.depth == UNCLAIMED {
+                c.depth = depth;
+            }
+        }
     }
 
     /// The attempt `m` over the cached arguments begins.
@@ -358,64 +447,173 @@ impl<'a> Worker<'a> {
     }
 
     pub(super) fn arg_cache_close(&mut self) {
-        self.attempt_caches.pop();
+        if let Some(mut c) = self.attempt_caches.pop() {
+            c.args.clear();
+            self.cache_buffers.push(c.args);
+        }
+        // What adaptations of cached typings took as typed (`Worker::retry_typed`) is over.
+        if self.attempt_caches.is_empty() && !self.retry_typed.is_empty() {
+            self.retry_typed.clear();
+        }
     }
 
-    /// The typing of the argument `e` an earlier attempt cached, if any.
+    /// Whether the cache `c` holds the arguments of an application at `depth`, in this file.
     #[inline]
-    pub(super) fn cached_arg(&self, e: crate::ast::ExprId) -> Option<(crate::tir::TExprId, crate::types::TypeId)> {
+    fn cache_holds_at(c: &ArgCache, file: crate::source::FileId, depth: u32) -> bool {
+        c.file == file && (c.depth == depth || c.depth == ANY_DEPTH)
+    }
+
+    /// Where the argument `e`, typed now by the application at the current depth, stands in the
+    /// caches: an earlier attempt's typing of it (from the innermost cache that has one: a
+    /// cache opened inside an attempt over the same arguments, the conversion's member applied
+    /// under a retry, reads its enclosing one's), or the innermost cache that holds it.
+    #[inline]
+    pub(super) fn arg_slot(&self, e: crate::ast::ExprId) -> ArgSlot {
         if self.attempt_caches.is_empty() {
-            return None;
+            return ArgSlot::None;
         }
-        self.cached_arg_slow(e)
+        self.arg_slot_slow(e)
     }
 
     #[inline(never)]
-    fn cached_arg_slow(&self, e: crate::ast::ExprId) -> Option<(crate::tir::TExprId, crate::types::TypeId)> {
-        let file = self.env.file;
-        self.attempt_caches.iter().rev().find_map(|c| if c.file == file { c.args.get(&e).copied().flatten() } else { None })
+    fn arg_slot_slow(&self, e: crate::ast::ExprId) -> ArgSlot {
+        let (file, depth) = (self.env.file, self.app_depth);
+        let mut held = None;
+        for c in self.attempt_caches.iter().rev() {
+            if !Self::cache_holds_at(c, file, depth) {
+                continue;
+            }
+            let Some(a) = c.args.iter().find(|a| a.key == e) else { continue };
+            if let Some((te, ty)) = a.typed {
+                return ArgSlot::Cached(te, ty);
+            }
+            held.get_or_insert((a.named, a.written, c.unadapted));
+        }
+        match held {
+            Some((named, written, unadapted)) => ArgSlot::Held { named, written, unadapted },
+            None => ArgSlot::None,
+        }
     }
 
-    /// The typing of the argument `e` begins: where a cache holds it, what the typing writes is
-    /// the retained argument's, not the attempt's (`promote_end`).
+    /// The innermost cache holding the argument `e` at the current depth, and its place there.
+    fn arg_holder(&self, e: crate::ast::ExprId) -> Option<(usize, usize)> {
+        let (file, depth) = (self.env.file, self.app_depth);
+        self.attempt_caches.iter().enumerate().rev().find_map(|(k, c)| {
+            if !Self::cache_holds_at(c, file, depth) {
+                return None;
+            }
+            c.args.iter().position(|a| a.key == e).map(|i| (k, i))
+        })
+    }
+
+    /// The typing of the argument `e` held by a cache begins: what the typing writes is the
+    /// retained argument's, not the attempt's (`promote_end`).
     #[inline]
     pub(super) fn arg_typing_begin(&self, e: crate::ast::ExprId) -> Option<PromoteMark> {
-        if self.attempt_caches.is_empty() || self.attempts.open == 0 {
+        if self.attempts.open == 0 {
             return None;
         }
-        let file = self.env.file;
-        let c = self.attempt_caches.iter().rev().find(|c| c.file == file && c.args.contains_key(&e))?;
-        Some(self.promote_mark(Keep::Since(c.seq), false))
+        let (k, _) = self.arg_holder(e)?;
+        Some(self.promote_mark(Keep::Since(self.attempt_caches[k].seq), false))
     }
 
     /// Caches the typing of the argument `e` where a cache holds it and the attempt under way
     /// has reported no error (`ProtoTypes` 488: whatever reported it).
-    /// Whether it cached it.
-    #[inline]
-    pub(super) fn cache_arg(&mut self, e: crate::ast::ExprId, typed: (crate::tir::TExprId, crate::types::TypeId)) -> bool {
-        if self.attempt_caches.is_empty() {
-            return false;
+    pub(super) fn cache_arg(&mut self, e: crate::ast::ExprId, typed: (crate::tir::TExprId, crate::types::TypeId)) -> Cache {
+        let Some((k, i)) = self.arg_holder(e) else { return Cache::Not };
+        if !self.attempt_caches[k].unadapted && self.literal_arg(e) {
+            return Cache::Not;
         }
-        self.cache_arg_slow(e, typed)
+        if !self.arg_cache_clean(k) {
+            return Cache::Failed;
+        }
+        let a = &mut self.attempt_caches[k].args[i];
+        a.typed = Some(typed);
+        a.error = false;
+        Cache::Kept
     }
 
-    #[inline(never)]
-    fn cache_arg_slow(&mut self, e: crate::ast::ExprId, typed: (crate::tir::TExprId, crate::types::TypeId)) -> bool {
-        let file = self.env.file;
-        let Some(k) = self.attempt_caches.iter().rposition(|c| c.file == file && c.args.contains_key(&e)) else { return false };
-        if self.literal_arg(e) {
-            return false;
-        }
-        // A late error is one all the same (scalac reports it from the kept tree, which a cached
-        // typing would keep without it: a retraction drops a cached argument's diagnostics).
-        let clean = match self.attempt_caches[k].attempt {
+    /// Whether the attempt under way over the cache `k` has reported no error, a late one
+    /// included (scalac reports it from the kept tree, which a cached typing would keep without
+    /// it: a retraction drops a cached argument's diagnostics).
+    fn arg_cache_clean(&self, k: usize) -> bool {
+        match self.attempt_caches[k].attempt {
             Some(m) => !self.attempt_failed(&m) && !self.attempts.late.iter().any(|&i| i >= m.diags),
             None => true,
-        };
-        if clean {
-            self.attempt_caches[k].args.insert(e, Some(typed));
         }
+    }
+
+    /// The argument `e`, typed where the attempt had reported an error, has one inside it
+    /// (`errorArgs`).
+    pub(super) fn arg_cache_error(&mut self, e: crate::ast::ExprId) {
+        if let Some((k, i)) = self.arg_holder(e) {
+            self.attempt_caches[k].args[i].error = true;
+        }
+    }
+
+    /// The tupled dual's typing in the cache of the application at the current depth, if one
+    /// is its.
+    pub(super) fn dual_slot(&self) -> Option<Dual> {
+        let (file, depth) = (self.env.file, self.app_depth);
+        self.attempt_caches.last().filter(|c| c.file == file && c.depth == depth).map(|c| c.dual)
+    }
+
+    /// The typing of the tupled dual held by `dual_slot` begins, as `arg_typing_begin`.
+    pub(super) fn dual_typing_begin(&self) -> Option<PromoteMark> {
+        if self.attempts.open == 0 {
+            return None;
+        }
+        Some(self.promote_mark(Keep::Since(self.attempt_caches.last()?.seq), false))
+    }
+
+    /// Caches the tupled dual's typing `typed`, begun at the diagnostics' index `diags`, where the
+    /// attempt has reported no error; an error argument where the typing reported one, inside the
+    /// tuple. Whether it cached it.
+    pub(super) fn cache_dual(&mut self, typed: (crate::tir::TExprId, crate::types::TypeId), diags: usize) -> bool {
+        let Some(k) = self.attempt_caches.len().checked_sub(1) else { return false };
+        let clean = self.arg_cache_clean(k);
+        let failed = self.diags.items[diags..].iter().any(|d| !d.is_warning);
+        self.attempt_caches[k].dual = match (clean, failed) {
+            (true, _) => Dual::Typed(typed.0, typed.1),
+            (false, true) => Dual::Error,
+            (false, false) => Dual::None,
+        };
         clean
+    }
+
+    /// The innermost cache, a member's under its retry: its arguments as `CachedArg`s.
+    pub(super) fn member_args(&self) -> &[CachedArg] {
+        self.attempt_caches.last().map_or(&[], |c| &c.args[..])
+    }
+
+    /// Caches the typing of the member's argument `e` its retry's test typed alone
+    /// (`typedArgs`, ProtoTypes.scala 508, which caches into the same map).
+    pub(super) fn member_arg_put(&mut self, e: crate::ast::ExprId, typed: (crate::tir::TExprId, crate::types::TypeId)) {
+        if let Some(a) = self.attempt_caches.last_mut().and_then(|c| c.args.iter_mut().find(|a| a.key == e)) {
+            a.typed = Some(typed);
+        }
+    }
+
+    /// Forgets the typings of the member's arguments: its application typed none, dotty's
+    /// `reorder` having failed (`init`, Applications.scala 661).
+    pub(super) fn member_args_forget(&mut self) {
+        if let Some(c) = self.attempt_caches.last_mut() {
+            for a in c.args.iter_mut() {
+                a.typed = None;
+                a.error = false;
+            }
+        }
+    }
+
+    /// The tupled dual's typing of the member's arguments.
+    pub(super) fn member_dual(&self) -> Dual {
+        self.attempt_caches.last().map_or(Dual::None, |c| c.dual)
+    }
+
+    pub(super) fn set_member_dual(&mut self, d: Dual) {
+        if let Some(c) = self.attempt_caches.last_mut() {
+            c.dual = d;
+        }
     }
 
     /// Whether the argument `e` is a literal, or a tuple of literals, in parentheses or not: each
@@ -434,6 +632,58 @@ impl<'a> Worker<'a> {
             Expr::Tuple(l) => ast.expr_list(l).iter().all(|&x| self.literal_arg(x)),
             _ => false,
         }
+    }
+
+    /// Whether the inline call of `sym` at `span` typed now is the transparent call a member's
+    /// cache types as its argument (`Worker::unadapted_call`), which is left pending for its
+    /// adaptation, as `typedUnadapted` leaves it (Typer.scala 3800): not inside an expansion, a
+    /// retained inline body or a quote, where `defers_plain_inline` expands a call as typed.
+    pub(super) fn takes_unadapted(&mut self, sym: crate::types::SymId, span: crate::source::Span) -> bool {
+        if self.unadapted_call != Some((self.env.file, span)) {
+            return false;
+        }
+        self.unadapted_call = None;
+        self.syms.sym(sym).mods & crate::ast::mods::TRANSPARENT != 0
+            && self.inline.depth == 0
+            && self.inline.retained == 0
+            && self.inline.checking == 0
+            && self.quote.level == 0
+            && self.quote.macro_depth == 0
+            && self.syms.sym(sym).owner != crate::symbols::Owner::Local
+            && self.intrinsic_of(sym).is_none()
+    }
+
+    /// The transparent call `te` a member's cache typed unadapted (`takes_unadapted`), expanded
+    /// as `Typer.adapt` expands it (4819 to 4825) against `pt`, in the attempt under way: what its
+    /// expansion reports is that attempt's, and a set-aside or retraction of it takes the
+    /// expansion back, the call pending again for the next attempt's adaptation, which expands it
+    /// again (a macro runs once per adaptation, as under scalac's retry on the qualifier). The
+    /// expansion's type, where `te` is such a call.
+    #[inline]
+    pub(super) fn expand_unadapted(&mut self, te: crate::tir::TExprId, pt: crate::types::TypeId) -> Option<crate::types::TypeId> {
+        if self.attempts.pending.is_empty() {
+            return None;
+        }
+        self.expand_unadapted_slow(te, pt)
+    }
+
+    #[inline(never)]
+    fn expand_unadapted_slow(&mut self, te: crate::tir::TExprId, pt: crate::types::TypeId) -> Option<crate::types::TypeId> {
+        let p = self.attempts.pending.iter().rev().find(|p| p.node == te)?;
+        let call = p.call.as_ref()?;
+        if self.syms.sym(call.call.sym).mods & crate::ast::mods::TRANSPARENT == 0 {
+            return None;
+        }
+        let typed_as = p.typed_as;
+        // What the expansion copies or reads of its arguments is expanded first, as where the
+        // call expands as typed (`apply_method_in_now`).
+        let mut roots = call.args.clone();
+        roots.extend(call.call.recv);
+        roots.extend(call.call.ext_recv.map(|(r, _)| r));
+        self.expand_pending_in(&roots);
+        let mut call = self.consume_pending(te)?;
+        call.expected = Some(pt);
+        self.expand_pending(te, typed_as, call)
     }
 
     /// Whether a plain inline call of `sym` typed now waits for the later expansion phase:
@@ -719,6 +969,20 @@ impl<'a> Worker<'a> {
         failed
     }
 
+    /// The calls still pending inside the trees of `roots`, trees no kept tree holds, go unexpanded.
+    pub(super) fn drop_pending_in(&mut self, roots: &[crate::tir::TExprId]) {
+        let mut inside: Vec<crate::tir::TExprId> = Vec::new();
+        for &r in roots {
+            inside.extend(self.prog.descendants(r));
+        }
+        inside.sort_unstable();
+        for p in self.attempts.pending.iter_mut() {
+            if p.call.is_some() && inside.binary_search(&p.node).is_ok() {
+                p.call = None;
+            }
+        }
+    }
+
     /// Whether `te` is a call still pending.
     pub(super) fn is_pending_call(&self, te: crate::tir::TExprId) -> bool {
         !self.attempts.pending.is_empty() && self.attempts.pending.iter().rev().any(|p| p.node == te && p.call.is_some())
@@ -806,7 +1070,7 @@ impl<'a> Worker<'a> {
 
     /// The pending call at `node` expanded, with what it captured of its site restored, the node
     /// replaced in place by the expansion.
-    fn expand_pending(&mut self, node: crate::tir::TExprId, typed_as: crate::types::TypeId, p: PendingCall) {
+    fn expand_pending(&mut self, node: crate::tir::TExprId, typed_as: crate::types::TypeId, p: PendingCall) -> Option<crate::types::TypeId> {
         let gadt = std::mem::replace(&mut self.gadt, p.gadt);
         let nowarn = std::mem::replace(&mut self.nowarn, p.nowarn);
         let body_node = std::mem::replace(&mut self.body_node, p.body_node);
@@ -835,7 +1099,8 @@ impl<'a> Worker<'a> {
             let name = self.name_str(self.syms.sym(call.sym).name);
             eprintln!("flush {} at {:?}: {:?}", name, span, expanded.map(|(e, _)| self.prog.expr(e)));
         }
-        if let Some((expanded, ty)) = expanded {
+        let (expanded, ty) = expanded?;
+        {
             if expanded != node {
                 // A type the typing gave the call's node after it was typed (an `Int` widened to
                 // `Double` in place, `widen_numeric`) stays, as it stays on an expansion's node.
@@ -867,6 +1132,7 @@ impl<'a> Worker<'a> {
                 }
             }
         }
+        Some(self.prog.type_of(node).unwrap_or(ty))
     }
 
     /// What the expansion's root `from` is recorded as, given to the call's node `to` that takes its
@@ -977,14 +1243,30 @@ impl<'a> Worker<'a> {
         self.error_nodes > m.error_nodes || self.attempt_reported_error(m)
     }
 
+    /// `attempt_failed` of what the attempt `m` reported before the diagnostics' count `diags` and
+    /// typed before the error nodes' count `error_nodes`.
+    pub(super) fn attempt_failed_before(&self, m: &Mark, diags: usize, error_nodes: u32) -> bool {
+        if error_nodes > m.error_nodes {
+            return true;
+        }
+        let from = m.diags as usize;
+        let to = diags.min(self.diags.items.len());
+        if !self.diags.items.get(from..to).is_some_and(|items| items.iter().any(|d| !d.is_warning)) {
+            return false;
+        }
+        let kept = self.promoted_positions(m, |p| p.diags, m.diags);
+        (from..to).any(|i| !self.diags.items[i].is_warning && kept.binary_search(&i).is_err() && !self.attempts.late.contains(&(i as u32)))
+    }
+
     /// Whether the attempt reported an error of its own past `m`, the error nodes it typed aside:
     /// the test of a library val's typing against scalac's type (`type_inferred_val`), as on
     /// master, a type of the body the reader could not convert being an error node that reports
     /// nothing (`TyExpr::Error`).
     pub(super) fn attempt_reported_error(&self, m: &Mark) -> bool {
         let from = m.diags as usize;
-        if self.attempts.promoted.is_empty() && self.attempts.late.is_empty() {
-            return self.diags.items.get(from..).is_some_and(|items| items.iter().any(|d| !d.is_warning));
+        let reported = self.diags.items.get(from..).is_some_and(|items| items.iter().any(|d| !d.is_warning));
+        if !reported || (self.attempts.promoted.is_empty() && self.attempts.late.is_empty()) {
+            return reported;
         }
         let kept = self.promoted_positions(m, |p| p.diags, m.diags);
         self.diags.items.iter().enumerate().skip(from).any(|(i, d)| !d.is_warning && kept.binary_search(&i).is_err() && !self.attempts.late.contains(&(i as u32)))
@@ -1067,37 +1349,6 @@ impl<'a> Worker<'a> {
         aside
     }
 
-    /// `set_aside` of the journals the caller does not take out itself: the trail, the
-    /// diagnostics and the index records stay where they are, for the caller (a member's retry
-    /// on the qualifier, which reads its typings' positions in them), and the rarely written
-    /// journals, the late errors' positions (relative to the attempt's first diagnostic, where the
-    /// caller puts its diagnostics back) and the error nodes go aside. What promoted work kept
-    /// (a cached argument's typing, `retained_typing_begin`) stays.
-    pub(super) fn set_aside_journals(&mut self, m: Mark) -> JournalsAside {
-        let error_nodes = self.error_nodes - m.error_nodes;
-        self.error_nodes = m.error_nodes;
-        let at = self.attempts.stack.last().map_or([UNTAKEN; RARE], |o| o.at);
-        let keeps = self.keeps_promoted(&m, &at);
-        let kept_rare = if keeps { self.promoted_rare(&m, &at) } else { Default::default() };
-        let late = self.split_late(m.diags, &[]);
-        let (infos, matches, bounds, rewrites, pending) = self.cut_rare(&at, &[kept_rare[0].as_slice(), kept_rare[1].as_slice(), kept_rare[2].as_slice(), kept_rare[3].as_slice(), kept_rare[4].as_slice()]);
-        if keeps {
-            self.relocate_promoted(&m, &at, &[], &[], &kept_rare);
-        } else {
-            self.drop_promoted_past(&m, &at);
-        }
-        self.end_attempt(&m);
-        JournalsAside { diags_at: m.diags, late, error_nodes, infos, matches, bounds, rewrites, pending }
-    }
-
-    /// Puts back what `set_aside_journals` took out, the caller having put the attempt's
-    /// diagnostics back where they began.
-    pub(super) fn restore_journals(&mut self, s: JournalsAside) {
-        self.attempts.late.extend(s.late.iter().map(|&i| s.diags_at + i));
-        self.error_nodes += s.error_nodes;
-        self.restore_rare(s.infos, s.matches, s.bounds, s.rewrites, s.pending);
-    }
-
     /// The given the prefix resolved for the zonked `target`, or for the parameter `param` where its
     /// target was open (`Attempts::inferred`), taken by the application of `sym` it is for.
     pub(super) fn inferred_hit(&mut self, sym: crate::types::SymId, target: crate::types::TypeId, param: crate::types::SymId) -> Option<(crate::tir::TExprId, crate::types::TypeId)> {
@@ -1118,14 +1369,6 @@ impl<'a> Worker<'a> {
         }
         Some((te, ty))
     }
-
-    /// The typing of an argument a member's application under the attempt `m` caches for its
-    /// retry begins: what it writes of the rarely written journals is kept through the set-aside
-    /// of `m` and the retractions of the retry's tries (`promote_end` where it is clean).
-    pub(super) fn retained_typing_begin(&self, m: &Mark) -> PromoteMark {
-        self.promote_mark(Keep::Since(m.seq - 1), false)
-    }
-
 
     /// Puts back what `set_aside` took out, into the attempt open now.
     pub(super) fn restore(&mut self, s: SetAside) {

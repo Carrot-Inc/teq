@@ -26,7 +26,7 @@
 // expect: 97:22: error: type mismatch: found String, required Int
 // expect: 98:18: error: type mismatch: found String, required Int
 // expect: 99:21: error: type mismatch: found String
-// expect: 100:17: error: type mismatch: found Array[String]
+// expect: 100:17: error: type mismatch: found String, required T
 // expect: 101:38: error: type mismatch: found String
 // expect: 102:39: error: type mismatch: found String
 // expect: 103:55: error: type mismatch: found String, required Int

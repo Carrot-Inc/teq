@@ -135,6 +135,10 @@ pub fn parse(text: &str, lexed: &LexResult, closed: &[u32], interner: &Interner,
     p.parse_file();
     let mut asts = vec![p.ast];
     asts.extend(p.package_blocks);
+    for a in asts.iter_mut() {
+        a.braced.sort_unstable();
+        a.braced.dedup();
+    }
     Parsed { asts, errors: p.errors, boundary: p.boundary }
 }
 

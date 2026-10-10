@@ -74,7 +74,7 @@ pub(super) struct Recorded {
     marks: usize,
 }
 
-/// What an attempt recorded, taken out (`Worker::index_take`).
+/// What an attempt recorded, taken out (`Worker::index_take_except`).
 pub(super) struct Taken {
     records: Vec<(FileId, Record)>,
     marks: Vec<(super::unused::Sel, u8)>,
@@ -404,7 +404,8 @@ impl<'a> Worker<'a> {
         self.unused.drop_since(mark.marks);
     }
 
-    /// `index_take` but for the records at the positions `kept`, which stay.
+    /// Takes out what was recorded since `mark`, for `index_put_back` to restore should the
+    /// attempt be kept after all, but for the records at the positions `kept`, which stay.
     pub(super) fn index_take_except(&mut self, mark: Recorded, kept: &[usize]) -> Taken {
         let records = match self.index.as_mut() {
             Some(ix) if mark.records < ix.journal.len() => {
@@ -440,13 +441,6 @@ impl<'a> Worker<'a> {
         self.unused.drop_since(mark.marks);
     }
 
-    /// Takes out what was recorded since `mark`, for `index_put_back` to restore should the
-    /// attempt be kept after all.
-    pub(super) fn index_take(&mut self, mark: Recorded) -> Taken {
-        let records = self.index.as_mut().map_or_else(Vec::new, |ix| ix.journal.split_off(mark.records));
-        Taken { records, marks: self.unused.take_since(mark.marks) }
-    }
-
     /// Takes back the records made since `mark` at `span` of `file`, keeping the marks and what
     /// was recorded elsewhere meanwhile: what an annotation typed for the marks alone recorded
     /// (`Worker::mark_annotation`), and not a definition it completed on the way.
@@ -462,26 +456,6 @@ impl<'a> Worker<'a> {
             }
             ix.journal.truncate(k);
         }
-    }
-
-    /// Puts back, of `taken` (what `index_take(base)` took out), what was recorded between
-    /// `from` and `to`: the typings a member's retry reuses keep their records.
-    pub(super) fn index_put_back_between(&mut self, taken: &Taken, base: Recorded, from: Recorded, to: Recorded) {
-        if let Some(ix) = self.index.as_mut() {
-            ix.journal.extend_from_slice(&taken.records[from.records - base.records..to.records - base.records]);
-        }
-        self.unused.put_back(taken.marks[from.marks - base.marks..to.marks - base.marks].to_vec());
-    }
-
-    /// Whether what was recorded between `from` and `to` lies within `taken`, what
-    /// `index_take(base)` took out.
-    pub(super) fn index_holds(&self, taken: &Taken, base: Recorded, from: Recorded, to: Recorded) -> bool {
-        from.records >= base.records
-            && from.records <= to.records
-            && to.records - base.records <= taken.records.len()
-            && from.marks >= base.marks
-            && from.marks <= to.marks
-            && to.marks - base.marks <= taken.marks.len()
     }
 
     pub(super) fn index_put_back(&mut self, taken: Taken) {

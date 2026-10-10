@@ -219,5 +219,6 @@ impl Ast {
             + array(&self.inline_annots)
             + array(&self.cut_args)
             + array(&self.broken_cases)
+            + array(&self.braced)
     }
 }

@@ -587,9 +587,9 @@ impl<'a> Worker<'a> {
             return (te, expected);
         }
         // A value typed ahead of the context function type expected of it (an argument typed
-        // for overload resolution) is wrapped in one, as `type_expr` wraps the expression; one a
-        // member's retry on its qualifier takes as its test typed it is not, as dotty's `adapt`
-        // wraps no typed tree.
+        // for overload resolution) is wrapped in one, as `type_expr` wraps the expression; an
+        // argument an attempt adapts as an earlier one cached it (`state::ArgCache`) is not, as
+        // dotty's `adapt` wraps no typed tree.
         if let Some((ptys, ret)) = self.as_context_function(exp) {
             if self.as_context_function(actual).is_none() && !self.retry_typed.contains_key(&te) {
                 let syms: Vec<SymId> = ptys.iter().enumerate().map(|(i, &t)| self.indexed_local("contextual", i as u32 + 1, t, span)).collect();
@@ -622,8 +622,9 @@ impl<'a> Worker<'a> {
         self.retract(attempt);
         // An eta-expansion typed ahead of the trait with a single abstract method expected of
         // it (an argument typed for overload resolution, `map(f)` for a `SAM[Int, T]`) still
-        // implements the trait, and so does a function literal a member's retry takes as typed
-        // (dotty's `adapt` of a closure); a value of function type does not, as under scalac.
+        // implements the trait, and so does a function literal an attempt adapts as an earlier
+        // one cached it (dotty's `adapt` of a closure); a value of function type does not, as
+        // under scalac.
         let sam_convertible = self.eta_expansions.contains_key(&te) || (self.retry_typed.contains_key(&te) && matches!(self.prog.expr(te), TExpr::Lambda(..)));
         if let (true, Some((params, _))) = (sam_convertible, self.as_function(actual)) {
             if let Some((trait_ty, method, sig, subst)) = self.sam_method(exp, params.len()) {
@@ -2547,24 +2548,6 @@ impl<'a> Worker<'a> {
         (te, self.poly_type(&ps, fun_ty))
     }
 
-    /// Whether a function literal of a parameter without a type is typed where a member's
-    /// application asks that it be left untyped (`untyped_lambda`): dotty's test leaves it
-    /// untyped only where the formal gives the parameter no type, which a function type of its
-    /// arity, a SAM, a partial function or a dependent function does, through a context function
-    /// to its result (`functionWithUnknownParamType`, ProtoTypes.scala 475); a `{ case … }`
-    /// literal and one with a contextual parameter are typed.
-    fn lambda_kept_typed(&mut self, lps: &[ast::LambdaParam], given: Option<TypeId>) -> bool {
-        if (lps.len() == 1 && lps[0].name == names::CASE_PARAM) || lps.iter().any(|p| p.contextual) {
-            return true;
-        }
-        let Some(mut pt) = given else { return false };
-        while let Some((_, ret)) = self.as_context_function(pt) {
-            pt = ret;
-        }
-        let expected = self.function_bound(pt, lps.len());
-        self.named_function(expected).is_some() || self.sam_method(expected, lps.len()).is_some() || self.as_partial_function(expected).is_some() || self.expected_function(expected, lps.len()).is_some()
-    }
-
     fn type_lambda(
         &mut self,
         params: ListRef,
@@ -2574,10 +2557,6 @@ impl<'a> Worker<'a> {
     ) -> (TExprId, TypeId) {
         let ast = self.cur_ast();
         let lps: Vec<ast::LambdaParam> = ast.lambda_params[params.range()].to_vec();
-        // A member's application asking that a literal the formal gives no parameter types be
-        // left untyped (`Worker::untyped_lambda`); a literal nested in this one is not asked.
-        let untyped_ok = self.untyped_lambda.take().is_some();
-        let given = expected;
         let contextual = !lps.is_empty() && lps.iter().all(|p| p.contextual);
         if contextual {
             return self.type_context_lambda(&lps, body, span, expected);
@@ -2677,7 +2656,6 @@ impl<'a> Worker<'a> {
         }
         // Parameters that do not take the tuple's elements make a function of several.
         let exp_partial = exp_partial.filter(|_| lps.len() == 1 || untupled.is_some());
-        let mut missing = false;
         if untupled.is_none() {
             for (i, lp) in lps.iter().enumerate() {
                 let ty = match lp.ty {
@@ -2704,7 +2682,6 @@ impl<'a> Worker<'a> {
                             Some(t) => t,
                             None => {
                                 self.error_unless_unknown(lp.span, "missing parameter type".to_string(), &expected.into_iter().collect::<Vec<_>>());
-                                missing = true;
                                 ERROR
                             }
                         },
@@ -2713,14 +2690,6 @@ impl<'a> Worker<'a> {
                 param_tys.push(ty);
             }
             fn_param_tys = param_tys.clone();
-        }
-        // dotty's applicability test leaves such a literal untyped (`functionWithUnknownParamType`,
-        // ProtoTypes.scala 475); the application reports the missing types and types none of it,
-        // so that the retry on the qualifier types it for the first time (`apply::type_arg_recorded`).
-        if missing && untyped_ok && !self.lambda_kept_typed(&lps, given) {
-            self.pop_scope();
-            self.untyped_lambda = Some(true);
-            return (self.prog.add(TExpr::Unit), ERROR);
         }
         let mut syms = Vec::with_capacity(lps.len());
         for (lp, &ty) in lps.iter().zip(&param_tys) {
@@ -3058,7 +3027,7 @@ impl<'a> Worker<'a> {
     /// The lambda of a tuple's elements binds them in a block around its body
     /// (`desugar.makeTupledFunction`), so its match is such a match, and one in braces, a block
     /// in that block, neither: the braces the parser drops are read from the text between the
-    /// body and the end of the lambda at `span`, as `apply::bare_in_list` reads them. So for a
+    /// body and the end of the lambda at `span`. So for a
     /// block whose last statement is a match in braces of its own (`{ val k = 1; { s match .. } }`),
     /// from the text before the match.
     fn partial_body(&self, ast: &ast::Ast, body: ExprId, untupled: bool, span: Span) -> PartialBody {

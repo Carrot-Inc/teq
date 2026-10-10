@@ -1,5 +1,6 @@
 use super::profile::{About, Kind, Outcome};
 use super::resolve::TermRef;
+use super::state::{ArgSlot, Cache, Dual};
 use super::{Worker, Undo};
 use crate::ast::{Expr, ExprId, ListRef, Pat, PatId, TyExpr, TyExprId};
 use crate::intern::Name;
@@ -80,21 +81,13 @@ impl Clone for ArgList {
 }
 
 /// An argument of a member's first list in the test of `Worker::boundary_attempt`: as written
-/// (`written`, a named one's `n = v`, and `value`, its `v`) or typed already, the parameter it
-/// goes to, whether it is a sequence spliced into it (`xs*`), its name where named, its place in
-/// the list and whether it is an operand evaluated ahead of the receiver.
+/// (`value`, a named one's `v`) or typed already, the parameter it goes to and whether it is a
+/// sequence spliced into it (`xs*`).
 struct BoundaryArg {
-    written: Option<ExprId>,
     value: Option<ExprId>,
     pretyped: Option<(TExprId, TypeId)>,
     param: usize,
     splice: bool,
-    named: Option<Name>,
-    src: usize,
-    hoisted: bool,
-    /// Written bare between the list's delimiters, nothing but blanks and parentheses around its
-    /// expression: no braces or comments, which the parser drops (`{ (e) }` is read as `e`).
-    bare: bool,
 }
 
 /// The extensions of a name beyond the lexical scope: the givens with one, the context's the
@@ -135,42 +128,25 @@ enum Lexical {
     Ambiguous((MethodCall, Option<ClassId>), (MethodCall, Option<ClassId>)),
 }
 
-/// What a member's application under `apply_member_or_extension` typed of the arguments it was
-/// given, as dotty's `FunProto` caches them (`cacheTypedArg`, ProtoTypes.scala 471): its retry
-/// on the qualifier adapts these typings and types none of the arguments again, so that an
-/// expansion, a macro's among them, runs once.
-pub struct ArgCache {
-    file: crate::source::FileId,
-    /// The argument lists as written, for the retry, flat: every list's arguments in one buffer,
-    /// and per list where its arguments begin, whether it is a using one and its span
-    /// (`written`); a call that types keeps the buffers for the next (`Worker::arg_caches`).
+/// What a member's application under `apply_member_or_extension` keeps for its retry on the
+/// qualifier: its argument lists as written, flat (every list's arguments in one buffer, and per
+/// list where its arguments begin, whether it is a using one and its span); a call that types
+/// keeps the buffers for the next (`Worker::member_calls`). The typings of its first plain
+/// list's arguments are in the attempts' cache (`state::ArgCache`, dotty's `FunProto`).
+pub struct MemberCall {
     args: Vec<ArgSrc>,
     lists: Vec<(u32, bool, Span)>,
-    /// Set while the first argument list that is not a using one is typed (`type_clause_args`),
-    /// whose typings alone the retry reads: it is tried as written and as its tupled dual.
-    active: bool,
-    /// Whether that list has been reached.
-    done: bool,
-    /// Whether the application stopped at that list, which failed (`apply_method_in_now`): the
-    /// lists after it are typed once, by the retry that takes the application over or alone.
-    stopped: bool,
-    typings: Vec<ArgTyping>,
-    /// The type mismatches the application reported, by diagnostic index and span with the
-    /// type each required (`Worker::mismatches`), filled where it failed.
-    mismatches: Vec<(usize, Span, TypeId)>,
-    /// The application's attempt: what a clean typing of an argument
-    /// writes of the rarely written journals is kept through its set-aside and the retry's
-    /// tries (`state::retained_typing_begin`).
-    attempt: Option<super::state::Mark>,
-    /// The count of type variables where the application began (`Taken::vars`).
-    vars: u32,
     /// The depth of applications (`Worker::app_depth`) of the member's application, which the
-    /// first application under the cache claims: an application nested in a later list's
-    /// argument types its own later lists for their errors.
+    /// first application under it claims: an application nested in a later list's argument types
+    /// its own later lists for their errors.
     depth: u32,
+    /// Whether the application stopped at its first plain list, which failed
+    /// (`apply_method_in_now`): the lists after it are typed once, by the retry that takes the
+    /// application over or alone.
+    stopped: bool,
 }
 
-impl ArgCache {
+impl MemberCall {
     /// Keeps `lists` as written.
     #[inline]
     fn keep(&mut self, lists: &[ArgList]) {
@@ -180,6 +156,8 @@ impl ArgCache {
             self.lists.push((self.args.len() as u32, l.using, l.span));
             self.args.extend_from_slice(&l.args);
         }
+        self.depth = 0;
+        self.stopped = false;
     }
 
     /// The lists as written.
@@ -193,86 +171,10 @@ impl ArgCache {
     }
 }
 
-impl Default for ArgCache {
-    fn default() -> ArgCache {
-        ArgCache { file: crate::source::NO_FILE, args: Vec::new(), lists: Vec::new(), active: false, done: false, stopped: false, typings: Vec::new(), mismatches: Vec::new(), attempt: None, vars: 0, depth: 0 }
+impl Default for MemberCall {
+    fn default() -> MemberCall {
+        MemberCall { args: Vec::new(), lists: Vec::new(), depth: 0, stopped: false }
     }
-}
-
-/// One typing of an `ArgCache`: the marks the application's typing of an argument left, from
-/// which the retry reads what it needs where the application failed.
-#[derive(Clone, Copy)]
-struct ArgTyping {
-    e: ExprId,
-    /// The formal the member's application typed it against; `None` where it typed it alone,
-    /// an argument of no parameter.
-    formal: Option<TypeId>,
-    /// `typedUnadapted`'s tree, its type as the typing gave it and that type with the
-    /// variables solved where the application ended (`retry_on_qualifier`).
-    te: TExprId,
-    own: TypeId,
-    ty: TypeId,
-    /// The typing adapted to the formal, as a named argument's is kept (`typedNamedArg`); its
-    /// type is the node's where the retry reads it.
-    adapted: Option<TExprId>,
-    /// The trail's length where the typing began, where it ended and where its adaptation ended.
-    trail: (u32, u32, u32),
-    /// The type variables' count where the typing began: the variables it made are from it on.
-    vars: u32,
-    /// The diagnostics' count where the typing began, where it ended and where its adaptation
-    /// ended.
-    diags: (u32, u32, u32),
-    /// Whether the typing bound a temporary in the application's segment.
-    hoisted: bool,
-    /// The index's records the typing made.
-    index: (super::index::Recorded, super::index::Recorded),
-    /// A tupled dual (`type_tupled_dual`): whether its elements were typed alone, the formal
-    /// being no tuple type of as many.
-    dual: Option<bool>,
-    /// A function literal the application did not type (`type_arg_recorded`): the formal gave
-    /// its parameters no types, so it reported the missing type and typed none of it.
-    untyped: bool,
-}
-
-impl ArgTyping {
-    #[inline]
-    fn trail(&self) -> (usize, usize, usize) {
-        (self.trail.0 as usize, self.trail.1 as usize, self.trail.2 as usize)
-    }
-
-    #[inline]
-    fn diags(&self) -> (usize, usize, usize) {
-        (self.diags.0 as usize, self.diags.1 as usize, self.diags.2 as usize)
-    }
-}
-
-/// What a member's retry took out of the member's application: its diagnostics, from the index
-/// `diags_at` on, what the index recorded from `index_at` on, the trail's bindings from `mark`
-/// on (`undone`, the last first) and the type mismatches it logged.
-struct Taken<'d> {
-    diags: &'d [crate::source::Diagnostic],
-    diags_at: usize,
-    index: &'d super::index::Taken,
-    index_at: super::index::Recorded,
-    undone: &'d [super::Redo],
-    mark: usize,
-    /// The count of type variables where the member's application began: those made since are
-    /// its own, whose instances stay where the retry sets the application aside (the owner rule)
-    /// and whose bounds go.
-    vars: usize,
-    mismatches: &'d [(usize, Span, TypeId)],
-}
-
-/// `cached_argument`'s reading of a typing: an error argument, an erroneous typing of an
-/// argument typed alone, one dotty would type again, or the typing to adapt and whether the
-/// retry may reuse it.
-enum Cached {
-    ErrorArg,
-    Erroneous,
-    /// A typing the retry would have to type again: the retry declines.
-    Declined,
-    /// The tree, its type and, where the retry may reuse it, the bindings to bring back.
-    Typed(TExprId, TypeId, Option<Vec<super::Redo>>),
 }
 
 /// How a try of a member's retry ends before any extension or conversion is looked for.
@@ -280,15 +182,8 @@ enum Boundary {
     /// The member's errors stand for this try, as dotty has it: an argument is an error
     /// argument (`hasErrorArg`), or the member matches the arguments (`isMatchedBy`).
     Stands,
-    /// The retry would have to type an argument the member's application typed, or adapt a
-    /// typing whose dependencies the rollback undoes: the member's errors stand, and no
-    /// further try is made.
-    Declines,
-    /// The argument lists to apply an extension or a conversion to, the index records of the
-    /// typings they reuse, the bindings of their own type variables to bring back and the
-    /// warnings of the reused macro expansions that are arguments themselves, which go with a
-    /// try that applies (`expansion_warnings`).
-    Retry(Vec<ArgList>, Vec<(super::index::Recorded, super::index::Recorded)>, Vec<super::Redo>, Vec<crate::source::Diagnostic>),
+    /// The argument lists to apply an extension or a conversion to.
+    Retry(Vec<ArgList>),
 }
 
 /// The tries of a member's retry, in dotty's order (Applications.scala 1494): the arguments as
@@ -2828,12 +2723,17 @@ impl<'a> Worker<'a> {
     ) -> Option<(TExprId, TypeId)> {
         let outer = std::mem::replace(&mut self.annotation_args, self.typing_annotation && ctor.is_some());
         self.app_depth += 1;
-        // The member's application under `apply_member_or_extension` is the first under its cache.
-        if let Some(c) = self.arg_cache.as_mut() {
+        if self.retry_depth.is_some_and(|d| d + 1 == self.app_depth) {
+            self.retry_applied = None;
+        }
+        // The member's application under `apply_member_or_extension` is the first under it, and
+        // the arguments of an argument cache's application are typed at its depth.
+        if let Some(c) = self.member_call.as_mut() {
             if c.depth == 0 {
                 c.depth = self.app_depth;
             }
         }
+        self.arg_cache_claim(self.app_depth);
         let erroneous_mark = (self.erroneous_args.len(), self.erroneous_lambdas.len());
         let applied = self.apply_method_in_now(call, ctor, targs, lists, span, expected, trial);
         self.erroneous_args.truncate(erroneous_mark.0);
@@ -3195,6 +3095,10 @@ impl<'a> Worker<'a> {
                         stopped = true;
                         break;
                     }
+                    // Applied, it ends what a try of a member's retry decides on (`retry_applied`).
+                    if normal_seen == 1 && self.retry_depth.is_some_and(|d| d + 1 == self.app_depth) {
+                        self.retry_applied = Some((self.diags.items.len() as u32, self.error_nodes));
+                    }
                 }
                 Some(list) => {
                     self.error(list.span, "unexpected using clause");
@@ -3431,6 +3335,24 @@ impl<'a> Worker<'a> {
                 self.defer_inline(&call, &sig, &subst, te, ret_ty, span, expected);
                 te
             }
+            // A transparent call that is a member's argument itself, typed for its cache, is
+            // `typedUnadapted`'s call (Typer.scala 3800): its expansion is the adaptation's
+            // (`Typer.adapt`, 4819), which each attempt over the argument makes
+            // (`Worker::expand_unadapted`), a result type that depends on a parameter included
+            // (`Inlines.needsInlining`, 66, asks nothing of it). One inferred as an error keeps
+            // the call's expansion here.
+            None if inline_callee
+                && self.unadapted_call.is_some()
+                && self.takes_unadapted(call.sym, span)
+                && !self.types.contains_error(ret_ty) =>
+            {
+                let te = self.build_call(&call, l);
+                let arg_types = std::mem::replace(&mut self.inline.arg_types, outer_arg_types);
+                ty = self.normalize(ret_ty);
+                self.defer_plain_inline(te, &call, &sig, &subst, &args_out, arg_types, ret_ty, ty, span, expected);
+                self.unadapted_node = Some(te);
+                te
+            }
             // A result type the typer cannot give without the expansion (one inferred as an
             // error, one that depends on a parameter) keeps the call's expansion here.
             None if inline_callee
@@ -3524,7 +3446,7 @@ impl<'a> Worker<'a> {
             // is its own); any other application types them alone, once, for their own errors
             // (`typedArgs`, 1438).
             let depth = self.app_depth;
-            let owned = self.arg_cache.as_ref().is_some_and(|c| c.depth == depth);
+            let owned = self.member_call.as_ref().is_some_and(|c| c.depth == depth);
             if !owned && self.retry_depth.map_or(true, |d| d + 1 != self.app_depth) {
                 self.type_args_for_errors(&rest);
             }
@@ -3961,21 +3883,6 @@ impl<'a> Worker<'a> {
         self.widen_numeric(arg, from_ty, to_ty)
     }
 
-    fn is_function_literal(&self, a: &ArgSrc) -> bool {
-        match a {
-            ArgSrc::Ast(e) | ArgSrc::Hoisted(e) => {
-                let ast = self.cur_ast();
-                let inner = match ast.expr(*e) {
-                    Expr::NamedArg(_, v) => v,
-                    _ => *e,
-                };
-                matches!(ast.expr(inner), Expr::Lambda(..))
-            }
-            ArgSrc::Typed(..) | ArgSrc::Named(..) => false,
-            ArgSrc::ForLambda(..) => true,
-        }
-    }
-
     /// An expression whose evaluation has no effect and observes none, so its place in the
     /// evaluation order is immaterial.
     pub fn is_stable(&self, te: TExprId) -> bool {
@@ -4048,12 +3955,6 @@ impl<'a> Worker<'a> {
         subst: &Subst,
         out: &mut Vec<TExprId>,
     ) -> bool {
-        // A member's application under `apply_member_or_extension` records the typings of the
-        // first list that is not a using one, its retry's, and no other list's.
-        if let Some(c) = self.arg_cache.as_mut() {
-            c.active = !list.using && !c.done;
-            c.done |= !list.using;
-        }
         let ast = self.cur_ast();
         let n = clause.params.len();
         if n == 1 && list.args.len() > 1 && !clause.params[0].repeated {
@@ -4070,19 +3971,16 @@ impl<'a> Worker<'a> {
             });
         let dependent = self.note_paths;
         if plain {
-            // Positional arguments only: function literals are still typed last.
+            // Positional arguments only, typed in their order, a function literal among them, as
+            // `matchArgs` types them (Applications.scala 816): an attempt over the arguments caches
+            // each before a later one fails (`cacheTypedArg`).
             let base = out.len();
             out.resize(base + n, TExprId(0));
-            for pass in 0..2 {
-                for i in 0..n {
-                    if (pass == 1) != self.is_function_literal(&list.args[i]) {
-                        continue;
-                    }
-                    let pty = self.param_type(clause.params[i].ty, subst);
-                    out[base + i] = self.type_arg(list.args[i], pty, list.span);
-                    if dependent {
-                        self.note_param_path(&clause.params[i], out[base + i], pty);
-                    }
+            for i in 0..n {
+                let pty = self.param_type(clause.params[i].ty, subst);
+                out[base + i] = self.type_arg(list.args[i], pty, list.span);
+                if dependent {
+                    self.note_param_path(&clause.params[i], out[base + i], pty);
                 }
             }
             return false;
@@ -4095,6 +3993,11 @@ impl<'a> Worker<'a> {
         // provided every parameter before it has an argument.
         let mut pos = 0usize;
         let mut misplaced = false;
+        // The arguments past the parameters: reported, and typed alone for their errors, once the
+        // arguments before them are typed, where dotty's `matchArgs` reaches them
+        // (Applications.scala, `TooManyArguments`), so that an attempt over the arguments caches
+        // those as it does.
+        let mut extra: Vec<Option<ExprId>> = Vec::new();
         for a in &list.args {
             let named = match a {
                 ArgSrc::Ast(e) => match ast.expr(*e) {
@@ -4134,13 +4037,16 @@ impl<'a> Worker<'a> {
                 None => {
                     let is_repeated = clause.params.get(pos.min(n.saturating_sub(1))).map_or(false, |p| p.repeated);
                     let skipped = slots[..pos.min(n)].iter().any(|s| s.is_empty());
-                    if skipped || (pos >= n && !is_repeated) {
-                        misplaced |= skipped;
-                        let msg = if skipped { "positional after named argument".to_string() } else { format!("too many arguments: expected {}", n) };
-                        self.arity_error(&list, msg);
+                    if skipped {
+                        misplaced = true;
+                        self.arity_error(&list, "positional after named argument".to_string());
                         if let ArgSrc::Ast(e) = a {
                             self.type_extra_arg(*e);
                         }
+                        continue;
+                    }
+                    if pos >= n && !is_repeated {
+                        extra.push(a.ast().filter(|_| matches!(a, ArgSrc::Ast(_))));
                         continue;
                     }
                     let i = pos.min(n - 1);
@@ -4162,82 +4068,80 @@ impl<'a> Worker<'a> {
                 }
             }
         }
+        // The parameters' arguments typed in the parameters' order, as `matchArgs` types the
+        // reordered arguments (Applications.scala 661, 816).
         let mut results: Vec<Option<TExprId>> = vec![None; n];
-        for pass in 0..2 {
-            for i in 0..n {
-                let p = &clause.params[i];
-                let pty = self.param_type(p.ty, subst);
-                if p.repeated {
-                    if pass == 1 {
-                        continue;
+        for i in 0..n {
+            let p = &clause.params[i];
+            let pty = self.param_type(p.ty, subst);
+            if p.repeated {
+                if splice {
+                    let seq_ty = match self.seq_class() {
+                        Some(seq) => self.types.class(seq, &[pty]),
+                        None => ERROR,
+                    };
+                    self.spread_arg = true;
+                    self.spread_was_array = false;
+                    let mut spliced = self.type_arg(slots[i][0], seq_ty, list.span);
+                    self.spread_arg = false;
+                    // The JVM's backend passes a Java method an array of its own.
+                    if self.java_varargs && !self.spread_was_array && !self.jvm {
+                        spliced = self.java_varargs_copy(spliced, pty);
                     }
-                    if splice {
-                        let seq_ty = match self.seq_class() {
-                            Some(seq) => self.types.class(seq, &[pty]),
-                            None => ERROR,
-                        };
-                        self.spread_arg = true;
-                        self.spread_was_array = false;
-                        let mut spliced = self.type_arg(slots[i][0], seq_ty, list.span);
-                        self.spread_arg = false;
-                        // The JVM's backend passes a Java method an array of its own.
-                        if self.java_varargs && !self.spread_was_array && !self.jvm {
-                            spliced = self.java_varargs_copy(spliced, pty);
-                        }
-                        if self.capturing() {
-                            self.capture_wrap(spliced, Wrap::Splice(pty));
-                        }
-                        results[i] = Some(spliced);
-                    } else {
-                        let open = self.deref(pty);
-                        let lower_mark = match self.types.get(open) {
-                            Type::Var(v) => self.tvars[v].lower.len(),
-                            _ => 0,
-                        };
-                        let items: Vec<TExprId> =
-                            slots[i].clone().iter().map(|&a| self.type_arg(a, pty, list.span)).collect();
-                        self.harmonize_varargs(&items, pty, lower_mark);
-                        let l = self.prog.list(&items);
-                        let seq = self.prog.add(TExpr::SeqLit(l));
-                        if self.capturing() {
-                            self.capture_form(seq, Form::Repeated(pty));
-                        }
-                        // The sequence's type says what its elements are, which the JVM boxes
-                        // them as: an `Int` written where a `Double` is expected is one.
-                        if let Some(seq_class) = self.seq_class() {
-                            let seq_ty = self.types.class(seq_class, &[pty]);
-                            self.prog.set_type(seq, seq_ty);
-                        }
-                        results[i] = Some(seq);
+                    if self.capturing() {
+                        self.capture_wrap(spliced, Wrap::Splice(pty));
                     }
-                    if p.by_name {
-                        results[i] = results[i].map(|seq| self.by_name_thunk(seq));
-                    }
-                    continue;
-                }
-                let Some(&arg) = slots[i].first() else {
-                    if pass == 0 {
-                        if !p.has_default && !misplaced {
-                            let msg = format!("missing argument for parameter {}", self.name_str(p.name));
-                            self.arity_error(&list, msg);
-                        }
-                        results[i] = Some(if p.has_default { self.default_placeholder() } else { self.prog.add(TExpr::Unit) });
-                    }
-                    continue;
-                };
-                if (pass == 1) != self.is_function_literal(&arg) {
-                    continue;
-                }
-                let arg = match arg {
-                    ArgSrc::Hoisted(e) if p.by_name || (self.b.by_name.is_some() && self.by_name_arg(pty).is_some()) => ArgSrc::Ast(e),
-                    a => a,
-                };
-                let te = self.type_arg(arg, pty, list.span);
-                results[i] = Some(if p.by_name {
-                    self.by_name_thunk(te)
+                    results[i] = Some(spliced);
                 } else {
-                    te
-                });
+                    let open = self.deref(pty);
+                    let lower_mark = match self.types.get(open) {
+                        Type::Var(v) => self.tvars[v].lower.len(),
+                        _ => 0,
+                    };
+                    let items: Vec<TExprId> =
+                        slots[i].clone().iter().map(|&a| self.type_arg(a, pty, list.span)).collect();
+                    self.harmonize_varargs(&items, pty, lower_mark);
+                    let l = self.prog.list(&items);
+                    let seq = self.prog.add(TExpr::SeqLit(l));
+                    if self.capturing() {
+                        self.capture_form(seq, Form::Repeated(pty));
+                    }
+                    // The sequence's type says what its elements are, which the JVM boxes
+                    // them as: an `Int` written where a `Double` is expected is one.
+                    if let Some(seq_class) = self.seq_class() {
+                        let seq_ty = self.types.class(seq_class, &[pty]);
+                        self.prog.set_type(seq, seq_ty);
+                    }
+                    results[i] = Some(seq);
+                }
+                if p.by_name {
+                    results[i] = results[i].map(|seq| self.by_name_thunk(seq));
+                }
+                continue;
+            }
+            let Some(&arg) = slots[i].first() else {
+                if !p.has_default && !misplaced {
+                    let msg = format!("missing argument for parameter {}", self.name_str(p.name));
+                    self.arity_error(&list, msg);
+                }
+                results[i] = Some(if p.has_default { self.default_placeholder() } else { self.prog.add(TExpr::Unit) });
+                continue;
+            };
+            let arg = match arg {
+                ArgSrc::Hoisted(e) if p.by_name || (self.b.by_name.is_some() && self.by_name_arg(pty).is_some()) => ArgSrc::Ast(e),
+                a => a,
+            };
+            let te = self.type_arg(arg, pty, list.span);
+            results[i] = Some(if p.by_name {
+                self.by_name_thunk(te)
+            } else {
+                te
+            });
+        }
+        for e in extra {
+            self.arity_error(&list, format!("too many arguments: expected {}", n));
+            if let Some(e) = e {
+                self.type_extra_arg(e);
             }
         }
         let mut results: Vec<TExprId> = results.into_iter().map(|r| r.unwrap()).collect();
@@ -4473,23 +4377,45 @@ impl<'a> Worker<'a> {
     fn type_arg_as(&mut self, arg: ArgSrc, pty: TypeId, span: Span) -> TExprId {
         let spread = std::mem::take(&mut self.spread_arg);
         match arg {
-            ArgSrc::Ast(e) | ArgSrc::Hoisted(e) => {
-                if self.arg_cache.is_some() && self.watches_arg(e) {
-                    return self.type_arg_recorded(arg, e, pty, spread);
-                }
-                // An argument an earlier attempt over the same application typed is adapted, not
-                // typed again (`state::ArgCache`).
-                let (te, ty) = match self.cached_arg(e) {
-                    Some(typed) => typed,
-                    None => {
-                        let retained = self.arg_typing_begin(e);
-                        let typed = self.type_expr(e, Some(pty));
-                        // What the typing of a cached argument wrote is the argument's.
-                        if self.cache_arg(e, typed) {
-                            self.promote_end(retained);
-                        }
-                        typed
+            ArgSrc::Ast(e) | ArgSrc::Hoisted(e) if spread => {
+                // A spliced sequence is typed and adapted against a sequence or an array of the
+                // elements (`typedWildcardStarArgExpr`, Typer.scala 1326: `Seq[T] | Array[? <: T]`),
+                // then adapted to the sequence. That typing is the wildcard-star argument's: a
+                // transparent call there expands in it and a mismatch with either is its error, so
+                // a member's cache keeps the sequence expanded, and not at all where it did not fit.
+                let tpt = self.splice_typing_type(pty);
+                let (te, ty) = match self.arg_slot(e) {
+                    ArgSlot::None => self.type_spliced(e, tpt),
+                    ArgSlot::Cached(te, ty) => {
+                        self.retry_typed.insert(te, ());
+                        (te, ty)
                     }
+                    ArgSlot::Held { written, .. } => self.type_spliced_cached(e, written, tpt),
+                };
+                let arg_span = self.cur_ast().expr_span(e);
+                let te = match arg {
+                    ArgSrc::Hoisted(_) => self.hoist(te, ty, arg_span),
+                    _ => te,
+                };
+                self.mark_spread_array(spread, te, ty);
+                self.typed_arg(te, ty, pty, arg_span)
+            }
+            ArgSrc::Ast(e) | ArgSrc::Hoisted(e) => {
+                // An argument an earlier attempt over the same application typed is adapted, not
+                // typed again (`state::ArgCache`, dotty's `typedArg`, ProtoTypes.scala 556).
+                // A transparent call a member's cache holds unexpanded is expanded as it is
+                // adapted (`expand_unadapted`).
+                let (te, ty) = match self.arg_slot(e) {
+                    ArgSlot::None => self.type_expr(e, Some(pty)),
+                    ArgSlot::Cached(te, ty) => {
+                        self.retry_typed.insert(te, ());
+                        (te, self.expand_unadapted(te, pty).unwrap_or(ty))
+                    }
+                    ArgSlot::Held { named: true, written, .. } if matches!(arg, ArgSrc::Ast(_)) => return self.type_named_arg_cached(e, written, pty, spread),
+                    ArgSlot::Held { written, unadapted, .. } => match self.type_arg_cached(e, written, pty, unadapted) {
+                        (te, ty, true) => (te, self.expand_unadapted(te, pty).unwrap_or(ty)),
+                        (te, ty, false) => (te, ty),
+                    },
                 };
                 let arg_span = self.cur_ast().expr_span(e);
                 let te = match arg {
@@ -4554,217 +4480,180 @@ impl<'a> Worker<'a> {
         self.adapt(te, ty, pty, span)
     }
 
-    /// Whether `e` is an argument the member's application under `apply_member_or_extension`
-    /// was given (`ArgCache::watched`).
-    #[inline]
-    fn watches_arg(&self, _e: ExprId) -> bool {
-        self.arg_cache.as_ref().is_some_and(|c| c.active && c.file == self.env.file)
-    }
-
-    /// Where a typing starts: the trail's, the diagnostics', the temporaries', the index's and
-    /// the type variables' lengths.
-    fn typing_marks(&self) -> (usize, usize, usize, super::index::Recorded, usize) {
-        (self.trail.len(), self.diags.items.len(), self.hoisted.len(), self.index_mark(), self.tvars.len())
-    }
-
-    /// The bindings the trail took under the member's application (`taken.undone`) from the
-    /// typing `ty`'s start to `to`, all of variables made by the typing: what the retry that
-    /// reuses it brings back. `None` where one is of an older variable, the application's. A
-    /// tree of a type without variables, a literal or an instance creation of such, depends on
-    /// none.
-    fn bindings_in(&self, taken: &Taken, ty: &ArgTyping, to: usize) -> Option<Vec<super::Redo>> {
-        use super::Redo;
-        if !self.types.has_vars(ty.own) && self.closed_tree(ty.te) {
-            return Some(Vec::new());
+    /// The spliced sequence `e` typed against `tpt`, `splice_typing_type`'s, and adapted to it
+    /// (`typedWildcardStarArgExpr`'s `typedExpr`, Typer.scala 1326 to 1346, whose result decides
+    /// the sequence or array form): kept as it stands where it conforms, converted where it does
+    /// not (the conversion's tree and the type it gives, an array's or a sequence's), and
+    /// erroneous where no conversion takes it to either member or several do, the mismatch or the
+    /// ambiguity reported here; the adaptation to the sequence after it (`typed_arg`, an array
+    /// marked spread) adapts that.
+    fn type_spliced(&mut self, e: ExprId, tpt: TypeId) -> (TExprId, TypeId) {
+        let (te, ty) = self.type_expr(e, Some(tpt));
+        if self.types.contains_error(ty) {
+            return (te, ty);
         }
-        // Typed against a formal over variables older than the application, which an enclosing
-        // typing had constrained before it: what the typing made of them is undone with the
-        // application. The application's own keep their instances (`Taken::vars`).
-        if ty.formal.is_some_and(|f| ty.trail().0 > taken.mark && self.mentions_var_before(f, taken.vars)) {
-            return None;
+        let span = self.cur_ast().expr_span(e);
+        let mark = self.snapshot();
+        if self.is_sub(ty, tpt) {
+            self.rollback(mark);
+            return (te, ty);
         }
-        let (from, vars) = (ty.trail().0, ty.vars as usize);
-        // The typing's segment lies in the record (the trail grew from the application's mark
-        // to its end without a rollback below a typing's end); where it does not, nothing is
-        // reused.
-        if from < taken.mark || to < from || to - taken.mark > taken.undone.len() {
-            return None;
-        }
-        let mut out = Vec::with_capacity(to - from);
-        for k in from..to {
-            let r = taken.undone[taken.undone.len() - 1 - (k - taken.mark)];
-            let (Redo::Inst(v, _) | Redo::Lower(v, _) | Redo::Upper(v, _)) = r;
-            if !self.tvars.made_since(v, vars) {
-                // One of the application's variables, made before the typing: its instance stays,
-                // its bounds go with the application; neither is the typing's to bring back.
-                if self.tvars.made_since(v, taken.vars) {
-                    continue;
-                }
-                return None;
-            }
-            out.push(r);
-        }
-        Some(out)
-    }
-
-    /// Whether `t` mentions a type variable this worker made before the first `vars`, or another
-    /// worker's.
-    fn mentions_var_before(&self, t: TypeId, vars: usize) -> bool {
-        if !self.types.has_vars(t) {
-            return false;
-        }
-        let mut found = Vec::new();
-        self.collect_vars(t, &mut found);
-        found.iter().any(|&v| !self.tvars.made_since(v, vars))
-    }
-
-    /// Whether no type variable is in the tree `te`: a literal, or an instance creation of a type
-    /// with none (a tuple's among them) of such arguments.
-    fn closed_tree(&self, te: TExprId) -> bool {
-        match self.prog.expr(te) {
-            TExpr::Int(_) | TExpr::Long(_) | TExpr::Double(_) | TExpr::Bool(_) | TExpr::Char(_) | TExpr::Str(_) | TExpr::Unit => true,
-            // A node's static type is recorded for the class-based targets alone: where it is,
-            // it has to be free of variables; on JavaScript the typing's own type stands for it.
-            TExpr::New(_, l) => self.prog.type_of(te).is_none_or(|t| !self.types.has_vars(t)) && self.prog.expr_list(l).iter().all(|&a| self.closed_tree(a)),
-            _ => false,
-        }
-    }
-
-    /// Brings back the bindings `bindings_in` read, in their order.
-    fn rebind(&mut self, bindings: &[super::Redo]) {
-        use super::{Redo, Undo};
-        for &r in bindings {
-            match r {
-                Redo::Inst(v, t) => self.instantiate(v, t),
-                Redo::Lower(v, t) => {
-                    self.tvars[v].lower.push(t);
-                    self.trail.push(Undo::Lower(v));
-                }
-                Redo::Upper(v, t) => {
-                    self.tvars[v].upper.push(t);
-                    self.trail.push(Undo::Upper(v));
-                }
+        self.rollback(mark);
+        match self.convert_to_typed(te, ty, tpt, span, true) {
+            Some((converted, cty)) if cty != ERROR => (converted, cty),
+            Some((te, _)) => (te, ERROR),
+            None => {
+                let (te, _) = self.adapt_typed(te, ty, tpt, span);
+                (te, ERROR)
             }
         }
     }
 
-    /// The record of `e`'s typing begun at `at`, against `formal`, to `te` of type `own`, as
-    /// the typing ended: adapted where `adapted`.
-    #[inline]
-    fn arg_typing(&self, e: ExprId, formal: Option<TypeId>, (te, own): (TExprId, TypeId), at: (usize, usize, usize, super::index::Recorded, usize), typed: (usize, usize), adapted: Option<TExprId>) -> ArgTyping {
-        ArgTyping {
-            e,
-            formal,
-            te,
-            own,
-            ty: own,
-            adapted,
-            trail: (at.0 as u32, typed.0 as u32, self.trail.len() as u32),
-            vars: at.4 as u32,
-            diags: (at.1 as u32, typed.1 as u32, self.diags.items.len() as u32),
-            hoisted: self.hoisted.len() > at.2,
-            index: (at.3, self.index_mark()),
-            dual: None,
-            untyped: false,
-        }
-    }
-
-    /// `type_arg_as` of an argument the member's application under `apply_member_or_extension`
-    /// was given: its typing, and that adapted to the formal, recorded for the retry.
+    /// `type_arg_cached` of a spliced sequence `e`, written `written` (`type_spliced`).
     #[inline(never)]
-    fn type_arg_recorded(&mut self, arg: ArgSrc, e: ExprId, pty: TypeId, spread: bool) -> TExprId {
-        let at = self.typing_marks();
-        // A function literal whose parameters the formal gives no types: dotty's test leaves it
-        // untyped (`functionWithUnknownParamType`, ProtoTypes.scala 475) and its retry types it
-        // against the extension's formal. `type_lambda` reports the missing types and types none
-        // of it under `Worker::untyped_lambda`, so that the retry's typing is its first.
-        let ast = self.cur_ast();
-        let literal = match ast.expr(e) {
-            crate::ast::Expr::Lambda(..) => true,
-            crate::ast::Expr::Parens(inner) => matches!(ast.expr(inner), crate::ast::Expr::Lambda(..)),
-            _ => false,
-        };
-        if literal {
-            self.untyped_lambda = Some(false);
+    fn type_spliced_cached(&mut self, e: ExprId, written: ExprId, tpt: TypeId) -> (TExprId, TypeId) {
+        let retained = self.arg_typing_begin(e);
+        let diags = self.diags.items.len();
+        let typed = self.type_spliced(e, tpt);
+        match self.cache_arg(e, typed) {
+            Cache::Kept => self.promote_end(retained),
+            Cache::Failed => self.note_error_arg(e, written, false, tpt, typed.1, diags),
+            Cache::Not => {}
         }
-        // The cache is out while the argument is typed: what is typed inside it is no argument
-        // of the application.
-        let cache = self.arg_cache.take();
-        let retained = self.retained_typing(&cache);
-        let (te, own) = self.type_expr(e, Some(pty));
-        self.retained_typing_end(retained, at.1);
-        let untyped = literal && self.untyped_lambda.take() == Some(true);
-        let typed = (self.trail.len(), self.diags.items.len());
-        let arg_span = self.cur_ast().expr_span(e);
-        let value = match arg {
-            ArgSrc::Hoisted(_) => self.hoist(te, own, arg_span),
-            _ => te,
+        typed
+    }
+
+    /// `Seq[T] | Array[? <: T]` of a splice's sequence type `Seq[T]` (`translateFromRepeated` to
+    /// either, Typer.scala's `typedWildcardStarArgExpr` 1315): what its expression is typed
+    /// against; `Seq[T]` alone in a quote pattern, which takes no array (dotty's #8680).
+    fn splice_typing_type(&mut self, seq: TypeId) -> TypeId {
+        if self.in_quote_pattern() {
+            return seq;
+        }
+        let Type::Class(_, args) = self.types.get(seq) else { return seq };
+        let &[elem] = self.types.items(args) else { return seq };
+        let wild = self.types.bounded_wild(NOTHING, elem);
+        let array = self.types.class(self.b.array, &[wild]);
+        self.types.union(seq, array)
+    }
+
+    /// `cacheTypedArg` (ProtoTypes.scala 471) of the argument `e`, written `written`, that a cache
+    /// holds and no attempt cached: typed against `pty` unadapted, cached where the attempt has
+    /// reported no error (what the typing wrote is then the argument's, kept through the
+    /// attempt's set-aside or retraction), an error argument where it has not and an error lies
+    /// inside the typing (`hasInnerErrors`, 450).
+    /// Whether the typing left its transparent call pending (`takes_unadapted`), the third.
+    #[inline(never)]
+    fn type_arg_cached(&mut self, e: ExprId, written: ExprId, pty: TypeId, unadapted: bool) -> (TExprId, TypeId, bool) {
+        let retained = self.arg_typing_begin(e);
+        let diags = self.diags.items.len();
+        // A transparent call that is the argument, through parentheses (dotty's `Parens` is no
+        // tree), is left unexpanded (`takes_unadapted`); one in braces is a block's expression,
+        // adapted inside it (`typedBlock`).
+        let outer = match unadapted {
+            true => {
+                let ast = self.cur_ast();
+                let mut at = e;
+                let mut braced = ast.is_braced(at);
+                while let Expr::Parens(inner) = ast.expr(at) {
+                    at = inner;
+                    braced |= ast.is_braced(at);
+                }
+                let call = (!braced).then(|| (self.env.file, ast.expr_span(at)));
+                std::mem::replace(&mut self.unadapted_call, call)
+            }
+            false => self.unadapted_call,
         };
-        self.mark_spread_array(spread, value, own);
-        let adapted = self.typed_arg(value, own, pty, arg_span);
-        let mut typing = self.arg_typing(e, Some(pty), (te, own), at, typed, Some(adapted));
-        typing.untyped = untyped;
-        self.arg_cache = cache;
-        if let Some(c) = self.arg_cache.as_mut() {
-            c.typings.push(typing);
+        let outer_node = self.unadapted_node.take();
+        let typed = self.type_expr(e, Some(pty));
+        self.unadapted_call = outer;
+        let deferred = std::mem::replace(&mut self.unadapted_node, outer_node) == Some(typed.0);
+        match self.cache_arg(e, typed) {
+            Cache::Kept => self.promote_end(retained),
+            Cache::Failed => self.note_error_arg(e, written, false, pty, typed.1, diags),
+            Cache::Not => {}
+        }
+        (typed.0, typed.1, deferred)
+    }
+
+    /// `type_arg_cached` of a named argument's value `e`: dotty's typing of the argument
+    /// (`typedNamedArg`, Typer.scala 1409) adapts the value to the formal, and the cache keeps
+    /// that, which a later attempt adapts again.
+    #[inline(never)]
+    fn type_named_arg_cached(&mut self, e: ExprId, written: ExprId, pty: TypeId, spread: bool) -> TExprId {
+        let retained = self.arg_typing_begin(e);
+        let diags = self.diags.items.len();
+        let (te, ty) = self.type_expr(e, Some(pty));
+        let arg_span = self.cur_ast().expr_span(e);
+        self.mark_spread_array(spread, te, ty);
+        let adapted = self.typed_arg(te, ty, pty, arg_span);
+        let adapted_ty = self.prog.type_of(adapted).unwrap_or(pty);
+        match self.cache_arg(e, (adapted, adapted_ty)) {
+            Cache::Kept => self.promote_end(retained),
+            Cache::Failed => self.note_error_arg(e, written, true, pty, ty, diags),
+            Cache::Not => {}
         }
         adapted
     }
 
-    /// The typing of an argument the member's application under `cache` records begins: a clean
-    /// one's rarely written journals stay through the application's set-aside (dotty's cached
-    /// typing, `cacheTypedArg` taking it where nothing failed, ProtoTypes.scala 488).
-    fn retained_typing(&self, cache: &Option<Box<ArgCache>>) -> Option<super::state::PromoteMark> {
-        let m = cache.as_ref()?.attempt?;
-        Some(self.retained_typing_begin(&m))
-    }
-
-    fn retained_typing_end(&mut self, retained: Option<super::state::PromoteMark>, diags: usize) {
-        if retained.is_some() && !self.diags.items[diags..].iter().any(|d| !d.is_warning) {
-            self.promote_end(retained);
-        }
-    }
-
-    /// An argument of no parameter, typed alone for its errors; recorded for the retry where
-    /// the member's application under `apply_member_or_extension` was given it.
-    fn type_extra_arg(&mut self, e: ExprId) {
-        if !(self.arg_cache.is_some() && self.watches_arg(e)) {
-            self.type_expr(e, None);
+    /// The argument `e`, written `written`, typed to the type `own` against `pty` where the
+    /// attempt had reported an error, is an error argument where `hasInnerErrors` finds an error
+    /// inside it among the diagnostics from `diags` on (`cacheTypedArg`, ProtoTypes.scala 489).
+    #[cold]
+    #[inline(never)]
+    fn note_error_arg(&mut self, e: ExprId, written: ExprId, named: bool, pty: TypeId, own: TypeId, diags: usize) {
+        if !self.diags.items[diags..].iter().any(|d| !d.is_warning) {
             return;
         }
-        let at = self.typing_marks();
-        let cache = self.arg_cache.take();
-        let retained = self.retained_typing(&cache);
-        let typed = self.type_expr(e, None);
-        self.retained_typing_end(retained, at.1);
-        let end = (self.trail.len(), self.diags.items.len());
-        let typing = self.arg_typing(e, None, typed, at, end, None);
-        self.arg_cache = cache;
-        if let Some(c) = self.arg_cache.as_mut() {
-            c.typings.push(typing);
+        // An entry stands for the diagnostic at its index where the spans agree: a speculation
+        // inside the typing may have logged one and discarded its diagnostic.
+        let end = self.diags.items.len();
+        let logged: Vec<(usize, TypeId)> = self.mismatches.iter().filter(|&&(i, sp, _)| i >= diags && i < end && self.diags.items[i].span == sp).map(|&(i, _, r)| (i, r)).collect();
+        let tree = if named { written } else { e };
+        if self.has_inner_errors(tree, named, pty, pty, own, diags, &logged) {
+            self.arg_cache_error(e);
         }
     }
 
-    /// `type_tuple` of the tupled dual of the arguments `elems` against `pty`, recorded for the
-    /// retry where the member's application under `apply_member_or_extension` was given them.
+    /// An argument of no parameter, typed alone for its errors: where a cache holds it, as
+    /// `typedArgs` types it (ProtoTypes.scala 508), cached where clean.
+    fn type_extra_arg(&mut self, e: ExprId) {
+        match self.arg_slot(e) {
+            ArgSlot::None => {
+                self.type_expr(e, None);
+            }
+            ArgSlot::Cached(..) => {}
+            ArgSlot::Held { .. } => {
+                let retained = self.arg_typing_begin(e);
+                let typed = self.type_expr(e, None);
+                if self.cache_arg(e, typed) == Cache::Kept {
+                    self.promote_end(retained);
+                }
+            }
+        }
+    }
+
+    /// `type_tuple` of the tupled dual of the arguments `elems` against `pty`: where the
+    /// application's cache holds their dual (`FunProto.tupledDual`'s own state), the typing an
+    /// earlier attempt cached, or one cached where the attempt has reported no error, an error
+    /// argument where it reported one.
     fn type_tupled_dual(&mut self, elems: &[ExprId], pty: TypeId) -> (TExprId, TypeId) {
-        if !(self.arg_cache.is_some() && self.watches_arg(elems[0])) {
-            return self.type_tuple(elems, Some(pty));
+        match self.dual_slot() {
+            None => self.type_tuple(elems, Some(pty)),
+            Some(Dual::Typed(te, ty)) => {
+                self.retry_typed.insert(te, ());
+                (te, ty)
+            }
+            Some(_) => {
+                let retained = self.dual_typing_begin();
+                let diags = self.diags.items.len();
+                let typed = self.type_tuple(elems, Some(pty));
+                if self.cache_dual(typed, diags) {
+                    self.promote_end(retained);
+                }
+                typed
+            }
         }
-        let alone = self.tuple_expected_elements(Some(pty), elems.len()).is_none();
-        let at = self.typing_marks();
-        let cache = self.arg_cache.take();
-        let retained = self.retained_typing(&cache);
-        let typed = self.type_tuple(elems, Some(pty));
-        self.retained_typing_end(retained, at.1);
-        let end = (self.trail.len(), self.diags.items.len());
-        let mut typing = self.arg_typing(elems[0], Some(pty), typed, at, end, None);
-        typing.dual = Some(alone);
-        self.arg_cache = cache;
-        if let Some(c) = self.arg_cache.as_mut() {
-            c.typings.push(typing);
-        }
-        typed
     }
 
     /// A stable argument for a parameter bounded by `Singleton` keeps its path type
@@ -6933,10 +6822,11 @@ impl<'a> Worker<'a> {
     /// receiver to a type whose member does (`settings.map(_.map(_.toLowerCase))` over pairs,
     /// cats' `Functor` syntax or the program's `extension (p: (A, A)) def map`, beside `Tuple`'s
     /// `map` of a polymorphic function). An error past that boundary, a missing given, a later
-    /// argument list, a lambda's body, an inline expansion, is the member's
+    /// argument list, an inline expansion, an error inside an argument, is the member's
     /// (`boundary_attempt`); where neither takes over, the member's application stands
-    /// with its errors. What the application types of the arguments is kept (`ArgCache`): the
-    /// retry adapts it and types no argument again.
+    /// with its errors. The member's application is an attempt (`tryEither`, Typer.scala 134)
+    /// over its first plain list's arguments cached as dotty's `FunProto` caches them
+    /// (`state::ArgCache`): the retry's tries adapt what it cached and type the rest.
     #[allow(clippy::too_many_arguments)]
     #[inline]
     fn apply_member_or_extension(
@@ -6952,221 +6842,153 @@ impl<'a> Worker<'a> {
         expected: Option<TypeId>,
         converted: bool,
     ) -> (TExprId, TypeId) {
-        // The member's application is an attempt, set aside where the retry takes over: what it
-        // wrote of the journals the retry does not take out itself goes with it (its pending
-        // expansions, a macro's infos, its deferred checks), but what a cached typing of an
-        // argument wrote.
-        let mark = self.attempt();
-        let at = (self.snapshot(), self.diags.items.len(), self.index_mark(), self.hoisted.len());
         // The lists as written, for the retry, into a spare buffer's, which a call that types
         // gives back.
-        let mut cache = self.arg_caches.pop().unwrap_or_default();
-        cache.keep(&lists);
-        self.watch_args(&mut cache);
-        cache.attempt = Some(mark);
-        cache.vars = self.tvars.len() as u32;
-        cache.depth = 0;
-        let outer = self.arg_cache.replace(cache);
-        // The type mismatches reported are logged for the retry (`Worker::mismatches`), the
-        // enclosing application's entries kept before this one's.
-        let log_start = self.mismatches.len();
+        let mut call = self.member_calls.pop().unwrap_or_default();
+        call.keep(&lists);
+        self.arg_cache_open_member(lists.iter().find(|l| !l.using));
+        let mark = self.attempt();
+        self.arg_cache_attempt(mark);
+        let hoisted = self.hoisted.len();
+        let outer = self.member_call.replace(call);
+        // The type mismatches reported are logged, by the type each required, for the test of
+        // an error argument (`Worker::mismatches`).
         self.logging += 1;
         let r = self.apply_callee(callee, targs, lists, span, expected);
-        let mut cache = std::mem::replace(&mut self.arg_cache, outer).unwrap_or_default();
         self.logging -= 1;
-        cache.attempt = None;
-        if !self.diags.items[at.1..].iter().any(|d| !d.is_warning) {
-            if self.logging == 0 {
-                self.mismatches.clear();
-            }
+        if self.logging == 0 {
+            self.mismatches.clear();
+        }
+        let call = std::mem::replace(&mut self.member_call, outer).unwrap_or_default();
+        if !self.attempt_failed(&mark) {
             self.close(mark);
-            self.arg_caches.push(cache);
+            self.arg_cache_close();
+            self.member_calls.push(call);
             return r;
         }
-        cache.mismatches.extend_from_slice(&self.mismatches[log_start..]);
-        self.mismatches.truncate(log_start);
-        self.retry_on_qualifier(r, at, mark, (sym, owner_ty), recv, recv_ty, name, targs, cache, span, expected, converted)
+        self.retry_on_qualifier(r, mark, hoisted, (sym, owner_ty), recv, recv_ty, name, targs, call, span, expected, converted)
     }
 
-    /// The typed arguments of `lists`, and the elements of a tuple among them, each with its
-    /// node and type as they are: what `adapt_typed` rewrites in place.
-    fn cached_nodes(&self, lists: &[ArgList]) -> Vec<(TExprId, TExpr, Option<TypeId>)> {
-        let mut out = Vec::new();
-        for a in lists.iter().flat_map(|l| &l.args) {
-            let (ArgSrc::Typed(te, _) | ArgSrc::Named(_, te, _)) = *a else { continue };
-            out.push((te, self.prog.expr(te), self.prog.type_of(te)));
-            if let TExpr::New(_, l) = self.prog.expr(te) {
-                for &i in self.prog.expr_list(l) {
-                    out.push((i, self.prog.expr(i), self.prog.type_of(i)));
-                }
-            }
-        }
-        out
-    }
-
-    /// Gives the typed arguments of `lists`, and the elements of a tuple among them, the types
-    /// their typings gave them.
-    fn settle_cached_types(&mut self, lists: &[ArgList]) {
-        for a in lists.iter().flat_map(|l| l.args.clone()) {
-            let (ArgSrc::Typed(te, ty) | ArgSrc::Named(_, te, ty)) = a else { continue };
-            self.prog.set_type(te, ty);
-            if let TExpr::New(_, l) = self.prog.expr(te) {
-                let items = self.prog.expr_list(l).to_vec();
-                if let Some(elems) = self.tuple_elements(ty).filter(|e| e.len() == items.len()) {
-                    for (&i, &t) in items.iter().zip(&elems) {
-                        self.prog.set_type(i, t);
-                    }
-                }
-            }
-        }
-    }
-
-    fn restore_nodes(&mut self, nodes: &[(TExprId, TExpr, Option<TypeId>)]) {
-        for &(te, ex, ty) in nodes {
-            self.prog.exprs[te.idx()] = ex;
-            if let Some(ty) = ty {
-                self.prog.set_type(te, ty);
-            }
-        }
-    }
-
-    /// Sets `cache` to record the typings of a member's application's arguments: those of the
-    /// first list that is not a using one, the retry's (`boundary_attempt`), which
-    /// `type_clause_args` marks; until it is reached, the arguments of any other path.
-    fn watch_args(&self, cache: &mut ArgCache) {
-        cache.file = self.env.file;
-        cache.active = true;
-        cache.done = false;
-        cache.stopped = false;
-        cache.typings.clear();
-        cache.mismatches.clear();
-    }
-
-    /// `apply_member_or_extension` past a member's application that reported an error, begun at
-    /// `at`: the retry, or the member's application back. dotty's tries in its order
-    /// (`retry_tries`), each ending where the member's errors stand for it (`Boundary::Stands`);
-    /// where the retry would have to type an argument the member's application typed, or reuse
-    /// a typing whose dependencies the rollback undoes, none is made (`Boundary::Declines`).
+    /// `apply_member_or_extension` past a member's application, the attempt `mark`, that
+    /// reported an error: the retry, or the member's application back. The application is set
+    /// aside whole, as dotty keeps its failed state for its error (Applications.scala 1477): what
+    /// work done on demand for an older definition wrote stays (its completion's diagnostics,
+    /// `Namer.Completer.complete`, Namer.scala 862), and so do what its cached typings wrote and
+    /// the instances of its own variables (the owner rule, `TypeVar.instantiateWith`). dotty's
+    /// tries in its order (`retry_tries`), each ending where the member's errors stand for it
+    /// (`Boundary::Stands`), each an attempt over the cached arguments.
     #[cold]
     #[inline(never)]
     #[allow(clippy::too_many_arguments)]
     fn retry_on_qualifier(
         &mut self,
         r: (TExprId, TypeId),
-        (mark, diags, recorded, hoisted): (usize, usize, super::index::Recorded, usize),
-        attempt: super::state::Mark,
+        mark: super::state::Mark,
+        hoisted: usize,
         (sym, owner_ty): (SymId, TypeId),
         recv: TExprId,
         recv_ty: TypeId,
         name: Name,
         targs: Option<ListRef>,
-        mut cache: Box<ArgCache>,
+        call: Box<MemberCall>,
         span: Span,
         expected: Option<TypeId>,
         converted: bool,
     ) -> (TExprId, TypeId) {
-        // Each typing's type as the application solved it, before the rollback undoes that.
-        for i in 0..cache.typings.len() {
-            let own = cache.typings[i].own;
-            cache.typings[i].ty = self.zonk(own);
-        }
-        let journals = self.set_aside_journals(attempt);
-        // The member's diagnostics leave the list: no promoted range keeps their positions, which
-        // the tries' diagnostics take (`state::diags_cut_at`).
-        self.diags_cut_at(diags);
-        let member_diags = self.diags.items.split_off(diags);
-        let member_index = self.index_take(recorded);
         let member_hoisted = self.hoisted.split_off(hoisted);
-        // The application's variables keep their instances (dotty's permanent instantiation of a
-        // variable by the state that owns it): a typing that read one stays what it was.
-        let undone = self.rollback_saving_owned(mark, cache.vars as usize);
-        let taken = Taken { diags: &member_diags, diags_at: diags, index: &member_index, index_at: recorded, undone: &undone, mark, vars: cache.vars as usize, mismatches: &cache.mismatches };
-        let written = cache.written();
-        let outer_depth = self.retry_depth.replace(self.app_depth);
+        let member = self.set_aside(mark);
+        // The retry is an attempt of its own, closed as it ends: what its test typed alone and the
+        // calls left pending in its typings wait for the tree it gives.
+        let retry = self.attempt();
+        let written = call.written();
+        let outer_depth = (self.retry_depth.replace(self.app_depth), self.retry_applied.take());
         for t in self.retry_tries(sym, &written).into_iter().flatten() {
-            let (lists, records, bindings, mut reused_warnings) = match self.boundary_attempt(sym, owner_ty, &written, t, &cache, &taken) {
-                Boundary::Stands => continue,
-                Boundary::Declines => break,
-                Boundary::Retry(lists, records, bindings, warnings) => (lists, records, bindings, warnings),
-            };
-            // The typings the retry reuses come with the index's records they made and the
-            // bindings of the variables they made.
-            for (a, b) in records {
-                self.index_put_back_between(&member_index, recorded, a, b);
-            }
-            self.rebind(&bindings);
-            // A cached typing is `typedUnadapted`'s: its nodes get the types the typing gave
-            // them back, which the member's adaptation may have left otherwise (a literal typed
-            // `Double` by a conversion it tried, `adapt_typed`). What a try then adapts in place
-            // is put back where the try fails: the nodes stand for the member's arguments too.
-            self.settle_cached_types(&lists);
-            let nodes = self.cached_nodes(&lists);
-            let (kept_index, kept_hoisted) = (self.index_mark(), self.hoisted.len());
-            let mut opt = Some(lists.clone());
-            // Either takes over where it types: the expected type is no prototype of the
-            // application (`IgnoredProto`, Applications.scala 1309), whose result a misfit of it
-            // is reported against once applied (`init` defers it, 693). Each is an attempt.
+            let Boundary::Retry(lists) = self.boundary_attempt(sym, owner_ty, &written, t) else { continue };
+            // What the test typed alone stays for the tries (`typedArgs`' typings, cached).
+            let kept_hoisted = self.hoisted.len();
+            // Either takes over where it applies the list: the expected type is no prototype of
+            // the application (`IgnoredProto`, Applications.scala 1309), whose result a misfit of
+            // it is reported against once applied (`init` defers it, 693). Each is an attempt.
             let tried = self.attempt();
+            self.arg_cache_attempt(tried);
             let outer = self.lexical_selected.replace(false);
+            let mut opt = Some(lists.clone());
             let ext = self.try_extensions(recv, recv_ty, recv_ty, name, targs, &mut opt, span, expected);
             let selected = std::mem::replace(&mut self.lexical_selected, outer) == Some(true);
-            // The extension applied clean, or applied to the first list and failing in a later
-            // one: dotty's outer application of that list fails with no retry (the function part
-            // is an `Apply`, not a `Select`), and the error is the extension's.
-            if let Some(ext) = ext.filter(|_| !self.diags.items[diags..].iter().any(|d| !d.is_warning) || self.later_clause_failure(diags, &written)) {
+            // The extension applied to the list, whatever its using clauses and later lists give
+            // after it (`retry_applied`): dotty's try is the list's application (`simpleApply` in
+            // `tryWithImplicitOnQualifier`), and the error is the extension's.
+            if let Some(ext) = ext.filter(|_| self.try_applied(&tried)) {
                 self.close(tried);
-                self.diags.items.append(&mut reused_warnings);
-                self.retry_depth = outer_depth;
-                self.retry_typed.clear();
-                self.arg_caches.push(cache);
-                return ext;
+                return self.retry_taken(ext, retry, outer_depth, call);
             }
             self.retract(tried);
-            self.drop_reported_since(diags);
-            self.rollback(mark);
-            self.index_drop(kept_index);
             self.hoisted.truncate(kept_hoisted);
-            self.restore_nodes(&nodes);
             // A lexical extension selected on the qualifier is the try's whatever its
             // application gives: its failure to apply opens no search for a conversion (dotty's
             // `tryExtensionOrConversion` returns it, Typer.scala 4320).
             if !converted && !selected {
                 let tried = self.attempt();
+                self.arg_cache_attempt(tried);
                 if let Some(c) = self.apply_through_conversion(recv, recv_ty, name, targs, &lists, span, expected) {
-                    if !self.diags.items[diags..].iter().any(|d| !d.is_warning) || self.later_clause_failure(diags, &written) {
+                    if self.try_applied(&tried) {
                         self.close(tried);
-                        self.diags.items.append(&mut reused_warnings);
-                        self.retry_depth = outer_depth;
-                        self.retry_typed.clear();
-                        self.arg_caches.push(cache);
-                        return c;
+                        return self.retry_taken(c, retry, outer_depth, call);
                     }
                 }
                 self.retract(tried);
+                self.hoisted.truncate(kept_hoisted);
             }
-            self.retry_typed.clear();
-            self.drop_reported_since(diags);
-            self.rollback(mark);
-            self.index_drop(recorded);
-            self.hoisted.truncate(hoisted);
-            self.restore_nodes(&nodes);
         }
-        self.retry_depth = outer_depth;
-        self.retry_typed.clear();
-        self.replay(undone);
-        self.diags.items.extend(member_diags);
-        self.index_put_back(member_index);
+        (self.retry_depth, self.retry_applied) = outer_depth;
+        self.restore(member);
         self.hoisted.extend(member_hoisted);
-        self.restore_journals(journals);
+        self.drop_unheld_typings(r.0);
+        self.arg_cache_close();
+        self.close(retry);
         // The member's errors stand. Where its attempt stopped at its first plain clause, the
         // lists after it are typed alone now, once (`typedArgs` under an erroneous function
         // part, Applications.scala 1438).
-        if cache.stopped {
+        if call.stopped {
             let first = written.iter().position(|l| !l.using).unwrap_or(0);
             self.type_args_for_errors(&written[first + 1..]);
         }
-        self.arg_caches.push(cache);
+        self.member_calls.push(call);
         r
+    }
+
+    /// A try of the member's retry, inside the retry's attempt `retry`, took the application
+    /// over, giving `r`: the member's application, set aside, goes.
+    fn retry_taken(&mut self, r: (TExprId, TypeId), retry: super::state::Mark, outer_depth: (Option<u32>, Option<(u32, u32)>), call: Box<MemberCall>) -> (TExprId, TypeId) {
+        (self.retry_depth, self.retry_applied) = outer_depth;
+        self.drop_unheld_typings(r.0);
+        self.arg_cache_close();
+        self.close(retry);
+        self.member_calls.push(call);
+        r
+    }
+
+    /// The calls left pending for the later expansion phase in the member's cached typings that
+    /// the application `app` the retry gives does not hold go: dotty's `Inlining` phase expands
+    /// the calls of the tree typing kept (Inlining.scala 135), and a typing the retry gave up is
+    /// none of it (the member's tupled dual where a try took the arguments as written, what the
+    /// test typed alone where the member's errors stand).
+    #[cold]
+    #[inline(never)]
+    fn drop_unheld_typings(&mut self, app: TExprId) {
+        let mut roots: Vec<TExprId> = self.member_args().iter().filter_map(|a| a.typed.map(|t| t.0)).collect();
+        if let Dual::Typed(te, _) = self.member_dual() {
+            roots.push(te);
+        }
+        roots.retain(|&te| self.holds_pending_call(te));
+        if roots.is_empty() {
+            return;
+        }
+        let held: crate::intern::FxMap<TExprId, ()> = self.prog.descendants(app).map(|e| (e, ())).collect();
+        roots.retain(|te| !held.contains_key(te));
+        if !roots.is_empty() {
+            self.drop_pending_in(&roots);
+        }
     }
 
     /// Whether an error was reported from the diagnostics' index `before` on: the clause typed
@@ -7178,29 +7000,22 @@ impl<'a> Worker<'a> {
         if !self.diags.items[before..].iter().any(|d| !d.is_warning) {
             return false;
         }
-        if let Some(c) = self.arg_cache.as_mut() {
+        let depth = self.app_depth;
+        if let Some(c) = self.member_call.as_mut().filter(|c| c.depth == depth) {
             c.stopped = true;
         }
         true
     }
 
-    /// Whether every error reported from the diagnostics' index `diags` on lies in a list of
-    /// `lists` past the first plain one: the application's first clause fit, and a later one
-    /// failed.
-    fn later_clause_failure(&self, diags: usize, lists: &[ArgList]) -> bool {
-        let first = lists.iter().position(|l| !l.using).unwrap_or(0);
-        let later = &lists[first + 1..];
-        if later.is_empty() {
-            return false;
+    /// Whether the try `tried` of a member's retry applied the member's list: it reported no error,
+    /// or none before its application applied its first plain list (`retry_applied`), what follows
+    /// being the outer application's.
+    fn try_applied(&self, tried: &super::state::Mark) -> bool {
+        if !self.attempt_failed(tried) {
+            return true;
         }
-        let mut any = false;
-        for d in self.diags.items[diags..].iter().filter(|d| !d.is_warning) {
-            any = true;
-            if d.file != self.env.file || !later.iter().any(|l| d.span.start >= l.span.start && d.span.end <= l.span.end) {
-                return false;
-            }
-        }
-        any
+        let Some((diags, error_nodes)) = self.retry_applied else { return false };
+        !self.attempt_failed_before(tried, diags as usize, error_nodes)
     }
 
     /// Whether a call names type arguments the source wrote, which dotc's
@@ -7244,107 +7059,58 @@ impl<'a> Worker<'a> {
     }
 
     /// One of dotty's `tryWithImplicitOnQualifier` tries (Applications.scala 1373, scalac 3.8.4's
-    /// lines) past a member's application that failed. The member's errors stand
-    /// for the try where an argument of the first list is an error argument (`FunProto.hasErrorArg`)
-    /// or the member matches the list (`SelectionProto.isMatchedBy`); otherwise the argument
-    /// lists the retry applies the extension or the conversion to, each argument as the
-    /// member's application typed it (`ArgCache`), which dotty's `FunProto` caches and its retry
-    /// adapts. The retry declines where it cannot reuse such a typing: one that placed a
-    /// diagnostic other than an error argument's, constrained a type variable, bound a
-    /// temporary, a sequence spliced, an operand evaluated ahead of the receiver, an argument
-    /// dotty types again (a typing that failed short of an error argument, an argument of a
-    /// tupled dual tried as written that is no literal its formal left as typed alone). An
-    /// argument the member's application did not type is typed here, its only typing.
-    fn boundary_attempt(&mut self, sym: SymId, owner_ty: TypeId, lists: &[ArgList], t: RetryTry, cache: &ArgCache, taken: &Taken) -> Boundary {
+    /// lines) past a member's application that failed. The member's errors stand for the try
+    /// where an argument of the first list is an error argument (`FunProto.hasErrorArg`) or the
+    /// member matches the list (`SelectionProto.isMatchedBy`, Typer.scala 4253), which tests it
+    /// on the arguments as the cache has them, a function literal of a parameter without a type
+    /// as its shape and the others typed alone into the cache (`FunProto.typedArgs`,
+    /// ProtoTypes.scala 508); otherwise the lists the retry applies an extension or a conversion
+    /// to, as written: their applications adapt what the cache holds and type the rest.
+    fn boundary_attempt(&mut self, sym: SymId, owner_ty: TypeId, lists: &[ArgList], t: RetryTry) -> Boundary {
         let sig = self.sig_arc(sym);
         let (Some(clause), Some(at)) = (sig.clauses.iter().find(|c| !c.is_using), lists.iter().position(|l| !l.using)) else { return Boundary::Stands };
         if t == RetryTry::Tupled {
-            return self.tupled_boundary(&sig, clause, owner_ty, lists, at, cache, taken);
+            return self.tupled_boundary(&sig, clause, owner_ty, lists, at);
         }
         let Some((args, matched, reordered)) = self.boundary_args(clause, &lists[at]) else { return Boundary::Stands };
-        // The member's application used the tupled dual: these arguments, typed inside its
-        // tuple, are typed alone in dotty's test (`typedArgs`).
-        let dual = cache.typings.iter().find(|ty| ty.dual.is_some());
-        let positional: Vec<ExprId> = lists[at].args.iter().filter_map(|a| a.ast()).collect();
-        let mut used: Vec<Option<(TExprId, TypeId)>> = Vec::with_capacity(args.len());
+        // Where `reorder` failed, dotty's application typed none of the arguments (`init`,
+        // Applications.scala 661): none is an error argument, and the test types them alone.
+        if !reordered {
+            self.member_args_forget();
+        }
+        if self.member_args().iter().any(|a| a.error) {
+            return Boundary::Stands;
+        }
         let mut types: Vec<Option<TypeId>> = Vec::with_capacity(args.len());
-        let mut records = Vec::new();
-        let mut bindings = Vec::new();
-        let mut warnings = Vec::new();
-        let (mut declines, mut erroneous, mut retypes) = (false, false, false);
         for a in &args {
             if let Some(p) = a.pretyped {
-                used.push(Some(p));
+                self.retry_typed.insert(p.0, ());
                 types.push(Some(p.1));
                 continue;
             }
             let Some(value) = a.value else {
-                used.push(None);
                 types.push(None);
                 continue;
             };
-            if let Some(d) = dual {
-                let alone = self.dual_element_alone(d, value, taken, &positional);
-                if alone.is_some() && d.dual == Some(true) && !records.contains(&d.index) {
-                    records.push(d.index);
-                    bindings.extend(self.bindings_in(taken, d, d.trail().1).into_iter().flatten());
-                }
-                declines |= alone.is_none();
-                used.push(alone);
-                types.push(alone.map(|p| p.1));
-                continue;
-            }
             // A splice's typing is its sequence's.
             let key = match self.cur_ast().expr(value) {
                 crate::ast::Expr::Typed(inner, _) if a.splice => inner,
                 _ => value,
             };
-            let typing = cache.typings.iter().rfind(|ty| ty.e == key && ty.dual.is_none()).filter(|ty| !ty.untyped);
-            match typing {
-                Some(ty) => match self.cached_argument(a, ty, taken, reordered) {
-                    Cached::ErrorArg => return Boundary::Stands,
-                    Cached::Erroneous => {
-                        erroneous = true;
-                        used.push(None);
-                        types.push(None);
-                    }
-                    Cached::Declined => {
-                        retypes = true;
-                        used.push(None);
-                        types.push(None);
-                    }
-                    Cached::Typed(te, t, reused) => {
-                        declines |= reused.is_none() || a.splice || a.hoisted;
-                        if let Some(b) = reused {
-                            records.push(ty.index);
-                            bindings.extend(b);
-                            warnings.extend(self.expansion_warnings(a, ty, taken));
-                        }
-                        used.push(Some((te, t)));
-                        types.push(Some(t));
-                    }
+            let cached = self.member_args().iter().find(|c| c.key == key).and_then(|c| c.typed);
+            let ty = match cached {
+                Some((_, ty)) => ty,
+                // `FunctionN(declared or ?, ?)`, what `cacheTypedArg` unforced makes of a
+                // function literal with a parameter of no written type (ProtoTypes.scala 475).
+                None => match self.function_shape(key) {
+                    Some(shape) => shape,
+                    None => match self.typed_alone_cached(key) {
+                        Some(ty) => ty,
+                        None => return Boundary::Stands,
+                    },
                 },
-                None => {
-                    // An argument the member's application did not type, a function literal
-                    // with a parameter of no written type being `FunctionN(declared or ?, ?)`
-                    // alone (`cacheTypedArg` unforced, ProtoTypes.scala 475).
-                    let e = key;
-                    if let Some(shape) = self.function_shape(e) {
-                        used.push(None);
-                        types.push(Some(shape));
-                        continue;
-                    }
-                    declines |= a.splice || a.hoisted;
-                    let kept = self.typed_alone_kept(e);
-                    erroneous |= kept.is_none();
-                    used.push(kept);
-                    types.push(kept.map(|p| p.1));
-                }
-            }
-        }
-        // An argument dotty types again has no typing here to test the member with.
-        if retypes {
-            return Boundary::Declines;
+            };
+            types.push(Some(ty));
         }
         let outer = self.snapshot();
         let diags = self.diags.items.len();
@@ -7355,166 +7121,36 @@ impl<'a> Worker<'a> {
         if applicable {
             return Boundary::Stands;
         }
-        if declines || erroneous || records.iter().any(|&(a, b)| !self.index_holds(taken.index, taken.index_at, a, b)) {
-            return Boundary::Declines;
-        }
-        let mut out = lists.to_vec();
-        for (a, u) in args.iter().zip(used) {
-            let (Some((te, ty)), None) = (u, a.pretyped) else { continue };
-            self.retry_typed.insert(te, ());
-            out[at].args[a.src] = match a.named {
-                Some(n) => ArgSrc::Named(n, te, ty),
-                None => ArgSrc::Typed(te, ty),
-            };
-        }
-        Boundary::Retry(out, records, bindings, warnings)
+        Boundary::Retry(lists.to_vec())
     }
 
-    /// The member's typing `ty` of the argument `a`, as the retry would reuse it: an error
-    /// argument where an error is inside it (`hasInnerErrors`); declined where it failed short
-    /// of one, which dotty types again; otherwise its typing (a named one's adapted, as
-    /// `typedNamedArg` types one), reusable where it placed no diagnostic, constrained no
-    /// variable older than the application and bound no temporary. A named argument's typing whose
-    /// adaptation alone failed, and any argument where `reorder` failed (`reordered` false:
-    /// dotty typed none), stand for the typing alone dotty makes where they are that typing,
-    /// a literal or a tuple of literals the formal left as typed alone (`literal_alone`), and
-    /// decline otherwise. One typed alone and erroneous is erroneous.
-    fn cached_argument(&mut self, a: &BoundaryArg, ty: &ArgTyping, taken: &Taken, reordered: bool) -> Cached {
-        let alone = |w: &mut Self| match w.literal_alone(ty.e, ty.te) {
-            Some(t) => Cached::Typed(ty.te, t, Some(Vec::new())),
-            None => Cached::Declined,
-        };
-        if !reordered && ty.formal.is_some() {
-            return alone(self);
-        }
-        let named = a.named.is_some();
-        let end = if named { ty.diags().2 } else { ty.diags().1 };
-        if ty.diags().0 < taken.diags_at || end - taken.diags_at > taken.diags.len() {
-            return Cached::Erroneous;
-        }
-        let placed = &taken.diags[ty.diags().0 - taken.diags_at..end - taken.diags_at];
-        if placed.iter().any(|d| !d.is_warning) {
-            let Some(formal) = ty.formal else { return Cached::Erroneous };
-            let typing = &taken.diags[ty.diags().0 - taken.diags_at..ty.diags().1 - taken.diags_at];
-            if named && !typing.iter().any(|d| !d.is_warning) {
-                return alone(self);
-            }
-            // `hasInnerErrors` judges the diagnostics the typing placed, as they were.
-            let from = self.diags.items.len();
-            self.diags.items.extend_from_slice(placed);
-            // An entry stands for the diagnostic at its index where the spans agree: a
-            // speculation inside the typing may have logged one and discarded its diagnostic.
-            let logged: Vec<(usize, TypeId)> = taken.mismatches.iter().filter(|&&(i, sp, _)| i >= ty.diags().0 && i < end && taken.diags[i - taken.diags_at].span == sp).map(|&(i, _, r)| (i - ty.diags().0 + from, r)).collect();
-            let tree = if named { a.written.unwrap_or(ty.e) } else { ty.e };
-            let inner = self.has_inner_errors(tree, named, formal, formal, ty.own, from, &logged);
-            self.drop_reported_since(from);
-            return if inner { Cached::ErrorArg } else { Cached::Declined };
-        }
-        let (te, t) = match (named, ty.adapted) {
-            (true, Some(adapted)) => (adapted, self.prog.type_of(adapted).unwrap_or(ty.formal.unwrap_or(ty.ty))),
-            _ => (ty.te, ty.ty),
-        };
-        // The typing is reusable where it placed no diagnostic but the typer's own pure-statement
-        // warning, bound no temporary and constrained no variable older than the application
-        // (`bindings_in`). That warning goes with the application, as dotty's cached typing keeps
-        // nothing of the failed state's reporter (`{ 1; 2 }` reused, no warning, as scalac's); a
-        // macro's warning is scalac's to report again where its retry expands the argument again:
-        // an argument that is the expansion itself (`put(M.next, 3)`, its warnings standing at the
-        // argument) is reused with them (`expansion_warnings`), one that holds an expansion (a
-        // nested, wrapped or named argument: `id(M.next)`, `{ M.next }`, `(M.next: Int)`, `y =
-        // M.next`), which scalac reuses without the warning, declines.
-        let to = if named { ty.trail().2 } else { ty.trail().1 };
-        let pure_statement = |d: &crate::source::Diagnostic| d.is_warning && d.msg.starts_with("A pure expression does nothing in statement position");
-        let own = self.own_expansion_warning(a, ty);
-        let bindings = if placed.iter().all(|d| pure_statement(d) || own(d)) && !ty.hoisted { self.bindings_in(taken, ty, to) } else { None };
-        Cached::Typed(te, t, bindings)
-    }
-
-    /// The warnings the member's typing `ty` of the argument `a` placed where the argument is a
-    /// macro's or an inline method's expansion itself, which scalac's retry expands again and
-    /// warns of again: kept for the try that reuses the typing, the pure-statement one aside.
-    fn expansion_warnings(&self, a: &BoundaryArg, ty: &ArgTyping, taken: &Taken) -> Vec<crate::source::Diagnostic> {
-        let own = self.own_expansion_warning(a, ty);
-        let (from, to) = (ty.diags().0 - taken.diags_at, ty.diags().1 - taken.diags_at);
-        taken.diags[from..to.min(taken.diags.len())].iter().filter(|d| own(d)).cloned().collect()
-    }
-
-    /// Whether a warning the member's typing `ty` of the argument `a` placed is the argument's own
-    /// expansion's: the argument a plain call written bare in its list (`BoundaryArg::bare`), whose
-    /// tree is an expansion, the warning standing at the argument itself, as a macro's stands at
-    /// its call (not at a call inside a block, parentheses, an ascription or another inline
-    /// method's argument).
-    fn own_expansion_warning(&self, a: &BoundaryArg, ty: &ArgTyping) -> impl Fn(&crate::source::Diagnostic) -> bool {
-        let call = matches!(self.cur_ast().expr(ty.e), Expr::Ident(_) | Expr::Select(..) | Expr::Apply(..) | Expr::TypeApply(..));
-        let (file, at) = (self.env.file, self.cur_ast().expr_span(ty.e));
-        let direct = a.named.is_none() && a.bare && call && self.prog.is_expansion(ty.te);
-        move |d: &crate::source::Diagnostic| direct && d.is_warning && d.file == file && d.span == at
-    }
-
-    /// `tupled_boundary` of the try with the arguments tupled into one (`untpd.Tuple(args)`):
-    /// the tuple the member's application typed (`typedTuple`, Typer.scala 3729, its elements
-    /// against its parameter's element types: an error in one is inside the tuple, an error
-    /// argument), or, where it typed the elements as its arguments (an infix operand's tuple
-    /// for a member of more parameters than one), the tuple alone of the literals they are; an
-    /// element of another kind declines. Where it typed none, the tuple is typed here.
-    #[allow(clippy::too_many_arguments)]
-    fn tupled_boundary(&mut self, sig: &MethodSig, clause: &ClauseSig, owner_ty: TypeId, lists: &[ArgList], at: usize, cache: &ArgCache, taken: &Taken) -> Boundary {
+    /// `boundary_attempt` of the try with the arguments tupled into one (`untpd.Tuple(args)`), a
+    /// prototype of its own (`FunProto.tupledDual`): the tuple the member's application typed
+    /// where it used this dual (`typedTuple`, Typer.scala 3729, its elements against its
+    /// parameter's element types: an error in one is inside the tuple, an error argument), or
+    /// the tuple typed alone (`typedArgs`), cached where clean.
+    fn tupled_boundary(&mut self, sig: &MethodSig, clause: &ClauseSig, owner_ty: TypeId, lists: &[ArgList], at: usize) -> Boundary {
         let list = &lists[at];
         let Some(elems) = list.args.iter().map(|a| match *a {
             ArgSrc::Ast(e) => Some(e),
             _ => None,
-        }).collect::<Option<Vec<ExprId>>>() else { return Boundary::Declines };
-        let mut records = Vec::new();
-        let mut bindings = Vec::new();
-        let (te, ty, reusable) = match cache.typings.iter().rfind(|t| t.dual.is_some() && t.e == elems[0]) {
-            Some(t) => {
-                if t.diags().0 < taken.diags_at || t.diags().1 - taken.diags_at > taken.diags.len() {
-                    return Boundary::Declines;
-                }
-                let placed = &taken.diags[t.diags().0 - taken.diags_at..t.diags().1 - taken.diags_at];
-                if placed.iter().any(|d| !d.is_warning) {
-                    return Boundary::Stands;
-                }
-                records.push(t.index);
-                let own = self.bindings_in(taken, t, t.trail().1);
-                let reusable = placed.is_empty() && own.is_some() && !t.hoisted;
-                bindings.extend(own.into_iter().flatten());
-                (t.te, t.ty, reusable)
-            }
-            None if elems.iter().all(|&e| !cache.typings.iter().any(|t| t.e == e)) => {
-                let (diags, hoisted, recorded) = (self.diags.items.len(), self.hoisted.len(), self.index_mark());
+        }).collect::<Option<Vec<ExprId>>>() else { return Boundary::Stands };
+        let (te, ty) = match self.member_dual() {
+            Dual::Error => return Boundary::Stands,
+            Dual::Typed(te, ty) => (te, ty),
+            Dual::None => {
+                let hoisted = self.hoisted.len();
+                let m = self.attempt();
                 let (te, ty) = self.type_tuple(&elems, None);
-                let failed = self.diags.items[diags..].iter().any(|d| !d.is_warning);
-                self.discard_diagnostics(diags);
-                if failed {
+                if self.attempt_failed(&m) {
+                    self.retract(m);
                     self.hoisted.truncate(hoisted);
-                    self.index_drop(recorded);
                     return Boundary::Stands;
                 }
+                self.close(m);
                 let ty = self.zonk(ty);
-                (te, ty, true)
-            }
-            None => {
-                let mut items = Vec::with_capacity(elems.len());
-                let mut tys = Vec::with_capacity(elems.len());
-                for &e in &elems {
-                    let alone = cache.typings.iter().rfind(|t| t.e == e && t.dual.is_none()).and_then(|t| self.literal_alone(e, t.te).map(|ty| (t.te, ty)));
-                    let Some((te, ty)) = alone else { return Boundary::Declines };
-                    items.push(te);
-                    tys.push(ty);
-                }
-                let ty = self.tuple_of(&tys);
-                let te = self.tuple_value(&items);
-                self.prog.set_type(te, ty);
-                // What `type_tuple` records of a tuple it makes, for the writer and the dependencies.
-                if self.capturing() && items.len() <= 22 {
-                    self.capture_targs(te, &tys);
-                }
-                if self.deps.is_some() {
-                    let class = self.tuple_class(items.len());
-                    self.deps_node(te, super::deps::Node::Apply(class));
-                }
-                (te, ty, true)
+                self.set_member_dual(Dual::Typed(te, ty));
+                (te, ty)
             }
         };
         // The member takes the tuple where its first parameter does and the others have
@@ -7528,90 +7164,10 @@ impl<'a> Worker<'a> {
         if matches {
             return Boundary::Stands;
         }
-        if !reusable || records.iter().any(|&(a, b)| !self.index_holds(taken.index, taken.index_at, a, b)) {
-            return Boundary::Declines;
-        }
         self.retry_typed.insert(te, ());
         let mut out = lists.to_vec();
         out[at] = ArgList { args: vec![ArgSrc::Typed(te, ty)], using: false, span: list.span };
-        Boundary::Retry(out, records, bindings, Vec::new())
-    }
-
-    /// The element `e` of the tupled dual the member's application typed (`d`, of the positional
-    /// arguments `elems`), as typed alone for the try of the arguments as written: as the dual
-    /// typed it where that typed its elements alone (its formal no tuple type of as many) and
-    /// placed no diagnostic, constrained no older variable and bound no temporary; otherwise a
-    /// literal its element's type left as it is (`literal_alone`).
-    fn dual_element_alone(&mut self, d: &ArgTyping, e: ExprId, taken: &Taken, elems: &[ExprId]) -> Option<(TExprId, TypeId)> {
-        let i = elems.iter().position(|&x| x == e)?;
-        let TExpr::New(_, l) = self.prog.expr(d.te) else { return None };
-        let items = self.prog.expr_list(l);
-        if items.len() != elems.len() {
-            return None;
-        }
-        let te = items[i];
-        let clean = d.diags().0 >= taken.diags_at && d.diags().1 - taken.diags_at <= taken.diags.len() && d.diags().0 == d.diags().1;
-        if d.dual == Some(true) && clean && !d.hoisted && self.bindings_in(taken, d, d.trail().1).is_some() {
-            let ty = self.tuple_elements(d.ty)?.get(i).copied()?;
-            return Some((te, ty));
-        }
-        self.literal_alone(e, te).map(|ty| (te, ty))
-    }
-
-    /// The type a literal `e` the member's application typed to `te` has typed alone, where
-    /// that typing is the one alone: a literal its formal left as it is (an `Int` literal
-    /// against an `Int`, not against a `Long`, which dotty's `typedNumber` makes a `Long` one),
-    /// or a tuple of such.
-    fn literal_alone(&mut self, e: ExprId, te: TExprId) -> Option<TypeId> {
-        use crate::ast::Expr;
-        let ast = self.cur_ast();
-        if let Expr::Parens(inner) = ast.expr(e) {
-            return self.literal_alone(inner, te);
-        }
-        if let (Expr::Tuple(l), TExpr::New(c, items)) = (ast.expr(e), self.prog.expr(te)) {
-            let elems = ast.expr_list(l);
-            let items = self.prog.expr_list(items).to_vec();
-            if !self.is_tuple_class(c) || elems.len() != items.len() || elems.len() > 22 {
-                return None;
-            }
-            let tys = elems.iter().zip(&items).map(|(&e, &te)| self.literal_alone(e, te)).collect::<Option<Vec<TypeId>>>()?;
-            let ty = self.tuple_of(&tys);
-            self.prog.set_type(te, ty);
-            if self.capturing() {
-                self.capture_targs(te, &tys);
-            }
-            return Some(ty);
-        }
-        let ty = match (ast.expr(e), self.prog.expr(te)) {
-            (Expr::IntLit(_), TExpr::Int(_)) => self.b.t_int,
-            (Expr::LongLit(_), TExpr::Long(_)) => self.b.t_long,
-            (Expr::DoubleLit(_), TExpr::Double(_)) => self.b.t_double,
-            (Expr::DecimalLit(_), TExpr::Double(_)) if self.prog.type_of(te) != Some(self.b.t_float) => self.b.t_double,
-            (Expr::FloatLit(_), TExpr::Double(_)) => self.b.t_float,
-            (Expr::BoolLit(_), TExpr::Bool(_)) => self.b.t_boolean,
-            (Expr::CharLit(_), TExpr::Char(_)) => self.b.t_char,
-            (Expr::StringLit(_), TExpr::Str(_)) => self.b.t_string,
-            _ => return None,
-        };
-        self.prog.set_type(te, ty);
-        Some(ty)
-    }
-
-    /// Whether the argument `e` of the list at `list` stands bare in it, as scalac reads it: the
-    /// list's opening parenthesis or a comma before it, parentheses and blanks alone between, as
-    /// after it (parentheses are no tree for scalac either); not inside braces or after a
-    /// comment, which the parser drops too (`{ M.next }`, `{ (M.next) }` are read as `M.next`).
-    fn bare_in_list(&self, e: ExprId, list: Span) -> bool {
-        let text = &self.source(self.env.file).text;
-        let at = self.cur_ast().expr_span(e);
-        let (Some(before), Some(after)) = (text.get(list.start as usize..at.start as usize), text.get(at.end as usize..list.end as usize)) else { return false };
-        let before = before.trim_end();
-        let outer = before.trim_end_matches(|c: char| c == '(' || c.is_whitespace());
-        let parens = before[outer.len()..].matches('(').count();
-        // The list's own parenthesis follows a name, a type argument list or a list before it.
-        let opens = outer.ends_with(',') || parens >= 1 && outer.ends_with(|c: char| c.is_alphanumeric() || matches!(c, '_' | ']' | ')' | '`'));
-        let rest = after.trim_start_matches(|c: char| c == ')' || c.is_whitespace());
-        opens && !rest.starts_with(['}', '/'])
+        Boundary::Retry(out)
     }
 
     /// The first list's arguments with the parameters they go to, as `Application.matchArgs`
@@ -7629,10 +7185,9 @@ impl<'a> Worker<'a> {
         let mut filled = vec![false; clause.params.len()];
         let mut repeated_args = 0;
         for (i, arg) in list.args.iter().enumerate() {
-            let (e, pretyped, hoisted) = match *arg {
-                ArgSrc::Ast(e) => (Some(e), None, false),
-                ArgSrc::Hoisted(e) => (Some(e), None, true),
-                ArgSrc::Typed(te, ty) => (None, Some((te, ty)), false),
+            let (e, pretyped) = match *arg {
+                ArgSrc::Ast(e) | ArgSrc::Hoisted(e) => (Some(e), None),
+                ArgSrc::Typed(te, ty) => (None, Some((te, ty))),
                 _ => return None,
             };
             let named = e.and_then(|e| match ast.expr(e) {
@@ -7667,8 +7222,7 @@ impl<'a> Worker<'a> {
             if splice && !repeated {
                 matched = false;
             }
-            let bare = e.is_some_and(|e| self.bare_in_list(e, list.span));
-            out.push(BoundaryArg { written: e, value, pretyped, param: at, splice, named: named.map(|(n, _)| n), src: i, hoisted, bare });
+            out.push(BoundaryArg { value, pretyped, param: at, splice });
         }
         // A splice is the repeated parameter's only argument.
         if out.iter().any(|a| a.splice) && repeated_args > 1 {
@@ -7767,9 +7321,12 @@ impl<'a> Worker<'a> {
                 _ => break,
             }
         }
-        if own == ERROR {
-            return false;
-        }
+        // teq types a tree erroneous wherever an error is in it, an application whose argument
+        // failed among them, where dotty gives that one its result type and lets an error type
+        // stand for the tree only where it is the one inside (a selection on an erroneous
+        // qualifier, `t.typeOpt != t1.typeOpt`): in an erroneous tree only a type mismatch counts,
+        // which dotty's adaptation places on the argument it adapts, never on the tree around it.
+        let erroneous = own == ERROR;
         let at = ast.expr_span(t);
         let formal = self.zonk(formal);
         let expected = expected.map(|x| self.zonk(x));
@@ -7778,7 +7335,7 @@ impl<'a> Worker<'a> {
             let mismatch = required.iter().find(|&&(i, _)| i == diags + k).map(|&(_, r)| r);
             let inside = d.span != at && d.span.start >= at.start && d.span.end <= at.end;
             let placed_at_tree = d.span == at && mismatch.is_some_and(|r| expected.is_some_and(|x| r != x));
-            !d.is_warning && mismatch != Some(formal) && (inside || placed_at_tree)
+            !d.is_warning && mismatch != Some(formal) && (inside || placed_at_tree) && (!erroneous || mismatch.is_some())
         })
     }
 
@@ -7859,20 +7416,21 @@ impl<'a> Worker<'a> {
         }
     }
 
-    /// `e` typed alone, as `FunProto.typedArgs` types it, the typing kept where it is clean, its
-    /// temporaries and records too: `None` where it is erroneous.
-    fn typed_alone_kept(&mut self, e: ExprId) -> Option<(TExprId, TypeId)> {
-        let (diags, recorded, hoisted) = (self.diags.items.len(), self.index_mark(), self.hoisted.len());
+    /// `e` typed alone, as `FunProto.typedArgs` types an argument its cache lacks
+    /// (ProtoTypes.scala 508), into the member's cache where clean: its type, `None` where it is
+    /// erroneous.
+    fn typed_alone_cached(&mut self, e: ExprId) -> Option<TypeId> {
+        let hoisted = self.hoisted.len();
+        let m = self.attempt();
         let (te, ty) = self.type_expr(e, None);
-        let erroneous = self.diags.items[diags..].iter().any(|d| !d.is_warning) || self.types.contains_error(ty);
-        let ty = self.zonk(ty);
-        self.discard_diagnostics(diags);
-        if erroneous {
-            self.index_drop(recorded);
+        if self.attempt_failed(&m) || self.types.contains_error(ty) {
+            self.retract(m);
             self.hoisted.truncate(hoisted);
             return None;
         }
-        Some((te, ty))
+        self.close(m);
+        self.member_arg_put(e, (te, ty));
+        Some(ty)
     }
 
     /// `Seq[T]`, or `Array[T]`, of a repeated parameter's element `T`.

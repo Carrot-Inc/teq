@@ -31,6 +31,14 @@ regression.
 - `proposed-cases/` are programs scalac accepts and teq rejects, with the output of
   `scala-cli run -S 3.8.4` as `.expected`, in the format of `tests/cases`.
 
+## A member's retry types again what its application did not cache (2026-10-09)
+
+`pos/i18645` moved from `rejects` to `accepts`: `x.pprint(() => ( 234 ))` fails against the member's
+`() => String` at the lambda's result, which is no error inside the argument (`hasInnerErrors`), and its
+typing, made where the member's attempt had reported that error, is not cached (`cacheTypedArg`), so the
+retry on the qualifier types the lambda again against the extension's `() => Int`, as scalac's
+`tryWithImplicitOnQualifier` does.
+
 ## A case class is a `java.io.Serializable` (2026-10-09)
 
 `pos/duplicate-parents` moved from `rejects` to `accepts`: a case class has the parents

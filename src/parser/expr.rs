@@ -152,7 +152,10 @@ impl<'a> Parser<'a> {
             self.placeholders.truncate(placeholders_mark);
         }
         let body = match stmts[..] {
-            [Stmt::Expr(e)] => e,
+            [Stmt::Expr(e)] => {
+                self.ast.braced.push(e);
+                e
+            }
             _ => {
                 let l = push_list(&mut self.ast.stmts, &stmts);
                 self.ast.add_expr(Expr::Block(l), start.to(self.prev_span()))
