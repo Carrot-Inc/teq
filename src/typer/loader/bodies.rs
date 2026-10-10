@@ -551,7 +551,7 @@ impl<'a> Worker<'a> {
             self.decoded_class(lc.file, lc.addr).template.stats.clone()
         };
         cv.this_chain.push(companion);
-        let class_tparams = self.syms.class(c).own_tparams().to_vec();
+        let class_tparams = self.syms.class(c).tparams.to_vec();
         for s in &stats {
             if let Stat::Def(sig, Some(rhs)) = s {
                 if let Some((owner, index)) = self.default_getter(cv, sig.name) {
@@ -905,7 +905,7 @@ impl<'a> Worker<'a> {
                 // A secondary constructor repeats the class's type parameters as its own, which
                 // the loader read as the class's; the body names them by the class's names.
                 if name == names::INIT {
-                    let class_tparams = self.syms.class(c).own_tparams().to_vec();
+                    let class_tparams = self.syms.class(c).tparams.to_vec();
                     for clause in &sig.clauses {
                         if let Clause::Types(ps) = clause {
                             for (tp, &own) in ps.iter().zip(&class_tparams) {
@@ -4113,6 +4113,18 @@ impl<'a> Worker<'a> {
         // typer passes the prefix only to a class that takes an outer instance.
         if let Type::Class(c, _) | Type::Ctor(c) = self.types.get(ctor) {
             self.outer_class(c)?;
+        }
+        // A member of the object the body is in (`O.this.a` of `new a.Item` in `O`) on the
+        // object's `this`, as the source's `a` is typed there, where `conv_path` names the member.
+        if let TType::TermRef(p, n) = &**prefix {
+            if let TType::This(inner) = &**p {
+                let c = self.this_class_of(cv, inner);
+                if c.is_some_and(|c| self.syms.class(c).kind == ClassKind::Object && cv.this_chain.last() == Some(&c)) {
+                    let name = self.conv_name(cv, *n);
+                    let this = cv.expr(Expr::This);
+                    return Some(cv.expr(Expr::Select(this, name)));
+                }
+            }
         }
         Some(self.conv_path(cv, prefix))
     }

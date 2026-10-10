@@ -1683,6 +1683,16 @@ impl<'a> Worker<'a> {
         let outer_base = std::mem::replace(&mut self.app_base, self.tvars.len() as u32);
         let first_var = self.tvars.len();
         let mut alts = self.alternatives_of(set, recv_ty, ctor);
+        // Each alternative is seen from the receiver's path, as the chosen one is applied: its
+        // owner's `this` and the enclosing classes' are the receiver's (dotty's member denotation
+        // `asSeenFrom` the prefix, `TypeOps.asSeenFrom`).
+        if let (Some(r), Some(rt)) = (recv, recv_ty) {
+            for alt in alts.iter_mut().filter(|a| a.ctor.is_none()) {
+                if let Some(prefix) = self.dependent_prefix(alt.sym, r, rt) {
+                    alt.sig = self.sig_seen_from(alt.sig.clone(), prefix, alt.sym);
+                }
+            }
+        }
         // An alternative whose header the parser could not complete is no candidate while a
         // complete one is.
         let incomplete = |t: &Self, a: &Alt| a.ctor.is_none() && t.syms.sym(a.sym).mods & crate::ast::mods::INCOMPLETE != 0;

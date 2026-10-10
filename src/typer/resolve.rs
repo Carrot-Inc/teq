@@ -28,6 +28,12 @@ pub enum TermRef {
     Package(PkgId),
     /// A member of the stable val of a package or an object, imported from the val.
     ValueMember(ValueImport, SymId),
+    /// The constructor proxy of a class nested in the class of such a val, imported from it
+    /// (`import o.*; Inner(1)` is `o.Inner(1)`, dotty's `NamerOps.addConstructorProxies`).
+    ValueClass(ValueImport, ClassId),
+    /// The proxy of a class an object inherits from a class or trait that declares it, whose
+    /// instance the object is (`import Schema.*; Record(f)` is `Schema.Record(f)`).
+    ModuleClass(ClassId, ClassId),
     /// The `self =>` alias of an enclosing class: its `this`.
     SelfAlias(ClassId),
 }
@@ -38,7 +44,7 @@ impl TermRef {
             TermRef::Local(s) | TermRef::This(_, s) | TermRef::ModuleMember(_, s) | TermRef::Global(s) | TermRef::ValueMember(_, s) => {
                 Some(s)
             }
-            TermRef::Class(_) | TermRef::Package(_) | TermRef::SelfAlias(_) => None,
+            TermRef::Class(_) | TermRef::Package(_) | TermRef::SelfAlias(_) | TermRef::ValueClass(..) | TermRef::ModuleClass(..) => None,
         }
     }
 }
@@ -796,9 +802,6 @@ impl<'a> Worker<'a> {
             return Some(TypeRef::Param(p));
         }
         if let Some(&n) = info.nested.get(&name) {
-            if self.syms.class(n).outer_tparams > 0 {
-                return Some(TypeRef::Member(c, name));
-            }
             return Some(TypeRef::Class(n));
         }
         if let Some(&a) = info.type_aliases.get(&name) {
@@ -847,19 +850,23 @@ impl<'a> Worker<'a> {
         let bases: Vec<ClassId> = self.syms.class(c).base_types.iter().skip(1).map(|&(b, _)| b).collect();
         let object = self.syms.class(c).kind == ClassKind::Object;
         for b in bases {
-            if self.syms.class(b).nested.get(&name).map_or(false, |&n| self.syms.class(n).outer_tparams > 0) {
-                return Some(TypeRef::Member(c, name));
-            }
             // An opaque type of a trait is the object's own copy through an object.
-            if let Some(&n) = self.syms.class(b).nested.get(&name).filter(|&&n| object && self.types.is_path_class(n)) {
+            if let Some(&n) = self.syms.class(b).nested.get(&name).filter(|&&n| object && self.is_opaque_path_class(n)) {
                 return Some(TypeRef::Class(self.derived_opaque(n, c)));
             }
-            // A class nested in a class or trait is inherited with it (`new C` in a subclass).
+            // A class nested in a class or trait is inherited with it (`new C` in a subclass),
+            // through the subclass's `this` (`Sub.this.C`, an object's own type for an object).
             if let Some(&n) = self.syms.class(b).nested.get(&name).filter(|_| self.syms.class(b).kind != ClassKind::Object) {
+                if self.is_inner_class(n) {
+                    return Some(TypeRef::Member(c, name));
+                }
                 return Some(TypeRef::Class(n));
             }
             if let Some(&a) = self.syms.class(b).type_aliases.get(&name) {
-                let through_this = !self.syms.class(b).tparams.is_empty();
+                // Through the subclass's `this`, as dotty's `TypeRef(Bar.this, Bla)` sees its info
+                // from the prefix: what the alias names of its owner's `this` is the subclass's
+                // (`type Bla[X <: A] = X` of `Foo` in `Bar extends Foo` has the bound `Bar.this.A`).
+                let through_this = !self.syms.class(b).tparams.is_empty() || (b != c && self.syms.class(b).kind != ClassKind::Object);
                 return Some(match self.alias_ref(b, a) {
                     TypeRef::Member(_, n) => TypeRef::Member(c, n),
                     TypeRef::Alias(_) if through_this => TypeRef::Member(c, name),
@@ -1222,6 +1229,14 @@ impl<'a> Worker<'a> {
         }
         if let Some(&n) = info.nested.get(&name) {
             return Some(TermRef::Class(n));
+        }
+        // A proxy stands where no member of the name does (`NamerOps.addConstructorProxies`'s
+        // `memberExists`), inherited ones included.
+        if let Some(n) = self.inherited_nested_class(c, name) {
+            let module_ty = self.types.class(c, &[]);
+            if self.find_member(module_ty, name).is_none() {
+                return Some(if self.outer_class(n).is_some() { TermRef::ModuleClass(c, n) } else { TermRef::Class(n) });
+            }
         }
         if let Some(r) = self.exports_of(c).and_then(|e| e.terms.get(&name).copied()) {
             return Some(r);
@@ -2097,7 +2112,8 @@ impl<'a> Worker<'a> {
                 let ty = self.import_value_ret(v);
                 // A member the import cannot reach is none it brings, named or not.
                 let Some((m, _)) = self.find_member(ty, orig) else {
-                    return if self.extension_call_head { self.value_extension_term(v, orig) } else { None };
+                    let ext = if self.extension_call_head { self.value_extension_term(v, orig) } else { None };
+                    return ext.or_else(|| self.value_class_term(v, orig));
                 };
                 self.is_accessible(m).then_some(TermRef::ValueMember(v, m))
             }
@@ -2108,7 +2124,8 @@ impl<'a> Worker<'a> {
                     return None;
                 }
                 let Some((m, _)) = self.find_member(ty, name) else {
-                    return if self.extension_call_head { self.value_extension_term(v, name) } else { None };
+                    let ext = if self.extension_call_head { self.value_extension_term(v, name) } else { None };
+                    return ext.or_else(|| self.value_class_term(v, name));
                 };
                 (!self.syms.is_given(m) && self.is_accessible(m)).then_some(TermRef::ValueMember(v, m))
             }
@@ -2120,6 +2137,14 @@ impl<'a> Worker<'a> {
             }
             _ => None,
         }
+    }
+
+    /// The constructor proxy of the class `name` nested in the class of the value an import
+    /// opens, where no term of the name is a member: dotty's proxy is a member of that class.
+    fn value_class_term(&mut self, v: ValueImport, name: Name) -> Option<TermRef> {
+        let prefix = self.import_value_prefix(v);
+        let c = self.nested_class_through(prefix, name).filter(|&c| self.needs_constructor_proxy(c))?;
+        Some(TermRef::ValueClass(v, c))
     }
 
     /// The type member `name` of the value an import opens, named or through its wildcard.
@@ -2455,7 +2480,14 @@ impl<'a> Worker<'a> {
                 if t == ERROR {
                     self.error(span, "this type does not take type arguments");
                 } else if params.len() == resolved.len() {
-                    self.check_type_args(&params, &resolved, &arg_ids);
+                    let through = match self.types.get(ctor) {
+                        Type::Lambda(_, body) => match self.types.get(body) {
+                            Type::Nested(p, class) => self.types.named_class(class).map(|c| (p, c)),
+                            _ => None,
+                        },
+                        _ => None,
+                    };
+                    self.check_type_args_through(&params, &resolved, &arg_ids, through);
                 }
                 t
             }
@@ -2593,13 +2625,27 @@ impl<'a> Worker<'a> {
             }
             TyExpr::Singleton(path) => self.singleton_type(path, span),
             TyExpr::Project(q, n) => {
-                let prefix = self.resolve_type(q);
+                // A type constructor has no members (dotty's E007 against `?{ T: ? }`).
+                let prefix = self.resolve_type_ctor(q);
+                if let Type::Ctor(c) = self.types.get(prefix) {
+                    let msg = format!("type mismatch: found {}, required ?{{ {}: ? }}", self.name_str(self.syms.class(c).name), self.name_str(n));
+                    self.error(self.cur_ast().ty_spans[q.idx()], msg);
+                    return ERROR;
+                }
+                let prefix = self.normalize(prefix);
+                let prefix = self.seen_from_receiver_paths(prefix);
                 if prefix == ERROR {
                     return ERROR;
                 }
+                // `p.type#T` is `p.T`, dotty's `TypeRef(p.type, T)`.
+                if self.types.is_path(prefix) {
+                    if let Some(t) = self.member_type(prefix, n) {
+                        return t;
+                    }
+                }
                 let prefix = self.dealias(prefix);
                 // A refined type projects its refinement's member (`Zippable.Out[A, B, C]#Out`).
-                if !matches!(self.types.get(prefix), Type::Class(..) | Type::Refined(..)) {
+                if !matches!(self.types.get(prefix), Type::Class(..) | Type::Refined(..) | Type::Nested(..)) {
                     let msg = format!("{} is not a legal path\nsince it is not a concrete type", self.show(prefix));
                     self.error(span, msg);
                     return ERROR;
@@ -2833,10 +2879,16 @@ impl<'a> Worker<'a> {
     /// Each argument of a type application has the kind of its parameter, by arity, and lies
     /// within the parameter's bounds; a wildcard is not checked. The bounds are checked once
     /// every class is complete, as scalac does after typing, since a parent clause names the
-    /// class being completed (`class Bar extends Foo[Bar]` for `Foo[F <: Foo[F]]`).
-    fn check_type_args(&mut self, params: &[TParamId], args: &[TypeId], arg_asts: &[TyExprId]) {
+    /// class being completed (`class Bar extends Foo[Bar]` for `Foo[F <: Foo[F]]`). The bounds
+    /// of a class nested in a class applied through the prefix `through` gives
+    /// (`Ext.this.Visitor[T]`) are seen from that prefix, as dotty sees a `TypeRef`'s class.
+    fn check_type_args_through(&mut self, params: &[TParamId], args: &[TypeId], arg_asts: &[TyExprId], through: Option<(TypeId, ClassId)>) {
         let ast = self.cur_ast();
         let subst: Subst = params.iter().copied().zip(args.iter().copied()).collect();
+        let seen = |t: &mut Self, b: TypeId| match through {
+            Some((p, c)) if t.types.has_paths(b) => t.outer_seen_from(b, p, c),
+            _ => b,
+        };
         for (i, (&p, &a)) in params.iter().zip(args).enumerate() {
             if matches!(ast.ty(arg_asts[i]), TyExpr::Wildcard | TyExpr::BoundedWildcard(..)) || self.unbound_type_var(arg_asts[i]) || self.types.contains_error(a) {
                 continue;
@@ -2867,8 +2919,14 @@ impl<'a> Worker<'a> {
             if upper == ANY && lower == NOTHING {
                 continue;
             }
-            let upper = (upper != ANY).then(|| self.types.subst(upper, &subst));
-            let lower = (lower != NOTHING).then(|| self.types.subst(lower, &subst));
+            let upper = (upper != ANY).then(|| {
+                let u = self.types.subst(upper, &subst);
+                seen(self, u)
+            });
+            let lower = (lower != NOTHING).then(|| {
+                let l = self.types.subst(lower, &subst);
+                seen(self, l)
+            });
             let file = self.env.file;
             let transparent = self.transparent.clone();
             // A library body was checked by scalac; a later build of a watch session would
@@ -2988,7 +3046,7 @@ impl<'a> Worker<'a> {
             return None;
         }
         match self.types.get(prefix) {
-            Type::This(c) | Type::Class(c, _) => Some(c),
+            Type::This(_) | Type::Class(..) | Type::Nested(..) => self.types.named_class(prefix),
             Type::Refined(base, _) => self.declaring_class(base, depth + 1),
             // The head of an alias's right-hand side names the class whatever the arguments.
             Type::Alias(a, _) if self.syms.alias(a).state() == Completion::Done => self.declaring_class(self.alias_body(a), depth + 1),
@@ -3888,6 +3946,22 @@ impl<'a> Worker<'a> {
             };
             parents.push((t, self.cur_ast().ty_spans[p.ty.idx()]));
         }
+        // A parent's type names no constructor parameter (`extends outer.Foo(outer)`), as dotty's
+        // `checkParentType` refuses it: the parent is constructed before the parameters are the
+        // class's fields.
+        let params: Vec<SymId> = self.syms.class(c).ctor.iter().flat_map(|cl| cl.params.iter().map(|p| p.sym)).collect();
+        if !params.is_empty() {
+            for &(t, span) in &parents {
+                if let Some(&p) = params.iter().find(|&&p| self.types.names_term(t, &[p])) {
+                    let msg = format!(
+                        "The type of a class parent cannot refer to constructor parameters, but {} refers to {}",
+                        self.show(t),
+                        self.name_str(self.syms.sym(p).name)
+                    );
+                    self.error(span, msg);
+                }
+            }
+        }
         if !trait_calls.is_empty() {
             self.inferred_trait_args.insert(c, std::sync::Arc::from(trait_calls));
         }
@@ -4144,7 +4218,13 @@ impl<'a> Worker<'a> {
         let mut trait_superclasses: Vec<(ClassId, ClassId, Span)> = Vec::new();
         for (pt, span) in parents {
             let pt = self.deref_alias(pt);
-            let Type::Class(pc, pargs) = self.types.get(pt) else {
+            // A class nested in a class, through its prefix (`extends H.o.I`, an alias of it): its
+            // base types are seen from the prefix, as dotty's `baseType` of a parent `TypeRef`.
+            let (class_pt, prefix) = match self.types.get(pt) {
+                Type::Nested(p, class) => (class, Some(p)),
+                _ => (pt, None),
+            };
+            let Type::Class(pc, pargs) = self.types.get(class_pt) else {
                 if pt == ANY && kind != ClassKind::Trait {
                     self.error(span, "Any does not have a constructor");
                 } else if pt != ERROR && pt != ANY {
@@ -4236,7 +4316,13 @@ impl<'a> Worker<'a> {
                 .zip(self.types.items(pargs).iter().copied())
                 .collect();
             let inherited: Vec<(ClassId, TypeId)> = self.syms.class(pc).base_types.clone();
-            linearisations.push(inherited.into_iter().map(|(bc, bt)| (bc, self.types.subst(bt, &subst))).collect());
+            let mut seen: Vec<(ClassId, TypeId)> = inherited.into_iter().map(|(bc, bt)| (bc, self.types.subst(bt, &subst))).collect();
+            if let Some(p) = prefix {
+                for (_, bt) in seen.iter_mut() {
+                    *bt = self.outer_seen_from(*bt, p, pc);
+                }
+            }
+            linearisations.push(seen);
         }
         if !trait_superclasses.is_empty() {
             superclass = self.superclass_with_traits(superclass, &trait_superclasses);
@@ -4258,7 +4344,7 @@ impl<'a> Worker<'a> {
             let bi = self.syms.class(b);
             !bi.type_aliases.is_empty()
                 || bi.inherits_types
-                || bi.nested.values().any(|&n| self.syms.class(n).outer_tparams > 0 || self.types.is_path_class(n))
+                || bi.nested.values().any(|&n| self.is_opaque_path_class(n))
                 || (bi.kind != ClassKind::Object && !bi.nested.is_empty())
         });
         let mut info = self.syms.class_mut(c);
@@ -4290,6 +4376,15 @@ impl<'a> Worker<'a> {
             let Some(declared) = self.syms.class(b).declared_self else { continue };
             let subst = self.owner_subst(bt);
             let required = self.types.subst(declared, &subst);
+            // Seen from `c`'s `this`, as dotty's `checkSelfAgainstParents` sees the parent's
+            // self type (`asSeenFrom(cls.thisType, parent)`): an outer class's `this` in it is
+            // the one `c` is nested in.
+            let required = if self.types.has_paths(required) {
+                let prefix = self.this_prefix(c);
+                self.as_seen_from(required, prefix, c)
+            } else {
+                required
+            };
             let mark = self.snapshot();
             let ok = self.is_sub(this, required);
             self.rollback(mark);
@@ -4469,6 +4564,18 @@ impl<'a> Worker<'a> {
     /// Two instantiations of one generic ancestor conflict where an invariant parameter differs;
     /// the arguments of a variant one would meet in their glb or lub.
     fn conflicting_instantiations(&mut self, c: ClassId, a: TypeId, b: TypeId) -> bool {
+        // An inner class through two prefixes that are not one path (`H.a.I` and `H.b.I`):
+        // dotty's base type is their intersection, a `HasProblemBase` (`CheckRealizable`).
+        let (a, b) = match (self.types.get(a), self.types.get(b)) {
+            (Type::Nested(p, x), Type::Nested(q, y)) => {
+                if p != q && !self.is_same(p, q) {
+                    return true;
+                }
+                (x, y)
+            }
+            (Type::Nested(..), _) | (_, Type::Nested(..)) => return true,
+            _ => (a, b),
+        };
         let (Type::Class(_, aa), Type::Class(_, ba)) = (self.types.get(a), self.types.get(b)) else { return false };
         let tparams = self.syms.class(c).tparams.clone();
         let (aa, ba) = (self.types.items(aa).to_vec(), self.types.items(ba).to_vec());
@@ -4737,7 +4844,7 @@ impl Binding for TermRef {
                 if let Some((s, _)) = member {
                     return Some(TermRef::This(c, s));
                 }
-                if let Some(&n) = t.syms.class(c).nested.get(&name) {
+                if let Some(n) = t.syms.class(c).nested.get(&name).copied().or_else(|| t.inherited_nested_class(c, name)) {
                     return Some(TermRef::Class(n));
                 }
                 if kind == ClassKind::Enum {

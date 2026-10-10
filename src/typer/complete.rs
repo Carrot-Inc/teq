@@ -200,7 +200,7 @@ enum Spelling {
 enum Found {
     Lexical,
     /// In the receiver's implicit scope, through that object.
-    Module(Option<ClassId>),
+    Module(Option<super::implicits::GivenScope>),
     /// A member of a given's type, its owner's type as seen from that type.
     Given(TypeId),
 }
@@ -1417,7 +1417,10 @@ impl<'a> Worker<'a> {
             TypeRef::Class(c) => Some(Cand::Class(c)),
             TypeRef::Alias(a) => Some(Cand::Alias(a)),
             TypeRef::Param(p) => Some(Cand::TParam(p)),
-            TypeRef::Member(c, n) => self.syms.class(c).type_aliases.get(&n).map(|&a| Cand::Alias(a)),
+            TypeRef::Member(c, n) => match self.syms.class(c).type_aliases.get(&n) {
+                Some(&a) => Some(Cand::Alias(a)),
+                None => self.inherited_inner_class(c, n).map(Cand::Class),
+            },
             TypeRef::ValueMember(..) => None,
         }
     }
@@ -2112,7 +2115,7 @@ impl<'a> Worker<'a> {
         if let Some(predef) = self.loaded.as_ref().and_then(|l| l.predef) {
             of_class(self, predef, &mut names);
         }
-        for m in self.implicit_scope_objects(t) {
+        for m in self.implicit_scope_modules(t) {
             of_class(self, m, &mut names);
             let givens: Vec<SymId> = self.syms.class_raw(m).givens.clone();
             for g in givens {
@@ -2139,7 +2142,7 @@ impl<'a> Worker<'a> {
             // (`ext_modules`, which the caller of `implicit_scope_extensions` truncates).
             let mark = self.ext_modules.len();
             let in_scope = self.muted(|w| w.implicit_scope_extensions(t, n));
-            let mut sites: Vec<Option<(SymId, ClassId)>> = self.ext_modules[mark..].iter().copied().map(Some).collect();
+            let mut sites: Vec<Option<(SymId, super::implicits::GivenScope)>> = self.ext_modules[mark..].iter().copied().map(Some).collect();
             self.ext_modules.truncate(mark);
             for e in in_scope {
                 let module = sites.iter_mut().find(|s| s.is_some_and(|(x, _)| x == e)).and_then(Option::take).map(|(_, m)| m);
@@ -2177,7 +2180,7 @@ impl<'a> Worker<'a> {
                 };
                 let (owner_subst, prefix) = match (at, trait_owner) {
                     (Found::Given(owner_ty), _) => (self.owner_subst(owner_ty), None),
-                    (Found::Module(Some(m)), Some(c)) => (self.trait_member_subst(super::exports::TraitMemberSite::Module(m), c), self.inherited_extension_prefix(Some(m))),
+                    (Found::Module(Some(scope)), Some(c)) => self.scope_extension_site(scope, c),
                     (Found::Lexical, Some(c)) => {
                         let site = self.trait_member_site(e, c);
                         (self.trait_member_subst(site, c), None)

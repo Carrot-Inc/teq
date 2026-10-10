@@ -87,6 +87,12 @@ pub enum Type {
     Member(TypeId, Name),
     /// A type member applied to arguments, `p.F[A]`; the first field is the `Member` or `Decl`.
     AppMember(TypeId, TList),
+    /// `p.C[Ts]`: a class or trait nested in a class or trait, selected through a prefix that
+    /// is a path (`o.Item`) or a type (the projection `O#Item`), dotty's `TypeRef(p, C)`. The
+    /// second field is the class's `Class` with its own arguments; the enclosing classes'
+    /// arguments are the prefix's. The bare `Class` of such a class is its occurrence through
+    /// the enclosing instance's `this` (`O.this.Item` inside `O`), which no `Nested` stands for.
+    Nested(TypeId, TypeId),
     /// An abstract type member of an object or a package, which needs no prefix.
     Decl(AliasId),
     /// `T { type A = X }`: the parent with one refinement; several nest, the last one outermost.
@@ -404,12 +410,14 @@ impl TypeStore {
             Type::Term(s) => PATHS_BIT | local_id(s.0),
             Type::Select(p, s) => PATHS_BIT | (self.entry_flag(p) & THROUGH_PREFIX) | local_id(s.0),
             Type::Member(p, _) => PATHS_BIT | (self.entry_flag(p) & THROUGH_PREFIX),
+            Type::Nested(p, c) => PATHS_BIT | (self.entry_flag(p) & THROUGH_PREFIX) | self.entry_flag(c),
             Type::Class(c, args) => {
                 let op = if args != EMPTY_LIST && self.is_op_class(c) { REDUCIBLE_BIT } else { 0 };
                 let path = if self.is_path_class(c) { PATHS_BIT } else { 0 };
                 op | path | self.list_flags(args) | local_id(c.0)
             }
-            Type::Ctor(c) => local_id(c.0),
+            // An inner class as a type constructor names its owner's `this` as its class does.
+            Type::Ctor(c) => (if self.is_path_class(c) { PATHS_BIT } else { 0 }) | local_id(c.0),
             Type::Param(p) => local_id(p.0),
             Type::AppParam(p, args) => APP_PARAM_BIT | self.list_flags(args) | local_id(p.0),
             Type::Decl(a) => local_id(a.0),
@@ -884,6 +892,7 @@ impl TypeStore {
             Type::Term(s) => terms.contains(&s),
             Type::Select(p, s) => terms.contains(&s) || self.names_term(p, terms),
             Type::Member(p, _) => self.names_term(p, terms),
+            Type::Nested(p, c) => self.names_term(p, terms) || self.names_term(c, terms),
             Type::AppMember(m, args) => self.names_term(m, terms) || list(args),
             Type::Class(_, args) | Type::AppParam(_, args) | Type::AppVar(_, args) | Type::Alias(_, args) => list(args),
             Type::Lambda(ps, b) | Type::Poly(ps, b) => list(ps) || self.names_term(b, terms),
@@ -902,6 +911,28 @@ impl TypeStore {
                 self.names_term(s, terms) || self.names_term(info.bound, terms) || info.cases.iter().any(|c| self.names_term(c.pattern, terms) || self.names_term(c.body, terms))
             }
             _ => false,
+        }
+    }
+
+    /// The class a class type, a class's `this` or a class through a prefix (`p.C`) names.
+    #[inline]
+    pub fn named_class(&self, t: TypeId) -> Option<ClassId> {
+        match self.get(t) {
+            Type::Class(c, _) | Type::This(c) => Some(c),
+            Type::Nested(_, class) => match self.get(class) {
+                Type::Class(c, _) => Some(c),
+                _ => None,
+            },
+            _ => None,
+        }
+    }
+
+    /// The class type of `p.C` without its prefix, any other type as it is.
+    #[inline]
+    pub fn strip_nested(&self, t: TypeId) -> TypeId {
+        match self.get(t) {
+            Type::Nested(_, class) => class,
+            _ => t,
         }
     }
 
@@ -1155,6 +1186,7 @@ impl TypeStore {
             Type::Poly(ps, body) => self.contains_error(body) || self.poly_bounds(ps).iter().any(|&a| self.contains_error(a)),
             Type::Union(a, b) | Type::Inter(a, b) | Type::BoundedWild(a, b) => self.contains_error(a) || self.contains_error(b),
             Type::Select(p, _) | Type::Member(p, _) => self.contains_error(p),
+            Type::Nested(p, c) => self.contains_error(p) || self.contains_error(c),
             Type::Refined(p, r) => self.contains_error(p) || self.refinement_types(r).into_iter().any(|a| self.contains_error(a)),
             Type::Match(s, m) => self.contains_error(s) || self.match_parts(m).collect::<Vec<_>>().into_iter().any(|a| self.contains_error(a)),
             Type::Alias(_, args) => self.items(args).iter().any(|&a| self.contains_error(a)),
@@ -1214,6 +1246,14 @@ impl TypeStore {
                     t
                 } else {
                     self.mk(Type::Member(np, name))
+                }
+            }
+            Type::Nested(p, c) => {
+                let (np, nc) = (self.subst(p, s), self.subst(c, s));
+                if np == p && nc == c {
+                    t
+                } else {
+                    self.mk(Type::Nested(np, nc))
                 }
             }
             Type::AppMember(m, args) => {
@@ -1363,6 +1403,10 @@ impl TypeStore {
             Type::AppMember(m, args) => {
                 let (nm, n) = (self.replace(m, pairs), list(self, args));
                 if nm == m && n == args { t } else { let items = self.items(n).to_vec(); self.apply_ctor(nm, &items) }
+            }
+            Type::Nested(p, c) => {
+                let (np, nc) = (self.replace(p, pairs), self.replace(c, pairs));
+                if np == p && nc == c { t } else { self.mk(Type::Nested(np, nc)) }
             }
             Type::Alias(a, args) => {
                 let n = list(self, args);
@@ -1760,6 +1804,7 @@ impl TypeStore {
         match self.entry(t) {
             Type::Class(_, args) | Type::AppParam(_, args) | Type::AppVar(_, args) | Type::Alias(_, args) => out.extend_from_slice(self.entry_items(args)),
             Type::Select(p, _) | Type::Member(p, _) => out.push(p),
+            Type::Nested(p, c) => out.extend([p, c]),
             Type::Lambda(ps, b) | Type::Poly(ps, b) => {
                 out.extend_from_slice(self.entry_items(ps));
                 out.push(b);
@@ -2168,6 +2213,10 @@ impl TypeStore {
                 ty(b);
             }
             Type::Select(p, _) | Type::Member(p, _) => ty(p),
+            Type::Nested(p, c) => {
+                ty(p);
+                ty(c);
+            }
             Type::AppMember(m, a) => {
                 ty(m);
                 list(a);
@@ -2804,6 +2853,11 @@ impl ShadowNs<'_> {
                     key.extend([p2, n.0 as u64]);
                     Self::real(&[p2]).then(|| Type::Member(TypeId(p2 as u32), n))
                 }
+                Type::Nested(p, c) => {
+                    let (p2, c2) = (edge(self, p), edge(self, c));
+                    key.extend([p2, c2]);
+                    Self::real(&[p2, c2]).then(|| Type::Nested(TypeId(p2 as u32), TypeId(c2 as u32)))
+                }
                 Type::AppMember(m, a) => {
                     let (m2, l) = (edge(self, m), self.list(a));
                     key.extend([m2, l]);
@@ -3424,6 +3478,10 @@ impl TypeStore {
                 let p = part(p);
                 self.mk(Type::Member(p, n))
             }
+            Type::Nested(p, c) => {
+                let (p, c) = (part(p), part(c));
+                self.mk(Type::Nested(p, c))
+            }
             Type::AppMember(m, args) => {
                 let m = part(m);
                 let l = list(args);
@@ -3458,6 +3516,23 @@ impl TypeStore {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A class through its prefix nests the class's own type (`Nested`), as a member does its
+    /// prefix, so that `Type` keeps its three words and a class nested in no class is made as
+    /// before: a third payload word would take it to sixteen bytes.
+    #[test]
+    fn a_type_is_three_words() {
+        assert_eq!(std::mem::size_of::<Type>(), 12);
+        let s = TypeStore::new();
+        let plain = s.class(ClassId(40), &[]);
+        assert!(!s.has_paths(plain));
+        s.mark_path_class(ClassId(41));
+        let inner = s.class(ClassId(41), &[]);
+        assert!(s.has_paths(inner));
+        let prefix = s.mk(Type::Term(SymId(7)));
+        let nested = s.mk(Type::Nested(prefix, inner));
+        assert!(s.has_paths(nested) && nested != inner);
+    }
 
     /// A class a worker made has a tagged id: its mark is sparse, not a table sized by the tag.
     #[test]

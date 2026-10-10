@@ -187,18 +187,9 @@ pub struct ClassInfo {
     pub this_type: Option<TypeId>,
     /// Whether an ancestor declares a type member, which a lookup in the body then walks to.
     pub inherits_types: bool,
-    /// How many of `tparams` are the type parameters of the enclosing classes, which a class
-    /// nested in a generic class of a jar takes first, from its prefix.
-    pub outer_tparams: u8,
 }
 
 impl ClassInfo {
-    /// The type parameters the class declares, after those it takes from enclosing classes.
-    #[inline]
-    pub fn own_tparams(&self) -> &[TParamId] {
-        &self.tparams[self.outer_tparams as usize..]
-    }
-
     /// The file whose module the class belongs to.
     pub fn module_file(&self) -> FileId {
         self.made_at.unwrap_or(self.file)
@@ -912,7 +903,6 @@ impl Symbols {
             declared_self: None,
             this_type: None,
             inherits_types: false,
-            outer_tparams: 0,
         }))
     }
 

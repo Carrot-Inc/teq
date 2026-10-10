@@ -369,6 +369,17 @@ impl<'a> Gen<'a> {
                 }
                 return;
             }
+            // The enclosing instance, read through the outer accessor of the instance's class
+            // (which a test before this one established), is tested in its own slot.
+            TypeTest::Outer(accessor, inner) => {
+                let m = self.mref(accessor);
+                self.load(slot, ty);
+                self.checkcast(&m.owner);
+                self.invoke_mref(&m);
+                let outer_ty = m.ret.clone();
+                let outer = self.store_new(&outer_ty);
+                return self.test(inner, outer, &outer_ty, None, target, jump_if);
+            }
         };
         self.load(slot, ty);
         self.instance_of(&class);

@@ -137,6 +137,8 @@ enum Via {
     Scope,
     Module(ClassId),
     Value(ValueImport),
+    /// A path of the implicit scope whose members are candidates (dotty's `addPath`).
+    Path(TypeId),
 }
 
 struct Candidate {
@@ -444,9 +446,23 @@ impl<'a> Worker<'a> {
         }
         let mut scope = Vec::new();
         for &t in scope_tys {
-            for m in self.implicit_scope_objects(t) {
-                self.class_conversions(m, pick, &mut level);
-                scope.extend(level.drain(..).map(|g| (g, Via::Module(m))));
+            // The objects of the implicit scope, and the paths it holds, whose members are
+            // read on them (dotty's `OfTypeImplicits.refs` of the `addPath` references).
+            for found in self.implicit_scope_objects(t) {
+                match found {
+                    GivenScope::Module(m) => {
+                        self.class_conversions(m, pick, &mut level);
+                        scope.extend(level.drain(..).map(|g| (g, Via::Module(m))));
+                    }
+                    GivenScope::Path(p) if self.scope_accessible(found) => {
+                        let under = self.path_underlying(p);
+                        if let Some(c) = self.class_of(under) {
+                            self.class_conversions(c, pick, &mut level);
+                            scope.extend(level.drain(..).map(|g| (g, Via::Path(p))));
+                        }
+                    }
+                    _ => {}
+                }
             }
         }
         if !scope.is_empty() {
@@ -458,6 +474,7 @@ impl<'a> Worker<'a> {
         let key = |&(g, via): &ConvRef| match via {
             Via::Value(v) => (g, 2, values[v.0 as usize].0 .0),
             Via::Module(m) => (g, 1, m.0),
+            Via::Path(p) => (g, 3, p.0),
             Via::Scope => (g, 0, 0),
         };
         for level in &mut levels {
@@ -482,6 +499,7 @@ impl<'a> Worker<'a> {
         };
         let site = match (trait_owner, via) {
             (Some(c), Via::Module(m)) => Some((super::exports::TraitMemberSite::Module(m), c)),
+            (Some(c), Via::Path(p)) => Some((super::exports::TraitMemberSite::Path(p), c)),
             (Some(c), Via::Scope) => Some((self.trait_member_site(g, c), c)),
             _ => None,
         };
@@ -516,7 +534,13 @@ impl<'a> Worker<'a> {
         let prefix = match via {
             Via::Module(m) => Some(self.types.class(m, &[])),
             Via::Value(v) => Some(self.import_value_type(v)),
-            Via::Scope => None,
+            Via::Path(p) => Some(p),
+            // One a class in scope inherits is seen from that class's `this` (`~` of a
+            // `ParsersBase` conversion in a subclass is the subclass's).
+            Via::Scope => match site {
+                Some((super::exports::TraitMemberSite::This(Some(k)), _)) => Some(self.this_prefix(k)),
+                _ => None,
+            },
         };
         if let (Some(prefix), Some(c)) = (prefix, trait_owner) {
             from = self.as_seen_from(from, prefix, c);
@@ -758,6 +782,7 @@ impl<'a> Worker<'a> {
                     (te, ty)
                 }),
                 Via::Module(m) => self.instantiate_given_with((g, GivenScope::Module(m)), target, span, true),
+                Via::Path(p) => self.instantiate_given_with((g, GivenScope::Path(p)), target, span, true),
                 Via::Scope => self.instantiate_given_with((g, GivenScope::Lexical), target, span, true),
             };
             let Some((instance, inst_ty)) = instance else {
@@ -810,6 +835,7 @@ impl<'a> Worker<'a> {
             GivenScope::Module(m) => Via::Module(m),
             GivenScope::Value(v) => Via::Value(v),
             GivenScope::Lexical => Via::Scope,
+            GivenScope::Path(p) => Via::Path(p),
         };
         let mut accept = |t: &mut Self, result: TypeId| t.is_sub(result, to);
         self.try_conversion((g, via), arg, from, span, &mut accept, true).map(|(te, _)| te)
@@ -900,6 +926,7 @@ impl<'a> Worker<'a> {
         let scope = match via {
             Via::Module(m) => GivenScope::Module(m),
             Via::Value(v) => GivenScope::Value(v),
+            Via::Path(p) => GivenScope::Path(p),
             Via::Scope => match self.conversion_receiver(te, g) {
                 Some(m) => GivenScope::Module(m),
                 None => GivenScope::Lexical,

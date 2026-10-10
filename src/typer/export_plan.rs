@@ -299,7 +299,7 @@ impl Worker<'_> {
         if k == c || self.syms.class(k).tparams.is_empty() {
             return sig;
         }
-        let own: Vec<TypeId> = self.syms.class(c).own_tparams().iter().map(|&p| self.types.param(p)).collect();
+        let own: Vec<TypeId> = self.syms.class(c).tparams.iter().map(|&p| self.types.param(p)).collect();
         let this = self.types.class(c, &own);
         let Some(base) = self.base_type(this, k) else { return sig };
         let mut subst = self.owner_subst(base);

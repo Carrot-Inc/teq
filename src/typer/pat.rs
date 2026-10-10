@@ -108,9 +108,14 @@ impl<'a> Worker<'a> {
             Expr::Ident(name) => match self.lookup_type(name) {
                 Some(TypeRef::Class(c)) => Some(c),
                 Some(TypeRef::Alias(a)) if self.loaded.is_some() => self.aliased_class(a),
+                // A class nested in a class that `c` inherits (`inherited_type_member`).
+                Some(TypeRef::Member(c, n)) if self.inherited_inner_class(c, n).is_some() => self.inherited_inner_class(c, n),
                 _ => match self.lookup_term(name) {
                     Some(TermRef::Class(c)) => Some(c),
-                    Some(TermRef::Global(s) | TermRef::ModuleMember(_, s) | TermRef::This(_, s)) => {
+                    // A case class's name imported from a value (`import b.I`): its companion,
+                    // or the constructor proxy of a class with none.
+                    Some(TermRef::ValueClass(_, c)) => Some(c),
+                    Some(TermRef::Global(s) | TermRef::ModuleMember(_, s) | TermRef::This(_, s) | TermRef::ValueMember(_, s)) => {
                         match self.syms.sym(s).kind {
                             SymKind::Object(o) => self.syms.class(o).companion,
                             // `val :: : ::.type` of a package object stands for the object.
@@ -294,7 +299,8 @@ impl<'a> Worker<'a> {
                     self.prog.add_test(TypeTest::Always)
                 } else {
                     self.check_sensical_test(t, sty, span);
-                    self.test_for(t, sty, span, unchecked)
+                    let test = self.test_for(t, sty, span, unchecked);
+                    self.outer_tested(test, t, span)
                 };
                 self.mark_leaf_test(test, reads);
                 if self.inline.checking > 0 {
@@ -372,7 +378,8 @@ impl<'a> Worker<'a> {
                 if self.is_seq_pattern_class(c) {
                     return self.seq_pattern(c, ast.pat_list(subs).to_vec(), sty, span);
                 }
-                self.class_pattern(c, ast.pat_list(subs).to_vec(), sty, span)
+                let written = self.pattern_prefix(path, c);
+                self.class_pattern_through(c, ast.pat_list(subs).to_vec(), sty, written, span)
             }
             Pat::Rest(inner) => {
                 self.error(span, "a sequence wildcard can only end a sequence pattern");
@@ -971,6 +978,10 @@ impl<'a> Worker<'a> {
         let first_var = self.tvars.len();
         let vars: Vec<TypeId> = (0..arity).map(|_| self.fresh_var()).collect();
         let class_ty = self.types.class(c, &vars);
+        let class_ty = match self.scrutinee_prefix(c, sty) {
+            Some(p) => self.nested_type(p, class_ty),
+            None => class_ty,
+        };
         let mark = self.snapshot();
         let conforms = self.is_sub(class_ty, sty);
         if !conforms {
@@ -1031,6 +1042,10 @@ impl<'a> Worker<'a> {
 
     /// Infers the type arguments of a pattern's class from the scrutinee type.
     pub(super) fn instantiate_pattern_class(&mut self, c: ClassId, sty: TypeId) -> (TypeId, Subst) {
+        self.instantiate_pattern_class_through(c, sty, None)
+    }
+
+    fn instantiate_pattern_class_through(&mut self, c: ClassId, sty: TypeId, written: Option<TypeId>) -> (TypeId, Subst) {
         self.complete_class(c);
         let tparams = self.syms.class(c).tparams.clone();
         // `(String, Boolean) | (Tw, Boolean)` matched by a tuple pattern, or `Option[Int] |
@@ -1057,7 +1072,36 @@ impl<'a> Worker<'a> {
             None => self.solve_pattern_class(c, tparams.len(), sty).0,
         };
         let subst: Subst = tparams.iter().copied().zip(args.iter().copied()).collect();
-        (self.types.class(c, &args), subst)
+        let class_ty = self.types.class(c, &args);
+        let class_ty = match written.or_else(|| self.scrutinee_prefix(c, sty)) {
+            Some(p) => self.nested_type(p, class_ty),
+            None => class_ty,
+        };
+        (class_ty, subst)
+    }
+
+    /// The prefix a pattern's inner class `c` is matched through: the scrutinee's (`h.Foo(x, y)`
+    /// or `Foo(x, y)` against an `h.Foo`, an `h.Base` of a case of `Base`), as dotty types the
+    /// extractor's parameter through the prefix the scrutinee gives. None where the scrutinee
+    /// names no instance of `c`'s owner.
+    fn scrutinee_prefix(&mut self, c: ClassId, sty: TypeId) -> Option<TypeId> {
+        if !self.is_inner_class(c) {
+            return None;
+        }
+        let sty = self.deref(sty);
+        let sty = if self.types.is_path(sty) { self.widen_path(sty) } else { sty };
+        let Owner::Class(o) = self.syms.class(c).owner else { return None };
+        let found = match self.base_type(sty, c).map(|b| self.types.get(b)) {
+            Some(Type::Nested(p, _)) => Some(p),
+            _ => match self.types.get(sty) {
+                Type::Nested(p, class) => {
+                    let k = self.class_of(class)?;
+                    (self.syms.class(k).owner == Owner::Class(o)).then_some(p)
+                }
+                _ => None,
+            },
+        };
+        found
     }
 
     /// A pattern that fixes what the scrutinee type leaves to a type parameter tells what that
@@ -1153,6 +1197,20 @@ impl<'a> Worker<'a> {
         self.rollback(mark);
         if related {
             return;
+        }
+        // Another prefix of the class is no incompatibility: the outer test tells them apart
+        // at run time (`case b.I(n)` on an `a.I`), as dotty only warns of the case.
+        let scrut = self.deref(sty);
+        let (bare_class, bare_scrut) = (self.types.strip_nested(class_ty), self.types.strip_nested(scrut));
+        if (bare_class, bare_scrut) != (class_ty, scrut) {
+            let related = self.is_sub(bare_class, bare_scrut) || {
+                self.rollback(mark);
+                self.is_sub(bare_scrut, bare_class)
+            };
+            self.rollback(mark);
+            if related {
+                return;
+            }
         }
         let scrut = self.deref(sty);
         let open_scrutinee = matches!(
@@ -1277,7 +1335,69 @@ impl<'a> Worker<'a> {
     }
 
     fn class_pattern(&mut self, c: ClassId, subs: Vec<PatId>, sty: TypeId, span: Span) -> TPatId {
-        let (class_ty, subst) = self.instantiate_pattern_class(c, sty);
+        self.class_pattern_through(c, subs, sty, None, span)
+    }
+
+    /// The path a constructor pattern names its class through, as dotty types the extractor
+    /// reference and takes the pattern's type from its `unapply`'s parameter (Applications.scala
+    /// 1926): the qualifier of `o.I(a, b)`, the value an import selects the name on (`import
+    /// b.I; case I(n)` is `b.I`), or the `this` of the enclosing class the bare name is a member
+    /// of (`case I(n)` inside `O` is `O.this.I`), whatever the scrutinee's prefix.
+    fn pattern_prefix(&mut self, path: ExprId, c: ClassId) -> Option<TypeId> {
+        if !self.is_inner_class(c) {
+            return None;
+        }
+        let Owner::Class(o) = self.syms.class(c).owner else { return None };
+        let p = match self.cur_ast().expr(path) {
+            Expr::Select(q, _) => {
+                let mark = self.attempt();
+                let (te, qty) = self.type_expr(q, None);
+                let p = self.path_of(te).or_else(|| self.types.is_path(qty).then_some(qty));
+                self.retract(mark);
+                p?
+            }
+            Expr::Ident(name) => match self.lookup_term(name) {
+                Some(TermRef::ValueMember(v, _) | TermRef::ValueClass(v, _)) => self.import_value_type(v),
+                _ => {
+                    let frames: Vec<ClassId> = self.env.frames.iter().rev().filter_map(|f| match f {
+                        super::Frame::Class(k) => Some(*k),
+                        _ => None,
+                    }).collect();
+                    let k = frames.into_iter().find(|&k| self.derives_from(k, o))?;
+                    self.types.mk(Type::This(k))
+                }
+            },
+            _ => return None,
+        };
+        self.base_type(p, o).map(|_| p)
+    }
+
+    /// A constructor pattern of the class `c` through the prefix `written` names it through, or
+    /// the scrutinee's: the fields are members of that occurrence (`o.I`'s `a: A` an `Int` for an
+    /// `o: O[Int]`, Applications.scala 60 and 145); where the scrutinee is not known to be one,
+    /// the class test takes the outer test (`addOuterTest`): `case b.I(n)` on an `a.I` fails.
+    fn class_pattern_through(&mut self, c: ClassId, subs: Vec<PatId>, sty: TypeId, written: Option<TypeId>, span: Span) -> TPatId {
+        let pat = self.class_pattern_now(c, subs, sty, written, span);
+        let TPat::Class(_, class_ty, ..) = self.prog.pats[pat.idx()] else { return pat };
+        if !self.is_inner_class(c) {
+            return pat;
+        }
+        let mark = self.snapshot();
+        let known = self.is_sub(sty, class_ty);
+        self.rollback(mark);
+        if known {
+            return pat;
+        }
+        let class_test = self.prog.add_test(TypeTest::Class(c));
+        let test = self.outer_tested(class_test, class_ty, span);
+        if test == class_test {
+            return pat;
+        }
+        self.prog.add_pat(TPat::Test(test, class_ty, pat))
+    }
+
+    fn class_pattern_now(&mut self, c: ClassId, subs: Vec<PatId>, sty: TypeId, written: Option<TypeId>, span: Span) -> TPatId {
+        let (class_ty, subst) = self.instantiate_pattern_class_through(c, sty, written);
         self.refine_gadt(class_ty, sty);
         let info = self.syms.class(c);
         if info.mods & mods::CASE == 0 {
@@ -1286,9 +1406,15 @@ impl<'a> Worker<'a> {
         }
         self.check_related(class_ty, sty, span);
         let mut fields: Vec<ParamSig> = self.syms.class(c).ctor.first().map(|cl| cl.params.clone()).unwrap_or_default();
-        // A class nested in a class names the enclosing instance's members in its fields
-        // (`FromExpr[A](expr: ExprPromises.this.Expr[A])`), seen where the match stands.
-        if self.class_in_class(c) && fields.iter().any(|f| self.types.has_paths(f.ty)) {
+        // A class nested in a class through a prefix has its fields as members of that
+        // occurrence: the enclosing classes' arguments and `this` its prefix's.
+        if let Type::Nested(p, _) = self.types.get(class_ty) {
+            for f in fields.iter_mut() {
+                f.ty = self.outer_seen_from(f.ty, p, c);
+            }
+        } else if self.class_in_class(c) && fields.iter().any(|f| self.types.has_paths(f.ty)) {
+            // Through the enclosing `this`, they name the enclosing instance's members
+            // (`FromExpr[A](expr: ExprPromises.this.Expr[A])`), seen where the match stands.
             for f in fields.iter_mut() {
                 f.ty = self.seen_from_enclosing_this(f.ty);
             }
@@ -2165,6 +2291,9 @@ impl<'a> Worker<'a> {
                 let (_, hi) = self.member_bounds(t);
                 return self.bound_test(t, hi, sty, span);
             }
+            // A class through its prefix is tested as the class; dotty's matcher adds a test of
+            // the instance's outer (`PatternMatcher.addOuterTest`), which teq does not make.
+            Type::Nested(_, class) => return self.test_for(class, sty, span, unchecked),
             // A singleton type's test is `isInstance` of the singleton (TypeTestsCasts.scala
             // 325-326), the identity test `case _: x.type` makes; a path the
             // typer cannot name here (a member of no enclosing class) is the error below.
@@ -2180,6 +2309,96 @@ impl<'a> Worker<'a> {
             }
         };
         self.prog.add_test(test)
+    }
+
+    /// `test`, the class test of a pattern of type `t`, with the test of the instance's outer
+    /// that dotty's `PatternMatcher.addOuterTest` adds (PatternMatcher.scala 840): for a class
+    /// nested in a class through a singleton prefix (`a.I`, `O.this.I` for the bare `I`), that
+    /// the instance's outer is the prefix's value; through a projection `P#I` whose class `I`'s
+    /// owner does not derive from, that the outer is a `P`. A class whose outer owner is static,
+    /// or a trait of abstract members alone (dotty's `PureInterface`, no outer accessor), has none.
+    pub(super) fn outer_tested(&mut self, test: TestId, t: TypeId, span: Span) -> TestId {
+        let t = self.deref_alias(t);
+        let (c, pre) = match self.types.get(t) {
+            Type::Nested(p, class) => match self.types.get(class) {
+                Type::Class(c, _) => (c, p),
+                _ => return test,
+            },
+            Type::Class(c, _) if self.is_inner_class(c) => match self.syms.class(c).owner {
+                Owner::Class(o) => (c, self.types.mk(Type::This(o))),
+                _ => return test,
+            },
+            _ => return test,
+        };
+        let Some(o) = self.enclosing_instance_class(c) else { return test };
+        if self.syms.class(c).kind == ClassKind::Trait && self.pure_interface(c) {
+            return test;
+        }
+        let inner = match self.types.get(pre) {
+            // `O.this` of a class the match is not inside names no instance here.
+            Type::This(k) if !self.env.frames.iter().any(|f| matches!(f, super::Frame::Class(x) if *x == k)) => return test,
+            Type::This(_) | Type::Term(_) | Type::Select(..) => match self.prefix_value(pre) {
+                Some(v) => self.prog.add_test(TypeTest::Value(v)),
+                None => return test,
+            },
+            Type::Class(k, _) if self.is_module_class(k) => match self.prefix_value(pre) {
+                Some(v) => self.prog.add_test(TypeTest::Value(v)),
+                None => return test,
+            },
+            Type::Class(k, _) if !self.derives_from(o, k) => self.test_for(pre, ANY, span, true),
+            _ => return test,
+        };
+        let accessor = self.outer_accessor(c);
+        let outer = self.prog.add_test(TypeTest::Outer(accessor, inner));
+        self.prog.add_test(TypeTest::And(test, outer))
+    }
+
+    /// Whether the scrutinee type `sty` names the enclosing instance an inner class's pattern
+    /// type `t` is tested against: `t`'s prefix (`o` of `o.A`, `O.this` of a bare `A` inside `O`)
+    /// is the one `sty` names its owner's instance through (`o.T`, a bare `T` inside `O`), so
+    /// that the children of `sty` are the class through that prefix (`TypeOps.childPrefix`).
+    pub(super) fn prefix_agrees(&mut self, t: TypeId, sty: TypeId) -> bool {
+        let t = self.deref_alias(t);
+        let (c, pre) = match self.types.get(t) {
+            Type::Nested(p, class) => match self.types.get(class) {
+                Type::Class(c, _) => (c, p),
+                _ => return false,
+            },
+            Type::Class(c, _) => match self.syms.class(c).owner {
+                Owner::Class(o) => (c, self.types.mk(Type::This(o))),
+                _ => return false,
+            },
+            _ => return false,
+        };
+        let Owner::Class(o) = self.syms.class(c).owner else { return false };
+        let sty = self.deref(sty);
+        let sty = if self.types.is_path(sty) { self.widen_path(sty) } else { sty };
+        let stated = match self.scrutinee_prefix(c, sty) {
+            Some(p) => p,
+            None => match self.types.get(sty) {
+                Type::Class(k, _) if self.syms.class(k).owner == Owner::Class(o) => self.types.mk(Type::This(o)),
+                _ => return false,
+            },
+        };
+        stated == pre
+    }
+
+    /// dotty's `PureInterface` trait (`TreeInfo.defKind`, `TreeUnpickler.indexStats` for a
+    /// loaded one): its members are deferred methods and values and types alone, no class and
+    /// no default argument.
+    pub(super) fn pure_interface(&mut self, c: ClassId) -> bool {
+        if !self.syms.class(c).nested.is_empty() {
+            return false;
+        }
+        let members = self.syms.class(c).member_order.clone();
+        members.into_iter().all(|m| {
+            let info = self.syms.sym(m);
+            let kind = info.kind;
+            matches!(kind, SymKind::Def | SymKind::Val | SymKind::Var)
+                && info.mods & mods::LAZY == 0
+                && self.is_abstract_member(m)
+                && (kind != SymKind::Def || self.sig_of(m).clauses.iter().all(|cl| cl.params.iter().all(|p| !p.has_default)))
+        })
     }
 
     /// Whether the scrutinee type fixes the type arguments a test asks for: `Some[Int]` on an

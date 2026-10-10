@@ -641,6 +641,7 @@ impl<'a> Worker<'a> {
                         _ => self.is_same(x, y),
                     })
             }
+            (_, Type::Nested(p2, class2)) if !matches!(ta, Type::AppParam(..) | Type::AppVar(..)) => self.is_sub_nested(a, b, p2, class2),
             (_, Type::Class(c2, args2)) if !matches!(ta, Type::AppParam(..) | Type::AppVar(..)) => {
                 // A parameter bounded by an intersection conforms through either side, which one
                 // base type of the bound cannot say: `C <: LinearSeq[A] & LinearSeqOps[A, CC, C]`
@@ -654,7 +655,19 @@ impl<'a> Worker<'a> {
                 let Some(base) = self.base_type(a, c2) else {
                     return matches!(ta, Type::Param(p) if self.is_sub_by_gadt(p, b, -1));
                 };
-                let Type::Class(_, args1) = self.types.get(base) else { return false };
+                let args1 = match self.types.get(base) {
+                    Type::Class(_, args1) => args1,
+                    // `p.C` against the bare `C`, its type through its owner's `this`.
+                    Type::Nested(p1, class1) => {
+                        let (Type::Class(_, args1), Owner::Class(o)) = (self.types.get(class1), self.syms.class(c2).owner) else { return false };
+                        let this = self.types.mk(Type::This(o));
+                        if !self.is_sub_prefix(p1, this) {
+                            return false;
+                        }
+                        args1
+                    }
+                    _ => return false,
+                };
                 let xs: Vec<TypeId> = self.types.items(args1).to_vec();
                 let ys: Vec<TypeId> = self.types.items(args2).to_vec();
                 let variances: Vec<i8> = self
@@ -733,6 +746,46 @@ impl<'a> Worker<'a> {
             (Type::Ctor(c1), Type::Ctor(c2)) => c1 == c2 || self.ctor_extends(c1, c2),
             _ => false,
         }
+    }
+
+    /// `a <: p.C[Ts]`, dotty's `compareNamed` of a class reference: `a`'s base type of `C` is
+    /// the class through a prefix that conforms (`is_sub_prefix`), with conforming arguments; a
+    /// bare `C` is the class through its owner's `this`.
+    fn is_sub_nested(&mut self, a: TypeId, b: TypeId, p2: TypeId, class2: TypeId) -> bool {
+        let Type::Class(c2, _) = self.types.get(class2) else { return false };
+        let Some(base) = self.base_type(a, c2) else {
+            return matches!(self.types.get(a), Type::Param(p) if self.is_sub_by_gadt(p, b, -1));
+        };
+        let (p1, class1) = match self.types.get(base) {
+            Type::Nested(p1, class1) => (p1, class1),
+            Type::Class(..) => {
+                let Owner::Class(o) = self.syms.class(c2).owner else { return false };
+                (self.types.mk(Type::This(o)), base)
+            }
+            _ => return false,
+        };
+        self.is_sub_prefix(p1, p2) && self.is_sub(class1, class2)
+    }
+
+    /// Whether the prefix `p1` of a class reference conforms to `p2`, dotty's `isSubPrefix`: the
+    /// `this` of two classes whose self types derive from each other is one prefix, otherwise
+    /// the prefixes conform as types (`a.C <: O#C` for an `a: O`, `b.C` is `a.C` for a `b: a.type`).
+    fn is_sub_prefix(&mut self, p1: TypeId, p2: TypeId) -> bool {
+        if p1 == p2 {
+            return true;
+        }
+        if let (Type::This(c1), Type::This(c2)) = (self.types.get(p1), self.types.get(p2)) {
+            let derives = |w: &mut Self, x: ClassId, y: ClassId| w.syms.class(x).base_types.iter().any(|&(b, _)| b == y) || w.self_type_derives(x, y);
+            if derives(self, c1, c2) && derives(self, c2, c1) {
+                return true;
+            }
+        }
+        let mark = self.snapshot();
+        let holds = self.is_sub(p1, p2);
+        if !holds {
+            self.rollback(mark);
+        }
+        holds
     }
 
     /// Conformance where a match type, an alias application, a type-level operation or a tuple
@@ -885,6 +938,25 @@ impl<'a> Worker<'a> {
         }
     }
 
+    /// dotty's `compareThis` of an object's `this`: the path to an object nested in a class
+    /// (`Outer.this.R`, `p.R`) and the object's own `this` (`R.this`) are one value where the
+    /// path's prefix conforms to the enclosing class's `this`, in both directions.
+    fn object_this_holds(&mut self, ta: Type, tb: Type) -> bool {
+        let (path, r, flipped) = match (ta, tb) {
+            (Type::Select(p, v), Type::This(r)) if self.syms.class(r).inner_object == Some(v) => (p, r, false),
+            (Type::This(r), Type::Select(p, v)) if self.syms.class(r).inner_object == Some(v) => (p, r, true),
+            _ => return false,
+        };
+        let Owner::Class(o) = self.syms.class(r).owner else { return false };
+        let this = self.types.mk(Type::This(o));
+        let mark = self.snapshot();
+        let holds = if flipped { self.is_sub(this, path) } else { self.is_sub(path, this) };
+        if !holds {
+            self.rollback(mark);
+        }
+        holds
+    }
+
     /// The singleton type a stable val is declared with, if any.
     fn declared_singleton(&self, v: SymId) -> Option<TypeId> {
         let info = self.syms.sym(v);
@@ -943,6 +1015,18 @@ impl<'a> Worker<'a> {
                         // (`val alias: a.type = a`, then `alias.R.type` for `a.R`).
                         if let (Some(x), Some(y)) = (self.stable_path(a, 0), self.stable_path(b, 0)) {
                             if x == y {
+                                return true;
+                            }
+                        }
+                        if self.object_this_holds(ta, tb) {
+                            return true;
+                        }
+                        // One member through prefixes that conform, dotty's `compareNamed` of two
+                        // `TermRef`s: of one symbol, or of one name where neither is private (an
+                        // abstract val and the object implementing it, `Exprs.this.ExprPromise`).
+                        if let (Type::Select(p1, v1), Type::Select(p2, v2)) = (ta, tb) {
+                            let same = v1 == v2 || (self.syms.sym(v1).name == self.syms.sym(v2).name && !self.is_private(v1) && !self.is_private(v2));
+                            if same && self.is_sub_prefix(p1, p2) {
                                 return true;
                             }
                         }
@@ -1430,6 +1514,16 @@ impl<'a> Worker<'a> {
                 let class = self.widen_lit(t);
                 self.base_type(class, target)
             }
+            // `p.C`'s base type: the class's, as seen from the prefix (dotty's `baseType` of a
+            // `TypeRef`, its parents seen from its prefix).
+            Type::Nested(p, class) => {
+                let Type::Class(c, _) = self.types.get(class) else { return None };
+                if c == target {
+                    return Some(t);
+                }
+                let bt = self.base_type(class, target)?;
+                Some(self.outer_seen_from(bt, p, c))
+            }
             Type::This(_) | Type::Term(_) | Type::Select(..) | Type::Member(..) | Type::AppMember(..) | Type::Decl(_) | Type::Refined(..) | Type::Match(..) | Type::Alias(..) => {
                 let under = self.dependent_underlying(t)?;
                 self.base_type(under, target)
@@ -1457,6 +1551,9 @@ impl<'a> Worker<'a> {
                 let under = self.reduce_head(t).unwrap_or_else(|| self.match_bound(t));
                 (under != t && under != ANY).then_some(under)
             }
+            // The class itself, its enclosing classes not seen from the prefix: where that
+            // matters, `base_type` and `find_member` see it (`outer_seen_from`).
+            Type::Nested(_, class) => Some(class),
             _ => None,
         }
     }
@@ -1885,6 +1982,16 @@ impl<'a> Worker<'a> {
         // `c` is a base of `a` already; whether `b` shares it is the question.
         let y = self.base_type(b, c)?;
         let x = self.base_type(a, c)?;
+        // An inner class's occurrences join through the join of their prefixes (dotty's
+        // `mergeRefinedOrApplied`, `pre1 | pre2`), the bare class's its owner's `this`.
+        let (px, x) = match self.types.get(x) {
+            Type::Nested(p, class) => (Some(p), class),
+            _ => (None, x),
+        };
+        let (py, y) = match self.types.get(y) {
+            Type::Nested(p, class) => (Some(p), class),
+            _ => (None, y),
+        };
         let (Type::Class(_, xa), Type::Class(_, ya)) = (self.types.get(x), self.types.get(y)) else { return None };
         let xs: Vec<TypeId> = self.types.items(xa).to_vec();
         let ys: Vec<TypeId> = self.types.items(ya).to_vec();
@@ -1905,7 +2012,15 @@ impl<'a> Worker<'a> {
                 _ => return None,
             });
         }
-        Some(self.types.class(c, &merged))
+        let class = self.types.class(c, &merged);
+        if px.is_none() && py.is_none() {
+            return Some(class);
+        }
+        let Owner::Class(o) = self.syms.class(c).owner else { return Some(class) };
+        let this = self.types.mk(Type::This(o));
+        let (px, py) = (px.unwrap_or(this), py.unwrap_or(this));
+        let prefix = if px == py { px } else { self.types.union(px, py) };
+        Some(self.nested_type(prefix, class))
     }
 
     /// `? >: glb <: lub` of two invariant arguments: the narrower of the lower bounds where one
@@ -2039,6 +2154,7 @@ impl<'a> Worker<'a> {
                 let class = self.widen_lit(t);
                 self.class_of_within(class, depth)
             }
+            Type::Nested(_, class) => self.class_of_within(class, depth),
             Type::This(_) | Type::Term(_) | Type::Select(..) | Type::Member(..) | Type::AppMember(..) | Type::Decl(_) | Type::Refined(..) => {
                 let under = self.dependent_underlying(t)?;
                 self.class_of_within(under, depth)
@@ -2687,6 +2803,17 @@ impl<'a> Worker<'a> {
                 let class = self.widen_lit(t);
                 self.find_member_from(class, name, private_until)
             }
+            // The class's member, its owner's type the base type of `p.C` (`base_type`), so
+            // that the enclosing classes are seen from the prefix.
+            Type::Nested(p, class) => {
+                let (sym, owner_ty) = self.find_member_from(class, name, private_until)?;
+                let Type::Class(c, _) = self.types.get(class) else { return Some((sym, owner_ty)) };
+                let owner_ty = match self.types.get(owner_ty) {
+                    Type::Class(k, _) if k == c => self.nested_type(p, owner_ty),
+                    _ => self.outer_seen_from(owner_ty, p, c),
+                };
+                Some((sym, owner_ty))
+            }
             Type::This(_) | Type::Term(_) | Type::Select(..) | Type::Member(..) | Type::AppMember(..) | Type::Decl(_) | Type::Refined(..) | Type::Alias(..) | Type::Match(..) => {
                 let under = self.dependent_underlying(t)?;
                 self.find_member_from(under, name, private_until)
@@ -2796,9 +2923,17 @@ impl<'a> Worker<'a> {
         set
     }
 
-    /// Substitution mapping the owner class's type parameters to the arguments of `owner_ty`.
+    /// Substitution mapping the owner class's type parameters to the arguments of `owner_ty`;
+    /// of `p.C`, the enclosing classes' too, to the arguments of the prefix's base types.
     pub fn owner_subst(&mut self, owner_ty: TypeId) -> Subst {
         match self.types.get(owner_ty) {
+            Type::Nested(p, class) => {
+                let mut subst = self.owner_subst(class);
+                if let Type::Class(c, _) = self.types.get(class) {
+                    subst.extend(self.outer_subst(p, c));
+                }
+                subst
+            }
             Type::Class(c, args) => {
                 self.settle_class(c);
                 let tparams = self.syms.class(c).tparams.clone();

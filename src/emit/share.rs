@@ -995,6 +995,11 @@ impl<'a> Enc<'a> {
                 self.tok(105);
                 self.tok(n as u64);
             }
+            TypeTest::Outer(accessor, inner) => {
+                self.tok(107);
+                self.sym(accessor);
+                self.test(inner);
+            }
             other => {
                 self.tok(106);
                 self.tok(simple_test_tag(other));
@@ -1816,6 +1821,7 @@ impl<'a> Enc<'a> {
                 self.scan_test(a, out);
                 self.scan_test(b, out);
             }
+            TypeTest::Outer(_, inner) => self.scan_test(inner, out),
             _ => {}
         }
     }

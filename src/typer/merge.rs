@@ -765,6 +765,7 @@ impl Remap {
             Type::Term(s) => types.mk(Type::Term(self.sym(s))),
             Type::Select(q, s) => types.mk(Type::Select(part(p, q), self.sym(s))),
             Type::Member(q, name) => types.mk(Type::Member(part(p, q), name)),
+            Type::Nested(q, c) => types.mk(Type::Nested(part(p, q), part(p, c))),
             Type::Param(x) => types.mk(Type::Param(self.tparam(x))),
             Type::AppParam(x, args) => {
                 let l = list(p, args);

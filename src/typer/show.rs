@@ -239,6 +239,25 @@ impl<'a> Worker<'a> {
                 out.push('.');
                 out.push_str(self.interner.get(n));
             }
+            // `o.Item`, `Obj.Item`, `O#Item`, as dotty prints a class reference by its prefix.
+            Type::Nested(p, c) => {
+                match self.types.get(p) {
+                    Type::Term(_) | Type::Select(..) | Type::This(_) => {
+                        self.show_path(p, out);
+                        out.push('.');
+                    }
+                    Type::Class(k, args) if self.syms.class(k).kind == ClassKind::Object => {
+                        out.push_str(self.interner.get(self.syms.class(k).name));
+                        self.show_args(args, out);
+                        out.push('.');
+                    }
+                    _ => {
+                        self.show_into(p, out, true);
+                        out.push('#');
+                    }
+                }
+                self.show_into(c, out, true);
+            }
             Type::AppMember(m, args) => {
                 self.show_into(m, out, false);
                 self.show_args(args, out);

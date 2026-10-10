@@ -401,6 +401,11 @@ pub enum TypeTest {
     Value(TExprId),
     Or(TestId, TestId),
     And(TestId, TestId),
+    /// The test of the scrutinee's enclosing instance, read through the outer accessor of its
+    /// class (the second test applies to what the accessor returns), after a test that the
+    /// scrutinee is of that class: dotty's `PatternMatcher.addOuterTest`, `x.$outer eq p` for a
+    /// class through the path `p`, the outer's class test for a projection `P#C`.
+    Outer(SymId, TestId),
 }
 
 impl TypeTest {
@@ -1567,6 +1572,7 @@ impl<'a> Descendants<'a> {
                 match prog.tests[t.idx()] {
                     TypeTest::Value(e) => self.exprs.push(e),
                     TypeTest::Or(a, b) | TypeTest::And(a, b) => self.tests.extend([a, b]),
+                    TypeTest::Outer(_, t) => self.tests.push(t),
                     _ => {}
                 }
             } else {

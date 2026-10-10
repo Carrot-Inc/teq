@@ -647,6 +647,10 @@ impl<'a> Worker<'a> {
         if cf.access & crate::classfile::ACC_ANNOTATION != 0 {
             m |= mods::JAVA_ANNOTATION;
         }
+        // A member class records whether it is static in its own `InnerClasses` entry.
+        if cf.inner_classes.iter().any(|i| i.inner == cf.name && i.outer.is_some() && i.access & ACC_STATIC != 0) {
+            m |= mods::JAVA_STATIC;
+        }
         let c = match placeholder {
             Some(c) => {
                 let mut info = self.syms.class_mut(c);
@@ -658,6 +662,7 @@ impl<'a> Worker<'a> {
             }
             None => self.syms.new_class(name, kind, m, owner, file, None, Span::default()),
         };
+        self.mark_inner_class(c);
         let tparam_names: Vec<String> = match &cf.signature {
             Some(s) => sig::parse_class(s).map(|cs| cs.tparams.into_iter().map(|p| p.name).collect()).unwrap_or_default(),
             None => Vec::new(),

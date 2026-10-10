@@ -605,6 +605,7 @@ inline_this_receiver
 inline_tuples
 inline_val_expansion_check
 inline_val_pure_path
+inner_class_creators
 inserted_apply_value
 int_remainder_negative_zero
 int_sign
@@ -830,11 +831,17 @@ nested_accessor_temps
 nested_case_object_identity
 nested_class_inherited
 nested_class_prefix
+nested_class_prefix_givens
+nested_class_prefix_inherited
+nested_class_prefix_last
+nested_class_prefix_review
+nested_class_prefix_types
 nested_classes
 nested_object_path_patterns
 nested_object_singleton
 nested_objects
 nested_trait_path_outer
+nested_trait_prefix_parents
 new_array
 new_leading_using_clause
 new_parameterised_alias
@@ -982,6 +989,7 @@ refinement_alias_meets_bounds
 refinement_member_variance
 reflect_annotation_identity
 reflect_instantiation
+reflect_nested_secondary
 reflect_root
 reflect_trait_assignable
 reflective_selectable

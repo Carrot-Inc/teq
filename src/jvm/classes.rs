@@ -1221,13 +1221,14 @@ impl<'a> Gen<'a> {
                 }
                 types
             }
-            // A parent call that goes to a secondary constructor of the superclass.
+            // A parent call that goes to a secondary constructor of the superclass, the
+            // enclosing instance of an inner superclass first as a secondary `new` passes it
+            // (`ExplicitOuter.OuterOps.args` for `New`, `Super` and `This` alike).
             Some(e) if tc.parent_via.is_some() && !is_anon => {
                 let via = tc.parent_via.unwrap();
-                let types = self.param_types(via);
                 let args = tc.parent_args.unwrap_or(crate::ast::ListRef::EMPTY);
                 self.m.before_super = true;
-                self.ctor_arguments_of(e, Some(via), args, &types);
+                let types = self.via_arguments(e, via, args);
                 self.m.before_super = false;
                 types
             }
@@ -1324,16 +1325,12 @@ impl<'a> Gen<'a> {
         self.load(0, &this);
         self.m.before_super = true;
         let types = match prog.expr(call) {
-            TExpr::New(c, args) => {
-                let types = self.ctor_param_types(c);
-                self.ctor_arguments(c, args, &types);
-                types
-            }
+            // The primary constructor, its captures (the enclosing instance of a class nested
+            // in a class, the secondary's own outer parameter) first.
+            TExpr::New(c, args) => self.new_arguments(c, args),
             TExpr::NewVia(s, args) => {
                 let Owner::Class(c) = cx.input.syms.sym(s).owner else { return };
-                let types = self.param_types(s);
-                self.ctor_arguments_of(c, Some(s), args, &types);
-                types
+                self.via_arguments(c, s, args)
             }
             _ => return,
         };

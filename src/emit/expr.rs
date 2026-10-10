@@ -1145,6 +1145,15 @@ impl<'a> Emitter<'a> {
                 self.emit_test(b, x);
                 self.out.push_str(close);
             }
+            // The test of the enclosing instance the outer accessor reads.
+            TypeTest::Outer(accessor, inner) => {
+                let n = self.sym_name(accessor);
+                let simple = x.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'$' || b == b'_' || b == b'.');
+                let outer = if simple { format!("{}.{}()", x, n) } else { format!("({}).{}()", x, n) };
+                self.out.push_str(open);
+                self.emit_test(inner, &outer);
+                self.out.push_str(close);
+            }
             _ => unreachable!("a test written from its text"),
         }
     }
@@ -2318,7 +2327,7 @@ pub(super) fn test_text(t: TypeTest) -> Option<(&'static str, bool)> {
         TypeTest::Null => ("$0 === null", true),
         TypeTest::AnyRef => ("$isRef($0)", false),
         TypeTest::AnyVal => ("($0 !== null)", false),
-        TypeTest::Class(_) | TypeTest::Value(_) | TypeTest::Or(..) | TypeTest::And(..) => return None,
+        TypeTest::Class(_) | TypeTest::Value(_) | TypeTest::Or(..) | TypeTest::And(..) | TypeTest::Outer(..) => return None,
     })
 }
 

@@ -885,7 +885,7 @@ impl<'a> Worker<'a> {
     /// alternatives, a class's constructors or its companion's `apply`, a value's `apply`.
     fn term_signatures(&mut self, r: TermRef, name: crate::intern::Name) -> Vec<Shown> {
         let (s, owner_ty) = match r {
-            TermRef::Class(c) => return self.class_apply_signatures(c),
+            TermRef::Class(c) | TermRef::ValueClass(_, c) | TermRef::ModuleClass(_, c) => return self.class_apply_signatures(c),
             TermRef::Package(_) => return Vec::new(),
             TermRef::SelfAlias(c) => {
                 let ty = self.syms.this_type(c);
@@ -1012,7 +1012,7 @@ impl<'a> Worker<'a> {
         }
         let mark = self.ext_modules.len();
         let in_scope = self.muted(|w| w.implicit_scope_extensions(t, n));
-        let mut sites: Vec<Option<(SymId, ClassId)>> = self.ext_modules[mark..].iter().copied().map(Some).collect();
+        let mut sites: Vec<Option<(SymId, super::implicits::GivenScope)>> = self.ext_modules[mark..].iter().copied().map(Some).collect();
         self.ext_modules.truncate(mark);
         for e in in_scope {
             let module = sites.iter_mut().find(|s| s.is_some_and(|(x, _)| x == e)).and_then(Option::take).map(|(_, m)| m);
@@ -1021,7 +1021,7 @@ impl<'a> Worker<'a> {
                 _ => None,
             };
             let (subst, prefix) = match (module, trait_owner) {
-                (Some(m), Some(c)) => (self.trait_member_subst(super::exports::TraitMemberSite::Module(m), c), self.inherited_extension_prefix(Some(m))),
+                (Some(scope), Some(c)) => self.scope_extension_site(scope, c),
                 _ => (Vec::new(), None),
             };
             found.push((e, subst, prefix));

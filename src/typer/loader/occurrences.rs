@@ -1109,7 +1109,7 @@ impl<'a> Worker<'a> {
                 }
             }
             Scope::Class(c) => {
-                if let Some(t) = self.member_type_of(c, name).and_then(type_ref_target) {
+                if let Some(t) = self.member_type_of(c, name).and_then(|r| self.member_type_target(r)) {
                     return Some(t);
                 }
                 self.class_member_named(c, name, None, None).map(|t| self.shared(t))
@@ -1310,9 +1310,18 @@ impl<'a> Worker<'a> {
         }
     }
 
+    /// What a class's type member names: an inherited class nested in a class (`TypeRef::Member`
+    /// of `inherited_type_member`) that class, the rest as `type_ref_target` has it.
+    fn member_type_target(&self, r: super::super::resolve::TypeRef) -> Option<DocTarget> {
+        match r {
+            super::super::resolve::TypeRef::Member(c, n) => self.inherited_inner_class(c, n).map(|k| DocTarget::Shared(Target::Class(k))),
+            r => type_ref_target(r),
+        }
+    }
+
     /// The type member `name` of the class `c`: a nested class, an alias, an abstract member.
     fn type_member_target(&mut self, c: ClassId, name: Name) -> Option<DocTarget> {
-        if let Some(t) = self.member_type_of(c, name).and_then(type_ref_target) {
+        if let Some(t) = self.member_type_of(c, name).and_then(|r| self.member_type_target(r)) {
             return Some(t);
         }
         self.complete_class(c);

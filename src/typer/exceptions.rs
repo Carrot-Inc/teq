@@ -216,7 +216,7 @@ impl<'a> Worker<'a> {
                 lower != NOTHING && lower != t && self.null_conforms(lower)
             }
             Type::Refined(parent, _) => self.null_conforms(parent),
-            Type::Match(..) | Type::Alias(..) => match self.dependent_underlying(t) {
+            Type::Match(..) | Type::Alias(..) | Type::Nested(..) => match self.dependent_underlying(t) {
                 Some(u) => self.null_conforms(u),
                 None => false,
             },
@@ -241,7 +241,7 @@ impl<'a> Worker<'a> {
                 let class = self.widen_lit(t);
                 self.is_reference(class)
             }
-            Type::This(_) | Type::Term(_) | Type::Select(..) | Type::Member(..) | Type::AppMember(..) | Type::Decl(_) | Type::Refined(..) | Type::Match(..) | Type::Alias(..) => {
+            Type::This(_) | Type::Term(_) | Type::Select(..) | Type::Member(..) | Type::AppMember(..) | Type::Decl(_) | Type::Refined(..) | Type::Match(..) | Type::Alias(..) | Type::Nested(..) => {
                 match self.dependent_underlying(t) {
                     Some(u) => self.is_reference(u),
                     None => false,
@@ -283,7 +283,7 @@ impl<'a> Worker<'a> {
                 let class = self.widen_lit(t);
                 self.is_value(class)
             }
-            Type::This(_) | Type::Term(_) | Type::Select(..) | Type::Member(..) | Type::AppMember(..) | Type::Decl(_) | Type::Refined(..) | Type::Match(..) | Type::Alias(..) => {
+            Type::This(_) | Type::Term(_) | Type::Select(..) | Type::Member(..) | Type::AppMember(..) | Type::Decl(_) | Type::Refined(..) | Type::Match(..) | Type::Alias(..) | Type::Nested(..) => {
                 match self.dependent_underlying(t) {
                     Some(u) => self.is_value(u),
                     None => false,
@@ -347,6 +347,52 @@ impl<'a> Worker<'a> {
         }
     }
 
+    /// Whether the alternatives of an overloaded extractor all take the scrutinee only through
+    /// a type test and none of their inputs, seen from the receiver, is more specific than the
+    /// rest: dotty's overload resolution of `unapply` against the selector, every alternative
+    /// applicable through the test it adds, reports the ambiguity (`neg/i2378`).
+    fn ambiguous_unapply(&mut self, set: SymId, owner_ty: TypeId, recv: TExprId, rty: TypeId, sty: TypeId) -> bool {
+        let alts: Vec<SymId> = self.syms.alternatives(set).map(|a| a.to_vec()).unwrap_or_default();
+        let owner_subst = self.owner_subst(owner_ty);
+        let prefix = self.path_of(recv).unwrap_or(rty);
+        let c = self.class_of(rty);
+        let mut inputs = Vec::new();
+        for s in alts {
+            let usig = self.sig_of(s);
+            if !usig.tparams.is_empty() {
+                return false;
+            }
+            let Some(pty) = usig.clauses.iter().find(|cl| !cl.is_using && !cl.is_implicit).and_then(|cl| (cl.params.len() == 1).then(|| cl.params[0].ty)) else { continue };
+            let pty = self.types.subst(pty, &owner_subst);
+            let pty = match c {
+                Some(c) if self.types.has_paths(pty) => self.as_seen_from(pty, prefix, c),
+                _ => pty,
+            };
+            if self.types.contains_error(pty) {
+                return false;
+            }
+            inputs.push(pty);
+        }
+        if inputs.len() < 2 {
+            return false;
+        }
+        let mark = self.snapshot();
+        let any_conforms = inputs.iter().any(|&t| self.is_sub(sty, t));
+        self.rollback(mark);
+        if any_conforms {
+            return false;
+        }
+        let most_specific = (0..inputs.len()).any(|i| {
+            (0..inputs.len()).all(|j| {
+                let mark = self.snapshot();
+                let holds = i == j || self.is_sub(inputs[i], inputs[j]);
+                self.rollback(mark);
+                holds
+            })
+        });
+        !most_specific
+    }
+
     fn extractor_pattern_on(&mut self, recv: TExprId, rty: TypeId, subs: &[crate::ast::PatId], sty: TypeId, span: Span) -> Option<TPatId> {
         let (name, unapply, owner_ty) = match self.find_member(rty, names::UNAPPLY) {
             Some((s, o)) => (names::UNAPPLY, s, o),
@@ -356,6 +402,22 @@ impl<'a> Worker<'a> {
             }
         };
         let overloaded = self.syms.alternatives(unapply).is_some_and(|alts| alts.len() > 1);
+        if overloaded && self.ambiguous_unapply(unapply, owner_ty, recv, rty, sty) {
+            let msg = format!(
+                "Ambiguous overload. The overloaded alternatives of method {} in {} both match a scrutinee of type {}",
+                self.name_str(name),
+                self.class_description(match self.syms.sym(unapply).owner {
+                    Owner::Class(c) => c,
+                    _ => return None,
+                }),
+                self.show(sty)
+            );
+            self.error(span, msg);
+            for &s in subs {
+                self.type_pattern(s, ERROR);
+            }
+            return Some(self.prog.add_pat(TPat::Wildcard));
+        }
         let unapply = self.syms.alternatives(unapply).and_then(|alts| alts.first().copied()).unwrap_or(unapply);
         // A scrutinee wider than what `unapply` takes is tested against that type first.
         // The parameter is seen from the receiver's type (`m: Matcher[A, B]`).
@@ -370,6 +432,14 @@ impl<'a> Worker<'a> {
         let taken = match param {
             Some(pty) if !self.types.has_vars(pty) && !self.types.contains_error(pty) => {
                 let pty = self.types.subst(pty, &owner_subst);
+                // Seen from the receiver as its call sees it (`Path` of `i.Path.AtField` is `i.Path`).
+                let pty = match self.class_of(rty) {
+                    Some(c) if self.types.has_paths(pty) => {
+                        let prefix = self.path_of(recv).unwrap_or(rty);
+                        self.as_seen_from(pty, prefix, c)
+                    }
+                    _ => pty,
+                };
                 if tparams.is_empty() { pty } else { self.generic_extractor_input(pty, &tparams, sty, &owner_subst) }
             }
             _ => sty,

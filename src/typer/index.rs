@@ -2500,7 +2500,7 @@ impl<'a> Worker<'a> {
                     _ => "class",
                 };
                 let mut out = format!("{} {}", keyword, self.class_path(c));
-                let tparams: Vec<String> = info.own_tparams().iter().map(|&p| self.name_str(self.syms.tparam(p).name)).collect();
+                let tparams: Vec<String> = info.tparams.iter().map(|&p| self.name_str(self.syms.tparam(p).name)).collect();
                 if !tparams.is_empty() {
                     out.push_str(&format!("[{}]", tparams.join(", ")));
                 }

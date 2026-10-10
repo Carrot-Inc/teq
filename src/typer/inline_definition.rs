@@ -1479,6 +1479,13 @@ impl<'a> Worker<'a> {
                 };
                 self.prog.add_test(combined)
             }
+            TypeTest::Outer(accessor, inner) => {
+                let x = self.specialise_test(inner, subst);
+                if x == inner {
+                    return test;
+                }
+                self.prog.add_test(TypeTest::Outer(accessor, x))
+            }
             _ => test,
         }
     }
@@ -1960,8 +1967,10 @@ impl<'a> Worker<'a> {
             if self.prog.stored_tests.insert(t, ()).is_some() {
                 continue;
             }
-            if let TypeTest::Or(a, b) | TypeTest::And(a, b) = self.prog.tests[t.idx()] {
-                tests.extend([a, b]);
+            match self.prog.tests[t.idx()] {
+                TypeTest::Or(a, b) | TypeTest::And(a, b) => tests.extend([a, b]),
+                TypeTest::Outer(_, inner) => tests.push(inner),
+                _ => {}
             }
         }
     }

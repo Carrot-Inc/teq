@@ -773,6 +773,7 @@ impl<'a> Worker<'a> {
                 };
                 let cid =
                     self.syms.new_class(def.name, kind, def.mods, owner, file, Some(id), def.span);
+                self.mark_inner_class(cid);
                 self.def_classes.insert(file.0 as usize, id, cid);
                 self.syms.class_mut(cid).has_exports = !cls.exports.is_empty();
                 self.record_self_alias(cid);
@@ -804,6 +805,7 @@ impl<'a> Worker<'a> {
         let def = self.ast(file).def(id);
         let DefKind::Class(cls) = &def.kind else { return };
         let cid = self.syms.new_class(def.name, ClassKind::Class, def.mods | mods::FINAL, owner, file, Some(id), def.span);
+        self.mark_inner_class(cid);
         self.def_classes.insert(file.0 as usize, id, cid);
         self.syms.class_mut(cid).has_exports = !cls.exports.is_empty();
         self.record_self_alias(cid);

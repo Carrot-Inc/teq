@@ -172,6 +172,8 @@ struct Spaces<'t, 'a> {
     /// dotc's `isSubspace` of a case against a single type pattern is a subtype test alone
     /// (`computeIsSubspace`, `rhsDecompositionAllowed`).
     decompose_abstract: bool,
+    /// The scrutinee as the match states it, with its prefixes, and as the spaces see it.
+    prefixed: (TypeId, TypeId),
 }
 
 /// A match's check of its cases (`Worker::check_match`), kept until every body is typed: what
@@ -249,6 +251,7 @@ impl<'a> Worker<'a> {
         if self.inline.lenient_match > 0 {
             return;
         }
+        let stated = sty;
         let sty = self.match_type(sty);
         let scrut = self.deref(sty);
         if matches!(self.types.get(scrut), Type::Error | Type::Nothing) {
@@ -257,7 +260,7 @@ impl<'a> Worker<'a> {
         self.demand_match_hierarchy(scrut, cases);
         let mut sc = std::mem::take(&mut self.spaces);
         sc.clear();
-        let mut s = Spaces { t: self, sc, budget: DECOMPOSITIONS, inexact: false, decompose_abstract: false };
+        let mut s = Spaces { t: self, sc, budget: DECOMPOSITIONS, inexact: false, decompose_abstract: false, prefixed: (stated, scrut) };
         s.check(scrut, cases, clauses, partial, span);
         let Spaces { sc, .. } = s;
         self.spaces = sc;
@@ -528,10 +531,11 @@ impl<'t, 'a> Spaces<'t, 'a> {
     /// describe.
     fn plain(&mut self, p: TPatId) -> Option<Plain> {
         let wild = |t: &Worker, p: TPatId| matches!(t.prog.pats[p.idx()], TPat::Wildcard | TPat::Bind(_, None));
-        match self.t.prog.pats[p.idx()] {
+        let pat = self.t.prog.pats[p.idx()];
+        match pat {
             TPat::Wildcard | TPat::Bind(_, None) => Some(Plain::Total),
             TPat::Bind(_, Some(inner)) => self.plain(inner),
-            TPat::Test(_, t, inner) if wild(self.t, inner) => match self.t.types.get(t) {
+            TPat::Test(test, t, inner) if wild(self.t, inner) && !(self.outer_tested(test) && !self.outer_implied(t, self.prefixed.1)) => match self.t.types.get(t) {
                 Type::Any => Some(Plain::Total),
                 Type::Class(c, _) if c == self.t.b.array && self.t.jvm => {
                     self.sc.classes.push(c);
@@ -1047,6 +1051,9 @@ impl<'t, 'a> Spaces<'t, 'a> {
                 if self.t.types.contains_error(t) || self.t.prog.deferred_tests.contains_key(&test) {
                     return Space::Opaque;
                 }
+                if self.outer_tested(test) && !self.outer_implied(t, sty) {
+                    return Space::Opaque;
+                }
                 // An abstract type is the space of itself, as scalac's `Typ(T)` (Space.scala,
                 // `project`), whatever its bound: a wildcard after `case _: T` is reachable.
                 let t = match self.t.types.get(t) {
@@ -1230,7 +1237,9 @@ impl<'t, 'a> Spaces<'t, 'a> {
     /// The run time tells classes apart, not their type arguments: `Box[Int]` and `Box[String]`
     /// are one space.
     fn same_class(&self, t1: TypeId, t2: TypeId) -> bool {
-        match (self.t.types.get(t1), self.t.types.get(t2)) {
+        // A class through a prefix (`o.I`) is its class here; `outer_implied` judges the prefix.
+        let types = &self.t.types;
+        match (types.get(types.strip_nested(t1)), types.get(types.strip_nested(t2))) {
             (Type::Class(c1, _), Type::Class(c2, _)) => c1 == c2,
             _ => false,
         }
@@ -1403,6 +1412,26 @@ impl<'t, 'a> Spaces<'t, 'a> {
     /// A space that covers no whole type, because a literal (of a type with more than two
     /// values) or an unanalysed pattern sits in it: taking it from a type changes nothing the
     /// algebra can express.
+    /// Whether the outer test of the pattern type `t` holds of every value of the scrutinee
+    /// space `sty` that is an instance of its class. dotty's space keeps prefixes: the children
+    /// of an `o.T` are `o.A` and `o.B` (`childPrefix`), which an `o.A(n)` covers, while `isSubType`
+    /// of an `O#I` or an `a.I` fails against a `b.I`, leaving the scrutinee whole. The spaces
+    /// here see classes without their prefixes, so the scrutinee as the match states it decides,
+    /// and a pattern below another covers nothing.
+    fn outer_implied(&mut self, t: TypeId, sty: TypeId) -> bool {
+        let (stated, scrut) = self.prefixed;
+        sty == scrut && self.t.prefix_agrees(t, stated)
+    }
+
+    /// Whether a type test compares the enclosing instance (`TypeTest::Outer`).
+    fn outer_tested(&self, test: TestId) -> bool {
+        match self.t.prog.tests[test.idx()] {
+            TypeTest::Outer(..) => true,
+            TypeTest::And(a, b) => self.outer_tested(a) || self.outer_tested(b),
+            _ => false,
+        }
+    }
+
     fn cannot_cover(&self, s: Space) -> bool {
         match s {
             Space::Empty | Space::Opaque => true,

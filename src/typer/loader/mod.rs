@@ -1278,16 +1278,10 @@ impl<'a> Worker<'a> {
         // from its companion's.
         let class_name = if inner_object && companion_class { self.interner.intern(&format!("{}$", self.name_ref(name))) } else { name };
         let cid = self.syms.new_class(class_name, kind, m, owner, file_id, None, Span::default());
-        // A class nested in a generic class takes the enclosing type parameters first.
-        let outer: Vec<TParamId> = match owner {
-            Owner::Class(o) if !matches!(self.syms.class(o).kind, ClassKind::Object | ClassKind::Builtin) => self.syms.class(o).tparams.clone(),
-            _ => Vec::new(),
-        };
-        self.syms.class_mut(cid).outer_tparams = outer.len() as u8;
+        self.mark_inner_class(cid);
         if inner_object {
             let sym = self.syms.new_sym(name, SymKind::Val, mods::FINAL | mods::LAZY, owner, file_id, None, Span::default());
-            let outer_args: Vec<TypeId> = outer.iter().map(|&p| self.types.param(p)).collect();
-            let ty = self.types.class(cid, &outer_args);
+            let ty = self.types.class(cid, &[]);
             let mut s = self.syms.sym_mut(sym);
             s.sig = Some(Arc::new(MethodSig::value(ty)));
             s.state().set(Completion::Done);
@@ -1362,7 +1356,7 @@ impl<'a> Worker<'a> {
                 id
             })
             .collect();
-        self.syms.class_mut(cid).tparams = outer.into_iter().chain(ids).collect();
+        self.syms.class_mut(cid).tparams = ids;
         let nested = decoder.nested_types(e.addr);
         self.enter_entries(file, &nested, Owner::Class(cid));
         Some(cid)
@@ -1658,7 +1652,7 @@ impl<'a> Worker<'a> {
         }
         let sig = decoder.class_sig(lc.addr);
         let mut cx = MapCx::new(lc.file);
-        let ids = self.syms.class(c).own_tparams().to_vec();
+        let ids = self.syms.class(c).tparams.to_vec();
         for (tp, &id) in sig.tparams.iter().zip(&ids) {
             self.set_tparam_bounds(&mut cx, id, &tp.info);
         }
@@ -1806,8 +1800,10 @@ impl<'a> Worker<'a> {
             let k = match self.sealed_child_term(cx, &args[0]) {
                 Some(k) => k,
                 None => {
+                    // The child's class whatever its prefix (`parent.classSymbol` as the
+                    // annotation registered it).
                     let child = self.map_type(cx, &args[0]);
-                    match self.types.get(child) {
+                    match self.types.get(self.types.strip_nested(child)) {
                         Type::Class(k, _) => k,
                         _ => continue,
                     }
@@ -1969,7 +1965,13 @@ impl<'a> Worker<'a> {
         let kind = self.syms.class(c).kind;
         for pt in parents {
             let pt = self.deref_alias(pt);
-            let Type::Class(pc, pargs) = self.types.get(pt) else { continue };
+            // A class nested in a class through its prefix: its base types seen from the prefix,
+            // as a source class's (`set_parents`).
+            let (class_pt, prefix) = match self.types.get(pt) {
+                Type::Nested(p, class) => (class, Some(p)),
+                _ => (pt, None),
+            };
+            let Type::Class(pc, pargs) = self.types.get(class_pt) else { continue };
             // A Java class that only a signature named stays unread until a member is asked of it.
             if !self.is_java_placeholder(pc) {
                 self.complete_class(pc);
@@ -2002,7 +2004,13 @@ impl<'a> Worker<'a> {
             parent_types.push(pt);
             let subst: Subst = self.syms.class(pc).tparams.iter().copied().zip(self.types.items(pargs).iter().copied()).collect();
             let inherited: Vec<(ClassId, TypeId)> = self.syms.class(pc).base_types.clone();
-            linearisations.push(inherited.into_iter().map(|(bc, bt)| (bc, self.types.subst(bt, &subst))).collect());
+            let mut seen: Vec<(ClassId, TypeId)> = inherited.into_iter().map(|(bc, bt)| (bc, self.types.subst(bt, &subst))).collect();
+            if let Some(p) = prefix {
+                for (_, bt) in seen.iter_mut() {
+                    *bt = self.outer_seen_from(*bt, p, pc);
+                }
+            }
+            linearisations.push(seen);
         }
         let (mut base, _) = self.linearise(c, self_ty, linearisations.clone(), false);
         self.narrow_base_types(c, &mut base, &linearisations);
@@ -2016,7 +2024,7 @@ impl<'a> Worker<'a> {
             let bi = self.syms.class(b);
             !bi.type_aliases.is_empty()
                 || bi.inherits_types
-                || bi.nested.values().any(|&n| self.syms.class(n).outer_tparams > 0 || self.types.is_path_class(n))
+                || bi.nested.values().any(|&n| self.is_opaque_path_class(n))
         });
         let has_native_base = base.iter().skip(1).any(|&(b, _)| self.syms.class(b).js == JsKind::Native);
         let mut info = self.syms.class_mut(c);
@@ -2147,7 +2155,7 @@ impl<'a> Worker<'a> {
         let mut clauses = Vec::new();
         let mut syms_per_clause = Vec::new();
         // The constructor's type parameters are the class's under addresses of their own.
-        let class_tparams = self.syms.class(c).own_tparams().to_vec();
+        let class_tparams = self.syms.class(c).tparams.to_vec();
         let mut i = 0;
         for clause in &ctor.clauses {
             if let Clause::Types(ps) = clause {
@@ -2613,7 +2621,7 @@ impl<'a> Worker<'a> {
         // A secondary constructor is pickled with a copy of the class's type parameters, which
         // it means: its parameters and body are typed under the class's.
         let class_tparams: Vec<TParamId> = match self.syms.sym(sym).owner {
-            Owner::Class(c) if self.syms.sym(sym).name == names::INIT => self.syms.class(c).own_tparams().to_vec(),
+            Owner::Class(c) if self.syms.sym(sym).name == names::INIT => self.syms.class(c).tparams.to_vec(),
             _ => Vec::new(),
         };
         for clause in &clauses {
@@ -2693,7 +2701,7 @@ impl<'a> Worker<'a> {
         self.complete_class(k);
         let info = self.syms.class(k);
         let declared = *info.parents.last()?;
-        let own = info.own_tparams().to_vec();
+        let own = info.tparams.to_vec();
         if own.len() != tparams.len() {
             return None;
         }

@@ -719,6 +719,12 @@ pub struct Worker<'a> {
     /// `F.map[A, B](fa)(f)`: the type arguments of a direct extension call name the
     /// extension's own type parameters too.
     pub direct_ext_targs: bool,
+    /// The prefix of the class the next constructor application makes (`new o.I(a)`, `o.I(a)`),
+    /// which its signature is seen from; taken by the application.
+    pub ctor_prefix: Option<TypeId>,
+    /// In a secondary constructor of a class nested in a class: that class and the
+    /// constructor's outer parameter, which stands for its `this` there (`outer_this_sym`).
+    pub ctor_outer: Option<(ClassId, SymId)>,
     /// The type arguments a macro gave `Select.overloaded`, for the application of the member
     /// it names in the place of written ones.
     pub macro_targs: Option<(Name, Vec<TypeId>)>,
@@ -878,7 +884,7 @@ pub struct Worker<'a> {
     /// The implicit scope of a type without open variables, computed once: the objects whose
     /// members make it up, and per wanted class the givens selected from them before the
     /// accessibility filter, which depends on the scope of the search (`implicits.rs`).
-    pub implicit_scopes: FxMap<TypeId, std::sync::Arc<[ClassId]>>,
+    pub implicit_scopes: FxMap<TypeId, std::sync::Arc<[implicits::GivenScope]>>,
     pub implicit_scope_givens: FxMap<(TypeId, u8, u32), std::sync::Arc<implicits::ScopeList>>,
     /// A package clause's level of a given search before the accessibility filter, per package,
     /// file (for the innermost clause, which holds the file's imports), and wanted class
@@ -901,7 +907,7 @@ pub struct Worker<'a> {
     /// The shape pass of a candidate against a target without open variables, keyed by the
     /// candidate, the object it is reached through and the target (`fits_target` says when the
     /// answer is context-free).
-    pub given_fits: FxMap<(SymId, u32, TypeId), bool>,
+    pub given_fits: FxMap<(SymId, u64, TypeId), bool>,
     /// A candidate's declared result as the head rejection reads it against a class, per
     /// candidate and class (`implicits::HeadSig`): kept like `given_fits`, cleared by a retype.
     pub head_sigs: FxMap<(SymId, ClassId), std::sync::Arc<implicits::HeadSig>>,
@@ -917,7 +923,7 @@ pub struct Worker<'a> {
     pub function_targets: Vec<TypeId>,
     /// The extensions of an implicit scope inherited from a trait, with the object each was
     /// found in, for the search under way (`Worker::implicit_scope_extensions`).
-    pub ext_modules: Vec<(SymId, ClassId)>,
+    pub ext_modules: Vec<(SymId, implicits::GivenScope)>,
     /// The value each `ValueImport` reads: its val, the object it is a member of, and the value
     /// it is selected on where it is an object nested in a class (`import o.R.S.*` reads `S` on
     /// `o.R`, an entry of its own reading `R` on `o`). One table for every worker, appended to
@@ -2029,6 +2035,8 @@ impl<'a> Worker<'a> {
             declared_took: None,
             infix_declared: None,
             direct_ext_targs: false,
+            ctor_prefix: None,
+            ctor_outer: None,
             macro_targs: None,
             dropped_type_list: None,
             assign_op_target: None,
@@ -2343,6 +2351,8 @@ impl<'a> Worker<'a> {
             declared_took: None,
             infix_declared: None,
             direct_ext_targs: Default::default(),
+            ctor_prefix: None,
+            ctor_outer: None,
             macro_targs: None,
             dropped_type_list: Default::default(),
             assign_op_target: None,

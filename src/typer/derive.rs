@@ -209,7 +209,7 @@ impl<'a> Worker<'a> {
                 let upper = self.syms.tparam(p).upper;
                 upper != ANY && self.every_value_by_rule(upper, class_by_rule)
             }
-            Type::This(_) | Type::Term(_) | Type::Select(..) | Type::Member(..) | Type::AppMember(..) | Type::Decl(_) | Type::Refined(..) | Type::Match(..) | Type::Alias(..) => {
+            Type::This(_) | Type::Term(_) | Type::Select(..) | Type::Member(..) | Type::AppMember(..) | Type::Decl(_) | Type::Refined(..) | Type::Match(..) | Type::Alias(..) | Type::Nested(..) => {
                 match self.dependent_underlying(t) {
                     Some(u) => self.every_value_by_rule(u, class_by_rule),
                     None => false,
@@ -239,7 +239,7 @@ impl<'a> Worker<'a> {
                 let upper = self.syms.tparam(p).upper;
                 upper != ANY && self.is_enum_value(upper)
             }
-            Type::This(_) | Type::Term(_) | Type::Select(..) | Type::Member(..) | Type::AppMember(..) | Type::Decl(_) | Type::Refined(..) | Type::Match(..) | Type::Alias(..) => {
+            Type::This(_) | Type::Term(_) | Type::Select(..) | Type::Member(..) | Type::AppMember(..) | Type::Decl(_) | Type::Refined(..) | Type::Match(..) | Type::Alias(..) | Type::Nested(..) => {
                 match self.dependent_underlying(t) {
                     Some(u) => self.is_enum_value(u),
                     None => false,
@@ -374,10 +374,16 @@ impl<'a> Worker<'a> {
             _ => true,
         };
         if !fits {
-            self.refuse_mirror(c, wants, mirrored);
+            self.refuse_mirror(c, wants, mirrored, None);
             return None;
         }
         let shape = shape?;
+        if let Shape::Sum(children) = &shape {
+            if let Some(why) = self.inaccessible_child(c, children, subject) {
+                self.refuse_mirror(c, wants, mirrored, Some(why));
+                return None;
+            }
+        }
         let ty = self.scala_mirror_type(c, &shape, mirrored, subject, &params, names, sm);
         // The one mirror of a class without parameters is declared with its refined type in link
         // mode, so that a path to it keeps the type members: scala-library's `summon` is inline
@@ -385,7 +391,24 @@ impl<'a> Worker<'a> {
         // class (`Red.type`, `A & B`), which keeps its accessor's descriptor that of the
         // mirror's parent in every build (`complete_program_mirrors`).
         let plain = self.scala_library_std() && params.is_empty() && self.syms.class(c).tparams.is_empty();
-        let value = self.scala_mirror_value(c, &shape, sm, plain.then_some(ty))?;
+        // A product nested in a class seen through a prefix (`cw.Foo`) is made with the prefix's
+        // value as its enclosing instance, as dotty's anonymous mirror makes `new pre.C(..)`
+        // (`MirrorImpl.OfProduct(pre)`); the mirror of a class nested in a class is made where it
+        // is summoned in any case (`scala_mirror_value_unlocked`).
+        let outer = match (self.types.get(subject), &shape) {
+            (Type::Nested(p, _), Shape::Product) if self.outer_class(c).is_some() => self.prefix_value(p),
+            _ => None,
+        };
+        let value = match outer {
+            Some(outer) => {
+                let span = self.syms.class(c).span;
+                let prefixed = std::mem::replace(&mut self.new_prefixed, true);
+                let value = self.build_scala_mirror(c, &shape, sm.product_impl, span, Some(outer));
+                self.new_prefixed = prefixed;
+                value
+            }
+            None => self.scala_mirror_value(c, &shape, sm, plain.then_some(ty))?,
+        };
         Some((value, ty))
     }
 
@@ -407,7 +430,7 @@ impl<'a> Worker<'a> {
             }
             // Only the class over the lambda's own parameters, as `[X] =>> Tree[X]` is `Tree`;
             // `[X] =>> List[Tree[X]]` is no class and has no mirror.
-            Type::Lambda(ps, body) => match self.types.get(body) {
+            Type::Lambda(ps, body) => match self.types.get(self.types.strip_nested(body)) {
                 Type::Class(c, args) if self.types.items(args) == self.types.items(ps) => Some((c, body, self.types.items(ps).to_vec())),
                 _ => None,
             },
@@ -420,7 +443,7 @@ impl<'a> Worker<'a> {
     /// side, as scalac's `MirrorSource` reduces it.
     fn mirror_source(&mut self, mirrored: TypeId) -> Option<(ClassId, TypeId)> {
         let mirrored = self.deref(mirrored);
-        match self.types.get(mirrored) {
+        match self.types.get(self.types.strip_nested(mirrored)) {
             Type::Class(c, _) => Some((c, mirrored)),
             Type::Term(s) => match self.syms.sym(s).kind {
                 SymKind::EnumValue(c) | SymKind::Object(c) => Some((c, self.types.class(c, &[]))),
@@ -476,6 +499,10 @@ impl<'a> Worker<'a> {
                 _ => ANY,
             }).collect();
             mono = self.types.class(c, &bounds);
+            // Through the subject's prefix, as `mkMirroredMonoType` applies the lambda.
+            if let Type::Nested(p, _) = self.types.get(subject) {
+                mono = self.nested_type(p, mono);
+            }
         }
         let labels: Vec<TypeId> = elem_names.iter().map(|&n| self.types.lit(LitVal::Str(n))).collect();
         let labels_ty = self.tuple_of(&labels);
@@ -522,7 +549,7 @@ impl<'a> Worker<'a> {
         // The mirror of a class nested in a class holds the enclosing instance, as scalac's
         // (the companion) does: it is made where it is summoned, not held by a top-level val.
         if self.outer_class(c).is_some() {
-            return Some(self.build_scala_mirror(c, shape, impl_class, span));
+            return Some(self.build_scala_mirror(c, shape, impl_class, span, None));
         }
         let depth = std::mem::replace(&mut self.implicit_depth, 0);
         let owners = std::mem::take(&mut self.sites.owners);
@@ -541,14 +568,16 @@ impl<'a> Worker<'a> {
             self.syms.sym_mut(sym).sig = Some(sig);
         }
         self.derive.scala_mirrors.insert(c, sym);
-        let init = self.with_env(env, |t| t.build_scala_mirror(c, shape, impl_class, span));
+        let init = self.with_env(env, |t| t.build_scala_mirror(c, shape, impl_class, span, None));
         self.prog.top_vals.push((sym, init));
         self.sites.owners = owners;
         self.implicit_depth = depth;
         Some(self.prog.add(TExpr::Static(sym)))
     }
 
-    fn build_scala_mirror(&mut self, c: ClassId, shape: &Shape, impl_class: ClassId, span: Span) -> TExprId {
+    /// The mirror object, whose constructions of the product take `outer` as their enclosing
+    /// instance where it is given, that of the summon site otherwise.
+    fn build_scala_mirror(&mut self, c: ClassId, shape: &Shape, impl_class: ClassId, span: Span, outer: Option<TExprId>) -> TExprId {
         let arg = match shape {
             Shape::Product => {
                 let product_ty = self.b.product.map_or(ANY, |p| self.types.class(p, &[]));
@@ -594,6 +623,9 @@ impl<'a> Worker<'a> {
                     Some(te) => te,
                     None => self.new_instance(c, values, span),
                 };
+                if let Some(outer) = outer {
+                    self.pass_outer(instance, outer);
+                }
                 let params = self.prog.syms(&[p]);
                 self.prog.add(TExpr::Lambda(params, instance))
             }
@@ -613,7 +645,7 @@ impl<'a> Worker<'a> {
     /// scalac's explanation of why no mirror exists, in the place of the message a missing
     /// given gets.
     #[cold]
-    fn refuse_mirror(&mut self, c: ClassId, wants: Wants, mirrored: TypeId) {
+    fn refuse_mirror(&mut self, c: ClassId, wants: Wants, mirrored: TypeId, sum_problem: Option<String>) {
         if self.implicit_depth != 1 {
             return;
         }
@@ -631,10 +663,164 @@ Failed to synthesize an instance of type {}:", shown, shown);
 	* {} is not a generic product because {}", desc, self.why_not_generic_product(c)));
         }
         if wants != Wants::Product {
+            let why = sum_problem.unwrap_or_else(|| self.why_not_generic_sum(c));
             msg.push_str(&format!("
-	* {} is not a generic sum because {}", desc, self.why_not_generic_sum(c)));
+	* {} is not a generic sum because {}", desc, why));
         }
         self.given_ambiguity = Some(msg);
+    }
+
+    /// dotty's `TypeOps.childPrefix` (TypeOps.scala 1008): the prefix of `child`, a child of
+    /// `parent` seen through `pre`. The owners the two share are stripped; `pre` is unwound by
+    /// as many steps as the parent has owners left (a `this` to its class's prefix, a path to
+    /// the path it selects from), and the child's remaining owners, objects, are selected from
+    /// it: `o.mid.T`'s child of `O` is seen through `o`, a child in `O`'s `object Kids` through
+    /// `o.Kids`. None where no instance prefix comes of it (a static owner, a local value).
+    fn child_prefix(&mut self, pre: TypeId, parent: ClassId, child: ClassId) -> Option<TypeId> {
+        let chain = |w: &Self, c: ClassId| -> Vec<Owner> {
+            let mut owners = Vec::new();
+            let mut at = w.syms.class(c).owner;
+            loop {
+                owners.push(at);
+                at = match at {
+                    Owner::Class(k) => w.syms.class(k).owner,
+                    Owner::Package(p) => match w.syms.pkg(p).parent {
+                        Some(q) => Owner::Package(q),
+                        None => break,
+                    },
+                    Owner::Local => break,
+                };
+            }
+            owners.reverse();
+            owners
+        };
+        let (parent_owners, child_owners) = (chain(self, parent), chain(self, child));
+        let common = parent_owners.iter().zip(&child_owners).take_while(|(a, b)| a == b).count();
+        // `subPrefixAt`: a `this` steps to its class's prefix, a selection to what it selects
+        // from; a value with no prefix ends the walk.
+        let mut pre = pre;
+        for _ in common..parent_owners.len() {
+            pre = match self.types.get(pre) {
+                Type::Select(q, _) => q,
+                Type::This(k) => match self.syms.class(k).owner {
+                    Owner::Class(o) if self.is_module_class(o) && self.syms.class(o).inner_object.is_none() => self.types.class(o, &[]),
+                    Owner::Class(o) => self.types.mk(Type::This(o)),
+                    _ => return None,
+                },
+                _ => return None,
+            };
+        }
+        // `selectAll`: the child's owners below the common one, each an object of the prefix.
+        for &owner in &child_owners[common..] {
+            let Owner::Class(o) = owner else { return None };
+            pre = match self.syms.class(o).inner_object {
+                Some(val) => self.types.mk(Type::Select(pre, val)),
+                None if self.syms.class(o).kind == ClassKind::Object => self.types.class(o, &[]),
+                None => return None,
+            };
+        }
+        Some(pre)
+    }
+
+    /// dotty's `whyNotGenericSum(pre)`: a child of the sum `c` seen as `subject` has to be
+    /// reachable from the parent (its owner encloses `c`, or is an object reachable so) and, but
+    /// where the parent's companion holds the mirror, from the summon site (its owner encloses the
+    /// site, or is a base of the singleton prefix's class, or an object reachable so): the children
+    /// of `Outer#Item` summoned outside `Outer` are not.
+    fn inaccessible_child(&mut self, c: ClassId, children: &[ClassId], subject: TypeId) -> Option<String> {
+        // Children of packages and of objects in packages, the common case, are reachable.
+        let static_owner = |w: &Self, child: ClassId| {
+            let mut owner = w.syms.class(child).owner;
+            while let Owner::Class(o) = owner {
+                if w.syms.class(o).kind != ClassKind::Object {
+                    return false;
+                }
+                owner = w.syms.class(o).owner;
+            }
+            true
+        };
+        if children.iter().all(|&child| static_owner(self, child)) {
+            return None;
+        }
+        let companion_mirror = self.syms.class(c).companion.is_some_and(|k| self.syms.class(k).mods & mods::CASE == 0);
+        let prefix = match self.types.get(subject) {
+            Type::Nested(p, _) => Some(p),
+            _ => match self.syms.class(c).owner {
+                Owner::Class(o) if self.is_inner_class(c) => Some(self.types.mk(Type::This(o))),
+                _ => None,
+            },
+        };
+        // The classes of a singleton prefix (`pre.classSymbols`).
+        let scope: Vec<ClassId> = match prefix {
+            Some(p) if self.types.is_path(p) => {
+                let under = self.widen_path(p);
+                self.class_of(under).into_iter().collect()
+            }
+            Some(p) => match self.types.get(p) {
+                Type::Class(k, _) if self.is_module_class(k) => vec![k],
+                _ => Vec::new(),
+            },
+            None => Vec::new(),
+        };
+        let encloses = |w: &Self, outer: ClassId, inner: ClassId| {
+            let mut at = Owner::Class(inner);
+            while let Owner::Class(k) = at {
+                if k == outer {
+                    return true;
+                }
+                at = w.syms.class(k).owner;
+            }
+            false
+        };
+        for &child in children {
+            // A class owner (an object or a package recurses outward, as a module does).
+            let mut owner = self.syms.class(child).owner;
+            let mut to_parent = false;
+            while let Owner::Class(o) = owner {
+                if encloses(self, o, c) {
+                    to_parent = true;
+                    break;
+                }
+                if !self.is_module_class(o) && self.syms.class(o).local_module.is_none() {
+                    break;
+                }
+                owner = self.syms.class(o).owner;
+            }
+            let to_parent = to_parent || !matches!(owner, Owner::Class(_));
+            if !to_parent {
+                return Some(format!("its child {} is not accessible to its parent {}", self.class_description(child), self.class_description(c)));
+            }
+            if companion_mirror {
+                continue;
+            }
+            let mut owner = self.syms.class(child).owner;
+            let mut to_site = false;
+            while let Owner::Class(o) = owner {
+                let reachable = self.env.frames.iter().any(|f| matches!(f, super::Frame::Class(k) if *k == o));
+                let of_prefix = scope.iter().any(|&k| {
+                    let mut at = Owner::Class(k);
+                    while let Owner::Class(x) = at {
+                        if x == o || self.syms.class(x).base_types.iter().any(|&(b, _)| b == o) {
+                            return true;
+                        }
+                        at = self.syms.class(x).owner;
+                    }
+                    false
+                });
+                if reachable || of_prefix {
+                    to_site = true;
+                    break;
+                }
+                if !self.is_module_class(o) && self.syms.class(o).local_module.is_none() {
+                    break;
+                }
+                owner = self.syms.class(o).owner;
+            }
+            if !to_site && matches!(owner, Owner::Class(_)) {
+                return Some(format!("its child {} is not accessible to the call site", self.class_description(child)));
+            }
+        }
+        None
     }
 
     /// A case class's companion holds its mirror and reaches its constructor; only where the
@@ -930,7 +1116,22 @@ Failed to synthesize an instance of type {}:", shown, shown);
         self.complete_class(child);
         let arity = self.syms.class(child).tparams.len();
         let vars: Vec<TypeId> = (0..arity).map(|_| self.fresh_var()).collect();
-        let ty = self.types.class(child, &vars);
+        let mut ty = self.types.class(child, &vars);
+        // A child nested in a class is seen through the prefix `childPrefix` gives it, as
+        // `sumMirror` sees it (`asSeenFrom(childPre, child.owner)`, Synthesizer.scala 567).
+        if self.is_inner_class(child) {
+            let parent_class = self.types.named_class(parent);
+            let pre = match self.types.get(parent) {
+                Type::Nested(p, _) => Some(p),
+                _ => parent_class.and_then(|c| match self.syms.class(c).owner {
+                    Owner::Class(o) if self.is_inner_class(c) => Some(self.types.mk(Type::This(o))),
+                    _ => None,
+                }),
+            };
+            if let Some(child_pre) = pre.zip(parent_class).and_then(|(pre, c)| self.child_prefix(pre, c, child)) {
+                ty = self.nested_type(child_pre, ty);
+            }
+        }
         if arity > 0 {
             self.is_sub(ty, parent);
         }

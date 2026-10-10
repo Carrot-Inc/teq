@@ -8,17 +8,15 @@ libraries compiled from their jars run against scalac's output. The remaining di
 
 ### Syntax and definitions
 
-- A nested class made outside its enclosing class without a prefix (through an import of a value's members),
-  and a constructor proxy through a prefix: `o.Inner(1)` is not found where `new o.Inner(1)` works.
 - A local trait referring to the values of its block is `not supported yet`, a trait nested in a local class
   that reads them fails (at run time on JavaScript), and a local enum reading a value of the enclosing scope
   is `a local enum cannot refer to n: its values are made once`.
-- A class nested in a generic class does not see the enclosing type arguments through a prefix (`o.Inner.get`
-  on an `o: O[Int]` is an `A`), and `o.Item` and `o2.Item` are one type, their givens found through `this`.
+- A case class nested in a class compares its fields alone: `a.Item(1) == b.Item(1)` is true where scalac's
+  `equals` tests the outer instance too, as its patterns do (and teq's); a match through a prefix that misses
+  another instance's class (`case b.Item(n)` on an `a.Item`) is not warned of as inexhaustive, its run failing
+  with a `MatchError` as scalac's does.
 - A wildcard or `given` import from a stable `val` of a package or object (`import dom.window.*`) reports
   the val as no object or package; a named selector works.
-- A secondary constructor of a class nested in a class is given no enclosing instance, on every target:
-  `new o.Inner()` through `def this() = this(2)`, or reflectively, fails where the class reads the instance.
 - Confirmed, fix queued: `c.copy(a = 1)(2)` drops the second argument list, a local `lazy val (a, b) = e` is
   eager, an overloaded `unapply` is taken by its first alternative, a companion's own `unapply` is bypassed by
   a constructor pattern, and a by-name method eta-expanded without an expected type runs its argument once.

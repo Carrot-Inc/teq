@@ -1,0 +1,4 @@
+tests/modules/nestedprefixmisuse/b/Use.scala:6:27: error: type mismatch: found a.Item, required b.Item
+    val wrong: API.b.Item = API.make
+                            ^^^^^^^^
+1 error found

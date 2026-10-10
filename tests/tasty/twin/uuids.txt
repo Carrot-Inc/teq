@@ -54,7 +54,7 @@ inlres/fix/inlres/InlT.tasty 006e76b966199fe900ffb71f7e33a081
 interparts/fix/interparts/InterpParts.tasty 00cd65e446d690b40011d8fe18e903fd
 jvarargs/fix/jvarargs/JVarargs.tasty 005de7c1001ab7a200713d91bea468e3
 localcase/fix/shapes/Deferring.tasty 00f2414611f885ee0091ffbbfe5c87ff
-localcase/fix/shapes/LocalDefer.tasty 00b2fb2f7409daf200f147d62193c1b0
+localcase/fix/shapes/LocalDefer.tasty 00b2fb2f7409daf2008147d6219351b0
 members/fix/members/Container.tasty 00da16106c3cd8dd007735d8a918b48c
 members/fix/members/Holder.tasty 00183d087efee2c4002ff891073837ae
 members/fix/members/Registry.tasty 0084064e595f1cd800d640e5059e67e4
@@ -121,5 +121,5 @@ wave6/fix/wave6/W6Box.tasty 004761a7f189acca00835b6bd62ae890
 wave6/fix/wave6/W6Ctx.tasty 0097f357ee3980ee00378d7db225dbf3
 wave6/fix/wave6/W6Tags.tasty 005436e0aa5752eb0086e0d11c7de6c8
 wave6/fix/wave6/W6Thunk.tasty 008f7208fa8895b10099316c530f98a6
-wave6/fix/wave6/W6Use.tasty 001cfad5dd5bb1c700053a82a9bc9a81
-wave6/fix/wave6/wave6$package.tasty 00f0dab7e03124cc00cb67d33ab458a2
+wave6/fix/wave6/W6Use.tasty 001cf9dadd5bb1c700053a82a9bc9a81
+wave6/fix/wave6/wave6$package.tasty 00f0dab4e33124cc00cb67d33ab458a2

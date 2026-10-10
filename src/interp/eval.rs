@@ -1782,6 +1782,10 @@ impl<'a, 't> Interp<'a, 't> {
             }
             TypeTest::Or(a, b) => self.type_test(v, a, fr, cx)? || self.type_test(v, b, fr, cx)?,
             TypeTest::And(a, b) => self.type_test(v, a, fr, cx)? && self.type_test(v, b, fr, cx)?,
+            TypeTest::Outer(accessor, inner) => {
+                let outer = self.invoke(v.clone(), accessor, Vec::new())?;
+                self.type_test(&outer, inner, fr, cx)?
+            }
         })
     }
 

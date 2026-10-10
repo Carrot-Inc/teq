@@ -300,6 +300,10 @@ pub mod mods {
     /// a member whose call is the var's assignment (`typer::setters`). The namer makes it,
     /// without a definition, or the loader reads it from a pickle.
     pub const SETTER: Mods = 1 << 25;
+    /// A class a Java class or interface declares as a static member (every member class of an
+    /// interface, those marked `static` in a class): no inner class, its type through no prefix,
+    /// as dotty enters it in the Java class's companion.
+    pub const JAVA_STATIC: Mods = 1 << 26;
     /// A deferred given: `given x: T = deferred` in a trait, the marker resolving to
     /// `scala.compiletime.deferred` (scalac's `Deferred | HasDefault`, set as its signature
     /// completes), or one read from a pickle with `HASDEFAULT` and no body. Abstract, and

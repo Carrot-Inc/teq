@@ -286,7 +286,7 @@ impl<'a> Worker<'a> {
             return self.types.param(p);
         }
         if let Some(&c) = lf.classes.get(&addr) {
-            if self.syms.class(c).outer_tparams > 0 {
+            if self.is_inner_class(c) {
                 let through = match prefix {
                     Some(p) => self.prefix_type(cx, p),
                     None => match self.syms.class(c).owner {
@@ -405,10 +405,12 @@ impl<'a> Worker<'a> {
         match inner {
             TType::LocalType(addr, _) => self.loaded_tables(cx).classes.get(addr).copied(),
             TType::TypeRef(..) => {
+                // The class whatever its prefix (`classSymbol` of a `TypeRef(p, C)`).
                 let ty = self.map_type_ctor(cx, inner);
                 match self.types.get(ty) {
-                    Type::Class(c, _) | Type::Ctor(c) => Some(c),
-                    _ => None,
+                    Type::Ctor(c) => Some(c),
+                    Type::Lambda(_, body) => self.types.named_class(body),
+                    _ => self.types.named_class(ty),
                 }
             }
             _ => None,
@@ -426,10 +428,12 @@ impl<'a> Worker<'a> {
             TType::TermRef(..) | TType::LocalTerm(..) | TType::ParamRef(..) => self.path_singleton(cx, prefix),
             TType::RecThis(_) | TType::Rec(..) => None,
             other => {
+                // A class through a prefix (`o.Inner[A]#T`, dotty's `TypeRef(o, Inner)`) is a
+                // prefix with its own: the member is seen from it.
                 let ty = self.map_type(cx, other);
                 let ty = self.deref_alias(ty);
                 match self.types.get(ty) {
-                    Type::Class(..) | Type::Refined(..) => Some(ty),
+                    Type::Class(..) | Type::Nested(..) | Type::Refined(..) => Some(ty),
                     _ => None,
                 }
             }
@@ -706,13 +710,19 @@ impl<'a> Worker<'a> {
                         // An opaque type of a trait through an object deriving from it is the
                         // object's own (`HtmlTagOf.Tag` of `TagLite`).
                         Some(TypeRef::Class(k))
-                            if self.types.is_path_class(k) && self.syms.class(c).kind == ClassKind::Object && self.syms.class(k).owner != Owner::Class(c) =>
+                            if self.is_opaque_path_class(k) && self.syms.class(c).kind == ClassKind::Object && self.syms.class(k).owner != Owner::Class(c) =>
                         {
                             let d = self.derived_opaque(k, c);
                             self.class_ref(d)
                         }
-                        Some(TypeRef::Class(k)) if self.syms.class(k).outer_tparams > 0 => {
-                            let prefix = self.this_prefix(c);
+                        // A class nested in a class through the path written (an object nested in
+                        // a class, `Outer.this.Existential.Bounded`), or the class's `this`.
+                        Some(TypeRef::Class(k)) if self.is_inner_class(k) => {
+                            let path = match other {
+                                TType::This(_) => None,
+                                _ => self.prefix_type(cx, other).filter(|&p| self.types.is_path(p)),
+                            };
+                            let prefix = path.unwrap_or_else(|| self.this_prefix(c));
                             self.inner_class_through(k, prefix).unwrap_or_else(|| self.class_ref(k))
                         }
                         Some(r) => self.type_ref_to_type(r, crate::source::Span::default(), false),
@@ -742,7 +752,7 @@ impl<'a> Worker<'a> {
                 None => {
                     // `C[A]#Inner` names the class nested in `C`, with `C`'s arguments.
                     if let Some(nested) = self.projected_class(cx, other, name) {
-                        if self.syms.class(nested).outer_tparams > 0 {
+                        if self.is_inner_class(nested) {
                             let prefix = self.map_type(cx, other);
                             if let Some(ty) = self.inner_class_through(nested, prefix) {
                                 return ty;
@@ -786,7 +796,7 @@ impl<'a> Worker<'a> {
             return None;
         }
         let mapped = self.map_type(cx, prefix);
-        let Type::Class(c, targs) = self.types.get(mapped) else { return None };
+        let Type::Class(c, targs) = self.types.get(self.types.strip_nested(mapped)) else { return None };
         self.complete_class_tparams(c);
         let index = self.syms.class(c).tparams.iter().position(|&tp| self.syms.tparam(tp).name == name)?;
         self.types.items(targs).get(index).copied()
@@ -796,7 +806,7 @@ impl<'a> Worker<'a> {
     /// argument, the argument itself (`refs0.A` for `refs0: Iterator[? <: T]`).
     fn class_param_argument(&mut self, prefix: TypeId, name: Name) -> Option<TypeId> {
         let under = self.dealias(prefix);
-        let Type::Class(c, targs) = self.types.get(under) else { return None };
+        let Type::Class(c, targs) = self.types.get(self.types.strip_nested(under)) else { return None };
         self.complete_class_tparams(c);
         let index = self.syms.class(c).tparams.iter().position(|&tp| self.syms.tparam(tp).name == name)?;
         self.types.items(targs).get(index).copied()
@@ -847,6 +857,7 @@ impl<'a> Worker<'a> {
         while let Some(t) = stack.pop() {
             match self.types.get(t) {
                 Type::Class(k, _) => out.push(k),
+                Type::Nested(_, class) => out.extend(self.types.named_class(class)),
                 Type::Inter(a, b) => {
                     stack.push(b);
                     stack.push(a);
@@ -978,7 +989,7 @@ impl<'a> Worker<'a> {
 
     fn nested_class_on_path(&mut self, prefix: TypeId, name: Name) -> Option<TypeId> {
         let nested = self.nested_class_through(prefix, name)?;
-        if self.syms.class(nested).outer_tparams > 0 {
+        if self.is_inner_class(nested) {
             if let Some(ty) = self.inner_class_through(nested, prefix) {
                 return Some(ty);
             }
@@ -1089,6 +1100,11 @@ impl<'a> Worker<'a> {
             return t;
         }
         let Owner::Class(k) = self.syms.class(c).owner else { return t };
+        // The object's own `this` is the path to it, and its enclosing class's what the path
+        // selects it on (`AsSeenFromMap.toPrefix` through the object's `TermRef`).
+        if let Some(object) = self.prefix_type(cx, path).filter(|&p| self.types.is_path(p)) {
+            return self.as_seen_from(t, object, c);
+        }
         match self.prefix_type(cx, outer) {
             Some(p) => self.as_seen_from(t, p, k),
             None => t,
@@ -1199,8 +1215,9 @@ impl<'a> Worker<'a> {
         }
         let ctor = self.map_type_ctor(cx, prefix);
         let outer = match self.types.get(ctor) {
-            Type::Ctor(k) | Type::Class(k, _) => k,
-            _ => return None,
+            Type::Ctor(k) => k,
+            Type::Lambda(_, body) => self.types.named_class(body)?,
+            _ => self.types.named_class(ctor).filter(|_| !matches!(self.types.get(ctor), Type::This(_)))?,
         };
         self.complete_class(outer);
         self.syms.class(outer).nested.get(&name).copied()
