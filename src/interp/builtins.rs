@@ -1910,7 +1910,16 @@ fn install_java(it: &mut Table) {
         Ok(Value::Unit)
     });
     reg!(it, "java.io.PrintStream.flush", |_it, _a| Ok(Value::Unit));
-    reg!(it, "java.util.Objects.equals", |it, a| Ok(Value::Bool(it.equal(&arg(a, 1), &arg(a, 2))?)));
+    // Java's equality: the same object, else `a.equals(b)` as the boxes of their widths answer,
+    // never Scala's cooperative `==`.
+    reg!(it, "java.util.Objects.equals", |it, a| {
+        let (x, y) = (arg(a, 1), arg(a, 2));
+        Ok(Value::Bool(match (&x, &y) {
+            (Value::Null, _) => matches!(y, Value::Null),
+            (Value::Obj(p), Value::Obj(q)) if Rc::ptr_eq(p, q) => true,
+            _ => it.equals_method(&x, &y)?,
+        }))
+    });
     reg!(it, "java.util.Objects.hashCode", |it, a| match arg(a, 1) {
         Value::Null => Ok(Value::Int(0)),
         v => Ok(Value::Int(it.hash_code(&v)?)),

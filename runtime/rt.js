@@ -306,6 +306,12 @@ function $equals(a, b) {
   }
   return a === b;
 }
+// java.util.Objects.equals: the same reference, else `a.equals(b)`, a number a box of its own,
+// compared as Double.equals compares (`0.0` is not `-0.0`, a NaN is one).
+function $objectsEquals(a, b) {
+  if (typeof a === "number") return $equals(a, b);
+  return a === b || (a !== null && $equals(a, b));
+}
 function $eq(a, b) {
   if (a === b) return true;
   if (a == null || b == null) return false;

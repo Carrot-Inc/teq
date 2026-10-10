@@ -1306,7 +1306,8 @@ package java.util:
   @javaDefined
   @jvmClass("java/util/Objects")
   object Objects:
-    @js("$eq($1, $2)")
+    // Java's equality, not Scala's `==`: a boxed number equals one of its own class alone.
+    @js("$objectsEquals($1, $2)")
     @jvm("invokestatic java/util/Objects.equals(Ljava/lang/Object;Ljava/lang/Object;)Z")
     def equals(a: Any, b: Any): Boolean
     @js("($1 === null ? 0 : $hashCode($1))")
