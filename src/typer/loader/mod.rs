@@ -2473,7 +2473,9 @@ impl<'a> Worker<'a> {
             s.is_extension = true;
             s.ext_tparams = ext_tparams as u8;
             s.ext_clauses = ext_clauses as u8;
+            let name = s.name;
             self.syms.class_mut(c).extensions.push(sym);
+            self.syms.note_member_name(c, name);
         } else if !self.join_value_and_method(c, sym) {
             self.register_term(Owner::Class(c), sym);
         }
@@ -2665,6 +2667,7 @@ impl<'a> Worker<'a> {
             self.syms.class_mut(c).members.insert(name, set);
         }
         self.syms.class_mut(c).member_order.push(sym);
+        self.syms.note_member_name(c, name);
         true
     }
 

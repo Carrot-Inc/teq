@@ -5406,6 +5406,7 @@ impl<'a> Worker<'a> {
         let in_jar = self.in_jar(file);
         let inherits_overloads = self.syms.class(c).base_types[1..].iter().any(|&(b, _)| self.syms.class(b).has_overloads);
         self.syms.class_mut(c).has_overloads |= inherits_overloads;
+        let mut inherited: Option<super::check::BaseNames> = None;
         for i in 0..self.syms.class(c).member_order.len() {
             let info = self.syms.class(c);
             let m = info.member_order[i];
@@ -5416,7 +5417,10 @@ impl<'a> Worker<'a> {
             if kind != SymKind::Def && !is_val {
                 continue;
             }
-            let meets = info.base_types[1..].iter().any(|&(b, _)| {
+            // A name none of the bases has meets nothing there (the bases' names gathered once).
+            let named = inherited.get_or_insert_with(|| self.base_member_names(c)).has(name);
+            let info = self.syms.class(c);
+            let meets = named && info.base_types[1..].iter().any(|&(b, _)| {
                 self.syms.class(b).members.get(&name).map_or(false, |&p| match self.syms.sym(p).kind {
                     SymKind::Overloaded(_) => true,
                     SymKind::Def => (!is_std || in_jar) && !is_val,
@@ -5599,6 +5603,15 @@ impl<'a> Worker<'a> {
         }
         let holders = &holders[..n];
         if holders.iter().all(|&(_, g)| g == holders[0].1) {
+            return false;
+        }
+        // Two groups share a name only where their names masks share its bit.
+        let mut masks = [0u64; 4];
+        for &(b, g) in holders {
+            masks[g as usize] |= self.syms.class(b).names_mask;
+        }
+        let masks = &masks[..parents.len()];
+        if !(0..masks.len()).any(|i| (i + 1..masks.len()).any(|j| masks[i] & masks[j] != 0)) {
             return false;
         }
         let mut named = [(Name(0), 0u32); 64];

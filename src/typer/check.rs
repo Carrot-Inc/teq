@@ -4160,6 +4160,24 @@ impl<'a> Worker<'a> {
     /// there, so what a check read depended on the merges made before it, the workers' order.
     /// The flags only ever turn on, and every merge a body makes is made by the end, so the
     /// decisions made again contain the ones made on the way whatever the order was.
+    /// The names `c`'s bases enter as a mask (their `names_mask`): all a walk of `c`'s own members
+    /// over its bases can meet in their tables, gathered once per class as dotty's `memberNames`
+    /// is, so that a member none of them names goes without a probe of each base.
+    pub(super) fn base_member_names(&self, c: ClassId) -> BaseNames {
+        let mut mask = 0;
+        for &(b, _) in &self.syms.class(c).base_types[1..] {
+            debug_assert!(self.names_mask_covers(b), "the names mask of {} lacks a name of its table", self.class_path(b));
+            mask |= self.syms.class(b).names_mask;
+        }
+        BaseNames(mask)
+    }
+
+    /// Whether `b`'s `names_mask` has the bit of every name of its table and extensions.
+    pub(super) fn names_mask_covers(&self, b: ClassId) -> bool {
+        let bi = self.syms.class(b);
+        bi.members.keys().all(|&n| bi.may_have(n)) && bi.extensions.iter().all(|&e| bi.may_have(self.syms.sym(e).name))
+    }
+
     pub(super) fn decide_override_pairs(&mut self) {
         let pairs = std::mem::take(&mut self.override_pairs);
         if pairs.is_empty() {
@@ -4191,6 +4209,7 @@ impl<'a> Worker<'a> {
         }
         // The `@targetName`s of the ancestors' alternatives, gathered once for the selectors.
         let mut ancestor_targets: Option<Vec<Name>> = None;
+        let mut inherited: Option<BaseNames> = None;
         for i in 0..self.own_member_count(c) {
             let m = self.own_member(c, i);
             let (name, is_ext, m_mods, has_def) = {
@@ -4220,7 +4239,9 @@ impl<'a> Worker<'a> {
             // Whether `m` overrides a method whose name in the output may not be the plain one,
             // and whether it is overloaded with a method it inherits.
             let (mut named_root, mut overloads_inherited) = (false, false);
-            for j in 1..self.syms.class(c).base_types.len() {
+            // A name none of the bases has meets nothing there (the bases' names gathered once).
+            let named = inherited.get_or_insert_with(|| self.base_member_names(c)).has(name);
+            for j in (1..self.syms.class(c).base_types.len()).filter(|_| named) {
                 let (b, bt) = self.syms.class(c).base_types[j];
                 // A base that declares nothing (`java.io.Serializable`) has nothing to override.
                 let bi = self.syms.class(b);
@@ -5901,6 +5922,7 @@ impl<'a> Worker<'a> {
     fn mark_accessors_unlocked(&mut self, c: ClassId) {
         let bases: Vec<ClassId> = self.syms.class(c).base_types.iter().map(|&(b, _)| b).skip(1).collect();
         let members = self.syms.class(c).member_order.clone();
+        let mut inherited: Option<BaseNames> = None;
         for m in members {
             // The setter of an abstract var is declared in the output whether or not a call
             // has completed it.
@@ -5930,7 +5952,9 @@ impl<'a> Worker<'a> {
             // the reach checks after the final passes (a library's subclass) takes it from its base
             // here, the ones checked before in `settle_val_accessors`.
             let mut over_accessor = false;
-            for &b in &bases {
+            // A name none of the bases has meets nothing there (the bases' names gathered once).
+            let named = inherited.get_or_insert_with(|| self.base_member_names(c)).has(name);
+            for &b in bases.iter().filter(|_| named) {
                 let Some(p) = self.syms.class(b).members.get(&name).copied() else { continue };
                 if self.syms.sym(p).kind != SymKind::Def {
                     let info = self.syms.sym(p);
@@ -5958,7 +5982,7 @@ impl<'a> Worker<'a> {
             } else if self.syms.class(c).has_overloads {
                 // The alternative without parameters of an overloaded name, whose name in the
                 // output the accessor takes.
-                let implemented = bases.iter().find_map(|&b| {
+                let implemented = bases.iter().filter(|_| named).find_map(|&b| {
                     let mut k = 0;
                     while let Some(p) = self.own_alternative(b, name, k) {
                         k += 1;
@@ -6208,4 +6232,15 @@ enum Boundary {
     Root,
     Class(ClassId),
     Package(PkgId),
+}
+
+/// The names of a class's bases, a bit each (`Worker::base_member_names`).
+#[derive(Clone, Copy)]
+pub(super) struct BaseNames(u64);
+
+impl BaseNames {
+    /// Whether a base may have the name: false only where none has.
+    pub(super) fn has(self, n: Name) -> bool {
+        self.0 & crate::symbols::name_bit(n) != 0
+    }
 }

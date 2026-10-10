@@ -2585,6 +2585,8 @@ impl<'c> Copier<'c> {
         // to it, their parameters, and every construction through them (`NewVia`).
         let ctors: Vec<SymId> = info.ctors.iter().map(|&s| self.member(t, s, nc)).collect();
         let primary_ctor = info.primary_ctor.map(|s| self.member(t, s, nc));
+        let names_mask = members.keys().fold(0, |m, &n| m | crate::symbols::name_bit(n))
+            | extensions.iter().fold(0, |m, &e| m | crate::symbols::name_bit(t.syms.sym(e).name));
         let givens: Vec<SymId> = info.givens.iter().map(|&s| self.sym(s)).collect();
         let parents: Vec<TypeId> = info.parents.iter().map(|&p| self.ty(t, p)).collect();
         let base_types: Vec<(ClassId, TypeId)> =
@@ -2619,6 +2621,7 @@ impl<'c> Copier<'c> {
         let superclass = info.superclass.map(|k| self.classes.get(&k).copied().unwrap_or(k));
         copy.superclass = superclass;
         copy.nested = info.nested.iter().map(|(&n, &k)| (n, self.classes.get(&k).copied().unwrap_or(k))).collect();
+        copy.names_mask = names_mask;
         copy.members = members;
         copy.member_order = member_order;
         copy.selectors = selectors;

@@ -138,6 +138,10 @@ pub struct ClassInfo {
     pub subclasses: Vec<ClassId>,
     pub members: FxMap<Name, SymId>,
     pub member_order: Vec<SymId>,
+    /// The names of `members` and `extensions`, a bit each (`name_bit`), set wherever either
+    /// gains one: dotty's `memberNames` of the class's own scope, so that a lookup of a name
+    /// whose bit is clear needs no probe of the table (`ClassInfo::may_have`).
+    pub names_mask: u64,
     pub nested: FxMap<Name, ClassId>,
     pub type_aliases: FxMap<Name, AliasId>,
     pub companion: Option<ClassId>,
@@ -889,6 +893,7 @@ impl Symbols {
             subclasses: Vec::new(),
             members: FxMap::default(),
             member_order: Vec::new(),
+            names_mask: 0,
             nested: FxMap::default(),
             type_aliases: FxMap::default(),
             companion: None,
@@ -1101,6 +1106,12 @@ impl Symbols {
         let info = &mut self.classes[c.idx()];
         info.members.insert(name, s);
         info.member_order.push(s);
+        info.names_mask |= name_bit(name);
+    }
+
+    /// Notes a name `c`'s table or extensions gained otherwise than by `add_member`.
+    pub fn note_member_name(&mut self, c: ClassId, name: Name) {
+        self.classes[c.idx()].names_mask |= name_bit(name);
     }
 
     /// Whether a private member `name` of `c` would share its run-time name with a member of a
@@ -1797,5 +1808,19 @@ mod tests {
         f.syms.class_mut(f.c).parents = vec![own];
         let store: &TypeStore = &f.store;
         f.syms.each_unpublished_type(&mut |what, t| crate::types::view::published(store, what, t));
+    }
+}
+
+/// A name's bit in `ClassInfo::names_mask`.
+#[inline]
+pub fn name_bit(n: Name) -> u64 {
+    1 << (n.0.wrapping_mul(0x9E37_79B9) >> 26)
+}
+
+impl ClassInfo {
+    /// Whether the class's table or extensions may have the name: false only where neither has.
+    #[inline]
+    pub fn may_have(&self, n: Name) -> bool {
+        self.names_mask & name_bit(n) != 0
     }
 }

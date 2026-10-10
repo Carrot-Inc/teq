@@ -144,7 +144,12 @@ impl<'a> Worker<'a> {
     /// The `k`-th alternative that `b` itself defines for `name`.
     #[inline]
     pub(super) fn own_alternative(&self, b: ClassId, name: Name, k: usize) -> Option<SymId> {
-        let &entry = self.syms.class(b).members.get(&name)?;
+        let info = self.syms.class(b);
+        if !info.may_have(name) {
+            debug_assert!(!info.members.contains_key(&name), "the names mask of {} lacks {}", self.class_path(b), self.name_str(name));
+            return None;
+        }
+        let &entry = info.members.get(&name)?;
         match self.syms.alternatives(entry) {
             Some(alts) => alts.iter().copied().filter(|&a| self.syms.sym(a).owner == Owner::Class(b)).nth(k),
             None => (k == 0).then_some(entry),
@@ -244,6 +249,7 @@ impl<'a> Worker<'a> {
         }
         let set = self.syms.new_overloaded(all[0], Owner::Class(c), all);
         self.syms.class_mut(c).members.insert(name, set);
+        self.syms.note_member_name(c, name);
         self.syms.class_mut(c).has_overloads = true;
         // The entry it replaces stands for nothing any more.
         if let SymKind::Overloaded(_) = self.syms.sym(entry).kind {
@@ -409,6 +415,7 @@ impl<'a> Worker<'a> {
         info.meets_inherited = true;
         info.merge_pending = true;
         self.syms.class_mut(c).members.insert(name, set);
+        self.syms.note_member_name(c, name);
     }
 
     // ---- names in the output ----
