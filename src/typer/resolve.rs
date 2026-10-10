@@ -3284,10 +3284,11 @@ impl<'a> Worker<'a> {
     }
 
     /// The term members of a refinement of `parent` as dotty's `Typer.typedRefinedTypeTree`
-    /// checks the class it makes of them: a generic member refines a member of the parent (but
-    /// an `apply` where the parent is `PolyFunction` itself, the parent's type symbol), and no
-    /// member's name is overloaded there, the refinement's members with the parent's that none
-    /// of them matches (`refinement_matches`); and, where the parent derives from
+    /// checks the class it makes of them: a generic member refines a member of the parent by
+    /// their infos (`allOverriddenSymbols`, `refinement_info_matches`; but an `apply` where the
+    /// parent is `PolyFunction` itself, the parent's type symbol), and no member's name is
+    /// overloaded there, the refinement's members with the parent's that none of them matches
+    /// by signature (`refinement_matches`); and, where the parent derives from
     /// `PolyFunction` (through an intersection or an alias too), as
     /// `Checking.checkPolyFunctionType` checks its method refinements: a `def`, and a `var`'s
     /// getter and setter (`Desugar.refinedTypeToClass`), a `val` left alone.
@@ -3308,7 +3309,7 @@ impl<'a> Worker<'a> {
         for &(name, sym, span) in terms {
             let sig = self.sig_arc(sym);
             let theirs = alternatives(self, name);
-            let refines = theirs.iter().any(|&(m, owner)| self.refinement_matches(m, owner, &sig));
+            let refines = theirs.iter().any(|&(m, owner)| self.refinement_info_matches(m, owner, &sig));
             if !sig.tparams.is_empty() && !refines && !(exact_poly_function && name == names::APPLY) {
                 let parent_name = match class {
                     Some(c) if c == self.b.any_ref => "type AnyRef".to_string(),

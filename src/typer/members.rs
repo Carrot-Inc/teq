@@ -506,9 +506,6 @@ impl<'a> Worker<'a> {
                 let found = self.member_in_type(body, name, prefix)?;
                 Some(self.opened_member(found, prefix))
             }
-            // `Types.findMember`'s `goRefined`: an alias is the member's info as it stands, bounds
-            // are met with the parent's member (`pinfo & rinfo`), a refinement of a refinement
-            // of one name narrowing it on both sides.
             Type::Refined(parent, r) => match self.types.refinement(r) {
                 Refinement::Alias(n, rhs) if n == name => Some(MemberInfo::Alias(rhs)),
                 // A refinement's bounds narrow the member its parent has (a `RefinedType`'s
@@ -2024,8 +2021,69 @@ impl<'a> Worker<'a> {
     /// as `owner_ty`, which it then refines rather than overloads (dotty's `Denotation.matches`
     /// of a refinement's symbol, `Typer.typedRefinedTypeTree`): as many type parameters, the
     /// same clauses, each parameter of the same mode and type, the member's type parameters and
-    /// earlier parameters read as the refinement's.
+    /// earlier parameters read as the refinement's. The signatures decide first
+    /// (`matchesLoosely`, `Signature.matchDegree`): parameters erased otherwise (a type
+    /// parameter's bound that erases otherwise) match nothing, and parameters and result erased
+    /// alike match whatever the types; where only the parameters' erasures agree, the infos are
+    /// compared (`Type.matches`, `matchingMethodParams`, `refinement_info_matches`).
     pub fn refinement_matches(&mut self, member: SymId, owner_ty: TypeId, sig: &MethodSig) -> bool {
+        let theirs = self.sig_arc(member);
+        let shape = |s: &MethodSig| s.clauses.iter().map(|c| c.params.len()).collect::<Vec<_>>();
+        if theirs.tparams.len() != sig.tparams.len() || shape(&theirs) != shape(sig) {
+            return false;
+        }
+        let subst = self.owner_subst(owner_ty);
+        let keys = |ps: &[super::loader::declared::PickledSigParam]| -> Vec<String> {
+            ps.iter().map(|p| match p {
+                super::loader::declared::PickledSigParam::Types(n) => format!("#{n}"),
+                super::loader::declared::PickledSigParam::Term(t) => t.clone(),
+            }).collect()
+        };
+        // The member's signature as the refined type sees it (`asSeenFrom`): a generic member's
+        // own type parameters bounded as seen from there too, fresh ones over the substituted
+        // bounds (`Parent[c.T]`'s `run[A <: T]` erases `A` as `c.T`).
+        let own_sig = if subst.is_empty() || theirs.tparams.is_empty() {
+            self.pickled_signature_seen(member, "", &subst)
+        } else {
+            let fresh: Vec<TParamId> = theirs.tparams.iter().map(|&p| {
+                let info = self.syms.tparam(p);
+                let (n, variance, arity) = (info.name, info.variance, info.arity);
+                let q = self.syms.new_tparam(n, variance);
+                self.syms.tparams[q.idx()].arity = arity;
+                q
+            }).collect();
+            let mut seen_subst = subst.clone();
+            seen_subst.extend(theirs.tparams.iter().zip(&fresh).map(|(&p, &q)| (p, self.types.param(q))));
+            for (&p, &q) in theirs.tparams.iter().zip(&fresh) {
+                let (lo, hi) = (self.syms.tparam(p).lower, self.syms.tparam(p).upper);
+                self.syms.tparams[q.idx()].lower = self.types.subst(lo, &seen_subst);
+                self.syms.tparams[q.idx()].upper = self.types.subst(hi, &seen_subst);
+            }
+            let mut seen = (*theirs).clone();
+            seen.tparams = fresh;
+            for p in seen.clauses.iter_mut().flat_map(|c| c.params.iter_mut()) {
+                p.ty = self.types.subst(p.ty, &seen_subst);
+            }
+            seen.ret = self.types.subst(seen.ret, &seen_subst);
+            self.pickled_refinement_signature(&seen, "")
+        };
+        // A type whose erasure teq cannot tell is consistent with any (`tpnme.Uninstantiated`).
+        if let (Some((own, own_ret)), Some((refined, refined_ret))) = (own_sig, self.pickled_refinement_signature(sig, "")) {
+            if keys(&own) != keys(&refined) {
+                return false;
+            }
+            if own_ret == refined_ret {
+                return true;
+            }
+        }
+        self.refinement_info_matches(member, owner_ty, sig)
+    }
+
+    /// Whether a refinement of the signature `sig` matches `member` by their infos alone (dotty's
+    /// `Type.matches`, which `allOverriddenSymbols` asks through `matchingDecl`): as many type
+    /// parameters, their bounds aside, the same clauses, each parameter of the same mode and
+    /// type.
+    pub fn refinement_info_matches(&mut self, member: SymId, owner_ty: TypeId, sig: &MethodSig) -> bool {
         let theirs = self.sig_arc(member);
         let shape = |s: &MethodSig| s.clauses.iter().map(|c| c.params.len()).collect::<Vec<_>>();
         if theirs.tparams.len() != sig.tparams.len() || shape(&theirs) != shape(sig) {
@@ -2079,11 +2137,12 @@ impl<'a> Worker<'a> {
             let t = w.subst_paths(t, &renamed);
             w.types.subst(t, &subst)
         };
+        // `matchingPolyParams`: the member's bounds lie within the refinement's, contravariantly.
         for (&p, &q) in theirs.tparams.iter().zip(&sig.tparams) {
             let (lo, hi) = (self.syms.tparam(p).lower, self.syms.tparam(p).upper);
             let (lo, hi) = (seen(self, lo), seen(self, hi));
             let (qlo, qhi) = (self.syms.tparam(q).lower, self.syms.tparam(q).upper);
-            if !self.is_same(lo, qlo) || !self.is_same(hi, qhi) {
+            if !self.is_sub(qlo, lo) || !self.is_sub(hi, qhi) {
                 self.rollback(mark);
                 return false;
             }
@@ -2125,8 +2184,16 @@ impl<'a> Worker<'a> {
     }
 
     /// The structural member `name` of the refined type `t` selected through `prefix`, the
-    /// receiver's path or `t`: a recursive refinement is opened at it (`goRec`).
+    /// receiver's path or `t`: a recursive refinement is opened at it (`goRec`). Refinements
+    /// that make an overload give none.
     pub fn refined_term_through(&mut self, t: TypeId, name: Name, prefix: TypeId) -> Option<Refinement> {
+        self.refined_denotation_through(t, name, prefix).ok().flatten()
+    }
+
+    /// `refined_term_through` as a denotation: the refinement, none, or `Err` where the parts'
+    /// refinements make an overload, which stays one whatever another part refines
+    /// (`MultiDenotation.meet`: `R["k"] & R["v"] & R["z"]`'s three `get`s).
+    fn refined_denotation_through(&mut self, t: TypeId, name: Name, prefix: TypeId) -> Result<Option<Refinement>, ()> {
         let mut t = self.deref(t);
         loop {
             match self.types.get(t) {
@@ -2136,23 +2203,54 @@ impl<'a> Worker<'a> {
                 // different methods are an overload, which no refinement narrows (`Overloaded
                 // definitions introduced by refinements cannot be resolved`): the class's member.
                 Type::Inter(a, b) => {
-                    let (x, y) = (self.refined_term_through(a, name, prefix), self.refined_term_through(b, name, prefix));
+                    let (x, y) = (self.refined_denotation_through(a, name, prefix)?, self.refined_denotation_through(b, name, prefix)?);
                     return match (x, y) {
-                        (Some(x), None) | (None, Some(x)) => Some(x),
-                        (Some(x), Some(y)) if x == y => Some(x),
-                        (Some(Refinement::Val(n, s, tx)), Some(Refinement::Val(_, _, ty))) => Some(Refinement::Val(n, s, self.types.inter(tx, ty))),
-                        _ => None,
+                        (None, None) => Ok(None),
+                        (Some(x), None) | (None, Some(x)) => Ok(Some(x)),
+                        (Some(x), Some(y)) if x == y => Ok(Some(x)),
+                        (Some(Refinement::Val(n, s, tx)), Some(Refinement::Val(_, _, ty))) => Ok(Some(Refinement::Val(n, s, if tx == ty { tx } else { self.types.inter(tx, ty) }))),
+                        // Two refinements of one signature, declared apart, join: the first's
+                        // parameters, the results intersected (`TypeComparer.andType` of two
+                        // method types with matching parameters).
+                        (Some(x @ Refinement::Term(n, s, lx)), Some(Refinement::Term(_, sy, ly))) => {
+                            let (xs, ys) = (self.refinement_sig(x), self.refinement_sig(Refinement::Term(n, sy, ly)));
+                            let shape = |s: &MethodSig| s.clauses.iter().map(|c| (c.params.len(), c.is_using)).collect::<Vec<_>>();
+                            if !xs.tparams.is_empty() || !ys.tparams.is_empty() || shape(&xs) != shape(&ys) {
+                                return Err(());
+                            }
+                            let renamed: Vec<(SymId, TypeId)> = ys.clauses.iter().flat_map(|c| c.params.iter()).zip(xs.clauses.iter().flat_map(|c| c.params.iter())).filter(|(q, p)| q.sym != p.sym).map(|(q, p)| (q.sym, self.types.mk(Type::Term(p.sym)))).collect();
+                            let pairs: Vec<(TypeId, TypeId)> = xs.clauses.iter().flat_map(|c| c.params.iter()).zip(ys.clauses.iter().flat_map(|c| c.params.iter())).map(|(p, q)| (p.ty, q.ty)).collect();
+                            let mark = self.trail.len();
+                            for (pt, qt) in pairs {
+                                let qt = self.subst_paths(qt, &renamed);
+                                if !self.is_same(pt, qt) {
+                                    self.rollback(mark);
+                                    return Err(());
+                                }
+                            }
+                            let yret = self.subst_paths(ys.ret, &renamed);
+                            let ret = if xs.ret == yret { xs.ret } else { self.types.inter(xs.ret, yret) };
+                            let mut items: Vec<TypeId> = self.types.items(lx).to_vec();
+                            if let Some(last) = items.last_mut() {
+                                *last = ret;
+                            }
+                            Ok(Some(Refinement::Term(n, s, self.types.list(&items))))
+                        }
+                        _ => Err(()),
                     };
                 }
                 Type::Refined(p, r) => {
                     let refinement = self.types.refinement(r);
                     if matches!(refinement, Refinement::Term(n, ..) | Refinement::Val(n, ..) if n == name) {
-                        return Some(refinement);
+                        return Ok(Some(refinement));
                     }
                     t = p;
                 }
-                Type::Alias(..) => t = self.reduce_head(t)?,
-                _ => return None,
+                Type::Alias(..) => match self.reduce_head(t) {
+                    Some(r) => t = r,
+                    None => return Ok(None),
+                },
+                _ => return Ok(None),
             }
         }
     }

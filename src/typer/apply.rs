@@ -5420,17 +5420,23 @@ impl<'a> Worker<'a> {
     /// receiver's type declares it, opened at the receiver: dotty's `Types.findMember`
     /// `goRefined`, whose joint denotation keeps the refinement's info where it conforms to the
     /// member's (`rinfo <:< joint.info`) or is the `apply` of a function type's refinement, for
-    /// the parameters' names and the result. The call is typed by it; the class's member is the
-    /// one called, its defaults its own. None for an overloaded member and where the refinement
-    /// does not conform.
+    /// the parameters' names and the result, and the two infos met elsewhere (`Denotations.meet`,
+    /// `infoMeet`: the member's parameters, the results intersected, `A & Z`). The call is typed
+    /// by it; the class's member is the one called, its defaults its own. None for an overloaded
+    /// member and for a refinement of another signature (an overload of the name).
     fn refined_denotation(&mut self, recv: TExprId, recv_ty: TypeId, name: Name, sym: SymId, owner_ty: TypeId) -> Option<(Refinement, Arc<MethodSig>)> {
-        if !self.types.term_refinements() || matches!(self.types.get(recv_ty), Type::Class(..) | Type::Lit(_) | Type::Param(_) | Type::Error) {
+        if !self.types.term_refinements() || matches!(self.types.get(recv_ty), Type::Class(..) | Type::Lit(_) | Type::Error) {
             return None;
         }
         if self.syms.alternatives(sym).is_some() {
             return None;
         }
-        let under = self.widen_path(recv_ty);
+        // A type parameter's member is its bound's (`findMember` through a `TypeParamRef`'s info).
+        let under = match self.types.get(recv_ty) {
+            Type::Param(p) if self.syms.tparam(p).upper != ANY => self.syms.tparam(p).upper,
+            Type::Param(_) => return None,
+            _ => self.widen_path(recv_ty),
+        };
         let prefix = self.path_of(recv).unwrap_or(under);
         let r = self.refined_term_through(under, name, prefix)?;
         let rsig = self.refinement_sig(r);
@@ -5440,9 +5446,17 @@ impl<'a> Worker<'a> {
             None => theirs,
         };
         let function_apply = name == names::APPLY && self.class_of(under).is_some_and(|c| self.is_function_class(c) || self.is_context_function_class(c));
-        if !function_apply && !self.refined_info_conforms(&theirs, owner_ty, &rsig) {
-            return None;
-        }
+        let (r, rsig) = if function_apply || self.refined_info_conforms(&theirs, owner_ty, &rsig) {
+            (r, rsig)
+        } else {
+            let met = self.met_denotation(&theirs, owner_ty, &rsig)?;
+            let r = match r {
+                Refinement::Term(n, s, _) => Refinement::Term(n, s, self.sig_types(&met)),
+                Refinement::Val(n, s, _) => Refinement::Val(n, s, met.ret),
+                other => other,
+            };
+            (r, Arc::new(met))
+        };
         // The defaults are the member's: scalac finds the getters by the symbol the joint
         // denotation keeps.
         let defaults: Vec<bool> = theirs.clauses.iter().flat_map(|c| c.params.iter().map(|p| p.has_default)).collect();
@@ -5456,6 +5470,34 @@ impl<'a> Worker<'a> {
             rsig
         };
         Some((r, rsig))
+    }
+
+    /// The member's info `theirs` (its owner seen as `owner_ty`) met with the refinement's `rsig`
+    /// of one signature (`Denotations.meet` of the two, `TypeComparer.andType` of two method
+    /// types with matching parameters): the member's parameters, its result `&` the
+    /// refinement's, the refinement's parameters read as the member's. None where the two do not
+    /// match (an overload).
+    fn met_denotation(&mut self, theirs: &MethodSig, owner_ty: TypeId, rsig: &MethodSig) -> Option<MethodSig> {
+        let shape = |s: &MethodSig| s.clauses.iter().map(|c| (c.params.len(), c.is_using)).collect::<Vec<_>>();
+        if !theirs.tparams.is_empty() || !rsig.tparams.is_empty() || shape(theirs) != shape(rsig) {
+            return None;
+        }
+        let subst = self.owner_subst(owner_ty);
+        let mut met = theirs.clone();
+        let renamed: Vec<(SymId, TypeId)> = rsig.clauses.iter().flat_map(|c| c.params.iter()).zip(theirs.clauses.iter().flat_map(|c| c.params.iter())).filter(|(q, p)| q.sym != p.sym).map(|(q, p)| (q.sym, self.types.mk(Type::Term(p.sym)))).collect();
+        let mark = self.trail.len();
+        for (p, q) in met.clauses.iter_mut().flat_map(|c| c.params.iter_mut()).zip(rsig.clauses.iter().flat_map(|c| c.params.iter())) {
+            p.ty = self.types.subst(p.ty, &subst);
+            let qt = self.subst_paths(q.ty, &renamed);
+            if p.by_name != q.by_name || p.repeated != q.repeated || !self.is_same(p.ty, qt) {
+                self.rollback(mark);
+                return None;
+            }
+        }
+        let ret = self.types.subst(theirs.ret, &subst);
+        let rret = self.subst_paths(rsig.ret, &renamed);
+        met.ret = self.types.inter(ret, rret);
+        Some(met)
     }
 
     fn apply_member_of_class(
