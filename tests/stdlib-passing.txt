@@ -16,6 +16,7 @@ anon_sites
 any_equals_method
 anyref_parent
 anyref_synchronized
+applied_param_reference
 apply_value
 arity
 array_as_collection
@@ -45,7 +46,6 @@ bench_collections
 bench_dispatch
 bench_numeric
 bench_toplevel
-bigint_ops
 bigint_random_entry_points
 bigint_random_primes
 block_infix_argument
@@ -64,7 +64,6 @@ brace_first_line_statements
 brace_next_line
 braces
 branch_var_bound_conversion
-buffer_append_varargs
 byname_conversion
 byname_default
 byname_in_function_type
@@ -370,6 +369,8 @@ given_fits_var_candidate
 given_hk_bound
 given_implicit_scope_negation
 given_import_bound_exclusion
+given_import_bound_situated
+given_import_bounds
 given_import_context_chain
 given_import_empty_contexts
 given_import_file_contexts
@@ -590,7 +591,6 @@ intersection_bounds_over_params
 intersection_generic_overloads
 intersection_member_bounds_meet
 irrefutable_extractor_exhaustive
-iterable_to_iterator
 iterator_laziness
 jar_inner_class_bounds
 java_annotation_interface
@@ -771,7 +771,6 @@ module_init
 multi
 murmurhash3
 mutable_map_overloads
-mutable_multimap
 mutable_set_map_result
 name_precedence
 name_transformer
@@ -847,7 +846,6 @@ overload_protected_alternative
 overload_resolution
 overload_roots
 overload_sam
-overload_std_collections
 overload_targetname
 overload_tupled_most_specific
 overload_type_arg_count
@@ -1108,7 +1106,6 @@ std_implicit_evidence
 std_iterator
 std_listmap_partition
 std_listset
-std_map_set_buffer
 std_mapview_map
 std_mutable_map_default
 std_named_imports
@@ -1315,7 +1312,6 @@ vc_box_stable
 vc_box_stable_extractor
 vdom_dsl
 vector_trie
-views
 widened_double_text
 wildcard_bounds
 wildcard_lower_bound
