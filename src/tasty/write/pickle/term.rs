@@ -3557,6 +3557,21 @@ impl<'w, 'a> P<'w, 'a> {
         }
     }
 
+    /// The prefix a local class `c` is named under where a body refers to it: the enclosing
+    /// class's, but where the body is `c`'s own (a secondary constructor's `this(..)`, a `new C`
+    /// in a method of `C`), the class `c` itself stands in, so `c`'s name is the one it has where it
+    /// is defined, as the signature's result is the class's own erased name wherever it is read.
+    fn local_prefix_of(&mut self, c: ClassId) -> String {
+        match self.enclosing.iter().rposition(|&k| k == c) {
+            Some(0) => String::new(),
+            Some(i) => {
+                let k = self.enclosing[i - 1];
+                self.w.library_class_name(k, "")
+            }
+            None => self.local_prefix(),
+        }
+    }
+
     /// `f.apply(args)` of a function value.
     /// `f.apply(args)`: the `apply` the function's type has, a context function's or one a
     /// class of functions overrides, as the typer of scalac selects it.
@@ -3817,7 +3832,7 @@ impl<'w, 'a> P<'w, 'a> {
         };
         let opens: Vec<crate::tasty::write::buf::Slot> = clauses.iter().map(|_| self.open(APPLY)).collect();
         let ta = (!targs.is_empty()).then(|| self.open(TYPEAPPLY));
-        let local = self.local_prefix();
+        let local = self.local_prefix_of(c);
         let object = c == self.w.b.any_ref;
         let sig = match via {
             Some(s) => self.w.pickled_signature(s, &local),
