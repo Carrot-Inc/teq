@@ -35,6 +35,8 @@ pub struct DefSites {
     pub(super) not_given_class: Option<ClassId>,
     /// `scala.reflect.ClassTag`.
     pub class_tag: Option<ClassId>,
+    /// `scala.reflect.GenericClassTag`, the class of the tags `ClassTag.apply` makes.
+    pub generic_class_tag: Option<ClassId>,
     /// `scala.reflect.TypeTest`, the std's or a jar's, once a search has met it.
     pub(super) type_test: Option<ClassId>,
 }
@@ -72,6 +74,7 @@ impl<'a> Worker<'a> {
     pub fn find_site_classes(&mut self) {
         self.sites.not_given_class = self.entered_class_at(&["scala", "util", "NotGiven"]);
         self.sites.class_tag = self.entered_class_at(&["scala", "reflect", "ClassTag"]);
+        self.sites.generic_class_tag = self.entered_class_at(&["scala", "reflect", "GenericClassTag"]);
     }
 
     /// The class or object at a path of packages, then of classes nested in one another,
@@ -430,15 +433,21 @@ impl<'a> Worker<'a> {
         Some(self.build_call(&call, none))
     }
 
-    /// The tag of `c`, a `ClassTag[tagged]`.
+    /// The tag of `c`, a `ClassTag[tagged]`: what scalac's `ClassTag.apply` makes of its class
+    /// (`Synthesizer.synthesizedClassTag`), a `GenericClassTag`, which the JVM's call of the
+    /// library's `apply` makes there.
     fn tag_of_class(&mut self, class: ClassId, c: ClassId, any: bool, tagged: TypeId) -> Option<TExprId> {
         if self.link_mode() {
             return self.linked_class_tag(class, c, any, tagged);
         }
+        if self.sites.generic_class_tag.is_none() {
+            self.sites.generic_class_tag = self.entered_class_at(&["scala", "reflect", "GenericClassTag"]);
+        }
+        let generic = self.sites.generic_class_tag?;
         let c = self.runtime_tuple_class(c);
         let of = self.prog.add(TExpr::ClassOf(c));
         let l = self.prog.list(&[of]);
-        Some(self.prog.add(TExpr::New(class, l)))
+        Some(self.prog.add(TExpr::New(generic, l)))
     }
 
     /// The tag of an erasure: of its class, wrapped once per dimension on the JVM, and of the

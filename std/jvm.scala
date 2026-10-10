@@ -521,7 +521,7 @@ def newArrayOfTag[T](tag: scala.reflect.ClassTag[T], length: Int): Array[T] =
   unsafeCast(newInstanceOf(elementClassOf(tag), length))
 
 def wrappedTag[T](tag: scala.reflect.ClassTag[T]): scala.reflect.ClassTag[Array[T]] =
-  new scala.reflect.ClassTag(classOfValue(newInstanceOf(elementClassOf(tag), 0)))
+  scala.reflect.ClassTag(classOfValue(newInstanceOf(elementClassOf(tag), 0)))
 
 private def fillArray[T](out: Array[T], b: RawBuffer[T]): Array[T] =
   var i = 0

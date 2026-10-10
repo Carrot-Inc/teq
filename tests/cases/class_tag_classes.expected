@@ -1,0 +1,25 @@
+java.lang.String
+unapply Abc
+Some(Abc)
+unapply abc
+None
+newArray 2
+List(new, new)
+newArray 1
+List(new)
+unapply 1
+unapply abc
+unapply Xyz
+Some(Xyz)
+unapply q
+unapply Q
+List(plain q, tag Q)
+Upper
+List(Int, java.lang.String, Long, Unit)
+true
+true
+true
+List(0, 0)
+Some(1)
+None
+1

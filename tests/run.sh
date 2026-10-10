@@ -11,7 +11,10 @@
 # honours; linking takes longer than a JVM run, the first time by a download. A test of the JVM's
 # platform, the files and the process JavaScript has none of, carries `//> using platform jvm`:
 # its expectation is written as any other's, run from the repository's root, and it does not run
-# here (tests/run_interp.sh and tests/run_jvm.sh run it).
+# here (tests/run_interp.sh and tests/run_jvm.sh run it). A test of a departure the lean targets keep
+# (docs/internal/DIFFERENCES.md: the std's erased `ClassTag` evidence) is compared with
+# tests/lean-expected/<name>.expected here and in tests/run_interp.sh, written by hand; its .expected
+# stays scalac's, which tests/run_jvm.sh compares with.
 cd "$(dirname "$0")/.."
 TEQ=${TEQ:-./target/release/teq}
 export TZ=UTC  # an archive entry's DOS time is local time: the recorded bytes are UTC's
@@ -40,6 +43,7 @@ for src in tests/cases/*.scala tests/cases/*/; do
       continue
     fi
   fi
+  [ -f "tests/lean-expected/$name.expected" ] && expected="tests/lean-expected/$name.expected"
   if grep -q -h '^//> using platform jvm' "$src" "$src"/*.scala 2>/dev/null; then
     echo "skip $name: the JVM's platform"
     pass=$((pass + 1))

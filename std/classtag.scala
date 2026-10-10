@@ -1,9 +1,12 @@
 package scala.reflect
 
-/** A `ClassTag[T]` carries the class of `T`. The compiler supplies one for a concrete `T` where a
-  * `using` parameter asks for it, as scalac does; `classOf[T]` is the class it carries.
+/** scala-library's `ClassTag`, the class of `T` (`runtimeClass`): a trait a program may implement,
+  * overriding `newArray`, `unapply` or `wrap` too. The compiler supplies a `GenericClassTag` for a
+  * concrete `T` where a `using` parameter asks for one, as scalac's `ClassTag.apply` makes it;
+  * `classOf[T]` is the class it carries.
   */
-final class ClassTag[T](val runtimeClass: Class[?]):
+trait ClassTag[T]:
+  def runtimeClass: Class[?]
   @jvm("rt $0 $1:I rtcall newArrayOfTag(Lscala/reflect/ClassTag;I)Ljava/lang/Object; cast_result")
   @jvmLink("$0 $1:I invokeinterface scala/reflect/ClassTag.newArray(I)Ljava/lang/Object; cast_result")
   def newArray(len: Int): Array[T] = unsafeCast(scala.newArray[Any](len, zero))
@@ -38,7 +41,7 @@ final class ClassTag[T](val runtimeClass: Class[?]):
     if fits then Some(unsafeCast(x)) else None
   @jvm("rt $0 rtcall wrappedTag(Lscala/reflect/ClassTag;)Lscala/reflect/ClassTag;")
   @jvmLink("$0 invokeinterface scala/reflect/ClassTag.wrap()Lscala/reflect/ClassTag;")
-  def wrap: ClassTag[Array[T]] = new ClassTag(classOf[Array[T]])
+  def wrap: ClassTag[Array[T]] = new GenericClassTag(classOf[Array[T]])
   override def equals(that: Any): Boolean = that match
     case c: ClassTag[?] => c.runtimeClass.getName == runtimeClass.getName
     case _ => false
@@ -59,8 +62,11 @@ final class ClassTag[T](val runtimeClass: Class[?]):
 /** `scala.reflect.classTag[T]`, the evidence itself, as a library body names it. */
 def classTag[T](using ct: ClassTag[T]): ClassTag[T] = ct
 
+/** scala-library's `ClassTag.GenericClassTag`, the tag `ClassTag.apply` makes. */
+final class GenericClassTag[T](val runtimeClass: Class[?]) extends ClassTag[T]
+
 object ClassTag:
-  def apply[T](runtimeClass: Class[?]): ClassTag[T] = new ClassTag(runtimeClass)
+  def apply[T](runtimeClass: Class[?]): ClassTag[T] = new GenericClassTag(runtimeClass)
   val Byte: ClassTag[Byte] = ClassTag(classOf[Byte])
   val Short: ClassTag[Short] = ClassTag(classOf[Short])
   val Char: ClassTag[Char] = ClassTag(classOf[Char])
