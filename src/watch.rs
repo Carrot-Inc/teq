@@ -292,12 +292,18 @@ struct Report {
     parts: Option<String>,
     /// The identity the language server gave the build (`build #<n>`).
     build: Option<u64>,
+    /// Of a one-file JavaScript build: whether the file is an ES module, the program importing or
+    /// exporting, rather than a script.
+    es_module: Option<bool>,
 }
 
 /// What a session builds after typing.
 enum Target {
     /// The split JavaScript build into the directory.
     Js(String),
+    /// The one-file JavaScript build into the file (`-o` without `--split`), a script or, where
+    /// the program imports or exports, an ES module, which the answer says (`esModule`).
+    JsFile(String),
     /// The class files of a JVM build into the directory, the files under `--own` only.
     Jvm(String),
     /// Nothing: the diagnostics alone.
@@ -384,10 +390,11 @@ pub fn run(opts: &Options) -> ! {
             }
         }
     } else {
-        match opts.split.clone() {
-            Some(dir) => Target::Js(dir),
-            None => {
-                eprintln!("teq compiler watch needs --split dir, -o dir with --target jvm, or --check");
+        match (opts.split.clone(), opts.output.clone()) {
+            (Some(dir), _) => Target::Js(dir),
+            (None, Some(file)) => Target::JsFile(file),
+            (None, None) => {
+                eprintln!("teq compiler watch needs --split dir, -o file, -o dir with --target jvm, or --check");
                 std::process::exit(2);
             }
         }
@@ -658,8 +665,8 @@ pub fn run(opts: &Options) -> ! {
             t.inline.max_depth = opts.max_inlines;
             t.inline.production = opts.release;
             // A JVM session writes every entry point's class, as `--all-mains` does.
-            let js = matches!(target, Target::Js(_));
-            t.inline.es_modules = js;
+            let js = matches!(target, Target::Js(_) | Target::JsFile(_));
+            t.inline.es_modules = matches!(target, Target::Js(_));
             t.inline.outlines = js && !opts.no_outline;
             t.choose_entry = js;
             if opts.jvm {
@@ -925,7 +932,7 @@ pub fn run(opts: &Options) -> ! {
                     if opts.jvm {
                         report.diagnostics = Some(render_check(&t.diags, &diag_files(t, &sources)));
                     }
-                } else if matches!(target, Target::Js(_)) && written.is_empty() {
+                } else if matches!(target, Target::Js(_) | Target::JsFile(_)) && written.is_empty() {
                     // The last build could not be written: this one writes it.
                     if finish(t, &sources, &asts, &target, opts, &mut report, &mut written, &mut emit_cache, &mut jvm_state, None, &unit_file, &mut kept_reach, true, None) {
                         modules_written = report.modules;
@@ -933,6 +940,21 @@ pub fn run(opts: &Options) -> ! {
                 } else {
                     report.ok = true;
                     report.modules = modules_written;
+                    if let Target::JsFile(file) = &target {
+                        // The file another tool deleted since the last build is put back.
+                        if !std::path::Path::new(file).exists() {
+                            if let Some(text) = written.get(file) {
+                                match write_file(file, text) {
+                                    Ok(()) => report.changed = vec![file.clone()],
+                                    Err(e) => {
+                                        report.ok = false;
+                                        report.errors.push(json_object(&[("message", JsonValue::Str(&format!("cannot write {}: {}", file, e)))]));
+                                    }
+                                }
+                            }
+                        }
+                        report.es_module = Some(t.prog.is_module());
+                    }
                     if let Target::Js(dir) = &target {
                         // What another tool deleted since the last build is put back.
                         let t_write = Instant::now();
@@ -1206,29 +1228,38 @@ fn finish(
     let reuse = reuse && emit::kept::wanted() && kept.as_ref().is_some_and(|k| k.current());
     let done = match target {
         Target::Js(dir) => finish_build(t, sources, dir, opts, report, written, cache, kept, reuse),
+        Target::JsFile(file) => finish_file(t, sources, file, opts, report, written, kept, reuse),
         Target::Jvm(dir) => finish_jvm(t, sources, asts, dir, opts, report, jvm_state, scope, unit_file, kept, reuse, target_names),
         Target::Check => {
             check_report(t, sources, opts, report);
-            // Under `--own`, the classes of the owned files typed anew, for a build tool's
-            // discovery, as a JVM session answers them; under `--analysis-version` without it,
-            // those of every file of the program.
-            let all_sources = t.all_sources();
-            let owned = crate::owned_files(opts, &all_sources);
-            if owned.is_some() || opts.analysis_version.is_some() {
-                let owned_file = |f: &FileId| !sources[f.0 as usize].is_std && owned.as_ref().is_none_or(|o| o[f.0 as usize]);
-                let files: Vec<FileId> = match scope {
-                    Some(files) => files.iter().copied().filter(owned_file).collect(),
-                    None => (0..sources.len()).map(|i| FileId(i as u32)).filter(owned_file).collect(),
-                };
-                let unit_file = unit_file.to_vec();
-                let mark = t.diags.items.len();
-                report.analysis = Some(crate::typer::thread::run(|| jvm::analysis::render_typed(t, &files, &unit_file)));
-                add_api(t, opts, report, &files, &unit_file);
-                t.diags.items.truncate(mark);
-            }
             true
         }
     };
+    // Under `--own`, the classes of the owned files typed anew, for a build tool's discovery, as a
+    // JVM session answers them; under `--analysis-version` without it, those of every file of the
+    // program: a check's, or a JavaScript build's that passed (a test link's, whose suites the
+    // runner finds by it).
+    let analysed = match target {
+        Target::Check => true,
+        Target::Js(_) | Target::JsFile(_) => done && opts.analysis_version.is_some(),
+        Target::Jvm(_) => false,
+    };
+    if analysed {
+        let all_sources = t.all_sources();
+        let owned = crate::owned_files(opts, &all_sources);
+        if owned.is_some() || opts.analysis_version.is_some() {
+            let owned_file = |f: &FileId| !sources[f.0 as usize].is_std && owned.as_ref().is_none_or(|o| o[f.0 as usize]);
+            let files: Vec<FileId> = match scope {
+                Some(files) => files.iter().copied().filter(owned_file).collect(),
+                None => (0..sources.len()).map(|i| FileId(i as u32)).filter(owned_file).collect(),
+            };
+            let unit_file = unit_file.to_vec();
+            let mark = t.diags.items.len();
+            report.analysis = Some(crate::typer::thread::run(|| jvm::analysis::render_typed(t, &files, &unit_file)));
+            add_api(t, opts, report, &files, &unit_file);
+            t.diags.items.truncate(mark);
+        }
+    }
     if !emit::kept::wanted() {
         *kept = None;
     }
@@ -1816,6 +1847,59 @@ fn finish_build(
             false
         }
     }
+}
+
+/// A file written whole under another name, then renamed over the old one, so that a reader
+/// never finds half of it.
+fn write_file(file: &str, text: &str) -> std::io::Result<()> {
+    let tmp = format!("{}.tmp", file);
+    write::file(&tmp, text)?;
+    std::fs::rename(&tmp, file)
+}
+
+/// Reach, emit and the writing of a one-file JavaScript build after a successful type check: the
+/// file rewritten when its text differs from the last build's (`written`, by the file's name),
+/// whether it is an ES module answered; false when errors stop the build, the file left as it was.
+#[allow(clippy::too_many_arguments)]
+fn finish_file(t: &mut Worker, sources: &Sources, file: &str, opts: &Options, report: &mut Report, written: &mut FxMap<String, String>, kept: &mut Option<emit::kept::Kept>, reuse: bool) -> bool {
+    if t.diags.fails(&diag_files(t, sources), opts.werror) {
+        report.errors = render_all(&t.diags, &diag_files(t, sources), opts.werror);
+        report.warnings = Vec::new();
+        return false;
+    }
+    let t_reach = Instant::now();
+    let array_seq = crate::typer::thread::run(|| t.array_seq_class());
+    let reach = session_reach(t, array_seq, opts.release, kept, reuse, report);
+    report.ms.reach = t_reach.elapsed();
+    if t.diags.has_errors() {
+        report.errors = render_all(&t.diags, &diag_files(t, sources), false);
+        return false;
+    }
+    let t_emit = Instant::now();
+    let array_seq = crate::typer::thread::run(|| t.array_seq_class());
+    let options = emit::Options { release: opts.release, size_report: None, outline: !opts.no_outline };
+    let (output, _) = emit::emit(&t.prog, &t.syms, &t.types, t.interner, array_seq, reach, None, options, None);
+    report.ms.emit = t_emit.elapsed();
+    note_parts(report, Duration::ZERO, true);
+    let emit::Output::Script(text) = output else { unreachable!("one file without a split") };
+    let t_write = Instant::now();
+    if written.get(file) != Some(&text) || !std::path::Path::new(file).exists() {
+        if let Err(e) = write_file(file, &text) {
+            written.clear();
+            report.errors.push(json_object(&[("message", JsonValue::Str(&format!("cannot write {}: {}", file, e)))]));
+            return false;
+        }
+        report.changed = vec![file.to_string()];
+    }
+    report.ms.write = t_write.elapsed();
+    report.ok = true;
+    report.modules = 1;
+    report.es_module = Some(t.prog.is_module());
+    report.warnings = render_warnings(&t.diags, &diag_files(t, sources));
+    written.clear();
+    written.insert(file.to_string(), text);
+    note_after(report);
+    true
 }
 
 /// The lexical and parse diagnostics of the program's files, by canonical path.
@@ -2523,6 +2607,9 @@ fn print_report(r: &Report) {
     }
     if !r.deleted.is_empty() {
         fields.push(("deleted", JsonValue::Raw(&deleted)));
+    }
+    if let Some(m) = r.es_module {
+        fields.push(("esModule", JsonValue::Bool(m)));
     }
     if !r.removed.is_empty() {
         fields.push(("removed", JsonValue::Raw(&removed)));

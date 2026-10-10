@@ -1054,9 +1054,9 @@ fn parse_file_options(command: &str, args: &[String]) -> Options {
             eprintln!("teq: analysis version {} is not one this teq answers: it answers versions 2 and 3", v);
             std::process::exit(2);
         }
-        let answers = (o.command == "build" && o.jvm) || (o.command == "check" && !o.interp) || (o.command == "watch" && (o.jvm || o.check));
+        let answers = (o.command == "build" && o.jvm) || (o.command == "check" && !o.interp) || o.command == "watch";
         if !answers {
-            eprintln!("--analysis-version belongs to `teq compiler build --target jvm`, `teq compiler check` and `teq compiler watch` with --target jvm or --check");
+            eprintln!("--analysis-version belongs to `teq compiler build --target jvm`, `teq compiler check` and `teq compiler watch`");
             std::process::exit(2);
         }
     }
