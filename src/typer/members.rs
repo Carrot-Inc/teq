@@ -598,6 +598,10 @@ impl<'a> Worker<'a> {
             return t;
         }
         match self.types.get(t) {
+            // A member named inside its own expansion stays named, as a class's match type alias
+            // does (`Type::Alias`): its cases name it (`h *: OutInner[t]`), and it is reduced
+            // where it is applied, one step at a time.
+            Type::Member(p, n) if p == prefix && self.lookups.iter().any(|&(q, m, _)| q == prefix && m == n) => t,
             Type::Member(p, n) if p == prefix => self.member_type(prefix, n).unwrap_or(t),
             // A val selected through the prefix is the prefix's member of its name (a
             // `TermRef`'s denotation, made again on its new prefix): `k.a` of `K`'s `a`, which

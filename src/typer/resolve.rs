@@ -3019,15 +3019,26 @@ impl<'a> Worker<'a> {
     /// refinement fixes is replaced by what it equals where it is named (as a prefix that fixes a
     /// member replaces it), and the chain is bound by a `Rec` only where a member still names
     /// the refined type (`RecType.closeOver`), the outer refinements' indices lowered otherwise.
+    /// Whether an alias's right-hand side is a match type, over its type parameters or not.
+    fn is_match_rhs(&self, x: TypeId) -> bool {
+        match self.types.get(x) {
+            Type::Lambda(_, body) => matches!(self.types.get(body), Type::Match(..)),
+            Type::Match(..) => true,
+            _ => false,
+        }
+    }
+
     /// An alias that comes back to itself through the refinement's aliases (`type A = A`, `type
     /// L = List[L]`) is reported once, at the alias whose right-hand side closes the cycle, as
     /// dotty's completion of the refinement class's alias reports its cyclic reference (E140).
     fn close_refinement(&mut self, t: TypeId, spans: &[(Name, Span)]) -> TypeId {
         let (parent, rs) = self.types.refinements_of(t);
+        // A match type's alias stays named, as a class's does (`Type::Alias`): its cases may name
+        // it (`type OutInner[Ts] = Ts match { .. => h *: OutInner[t] }`), which is no cycle.
         let aliases: Vec<(Name, TypeId)> = rs
             .iter()
             .filter_map(|&r| match self.types.refinement(r) {
-                Refinement::Alias(n, x) => Some((n, x)),
+                Refinement::Alias(n, x) if !self.is_match_rhs(x) => Some((n, x)),
                 _ => None,
             })
             .collect();

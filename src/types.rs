@@ -1373,8 +1373,11 @@ impl TypeStore {
                     self.mk(Type::AppVar(v, n))
                 }
             }
+            // A binder's own parameters are not substituted inside it: a recursive refinement
+            // seen through a projection holds the lambda being reduced in its prefix.
             Type::Lambda(ps, body) => {
-                let b = self.subst(body, s);
+                let inner = self.unshadowed(ps, s);
+                let b = self.subst(body, inner.as_ref().unwrap_or(s));
                 if b == body {
                     t
                 } else {
@@ -1382,6 +1385,8 @@ impl TypeStore {
                 }
             }
             Type::Poly(ps, body) => {
+                let inner = self.unshadowed(ps, s);
+                let s = inner.as_ref().unwrap_or(s);
                 let b = self.subst(body, s);
                 let items = self.items(ps).to_vec();
                 let k = items.len() / 3;
@@ -1436,6 +1441,8 @@ impl TypeStore {
                 let ncases: Vec<MatchCase> = cases
                     .iter()
                     .map(|c| {
+                        let inner = self.unshadowed(c.binders, s);
+                        let s = inner.as_ref().unwrap_or(s);
                         let (p, b) = (self.subst(c.pattern, s), self.subst(c.body, s));
                         changed |= p != c.pattern || b != c.body;
                         MatchCase { binders: c.binders, pattern: p, body: b }
@@ -1502,6 +1509,20 @@ impl TypeStore {
             }
             _ => t,
         }
+    }
+
+    /// `s` without the parameters the binder list `ps` binds (a lambda's, a polymorphic
+    /// function's, a match case's), where it maps one of them: None where none is shadowed.
+    fn unshadowed(&self, ps: TList, s: &Subst) -> Option<Subst> {
+        if ps == EMPTY_LIST || s.is_empty() {
+            return None;
+        }
+        let items = self.items(ps);
+        let bound = |q: TParamId| items.iter().any(|&x| matches!(self.get(x), Type::Param(p) if p == q));
+        if !s.iter().any(|&(q, _)| bound(q)) {
+            return None;
+        }
+        Some(s.iter().copied().filter(|&(q, _)| !bound(q)).collect())
     }
 
     /// `t` with each direct part through `f` (a refinement's types and a match type's cases
@@ -3815,6 +3836,23 @@ mod tests {
         assert_ne!(s.open_rec(outer, path), outer);
         assert!(s.refers_to_rec(outer, 0));
         assert_eq!(inner_opened, s.mk(Type::Rec(chain(&s, 0))));
+    }
+
+    /// A substitution leaves a binder's own parameters alone inside it: a lambda over `p` within
+    /// a type substituted for `p` (a recursive refinement's prefix holding the lambda being
+    /// reduced) keeps its body.
+    #[test]
+    fn a_substitution_skips_the_parameters_a_binder_binds() {
+        let s = TypeStore::new();
+        let (p, q) = (TParamId(1), TParamId(2));
+        let (pt, qt) = (s.param(p), s.param(q));
+        let body = s.union(pt, qt);
+        let lambda = s.mk(Type::Lambda(s.list(&[pt]), body));
+        let outer = s.inter(pt, lambda);
+        let subst: Subst = vec![(p, ANY), (q, NOTHING)];
+        let inner = s.mk(Type::Lambda(s.list(&[pt]), s.union(pt, NOTHING)));
+        assert_eq!(s.subst(outer, &subst), s.inter(ANY, inner));
+        assert_eq!(s.subst(lambda, &vec![(p, ANY)]), lambda);
     }
 
     /// A class a worker made has a tagged id: its mark is sparse, not a table sized by the tag.
