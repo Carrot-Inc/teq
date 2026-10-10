@@ -405,6 +405,7 @@ for_map_generator_overload
 for_trailing_map
 function_class_name_field
 function_conversions
+function_parent
 function_type_tests
 future_prepare
 futures
