@@ -74,6 +74,29 @@ resolution (dotty's `ConstantType`), so `exprQuote[T <: Singleton](x: T)` applie
 asserted as scalac's (two `Any` results refused, one ambiguity among the refinements) by
 `tests/errors/intersection_member_i8736.scala`.
 
+## Refinements as dotty's (2026-10-10)
+
+Twenty-six tests moved when a refinement's members became one scope closed over its self (dotty's
+`RecType`), a refined member's call took the refinement's denotation, structural conformance and the
+variance check took refinements as dotty does, and a block's alias was completed under the block's imports:
+
+- `rejects` to `accepts` (18): the members naming each other or the parent's members, `pos/i5700`, `i7602`,
+  `i7445a`, `i7445b` (a match-type alias naming itself), `i17381`, `i22648`, `i17380`, `i6443`, `apply-equiv`,
+  `projections`, `lookuprefined`, `20538`; a member refined twice met from both refinements (`Types.findMember`'s
+  `goRefined`), `refinedSubtyping`; an intersection's refined member (`goAnd`) and an intersection compared whole
+  against a refinement (`TypeComparer.secondTry`), `compound`, `i13889`; a generic refinement member's result,
+  `p11210-refinement`; a block's alias under the block's imports (`Namer.index`), `t5305`.
+- `std` to `accepts`: `pos/i12211`, `Selectable.WithoutPreciseParameterTypes` in the lean std.
+- `accepts` to `same` (5): the variance of a refinement's members (`VarianceChecker`), `neg/i18035`; a member
+  `@targetName` renames in structural conformance (`TypeComparer.hasMatchingMember`), `neg/i18922`,
+  `targetName-refine`; a structural member's erased signature (`sigsOK`), `structuralNoSuchMethod`.
+- `superset` to `same` (4): `neg/structural-recursive-{both1,both2,pattern,scrutinee}-gadt`, their false
+  `type S not found` at the refinements gone.
+
+A detail moved within its category: `neg/i15158` stays `different`, its block's recursive match alias now
+found and hitting the recursion limit as a class member's does (scalac's too, at a class member), where
+`type Rec not found` stood.
+
 ## A member's retry types again what its application did not cache (2026-10-09)
 
 `pos/i18645` moved from `rejects` to `accepts`: `x.pprint(() => ( 234 ))` fails against the member's
