@@ -723,6 +723,11 @@ impl<'a> Worker<'a> {
                         work.push(Node::Sym(sa.member.0));
                         work.extend(sa.target.map(|x| Node::Sym(x.0)));
                     }
+                    work.extend(tc.existing_defs.iter().map(|&(_, x)| Node::Sym(x.0)));
+                    for &(x, e) in &tc.constants {
+                        work.push(Node::Sym(x.0));
+                        work.push(Node::Expr(e.0));
+                    }
                 }
                 Node::Quote(i) => {
                     if !p.quotes.seal(i) {
