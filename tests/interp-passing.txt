@@ -16,6 +16,7 @@ anon_sites
 any_equals_method
 anyref_parent
 anyref_synchronized
+applied_param_reference
 apply_value
 arity
 array_as_collection
