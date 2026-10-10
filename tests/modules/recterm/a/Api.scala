@@ -11,6 +11,10 @@ trait Box:
   def get: T
 trait P2:
   val a: Box
+trait Holder:
+  val b: Box
+trait P3:
+  val a: Holder
 
 object Api:
   type R = P { val b: a.type }
@@ -29,3 +33,7 @@ object Api:
   type N = AnyRef { type A; type B <: AnyRef { type C; type D = C; type E = A } }
   def same(q: Q)(x: q.T): q.a.T = x
   def nested(n: N)(b: n.B)(c: b.C): b.D = c
+  // A member two selections down from the self, through the parent's own val (`TYPEREF T` over
+  // `TERMREF b` over `TERMREF a` over the self, mapped whole: `RecThis.a.b.T`).
+  type D = P3 { type T = a.b.T }
+  def deep(d: D)(x: d.T): d.a.b.T = x

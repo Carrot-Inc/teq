@@ -1247,7 +1247,11 @@ impl<'a> Worker<'a> {
                 }
                 let ret = self.sig_of(s).ret;
                 match self.find_member(under, name) {
-                    Some((_, owner_ty)) => {
+                    Some((found, owner_ty)) => {
+                        // A member over a path is reloaded by its name, so an override in the
+                        // prefix's class gives its info (dotty's `withPrefix`: a member of a class
+                        // seen from a path depends on it, `infoDependsOnPrefix`).
+                        let (s, ret) = if found != s && self.syms.alternatives(found).is_none() && self.syms.alternatives(s).is_none() { (found, self.sig_of(found).ret) } else { (s, ret) };
                         let subst = self.owner_subst(owner_ty);
                         let ty = self.types.subst(ret, &subst);
                         // A member of the prefix's own class keeps an enclosing class's `this`
