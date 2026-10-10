@@ -3200,7 +3200,7 @@ pos/i18623.scala	oos	inheritance
 pos/i18623a.scala	rejects	type {} not found
 pos/i18626.min1.scala	accepts	
 pos/i18626.scala	accepts	
-pos/i18645.scala	rejects	type mismatch
+pos/i18645.scala	accepts	
 pos/i18649.scala	accepts	
 pos/i1865.scala	accepts	
 pos/i18654	oos	java

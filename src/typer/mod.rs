@@ -598,8 +598,10 @@ pub struct Worker<'a> {
     pub trail: Vec<Undo>,
     /// The attempts under way (`state.rs`).
     pub attempts: state::Attempts,
-    /// The argument caches of the applications several attempts apply (`state::ArgCache`).
+    /// The argument caches of the applications several attempts apply (`state::ArgCache`), and
+    /// the spare buffers of closed ones.
     attempt_caches: Vec<state::ArgCache>,
+    cache_buffers: Vec<Vec<state::CachedArg>>,
     pub fun_of_sym: crate::arena::Layered<SymId, FunId>,
     /// The string concatenations that are interpolations, which scalac does not fold.
     pub interpolations: FxMap<TExprId, ()>,
@@ -661,14 +663,28 @@ pub struct Worker<'a> {
     /// leaves the lists after it to the next try; one nested in its arguments is not.
     pub app_depth: u32,
     pub retry_depth: Option<u32>,
-    /// The arguments a member's retry on its qualifier takes as its test typed them
-    /// (`apply::retry_on_qualifier`, dotty's `FunProto` cache): adapted as dotty's `adapt` adapts
-    /// a typed tree, never wrapped in a context function, a closure converted to a SAM.
+    /// Where the application a try of that retry makes, one deeper, applied its first plain list:
+    /// the diagnostics' count and the error nodes' then. What it reports past that point (an
+    /// inferred using clause's missing given, a later list's mismatch) is no part of the try: dotty's
+    /// `tryWithImplicitOnQualifier` commits the application of that list (`simpleApply`), and the
+    /// implicit arguments and the later lists are adapted and applied after it
+    /// (`adaptNoArgsImplicitMethod`, the outer `realApply`).
+    pub retry_applied: Option<(u32, u32)>,
+    /// The typed arguments an attempt adapts as an earlier one typed them (`state::ArgCache`,
+    /// dotty's `FunProto` cache), and the tuple a member's retry passes typed: adapted as dotty's
+    /// `adapt` adapts a typed tree, never wrapped in a context function, a closure converted to
+    /// a SAM.
     pub retry_typed: FxMap<TExprId, ()>,
-    /// What the member's application under way in `apply::apply_member_or_extension` typed of
-    /// its arguments, for its retry; a spare one is kept in `arg_caches`.
-    pub arg_cache: Option<Box<apply::ArgCache>>,
-    pub arg_caches: Vec<Box<apply::ArgCache>>,
+    /// The argument a member's cache types now, where it is a transparent call (through
+    /// parentheses): that call is left pending, `typedUnadapted`'s tree, for its adaptation to
+    /// expand (`state::expand_unadapted`).
+    pub unadapted_call: Option<(crate::source::FileId, Span)>,
+    /// The call `unadapted_call` left pending, for the typing of the argument to expand.
+    pub unadapted_node: Option<TExprId>,
+    /// What the member's application under way in `apply::apply_member_or_extension` keeps for
+    /// its retry; a spare one is kept in `member_calls`.
+    pub member_call: Option<Box<apply::MemberCall>>,
+    pub member_calls: Vec<Box<apply::MemberCall>>,
     /// The first elements of the tuples an infix operation's operand was flattened from
     /// (`a op (b, c)`, dotty's `ApplyKind.InfixTuple`), by file.
     pub infix_tuples: FxMap<(crate::source::FileId, crate::ast::ExprId), ()>,
@@ -678,11 +694,6 @@ pub struct Worker<'a> {
     /// Set where `pick_extension` took the first of several overloads the arguments did not
     /// decide between, dotty's failed overload resolution (`lexical_among_imports`).
     pub ext_undecided: bool,
-    /// Set (`Some(false)`) by a member's application around the typing of a function literal
-    /// it was given (`apply::type_arg_recorded`): `type_lambda` takes it, and where the formal
-    /// gives a parameter no type it reports the missing type and types none of the literal,
-    /// leaving `Some(true)`, so that the retry's typing is the literal's first.
-    pub untyped_lambda: Option<bool>,
     /// Set for the member selection on a converted receiver, which no second conversion may
     /// serve.
     pub no_receiver_conversion: bool,
@@ -1962,6 +1973,7 @@ impl<'a> Worker<'a> {
             trail: Vec::new(),
             attempts: Default::default(),
             attempt_caches: Vec::new(),
+            cache_buffers: Vec::new(),
             fun_of_sym: Default::default(),
             interpolations: FxMap::default(),
             bodies_in_progress: Vec::new(),
@@ -1988,13 +2000,15 @@ impl<'a> Worker<'a> {
             logging: 0,
             app_depth: 0,
             retry_depth: None,
+            retry_applied: None,
             retry_typed: FxMap::default(),
-            arg_cache: None,
-            arg_caches: Vec::new(),
+            unadapted_call: None,
+            unadapted_node: None,
+            member_call: None,
+            member_calls: Vec::new(),
             infix_tuples: FxMap::default(),
             lexical_selected: None,
             ext_undecided: false,
-            untyped_lambda: None,
             no_receiver_conversion: false,
             declared_call: None,
             declared_took: None,
@@ -2262,6 +2276,7 @@ impl<'a> Worker<'a> {
             trail: Default::default(),
             attempts: Default::default(),
             attempt_caches: Vec::new(),
+            cache_buffers: Vec::new(),
             fun_of_sym: self.fun_of_sym.attach(),
             // The navigation index's tables the typing reads, its records the worker's own,
             // which the merge joins in the work items' order (`merge_workers`).
@@ -2298,13 +2313,15 @@ impl<'a> Worker<'a> {
             logging: 0,
             app_depth: 0,
             retry_depth: None,
+            retry_applied: None,
             retry_typed: FxMap::default(),
-            arg_cache: None,
-            arg_caches: Vec::new(),
+            unadapted_call: None,
+            unadapted_node: None,
+            member_call: None,
+            member_calls: Vec::new(),
             infix_tuples: FxMap::default(),
             lexical_selected: None,
             ext_undecided: false,
-            untyped_lambda: None,
             no_receiver_conversion: Default::default(),
             declared_call: None,
             declared_took: None,

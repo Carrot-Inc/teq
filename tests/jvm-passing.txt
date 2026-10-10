@@ -747,6 +747,11 @@ member_fallback_macro
 member_fallback_macro_clauses
 member_fallback_named
 member_fallback_shapes
+member_retry_dependent
+member_retry_lambda_order
+member_retry_matrix
+member_retry_splice
+member_retry_transparent
 memberaliases
 mirror_declared_type
 mirror_derives
@@ -1106,6 +1111,7 @@ sorted_set_concat
 sourcecode
 sourcecode_multi
 sourcecode_names
+splice_conversion
 std_array_view
 std_byteswap
 std_console_valueof

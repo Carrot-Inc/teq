@@ -46,9 +46,13 @@ pub struct ConversionIndex {
 /// What is asked of a conversion: a member of its result, or a result of a class; or, for a
 /// completion, any.
 #[derive(Clone, Copy)]
-enum Pick {
+enum Pick<'a> {
     Member(Name),
     Result(Option<ClassId>),
+    /// A result of one of these classes: the members of a union expected, which a conversion's
+    /// result conforms to where it conforms to one (dotty's `inferView` takes any result that
+    /// conforms to the expected type).
+    Results(&'a [ClassId]),
     Any,
 }
 
@@ -79,11 +83,21 @@ const PRIM_OPS: &[Name] = &[
 ];
 
 impl ConversionIndex {
-    fn select(&self, pick: Pick, out: &mut Vec<SymId>) {
+    fn select(&self, pick: Pick<'_>, out: &mut Vec<SymId>) {
         let list = match pick {
             Pick::Member(n) => self.by_member.get(&n),
             Pick::Result(Some(c)) => self.by_result.get(&c),
             Pick::Result(None) => None,
+            Pick::Results(cs) => {
+                for c in cs {
+                    for &g in self.by_result.get(c).into_iter().flatten() {
+                        if !out.contains(&g) {
+                            out.push(g);
+                        }
+                    }
+                }
+                None
+            }
             Pick::Any => {
                 let mut all: Vec<SymId> = self.by_member.values().chain(self.by_result.values()).flatten().copied().collect();
                 all.sort_by_key(|s| s.0);
@@ -285,21 +299,21 @@ impl<'a> Worker<'a> {
         rc
     }
 
-    fn pkg_conversions(&mut self, p: PkgId, pick: Pick, out: &mut Vec<SymId>) {
+    fn pkg_conversions(&mut self, p: PkgId, pick: Pick<'_>, out: &mut Vec<SymId>) {
         let index = self.given_index_of(p);
         if let Some(ci) = self.conversion_index(ScopeKey::Pkg(p), &index) {
             ci.select(pick, out);
         }
     }
 
-    fn class_conversions(&mut self, c: ClassId, pick: Pick, out: &mut Vec<SymId>) {
+    fn class_conversions(&mut self, c: ClassId, pick: Pick<'_>, out: &mut Vec<SymId>) {
         let Some(index) = self.class_given_index_of(c) else { return };
         if let Some(ci) = self.conversion_index(ScopeKey::Class(c), &index) {
             ci.select(pick, out);
         }
     }
 
-    fn import_conversions(&mut self, imp: ResolvedImport, pick: Pick, out: &mut Vec<SymId>) {
+    fn import_conversions(&mut self, imp: ResolvedImport, pick: Pick<'_>, out: &mut Vec<SymId>) {
         if matches!(imp.target, ImportTarget::UnimportPredef) {
             return;
         }
@@ -337,7 +351,7 @@ impl<'a> Worker<'a> {
     }
 
     /// The conversions of the class of a value an import opens (`import dsl.*`), called on it.
-    fn value_import_conversions(&mut self, imp: ResolvedImport, pick: Pick, out: &mut Vec<ConvRef>) {
+    fn value_import_conversions(&mut self, imp: ResolvedImport, pick: Pick<'_>, out: &mut Vec<ConvRef>) {
         let (v, givens) = match imp.target {
             ImportTarget::ValueAll(v) => (v, false),
             ImportTarget::ValueGivens(v) => (v, true),
@@ -364,7 +378,7 @@ impl<'a> Worker<'a> {
     /// The candidate conversions level by level, as the given search orders its levels: the
     /// enclosing blocks and classes from the inside out with their imports, the package
     /// clauses, and last the implicit scopes of `scope_tys`.
-    fn conversion_levels(&mut self, scope_tys: &[TypeId], pick: Pick) -> Vec<Vec<ConvRef>> {
+    fn conversion_levels(&mut self, scope_tys: &[TypeId], pick: Pick<'_>) -> Vec<Vec<ConvRef>> {
         let mut levels: Vec<Vec<ConvRef>> = Vec::new();
         // One buffer for the conversions of a level, which the level's list takes as refs.
         let mut level: Vec<SymId> = Vec::new();
@@ -1164,8 +1178,15 @@ impl<'a> Worker<'a> {
         if matches!(self.types.get(target), Type::Var(_) | Type::AppVar(..)) || target == ANY {
             return None;
         }
-        let target_class = self.class_of(target);
-        let levels = self.conversion_levels(&[actual, expected], Pick::Result(target_class));
+        let members;
+        let pick = match self.types.get(target) {
+            Type::Union(..) => {
+                members = self.union_member_classes(target);
+                Pick::Results(&members)
+            }
+            _ => Pick::Result(self.class_of(target)),
+        };
+        let levels = self.conversion_levels(&[actual, expected], pick);
         if levels.is_empty() {
             return None;
         }
@@ -1184,6 +1205,27 @@ impl<'a> Worker<'a> {
             Ok((_, converted, ty)) => Some((converted, ty)),
             Err(()) => Some((te, ERROR)),
         }
+    }
+
+    /// The classes of the members of the union `t`, through nested unions.
+    fn union_member_classes(&mut self, t: TypeId) -> Vec<ClassId> {
+        let mut out = Vec::new();
+        let mut stack = vec![t];
+        while let Some(t) = stack.pop() {
+            let t = self.deref(t);
+            match self.types.get(t) {
+                Type::Union(a, b) => {
+                    stack.push(b);
+                    stack.push(a);
+                }
+                _ => {
+                    if let Some(c) = self.class_of(t).filter(|c| !out.contains(c)) {
+                        out.push(c);
+                    }
+                }
+            }
+        }
+        out
     }
 
     /// Whether some conversion takes a value of `actual` to `expected`, nothing applied.

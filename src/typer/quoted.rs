@@ -883,6 +883,11 @@ impl<'a> Worker<'a> {
     /// `case '{ ... }` against an `Expr`: the body is typed as a quote whose splices bind, the
     /// match runs the interpreter's structural comparison through the template `$quoteMatch`,
     /// whose result carries the code of the holes and the types of the type variables.
+    /// Whether the body of a quote pattern is typed now (dotty's `Mode.isQuotedPattern`).
+    pub(super) fn in_quote_pattern(&self) -> bool {
+        self.quote.pattern.is_some()
+    }
+
     pub(super) fn type_quote_pattern(&mut self, body: ExprId, sty: TypeId, span: Span) -> TPatId {
         let scrutinee_arg = self.quoted_arg(sty, false);
         let (declared, body) = self.declared_pattern_type_vars(body);
