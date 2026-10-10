@@ -16145,6 +16145,7 @@ scala.collection.SeqOps	toVector	-:scala.collection.immutable.Vector
 scala.collection.SeqOps	updated	[1],scala.Int,java.lang.Object:java.lang.Object
 scala.collection.SeqOps	zip	[1],scala.collection.IterableOnce:java.lang.Object
 scala.collection.SeqOps	zipWithIndex	-:java.lang.Object
+scala.collection.Set	+	java.lang.Object,java.lang.Object,scala.collection.immutable.Seq:scala.collection.Set
 scala.collection.Set	+	java.lang.Object:scala.collection.Set
 scala.collection.Set	<init>	[1]:scala.collection.Set
 scala.collection.Set	apply	java.lang.Object:scala.Boolean
