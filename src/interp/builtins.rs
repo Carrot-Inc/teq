@@ -783,8 +783,9 @@ fn install_core(it: &mut Table) {
         Value::Class(c) => Ok(Value::Bool(c.qname.starts_with('['))),
         _ => Ok(Value::Bool(false)),
     });
-    // An array class's element, read from its name (`[I`, `[Ljava.lang.String;`); none of a class
-    // that is no array's.
+    // An array class's element, read from its name (`[I`, `[Ljava.lang.String;`); `Object` for any
+    // other, which an array value's class is here (`java.util.ArrayList`), as scala-library's
+    // `ArrayOps` asks of it.
     reg!(it, "java.lang.Class.getComponentType", |it, a| match arg(a, 0) {
         Value::Class(c) => match c.qname.strip_prefix('[') {
             Some(element) => {
@@ -802,7 +803,7 @@ fn install_core(it: &mut Table) {
                 };
                 Ok(it.class_value_named(name))
             }
-            None => Ok(Value::Null),
+            None => Ok(it.class_value_named("java.lang.Object")),
         },
         _ => Ok(Value::Null),
     });
