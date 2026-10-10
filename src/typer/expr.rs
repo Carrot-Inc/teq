@@ -3670,7 +3670,7 @@ impl<'a> Worker<'a> {
                     }
                     ast::ClassKind::EnumCase => {}
                 },
-                DefKind::TypeAlias { rhs, .. } if !rhs.map_or(false, |r| self.names_term_path(r)) => self.enter_local_alias(file, *d),
+                DefKind::TypeAlias { rhs, .. } if !rhs.map_or(false, |r| self.names_term_path(r)) => self.declare_local_alias(file, *d),
                 // A lazy val with a declared type may be named before its definition, by the
                 // lazy vals and methods above it.
                 DefKind::Val { pat: None, ty: Some(t), rhs: Some(_) } if def.mods & mods::LAZY != 0 => {
@@ -3875,6 +3875,7 @@ impl<'a> Worker<'a> {
             // An alias over a path of the block (`type Elem = et.Underlying`) is entered where it
             // stands, once the path's value is.
             DefKind::TypeAlias { rhs: Some(r), .. } if self.names_term_path(*r) => self.enter_local_alias(file, d),
+            DefKind::TypeAlias { .. } => self.complete_local_alias(d),
             DefKind::Class(cls) => {
                 let Some(&c) = self.def_classes.get(file.0 as usize, &d) else { return };
                 if self.deps.is_some() {
@@ -4082,7 +4083,6 @@ impl<'a> Worker<'a> {
                 self.defining = outer_defining;
                 out.push(TStmt::Val(sym, init));
             }
-            _ => {}
         }
     }
 

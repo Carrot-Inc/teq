@@ -3899,6 +3899,15 @@ impl<'a> Worker<'a> {
         };
         let def = self.ast(file).def(def_id);
         let DefKind::TypeAlias { tparams, rhs, lower, upper } = &def.kind else { return };
+        // A block's alias is completed in the block, where it is named or stands
+        // (`declare_local_alias`).
+        if owner == Owner::Local {
+            let depth = self.env.frames.len();
+            let (ids, ty, bounds) = self.resolve_alias_def(a, tparams, *rhs, *lower, *upper);
+            self.env.frames.truncate(depth);
+            self.finish_alias(a, ids, ty, bounds);
+            return;
+        }
         let env = self.env_at(file, owner, def.span.start);
         let (ids, ty, bounds) = self.with_env(env, |t| t.resolve_alias_def(a, tparams, *rhs, *lower, *upper));
         self.finish_alias(a, ids, ty, bounds);
@@ -3932,6 +3941,47 @@ impl<'a> Worker<'a> {
         if let Some(order) = alias_order().filter(|o| self.name_str(self.syms.aliases[a.idx()].name) == o.name) {
             ordered_wait(|| order.met.load(std::sync::atomic::Ordering::Acquire));
             std::thread::sleep(std::time::Duration::from_millis(500));
+        }
+    }
+
+    /// A type alias local to a block, entered in the block's scope where the block's definitions
+    /// are and completed where it stands, under the imports before it (`Namer.index`, whose
+    /// completers keep the import context of their definition): its right-hand side is resolved
+    /// by `complete_local_alias` at its statement, or by `complete_alias` where it is named first.
+    pub(super) fn declare_local_alias(&mut self, file: FileId, d: ast::DefId) {
+        let def = self.ast(file).def(d);
+        let DefKind::TypeAlias { rhs, .. } = &def.kind else { return };
+        if rhs.is_none() {
+            self.error(def.span, "only classes can have declared but undefined members");
+            return;
+        }
+        let a = AliasId(self.syms.aliases.len() as u32);
+        self.syms.aliases.push(AliasInfo {
+            name: def.name,
+            owner: Owner::Local,
+            file,
+            def: Some(d),
+            tparams: Vec::new(),
+            rhs: ERROR,
+            bounds: None,
+            deprecated: def.mods & crate::ast::mods::DEPRECATED != 0,
+        });
+        self.syms.alias_cells.set(a.0, Completion::NotStarted);
+        if let Some(Frame::Locals { aliases, .. }) = self.env.frames.last_mut() {
+            aliases.push((def.name, a));
+        }
+    }
+
+    /// The block's alias of the definition `d` (`declare_local_alias`), completed at its
+    /// statement.
+    pub(super) fn complete_local_alias(&mut self, d: ast::DefId) {
+        let name = self.cur_ast().def(d).name;
+        let found = match self.env.frames.last() {
+            Some(Frame::Locals { aliases, .. }) => aliases.iter().rev().find(|&&(n, a)| n == name && self.syms.aliases[a.idx()].def == Some(d)).map(|&(_, a)| a),
+            _ => None,
+        };
+        if let Some(a) = found {
+            self.complete_alias(a);
         }
     }
 

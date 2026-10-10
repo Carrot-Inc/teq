@@ -55,6 +55,7 @@ bigdecimal_conv
 bigint_ops
 bigint_random_entry_points
 bigint_random_primes
+block_import_alias
 block_infix_argument
 block_lambda_stmts
 block_then_select
