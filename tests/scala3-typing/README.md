@@ -95,7 +95,13 @@ variance check took refinements as dotty does, and a block's alias was completed
 
 A detail moved within its category: `neg/i15158` stays `different`, its block's recursive match alias now
 found and hitting the recursion limit as a class member's does (scalac's too, at a class member), where
-`type Rec not found` stood.
+`type Rec not found` stood. So did `pos/i9667`'s, which stays `rejects`: `this.B` inside the refinement is
+the refinement's self now (`TypeAssigner.assignType`), and `type B not found` gives way to the mismatch left.
+An anonymous instance's type keeps its own aliases alone (`Selectable{type D = C}`), where scalac's
+`TypeOps.classBound` gives every member over the local class's parents, a recursive refinement
+(`{z1 => Selectable{type B; type D <: A; val x: A; val xx: z1.x.M; val y: z1.B; ..}}`). Re-recorded over
+35c4230fb, `neg/i7425`'s detail moves too: its first error is now the JavaScript naming clash master's binary
+reports first as well, where master's record still has `value f is not a member`.
 
 ## A member's retry types again what its application did not cache (2026-10-09)
 
