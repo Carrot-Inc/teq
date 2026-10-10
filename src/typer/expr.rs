@@ -36,7 +36,7 @@ pub const WITHHELD_TEMPLATE: &str = "$withheld";
 
 impl<'a> Worker<'a> {
     pub fn push_scope(&mut self) {
-        self.env.frames.push(Frame::locals());
+        self.env.frames.push(Frame::locals(self.sites.owners.len() as u32));
     }
 
     pub fn pop_scope(&mut self) {
@@ -264,15 +264,33 @@ impl<'a> Worker<'a> {
         matches!(self.types.get(ret), Type::Class(k, a) if k == c && a == EMPTY_LIST)
     }
 
-    /// Inside the body of a local object its name stands for `this`.
-    pub(super) fn enclosing_local_object(&self, s: SymId) -> Option<ClassId> {
-        if self.syms.sym(s).mods & mods::LAZY == 0 {
-            return None;
-        }
-        self.env.frames.iter().rev().find_map(|f| match f {
-            Frame::Class(k) if self.syms.class(*k).local_module == Some(s) => Some(*k),
+    /// The module class of `s` that encloses the code typed: inside its own class a module's name
+    /// stands for that class's `this` (`tpd.ref`: `This(tp.symbol.moduleClass)`), as a local object,
+    /// an object nested in a class and a given object (`Parsers.givenDef`'s `ModuleDef`) need, whose
+    /// value is set only once the instance is made.
+    #[inline]
+    pub(super) fn enclosing_module_class(&self, s: SymId) -> Option<ClassId> {
+        let info = self.syms.sym(s);
+        match info.kind {
+            SymKind::Given => self.enclosing_module_class_of(s),
+            SymKind::Val if info.mods & mods::LAZY != 0 => self.enclosing_module_class_of(s),
             _ => None,
-        })
+        }
+    }
+
+    fn enclosing_module_class_of(&self, s: SymId) -> Option<ClassId> {
+        let info = self.syms.sym(s);
+        // A given object (a lazy given of a class of its own) or a local or inner object's lazy
+        // val; any other name, an object of a package or an object's among them, is no such read.
+        let k = match info.kind {
+            SymKind::Given => info.impl_class.filter(|_| info.sig.as_ref().map_or(false, |sig| sig.tparams.is_empty() && sig.clauses.is_empty()))?,
+            SymKind::Val if info.mods & mods::LAZY != 0 => match self.types.get(info.sig.as_ref()?.ret) {
+                Type::Class(c, _) if self.syms.class(c).local_module == Some(s) || self.syms.class(c).inner_object == Some(s) => c,
+                _ => return None,
+            },
+            _ => return None,
+        };
+        self.env.frames.iter().any(|f| matches!(f, Frame::Class(c) if *c == k)).then_some(k)
     }
 
     fn check_local_enum_captures(&mut self, c: ClassId, first: usize, span: Span) {

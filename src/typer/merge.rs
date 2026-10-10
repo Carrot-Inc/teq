@@ -52,7 +52,7 @@ mod trace;
 
 pub(super) use records::Mapping;
 use records::SigMemo;
-use super::{Env, ImportTarget, ResolvedImport, TVarInfo, TVars, Worker};
+use super::{Env, ResolvedImport, TVarInfo, TVars, Worker};
 use crate::source::FileId;
 use crate::ast::ListRef;
 use crate::intern::FxMap;
@@ -1332,7 +1332,7 @@ impl Remap {
             *t = self.test(*t);
         }
         self.syms_in(&mut d.hoisted);
-        for e in d.widened.iter_mut().chain(d.opaque.iter_mut()).chain(d.spread.iter_mut()) {
+        for e in d.widened.iter_mut().chain(d.opaque.iter_mut()).chain(d.spread.iter_mut()).chain(d.erased.iter_mut()) {
             *e = self.expr(*e);
         }
         for tc in &mut d.classes {
@@ -1619,13 +1619,9 @@ pub(super) fn untyped_tables<'w>(w: &'w mut Worker, mode: TablesMode) -> Vec<Tab
     tasks.push(Box::new(move |m| {
         map(m, class_imports, |r, c| r.class(c), |r, imports| {
             if imports.iter().any(|(_, i)| records::env_moves(r, &Env { file: FileId(0), frames: Vec::new(), imports: vec![*i] })) {
-                let mut moved: Vec<(u32, ImportTarget)> = Vec::new();
                 let mut env = Env { file: FileId(0), frames: Vec::new(), imports: imports.iter().map(|(_, i)| *i).collect() };
                 records::env(r, &mut env);
-                for ((at, _), i) in imports.iter().zip(env.imports.iter()) {
-                    moved.push((*at, i.target));
-                }
-                let renumbered: Vec<(u32, ResolvedImport)> = imports.iter().zip(moved).map(|((_, i), (at, target))| (at, ResolvedImport { target, ..*i })).collect();
+                let renumbered: Vec<(u32, ResolvedImport)> = imports.iter().zip(env.imports).map(|(&(at, _), i)| (at, i)).collect();
                 *imports = Arc::from(renumbered);
             }
         });
@@ -2758,6 +2754,7 @@ mod tests {
             diagnostics: Vec::new(),
             widened: Vec::new(),
             opaque: Vec::new(),
+            erased: Vec::new(),
             spread: Vec::new(),
             hoisted: Vec::new(),
             imports: Vec::new(),

@@ -144,6 +144,9 @@ pub struct InlineState {
     pub pat_vars: Vec<(Name, TypeId)>,
     /// What the last `erasedValue[T]` produced: a scrutinee without a value.
     pub erased: Option<TExprId>,
+    /// The binders of the inline matches being reduced that an erased scrutinee binds
+    /// (`InlineReducer.reduceInlineMatch`'s `unusable`): no value, no read.
+    pub unusable: Vec<SymId>,
     /// How many retained inline bodies are being typed at their definition.
     pub retained: u32,
     /// How many inline bodies are being typed by the definition check (`inline_definition.rs`),
@@ -286,6 +289,9 @@ impl InlineState {
             no_subst: _,
             // Taken by the expansion the walk starts next, before anything else runs.
             entry: _,
+            // A stack of the matches being reduced, each truncating it to its own mark: a body
+            // typed on its own leaves it as it found it.
+            unusable: _,
             // Room for the next walk, whose contents no walk reads from another.
             spare_walks: _,
             stored_lists: _,
@@ -514,6 +520,9 @@ struct Scrutinee {
     constant: Option<LitVal>,
     erased: bool,
     bound: Option<TExprId>,
+    /// The erased values the whole scrutinee holds (`erased_tested`), which a field's projection
+    /// is free of or not.
+    erased_parts: std::rc::Rc<[TExprId]>,
 }
 
 impl<'a> Worker<'a> {
@@ -920,7 +929,10 @@ impl<'a> Worker<'a> {
             }
         } else if !body.declared {
             let (te, ty) = self.type_expr(body.body, expected);
-            (te, self.solve_inferred(ty))
+            match self.inferred_call_result(call, subst, args) {
+                Some(inferred) => (te, inferred),
+                None => (te, self.solve_inferred(ty)),
+            }
         } else if let Some(own) = self.body_result_type(call, sig, subst, &bound) {
             (self.check_expr(body.body, own), ret_ty)
         } else {
@@ -980,7 +992,7 @@ impl<'a> Worker<'a> {
         let bind = self.part(Part::Bind);
         let arg_types = std::mem::take(&mut self.inline.arg_types);
         let tparams: Vec<(Name, TParamId)> = sig.tparams.iter().map(|&p| (self.syms.tparam(p).name, p)).collect();
-        self.env.frames.push(Frame::Locals { names: Vec::new(), tparams, givens: Vec::new(), classes: Vec::new(), aliases: Vec::new() });
+        self.env.frames.push(Frame::Locals { names: Vec::new(), tparams, givens: Vec::new(), classes: Vec::new(), aliases: Vec::new(), owner: self.sites.owners.len() as u32 });
         self.inline.body_frames.push(self.env.frames.len());
         let mut bound = BoundCall {
             stmts: Vec::new(),
@@ -1894,6 +1906,16 @@ impl<'a> Worker<'a> {
         if self.prog.is_spread(e) {
             self.prog.mark_spread(id);
         }
+        // A pending call's copy in an expansion is pending in its turn (`pend_copy`).
+        if self.inline.depth > 0 && self.attempts.pending_len() != 0 && self.is_pending_call(e) {
+            self.pend_copy(e, id);
+        }
+        // An erased value's copy is one too (`Erasure.checkNotErased` of every copy kept).
+        if !self.erased_values.is_empty() {
+            if let Some(&(_, file, at)) = self.erased_values.iter().find(|m| m.0 == e) {
+                self.erased_values.push((id, file, at));
+            }
+        }
         if self.interpolations.contains_key(&e) {
             self.interpolations.insert(id, ());
         }
@@ -2502,6 +2524,15 @@ impl<'a> Worker<'a> {
             None => (self.fold_type(cond_ty), Some(tc)),
         };
         let read_leaf = self.inline.leaf_reads != reads;
+        // Under an erased scrutinee's binders the branch dropped is checked as the taken one is
+        // (`cleanupUnusable` sees the case's body before its `inline if` reduces).
+        if !self.inline.unusable.is_empty() {
+            match folded {
+                Some(LitVal::Bool(true)) => els.into_iter().for_each(|e| self.check_dropped_unusable(e, span)),
+                Some(LitVal::Bool(false)) => self.check_dropped_unusable(t, span),
+                _ => {}
+            }
+        }
         let (te, ty) = match folded {
             Some(LitVal::Bool(true)) => self.type_expr_adapted(t, expected),
             Some(LitVal::Bool(false)) => match els {
@@ -2564,12 +2595,21 @@ impl<'a> Worker<'a> {
         let (ts, sty) = self.type_expr(scrut, None);
         let sty = self.solve_in(sty);
         let constant = self.fold_constant(ts).or_else(|| self.fold_type(sty));
-        let erased = self.inline.erased.take() == Some(ts);
-        let mut scrutinee = Scrutinee { expr: ts, ty: sty, constant, erased, bound: None };
+        // A scrutinee with an `erasedValue` anywhere in it is erased (`existsSubTree(_.symbol.isErased)`).
+        let mut parts = self.erased_tested(ts);
+        let marked = self.inline.erased.take() == Some(ts);
+        if marked {
+            parts.push(ts);
+        }
+        let erased = marked || !parts.is_empty() || self.names_erased_value(ts);
+        let erased_parts: std::rc::Rc<[TExprId]> = parts.into();
+        let mut scrutinee = Scrutinee { expr: ts, ty: sty, constant, erased, bound: None, erased_parts };
         let clauses = ast.case_list(cases).to_vec();
+        let unusable_mark = self.inline.unusable.len();
         for c in &clauses {
             self.push_scope();
             let tparam_mark = self.inline.tparams.len();
+            self.inline.unusable.truncate(unusable_mark);
             let mut stmts: Vec<TStmt> = Vec::new();
             scrutinee.bound = None;
             // Each case an attempt: one that does not match goes whole, its constraints with it.
@@ -2606,10 +2646,19 @@ impl<'a> Worker<'a> {
             let (body, ty) = self.type_expr_adapted(c.body, expected);
             self.truncate_tparams(tparam_mark);
             self.pop_scope();
-            // A retained body evaluates its scrutinee once where no binder of the case reads it
-            // and it is not pure, as scalac's `InlineReducer` binds it (`inline { println(..); x }
-            // match`, a by-name parameter).
-            if retained && scrutinee.bound.is_none() && !scrutinee.erased && scrutinee.constant.is_none() && !self.is_pure_value(scrutinee.expr) {
+            // The other cases, which the reduction drops, under an enclosing erased scrutinee's
+            // binders: checked as the selected one is.
+            if unusable_mark > 0 {
+                for other in clauses.iter().filter(|o| o.body != c.body) {
+                    self.check_dropped_unusable(other.body, span);
+                }
+            }
+            self.report_unusable_reads(unusable_mark, body, &[], span);
+            self.drop_unusable(unusable_mark, &mut stmts);
+            // The scrutinee is evaluated once where no binder of the case reads it and it is not
+            // elideable, as scalac's `InlineReducer` binds it (`inline { println(..); x } match`,
+            // an inline or by-name parameter).
+            if scrutinee.bound.is_none() && !scrutinee.erased && !self.elideable_scrutinee(scrutinee.expr) {
                 stmts.insert(0, TStmt::Expr(scrutinee.expr));
             }
             if stmts.is_empty() {
@@ -2690,8 +2739,12 @@ impl<'a> Worker<'a> {
                 };
                 let sym = self.new_local(name, SymKind::Val, ty, span);
                 // A binder over a constant stands for the constant, as scalac's reduced
-                // projection does, so that a guard on it folds.
-                match s.constant {
+                // projection does, so that a guard on it folds; one over an erased scrutinee is
+                // erased and unusable (`adjustErased`), whatever its type.
+                if s.erased {
+                    self.inline.unusable.push(sym);
+                }
+                match s.constant.filter(|_| !s.erased) {
                     Some(v) => {
                         let (lit, _) = self.constant(v);
                         self.inline.args.insert(sym, InlineArg { expr: lit, ty, source: None });
@@ -2707,7 +2760,7 @@ impl<'a> Worker<'a> {
             Pat::Typed(inner, ty) => {
                 let Some(narrowed) = self.type_pattern_matches(ty, s.ty) else { return false };
                 let narrowed = if matches!(ast.pat(inner), Pat::Wildcard) { narrowed } else { self.narrowed_to(s.ty, narrowed) };
-                let mut narrowed_scrutinee = Scrutinee { expr: s.expr, ty: narrowed, constant: s.constant, erased: s.erased, bound: s.bound };
+                let mut narrowed_scrutinee = Scrutinee { expr: s.expr, ty: narrowed, constant: s.constant, erased: s.erased, bound: s.bound, erased_parts: s.erased_parts.clone() };
                 let ok = self.inline_pattern(inner, &mut narrowed_scrutinee, stmts);
                 s.bound = narrowed_scrutinee.bound;
                 ok
@@ -2800,14 +2853,20 @@ impl<'a> Worker<'a> {
             if matches!(self.cur_ast().pat(sub), Pat::Wildcard) {
                 continue;
             }
-            let value = self.scrutinee_ref(s, stmts, span);
-            let expr = if self.is_tuple_class(c) && fields.len() > 22 {
-                let elems: Vec<TypeId> = self.types.items(args).to_vec();
-                self.tuple_element(value, &fields, &elems, i, span)
-            } else {
-                self.prog.add(TExpr::Field(value, field))
+            let (expr, erased) = match self.erased_free_projection(s.expr, s.erased, &s.erased_parts, c, i) {
+                Some(item) => (self.copy_expr(item), false),
+                None => {
+                    let value = self.scrutinee_ref(s, stmts, span);
+                    let expr = if self.is_tuple_class(c) && fields.len() > 22 {
+                        let elems: Vec<TypeId> = self.types.items(args).to_vec();
+                        self.tuple_element(value, &fields, &elems, i, span)
+                    } else {
+                        self.prog.add(TExpr::Field(value, field))
+                    };
+                    (expr, s.erased)
+                }
             };
-            let mut elem = Scrutinee { expr, ty: fty, constant, erased: s.erased, bound: None };
+            let mut elem = Scrutinee { expr, ty: fty, constant, erased, bound: None, erased_parts: s.erased_parts.clone() };
             if !self.inline_pattern(sub, &mut elem, stmts) {
                 return false;
             }
@@ -2826,7 +2885,7 @@ impl<'a> Worker<'a> {
         let fields: Vec<SymId> = self.syms.class(c).ctor_syms.concat();
         let value = self.scrutinee_ref(s, stmts, span);
         let head_expr = self.tuple_element(value, &fields, &elems, 0, span);
-        let mut head_scrutinee = Scrutinee { expr: head_expr, ty: elems[0], constant: self.fold_type(elems[0]), erased: s.erased, bound: None };
+        let mut head_scrutinee = Scrutinee { expr: head_expr, ty: elems[0], constant: self.fold_type(elems[0]), erased: s.erased, bound: None, erased_parts: s.erased_parts.clone() };
         if !self.inline_pattern(head, &mut head_scrutinee, stmts) {
             return false;
         }
@@ -2838,7 +2897,7 @@ impl<'a> Worker<'a> {
             .collect();
         let tail_ty = self.tuple_of(&elems[1..]);
         let tail_expr = self.tuple_value(&rest);
-        let mut tail_scrutinee = Scrutinee { expr: tail_expr, ty: tail_ty, constant: None, erased: s.erased, bound: None };
+        let mut tail_scrutinee = Scrutinee { expr: tail_expr, ty: tail_ty, constant: None, erased: s.erased, bound: None, erased_parts: s.erased_parts.clone() };
         self.inline_pattern(tail, &mut tail_scrutinee, stmts)
     }
 
@@ -3359,8 +3418,13 @@ impl<'a> Worker<'a> {
                 // ambiguous where `V` has an implicit `Int`.
                 let mut scopes = self.inline.outer_scopes.clone();
                 scopes.extend(self.body_scopes());
+                // The expanded code is the site's owner's, as scalac's inlined trees are.
+                let site_owner = env.frames.last().map_or(0, |f| match f {
+                    Frame::Locals { owner, .. } => *owner,
+                    Frame::Class(_) => u32::MAX,
+                });
                 for scope in &scopes {
-                    env.frames.push(Frame::Locals { names: Vec::new(), tparams: Vec::new(), givens: scope.givens.clone(), classes: Vec::new(), aliases: Vec::new() });
+                    env.frames.push(Frame::Locals { names: Vec::new(), tparams: Vec::new(), givens: scope.givens.clone(), classes: Vec::new(), aliases: Vec::new(), owner: site_owner });
                     let at = env.imports.len();
                     for &imp in &scope.imports {
                         env.push_import(at, imp);
@@ -3385,6 +3449,136 @@ impl<'a> Worker<'a> {
         };
         self.profile.summon = outer;
         found
+    }
+
+    /// A read, in the selected case's right-hand side `body` before it reduces any further, of a
+    /// binder an erased scrutinee bound (`unusable` from `mark`), reported at the outermost inline
+    /// call: `InlineReducer.reduceInlineMatch`'s `cleanupUnusable` runs on the reduced match, the
+    /// case's body still holding its own `inline if` and matches. `originals` names the stored
+    /// binders an expansion renamed into these, which a part of the body it left uncopied reads.
+    pub(super) fn report_unusable_reads(&mut self, mark: usize, body: TExprId, originals: &[SymId], span: Span) {
+        if self.inline.unusable.len() <= mark {
+            return;
+        }
+        let unusable = &self.inline.unusable[mark..];
+        let read = self.prog.descendants(body).find_map(|e| match self.prog.expr(e) {
+            TExpr::Local(s) if unusable.contains(&s) || originals.contains(&s) => Some(s),
+            _ => None,
+        });
+        if let Some(s) = read {
+            let (file, at) = self.inline.sites.first().map_or((self.env.file, span), |site| (site.file, site.span));
+            let msg = format!("value {} is unusable because it refers to an erased expression in the selector of an inline match", self.name_str(self.syms.sym(s).name));
+            self.diags.error(file, at, msg);
+        }
+    }
+
+    /// A part the retype path's reduction drops untyped (an `inline if`'s other branch, an
+    /// `inline match`'s other cases) under an erased scrutinee's binders: typed aside, what it
+    /// reports and makes retracted, and a read of one of them in it reported as one in the case's
+    /// body is (`cleanupUnusable` before the reduction of the body).
+    fn check_dropped_unusable(&mut self, part: ExprId, span: Span) {
+        let mark = self.attempt();
+        let diags = self.diags.items.len();
+        let (te, _) = self.type_expr(part, None);
+        let read = self.prog.descendants(te).find_map(|e| match self.prog.expr(e) {
+            TExpr::Local(s) if self.inline.unusable.contains(&s) => Some(s),
+            _ => None,
+        });
+        self.drop_reported_since(diags);
+        self.retract(mark);
+        if let Some(s) = read {
+            let (file, at) = self.inline.sites.first().map_or((self.env.file, span), |site| (site.file, site.span));
+            let msg = format!("value {} is unusable because it refers to an erased expression in the selector of an inline match", self.name_str(self.syms.sym(s).name));
+            self.diags.error(file, at, msg);
+        }
+    }
+
+    /// The vals of the binders an erased scrutinee bound for the case reduced (`unusable` from
+    /// `mark`), dropped (`cleanupUnusable`).
+    pub(super) fn drop_unusable(&mut self, mark: usize, stmts: &mut Vec<TStmt>) {
+        if self.inline.unusable.len() <= mark {
+            return;
+        }
+        let unusable = self.inline.unusable.split_off(mark);
+        stmts.retain(|st| !matches!(st, TStmt::Val(v, _) if unusable.contains(v)));
+    }
+
+    /// Records the erased value `e`, an `erasedValue` the typing made or an expansion copied, for
+    /// the check of its unit's end (`report_erased_values`), at the outermost inline call's site
+    /// where an expansion made it; not in a body the definition check types, which no tree keeps.
+    pub(super) fn note_erased_value(&mut self, e: TExprId, span: Span) {
+        if !self.checks_inline_definition() {
+            let (file, at) = self.inline.sites.first().map_or((self.env.file, span), |s| (s.file, s.span));
+            self.erased_values.push((e, file, at));
+        }
+    }
+
+    /// Whether `e` calls `erasedValue` (scala-library's a plain method of its package object, the
+    /// lean library's the intrinsic's deferred call).
+    pub(super) fn calls_erased_value(&mut self, e: TExprId) -> bool {
+        match self.prog.expr(e) {
+            TExpr::CallStatic(s, _) | TExpr::CallMethod(_, s, _) => {
+                self.syms.sym(s).name == crate::names::ERASED_VALUE && self.intrinsic_of(s) == Some(Intrinsic::ErasedValue)
+            }
+            _ => false,
+        }
+    }
+
+    /// The values `erasedValue` made inside the scrutinee `scrut` that an `inline match` tests:
+    /// no values, no longer recorded as such, and handed back.
+    pub(super) fn erased_tested(&mut self, scrut: TExprId) -> Vec<TExprId> {
+        if self.erased_values.is_empty() {
+            return Vec::new();
+        }
+        let inside: Vec<TExprId> = self.prog.descendants(scrut).collect();
+        let mut tested = Vec::new();
+        self.erased_values.retain(|m| {
+            let within = inside.contains(&m.0);
+            if within {
+                tested.push(m.0);
+            }
+            !within
+        });
+        tested
+    }
+
+    /// The argument of the constructor application `scrut` a field `i` of `c` projects to where the
+    /// scrutinee is erased (`InlineReducer.reduceProjection` over a precomputed instance): an
+    /// elideable one that holds no erased value, which the field's binding reads instead of the
+    /// erased scrutinee, so that `adjustErased` finds no erased reference in it. Another argument
+    /// is read through the scrutinee, erased as the scrutinee is.
+    pub(super) fn erased_free_projection(&mut self, scrut: TExprId, erased: bool, parts: &[TExprId], c: ClassId, i: usize) -> Option<TExprId> {
+        if !erased {
+            return None;
+        }
+        let TExpr::New(k, items) = self.prog.expr(scrut) else { return None };
+        let item = *self.prog.expr_list(items).get(i).filter(|_| k == c)?;
+        let holds_erased = self.prog.descendants(item).any(|e| parts.contains(&e)) || self.names_erased_value(item);
+        (!holds_erased && self.elideable_scrutinee(item)).then_some(item)
+    }
+
+    /// Reports the values `erasedValue` made since `mark` that the unit's trees `roots` still
+    /// hold: used as values, not tested by an `inline match` (scalac's `Erasure.checkNotErased`).
+    pub(super) fn report_erased_values(&mut self, mark: usize, roots: &[TExprId]) {
+        if self.erased_values.len() <= mark {
+            return;
+        }
+        let mut made: Vec<(TExprId, FileId, Span)> = self.erased_values.split_off(mark);
+        made.sort_by_key(|m| m.0);
+        let mut used: Vec<(FileId, Span)> = Vec::new();
+        for &root in roots {
+            for e in self.prog.descendants(root) {
+                if let Ok(i) = made.binary_search_by_key(&e, |m| m.0) {
+                    let (_, file, span) = made[i];
+                    if !used.contains(&(file, span)) {
+                        used.push((file, span));
+                    }
+                }
+            }
+        }
+        for (file, span) in used {
+            self.diags.error(file, span, "method erasedValue is declared as `erased`, but is in fact used");
+        }
     }
 
     pub(super) fn inline_intrinsic(
@@ -3426,6 +3620,7 @@ impl<'a> Worker<'a> {
                 let t = targ(self);
                 let e = unit(self);
                 self.inline.erased = Some(e);
+                self.note_erased_value(e, span);
                 (e, t)
             }
             Intrinsic::ConstValue => {

@@ -204,4 +204,5 @@ well_known! {
     PACKAGE = "package",
     UNCHECKED_VARIANCE = "uncheckedVariance",
     CONS_TUPLE = "*:",
+    ERASED_VALUE = "erasedValue",
 }

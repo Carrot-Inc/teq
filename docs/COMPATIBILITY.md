@@ -44,31 +44,30 @@ libraries compiled from their jars run against scalac's output. The remaining di
 
 ### Givens and implicits
 
-- `import a.{given T}` brings every given of `a`, the type not filtering them; a given a block imports is
-  nearer than one defined in an enclosing scope of the same method, where scalac keeps the definition.
 - The implicit scope of an opaque type holds its companion where the type is transparent, which scalac's
-  does not, and extension methods found through givens rank by their receiver alone, so an opaque type's
-  companion instance loses to an imported low-priority one for its underlying type.
-- A local `transparent inline given` is computed once, where scalac expands its right-hand side at each use;
-  a program's own `given nf(using Missing): NotGiven[Int]` whose using clause fails is rejected, where
-  scalac's negation makes it a success.
+  does not.
+- A local `inline given`, transparent or not, is computed once, where scalac expands its right-hand side at
+  each use.
 - A class that implements a `deferred` given by the search cannot have a method of its name with other
   parameters (`def x(s: String)` beside `given x: Int = deferred`): "only methods can be overloaded".
+- A given object of a package or an object (`given t: T with ...`) is set once its body has run: a method its
+  body calls that reads `t` gets `null` (the interpreter recurses), where scalac's module is set before its
+  body runs; inside the body, `t` and a search for `T` are the instance, as in scalac.
 
 ### Macros, inline and derivation
 
 - Macro annotations (`MacroAnnotation`) and `scala.quoted.staging` are not covered; a reflection member the
-  API lacks reports `not supported yet: scala.quoted <member> (called by <macro>)`. Of scalac's 322
-  run-macros test programs, 69 pass under node and 71 in the interpreter.
+  API lacks reports `not supported yet: scala.quoted <member> (called by <macro>)`. Of the 320 run-macros test
+  programs of scalac 3.8.4's tag, 89 pass under node and 94 in the interpreter (41 of each have no check file
+  and pass by running without an error).
 - Types carry no annotations (`AnnotatedType(t, annot)` is `t`, the type tree of a `T*` parameter is
-  `Seq[T]`, so Magnolia's `repeated` answers `false`), and `IntConstant` and the other kinds of constant are
-  aliases of `Constant`, so `case c: IntConstant` matches every constant, the extractors telling them apart.
+  `Seq[T]`, so Magnolia's `repeated` answers `false`).
 - An inline method of a library is expanded by typing its body again at the call, so a member only the
   argument's class has is accepted on the parameter inside the body, `constValue` of a parameter's singleton
-  is no constant and `codeOf` gives the argument's source text; `erasedValue` used as a value is `()`.
+  is no constant and `codeOf` gives the argument's source text.
 - The mirror of a case object or a parameterless enum case is an object of its own
-  (`summon[Mirror.Of[O.type]] eq O` is false), `fromTuple` and `fromProductTyped` are members of
-  `Mirror.Product` rather than extensions, and `fromProductTyped` does not check the element types.
+  (`summon[Mirror.Of[O.type]] eq O` is false), and `fromProductTyped` is a member of `Mirror.Product` rather
+  than an extension, which does not check the element types.
 
 ### The standard library on JavaScript
 

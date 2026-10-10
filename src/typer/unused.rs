@@ -325,7 +325,7 @@ impl<'a> Worker<'a> {
         let inner: Vec<&ast::Annot> = tparams.iter().flat_map(|tp| tp.annots.iter()).chain(clauses.iter().flat_map(|c| c.params.iter()).flat_map(|p| ast.param_annots(p).iter())).collect();
         if !inner.is_empty() {
             let own = self.own_tparams(file, d);
-            self.env.frames.push(Frame::Locals { names: Vec::new(), tparams: own, givens: Vec::new(), classes: Vec::new(), aliases: Vec::new() });
+            self.env.frames.push(Frame::Locals { names: Vec::new(), tparams: own, givens: Vec::new(), classes: Vec::new(), aliases: Vec::new(), owner: self.sites.owners.len() as u32 });
             for a in inner {
                 self.mark_annotation(file, a.instance);
             }
@@ -352,7 +352,7 @@ impl<'a> Worker<'a> {
             let inline: Vec<ast::ExprId> = ast.inline_annots[from..].iter().take_while(|a| at(a) < range.end).map(|a| a.instance).collect();
             if !inline.is_empty() {
                 let own = self.own_tparams(file, d);
-                self.env.frames.push(Frame::Locals { names: Vec::new(), tparams: own, givens: Vec::new(), classes: Vec::new(), aliases: Vec::new() });
+                self.env.frames.push(Frame::Locals { names: Vec::new(), tparams: own, givens: Vec::new(), classes: Vec::new(), aliases: Vec::new(), owner: self.sites.owners.len() as u32 });
                 for instance in inline {
                     self.mark_annotation(file, instance);
                 }

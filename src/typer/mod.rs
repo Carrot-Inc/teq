@@ -203,13 +203,17 @@ pub enum Frame {
         classes: Vec<(Name, ClassId)>,
         /// The type aliases defined in the block.
         aliases: Vec<(Name, AliasId)>,
+        /// How deep scalac's owner chain is where the scope opens (`DefSites::owners`): two
+        /// scopes of one depth, one inside the other, have one owner, which an import's level
+        /// reads (`ContextualImplicits.level`).
+        owner: u32,
     },
     Class(ClassId),
 }
 
 impl Frame {
-    pub fn locals() -> Frame {
-        Frame::Locals { names: Vec::new(), tparams: Vec::new(), givens: Vec::new(), classes: Vec::new(), aliases: Vec::new() }
+    pub fn locals(owner: u32) -> Frame {
+        Frame::Locals { names: Vec::new(), tparams: Vec::new(), givens: Vec::new(), classes: Vec::new(), aliases: Vec::new(), owner }
     }
 }
 
@@ -516,9 +520,16 @@ pub struct ResolvedImport {
     pub target: ImportTarget,
     /// What a wildcard leaves out (`{a as _, b as c, *}`), in `Worker::import_hidden`.
     pub hidden: ListRef,
+    /// The type a `given T` selector bounds the givens it brings by (`ImportInfo.givenBound`);
+    /// `Nothing` for a name a clause with a wildcard renames, which brings none.
+    pub bound: Option<TypeId>,
     /// How many frames enclose the import, 0 at the top of a file. Its givens are as near as
     /// the givens of the innermost of those frames.
     pub depth: u32,
+    /// Where its import clause starts in its file (`Import.span.start`), the same for each of the
+    /// clause's selectors: a context of the implicit search each (`ContextualImplicits`), in the
+    /// order of the source; `u32::MAX` for a root import.
+    pub stmt: u32,
     /// Where an explicit import of `Predef` stands, which takes Predef's root import away from
     /// the code after it.
     pub unimports_predef: Option<u32>,
@@ -764,6 +775,10 @@ pub struct Worker<'a> {
     pub error_nodes: u32,
     /// Opaque types whose definition is visible in the current environment.
     pub transparent: Vec<ClassId>,
+    /// The values `erasedValue` made, each with where it was called (the outermost inline call
+    /// that expanded it): one a unit's trees still hold when typed is used, which scalac's
+    /// `Erasure.checkNotErased` rejects (`Worker::report_erased_values`).
+    pub erased_values: Vec<(crate::tir::TExprId, FileId, Span)>,
     pub file_opaques: crate::arena::FileVec<Vec<ClassId>>,
     /// The runtime versions of a jar's inline overrides, as scalac retained them for dispatch.
     pub retained_bodies: crate::arena::Layered<SymId, crate::ast::ExprId>,
@@ -2037,6 +2052,7 @@ impl<'a> Worker<'a> {
             recovered: false,
             error_nodes: 0,
             transparent: Vec::new(),
+            erased_values: Vec::new(),
             file_opaques: crate::arena::FileVec::from_vec(vec![Vec::new(); n_files]),
             retained_bodies: Default::default(),
             inline_definitions: Default::default(),
@@ -2346,6 +2362,7 @@ impl<'a> Worker<'a> {
             recovered: self.recovered,
             error_nodes: Default::default(),
             transparent: Default::default(),
+            erased_values: Vec::new(),
             file_opaques: self.file_opaques.attach(worker),
             retained_bodies: self.retained_bodies.attach(),
             inline_definitions: self.inline_definitions.attach(),

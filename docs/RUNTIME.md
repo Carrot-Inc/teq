@@ -79,7 +79,8 @@ classes, methods for methods, arrow functions for lambdas, the names of the sour
 kilobytes. A definition the dead-code pass leaves out takes no bytes; an anonymous class that is a closure
 in all but name is an arrow function with no class of its own; the anonymous classes inline expansions make
 at one expression with the same body are one class, and the expansions of one inline method that are the
-same up to what the call site gave are one function (`--no-outline` writes each at its site, for debugging).
+same up to what the call site gave are one function, a call or a read on what the site gave the same
+whichever override its type selects, as the output writes it (`--no-outline` writes each at its site, for debugging).
 
 `--release` writes the production output: the members of Scala classes get short names from one table for
 the whole program, so a call by name lands on the same member in every module, and the output has no

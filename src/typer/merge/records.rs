@@ -468,7 +468,7 @@ pub(in crate::typer) fn map<M: Mapping + ?Sized, K: Copy + Eq + std::hash::Hash,
 /// Whether an environment names an id the merge moves.
 pub(in crate::typer) fn env_moves<M: Mapping + ?Sized>(m: &M, env: &Env) -> bool {
     let frame_moves = |f: &Frame| match f {
-        Frame::Locals { names, tparams, givens, classes, aliases } => {
+        Frame::Locals { names, tparams, givens, classes, aliases, .. } => {
             names.iter().any(|&(_, s)| m.sym(s) != s)
                 || tparams.iter().any(|&(_, p)| m.tparam(p) != p)
                 || givens.iter().any(|&s| m.sym(s) != s)
@@ -478,10 +478,13 @@ pub(in crate::typer) fn env_moves<M: Mapping + ?Sized>(m: &M, env: &Env) -> bool
         Frame::Class(c) => m.class(*c) != *c,
     };
     env.frames.iter().any(frame_moves)
-        || env.imports.iter().any(|i| match i.target {
-            ImportTarget::PkgMember(p, _) | ImportTarget::PkgAll(p) | ImportTarget::PkgGivens(p) => m.pkg(p) != p,
-            ImportTarget::ClassMember(c, _) | ImportTarget::ClassAll(c) | ImportTarget::ClassGivens(c) => m.class(c) != c,
-            _ => false,
+        || env.imports.iter().any(|i| {
+            i.bound.is_some_and(|t| m.ty(t) != t)
+                || match i.target {
+                    ImportTarget::PkgMember(p, _) | ImportTarget::PkgAll(p) | ImportTarget::PkgGivens(p) => m.pkg(p) != p,
+                    ImportTarget::ClassMember(c, _) | ImportTarget::ClassAll(c) | ImportTarget::ClassGivens(c) => m.class(c) != c,
+                    _ => false,
+                }
         })
 }
 
@@ -489,7 +492,7 @@ pub(in crate::typer) fn env_moves<M: Mapping + ?Sized>(m: &M, env: &Env) -> bool
 pub(in crate::typer) fn env<M: Mapping + ?Sized>(m: &M, env: &mut Env) {
     for f in &mut env.frames {
         match f {
-            Frame::Locals { names, tparams, givens, classes, aliases } => {
+            Frame::Locals { names, tparams, givens, classes, aliases, .. } => {
                 for (_, s) in names {
                     *s = m.sym(*s);
                 }
@@ -510,6 +513,7 @@ pub(in crate::typer) fn env<M: Mapping + ?Sized>(m: &M, env: &mut Env) {
         }
     }
     for i in &mut env.imports {
+        i.bound = i.bound.map(|t| m.ty(t));
         i.target = match i.target {
             ImportTarget::PkgMember(p, n) => ImportTarget::PkgMember(m.pkg(p), n),
             ImportTarget::PkgAll(p) => ImportTarget::PkgAll(m.pkg(p)),

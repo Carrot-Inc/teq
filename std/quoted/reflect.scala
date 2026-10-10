@@ -1071,88 +1071,93 @@ object Reflect:
 
   // ---- constants ----
 
-  final class Constant(val value: Any)
-  object Constant:
-    def apply(x: Any): Constant = new Constant(x)
+  // A constant is its value and its kind, the tag of dotty's `Constants.Constant` (`UnitTag` 2 to
+  // `ClazzTag` 13), which the kinds' type tests and extractors compare (`QuotesImpl.IntConstantTypeTest`:
+  // `x.tag == IntTag`), never the value's class: on JavaScript a `Char` is no other than a one-character
+  // `String` but by its tag.
+  final class Constant(val value: Any, val tag: Int)
+  // scalac's `val Constant: ConstantModule`, a module with no members: a constant is made by its kind's.
+  object Constant
   object ConstantMethods:
     extension (self: Constant)
       def value: Any = self.value
       def show(using Printer[Constant]): String = summon[Printer[Constant]].show(self)
   export ConstantMethods.*
   object BooleanConstant:
-    def apply(x: Boolean): Constant = Constant(x)
-    def unapply(c: Constant): Option[Boolean] = c.value match { case v: Boolean => Some(v); case _ => None }
+    def apply(x: Boolean): BooleanConstant = new Constant(x, 3)
+    def unapply(c: Constant): Option[Boolean] = if c.tag == 3 then Some(c.value.asInstanceOf[Boolean]) else None
   object ByteConstant:
-    def apply(x: Byte): Constant = Constant(x)
-    def unapply(c: Constant): Option[Byte] = c.value match { case v: Byte => Some(v); case _ => None }
+    def apply(x: Byte): ByteConstant = new Constant(x, 4)
+    def unapply(c: Constant): Option[Byte] = if c.tag == 4 then Some(c.value.asInstanceOf[Byte]) else None
   object ShortConstant:
-    def apply(x: Short): Constant = Constant(x)
-    def unapply(c: Constant): Option[Short] = c.value match { case v: Short => Some(v); case _ => None }
+    def apply(x: Short): ShortConstant = new Constant(x, 5)
+    def unapply(c: Constant): Option[Short] = if c.tag == 5 then Some(c.value.asInstanceOf[Short]) else None
   object IntConstant:
-    def apply(x: Int): Constant = Constant(x)
-    def unapply(c: Constant): Option[Int] = c.value match { case v: Int => Some(v); case _ => None }
+    def apply(x: Int): IntConstant = new Constant(x, 7)
+    def unapply(c: Constant): Option[Int] = if c.tag == 7 then Some(c.value.asInstanceOf[Int]) else None
   object LongConstant:
-    def apply(x: Long): Constant = Constant(x)
-    def unapply(c: Constant): Option[Long] = c.value match { case v: Long => Some(v); case _ => None }
+    def apply(x: Long): LongConstant = new Constant(x, 8)
+    def unapply(c: Constant): Option[Long] = if c.tag == 8 then Some(c.value.asInstanceOf[Long]) else None
   object FloatConstant:
-    def apply(x: Float): Constant = Constant(x)
-    def unapply(c: Constant): Option[Float] = c.value match { case v: Float => Some(v); case _ => None }
+    def apply(x: Float): FloatConstant = new Constant(x, 9)
+    def unapply(c: Constant): Option[Float] = if c.tag == 9 then Some(c.value.asInstanceOf[Float]) else None
   object DoubleConstant:
-    def apply(x: Double): Constant = Constant(x)
-    def unapply(c: Constant): Option[Double] = c.value match { case v: Double => Some(v); case _ => None }
+    def apply(x: Double): DoubleConstant = new Constant(x, 10)
+    def unapply(c: Constant): Option[Double] = if c.tag == 10 then Some(c.value.asInstanceOf[Double]) else None
   object CharConstant:
-    def apply(x: Char): Constant = Constant(x)
-    def unapply(c: Constant): Option[Char] = c.value match { case v: Char => Some(v); case _ => None }
+    def apply(x: Char): CharConstant = new Constant(x, 6)
+    def unapply(c: Constant): Option[Char] = if c.tag == 6 then Some(c.value.asInstanceOf[Char]) else None
   object StringConstant:
-    def apply(x: String): Constant = Constant(x)
-    def unapply(c: Constant): Option[String] = c.value match { case v: String => Some(v); case _ => None }
+    def apply(x: String): StringConstant = new Constant(x, 11)
+    def unapply(c: Constant): Option[String] = if c.tag == 11 then Some(c.value.asInstanceOf[String]) else None
   object UnitConstant:
-    def apply(): Constant = Constant(())
-    def unapply(c: Constant): Boolean = c.value match { case _: Unit => true; case _ => false }
+    def apply(): UnitConstant = new Constant((), 2)
+    def unapply(c: Constant): Boolean = c.tag == 2
   object NullConstant:
-    def apply(): Constant = Constant(null)
-    def unapply(c: Constant): Boolean = c.value == null
+    def apply(): NullConstant = new Constant(null, 12)
+    def unapply(c: Constant): Boolean = c.tag == 12
   object ClassOfConstant:
-    @js("$quoted") def apply(x: TypeRepr): Constant
-    def unapply(c: Constant): Option[TypeRepr] = c.value match { case v: TypeRepr => Some(v); case _ => None }
+    @js("$quoted") def apply(x: TypeRepr): ClassOfConstant
+    def unapply(c: Constant): Option[TypeRepr] = if c.tag == 13 then Some(c.value.asInstanceOf[TypeRepr]) else None
 
-  // The kinds of constant as scalac's types under `Constant`, told apart by their value.
-  type BooleanConstant = Constant
-  object BooleanConstantTypeTest:
-    def unapply(x: Constant): Option[BooleanConstant] = x.value match { case _: Boolean => true; case _ => false } match { case true => Some(x); case false => None }
-  type ByteConstant = Constant
-  object ByteConstantTypeTest:
-    def unapply(x: Constant): Option[ByteConstant] = x.value match { case _: Byte => true; case _ => false } match { case true => Some(x); case false => None }
-  type ShortConstant = Constant
-  object ShortConstantTypeTest:
-    def unapply(x: Constant): Option[ShortConstant] = x.value match { case _: Short => true; case _ => false } match { case true => Some(x); case false => None }
-  type IntConstant = Constant
-  object IntConstantTypeTest:
-    def unapply(x: Constant): Option[IntConstant] = x.value match { case _: Int => true; case _ => false } match { case true => Some(x); case false => None }
-  type LongConstant = Constant
-  object LongConstantTypeTest:
-    def unapply(x: Constant): Option[LongConstant] = x.value match { case _: Long => true; case _ => false } match { case true => Some(x); case false => None }
-  type FloatConstant = Constant
-  object FloatConstantTypeTest:
-    def unapply(x: Constant): Option[FloatConstant] = x.value match { case _: Float => true; case _ => false } match { case true => Some(x); case false => None }
-  type DoubleConstant = Constant
-  object DoubleConstantTypeTest:
-    def unapply(x: Constant): Option[DoubleConstant] = x.value match { case _: Double => true; case _ => false } match { case true => Some(x); case false => None }
-  type CharConstant = Constant
-  object CharConstantTypeTest:
-    def unapply(x: Constant): Option[CharConstant] = x.value match { case _: Char => true; case _ => false } match { case true => Some(x); case false => None }
-  type StringConstant = Constant
-  object StringConstantTypeTest:
-    def unapply(x: Constant): Option[StringConstant] = x.value match { case _: String => true; case _ => false } match { case true => Some(x); case false => None }
-  type UnitConstant = Constant
-  object UnitConstantTypeTest:
-    def unapply(x: Constant): Option[UnitConstant] = x.value match { case _: Unit => true; case _ => false } match { case true => Some(x); case false => None }
-  type NullConstant = Constant
-  object NullConstantTypeTest:
-    def unapply(x: Constant): Option[NullConstant] = x.value match { case null => true; case _ => false } match { case true => Some(x); case false => None }
-  type ClassOfConstant = Constant
-  object ClassOfConstantTypeTest:
-    def unapply(x: Constant): Option[ClassOfConstant] = x.value match { case _: TypeRepr => true; case _ => false } match { case true => Some(x); case false => None }
+  // The kinds of constant: scalac's abstract types under `Constant` (`Quotes.reflectModule`), each told apart by
+  // its tag by the `TypeTest` a pattern over it finds in this object (`QuotesImpl.IntConstantTypeTest`).
+  opaque type BooleanConstant <: Constant = Constant
+  given BooleanConstantTypeTest: scala.reflect.TypeTest[Constant, BooleanConstant] with
+    def unapply(x: Constant): Option[x.type & BooleanConstant] = if x.tag == 3 then Some(x) else None
+  opaque type ByteConstant <: Constant = Constant
+  given ByteConstantTypeTest: scala.reflect.TypeTest[Constant, ByteConstant] with
+    def unapply(x: Constant): Option[x.type & ByteConstant] = if x.tag == 4 then Some(x) else None
+  opaque type ShortConstant <: Constant = Constant
+  given ShortConstantTypeTest: scala.reflect.TypeTest[Constant, ShortConstant] with
+    def unapply(x: Constant): Option[x.type & ShortConstant] = if x.tag == 5 then Some(x) else None
+  opaque type IntConstant <: Constant = Constant
+  given IntConstantTypeTest: scala.reflect.TypeTest[Constant, IntConstant] with
+    def unapply(x: Constant): Option[x.type & IntConstant] = if x.tag == 7 then Some(x) else None
+  opaque type LongConstant <: Constant = Constant
+  given LongConstantTypeTest: scala.reflect.TypeTest[Constant, LongConstant] with
+    def unapply(x: Constant): Option[x.type & LongConstant] = if x.tag == 8 then Some(x) else None
+  opaque type FloatConstant <: Constant = Constant
+  given FloatConstantTypeTest: scala.reflect.TypeTest[Constant, FloatConstant] with
+    def unapply(x: Constant): Option[x.type & FloatConstant] = if x.tag == 9 then Some(x) else None
+  opaque type DoubleConstant <: Constant = Constant
+  given DoubleConstantTypeTest: scala.reflect.TypeTest[Constant, DoubleConstant] with
+    def unapply(x: Constant): Option[x.type & DoubleConstant] = if x.tag == 10 then Some(x) else None
+  opaque type CharConstant <: Constant = Constant
+  given CharConstantTypeTest: scala.reflect.TypeTest[Constant, CharConstant] with
+    def unapply(x: Constant): Option[x.type & CharConstant] = if x.tag == 6 then Some(x) else None
+  opaque type StringConstant <: Constant = Constant
+  given StringConstantTypeTest: scala.reflect.TypeTest[Constant, StringConstant] with
+    def unapply(x: Constant): Option[x.type & StringConstant] = if x.tag == 11 then Some(x) else None
+  opaque type UnitConstant <: Constant = Constant
+  given UnitConstantTypeTest: scala.reflect.TypeTest[Constant, UnitConstant] with
+    def unapply(x: Constant): Option[x.type & UnitConstant] = if x.tag == 2 then Some(x) else None
+  opaque type NullConstant <: Constant = Constant
+  given NullConstantTypeTest: scala.reflect.TypeTest[Constant, NullConstant] with
+    def unapply(x: Constant): Option[x.type & NullConstant] = if x.tag == 12 then Some(x) else None
+  opaque type ClassOfConstant <: Constant = Constant
+  given ClassOfConstantTypeTest: scala.reflect.TypeTest[Constant, ClassOfConstant] with
+    def unapply(x: Constant): Option[x.type & ClassOfConstant] = if x.tag == 13 then Some(x) else None
 
   // ---- implicits ----
 

@@ -246,7 +246,8 @@ def classify(test):
     for bucket, needle in OOS_MESSAGES:
         if needle in first:
             return "oos", bucket, out
-    if first.startswith(SYNTAX_PREFIXES) or "is not part of the supported Scala subset" in first:
+    # `expected a constant value` is the typer's (`requireConst`, scalac's words), no parser's.
+    if first.startswith(SYNTAX_PREFIXES) and not first.startswith("expected a constant value") or "is not part of the supported Scala subset" in first:
         return "syntax", normalise(first), out
     # A member a package lacks is scalac's `value x is not a member of p`; packages are the
     # lowercase qualifiers, `<root>` among them.

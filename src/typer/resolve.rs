@@ -370,7 +370,7 @@ impl<'a> Worker<'a> {
                 ImportSel::Name(_, Some(names::WILDCARD)) => return None,
                 ImportSel::Name(n, alias) => (Some(alias.unwrap_or(n)), ast::ListRef::EMPTY),
             };
-            return Some(ResolvedImport { name, target: ImportTarget::Unresolved, hidden, depth: 0, unimports_predef: None, sel: self.sel_ref(sel, None) });
+            return Some(ResolvedImport { name, target: ImportTarget::Unresolved, hidden, bound: None, depth: 0, stmt: imp.span.start, unimports_predef: None, sel: self.sel_ref(sel, None) });
         };
         if self.index.is_some() {
             self.index_import(imp, target);
@@ -381,18 +381,11 @@ impl<'a> Worker<'a> {
         let unimports_predef = self.names_predef(&imp.path, target).then_some(imp.span.start);
         let (name, member) = match imp.sel {
             ImportSel::Wildcard | ImportSel::Given => {
-                // The names of a `given T`'s type use their imports; the type credits the
-                // selector with what conforms to it.
-                let bound = match (imp.bound, self.unused.on()) {
-                    (Some(b), true) => {
-                        let mark = self.diags.mark();
-                        let t = self.resolve_type(b);
-                        let failed = self.diags.items[mark..].iter().any(|d| !d.is_warning);
-                        self.diags.rollback(mark);
-                        (!failed && t != ERROR).then_some(t)
-                    }
-                    _ => None,
-                };
+                // A `given T` brings the givens that conform to `T` (`ImportInfo.givenBound`), and
+                // the names of its type use their imports. The bound is typed with the import
+                // (`Namer.importBound`: `typedAheadType(sel.bound)`): a bound that fails is reported
+                // and stays an error, which no given matches, never an unbounded import.
+                let bound = imp.bound.map(|b| self.resolve_type(b));
                 let hidden = self.wildcard_hidden(imp, clause);
                 let given_only = matches!(imp.sel, ImportSel::Given);
                 let target = match target {
@@ -401,11 +394,12 @@ impl<'a> Worker<'a> {
                     ImportTarget::ValueAll(v) if given_only => ImportTarget::ValueGivens(v),
                     t => t,
                 };
-                return Some(ResolvedImport { name: None, target, hidden, depth: 0, unimports_predef, sel: self.sel_ref(sel, bound) });
+                let bound = bound.filter(|_| given_only);
+                return Some(ResolvedImport { name: None, target, hidden, bound, depth: 0, stmt: imp.span.start, unimports_predef, sel: self.sel_ref(sel, bound) });
             }
             // `import Predef.{x as _}` binds nothing but still takes the root import away.
             ImportSel::Name(_, Some(names::WILDCARD)) if unimports_predef.is_some() => {
-                return Some(ResolvedImport { name: None, target: ImportTarget::UnimportPredef, hidden: ast::ListRef::EMPTY, depth: 0, unimports_predef, sel: self.sel_ref(sel, None) });
+                return Some(ResolvedImport { name: None, target: ImportTarget::UnimportPredef, hidden: ast::ListRef::EMPTY, bound: None, depth: 0, stmt: imp.span.start, unimports_predef, sel: self.sel_ref(sel, None) });
             }
             ImportSel::Name(_, Some(names::WILDCARD)) => return None,
             ImportSel::Name(n, alias) => {
@@ -413,6 +407,11 @@ impl<'a> Worker<'a> {
                 (alias.unwrap_or(n), n)
             }
         };
+        // A name a clause with a wildcard renames is among the wildcard's exclusions, which
+        // `ImportInfo.importedImplicits` checks first: it brings no implicit under either name.
+        let renamed_beside_wildcard = name != member
+            && clause.iter().any(|other| other.span.start == imp.span.start && matches!(other.sel, ImportSel::Wildcard | ImportSel::Given));
+        let bound = renamed_beside_wildcard.then_some(NOTHING);
         let target = match target {
             ImportTarget::PkgAll(p) => {
                 let pkg = self.syms.pkg(p);
@@ -437,7 +436,7 @@ impl<'a> Worker<'a> {
             ImportTarget::ValueAll(v) => ImportTarget::ValueMember(v, member),
             t => t,
         };
-        Some(ResolvedImport { name: Some(name), target, hidden: ast::ListRef::EMPTY, depth: 0, unimports_predef, sel: self.sel_ref(sel, None) })
+        Some(ResolvedImport { name: Some(name), target, hidden: ast::ListRef::EMPTY, bound, depth: 0, stmt: imp.span.start, unimports_predef, sel: self.sel_ref(sel, None) })
     }
 
     /// Whether the import's qualifier is `Predef`, one of scalac's root imports: the std's
@@ -1464,7 +1463,7 @@ impl<'a> Worker<'a> {
     #[inline]
     pub(super) fn predef_import(&self) -> Option<ResolvedImport> {
         let predef = self.loaded.as_ref()?.predef?;
-        Some(ResolvedImport { name: None, target: ImportTarget::ClassAll(predef), hidden: ast::ListRef::EMPTY, depth: 0, unimports_predef: None, sel: super::unused::SelRef::NONE })
+        Some(ResolvedImport { name: None, target: ImportTarget::ClassAll(predef), hidden: ast::ListRef::EMPTY, bound: None, depth: 0, stmt: u32::MAX, unimports_predef: None, sel: super::unused::SelRef::NONE })
     }
 
     /// Inlined into `lookup` whatever its size: the per-import loop of every lookup, where an
@@ -2580,6 +2579,7 @@ impl<'a> Worker<'a> {
                     givens: Vec::new(),
                     classes: Vec::new(),
                     aliases: Vec::new(),
+                    owner: self.sites.owners.len() as u32,
                 });
                 // The bounds of the parameters (`[x <: Node] =>> SynEv[x]`), which may name
                 // each other, so they are resolved with the parameters in scope.
@@ -2645,7 +2645,7 @@ impl<'a> Worker<'a> {
             let r = match &def.kind {
                 DefKind::TypeAlias { tparams, rhs, lower, upper } => {
                     let ids = self.make_tparams(tparams);
-                    self.env.frames.push(Frame::Locals { names: Vec::new(), tparams: ids.clone(), givens: Vec::new(), classes: Vec::new(), aliases: Vec::new() });
+                    self.env.frames.push(Frame::Locals { names: Vec::new(), tparams: ids.clone(), givens: Vec::new(), classes: Vec::new(), aliases: Vec::new(), owner: self.sites.owners.len() as u32 });
                     self.resolve_tparam_bounds(tparams, &ids);
                     let over = |t: &mut Self, ty: TypeId| {
                         if ids.is_empty() {
@@ -2793,7 +2793,7 @@ impl<'a> Worker<'a> {
             ps.push(self.types.param(p));
             ids.push(p);
         }
-        self.env.frames.push(Frame::Locals { names: Vec::new(), tparams: frame_tparams, givens: Vec::new(), classes: Vec::new(), aliases: Vec::new() });
+        self.env.frames.push(Frame::Locals { names: Vec::new(), tparams: frame_tparams, givens: Vec::new(), classes: Vec::new(), aliases: Vec::new(), owner: self.sites.owners.len() as u32 });
         if let Some(bl) = bounds {
             self.resolve_lambda_bounds(bl, &ids);
         }
@@ -3509,7 +3509,7 @@ impl<'a> Worker<'a> {
             let ids = t.make_tparams(tparams);
             // A match type names the alias itself in its cases, by these parameters.
             t.syms.aliases[a.idx()].tparams = ids.iter().map(|&(_, p)| p).collect();
-            t.env.frames.push(Frame::Locals { names: Vec::new(), tparams: ids.clone(), givens: Vec::new(), classes: Vec::new(), aliases: Vec::new() });
+            t.env.frames.push(Frame::Locals { names: Vec::new(), tparams: ids.clone(), givens: Vec::new(), classes: Vec::new(), aliases: Vec::new(), owner: t.sites.owners.len() as u32 });
             t.resolve_tparam_bounds(tparams, &ids);
             let over = |t: &mut Self, ty: TypeId| {
                 if ids.is_empty() || ty == ANY || ty == NOTHING {
@@ -3798,7 +3798,7 @@ impl<'a> Worker<'a> {
             DefKind::Given(g) => {
                 let ids = t.make_tparams(&g.tparams);
                 t.syms.class_mut(c).tparams = ids.iter().map(|&(_, p)| p).collect();
-                t.env.frames.push(Frame::Locals { names: Vec::new(), tparams: ids.clone(), givens: Vec::new(), classes: Vec::new(), aliases: Vec::new() });
+                t.env.frames.push(Frame::Locals { names: Vec::new(), tparams: ids.clone(), givens: Vec::new(), classes: Vec::new(), aliases: Vec::new(), owner: t.sites.owners.len() as u32 });
                 t.resolve_tparam_bounds(&g.tparams, &ids);
                 let existing = t.syms.class(c).ctor_syms.clone();
                 let ctor = t.resolve_clauses(&g.clauses, Some(existing), &g.tparams, &ids, Some(c));
@@ -3809,7 +3809,7 @@ impl<'a> Worker<'a> {
             DefKind::TypeAlias { tparams, rhs, upper, .. } => {
                 let ids = t.make_tparams(tparams);
                 t.syms.class_mut(c).tparams = ids.iter().map(|&(_, p)| p).collect();
-                t.env.frames.push(Frame::Locals { names: Vec::new(), tparams: ids.clone(), givens: Vec::new(), classes: Vec::new(), aliases: Vec::new() });
+                t.env.frames.push(Frame::Locals { names: Vec::new(), tparams: ids.clone(), givens: Vec::new(), classes: Vec::new(), aliases: Vec::new(), owner: t.sites.owners.len() as u32 });
                 t.resolve_tparam_bounds(tparams, &ids);
                 let under = rhs.map_or(ERROR, |r| t.resolve_type(r));
                 t.syms.class_mut(c).underlying = Some(under);
@@ -3840,7 +3840,7 @@ impl<'a> Worker<'a> {
         }
         let ids = self.make_tparams(tparam_asts);
         self.syms.class_mut(c).tparams = ids.iter().map(|&(_, p)| p).collect();
-        self.env.frames.push(Frame::Locals { names: Vec::new(), tparams: ids.clone(), givens: Vec::new(), classes: Vec::new(), aliases: Vec::new() });
+        self.env.frames.push(Frame::Locals { names: Vec::new(), tparams: ids.clone(), givens: Vec::new(), classes: Vec::new(), aliases: Vec::new(), owner: self.sites.owners.len() as u32 });
         // The bound of a higher-kinded parameter names a class that may extend this one
         // (`FromIterator[+C[X] <: Iterable[X]]`, `Iterable extends FromIterator[Iterable]`),
         // so it is resolved once the class is complete enough to be extended.

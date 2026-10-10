@@ -1928,6 +1928,22 @@ impl<'a> Worker<'a> {
         lists: &mut Vec<ArgList>,
         expected: Option<TypeId>,
     ) -> Option<usize> {
+        self.resolve_extension_overload(calls, None, recv, recv_ty, lists, expected).ok()
+    }
+
+    /// The one of same-named extensions of an instance that the receiver, as the first list,
+    /// and the lists after it choose, with the call's explicit type arguments, as scalac's
+    /// `resolveOverloaded` chooses among the alternatives on the arguments typed alone; where
+    /// none or several apply, its E134 or E051.
+    pub(super) fn resolve_extension_overload(
+        &mut self,
+        calls: &[MethodCall],
+        targs: Option<ListRef>,
+        recv: TExprId,
+        recv_ty: TypeId,
+        lists: &mut Vec<ArgList>,
+        expected: Option<TypeId>,
+    ) -> Result<usize, String> {
         let alts: Vec<Alt> = calls
             .iter()
             .map(|call| Alt { sym: call.sym, sig: self.sig_arc(call.sym), owner_subst: call.owner_subst.clone(), ctor: None })
@@ -1935,9 +1951,17 @@ impl<'a> Worker<'a> {
         let span = lists.first().map_or(Span::default(), |l| l.span);
         lists.insert(0, ArgList { args: vec![ArgSrc::Typed(recv, recv_ty)], using: false, span });
         let mut infos = Vec::new();
-        let choice = self.resolve_overloaded(&alts, None, lists, &mut infos, expected, false, false);
+        let choice = self.resolve_overloaded(&alts, targs, lists, &mut infos, expected, false, false);
+        let result = match choice {
+            Ok(i) => Ok(i),
+            Err(failure) => {
+                self.type_plain_args(lists);
+                let set = alts[0].sym;
+                Err(self.overload_failure(set, &alts, &failure, lists, &infos, expected))
+            }
+        };
         lists.remove(0);
-        choice.ok()
+        result
     }
 
     /// The alternative the lists choose (`resolve_choice`); in an index session the names of its

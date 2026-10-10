@@ -355,7 +355,7 @@ impl<'a> Worker<'a> {
         }
         self.note_tasty_opaques(file, tasty_file);
         for o in converted.holder_objects {
-            let imp = super::super::ResolvedImport { name: None, target: super::super::ImportTarget::ClassAll(o), hidden: crate::ast::ListRef::EMPTY, depth: 0, unimports_predef: None, sel: super::super::unused::SelRef::NONE };
+            let imp = super::super::ResolvedImport { name: None, target: super::super::ImportTarget::ClassAll(o), hidden: crate::ast::ListRef::EMPTY, bound: None, depth: 0, stmt: u32::MAX, unimports_predef: None, sel: super::super::unused::SelRef::NONE };
             std::sync::Arc::make_mut(self.file_imports[file.0 as usize].get_or_insert_with(Default::default)).push(imp);
         }
         for &(d, s) in &converted.def_syms {

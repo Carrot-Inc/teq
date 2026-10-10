@@ -2637,10 +2637,14 @@ impl<'a> Gen<'a> {
                         return self.adapt_vc(c, args, t, want);
                     }
                 }
-                // The typer knows more than the erased signature: `xs.head` of a `List[Int]`.
+                // The typer knows more than the erased signature: `xs.head` of a `List[Int]`. A
+                // given object's read is of the given's declared type (`given_object_read`), whatever
+                // class the typer records for the module it is, so that no build casts it more than
+                // another, whichever of a search and its name gave the read.
                 let known = match prog.expr(e) {
                     TExpr::Int(_) | TExpr::Double(_) => Some(self.static_type(e)),
                     TExpr::Long(_) | TExpr::Bool(_) | TExpr::Char(_) | TExpr::Str(_) => None,
+                    TExpr::Static(s) | TExpr::Field(_, s) if self.cx.given_objects.contains_key(&s) || self.cx.inner_given_objects.contains_key(&s) => None,
                     _ => self.recorded(e),
                 };
                 let t = match known {

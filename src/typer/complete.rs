@@ -378,7 +378,7 @@ impl<'a> Worker<'a> {
         let saved = self.file_imports[f].clone();
         let mut imports: Vec<ResolvedImport> = saved.as_deref().cloned().unwrap_or_default();
         // A file's named imports come first, the latest at the front (`resolve_file_imports`).
-        imports.insert(0, ResolvedImport { name: Some(name), target, hidden: ast::ListRef::EMPTY, depth: 0, unimports_predef: None, sel: super::unused::SelRef::NONE });
+        imports.insert(0, ResolvedImport { name: Some(name), target, hidden: ast::ListRef::EMPTY, bound: None, depth: 0, stmt: u32::MAX, unimports_predef: None, sel: super::unused::SelRef::NONE });
         self.file_imports[f] = Some(std::sync::Arc::new(imports));
         let at = Span::new(0, 0);
         let key = |r: TermRef| match r {
@@ -1009,7 +1009,7 @@ impl<'a> Worker<'a> {
                 }
             }
             DefKind::Given(g) => {
-                self.env.frames.push(Frame::locals());
+                self.push_scope();
                 self.bind_params(&g.tparams, &g.clauses, b);
                 if let Some(e) = g.alias.filter(|&e| holds(ast.expr_span(e), offset)) {
                     self.scope_expr(file, ast, e, offset, b);
@@ -1026,7 +1026,7 @@ impl<'a> Worker<'a> {
                 }
             }
             DefKind::Fun(f) => {
-                self.env.frames.push(Frame::locals());
+                self.push_scope();
                 // A default argument sees the clauses before its own, the body all of them.
                 for (k, clause) in f.clauses.iter().enumerate() {
                     for p in &clause.params {
@@ -1105,7 +1105,7 @@ impl<'a> Worker<'a> {
         match ast.expr(e) {
             Expr::Block(stmts) => self.scope_block(file, ast, ast.stmt_list(stmts), offset, b),
             Expr::Lambda(params, body) => {
-                self.env.frames.push(Frame::locals());
+                self.push_scope();
                 for p in &ast.lambda_params[params.range()] {
                     if let Some(s) = b.local(p.name, p.span) {
                         self.bind_term(p.name, s);
@@ -1139,7 +1139,7 @@ impl<'a> Worker<'a> {
                 self.scope_cases(file, ast, ast.case_list(t.cases), offset, b);
             }
             Expr::For(enums, body, _) => {
-                self.env.frames.push(Frame::locals());
+                self.push_scope();
                 for en in &ast.enumerators[enums.range()] {
                     let (pat, rhs) = match *en {
                         ast::Enumerator::Gen(p, x) | ast::Enumerator::CaseGen(p, x) | ast::Enumerator::Val(p, x) => (Some(p), x),
@@ -1173,7 +1173,7 @@ impl<'a> Worker<'a> {
             }
             Expr::NewAnon(d) => self.scope_def(file, ast, d, offset, b),
             Expr::PolyLambda(names, lambda) => {
-                self.env.frames.push(Frame::locals());
+                self.push_scope();
                 let span = ast.expr_span(e);
                 for &n in &ast.name_lists[names.range()] {
                     if let Some(p) = b.tparam(n, span) {
@@ -1200,7 +1200,7 @@ impl<'a> Worker<'a> {
             if !holds(span, offset) {
                 continue;
             }
-            self.env.frames.push(Frame::locals());
+            self.push_scope();
             self.bind_pattern(ast, case.pat, b);
             for x in case.guard.into_iter().chain([case.body]) {
                 if holds(ast.expr_span(x), offset) {
@@ -1235,7 +1235,7 @@ impl<'a> Worker<'a> {
     /// A block: its definitions visible throughout, its values and imports from where they
     /// end, then the statement that holds the offset.
     fn scope_block(&mut self, file: FileId, ast: &'a Ast, stmts: &'a [Stmt], offset: u32, b: &Binders) {
-        self.env.frames.push(Frame::locals());
+        self.push_scope();
         let scope = self.env.imports.len();
         for stmt in stmts {
             let Stmt::Def(d) = *stmt else { continue };

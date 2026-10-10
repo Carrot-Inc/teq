@@ -281,7 +281,13 @@ impl<'a> Worker<'a> {
         match self.types.get(t) {
             Type::Refined(parent, r) => match self.types.refinement(r) {
                 Refinement::Alias(n, rhs) if n == name => Some(MemberInfo::Alias(rhs)),
-                Refinement::Bounds(n, lo, hi) if n == name => Some(MemberInfo::Bounds(lo, hi)),
+                // A refinement's bounds narrow the member its parent has (a `RefinedType`'s
+                // member is the parent's denotation `&` the refined info): `ProductOf[B] { type
+                // MirroredElemTypes >: A }` has `>: A <: Tuple`.
+                Refinement::Bounds(n, lo, hi) if n == name => {
+                    let outer = self.member_in_type(parent, name, prefix);
+                    Some(self.bounds_meet(lo, hi, outer))
+                }
                 _ => self.member_in_type(parent, name, prefix),
             },
             Type::Class(c, args) => self.member_in_class(c, args, name, prefix),

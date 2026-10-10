@@ -93,11 +93,6 @@ pub struct Attempts {
     /// Whether a copy of a typed tree is under way (`Worker::copy_expr`), which expanded the
     /// tree's pending calls when it began.
     pub copying: bool,
-    /// Whether the flush records the expansions it moved into their calls' nodes (`moved`),
-    /// for the tail-call check, which counts calls node by node.
-    pub tracking_moved: u32,
-    /// The expansions' roots the flush moved into the calls' nodes, left behind unreached.
-    pub moved: Vec<crate::tir::TExprId>,
     /// How many times work done on demand began inside an attempt (`promote_begin`).
     demanded: u32,
     /// The positions of the diagnostics an open attempt holds that scalac reports only in its
@@ -295,17 +290,15 @@ pub(super) struct ArgCache {
     /// The depth of applications (`Worker::app_depth`) the arguments are typed at: the first
     /// application under the cache claims it (`UNCLAIMED` until then), as a `FunProto` is its
     /// application's, so that an application nested in an argument types its own arguments
-    /// afresh; `ANY_DEPTH` where the attempts apply the arguments through applications of their
-    /// own (the extensions of an instance tried in turn).
+    /// afresh.
+    ///
+    /// The typings are `typedArg`'s, unadapted (ProtoTypes.scala 556): a literal typed against
+    /// the formal and cached as any argument is (dotty's `typedNumber` types `1` for a `Long`
+    /// formal as a `Long` literal, which a member's retry adapts as it is), and a transparent
+    /// call that is the argument itself left unexpanded, its expansion each adaptation's
+    /// (`expand_unadapted`). An instance's overloaded extensions are no attempts over a cache:
+    /// they are resolved on the arguments typed alone (`resolve_extension_overload`).
     depth: u32,
-    /// Whether the cache holds `typedArg`'s unadapted typings (ProtoTypes.scala 556), a member's
-    /// `FunProto`'s: a literal typed against the formal and cached as any argument is (dotty's
-    /// `typedNumber` types `1` for a `Long` formal as a `Long` literal, which a member's retry
-    /// adapts as it is), and a transparent call that is the argument itself left unexpanded, its
-    /// expansion each adaptation's (`expand_unadapted`). The extensions of an instance stand for
-    /// dotty's overload resolution on the arguments typed alone (`typedArgs`), where each attempt
-    /// types a literal against its own formal (`literal_arg`).
-    unadapted: bool,
     args: Vec<CachedArg>,
     /// The tupled dual's typing of the arguments, a prototype of its own whose one argument is
     /// their tuple (`FunProto.tupledDual`): one where the application auto-tupled them.
@@ -343,9 +336,8 @@ pub(super) enum Dual {
 /// has no typing of it yet (named or not), or in none.
 pub(super) enum ArgSlot {
     Cached(crate::tir::TExprId, crate::types::TypeId),
-    /// Held, with the argument as written, whether it is named and whether the cache holds
-    /// unadapted typings (`ArgCache::unadapted`).
-    Held { named: bool, written: crate::ast::ExprId, unadapted: bool },
+    /// Held, with the argument as written and whether it is named.
+    Held { named: bool, written: crate::ast::ExprId },
     None,
 }
 
@@ -356,12 +348,11 @@ pub(super) enum Cache {
     Kept,
     /// Not cached: the attempt had reported an error, the typing's own or an earlier one's.
     Failed,
-    /// No cache holds the argument, or holds it for each attempt to type (a literal).
+    /// No cache holds the argument.
     Not,
 }
 
 const UNCLAIMED: u32 = 0;
-const ANY_DEPTH: u32 = u32::MAX;
 
 /// Takes the entries of `v` from `from` on out, but those at the positions `kept` (ascending),
 /// which stay in their order.
@@ -392,20 +383,6 @@ fn moved(i: u32, from: u32, kept: &[usize]) -> u32 {
 }
 
 impl<'a> Worker<'a> {
-    /// Opens the cache of the source arguments of `lists`, for the attempts that apply them
-    /// through applications of their own (the extensions of an instance tried in turn).
-    pub(super) fn arg_cache_open(&mut self, lists: &[super::apply::ArgList]) {
-        let mut args = self.cache_buffers.pop().unwrap_or_default();
-        for l in lists {
-            for a in &l.args {
-                if let super::apply::ArgSrc::Ast(e) = *a {
-                    args.push(CachedArg { key: e, written: e, named: false, typed: None, error: false });
-                }
-            }
-        }
-        self.attempt_caches.push(ArgCache { seq: self.attempts.seq, file: self.env.file, depth: ANY_DEPTH, unadapted: false, args, dual: Dual::None, attempt: None });
-    }
-
     /// Opens the cache of the arguments of a member's first plain list, `FunProto`'s for the
     /// member's application and the extensions and conversions its retry on the qualifier tries
     /// (`tryWithImplicitOnQualifier`, Applications.scala 1373): each by the tree typed, a named
@@ -425,7 +402,7 @@ impl<'a> Worker<'a> {
                 args.push(CachedArg { key, written: e, named, typed: None, error: false });
             }
         }
-        self.attempt_caches.push(ArgCache { seq: self.attempts.seq, file: self.env.file, depth: UNCLAIMED, unadapted: true, args, dual: Dual::None, attempt: None });
+        self.attempt_caches.push(ArgCache { seq: self.attempts.seq, file: self.env.file, depth: UNCLAIMED, args, dual: Dual::None, attempt: None });
     }
 
     /// The application at `depth` begins: the innermost cache, where no application claimed it,
@@ -460,7 +437,7 @@ impl<'a> Worker<'a> {
     /// Whether the cache `c` holds the arguments of an application at `depth`, in this file.
     #[inline]
     fn cache_holds_at(c: &ArgCache, file: crate::source::FileId, depth: u32) -> bool {
-        c.file == file && (c.depth == depth || c.depth == ANY_DEPTH)
+        c.file == file && c.depth == depth
     }
 
     /// Where the argument `e`, typed now by the application at the current depth, stands in the
@@ -487,10 +464,10 @@ impl<'a> Worker<'a> {
             if let Some((te, ty)) = a.typed {
                 return ArgSlot::Cached(te, ty);
             }
-            held.get_or_insert((a.named, a.written, c.unadapted));
+            held.get_or_insert((a.named, a.written));
         }
         match held {
-            Some((named, written, unadapted)) => ArgSlot::Held { named, written, unadapted },
+            Some((named, written)) => ArgSlot::Held { named, written },
             None => ArgSlot::None,
         }
     }
@@ -521,9 +498,6 @@ impl<'a> Worker<'a> {
     /// has reported no error (`ProtoTypes` 488: whatever reported it).
     pub(super) fn cache_arg(&mut self, e: crate::ast::ExprId, typed: (crate::tir::TExprId, crate::types::TypeId)) -> Cache {
         let Some((k, i)) = self.arg_holder(e) else { return Cache::Not };
-        if !self.attempt_caches[k].unadapted && self.literal_arg(e) {
-            return Cache::Not;
-        }
         if !self.arg_cache_clean(k) {
             return Cache::Failed;
         }
@@ -613,24 +587,6 @@ impl<'a> Worker<'a> {
     pub(super) fn set_member_dual(&mut self, d: Dual) {
         if let Some(c) = self.attempt_caches.last_mut() {
             c.dual = d;
-        }
-    }
-
-    /// Whether the argument `e` is a literal, or a tuple of literals, in parentheses or not: each
-    /// attempt types it against its own formal and none caches it. Its typing is the formal's
-    /// (dotty's `typedNumber` makes `1` a `Double` literal against a `Double`), which a later
-    /// candidate's formal may not take where the literal typed alone fits it; where dotty applies
-    /// several alternatives to one argument it resolves the overload on the arguments typed alone
-    /// (`typedArgs`), so that the alternative it applies adapts `1` to its own formal. Typing a
-    /// literal again makes nothing an attempt would make twice.
-    fn literal_arg(&self, e: crate::ast::ExprId) -> bool {
-        use crate::ast::Expr;
-        let ast = self.cur_ast();
-        match ast.expr(e) {
-            Expr::IntLit(_) | Expr::LongLit(_) | Expr::DoubleLit(_) | Expr::DecimalLit(_) | Expr::FloatLit(_) | Expr::BoolLit(_) | Expr::CharLit(_) | Expr::StringLit(_) => true,
-            Expr::Parens(inner) => self.literal_arg(inner),
-            Expr::Tuple(l) => ast.expr_list(l).iter().all(|&x| self.literal_arg(x)),
-            _ => false,
         }
     }
 
@@ -983,6 +939,92 @@ impl<'a> Worker<'a> {
         }
     }
 
+    /// The calls still pending in the trees of `roots`, where each is one a copy carries whole
+    /// (`copyable_pending`); `None` where another is among them, which `expand_pending_in` expands
+    /// before the expansion copies it.
+    pub(super) fn copyable_pending_in(&self, roots: &[crate::tir::TExprId]) -> Option<Vec<crate::tir::TExprId>> {
+        let mut found = Vec::new();
+        for &r in roots {
+            for e in self.prog.descendants(r) {
+                let Some(p) = self.attempts.pending.iter().rev().find(|p| p.node == e && p.call.is_some()) else { continue };
+                if !self.copyable_pending(e, p.call.as_ref().unwrap()) {
+                    return None;
+                }
+                found.push(e);
+            }
+        }
+        Some(found)
+    }
+
+    /// Whether the pending call `e` is one a copy of its node carries with the state its expansion
+    /// reads: a static or a method call whose node lists the call's arguments and whose receiver
+    /// is the call's, no extension's receiver apart, its arguments' recorded types of those nodes.
+    fn copyable_pending(&self, e: crate::tir::TExprId, call: &PendingCall) -> bool {
+        use crate::tir::TExpr;
+        if call.call.ext_recv.is_some() {
+            return false;
+        }
+        let (recv, list) = match self.prog.expr(e) {
+            TExpr::CallStatic(_, l) => (None, l),
+            TExpr::CallMethod(r, _, l) => (Some(r), l),
+            _ => return false,
+        };
+        let items = self.prog.expr_list(list);
+        items == call.args.as_slice()
+            && (call.call.recv.is_none() || call.call.recv == recv)
+            && call.arg_types.iter().all(|&(a, _)| items.contains(&a) || Some(a) == call.call.recv)
+    }
+
+    /// The copy `copy` of the pending call `orig`, pending in its turn with the receiver and the
+    /// arguments the copy has: a transparent expansion keeps a plain call among its arguments in
+    /// each copy of the inline parameter, each expanded by the later phase where it survives, as
+    /// dotty's `Inlining.InliningTreeMap.transform` expands each surviving call with its own
+    /// children.
+    pub(super) fn pend_copy(&mut self, orig: crate::tir::TExprId, copy: crate::tir::TExprId) {
+        use crate::tir::TExpr;
+        let Some(p) = self.attempts.pending.iter().rev().find(|p| p.node == orig && p.call.is_some()) else { return };
+        let (typed_as, mut call) = (p.typed_as, p.call.clone().unwrap());
+        if !self.copyable_pending(orig, &call) {
+            return;
+        }
+        let (copy_recv, copy_list) = match self.prog.expr(copy) {
+            TExpr::CallStatic(_, l) => (None, l),
+            TExpr::CallMethod(r, _, l) => (Some(r), l),
+            _ => return,
+        };
+        let copied: Vec<crate::tir::TExprId> = self.prog.expr_list(copy_list).to_vec();
+        if copied.len() != call.args.len() {
+            return;
+        }
+        let renamed = |e: crate::tir::TExprId| -> crate::tir::TExprId {
+            match call.args.iter().position(|&a| a == e) {
+                Some(i) => copied[i],
+                None if Some(e) == call.call.recv => copy_recv.unwrap_or(e),
+                None => e,
+            }
+        };
+        call.arg_types = call.arg_types.iter().map(|&(a, t)| (renamed(a), t)).collect();
+        if call.call.recv.is_some() {
+            call.call.recv = copy_recv;
+        }
+        call.args = copied;
+        let len = self.attempts.pending.len();
+        self.note_rare(Rare::Pending, len);
+        self.attempts.pending.push(PendingInline { node: copy, typed_as, call: Some(call), seq: self.attempts.seq, held: Vec::new() });
+    }
+
+    /// The pending calls among `originals` that the expansion `expanded` does not hold: copies of
+    /// them stand in its tree (`pend_copy`), so that they are dropped unexpanded, as an inline
+    /// parameter's argument is in scalac's expansion.
+    pub(super) fn drop_pending_copied(&mut self, originals: &[crate::tir::TExprId], expanded: crate::tir::TExprId) {
+        let kept: Vec<crate::tir::TExprId> = self.prog.descendants(expanded).filter(|e| originals.contains(e)).collect();
+        for &o in originals {
+            if !kept.contains(&o) {
+                self.consume_pending(o);
+            }
+        }
+    }
+
     /// Whether `te` is a call still pending.
     pub(super) fn is_pending_call(&self, te: crate::tir::TExprId) -> bool {
         !self.attempts.pending.is_empty() && self.attempts.pending.iter().rev().any(|p| p.node == te && p.call.is_some())
@@ -1121,9 +1163,6 @@ impl<'a> Worker<'a> {
                         self.rewrite_expr(node, value);
                         self.retype_expr(node, changed.unwrap_or(ty));
                         self.move_expansion_marks(expanded, node);
-                        if self.attempts.tracking_moved != 0 {
-                            self.attempts.moved.push(expanded);
-                        }
                     }
                 }
                 self.prog.copy_chain_marks(expanded, node);
@@ -1140,6 +1179,10 @@ impl<'a> Worker<'a> {
     /// shares one function among the expansions of one shape, docs/TARGETS.md), its leaf, widening
     /// and opacity marks, its evaluation and the language server's record of it.
     fn move_expansion_marks(&mut self, from: crate::tir::TExprId, to: crate::tir::TExprId) {
+        // An `erasedValue` the expansion is stands in the call's node now.
+        for made in self.erased_values.iter_mut().filter(|m| m.0 == from) {
+            made.0 = to;
+        }
         if self.prog.is_expansion(from) {
             match self.prog.expansions.get(&from) {
                 Some(&x) => self.prog.note_expansion(to, x),
@@ -1221,20 +1264,6 @@ impl<'a> Worker<'a> {
         if let Some(len) = self.infos.as_ref().map(|i| i.len()) {
             self.note_rare(Rare::Infos, len);
         }
-    }
-
-    /// Whether the attempt reported anything, a warning included, past `m` (what work done on
-    /// demand for an older definition reported aside).
-    pub(super) fn attempt_reported(&self, m: &Mark) -> bool {
-        let from = m.diags as usize;
-        if self.diags.items.len() <= from {
-            return false;
-        }
-        if self.attempts.promoted.is_empty() {
-            return true;
-        }
-        let kept = self.promoted_positions(m, |p| p.diags, m.diags);
-        (from..self.diags.items.len()).any(|i| kept.binary_search(&i).is_err())
     }
 
     /// Whether the attempt reported an error, or typed an error node, past `m`: what work done

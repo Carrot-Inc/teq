@@ -110,6 +110,14 @@ runs tests/dce/expansions.expected out/dce/expansions.actual expansions
 once $out 'step body' '"rendered "' 'function step\$o'
 present $out 'step\$o[0-9a-f]*("b", () => Tag\$().given_Tag_String, "many ", 2)'
 
+# The same with the type class's member a val its givens implement: each site reads it on the given
+# object its search found, typed at that object's class, and the step is still written once.
+out=out/dce/expansions_val.js
+run_js 20 $out tests/dce/expansions_val.scala > out/dce/expansions_val.actual 2>&1 || bad "expansions_val build"
+runs tests/dce/expansions_val.expected out/dce/expansions_val.actual expansions_val
+once $out 'step body' 'function step\$o'
+present $out 'step\$o[0-9a-f]*("b", () => Tag\$().given_Tag_String, "many ", 2)'
+
 # Reflective instantiation costs nothing until a lookup is reached: an annotated class nothing
 # names is dropped, and no registration or registry is written.
 out=out/dce/reflect_unused.js

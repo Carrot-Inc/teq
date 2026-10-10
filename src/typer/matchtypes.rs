@@ -95,7 +95,7 @@ impl<'a> Worker<'a> {
             }
             let pattern = self.resolve_type(pat);
             self.bind_binder_bounds(pattern, &binders);
-            self.env.frames.push(Frame::Locals { names: Vec::new(), tparams: frame_tparams, givens: Vec::new(), classes: Vec::new(), aliases: Vec::new() });
+            self.env.frames.push(Frame::Locals { names: Vec::new(), tparams: frame_tparams, givens: Vec::new(), classes: Vec::new(), aliases: Vec::new(), owner: self.sites.owners.len() as u32 });
             let body = self.resolve_type(body);
             self.env.frames.pop();
             self.case_binders.truncate(mark);

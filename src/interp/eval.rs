@@ -1730,6 +1730,12 @@ impl<'a, 't> Interp<'a, 't> {
         if matches!(self.prog().tests[test.idx()], TypeTest::Function(_)) && self.function_arity(&v).is_some() {
             return Ok(v);
         }
+        // A `Char`'s unboxing in code typed for JavaScript, whose test is a string's, run here as
+        // a macro's code: dotty runs a macro's class on the JVM (`quoted.Interpreter`), where the
+        // unboxing (`Erasure.Boxing.unbox`, `Char.unbox`) takes a `Character`, this `Char`.
+        if let (CastOp::Unbox(..), TypeTest::Str, Value::Char(_)) = (op, &self.prog().tests[test.idx()], &v) {
+            return Ok(v);
+        }
         if self.type_test(&v, test, fr, cx)? {
             return Ok(v);
         }

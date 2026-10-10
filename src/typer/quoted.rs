@@ -228,6 +228,27 @@ impl<'a> Worker<'a> {
         }
     }
 
+    /// `f` typed outside the quotes under way: a body typed on demand from inside one is its
+    /// definition's, at level 0, its inline calls expanded as the walk expands them, where a
+    /// quote's are kept for the site it is spliced at (dotty's `Inlining.InliningTreeMap` keeps
+    /// a quote's level for the trees inside it alone).
+    pub(super) fn outside_quotes<T>(&mut self, f: impl FnOnce(&mut Self) -> T) -> T {
+        // Outside every quote, which most bodies are, there is nothing to set aside.
+        if self.quote.level == 0 && self.quote.frames.is_empty() && self.quote.hole_ranges.is_empty() && self.quote.pattern.is_none() {
+            return f(self);
+        }
+        let level = std::mem::replace(&mut self.quote.level, 0);
+        let frames = std::mem::take(&mut self.quote.frames);
+        let holes = std::mem::take(&mut self.quote.hole_ranges);
+        let pattern = self.quote.pattern.take();
+        let result = f(self);
+        self.quote.level = level;
+        self.quote.frames = frames;
+        self.quote.hole_ranges = holes;
+        self.quote.pattern = pattern;
+        result
+    }
+
     /// Whether the code being typed is a splice's inside a quote (a hole's).
     fn in_splice_of_quote(&self) -> bool {
         self.quote.frames.len() > self.quote.level as usize

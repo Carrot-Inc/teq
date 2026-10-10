@@ -76,7 +76,7 @@ impl<'a> Worker<'a> {
         let names: Vec<Name> = ast.name_lists[names_list.range()].to_vec();
         let param_tys: Vec<TyExprId> = ast.ty_list(params).to_vec();
         let file = self.env.file;
-        self.env.frames.push(Frame::locals());
+        self.push_scope();
         let mut sig_params = Vec::with_capacity(names.len());
         for (&name, &p) in names.iter().zip(&param_tys) {
             let ty = match self.cur_ast().ty(p) {

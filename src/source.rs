@@ -369,15 +369,6 @@ impl Diagnostics {
         self.items.iter().any(|d| !d.is_warning)
     }
 
-    /// Where the diagnostics stand, for `rollback` to drop what a trial typing reported.
-    pub fn mark(&self) -> usize {
-        self.items.len()
-    }
-
-    pub fn rollback(&mut self, mark: usize) {
-        self.items.truncate(mark);
-    }
-
     /// Adds another worker's diagnostics, leaving out what is reported already: two workers
     /// can report one problem, each from the body that met it.
     pub fn absorb(&mut self, other: Diagnostics) {

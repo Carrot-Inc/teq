@@ -897,9 +897,11 @@ stop
 # An edit of an inline body types the files that expanded it again: the error it makes in an
 # unchanged caller's `inline if` branch is reported at once, on an incremental build, and an
 # unchanged retry after a type error kept in a method with a declared type keeps the error.
+# `pick` is transparent: its call is typed by the branch it expands to, as scalac types it (a
+# plain inline method's call has its inferred result, `Int | String`, `Namer.inferredResultType`).
 rm -rf "$src"
 cp -r tests/split/inline "$src"
-sed -i.bak 's/def pick: Int = if flag then 1 else 2/inline def pick = inline if flag then 1 else "two"\
+sed -i.bak 's/def pick: Int = if flag then 1 else 2/transparent inline def pick = inline if flag then 1 else "two"\
   val chosen: Int = pick/' "$src/use.scala"
 start "$src"
 expect "inline: first build" "$(field ok),$(field diagnostics)" 'true,[]'

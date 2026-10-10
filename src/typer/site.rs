@@ -102,6 +102,12 @@ impl<'a> Worker<'a> {
         let name = self.interner.intern(path[i]);
         if demand {
             self.demand_std(p, name, crate::stdindex::TYPE | crate::stdindex::TERM);
+            // A class of the classpath enters when first named, as `pkg_type` enters it: a build
+            // over scala-library has its `scala.reflect.TypeTest` from the jar.
+            let entered = self.syms.pkg(p).entries.get(&name).is_some_and(|e| e.class.is_some() || e.term.is_some());
+            if !entered && self.sees_classpath() {
+                self.load_pkg_member(p, name);
+            }
         }
         let entry = self.syms.pkg(p).entries.get(&name)?;
         let mut class = entry.class.or_else(|| match entry.term.map(|s| self.syms.sym(s).kind) {

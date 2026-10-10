@@ -131,7 +131,7 @@ neg/classfile-artifacts.scala	same
 neg/classtag-typetest	accepts	
 neg/closure-args.scala	different	a by-name type can only be the type of a parameter
 neg/companions.scala	same	
-neg/compiletime-const.scala	syntax	expected a constant value but found: a
+neg/compiletime-const.scala	superset	+2 lines: expected a constant value but found: a
 neg/complex-self-call.scala	same	
 neg/conflicting-inst-basetypes.scala	same	
 neg/constrParams.scala	accepts	
@@ -245,7 +245,7 @@ neg/erased-val-rhs.scala	syntax	'erased' is not part of the supported Scala subs
 neg/erased-value-class.scala	syntax	'erased' is not part of the supported Scala subset
 neg/erased-var.scala	syntax	'erased' is not part of the supported Scala subset
 neg/erasedInline.scala	syntax	'erased' is not part of the supported Scala subset
-neg/erasedValue.scala	accepts	
+neg/erasedValue.scala	same	
 neg/erasedValueb.scala	syntax	'erased' is not part of the supported Scala subset
 neg/errorTypes.scala	same	
 neg/errpos.scala	syntax	expected an expression, found {}
@@ -880,7 +880,7 @@ neg/i22552.scala	superset	+1 lines: Context bounds are not allowed in this posit
 neg/i22560.scala	subset	1/3 lines
 neg/i22560b.scala	accepts	
 neg/i22560c	accepts	
-neg/i22575.scala	accepts	
+neg/i22575.scala	same	
 neg/i22589.scala	same	
 neg/i22589b.scala	same	
 neg/i22589c.scala	same	
@@ -1072,7 +1072,7 @@ neg/i4058.scala	syntax	expected identifier, found {}
 neg/i4060.scala	syntax	'erased' is not part of the supported Scala subset
 neg/i4098.scala	same	
 neg/i4098a.scala	same	
-neg/i4196.scala	superset	+2 lines: Cannot rewrite recursive call: it is not in tail position
+neg/i4196.scala	superset	+2 lines: TailRec optimisation not applicable, method foo contains no recursive calls
 neg/i4247.scala	accepts	
 neg/i4247b.scala	accepts	
 neg/i4272.scala	same	
@@ -1210,7 +1210,7 @@ neg/i6060.scala	accepts
 neg/i6061.scala	superset	+1 lines: modifier opaque is not allowed for this definition
 neg/i6063.scala	syntax	expected identifier, found {}
 neg/i6064.scala	same	
-neg/i6183.scala	accepts	
+neg/i6183.scala	subset	1/2 lines
 neg/i6188.scala	syntax	expected {}, found {}
 neg/i6190.scala	same	
 neg/i6205.scala	accepts	
@@ -1807,7 +1807,7 @@ neg/specialized-trait-trait-extends-specialized-trait.scala	different	modifier i
 neg/specialized-trait-variance-not-allowed.scala	superset	+2 lines: modifier inline is not allowed for this definition
 neg/specialized-trait-variance-nothing.scala	different	modifier inline is not allowed for this definition
 neg/specialized-trait-variant-warns.scala	different	modifier inline is not allowed for this definition
-neg/specializing-inline.scala	subset	1/2 lines
+neg/specializing-inline.scala	same	
 neg/spread-patterns.scala	same	
 neg/static-implements.scala	accepts	
 neg/static-no-companion.scala	accepts	
@@ -1929,7 +1929,7 @@ neg/transparent-inline-nested-note.scala	same
 neg/transparent-inline-param-note.scala	same	
 neg/transparent-inline-refined-no-note.scala	same	
 neg/transparent-inline-select-note.scala	same	
-neg/transparent-inline.scala	subset	2/5 lines
+neg/transparent-inline.scala	subset	4/5 lines
 neg/transparent-override	accepts	
 neg/transparent-trait.scala	accepts	
 neg/transparent.scala	subset	3/6 lines
@@ -2577,7 +2577,7 @@ pos/i11318b.scala	accepts
 pos/i11318c.scala	rejects	not found: {}
 pos/i11350.scala	accepts	
 pos/i11353.scala	accepts	
-pos/i11358.scala	rejects	this value does not take type arguments
+pos/i11358.scala	rejects	Ambiguous overload. The overloaded alternatives of method +++ in object Test with types
 pos/i1137-1	accepts	
 pos/i1137-2	accepts	
 pos/i1137-3	accepts	
@@ -3310,7 +3310,7 @@ pos/i1990a.scala	accepts
 pos/i19929.scala	accepts	
 pos/i19942.1.scala	accepts	
 pos/i19942.scala	syntax	expected identifier, found {}
-pos/i19950.scala	rejects	ambiguous extension methods: both given_Apply_Option and given_Apply_List provide mapN on (Option[Int], Option[Int], Option[Int])
+pos/i19950.scala	rejects	missing parameter type
 pos/i19955a.scala	rejects	no given instance
 pos/i19955b.scala	accepts	
 pos/i19962.scala	accepts	
@@ -3510,7 +3510,7 @@ pos/i23086.scala	rejects	no given instance
 pos/i23095	accepts	
 pos/i23113.scala	accepts	
 pos/i23119.scala	accepts	
-pos/i23134.scala	rejects	Deferred inline method foo in trait A cannot be invoked
+pos/i23134.scala	rejects	No given instance of type A{type Out = 1} was found.
 pos/i23155b.scala	accepts	
 pos/i23158.scala	oos	extractors
 pos/i23194.scala	accepts	
@@ -3577,7 +3577,7 @@ pos/i24308.scala	accepts
 pos/i2437a.scala	accepts	
 pos/i2437b.scala	accepts	
 pos/i24412.scala	accepts	
-pos/i24414	rejects	Deferred inline method test in trait Constraint cannot be invoked
+pos/i24414	accepts	
 pos/i24456.scala	accepts	
 pos/i24479.scala	accepts	
 pos/i24496.scala	syntax	expected identifier, found {}
@@ -5739,7 +5739,7 @@ pos/test5refine.scala	accepts
 pos/testCoercionThis.scala	accepts	
 pos/testcast.scala	accepts	
 pos/the-given.scala	accepts	
-pos/the.scala	rejects	type mismatch
+pos/the.scala	accepts	
 pos/this-implicit-scope.scala	accepts	
 pos/this-types.scala	accepts	
 pos/thistype.scala	accepts	

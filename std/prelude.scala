@@ -58,6 +58,8 @@ object Tuple:
   import scala.compiletime.ops.int.S
 
   def apply(): EmptyTuple = EmptyTuple
+  def apply[T](x: T): T *: EmptyTuple = Tuple1(x)
+  def unapply(x: EmptyTuple): true = true
 
   def fromArray[T](xs: Array[T]): Tuple = xs.length match
     case 0 => EmptyTuple
@@ -94,6 +96,10 @@ object Tuple:
     case _ => fromArray(Array.tabulate(product.productArity)(product.productElement))
   def fromProductTyped[P <: Product](p: P)(using m: scala.deriving.Mirror.ProductOf[P]): m.MirroredElemTypes =
     fromProduct(p).asInstanceOf[m.MirroredElemTypes]
+  given canEqualEmptyTuple: CanEqual[EmptyTuple, EmptyTuple] = CanEqual.derived
+  given canEqualTuple[H1, T1 <: Tuple, H2, T2 <: Tuple](
+    using eqHead: CanEqual[H1, H2], eqTail: CanEqual[T1, T2]
+  ): CanEqual[H1 *: T1, H2 *: T2] = CanEqual.derived
 
   type Head[X <: Tuple] = X match
     case x *: _ => x

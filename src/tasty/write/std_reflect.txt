@@ -62,7 +62,6 @@ scala.quoted.Reflect$	BlockTypeTest	-:scala.quoted.Reflect$.BlockTypeTest$	-	sca
 scala.quoted.Reflect$	BlockTypeTest	object	BlockTypeTest	scala.reflect.TypeTest	object
 scala.quoted.Reflect$	BooleanConstant	-:scala.quoted.Reflect$.BooleanConstant$	-	scala.quoted.Quotes.reflectModule	-
 scala.quoted.Reflect$	BooleanConstant	object	BooleanConstant	scala.quoted.Quotes.reflectModule.BooleanConstantModule	object
-scala.quoted.Reflect$	BooleanConstantTypeTest	-:scala.quoted.Reflect$.BooleanConstantTypeTest$	-	scala.quoted.Quotes.reflectModule	-
 scala.quoted.Reflect$	BooleanConstantTypeTest	object	BooleanConstantTypeTest	scala.reflect.TypeTest	object
 scala.quoted.Reflect$	ByName	-:scala.quoted.Reflect$.ByName$	-	scala.quoted.Quotes.reflectModule	-
 scala.quoted.Reflect$	ByName	object	ByName	scala.quoted.Quotes.reflectModule.ByNameModule	object
@@ -78,7 +77,6 @@ scala.quoted.Reflect$	ByNameTypeTypeTest	-:scala.quoted.Reflect$.ByNameTypeTypeT
 scala.quoted.Reflect$	ByNameTypeTypeTest	object	ByNameTypeTypeTest	scala.reflect.TypeTest	object
 scala.quoted.Reflect$	ByteConstant	-:scala.quoted.Reflect$.ByteConstant$	-	scala.quoted.Quotes.reflectModule	-
 scala.quoted.Reflect$	ByteConstant	object	ByteConstant	scala.quoted.Quotes.reflectModule.ByteConstantModule	object
-scala.quoted.Reflect$	ByteConstantTypeTest	-:scala.quoted.Reflect$.ByteConstantTypeTest$	-	scala.quoted.Quotes.reflectModule	-
 scala.quoted.Reflect$	ByteConstantTypeTest	object	ByteConstantTypeTest	scala.reflect.TypeTest	object
 scala.quoted.Reflect$	CaseDef	-:scala.quoted.Reflect$.CaseDef$	-	scala.quoted.Quotes.reflectModule	-
 scala.quoted.Reflect$	CaseDef	object	CaseDef	scala.quoted.Quotes.reflectModule.CaseDefModule	object
@@ -88,7 +86,6 @@ scala.quoted.Reflect$	CaseDefTypeTest	-:scala.quoted.Reflect$.CaseDefTypeTest$	-
 scala.quoted.Reflect$	CaseDefTypeTest	object	CaseDefTypeTest	scala.reflect.TypeTest	object
 scala.quoted.Reflect$	CharConstant	-:scala.quoted.Reflect$.CharConstant$	-	scala.quoted.Quotes.reflectModule	-
 scala.quoted.Reflect$	CharConstant	object	CharConstant	scala.quoted.Quotes.reflectModule.CharConstantModule	object
-scala.quoted.Reflect$	CharConstantTypeTest	-:scala.quoted.Reflect$.CharConstantTypeTest$	-	scala.quoted.Quotes.reflectModule	-
 scala.quoted.Reflect$	CharConstantTypeTest	object	CharConstantTypeTest	scala.reflect.TypeTest	object
 scala.quoted.Reflect$	ClassDef	-:scala.quoted.Reflect$.ClassDef$	-	scala.quoted.Quotes.reflectModule	-
 scala.quoted.Reflect$	ClassDef	object	ClassDef	scala.quoted.Quotes.reflectModule.ClassDefModule	object
@@ -98,7 +95,6 @@ scala.quoted.Reflect$	ClassDefTypeTest	-:scala.quoted.Reflect$.ClassDefTypeTest$
 scala.quoted.Reflect$	ClassDefTypeTest	object	ClassDefTypeTest	scala.reflect.TypeTest	object
 scala.quoted.Reflect$	ClassOfConstant	-:scala.quoted.Reflect$.ClassOfConstant$	-	scala.quoted.Quotes.reflectModule	-
 scala.quoted.Reflect$	ClassOfConstant	object	ClassOfConstant	scala.quoted.Quotes.reflectModule.ClassOfConstantModule	object
-scala.quoted.Reflect$	ClassOfConstantTypeTest	-:scala.quoted.Reflect$.ClassOfConstantTypeTest$	-	scala.quoted.Quotes.reflectModule	-
 scala.quoted.Reflect$	ClassOfConstantTypeTest	object	ClassOfConstantTypeTest	scala.reflect.TypeTest	object
 scala.quoted.Reflect$	Closure	-:scala.quoted.Reflect$.Closure$	-	scala.quoted.Quotes.reflectModule	-
 scala.quoted.Reflect$	Closure	object	Closure	scala.quoted.Quotes.reflectModule.ClosureModule	object
@@ -131,7 +127,6 @@ scala.quoted.Reflect$	DefinitionTypeTest	-:scala.quoted.Reflect$.DefinitionTypeT
 scala.quoted.Reflect$	DefinitionTypeTest	object	DefinitionTypeTest	scala.reflect.TypeTest	object
 scala.quoted.Reflect$	DoubleConstant	-:scala.quoted.Reflect$.DoubleConstant$	-	scala.quoted.Quotes.reflectModule	-
 scala.quoted.Reflect$	DoubleConstant	object	DoubleConstant	scala.quoted.Quotes.reflectModule.DoubleConstantModule	object
-scala.quoted.Reflect$	DoubleConstantTypeTest	-:scala.quoted.Reflect$.DoubleConstantTypeTest$	-	scala.quoted.Quotes.reflectModule	-
 scala.quoted.Reflect$	DoubleConstantTypeTest	object	DoubleConstantTypeTest	scala.reflect.TypeTest	object
 scala.quoted.Reflect$	Export	-:scala.quoted.Reflect$.Export$	-	scala.quoted.Quotes.reflectModule	-
 scala.quoted.Reflect$	Export	object	Export	scala.quoted.Quotes.reflectModule.ExportModule	object
@@ -147,7 +142,6 @@ scala.quoted.Reflect$	FlexibleTypeTypeTest	-:scala.quoted.Reflect$.FlexibleTypeT
 scala.quoted.Reflect$	FlexibleTypeTypeTest	object	FlexibleTypeTypeTest	scala.reflect.TypeTest	object
 scala.quoted.Reflect$	FloatConstant	-:scala.quoted.Reflect$.FloatConstant$	-	scala.quoted.Quotes.reflectModule	-
 scala.quoted.Reflect$	FloatConstant	object	FloatConstant	scala.quoted.Quotes.reflectModule.FloatConstantModule	object
-scala.quoted.Reflect$	FloatConstantTypeTest	-:scala.quoted.Reflect$.FloatConstantTypeTest$	-	scala.quoted.Quotes.reflectModule	-
 scala.quoted.Reflect$	FloatConstantTypeTest	object	FloatConstantTypeTest	scala.reflect.TypeTest	object
 scala.quoted.Reflect$	Ident	-:scala.quoted.Reflect$.Ident$	-	scala.quoted.Quotes.reflectModule	-
 scala.quoted.Reflect$	Ident	object	Ident	scala.quoted.Quotes.reflectModule.IdentModule	object
@@ -187,7 +181,6 @@ scala.quoted.Reflect$	InlinedTypeTest	-:scala.quoted.Reflect$.InlinedTypeTest$	-
 scala.quoted.Reflect$	InlinedTypeTest	object	InlinedTypeTest	scala.reflect.TypeTest	object
 scala.quoted.Reflect$	IntConstant	-:scala.quoted.Reflect$.IntConstant$	-	scala.quoted.Quotes.reflectModule	-
 scala.quoted.Reflect$	IntConstant	object	IntConstant	scala.quoted.Quotes.reflectModule.IntConstantModule	object
-scala.quoted.Reflect$	IntConstantTypeTest	-:scala.quoted.Reflect$.IntConstantTypeTest$	-	scala.quoted.Quotes.reflectModule	-
 scala.quoted.Reflect$	IntConstantTypeTest	object	IntConstantTypeTest	scala.reflect.TypeTest	object
 scala.quoted.Reflect$	Lambda	-:scala.quoted.Reflect$.Lambda$	-	scala.quoted.Quotes.reflectModule	-
 scala.quoted.Reflect$	Lambda	object	Lambda	scala.quoted.Quotes.reflectModule.LambdaModule	object
@@ -209,7 +202,6 @@ scala.quoted.Reflect$	LiteralTypeTest	-:scala.quoted.Reflect$.LiteralTypeTest$	-
 scala.quoted.Reflect$	LiteralTypeTest	object	LiteralTypeTest	scala.reflect.TypeTest	object
 scala.quoted.Reflect$	LongConstant	-:scala.quoted.Reflect$.LongConstant$	-	scala.quoted.Quotes.reflectModule	-
 scala.quoted.Reflect$	LongConstant	object	LongConstant	scala.quoted.Quotes.reflectModule.LongConstantModule	object
-scala.quoted.Reflect$	LongConstantTypeTest	-:scala.quoted.Reflect$.LongConstantTypeTest$	-	scala.quoted.Quotes.reflectModule	-
 scala.quoted.Reflect$	LongConstantTypeTest	object	LongConstantTypeTest	scala.reflect.TypeTest	object
 scala.quoted.Reflect$	Match	-:scala.quoted.Reflect$.Match$	-	scala.quoted.Quotes.reflectModule	-
 scala.quoted.Reflect$	Match	object	Match	scala.quoted.Quotes.reflectModule.MatchModule	object
@@ -265,7 +257,6 @@ scala.quoted.Reflect$	NoPrefixTypeTest	-:scala.quoted.Reflect$.NoPrefixTypeTest$
 scala.quoted.Reflect$	NoPrefixTypeTest	object	NoPrefixTypeTest	scala.reflect.TypeTest	object
 scala.quoted.Reflect$	NullConstant	-:scala.quoted.Reflect$.NullConstant$	-	scala.quoted.Quotes.reflectModule	-
 scala.quoted.Reflect$	NullConstant	object	NullConstant	scala.quoted.Quotes.reflectModule.NullConstantModule	object
-scala.quoted.Reflect$	NullConstantTypeTest	-:scala.quoted.Reflect$.NullConstantTypeTest$	-	scala.quoted.Quotes.reflectModule	-
 scala.quoted.Reflect$	NullConstantTypeTest	object	NullConstantTypeTest	scala.reflect.TypeTest	object
 scala.quoted.Reflect$	OrType	-:scala.quoted.Reflect$.OrType$	-	scala.quoted.Quotes.reflectModule	-
 scala.quoted.Reflect$	OrType	object	OrType	scala.quoted.Quotes.reflectModule.OrTypeModule	object
@@ -349,7 +340,6 @@ scala.quoted.Reflect$	SelectTypeTest	-:scala.quoted.Reflect$.SelectTypeTest$	-	s
 scala.quoted.Reflect$	SelectTypeTest	object	SelectTypeTest	scala.reflect.TypeTest	object
 scala.quoted.Reflect$	ShortConstant	-:scala.quoted.Reflect$.ShortConstant$	-	scala.quoted.Quotes.reflectModule	-
 scala.quoted.Reflect$	ShortConstant	object	ShortConstant	scala.quoted.Quotes.reflectModule.ShortConstantModule	object
-scala.quoted.Reflect$	ShortConstantTypeTest	-:scala.quoted.Reflect$.ShortConstantTypeTest$	-	scala.quoted.Quotes.reflectModule	-
 scala.quoted.Reflect$	ShortConstantTypeTest	object	ShortConstantTypeTest	scala.reflect.TypeTest	object
 scala.quoted.Reflect$	Signature	-:scala.quoted.Reflect$.Signature$	-	scala.quoted.Quotes.reflectModule	-
 scala.quoted.Reflect$	Signature	object	Signature	scala.quoted.Quotes.reflectModule.SignatureModule	object
@@ -369,7 +359,6 @@ scala.quoted.Reflect$	StatementTypeTest	-:scala.quoted.Reflect$.StatementTypeTes
 scala.quoted.Reflect$	StatementTypeTest	object	StatementTypeTest	scala.reflect.TypeTest	object
 scala.quoted.Reflect$	StringConstant	-:scala.quoted.Reflect$.StringConstant$	-	scala.quoted.Quotes.reflectModule	-
 scala.quoted.Reflect$	StringConstant	object	StringConstant	scala.quoted.Quotes.reflectModule.StringConstantModule	object
-scala.quoted.Reflect$	StringConstantTypeTest	-:scala.quoted.Reflect$.StringConstantTypeTest$	-	scala.quoted.Quotes.reflectModule	-
 scala.quoted.Reflect$	StringConstantTypeTest	object	StringConstantTypeTest	scala.reflect.TypeTest	object
 scala.quoted.Reflect$	SummonFrom	-:scala.quoted.Reflect$.SummonFrom$	-	scala.quoted.Quotes.reflectModule	-
 scala.quoted.Reflect$	SummonFrom	object	SummonFrom	scala.quoted.Quotes.reflectModule.SummonFromModule	object
@@ -539,7 +528,6 @@ scala.quoted.Reflect$	UnapplyTypeTest	-:scala.quoted.Reflect$.UnapplyTypeTest$	-
 scala.quoted.Reflect$	UnapplyTypeTest	object	UnapplyTypeTest	scala.reflect.TypeTest	object
 scala.quoted.Reflect$	UnitConstant	-:scala.quoted.Reflect$.UnitConstant$	-	scala.quoted.Quotes.reflectModule	-
 scala.quoted.Reflect$	UnitConstant	object	UnitConstant	scala.quoted.Quotes.reflectModule.UnitConstantModule	object
-scala.quoted.Reflect$	UnitConstantTypeTest	-:scala.quoted.Reflect$.UnitConstantTypeTest$	-	scala.quoted.Quotes.reflectModule	-
 scala.quoted.Reflect$	UnitConstantTypeTest	object	UnitConstantTypeTest	scala.reflect.TypeTest	object
 scala.quoted.Reflect$	ValDef	-:scala.quoted.Reflect$.ValDef$	-	scala.quoted.Quotes.reflectModule	-
 scala.quoted.Reflect$	ValDef	object	ValDef	scala.quoted.Quotes.reflectModule.ValDefModule	object
@@ -631,7 +619,6 @@ scala.quoted.Reflect$.BlockMethods$	statements	scala.quoted.Reflect$.Block:scala
 scala.quoted.Reflect$.BlockTypeTest$	unapply	scala.quoted.Reflect$.Tree:scala.Option	BlockTypeTest	scala.reflect.TypeTest	java.lang.Object:scala.Option
 scala.quoted.Reflect$.BooleanConstant$	apply	scala.Boolean:scala.quoted.Reflect$.Constant	BooleanConstant	scala.quoted.Quotes.reflectModule.BooleanConstantModule	scala.Boolean:java.lang.Object
 scala.quoted.Reflect$.BooleanConstant$	unapply	scala.quoted.Reflect$.Constant:scala.Option	BooleanConstant	scala.quoted.Quotes.reflectModule.BooleanConstantModule	java.lang.Object:scala.Some
-scala.quoted.Reflect$.BooleanConstantTypeTest$	unapply	scala.quoted.Reflect$.Constant:scala.Option	BooleanConstantTypeTest	scala.reflect.TypeTest	java.lang.Object:scala.Option
 scala.quoted.Reflect$.ByName$	apply	scala.quoted.Reflect$.TypeTree:scala.quoted.Reflect$.ByName	ByName	scala.quoted.Quotes.reflectModule.ByNameModule	java.lang.Object:java.lang.Object
 scala.quoted.Reflect$.ByName$	copy	scala.quoted.Reflect$.Tree,scala.quoted.Reflect$.TypeTree:scala.quoted.Reflect$.ByName	ByName	scala.quoted.Quotes.reflectModule.ByNameModule	java.lang.Object,java.lang.Object:java.lang.Object
 scala.quoted.Reflect$.ByName$	unapply	scala.quoted.Reflect$.ByName:scala.Some	ByName	scala.quoted.Quotes.reflectModule.ByNameModule	java.lang.Object:scala.Some
@@ -643,7 +630,6 @@ scala.quoted.Reflect$.ByNameTypeTest$	unapply	scala.quoted.Reflect$.Tree:scala.O
 scala.quoted.Reflect$.ByNameTypeTypeTest$	unapply	scala.quoted.Reflect$.TypeRepr:scala.Option	ByNameTypeTypeTest	scala.reflect.TypeTest	java.lang.Object:scala.Option
 scala.quoted.Reflect$.ByteConstant$	apply	scala.Byte:scala.quoted.Reflect$.Constant	ByteConstant	scala.quoted.Quotes.reflectModule.ByteConstantModule	scala.Byte:java.lang.Object
 scala.quoted.Reflect$.ByteConstant$	unapply	scala.quoted.Reflect$.Constant:scala.Option	ByteConstant	scala.quoted.Quotes.reflectModule.ByteConstantModule	java.lang.Object:scala.Some
-scala.quoted.Reflect$.ByteConstantTypeTest$	unapply	scala.quoted.Reflect$.Constant:scala.Option	ByteConstantTypeTest	scala.reflect.TypeTest	java.lang.Object:scala.Option
 scala.quoted.Reflect$.CaseDef$	apply	scala.quoted.Reflect$.Tree,scala.Option,scala.quoted.Reflect$.Term:scala.quoted.Reflect$.CaseDef	CaseDef	scala.quoted.Quotes.reflectModule.CaseDefModule	java.lang.Object,scala.Option,java.lang.Object:java.lang.Object
 scala.quoted.Reflect$.CaseDef$	copy	scala.quoted.Reflect$.Tree,scala.quoted.Reflect$.Tree,scala.Option,scala.quoted.Reflect$.Term:scala.quoted.Reflect$.CaseDef	CaseDef	scala.quoted.Quotes.reflectModule.CaseDefModule	java.lang.Object,java.lang.Object,scala.Option,java.lang.Object:java.lang.Object
 scala.quoted.Reflect$.CaseDef$	unapply	scala.quoted.Reflect$.CaseDef:scala.Tuple3	CaseDef	scala.quoted.Quotes.reflectModule.CaseDefModule	java.lang.Object:scala.Tuple3
@@ -653,7 +639,6 @@ scala.quoted.Reflect$.CaseDefMethods$	rhs	scala.quoted.Reflect$.CaseDef:scala.qu
 scala.quoted.Reflect$.CaseDefTypeTest$	unapply	scala.quoted.Reflect$.Tree:scala.Option	CaseDefTypeTest	scala.reflect.TypeTest	java.lang.Object:scala.Option
 scala.quoted.Reflect$.CharConstant$	apply	scala.Char:scala.quoted.Reflect$.Constant	CharConstant	scala.quoted.Quotes.reflectModule.CharConstantModule	scala.Char:java.lang.Object
 scala.quoted.Reflect$.CharConstant$	unapply	scala.quoted.Reflect$.Constant:scala.Option	CharConstant	scala.quoted.Quotes.reflectModule.CharConstantModule	java.lang.Object:scala.Some
-scala.quoted.Reflect$.CharConstantTypeTest$	unapply	scala.quoted.Reflect$.Constant:scala.Option	CharConstantTypeTest	scala.reflect.TypeTest	java.lang.Object:scala.Option
 scala.quoted.Reflect$.ClassDef$	apply	scala.quoted.Reflect$.Symbol,scala.collection.immutable.List,scala.collection.immutable.List:scala.quoted.Reflect$.ClassDef	ClassDef	scala.quoted.Quotes.reflectModule.ClassDefModule	java.lang.Object,scala.collection.immutable.List,scala.collection.immutable.List:java.lang.Object
 scala.quoted.Reflect$.ClassDef$	copy	scala.quoted.Reflect$.Tree,java.lang.String,scala.quoted.Reflect$.DefDef,scala.collection.immutable.List,scala.Option,scala.collection.immutable.List:scala.quoted.Reflect$.ClassDef	ClassDef	scala.quoted.Quotes.reflectModule.ClassDefModule	java.lang.Object,java.lang.String,java.lang.Object,scala.collection.immutable.List,scala.Option,scala.collection.immutable.List:java.lang.Object
 scala.quoted.Reflect$.ClassDef$	unapply	scala.quoted.Reflect$.ClassDef:scala.Tuple5	ClassDef	scala.quoted.Quotes.reflectModule.ClassDefModule	java.lang.Object:scala.Tuple5
@@ -664,7 +649,6 @@ scala.quoted.Reflect$.ClassDefMethods$	self	scala.quoted.Reflect$.ClassDef:scala
 scala.quoted.Reflect$.ClassDefTypeTest$	unapply	scala.quoted.Reflect$.Tree:scala.Option	ClassDefTypeTest	scala.reflect.TypeTest	java.lang.Object:scala.Option
 scala.quoted.Reflect$.ClassOfConstant$	apply	scala.quoted.Reflect$.TypeRepr:scala.quoted.Reflect$.Constant	ClassOfConstant	scala.quoted.Quotes.reflectModule.ClassOfConstantModule	java.lang.Object:java.lang.Object
 scala.quoted.Reflect$.ClassOfConstant$	unapply	scala.quoted.Reflect$.Constant:scala.Option	ClassOfConstant	scala.quoted.Quotes.reflectModule.ClassOfConstantModule	java.lang.Object:scala.Option
-scala.quoted.Reflect$.ClassOfConstantTypeTest$	unapply	scala.quoted.Reflect$.Constant:scala.Option	ClassOfConstantTypeTest	scala.reflect.TypeTest	java.lang.Object:scala.Option
 scala.quoted.Reflect$.Closure$	apply	scala.quoted.Reflect$.Term,scala.Option:scala.quoted.Reflect$.Closure	Closure	scala.quoted.Quotes.reflectModule.ClosureModule	java.lang.Object,scala.Option:java.lang.Object
 scala.quoted.Reflect$.Closure$	copy	scala.quoted.Reflect$.Tree,scala.quoted.Reflect$.Tree,scala.Option:scala.quoted.Reflect$.Closure	Closure	scala.quoted.Quotes.reflectModule.ClosureModule	java.lang.Object,java.lang.Object,scala.Option:java.lang.Object
 scala.quoted.Reflect$.Closure$	unapply	scala.quoted.Reflect$.Closure:scala.Tuple2	Closure	scala.quoted.Quotes.reflectModule.ClosureModule	java.lang.Object:scala.Tuple2
@@ -697,7 +681,6 @@ scala.quoted.Reflect$.DefinitionMethods$	name	scala.quoted.Reflect$.Definition:j
 scala.quoted.Reflect$.DefinitionTypeTest$	unapply	scala.quoted.Reflect$.Tree:scala.Option	DefinitionTypeTest	scala.reflect.TypeTest	java.lang.Object:scala.Option
 scala.quoted.Reflect$.DoubleConstant$	apply	scala.Double:scala.quoted.Reflect$.Constant	DoubleConstant	scala.quoted.Quotes.reflectModule.DoubleConstantModule	scala.Double:java.lang.Object
 scala.quoted.Reflect$.DoubleConstant$	unapply	scala.quoted.Reflect$.Constant:scala.Option	DoubleConstant	scala.quoted.Quotes.reflectModule.DoubleConstantModule	java.lang.Object:scala.Some
-scala.quoted.Reflect$.DoubleConstantTypeTest$	unapply	scala.quoted.Reflect$.Constant:scala.Option	DoubleConstantTypeTest	scala.reflect.TypeTest	java.lang.Object:scala.Option
 scala.quoted.Reflect$.Export$	unapply	scala.quoted.Reflect$.Export:scala.Tuple2	Export	scala.quoted.Quotes.reflectModule.ExportModule	java.lang.Object:scala.Tuple2
 scala.quoted.Reflect$.Flags$	AbsOverride	-:scala.quoted.Reflect$.Flags	Flags	scala.quoted.Quotes.reflectModule.FlagsModule	-
 scala.quoted.Reflect$.Flags$	Abstract	-:scala.quoted.Reflect$.Flags	Flags	scala.quoted.Quotes.reflectModule.FlagsModule	-
@@ -756,7 +739,6 @@ scala.quoted.Reflect$.FlexibleTypeMethods$	underlying	scala.quoted.Reflect$.Flex
 scala.quoted.Reflect$.FlexibleTypeTypeTest$	unapply	scala.quoted.Reflect$.TypeRepr:scala.Option	FlexibleTypeTypeTest	scala.reflect.TypeTest	java.lang.Object:scala.Option
 scala.quoted.Reflect$.FloatConstant$	apply	scala.Float:scala.quoted.Reflect$.Constant	FloatConstant	scala.quoted.Quotes.reflectModule.FloatConstantModule	scala.Float:java.lang.Object
 scala.quoted.Reflect$.FloatConstant$	unapply	scala.quoted.Reflect$.Constant:scala.Option	FloatConstant	scala.quoted.Quotes.reflectModule.FloatConstantModule	java.lang.Object:scala.Some
-scala.quoted.Reflect$.FloatConstantTypeTest$	unapply	scala.quoted.Reflect$.Constant:scala.Option	FloatConstantTypeTest	scala.reflect.TypeTest	java.lang.Object:scala.Option
 scala.quoted.Reflect$.Ident$	apply	scala.quoted.Reflect$.TermRef:scala.quoted.Reflect$.Term	Ident	scala.quoted.Quotes.reflectModule.IdentModule	java.lang.Object:java.lang.Object
 scala.quoted.Reflect$.Ident$	copy	scala.quoted.Reflect$.Tree,java.lang.String:scala.quoted.Reflect$.Ident	Ident	scala.quoted.Quotes.reflectModule.IdentModule	java.lang.Object,java.lang.String:java.lang.Object
 scala.quoted.Reflect$.Ident$	unapply	scala.quoted.Reflect$.Ident:scala.Some	Ident	scala.quoted.Quotes.reflectModule.IdentModule	java.lang.Object:scala.Some
@@ -794,7 +776,6 @@ scala.quoted.Reflect$.InlinedMethods$	call	scala.quoted.Reflect$.Inlined:scala.O
 scala.quoted.Reflect$.InlinedTypeTest$	unapply	scala.quoted.Reflect$.Tree:scala.Option	InlinedTypeTest	scala.reflect.TypeTest	java.lang.Object:scala.Option
 scala.quoted.Reflect$.IntConstant$	apply	scala.Int:scala.quoted.Reflect$.Constant	IntConstant	scala.quoted.Quotes.reflectModule.IntConstantModule	scala.Int:java.lang.Object
 scala.quoted.Reflect$.IntConstant$	unapply	scala.quoted.Reflect$.Constant:scala.Option	IntConstant	scala.quoted.Quotes.reflectModule.IntConstantModule	java.lang.Object:scala.Some
-scala.quoted.Reflect$.IntConstantTypeTest$	unapply	scala.quoted.Reflect$.Constant:scala.Option	IntConstantTypeTest	scala.reflect.TypeTest	java.lang.Object:scala.Option
 scala.quoted.Reflect$.Lambda$	apply	scala.quoted.Reflect$.Symbol,scala.quoted.Reflect$.MethodType,scala.Function2:scala.quoted.Reflect$.Block	Lambda	scala.quoted.Quotes.reflectModule.LambdaModule	java.lang.Object,java.lang.Object,scala.Function2:java.lang.Object
 scala.quoted.Reflect$.Lambda$	unapply	scala.quoted.Reflect$.Block:scala.Option	Lambda	scala.quoted.Quotes.reflectModule.LambdaModule	java.lang.Object:scala.Option
 scala.quoted.Reflect$.LambdaTypeMethods$	paramNames	scala.quoted.Reflect$.LambdaType:scala.collection.immutable.List	LambdaTypeMethods	scala.quoted.Quotes.reflectModule.LambdaTypeMethods	java.lang.Object:scala.collection.immutable.List
@@ -812,7 +793,6 @@ scala.quoted.Reflect$.LiteralMethods$	constant	scala.quoted.Reflect$.Literal:sca
 scala.quoted.Reflect$.LiteralTypeTest$	unapply	scala.quoted.Reflect$.Tree:scala.Option	LiteralTypeTest	scala.reflect.TypeTest	java.lang.Object:scala.Option
 scala.quoted.Reflect$.LongConstant$	apply	scala.Long:scala.quoted.Reflect$.Constant	LongConstant	scala.quoted.Quotes.reflectModule.LongConstantModule	scala.Long:java.lang.Object
 scala.quoted.Reflect$.LongConstant$	unapply	scala.quoted.Reflect$.Constant:scala.Option	LongConstant	scala.quoted.Quotes.reflectModule.LongConstantModule	java.lang.Object:scala.Some
-scala.quoted.Reflect$.LongConstantTypeTest$	unapply	scala.quoted.Reflect$.Constant:scala.Option	LongConstantTypeTest	scala.reflect.TypeTest	java.lang.Object:scala.Option
 scala.quoted.Reflect$.Match$	apply	scala.quoted.Reflect$.Term,scala.collection.immutable.List:scala.quoted.Reflect$.Match	Match	scala.quoted.Quotes.reflectModule.MatchModule	java.lang.Object,scala.collection.immutable.List:java.lang.Object
 scala.quoted.Reflect$.Match$	copy	scala.quoted.Reflect$.Tree,scala.quoted.Reflect$.Term,scala.collection.immutable.List:scala.quoted.Reflect$.Match	Match	scala.quoted.Quotes.reflectModule.MatchModule	java.lang.Object,java.lang.Object,scala.collection.immutable.List:java.lang.Object
 scala.quoted.Reflect$.Match$	unapply	scala.quoted.Reflect$.Match:scala.Tuple2	Match	scala.quoted.Quotes.reflectModule.MatchModule	java.lang.Object:scala.Tuple2
@@ -862,7 +842,6 @@ scala.quoted.Reflect$.NoPrefix$	unapply	scala.quoted.Reflect$.NoPrefix:scala.Boo
 scala.quoted.Reflect$.NoPrefixTypeTest$	unapply	scala.quoted.Reflect$.TypeRepr:scala.Option	NoPrefixTypeTest	scala.reflect.TypeTest	java.lang.Object:scala.Option
 scala.quoted.Reflect$.NullConstant$	apply	:scala.quoted.Reflect$.Constant	NullConstant	scala.quoted.Quotes.reflectModule.NullConstantModule	:java.lang.Object
 scala.quoted.Reflect$.NullConstant$	unapply	scala.quoted.Reflect$.Constant:scala.Boolean	NullConstant	scala.quoted.Quotes.reflectModule.NullConstantModule	java.lang.Object:scala.Boolean
-scala.quoted.Reflect$.NullConstantTypeTest$	unapply	scala.quoted.Reflect$.Constant:scala.Option	NullConstantTypeTest	scala.reflect.TypeTest	java.lang.Object:scala.Option
 scala.quoted.Reflect$.OrType$	apply	scala.quoted.Reflect$.TypeRepr,scala.quoted.Reflect$.TypeRepr:scala.quoted.Reflect$.OrType	OrType	scala.quoted.Quotes.reflectModule.OrTypeModule	java.lang.Object,java.lang.Object:java.lang.Object
 scala.quoted.Reflect$.OrType$	unapply	scala.quoted.Reflect$.OrType:scala.Tuple2	OrType	scala.quoted.Quotes.reflectModule.OrTypeModule	java.lang.Object:scala.Tuple2
 scala.quoted.Reflect$.OrTypeTypeTest$	unapply	scala.quoted.Reflect$.TypeRepr:scala.Option	OrTypeTypeTest	scala.reflect.TypeTest	java.lang.Object:scala.Option
@@ -973,7 +952,6 @@ scala.quoted.Reflect$.SelectOuterTypeTest$	unapply	scala.quoted.Reflect$.Tree:sc
 scala.quoted.Reflect$.SelectTypeTest$	unapply	scala.quoted.Reflect$.Tree:scala.Option	SelectTypeTest	scala.reflect.TypeTest	java.lang.Object:scala.Option
 scala.quoted.Reflect$.ShortConstant$	apply	scala.Short:scala.quoted.Reflect$.Constant	ShortConstant	scala.quoted.Quotes.reflectModule.ShortConstantModule	scala.Short:java.lang.Object
 scala.quoted.Reflect$.ShortConstant$	unapply	scala.quoted.Reflect$.Constant:scala.Option	ShortConstant	scala.quoted.Quotes.reflectModule.ShortConstantModule	java.lang.Object:scala.Some
-scala.quoted.Reflect$.ShortConstantTypeTest$	unapply	scala.quoted.Reflect$.Constant:scala.Option	ShortConstantTypeTest	scala.reflect.TypeTest	java.lang.Object:scala.Option
 scala.quoted.Reflect$.Signature	paramSigs	-:scala.collection.immutable.List	ext:SignatureMethods	scala.quoted.Quotes.reflectModule.SignatureMethods	java.lang.Object:scala.collection.immutable.List
 scala.quoted.Reflect$.Signature	resultSig	-:java.lang.String	ext:SignatureMethods	scala.quoted.Quotes.reflectModule.SignatureMethods	java.lang.Object:java.lang.String
 scala.quoted.Reflect$.Signature$	unapply	scala.quoted.Reflect$.Signature:scala.Tuple2	Signature	scala.quoted.Quotes.reflectModule.SignatureModule	java.lang.Object:scala.Tuple2
@@ -993,7 +971,6 @@ scala.quoted.Reflect$.SourceFileMethods$	path	scala.quoted.Reflect$.SourceFile:j
 scala.quoted.Reflect$.StatementTypeTest$	unapply	scala.quoted.Reflect$.Tree:scala.Option	StatementTypeTest	scala.reflect.TypeTest	java.lang.Object:scala.Option
 scala.quoted.Reflect$.StringConstant$	apply	java.lang.String:scala.quoted.Reflect$.Constant	StringConstant	scala.quoted.Quotes.reflectModule.StringConstantModule	java.lang.String:java.lang.Object
 scala.quoted.Reflect$.StringConstant$	unapply	scala.quoted.Reflect$.Constant:scala.Option	StringConstant	scala.quoted.Quotes.reflectModule.StringConstantModule	java.lang.Object:scala.Some
-scala.quoted.Reflect$.StringConstantTypeTest$	unapply	scala.quoted.Reflect$.Constant:scala.Option	StringConstantTypeTest	scala.reflect.TypeTest	java.lang.Object:scala.Option
 scala.quoted.Reflect$.SummonFrom$	apply	scala.collection.immutable.List:scala.quoted.Reflect$.SummonFrom	SummonFrom	scala.quoted.Quotes.reflectModule.SummonFromModule	scala.collection.immutable.List:java.lang.Object
 scala.quoted.Reflect$.SummonFrom$	copy	scala.quoted.Reflect$.Tree,scala.collection.immutable.List:scala.quoted.Reflect$.SummonFrom	SummonFrom	scala.quoted.Quotes.reflectModule.SummonFromModule	java.lang.Object,scala.collection.immutable.List:java.lang.Object
 scala.quoted.Reflect$.SummonFrom$	unapply	scala.quoted.Reflect$.SummonFrom:scala.Some	SummonFrom	scala.quoted.Quotes.reflectModule.SummonFromModule	java.lang.Object:scala.Some
@@ -1290,7 +1267,6 @@ scala.quoted.Reflect$.UnapplyMethods$	patterns	scala.quoted.Reflect$.Unapply:sca
 scala.quoted.Reflect$.UnapplyTypeTest$	unapply	scala.quoted.Reflect$.Tree:scala.Option	UnapplyTypeTest	scala.reflect.TypeTest	java.lang.Object:scala.Option
 scala.quoted.Reflect$.UnitConstant$	apply	:scala.quoted.Reflect$.Constant	UnitConstant	scala.quoted.Quotes.reflectModule.UnitConstantModule	:java.lang.Object
 scala.quoted.Reflect$.UnitConstant$	unapply	scala.quoted.Reflect$.Constant:scala.Boolean	UnitConstant	scala.quoted.Quotes.reflectModule.UnitConstantModule	java.lang.Object:scala.Boolean
-scala.quoted.Reflect$.UnitConstantTypeTest$	unapply	scala.quoted.Reflect$.Constant:scala.Option	UnitConstantTypeTest	scala.reflect.TypeTest	java.lang.Object:scala.Option
 scala.quoted.Reflect$.ValDef$	apply	scala.quoted.Reflect$.Symbol,scala.Option:scala.quoted.Reflect$.ValDef	ValDef	scala.quoted.Quotes.reflectModule.ValDefModule	java.lang.Object,scala.Option:java.lang.Object
 scala.quoted.Reflect$.ValDef$	copy	scala.quoted.Reflect$.Tree,java.lang.String,scala.quoted.Reflect$.TypeTree,scala.Option:scala.quoted.Reflect$.ValDef	ValDef	scala.quoted.Quotes.reflectModule.ValDefModule	java.lang.Object,java.lang.String,java.lang.Object,scala.Option:java.lang.Object
 scala.quoted.Reflect$.ValDef$	let	scala.quoted.Reflect$.Symbol,java.lang.String,scala.quoted.Reflect$.Term,scala.Function1:scala.quoted.Reflect$.Term	ValDef	scala.quoted.Quotes.reflectModule.ValDefModule	java.lang.Object,java.lang.String,java.lang.Object,scala.Function1:java.lang.Object

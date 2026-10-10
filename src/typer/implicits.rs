@@ -294,7 +294,6 @@ struct Success {
     given: GivenRef,
     expr: TExprId,
     ty: TypeId,
-    rank: u8,
     /// What this success wrote while another candidate is tried (`state.rs`).
     undone: Option<super::state::SetAside>,
     /// What the nested searches of this success took (`Unused::given_winners`).
@@ -313,30 +312,53 @@ pub struct ScopeList {
 }
 
 /// A package level's candidates before the accessibility filter (`Worker::package_levels`):
-/// the package's own, then those imported by name and by wildcard, each once, with the
-/// binding precedence, and whether every imported one is accessible from anywhere.
+/// the package's own, then those of each import statement of the file in the order of the
+/// source, a context each (`LevelBuf`), and whether every imported one is accessible from
+/// anywhere.
 pub struct LevelList {
     givens: Box<[GivenRef]>,
-    ranks: Ranks,
+    nodes: Box<[(u32, Prec)]>,
+    renamed: Box<[(u32, Name)]>,
     plain: bool,
 }
 
-/// Where the candidates of one level change binding precedence: the givens the scope defines
-/// come first, then those imported by name, then those a wildcard brings in. A candidate hides
-/// a same-named one of lower precedence.
-#[derive(Clone, Copy)]
-struct Ranks {
-    own_end: usize,
-    named_end: usize,
+/// A context's binding precedence (`Typer.BindingPrec`): a scope's own definitions, an import
+/// statement naming what it brings, or one with a wildcard selector, `*` or `given`
+/// (`ImportInfo.isWildcardImport`).
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+enum Prec {
+    Wild,
+    Named,
+    Def,
 }
 
-impl Ranks {
-    fn all_own(n: usize) -> Ranks {
-        Ranks { own_end: n, named_end: n }
+impl Prec {
+    /// `BindingPrec.beats`: a definition beats a context inside it, a named import a wildcard.
+    fn beats(self, inner: Prec) -> bool {
+        self == Prec::Def || self == Prec::Named && inner == Prec::Wild
+    }
+}
+
+/// The candidates of one level of a search (`level_candidates`), its contexts outermost first
+/// (`ContextualImplicits`), each the end of its candidates and its binding precedence, and the
+/// name an import renames a candidate to (`implicitName`) where it is not the given's own.
+#[derive(Default)]
+struct LevelBuf {
+    cands: Vec<GivenRef>,
+    nodes: Vec<(u32, Prec)>,
+    renamed: Vec<(u32, Name)>,
+}
+
+impl LevelBuf {
+    fn clear(&mut self) {
+        self.cands.clear();
+        self.nodes.clear();
+        self.renamed.clear();
     }
 
-    fn of(&self, i: usize) -> u8 {
-        (i >= self.own_end) as u8 + (i >= self.named_end) as u8
+    /// Ends the context whose candidates were pushed since the last one.
+    fn close(&mut self, prec: Prec) {
+        self.nodes.push((self.cands.len() as u32, prec));
     }
 }
 
@@ -346,14 +368,31 @@ pub(super) enum Pick {
     Ambiguous,
 }
 
-/// The scopes a search walks: the enclosing frames, the package clauses, `scala.Predef` of a
-/// classpath and the implicit scope of the target, which is level 0.
+/// The scopes a search walks: the levels among the enclosing frames, the package clauses,
+/// `scala.Predef` of a classpath and the implicit scope of the target, which is level 0.
 struct Levels {
-    n_frames: usize,
+    frames: FrameLevels,
     packages: Arc<[PkgId]>,
     predef: Option<ClassId>,
     /// The alias given whose right-hand side is being typed, left out above level 0.
     defining: Option<SymId>,
+}
+
+/// The levels among the enclosing frames, outermost first (`ContextualImplicits.level`).
+enum FrameLevels {
+    /// No import inside a frame: each frame a level, its own givens its one context.
+    PerFrame(usize),
+    /// Each level's contexts, outermost first, `nodes` up to its end in `ends`: a frame's own
+    /// givens open a level, an import statement of the same owner as the context outside it
+    /// stands at that context's level, one of another owner opens a level. A statement's
+    /// selectors are `start..end` of `selectors`, indices in `Env::imports`.
+    Composed { nodes: Vec<FrameNode>, ends: Vec<u32>, selectors: Vec<u32> },
+}
+
+#[derive(Clone, Copy)]
+enum FrameNode {
+    Own(u32),
+    Stmt(u32, u32, Prec),
 }
 
 impl Levels {
@@ -361,8 +400,15 @@ impl Levels {
         1 + self.predef.is_some() as usize
     }
 
+    fn n_frames(&self) -> usize {
+        match &self.frames {
+            FrameLevels::PerFrame(n) => *n,
+            FrameLevels::Composed { ends, .. } => ends.len(),
+        }
+    }
+
     fn count(&self) -> usize {
-        self.n_frames + self.packages.len() + self.n_outer()
+        self.n_frames() + self.packages.len() + self.n_outer()
     }
 }
 
@@ -644,9 +690,122 @@ impl<'a> Worker<'a> {
         index
     }
 
-    /// The givens of one lexical scope: a block or parameter list, or an enclosing class, and
-    /// what the imports standing in that scope bring in.
-    fn frame_givens(&mut self, frame: usize, wanted: Wanted, out: &mut Vec<GivenRef>) -> Ranks {
+    /// The levels among the enclosing frames (`ContextualImplicits.level`, `Contexts.implicits`),
+    /// outermost first. A frame with givens (a block's or parameter list's, a class's in reach) is
+    /// a context of its own scope and opens a level; each import statement inside a frame that
+    /// brings an implicit is a context, standing at the level of the context outside it where
+    /// both have one owner and opening a level where not. An import that brings none is no
+    /// context. Without an import inside a frame, each frame is a level.
+    fn frame_levels(&mut self) -> FrameLevels {
+        let n = self.env.frames.len();
+        // The imports go outermost scope first, so the last is the deepest.
+        debug_assert!(self.env.imports.windows(2).all(|w| w[0].depth <= w[1].depth), "imports go outermost scope first");
+        if self.env.imports.last().map_or(true, |imp| imp.depth == 0) {
+            return FrameLevels::PerFrame(n);
+        }
+        self.composed_frame_levels(n)
+    }
+
+    #[cold]
+    #[inline(never)]
+    fn composed_frame_levels(&mut self, n: usize) -> FrameLevels {
+        // A scope's imports by statement, in the order of the source.
+        let mut order: Vec<u32> = (0..self.env.imports.len() as u32).filter(|&i| self.env.imports[i as usize].depth > 0).collect();
+        order.sort_by_key(|&i| {
+            let imp = &self.env.imports[i as usize];
+            (imp.depth, imp.stmt)
+        });
+        let (mut nodes, mut ends, mut selectors) = (Vec::new(), Vec::new(), Vec::new());
+        // The owner of the last context: a class's own, or the owner depth of a frame's scope.
+        let mut last: Option<(bool, u32)> = None;
+        let mut k = 0;
+        for f in 0..n {
+            let owner = match &self.env.frames[f] {
+                Frame::Class(_) => (true, f as u32),
+                Frame::Locals { owner, .. } => (false, *owner),
+            };
+            if self.frame_has_givens(f) {
+                if !nodes.is_empty() {
+                    ends.push(nodes.len() as u32);
+                }
+                nodes.push(FrameNode::Own(f as u32));
+                last = Some(owner);
+            }
+            let depth = f as u32 + 1;
+            while k < order.len() && self.env.imports[order[k] as usize].depth == depth {
+                let stmt = self.env.imports[order[k] as usize].stmt;
+                let start = selectors.len();
+                let (mut prec, mut brings) = (Prec::Named, false);
+                while k < order.len() && self.env.imports[order[k] as usize].depth == depth && self.env.imports[order[k] as usize].stmt == stmt {
+                    let imp = self.env.imports[order[k] as usize];
+                    if imp.name.is_none() {
+                        prec = Prec::Wild;
+                    }
+                    brings = brings || self.import_brings_implicits(imp);
+                    selectors.push(order[k]);
+                    k += 1;
+                }
+                if !brings {
+                    selectors.truncate(start);
+                    continue;
+                }
+                if last != Some(owner) && !nodes.is_empty() {
+                    ends.push(nodes.len() as u32);
+                }
+                nodes.push(FrameNode::Stmt(start as u32, selectors.len() as u32, prec));
+                last = Some(owner);
+            }
+        }
+        if !nodes.is_empty() {
+            ends.push(nodes.len() as u32);
+        }
+        FrameLevels::Composed { nodes, ends, selectors }
+    }
+
+    /// Whether frame `frame` is a context of the search (`Contexts.implicits`: its scope's or its
+    /// class's implicits are not empty): a scope with givens, a class with a given in reach, the
+    /// class whose deferred given's implementation is typed, with its using parameters.
+    fn frame_has_givens(&mut self, frame: usize) -> bool {
+        match &self.env.frames[frame] {
+            Frame::Locals { givens, .. } => !givens.is_empty(),
+            Frame::Class(c) if self.parent_args_of == Some(*c) => self.deferred_impl_of == Some(*c),
+            Frame::Class(c) => {
+                let c = *c;
+                self.class_given_index(c).is_some()
+            }
+        }
+    }
+
+    /// Whether an import brings an implicit (`ImportInfo.importedImplicits` not empty), which
+    /// makes it a context: a `given` selector any given of its prefix, `*` a Scala 2 implicit, a
+    /// name the given or implicit it names.
+    fn import_brings_implicits(&mut self, imp: ResolvedImport) -> bool {
+        // A `given T` selector's bound and the clause's exclusions first (`importedImplicits`):
+        // an import they leave nothing is no context, whatever its prefix holds.
+        if !imp.hidden.is_empty() || imp.bound.is_some() {
+            let mut found = Vec::new();
+            self.import_givens_unfiltered(imp, Wanted::AnyClass, &mut found);
+            let hidden: Vec<Name> = self.import_hidden.as_slice()[imp.hidden.range()].to_vec();
+            return found.into_iter().any(|given| !hidden.contains(&self.syms.sym(given.0).name) && imp.bound.map_or(true, |b| self.matches_import_bound(given, b)));
+        }
+        let any = |i: &GivenIndex| !i.all.is_empty() || !i.conversions.is_empty();
+        match imp.target {
+            ImportTarget::PkgGivens(p) => any(&self.given_index(p)),
+            ImportTarget::ClassGivens(c) => self.class_given_index(c).is_some_and(|i| any(&i)),
+            ImportTarget::PkgAll(p) => self.given_index(p).has_scala2,
+            ImportTarget::ClassAll(c) => self.class_given_index(c).is_some_and(|i| i.has_scala2),
+            ImportTarget::UnimportPredef | ImportTarget::Unresolved => false,
+            _ => {
+                let mut found = Vec::new();
+                self.import_givens_unfiltered(imp, Wanted::AnyClass, &mut found);
+                !found.is_empty()
+            }
+        }
+    }
+
+    /// The givens of one lexical scope's own context: a block's or parameter list's, or an
+    /// enclosing class's in reach.
+    fn frame_own_givens(&mut self, frame: usize, wanted: Wanted, out: &mut Vec<GivenRef>) {
         match &self.env.frames[frame] {
             Frame::Locals { givens, .. } if !givens.iter().any(|&g| self.syms.is_scala2_implicit(g)) => {
                 out.extend(givens.iter().rev().map(|&g| (g, GivenScope::Lexical)))
@@ -675,44 +834,29 @@ impl<'a> Worker<'a> {
                 }
             }
         }
-        let own_end = out.len();
-        let depth = frame as u32 + 1;
-        let (mut named, mut wild) = (Vec::new(), Vec::new());
-        for i in 0..self.env.imports.len() {
-            let imp = self.env.imports[i];
-            if imp.depth == depth {
-                let into = if imp.name.is_some() { &mut named } else { &mut wild };
-                self.import_givens(imp, wanted, into);
-            }
-        }
-        self.add_imported(own_end, named, wild, out)
     }
 
-    /// Appends what imports bring in after the givens a scope defines, `out[..own_end]`, leaving
-    /// out what is inaccessible or already there.
-    fn add_imported(
-        &mut self,
-        own_end: usize,
-        mut named: Vec<GivenRef>,
-        mut wild: Vec<GivenRef>,
-        out: &mut Vec<GivenRef>,
-    ) -> Ranks {
-        if named.is_empty() && wild.is_empty() {
-            return Ranks::all_own(own_end);
-        }
-        // Two imports of one scope may bring the same given (`import P.{*, given}`): once.
-        for (g, via) in named.drain(..).collect::<Vec<_>>() {
-            if self.is_given_accessible(g) && !out.iter().any(|&(known, _)| known == g) {
-                out.push((g, via));
+    /// The givens an import statement brings (`importedImplicits`) into a level, as a context of
+    /// its own: each once (`import P.{*, given}`), the inaccessible left out, with the name a
+    /// selector renames one to (`implicitName`). A given another context of the level brings too
+    /// stays: which of the two the level keeps is the composition's (`compose_level`).
+    /// Unfiltered for a package level's kept list, whose accessibility each search filters
+    /// (`package_level`).
+    fn stmt_givens(&mut self, stmt: &[ResolvedImport], wanted: Wanted, buf: &mut LevelBuf, filtered: bool) {
+        let start = buf.cands.len();
+        let mut found = Vec::new();
+        for &imp in stmt {
+            found.clear();
+            self.import_givens(imp, wanted, &mut found);
+            for &(g, via) in &found {
+                if (!filtered || self.is_given_accessible(g)) && !buf.cands[start..].iter().any(|&(known, _)| known == g) {
+                    if let Some(alias) = imp.name.filter(|&n| n != self.syms.sym(g).name) {
+                        buf.renamed.push((buf.cands.len() as u32, alias));
+                    }
+                    buf.cands.push((g, via));
+                }
             }
         }
-        let named_end = out.len();
-        for (g, via) in wild.drain(..).collect::<Vec<_>>() {
-            if self.is_given_accessible(g) && !out.iter().any(|&(known, _)| known == g) {
-                out.push((g, via));
-            }
-        }
-        Ranks { own_end, named_end }
     }
 
     /// The givens an import from a value brings: the value's class's, through its given selector,
@@ -756,6 +900,51 @@ impl<'a> Worker<'a> {
     }
 
     pub(super) fn import_givens(&mut self, imp: ResolvedImport, wanted: Wanted, out: &mut Vec<GivenRef>) {
+        let from = out.len();
+        self.import_givens_unfiltered(imp, wanted, out);
+        if !imp.hidden.is_empty() || imp.bound.is_some() {
+            self.filter_wildcard_imported(imp, from, out);
+        }
+    }
+
+    /// What an import brings, `out[from..]`, as `ImportInfo.importedImplicits` has it: through
+    /// a wildcard no name another selector of its clause renames or hides (`excluded`), through
+    /// a `given T` only the givens whose type conforms to `T` (`givenBound`, `matchesImportBound`),
+    /// and through a name renamed beside a wildcard nothing (its bound `Nothing`).
+    #[cold]
+    #[inline(never)]
+    fn filter_wildcard_imported(&mut self, imp: ResolvedImport, from: usize, out: &mut Vec<GivenRef>) {
+        let hidden: Vec<Name> = self.import_hidden.as_slice()[imp.hidden.range()].to_vec();
+        let mut i = from;
+        while i < out.len() {
+            let given = out[i];
+            let keep = !hidden.contains(&self.syms.sym(given.0).name) && imp.bound.map_or(true, |b| self.matches_import_bound(given, b));
+            if keep {
+                i += 1;
+            } else {
+                out.remove(i);
+            }
+        }
+    }
+
+    /// Whether the given's type, its type parameters open, conforms to an import's bound.
+    fn matches_import_bound(&mut self, given: GivenRef, bound: TypeId) -> bool {
+        if bound == ANY || bound == NOTHING {
+            return bound == ANY;
+        }
+        let mark = self.attempt();
+        let fits = match self.open_given_sig(given) {
+            Some((_, subst, sig)) => {
+                let ret = self.types.subst(sig.ret, &subst);
+                self.is_sub(ret, bound)
+            }
+            None => false,
+        };
+        self.retract(mark);
+        fits
+    }
+
+    fn import_givens_unfiltered(&mut self, imp: ResolvedImport, wanted: Wanted, out: &mut Vec<GivenRef>) {
         match imp.target {
             ImportTarget::ClassGivens(c) => {
                 if let Some(index) = self.class_given_index(c) {
@@ -796,37 +985,24 @@ impl<'a> Worker<'a> {
         }
     }
 
-    /// The givens of one package clause of the file. Each clause is a level of its own, as in
-    /// scalac, and the imports at the top of the file share the level of the innermost clause.
-    fn package_givens(&mut self, p: PkgId, with_imports: bool, wanted: Wanted, out: &mut Vec<GivenRef>) -> Ranks {
-        self.given_index(p).select(wanted, GivenScope::Lexical, out);
-        out.sort_by_key(|&(g, _)| g);
-        out.dedup_by_key(|&mut (g, _)| g);
-        let own_end = out.len();
-        if !with_imports {
-            return Ranks::all_own(own_end);
-        }
-        let (mut named, mut wild) = (Vec::new(), Vec::new());
-        let n_imports = self.import_count();
-        for i in 0..n_imports {
-            let imp = self.import_at(i);
-            if imp.depth == 0 {
-                let into = if imp.name.is_some() { &mut named } else { &mut wild };
-                self.import_givens(imp, wanted, into);
-            }
-        }
-        self.add_imported(own_end, named, wild, out)
+    /// The givens of one package clause of the file, a context of its own, and for the innermost
+    /// clause each import statement at the top of the file, a context at the clause's level (one
+    /// owner, `ContextualImplicits.level`) in the order of the source. Each clause is a level of
+    /// its own, as in scalac.
+    fn package_givens(&mut self, p: PkgId, with_imports: bool, wanted: Wanted, buf: &mut LevelBuf) {
+        let (list, _) = self.package_level_list(p, with_imports, wanted);
+        self.level_list_into(&list, buf);
     }
 
     /// `package_givens` for a level of its own, from `package_levels` where its inputs are
     /// settled: the package's index, the file's imports when they stand at the level, and the
-    /// wanted class. The accessibility filter runs per search, as `add_imported` runs it. A local
-    /// import standing at depth 0 is an input the key does not name, so with one the level is
-    /// neither looked up nor kept: the test precedes the lookup.
-    fn package_level(&mut self, p: PkgId, with_imports: bool, wanted: Wanted, out: &mut Vec<GivenRef>) -> Ranks {
-        debug_assert!(out.is_empty(), "a level's candidates start empty");
+    /// wanted class. The accessibility filter runs per search. A local import standing at depth
+    /// 0 is an input the key does not name, so with one the level is neither looked up nor kept:
+    /// the test precedes the lookup.
+    fn package_level(&mut self, p: PkgId, with_imports: bool, wanted: Wanted, buf: &mut LevelBuf) {
+        debug_assert!(buf.cands.is_empty(), "a level's candidates start empty");
         if with_imports && self.env.imports.iter().any(|imp| imp.depth == 0) {
-            return self.package_givens(p, with_imports, wanted, out);
+            return self.package_givens(p, with_imports, wanted, buf);
         }
         let (tag, id) = wanted.key();
         let file = if with_imports { self.env.file.0 } else { u32::MAX };
@@ -842,98 +1018,144 @@ impl<'a> Worker<'a> {
                 list
             }
         };
-        let own_end = list.ranks.own_end;
-        out.extend_from_slice(&list.givens[..own_end]);
-        let named_end = if list.plain {
-            out.extend_from_slice(&list.givens[own_end..]);
-            list.ranks.named_end
-        } else {
-            out.extend(list.givens[own_end..list.ranks.named_end].iter().copied().filter(|&(g, _)| self.is_given_accessible(g)));
-            let named_end = out.len();
-            out.extend(list.givens[list.ranks.named_end..].iter().copied().filter(|&(g, _)| self.is_given_accessible(g)));
-            named_end
-        };
-        let ranks = if own_end == list.givens.len() { Ranks::all_own(own_end) } else { Ranks { own_end, named_end } };
-        debug_assert!(
-            {
-                let mut fresh = Vec::new();
-                let fresh_ranks = self.package_givens(p, with_imports, wanted, &mut fresh);
-                fresh == *out && fresh_ranks.own_end == ranks.own_end && fresh_ranks.named_end == ranks.named_end
-            },
-            "a package level's kept candidates are what it collects"
-        );
-        ranks
+        self.level_list_into(&list, buf);
     }
 
-    /// A package level's candidates before the accessibility filter, as `package_givens` has
-    /// them after it, and whether every input is settled: the indexes read are kept (built
-    /// over settled export tables) and no import reads a value, whose type a search may still
-    /// be inferring.
-    fn package_level_list(&mut self, p: PkgId, with_imports: bool, wanted: Wanted) -> (LevelList, bool) {
-        let mut out = Vec::new();
-        self.given_index(p).select(wanted, GivenScope::Lexical, &mut out);
-        out.sort_by_key(|&(g, _)| g);
-        out.dedup_by_key(|&mut (g, _)| g);
-        let own_end = out.len();
-        let mut settled = self.given_indexes.contains_key(&p);
-        if !with_imports {
-            return (LevelList { givens: out.into_boxed_slice(), ranks: Ranks::all_own(own_end), plain: true }, settled);
+    /// A package level's kept list into a search's level, the inaccessible imported givens left
+    /// out.
+    fn level_list_into(&mut self, list: &LevelList, buf: &mut LevelBuf) {
+        if list.givens.is_empty() {
+            return;
         }
-        let (mut named, mut wild) = (Vec::new(), Vec::new());
-        let n_imports = self.import_count();
-        for i in 0..n_imports {
-            let imp = self.import_at(i);
-            if imp.depth != 0 {
-                continue;
-            }
-            settled &= match imp.target {
-                ImportTarget::ClassMember(c, _) => self.exports_settled(ExportOwner::Class(c)),
-                ImportTarget::PkgMember(q, _) => self.exports_settled(ExportOwner::Pkg(q)),
-                ImportTarget::ValueGivens(_) | ImportTarget::ValueMember(..) | ImportTarget::ValueAll(_) => false,
-                _ => true,
-            };
-            let into = if imp.name.is_some() { &mut named } else { &mut wild };
-            self.import_givens(imp, wanted, into);
-            settled &= match imp.target {
-                ImportTarget::PkgGivens(q) | ImportTarget::PkgAll(q) => self.given_indexes.contains_key(&q),
-                ImportTarget::ClassGivens(c) | ImportTarget::ClassAll(c) => {
-                    self.class_given_indexes.contains_key(&c) || (self.exports_settled(ExportOwner::Class(c)) && self.class_without_givens(c))
+        if list.plain {
+            buf.cands.extend_from_slice(&list.givens);
+            buf.nodes.extend_from_slice(&list.nodes);
+            buf.renamed.extend_from_slice(&list.renamed);
+            return;
+        }
+        let mut from = 0;
+        for (n, &(end, prec)) in list.nodes.iter().enumerate() {
+            for i in from..end as usize {
+                let g = list.givens[i];
+                // The package's own givens are each accessible in its clause.
+                if n == 0 || self.is_given_accessible(g.0) {
+                    if let Some(&(_, alias)) = list.renamed.iter().find(|&&(at, _)| at as usize == i) {
+                        buf.renamed.push((buf.cands.len() as u32, alias));
+                    }
+                    buf.cands.push(g);
                 }
-                _ => true,
-            };
-        }
-        if named.is_empty() && wild.is_empty() {
-            return (LevelList { givens: out.into_boxed_slice(), ranks: Ranks::all_own(own_end), plain: true }, settled);
-        }
-        for (g, via) in named {
-            if !out.iter().any(|&(known, _)| known == g) {
-                out.push((g, via));
             }
+            buf.close(prec);
+            from = end as usize;
         }
-        let named_end = out.len();
-        for (g, via) in wild {
-            if !out.iter().any(|&(known, _)| known == g) {
-                out.push((g, via));
-            }
-        }
-        let plain = out[own_end..].iter().all(|&(g, _)| self.plainly_accessible(g));
-        (LevelList { givens: out.into_boxed_slice(), ranks: Ranks { own_end, named_end }, plain }, settled)
     }
 
-    /// Givens imported at the top of the file and those of every package clause together, and
-    /// those of `scala.Predef` when a classpath supplies it.
-    fn imported_and_package_givens(&mut self, wanted: Wanted, out: &mut Vec<GivenRef>) {
-        let chain = self.pkg_chain();
-        for (i, &p) in chain.iter().enumerate() {
-            self.package_givens(p, i == 0, wanted, out);
-        }
-        if let Some(predef) = self.loaded.as_ref().and_then(|l| l.predef) {
-            if let Some(index) = self.class_given_index(predef) {
-                index.select(wanted, GivenScope::Lexical, out);
+    /// A package level's candidates before the accessibility filter of the imported ones, as
+    /// `package_givens` has them after it, and whether every input is settled: the indexes read
+    /// are kept (built over settled export tables) and no import reads a value, whose type a
+    /// search may still be inferring.
+    fn package_level_list(&mut self, p: PkgId, with_imports: bool, wanted: Wanted) -> (LevelList, bool) {
+        let mut buf = LevelBuf::default();
+        self.given_index(p).select(wanted, GivenScope::Lexical, &mut buf.cands);
+        buf.cands.sort_by_key(|&(g, _)| g);
+        buf.cands.dedup_by_key(|&mut (g, _)| g);
+        buf.close(Prec::Def);
+        let mut settled = self.given_indexes.contains_key(&p);
+        if with_imports {
+            // The file's imports by statement, in the order of the source.
+            let n_imports = self.import_count();
+            let mut imports: Vec<ResolvedImport> = (0..n_imports).map(|i| self.import_at(i)).filter(|imp| imp.depth == 0).collect();
+            imports.sort_by_key(|imp| imp.stmt);
+            let mut k = 0;
+            while k < imports.len() {
+                let stmt = imports[k].stmt;
+                let end = imports[k..].iter().position(|imp| imp.stmt != stmt).map_or(imports.len(), |n| k + n);
+                let clause = imports[k..end].to_vec();
+                k = end;
+                for &imp in &clause {
+                    settled &= match imp.target {
+                        ImportTarget::ClassMember(c, _) => self.exports_settled(ExportOwner::Class(c)),
+                        ImportTarget::PkgMember(q, _) => self.exports_settled(ExportOwner::Pkg(q)),
+                        ImportTarget::ValueGivens(_) | ImportTarget::ValueMember(..) | ImportTarget::ValueAll(_) => false,
+                        _ => true,
+                    };
+                }
+                if !clause.iter().any(|&imp| self.import_brings_implicits(imp)) {
+                    continue;
+                }
+                self.stmt_givens(&clause, wanted, &mut buf, false);
+                buf.close(if clause.iter().any(|imp| imp.name.is_none()) { Prec::Wild } else { Prec::Named });
+                for &imp in &clause {
+                    settled &= match imp.target {
+                        ImportTarget::PkgGivens(q) | ImportTarget::PkgAll(q) => self.given_indexes.contains_key(&q),
+                        ImportTarget::ClassGivens(c) | ImportTarget::ClassAll(c) => {
+                            self.class_given_indexes.contains_key(&c) || (self.exports_settled(ExportOwner::Class(c)) && self.class_without_givens(c))
+                        }
+                        _ => true,
+                    };
+                }
             }
         }
-        out.sort_by_key(|&(g, _)| g);
-        out.dedup_by_key(|&mut (g, _)| g);
+        let own_end = buf.nodes[0].0 as usize;
+        let plain = buf.cands[own_end..].iter().all(|&(g, _)| self.plainly_accessible(g));
+        let list = LevelList { givens: buf.cands.into_boxed_slice(), nodes: buf.nodes.into_boxed_slice(), renamed: buf.renamed.into_boxed_slice(), plain };
+        (list, settled)
+    }
+
+    /// The name a candidate of a level is known by (`implicitName`): the one an import renames it
+    /// to, or its own.
+    fn level_name(&self, buf: &LevelBuf, i: u32) -> Name {
+        match buf.renamed.iter().find(|&&(at, _)| at == i) {
+            Some(&(_, alias)) => alias,
+            None => self.syms.sym(buf.cands[i as usize].0).name,
+        }
+    }
+
+    /// The eligible candidates of a level (`ContextualImplicits.eligible`), indices of
+    /// `buf.cands`: of the matching ones `fits` (in order), each context composed with the ones
+    /// outside it, outermost first (`combineEligibles`): an inner context's candidates hide the
+    /// same-named ones outside it, except where the outer context's precedence beats the inner's
+    /// (`BindingPrec.beats`), which keeps the outer ones and drops the inner same-named. Inner
+    /// first in the result. A context with no matching candidate still sets the precedence the
+    /// next one is compared with.
+    fn compose_level(&self, buf: &LevelBuf, fits: Vec<u32>) -> Vec<u32> {
+        if buf.nodes.len() <= 1 || fits.is_empty() {
+            return fits;
+        }
+        let mut acc: Vec<u32> = Vec::new();
+        let mut outer: Option<Prec> = None;
+        let mut k = 0;
+        for &(end, prec) in &buf.nodes {
+            let mut own: Vec<u32> = Vec::new();
+            while k < fits.len() && fits[k] < end {
+                own.push(fits[k]);
+                k += 1;
+            }
+            if !own.is_empty() && !acc.is_empty() {
+                if outer.is_some_and(|o| o.beats(prec)) {
+                    own.retain(|&i| {
+                        let n = self.level_name(buf, i);
+                        !acc.iter().any(|&j| self.level_name(buf, j) == n)
+                    });
+                } else {
+                    let names: Vec<Name> = own.iter().map(|&i| self.level_name(buf, i)).collect();
+                    acc.retain(|&j| !names.contains(&self.level_name(buf, j)));
+                }
+            }
+            own.extend_from_slice(&acc);
+            acc = own;
+            outer = Some(prec);
+        }
+        // A given two contexts bring under two names is one candidate (`disambiguate`: refs `=:=`).
+        let mut seen: Vec<SymId> = Vec::with_capacity(acc.len());
+        acc.retain(|&i| {
+            let g = buf.cands[i as usize].0;
+            !seen.contains(&g) && {
+                seen.push(g);
+                true
+            }
+        });
+        acc
     }
 
     /// Givens of the implicit scope of `t`: the companions of every class the type mentions and
@@ -1213,21 +1435,41 @@ impl<'a> Worker<'a> {
 
     fn givens_with_extension_now(&mut self, name: Name, recv_ty: TypeId) -> (Vec<(GivenRef, TypeId)>, usize, Vec<u32>) {
         let wanted = Wanted::Extension(name);
-        let mut refs = Vec::new();
+        let mut refs: Vec<GivenRef> = Vec::new();
         let mut levels = Vec::new();
-        for frame in (0..self.env.frames.len()).rev() {
-            self.frame_givens(frame, wanted, &mut refs);
-            if refs.len() > levels.len() {
-                levels.resize(refs.len(), frame as u32 + 1);
+        // The levels of the search (`given_levels`), the implicit scope's apart: each level's
+        // eligible candidates as `ContextualImplicits.eligible` composes them, those a nearer
+        // level's of their name hides left out.
+        let given_levels = self.given_levels();
+        let mut buf = LevelBuf::default();
+        let mut hidden: Vec<Name> = Vec::new();
+        for level in (1..given_levels.count()).rev() {
+            buf.clear();
+            self.level_candidates(&given_levels, level, recv_ty, wanted, &mut buf);
+            if buf.cands.is_empty() {
+                continue;
+            }
+            let mut fits: Vec<u32> = Vec::new();
+            for i in 0..buf.cands.len() as u32 {
+                let g = buf.cands[i as usize].0;
+                if refs.iter().any(|&(known, _)| known == g) || !hidden.is_empty() && hidden.contains(&self.level_name(&buf, i)) {
+                    continue;
+                }
+                fits.push(i);
+            }
+            for &i in &fits {
+                let n = self.level_name(&buf, i);
+                if !hidden.contains(&n) {
+                    hidden.push(n);
+                }
+            }
+            for i in self.compose_level(&buf, fits) {
+                refs.push(buf.cands[i as usize]);
+                levels.push(level as u32);
             }
         }
-        let mut outer = Vec::new();
-        self.imported_and_package_givens(wanted, &mut outer);
-        refs.append(&mut outer);
         let contextual = refs.len();
-        if contextual > levels.len() {
-            levels.resize(contextual, 0);
-        }
+        let mut outer = Vec::new();
         self.implicit_scope_givens(recv_ty, wanted, &mut outer);
         outer.retain(|&(g, _)| !refs.iter().any(|&(known, _)| known == g));
         refs.append(&mut outer);
@@ -1407,6 +1649,61 @@ impl<'a> Worker<'a> {
         Some(te)
     }
 
+    /// `NotGiven.value` where a candidate of the search for `target`, a `NotGiven`, fails
+    /// (`rank`'s `negateIfNot(tryImplicit(..))`, Implicits.scala 1493 and 1533): the candidates
+    /// each level finds eligible, composed and hidden as `search_given` has them, the context's
+    /// and then the implicit scope's (`searchImplicit`, 1700 to 1712: a companion's of the negated
+    /// type among them), are tried in its order, a failure negated into the success, a success into
+    /// a failure that leaves the search to the next candidate. NotGiven's companion's own and its
+    /// parents' (`amb1`, `amb2`, `default`) are what the synthesis answers for (`not_given`), after.
+    fn negated_not_given(&mut self, class: ClassId, target: TypeId, span: Span) -> Option<TExprId> {
+        let (companion, value) = self.not_given_value(class)?;
+        let library = |t: &mut Self, g: SymId| match t.syms.sym(g).owner {
+            Owner::Class(o) => o == companion || t.derives_from(companion, o),
+            _ => false,
+        };
+        let levels = self.given_levels();
+        let wanted = Wanted::Class(class);
+        let memoised = self.transparent.is_empty() && !self.types.has_vars(target) && self.gadt.is_empty();
+        let mut heads = None;
+        let mut hidden: Vec<Name> = Vec::new();
+        let mut buf = LevelBuf::default();
+        let mut failed = false;
+        'levels: for level in (0..levels.count()).rev() {
+            buf.clear();
+            self.level_candidates(&levels, level, target, wanted, &mut buf);
+            if buf.cands.is_empty() {
+                continue;
+            }
+            let heads = heads.get_or_insert_with(|| self.target_heads(target));
+            let eligible = self.level_eligible(&levels, level, target, Some(class), &buf, &mut hidden, memoised, heads);
+            let mut order: Vec<usize> = eligible.into_iter().map(|i| i as usize).collect();
+            if order.len() > 1 {
+                self.preference_order(&buf.cands, &mut order);
+            }
+            for i in order {
+                let given = buf.cands[i];
+                if library(self, given.0) {
+                    continue;
+                }
+                let mark = self.attempt();
+                let attempt = self.try_given(given, Some(target), span, true);
+                self.retract(mark);
+                if !matches!(attempt, Attempt::Ok(..)) {
+                    failed = true;
+                    break 'levels;
+                }
+            }
+        }
+        if !failed {
+            return None;
+        }
+        let recv = self.prog.add(TExpr::Module(companion));
+        let te = self.prog.add(TExpr::CallMethod(recv, value, ListRef::EMPTY));
+        self.prog.set_type(te, target);
+        Some(te)
+    }
+
     /// `NotGiven`'s companion object and its `value` member.
     fn not_given_value(&mut self, class: ClassId) -> Option<(ClassId, SymId)> {
         let companion = self.syms.class(class).companion?;
@@ -1470,13 +1767,15 @@ impl<'a> Worker<'a> {
             }
         }
         let target_class = self.class_of(target);
-        // A `NotGiven[T]` target is answered by the synthesis alone: scalac negates every
-        // candidate's result (`Implicits.negateIfNot`), so the companion's `default`, `amb1` and
-        // `amb2` of scala-library and a user's `given NotGiven[T]` never supply one; the search
-        // for `T` itself decides.
+        // A `NotGiven[T]` target: scalac negates every candidate's result (`Implicits.negateIfNot`),
+        // a failure into `NotGiven.value` and a success into a failure. The companion's `default`,
+        // `amb1` and `amb2` of scala-library negate the search for `T`, which the synthesis makes;
+        // a program's own candidate that fits and fails is a success as well.
         if let Some(c) = target_class.filter(|&c| self.is_not_given_class(c)) {
             self.given_early(pre, Early::NotGiven);
-            return match self.synthesized_given(c, target, span, byname) {
+            // The contextual candidates first, each negated; the companion's fallback where none
+            // fails (`searchImplicit`'s implicit scope after the context).
+            return match self.negated_not_given(c, target, span).or_else(|| self.synthesized_given(c, target, span, byname)) {
                 Some(te) => Pick::Found(te, target),
                 None => Pick::NoMatch,
             };
@@ -1859,8 +2158,8 @@ impl<'a> Worker<'a> {
         for f in &self.env.frames {
             match f {
                 Frame::Class(c) => words.extend([1, c.0]),
-                Frame::Locals { givens, .. } => {
-                    words.extend([2, givens.len() as u32]);
+                Frame::Locals { givens, owner, .. } => {
+                    words.extend([2, *owner, givens.len() as u32]);
                     words.extend(givens.iter().map(|g| g.0));
                 }
             }
@@ -1879,7 +2178,7 @@ impl<'a> Worker<'a> {
                 ImportTarget::UnimportPredef => (9, 0, 0),
                 ImportTarget::Unresolved => (10, 0, 0),
             };
-            words.extend([3, imp.depth, imp.name.map_or(u32::MAX, |n| n.0), imp.hidden.start, imp.hidden.len, imp.unimports_predef.unwrap_or(u32::MAX), tag, id, n]);
+            words.extend([3, imp.depth, imp.stmt, imp.name.map_or(u32::MAX, |n| n.0), imp.hidden.start, imp.hidden.len, imp.bound.map_or(u32::MAX, |t| t.0), imp.unimports_predef.unwrap_or(u32::MAX), tag, id, n]);
         }
         words.extend([4, self.defining.map_or(u32::MAX, |d| d.0), self.parent_args_of.map_or(u32::MAX, |c| c.0), self.transparent.len() as u32]);
         words.extend(self.transparent.iter().map(|c| c.0));
@@ -2118,17 +2417,21 @@ impl<'a> Worker<'a> {
     /// scope of the type still has it.
     fn search_given(&mut self, target: TypeId, target_class: Option<ClassId>, span: Span) -> Pick {
         let wanted = target_class.map_or(Wanted::AnyClass, Wanted::Class);
-        let mut candidates: Vec<GivenRef> = Vec::new();
-        // Names of candidates that fit the target at a nearer level and failed; they hide the
-        // candidates of that name further out, as in scalac.
-        let mut shadowed: Vec<Name> = Vec::new();
+        let mut buf = LevelBuf::default();
+        // The names of the matching candidates of the nearer levels, which hide those of their
+        // name further out (`combineEligibles`); not the implicit scope's.
+        let mut hidden: Vec<Name> = Vec::new();
         let step = self.step(Step::Levels);
         let levels = self.given_levels();
         self.step_end(step, Step::Levels);
+        // Nothing is settled under a pattern's GADT bounds either: the head rejection reads
+        // a type argument through them.
+        let memoised = self.transparent.is_empty() && !self.types.has_vars(target) && self.gadt.is_empty();
+        let mut heads = None;
         for level in (0..levels.count()).rev() {
-            candidates.clear();
+            buf.clear();
             let step = self.step(Step::Levels);
-            let ranks = self.level_candidates(&levels, level, target, wanted, &mut candidates);
+            self.level_candidates(&levels, level, target, wanted, &mut buf);
             let ns = self.step_end(step, Step::Levels);
             if self.profile.on {
                 let kind = if level == 0 {
@@ -2142,12 +2445,16 @@ impl<'a> Worker<'a> {
                 };
                 self.profile.given.parts.levels[kind as usize].add(ns);
             }
-            self.profile.given_found(candidates.len());
-            if candidates.is_empty() {
+            self.profile.given_found(buf.cands.len());
+            if buf.cands.is_empty() {
                 continue;
             }
-            let shadowing = if level > 0 { Some(&mut shadowed) } else { None };
-            match self.pick_given(&candidates, ranks, shadowing, target, target_class, span) {
+            let heads = heads.get_or_insert_with(|| self.target_heads(target));
+            let eligible = self.level_eligible(&levels, level, target, target_class, &buf, &mut hidden, memoised, heads);
+            if eligible.is_empty() {
+                continue;
+            }
+            match self.pick_given(&buf.cands, eligible, target, span) {
                 Pick::NoMatch => {}
                 pick => {
                     self.given_consulted.push(wanted);
@@ -2159,36 +2466,102 @@ impl<'a> Worker<'a> {
         Pick::NoMatch
     }
 
+    /// A level's eligible candidates for `target` (`ContextualImplicits.eligible`), indices of
+    /// `buf.cands`: those that match it (`fit_decision`, scalac's `filterMatching`), but the
+    /// alias given being defined and those of a name a matching candidate of a nearer level has
+    /// (`hidden`), composed (`compose_level`). The matching ones' names join `hidden` for the
+    /// levels further out, the implicit scope's apart.
+    #[allow(clippy::too_many_arguments)]
+    fn level_eligible(
+        &mut self,
+        levels: &Levels,
+        level: usize,
+        target: TypeId,
+        target_class: Option<ClassId>,
+        buf: &LevelBuf,
+        hidden: &mut Vec<Name>,
+        memoised: bool,
+        heads: &mut TargetHeads,
+    ) -> Vec<u32> {
+        let defining = levels.defining.filter(|_| level > 0);
+        // The implicit scope's candidates are its own eligible list, which no name of the
+        // context's hides (`searchImplicit`'s `implicitScope(wildProto).eligible`).
+        let hide = level > 0 && !hidden.is_empty();
+        let mut fits: Vec<u32> = Vec::new();
+        for i in 0..buf.cands.len() as u32 {
+            let given = buf.cands[i as usize];
+            if defining == Some(given.0) || hide && hidden.contains(&self.level_name(buf, i)) {
+                continue;
+            }
+            if self.fit_decision(given, target, target_class, memoised, heads) {
+                fits.push(i);
+            }
+        }
+        self.profile.given.fits += fits.len() as u64;
+        if fits.is_empty() {
+            return fits;
+        }
+        if level > 0 {
+            for &i in &fits {
+                let n = self.level_name(buf, i);
+                if !hidden.contains(&n) {
+                    hidden.push(n);
+                }
+            }
+        }
+        self.compose_level(buf, fits)
+    }
+
     /// The levels a search walks from the innermost, as `search_given` documents them.
     fn given_levels(&mut self) -> Levels {
         let packages = self.pkg_chain();
         // `scala.Predef` of a classpath is a level of its own outside the package clauses.
         let predef = self.loaded.as_ref().and_then(|l| l.predef);
-        Levels { n_frames: self.env.frames.len(), packages, predef, defining: self.defining }
+        Levels { frames: self.frame_levels(), packages, predef, defining: self.defining }
     }
 
-    /// The candidates of one level, nearest last: level 0 is the implicit scope of the target.
-    fn level_candidates(&mut self, levels: &Levels, level: usize, target: TypeId, wanted: Wanted, candidates: &mut Vec<GivenRef>) -> Ranks {
+    /// The candidates of one level, its contexts outermost first: level 0 is the implicit scope
+    /// of the target.
+    #[inline(always)]
+    fn level_candidates(&mut self, levels: &Levels, level: usize, target: TypeId, wanted: Wanted, buf: &mut LevelBuf) {
         let n_packages = levels.packages.len();
         let n_outer = levels.n_outer();
-        let ranks = if level == 0 {
-            self.implicit_scope_givens(target, wanted, candidates);
-            Ranks::all_own(candidates.len())
+        if level == 0 {
+            self.implicit_scope_givens(target, wanted, &mut buf.cands);
+            buf.close(Prec::Def);
         } else if level < n_outer {
             if let Some(index) = self.class_given_index(levels.predef.unwrap()) {
-                index.select(wanted, GivenScope::Lexical, candidates);
+                index.select(wanted, GivenScope::Lexical, &mut buf.cands);
             }
-            Ranks::all_own(candidates.len())
+            buf.close(Prec::Def);
         } else if level < n_packages + n_outer {
             let i = n_packages + n_outer - 1 - level;
-            self.package_level(levels.packages[i], i == 0, wanted, candidates)
+            self.package_level(levels.packages[i], i == 0, wanted, buf);
         } else {
-            self.frame_givens(level - n_packages - n_outer, wanted, candidates)
-        };
-        if let (Some(d), true) = (levels.defining, level > 0) {
-            candidates.retain(|&(g, _)| g != d);
+            let k = level - n_packages - n_outer;
+            match &levels.frames {
+                FrameLevels::PerFrame(_) => {
+                    self.frame_own_givens(k, wanted, &mut buf.cands);
+                    buf.close(Prec::Def);
+                }
+                FrameLevels::Composed { nodes, ends, selectors } => {
+                    let start = if k == 0 { 0 } else { ends[k - 1] as usize };
+                    for &node in &nodes[start..ends[k] as usize] {
+                        match node {
+                            FrameNode::Own(f) => {
+                                self.frame_own_givens(f as usize, wanted, &mut buf.cands);
+                                buf.close(Prec::Def);
+                            }
+                            FrameNode::Stmt(from, to, prec) => {
+                                let stmt: Vec<ResolvedImport> = selectors[from as usize..to as usize].iter().map(|&i| self.env.imports[i as usize]).collect();
+                                self.stmt_givens(&stmt, wanted, buf, true);
+                                buf.close(prec);
+                            }
+                        }
+                    }
+                }
+            }
         }
-        ranks
     }
 
     /// Whether the candidate's declared result has a class that derives from the target's.
@@ -2398,31 +2771,8 @@ impl<'a> Worker<'a> {
     /// candidate beats it outright. In a contextual level (`shadowed` given) a candidate that
     /// fits the target hides the same-named candidates of lower binding precedence, and of
     /// the outer levels if this one fails.
-    fn pick_given(
-        &mut self,
-        candidates: &[GivenRef],
-        ranks: Ranks,
-        shadowed: Option<&mut Vec<Name>>,
-        target: TypeId,
-        target_class: Option<ClassId>,
-        span: Span,
-    ) -> Pick {
-        let mut fitting: Vec<usize> = Vec::new();
-        // Nothing is settled under a pattern's GADT bounds either: the head rejection reads
-        // a type argument through them.
-        let memoised = self.transparent.is_empty() && !self.types.has_vars(target) && self.gadt.is_empty();
-        let mut heads = self.target_heads(target);
-        for (i, &given) in candidates.iter().enumerate() {
-            let name = self.syms.sym(given.0).name;
-            if shadowed.as_ref().map_or(false, |s| s.contains(&name)) {
-                continue;
-            }
-            if self.fit_decision(given, target, target_class, memoised, &mut heads) {
-                fitting.push(i);
-            }
-        }
-        self.profile.given.fits += fitting.len() as u64;
-        let may_prune = ranks.own_end >= candidates.len();
+    fn pick_given(&mut self, candidates: &[GivenRef], eligible: Vec<u32>, target: TypeId, span: Span) -> Pick {
+        let mut fitting: Vec<usize> = eligible.into_iter().map(|i| i as usize).collect();
         if fitting.len() > 1 {
             let step = self.step(Step::Order);
             self.preference_order(candidates, &mut fitting);
@@ -2435,13 +2785,11 @@ impl<'a> Worker<'a> {
         let coherent = self.b.can_equal.is_some() && self.class_of(target) == self.b.can_equal;
         let mut found: Vec<Success> = Vec::new();
         let mut best_so_far: Option<usize> = None;
-        let mut ambiguous: Vec<(SymId, u8)> = Vec::new();
-        let mut incomplete: Vec<(Name, u8)> = Vec::new();
+        let mut ambiguous: Vec<SymId> = Vec::new();
         let mut in_place: Option<super::state::Mark> = None;
         for &i in &fitting {
             let given = candidates[i];
-            let name = self.syms.sym(given.0).name;
-            if let (true, Some(b)) = (may_prune, best_so_far) {
+            if let Some(b) = best_so_far {
                 if self.compare_givens(found[b].given.0, given.0) > 0 {
                     self.profile.given.pruned += 1;
                     continue;
@@ -2455,7 +2803,6 @@ impl<'a> Worker<'a> {
             // wrote goes with it where it fails, and stays aside where another wins.
             let mark = self.attempt();
             let captured = self.capture_mark();
-            let rank = ranks.of(i);
             let winners_mark = self.unused.given_winners.len();
             self.profile.try_start(given.0);
             let attempt = self.try_given(given, Some(target), span, true);
@@ -2476,7 +2823,7 @@ impl<'a> Worker<'a> {
             match attempt {
                 Attempt::Ok(expr, ty) => {
                     if coherent {
-                        let earlier: Vec<SymId> = ambiguous.iter().map(|&(a, _)| a).collect();
+                        let earlier: Vec<SymId> = ambiguous.clone();
                         if !earlier.iter().all(|&a| self.compare_givens(given.0, a) > 0) {
                             self.retract(mark);
                             self.capture_drop_since(captured);
@@ -2484,7 +2831,7 @@ impl<'a> Worker<'a> {
                             continue;
                         }
                     }
-                    found.push(Success { given, expr, ty, rank, undone: None, winners, receiver });
+                    found.push(Success { given, expr, ty, undone: None, winners, receiver });
                     // Open until another candidate sets it aside, or it wins or loses.
                     in_place = Some(mark);
                     let s = found.len() - 1;
@@ -2499,37 +2846,14 @@ impl<'a> Worker<'a> {
                 }
                 Attempt::Ambiguous => {
                     self.retract(mark);
-                    ambiguous.push((given.0, rank));
+                    ambiguous.push(given.0);
                 }
-                Attempt::Incomplete => {
-                    self.retract(mark);
-                    incomplete.push((name, rank));
-                }
-                Attempt::Mismatch => self.retract(mark),
+                Attempt::Incomplete | Attempt::Mismatch => self.retract(mark),
             }
             self.step_end(step, how);
         }
-        if ranks.own_end < candidates.len() && found.len() + ambiguous.len() + incomplete.len() > 1 {
-            let mut hiders = incomplete.clone();
-            hiders.extend(found.iter().map(|s| (self.syms.sym(s.given.0).name, s.rank)));
-            hiders.extend(ambiguous.iter().map(|&(a, r)| (self.syms.sym(a).name, r)));
-            let hidden = |name: Name, rank: u8| hiders.iter().any(|&(n, r)| n == name && r < rank);
-            if let Some(last) = found.last() {
-                if hidden(self.syms.sym(last.given.0).name, last.rank) {
-                    if let Some(mark) = in_place.take() {
-                        self.retract(mark);
-                    }
-                }
-            }
-            let syms = &self.syms;
-            found.retain(|s| !hidden(syms.sym(s.given.0).name, s.rank));
-            ambiguous.retain(|&(a, r)| !hidden(syms.sym(a).name, r));
-        }
         if found.is_empty() {
             if ambiguous.is_empty() {
-                if let Some(shadowed) = shadowed {
-                    shadowed.extend(incomplete.iter().map(|&(n, _)| n));
-                }
                 return Pick::NoMatch;
             }
             return Pick::Ambiguous;
@@ -2544,7 +2868,7 @@ impl<'a> Worker<'a> {
         }
         if let Some(b) = best {
             let winner = found[b].given.0;
-            if !ambiguous.iter().all(|&(a, _)| self.compare_givens(winner, a) > 0) {
+            if !ambiguous.iter().all(|&a| self.compare_givens(winner, a) > 0) {
                 best = None;
             }
         }
@@ -3714,6 +4038,11 @@ impl<'a> Worker<'a> {
         // module itself.
         let has_params = !sig.clauses.is_empty() || !sig.tparams.is_empty() || kind == SymKind::Def;
         let mut te = match owner {
+            // A given object found inside its own class is that class's `this` (`tpd.ref`).
+            _ if !has_params && self.enclosing_module_class(g).is_some() => {
+                let k = self.enclosing_module_class(g).unwrap();
+                self.this_ref(k)
+            }
             _ if matches!(kind, SymKind::Object(_)) => {
                 let SymKind::Object(c) = kind else { unreachable!() };
                 self.prog.add(TExpr::Module(c))
@@ -3910,7 +4239,12 @@ impl<'a> Worker<'a> {
             let result = self.prog.add(TExpr::Local(rec));
             te = self.prog.add(TExpr::Block(stmts, result));
         }
-        let ty = self.zonk(ret);
+        // A given object is its module: the instance is of its class, as a reference to it by its
+        // name is (`given_object_type`), whichever of the two a body read from a pickle holds.
+        let ty = match self.given_object_type(g) {
+            Some(class) => class,
+            None => self.zonk(ret),
+        };
         if self.given_trace() {
             let a = self.show(ty);
             eprintln!("ok {} : {}", self.name_str(self.syms.sym(g).name), a);

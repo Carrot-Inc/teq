@@ -365,6 +365,9 @@ given_deferred_own_marker
 given_deferred_scope
 given_deferred_site
 given_dependent_members
+given_extension_context_chain
+given_extension_levels
+given_extension_prefix
 given_fits_abstract_member
 given_fits_gadt_branch
 given_fits_module_sites
@@ -380,6 +383,13 @@ given_fits_site_refined_result
 given_fits_trait_receiver
 given_fits_var_candidate
 given_hk_bound
+given_implicit_scope_negation
+given_import_bound_exclusion
+given_import_context_chain
+given_import_empty_contexts
+given_import_file_contexts
+given_import_level_owner
+given_import_same_level
 given_intersection
 given_intersection_bounds
 given_laziness
@@ -399,6 +409,9 @@ given_memo_trait_site_member
 given_memo_var_candidate
 given_memo_walk_levels
 given_not_given_fallback
+given_not_given_negation
+given_not_given_shadowed
+given_object_module
 given_param_bounds_scope
 given_patterns
 given_polymorphic_def
@@ -528,9 +541,12 @@ inline_fold_std
 inline_guard_constant_type
 inline_hk_alias_summon
 inline_if_literal_type
+inline_inferred_result_dependent
 inline_local_forward_unused_import
 inline_match
+inline_match_erased_projection
 inline_match_intersection_tuple
+inline_match_scrutinee_effect
 inline_mirror_labels
 inline_mirror_proxy
 inline_named_local_class_twice
@@ -664,7 +680,10 @@ macro_builtin_ops
 macro_bundle
 macro_by_name_call_view
 macro_byte_buffer
+macro_cast_char
 macro_char_buffer
+macro_constant_tags
+macro_constant_type_test
 macro_ctor_member_type
 macro_ctor_param_annots
 macro_default_getters
@@ -755,6 +774,8 @@ member_retry_transparent
 memberaliases
 mirror_declared_type
 mirror_derives
+mirror_from_tuple_extension
+mirror_from_tuple_refined
 mirror_private_ctor
 mirror_refined_alias
 mirror_unchecked_members
@@ -872,6 +893,7 @@ pf_lambda_seq_option
 pickled_inline_block_imports
 pickled_inline_by_name
 pickled_inline_classes_access
+pickled_inline_import_exclusion
 pickled_inline_match_type
 pickled_inline_summon
 pickled_inline_transparent
@@ -1190,6 +1212,7 @@ tabulate_order
 tail_calls
 tailcalls
 tailcalls_std
+tailrec_inline_choose
 tailrec_param_shadow
 target_name_alias_dispatch
 target_name_bridge_alias
@@ -1227,6 +1250,7 @@ trait_vals_mixed
 transparent_given_local
 transparent_widened_ascription
 try_without_handlers
+tuple_companion_api
 tuple_element_var_bound
 tuple_erasure
 tuple_erasure_own_class
@@ -1276,6 +1300,7 @@ typer_state_given_mirror
 typer_state_given_unused_arg
 typer_state_harmonize_negated
 typer_state_held_abandoned
+typer_state_held_argument
 typer_state_inline_arg_copy
 typer_state_inline_captures
 typer_state_inline_widened
@@ -1291,6 +1316,7 @@ typer_state_member_retry_pending
 typer_state_member_retry_warning
 typer_state_mixed_order
 typer_state_pending_given_purity
+typer_state_quote_on_demand
 typer_state_tailrec_expansion
 typer_state_tailrec_inline_param
 typer_state_tuple_index
@@ -1345,11 +1371,10 @@ views
 widened_double_text
 wildcard_bounds
 wildcard_lower_bound
+wildcard_param_bound
+wildcard_param_bound_generic
 wildcard_pattern_binders
 yield_left_of_for
-zip_digest
-zip_entry_times
-zip_time_precision
 extractor_abstract_input
 extractor_reachable_after
 files_directories
@@ -1371,3 +1396,6 @@ lexical_extension_retry_leading
 path_operations
 sys_exit_status
 typer_state_cache_literal_formals
+zip_digest
+zip_entry_times
+zip_time_precision

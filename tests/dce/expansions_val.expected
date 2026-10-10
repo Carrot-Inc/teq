@@ -1,0 +1,6 @@
+one a: int / step body 1
+many b: string / step body 2
+many c: boolean / step body 3
+rendered 3
+rendered 12
+rendered 10
