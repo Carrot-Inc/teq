@@ -18,7 +18,8 @@
 # that adds and removes a definition a local's scope reads, and another package's of its name; a
 # session over an upstream module's products that another build rewrites between two requests,
 # once keeping every file's size and time, once with a request for a file whose time was kept,
-# once killed on the way (the session reads the last whole publication); and a
+# once killed on the way (the session reads the last whole publication); a session over an
+# upstream's products whose inline body is replaced and put back; and a
 # session over tests/split/given_memo that adds a local given to a body and removes it, and changes
 # a file's import of givens and changes it back, through the given search's kept memos.
 # Every session types its full builds at the automatic count and every fresh build it is compared
@@ -375,6 +376,36 @@ build
 expect "products: a publication killed on the way takes the full path" "$(field incremental)" 'false'
 same_as_fresh "products: a publication killed on the way" "$src/down" --classpath "$src/upP"
 expect "products: a publication killed on the way reads the last whole one" "$(timeout 20 node "$work/out/main.mjs")" "ten!"
+stop
+rm -rf "$work/out"
+
+# An upstream's inline body replaced and then put back between requests of a session over its
+# products: the record of the body, made from the product on the first call and kept with the
+# loader (src/typer/inline_definition.rs, `demand_library_definition`), goes with the whole typing
+# state when the directory's identity changes, so each request expands the body the products hold
+# now, as a fresh session does (a constant through the parameter's path, and a local class).
+src=$work/inline_products
+mkdir -p "$src/up" "$src/down"
+inline_up() { printf 'package up\nimport scala.compiletime.constValue\nobject Lib:\n  inline def greet(x: Int): String =\n    class G { def text: String = "%s" + constValue[x.type] }\n    new G().text\n' "$1" > "$src/up/Lib.scala"; }
+inline_up one
+printf 'package down\n@main def run(): Unit = println(up.Lib.greet(1) + up.Lib.greet(2))\n' > "$src/down/Main.scala"
+"$TEQ" compiler check --products "$src/upP" "$src/up/Lib.scala" > /dev/null 2>&1 || bad "inline products: the upstream's products"
+retype_start "$src/down" --classpath "$src/upP"
+expect "inline products: first build" "$(field ok)" 'true'
+same_as_fresh "inline products: first build" "$src/down" --classpath "$src/upP"
+expect "inline products: first build runs" "$(timeout 20 node "$work/out/main.mjs")" "one1one2"
+inline_up two
+"$TEQ" compiler check --products "$src/upP" "$src/up/Lib.scala" > /dev/null 2>&1 || bad "inline products: the body replaced"
+build
+expect "inline products: the body replaced takes the full path" "$(field incremental)" 'false'
+same_as_fresh "inline products: the body replaced" "$src/down" --classpath "$src/upP"
+expect "inline products: the body replaced runs" "$(timeout 20 node "$work/out/main.mjs")" "two1two2"
+inline_up one
+"$TEQ" compiler check --products "$src/upP" "$src/up/Lib.scala" > /dev/null 2>&1 || bad "inline products: the body put back"
+build
+expect "inline products: the body put back takes the full path" "$(field incremental)" 'false'
+same_as_fresh "inline products: the body put back" "$src/down" --classpath "$src/upP"
+expect "inline products: the body put back runs" "$(timeout 20 node "$work/out/main.mjs")" "one1one2"
 stop
 rm -rf "$work/out"
 
