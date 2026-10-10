@@ -535,7 +535,7 @@ impl<'w, 'a> P<'w, 'a> {
         // a final class's own `canEqual` keeps (`SyntheticMembers.equalsBody`).
         let record = self.index.tclasses.get(&c).map(|&i| {
             let tc = &self.w.prog.classes[i as usize];
-            (tc.synthesized & crate::tir::synthetic::EQUALS_CALLS_CAN_EQUAL != 0, tc.equals_order.clone())
+            (tc.synthesized & crate::tir::synthetic::EQUALS_CALLS_CAN_EQUAL != 0, tc.equals_order().to_vec())
         });
         let (calls_can_equal, order) = record.unwrap_or_else(|| (!value_class && self.w.syms.class(c).mods & mods::FINAL == 0, Vec::new()));
         let mut fields: Vec<(String, TypeId)> = if order.is_empty() { fields } else { order.iter().filter_map(|&k| fields.get(k as usize).cloned()).collect() };

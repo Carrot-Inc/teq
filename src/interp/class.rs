@@ -1553,7 +1553,7 @@ impl<'a, 't> Interp<'a, 't> {
                 _ => Some(Member::Missing),
             };
         }
-        let existing = self.tclass_field(c, |tc| tc.existing_defs.iter().find(|&&(b, _)| b == bit).map(|&(_, s)| s)).flatten()?;
+        let existing = self.tclass_field(c, |tc| tc.existing_defs().iter().find(|&&(b, _)| b == bit).map(|&(_, s)| s)).flatten()?;
         let Owner::Class(k) = self.syms().sym(existing).owner else { return None };
         match self.own_member(k, name) {
             Member::Missing => None,
@@ -1570,7 +1570,7 @@ impl<'a, 't> Interp<'a, 't> {
         let mut slots = Vec::new();
         for b in bases {
             let Some(ti) = self.tclass_index(b) else { continue };
-            let constants = self.prog().classes[ti].constants.clone();
+            let constants = self.prog().classes[ti].constants().to_vec();
             for (s, e) in constants {
                 let v = match self.prog().expr(e) {
                     TExpr::Int(v) => Value::Int(v),
@@ -1635,7 +1635,7 @@ impl<'a, 't> Interp<'a, 't> {
         } else if is_case {
             let params: Vec<SymId> = info.ctor.first().map(|cl| cl.params.iter().map(|p| p.sym).collect()).unwrap_or_default();
             let keys: Vec<FieldKey> = params.into_iter().map(|p| self.field_key(p)).collect();
-            let order = self.tclass_field(c, |tc| tc.equals_order.clone()).unwrap_or_default();
+            let order = self.tclass_field(c, |tc| tc.equals_order().to_vec()).unwrap_or_default();
             let compared: Rc<[FieldKey]> = if order.is_empty() { Rc::from(keys.clone()) } else { order.iter().filter_map(|&i| keys.get(i as usize).cloned()).collect() };
             let display = if self.is_tuple_name(&name) { Rc::from("") } else { name };
             Shape::Case(Rc::from(keys), display, compared)

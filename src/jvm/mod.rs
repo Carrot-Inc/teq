@@ -753,7 +753,7 @@ impl<'a> Cx<'a> {
         match self.tclass_of[c.idx()] {
             u32::MAX => (0..n).collect(),
             i => {
-                let order = &self.input.prog.classes[i as usize].equals_order;
+                let order = self.input.prog.classes[i as usize].equals_order();
                 if order.is_empty() { (0..n).collect() } else { order.iter().map(|&k| k as usize).collect() }
             }
         }

@@ -2498,7 +2498,7 @@ impl<'a> Emitter<'a> {
                 let n = self.sym_name(p);
                 self.line();
                 // `Memoize`'s getter of a constant val answers the constant, which no field holds.
-                let constant = tc.constants.iter().find(|&&(s, _)| s == p).map(|&(_, lit)| lit);
+                let constant = tc.constants().iter().find(|&&(s, _)| s == p).map(|&(_, lit)| lit);
                 match init.and(constant).filter(|_| self.reach.constant_vals.binary_search(&p).is_ok()) {
                     Some(e) => {
                         let _ = write!(self.out, "{}() {{ return ", n);
@@ -2984,7 +2984,7 @@ impl<'a> Emitter<'a> {
         // `Memoize`'s getter of a constant val, where a read through a receiver reaches it: the
         // literal on the prototype, for the instances and a trait's classes (before `$cls`,
         // which takes a trait's members).
-        for &(s, lit) in &tc.constants {
+        for &(s, lit) in tc.constants() {
             let read = self.reach.fields_read[s.idx()] || self.reach.init_read[s.idx()];
             if read && self.reach.constant_vals.binary_search(&s).is_ok() {
                 let field = self.field_access(s);
@@ -3144,10 +3144,10 @@ impl<'a> Emitter<'a> {
         }
         // The fields in the order `equals` by rule compares them, the primitive ones first, where
         // that is not `$fields`' (`TClass::equals_order`).
-        if has_fields && !tc.equals_order.is_empty() {
+        if has_fields && !tc.equals_order().is_empty() {
             let fields: Vec<SymId> = info.ctor.first().map(|c| c.params.iter().map(|p| p.sym).collect()).unwrap_or_default();
             let _ = write!(self.out, " {}.prototype.$eqFields = [", name);
-            for (i, &k) in tc.equals_order.iter().enumerate() {
+            for (i, &k) in tc.equals_order().iter().enumerate() {
                 if i > 0 {
                     self.out.push_str(", ");
                 }

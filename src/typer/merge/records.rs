@@ -431,12 +431,14 @@ pub(in crate::typer) fn tclass<M: Mapping + ?Sized>(m: &M, tc: &mut TClass) {
         *a = m.sym(*a);
         *b = m.sym(*b);
     }
-    for (_, s) in &mut tc.existing_defs {
-        *s = m.sym(*s);
-    }
-    for (s, e) in &mut tc.constants {
-        *s = m.sym(*s);
-        *e = m.expr(*e);
+    if let Some(l) = tc.lists.as_deref_mut() {
+        for (_, s) in &mut l.existing_defs {
+            *s = m.sym(*s);
+        }
+        for (s, e) in &mut l.constants {
+            *s = m.sym(*s);
+            *e = m.expr(*e);
+        }
     }
 }
 

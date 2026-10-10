@@ -2837,9 +2837,7 @@ impl<'a> Worker<'a> {
             parent_prelude: ast::ListRef::EMPTY,
             synthesized: 0,
             retracted_unapply: false,
-            equals_order: Vec::new(),
-            existing_defs: Vec::new(),
-            constants: Vec::new(),
+            lists: None,
             init: Vec::new(),
             methods: Vec::new(),
             ctors: Vec::new(),
@@ -2856,10 +2854,12 @@ impl<'a> Worker<'a> {
         }
         let (synthesized, existing_defs) = self.synthesized_record(c);
         tclass.synthesized = synthesized;
-        tclass.existing_defs = existing_defs;
+        if !existing_defs.is_empty() {
+            tclass.lists_mut().existing_defs = existing_defs;
+        }
         if tclass.synthesized & synthetic::EQUALS != 0 && crate::tir::equals_reorders(&self.syms, &self.types, self.interner, c) {
             let order = crate::tir::equals_order(&self.syms, &self.types, self.interner, c);
-            tclass.equals_order = order.into_iter().map(|k| k as u16).collect();
+            tclass.lists_mut().equals_order = order.into_iter().map(|k| k as u16).collect();
         }
         let Some(def_id) = def_id else {
             self.push_class_body(tclass);
@@ -3874,9 +3874,9 @@ impl<'a> Worker<'a> {
                     match crate::tir::constant_val(&self.prog, &self.syms, &self.types, &self.asts, sym, init) {
                         Some(crate::tir::ConstVal::Declared(l)) => {
                             let lit = self.literal_expr(self.types.lit_val(l));
-                            tclass.constants.push((sym, lit));
+                            tclass.lists_mut().constants.push((sym, lit));
                         }
-                        Some(crate::tir::ConstVal::Literal) => tclass.constants.push((sym, init)),
+                        Some(crate::tir::ConstVal::Literal) => tclass.lists_mut().constants.push((sym, init)),
                         None => {}
                     }
                 }

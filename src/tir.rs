@@ -908,17 +908,9 @@ pub struct TClass {
     /// Whether a case class's companion goes without the synthetic `unapply` (`unapplySeq`),
     /// withdrawn by one it declares or inherits (`Worker::synthetic_unapply_retracted`).
     pub retracted_unapply: bool,
-    /// The indices of a case class's fields in the order its synthesized `equals` compares them
-    /// (`equals_order`), where that is not their declaration order; empty otherwise.
-    pub equals_order: Vec<u16>,
-    /// For each member of the kind's set the class does not get by rule, the definition dotty's
-    /// `existingDef` takes in its place (`synthetic`'s bit, the member), which a lookup of the name
-    /// finds before the bases' other definitions.
-    pub existing_defs: Vec<(u16, SymId)>,
-    /// The constant vals of the class's body (`constant_val`) with their constants as literals,
-    /// which a getter answers whatever the constructor has run (`Memoize`); a right side that is
-    /// no literal stays in `init`, the constructor's work.
-    pub constants: Vec<(SymId, TExprId)>,
+    /// The record's lists that few classes have (`TClassLists`), apart so that a body without
+    /// them is no larger: a resident session keeps the bodies of every build since a full one.
+    pub lists: Option<Box<TClassLists>>,
     pub init: Vec<TInit>,
     pub methods: Vec<FunId>,
     /// The secondary constructors: the body of each is a block whose one statement is the
@@ -939,6 +931,41 @@ pub struct TClass {
     /// `init`, is the search where the class is defined (`Worker::implement_deferred_givens`).
     /// Not a member of the class's table, so that every lookup finds the trait's declaration.
     pub deferred_givens: Vec<(SymId, SymId)>,
+}
+
+/// The lists of a class body that most classes leave empty (`TClass::lists`).
+#[derive(Clone, Default)]
+pub struct TClassLists {
+    /// The indices of a case class's fields in the order its synthesized `equals` compares them
+    /// (`equals_order`), where that is not their declaration order; empty otherwise.
+    pub equals_order: Vec<u16>,
+    /// For each member of the kind's set the class does not get by rule, the definition dotty's
+    /// `existingDef` takes in its place (`synthetic`'s bit, the member), which a lookup of the name
+    /// finds before the bases' other definitions.
+    pub existing_defs: Vec<(u16, SymId)>,
+    /// The constant vals of the class's body (`constant_val`) with their constants as literals,
+    /// which a getter answers whatever the constructor has run (`Memoize`); a right side that is
+    /// no literal stays in `init`, the constructor's work.
+    pub constants: Vec<(SymId, TExprId)>,
+}
+
+impl TClass {
+    pub fn equals_order(&self) -> &[u16] {
+        self.lists.as_deref().map_or(&[], |l| &l.equals_order)
+    }
+
+    pub fn existing_defs(&self) -> &[(u16, SymId)] {
+        self.lists.as_deref().map_or(&[], |l| &l.existing_defs)
+    }
+
+    pub fn constants(&self) -> &[(SymId, TExprId)] {
+        self.lists.as_deref().map_or(&[], |l| &l.constants)
+    }
+
+    /// The lists, made where the class has none yet.
+    pub fn lists_mut(&mut self) -> &mut TClassLists {
+        self.lists.get_or_insert_with(Default::default)
+    }
 }
 
 /// `@jsImport("module", "name")`; the name `default` is the default export and `*` the namespace.
