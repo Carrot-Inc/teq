@@ -930,6 +930,27 @@ pub fn bodies<'s>(file: &super::TastyFile, s: &'s Stat, owner: &str, out: &mut V
 }
 
 impl TType {
+    /// Whether the type names the recursive type at `addr` by its self reference.
+    pub fn mentions_rec_this(&self, addr: Addr) -> bool {
+        match self {
+            TType::RecThis(a) => *a == addr,
+            TType::LocalType(_, prefix) | TType::LocalTerm(_, prefix) => prefix.as_deref().map_or(false, |p| p.mentions_rec_this(addr)),
+            TType::TypeRef(p, _) | TType::TermRef(p, _) | TType::This(p) | TType::Alias(p) | TType::ByName(p) | TType::Flexible(p) | TType::Rec(_, p) => p.mentions_rec_this(addr),
+            TType::Applied(f, args) => f.mentions_rec_this(addr) || args.iter().any(|a| a.mentions_rec_this(addr)),
+            TType::Bounds(a, b) | TType::BoundedAlias(a, b) | TType::And(a, b) | TType::Or(a, b) | TType::Annotated(a, b) | TType::Super(a, b) | TType::MatchCase(a, b) => {
+                a.mentions_rec_this(addr) || b.mentions_rec_this(addr)
+            }
+            TType::Refined(p, members) => p.mentions_rec_this(addr) || members.iter().any(|(_, t)| t.as_ref().map_or(false, |t| t.mentions_rec_this(addr))),
+            TType::Lambda { params, result, .. } => params.iter().any(|p| p.info.mentions_rec_this(addr)) || result.mentions_rec_this(addr),
+            TType::Match { scrutinee, bound, cases } => {
+                scrutinee.mentions_rec_this(addr)
+                    || bound.as_deref().map_or(false, |b| b.mentions_rec_this(addr))
+                    || cases.iter().any(|c| c.pattern.mentions_rec_this(addr) || c.body.mentions_rec_this(addr))
+            }
+            TType::Package(_) | TType::ParamRef(..) | TType::Const(_) | TType::Unknown(_) => false,
+        }
+    }
+
     /// Whether the type names the local type at `addr` (a pattern's type variable).
     pub fn mentions_local(&self, addr: Addr) -> bool {
         match self {

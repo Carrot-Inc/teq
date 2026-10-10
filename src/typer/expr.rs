@@ -847,7 +847,7 @@ impl<'a> Worker<'a> {
     /// An anonymous class instance has the members its body defines, which a refinement type
     /// expected of it asks for (`val s: AnyRef { def m: Int } = new AnyRef { def m = 1 }`).
     fn conforms_as_anon(&mut self, te: TExprId, expected: TypeId) -> bool {
-        if !matches!(self.types.get(expected), Type::Refined(..)) {
+        if !matches!(self.types.get(expected), Type::Refined(..) | Type::Rec(_)) {
             return false;
         }
         let mut e = te;
@@ -3389,6 +3389,7 @@ impl<'a> Worker<'a> {
             }
             Type::Union(a, b) | Type::Inter(a, b) => self.type_names_local_class(a, locals, d) || self.type_names_local_class(b, locals, d),
             Type::Refined(p, _) => self.type_names_local_class(p, locals, d),
+            Type::Rec(body) => self.type_names_local_class(body, locals, d),
             Type::Lambda(_, body) | Type::Poly(_, body) => self.type_names_local_class(body, locals, d),
             _ => false,
         }

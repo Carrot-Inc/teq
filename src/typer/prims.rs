@@ -1639,7 +1639,7 @@ impl<'a> Worker<'a> {
                     _ => None,
                 }
             }
-            Type::Term(_) | Type::Select(..) | Type::This(_) | Type::Refined(..) => match self.dependent_underlying(t) {
+            Type::Term(_) | Type::Select(..) | Type::This(_) | Type::Refined(..) | Type::Rec(_) => match self.dependent_underlying(t) {
                 Some(u) if u != t => self.found_primitive_at(u, depth + 1),
                 _ => None,
             },

@@ -1309,6 +1309,8 @@ pub struct Worker<'a> {
     pub body_depth: u32,
     /// The nesting of the type printer, which cuts a type short past a depth.
     pub show_depth: std::cell::Cell<u32>,
+    /// The `Rec` binders the type being shown is inside, which name its `RecThis` (`z1`, `z2`).
+    pub show_recs: std::cell::Cell<u32>,
     pub dep_budget: u32,
     /// The member the outermost lookup under way asked for, which a cycle is reported at.
     pub dep_root: (TypeId, Name),
@@ -1366,6 +1368,8 @@ pub struct Worker<'a> {
     pub other_view_memos: ViewMemos,
     /// The type variables of the match type case being resolved, by name.
     pub case_binders: Vec<(Name, TypeId)>,
+    /// The refinements whose members are being resolved, innermost last (`resolve::RefineScope`).
+    pub refine_scopes: Vec<resolve::RefineScope>,
     /// The type the last typed pattern (`x: T`) gave its binder, which the enclosing `Bind`
     /// reads: the ascription with its wildcard arguments inferred from the scrutinee.
     pub last_typed_pattern: Option<(crate::ast::PatId, TypeId)>,
@@ -2299,6 +2303,7 @@ impl<'a> Worker<'a> {
             lookups: Vec::new(),
             body_depth: 0,
             show_depth: std::cell::Cell::new(0),
+            show_recs: std::cell::Cell::new(0),
             dep_budget: 0,
             dep_root: (ERROR, crate::names::EMPTY),
             dep_exhausted: false,
@@ -2320,6 +2325,7 @@ impl<'a> Worker<'a> {
             matches: matchtypes::MatchState::default(),
             other_view_memos: Default::default(),
             case_binders: Vec::new(),
+            refine_scopes: Vec::new(),
             last_typed_pattern: None,
             refutable_is_error: false,
             applied_extension: None,
@@ -2618,6 +2624,7 @@ impl<'a> Worker<'a> {
             dep_depth: Default::default(),
             body_depth: Default::default(),
             show_depth: Default::default(),
+            show_recs: Default::default(),
             dep_budget: self.dep_budget,
             dep_root: (ERROR, crate::names::EMPTY),
             dep_exhausted: Default::default(),
@@ -2640,6 +2647,7 @@ impl<'a> Worker<'a> {
             matches: Default::default(),
             other_view_memos: Default::default(),
             case_binders: Default::default(),
+            refine_scopes: Default::default(),
             last_typed_pattern: Default::default(),
             refutable_is_error: false,
             applied_extension: None,

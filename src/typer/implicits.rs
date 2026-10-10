@@ -2488,6 +2488,7 @@ impl<'a> Worker<'a> {
         match self.types.get(t) {
             Type::Inter(a, b) => self.knot_parts(a, out) && self.knot_parts(b, out),
             Type::Refined(parent, _) => self.knot_parts(parent, out),
+            Type::Rec(body) => self.knot_parts(body, out),
             Type::Class(c, _) => {
                 if !out.contains(&c) {
                     out.push(c);

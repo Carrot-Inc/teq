@@ -225,6 +225,7 @@ impl<'a> Worker<'a> {
             Type::Member(p, n) => {
                 match self.types.get(p) {
                     Type::Term(_) | Type::Select(..) | Type::This(_) => self.show_path(p, out),
+                    Type::RecThis(_) => self.show_into(p, out, false),
                     Type::Class(c, args) if self.syms.class(c).kind == ClassKind::Object => {
                         out.push_str(self.interner.get(self.syms.class(c).name));
                         self.show_args(args, out);
@@ -292,6 +293,19 @@ impl<'a> Worker<'a> {
                     out.push(')');
                 }
             }
+            // `{z1 => AnyRef{type T; type U = z1.T}}`, as dotty's `PlainPrinter` shows a `RecType`.
+            Type::Rec(b) => {
+                let n = self.show_recs.get() + 1;
+                self.show_recs.set(n);
+                out.push_str(&format!("{{z{} => ", n));
+                self.show_into(b, out, false);
+                out.push('}');
+                self.show_recs.set(n - 1);
+            }
+            Type::RecThis(k) => match self.show_recs.get().checked_sub(k) {
+                Some(n) if n > 0 => out.push_str(&format!("z{}", n)),
+                _ => out.push_str("<this>"),
+            },
             Type::Refined(..) if self.show_named_function(t, out, nested) => {}
             Type::Refined(..) => {
                 let (parent, rs) = self.types.refinements_of(t);

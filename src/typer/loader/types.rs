@@ -24,11 +24,33 @@ pub struct MapCx {
     /// How many arguments the type constructor being mapped is applied to, which gives a
     /// Java class its arity.
     applied_to: Option<usize>,
+    /// The recursive types being mapped, innermost last, by address: a `RECthis` (or a
+    /// refinement tree's own `this`) is `RecThis` of its index from the end.
+    recs: Vec<Addr>,
+}
+
+/// The recursive type a prefix is the self reference of: `RECthis`, or a refinement tree's own
+/// `THIS`.
+fn rec_self(prefix: &TType) -> Option<Addr> {
+    match prefix {
+        TType::RecThis(addr) => Some(*addr),
+        TType::This(inner) => match &**inner {
+            TType::RecThis(addr) => Some(*addr),
+            _ => None,
+        },
+        _ => None,
+    }
 }
 
 impl MapCx {
     pub fn new(file: u32) -> MapCx {
-        MapCx { file, binders: Vec::new(), term_binders: Vec::new(), applied_to: None }
+        MapCx { file, binders: Vec::new(), term_binders: Vec::new(), applied_to: None, recs: Vec::new() }
+    }
+
+    /// The `RecThis` of the recursive type at `addr`, where it is being mapped.
+    fn rec_this(&self, addr: Addr) -> Option<Type> {
+        let at = self.recs.iter().rposition(|&a| a == addr)?;
+        Some(Type::RecThis((self.recs.len() - 1 - at) as u32))
     }
 }
 
@@ -176,7 +198,25 @@ impl<'a> Worker<'a> {
                     None => self.blocked(cx, Shape::Refinement, t),
                 }
             }
-            TType::Rec(..) | TType::RecThis(_) => self.blocked(cx, Shape::Recursive, t),
+            // `RECtype` over a refined chain (or a refinement tree whose members name it), its
+            // self references `RecThis`: closed over as the source's is (`RecType.closeOver`).
+            TType::Rec(addr, body) => {
+                cx.recs.push(*addr);
+                let mapped = self.map_type(cx, body);
+                cx.recs.pop();
+                if mapped == ERROR || self.types.contains_error(mapped) {
+                    return mapped;
+                }
+                if self.types.refers_to_rec(mapped, 0) {
+                    self.types.mk(Type::Rec(mapped))
+                } else {
+                    self.types.open_rec(mapped, ANY)
+                }
+            }
+            TType::RecThis(addr) => match cx.rec_this(*addr) {
+                Some(this) => self.types.mk(this),
+                None => self.blocked(cx, Shape::Recursive, t),
+            },
             TType::Super(..) => self.blocked(cx, Shape::SuperType, t),
             TType::Lambda { kind: LambdaKind::Type, binder, params, result } => {
                 let tasty = self.tasty(cx.file);
@@ -324,6 +364,14 @@ impl<'a> Worker<'a> {
         if Decoder::new(&tasty).tag_at(addr) == crate::tasty::tags::BIND {
             return WILD;
         }
+        // A refinement tree's member named by its definition through the refinement's `this`.
+        if let Some(this) = prefix.and_then(rec_self).and_then(|a| cx.rec_this(a)) {
+            if let Some(n) = Decoder::new(&tasty).name_at(addr) {
+                let name = self.intern_name(&tasty, n);
+                let this = self.types.mk(this);
+                return self.types.mk(Type::Member(this, name));
+            }
+        }
         let kind = Decoder::new(&tasty).local_type_kind(addr);
         let shape = match kind {
             LocalKind::AbstractMember => match prefix {
@@ -426,14 +474,15 @@ impl<'a> Worker<'a> {
                 Some(self.this_prefix(c))
             }
             TType::TermRef(..) | TType::LocalTerm(..) | TType::ParamRef(..) => self.path_singleton(cx, prefix),
-            TType::RecThis(_) | TType::Rec(..) => None,
+            TType::RecThis(addr) => cx.rec_this(*addr).map(|this| self.types.mk(this)),
+            TType::Rec(..) => None,
             other => {
                 // A class through a prefix (`o.Inner[A]#T`, dotty's `TypeRef(o, Inner)`) is a
                 // prefix with its own: the member is seen from it.
                 let ty = self.map_type(cx, other);
                 let ty = self.deref_alias(ty);
                 match self.types.get(ty) {
-                    Type::Class(..) | Type::Nested(..) | Type::Refined(..) => Some(ty),
+                    Type::Class(..) | Type::Nested(..) | Type::Refined(..) | Type::Rec(_) => Some(ty),
                     _ => None,
                 }
             }
@@ -675,8 +724,18 @@ impl<'a> Worker<'a> {
             let pkg = self.resolve_package(cx, p);
             return self.type_in_pkg(cx, pkg, name, t);
         }
+        // A member of the recursive type being mapped, by its self reference: `RecThis.T`, as
+        // the source makes it inside the refinement.
+        if let Some(addr) = rec_self(prefix) {
+            return match cx.rec_this(addr) {
+                Some(this) => {
+                    let this = self.types.mk(this);
+                    self.types.mk(Type::Member(this, name))
+                }
+                None => self.blocked(cx, Shape::Recursive, t),
+            };
+        }
         match prefix {
-            TType::RecThis(_) => self.blocked(cx, Shape::Recursive, t),
             other => match self.scope_of(cx, other) {
                 Some(Scope::Class(c)) => {
                     let found = match self.member_type_of(c, name) {

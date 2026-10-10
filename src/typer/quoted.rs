@@ -533,7 +533,7 @@ impl<'a> Worker<'a> {
                 self.collect_type_params(a, out);
                 self.collect_type_params(b, out);
             }
-            Type::Select(p, _) | Type::Member(p, _) | Type::Match(p, _) => self.collect_type_params(p, out),
+            Type::Select(p, _) | Type::Member(p, _) | Type::Match(p, _) | Type::Rec(p) => self.collect_type_params(p, out),
             Type::Refined(p, _) => {
                 let (_, rs) = self.types.refinements_of(t);
                 self.collect_type_params(p, out);

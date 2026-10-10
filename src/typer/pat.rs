@@ -1717,6 +1717,7 @@ impl<'a> Worker<'a> {
             Type::This(c) => Some(self.class_erasure(c)),
             Type::Poly(_, body) => self.bound_erasure(body, depth + 1),
             Type::Refined(parent, _) => self.bound_erasure(parent, depth + 1),
+            Type::Rec(body) => self.bound_erasure(body, depth + 1),
             Type::Term(_) | Type::Select(..) | Type::Match(..) | Type::Alias(..) => match self.dependent_underlying(t) {
                 Some(u) if u != t => self.bound_erasure(u, depth + 1),
                 _ => Some(object),
@@ -1813,6 +1814,7 @@ impl<'a> Worker<'a> {
                 self.array_upper_bound(union, 0).is_none()
             }
             Type::Refined(parent, _) => self.generic_array_element_at(parent, depth + 1),
+            Type::Rec(body) => self.generic_array_element_at(body, depth + 1),
             Type::Term(_) | Type::Select(..) | Type::This(_) | Type::Alias(..) => match self.dependent_underlying(t) {
                 Some(u) if u != t => self.generic_array_element_at(u, depth + 1),
                 _ => false,
@@ -1850,6 +1852,7 @@ impl<'a> Worker<'a> {
             }
             Type::BoundedWild(_, hi) => self.array_upper_bound(hi, depth + 1),
             Type::Refined(parent, _) => self.array_upper_bound(parent, depth + 1),
+            Type::Rec(body) => self.array_upper_bound(body, depth + 1),
             Type::Union(a, b) => {
                 let (x, y) = (self.array_upper_bound(a, depth + 1), self.array_upper_bound(b, depth + 1));
                 if x == y { x } else { None }
@@ -1908,6 +1911,7 @@ impl<'a> Worker<'a> {
                 hi == t || self.may_be_null(hi, depth + 1)
             }
             Type::Refined(parent, _) => self.may_be_null(parent, depth + 1),
+            Type::Rec(body) => self.may_be_null(body, depth + 1),
             Type::Term(_) | Type::Select(..) | Type::This(_) | Type::Match(..) | Type::Alias(..) => match self.dependent_underlying(t) {
                 Some(u) if u != t => self.may_be_null(u, depth + 1),
                 _ => true,
@@ -2050,7 +2054,7 @@ impl<'a> Worker<'a> {
                 let upper = self.app_param_upper(p, args)?;
                 self.effective_class(upper, depth)
             }
-            Type::Match(..) | Type::Alias(..) | Type::This(_) | Type::Term(_) | Type::Select(..) | Type::Member(..) | Type::AppMember(..) | Type::Decl(_) | Type::Refined(..) => {
+            Type::Match(..) | Type::Alias(..) | Type::This(_) | Type::Term(_) | Type::Select(..) | Type::Member(..) | Type::AppMember(..) | Type::Decl(_) | Type::Refined(..) | Type::Rec(_) => {
                 let under = self.dependent_underlying(t)?;
                 self.effective_class(under, depth)
             }
@@ -2225,6 +2229,7 @@ impl<'a> Worker<'a> {
             }
             // The refinement itself is not checked, as scalac tests the class alone.
             Type::Refined(parent, _) => return self.test_for(parent, sty, span, true),
+            Type::Rec(body) => return self.test_for(body, sty, span, true),
             Type::Lit(l) => {
                 let v = self.types.lit_val(l);
                 TypeTest::Value(self.literal_expr(v))

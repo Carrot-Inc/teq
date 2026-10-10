@@ -1048,6 +1048,8 @@ refined_aux_givens
 refined_projection_patterns
 refinement_alias_meets_bounds
 refinement_member_variance
+refinement_member_scope
+refinement_nested_scope
 reflect_annotation_identity
 reflect_instantiation
 reflect_nested_secondary

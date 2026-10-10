@@ -1585,6 +1585,7 @@ impl<'a> Worker<'a> {
                 self.contains_intersection(upper, depth + 1)
             }
             Type::Refined(parent, _) => self.contains_intersection(parent, depth + 1),
+            Type::Rec(body) => self.contains_intersection(body, depth + 1),
             _ => false,
         }
     }
@@ -1616,6 +1617,7 @@ impl<'a> Worker<'a> {
                 self.receiver_type(upper, depth + 1)
             }
             Type::Refined(parent, _) => self.receiver_type(parent, depth + 1),
+            Type::Rec(body) => self.receiver_type(body, depth + 1),
             Type::Inter(a, b) => {
                 let (ra, rb) = (self.receiver_type(a, depth + 1), self.receiver_type(b, depth + 1));
                 let (Some(ra), Some(rb)) = (ra, rb) else { return ra.or(rb) };

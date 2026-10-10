@@ -355,6 +355,7 @@ impl<'a> Worker<'a> {
                 Type::Param(p) => todo.push(self.syms.tparam(p).upper),
                 Type::Inter(a, b) => todo.extend([b, a]),
                 Type::Refined(p, _) => todo.push(p),
+                Type::Rec(body) => todo.push(body),
                 _ => {}
             }
         }

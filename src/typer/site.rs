@@ -522,6 +522,7 @@ impl<'a> Worker<'a> {
                 Some(if self.compare_erased(a, b) != std::cmp::Ordering::Greater { a } else { b })
             }
             Type::Refined(parent, _) => self.stable_erasure(parent),
+            Type::Rec(body) => self.stable_erasure(body),
             _ => None,
         }
     }

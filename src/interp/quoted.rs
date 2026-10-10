@@ -4155,10 +4155,11 @@ impl<'a, 't> Interp<'a, 't> {
                 if ret == t { SymRef::None } else { self.type_symbol(ret) }
             }
             Type::Lambda(_, b) | Type::Poly(_, b) => self.type_symbol(b),
-            Type::Refined(p, _) | Type::AppMember(p, _) => self.type_symbol(p),
+            Type::Refined(p, _) | Type::AppMember(p, _) | Type::Rec(p) => self.type_symbol(p),
             Type::Nested(_, c) => self.type_symbol(c),
             Type::Blocked(_) => self.pkg_form(t).map_or(SymRef::None, |(_, p)| p),
-            Type::Member(..)
+            Type::RecThis(_)
+            | Type::Member(..)
             | Type::Union(..)
             | Type::Inter(..)
             | Type::Var(_)

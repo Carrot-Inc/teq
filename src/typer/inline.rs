@@ -1524,7 +1524,7 @@ impl<'a> Worker<'a> {
         self.inline.copies.push((copied, s));
         // The copy stands where the proxy stood, so it carries the proxy's type: a mirror
         // passed for a `Mirror.ProductOf[T]` keeps the refinement its value's own type lacks.
-        if self.types.has_paths(arg.ty) || matches!(self.types.get(arg.ty), Type::Refined(..)) {
+        if self.types.has_paths(arg.ty) || matches!(self.types.get(arg.ty), Type::Refined(..) | Type::Rec(_)) {
             self.prog.set_type(copied, arg.ty);
         }
         Some((copied, arg.ty))
@@ -1614,6 +1614,7 @@ impl<'a> Worker<'a> {
                 self.own_classes(b, out);
             }
             Type::Refined(parent, _) => self.own_classes(parent, out),
+            Type::Rec(body) => self.own_classes(body, out),
             _ => {
                 let under = self.dealias(t);
                 if under != t {

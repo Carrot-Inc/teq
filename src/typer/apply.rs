@@ -5623,7 +5623,8 @@ impl<'a> Worker<'a> {
             return (te, ty);
         }
         if member.is_none() {
-            if let Some(refined) = self.refined_term(recv_ty, name) {
+            let prefix = self.path_of(recv).unwrap_or(recv_ty);
+            if let Some(refined) = self.refined_term_through(recv_ty, name, prefix) {
                 let sig = self.refinement_sig(refined);
                 return self.apply_structural(recv, recv_ty, sig, name, targs, lists, span, expected);
             }

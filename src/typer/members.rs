@@ -9,7 +9,7 @@ use crate::symbols::*;
 use crate::types::*;
 
 /// What a type member is through a prefix.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub enum MemberInfo {
     Alias(TypeId),
     Bounds(TypeId, TypeId),
@@ -444,6 +444,8 @@ impl<'a> Worker<'a> {
                 self.member_in_class(k, EMPTY_LIST, name, prefix)
             }),
             Type::Class(c, args) => self.member_in_class(c, args, name, prefix),
+            // The refinement class's `this` while the refinement's members are resolved.
+            Type::RecThis(k) => self.refine_scope_member(k, name, prefix),
             _ => {
                 let under = self.path_underlying(prefix);
                 self.member_in_type(under, name, prefix)
@@ -500,6 +502,10 @@ impl<'a> Worker<'a> {
     fn member_in_type(&mut self, t: TypeId, name: Name, prefix: TypeId) -> Option<MemberInfo> {
         let t = self.dealias(t);
         match self.types.get(t) {
+            Type::Rec(body) => {
+                let found = self.member_in_type(body, name, prefix)?;
+                Some(self.opened_member(found, prefix))
+            }
             Type::Refined(parent, r) => match self.types.refinement(r) {
                 Refinement::Alias(n, rhs) if n == name => Some(MemberInfo::Alias(rhs)),
                 // A refinement's bounds narrow the member its parent has (a `RefinedType`'s
@@ -556,6 +562,57 @@ impl<'a> Worker<'a> {
                 self.member_in_type(j, name, prefix)
             }
             _ => None,
+        }
+    }
+
+    pub(super) fn member_in_parent_of_scope(&mut self, parent: TypeId, name: Name, prefix: TypeId) -> Option<MemberInfo> {
+        self.member_in_type(parent, name, prefix)
+    }
+
+    /// A member found in the body of a `Rec`, seen through `prefix`: its `RecThis(0)` is the
+    /// prefix (`Types.findMember`'s `goRec`, `substRecThis(rt, pre)`), a path or, where the
+    /// member is selected from a type, that type (a projection), and each member the prefix then
+    /// fixes is replaced by what it equals.
+    fn opened_member(&mut self, info: MemberInfo, prefix: TypeId) -> MemberInfo {
+        let open = |w: &mut Self, t: TypeId| w.opened_rec(t, prefix);
+        match info {
+            MemberInfo::Alias(t) => MemberInfo::Alias(open(self, t)),
+            MemberInfo::Bounds(lo, hi) => {
+                let lo = open(self, lo);
+                MemberInfo::Bounds(lo, open(self, hi))
+            }
+        }
+    }
+
+    /// The body of a `Rec` opened at `prefix`, each member the prefix fixes replaced by what it
+    /// equals.
+    pub(super) fn opened_rec(&mut self, body: TypeId, prefix: TypeId) -> TypeId {
+        let opened = self.types.open_rec(body, prefix);
+        if opened == body { body } else { self.fix_members_through(opened, prefix) }
+    }
+
+    /// `t` with each member seen through `prefix` replaced by what the prefix makes of it: an
+    /// opened refinement's `prefix.T` for its own `RecThis(0).T`.
+    fn fix_members_through(&mut self, t: TypeId, prefix: TypeId) -> TypeId {
+        if !self.types.has_paths(t) {
+            return t;
+        }
+        match self.types.get(t) {
+            Type::Member(p, n) if p == prefix => self.member_type(prefix, n).unwrap_or(t),
+            _ => {
+                let types = self.types.clone();
+                let mut parts = Vec::new();
+                types.map_parts(t, &mut |x| {
+                    parts.push(x);
+                    x
+                });
+                let fixed: Vec<TypeId> = parts.iter().map(|&x| self.fix_members_through(x, prefix)).collect();
+                if fixed == parts {
+                    return t;
+                }
+                let mut next = fixed.into_iter();
+                types.map_parts(t, &mut |x| next.next().unwrap_or(x))
+            }
         }
     }
 
@@ -1927,9 +1984,17 @@ impl<'a> Worker<'a> {
 
     /// The structural member `name` of a refined type, with the refinement chain it sits in.
     pub fn refined_term(&mut self, t: TypeId, name: Name) -> Option<Refinement> {
+        let t = self.deref(t);
+        self.refined_term_through(t, name, t)
+    }
+
+    /// The structural member `name` of the refined type `t` selected through `prefix`, the
+    /// receiver's path or `t`: a recursive refinement is opened at it (`goRec`).
+    pub fn refined_term_through(&mut self, t: TypeId, name: Name, prefix: TypeId) -> Option<Refinement> {
         let mut t = self.deref(t);
         loop {
             match self.types.get(t) {
+                Type::Rec(body) => t = self.opened_rec(body, prefix),
                 Type::Refined(p, r) => {
                     let refinement = self.types.refinement(r);
                     if matches!(refinement, Refinement::Term(n, ..) | Refinement::Val(n, ..) if n == name) {

@@ -430,6 +430,7 @@ impl<'a> Worker<'a> {
             Type::Class(c, _) => Some(c),
             Type::Nested(_, class) => self.sig_erased_class(class),
             Type::Refined(p, _) => self.sig_erased_class(p),
+            Type::Rec(body) => self.sig_erased_class(body),
             Type::Param(p) | Type::AppParam(p, _) => {
                 let u = self.syms.tparam(p).upper;
                 if u == d { None } else { self.sig_erased_class(u) }
