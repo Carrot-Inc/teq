@@ -2912,8 +2912,33 @@ impl<'c> Copier<'c> {
                 TExpr::CallMethod(r, s, self.list(t, args))
             }
             TExpr::CallClosure(f, args) => {
+                // The application of a macro's parameter in a quote (`'{ f(1) }`, Focus's
+                // `lambda(using c)`), whose proxy the run fills with its argument: a lambda argument
+                // applied is its body with the parameters replaced, as `InlineTyper.typedApply`
+                // reduces the application where the expansion puts the argument (`BetaReduce`).
+                let filled = self.stored.is_none() && matches!(t.prog.expr(f), TExpr::Local(s) if self.params.contains_key(&s));
                 let f = self.expr(t, f);
-                TExpr::CallClosure(f, self.list(t, args))
+                let l = self.list(t, args);
+                if filled {
+                    let items = t.prog.expr_list(l).to_vec();
+                    if let Some(reduced) = t.beta_reduce(f, &items) {
+                        // A pure constant the reduction leaves is its literal (`constToLiteral`).
+                        let reduced = match t.fold_constant(reduced) {
+                            Some(v) if t.is_pure_value(reduced) => {
+                                let lit = t.literal_expr(v);
+                                t.prog.copy_span(e, lit);
+                                lit
+                            }
+                            _ => reduced,
+                        };
+                        if let Some(ty) = recorded {
+                            let ty = self.ty(t, ty);
+                            self.set_copy_type(t, reduced, ty);
+                        }
+                        return reduced;
+                    }
+                }
+                TExpr::CallClosure(f, l)
             }
             TExpr::New(c, args) if self.stored_class_body(c).is_some() => {
                 let nc = self.stored_class(t, c);

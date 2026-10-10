@@ -2664,7 +2664,6 @@ impl<'a> Worker<'a> {
                     let call = match self.beta_reduce(te, &args) {
                         Some(reduced) => reduced,
                         None => {
-                            self.note_quoted_application(te);
                             let l = self.prog.list(&args);
                             let call = self.prog.add(TExpr::CallClosure(te, l));
                             if let Some(targs) = &poly_targs {
@@ -2699,7 +2698,6 @@ impl<'a> Worker<'a> {
                     let call = match self.beta_reduce(f[0], &args) {
                         Some(reduced) => reduced,
                         None => {
-                            self.note_quoted_application(f[0]);
                             let l = self.prog.list(&args);
                             let call = self.prog.add(TExpr::CallClosure(f[0], l));
                             if let Some(targs) = &poly_targs {

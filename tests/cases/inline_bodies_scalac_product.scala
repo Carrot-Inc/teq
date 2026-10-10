@@ -8,7 +8,7 @@
 // tests is consumed; a generic class's match-type alias is seen from the receiver; a quote applying an
 // inline parameter sees the argument's closure reduced (monocle's `Focus`). scalac prints the lines
 // of the .expected file.
-import inlinebodies.{Bodies, Counter, Focus, K0}
+import inlinebodies.{Bodies, Counter, Focus, K0, Quoted}
 var effects = 0
 case class P(a: Int, b: String)
 def effect(n: Int): Int = { effects += 1; n }
@@ -31,3 +31,6 @@ def effect(n: Int): Int = { effects += 1; n }
   println(K0.count[Option, P])
   println(Focus[P](_.a))
   println(Bodies.value({ def y: Int = 3; 5 }))
+  println(Quoted.value(3, x => x + 1))
+  println(Quoted.code(1 + 2, x => x + 1))
+  println(Quoted.shape(x => x + 1))

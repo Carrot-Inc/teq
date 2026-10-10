@@ -807,6 +807,7 @@ macro_quote_inline_deferred
 macro_quote_pattern_result
 macro_quote_refined
 macro_quoted_inline_application
+macro_quoted_parameter_application
 macro_quotes_qualifier
 macro_receiver_copy
 macro_records

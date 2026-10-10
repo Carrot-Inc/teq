@@ -1,8 +1,8 @@
 // A quote that applies an inline parameter (`'{ (c: Ctx) ?=> lambda(using c) }`, monocle's `Focus`):
 // the expansion reduces the argument's closure there before the macro reads the quote
 // (`InlineTyper.typedApply`'s `BetaReduce`), so the macro sees a lambda whose body selects the field.
-// The stored body names the parameter's proxy in its quotes: the check holds the method for the
-// retype path, which types the quote with the argument in place.
+// The stored body names the parameter's proxy in its quotes, which a run fills with the argument and
+// reduces there (the quote's copy, `Copier`).
 import scala.quoted.*
 trait Ctx
 class Mk[S]:
