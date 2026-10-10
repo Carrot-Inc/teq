@@ -2402,6 +2402,9 @@ impl<'c> Copier<'c> {
         let receiver = self.stored.as_mut().and_then(|s| s.this.take());
         self.class_depth += 1;
         self.suspended.push((receiver, t.env.frames.len()));
+        // The walk does not enter a class's bodies: they are copied whole, no branch left for a
+        // demand that would copy it where `this` is the receiver again (`Copier::class`).
+        let deferring = std::mem::replace(&mut self.deferring, false);
         for &k in &graph {
             let nk = self.classes[&k];
             let Some(ktc) = self.stored_class_body(k).cloned() else {
@@ -2420,6 +2423,7 @@ impl<'c> Copier<'c> {
             self.fill_class(t, k, nk, ktc);
             t.env.frames.truncate(frame);
         }
+        self.deferring = deferring;
         self.suspended.pop();
         self.class_depth -= 1;
         if let Some(s) = self.stored.as_mut() {
