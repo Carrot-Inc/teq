@@ -963,7 +963,6 @@ fn test_js_configuration(state: &Arc<State>, export: &Arc<Export>, request: &Req
         }
     };
     let mut prints: Vec<runner::Fingerprint> = Vec::new();
-    let mut missing = 0;
     for (i, f) in found.iter().enumerate() {
         match f {
             Some(info) => {
@@ -971,15 +970,15 @@ fn test_js_configuration(state: &Arc<State>, export: &Arc<Export>, request: &Req
                     prints.push(runner::Fingerprint { framework: i, index: j, kind: *kind, module: *module, name: name.clone(), no_args: *no_args });
                 }
             }
-            // A framework the export names that the link does not hold leaves its suites unrun:
-            // never a pass.
+            // A framework the export names that the link does not hold is left out, as sbt-scalajs's
+            // `loadedTestFrameworks` keeps only those its link answers for; teq links TASTy alone,
+            // so one whose jar is Scala 2's IR alone (Scala.js's JUnit runtime, which munit brings)
+            // is never in it, and the note says its suites, if any, do not run.
             None => {
-                reply.err(&format!("teq: {}: the test framework {} is not in the test link\n", key, classes[i]));
-                missing += 1;
+                reply.err(&format!("teq: note: {}: the test framework {} is not in the test link (its jar holds no TASTy): its suites, if any, do not run\n", key, classes[i]));
             }
         }
     }
-    let incomplete = i32::from(missing > 0);
     let defined = suites::defined(&candidates, &prints);
     if defined.is_empty() {
         let _ = run.finish();
@@ -991,7 +990,7 @@ fn test_js_configuration(state: &Arc<State>, export: &Arc<Export>, request: &Req
             out(&format!("{}\n", d));
         }
         return match run.finish() {
-            Ok(()) => incomplete,
+            Ok(()) => 0,
             Err(e) => {
                 reply.err(&format!("teq: {}: {}\n", key, e));
                 1
@@ -1026,10 +1025,10 @@ fn test_js_configuration(state: &Arc<State>, export: &Arc<Export>, request: &Req
         let _ = run.finish();
         let why = if asked.changed { "no suite depends on what changed" } else { "no suite to run" };
         reply.out(&format!("{}: {}\n", key, why));
-        if every && incomplete == 0 {
+        if every {
             record(state);
         }
-        return incomplete;
+        return 0;
     }
     let mut tally = Tally::default();
     let run_started = Instant::now();
@@ -1050,12 +1049,12 @@ fn test_js_configuration(state: &Arc<State>, export: &Arc<Export>, request: &Req
     let ms = run_started.elapsed().as_millis() as u64;
     match result {
         Ok(()) => {
-            if every && incomplete == 0 {
+            if every {
                 record(state);
             }
             out(&summary(key, selected.len(), &tally, ms, built_ms));
             write_events(asked, key, &tally, reply);
-            i32::from(tally.failed() > 0).max(incomplete)
+            i32::from(tally.failed() > 0)
         }
         Err(e) => {
             reply.err(&format!("teq: {}: {}\n", key, e));

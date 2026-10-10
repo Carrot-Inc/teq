@@ -1656,8 +1656,8 @@ else
   fail "scalajs tests: an early end: $out"
 fi
 out=$(jstest missing)
-if [ $? = 1 ] && [[ "$out" == *"the test framework org.scalatest.tools.Framework is not in the test link"* ]] && [[ "$out" == *"missing/test: 1 suite, 2 passed, 0 failed"* ]]; then
-  pass "scalajs tests: a framework the link does not hold fails the run, the other's suites run"
+if [ $? = 0 ] && [[ "$out" == *"note: missing/test: the test framework org.scalatest.tools.Framework is not in the test link"* ]] && [[ "$out" == *"missing/test: 1 suite, 2 passed, 0 failed"* ]]; then
+  pass "scalajs tests: a framework the link does not hold is left out with a note, as sbt-scalajs leaves it out, the other's suites run"
 else
   fail "scalajs tests: a missing framework: $out"
 fi
