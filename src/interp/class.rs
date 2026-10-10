@@ -1613,6 +1613,14 @@ impl<'a, 't> Interp<'a, 't> {
         })
     }
 
+    /// The shape of `c`, made once, borrowed: a test of its kind copies none of its fields.
+    pub(super) fn shape_ref(&mut self, c: ClassId) -> &Shape {
+        if self.shapes[c.idx()].is_none() {
+            self.shape(c);
+        }
+        self.shapes[c.idx()].as_ref().expect("the shape is made")
+    }
+
     pub(super) fn shape(&mut self, c: ClassId) -> Shape {
         if let Some(s) = &self.shapes[c.idx()] {
             return s.clone();

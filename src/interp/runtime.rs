@@ -6,6 +6,22 @@ use super::value::*;
 use super::*;
 use crate::symbols::ClassKind;
 
+/// The members of `Product` and `Equals` the rule's product functions read a class's definition of,
+/// by the bit `Interp::product_defs` keeps; any other name is asked for at once.
+const PRODUCT_DEFS: [(u16, crate::intern::Name); 6] = [
+    (1, crate::names::PRODUCT_ITERATOR),
+    (2, crate::names::PRODUCT_ARITY),
+    (4, crate::names::PRODUCT_ELEMENT),
+    (8, crate::names::PRODUCT_PREFIX),
+    (16, crate::names::PRODUCT_ELEMENT_NAME),
+    (32, crate::names::CAN_EQUAL_METHOD),
+];
+const PRODUCT_DEFS_KNOWN: u16 = 1 << 15;
+
+fn product_def_bit(name: crate::intern::Name) -> u16 {
+    PRODUCT_DEFS.iter().find(|&&(_, n)| n == name).map_or(u16::MAX, |&(bit, _)| bit)
+}
+
 impl<'a, 't> Interp<'a, 't> {
     pub(super) fn to_str(&mut self, v: &Value) -> R<String> {
         Ok(match v {
@@ -169,11 +185,8 @@ impl<'a, 't> Interp<'a, 't> {
         let mut out = if display.is_empty() { String::new() } else { self.product_prefix(v)? };
         out.push('(');
         let class = o.class;
-        let defined = |it: &mut Self, n: &str| {
-            let name = it.typer.interner.intern(n);
-            it.defined_member(class, name).is_some()
-        };
-        if defined(self, "productIterator") {
+        let defined = |it: &mut Self, n| it.defined_member(class, n).is_some();
+        if defined(self, crate::names::PRODUCT_ITERATOR) {
             let iterator = self.call_by_name(v.clone(), "productIterator", Vec::new())?;
             let mut first = true;
             while self.call_by_name(iterator.clone(), "hasNext", Vec::new())?.as_bool().unwrap_or(false) {
@@ -183,7 +196,7 @@ impl<'a, 't> Interp<'a, 't> {
                 }
                 out.push_str(&self.to_str(&x)?);
             }
-        } else if defined(self, "productArity") || defined(self, "productElement") {
+        } else if defined(self, crate::names::PRODUCT_ARITY) || defined(self, crate::names::PRODUCT_ELEMENT) {
             let arity = self.product_arity(v)?;
             for i in 0..arity {
                 if i > 0 {
@@ -209,6 +222,31 @@ impl<'a, 't> Interp<'a, 't> {
     /// over what the rule gives a product (dotty's `existingDef`): not `Product`'s or `Equals`'s
     /// own, nor a template without a body.
     pub(super) fn defined_member(&mut self, c: ClassId, name: crate::intern::Name) -> Option<Member> {
+        if self.product_defs(c) & product_def_bit(name) == 0 {
+            return None;
+        }
+        self.defined_member_now(c, name)
+    }
+
+    /// Which of the members `PRODUCT_DEFS` names `c` defines (`defined_member_now`), by bit,
+    /// computed once per class: the rule's `toString`, `equals` and `hashCode` ask for them at
+    /// every call.
+    fn product_defs(&mut self, c: ClassId) -> u16 {
+        let known = self.product_defs[c.idx()];
+        if known != 0 {
+            return known;
+        }
+        let mut bits = PRODUCT_DEFS_KNOWN;
+        for (bit, name) in PRODUCT_DEFS {
+            if self.defined_member_now(c, name).is_some() {
+                bits |= bit;
+            }
+        }
+        self.product_defs[c.idx()] = bits;
+        bits
+    }
+
+    fn defined_member_now(&mut self, c: ClassId, name: crate::intern::Name) -> Option<Member> {
         let (product, equals) = (self.typer.b.product, self.typer.equals_class());
         match self.member(c, name) {
             Member::Fun(_, k) if Some(k) == product || Some(k) == equals => None,
@@ -243,7 +281,7 @@ impl<'a, 't> Interp<'a, 't> {
         let (Value::Obj(x), Value::Obj(y)) = (a, b) else { return Ok(false) };
         // A case object equals itself alone: one nested in a class has an instance per
         // enclosing instance, and two of them are not equal.
-        if matches!(self.shape(x.class), Shape::CaseObject(_)) {
+        if matches!(self.shape_ref(x.class), Shape::CaseObject(_)) {
             return Ok(false);
         }
         // The fields in `SyntheticMembers.equalsBody`'s order, the primitive ones first.
@@ -273,7 +311,7 @@ impl<'a, 't> Interp<'a, 't> {
         let mut at = Some(c);
         let mut steps = 0;
         while let Some(k) = at {
-            if matches!(self.shape(k), Shape::Case(..) | Shape::CaseObject(_)) {
+            if matches!(self.shape_ref(k), Shape::Case(..) | Shape::CaseObject(_)) {
                 return Some(k);
             }
             steps += 1;
