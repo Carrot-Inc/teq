@@ -4222,6 +4222,11 @@ impl<'a> Worker<'a> {
             let (mut named_root, mut overloads_inherited) = (false, false);
             for j in 1..self.syms.class(c).base_types.len() {
                 let (b, bt) = self.syms.class(c).base_types[j];
+                // A base that declares nothing (`java.io.Serializable`) has nothing to override.
+                let bi = self.syms.class(b);
+                if if is_ext { bi.extensions.is_empty() } else { bi.members.is_empty() } {
+                    continue;
+                }
                 let mut k = 0;
                 while let Some(p) = self.inherited_member(b, name, is_ext, k) {
                     k += 1;

@@ -142,6 +142,7 @@ impl<'a> Worker<'a> {
     // ---- the alternatives of a name in a class ----
 
     /// The `k`-th alternative that `b` itself defines for `name`.
+    #[inline]
     pub(super) fn own_alternative(&self, b: ClassId, name: Name, k: usize) -> Option<SymId> {
         let &entry = self.syms.class(b).members.get(&name)?;
         match self.syms.alternatives(entry) {
