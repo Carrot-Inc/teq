@@ -823,7 +823,7 @@ pub fn constant_val(prog: &Program, syms: &crate::symbols::Symbols, types: &crat
 /// its fields.
 pub fn hashes_through_elements(syms: &crate::symbols::Symbols, types: &crate::types::TypeStore, interner: &crate::intern::Interner, c: ClassId) -> bool {
     let fields = case_field_types(syms, c);
-    !fields.is_empty() && !fields.into_iter().any(|t| is_primitive_value_class(syms, types, interner, t))
+    !fields.is_empty() && !fields.into_iter().any(|t| t.is_some_and(|t| is_primitive_value_class(syms, types, interner, t)))
 }
 
 /// dotty's `SyntheticMembers.equalsBody`'s `sortedAccessors`: the indices of the case class
@@ -833,21 +833,25 @@ pub fn hashes_through_elements(syms: &crate::symbols::Symbols, types: &crate::ty
 pub fn equals_order(syms: &crate::symbols::Symbols, types: &crate::types::TypeStore, interner: &crate::intern::Interner, c: ClassId) -> Vec<usize> {
     let fields = case_field_types(syms, c);
     let mut order: Vec<usize> = (0..fields.len()).collect();
-    order.sort_by_key(|&i| !is_primitive_value_class(syms, types, interner, fields[i]));
+    order.sort_by_key(|&i| !fields[i].is_some_and(|t| is_primitive_value_class(syms, types, interner, t)));
     order
 }
 
-fn case_field_types(syms: &crate::symbols::Symbols, c: ClassId) -> Vec<TypeId> {
-    syms.class(c).ctor.first().map(|cl| cl.params.iter().map(|p| p.ty).collect()).unwrap_or_default()
+/// The declared types of the case class's fields, `None` for a repeated one, whose accessor is a
+/// `Seq` (`xs: Int*`).
+fn case_field_types(syms: &crate::symbols::Symbols, c: ClassId) -> Vec<Option<TypeId>> {
+    syms.class(c).ctor.first().map(|cl| cl.params.iter().map(|p| (!p.repeated).then_some(p.ty)).collect()).unwrap_or_default()
 }
 
-/// dotty's `isPrimitiveValueClass` of a field's declared type.
+/// dotty's `isPrimitiveValueClass` of a field's declared type's `typeSymbol`, a literal type's
+/// being its class's (`x: 1` is an `Int`).
 fn is_primitive_value_class(syms: &crate::symbols::Symbols, types: &crate::types::TypeStore, interner: &crate::intern::Interner, t: TypeId) -> bool {
     match types.get(t) {
         crate::types::Type::Class(k, _) => {
             let ki = syms.class(k);
             ki.kind == crate::symbols::ClassKind::Builtin && matches!(interner.get(ki.name), "Int" | "Long" | "Double" | "Float" | "Char" | "Byte" | "Short" | "Boolean" | "Unit")
         }
+        crate::types::Type::Lit(l) => !matches!(types.lit_val(l), crate::types::LitVal::Str(_)),
         _ => false,
     }
 }
