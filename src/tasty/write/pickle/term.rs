@@ -1883,7 +1883,12 @@ impl<'w, 'a> P<'w, 'a> {
             }
             _ => {
                 let outer = std::mem::replace(&mut self.expected_fn, u.expected);
+                // An argument is typed against the parameter's type as the call instantiates
+                // it, which an anonymous class's instance is ascribed where its class's bound
+                // does not conform (`Typer.ensureNoLocalRefs`).
+                let outer_anon = std::mem::replace(&mut self.expected_anon, u.ty.map(|t| (a, t)));
                 self.term(a);
+                self.expected_anon = outer_anon;
                 self.expected_fn = outer;
             }
         }
@@ -4059,9 +4064,17 @@ impl<'w, 'a> P<'w, 'a> {
             Some(t) if !cast && !matches!(self.w.types.get(t), Type::Class(k, _) if k == c) => t,
             _ => ty,
         };
-        // A type the members refine: the context's, where it has one, which scalac ascribes the
-        // instance where the refined parents are not one.
+        // The class escapes the block the instance is (`Typer.ensureNoLocalRefs`): the block is
+        // ascribed the class's bound (`TypeOps.avoid`, `classBound`: the parents refined by the
+        // type members the body defines), or the type the context expects where it is defined
+        // and the bound does not conform to it (`AnyRef { def f(x: Int): Int }` of an argument).
         let expected = self.expected_anon.filter(|&(x, _)| x == e && !cast).map(|(_, t)| self.w.zonk(t)).filter(|&t| !self.w.types.has_vars(t) && !self.is_unit(t));
+        let expected = expected.filter(|&pt| {
+            let mark = self.w.snapshot();
+            let bound_conforms = self.w.is_sub(ty, pt);
+            self.w.rollback(mark);
+            !bound_conforms
+        });
         let ty = expected.unwrap_or(ty);
         if expected.is_none() && self.refining_anon_class(c, ty) {
             return self.fail("an anonymous class whose members refine its type".to_string());
