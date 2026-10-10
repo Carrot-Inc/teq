@@ -625,6 +625,8 @@ trait SetOps[A, +C] extends IterableOnce[A]:
 
 @predef
 trait Set[A] extends SetOps[A, Set[A]], IterableOps[A, Set, Set[A]], Iterable[A], scala.collection.Set[A]:
+  // `collection.Set`'s, the set of this kind with the element (`immutable.SetOps.+`).
+  override def +(elem: A): Set[A] = incl(elem)
   def buildCC[B](items: RawBuffer[B]): Set[B] = Set.from(Vector.wrap(items))
   override def toSet[B >: A]: Set[B] = unsafeCast(this)
   def equals(that: Any): Boolean = that match

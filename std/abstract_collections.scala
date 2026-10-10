@@ -29,6 +29,9 @@ trait Set[A] extends Iterable[A]:
   def contains(elem: A): Boolean
   def apply(elem: A): Boolean = contains(elem)
   def subsetOf(that: Set[A]): Boolean = forall(that.contains)
+  // `collection.SetOps`'s, deprecated since 2.13, which libraries built on it still call
+  // (scalactic's `prettify`): the elements and the element, an immutable set.
+  def +(elem: A): Set[A] = scala.Set.from(this) + elem
 
 /** scala-library's `BuildFrom`: builds a collection like `from` with elements of type `A`, which
   * `ZIO.foreach` and `Future.traverse` take to return the collection they were given.
@@ -112,3 +115,14 @@ object EvidenceIterableFactory:
 type View[+A] = scala.View[A]
 type SeqView[+A] = scala.View[A]
 type IndexedSeqView[+A] = scala.View[A]
+
+// scala-library's deprecated names of the collections before 2.13 (scala/collection/package.scala),
+// which libraries built on it still name.
+type Traversable[+X] = Iterable[X]
+type TraversableOnce[+X] = IterableOnce[X]
+type GenTraversableOnce[+X] = IterableOnce[X]
+type GenTraversable[+X] = Iterable[X]
+type GenIterable[+X] = Iterable[X]
+type GenSeq[+X] = Seq[X]
+type GenSet[X] = Set[X]
+type GenMap[K, +V] = Map[K, V]
