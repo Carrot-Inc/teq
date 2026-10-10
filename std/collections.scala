@@ -523,13 +523,15 @@ object List:
   def concat[A](xss: IterableOnce[A]*): List[A] = xss.toList.flatMap(xs => xs)
   def iterate[A](start: A, len: Int)(f: A => A): List[A] = Iterator.iterate(start)(f).take(len).toList
   def unfold[A, S](init: S)(f: S => Option[(A, S)]): List[A] = Iterator.unfold(init)(f).toList
+  // The element computed n times in order, front to back (`View.Fill`): one that reads a stream
+  // reads it in the list's order.
   def fill[A](n: Int)(elem: => A): List[A] =
     var acc: List[A] = Nil
     var i = 0
     while i < n do
       acc = elem :: acc
       i += 1
-    acc
+    acc.reverse
   def tabulate[A](n: Int)(f: Int => A): List[A] =
     var acc: List[A] = Nil
     var i = 0
