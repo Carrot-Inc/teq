@@ -801,6 +801,7 @@ macro_pattern_type_bounds
 macro_patterns
 macro_position_implicit
 macro_position_nested
+macro_position_result
 macro_position_units
 macro_quote_cancel
 macro_quote_deferred_inline_types

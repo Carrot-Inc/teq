@@ -18,6 +18,8 @@ macrofresh scalac-lean-c  the same as scalac-lean-b
 inlinequote scalac-b  the same as macroquote: scalac's compilation of the downstream calls the upstream macro's implementations in teq's class files, which do not have them, the JVM prerequisite, queued
 inlinequote scalac-run  the same: scalac compiles no downstream to run
 inlinequote scalac-lean-b  the same as macropattern's: scalac runs the macro on the JVM and the Scala.js check build's products are TASTy alone; with class files it is scalac-b's, the JVM prerequisite
+macroposition scalac-b  the same as macroquote: scalac's compilation of the downstream calls the upstream macros' implementations in teq's class files, which do not have them, the JVM prerequisite, queued
+macroposition scalac-run  the same: scalac compiles no downstream to run
 macroderive scalac-b  the same as macroquote: scalac's compilation of the downstream calls the macros' implementations in teq's class files, which do not have them, the JVM prerequisite
 macroderive scalac-run  the same: scalac compiles no downstream to run
 macroderive scalac-lean-b  the same as macropattern's: scalac runs the downstream's macros on the JVM and the Scala.js check build's products are TASTy alone
