@@ -51,6 +51,7 @@ classof-object
 collective-extensions
 concat-two-strings
 constValueTuple
+constructors
 curried-using-threading
 dead-code-elimination
 defaultGetters
@@ -86,6 +87,8 @@ final-var
 flat-flat-flat
 for-desugar-strawman
 forvaleq
+fully-abstract-nat-1
+fully-abstract-nat-3
 function-arity
 functionXXL
 genericTupleMembers
@@ -192,6 +195,7 @@ i16108
 i16213
 i16252
 i16390
+i16728
 i16785
 i17021
 i17021.defs
@@ -287,6 +291,7 @@ i3248
 i3248b
 i3248c
 i3396
+i3548
 i3624
 i4037
 i4073b
@@ -302,6 +307,7 @@ i4557a
 i4558
 i4559
 i4563
+i4600b
 i4754
 i4935
 i4935b
@@ -424,6 +430,8 @@ numeric-range
 opaque-inline2
 option-fold
 ordered
+outer-accessors
+outerPatternMatch
 overload_directly_applicable
 overloads
 partialFunctions
@@ -472,6 +480,7 @@ t107
 t1309
 t1333
 t1335
+t13418
 t1360
 t1434
 t1500b
@@ -538,6 +547,7 @@ t4122
 t429
 t4297
 t4351
+t4400
 t4415
 t4482
 t4558
@@ -654,6 +664,7 @@ tuple-product
 tuple-underscore-syntax
 tuples-empty
 typable
+type-test-binding
 unapplyArray
 unroll-inferredFinal
 value-class-partial-func-depmet
