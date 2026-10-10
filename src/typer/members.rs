@@ -599,6 +599,27 @@ impl<'a> Worker<'a> {
         }
         match self.types.get(t) {
             Type::Member(p, n) if p == prefix => self.member_type(prefix, n).unwrap_or(t),
+            // A val selected through the prefix is the prefix's member of its name (a
+            // `TermRef`'s denotation, made again on its new prefix): `k.a` of `K`'s `a`, which
+            // overrides the parent's the refinement named.
+            Type::Select(p, s) if p == prefix => {
+                let name = self.syms.sym(s).name;
+                let mut under = if self.types.is_path(prefix) { self.widen_path(prefix) } else { prefix };
+                // The class part: a refinement's own members are not re-resolved, and a
+                // recursive one is not opened again.
+                loop {
+                    under = self.dealias(under);
+                    match self.types.get(under) {
+                        Type::Rec(body) => under = body,
+                        Type::Refined(p, _) => under = p,
+                        _ => break,
+                    }
+                }
+                match self.find_member(under, name) {
+                    Some((m, _)) if m != s && matches!(self.syms.sym(m).kind, SymKind::Val | SymKind::Given) && !self.syms.sym(m).by_name => self.types.mk(Type::Select(prefix, m)),
+                    _ => t,
+                }
+            }
             _ => {
                 let types = self.types.clone();
                 let mut parts = Vec::new();
@@ -1867,7 +1888,15 @@ impl<'a> Worker<'a> {
                     Some(r @ (Refinement::Term(_, s, _) | Refinement::Val(_, s, _))) => (self.refinement_sig(r), s, ANY, true),
                     _ => {
                         let Some((found, owner_ty)) = self.find_member(t, name) else { return false };
-                        (self.sig_arc(found), found, owner_ty, false)
+                        // The member as `t` has it (`tp1.member(name).info`, seen from `tp1`):
+                        // `k.a.type` for `K`'s `b: a.type` through a `k: K`.
+                        let own = self.sig_arc(found);
+                        let sig = if self.types.has_paths(own.ret) || own.clauses.iter().any(|c| c.params.iter().any(|p| self.types.has_paths(p.ty))) {
+                            self.sig_seen_from(own, t, found)
+                        } else {
+                            own
+                        };
+                        (sig, found, owner_ty, false)
                     }
                 };
                 // `qualifies`: a member whose `@targetName` renames it is not the member of its

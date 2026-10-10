@@ -1040,6 +1040,7 @@ refinement_member_scope
 refinement_member_variance
 refinement_nested_scope
 refinement_signature_exemptions
+refinement_term_scope
 reflective_selectable
 regex_beyond_javascript
 regex_case_properties

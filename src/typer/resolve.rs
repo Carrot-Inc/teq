@@ -18,6 +18,8 @@ pub struct RefineScope {
     frame_depth: usize,
     /// The type members, each with its place among all the members.
     types: Vec<(Name, usize)>,
+    /// The term members' symbols, made when the refinement is indexed, each with its place.
+    terms: Vec<(Name, SymId, usize)>,
     /// The place of the member being resolved: a type member at it or after it is a forward
     /// reference (`Checking.checkRefinementNonCyclic`).
     current: usize,
@@ -2824,7 +2826,19 @@ impl<'a> Worker<'a> {
             .filter(|&(_, &d)| matches!(ast.def(d).kind, DefKind::TypeAlias { .. }))
             .map(|(i, &d)| (ast.def(d).name, i))
             .collect();
-        self.refine_scopes.push(RefineScope { frame_depth: self.env.frames.len(), types, current: 0, parent: parent_ty, infos: Vec::new(), referenced: false });
+        let mut term_syms: Vec<(Name, SymId, usize)> = Vec::new();
+        for (i, &d) in ast.def_list(members).iter().enumerate() {
+            let def = ast.def(d);
+            let kind = match &def.kind {
+                DefKind::Fun(_) => SymKind::Def,
+                DefKind::Val { .. } => SymKind::Val,
+                _ => continue,
+            };
+            let sym = self.syms.new_sym(def.name, kind, def.mods | mods::ABSTRACT, Owner::Local, file, Some(d), def.span);
+            self.def_syms.insert(file.0 as usize, d, sym);
+            term_syms.push((def.name, sym, i));
+        }
+        self.refine_scopes.push(RefineScope { frame_depth: self.env.frames.len(), types, terms: term_syms.clone(), current: 0, parent: parent_ty, infos: Vec::new(), referenced: false });
         for (at, &d) in ast.def_list(members).iter().enumerate() {
             if let Some(scope) = self.refine_scopes.last_mut() {
                 scope.current = at;
@@ -2879,8 +2893,7 @@ impl<'a> Worker<'a> {
                         DefKind::Fun(_) => SymKind::Def,
                         _ => SymKind::Val,
                     };
-                    let sym = self.syms.new_sym(def.name, kind, def.mods | mods::ABSTRACT, Owner::Local, file, Some(d), def.span);
-                    self.def_syms.insert(file.0 as usize, d, sym);
+                    let Some(&(_, sym, _)) = term_syms.iter().find(|&&(_, _, i)| i == at) else { continue };
                     terms.push((def.name, sym, def.span));
                     let sig = self.sig_arc(sym);
                     if kind == SymKind::Val {
@@ -2953,6 +2966,46 @@ impl<'a> Worker<'a> {
             }
             let this = self.types.mk(Type::RecThis((self.refine_scopes.len() - 1 - k) as u32));
             return Some(self.types.mk(Type::Member(this, n)));
+        }
+        None
+    }
+
+    /// A path's head inside a refinement that one of the refinements being resolved has as a
+    /// term member, its own or its parent's: that member of the refined type, `RecThis(k).a`
+    /// (a `val`'s path; a `def` is none). A local of a frame opened inside the refinement (a
+    /// member's parameter) binds first.
+    fn refinement_term_member(&mut self, n: Name, span: Span) -> Option<Result<TypeId, SymId>> {
+        let mut upper = self.env.frames.len();
+        for k in (0..self.refine_scopes.len()).rev() {
+            let depth = self.refine_scopes[k].frame_depth;
+            let bound_inside = (depth..upper).any(|i| matches!(&self.env.frames[i], Frame::Locals { names, .. } if names.iter().any(|&(m, _)| m == n)));
+            if bound_inside {
+                return None;
+            }
+            upper = depth;
+            let own = self.refine_scopes[k].terms.iter().find(|&&(m, _, _)| m == n).map(|&(_, s, at)| (s, at));
+            let sym = match own {
+                Some((s, _)) => s,
+                None => {
+                    let parent = self.refine_scopes[k].parent;
+                    match self.find_member(parent, n) {
+                        Some((s, _)) => s,
+                        None => continue,
+                    }
+                }
+            };
+            if own.is_some_and(|(_, at)| at >= self.refine_scopes[k].current) {
+                self.warn(span, "forward reference in refinement is deprecated");
+            }
+            for scope in &mut self.refine_scopes[k..] {
+                scope.referenced = true;
+            }
+            let this = self.types.mk(Type::RecThis((self.refine_scopes.len() - 1 - k) as u32));
+            let info = self.syms.sym(sym);
+            return Some(match info.kind {
+                SymKind::Val | SymKind::Given if !info.by_name => Ok(self.types.mk(Type::Select(this, sym))),
+                _ => Err(sym),
+            });
         }
         None
     }
@@ -3599,6 +3652,12 @@ impl<'a> Worker<'a> {
                 Some(Ok(self.inline_this_of(c).unwrap_or_else(|| self.this_prefix(c))))
             }
             TyExpr::Name(n) => {
+                if !self.refine_scopes.is_empty() {
+                    let span = ast.ty_spans[q.idx()];
+                    if let Some(found) = self.refinement_term_member(n, span) {
+                        return Some(found);
+                    }
+                }
                 let r = self.lookup_term(n)?;
                 via_ref(self, r)
             }
