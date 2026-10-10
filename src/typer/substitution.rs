@@ -249,11 +249,10 @@ impl<'a> Worker<'a> {
     /// The record a call of `sym` is expanded from, or why the call takes the retype path, the
     /// entry decision, made before the expansion has any effect: the std's method; a library's
     /// whose record its converted body did not give (`library_entry`); otherwise the record
-    /// demanded whatever the typing order, and then a call met
-    /// while its body is typed (a cycle through the method), a body the capture of the product
-    /// modes holds back (one that makes a class) or a `summonFrom` the check holds back, which
-    /// the retype path keeps; a local method called before its definition across a val an
-    /// import reads is scalac's E039. A failed record's call is the plain call before this
+    /// demanded whatever the typing order, and then a call met while its body is typed (a cycle
+    /// through the method) or a form the check holds back (`HeldForm`), which the
+    /// retype path keeps; a local method called before its definition across a val an import
+    /// reads is scalac's E039. A failed record's call is the plain call before this
     /// (`failed_definition_call`).
     pub(super) fn substitution_entry(&mut self, sym: SymId) -> Result<Arc<InlineDefinition>, Fallback> {
         if self.library_inline(sym) {
