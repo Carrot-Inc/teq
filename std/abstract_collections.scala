@@ -143,10 +143,76 @@ object EvidenceIterableFactory:
       def fromSpecific(it: IterableOnce[A]): CC[A] = factory.from(it)
       def newBuilder: scala.collection.mutable.Builder[A, CC[A]] = factory.newBuilder[A]
 
-// scala-library's views by their names in this package, which the std's one `View` stands for.
 type View[+A] = scala.View[A]
-type SeqView[+A] = scala.View[A]
-type IndexedSeqView[+A] = scala.View[A]
+
+// scala-library's `SeqView` and `IndexedSeqView`, the views of a sequence and of an indexed one,
+// over the iterator of their source as `View` is: an operation that keeps a sequence a sequence
+// keeps the kind of the view where scala-library's result type does (`map`, `take`, `reverse`),
+// one that may not gives a `View` (`filter`, `flatMap`).
+trait SeqView[+A] extends SeqOps[A, View, View[A]], View[A]:
+  def length: Int =
+    var n = 0
+    iterator.foreach(_ => n += 1)
+    n
+  def apply(i: Int): A =
+    val it = iterator.drop(i)
+    if i < 0 || !it.hasNext then indexOutOfBounds(i.toString) else it.next()
+  override def view: SeqView[A] = this
+  override def map[B](f: A => B): SeqView[B] = SeqView.over(() => iterator.map(f))
+  override def appended[B >: A](elem: B): SeqView[B] = SeqView.over(() => iterator ++ Iterator.single(elem))
+  override def prepended[B >: A](elem: B): SeqView[B] = SeqView.over(() => Iterator.single(elem) ++ iterator)
+  override def reverse: SeqView[A] = SeqView.over(() => reverseIterator)
+  override def take(n: Int): SeqView[A] = SeqView.over(() => iterator.take(n))
+  override def drop(n: Int): SeqView[A] = SeqView.over(() => iterator.drop(n))
+  override def takeRight(n: Int): SeqView[A] = SeqView.over(() => iterator.drop(length - Math.max(n, 0)))
+  override def dropRight(n: Int): SeqView[A] = SeqView.over(() => iterator.take(length - Math.max(n, 0)))
+  override def tapEach[U](f: A => U): SeqView[A] = SeqView.over(() => iterator.tapEach(f))
+  override def sorted[B >: A](implicit ord: Ordering[B]): SeqView[A] = SeqView.over(() => toList.sorted(ord).iterator)
+  // scala-library overloads these with a sequence, whose result stays a `SeqView`; the std hides
+  // an inherited method of the name unless it declares the alternatives together.
+  override def concat[B >: A](suffix: IterableOnce[B]): View[B] = super.concat(suffix)
+  def concat[B >: A](suffix: SeqOps[B, AnyConstr, ?]): SeqView[B] = SeqView.over(() => iterator ++ suffix.iterator)
+  override def appendedAll[B >: A](suffix: IterableOnce[B]): View[B] = super.concat(suffix)
+  def appendedAll[B >: A](suffix: SeqOps[B, AnyConstr, ?]): SeqView[B] = SeqView.over(() => iterator ++ suffix.iterator)
+  override def prependedAll[B >: A](prefix: IterableOnce[B]): View[B] = prefix match
+    case xs: Iterable[?] => View.over(() => unsafeCast[Iterable[?], Iterable[B]](xs).iterator ++ iterator)
+    case _ => View.from(prefix.iterator ++ iterator)
+  def prependedAll[B >: A](prefix: SeqOps[B, AnyConstr, ?]): SeqView[B] = SeqView.over(() => prefix.iterator ++ iterator)
+  override def collectionClassName: String = "SeqView"
+
+object SeqView:
+  def over[A](source: () => Iterator[A]): SeqView[A] = new Id(source)
+  final class Id[+A](source: () => Iterator[A]) extends SeqView[A]:
+    def iterator: Iterator[A] = source()
+
+trait IndexedSeqView[+A] extends IndexedSeqOps[A, View, View[A]], SeqView[A]:
+  override def view: IndexedSeqView[A] = this
+  def view(from: Int, until: Int): IndexedSeqView[A] = slice(from, until)
+  override def map[B](f: A => B): IndexedSeqView[B] = IndexedSeqView.over(() => iterator.map(f))
+  override def appended[B >: A](elem: B): IndexedSeqView[B] = IndexedSeqView.over(() => iterator ++ Iterator.single(elem))
+  override def prepended[B >: A](elem: B): IndexedSeqView[B] = IndexedSeqView.over(() => Iterator.single(elem) ++ iterator)
+  override def reverse: IndexedSeqView[A] = IndexedSeqView.over(() => reverseIterator)
+  override def take(n: Int): IndexedSeqView[A] = IndexedSeqView.over(() => iterator.take(n))
+  override def drop(n: Int): IndexedSeqView[A] = IndexedSeqView.over(() => iterator.drop(n))
+  override def takeRight(n: Int): IndexedSeqView[A] = IndexedSeqView.over(() => iterator.drop(length - Math.max(n, 0)))
+  override def dropRight(n: Int): IndexedSeqView[A] = IndexedSeqView.over(() => iterator.take(length - Math.max(n, 0)))
+  override def slice(from: Int, until: Int): IndexedSeqView[A] = IndexedSeqView.over(() => iterator.slice(from, until))
+  override def tapEach[U](f: A => U): IndexedSeqView[A] = IndexedSeqView.over(() => iterator.tapEach(f))
+  def concat[B >: A](suffix: SomeIndexedSeqOps[B]): IndexedSeqView[B] = IndexedSeqView.over(() => iterator ++ suffix.iterator)
+  def appendedAll[B >: A](suffix: SomeIndexedSeqOps[B]): IndexedSeqView[B] = IndexedSeqView.over(() => iterator ++ suffix.iterator)
+  def prependedAll[B >: A](prefix: SomeIndexedSeqOps[B]): IndexedSeqView[B] = IndexedSeqView.over(() => prefix.iterator ++ iterator)
+  override def collectionClassName: String = "IndexedSeqView"
+
+object IndexedSeqView:
+  def over[A](source: () => Iterator[A]): IndexedSeqView[A] = new Id(source)
+  final class Id[+A](source: () => Iterator[A]) extends IndexedSeqView[A]:
+    def iterator: Iterator[A] = source()
+
+// scala-library's `collection.AnyConstr`, the type constructor of any sequence's operations.
+type AnyConstr[X] = Any
+// scala-library's `IndexedSeqView.SomeIndexedSeqOps`: the std's `IndexedSeq` and the library classes
+// beside it are no `IndexedSeqOps`.
+type SomeIndexedSeqOps[A] = IndexedSeqOps[A, AnyConstr, ?] | IndexedSeq[A]
 
 // scala-library's deprecated names of the collections before 2.13 (scala/collection/package.scala),
 // which libraries built on it still name.

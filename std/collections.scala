@@ -571,6 +571,14 @@ final class ArrayWithFilter[T](a: Array[T], p: T => Boolean):
       i += 1
   def withFilter(q: T => Boolean): ArrayWithFilter[T] = new ArrayWithFilter(a, x => p(x) && q(x))
 
+// scala-library's `ArrayOps.ArrayView`: an array's view, indexed as the array is, printed with
+// its elements.
+final class ArrayView[A](a: Array[A]) extends scala.collection.IndexedSeqView[A]:
+  def iterator: Iterator[A] = arrayIterator(a)
+  override def length: Int = a.length
+  override def apply(i: Int): A = a(i)
+  override def toString: String = mkString("ArrayView(", ", ", ")")
+
 extension [T](a: Array[T])
   @js("$0.length")
   @jvm("$0 array_length")
@@ -637,7 +645,7 @@ extension [T](a: Array[T])
   def toBuffer: scala.collection.mutable.ArrayBuffer[T] = scala.collection.mutable.ArrayBuffer.from(Vector.wrap(buffered(a)))
   def toArray: Array[T] = a.clone()
   def iterator: Iterator[T] = arrayIterator(a)
-  def view: View[T] = new View(() => arrayIterator(a), "View")
+  def view: scala.collection.IndexedSeqView[T] = new ArrayView(a)
   def indices: Range = Range(0, a.length, 1)
   def mkString(start: String, sep: String, end: String): String = joinStrings(Vector.wrap(buffered(a)), start, sep, end)
   def mkString(sep: String): String = joinStrings(Vector.wrap(buffered(a)), "", sep, "")

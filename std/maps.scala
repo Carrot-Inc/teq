@@ -519,7 +519,7 @@ extension [K, V](m: Map[K, V])
 // A map traversed and looked up on demand: mapValues and filterKeys apply their function when
 // an entry is asked for, and toMap materialises the result.
 final class MapView[K, +V](entries: () => Iterator[(K, V)], lookup: K => Option[V]) extends IterableOps[(K, V), View, MapView[K, V]], Iterable[(K, V)]:
-  def buildCC[B](items: RawBuffer[B]): View[B] = new View(() => Iterator.over(items), "View")
+  def buildCC[B](items: RawBuffer[B]): View[B] = View.over(() => Iterator.over(items))
   override def buildC(items: RawBuffer[(K, V)]): MapView[K, V] = Map.from(Vector.wrap(items)).view
   override def iterator: Iterator[(K, V)] = entries()
   def foreach[U](f: ((K, V)) => U): Unit = entries().foreach(f)
@@ -530,13 +530,13 @@ final class MapView[K, +V](entries: () => Iterator[(K, V)], lookup: K => Option[
     case None => noSuchElement("key not found: " + key)
   def getOrElse[V1 >: V](key: K, default: => V1): V1 = lookup(key).getOrElse(default)
   def contains(key: K): Boolean = lookup(key).isDefined
-  def keys: View[K] = new View(() => entries().map(e => e._1), "View")
-  def values: View[V] = new View(() => entries().map(e => e._2), "View")
+  def keys: View[K] = View.over(() => entries().map(e => e._1))
+  def values: View[V] = View.over(() => entries().map(e => e._2))
   def keySet: Set[K] = Set.from(keys)
   def mapValues[W](f: V => W): MapView[K, W] = new MapView(() => entries().map(e => (e._1, f(e._2))), k => lookup(k).map(f))
-  def map[K2, V2](f: ((K, V)) => (K2, V2)): View[(K2, V2)] = new View(() => entries().map(f), "View")
-  override def map[B](f: ((K, V)) => B): View[B] = new View(() => entries().map(f), "View")
-  def ++[V2 >: V](that: IterableOnce[(K, V2)]): View[(K, V2)] = new View(() => entries() ++ that.iterator, "View")
+  def map[K2, V2](f: ((K, V)) => (K2, V2)): View[(K2, V2)] = View.over(() => entries().map(f))
+  override def map[B](f: ((K, V)) => B): View[B] = View.over(() => entries().map(f))
+  def ++[V2 >: V](that: IterableOnce[(K, V2)]): View[(K, V2)] = View.over(() => entries() ++ that.iterator)
   def filterKeys(p: K => Boolean): MapView[K, V] = new MapView(() => entries().filter(e => p(e._1)), k => if p(k) then lookup(k) else None)
   override def filter(p: ((K, V)) => Boolean): MapView[K, V] =
     new MapView(() => entries().filter(p), k => lookup(k).filter(v => p((k, v))))

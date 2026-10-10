@@ -1,0 +1,12 @@
+List(SeqView, IndexedSeqView, IndexedSeqView, View, IndexedSeqView, IndexedSeqView)
+List(SeqView(<not computed>), IndexedSeqView(<not computed>), ArrayView(1, 2, 3), View(<not computed>))
+List(SeqView List(10, 20, 30), SeqView List(1, 2), SeqView List(2, 3), SeqView List(3, 2, 1), SeqView List(1, 2, 3, 4), SeqView List(0, 1, 2, 3), SeqView List(1, 2, 3), View List(2, 3), View List(1, 1, 2, 2, 3, 3))
+List(IndexedSeqView List(2, 3, 4), IndexedSeqView List(1, 2), IndexedSeqView List(3, 2, 1), IndexedSeqView List(2, 3), IndexedSeqView List(1, 2, 3, 9), View List(1, 3))
+List(3, 2, 3, 3, 1)
+2,4
+List(6, 4)
+List(SeqView(<not computed>), View(<not computed>), IndexedSeqView(<not computed>), View(<not computed>))
+List(SeqView List(1, 2, 3, 4), IndexedSeqView List(1, 2, 3, 4), IndexedSeqView List(0, 1, 2, 3), View List(1, 2, 3, 5), SeqView List(1, 2))
+List(2, 3)
+List(SeqView List(1, 2, 3, 7), SeqView List(1, 2, 3, 8), SeqView List(1, 2, 3, 7), IndexedSeqView List(1, 2, 3, 7))
+List(IndexedSeqView List(1, 2, 3, 2, 4, 6), IndexedSeqView List(1, 2, 3, 1, 2))
