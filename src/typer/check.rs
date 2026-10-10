@@ -5040,8 +5040,19 @@ impl<'a> Worker<'a> {
         // A Java method's `()` matches a parameterless member or a val, and a parameterless
         // one (the std's `Iterator.hasNext`) a `()`, as scalac's `matchNullaryLoosely` has it for
         // Java-defined members; the std's classes of `java.*` stand for the JDK's.
+        // So does a member that overrides one of Java's or `Any`'s (`Function1.toString()`
+        // overrides `Any.toString`, which a `def toString` overrides in turn).
         let empty = |sig: &MethodSig| matches!(&sig.clauses[..], [cl] if cl.params.is_empty() && !cl.is_using);
-        let java_member = self.syms.sym(p).java_defined || (self.is_std_member(p) && !self.is_std_scala_member(p));
+        let java = |t: &Self, s: SymId| t.syms.sym(s).java_defined || (t.is_std_member(s) && !t.is_std_scala_member(s));
+        let nullary_pair = (msig.clauses.is_empty() && empty(&psig)) || (psig.clauses.is_empty() && empty(&msig));
+        let java_member = java(self, p)
+            || (nullary_pair && {
+                let mut roots = Vec::new();
+                matches!(self.syms.sym(p).name, names::TO_STRING | names::HASH_CODE) || {
+                    self.root_declarations(p, 0, &mut roots);
+                    roots.iter().any(|&r| r != p && java(self, r))
+                }
+            });
         if msig.clauses.is_empty() && empty(&psig) && java_member {
             psig = Arc::new(MethodSig { tparams: psig.tparams.clone(), clauses: Vec::new(), ret: psig.ret });
         } else if psig.clauses.is_empty() && empty(&msig) && java_member && self.syms.sym(p).kind == SymKind::Def {
