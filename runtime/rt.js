@@ -500,8 +500,7 @@ function $productToString() {
   }
   return s + ")";
 }
-// The fields compare in `$eqFields`' order where the registration gives one (the primitive ones
-// first, `SyntheticMembers.equalsBody`), else in `$fields`'.
+// The fields compare in `$eqFields`' order where given (`SyntheticMembers.equalsBody`).
 function $caseEquals(that) {
   if (this === that) return true;
   if (that == null || that.constructor !== this.constructor) return false;
@@ -579,8 +578,7 @@ function $iterator() {
 // Registers a class: its name; its shape, the field names of a case class, 2 for a case object,
 // 3 for an enum value, 4 for a trait or enum; the traits and enums it takes members from, in
 // linearisation order (the first declaration wins); their numbers for type tests; an enum ordinal.
-// The methods of a shape come by prototype, or copied below a superclass where the superclass
-// defines none: a definition the class has wins (dotty's `existingDef`).
+// The methods of a shape come by prototype, or copied below a superclass that defines none.
 function $cls(c, name, shape, traits, ids, ordinal) {
   const p = c.prototype;
   if (shape === 4) p.$own = Object.getOwnPropertyDescriptors(p);
