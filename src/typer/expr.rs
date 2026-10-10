@@ -877,7 +877,7 @@ impl<'a> Worker<'a> {
         }
         rs.into_iter().all(|r| match self.types.refinement(r) {
             Refinement::Term(name, ..) | Refinement::Val(name, ..) => self.find_member(own, name).is_some(),
-            _ => self.refinement_holds(own, r),
+            _ => self.refinement_holds(own, parent, r),
         })
     }
 

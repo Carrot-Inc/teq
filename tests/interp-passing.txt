@@ -1051,6 +1051,7 @@ refinement_member_denotation
 refinement_member_scope
 refinement_member_variance
 refinement_nested_scope
+refinement_signature_exemptions
 reflect_annotation_identity
 reflect_instantiation
 reflect_nested_secondary

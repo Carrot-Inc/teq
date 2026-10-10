@@ -1840,7 +1840,9 @@ impl<'a> Worker<'a> {
 
     /// The bounds of a member that a refinement `r` states for the type `t`'s member of its
     /// name: what the refinement asks of `t`.
-    pub fn refinement_holds(&mut self, t: TypeId, r: RefineId) -> bool {
+    /// Whether `t` has the member the refinement `r` of a type over `parent` describes, as dotty's
+    /// `TypeComparer.hasMatchingMember` has it.
+    pub fn refinement_holds(&mut self, t: TypeId, parent: TypeId, r: RefineId) -> bool {
         match self.types.refinement(r) {
             Refinement::Alias(name, rhs) => match self.member_in_type(t, name, t) {
                 Some(MemberInfo::Alias(a)) => self.is_same(a, rhs),
@@ -1861,13 +1863,18 @@ impl<'a> Worker<'a> {
             wanted_ref @ (Refinement::Term(name, ..) | Refinement::Val(name, ..)) => {
                 let wanted = self.refinement_sig(wanted_ref);
                 let refined = if self.types.is_path(t) { self.widen_path(t) } else { t };
-                let (sig, found, owner_ty) = match self.refined_term(refined, name) {
-                    Some(r @ (Refinement::Term(_, s, _) | Refinement::Val(_, s, _))) => (self.refinement_sig(r), s, ANY),
+                let (sig, found, owner_ty, own) = match self.refined_term(refined, name) {
+                    Some(r @ (Refinement::Term(_, s, _) | Refinement::Val(_, s, _))) => (self.refinement_sig(r), s, ANY, true),
                     _ => {
                         let Some((found, owner_ty)) = self.find_member(t, name) else { return false };
-                        (self.sig_arc(found), found, owner_ty)
+                        (self.sig_arc(found), found, owner_ty, false)
                     }
                 };
+                // `qualifies`: a member whose `@targetName` renames it is not the member of its
+                // name (a refinement's own members take any target name).
+                if !own && self.target_name_of(found).is_some_and(|n| n != name) {
+                    return false;
+                }
                 // A `val` refinement asks for a stable member: a `def` or a `var` is none.
                 if matches!(wanted_ref, Refinement::Val(..)) && matches!(self.syms.sym(found).kind, SymKind::Def | SymKind::Var) && self.syms.sym(found).sig.as_ref().map_or(true, |sg| sg.clauses.is_empty()) {
                     return false;
@@ -1897,10 +1904,10 @@ impl<'a> Worker<'a> {
                     return false;
                 }
                 // The parameters are matched by position, as the override check matches them
-                // (`(d: Ctx) => d.T` is `(c: Ctx) => c.T`). A function's `apply`, which the
-                // refined class declares, takes them contravariantly, as scalac's
-                // `hasMatchingMember` compares a refinement of a member the class has (`Any =>
-                // Int` is a `(s: String) => Int`); another member's have to be the same.
+                // (`(d: Ctx) => d.T` is `(c: Ctx) => c.T`), and contravariantly (`isSubInfo`'s
+                // `matchingMethodParams(.., precise = false)`): `Any => Int` is a `(s: String) =>
+                // Int`; a member the refined type's class does not declare is called by
+                // reflection, which needs its erased parameters to be the refinement's (`sigsOK`).
                 let renamed: Vec<(SymId, TypeId)> = sig
                     .clauses
                     .iter()
@@ -1918,17 +1925,62 @@ impl<'a> Worker<'a> {
                         }
                         let xt = self.subst_paths(x.ty, &renamed);
                         let xt = self.types.subst(xt, &subst);
-                        let fits = if name == crate::names::APPLY { self.is_sub(y.ty, xt) } else { self.is_same(xt, y.ty) };
-                        if !fits {
+                        if !self.is_sub(y.ty, xt) {
                             return false;
                         }
                     }
                 }
                 let ret = self.subst_paths(sig.ret, &renamed);
                 let ret = self.types.subst(ret, &subst);
-                self.is_sub(ret, wanted.ret)
+                self.is_sub(ret, wanted.ret) && (own || self.refinement_sigs_ok(parent, name, found, &wanted))
             }
         }
+    }
+
+    /// `TypeComparer.hasMatchingMember`'s `sigsOK`: a member `found` that the class of the
+    /// refined type (`parent`'s, refinements looked through) does not declare, unless that type
+    /// is a `Selectable.WithoutPreciseParameterTypes`, has the erased parameters of the
+    /// refinement `wanted` in its own declaration (`Signature.consistentParams` of the symbol's
+    /// info); a parameterless member or a generic refinement is compared by type alone.
+    fn refinement_sigs_ok(&mut self, parent: TypeId, name: Name, found: SymId, wanted: &MethodSig) -> bool {
+        let declared = self.sig_arc(found);
+        if wanted.clauses.is_empty() || !wanted.tparams.is_empty() || declared.clauses.is_empty() {
+            return true;
+        }
+        let mut class_part = self.types.refinements_of(parent).0;
+        while let Type::Rec(body) = self.types.get(class_part) {
+            class_part = self.types.refinements_of(body).0;
+        }
+        if self.find_member(class_part, name).is_some() {
+            return true;
+        }
+        if let Some(marker) = self.std_selectable_marker() {
+            if self.base_type(parent, marker).is_some() {
+                return true;
+            }
+        }
+        let terms = |ps: Vec<super::loader::declared::PickledSigParam>| -> Vec<String> {
+            ps.into_iter().filter_map(|p| match p {
+                super::loader::declared::PickledSigParam::Term(t) => Some(t),
+                _ => None,
+            }).collect()
+        };
+        match (self.pickled_signature(found, ""), self.pickled_refinement_signature(wanted, "")) {
+            (Some((own, _)), Some((theirs, _))) => terms(own) == terms(theirs),
+            // A type whose erasure teq cannot tell is consistent with any (dotty's
+            // `tpnme.Uninstantiated`).
+            _ => true,
+        }
+    }
+
+    /// The std's `scala.Selectable.WithoutPreciseParameterTypes`.
+    fn std_selectable_marker(&mut self) -> Option<ClassId> {
+        let selectable = self.b.selectable?;
+        self.complete_class(selectable);
+        let companion = self.syms.class(selectable).companion?;
+        let name = self.interner.intern("WithoutPreciseParameterTypes");
+        self.complete_class(companion);
+        self.syms.class(companion).nested.get(&name).copied()
     }
 
     /// Whether a refinement of the signature `sig` matches `member`, a member of the class seen

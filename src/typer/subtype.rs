@@ -1195,7 +1195,7 @@ impl<'a> Worker<'a> {
                 if !self.is_sub(a, parent) {
                     return false;
                 }
-                if self.refinement_holds(a, r) {
+                if self.refinement_holds(a, parent, r) {
                     return true;
                 }
                 self.rollback(mark);

@@ -38,6 +38,13 @@ object =:= :
   */
 trait Selectable
 
+object Selectable:
+  /** A `Selectable` whose `applyDynamic` dispatches without the parameters' precise types: a
+    * structural member's erased signature need not be the refinement's
+    * (`TypeComparer.hasMatchingMember`'s `sigsOK`).
+    */
+  trait WithoutPreciseParameterTypes extends Selectable
+
 /** An implicit that is always there, which tells overloads apart that erase alike. */
 final class DummyImplicit
 
