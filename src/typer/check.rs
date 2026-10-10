@@ -5288,7 +5288,9 @@ impl<'a> Worker<'a> {
     /// Returns the abstract members that an export clause of `c` implements, with their targets.
     /// A member of `synthesized` (`TClass::synthesized`) is implemented by rule.
     fn check_implements_all(&mut self, c: ClassId, which: Abstracts, synthesized: u16) -> Vec<(SymId, SymId)> {
-        let bases: Vec<(ClassId, TypeId)> = self.syms.class(c).base_types.clone();
+        // The base types as a list of the check's own, made where an abstract member is to be
+        // matched: most classes inherit none.
+        let mut copied: Option<Vec<(ClassId, TypeId)>> = None;
         let mut missing: Vec<(String, SymId, TypeId)> = Vec::new();
         // A member left unimplemented beside an incomplete definition of its name, whose body
         // is unknown rather than missing.
@@ -5306,12 +5308,20 @@ impl<'a> Worker<'a> {
             let info = self.syms.class(c);
             which == Abstracts::Declared && (info.mods & mods::CASE != 0 || info.kind == ClassKind::EnumCase)
         };
-        for &(b, bt) in bases.iter().skip(1 - own) {
+        for j in (1 - own)..self.syms.class(c).base_types.len() {
+            let (b, bt) = self.syms.class(c).base_types[j];
             if completed_by_rule && self.is_desugared_parent(b) {
                 continue;
             }
-            let members = self.syms.class(b).member_order.clone();
-            for m in members.into_iter().chain(self.syms.class(b).extensions.clone()) {
+            // The base's members and then its extensions, read in place.
+            let mut i = 0;
+            while let Some(m) = {
+                let bi = self.syms.class(b);
+                let declared = bi.member_order.len();
+                let at = if i < declared { bi.member_order.get(i) } else { bi.extensions.get(i - declared) };
+                i += 1;
+                at.copied()
+            } {
                 // A deferred given is implemented by the search, or reported there.
                 if !self.is_abstract_member(m) || self.is_deferred_given(m) {
                     continue;
@@ -5349,6 +5359,7 @@ impl<'a> Worker<'a> {
                 // The class's own member is the most derived: whatever of its name it inherits it
                 // overrides, which implements nothing of it (`class C extends T { override def x:
                 // Int }` over a concrete `T.x`).
+                let bases: &Vec<(ClassId, TypeId)> = copied.get_or_insert_with(|| self.syms.class(c).base_types.clone());
                 let implemented = bases.iter().enumerate().filter(|&(i, _)| b != c || i == 0).any(|(i, &(other, ot))| {
                     let mut k = 0;
                     while let Some(s) = self.inherited_member(other, name, is_ext, k) {
@@ -5404,6 +5415,7 @@ impl<'a> Worker<'a> {
             }
         }
         if !missing.is_empty() && self.link_mode() {
+            let bases = copied.take().unwrap_or_else(|| self.syms.class(c).base_types.clone());
             missing.retain(|&(_, m, bt)| !self.inherited_export_implements(c, &bases, m, bt));
         }
         if !missing.is_empty() {
