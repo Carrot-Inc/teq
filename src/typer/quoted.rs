@@ -2930,17 +2930,20 @@ impl<'c> Copier<'c> {
                     let items = t.prog.expr_list(l).to_vec();
                     if let Some(reduced) = t.beta_reduce(f, &items) {
                         // A pure constant the reduction leaves is its literal (`constToLiteral`).
-                        let reduced = match t.fold_constant(reduced) {
+                        let (reduced, literal) = match t.fold_constant(reduced) {
                             Some(v) if t.is_pure_value(reduced) => {
                                 let lit = t.literal_expr(v);
                                 t.prog.copy_span(e, lit);
-                                lit
+                                (lit, true)
                             }
-                            _ => reduced,
+                            _ => (reduced, false),
                         };
                         if let Some(ty) = recorded {
                             let ty = self.ty(t, ty);
                             self.set_copy_type(t, reduced, ty);
+                        }
+                        if t.capturing() {
+                            self.reduced_for(t, e, reduced, literal);
                         }
                         return reduced;
                     }
@@ -3271,6 +3274,24 @@ impl<'c> Copier<'c> {
         if let Some(copies) = self.copies.as_mut() {
             copies.insert(e, id);
             self.occurrences.push((e, id));
+        }
+    }
+
+    /// `reduced`, the reduction put for the application `e`, takes the layers written around `e`,
+    /// as an argument put for a parameter does, and the place of `e`'s tree where it is the literal
+    /// `constToLiteral` leaves at the application's span; any other reduction stands at the places
+    /// of its own trees (`BetaReduce`).
+    fn reduced_for(&mut self, t: &mut Worker, e: TExprId, reduced: TExprId, literal: bool) {
+        let this = &*self;
+        t.capture_copy_layers(e, reduced, &|w, ty| this.ty(w, ty));
+        if literal {
+            if let Some((file, addr)) = t.prog.capture.as_deref().and_then(|c| c.records_of(e).tree) {
+                t.capture_tree(reduced, file, addr);
+            }
+        }
+        if let Some(copies) = self.copies.as_mut() {
+            copies.insert(e, reduced);
+            self.occurrences.push((e, reduced));
         }
     }
 
