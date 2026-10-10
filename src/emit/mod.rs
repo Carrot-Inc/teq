@@ -3383,11 +3383,8 @@ impl<'a> Emitter<'a> {
     /// cases (dotty's `enumScaffolding`), where a lookup reads it (`Reach::enum_stores`).
     fn emit_enum_store(&mut self, companion: ClassId, this: &str) {
         let syms = self.syms;
-        let Some(e) = syms.class(companion).companion.map(|e| syms.class(e)).filter(|e| e.kind == ClassKind::Enum) else { return };
-        let read = self.reach.enum_stores.binary_search(&companion).is_ok();
-        if !read || e.children.is_empty() || e.children.iter().any(|&c| syms.class(c).singleton.is_none() || !self.reach.classes[c.idx()]) {
-            return;
-        }
+        let Some(e) = self.enum_store_of(companion) else { return };
+        let e = syms.class(e);
         self.line();
         let _ = write!(self.out, "{}.$values = [", this);
         for (i, &case) in e.children.iter().enumerate() {
@@ -3405,6 +3402,16 @@ impl<'a> Emitter<'a> {
             }
         }
         self.out.push_str("];");
+    }
+
+    /// The enum whose `$values` the companion `companion` stores (`emit_enum_store`): one whose
+    /// cases are all values, reached, where a lookup reads it.
+    pub(super) fn enum_store_of(&self, companion: ClassId) -> Option<ClassId> {
+        let syms = self.syms;
+        let e = syms.class(companion).companion.filter(|&e| syms.class(e).kind == ClassKind::Enum)?;
+        let children = &syms.class(e).children;
+        let read = self.reach.enum_stores.binary_search(&companion).is_ok();
+        (read && !children.is_empty() && children.iter().all(|&c| syms.class(c).singleton.is_some() && self.reach.classes[c.idx()])).then_some(e)
     }
 
     /// The values of the given enum cases as constants of the module, created when it loads. In a

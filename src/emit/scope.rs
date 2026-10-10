@@ -1486,6 +1486,16 @@ impl<'a> Emitter<'a> {
                 self.walk_class(w, case);
             }
         }
+        // The `$values` a companion stores names its enum's value cases where they are module
+        // constants (`emit_enum_store`).
+        if let Some(e) = self.enum_store_of(tc.id).filter(|&e| !self.syms.class(e).stateful) {
+            for case in self.syms.class(e).children.clone() {
+                if let Some(sym) = self.syms.class(case).singleton {
+                    let n = self.enum_value_name(sym);
+                    w.name(&n);
+                }
+            }
+        }
         for init in &tc.init {
             match init {
                 TInit::Field(s, e) => {
