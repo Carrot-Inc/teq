@@ -1033,17 +1033,18 @@ impl<'a> Worker<'a> {
         self.named_fun_type_in(file, clause.is_using, clause.params, r, crate::source::Span::default())
     }
 
-    /// The alias a type's head names (`Values` of `Values`, `js.Array` of `js.Array[Int]`),
-    /// by its address in the same pickle or through a package or the members of a class or an
-    /// object; none for any other type.
-    pub(super) fn named_alias(&mut self, cx: &mut MapCx, t: &TType) -> Option<AliasId> {
+    /// The alias or the class a type's head names (`Values` of `Values`, `js.Array` of
+    /// `js.Array[Int]`), by its address in the same pickle or through a package or the members
+    /// of a class or an object; none for any other type.
+    fn named_type_ref(&mut self, cx: &mut MapCx, t: &TType) -> Option<TypeRef> {
         let head = match t {
             TType::Applied(h, _) => &**h,
             _ => t,
         };
         // A type definition of the same pickle, named by its address.
         if let TType::LocalType(addr, _) = head {
-            return self.loaded_tables(cx).aliases.get(addr).copied();
+            let tables = self.loaded_tables(cx);
+            return tables.aliases.get(addr).map(|&a| TypeRef::Alias(a)).or_else(|| tables.classes.get(addr).map(|&c| TypeRef::Class(c)));
         }
         let TType::TypeRef(prefix, n) = head else { return None };
         let tasty = self.tasty(cx.file);
@@ -1067,19 +1068,17 @@ impl<'a> Worker<'a> {
                 None => None,
             },
         };
-        match found {
-            Some(TypeRef::Alias(a)) => Some(a),
-            _ => None,
-        }
+        found
     }
 
     /// Whether a type names a JavaScript type the std holds as an alias of a Scala type
-    /// (`js.Array[Int]`), or an alias of one (`type Values = js.Array[Int]`), as
-    /// `Worker::alias_names_js` tells.
+    /// (`js.Array[Int]`), or an alias or an opaque type of one (`type Values = js.Array[Int]`),
+    /// as `Worker::alias_names_js` and `Worker::opaque_names_js` tell.
     pub(super) fn names_js_type(&mut self, cx: &mut MapCx, t: &TType) -> bool {
-        match self.named_alias(cx, t) {
-            Some(a) => self.alias_names_js(a),
-            None => false,
+        match self.named_type_ref(cx, t) {
+            Some(TypeRef::Alias(a)) => self.alias_names_js(a),
+            Some(TypeRef::Class(c)) => self.opaque_names_js(c),
+            _ => false,
         }
     }
 
@@ -1112,7 +1111,7 @@ impl<'a> Worker<'a> {
         }
     }
 
-    pub(super) fn member_type_of(&mut self, c: ClassId, name: Name) -> Option<TypeRef> {
+    pub(in crate::typer) fn member_type_of(&mut self, c: ClassId, name: Name) -> Option<TypeRef> {
         if self.syms.class(c).state() == Completion::NotStarted {
             self.complete_class(c);
         }

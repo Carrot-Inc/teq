@@ -1668,7 +1668,9 @@ impl<'a> Worker<'a> {
                 (alias, bounds) => (alias, bounds.as_ref()),
             };
             let under = self.map_type(&mut cx, alias);
+            let js = self.names_js_type(&mut cx, alias);
             self.syms.class_mut(c).underlying = Some(under);
+            self.syms.class_mut(c).underlying_js = js;
             let targs: Vec<TypeId> = self.syms.class(c).tparams.clone().iter().map(|&p| self.types.param(p)).collect();
             let self_ty = self.types.class(c, &targs);
             self.syms.class_mut(c).base_types = vec![(c, self_ty)];

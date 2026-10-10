@@ -4707,6 +4707,17 @@ impl<'a> Worker<'a> {
                         }
                         other => (Vec::new(), self.conv_type(cv, other)),
                     };
+                    // `type L = js.Array[Int]`: a JavaScript type the std holds as an alias of a
+                    // Scala type, kept as the body spelled it, as a cast's (`written_js_alias`);
+                    // `type M = L` names the local alias, which the typer follows.
+                    let mut cx = super::MapCx::new(cv.file);
+                    let written = match &sig.rhs {
+                        TType::Lambda { kind: LambdaKind::Type, result, .. } => &**result,
+                        other => other,
+                    };
+                    if self.names_js_type(&mut cx, written) {
+                        cv.ast.js_alias_types.push(rhs);
+                    }
                     Some(cv.ast.add_def(Def { name, span: cv.span, mods: 0, annots: Vec::new(), kind: DefKind::TypeAlias { tparams, rhs: Some(rhs), lower: None, upper: None } }))
         }
     }

@@ -1,4 +1,4 @@
-// tests/tasty/fixtures/JsMap.tasty (TASTy 28.8, 1127 bytes)
+// tests/tasty/fixtures/JsMap.tasty (TASTy 28.8, 1142 bytes)
 package fix.facades
 @JSType @SourceFile @JSGlobal @native class JsMap[K, V]() extends Object {
   def get(k: K): UndefOr[V] = ...

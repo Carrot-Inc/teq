@@ -1,4 +1,4 @@
-// tests/tasty/fixtures/facades$package.tasty (TASTy 28.8, 828 bytes)
+// tests/tasty/fixtures/facades$package.tasty (TASTy 28.8, 843 bytes)
 package fix.facades
 @SourceFile <synthetic> object facades$package extends Object {
   <synthetic> private def writeReplace(): AnyRef = ...

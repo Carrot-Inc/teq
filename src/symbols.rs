@@ -157,6 +157,10 @@ pub struct ClassInfo {
     pub base_types: Vec<(ClassId, TypeId)>,
     pub ordinal: u32,
     pub underlying: Option<TypeId>,
+    /// Of an opaque type: whether its right side names a JavaScript type the std holds as an
+    /// alias of a Scala type (`opaque type O = js.Array[Int]`), which `underlying` no longer
+    /// tells, as `AliasInfo::js` of an alias.
+    pub underlying_js: bool,
     pub extensions: Vec<SymId>,
     pub givens: Vec<SymId>,
     /// For enum cases without parameters: the value symbol in the enum companion.
@@ -909,6 +913,7 @@ impl Symbols {
             base_types: Vec::new(),
             ordinal: 0,
             underlying: None,
+            underlying_js: false,
             extensions: Vec::new(),
             givens: Vec::new(),
             singleton: None,

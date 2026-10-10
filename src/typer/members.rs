@@ -1008,7 +1008,7 @@ impl<'a> Worker<'a> {
             self.syms.tparams[q.idx()].upper = hi;
         }
         let info = self.syms.class(c);
-        let (underlying, parents, bases) = (info.underlying, info.parents.clone(), info.base_types.clone());
+        let (underlying, underlying_js, parents, bases) = (info.underlying, info.underlying_js, info.parents.clone(), info.base_types.clone());
         let underlying = underlying.map(|u| this_of(self, u));
         let parents: Vec<TypeId> = parents.iter().map(|&p| this_of(self, p)).collect();
         let fresh_types: Vec<TypeId> = fresh.iter().map(|&q| self.types.param(q)).collect();
@@ -1020,6 +1020,7 @@ impl<'a> Worker<'a> {
         let mut info = self.syms.class_mut(d);
         info.tparams = fresh;
         info.underlying = underlying;
+        info.underlying_js = underlying_js;
         info.parents = parents;
         info.base_types = base_types;
         info.state().set(Completion::Done);

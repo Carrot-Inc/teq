@@ -2319,7 +2319,10 @@ impl<'a> Worker<'a> {
 
     /// Whether the written type's head names an alias of the std's `scala.scalajs.js` package
     /// (`js.Function2`, `js.Array[Int]`), a JavaScript type a cast leaves untested, before the alias
-    /// is expanded into scala's type; a library body's cast the loader recorded so (`js_alias_types`).
+    /// is expanded into scala's type, or an alias or an opaque type that stands for one, whatever
+    /// path selects it (`shape.Values` of a value's class); a library body's cast the loader
+    /// recorded so (`js_alias_types`). `JSCodeGen.genAsInstanceOf` reads the cast's type after
+    /// erasure, which sees through all of them.
     pub(super) fn written_js_alias(&mut self, id: TyExprId) -> bool {
         let ast = self.cur_ast();
         if ast.js_alias_types.contains(&id) {
@@ -2331,11 +2334,37 @@ impl<'a> Worker<'a> {
         };
         let found = match ast.ty(head) {
             TyExpr::Name(n) => self.lookup_type(n),
-            TyExpr::Select(q, n) => self.lookup_type_in_path(q, n),
+            TyExpr::Select(q, n) => self.lookup_type_in_path(q, n).or_else(|| self.value_path_type(q, n)),
             _ => None,
         };
-        let Some(TypeRef::Alias(a)) = found else { return false };
-        self.alias_names_js(a)
+        match found {
+            Some(TypeRef::Alias(a)) => self.alias_names_js(a),
+            Some(TypeRef::Class(c)) => self.opaque_names_js(c),
+            _ => false,
+        }
+    }
+
+    /// Whether the class is an opaque type whose right side names a JavaScript type the std holds
+    /// as an alias of a Scala one (`ClassInfo::underlying_js`).
+    pub(crate) fn opaque_names_js(&mut self, c: ClassId) -> bool {
+        if self.syms.class(c).kind != ClassKind::Opaque {
+            return false;
+        }
+        // One this thread is completing (its right side naming itself) stays as it stands.
+        let state = self.syms.class(c).state();
+        if !(state.get() == Completion::InProgress && state.mine()) {
+            self.complete_class(c);
+        }
+        self.syms.class(c).underlying_js
+    }
+
+    /// The type `n` of the class of the stable value the path `q` names (`shape.Values`), its
+    /// inherited type members among them.
+    fn value_path_type(&mut self, q: TyExprId, n: Name) -> Option<TypeRef> {
+        let Some(Ok(p)) = self.type_path(q) else { return None };
+        let under = self.widen_path(p);
+        let c = self.types.named_class(under)?;
+        self.member_type_of(c, n)
     }
 
     /// Whether the alias stands for a JavaScript type: one of the std's `scala.scalajs.js`
@@ -4732,8 +4761,11 @@ impl<'a> Worker<'a> {
                 t.syms.class_mut(c).tparams = ids.iter().map(|&(_, p)| p).collect();
                 t.env.frames.push(Frame::Locals { names: Vec::new(), tparams: ids.clone(), givens: Vec::new(), classes: Vec::new(), aliases: Vec::new(), owner: t.sites.owners.len() as u32 });
                 t.resolve_tparam_bounds(tparams, &ids);
+                // Read off the right side as written, as an alias's (`AliasInfo::js`).
+                let js = rhs.is_some_and(|r| t.written_js_alias(r));
                 let under = rhs.map_or(ERROR, |r| t.resolve_type(r));
                 t.syms.class_mut(c).underlying = Some(under);
+                t.syms.class_mut(c).underlying_js = js;
                 t.set_parents(c, Vec::new());
                 if let Some(b) = *upper {
                     let bt = t.resolve_type(b);

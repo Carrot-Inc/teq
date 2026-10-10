@@ -1,4 +1,4 @@
-// tests/tasty/fixtures/JsBindings.tasty (TASTy 28.8, 1051 bytes)
+// tests/tasty/fixtures/JsBindings.tasty (TASTy 28.8, 1066 bytes)
 package fix.facades
 @SourceFile object JsBindings extends Object {
   <synthetic> private def writeReplace(): AnyRef = ...

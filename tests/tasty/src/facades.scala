@@ -79,3 +79,10 @@ object JsCasts:
   type Again = Numbers
   def numbers(x: Any): Numbers = x.asInstanceOf[Numbers]
   def again(x: Any): Again = x.asInstanceOf[Again]
+  // Through an opaque type and a chain of local aliases, which erasure sees through alike.
+  opaque type Hidden = js.Array[Int]
+  def hidden(x: Any): Any = x.asInstanceOf[Hidden]
+  def local(x: Any): Any =
+    type L = js.Array[Int]
+    type M = L
+    x.asInstanceOf[M]

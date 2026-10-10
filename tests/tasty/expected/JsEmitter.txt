@@ -1,4 +1,4 @@
-// tests/tasty/fixtures/JsEmitter.tasty (TASTy 28.8, 974 bytes)
+// tests/tasty/fixtures/JsEmitter.tasty (TASTy 28.8, 989 bytes)
 package fix.facades
 @JSType @SourceFile @JSImport @native class JsEmitter() extends Object {
   def on(name: Predef.String, f: Function1[Predef.String, Unit]): JsEmitter.this.type = ...
