@@ -158,30 +158,30 @@ class ExportSuite extends munit.FunSuite {
   }
 
   test("a jar's key and the Maven layout a reader derives from it") {
-    assertEquals(Export.jarKey("org.jline", "jline", "3.29.0", Some("jdk8")), "org.jline:jline:3.29.0:jdk8")
-    assertEquals(Export.jarKey("a", "b", "1", Some("")), "a:b:1")
-    assertEquals(Export.mavenLayout("org.jline:jline:3.29.0:jdk8"), Some("org/jline/jline/3.29.0/jline-3.29.0-jdk8.jar"))
-    assertEquals(Export.mavenLayout("org.scala-lang:scala3-library_3:3.8.4"), Some("org/scala-lang/scala3-library_3/3.8.4/scala3-library_3-3.8.4.jar"))
-    for (no <- Seq("a:b", "a:b:c:d:e", "a::1", "a:b:1:", "")) assertEquals(Export.mavenLayout(no), None, no)
+    assertEquals(Exported.jarKey("org.jline", "jline", "3.29.0", Some("jdk8")), "org.jline:jline:3.29.0:jdk8")
+    assertEquals(Exported.jarKey("a", "b", "1", Some("")), "a:b:1")
+    assertEquals(Exported.mavenLayout("org.jline:jline:3.29.0:jdk8"), Some("org/jline/jline/3.29.0/jline-3.29.0-jdk8.jar"))
+    assertEquals(Exported.mavenLayout("org.scala-lang:scala3-library_3:3.8.4"), Some("org/scala-lang/scala3-library_3/3.8.4/scala3-library_3-3.8.4.jar"))
+    for (no <- Seq("a:b", "a:b:c:d:e", "a::1", "a:b:1:", "")) assertEquals(Exported.mavenLayout(no), None, no)
     // A path off the layout (a timestamped snapshot) is written as the record's fourth field; one on it is derived.
-    val r = Export.Repository("r", "https://r.example/", Some("r.example"))
-    val snapshot = Export.Jar("x:snap:1.0-SNAPSHOT", r, "x/snap/1.0-SNAPSHOT/snap-1.0-20261005.101010-3.jar", "s", 1, "p/compile")
+    val r = Exported.Repository("r", "https://r.example/", Some("r.example"))
+    val snapshot = Exported.Jar("x:snap:1.0-SNAPSHOT", r, "x/snap/1.0-SNAPSHOT/snap-1.0-20261005.101010-3.jar", "s", 1, "p/compile")
     assertEquals(snapshot.fields(_.id), Json.Str(s"r s 1 ${snapshot.path}"))
-    assertEquals(Export.Jar("x:y:1.0", r, "x/y/1.0/y-1.0.jar", "s", 1, "p/compile").fields(_.id), Json.Str("r s 1"))
+    assertEquals(Exported.Jar("x:y:1.0", r, "x/y/1.0/y-1.0.jar", "s", 1, "p/compile").fields(_.id), Json.Str("r s 1"))
     // A path with a space is refused: the fields could not hold it.
-    assertEquals(Export.table(Seq(Export.Jar("x:y:1.0", r, "x/y/1.0/y 1.0.jar", "s", 1, "p/compile")))._2.size, 1)
+    assertEquals(Exported.table(Seq(Exported.Jar("x:y:1.0", r, "x/y/1.0/y 1.0.jar", "s", 1, "p/compile")))._2.size, 1)
   }
 
   test("one key, one jar: a key that names two files is refused with both") {
-    val central = Export.Repository("maven-central", "https://repo1.maven.org/maven2/", None)
-    val company = Export.Repository("company", "https://artifacts.example.io/releases/", Some("artifacts.example.io"))
-    val jar = Export.Jar("a:b:1", central, "a/b/1/b-1.jar", "da39a3ee5e6b4b0d3255bfef95601890afd80709", 10, "p/compile")
+    val central = Exported.Repository("maven-central", "https://repo1.maven.org/maven2/", None)
+    val company = Exported.Repository("company", "https://artifacts.example.io/releases/", Some("artifacts.example.io"))
+    val jar = Exported.Jar("a:b:1", central, "a/b/1/b-1.jar", "da39a3ee5e6b4b0d3255bfef95601890afd80709", 10, "p/compile")
     // One repository under two projects' names is one: q's resolver names company's URL "second".
-    val aliased = Export.Jar("a:c:1", company, "a/c/1/c-1.jar", "s", 1, "p/compile")
-    val (one, none) = Export.table(Seq(jar, jar.copy(where = "q/test"), aliased, aliased.copy(repository = company.copy(id = "second"), where = "q/compile")))
+    val aliased = Exported.Jar("a:c:1", company, "a/c/1/c-1.jar", "s", 1, "p/compile")
+    val (one, none) = Exported.table(Seq(jar, jar.copy(where = "q/test"), aliased, aliased.copy(repository = company.copy(id = "second"), where = "q/compile")))
     assertEquals((one.map(_.key), none), (Seq("a:b:1", "a:c:1"), Nil))
     for (other <- Seq(jar.copy(repository = company, where = "q/test"), jar.copy(path = "a/b/1/b-1-x.jar", where = "q/test"), jar.copy(sha1 = "0" * 40, where = "q/test"), jar.copy(size = 11, where = "q/test"))) {
-      val (_, refusals) = Export.table(Seq(jar, other))
+      val (_, refusals) = Exported.table(Seq(jar, other))
       assertEquals(refusals, Seq(s"the jar a:b:1 is two files, $jar and $other: one key names one jar"))
       assert(refusals.head.contains("for p/compile") && refusals.head.contains("for q/test"), refusals.head)
     }
@@ -189,13 +189,13 @@ class ExportSuite extends munit.FunSuite {
 
   test("one repository per URL and credentials host, by the first name a project gives it") {
     val url = "http://127.0.0.1:38443/"
-    val (first, second) = (Export.Repository("first", url, Some("127.0.0.1")), Export.Repository("second", url, Some("127.0.0.1")))
-    val central = Export.Repository("maven-central", "https://repo1.maven.org/maven2/", None)
-    val (repositories, id, conflicts) = Export.shared(Seq(central, first, central, second))
+    val (first, second) = (Exported.Repository("first", url, Some("127.0.0.1")), Exported.Repository("second", url, Some("127.0.0.1")))
+    val central = Exported.Repository("maven-central", "https://repo1.maven.org/maven2/", None)
+    val (repositories, id, conflicts) = Exported.shared(Seq(central, first, central, second))
     assertEquals((repositories, Seq(central, first, second).map(id), conflicts), (Seq(central, first), Seq("maven-central", "first", "first"), Nil))
     // One name for two URLs is refused, as before.
-    val other = Export.Repository("first", "https://elsewhere.example/", Some("elsewhere.example"))
-    assertEquals(Export.shared(Seq(first, other))._3, Seq(s"the repository id first names $url and https://elsewhere.example/: give the resolvers names of their own"))
+    val other = Exported.Repository("first", "https://elsewhere.example/", Some("elsewhere.example"))
+    assertEquals(Exported.shared(Seq(first, other))._3, Seq(s"the repository id first names $url and https://elsewhere.example/: give the resolvers names of their own"))
   }
 
   test("the build definition files and the hash over them") {
@@ -213,7 +213,7 @@ class ExportSuite extends munit.FunSuite {
           "sub/inner.sbt" -> "i",
         ))
       IO.write(new File(root, path), text, UTF_8)
-      val (files, hash) = Export.inputs(root.toPath)
+      val Exported.Inputs(files, hash, _) = Export.inputs(root.toPath)
       val expected = Seq(
         "build.sbt" -> sha256("a"),
         "other.sbt" -> sha256("b"),
@@ -237,7 +237,7 @@ class ExportSuite extends munit.FunSuite {
         ))
       IO.write(new File(root, path), text, UTF_8)
       // The raw bytes, CRLF and all: scalac keeps the `\r\n` of S's multi-line string.
-      assertEquals(Export.inputs(root.toPath)._1.toMap, Map(
+      assertEquals(Export.inputs(root.toPath).files.toMap, Map(
         "build.sbt" -> sha256("name := \"x\"\r\n"),
         "other.sbt" -> sha256("name := \"y\"\n"),
         "project/S.scala" -> sha256(string.replace("\n", "\r\n")),
@@ -295,22 +295,22 @@ class ExportSuite extends munit.FunSuite {
       MavenRepository("local file", "file:///tmp/repository/"),
     ))
     assertEquals(repositories, Seq(
-      Export.Repository("maven-central", "https://repo1.maven.org/maven2/", None),
-      Export.Repository("example-artifacts-releases", "https://artifacts.example.io/repository/maven-releases/", Some("artifacts.example.io")),
-      Export.Repository("example-artifacts-releases-2", "https://other.example.io/maven-releases/", Some("other.example.io")),
+      Exported.Repository("maven-central", "https://repo1.maven.org/maven2/", None),
+      Exported.Repository("example-artifacts-releases", "https://artifacts.example.io/repository/maven-releases/", Some("artifacts.example.io")),
+      Exported.Repository("example-artifacts-releases-2", "https://other.example.io/maven-releases/", Some("other.example.io")),
     ))
   }
 
   test("scalac's -Wunused kinds map to --wunused with every kind, the warning options to teq's") {
-    def flags(options: String*) = TeqPlugin.ScalacOptions(options).flags(jvm = false)
-    def ignored(options: String*) = TeqPlugin.ScalacOptions(options).ignored
+    def flags(options: String*) = ScalacOptions(options).flags(jvm = false)
+    def ignored(options: String*) = ScalacOptions(options).ignored
     assertEquals(flags("-Wunused:imports"), Seq("--wunused", "imports"))
     assertEquals(flags("-Wunused:privates,imports", "-Wunused:locals"), Seq("--wunused", "privates,imports,locals"))
     assertEquals(flags("-Wunused"), Seq("--wunused", "all"))
     assertEquals(flags("-Wall"), Seq("--wunused", "all", "--wtostring-interpolated"))
     for (on <- Seq(Seq("-Wunused:imports"), Seq("-Wunused:all"), Seq("-Wunused"), Seq("-Wunused:privates,imports"), Seq("-Wunused:linted"), Seq("-Wall")))
-      assert(TeqPlugin.ScalacOptions(on).wunusedImports, on)
-    assert(!TeqPlugin.ScalacOptions(Seq("-Wunused:privates")).wunusedImports)
+      assert(ScalacOptions(on).wunusedImports, on)
+    assert(!ScalacOptions(Seq("-Wunused:privates")).wunusedImports)
     assertEquals(ignored("-Wunused:privates,imports,locals"), Nil)
     assertEquals(ignored("-Wall"), Seq("-Wall"))
     assertEquals(flags("-Werror", "-Wunused:imports"), Seq("--werror", "--wunused", "imports"))
@@ -323,27 +323,27 @@ class ExportSuite extends munit.FunSuite {
   }
 
   test("dynamic versions") {
-    for (version <- Seq("1.0.+", "latest.release", "[1.0,2.0)", "]1.0,)", "(,2.0]")) assert(Export.isDynamic(version), version)
-    for (version <- Seq("1.0", "1.0-SNAPSHOT", "0.4.3-M5", "0.1.0-pre.2")) assert(!Export.isDynamic(version), version)
+    for (version <- Seq("1.0.+", "latest.release", "[1.0,2.0)", "]1.0,)", "(,2.0]")) assert(Exported.isDynamic(version), version)
+    for (version <- Seq("1.0", "1.0-SNAPSHOT", "0.4.3-M5", "0.1.0-pre.2")) assert(!Exported.isDynamic(version), version)
   }
 
   test("snapshot versions") {
-    for (version <- Seq("0.1.0-SNAPSHOT", "0.1.1-releases-SNAPSHOT")) assert(Export.isSnapshot(version), version)
-    for (version <- Seq("0.1.1", "0.1.0-pre.1", "1.0-SNAPSHOT-1")) assert(!Export.isSnapshot(version), version)
+    for (version <- Seq("0.1.0-SNAPSHOT", "0.1.1-releases-SNAPSHOT")) assert(Exported.isSnapshot(version), version)
+    for (version <- Seq("0.1.1", "0.1.0-pre.1", "1.0-SNAPSHOT-1")) assert(!Exported.isSnapshot(version), version)
   }
 
   test("a file of coursier's cache by its URL") {
     val cache = new File("/c/coursier/v1")
-    assertEquals(Export.cachedUrl(cache, new File("/c/coursier/v1/https/repo1.maven.org/maven2/a/b/1/b-1.jar")), Some("https://repo1.maven.org/maven2/a/b/1/b-1.jar"))
-    assertEquals(Export.cachedUrl(cache, new File("/elsewhere/b-1.jar")), None)
-    assertEquals(Export.cachedUrl(cache, new File("/c/coursier/v1/http/127.0.0.1%3A34563/a/b/1.0%2B3/b-1.0%2B3.jar")), Some("http://127.0.0.1:34563/a/b/1.0+3/b-1.0+3.jar"))
+    assertEquals(Exported.cachedUrl(cache, new File("/c/coursier/v1/https/repo1.maven.org/maven2/a/b/1/b-1.jar")), Some("https://repo1.maven.org/maven2/a/b/1/b-1.jar"))
+    assertEquals(Exported.cachedUrl(cache, new File("/elsewhere/b-1.jar")), None)
+    assertEquals(Exported.cachedUrl(cache, new File("/c/coursier/v1/http/127.0.0.1%3A34563/a/b/1.0%2B3/b-1.0%2B3.jar")), Some("http://127.0.0.1:34563/a/b/1.0+3/b-1.0+3.jar"))
   }
 
   test("sbt's own scala-library is the jar of the declared repository the build's resolvers give it, never Central unasked") {
     val key = "org.scala-lang:scala-library:3.8.4"
     val path = "org/scala-lang/scala-library/3.8.4/scala-library-3.8.4.jar"
     // A mirror alone, named as Central is: its jar, at its path; no second maven-central.
-    val mirror = Export.Repository("maven-central", "http://127.0.0.1:33113/", Some("127.0.0.1"))
+    val mirror = Exported.Repository("maven-central", "http://127.0.0.1:33113/", Some("127.0.0.1"))
     assertEquals(Export.bootRepository(key, Right(Some(mirror.url + path)), Seq(mirror)), Right((mirror, path)))
     val named = mirror.copy(id = "mirror")
     assertEquals(Export.bootRepository(key, Right(Some(named.url + path)), Seq(named)), Right((named, path)))
@@ -436,8 +436,8 @@ class ExportSuite extends munit.FunSuite {
     def log(level: Level.Value, message: => String): Unit = lines += s"$level: $message"
   }
 
-  private def repository(id: String, url: String) = Export.Repository(id, url, Some("127.0.0.1"))
-  private val unserved = Served(Nil, Logger.Null)
+  private def repository(id: String, url: String) = Exported.Repository(id, url, Some("127.0.0.1"))
+  private val unserved = Served(Map.empty)
 
   test("the binaries' records from the first repository serving the version by its pom: the sha1 from the .sha1, the size from a HEAD, none downloaded") {
     withDirectory { root =>
@@ -453,19 +453,19 @@ class ExportSuite extends munit.FunSuite {
         withRepository(releases) { case (second, requests) =>
           withRepository(later) { case (third, thirdRequests) =>
             val repositories = Seq(repository("first", first), repository("second", second), repository("third", third))
-            val pins = Export.pinned("build.teq", "teq", "1.2.3", Export.Classifiers, repositories, unserved, Logger.Null)
+            val pins = Exported.pinned("build.teq", "teq", "1.2.3", Exported.Classifiers, repositories, unserved, _ => ())
             assertEquals((pins.refusals, pins.untold), (Nil, Nil))
             assertEquals(pins.found, Seq(
-              Export.Binary("osx-aarch_64", s"$second$at/teq-1.2.3-osx-aarch_64.exe", Sha1.compute(new File(releases, s"$at/teq-1.2.3-osx-aarch_64.exe")), 12, Some(repository("second", second))),
-              Export.Binary("linux-x86_64", s"$second$at/teq-1.2.3-linux-x86_64.exe", Sha1.compute(new File(releases, s"$at/teq-1.2.3-linux-x86_64.exe")), 12, Some(repository("second", second))),
+              Exported.Binary("osx-aarch_64", s"$second$at/teq-1.2.3-osx-aarch_64.exe", Sha1.compute(new File(releases, s"$at/teq-1.2.3-osx-aarch_64.exe")), 12, Some(repository("second", second))),
+              Exported.Binary("linux-x86_64", s"$second$at/teq-1.2.3-linux-x86_64.exe", Sha1.compute(new File(releases, s"$at/teq-1.2.3-linux-x86_64.exe")), 12, Some(repository("second", second))),
             ))
-            assertEquals(Lock.canonical(Export.Binaries("1.2.3", pins.found, Nil).block),
+            assertEquals(Lock.canonical(Exported.Binaries("1.2.3", pins.found, Nil).block),
               pins.found.sortBy(_.classifier).map(b => s"${b.classifier}: $second$at/teq-1.2.3-${b.classifier}.exe ${b.sha1} 12\n").mkString)
             // The first repository asked for the pom alone; the second for the pom, then per classifier
             // the .sha1 and a HEAD of the binary (which tells a classifier not published from a binary
             // without its checksum): no binary's GET; the third never asked.
             assertEquals(firstRequests(), Seq(s"HEAD /$at/teq-1.2.3.pom"))
-            assertEquals(requests(), s"HEAD /$at/teq-1.2.3.pom" +: Export.Classifiers.flatMap(c => Seq(s"GET /$at/teq-1.2.3-$c.exe.sha1", s"HEAD /$at/teq-1.2.3-$c.exe")))
+            assertEquals(requests(), s"HEAD /$at/teq-1.2.3.pom" +: Exported.Classifiers.flatMap(c => Seq(s"GET /$at/teq-1.2.3-$c.exe.sha1", s"HEAD /$at/teq-1.2.3-$c.exe")))
             assertEquals(thirdRequests(), Nil)
           }
         }
@@ -479,9 +479,9 @@ class ExportSuite extends munit.FunSuite {
       published(root, "1.2.3", "linux-x86_64" -> "linux binary", "osx-aarch_64" -> "a mac binary!")
       // The binaries at signed URLs too, as a repository that redirects its downloads serves them.
       for (c <- Seq("linux-x86_64", "osx-aarch_64")) IO.copyFile(new File(root, s"$at/teq-1.2.3-$c.exe"), new File(root, s"signed/teq-1.2.3-$c.exe"))
-      def pinned(url: String) = Export.pinned("build.teq", "teq", "1.2.3", Export.Classifiers, Seq(repository("r", url)), unserved, Logger.Null)
+      def pinned(url: String) = Exported.pinned("build.teq", "teq", "1.2.3", Exported.Classifiers, Seq(repository("r", url)), unserved, _ => ())
       def found(url: String) = Seq("osx-aarch_64" -> 13, "linux-x86_64" -> 12).map { case (c, size) =>
-        Export.Binary(c, s"$url$at/teq-1.2.3-$c.exe", Sha1.compute(new File(root, s"$at/teq-1.2.3-$c.exe")), size, Some(repository("r", url)))
+        Exported.Binary(c, s"$url$at/teq-1.2.3-$c.exe", Sha1.compute(new File(root, s"$at/teq-1.2.3-$c.exe")), size, Some(repository("r", url)))
       }
       val first = "(bytes=0-0)"
       // Every HEAD refused (405), a range answered (206) or ignored (200): the pom, then per classifier the .sha1, the
@@ -491,7 +491,7 @@ class ExportSuite extends munit.FunSuite {
           val pins = pinned(url)
           assertEquals((pins.found, pins.refusals, pins.untold), (found(url), Nil, Nil), s"ranges answered: $ranges")
           assertEquals(requests(), Seq(s"HEAD /$at/teq-1.2.3.pom", s"GET /$at/teq-1.2.3.pom $first") ++
-            Export.Classifiers.flatMap(c => Seq(s"GET /$at/teq-1.2.3-$c.exe.sha1", s"HEAD /$at/teq-1.2.3-$c.exe", s"GET /$at/teq-1.2.3-$c.exe $first")))
+            Exported.Classifiers.flatMap(c => Seq(s"GET /$at/teq-1.2.3-$c.exe.sha1", s"HEAD /$at/teq-1.2.3-$c.exe", s"GET /$at/teq-1.2.3-$c.exe $first")))
         }
       // The binaries redirected to signed URLs, which refuse a HEAD (403): the GET of the first byte follows the
       // redirect from the repository's URL, which the record keeps.
@@ -504,7 +504,7 @@ class ExportSuite extends munit.FunSuite {
       }
       // A HEAD refused and the GET refused as well: the repository cannot tell, named by the GET.
       withRepository(root, head = _ => Some(405), answer = path => Option.when(path.endsWith(".pom"))(Left(403))) { (url, _) =>
-        assertEquals(pinned(url), Export.Pinned(Nil, Nil, Seq(s"whether the repository r ($url) serves build.teq:teq:1.2.3 cannot be told (GET (bytes=0-0) $url$at/teq-1.2.3.pom answered 403)")))
+        assertEquals(pinned(url), Exported.Pinned(Nil, Nil, Seq(s"whether the repository r ($url) serves build.teq:teq:1.2.3 cannot be told (GET (bytes=0-0) $url$at/teq-1.2.3.pom answered 403)")))
       }
     }
   }
@@ -514,7 +514,7 @@ class ExportSuite extends munit.FunSuite {
       published(root, "1.2.3", "linux-x86_64" -> "linux binary", "osx-aarch_64" -> "a mac binary")
       val at = "build/teq/teq/1.2.3"
       IO.write(new File(root, s"$at/teq-1.2.3-osx-aarch_64.exe.sha1"), "e5f121495fbad0018189acfd347a37de61d3edf\n")
-      def pinned(repositories: Export.Repository*) = Export.pinned("build.teq", "teq", "1.2.3", Export.Classifiers, repositories, unserved, Logger.Null)
+      def pinned(repositories: Exported.Repository*) = Exported.pinned("build.teq", "teq", "1.2.3", Exported.Classifiers, repositories, unserved, _ => ())
       def refusal(url: String, classifier: String, why: String) = s"teq's binary for $classifier cannot be pinned from the repository r ($url): $why"
       def osx(url: String) = refusal(url, "osx-aarch_64", s"$url$at/teq-1.2.3-osx-aarch_64.exe.sha1 holds no SHA-1: " + "\"e5f121495fbad0018189acfd347a37de61d3edf\"")
       withRepository(root) { case (url, _) =>
@@ -539,8 +539,8 @@ class ExportSuite extends munit.FunSuite {
       def refusalOf(url: String) = refusal(url, "linux-x86_64", s"GET $url$linux.sha1: ")
       withRepository(root, stalled = _ == s"/$linux.sha1") { case (url, _) =>
         val started = System.nanoTime
-        val pins = Export.pinned("build.teq", "teq", "1.2.3", Seq("linux-x86_64"), Seq(repository("r", url)), Served(Nil, Logger.Null, Duration.ofSeconds(1)), Logger.Null)
-        assertEquals(pins, Export.Pinned(Nil, Seq(refusalOf(url) + "HttpTimeoutException: no whole answer within 1000 ms"), Nil))
+        val pins = Exported.pinned("build.teq", "teq", "1.2.3", Seq("linux-x86_64"), Seq(repository("r", url)), Served(Map.empty, Duration.ofSeconds(1)), _ => ())
+        assertEquals(pins, Exported.Pinned(Nil, Seq(refusalOf(url) + "HttpTimeoutException: no whole answer within 1000 ms"), Nil))
         assert(System.nanoTime - started < TimeUnit.SECONDS.toNanos(10))
       }
       withRepository(root, path => Option.when(path == s"/$linux.sha1")(Right("/bad redirect"))) { case (url, _) =>
@@ -560,7 +560,7 @@ class ExportSuite extends munit.FunSuite {
         assert(pins.untold(1).startsWith(s"whether the repository gone (http://127.0.0.1:$closed/) serves build.teq:teq:1.2.3 cannot be told (HEAD http://127.0.0.1:$closed/$at/teq-1.2.3.pom: ConnectException"), pins.untold(1))
         withRepository(root) { case (serving, _) =>
           val log = new Recorded()
-          val pins = Export.pinned("build.teq", "teq", "1.2.3", Seq("linux-x86_64"), Seq(repository("failing", failing), repository("serving", serving)), unserved, log)
+          val pins = Exported.pinned("build.teq", "teq", "1.2.3", Seq("linux-x86_64"), Seq(repository("failing", failing), repository("serving", serving)), unserved, m => log.warn(m))
           assertEquals((pins.found.flatMap(_.repository).map(_.id), pins.refusals, pins.untold), (Seq("serving"), Nil, Nil))
           assertEquals(log.lines.toSeq, Seq(s"warn: teq: whether the repository failing ($failing) serves build.teq:teq:1.2.3 cannot be told (HEAD $failing$at/teq-1.2.3.pom answered 500); serving serves it"))
         }
@@ -576,7 +576,7 @@ class ExportSuite extends munit.FunSuite {
       val at = "build/teq/teq/1.2.3"
       withRepository(root, path => Option.when(path.startsWith("/moved/"))(Right(path.replace("/moved/", "/releases/"))), user = Some("reader" -> "secret")) { case (url, requests) =>
         val moved = repository("private", s"${url}moved/")
-        def pinned(credentials: Seq[Credentials]) = Export.pinned("build.teq", "teq", "1.2.3", Seq("linux-x86_64"), Seq(moved), Served(credentials, Logger.Null), Logger.Null)
+        def pinned(credentials: Seq[Credentials]) = Exported.pinned("build.teq", "teq", "1.2.3", Seq("linux-x86_64"), Seq(moved), TeqPlugin.served(credentials, Logger.Null), _ => ())
         // A credentials file of the build's (sbt's `Credentials(file)`, at a path of its own) and inline
         // credentials alike; every request redirected, the record keeping the URL of the resolver's
         // layout, not the one the redirect answered from.
@@ -588,10 +588,10 @@ class ExportSuite extends munit.FunSuite {
         assertEquals(requests().filter(_.contains("/releases/")).distinct, Seq(s"HEAD /releases/$at/teq-1.2.3.pom", s"GET /releases/$at/teq-1.2.3-linux-x86_64.exe.sha1", s"HEAD /releases/$at/teq-1.2.3-linux-x86_64.exe"))
         // Without them, or with another host's: the repository cannot tell, naming the answer.
         for (credentials <- Seq(Nil, Seq(Credentials("teq", "elsewhere.example", "reader", "secret"))))
-          assertEquals(pinned(credentials), Export.Pinned(Nil, Nil, Seq(s"whether the repository private (${url}moved/) serves build.teq:teq:1.2.3 cannot be told (HEAD ${url}moved/$at/teq-1.2.3.pom answered 401)")))
+          assertEquals(pinned(credentials), Exported.Pinned(Nil, Nil, Seq(s"whether the repository private (${url}moved/) serves build.teq:teq:1.2.3 cannot be told (HEAD ${url}moved/$at/teq-1.2.3.pom answered 401)")))
         // A credentials file that cannot be read is passed over with a warning, as sbt passes it over.
         val log = new Recorded()
-        Served(Seq(Credentials(new File(root, "missing"))), log)
+        TeqPlugin.served(Seq(Credentials(new File(root, "missing"))), log)
         assert(log.lines.exists(_.startsWith("warn: teq: Credentials file")), log.lines)
       }
     }
@@ -673,12 +673,12 @@ class ExportSuite extends munit.FunSuite {
       val root = dir.getCanonicalFile.toPath
       val refusals = mutable.ArrayBuffer.empty[String]
       val command = TeqCommand(Seq("teq", "interp", "scripts/gen.scala", "--", "app"), inputs = Seq("app/assets/**/*.svg"), outputs = Seq("app/assets/module.js", "./app/gen/"))
-      val block = Export.commandJson(root, command, "target/teq/app/compile/src_managed", "app", refusals, buildTool = true)
+      val block = Exported.commandJson(root, command, "target/teq/app/compile/src_managed", "app", refusals, buildTool = true)
       assertEquals(block("run").strings, Seq("teq", "interp", "scripts/gen.scala", "--", "app", "target/teq/app/compile/src_managed"))
       assertEquals(block("outputs").strings, Seq("target/teq/app/compile/src_managed", "app/assets/module.js", "app/gen"))
       assertEquals(block("inputs").strings, Seq("app/assets/**/*.svg"))
       assert(refusals.isEmpty)
-      Export.commandJson(root, command.copy(outputs = Seq("../elsewhere.js")), "target/teq/app/compile/src_managed", "app", refusals, buildTool = true)
+      Exported.commandJson(root, command.copy(outputs = Seq("../elsewhere.js")), "target/teq/app/compile/src_managed", "app", refusals, buildTool = true)
       assertEquals(refusals.toSeq, Seq("app: the TeqCommand teq interp scripts/gen.scala -- app writes ../elsewhere.js, outside the build's root"))
     }
   }
@@ -750,9 +750,9 @@ class ExportSuite extends munit.FunSuite {
   }
 
   test("a description's managed source directories: the export's directory of a project whose generators teq runs, sbt's own of one whose generators sbt runs or that has no part, none of one without generators") {
-    def part(name: String, sources: Seq[Either[String, Export.Managed]], bySbt: Option[Boolean]) =
-      Export.Part(name, Json.Obj(Map("base" -> Json.Str(name), "description" -> Json.Obj(Map()))), Nil, Nil, Nil, Nil, sources, bySbt)
-    def managed(owner: String, dir: String, generates: Boolean = true) = Right(Export.Managed(owner, Some(dir), generates))
+    def part(name: String, sources: Seq[Either[String, Exported.Managed]], bySbt: Option[Boolean]) =
+      Exported.Part(name, Json.Obj(Map("base" -> Json.Str(name), "description" -> Json.Obj(Map()))), Nil, Nil, Nil, Nil, sources, bySbt)
+    def managed(owner: String, dir: String, generates: Boolean = true) = Right(Exported.Managed(owner, Some(dir), generates))
     val app = part("app", Seq(
       Left("app/src"),
       managed("gen", "target/out/gen/src_managed/main"),
@@ -762,11 +762,26 @@ class ExportSuite extends munit.FunSuite {
       managed("foreign", "target/out/foreign/src_managed/main"),
       managed("idle", "target/out/idle/src_managed/main", generates = false),
       managed("foreign", "/elsewhere/foreign/src_managed/main"),
-      Right(Export.Managed("gen", None, true)),
+      Right(Exported.Managed("gen", None, true)),
     ), None)
     val parts = Seq(app, part("gen", Nil, Some(true)), part("multi", Nil, Some(true)), part("teq", Nil, Some(false)), part("plain", Nil, None))
     val sources = Export.withSources(parts).map(p => p.name -> p.json("description")("sources").strings).toMap
     assertEquals(sources("app"), Seq("app/src", "target/out/gen/src_managed/main", "multi/managed-a", "target/teq/teq/compile/src_managed", "target/out/foreign/src_managed/main", "/elsewhere/foreign/src_managed/main"))
     assertEquals(sources("gen"), Nil)
+  }
+
+  test("a Scala.js project's JavaScript environment as the lock records it: Node.js's by its configuration, another by its class") {
+    import org.scalajs.jsenv.nodejs.NodeJSEnv
+    val node = TeqScalaJSPlugin.jsEnvJson(new NodeJSEnv(NodeJSEnv.Config().withArgs(List("--enable-source-maps")).withEnv(Map("TZ" -> "UTC"))))
+    assertEquals(node("kind").str, "node")
+    assertEquals(node("executable").str, "node")
+    assertEquals(node("args").strings, Seq("--enable-source-maps"))
+    assertEquals(node("env"), Json.Obj(Map("TZ" -> Json.Str("UTC"))))
+    val other = TeqScalaJSPlugin.jsEnvJson(new org.scalajs.jsenv.JSEnv {
+      val name = "a browser"
+      def start(input: Seq[org.scalajs.jsenv.Input], config: org.scalajs.jsenv.RunConfig) = ???
+      def startWithCom(input: Seq[org.scalajs.jsenv.Input], config: org.scalajs.jsenv.RunConfig, onMessage: String => Unit) = ???
+    })
+    assertEquals((other("args").strings, other("executable")), (Nil, Json.Null))
   }
 }

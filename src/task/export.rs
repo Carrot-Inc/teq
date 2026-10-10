@@ -30,6 +30,11 @@ pub struct Export {
     pub table: BTreeMap<String, Jar>,
     /// The build definition files and the digests of their contents, as the export recorded them.
     pub inputs: BTreeMap<String, String>,
+    /// The inputs the build declares besides its definition files (`inputs.declared`, Mill's), paths
+    /// relative to the root, which every check of the inputs reads as well.
+    pub declared: Vec<String>,
+    /// The build tool whose plugin wrote the export (`exporter`, sbt when absent).
+    pub exporter: Exporter,
     /// The compiler the export pins, its header: the daemon exits when it changes.
     pub teq: Pinned,
     /// The class files' version the build compiles for: the least Java a test runner may run on.
@@ -78,6 +83,8 @@ pub struct Project {
 pub struct RunContext {
     pub base_directory: String,
     pub env_vars: BTreeMap<String, String>,
+    /// As a test context's `envPaths`.
+    pub env_paths: BTreeMap<String, Vec<String>>,
     pub java_options: Vec<String>,
     pub aliases: BTreeMap<String, String>,
     /// `Compile / run / mainClass`, else `Compile / mainClass`, when the build sets one; none in
@@ -152,25 +159,87 @@ pub struct Configuration {
     pub classpath: Vec<Entry>,
     pub flags: Flags,
     pub generators: Vec<Value>,
-    /// The resource generators sbt runs, which teq cannot (each of kind `sbt`).
+    /// The resource generators the build tool runs, which teq cannot (each of kind `sbt` or `mill`).
     pub resource_generators: Vec<Value>,
     /// The main classes the build declares: `Compile / mainClass`, the aliases' targets and
     /// `teqMainClasses`, sorted.
     pub main_classes: Vec<String>,
     /// The test configuration's execution context.
     pub test: Option<TestContext>,
+    /// Whether the configurations its products' own classpaths hold are seen by its sources too, as
+    /// sbt's classpaths are (`transitive`, true when absent). False where the build tool keeps them
+    /// out of sight (Mill's `compileModuleDeps`, not transitive): the classpath's products are then
+    /// the whole of what its sources see, and the closure's others its products' prerequisites alone.
+    pub transitive: bool,
+    /// The classpath its suites run on where it is not `classpath` (`runtimeClasspath`, Mill's test
+    /// module, compiled against its compile classpath and run on its run classpath).
+    pub runtime_classpath: Option<Vec<Entry>>,
 }
 
-/// How sbt runs a test configuration's suites: its JVM's directory, options and environment, the
-/// frameworks with their `Tests.Argument`s, and the suites a `Tests.Exclude` names.
+impl Configuration {
+    /// The classpath the configuration's code runs on: `runtimeClasspath`, else `classpath`.
+    pub fn run_classpath(&self) -> &[Entry] {
+        self.runtime_classpath.as_deref().unwrap_or(&self.classpath)
+    }
+}
+
+/// How the build tool runs a test configuration's suites: its JVM's directory, options and environment,
+/// the frameworks with their arguments, and the suites a `Tests.Exclude` names; on Scala.js the link's
+/// module kind and the JavaScript environment.
 #[derive(Clone, Default, PartialEq, Eq, Debug)]
 pub struct TestContext {
     pub fork: bool,
     pub base_directory: String,
     pub env_vars: BTreeMap<String, String>,
+    /// Variables whose values are paths under the build's root (`envPaths`): each the paths given,
+    /// absolute, joined by `;`, as Mill sets `MILL_TEST_RESOURCE_DIR` and `MILL_WORKSPACE_ROOT`.
+    pub env_paths: BTreeMap<String, Vec<String>>,
     pub java_options: Vec<String>,
     pub frameworks: Vec<Framework>,
     pub exclude: Vec<String>,
+    /// Whether each run of the suites has a directory of its own, empty, as its working directory
+    /// (`sandbox`, Mill's `testSandboxWorkingDir`): `sandbox_directory`, emptied before each run.
+    pub sandbox: bool,
+    /// A Scala.js test link's module kind (`moduleKind`: `NoModule`, `CommonJSModule`, `ESModule`).
+    pub module_kind: Option<String>,
+    /// The JavaScript environment a Scala.js configuration's suites run in (`jsEnv`).
+    pub js_env: Option<JsEnv>,
+}
+
+/// A Scala.js test configuration's JavaScript environment: its kind (`node`, `jsdom`, or the build
+/// tool's name of another), the executable, its arguments and environment variables.
+#[derive(Clone, Default, PartialEq, Eq, Debug)]
+pub struct JsEnv {
+    pub kind: String,
+    pub executable: Option<String>,
+    pub args: Vec<String>,
+    pub env: BTreeMap<String, String>,
+}
+
+impl TestContext {
+    /// The environment variables a run of the suites is given: `envVars`, then `envPaths` resolved
+    /// under the build's root.
+    pub fn env(&self, export: &Export) -> BTreeMap<String, String> {
+        let mut env = self.env_vars.clone();
+        env.extend(export.env_paths(&self.env_paths));
+        env
+    }
+
+    /// How a Scala.js configuration's suites would run, as a refusal names it: the module kind and
+    /// the environment; empty when the export says neither.
+    pub fn js_run(&self) -> String {
+        let env = self.js_env.as_ref().map(|e| match e.kind.as_str() {
+            "node" => "under node".to_string(),
+            "jsdom" => "under node with jsdom".to_string(),
+            other => format!("in the JavaScript environment {}", other),
+        });
+        match (self.module_kind.as_deref(), env) {
+            (Some(kind), Some(env)) => format!(" (linked as {}, run {})", kind, env),
+            (Some(kind), None) => format!(" (linked as {})", kind),
+            (None, Some(env)) => format!(" (run {})", env),
+            (None, None) => String::new(),
+        }
+    }
 }
 
 #[derive(Clone, PartialEq, Eq, Debug)]
@@ -340,9 +409,59 @@ pub fn canonical(file: &Path) -> PathBuf {
     crate::source::canonicalize(base).unwrap_or_else(|_| base.to_path_buf()).join(place)
 }
 
-/// Whether a generator is one sbt runs and teq cannot: of kind `sbt`.
-pub fn by_sbt(generator: &Value) -> bool {
-    generator.get("kind").and_then(Value::str) == Some("sbt")
+/// The build tool whose plugin wrote an export, the lock's `exporter` (sbt when absent, as in every lock
+/// sbt-teq writes): which files are its build definition, the command that writes the export again, and
+/// the tool that runs what teq cannot.
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
+pub enum Exporter {
+    #[default]
+    Sbt,
+    Mill,
+}
+
+/// The release of mill-teq this compiler names in the command that writes a Mill build's export again, its
+/// own version line (`integrations/mill/plugin-version.txt`, which build.rs bakes in).
+pub const MILL_PLUGIN_VERSION: &str = env!("TEQ_MILL_PLUGIN_VERSION");
+
+/// The file at a Mill build's root where it declares what Mill cannot tell the export (docs/TOOLING.md, "The
+/// export of a Mill build"): one of the build's inputs.
+pub const MILL_OVERLAY: &str = "teq.mill.json";
+
+impl Exporter {
+    pub fn name(self) -> &'static str {
+        match self {
+            Exporter::Sbt => "sbt",
+            Exporter::Mill => "mill",
+        }
+    }
+
+    /// How a repository keeps the tool's build definition files LF in every checkout (`LF_REMEDY`,
+    /// `MILL_LF_REMEDY`).
+    pub fn lf_remedy(self) -> &'static str {
+        match self {
+            Exporter::Sbt => LF_REMEDY,
+            Exporter::Mill => MILL_LF_REMEDY,
+        }
+    }
+
+    /// The command that writes the export again, run at the build's root.
+    pub fn command(self) -> String {
+        match self {
+            Exporter::Sbt => "sbt teqExportAll".to_string(),
+            Exporter::Mill => format!("mill --import mvn:build.teq::mill-teq::{} dev.teq.mill.Teq/teqExportAll", MILL_PLUGIN_VERSION),
+        }
+    }
+}
+
+/// The build tool that runs a generator teq cannot, the generator's kind: `sbt` (sbt-teq's) or `mill`
+/// (mill-teq's: a task of the build that produces sources or resources); none for one teq runs.
+pub fn run_by(generator: &Value) -> Option<&str> {
+    generator.get("kind").and_then(Value::str).filter(|k| matches!(*k, "sbt" | "mill"))
+}
+
+/// Whether a generator is one the build tool runs and teq cannot: of kind `sbt` or `mill`.
+pub fn by_build_tool(generator: &Value) -> bool {
+    run_by(generator).is_some()
 }
 
 impl Export {
@@ -371,6 +490,12 @@ impl Export {
             table.insert(key.clone(), jar(key, record).map_err(|e| fail(format!("jars.{}: {}", key, e)))?);
         }
         let inputs = value.at(&["inputs", "files"]).map_or(&[][..], Value::entries).iter().filter_map(|(k, v)| Some((k.clone(), v.str()?.to_string()))).collect();
+        let declared = strings(value.at(&["inputs", "declared"]));
+        let exporter = match value.get("exporter").map(Value::str) {
+            None | Some(Some("sbt")) => Exporter::Sbt,
+            Some(Some("mill")) => Exporter::Mill,
+            Some(other) => return Err(fail(format!("exporter is sbt or mill, not {}: run the teq the lock names, {}", other.unwrap_or("a mapping or a list"), version))),
+        };
         let mut projects = BTreeMap::new();
         for (name, p) in value.get("projects").map_or(&[][..], Value::entries) {
             projects.insert(name.clone(), project(p).map_err(|e| fail(format!("projects.{}: {}", name, e)))?);
@@ -388,6 +513,8 @@ impl Export {
             repositories,
             table,
             inputs,
+            declared,
+            exporter,
             teq: Pinned { version, binaries },
             java_output_version: value.at(&["java", "outputVersion"]).and_then(Value::uint),
         };
@@ -405,7 +532,7 @@ impl Export {
         }
         for (name, p) in &self.projects {
             for (c, conf) in &p.configurations {
-                for entry in &conf.classpath {
+                for entry in conf.classpath.iter().chain(conf.runtime_classpath.iter().flatten()) {
                     match entry {
                         Entry::Product(key) if self.configuration(key).is_none() => return Err(format!("{}/{} names {}, which the export does not hold", name, c, key)),
                         Entry::Artifact(key) if !self.table.contains_key(key) => return Err(format!("{}/{} names the jar {}, which the export's jars do not hold", name, c, key)),
@@ -474,26 +601,38 @@ impl Export {
 
     /// The configuration of a project that one resident types for everything the project's
     /// verbs need: its test configuration, which holds the main sources, when it has one and its
-    /// closure's sources are all teq's to generate (a test generator sbt runs leaves the
-    /// compile configuration to type).
+    /// closure's sources are all teq's to generate (a test generator the build tool runs leaves the
+    /// compile configuration to type); the compile configuration itself where that one is not
+    /// transitive (a Mill module's), which the test's resident would show the test's class path.
     pub fn widest(&self, project: &str) -> Option<Key> {
         let p = self.projects.get(project)?;
+        if p.configurations.get("compile").is_some_and(|c| !c.transitive) {
+            return Some(Key::new(project, "compile"));
+        }
         let present: Vec<Key> = ["test", "compile"].into_iter().filter(|c| p.configurations.contains_key(*c)).map(|c| Key::new(project, c)).collect();
         present.iter().find(|k| self.typable(k)).or(present.first()).cloned()
     }
 
+    /// Whether a resident may type a configuration a verb asks for: always for a transitive one,
+    /// which sees what its products build on as sbt's configurations do; for one that is not (a
+    /// Mill module's), its own resident alone, since another's one program holds what its class path
+    /// does not name.
+    pub fn serves(&self, resident: &Key, wanted: &Key) -> bool {
+        resident == wanted || self.configuration(wanted).is_none_or(|c| c.transitive)
+    }
+
     /// Whether one resident may type a configuration for teq: no configuration of its
-    /// closure has a source generator sbt runs.
+    /// closure has a source generator the build tool runs.
     pub fn typable(&self, key: &Key) -> bool {
-        self.sbt_generated(&self.closure(key)).is_empty()
+        self.tool_generated(&self.closure(key)).is_empty()
     }
 
-    /// The source generators of a closure's configurations that sbt runs, by configuration.
-    fn sbt_generated(&self, closure: &[Key]) -> Vec<(Key, &Value)> {
-        closure.iter().filter_map(|k| Some((k, self.configuration(k)?))).flat_map(|(k, c)| c.generators.iter().filter(|g| by_sbt(g)).map(move |g| (k.clone(), g))).collect()
+    /// The source generators of a closure's configurations that the build tool runs, by configuration.
+    fn tool_generated(&self, closure: &[Key]) -> Vec<(Key, &Value)> {
+        closure.iter().filter_map(|k| Some((k, self.configuration(k)?))).flat_map(|(k, c)| c.generators.iter().filter(|g| by_build_tool(g)).map(move |g| (k.clone(), g))).collect()
     }
 
-    /// Why a verb cannot run a project, as the export records it: the generators sbt runs of the
+    /// Why a verb cannot run a project, as the export records it: the generators the build tool runs of the
     /// configurations the verb types (their sources) or runs (their resources too), and what the
     /// project's export says the verb cannot reproduce; every reason of the projects involved,
     /// each once, none when it runs. `compile`, `watch` and `build` type the project's closure;
@@ -507,8 +646,8 @@ impl Export {
             "test" => (vec![Key::new(project, "test")], true),
             _ => (vec![Key::new(project, "compile"), Key::new(project, "runtime")], true),
         };
-        for key in typed {
-            for k in self.closure(&key) {
+        for key in &typed {
+            for k in self.closure(key) {
                 if !keys.contains(&k) {
                     keys.push(k);
                 }
@@ -522,19 +661,88 @@ impl Export {
         };
         for key in keys.iter().filter(|k| self.configuration(k).is_some()) {
             let conf = &self.configuration(key).expect("present");
-            let remedy = if key.configuration == "compile" { format!("make it a TeqCommand of Compile / teqGenerators, or build {} with sbt", key.project) } else { format!("build {} with sbt", key.project) };
-            for g in conf.generators.iter().filter(|g| by_sbt(g)) {
+            for g in conf.generators.iter() {
+                let Some(tool) = run_by(g) else { continue };
+                let remedy = match (key.configuration.as_str(), tool) {
+                    ("compile", "sbt") => format!("make it a TeqCommand of Compile / teqGenerators, or build {} with sbt", key.project),
+                    ("compile", _) => format!("declare a command that writes its sources for {} in {}, or build {} with {}", key.project, MILL_OVERLAY, key.project, tool),
+                    _ => format!("build {} with {}", key.project, tool),
+                };
                 let task = g.get("task").and_then(Value::str).unwrap_or("an unnamed task");
                 match g.get("reason").and_then(Value::str) {
-                    Some(reason) => add(format!("{} has the source generator {}, which sbt runs and teq cannot ({}): {}", key, task, reason, remedy)),
-                    None => add(format!("{} has the source generator {}, which sbt runs and teq cannot: {}", key, task, remedy)),
+                    Some(reason) => add(format!("{} has the source generator {}, which {} runs and teq cannot ({}): {}", key, task, tool, reason, remedy)),
+                    None => add(format!("{} has the source generator {}, which {} runs and teq cannot: {}", key, task, tool, remedy)),
                 }
             }
             if resources {
                 for g in conf.resource_generators.iter() {
                     let task = g.get("task").and_then(Value::str).unwrap_or("an unnamed task");
-                    add(format!("{} has the resource generator {}, which sbt runs and teq cannot: make its output a resource directory of the build, or {} {} with sbt", key, task, verb, key.project));
+                    let tool = run_by(g).unwrap_or(self.exporter.name());
+                    add(format!("{} has the resource generator {}, which {} runs and teq cannot: make its output a resource directory of the build, or {} {} with {}", key, task, tool, verb, key.project, tool));
                 }
+            }
+        }
+        let tool = self.exporter.name();
+        // What a resident's one program shows a configuration typed in it that its build tool keeps out of
+        // its sight (`transitive: false`): the resident's sources and class path are one union, so such a
+        // configuration sees every configuration of the resident's closure its class path does not name
+        // (a prerequisite of one it names, Mill's `compileModuleDeps`), and every jar of the resident's
+        // class path that its own does not name (a test configuration's, the resident of its compile
+        // configuration's test); and it is typed without every jar of its own class path the resident's
+        // does not name (Mill's `compileMvnDeps` of an upstream module, which its dependents' class paths
+        // leave out): scalac compiles the two apart, each against its own. The configurations that build
+        // on it are the one program's for every build, a reference to them a cycle no build tool compiles.
+        // Refused until configurations have compilation scopes of their own.
+        for resident in typed.iter().filter(|k| k.configuration != "runtime") {
+            let Some(union) = self.configuration(resident) else { continue };
+            let closure = self.closure(resident);
+            let union_jars = jars_of(&union.classpath);
+            for key in closure.iter().filter(|k| self.configuration(k).is_some_and(|c| !c.transitive)) {
+                let conf = self.configuration(key).expect("present");
+                let named = products(&conf.classpath);
+                let builds_on_it = |k: &Key| k != key && self.closure(k).contains(key);
+                for hidden in closure.iter().filter(|k| *k != key && !named.contains(k) && !builds_on_it(k)) {
+                    let through = named.iter().find(|n| self.closure(n).contains(hidden)).map_or_else(String::new, |n| format!(", which {} builds on", n));
+                    add(format!("{} does not see {}{}: teq types {} as one program with every configuration it builds on, where {} would be seen; {} {} with {}", key, hidden, through, resident, hidden, verb, resident.project, tool));
+                }
+                let own = jars_of(&conf.classpath);
+                let unseen: Vec<&String> = union_jars.iter().filter(|j| !own.contains(*j)).collect();
+                if let Some(first) = unseen.first() {
+                    let more = match unseen.len() {
+                        1 => String::new(),
+                        2 => format!(" and {}", unseen[1]),
+                        n => format!(", {} and {} more", unseen[1], n - 2),
+                    };
+                    add(format!(
+                        "{} is typed inside {}, whose class path holds {}{}, which {}'s does not name: teq types a configuration with those that build on it as one program until configurations have compilation scopes of their own; {} {} with {}",
+                        key, resident, first, more, key, verb, resident.project, tool
+                    ));
+                }
+                let lacking: Vec<&String> = own.iter().filter(|j| !union_jars.contains(*j)).collect();
+                if let Some(first) = lacking.first() {
+                    let more = match lacking.len() {
+                        1 => String::new(),
+                        2 => format!(" and {}", lacking[1]),
+                        n => format!(", {} and {} more", lacking[1], n - 2),
+                    };
+                    add(format!(
+                        "{} is typed inside {}, whose class path lacks {}{}, which {}'s names: teq types a configuration with those that build on it as one program until configurations have compilation scopes of their own; {} {} with {}",
+                        key, resident, first, more, key, verb, resident.project, tool
+                    ));
+                }
+            }
+        }
+        // The products a run needs that no build of the verb's makes: those of the classpath the suites
+        // or the program run on outside the closure the resident types (a runtime-only dependency).
+        let runs: Option<(Key, Key)> = match verb {
+            "test" => Some((Key::new(project, "test"), Key::new(project, "test"))),
+            "run" | "stage" | "dev" => Some((Key::new(project, "runtime"), Key::new(project, "compile"))),
+            _ => None,
+        };
+        if let Some((running, built)) = runs.filter(|(r, b)| self.configuration(r).is_some() && self.configuration(b).is_some()) {
+            let closure = self.closure(&built);
+            for needed in products(self.configuration(&running).expect("present").run_classpath()).into_iter().filter(|k| !closure.contains(k)) {
+                add(format!("{} runs on {}'s products, which {}'s closure does not build (a dependency at run time alone): {} {} with {}", running, needed, built, verb, project, tool));
             }
         }
         for why in p.unsupported.get(verb).into_iter().flatten() {
@@ -618,18 +826,17 @@ impl Export {
         }
     }
 
-    /// The build definition files as they are now, with the digests of their contents: every
-    /// `.sbt` at the root, `project/build.properties`, and every `.sbt` and `.scala` under
-    /// `project/` outside its `target` and hidden directories.
+    /// The build's inputs as they are now, with the digests of their contents: the definition files
+    /// of the tool that wrote the export (`input_digests`) and the inputs it declares.
     pub fn current_inputs(&self) -> BTreeMap<String, String> {
-        input_digests(&self.root)
+        input_digests(&self.root, self.exporter, &self.declared)
     }
 
     /// What changed in the build definition since the export; nothing when it is current. A file added
     /// that git ignores (Metals' `metals.sbt`) is a tool's, not the build's, and does not count.
     pub fn stale_inputs(&self) -> Stale {
         let now = self.current_inputs();
-        let mut stale = Stale::default();
+        let mut stale = Stale { exporter: self.exporter, ..Stale::default() };
         let mut added = Vec::new();
         for (file, digest) in &now {
             match self.inputs.get(file) {
@@ -647,6 +854,18 @@ impl Export {
         stale.changes.extend(added.iter().filter(|f| !ignored.contains(**f)).map(|f| format!("{} added", f)));
         stale.changes.extend(self.inputs.keys().filter(|f| !now.contains_key(*f)).map(|f| format!("{} removed", f)));
         stale
+    }
+
+    /// Variables whose values are paths under the build's root, each the paths absolute and joined
+    /// by `;` (`envPaths`).
+    pub fn env_paths(&self, paths: &BTreeMap<String, Vec<String>>) -> BTreeMap<String, String> {
+        paths.iter().map(|(k, ps)| (k.clone(), ps.iter().map(|p| self.path(p).to_string_lossy().into_owned()).collect::<Vec<_>>().join(";"))).collect()
+    }
+
+    /// The working directory of a test configuration's runs when it has one of its own (`sandbox`),
+    /// beside its class directory.
+    pub fn sandbox_directory(&self, key: &Key) -> PathBuf {
+        self.path(&format!("target/teq/{}/{}/sandbox", key.project, key.configuration))
     }
 
     /// The directory a resident of the configuration writes its class files into.
@@ -728,6 +947,23 @@ impl Export {
     }
 }
 
+/// The jars and files a classpath names, each by its key or its path, in its order.
+fn jars_of(classpath: &[Entry]) -> Vec<String> {
+    classpath
+        .iter()
+        .filter_map(|e| match e {
+            Entry::Artifact(key) => Some(key.clone()),
+            Entry::File(path) => Some(path.clone()),
+            Entry::Product(_) => None,
+        })
+        .collect()
+}
+
+/// The configurations whose products a classpath names, in its order.
+fn products(classpath: &[Entry]) -> Vec<Key> {
+    classpath.iter().filter_map(|e| if let Entry::Product(k) = e { Some(k.clone()) } else { None }).collect()
+}
+
 /// A classpath in the platform's form: `;` between the entries on Windows, `:` elsewhere.
 pub fn join_paths(paths: &[PathBuf]) -> String {
     let separator = if cfg!(windows) { ";" } else { ":" };
@@ -765,6 +1001,8 @@ pub struct Stale {
     /// (`line_ends_alone`), a checkout's CRLF where the export read LF or the reverse. They are
     /// changed all the same: scalac keeps a `\r\n` in a multi-line string of a `.scala` file.
     pub line_ends: Vec<String>,
+    /// The tool that wrote the export, whose files the note's remedy names.
+    pub exporter: Exporter,
 }
 
 impl Stale {
@@ -785,7 +1023,7 @@ impl Stale {
             1 => "differs",
             _ => "differ",
         };
-        Some(format!("{} {} from {}'s record by line ends alone, LF against CRLF: {}", self.line_ends.join(", "), verb, FILE, LF_REMEDY))
+        Some(format!("{} {} from {}'s record by line ends alone, LF against CRLF: {}", self.line_ends.join(", "), verb, FILE, self.exporter.lf_remedy()))
     }
 }
 
@@ -794,6 +1032,9 @@ impl Stale {
 /// the remedy the note on a file that differs by line ends alone gives, and sbt-teq's export when
 /// it reads CRLF in a Git work tree (`Export.LfRemedy`).
 pub const LF_REMEDY: &str = ".gitattributes keeps the build's files LF in every checkout with *.sbt text eol=lf, project/**/*.scala text eol=lf and project/build.properties text eol=lf: add them, delete the files and check them out again, then export again";
+
+/// `LF_REMEDY` for a Mill build, mill-teq's export's when it reads CRLF (`Inputs.LfRemedy`).
+pub const MILL_LF_REMEDY: &str = ".gitattributes keeps the build's files LF in every checkout with *.mill text eol=lf, mill-build/** text eol=lf, .mill-version text eol=lf and teq.mill.json text eol=lf: add them, delete the files and check them out again, then export again";
 
 /// Whether a file's bytes are those a digest records but for their line ends: with every `\r\n`
 /// read as `\n`, or every `\n` alone written `\r\n` (Git's checkout of a text file with CRLF).
@@ -813,7 +1054,6 @@ fn line_ends_alone(file: &Path, recorded: &str) -> bool {
     sha256::hex(&lf) == recorded || sha256::hex(&crlf) == recorded
 }
 
-/// The digests of a build's definition files, by path relative to the root.
 /// The files among `files` (paths relative to `root`) that git ignores. None without git on the path or
 /// outside a repository.
 fn git_ignored(root: &Path, files: &[&str]) -> BTreeSet<String> {
@@ -847,13 +1087,16 @@ fn git_ignored(root: &Path, files: &[&str]) -> BTreeSet<String> {
     out.stdout.split(|b| *b == 0).filter(|s| !s.is_empty()).map(|s| String::from_utf8_lossy(s).into_owned()).collect()
 }
 
-pub fn input_digests(root: &Path) -> BTreeMap<String, String> {
-    let mut files: Vec<PathBuf> = std::fs::read_dir(root).map(|es| es.flatten().map(|e| e.path()).filter(|p| p.is_file() && p.extension().is_some_and(|x| x == "sbt")).collect()).unwrap_or_default();
-    let properties = root.join("project/build.properties");
-    if properties.is_file() {
-        files.push(properties);
+/// The digests of a build's inputs, by path relative to the root with `/`: its definition files as the
+/// tool that exported it finds them (`sbt_definition_files`, `mill_definition_files`), and the files among
+/// `declared` that exist.
+pub fn input_digests(root: &Path, exporter: Exporter, declared: &[String]) -> BTreeMap<String, String> {
+    let mut files = Vec::new();
+    match exporter {
+        Exporter::Sbt => sbt_definition_files(root, &mut files),
+        Exporter::Mill => mill_definition_files(root, &mut files),
     }
-    definition_files(&root.join("project"), &mut files);
+    files.extend(declared.iter().map(|d| root.join(d)).filter(|f| f.is_file()));
     files
         .into_iter()
         .filter_map(|f| {
@@ -861,6 +1104,90 @@ pub fn input_digests(root: &Path) -> BTreeMap<String, String> {
             Some((relative, sha256::hex(&std::fs::read(&f).ok()?)))
         })
         .collect()
+}
+
+/// An sbt build's definition files: every `.sbt` at the root, `project/build.properties`, and every `.sbt`
+/// and `.scala` under `project/` outside its `target` and hidden directories (sbt-teq's
+/// `Export.definitionFiles`).
+fn sbt_definition_files(root: &Path, out: &mut Vec<PathBuf>) {
+    out.extend(std::fs::read_dir(root).map(|es| es.flatten().map(|e| e.path()).filter(|p| p.is_file() && p.extension().is_some_and(|x| x == "sbt")).collect::<Vec<_>>()).unwrap_or_default());
+    let properties = root.join("project/build.properties");
+    if properties.is_file() {
+        out.push(properties);
+    }
+    definition_files(&root.join("project"), out);
+}
+
+/// A Mill build's root build file: Mill 1.1's first (`build.mill.yaml`, then `build.mill`), else Mill 1.0's
+/// (`build.mill.scala`, `build.sc`); none for a directory that is no Mill build.
+pub fn mill_build_file(root: &Path) -> Option<PathBuf> {
+    ["build.mill.yaml", "build.mill", "build.mill.scala", "build.sc"].into_iter().map(|f| root.join(f)).find(|f| f.is_file())
+}
+
+/// The extensions of a Mill build's scripts: `.mill` and `.mill.yaml` for a `build.mill` or `build.mill.yaml`
+/// build (Mill 1.0 reads the first, Mill 1.1 both), `.mill.scala` or `.sc` for a build whose root file is
+/// `build.mill.scala` or `build.sc` (Mill 1.0 alone); none for a directory that is no Mill build.
+fn mill_extensions(root: &Path) -> &'static [&'static str] {
+    if root.join("build.mill").is_file() || root.join("build.mill.yaml").is_file() {
+        &["mill", "mill.yaml"]
+    } else if root.join("build.mill.scala").is_file() {
+        &["mill.scala"]
+    } else if root.join("build.sc").is_file() {
+        &["sc"]
+    } else {
+        &[]
+    }
+}
+
+/// The files at a Mill build's root that choose its launcher's Mill and JVM and their options.
+const MILL_LAUNCHER_FILES: [&str; 6] = [".mill-version", ".config/mill-version", ".mill-jvm-version", ".config/mill-jvm-version", ".mill-jvm-opts", ".mill-opts"];
+
+/// A Mill build's definition files, as Mill 1.0's `FileImportGraph.walkBuildFiles` and Mill 1.1's
+/// `BuildFileDiscovery.walkBuildFiles` find the build's scripts, the files of either (mill-teq's
+/// `Inputs.definitionFiles` the same): every `package.<ext>` of a directory reached from the root through
+/// directories that hold one, `out/` and `mill-build/` left out, and every file whose name ends in `.<ext>`
+/// beside the root's build file or a `package.<ext>`, for each extension of the build's (`mill_extensions`).
+/// Then every file of the meta-build under `mill-build/` outside its hidden directories, the launcher's files
+/// (`MILL_LAUNCHER_FILES`) and the overlay, `teq.mill.json`. None without a root build file. (A build that allows
+/// nested build files, Mill 1.1's `mill-allow-nested-build-mill`, is refused by the export.)
+fn mill_definition_files(root: &Path, out: &mut Vec<PathBuf>) {
+    let exts = mill_extensions(root);
+    if exts.is_empty() {
+        return;
+    }
+    let packages: Vec<String> = exts.iter().map(|e| format!("package.{}", e)).collect();
+    let suffixes: Vec<String> = exts.iter().map(|e| format!(".{}", e)).collect();
+    let mut dirs = vec![root.to_path_buf()];
+    let mut i = 0;
+    while i < dirs.len() {
+        let mut below: Vec<PathBuf> = std::fs::read_dir(&dirs[i]).map(|es| es.flatten().map(|e| e.path()).collect()).unwrap_or_default();
+        below.retain(|p| p.is_dir() && packages.iter().any(|n| p.join(n).is_file()) && !(i == 0 && (p.ends_with("out") || p.ends_with("mill-build"))));
+        below.sort();
+        dirs.extend(below);
+        i += 1;
+    }
+    for dir in &dirs {
+        let Ok(entries) = std::fs::read_dir(dir) else { continue };
+        out.extend(entries.flatten().map(|e| e.path()).filter(|p| p.is_file() && p.file_name().is_some_and(|n| suffixes.iter().any(|s| n.to_string_lossy().ends_with(s.as_str())))));
+    }
+    meta_build_files(&root.join("mill-build"), out);
+    out.extend(MILL_LAUNCHER_FILES.iter().chain([&MILL_OVERLAY]).map(|f| root.join(f)).filter(|f| f.is_file()));
+}
+
+/// Every file under a Mill meta-build's directory outside its hidden directories and its `out/`.
+fn meta_build_files(dir: &Path, out: &mut Vec<PathBuf>) {
+    let Ok(entries) = std::fs::read_dir(dir) else { return };
+    for entry in entries.flatten() {
+        let name = entry.file_name();
+        let name = name.to_string_lossy();
+        if entry.file_type().is_ok_and(|k| k.is_dir()) {
+            if name != "out" && !name.starts_with('.') {
+                meta_build_files(&entry.path(), out);
+            }
+        } else if entry.path().is_file() {
+            out.push(entry.path());
+        }
+    }
 }
 
 fn definition_files(dir: &Path, out: &mut Vec<PathBuf>) {
@@ -909,6 +1236,7 @@ fn project(value: &Value) -> Result<Project, String> {
         run: value.get("run").map(|r| RunContext {
             base_directory: r.get("baseDirectory").and_then(Value::str).unwrap_or(".").to_string(),
             env_vars: string_map(r.get("envVars")),
+            env_paths: string_lists(r.get("envPaths")),
             java_options: strings(r.get("javaOptions")),
             aliases: string_map(r.get("aliases")),
             main_class: r.get("mainClass").and_then(Value::str).map(str::to_string),
@@ -974,11 +1302,26 @@ fn strings(value: Option<&Value>) -> Vec<String> {
     value.map_or(&[][..], Value::items).iter().filter_map(Value::str).map(str::to_string).collect()
 }
 
-fn configuration(value: &Value) -> Result<Configuration, String> {
+/// A map of lists of strings (`envPaths`).
+fn string_lists(value: Option<&Value>) -> BTreeMap<String, Vec<String>> {
+    value.map_or(&[][..], Value::entries).iter().map(|(k, v)| (k.clone(), strings(Some(v)))).collect()
+}
+
+/// A classpath's entries, each a jar's key, a product or a file.
+fn classpath(value: Option<&Value>, field: &str) -> Result<Vec<Entry>, String> {
     let mut classpath = Vec::new();
-    for (i, e) in value.get("classpath").map_or(&[][..], Value::items).iter().enumerate() {
-        classpath.push(entry(e).ok_or_else(|| format!("classpath[{}] is neither a jar's key, a product nor a file", i))?);
+    for (i, e) in value.map_or(&[][..], Value::items).iter().enumerate() {
+        classpath.push(entry(e).ok_or_else(|| format!("{}[{}] is neither a jar's key, a product nor a file", field, i))?);
     }
+    Ok(classpath)
+}
+
+fn configuration(value: &Value) -> Result<Configuration, String> {
+    let classpath = classpath(value.get("classpath"), "classpath")?;
+    let runtime_classpath = match value.get("runtimeClasspath") {
+        Some(v) => Some(self::classpath(Some(v), "runtimeClasspath")?),
+        None => None,
+    };
     let flags = value.get("flags").map_or(Flags::default(), |f| Flags {
         max_inlines: f.get("maxInlines").and_then(Value::uint),
         strict_equality: f.get("strictEquality").and_then(Value::bool) == Some(true),
@@ -997,6 +1340,7 @@ fn configuration(value: &Value) -> Result<Configuration, String> {
         fork: value.get("fork").and_then(Value::bool) == Some(true),
         base_directory: value.get("baseDirectory").and_then(Value::str).unwrap_or(".").to_string(),
         env_vars: string_map(value.get("envVars")),
+        env_paths: string_lists(value.get("envPaths")),
         java_options: strings(value.get("javaOptions")),
         frameworks: value
             .get("frameworks")
@@ -1005,6 +1349,14 @@ fn configuration(value: &Value) -> Result<Configuration, String> {
             .filter_map(|f| Some(Framework { class: f.get("class").and_then(Value::str)?.to_string(), arguments: strings(f.get("arguments")) }))
             .collect(),
         exclude: strings(value.get("exclude")),
+        sandbox: value.get("sandbox").and_then(Value::bool) == Some(true),
+        module_kind: value.get("moduleKind").and_then(Value::str).map(str::to_string),
+        js_env: value.get("jsEnv").map(|e| JsEnv {
+            kind: e.get("kind").and_then(Value::str).unwrap_or("node").to_string(),
+            executable: e.get("executable").and_then(Value::str).map(str::to_string),
+            args: strings(e.get("args")),
+            env: string_map(e.get("env")),
+        }),
     });
     Ok(Configuration {
         sources: strings(value.get("sources")),
@@ -1015,6 +1367,8 @@ fn configuration(value: &Value) -> Result<Configuration, String> {
         resource_generators: value.get("resourceGenerators").map_or(&[][..], Value::items).to_vec(),
         main_classes: strings(value.get("mainClasses")),
         test,
+        transitive: value.get("transitive").and_then(Value::bool) != Some(false),
+        runtime_classpath,
     })
 }
 
@@ -1183,7 +1537,7 @@ mod tests {
         assert_eq!(export.closure(&Key::new("jvmapp", "test")), vec![Key::new("jvmcore", "compile"), Key::new("jvmapp", "compile"), Key::new("jvmapp", "test")]);
         assert_eq!(export.closure(&Key::new("frontend", "compile")), vec![Key::new("shared", "compile"), Key::new("frontend", "compile")]);
         assert_eq!(export.widest("frontend"), Some(Key::new("frontend", "test")));
-        assert_eq!(api.configurations["compile"].flags.args(true), ["--max-inlines", "80"]);
+        assert_eq!(api.configurations["compile"].flags.args(true), ["--max-inlines", "80", "--wconf", "any:s"]);
         assert_eq!(export.projects["frontend"].description.session_args(), ["--cacheable-state", "meridian.web.css.Catalog"]);
         assert_eq!(export.inputs_hash_recorded(), inputs_hash(&export.inputs));
         assert_eq!(export.java_output_version, Some(17));
@@ -1344,7 +1698,7 @@ repositories:
         ] {
             std::fs::write(dir.join(f), t).unwrap();
         }
-        let inputs = input_digests(&dir);
+        let inputs = input_digests(&dir, Exporter::Sbt, &[]);
         assert_eq!(inputs.keys().map(String::as_str).collect::<Vec<_>>(), ["build.sbt", "other.sbt", "project/D.scala", "project/build.properties", "project/project/P.scala"]);
         assert_eq!(inputs["build.sbt"], sha256::hex(b"a"));
         let mut recorded = inputs.clone();
@@ -1354,9 +1708,126 @@ repositories:
         let files = recorded.iter().map(|(k, v)| format!("    {}: {}\n", k, v)).collect::<String>();
         std::fs::write(dir.join(FILE), lock(&format!("inputs:\n  files:\n{}", files))).unwrap();
         let export = Export::read(&dir.join(FILE)).unwrap();
-        assert_eq!(export.stale_inputs(), Stale { changes: ["build.sbt changed", "other.sbt added", "project/Gone.scala removed"].map(String::from).to_vec(), line_ends: Vec::new() });
+        assert_eq!(export.stale_inputs(), Stale { changes: ["build.sbt changed", "other.sbt added", "project/Gone.scala removed"].map(String::from).to_vec(), line_ends: Vec::new(), exporter: Exporter::Sbt });
         assert_eq!(export.stale_inputs().line_end_note(), None);
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// A Mill build's inputs as `FileImportGraph.walkBuildFiles` finds its scripts: the root's build file and
+    /// the `.mill` files beside it, each `package.mill` reached through directories that hold one and the
+    /// `.mill` files beside it (not `out/`'s, nor those of a directory without one), the meta-build's files,
+    /// the launcher's files, the overlay, and the inputs the lock declares; every change to them read as one,
+    /// the files added and removed among them.
+    #[test]
+    fn a_mill_builds_inputs_and_their_changes() {
+        let dir = std::env::temp_dir().join(format!("teq-export-mill-inputs-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        for d in ["core/js", "core/plain", "docs/nested", "out/core", "mill-build/src", "mill-build/.bsp", ".config"] {
+            std::fs::create_dir_all(dir.join(d)).unwrap();
+        }
+        for (f, t) in [
+            ("build.mill", "//| mill-version: 1.0.6\nobject root"),
+            ("helper.mill", "def shared = 1"),
+            ("build.sbt", "not this build's"),
+            ("core/package.mill", "package build.core"),
+            ("core/Deps.mill", "object Deps"),
+            ("core/js/package.mill", "package build.core.js"),
+            ("core/plain/Unreached.mill", "x"),
+            ("docs/nested/package.mill", "package build.docs.nested"),
+            ("out/core/package.mill", "x"),
+            ("mill-build/build.mill", "meta"),
+            ("mill-build/src/Plugin.scala", "object Plugin"),
+            ("mill-build/.bsp/x.json", "{}"),
+            (".mill-version", "1.0.6\n"),
+            (".config/mill-jvm-version", "17\n"),
+            ("teq.mill.json", "{}"),
+            (".tyrian-version", "0.14.0\n"),
+            ("notes.txt", "n"),
+        ] {
+            std::fs::write(dir.join(f), t).unwrap();
+        }
+        let declared = [".tyrian-version".to_string(), "absent.txt".to_string()];
+        let inputs = input_digests(&dir, Exporter::Mill, &declared);
+        assert_eq!(
+            inputs.keys().map(String::as_str).collect::<Vec<_>>(),
+            [
+                ".config/mill-jvm-version",
+                ".mill-version",
+                ".tyrian-version",
+                "build.mill",
+                "core/Deps.mill",
+                "core/js/package.mill",
+                "core/package.mill",
+                "helper.mill",
+                "mill-build/build.mill",
+                "mill-build/src/Plugin.scala",
+                "teq.mill.json"
+            ]
+        );
+        // The same root read as sbt's: its .sbt alone.
+        assert_eq!(input_digests(&dir, Exporter::Sbt, &[]).keys().map(String::as_str).collect::<Vec<_>>(), ["build.sbt"]);
+        let write = |recorded: &BTreeMap<String, String>| {
+            let files = recorded.iter().map(|(k, v)| format!("    {}: {}\n", k, v)).collect::<String>();
+            std::fs::write(dir.join(FILE), lock(&format!("exporter: mill\ninputs:\n  declared:\n    - .tyrian-version\n    - absent.txt\n  files:\n{}", files))).unwrap();
+        };
+        write(&inputs);
+        let export = Export::read(&dir.join(FILE)).unwrap();
+        assert_eq!(export.exporter, Exporter::Mill);
+        assert!(export.stale_inputs().is_empty(), "{:?}", export.stale_inputs());
+        // An edit of a package, a declared input removed, a package added, a helper added, the meta-build edited.
+        std::fs::write(dir.join("core/package.mill"), "package build.core // edited").unwrap();
+        std::fs::remove_file(dir.join(".tyrian-version")).unwrap();
+        std::fs::create_dir_all(dir.join("web")).unwrap();
+        std::fs::write(dir.join("web/package.mill"), "package build.web").unwrap();
+        std::fs::write(dir.join("core/More.mill"), "object More").unwrap();
+        std::fs::write(dir.join("mill-build/src/Plugin.scala"), "object Plugin // edited").unwrap();
+        std::fs::write(dir.join("notes.txt"), "not an input").unwrap();
+        assert_eq!(
+            export.stale_inputs().changes,
+            ["core/package.mill changed", "mill-build/src/Plugin.scala changed", "core/More.mill added", "web/package.mill added", ".tyrian-version removed"]
+        );
+        // A package's directory removed takes its packages and helpers with it.
+        std::fs::remove_dir_all(dir.join("core/js")).unwrap();
+        assert!(export.stale_inputs().changes.contains(&"core/js/package.mill removed".to_string()));
+        // Without its root build file a directory is no Mill build: every recorded file removed.
+        std::fs::remove_file(dir.join("build.mill")).unwrap();
+        assert!(input_digests(&dir, Exporter::Mill, &[]).is_empty());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// A Mill build's inputs under Mill 1.1's discovery as well as 1.0's (`BuildFileDiscovery.walkBuildFiles`):
+    /// a `build.mill.yaml` root, `package.mill.yaml` packages reached as `package.mill` ones are, and `.mill.yaml`
+    /// scripts beside them; a `build.mill.scala` build's `.mill.scala` scripts alone (Mill 1.0's). mill-teq's
+    /// `InputsSuite` holds the same trees.
+    #[test]
+    fn a_mill_builds_yaml_and_scala_scripts() {
+        let dir = std::env::temp_dir().join(format!("teq-export-mill-yaml-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        for d in ["a/b", "c", "d"] {
+            std::fs::create_dir_all(dir.join(d)).unwrap();
+        }
+        for f in ["build.mill.yaml", "helper.mill.yaml", "a/package.mill.yaml", "a/Deps.mill", "a/b/package.mill", "c/package.mill.scala", "d/stray.sc", "x.sc"] {
+            std::fs::write(dir.join(f), "x").unwrap();
+        }
+        let files = |root: &Path| input_digests(root, Exporter::Mill, &[]).into_keys().collect::<Vec<_>>();
+        assert_eq!(files(&dir), ["a/Deps.mill", "a/b/package.mill", "a/package.mill.yaml", "build.mill.yaml", "helper.mill.yaml"]);
+        assert_eq!(mill_build_file(&dir), Some(dir.join("build.mill.yaml")));
+        std::fs::remove_file(dir.join("build.mill.yaml")).unwrap();
+        std::fs::write(dir.join("build.mill.scala"), "x").unwrap();
+        assert_eq!(files(&dir), ["build.mill.scala", "c/package.mill.scala"]);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// The exporter a lock names: sbt when absent, mill, and nothing else.
+    #[test]
+    fn the_exporter() {
+        assert_eq!(parse(&lock("projects: {}\n")).unwrap().exporter, Exporter::Sbt);
+        assert_eq!(parse(&lock("exporter: sbt\nprojects: {}\n")).unwrap().exporter, Exporter::Sbt);
+        let mill = parse(&lock("exporter: mill\nprojects: {}\n")).unwrap();
+        assert_eq!(mill.exporter, Exporter::Mill);
+        assert!(mill.exporter.command().starts_with("mill --import mvn:build.teq::mill-teq::"), "{}", mill.exporter.command());
+        let other = parse(&lock("exporter: gradle\nprojects: {}\n")).err().unwrap_or_default();
+        assert!(other.contains("exporter is sbt or mill, not gradle"), "{other}");
     }
 
     #[test]
@@ -1395,10 +1866,13 @@ repositories:
             format!("build.sbt, other.sbt, project/S.scala, project/build.properties differ from teq.lock's record by line ends alone, LF against CRLF: {}", LF_REMEDY)
         );
         assert!(!stale.line_ends_only());
-        let one = Stale { changes: vec!["build.sbt changed".to_string()], line_ends: vec!["build.sbt".to_string()] };
+        let one = Stale { changes: vec!["build.sbt changed".to_string()], line_ends: vec!["build.sbt".to_string()], exporter: Exporter::Sbt };
         assert!(one.line_end_note().unwrap().starts_with("build.sbt differs from teq.lock's record by line ends alone, LF against CRLF: .gitattributes keeps"));
         assert!(one.line_ends_only());
-        assert!(!Stale { changes: vec!["build.sbt changed".to_string(), "other.sbt added".to_string()], line_ends: vec!["build.sbt".to_string()] }.line_ends_only());
+        assert!(!Stale { changes: vec!["build.sbt changed".to_string(), "other.sbt added".to_string()], line_ends: vec!["build.sbt".to_string()], exporter: Exporter::Sbt }.line_ends_only());
+        // A Mill build's note names its own files' lines.
+        let mill = Stale { changes: vec!["build.mill changed".to_string()], line_ends: vec!["build.mill".to_string()], exporter: Exporter::Mill };
+        assert!(mill.line_end_note().unwrap().ends_with(MILL_LF_REMEDY) && MILL_LF_REMEDY.contains("*.mill text eol=lf"));
         let _ = std::fs::remove_dir_all(&dir);
     }
 
@@ -1579,6 +2053,285 @@ repositories:
         let refused = super::super::refused(&export, "compile", &["app", "gen"]).unwrap();
         assert_eq!(refused.lines().count(), 3, "{}", refused);
         assert!(super::super::refused(&export, "compile", &["packaged"]).is_none());
+    }
+
+    /// A Mill export's generators (kind `mill`, mill-teq's record of a task of the build that writes sources or
+    /// resources): refused as sbt's are, each naming mill, the overlay where a command can stand in for one,
+    /// and mill as the tool to build with.
+    #[test]
+    fn what_mill_alone_runs_is_refused_by_the_verbs_that_need_it() {
+        let text = lock(
+            "exporter: mill
+projects:
+  app:
+    configurations:
+      compile:
+        classpath:
+          - {configuration: compile, project: tags}
+        sources: []
+      test:
+        classpath:
+          - {configuration: compile, project: app}
+          - {configuration: compile, project: tags}
+        frameworks: []
+        generators:
+          - {kind: mill, task: app.test.generatedSources}
+        resourceGenerators:
+          - {kind: mill, task: app.test.resources}
+    platform: jvm
+  tags:
+    configurations:
+      compile:
+        generators:
+          - kind: mill
+            reason: \"generatedSources is the build's own task\"
+            task: tags.generatedSources
+        sources:
+          - out/tags/generatedSources.dest
+    platform: jvm
+",
+        );
+        let export = parse(&text).unwrap();
+        let tags = "tags/compile has the source generator tags.generatedSources, which mill runs and teq cannot (generatedSources is the build's own task): declare a command that writes its sources for tags in teq.mill.json, or build tags with mill";
+        assert_eq!(export.refusals("compile", "tags"), [tags]);
+        assert_eq!(export.refusals("compile", "app"), [tags]);
+        assert!(!export.typable(&Key::new("app", "compile")));
+        let test = export.refusals("test", "app");
+        assert_eq!(
+            test,
+            [
+                tags,
+                "app/test has the source generator app.test.generatedSources, which mill runs and teq cannot: build app with mill",
+                "app/test has the resource generator app.test.resources, which mill runs and teq cannot: make its output a resource directory of the build, or test app with mill"
+            ]
+        );
+        let refused = super::super::refused(&export, "compile", &["app"]).unwrap();
+        assert!(refused.starts_with("cannot compile app, which needs what mill alone runs:\n  tags/compile has"), "{}", refused);
+        assert!(super::super::left_out(&export, "test", &["app".to_string()]).starts_with("teq: test left out app, which needs what mill alone runs:\n"));
+    }
+
+    /// The contract of a Mill export's configurations: `transitive: false` (the classpath's products the
+    /// whole of what the sources see, a prerequisite beyond them refusing the verbs that type it), a test
+    /// configuration's `runtimeClasspath` (what its suites run on; a product its closure does not build
+    /// refused), `sandbox` and `envPaths`, and a Scala.js test configuration's `moduleKind` and `jsEnv`.
+    #[test]
+    fn a_mill_exports_visibility_runs_and_scalajs_tests() {
+        let text = lock(
+            "exporter: mill
+projects:
+  a:
+    configurations:
+      compile:
+        classpath:
+          - {configuration: compile, project: b}
+        transitive: false
+    platform: jvm
+  b:
+    configurations:
+      compile:
+        transitive: false
+    platform: jvm
+  c:
+    configurations:
+      compile:
+        classpath:
+          - {configuration: compile, project: a}
+        transitive: false
+      runtime:
+        classpath:
+          - {configuration: compile, project: c}
+          - {configuration: compile, project: a}
+          - {configuration: compile, project: r}
+      test:
+        classpath:
+          - {configuration: compile, project: a}
+          - {configuration: compile, project: c}
+        envPaths:
+          MILL_TEST_RESOURCE_DIR:
+            - c/test/resources
+            - c/test/more
+          MILL_WORKSPACE_ROOT:
+            - .
+        envVars:
+          GIVEN: x
+        frameworks: []
+        runtimeClasspath:
+          - {configuration: compile, project: c}
+          - {file: lib/run.jar}
+          - {configuration: compile, project: r}
+        sandbox: true
+        transitive: false
+    platform: jvm
+  r:
+    configurations:
+      compile: {}
+    platform: jvm
+  web:
+    configurations:
+      compile: {}
+      test:
+        frameworks: []
+        jsEnv:
+          args:
+            - \"--experimental-vm-modules\"
+          kind: jsdom
+        moduleKind: CommonJSModule
+    platform: js
+",
+        );
+        let export = parse(&text).unwrap();
+        let hidden = "c/compile does not see b/compile, which a/compile builds on: teq types c/compile as one program with every configuration it builds on, where b/compile would be seen; compile c with mill";
+        assert_eq!(export.refusals("compile", "c"), [hidden]);
+        assert!(export.refusals("compile", "a").is_empty());
+        assert_eq!(
+            export.refusals("test", "c"),
+            [
+                hidden.replace("teq types c/compile", "teq types c/test").replace("; compile c", "; test c"),
+                "c/test does not see b/compile, which a/compile builds on: teq types c/test as one program with every configuration it builds on, where b/compile would be seen; test c with mill".to_string(),
+                "c/test runs on r/compile's products, which c/test's closure does not build (a dependency at run time alone): test c with mill".to_string()
+            ]
+        );
+        assert_eq!(export.refusals("run", "c")[1], "c/runtime runs on r/compile's products, which c/compile's closure does not build (a dependency at run time alone): run c with mill");
+        let conf = export.configuration(&Key::new("c", "test")).unwrap();
+        assert_eq!(conf.run_classpath().len(), 3);
+        assert_eq!(conf.classpath.len(), 2);
+        let context = conf.test.as_ref().unwrap();
+        assert!(context.sandbox);
+        assert_eq!(export.sandbox_directory(&Key::new("c", "test")), Path::new("/b/target/teq/c/test/sandbox"));
+        let env = context.env(&export);
+        assert_eq!(env["MILL_TEST_RESOURCE_DIR"], "/b/c/test/resources;/b/c/test/more");
+        assert_eq!((env["MILL_WORKSPACE_ROOT"].as_str(), env["GIVEN"].as_str()), ("/b", "x"));
+        let web = export.configuration(&Key::new("web", "test")).unwrap().test.as_ref().unwrap();
+        assert_eq!(web.js_env.as_ref().map(|e| (e.kind.as_str(), e.args.len())), Some(("jsdom", 1)));
+        assert_eq!(web.js_run(), " (linked as CommonJSModule, run under node with jsdom)");
+        // Transitive configurations, as sbt's are: their products' prerequisites seen.
+        let sbt = parse(&text.replace("exporter: mill\n", "").replace("transitive: false", "transitive: true")).unwrap();
+        assert!(sbt.refusals("compile", "c").is_empty());
+    }
+
+    /// A configuration that is not transitive (a Mill module's) typed inside another configuration's resident
+    /// sees the resident's whole union: `leak`'s compile configuration, typed as `leak/test`, would see munit,
+    /// which only its test's class path names, so its test is refused, while its compile and watch get a
+    /// resident of their own (`widest`, `serves`); `lib`'s, typed inside `app`, whose class path adds a jar,
+    /// refuses `app`'s compile; `same`'s test adds nothing its compile does not name and runs. An sbt export's
+    /// configurations, transitive, are typed as before.
+    #[test]
+    fn a_configuration_typed_inside_another_resident_sees_its_union() {
+        let text = lock(
+            "exporter: mill
+jars:
+  x:munit:1: maven-central 0000000000000000000000000000000000000001 1
+  x:scala:1: maven-central 0000000000000000000000000000000000000002 1
+  x:extra:1: maven-central 0000000000000000000000000000000000000003 1
+repositories:
+  - id: maven-central
+    url: https://repo1.maven.org/maven2/
+projects:
+  leak:
+    configurations:
+      compile:
+        classpath:
+          - x:scala:1
+        transitive: false
+      test:
+        classpath:
+          - x:scala:1
+          - x:munit:1
+          - {configuration: compile, project: leak}
+        frameworks: []
+        transitive: false
+    platform: jvm
+  lib:
+    configurations:
+      compile:
+        classpath:
+          - x:scala:1
+        transitive: false
+    platform: jvm
+  app:
+    configurations:
+      compile:
+        classpath:
+          - x:scala:1
+          - x:extra:1
+          - {configuration: compile, project: lib}
+        transitive: false
+    platform: jvm
+  same:
+    configurations:
+      compile:
+        classpath:
+          - x:scala:1
+          - x:munit:1
+        transitive: false
+      test:
+        classpath:
+          - x:scala:1
+          - x:munit:1
+          - {configuration: compile, project: same}
+        frameworks: []
+        transitive: false
+    platform: jvm
+",
+        );
+        let export = parse(&text).unwrap();
+        assert_eq!(
+            export.refusals("test", "leak"),
+            ["leak/compile is typed inside leak/test, whose class path holds x:munit:1, which leak/compile's does not name: teq types a configuration with those that build on it as one program until configurations have compilation scopes of their own; test leak with mill"]
+        );
+        assert!(export.refusals("compile", "leak").is_empty() && export.refusals("watch", "leak").is_empty());
+        assert_eq!(export.widest("leak"), Some(Key::new("leak", "compile")));
+        assert!(!export.serves(&Key::new("leak", "test"), &Key::new("leak", "compile")) && export.serves(&Key::new("leak", "compile"), &Key::new("leak", "compile")));
+        assert_eq!(export.refusals("compile", "app").len(), 1);
+        assert!(export.refusals("compile", "app")[0].starts_with("lib/compile is typed inside app/compile, whose class path holds x:extra:1, which lib/compile's does not name"));
+        assert!(export.refusals("test", "same").is_empty());
+        let sbt = parse(&text.replace("exporter: mill\n", "").replace("transitive: false", "transitive: true")).unwrap();
+        assert!(sbt.refusals("test", "leak").is_empty() && sbt.refusals("compile", "app").is_empty());
+        assert_eq!(sbt.widest("leak"), Some(Key::new("leak", "test")));
+        assert!(sbt.serves(&Key::new("leak", "test"), &Key::new("leak", "compile")));
+    }
+
+    /// An upstream configuration that is not transitive, typed inside a downstream resident whose class path
+    /// lacks a jar of its own (Mill's `compileMvnDeps`, which its dependents' class paths leave out), would not
+    /// find what it reads, where scalac compiles it apart against its own class path: the downstream's
+    /// compile is refused, naming the two configurations and the jar, while the upstream's compiles alone.
+    #[test]
+    fn a_configuration_typed_inside_a_resident_that_lacks_its_jars_is_refused() {
+        let text = lock(
+            "exporter: mill
+jars:
+  x:scala:1: maven-central 0000000000000000000000000000000000000002 1
+  x:sourcecode:1: maven-central 0000000000000000000000000000000000000004 1
+repositories:
+  - id: maven-central
+    url: https://repo1.maven.org/maven2/
+projects:
+  upstream:
+    configurations:
+      compile:
+        classpath:
+          - x:scala:1
+          - x:sourcecode:1
+        transitive: false
+    platform: jvm
+  downstream:
+    configurations:
+      compile:
+        classpath:
+          - x:scala:1
+          - {configuration: compile, project: upstream}
+        transitive: false
+    platform: jvm
+",
+        );
+        let export = parse(&text).unwrap();
+        assert_eq!(
+            export.refusals("compile", "downstream"),
+            ["upstream/compile is typed inside downstream/compile, whose class path lacks x:sourcecode:1, which upstream/compile's names: teq types a configuration with those that build on it as one program until configurations have compilation scopes of their own; compile downstream with mill"]
+        );
+        assert!(export.refusals("compile", "upstream").is_empty());
+        let sbt = parse(&text.replace("exporter: mill\n", "").replace("transitive: false", "transitive: true")).unwrap();
+        assert!(sbt.refusals("compile", "downstream").is_empty());
     }
 
     #[test]

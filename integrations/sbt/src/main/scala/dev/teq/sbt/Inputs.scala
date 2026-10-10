@@ -103,7 +103,7 @@ object Inputs {
       val jvm = TeqPlugin.Jvm == teqTarget.value
       def paths(files: Seq[File]) = Json.Arr(files.map(f => Json.Str(normal(f.toPath).toString)))
       def described(m: Module) = {
-        val options = TeqPlugin.ScalacOptions(m.options)
+        val options = ScalacOptions(m.options)
         Json.Obj(Map(
           "project" -> Json.Str(m.project.project),
           "configuration" -> Json.Str(m.configuration),

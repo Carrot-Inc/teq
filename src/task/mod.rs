@@ -1,6 +1,6 @@
 //! `teq`: the driver over the export, `teq.lock` at the build's root (committed, under the
 //! native driver) or under its `target/teq/` (docs/TARGETS.md, "The export and the project verbs"). It reads the export,
-//! refuses a project whose export records what sbt alone runs for the verb (`refused`), warns
+//! refuses a project whose export records what the build tool alone runs for the verb (`refused`), warns
 //! when the build definition changed since it was written, and answers its verbs through the
 //! export's session daemon, which keeps one resident per closure and one test runner per test
 //! configuration, and writes the Docker stage (`stage.rs`); `run` has the daemon compile and runs
@@ -241,7 +241,7 @@ pub fn run(args: &[String]) -> ! {
         if verb.is_none() {
             usage(None);
         }
-        eprintln!("teq: no {} at or above {}, at a directory or under its {}: export the build with sbt teqExportAll; for files, teq compiler build and teq interp", export::FILE, cwd.display(), export::UNDER_TARGET.trim_end_matches(export::FILE));
+        eprintln!("teq: no {} at or above {}, at a directory or under its {}: export the build with sbt teqExportAll, or a Mill build with {}; for files, teq compiler build and teq interp", export::FILE, cwd.display(), export::UNDER_TARGET.trim_end_matches(export::FILE), export::Exporter::Mill.command());
         std::process::exit(2);
     };
     let export = match Export::read(&file) {
@@ -255,7 +255,7 @@ pub fn run(args: &[String]) -> ! {
     if !stale.is_empty() {
         let what = if strict { "refusing a stale export" } else { "warning" };
         let commit = if export.file.parent() == Some(export.root.as_path()) { " and commit the file" } else { "" };
-        let command = if stale.line_ends_only() { String::new() } else { format!("; run sbt teqExportAll{}", commit) };
+        let command = if stale.line_ends_only() { String::new() } else { format!("; run {}{}", export.exporter.command(), commit) };
         eprintln!("teq: {}: {} was written before {}{}", what, export::FILE, stale.changes.join(", "), command);
         if let Some(note) = stale.line_end_note() {
             eprintln!("teq: note: {}", note);
@@ -284,7 +284,7 @@ pub fn refused(export: &Export, verb: &str, projects: &[&str]) -> Option<String>
             reasons.push(why);
         }
     }
-    (!reasons.is_empty()).then(|| format!("cannot {} {}, which need{} what sbt alone runs:\n{}", verb, projects.join(" "), if projects.len() == 1 { "s" } else { "" }, reasons.iter().map(|r| format!("  {}", r)).collect::<Vec<_>>().join("\n")))
+    (!reasons.is_empty()).then(|| format!("cannot {} {}, which need{} what {} alone runs:\n{}", verb, projects.join(" "), if projects.len() == 1 { "s" } else { "" }, export.exporter.name(), reasons.iter().map(|r| format!("  {}", r)).collect::<Vec<_>>().join("\n")))
 }
 
 /// The exit code of a verb over every project: 2 when it left a project out, so that a run that
@@ -298,7 +298,7 @@ pub fn with_left_out(code: i32, left_out: &[String]) -> i32 {
 pub fn left_out(export: &Export, verb: &str, projects: &[String]) -> String {
     projects
         .iter()
-        .map(|p| format!("teq: {} left out {}, which needs what sbt alone runs:\n{}\n", verb, p, export.refusals(verb, p).iter().map(|r| format!("  {}", r)).collect::<Vec<_>>().join("\n")))
+        .map(|p| format!("teq: {} left out {}, which needs what {} alone runs:\n{}\n", verb, p, export.exporter.name(), export.refusals(verb, p).iter().map(|r| format!("  {}", r)).collect::<Vec<_>>().join("\n")))
         .collect()
 }
 

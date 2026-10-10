@@ -284,6 +284,12 @@ projects:
               - "-b"
             class: munit.Framework
         javaOptions: []
+        jsEnv:
+          args: []
+          env: {}
+          executable: node
+          kind: node
+        moduleKind: NoModule
         resources:
           - sjsapp/src/test/resources
         sources:
@@ -362,6 +368,12 @@ projects:
         fork: false
         frameworks: []
         javaOptions: []
+        jsEnv:
+          args: []
+          env: {}
+          executable: node
+          kind: node
+        moduleKind: NoModule
         resources:
           - sjscore/src/test/resources
         sources:

@@ -98,7 +98,7 @@ without editing the build.
 
 ### As a native build tool
 
-Compile, test and run without sbt running. One lockfile describes the build; the launcher fetches the
+Compile, test and run without sbt or Mill running. One lockfile describes the build; the launcher fetches the
 pinned compiler.
 
 Add the [sbt plugin](#as-the-compiler-of-an-sbt-build) and set `teqBuildTool`:
@@ -109,6 +109,13 @@ teqBuildTool := true
 ```
 
 Then run `sbt teqExportAll` and commit the generated `teq.lock`, `teq` and `teq.cmd` files.
+
+A Mill 1.x build exports the same lockfile through mill-teq, with no edit of the build (`"buildTool": true` in a
+`teq.mill.json` at its root writes it there with the launchers):
+
+```bash
+mill --import mvn:build.teq::mill-teq::0.1.0 dev.teq.mill.Teq/teqExportAll
+```
 
 Drive your project without a JVM:
 
@@ -191,7 +198,7 @@ among them. `docs/LIBRARIES.md` has the details and the measurements.
 | `docs/COMPATIBILITY.md` | Scala compatibility: what is not there yet, and where behaviour differs on purpose |
 | `docs/CLI.md` | the command line: every command and flag |
 | `docs/TARGETS.md` | the three targets and their output: JavaScript, JVM class files, the interpreter; watch mode, Windows |
-| `docs/TOOLING.md` | the sbt plugin, the lockfile and the launchers, `teq`, the vite plugin, the language server and Zed |
+| `docs/TOOLING.md` | the sbt plugin, the lockfile and the launchers, the export of a Mill build, `teq`, the vite plugin, the language server and Zed |
 | `docs/LIBRARIES.md` | libraries from their jars, the two standard libraries, Java classes |
 | `docs/SPEED.md` | what makes teq fast, `--time` and `--profile`, the dialect flags |
 | `docs/RUNTIME.md` | the output's runtime speed and size |

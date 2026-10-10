@@ -47,7 +47,42 @@ object TeqScalaJSPlugin extends AutoPlugin {
           else stock(Test, task, directory).value
         }),
       )
+    } ++ scalaJSTest
+
+  /** The test run's facts the export records (`Export.teqExportScalaJSTest`): the test link's module kind and
+    * the JavaScript environment, which teq reads (docs/TOOLING.md, "The lockfile and the launchers"). */
+  private val scalaJSTest: Seq[Setting[?]] = Seq(
+    Export.teqExportScalaJSTest := Map(
+      "moduleKind" -> Json.Str((Test / scalaJSLinkerConfig).value.moduleKind.toString),
+      "jsEnv" -> jsEnvJson((Test / jsEnv).value),
+    ),
+  )
+
+  /** A JavaScript environment as the lock records it: its kind (`node` for Node.js, `jsdom` for jsdom's,
+    * else the environment's class, lowercased) and, from its configuration where the environment keeps one
+    * (Node.js's and jsdom's, read as their `Config`s give them), the executable, its arguments and its
+    * environment variables. */
+  private[sbt] def jsEnvJson(env: AnyRef): Json.Value = {
+    val kind = env.getClass.getName match {
+      case "org.scalajs.jsenv.nodejs.NodeJSEnv" => "node"
+      case "org.scalajs.jsenv.jsdomnodejs.JSDOMNodeJSEnv" => "jsdom"
+      case other => other.split('.').last.toLowerCase
     }
+    val config: Option[AnyRef] =
+      try {
+        val field = env.getClass.getDeclaredField("config")
+        field.setAccessible(true)
+        Option(field.get(env))
+      }
+      catch { case scala.util.control.NonFatal(_) => None }
+    def read[T](name: String): Option[T] = config.flatMap(c =>
+      try Option(c.getClass.getMethod(name).invoke(c).asInstanceOf[T]) catch { case scala.util.control.NonFatal(_) => None })
+    Json.Obj(Map(
+      "kind" -> Json.Str(kind),
+      "args" -> Json.Arr(read[Seq[String]]("args").getOrElse(Nil).map(Json.Str(_))),
+      "env" -> Json.Obj(read[Map[String, String]]("env").getOrElse(Map.empty).map { case (k, v) => k -> Json.Str(v) }),
+    ) ++ read[String]("executable").map("executable" -> Json.Str(_)))
+  }
 
   /** The Scala.js linker's own link of the configuration, as the directory's writer. */
   private def stock(config: Configuration, task: TaskKey[Attributed[org.scalajs.linker.interface.Report]], directory: Def.Initialize[File]) =

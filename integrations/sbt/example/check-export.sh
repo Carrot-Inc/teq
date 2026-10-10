@@ -713,7 +713,13 @@ for what, ok in [("the outside source directory", "/teq-outside-the-root" in com
     rm teq.lock
     out=$(timeout 300 "$teq" test 2>&1)
     code=$?
-    if [ $code != 0 ] || [[ "$out" != *"jvmapp/test"* ]] || [[ "$out" != *"api/test"* ]]; then out="teq test ($code): $out"; else out=ok; fi
+    # The Scala.js projects with suites, which teq does not run yet, named left out: the run exits 2.
+    if [ $code != 2 ] || [[ "$out" != *"jvmapp/test"* ]] || [[ "$out" != *"api/test"* ]] ||
+      [[ "$out" != *"teq: test left out browserdemo is a Scala.js project, whose suites"* ]] || [[ "$out" != *"teq: test left out sjsapp is a Scala.js project, whose suites"* ]]; then
+      out="teq test ($code): $out"
+    else
+      out=ok
+    fi
     timeout 30 "$teq" stop > /dev/null 2>&1
   fi
   cp -p target-export-launchers/teq target-export-launchers/teq.cmd . && cp target-export-fixture.lock teq.lock && rm -f target/teq/teq.lock

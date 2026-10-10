@@ -5,14 +5,13 @@ import java.security.MessageDigest
 import java.util.concurrent.ConcurrentHashMap
 import scala.collection.compat.*
 
-import sbt.io.IO
 
 /** The SHA-1 digests the plugin names files by: a resolved file's (the export's jars, the copy of
   * the binary under `target/teq/bin`), and the stamp beside that copy, `<copy>.sha1`,
   * which holds the digest it was copied with, so that the copy is made again whenever the resolved
   * file is another one (a binary published locally again under its SNAPSHOT version) and its bytes
   * are not read at every start. */
-private[sbt] object Sha1 {
+private[teq] object Sha1 {
   private val digests = new ConcurrentHashMap[(String, Long, Long), String]()
 
   /** The digest of a resolved file, computed from its bytes once per file, size and date in a
@@ -48,13 +47,13 @@ private[sbt] object Sha1 {
   def stamped(copy: File): Option[String] =
     if (!copy.isFile) None
     else {
-      val kept = try Option(stamp(copy)).filter(_.isFile).flatMap(found => in(IO.read(found))) catch { case _: IOException => None }
+      val kept = try Option(stamp(copy)).filter(_.isFile).flatMap(found => in(new String(java.nio.file.Files.readAllBytes(found.toPath), java.nio.charset.StandardCharsets.UTF_8))) catch { case _: IOException => None }
       kept.orElse(Some(writeStamp(copy)))
     }
 
   def writeStamp(copy: File): String = {
     val checksum = compute(copy)
-    IO.write(stamp(copy), checksum)
+    java.nio.file.Files.write(stamp(copy).toPath, checksum.getBytes(java.nio.charset.StandardCharsets.UTF_8))
     checksum
   }
 }

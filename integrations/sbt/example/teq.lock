@@ -101,11 +101,12 @@ projects:
           - org.scala-lang:scala-library:3.8.4
           - org.typelevel:cats-kernel_3:2.13.0
         flags:
-          ignoredScalacOptions:
-            - "-Wconf:any:s"
+          ignoredScalacOptions: []
           kindProjector: false
           maxInlines: 80
           strictEquality: false
+          wconf:
+            - any:s
           werror: false
         generators:
           - dynamic:
@@ -199,11 +200,12 @@ projects:
         exclude:
           - meridian.apitest.JunitStyleSuite
         flags:
-          ignoredScalacOptions:
-            - "-Wconf:any:s"
+          ignoredScalacOptions: []
           kindProjector: false
           maxInlines: 80
           strictEquality: false
+          wconf:
+            - any:s
           werror: false
         fork: false
         frameworks:
@@ -286,11 +288,12 @@ projects:
           - org.scala-lang:scala3-library_3:3.8.4
         flags:
           ignoredScalacOptions:
-            - "-Wconf:any:s"
             - "-scalajs"
           kindProjector: false
           maxInlines: 80
           strictEquality: false
+          wconf:
+            - any:s
           werror: false
         generators:
           - cwd: .
@@ -374,11 +377,12 @@ projects:
         exclude: []
         flags:
           ignoredScalacOptions:
-            - "-Wconf:any:s"
             - "-scalajs"
           kindProjector: false
           maxInlines: 80
           strictEquality: false
+          wconf:
+            - any:s
           werror: false
         fork: false
         frameworks:
@@ -391,6 +395,12 @@ projects:
           - arguments: []
             class: zio.test.sbt.ZTestFramework
         javaOptions: []
+        jsEnv:
+          args: []
+          env: {}
+          executable: node
+          kind: node
+        moduleKind: ESModule
         resources:
           - browserdemo/src/test/resources
         sources:
@@ -438,11 +448,12 @@ projects:
           - org.scala-lang:scala3-library_3:3.8.4
         flags:
           ignoredScalacOptions:
-            - "-Wconf:any:s"
             - "-scalajs"
           kindProjector: false
           maxInlines: 80
           strictEquality: false
+          wconf:
+            - any:s
           werror: false
         generators: []
         mainClasses:
@@ -486,15 +497,22 @@ projects:
         exclude: []
         flags:
           ignoredScalacOptions:
-            - "-Wconf:any:s"
             - "-scalajs"
           kindProjector: false
           maxInlines: 80
           strictEquality: false
+          wconf:
+            - any:s
           werror: false
         fork: false
         frameworks: []
         javaOptions: []
+        jsEnv:
+          args: []
+          env: {}
+          executable: node
+          kind: node
+        moduleKind: NoModule
         resources:
           - frontend/src/test/resources
         sources:
@@ -538,11 +556,12 @@ projects:
           - org.scala-lang:scala3-library_3:3.8.4
           - org.scala-lang:scala-library:3.8.4
         flags:
-          ignoredScalacOptions:
-            - "-Wconf:any:s"
+          ignoredScalacOptions: []
           kindProjector: false
           maxInlines: 80
           strictEquality: false
+          wconf:
+            - any:s
           werror: false
         generators: []
         mainClasses: []
@@ -577,11 +596,12 @@ projects:
         envVars: {}
         exclude: []
         flags:
-          ignoredScalacOptions:
-            - "-Wconf:any:s"
+          ignoredScalacOptions: []
           kindProjector: false
           maxInlines: 80
           strictEquality: false
+          wconf:
+            - any:s
           werror: false
         fork: false
         frameworks:
@@ -624,11 +644,12 @@ projects:
           - org.scala-lang:scala3-library_3:3.8.4
           - org.scala-lang:scala-library:3.8.4
         flags:
-          ignoredScalacOptions:
-            - "-Wconf:any:s"
+          ignoredScalacOptions: []
           kindProjector: false
           maxInlines: 80
           strictEquality: false
+          wconf:
+            - any:s
           werror: false
         generators: []
         mainClasses: []
@@ -652,11 +673,12 @@ projects:
         envVars: {}
         exclude: []
         flags:
-          ignoredScalacOptions:
-            - "-Wconf:any:s"
+          ignoredScalacOptions: []
           kindProjector: false
           maxInlines: 80
           strictEquality: false
+          wconf:
+            - any:s
           werror: false
         fork: false
         frameworks: []
@@ -701,11 +723,12 @@ projects:
           - org.scala-lang:scala3-library_3:3.8.4
         flags:
           ignoredScalacOptions:
-            - "-Wconf:any:s"
             - "-scalajs"
           kindProjector: false
           maxInlines: 80
           strictEquality: false
+          wconf:
+            - any:s
           werror: false
         generators:
           - cwd: .
@@ -753,15 +776,22 @@ projects:
         exclude: []
         flags:
           ignoredScalacOptions:
-            - "-Wconf:any:s"
             - "-scalajs"
           kindProjector: false
           maxInlines: 80
           strictEquality: false
+          wconf:
+            - any:s
           werror: false
         fork: false
         frameworks: []
         javaOptions: []
+        jsEnv:
+          args: []
+          env: {}
+          executable: node
+          kind: node
+        moduleKind: ESModule
         resources:
           - mirrored/src/test/resources
         sources:
@@ -802,11 +832,12 @@ projects:
           - org.scala-lang:scala3-library_3:3.8.4
         flags:
           ignoredScalacOptions:
-            - "-Wconf:any:s"
             - "-scalajs"
           kindProjector: false
           maxInlines: 80
           strictEquality: false
+          wconf:
+            - any:s
           werror: false
         generators: []
         mainClasses: []
@@ -847,15 +878,22 @@ projects:
         exclude: []
         flags:
           ignoredScalacOptions:
-            - "-Wconf:any:s"
             - "-scalajs"
           kindProjector: false
           maxInlines: 80
           strictEquality: false
+          wconf:
+            - any:s
           werror: false
         fork: false
         frameworks: []
         javaOptions: []
+        jsEnv:
+          args: []
+          env: {}
+          executable: node
+          kind: node
+        moduleKind: NoModule
         resources:
           - shared/src/test/resources
         sources:
@@ -892,11 +930,12 @@ projects:
           - org.scala-lang:scala3-library_3:3.8.4
         flags:
           ignoredScalacOptions:
-            - "-Wconf:any:s"
             - "-scalajs"
           kindProjector: false
           maxInlines: 80
           strictEquality: false
+          wconf:
+            - any:s
           werror: false
         generators: []
         mainClasses: []
@@ -939,11 +978,12 @@ projects:
         exclude: []
         flags:
           ignoredScalacOptions:
-            - "-Wconf:any:s"
             - "-scalajs"
           kindProjector: false
           maxInlines: 80
           strictEquality: false
+          wconf:
+            - any:s
           werror: false
         fork: false
         frameworks:
@@ -952,6 +992,12 @@ projects:
           - arguments: []
             class: munit.Framework
         javaOptions: []
+        jsEnv:
+          args: []
+          env: {}
+          executable: node
+          kind: node
+        moduleKind: NoModule
         resources:
           - sjsapp/src/test/resources
         sources:
@@ -990,11 +1036,12 @@ projects:
           - org.scala-lang:scala3-library_3:3.8.4
         flags:
           ignoredScalacOptions:
-            - "-Wconf:any:s"
             - "-scalajs"
           kindProjector: false
           maxInlines: 80
           strictEquality: false
+          wconf:
+            - any:s
           werror: false
         generators: []
         mainClasses: []
@@ -1030,15 +1077,22 @@ projects:
         exclude: []
         flags:
           ignoredScalacOptions:
-            - "-Wconf:any:s"
             - "-scalajs"
           kindProjector: false
           maxInlines: 80
           strictEquality: false
+          wconf:
+            - any:s
           werror: false
         fork: false
         frameworks: []
         javaOptions: []
+        jsEnv:
+          args: []
+          env: {}
+          executable: node
+          kind: node
+        moduleKind: NoModule
         resources:
           - sjscore/src/test/resources
         sources:

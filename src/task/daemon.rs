@@ -430,7 +430,7 @@ fn plan(export: &Export, running: &[Key], wanted: &[Key]) -> Vec<Key> {
     let inputs = |k: &Key| export.session_inputs(k).into_iter().collect::<BTreeSet<PathBuf>>();
     let platform = |k: &Key| export.projects.get(&k.project).map(|p| p.platform);
     let needs: BTreeMap<Key, BTreeSet<PathBuf>> = wanted.iter().map(|k| (k.clone(), inputs(k))).collect();
-    let types = |resident: &Key, has: &BTreeSet<PathBuf>, k: &Key| platform(resident) == platform(k) && needs[k].is_subset(has);
+    let types = |resident: &Key, has: &BTreeSet<PathBuf>, k: &Key| platform(resident) == platform(k) && needs[k].is_subset(has) && export.serves(resident, k);
     let mut left: Vec<Key> = wanted.to_vec();
     let mut chosen: Vec<Key> = Vec::new();
     while let Some(first) = left.first().cloned() {
@@ -445,7 +445,9 @@ fn plan(export: &Export, running: &[Key], wanted: &[Key]) -> Vec<Key> {
         let (key, has) = match best {
             Some((n, k, has)) if n > 0 => (k, has),
             _ => {
-                let k = export.widest(&first.project).unwrap_or_else(|| first.clone());
+                // The project's widest resident, unless it may not type the configuration (one that is not
+                // transitive, which a resident of its own types): then that one.
+                let k = export.widest(&first.project).filter(|w| export.serves(w, &first)).unwrap_or_else(|| first.clone());
                 let has = inputs(&k).union(&needs[&first]).cloned().collect();
                 (k, has)
             }
@@ -579,15 +581,21 @@ fn test(state: &Arc<State>, export: &Arc<Export>, request: &Request, reply: &mut
     }
     let named = words.first().filter(|w| export.projects.contains_key(*w)).cloned();
     let mut left_out = Vec::new();
+    let mut scalajs_left_out: Vec<String> = Vec::new();
     let keys = match &named {
         Some(name) => {
             let project = &export.projects[name];
             if !project.configurations.get("test").is_some_and(|c| c.test.is_some()) {
-                reply.err(&format!("teq: project {} has no test configuration\n", name));
+                // A test configuration the export left out (a Mill test module it could not describe) is
+                // refused with the export's reasons.
+                match super::refused(export, "test", &[name]) {
+                    Some(why) => reply.err(&format!("teq: {}\n", why)),
+                    None => reply.err(&format!("teq: project {} has no test configuration\n", name)),
+                }
                 return 2;
             }
             if project.platform != Platform::Jvm {
-                reply.err(&format!("teq: {} is a Scala.js project, whose suites teq does not run yet\n", name));
+                reply.err(&format!("teq: {}\n", scalajs_suites(export, name)));
                 return 2;
             }
             if let Some(why) = super::refused(export, "test", &[name]) {
@@ -596,25 +604,45 @@ fn test(state: &Arc<State>, export: &Arc<Export>, request: &Request, reply: &mut
             }
             vec![Key::new(name, "test")]
         }
-        // Every JVM project with frameworks, but those the export records what sbt alone runs of
-        // for its test, named in the summary and failing the run.
+        // Every project with frameworks, but those the export records what the build tool alone
+        // runs of for its test, and the Scala.js projects, whose suites teq does not run yet: named
+        // in the summary and failing the run, never skipped unsaid.
         None => {
             let mut keys = Vec::new();
-            for (n, _) in export.projects.iter().filter(|(_, p)| p.platform == Platform::Jvm && p.configurations.get("test").and_then(|c| c.test.as_ref()).is_some_and(|t| !t.frameworks.is_empty())) {
-                if export.refusals("test", n).is_empty() { keys.push(Key::new(n, "test")) } else { left_out.push(n.clone()) }
+            // A test configuration the export left out with its reasons is left out here, named.
+            left_out.extend(export.projects.iter().filter(|(_, p)| !p.configurations.contains_key("test") && p.unsupported.get("test").is_some_and(|w| !w.is_empty())).map(|(n, _)| n.clone()));
+            for (n, p) in export.projects.iter().filter(|(_, p)| p.configurations.get("test").and_then(|c| c.test.as_ref()).is_some_and(|t| !t.frameworks.is_empty())) {
+                if p.platform != Platform::Jvm {
+                    scalajs_left_out.push(n.clone());
+                } else if export.refusals("test", n).is_empty() {
+                    keys.push(Key::new(n, "test"))
+                } else {
+                    left_out.push(n.clone())
+                }
             }
             keys
         }
     };
     let patterns = Patterns::new(&words[usize::from(named.is_some())..]);
     let asked = TestRequest { keys, patterns, changed, list, verbose };
-    if asked.keys.is_empty() && left_out.is_empty() {
-        reply.out("teq: no JVM project with test frameworks\n");
+    if asked.keys.is_empty() && left_out.is_empty() && scalajs_left_out.is_empty() {
+        reply.out("teq: no project with test frameworks\n");
         return 0;
     }
     let code = asked.keys.iter().map(|key| test_configuration(state, export, request, &asked, key, reply)).max().unwrap_or(0);
     reply.out(&super::left_out(export, "test", &left_out));
+    for n in &scalajs_left_out {
+        reply.out(&format!("teq: test left out {}\n", scalajs_suites(export, n)));
+    }
+    left_out.extend(scalajs_left_out);
     super::with_left_out(code, &left_out)
+}
+
+/// Why a Scala.js project's suites do not run, naming how its build tool runs them: the link's module
+/// kind and the JavaScript environment.
+fn scalajs_suites(export: &Export, name: &str) -> String {
+    let how = export.configuration(&Key::new(name, "test")).and_then(|c| c.test.as_ref()).map_or_else(String::new, |t| t.js_run());
+    format!("{} is a Scala.js project, whose suites{} teq does not run yet", name, how)
 }
 
 fn test_configuration(state: &Arc<State>, export: &Arc<Export>, request: &Request, asked: &TestRequest, key: &Key, reply: &mut Reply) -> i32 {
@@ -668,6 +696,12 @@ fn test_configuration(state: &Arc<State>, export: &Arc<Export>, request: &Reques
     }
     if runner.is_none() {
         log(&format!("starting the test runner of {}: {}", key, spec.java.display()));
+        if context.sandbox {
+            if let Err(e) = std::fs::create_dir_all(&spec.directory) {
+                reply.err(&format!("teq: {}: cannot create {}: {}\n", key, spec.directory.display(), e));
+                return 2;
+            }
+        }
         let argfile = export.path(&format!("target/teq/{}/{}/runner.args", key.project, key.configuration));
         // Launched under the registry's lock, so that an ending daemon's kill pass either sees the
         // process or the launch sees the daemon ending.
@@ -738,6 +772,13 @@ fn test_configuration(state: &Arc<State>, export: &Arc<Export>, request: &Reques
         return incomplete;
     }
     let directories = child_directories(export, key, &owner);
+    // A run of its own directory starts in it empty, as Mill's sandbox (`TestModuleUtil`) does.
+    if context.sandbox {
+        if let Err(e) = empty_directory(&export.sandbox_directory(key)) {
+            reply.err(&format!("teq: {}: {}\n", key, e));
+            return 2;
+        }
+    }
     let names: Vec<(usize, usize, String)> = selected.iter().map(|s| (s.framework, s.fingerprint, s.name.clone())).collect();
     let result = r.run(&directories, &names, asked.verbose, request.tty, &mut |line| reply.out(line));
     drop(finished);
@@ -931,7 +972,7 @@ fn kill_when_gone(reply: &Reply, finished: &Finished, process: Arc<Mutex<std::pr
 fn runner_spec(export: &Export, key: &Key, context: &TestContext, environment: &BTreeMap<String, String>) -> Result<Spec, String> {
     let conf = export.configuration(key).ok_or_else(|| format!("no configuration {}", key))?;
     let mut jars = Vec::new();
-    for entry in &conf.classpath {
+    for entry in conf.run_classpath() {
         let path = match entry {
             Entry::Product(_) => continue,
             Entry::File(path) if export.path(path).is_dir() => continue,
@@ -943,11 +984,23 @@ fn runner_spec(export: &Export, key: &Key, context: &TestContext, environment: &
         java: runner::java(environment)?,
         least: export.java_output_version,
         options: context.java_options.clone(),
-        directory: export.path(&context.base_directory),
-        env: context.env_vars.clone(),
+        directory: if context.sandbox { export.sandbox_directory(key) } else { export.path(&context.base_directory) },
+        env: context.env(export),
         jars,
         frameworks: context.frameworks.clone(),
     })
+}
+
+/// A directory made empty, created when missing: what it holds removed, the directory itself kept,
+/// since a test runner started in it keeps it as its working directory.
+fn empty_directory(dir: &Path) -> Result<(), String> {
+    std::fs::create_dir_all(dir).map_err(|e| format!("cannot create {}: {}", dir.display(), e))?;
+    for entry in std::fs::read_dir(dir).map_err(|e| format!("cannot read {}: {}", dir.display(), e))?.flatten() {
+        let path = entry.path();
+        let removed = if entry.file_type().is_ok_and(|k| k.is_dir()) { std::fs::remove_dir_all(&path) } else { std::fs::remove_file(&path) };
+        removed.map_err(|e| format!("cannot empty {}: {}", path.display(), e))?;
+    }
+    Ok(())
 }
 
 /// The directories a run reads through its own class loader: the resident's class files, the
@@ -956,7 +1009,7 @@ fn child_directories(export: &Export, key: &Key, owner: &Key) -> Vec<PathBuf> {
     let conf = export.configuration(key).expect("a test configuration");
     let mut out = vec![export.path(&export.classes(owner))];
     out.extend(conf.resources.iter().map(|r| export.path(r)));
-    for entry in &conf.classpath {
+    for entry in conf.run_classpath() {
         match entry {
             Entry::Product(k) => out.extend(export.configuration(k).map_or(&[][..], |c| &c.resources).iter().map(|r| export.path(r))),
             Entry::File(path) if export.path(path).is_dir() => out.push(export.path(path)),
@@ -1156,6 +1209,53 @@ projects:
         // app's description leaves core's sources out: its resident does not type core.
         assert_eq!(plan(&export, &[], &compile(&["app", "core"])), [Key::new("app", "compile"), Key::new("core", "compile")]);
         assert_eq!(plan(&export, &[Key::new("app", "compile")], &compile(&["core"])), [Key::new("core", "compile")]);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// A Mill module's configurations, not transitive, each a resident of its own: a compile is never served by
+    /// the test's resident (whose class path is wider) nor by a dependent's, and a test's plan ends with the test's
+    /// own resident (it once looped, the fallback widest no resident of the test).
+    #[test]
+    fn a_configuration_that_is_not_transitive_gets_a_resident_of_its_own() {
+        let dir = std::env::temp_dir().join(format!("teq-plan-mill-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let text = "teq: 0.1.2
+format: 1
+binaries: {}
+exporter: mill
+projects:
+  app:
+    configurations:
+      compile:
+        classpath:
+          - {configuration: compile, project: core}
+        sources:
+          - app/src
+        transitive: false
+      test:
+        classpath:
+          - {configuration: compile, project: app}
+        frameworks: []
+        sources:
+          - app/test
+        transitive: false
+    platform: jvm
+  core:
+    configurations:
+      compile:
+        sources:
+          - core/src
+        transitive: false
+    platform: jvm
+";
+        std::fs::write(dir.join("teq.lock"), text).unwrap();
+        let export = Export::read(&dir.join("teq.lock")).unwrap();
+        let (app, app_test, core) = (Key::new("app", "compile"), Key::new("app", "test"), Key::new("core", "compile"));
+        assert_eq!(plan(&export, &[], std::slice::from_ref(&app_test)), [app_test.clone()]);
+        assert_eq!(plan(&export, &[], std::slice::from_ref(&app)), [app.clone()]);
+        assert_eq!(plan(&export, std::slice::from_ref(&app_test), std::slice::from_ref(&app)), [app.clone()]);
+        assert_eq!(plan(&export, std::slice::from_ref(&app), std::slice::from_ref(&core)), [core.clone()]);
         let _ = std::fs::remove_dir_all(&dir);
     }
 

@@ -51,7 +51,7 @@ private[sbt] object DockerStage {
   val of: Def.Initialize[Task[NativeStage]] = Def.taskDyn {
     val structure = buildStructure.value
     val data = settingsData.value
-    val root = Export.rootOf((LocalRootProject / baseDirectory).value)
+    val root = Exported.rootOf((LocalRootProject / baseDirectory).value)
     val project = thisProjectRef.value
     val inDocker = Scope(Select(project), Select(ConfigKey(Docker.name)), Zero, Zero)
     val inProject = Scope(Select(project), Zero, Zero, Zero)
@@ -70,7 +70,7 @@ private[sbt] object DockerStage {
     val built = function.value
     val converter = fileConverter.value
     val structure = buildStructure.value
-    val root = Export.rootOf((LocalRootProject / baseDirectory).value)
+    val root = Exported.rootOf((LocalRootProject / baseDirectory).value)
     val project = thisProjectRef.value
     val name = project.project
     val install = (Docker / defaultLinuxInstallLocation).value
@@ -82,7 +82,7 @@ private[sbt] object DockerStage {
     /** A file a reason names, as the lock records it on every machine and in every checkout:
       * relative to the build's root, and outside it by the setting that names it. */
     def named(file: File, setting: String) =
-      if (file.toPath.toAbsolutePath.normalize.startsWith(root)) Export.relativeTo(root, file) else s"$setting, outside the build's root,"
+      if (file.toPath.toAbsolutePath.normalize.startsWith(root)) Exported.relativeTo(root, file) else s"$setting, outside the build's root,"
     def setHere(key: AttributeKey[?], config: Option[String] = None) =
       Export.setInBuild(structure, root, project, key, scope => config.forall(c => scope.config == Select(ConfigKey(c))))
     val refusals =

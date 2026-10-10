@@ -1,0 +1,82 @@
+//| mill-version: 1.0.6
+// mill-teq: the Mill plugin that exports a Mill build to teq.lock (docs/TOOLING.md, "The export of a Mill
+// build"), an external module a build runs without naming it:
+//
+//   mill --import mvn:build.teq::mill-teq::<version> dev.teq.mill.Teq/teqExportAll
+//
+// Built by Mill 1.0.6 against mill-libs 1.0.6, the oldest Mill 1.x it serves, on that Mill's Scala; the
+// hosting Mill provides mill-libs at run time (a dependency of the published pom's `provided` scope). Its
+// version line is its own (plugin-version.txt), apart from the compiler's and sbt-teq's.
+package build
+
+import mill.*, scalalib.*, publish.*
+
+object `package` extends ScalaModule, PublishModule {
+  def millLibs = "1.0.6"
+  def scalaVersion = "3.7.3"
+  def artifactName = "mill-teq"
+  // Mill's plugin convention: the Mill line in the artifact's name, `mill-teq_mill1_3`, which an import's
+  // `build.teq::mill-teq::<version>` resolves for a Mill 1.x build.
+  def platformSuffix = "_mill1"
+  def versionFile = Task.Source(moduleDir / "plugin-version.txt")
+  // A branch publishes under a version of its own (TEQ_MILL_PLUGIN_VERSION, a SNAPSHOT), never a release's.
+  def versionOverride = Task.Input { Task.env.get("TEQ_MILL_PLUGIN_VERSION") }
+  def publishVersion = Task { versionOverride().getOrElse(os.read(versionFile().path).trim) }
+  def pomSettings = PomSettings(
+    description = "A Mill 1.x plugin that exports a Mill build to teq.lock, the description teq's project verbs, language server and vite plugin read",
+    organization = "build.teq",
+    url = "https://teq.build",
+    licenses = Seq(License.`Apache-2.0`),
+    versionControl = VersionControl.github("Carrot-Inc", "teq"),
+    developers = Seq(Developer("carrot", "Carrot", "https://github.com/Carrot-Inc/teq"))
+  )
+  def compileMvnDeps = Seq(mvn"com.lihaoyi::mill-libs:$millLibs")
+  // The YAML parser Mill reads a build's header with (`Inputs.allowsNestedBuilds`), Mill 1.0.6's version.
+  def mvnDeps = Seq(mvn"org.snakeyaml:snakeyaml-engine:2.10")
+  def scalacOptions = Seq("-deprecation", "-feature")
+
+  /** sbt-teq's sources that hold nothing of sbt: the lock's canonical form, its records and the jar table, the
+    * launchers, the release manifest and the scalac options mapping, one implementation for both exporters. */
+  def shared = Task.Sources(
+    Seq("Exported", "Json", "Launchers", "Lock", "Release", "ScalacOptions", "Served", "Sha1")
+      .map(name => moduleDir / os.up / "sbt" / "src" / "main" / "scala" / "dev" / "teq" / "sbt" / s"$name.scala")*
+  )
+  def own = Task.Sources(moduleDir / "src")
+  def sources = Task { own() ++ shared() }
+
+  /** The plugin's version and the compiler it is released with (Cargo.toml's), the default `teq` of an export. */
+  def cargoToml = Task.Source(moduleDir / os.up / os.up / "Cargo.toml")
+  def generatedSources = Task {
+    val cargo = os.read(cargoToml().path)
+    val compiler = """(?m)^version\s*=\s*"([^"]+)"""".r.findFirstMatchIn(cargo).map(_.group(1)).getOrElse(sys.error("no version in Cargo.toml"))
+    os.write(
+      Task.dest / "BuildInfo.scala",
+      s"package dev.teq.mill\n\nprivate[mill] object BuildInfo:\n  val version = \"${publishVersion()}\"\n  val compiler = \"$compiler\"\n"
+    )
+    Seq(PathRef(Task.dest))
+  }
+
+  /** The launchers an export writes beside teq.lock (sbt-teq's `Launchers`, which reads them here): teq's
+    * tools/launcher/teq and teq.cmd, the version their marker line names, and every version shipped before
+    * (tools/launcher/shipped/<version>/), as dev/teq/sbt/launcher/<version>/<name>, line ends \n, with `versions`
+    * listing them; sbt-teq's build makes the same resources. */
+  def launchers = Task.Sources(moduleDir / os.up / os.up / "tools" / "launcher")
+  def resources = Task {
+    val dir = launchers().head.path
+    val out = Task.dest / "dev" / "teq" / "sbt" / "launcher"
+    val marker = """(?m)^(?:#|rem) teq launcher (\d+):""".r
+    def versionOf(f: os.Path) = marker.findFirstMatchIn(os.read(f)).map(_.group(1).toInt).getOrElse(sys.error(s"$f has no `teq launcher <version>:` line"))
+    val current = versionOf(dir / "teq")
+    if versionOf(dir / "teq.cmd") != current then sys.error(s"${dir / "teq.cmd"} is not launcher $current, as ${dir / "teq"} is")
+    val shipped = if os.isDir(dir / "shipped") then os.list(dir / "shipped").filter(os.isDir).map(d => d.last.toInt -> d) else Nil
+    val all = (shipped :+ (current -> dir)).sortBy(_._1)
+    for (version, from) <- all; name <- Seq("teq", "teq.cmd") do
+      os.write(out / version.toString / name, os.read(from / name).replace("\r\n", "\n"), createFolders = true)
+    os.write(out / "versions", all.map(_._1).mkString("", "\n", "\n"))
+    Seq(PathRef(Task.dest))
+  }
+
+  object test extends ScalaTests, TestModule.Munit {
+    def mvnDeps = Seq(mvn"org.scalameta::munit:1.3.4", mvn"com.lihaoyi::mill-libs:$millLibs")
+  }
+}

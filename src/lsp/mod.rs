@@ -588,6 +588,11 @@ struct Server {
     folder_diagnostics: BTreeMap<PathBuf, Vec<Json>>,
     /// Whether the client takes a registration of the files to watch.
     watch_files: bool,
+    /// Whether the client watches a glob relative to a directory of its own (LSP 3.17's `RelativePattern`).
+    relative_patterns: bool,
+    /// The watchers of the inputs the exports declare (a Mill build's `inputs.declared`) last registered, as
+    /// their text.
+    declared_watched: Vec<String>,
     /// Whether the client shows work-done progress.
     progress: bool,
     /// Numbers the requests to the client and the progress tokens.
@@ -651,6 +656,8 @@ pub fn run(args: &[String]) -> ! {
         folders: Vec::new(),
         folder_diagnostics: BTreeMap::new(),
         watch_files: false,
+        relative_patterns: false,
+        declared_watched: Vec::new(),
         progress: false,
         next_request: 0,
         discovered_at: Instant::now(),
@@ -671,17 +678,79 @@ fn names_an_export(params: &Json) -> bool {
     changes.iter().filter_map(|c| c.get("uri")?.str()).any(|uri| uri.ends_with(&format!("/{}", crate::task::export::FILE)))
 }
 
-/// The files of an sbt build a `workspace/didChangeWatchedFiles` or a `didSave` names: `.sbt`
-/// files, `project/build.properties` and the sources under `project/`, none under a `target`.
-fn changed_build_files(params: &Json) -> Vec<PathBuf> {
+/// The globs of the build definition files the server watches: sbt's and Mill's (the files
+/// `task::export::input_digests` reads of either) and the exports.
+const WATCHED: [&str; 16] = [
+    "**/*.scala",
+    "**/teq.lock",
+    "**/*.sbt",
+    "**/project/build.properties",
+    "**/*.mill",
+    "**/*.mill.yaml",
+    "**/*.mill.scala",
+    "**/*.sc",
+    "**/mill-build/**",
+    "**/.mill-version",
+    "**/.config/mill-version",
+    "**/.mill-jvm-version",
+    "**/.config/mill-jvm-version",
+    "**/.mill-jvm-opts",
+    "**/.mill-opts",
+    "**/teq.mill.json",
+];
+
+/// Whether a file a `workspace/didChangeWatchedFiles` or a `didSave` names is a build definition file: an
+/// sbt build's `.sbt` files, `project/build.properties` and the sources under `project/`, none under a
+/// `target`; a Mill build's scripts, meta-build, launcher files and overlay, none under its `out/`.
+fn is_build_file(uri: &str) -> bool {
+    let sbt = !uri.contains("/target/") && (uri.ends_with(".sbt") || uri.ends_with("/project/build.properties") || (uri.contains("/project/") && uri.ends_with(".scala")));
+    let name = uri.rsplit('/').next().unwrap_or(uri);
+    let mill = !uri.contains("/out/")
+        && ([".mill", ".mill.yaml", ".mill.scala", ".sc"].iter().any(|ext| name.ends_with(ext))
+            || uri.contains("/mill-build/")
+            || uri.ends_with("/.config/mill-version")
+            || uri.ends_with("/.config/mill-jvm-version")
+            || [".mill-version", ".mill-jvm-version", ".mill-jvm-opts", ".mill-opts", crate::task::export::MILL_OVERLAY].contains(&name));
+    sbt || mill
+}
+
+/// The files a `workspace/didChangeWatchedFiles` or a `didSave` names that are a build's inputs: its
+/// definition files (`is_build_file`), or one of `declared`, the inputs the exports declare.
+fn changed_build_files(params: &Json, declared: &BTreeSet<PathBuf>) -> Vec<PathBuf> {
     let mut uris: Vec<&str> = params.get("changes").map(Json::arr).unwrap_or(&[]).iter().filter_map(|c| c.get("uri")?.str()).collect();
     uris.extend(params.at(&["textDocument", "uri"]).and_then(Json::str));
     uris.into_iter()
-        .filter(|uri| !uri.contains("/target/"))
-        .filter(|uri| uri.ends_with(".sbt") || uri.ends_with("/project/build.properties") || (uri.contains("/project/") && uri.ends_with(".scala")))
-        .filter_map(uri::to_path)
-        .map(|p| canonical(&p))
+        .filter_map(|uri| {
+            let path = canonical(&uri::to_path(uri)?);
+            (is_build_file(uri) || declared.contains(&path)).then_some(path)
+        })
         .collect()
+}
+
+/// The watchers of the inputs the exports declare: a glob of the file's name (`**/<name>`) for one inside a
+/// workspace folder, which the client resolves against its folders; one outside them (a Mill build's
+/// `../external.txt`) watched from its own directory, as a relative pattern where the client takes one (LSP
+/// 3.17's `relativePatternSupport`), else as its absolute path.
+fn declared_watchers(declared: &BTreeSet<PathBuf>, folders: &[PathBuf], relative: bool) -> Vec<Json> {
+    let mut out: Vec<Json> = Vec::new();
+    for path in declared {
+        let Some(name) = path.file_name().map(|n| n.to_string_lossy().into_owned()) else { continue };
+        let watcher = match path.parent() {
+            _ if folders.iter().any(|f| path.starts_with(f)) => obj([("globPattern", format!("**/{name}").into())]),
+            Some(dir) if relative => obj([("globPattern", obj([("baseUri", uri::from_path(dir).into()), ("pattern", name.into())]))]),
+            _ => obj([("globPattern", path.to_string_lossy().replace('\\', "/").into())]),
+        };
+        if !out.contains(&watcher) {
+            out.push(watcher);
+        }
+    }
+    out
+}
+
+/// Whether changed files touch an export: one under its build's root, or one of the inputs it declares,
+/// wherever it is (a Mill build's `../external.txt`).
+fn touches(root: &Path, declared: &[PathBuf], files: &[PathBuf]) -> bool {
+    files.iter().any(|p| p.starts_with(root) || declared.contains(p))
 }
 
 fn send_to_client(message: &Json) {
@@ -1114,6 +1183,7 @@ impl Server {
         match method {
             "initialized" => {
                 self.register_watchers();
+                self.register_declared_watchers();
                 self.start_sessions()
             }
             "exit" => self.exit(),
@@ -1164,7 +1234,8 @@ impl Server {
                 if names_an_export(params) {
                     self.rediscover();
                 }
-                self.build_files_changed(&changed_build_files(params));
+                let declared = self.declared_inputs();
+                self.build_files_changed(&changed_build_files(params, &declared));
                 self.reload_exports();
                 self.restart_moved_inputs();
                 for s in 0..self.sessions.len() {
@@ -1256,6 +1327,7 @@ impl Server {
         self.document_changes = params.at(&["capabilities", "workspace", "workspaceEdit", "documentChanges"]).and_then(Json::bool) == Some(true);
         self.label_offsets = params.at(&["capabilities", "textDocument", "signatureHelp", "signatureInformation", "parameterInformation", "labelOffsetSupport"]).and_then(Json::bool) == Some(true);
         self.watch_files = params.at(&["capabilities", "workspace", "didChangeWatchedFiles", "dynamicRegistration"]).and_then(Json::bool) == Some(true);
+        self.relative_patterns = params.at(&["capabilities", "workspace", "didChangeWatchedFiles", "relativePatternSupport"]).and_then(Json::bool) == Some(true);
         self.progress = params.at(&["capabilities", "window", "workDoneProgress"]).and_then(Json::bool) == Some(true);
         respond(id, obj([("capabilities", capabilities), ("serverInfo", obj([("name", "teq".into()), ("version", env!("CARGO_PKG_VERSION").into())]))]));
         // What the exports said while the folders were read is published after the answer.
@@ -1274,8 +1346,7 @@ impl Server {
         if !self.watch_files {
             return;
         }
-        let globs = ["**/*.scala", "**/teq.lock", "**/*.sbt", "**/project/build.properties"];
-        let watchers = Json::Arr(globs.iter().map(|g| obj([("globPattern", (*g).into())])).collect());
+        let watchers = Json::Arr(WATCHED.iter().map(|g| obj([("globPattern", (*g).into())])).collect());
         let registration = obj([
             ("id", "teq-watched-files".into()),
             ("method", "workspace/didChangeWatchedFiles".into()),
@@ -1456,7 +1527,15 @@ impl Server {
                 build.again = true;
             }
         }
-        let touched: Vec<PathBuf> = self.exports.keys().filter(|file| files.iter().any(|p| p.starts_with(crate::task::export::root_of(file)))).cloned().collect();
+        let touched: Vec<PathBuf> = self
+            .exports
+            .iter()
+            .filter(|(file, loaded)| {
+                let declared: Vec<PathBuf> = loaded.export.as_ref().map(|e| e.declared.iter().map(|d| canonical(&e.path(d))).collect()).unwrap_or_default();
+                touches(&crate::task::export::root_of(file), &declared, files)
+            })
+            .map(|(file, _)| file.clone())
+            .collect();
         for file in touched {
             self.export_diagnostics(&file);
         }
@@ -1535,6 +1614,37 @@ impl Server {
     /// Reads each export the folders find again when it changed since it was read: the sessions
     /// whose configuration it removed retire, those whose description it changed start anew (a
     /// running one at once), and why it does not read goes on it, the sessions left as they were.
+    /// The inputs the loaded exports declare besides their definition files (a Mill build's
+    /// `inputs.declared`), each canonical.
+    fn declared_inputs(&self) -> BTreeSet<PathBuf> {
+        self.exports.values().filter_map(|l| l.export.as_ref().ok()).flat_map(|e| e.declared.iter().map(|d| canonical(&e.path(d))).collect::<Vec<_>>()).collect()
+    }
+
+    /// Registers the watchers of the declared inputs anew when they changed (`declared_watchers`), a
+    /// change of which `changed_build_files` keeps when it is one of them.
+    fn register_declared_watchers(&mut self) {
+        if !self.watch_files {
+            return;
+        }
+        let folders: Vec<PathBuf> = self.folders.iter().map(|f| f.root.clone()).collect();
+        let watchers = declared_watchers(&self.declared_inputs(), &folders, self.relative_patterns);
+        let globs: Vec<String> = watchers.iter().map(Json::to_text).collect();
+        if globs == self.declared_watched {
+            return;
+        }
+        let id = "teq-declared-inputs";
+        if !self.declared_watched.is_empty() {
+            let unregistration = obj([("id", id.into()), ("method", "workspace/didChangeWatchedFiles".into())]);
+            self.request_client("client/unregisterCapability", obj([("unregisterations", Json::Arr(vec![unregistration]))]));
+        }
+        if !watchers.is_empty() {
+            let watchers = Json::Arr(watchers);
+            let registration = obj([("id", id.into()), ("method", "workspace/didChangeWatchedFiles".into()), ("registerOptions", obj([("watchers", watchers)]))]);
+            self.request_client("client/registerCapability", obj([("registrations", Json::Arr(vec![registration]))]));
+        }
+        self.declared_watched = globs;
+    }
+
     fn reload_exports(&mut self) {
         let files: BTreeSet<PathBuf> = self.folders.iter().flat_map(|f| f.exports.iter().cloned()).collect();
         let mut read_any = false;
@@ -1564,6 +1674,9 @@ impl Server {
                 self.replace_session(s, description);
             }
         }
+        if read_any && self.initialized {
+            self.register_declared_watchers();
+        }
         // An open document a configuration the export gained holds is served by it.
         if read_any && self.initialized {
             let open: Vec<PathBuf> = self.docs.keys().cloned().collect();
@@ -1582,7 +1695,7 @@ impl Server {
     fn export_diagnostics(&mut self, file: &Path) {
         let Some(loaded) = self.exports.get(file) else { return };
         let root = crate::task::export::root_of(file);
-        let anchor = if export::is_sbt_build(&root) { export::anchor(&root) } else { file.to_path_buf() };
+        let anchor = if export::is_sbt_build(&root) { export::anchor(&root) } else { crate::task::export::mill_build_file(&root).unwrap_or_else(|| file.to_path_buf()) };
         let (on_file, stale) = match &loaded.export {
             Err(e) => (Some(diagnostic_at_start(e)), Default::default()),
             Ok(export) => (None, export.stale_inputs()),
@@ -1592,7 +1705,10 @@ impl Server {
             None => self.folder_diagnostics.remove(file),
         };
         if !stale.is_empty() {
-            let command = if stale.line_ends_only() { "" } else { "; run sbt teqExportAll" };
+            let command = match &loaded.export {
+                Ok(export) if !stale.line_ends_only() => format!("; run {}", export.exporter.command()),
+                _ => String::new(),
+            };
             let mut message = format!("{} was written before {}{}", crate::task::export::FILE, stale.changes.join(", "), command);
             if let Some(note) = stale.line_end_note() {
                 message = format!("{}\n{}", message, note);
@@ -2625,6 +2741,44 @@ fn merge(method: &str, query: &str, results: Vec<Json>) -> Json {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A Mill build's definition files and the inputs an export declares are build files whose change
+    /// refreshes the stale warning, as an sbt build's are: watched by their globs, kept by
+    /// `changed_build_files`; a Mill build's `out/` and an sbt build's `target/` are not.
+    #[test]
+    fn a_mill_builds_files_and_declared_inputs_are_watched() {
+        for glob in ["**/*.mill", "**/*.mill.yaml", "**/mill-build/**", "**/.mill-version", "**/teq.mill.json", "**/*.sbt"] {
+            assert!(WATCHED.contains(&glob), "{glob}");
+        }
+        let change = |uri: &str| Json::parse(&format!("{{\"changes\":[{{\"uri\":\"{}\",\"type\":2}}]}}", uri)).unwrap();
+        let declared: BTreeSet<PathBuf> = [canonical(Path::new("/w/.tyrian-version"))].into_iter().collect();
+        for kept in ["file:///w/build.mill", "file:///w/core/package.mill", "file:///w/core/Deps.mill", "file:///w/build.mill.yaml", "file:///w/mill-build/src/P.scala", "file:///w/.mill-version", "file:///w/teq.mill.json", "file:///w/.tyrian-version", "file:///w/build.sbt", "file:///w/project/P.scala"] {
+            assert_eq!(changed_build_files(&change(kept), &declared).len(), 1, "{kept}");
+        }
+        for dropped in ["file:///w/out/core/package.mill", "file:///w/target/x.sbt", "file:///w/core/src/A.scala", "file:///w/notes.txt", "file:///w/.indigo-version"] {
+            assert!(changed_build_files(&change(dropped), &declared).is_empty(), "{dropped}");
+        }
+    }
+
+    /// A declared input outside the workspace folders (a Mill build's `../external.txt`) is watched from its
+    /// own directory, a relative pattern where the client takes one, else its absolute path, one inside them
+    /// by its name; and its change touches the export that declares it, though it is outside the build's root.
+    #[test]
+    fn a_declared_input_outside_the_build_is_watched_from_its_directory_and_touches_its_export() {
+        let folders = [PathBuf::from("/w/app")];
+        let declared: BTreeSet<PathBuf> = [PathBuf::from("/w/app/.tyrian-version"), PathBuf::from("/w/external.txt")].into_iter().collect();
+        let relative = declared_watchers(&declared, &folders, true);
+        assert_eq!(relative.len(), 2);
+        assert_eq!(relative[0].get("globPattern").and_then(Json::str), Some("**/.tyrian-version"));
+        assert_eq!(relative[1].at(&["globPattern", "baseUri"]).and_then(Json::str), Some("file:///w"));
+        assert_eq!(relative[1].at(&["globPattern", "pattern"]).and_then(Json::str), Some("external.txt"));
+        assert_eq!(declared_watchers(&declared, &folders, false)[1].get("globPattern").and_then(Json::str), Some("/w/external.txt"));
+        let declared: Vec<PathBuf> = declared.into_iter().collect();
+        assert!(touches(Path::new("/w/app"), &declared, &[PathBuf::from("/w/external.txt")]));
+        assert!(touches(Path::new("/w/app"), &[], &[PathBuf::from("/w/app/build.mill")]));
+        assert!(!touches(Path::new("/w/app"), &declared, &[PathBuf::from("/w/other.txt")]));
+        assert!(!touches(Path::new("/w/other"), &[], &[PathBuf::from("/w/external.txt")]));
+    }
 
     fn session(key: Option<Key>, root: &str) -> Session {
         let description = Description { root: PathBuf::from(root), inputs: Vec::new(), excludes: Vec::new(), classpath: Vec::new(), jvm_std: None, flags: Vec::new() };

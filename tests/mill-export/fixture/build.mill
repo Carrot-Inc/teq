@@ -1,0 +1,114 @@
+// The fixture of tests/mill-export.sh: a Mill build whose export covers mill-teq's mapping (docs/TOOLING.md, "The
+// export of a Mill build"). Its Mill is the one the driver names (.mill-version, written by it).
+package build
+
+import mill.*, scalalib.*, scalajslib.*, scalanativelib.*
+
+trait Base extends ScalaModule {
+  def scalaVersion = Versions.scala
+}
+
+// a compiles against b (compileModuleDeps, not transitive); c depends on a and does not see b.
+object b extends Base
+object a extends Base { def compileModuleDeps = Seq(b) }
+object c extends Base { def moduleDeps = Seq(a) }
+
+// d runs with r on its class path, which it does not compile against (runModuleDeps).
+object r extends Base
+object d extends Base { def runModuleDeps = Seq(r) }
+
+// A library with a dependency, a test module (its test configuration, whose class path adds munit, which
+// core's sources typed inside it would see: its test refused), a further test module (left out) and a module
+// nested in it (a project of its own).
+object core extends Base {
+  def mvnDeps = Seq(mvn"com.lihaoyi::sourcecode:0.4.2")
+  object test extends ScalaTests, TestModule.Munit { def munitVersion = Versions.munit }
+  object integration extends ScalaTests, TestModule.Munit { def munitVersion = Versions.munit }
+  object extras extends Base { def moduleDeps = Seq(core) }
+}
+
+// A module whose own class path names munit, so that its test configuration adds nothing its sources would
+// see, with a dependency at run time alone: its suites run as Mill runs them.
+object harness extends Base {
+  def mvnDeps = Seq(mvn"org.scalameta::munit:${Versions.munit}", mvn"com.lihaoyi::sourcecode:0.4.2")
+  def runMvnDeps = Seq(mvn"org.slf4j:slf4j-nop:2.0.16")
+  object test extends ScalaTests, TestModule.Munit { def munitVersion = Versions.munit }
+}
+
+// Computations of the build's, which the export never runs (each writes a file under its task's directory
+// when it runs): sources and resources a task computes, recorded as Mill's generators; a local class path a
+// task computes, which leaves its module out, and its dependent.
+object computed extends Base {
+  def sources = Task { os.write(Task.dest / "ran", "sources"); super.sources() }
+  def resources = Task { os.write(Task.dest / "ran", "resources"); super.resources() }
+}
+object custom extends Base {
+  def unmanagedClasspath = Task { os.write(Task.dest / "ran", "unmanagedClasspath"); Seq(PathRef(moduleDir / "lib")) }
+}
+object usescustom extends Base { def moduleDeps = Seq(custom) }
+
+// A test module with Java sources, its owner's test configuration left out with the reason.
+object tested extends Base {
+  object test extends ScalaTests, TestModule.Munit { def munitVersion = Versions.munit }
+}
+
+// A test module whose resolvedMvnDeps is the build's own task, which runs its generatedSources (writing a file
+// when it runs): its owner's test configuration left out before anything of it is read.
+object overridden extends Base {
+  object test extends ScalaTests, TestModule.Munit {
+    def munitVersion = Versions.munit
+    def generatedSources = Task { os.write(Task.dest / "ran", "generatedSources"); Seq.empty[PathRef] }
+    def resolvedMvnDeps = Task { generatedSources(); super.resolvedMvnDeps() }
+  }
+}
+
+// A module with a dependency at compile time alone (compileMvnDeps), which its dependent's class path leaves
+// out: the dependent's compile, which would type upstream's sources without it, refused.
+object upstream extends Base { def compileMvnDeps = Seq(mvn"com.lihaoyi::sourcecode:0.4.2") }
+object downstream extends Base { def moduleDeps = Seq(upstream) }
+
+// A cross module, a project per axis, with a test module of uTest.
+object matrix extends Cross[Cell]("3.8.4")
+trait Cell extends CrossScalaModule {
+  object test extends ScalaTests, TestModule.Utest { def utestVersion = Versions.utest }
+}
+
+// A Scala.js module, linked as an ES module, whose tests link as CommonJS and run under jsdom.
+object web extends ScalaJSModule {
+  def scalaVersion = Versions.scala
+  def scalaJSVersion = Versions.scalaJS
+  def moduleKind = mill.scalajslib.api.ModuleKind.ESModule
+  object test extends ScalaJSTests, TestModule.Utest {
+    def utestVersion = Versions.utest
+    override def moduleKind = mill.scalajslib.api.ModuleKind.CommonJSModule
+    override def jsEnvConfig = mill.scalajslib.api.JsEnvConfig.JsDom()
+  }
+}
+
+// A generator of the build's own, which the export does not run: Mill's alone.
+object gen extends Base {
+  def generatedSources = Task {
+    os.write(Task.dest / "Generated.scala", "package gen\n\nobject Generated:\n  val n: Int = 1\n")
+    Seq(PathRef(Task.dest))
+  }
+}
+
+// A generator the overlay declares as a command (teq.mill.json), which teq runs as Mill runs this task.
+object tool extends Base {
+  def script = Task.Source(moduleDir / "gen.sh")
+  def labels = Task.Source(moduleDir / "labels.txt")
+  def generatedSources = Task {
+    os.call(("sh", script().path, labels().path, Task.dest))
+    Seq(PathRef(Task.dest))
+  }
+}
+
+// What teq does not build: a Scala Native module, a Java module, a module with Java sources, and one that
+// depends on one of those.
+object native extends ScalaNativeModule {
+  def scalaVersion = Versions.scala
+  def scalaNativeVersion = "0.5.8"
+}
+object javaonly extends JavaModule
+object mixed extends Base
+object usesjava extends Base { def moduleDeps = Seq(javaonly) }

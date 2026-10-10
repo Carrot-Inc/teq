@@ -1,0 +1,11 @@
+{
+  "teq": "0.1.8",
+  "inputs": [".fixture-version"],
+  "modules": {
+    "tool": {
+      "generators": [{"run": ["sh", "tool/gen.sh", "tool/labels.txt"], "inputs": ["tool/labels.txt"]}],
+      "mainClasses": ["tool.Main"],
+      "runAliases": {"main": "tool.Main"}
+    }
+  }
+}

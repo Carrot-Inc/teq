@@ -17,14 +17,14 @@ use std::process::{Command, Stdio};
 use std::time::SystemTime;
 
 /// Runs the generators of a closure's configurations; what they printed is returned to be shown.
-/// A configuration with a generator sbt runs (kind `sbt`) has none run here: its sources name
-/// sbt's managed directories, which hold what sbt last generated of them all, and the verbs that
-/// would need them run refuse first (`Export::refusals`). The runs of the build are serialised through `target/teq/generators.lock`: two residents
+/// A configuration with a generator the build tool runs (kind `sbt` or `mill`) has none run here: its
+/// sources name the tool's own output directories, which hold what it last generated of them all, and
+/// the verbs that would need them run refuse first (`Export::refusals`). The runs of the build are serialised through `target/teq/generators.lock`: two residents
 /// whose closures share a configuration, or the daemon and the language server, run its
 /// generators one after the other, never into one output at once.
 pub fn run(export: &Export, closure: &[Key], classes: PathBuf, env: &BTreeMap<String, String>) -> Result<Vec<String>, String> {
     let mut notes = Vec::new();
-    let ours = |k: &Key| export.configuration(k).filter(|c| !c.generators.iter().any(super::export::by_sbt));
+    let ours = |k: &Key| export.configuration(k).filter(|c| !c.generators.iter().any(super::export::by_build_tool));
     if closure.iter().all(|k| ours(k).is_none_or(|c| c.generators.is_empty())) {
         return Ok(notes);
     }
