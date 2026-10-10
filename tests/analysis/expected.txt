@@ -280,6 +280,7 @@ inlined ila2.Macros describe inline-fingerprint
 inlined ila2.Macros pick inline-fingerprint
 inlined ila2.Macros total inline-fingerprint
 inlined ila2.Macros twice inline-fingerprint
+summonfrom selection.Logic$package selected inline-fingerprint
 
 # The dependencies' mappings, by referring class and part (docs/TARGETS.md, "The analysis
 # graph", the dependencies' mappings).

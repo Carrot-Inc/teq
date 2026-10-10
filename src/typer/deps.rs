@@ -88,6 +88,10 @@ pub enum Node {
     /// A constant member (`final val x = 1`, `inline val`) a reference to which the typer wrote
     /// as its literal.
     Constant(SymId),
+    /// A given val or def of a package that an implicit search found, referred to as scalac's
+    /// search refers to it (`tpd.ref` of its `TermRef` on the package), not through its
+    /// `<file>$package`.
+    Searched,
 }
 
 /// The records of the typer's resolutions, per computation of a non-local definition (the
@@ -154,6 +158,7 @@ impl Recorder {
                 Node::Apply(c) => Node::Apply(class(c)),
                 Node::Export(c, n, r) => Node::Export(class(c), n, expr(r)),
                 Node::Constant(s) => Node::Constant(sym(s)),
+                Node::Searched => Node::Searched,
             };
             self.nodes.insert(expr(e), n);
         }
@@ -827,6 +832,8 @@ struct Collector<'c, 'a> {
     given_objects: FxMap<ClassId, ()>,
     /// The matches of the stored inline bodies walked that stand for a `summonFrom`.
     summon_froms: FxMap<TExprId, ()>,
+    /// Whether the reference walked is one an implicit search made (`Node::Searched`).
+    searched: bool,
 }
 
 impl<'c, 'a> Collector<'c, 'a> {
@@ -879,6 +886,7 @@ impl<'c, 'a> Collector<'c, 'a> {
             source_packages: None,
             given_objects,
             summon_froms: FxMap::default(),
+            searched: false,
         }
     }
 
@@ -2313,7 +2321,9 @@ impl<'c, 'a> Collector<'c, 'a> {
                     return;
                 }
                 if let Some(name) = self.package_member_module_name(PackageMember::Sym(s), file, p) {
-                    self.use_name(name);
+                    if !self.searched {
+                        self.use_name(name);
+                    }
                     if let Some(t) = self.package_member_target(PackageMember::Sym(s), file, p) {
                         self.package_object_dep(t);
                     }
@@ -3777,6 +3787,8 @@ impl<'c, 'a> Collector<'c, 'a> {
                     self.info_seen_from(s, prefix);
                 }
             }
+            // Read where the reference is walked (`searched_term_node`).
+            Some(Node::Searched) => {}
             None => {}
         }
         if let Some(Form::Cast(_)) = form {
@@ -3822,7 +3834,7 @@ impl<'c, 'a> Collector<'c, 'a> {
                 self.local_def(s);
             }
             TExpr::Static(_) if self.forwarded.contains_key(&e) => {}
-            TExpr::Static(s) => self.term_node(s, None),
+            TExpr::Static(s) => self.searched_term_node(s, node),
             TExpr::Module(_) if matches!(node, Some(Node::AliasVal(_))) => {}
             TExpr::Module(c) => {
                 if let Some(m) = self.w.syms.class(c).module_sym {
@@ -3839,7 +3851,7 @@ impl<'c, 'a> Collector<'c, 'a> {
             }
             TExpr::CallStatic(s, args) => {
                 if !self.forwarded.contains_key(&e) {
-                    self.term_node(s, None);
+                    self.searched_term_node(s, node);
                 }
                 self.list(args);
             }
@@ -3875,7 +3887,7 @@ impl<'c, 'a> Collector<'c, 'a> {
             }
             TExpr::New(_, args) if matches!(form, Some(Form::GivenCall(_))) => {
                 if let Some(Form::GivenCall(g)) = form {
-                    self.term_node(g, None);
+                    self.searched_term_node(g, node);
                 }
                 self.list(args);
             }
@@ -4110,6 +4122,14 @@ impl<'c, 'a> Collector<'c, 'a> {
             (Some(_), Some(t)) => self.type_deps(t),
             _ => self.term_prefix(s),
         }
+    }
+
+    /// `term_node` of a member reached without a receiver, as an implicit search refers to it
+    /// where the node is one it made.
+    fn searched_term_node(&mut self, s: SymId, node: Option<Node>) {
+        self.searched = node == Some(Node::Searched);
+        self.term_node(s, None);
+        self.searched = false;
     }
 
     /// The prefix a member is reached through without a receiver: its object's type.
