@@ -1679,6 +1679,51 @@ impl TypeStore {
         }
     }
 
+    /// `t` with each occurrence of the path `this` read as the self of a binder about to be put
+    /// around it (`RecType.apply`'s `parentExp` applied to the new type's `recThis`):
+    /// `RecThis(k)` at `k` binders inside.
+    pub fn abstract_rec(&self, t: TypeId, this: TypeId) -> TypeId {
+        self.abstract_rec_at(t, this, 0)
+    }
+
+    fn abstract_rec_at(&self, t: TypeId, this: TypeId, depth: u32) -> TypeId {
+        if t == this {
+            return self.mk(Type::RecThis(depth));
+        }
+        if !self.has_paths(t) {
+            return t;
+        }
+        match self.get(t) {
+            Type::Rec(b) => {
+                let nb = self.abstract_rec_at(b, this, depth + 1);
+                if nb == b { t } else { self.mk(Type::Rec(nb)) }
+            }
+            _ => self.map_parts(t, &mut |x| self.abstract_rec_at(x, this, depth)),
+        }
+    }
+
+    /// The body of a `Rec` on the spine of a refined chain about to be bound by another, merged
+    /// into it (`RecType.apply`'s normalisation): its self references are the new binder's, and
+    /// the indices past it drop by one.
+    pub fn merge_rec(&self, body: TypeId) -> TypeId {
+        self.lower_past(body, 0)
+    }
+
+    fn lower_past(&self, t: TypeId, depth: u32) -> TypeId {
+        if !self.has_rec_this(t) {
+            return t;
+        }
+        match self.get(t) {
+            Type::RecThis(k) if k > depth => self.mk(Type::RecThis(k - 1)),
+            Type::RecThis(_) => t,
+            Type::Rec(b) => {
+                let nb = self.lower_past(b, depth + 1);
+                if nb == b { t } else { self.mk(Type::Rec(nb)) }
+            }
+            _ => self.map_parts(t, &mut |x| self.lower_past(x, depth)),
+        }
+    }
+
     /// Whether `RecThis(depth)` occurs in `t`, the binder `depth` levels out: `RecType`'s
     /// `isReferredToBy`.
     pub fn refers_to_rec(&self, t: TypeId, depth: u32) -> bool {

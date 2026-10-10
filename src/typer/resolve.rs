@@ -3028,58 +3028,17 @@ impl<'a> Worker<'a> {
         }
     }
 
-    /// An alias that comes back to itself through the refinement's aliases (`type A = A`, `type
-    /// L = List[L]`) is reported once, at the alias whose right-hand side closes the cycle, as
-    /// dotty's completion of the refinement class's alias reports its cyclic reference (E140).
+    /// The refined chain `t` whose members name the refined type, closed over it as dotty's
+    /// `TypeAssigner.assignType` closes a refinement over its class's `this`: the members keep
+    /// their references to each other (`RecThis(0).T`), normalised as `RecType.apply` does (a
+    /// recursive type on the chain's spine merged into this one, `type T = z.T` read as `type
+    /// T`), each member checked for cycles (`Checking.checkNonCyclic`, through nested recursive
+    /// refinements as well), and the chain bound by a `Rec` only where a member still names the
+    /// refined type (`RecType.closeOver`), the outer refinements' indices lowered otherwise.
     fn close_refinement(&mut self, t: TypeId, spans: &[(Name, Span)]) -> TypeId {
-        let (parent, rs) = self.types.refinements_of(t);
-        // A match type's alias stays named, as a class's does (`Type::Alias`): its cases may name
-        // it (`type OutInner[Ts] = Ts match { .. => h *: OutInner[t] }`), which is no cycle.
-        let aliases: Vec<(Name, TypeId)> = rs
-            .iter()
-            .filter_map(|&r| match self.types.refinement(r) {
-                Refinement::Alias(n, x) if !self.is_match_rhs(x) => Some((n, x)),
-                _ => None,
-            })
-            .collect();
-        let body = if aliases.is_empty() {
-            t
-        } else {
-            let mut reported = false;
-            let mut body = parent;
-            for &r in &rs {
-                let refinement = self.types.refinement(r);
-                let mut open: Vec<Name> = match refinement {
-                    Refinement::Alias(n, _) => vec![n],
-                    _ => Vec::new(),
-                };
-                let mut cyclic = false;
-                let mut fix = |w: &mut Self, x: TypeId| w.fix_own_aliases(x, &aliases, &mut open, &mut cyclic);
-                let fixed = match refinement {
-                    Refinement::Alias(n, x) => Refinement::Alias(n, fix(self, x)),
-                    Refinement::Bounds(n, lo, hi) => {
-                        let lo = fix(self, lo);
-                        Refinement::Bounds(n, lo, fix(self, hi))
-                    }
-                    Refinement::Val(n, s, x) => Refinement::Val(n, s, fix(self, x)),
-                    Refinement::Term(n, s, l) => {
-                        let items: Vec<TypeId> = self.types.items(l).to_vec();
-                        let fixed: Vec<TypeId> = items.into_iter().map(|x| fix(self, x)).collect();
-                        Refinement::Term(n, s, self.types.list(&fixed))
-                    }
-                };
-                if cyclic && !reported {
-                    reported = true;
-                    let name = refinement.name();
-                    let span = spans.iter().find(|&&(n, _)| n == name).map_or(Span::default(), |&(_, s)| s);
-                    let shown = self.name_str(name);
-                    self.error(span, format!("illegal cyclic type reference: alias {0} of type {0} refers back to the type itself", shown));
-                }
-                let r = self.types.refine(fixed);
-                body = self.types.mk(Type::Refined(body, r));
-            }
-            body
-        };
+        // The members are checked where they are typed, before the binder normalises them.
+        let body = self.checked_own_cycles(t, spans);
+        let body = self.normalised_rec_body(body);
         if self.types.refers_to_rec(body, 0) {
             self.types.mk(Type::Rec(body))
         } else {
@@ -3087,28 +3046,135 @@ impl<'a> Worker<'a> {
         }
     }
 
-    /// `t` with each `RecThis(0).A` for an alias `A` of `aliases` replaced by the alias's own
-    /// right-hand side, itself so replaced; a member reached again through its own alias is left
-    /// named. A recursive refinement inside `t` is left as it is.
-    fn fix_own_aliases(&mut self, t: TypeId, aliases: &[(Name, TypeId)], open: &mut Vec<Name>, cyclic: &mut bool) -> TypeId {
-        if !self.types.has_rec_this(t) {
+    /// `RecType.apply`'s normalisation of the refined chain `t` about to be bound: a `Rec` on its
+    /// spine (`R { type V = U }` of a recursive `R`) is merged with the new binder, and a member
+    /// `type T = z.T` naming itself through the binder is the abstract `type T`.
+    pub(crate) fn normalised_rec(&mut self, t: TypeId) -> TypeId {
+        self.normalised_rec_body(t)
+    }
+
+    fn normalised_rec_body(&mut self, t: TypeId) -> TypeId {
+        let (parent, rs) = self.types.refinements_of(t);
+        let parent = match self.types.get(parent) {
+            Type::Rec(b) => {
+                let merged = self.types.merge_rec(b);
+                self.normalised_rec_body(merged)
+            }
+            _ => parent,
+        };
+        let mut body = parent;
+        for r in rs {
+            let r = match self.types.refinement(r) {
+                Refinement::Alias(n, x) if matches!(self.types.get(x), Type::Member(p, m) if m == n && matches!(self.types.get(p), Type::RecThis(0))) => {
+                    self.types.refine(Refinement::Bounds(n, NOTHING, ANY))
+                }
+                _ => r,
+            };
+            body = self.types.mk(Type::Refined(body, r));
+        }
+        body
+    }
+
+    /// The refined chain `t` with each type member checked for cycles through the others as
+    /// dotty's `CheckNonCyclicMap` checks a refinement class's members: an alias's right-hand side
+    /// and a lower bound may name no member that comes back to it, wherever that is, inside a
+    /// nested refinement or recursive type too; a refinement inside an upper bound may (an
+    /// F-bound). A cyclic member is reported once, at the first one met, and its info is the error
+    /// type (`IllegalCyclicTypeReference`).
+    fn checked_own_cycles(&mut self, t: TypeId, spans: &[(Name, Span)]) -> TypeId {
+        let (parent, rs) = self.types.refinements_of(t);
+        let own: Vec<(Name, Refinement)> = rs.iter().map(|&r| self.types.refinement(r)).filter(|r| matches!(r, Refinement::Alias(..) | Refinement::Bounds(..))).map(|r| (r.name(), r)).collect();
+        if own.is_empty() || !self.types.has_rec_this(t) {
             return t;
         }
+        let mut cyclic: Option<Name> = None;
+        for &(name, r) in &own {
+            let mut locked = vec![name];
+            let mut budget = 4096u32;
+            if self.own_info_cyclic(r, &own, &mut locked, &mut budget) {
+                cyclic = Some(name);
+                break;
+            }
+        }
+        let Some(name) = cyclic else { return t };
+        let span = spans.iter().find(|&&(n, _)| n == name).map_or(Span::default(), |&(_, s)| s);
+        let shown = self.name_str(name);
+        self.error(span, format!("illegal cyclic type reference: alias {0} of type {0} refers back to the type itself", shown));
+        let mut body = parent;
+        for r in rs {
+            let r = match self.types.refinement(r) {
+                Refinement::Alias(n, _) | Refinement::Bounds(n, ..) if n == name => self.types.refine(Refinement::Alias(n, ERROR)),
+                _ => r,
+            };
+            body = self.types.mk(Type::Refined(body, r));
+        }
+        body
+    }
+
+    /// `CheckNonCyclicMap.checkInfo` of a member's info: an alias as its lower and upper part,
+    /// bounds as a lower and an upper bound, an upper part allowing cycles in nested refinements.
+    fn own_info_cyclic(&mut self, r: Refinement, own: &[(Name, Refinement)], locked: &mut Vec<Name>, budget: &mut u32) -> bool {
+        match r {
+            // A match type's alias names itself in its cases, guarded (`MatchAlias`).
+            Refinement::Alias(_, x) if self.is_match_rhs(x) => false,
+            Refinement::Alias(_, x) => self.own_cyclic(x, 0, -1, false, false, own, locked, budget) || self.own_cyclic(x, 0, 1, false, true, own, locked, budget),
+            Refinement::Bounds(_, lo, hi) => self.own_cyclic(lo, 0, -1, false, false, own, locked, budget) || self.own_cyclic(hi, 0, 1, false, true, own, locked, budget),
+            _ => false,
+        }
+    }
+
+    /// `CheckNonCyclicMap.apply` over `t`, `depth` binders inside the refinement's own: a member of
+    /// the refinement named through its self (`RecThis(depth).T`) is followed into its info,
+    /// locked meanwhile, a locked one met again a cycle unless `cycle_ok`; a refinement's info is
+    /// checked with `cycle_ok` and `nested_ok` both `nested_ok`; a type argument with `cycle_ok`
+    /// `nested_ok`, and `nested_ok` where the argument's variance differs from the position's
+    /// (`mapArg`); a recursive type through its body (`tp.rebind`).
+    #[allow(clippy::too_many_arguments)]
+    fn own_cyclic(&mut self, t: TypeId, depth: u32, variance: i8, cycle_ok: bool, nested_ok: bool, own: &[(Name, Refinement)], locked: &mut Vec<Name>, budget: &mut u32) -> bool {
+        if !self.types.has_rec_this(t) || *budget == 0 {
+            return false;
+        }
+        *budget -= 1;
         match self.types.get(t) {
-            Type::Member(p, n) if matches!(self.types.get(p), Type::RecThis(0)) => match aliases.iter().find(|&&(m, _)| m == n) {
-                Some(_) if open.contains(&n) => {
-                    *cyclic = true;
-                    ERROR
+            Type::Member(p, n) if matches!(self.types.get(p), Type::RecThis(k) if k == depth) => {
+                let Some(&(_, info)) = own.iter().find(|&&(m, _)| m == n) else { return false };
+                if locked.contains(&n) {
+                    return !cycle_ok;
                 }
-                Some(&(_, rhs)) => {
-                    open.push(n);
-                    let fixed = self.fix_own_aliases(rhs, aliases, open, cyclic);
-                    open.pop();
-                    fixed
+                locked.push(n);
+                let cyclic = match info {
+                    Refinement::Alias(_, x) if self.is_match_rhs(x) => false,
+                    Refinement::Alias(_, x) => self.own_cyclic(x, 0, -1, cycle_ok, nested_ok, own, locked, budget) || self.own_cyclic(x, 0, 1, cycle_ok, true, own, locked, budget),
+                    Refinement::Bounds(_, lo, hi) => self.own_cyclic(lo, 0, -1, cycle_ok, nested_ok, own, locked, budget) || self.own_cyclic(hi, 0, 1, cycle_ok, true, own, locked, budget),
+                    _ => false,
+                };
+                locked.pop();
+                cyclic
+            }
+            Type::Member(p, _) => self.own_cyclic(p, depth, variance.max(0), false, false, own, locked, budget),
+            Type::Rec(b) => self.own_cyclic(b, depth + 1, variance, cycle_ok, nested_ok, own, locked, budget),
+            // A match type's cases are reduced on demand: what they name is no cycle of the alias.
+            Type::Match(..) => false,
+            Type::Refined(p, r) => {
+                if self.own_cyclic(p, depth, variance, cycle_ok, nested_ok, own, locked, budget) {
+                    return true;
                 }
-                None => t,
-            },
-            Type::Rec(_) => t,
+                let parts: Vec<TypeId> = match self.types.refinement(r) {
+                    Refinement::Alias(_, x) | Refinement::Val(_, _, x) => vec![x],
+                    Refinement::Bounds(_, lo, hi) => vec![lo, hi],
+                    Refinement::Term(_, _, l) => self.types.items(l).to_vec(),
+                };
+                parts.into_iter().any(|x| self.own_cyclic(x, depth, variance, nested_ok, nested_ok, own, locked, budget))
+            }
+            Type::Class(c, args) => {
+                let items: Vec<TypeId> = self.types.items(args).to_vec();
+                let params: Vec<i8> = self.syms.class(c).tparams.iter().map(|&p| self.syms.tparam(p).variance).collect();
+                items.into_iter().enumerate().any(|(i, x)| {
+                    let pv = params.get(i).copied().unwrap_or(0);
+                    let nested = nested_ok || (variance != 0 && variance != pv);
+                    self.own_cyclic(x, depth, variance * pv, nested_ok, nested, own, locked, budget)
+                })
+            }
             _ => {
                 let types = self.types.clone();
                 let mut parts = Vec::new();
@@ -3116,12 +3182,7 @@ impl<'a> Worker<'a> {
                     parts.push(x);
                     x
                 });
-                let fixed: Vec<TypeId> = parts.iter().map(|&x| self.fix_own_aliases(x, aliases, open, cyclic)).collect();
-                if fixed == parts {
-                    return t;
-                }
-                let mut next = fixed.into_iter();
-                types.map_parts(t, &mut |x| next.next().unwrap_or(x))
+                parts.into_iter().any(|x| self.own_cyclic(x, depth, variance, cycle_ok, nested_ok, own, locked, budget))
             }
         }
     }
