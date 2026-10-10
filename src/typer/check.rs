@@ -5239,6 +5239,8 @@ impl<'a> Worker<'a> {
         // is unknown rather than missing.
         let mut unknown = false;
         let mut forwarders = Vec::new();
+        // The class's own deferred declarations of what the rule gives it.
+        let mut own_deferred: Vec<SymId> = Vec::new();
         // A concrete class's own members without a body too (`class C { given x: Int }`), as
         // scalac's "needs to be abstract"; an object's are E067 (`misplaced_abstract_member`).
         let own = (which == Abstracts::Declared && self.syms.class(c).kind == ClassKind::Class) as usize;
@@ -5268,8 +5270,12 @@ impl<'a> Worker<'a> {
                 }
                 let name = self.syms.sym(m).name;
                 let is_ext = self.syms.sym(m).is_extension;
-                // A member the rule synthesizes (`TClass::synthesized`) is its implementation.
                 if !is_ext && self.synthesized_by_rule(m, synthesized) {
+                    // The member the rule gives implements what the class inherits; its own
+                    // deferred declaration stays one (`RefChecks.checkNoAbstractDecls`).
+                    if b == c {
+                        own_deferred.push(m);
+                    }
                     continue;
                 }
                 // `Any`'s `toString`, `hashCode` and `equals` implement an abstract redeclaration of
@@ -5352,8 +5358,33 @@ impl<'a> Worker<'a> {
             missing.sort_by(|a, b| a.0.cmp(&b.0));
             missing.dedup_by(|a, b| a.0 == b.0);
             self.report_unimplemented(c, &missing, unknown);
+        } else if !own_deferred.is_empty() {
+            self.report_deferred_declarations(c, &own_deferred);
         }
         forwarders
+    }
+
+    /// dotty's `RefChecks.checkNoAbstractDecls`, which runs where every member is implemented: a
+    /// concrete class's own deferred declaration that nothing below it implements, here one of a
+    /// member the rule gives the class beside it (`case class C(x: Int) { override def toString:
+    /// String }`).
+    #[cold]
+    fn report_deferred_declarations(&mut self, c: ClassId, decls: &[SymId]) {
+        let (span, file) = {
+            let i = self.syms.class(c);
+            (i.span, i.file)
+        };
+        let mut errors = vec![format!("{} needs to be abstract, since", self.class_description(c))];
+        for &m in decls {
+            // dotty's `infoString`: a method without parameters is of type `=> T`.
+            let parameterless = self.syms.sym(m).kind == SymKind::Def && self.sig_of(m).clauses.is_empty();
+            let ty = self.sig_string(m);
+            let what = format!("{} of type {}{}", self.member_description(m, None), if parameterless { "=> " } else { "" }, ty);
+            errors.push(format!("there is a deferred declaration of {} which is not implemented in a subclass", what));
+        }
+        // dotty's `abstractErrorMessage`.
+        let msg = if errors.len() <= 2 { errors.join(" ") } else { format!("{}:\n{}", errors[0], errors[1..].join("\n")) };
+        self.diags.error(file, span, msg);
     }
 
     /// Whether an export of a class above `c` implements the abstract member `m`, which nothing else
