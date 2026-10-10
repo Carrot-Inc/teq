@@ -339,11 +339,12 @@ impl<'a> Worker<'a> {
     /// The record of the library inline method `sym`, demanded by its first call: its class
     /// converted (or its product's package checked) as the retype path converts it, then the
     /// converted body checked as a program's definition is, its parameters at their declared
-    /// types, in its definition's scope. Under the loader's lock, as a library body is typed
-    /// (`library_body`): the record, its nodes and its deferred calls' records are the shared
-    /// region's, typed once and every worker's when the lock is released, and they live as long
-    /// as the loader, whose products a watch session drops with the whole typing state when a
-    /// directory of them changes.
+    /// types, in its definition's scope. In the demanding worker's chunk, as the retype path
+    /// types a library body at a call and as a program's record another worker's file demands is
+    /// made: what the check writes besides the record (the closures it makes classes of,
+    /// `sam_classes`, among others) is that worker's, which its copies read; the merge keeps one
+    /// record. It lives as long as the loader, whose products a watch session drops with the
+    /// whole typing state when a directory of them changes.
     pub(super) fn demand_library_definition(&mut self, sym: SymId) {
         if self.syms.sym(sym).def.is_none() {
             if let Some(obj) = self.loaded.as_ref().and_then(|l| l.product_package_members.get(&sym).copied()) {
@@ -358,17 +359,14 @@ impl<'a> Worker<'a> {
         if self.syms.sym(sym).def.is_none() {
             return;
         }
-        self.with_loader_for(crate::measure::Hold::Body, |w| {
-            if w.inline_definitions.contains_key(&sym) {
-                return;
-            }
-            let (file, owner, span) = {
-                let s = w.syms.sym(sym);
-                (s.file, s.owner, s.span)
-            };
-            let env = w.env_at(file, owner, span.start);
-            w.outside_annotation(|t| t.check_definition_in(sym, env));
-        });
+        let (file, owner, span) = {
+            let s = self.syms.sym(sym);
+            (s.file, s.owner, s.span)
+        };
+        let env = self.env_at(file, owner, span.start);
+        let entered = self.deps_set_aside();
+        self.outside_annotation(|t| t.check_definition_in(sym, env));
+        self.deps_leave(entered);
     }
 
     /// The body of a std inline method the program may never expand, typed as the definition

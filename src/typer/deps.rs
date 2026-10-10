@@ -296,6 +296,16 @@ impl<'a> Worker<'a> {
         Entered(Some(d.current.replace(Comp::Alias(a))))
     }
 
+    /// Records go to no computation until `deps_leave`: the check of a library's inline body,
+    /// typed where a call demands it, which is no part of the calling definition's tree (scalac's
+    /// collector meets the call alone, `ExtractDependencies` running before `Inlining`).
+    pub(super) fn deps_set_aside(&mut self) -> Entered {
+        match self.deps.as_mut() {
+            Some(d) => Entered(Some(d.current.take())),
+            None => Entered(None),
+        }
+    }
+
     #[inline]
     pub(super) fn deps_leave(&mut self, e: Entered) {
         if let (Some(outer), Some(d)) = (e.0, self.deps.as_mut()) {
