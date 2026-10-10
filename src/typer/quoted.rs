@@ -2920,30 +2920,33 @@ impl<'c> Copier<'c> {
             }
             TExpr::CallClosure(f, args) => {
                 // The application of a macro's parameter in a quote (`'{ f(1) }`, Focus's
-                // `lambda(using c)`), whose proxy the run fills with its argument: a lambda argument
-                // applied is its body with the parameters replaced, as `InlineTyper.typedApply`
-                // reduces the application where the expansion puts the argument (`BetaReduce`).
-                let filled = self.stored.is_none() && matches!(t.prog.expr(f), TExpr::Local(s) if self.params.contains_key(&s));
+                // `lambda(using c)`), whose proxy the run fills with its argument, or of what such
+                // an application gives (`'{ f(1)(2) }`): a closure applied is reduced where the
+                // expansion puts the argument, as `InlineTyper.typedApply` reduces every
+                // application of the inlined tree (`BetaReduce`, then `constToLiteral`).
+                let filled = self.stored.is_none() && self.applies_filled(t, f);
                 let f = self.expr(t, f);
                 let l = self.list(t, args);
                 if filled {
                     let items = t.prog.expr_list(l).to_vec();
-                    if let Some(reduced) = t.beta_reduce(f, &items) {
+                    if let Some(reduced) = t.beta_reduce_binding(f, &items) {
+                        use super::elaborate::Purity;
                         // A pure constant the reduction leaves is its literal (`constToLiteral`).
-                        let (reduced, literal) = match t.fold_constant(reduced) {
-                            Some(v) if t.is_pure_value(reduced) => {
-                                let lit = t.literal_expr(v);
-                                t.prog.copy_span(e, lit);
-                                (lit, true)
-                            }
-                            _ => (reduced, false),
+                        let is_literal = |t: &Worker, x: TExprId| matches!(t.prog.expr(x), TExpr::Int(_) | TExpr::Long(_) | TExpr::Double(_) | TExpr::Bool(_) | TExpr::Char(_) | TExpr::Str(_));
+                        let reduced = match t.fold_constant(reduced) {
+                            Some(v) if !is_literal(t, reduced) && t.expr_purity(reduced).at_least(Purity::PURE) => t.literal_expr(v),
+                            _ => reduced,
                         };
+                        // The reduction stands at the application (`seq(..).withSpan(tree.span)`,
+                        // `constToLiteral`'s literal at the span): a tree the reduction made, the
+                        // copy putting a copy of what it puts for a parameter.
+                        t.prog.copy_span(e, reduced);
                         if let Some(ty) = recorded {
                             let ty = self.ty(t, ty);
                             self.set_copy_type(t, reduced, ty);
                         }
                         if t.capturing() {
-                            self.reduced_for(t, e, reduced, literal);
+                            self.reduced_for(t, e, reduced);
                         }
                         return reduced;
                     }
@@ -3277,17 +3280,24 @@ impl<'c> Copier<'c> {
         }
     }
 
+    /// Whether the stored function `f` of an application is a parameter of the quote the run
+    /// fills, or an application of one (`f(1)` of `f(1)(2)`).
+    fn applies_filled(&self, t: &Worker, f: TExprId) -> bool {
+        match t.prog.expr(f) {
+            TExpr::Local(s) => self.params.contains_key(&s),
+            TExpr::CallClosure(g, _) => self.applies_filled(t, g),
+            _ => false,
+        }
+    }
+
     /// `reduced`, the reduction put for the application `e`, takes the layers written around `e`,
-    /// as an argument put for a parameter does, and the place of `e`'s tree where it is the literal
-    /// `constToLiteral` leaves at the application's span; any other reduction stands at the places
-    /// of its own trees (`BetaReduce`).
-    fn reduced_for(&mut self, t: &mut Worker, e: TExprId, reduced: TExprId, literal: bool) {
+    /// as an argument put for a parameter does, and the place of `e`'s tree, where the reduction
+    /// stands (`seq(..).withSpan(tree.span)`, `constToLiteral`'s literal at the span).
+    fn reduced_for(&mut self, t: &mut Worker, e: TExprId, reduced: TExprId) {
         let this = &*self;
         t.capture_copy_layers(e, reduced, &|w, ty| this.ty(w, ty));
-        if literal {
-            if let Some((file, addr)) = t.prog.capture.as_deref().and_then(|c| c.records_of(e).tree) {
-                t.capture_tree(reduced, file, addr);
-            }
+        if let Some((file, addr)) = t.prog.capture.as_deref().and_then(|c| c.records_of(e).tree) {
+            t.capture_tree(reduced, file, addr);
         }
         if let Some(copies) = self.copies.as_mut() {
             copies.insert(e, reduced);

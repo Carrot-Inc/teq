@@ -510,12 +510,10 @@ impl<'a> Worker<'a> {
                     check(from.receiver.is_some(), &|to| c.receivers.contains_key(&to), "receiver");
                     // A converted body's place goes with each copy of its node; a node the copy
                     // substitutes (`this` by the receiver's proxy, a parameter by its argument's)
-                    // stands at the place of what stands for it, and so does an application the copy
-                    // reduces (`BetaReduce`) unless the reduction is the literal at its span.
+                    // stands at the place of what stands for it.
                     let substituted = match (self.prog.expr(e), to.map(|t| self.prog.expr(t))) {
                         (TExpr::This, Some(_)) => true,
                         (TExpr::Local(a), Some(TExpr::Local(b))) => a != b && !locals.contains(&(a, b)),
-                        (TExpr::CallClosure(..), Some(k)) => !matches!(k, TExpr::CallClosure(..)) && !k.is_constant(),
                         _ => false,
                     };
                     check(from.tree.is_some() && !substituted, &|to| c.trees.contains_key(&to), "tree");
