@@ -5491,6 +5491,9 @@ impl<'a> Worker<'a> {
     /// class over one trait, `Product` and `Serializable`). A class with many members is taken to.
     pub(super) fn bases_share_a_name(&self, c: ClassId, extensions: bool) -> bool {
         let info = self.syms.class(c);
+        if info.desugared_parents > 0 && info.parents.len() <= info.desugared_parents as usize + 1 {
+            return self.parents_share_a_name(c, extensions);
+        }
         let mut named = [(Name(0), 0u32); 64];
         let mut n = 0;
         // The parents `Desugar.classDef` gives (`Product` with `Equals`, `Serializable`, `Enum`) share
@@ -5526,6 +5529,60 @@ impl<'a> Worker<'a> {
         if named.iter().any(|&(name, _)| in_desugared(name)) {
             return true;
         }
+        named.sort_unstable();
+        named.windows(2).any(|w| w[0].0 == w[1].0 && w[0].1 != w[1].1)
+    }
+
+    /// `bases_share_a_name` of a class with one written parent at most beside those
+    /// `Desugar.classDef` gives: a pair of members of two bases of one parent is handled by that
+    /// parent, which derives from both owners (dotty's `OverridingPairs.isHandledByParent`), so
+    /// only a name in the bases of two parents is left. Each base is taken with the first parent
+    /// that has it.
+    fn parents_share_a_name(&self, c: ClassId, extensions: bool) -> bool {
+        let info = self.syms.class(c);
+        let mut parents = [c; 4];
+        if info.parents.len() > parents.len() {
+            return true;
+        }
+        for (k, &p) in info.parents.iter().enumerate() {
+            let class_ty = match self.types.get(p) {
+                Type::Nested(_, class) => class,
+                _ => p,
+            };
+            let Type::Class(pc, _) = self.types.get(class_ty) else { return true };
+            parents[k] = pc;
+        }
+        let parents = &parents[..info.parents.len()];
+        let mut group_of = [0u32; 32];
+        let mut holding = [false; 4];
+        if info.base_types.len() > group_of.len() {
+            return true;
+        }
+        for (i, &(b, _)) in info.base_types.iter().enumerate().skip(1) {
+            let Some(g) = parents.iter().position(|&p| p == b || self.syms.class(p).base_types.iter().any(|&(x, _)| x == b)) else {
+                return true;
+            };
+            group_of[i] = g as u32;
+            let bi = self.syms.class(b);
+            holding[g] |= !bi.member_order.is_empty() || (extensions && !bi.extensions.is_empty());
+        }
+        if holding.iter().filter(|&&h| h).count() < 2 {
+            return false;
+        }
+        let mut named = [(Name(0), 0u32); 64];
+        let mut n = 0;
+        for (i, &(b, _)) in info.base_types.iter().enumerate().skip(1) {
+            let bi = self.syms.class(b);
+            let own = if extensions { &bi.extensions[..] } else { &[] };
+            if n + bi.member_order.len() + own.len() > named.len() {
+                return true;
+            }
+            for &m in bi.member_order.iter().chain(own) {
+                named[n] = (self.syms.sym(m).name, group_of[i]);
+                n += 1;
+            }
+        }
+        let named = &mut named[..n];
         named.sort_unstable();
         named.windows(2).any(|w| w[0].0 == w[1].0 && w[0].1 != w[1].1)
     }
