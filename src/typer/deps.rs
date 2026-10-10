@@ -825,6 +825,8 @@ struct Collector<'c, 'a> {
     /// The classes of the givens that are objects in scalac (`given Show[Int] with`, no
     /// parameters), by class.
     given_objects: FxMap<ClassId, ()>,
+    /// The matches of the stored inline bodies walked that stand for a `summonFrom`.
+    summon_froms: FxMap<TExprId, ()>,
 }
 
 impl<'c, 'a> Collector<'c, 'a> {
@@ -876,6 +878,7 @@ impl<'c, 'a> Collector<'c, 'a> {
             copies: FxMap::default(),
             source_packages: None,
             given_objects,
+            summon_froms: FxMap::default(),
         }
     }
 
@@ -3438,6 +3441,11 @@ impl<'c, 'a> Collector<'c, 'a> {
         };
         self.inline_hosts.extend(host);
         self.in_inline_body = true;
+        for (&r, source) in d.reducible.iter().zip(&d.reducible_sources) {
+            if matches!(source, crate::tir::ReducibleSource::SummonFrom { .. }) {
+                self.summon_froms.insert(r, ());
+            }
+        }
         for &e in d.defaults.iter().flatten() {
             self.expr(e);
         }
@@ -4019,7 +4027,13 @@ impl<'c, 'a> Collector<'c, 'a> {
                 }
             }
             TExpr::Match(selector, cases) => {
-                if let Some(t) = self.type_of(selector) {
+                if self.summon_froms.contains_key(&e) {
+                    // scalac's selector of a `summonFrom`, typed `ImplicitScrutineeTypeRef`: the
+                    // type `implicit` of package `scala`, of empty bounds.
+                    self.named_builtin("implicit");
+                    self.named_builtin("Nothing");
+                    self.named_builtin("Any");
+                } else if let Some(t) = self.type_of(selector) {
                     self.patmat(t);
                 }
                 self.expr(selector);
