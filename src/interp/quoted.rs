@@ -78,8 +78,10 @@ pub enum PendingKind {
     Named(Name),
     /// A builtin operator of the typed program (`1 + 1`) by name, applied as `Named` is, with
     /// the method type of the alternative the typer chose: what `tpe` of scalac's `Select`
-    /// gives.
-    Operator(Name, TypeId),
+    /// gives; the operation itself and its result's type where it is a primitive one, which an
+    /// application to one argument makes again, as dotty's `Select` of the operator's symbol
+    /// applies that operator whatever the receiver's static type (`left.select(sel.symbol)`).
+    Operator(Name, TypeId, Option<(PrimOp, TypeId)>),
     /// `New(tpt)`.
     New(TypeId),
     /// `Select(New(tpt), <init>)`.
@@ -1453,7 +1455,8 @@ impl<'a, 't> Interp<'a, 't> {
                 TExpr::Prim(op, l, r) => {
                     let name = self.typer.interner.intern(prim_name(op));
                     let method = self.operator_type(op, l, r, e);
-                    let fun = self.pending(Pending { recv: Some(TreeRef::Expr(l)), kind: PendingKind::Operator(name, method), targs: Vec::new() });
+                    let result = self.prog().type_of(e).unwrap_or(ANY);
+                    let fun = self.pending(Pending { recv: Some(TreeRef::Expr(l)), kind: PendingKind::Operator(name, method, Some((op, result))), targs: Vec::new() });
                     View::Apply(fun, vec![TreeRef::Expr(r)])
                 }
                 TExpr::Unary(op, x) => {
@@ -1660,9 +1663,9 @@ impl<'a, 't> Interp<'a, 't> {
                 match (p.recv, p.kind) {
                     (Some(r), PendingKind::Sym(s)) => View::Select(r, SymRef::Term(s), self.syms().sym(s).name),
                     (Some(r), PendingKind::Named(n)) => View::Select(r, SymRef::None, n),
-                    (Some(r), PendingKind::Operator(n, _)) => View::Select(r, SymRef::Operator(i), n),
+                    (Some(r), PendingKind::Operator(n, ..)) => View::Select(r, SymRef::Operator(i), n),
                     (None, PendingKind::Sym(s)) => View::Ident(SymRef::Term(s)),
-                    (None, PendingKind::Named(n) | PendingKind::Operator(n, _)) => {
+                    (None, PendingKind::Named(n) | PendingKind::Operator(n, ..)) => {
                         let _ = n;
                         View::Ident(SymRef::None)
                     }
@@ -1714,7 +1717,7 @@ impl<'a, 't> Interp<'a, 't> {
         let names = vec![self.typer.interner.intern(name)];
         let result = self.typer.b.t_string;
         let method = self.method_type(MethodTypeRepr { names, types: vec![param], result, open: Vec::new(), kind: ClauseKind::Plain });
-        let fun = self.pending(Pending { recv: Some(left), kind: PendingKind::Operator(plus, method), targs: Vec::new() });
+        let fun = self.pending(Pending { recv: Some(left), kind: PendingKind::Operator(plus, method, None), targs: Vec::new() });
         View::Apply(fun, vec![TreeRef::Expr(items[n - 1])])
     }
 
@@ -1947,7 +1950,8 @@ impl<'a, 't> Interp<'a, 't> {
                 let name = self.syms().sym(s).name;
                 Pending { kind: PendingKind::Named(name), ..p }
             }
-            PendingKind::Operator(name, _) => Pending { kind: PendingKind::Named(name), ..p },
+            PendingKind::Operator(_, _, Some(_)) if applied && args.len() == 1 && p.recv.is_some() => p,
+            PendingKind::Operator(name, ..) => Pending { kind: PendingKind::Named(name), ..p },
             _ => p,
         };
         match p.kind {
@@ -1978,6 +1982,8 @@ impl<'a, 't> Interp<'a, 't> {
                         let _ = r;
                         self.typer.prog.add(TExpr::Module(c))
                     }
+                    // A member of a JS type as the typer applies it: a property, brackets, a call.
+                    (Some(r), _, _) if !is_ext && self.syms().js_member(s) && self.syms().sym(s).intrinsic.is_none() => self.typer.build_js_member_call(r, s, l),
                     (Some(r), _, _) if !is_ext => self.typer.prog.add(TExpr::CallMethod(r, s, l)),
                     (Some(r), _, _) => {
                         let mut all = vec![r];
@@ -2007,7 +2013,19 @@ impl<'a, 't> Interp<'a, 't> {
                 }
                 Ok(te)
             }
-            PendingKind::Named(name) | PendingKind::Operator(name, _) => {
+            // The primitive operation the operator was read from, on the receiver and the argument.
+            PendingKind::Operator(_, _, Some((op, result))) if applied && args.len() == 1 && p.recv.is_some() => {
+                let recv = self.materialize(p.recv.expect("checked"))?;
+                let arg = match self.named_arg(args[0])? {
+                    Some((_, a)) => a,
+                    None => args[0],
+                };
+                let arg = self.materialize(arg)?;
+                let te = self.typer.prog.add(TExpr::Prim(op, recv, arg));
+                self.typer.prog.set_type(te, result);
+                Ok(te)
+            }
+            PendingKind::Named(name) | PendingKind::Operator(name, ..) => {
                 let Some(r) = p.recv else {
                     return self.unsupported(format!("a reference to {} without a definition", self.typer.name_ref(name)));
                 };
@@ -2312,7 +2330,7 @@ impl<'a, 't> Interp<'a, 't> {
                     PendingKind::Ref(SymRef::Class(c)) => self.typer.types.class(c, &[]),
                     PendingKind::Ref(_) => ANY,
                     PendingKind::Named(_) => ANY,
-                    PendingKind::Operator(_, method) => method,
+                    PendingKind::Operator(_, method, _) => method,
                 }
             }
             TreeRef::Def(s) => self.typer.sig_of(s).ret,
@@ -2702,8 +2720,8 @@ impl<'a, 't> Interp<'a, 't> {
                 return Ok(TreeRef::Expr(init));
             }
             SymRef::Operator(i) => {
-                let PendingKind::Operator(name, method) = self.pending_of(i)?.kind else { unreachable!("an operator's symbol is of its selection") };
-                return Ok(self.pending(Pending { recv: Some(qual), kind: PendingKind::Operator(name, method), targs: Vec::new() }));
+                let kind @ PendingKind::Operator(..) = self.pending_of(i)?.kind else { unreachable!("an operator's symbol is of its selection") };
+                return Ok(self.pending(Pending { recv: Some(qual), kind, targs: Vec::new() }));
             }
             other => {
                 let shown = self.symbol_name(other);
@@ -3018,7 +3036,7 @@ fn install_trees(it: &mut Table) {
                 // The operator selected again under its name keeps the alternative's type.
                 let kind = match original {
                     TreeRef::Pending(i) => match it.pending_of(i)?.kind {
-                        PendingKind::Operator(was, method) if was == n => PendingKind::Operator(n, method),
+                        PendingKind::Operator(was, method, prim) if was == n => PendingKind::Operator(n, method, prim),
                         _ => PendingKind::Named(n),
                     },
                     _ => PendingKind::Named(n),
@@ -4545,7 +4563,7 @@ impl<'a, 't> Interp<'a, 't> {
             TreeRef::Pending(i) => {
                 let p = self.pending_of(i)?;
                 match p.kind {
-                    PendingKind::Operator(_, method) => return Ok(Some(method)),
+                    PendingKind::Operator(_, method, _) => return Ok(Some(method)),
                     PendingKind::Sym(s) if self.takes_arguments(s) => {
                         let recv = match p.recv {
                             Some(r) => Some(self.materialize(r)?),
@@ -5819,7 +5837,7 @@ impl<'a, 't> Interp<'a, 't> {
             SymRef::Nothing => "Nothing".to_string(),
             SymRef::None => "<none>".to_string(),
             SymRef::Operator(i) => match self.pending_of(i).map(|p| p.kind) {
-                Ok(PendingKind::Operator(name, _)) => self.typer.name_ref(name).to_string(),
+                Ok(PendingKind::Operator(name, ..)) => self.typer.name_ref(name).to_string(),
                 _ => "<none>".to_string(),
             },
         }
