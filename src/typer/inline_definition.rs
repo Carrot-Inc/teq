@@ -539,7 +539,9 @@ impl<'a> Worker<'a> {
         // range, promoted after it, covers what stays.
         self.diags_cut_at(diag_mark);
         let reported: Vec<Diagnostic> = self.diags.items.drain(diag_mark..).collect();
-        let within = |d: &Diagnostic| (d.of_body || library) && d.file == file && d.span.start >= def_span.start && d.span.end <= def_span.end;
+        // A library's: whatever its check reported in the body's pseudo file, a place it gave
+        // none included.
+        let within = |d: &Diagnostic| d.file == file && (library || d.of_body && d.span.start >= def_span.start && d.span.end <= def_span.end);
         let (own, other): (Vec<Diagnostic>, Vec<Diagnostic>) = reported.into_iter().partition(within);
         self.diags.items.extend(other);
         // A body with an error fails, held back or not: its errors are the build's, reported here
