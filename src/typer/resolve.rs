@@ -127,7 +127,6 @@ impl<'a> Worker<'a> {
         let noting = self.checks_inline_definition() && self.quote.level == 0;
         // What a block of a captured body imports the capture keeps too (`capture_block_imports`).
         let keeping = noting || self.capturing();
-        self.note_quiet_imports(clauses);
         let mut entered = Vec::new();
         for imp in clauses {
             // An inline expansion's imports are its definition's, recorded where it is typed.
@@ -257,16 +256,9 @@ impl<'a> Worker<'a> {
                 let scope = t.env.imports.len();
                 let mut out = Vec::new();
                 let outer = if t.deps.is_some() { Some(t.deps_enter_class_body(c)) } else { None };
-                // A class under `@nowarn` (its own or an enclosing class's) silences its imports.
-                let quiet = t.unused.on() && t.class_nowarn(c) > 0;
                 for stmt in body {
                     let ast::Stmt::Import(i) = *stmt else { continue };
                     let clauses = ast.import_stmt(i);
-                    if quiet {
-                        let nowarn = std::mem::replace(&mut t.nowarn, 1);
-                        t.note_quiet_imports(clauses);
-                        t.nowarn = nowarn;
-                    }
                     for imp in clauses {
                         if let Some(resolved) = t.resolve_import(imp, clauses) {
                             out.push((imp.span.start, resolved));
@@ -387,11 +379,14 @@ impl<'a> Worker<'a> {
         let unimports_predef = self.names_predef(&imp.path, target).then_some(imp.span.start);
         let (name, member) = match imp.sel {
             ImportSel::Wildcard | ImportSel::Given => {
-                // A `given T` brings the givens that conform to `T` (`ImportInfo.givenBound`), and
-                // the names of its type use their imports. The bound is typed with the import
-                // (`Namer.importBound`: `typedAheadType(sel.bound)`): a bound that fails is reported
-                // and stays an error, which no given matches, never an unbounded import.
-                let bound = imp.bound.map(|b| self.resolve_type(b));
+                // A `given` selector brings the givens that conform to its clause's bound
+                // (`ImportInfo.givenBound`), and the names of its type use their imports. Each
+                // type is typed with the import (`Namer.importBound`: `typedAheadType(sel.bound)`),
+                // what fails reported and an `ErrorType` in the union (`given_bounds`).
+                let (own, bound) = match imp.sel {
+                    ImportSel::Given => self.given_bounds(imp, clause),
+                    _ => (None, None),
+                };
                 let hidden = self.wildcard_hidden(imp, clause);
                 let given_only = matches!(imp.sel, ImportSel::Given);
                 let target = match target {
@@ -400,8 +395,7 @@ impl<'a> Worker<'a> {
                     ImportTarget::ValueAll(v) if given_only => ImportTarget::ValueGivens(v),
                     t => t,
                 };
-                let bound = bound.filter(|_| given_only);
-                return Some(ResolvedImport { name: None, target, hidden, bound, depth: 0, stmt: imp.span.start, unimports_predef, sel: self.sel_ref(sel, bound) });
+                return Some(ResolvedImport { name: None, target, hidden, bound, depth: 0, stmt: imp.span.start, unimports_predef, sel: self.sel_ref(sel, own) });
             }
             // `import Predef.{x as _}` binds nothing but still takes the root import away.
             ImportSel::Name(_, Some(names::WILDCARD)) if unimports_predef.is_some() => {
@@ -496,6 +490,68 @@ impl<'a> Worker<'a> {
         }
     }
 
+    /// Whether the given a name resolves to through the `given` selector `imp` conforms to the
+    /// bound of what its clause brings (`Typer.selection`'s `checkBounds`): a test of the import
+    /// on a name's lookup, the bound's check apart.
+    #[inline]
+    fn import_admits_ref(&mut self, imp: ResolvedImport, r: TermRef) -> bool {
+        imp.bound.is_none() || self.import_bound_admits(imp, r)
+    }
+
+    #[cold]
+    #[inline(never)]
+    fn import_bound_admits(&mut self, imp: ResolvedImport, r: TermRef) -> bool {
+        match (imp.bound, r.sym()) {
+            (Some(bound), Some(s)) => {
+                let given = self.imported_given(imp, (s, super::implicits::GivenScope::Lexical));
+                self.matches_import_bound(given, bound)
+            }
+            _ => true,
+        }
+    }
+
+    /// The type of the `given T` selector `imp`, resolved with what it reports, and the bound of
+    /// the givens its clause `clause` brings (`Namer.importBound`): the union of its `given`
+    /// selectors' types from the left, none where it is `Any` (a selector without a type makes
+    /// it so) or an erroneous type, to which every given conforms (an `ErrorType` is a
+    /// `FlexType`).
+    fn given_bounds(&mut self, imp: &ast::Import, clause: &[ast::Import]) -> (Option<TypeId>, Option<TypeId>) {
+        let own = imp.bound.map(|b| self.resolve_type(b));
+        let file = self.env.file;
+        let mut bound = NOTHING;
+        for other in clause.iter().filter(|o| o.span.start == imp.span.start && matches!(o.sel, ImportSel::Given)) {
+            let t = if other.span == imp.span {
+                own
+            } else {
+                // Another selector's type, whose report at it is its own; what resolving it does
+                // elsewhere on the way (the file's imports resolved first) keeps its diagnostics.
+                other.bound.map(|b| {
+                    let mark = self.diags.items.len();
+                    let t = self.resolve_type(b);
+                    let at = other.selector_span;
+                    let elsewhere: Vec<crate::source::Diagnostic> = self.diags.items.drain(mark..).filter(|d| !(d.file == file && d.span.start >= at.start && d.span.end <= at.end)).collect();
+                    self.diags.items.extend(elsewhere);
+                    t
+                })
+            };
+            // `bound | t`, `TypeComparer.lub`: an `ErrorType`, a subtype and a supertype of every
+            // type, is dropped after a type, which it conforms to, and drops every type after it
+            // (`dropIfSub`), so that `{given Int, given Missing}` brings the `Int`s alone and
+            // `{given Missing, given Int}` every given.
+            bound = match t {
+                None => ANY,
+                Some(t) if bound == NOTHING => t,
+                Some(t) if t == ERROR || bound == ANY || bound == ERROR => bound,
+                Some(t) => self.types.union(bound, t),
+            };
+            if bound == ANY || bound == ERROR {
+                break;
+            }
+        }
+        let own = own.filter(|&t| t != ERROR);
+        (own, (bound != ANY && bound != ERROR).then_some(bound))
+    }
+
     /// The first segment is a name in scope where the import stands, earlier imports included.
     /// A segment may also be a value whose type is a class (`import quotes.reflect.*`, where
     /// `quotes` is a given `Quotes`): the members are then selected on that type, and an object
@@ -534,6 +590,10 @@ impl<'a> Worker<'a> {
                             if self.illegal_instance_prefix(c, s, span) {
                                 return None;
                             }
+                        }
+                        // The import's qualifier reads the value it names (`transformAllDeep(imp.expr)`).
+                        if let Some(s) = head.and_then(|r| r.sym()) {
+                            self.use_sym(s, span);
                         }
                         static_val = head.and_then(|r| self.static_import_val(r));
                         if static_val.is_some() {
@@ -2351,6 +2411,18 @@ impl<'a> Worker<'a> {
                     if self.index.is_some() {
                         self.index_type(id, r);
                     }
+                    if super::deprecation::possible() {
+                        match r {
+                            TypeRef::Class(c) => self.check_deprecated_class(c, span),
+                            TypeRef::Alias(a) => self.check_deprecated_alias(a, span),
+                            _ => {}
+                        }
+                    }
+                    match r {
+                        TypeRef::Class(c) => self.use_class(c, span),
+                        TypeRef::Alias(a) => self.use_alias(a, span),
+                        _ => {}
+                    }
                     if self.deps.is_some() {
                         self.deps_type_ref(r);
                         if n == names::ANY_REF {
@@ -2381,6 +2453,18 @@ impl<'a> Worker<'a> {
                 let found = self.lookup_type_in_path(q, n);
                 if let (Some(r), true) = (found, self.index.is_some()) {
                     self.index_type(id, r);
+                }
+                if super::deprecation::possible() {
+                    match found {
+                        Some(TypeRef::Class(c)) => self.check_deprecated_class(c, span),
+                        Some(TypeRef::Alias(a)) => self.check_deprecated_alias(a, span),
+                        _ => {}
+                    }
+                }
+                match found {
+                    Some(TypeRef::Class(c)) => self.use_class(c, span),
+                    Some(TypeRef::Alias(a)) => self.use_alias(a, span),
+                    _ => {}
                 }
                 if let (Some(r), true) = (found, self.deps.is_some()) {
                     self.deps_type_ref(r);
@@ -3543,6 +3627,7 @@ impl<'a> Worker<'a> {
             tparams: Vec::new(),
             rhs: ERROR,
             bounds: None,
+            deprecated: def.mods & crate::ast::mods::DEPRECATED != 0,
         });
         self.syms.alias_cells.set(a.0, Completion::InProgress);
         let depth = self.env.frames.len();
@@ -4869,13 +4954,14 @@ impl Binding for TermRef {
         match imp.target {
             ImportTarget::PkgMember(p, orig) if imp.name == Some(name) => t.pkg_term(p, orig),
             ImportTarget::PkgAll(p) if imp.name.is_none() => t.pkg_term(p, name).filter(|&r| !t.is_given_ref(r)),
-            ImportTarget::PkgGivens(p) => t.pkg_term(p, name).filter(|&r| t.is_given_ref(r)),
+            ImportTarget::PkgGivens(p) => t.pkg_term(p, name).filter(|&r| t.is_given_ref(r) && t.import_admits_ref(imp, r)),
             ImportTarget::ClassMember(c, orig) if imp.name == Some(name) => t.module_term(c, orig),
             ImportTarget::ClassAll(c) if imp.name.is_none() => {
                 t.module_term(c, name).filter(|&r| !t.is_given_ref(r))
             }
-            ImportTarget::ClassGivens(c) => t.module_term(c, name).filter(|&r| t.is_given_ref(r)),
-            ImportTarget::ValueMember(..) | ImportTarget::ValueAll(_) | ImportTarget::ValueGivens(_) => t.value_import_term(imp, name),
+            ImportTarget::ClassGivens(c) => t.module_term(c, name).filter(|&r| t.is_given_ref(r) && t.import_admits_ref(imp, r)),
+            ImportTarget::ValueGivens(_) => t.value_import_term(imp, name).filter(|&r| t.import_admits_ref(imp, r)),
+            ImportTarget::ValueMember(..) | ImportTarget::ValueAll(_) => t.value_import_term(imp, name),
             _ => None,
         }
     }

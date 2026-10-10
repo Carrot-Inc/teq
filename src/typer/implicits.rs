@@ -795,7 +795,7 @@ impl<'a> Worker<'a> {
             let mut found = Vec::new();
             self.import_givens_unfiltered(imp, Wanted::AnyClass, &mut found);
             let hidden: Vec<Name> = self.import_hidden.as_slice()[imp.hidden.range()].to_vec();
-            return found.into_iter().any(|given| !hidden.contains(&self.syms.sym(given.0).name) && imp.bound.map_or(true, |b| self.matches_import_bound(given, b)));
+            return found.into_iter().any(|given| !hidden.contains(&self.syms.sym(given.0).name) && imp.bound.map_or(true, |b| self.matches_import_bound(self.imported_given(imp, given), b)));
         }
         let any = |i: &GivenIndex| !i.all.is_empty() || !i.conversions.is_empty();
         match imp.target {
@@ -945,7 +945,7 @@ impl<'a> Worker<'a> {
         let mut i = from;
         while i < out.len() {
             let given = out[i];
-            let keep = !hidden.contains(&self.syms.sym(given.0).name) && imp.bound.map_or(true, |b| self.matches_import_bound(given, b));
+            let keep = !hidden.contains(&self.syms.sym(given.0).name) && imp.bound.map_or(true, |b| self.matches_import_bound(self.imported_given(imp, given), b));
             if keep {
                 i += 1;
             } else {
@@ -954,16 +954,42 @@ impl<'a> Worker<'a> {
         }
     }
 
-    /// Whether the given's type, its type parameters open, conforms to an import's bound.
-    fn matches_import_bound(&mut self, given: GivenRef, bound: TypeId) -> bool {
+    /// The given `g` as the import `imp` reaches it: a member of the object it imports from is
+    /// seen from that object (`Strings.box` of a `trait Lib[A]` that `Strings` extends as
+    /// `Lib[String]` is a `Box[String]`), as scalac's import reads its members from the
+    /// qualifier's type.
+    pub(super) fn imported_given(&self, imp: ResolvedImport, g: GivenRef) -> GivenRef {
+        match imp.target {
+            ImportTarget::ClassGivens(c) | ImportTarget::ClassMember(c, _) | ImportTarget::ClassAll(c) if self.syms.class(c).kind == ClassKind::Object => (g.0, GivenScope::Module(c)),
+            ImportTarget::ValueGivens(v) | ImportTarget::ValueMember(v, _) | ImportTarget::ValueAll(v) => (g.0, GivenScope::Value(v)),
+            _ => g,
+        }
+    }
+
+    /// Whether the given matches an import's bound (dotty's `Denotations.matchesImportBound`):
+    /// `NoViewsAllowed.normalizedCompatible` of its signature as it is reached (`open_given_sig`:
+    /// the trait's parameters as the object instantiates them, its own fresh within their
+    /// bounds), without keeping a constraint. Its type is normalized as `ProtoTypes.normalize`
+    /// does: a using clause gives way to its result, another clause makes a function type of its
+    /// parameters to the rest.
+    pub(super) fn matches_import_bound(&mut self, given: GivenRef, bound: TypeId) -> bool {
         if bound == ANY || bound == NOTHING {
             return bound == ANY;
         }
         let mark = self.attempt();
         let fits = match self.open_given_sig(given) {
             Some((_, subst, sig)) => {
-                let ret = self.types.subst(sig.ret, &subst);
-                self.is_sub(ret, bound)
+                let mut normalized = self.types.subst(sig.ret, &subst);
+                for clause in sig.clauses.iter().rev() {
+                    if clause.is_using || clause.is_implicit || clause.params.is_empty() {
+                        continue;
+                    }
+                    let mut args: Vec<TypeId> = clause.params.iter().map(|p| self.types.subst(p.ty, &subst)).collect();
+                    args.push(normalized);
+                    let f = self.function_class(clause.params.len());
+                    normalized = self.types.class(f, &args);
+                }
+                self.is_sub(normalized, bound)
             }
             None => false,
         };
@@ -3006,7 +3032,7 @@ impl<'a> Worker<'a> {
             let attempt = self.try_given(given, Some(target), span, true);
             // What a candidate's nested searches took goes with it: kept by a success, dropped
             // by a failure.
-            let winners = if self.unused.on() { self.unused.given_winners.split_off(winners_mark) } else { Vec::new() };
+            let winners = if self.unused.on() || self.unused.defs_on() { self.unused.given_winners.split_off(winners_mark) } else { Vec::new() };
             let receiver = self.unused.receiver.take();
             self.profile.try_end(!matches!(attempt, Attempt::Ok(..)), false);
             if !matches!(attempt, Attempt::Ok(..)) && captured.is_some() {
@@ -3096,7 +3122,7 @@ impl<'a> Worker<'a> {
         } else if let Some(mark) = in_place {
             self.close(mark);
         }
-        if self.unused.on() {
+        if self.unused.on() || self.unused.defs_on() {
             self.unused.given_winners.extend(winner.winners);
             // An inherited given read on an imported object (`B.n` of a trait's `n`) is that
             // object's, as CheckUnused's prefix test credits it.

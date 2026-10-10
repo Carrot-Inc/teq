@@ -38,7 +38,9 @@
 //! accepted. Its answers carry the fields above and
 //! `"diagnostics":[{"file","line","col","endLine","endCol","severity","message","source",
 //! "caret"}]`, every error and warning of the whole program, the syntax errors among them, in
-//! file and position order (an unused import with `"tags":[1]`, and in a session with `--index`
+//! file and position order (an unused import with `"tags":[1]` and, where it carries the edit
+//! removing it, an `"action":{"title","description","edits":[...]}` whose edits are ranges as the
+//! diagnostic's with their `"newText"`, and in a session with `--index`
 //! outside `--wunused` a `"hint"`, which no count reads); lines and columns are 1-based, the end
 //! exclusive, and the columns of a check session count UTF-16 units, as scalac's and an
 //! editor's do. `ok` is false when there is an error (or a warning under `--werror`); a
@@ -645,12 +647,14 @@ pub fn run(opts: &Options) -> ! {
             t.known_caches = !opts.no_known_caches;
             t.macro_state_per_worker = opts.macro_state_per_worker;
             t.dialect = opts.dialect;
+            t.diags.policy = std::sync::Arc::new(opts.policy());
             // The unused imports: warnings under the flag, else a language server's hints.
             t.unused.mode = match (opts.wunused_imports, opts.index) {
                 (true, _) => crate::typer::unused::Mode::Warn,
                 (false, true) => crate::typer::unused::Mode::Hint,
                 (false, false) => crate::typer::unused::Mode::Off,
             };
+            t.unused.defs = crate::typer::unused::DefKinds::of(&t.diags.policy.unused);
             t.inline.max_depth = opts.max_inlines;
             t.inline.production = opts.release;
             // A JVM session writes every entry point's class, as `--all-mains` does.
@@ -915,7 +919,7 @@ pub fn run(opts: &Options) -> ! {
             if changed.is_empty() && !compact {
                 if opts.check {
                     check_report(t, &sources, opts, &mut report);
-                } else if t.diags.fails(opts.werror) {
+                } else if t.diags.fails(&diag_files(t, &sources), opts.werror) {
                     // The last build failed and nothing changed: the answer is its errors again.
                     report.errors = render_all(&t.diags, &diag_files(t, &sources), opts.werror);
                     if opts.jvm {
@@ -1274,7 +1278,7 @@ fn finish_jvm(
         Some(files) if jvm::kept::wanted() => state.kept.retyped((0..unit_file.len()).filter(|&i| files.contains(&unit_file[i])).map(|i| FileId(i as u32))),
         _ => state.kept.clear(),
     }
-    let failed = t.diags.fails(opts.werror);
+    let failed = t.diags.fails(&diag_files(t, sources), opts.werror);
     if failed {
         report.errors = render_all(&t.diags, &diag_files(t, sources), opts.werror);
         report.diagnostics = Some(render_check(&t.diags, &diag_files(t, sources)));
@@ -1670,7 +1674,7 @@ fn end_session(full_builds: usize) -> ! {
 /// the errors and warnings as the build answers carry them, and `ok` when nothing is an error.
 fn check_report(t: &Typer, sources: &Sources, opts: &Options, report: &mut Report) {
     let files = diag_files(t, sources);
-    let failed = t.diags.fails(opts.werror);
+    let failed = t.diags.fails(&files, opts.werror);
     report.ok = !failed;
     report.errors = if failed { render_all(&t.diags, &files, opts.werror) } else { Vec::new() };
     report.warnings = if opts.werror { Vec::new() } else { render_warnings(&t.diags, &files) };
@@ -1767,7 +1771,7 @@ fn finish_build(
     kept: &mut Option<emit::kept::Kept>,
     reuse: bool,
 ) -> bool {
-    let failed = t.diags.fails(opts.werror);
+    let failed = t.diags.fails(&diag_files(t, sources), opts.werror);
     if failed {
         report.errors = render_all(&t.diags, &diag_files(t, sources), opts.werror);
         report.warnings = Vec::new();
@@ -2160,7 +2164,7 @@ fn utf16_col(line_text: &str, byte_col: usize) -> usize {
 
 /// One diagnostic of a `--check` session: the span's start and exclusive end as lines and
 /// UTF-16 columns, its severity, and the source line and caret as the build answers have them.
-fn render_check_at(path: &str, text: &str, start: u32, end: u32, severity: &str, msg: &str, unnecessary: bool) -> String {
+fn render_check_at(path: &str, text: &str, start: u32, end: u32, severity: &str, msg: &str, unnecessary: bool, action: Option<&crate::source::Action>) -> String {
     let end = end.max(start);
     let (line, col, line_text) = locate(text, start as usize);
     let (end_line, end_col, end_line_text) = locate(text, end as usize);
@@ -2194,11 +2198,59 @@ fn render_check_at(path: &str, text: &str, start: u32, end: u32, severity: &str,
     if unnecessary {
         fields.push(("tags", JsonValue::Raw("[1]")));
     }
+    let action = action.map(|a| render_action(text, a));
+    if let Some(a) = &action {
+        fields.push(("action", JsonValue::Raw(a)));
+    }
     json_object(&fields)
 }
 
-fn render_check_one(d: &Diagnostic, files: &[SourceFile]) -> String {
-    let severity = if d.hint { "hint" } else if d.is_warning { "warning" } else { "error" };
+/// The change a diagnostic proposes: its title, description and edits, each a range of the
+/// diagnostic's file as the diagnostic's is (the protocol's range in a language server's
+/// session, else lines and UTF-16 columns from 1, the end exclusive) and the text replacing it.
+fn render_action(text: &str, a: &crate::source::Action) -> String {
+    let lines = INDEXED.get().map(|_| crate::index::Lines::new(text));
+    let edits: Vec<String> = a
+        .patches
+        .iter()
+        .map(|(span, new_text)| match (&lines, INDEXED.get()) {
+            (Some(lines), Some(&positions)) => {
+                // The protocol has no position between the CR and the LF of a line break: an end
+                // there (scalac's edit taking a line's blank rest, its CR among it) goes past the
+                // LF, which the new text gives back; a start there before the CR, which it does.
+                let b = text.as_bytes();
+                let between = |at: u32| at > 0 && b.get(at as usize - 1) == Some(&b'\r') && b.get(at as usize) == Some(&b'\n');
+                let (mut span, mut new_text) = (*span, new_text.clone());
+                if between(span.end) {
+                    span.end += 1;
+                    new_text.push('\n');
+                }
+                if between(span.start) {
+                    span.start -= 1;
+                    new_text.insert(0, '\r');
+                }
+                let range = lines.range(span, positions).to_text();
+                json_object(&[("range", JsonValue::Raw(&range)), ("newText", JsonValue::Str(&new_text))])
+            }
+            _ => {
+                let (line, col, line_text) = locate(text, span.start as usize);
+                let (end_line, end_col, end_line_text) = locate(text, span.end as usize);
+                json_object(&[
+                    ("line", JsonValue::Int(line)),
+                    ("col", JsonValue::Int(utf16_col(line_text, col))),
+                    ("endLine", JsonValue::Int(end_line)),
+                    ("endCol", JsonValue::Int(utf16_col(end_line_text, end_col))),
+                    ("newText", JsonValue::Str(new_text)),
+                ])
+            }
+        })
+        .collect();
+    let edits = json_array(&edits, false);
+    json_object(&[("title", JsonValue::Str(a.title)), ("description", JsonValue::Str(a.description)), ("edits", JsonValue::Raw(&edits))])
+}
+
+fn render_check_one(d: &Diagnostic, level: crate::source::Level, files: &[SourceFile]) -> String {
+    let severity = level.name();
     if d.file == crate::source::NO_FILE {
         return json_object(&[("severity", JsonValue::Str(severity)), ("message", JsonValue::Str(&d.msg))]);
     }
@@ -2208,21 +2260,26 @@ fn render_check_one(d: &Diagnostic, files: &[SourceFile]) -> String {
     let Some(f) = files.get(d.file.0 as usize) else {
         return json_object(&[("file", JsonValue::Str("<library>")), ("severity", JsonValue::Str(severity)), ("message", JsonValue::Str(&d.msg))]);
     };
-    render_check_at(&f.path, &f.text, d.span.start, d.span.end, severity, &d.msg, d.unnecessary)
+    render_check_at(&f.path, &f.text, d.span.start, d.span.end, severity, &d.msg, d.unnecessary, d.action.as_deref())
+}
+
+/// The diagnostics as the reporting policy presents them (`Diagnostics::report`) that `keep`
+/// takes, in file and position order, each with its level.
+fn reported<'d>(diags: &'d Diagnostics, files: &[SourceFile], keep: impl Fn(crate::source::Level) -> bool) -> Vec<crate::source::Shown<'d>> {
+    let mut items: Vec<crate::source::Shown> = diags.report(files).shown.into_iter().filter(|s| keep(s.level)).collect();
+    items.sort_by_key(|s| (s.order, s.d.file.0, s.d.span.start));
+    items
 }
 
 /// Every diagnostic in file and position order, for a `--check` answer.
 pub(crate) fn render_check(diags: &Diagnostics, files: &[SourceFile]) -> Vec<String> {
-    let mut items: Vec<&Diagnostic> = diags.presented().collect();
-    items.sort_by_key(|d| (d.file.0, d.span.start));
-    items.into_iter().map(|d| render_check_one(d, files)).collect()
+    reported(diags, files, |_| true).iter().map(|s| render_check_one(&s.d, s.level, files)).collect()
 }
 
 /// The warnings of a build in file and position order; a hint is none.
 fn render_warnings(diags: &Diagnostics, files: &[SourceFile]) -> Vec<String> {
-    let mut items: Vec<&Diagnostic> = diags.presented().filter(|d| d.is_warning && !d.hint).collect();
-    items.sort_by_key(|d| (d.file.0, d.span.start));
-    items.into_iter().map(|d| render_one(d, files)).collect()
+    use crate::source::Level;
+    reported(diags, files, |l| l == Level::Warning).iter().map(|s| render_one(&s.d, files)).collect()
 }
 
 fn render_one(d: &Diagnostic, files: &[SourceFile]) -> String {
@@ -2260,9 +2317,8 @@ fn render_placed(p: &crate::source::Place, severity: Option<&str>, msg: &str) ->
 /// The errors of a build in file and position order, or every diagnostic but the hints under
 /// `--werror`.
 fn render_all(diags: &Diagnostics, files: &[SourceFile], all: bool) -> Vec<String> {
-    let mut items: Vec<&Diagnostic> = diags.presented().filter(|d| (all && !d.hint) || !d.is_warning).collect();
-    items.sort_by_key(|d| (d.file.0, d.span.start));
-    items.into_iter().map(|d| render_one(d, files)).collect()
+    use crate::source::Level;
+    reported(diags, files, |l| l == Level::Error || (all && l == Level::Warning)).iter().map(|s| render_one(&s.d, files)).collect()
 }
 
 /// The answer to a query: one line `{"result":...}`.

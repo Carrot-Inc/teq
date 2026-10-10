@@ -1,0 +1,3 @@
+11:1:36 @nowarn annotation does not suppress any warnings
+14:1:52 @nowarn annotation does not suppress any warnings but matches a diagnostic
+22:1:52 @nowarn annotation does not suppress any warnings but matches a diagnostic

@@ -1,3 +1,4 @@
+import scala.language.implicitConversions
 class A
 class B(val n: Int)
 class Ev(val n: Int)

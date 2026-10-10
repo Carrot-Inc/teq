@@ -1,0 +1,2 @@
+exit 0
+warning 3:56 class Old is deprecated since 1: old class

@@ -1,0 +1,2 @@
+exit 0
+warning 1:14 Definition of implicit conversion method convert should be enabled

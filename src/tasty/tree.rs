@@ -45,6 +45,8 @@ pub struct Entry {
     pub access_within: Option<NameRef>,
     /// An annotation of the definition has the simple name of a Scala.js interop annotation.
     pub js_annotated: bool,
+    /// The definition is annotated `@deprecated` (`typer::deprecation`).
+    pub deprecated: bool,
 }
 
 /// The simple names of the Scala.js annotations the loader reads (`scala.scalajs.js.native` and
@@ -372,12 +374,17 @@ impl<'a> Decoder<'a> {
         let mut qualified_private = false;
         let mut access_within = None;
         let mut js_annotated = false;
+        let mut deprecated = false;
         while self.r.pos < end {
             let m = self.r.byte();
             match m {
                 ANNOTATION => {
                     let annot_end = self.r.end();
-                    js_annotated |= self.names_js_annotation();
+                    match self.annotation_name() {
+                        Some(n) if JS_ANNOTATION_NAMES.contains(&n) => js_annotated = true,
+                        Some("deprecated") => deprecated = true,
+                        _ => {}
+                    }
                     self.r.pos = annot_end;
                 }
                 // `private[p]` and `protected[p]` are reachable from all of `p`, which the
@@ -392,7 +399,7 @@ impl<'a> Decoder<'a> {
             }
         }
         self.r.pos = end;
-        Entry { addr, tag, name, flags, is_class, has_body, qualified_private, access_within, js_annotated }
+        Entry { addr, tag, name, flags, is_class, has_body, qualified_private, access_within, js_annotated, deprecated }
     }
 
     /// The name of the class or package a qualifier type at the cursor refers to.
@@ -440,9 +447,9 @@ impl<'a> Decoder<'a> {
         }
     }
 
-    /// Whether the annotation class at the cursor, a type reference, has the name of a Scala.js
-    /// annotation; the cursor is left where it was.
-    fn names_js_annotation(&mut self) -> bool {
+    /// The simple name of the annotation class at the cursor, a type reference; the cursor is
+    /// left where it was.
+    fn annotation_name(&mut self) -> Option<&'a str> {
         let saved = self.r.pos;
         let mut hops = 0;
         let found = loop {
@@ -454,13 +461,39 @@ impl<'a> Decoder<'a> {
                 }
                 TYPEREF => {
                     let n = self.r.nat();
-                    break self.file.simple(n).map_or(false, |s| JS_ANNOTATION_NAMES.contains(&s));
+                    break self.file.simple(n);
                 }
-                _ => break false,
+                _ => break None,
             }
         };
         self.r.pos = saved;
         found
+    }
+
+    /// The annotations of the definition at `addr`, with their arguments.
+    pub fn annotations_at(&mut self, addr: Addr) -> Vec<Annot> {
+        self.r.pos = addr as usize;
+        let tag = self.r.byte();
+        let end = self.r.end();
+        self.r.nat();
+        self.skip_to_modifiers(tag, end);
+        let mut out = Vec::new();
+        while self.r.pos < end {
+            match self.r.byte() {
+                ANNOTATION => {
+                    let annot_end = self.r.end();
+                    let class = self.read_type();
+                    let args = if self.r.pos < annot_end { self.annotation_args() } else { Vec::new() };
+                    out.push(Annot { class, args });
+                    self.r.pos = annot_end;
+                }
+                PRIVATEQUALIFIED | PROTECTEDQUALIFIED => self.skip_tree(),
+                m if m < 64 => {}
+                _ => break,
+            }
+        }
+        self.r.pos = end;
+        out
     }
 
     /// The annotations of the definition of `e`, with their arguments.

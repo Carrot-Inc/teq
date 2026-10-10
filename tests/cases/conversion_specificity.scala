@@ -1,6 +1,7 @@
 // Two implicit conversions provide the same extension method: the one whose parameter type the
 // other's conforms to is the more specific (SLS 6.26.3), so a conversion from `Either[A, B]`
 // beats one from `F[A, B]` for any `F`, however the type parameters would be inferred.
+import scala.language.implicitConversions
 trait Bifunctor[F[_, _]]:
   def bimap[A, B, C, D](fab: F[A, B])(f: A => C, g: B => D): F[C, D]
 

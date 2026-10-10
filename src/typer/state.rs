@@ -157,7 +157,6 @@ struct PendingCall {
     expected: Option<crate::types::TypeId>,
     env: std::sync::Arc<super::Env>,
     gadt: Vec<(crate::types::TParamId, crate::types::TypeId, i8)>,
-    nowarn: u32,
     body_node: Option<super::BodyNode>,
     of_bodies: bool,
     /// scalac's owner chain at the call, which a macro's `Symbol.spliceOwner` reads.
@@ -761,7 +760,6 @@ impl<'a> Worker<'a> {
             expected,
             env: std::sync::Arc::new(self.env.clone()),
             gadt: self.gadt.clone(),
-            nowarn: self.nowarn,
             body_node: self.body_node,
             of_bodies: self.diags.of_bodies,
             owners: self.sites.owners.clone(),
@@ -1114,7 +1112,6 @@ impl<'a> Worker<'a> {
     /// replaced in place by the expansion.
     fn expand_pending(&mut self, node: crate::tir::TExprId, typed_as: crate::types::TypeId, p: PendingCall) -> Option<crate::types::TypeId> {
         let gadt = std::mem::replace(&mut self.gadt, p.gadt);
-        let nowarn = std::mem::replace(&mut self.nowarn, p.nowarn);
         let body_node = std::mem::replace(&mut self.body_node, p.body_node);
         let of_bodies = std::mem::replace(&mut self.diags.of_bodies, p.of_bodies);
         let owners = std::mem::replace(&mut self.sites.owners, p.owners);
@@ -1132,7 +1129,6 @@ impl<'a> Worker<'a> {
         self.inline.site_at_end = at_end;
         self.inline.arg_types = arg_types;
         self.gadt = gadt;
-        self.nowarn = nowarn;
         self.body_node = body_node;
         self.diags.of_bodies = of_bodies;
         self.sites.owners = owners;

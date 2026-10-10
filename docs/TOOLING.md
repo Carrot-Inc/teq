@@ -308,13 +308,14 @@ same swaps, since the refresh runtime and what a swap runs again are written by 
 `teq lsp` is a language server over stdin and stdout, used by Claude Code's LSP tool and by Zed. It answers
 definitions, references, hovers, document and workspace symbols, implementations, the call hierarchy (the
 callers and callees of a method, grouped by their enclosing definition), completion and signature help, and
-publishes diagnostics after each edit (an unused import as a hint). A definition into a library goes to its
-source, read from the sources jar beside the jar, or into teq's own standard library, shown in read-only
-documents where navigation works as in a source, and completion and signature help too in the standard
-library's. A member called on an object seen as one of its parents
-(`(Obj: Base).f`) answers both declarations, the parent's and the object's that runs, as scalac's own lookup
-does. Formatting, code actions and rename are not offered; hover shows a name's signature or type, not yet an
-expression's.
+publishes diagnostics after each edit (an unused import as a hint, with a quick fix removing it: scalac's own
+edit, CheckUnused's, which deletes the statement, keeps its one used selector or drops the unused ones with
+their commas). A definition into a library goes to its source, read from the sources jar beside the jar, or
+into teq's own standard library, shown in read-only documents where navigation works as in a source, and
+completion and signature help too in the standard library's. A member called on an object seen as one of its
+parents (`(Obj: Base).f`) answers both declarations, the parent's and the object's that runs, as scalac's own
+lookup does. Formatting, other code actions and rename are not offered; hover shows a name's signature or
+type, not yet an expression's.
 
 Completion lists the members of a receiver (extension methods and conversions included), the names in scope,
 types, the class after `new`, imports and keywords, filtered by the prefix case-insensitively and cut at

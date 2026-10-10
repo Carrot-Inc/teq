@@ -1,0 +1,14 @@
+10:12:1 unused pattern variable
+24:20:1 unused pattern variable
+27:17:1 unused pattern variable
+27:20:1 unused pattern variable
+29:15:1 unused pattern variable
+32:9:1 unused pattern variable
+36:18:1 unused pattern variable
+57:12:6 unused pattern variable
+69:19:1 unused pattern variable
+99:16:1 unset private variable, consider using an immutable val instead
+105:10:1 unset local variable, consider using an immutable val instead
+112:11:1 unset local variable, consider using an immutable val instead
+123:21:1 unused pattern variable
+123:24:1 unused pattern variable

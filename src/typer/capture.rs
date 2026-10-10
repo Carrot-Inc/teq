@@ -1053,8 +1053,8 @@ impl<'a> Worker<'a> {
 
 impl<'a> Worker<'a> {
     /// The types of the tuple scalac packs a comprehension's variables into.
-    pub(super) fn pack_tuple(&mut self, vars: &[(crate::intern::Name, TypeId, bool)]) -> Option<TList> {
-        let elems: Vec<TypeId> = vars.iter().map(|&(_, t, _)| t).collect();
+    pub(super) fn pack_tuple(&mut self, vars: &[(crate::intern::Name, TypeId, bool, crate::types::SymId)]) -> Option<TList> {
+        let elems: Vec<TypeId> = vars.iter().map(|&(_, t, _, _)| t).collect();
         Some(self.types.list(&elems))
     }
 }

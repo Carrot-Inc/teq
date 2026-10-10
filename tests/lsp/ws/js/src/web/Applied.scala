@@ -1,5 +1,7 @@
 package web
 
+import scala.language.implicitConversions
+
 // Function values applied (`f(x)`, the `apply` the typer inserts on a function type, a partial
 // function, a SAM-typed value or a tuple): each written name is recorded as its unapplied use is,
 // a function value's as a reference and a method's whose result is applied as a call. The driver

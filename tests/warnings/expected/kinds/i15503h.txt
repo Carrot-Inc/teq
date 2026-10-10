@@ -1,0 +1,6 @@
+3:27:3 unused import
+6:15:1 unused private member
+9:15:1 unused private member
+10:15:1 unused implicit parameter
+13:9:1 unused local definition
+14:9:1 unused local definition

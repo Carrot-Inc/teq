@@ -1,5 +1,6 @@
 // From scala/scala3 tests/run/implicitclasses.scala and tests/pos/implicitonSelect.scala
 // (`extends App` replaced by a main method, the assertion printed).
+import scala.language.implicitConversions
 object Test {
   implicit class C(s: String) {
     def nElems = s.length

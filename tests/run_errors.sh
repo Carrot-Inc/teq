@@ -7,7 +7,8 @@
 # the class path (tests/support/jars.sh); without one of them in the coursier cache the program
 # is skipped. Each program's exit and complete diagnostics go to out/errors-tests/<name>.out, and
 # the last line says whether every program was rejected as expected, with the counts of
-# tests/warnings/unused-imports.sh and tests/warnings/matches.sh, which run after them.
+# tests/warnings/unused-imports.sh, tests/warnings/unused-kinds.sh, tests/warnings/matches.sh and
+# tests/warnings/policy.sh, which run after them.
 cd "$(dirname "$0")/.."
 TEQ=${TEQ:-./target/release/teq}
 . tests/support/jars.sh
@@ -58,5 +59,15 @@ matches=$(./tests/warnings/matches.sh 2>&1)
 [ $? -ne 0 ] && fail=1
 grep -v '^match warnings: ' <<< "$matches"
 matches_summary=$(tail -1 <<< "$matches")
-if [ $fail = 0 ]; then echo "error tests passed; $unused_summary; $matches_summary"; else echo "error tests failed; $unused_summary; $matches_summary"; fi
+# The reporting policy of warnings against scalac's: flags, -Wconf, @nowarn, exits (its own script).
+policy=$(./tests/warnings/policy.sh 2>&1)
+[ $? -ne 0 ] && fail=1
+grep -v '^warning policy: ' <<< "$policy"
+policy_summary=$(tail -1 <<< "$policy")
+# The unused warnings of every kind against scalac's on dotty's corpus (its own script).
+kinds=$(./tests/warnings/unused-kinds.sh 2>&1)
+[ $? -ne 0 ] && fail=1
+grep -v '^unused kinds: ' <<< "$kinds"
+kinds_summary=$(tail -1 <<< "$kinds")
+if [ $fail = 0 ]; then echo "error tests passed; $unused_summary; $kinds_summary; $matches_summary; $policy_summary"; else echo "error tests failed; $unused_summary; $kinds_summary; $matches_summary; $policy_summary"; fi
 exit $fail

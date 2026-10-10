@@ -643,6 +643,11 @@ pub struct TFun {
     /// Default value expressions, parallel to `params`.
     pub defaults: Vec<Option<TExprId>>,
     pub body: Option<TExprId>,
+    /// Whether the type the body was typed at, before its adaptation to the declared result,
+    /// is a constant type or `Nothing` (`CheckUnused.isUnconsuming`'s tests of `rhs.tpe`; a
+    /// call of a method of a literal result type has its literal type): read off the type when
+    /// the body is committed, where an unused kind is checked.
+    pub body_unconsuming: bool,
 }
 
 /// The call of a parent constructor as the typer hands it over: `TClass::parent_prelude` and

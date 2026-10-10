@@ -2,6 +2,7 @@
 // encoders combined in constructed quotes (skunk's `sql` fold, with the block a pickled quote
 // holds and its using clause passed): the expansion's static type at the site is the bound
 // type, not a wildcard, and a quote's block body has its result's type.
+import scala.language.implicitConversions
 import scala.quoted.*
 import Enc.*
 

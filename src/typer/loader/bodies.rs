@@ -1783,7 +1783,7 @@ impl<'a> Worker<'a> {
                 Some("_") => ImportSel::Wildcard,
                 _ => ImportSel::Name(self.conv_name(cv, from), to.map(|n| self.conv_name(cv, n))),
             };
-            cv.ast.local_imports.push(ast::Import { path: path.clone(), sel, span: cv.span, selector_span: cv.span, bound: None });
+            cv.ast.local_imports.push(ast::Import { path: path.clone(), sel, span: cv.span, selector_span: cv.span, bound: None, tree_start: cv.span.start, qual_end: cv.span.start, clause_end: cv.span.end });
         }
         let len = cv.ast.local_imports.len() as u32 - start;
         if len == 0 {

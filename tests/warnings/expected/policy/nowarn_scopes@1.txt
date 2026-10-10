@@ -1,0 +1,4 @@
+exit 0
+warning 11:44 method old is deprecated since 1: old
+warning 13:12 method old is deprecated since 1: old
+warning 8:22 unused import

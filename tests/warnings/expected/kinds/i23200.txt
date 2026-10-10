@@ -1,0 +1,2 @@
+8:9:1 unset private variable, consider using an immutable val instead
+40:7:1 unset local variable, consider using an immutable val instead

@@ -1,0 +1,10 @@
+exit 0
+warning 13:15 interpolation uses toString
+warning 13:20 interpolated Unit value
+warning 13:35 interpolation uses toString
+warning 13:45 interpolation uses toString
+warning 13:50 interpolation uses toString
+warning 13:72 interpolation uses toString
+warning 14:17 interpolation uses toString
+warning 15:16 interpolation uses toString
+warning 16:18 interpolation uses toString

@@ -1,0 +1,8 @@
+exit 0
+warning 14:11 method m in object Lib is deprecated since 2.0: use other
+warning 14:22 method n in object Lib is deprecated
+warning 14:30 value v in object Lib is deprecated: gone
+warning 14:38 variable w in object Lib is deprecated since 3.1
+warning 15:15 class Old is deprecated since 1.0: old class
+warning 16:11 object Gone is deprecated since 1.1: old object
+warning 17:12 class Old is deprecated since 1.0: old class

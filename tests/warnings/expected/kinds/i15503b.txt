@@ -1,0 +1,23 @@
+8:7:2 unused local definition
+9:7:2 unused local definition
+10:7:2 unused local definition
+14:7:2 unset local variable, consider using an immutable val instead
+29:7:2 unused local definition
+30:7:2 unused local definition
+31:7:2 unused local definition
+36:7:2 unset local variable, consider using an immutable val instead
+53:9:2 unused local definition
+54:9:2 unused local definition
+55:9:2 unused local definition
+59:9:2 unset local variable, consider using an immutable val instead
+74:9:2 unused local definition
+75:9:2 unused local definition
+76:9:2 unused local definition
+81:9:2 unset local variable, consider using an immutable val instead
+102:11:1 unused local definition
+109:11:1 unused local definition
+113:11:1 unset local variable, consider using an immutable val instead
+120:14:8 unused local definition
+121:13:2 unused local definition
+125:13:14 unused local definition
+128:12:10 unused local definition

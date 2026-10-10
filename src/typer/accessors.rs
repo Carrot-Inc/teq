@@ -265,7 +265,7 @@ impl<'a> Worker<'a> {
                 }
                 self.syms.add_member(c, s);
                 let defaults = vec![None; params.len()];
-                let f = self.prog.add_fun(crate::tir::TFun { sym: s, params, defaults, body: Some(body) });
+                let f = self.prog.add_fun(crate::tir::TFun { sym: s, params, defaults, body: Some(body), body_unconsuming: false });
                 self.fun_of_sym.insert(s, f);
                 // Among the class's methods, which the backends emit.
                 if let Some(i) = self.prog_index.class(&self.prog, c) {

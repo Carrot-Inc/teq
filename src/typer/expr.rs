@@ -468,7 +468,7 @@ impl<'a> Worker<'a> {
         }
         let span = self.cur_ast().expr_span(self.result_expr(e));
         let msg = format!("Discarded non-Unit value of type {}. Add `: Unit` to discard silently.", self.show(ty));
-        self.warn(span, msg);
+        self.warn_as(span, msg, crate::source::Warning::id(crate::warnings::id::VALUE_DISCARDING));
     }
 
     /// scalac's warning for a statement that computes a value and drops it: `1; 2`. A closure
@@ -489,7 +489,7 @@ impl<'a> Worker<'a> {
             self.error(span, msg);
             return;
         }
-        self.warn(span, "A pure expression does nothing in statement position");
+        self.warn_as(span, "A pure expression does nothing in statement position", crate::source::Warning::id(crate::warnings::id::PURE_EXPRESSION_IN_STATEMENT_POSITION));
     }
 
     /// Whether a closure typed of the expression is the typer's, no function literal the program
@@ -1072,6 +1072,11 @@ impl<'a> Worker<'a> {
             }
         }
         let (te, ty) = self.type_expr_untracked(e, expected);
+        // The reference the expression makes, checked where a deprecated definition was met
+        // or the unused definitions' marks are kept (`deprecation::references_checked`).
+        if super::deprecation::references_checked() {
+            self.check_reference(e, te);
+        }
         if self.index.is_some() {
             self.index_expr(e, te);
         }
@@ -1981,6 +1986,7 @@ impl<'a> Worker<'a> {
         for &a in arg_ids {
             let (te, ty) = self.type_expr(a, None);
             let ty = self.solve_in(ty);
+            self.lint_interpolated(ty, ast.expr_span(a));
             if object_seen && !self.is_stable(te) {
                 reorders = true;
             }
@@ -2043,7 +2049,12 @@ impl<'a> Worker<'a> {
             let r = self.prog.add_str(&text);
             strs.push(self.prog.add(TExpr::Str(r)));
         }
-        let values: Vec<TExprId> = arg_ids.into_iter().map(|a| self.check_expr(a, ANY)).collect();
+        let mut values = Vec::with_capacity(arg_ids.len());
+        for (i, a) in arg_ids.into_iter().enumerate() {
+            let (te, ty) = self.check_expr_own(a, ANY);
+            self.lint_formatted_part(ty, i, parts);
+            values.push(te);
+        }
         let (t_string, array) = (self.b.t_string, self.b.array);
         let part_list = self.prog.list(&strs);
         let parts_array = self.prog.add(TExpr::ArrayLit(part_list));
@@ -2067,10 +2078,18 @@ impl<'a> Worker<'a> {
         expected: Option<TypeId>,
     ) -> (TExprId, TypeId) {
         let ast = self.cur_ast();
-        let list = ArgList {
-            args: ast.expr_list(args).iter().map(|&a| ArgSrc::Ast(a)).collect(),
-            using: false,
-            span,
+        // An `f` interpolation's arguments are typed as `Any`, each checked as its conversion
+        // takes it (`--wtostring-interpolated`).
+        let list = if id == names::F_INTERP {
+            let mut typed = Vec::with_capacity(args.len as usize);
+            for (i, &a) in ast.expr_list(args).iter().enumerate() {
+                let (te, ty) = self.check_expr_own(a, ANY);
+                self.lint_formatted_part(ty, i, parts);
+                typed.push(ArgSrc::Typed(te, ANY));
+            }
+            ArgList { args: typed, using: false, span }
+        } else {
+            ArgList { args: ast.expr_list(args).iter().map(|&a| ArgSrc::Ast(a)).collect(), using: false, span }
         };
         let Some(class) = self.string_context_class() else {
             self.error(span, "StringContext is missing from the standard library");
@@ -2135,7 +2154,11 @@ impl<'a> Worker<'a> {
         let prefixed = self.cur_ast().new_outers.contains_key(&e);
         let outer_prefixed = std::mem::replace(&mut self.new_prefixed, prefixed);
         let outer_new = std::mem::replace(&mut self.explicit_new, true);
+        let journal = self.unused.journal_len();
         let typed = self.type_new(ty, &[(args, false)], false, span, expected);
+        if self.unused.defs_on() {
+            self.ignore_self_construction_args(typed.0, journal);
+        }
         self.explicit_new = outer_new;
         self.new_prefixed = outer_prefixed;
         self.part_end(part);
@@ -2593,7 +2616,13 @@ impl<'a> Worker<'a> {
                 Err(selected) => selected,
             },
             Expr::Ident(name) => {
+                // The target of an assignment, no use of it, for the unused-definitions check.
+                let defs = self.unused.defs_on();
+                let outer = if defs { self.unused.assign_target.replace(lhs) } else { None };
                 let typed = self.type_expr(lhs, None);
+                if defs {
+                    self.unused.assign_target = outer;
+                }
                 if let Some(setter_call) = self.unqualified_setter_call(typed.0, name, rhs, span) {
                     return setter_call;
                 }
@@ -3309,7 +3338,7 @@ impl<'a> Worker<'a> {
     /// `mark` on, quietened in place as `quiet_repeated_matches` does.
     fn match_not_partial(&mut self, m: ExprId, mark: usize) {
         let span = self.cur_ast().expr_span(m);
-        self.warn(span, "match expression in result of block will not be used to synthesize partial function");
+        self.warn_as(span, "match expression in result of block will not be used to synthesize partial function", crate::source::Warning::id(crate::warnings::id::MATCH_IS_NOT_PARTIAL_FUNCTION));
         let file = self.env.file;
         for d in &mut self.deferred_matches[mark..] {
             if d.file == file && d.span.start >= span.start && d.span.end <= span.end {
@@ -3774,6 +3803,7 @@ impl<'a> Worker<'a> {
         if !def.annots.is_empty() {
             self.enter_interop_annots(file, Owner::Local, def, None);
         }
+        self.check_def_warnings(file, d);
         if self.unused.on() {
             self.mark_annotations(file, d);
         }
@@ -4239,6 +4269,7 @@ impl<'a> Worker<'a> {
                             if self.index.is_some() {
                                 self.index_local_at(sym, ast.pat_spans[pat.idx()]);
                             }
+                            self.note_def_at(sym, ast.pat_spans[pat.idx()].start);
                             self.bind_local(name, sym);
                             TStmt::Val(sym, init)
                         }
@@ -4260,7 +4291,7 @@ impl<'a> Worker<'a> {
                 for (n, s) in vars {
                     let ty = self.sig_of(s).ret;
                     let given = self.syms.sym(s).mods & mods::GIVEN != 0;
-                    pack.push((n, self.solve_in(ty), given));
+                    pack.push((n, self.solve_in(ty), given, s));
                     items.push(self.prog.add(TExpr::Local(s)));
                 }
                 let tuple = if self.capturing() { self.pack_tuple(&pack) } else { None };

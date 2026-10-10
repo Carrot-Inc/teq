@@ -392,6 +392,8 @@ given_fits_var_candidate
 given_hk_bound
 given_implicit_scope_negation
 given_import_bound_exclusion
+given_import_bound_situated
+given_import_bounds
 given_import_context_chain
 given_import_empty_contexts
 given_import_file_contexts

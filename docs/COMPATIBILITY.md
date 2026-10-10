@@ -114,10 +114,23 @@ a JDK member as `not supported on JavaScript`. Beyond that:
 - JVM, which links scala-library's bytecode: `Duration(1.5, SECONDS)`, `e.canEqual(x)` on an `Equals` and
   `sb.length()` of a `StringBuilder` are rejected where scalac types them, `f"n=$n%04d"` fails with
   `NoSuchMethodError`, a derived `Show` prints a case object as `Nil()`, `eq` on strings compares by value.
-- `-deprecation`, `-feature` and `-Wtostring-interpolated` have no counterpart, `-Wconf` is not read, the
-  `-Wunused` kinds other than `imports` report nothing, `@nowarn("msg=...")` silences every warning of its
-  definition, and a cast between primitives that no conversion makes warns where it is written but not where
-  an inline method's expansion makes one, so a build with them and `-Werror` passes here where scalac fails it.
+- Under `-Wunused:implicits`, a using clause of an `extension` is one parameter its methods share, where
+  scalac's is one per method: a method that does not use it warns in scalac, not here while another method
+  uses it. Under `-Wunused:imports`, what a macro's or an inline method's expansion names uses no import:
+  scalac resolves it at the call site, where a definition of the call site's own file counts as another
+  file's, so an expansion naming one (a `derives` clause's macro) uses a wildcard import of the file's own
+  package, which teq reports unused. `-feature` reports an implicit conversion's definition alone, not the use
+  of a `Conversion` given or an extension of `scala.Dynamic`; on JavaScript the lean standard library
+  deprecates none of its members, so a use of one scalac's deprecates (`mapValues`, `JavaConverters`) gives no
+  deprecation warning there (`--std=scala-library` and the JVM read scala-library's). A warning at a place an
+  earlier diagnostic took is hidden as scalac's reporter hides it, but an error is hidden only by the same
+  error, where scalac's hides any at a place another error took: teq's errors do not all stand where scalac's
+  do. A `@nowarn` whose argument names a definition local to the block around it registers nothing. Under
+  `-Wunused:explicits`, a parameter of a method whose body has a constant type only as the union of its
+  branches' literal types (`if (b) 1 else 1`) is reported: teq's typer gives a literal its widened type where
+  scalac's gives it a constant type. A cast between primitives that no conversion makes warns where it is
+  written but not where an inline method's expansion makes one, so a build with `-Werror` passes here where
+  scalac fails it.
 
 ## Known differences
 

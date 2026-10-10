@@ -1,0 +1,2 @@
+exit 0
+warning 1:26 Invalid message filter

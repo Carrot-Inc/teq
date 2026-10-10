@@ -920,6 +920,8 @@ impl<'a> Worker<'a> {
     /// brings it on the object or value it was read on (CheckUnused's prefix test), as for a
     /// given (`Unused::receiver`).
     fn attribute_conversion(&mut self, (g, via): ConvRef, te: TExprId) {
+        // The conversion's reference reads it (`refUsage` of the tree the typer inserts).
+        self.use_sym(g, Span::default());
         if !self.unused.on() {
             return;
         }

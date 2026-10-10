@@ -1408,6 +1408,7 @@ impl<'a> Worker<'a> {
             defaults: vec![None; param_syms.len()],
             params: param_syms,
             body: Some(body),
+            body_unconsuming: false,
         });
         self.fun_of_sym.insert(msym, f);
         let tclass = TClass {
@@ -1856,7 +1857,7 @@ impl<'a> Worker<'a> {
                 self.syms.add_member(c, s);
                 s
             };
-            let f = self.prog.add_fun(TFun { sym: s, params: Vec::new(), defaults: Vec::new(), body: Some(body) });
+            let f = self.prog.add_fun(TFun { sym: s, params: Vec::new(), defaults: Vec::new(), body: Some(body), body_unconsuming: false });
             self.fun_of_sym.insert(s, f);
             funs.push(f);
         }

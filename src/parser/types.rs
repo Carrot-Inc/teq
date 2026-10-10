@@ -488,6 +488,10 @@ impl<'a> Parser<'a> {
                 Tok::At => {
                     let annots = self.parse_inline_annots();
                     self.ast.inline_annots.extend_from_slice(&annots);
+                    // `T @nowarn` covers the type, not the expression it ascribes.
+                    for a in annots.iter().filter(|a| a.name == names::NOWARN) {
+                        self.ast.nowarn_ascriptions.push((start.to(self.prev_span()), a.clone()));
+                    }
                     if annots.iter().any(|a| a.name == names::UNCHECKED) {
                         t = self.ast.add_ty(TyExpr::Unchecked(t), start.to(self.prev_span()));
                     }

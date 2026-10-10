@@ -310,6 +310,9 @@ pub mod mods {
     /// implemented by every class that is the first to extend its trait, by a search where the
     /// class is defined (`Worker::implement_deferred_givens`).
     pub const DEFERRED: Mods = 1 << 27;
+    /// The definition is annotated `@deprecated` (a program's) or its pickle or class file says
+    /// it is deprecated (a library's): its references warn (`typer::deprecation`).
+    pub const DEPRECATED: Mods = 1 << 28;
 }
 
 #[derive(Clone, Debug)]
@@ -457,8 +460,16 @@ pub struct Import {
     /// rename (`Shadow as Sh`, `a => b`, `a as _`), the `*` or `_`, the `given` with its type.
     pub selector_span: Span,
     /// The type of a `given T` selector, whose names use the imports they resolve through
-    /// (`typer::unused`); the givens it brings are not filtered by it.
+    /// (`typer::unused`), and which bounds the givens its clause brings (`Namer.importBound`).
     pub bound: Option<TyExprId>,
+    /// Where scalac's tree of the clause starts: the `import` keyword for a statement's first
+    /// clause, the clause's path for the others (`isPrimaryClause`).
+    pub tree_start: u32,
+    /// The end of the clause's path, the qualifier its selectors select from (`span.start`
+    /// for none), and the end of the clause, past its closing brace: the positions of the
+    /// unused-import edits (`typer::unused_edits`).
+    pub qual_end: u32,
+    pub clause_end: u32,
 }
 
 pub struct Ast {
@@ -515,6 +526,10 @@ pub struct Ast {
     /// The file's top-level imports of `scala.language`, which the parser takes out of
     /// `imports`: they name the object all the same.
     pub language_imports: Vec<Import>,
+    /// Each feature a `scala.language` import of the file names, whether it enables it (`f =>
+    /// _` takes it back) and its scope: from the import to the end of the block or body it stands
+    /// in, or of the file (`typer::feature`). A wildcard names none.
+    pub language_scopes: Vec<(Name, bool, Span)>,
     /// The initialisers written `_` (`var x: T = _`), which only a field may have.
     pub default_inits: Vec<ExprId>,
     /// The names of one `val a, b = e` after the first, each with the name before it: every name
@@ -571,6 +586,11 @@ pub struct Ast {
     /// source order: no meaning is read of them but `@unchecked`'s and `@uncheckedVariance`'s,
     /// while their names use the imports they resolve through (`typer::unused`).
     pub inline_annots: Vec<Annot>,
+    /// Whether an annotation named `nowarn` was written in the file, whose definitions and
+    /// ascriptions `@nowarn` suppresses the warnings of (`warnings.rs`), and the ascriptions
+    /// and types so annotated (`e: @nowarn`, `T @nowarn`), each with its whole range.
+    pub has_nowarn: bool,
+    pub nowarn_ascriptions: Vec<(Span, Annot)>,
     /// The tokens the parser skipped after a syntax error, each run with the construct whose
     /// recovery skipped it, in source order.
     pub recoveries: Vec<Recovery>,
@@ -780,6 +800,7 @@ impl Ast {
             top_exports: Vec::new(),
             strict_equality: false,
             language_imports: Vec::new(),
+            language_scopes: Vec::new(),
             default_inits: Vec::new(),
             val_copies: crate::intern::FxMap::default(),
             source_future: false,
@@ -800,11 +821,32 @@ impl Ast {
             package_ranges: Vec::new(),
             reader: None,
             inline_annots: Vec::new(),
+            has_nowarn: false,
+            nowarn_ascriptions: Vec::new(),
             recoveries: Vec::new(),
             cut_args: Vec::new(),
             broken_cases: Vec::new(),
             braced: Vec::new(),
         }
+    }
+
+    /// Whether the definition `d`, one of its parameters or one of its type parameters is
+    /// annotated.
+    #[inline]
+    pub fn def_has_annotations(&self, d: DefId) -> bool {
+        let def = self.def(d);
+        if !def.annots.is_empty() {
+            return true;
+        }
+        let (tparams, clauses): (&[TypeParam], &[ParamClause]) = match &def.kind {
+            DefKind::Fun(f) => (&f.tparams, &f.clauses),
+            DefKind::Class(c) => (&c.tparams, &c.clauses),
+            DefKind::Given(g) => (&g.tparams, &g.clauses),
+            DefKind::TypeAlias { tparams, .. } => (tparams, &[]),
+            DefKind::Val { .. } => (&[], &[]),
+        };
+        // The parameters walked where the file annotates one.
+        tparams.iter().any(|tp| !tp.annots.is_empty()) || (!self.param_annots.is_empty() && clauses.iter().flat_map(|c| c.params.iter()).any(|p| !p.annots.is_empty()))
     }
 
     /// The range of the whole definition, or its name's span where the parser has none.

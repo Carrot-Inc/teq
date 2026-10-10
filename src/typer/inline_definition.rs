@@ -353,7 +353,6 @@ impl<'a> Worker<'a> {
         let marks = (self.diags.items.len(), self.deferred_matches.len(), self.deferred_bounds.len());
         let notes = Notes { sym, tparams: sig.tparams.clone(), pattern_tparams: Vec::new(), reducible: Vec::new(), deferred: Vec::new(), type_args: Vec::new(), splices: Vec::new(), leaf_tests: Vec::new(), imports: Vec::new(), hoisted: Vec::new(), pending_imports: Vec::new(), unplaced_aliases: Vec::new(), pending_aliases: Vec::new(), aliases: Vec::new(), classes: Vec::new(), class_bodies: Vec::new(), inline_vals: Vec::new(), inferred_vals: Vec::new(), held: None };
         let case_binders = std::mem::take(&mut self.case_binders);
-        let nowarn = std::mem::replace(&mut self.nowarn, 0);
         self.outside_annotation(|t| {
             t.outside_search(|t| {
                 t.outside_inline(|t| {
@@ -365,7 +364,6 @@ impl<'a> Worker<'a> {
                 })
             })
         });
-        self.nowarn = nowarn;
         self.case_binders = case_binders;
         self.drop_reported_since(marks.0);
         self.deferred_matches.truncate(marks.1);
@@ -391,9 +389,7 @@ impl<'a> Worker<'a> {
     /// body's (`again`), which `check_definition_in_body` reads to tell a failed definition, its
     /// warnings reported, as the walk's own check reports them.
     pub(super) fn check_definition_in(&mut self, sym: SymId, env: super::Env) {
-        let nowarn = std::mem::replace(&mut self.nowarn, 0);
         self.again(|t| t.check_definition_in_body(sym, env));
-        self.nowarn = nowarn;
     }
 
     fn check_definition_in_body(&mut self, sym: SymId, env: super::Env) {
@@ -1783,9 +1779,6 @@ impl<'a> Worker<'a> {
         }
         let outer_return = self.return_to.take();
         let outer_returns = std::mem::take(&mut self.returns);
-        let own_nowarn = def.annots.iter().any(|a| a.name == crate::names::NOWARN) as u32;
-        let outer_nowarn = self.nowarn;
-        self.nowarn = self.enclosing_nowarn(sym) + own_nowarn;
         let transparent = def.mods & mods::TRANSPARENT != 0;
         let defaults = self.enter_params(sig, &default_exprs, frame);
         let (te, ty) = if declared {
@@ -1795,7 +1788,6 @@ impl<'a> Worker<'a> {
             let ty = if transparent { self.solve_in(ty) } else { self.solve_inferred(ty) };
             (te, ty)
         };
-        self.nowarn = outer_nowarn;
         self.returns = outer_returns;
         self.return_to = outer_return;
         self.defining = outer_defining;

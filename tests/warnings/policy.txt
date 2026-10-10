@@ -1,0 +1,61 @@
+# The option, severity and suppression matrix of tests/warnings/policy.sh: per line a probe of
+# tests/warnings/policy and scalac's options for one run of it; teq's flags are made of them
+# (policy.py teq). Captured by tests/warnings/capture-policy.sh into tests/warnings/expected/policy.
+deprecation:
+deprecation: -deprecation
+deprecation: -Werror
+deprecation: -deprecation -Werror
+deprecation: -Wconf:cat=deprecation:s -Werror
+deprecation: -Wconf:cat=deprecation:w
+deprecation: -Wconf:any:e
+deprecation: -Wconf:origin=old:s -Werror
+deprecation: -Wconf:any:v -deprecation
+deprecation_kinds: -deprecation
+deprecation_kinds:
+deprecated_alias: -deprecation -Werror
+deprecated_alias:
+deprecated_annotation: -deprecation -Werror
+deprecated_annotation_alias: -deprecation -Werror
+deprecated_annotation_alias:
+deprecated_override: -deprecation -Werror
+deprecated_override:
+deprecated_given: -deprecation -Werror
+feature:
+feature: -feature
+feature: -Werror
+feature: -feature -Werror
+feature: -Wconf:cat=feature:e
+feature_kinds: -feature
+feature_star: -feature -Werror
+feature_hide: -feature -Werror
+feature_nested: -feature -Werror
+tostring: -Wtostring-interpolated
+tostring:
+interpolation_calls: -Wtostring-interpolated
+nowarn_filter: -Wunused:imports -Werror
+nowarn_typed: -Wunused:explicits
+nowarn_typed: -Wunused:explicits,nowarn
+nowarn_invalid:
+nowarn_invalid: -Werror
+nowarn_unused: -Wunused:nowarn
+nowarn_unused: -Wunused:nowarn,imports -deprecation
+nowarn_unused: -Wunused:nowarn -Werror
+nowarn_scopes: -Wunused:imports -deprecation
+nowarn_scopes: -Wunused:imports
+wconf: -Wunused:imports -Wconf:id=E198:e
+wconf: -Wunused:imports -Wconf:id=E198:s -Werror
+wconf: -Wunused:imports -Wconf:cat=unused:e
+wconf: -Wunused:imports -Wconf:cat=unused:e -Werror
+wconf: -Wunused:imports -Wconf:any:e,id=E198:s
+wconf: -Wunused:imports -Wconf:id=E198:s -Wconf:any:e
+wconf: -Wunused:imports -Wconf:msg=unused:i -Werror
+wconf: -Wunused:imports -Wconf:name=UnusedSymbol:s -Werror
+wconf: -Wunused:imports -Wconf:src=wconf:e
+wconf: -Wunused:imports -Wconf:origin=O.x:s -Werror
+wconf: -Wunused:imports -Wconf:id=E198
+wconf: -Wunused:imports -Wconf:id=E0:s
+wconf: -Wunused:imports -Wconf:any:v
+unused_constant: -Wunused:explicits
+unused_constant: -Wunused:explicits -Werror
+overlap: -deprecation -Wtostring-interpolated
+overlap: -Wtostring-interpolated

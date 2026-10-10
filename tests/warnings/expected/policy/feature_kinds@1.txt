@@ -1,0 +1,4 @@
+exit 0
+warning 10:16 Definition of implicit conversion method notOne should be enabled
+warning 2:16 Definition of implicit conversion method toStr should be enabled
+warning 3:16 Definition of implicit conversion method toLen should be enabled

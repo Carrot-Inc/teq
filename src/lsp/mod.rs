@@ -601,6 +601,9 @@ struct Server {
     insert_replace: bool,
     /// Whether the client takes a completion item's text as a snippet.
     snippets: bool,
+    /// Whether the client takes a workspace edit as document changes, each naming the version of
+    /// the document it edits.
+    document_changes: bool,
 }
 
 
@@ -652,6 +655,7 @@ pub fn run(args: &[String]) -> ! {
         session_idle: SESSION_IDLE,
         insert_replace: false,
         snippets: false,
+        document_changes: false,
     };
     server.serve(inbox)
 }
@@ -843,6 +847,7 @@ impl Server {
             "textDocument/prepareCallHierarchy" => self.at_position(id, method, params, "prepare-call", ""),
             "textDocument/completion" => self.complete(id, params),
             "completionItem/resolve" => self.resolve_item(id, params),
+            "textDocument/codeAction" => self.code_actions(id, params),
             "textDocument/documentSymbol" => match document_path(params) {
                 Some(path) if self.library_document_changed(&path) => respond(&id, Json::Null),
                 Some(path) => {
@@ -1166,6 +1171,44 @@ impl Server {
         }
     }
 
+    /// `textDocument/codeAction`: a quick fix for each diagnostic published on the document whose
+    /// range meets the one asked on and that carries the compiler's change (an unused import's
+    /// removal, `typer::unused_edits`). The edits were computed on the text the diagnostics were
+    /// published for: where the document changed since, there are none until the next build's
+    /// diagnostics are.
+    fn code_actions(&mut self, id: Json, params: &Json) {
+        let none = || Json::Arr(Vec::new());
+        let only = params.at(&["context", "only"]).map(Json::arr);
+        if only.is_some_and(|kinds| !kinds.iter().any(|k| matches!(k.str(), Some("quickfix" | "")))) {
+            return respond(&id, none());
+        }
+        let Some(path) = document_path(params) else { return respond(&id, none()) };
+        let current = self.docs.get(&path).map(|d| d.version);
+        let Some((published, version)) = self.published.get(&path).filter(|(_, v)| *v == current) else { return respond(&id, none()) };
+        let point = |p: Option<&Json>| -> Option<(u32, u32)> { Some((p?.get("line")?.uint()?, p?.get("character")?.uint()?)) };
+        let (Some(from), Some(to)) = (point(params.at(&["range", "start"])), point(params.at(&["range", "end"]))) else { return respond(&id, none()) };
+        let uri = self.client_uri(&path);
+        let mut actions = Vec::new();
+        for d in published {
+            let Some(action) = d.at(&["data", "action"]) else { continue };
+            let (Some(start), Some(end)) = (point(d.at(&["range", "start"])), point(d.at(&["range", "end"]))) else { continue };
+            if end < from || to < start {
+                continue;
+            }
+            let edits = action.get("edits").cloned().unwrap_or(Json::Arr(Vec::new()));
+            let edit = match version {
+                Some(v) if self.document_changes => {
+                    let document = obj([("uri", uri.clone().into()), ("version", Json::Num(*v as f64))]);
+                    obj([("documentChanges", Json::Arr(vec![obj([("textDocument", document), ("edits", edits)])]))])
+                }
+                _ => obj([("changes", Json::Obj(vec![(uri.clone(), edits)]))]),
+            };
+            let title = action.get("title").and_then(Json::str).unwrap_or("").to_string();
+            actions.push(obj([("title", title.into()), ("kind", "quickfix".into()), ("diagnostics", Json::Arr(vec![d.clone()])), ("isPreferred", true.into()), ("edit", edit)]));
+        }
+        respond(&id, Json::Arr(actions));
+    }
+
     fn initialize(&mut self, id: &Json, params: &Json) {
         let offered = params.at(&["capabilities", "general", "positionEncodings"]).map(Json::arr).unwrap_or(&[]);
         self.positions = if offered.iter().any(|e| e.str() == Some("utf-8")) { "utf-8" } else { "utf-16" };
@@ -1201,9 +1244,11 @@ impl Server {
             ("implementationProvider", true.into()),
             ("callHierarchyProvider", true.into()),
             ("completionProvider", obj([("triggerCharacters", Json::Arr(vec![".".into()])), ("resolveProvider", true.into())])),
+            ("codeActionProvider", obj([("codeActionKinds", Json::Arr(vec!["quickfix".into()]))])),
         ]);
         self.insert_replace = params.at(&["capabilities", "textDocument", "completion", "completionItem", "insertReplaceSupport"]).and_then(Json::bool) == Some(true);
         self.snippets = params.at(&["capabilities", "textDocument", "completion", "completionItem", "snippetSupport"]).and_then(Json::bool) == Some(true);
+        self.document_changes = params.at(&["capabilities", "workspace", "workspaceEdit", "documentChanges"]).and_then(Json::bool) == Some(true);
         self.watch_files = params.at(&["capabilities", "workspace", "didChangeWatchedFiles", "dynamicRegistration"]).and_then(Json::bool) == Some(true);
         self.progress = params.at(&["capabilities", "window", "workDoneProgress"]).and_then(Json::bool) == Some(true);
         respond(id, obj([("capabilities", capabilities), ("serverInfo", obj([("name", "teq".into()), ("version", env!("CARGO_PKG_VERSION").into())]))]));
@@ -2219,6 +2264,11 @@ impl Server {
             let mut diagnostic = obj([("range", range), ("severity", severity.into()), ("source", "teq".into()), ("message", message.into())]);
             if let (Some(tags), Json::Obj(fields)) = (d.get("tags"), &mut diagnostic) {
                 fields.push(("tags".to_string(), tags.clone()));
+            }
+            // The change the compiler proposes (an unused import's removal) goes in the `data`
+            // the protocol keeps with the diagnostic, which `textDocument/codeAction` reads.
+            if let (Some(action), Json::Obj(fields)) = (d.get("action"), &mut diagnostic) {
+                fields.push(("data".to_string(), obj([("action", action.clone())])));
             }
             let list = by_file.entry(file).or_default();
             if !list.contains(&diagnostic) {

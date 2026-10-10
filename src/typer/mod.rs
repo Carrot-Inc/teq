@@ -10,9 +10,11 @@ mod complete;
 mod conversions;
 pub mod deps;
 mod depfun;
+pub mod deprecation;
 mod deferred;
 mod derive;
 mod exceptions;
+pub mod feature;
 pub mod exports;
 pub mod export_plan;
 mod expr;
@@ -43,6 +45,7 @@ pub use expr::WITHHELD_TEMPLATE;
 pub use inline::MAX_INLINES;
 pub use measured::reach_mode_error;
 pub use resolve::{TermRef, TypeRef};
+mod referents;
 mod reflective;
 mod restrict;
 pub mod setters;
@@ -53,8 +56,12 @@ mod space;
 mod state;
 pub mod stdlib;
 mod subtype;
+mod suppress;
 mod tailrec;
+mod tostring;
 pub mod unused;
+mod unused_defs;
+mod unused_edits;
 
 use crate::ast::{Ast, Asts, ListRef};
 use crate::intern::{FxMap, Interner, Name};
@@ -520,8 +527,10 @@ pub struct ResolvedImport {
     pub target: ImportTarget,
     /// What a wildcard leaves out (`{a as _, b as c, *}`), in `Worker::import_hidden`.
     pub hidden: ListRef,
-    /// The type a `given T` selector bounds the givens it brings by (`ImportInfo.givenBound`);
-    /// `Nothing` for a name a clause with a wildcard renames, which brings none.
+    /// The type a `given` selector bounds the givens it brings by (`ImportInfo.givenBound`,
+    /// `Namer.importBound`): the union of its clause's `given T` types, none where that is `Any`
+    /// or erroneous (`Worker::given_bounds`); `Nothing` for a name a clause with a wildcard
+    /// renames, which brings none.
     pub bound: Option<TypeId>,
     /// How many frames enclose the import, 0 at the top of a file. Its givens are as near as
     /// the givens of the innermost of those frames.
@@ -664,6 +673,11 @@ pub struct Worker<'a> {
     /// The arguments typed are a Java method's (`apply_method`), whose varargs take a sequence
     /// spread as a copy (`ElimRepeated.adaptToArray`).
     pub java_varargs: bool,
+    /// The literal parts of the `StringContext(parts).s|raw|f(args)` the application being
+    /// typed writes, and the call its arguments are linted for once it resolves to the standard
+    /// interpolator (`tostring.rs`).
+    pub interp_parts: Option<(Span, ListRef)>,
+    pub interp_call: Option<tostring::InterpCall>,
     /// Under a member's application (`apply::apply_member_or_extension`, `logging` deep): each
     /// type mismatch reported, by its diagnostic's index and span, with the type it required.
     pub mismatches: Vec<(usize, Span, TypeId)>,
@@ -763,8 +777,6 @@ pub struct Worker<'a> {
     /// The `return` expressions of the body being typed, for the warning on those a lambda
     /// separates from their method.
     pub returns: Vec<(TExprId, Span)>,
-    /// How many `@nowarn` definitions enclose the code being typed.
-    pub nowarn: u32,
     /// The unused-import check's marks and mode (`unused.rs`).
     pub unused: unused::Unused,
     /// Set while a check runs whose findings depend on malformed syntax, the coverage of a
@@ -861,7 +873,7 @@ pub struct Worker<'a> {
     /// Variables carried through a for-comprehension when a guard follows value definitions.
     /// The values a `for`'s value definitions pack for the generator after a guard: the name,
     /// the type and whether it is a given.
-    pub for_packs: Vec<Vec<(Name, TypeId, bool)>>,
+    pub for_packs: Vec<Vec<(Name, TypeId, bool, SymId)>>,
     pub for_bases: Vec<usize>,
     pub given_indexes: FxMap<PkgId, std::sync::Arc<implicits::GivenIndex>>,
     /// Shared signatures for plain values, so that locals do not allocate one each.
@@ -1038,6 +1050,9 @@ pub struct Worker<'a> {
     /// receiver and the member it names: a path still where a singleton type is expected of it
     /// (`def cond(): C.f.type = C.f`), as scalac folds only after typing.
     pub folded_paths: FxMap<TExprId, (TExprId, SymId)>,
+    /// Whether a deprecated constant member was folded (`folded_paths`), which a literal's
+    /// deprecation check then looks up: rarely, so the check of every other literal is a test.
+    pub folded_deprecated: bool,
     /// Set while the qualifier of an explicit `.apply` is typed: `Box[Int].apply` names the
     /// `apply` of `Box`, which no summoner sugar replaces.
     pub apply_selected: bool,
@@ -1823,6 +1838,7 @@ impl<'a> Typer<'a> {
             w.check_deferred_bounds();
             w.phase_end(p);
             w.report_unused(None);
+            w.register_suppressions();
             w.tell_cacheable_warnings();
             w.index_settle();
             crate::measure::phase_done("final");
@@ -2017,6 +2033,8 @@ impl<'a> Worker<'a> {
             spread_arg: false,
             spread_was_array: false,
             java_varargs: false,
+            interp_parts: None,
+            interp_call: None,
             mismatches: Vec::new(),
             logging: 0,
             app_depth: 0,
@@ -2054,7 +2072,6 @@ impl<'a> Worker<'a> {
             blocked_conversion: None,
             return_to: None,
             returns: Vec::new(),
-            nowarn: 0,
             unused: Default::default(),
             dependent_checks: 0,
             recovered: false,
@@ -2153,6 +2170,7 @@ impl<'a> Worker<'a> {
             expr_marks: FxMap::default(),
             eta_expansions: FxMap::default(),
             folded_paths: FxMap::default(),
+            folded_deprecated: false,
             apply_selected: false,
             gadt: Vec::new(),
             wildcards_used: std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false)),
@@ -2333,6 +2351,8 @@ impl<'a> Worker<'a> {
             spread_arg: false,
             spread_was_array: false,
             java_varargs: false,
+            interp_parts: None,
+            interp_call: None,
             mismatches: Vec::new(),
             logging: 0,
             app_depth: 0,
@@ -2366,7 +2386,6 @@ impl<'a> Worker<'a> {
             blocked_conversion: Default::default(),
             return_to: Default::default(),
             returns: Default::default(),
-            nowarn: Default::default(),
             unused: self.unused.attach(),
             dependent_checks: Default::default(),
             recovered: self.recovered,
@@ -2454,6 +2473,7 @@ impl<'a> Worker<'a> {
             expr_marks: self.expr_marks.clone(),
             eta_expansions: self.eta_expansions.clone(),
             folded_paths: self.folded_paths.clone(),
+            folded_deprecated: self.folded_deprecated,
             apply_selected: Default::default(),
             gadt: Default::default(),
             wildcards_used: self.wildcards_used.clone(),
@@ -3349,14 +3369,16 @@ impl<'a> Worker<'a> {
     }
 
     /// Warnings concern the program, not the std it is compiled with or the library bodies
-    /// scalac checked.
+    /// scalac checked. A warning is kept whatever `@nowarn` encloses it: the reporting policy
+    /// filters it when the build is presented (`warnings.rs`).
     pub fn warn(&mut self, span: Span, msg: impl Into<String>) {
-        if self.nowarn == 0 && !self.source(self.env.file).is_std && !self.is_body_file(self.env.file) {
-            if self.dependent_checks > 0 {
-                self.diags.dependent_warn(self.env.file, span, msg);
-            } else {
-                self.diags.warn(self.env.file, span, msg);
-            }
+        self.warn_as(span, msg, crate::source::Warning::plain());
+    }
+
+    /// A warning with its identity (`Diagnostic::id`).
+    pub fn warn_as(&mut self, span: Span, msg: impl Into<String>, w: crate::source::Warning) {
+        if !self.source(self.env.file).is_std && !self.is_body_file(self.env.file) {
+            self.diags.warn_as(self.env.file, span, msg, w, self.dependent_checks > 0);
         }
     }
 
@@ -3539,9 +3561,47 @@ impl<'a> Worker<'a> {
     }
 
     /// The diagnostics rendered in the canonical order of the files.
-    pub fn render_diags(&mut self) -> String {
+    /// The report of the diagnostics as the reporting policy presents them (`warnings.rs`), its
+    /// errors and warnings counted; what it shows is printed once (`report_new_diags`).
+    pub fn report_diags(&mut self) -> (String, usize, usize) {
+        if !self.reports_anything(0) {
+            self.diags.printed = Some(self.diags.items.len());
+            return (String::new(), 0, 0);
+        }
+        let sources = self.report_sources(0);
+        let report = self.diags.report(&sources);
+        let text = crate::source::render_shown(&report.shown, &sources, &self.syms.file_ranks);
+        let counts = (report.errors, report.warnings);
+        self.diags.printed = Some(self.diags.items.len());
+        (text, counts.0, counts.1)
+    }
+
+    /// The diagnostics reported since the last report (`Diagnostics::report_from`), which it
+    /// did not show: the errors a JavaScript build's reach or an interpreted run met.
+    pub fn report_new_diags(&mut self) -> (String, usize) {
+        let sources = self.report_sources(self.diags.printed.unwrap_or(0));
+        let report = self.diags.report_from(&sources, self.diags.printed);
+        let text = crate::source::render_shown(&report.shown, &sources, &self.syms.file_ranks);
+        let errors = report.errors;
+        self.diags.printed = Some(self.diags.items.len());
+        (text, errors)
+    }
+
+    /// The sources a report of the diagnostics from `from` on reads (the paths `-Wconf` and
+    /// `@nowarn` match, the places it shows), the files ranked: none where it has nothing to
+    /// read them for, as a build that reports nothing renders nothing.
+    fn report_sources(&mut self, from: usize) -> Vec<crate::source::SourceFile> {
+        if !self.reports_anything(from) {
+            return Vec::new();
+        }
         self.rank_files();
-        self.diags.render_ranked(&self.all_sources(), &self.syms.file_ranks)
+        self.all_sources()
+    }
+
+    /// Whether a report of the diagnostics from `from` on has anything to show: a diagnostic,
+    /// or a `@nowarn` that may report itself unused.
+    fn reports_anything(&self, from: usize) -> bool {
+        self.diags.items.len() > from || !self.diags.suppressions.is_empty() || !self.diags.suppression_warnings.is_empty()
     }
 
     /// Owned so that messages can be built while the typer is borrowed mutably.

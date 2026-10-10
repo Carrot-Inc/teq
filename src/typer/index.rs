@@ -77,7 +77,7 @@ pub(super) struct Recorded {
 /// What an attempt recorded, taken out (`Worker::index_take_except`).
 pub(super) struct Taken {
     records: Vec<(FileId, Record)>,
-    marks: Vec<(super::unused::Sel, u8)>,
+    marks: Vec<(super::unused::Key, u8)>,
 }
 
 #[derive(Clone, Copy, Debug)]

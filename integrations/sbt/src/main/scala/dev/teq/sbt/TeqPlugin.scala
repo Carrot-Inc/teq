@@ -679,15 +679,29 @@ object TeqPlugin extends AutoPlugin:
     werror: Boolean,
     javaOutputVersion: Option[Int],
     ignored: Seq[String],
-    wunusedImports: Boolean = false,
+    wunused: Seq[String] = Nil,
+    deprecation: Boolean = false,
+    feature: Boolean = false,
+    wtostringInterpolated: Boolean = false,
+    wconf: Seq[String] = Nil,
+    language: Seq[String] = Nil,
   ):
+    /** Whether the unused imports are reported, as scalac's `WunusedHas.imports` reads the kinds. */
+    def wunusedImports: Boolean =
+      (wunused.contains("all") || wunused.contains("imports") || wunused.contains("linted")) && !wunused.contains("strict-no-implicit-warn")
+
     /** The teq flags the options map onto; the output version is a JVM build's alone. */
     def flags(jvm: Boolean): Seq[String] =
       maxInlines.toSeq.flatMap(n => Seq("--max-inlines", n.toString)) ++
         (if strictEquality then Seq("--strict-equality") else Nil) ++
         (if kindProjector then Seq("--kind-projector") else Nil) ++
+        (if language.nonEmpty then Seq("--language", language.mkString(",")) else Nil) ++
         (if werror then Seq("--werror") else Nil) ++
-        (if wunusedImports then Seq("--wunused", "imports") else Nil) ++
+        (if wunused.nonEmpty then Seq("--wunused", wunused.mkString(",")) else Nil) ++
+        (if deprecation then Seq("--deprecation") else Nil) ++
+        (if feature then Seq("--feature") else Nil) ++
+        (if wtostringInterpolated then Seq("--wtostring-interpolated") else Nil) ++
+        wconf.flatMap(rules => Seq("--wconf", rules)) ++
         (if jvm then javaOutputVersion.toSeq.flatMap(n => Seq("--java-output-version", n.toString)) else Nil)
 
   private[sbt] object ScalacOptions:
@@ -700,7 +714,12 @@ object TeqPlugin extends AutoPlugin:
       var strictEquality = false
       var kindProjector = false
       var werror = false
-      var wunusedImports = false
+      var deprecation = false
+      var feature = false
+      var wtostringInterpolated = false
+      val wunused = mutable.ArrayBuffer.empty[String]
+      val wconf = mutable.ArrayBuffer.empty[String]
+      val language = mutable.ArrayBuffer.empty[String]
       val versions = mutable.Map.empty[String, Int]
       val ignored = mutable.ArrayBuffer.empty[String]
       var rest = options.toList
@@ -727,29 +746,38 @@ object TeqPlugin extends AutoPlugin:
           case ("-Werror" | "-Xfatal-warnings") :: tail =>
             werror = true
             rest = tail
-          // scalac's `-Wunused` with its kinds: teq reports the unused imports (`--wunused
-          // imports`), which a bare `-Wunused`, `all`, `linted` or `imports` asks for; the other
-          // kinds are ignored. `-Wall` asks for every unused kind among the rest of its warnings.
+          case ("-deprecation" | "--deprecation") :: tail =>
+            deprecation = true
+            rest = tail
+          case ("-feature" | "--feature") :: tail =>
+            feature = true
+            rest = tail
+          case "-Wtostring-interpolated" :: tail =>
+            wtostringInterpolated = true
+            rest = tail
+          // scalac's `-Wconf` rules, in their order: teq's `--wconf`, the rightmost deciding.
+          case option :: tail if option.startsWith("-Wconf:") =>
+            wconf += option.stripPrefix("-Wconf:")
+            rest = tail
+          // scalac's `-Wunused` with its kinds, each given adding to the ones before, which teq
+          // takes as they are (`--wunused`); a bare `-Wunused` is every kind.
           case "-Wunused" :: tail =>
-            wunusedImports = true
+            wunused += "all"
             rest = tail
           case option :: tail if option.startsWith("-Wunused:") =>
-            val kinds = option.stripPrefix("-Wunused:").split(",").toSeq.map(_.trim).filter(_.nonEmpty)
-            for kind <- kinds do kind match
-              case "imports" | "all" | "linted" => wunusedImports = true
-              case "-imports" => wunusedImports = false
-              case _ => ()
-            val others = kinds.filterNot(Set("imports", "-imports"))
-            if others.nonEmpty then ignored += others.mkString("-Wunused:", ",", "")
+            wunused ++= option.stripPrefix("-Wunused:").split(",").toSeq.map(_.trim).filter(_.nonEmpty)
             rest = tail
+          // `-Wall` asks for every unused kind and `-Wtostring-interpolated` among the rest of its
+          // warnings, which teq does not give.
           case "-Wall" :: tail =>
-            wunusedImports = true
+            wunused += "all"
+            wtostringInterpolated = true
             ignored += "-Wall"
             rest = tail
           case option :: tail if option.startsWith("-language:") =>
-            val (strict, others) = option.stripPrefix("-language:").split(",").toSeq.partition(_ == "strictEquality")
+            val (strict, others) = option.stripPrefix("-language:").split(",").toSeq.map(_.trim).filter(_.nonEmpty).partition(_ == "strictEquality")
             if strict.nonEmpty then strictEquality = true
-            if others.nonEmpty then ignored += others.mkString("-language:", ",", "")
+            language ++= others
             rest = tail
           case option :: argument :: tail if withArgument(option) =>
             ignored += s"$option $argument"
@@ -759,7 +787,7 @@ object TeqPlugin extends AutoPlugin:
             rest = tail
           case Nil => ()
       val javaOutputVersion = outputVersion.collectFirst { case name if versions.contains(name) => versions(name) }
-      ScalacOptions(maxInlines, strictEquality, kindProjector, werror, javaOutputVersion, ignored.distinct.toSeq, wunusedImports)
+      ScalacOptions(maxInlines, strictEquality, kindProjector, werror, javaOutputVersion, ignored.distinct.toSeq, wunused.distinct.toSeq, deprecation, feature, wtostringInterpolated, wconf.toSeq, language.distinct.toSeq)
 
   private final case class Description(
     root: File,

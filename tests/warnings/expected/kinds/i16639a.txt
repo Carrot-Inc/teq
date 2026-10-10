@@ -1,0 +1,42 @@
+4:15:4 unused private member
+5:15:4 unused private member
+6:17:5 unused private member
+7:21:7 unused private member
+8:21:7 unused private member
+15:15:12 unused private member
+16:20:4 unused private member
+22:10:4 unused explicit parameter
+27:15:2 unused private member
+28:15:2 unset private variable, consider using an immutable val instead
+29:15:2 private variable was mutated but not read
+32:21:2 unset private variable, consider using an immutable val instead
+33:21:2 private variable was mutated but not read
+46:15:2 unused private member
+47:15:2 unset private variable, consider using an immutable val instead
+48:15:2 private variable was mutated but not read
+51:21:2 unset private variable, consider using an immutable val instead
+52:21:2 private variable was mutated but not read
+65:40:5 unused private member
+65:54:5 unused private member
+77:9:1 unused local definition
+84:9:1 unused local definition
+88:9:1 unset local variable, consider using an immutable val instead
+94:18:5 unused private member
+95:17:4 unused private member
+97:16:6 unused private member
+104:12:8 unused local definition
+105:11:2 unused local definition
+109:11:14 unused local definition
+112:10:10 unused local definition
+127:15:3 unused private member
+128:15:1 unused private member
+129:15:3 unused private member
+148:8:1 unused pattern variable
+148:11:1 unused pattern variable
+154:15:11 unused private member
+161:10:1 unused pattern variable
+167:15:1 unused pattern variable
+168:15:1 unused pattern variable
+176:27:18 unused private member
+192:17:1 unused private member
+202:9:1 unused local definition

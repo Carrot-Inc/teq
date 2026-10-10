@@ -1050,6 +1050,36 @@ unused_imports_session() {
 }
 unused_imports_session
 
+# --- Unused definitions without the index ---------------------------------------------------------
+# A session under --wunused privates and --werror: a private class a signature names stays used
+# across a body's retype and an edit that moves it (its mark moved with its name), and an edit taking
+# a private val's only read away makes it a warning, which --werror fails.
+unused_definitions_session() {
+  local src=$work/unused-defs
+  rm -rf "$src"
+  mkdir -p "$src"
+  printf 'object Use {
+  private class T
+  private val u = 1
+  def f(t: T): Int = 1
+  def g: Int = u
+}
+' > "$src/a.scala"
+  start "$src" --wunused privates --werror
+  expect "unused definitions: the first build" "$(field ok),$(count warning)" 'true,0'
+  sed -i.bak 's/def g: Int = u/def g: Int = u + 1/' "$src/a.scala"
+  build "$src/a.scala"
+  expect "unused definitions: a body's retype keeps the signature's use" "$(field ok),$(field incremental),$(count warning)" 'true,true,0'
+  sed -i.bak 's/def g: Int = u + 1/def g: Int = 3/' "$src/a.scala"
+  build "$src/a.scala"
+  expect "unused definitions: the body's only read taken away" "$(field ok),$(field incremental),$(count warning)" 'false,true,1'
+  sed -i.bak 's/^object Use {/\/\/ moved\nobject Use {/' "$src/a.scala"
+  build "$src/a.scala"
+  expect "unused definitions: the signature's use moved with the class" "$(field ok),$(count warning)" 'false,1'
+  stop
+}
+unused_definitions_session
+
 # --- One file after another ---------------------------------------------------------------------
 retype_entry
 retype_entry --index

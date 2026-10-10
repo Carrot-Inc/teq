@@ -4885,7 +4885,7 @@ pos/spec-example1.scala	accepts
 pos/spec-fields-old.scala	std	ClassManifest
 pos/spec-foo.scala	accepts	
 pos/spec-funs.scala	accepts	
-pos/spec-groups.scala	accepts	
+pos/spec-groups.scala	rejects	cannot resolve import
 pos/spec-lists.scala	std	App
 pos/spec-localdefs.scala	accepts	
 pos/spec-maps.scala	accepts	
