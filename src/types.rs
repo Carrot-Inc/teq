@@ -1385,7 +1385,8 @@ impl TypeStore {
                 }
             }
             Type::Poly(ps, body) => {
-                let inner = self.unshadowed(ps, s);
+                // Its list holds the parameters, then their bounds: the parameters alone bind.
+                let inner = self.unshadowed_among(self.poly_params(ps), s);
                 let s = inner.as_ref().unwrap_or(s);
                 let b = self.subst(body, s);
                 let items = self.items(ps).to_vec();
@@ -1514,10 +1515,17 @@ impl TypeStore {
     /// `s` without the parameters the binder list `ps` binds (a lambda's, a polymorphic
     /// function's, a match case's), where it maps one of them: None where none is shadowed.
     fn unshadowed(&self, ps: TList, s: &Subst) -> Option<Subst> {
-        if ps == EMPTY_LIST || s.is_empty() {
+        if ps == EMPTY_LIST {
             return None;
         }
-        let items = self.items(ps);
+        self.unshadowed_among(self.items(ps), s)
+    }
+
+    /// `unshadowed` over the binders `items`, `Param` types.
+    fn unshadowed_among(&self, items: &[TypeId], s: &Subst) -> Option<Subst> {
+        if items.is_empty() || s.is_empty() {
+            return None;
+        }
         let bound = |q: TParamId| items.iter().any(|&x| matches!(self.get(x), Type::Param(p) if p == q));
         if !s.iter().any(|&(q, _)| bound(q)) {
             return None;
@@ -3853,6 +3861,14 @@ mod tests {
         let inner = s.mk(Type::Lambda(s.list(&[pt]), s.union(pt, NOTHING)));
         assert_eq!(s.subst(outer, &subst), s.inter(ANY, inner));
         assert_eq!(s.subst(lambda, &vec![(p, ANY)]), lambda);
+        // `[T <: U] => T => U` substituted for `U`: a bound naming an outer parameter is no binder.
+        let (t, u) = (TParamId(3), TParamId(4));
+        let (tt, ut) = (s.param(t), s.param(u));
+        let fun = s.class(ClassId(9), &[tt, ut]);
+        let poly = s.mk(Type::Poly(s.list(&[tt, NOTHING, ut]), fun));
+        let done = s.mk(Type::Poly(s.list(&[tt, NOTHING, ANY]), s.class(ClassId(9), &[tt, ANY])));
+        assert_eq!(s.subst(poly, &vec![(u, ANY)]), done);
+        assert_eq!(s.subst(poly, &vec![(t, ANY)]), poly);
     }
 
     /// A class a worker made has a tagged id: its mark is sparse, not a table sized by the tag.

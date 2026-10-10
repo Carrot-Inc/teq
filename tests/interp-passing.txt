@@ -1004,6 +1004,7 @@ pkgobj_inherited_members
 placeholder_params
 placeholder_type_args
 poly_context_function
+poly_function_outer_bound
 poly_functions
 poly_named_params
 predef_std
