@@ -546,6 +546,15 @@ impl<'a> Worker<'a> {
         }
         if let Type::Inter(x, y) = ta {
             let mark = self.snapshot();
+            // dotty's `secondTry` sends an `AndType` on the left to `thirdTry`, whose
+            // `compareRefined` takes it whole (its member a refinement of one part names the
+            // other part's member through it); the parts are tried after (`fourthTry`).
+            if let Type::Refined(parent, r) = tb {
+                if self.is_sub(a, parent) && self.refinement_holds(a, parent, r) {
+                    return true;
+                }
+                self.rollback(mark);
+            }
             if self.necessary_either && self.types.has_vars(x) && self.types.has_vars(y) {
                 if let Some(ok) = self.is_sub_inter_necessary(x, y, b, mark) {
                     return ok;

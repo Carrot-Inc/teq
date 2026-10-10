@@ -1035,6 +1035,7 @@ receiver_type_args_from_expected
 refined_aux_givens
 refined_projection_patterns
 refinement_alias_meets_bounds
+refinement_joint_members
 refinement_match_alias
 refinement_member_denotation
 refinement_member_scope

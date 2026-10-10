@@ -506,6 +506,9 @@ impl<'a> Worker<'a> {
                 let found = self.member_in_type(body, name, prefix)?;
                 Some(self.opened_member(found, prefix))
             }
+            // `Types.findMember`'s `goRefined`: an alias is the member's info as it stands, bounds
+            // are met with the parent's member (`pinfo & rinfo`), a refinement of a refinement
+            // of one name narrowing it on both sides.
             Type::Refined(parent, r) => match self.types.refinement(r) {
                 Refinement::Alias(n, rhs) if n == name => Some(MemberInfo::Alias(rhs)),
                 // A refinement's bounds narrow the member its parent has (a `RefinedType`'s
@@ -1888,7 +1891,8 @@ impl<'a> Worker<'a> {
             wanted_ref @ (Refinement::Term(name, ..) | Refinement::Val(name, ..)) => {
                 let wanted = self.refinement_sig(wanted_ref);
                 let refined = if self.types.is_path(t) { self.widen_path(t) } else { t };
-                let (sig, found, owner_ty, own) = match self.refined_term(refined, name) {
+                // A recursive refinement of `t`'s type is opened at `t`, as the wanted member was.
+                let (sig, found, owner_ty, own) = match self.refined_term_through(refined, name, t) {
                     Some(r @ (Refinement::Term(_, s, _) | Refinement::Val(_, s, _))) => (self.refinement_sig(r), s, ANY, true),
                     _ => {
                         let Some((found, owner_ty)) = self.find_member(t, name) else { return false };
@@ -2127,6 +2131,8 @@ impl<'a> Worker<'a> {
         loop {
             match self.types.get(t) {
                 Type::Rec(body) => t = self.opened_rec(body, prefix),
+                // `goAnd`: either side's refinement.
+                Type::Inter(a, b) => return self.refined_term_through(a, name, prefix).or_else(|| self.refined_term_through(b, name, prefix)),
                 Type::Refined(p, r) => {
                     let refinement = self.types.refinement(r);
                     if matches!(refinement, Refinement::Term(n, ..) | Refinement::Val(n, ..) if n == name) {
