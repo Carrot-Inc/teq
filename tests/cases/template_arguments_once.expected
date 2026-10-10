@@ -1,0 +1,12 @@
+hashCode 1 1
+toString 2 2
+signum -1 3
+trailing 3 4
+compare -1 6
+dropRight abc 7
+stripSuffix ab 9
+stripPrefix cd 10
+capitalize Abc 11
+named abkept 12
+order 1 12
+ab

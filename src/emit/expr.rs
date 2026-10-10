@@ -296,6 +296,79 @@ impl<'a> Emitter<'a> {
         }
     }
 
+    /// Whether an argument may be written wherever a template puts it, twice, never or behind a
+    /// condition, with the effect of evaluating it once where the call stands: scalac's
+    /// `exprPurity` at least `Idempotent`, below which `tpd.evalOnce` binds a tree before
+    /// using it again. A literal, `this`, an object, a class literal, a function (a by-name
+    /// argument is one), a stable local, field or getter over such a receiver, a cast of one; a
+    /// parameter of an outlined function goes by value or as a thunk to call. A primitive
+    /// operation over such operands that cannot throw is one too: scalac binds it (`isPureApply`
+    /// asks for a constant), but evaluating it again has no effect, so the text stays as written.
+    fn is_idempotent_arg(&self, e: TExprId) -> bool {
+        if let Some((_, kind)) = self.hole_of(e) {
+            return kind == HoleKind::Value;
+        }
+        let stable = |s: SymId| {
+            let info = self.syms.sym(s);
+            matches!(info.kind, SymKind::Val | SymKind::Param | SymKind::Given | SymKind::Object(_) | SymKind::EnumValue(_))
+                && info.mods & mods::MUTABLE == 0
+                && !info.by_name
+        };
+        match self.peek(e) {
+            TExpr::Int(_) | TExpr::Long(_) | TExpr::Double(_) | TExpr::Bool(_) | TExpr::Char(_) | TExpr::Str(_) | TExpr::Unit
+            | TExpr::Null | TExpr::This | TExpr::Super(_) | TExpr::Module(_) | TExpr::ClassOf(_) | TExpr::Lambda(..) => true,
+            TExpr::Local(s) | TExpr::Static(s) => stable(s),
+            TExpr::CallStatic(s, args) => args.len == 0 && stable(s),
+            TExpr::Field(r, s) => stable(s) && self.is_idempotent_arg(r),
+            TExpr::CallMethod(r, s, args) => args.len == 0 && stable(s) && self.is_idempotent_arg(r),
+            TExpr::Cast(r, ..) | TExpr::Unary(_, r) => self.is_idempotent_arg(r),
+            // Structural equality calls `equals`.
+            TExpr::Prim(op, a, b) => {
+                use PrimOp::*;
+                !matches!(op, IntDiv | IntRem | LongDiv | LongRem | Eq | Ne) && self.is_idempotent_arg(a) && self.is_idempotent_arg(b)
+            }
+            _ => self.is_closure(e),
+        }
+    }
+
+    /// The arguments a template call binds before its text, a bit per argument. The text writes
+    /// an argument where it puts it, which may be twice, never, behind a condition or out of
+    /// order, where a call evaluates each strict argument once, in order, before its body
+    /// (`tpd.evalOnce`; Scala.js's `genApply` keeps one tree per argument). Unless every
+    /// argument that is not idempotent is written once, in order and where the text always
+    /// evaluates it, each of them is bound, in order, as a parameter of an arrow function the
+    /// call applies to them. A spread argument, the last, is written as it stands.
+    pub(super) fn template_binds(&self, text: &str, args: &[TExprId]) -> u64 {
+        let impure: Vec<bool> = args.iter().map(|&a| !self.is_idempotent_arg(a)).collect();
+        if !impure.iter().any(|&i| i) {
+            return 0;
+        }
+        let mut written = 0u64;
+        let mut last = None;
+        let mut linear = true;
+        for (k, cond, spread) in template_slots(text) {
+            if k >= args.len() || !impure[k] {
+                continue;
+            }
+            if (cond && !spread) || written & (1 << k) != 0 || last.map_or(false, |l| k < l) {
+                linear = false;
+            }
+            written |= 1 << k;
+            last = Some(k);
+        }
+        let spread = |k: usize| text.contains(&format!("...${}", k));
+        let mut binds = 0u64;
+        for k in 0..args.len().min(64) {
+            if impure[k] && !spread(k) {
+                binds |= 1 << k;
+                if written & (1 << k) == 0 {
+                    linear = false;
+                }
+            }
+        }
+        if linear { 0 } else { binds }
+    }
+
     pub(super) fn seq_literal_items(&self, e: TExprId) -> Option<&'a [TExprId]> {
         match self.peek(e) {
             TExpr::SeqLit(items) => Some(self.prog.expr_list(items)),
@@ -680,7 +753,18 @@ impl<'a> Emitter<'a> {
             TExpr::Js(template, args) => {
                 let t = &prog.strings[template.idx()];
                 let args = prog.expr_list(args);
-                let wrap = !bare && matches!(template_shape(t), Shape::Compound { .. });
+                // The arguments evaluated once before the text: `(($t0) => text)(a0)`.
+                let binds = self.template_binds(t, args);
+                let bound = || (0..args.len()).filter(move |&k| binds & (1 << k) != 0);
+                if binds != 0 {
+                    self.out.push_str("((");
+                    for (n, k) in bound().enumerate() {
+                        let _ = write!(self.out, "{}$t{}", if n > 0 { ", " } else { "" }, k);
+                    }
+                    self.out.push_str(") => ");
+                }
+                let compound = matches!(template_shape(t), Shape::Compound { .. });
+                let wrap = if binds != 0 { compound || t.trim_start().starts_with('{') } else { !bare && compound };
                 if wrap {
                     self.out.push('(');
                 }
@@ -697,7 +781,10 @@ impl<'a> Emitter<'a> {
                         if cond {
                             self.enter_cond();
                         }
-                        if t[start..i].ends_with("...") {
+                        if binds & (1 << idx) != 0 {
+                            self.out.push_str(&t[start..i]);
+                            let _ = write!(self.out, "$t{}", idx);
+                        } else if t[start..i].ends_with("...") {
                             self.out.push_str(&t[start..i - 3]);
                             self.emit_template_spread(args.get(idx).copied(), &t[i + 2..]);
                         } else {
@@ -725,6 +812,18 @@ impl<'a> Emitter<'a> {
                 }
                 self.out.push_str(&t[start..]);
                 if wrap {
+                    self.out.push(')');
+                }
+                if binds != 0 {
+                    self.out.push_str(")(");
+                    for (n, k) in bound().enumerate() {
+                        if n > 0 {
+                            self.out.push_str(", ");
+                        }
+                        self.enter_cond();
+                        self.emit_value(args[k]);
+                        self.leave_cond();
+                    }
                     self.out.push(')');
                 }
             }
@@ -2146,6 +2245,43 @@ enum Shape {
     /// A binary operator, a conditional, an assignment, an arrow or a comma: parentheses as an
     /// operand; `conditional` for the kinds that also need them as a conditional's condition.
     Compound { conditional: bool },
+}
+
+/// A template's placeholders in the order its text writes them, as the emission substitutes
+/// them: the argument, whether the text may skip it or evaluate it again there (past a
+/// conditional operator, `?`, `&&`, `||`, or an arrow function's `=>`, outside a string), and
+/// whether it is spread.
+fn template_slots(t: &str) -> Vec<(usize, bool, bool)> {
+    let b = t.as_bytes();
+    let mut slots = Vec::new();
+    let mut cond = false;
+    let mut quote = 0u8;
+    let mut i = 0;
+    while i < b.len() {
+        let c = b[i];
+        if c == b'$' && b.get(i + 1).map_or(false, |d| d.is_ascii_digit()) {
+            slots.push(((b[i + 1] - b'0') as usize, cond, t[..i].ends_with("...")));
+            i += 2;
+            continue;
+        }
+        if quote != 0 {
+            if c == b'\\' {
+                i += 1;
+            } else if c == quote {
+                quote = 0;
+            }
+        } else {
+            match c {
+                b'"' | b'\'' | b'`' => quote = c,
+                b'?' => cond = true,
+                b'&' | b'|' if b.get(i + 1) == Some(&c) => cond = true,
+                b'=' if b.get(i + 1) == Some(&b'>') => cond = true,
+                _ => {}
+            }
+        }
+        i += 1;
+    }
+    slots
 }
 
 fn template_shape(t: &str) -> Shape {

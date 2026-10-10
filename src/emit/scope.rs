@@ -556,6 +556,10 @@ impl<'a> Renderable<'a> {
             }
             r.templates.insert(text, names);
         }
+        // The parameters a template call binds its arguments to (`Emitter::template_binds`).
+        for k in 0..10 {
+            add(&mut r.stems, &format!("$t{}", k));
+        }
         for &name in &reach.globals {
             add(&mut r.stems, interner.get(name));
         }
@@ -1776,11 +1780,23 @@ impl<'a> Emitter<'a> {
                 for name in &free {
                     w.name(name);
                 }
+                // An argument evaluated before the text is written once, outside the arrow
+                // function whose parameters name it there (`Emitter::template_binds`).
+                let binds = self.template_binds(&prog.strings[t.idx()], args);
+                let binders: Vec<String> = (0..args.len()).filter(|&k| binds & (1 << k) != 0).map(|k| format!("$t{}", k)).collect();
+                for (k, &a) in args.iter().enumerate() {
+                    if binds & (1 << k) != 0 {
+                        self.walk(w, a);
+                    }
+                }
                 // An argument the template has no placeholder for is not written.
                 for (k, names) in &around {
                     let Some(&a) = args.get(*k as usize) else { continue };
+                    if binds & (1 << k) != 0 {
+                        continue;
+                    }
                     let mark = w.top;
-                    for n in names {
+                    for n in names.iter().chain(binders.iter()) {
                         w.bind_fixed(n);
                     }
                     // A spread of literal varargs is written as its elements.
