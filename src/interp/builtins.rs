@@ -2306,10 +2306,19 @@ fn install_typer_templates(it: &mut Table) {
         let name = text(it, a, 1)?;
         it.reflective_member(arg(a, 0), &name, Vec::new())
     });
-    reg!(it, "scala.reflect.callByName", |it, a| {
+    reg!(it, "scala.reflect.callBySignature", |it, a| {
         let name = text(it, a, 1)?;
-        let args = array(it, a, 2)?.borrow().clone();
-        it.reflective_member(arg(a, 0), &name, args)
+        let classes = it.elements_of(&arg(a, 2))?;
+        let args = array(it, a, 3)?.borrow().clone();
+        let classes: Option<Vec<ClassId>> = classes.iter().map(|c| match c {
+            Value::Class(c) => c.class,
+            _ => None,
+        }).collect();
+        let names = match classes {
+            Some(classes) => crate::typer::reflective_names(it.syms(), it.typer.interner, &name, &classes),
+            None => vec![name.to_string()],
+        };
+        it.reflective_call(arg(a, 0), &names, args)
     });
     reg!(it, "$productElementName($0, $1)", |it, a| {
         let i = int(it, a, 1)?;

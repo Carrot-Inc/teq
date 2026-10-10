@@ -38,6 +38,61 @@ pub(super) struct Alt {
     pub refined: Option<Arc<MethodSig>>,
 }
 
+/// The packages and classes around a definition, each name followed by `_`, as a qualified
+/// erased signature writes them (`scala_Int`).
+fn owner_path(syms: &Symbols, interner: &crate::intern::Interner, owner: Owner, out: &mut String) {
+    match owner {
+        Owner::Package(p) => {
+            let info = syms.pkg(p);
+            if let Some(parent) = info.parent {
+                owner_path(syms, interner, Owner::Package(parent), out);
+                out.push_str(interner.get(info.name));
+                out.push('_');
+            }
+        }
+        Owner::Class(c) => {
+            let info = syms.class(c);
+            owner_path(syms, interner, info.owner, out);
+            out.push_str(interner.get(info.name));
+            out.push('_');
+        }
+        Owner::Local => {}
+    }
+}
+
+/// The names a reflective call of `name` with parameters of the erased classes `classes`
+/// reaches its method by, in the order to try them: the alternative of an overloaded name that
+/// takes those classes, by their simple and by their qualified names (`erased_signature`), then
+/// the method that keeps the plain name. The call names the method by its encoded name and its
+/// parameters' classes, as Scala.js's `genReflectiveCall` names a reflective proxy; an array's
+/// class, which does not say its element, leaves the plain name alone.
+pub fn reflective_names(syms: &Symbols, interner: &crate::intern::Interner, name: &str, classes: &[ClassId]) -> Vec<String> {
+    let mut out = Vec::with_capacity(3);
+    let array = |c: ClassId| syms.class(c).kind == ClassKind::Builtin && interner.get(syms.class(c).name) == "Array";
+    if !classes.iter().any(|&c| array(c)) {
+        let (mut simple, mut qualified) = (String::new(), String::new());
+        for (i, &c) in classes.iter().enumerate() {
+            if i > 0 {
+                simple.push('$');
+                qualified.push('$');
+            }
+            owner_path(syms, interner, syms.class(c).owner, &mut qualified);
+            simple.push_str(interner.get(syms.class(c).name));
+            qualified.push_str(interner.get(syms.class(c).name));
+        }
+        if classes.is_empty() {
+            simple.push('0');
+            qualified.push('0');
+        }
+        out.push(format!("{}${}", name, simple));
+        if qualified != simple {
+            out.push(format!("{}${}", name, qualified));
+        }
+    }
+    out.push(name.to_string());
+    out
+}
+
 fn overload_outcome(choice: &Result<usize, Failure>) -> Outcome {
     match choice {
         Ok(_) => Outcome::Found,
@@ -1135,23 +1190,7 @@ impl<'a> Worker<'a> {
     }
 
     fn owner_path(&self, owner: Owner, out: &mut String) {
-        match owner {
-            Owner::Package(p) => {
-                let info = self.syms.pkg(p);
-                if let Some(parent) = info.parent {
-                    self.owner_path(Owner::Package(parent), out);
-                    out.push_str(self.interner.get(info.name));
-                    out.push('_');
-                }
-            }
-            Owner::Class(c) => {
-                let info = self.syms.class(c);
-                self.owner_path(info.owner, out);
-                out.push_str(self.interner.get(info.name));
-                out.push('_');
-            }
-            Owner::Local => {}
-        }
+        owner_path(&self.syms, self.interner, owner, out)
     }
 
     /// Names every alternative of an overloaded name; two of one class that end up with one

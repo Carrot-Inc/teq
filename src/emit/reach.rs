@@ -3065,12 +3065,34 @@ impl Meet for Walker {
             self.reach.js_names.push("productElementName".to_string());
         }
         // A reflective structural call names the member with a literal: every method
-        // of that name is kept.
-        if text.starts_with("$memberByName") || text.starts_with("$callByName") {
-            for &a in prog.expr_list(args) {
+        // of that name is kept, and the names a call by signature tries keep their text.
+        if text.starts_with("$memberByName") || text.starts_with("$callBySignature") {
+            let list = prog.expr_list(args);
+            for &a in list {
                 if let TExpr::Str(k) = prog.expr(a) {
                     if let Some(n) = cx.interner.lookup(&prog.strings[k.idx()]) {
                         self.call_name(cx, n, None);
+                    }
+                }
+            }
+            if let ([_, _, classes, _], TExpr::Str(k)) = (list, prog.expr(list[1])) {
+                if let TExpr::SeqLit(items) = prog.expr(*classes) {
+                    let classes: Option<Vec<ClassId>> = prog.expr_list(items).iter().map(|&c| match prog.expr(c) {
+                        TExpr::ClassOf(c) => Some(c),
+                        _ => None,
+                    }).collect();
+                    if let Some(classes) = classes {
+                        // Each name an alternative of the source name may go by.
+                        let source = cx.interner.lookup(&prog.strings[k.idx()]);
+                        for name in crate::typer::reflective_names(cx.syms, cx.interner, &prog.strings[k.idx()], &classes) {
+                            if let (Some(n), Some(source)) = (cx.interner.lookup(&name), source) {
+                                if n != source {
+                                    self.overloaded.insert(n, source);
+                                }
+                                self.call_name(cx, n, None);
+                            }
+                            self.reach.js_names.push(name);
+                        }
                     }
                 }
             }

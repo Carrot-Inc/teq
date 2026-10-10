@@ -437,6 +437,23 @@ impl<'a, 't> Interp<'a, 't> {
         }
     }
 
+    /// The method a reflective call by signature reaches: by the first of the names it goes by
+    /// that the object's class has (`typer::reflective_names`), as the output's call tries them.
+    pub(super) fn reflective_call(&mut self, recv: Value, names: &[String], args: Vec<Value>) -> R {
+        if let Value::Obj(o) = &recv {
+            let class = o.class;
+            for name in names {
+                let Some(n) = self.typer.interner.lookup(name) else { continue };
+                match self.member(class, n) {
+                    Member::Missing => {}
+                    m => return self.invoke_member(recv.clone(), m, n, args),
+                }
+            }
+        }
+        let name = names.last().map_or("", |n| n.as_str());
+        self.throw_named("RuntimeException", &format!("{} is not a member", name))
+    }
+
     /// `productPrefix`: the class's definition, else an enum value's name or the class's.
     pub(super) fn product_prefix(&mut self, v: &Value) -> R<String> {
         let Value::Obj(o) = v else { return Ok(String::new()) };

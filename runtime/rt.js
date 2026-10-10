@@ -644,11 +644,17 @@ function $memberByName(x, name) {
   if (m === undefined) throw new TypeError(name + " is not a member of " + $str(x));
   return typeof m === "function" ? m.call(x) : m;
 }
-function $callByName(x, name, args) {
-  const m = x[name];
-  if (typeof m !== "function") throw new TypeError(name + " is not a method of " + $str(x));
-  return m.apply(x, args);
+// A reflective call: the method by the first of the names it goes by that the object has
+// (`typer::reflective_names`), an alternative's of an overloaded name before the plain one.
+function $callByNames(x, names, args) {
+  for (const name of names) {
+    const m = x[name];
+    if (typeof m === "function") return m.apply(x, args);
+  }
+  throw new TypeError(names[names.length - 1] + " is not a method of " + $str(x));
 }
+// One whose parameters' classes are no literals reaches the method of the plain name.
+function $callBySignature(x, name, classes, args) { return $callByNames(x, [name], args); }
 function $productElement(p, i) {
   if (typeof p.productElement === "function") return p.productElement(i);
   const f = p.$fields;

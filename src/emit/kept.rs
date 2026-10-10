@@ -564,7 +564,7 @@ impl<'c> Meet for Recorder<'c> {
     fn template(&mut self, cx: Cx, template: StrRef, args: ListRef) {
         let prog = cx.prog;
         let text = &prog.strings[template.idx()];
-        let read = self.js_visible || text.starts_with("$memberByName") || text.starts_with("$callByName");
+        let read = self.js_visible || text.starts_with("$memberByName") || text.starts_with("$callBySignature");
         let strings: Vec<Option<String>> = match read {
             true => prog
                 .expr_list(args)

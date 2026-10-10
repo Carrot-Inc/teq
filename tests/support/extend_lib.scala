@@ -1,6 +1,6 @@
 // The jar side of tests/classpath/js/extend_lib, compiled by scalac: a class extending
-// PartialFunction, one extending ClassTag with overrides, and members whose results are
-// scala-library's views.
+// PartialFunction, one extending ClassTag with overrides, members whose results are
+// scala-library's views, and a class whose overloads a reflective call tells apart.
 package extendlib
 
 class Offset(val offset: Int) extends PartialFunction[Int, Int]:
@@ -21,3 +21,7 @@ object Views:
   def indexed: scala.collection.IndexedSeqView[Int] = Vector(1, 2, 3).view
   def mapped(v: scala.collection.SeqView[Int]): scala.collection.SeqView[Int] = v.map(_ * 10)
   def filtered(v: scala.collection.SeqView[Int]): scala.collection.View[Int] = v.filter(_ > 1)
+
+class Overloads:
+  def f(x: Int): String = s"lib int $x"
+  def f(x: String): String = s"lib string $x"

@@ -369,6 +369,22 @@ impl<'a> Emitter<'a> {
         if linear { 0 } else { binds }
     }
 
+    /// A reflective call by signature (`std/reflect_selectable.scala`), the method's name and the
+    /// classes of its parameters literals: the names of the method in the output, to try in
+    /// order (`typer::reflective_names`).
+    pub(super) fn reflective_call_names(&self, text: &str, args: &[TExprId]) -> Option<Vec<String>> {
+        if text != "$callBySignature($0, $1, $2, $3)" {
+            return None;
+        }
+        let TExpr::Str(name) = self.peek(args[1]) else { return None };
+        let mut classes = Vec::new();
+        for &c in self.seq_literal_items(args[2])? {
+            let TExpr::ClassOf(c) = self.peek(c) else { return None };
+            classes.push(c);
+        }
+        Some(crate::typer::reflective_names(self.syms, self.interner, &self.prog.strings[name.idx()], &classes))
+    }
+
     pub(super) fn seq_literal_items(&self, e: TExprId) -> Option<&'a [TExprId]> {
         match self.peek(e) {
             TExpr::SeqLit(items) => Some(self.prog.expr_list(items)),
@@ -753,6 +769,21 @@ impl<'a> Emitter<'a> {
             TExpr::Js(template, args) => {
                 let t = &prog.strings[template.idx()];
                 let args = prog.expr_list(args);
+                if let Some(names) = self.reflective_call_names(t, args) {
+                    self.out.push_str("$callByNames(");
+                    self.emit_value(args[0]);
+                    self.out.push_str(", [");
+                    for (i, n) in names.iter().enumerate() {
+                        if i > 0 {
+                            self.out.push_str(", ");
+                        }
+                        js_string(n, &mut self.out);
+                    }
+                    self.out.push_str("], ");
+                    self.emit_value(args[3]);
+                    self.out.push(')');
+                    return;
+                }
                 // The arguments evaluated once before the text: `(($t0) => text)(a0)`.
                 let binds = self.template_binds(t, args);
                 let bound = || (0..args.len()).filter(move |&k| binds & (1 << k) != 0);

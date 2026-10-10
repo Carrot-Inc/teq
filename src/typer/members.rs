@@ -1957,82 +1957,108 @@ impl<'a> Worker<'a> {
                     Some(r @ (Refinement::Term(_, s, _) | Refinement::Val(_, s, _))) => (self.refinement_sig(r), s, ANY, true),
                     _ => {
                         let Some((found, owner_ty)) = self.find_member(t, name) else { return false };
-                        // The member as `t` has it (`tp1.member(name).info`, seen from `tp1`):
-                        // `k.a.type` for `K`'s `b: a.type` through a `k: K`.
-                        let own = self.sig_arc(found);
-                        let sig = if self.types.has_paths(own.ret) || own.clauses.iter().any(|c| c.params.iter().any(|p| self.types.has_paths(p.ty))) {
-                            self.sig_seen_from(own, t, found)
-                        } else {
-                            own
-                        };
-                        (sig, found, owner_ty, false)
+                        // An overloaded member holds the refinement when one of its alternatives
+                        // qualifies (dotty's `hasMatchingMember`: `hasAltWith(qualifies)`).
+                        if let Some(alts) = self.syms.alternatives(found).map(|a| a.to_vec()) {
+                            for alt in alts {
+                                let mark = self.snapshot();
+                                let sig = self.refinement_member_sig(alt, t);
+                                if self.term_member_qualifies(wanted_ref, &wanted, sig, alt, owner_ty, name, false, parent) {
+                                    return true;
+                                }
+                                self.rollback(mark);
+                            }
+                            return false;
+                        }
+                        (self.refinement_member_sig(found, t), found, owner_ty, false)
                     }
                 };
-                // `qualifies`: a member whose `@targetName` renames it is not the member of its
-                // name (a refinement's own members take any target name).
-                if !own && self.target_name_of(found).is_some_and(|n| n != name) {
-                    return false;
-                }
-                // A `val` refinement asks for a stable member: a `def` or a `var` is none.
-                if matches!(wanted_ref, Refinement::Val(..)) && matches!(self.syms.sym(found).kind, SymKind::Def | SymKind::Var) && self.syms.sym(found).sig.as_ref().map_or(true, |sg| sg.clauses.is_empty()) {
-                    return false;
-                }
-                let mut subst = self.owner_subst(owner_ty);
-                if sig.tparams.len() != wanted.tparams.len() {
-                    return false;
-                }
-                // A generic member's type parameters are the wanted one's, whose bounds lie
-                // within its own (dotty's `TypeComparer.comparePoly`, `matchingPolyParams`).
-                for (&p, &q) in sig.tparams.iter().zip(&wanted.tparams) {
-                    if p != q {
-                        let to = self.types.param(q);
-                        subst.push((p, to));
-                    }
-                }
-                for (&p, &q) in sig.tparams.iter().zip(&wanted.tparams) {
-                    let (lo, hi) = (self.syms.tparam(p).lower, self.syms.tparam(p).upper);
-                    let (lo, hi) = (self.types.subst(lo, &subst), self.types.subst(hi, &subst));
-                    let (wlo, whi) = (self.syms.tparam(q).lower, self.syms.tparam(q).upper);
-                    if !(self.is_sub(lo, wlo) && self.is_sub(whi, hi)) {
-                        return false;
-                    }
-                }
-                let shape = |s: &MethodSig| s.clauses.iter().map(|c| c.params.len()).collect::<Vec<_>>();
-                if shape(&sig) != shape(&wanted) {
-                    return false;
-                }
-                // The parameters are matched by position, as the override check matches them
-                // (`(d: Ctx) => d.T` is `(c: Ctx) => c.T`), and contravariantly (`isSubInfo`'s
-                // `matchingMethodParams(.., precise = false)`): `Any => Int` is a `(s: String) =>
-                // Int`; a member the refined type's class does not declare is called by
-                // reflection, which needs its erased parameters to be the refinement's (`sigsOK`).
-                let renamed: Vec<(SymId, TypeId)> = sig
-                    .clauses
-                    .iter()
-                    .zip(&wanted.clauses)
-                    .flat_map(|(a, b)| a.params.iter().zip(&b.params).map(|(x, y)| (x.sym, y.sym)).collect::<Vec<_>>())
-                    .filter(|&(x, y)| x != y)
-                    .map(|(x, y)| (x, self.types.mk(Type::Term(y))))
-                    .collect();
-                for (a, b) in sig.clauses.iter().zip(&wanted.clauses) {
-                    for (x, y) in a.params.iter().zip(&b.params) {
-                        // A parameter's mode is part of its type, `=> T` and `T*` in dotty's
-                        // method types (`TypeComparer.matchingMethodParams`).
-                        if x.by_name != y.by_name || x.repeated != y.repeated {
-                            return false;
-                        }
-                        let xt = self.subst_paths(x.ty, &renamed);
-                        let xt = self.types.subst(xt, &subst);
-                        if !self.is_sub(y.ty, xt) {
-                            return false;
-                        }
-                    }
-                }
-                let ret = self.subst_paths(sig.ret, &renamed);
-                let ret = self.types.subst(ret, &subst);
-                self.is_sub(ret, wanted.ret) && (own || self.refinement_sigs_ok(parent, name, found, &wanted))
+                self.term_member_qualifies(wanted_ref, &wanted, sig, found, owner_ty, name, own, parent)
             }
         }
+    }
+
+    /// The signature of the member `found` as `t` has it (`tp1.member(name).info`, seen from
+    /// `tp1`).
+    fn refinement_member_sig(&mut self, found: SymId, t: TypeId) -> std::sync::Arc<MethodSig> {
+        // The member as `t` has it (`tp1.member(name).info`, seen from `tp1`):
+        // `k.a.type` for `K`'s `b: a.type` through a `k: K`.
+        let own = self.sig_arc(found);
+        if self.types.has_paths(own.ret) || own.clauses.iter().any(|c| c.params.iter().any(|p| self.types.has_paths(p.ty))) {
+            self.sig_seen_from(own, t, found)
+        } else {
+            own
+        }
+    }
+
+    /// `TypeComparer.hasMatchingMember`'s `qualifies` of one member `found` (of the signature
+    /// `sig`, seen as `owner_ty`) for the term refinement `wanted_ref` of the signature `wanted`;
+    /// `own` where the member is the refinement's own.
+    #[allow(clippy::too_many_arguments)]
+    fn term_member_qualifies(&mut self, wanted_ref: Refinement, wanted: &MethodSig, sig: std::sync::Arc<MethodSig>, found: SymId, owner_ty: TypeId, name: Name, own: bool, parent: TypeId) -> bool {
+        // `qualifies`: a member whose `@targetName` renames it is not the member of its
+        // name (a refinement's own members take any target name).
+        if !own && self.target_name_of(found).is_some_and(|n| n != name) {
+            return false;
+        }
+        // A `val` refinement asks for a stable member: a `def` or a `var` is none.
+        if matches!(wanted_ref, Refinement::Val(..)) && matches!(self.syms.sym(found).kind, SymKind::Def | SymKind::Var) && self.syms.sym(found).sig.as_ref().map_or(true, |sg| sg.clauses.is_empty()) {
+            return false;
+        }
+        let mut subst = self.owner_subst(owner_ty);
+        if sig.tparams.len() != wanted.tparams.len() {
+            return false;
+        }
+        // A generic member's type parameters are the wanted one's, whose bounds lie
+        // within its own (dotty's `TypeComparer.comparePoly`, `matchingPolyParams`).
+        for (&p, &q) in sig.tparams.iter().zip(&wanted.tparams) {
+            if p != q {
+                let to = self.types.param(q);
+                subst.push((p, to));
+            }
+        }
+        for (&p, &q) in sig.tparams.iter().zip(&wanted.tparams) {
+            let (lo, hi) = (self.syms.tparam(p).lower, self.syms.tparam(p).upper);
+            let (lo, hi) = (self.types.subst(lo, &subst), self.types.subst(hi, &subst));
+            let (wlo, whi) = (self.syms.tparam(q).lower, self.syms.tparam(q).upper);
+            if !(self.is_sub(lo, wlo) && self.is_sub(whi, hi)) {
+                return false;
+            }
+        }
+        let shape = |s: &MethodSig| s.clauses.iter().map(|c| c.params.len()).collect::<Vec<_>>();
+        if shape(&sig) != shape(&wanted) {
+            return false;
+        }
+        // The parameters are matched by position, as the override check matches them
+        // (`(d: Ctx) => d.T` is `(c: Ctx) => c.T`), and contravariantly (`isSubInfo`'s
+        // `matchingMethodParams(.., precise = false)`): `Any => Int` is a `(s: String) =>
+        // Int`; a member the refined type's class does not declare is called by
+        // reflection, which needs its erased parameters to be the refinement's (`sigsOK`).
+        let renamed: Vec<(SymId, TypeId)> = sig
+            .clauses
+            .iter()
+            .zip(&wanted.clauses)
+            .flat_map(|(a, b)| a.params.iter().zip(&b.params).map(|(x, y)| (x.sym, y.sym)).collect::<Vec<_>>())
+            .filter(|&(x, y)| x != y)
+            .map(|(x, y)| (x, self.types.mk(Type::Term(y))))
+            .collect();
+        for (a, b) in sig.clauses.iter().zip(&wanted.clauses) {
+            for (x, y) in a.params.iter().zip(&b.params) {
+                // A parameter's mode is part of its type, `=> T` and `T*` in dotty's
+                // method types (`TypeComparer.matchingMethodParams`).
+                if x.by_name != y.by_name || x.repeated != y.repeated {
+                    return false;
+                }
+                let xt = self.subst_paths(x.ty, &renamed);
+                let xt = self.types.subst(xt, &subst);
+                if !self.is_sub(y.ty, xt) {
+                    return false;
+                }
+            }
+        }
+        let ret = self.subst_paths(sig.ret, &renamed);
+        let ret = self.types.subst(ret, &subst);
+        self.is_sub(ret, wanted.ret) && (own || self.refinement_sigs_ok(parent, name, found, &wanted))
     }
 
     /// `TypeComparer.hasMatchingMember`'s `sigsOK`: a member `found` that the class of the
