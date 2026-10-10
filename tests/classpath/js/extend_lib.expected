@@ -1,0 +1,20 @@
+11
+defined 0
+0
+defined -1
+defined 2
+List(12)
+defined -5
+0
+defined 3
+Some(13)
+List(4)
+unapply 1
+Some(custom 1)
+newArray 2
+List(custom, custom)
+unapply 1
+unapply x
+List(custom 1, custom x)
+List(List(1, 2, 3), List(1, 2, 3), List(10, 20, 30), List(2, 3))
+List(30, 20, 10)

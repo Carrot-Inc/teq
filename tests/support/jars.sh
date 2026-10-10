@@ -20,7 +20,8 @@
 # tests/support/typetest_lib.scala compiled the same way; predef-lib,
 # tests/support/predef_lib.scala compiled the same way; depfun-lib, tests/support/depfun_lib.scala
 # compiled the same way; inlinebodies-lib, tests/support/inline_bodies_lib.scala compiled the same way; view-lib, tests/support/view_lib.scala compiled the same way; nestedcompanion-lib,
-# tests/support/nestedcompanion_lib.scala compiled the same way; bundle-lib,
+# tests/support/nestedcompanion_lib.scala compiled the same way; extend-lib,
+# tests/support/extend_lib.scala compiled the same way; bundle-lib,
 # tests/support/bundle's properties file as a jar (a resource bundle); reflect-lib,
 # tests/support/reflect_lib.scala compiled the same way for Scala.js; erasure-lib,
 # tests/support/erasure_lib.scala compiled the same way for the JVM; vctraits-lib,
@@ -384,6 +385,20 @@ view_lib_jar() {
   fi
   echo "$jar"
 }
+# tests/support/extend_lib.scala compiled by scalac into a jar: a library's classes extending
+# PartialFunction and ClassTag, and its view results.
+extend_lib_jar() {
+  local src=tests/support/extend_lib.scala
+  local jar=$scratch-extend-lib.jar
+  local dir=$scratch-extend-lib.$$
+  if [ ! -f "$jar" ] || [ "$src" -nt "$jar" ]; then
+    mkdir -p "$dir" && cp "$src" "$dir/"
+    timeout 200 scala-cli --power package --library -S "${SCALA_VERSION:-3.8.4}" "$dir/extend_lib.scala" --server=false -q -o "$jar.$$" -f > /dev/null 2>&1 \
+      && mv -f "$jar.$$" "$jar" || rm -f "$jar.$$" "$jar"
+    rm -rf "$dir"
+  fi
+  echo "$jar"
+}
 # tests/support/predef_lib.scala compiled by scalac into a jar: bodies through scala-library's Predef.
 predef_lib_jar() {
   local src=tests/support/predef_lib.scala
@@ -550,6 +565,7 @@ jar_of() {
     lazyorder-lib) lazyorder_lib_jar ;;
     view-lib) view_lib_jar ;;
     nestedcompanion-lib) nestedcompanion_lib_jar ;;
+    extend-lib) extend_lib_jar ;;
     state-lib) state_lib_jar ;;
     scala2-lib) scala2_lib_jar ;;
     scala2-traits) scala2_traits_jar ;;
