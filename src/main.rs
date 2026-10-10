@@ -1424,7 +1424,47 @@ fn save_jar_caches(typer: &mut typer::Worker) {
     }
 }
 
+/// The soft limit of open files raised towards the hard one: a build opens every jar of a class path
+/// at once, more than the 256 a macOS shell gives a process. Every teq process raises its own, so
+/// the daemon's residents and runners start raised too.
+#[cfg(any(target_os = "linux", target_os = "macos"))]
+fn raise_open_files_limit() {
+    #[repr(C)]
+    struct Rlimit {
+        cur: u64,
+        max: u64,
+    }
+    extern "C" {
+        fn getrlimit(resource: i32, rlim: *mut Rlimit) -> i32;
+        fn setrlimit(resource: i32, rlim: *const Rlimit) -> i32;
+    }
+    #[cfg(target_os = "linux")]
+    const RLIMIT_NOFILE: i32 = 7;
+    #[cfg(target_os = "macos")]
+    const RLIMIT_NOFILE: i32 = 8;
+    let mut limit = Rlimit { cur: 0, max: 0 };
+    // SAFETY: the kernel fills a struct of the layout it declares.
+    if unsafe { getrlimit(RLIMIT_NOFILE, &mut limit) } != 0 {
+        return;
+    }
+    // macOS refuses a soft limit above OPEN_MAX (10240) whatever the hard limit says.
+    for wanted in [limit.max.min(65536), 10240] {
+        if wanted <= limit.cur {
+            return;
+        }
+        let raised = Rlimit { cur: wanted, max: limit.max };
+        // SAFETY: a struct of the kernel's layout, read by the call alone.
+        if unsafe { setrlimit(RLIMIT_NOFILE, &raised) } == 0 {
+            return;
+        }
+    }
+}
+
+#[cfg(not(any(target_os = "linux", target_os = "macos")))]
+fn raise_open_files_limit() {}
+
 fn main() {
+    raise_open_files_limit();
     argfile::init();
     if let Some(msg) = types::overlays_switch_error().or_else(typer::reach_mode_error) {
         eprintln!("{}", msg);

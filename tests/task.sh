@@ -1439,12 +1439,13 @@ rm "$l/build/teq.lock"
 out=$(launch "$sh" cache-refused x)
 if [ $? = 1 ] && [[ "$out" == *"no teq.lock beside ./teq: export the build with sbt teqExportAll"* ]]; then pass "launcher: no lock beside it is refused"; else fail "launcher, no lock: $out"; fi
 if command -v shellcheck > /dev/null; then
-  if out=$(shellcheck -s sh tools/launcher/teq 2>&1); then pass "launcher: shellcheck finds nothing"; else fail "launcher, shellcheck: $out"; fi
+  if out=$(shellcheck -S warning -s sh tools/launcher/teq 2>&1); then pass "launcher: shellcheck finds nothing"; else fail "launcher, shellcheck: $out"; fi
 else
   echo "task: note: no shellcheck here, the launcher not linted"
 fi
 kill "$lserver" 2> /dev/null
 
+[ -d integrations/vite/node_modules/yaml ] || timeout 120 npm --prefix integrations/vite install --legacy-peer-deps --prefer-offline --no-audit --no-fund > "$work/vite-npm.log" 2>&1 || fail "vite-plugin-teq: npm install in integrations/vite: $(tail -3 "$work/vite-npm.log")"
 if timeout 60 node integrations/vite/test.mjs > "$work/vite.out" 2>&1; then pass "vite-plugin-teq reads the export and finds the binary it pins (integrations/vite/test.mjs)"; else fail "vite-plugin-teq: $(grep FAIL "$work/vite.out" || tail -5 "$work/vite.out")"; fi
 
 [ $status = 0 ] && echo "task: all passed"

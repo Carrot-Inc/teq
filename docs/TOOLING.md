@@ -294,8 +294,10 @@ remounts them or leaves their old code. A `main()` that renders must keep its Re
 swap makes (on `window`, say) and render only the first time.
 
 The package is not published yet: an application installs it from a checkout of the repository
-(`"vite-plugin-teq": "file:<teq>/integrations/vite"` among its `devDependencies`). It depends on nothing but
-`curl`, for fetching the binary; `vite` is a peer dependency. The other route to a browser goes through sbt:
+(`"vite-plugin-teq": "file:<teq>/integrations/vite"` among its `devDependencies`; npm symlinks a `file:` dependency and
+installs none of its own, so `npm install --legacy-peer-deps` once in `integrations/vite` too, where yarn needs nothing more). It depends
+on the `yaml` package, for the lock, and on `curl`, for fetching the binary; `vite` is a peer dependency. The other
+route to a browser goes through sbt:
 with `TEQ_COMPILER=1` the stock Scala.js vite plugin serves what `fastLinkJS` names, teq's output unmodified,
 `sbt ~frontend/fastLinkJS` keeps it current and `vite build` bundles the one file of `fullLinkJS`, with the
 same swaps, since the refresh runtime and what a swap runs again are written by `--hot` into the output.

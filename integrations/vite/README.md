@@ -101,7 +101,9 @@ file is renamed into place.
 The package is not published yet: an application installs it from a checkout
 (`"vite-plugin-teq": "file:<teq>/integrations/vite"` in `devDependencies`, as
 `integrations/sbt/example/package.json` does) or imports `<teq>/integrations/vite/index.js` by path.
-It depends on nothing but `curl` for the fetch; `vite` is a peer dependency. `node test.mjs`
+It depends on the `yaml` package for the lock and on `curl` for the fetch; `vite` is a peer dependency.
+npm symlinks a `file:` dependency and installs none of its own, so an install from a checkout with
+npm runs `npm install --legacy-peer-deps` in `integrations/vite` once (yarn copies the plugin and needs nothing more). `node test.mjs`
 (`npm test`) checks its reading of the export and its search for the binary, a fetch over the
 loopback interface among them; `tests/task.sh` runs it.
 `integrations/sbt/example/check.sh` builds the example's frontend through it, starts its dev

@@ -108,8 +108,8 @@ try {
     /format 2, which this vite-plugin-teq does not read \(it reads format 1\): update vite-plugin-teq to the release of teq 0.1.0-pre.9/.test(await throws(() => loadDescription("web", build(join(work, "f2"), { format: 2 })))),
     "a lock of another format is refused, naming the teq it pins",
   )
-  writeFileSync(join(work, "f2", "teq.lock"), 'teq: 0.1.0\nformat: 1\nbinaries: {}\nprojects: yes\n')
-  check(/teq.lock: line 4: the bare `yes`/.test(await throws(() => loadDescription("web", join(work, "f2")))), "a lock outside the subset is refused with its line")
+  writeFileSync(join(work, "f2", "teq.lock"), 'teq: 0.1.0\nformat: 1\nbinaries: {}\nprojects: {a: 1, a: 2}\n')
+  check(/teq.lock: line 4: Map keys must be unique/.test(await throws(() => loadDescription("web", join(work, "f2")))), "a lock YAML refuses is refused with its line")
 
   process.env.TEQ = "/opt/teq"
   check((await resolveTeq(web)) === "/opt/teq", "TEQ comes first")

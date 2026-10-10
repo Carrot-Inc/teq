@@ -19,3 +19,5 @@ site/public/
 site/generated/
 integrations/vite/NOTICE
 integrations/vite/LICENSE
+integrations/vite/node_modules/
+integrations/vite/package-lock.json

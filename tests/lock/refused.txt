@@ -1,5 +1,8 @@
-# Documents every reader of teq.lock refuses, each after a line `=== <line> <why>` naming the line
-# its refusal names: tests/lock.sh holds lock.js and check-export.py to it, teq's unit test lock.rs.
+# Documents the hand readers of teq.lock refuse, each after a line `=== <line> <why>` naming the
+# line its refusal names: tests/lock.sh holds check-export.py to every one, teq's unit test lock.rs.
+# vite-plugin-teq's lock.js reads YAML 1.2 whole (the `yaml` package), so tests/lock.sh holds it to
+# refusing, on the same line, the ones YAML refuses or reads as no mapping, and to reading the
+# others, the subset's own rules, to the core schema's tree.
 === 4 a float where a string or an integer stands
 teq: 0.1.2
 format: 1

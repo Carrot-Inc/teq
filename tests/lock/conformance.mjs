@@ -1,7 +1,8 @@
 // node tests/lock/conformance.mjs: the YAML 1.2 core-schema reader (the `yaml` package this
 // directory pins) and vite-plugin-teq's reader (integrations/vite/lock.js) read the corpus to the
-// tree corpus.json holds and the example's lock to one tree; lock.js refuses every document of
-// refused.txt with its line. A line per check, FAIL for a failure, exit 1 on any.
+// tree corpus.json holds and the example's lock to one tree; of refused.txt's documents, lock.js
+// refuses the ones the core schema refuses or reads as no mapping, each on its line, and reads
+// the others to the core schema's tree. A line per check, FAIL for a failure, exit 1 on any.
 import { readFileSync } from "node:fs"
 import { dirname, join } from "node:path"
 import { fileURLToPath } from "node:url"
@@ -30,21 +31,29 @@ check(same(parse(corpus), tree), "lock.js reads the corpus to corpus.json's tree
 const example = readFileSync(join(here, "../../integrations/sbt/example/teq.lock"), "utf-8")
 check(same(core(example), parse(example)), "yaml and lock.js read the example's lock to one tree")
 
+const isMapping = (v) => v !== null && typeof v === "object" && !Array.isArray(v)
+const attempt = (run) => {
+  try {
+    return { tree: run() }
+  } catch (err) {
+    return { message: err.message }
+  }
+}
 const cases = read("refused.txt").split(/^=== /m).slice(1)
-let refused = 0
+let refuses = 0
+let reads = 0
 for (const c of cases) {
   const [head, ...rest] = c.split("\n")
   const [line, ...why] = head.split(" ")
   const text = rest.join("\n")
-  let message
-  try {
-    parse(text)
-  } catch (err) {
-    message = err.message
-  }
-  if (message?.startsWith(`line ${line}: `)) refused++
-  else check(false, `lock.js refuses ${why.join(" ")} on line ${line}`, message ?? "it read")
+  const oracle = attempt(() => core(text))
+  const found = attempt(() => parse(text))
+  if (isMapping(oracle.tree)) {
+    if (found.tree !== undefined && same(found.tree, oracle.tree)) reads++
+    else check(false, `lock.js reads ${why.join(" ")} to the core schema's tree`, found.message ?? "another tree")
+  } else if (found.message?.startsWith(`line ${line}: `)) refuses++
+  else check(false, `lock.js refuses ${why.join(" ")} on line ${line}`, found.message ?? "it read")
 }
-check(refused === cases.length, `lock.js refuses the ${cases.length} documents of refused.txt, each on its line`)
+check(refuses + reads === cases.length, `lock.js refuses the ${refuses} documents of refused.txt the core schema refuses or reads as no mapping, each on its line, and reads the other ${reads} to its tree`)
 console.log(failed ? `lock: ${failed} failed` : "lock: all passed")
 process.exit(failed ? 1 : 0)

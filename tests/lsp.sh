@@ -49,6 +49,10 @@ if [ "${TEQ_FORK:-}" = 1 ]; then
   export TEQ_VIEW_CHECKS_LOG=$work/checks.log
   : > "$TEQ_VIEW_CHECKS_LOG"
 fi
+if [ ! -d integrations/vite/node_modules/yaml ] && ! timeout 120 npm --prefix integrations/vite install --legacy-peer-deps --prefer-offline --no-audit --no-fund > "$work/vite-npm.log" 2>&1; then
+  echo "FAIL: npm install in integrations/vite, whose lock.js the driver imports (see $work/vite-npm.log)"
+  exit 1
+fi
 sessions_log "$work/workers.log"
 timeout 330 node tests/lsp/driver.mjs "$TEQ" "$work/run" "$jar" "$jar2"
 status=$?

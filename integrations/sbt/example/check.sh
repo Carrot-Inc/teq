@@ -91,6 +91,10 @@ timeout 340 sbt --server --batch 'reload; teqExportAll' >> target-threads.log 2>
 [ "$(threads_of)" = none ] || { echo "FAIL the description kept threads after reload"; status=1; }
 cp target-threads-fixture.lock teq.lock
 
+if [ ! -d ../../vite/node_modules/yaml ] && ! timeout 120 npm --prefix ../../vite install --legacy-peer-deps --prefer-offline --no-audit --no-fund > target-npm-vite.log 2>&1; then
+  echo "FAIL npm install in ../../vite, the plugin's own dependency (see target-npm-vite.log)"
+  exit 1
+fi
 if [ ! -d node_modules ] && ! timeout 180 npm install --prefer-offline --no-audit --no-fund > target-npm.log 2>&1; then
   echo "FAIL npm install (see target-npm.log)"
   exit 1
