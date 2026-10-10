@@ -28,6 +28,13 @@ final class PhantomClassTag[T](val runtimeClass: Class[?], name: String) extends
   override def hashCode: Int = System.identityHashCode(this)
   override def toString: String = name
 
+// scala-library's `newArray`, which `java.lang.reflect.Array.newInstance` makes: of the class's
+// zero, and none of `void`, which `IllegalArgumentException` refuses (`ClassTag.Unit` makes its
+// arrays itself).
+private[reflect] def newArrayOf(c: Class[?], len: Int): Array[Any] =
+  if c.getName == "void" then throw new IllegalArgumentException()
+  scala.newArray[Any](len, zeroOf(c))
+
 // The element a new array of the class holds.
 private[reflect] def zeroOf(c: Class[?]): Any = c.getName match
   case "int" | "short" | "byte" => 0

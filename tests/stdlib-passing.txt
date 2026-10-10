@@ -166,6 +166,7 @@ class_tag_of_opaque
 class_tag_of_types
 class_tag_of_unit_arrays
 class_tag_unapply
+class_tag_void_array
 class_tags
 classes
 clone_without_parens

@@ -13,7 +13,7 @@ trait ClassTag[T]:
   // classes are in `classtag_kinds.scala`, which a program enters where it makes a tag.
   @jvm("rt $0 $1:I rtcall newArrayOfTag(Lscala/reflect/ClassTag;I)Ljava/lang/Object; cast_result")
   @jvmLink("$0 $1:I invokeinterface scala/reflect/ClassTag.newArray(I)Ljava/lang/Object; cast_result")
-  def newArray(len: Int): Array[T] = unsafeCast(scala.newArray[Any](len, zeroOf(runtimeClass)))
+  def newArray(len: Int): Array[T] = unsafeCast(newArrayOf(runtimeClass, len))
   /** The extractor a type pattern over an abstract `T` goes through (`Typer::tag_pattern`). */
   def unapply(x: Any): Option[T] = if runtimeClass.isInstance(x) then Some(unsafeCast(x)) else None
   @jvm("rt $0 rtcall wrappedTag(Lscala/reflect/ClassTag;)Lscala/reflect/ClassTag;")
