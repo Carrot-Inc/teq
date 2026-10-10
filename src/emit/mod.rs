@@ -3113,6 +3113,20 @@ impl<'a> Emitter<'a> {
                 let _ = write!(self.out, " {}.prototype.$i{} = true;", name, n);
             }
         }
+        // The fields in the order `equals` by rule compares them, the primitive ones first, where
+        // that is not `$fields`' (`TClass::equals_order`).
+        if has_fields && !tc.equals_order.is_empty() {
+            let fields: Vec<SymId> = info.ctor.first().map(|c| c.params.iter().map(|p| p.sym).collect()).unwrap_or_default();
+            let _ = write!(self.out, " {}.prototype.$eqFields = [", name);
+            for (i, &k) in tc.equals_order.iter().enumerate() {
+                if i > 0 {
+                    self.out.push_str(", ");
+                }
+                let n = self.field_name(fields[k as usize]);
+                js_string(&n, &mut self.out);
+            }
+            self.out.push_str("];");
+        }
         // The field names `productElementName` answers, by their Scala names.
         if has_fields && self.reach.uses_element_names {
             let _ = write!(self.out, " {}.prototype.$names = [", name);

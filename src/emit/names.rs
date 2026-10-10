@@ -317,7 +317,7 @@ const RUNTIME_CALLED: &[&str] = &[
 
 /// Property names that the runtime and the emitter put on instances behind a `$`, which a short
 /// name must not meet through the `$` of an accessor-backed field.
-const RUNTIME_PROPERTIES: &[&str] = &["name", "ordinal", "className", "fields", "values", "own", "body", "traitInit", "init"];
+const RUNTIME_PROPERTIES: &[&str] = &["name", "ordinal", "className", "fields", "eqFields", "values", "own", "body", "traitInit", "init"];
 
 impl Renames {
     pub fn compute(

@@ -2945,9 +2945,8 @@ impl<'a> Gen<'a> {
             self.load(1, &object);
             self.checkcast(&owner);
             let that = self.store_new(&this);
-            let mut order: Vec<&(String, JType)> = field_refs.iter().collect();
-            order.sort_by_key(|(_, ty)| matches!(ty, JType::L(_)));
-            for (name, ty) in order {
+            let order = cx.equals_order(c, field_refs.len());
+            for (name, ty) in order.iter().filter_map(|&i| field_refs.get(i)) {
                 self.load(0, &this);
                 self.getfield(&owner, name, ty);
                 self.load(that, &this);

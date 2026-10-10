@@ -822,16 +822,34 @@ pub fn constant_val(prog: &Program, syms: &crate::symbols::Symbols, types: &crat
 /// `MurmurHash3.productHash`, through `productArity` and `productElement`, rather than the mix of
 /// its fields.
 pub fn hashes_through_elements(syms: &crate::symbols::Symbols, types: &crate::types::TypeStore, interner: &crate::intern::Interner, c: ClassId) -> bool {
-    use crate::symbols::ClassKind;
-    let fields: Vec<TypeId> = syms.class(c).ctor.first().map(|cl| cl.params.iter().map(|p| p.ty).collect()).unwrap_or_default();
-    let primitive = |t: TypeId| match types.get(t) {
+    let fields = case_field_types(syms, c);
+    !fields.is_empty() && !fields.into_iter().any(|t| is_primitive_value_class(syms, types, interner, t))
+}
+
+/// dotty's `SyntheticMembers.equalsBody`'s `sortedAccessors`: the indices of the case class
+/// `c`'s fields (its first parameter list, `Product`'s order) in the order its `equals` by rule
+/// compares them, those of a primitive class first (`isPrimitiveValueClass`), each group in
+/// declaration order, so that a cheap unequal field decides before an `equals` of a reference.
+pub fn equals_order(syms: &crate::symbols::Symbols, types: &crate::types::TypeStore, interner: &crate::intern::Interner, c: ClassId) -> Vec<usize> {
+    let fields = case_field_types(syms, c);
+    let mut order: Vec<usize> = (0..fields.len()).collect();
+    order.sort_by_key(|&i| !is_primitive_value_class(syms, types, interner, fields[i]));
+    order
+}
+
+fn case_field_types(syms: &crate::symbols::Symbols, c: ClassId) -> Vec<TypeId> {
+    syms.class(c).ctor.first().map(|cl| cl.params.iter().map(|p| p.ty).collect()).unwrap_or_default()
+}
+
+/// dotty's `isPrimitiveValueClass` of a field's declared type.
+fn is_primitive_value_class(syms: &crate::symbols::Symbols, types: &crate::types::TypeStore, interner: &crate::intern::Interner, t: TypeId) -> bool {
+    match types.get(t) {
         crate::types::Type::Class(k, _) => {
             let ki = syms.class(k);
-            ki.kind == ClassKind::Builtin && matches!(interner.get(ki.name), "Int" | "Long" | "Double" | "Float" | "Char" | "Byte" | "Short" | "Boolean" | "Unit")
+            ki.kind == crate::symbols::ClassKind::Builtin && matches!(interner.get(ki.name), "Int" | "Long" | "Double" | "Float" | "Char" | "Byte" | "Short" | "Boolean" | "Unit")
         }
         _ => false,
-    };
-    !fields.is_empty() && !fields.into_iter().any(primitive)
+    }
 }
 
 #[derive(Clone)]
@@ -859,6 +877,9 @@ pub struct TClass {
     /// Whether a case class's companion goes without the synthetic `unapply` (`unapplySeq`),
     /// withdrawn by one it declares or inherits (`Worker::synthetic_unapply_retracted`).
     pub retracted_unapply: bool,
+    /// The indices of a case class's fields in the order its synthesized `equals` compares them
+    /// (`equals_order`), where that is not their declaration order; empty otherwise.
+    pub equals_order: Vec<u16>,
     pub init: Vec<TInit>,
     pub methods: Vec<FunId>,
     /// The secondary constructors: the body of each is a block whose one statement is the

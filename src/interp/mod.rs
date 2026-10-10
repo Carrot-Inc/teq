@@ -219,8 +219,9 @@ pub enum Member {
 #[derive(Clone)]
 pub enum Shape {
     Plain,
-    /// A case class: its fields, and the name it prints and hashes under (empty for a tuple).
-    Case(Rc<[FieldKey]>, Rc<str>),
+    /// A case class: its fields, the name it prints and hashes under (empty for a tuple), and
+    /// its fields in the order its `equals` by rule compares them (`tir::equals_order`).
+    Case(Rc<[FieldKey]>, Rc<str>, Rc<[FieldKey]>),
     CaseObject(Rc<str>),
     EnumValue,
 }

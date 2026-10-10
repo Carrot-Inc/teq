@@ -246,7 +246,8 @@ impl<'a, 't> Interp<'a, 't> {
         if matches!(self.shape(x.class), Shape::CaseObject(_)) {
             return Ok(false);
         }
-        let Some((fields, _)) = self.case_info(x.class) else { return Ok(false) };
+        // The fields in `SyntheticMembers.equalsBody`'s order, the primitive ones first.
+        let Some(fields) = self.case_compared_fields(x.class) else { return Ok(false) };
         // An instance of a subclass may equal one of the case class itself, as under scalac,
         // when the case class defines no equals of its own.
         let related = if x.class == y.class {

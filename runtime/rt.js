@@ -500,10 +500,12 @@ function $productToString() {
   }
   return s + ")";
 }
+// The fields compare in `$eqFields`' order where the registration gives one (the primitive ones
+// first, `SyntheticMembers.equalsBody`), else in `$fields`'.
 function $caseEquals(that) {
   if (this === that) return true;
   if (that == null || that.constructor !== this.constructor) return false;
-  const fields = this.$fields;
+  const fields = this.$eqFields || this.$fields;
   for (let i = 0; i < fields.length; i++) {
     if (!$eq(this[fields[i]], that[fields[i]])) return false;
   }
@@ -515,7 +517,7 @@ function $productEquals(c) {
   return function (that) {
     if (this === that) return true;
     if (!(that instanceof c)) return false;
-    for (const f of this.$fields) if (!$eq(this[f], that[f])) return false;
+    for (const f of this.$eqFields || this.$fields) if (!$eq(this[f], that[f])) return false;
     return $canEqual(that, this);
   };
 }
@@ -524,7 +526,7 @@ function $subEquals(c) {
   return function (that) {
     if (this === that) return true;
     if (!(that instanceof c)) return false;
-    for (const f of this.$fields) if (!$eq(this[f], that[f])) return false;
+    for (const f of this.$eqFields || this.$fields) if (!$eq(this[f], that[f])) return false;
     return true;
   };
 }

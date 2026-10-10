@@ -2837,6 +2837,7 @@ impl<'a> Worker<'a> {
             parent_prelude: ast::ListRef::EMPTY,
             synthesized: 0,
             retracted_unapply: false,
+            equals_order: Vec::new(),
             init: Vec::new(),
             methods: Vec::new(),
             ctors: Vec::new(),
@@ -2852,6 +2853,12 @@ impl<'a> Worker<'a> {
             tclass.captures = 1;
         }
         tclass.synthesized = self.synthesized_members(c);
+        if tclass.synthesized & synthetic::EQUALS != 0 {
+            let order = crate::tir::equals_order(&self.syms, &self.types, self.interner, c);
+            if order.iter().enumerate().any(|(i, &k)| i != k) {
+                tclass.equals_order = order.into_iter().map(|k| k as u16).collect();
+            }
+        }
         let Some(def_id) = def_id else {
             self.push_class_body(tclass);
             return;

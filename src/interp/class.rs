@@ -1555,8 +1555,10 @@ impl<'a, 't> Interp<'a, 't> {
         } else if is_case {
             let params: Vec<SymId> = info.ctor.first().map(|cl| cl.params.iter().map(|p| p.sym).collect()).unwrap_or_default();
             let keys: Vec<FieldKey> = params.into_iter().map(|p| self.field_key(p)).collect();
+            let order = self.tclass_field(c, |tc| tc.equals_order.clone()).unwrap_or_default();
+            let compared: Rc<[FieldKey]> = if order.is_empty() { Rc::from(keys.clone()) } else { order.iter().filter_map(|&i| keys.get(i as usize).cloned()).collect() };
             let display = if self.is_tuple_name(&name) { Rc::from("") } else { name };
-            Shape::Case(Rc::from(keys), display)
+            Shape::Case(Rc::from(keys), display, compared)
         } else {
             Shape::Plain
         };
@@ -1571,12 +1573,21 @@ impl<'a, 't> Interp<'a, 't> {
     /// The case class whose fields and name an instance of `c` prints and hashes: `c` itself,
     /// or the case class it extends.
     pub(super) fn case_info(&mut self, c: ClassId) -> Option<(Rc<[FieldKey]>, Rc<str>)> {
+        self.case_shape(c).map(|(fields, display, _)| (fields, display))
+    }
+
+    /// The case class's fields in the order its `equals` by rule compares them.
+    pub(super) fn case_compared_fields(&mut self, c: ClassId) -> Option<Rc<[FieldKey]>> {
+        self.case_shape(c).map(|(_, _, compared)| compared)
+    }
+
+    fn case_shape(&mut self, c: ClassId) -> Option<(Rc<[FieldKey]>, Rc<str>, Rc<[FieldKey]>)> {
         let mut at = Some(c);
         let mut steps = 0;
         while let Some(k) = at {
             match self.shape(k) {
-                Shape::Case(fields, display) => return Some((fields, display)),
-                Shape::CaseObject(name) => return Some((Rc::from(Vec::new()), name)),
+                Shape::Case(fields, display, compared) => return Some((fields, display, compared)),
+                Shape::CaseObject(name) => return Some((Rc::from(Vec::new()), name, Rc::from(Vec::new()))),
                 _ => {}
             }
             steps += 1;

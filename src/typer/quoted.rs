@@ -2725,6 +2725,7 @@ impl<'c> Copier<'c> {
             parent_prelude,
             synthesized: tc.synthesized,
             retracted_unapply: tc.retracted_unapply,
+            equals_order: tc.equals_order.clone(),
             init,
             methods,
             ctors,

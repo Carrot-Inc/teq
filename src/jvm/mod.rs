@@ -747,6 +747,18 @@ impl<'a> Cx<'a> {
         }
     }
 
+    /// The case class's fields in its `equals`'s order (`TClass::equals_order`): declaration order
+    /// where the record holds none.
+    pub fn equals_order(&self, c: ClassId, n: usize) -> Vec<usize> {
+        match self.tclass_of[c.idx()] {
+            u32::MAX => (0..n).collect(),
+            i => {
+                let order = &self.input.prog.classes[i as usize].equals_order;
+                if order.is_empty() { (0..n).collect() } else { order.iter().map(|&k| k as usize).collect() }
+            }
+        }
+    }
+
     pub fn is_java_enum(&self, e: ClassId) -> bool {
         let info = self.input.syms.class(e);
         info.kind == ClassKind::Enum && info.superclass.map_or(false, |s| self.class_names[s.idx()] == "java/lang/Enum")
