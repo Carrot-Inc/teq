@@ -174,6 +174,8 @@ charset_decode_writable
 charset_encode_consumes
 charset_utf8_replacement
 class_of
+class_tag_classes
+class_tag_evidence_erased
 class_tag_of_bottoms
 class_tag_of_compound
 class_tag_of_opaque
@@ -779,6 +781,7 @@ local_object_import
 local_objects
 local_traits
 local_type_aliases
+locale_display_names
 lone_surrogate_literal
 long_buffer_order
 long_map
@@ -815,6 +818,7 @@ macro_fresh_nested_site
 macro_heal_types
 macro_hole_cast
 macro_identity_hash
+macro_jdk_bodies
 macro_jvm_template_body
 macro_lambda_quotes
 macro_library_body_attempt
@@ -965,6 +969,9 @@ numeric
 object_inherited_protected
 object_member
 objects_deep_equals
+objects_equals_identity
+objects_java_equality
+objects_jdk_bodies
 opaque_bound
 opaque_intersection_bound
 opaque_into_union
@@ -1012,6 +1019,7 @@ overload_vals
 overloads_by_using_clause
 override_enclosing_type_member
 override_inferred
+override_nullary_any
 package_alias_beside_object
 package_blocks
 package_main
@@ -1025,6 +1033,7 @@ param_clauses
 paren_pattern_types
 partial_application_once
 partial_function_apply
+partial_function_classes
 partial_function_match_body
 partial_functions
 partial_sites
@@ -1378,6 +1387,7 @@ structural_dispatch_selected
 structural_members
 structural_overload
 structural_reflective_calls
+structural_signatures
 structural_value_class
 summon_from_wildcard_given
 summoner_sugar
@@ -1404,6 +1414,7 @@ target_name_qualified_lone
 target_name_unrelated_value
 target_name_unrelated_value_written
 target_name_wildcard_dispatch
+template_arguments_once
 template_pattern_vals
 this_rooted_type_path
 this_type_intersection
@@ -1561,6 +1572,7 @@ vc_stable_pattern
 vdom_dsl
 vector_retention
 vector_trie
+view_kinds
 view_lib_alias
 view_lib_quotes
 views
