@@ -937,8 +937,9 @@ same_as_fresh "exceptions: catch case edited" "$src"
 expect "exceptions: catch case runs" "$(timeout 20 node "$work/out/main.mjs" | sed -n 4p)" "none left of pen"
 sed -i.bak 's|        case e: StockError => "stock: " + e.getMessage|        case e: Throwable => "any: " + e.getMessage|' "$src/main.scala"
 build "$src/main.scala"
-# A catch that can take any Throwable brings `js.JavaScriptException` into the std module.
-expect "exceptions: catch of Throwable" "$(field ok),$(field incremental),$(field changed)" 'true,true,["app.mjs","std.mjs"]'
+# A catch that can take any Throwable tests the caught value, a `Throwable` once wrapped (`$wrapJs`), for
+# null as dotty's `TypeTestsCasts` tests a scrutinee whose type conforms: the module of the edited file alone.
+expect "exceptions: catch of Throwable" "$(field ok),$(field incremental),$(field changed)" 'true,true,["app.mjs"]'
 same_as_fresh "exceptions: catch of Throwable" "$src"
 expect "exceptions: catch of Throwable runs" "$(timeout 20 node "$work/out/main.mjs" | sed -n 6p)" "any: only 3 left"
 sed -i.bak 's|    println(s"ordered $item")|    println(s"handled $item")|' "$src/shop.scala"
