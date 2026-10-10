@@ -1958,9 +1958,22 @@ impl<'w, 'a> P<'w, 'a> {
             self.buf.end_length(app);
             self.annotation_tree("scala.annotation.internal", "Repeated");
             self.buf.end_length(len);
+        } else if let Some(a) = self.written_field_alias(p) {
+            // A case class's field as it is written (`n: Count`), as scalac pickles it, which the
+            // loader reads the equality's order from (`SymInfo::declared_alias`).
+            self.mark_tree();
+            self.alias_ref(a);
         } else {
             self.tpt(p.ty);
         }
+    }
+
+    /// The alias a parameter's type is written as, where one without type parameters names it.
+    fn written_field_alias(&self, p: &ParamSig) -> Option<AliasId> {
+        if p.sym == SymId(u32::MAX) {
+            return None;
+        }
+        self.w.syms.sym(p.sym).declared_alias().filter(|&a| self.w.syms.alias(a).tparams.is_empty())
     }
 
     /// `Seq[T] @Repeated` as a type.

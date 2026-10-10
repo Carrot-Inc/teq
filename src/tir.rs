@@ -831,9 +831,16 @@ pub fn hashes_through_elements(syms: &crate::symbols::Symbols, types: &crate::ty
 /// compares them, those of a primitive class first (`isPrimitiveValueClass`), each group in
 /// declaration order, so that a cheap unequal field decides before an `equals` of a reference.
 pub fn equals_order(syms: &crate::symbols::Symbols, types: &crate::types::TypeStore, interner: &crate::intern::Interner, c: ClassId) -> Vec<usize> {
-    let fields = case_field_types(syms, c);
-    let primitive: Vec<bool> = fields.iter().map(|t| t.is_some_and(|t| is_primitive_value_class(syms, types, interner, t))).collect();
-    let mut order: Vec<usize> = (0..fields.len()).collect();
+    // The declared type's symbol (`accessor.info.typeSymbol`), an alias's being no class, where
+    // the hash reads the class behind it (`hashes_through_elements`).
+    let primitive: Vec<bool> = syms
+        .class(c)
+        .ctor
+        .first()
+        .map(|cl| cl.params.iter().map(|p| !p.repeated && syms.sym(p.sym).declared_alias().is_none() && is_primitive_value_class(syms, types, interner, p.ty)).collect())
+        .unwrap_or_default();
+    let fields = primitive.len();
+    let mut order: Vec<usize> = (0..fields).collect();
     // Already in order where no reference comes before a primitive, the usual case.
     if primitive.windows(2).any(|w| !w[0] && w[1]) {
         order.sort_by_key(|&i| !primitive[i]);

@@ -265,6 +265,12 @@ pub struct SymInfo {
     /// Set for a val with an initialiser that a constructor parameter of a subclass overrides:
     /// the parameter is set first and keeps the field.
     pub overridden_by_param: bool,
+    /// The type alias a case class's field is declared as (`n: Count` with `type Count = Long`),
+    /// through `declared_alias`: dotty's `info.typeSymbol` is the alias, no primitive class, so
+    /// `SyntheticMembers.equalsBody` compares it with the references (`tir::equals_order`), while
+    /// `chooseHashcode`'s `classSymbol` sees through it; the products pickle the field's type as
+    /// it is written. The alias's id plus one, 0 for none, which the record's padding holds.
+    pub declared_alias_id: u32,
     pub is_main: bool,
     /// For givens backed by a class (`given ... with`).
     pub impl_class: Option<ClassId>,
@@ -292,6 +298,17 @@ pub struct SymInfo {
     /// Whether the method has a name of its own in the output, which `Symbols::dispatch_names`
     /// holds: an alternative of an overloaded name.
     pub dispatch: Dispatch,
+}
+
+impl SymInfo {
+    /// The type alias a case class's field is declared as (`SymInfo::declared_alias_id`).
+    pub fn declared_alias(&self) -> Option<AliasId> {
+        self.declared_alias_id.checked_sub(1).map(AliasId)
+    }
+
+    pub fn set_declared_alias(&mut self, a: Option<AliasId>) {
+        self.declared_alias_id = a.map_or(0, |a| a.0 + 1);
+    }
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -942,6 +959,7 @@ impl Symbols {
             needs_setter: false,
             scoped_private: false,
             overridden_by_param: false,
+            declared_alias_id: 0,
             is_main: false,
             impl_class: None,
             by_name: false,

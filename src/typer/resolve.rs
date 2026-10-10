@@ -4003,6 +4003,26 @@ impl<'a> Worker<'a> {
 
     /// Resolves parameter clauses. `existing` holds pre-created symbols (constructor params);
     /// context bounds become a trailing using clause.
+    /// The type alias the type `id` is written as, applied or annotated (`Count`, `F[Int]`,
+    /// `Count @unchecked`), where it resolves to the class `class_name`: dotty's `typeSymbol` of it
+    /// is the alias, whatever class it expands to. A name that is the class's own names the class,
+    /// and is not looked up again.
+    fn written_alias(&mut self, id: TyExprId, class_name: Name) -> Option<AliasId> {
+        let ast = self.cur_ast();
+        let span = ast.ty_spans[id.idx()];
+        let found = match ast.ty(id) {
+            TyExpr::Name(n) | TyExpr::Select(_, n) if n == class_name => None,
+            TyExpr::Name(n) => self.lookup_type_at(n, span),
+            TyExpr::Select(q, n) => self.lookup_type_in_path(q, n),
+            TyExpr::Apply(f, _) | TyExpr::Unchecked(f) | TyExpr::UncheckedVariance(f) => return self.written_alias(f, class_name),
+            _ => None,
+        };
+        match found {
+            Some(TypeRef::Alias(a)) => Some(a),
+            _ => None,
+        }
+    }
+
     pub fn resolve_clauses(
         &mut self,
         clauses: &[ast::ParamClause],
@@ -4052,11 +4072,22 @@ impl<'a> Worker<'a> {
                         sym
                     }
                 };
+                // A case class's field whose type names an alias of a primitive class
+                // (`SymInfo::declared_alias`), which its equality orders.
+                let primitive = match self.types.get(ty) {
+                    Type::Class(k, _) if self.syms.class(k).kind == ClassKind::Builtin => Some(self.syms.class(k).name),
+                    _ => None,
+                };
+                let declared_alias = match primitive {
+                    Some(k) if ci == 0 && class_owner.is_some_and(|c| self.syms.class(c).mods & mods::CASE != 0) => self.written_alias(p.ty, k),
+                    _ => None,
+                };
                 {
                     let mut s = self.syms.sym_mut(sym);
                     s.sig = Some(Arc::new(MethodSig::value(local_ty)));
                     s.state().set(Completion::Done);
                     s.by_name = by_name;
+                    s.set_declared_alias(declared_alias);
                 }
                 // Later parameters and the result type can name it (`y: x.type`), and a using
                 // parameter is the given of `quotes.type` there.

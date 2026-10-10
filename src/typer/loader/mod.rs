@@ -2248,6 +2248,7 @@ impl<'a> Worker<'a> {
                 }
             }
         }
+        let mut first_terms = true;
         for clause in &ctor.clauses {
             let Clause::Terms(ps) = clause else { continue };
             let is_using = is_using_clause(ps);
@@ -2267,6 +2268,16 @@ impl<'a> Worker<'a> {
                 }
                 let kind = if flags.has(tags::MUTABLE) { SymKind::Var } else { SymKind::Val };
                 let (ty, by_name, repeated) = self.map_param_type(cx, &p.ty);
+                // A case class's field whose type names an alias of a primitive class, which its
+                // equality orders as a reference (`SymInfo::declared_alias`).
+                let primitive = match self.types.get(ty) {
+                    Type::Class(k, _) if self.syms.class(k).kind == ClassKind::Builtin => Some(self.syms.class(k).name),
+                    _ => None,
+                };
+                let declared_alias = match primitive {
+                    Some(k) if first_terms && self.syms.class(c).mods & mods::CASE != 0 => self.pickled_alias(cx, &p.ty, k),
+                    _ => None,
+                };
                 let field_ty = match (repeated, self.seq_class()) {
                     (true, Some(seq)) => self.types.class(seq, &[ty]),
                     _ => ty,
@@ -2277,6 +2288,7 @@ impl<'a> Worker<'a> {
                     s.sig = Some(Arc::new(MethodSig::value(field_ty)));
                     s.state().set(Completion::Done);
                     s.by_name = by_name;
+                    s.set_declared_alias(declared_alias);
                 }
                 if !self.syms.class(c).members.contains_key(&name) {
                     self.register_term(Owner::Class(c), sym);
@@ -2294,6 +2306,7 @@ impl<'a> Worker<'a> {
                 syms.push(sym);
             }
             clauses.push(sig);
+            first_terms = false;
             syms_per_clause.push(syms);
         }
         // `class C` is pickled with the empty clause of `class C()`.

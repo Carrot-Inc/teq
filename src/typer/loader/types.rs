@@ -1033,6 +1033,33 @@ impl<'a> Worker<'a> {
 
     /// A type member `name` of the class `c` or its ancestors: a nested class or an alias. An
     /// object nested under the same name is no type (`object Expr` beside `type Expr[A]`).
+    /// The type alias a pickled type names at its head, applied or annotated (`Count` with `type
+    /// Count = Long`), where it maps to the class `class_name`: dotty's `typeSymbol` of it is the
+    /// alias (`SymInfo::declared_alias`). A name that is the class's own names the class.
+    pub(super) fn pickled_alias(&mut self, cx: &mut MapCx, t: &TType, class_name: Name) -> Option<AliasId> {
+        match t {
+            TType::Annotated(inner, _) | TType::Applied(inner, _) => self.pickled_alias(cx, inner, class_name),
+            TType::LocalType(addr, _) => self.loaded_tables(cx).aliases.get(addr).copied(),
+            TType::TypeRef(prefix, n) => {
+                let tasty = self.tasty(cx.file);
+                let name = self.intern_name(&tasty, *n);
+                if name == class_name {
+                    return None;
+                }
+                let found = match self.scope_of(cx, prefix) {
+                    Some(Scope::Pkg(p)) => self.pkg_type(p, name),
+                    Some(Scope::Class(c)) => self.member_type_of(c, name),
+                    None => None,
+                };
+                match found {
+                    Some(TypeRef::Alias(a)) => Some(a),
+                    _ => None,
+                }
+            }
+            _ => None,
+        }
+    }
+
     pub(super) fn member_type_of(&mut self, c: ClassId, name: Name) -> Option<TypeRef> {
         if self.syms.class(c).state() == Completion::NotStarted {
             self.complete_class(c);
