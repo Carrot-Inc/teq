@@ -107,7 +107,9 @@ Recording expectations: `tests/run.sh --regen` (the `.expected` files from scala
 `--update` on `tests/run_jvm.sh`, `run_interp.sh`, `run_stdlib.sh`, `tests/scala3/run.sh` and
 `tests/scala3-typing/harness.py` (their allow-lists), `SIZE_RECORD=1 ./teq interp tests/size.scala`,
 `BUDGET_RECORD=1 bench/budget.sh`, `RUNTIME_RECORD=1 tests/runtime.sh`,
-`WATCH_MEMORY_RECORD=1 tests/watch-memory.sh`. A `// teq: <flags>` line in a test passes flags to teq; a
+`WATCH_MEMORY_RECORD=1 tests/watch-memory.sh`; `tests/lean-expected/<name>.expected` is written by hand, the
+output of JavaScript and the interpreter for a case of a departure they keep (`.expected` stays scalac's, the
+JVM's). A `// teq: <flags>` line in a test passes flags to teq; a
 `// os: windows` or `// os: unix` line keeps a case of `run_interp.sh` and `run_jvm.sh` to that system, where
 Git's bash is Windows (the `windows_*` cases are the interpreter's acceptance on Windows, their expectations
 the Windows JDK's). `bench/budget.sh` and `tests/runtime.sh` skip on any machine but the one that recorded their
