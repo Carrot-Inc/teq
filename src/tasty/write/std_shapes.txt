@@ -108,6 +108,7 @@ java.io.EOFException	getStackTrace	:java.lang.StackTraceElement[]
 java.io.EOFException	getSuppressed	:java.lang.Throwable[]
 java.io.EOFException	initCause	java.lang.Throwable:java.lang.Throwable
 java.io.EOFException	printStackTrace	:scala.Unit
+java.io.EOFException	printStackTrace	java.io.PrintStream:scala.Unit
 java.io.EOFException	printStackTrace	java.io.PrintWriter:scala.Unit
 java.io.EOFException	setStackTrace	java.lang.StackTraceElement[]:scala.Unit
 java.io.EOFException	toString	:java.lang.String
@@ -170,6 +171,7 @@ java.io.FileNotFoundException	getStackTrace	:java.lang.StackTraceElement[]
 java.io.FileNotFoundException	getSuppressed	:java.lang.Throwable[]
 java.io.FileNotFoundException	initCause	java.lang.Throwable:java.lang.Throwable
 java.io.FileNotFoundException	printStackTrace	:scala.Unit
+java.io.FileNotFoundException	printStackTrace	java.io.PrintStream:scala.Unit
 java.io.FileNotFoundException	printStackTrace	java.io.PrintWriter:scala.Unit
 java.io.FileNotFoundException	setStackTrace	java.lang.StackTraceElement[]:scala.Unit
 java.io.FileNotFoundException	toString	:java.lang.String
@@ -216,6 +218,7 @@ java.io.IOException	getStackTrace	:java.lang.StackTraceElement[]
 java.io.IOException	getSuppressed	:java.lang.Throwable[]
 java.io.IOException	initCause	java.lang.Throwable:java.lang.Throwable
 java.io.IOException	printStackTrace	:scala.Unit
+java.io.IOException	printStackTrace	java.io.PrintStream:scala.Unit
 java.io.IOException	printStackTrace	java.io.PrintWriter:scala.Unit
 java.io.IOException	setStackTrace	java.lang.StackTraceElement[]:scala.Unit
 java.io.IOException	toString	:java.lang.String
@@ -252,6 +255,7 @@ java.io.InterruptedIOException	getStackTrace	:java.lang.StackTraceElement[]
 java.io.InterruptedIOException	getSuppressed	:java.lang.Throwable[]
 java.io.InterruptedIOException	initCause	java.lang.Throwable:java.lang.Throwable
 java.io.InterruptedIOException	printStackTrace	:scala.Unit
+java.io.InterruptedIOException	printStackTrace	java.io.PrintStream:scala.Unit
 java.io.InterruptedIOException	printStackTrace	java.io.PrintWriter:scala.Unit
 java.io.InterruptedIOException	setStackTrace	java.lang.StackTraceElement[]:scala.Unit
 java.io.InterruptedIOException	toString	:java.lang.String
@@ -328,6 +332,7 @@ java.io.UTFDataFormatException	getStackTrace	:java.lang.StackTraceElement[]
 java.io.UTFDataFormatException	getSuppressed	:java.lang.Throwable[]
 java.io.UTFDataFormatException	initCause	java.lang.Throwable:java.lang.Throwable
 java.io.UTFDataFormatException	printStackTrace	:scala.Unit
+java.io.UTFDataFormatException	printStackTrace	java.io.PrintStream:scala.Unit
 java.io.UTFDataFormatException	printStackTrace	java.io.PrintWriter:scala.Unit
 java.io.UTFDataFormatException	setStackTrace	java.lang.StackTraceElement[]:scala.Unit
 java.io.UTFDataFormatException	toString	:java.lang.String
@@ -342,6 +347,7 @@ java.io.UncheckedIOException	getStackTrace	:java.lang.StackTraceElement[]
 java.io.UncheckedIOException	getSuppressed	:java.lang.Throwable[]
 java.io.UncheckedIOException	initCause	java.lang.Throwable:java.lang.Throwable
 java.io.UncheckedIOException	printStackTrace	:scala.Unit
+java.io.UncheckedIOException	printStackTrace	java.io.PrintStream:scala.Unit
 java.io.UncheckedIOException	printStackTrace	java.io.PrintWriter:scala.Unit
 java.io.UncheckedIOException	setStackTrace	java.lang.StackTraceElement[]:scala.Unit
 java.io.UncheckedIOException	toString	:java.lang.String
@@ -356,6 +362,7 @@ java.io.UnsupportedEncodingException	getStackTrace	:java.lang.StackTraceElement[
 java.io.UnsupportedEncodingException	getSuppressed	:java.lang.Throwable[]
 java.io.UnsupportedEncodingException	initCause	java.lang.Throwable:java.lang.Throwable
 java.io.UnsupportedEncodingException	printStackTrace	:scala.Unit
+java.io.UnsupportedEncodingException	printStackTrace	java.io.PrintStream:scala.Unit
 java.io.UnsupportedEncodingException	printStackTrace	java.io.PrintWriter:scala.Unit
 java.io.UnsupportedEncodingException	setStackTrace	java.lang.StackTraceElement[]:scala.Unit
 java.io.UnsupportedEncodingException	toString	:java.lang.String
@@ -396,6 +403,7 @@ java.lang.ArithmeticException	getStackTrace	:java.lang.StackTraceElement[]
 java.lang.ArithmeticException	getSuppressed	:java.lang.Throwable[]
 java.lang.ArithmeticException	initCause	java.lang.Throwable:java.lang.Throwable
 java.lang.ArithmeticException	printStackTrace	:scala.Unit
+java.lang.ArithmeticException	printStackTrace	java.io.PrintStream:scala.Unit
 java.lang.ArithmeticException	printStackTrace	java.io.PrintWriter:scala.Unit
 java.lang.ArithmeticException	setStackTrace	java.lang.StackTraceElement[]:scala.Unit
 java.lang.ArithmeticException	toString	:java.lang.String
@@ -410,6 +418,7 @@ java.lang.ArrayIndexOutOfBoundsException	getStackTrace	:java.lang.StackTraceElem
 java.lang.ArrayIndexOutOfBoundsException	getSuppressed	:java.lang.Throwable[]
 java.lang.ArrayIndexOutOfBoundsException	initCause	java.lang.Throwable:java.lang.Throwable
 java.lang.ArrayIndexOutOfBoundsException	printStackTrace	:scala.Unit
+java.lang.ArrayIndexOutOfBoundsException	printStackTrace	java.io.PrintStream:scala.Unit
 java.lang.ArrayIndexOutOfBoundsException	printStackTrace	java.io.PrintWriter:scala.Unit
 java.lang.ArrayIndexOutOfBoundsException	setStackTrace	java.lang.StackTraceElement[]:scala.Unit
 java.lang.ArrayIndexOutOfBoundsException	toString	:java.lang.String
@@ -425,6 +434,7 @@ java.lang.AssertionError	getStackTrace	:java.lang.StackTraceElement[]
 java.lang.AssertionError	getSuppressed	:java.lang.Throwable[]
 java.lang.AssertionError	initCause	java.lang.Throwable:java.lang.Throwable
 java.lang.AssertionError	printStackTrace	:scala.Unit
+java.lang.AssertionError	printStackTrace	java.io.PrintStream:scala.Unit
 java.lang.AssertionError	printStackTrace	java.io.PrintWriter:scala.Unit
 java.lang.AssertionError	setStackTrace	java.lang.StackTraceElement[]:scala.Unit
 java.lang.AssertionError	toString	:java.lang.String
@@ -509,6 +519,7 @@ java.lang.ClassCastException	getStackTrace	:java.lang.StackTraceElement[]
 java.lang.ClassCastException	getSuppressed	:java.lang.Throwable[]
 java.lang.ClassCastException	initCause	java.lang.Throwable:java.lang.Throwable
 java.lang.ClassCastException	printStackTrace	:scala.Unit
+java.lang.ClassCastException	printStackTrace	java.io.PrintStream:scala.Unit
 java.lang.ClassCastException	printStackTrace	java.io.PrintWriter:scala.Unit
 java.lang.ClassCastException	setStackTrace	java.lang.StackTraceElement[]:scala.Unit
 java.lang.ClassCastException	toString	:java.lang.String
@@ -528,6 +539,7 @@ java.lang.ClassNotFoundException	getStackTrace	:java.lang.StackTraceElement[]
 java.lang.ClassNotFoundException	getSuppressed	:java.lang.Throwable[]
 java.lang.ClassNotFoundException	initCause	java.lang.Throwable:java.lang.Throwable
 java.lang.ClassNotFoundException	printStackTrace	:scala.Unit
+java.lang.ClassNotFoundException	printStackTrace	java.io.PrintStream:scala.Unit
 java.lang.ClassNotFoundException	printStackTrace	java.io.PrintWriter:scala.Unit
 java.lang.ClassNotFoundException	setStackTrace	java.lang.StackTraceElement[]:scala.Unit
 java.lang.ClassNotFoundException	toString	:java.lang.String
@@ -581,6 +593,7 @@ java.lang.Error	getStackTrace	:java.lang.StackTraceElement[]
 java.lang.Error	getSuppressed	:java.lang.Throwable[]
 java.lang.Error	initCause	java.lang.Throwable:java.lang.Throwable
 java.lang.Error	printStackTrace	:scala.Unit
+java.lang.Error	printStackTrace	java.io.PrintStream:scala.Unit
 java.lang.Error	printStackTrace	java.io.PrintWriter:scala.Unit
 java.lang.Error	setStackTrace	java.lang.StackTraceElement[]:scala.Unit
 java.lang.Error	toString	:java.lang.String
@@ -598,6 +611,7 @@ java.lang.Exception	getStackTrace	:java.lang.StackTraceElement[]
 java.lang.Exception	getSuppressed	:java.lang.Throwable[]
 java.lang.Exception	initCause	java.lang.Throwable:java.lang.Throwable
 java.lang.Exception	printStackTrace	:scala.Unit
+java.lang.Exception	printStackTrace	java.io.PrintStream:scala.Unit
 java.lang.Exception	printStackTrace	java.io.PrintWriter:scala.Unit
 java.lang.Exception	setStackTrace	java.lang.StackTraceElement[]:scala.Unit
 java.lang.Exception	toString	:java.lang.String
@@ -638,6 +652,7 @@ java.lang.IllegalArgumentException	getStackTrace	:java.lang.StackTraceElement[]
 java.lang.IllegalArgumentException	getSuppressed	:java.lang.Throwable[]
 java.lang.IllegalArgumentException	initCause	java.lang.Throwable:java.lang.Throwable
 java.lang.IllegalArgumentException	printStackTrace	:scala.Unit
+java.lang.IllegalArgumentException	printStackTrace	java.io.PrintStream:scala.Unit
 java.lang.IllegalArgumentException	printStackTrace	java.io.PrintWriter:scala.Unit
 java.lang.IllegalArgumentException	setStackTrace	java.lang.StackTraceElement[]:scala.Unit
 java.lang.IllegalArgumentException	toString	:java.lang.String
@@ -654,6 +669,7 @@ java.lang.IllegalStateException	getStackTrace	:java.lang.StackTraceElement[]
 java.lang.IllegalStateException	getSuppressed	:java.lang.Throwable[]
 java.lang.IllegalStateException	initCause	java.lang.Throwable:java.lang.Throwable
 java.lang.IllegalStateException	printStackTrace	:scala.Unit
+java.lang.IllegalStateException	printStackTrace	java.io.PrintStream:scala.Unit
 java.lang.IllegalStateException	printStackTrace	java.io.PrintWriter:scala.Unit
 java.lang.IllegalStateException	setStackTrace	java.lang.StackTraceElement[]:scala.Unit
 java.lang.IllegalStateException	toString	:java.lang.String
@@ -668,6 +684,7 @@ java.lang.IllegalThreadStateException	getStackTrace	:java.lang.StackTraceElement
 java.lang.IllegalThreadStateException	getSuppressed	:java.lang.Throwable[]
 java.lang.IllegalThreadStateException	initCause	java.lang.Throwable:java.lang.Throwable
 java.lang.IllegalThreadStateException	printStackTrace	:scala.Unit
+java.lang.IllegalThreadStateException	printStackTrace	java.io.PrintStream:scala.Unit
 java.lang.IllegalThreadStateException	printStackTrace	java.io.PrintWriter:scala.Unit
 java.lang.IllegalThreadStateException	setStackTrace	java.lang.StackTraceElement[]:scala.Unit
 java.lang.IllegalThreadStateException	toString	:java.lang.String
@@ -682,6 +699,7 @@ java.lang.IncompatibleClassChangeError	getStackTrace	:java.lang.StackTraceElemen
 java.lang.IncompatibleClassChangeError	getSuppressed	:java.lang.Throwable[]
 java.lang.IncompatibleClassChangeError	initCause	java.lang.Throwable:java.lang.Throwable
 java.lang.IncompatibleClassChangeError	printStackTrace	:scala.Unit
+java.lang.IncompatibleClassChangeError	printStackTrace	java.io.PrintStream:scala.Unit
 java.lang.IncompatibleClassChangeError	printStackTrace	java.io.PrintWriter:scala.Unit
 java.lang.IncompatibleClassChangeError	setStackTrace	java.lang.StackTraceElement[]:scala.Unit
 java.lang.IncompatibleClassChangeError	toString	:java.lang.String
@@ -696,6 +714,7 @@ java.lang.IndexOutOfBoundsException	getStackTrace	:java.lang.StackTraceElement[]
 java.lang.IndexOutOfBoundsException	getSuppressed	:java.lang.Throwable[]
 java.lang.IndexOutOfBoundsException	initCause	java.lang.Throwable:java.lang.Throwable
 java.lang.IndexOutOfBoundsException	printStackTrace	:scala.Unit
+java.lang.IndexOutOfBoundsException	printStackTrace	java.io.PrintStream:scala.Unit
 java.lang.IndexOutOfBoundsException	printStackTrace	java.io.PrintWriter:scala.Unit
 java.lang.IndexOutOfBoundsException	setStackTrace	java.lang.StackTraceElement[]:scala.Unit
 java.lang.IndexOutOfBoundsException	toString	:java.lang.String
@@ -716,6 +735,7 @@ java.lang.InstantiationError	getStackTrace	:java.lang.StackTraceElement[]
 java.lang.InstantiationError	getSuppressed	:java.lang.Throwable[]
 java.lang.InstantiationError	initCause	java.lang.Throwable:java.lang.Throwable
 java.lang.InstantiationError	printStackTrace	:scala.Unit
+java.lang.InstantiationError	printStackTrace	java.io.PrintStream:scala.Unit
 java.lang.InstantiationError	printStackTrace	java.io.PrintWriter:scala.Unit
 java.lang.InstantiationError	setStackTrace	java.lang.StackTraceElement[]:scala.Unit
 java.lang.InstantiationError	toString	:java.lang.String
@@ -730,6 +750,7 @@ java.lang.InstantiationException	getStackTrace	:java.lang.StackTraceElement[]
 java.lang.InstantiationException	getSuppressed	:java.lang.Throwable[]
 java.lang.InstantiationException	initCause	java.lang.Throwable:java.lang.Throwable
 java.lang.InstantiationException	printStackTrace	:scala.Unit
+java.lang.InstantiationException	printStackTrace	java.io.PrintStream:scala.Unit
 java.lang.InstantiationException	printStackTrace	java.io.PrintWriter:scala.Unit
 java.lang.InstantiationException	setStackTrace	java.lang.StackTraceElement[]:scala.Unit
 java.lang.InstantiationException	toString	:java.lang.String
@@ -782,6 +803,7 @@ java.lang.InterruptedException	getStackTrace	:java.lang.StackTraceElement[]
 java.lang.InterruptedException	getSuppressed	:java.lang.Throwable[]
 java.lang.InterruptedException	initCause	java.lang.Throwable:java.lang.Throwable
 java.lang.InterruptedException	printStackTrace	:scala.Unit
+java.lang.InterruptedException	printStackTrace	java.io.PrintStream:scala.Unit
 java.lang.InterruptedException	printStackTrace	java.io.PrintWriter:scala.Unit
 java.lang.InterruptedException	setStackTrace	java.lang.StackTraceElement[]:scala.Unit
 java.lang.InterruptedException	toString	:java.lang.String
@@ -800,6 +822,7 @@ java.lang.LinkageError	getStackTrace	:java.lang.StackTraceElement[]
 java.lang.LinkageError	getSuppressed	:java.lang.Throwable[]
 java.lang.LinkageError	initCause	java.lang.Throwable:java.lang.Throwable
 java.lang.LinkageError	printStackTrace	:scala.Unit
+java.lang.LinkageError	printStackTrace	java.io.PrintStream:scala.Unit
 java.lang.LinkageError	printStackTrace	java.io.PrintWriter:scala.Unit
 java.lang.LinkageError	setStackTrace	java.lang.StackTraceElement[]:scala.Unit
 java.lang.LinkageError	toString	:java.lang.String
@@ -882,6 +905,7 @@ java.lang.NegativeArraySizeException	getStackTrace	:java.lang.StackTraceElement[
 java.lang.NegativeArraySizeException	getSuppressed	:java.lang.Throwable[]
 java.lang.NegativeArraySizeException	initCause	java.lang.Throwable:java.lang.Throwable
 java.lang.NegativeArraySizeException	printStackTrace	:scala.Unit
+java.lang.NegativeArraySizeException	printStackTrace	java.io.PrintStream:scala.Unit
 java.lang.NegativeArraySizeException	printStackTrace	java.io.PrintWriter:scala.Unit
 java.lang.NegativeArraySizeException	setStackTrace	java.lang.StackTraceElement[]:scala.Unit
 java.lang.NegativeArraySizeException	toString	:java.lang.String
@@ -896,6 +920,7 @@ java.lang.NoSuchMethodException	getStackTrace	:java.lang.StackTraceElement[]
 java.lang.NoSuchMethodException	getSuppressed	:java.lang.Throwable[]
 java.lang.NoSuchMethodException	initCause	java.lang.Throwable:java.lang.Throwable
 java.lang.NoSuchMethodException	printStackTrace	:scala.Unit
+java.lang.NoSuchMethodException	printStackTrace	java.io.PrintStream:scala.Unit
 java.lang.NoSuchMethodException	printStackTrace	java.io.PrintWriter:scala.Unit
 java.lang.NoSuchMethodException	setStackTrace	java.lang.StackTraceElement[]:scala.Unit
 java.lang.NoSuchMethodException	toString	:java.lang.String
@@ -910,6 +935,7 @@ java.lang.NullPointerException	getStackTrace	:java.lang.StackTraceElement[]
 java.lang.NullPointerException	getSuppressed	:java.lang.Throwable[]
 java.lang.NullPointerException	initCause	java.lang.Throwable:java.lang.Throwable
 java.lang.NullPointerException	printStackTrace	:scala.Unit
+java.lang.NullPointerException	printStackTrace	java.io.PrintStream:scala.Unit
 java.lang.NullPointerException	printStackTrace	java.io.PrintWriter:scala.Unit
 java.lang.NullPointerException	setStackTrace	java.lang.StackTraceElement[]:scala.Unit
 java.lang.NullPointerException	toString	:java.lang.String
@@ -931,6 +957,7 @@ java.lang.NumberFormatException	getStackTrace	:java.lang.StackTraceElement[]
 java.lang.NumberFormatException	getSuppressed	:java.lang.Throwable[]
 java.lang.NumberFormatException	initCause	java.lang.Throwable:java.lang.Throwable
 java.lang.NumberFormatException	printStackTrace	:scala.Unit
+java.lang.NumberFormatException	printStackTrace	java.io.PrintStream:scala.Unit
 java.lang.NumberFormatException	printStackTrace	java.io.PrintWriter:scala.Unit
 java.lang.NumberFormatException	setStackTrace	java.lang.StackTraceElement[]:scala.Unit
 java.lang.NumberFormatException	toString	:java.lang.String
@@ -948,6 +975,7 @@ java.lang.OutOfMemoryError	getStackTrace	:java.lang.StackTraceElement[]
 java.lang.OutOfMemoryError	getSuppressed	:java.lang.Throwable[]
 java.lang.OutOfMemoryError	initCause	java.lang.Throwable:java.lang.Throwable
 java.lang.OutOfMemoryError	printStackTrace	:scala.Unit
+java.lang.OutOfMemoryError	printStackTrace	java.io.PrintStream:scala.Unit
 java.lang.OutOfMemoryError	printStackTrace	java.io.PrintWriter:scala.Unit
 java.lang.OutOfMemoryError	setStackTrace	java.lang.StackTraceElement[]:scala.Unit
 java.lang.OutOfMemoryError	toString	:java.lang.String
@@ -1056,6 +1084,7 @@ java.lang.ReflectiveOperationException	getStackTrace	:java.lang.StackTraceElemen
 java.lang.ReflectiveOperationException	getSuppressed	:java.lang.Throwable[]
 java.lang.ReflectiveOperationException	initCause	java.lang.Throwable:java.lang.Throwable
 java.lang.ReflectiveOperationException	printStackTrace	:scala.Unit
+java.lang.ReflectiveOperationException	printStackTrace	java.io.PrintStream:scala.Unit
 java.lang.ReflectiveOperationException	printStackTrace	java.io.PrintWriter:scala.Unit
 java.lang.ReflectiveOperationException	setStackTrace	java.lang.StackTraceElement[]:scala.Unit
 java.lang.ReflectiveOperationException	toString	:java.lang.String
@@ -1085,6 +1114,7 @@ java.lang.RuntimeException	getStackTrace	:java.lang.StackTraceElement[]
 java.lang.RuntimeException	getSuppressed	:java.lang.Throwable[]
 java.lang.RuntimeException	initCause	java.lang.Throwable:java.lang.Throwable
 java.lang.RuntimeException	printStackTrace	:scala.Unit
+java.lang.RuntimeException	printStackTrace	java.io.PrintStream:scala.Unit
 java.lang.RuntimeException	printStackTrace	java.io.PrintWriter:scala.Unit
 java.lang.RuntimeException	setStackTrace	java.lang.StackTraceElement[]:scala.Unit
 java.lang.RuntimeException	toString	:java.lang.String
@@ -1100,6 +1130,7 @@ java.lang.SecurityException	getStackTrace	:java.lang.StackTraceElement[]
 java.lang.SecurityException	getSuppressed	:java.lang.Throwable[]
 java.lang.SecurityException	initCause	java.lang.Throwable:java.lang.Throwable
 java.lang.SecurityException	printStackTrace	:scala.Unit
+java.lang.SecurityException	printStackTrace	java.io.PrintStream:scala.Unit
 java.lang.SecurityException	printStackTrace	java.io.PrintWriter:scala.Unit
 java.lang.SecurityException	setStackTrace	java.lang.StackTraceElement[]:scala.Unit
 java.lang.SecurityException	toString	:java.lang.String
@@ -1130,6 +1161,7 @@ java.lang.StackOverflowError	getStackTrace	:java.lang.StackTraceElement[]
 java.lang.StackOverflowError	getSuppressed	:java.lang.Throwable[]
 java.lang.StackOverflowError	initCause	java.lang.Throwable:java.lang.Throwable
 java.lang.StackOverflowError	printStackTrace	:scala.Unit
+java.lang.StackOverflowError	printStackTrace	java.io.PrintStream:scala.Unit
 java.lang.StackOverflowError	printStackTrace	java.io.PrintWriter:scala.Unit
 java.lang.StackOverflowError	setStackTrace	java.lang.StackTraceElement[]:scala.Unit
 java.lang.StackOverflowError	toString	:java.lang.String
@@ -1138,6 +1170,7 @@ java.lang.StackTraceElement	getClassName	:java.lang.String
 java.lang.StackTraceElement	getFileName	:java.lang.String
 java.lang.StackTraceElement	getLineNumber	:scala.Int
 java.lang.StackTraceElement	getMethodName	:java.lang.String
+java.lang.StackTraceElement	isNativeMethod	:scala.Boolean
 java.lang.StackTraceElement	toString	:java.lang.String
 java.lang.String	<init>	:java.lang.String
 java.lang.String	charAt	scala.Int:scala.Char
@@ -1250,6 +1283,7 @@ java.lang.StringIndexOutOfBoundsException	getStackTrace	:java.lang.StackTraceEle
 java.lang.StringIndexOutOfBoundsException	getSuppressed	:java.lang.Throwable[]
 java.lang.StringIndexOutOfBoundsException	initCause	java.lang.Throwable:java.lang.Throwable
 java.lang.StringIndexOutOfBoundsException	printStackTrace	:scala.Unit
+java.lang.StringIndexOutOfBoundsException	printStackTrace	java.io.PrintStream:scala.Unit
 java.lang.StringIndexOutOfBoundsException	printStackTrace	java.io.PrintWriter:scala.Unit
 java.lang.StringIndexOutOfBoundsException	setStackTrace	java.lang.StackTraceElement[]:scala.Unit
 java.lang.StringIndexOutOfBoundsException	toString	:java.lang.String
@@ -1323,6 +1357,7 @@ java.lang.Throwable	getStackTrace	:java.lang.StackTraceElement[]
 java.lang.Throwable	getSuppressed	:java.lang.Throwable[]
 java.lang.Throwable	initCause	java.lang.Throwable:java.lang.Throwable
 java.lang.Throwable	printStackTrace	:scala.Unit
+java.lang.Throwable	printStackTrace	java.io.PrintStream:scala.Unit
 java.lang.Throwable	printStackTrace	java.io.PrintWriter:scala.Unit
 java.lang.Throwable	setStackTrace	java.lang.StackTraceElement[]:scala.Unit
 java.lang.Throwable	toString	:java.lang.String
@@ -1339,6 +1374,7 @@ java.lang.UnsupportedOperationException	getStackTrace	:java.lang.StackTraceEleme
 java.lang.UnsupportedOperationException	getSuppressed	:java.lang.Throwable[]
 java.lang.UnsupportedOperationException	initCause	java.lang.Throwable:java.lang.Throwable
 java.lang.UnsupportedOperationException	printStackTrace	:scala.Unit
+java.lang.UnsupportedOperationException	printStackTrace	java.io.PrintStream:scala.Unit
 java.lang.UnsupportedOperationException	printStackTrace	java.io.PrintWriter:scala.Unit
 java.lang.UnsupportedOperationException	setStackTrace	java.lang.StackTraceElement[]:scala.Unit
 java.lang.UnsupportedOperationException	toString	:java.lang.String
@@ -1354,6 +1390,7 @@ java.lang.VirtualMachineError	getStackTrace	:java.lang.StackTraceElement[]
 java.lang.VirtualMachineError	getSuppressed	:java.lang.Throwable[]
 java.lang.VirtualMachineError	initCause	java.lang.Throwable:java.lang.Throwable
 java.lang.VirtualMachineError	printStackTrace	:scala.Unit
+java.lang.VirtualMachineError	printStackTrace	java.io.PrintStream:scala.Unit
 java.lang.VirtualMachineError	printStackTrace	java.io.PrintWriter:scala.Unit
 java.lang.VirtualMachineError	setStackTrace	java.lang.StackTraceElement[]:scala.Unit
 java.lang.VirtualMachineError	toString	:java.lang.String
@@ -1563,6 +1600,7 @@ java.net.BindException	getStackTrace	:java.lang.StackTraceElement[]
 java.net.BindException	getSuppressed	:java.lang.Throwable[]
 java.net.BindException	initCause	java.lang.Throwable:java.lang.Throwable
 java.net.BindException	printStackTrace	:scala.Unit
+java.net.BindException	printStackTrace	java.io.PrintStream:scala.Unit
 java.net.BindException	printStackTrace	java.io.PrintWriter:scala.Unit
 java.net.BindException	setStackTrace	java.lang.StackTraceElement[]:scala.Unit
 java.net.BindException	toString	:java.lang.String
@@ -1577,6 +1615,7 @@ java.net.ConnectException	getStackTrace	:java.lang.StackTraceElement[]
 java.net.ConnectException	getSuppressed	:java.lang.Throwable[]
 java.net.ConnectException	initCause	java.lang.Throwable:java.lang.Throwable
 java.net.ConnectException	printStackTrace	:scala.Unit
+java.net.ConnectException	printStackTrace	java.io.PrintStream:scala.Unit
 java.net.ConnectException	printStackTrace	java.io.PrintWriter:scala.Unit
 java.net.ConnectException	setStackTrace	java.lang.StackTraceElement[]:scala.Unit
 java.net.ConnectException	toString	:java.lang.String
@@ -1636,6 +1675,7 @@ java.net.SocketException	getStackTrace	:java.lang.StackTraceElement[]
 java.net.SocketException	getSuppressed	:java.lang.Throwable[]
 java.net.SocketException	initCause	java.lang.Throwable:java.lang.Throwable
 java.net.SocketException	printStackTrace	:scala.Unit
+java.net.SocketException	printStackTrace	java.io.PrintStream:scala.Unit
 java.net.SocketException	printStackTrace	java.io.PrintWriter:scala.Unit
 java.net.SocketException	setStackTrace	java.lang.StackTraceElement[]:scala.Unit
 java.net.SocketException	toString	:java.lang.String
@@ -1650,6 +1690,7 @@ java.net.SocketTimeoutException	getStackTrace	:java.lang.StackTraceElement[]
 java.net.SocketTimeoutException	getSuppressed	:java.lang.Throwable[]
 java.net.SocketTimeoutException	initCause	java.lang.Throwable:java.lang.Throwable
 java.net.SocketTimeoutException	printStackTrace	:scala.Unit
+java.net.SocketTimeoutException	printStackTrace	java.io.PrintStream:scala.Unit
 java.net.SocketTimeoutException	printStackTrace	java.io.PrintWriter:scala.Unit
 java.net.SocketTimeoutException	setStackTrace	java.lang.StackTraceElement[]:scala.Unit
 java.net.SocketTimeoutException	toString	:java.lang.String
@@ -1700,6 +1741,7 @@ java.net.URISyntaxException	getStackTrace	:java.lang.StackTraceElement[]
 java.net.URISyntaxException	getSuppressed	:java.lang.Throwable[]
 java.net.URISyntaxException	initCause	java.lang.Throwable:java.lang.Throwable
 java.net.URISyntaxException	printStackTrace	:scala.Unit
+java.net.URISyntaxException	printStackTrace	java.io.PrintStream:scala.Unit
 java.net.URISyntaxException	printStackTrace	java.io.PrintWriter:scala.Unit
 java.net.URISyntaxException	setStackTrace	java.lang.StackTraceElement[]:scala.Unit
 java.net.URISyntaxException	toString	:java.lang.String
@@ -1717,6 +1759,7 @@ java.net.UnknownHostException	getStackTrace	:java.lang.StackTraceElement[]
 java.net.UnknownHostException	getSuppressed	:java.lang.Throwable[]
 java.net.UnknownHostException	initCause	java.lang.Throwable:java.lang.Throwable
 java.net.UnknownHostException	printStackTrace	:scala.Unit
+java.net.UnknownHostException	printStackTrace	java.io.PrintStream:scala.Unit
 java.net.UnknownHostException	printStackTrace	java.io.PrintWriter:scala.Unit
 java.net.UnknownHostException	setStackTrace	java.lang.StackTraceElement[]:scala.Unit
 java.net.UnknownHostException	toString	:java.lang.String
@@ -1745,6 +1788,7 @@ java.nio.BufferOverflowException	getStackTrace	:java.lang.StackTraceElement[]
 java.nio.BufferOverflowException	getSuppressed	:java.lang.Throwable[]
 java.nio.BufferOverflowException	initCause	java.lang.Throwable:java.lang.Throwable
 java.nio.BufferOverflowException	printStackTrace	:scala.Unit
+java.nio.BufferOverflowException	printStackTrace	java.io.PrintStream:scala.Unit
 java.nio.BufferOverflowException	printStackTrace	java.io.PrintWriter:scala.Unit
 java.nio.BufferOverflowException	setStackTrace	java.lang.StackTraceElement[]:scala.Unit
 java.nio.BufferOverflowException	toString	:java.lang.String
@@ -1758,6 +1802,7 @@ java.nio.BufferUnderflowException	getStackTrace	:java.lang.StackTraceElement[]
 java.nio.BufferUnderflowException	getSuppressed	:java.lang.Throwable[]
 java.nio.BufferUnderflowException	initCause	java.lang.Throwable:java.lang.Throwable
 java.nio.BufferUnderflowException	printStackTrace	:scala.Unit
+java.nio.BufferUnderflowException	printStackTrace	java.io.PrintStream:scala.Unit
 java.nio.BufferUnderflowException	printStackTrace	java.io.PrintWriter:scala.Unit
 java.nio.BufferUnderflowException	setStackTrace	java.lang.StackTraceElement[]:scala.Unit
 java.nio.BufferUnderflowException	toString	:java.lang.String
@@ -1849,6 +1894,7 @@ java.nio.ReadOnlyBufferException	getStackTrace	:java.lang.StackTraceElement[]
 java.nio.ReadOnlyBufferException	getSuppressed	:java.lang.Throwable[]
 java.nio.ReadOnlyBufferException	initCause	java.lang.Throwable:java.lang.Throwable
 java.nio.ReadOnlyBufferException	printStackTrace	:scala.Unit
+java.nio.ReadOnlyBufferException	printStackTrace	java.io.PrintStream:scala.Unit
 java.nio.ReadOnlyBufferException	printStackTrace	java.io.PrintWriter:scala.Unit
 java.nio.ReadOnlyBufferException	setStackTrace	java.lang.StackTraceElement[]:scala.Unit
 java.nio.ReadOnlyBufferException	toString	:java.lang.String
@@ -1862,6 +1908,7 @@ java.nio.channels.ClosedChannelException	getStackTrace	:java.lang.StackTraceElem
 java.nio.channels.ClosedChannelException	getSuppressed	:java.lang.Throwable[]
 java.nio.channels.ClosedChannelException	initCause	java.lang.Throwable:java.lang.Throwable
 java.nio.channels.ClosedChannelException	printStackTrace	:scala.Unit
+java.nio.channels.ClosedChannelException	printStackTrace	java.io.PrintStream:scala.Unit
 java.nio.channels.ClosedChannelException	printStackTrace	java.io.PrintWriter:scala.Unit
 java.nio.channels.ClosedChannelException	setStackTrace	java.lang.StackTraceElement[]:scala.Unit
 java.nio.channels.ClosedChannelException	toString	:java.lang.String
@@ -1877,6 +1924,7 @@ java.nio.charset.CharacterCodingException	getStackTrace	:java.lang.StackTraceEle
 java.nio.charset.CharacterCodingException	getSuppressed	:java.lang.Throwable[]
 java.nio.charset.CharacterCodingException	initCause	java.lang.Throwable:java.lang.Throwable
 java.nio.charset.CharacterCodingException	printStackTrace	:scala.Unit
+java.nio.charset.CharacterCodingException	printStackTrace	java.io.PrintStream:scala.Unit
 java.nio.charset.CharacterCodingException	printStackTrace	java.io.PrintWriter:scala.Unit
 java.nio.charset.CharacterCodingException	setStackTrace	java.lang.StackTraceElement[]:scala.Unit
 java.nio.charset.CharacterCodingException	toString	:java.lang.String
@@ -1903,6 +1951,7 @@ java.nio.charset.MalformedInputException	getStackTrace	:java.lang.StackTraceElem
 java.nio.charset.MalformedInputException	getSuppressed	:java.lang.Throwable[]
 java.nio.charset.MalformedInputException	initCause	java.lang.Throwable:java.lang.Throwable
 java.nio.charset.MalformedInputException	printStackTrace	:scala.Unit
+java.nio.charset.MalformedInputException	printStackTrace	java.io.PrintStream:scala.Unit
 java.nio.charset.MalformedInputException	printStackTrace	java.io.PrintWriter:scala.Unit
 java.nio.charset.MalformedInputException	setStackTrace	java.lang.StackTraceElement[]:scala.Unit
 java.nio.charset.MalformedInputException	toString	:java.lang.String
@@ -1923,6 +1972,7 @@ java.nio.charset.UnmappableCharacterException	getStackTrace	:java.lang.StackTrac
 java.nio.charset.UnmappableCharacterException	getSuppressed	:java.lang.Throwable[]
 java.nio.charset.UnmappableCharacterException	initCause	java.lang.Throwable:java.lang.Throwable
 java.nio.charset.UnmappableCharacterException	printStackTrace	:scala.Unit
+java.nio.charset.UnmappableCharacterException	printStackTrace	java.io.PrintStream:scala.Unit
 java.nio.charset.UnmappableCharacterException	printStackTrace	java.io.PrintWriter:scala.Unit
 java.nio.charset.UnmappableCharacterException	setStackTrace	java.lang.StackTraceElement[]:scala.Unit
 java.nio.charset.UnmappableCharacterException	toString	:java.lang.String
@@ -1937,6 +1987,7 @@ java.nio.charset.UnsupportedCharsetException	getStackTrace	:java.lang.StackTrace
 java.nio.charset.UnsupportedCharsetException	getSuppressed	:java.lang.Throwable[]
 java.nio.charset.UnsupportedCharsetException	initCause	java.lang.Throwable:java.lang.Throwable
 java.nio.charset.UnsupportedCharsetException	printStackTrace	:scala.Unit
+java.nio.charset.UnsupportedCharsetException	printStackTrace	java.io.PrintStream:scala.Unit
 java.nio.charset.UnsupportedCharsetException	printStackTrace	java.io.PrintWriter:scala.Unit
 java.nio.charset.UnsupportedCharsetException	setStackTrace	java.lang.StackTraceElement[]:scala.Unit
 java.nio.charset.UnsupportedCharsetException	toString	:java.lang.String
@@ -1961,6 +2012,7 @@ java.nio.file.AccessDeniedException	getStackTrace	:java.lang.StackTraceElement[]
 java.nio.file.AccessDeniedException	getSuppressed	:java.lang.Throwable[]
 java.nio.file.AccessDeniedException	initCause	java.lang.Throwable:java.lang.Throwable
 java.nio.file.AccessDeniedException	printStackTrace	:scala.Unit
+java.nio.file.AccessDeniedException	printStackTrace	java.io.PrintStream:scala.Unit
 java.nio.file.AccessDeniedException	printStackTrace	java.io.PrintWriter:scala.Unit
 java.nio.file.AccessDeniedException	setStackTrace	java.lang.StackTraceElement[]:scala.Unit
 java.nio.file.AccessDeniedException	toString	:java.lang.String
@@ -1977,6 +2029,7 @@ java.nio.file.AtomicMoveNotSupportedException	getStackTrace	:java.lang.StackTrac
 java.nio.file.AtomicMoveNotSupportedException	getSuppressed	:java.lang.Throwable[]
 java.nio.file.AtomicMoveNotSupportedException	initCause	java.lang.Throwable:java.lang.Throwable
 java.nio.file.AtomicMoveNotSupportedException	printStackTrace	:scala.Unit
+java.nio.file.AtomicMoveNotSupportedException	printStackTrace	java.io.PrintStream:scala.Unit
 java.nio.file.AtomicMoveNotSupportedException	printStackTrace	java.io.PrintWriter:scala.Unit
 java.nio.file.AtomicMoveNotSupportedException	setStackTrace	java.lang.StackTraceElement[]:scala.Unit
 java.nio.file.AtomicMoveNotSupportedException	toString	:java.lang.String
@@ -1994,6 +2047,7 @@ java.nio.file.DirectoryNotEmptyException	getStackTrace	:java.lang.StackTraceElem
 java.nio.file.DirectoryNotEmptyException	getSuppressed	:java.lang.Throwable[]
 java.nio.file.DirectoryNotEmptyException	initCause	java.lang.Throwable:java.lang.Throwable
 java.nio.file.DirectoryNotEmptyException	printStackTrace	:scala.Unit
+java.nio.file.DirectoryNotEmptyException	printStackTrace	java.io.PrintStream:scala.Unit
 java.nio.file.DirectoryNotEmptyException	printStackTrace	java.io.PrintWriter:scala.Unit
 java.nio.file.DirectoryNotEmptyException	setStackTrace	java.lang.StackTraceElement[]:scala.Unit
 java.nio.file.DirectoryNotEmptyException	toString	:java.lang.String
@@ -2015,6 +2069,7 @@ java.nio.file.FileAlreadyExistsException	getStackTrace	:java.lang.StackTraceElem
 java.nio.file.FileAlreadyExistsException	getSuppressed	:java.lang.Throwable[]
 java.nio.file.FileAlreadyExistsException	initCause	java.lang.Throwable:java.lang.Throwable
 java.nio.file.FileAlreadyExistsException	printStackTrace	:scala.Unit
+java.nio.file.FileAlreadyExistsException	printStackTrace	java.io.PrintStream:scala.Unit
 java.nio.file.FileAlreadyExistsException	printStackTrace	java.io.PrintWriter:scala.Unit
 java.nio.file.FileAlreadyExistsException	setStackTrace	java.lang.StackTraceElement[]:scala.Unit
 java.nio.file.FileAlreadyExistsException	toString	:java.lang.String
@@ -2032,6 +2087,7 @@ java.nio.file.FileSystemException	getStackTrace	:java.lang.StackTraceElement[]
 java.nio.file.FileSystemException	getSuppressed	:java.lang.Throwable[]
 java.nio.file.FileSystemException	initCause	java.lang.Throwable:java.lang.Throwable
 java.nio.file.FileSystemException	printStackTrace	:scala.Unit
+java.nio.file.FileSystemException	printStackTrace	java.io.PrintStream:scala.Unit
 java.nio.file.FileSystemException	printStackTrace	java.io.PrintWriter:scala.Unit
 java.nio.file.FileSystemException	setStackTrace	java.lang.StackTraceElement[]:scala.Unit
 java.nio.file.FileSystemException	toString	:java.lang.String
@@ -2048,6 +2104,7 @@ java.nio.file.FileSystemLoopException	getStackTrace	:java.lang.StackTraceElement
 java.nio.file.FileSystemLoopException	getSuppressed	:java.lang.Throwable[]
 java.nio.file.FileSystemLoopException	initCause	java.lang.Throwable:java.lang.Throwable
 java.nio.file.FileSystemLoopException	printStackTrace	:scala.Unit
+java.nio.file.FileSystemLoopException	printStackTrace	java.io.PrintStream:scala.Unit
 java.nio.file.FileSystemLoopException	printStackTrace	java.io.PrintWriter:scala.Unit
 java.nio.file.FileSystemLoopException	setStackTrace	java.lang.StackTraceElement[]:scala.Unit
 java.nio.file.FileSystemLoopException	toString	:java.lang.String
@@ -2090,6 +2147,7 @@ java.nio.file.NoSuchFileException	getStackTrace	:java.lang.StackTraceElement[]
 java.nio.file.NoSuchFileException	getSuppressed	:java.lang.Throwable[]
 java.nio.file.NoSuchFileException	initCause	java.lang.Throwable:java.lang.Throwable
 java.nio.file.NoSuchFileException	printStackTrace	:scala.Unit
+java.nio.file.NoSuchFileException	printStackTrace	java.io.PrintStream:scala.Unit
 java.nio.file.NoSuchFileException	printStackTrace	java.io.PrintWriter:scala.Unit
 java.nio.file.NoSuchFileException	setStackTrace	java.lang.StackTraceElement[]:scala.Unit
 java.nio.file.NoSuchFileException	toString	:java.lang.String
@@ -2106,6 +2164,7 @@ java.nio.file.NotDirectoryException	getStackTrace	:java.lang.StackTraceElement[]
 java.nio.file.NotDirectoryException	getSuppressed	:java.lang.Throwable[]
 java.nio.file.NotDirectoryException	initCause	java.lang.Throwable:java.lang.Throwable
 java.nio.file.NotDirectoryException	printStackTrace	:scala.Unit
+java.nio.file.NotDirectoryException	printStackTrace	java.io.PrintStream:scala.Unit
 java.nio.file.NotDirectoryException	printStackTrace	java.io.PrintWriter:scala.Unit
 java.nio.file.NotDirectoryException	setStackTrace	java.lang.StackTraceElement[]:scala.Unit
 java.nio.file.NotDirectoryException	toString	:java.lang.String
@@ -2123,6 +2182,7 @@ java.nio.file.NotLinkException	getStackTrace	:java.lang.StackTraceElement[]
 java.nio.file.NotLinkException	getSuppressed	:java.lang.Throwable[]
 java.nio.file.NotLinkException	initCause	java.lang.Throwable:java.lang.Throwable
 java.nio.file.NotLinkException	printStackTrace	:scala.Unit
+java.nio.file.NotLinkException	printStackTrace	java.io.PrintStream:scala.Unit
 java.nio.file.NotLinkException	printStackTrace	java.io.PrintWriter:scala.Unit
 java.nio.file.NotLinkException	setStackTrace	java.lang.StackTraceElement[]:scala.Unit
 java.nio.file.NotLinkException	toString	:java.lang.String
@@ -2202,6 +2262,7 @@ java.security.GeneralSecurityException	getStackTrace	:java.lang.StackTraceElemen
 java.security.GeneralSecurityException	getSuppressed	:java.lang.Throwable[]
 java.security.GeneralSecurityException	initCause	java.lang.Throwable:java.lang.Throwable
 java.security.GeneralSecurityException	printStackTrace	:scala.Unit
+java.security.GeneralSecurityException	printStackTrace	java.io.PrintStream:scala.Unit
 java.security.GeneralSecurityException	printStackTrace	java.io.PrintWriter:scala.Unit
 java.security.GeneralSecurityException	setStackTrace	java.lang.StackTraceElement[]:scala.Unit
 java.security.GeneralSecurityException	toString	:java.lang.String
@@ -2228,6 +2289,7 @@ java.security.NoSuchAlgorithmException	getStackTrace	:java.lang.StackTraceElemen
 java.security.NoSuchAlgorithmException	getSuppressed	:java.lang.Throwable[]
 java.security.NoSuchAlgorithmException	initCause	java.lang.Throwable:java.lang.Throwable
 java.security.NoSuchAlgorithmException	printStackTrace	:scala.Unit
+java.security.NoSuchAlgorithmException	printStackTrace	java.io.PrintStream:scala.Unit
 java.security.NoSuchAlgorithmException	printStackTrace	java.io.PrintWriter:scala.Unit
 java.security.NoSuchAlgorithmException	setStackTrace	java.lang.StackTraceElement[]:scala.Unit
 java.security.NoSuchAlgorithmException	toString	:java.lang.String
@@ -2357,6 +2419,7 @@ java.time.DateTimeException	getStackTrace	:java.lang.StackTraceElement[]
 java.time.DateTimeException	getSuppressed	:java.lang.Throwable[]
 java.time.DateTimeException	initCause	java.lang.Throwable:java.lang.Throwable
 java.time.DateTimeException	printStackTrace	:scala.Unit
+java.time.DateTimeException	printStackTrace	java.io.PrintStream:scala.Unit
 java.time.DateTimeException	printStackTrace	java.io.PrintWriter:scala.Unit
 java.time.DateTimeException	setStackTrace	java.lang.StackTraceElement[]:scala.Unit
 java.time.DateTimeException	toString	:java.lang.String
@@ -2510,6 +2573,7 @@ java.time.temporal.UnsupportedTemporalTypeException	getStackTrace	:java.lang.Sta
 java.time.temporal.UnsupportedTemporalTypeException	getSuppressed	:java.lang.Throwable[]
 java.time.temporal.UnsupportedTemporalTypeException	initCause	java.lang.Throwable:java.lang.Throwable
 java.time.temporal.UnsupportedTemporalTypeException	printStackTrace	:scala.Unit
+java.time.temporal.UnsupportedTemporalTypeException	printStackTrace	java.io.PrintStream:scala.Unit
 java.time.temporal.UnsupportedTemporalTypeException	printStackTrace	java.io.PrintWriter:scala.Unit
 java.time.temporal.UnsupportedTemporalTypeException	setStackTrace	java.lang.StackTraceElement[]:scala.Unit
 java.time.temporal.UnsupportedTemporalTypeException	toString	:java.lang.String
@@ -2807,6 +2871,7 @@ java.util.ConcurrentModificationException	getStackTrace	:java.lang.StackTraceEle
 java.util.ConcurrentModificationException	getSuppressed	:java.lang.Throwable[]
 java.util.ConcurrentModificationException	initCause	java.lang.Throwable:java.lang.Throwable
 java.util.ConcurrentModificationException	printStackTrace	:scala.Unit
+java.util.ConcurrentModificationException	printStackTrace	java.io.PrintStream:scala.Unit
 java.util.ConcurrentModificationException	printStackTrace	java.io.PrintWriter:scala.Unit
 java.util.ConcurrentModificationException	setStackTrace	java.lang.StackTraceElement[]:scala.Unit
 java.util.ConcurrentModificationException	toString	:java.lang.String
@@ -3133,6 +3198,7 @@ java.util.NoSuchElementException	getStackTrace	:java.lang.StackTraceElement[]
 java.util.NoSuchElementException	getSuppressed	:java.lang.Throwable[]
 java.util.NoSuchElementException	initCause	java.lang.Throwable:java.lang.Throwable
 java.util.NoSuchElementException	printStackTrace	:scala.Unit
+java.util.NoSuchElementException	printStackTrace	java.io.PrintStream:scala.Unit
 java.util.NoSuchElementException	printStackTrace	java.io.PrintWriter:scala.Unit
 java.util.NoSuchElementException	setStackTrace	java.lang.StackTraceElement[]:scala.Unit
 java.util.NoSuchElementException	toString	:java.lang.String
@@ -3559,6 +3625,7 @@ java.util.concurrent.CancellationException	getStackTrace	:java.lang.StackTraceEl
 java.util.concurrent.CancellationException	getSuppressed	:java.lang.Throwable[]
 java.util.concurrent.CancellationException	initCause	java.lang.Throwable:java.lang.Throwable
 java.util.concurrent.CancellationException	printStackTrace	:scala.Unit
+java.util.concurrent.CancellationException	printStackTrace	java.io.PrintStream:scala.Unit
 java.util.concurrent.CancellationException	printStackTrace	java.io.PrintWriter:scala.Unit
 java.util.concurrent.CancellationException	setStackTrace	java.lang.StackTraceElement[]:scala.Unit
 java.util.concurrent.CancellationException	toString	:java.lang.String
@@ -3623,6 +3690,7 @@ java.util.concurrent.ExecutionException	getStackTrace	:java.lang.StackTraceEleme
 java.util.concurrent.ExecutionException	getSuppressed	:java.lang.Throwable[]
 java.util.concurrent.ExecutionException	initCause	java.lang.Throwable:java.lang.Throwable
 java.util.concurrent.ExecutionException	printStackTrace	:scala.Unit
+java.util.concurrent.ExecutionException	printStackTrace	java.io.PrintStream:scala.Unit
 java.util.concurrent.ExecutionException	printStackTrace	java.io.PrintWriter:scala.Unit
 java.util.concurrent.ExecutionException	setStackTrace	java.lang.StackTraceElement[]:scala.Unit
 java.util.concurrent.ExecutionException	toString	:java.lang.String
@@ -3640,6 +3708,7 @@ java.util.concurrent.RejectedExecutionException	getStackTrace	:java.lang.StackTr
 java.util.concurrent.RejectedExecutionException	getSuppressed	:java.lang.Throwable[]
 java.util.concurrent.RejectedExecutionException	initCause	java.lang.Throwable:java.lang.Throwable
 java.util.concurrent.RejectedExecutionException	printStackTrace	:scala.Unit
+java.util.concurrent.RejectedExecutionException	printStackTrace	java.io.PrintStream:scala.Unit
 java.util.concurrent.RejectedExecutionException	printStackTrace	java.io.PrintWriter:scala.Unit
 java.util.concurrent.RejectedExecutionException	setStackTrace	java.lang.StackTraceElement[]:scala.Unit
 java.util.concurrent.RejectedExecutionException	toString	:java.lang.String
@@ -3687,6 +3756,7 @@ java.util.concurrent.TimeoutException	getStackTrace	:java.lang.StackTraceElement
 java.util.concurrent.TimeoutException	getSuppressed	:java.lang.Throwable[]
 java.util.concurrent.TimeoutException	initCause	java.lang.Throwable:java.lang.Throwable
 java.util.concurrent.TimeoutException	printStackTrace	:scala.Unit
+java.util.concurrent.TimeoutException	printStackTrace	java.io.PrintStream:scala.Unit
 java.util.concurrent.TimeoutException	printStackTrace	java.io.PrintWriter:scala.Unit
 java.util.concurrent.TimeoutException	setStackTrace	java.lang.StackTraceElement[]:scala.Unit
 java.util.concurrent.TimeoutException	toString	:java.lang.String
@@ -3917,6 +3987,7 @@ java.util.regex.PatternSyntaxException	getStackTrace	:java.lang.StackTraceElemen
 java.util.regex.PatternSyntaxException	getSuppressed	:java.lang.Throwable[]
 java.util.regex.PatternSyntaxException	initCause	java.lang.Throwable:java.lang.Throwable
 java.util.regex.PatternSyntaxException	printStackTrace	:scala.Unit
+java.util.regex.PatternSyntaxException	printStackTrace	java.io.PrintStream:scala.Unit
 java.util.regex.PatternSyntaxException	printStackTrace	java.io.PrintWriter:scala.Unit
 java.util.regex.PatternSyntaxException	setStackTrace	java.lang.StackTraceElement[]:scala.Unit
 java.util.regex.PatternSyntaxException	toString	:java.lang.String
@@ -4197,6 +4268,7 @@ java.util.zip.DataFormatException	getStackTrace	:java.lang.StackTraceElement[]
 java.util.zip.DataFormatException	getSuppressed	:java.lang.Throwable[]
 java.util.zip.DataFormatException	initCause	java.lang.Throwable:java.lang.Throwable
 java.util.zip.DataFormatException	printStackTrace	:scala.Unit
+java.util.zip.DataFormatException	printStackTrace	java.io.PrintStream:scala.Unit
 java.util.zip.DataFormatException	printStackTrace	java.io.PrintWriter:scala.Unit
 java.util.zip.DataFormatException	setStackTrace	java.lang.StackTraceElement[]:scala.Unit
 java.util.zip.DataFormatException	toString	:java.lang.String
@@ -4350,6 +4422,7 @@ java.util.zip.ZipException	getStackTrace	:java.lang.StackTraceElement[]
 java.util.zip.ZipException	getSuppressed	:java.lang.Throwable[]
 java.util.zip.ZipException	initCause	java.lang.Throwable:java.lang.Throwable
 java.util.zip.ZipException	printStackTrace	:scala.Unit
+java.util.zip.ZipException	printStackTrace	java.io.PrintStream:scala.Unit
 java.util.zip.ZipException	printStackTrace	java.io.PrintWriter:scala.Unit
 java.util.zip.ZipException	setStackTrace	java.lang.StackTraceElement[]:scala.Unit
 java.util.zip.ZipException	toString	:java.lang.String
@@ -14022,6 +14095,7 @@ scala.MatchError	getSuppressed	:java.lang.Throwable[]
 scala.MatchError	initCause	java.lang.Throwable:java.lang.Throwable
 scala.MatchError	obj	-:java.lang.Object
 scala.MatchError	printStackTrace	:scala.Unit
+scala.MatchError	printStackTrace	java.io.PrintStream:scala.Unit
 scala.MatchError	printStackTrace	java.io.PrintWriter:scala.Unit
 scala.MatchError	setStackTrace	java.lang.StackTraceElement[]:scala.Unit
 scala.MatchError	toString	:java.lang.String
@@ -14067,6 +14141,7 @@ scala.NotImplementedError	getStackTrace	:java.lang.StackTraceElement[]
 scala.NotImplementedError	getSuppressed	:java.lang.Throwable[]
 scala.NotImplementedError	initCause	java.lang.Throwable:java.lang.Throwable
 scala.NotImplementedError	printStackTrace	:scala.Unit
+scala.NotImplementedError	printStackTrace	java.io.PrintStream:scala.Unit
 scala.NotImplementedError	printStackTrace	java.io.PrintWriter:scala.Unit
 scala.NotImplementedError	setStackTrace	java.lang.StackTraceElement[]:scala.Unit
 scala.NotImplementedError	toString	:java.lang.String
@@ -14826,6 +14901,7 @@ scala.collection	Iterator	object
 scala.collection	JavaConverters	object
 scala.collection	Map	object
 scala.collection	MapFactory	object
+scala.collection	Set	object
 scala.collection	SortedMap	object
 scala.collection	SortedSet	object
 scala.collection.AbstractIterable	++	[1],scala.collection.IterableOnce:scala.collection.Iterable
@@ -14858,6 +14934,7 @@ scala.collection.AbstractIterable	groupBy	[1],scala.Function1:scala.collection.i
 scala.collection.AbstractIterable	groupMap	[2],scala.Function1,scala.Function1:scala.collection.immutable.Map
 scala.collection.AbstractIterable	groupMapReduce	[2],scala.Function1,scala.Function1,scala.Function2:scala.collection.immutable.Map
 scala.collection.AbstractIterable	grouped	scala.Int:scala.collection.Iterator
+scala.collection.AbstractIterable	hasDefiniteSize	-:scala.Boolean
 scala.collection.AbstractIterable	head	-:java.lang.Object
 scala.collection.AbstractIterable	headOption	-:scala.Option
 scala.collection.AbstractIterable	isEmpty	-:scala.Boolean
@@ -14916,6 +14993,7 @@ scala.collection.AbstractIterable	view	-:scala.collection.View
 scala.collection.AbstractIterable	zip	[1],scala.collection.IterableOnce:scala.collection.Iterable
 scala.collection.AbstractIterator	++	[1],scala.Function0:scala.collection.Iterator
 scala.collection.AbstractIterator	<init>	[1]:scala.collection.AbstractIterator
+scala.collection.AbstractIterator	buffered	-:scala.collection.BufferedIterator
 scala.collection.AbstractIterator	collect	[1],scala.PartialFunction:scala.collection.Iterator
 scala.collection.AbstractIterator	collectFirst	[1],scala.PartialFunction:scala.Option
 scala.collection.AbstractIterator	concat	[1],scala.Function0:scala.collection.Iterator
@@ -14938,6 +15016,7 @@ scala.collection.AbstractIterator	foldLeft	[1],java.lang.Object,scala.Function2:
 scala.collection.AbstractIterator	foldRight	[1],java.lang.Object,scala.Function2:java.lang.Object
 scala.collection.AbstractIterator	forall	scala.Function1:scala.Boolean
 scala.collection.AbstractIterator	foreach	[1],scala.Function1:scala.Unit
+scala.collection.AbstractIterator	hasDefiniteSize	-:scala.Boolean
 scala.collection.AbstractIterator	hasNext	-:scala.Boolean
 scala.collection.AbstractIterator	indexOf	[1],java.lang.Object,scala.Int:scala.Int
 scala.collection.AbstractIterator	indexWhere	scala.Function1,scala.Int:scala.Int
@@ -14991,6 +15070,89 @@ scala.collection.AbstractIterator	withFilter	scala.Function1:scala.collection.It
 scala.collection.AbstractIterator	zip	[1],scala.collection.IterableOnce:scala.collection.Iterator
 scala.collection.AbstractIterator	zipAll	[2],scala.collection.IterableOnce,java.lang.Object,java.lang.Object:scala.collection.Iterator
 scala.collection.AbstractIterator	zipWithIndex	-:scala.collection.Iterator
+scala.collection.AbstractSeq	<init>	[1]:scala.collection.AbstractSeq
+scala.collection.AbstractSeq	apply	scala.Int:java.lang.Object
+scala.collection.AbstractSeq	className	-:java.lang.String
+scala.collection.AbstractSeq	collectFirst	[1],scala.PartialFunction:scala.Option
+scala.collection.AbstractSeq	collectionClassName	-:java.lang.String
+scala.collection.AbstractSeq	contains	[1],java.lang.Object:scala.Boolean
+scala.collection.AbstractSeq	copyToArray	[1],java.lang.Object,scala.Int,scala.Int:scala.Int
+scala.collection.AbstractSeq	copyToArray	[1],java.lang.Object,scala.Int:scala.Int
+scala.collection.AbstractSeq	copyToArray	[1],java.lang.Object:scala.Int
+scala.collection.AbstractSeq	corresponds	[1],scala.collection.IterableOnce,scala.Function2:scala.Boolean
+scala.collection.AbstractSeq	count	scala.Function1:scala.Int
+scala.collection.AbstractSeq	endsWith	[1],scala.collection.Iterable:scala.Boolean
+scala.collection.AbstractSeq	equals	java.lang.Object:scala.Boolean
+scala.collection.AbstractSeq	exists	scala.Function1:scala.Boolean
+scala.collection.AbstractSeq	find	scala.Function1:scala.Option
+scala.collection.AbstractSeq	findLast	scala.Function1:scala.Option
+scala.collection.AbstractSeq	fold	[1],java.lang.Object,scala.Function2:java.lang.Object
+scala.collection.AbstractSeq	foldLeft	[1],java.lang.Object,scala.Function2:java.lang.Object
+scala.collection.AbstractSeq	foldRight	[1],java.lang.Object,scala.Function2:java.lang.Object
+scala.collection.AbstractSeq	forall	scala.Function1:scala.Boolean
+scala.collection.AbstractSeq	foreach	[1],scala.Function1:scala.Unit
+scala.collection.AbstractSeq	groupBy	[1],scala.Function1:scala.collection.immutable.Map
+scala.collection.AbstractSeq	groupMap	[2],scala.Function1,scala.Function1:scala.collection.immutable.Map
+scala.collection.AbstractSeq	groupMapReduce	[2],scala.Function1,scala.Function1,scala.Function2:scala.collection.immutable.Map
+scala.collection.AbstractSeq	grouped	scala.Int:scala.collection.Iterator
+scala.collection.AbstractSeq	hasDefiniteSize	-:scala.Boolean
+scala.collection.AbstractSeq	head	-:java.lang.Object
+scala.collection.AbstractSeq	headOption	-:scala.Option
+scala.collection.AbstractSeq	indexOf	[1],java.lang.Object,scala.Int:scala.Int
+scala.collection.AbstractSeq	indexWhere	scala.Function1,scala.Int:scala.Int
+scala.collection.AbstractSeq	indices	-:scala.collection.immutable.Range
+scala.collection.AbstractSeq	inits	-:scala.collection.Iterator
+scala.collection.AbstractSeq	isDefinedAt	scala.Int:scala.Boolean
+scala.collection.AbstractSeq	isEmpty	-:scala.Boolean
+scala.collection.AbstractSeq	iterator	-:scala.collection.Iterator
+scala.collection.AbstractSeq	knownSize	-:scala.Int
+scala.collection.AbstractSeq	last	-:java.lang.Object
+scala.collection.AbstractSeq	lastIndexWhere	scala.Function1,scala.Int:scala.Int
+scala.collection.AbstractSeq	lastOption	-:scala.Option
+scala.collection.AbstractSeq	length	-:scala.Int
+scala.collection.AbstractSeq	lengthCompare	scala.Int:scala.Int
+scala.collection.AbstractSeq	max	[1],scala.math.Ordering:java.lang.Object
+scala.collection.AbstractSeq	maxBy	[1],scala.Function1,scala.math.Ordering:java.lang.Object
+scala.collection.AbstractSeq	maxByOption	[1],scala.Function1,scala.math.Ordering:scala.Option
+scala.collection.AbstractSeq	maxOption	[1],scala.math.Ordering:scala.Option
+scala.collection.AbstractSeq	min	[1],scala.math.Ordering:java.lang.Object
+scala.collection.AbstractSeq	minBy	[1],scala.Function1,scala.math.Ordering:java.lang.Object
+scala.collection.AbstractSeq	minByOption	[1],scala.Function1,scala.math.Ordering:scala.Option
+scala.collection.AbstractSeq	minOption	[1],scala.math.Ordering:scala.Option
+scala.collection.AbstractSeq	mkString	-:java.lang.String
+scala.collection.AbstractSeq	mkString	java.lang.String,java.lang.String,java.lang.String:java.lang.String
+scala.collection.AbstractSeq	mkString	java.lang.String:java.lang.String
+scala.collection.AbstractSeq	newSpecificBuilder	-:scala.collection.mutable.Builder
+scala.collection.AbstractSeq	nonEmpty	-:scala.Boolean
+scala.collection.AbstractSeq	partition	scala.Function1:scala.Tuple2
+scala.collection.AbstractSeq	partitionMap	[2],scala.Function1:scala.Tuple2
+scala.collection.AbstractSeq	product	[1],scala.math.Numeric:java.lang.Object
+scala.collection.AbstractSeq	reduce	[1],scala.Function2:java.lang.Object
+scala.collection.AbstractSeq	reduceLeft	[1],scala.Function2:java.lang.Object
+scala.collection.AbstractSeq	reduceLeftOption	[1],scala.Function2:scala.Option
+scala.collection.AbstractSeq	reduceOption	[1],scala.Function2:scala.Option
+scala.collection.AbstractSeq	reduceRight	[1],scala.Function2:java.lang.Object
+scala.collection.AbstractSeq	reduceRightOption	[1],scala.Function2:scala.Option
+scala.collection.AbstractSeq	reverseIterator	-:scala.collection.Iterator
+scala.collection.AbstractSeq	sameElements	[1],scala.collection.IterableOnce:scala.Boolean
+scala.collection.AbstractSeq	size	-:scala.Int
+scala.collection.AbstractSeq	sizeCompare	scala.Int:scala.Int
+scala.collection.AbstractSeq	sizeCompare	scala.collection.Iterable:scala.Int
+scala.collection.AbstractSeq	sliding	scala.Int,scala.Int:scala.collection.Iterator
+scala.collection.AbstractSeq	span	scala.Function1:scala.Tuple2
+scala.collection.AbstractSeq	splitAt	scala.Int:scala.Tuple2
+scala.collection.AbstractSeq	startsWith	[1],scala.collection.IterableOnce,scala.Int:scala.Boolean
+scala.collection.AbstractSeq	sum	[1],scala.math.Numeric:java.lang.Object
+scala.collection.AbstractSeq	tails	-:scala.collection.Iterator
+scala.collection.AbstractSeq	to	[1],scala.collection.Factory:java.lang.Object
+scala.collection.AbstractSeq	toArray	[1],scala.reflect.ClassTag:java.lang.Object
+scala.collection.AbstractSeq	toIndexedSeq	-:scala.collection.immutable.IndexedSeq
+scala.collection.AbstractSeq	toIterator	-:scala.collection.Iterator
+scala.collection.AbstractSeq	toList	-:scala.collection.immutable.List
+scala.collection.AbstractSeq	toMap	[2],scala.<:<:scala.collection.immutable.Map
+scala.collection.AbstractSeq	toSeq	-:scala.collection.immutable.Seq
+scala.collection.AbstractSeq	toSet	[1]:scala.collection.immutable.Set
+scala.collection.AbstractSeq	toVector	-:scala.collection.immutable.Vector
 scala.collection.ArrayOps	++	[1],java.lang.Object,scala.reflect.ClassTag:java.lang.Object
 scala.collection.ArrayOps	++	[1],scala.collection.IterableOnce,scala.reflect.ClassTag:java.lang.Object
 scala.collection.ArrayOps	+:	[1],java.lang.Object,scala.reflect.ClassTag:java.lang.Object
@@ -15049,8 +15211,90 @@ scala.collection.ArrayOps	takeRight	scala.Int:java.lang.Object
 scala.collection.ArrayOps	takeWhile	scala.Function1:java.lang.Object
 scala.collection.ArrayOps	toIndexedSeq	-:scala.collection.immutable.IndexedSeq
 scala.collection.ArrayOps	toSeq	-:scala.collection.immutable.Seq
+scala.collection.ArrayOps	xs	-:java.lang.Object
 scala.collection.ArrayOps	zip	[1],scala.collection.IterableOnce:scala.Tuple2[]
 scala.collection.ArrayOps	zipWithIndex	-:scala.Tuple2[]
+scala.collection.BufferedIterator	++	[1],scala.Function0:scala.collection.Iterator
+scala.collection.BufferedIterator	<init>	[1]:scala.collection.BufferedIterator
+scala.collection.BufferedIterator	buffered	-:scala.collection.BufferedIterator
+scala.collection.BufferedIterator	collect	[1],scala.PartialFunction:scala.collection.Iterator
+scala.collection.BufferedIterator	collectFirst	[1],scala.PartialFunction:scala.Option
+scala.collection.BufferedIterator	concat	[1],scala.Function0:scala.collection.Iterator
+scala.collection.BufferedIterator	copyToArray	[1],java.lang.Object,scala.Int,scala.Int:scala.Int
+scala.collection.BufferedIterator	copyToArray	[1],java.lang.Object,scala.Int:scala.Int
+scala.collection.BufferedIterator	copyToArray	[1],java.lang.Object:scala.Int
+scala.collection.BufferedIterator	count	scala.Function1:scala.Int
+scala.collection.BufferedIterator	distinct	-:scala.collection.Iterator
+scala.collection.BufferedIterator	distinctBy	[1],scala.Function1:scala.collection.Iterator
+scala.collection.BufferedIterator	drop	scala.Int:scala.collection.Iterator
+scala.collection.BufferedIterator	dropWhile	scala.Function1:scala.collection.Iterator
+scala.collection.BufferedIterator	exists	scala.Function1:scala.Boolean
+scala.collection.BufferedIterator	filter	scala.Function1:scala.collection.Iterator
+scala.collection.BufferedIterator	filterNot	scala.Function1:scala.collection.Iterator
+scala.collection.BufferedIterator	find	scala.Function1:scala.Option
+scala.collection.BufferedIterator	flatMap	[1],scala.Function1:scala.collection.Iterator
+scala.collection.BufferedIterator	flatten	[1],scala.Function1:scala.collection.Iterator
+scala.collection.BufferedIterator	fold	[1],java.lang.Object,scala.Function2:java.lang.Object
+scala.collection.BufferedIterator	foldLeft	[1],java.lang.Object,scala.Function2:java.lang.Object
+scala.collection.BufferedIterator	foldRight	[1],java.lang.Object,scala.Function2:java.lang.Object
+scala.collection.BufferedIterator	forall	scala.Function1:scala.Boolean
+scala.collection.BufferedIterator	foreach	[1],scala.Function1:scala.Unit
+scala.collection.BufferedIterator	hasDefiniteSize	-:scala.Boolean
+scala.collection.BufferedIterator	hasNext	-:scala.Boolean
+scala.collection.BufferedIterator	head	-:java.lang.Object
+scala.collection.BufferedIterator	headOption	-:scala.Option
+scala.collection.BufferedIterator	indexOf	[1],java.lang.Object,scala.Int:scala.Int
+scala.collection.BufferedIterator	indexWhere	scala.Function1,scala.Int:scala.Int
+scala.collection.BufferedIterator	isEmpty	-:scala.Boolean
+scala.collection.BufferedIterator	iterator	-:scala.collection.Iterator
+scala.collection.BufferedIterator	knownSize	-:scala.Int
+scala.collection.BufferedIterator	length	-:scala.Int
+scala.collection.BufferedIterator	map	[1],scala.Function1:scala.collection.Iterator
+scala.collection.BufferedIterator	max	[1],scala.math.Ordering:java.lang.Object
+scala.collection.BufferedIterator	maxBy	[1],scala.Function1,scala.math.Ordering:java.lang.Object
+scala.collection.BufferedIterator	maxByOption	[1],scala.Function1,scala.math.Ordering:scala.Option
+scala.collection.BufferedIterator	maxOption	[1],scala.math.Ordering:scala.Option
+scala.collection.BufferedIterator	min	[1],scala.math.Ordering:java.lang.Object
+scala.collection.BufferedIterator	minBy	[1],scala.Function1,scala.math.Ordering:java.lang.Object
+scala.collection.BufferedIterator	minByOption	[1],scala.Function1,scala.math.Ordering:scala.Option
+scala.collection.BufferedIterator	minOption	[1],scala.math.Ordering:scala.Option
+scala.collection.BufferedIterator	mkString	-:java.lang.String
+scala.collection.BufferedIterator	mkString	java.lang.String,java.lang.String,java.lang.String:java.lang.String
+scala.collection.BufferedIterator	mkString	java.lang.String:java.lang.String
+scala.collection.BufferedIterator	next	:java.lang.Object
+scala.collection.BufferedIterator	nextOption	:scala.Option
+scala.collection.BufferedIterator	nonEmpty	-:scala.Boolean
+scala.collection.BufferedIterator	partition	scala.Function1:scala.Tuple2
+scala.collection.BufferedIterator	product	[1],scala.math.Numeric:java.lang.Object
+scala.collection.BufferedIterator	reduce	[1],scala.Function2:java.lang.Object
+scala.collection.BufferedIterator	reduceLeft	[1],scala.Function2:java.lang.Object
+scala.collection.BufferedIterator	reduceLeftOption	[1],scala.Function2:scala.Option
+scala.collection.BufferedIterator	reduceOption	[1],scala.Function2:scala.Option
+scala.collection.BufferedIterator	reduceRight	[1],scala.Function2:java.lang.Object
+scala.collection.BufferedIterator	reduceRightOption	[1],scala.Function2:scala.Option
+scala.collection.BufferedIterator	scanLeft	[1],java.lang.Object,scala.Function2:scala.collection.Iterator
+scala.collection.BufferedIterator	scanRight	[1],java.lang.Object,scala.Function2:scala.collection.Iterator
+scala.collection.BufferedIterator	size	-:scala.Int
+scala.collection.BufferedIterator	slice	scala.Int,scala.Int:scala.collection.Iterator
+scala.collection.BufferedIterator	span	scala.Function1:scala.Tuple2
+scala.collection.BufferedIterator	splitAt	scala.Int:scala.Tuple2
+scala.collection.BufferedIterator	sum	[1],scala.math.Numeric:java.lang.Object
+scala.collection.BufferedIterator	take	scala.Int:scala.collection.Iterator
+scala.collection.BufferedIterator	takeWhile	scala.Function1:scala.collection.Iterator
+scala.collection.BufferedIterator	tapEach	[1],scala.Function1:scala.collection.Iterator
+scala.collection.BufferedIterator	to	[1],scala.collection.Factory:java.lang.Object
+scala.collection.BufferedIterator	toArray	[1],scala.reflect.ClassTag:java.lang.Object
+scala.collection.BufferedIterator	toIndexedSeq	-:scala.collection.immutable.IndexedSeq
+scala.collection.BufferedIterator	toIterator	-:scala.collection.Iterator
+scala.collection.BufferedIterator	toList	-:scala.collection.immutable.List
+scala.collection.BufferedIterator	toMap	[2],scala.<:<:scala.collection.immutable.Map
+scala.collection.BufferedIterator	toSeq	-:scala.collection.immutable.Seq
+scala.collection.BufferedIterator	toSet	[1]:scala.collection.immutable.Set
+scala.collection.BufferedIterator	toVector	-:scala.collection.immutable.Vector
+scala.collection.BufferedIterator	withFilter	scala.Function1:scala.collection.Iterator
+scala.collection.BufferedIterator	zip	[1],scala.collection.IterableOnce:scala.collection.Iterator
+scala.collection.BufferedIterator	zipAll	[2],scala.collection.IterableOnce,java.lang.Object,java.lang.Object:scala.collection.Iterator
+scala.collection.BufferedIterator	zipWithIndex	-:scala.collection.Iterator
 scala.collection.BuildFrom	<init>	[3]:scala.collection.BuildFrom
 scala.collection.BuildFrom	fromSpecific	java.lang.Object,scala.collection.IterableOnce:java.lang.Object
 scala.collection.BuildFrom	newBuilder	java.lang.Object:scala.collection.mutable.Builder
@@ -15117,6 +15361,7 @@ scala.collection.IndexedSeqOps	groupBy	[1],scala.Function1:scala.collection.immu
 scala.collection.IndexedSeqOps	groupMap	[2],scala.Function1,scala.Function1:scala.collection.immutable.Map
 scala.collection.IndexedSeqOps	groupMapReduce	[2],scala.Function1,scala.Function1,scala.Function2:scala.collection.immutable.Map
 scala.collection.IndexedSeqOps	grouped	scala.Int:scala.collection.Iterator
+scala.collection.IndexedSeqOps	hasDefiniteSize	-:scala.Boolean
 scala.collection.IndexedSeqOps	head	-:java.lang.Object
 scala.collection.IndexedSeqOps	headOption	-:scala.Option
 scala.collection.IndexedSeqOps	indexOf	[1],java.lang.Object,scala.Int:scala.Int
@@ -15227,6 +15472,7 @@ scala.collection.Iterable	groupBy	[1],scala.Function1:scala.collection.immutable
 scala.collection.Iterable	groupMap	[2],scala.Function1,scala.Function1:scala.collection.immutable.Map
 scala.collection.Iterable	groupMapReduce	[2],scala.Function1,scala.Function1,scala.Function2:scala.collection.immutable.Map
 scala.collection.Iterable	grouped	scala.Int:scala.collection.Iterator
+scala.collection.Iterable	hasDefiniteSize	-:scala.Boolean
 scala.collection.Iterable	head	-:java.lang.Object
 scala.collection.Iterable	headOption	-:scala.Option
 scala.collection.Iterable	isEmpty	-:scala.Boolean
@@ -15319,6 +15565,7 @@ scala.collection.IterableFactoryDefaults	groupBy	[1],scala.Function1:scala.colle
 scala.collection.IterableFactoryDefaults	groupMap	[2],scala.Function1,scala.Function1:scala.collection.immutable.Map
 scala.collection.IterableFactoryDefaults	groupMapReduce	[2],scala.Function1,scala.Function1,scala.Function2:scala.collection.immutable.Map
 scala.collection.IterableFactoryDefaults	grouped	scala.Int:scala.collection.Iterator
+scala.collection.IterableFactoryDefaults	hasDefiniteSize	-:scala.Boolean
 scala.collection.IterableFactoryDefaults	head	-:java.lang.Object
 scala.collection.IterableFactoryDefaults	headOption	-:scala.Option
 scala.collection.IterableFactoryDefaults	isEmpty	-:scala.Boolean
@@ -15399,6 +15646,7 @@ scala.collection.IterableOps	groupBy	[1],scala.Function1:scala.collection.immuta
 scala.collection.IterableOps	groupMap	[2],scala.Function1,scala.Function1:scala.collection.immutable.Map
 scala.collection.IterableOps	groupMapReduce	[2],scala.Function1,scala.Function1,scala.Function2:scala.collection.immutable.Map
 scala.collection.IterableOps	grouped	scala.Int:scala.collection.Iterator
+scala.collection.IterableOps	hasDefiniteSize	-:scala.Boolean
 scala.collection.IterableOps	head	-:java.lang.Object
 scala.collection.IterableOps	headOption	-:scala.Option
 scala.collection.IterableOps	init	-:java.lang.Object
@@ -15461,6 +15709,7 @@ scala.collection.IterableOps	zip	[1],scala.collection.IterableOnce:java.lang.Obj
 scala.collection.IterableOps	zipWithIndex	-:java.lang.Object
 scala.collection.Iterator	++	[1],scala.Function0:scala.collection.Iterator
 scala.collection.Iterator	<init>	[1]:scala.collection.Iterator
+scala.collection.Iterator	buffered	-:scala.collection.BufferedIterator
 scala.collection.Iterator	collect	[1],scala.PartialFunction:scala.collection.Iterator
 scala.collection.Iterator	collectFirst	[1],scala.PartialFunction:scala.Option
 scala.collection.Iterator	concat	[1],scala.Function0:scala.collection.Iterator
@@ -15483,6 +15732,7 @@ scala.collection.Iterator	foldLeft	[1],java.lang.Object,scala.Function2:java.lan
 scala.collection.Iterator	foldRight	[1],java.lang.Object,scala.Function2:java.lang.Object
 scala.collection.Iterator	forall	scala.Function1:scala.Boolean
 scala.collection.Iterator	foreach	[1],scala.Function1:scala.Unit
+scala.collection.Iterator	hasDefiniteSize	-:scala.Boolean
 scala.collection.Iterator	hasNext	-:scala.Boolean
 scala.collection.Iterator	indexOf	[1],java.lang.Object,scala.Int:scala.Int
 scala.collection.Iterator	indexWhere	scala.Function1,scala.Int:scala.Int
@@ -15575,6 +15825,7 @@ scala.collection.Map	copyToArray	[1],java.lang.Object,scala.Int:scala.Int
 scala.collection.Map	copyToArray	[1],java.lang.Object:scala.Int
 scala.collection.Map	count	scala.Function1:scala.Int
 scala.collection.Map	exists	scala.Function1:scala.Boolean
+scala.collection.Map	filter	scala.Function1:scala.collection.Map
 scala.collection.Map	find	scala.Function1:scala.Option
 scala.collection.Map	flatMap	[1],scala.Function1:scala.collection.Iterable
 scala.collection.Map	flatten	[1],scala.Function1:scala.collection.Iterable
@@ -15589,6 +15840,7 @@ scala.collection.Map	groupBy	[1],scala.Function1:scala.collection.immutable.Map
 scala.collection.Map	groupMap	[2],scala.Function1,scala.Function1:scala.collection.immutable.Map
 scala.collection.Map	groupMapReduce	[2],scala.Function1,scala.Function1,scala.Function2:scala.collection.immutable.Map
 scala.collection.Map	grouped	scala.Int:scala.collection.Iterator
+scala.collection.Map	hasDefiniteSize	-:scala.Boolean
 scala.collection.Map	headOption	-:scala.Option
 scala.collection.Map	isDefinedAt	java.lang.Object:scala.Boolean
 scala.collection.Map	isEmpty	-:scala.Boolean
@@ -15628,6 +15880,7 @@ scala.collection.Map	sliding	scala.Int,scala.Int:scala.collection.Iterator
 scala.collection.Map	span	scala.Function1:scala.Tuple2
 scala.collection.Map	splitAt	scala.Int:scala.Tuple2
 scala.collection.Map	sum	[1],scala.math.Numeric:java.lang.Object
+scala.collection.Map	tail	-:scala.collection.Map
 scala.collection.Map	to	[1],scala.collection.Factory:java.lang.Object
 scala.collection.Map	toArray	[1],scala.reflect.ClassTag:java.lang.Object
 scala.collection.Map	toIndexedSeq	-:scala.collection.immutable.IndexedSeq
@@ -15673,6 +15926,7 @@ scala.collection.MapView	groupBy	[1],scala.Function1:scala.collection.immutable.
 scala.collection.MapView	groupMap	[2],scala.Function1,scala.Function1:scala.collection.immutable.Map
 scala.collection.MapView	groupMapReduce	[2],scala.Function1,scala.Function1,scala.Function2:scala.collection.immutable.Map
 scala.collection.MapView	grouped	scala.Int:scala.collection.Iterator
+scala.collection.MapView	hasDefiniteSize	-:scala.Boolean
 scala.collection.MapView	headOption	-:scala.Option
 scala.collection.MapView	isEmpty	-:scala.Boolean
 scala.collection.MapView	iterator	-:scala.collection.Iterator
@@ -15770,6 +16024,7 @@ scala.collection.SeqOps	groupBy	[1],scala.Function1:scala.collection.immutable.M
 scala.collection.SeqOps	groupMap	[2],scala.Function1,scala.Function1:scala.collection.immutable.Map
 scala.collection.SeqOps	groupMapReduce	[2],scala.Function1,scala.Function1,scala.Function2:scala.collection.immutable.Map
 scala.collection.SeqOps	grouped	scala.Int:scala.collection.Iterator
+scala.collection.SeqOps	hasDefiniteSize	-:scala.Boolean
 scala.collection.SeqOps	head	-:java.lang.Object
 scala.collection.SeqOps	headOption	-:scala.Option
 scala.collection.SeqOps	indexOf	[1],java.lang.Object,scala.Int:scala.Int
@@ -15851,6 +16106,7 @@ scala.collection.SeqOps	toVector	-:scala.collection.immutable.Vector
 scala.collection.SeqOps	updated	[1],scala.Int,java.lang.Object:java.lang.Object
 scala.collection.SeqOps	zip	[1],scala.collection.IterableOnce:java.lang.Object
 scala.collection.SeqOps	zipWithIndex	-:java.lang.Object
+scala.collection.Set	+	java.lang.Object:scala.collection.Set
 scala.collection.Set	<init>	[1]:scala.collection.Set
 scala.collection.Set	apply	java.lang.Object:scala.Boolean
 scala.collection.Set	className	-:java.lang.String
@@ -15872,6 +16128,7 @@ scala.collection.Set	groupBy	[1],scala.Function1:scala.collection.immutable.Map
 scala.collection.Set	groupMap	[2],scala.Function1,scala.Function1:scala.collection.immutable.Map
 scala.collection.Set	groupMapReduce	[2],scala.Function1,scala.Function1,scala.Function2:scala.collection.immutable.Map
 scala.collection.Set	grouped	scala.Int:scala.collection.Iterator
+scala.collection.Set	hasDefiniteSize	-:scala.Boolean
 scala.collection.Set	head	-:java.lang.Object
 scala.collection.Set	headOption	-:scala.Option
 scala.collection.Set	isEmpty	-:scala.Boolean
@@ -15919,6 +16176,9 @@ scala.collection.Set	toSeq	-:scala.collection.immutable.Seq
 scala.collection.Set	toSet	[1]:scala.collection.immutable.Set
 scala.collection.Set	toVector	-:scala.collection.immutable.Vector
 scala.collection.Set	view	-:scala.collection.View
+scala.collection.Set$	apply	[1],scala.collection.immutable.Seq:scala.collection.Set
+scala.collection.Set$	empty	[1]:scala.collection.Set
+scala.collection.Set$	from	[1],scala.collection.IterableOnce:scala.collection.Set
 scala.collection.SetOps	apply	java.lang.Object:scala.Boolean
 scala.collection.SetOps	contains	java.lang.Object:scala.Boolean
 scala.collection.SetOps	forall	scala.Function1:scala.Boolean
@@ -15967,6 +16227,7 @@ scala.collection.SortedMap	groupBy	[1],scala.Function1:scala.collection.immutabl
 scala.collection.SortedMap	groupMap	[2],scala.Function1,scala.Function1:scala.collection.immutable.Map
 scala.collection.SortedMap	groupMapReduce	[2],scala.Function1,scala.Function1,scala.Function2:scala.collection.immutable.Map
 scala.collection.SortedMap	grouped	scala.Int:scala.collection.Iterator
+scala.collection.SortedMap	hasDefiniteSize	-:scala.Boolean
 scala.collection.SortedMap	headOption	-:scala.Option
 scala.collection.SortedMap	isDefinedAt	java.lang.Object:scala.Boolean
 scala.collection.SortedMap	isEmpty	-:scala.Boolean
@@ -16034,7 +16295,6 @@ scala.collection.SortedMap$	from	[2],scala.collection.IterableOnce,scala.math.Or
 scala.collection.SortedMap$	newBuilder	[2],scala.math.Ordering:scala.collection.mutable.Builder
 scala.collection.SortedSet	&	scala.collection.Set:scala.collection.SortedSet
 scala.collection.SortedSet	&~	scala.collection.Set:scala.collection.SortedSet
-scala.collection.SortedSet	+	java.lang.Object,java.lang.Object,scala.collection.immutable.Seq:scala.collection.SortedSet
 scala.collection.SortedSet	+	java.lang.Object:scala.collection.SortedSet
 scala.collection.SortedSet	++	scala.collection.IterableOnce:scala.collection.SortedSet
 scala.collection.SortedSet	-	java.lang.Object:scala.collection.SortedSet
@@ -16070,6 +16330,7 @@ scala.collection.SortedSet	groupBy	[1],scala.Function1:scala.collection.immutabl
 scala.collection.SortedSet	groupMap	[2],scala.Function1,scala.Function1:scala.collection.immutable.Map
 scala.collection.SortedSet	groupMapReduce	[2],scala.Function1,scala.Function1,scala.Function2:scala.collection.immutable.Map
 scala.collection.SortedSet	grouped	scala.Int:scala.collection.Iterator
+scala.collection.SortedSet	hasDefiniteSize	-:scala.Boolean
 scala.collection.SortedSet	head	-:java.lang.Object
 scala.collection.SortedSet	headOption	-:scala.Option
 scala.collection.SortedSet	intersect	scala.collection.Set:scala.collection.SortedSet
@@ -16161,6 +16422,7 @@ scala.collection.StrictOptimizedIterableOps	groupBy	[1],scala.Function1:scala.co
 scala.collection.StrictOptimizedIterableOps	groupMap	[2],scala.Function1,scala.Function1:scala.collection.immutable.Map
 scala.collection.StrictOptimizedIterableOps	groupMapReduce	[2],scala.Function1,scala.Function1,scala.Function2:scala.collection.immutable.Map
 scala.collection.StrictOptimizedIterableOps	grouped	scala.Int:scala.collection.Iterator
+scala.collection.StrictOptimizedIterableOps	hasDefiniteSize	-:scala.Boolean
 scala.collection.StrictOptimizedIterableOps	head	-:java.lang.Object
 scala.collection.StrictOptimizedIterableOps	headOption	-:scala.Option
 scala.collection.StrictOptimizedIterableOps	init	-:java.lang.Object
@@ -16266,6 +16528,7 @@ scala.collection.StrictOptimizedSeqOps	groupBy	[1],scala.Function1:scala.collect
 scala.collection.StrictOptimizedSeqOps	groupMap	[2],scala.Function1,scala.Function1:scala.collection.immutable.Map
 scala.collection.StrictOptimizedSeqOps	groupMapReduce	[2],scala.Function1,scala.Function1,scala.Function2:scala.collection.immutable.Map
 scala.collection.StrictOptimizedSeqOps	grouped	scala.Int:scala.collection.Iterator
+scala.collection.StrictOptimizedSeqOps	hasDefiniteSize	-:scala.Boolean
 scala.collection.StrictOptimizedSeqOps	head	-:java.lang.Object
 scala.collection.StrictOptimizedSeqOps	headOption	-:scala.Option
 scala.collection.StrictOptimizedSeqOps	indexOf	[1],java.lang.Object,scala.Int:scala.Int
@@ -16387,7 +16650,9 @@ scala.collection.StringOps	patch	[1],scala.Int,scala.collection.IterableOnce,sca
 scala.collection.StringOps	patch	scala.Int,java.lang.String,scala.Int:java.lang.String
 scala.collection.StringOps	patch	scala.Int,scala.collection.IterableOnce,scala.Int:java.lang.String
 scala.collection.StringOps	r	-:scala.util.matching.Regex
+scala.collection.StringOps	replaceAllLiterally	java.lang.String,java.lang.String:java.lang.String
 scala.collection.StringOps	reverse	-:java.lang.String
+scala.collection.StringOps	s	-:java.lang.String
 scala.collection.StringOps	size	-:scala.Int
 scala.collection.StringOps	slice	scala.Int,scala.Int:java.lang.String
 scala.collection.StringOps	sliding	scala.Int,scala.Int:scala.collection.Iterator
@@ -16444,6 +16709,7 @@ scala.collection.View	groupBy	[1],scala.Function1:scala.collection.immutable.Map
 scala.collection.View	groupMap	[2],scala.Function1,scala.Function1:scala.collection.immutable.Map
 scala.collection.View	groupMapReduce	[2],scala.Function1,scala.Function1,scala.Function2:scala.collection.immutable.Map
 scala.collection.View	grouped	scala.Int:scala.collection.Iterator
+scala.collection.View	hasDefiniteSize	-:scala.Boolean
 scala.collection.View	head	-:java.lang.Object
 scala.collection.View	headOption	-:scala.Option
 scala.collection.View	inits	-:scala.collection.Iterator
@@ -16567,6 +16833,7 @@ scala.collection.immutable.::	groupBy	[1],scala.Function1:scala.collection.immut
 scala.collection.immutable.::	groupMap	[2],scala.Function1,scala.Function1:scala.collection.immutable.Map
 scala.collection.immutable.::	groupMapReduce	[2],scala.Function1,scala.Function1,scala.Function2:scala.collection.immutable.Map
 scala.collection.immutable.::	grouped	scala.Int:scala.collection.Iterator
+scala.collection.immutable.::	hasDefiniteSize	-:scala.Boolean
 scala.collection.immutable.::	head	-:java.lang.Object
 scala.collection.immutable.::	indexOf	[1],java.lang.Object,scala.Int:scala.Int
 scala.collection.immutable.::	indexWhere	scala.Function1,scala.Int:scala.Int
@@ -16697,6 +16964,7 @@ scala.collection.immutable.ArraySeq	groupBy	[1],scala.Function1:scala.collection
 scala.collection.immutable.ArraySeq	groupMap	[2],scala.Function1,scala.Function1:scala.collection.immutable.Map
 scala.collection.immutable.ArraySeq	groupMapReduce	[2],scala.Function1,scala.Function1,scala.Function2:scala.collection.immutable.Map
 scala.collection.immutable.ArraySeq	grouped	scala.Int:scala.collection.Iterator
+scala.collection.immutable.ArraySeq	hasDefiniteSize	-:scala.Boolean
 scala.collection.immutable.ArraySeq	head	-:java.lang.Object
 scala.collection.immutable.ArraySeq	headOption	-:scala.Option
 scala.collection.immutable.ArraySeq	indexOf	[1],java.lang.Object,scala.Int:scala.Int
@@ -16806,6 +17074,7 @@ scala.collection.immutable.HashMap	groupBy	[1],scala.Function1:scala.collection.
 scala.collection.immutable.HashMap	groupMap	[2],scala.Function1,scala.Function1:scala.collection.immutable.Map
 scala.collection.immutable.HashMap	groupMapReduce	[2],scala.Function1,scala.Function1,scala.Function2:scala.collection.immutable.Map
 scala.collection.immutable.HashMap	grouped	scala.Int:scala.collection.Iterator
+scala.collection.immutable.HashMap	hasDefiniteSize	-:scala.Boolean
 scala.collection.immutable.HashMap	headOption	-:scala.Option
 scala.collection.immutable.HashMap	isDefinedAt	java.lang.Object:scala.Boolean
 scala.collection.immutable.HashMap	isEmpty	-:scala.Boolean
@@ -16885,6 +17154,7 @@ scala.collection.immutable.HashSet	groupBy	[1],scala.Function1:scala.collection.
 scala.collection.immutable.HashSet	groupMap	[2],scala.Function1,scala.Function1:scala.collection.immutable.Map
 scala.collection.immutable.HashSet	groupMapReduce	[2],scala.Function1,scala.Function1,scala.Function2:scala.collection.immutable.Map
 scala.collection.immutable.HashSet	grouped	scala.Int:scala.collection.Iterator
+scala.collection.immutable.HashSet	hasDefiniteSize	-:scala.Boolean
 scala.collection.immutable.HashSet	head	-:java.lang.Object
 scala.collection.immutable.HashSet	headOption	-:scala.Option
 scala.collection.immutable.HashSet	isEmpty	-:scala.Boolean
@@ -16980,6 +17250,7 @@ scala.collection.immutable.IndexedSeq	groupBy	[1],scala.Function1:scala.collecti
 scala.collection.immutable.IndexedSeq	groupMap	[2],scala.Function1,scala.Function1:scala.collection.immutable.Map
 scala.collection.immutable.IndexedSeq	groupMapReduce	[2],scala.Function1,scala.Function1,scala.Function2:scala.collection.immutable.Map
 scala.collection.immutable.IndexedSeq	grouped	scala.Int:scala.collection.Iterator
+scala.collection.immutable.IndexedSeq	hasDefiniteSize	-:scala.Boolean
 scala.collection.immutable.IndexedSeq	head	-:java.lang.Object
 scala.collection.immutable.IndexedSeq	headOption	-:scala.Option
 scala.collection.immutable.IndexedSeq	indexOf	[1],java.lang.Object,scala.Int:scala.Int
@@ -17090,6 +17361,7 @@ scala.collection.immutable.LazyList	groupBy	[1],scala.Function1:scala.collection
 scala.collection.immutable.LazyList	groupMap	[2],scala.Function1,scala.Function1:scala.collection.immutable.Map
 scala.collection.immutable.LazyList	groupMapReduce	[2],scala.Function1,scala.Function1,scala.Function2:scala.collection.immutable.Map
 scala.collection.immutable.LazyList	grouped	scala.Int:scala.collection.Iterator
+scala.collection.immutable.LazyList	hasDefiniteSize	-:scala.Boolean
 scala.collection.immutable.LazyList	head	-:java.lang.Object
 scala.collection.immutable.LazyList	headOption	-:scala.Option
 scala.collection.immutable.LazyList	isEmpty	-:scala.Boolean
@@ -17201,6 +17473,7 @@ scala.collection.immutable.List	groupBy	[1],scala.Function1:scala.collection.imm
 scala.collection.immutable.List	groupMap	[2],scala.Function1,scala.Function1:scala.collection.immutable.Map
 scala.collection.immutable.List	groupMapReduce	[2],scala.Function1,scala.Function1,scala.Function2:scala.collection.immutable.Map
 scala.collection.immutable.List	grouped	scala.Int:scala.collection.Iterator
+scala.collection.immutable.List	hasDefiniteSize	-:scala.Boolean
 scala.collection.immutable.List	head	-:java.lang.Object
 scala.collection.immutable.List	headOption	-:scala.Option
 scala.collection.immutable.List	indexOf	[1],java.lang.Object,scala.Int:scala.Int
@@ -17324,6 +17597,7 @@ scala.collection.immutable.ListMap	groupBy	[1],scala.Function1:scala.collection.
 scala.collection.immutable.ListMap	groupMap	[2],scala.Function1,scala.Function1:scala.collection.immutable.Map
 scala.collection.immutable.ListMap	groupMapReduce	[2],scala.Function1,scala.Function1,scala.Function2:scala.collection.immutable.Map
 scala.collection.immutable.ListMap	grouped	scala.Int:scala.collection.Iterator
+scala.collection.immutable.ListMap	hasDefiniteSize	-:scala.Boolean
 scala.collection.immutable.ListMap	headOption	-:scala.Option
 scala.collection.immutable.ListMap	init	-:scala.collection.immutable.ListMap
 scala.collection.immutable.ListMap	isDefinedAt	java.lang.Object:scala.Boolean
@@ -17424,6 +17698,7 @@ scala.collection.immutable.ListSet	groupBy	[1],scala.Function1:scala.collection.
 scala.collection.immutable.ListSet	groupMap	[2],scala.Function1,scala.Function1:scala.collection.immutable.Map
 scala.collection.immutable.ListSet	groupMapReduce	[2],scala.Function1,scala.Function1,scala.Function2:scala.collection.immutable.Map
 scala.collection.immutable.ListSet	grouped	scala.Int:scala.collection.Iterator
+scala.collection.immutable.ListSet	hasDefiniteSize	-:scala.Boolean
 scala.collection.immutable.ListSet	head	-:java.lang.Object
 scala.collection.immutable.ListSet	headOption	-:scala.Option
 scala.collection.immutable.ListSet	incl	java.lang.Object:scala.collection.immutable.ListSet
@@ -17516,6 +17791,7 @@ scala.collection.immutable.LongMap	groupBy	[1],scala.Function1:scala.collection.
 scala.collection.immutable.LongMap	groupMap	[2],scala.Function1,scala.Function1:scala.collection.immutable.Map
 scala.collection.immutable.LongMap	groupMapReduce	[2],scala.Function1,scala.Function1,scala.Function2:scala.collection.immutable.Map
 scala.collection.immutable.LongMap	grouped	scala.Int:scala.collection.Iterator
+scala.collection.immutable.LongMap	hasDefiniteSize	-:scala.Boolean
 scala.collection.immutable.LongMap	headOption	-:scala.Option
 scala.collection.immutable.LongMap	isDefinedAt	scala.Long:scala.Boolean
 scala.collection.immutable.LongMap	isEmpty	-:scala.Boolean
@@ -17617,6 +17893,7 @@ scala.collection.immutable.Map	groupBy	[1],scala.Function1:scala.collection.immu
 scala.collection.immutable.Map	groupMap	[2],scala.Function1,scala.Function1:scala.collection.immutable.Map
 scala.collection.immutable.Map	groupMapReduce	[2],scala.Function1,scala.Function1,scala.Function2:scala.collection.immutable.Map
 scala.collection.immutable.Map	grouped	scala.Int:scala.collection.Iterator
+scala.collection.immutable.Map	hasDefiniteSize	-:scala.Boolean
 scala.collection.immutable.Map	headOption	-:scala.Option
 scala.collection.immutable.Map	isDefinedAt	java.lang.Object:scala.Boolean
 scala.collection.immutable.Map	isEmpty	-:scala.Boolean
@@ -17656,6 +17933,7 @@ scala.collection.immutable.Map	sliding	scala.Int,scala.Int:scala.collection.Iter
 scala.collection.immutable.Map	span	scala.Function1:scala.Tuple2
 scala.collection.immutable.Map	splitAt	scala.Int:scala.Tuple2
 scala.collection.immutable.Map	sum	[1],scala.math.Numeric:java.lang.Object
+scala.collection.immutable.Map	tail	-:scala.collection.immutable.Map
 scala.collection.immutable.Map	take	scala.Int:scala.collection.immutable.Map
 scala.collection.immutable.Map	takeRight	scala.Int:scala.collection.immutable.Map
 scala.collection.immutable.Map	takeWhile	scala.Function1:scala.collection.immutable.Map
@@ -17719,6 +17997,7 @@ scala.collection.immutable.Map$.Map1	groupBy	[1],scala.Function1:scala.collectio
 scala.collection.immutable.Map$.Map1	groupMap	[2],scala.Function1,scala.Function1:scala.collection.immutable.Map
 scala.collection.immutable.Map$.Map1	groupMapReduce	[2],scala.Function1,scala.Function1,scala.Function2:scala.collection.immutable.Map
 scala.collection.immutable.Map$.Map1	grouped	scala.Int:scala.collection.Iterator
+scala.collection.immutable.Map$.Map1	hasDefiniteSize	-:scala.Boolean
 scala.collection.immutable.Map$.Map1	headOption	-:scala.Option
 scala.collection.immutable.Map$.Map1	isDefinedAt	java.lang.Object:scala.Boolean
 scala.collection.immutable.Map$.Map1	isEmpty	-:scala.Boolean
@@ -17761,6 +18040,7 @@ scala.collection.immutable.Map$.Map1	sliding	scala.Int,scala.Int:scala.collectio
 scala.collection.immutable.Map$.Map1	span	scala.Function1:scala.Tuple2
 scala.collection.immutable.Map$.Map1	splitAt	scala.Int:scala.Tuple2
 scala.collection.immutable.Map$.Map1	sum	[1],scala.math.Numeric:java.lang.Object
+scala.collection.immutable.Map$.Map1	tail	-:scala.collection.immutable.Map
 scala.collection.immutable.Map$.Map1	take	scala.Int:scala.collection.immutable.Map
 scala.collection.immutable.Map$.Map1	takeRight	scala.Int:scala.collection.immutable.Map
 scala.collection.immutable.Map$.Map1	takeWhile	scala.Function1:scala.collection.immutable.Map
@@ -17820,6 +18100,7 @@ scala.collection.immutable.Map$.Map2	groupBy	[1],scala.Function1:scala.collectio
 scala.collection.immutable.Map$.Map2	groupMap	[2],scala.Function1,scala.Function1:scala.collection.immutable.Map
 scala.collection.immutable.Map$.Map2	groupMapReduce	[2],scala.Function1,scala.Function1,scala.Function2:scala.collection.immutable.Map
 scala.collection.immutable.Map$.Map2	grouped	scala.Int:scala.collection.Iterator
+scala.collection.immutable.Map$.Map2	hasDefiniteSize	-:scala.Boolean
 scala.collection.immutable.Map$.Map2	headOption	-:scala.Option
 scala.collection.immutable.Map$.Map2	isDefinedAt	java.lang.Object:scala.Boolean
 scala.collection.immutable.Map$.Map2	isEmpty	-:scala.Boolean
@@ -17863,6 +18144,7 @@ scala.collection.immutable.Map$.Map2	sliding	scala.Int,scala.Int:scala.collectio
 scala.collection.immutable.Map$.Map2	span	scala.Function1:scala.Tuple2
 scala.collection.immutable.Map$.Map2	splitAt	scala.Int:scala.Tuple2
 scala.collection.immutable.Map$.Map2	sum	[1],scala.math.Numeric:java.lang.Object
+scala.collection.immutable.Map$.Map2	tail	-:scala.collection.immutable.Map
 scala.collection.immutable.Map$.Map2	take	scala.Int:scala.collection.immutable.Map
 scala.collection.immutable.Map$.Map2	takeRight	scala.Int:scala.collection.immutable.Map
 scala.collection.immutable.Map$.Map2	takeWhile	scala.Function1:scala.collection.immutable.Map
@@ -17923,6 +18205,7 @@ scala.collection.immutable.Map$.Map3	groupBy	[1],scala.Function1:scala.collectio
 scala.collection.immutable.Map$.Map3	groupMap	[2],scala.Function1,scala.Function1:scala.collection.immutable.Map
 scala.collection.immutable.Map$.Map3	groupMapReduce	[2],scala.Function1,scala.Function1,scala.Function2:scala.collection.immutable.Map
 scala.collection.immutable.Map$.Map3	grouped	scala.Int:scala.collection.Iterator
+scala.collection.immutable.Map$.Map3	hasDefiniteSize	-:scala.Boolean
 scala.collection.immutable.Map$.Map3	headOption	-:scala.Option
 scala.collection.immutable.Map$.Map3	isDefinedAt	java.lang.Object:scala.Boolean
 scala.collection.immutable.Map$.Map3	isEmpty	-:scala.Boolean
@@ -17967,6 +18250,7 @@ scala.collection.immutable.Map$.Map3	sliding	scala.Int,scala.Int:scala.collectio
 scala.collection.immutable.Map$.Map3	span	scala.Function1:scala.Tuple2
 scala.collection.immutable.Map$.Map3	splitAt	scala.Int:scala.Tuple2
 scala.collection.immutable.Map$.Map3	sum	[1],scala.math.Numeric:java.lang.Object
+scala.collection.immutable.Map$.Map3	tail	-:scala.collection.immutable.Map
 scala.collection.immutable.Map$.Map3	take	scala.Int:scala.collection.immutable.Map
 scala.collection.immutable.Map$.Map3	takeRight	scala.Int:scala.collection.immutable.Map
 scala.collection.immutable.Map$.Map3	takeWhile	scala.Function1:scala.collection.immutable.Map
@@ -18028,6 +18312,7 @@ scala.collection.immutable.Map$.Map4	groupBy	[1],scala.Function1:scala.collectio
 scala.collection.immutable.Map$.Map4	groupMap	[2],scala.Function1,scala.Function1:scala.collection.immutable.Map
 scala.collection.immutable.Map$.Map4	groupMapReduce	[2],scala.Function1,scala.Function1,scala.Function2:scala.collection.immutable.Map
 scala.collection.immutable.Map$.Map4	grouped	scala.Int:scala.collection.Iterator
+scala.collection.immutable.Map$.Map4	hasDefiniteSize	-:scala.Boolean
 scala.collection.immutable.Map$.Map4	headOption	-:scala.Option
 scala.collection.immutable.Map$.Map4	isDefinedAt	java.lang.Object:scala.Boolean
 scala.collection.immutable.Map$.Map4	isEmpty	-:scala.Boolean
@@ -18073,6 +18358,7 @@ scala.collection.immutable.Map$.Map4	sliding	scala.Int,scala.Int:scala.collectio
 scala.collection.immutable.Map$.Map4	span	scala.Function1:scala.Tuple2
 scala.collection.immutable.Map$.Map4	splitAt	scala.Int:scala.Tuple2
 scala.collection.immutable.Map$.Map4	sum	[1],scala.math.Numeric:java.lang.Object
+scala.collection.immutable.Map$.Map4	tail	-:scala.collection.immutable.Map
 scala.collection.immutable.Map$.Map4	take	scala.Int:scala.collection.immutable.Map
 scala.collection.immutable.Map$.Map4	takeRight	scala.Int:scala.collection.immutable.Map
 scala.collection.immutable.Map$.Map4	takeWhile	scala.Function1:scala.collection.immutable.Map
@@ -18141,6 +18427,7 @@ scala.collection.immutable.Nil$	groupBy	[1],scala.Function1:scala.collection.imm
 scala.collection.immutable.Nil$	groupMap	[2],scala.Function1,scala.Function1:scala.collection.immutable.Map
 scala.collection.immutable.Nil$	groupMapReduce	[2],scala.Function1,scala.Function1,scala.Function2:scala.collection.immutable.Map
 scala.collection.immutable.Nil$	grouped	scala.Int:scala.collection.Iterator
+scala.collection.immutable.Nil$	hasDefiniteSize	-:scala.Boolean
 scala.collection.immutable.Nil$	head	-:scala.Nothing
 scala.collection.immutable.Nil$	indexOf	[1],java.lang.Object,scala.Int:scala.Int
 scala.collection.immutable.Nil$	indexWhere	scala.Function1,scala.Int:scala.Int
@@ -18265,6 +18552,7 @@ scala.collection.immutable.NumericRange	groupBy	[1],scala.Function1:scala.collec
 scala.collection.immutable.NumericRange	groupMap	[2],scala.Function1,scala.Function1:scala.collection.immutable.Map
 scala.collection.immutable.NumericRange	groupMapReduce	[2],scala.Function1,scala.Function1,scala.Function2:scala.collection.immutable.Map
 scala.collection.immutable.NumericRange	grouped	scala.Int:scala.collection.Iterator
+scala.collection.immutable.NumericRange	hasDefiniteSize	-:scala.Boolean
 scala.collection.immutable.NumericRange	hashCode	-:scala.Int
 scala.collection.immutable.NumericRange	head	-:java.lang.Object
 scala.collection.immutable.NumericRange	headOption	-:scala.Option
@@ -18388,6 +18676,7 @@ scala.collection.immutable.Queue	groupBy	[1],scala.Function1:scala.collection.im
 scala.collection.immutable.Queue	groupMap	[2],scala.Function1,scala.Function1:scala.collection.immutable.Map
 scala.collection.immutable.Queue	groupMapReduce	[2],scala.Function1,scala.Function1,scala.Function2:scala.collection.immutable.Map
 scala.collection.immutable.Queue	grouped	scala.Int:scala.collection.Iterator
+scala.collection.immutable.Queue	hasDefiniteSize	-:scala.Boolean
 scala.collection.immutable.Queue	head	-:java.lang.Object
 scala.collection.immutable.Queue	headOption	-:scala.Option
 scala.collection.immutable.Queue	indexOf	[1],java.lang.Object,scala.Int:scala.Int
@@ -18509,6 +18798,7 @@ scala.collection.immutable.Range	groupBy	[1],scala.Function1:scala.collection.im
 scala.collection.immutable.Range	groupMap	[2],scala.Function1,scala.Function1:scala.collection.immutable.Map
 scala.collection.immutable.Range	groupMapReduce	[2],scala.Function1,scala.Function1,scala.Function2:scala.collection.immutable.Map
 scala.collection.immutable.Range	grouped	scala.Int:scala.collection.Iterator
+scala.collection.immutable.Range	hasDefiniteSize	-:scala.Boolean
 scala.collection.immutable.Range	head	-:scala.Int
 scala.collection.immutable.Range	headOption	-:scala.Option
 scala.collection.immutable.Range	inclusive	-:scala.collection.immutable.Range
@@ -18634,6 +18924,7 @@ scala.collection.immutable.Seq	groupBy	[1],scala.Function1:scala.collection.immu
 scala.collection.immutable.Seq	groupMap	[2],scala.Function1,scala.Function1:scala.collection.immutable.Map
 scala.collection.immutable.Seq	groupMapReduce	[2],scala.Function1,scala.Function1,scala.Function2:scala.collection.immutable.Map
 scala.collection.immutable.Seq	grouped	scala.Int:scala.collection.Iterator
+scala.collection.immutable.Seq	hasDefiniteSize	-:scala.Boolean
 scala.collection.immutable.Seq	head	-:java.lang.Object
 scala.collection.immutable.Seq	headOption	-:scala.Option
 scala.collection.immutable.Seq	indexOf	[1],java.lang.Object,scala.Int:scala.Int
@@ -18719,7 +19010,6 @@ scala.collection.immutable.Seq$	tabulate	[1],scala.Int,scala.Function1:scala.col
 scala.collection.immutable.Seq$	unapplySeq	[1],scala.collection.immutable.Seq:scala.collection.SeqOps
 scala.collection.immutable.Set	&	scala.collection.Set:scala.collection.immutable.Set
 scala.collection.immutable.Set	&~	scala.collection.Set:scala.collection.immutable.Set
-scala.collection.immutable.Set	+	java.lang.Object,java.lang.Object,scala.collection.immutable.Seq:scala.collection.immutable.Set
 scala.collection.immutable.Set	+	java.lang.Object:scala.collection.immutable.Set
 scala.collection.immutable.Set	++	[1],scala.collection.IterableOnce:scala.collection.immutable.Set
 scala.collection.immutable.Set	++	scala.collection.IterableOnce:scala.collection.immutable.Set
@@ -18760,6 +19050,7 @@ scala.collection.immutable.Set	groupBy	[1],scala.Function1:scala.collection.immu
 scala.collection.immutable.Set	groupMap	[2],scala.Function1,scala.Function1:scala.collection.immutable.Map
 scala.collection.immutable.Set	groupMapReduce	[2],scala.Function1,scala.Function1,scala.Function2:scala.collection.immutable.Map
 scala.collection.immutable.Set	grouped	scala.Int:scala.collection.Iterator
+scala.collection.immutable.Set	hasDefiniteSize	-:scala.Boolean
 scala.collection.immutable.Set	head	-:java.lang.Object
 scala.collection.immutable.Set	headOption	-:scala.Option
 scala.collection.immutable.Set	incl	java.lang.Object:scala.collection.immutable.Set
@@ -18854,6 +19145,7 @@ scala.collection.immutable.TreeMap	groupBy	[1],scala.Function1:scala.collection.
 scala.collection.immutable.TreeMap	groupMap	[2],scala.Function1,scala.Function1:scala.collection.immutable.Map
 scala.collection.immutable.TreeMap	groupMapReduce	[2],scala.Function1,scala.Function1,scala.Function2:scala.collection.immutable.Map
 scala.collection.immutable.TreeMap	grouped	scala.Int:scala.collection.Iterator
+scala.collection.immutable.TreeMap	hasDefiniteSize	-:scala.Boolean
 scala.collection.immutable.TreeMap	headOption	-:scala.Option
 scala.collection.immutable.TreeMap	isDefinedAt	java.lang.Object:scala.Boolean
 scala.collection.immutable.TreeMap	isEmpty	-:scala.Boolean
@@ -18937,6 +19229,7 @@ scala.collection.immutable.TreeSet	groupBy	[1],scala.Function1:scala.collection.
 scala.collection.immutable.TreeSet	groupMap	[2],scala.Function1,scala.Function1:scala.collection.immutable.Map
 scala.collection.immutable.TreeSet	groupMapReduce	[2],scala.Function1,scala.Function1,scala.Function2:scala.collection.immutable.Map
 scala.collection.immutable.TreeSet	grouped	scala.Int:scala.collection.Iterator
+scala.collection.immutable.TreeSet	hasDefiniteSize	-:scala.Boolean
 scala.collection.immutable.TreeSet	head	-:java.lang.Object
 scala.collection.immutable.TreeSet	headOption	-:scala.Option
 scala.collection.immutable.TreeSet	incl	java.lang.Object:scala.collection.immutable.TreeSet
@@ -19038,6 +19331,7 @@ scala.collection.immutable.Vector	groupBy	[1],scala.Function1:scala.collection.i
 scala.collection.immutable.Vector	groupMap	[2],scala.Function1,scala.Function1:scala.collection.immutable.Map
 scala.collection.immutable.Vector	groupMapReduce	[2],scala.Function1,scala.Function1,scala.Function2:scala.collection.immutable.Map
 scala.collection.immutable.Vector	grouped	scala.Int:scala.collection.Iterator
+scala.collection.immutable.Vector	hasDefiniteSize	-:scala.Boolean
 scala.collection.immutable.Vector	head	-:java.lang.Object
 scala.collection.immutable.Vector	headOption	-:scala.Option
 scala.collection.immutable.Vector	indexOf	[1],java.lang.Object,scala.Int:scala.Int
@@ -19206,6 +19500,7 @@ scala.collection.mutable.ArrayBuffer	groupBy	[1],scala.Function1:scala.collectio
 scala.collection.mutable.ArrayBuffer	groupMap	[2],scala.Function1,scala.Function1:scala.collection.immutable.Map
 scala.collection.mutable.ArrayBuffer	groupMapReduce	[2],scala.Function1,scala.Function1,scala.Function2:scala.collection.immutable.Map
 scala.collection.mutable.ArrayBuffer	grouped	scala.Int:scala.collection.Iterator
+scala.collection.mutable.ArrayBuffer	hasDefiniteSize	-:scala.Boolean
 scala.collection.mutable.ArrayBuffer	head	-:java.lang.Object
 scala.collection.mutable.ArrayBuffer	headOption	-:scala.Option
 scala.collection.mutable.ArrayBuffer	indexOf	[1],java.lang.Object,scala.Int:scala.Int
@@ -19854,6 +20149,7 @@ scala.collection.mutable.Builder	result	:java.lang.Object
 scala.collection.mutable.Builder	sizeHint	scala.Int:scala.Unit
 scala.collection.mutable.Builder	sizeHint	scala.collection.IterableOnce,scala.Int:scala.Unit
 scala.collection.mutable.Builder	sizeHint$default$2	-:scala.Int
+scala.collection.mutable.HashMap	++	[1],scala.collection.IterableOnce:scala.collection.mutable.HashMap
 scala.collection.mutable.HashMap	++=	scala.collection.IterableOnce:scala.collection.mutable.HashMap
 scala.collection.mutable.HashMap	+=	scala.Tuple2:scala.collection.mutable.HashMap
 scala.collection.mutable.HashMap	--=	scala.collection.IterableOnce:scala.collection.mutable.HashMap
@@ -19896,6 +20192,7 @@ scala.collection.mutable.HashMap	groupBy	[1],scala.Function1:scala.collection.im
 scala.collection.mutable.HashMap	groupMap	[2],scala.Function1,scala.Function1:scala.collection.immutable.Map
 scala.collection.mutable.HashMap	groupMapReduce	[2],scala.Function1,scala.Function1,scala.Function2:scala.collection.immutable.Map
 scala.collection.mutable.HashMap	grouped	scala.Int:scala.collection.Iterator
+scala.collection.mutable.HashMap	hasDefiniteSize	-:scala.Boolean
 scala.collection.mutable.HashMap	headOption	-:scala.Option
 scala.collection.mutable.HashMap	isDefinedAt	java.lang.Object:scala.Boolean
 scala.collection.mutable.HashMap	isEmpty	-:scala.Boolean
@@ -19938,6 +20235,7 @@ scala.collection.mutable.HashMap	span	scala.Function1:scala.Tuple2
 scala.collection.mutable.HashMap	splitAt	scala.Int:scala.Tuple2
 scala.collection.mutable.HashMap	subtractOne	java.lang.Object:scala.collection.mutable.HashMap
 scala.collection.mutable.HashMap	sum	[1],scala.math.Numeric:java.lang.Object
+scala.collection.mutable.HashMap	tail	-:scala.collection.mutable.HashMap
 scala.collection.mutable.HashMap	take	scala.Int:scala.collection.mutable.HashMap
 scala.collection.mutable.HashMap	takeRight	scala.Int:scala.collection.mutable.HashMap
 scala.collection.mutable.HashMap	takeWhile	scala.Function1:scala.collection.mutable.HashMap
@@ -20001,6 +20299,7 @@ scala.collection.mutable.HashSet	groupBy	[1],scala.Function1:scala.collection.im
 scala.collection.mutable.HashSet	groupMap	[2],scala.Function1,scala.Function1:scala.collection.immutable.Map
 scala.collection.mutable.HashSet	groupMapReduce	[2],scala.Function1,scala.Function1,scala.Function2:scala.collection.immutable.Map
 scala.collection.mutable.HashSet	grouped	scala.Int:scala.collection.Iterator
+scala.collection.mutable.HashSet	hasDefiniteSize	-:scala.Boolean
 scala.collection.mutable.HashSet	head	-:java.lang.Object
 scala.collection.mutable.HashSet	headOption	-:scala.Option
 scala.collection.mutable.HashSet	isEmpty	-:scala.Boolean
@@ -20130,6 +20429,7 @@ scala.collection.mutable.ListBuffer	groupBy	[1],scala.Function1:scala.collection
 scala.collection.mutable.ListBuffer	groupMap	[2],scala.Function1,scala.Function1:scala.collection.immutable.Map
 scala.collection.mutable.ListBuffer	groupMapReduce	[2],scala.Function1,scala.Function1,scala.Function2:scala.collection.immutable.Map
 scala.collection.mutable.ListBuffer	grouped	scala.Int:scala.collection.Iterator
+scala.collection.mutable.ListBuffer	hasDefiniteSize	-:scala.Boolean
 scala.collection.mutable.ListBuffer	head	-:java.lang.Object
 scala.collection.mutable.ListBuffer	headOption	-:scala.Option
 scala.collection.mutable.ListBuffer	indexOf	[1],java.lang.Object,scala.Int:scala.Int
@@ -20249,6 +20549,7 @@ scala.collection.mutable.Map$.WithDefault	groupBy	[1],scala.Function1:scala.coll
 scala.collection.mutable.Map$.WithDefault	groupMap	[2],scala.Function1,scala.Function1:scala.collection.immutable.Map
 scala.collection.mutable.Map$.WithDefault	groupMapReduce	[2],scala.Function1,scala.Function1,scala.Function2:scala.collection.immutable.Map
 scala.collection.mutable.Map$.WithDefault	grouped	scala.Int:scala.collection.Iterator
+scala.collection.mutable.Map$.WithDefault	hasDefiniteSize	-:scala.Boolean
 scala.collection.mutable.Map$.WithDefault	headOption	-:scala.Option
 scala.collection.mutable.Map$.WithDefault	isDefinedAt	java.lang.Object:scala.Boolean
 scala.collection.mutable.Map$.WithDefault	isEmpty	-:scala.Boolean
@@ -20336,6 +20637,7 @@ scala.collection.mutable.PriorityQueue	groupBy	[1],scala.Function1:scala.collect
 scala.collection.mutable.PriorityQueue	groupMap	[2],scala.Function1,scala.Function1:scala.collection.immutable.Map
 scala.collection.mutable.PriorityQueue	groupMapReduce	[2],scala.Function1,scala.Function1,scala.Function2:scala.collection.immutable.Map
 scala.collection.mutable.PriorityQueue	grouped	scala.Int:scala.collection.Iterator
+scala.collection.mutable.PriorityQueue	hasDefiniteSize	-:scala.Boolean
 scala.collection.mutable.PriorityQueue	head	-:java.lang.Object
 scala.collection.mutable.PriorityQueue	headOption	-:scala.Option
 scala.collection.mutable.PriorityQueue	isEmpty	-:scala.Boolean
@@ -20438,6 +20740,7 @@ scala.collection.mutable.SortedSet	groupBy	[1],scala.Function1:scala.collection.
 scala.collection.mutable.SortedSet	groupMap	[2],scala.Function1,scala.Function1:scala.collection.immutable.Map
 scala.collection.mutable.SortedSet	groupMapReduce	[2],scala.Function1,scala.Function1,scala.Function2:scala.collection.immutable.Map
 scala.collection.mutable.SortedSet	grouped	scala.Int:scala.collection.Iterator
+scala.collection.mutable.SortedSet	hasDefiniteSize	-:scala.Boolean
 scala.collection.mutable.SortedSet	head	-:java.lang.Object
 scala.collection.mutable.SortedSet	headOption	-:scala.Option
 scala.collection.mutable.SortedSet	isEmpty	-:scala.Boolean
@@ -20549,6 +20852,7 @@ scala.collection.mutable.Stack	groupBy	[1],scala.Function1:scala.collection.immu
 scala.collection.mutable.Stack	groupMap	[2],scala.Function1,scala.Function1:scala.collection.immutable.Map
 scala.collection.mutable.Stack	groupMapReduce	[2],scala.Function1,scala.Function1,scala.Function2:scala.collection.immutable.Map
 scala.collection.mutable.Stack	grouped	scala.Int:scala.collection.Iterator
+scala.collection.mutable.Stack	hasDefiniteSize	-:scala.Boolean
 scala.collection.mutable.Stack	head	-:java.lang.Object
 scala.collection.mutable.Stack	headOption	-:scala.Option
 scala.collection.mutable.Stack	indexOf	[1],java.lang.Object,scala.Int:scala.Int
@@ -20695,6 +20999,7 @@ scala.collection.mutable.TreeSet	groupBy	[1],scala.Function1:scala.collection.im
 scala.collection.mutable.TreeSet	groupMap	[2],scala.Function1,scala.Function1:scala.collection.immutable.Map
 scala.collection.mutable.TreeSet	groupMapReduce	[2],scala.Function1,scala.Function1,scala.Function2:scala.collection.immutable.Map
 scala.collection.mutable.TreeSet	grouped	scala.Int:scala.collection.Iterator
+scala.collection.mutable.TreeSet	hasDefiniteSize	-:scala.Boolean
 scala.collection.mutable.TreeSet	head	-:java.lang.Object
 scala.collection.mutable.TreeSet	headOption	-:scala.Option
 scala.collection.mutable.TreeSet	isEmpty	-:scala.Boolean
@@ -20750,6 +21055,9 @@ scala.collection.mutable.TreeSet$	apply	[1],scala.collection.immutable.Seq,scala
 scala.collection.mutable.TreeSet$	empty	[1],scala.math.Ordering:scala.collection.mutable.TreeSet
 scala.collection.mutable.TreeSet$	from	[1],scala.collection.IterableOnce,scala.math.Ordering:scala.collection.mutable.TreeSet
 scala.collection.mutable.TreeSet$	newBuilder	[1],scala.math.Ordering:scala.collection.mutable.Builder
+scala.compat	Platform	object
+scala.compat.Platform$	EOL	-:java.lang.String
+scala.compat.Platform$	currentTime	-:scala.Long
 scala.compiletime	package$package	object
 scala.compiletime.ops	any	object
 scala.compiletime.ops	boolean	object
@@ -21481,6 +21789,7 @@ scala.math.Ordering$	Tuple9	[9],scala.math.Ordering,scala.math.Ordering,scala.ma
 scala.math.Ordering$	apply	[1],scala.math.Ordering:scala.math.Ordering
 scala.math.Ordering$	by	[2],scala.Function1,scala.math.Ordering:scala.math.Ordering
 scala.math.Ordering$	fromLessThan	[1],scala.Function2:scala.math.Ordering
+scala.math.Ordering$	ordered	[1],scala.Function1:scala.math.Ordering
 scala.math.Ordering$.Implicits$	seqOrdering	[2],scala.math.Ordering:scala.math.Ordering
 scala.math.ScalaNumber	<init>	:scala.math.ScalaNumber
 scala.math.ScalaNumber	byteValue	:scala.Byte
@@ -21626,6 +21935,7 @@ scala.quoted.runtime.StopMacroExpansion	getStackTrace	:java.lang.StackTraceEleme
 scala.quoted.runtime.StopMacroExpansion	getSuppressed	:java.lang.Throwable[]
 scala.quoted.runtime.StopMacroExpansion	initCause	java.lang.Throwable:java.lang.Throwable
 scala.quoted.runtime.StopMacroExpansion	printStackTrace	:scala.Unit
+scala.quoted.runtime.StopMacroExpansion	printStackTrace	java.io.PrintStream:scala.Unit
 scala.quoted.runtime.StopMacroExpansion	printStackTrace	java.io.PrintWriter:scala.Unit
 scala.quoted.runtime.StopMacroExpansion	setStackTrace	java.lang.StackTraceElement[]:scala.Unit
 scala.quoted.runtime.StopMacroExpansion	toString	:java.lang.String
@@ -22650,6 +22960,7 @@ scala.util.control.ControlThrowable	getSuppressed	:java.lang.Throwable[]
 scala.util.control.ControlThrowable	initCause	java.lang.Throwable:java.lang.Throwable
 scala.util.control.ControlThrowable	message	-:java.lang.String
 scala.util.control.ControlThrowable	printStackTrace	:scala.Unit
+scala.util.control.ControlThrowable	printStackTrace	java.io.PrintStream:scala.Unit
 scala.util.control.ControlThrowable	printStackTrace	java.io.PrintWriter:scala.Unit
 scala.util.control.ControlThrowable	setStackTrace	java.lang.StackTraceElement[]:scala.Unit
 scala.util.control.ControlThrowable	toString	:java.lang.String
@@ -22663,6 +22974,7 @@ scala.util.control.NoStackTrace	getStackTrace	:java.lang.StackTraceElement[]
 scala.util.control.NoStackTrace	getSuppressed	:java.lang.Throwable[]
 scala.util.control.NoStackTrace	initCause	java.lang.Throwable:java.lang.Throwable
 scala.util.control.NoStackTrace	printStackTrace	:scala.Unit
+scala.util.control.NoStackTrace	printStackTrace	java.io.PrintStream:scala.Unit
 scala.util.control.NoStackTrace	printStackTrace	java.io.PrintWriter:scala.Unit
 scala.util.control.NoStackTrace	setStackTrace	java.lang.StackTraceElement[]:scala.Unit
 scala.util.control.NoStackTrace	toString	:java.lang.String
