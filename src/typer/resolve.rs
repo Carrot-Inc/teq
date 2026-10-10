@@ -5213,7 +5213,10 @@ impl<'a> Worker<'a> {
                 .zip(self.types.items(pargs).iter().copied())
                 .collect();
             let inherited: Vec<(ClassId, TypeId)> = self.syms.class(pc).base_types.clone();
-            let mut seen: Vec<(ClassId, TypeId)> = inherited.into_iter().map(|(bc, bt)| (bc, self.types.subst(bt, &subst))).collect();
+            // A parent without type arguments (`Product`, most traits) is its linearisation as is,
+            // without a substitution; one through a prefix is seen from it.
+            let mut seen: Vec<(ClassId, TypeId)> =
+                if subst.is_empty() { inherited } else { inherited.into_iter().map(|(bc, bt)| (bc, self.types.subst(bt, &subst))).collect() };
             if let Some(p) = prefix {
                 for (_, bt) in seen.iter_mut() {
                     *bt = self.outer_seen_from(*bt, p, pc);

@@ -1424,9 +1424,10 @@ impl<'a> Worker<'a> {
             // that path (dotty's `addCompanion(pre, companion)`): one per enclosing instance. An
             // object's own class has the object itself (a module class's `companionModule`).
             let through: Vec<TypeId> = seen.through.iter().filter(|&&(k, _)| k == c).map(|&(_, p)| p).collect();
+            let named_through = !through.is_empty();
             let info = self.syms.class(c);
             let module = info.inner_object.or_else(|| info.companion.and_then(|m| self.syms.class(m).inner_object));
-            if let Some(val) = module.filter(|_| !through.is_empty()) {
+            if let Some(val) = module.filter(|_| named_through) {
                 for p in through {
                     let path = self.types.mk(Type::Select(p, val));
                     if !paths.contains(&path) {
@@ -1434,19 +1435,21 @@ impl<'a> Worker<'a> {
                     }
                 }
             }
-            let n_bases = self.syms.class(c).base_types.len();
-            for i in 0..n_bases {
-                let mut b = self.syms.class(c).base_types[i].0;
+            // Each base read once: the object it is or its companion, then the objects it is
+            // nested in; the class's own inner companion reached through a path is that path's.
+            for &(base, _) in self.syms.class(c).base_types.iter() {
+                let mut b = base;
                 loop {
                     let info = self.syms.class(b);
-                    let module = if self.is_module_class(b) { Some(b) } else { info.companion };
-                    let module = module.filter(|&m| !(b == c && seen.through.iter().any(|&(k, _)| k == c) && self.syms.class(m).inner_object.is_some()));
-                    if let Some(m) = module.filter(|&m| self.is_module_class(m)) {
+                    let is_module = info.kind == ClassKind::Object || info.inner_object.is_some();
+                    let module = if is_module { Some(b) } else { info.companion.filter(|&m| self.is_module_class(m)) };
+                    let module = module.filter(|&m| !(b == c && named_through && self.syms.class(m).inner_object.is_some()));
+                    if let Some(m) = module {
                         if !scopes.contains(&m) {
                             scopes.push(m);
                         }
                     }
-                    match self.syms.class(b).owner {
+                    match info.owner {
                         Owner::Class(o) if self.is_module_class(o) => b = o,
                         _ => break,
                     }
