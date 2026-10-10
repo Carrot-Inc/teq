@@ -1,0 +1,8 @@
+package build.pkg
+
+import mill.*, scalalib.*
+
+// A package of the build (pkg/package.mill), a module of its own.
+object `package` extends build.Base {
+  def moduleDeps = Seq(build.core)
+}

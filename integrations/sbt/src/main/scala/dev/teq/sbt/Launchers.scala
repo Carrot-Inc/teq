@@ -3,14 +3,14 @@ package dev.teq.sbt
 import java.io.File
 import java.nio.charset.StandardCharsets.UTF_8
 
-import sbt.io.IO
+import java.nio.file.Files
 
 /** The launchers `teqExportAll` writes beside `teq.lock` (docs/TARGETS.md, "The launchers"): `teq`
   * (POSIX sh) and `teq.cmd`, teq's `tools/launcher/`, which the plugin carries in every version it
   * has shipped. A launcher is written when absent and replaced by the current one only while it is
   * one of those, unedited (line ends aside); any other (edited, without the marker, or a later
   * plugin's) is kept and reported. */
-private[sbt] object Launchers {
+private[teq] object Launchers {
   val Names = Seq("teq", "teq.cmd")
   private val Marker = """(?m)^(?:#|rem) teq launcher (\d+):""".r
 
@@ -39,7 +39,7 @@ private[sbt] object Launchers {
     Names.flatMap { name =>
       val file = new File(root, name)
       def place(): Unit = {
-        IO.write(file, lineEnds(name, current(name)), UTF_8)
+        Files.write(file.toPath, lineEnds(name, current(name)).getBytes(UTF_8))
         if (name == "teq") file.setExecutable(true, false)
       }
       if (!file.isFile) {
@@ -47,7 +47,7 @@ private[sbt] object Launchers {
         Some(Report(false, s"wrote $file, launcher $version"))
       }
       else {
-        val text = normalized(IO.read(file, UTF_8))
+        val text = normalized(new String(Files.readAllBytes(file.toPath), UTF_8))
         if (text == current(name)) {
           if (name == "teq" && !file.canExecute) file.setExecutable(true, false)
           None

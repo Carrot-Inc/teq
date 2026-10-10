@@ -19,6 +19,14 @@ fn main() {
     let numbers: Vec<&str> = plugin.split('.').collect();
     assert!(numbers.len() == 3 && numbers.iter().all(|n| !n.is_empty() && n.bytes().all(|b| b.is_ascii_digit())), "integrations/sbt/plugin-version.txt holds {plugin:?}, not <major>.<minor>.<patch>");
     println!("cargo:rustc-env=TEQ_PLUGIN_VERSION={plugin}");
+    // The release of mill-teq this compiler names in the command that exports a Mill build again
+    // (src/task/export.rs, `Exporter::command`), its own version line.
+    println!("cargo:rerun-if-changed=integrations/mill/plugin-version.txt");
+    let mill = std::fs::read_to_string("integrations/mill/plugin-version.txt").expect("integrations/mill/plugin-version.txt names mill-teq's version");
+    let mill = mill.trim();
+    let numbers: Vec<&str> = mill.split('.').collect();
+    assert!(numbers.len() == 3 && numbers.iter().all(|n| !n.is_empty() && n.bytes().all(|b| b.is_ascii_digit())), "integrations/mill/plugin-version.txt holds {mill:?}, not <major>.<minor>.<patch>");
+    println!("cargo:rustc-env=TEQ_MILL_PLUGIN_VERSION={mill}");
     emit_git_hash();
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("std");
     let mut files = Vec::new();

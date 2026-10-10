@@ -52,7 +52,8 @@ runtime/rt.js      the JavaScript runtime
 tests/             the suites (tests/all.sh lists them); tests/support/ what the runners share
 bench/             generators, budgets and measurements; bench/app the application corpus (below)
 proptests/         the property-based tests, a crate of its own (proptests/README.md)
-integrations/      sbt/ the sbt plugin (for sbt 2 and sbt 1), vite/ and vite-scalajs/, zed/ the Zed extension, claude-code/
+integrations/      sbt/ the sbt plugin (for sbt 2 and sbt 1), mill/ the Mill plugin, vite/ and vite-scalajs/, zed/ the Zed
+                   extension, claude-code/
 tools/             launcher/ (the launchers, below)
 ```
 
@@ -152,7 +153,14 @@ its own and checks the two over the fixtures under `axes/`.
 A branch publishes the plugin only under a SNAPSHOT version of its own, never a release's:
 `~/.ivy2/local` comes before every repository, so a local publish of a release's version would stand in
 for that release in every sbt build on the machine. `check.sh`
-never runs in the application's checkout. The Zed extension (`integrations/zed`) is a crate of its own:
+never runs in the application's checkout. mill-teq, the Mill plugin (`integrations/mill`), is built by Mill,
+compiling sbt-teq's sources that hold nothing of sbt (`Exported`, `Lock`, `Json`, `Launchers`, `Release`, `Served`,
+`Sha1`, `ScalacOptions`, in the syntax both sbt lines' Scala reads) beside its own, and tested outside `tests/all.sh` too: `tests/mill-export.sh` builds it,
+publishes it under a version of the test's own into a Maven directory of the test's, and exports
+`tests/mill-export/fixture` under Mill 1.0.6 and 1.1.10 against `tests/mill-export/expected-<mill>.lock` (`--record`
+writes them), then runs teq's verbs over the export (`TEQ`). A branch publishes it only under a SNAPSHOT of its own
+(`TEQ_MILL_PLUGIN_VERSION`) into a directory it names (`publishM2Local --m2RepoPath`), never a release's into
+`~/.m2`. The Zed extension (`integrations/zed`) is a crate of its own:
 `cargo test` there; its dev build needs rustup's `wasm32-wasip2` target.
 
 ### The assertion-enabled build

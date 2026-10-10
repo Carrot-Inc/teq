@@ -32,7 +32,7 @@ private[sbt] object BuildInfoGenerator {
   private def generator(keys: Seq[BuildInfoCompat.Key], evaluated: Seq[Seq[BuildInfoResult]]): Def.Initialize[Task[Either[Seq[String], Json.Value]]] = Def.task {
     val name = thisProjectRef.value.project
     val data = settingsData.value
-    val buildRoot = Export.rootOf((LocalRootProject / baseDirectory).value)
+    val buildRoot = Exported.rootOf((LocalRootProject / baseDirectory).value)
     val options = (Compile / buildInfoOptions).value
     val renderer = (Compile / buildInfoRenderer).value
     val packageName = (Compile / buildInfoPackage).value
@@ -51,7 +51,7 @@ private[sbt] object BuildInfoGenerator {
             // records is the same bytes on every machine and in every checkout.
             case None =>
               val path = file.toPath.toAbsolutePath.normalize
-              val what = if (path.startsWith(buildRoot)) s"the file ${Export.relativeTo(buildRoot, file)}" else "a file outside the build's root"
+              val what = if (path.startsWith(buildRoot)) s"the file ${Exported.relativeTo(buildRoot, file)}" else "a file outside the build's root"
               Left(s"the BuildInfo key ${r.identifier} is $what, which is no class directory of the build")
           }
         case (Some("String"), s: String) => Right(r.identifier -> Right(Json.Str(s)))
@@ -82,7 +82,7 @@ private[sbt] object BuildInfoGenerator {
     else {
       val named = members.collect { case Right(member) => member }
       val directory = if (packagePath) packageName.split('.').filter(_.nonEmpty).mkString("/") else "sbt-buildinfo"
-      val output = Seq(Export.generatedDirectory(name), directory, s"$objectName.scala").filter(_.nonEmpty).mkString("/")
+      val output = Seq(Exported.generatedDirectory(name), directory, s"$objectName.scala").filter(_.nonEmpty).mkString("/")
       Right(Json.Obj(Map(
         "kind" -> Json.Str("buildInfo"),
         "package" -> Json.Str(packageName),

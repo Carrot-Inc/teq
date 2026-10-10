@@ -129,7 +129,7 @@ pub fn run(export: &Export, args: &[String]) -> i32 {
         return 2;
     }
     let mut command = Command::new(&java);
-    command.args(&context.java_options).arg(format!("@{}", argfile.display())).arg(&main).args(extra).current_dir(export.path(&context.base_directory)).envs(&context.env_vars);
+    command.args(&context.java_options).arg(format!("@{}", argfile.display())).arg(&main).args(extra).current_dir(export.path(&context.base_directory)).envs(&context.env_vars).envs(export.env_paths(&context.env_paths));
     job::take_signals();
     let mut child = match job::start(command) {
         Ok(c) => c,

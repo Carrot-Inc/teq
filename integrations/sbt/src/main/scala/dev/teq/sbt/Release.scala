@@ -9,9 +9,8 @@ import java.util.concurrent.ConcurrentHashMap
 
 import scala.util.control.NonFatal
 import scala.collection.compat.*
+import scala.jdk.CollectionConverters.*
 
-import sbt.io.IO
-import sbt.util.Logger
 
 /** The compiler's binaries from its release (docs/TARGETS.md, "Releases"), from 0.1.7 on: under the releases'
   * base (`teqReleases`, GitHub's releases of teq), the directory `v<version>/` holds the asset
@@ -29,7 +28,7 @@ import sbt.util.Logger
   * download goes to a file of its own and is renamed into place once its bytes check out, a copy without its
   * receipt, a part left by an interrupted download and a copy whose bytes no longer give the receipt's digest are
   * fetched and checked again, and only a copy that gives its receipt's digest serves offline. */
-private[sbt] object Release {
+private[teq] object Release {
   val DefaultBase = "https://github.com/Carrot-Inc/teq/releases/download"
 
   /** The first release served, the GitHub release's first: an earlier one is refused by the plugin, as by the
@@ -154,7 +153,7 @@ private[sbt] object Release {
   /** The classifier's binary of the release, verified: from the cache when its copy gives its receipt's digest (no
     * request made), else fetched and checked. The lock's pin, of this compiler and classifier, must agree with
     * what is accepted. */
-  def binary(base: String, version: String, classifier: String, cache: File, pin: Option[Pin], served: Served, log: Logger): Either[String, Verified] = {
+  def binary(base: String, version: String, classifier: String, cache: File, pin: Option[Pin], served: Served, info: String => Unit): Either[String, Verified] = {
     val dir = cacheDir(cache, base, version, classifier)
     val file = new File(dir, assetName(version, classifier))
     val receipt = new File(dir, assetName(version, classifier) + ".receipt")
@@ -171,7 +170,7 @@ private[sbt] object Release {
             m <- manifest(base, version, served).left.map(u => s"the release v$version of teq cannot be read: ${u.why}")
             e <- m.entry(classifier).toRight(s"the release v$version of teq has no binary for $classifier: ${manifestName(version)} lists ${if (m.entries.isEmpty) "none" else m.entries.map(_.classifier).mkString(", ")}")
             _ <- pinned(Verified(file, e.sha256, e.sha1, e.size))
-            v <- fetch(base, version, m, e, file, receipt, served, log)
+            v <- fetch(base, version, m, e, file, receipt, served, info)
           }
           yield v
       }
@@ -183,7 +182,7 @@ private[sbt] object Release {
   private def kept(file: File, receipt: File, base: String, version: String, classifier: String): Option[Verified] =
     if (!file.isFile || !receipt.isFile) None
     else {
-      val fields = try IO.readLines(receipt).flatMap(_.split(" ", 2) match {
+      val fields = try Files.readAllLines(receipt.toPath, UTF_8).asScala.toList.flatMap(_.split(" ", 2) match {
         case Array(k, v) => Some(k -> v)
         case _ => None
       }).toMap catch { case _: IOException => Map.empty[String, String] }
@@ -194,21 +193,21 @@ private[sbt] object Release {
         fields.get("sha256").exists(d => Hex64.pattern.matcher(d).matches && digestOf(file).exists(_ == (d, fields("sha1"))))
       if (ok) Some(Verified(file, fields("sha256"), fields("sha1"), file.length))
       else {
-        IO.delete(file)
-        IO.delete(receipt)
+        file.delete()
+        receipt.delete()
         None
       }
     }
 
   /** The asset downloaded to a file of its own beside the copy, checked against the entry, made executable and
     * renamed into place, its receipt written after it. */
-  private def fetch(base: String, version: String, m: Manifest, e: Entry, file: File, receipt: File, served: Served, log: Logger): Either[String, Verified] = {
+  private def fetch(base: String, version: String, m: Manifest, e: Entry, file: File, receipt: File, served: Served, info: String => Unit): Either[String, Verified] = {
     val url = assetUrl(base, version, e.classifier)
     try {
-      IO.createDirectory(file.getParentFile)
+      Files.createDirectories(file.getParentFile.toPath)
       val part = Files.createTempFile(file.getParentFile.toPath, s".${e.asset}.", ".part")
       try {
-        log.info(s"teq: fetching $url")
+        info(s"teq: fetching $url")
         served.download(url, part, e.size, DownloadBound) match {
           case Left(why) => Left(s"teq's binary for ${e.classifier} cannot be fetched from the release v$version: $why")
           case Right(status) if status != 200 => Left(s"GET $url answered $status: the release v$version does not serve its binary for ${e.classifier}")
@@ -241,7 +240,7 @@ private[sbt] object Release {
     if (!lock.isFile) None
     else
       try {
-        val lines = IO.readLines(lock).map(_.stripSuffix("\r"))
+        val lines = Files.readAllLines(lock.toPath, UTF_8).asScala.toList.map(_.stripSuffix("\r"))
         val pinsVersion = lines.headOption.exists(l => unquote(l.stripPrefix("teq: ")).contains(version) && l.startsWith("teq: "))
         if (!pinsVersion) None
         else {

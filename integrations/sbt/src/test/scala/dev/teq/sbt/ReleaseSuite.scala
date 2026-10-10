@@ -62,7 +62,7 @@ class ReleaseSuite extends munit.FunSuite {
     finally server.stop(0)
   }
 
-  private val served = Served(Nil, Logger.Null)
+  private val served = Served(Map.empty)
   private def dirs() = {
     val base = Files.createTempDirectory("teq-release").toFile
     (new File(base, "release"), new File(base, "cache"), base)
@@ -93,7 +93,7 @@ class ReleaseSuite extends munit.FunSuite {
     val (dir, cache, base) = dirs()
     release(dir, Map(classifier -> "#!/bin/sh\necho teq 0.1.7\n", "osx-aarch_64" -> "a mac binary"))
     val url = withRelease(dir) { case (url, requests) =>
-      val v = Release.binary(url, version, classifier, cache, None, served, Logger.Null).fold(fail(_), identity)
+      val v = Release.binary(url, version, classifier, cache, None, served, _ => ()).fold(fail(_), identity)
       assertEquals(IO.read(v.file), "#!/bin/sh\necho teq 0.1.7\n")
       assert(v.file.canExecute)
       assertEquals(requests(), Seq(s"GET /download/v$version/teq-$version-binaries.txt", s"GET /download/v$version/SHA256SUMS",
@@ -103,7 +103,7 @@ class ReleaseSuite extends munit.FunSuite {
       assertEquals(receipt("manifest"), sha256(IO.read(new File(dir, s"v$version/teq-$version-binaries.txt"))))
       url
     }
-    val warm = Release.binary(url, version, classifier, cache, None, served, Logger.Null)
+    val warm = Release.binary(url, version, classifier, cache, None, served, _ => ())
     assertEquals(warm.map(_.sha256), Right(sha256("#!/bin/sh\necho teq 0.1.7\n")))
     IO.delete(base)
   }
@@ -112,18 +112,18 @@ class ReleaseSuite extends munit.FunSuite {
     val (dir, cache, base) = dirs()
     release(dir, Map(classifier -> "the right bytes"))
     val stopped = withRelease(dir){ case (url, _) => url}
-    val offline = Release.binary(stopped, version, classifier, cache, None, served, Logger.Null)
+    val offline = Release.binary(stopped, version, classifier, cache, None, served, _ => ())
     assert(offline.left.exists(_.contains(s"the release v$version of teq cannot be read")), offline.toString)
     withRelease(dir) { case (url, requests) =>
       val kept = new File(Release.cacheDir(cache, url, version, classifier), asset)
       IO.write(kept, "the right bytes")
       IO.write(new File(kept.getParentFile, s".$asset.123.part"), "the rig")
-      assertEquals(Release.binary(url, version, classifier, cache, None, served, Logger.Null).map(_.size), Right(15L))
+      assertEquals(Release.binary(url, version, classifier, cache, None, served, _ => ()).map(_.size), Right(15L))
       assert(requests().exists(_.endsWith(s"/objects/v$version/$asset")), "a copy without its receipt is no verified copy")
       IO.write(kept, "the righT bytes")
       kept.setLastModified(kept.lastModified + 2000)
       val before = requests().size
-      assertEquals(Release.binary(url, version, classifier, cache, None, served, Logger.Null).map(_.size), Right(15L))
+      assertEquals(Release.binary(url, version, classifier, cache, None, served, _ => ()).map(_.size), Right(15L))
       assertEquals(IO.read(kept), "the right bytes")
       assert(requests().size > before, "a copy of the receipt's size that does not give its digest is fetched again")
     }
@@ -134,9 +134,9 @@ class ReleaseSuite extends munit.FunSuite {
     val (dir, cache, base) = dirs()
     release(dir, Map("osx-aarch_64" -> "a mac binary", "windows-x86_64" -> "a windows binary"))
     withRelease(dir) { case (url, _) =>
-      val missing = Release.binary(url, version, classifier, cache, None, served, Logger.Null)
+      val missing = Release.binary(url, version, classifier, cache, None, served, _ => ())
       assertEquals(missing, Left(s"the release v$version of teq has no binary for $classifier: teq-$version-binaries.txt lists osx-aarch_64, windows-x86_64"))
-      val absent = Release.binary(url, "0.1.9", classifier, cache, None, served, Logger.Null)
+      val absent = Release.binary(url, "0.1.9", classifier, cache, None, served, _ => ())
       assert(absent.left.exists(_.contains("the release v0.1.9 is not at")), absent.toString)
       assert(Release.manifest(url, "0.1.9", served).left.exists(_.absent))
     }
@@ -150,7 +150,7 @@ class ReleaseSuite extends munit.FunSuite {
       IO.delete(dir)
       release(dir, bytes, manifest, sums)
       for ((c, b) <- served) IO.write(new File(dir, s"v$version/${Release.assetName(version, c)}"), b)
-      withRelease(dir){ case (url, _) => Release.binary(url, version, classifier, cache, None, this.served, Logger.Null)}.fold(identity, v => fail(s"accepted $v"))
+      withRelease(dir){ case (url, _) => Release.binary(url, version, classifier, cache, None, this.served, _ => ())}.fold(identity, v => fail(s"accepted $v"))
     }
     assert(refused(manifest = Some(s"teq 0.1.8 0123456789abcdef0123456789abcdef01234567\n")).contains(s"not `teq $version <commit>`"))
     val swapped = refused(served = Map(classifier -> "0.1.8's bytez"))
@@ -172,7 +172,7 @@ class ReleaseSuite extends munit.FunSuite {
     release(dir, Map(classifier -> "short"))
     IO.write(new File(dir, s"v$version/$asset"), "short, and then a great deal more")
     withRelease(dir) { case (url, _) =>
-      val refused = Release.binary(url, version, classifier, cache, None, served, Logger.Null)
+      val refused = Release.binary(url, version, classifier, cache, None, served, _ => ())
       assert(refused.left.exists(_.contains("more than the 5 bytes")), refused.toString)
     }
     IO.delete(base)
@@ -191,12 +191,12 @@ class ReleaseSuite extends munit.FunSuite {
     assertEquals(Release.pinIn(lock, version, "windows-x86_64"), None)
     withRelease(dir) { case (url, _) =>
       lockOf(version, sha1(b), b.length + 1)
-      val stale = Release.binary(url, version, classifier, cache, Release.pinIn(lock, version, classifier), served, Logger.Null)
+      val stale = Release.binary(url, version, classifier, cache, Release.pinIn(lock, version, classifier), served, _ => ())
       assert(stale.left.exists(_.contains("export the build again")), stale.toString)
       lockOf(version, sha1(b), b.length)
-      assertEquals(Release.binary(url, version, classifier, cache, Release.pinIn(lock, version, classifier), served, Logger.Null).map(_.sha1), Right(sha1(b)))
+      assertEquals(Release.binary(url, version, classifier, cache, Release.pinIn(lock, version, classifier), served, _ => ()).map(_.sha1), Right(sha1(b)))
       lockOf(version, "b" * 40, b.length)
-      val warm = Release.binary(url, version, classifier, cache, Release.pinIn(lock, version, classifier), served, Logger.Null)
+      val warm = Release.binary(url, version, classifier, cache, Release.pinIn(lock, version, classifier), served, _ => ())
       assert(warm.left.exists(_.contains("export the build again")), "a verified copy is checked against the lock too")
     }
     IO.delete(base)
@@ -206,14 +206,14 @@ class ReleaseSuite extends munit.FunSuite {
     val (dir, cache, base) = dirs()
     val good = "#!/bin/sh\necho RIGHT\n"
     release(dir, Map(classifier -> good))
-    val (url, kept) = withRelease(dir){ case (url, _) => (url, Release.binary(url, version, classifier, cache, None, served, Logger.Null).fold(fail(_), identity).file)}
+    val (url, kept) = withRelease(dir){ case (url, _) => (url, Release.binary(url, version, classifier, cache, None, served, _ => ()).fold(fail(_), identity).file)}
     val date = Files.getLastModifiedTime(kept.toPath)
     Files.writeString(kept.toPath, "#!/bin/sh\necho WRONG\n")
     Files.setLastModifiedTime(kept.toPath, date)
-    val offline = Release.binary(url, version, classifier, cache, None, served, Logger.Null)
+    val offline = Release.binary(url, version, classifier, cache, None, served, _ => ())
     assert(offline.left.exists(_.contains("cannot be read")), s"the changed copy served: $offline")
     withRelease(dir) { case (again, requests) =>
-      val v = Release.binary(again, version, classifier, cache, None, served, Logger.Null).fold(fail(_), identity)
+      val v = Release.binary(again, version, classifier, cache, None, served, _ => ()).fold(fail(_), identity)
       assertEquals(IO.read(v.file), good)
       assert(requests().exists(_.endsWith(s"/objects/v$version/$asset")))
       // The same write to a copy the plugin runs: its digest is its bytes', not the one seen before.
@@ -230,11 +230,11 @@ class ReleaseSuite extends munit.FunSuite {
     val (dir, cache, base) = dirs()
     release(dir, Map(classifier -> "the bytes"))
     withRelease(dir) { case (url, requests) =>
-      val v = Release.binary(url, version, classifier, cache, None, served, Logger.Null).fold(fail(_), identity)
+      val v = Release.binary(url, version, classifier, cache, None, served, _ => ()).fold(fail(_), identity)
       val receipt = new File(v.file.getPath + ".receipt")
       IO.writeLines(receipt, IO.readLines(receipt).filterNot(_.startsWith("sha1 ")))
       val before = requests().size
-      assertEquals(Release.binary(url, version, classifier, cache, None, served, Logger.Null).map(_.sha1), Right(v.sha1))
+      assertEquals(Release.binary(url, version, classifier, cache, None, served, _ => ()).map(_.sha1), Right(v.sha1))
       assert(requests().size > before, "fetched again")
     }
     IO.delete(base)

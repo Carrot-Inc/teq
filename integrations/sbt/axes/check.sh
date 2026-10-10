@@ -180,7 +180,7 @@ for version in $axes; do
   [ -f "$work/verbs-$version.txt" ] || continue
   if grep -q "^compile gen: refused" "$work/verbs-$version.txt" && grep -q "^compile: exit 2" "$work/verbs-$version.txt" &&
     grep -q "^compile lib app sjs: 0 0" "$work/verbs-$version.txt" && grep -q "^test lib: 0 lib/test: 1 suite, 2 passed, 0 failed$" "$work/verbs-$version.txt" &&
-    grep -q "^test sjs: 2 teq: sjs is a Scala.js project, whose suites teq does not run yet$" "$work/verbs-$version.txt" &&
+    grep -q "^test sjs: 2 teq: sjs is a Scala.js project, whose suites (linked as NoModule, run under node) teq does not run yet$" "$work/verbs-$version.txt" &&
     grep -q "^run app hello: 0 app one two$" "$work/verbs-$version.txt"; then
     pass "teq over equal's export on sbt $version: gen refused, a bare compile exiting 2, lib, app and sjs compiled, lib's suites passing (sjs's refused, as Scala.js suites are), app's alias run"
   else

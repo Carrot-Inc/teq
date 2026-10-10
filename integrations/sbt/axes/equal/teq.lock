@@ -364,6 +364,12 @@ projects:
               - "-b"
             class: munit.Framework
         javaOptions: []
+        jsEnv:
+          args: []
+          env: {}
+          executable: node
+          kind: node
+        moduleKind: NoModule
         resources:
           - sjs/src/test/resources
         sources:

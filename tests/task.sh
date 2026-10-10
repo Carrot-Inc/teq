@@ -1286,6 +1286,157 @@ else
 fi
 (cd "$r" && timeout 30 "$TEQ" stop > /dev/null 2>&1)
 
+# A Mill build's export at its root (`exporter: mill`, mill-teq's): its inputs are the build's scripts as
+# Mill finds them (build.mill, each package.mill and the .mill files beside them, mill-build/, the
+# launcher's files) and the inputs it declares, so that an edited package, a package added and a
+# declared input removed each read as stale, naming the command that exports a Mill build again, and
+# --strict refuses; a generator of the build's own (kind mill) refuses the verbs that type it, naming
+# mill and the overlay, while a project without one compiles.
+mb=$work/mill
+mkdir -p "$mb/core/src/core" "$mb/tags/src/tags" "$mb/out/core" "$mb/notes"
+printf 'package core\n\nobject Core:\n  val n: Int = 1\n' > "$mb/core/src/core/Core.scala"
+printf 'package tags\n\nobject Tags:\n  val n: Int = Html.n\n' > "$mb/tags/src/tags/Tags.scala"
+printf '//| mill-version: 1.0.6\nimport mill.*, scalalib.*\n' > "$mb/build.mill"
+printf 'package build.core\nobject `package` extends mill.scalalib.ScalaModule\n' > "$mb/core/package.mill"
+printf 'object Versions\n' > "$mb/core/Versions.mill"
+printf 'package build.out\n' > "$mb/out/core/package.mill"
+printf '1.0.6\n' > "$mb/.mill-version"
+printf '0.14.0\n' > "$mb/.tyrian-version"
+# core's suite (core/test, Mill's test module folded into core's test configuration) checks what Mill's
+# own run of it gives: a working directory of its own, empty at each run (the sandbox); the resource
+# directories in MILL_TEST_RESOURCE_DIR and the build's root in MILL_WORKSPACE_ROOT, absolute; and a
+# jar of its run classpath alone (runonly.jar, a resource) present at run time. va compiles against vb
+# (Mill's compileModuleDeps), vc against va alone; web is a Scala.js project with suites.
+mkdir -p "$mb/core/test/src/core" "$mb/core/test/resources" "$mb/lib" "$mb/vb/src/vb" "$mb/va/src/va" "$mb/vc/src/vc" "$mb/web/src/web"
+cat > "$mb/core/test/src/core/SandboxSuite.scala" <<'SCALA'
+package core
+
+import java.nio.file.{Files, Paths}
+
+class SandboxSuite extends munit.FunSuite:
+  test("a sandbox of its own, empty, Mill's variables, the run classpath") {
+    val cwd = Paths.get("").toAbsolutePath
+    assert(cwd.endsWith(Paths.get("target/teq/core/test/sandbox")), cwd.toString)
+    assertEquals(Files.list(cwd).count(), 0L)
+    Files.writeString(cwd.resolve("left-by-the-run.txt"), "x")
+    assertEquals(sys.env("MILL_TEST_RESOURCE_DIR"), sys.env("MILL_WORKSPACE_ROOT") + "/core/test/resources")
+    assert(getClass.getResource("/runonly.txt") != null)
+    assertEquals(Core.n, 1)
+  }
+SCALA
+python3 -c 'import sys, zipfile; z = zipfile.ZipFile(sys.argv[1], "w"); z.writestr("runonly.txt", "run time alone\n"); z.close()' "$mb/lib/runonly.jar"
+printf 'package vb\n\nobject B:\n  val n: Int = 1\n' > "$mb/vb/src/vb/B.scala"
+printf 'package va\n\nobject A:\n  val n: Int = vb.B.n\n' > "$mb/va/src/va/A.scala"
+printf 'package vc\n\nobject C:\n  val n: Int = va.A.n\n' > "$mb/vc/src/vc/C.scala"
+printf 'package web\n\nobject Web:\n  val n: Int = 1\n' > "$mb/web/src/web/Web.scala"
+mkdir -p "$mb/leak/src/leak" "$mb/leak/test/src/leak"
+printf 'package leak\n\nobject Leak:\n  val suite: Class[?] = classOf[munit.FunSuite]\n' > "$mb/leak/src/leak/Leak.scala"
+printf 'package leak\n\nclass LeakSuite extends munit.FunSuite:\n  test("seen")(assert(Leak.suite != null))\n' > "$mb/leak/test/src/leak/LeakSuite.scala"
+python3 - "$mb" "$lib" "$lib3" "$PWD/integrations/sbt/example/teq.lock" <<'PY'
+import hashlib, importlib.util, os, sys
+spec = importlib.util.spec_from_file_location("lock", os.environ["LOCK_PY"])
+lock = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(lock)
+mb, lib, lib3, fixture = sys.argv[1:]
+m2 = lib[: lib.index("/maven2/") + len("/maven2/")]
+def artifact(path):
+    data = open(path, "rb").read()
+    parts = path[len(m2):].split("/")
+    return ":".join([".".join(parts[:-3]), parts[-3], parts[-2]]), f"maven-central {hashlib.sha1(data).hexdigest()} {len(data)}"
+table = dict([artifact(lib3), artifact(lib)])
+jars = list(table)
+example = lock.parse(open(fixture, encoding="utf-8").read())
+munit = [e for e in example["projects"]["jvmapp"]["configurations"]["test"]["classpath"] if isinstance(e, str) and e not in table]
+table.update({key: example["jars"][key] for key in munit})
+flags = {"ignoredScalacOptions": [], "kindProjector": False, "strictEquality": False, "werror": False}
+product = lambda p: {"configuration": "compile", "project": p}
+def project(name, generators=(), depends=(), platform="jvm"):
+    sources = [name + "/src"] + ([f"out/{name}/generatedSources.dest"] if generators else [])
+    return {"base": name, "platform": platform, "scalaVersion": "3.8.4", "configurations": {"compile": {"classpath": [product(d) for d in depends] + jars, "flags": flags, "generators": list(generators), "mainClasses": [], "resources": [], "sources": sources, "transitive": False}}}
+core = project("core")
+# core's own class path names munit, so that its test configuration adds nothing core's sources would see
+# typed inside it; leak's does not, its test's adding munit (Mill's test module's mvnDeps).
+core["configurations"]["compile"]["classpath"] += munit
+leak = project("leak")
+leak["configurations"]["test"] = {"classpath": [product("leak")] + jars + munit, "flags": flags, "resources": [], "sources": ["leak/test/src"], "transitive": False,
+    "baseDirectory": ".", "envVars": {}, "exclude": [], "fork": True, "javaOptions": [], "frameworks": [{"arguments": [], "class": "munit.Framework"}]}
+core["configurations"]["test"] = {"classpath": [product("core")] + jars + munit, "runtimeClasspath": [product("core")] + jars + munit + [{"file": "lib/runonly.jar"}],
+    "flags": flags, "resources": ["core/test/resources"], "sources": ["core/test/src"], "transitive": False, "baseDirectory": ".", "envVars": {}, "exclude": [], "fork": True, "javaOptions": [],
+    "envPaths": {"MILL_TEST_RESOURCE_DIR": ["core/test/resources"], "MILL_WORKSPACE_ROOT": ["."]}, "sandbox": True, "frameworks": [{"arguments": [], "class": "munit.Framework"}]}
+web = project("web", platform="js")
+web["configurations"]["test"] = {"classpath": [product("web")] + jars, "flags": flags, "resources": [], "sources": ["web/test/src"], "transitive": False, "baseDirectory": ".", "envVars": {}, "exclude": [],
+    "fork": True, "javaOptions": [], "frameworks": [{"arguments": [], "class": "utest.runner.Framework"}], "moduleKind": "CommonJSModule", "jsEnv": {"args": [], "env": {}, "kind": "jsdom"}}
+files = [".mill-version", ".tyrian-version", "build.mill", "core/Versions.mill", "core/package.mill"]
+inputs = {f: hashlib.sha256(open(os.path.join(mb, f), "rb").read()).hexdigest() for f in files}
+digest = hashlib.sha256("".join(f"{f}\0{d}\n" for f, d in sorted(inputs.items())).encode()).hexdigest()
+export = {"teq": "0.1.7-check.1", "format": 1, "binaries": {}, "exporter": "mill", "inputs": {"declared": [".tyrian-version"], "files": inputs, "sha256": digest},
+          "java": {"outputVersion": 17}, "repositories": [{"id": "maven-central", "url": "https://repo1.maven.org/maven2/"}], "jars": table,
+          "projects": {"core": core, "leak": leak, "tags": project("tags", [{"kind": "mill", "task": "tags.generatedSources"}]), "vb": project("vb"), "va": project("va", depends=["vb"]), "vc": project("vc", depends=["va"]), "web": web}}
+open(os.path.join(mb, "teq.lock"), "w", encoding="utf-8").write(lock.canonical(export))
+PY
+mill_command="mill --import mvn:build.teq::mill-teq::$(cat integrations/mill/plugin-version.txt) dev.teq.mill.Teq/teqExportAll"
+out=$(cd "$mb" && timeout 120 "$TEQ" --strict compile core 2>&1)
+if [ $? = 0 ] && [[ "$out" == "core/compile: "*" classes, "* ]] && [[ "$out" != *"written before"* ]]; then pass "mill: an unchanged Mill build's export is current, --strict compiling"; else fail "mill, the current export: $out"; fi
+cp "$mb/core/package.mill" "$work/package.mill.saved"
+printf '// edited\n' >> "$mb/core/package.mill"
+out=$(cd "$mb" && timeout 120 "$TEQ" compile core 2>&1)
+code=$?
+strict=$(cd "$mb" && timeout 120 "$TEQ" --strict compile core 2>&1)
+if [ $code = 0 ] && [[ "$out" == *"warning: teq.lock was written before core/package.mill changed; run $mill_command and commit the file"* ]] && [[ "$strict" == *"refusing a stale export: teq.lock was written before core/package.mill changed"* ]]; then
+  pass "mill: an edited package.mill is stale, naming Mill's export, --strict refusing"
+else
+  fail "mill, the edited package: ($code) $out; strict: $strict"
+fi
+cp "$work/package.mill.saved" "$mb/core/package.mill"
+mkdir -p "$mb/web" && printf 'package build.web\n' > "$mb/web/package.mill"
+mkdir -p "$mb/notes/deep" && printf 'package build.notes.deep\n' > "$mb/notes/deep/package.mill"
+rm "$mb/.tyrian-version"
+out=$(cd "$mb" && timeout 120 "$TEQ" --strict compile core 2>&1)
+if [ $? = 2 ] && [[ "$out" == *"teq.lock was written before web/package.mill added, .tyrian-version removed; run $mill_command"* ]]; then
+  pass "mill: a package added and a declared input removed are stale, a package.mill below a directory without one (Mill's walk never reaches it) and out/'s not inputs"
+else
+  fail "mill, the added and removed inputs: $out"
+fi
+rm -r "$mb/web"
+printf '0.14.0\n' > "$mb/.tyrian-version"
+out=$(cd "$mb" && timeout 120 "$TEQ" --strict compile tags 2>&1)
+if [ $? = 2 ] && [ "$out" = "teq: cannot compile tags, which needs what mill alone runs:
+  tags/compile has the source generator tags.generatedSources, which mill runs and teq cannot: declare a command that writes its sources for tags in teq.mill.json, or build tags with mill" ]; then
+  pass "mill: a generator of the build's own (kind mill) refuses the compile, naming mill and the overlay"
+else
+  fail "mill, the generator's refusal: $out"
+fi
+out=$(cd "$mb" && timeout 120 "$TEQ" compile vc 2>&1)
+code=$?
+va=$(cd "$mb" && timeout 120 "$TEQ" compile va 2>&1)
+if [ $code = 2 ] && [ "$out" = "teq: cannot compile vc, which needs what mill alone runs:
+  vc/compile does not see vb/compile, which va/compile builds on: teq types vc/compile as one program with every configuration it builds on, where vb/compile would be seen; compile vc with mill" ] && [[ "$va" == "va/compile: "* ]]; then
+  pass "mill: a prerequisite out of a configuration's sight (compileModuleDeps, not transitive) refuses its compile, the one that sees it compiling"
+else
+  fail "mill, the visibility: ($code) $out; va: $va"
+fi
+out=$(cd "$mb" && timeout 120 "$TEQ" compile leak 2>&1)
+code=$?
+test_out=$(cd "$mb" && timeout 120 "$TEQ" test leak 2>&1)
+test_code=$?
+if [ $code = 1 ] && [[ "$out" == *"leak/src/leak/Leak.scala:4:33: error: type FunSuite not found"* ]] && [[ "$out" == *"leak/compile: 2 errors"* ]] && [ $test_code = 2 ] &&
+  [[ "$test_out" == *"leak/compile is typed inside leak/test, whose class path holds org.scalameta:munit_3:"*"which leak/compile's does not name"* ]]; then
+  pass "mill: a module's compile is typed alone, never inside its test's resident (whose class path adds munit), and its test, which would show it munit, refused"
+else
+  fail "mill, a compile typed inside its test: compile ($code) $out; test ($test_code) $test_out"
+fi
+out=$(cd "$mb" && timeout 300 "$TEQ" test 2>&1)
+code=$?
+again=$(cd "$mb" && timeout 300 "$TEQ" test core 2>&1)
+again_code=$?
+if [ $code = 2 ] && [[ "$out" == *"core/test: 1 suite, 1 passed, 0 failed"* ]] && [[ "$out" == *"teq: test left out leak, which needs what mill alone runs"* ]] && [[ "$out" == *"teq: test left out web is a Scala.js project, whose suites (linked as CommonJSModule, run under node with jsdom) teq does not run yet"* ]] &&
+  [ $again_code = 0 ] && [[ "$again" == *"core/test: 1 suite, 1 passed, 0 failed"* ]] && [ -f "$mb/target/teq/core/test/sandbox/left-by-the-run.txt" ]; then
+  pass "mill: the suites run in a sandbox emptied for each run, with Mill's variables and the run classpath; a Scala.js project's named left out, the run exiting 2"
+else
+  fail "mill, the test run: ($code) $out; again ($again_code): $again"
+fi
+(cd "$mb" && timeout 30 "$TEQ" stop > /dev/null 2>&1)
+
 # The launcher tools/launcher/teq (docs/TARGETS.md, "The launchers") under each POSIX shell
 # present, over a repository on the loopback interface that serves a stand-in for the binary, which
 # prints its arguments and exits with STAND_IN_EXIT: a cold cache fetched into, the arguments and

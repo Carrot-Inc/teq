@@ -1,8 +1,9 @@
 # Tooling
 
 How teq fits a build and an editor. An sbt build takes teq through its plugin, which puts teq in the place of
-sbt's compiler and exports the build into a lockfile; from the lockfile `teq`, the vite plugin and the
-language server work with no sbt running, and a clone builds with nothing installed. The binary's own commands
+sbt's compiler and exports the build into a lockfile, and a Mill build through mill-teq, which exports it into
+the same lockfile; from the lockfile `teq`, the vite plugin and the language server work with neither tool
+running, and a clone builds with nothing installed. The binary's own commands
 and flags are in `docs/CLI.md`, the output and the targets in `docs/TARGETS.md`.
 
 The notices of the code teq adapts from other projects, which a program teq compiles carries along with teq's
@@ -120,7 +121,7 @@ directory.
 `target/teq/teq.lock` under the build's root, adding nothing to the repository. With teq as the build tool,
 `teqBuildTool := true`, it writes it at the build's root and beside it the launchers `teq` (POSIX sh)
 and `teq.cmd`; the repository commits the three files, `teq` and `teq.lock` with LF line ends and `teq.cmd`
-with CRLF in its `.gitattributes`, and keeps the build's own files LF there too (below). Every tool looks
+with CRLF in its `.gitattributes`, and keeps the build's own files LF there too (below; a Mill build's lines are in "The export of a Mill build"). Every tool looks
 for `teq.lock` at a directory, then for `target/teq/teq.lock` under it. A clone of such a build
 then needs no teq installed: `./teq test` reads the lock's first line and its platform's `binaries` line,
 finds the pinned binary in teq's cache, else in coursier's, else fetches it with curl, its size and sha1
@@ -132,13 +133,18 @@ later exports, which say so.
 
 The lock is a subset of YAML 1.2 that any YAML reader reads, with every path relative to the build's root. Its
 first line is the compiler, `teq: <version>`, then `format: 1` and `binaries:`, a line per platform with the
-binary's URL, sha1 and size (`binaries: {}` while the release is not published); then `inputs`, every build definition file with its SHA-256; `repositories`, the
+binary's URL, sha1 and size (`binaries: {}` while the release is not published); then `exporter`, the tool whose
+plugin wrote it (`mill`; absent, sbt); `inputs`, every build definition file with its SHA-256 (and `declared`, the
+inputs a Mill build names besides its scripts); `repositories`, the
 build's remote Maven ones and their credentials hosts; `jars`, every jar a classpath names, once, by its key
 `organization:name:version[:classifier]` with its repository, sha1 and size; `java.outputVersion`, the class
 files' version; and `projects`, each with its platform, Scala version and configurations (the roots, the full
 ordered classpath, the flags, the generators, the declared main classes and the test context of `compile`,
 `runtime` and `test`), the `run`, `dev` and `stage` blocks the verbs read, and the description the plugin's
-own tasks build from.
+own tasks build from. A Mill build's configurations say more (below, "The export of a Mill build"): `transitive:
+false`, the classpath's products the whole of what the sources see; a test configuration's `runtimeClasspath`,
+what its suites run on where that is not its classpath, `sandbox`, a directory of its own for each run, and
+`envPaths`, variables whose values are paths under the root, absolute and joined by `;` (a run block's too).
 
 The export compiles nothing and runs none of the build's code: the classpaths come from dependency resolution
 alone, so it costs an sbt start. Under the driver CI checks it with
@@ -205,12 +211,87 @@ version, a path outside the build's root and an artifact from none of the build'
 written as they are; under the driver they are refused, every reason named at once (SNAPSHOT and dynamic
 versions where `teqExportSnapshots` allows them), as is in both modes a jar key naming two files.
 
+A Scala.js project's test configuration records, beside its frameworks, its link's module kind
+(`moduleKind`: `NoModule`, `CommonJSModule` or `ESModule`, the `Test / scalaJSLinkerConfig`'s) and the
+JavaScript environment its suites run in (`jsEnv`: its `kind`, `node`, `jsdom` or another environment's name,
+and its `executable`, `args` and `env`), which `teq test` names when it refuses the project: teq does not run a
+Scala.js project's suites yet.
+
+## The export of a Mill build
+
+mill-teq exports a Mill 1.x build (1.0.6 and later) to the same `teq.lock`, from what Mill resolves of its
+modules, compiling nothing. It is an external module on Maven Central under a version line of its own
+(`build.teq:mill-teq_mill1_3`, `integrations/mill`), which a build runs without naming it:
+
+```bash
+mill --import mvn:build.teq::mill-teq::0.1.0 dev.teq.mill.Teq/teqExportAll
+```
+
+The lock lands in `target/teq/teq.lock`, or at the build's root with the launchers beside it when
+`teq.mill.json` says `"buildTool": true`; the lock's root says `exporter: mill`, which tells the readers its
+inputs and the command that exports it again. What sbt-teq's settings declare, `teq.mill.json` at the build's
+root declares (`integrations/mill/README.md` has its fields): the driver's mode, SNAPSHOT versions, the compiler
+the lock pins, the inputs the build reads besides its scripts (`inputs.declared`), and per module the commands that
+write its sources, its main classes and aliases, its dev command and the module that is its test configuration.
+
+The modules map onto teq's projects as sbt's projects do:
+
+- a project per JavaModule the build resolves, its key the module's segments as Mill 1.0 renders them, every
+  cross axis and nesting kept (`matrix[3.8.4]`, `cats.js`), its `base` the module's directory; a module's
+  direct child `test`, a TestModule, is the project's test configuration, not a project of its own;
+- left out, each named with its reason: a Scala Native module, a Scala 2 module, a Java module, a module whose
+  sources hold Java files, a test module that is no module's `test` (unless the overlay names it), a module whose
+  `compileClasspath`, `resolvedMvnDeps` or `resolvedRunMvnDeps` is the build's own task (told from its definition
+  before anything of the module is read), or whose local class path (`compileResources`, `unmanagedClasspath`) the
+  build computes, never read as empty, and every module that depends on one of those; a test module is held to the
+  same before it is its owner's test configuration, the project keeping its compile and runtime configurations and
+  its test refusing with the reason;
+- `compile` holds the module's sources and resources and its compile class path in Mill's order (the resolved
+  artifacts, then each module of `transitiveModuleCompileModuleDeps` by its local class path and its products,
+  then its own local class path), `runtime` its run class path (`resolvedRunMvnDeps`, then
+  `transitiveModuleRunModuleDeps`' and its own products); a jar is named by its coordinates, its repository and
+  its path there, from Mill's resolution of the module with its own resolver settings (`Jvm.getArtifacts`),
+  reconciled with the class path's files;
+- `test` holds the test module's, compiled against its compile class path and run on its run class path
+  (`runtimeClasspath` where they differ), in a directory of its own emptied before each run when Mill's run has
+  one (`sandbox`, `testSandboxWorkingDir`), with `MILL_WORKSPACE_ROOT` and `MILL_TEST_RESOURCE_DIR` the paths
+  Mill gives them (`envPaths`), its framework the module's `testFramework`;
+- every configuration is `transitive: false`: Mill compiles each module against its own class path alone, its
+  `compileModuleDeps` seen by their dependent alone, so the classpath's products and jars are the whole of what its
+  sources see. teq types a configuration in a resident of its own (its compile never inside its test's), with every
+  configuration it builds on as one program, whose sources and class path are one union: the verbs refuse where a
+  configuration of that program would see a configuration or a jar its own class path does not name, never
+  flattening. A test whose class path adds a jar its module's does not name (its framework, unless the module's own
+  dependencies name it) is refused so, until configurations have compilation scopes of their own;
+- a `generatedSources` the build defines is never run: a command of the overlay stands for it, which teq runs
+  as for an sbt build, else it is recorded as Mill's (a generator of kind `mill`), the task's directory under
+  Mill's `out/` (`out/<module>/generatedSources.dest`, whatever Mill last wrote there) the editor's root, and the
+  verbs that need it refuse. The export runs no computation of the build's or a plugin's: a `sources`,
+  `resources` or local class path task is read only where its definition is static, told before anything runs
+  (source tasks, and tasks of Mill's own modules); one the build computes is recorded as Mill's generator, never
+  run, the source tasks it reads the editor's roots, and one returning a path under Mill's `out/` is Mill's
+  generator too.
+
+The lock's inputs are the build's scripts as Mill 1.0 and 1.1 find them (`FileImportGraph.walkBuildFiles`,
+`BuildFileDiscovery.walkBuildFiles`: the root's `build.mill` or `build.mill.yaml`, Mill 1.0's `build.mill.scala`
+or `build.sc`, every `package.mill` or `package.mill.yaml` reached through directories that hold one, and every
+`.mill` or `.mill.yaml` file beside those), the meta-build's files under `mill-build/`, the launcher's files
+(`.mill-version`, `.config/mill-version`, `.mill-jvm-version`, `.mill-jvm-opts`, `.mill-opts`), `teq.mill.json`
+and the inputs it declares: an edit to one, a script added and one removed make the lock stale, as for an sbt
+build, and the warning names the command above; the language server watches them and refreshes the warning, a
+declared input outside the workspace's folders (`../external.txt`) watched from its own directory (a relative
+pattern, where the client takes one). A build that allows nested build files (Mill 1.1's
+`mill-allow-nested-build-mill`, its header read as YAML as Mill reads it) is refused. `*.mill text eol=lf`,
+`mill-build/** text eol=lf`, `.mill-version text eol=lf` and `teq.mill.json text eol=lf` in `.gitattributes` keep
+them LF in every checkout.
+
 ## `teq`
 
 `teq [--export file] [--strict] <verb> [args]` reads the export at or above the working directory, or the
-one named; without a verb it lists the verbs and the projects. A project whose export records what sbt alone
-runs for a verb is refused with the reasons; a verb over every project runs the others, names each one left out
-and exits 2.
+one named; without a verb it lists the verbs and the projects. A project whose export records what the build
+tool alone runs for a verb (sbt's or Mill's: a generator it runs, a dependency teq's one program would show, a
+product a run needs that no compile of teq's makes) is refused with the reasons; a verb over every project runs
+the others, names each one left out and exits 2.
 
 | Verb | |
 |---|---|
@@ -245,7 +326,9 @@ them (`--list` prints them) and the patterns applied as `testOnly` applies them;
 whose classes depend, transitively, on a class rewritten since the configuration's last full run. Each failure
 is reported as `[fail] <test>: <message>` with the frames in the suite's code, then a line per project with
 its suites, the passed and failed counts and the times; the exit code is 1 when anything failed. Without a
-project every JVM project's suites run; a Scala.js project's are not run yet, and naming one is refused.
+project every JVM project's suites run; a Scala.js project's are not run yet: naming one is refused, naming its
+link's module kind and JavaScript environment, and a run of every project names each such project left out and
+exits 2.
 
 **Stage.** `teq stage api` writes the files of the export's `stage` block under its directory,
 `<layer>/<path in the image>`, so that a Dockerfile copying native-packager's layers

@@ -11,15 +11,13 @@ import java.util.Base64
 import java.util.concurrent.{CompletableFuture, CompletionStage, ExecutionException, Flow, TimeUnit, TimeoutException}
 import scala.collection.compat.*
 
-import sbt.util.Logger
-
 /** What a repository serves, asked over HTTP: whether a file is served and its size (`probe`), a GET
   * of a small file read to its first kilobytes (`limit` bytes), the whole answer within `timeout`; or a
-  * file downloaded whole (`download`). A request carries the user and password sbt holds for the host it goes to, as
-  * coursier sends them in sbt (`allCredentials`, a credentials file read as sbt reads it, the first
-  * entry of a host taken); a redirect is followed up to five times, to another host too (a release's
+  * file downloaded whole (`download`). A request carries the user and password the build holds for the host it
+  * goes to, as its resolver sends them (sbt's `allCredentials`, `TeqPlugin.served`); a redirect is followed up to
+  * five times, to another host too (a release's
   * asset is served from a CDN), never from https to plain http, each hop with its own host's. */
-private[sbt] final class Served(credentials: Map[String, (String, String)], timeout: Duration) {
+private[teq] final class Served(credentials: Map[String, (String, String)], timeout: Duration) {
   import Served.*
 
   def get(url: String, limit: Int = BodyLimit): Either[String, Answer] = ask("GET", url, 0, limit)
@@ -116,7 +114,7 @@ private[sbt] final class Served(credentials: Map[String, (String, String)], time
     }
 }
 
-private[sbt] object Served {
+private[teq] object Served {
   /** A repository's answer: the status, the `Content-Length`, the body's first kilobytes and the
     * `Content-Range`. */
   final case class Answer(status: Int, length: Option[Long], body: String, range: Option[String] = None)
@@ -130,10 +128,8 @@ private[sbt] object Served {
   private val Ranged = s"GET ($FirstByte)"
   private val Total = """bytes \d+-\d+/(\d+)""".r
 
-  /** The requests made with the credentials sbt gives: a credentials file that cannot be read is
-    * passed over with a warning, as sbt passes it over. */
-  def apply(credentials: Seq[Compat.Credentials], log: Logger, timeout: Duration = Duration.ofSeconds(60)): Served =
-    new Served(Compat.hosts(credentials, log).reverse.map { case (host, user, password) => host -> (user, password) }.toMap, timeout)
+  /** The requests made with the credentials given, by host. */
+  def apply(credentials: Map[String, (String, String)], timeout: Duration = Duration.ofSeconds(60)): Served = new Served(credentials, timeout)
 
   private val BodyLimit = 4096
 
