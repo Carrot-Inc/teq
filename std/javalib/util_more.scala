@@ -312,33 +312,40 @@ package java.util:
       else if country.isEmpty then lang
       else (if lang.isEmpty then "und" else lang) + "-" + country
     // Display names in English, of the languages and regions `Locale`'s constants name, whatever
-    // the locale asked; another code is its own name, the std carrying no locale data.
+    // the locale asked (a null one refused as the JDK refuses it); another code is its own name, the
+    // std carrying no locale data.
     @jvm("invokevirtual java/util/Locale.getDisplayLanguage()Ljava/lang/String;")
     def getDisplayLanguage(): String = getDisplayLanguage(Locale.getDefault())
     @jvm("invokevirtual java/util/Locale.getDisplayLanguage(Ljava/util/Locale;)Ljava/lang/String;")
-    def getDisplayLanguage(inLocale: Locale): String = lang match
-      case "en" => "English"
-      case "fr" => "French"
-      case "de" => "German"
-      case "it" => "Italian"
-      case "ja" => "Japanese"
-      case other => other
+    def getDisplayLanguage(inLocale: Locale): String =
+      if inLocale == null then throw new NullPointerException()
+      lang match
+        case "en" => "English"
+        case "fr" => "French"
+        case "de" => "German"
+        case "it" => "Italian"
+        case "ja" => "Japanese"
+        case other => other
     @jvm("invokevirtual java/util/Locale.getDisplayCountry()Ljava/lang/String;")
     def getDisplayCountry(): String = getDisplayCountry(Locale.getDefault())
     @jvm("invokevirtual java/util/Locale.getDisplayCountry(Ljava/util/Locale;)Ljava/lang/String;")
-    def getDisplayCountry(inLocale: Locale): String = country match
-      case "US" => "United States"
-      case "GB" => "United Kingdom"
-      case "CA" => "Canada"
-      case "FR" => "France"
-      case "DE" => "Germany"
-      case "IT" => "Italy"
-      case "JP" => "Japan"
-      case other => other
+    def getDisplayCountry(inLocale: Locale): String =
+      if inLocale == null then throw new NullPointerException()
+      country match
+        case "US" => "United States"
+        case "GB" => "United Kingdom"
+        case "CA" => "Canada"
+        case "FR" => "France"
+        case "DE" => "Germany"
+        case "IT" => "Italy"
+        case "JP" => "Japan"
+        case other => other
     @jvm("invokevirtual java/util/Locale.getDisplayName()Ljava/lang/String;")
     def getDisplayName(): String = getDisplayName(Locale.getDefault())
     @jvm("invokevirtual java/util/Locale.getDisplayName(Ljava/util/Locale;)Ljava/lang/String;")
     def getDisplayName(inLocale: Locale): String =
+      // The JDK looks the locale up in a map first, with its message.
+      if inLocale == null then throw new NullPointerException("Cannot invoke \"Object.hashCode()\" because \"key\" is null")
       val language = getDisplayLanguage(inLocale)
       val region = getDisplayCountry(inLocale)
       if language.isEmpty then region else if region.isEmpty then language else language + " (" + region + ")"
