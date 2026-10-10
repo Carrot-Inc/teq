@@ -8,6 +8,7 @@ case class V(n: Int) extends Ordered[V]:
 @main def run(): Unit =
   val s: scala.collection.Set[Int] = Set(1, 2)
   println((s + 3).toList.sorted)
+  println((s + (4, 5)).toList.sorted)
   println(scala.collection.Set.empty[Int].size)
   val gm: scala.collection.GenMap[String, Int] = Map("a" -> 1, "b" -> 2)
   println(gm.filter(_._2 > 1))

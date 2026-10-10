@@ -35,8 +35,11 @@ trait Set[A] extends Iterable[A]:
   def apply(elem: A): Boolean = contains(elem)
   def subsetOf(that: Set[A]): Boolean = forall(that.contains)
   // `collection.SetOps`'s, deprecated since 2.13, which libraries built on it still call
-  // (scalactic's `prettify`): the elements and the element, an immutable set.
+  // (scalactic's `prettify`): the elements and the element, or the elements, an immutable set;
+  // both alternatives, as scala-library has them, so that the immutable sets' overrides of the
+  // two are named alike in the output.
   def +(elem: A): Set[A] = scala.Set.from(this) + elem
+  def +(elem1: A, elem2: A, elems: A*): Set[A] = scala.Set.from(this).+(elem1, elem2, elems*)
 
 object Set:
   def empty[A]: Set[A] = scala.Set.empty[A]
