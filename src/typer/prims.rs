@@ -487,6 +487,12 @@ impl<'a> Worker<'a> {
         span: Span,
         expected: Option<TypeId>,
     ) -> (TExprId, TypeId) {
+        // The short-circuit operators of a Boolean, which `b ||= c` reaches as `b = b || c`.
+        if (op == names::AMPAMP || op == names::BARBAR) && self.dealias(prim_lty) == self.b.t_boolean {
+            let tr = self.check_right_operand(op, tl, r);
+            let prim = if op == names::AMPAMP { PrimOp::BoolAnd } else { PrimOp::BoolOr };
+            return (self.prog.add(TExpr::Prim(prim, tl, tr)), self.b.t_boolean);
+        }
         let args = match self.prim_binop(op, tl, prim_lty, r, span) {
             Binop::Done(te, ty) => return (te, ty),
             Binop::NotBuiltin => self.infix_args(r),
