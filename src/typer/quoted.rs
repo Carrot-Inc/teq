@@ -670,13 +670,16 @@ impl<'a> Worker<'a> {
 
     /// A local like `s`, for the definitions of a quote's body renamed at each run.
     pub fn clone_local(&mut self, s: SymId) -> SymId {
-        let (name, kind, mods, file, span, sig) = {
+        let (name, kind, mods, file, span, sig, by_name) = {
             let info = self.syms.sym(s);
-            (info.name, info.kind, info.mods, info.file, info.span, info.sig.clone())
+            (info.name, info.kind, info.mods, info.file, info.span, info.sig.clone(), info.by_name)
         };
         let fresh = self.syms.new_sym(name, kind, mods, Owner::Local, file, None, span);
         let mut info = self.syms.sym_mut(fresh);
         info.sig = sig;
+        // A by-name parameter stays one, its type an `ExprType` that `TreeTypeMap` maps with the
+        // rest of the symbol's info: its reads apply the thunk its callers pass.
+        info.by_name = by_name;
         info.state().set(Completion::Done);
         if self.capturing() {
             self.capture_copy_local(s, fresh);
@@ -2102,6 +2105,9 @@ impl<'c> Copier<'c> {
             return Some(ty);
         }
         match t.prog.expr(e) {
+            // A by-name parameter's node is its thunk, which its read applies: its symbol's type is
+            // the value's (dotty's `ExprType`), no type of the node.
+            TExpr::Local(s) if t.syms.sym(s).by_name => None,
             TExpr::Local(s) => t.syms.sym(s).sig.as_ref().filter(|sig| sig.tparams.is_empty() && sig.clauses.is_empty()).map(|sig| sig.ret),
             _ => None,
         }

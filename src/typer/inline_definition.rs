@@ -1915,6 +1915,9 @@ impl<'a> Worker<'a> {
             TExpr::Char(_) => char,
             TExpr::Unit | TExpr::While(..) | TExpr::Assign(..) => unit,
             TExpr::Throw(..) | TExpr::Return(_) => NOTHING,
+            // A by-name parameter's node is its thunk, which its read applies: its symbol's type
+            // is the value's (dotty's `ExprType`), no type of the node.
+            TExpr::Local(s) if self.syms.sym(s).by_name => return None,
             TExpr::Local(s) | TExpr::Static(s) | TExpr::Field(_, s) => {
                 let sig = self.sig_of(s);
                 if !sig.tparams.is_empty() || !sig.clauses.is_empty() {
