@@ -1,0 +1,26 @@
+# The file coursier's cache keeps for a URL, relative to the cache, as coursier-paths 2.1.25-M26 (the coursier sbt
+# 2.0.8 embeds) names it: CachePath.localFile with no user, called on each URL by tests/support/coursier-files.scala,
+# which writes the second column (`--check` compares). The scheme, a `/`, then the URL after the scheme's `:` with
+# its leading `/`s taken off and a trailing `/` made `/.directory`, the whole escaped as CachePath.escape does: each
+# of ` %$&+,:;=?@<>#`, and each UTF-16 unit above 128 (no case here holds one), as `%` and two capital hexadecimal
+# digits; the authority's user, a port, the query and the fragment kept. A URL whose path holds a `.` or `..` segment
+# coursier refuses, and so does every implementation (`-` in the second column). A case a line, the URL and the file
+# apart by a space, for every implementation of the mapping: src/task/fetch.rs (coursier_file),
+# integrations/vite/binary.js (coursierFile), integrations/sbt/example/check-export.py (coursier_file) and the
+# launchers tools/launcher/teq and teq.cmd (tests/task.sh). Its hosts resolve nowhere, so that a copy not found is
+# no fetch.
+https://repo.invalid/maven2/a/b.jar https/repo.invalid/maven2/a/b.jar
+http://127.0.0.1:9/a/b/1.0+3/b-1.0+3.jar http/127.0.0.1%3A9/a/b/1.0%2B3/b-1.0%2B3.jar
+http://127.0.0.1:9/org/example/probe/1.0@build/probe-1.0@build.jar http/127.0.0.1%3A9/org/example/probe/1.0%40build/probe-1.0%40build.jar
+https://user@repo.invalid/r/x@1/x-1@1.jar https/user%40repo.invalid/r/x%401/x-1%401.jar
+https://user:secret@repo.invalid/r/x.jar?q=1 https/user%3Asecret%40repo.invalid/r/x.jar%3Fq%3D1
+https://user@repo.invalid https/user%40repo.invalid
+https://repo.invalid/a%20b/teq.exe https/repo.invalid/a%2520b/teq.exe
+https://repo.invalid/a&b/c$d,e;f=g/teq.exe https/repo.invalid/a%26b/c%24d%2Ce%3Bf%3Dg/teq.exe
+https://repo.invalid/a!b/(c)'d~e/teq.exe https/repo.invalid/a!b/(c)'d~e/teq.exe
+https://repo.invalid/r/teq.exe#part https/repo.invalid/r/teq.exe%23part
+https://repo.invalid:8443/r/teq.exe?sig=a/b@c https/repo.invalid%3A8443/r/teq.exe%3Fsig%3Da/b%40c
+http://127.0.0.1:9/teq.exe?sig=one http/127.0.0.1%3A9/teq.exe%3Fsig%3Done
+https://repo.invalid/r/ https/repo.invalid/r/.directory
+https:///repo.invalid/r/teq.exe https/repo.invalid/r/teq.exe
+https://repo.invalid/r/./teq.exe -

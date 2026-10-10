@@ -362,8 +362,10 @@ mod tests {
         assert_eq!(build_roots(&dir.join("mono")), vec![dir.join("mono/backend")]);
         assert_eq!(build_roots(&dir.join("mono/backend/project")), vec![dir.join("mono/backend")]);
         assert_eq!(build_roots(&dir.join("mono/frontend")), Vec::<PathBuf>::new());
-        // No repository above: the folder looks no higher than itself.
-        assert_eq!(build_roots(&dir.join("loose/sub")), Vec::<PathBuf>::new());
+        // No repository above: the folder looks no higher than itself. The temporary directory may lie in a
+        // repository the test does not own (a `.git` above it), where the folder looks up to that repository's root.
+        let above = repository_above(&dir.join("loose/sub"));
+        assert_eq!(build_roots(&dir.join("loose/sub")), if above { vec![dir.join("loose")] } else { Vec::new() });
         assert_eq!(build_roots(&dir.join("loose")), vec![dir.join("loose")]);
         let _ = std::fs::remove_dir_all(&dir);
     }

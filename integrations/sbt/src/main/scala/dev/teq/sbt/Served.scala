@@ -14,17 +14,30 @@ import sbt.internal.librarymanagement.ivy.IvyCredentials
 import sbt.librarymanagement.Credentials
 import sbt.util.Logger
 
-/** What a repository serves, asked over HTTP: a HEAD, a GET of a small file read to its first
-  * kilobytes (`limit` bytes), the whole answer within `timeout`; or a file downloaded whole
-  * (`download`). A request carries the user and password sbt holds for the host it goes to, as
+/** What a repository serves, asked over HTTP: whether a file is served and its size (`probe`), a GET
+  * of a small file read to its first kilobytes (`limit` bytes), the whole answer within `timeout`; or a
+  * file downloaded whole (`download`). A request carries the user and password sbt holds for the host it goes to, as
   * coursier sends them in sbt (`allCredentials`, a credentials file read as sbt reads it, the first
   * entry of a host taken); a redirect is followed up to five times, to another host too (a release's
   * asset is served from a CDN), never from https to plain http, each hop with its own host's. */
 private[sbt] final class Served(credentials: Map[String, (String, String)], timeout: Duration):
   import Served.*
 
-  def head(url: String): Either[String, Answer] = ask("HEAD", url, 0, BodyLimit)
   def get(url: String, limit: Int = BodyLimit): Either[String, Answer] = ask("GET", url, 0, limit)
+
+  /** Whether `url` is served and its size: a HEAD's answer; where the HEAD itself is refused (403, 405 or 501:
+    * a method the repository does not take, or a URL signed for the GET alone, as a redirect to a presigned one
+    * gives), a GET of its first byte (`Range: bytes=0-0`) from the same URL, its redirects followed, the body
+    * read no further: the total of a 206's `Content-Range`, or the `Content-Length` of a 200 that ignored the
+    * range. The status is the one a HEAD gives (200 for the 206), `asked` the request that answered. */
+  def probe(url: String): Either[String, Probe] =
+    ask("HEAD", url, 0, BodyLimit) match
+      case Right(head) if HeadRefused(head.status) =>
+        ask("GET", url, 0, 1, Some(FirstByte)).map { got =>
+          if got.status == 206 then Probe(Ranged, 200, got.range.collect { case Total(total) => total.toLong })
+          else Probe(Ranged, got.status, got.length)
+        }
+      case answered => answered.map(head => Probe("HEAD", head.status, head.length))
 
   /** The file at `url` written whole to `target`, at most `maxBytes` of it, within `bound`: the final status,
     * or why there is none. A body past `maxBytes` fails the download, and the part written stays for the
@@ -57,23 +70,26 @@ private[sbt] final class Served(credentials: Map[String, (String, String)], time
         case e: InterruptedException => Left(s"GET $url: interrupted")
     hop(url, 0)
 
-  /** The answer, or why there is none, naming the request. */
-  private def ask(method: String, url: String, hops: Int, limit: Int): Either[String, Answer] =
+  /** The answer, or why there is none, naming the request; `range` the `Range` header of a GET. */
+  private def ask(method: String, url: String, hops: Int, limit: Int, range: Option[String] = None): Either[String, Answer] =
     try
       val uri = URI.create(url)
       val request = HttpRequest.newBuilder(uri).method(method, HttpRequest.BodyPublishers.noBody())
       for (user, password) <- credentials.get(uri.getHost) do
         request.header("Authorization", "Basic " + Base64.getEncoder.encodeToString(s"$user:$password".getBytes(UTF_8)))
+      range.foreach(request.header("Range", _))
       val response = within(client.sendAsync(request.build(), _ => Capped(limit)))
       val length = response.headers.firstValueAsLong("Content-Length")
-      val answer = Answer(response.statusCode, Option.when(length.isPresent)(length.getAsLong), new String(response.body, UTF_8))
+      val contentRange = response.headers.firstValue("Content-Range")
+      val answer = Answer(response.statusCode, Option.when(length.isPresent)(length.getAsLong), new String(response.body, UTF_8),
+        Option.when(contentRange.isPresent)(contentRange.get))
       val location = response.headers.firstValue("Location")
       if !Redirects(answer.status) || location.isEmpty then Right(answer)
       else
         val next = uri.resolve(location.get)
         if hops == MaxRedirects then Left(s"$method $url: a redirect past $MaxRedirects")
         else if uri.getScheme == "https" && next.getScheme != "https" then Left(s"$method $url redirects to $next, off https")
-        else ask(method, next.toString, hops + 1, limit)
+        else ask(method, next.toString, hops + 1, limit, range)
     catch
       case e: IOException => Left(s"$method $url: ${reason(e)}")
       case e: IllegalArgumentException => Left(s"$method $url: ${reason(e)}")
@@ -91,8 +107,18 @@ private[sbt] final class Served(credentials: Map[String, (String, String)], time
       case e: ExecutionException => throw e.getCause
 
 private[sbt] object Served:
-  /** A repository's answer: the status, the `Content-Length` and the body's first kilobytes. */
-  final case class Answer(status: Int, length: Option[Long], body: String)
+  /** A repository's answer: the status, the `Content-Length`, the body's first kilobytes and the
+    * `Content-Range`. */
+  final case class Answer(status: Int, length: Option[Long], body: String, range: Option[String] = None)
+
+  /** `probe`'s answer: the request that gave it, a HEAD's status and the size. */
+  final case class Probe(asked: String, status: Int, length: Option[Long])
+
+  /** A HEAD's statuses that refuse the method rather than tell of the file, and the GET asked then. */
+  private val HeadRefused = Set(403, 405, 501)
+  private val FirstByte = "bytes=0-0"
+  private val Ranged = s"GET ($FirstByte)"
+  private val Total = """bytes \d+-\d+/(\d+)""".r
 
   /** The requests made with the credentials sbt gives: a credentials file that cannot be read is
     * passed over with a warning, as sbt passes it over. */

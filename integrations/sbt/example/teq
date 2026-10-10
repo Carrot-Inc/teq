@@ -1,5 +1,5 @@
 #!/bin/sh
-# teq launcher 2: the teq this build pins, with nothing installed. Reads the first line of the
+# teq launcher 3: the teq this build pins, with nothing installed. Reads the first line of the
 # teq.lock beside it (the compiler's version) and the lock's binaries line of this machine's
 # classifier (URL, sha1, size), then runs that binary with the arguments as given: TEQ when set;
 # else teq's cache, bin/<sha1>/teq-<version>-<classifier>[.exe]; else coursier's copy of the URL,
@@ -123,8 +123,12 @@ trap 'rm -f "$part"' EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
 
-# Coursier's copy of the URL, `<cache>/<scheme>/<host>/<path>`, escaped as its CachePath.escape
-# does (a port's `:`, a version's `+`).
+# Coursier's copy of the URL, as its CachePath.localFile names it (src/task/fetch.rs's coursier_file): the
+# scheme, a `/`, then the URL after the scheme's `:` with its leading `/`s taken off and a trailing `/` made
+# `/.directory`, the whole escaped as its CachePath.escape does (a port's `:`, a version's `+`, a user, the
+# query and the fragment kept); none for a URL coursier refuses (no `/` after the scheme, a `.` or `..`
+# segment). A character beyond ASCII, which coursier escapes by its UTF-16 unit, names no copy: the binary is
+# fetched.
 if [ -n "${COURSIER_CACHE:-}" ]; then
   coursier=$COURSIER_CACHE
 elif [ "$os" = windows ]; then
@@ -134,13 +138,18 @@ elif [ "$os" = osx ]; then
 else
   coursier=$HOME/.cache/coursier/v1
 fi
-rest=${url#*://}
-rest=${rest%%[?#]*}
-authority=${rest%%/*}
-place=${authority##*@}${rest#"$authority"}
-place=$(printf '%s' "$place" | sed -e 's/%/%25/g' -e 's/ /%20/g' -e 's/\$/%24/g' -e 's/&/%26/g' -e 's/+/%2B/g' -e 's/,/%2C/g' \
-  -e 's/:/%3A/g' -e 's/;/%3B/g' -e 's/=/%3D/g' -e 's/?/%3F/g' -e 's/@/%40/g' -e 's/</%3C/g' -e 's/>/%3E/g' -e 's/#/%23/g')
-copy=$coursier/${url%%://*}/$place
+rest=${url#*:}
+case $rest in
+  ///*) rest=${rest#///} ;;
+  /*) rest=${rest#/} ;;
+  *) coursier= ;;
+esac
+case $rest in */) rest=$rest.directory ;; esac
+rest=${rest#"${rest%%[!/]*}"}
+place=$(printf '%s/%s' "${url%%:*}" "$rest" | sed -e 's/%/%25/g' -e 's/ /%20/g' -e 's/\$/%24/g' -e 's/&/%26/g' -e 's/+/%2B/g' \
+  -e 's/,/%2C/g' -e 's/:/%3A/g' -e 's/;/%3B/g' -e 's/=/%3D/g' -e 's/?/%3F/g' -e 's/@/%40/g' -e 's/</%3C/g' -e 's/>/%3E/g' -e 's/#/%23/g')
+case /$place/ in */./* | */../*) coursier= ;; esac
+copy=$coursier/$place
 if [ -n "$coursier" ] && [ "$(size_of "$copy")" = "$size" ] && [ "$(sha1_of "$copy")" = "$sha1" ]; then
   cp "$copy" "$part" || fail "cannot copy $copy to $part"
 else

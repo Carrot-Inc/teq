@@ -10,8 +10,8 @@
 # test runner's classes without a javac (a javac other than 17's only notes a difference).
 cd "$(dirname "$0")/.."
 # The compiler the suites test, target/release/teq unless TEQ names another; the repository's launcher runs
-# the suites written in Scala (./teq interp tests/x.scala) under it too, as a release pinned in teq.lock
-# without their natives cannot (docs/DEVELOPING.md, "The repository's scripts").
+# the suites written in Scala (./teq interp tests/x.scala) under it too, so that they run under the binary they
+# test, not the release teq.lock pins (docs/DEVELOPING.md, "The repository's scripts").
 export TEQ=${TEQ:-$PWD/target/release/teq}
 # The default checkout sits next to the main working tree, which a linked worktree is not in.
 if [ -z "$SCALA3" ] && common=$(git rev-parse --path-format=absolute --git-common-dir 2> /dev/null); then

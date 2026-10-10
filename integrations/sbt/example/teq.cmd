@@ -1,5 +1,5 @@
 @echo off
-rem teq launcher 2: the teq this build pins, with nothing installed. Reads the first line of the
+rem teq launcher 3: the teq this build pins, with nothing installed. Reads the first line of the
 rem teq.lock beside it (the compiler's version) and the lock's binaries line of this machine's
 rem classifier (URL, sha1, size), then runs that binary with the arguments as given: TEQ when set;
 rem else teq's cache, bin\<sha1>\teq-<version>-<classifier>.exe; else coursier's copy of the URL,
@@ -9,7 +9,8 @@ rem refused, and so is a lock without this machine's binary, an empty table amon
 rem not published yet). Written by sbt-teq's teqExportAll, which replaces it only while it is
 rem unedited (docs/TARGETS.md, "The launchers"). No variable is
 rem expanded inside parentheses, where a parenthesis in a path would end them; a FOR variable is,
-rem since cmd substitutes it after it has read the line.
+rem since cmd substitutes it after it has read the line. A substring is taken at an offset inside its
+rem value alone, past whose end wine's cmd gives the last character where Windows' gives nothing.
 setlocal EnableExtensions DisableDelayedExpansion
 rem A variable named ERRORLEVEL would stand in the place of the last exit code.
 set "ERRORLEVEL="
@@ -24,7 +25,10 @@ for /f "usebackq delims=" %%l in ("%lock%") do (set "first=%%l" & goto first)
 set "message=%lock%'s first line is not teq: <version>"
 if not defined first goto fail
 if not "%first:~0,5%"=="teq: " goto fail
-set "version=%first:~5%"
+rem The rest of the line, read with a character after it that then goes.
+set "version=%first%#"
+set "version=%version:~5%"
+set "version=%version:~0,-1%"
 if not defined version goto fail
 set "version=%version:"=%"
 rem The releases before 0.1.7 are served no longer, whatever URL the lock gives; a SNAPSHOT is no
@@ -66,10 +70,11 @@ rem The line in double quotes, as the lock writes a URL of other characters than
 rem the quotes go, and no URL holds what the lock would escape.
 set "url=%url:"=%"
 set "size=%size:"=%"
-if "%sha1:~39,1%"=="" goto fail
-if not "%sha1:~40%"=="" goto fail
-rem A token left once the digits are taken as delimiters is a character of another kind.
+rem A token left once the digits are taken as delimiters is a character of another kind; then the
+rem sha1 with an x and forty dots after it has that x at offset 40 at a length of forty alone.
 for /f "delims=0123456789abcdefABCDEF" %%x in ("%sha1%") do goto fail
+set "probe=%sha1%x........................................"
+if not "%probe:~40,1%"=="x" goto fail
 for /f "delims=0123456789" %%x in ("%size%") do goto fail
 
 set "root=%TEQ_CACHE_DIR%"
@@ -97,27 +102,79 @@ if %tries% gtr 64 goto fail
 set "part=%dir%\.teq.%RANDOM%%RANDOM%.part"
 mkdir "%part%.d" 2>nul || goto claim
 
-rem Coursier's copy of the URL, <cache>\<scheme>\<host>\<path>, a port's colon, a version's plus
-rem and an at, a space, a comma and a semicolon escaped as its CachePath.escape does; a URL with
-rem another of the characters it escapes finds no copy and is fetched.
+rem Coursier's copy of the URL, as its CachePath.localFile names it (src/task/fetch.rs's
+rem coursier_file): the scheme, a \, then the URL after the scheme's colon with its leading slashes
+rem taken off (one, or three, then any left) and a trailing one made \.directory, each of
+rem ` %$&+,:;=?@<>#` escaped as its CachePath.escape does, as % and two digits of base 16 (a user, a
+rem port, the query and the fragment kept); none for a URL coursier refuses (no slash after the
+rem scheme, a . or .. segment). A character at a time, the URL followed by a # that marks its end,
+rem since a substitution takes no = and its result no percent sign; one beyond ASCII, read in the
+rem console's code page, stays as read, naming no file coursier writes, so that the binary is fetched.
+rem The variables are the mapping's own: part names the partial file above.
 set "from="
 set "coursier=%COURSIER_CACHE%"
 if not defined coursier if defined LOCALAPPDATA set "coursier=%LOCALAPPDATA%\Coursier\cache\v1"
 if not defined coursier goto fetch
-for /f "tokens=1,* delims=:" %%s in ("%url%") do (set "scheme=%%s" & set "place=%%t")
-set "place=%place:~2%"
-rem A percent sign cannot stand in the replacement of a substitution, whose expansion it would end:
-rem these run under delayed expansion, and the endlocal line carries the result out, its variables
-rem expanded before it runs.
-setlocal EnableDelayedExpansion
-set "place=!place::=%%3A!"
-set "place=!place:+=%%2B!"
-set "place=!place:@=%%40!"
-set "place=!place: =%%20!"
-set "place=!place:,=%%2C!"
-set "place=!place:;=%%3B!"
-set "place=!place:/=\!"
-endlocal & set "copy=%coursier%\%scheme%\%place%"
+set "rest=%url%#"
+set "scheme="
+:scheme
+if "%rest%"=="#" goto fetch
+set "c=%rest:~0,1%"
+set "rest=%rest:~1%"
+if "%c%"==":" goto colon
+set "scheme=%scheme%%c%"
+goto scheme
+:colon
+if not "%rest:~0,1%"=="/" goto fetch
+if "%rest:~0,3%"=="///" goto three
+set "rest=%rest:~1%"
+goto stripped
+:three
+set "rest=%rest:~3%"
+:stripped
+set "trailing="
+if "%rest:~-2,1%"=="/" set "trailing=\.directory"
+:leading
+if not "%rest:~0,1%"=="/" goto escape
+set "rest=%rest:~1%"
+goto leading
+:escape
+set "rest=%scheme%/%rest%"
+set "place="
+set "segment="
+:char
+if "%rest%"=="#" goto escaped
+set "c=%rest:~0,1%"
+set "rest=%rest:~1%"
+if "%c%"=="/" goto segment
+set "segment=%segment%%c%"
+set "e=%c%"
+if "%c%"==" " set "e=%%20"
+if "%c%"=="%%" set "e=%%25"
+if "%c%"=="$" set "e=%%24"
+if "%c%"=="&" set "e=%%26"
+if "%c%"=="+" set "e=%%2B"
+if "%c%"=="," set "e=%%2C"
+if "%c%"==":" set "e=%%3A"
+if "%c%"==";" set "e=%%3B"
+if "%c%"=="=" set "e=%%3D"
+if "%c%"=="?" set "e=%%3F"
+if "%c%"=="@" set "e=%%40"
+if "%c%"=="<" set "e=%%3C"
+if "%c%"==">" set "e=%%3E"
+if "%c%"=="#" set "e=%%23"
+set "place=%place%%e%"
+goto char
+:segment
+if "%segment%"=="." goto fetch
+if "%segment%"==".." goto fetch
+set "segment="
+set "place=%place%\"
+goto char
+:escaped
+if "%segment%"=="." goto fetch
+if "%segment%"==".." goto fetch
+set "copy=%coursier%\%place%%trailing%"
 rem Taken only when its size and sha1 are the pinned ones; any failure of this step, a copy of
 rem other bytes among them, leaves it for the fetch.
 if not exist "%copy%" goto fetch
@@ -213,5 +270,6 @@ rmdir "%part%.d" 2>nul
 
 :fail
 setlocal EnableDelayedExpansion
->&2 echo(teq: !message!
+rem A plain echo: wine's cmd prints the parenthesis of echo( that Windows' takes as the separator.
+>&2 echo teq: !message!
 exit /b 1

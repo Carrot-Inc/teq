@@ -37,21 +37,30 @@ export function coursierCache(env = process.env, platform = process.platform) {
 }
 
 /**
- * The file coursier keeps for a URL, `<cache>/<scheme>/<host>/<path>`, escaped as its
- * `CachePath.escape` does: every UTF-16 unit above 128 and each of ` %$&+,:;=?@<>#` as `%` and two
- * capital hexadecimal digits (`src/task/fetch.rs`'s `coursier_file`).
+ * The file coursier keeps for a URL, as its `CachePath.localFile` names it with no user
+ * (`src/task/fetch.rs`'s `coursier_file`): the scheme, a `/`, then the URL after the scheme's `:` with its
+ * leading `/`s taken off and a trailing `/` made `/.directory`, the whole escaped as `CachePath.escape`
+ * does: every UTF-16 unit above 128 and each of ` %$&+,:;=?@<>#` as `%` and two capital hexadecimal
+ * digits (the authority's user, a port, the query and the fragment kept). Undefined for a URL coursier
+ * refuses: no scheme, no `/` after it, or a `.` or `..` segment.
  */
 export function coursierFile(cache, url) {
-  const match = /^([a-z]+):\/\/([^/?#]*)([^?#]*)/.exec(url)
-  if (!cache || !match) return undefined
-  const place = `${match[2].slice(match[2].lastIndexOf("@") + 1)}${match[3]}`
+  const colon = url.indexOf(":")
+  if (!cache || colon < 0) return undefined
+  let rest = url.slice(colon + 1)
+  if (rest.startsWith("///")) rest = rest.slice(3)
+  else if (rest.startsWith("/")) rest = rest.slice(1)
+  else return undefined
+  if (rest.endsWith("/")) rest += ".directory"
+  const place = `${url.slice(0, colon)}/${rest.replace(/^\/+/, "")}`
   const digit = (n) => String.fromCharCode(n < 10 ? 48 + n : 55 + n)
   let escaped = ""
   for (let i = 0; i < place.length; i++) {
     const unit = place.charCodeAt(i)
     escaped += unit > 128 || " %$&+,:;=?@<>#".includes(place[i]) ? `%${digit(Math.floor(unit / 16))}${digit(unit % 16)}` : place[i]
   }
-  return join(cache, match[1], escaped)
+  if (escaped.split("/").some((segment) => segment === "." || segment === "..")) return undefined
+  return join(cache, ...escaped.split("/"))
 }
 
 /**

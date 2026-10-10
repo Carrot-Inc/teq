@@ -437,7 +437,10 @@ refused (a warning for a SNAPSHOT or a dynamic version), and one out of reach is
 lock then naming no binary, so that an export offline still writes the lock; a release before 0.1.7 is
 refused. For a SNAPSHOT published locally, of the build's remote Maven repositories, in its order, the first that serves the version's
 pom (`teq-<version>.pom`, by which coursier resolves the module) gives each classifier's record from
-its `.sha1` and a HEAD of the binary for its size; a classifier whose `.sha1` and binary both answer
+its `.sha1` and a HEAD of the binary for its size; a repository that refuses a HEAD (403, 405 or 501, as
+a redirect to a URL signed for the GET alone answers) is asked a GET of the file's first byte instead, its
+size the total of the answer's `Content-Range` (or its `Content-Length` where the range is ignored), the
+lock keeping the repository's URL, never a signed one; a classifier whose `.sha1` and binary both answer
 404 is not published, and a binary without its `.sha1` is refused. The requests carry the credentials
 sbt holds for the host, its `credentials` inline or from a file (`credentials +=
 Credentials(Path.userHome / ".sbt" / ".credentials")`, `$SBT_CREDENTIALS`), not coursier's own. Only

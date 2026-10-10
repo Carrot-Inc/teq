@@ -6,7 +6,7 @@
 // run on the JVM with scala-library alone beside them (tests/tasty/exec/Launch.java runs the main
 // `mainOf` names), each printing its .expected, which scalac's own build printed. A listed program
 // whose products withhold a body fails the line (the closure shrank); `--update` rewrites the list
-// as every case without jars, Scala.js or the interpreter, of one main, that builds with every body
+// as every case without jars or Scala.js, of one main, that builds with every body
 // written, regenerates and runs as expected, to be read against the previous list. Without
 // scala-cli, java or javac a failure (incomplete validation). The products are built and the
 // programs run as many at once as the machine has processors, the regenerations in a sixth of them
@@ -64,8 +64,8 @@ import java.util.regex.Pattern
     if !Files.exists(src) then
       why(name) = "no case"
       Sh.End
-    else if text.exists(l => l.startsWith("// jars:") || l.startsWith("//> using platform js") || (l.startsWith("// teq:") && l.contains("--target interp"))) then
-      why(name) = "jars, Scala.js or the interpreter"
+    else if text.exists(l => l.startsWith("// jars:") || l.startsWith("//> using platform js")) then
+      why(name) = "jars or Scala.js"
       Sh.End
     else if !Files.exists(Paths.get(s"$dir/$name.expected")) then
       why(name) = "no expected output"

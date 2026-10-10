@@ -232,14 +232,22 @@ them under `teqBuildTool` (without it the lock goes to `target/teq/teq.lock` and
 replacing one only while it is an unedited version it carries. A change to a launcher is a new
 version: its marker line (`# teq launcher <n>:`, `rem teq launcher <n>:`) goes up and the version it
 replaces moves under `shipped/` (launcher 1 has, for launcher 2, which refuses a release before 0.1.7 and
-names `TEQ` and the release to pin for an empty table), so that applications committing the old one get the
-new one at their next export. `tools/launcher/.gitattributes` keeps `teq` LF and `teq.cmd` CRLF; an
-application needs the same lines (`teq text eol=lf`, `teq.cmd text eol=crlf`, `teq.lock text eol=lf`).
-`tests/task.sh` runs `teq` under each shell present and shellcheck where installed. `teq.cmd` runs on Windows
-at each release, in the release workflow's Windows job (`tests/windows.sh`: cmd.exe fetching the pinned binary
-cold by a lock, running it warm, refusing another sha1); between releases a change to it is desk-checked. Wine's
-`cmd` (10.0) cannot run it: a substring past a value's end gives its last character where Windows' gives nothing
-(`%sha1:~40%` of a sha1), so `teq.cmd` refuses every lock there.
+names `TEQ` and the release to pin for an empty table; launcher 2 has, for launcher 3, whose `teq.cmd` reads a
+valid lock under wine's `cmd` as under Windows', and whose two launchers find coursier's copy of a URL where
+coursier keeps it), so that applications committing the old one get the new one at their next export.
+`tools/launcher/.gitattributes` keeps `teq` LF and `teq.cmd` CRLF; an application needs the same lines (`teq text
+eol=lf`, `teq.cmd text eol=crlf`, `teq.lock text eol=lf`).
+`tests/task.sh` runs `teq` under each shell present and shellcheck where installed, and `teq.cmd` under wine's
+`cmd` where wine is installed, files named as `teq.cmd`'s variables in its working directory kept across each
+resolution. Every implementation of the URL's place in coursier's cache (`src/task/fetch.rs`, vite-plugin-teq, the
+export checker and both launchers) is tested on `tests/support/coursier-files.txt`, coursier's own answers:
+`tests/support/coursier-files.scala` calls coursier-paths' `CachePath.localFile` (the coursier sbt 2.0.8 embeds) on
+each URL under scala-cli and writes the file column, and `tests/task.sh` runs its `--check`. `teq.cmd` runs on
+Windows at each release, in the release workflow's Windows job (`tests/windows.sh`: cmd.exe fetching the pinned
+binary cold by a lock, running it warm, refusing another sha1); between releases its wine run is the check, short of what wine lacks (its
+`certutil` prints nothing and it has no `curl.exe`, so the digests and the fetch are Windows' alone). Wine's `cmd`
+(10.0) is not Windows': a substring past a value's end is its last character where Windows' is empty, and `echo(`
+prints its parenthesis; `teq.cmd` takes every substring at an offset inside its value and echoes plainly.
 
 ## The repository's scripts
 
@@ -284,11 +292,11 @@ the gate set `TEQ` to the tree's build, so their scripts run under the binary th
 under one binary and tests another says so: `TEQ=<a master binary> ./teq interp tests/size.scala -- --teq
 target/fast/teq`.
 
-The lock pins 0.1.7, whose interpreter has none of the natives the library calls (processes, streams, file
-writes, archives, digests, the clock): until a release ships them and the lock moves to it, a script runs
-with `TEQ` naming a binary built from the tree, which the gate and the workflows build first, and a fresh
-clone's `./teq interp tests/size.scala` stops with a type error naming `ProcessBuilder`. `site/stage.scala`
-uses nothing 0.1.7 lacks and no library, so that the site builds under the pinned release.
+The lock pins 0.1.8, the first release whose interpreter has the natives the library calls (processes, streams,
+file writes, archives, digests, the clock; 0.1.7 has none), so that a fresh clone's `./teq interp tests/size.scala`
+runs under the pinned release, as `integrations/zed/package.sh`'s check of the crates' notices does. A script that
+calls a native added since runs with `TEQ` naming a binary built from the tree, which the gate and the workflows
+build first. `site/stage.scala` uses no library, so that the site builds under the pinned release.
 
 `teq compiler check` and the language server see a script alone; a check names the library:
 `teq compiler check tools/script tests/size.scala`. scala-cli runs the same file (`scala-cli run tests/size.scala
@@ -361,6 +369,21 @@ pinned by its commit. The order:
    (a dry run publishes no plugin); a resume takes that decision from the record of the run it resumes
    (`plugin.publish`), never deciding again, since Central serves the plugin that run promoted. Every later job
    checks out that commit, never a moving master.
+
+   A history squashed before its first publication meets the same rules: master's first-parent history holds
+   one commit "Release <version>", and that commit changes the version its parent's files name. So the squash
+   stops before the bump, its files naming the release before, and the commit `bench/release.sh` makes goes on
+   it:
+
+   ```
+   $ git log --first-parent --format='%h %s' master
+   5d2c1e0 Release 0.1.8         # Cargo.toml, Cargo.lock: 0.1.8
+   9a41f37 The tree at 0.1.7     # the squash: every file as it was before the bump
+   ```
+
+   An empty commit "Release 0.1.8" on a squash whose files name 0.1.8 already is refused (its parent names the
+   version), and so is a second commit "Release 0.1.8" on the first-parent history (`tests/release-actions.sh`
+   has the three cases).
 2. **The builds**, `bench/ship.sh --step` in jobs of their own (`bench/actions/step.sh`), in the ship's images
    (below): the profiles, an earlier release's taken up by the job `profiles` or, when they will not serve, the
    aarch64 trainer and its training, natively on an arm64 runner in the arm64 image, and the x86-64 trainer and its

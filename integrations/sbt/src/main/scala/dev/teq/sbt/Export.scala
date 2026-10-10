@@ -1054,13 +1054,15 @@ private[sbt] object Export:
     s"${org.replace('.', '/')}/$name/$version/$name-$version${classifier.fold(".pom")(c => s"-$c.exe")}"
 
   /** The compiler's binaries as the repositories serve them, none downloaded. The repositories are
-    * asked in the build's order whether they serve the version, by a HEAD of its pom: coursier
+    * asked in the build's order whether they serve the version, by a HEAD of its pom (`Served.probe`:
+    * a GET of its first byte where the repository refuses the HEAD): coursier
     * resolves the module by its pom, so a repository serving the binaries without one is never
     * taken, and the first that serves it gives every classifier, a classifier it lacks not looked
     * for in a later one, as in coursier. A repository that cannot tell is passed over with a warning
     * when a later one serves the version, as coursier passes it over. Per classifier, the sha1 is
-    * the `.sha1` beside the binary and the size a HEAD's `Content-Length`, the URL the resolver's
-    * layout gives (redirects followed for the requests alone). A classifier is not published when
+    * the `.sha1` beside the binary and the size a HEAD's `Content-Length` (or that GET's total), the
+    * URL the resolver's layout gives (redirects followed for the requests alone, never a presigned
+    * URL they lead to). A classifier is not published when
     * both its `.sha1` and its binary answer 404; a binary served without its `.sha1`, and any other
     * answer, is a refusal naming the classifier. */
   private[sbt] def pinned(org: String, name: String, version: String, classifiers: Seq[String], repositories: Seq[Repository], served: Served, log: Logger): Pinned =
@@ -1068,11 +1070,11 @@ private[sbt] object Export:
     val pom = binaryPath(org, name, version, None)
     val unanswered = mutable.ArrayBuffer.empty[(Repository, String)]
     val serving = repositories.iterator.map { r =>
-      served.head(r.url + pom) match
+      served.probe(r.url + pom) match
         case Right(answer) if answer.status == 200 => Some(r)
         case Right(answer) if answer.status == 404 => None
         case Right(answer) =>
-          unanswered += r -> s"HEAD ${r.url}$pom answered ${answer.status}"
+          unanswered += r -> s"${answer.asked} ${r.url}$pom answered ${answer.status}"
           None
         case Left(why) =>
           unanswered += r -> why
@@ -1091,22 +1093,22 @@ private[sbt] object Export:
           served.get(url + ".sha1") match
             case Left(why) => refused(why)
             case Right(answer) if answer.status == 404 =>
-              served.head(url) match
+              served.probe(url) match
                 case Left(why) => refused(why)
                 case Right(head) if head.status == 404 => None
                 case Right(head) if head.status == 200 => refused(s"$url is served without its checksum (GET $url.sha1 answered 404)")
-                case Right(head) => refused(s"HEAD $url answered ${head.status}")
+                case Right(head) => refused(s"${head.asked} $url answered ${head.status}")
             case Right(answer) if answer.status != 200 => refused(s"GET $url.sha1 answered ${answer.status}")
             case Right(answer) =>
               Sha1.in(answer.body) match
                 case None => refused(s"$url.sha1 holds no SHA-1: \"${answer.body.trim.linesIterator.nextOption().getOrElse("").take(80)}\"")
                 case Some(sha1) =>
-                  served.head(url) match
+                  served.probe(url) match
                     case Left(why) => refused(why)
-                    case Right(head) if head.status != 200 => refused(s"HEAD $url answered ${head.status}")
+                    case Right(head) if head.status != 200 => refused(s"${head.asked} $url answered ${head.status}")
                     case Right(head) =>
                       head.length.filter(_ >= 0) match
-                        case None => refused(s"HEAD $url gave no Content-Length")
+                        case None => refused(s"${head.asked} $url gave no size")
                         case Some(size) => Some(Right(Binary(classifier, repository.url.stripSuffix("/") + "/" + path.stripPrefix("/"), sha1, size, Some(repository))))
         }
         val (refusals, found) = records.partitionMap(identity)

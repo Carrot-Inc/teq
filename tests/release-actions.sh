@@ -1,9 +1,9 @@
 #!/bin/bash
 # Checks of the release workflow's scripts without GitHub, the Portal or a build (docs/DEVELOPING.md, "Releases"):
-# the workflows' shape (actions pinned by digest, no pull_request_target, permissions none by default and written
-# per job, the secrets in the `release` environment's steps alone, every job on the admitted commit), actionlint
-# where installed; bench/ship.sh's steps run alone from the products they carry (stand-ins for the builds);
-# tests/support/identity.sh's produce and compare modes (a stand-in compiler) and their refusals; the admission
+# the workflows' shape (actions pinned by digest, the gate's among them, no pull_request_target, permissions none by
+# default and written per job, the gate's jobs reading the contents alone, the secrets in the `release`
+# environment's steps alone, every job on the admitted commit), actionlint where installed; bench/ship.sh's steps
+# run alone from the products they carry (stand-ins for the builds); tests/support/identity.sh's produce and compare modes (a stand-in compiler) and their refusals; the admission
 # (bench/actions/admit.sh) against local repositories, a stand-in gh and a local Central; the publication's steps,
 # bench/ship-publish.sh --step through bench/actions/release-step.sh with stand-ins of the GitHub release, the
 # smoke, the plugin's publish and the Portal, its records carried to another runner where a job is lost, its
@@ -33,13 +33,18 @@ export GIT_CONFIG_NOSYSTEM=1
 for f in bench/actions/*.sh tests/windows.sh tests/support/identity.sh tests/support/identity-across.sh bench/ship.sh; do
   check "bash -n $f" "$(bash -n "$f" 2>&1)" ""
 done
-for f in .github/workflows/release.yml .github/workflows/ship-image.yml; do
-  check "$f: every action pinned by a commit" "$(grep -E '^\s*(- )?uses:' "$f" | grep -vE 'uses: [a-z0-9-]+/[a-z0-9-]+@[0-9a-f]{40} # v[0-9.]+$')" ""
-  check "$f: no pull_request trigger" "$(grep -cE 'pull_request' "$f")" 0
+for f in .github/workflows/release.yml .github/workflows/ship-image.yml .github/workflows/gate.yml; do
+  check "$f: every action pinned by a commit" "$(grep -E '^\s*(- )?uses:' "$f" | grep -vE 'uses: [A-Za-z0-9-]+/[a-z0-9-]+@[0-9a-f]{40} # v[0-9.]+$')" ""
   check "$f: no permission by default" "$(grep -c '^permissions: {}$' "$f")" 1
 done
+for f in .github/workflows/release.yml .github/workflows/ship-image.yml; do
+  check "$f: no pull_request trigger" "$(grep -cE 'pull_request' "$f")" 0
+done
+# The gate runs a pull request's code with a token that reads the repository, each job's own, and nothing else.
+check ".github/workflows/gate.yml: no pull_request_target" "$(grep -c 'pull_request_target' .github/workflows/gate.yml)" 0
+check ".github/workflows/gate.yml: each job reads the contents alone" "$(grep -c '^    permissions:$' .github/workflows/gate.yml) $(grep -c '^      contents: read$' .github/workflows/gate.yml) $(grep -cE '^      [a-z-]+: (read|write)$' .github/workflows/gate.yml)" "2 2 2"
 if command -v actionlint > /dev/null; then
-  check "actionlint" "$(timeout 120 actionlint .github/workflows/release.yml .github/workflows/ship-image.yml 2>&1)" ""
+  check "actionlint" "$(timeout 120 actionlint .github/workflows/release.yml .github/workflows/ship-image.yml .github/workflows/gate.yml 2>&1)" ""
 else
   echo "skip actionlint: not installed"
 fi
@@ -927,6 +932,42 @@ admit workflow_dispatch "$c" TEQ_VERSION=0.1.8
 check "admit: a dispatch of a version master has no commit of" "$?" 1
 admit workflow_dispatch "$c" TEQ_VERSION=1.0
 check "admit: a dispatch of no version" "$?" 1
+# A history squashed for its first publication (docs/DEVELOPING.md, "The release workflow"), each case a repository
+# of its own holding the fixture's tree without its history: the squash naming the release before and the commit
+# "Release 0.1.8" bumping it, admitted by its push and by a dispatch; an empty "Release 0.1.8" on a squash naming
+# 0.1.8 already, refused; a second commit "Release 0.1.8" on the first-parent history, refused.
+kept_gh=$gh kept_co=$co
+squashed() {
+  gh=$work/squash-$1.git co=$work/squash-$1
+  git_ init -q --bare "$gh" && cp -R "$kept_co" "$co" && rm -rf "$co/.git" && (cd "$co" && git_ init -q && git_ remote add origin "$gh") || exit 1
+}
+squashed bump
+version 0.1.7
+commit "The tree at 0.1.7" > /dev/null
+version 0.1.8
+s=$(commit "Release 0.1.8")
+admit push "$s"
+check "admit: a squash naming 0.1.7, then Release 0.1.8: its push" "$?/$(out go)/$(out version)/$(out commit)" "0/true/0.1.8/$s"
+admit workflow_dispatch "$s" TEQ_VERSION=0.1.8
+check "admit: a squash naming 0.1.7, then Release 0.1.8: a dispatch" "$?/$(out go)/$(out commit)" "0/true/$s"
+squashed empty
+version 0.1.8
+commit "The tree at 0.1.8" > /dev/null
+s=$(cd "$co" && git_ commit -q --allow-empty -m "Release 0.1.8" && git_ push -q origin HEAD:refs/heads/master && git rev-parse HEAD)
+admit push "$s"
+check "admit: an empty Release 0.1.8 on a squash naming 0.1.8" "$?" 1
+has "admit: says the parent names the version" "$work/admit.out" "did not bump the version: its parent names 0.1.8 already"
+squashed twice
+version 0.1.7
+commit "The tree at 0.1.7" > /dev/null
+version 0.1.8
+commit "Release 0.1.8" > /dev/null
+echo y > "$co/other"
+s=$(commit "Release 0.1.8")
+admit workflow_dispatch "$s" TEQ_VERSION=0.1.8
+check "admit: two commits Release 0.1.8 on the first-parent history" "$?" 1
+has "admit: counts them" "$work/admit.out" "master has 2 commits 'Release 0.1.8'"
+gh=$kept_gh co=$kept_co
 admit workflow_dispatch "$c" TEQ_DRY=true
 check "admit: a dry run on master's version" "$?/$(out go)/$(out version)/$(out commit)/$(out dry)" "0/true/0.1.7/$c/true"
 admit workflow_dispatch "$c" TEQ_DRY=true TEQ_VERSION=0.1.6

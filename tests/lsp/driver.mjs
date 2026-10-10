@@ -7,6 +7,7 @@
 // scenarios edit.
 import { spawn, execSync } from "node:child_process"
 import { createHash } from "node:crypto"
+import { createServer } from "node:http"
 import { cpSync, mkdirSync, readFileSync, rmSync, writeFileSync, copyFileSync, existsSync, utimesSync, symlinkSync, realpathSync, appendFileSync, chmodSync, readdirSync, statSync, lstatSync } from "node:fs"
 import { join, dirname } from "node:path"
 import { fileURLToPath, pathToFileURL } from "node:url"
@@ -271,8 +272,8 @@ function lockText(tree) {
 }
 /** Writes an export (teq.lock) of the projects, with a new modification time whatever the file
  * system's granularity. A project is `{ platform, sources, classpath, flags, description }`. */
-function writeExport(file, projects) {
-  const json = { teq: "0.1.2", format: 1, binaries: {}, inputs: { files: {} }, repositories: [{ id: "maven-central", url: "https://repo1.maven.org/maven2/" }], jars: {}, projects: {} }
+function writeExport(file, projects, repositories = [{ id: "maven-central", url: "https://repo1.maven.org/maven2/" }]) {
+  const json = { teq: "0.1.2", format: 1, binaries: {}, inputs: { files: {} }, repositories, jars: {}, projects: {} }
   for (const [name, p] of Object.entries(projects)) {
     // A pinned jar (`pinned` below) goes into the table, its key onto the classpath.
     const classpath = (p.classpath ?? []).map((e) => (e.key ? ((json.jars[e.key] = e.record), e.key) : e))
@@ -4520,6 +4521,70 @@ async function unusedImportActions() {
 // A session whose builds get no mapping for the type store's overlays (an address-space limit the
 // server's children inherit, every full build asked of two workers and every build full) is typed by
 // one worker, and the server says so in the client's log once, however many builds follow.
+/**
+ * A pinned jar in neither teq's cache nor coursier's, fetched for a session from a repository on the loopback
+ * interface that answers its first byte at once and the rest 300 ms later: the fetch is told in the client's log
+ * (`window/logMessage`, a log line `teq: fetching <key> (<size>)`) before the transfer ends, and the jar's classes
+ * reach the session (the file's one error a mismatch naming the jar's class, which resolved); a second server over
+ * the same cache asks the repository nothing and tells no fetch. Run once, when named (tests/lsp.sh).
+ */
+async function jarFetch() {
+  const root = join(work, "fetch")
+  mkdirSync(join(root, "app/src"), { recursive: true })
+  const file = join(root, "app/src/Main.scala")
+  writeFileSync(file, 'object Main:\n  val name: Int = sourcecode.Name("main")\n')
+  const data = readFileSync(jar)
+  const parts = jar.slice(jar.indexOf("/maven2/") + "/maven2/".length).split("/")
+  const key = [parts.slice(0, -3).join("."), parts.at(-3), parts.at(-2)].join(":")
+  const requests = []
+  let toldAtEnd
+  let c
+  const told = (client) => client.notifications.filter((n) => n.method === "window/logMessage" && n.params.message.startsWith(`teq: fetching ${key} (`))
+  const server = createServer((req, res) => {
+    requests.push(req.url)
+    res.writeHead(200, { "Content-Length": data.length })
+    res.write(data.subarray(0, 1))
+    setTimeout(() => {
+      toldAtEnd = told(c).length
+      res.end(data.subarray(1))
+    }, 300)
+  })
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve))
+  const record = `loop ${createHash("sha1").update(data).digest("hex")} ${data.length}`
+  writeExport(join(root, "teq.lock"), { app: { platform: "jvm", sources: ["app/src"], classpath: [{ key, record }] } }, [{ id: "loop", url: `http://127.0.0.1:${server.address().port}/` }])
+  const env = { TEQ_CACHE_DIR: join(work, "fetch-cache") }
+  // A session over the file: its first diagnostics' messages, then the server stopped.
+  const run = async () => {
+    c = new Client(root, env)
+    try {
+      await c.result("initialize", { processId: null, rootUri: uriOf(root), capabilities: {} })
+      c.notify("initialized", {})
+      const m = c.mark()
+      c.notify("textDocument/didOpen", { textDocument: { uri: uriOf(file), languageId: "scala", version: 1, text: readFileSync(file, "utf8") } })
+      const ds = (await c.waitDiagnostics(m, uriOf(file), (ds) => ds.length > 0, 60000))?.map((d) => d.message)
+      // The transfer's end seen, which a cold session waited for.
+      await until(() => requests.length === 0 || toldAtEnd !== undefined, 10000)
+      await c.result("shutdown", null)
+      c.notify("exit", null)
+      await Promise.race([c.exited, sleep(10000)])
+      return ds
+    } catch (e) {
+      check("the jar fetch's session ran to its end", false, `${e.stack}\nstderr: ${c.stderr.slice(-1000)}`)
+      c.proc.kill()
+    }
+  }
+  const mismatch = ["type mismatch: found Name, required Int"]
+  try {
+    const cold = await run()
+    const lines = told(c)
+    check("a jar fetched for a session over the loopback interface is told in the client's log before its transfer ends, its classes the session's", same(cold, mismatch) && requests.length === 1 && toldAtEnd === 1 && lines.length === 1 && lines[0].params.type === 4, { cold, requests, toldAtEnd, lines, stderr: c.stderr.slice(-400) })
+    const warm = await run()
+    check("a second server over the same cache fetches nothing and tells no fetch", same(warm, mismatch) && requests.length === 1 && told(c).length === 0, { warm, requests, lines: told(c) })
+  } finally {
+    server.close()
+  }
+}
+
 async function refusedMapping() {
   const root = join(work, "refused")
   cpSync(join(here, "bare"), root, { recursive: true })
@@ -4546,9 +4611,9 @@ async function refusedMapping() {
   }
 }
 
-const scenarios = { mainWorkspace, appliedValues, closedAlias, completion, completionCases, completionSnippets, completionRaces, signatureCases, signatureHelp, indexSize, cacheableAcrossCompletions, stoppedChild, busyChild, closedDocument, overtaken, overtakenAgain, bareRoot, libraries, libraryDocumentParked, libraryDocumentProducerReplaced, leanStd, leanStdSessions, leanStdComplete, stdDocumentRouting, sessionLimits, serverGenerators, sbtBuild, sbtLockGone, sbtRefusals, sbtRunLifetime, unusedImports, unusedImportActions, refusedMapping, idleMinute }
-// Run only when named: the idle minute, which tests/lsp.sh runs once.
-const named = new Set(["idleMinute"])
+const scenarios = { mainWorkspace, appliedValues, closedAlias, completion, completionCases, completionSnippets, completionRaces, signatureCases, signatureHelp, indexSize, cacheableAcrossCompletions, stoppedChild, busyChild, closedDocument, overtaken, overtakenAgain, bareRoot, libraries, libraryDocumentParked, libraryDocumentProducerReplaced, leanStd, leanStdSessions, leanStdComplete, stdDocumentRouting, sessionLimits, serverGenerators, sbtBuild, sbtLockGone, sbtRefusals, sbtRunLifetime, unusedImports, unusedImportActions, refusedMapping, idleMinute, jarFetch }
+// Run only when named: the idle minute and the jar fetch, which tests/lsp.sh runs once each.
+const named = new Set(["idleMinute", "jarFetch"])
 for (const [name, run] of Object.entries(scenarios)) {
   if (only ? only.includes(name) : !named.has(name)) await run()
 }

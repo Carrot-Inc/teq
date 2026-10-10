@@ -112,16 +112,20 @@ fn home() -> Option<PathBuf> {
     var("HOME").or_else(|| var("USERPROFILE"))
 }
 
-/// The file coursier keeps for a URL: `<cache>/<scheme>/<host>/<path>`, the user of the authority
-/// left out, escaped as coursier's `CachePath.escape` does (a repository's port, a `+` or an `@` of
-/// a version).
+/// The file coursier keeps for a URL, as its `CachePath.localFile` names it with no user: the scheme, a `/`,
+/// then the URL after the scheme's `:` with its leading `/`s taken off (one, or three, then any left) and a
+/// trailing `/` made `/.directory`, the whole escaped as `CachePath.escape` does (the authority's user, a port,
+/// a version's `+` or `@`, the query and the fragment kept, escaped). None for a URL coursier refuses: no
+/// scheme, no `/` after it, or a `.` or `..` segment (tests/support/coursier-files.txt has coursier's answers).
 pub fn coursier_file(cache: &Path, url: &str) -> Option<PathBuf> {
-    let (scheme, rest) = url.split_once("://")?;
-    let rest = rest.split(['?', '#']).next()?;
-    let (authority, path) = rest.split_once('/').map_or((rest, None), |(a, p)| (a, Some(p)));
-    let host = authority.rsplit_once('@').map_or(authority, |(_, host)| host);
-    let place = path.map_or(host.to_string(), |p| format!("{}/{}", host, p));
-    Some(cache.join(scheme).join(coursier_escape(&place)))
+    let (scheme, rest) = url.split_once(':')?;
+    let rest = rest.strip_prefix("///").or_else(|| rest.strip_prefix('/'))?;
+    let rest = if rest.ends_with('/') { format!("{}.directory", rest) } else { rest.to_string() };
+    let place = coursier_escape(&format!("{}/{}", scheme, rest.trim_start_matches('/')));
+    if place.split('/').any(|segment| segment == "." || segment == "..") {
+        return None;
+    }
+    Some(cache.join(place))
 }
 
 /// coursier's `CachePath.escape`: every UTF-16 unit above 128 and each of ` %$&+,:;=?@<>#` as `%`
@@ -711,15 +715,17 @@ mod tests {
     #[test]
     fn coursier_keeps_a_url_under_its_scheme_and_host() {
         let cache = Path::new("/c/v1");
-        assert_eq!(coursier_file(cache, "https://repo1.maven.org/maven2/a/b.jar"), Some(PathBuf::from("/c/v1/https/repo1.maven.org/maven2/a/b.jar")));
-        assert_eq!(coursier_file(cache, "https://user@host.io/r/x.jar?q"), Some(PathBuf::from("/c/v1/https/host.io/r/x.jar")));
+        // coursier's own answers (CachePath.localFile), which the launchers, vite-plugin-teq and the export
+        // checker are tested on: a repository's port, a version's `+`, an `@`, a user, a percent sign, the query
+        // and the fragment, a trailing `/`, and a `.` segment refused (`-`).
+        let cases = include_str!("../../tests/support/coursier-files.txt");
+        let cases: Vec<(&str, &str)> = cases.lines().filter(|l| !l.is_empty() && !l.starts_with('#')).filter_map(|l| l.split_once(' ')).collect();
+        assert!(cases.len() > 10);
+        for (url, file) in cases {
+            assert_eq!(coursier_file(cache, url), (file != "-").then(|| cache.join(file)), "{url}");
+        }
         assert_eq!(coursier_file(cache, "no-scheme"), None);
-        // A repository's port and a version's `+`, as coursier keeps them.
-        assert_eq!(coursier_file(cache, "http://127.0.0.1:34563/a/b/1.0+3/b-1.0+3.jar"), Some(PathBuf::from("/c/v1/http/127.0.0.1%3A34563/a/b/1.0%2B3/b-1.0%2B3.jar")));
-        // An `@` of the path is the path's, the authority's user alone left out.
-        assert_eq!(coursier_file(cache, "http://127.0.0.1:42235/org/example/probe/1.0@build/probe-1.0@build.jar"), Some(PathBuf::from("/c/v1/http/127.0.0.1%3A42235/org/example/probe/1.0%40build/probe-1.0%40build.jar")));
-        assert_eq!(coursier_file(cache, "https://user@host.io/r/x@1/x-1@1.jar"), Some(PathBuf::from("/c/v1/https/host.io/r/x%401/x-1%401.jar")));
-        assert_eq!(coursier_file(cache, "https://user@host.io"), Some(PathBuf::from("/c/v1/https/host.io")));
+        assert_eq!(coursier_file(cache, "https://repo.invalid/\u{e9}/x.jar"), Some(PathBuf::from("/c/v1/https/repo.invalid/%E9/x.jar")));
         let source = Source { repository: "https://repo1.maven.org/maven2/", path: "a/b.jar", credentials: None };
         assert_eq!(source.url(), "https://repo1.maven.org/maven2/a/b.jar");
     }

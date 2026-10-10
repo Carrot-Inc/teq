@@ -44,9 +44,8 @@ def place(entry):
     if isinstance(entry, dict):
         return entry["file"]
     repository, _, _, path = c.fields(export, entry)
-    scheme, rest = (urls[repository] + "/" + path).split("://", 1)
-    # coursier's CachePath.escape: a port's `:`, a version's `+`, ... as `%` and two digits of base 16.
-    return os.path.join(cache, scheme, c.coursier_escape(rest))
+    # Where coursier keeps it: its CachePath.localFile, a port's `:`, a version's `+`, ... as `%` and two digits of base 16.
+    return c.coursier_file(cache, urls[repository] + "/" + path)
 print(":".join(place(e) for e in export["projects"]["api"]["configurations"]["runtime"]["classpath"] if isinstance(e, str) or "file" in e))
 PY
 )
@@ -261,14 +260,17 @@ if [ -z "$RELEASE_ONLY$EXPORT_ONLY$GENERATOR_ONLY" ]; then
 # against the configuration's own class directory. Compile, run against scalac's output, the three
 # frameworks' suites, testOnly, a failing test reported by its framework, a body edit compiling
 # its source alone against its siblings' products, a type error reported with its position and
-# kept across an unchanged retry, packageBin, a deletion-only change, `clean`, an edit of a
-# Compile source reaching a test, forked tests, testQuick over zinc's dependencies, an API change
+# kept across an unchanged retry, packageBin (the jar it answers, siblings beside it), a
+# deletion-only change, `clean`, an edit of a Compile source reaching a test, forked tests, testQuick over zinc's dependencies, an API change
 # compiling its dependents alone in both configurations, an inline body's change reaching its
 # caller, a removal nothing depends on (no batch, the manifest's own operation), a failed second
 # batch leaving the products and the manifest as they were, the toggle turned off and on again
 # (scalac compiles the same commands, then teq compiles afresh), and `teqCacheableState` under
 # compile (a change after a passed compile compiling everything again), teqBuild and the
-# frontend's teqFullLinkJS.
+# frontend's teqFullLinkJS. The section ends with no file git neither knows nor ignores that was not
+# there before it (an edit's backup among them).
+untracked() { git status --porcelain --untracked-files=all -- . 2> /dev/null | grep '^??'; }
+untracked_before=$(untracked)
 sbtlog=target-sbt-compiler.log
 : > $sbtlog
 client() {
@@ -306,7 +308,7 @@ object Actions:
     def run(): Int = 42
 EOF
 package_util() {
-  sed -i.bak "s/inline def value: Int = .*/inline def value: Int = $1/" lib-src/Util.scala
+  sed -i.bak "s/inline def value: Int = .*/inline def value: Int = $1/" lib-src/Util.scala && rm -f lib-src/Util.scala.bak
   timeout 200 scala-cli --power package lib-src --library -o api/lib/util.jar -f -S 3.8.4 --server=false > target-util-jar.log 2>&1 || { echo "FAIL compiler: packaging util.jar (see target-util-jar.log)"; status=1; }
 }
 package_util 1
@@ -365,9 +367,17 @@ class Failing extends AnyFunSuite:
 EOF
 if ! client "api/testOnly meridian.apitest.Failing" && has_output "arithmetic"; then echo "compiler: a failing test is reported by its framework"; else echo "FAIL compiler: failing test (see $sbtlog)"; status=1; fi
 rm api-test-src/meridian/apitest/Failing.scala
-expect_ok api/packageBin "packageBin"
-jar=$(ls target/out/jvm/scala-3.8.4/api/*.jar 2> /dev/null | grep -v -- '-tests.jar' | head -1)
-if [ -n "$jar" ] && unzip -l "$jar" | grep -q "meridian/server/Main.class"; then echo "compiler: the jar holds the classes"; else echo "FAIL compiler: no jar with the classes"; status=1; fi
+expect_ok "print api/packageBin" "packageBin"
+# The jar packageBin answers, as `print` gives it to the client (`${OUT}` the build's target/out, then its digest), not
+# one of its siblings, whose names sort before it: a sources, a javadoc and a test sources jar beside it, empty ones
+# put there as controls.
+jar=$(printf '%s\n' "$CLIENT_OUT" | grep -o '[$]{OUT}/[^ ]*[.]jar' | tail -1 | sed 's|^[$]{OUT}|target/out|')
+controls=()
+for c in sources javadoc test-sources; do
+  [ -n "$jar" ] && [ ! -e "${jar%.jar}-$c.jar" ] && python3 -c 'import sys, zipfile; zipfile.ZipFile(sys.argv[1], "w").close()' "${jar%.jar}-$c.jar" && controls+=("${jar%.jar}-$c.jar")
+done
+if [ -f "$jar" ] && unzip -l "$jar" | grep -q "meridian/server/Main.class"; then echo "compiler: the jar packageBin answers holds the classes, its siblings beside it"; else echo "FAIL compiler: no jar with the classes at '$jar' (see $sbtlog)"; status=1; fi
+rm -f "${controls[@]}"
 # A body edit of a small file: the second compile is a retype.
 edited=src/api/business/ServiceError.scala
 cp $edited target-edited.bak
@@ -808,6 +818,7 @@ cp target-edited.bak $edited
 rm -f target-fifo target-core.bak target-munit.bak target-scalatest.bak $core.bak
 timeout 60 sbt --client shutdown > /dev/null 2>&1
 rm -f target-edited.bak target-shared.bak target-client.out $edited.bak $shared.bak
+if [ "$(untracked)" = "$untracked_before" ]; then echo "compiler: the section leaves no file git neither knows nor ignores, an edit's backup among them"; else echo "FAIL compiler: files left behind: $(diff <(printf '%s\n' "$untracked_before") <(untracked) | grep '^>')"; status=1; fi
 unset TEQ_COMPILER
 fi
 

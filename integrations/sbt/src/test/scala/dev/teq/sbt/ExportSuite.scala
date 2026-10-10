@@ -21,6 +21,11 @@ class ExportSuite extends munit.FunSuite:
     val dir = Files.createTempDirectory("teq-export").toFile
     try body(dir) finally IO.delete(dir)
 
+  /** Whether a directory lies in a Git work tree the test does not own: a `.git` at it or above, as a machine's
+    * temporary directory may have one. A test of a build in no work tree states its answer under this condition. */
+  private def inWorkTree(dir: File): Boolean =
+    Iterator.iterate(dir.getAbsoluteFile)(_.getParentFile).takeWhile(_ != null).exists(d => new File(d, ".git").exists)
+
   /** The conformance corpus of `tests/lock/`, which teq's writer, check-export.py's and this one
     * write to the same bytes and the YAML 1.2 core reader reads to `corpus.json`'s tree. */
   private def corpus(name: String): String =
@@ -221,10 +226,15 @@ class ExportSuite extends munit.FunSuite:
         "project/build.properties" -> sha256("sbt.version=2.0.8\rmore\n"),
       ))
       // A lone `\r` is no CRLF. The directory is in no Git work tree: no checkout to correct, so
-      // the export on the other copy's machine.
-      assertEquals(Export.crlfWarning(root.toPath), Some("teq: build.sbt, project/S.scala have CRLF line ends, and teq.lock records their bytes, so that a copy of the build that differs from them by line ends alone finds it stale until it is exported on that copy's machine"))
+      // the export on the other copy's machine; in one above the temporary directory, the remedy of .gitattributes.
+      val above = inWorkTree(root)
+      assertEquals(Export.crlfWarning(root.toPath), Some(
+        if above then s"teq: build.sbt, project/S.scala have CRLF line ends, and teq.lock records their bytes, so that a checkout with LF finds it stale: ${Export.LfRemedy}"
+        else "teq: build.sbt, project/S.scala have CRLF line ends, and teq.lock records their bytes, so that a copy of the build that differs from them by line ends alone finds it stale until it is exported on that copy's machine"))
       IO.write(new File(root, "project/S.scala"), string, UTF_8)
-      assertEquals(Export.crlfWarning(root.toPath), Some("teq: build.sbt has CRLF line ends, and teq.lock records its bytes, so that a copy of the build that differs from it by line ends alone finds it stale until it is exported on that copy's machine"))
+      assertEquals(Export.crlfWarning(root.toPath), Some(
+        if above then s"teq: build.sbt has CRLF line ends, and teq.lock records its bytes, so that a checkout with LF finds it stale: ${Export.LfRemedy}"
+        else "teq: build.sbt has CRLF line ends, and teq.lock records its bytes, so that a copy of the build that differs from it by line ends alone finds it stale until it is exported on that copy's machine"))
       // In a Git work tree, a repository's `.git` at the root, the remedy of .gitattributes.
       IO.createDirectory(new File(root, ".git"))
       assertEquals(Export.crlfWarning(root.toPath), Some(s"teq: build.sbt has CRLF line ends, and teq.lock records its bytes, so that a checkout with LF finds it stale: ${Export.LfRemedy}"))
@@ -238,7 +248,8 @@ class ExportSuite extends munit.FunSuite:
       val build = new File(dir, "repository/builds/b")
       IO.write(new File(build, "build.sbt"), "name := \"x\"\r\n", UTF_8)
       val git = s"teq: build.sbt has CRLF line ends, and teq.lock records its bytes, so that a checkout with LF finds it stale: ${Export.LfRemedy}"
-      assert(!Export.crlfWarning(build.toPath).contains(git))
+      // The Git advice without a repository of the test's own only in a work tree above the temporary directory.
+      assertEquals(Export.crlfWarning(build.toPath).contains(git), inWorkTree(dir))
       // A build below the repository's root.
       IO.createDirectory(new File(dir, "repository/.git"))
       assertEquals(Export.crlfWarning(build.toPath), Some(git))
@@ -319,11 +330,13 @@ class ExportSuite extends munit.FunSuite:
     assert(Export.bootRepository(key, Left("x"), Nil).left.toOption.exists(_.contains("(tried none)")))
 
   /** A Maven repository on loopback serving a directory's files, a HEAD with the `Content-Length`
-    * alone, each request recorded as `<method> <path>`: `answer` stands in for a path's file (a
-    * status, or a redirect to another path), `stalled` paths answer 40 bytes' headers and one byte
-    * and then wait, `user` is the basic authentication every request needs. */
+    * alone, each request recorded as `<method> <path>` (and ` (<range>)` for a GET's `Range`): `answer`
+    * stands in for a path's file (a status, or a redirect to another path), `head` for a HEAD of a path (a
+    * status), `stalled` paths answer 40 bytes' headers and one byte and then wait, `user` is the basic
+    * authentication every request needs; `ranged` answers a GET's `bytes=<first>-<last>` with those bytes,
+    * 206 and the `Content-Range`, and without it a range is ignored. */
   private def withRepository[A](dir: File, answer: String => Option[Either[Int, String]] = _ => None, user: Option[(String, String)] = None,
-      stalled: String => Boolean = _ => false)(body: (String, () => Seq[String]) => A): A =
+      stalled: String => Boolean = _ => false, head: String => Option[Int] = _ => None, ranged: Boolean = false)(body: (String, () => Seq[String]) => A): A =
     val requests = mutable.ArrayBuffer.empty[String]
     val server = HttpServer.create(new InetSocketAddress(InetAddress.getLoopbackAddress, 0), 0)
     val handlers = Executors.newCachedThreadPool()
@@ -331,13 +344,16 @@ class ExportSuite extends munit.FunSuite:
     server.setExecutor(handlers)
     val context = server.createContext("/", exchange =>
       val path = exchange.getRequestURI.getPath
-      requests.synchronized(requests += s"${exchange.getRequestMethod} $path")
+      val range = Option(exchange.getRequestHeaders.getFirst("Range"))
+      requests.synchronized(requests += s"${exchange.getRequestMethod} $path${range.fold("")(r => s" ($r)")}")
       val file = new File(dir, path.stripPrefix("/"))
+      val bytes = """bytes=(\d+)-(\d+)""".r
       if stalled(path) then
         exchange.sendResponseHeaders(200, 40)
         exchange.getResponseBody.write('0')
         exchange.getResponseBody.flush()
         released.await(30, TimeUnit.SECONDS)
+      else if exchange.getRequestMethod == "HEAD" && head(path).isDefined then exchange.sendResponseHeaders(head(path).get, -1)
       else answer(path) match
         case Some(Left(status)) => exchange.sendResponseHeaders(status, -1)
         case Some(Right(to)) =>
@@ -346,6 +362,12 @@ class ExportSuite extends munit.FunSuite:
         case None if file.isFile && exchange.getRequestMethod == "HEAD" =>
           exchange.getResponseHeaders.set("Content-Length", file.length.toString)
           exchange.sendResponseHeaders(200, -1)
+        case None if file.isFile && ranged && range.exists(bytes.matches) =>
+          val bytes(first, last) = range.get: @unchecked
+          val slice = IO.readBytes(file).slice(first.toInt, last.toInt + 1)
+          exchange.getResponseHeaders.set("Content-Range", s"bytes $first-$last/${file.length}")
+          exchange.sendResponseHeaders(206, slice.length)
+          exchange.getResponseBody.write(slice)
         case None if file.isFile =>
           exchange.sendResponseHeaders(200, file.length)
           exchange.getResponseBody.write(IO.readBytes(file))
@@ -411,6 +433,40 @@ class ExportSuite extends munit.FunSuite:
             assertEquals(thirdRequests(), Nil)
           }
         }
+      }
+    }
+
+  test("a repository refusing a HEAD, of its own or of a signed URL it redirects to: the pom's presence and each binary's size from a GET of its first byte, a Content-Range's total or an ignored range's Content-Length, the URL the repository's"):
+    withDirectory { root =>
+      val at = "build/teq/teq/1.2.3"
+      published(root, "1.2.3", "linux-x86_64" -> "linux binary", "osx-aarch_64" -> "a mac binary!")
+      // The binaries at signed URLs too, as a repository that redirects its downloads serves them.
+      for c <- Seq("linux-x86_64", "osx-aarch_64") do IO.copyFile(new File(root, s"$at/teq-1.2.3-$c.exe"), new File(root, s"signed/teq-1.2.3-$c.exe"))
+      def pinned(url: String) = Export.pinned("build.teq", "teq", "1.2.3", Export.Classifiers, Seq(repository("r", url)), unserved, Logger.Null)
+      def found(url: String) = Seq("osx-aarch_64" -> 13, "linux-x86_64" -> 12).map((c, size) =>
+        Export.Binary(c, s"$url$at/teq-1.2.3-$c.exe", Sha1.compute(new File(root, s"$at/teq-1.2.3-$c.exe")), size, Some(repository("r", url))))
+      val first = "(bytes=0-0)"
+      // Every HEAD refused (405), a range answered (206) or ignored (200): the pom, then per classifier the .sha1, the
+      // HEAD and the GET of the first byte; the classifiers not published answer that GET 404.
+      for ranges <- Seq(true, false) do
+        withRepository(root, head = _ => Some(405), ranged = ranges) { (url, requests) =>
+          val pins = pinned(url)
+          assertEquals((pins.found, pins.refusals, pins.untold), (found(url), Nil, Nil), s"ranges answered: $ranges")
+          assertEquals(requests(), Seq(s"HEAD /$at/teq-1.2.3.pom", s"GET /$at/teq-1.2.3.pom $first") ++
+            Export.Classifiers.flatMap(c => Seq(s"GET /$at/teq-1.2.3-$c.exe.sha1", s"HEAD /$at/teq-1.2.3-$c.exe", s"GET /$at/teq-1.2.3-$c.exe $first")))
+        }
+      // The binaries redirected to signed URLs, which refuse a HEAD (403): the GET of the first byte follows the
+      // redirect from the repository's URL, which the record keeps.
+      val signed = (path: String) => Option.when(path.startsWith(s"/$at/") && path.endsWith(".exe") && new File(root, s"signed/${path.split('/').last}").isFile)(Right(s"/signed/${path.split('/').last}"))
+      withRepository(root, answer = signed, head = path => Option.when(path.startsWith("/signed/"))(403), ranged = true) { (url, requests) =>
+        val pins = pinned(url)
+        assertEquals((pins.found, pins.refusals, pins.untold), (found(url), Nil, Nil))
+        assert(requests().containsSlice(Seq(s"HEAD /$at/teq-1.2.3-linux-x86_64.exe", "HEAD /signed/teq-1.2.3-linux-x86_64.exe",
+          s"GET /$at/teq-1.2.3-linux-x86_64.exe $first", s"GET /signed/teq-1.2.3-linux-x86_64.exe $first")), requests())
+      }
+      // A HEAD refused and the GET refused as well: the repository cannot tell, named by the GET.
+      withRepository(root, head = _ => Some(405), answer = path => Option.when(path.endsWith(".pom"))(Left(403))) { (url, _) =>
+        assertEquals(pinned(url), Export.Pinned(Nil, Nil, Seq(s"whether the repository r ($url) serves build.teq:teq:1.2.3 cannot be told (GET (bytes=0-0) $url$at/teq-1.2.3.pom answered 403)")))
       }
     }
 
