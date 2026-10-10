@@ -7279,6 +7279,34 @@ impl<'a, 't> Interp<'a, 't> {
     }
 
     /// The tree as Scala source, as `Printer.TreeCode` shows it.
+    /// The prefix `SourceCode.printType` writes for `ThisType` of a class (`printFullClassName`:
+    /// its enclosing classes' names, then `.this`) or of an object (its path, packages included,
+    /// the empty and root packages left out).
+    fn this_prefix_text(&mut self, c: ClassId) -> String {
+        let info = self.syms().class(c);
+        let (kind, owner, name) = (info.kind, info.owner, info.name);
+        let own = self.typer.name_ref(name).trim_end_matches('$').to_string();
+        if matches!(kind, ClassKind::Object | ClassKind::GivenImpl) {
+            return match owner {
+                Owner::Package(p) => format!("{}{}", self.package_path(p), own),
+                Owner::Class(o) => format!("{}.{}", self.this_prefix_text(o), own),
+                _ => own,
+            };
+        }
+        let mut names = vec![own];
+        let mut at = owner;
+        while let Owner::Class(o) = at {
+            let i = self.syms().class(o);
+            if matches!(i.kind, ClassKind::Object | ClassKind::GivenImpl) {
+                break;
+            }
+            names.push(self.typer.name_ref(i.name).to_string());
+            at = i.owner;
+        }
+        names.reverse();
+        format!("{}.this", names.join("."))
+    }
+
     pub(super) fn show_tree(&mut self, t: TreeRef) -> String {
         let mut out = String::new();
         if let Err(_) = self.show_tree_into(t, &mut out, 0) {
@@ -7290,7 +7318,17 @@ impl<'a, 't> Interp<'a, 't> {
     fn show_tree_into(&mut self, t: TreeRef, out: &mut String, indent: usize) -> R<()> {
         match self.view(t)? {
             View::Literal(v) => out.push_str(&self.show_constant(&v)?),
-            View::Ident(s) => out.push_str(&self.symbol_name(s).trim_end_matches('$').to_string()),
+            // dotty's `SourceCode` prints an `Ident` by its type: a member of an enclosing class
+            // as `C.this.x`, one of an object as its path (`pkg.Obj.x`).
+            View::Ident(s) => {
+                if let SymRef::Term(sym) = s {
+                    if let Owner::Class(c) = self.syms().sym(sym).owner {
+                        out.push_str(&self.this_prefix_text(c));
+                        out.push('.');
+                    }
+                }
+                out.push_str(&self.symbol_name(s).trim_end_matches('$').to_string())
+            }
             View::Select(q, _, n) => {
                 self.show_tree_into(q, out, indent)?;
                 out.push('.');
