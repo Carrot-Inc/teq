@@ -816,6 +816,7 @@ macro_method_type_by_name
 macro_mirror_summon
 macro_module_members
 macro_named_args
+macro_operator_symbols
 macro_owner_under_check
 macro_owners
 macro_package_prefix
@@ -862,6 +863,7 @@ macro_treemap_method_types
 macro_treemap_typedef
 macro_tuple_type_patterns
 macro_type_bounds_tree_copy
+macro_underlying_locals
 macro_val_type_ref_stable
 macro_val_type_ref_widen
 macro_vector_append
