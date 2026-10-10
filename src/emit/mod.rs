@@ -3251,7 +3251,8 @@ impl<'a> Emitter<'a> {
     pub(super) fn emit_class_of(&mut self, c: ClassId, dims: u8) {
         // An array is of the one array class here, which no array value tells apart: the class
         // of an array of a known element names it where the compiler reads it (a reflective
-        // call's proxy), not at run time.
+        // call's proxy), not at run time (the interpreter's `class_literal` names it, for the
+        // reflection a JVM build's macro runs).
         if dims > 0 {
             self.out.push_str("$classNamed(\"[Ljava.lang.Object;\")");
             return;

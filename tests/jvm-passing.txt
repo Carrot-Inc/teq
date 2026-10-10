@@ -842,6 +842,7 @@ macro_refinement_clause_kinds
 macro_refinement_info_equality
 macro_refinement_members
 macro_refinement_param_kinds
+macro_reflective_arrays
 macro_reflective_call
 macro_source_path
 macro_std_body_return
