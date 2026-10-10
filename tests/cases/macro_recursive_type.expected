@@ -1,0 +1,3 @@
+rec(AnyRef { T >: Nothing <: Any } { U = self.T }) bound true | built Box { T >: Nothing <: Any } true
+rec(AnyRef { T = String } { f (): self.T }) bound true | built Box { T >: Nothing <: Any } true
+not recursive: AnyRef { T >: Nothing <: Any } { g : => Int } | built Box { T >: Nothing <: Any } true

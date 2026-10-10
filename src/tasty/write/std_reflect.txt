@@ -290,6 +290,8 @@ scala.quoted.Reflect$	Printer	-:scala.quoted.Reflect$.Printer$	-	scala.quoted.Qu
 scala.quoted.Reflect$	Printer	object	Printer	scala.quoted.Quotes.reflectModule.PrinterModule	object
 scala.quoted.Reflect$	RecursiveThis	-:scala.quoted.Reflect$.RecursiveThis$	-	scala.quoted.Quotes.reflectModule	-
 scala.quoted.Reflect$	RecursiveThis	object	RecursiveThis	scala.quoted.Quotes.reflectModule.RecursiveThisModule	object
+scala.quoted.Reflect$	RecursiveThisMethods	-:scala.quoted.Reflect$.RecursiveThisMethods$	-	scala.quoted.Quotes.reflectModule	-
+scala.quoted.Reflect$	RecursiveThisMethods	object	RecursiveThisMethods	scala.quoted.Quotes.reflectModule.RecursiveThisMethods	object
 scala.quoted.Reflect$	RecursiveThisTypeTest	-:scala.quoted.Reflect$.RecursiveThisTypeTest$	-	scala.quoted.Quotes.reflectModule	-
 scala.quoted.Reflect$	RecursiveThisTypeTest	object	RecursiveThisTypeTest	scala.reflect.TypeTest	object
 scala.quoted.Reflect$	RecursiveType	-:scala.quoted.Reflect$.RecursiveType$	-	scala.quoted.Quotes.reflectModule	-
@@ -902,7 +904,9 @@ scala.quoted.Reflect$.Printer$.TypeReprCode$	show	scala.quoted.Reflect$.TypeRepr
 scala.quoted.Reflect$.Printer$.TypeReprShortCode$	show	scala.quoted.Reflect$.TypeRepr:java.lang.String	Printer.TypeReprShortCode	scala.quoted.Quotes.reflectModule.Printer	java.lang.Object:java.lang.String
 scala.quoted.Reflect$.Printer$.TypeReprStructure$	show	scala.quoted.Reflect$.TypeRepr:java.lang.String	Printer.TypeReprStructure	scala.quoted.Quotes.reflectModule.Printer	java.lang.Object:java.lang.String
 scala.quoted.Reflect$.RecursiveThis$	unapply	scala.quoted.Reflect$.RecursiveThis:scala.Some	RecursiveThis	scala.quoted.Quotes.reflectModule.RecursiveThisModule	java.lang.Object:scala.Some
+scala.quoted.Reflect$.RecursiveThisMethods$	binder	scala.quoted.Reflect$.RecursiveThis:scala.quoted.Reflect$.RecursiveType	RecursiveThisMethods	scala.quoted.Quotes.reflectModule.RecursiveThisMethods	java.lang.Object:java.lang.Object
 scala.quoted.Reflect$.RecursiveThisTypeTest$	unapply	scala.quoted.Reflect$.TypeRepr:scala.Option	RecursiveThisTypeTest	scala.reflect.TypeTest	java.lang.Object:scala.Option
+scala.quoted.Reflect$.RecursiveType$	apply	scala.Function1:scala.quoted.Reflect$.RecursiveType	RecursiveType	scala.quoted.Quotes.reflectModule.RecursiveTypeModule	scala.Function1:java.lang.Object
 scala.quoted.Reflect$.RecursiveType$	unapply	scala.quoted.Reflect$.RecursiveType:scala.Some	RecursiveType	scala.quoted.Quotes.reflectModule.RecursiveTypeModule	java.lang.Object:scala.Some
 scala.quoted.Reflect$.RecursiveTypeMethods$	recThis	scala.quoted.Reflect$.RecursiveType:scala.quoted.Reflect$.RecursiveThis	RecursiveTypeMethods	scala.quoted.Quotes.reflectModule.RecursiveTypeMethods	java.lang.Object:java.lang.Object
 scala.quoted.Reflect$.RecursiveTypeMethods$	underlying	scala.quoted.Reflect$.RecursiveType:scala.quoted.Reflect$.TypeRepr	RecursiveTypeMethods	scala.quoted.Quotes.reflectModule.RecursiveTypeMethods	java.lang.Object:java.lang.Object
