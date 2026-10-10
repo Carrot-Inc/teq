@@ -1328,6 +1328,32 @@ impl<'a, 't> Interp<'a, 't> {
         }
     }
 
+    /// The selection that stands for the symbol of the operator selection `i` selects: the
+    /// run's first of its name, method type, operation and receiver's class (`Records::operators`),
+    /// so that equal operators are one symbol, as the primitive class's method is dotty's.
+    fn canonical_operator(&mut self, i: u32) -> R<u32> {
+        let p = self.pending_of(i)?;
+        let PendingKind::Operator(name, method, prim) = p.kind else { return Ok(i) };
+        let owner = match p.recv {
+            Some(r) => {
+                let ty = self.tree_type(r)?;
+                self.type_symbol(ty)
+            }
+            None => SymRef::None,
+        };
+        let key: super::OperatorKey = (name, method, prim, owner);
+        let found = self.records.operators.iter().find(|(k, _)| *k == key).map(|&(_, at)| at);
+        if let Some(at) = found {
+            // One of an earlier run is stale in this one, and gives way to this selection.
+            if self.records.pending.get(at).is_some() {
+                return Ok(at);
+            }
+            self.records.operators.retain(|(k, _)| *k != key);
+        }
+        self.records.operators.push((key, i));
+        Ok(i)
+    }
+
     fn pending(&mut self, p: Pending) -> TreeRef {
         TreeRef::Pending(self.records.pending.push(p))
     }
@@ -2717,7 +2743,7 @@ impl<'a, 't> Interp<'a, 't> {
             TreeRef::Pending(i) => match self.pending_of(i)?.kind {
                 PendingKind::Sym(s) => SymRef::Term(s),
                 PendingKind::New(ty) | PendingKind::Ctor(ty) => self.ctor_sym(ty),
-                PendingKind::Operator(..) => SymRef::Operator(i),
+                PendingKind::Operator(..) => SymRef::Operator(self.canonical_operator(i)?),
                 PendingKind::Named(_) => SymRef::None,
                 PendingKind::Ref(r) => r,
             },

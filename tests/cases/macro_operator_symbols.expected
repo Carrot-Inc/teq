@@ -1,0 +1,6 @@
++ Int true
++ Int true
++ Int false
++ Int false
+< Int true
+== Int true
