@@ -3149,12 +3149,12 @@ impl<'a> Worker<'a> {
         let superclass = self.syms.class(c).superclass;
         let mut synthesized = 0;
         let mut existing = Vec::new();
-        let holders = self.definition_holders(c);
+        let held = self.held_rule_names(c);
         for (bit, name, param) in synthetic::MEMBERS {
             if wanted & bit == 0 {
                 continue;
             }
-            let found = self.existing_def_among(c, name, param, &holders);
+            let found = if held & bit != 0 { self.existing_def_among(c, name, param) } else { None };
             if let Some(s) = found {
                 existing.push((bit, s));
             }
@@ -3178,7 +3178,7 @@ impl<'a> Worker<'a> {
         if synthesized & synthetic::EQUALS != 0 {
             // A value class is final (`Namer`).
             let is_final = self.syms.class(c).mods & mods::FINAL != 0 || value_class;
-            if !is_final || self.existing_def_among(c, names::CAN_EQUAL_METHOD, synthetic::Param::Any, &holders).is_some() {
+            if !is_final || (held & synthetic::CAN_EQUAL != 0 && self.existing_def_among(c, names::CAN_EQUAL_METHOD, synthetic::Param::Any).is_some()) {
                 synthesized |= synthetic::EQUALS_CALLS_CAN_EQUAL;
             }
         }
@@ -3229,13 +3229,8 @@ impl<'a> Worker<'a> {
     /// concrete member over an abstract one of an unrelated parent, while an abstract
     /// redeclaration hides what it overrides), unless that is the declaration the rule
     /// implements (`Any`'s, `Product`'s, `Equals`'s, `Enum`'s).
-    /// `holders` are `c`'s `definition_holders`.
-    fn existing_def_among(&mut self, c: ClassId, name: Name, param: synthetic::Param, holders: &[ClassId]) -> Option<SymId> {
-        // Where no base that can hold the definition has the name, there is none (a case class
-        // over `Product` and `Any` alone).
-        if !holders.iter().any(|&b| self.syms.class(b).members.contains_key(&name)) {
-            return None;
-        }
+    /// Asked only for a name some base that can hold a definition has (`held_rule_names`).
+    fn existing_def_among(&mut self, c: ClassId, name: Name, param: synthetic::Param) -> Option<SymId> {
         let mut abstract_in: Vec<ClassId> = Vec::new();
         for i in 0..self.syms.class(c).base_types.len() {
             let (b, bt) = self.syms.class(c).base_types[i];
@@ -3259,10 +3254,33 @@ impl<'a> Worker<'a> {
         None
     }
 
-    /// The bases of `c` that can hold an existing definition: none whose declarations the rule
-    /// implements, none without members (`java.io.Serializable`).
-    fn definition_holders(&self, c: ClassId) -> Vec<ClassId> {
-        self.syms.class(c).base_types.iter().map(|&(b, _)| b).filter(|&b| !self.syms.class(b).members.is_empty() && !self.declares_by_rule(b)).collect()
+    /// Which of the names `synthetic::MEMBERS` gives (their bits) a base of `c` that can hold an
+    /// existing definition has: none whose declarations the rule implements, none without members
+    /// (`java.io.Serializable`). `existingDef` of another name is none (a case class over `Product`
+    /// and `Any` alone), which is told without a lookup per name.
+    fn held_rule_names(&self, c: ClassId) -> u16 {
+        let mut held = 0;
+        for &(b, _) in &self.syms.class(c).base_types {
+            let members = &self.syms.class(b).members;
+            if members.is_empty() || self.declares_by_rule(b) {
+                continue;
+            }
+            // A small table read whole, a large one asked for each name.
+            if members.len() <= synthetic::MEMBERS.len() {
+                for name in members.keys() {
+                    if let Some(&(bit, _, _)) = synthetic::MEMBERS.iter().find(|&&(_, n, _)| n == *name) {
+                        held |= bit;
+                    }
+                }
+            } else {
+                for &(bit, name, _) in &synthetic::MEMBERS {
+                    if members.contains_key(&name) {
+                        held |= bit;
+                    }
+                }
+            }
+        }
+        held
     }
 
     /// Whether `b` is a class whose declarations the rule implements (`Any`'s, `Object`'s,
