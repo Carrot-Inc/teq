@@ -3144,10 +3144,13 @@ impl<'a> Worker<'a> {
         } else {
             0
         };
+        if wanted == 0 {
+            return (0, Vec::new());
+        }
         let superclass = self.syms.class(c).superclass;
         let mut synthesized = 0;
         let mut existing = Vec::new();
-        let holders = if wanted == 0 { Vec::new() } else { self.definition_holders(c) };
+        let holders = self.definition_holders(c);
         for (bit, name, param) in synthetic::MEMBERS {
             if wanted & bit == 0 {
                 continue;
@@ -3313,7 +3316,7 @@ impl<'a> Worker<'a> {
         let Some(e) = self.syms.class(companion).companion else { return false };
         self.syms.class(e).superclass.is_some_and(|s| {
             let info = self.syms.class(s);
-            self.interner.get(info.name) == "Enum" && matches!(info.owner, Owner::Package(p) if self.pkg_path(p) == "java.lang")
+            self.interner.get(info.name) == "Enum" && matches!(info.owner, Owner::Package(p) if self.pkg_is(p, "java.lang"))
         })
     }
 
@@ -3335,7 +3338,7 @@ impl<'a> Worker<'a> {
     /// `java.lang.Object`, read from a jar or the std's.
     fn is_java_lang_object(&self, k: ClassId) -> bool {
         let info = self.syms.class(k);
-        info.name == names::OBJECT && matches!(info.owner, Owner::Package(p) if self.pkg_path(p) == "java.lang")
+        info.name == names::OBJECT && matches!(info.owner, Owner::Package(p) if self.pkg_is(p, "java.lang"))
     }
 
     /// The parent clause that names the superclass of `c`, when the class names one itself rather
@@ -4516,6 +4519,9 @@ impl<'a> Worker<'a> {
     /// direct parent inherits as well was checked with that parent.
     #[cold]
     fn check_inherited_pairs(&mut self, c: ClassId) {
+        if !self.bases_share_a_name(c, true) {
+            return;
+        }
         let bases: Vec<(ClassId, TypeId)> = self.syms.class(c).base_types[1..].to_vec();
         let direct: Vec<ClassId> = self.syms.class(c).parents.clone().iter().filter_map(|&p| self.class_of(p)).collect();
         let extends = |t: &Self, sub: ClassId, sup: ClassId| t.syms.class(sub).base_types.iter().any(|&(x, _)| x == sup);
@@ -4529,6 +4535,10 @@ impl<'a> Worker<'a> {
                 }
                 let name = self.syms.sym(m).name;
                 let earlier_ones = seen.entry(name).or_default();
+                if earlier_ones.is_empty() {
+                    earlier_ones.push((m, b, bt));
+                    continue;
+                }
                 let earlier_ones: Vec<(SymId, ClassId, TypeId)> = {
                     earlier_ones.push((m, b, bt));
                     earlier_ones[..earlier_ones.len() - 1].to_vec()

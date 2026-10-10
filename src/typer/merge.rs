@@ -1461,6 +1461,7 @@ impl Remap {
         w.sites.class_tag = w.sites.class_tag.map(|c| self.class(c));
         w.sites.not_given_class = w.sites.not_given_class.map(|c| self.class(c));
         w.unit_ops = w.unit_ops.map(|o| o.map(|c| self.class(c)));
+        w.java_serializable = w.java_serializable.map(|o| o.map(|c| self.class(c)));
         w.prog.partial_function = w.prog.partial_function.map(|c| self.class(c));
         w.prog.throwable = w.prog.throwable.map(|c| self.class(c));
         w.prog.js_exception = w.prog.js_exception.map(|c| self.class(c));
@@ -2204,6 +2205,9 @@ impl<'a> Worker<'a> {
         }
         if self.unit_ops.is_none() {
             self.unit_ops = o.unit_ops;
+        }
+        if self.java_serializable.is_none() {
+            self.java_serializable = o.java_serializable;
         }
         if self.prog.partial_function.is_none() {
             self.prog.partial_function = o.prog.partial_function;

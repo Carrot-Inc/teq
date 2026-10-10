@@ -1226,6 +1226,8 @@ pub struct Worker<'a> {
     /// `scala.scalajs.js.internal.UnitOps` once looked up, which is in the implicit scope of `Unit`
     /// on JavaScript.
     pub unit_ops: Option<Option<ClassId>>,
+    /// `java.io.Serializable` once looked up, the parent `Desugar.classDef` gives a case class.
+    pub java_serializable: Option<Option<ClassId>>,
     /// Whether the program runs under the interpreter, which tells a `Char` from a `String`.
     pub interp: bool,
     /// Set while a body is typed for the interpreter on the JVM (`deferred_body`): a def with a
@@ -2272,6 +2274,7 @@ impl<'a> Worker<'a> {
             deferred_bounds: Vec::new(),
             jvm: false,
             unit_ops: None,
+            java_serializable: None,
             interp: false,
             for_interpreter: false,
             erased_tags: None,
@@ -2592,6 +2595,7 @@ impl<'a> Worker<'a> {
             dialect: self.dialect,
             jvm: self.jvm,
             unit_ops: self.unit_ops,
+            java_serializable: self.java_serializable,
             interp: self.interp,
             for_interpreter: self.for_interpreter,
             erased_tags: None,

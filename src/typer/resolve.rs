@@ -5040,7 +5040,7 @@ impl<'a> Worker<'a> {
         let is_case = self.syms.class(c).mods & mods::CASE != 0;
         let added: Vec<ClassId> = match kind {
             ClassKind::Class | ClassKind::Object if is_case => {
-                [self.b.product, self.class_at(&["java", "io", "Serializable"])].into_iter().flatten().collect()
+                [self.b.product, self.java_serializable_class()].into_iter().flatten().collect()
             }
             ClassKind::Enum => self.b.reflect_enum.into_iter().collect(),
             _ => Vec::new(),
@@ -5055,6 +5055,16 @@ impl<'a> Worker<'a> {
             }
         }
         self.syms.class_mut(c).desugared_parents = count;
+    }
+
+    /// `java.io.Serializable`, looked up once.
+    fn java_serializable_class(&mut self) -> Option<ClassId> {
+        if let Some(found) = self.java_serializable {
+            return found;
+        }
+        let found = self.class_at(&["java", "io", "Serializable"]);
+        self.java_serializable = Some(found);
+        found
     }
 
     pub(super) fn set_parents(&mut self, c: ClassId, parents: Vec<(TypeId, Span)>) {
@@ -5442,6 +5452,29 @@ impl<'a> Worker<'a> {
             .any(|(&p, (&x, &y))| self.syms.tparam(p).variance == 0 && x != y && !self.is_same(x, y))
     }
 
+    /// Whether two of the bases of `c` have members of one name (with their extensions when
+    /// `extensions` holds), without which no pair of inherited members is there to check (a case
+    /// class over one trait, `Product` and `Serializable`). A class with many members is taken to.
+    pub(super) fn bases_share_a_name(&self, c: ClassId, extensions: bool) -> bool {
+        let info = self.syms.class(c);
+        let mut named = [(Name(0), 0u32); 64];
+        let mut n = 0;
+        for (i, &(b, _)) in info.base_types.iter().enumerate().skip(1) {
+            let bi = self.syms.class(b);
+            let own = if extensions { &bi.extensions[..] } else { &[] };
+            if n + bi.member_order.len() + own.len() > named.len() {
+                return true;
+            }
+            for &m in bi.member_order.iter().chain(own) {
+                named[n] = (self.syms.sym(m).name, i as u32);
+                n += 1;
+            }
+        }
+        let named = &mut named[..n];
+        named.sort_unstable();
+        named.windows(2).any(|w| w[0].0 == w[1].0 && w[0].1 != w[1].1)
+    }
+
     /// Two ancestors that define one concrete member: the earlier one in the linearisation has
     /// to override it, and override a member both inherit, unless the class defines it itself.
     /// A pair that a direct parent inherits as well was checked with that parent. Two methods
@@ -5450,6 +5483,9 @@ impl<'a> Worker<'a> {
     /// `c`, which gets an entry that joins the alternatives of the two ancestors.
     #[cold]
     fn check_conflicting_members(&mut self, c: ClassId) {
+        if !self.bases_share_a_name(c, false) {
+            return;
+        }
         let bases: Vec<ClassId> = self.syms.class(c).base_types.iter().skip(1).map(|&(b, _)| b).collect();
         let direct: Vec<ClassId> = self.syms.class(c).parents.clone().iter().filter_map(|&p| self.class_of(p)).collect();
         let extends = |t: &Self, sub: ClassId, sup: ClassId| t.syms.class(sub).base_types.iter().any(|&(x, _)| x == sup);
