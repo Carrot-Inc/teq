@@ -1451,7 +1451,9 @@ mkdir -p "$js"
 (cd tests/scalajs-test && tar cf - --exclude=node_modules --exclude=target --exclude='oracle-*' .) | (cd "$js" && tar xf -)
 mkdir -p "$js/none/src/test/scala/fixture" "$js/early/src/test/scala/fixture" "$js/removal/src/test/scala/fixture"
 # `removal`: a suite whose given comes from a file of its own, which a later step deletes, the companion's
-# fallback taking its place; and a suite that depends on nothing of it.
+# fallback taking its place; a suite whose inline call's summonFrom finds a given of a file of its own,
+# which a later step deletes, the case naming no binder (scalac binds it, which its dependencies name);
+# and a suite that depends on nothing of them.
 cat > "$js/removal/src/test/scala/fixture/Greeting.scala" <<'EOF'
 package fixture
 
@@ -1473,6 +1475,25 @@ package fixture
 
 class GreetingSuite extends munit.FunSuite:
   test("greets") { assertEquals(summon[Greeting].text, "preferred") }
+EOF
+cat > "$js/removal/src/test/scala/fixture/Logic.scala" <<'EOF'
+package fixture
+
+import scala.compiletime.summonFrom
+
+trait Marker
+
+inline def selected: Int = summonFrom {
+  case _: Marker => 1
+  case _ => 2
+}
+EOF
+printf 'package fixture\n\ngiven marker: Marker = new Marker {}\n' > "$js/removal/src/test/scala/fixture/Marked.scala"
+cat > "$js/removal/src/test/scala/fixture/SelectedSuite.scala" <<'EOF'
+package fixture
+
+class SelectedSuite extends munit.FunSuite:
+  test("selected") { assertEquals(selected, 1) }
 EOF
 cat > "$js/removal/src/test/scala/fixture/OtherSuite.scala" <<'EOF'
 package fixture
@@ -1620,6 +1641,14 @@ if [ $code = 1 ] && grep -q "GreetingSuite" "$js/removal.events" && ! grep -q "O
   pass "scalajs tests: --changed after a source is deleted runs the suites that depended on it, the others left"
 else
   fail "scalajs tests: --changed after a deletion ($code): $(cut -f2,4 "$js/removal.events" 2> /dev/null | tr '\n' ' ') $out"
+fi
+rm "$js/removal/src/test/scala/fixture/Marked.scala"
+out=$(jstest removal --changed --events "$js/removal2.events")
+code=$?
+if [ $code = 1 ] && [ "$(cut -f2 "$js/removal2.events" | sort -u)" = "fixture.SelectedSuite.selected" ] && [[ "$out" == *"removal/test: 1 suite, 0 passed, 1 failed"* ]]; then
+  pass "scalajs tests: --changed after deleting a given a summonFrom found, its case binding none, runs the suite of the inline call"
+else
+  fail "scalajs tests: --changed after deleting a summonFrom's given ($code): $(cut -f2,4 "$js/removal2.events" 2> /dev/null | tr '\n' ' ') $out"
 fi
 out=$(jstest esm --events "$js/esm.events")
 if [ $? = 0 ] && [ "$(inventory "$js/esm.events")" = "$(oracle_of esm)" ] && [ -f "$js/target/teq/esm/test/link/main.mjs" ]; then

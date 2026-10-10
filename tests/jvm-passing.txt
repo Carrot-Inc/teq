@@ -1331,6 +1331,7 @@ structural_members
 structural_overload
 structural_reflective_calls
 structural_value_class
+summon_from_wildcard_given
 summoner_sugar
 suppression_disabled
 suppression_inheritance
