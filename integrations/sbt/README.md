@@ -15,7 +15,7 @@ line:
 addSbtPlugin("build.teq" % "sbt-teq" % "1.0.0")
 
 // build.sbt
-teqVersion := "0.1.7"
+teqVersion := "0.1.8"
 teqCompiler := true
 ```
 

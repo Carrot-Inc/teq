@@ -1,18 +1,18 @@
-teq: 0.1.7
+teq: 0.1.8
 format: 1
 binaries:
-  linux-aarch_64: https://github.com/Carrot-Inc/teq/releases/download/v0.1.7/teq-0.1.7-linux-aarch_64 efc41bbeddeaeeba9d9e31fa76326a2d5ff593ac 22040824
-  linux-x86_64: https://github.com/Carrot-Inc/teq/releases/download/v0.1.7/teq-0.1.7-linux-x86_64 84f92001896bd8b73432ede18075ee8db2c9f7c8 24758176
-  osx-aarch_64: https://github.com/Carrot-Inc/teq/releases/download/v0.1.7/teq-0.1.7-osx-aarch_64 7cd8817f041f8261e045926182901846ada72086 20432000
-  osx-x86_64: https://github.com/Carrot-Inc/teq/releases/download/v0.1.7/teq-0.1.7-osx-x86_64 97adc1f6b9be2e31cf12d0e372ef8db116b7d143 23416480
-  windows-x86_64: https://github.com/Carrot-Inc/teq/releases/download/v0.1.7/teq-0.1.7-windows-x86_64.exe 0fb5d94246221c7f0f978f3c5f65a81378cab45c 22478848
+  linux-aarch_64: https://github.com/Carrot-Inc/teq/releases/download/v0.1.8/teq-0.1.8-linux-aarch_64 5cb80d1a685f5b0c11246e7bab6d306e13b2ee9b 22948576
+  linux-x86_64: https://github.com/Carrot-Inc/teq/releases/download/v0.1.8/teq-0.1.8-linux-x86_64 920702b78eb8f6ddfc5c243a3429ea8454dcda11 25738696
+  osx-aarch_64: https://github.com/Carrot-Inc/teq/releases/download/v0.1.8/teq-0.1.8-osx-aarch_64 6139047bbdb649c86012e169a89ad3976adee405 21294064
+  osx-x86_64: https://github.com/Carrot-Inc/teq/releases/download/v0.1.8/teq-0.1.8-osx-x86_64 851f18c6ff037c0f2d3b16b2dfe61f5b3af09fe7 24312920
+  windows-x86_64: https://github.com/Carrot-Inc/teq/releases/download/v0.1.8/teq-0.1.8-windows-x86_64.exe f93304767201c77990cabbe02573b74482d7ca79 23411200
 inputs:
   files:
-    build.sbt: 984af352fc5f1730989ffaa5864d66ae311540899a7235fcbb19b852dc967124
+    build.sbt: dd3f64861bbe82ec510c7a7d786df204640b62cf25589974f559be3c45cfd086
     project/Mirror.scala: d7066899113707dba034f1575cd93a821f8b67a44ff04885d5d52f16a4353d5e
     project/build.properties: 130d92ddf3cbfd0330ca6ec0e9aa88a65c8221ea9b47f0ed83095f52515ebcd3
     project/plugins.sbt: fa152f0de7096552b1e5cda01933efea5c22f9c4ed3aaa5d170a764e04443190
-  sha256: 3dab8419e50238e6236a52215d45b5d95358e01e69c8973eac1657055bf85f29
+  sha256: e4eafdd1924409c4d5058bb5180293c728134d0db33eec3e681f93e2d07f2048
 jars:
   com.github.sbt:junit-interface:0.13.3: maven-central cc5178fdec607a63c045951f9ba5c7e7e5a1813e 35398
   com.lihaoyi:sourcecode_3:0.4.2: maven-central e7445e5caa2003ce647370451e59615e0c222aba 110490
