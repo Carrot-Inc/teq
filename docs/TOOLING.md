@@ -341,7 +341,10 @@ it is the lockfile installed last) and checked against the version an npm lockfi
 (Selenium, Playwright), a jsdom whose root holds no lockfile and jsdom under a module are refused by the
 export's `jsEnv` and `moduleKind`, a module initializer or an input of the build's own in the test link by the
 export's refusals. The test link's module split and ES features shape the linker's files and syntax alone:
-teq's link is one file of ES2015 whatever they say. A Mill build's Scala.js projects are not run yet: naming
+teq's link is one file of ES2015 whatever they say. sbt-scalajs's `Test / jsEnvInput` is the project's own
+`jsEnvInput` followed by the link, which teq supplies itself: the inputs a build adds at the project's level are
+named in the refusal, and a definition of `Test / jsEnvInput` of the build's own by where it stands, since only
+linking would give its inputs. A Mill build's Scala.js projects are not run yet: naming
 one is refused, naming its link's module kind and JavaScript environment, and a run of every project names
 each such project left out and exits 2.
 

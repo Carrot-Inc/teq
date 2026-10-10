@@ -17,6 +17,23 @@ object TestJs {
   val JSDOMNodeJSEnv = "org.scalajs.jsenv.jsdomnodejs.JSDOMNodeJSEnv"
   private val Lockfiles = Seq("package-lock.json", "npm-shrinkwrap.json", "yarn.lock", "pnpm-lock.yaml")
 
+  /** The refusals of what sbt-scalajs loads before the test link besides the link itself: its
+    * `Test / jsEnvInput` is the project's own `jsEnvInput` (the Zero configuration's, `Nil` unless
+    * the build adds to it) followed by the link's main module, which teq's run supplies itself.
+    * The inputs the build adds at the project's level (`project`, described) and its own
+    * definitions of `Test / jsEnvInput` beside sbt-scalajs's two (`test`, where they stand), whose
+    * inputs only linking would tell, load before the tests what teq's run does not. */
+  def inputRefusals(project: Seq[String], test: Seq[String]): Seq[String] = {
+    val own = if (project.isEmpty) Nil else Seq(s"jsEnvInput loads ${project.mkString(", ")} before the test link, which teq's run does not")
+    own ++ test.map(at => s"Test / jsEnvInput is set at $at beside sbt-scalajs's input of the link: what it adds loads before the test link, which teq's run does not")
+  }
+
+  /** Whether a setting stands in sbt-scalajs's own `ScalaJSPluginInternal.scala`, whose two
+    * definitions of `Test / jsEnvInput` are the link's: sbt 2 gives the position's file by its name,
+    * sbt 1 after the definition's owner
+    * (`(org.scalajs.sbtplugin.ScalaJSPluginInternal.scalaJSConfigSettings) ScalaJSPluginInternal.scala`). */
+  def fromScalaJS(path: String): Boolean = path.endsWith("ScalaJSPluginInternal.scala")
+
   /** The fields of a link of the module kind under `env` (`Test / jsEnv`), the refusals found so far
     * added to: `jsEnv` as `TeqScalaJSPlugin.jsEnvJson` records any environment, and what teq's run
     * of a `NodeJSEnv` or a `JSDOMNodeJSEnv` takes besides, read from its field `config`

@@ -47,4 +47,13 @@ class TestJsSuite extends munit.FunSuite {
     // No lockfile at the root: none recorded, which teq test refuses.
     assertEquals(envOf(TestJs.of("NoModule", env, root(), Nil)).get("lockfile"), None)
   }
+
+  test("the inputs a build adds before the test link are refusals, sbt-scalajs's input of the link none") {
+    assertEquals(TestJs.inputRefusals(Nil, Nil), Nil)
+    assert(TestJs.fromScalaJS("ScalaJSPluginInternal.scala"))
+    assert(TestJs.fromScalaJS("(org.scalajs.sbtplugin.ScalaJSPluginInternal.scalaJSConfigSettings) ScalaJSPluginInternal.scala"))
+    assert(!TestJs.fromScalaJS("/work/build.sbt"))
+    assertEquals(TestJs.inputRefusals(Seq("the script setup.js"), Nil), Seq("jsEnvInput loads the script setup.js before the test link, which teq's run does not"))
+    assertEquals(TestJs.inputRefusals(Nil, Seq("build.sbt:12")), Seq("Test / jsEnvInput is set at build.sbt:12 beside sbt-scalajs's input of the link: what it adds loads before the test link, which teq's run does not"))
+  }
 }
