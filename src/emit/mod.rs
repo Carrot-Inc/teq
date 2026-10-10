@@ -1184,6 +1184,7 @@ impl<'a> Emitter<'a> {
     /// emitter wrote before it.
     fn begin_item(&mut self) {
         self.tmp_counter = 0;
+        self.never_null_locals.clear();
         self.scope_names.clear();
         for s in self.named_locals.drain(..) {
             self.sym_names[s.idx()] = None;
