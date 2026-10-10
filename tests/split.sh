@@ -48,6 +48,8 @@ for src in tests/cases/*.scala tests/cases/*/ tests/interop/*.scala tests/intero
   expected="$suite/$name.expected"
   [ "$src" = "$STUB" ] && continue
   [ -f "$expected" ] || continue
+  # A departure the lean targets keep has their output apart (tests/run.sh).
+  [ -f "tests/lean-expected/$name.expected" ] && expected="tests/lean-expected/$name.expected"
   # A program of the JVM's platform (files, the process) has no JavaScript run (tests/run.sh).
   grep -q -h '^//> using platform jvm' "$src" "$src"/*.scala 2> /dev/null && continue
   # The interop programs are written against the stub; a case takes the std's Scala.js layer.
