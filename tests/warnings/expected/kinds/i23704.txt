@@ -1,0 +1,5 @@
+9:9:8 private variable was mutated but not read
+16:15:5 private variable was mutated but not read
+26:9:8 local variable was mutated but not read
+33:9:8 private variable was mutated but not read
+39:15:5 unused private member

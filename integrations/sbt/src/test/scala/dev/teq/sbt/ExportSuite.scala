@@ -268,16 +268,25 @@ class ExportSuite extends munit.FunSuite:
       Export.Repository("example-artifacts-releases-2", "https://other.example.io/maven-releases/", Some("other.example.io")),
     ))
 
-  test("scalac's -Wunused kinds that report unused imports map to --wunused imports, the others are ignored"):
+  test("scalac's -Wunused kinds map to --wunused with every kind, the warning options to teq's"):
     def flags(options: String*) = TeqPlugin.ScalacOptions(options).flags(jvm = false)
     def ignored(options: String*) = TeqPlugin.ScalacOptions(options).ignored
+    assertEquals(flags("-Wunused:imports"), Seq("--wunused", "imports"))
+    assertEquals(flags("-Wunused:privates,imports", "-Wunused:locals"), Seq("--wunused", "privates,imports,locals"))
+    assertEquals(flags("-Wunused"), Seq("--wunused", "all"))
+    assertEquals(flags("-Wall"), Seq("--wunused", "all", "--wtostring-interpolated"))
     for on <- Seq(Seq("-Wunused:imports"), Seq("-Wunused:all"), Seq("-Wunused"), Seq("-Wunused:privates,imports"), Seq("-Wunused:linted"), Seq("-Wall")) do
-      assertEquals(flags(on*), Seq("--wunused", "imports"), on)
-    assertEquals(flags("-Wunused:privates"), Nil)
-    assertEquals(flags("-Wunused:all,-imports"), Nil)
-    assertEquals(ignored("-Wunused:imports"), Nil)
-    assertEquals(ignored("-Wunused:privates,imports,locals"), Seq("-Wunused:privates,locals"))
+      assert(TeqPlugin.ScalacOptions(on).wunusedImports, on)
+    assert(!TeqPlugin.ScalacOptions(Seq("-Wunused:privates")).wunusedImports)
+    assertEquals(ignored("-Wunused:privates,imports,locals"), Nil)
+    assertEquals(ignored("-Wall"), Seq("-Wall"))
     assertEquals(flags("-Werror", "-Wunused:imports"), Seq("--werror", "--wunused", "imports"))
+    assertEquals(
+      flags("-deprecation", "-feature", "-Wtostring-interpolated", "-Wconf:id=E198:s", "-Wconf:cat=deprecation:e,any:w"),
+      Seq("--deprecation", "--feature", "--wtostring-interpolated", "--wconf", "id=E198:s", "--wconf", "cat=deprecation:e,any:w"),
+    )
+    assertEquals(flags("-language:implicitConversions,strictEquality"), Seq("--strict-equality", "--language", "implicitConversions"))
+    assertEquals(ignored("-deprecation", "-feature", "-Wconf:any:s", "-language:implicitConversions"), Nil)
 
   test("dynamic versions"):
     for version <- Seq("1.0.+", "latest.release", "[1.0,2.0)", "]1.0,)", "(,2.0]") do assert(Export.isDynamic(version), version)

@@ -1,0 +1,13 @@
+i15503d: teq's parser rejects a `case` clause starting a line inside a lambda's braces ("expected an expression, found 'case'"); the error withholds the report, as scalac's would.
+i15503f: teq's parser rejects a given with type parameters before a function type (`given [T] => (Type[T], FromExpr[T]) => FromExpr[Option[T]]`); the error withholds the report.
+i15503g: the using clause of an `extension` is one parameter per method in scalac, unused in `repeat` though `echo` uses it; teq marks the clause's parameter by its place, which the methods share.
+i15503i: teq's std has no scala.compiletime.asMatchable ("asMatchable is not a member of the package", an unused import here), and the implicit `Quotes` an import's qualifier `quotes` takes is not searched in an import's path, so the using parameter is unused.
+i16930: teq resolves no import of a val's type members in an object's body (`val outer: Outer; import outer.{Used, Unused}`: "outer is not an object or a package"); the error withholds the report.
+i19657: teq finds no given for `Schema[Foo]` through `import FooCodec.given` of a generic codec trait's object, and resolves no import from a val's nested object (`import c.N.*`); the errors withhold the report.
+i23200: teq does not resolve a setter called by its name (`x_=(27)`: "not found: x_="); the error withholds the report.
+i23347: teq reports a name both a wildcard import and a later one bring as ambiguous where scalac's precedence takes the earlier ("reference to A is ambiguous"); the error withholds the report.
+i23704: teq does not resolve a setter called by its name (`settable_=(42)`: "not found: settable_="); the error withholds the report.
+i24562: teq resolves no export from a val of a class (`val c = new C; export c.*`); the errors withhold the report.
+unused-can-equal: teq does not derive `CanEqual[Box[Int], Box[Long]]` from `derives CanEqual` under strictEquality (`Box(1) == Box(1L)`); the error withholds the report.
+unused-erased: teq rejects `erased` parameters ("'erased' is not part of the supported Scala subset"); the errors withhold the report.
+unused-params: teq rejects an `override` of a member its self type requires ("method call overrides nothing"); the error withholds the report.

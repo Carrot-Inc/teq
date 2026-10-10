@@ -44,6 +44,7 @@ mod tir;
 mod token;
 mod typer;
 mod types;
+mod warnings;
 mod watch;
 mod write;
 mod zip;
@@ -433,9 +434,20 @@ pub(crate) struct Options {
     pub program_args: Vec<String>,
     pub timings: bool,
     pub werror: bool,
-    /// `--wunused <kinds>`, scalac's `-Wunused`: `imports` (or `all`) reports the unused imports
-    /// as warnings (`typer::unused`); the other kinds are accepted and do nothing yet.
+    /// `--wunused <kinds>`, scalac's `-Wunused`, every one given: `imports` (or `all`, `linted`)
+    /// reports the unused imports as warnings (`typer::unused`), `privates`, `locals`,
+    /// `explicits`, `implicits`, `params` and `patvars` the unused definitions
+    /// (`typer::unused_defs`).
+    pub wunused: Vec<String>,
     pub wunused_imports: bool,
+    /// `--deprecation`, `--feature`, `--wtostring-interpolated` and `--wconf <rules>`: scalac's
+    /// `-deprecation`, `-feature`, `-Wtostring-interpolated` and `-Wconf` (`warnings.rs`).
+    pub deprecation: bool,
+    pub feature: bool,
+    pub wtostring_interpolated: bool,
+    pub wconf: Vec<String>,
+    /// `--language <features>`: scalac's `-language`, the features enabled for the program.
+    pub language: Vec<String>,
     pub dump_tokens: bool,
     /// `--dump-defs`: each file's definitions and the parser's recovery (`parser::dump`), in the
     /// place of the build.
@@ -487,30 +499,24 @@ pub(crate) struct Options {
     pub sourceroot: Option<String>,
 }
 
-/// Whether scalac's `-Wunused:<kinds>` choices report unused imports, read in order as scalac
-/// reads them (`-imports` takes it back); None for a kind scalac does not know.
-fn wunused_imports(kinds: &str) -> Option<bool> {
-    const KNOWN: [&str; 12] = ["nowarn", "all", "imports", "privates", "locals", "explicits", "implicits", "params", "linted", "strict-no-implicit-warn", "unsafe-warn-patvars", "patvars"];
-    let mut on = false;
-    for kind in kinds.split(',').map(str::trim).filter(|k| !k.is_empty()) {
-        let (negated, name) = match kind.strip_prefix('-') {
-            Some(n) => (true, n),
-            None => (false, kind),
-        };
-        if !KNOWN.contains(&name) {
-            return None;
+impl Options {
+    /// The reporting policy of the build's warnings (`warnings.rs`).
+    pub fn policy(&self) -> warnings::Policy {
+        warnings::Policy {
+            deprecation: self.deprecation,
+            feature: self.feature,
+            tostring_interpolated: self.wtostring_interpolated,
+            language: self.language.clone(),
+            unused: warnings::Unused::parse(self.wunused.iter().map(String::as_str)).unwrap_or_default(),
+            ..Default::default()
         }
-        match name {
-            "imports" | "all" | "linted" => on = !negated,
-            _ => {}
-        }
+        .with_wconf(self.wconf.clone())
     }
-    Some(on)
 }
 
 /// The usage of `teq compiler`: on stderr with exit 2 for a bad command line, on stdout with
 /// exit 0 for `--help`.
-const COMPILER_USAGE: &str = "usage: teq compiler <build|check|watch> <files or directories...> [--target js|jvm] [-o out.js | --split dir [--module-per-file pkg,...] [--hot] | --check] [--release] [--no-outline] [--exclude path]... [--own root]... [--all-mains] [--products dir] [--removed source]... [--sourceroot dir] [--classpath a.jar:b.jar] [--no-cache] [--std lean|scala-library] [--java-output-version N] [--main name] [--cacheable-state a.B]... [--no-known-caches] [--macro-state ordered|per-worker] [--dialect flags] [--strict-equality] [--kind-projector] [--werror] [--threads n] [--time] [--profile[=file.json]] [--size-report]\n\
+const COMPILER_USAGE: &str = "usage: teq compiler <build|check|watch> <files or directories...> [--target js|jvm] [-o out.js | --split dir [--module-per-file pkg,...] [--hot] | --check] [--release] [--no-outline] [--exclude path]... [--own root]... [--all-mains] [--products dir] [--removed source]... [--sourceroot dir] [--classpath a.jar:b.jar] [--no-cache] [--std lean|scala-library] [--java-output-version N] [--main name] [--cacheable-state a.B]... [--no-known-caches] [--macro-state ordered|per-worker] [--dialect flags] [--strict-equality] [--kind-projector] [--language features] [--werror] [--wunused kinds] [--deprecation] [--feature] [--wtostring-interpolated] [--wconf rules]... [--threads n] [--time] [--profile[=file.json]] [--size-report]\n\
          \n\
          @<file>  stands for the file's lines, one argument per line, anywhere before a `--` (what\n\
          \x20        follows one, on the line or from a file, is the program's as written; UTF-8,\n\
@@ -604,10 +610,23 @@ const COMPILER_USAGE: &str = "usage: teq compiler <build|check|watch> <files or 
          \x20         type lambda (`Either[String, *]` for `[X] =>> Either[String, X]`)\n\
          --max-inlines  scalac's -Xmax-inlines: how deep inline calls may nest (32 by default);\n\
          \x20         a `max-inlines = n` in the teq.toml sets it for a project\n\
+         --language  scalac's -language: the comma-separated features enabled for the program\n\
+         \x20         (`implicitConversions`, `strictEquality`)\n\
          --werror  fails the build on warnings\n\
-         --wunused scalac's -Wunused with its comma-separated kinds: `imports` or `all` warns on\n\
-         \x20         each import selector that no name resolves through (`unused import`); the\n\
-         \x20         other kinds are accepted and ignored for now\n\
+         --wunused scalac's -Wunused with its comma-separated kinds: `imports` (or `all`, `linted`)\n\
+         \x20         warns on each import selector that no name resolves through (`unused import`),\n\
+         \x20         `privates`, `locals`, `explicits`, `implicits` (or `params`) and `patvars` on\n\
+         \x20         each such definition nothing uses, `nowarn` on each @nowarn that silences nothing\n\
+         --deprecation  scalac's -deprecation: each use of a deprecated definition is a warning;\n\
+         \x20         without it the build warns once of how many there are\n\
+         --feature  scalac's -feature: each feature warning in full (an implicit conversion's\n\
+         \x20         definition without `import scala.language.implicitConversions`); without it\n\
+         \x20         the build warns once of how many there are\n\
+         --wtostring-interpolated  scalac's -Wtostring-interpolated: an `s`, `raw` or `f`\n\
+         \x20         interpolation of a value that is no string nor primitive warns\n\
+         --wconf   scalac's -Wconf: `<filter>&...:<action>` rules, comma-separated, repeatable,\n\
+         \x20         the rightmost that matches a warning deciding (filters any, msg=, id=,\n\
+         \x20         name=, cat=, src=, origin=; actions error, warning, info, verbose, silent)\n\
          --threads how many workers type the bodies (TEQ_THREADS too): by default one for a\n\
          \x20         program under 512 KiB of source or one whose largest top-level definition\n\
          \x20         holds more than half of it, else the least of the cores (at most\n\
@@ -657,7 +676,9 @@ const INTERP_USAGE: &str = "usage: teq interp <files or directories...> [options
          \x20         takes them\n\
          --threads n  how many workers type the bodies (TEQ_THREADS too); one by default for a\n\
          \x20         small program\n\
-         --werror     fails on warnings; --wunused <kinds> warns on unused imports (scalac's -Wunused)\n\
+         --werror     fails on warnings; --wunused <kinds>, --deprecation, --feature,\n\
+         \x20         --wtostring-interpolated, --wconf <rules>, --language <features> as teq\n\
+         \x20         compiler takes them\n\
          --time       reports where the time went, the run phase included\n\
          --profile[=file.json]  reports where the time of the type phase went, after the run, which\n\
          \x20         types the std's bodies the program reaches\n\
@@ -784,7 +805,13 @@ fn parse_file_options(command: &str, args: &[String]) -> Options {
         program_args: Vec::new(),
         timings: false,
         werror: false,
+        wunused: Vec::new(),
         wunused_imports: false,
+        deprecation: false,
+        feature: false,
+        wtostring_interpolated: false,
+        wconf: Vec::new(),
+        language: Vec::new(),
         dump_tokens: false,
         dump_defs: false,
         dialect: dialect::Dialect::default(),
@@ -936,8 +963,36 @@ fn parse_file_options(command: &str, args: &[String]) -> Options {
                 o.profile_json = Some(a["--profile=".len()..].to_string());
             }
             "--werror" => o.werror = true,
-            "--wunused" => match args.next().and_then(|kinds| wunused_imports(&kinds)) {
-                Some(on) => o.wunused_imports = on,
+            "--wunused" => match args.next() {
+                Some(kinds) => {
+                    o.wunused.push(kinds);
+                    match warnings::Unused::parse(o.wunused.iter().map(String::as_str)) {
+                        Ok(u) => o.wunused_imports = u.imports,
+                        Err(e) => {
+                            eprintln!("{}", e);
+                            std::process::exit(2);
+                        }
+                    }
+                }
+                None => usage_for(command),
+            },
+            "--deprecation" => o.deprecation = true,
+            "--feature" => o.feature = true,
+            "--wtostring-interpolated" => o.wtostring_interpolated = true,
+            "--wconf" => match args.next() {
+                Some(rules) => o.wconf.push(rules),
+                None => usage_for(command),
+            },
+            _ if a.starts_with("--wconf=") => o.wconf.push(a["--wconf=".len()..].to_string()),
+            "--language" => match args.next() {
+                Some(features) => {
+                    for f in features.split(',').map(str::trim).filter(|f| !f.is_empty()) {
+                        if f == "strictEquality" {
+                            flags.push(dialect::STRICT_EQUALITY.to_string());
+                        }
+                        o.language.push(f.to_string());
+                    }
+                }
                 None => usage_for(command),
             },
             "--threads" => match args.next().and_then(|n| n.parse::<usize>().ok()) {
@@ -1578,9 +1633,11 @@ fn compile() -> i32 {
     typer.macro_state_per_worker = opts.macro_state_per_worker;
     crate::measure::set_macro_state_per_worker(opts.macro_state_per_worker);
     typer.dialect = opts.dialect;
+    typer.diags.policy = std::sync::Arc::new(opts.policy());
     if opts.wunused_imports {
         typer.unused.mode = typer::unused::Mode::Warn;
     }
+    typer.unused.defs = typer::unused::DefKinds::of(&typer.diags.policy.unused);
     typer.inline.max_depth = opts.max_inlines;
     typer.inline.production = opts.release;
     typer.inline.es_modules = opts.split.is_some();
@@ -1631,8 +1688,8 @@ fn compile() -> i32 {
     }
     // The merge's check refused the merged program: nothing reads it.
     if typer.merge_failed {
-        eprint!("{}", typer.render_diags());
-        let n = typer.diags.presented_error_count();
+        let (shown, n, _) = typer.report_diags();
+        eprint!("{}", shown);
         eprintln!("{} error{} found", n, if n == 1 { "" } else { "s" });
         std::process::exit(1);
     }
@@ -1663,11 +1720,10 @@ fn compile() -> i32 {
     if opts.profile && !opts.interp && (opts.command == "check" || opts.classpath.is_empty()) {
         typer.on_thread(|w| print_profile(w, t_type - t_parse, opts.profile_json.as_deref()));
     }
-    if !typer.diags.items.is_empty() {
-        eprint!("{}", typer.render_diags());
-    }
-    if typer.diags.has_errors() || parse_errors > 0 {
-        let n = typer.diags.presented_error_count() + parse_errors;
+    let (shown, errors, warnings) = typer.report_diags();
+    eprint!("{}", shown);
+    if typer.diags.has_errors() || errors > 0 || parse_errors > 0 {
+        let n = errors + parse_errors;
         eprintln!("{} error{} found", n, if n == 1 { "" } else { "s" });
         save_jar_caches(&mut typer);
         // The overlays' measurement reads a build that fails, which the part without the
@@ -1678,8 +1734,8 @@ fn compile() -> i32 {
         answer_failure(&opts);
         std::process::exit(1);
     }
-    if opts.werror && typer.diags.warning_count() > 0 {
-        let n = typer.diags.warning_count();
+    if opts.werror && warnings > 0 {
+        let n = warnings;
         eprintln!("{} warning{} found, errors under --werror", n, if n == 1 { "" } else { "s" });
         save_jar_caches(&mut typer);
         answer_failure(&opts);
@@ -1765,7 +1821,7 @@ fn compile() -> i32 {
     // the program reaches them.
     if typer.diags.has_errors() {
         save_jar_caches(&mut typer);
-        eprint!("{}", typer.render_diags());
+        eprint!("{}", typer.report_new_diags().0);
         if opts.timings || typer.loaded.as_ref().is_some_and(|loaded| !loaded.bodies.misses.is_empty()) {
             eprintln!("{}", loaded_report(&typer).render());
         }
@@ -2722,9 +2778,9 @@ fn run_interp(opts: &Options, mut typer: typer::Worker, lines: usize, t: [Instan
     if opts.profile {
         print_profile(&mut typer, t[3] - t[2], opts.profile_json.as_deref());
     }
-    if !typer.diags.items.is_empty() {
-        eprint!("{}", typer.render_diags());
-    }
+    // What the run met past the report printed before it (a jar entry a lookup could not read,
+    // a std body's typing): each diagnostic is printed once.
+    eprint!("{}", typer.report_new_diags().0);
     // An error the run met (a jar entry a lookup could not read) fails the command.
     if code == 0 && typer.diags.has_errors() {
         code = 1;

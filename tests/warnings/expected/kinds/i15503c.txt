@@ -1,0 +1,10 @@
+9:23:1 unused private member
+10:17:1 unused private member
+17:23:1 unset private variable, consider using an immutable val instead
+18:17:1 unused private member
+22:17:1 unused private member
+27:17:3 unused private member
+39:32:2 unused private member
+44:32:1 unset private variable, consider using an immutable val instead
+76:24:6 unused private member
+78:20:7 unused private member

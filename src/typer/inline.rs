@@ -4202,7 +4202,7 @@ fn same_tag_or_numeric(x: LitVal, y: LitVal) -> bool {
     std::mem::discriminant(&x) == std::mem::discriminant(&y) || (numeric(x) && numeric(y))
 }
 
-fn fold_prim(op: PrimOp, x: LitVal, y: LitVal) -> Option<LitVal> {
+pub(super) fn fold_prim(op: PrimOp, x: LitVal, y: LitVal) -> Option<LitVal> {
     use LitVal::*;
     use PrimOp::*;
     let as_f64 = |v: LitVal| match v {

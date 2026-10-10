@@ -20,7 +20,7 @@ mod net;
 pub mod process;
 pub mod profile;
 pub mod quoted;
-mod regex;
+pub(crate) mod regex;
 pub mod registry;
 mod runtime;
 pub mod value;

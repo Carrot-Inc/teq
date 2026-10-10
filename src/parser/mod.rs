@@ -41,6 +41,9 @@ pub struct Parser<'a> {
     export_scratch: Vec<Import>,
     /// The `scala.language` imports of the clause parsed last.
     language_scratch: Vec<Import>,
+    /// The entries of `Ast::language_scopes` of the blocks and bodies being parsed, whose
+    /// scopes end with them.
+    language_open: Vec<usize>,
     /// Classes with a `derives` clause whose enclosing body is still being parsed.
     pending_derives: Vec<PendingDerives>,
     /// The `self =>` alias of the template body being parsed, EMPTY without one; a nested body
@@ -117,6 +120,7 @@ pub fn parse(text: &str, lexed: &LexResult, closed: &[u32], interner: &Interner,
         ty_scratch: Vec::new(),
         export_scratch: Vec::new(),
         language_scratch: Vec::new(),
+        language_open: Vec::new(),
         pending_derives: Vec::new(),
         package_blocks: Vec::new(),
         template_type: false,
@@ -994,20 +998,60 @@ impl<'a> Parser<'a> {
         let start = self.span();
         self.expect(Tok::KwImport);
         let mut imports = std::mem::take(&mut self.ast.imports);
-        self.parse_import_exprs(&mut imports);
+        self.parse_import_exprs(&mut imports, start.start);
         self.ast.imports = imports;
         if self.syntax.index {
             self.ast.import_ranges.push(start.to(self.prev_span()));
         }
         let language = std::mem::take(&mut self.language_scratch);
+        self.open_language_scopes(&language, start.start, false);
         self.ast.language_imports.extend(language);
+    }
+
+    /// The scopes of the features the `scala.language` imports `language` name, from `start`:
+    /// to the end of the file, or `local`ly to the end of the block or body (`close_language`).
+    pub(super) fn open_language_scopes(&mut self, language: &[Import], start: u32, local: bool) {
+        for imp in language {
+            let path = match imp.path.split_first() {
+                Some((&names::SCALA, rest)) => rest,
+                _ => &imp.path[..],
+            };
+            if path != [names::LANGUAGE] {
+                continue;
+            }
+            // A feature an explicit selector names is enabled, one it excludes (`n as _`) is not,
+            // and what the clause's wildcard brings is neither (`ImportInfo.mentionsFeature`): a
+            // feature not named is looked up in the clauses around.
+            let (name, enables) = match imp.sel {
+                ImportSel::Name(n, Some(names::WILDCARD)) => (n, false),
+                ImportSel::Name(n, _) => (n, true),
+                ImportSel::Wildcard | ImportSel::Given => continue,
+            };
+            if local {
+                self.language_open.push(self.ast.language_scopes.len());
+            }
+            self.ast.language_scopes.push((name, enables, Span::new(start, u32::MAX)));
+        }
+    }
+
+    /// The block or body whose statements began at `mark` of `language_open` ends: the scopes
+    /// of its language imports end with it.
+    pub(super) fn close_language(&mut self, mark: usize) {
+        if self.language_open.len() == mark {
+            return;
+        }
+        let end = self.prev_span().end;
+        for i in self.language_open.drain(mark..) {
+            self.ast.language_scopes[i].2.end = end;
+        }
     }
 
     /// The clauses are collected until the enclosing body ends, see `export_list`.
     pub(super) fn parse_export(&mut self) {
+        let keyword = self.span().start;
         self.expect(Tok::KwExport);
         let mut exports = std::mem::take(&mut self.export_scratch);
-        self.parse_import_exprs(&mut exports);
+        self.parse_import_exprs(&mut exports, keyword);
         self.export_scratch = exports;
     }
 
@@ -1017,14 +1061,20 @@ impl<'a> Parser<'a> {
         ListRef { start, len: self.ast.exports.len() as u32 - start }
     }
 
-    /// The part shared by `import` and `export`: one entry per selector is appended to `out`.
-    /// `import scala.language.*` and its selectors switch on features of scalac and are dropped.
-    fn parse_import_exprs(&mut self, out: &mut Vec<Import>) {
+    /// The part shared by `import` and `export`, after the keyword at `keyword`: one entry per
+    /// selector is appended to `out`. `import scala.language.*` and its selectors switch on
+    /// features of scalac and are dropped.
+    fn parse_import_exprs(&mut self, out: &mut Vec<Import>, keyword: u32) {
         let mark = out.len();
+        let mut first = true;
         loop {
             let start = self.span();
+            let clause = out.len();
+            let tree_start = if first { keyword } else { start.start };
+            first = false;
             let mut path = Vec::new();
-            let mut path_spans = Vec::new();
+            let mut path_spans: Vec<Span> = Vec::new();
+            let qual_end = |path_spans: &[Span]| path_spans.last().map_or(start.start, |s| s.end);
             loop {
                 if self.at(Tok::LBrace) {
                     self.bump();
@@ -1036,12 +1086,19 @@ impl<'a> Parser<'a> {
                         let span = start.to(self.prev_span());
                         let selector_span = from.to(self.prev_span());
                         self.note_import(sel_start, &path_spans, span);
-                        out.push(Import { path: path.clone(), sel, span, selector_span, bound });
+                        let end = selector_span.end;
+                        out.push(Import { path: path.clone(), sel, span, selector_span, bound, tree_start, qual_end: qual_end(&path_spans), clause_end: end });
                         if !self.list_continues(Tok::RBrace, &mut cut) {
                             break;
                         }
                     }
-                    self.expect(Tok::RBrace);
+                    // The clause ends past its brace.
+                    if self.expect(Tok::RBrace) {
+                        let end = self.prev_span().end;
+                        for imp in &mut out[clause..] {
+                            imp.clause_end = end;
+                        }
+                    }
                     break;
                 }
                 if self.at_op(names::STAR) || self.at(Tok::Underscore) || self.at(Tok::KwGiven) {
@@ -1051,7 +1108,8 @@ impl<'a> Parser<'a> {
                     let span = start.to(self.prev_span());
                     let selector_span = from.to(self.prev_span());
                     self.note_import(sel_start, &path_spans, span);
-                    out.push(Import { path, sel, span, selector_span, bound });
+                    let qual_end = qual_end(&path_spans);
+                    out.push(Import { path, sel, span, selector_span, bound, tree_start, qual_end, clause_end: selector_span.end });
                     break;
                 }
                 // `import a.b.` cut after its last `.` imports what `a.b` holds, which scalac's
@@ -1063,7 +1121,8 @@ impl<'a> Parser<'a> {
                     self.error_at(at, format!("expected an identifier, found {}", found));
                     let span = start.to(self.prev_span());
                     let selector_span = self.prev_span();
-                    out.push(Import { path, sel: ImportSel::Wildcard, span, selector_span, bound: None });
+                    let qual_end = qual_end(&path_spans);
+                    out.push(Import { path, sel: ImportSel::Wildcard, span, selector_span, bound: None, tree_start, qual_end, clause_end: selector_span.end });
                     break;
                 }
                 let (n, name_span) = self.expect_ident();
@@ -1090,7 +1149,8 @@ impl<'a> Parser<'a> {
                 let span = start.to(self.prev_span());
                 let selector_span = name_span.to(self.prev_span());
                 self.note_import(sel_start, &path_spans, span);
-                out.push(Import { path, sel: ImportSel::Name(n, rename), span, selector_span, bound: None });
+                let qual_end = qual_end(&path_spans);
+                out.push(Import { path, sel: ImportSel::Name(n, rename), span, selector_span, bound: None, tree_start, qual_end, clause_end: selector_span.end });
                 break;
             }
             if !self.eat(Tok::Comma) {
@@ -1105,9 +1165,10 @@ impl<'a> Parser<'a> {
                 kept += 1;
                 continue;
             }
-            if matches!(out[i].sel, ImportSel::Name(names::STRICT_EQUALITY, _)) {
+            // A feature excluded (`strictEquality as _`) is not enabled.
+            if matches!(out[i].sel, ImportSel::Name(names::STRICT_EQUALITY, r) if r != Some(names::WILDCARD)) {
                 self.ast.strict_equality = true;
-            } else if matches!(out[i].sel, ImportSel::Name(names::FUTURE, _)) {
+            } else if matches!(out[i].sel, ImportSel::Name(names::FUTURE, r) if r != Some(names::WILDCARD)) {
                 self.ast.source_future = true;
             }
             self.language_scratch.push(out[i].clone());

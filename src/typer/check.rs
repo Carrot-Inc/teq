@@ -595,7 +595,7 @@ impl<'a> Worker<'a> {
 
     /// The member of class `b` a call of `member` through `super` may run: of an overloaded
     /// name, the alternative with the member's parameters; none private or abstract.
-    fn concrete_super_member(&mut self, b: ClassId, member: SymId) -> Option<SymId> {
+    pub(super) fn concrete_super_member(&mut self, b: ClassId, member: SymId) -> Option<SymId> {
         let name = self.syms.sym(member).name;
         let m = *self.syms.class(b).members.get(&name)?;
         let alts: Option<Vec<SymId>> = self.syms.alternatives(m).map(|alts| alts.to_vec());
@@ -908,7 +908,7 @@ impl<'a> Worker<'a> {
     }
 
     /// `def main(args: Array[String]): Unit`, the entry point of the JVM.
-    fn is_java_main(&mut self, sym: SymId) -> bool {
+    pub(super) fn is_java_main(&mut self, sym: SymId) -> bool {
         if self.syms.sym(sym).kind != SymKind::Def || self.syms.sym(sym).is_extension {
             return false;
         }
@@ -947,6 +947,7 @@ impl<'a> Worker<'a> {
 
     pub(super) fn check_top_def(&mut self, file: FileId, owner: Owner, id: DefId) {
         self.restrict_def(file, id);
+        self.check_def_warnings(file, id);
         if self.unused.on() {
             self.mark_annotations(file, id);
             self.mark_module_prefixes(file, id, owner, true);
@@ -991,6 +992,7 @@ impl<'a> Worker<'a> {
                     }
                     if self.syms.sym(sym).is_main {
                         self.enter_main_method(sym);
+                        self.credit_main_proxy(sym);
                     } else if self.syms.sym(sym).name == names::MAIN && matches!(owner, Owner::Package(_)) && self.is_java_main(sym) {
                         // A package's own `main(args: Array[String])`, which `java` runs through
                         // the static forwarder of its file's `<stem>$package`, as scalac finds it.
@@ -2183,7 +2185,7 @@ impl<'a> Worker<'a> {
         stmts.push(TStmt::Expr(call));
         let l = self.prog.stmts.push_slice(&stmts);
         let body = self.prog.add(TExpr::Block(l, after));
-        let fid = self.prog.add_fun(TFun { sym, params, defaults, body: Some(body) });
+        let fid = self.prog.add_fun(TFun { sym, params, defaults, body: Some(body), body_unconsuming: false });
         self.fun_of_sym.insert(sym, fid);
         tclass.ctors.push(fid);
     }
@@ -2281,9 +2283,9 @@ impl<'a> Worker<'a> {
         // expansion's, and the search's state is the demanding body's.
         let retained = self.is_inline_callee(sym) as u32;
         let ty = if self.made_in_block(self.syms.sym(sym).owner) {
-            self.as_own_unit(|t| t.type_retained(retained, |t| t.type_body_in(sym, sig, expected, true)))
+            self.as_own_unit(|t| t.type_retained(retained, |t| t.type_body_in(sym, sig, expected)))
         } else {
-            self.as_own_unit(|t| t.outside_search(|t| t.outside_inline(|t| t.outside_quotes(|t| t.type_retained(retained, |t| t.type_body_in(sym, sig, expected, false))))))
+            self.as_own_unit(|t| t.outside_search(|t| t.outside_inline(|t| t.outside_quotes(|t| t.type_retained(retained, |t| t.type_body_in(sym, sig, expected))))))
         };
         self.phase_end(p);
         // The body's typing is kept whatever demanded it (an attempt abandoned after it inferred
@@ -2410,58 +2412,23 @@ impl<'a> Worker<'a> {
         self.def_syms.get(s.file.0 as usize, &previous).copied()
     }
 
-    /// The `@nowarn` annotations on the classes enclosing `sym`, which suppress its body's
-    /// warnings wherever the body is typed from: its class's walk, or another body's demand.
-    pub(super) fn enclosing_nowarn(&self, sym: SymId) -> u32 {
-        let mut n = 0;
-        let mut owner = self.syms.sym(sym).owner;
-        while let Owner::Class(c) = owner {
-            let info = self.syms.class(c);
-            if let Some(d) = info.def {
-                n += self.ast(info.file).def(d).annots.iter().any(|a| a.name == names::NOWARN) as u32;
-            }
-            owner = info.owner;
-        }
-        n
-    }
-
-    /// The `@nowarn` annotations on `c` and the classes enclosing it.
-    pub(super) fn class_nowarn(&self, c: ClassId) -> u32 {
-        let mut n = 0;
-        let mut at = Some(c);
-        while let Some(k) = at {
-            let info = self.syms.class(k);
-            if let Some(d) = info.def {
-                n += self.ast(info.file).def(d).annots.iter().any(|a| a.name == names::NOWARN) as u32;
-            }
-            at = match info.owner {
-                Owner::Class(o) => Some(o),
-                _ => None,
-            };
-        }
-        n
-    }
-
-    /// `in_block` is `made_in_block` of the owner: the context of the body typing the block
-    /// stands for the lexical one then (a local class asked for before its walk from a body
-    /// outside its scope reads that body's).
-    fn type_body_in(&mut self, sym: SymId, sig: &MethodSig, expected: Option<TypeId>, in_block: bool) -> TypeId {
+    fn type_body_in(&mut self, sym: SymId, sig: &MethodSig, expected: Option<TypeId>) -> TypeId {
         if self.deps.is_none() {
-            return self.type_body_in_now(sym, sig, expected, in_block);
+            return self.type_body_in_now(sym, sig, expected);
         }
-        self.type_body_recorded(sym, sig, expected, in_block)
+        self.type_body_recorded(sym, sig, expected)
     }
 
     #[cold]
     #[inline(never)]
-    fn type_body_recorded(&mut self, sym: SymId, sig: &MethodSig, expected: Option<TypeId>, in_block: bool) -> TypeId {
+    fn type_body_recorded(&mut self, sym: SymId, sig: &MethodSig, expected: Option<TypeId>) -> TypeId {
         let outer = self.deps_enter_sym(sym, super::deps::Comp::Body(sym));
-        let ty = self.type_body_in_now(sym, sig, expected, in_block);
+        let ty = self.type_body_in_now(sym, sig, expected);
         self.deps_leave(outer);
         ty
     }
 
-    fn type_body_in_now(&mut self, sym: SymId, sig: &MethodSig, expected: Option<TypeId>, in_block: bool) -> TypeId {
+    fn type_body_in_now(&mut self, sym: SymId, sig: &MethodSig, expected: Option<TypeId>) -> TypeId {
         let (file, def_id) = {
             let s = self.syms.sym(sym);
             (s.file, s.def)
@@ -2497,9 +2464,6 @@ impl<'a> Worker<'a> {
         };
         let outer_return = std::mem::replace(&mut self.return_to, returns_to);
         let outer_returns = std::mem::take(&mut self.returns);
-        let own_nowarn = def.annots.iter().any(|a| a.name == names::NOWARN) as u32;
-        let outer_nowarn = self.nowarn;
-        self.nowarn = if in_block { outer_nowarn } else { self.enclosing_nowarn(sym) } + own_nowarn;
         let (body, default_exprs): (Option<ast::ExprId>, Vec<Option<ast::ExprId>>) = match &def.kind {
             DefKind::Val { rhs, .. } => (*rhs, Vec::new()),
             DefKind::Fun(f) => (
@@ -2519,17 +2483,25 @@ impl<'a> Worker<'a> {
         // The interpreter runs the body of a templated def where it has no builtin for it.
         let has_intrinsic = (self.syms.sym(sym).intrinsic.is_some() || self.body_is_native(sym)) && !((self.interp || self.for_interpreter) && body.is_some());
         let mut result_ty = expected.unwrap_or(ERROR);
+        // The body's own type, before its adaptation to the declared result (`rhs.tpe`).
+        let mut body_ty = None;
         let typed = match body {
             Some(b) if !has_intrinsic => Some(match expected {
                 Some(t) if t == self.b.t_unit => {
                     let (e, ty) = self.type_expr(b, None);
                     self.warn_discarded(b, e, ty);
+                    body_ty = Some(ty);
                     e
                 }
                 Some(t) if self.declared_type_inferred(&def.kind) => self.type_inferred_val(b, t).0,
-                Some(t) => self.check_expr(b, t),
+                Some(t) => {
+                    let (e, own) = self.check_expr_own(b, t);
+                    body_ty = Some(own);
+                    e
+                }
                 None => {
                     let (e, t) = self.type_expr(b, None);
+                    body_ty = Some(t);
                     let (mut e, t) = self.apply_inferred_context(b, e, t);
                     // A `final val` of an operation over constants is the constant, as scalac's
                     // `ConstFold` makes it (`final val k = 0 + 0`, an ascribed operand too: its
@@ -2570,10 +2542,10 @@ impl<'a> Worker<'a> {
         if let (false, Some(body)) = (returns.is_empty(), typed) {
             self.warn_nonlocal_returns(body, &returns);
         }
-        self.nowarn = outer_nowarn;
         if is_method {
             if !has_intrinsic {
-                let f = self.prog.add_fun(TFun { sym, params, defaults, body: typed });
+                let body_unconsuming = self.unused.defs_on() && body_ty.is_some_and(|t| t == NOTHING || self.fold_type(t).is_some());
+                let f = self.prog.add_fun(TFun { sym, params, defaults, body: typed, body_unconsuming });
                 self.fun_of_sym.insert(sym, f);
                 if def.annots.iter().any(|a| a.name == names::TAILREC) {
                     // The check reads the calls the body's plain inline calls expand to, as
@@ -2797,8 +2769,6 @@ impl<'a> Worker<'a> {
             DefKind::Given(g) => (&g.body, &g.clauses, &[]),
             _ => (&[], &[], &[]),
         };
-        let nowarn = def.annots.iter().any(|a| a.name == names::NOWARN) as u32;
-        self.nowarn += nowarn;
         if kind == ClassKind::EnumCase && self.unused.on() {
             self.mark_enum_case_parents(c, file, parents);
         }
@@ -2924,7 +2894,6 @@ impl<'a> Worker<'a> {
         } else {
             self.mark_accessors(c);
         }
-        self.nowarn -= nowarn;
         if self.capturing() && self.syms.class(c).owner != Owner::Local {
             self.capture_class_annotations(c, file, def_id);
         }
@@ -3527,6 +3496,8 @@ impl<'a> Worker<'a> {
 
     fn check_member(&mut self, file: FileId, d: DefId, tclass: &mut TClass) {
         self.restrict_def(file, d);
+        self.check_def_warnings(file, d);
+        self.check_deprecated_overrides(file, d, tclass.id);
         if self.unused.on() {
             self.mark_annotations(file, d);
             self.mark_module_prefixes(file, d, Owner::Class(tclass.id), false);

@@ -2,6 +2,7 @@
 // are adapted: a literal widens or converts into the bound the expected type gave a type
 // variable, an inner application keeps the variables of the enclosing one open, and a union
 // selects members through its join.
+import scala.language.implicitConversions
 class Money(val cents: Int):
   override def toString = s"Money($cents)"
 object Money:

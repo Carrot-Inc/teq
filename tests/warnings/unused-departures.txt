@@ -3,3 +3,4 @@ i16930: teq resolves no import of a val's type members in an object's body (`val
 i19657: teq finds no given for `Schema[Foo]` through `import FooCodec.given` of a generic codec trait's object, and resolves no import from a val's nested object (`import c.N.*`); the errors withhold the report.
 i24562: teq resolves no export from a val of a class (`val c = new C; export c.*`); the errors withhold the report.
 unused-can-equal: teq does not derive `CanEqual[Box[Int], Box[Long]]` from `derives CanEqual` under strictEquality (`Box(1) == Box(1L)`); the error withholds the report.
+probes/macro_expansion: scalac resolves the references of a macro's or an inline method's expansion through the call site's scopes (CheckUnused's `resolveUsage`), the expansion's source the macro's file, so a definition of the call site's file counts as another unit's (`OtherUnit`) and credits a wildcard import of its package; teq marks nothing in an expansion.

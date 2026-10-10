@@ -1,0 +1,2 @@
+exit 0
+warning 15:9 unused explicit parameter

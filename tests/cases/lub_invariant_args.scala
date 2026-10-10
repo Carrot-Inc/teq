@@ -1,6 +1,7 @@
 // The least upper bound of applications of one class that differ in an invariant argument:
 // dotc keeps their union, and selecting a member joins it to the class over a bounded wildcard
 // (`Fr[Op, ? >: Named <: Elem]`, `lubArgs`), whose argument is read at its upper bound.
+import scala.language.implicitConversions
 sealed abstract class Fr[S[_], A] extends Product with Serializable:
   def map[B](f: A => B): Fr[S, B] = Fr.Pure(f(this.asInstanceOf[Fr.Pure[S, A]].a))
   def get: A = this.asInstanceOf[Fr.Pure[S, A]].a

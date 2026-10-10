@@ -52,7 +52,7 @@ impl<'a> Worker<'a> {
         let t = ast.try_expr(index);
         if t.cases.is_empty() && t.handler.is_none() && t.finalizer.is_none() {
             let msg = "A try without catch or finally is equivalent to putting its body in a block; no exceptions are handled.";
-            self.warn(span, msg);
+            self.warn_as(span, msg, crate::source::Warning::id(crate::warnings::id::EMPTY_CATCH_AND_FINALLY_BLOCK));
         }
         let exp = self.branch_expected(expected);
         let guide = if exp.is_none() { Some(self.branch_guide(expected)) } else { None };
@@ -464,7 +464,7 @@ impl<'a> Worker<'a> {
             // the test passes any value, which scalac warns of (E092).
             if self.abstract_input(taken) && !self.checks_inline_definition() && self.inline.depth == 0 && !self.input_unchecked(unapply) {
                 let msg = format!("the type test for {} cannot be checked at runtime because it refers to an abstract type member or type parameter", self.show(taken));
-                self.warn(span, msg);
+                self.warn_as(span, msg, crate::source::Warning::unchecked());
             }
         }
         let (narrowed, test) = if conforms || tag.is_some() { (if conforms { sty } else { taken }, None) } else { (taken, Some(self.test_for(taken, sty, span, true))) };

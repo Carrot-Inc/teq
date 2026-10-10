@@ -37,6 +37,12 @@ teq compiler check src/                    # type check only
       --max-inlines n             # scalac's -Xmax-inlines (32 by default)
       --dialect no-overloading,.. # turn costly constructs off, or `strict` for all (docs/SPEED.md)
       --werror                    # warnings fail the build
+      --wunused imports,privates  # scalac's -Wunused, with its kinds
+      --deprecation, --feature    # scalac's -deprecation and -feature: each warning in full; without them
+                                  # a summary, which --werror counts too
+      --wtostring-interpolated    # scalac's -Wtostring-interpolated
+      --wconf 'id=E198:s,any:e'   # scalac's -Wconf: filters and actions, the rightmost rule winning
+      --language implicitConversions  # scalac's -language
       --threads n                 # workers typing the bodies; by default one under 512 KiB of source,
                                   # else the cores, at most 8 (docs/TARGETS.md, "The typer's workers")
       --time                      # print per-phase timings

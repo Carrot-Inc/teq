@@ -1939,7 +1939,7 @@ impl<'a> Worker<'a> {
         if let Some(why) = why {
             let shown = self.show(sty);
             let file = self.env.file;
-            self.diags.late_error(file, span, format!("unreachable case: type {} {}", shown, why));
+            self.diags.late_error_of(file, span, format!("unreachable case: type {} {}", shown, why), crate::source::PHASE_ERASURE);
         }
     }
 
@@ -2170,7 +2170,7 @@ impl<'a> Worker<'a> {
                         "the type test for {} cannot be checked at runtime because it refers to a type parameter",
                         self.show(t)
                     );
-                    self.warn(span, msg);
+                    self.warn_as(span, msg, crate::source::Warning::unchecked());
                 }
                 let hi = match self.types.get(t) {
                     Type::Param(p) => self.syms.tparam(p).upper,
@@ -2202,7 +2202,7 @@ impl<'a> Worker<'a> {
                         self.show(t),
                         self.show(sty)
                     );
-                    self.warn(span, msg);
+                    self.warn_as(span, msg, crate::source::Warning::unchecked());
                 }
                 let boxed = self.box_test(c);
                 let b = &self.b;
@@ -2257,7 +2257,7 @@ impl<'a> Worker<'a> {
                                     "the type test for {} cannot be checked at runtime because it refers to an opaque type",
                                     self.show(t)
                                 );
-                                self.warn(span, msg);
+                                self.warn_as(span, msg, crate::source::Warning::unchecked());
                             }
                             match self.opaque_erasure(t) {
                                 Some(u) => return self.test_for(u, sty, span, true),
@@ -2286,7 +2286,7 @@ impl<'a> Worker<'a> {
                         "the type test for {} cannot be checked at runtime because it refers to an abstract type member",
                         self.show(t)
                     );
-                    self.warn(span, msg);
+                    self.warn_as(span, msg, crate::source::Warning::unchecked());
                 }
                 let (_, hi) = self.member_bounds(t);
                 return self.bound_test(t, hi, sty, span);

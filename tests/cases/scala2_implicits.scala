@@ -1,3 +1,4 @@
+import scala.language.implicitConversions
 trait Show[A] { def show(a: A): String }
 object Show {
   implicit val showInt: Show[Int] = new Show[Int] { def show(a: Int) = s"Int($a)" }

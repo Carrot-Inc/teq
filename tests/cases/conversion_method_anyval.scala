@@ -1,5 +1,6 @@
 // A conversion method to a builtin or a value class is an implicit function value into `AnyVal`,
 // which their base types leave out (scalac: "3", "7").
+import scala.language.implicitConversions
 class W(val n: Int) extends AnyVal
 implicit def c(x: String): Int = x.length
 implicit def w(x: Long): W = W(x.toInt)

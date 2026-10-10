@@ -481,6 +481,7 @@ impl<'a> Worker<'a> {
                         tparams: Vec::new(),
                         rhs: ERROR,
                         bounds: abstract_member.then_some((NOTHING, ANY)),
+                        deprecated: def.mods & crate::ast::mods::DEPRECATED != 0,
                     });
                     self.def_aliases.insert(file.0 as usize, id, aid);
                     let duplicate = match owner {
@@ -811,7 +812,7 @@ impl<'a> Worker<'a> {
         self.record_self_alias(cid);
         self.enter_class_annots(file, def, cid);
         let ty = self.types.class(cid, &[]);
-        let m = def.mods & (mods::PRIVATE | mods::PROTECTED | mods::IMPLICIT | mods::QUALIFIED) | mods::FINAL | mods::LAZY;
+        let m = def.mods & (mods::PRIVATE | mods::PROTECTED | mods::IMPLICIT | mods::QUALIFIED | mods::DEPRECATED) | mods::FINAL | mods::LAZY;
         let sym = self.syms.new_sym(def.name, SymKind::Val, m, owner, file, None, def.span);
         {
             let mut s = self.syms.sym_mut(sym);

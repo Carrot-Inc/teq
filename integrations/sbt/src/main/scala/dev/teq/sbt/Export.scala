@@ -545,7 +545,13 @@ private[sbt] object Export:
           "werror" -> Json.Bool(o.werror),
           "ignoredScalacOptions" -> strings(o.ignored),
         ) ++ o.maxInlines.map(n => "maxInlines" -> num(n)) ++ o.javaOutputVersion.map(n => "javaOutputVersion" -> num(n)) ++
-          Option.when(o.wunusedImports)("wunusedImports" -> Json.Bool(true))
+          Option.when(o.wunusedImports)("wunusedImports" -> Json.Bool(true)) ++
+          Option.when(o.wunused.nonEmpty)("wunused" -> strings(o.wunused)) ++
+          Option.when(o.deprecation)("deprecation" -> Json.Bool(true)) ++
+          Option.when(o.feature)("feature" -> Json.Bool(true)) ++
+          Option.when(o.wtostringInterpolated)("wtostringInterpolated" -> Json.Bool(true)) ++
+          Option.when(o.wconf.nonEmpty)("wconf" -> strings(o.wconf)) ++
+          Option.when(o.language.nonEmpty)("language" -> strings(o.language))
         (Json.Obj(fields), o.javaOutputVersion.filter(_ => !js))
       val (compileFlags, compileVersion) = flags(compile.scalacOptions)
       val (testFlags, testVersion) = flags(test.scalacOptions)

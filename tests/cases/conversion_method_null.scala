@@ -1,5 +1,6 @@
 // A conversion method to `Null` is an implicit function value into any reference type, as `Null`
 // conforms to them without explicit nulls (scalac: "null").
+import scala.language.implicitConversions
 implicit def c(x: Int): Null = null
 @main def run(): Unit =
   val f = summon[Int => String]

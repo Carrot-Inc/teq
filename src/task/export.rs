@@ -195,8 +195,18 @@ pub struct Flags {
     pub strict_equality: bool,
     pub kind_projector: bool,
     pub werror: bool,
-    /// `wunusedImports`, scalac's `-Wunused:imports` (or `all`): `--wunused imports`.
+    /// `wunusedImports`, scalac's `-Wunused:imports` (or `all`): `--wunused imports`, where an
+    /// export older than `wunused` gives it alone.
     pub wunused_imports: bool,
+    /// `wunused`, the kinds of scalac's `-Wunused` options: `--wunused <kinds>`.
+    pub wunused: Vec<String>,
+    /// `deprecation`, `feature`, `wtostringInterpolated`, `wconf` and `language`: scalac's
+    /// `-deprecation`, `-feature`, `-Wtostring-interpolated`, `-Wconf` and `-language`.
+    pub deprecation: bool,
+    pub feature: bool,
+    pub wtostring_interpolated: bool,
+    pub wconf: Vec<String>,
+    pub language: Vec<String>,
     pub java_output_version: Option<u32>,
 }
 
@@ -212,8 +222,21 @@ impl Flags {
                 args.push(flag.to_string());
             }
         }
-        if self.wunused_imports {
+        if !self.language.is_empty() {
+            args.extend(["--language".to_string(), self.language.join(",")]);
+        }
+        if !self.wunused.is_empty() {
+            args.extend(["--wunused".to_string(), self.wunused.join(",")]);
+        } else if self.wunused_imports {
             args.extend(["--wunused".to_string(), "imports".to_string()]);
+        }
+        for (set, flag) in [(self.deprecation, "--deprecation"), (self.feature, "--feature"), (self.wtostring_interpolated, "--wtostring-interpolated")] {
+            if set {
+                args.push(flag.to_string());
+            }
+        }
+        for rules in &self.wconf {
+            args.extend(["--wconf".to_string(), rules.clone()]);
         }
         if let (true, Some(n)) = (jvm, self.java_output_version) {
             args.extend(["--java-output-version".to_string(), n.to_string()]);
@@ -962,6 +985,12 @@ fn configuration(value: &Value) -> Result<Configuration, String> {
         kind_projector: f.get("kindProjector").and_then(Value::bool) == Some(true),
         werror: f.get("werror").and_then(Value::bool) == Some(true),
         wunused_imports: f.get("wunusedImports").and_then(Value::bool) == Some(true),
+        wunused: strings(f.get("wunused")),
+        deprecation: f.get("deprecation").and_then(Value::bool) == Some(true),
+        feature: f.get("feature").and_then(Value::bool) == Some(true),
+        wtostring_interpolated: f.get("wtostringInterpolated").and_then(Value::bool) == Some(true),
+        wconf: strings(f.get("wconf")),
+        language: strings(f.get("language")),
         java_output_version: f.get("javaOutputVersion").and_then(Value::uint),
     });
     let test = value.get("frameworks").map(|_| TestContext {

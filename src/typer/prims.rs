@@ -1351,11 +1351,13 @@ impl<'a> Worker<'a> {
         }
         let lowering = self.cast_lowering(recv_ty, t, js_written);
         if lowering == CastLowering::Fail {
-            // `tpd.primitiveConversion`'s warning, where scalac's erasure meets the cast.
+            // `tpd.primitiveConversion`'s warning, where scalac's erasure meets the cast: of the
+            // reporting policy's phases, `Erasure`'s (`producer_rank`), and with no position in
+            // scalac, so that no place hides it.
             let from = self.dealias(recv_ty);
             let (from, to) = (self.widen_lit(from), self.dealias(t));
             let msg = format!("conversion from {} to {} will always fail at runtime.", self.show(from), self.show(to));
-            self.warn(span, msg);
+            self.warn_as(span, msg, crate::source::Warning { unplaced: true, ..crate::source::Warning::of_phase(crate::source::PHASE_ERASURE) });
         }
         let lowering = self.untested_lowering(recv, lowering);
         self.lower_cast_as(recv, recv_ty, t, lowering)

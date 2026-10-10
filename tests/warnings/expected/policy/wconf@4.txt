@@ -1,0 +1,3 @@
+exit 1
+warning 2:36 unused import
+warning Failed to parse `-Wconf` configuration: cat=unused:e

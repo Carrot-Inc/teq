@@ -565,6 +565,16 @@ pub(super) fn is_pattern_field_name(name: Option<&str>) -> bool {
     name.map_or(false, |n| n.len() > 1 && n.starts_with('$') && n[1..].bytes().all(|b| b.is_ascii_digit()))
 }
 
+/// The modifiers of an entry: its flags', and `DEPRECATED` where it is annotated so.
+fn entry_mods(e: &Entry) -> Mods {
+    if e.deprecated {
+        crate::typer::deprecation::note_deprecated();
+        flag_mods(e.flags) | mods::DEPRECATED
+    } else {
+        flag_mods(e.flags)
+    }
+}
+
 pub(super) fn flag_mods(f: Flags) -> Mods {
     let mut m = 0;
     for (tag, bit) in [
@@ -1207,7 +1217,7 @@ impl<'a> Worker<'a> {
         let is_object = tasty.is_object_class(e.name);
         let name = self.lname(&tasty, e.name);
         let file_id = self.loaded.as_ref().unwrap().file(file).file_id;
-        let mut m = flag_mods(e.flags);
+        let mut m = entry_mods(e);
         // An object nested in a trait or class, a companion too, is an inner class whose
         // instance the outer holds in a lazy val of the object's name (`ClassInfo::inner_object`);
         // one with a companion class is not among the outer's nested classes, where the
@@ -1425,6 +1435,9 @@ impl<'a> Worker<'a> {
             return;
         }
         let aid = AliasId(self.syms.aliases.len() as u32);
+        if e.deprecated {
+            crate::typer::deprecation::note_deprecated();
+        }
         self.syms.aliases.push(AliasInfo {
             name,
             owner,
@@ -1433,6 +1446,7 @@ impl<'a> Worker<'a> {
             tparams: Vec::new(),
             rhs: ERROR,
             bounds: abstract_member.then_some((NOTHING, ANY)),
+            deprecated: e.deprecated,
         });
         self.loaded_mut().aliases.insert(aid, LAlias { file, addr: e.addr });
         self.loaded_mut().tables[file as usize].aliases.insert(e.addr, aid);
@@ -2263,7 +2277,7 @@ impl<'a> Worker<'a> {
         }
         let name = self.lname(&tasty, e.name);
         let file_id = self.syms.class(c).file;
-        let mut m = flag_mods(f);
+        let mut m = entry_mods(e);
         // A given without a body is abstract too: an old-style abstract given, a def, or with
         // `HASDEFAULT` a deferred given (dotty's `Namer` flags it `Deferred | HasDefault`).
         if !e.has_body {
@@ -2532,7 +2546,7 @@ impl<'a> Worker<'a> {
     /// signature is read when it is first tried.
     fn enter_loaded_secondary_ctor(&mut self, c: ClassId, file: u32, e: &Entry) {
         let file_id = self.syms.class(c).file;
-        let m = flag_mods(e.flags);
+        let m = entry_mods(e);
         let sym = self.syms.new_sym(names::INIT, SymKind::Def, m, Owner::Class(c), file_id, None, Span::default());
         self.loaded_mut().syms.insert(sym, LSym { file, addr: e.addr, conversion: false });
         self.loaded_mut().tables[file as usize].terms.insert(e.addr, sym);
@@ -3385,5 +3399,37 @@ fn variance_of(flags: crate::tasty::tree::Flags) -> i8 {
         -1
     } else {
         0
+    }
+}
+
+impl<'a> Worker<'a> {
+    /// The message and the version of the `@deprecated` of the loaded member `sym` or class
+    /// `class`, read of its pickle (`typer::deprecation`): its first and second arguments where
+    /// they are strings.
+    pub(crate) fn loaded_deprecation(&mut self, sym: Option<SymId>, class: Option<ClassId>, alias: Option<AliasId>) -> (Option<String>, Option<String>) {
+        let Some(loaded) = self.loaded.as_ref() else { return (None, None) };
+        let at = match (sym, class, alias) {
+            (Some(s), _, _) => loaded.syms.get(&s).map(|l| (l.file, l.addr)),
+            (_, Some(c), _) => loaded.classes.get(&c).map(|l| (l.file, l.addr)),
+            (_, _, Some(a)) => loaded.aliases.get(&a).map(|l| (l.file, l.addr)),
+            _ => None,
+        };
+        let Some((file, addr)) = at else { return (None, None) };
+        let tasty = self.tasty(file);
+        let annots = Decoder::new(&tasty).annotations_at(addr);
+        for a in annots {
+            let TType::TypeRef(_, n) = &a.class else { continue };
+            if tasty.simple(*n) != Some("deprecated") {
+                continue;
+            }
+            let string = |this: &mut Self, arg: Option<&AnnotArg>| match arg {
+                Some(AnnotArg::Str(s)) => Some(this.lname(&tasty, *s)),
+                _ => None,
+            };
+            let message = string(self, a.args.first()).map(|n| self.name_str(n));
+            let since = string(self, a.args.get(1)).map(|n| self.name_str(n));
+            return (message, since);
+        }
+        (None, None)
     }
 }

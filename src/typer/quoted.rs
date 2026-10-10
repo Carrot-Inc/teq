@@ -2757,7 +2757,7 @@ impl<'c> Copier<'c> {
         let defaults = defaults.into_iter().map(|d| d.map(|x| self.expr(t, x))).collect();
         let body = body.map(|b| self.expr(t, b));
         let params = params.into_iter().map(|p| self.sym(p)).collect();
-        t.prog.add_fun(TFun { sym: self.sym(sym), params, defaults, body })
+        t.prog.add_fun(TFun { sym: self.sym(sym), params, defaults, body, body_unconsuming: false })
     }
 
     fn stmts(&mut self, t: &mut Worker, l: crate::ast::ListRef) -> crate::ast::ListRef {
@@ -3245,7 +3245,7 @@ impl<'c> Copier<'c> {
                 let defaults = defaults.into_iter().map(|d| d.map(|x| self.expr(t, x))).collect();
                 let body = body.map(|b| self.expr(t, b));
                 let params = params.into_iter().map(|p| self.sym(p)).collect();
-                let nf = t.prog.add_fun(TFun { sym: self.sym(sym), params, defaults, body });
+                let nf = t.prog.add_fun(TFun { sym: self.sym(sym), params, defaults, body, body_unconsuming: false });
                 TStmt::Fun(nf)
             }
         }

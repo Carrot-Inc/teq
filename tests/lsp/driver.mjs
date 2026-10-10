@@ -4433,6 +4433,90 @@ async function unusedImports() {
   }
 }
 
+// The quick fix of an unused import (`textDocument/codeAction`): the compiler's edits
+// (CheckUnused's `checkImports`), applied as a client applies them, all at once as scalac's
+// -rewrite does, give the text scalac's rewrite of each probe of tests/warnings/edits gives (one
+// selector, braces, clauses, aliases, hiding, givens, comments, blank lines, a block, CRLF line
+// breaks; pinned in tests/warnings/expected/edits by tests/warnings/capture-edits.sh), and that
+// text checks without an error, with the unused imports scalac finds in its rewrite. A document edited since its diagnostics were
+// published has no quick fix until the build of the edit publishes its own.
+async function unusedImportActions() {
+  encoding = "utf-16"
+  const dir = join(work, "link/actions")
+  mkdirSync(join(dir, "src"), { recursive: true })
+  const probes = join(here, "../warnings/edits")
+  const expected = join(here, "../warnings/expected/edits")
+  const names = readdirSync(probes).filter((n) => n.endsWith(".scala")).sort()
+  for (const n of names) copyFileSync(join(probes, n), join(dir, "src", n))
+  writeExport(join(dir, "teq.lock"), { app: { platform: "js", sources: ["src"] } })
+  // A position as a client reads it: past its line's text (before the line break), the line's end.
+  const offsetAt = (text, { line, character }) => {
+    const lines = text.split("\n")
+    let offset = 0
+    for (let i = 0; i < line && i < lines.length; i++) offset += lines[i].length + 1
+    const lineText = (lines[line] ?? "").replace(/\r$/, "")
+    return offset + Math.min(character, lineText.length)
+  }
+  const apply = (text, edits) => {
+    const spans = edits.map((e) => [offsetAt(text, e.range.start), offsetAt(text, e.range.end), e.newText]).sort((a, b) => b[0] - a[0])
+    for (const [from, to, newText] of spans) text = text.slice(0, from) + newText + text.slice(to)
+    return text
+  }
+  const wholeOf = (text) => ({ start: { line: 0, character: 0 }, end: positionAt(text, text.length) })
+  const c = new Client(dir)
+  try {
+    const init = await c.result("initialize", { processId: null, rootUri: uriOf(dir), capabilities: { workspace: { workspaceEdit: { documentChanges: true } } } })
+    check("the code action capability: quick fixes", same(init?.capabilities?.codeActionProvider, { codeActionKinds: ["quickfix"] }), init?.capabilities)
+    const m = c.mark()
+    c.notify("initialized", {})
+    const texts = {}
+    for (const n of names) {
+      const file = join(dir, "src", n)
+      texts[n] = readFileSync(file, "utf-8")
+      c.notify("textDocument/didOpen", { textDocument: { uri: uriOf(file), languageId: "scala", version: 1, text: texts[n] } })
+    }
+    for (const n of names) {
+      const file = join(dir, "src", n)
+      const ds = await c.waitDiagnostics(m, uriOf(file), (ds) => ds.some((d) => d.message === "unused import"))
+      const actions = await c.result("textDocument/codeAction", { textDocument: { uri: uriOf(file) }, range: wholeOf(texts[n]), context: { diagnostics: ds ?? [] } })
+      const changes = (actions ?? []).map((a) => a.edit?.documentChanges?.[0])
+      check(`${n}: quick fixes of the unused imports, each on the document's version`, actions?.length > 0 && actions.every((a) => a.kind === "quickfix" && a.title === "unused import" && a.diagnostics?.[0]?.message === "unused import") && changes.every((d) => d?.textDocument?.uri === uriOf(file) && d.textDocument.version === 1), actions)
+      const fixed = apply(texts[n], changes.flatMap((d) => d?.edits ?? []))
+      const want = readFileSync(join(expected, n), "utf-8")
+      check(`${n}: the fixes applied give scalac's rewrite`, fixed === want, { fixed, want })
+      // The fixed text checks without an error, its unused imports scalac's in its rewrite (a
+      // hiding selector its wildcard's removal leaves).
+      const m2 = c.mark()
+      c.notify("textDocument/didChange", { textDocument: { uri: uriOf(file), version: 2 }, contentChanges: [{ text: fixed }] })
+      const after = await c.waitDiagnostics(m2, uriOf(file), () => true, 30000)
+      const now = after ?? c.latestDiagnostics(uriOf(file))
+      const left = now.filter((d) => d.message === "unused import").map((d) => `${d.range.start.line + 1}:${d.range.start.character + 1}:${d.range.end.character - d.range.start.character}`).join("\n")
+      const scalacLeft = readFileSync(join(expected, n.replace(/\.scala$/, ".after.txt")), "utf-8").trim()
+      check(`${n}: the fixed text has no error, and scalac's unused imports in its rewrite`, now.every((d) => d.severity !== 1) && left === scalacLeft, { now, scalacLeft })
+      texts[n] = fixed
+    }
+    // A stale document: edited after its diagnostics were published, no fix until its build's.
+    const file = join(dir, "src", "braces_two_kept.scala")
+    const stale = readFileSync(file, "utf-8")
+    const m3 = c.mark()
+    c.notify("textDocument/didChange", { textDocument: { uri: uriOf(file), version: 3 }, contentChanges: [{ text: stale }] })
+    const none = await c.result("textDocument/codeAction", { textDocument: { uri: uriOf(file) }, range: wholeOf(stale), context: { diagnostics: [] } })
+    check("a document edited since its diagnostics: no quick fix", same(none, []), none)
+    await c.waitDiagnostics(m3, uriOf(file), (ds) => ds.some((d) => d.message === "unused import"))
+    const fresh = await c.result("textDocument/codeAction", { textDocument: { uri: uriOf(file) }, range: wholeOf(stale), context: { diagnostics: [] } })
+    check("its build's diagnostics published: the quick fixes on the new version", fresh?.length > 0 && fresh.every((a) => a.edit?.documentChanges?.[0]?.textDocument?.version === 3) && apply(stale, fresh.flatMap((a) => a.edit.documentChanges[0].edits)) === readFileSync(join(expected, "braces_two_kept.scala"), "utf-8"), fresh)
+    // Asked for another kind than quick fixes: none.
+    const refactors = await c.result("textDocument/codeAction", { textDocument: { uri: uriOf(file) }, range: wholeOf(stale), context: { diagnostics: [], only: ["refactor"] } })
+    check("asked for refactorings alone: no quick fix", same(refactors, []), refactors)
+    await c.result("shutdown", null)
+    c.notify("exit", null)
+    await Promise.race([c.exited, sleep(10000)])
+  } catch (e) {
+    check("the unused imports' quick fixes ran to their end", false, `${e.stack}\nstderr: ${c.stderr.slice(-1000)}`)
+    c.proc.kill()
+  }
+}
+
 // A session whose builds get no mapping for the type store's overlays (an address-space limit the
 // server's children inherit, every full build asked of two workers and every build full) is typed by
 // one worker, and the server says so in the client's log once, however many builds follow.
@@ -4462,7 +4546,7 @@ async function refusedMapping() {
   }
 }
 
-const scenarios = { mainWorkspace, appliedValues, closedAlias, completion, completionCases, completionSnippets, completionRaces, signatureCases, signatureHelp, indexSize, cacheableAcrossCompletions, stoppedChild, busyChild, closedDocument, overtaken, overtakenAgain, bareRoot, libraries, libraryDocumentParked, libraryDocumentProducerReplaced, leanStd, leanStdSessions, leanStdComplete, stdDocumentRouting, sessionLimits, serverGenerators, sbtBuild, sbtLockGone, sbtRefusals, sbtRunLifetime, unusedImports, refusedMapping, idleMinute }
+const scenarios = { mainWorkspace, appliedValues, closedAlias, completion, completionCases, completionSnippets, completionRaces, signatureCases, signatureHelp, indexSize, cacheableAcrossCompletions, stoppedChild, busyChild, closedDocument, overtaken, overtakenAgain, bareRoot, libraries, libraryDocumentParked, libraryDocumentProducerReplaced, leanStd, leanStdSessions, leanStdComplete, stdDocumentRouting, sessionLimits, serverGenerators, sbtBuild, sbtLockGone, sbtRefusals, sbtRunLifetime, unusedImports, unusedImportActions, refusedMapping, idleMinute }
 // Run only when named: the idle minute, which tests/lsp.sh runs once.
 const named = new Set(["idleMinute"])
 for (const [name, run] of Object.entries(scenarios)) {

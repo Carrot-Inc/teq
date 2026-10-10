@@ -1,0 +1,2 @@
+exit 1
+error 2:33 method old is deprecated since 1: old

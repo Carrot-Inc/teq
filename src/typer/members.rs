@@ -721,13 +721,13 @@ impl<'a> Worker<'a> {
             self.derived_aliases.insert((a, prefix), d);
             return d;
         }
-        let (name, owner, file, tparams) = {
+        let (name, owner, file, tparams, deprecated) = {
             let i = &self.syms.aliases[a.idx()];
-            (i.name, i.owner, i.file, i.tparams.clone())
+            (i.name, i.owner, i.file, i.tparams.clone(), i.deprecated)
         };
         let rhs = self.alias_body(a);
         let d = AliasId(self.syms.aliases.len() as u32);
-        self.syms.aliases.push(AliasInfo { name, owner, file, def: None, tparams: Vec::new(), rhs: ERROR, bounds: None });
+        self.syms.aliases.push(AliasInfo { name, owner, file, def: None, tparams: Vec::new(), rhs: ERROR, bounds: None, deprecated });
         self.syms.alias_cells.set(d.0, Completion::Done);
         self.derived_aliases.insert((a, prefix), d);
         let seen = |t: &mut Self, ty: TypeId| -> TypeId {

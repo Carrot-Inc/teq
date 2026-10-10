@@ -46,6 +46,7 @@ impl<'a> super::Typer<'a> {
                 let files: Vec<FileId> = changes.iter().map(|c| c.file).collect();
                 w.report_unused(Some(&files));
             }
+            w.register_suppressions();
             w.tell_cacheable_warnings();
             w.index_settle();
             // The buffers the stores outgrew during the step, freed once no reference into them

@@ -433,6 +433,11 @@ impl<'a> Worker<'a> {
                 _ => break,
             }
         }
+        // The parts of an interpolator's call whose arguments `-Wtostring-interpolated` lints
+        // (`StringInterpolatorOpt`'s lint runs under the setting alone).
+        if applies == 1 && self.diags.policy.tostring_interpolated {
+            self.note_interpolation_parts(e, head);
+        }
         // Collected at their counted length rather than pushed during the walk: pushing kept both
         // vectors' headers in stack memory across the loop, and profile-guided builds after
         // unrelated edits stalled on reloading them.
@@ -1646,6 +1651,7 @@ impl<'a> Worker<'a> {
                 Some(literal) if self.is_stable_path(recv) => {
                     let te = self.prog.add(literal);
                     self.folded_paths.insert(te, (recv, s));
+                    self.folded_deprecated |= self.syms.sym(s).info.mods & crate::ast::mods::DEPRECATED != 0;
                     if self.deps.is_some() {
                         self.deps_node(te, super::deps::Node::Constant(s));
                     }
@@ -2836,6 +2842,27 @@ impl<'a> Worker<'a> {
         r
     }
 
+    /// The interpolation the call `sym` on `recv` with `lists` is, where the parts of one were
+    /// noted (`interpolation_call`).
+    #[cold]
+    #[inline(never)]
+    fn interpolation_of(&mut self, sym: crate::types::SymId, recv: Option<TExprId>, span: Span, lists: &[ArgList]) -> Option<super::tostring::InterpCall> {
+        let args = lists.first().map_or(0, |l| l.args.len());
+        self.interpolation_call(sym, recv, span, args)
+    }
+
+    /// `apply_method_in_now` of a standard interpolator's call: its arguments are linted as the
+    /// interpolation's (`interp_call`, which the arguments at the call's depth alone read).
+    #[cold]
+    #[inline(never)]
+    #[allow(clippy::too_many_arguments)]
+    fn apply_interpolation(&mut self, interp: super::tostring::InterpCall, call: MethodCall, targs: Option<ListRef>, lists: Vec<ArgList>, span: Span, expected: Option<TypeId>, trial: bool) -> Option<(TExprId, TypeId)> {
+        let outer = self.interp_call.replace(interp);
+        let applied = self.apply_method_in_now(call, None, targs, lists, span, expected, trial);
+        self.interp_call = outer;
+        applied
+    }
+
     fn apply_method_in(
         &mut self,
         call: MethodCall,
@@ -2879,6 +2906,13 @@ impl<'a> Worker<'a> {
         expected: Option<TypeId>,
         trial: bool,
     ) -> Option<(TExprId, TypeId)> {
+        // A standard interpolator's call over literal parts, whose arguments are linted, where
+        // the parts were noted (`note_interpolation_parts`): its parts taken, it comes back here.
+        if self.interp_parts.is_some() && ctor.is_none() && call.sym.0 != u32::MAX {
+            if let Some(interp) = self.interpolation_of(call.sym, call.recv, span, &lists) {
+                return self.apply_interpolation(interp, call, targs, lists, span, expected, trial);
+            }
+        }
         let sig = match &ctor {
             // The constructor of a class nested in a class names the outer class's `this`,
             // the enclosing instance deriving from it where it is constructed or extended.
@@ -4313,6 +4347,10 @@ impl<'a> Worker<'a> {
                     let msg = format!("missing argument for parameter {}", self.name_str(p.name));
                     self.arity_error(&list, msg);
                 }
+                // The parameter's default getter is used (`CheckUnused`'s default arguments).
+                if p.has_default {
+                    self.use_default(p.sym);
+                }
                 results[i] = Some(if p.has_default { self.default_placeholder() } else { self.prog.add(TExpr::Unit) });
                 continue;
             };
@@ -4607,6 +4645,9 @@ impl<'a> Worker<'a> {
                     },
                 };
                 let arg_span = self.cur_ast().expr_span(e);
+                if self.interp_call.is_some() {
+                    self.lint_interpolation_arg(ty, arg_span, spread);
+                }
                 let te = match arg {
                     ArgSrc::Hoisted(_) => self.hoist(te, ty, arg_span),
                     _ => te,
@@ -4917,8 +4958,10 @@ impl<'a> Worker<'a> {
                     }
                 }
                 let mut stmts = Vec::with_capacity(vars.len());
-                for (i, (name, ty, given)) in vars.into_iter().enumerate() {
+                for (i, (name, ty, given, original)) in vars.into_iter().enumerate() {
                     let local = self.new_local(name, SymKind::Val, ty, span);
+                    // The variable restored stands for the one the comprehension packed.
+                    self.note_stand_in(local, original);
                     self.bind_local(name, local);
                     if given {
                         self.syms.sym_mut(local).mods |= crate::ast::mods::GIVEN;
@@ -4942,6 +4985,7 @@ impl<'a> Worker<'a> {
                     if self.index.is_some() {
                         self.index_local_at(sym, ast.pat_spans[pat.idx()]);
                     }
+                    self.note_def_at(sym, ast.pat_spans[pat.idx()].start);
                     self.bind_local(name, sym);
                     let (tb, bty) = self.type_for_rest(rest, span, ret_expected);
                     (sym, tb, bty)
@@ -4952,6 +4996,7 @@ impl<'a> Worker<'a> {
                     if self.index.is_some() {
                         self.index_local_at(sym, ast.pat_spans[pat.idx()]);
                     }
+                    self.note_def_at(sym, ast.pat_spans[pat.idx()].start);
                     self.bind_local(name, sym);
                     let (tb, bty) = self.type_for_rest(rest, span, ret_expected);
                     (sym, tb, bty)
@@ -7767,6 +7812,7 @@ impl<'a> Worker<'a> {
                 let ((given, given_ty), _) = in_scope[i];
                 if let Some(call) = self.given_extension_for(given, given_ty, name, recv, recv_ty, lists, expected, span, probe) {
                     self.attribute(given.0);
+                    self.use_sym(given.0, Span::default());
                     return self.apply_extension(call, targs, lists, span, expected);
                 }
             }
@@ -7821,6 +7867,7 @@ impl<'a> Worker<'a> {
         match (from_given, from_companion) {
             (Some((call, given)), _) => {
                 self.attribute(given);
+                self.use_sym(given, Span::default());
                 self.apply_extension(call, targs, lists, span, expected)
             }
             (None, Some(call)) => self.apply_extension(call, targs, lists, span, expected),

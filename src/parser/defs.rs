@@ -156,6 +156,7 @@ impl<'a> Parser<'a> {
                 let (more, _) = self.parse_args();
                 instance = self.ast.add_expr(Expr::Apply(instance, more), start.to(self.prev_span()));
             }
+            self.ast.has_nowarn |= name == crate::names::NOWARN;
             annots.push(Annot { name, args, instance });
             self.eat(Tok::Newline);
         }
@@ -266,6 +267,12 @@ impl<'a> Parser<'a> {
             _ => !0,
         };
         self.reject_modifiers(m, &spans, allowed);
+        let m = if annots.iter().any(|a| a.name == names::DEPRECATED) {
+            crate::typer::deprecation::note_deprecated();
+            m | mods::DEPRECATED
+        } else {
+            m
+        };
         match self.kind() {
             Tok::KwVal | Tok::KwVar => self.parse_val(m, annots, out),
             Tok::KwDef => {
@@ -1067,6 +1074,7 @@ impl<'a> Parser<'a> {
         let exports_mark = self.export_scratch.len();
         let derives_mark = self.pending_derives.len();
         let (alias_indent, self_type, alias) = self.parse_self_alias();
+        let language = self.language_open.len();
         self.statements(RecoverySite::TemplateBody, |p| {
             let at_enum_case =
                 |p: &Self| p.at(Tok::KwCase) && !matches!(p.kind_at(1), Tok::KwClass | Tok::KwObject);
@@ -1093,6 +1101,7 @@ impl<'a> Parser<'a> {
             self.eat(Tok::Outdent);
         }
         self.end_region();
+        self.close_language(language);
         self.desugar_pattern_vals(&mut body);
         if self.pending_derives.len() > derives_mark {
             let defs: Vec<DefId> =

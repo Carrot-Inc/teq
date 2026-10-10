@@ -2048,6 +2048,7 @@ impl<'a> Worker<'a> {
         union(&mut self.expr_marks, &mut o.expr_marks);
         union(&mut self.eta_expansions, &mut o.eta_expansions);
         union(&mut self.folded_paths, &mut o.folded_paths);
+        self.folded_deprecated |= o.folded_deprecated;
         union(&mut self.irrefutable_pats, &mut o.irrefutable_pats);
         union(&mut self.outer_prefixes, &mut o.outer_prefixes);
         union(&mut self.captured_locals, &mut o.captured_locals);

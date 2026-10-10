@@ -31,9 +31,8 @@
 //!
 //! **The report** runs once the typing is over (`report_unused`), after the merge and the final
 //! passes: per program file every selector without a mark is `unused import` at its
-//! `Import::selector_span`, in source order, but a selector under an enclosing `@nowarn`
-//! (recorded where the import is entered, `self.nowarn` being restored by then), one inside an
-//! inline method, which dotty never registers, and the language imports, which the parser keeps
+//! `Import::selector_span`, in source order, but one inside an inline method, which dotty never
+//! registers, and the language imports, which the parser keeps
 //! apart. A file whose parse recovered from a syntax error reports none, and nor does a program
 //! with an error under the flag, as scalac runs no phase after a typer that reported one; a hint
 //! leaves out a file with an error alone. scalac's own selection rules (CheckUnused's
@@ -48,7 +47,7 @@ use crate::intern::{FxMap, Name};
 use crate::names;
 use crate::source::{FileId, Span};
 use crate::symbols::*;
-use crate::types::{ClassId, PkgId, SymId, TParamId, TypeId};
+use crate::types::{ClassId, PkgId, SymId, TypeId};
 
 /// Whether the check runs, and what its findings are.
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
@@ -61,11 +60,62 @@ pub enum Mode {
     Warn,
 }
 
+/// The kinds of definitions `--wunused` reports (`warnings::Unused`), beside the imports.
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
+pub struct DefKinds {
+    pub privates: bool,
+    pub locals: bool,
+    pub explicits: bool,
+    pub implicits: bool,
+    pub patvars: bool,
+    /// Whether any kind is: the one byte each typed expression tests (`defs_on`).
+    some: bool,
+}
+
+impl DefKinds {
+    /// The kinds a build's setting reports: where it reports one, the typed expressions'
+    /// references are checked (`deprecation::references_checked`).
+    pub fn of(u: &crate::warnings::Unused) -> DefKinds {
+        let some = u.privates || u.locals || u.explicits || u.implicits || u.patvars;
+        if some {
+            super::deprecation::note_unused_defs();
+        }
+        DefKinds { privates: u.privates, locals: u.locals, explicits: u.explicits, implicits: u.implicits, patvars: u.patvars, some }
+    }
+
+    #[inline]
+    pub fn any(self) -> bool {
+        self.some
+    }
+}
+
 /// A selector of the program, the key of its marks: its file and its `Import::span`.
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub struct Sel {
     pub file: FileId,
     pub span: Span,
+}
+
+/// What a mark is of: an import's selector (the import check's), or a definition of the
+/// program read or assigned (the other kinds', `unused_defs.rs`), by its file and the start of
+/// its name.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
+pub enum Key {
+    Sel(Sel),
+    Read(FileId, u32),
+    Assign(FileId, u32),
+    /// The default of a parameter used by a call that leaves its argument out: the default
+    /// getter's use, by the parameter's place.
+    Default(FileId, u32),
+}
+
+impl Key {
+    fn file(self) -> FileId {
+        match self {
+            Key::Sel(s) => s.file,
+            Key::Read(f, _) | Key::Assign(f, _) | Key::Default(f, _) => f,
+        }
+    }
 }
 
 /// A selector and a `given T`'s type, an index into `Worker::import_sels`.
@@ -81,10 +131,6 @@ impl SelRef {
 /// A use by what a retype keeps, and by what it does again.
 const KEPT: u8 = 1;
 const REDONE: u8 = 2;
-/// The selector stands under an enclosing `@nowarn`, so recorded by what a retype keeps or
-/// does again.
-const KEPT_QUIET: u8 = 4;
-const REDONE_QUIET: u8 = 8;
 /// The key of a unit's import of the package `scala.compiletime.testing`, which erases the
 /// unit's checks in scalac (CheckUnused's `isNullified`): no selector stands there.
 const TESTING: Span = Span { start: u32::MAX, end: u32::MAX };
@@ -106,11 +152,21 @@ struct Facts {
 #[derive(Default)]
 pub struct Unused {
     pub mode: Mode,
+    /// The kinds of definitions reported (`unused_defs.rs`), whose reads and assignments are
+    /// marked while any is.
+    pub defs: DefKinds,
+    /// The target of the assignment being typed (`x` of `x = e`), which its typing marks
+    /// assigned rather than read (CheckUnused's `AssignmentTarget`).
+    pub assign_target: Option<ast::ExprId>,
+    /// The symbols that stand where their definition is not: a comprehension's variable,
+    /// made at the comprehension and keyed by its pattern's place, or restored from a pack and
+    /// keyed by the variable it stands for (`unused_defs.rs`).
+    pub(super) def_at: FxMap<SymId, u32>,
     /// The marks made since the last settling, each with its bits: what an attempt abandoned
     /// takes back (`index_drop`).
-    journal: Vec<(Sel, u8)>,
+    journal: Vec<(Key, u8)>,
     /// The settled marks.
-    marks: FxMap<Sel, u8>,
+    pub(super) marks: FxMap<Key, u8>,
     /// The locals of imports of stable values' members, each with its selector, which a read
     /// of the local marks.
     aliases: FxMap<SymId, Sel>,
@@ -148,12 +204,30 @@ enum Target {
 impl Unused {
     /// Another worker's state at the fork: the mode, nothing marked.
     pub fn attach(&self) -> Unused {
-        Unused { mode: self.mode, ..Default::default() }
+        Unused { mode: self.mode, defs: self.defs, ..Default::default() }
     }
 
     #[inline]
     pub fn on(&self) -> bool {
         self.mode != Mode::Off
+    }
+
+    /// Whether the reads and assignments of definitions are marked: a kind of them is reported.
+    #[inline]
+    pub fn defs_on(&self) -> bool {
+        self.defs.any()
+    }
+
+    /// Whether the definition at `start` of `file` is read, or with `assign` assigned, by a
+    /// settled mark.
+    pub(super) fn has(&self, file: FileId, start: u32, assign: bool) -> bool {
+        let key = if assign { Key::Assign(file, start) } else { Key::Read(file, start) };
+        self.marks.get(&key).is_some_and(|&b| b != 0)
+    }
+
+    /// Whether a call used the default of the parameter at `start` of `file`.
+    pub(super) fn has_default(&self, file: FileId, start: u32) -> bool {
+        self.marks.get(&Key::Default(file, start)).is_some_and(|&b| b != 0)
     }
 
     pub fn journal_len(&self) -> usize {
@@ -169,23 +243,29 @@ impl Unused {
     /// abandoned does not take them back with its own.
     pub fn settle_since(&mut self, mark: usize) {
         if mark < self.journal.len() {
-            for (sel, bits) in self.journal.drain(mark..) {
-                *self.marks.entry(sel).or_default() |= bits;
+            for (key, bits) in self.journal.drain(mark..) {
+                *self.marks.entry(key).or_default() |= bits;
             }
         }
     }
 
-    pub fn take_since(&mut self, mark: usize) -> Vec<(Sel, u8)> {
+    /// The marks of `key` made since `mark` taken back.
+    pub fn forget_since(&mut self, mark: usize, key: Key) {
+        let since = self.journal.split_off(mark.min(self.journal.len()));
+        self.journal.extend(since.into_iter().filter(|&(k, _)| k != key));
+    }
+
+    pub fn take_since(&mut self, mark: usize) -> Vec<(Key, u8)> {
         self.journal.split_off(mark.min(self.journal.len()))
     }
 
-    pub fn put_back(&mut self, taken: Vec<(Sel, u8)>) {
+    pub fn put_back(&mut self, taken: Vec<(Key, u8)>) {
         self.journal.extend(taken);
     }
 
     fn settle(&mut self) {
-        for (sel, bits) in std::mem::take(&mut self.journal) {
-            *self.marks.entry(sel).or_default() |= bits;
+        for (key, bits) in std::mem::take(&mut self.journal) {
+            *self.marks.entry(key).or_default() |= bits;
         }
     }
 
@@ -214,18 +294,19 @@ impl<'a> Worker<'a> {
 
     /// `sel` is used, with the lifetime of what is being done.
     #[inline]
-    fn mark_sel(&mut self, sel: Sel, quiet: bool) {
+    fn mark_sel(&mut self, sel: Sel) {
         if (sel.file.0 as usize) >= self.files.len() || self.files[sel.file.0 as usize].is_std {
             return;
         }
-        let bits = match (self.diags.of_bodies, quiet) {
-            (false, false) => KEPT,
-            (true, false) => REDONE,
-            (false, true) => KEPT_QUIET,
-            (true, true) => REDONE_QUIET,
-        };
-        if self.unused.journal.last() != Some(&(sel, bits)) {
-            self.unused.journal.push((sel, bits));
+        self.mark_key(Key::Sel(sel));
+    }
+
+    /// `key` is marked, with the lifetime of what is being done.
+    #[inline]
+    pub(super) fn mark_key(&mut self, key: Key) {
+        let bits = if self.diags.of_bodies { REDONE } else { KEPT };
+        if self.unused.journal.last() != Some(&(key, bits)) {
+            self.unused.journal.push((key, bits));
         }
     }
 
@@ -234,18 +315,7 @@ impl<'a> Worker<'a> {
     pub(super) fn mark_import(&mut self, imp: ResolvedImport) {
         if self.marking() {
             if let Some((sel, _)) = self.sel_of(imp) {
-                self.mark_sel(sel, false);
-            }
-        }
-    }
-
-    /// The imports of a statement were entered under an enclosing `@nowarn`, whose count is
-    /// restored before the report: recorded with them.
-    pub(super) fn note_quiet_imports(&mut self, clauses: &[ast::Import]) {
-        if self.unused.on() && self.nowarn > 0 && self.inline.depth == 0 {
-            let file = self.env.file;
-            for imp in clauses {
-                self.mark_sel(Sel { file, span: imp.span }, true);
+                self.mark_sel(sel);
             }
         }
     }
@@ -266,7 +336,7 @@ impl<'a> Worker<'a> {
         });
         if let Some(h) = hiding {
             let sel = Sel { file: wildcard.file, span: h.span };
-            self.mark_sel(sel, false);
+            self.mark_sel(sel);
         }
     }
 
@@ -314,10 +384,6 @@ impl<'a> Worker<'a> {
             ast::DefKind::TypeAlias { tparams, .. } => (tparams, &[]),
             ast::DefKind::Val { .. } => (&[], &[]),
         };
-        // The definition's own `@nowarn` silences what its annotations import, as it silences its
-        // body (`note_quiet_imports`).
-        let own_nowarn = def.annots.iter().any(|a| a.name == names::NOWARN) as u32;
-        self.nowarn += own_nowarn;
         for a in &def.annots {
             self.mark_annotation(file, a.instance);
         }
@@ -359,7 +425,6 @@ impl<'a> Worker<'a> {
                 self.env.frames.pop();
             }
         }
-        self.nowarn -= own_nowarn;
     }
 
     /// The type parameters of the definition `d` by name: a method's or a given's from its
@@ -443,7 +508,7 @@ impl<'a> Worker<'a> {
     /// the innermost; a scope that defines one ends the walk. As there, a given is a value of
     /// its type: one with parameters never conforms.
     pub(super) fn mark_can_equal(&mut self, l: TypeId, r: TypeId) {
-        if !self.marking() {
+        if !self.marking() && !self.unused.defs_on() {
             return;
         }
         let Some(ce) = self.b.can_equal else { return };
@@ -465,7 +530,9 @@ impl<'a> Worker<'a> {
                     }
                 }
             }
-            if self.any_value_conforms(&found, target) {
+            if let Some(g) = self.first_value_conforming(&found, target) {
+                // The given the scope provides is read (`refUsage(found.denot.symbol)`).
+                self.use_sym(g, Span::default());
                 return;
             }
             while next < n_local {
@@ -518,7 +585,7 @@ impl<'a> Worker<'a> {
             }
             _ => self.import_givens(imp, wanted, &mut found),
         }
-        // A `given T` selector brings the givens conforming to `T` alone.
+        // A `given T` selector is credited with the givens whose result conforms to `T` alone.
         if let Some((_, Some(bound))) = self.sel_of(imp) {
             found.retain(|&(g, _)| self.result_conforms(g, bound));
         }
@@ -532,20 +599,25 @@ impl<'a> Worker<'a> {
         true
     }
 
-    /// Whether the result of `sym`, its type parameters left open, conforms to `bound`.
+    /// Whether the final result of `sym` conforms to `bound`, its type parameters as they are
+    /// (`sym.info.finalResultType <:< sel.boundTpe`): what credits a `given T` selector, where
+    /// what its clause brings is `matches_import_bound`'s.
     fn result_conforms(&mut self, sym: SymId, bound: TypeId) -> bool {
         let sig = self.sig_arc(sym);
         let mark = self.snapshot();
-        let subst: Vec<(TParamId, TypeId)> = sig.tparams.iter().map(|&tp| (tp, self.fresh_var())).collect();
-        let ret = self.types.subst(sig.ret, &subst);
-        let fits = self.is_sub(ret, bound);
+        let fits = self.is_sub(sig.ret, bound);
         self.rollback(mark);
         fits
     }
 
     /// Whether one of `givens` without parameters has a type that conforms to `target`.
     fn any_value_conforms(&mut self, givens: &[GivenRef], target: TypeId) -> bool {
-        givens.iter().any(|&(g, _)| {
+        self.first_value_conforming(givens, target).is_some()
+    }
+
+    /// The first of `givens` without parameters whose type conforms to `target`.
+    fn first_value_conforming(&mut self, givens: &[GivenRef], target: TypeId) -> Option<SymId> {
+        givens.iter().map(|&(g, _)| g).find(|&g| {
             let sig = self.sig_arc(g);
             if !sig.tparams.is_empty() || !sig.clauses.is_empty() {
                 return false;
@@ -583,7 +655,7 @@ impl<'a> Worker<'a> {
     pub(super) fn note_import_package(&mut self, p: PkgId) {
         if self.marking() && self.is_compiletime_testing(p) {
             let file = self.env.file;
-            self.mark_sel(Sel { file, span: TESTING }, false);
+            self.mark_sel(Sel { file, span: TESTING });
         }
     }
 
@@ -615,7 +687,7 @@ impl<'a> Worker<'a> {
             return;
         }
         if let Some(&sel) = self.unused.aliases.get(&local) {
-            self.mark_sel(sel, false);
+            self.mark_sel(sel);
         }
     }
 
@@ -630,6 +702,18 @@ impl<'a> Worker<'a> {
             for &(g, via) in &winners {
                 self.attribute_as(g, true, via);
                 self.attribute_prefixes(g, via);
+                // An implicit argument's reference reads the given (`refUsage`), and the objects
+                // of its path, which its tree names (`Foo.int`).
+                self.use_sym(g, Span::default());
+                let mut owner = self.syms.sym(g).owner;
+                for _ in 0..10 {
+                    let Owner::Class(c) = owner else { break };
+                    if self.syms.class(c).kind != ClassKind::Object {
+                        break;
+                    }
+                    self.use_class(c, Span::default());
+                    owner = self.syms.class(c).owner;
+                }
             }
         }
     }
@@ -688,6 +772,42 @@ impl<'a> Worker<'a> {
         if module {
             self.attribute_owner_prefixes(owner);
         }
+    }
+
+    /// The top-level `@main` method `sym`: scalac's proxy, the class `MainProxies.mainProxy` adds
+    /// to the method's package after the file's package object, calls it by its name with the
+    /// package as its prefix (`run()` of `p`, synthetic), from where a definition of the package
+    /// object does not stand and the imports of the file do: CheckUnused's `resolveUsage` credits
+    /// the innermost import of highest precedence that brings it, a named import of the method
+    /// under its own name before a wildcard of its package.
+    pub(super) fn credit_main_proxy(&mut self, sym: SymId) {
+        if !self.marking() {
+            return;
+        }
+        let (owner, name) = {
+            let s = self.syms.sym(sym);
+            (s.owner, s.name)
+        };
+        let Owner::Package(p) = owner else { return };
+        let (n_imports, fresh) = self.attribution_imports();
+        let mut best: Option<(ResolvedImport, u8)> = None;
+        for i in 0..n_imports {
+            let imp = self.import_at(i);
+            if imp.sel == SelRef::NONE || imp.depth != 0 {
+                continue;
+            }
+            let precedence = match imp.target {
+                ImportTarget::PkgMember(q, n) if q == p && n == name && imp.name == Some(name) => 2,
+                ImportTarget::PkgAll(q) if q == p => 3,
+                _ => continue,
+            };
+            // The file's imports come in source order: a later one is the inner.
+            if best.is_none_or(|(_, b)| precedence <= b) {
+                best = Some((imp, precedence));
+            }
+        }
+        self.forget_fresh_imports(fresh);
+        self.attributed(best);
     }
 
     /// The owners outward from `at`, each attributed as a name would be: a class or object by its
@@ -894,7 +1014,7 @@ impl<'a> Worker<'a> {
         // The local an import of a stable value's member made (`import c.n` of a given `n`): the
         // search took it, so the import is used.
         if let Some(&sel) = self.unused.aliases.get(&sym) {
-            return self.mark_sel(sel, false);
+            return self.mark_sel(sel);
         }
         let (owner, file, name) = {
             let s = self.syms.sym(sym);
@@ -1021,8 +1141,8 @@ impl<'a> Worker<'a> {
     /// Another worker's marks, after the fork: unioned with this one's.
     pub(super) fn absorb_unused(&mut self, other: &mut Worker<'a>) {
         other.unused.settle();
-        for (sel, bits) in std::mem::take(&mut other.unused.marks) {
-            *self.unused.marks.entry(sel).or_default() |= bits;
+        for (key, bits) in std::mem::take(&mut other.unused.marks) {
+            *self.unused.marks.entry(key).or_default() |= bits;
         }
         self.unused.journal.append(&mut other.unused.journal);
         // The locals of a body are out of scope once it is typed, and another worker's are
@@ -1033,21 +1153,29 @@ impl<'a> Worker<'a> {
     /// A retype of `file` types its bodies again: the marks their typing made go, those of what
     /// is resolved once move to where the edit left their selectors.
     pub(super) fn forget_unused(&mut self, file: FileId, remap: &crate::shape::Remap) {
-        if !self.unused.on() {
+        if !self.unused.on() && !self.unused.defs_on() {
             return;
         }
         self.unused.settle();
-        let of_file: Vec<(Sel, u8)> = self.unused.marks.iter().filter(|(sel, _)| sel.file == file).map(|(&s, &b)| (s, b)).collect();
-        for (sel, bits) in of_file {
-            self.unused.marks.remove(&sel);
-            let kept = bits & (KEPT | KEPT_QUIET);
+        let of_file: Vec<(Key, u8)> = self.unused.marks.iter().filter(|(key, _)| key.file() == file).map(|(&k, &b)| (k, b)).collect();
+        for (key, bits) in of_file {
+            self.unused.marks.remove(&key);
+            let kept = bits & KEPT;
             if kept == 0 {
                 continue;
             }
-            // The file's import of `scala.compiletime.testing` is one of its once-resolved imports.
-            let moved = if sel.span == TESTING { Some(TESTING) } else { remap.moved.get(&sel.span).copied() };
-            if let Some(span) = moved {
-                *self.unused.marks.entry(Sel { file, span }).or_default() |= kept;
+            // A selector moves with its import, the file's import of `scala.compiletime.testing`
+            // being one of its once-resolved imports; a definition with its name, where it stands
+            // outside the bodies.
+            let moved = match key {
+                Key::Sel(sel) if sel.span == TESTING => Some(Key::Sel(sel)),
+                Key::Sel(sel) => remap.moved.get(&sel.span).map(|&span| Key::Sel(Sel { file, span })),
+                Key::Read(_, at) => remap.spans.get(&at).map(|s| Key::Read(file, s.start)),
+                Key::Assign(_, at) => remap.spans.get(&at).map(|s| Key::Assign(file, s.start)),
+                Key::Default(_, at) => remap.spans.get(&at).map(|s| Key::Default(file, s.start)),
+            };
+            if let Some(key) = moved {
+                *self.unused.marks.entry(key).or_default() |= kept;
             }
         }
         // What the attributions found reads the file's imports, which move.
@@ -1072,7 +1200,7 @@ impl<'a> Worker<'a> {
     /// retype typed again) where nothing else changed, as a warning under the flag and a hint
     /// in a language server's session outside it, at the selector, in source order.
     pub fn report_unused(&mut self, only: Option<&[FileId]>) {
-        if !self.unused.on() {
+        if !self.unused.on() && !self.unused.defs_on() {
             return;
         }
         self.unused.settle();
@@ -1121,8 +1249,17 @@ impl<'a> Worker<'a> {
                 continue;
             }
             let of_file = units.remove(&file).unwrap_or_else(|| vec![file]);
-            let testing = |t: &Self, u: FileId| t.unused.marks.contains_key(&Sel { file: u, span: TESTING });
+            let testing = |t: &Self, u: FileId| t.unused.marks.contains_key(&Key::Sel(Sel { file: u, span: TESTING }));
             if of_file.iter().any(|&u| !self.ast(u).recoveries.is_empty() || testing(self, u)) {
+                continue;
+            }
+            // The definitions no mark reads (`unused_defs.rs`), each at its unit.
+            if self.unused.defs_on() {
+                for (u, span, msg) in self.unused_definitions(&of_file) {
+                    self.diags.unnecessary(u, span, msg, false, None);
+                }
+            }
+            if !self.unused.on() {
                 continue;
             }
             let mut selectors: Vec<&ast::Import> = Vec::new();
@@ -1142,13 +1279,39 @@ impl<'a> Worker<'a> {
             }
             selectors.sort_by_key(|imp| (imp.selector_span.start, imp.span.start));
             selectors.dedup_by_key(|imp| imp.span);
-            for imp in selectors {
-                let used = of_file.iter().any(|&u| self.unused.marks.get(&Sel { file: u, span: imp.span }).is_some_and(|&b| b != 0));
-                if !used {
-                    self.diags.unnecessary(file, imp.selector_span, "unused import", hint);
+            let used: Vec<bool> = selectors.iter().map(|imp| of_file.iter().any(|&u| self.unused.marks.get(&Key::Sel(Sel { file: u, span: imp.span })).is_some_and(|&b| b != 0))).collect();
+            // The edits removing them, which a language server offers (`unused_edits.rs`).
+            let mut actions = super::unused_edits::import_actions(&self.files[file.0 as usize].text, &selectors, &used);
+            for (i, imp) in selectors.into_iter().enumerate() {
+                if !used[i] {
+                    let origin = self.selector_origin(file, imp);
+                    self.diags.unnecessary(file, imp.selector_span, "unused import", hint, Some(origin));
+                    if let (Some(a), Some(d)) = (actions[i].take(), self.diags.items.last_mut()) {
+                        d.action = Some(Box::new(a));
+                    }
                 }
             }
         }
+    }
+
+    /// The origin of the warning of an unused selector of `file`, the import of it alone as
+    /// scalac shows it without `import ` (`CheckUnused.warnImport`): `O.x`, `p.{a as b}`, `p.*`.
+    fn selector_origin(&self, file: FileId, imp: &ast::Import) -> Box<str> {
+        let mut out: String = imp.path.iter().map(|&n| self.interner.get(n)).collect::<Vec<_>>().join(".");
+        if !out.is_empty() {
+            out.push('.');
+        }
+        let written = self.files.as_slice().get(file.0 as usize).and_then(|f| f.text.get(imp.selector_span.start as usize..imp.selector_span.end as usize)).unwrap_or("");
+        match &imp.sel {
+            ImportSel::Wildcard => out.push('*'),
+            ImportSel::Name(n, None) => out.push_str(self.interner.get(*n)),
+            _ => {
+                out.push('{');
+                out.push_str(written);
+                out.push('}');
+            }
+        }
+        out.into_boxed_str()
     }
 
     /// Per unit the file it is a unit of: itself, or for a `package p:` block of a file the

@@ -140,8 +140,10 @@ impl<'a> Parser<'a> {
         // `{ x => a; b }`: the lambda's body is the rest of the block, as under scalac.
         let lambda = self.at_lambda_start().then(|| (self.span(), self.parse_lambda_params()));
         let mut stmts: Vec<Stmt> = Vec::new();
+        let language = self.language_open.len();
         self.statements(RecoverySite::Block, |p| p.parse_block_stmt(&mut stmts));
         self.end_region();
+        self.close_language(language);
         // Local classes are rejected by the typer; their clauses must not reach an outer body.
         self.pending_derives.truncate(derives_mark);
         // A statement that is a placeholder alone binds it to no function: scalac's
@@ -168,11 +170,14 @@ impl<'a> Parser<'a> {
     }
 
     pub(super) fn parse_block_stmt(&mut self, out: &mut Vec<Stmt>) {
-        if self.eat(Tok::KwImport) {
+        if self.at(Tok::KwImport) {
+            let at = self.bump().span.start;
             let start = self.ast.local_imports.len() as u32;
             let mut imports = std::mem::take(&mut self.ast.local_imports);
-            self.parse_import_exprs(&mut imports);
+            self.parse_import_exprs(&mut imports, at);
             self.ast.local_imports = imports;
+            let language = std::mem::take(&mut self.language_scratch);
+            self.open_language_scopes(&language, at, true);
             let len = self.ast.local_imports.len() as u32 - start;
             out.push(Stmt::Import(self.ast.import_stmts.len() as u32));
             self.ast.import_stmts.push(ListRef { start, len });
@@ -364,6 +369,9 @@ impl<'a> Parser<'a> {
                     self.bump();
                     let annots = self.parse_inline_annots();
                     self.ast.inline_annots.extend_from_slice(&annots);
+                    for a in annots.iter().filter(|a| a.name == names::NOWARN) {
+                        self.ast.nowarn_ascriptions.push((start.to(self.prev_span()), a.clone()));
+                    }
                     if annots.iter().any(|a| a.name == names::UNCHECKED) {
                         e = self.ast.add_expr(Expr::Unchecked(e), start.to(self.prev_span()));
                     }

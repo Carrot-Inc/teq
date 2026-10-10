@@ -1,0 +1,2 @@
+exit 0
+warning there were 8 deprecation warnings; re-run with -deprecation for details

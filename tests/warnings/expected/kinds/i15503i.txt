@@ -1,0 +1,37 @@
+3:28:13 unused import
+4:27:3 unused import
+8:15:1 unused private member
+16:15:2 unused private member
+20:16:1 unused implicit parameter
+23:16:1 unused implicit parameter
+25:10:1 unused explicit parameter
+28:9:1 unused local definition
+29:9:1 unused local definition
+40:10:1 unused pattern variable
+53:10:1 unused explicit parameter
+58:9:1 unused local definition
+70:17:1 unused private member
+90:17:6 unused explicit parameter
+92:24:6 unused explicit parameter
+100:5:1 unused explicit parameter
+102:17:1 unused private member
+117:5:1 unused explicit parameter
+118:17:1 unused private member
+120:5:1 unused explicit parameter
+122:17:1 unused private member
+139:17:1 unset private variable, consider using an immutable val instead
+141:5:1 unused explicit parameter
+143:17:3 unused private member
+148:17:1 unset private variable, consider using an immutable val instead
+152:17:2 unset private variable, consider using an immutable val instead
+158:5:1 unused explicit parameter
+159:17:1 unused private member
+161:5:1 unused explicit parameter
+163:17:1 unused private member
+168:17:1 unset private variable, consider using an immutable val instead
+172:17:1 unset private variable, consider using an immutable val instead
+208:7:1 unused pattern variable
+279:22:13 unused import
+349:20:1 unused explicit parameter
+351:17:4 unused private member
+353:17:1 unused private member

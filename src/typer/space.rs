@@ -188,6 +188,8 @@ pub struct DeferredMatch {
     pub partial: bool,
     pub span: Span,
     pub file: FileId,
+    /// The check warns of nothing: a repeat of a later check of the same match
+    /// (`quiet_repeated_matches`), or one an E211 at the match hides (`match_not_partial`).
     pub quiet: bool,
     /// A case's pattern or guard is malformed (`Ast::broken_cases`): what the check finds
     /// depends on it.
@@ -214,7 +216,7 @@ impl<'a> Worker<'a> {
         }
         let (transparent, gadt) = (self.transparent.clone(), self.gadt.clone());
         self.note_rare(super::state::Rare::DeferredMatches, self.deferred_matches.len());
-        self.deferred_matches.push(DeferredMatch { sty, cases, clauses, partial, span, file, quiet: self.nowarn > 0, broken, transparent, gadt, definition: None });
+        self.deferred_matches.push(DeferredMatch { sty, cases, clauses, partial, span, file, quiet: false, broken, transparent, gadt, definition: None });
     }
 
     /// Runs the matches' checks the bodies kept, over the program as it stands once every body
@@ -223,21 +225,23 @@ impl<'a> Worker<'a> {
         let mut matches = std::mem::take(&mut self.deferred_matches);
         matches.sort_by_key(|m| (m.file, m.span.start, m.span.end));
         let saved_file = self.env.file;
-        let saved_nowarn = self.nowarn;
         let saved_transparent = std::mem::take(&mut self.transparent);
         let saved_gadt = std::mem::take(&mut self.gadt);
         let saved_dependent = self.dependent_checks;
         for m in matches {
             self.env.file = m.file;
-            self.nowarn = m.quiet as u32;
             self.dependent_checks = m.broken as u32;
             self.transparent = m.transparent;
             self.gadt = m.gadt;
+            let mark = self.diags.items.len();
             self.check_match(m.sty, &m.cases, &m.clauses, m.partial, m.span);
+            if m.quiet {
+                let reported = self.diags.items.split_off(mark);
+                self.diags.items.extend(reported.into_iter().filter(|d| !d.is_warning));
+            }
         }
         self.dependent_checks = saved_dependent;
         self.env.file = saved_file;
-        self.nowarn = saved_nowarn;
         self.transparent = saved_transparent;
         self.gadt = saved_gadt;
     }
@@ -440,7 +444,7 @@ impl<'t, 'a> Spaces<'t, 'a> {
             return;
         }
         let shown = self.show_missing(remaining);
-        self.t.warn(span, format!("match may not be exhaustive; missing: {}", shown));
+        self.t.warn_as(span, format!("match may not be exhaustive; missing: {}", shown), crate::source::Warning::id(crate::warnings::id::PATTERN_MATCH_EXHAUSTIVITY));
     }
 
     // ---- the arena ----
@@ -812,7 +816,7 @@ impl<'t, 'a> Spaces<'t, 'a> {
                     shown.push(text);
                 }
             }
-            self.t.warn(span, format!("match may not be exhaustive; missing: {}", shown.join(", ")));
+            self.t.warn_as(span, format!("match may not be exhaustive; missing: {}", shown.join(", ")), crate::source::Warning::id(crate::warnings::id::PATTERN_MATCH_EXHAUSTIVITY));
         }
     }
 
@@ -1036,7 +1040,7 @@ impl<'t, 'a> Spaces<'t, 'a> {
 
     fn unreachable(&mut self, clauses: &[CaseClause], i: usize) {
         let pat_span = self.t.cur_ast().pat_spans[clauses[i].pat.idx()];
-        self.t.warn(pat_span, "unreachable case");
+        self.t.warn_as(pat_span, "unreachable case", crate::source::Warning::id(crate::warnings::id::MATCH_CASE_UNREACHABLE));
     }
 
     // ---- projection ----

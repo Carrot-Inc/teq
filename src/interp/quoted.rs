@@ -3642,7 +3642,7 @@ fn install_trees(it: &mut Table) {
             _ => None,
         };
         let n = params.len();
-        let f = it.typer.prog.add_fun(TFun { sym, params, defaults: vec![None; n], body });
+        let f = it.typer.prog.add_fun(TFun { sym, params, defaults: vec![None; n], body, body_unconsuming: false });
         Ok(Value::Tree(TreeRef::Fun(f)))
     });
     q!(it, "Reflect.DefDef.copy", |it, a| {
@@ -3673,7 +3673,7 @@ fn install_trees(it: &mut Table) {
                         (ps, vec![None; n])
                     }
                 };
-                let f = it.typer.prog.add_fun(TFun { sym, params, defaults, body: rhs });
+                let f = it.typer.prog.add_fun(TFun { sym, params, defaults, body: rhs, body_unconsuming: false });
                 Ok(Value::Tree(TreeRef::Fun(f)))
             }
         }
