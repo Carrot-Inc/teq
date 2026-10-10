@@ -685,6 +685,7 @@ intersection_alias_outside_bounds
 intersection_bounds_over_params
 intersection_denotation_meet
 intersection_generic_overloads
+intersection_given_object
 intersection_joint_member
 intersection_member_binders
 intersection_member_bounds_meet
