@@ -1083,6 +1083,9 @@ pub struct InterpCaches {
     lazy_inits: FxMap<SymId, (ClassId, TExprId)>,
     lazy_seen: (usize, usize),
     shapes: crate::arena::Dense<Option<Shape>>,
+    /// Per class: its and its bases' constant vals (`tir::constant_val`) with their constants,
+    /// which a new instance holds before any constructor runs (`Interp::construct`).
+    constant_slots: crate::arena::Dense<Option<Rc<[(FieldKey, Value)]>>>,
     has_body: crate::arena::Dense<Option<bool>>,
     tail_of: crate::arena::Dense<u8>,
     template_cache: crate::arena::Dense<Option<Template>>,
@@ -1156,6 +1159,7 @@ impl InterpCaches {
             lazy_inits: _,
             lazy_seen: _,
             shapes: _,
+            constant_slots: _,
             has_body: _,
             tail_of: _,
             template_cache: _,
@@ -1251,6 +1255,9 @@ pub struct Interp<'a, 't> {
     lazy_inits: FxMap<SymId, (ClassId, TExprId)>,
     lazy_seen: (usize, usize),
     shapes: crate::arena::Dense<Option<Shape>>,
+    /// Per class: its and its bases' constant vals (`tir::constant_val`) with their constants,
+    /// which a new instance holds before any constructor runs (`Interp::construct`).
+    constant_slots: crate::arena::Dense<Option<Rc<[(FieldKey, Value)]>>>,
     has_body: crate::arena::Dense<Option<bool>>,
     tail_of: crate::arena::Dense<u8>,
     builtins: Rc<FxMap<String, Builtin>>,
@@ -1373,6 +1380,7 @@ impl<'a, 't> Interp<'a, 't> {
             lazy_inits: FxMap::default(),
             lazy_seen: (0, 0),
             shapes: crate::arena::Dense::new(None),
+            constant_slots: crate::arena::Dense::new(None),
             has_body: crate::arena::Dense::new(None),
             tail_of: crate::arena::Dense::new(0),
             builtins: builtins::table(),
@@ -1450,6 +1458,7 @@ impl<'a, 't> Interp<'a, 't> {
             lazy_inits: self.lazy_inits,
             lazy_seen: self.lazy_seen,
             shapes: self.shapes,
+            constant_slots: self.constant_slots,
             has_body: self.has_body,
             tail_of: self.tail_of,
             template_cache: self.template_cache,
@@ -1510,6 +1519,7 @@ impl<'a, 't> Interp<'a, 't> {
         self.lazy_inits = c.lazy_inits;
         self.lazy_seen = c.lazy_seen;
         self.shapes = c.shapes;
+        self.constant_slots = c.constant_slots;
         self.has_body = c.has_body;
         self.tail_of = c.tail_of;
         self.template_cache = c.template_cache;

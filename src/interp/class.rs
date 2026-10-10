@@ -583,6 +583,15 @@ impl<'a, 't> Interp<'a, 't> {
     /// Runs the primary constructor of `c` on `obj`: the parameters become fields, the
     /// superclass is constructed, the body runs.
     fn construct(&mut self, obj: &Rc<Object>, c: ClassId, args: Vec<Value>) -> R<()> {
+        // dotty's `Memoize`: a constant val's getter answers the constant whatever the
+        // constructors have run (a trait's body reading it first), so the instance holds it
+        // before the first of them.
+        if obj.class == c {
+            let this = Value::Obj(obj.clone());
+            for (key, v) in self.constant_slots(c).iter() {
+                self.write_slot(&this, *key, v.clone());
+            }
+        }
         let ti = self.tclass_index(c);
         self.halt_on_withheld()?;
         let Some(ti) = ti else {
@@ -1545,6 +1554,35 @@ impl<'a, 't> Interp<'a, 't> {
             Member::Missing => None,
             m => Some(m),
         }
+    }
+
+    /// The constant vals of `c` and its bases with their constants (`Interp::constant_slots`).
+    fn constant_slots(&mut self, c: ClassId) -> Rc<[(FieldKey, Value)]> {
+        if let Some(s) = &self.constant_slots[c.idx()] {
+            return s.clone();
+        }
+        let bases: Vec<ClassId> = self.syms().class(c).base_types.iter().map(|&(b, _)| b).collect();
+        let mut slots = Vec::new();
+        for b in bases {
+            let Some(ti) = self.tclass_index(b) else { continue };
+            let constants = self.prog().classes[ti].constants.clone();
+            for (s, e) in constants {
+                let v = match self.prog().expr(e) {
+                    TExpr::Int(v) => Value::Int(v),
+                    TExpr::Long(v) => Value::Long(v),
+                    TExpr::Double(v) => Value::Double(v),
+                    TExpr::Bool(v) => Value::Bool(v),
+                    TExpr::Char(v) => Value::Char(v),
+                    TExpr::Str(id) => Value::Str(self.string_lit(id)),
+                    _ => continue,
+                };
+                let key = self.field_key(s);
+                slots.push((key, v));
+            }
+        }
+        let slots: Rc<[(FieldKey, Value)]> = Rc::from(slots);
+        self.constant_slots[c.idx()] = Some(slots.clone());
+        slots
     }
 
     fn shape_member(&mut self, c: ClassId, name: Name) -> Option<Member> {

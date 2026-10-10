@@ -884,6 +884,10 @@ pub struct TClass {
     /// `existingDef` takes in its place (`synthetic`'s bit, the member), which a lookup of the name
     /// finds before the bases' other definitions.
     pub existing_defs: Vec<(u16, SymId)>,
+    /// The constant vals of the class's body (`constant_val`) with their constants as literals,
+    /// which a getter answers whatever the constructor has run (`Memoize`); a right side that is
+    /// no literal stays in `init`, the constructor's work.
+    pub constants: Vec<(SymId, TExprId)>,
     pub init: Vec<TInit>,
     pub methods: Vec<FunId>,
     /// The secondary constructors: the body of each is a block whose one statement is the

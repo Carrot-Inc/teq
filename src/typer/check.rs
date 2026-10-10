@@ -2839,6 +2839,7 @@ impl<'a> Worker<'a> {
             retracted_unapply: false,
             equals_order: Vec::new(),
             existing_defs: Vec::new(),
+            constants: Vec::new(),
             init: Vec::new(),
             methods: Vec::new(),
             ctors: Vec::new(),
@@ -3828,6 +3829,18 @@ impl<'a> Worker<'a> {
                 self.class_member_body(sym);
                 if let (Some(_), Some(init)) = (rhs, self.readable_init(sym)) {
                     tclass.init.push(TInit::Field(sym, init));
+                    // dotty's `Memoize`: a constant val's getter answers the constant whatever
+                    // the constructor has run; the record gives the targets that have no type
+                    // store its literal (`TClass::constants`), the right side staying the
+                    // constructor's work where the val stands (`Constructors`).
+                    match crate::tir::constant_val(&self.prog, &self.syms, &self.types, &self.asts, sym, init) {
+                        Some(crate::tir::ConstVal::Declared(l)) => {
+                            let lit = self.literal_expr(self.types.lit_val(l));
+                            tclass.constants.push((sym, lit));
+                        }
+                        Some(crate::tir::ConstVal::Literal) => tclass.constants.push((sym, init)),
+                        None => {}
+                    }
                 }
             }
             DefKind::Fun(_) if def.name == names::INIT => {

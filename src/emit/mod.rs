@@ -2498,7 +2498,8 @@ impl<'a> Emitter<'a> {
                 let n = self.sym_name(p);
                 self.line();
                 // `Memoize`'s getter of a constant val answers the constant, which no field holds.
-                match init.filter(|&e| self.reach.constant_vals.binary_search(&p).is_ok() && layout::is_literal_init(self.prog, e)) {
+                let constant = tc.constants.iter().find(|&&(s, _)| s == p).map(|&(_, lit)| lit);
+                match init.and(constant).filter(|_| self.reach.constant_vals.binary_search(&p).is_ok()) {
                     Some(e) => {
                         let _ = write!(self.out, "{}() {{ return ", n);
                         self.emit_value(e);
@@ -2603,10 +2604,15 @@ impl<'a> Emitter<'a> {
         for init in &tc.init {
             match init {
                 TInit::Field(sym, _) if self.syms.sym(*sym).mods & mods::LAZY != 0 => {}
-                // A constant val initialised with its literal has no field: a read is folded, or
-                // a read through a receiver finds the literal on the prototype
-                // (`emit_registration`). One whose initialiser has effects keeps the slot it fills.
-                TInit::Field(sym, e) if self.reach.constant_vals.binary_search(sym).is_ok() && layout::is_literal_init(self.prog, *e) => {}
+                // A constant val has no field (`Memoize`): a read is folded, or finds the literal
+                // on the prototype or in the getter (`emit_registration`), whatever the
+                // constructors have run; a right side that is no literal runs here for its
+                // effects (`Constructors`).
+                TInit::Field(sym, e) if self.reach.constant_vals.binary_search(sym).is_ok() => {
+                    if !layout::is_literal_init(self.prog, *e) {
+                        self.emit_stmt(*e, &Ctx::Discard);
+                    }
+                }
                 // The field may hold what a subclass took as a parameter in its place.
                 TInit::Field(sym, e) if self.syms.sym(*sym).overridden_by_param => {
                     let field = self.field_name(*sym);
@@ -2978,13 +2984,12 @@ impl<'a> Emitter<'a> {
         // `Memoize`'s getter of a constant val, where a read through a receiver reaches it: the
         // literal on the prototype, for the instances and a trait's classes (before `$cls`,
         // which takes a trait's members).
-        for init in &tc.init {
-            let TInit::Field(s, e) = *init else { continue };
+        for &(s, lit) in &tc.constants {
             let read = self.reach.fields_read[s.idx()] || self.reach.init_read[s.idx()];
-            if read && self.reach.constant_vals.binary_search(&s).is_ok() && layout::is_literal_init(prog, e) {
+            if read && self.reach.constant_vals.binary_search(&s).is_ok() {
                 let field = self.field_access(s);
                 let _ = write!(self.out, "{}.prototype{} = ", name, field);
-                self.emit_value(e);
+                self.emit_value(lit);
                 self.out.push_str("; ");
             }
         }

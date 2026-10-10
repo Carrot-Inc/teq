@@ -207,6 +207,7 @@ conformance_extras
 cons_pattern_binders
 console_streams
 constant_final_val_accessor
+constant_final_val_early
 constant_final_vals
 constant_member_receiver
 constant_singleton_inferred
