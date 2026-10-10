@@ -1024,9 +1024,14 @@ impl<'a> Worker<'a> {
 
     /// Types a given. Parameterless structural givens become a value holding the instance, which
     /// under the fork is the given's body cell's, as a val's initialiser is: one worker makes and
-    /// publishes it, another that reads the given (a macro's run) waits for it (`walk_body`).
+    /// publishes it, another that reads the given (a macro's run) waits for it (`walk_body`). One
+    /// with type or term parameters is a def making an instance per call (dotty's
+    /// `Parsers.givenDef`).
     fn check_given(&mut self, sym: SymId) {
-        let parameterless = self.sig_of(sym).clauses.is_empty();
+        let parameterless = {
+            let sig = self.sig_of(sym);
+            sig.clauses.is_empty() && sig.tparams.is_empty()
+        };
         match self.syms.sym(sym).impl_class {
             Some(impl_class) => {
                 self.check_class(impl_class);
@@ -1432,7 +1437,7 @@ impl<'a> Worker<'a> {
                 return sig;
             }
             if self.syms.sym(sym).mods & mods::SETTER != 0 && !self.is_library_member(sym) {
-                let sig = Arc::new(self.abstract_setter_sig(sym));
+                let sig = Arc::new(self.setter_sig(sym));
                 self.publish_sig(sym, sig.clone());
                 self.outermost_completion_done();
                 return sig;
@@ -2466,9 +2471,12 @@ impl<'a> Worker<'a> {
         if let DefKind::Given(g) = &def.kind {
             self.defining = g.alias.map(|_| sym);
         }
+        // A given alias with type or term parameters is a def, one without a lazy val (dotty's
+        // `Parsers.givenDef`, `hasParams`).
+        let given_def = matches!(&def.kind, DefKind::Given(_)) && (!sig.clauses.is_empty() || !sig.tparams.is_empty());
         let returns_to = match &def.kind {
             DefKind::Fun(f) => Some((def.name, f.ret.map(|_| sig.ret), sym)),
-            DefKind::Given(g) if !g.clauses.is_empty() => Some((def.name, Some(sig.ret), sym)),
+            DefKind::Given(_) if given_def => Some((def.name, Some(sig.ret), sym)),
             _ => None,
         };
         let outer_return = std::mem::replace(&mut self.return_to, returns_to);
@@ -2491,8 +2499,7 @@ impl<'a> Worker<'a> {
             _ => (None, Vec::new()),
         };
         let defaults = self.enter_params(sig, &default_exprs, frame);
-        let is_method = matches!(def.kind, DefKind::Fun(_))
-            || (matches!(def.kind, DefKind::Given(_)) && !sig.clauses.is_empty());
+        let is_method = matches!(def.kind, DefKind::Fun(_)) || given_def;
         // The interpreter runs the body of a templated def where it has no builtin for it.
         let has_intrinsic = (self.syms.sym(sym).intrinsic.is_some() || self.body_is_native(sym)) && !((self.interp || self.for_interpreter) && body.is_some());
         let mut result_ty = expected.unwrap_or(ERROR);
@@ -4072,12 +4079,12 @@ impl<'a> Worker<'a> {
         if agreement == Agreement::Params && (p_abstract || overloads) {
             return false;
         }
-        // A def with `override` over an abstract var's getter or setter, which scalac names by
-        // the var.
-        let overrides_var = own && m_kind == SymKind::Def && m_mods & mods::OVERRIDE != 0 && p_abstract;
+        // A member with `override` over a var or its setter, which scalac names by the var
+        // (`RefChecks.checkOverride`, `other.isMutableVarOrAccessor`).
+        let overrides_var = own && m_mods & mods::OVERRIDE != 0 && (p_kind == SymKind::Var || (p_kind == SymKind::Def && p_mods & mods::SETTER != 0));
         let overridden_var = match p_kind {
             SymKind::Var if overrides_var => Some(p),
-            SymKind::Def if overrides_var => super::setters::abstract_var_of_setter(&self.syms, self.interner, p),
+            SymKind::Def if overrides_var => super::setters::var_of_setter(&self.syms, self.interner, p),
             _ => None,
         };
         let shown_p = overridden_var.unwrap_or(p);
@@ -4575,7 +4582,9 @@ impl<'a> Worker<'a> {
                         k += 1;
                         // A deferred given is implemented by the search, or reported there; one
                         // that `m` overrides, an ancestor's, implements nothing of `m`.
+                        // A concrete var's setter is the var's, which `var_implements_setter` reads.
                         let implements = s != m
+                            && !super::setters::is_concrete_setter(&self.syms, s)
                             && (!self.is_abstract_member(s) || (self.is_deferred_given(s) && !self.overrides_declaration_of(m, s)))
                             && !self.is_private(s)
                             && !self.is_abstract_override(s)
@@ -5077,7 +5086,7 @@ impl<'a> Worker<'a> {
         for m in members {
             // The setter of an abstract var is declared in the output whether or not a call
             // has completed it.
-            if self.syms.sym(m).mods & mods::SETTER != 0 {
+            if self.syms.sym(m).mods & (mods::SETTER | mods::ABSTRACT) == mods::SETTER | mods::ABSTRACT {
                 self.sig_of(m);
             }
             // A given without parameters is a lazy val, which may implement an abstract given

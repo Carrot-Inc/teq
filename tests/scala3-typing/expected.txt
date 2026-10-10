@@ -487,7 +487,7 @@ neg/i1286.scala	accepts
 neg/i12941.scala	superset	+1 lines: several entry points: func, hello; choose one with --main
 neg/i12986a	same	
 neg/i12986b.scala	same	
-neg/i13019.scala	accepts	
+neg/i13019.scala	same	
 neg/i13044.scala	same	
 neg/i13075.scala	syntax	expected a pattern, found {}
 neg/i13076.scala	same	
@@ -511,7 +511,7 @@ neg/i13513.scala	same
 neg/i13570.scala	same	
 neg/i13580.scala	syntax	expected {}, found {}
 neg/i13701.scala	accepts	
-neg/i13703.scala	superset	+1 lines: type mismatch
+neg/i13703.scala	same	
 neg/i13757-match-type-anykind.scala	std	AnyKind
 neg/i13769.scala	syntax	expected {}, found {}
 neg/i13780-1.scala	different	type mismatch
@@ -559,7 +559,7 @@ neg/i14544.scala	subset	1/2 lines
 neg/i14564.scala	syntax	expected {}, found {}
 neg/i14659.scala	different	type mismatch
 neg/i14660.scala	accepts	
-neg/i14722.scala	superset	+2 lines: value id cannot override mutable variable id in class HasId
+neg/i14722.scala	superset	+1 lines: error overriding variable id in class HasId of type String;
 neg/i14783.scala	same	
 neg/i14818.scala	different	b is exported twice, for two different definitions
 neg/i14823.scala	same	

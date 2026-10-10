@@ -655,7 +655,7 @@ impl<'a> Emitter<'a> {
                 self.out.push_str(close);
             }
             TExpr::ToStr(inner, conv) => {
-                let f = to_str_text(conv.kind());
+                let f = to_str_conv_text(prog, inner, conv);
                 self.note_text(f);
                 self.out.push_str(f);
                 self.out.push('(');
@@ -2324,6 +2324,19 @@ pub(super) fn unbox_helper(t: TypeTest) -> &'static str {
 }
 
 /// The function a value is turned into a string with, before a concatenation.
+/// The function a `ToStr` is written as: the program's `toString` of what may be `null` (a
+/// string's, a reference's) is `$toStr`, which fails on `null` as a member selected from it does;
+/// of a string by construction (a literal, a concatenation, a conversion), the string itself.
+pub(super) fn to_str_conv_text(prog: &crate::tir::Program, inner: TExprId, conv: crate::tir::StrConv) -> &'static str {
+    match conv.kind() {
+        StrKind::Str if !conv.is_rendering() && prog.is_non_null_string(inner) => "",
+        StrKind::Str | StrKind::Generic if !conv.is_rendering() => TO_STR_CALL,
+        kind => to_str_text(kind),
+    }
+}
+
+pub(super) const TO_STR_CALL: &str = "$toStr";
+
 pub(super) fn to_str_text(kind: StrKind) -> &'static str {
     match kind {
         StrKind::Str => "",
@@ -2360,7 +2373,7 @@ pub(super) fn op_texts() -> impl Iterator<Item = &'static str> {
     .filter_map(|t| test_text(t).map(|(text, _)| text));
     let strs = [StrKind::Plain, StrKind::Double, StrKind::Generic].into_iter().map(to_str_text);
     let casts = ["$as", "$asA", "$asS", "$asT", "$asNothing", "$uI", "$uJ", "$uD", "$uF", "$uB", "$uS", "$uC", "$uZ"];
-    prim.chain(unary).chain(tests).chain(strs).chain([INT_DIV_BY_CONSTANT.0, INT_REM_BY_CONSTANT.0, "NaN", "Infinity", THROW, UNWRAP_JS]).chain(casts)
+    prim.chain(unary).chain(tests).chain(strs).chain([TO_STR_CALL, INT_DIV_BY_CONSTANT.0, INT_REM_BY_CONSTANT.0, "NaN", "Infinity", THROW, UNWRAP_JS]).chain(casts)
 }
 
 #[cfg(test)]

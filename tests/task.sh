@@ -444,6 +444,13 @@ if [ $? = 0 ] && [[ "$out" == *"warning: teq.lock was written before build.sbt c
 out=$(task --strict compile app)
 if [ $? = 2 ] && [[ "$out" == *"refusing a stale export"* ]]; then pass "--strict refuses a stale export"; else fail "--strict: $out"; fi
 write_export 0.1.7-check.9 81
+# A build file git ignores (Metals' project/metals.sbt) is a tool's, not the build's: no warning.
+git -C "$b" init -q && echo 'metals.sbt' > "$b/.gitignore" && mkdir -p "$b/project" && echo '// metals' > "$b/project/metals.sbt"
+out=$(task compile app)
+if [ $? = 0 ] && [[ "$out" != *"was written before"* ]]; then pass "a build file git ignores is not the build's: no stale warning"; else fail "a git-ignored project/metals.sbt counted: $out"; fi
+rm -rf "$b/.git" "$b/.gitignore" "$b/project/metals.sbt"
+out=$(task compile app)
+if [ $? = 0 ] && [[ "$out" != *"was written before"* ]]; then pass "the export current again once the ignored file is gone"; else fail "after the ignored file: $out"; fi
 # build.sbt checked out with CRLF where the export read LF (Git for Windows' default), and the
 # reverse: stale all the same, --strict refusing, with a note naming the file and the remedy in the
 # place of the command (an export there would record those line ends); an edit beside the line

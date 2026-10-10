@@ -910,12 +910,29 @@ impl<'w, 'a> P<'w, 'a> {
                 },
                 Some(f) => self.unsupported_form(f),
             },
-            TExpr::Assign(lhs, rhs) => {
-                let l = self.open(ASSIGN);
-                self.term(lhs);
-                self.term(rhs);
-                self.buf.end_length(l);
-            }
+            TExpr::Assign(lhs, rhs) => match (form, self.w.prog.expr(lhs)) {
+                // A concrete var's setter called by its name (`o.x_=(v)`), whose call the typer
+                // made the var's assignment: scalac's tree is the call.
+                (Some(Form::Member(setter)), TExpr::Field(r, _)) => {
+                    self.receive_by_name(e, r, setter);
+                    if matches!(self.w.prog.expr(r), TExpr::This) && self.w.prog.span_of(r).is_none() && self.names_unqualified(e, setter) {
+                        return self.applied(setter, None, &[rhs], |p| p.identifier(setter), Some(Qual::Expr(r)));
+                    }
+                    self.call(setter, Qual::Expr(r), None, &[rhs])
+                }
+                (Some(Form::Member(setter)), _) => {
+                    if self.names_unqualified(e, setter) {
+                        return self.applied(setter, None, &[rhs], |p| p.identifier(setter), Some(Qual::Owner));
+                    }
+                    self.call(setter, Qual::Owner, None, &[rhs])
+                }
+                _ => {
+                    let l = self.open(ASSIGN);
+                    self.term(lhs);
+                    self.term(rhs);
+                    self.buf.end_length(l);
+                }
+            },
             TExpr::Match(s, cases) => {
                 let unit = self.typed_unit(e);
                 let scrut = self.term_type(s).unwrap_or(ANY);
@@ -2328,16 +2345,20 @@ impl<'w, 'a> P<'w, 'a> {
         };
         let forwarder = self.forwarder_name.take();
         let name = forwarder.unwrap_or(info.name);
+        // The member's own name (an accessor's derived one), or the forwarder's an export makes.
+        let original = match forwarder {
+            Some(f) => self.simple_name(f),
+            None => self.sym_name(s),
+        };
         let Some((params, result)) = sig else {
             self.buf.byte(SELECT);
-            let n = self.simple_name(name);
-            self.buf.nat(n as u64);
+            self.buf.nat(original as u64);
             qual(self);
             return;
         };
-        let target = self.target_name(s);
+        let target = self.target_name(s).filter(|t| *t != self.name(name)).map(|t| self.names.simple(&t));
         let l = self.open(SELECTIN);
-        let n = self.names.signed(&self.name(name), target.as_deref(), &params, &result);
+        let n = self.names.signed_of(original, target, &params, &result);
         self.buf.nat(n as u64);
         qual(self);
         // A std member is selected on its receiver's class, where scala-library has it; a

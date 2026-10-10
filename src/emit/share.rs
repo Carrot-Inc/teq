@@ -1147,7 +1147,7 @@ impl<'a> Enc<'a> {
             }
             TExpr::ToStr(a, conv) => {
                 self.tok(T_TOSTR);
-                self.tok(conv.kind() as u64);
+                self.tok(conv.bits() as u64);
                 self.expr(a);
             }
             TExpr::Js(s, args) => {

@@ -1,0 +1,7 @@
+# scalac 3.8.4's spans of A's anonymous classes (`teq tasty --positions` of scalac's A.tasty): each
+# from its `new` to the end of its template, which the whole lean check build's A.tasty gives the
+# same trees in this order.
+asa/A.tasty TYPEDEF 235 .. 415 a/A.scala
+asa/A.tasty TYPEDEF 258 .. 277 a/A.scala
+asa/A.tasty TYPEDEF 313 .. 343 a/A.scala
+asa/A.tasty TYPEDEF 368 .. 415 a/A.scala

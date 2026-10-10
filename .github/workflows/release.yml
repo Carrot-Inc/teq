@@ -685,6 +685,12 @@ jobs:
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 24.21.0
+      # The ship image's JDK release (bench/actions/toolchain.sh), which the identity reference's JVM programs read: a
+      # runner image's own JDK is another release, and its outputs differ from the reference's.
+      - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: temurin
+          java-version: 21
       - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.cache/coursier/v1
@@ -722,6 +728,10 @@ jobs:
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 24.21.0
+      - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: temurin
+          java-version: 21
       - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.cache/coursier/v1
@@ -764,6 +774,10 @@ jobs:
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 24.21.0
+      - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: temurin
+          java-version: 21
       - name: GNU coreutils (timeout)
         run: |
           command -v gtimeout > /dev/null || HOMEBREW_NO_AUTO_UPDATE=1 perl -e 'alarm 900; exec @ARGV' brew install coreutils
@@ -810,6 +824,10 @@ jobs:
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 24.21.0
+      - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: temurin
+          java-version: 21
       - name: GNU coreutils (timeout)
         run: |
           command -v gtimeout > /dev/null || HOMEBREW_NO_AUTO_UPDATE=1 perl -e 'alarm 900; exec @ARGV' brew install coreutils

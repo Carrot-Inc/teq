@@ -347,7 +347,7 @@ impl<'a> Worker<'a> {
         for &b in &bases {
             for m in self.syms.class(b).member_order.clone() {
                 let info = self.syms.sym(m);
-                if !matches!(info.kind, SymKind::Def | SymKind::Val | SymKind::Var) || info.mods & crate::ast::mods::PRIVATE != 0 {
+                if !matches!(info.kind, SymKind::Def | SymKind::Val | SymKind::Var) || info.mods & crate::ast::mods::PRIVATE != 0 || super::setters::is_concrete_setter(&self.syms, m) {
                     continue;
                 }
                 let name = info.name;
@@ -568,6 +568,17 @@ impl<'a> Worker<'a> {
                 out.insert(s, n);
             }
         }
+        // An inline accessor of an expanded name, `INLINEACCESSOR(EXPANDED(p$C, x))`
+        // (`typer::accessors`), is `p$C$$inline$x` in the class file, the qualifier mangled
+        // first, as scalac's backend mangles `PrepareInlineable.accessorNameOf`'s name.
+        let accessors: Vec<((ClassId, SymId, bool), SymId)> = self.inline_accessor_syms.iter().map(|(&k, &s)| (k, s)).collect();
+        for ((c, target, setter), s) in accessors {
+            let (prefix, member) = self.inline_accessor_parts(c, target, setter);
+            if !prefix.is_empty() {
+                let binary = self.interner.intern(&format!("{}$$inline${}", prefix.join("$"), crate::jvm::names::encode(&member)));
+                out.insert(s, binary);
+            }
+        }
         self.jvm_volatile = self.source_volatile();
         out
     }
@@ -710,9 +721,10 @@ impl<'a> Worker<'a> {
         let (name, Owner::Class(c)) = (self.syms.sym(m).name, self.syms.sym(m).owner) else { return true };
         let Some(entry) = self.settled_entry(c, name) else { return true };
         let alts: Vec<SymId> = self.syms.alternatives(entry).map_or_else(Vec::new, |a| a.to_vec());
+        // A concrete var's setter has no output, its call being the var's assignment.
         let mut written = 0;
         for a in alts {
-            if a == m || !self.nameless_inline(a) {
+            if a == m || (!self.nameless_inline(a) && !super::setters::is_concrete_setter(&self.syms, a)) {
                 written += 1;
             }
         }

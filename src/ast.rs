@@ -295,9 +295,10 @@ pub mod mods {
     pub const INCOMPLETE: Mods = 1 << 23;
     /// A Java annotation interface read from its class file.
     pub const JAVA_ANNOTATION: Mods = 1 << 24;
-    /// The setter `x_=` of an abstract `var x`: the member an assignment through the var calls
-    /// and an implementing class defines. The namer makes it, without a definition, or the
-    /// loader reads it from a pickle.
+    /// The setter `x_=` of a `var x`: of an abstract var (with `ABSTRACT`), the member an
+    /// assignment through the var calls and an implementing class defines; of a concrete one,
+    /// a member whose call is the var's assignment (`typer::setters`). The namer makes it,
+    /// without a definition, or the loader reads it from a pickle.
     pub const SETTER: Mods = 1 << 25;
     /// A deferred given: `given x: T = deferred` in a trait, the marker resolving to
     /// `scala.compiletime.deferred` (scalac's `Deferred | HasDefault`, set as its signature
@@ -602,6 +603,10 @@ pub struct ReaderTables {
     /// its producer gave the class and the place of the lambda in its source (kind 2 at the
     /// `$anonfun`).
     pub sam_classes: crate::intern::FxMap<ExprId, (String, u32, u32)>,
+    /// A product's binder the converter renamed apart where it shadows one its scope reads
+    /// (`x$b117`), by that name: its own name, which its local symbol takes, as the whole
+    /// program's has it, the scope resolving the renamed spelling.
+    pub binder_sources: crate::intern::FxMap<Name, Name>,
 }
 
 /// What a product's `INLINED`s took from their call sites, by the nodes made of them: the

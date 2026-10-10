@@ -3950,6 +3950,15 @@ impl<'c, 'a> Collector<'c, 'a> {
                     self.expr(c);
                 }
             }
+            // A concrete var's setter called by its name (`Form::Member`, recorded above): the
+            // receiver, not the var the typer assigns, as scalac's tree calls the setter.
+            TExpr::Assign(a, b) if matches!(form, Some(Form::Member(_))) => {
+                match self.w.prog.expr(a) {
+                    TExpr::Field(r, _) => self.expr(r),
+                    _ => {}
+                }
+                self.expr(b);
+            }
             TExpr::While(a, b) | TExpr::Assign(a, b) => {
                 self.expr(a);
                 self.expr(b);

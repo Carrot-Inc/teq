@@ -206,8 +206,11 @@ pub fn git_sha(env: &BTreeMap<String, String>, root: &Path) -> Result<String, St
     }
 }
 
-/// A command generator: run when its fingerprint changed or an output is missing (a file that is
-/// not there, a directory that is not there or empty), the fingerprint recorded once it succeeded.
+/// A command generator: run when its fingerprint changed or an output its last run made is gone (a
+/// file that is not there, a directory that is not there or empty), the fingerprint and the outputs
+/// present after the run recorded once it succeeded; before any record, every output is expected.
+/// An output the run leaves empty (the generated sources' directory of a command that writes
+/// elsewhere) is not waited for.
 /// The first word `teq` is `teq`, the binary running (`std::env::current_exe()`): the launchers
 /// chose it, the lock's or `TEQ`'s, before the build tool ran, so it is never a `teq` of the
 /// `PATH` nor a launcher of the repository.
@@ -215,15 +218,24 @@ fn command(export: &Export, key: &Key, index: usize, g: &Value, teq: &Result<Pat
     let run: Vec<&str> = g.get("run").map_or(&[][..], Value::items).iter().filter_map(Value::str).collect();
     let Some((program, args)) = run.split_first() else { return Err("no command to run".to_string()) };
     let cwd = export.path(g.get("cwd").and_then(Value::str).unwrap_or("."));
-    let outputs: Vec<PathBuf> = g.get("outputs").map_or(&[][..], Value::items).iter().filter_map(Value::str).map(|o| export.path(o)).collect();
+    let listed: Vec<&str> = g.get("outputs").map_or(&[][..], Value::items).iter().filter_map(Value::str).collect();
+    let outputs: Vec<PathBuf> = listed.iter().map(|o| export.path(o)).collect();
     let fingerprint = fingerprint(export, g, &cwd, &run);
     let record = export.path(&format!("target/teq/generators/{}-{}-{}", key.project, key.configuration, index));
-    let missing = outputs.iter().any(|o| match std::fs::metadata(o) {
-        Ok(meta) if meta.is_dir() => std::fs::read_dir(o).map_or(true, |mut d| d.next().is_none()),
-        Ok(_) => false,
-        Err(_) => true,
-    });
-    if !missing && std::fs::read_to_string(&record).is_ok_and(|r| r.trim() == fingerprint) {
+    let present = |o: &Path| match std::fs::metadata(o) {
+        Ok(meta) if meta.is_dir() => std::fs::read_dir(o).is_ok_and(|mut d| d.next().is_some()),
+        Ok(_) => true,
+        Err(_) => false,
+    };
+    let recorded = std::fs::read_to_string(&record).unwrap_or_default();
+    let mut lines = recorded.lines();
+    let same = lines.next().is_some_and(|f| f == fingerprint);
+    let made: Option<Vec<PathBuf>> = lines.next().filter(|l| l.starts_with("made ")).map(|_| lines.map(|l| export.path(l)).collect());
+    let gone = match &made {
+        Some(made) => made.iter().any(|o| !present(o)),
+        None => outputs.iter().any(|o| !present(o)),
+    };
+    if same && !gone {
         return Ok(Vec::new());
     }
     let before: Vec<(PathBuf, Vec<u8>, SystemTime)> = outputs
@@ -253,7 +265,8 @@ fn command(export: &Export, key: &Key, index: usize, g: &Value, teq: &Result<Pat
     if let Some(dir) = record.parent() {
         let _ = std::fs::create_dir_all(dir);
     }
-    let _ = std::fs::write(&record, format!("{}\n", fingerprint));
+    let made: Vec<&str> = listed.iter().copied().filter(|o| present(&export.path(o))).collect();
+    let _ = std::fs::write(&record, format!("{}\nmade {}\n{}\n", fingerprint, made.len(), made.join("\n")));
     Ok(printed.lines().filter(|l| !l.trim().is_empty()).map(|l| format!("{}: {}", key, l)).collect())
 }
 
@@ -514,6 +527,16 @@ mod tests {
         std::fs::write(dir.join("labels.txt"), "three\n").unwrap();
         command(&export, &key, 0, g, &none).unwrap();
         assert_eq!(std::fs::read_to_string(&out).unwrap(), "THREE\n");
+        // A second output directory the script leaves empty is not waited for: the next check runs nothing.
+        let generator = generator.replace("              - target/gen\n", "              - target/gen\n              - target/managed\n");
+        std::fs::write(dir.join("teq.lock"), lock_of(&format!("projects:\n  p:\n    configurations:\n      compile:\n        generators:\n{}    platform: jvm\n", generator))).unwrap();
+        let export = Export::read(&dir.join("teq.lock")).unwrap();
+        let g = &export.configuration(&key).unwrap().generators[0];
+        assert_eq!(command(&export, &key, 0, g, &none).unwrap(), ["p/compile: again"], "the changed block runs it");
+        std::fs::create_dir_all(dir.join("target/managed")).unwrap();
+        assert!(command(&export, &key, 0, g, &none).unwrap().is_empty(), "an output left empty by the run does not run it again");
+        std::fs::remove_dir_all(dir.join("target/gen")).unwrap();
+        assert_eq!(command(&export, &key, 0, g, &none).unwrap(), ["p/compile: again"], "an output the run made, gone, runs it");
         let _ = std::fs::remove_dir_all(&dir);
     }
 

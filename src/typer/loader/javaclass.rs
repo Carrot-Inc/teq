@@ -841,7 +841,7 @@ impl<'a> Worker<'a> {
             let owner = if is_static { obj } else { c };
             let name = self.interner.intern(&f.name);
             let (kind, mut fm) = if f.access & ACC_FINAL != 0 || f.access & ACC_ENUM != 0 {
-                (SymKind::Val, mods::FIELD)
+                (SymKind::Val, mods::FIELD | constant_final(f))
             } else {
                 (SymKind::Var, mods::FIELD | mods::MUTABLE)
             };
@@ -1060,7 +1060,7 @@ impl<'a> Worker<'a> {
             if self.std_member_named(owner, name) {
                 continue;
             }
-            let (kind, fm) = if f.access & ACC_FINAL != 0 { (SymKind::Val, mods::FIELD) } else { (SymKind::Var, mods::FIELD | mods::MUTABLE) };
+            let (kind, fm) = if f.access & ACC_FINAL != 0 { (SymKind::Val, mods::FIELD | constant_final(f)) } else { (SymKind::Var, mods::FIELD | mods::MUTABLE) };
             let sym = self.syms.new_sym(name, kind, fm, Owner::Class(owner), file, None, Span::default());
             self.syms.sym_mut(sym).java_defined = true;
             self.java_mut().syms.insert(sym, JSym { class, member: JMember::Field(i as u32) });
@@ -1247,6 +1247,25 @@ impl<'a> Worker<'a> {
 
     // ---- signatures ----
 
+    /// The type of a final field with a `ConstantValue`: the constant converted to the declared
+    /// type (dotty's `ClassfileParser.parseAttributes`, `ConstantType(convertTo(c, tp))`), a
+    /// boolean's from its int. teq's literal types have no `Byte`, `Short` or `Float`, which keep
+    /// the declared type, as a `final val` of such a literal does.
+    fn java_constant_type(&mut self, c: &crate::classfile::ConstValue, declared: TypeId) -> Option<TypeId> {
+        use crate::classfile::ConstValue;
+        let b = &self.b;
+        let lit = match *c {
+            ConstValue::Int(v) if declared == b.t_int => LitVal::Int(v),
+            ConstValue::Int(v) if declared == b.t_boolean => LitVal::Bool(v != 0),
+            ConstValue::Int(v) if declared == b.t_char => LitVal::Char(v as u16),
+            ConstValue::Long(v) if declared == b.t_long => LitVal::Long(v),
+            ConstValue::Double(v) if declared == b.t_double => LitVal::Double(v.to_bits()),
+            ConstValue::Str(ref s) if declared == b.t_string => LitVal::Str(self.interner.intern(s)),
+            _ => return None,
+        };
+        Some(self.types.lit(lit))
+    }
+
     pub(super) fn java_sig(&mut self, sym: SymId) -> Option<Arc<MethodSig>> {
         let js = *self.java().syms.get(&sym)?;
         let jc = self.java().classes.get(&js.class)?;
@@ -1262,6 +1281,10 @@ impl<'a> Worker<'a> {
                 let ty = match sig::field_type(f) {
                     Ok(t) => self.map_jtype(&mut cx, &t, false),
                     Err(e) => self.java_blocked(&e),
+                };
+                let ty = match &f.constant {
+                    Some(c) if f.access & ACC_FINAL != 0 => self.java_constant_type(c, ty).unwrap_or(ty),
+                    _ => ty,
                 };
                 Arc::new(MethodSig::value(ty))
             }
@@ -1491,5 +1514,15 @@ impl<'a> Worker<'a> {
             return self.placeholder_class(p, name, arity);
         }
         None
+    }
+}
+
+/// `FINAL` for a final field with a `ConstantValue`, whose read is its constant (`java_sig`), as
+/// dotty's `ClassfileParser` flags a Java final field.
+fn constant_final(f: &crate::classfile::Field) -> crate::ast::Mods {
+    if f.constant.is_some() {
+        mods::FINAL
+    } else {
+        0
     }
 }

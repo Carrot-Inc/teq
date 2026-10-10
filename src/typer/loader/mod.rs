@@ -1343,7 +1343,7 @@ impl<'a> Worker<'a> {
                 if let Owner::Class(companion) = owner {
                     if let Some(en) = self.syms.class(companion).companion.filter(|&en| self.syms.class(en).kind == ClassKind::Enum) {
                         self.syms.class_mut(en).children.push(cid);
-                        if let Some(ordinal) = self.product_case_ordinal(companion, e.addr) {
+                        if let Some(ordinal) = self.product_case_ordinal(companion, e.addr).or_else(|| self.encoded_case_ordinal(file, e.addr, true)) {
                             self.syms.class_mut(cid).ordinal = ordinal;
                         }
                     }
@@ -1838,6 +1838,52 @@ impl<'a> Worker<'a> {
         cases.iter().position(|&(_, a)| a == addr).map(|i| i as u32)
     }
 
+    /// The ordinal a pickled enum case states (dotty's `DesugarEnums.nextOrdinal` numbers the
+    /// cases, value and class alike, in their order of declaration): a class case's `ordinal`, a
+    /// value case's `$new(n, "A")` or the `ordinal` of the anonymous class it makes. A jar lists
+    /// the class cases first, so its order is not the cases'.
+    fn encoded_case_ordinal(&mut self, file: u32, addr: Addr, is_class: bool) -> Option<u32> {
+        use crate::tasty::terms::{Stat, Term, TermDecoder, TermKind};
+        use crate::tasty::tree::Const;
+        fn int(t: &Term) -> Option<u32> {
+            match &t.kind {
+                TermKind::Const(Const::Int(n)) => u32::try_from(*n).ok(),
+                TermKind::Typed(e, ..) | TermKind::Inlined { expansion: e, .. } => int(e),
+                _ => None,
+            }
+        }
+        fn ordinal_def(tasty: &TastyFile, stats: &[Stat]) -> Option<u32> {
+            stats.iter().find_map(|s| match s {
+                Stat::Def(sig, Some(body)) if tasty.simple(sig.name) == Some("ordinal") => int(body),
+                _ => None,
+            })
+        }
+        fn value(tasty: &TastyFile, t: &Term, case: &str) -> Option<u32> {
+            match &t.kind {
+                TermKind::Typed(e, ..) | TermKind::Inlined { expansion: e, .. } => value(tasty, e, case),
+                TermKind::Apply(_, args) => match args.as_slice() {
+                    [n, name] if matches!(&name.kind, TermKind::Const(Const::Str(s)) if tasty.name(*s) == case) => int(n),
+                    _ => None,
+                },
+                TermKind::Block(stats, _) => stats.iter().find_map(|s| match s {
+                    Stat::Class(cd) => ordinal_def(tasty, &cd.template.stats),
+                    _ => None,
+                }),
+                _ => None,
+            }
+        }
+        let tasty = self.tasty(file);
+        let mut decoder = Decoder::new(&tasty);
+        let mut terms = TermDecoder::new(&mut decoder);
+        if is_class {
+            let cd = terms.class_def(addr);
+            return ordinal_def(&tasty, &cd.template.stats);
+        }
+        let (sig, body) = terms.def_with_body(addr);
+        let case = tasty.simple(sig.name)?.to_string();
+        value(&tasty, &body?, &case)
+    }
+
     fn sealed_child_term(&mut self, cx: &mut MapCx, t: &TType) -> Option<ClassId> {
         let sym = match t {
             TType::TermRef(..) | TType::LocalTerm(..) => self.path_term(cx, t)?,
@@ -2218,10 +2264,14 @@ impl<'a> Worker<'a> {
                 m |= mods::DEFERRED;
             }
         }
-        // An abstract var's setter, as scalac and teq pickle it (`typer::setters`); a var
-        // parameter's has no body either.
-        if e.tag == tags::DEFDEF && !e.has_body && f.has(tags::FIELDACCESSOR) && f.has(tags::MUTABLE) && !f.has(tags::PARAMSETTER) {
+        // A var's setter, as scalac and teq pickle it (`typer::setters`): an abstract var's
+        // without a body, a concrete var's with the `()` dotty's `Memoize` fills in later, and a
+        // var parameter's, concrete, without one (`PARAMsetter`).
+        if e.tag == tags::DEFDEF && f.has(tags::FIELDACCESSOR) && f.has(tags::MUTABLE) && tasty.simple(e.name).map_or(false, |n| n.ends_with("_=")) {
             m |= mods::SETTER;
+            if f.has(tags::PARAMSETTER) {
+                m &= !mods::ABSTRACT;
+            }
         }
         let is_enum_case = e.tag == tags::VALDEF && f.has(tags::ENUM) && f.has(tags::CASE);
         // An old-style abstract given (`given x: T`) is a def in the program, as in its pickle.
@@ -2238,7 +2288,7 @@ impl<'a> Worker<'a> {
                 }
             }
             if let Some(en) = self.syms.class(c).companion.filter(|&en| self.syms.class(en).kind == ClassKind::Enum) {
-                let ordinal = self.product_case_ordinal(c, e.addr).unwrap_or(self.syms.class(en).children.len() as u32);
+                let ordinal = self.product_case_ordinal(c, e.addr).or_else(|| self.encoded_case_ordinal(file, e.addr, false)).unwrap_or(self.syms.class(en).children.len() as u32);
                 self.syms.class_mut(en).children.push(case);
                 self.syms.class_mut(case).ordinal = ordinal;
             }
@@ -2271,17 +2321,12 @@ impl<'a> Worker<'a> {
             self.syms.class_mut(case).singleton = Some(sym);
         }
         // What scalac adds to a class that teq's model of the class has not as members: the
-        // default getters, a concrete var's setter; an
-        // abstract var's (`mods::SETTER`) is a member of the model too.
+        // default getters. A var's setter (`mods::SETTER`) is a member of the model too.
         if product && e.tag == tags::DEFDEF {
             let default_getter = matches!(tasty.names.get(tasty.source_name(e.name) as usize), Some(crate::tasty::TName::DefaultGetter(..)));
-            let setter = m & mods::SETTER == 0 && tasty.simple(e.name).and_then(|n| n.strip_suffix("_=")).map_or(false, |var| {
-                let var = self.interner.intern(var);
-                self.syms.class(c).members.get(&var).map_or(false, |&v| self.syms.sym(v).kind == SymKind::Var)
-            });
             // And the accessors teq's writer gives a class for its inline bodies.
-            let accessor = tasty.simple(e.name).map_or(false, |n| n.starts_with("inline$"));
-            if default_getter || setter || accessor {
+            let accessor = tasty.is_inline_accessor(e.name);
+            if default_getter || accessor {
                 self.loaded_mut().product_synthetics.insert(sym, ());
             }
         }

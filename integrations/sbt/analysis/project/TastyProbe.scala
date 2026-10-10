@@ -115,7 +115,7 @@ object TastyProbe:
 
   private def build(teq: String, src: File, products: File, classpath: Seq[File]): String =
     val cp = Seq("--classpath", classpath.map(_.getAbsolutePath).mkString(File.pathSeparator))
-    val command = Seq(teq, "build", "--target", "jvm", "--std=scala-library", "--products", products.getAbsolutePath) ++ cp ++ Seq("--analysis-version", "3", src.getAbsolutePath)
+    val command = Seq(teq, "compiler", "build", "--target", "jvm", "--std=scala-library", "--products", products.getAbsolutePath) ++ cp ++ Seq("--analysis-version", "3", src.getAbsolutePath)
     try Process(command).!!
     catch case e: RuntimeException => throw new MessageOnlyException(s"${command.mkString(" ")}: ${e.getMessage}")
 

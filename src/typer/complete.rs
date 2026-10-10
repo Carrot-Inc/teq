@@ -1527,9 +1527,12 @@ impl<'a> Worker<'a> {
     fn push_candidate(&mut self, n: Name, target: Cand, rank: Rank, out: &mut Vec<Candidate>) {
         let name = self.name_str(n);
         if let Cand::Sym(s) = target {
+            if self.is_setter(s) {
+                return;
+            }
             if let Some(mut alts) = self.syms.alternatives(s).map(|a| a.to_vec()) {
                 // The alternatives the site reaches: a private one of another class is none.
-                alts.retain(|&alt| self.is_accessible(alt));
+                alts.retain(|&alt| self.is_accessible(alt) && !self.is_setter(alt));
                 for alt in alts {
                     let (detail, kind, clauses) = self.describe_candidate(Cand::Sym(alt), None);
                     out.push(Candidate { name: name.clone(), target: Cand::Sym(alt), rank, detail, kind, import: None, clauses });
@@ -1539,6 +1542,12 @@ impl<'a> Worker<'a> {
         }
         let (detail, kind, clauses) = self.describe_candidate(target, None);
         out.push(Candidate { name, target, rank, detail, kind, import: None, clauses });
+    }
+
+    /// A var's setter, which no completion offers (dotty's `isValidCompletionSymbol`:
+    /// `!sym.isAllOf(Mutable | Accessor)`).
+    fn is_setter(&self, s: SymId) -> bool {
+        self.syms.sym(s).mods & crate::ast::mods::SETTER != 0
     }
 
     /// What an item shows of its target, its signature seen from `owner` where it is a member
@@ -1931,7 +1940,7 @@ impl<'a> Worker<'a> {
                     None => vec![s],
                 };
                 for alt in alts {
-                    if !self.member_reachable(alt, through_this, t) {
+                    if !self.member_reachable(alt, through_this, t) || self.is_setter(alt) {
                         continue;
                     }
                     let (detail, kind, clauses) = self.describe_candidate(Cand::Sym(alt), Some(owner_ty));

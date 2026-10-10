@@ -904,7 +904,7 @@ impl<'a> Worker<'a> {
             TExpr::Local(s) => self.sig_of(s).ret,
             _ => self.walked_type(w, walked),
         };
-        let lowering = self.cast_lowering(from, to);
+        let lowering = self.cast_lowering(from, to, false);
         match self.untested_lowering(walked, lowering) {
             super::prims::CastLowering::Op(op) if !matches!(op, CastOp::Unbox(..)) || !matches!(self.prog.expr(walked), TExpr::Null) => {
                 self.prog.exprs[e.idx()] = TExpr::Cast(walked, op, to);
@@ -1075,9 +1075,26 @@ impl<'a> Worker<'a> {
                 // again, as the retype path chooses it: none for a string.
                 if k.kind() == StrKind::Generic {
                     let t = self.walked_type(w, a2);
+                    // The program's `toString` on a type that declares one calls that member, as
+                    // the retype path's member lookup comes before the universal `toString`.
+                    if t != ERROR && !k.is_rendering() {
+                        if let Some((member, _)) = self.find_member(t, crate::names::TO_STRING) {
+                            self.prog.exprs[e.idx()] = TExpr::CallMethod(a2, member, crate::ast::ListRef::EMPTY);
+                            return e;
+                        }
+                    }
                     if t != ERROR {
                         match self.str_conversion(t) {
-                            None => return a2,
+                            None if k.is_rendering() => return a2,
+                            // The program's `toString` of a string, the call `to_string_call` keeps.
+                            None => {
+                                let call = self.to_string_call(a2, t);
+                                if call == a2 {
+                                    return a2;
+                                }
+                                self.prog.exprs[e.idx()] = self.prog.expr(call);
+                                return e;
+                            }
                             Some(kind) => {
                                 let conv = if k.is_rendering() { StrConv::rendering(kind) } else { StrConv::call(kind) };
                                 self.prog.exprs[e.idx()] = TExpr::ToStr(a2, conv);

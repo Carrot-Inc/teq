@@ -1049,8 +1049,8 @@ extension (x: Double)
 
 /** The java.lang.Math surface that Scala code reaches as `Math`. */
 object Math:
-  val PI: Double = 3.141592653589793
-  val E: Double = 2.718281828459045
+  final val PI: 3.141592653589793 = 3.141592653589793
+  final val E: 2.718281828459045 = 2.718281828459045
   @js("$max($1, $2)")
   @jvm("rt $1:L $2:L rtcall numMax(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;")
   def max[T <: Int | Long | Double](a: T, b: T): T
@@ -1144,7 +1144,7 @@ def parseIntRadix(s: String, radix: Int): Int
 /** The static side of java.lang.String. */
 @javaDefined
 object String:
-  def valueOf(x: Any): String = x.toString
+  def valueOf(x: Any): String = "" + x
   def format(fmt: String, args: Any*): String = fmt.formatImpl(taggedArray(iterableToArray(args)))
 
 object Int:

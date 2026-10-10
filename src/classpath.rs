@@ -199,8 +199,9 @@ pub struct Classpath {
     /// The entries a search could not read, with why; each is reported once and never cached.
     pub scan_failures: Vec<(CpFile, String)>,
     scan_failed: FxMap<CpFile, ()>,
-    /// Per source, whether it holds Scala.js IR (`.sjsir`): only such a jar was compiled against
-    /// the Scala.js library.
+    /// Per source, whether it holds Scala.js IR (`.sjsir`), or is a Scala.js module's products
+    /// (their manifest's target `js`): only such a source was compiled against the Scala.js
+    /// library.
     scalajs: Vec<bool>,
     /// Per source, whether it looks written by scalac 2: no TASTy file and a module class
     /// (`Foo$.class`). Its top-level class files are read for their pickles on the JVM, where
@@ -273,6 +274,8 @@ impl Classpath {
         for (j, path) in paths.iter().enumerate() {
             // The own directory before the module's first build is an empty one.
             let first_build = own.is_some_and(|o| !Path::new(path).exists() && canonical_lenient(Path::new(path)) == o.dir);
+            // A Scala.js module's products hold its classes' TASTy where its jar would hold their IR.
+            let mut js_products = false;
             let source = if Path::new(path).is_dir() || first_build {
                 let root = PathBuf::from(path);
                 let mut files = Vec::new();
@@ -293,6 +296,7 @@ impl Classpath {
                         files.retain(|f| kept.contains_key(f.as_str()));
                         if let Some(m) = &manifest {
                             cp.products[j] = true;
+                            js_products = m.target == "js";
                             cp.product_inits.extend(m.entries.iter().zip(&retained).filter(|(_, &r)| r).flat_map(|(e, _)| e.inits.iter()).map(|n| (n.clone(), ())));
                         }
                         cp.own = Some(OwnRead { entry: j, manifest, retained });
@@ -300,6 +304,7 @@ impl Classpath {
                     None => {
                         if let Some(manifest) = manifest {
                             cp.products[j] = true;
+                            js_products = manifest.target == "js";
                             cp.product_inits.extend(manifest.inits().map(|n| (n.clone(), ())));
                             let std: FxMap<&str, ()> = manifest.std.iter().map(|s| (s.as_str(), ())).collect();
                             files.retain(|f| !std.contains_key(f.as_str()));
@@ -315,7 +320,7 @@ impl Classpath {
                 _ => None,
             };
             cp.caches.push(jar_cache);
-            let mut scalajs = false;
+            let mut scalajs = js_products;
             let (mut tasty_seen, mut module_seen) = (false, false);
             for i in 0..source.len() {
                 let name = source.name(i);

@@ -411,6 +411,9 @@ struct P<'w, 'a> {
     in_package_object: bool,
     /// The definitions being written, outermost first, which a failure names.
     current: Vec<String>,
+    /// The generated inline accessors (`typer::accessors`), by symbol: the class, the member and
+    /// whether it is the setter's, of which `sym_name` derives the accessor's name.
+    accessors: FxMap<SymId, (ClassId, SymId, bool)>,
     /// The shapes written as teq's typer holds them, by kind, for the report.
     approximated: &'w mut FxMap<String, u32>,
     /// The right-hand sides by producer, and those withheld by reason (`TEQ_BODIES_CENSUS`).
@@ -476,7 +479,9 @@ struct P<'w, 'a> {
 
 impl<'w, 'a> P<'w, 'a> {
     fn new(w: &'w mut Worker<'a>, index: &'w Index, lines: &'w Lines, file: FileId, source_path: &str, approximated: &'w mut FxMap<String, u32>, bodies: &'w mut FxMap<String, u32>) -> P<'w, 'a> {
+        let accessors = w.inline_accessor_syms.iter().map(|(&key, &a)| (a, key)).collect();
         P {
+            accessors,
             w,
             index,
             lines,
@@ -659,6 +664,19 @@ impl<'w, 'a> P<'w, 'a> {
     /// The name table's entry of an interned name, as a simple name.
     fn simple_name(&mut self, n: Name) -> u32 {
         self.names.interned(n, self.w.interner.get(n))
+    }
+
+    /// The name of a member as its symbol has it: a generated inline accessor's is the derived
+    /// name `PrepareInlineable.MakeInlineableMap.accessorNameOf` gives the accessor's symbol,
+    /// every other the simple name of its text.
+    fn sym_name(&mut self, s: SymId) -> u32 {
+        match self.accessors.get(&s).copied() {
+            Some((c, target, setter)) => {
+                let (prefix, member) = self.w.inline_accessor_parts(c, target, setter);
+                self.names.inline_accessor(&prefix, &member)
+            }
+            None => self.simple_name(self.w.syms.sym(s).name),
+        }
     }
 
     fn class_info(&self, c: ClassId) -> ClassInfo {
@@ -1512,7 +1530,7 @@ impl<'w, 'a> P<'w, 'a> {
         let syms: Vec<SymId> = info.ctor_syms.iter().flatten().copied().collect();
         for s in syms {
             let si = self.sym_info(s);
-            if si.mods & mods::MUTABLE == 0 || si.mods & mods::FIELD == 0 {
+            if si.mods & mods::MUTABLE == 0 || si.mods & mods::FIELD == 0 || !crate::typer::setters::setter_needed(&self.w.syms, s) {
                 continue;
             }
             let ty = self.w.sig_of(s).ret;
@@ -2508,8 +2526,11 @@ impl<'w, 'a> P<'w, 'a> {
     fn body_order(&mut self, c: ClassId, info: &ClassInfo) -> Vec<BodyItem> {
         let mut out = Vec::new();
         let Some(d) = info.def else {
+            // A var's setter is written with the var (`setter`).
             for &s in &info.member_order {
-                out.push(BodyItem::Sym(s));
+                if self.w.syms.sym(s).mods & mods::SETTER == 0 {
+                    out.push(BodyItem::Sym(s));
+                }
             }
             return out;
         };
@@ -2651,7 +2672,7 @@ impl<'w, 'a> P<'w, 'a> {
         self.define(Key::Sym(s), addr);
         self.buf.byte(if is_def { DEFDEF } else { VALDEF });
         let len = self.buf.begin_length();
-        let n = self.simple_name(info.name);
+        let n = self.sym_name(s);
         self.buf.nat(n as u64);
         let tmark = self.tparams.len();
         let pmark = self.params.len();
@@ -3230,23 +3251,7 @@ impl<'w, 'a> P<'w, 'a> {
 
     fn member_annotations(&mut self, s: SymId, is_def: bool) {
         let info = self.sym_info(s);
-        let top_private = info.mods & mods::PRIVATE != 0 && !info.scoped_private && matches!(info.owner, Owner::Package(_));
-        if top_private {
-            if let Owner::Package(p) = info.owner {
-                self.buf.byte(PRIVATEQUALIFIED);
-                self.package_typeref(p);
-            }
-        }
-        if info.scoped_private || info.mods & mods::PROTECTED != 0 && self.has_access_scope(s) {
-            // `private[p]` or `protected[p]`, the qualifier as the package or class it names.
-            if let Some(q) = self.scoped_qualifier(s) {
-                self.buf.byte(if info.scoped_private { PRIVATEQUALIFIED } else { PROTECTEDQUALIFIED });
-                match q {
-                    Qualifier::Pkg(p) => self.package_typeref(p),
-                    Qualifier::Class(c) => self.class_typeref(c),
-                }
-            }
-        }
+        self.member_access_qualifier(s, &info);
         // An implicit class's conversion carries the class's `@companionMethod` annotations, as
         // `PostTyper` adds them.
         if let Some(k) = is_def.then(|| self.implicit_class_of(s)).flatten() {
@@ -3334,6 +3339,28 @@ impl<'w, 'a> P<'w, 'a> {
     }
 
     /// Whether the definition names the scope of its access, `[p]`.
+    /// A member's qualified access, `private[p]` or `protected[p]` with the qualifier as the
+    /// package or class it names, and a private top-level definition's `private[p]`, which
+    /// `member_flags` leaves out.
+    fn member_access_qualifier(&mut self, s: SymId, info: &SymInfo) {
+        let top_private = info.mods & mods::PRIVATE != 0 && !info.scoped_private && matches!(info.owner, Owner::Package(_));
+        if top_private {
+            if let Owner::Package(p) = info.owner {
+                self.buf.byte(PRIVATEQUALIFIED);
+                self.package_typeref(p);
+            }
+        }
+        if info.scoped_private || info.mods & mods::PROTECTED != 0 && self.has_access_scope(s) {
+            if let Some(q) = self.scoped_qualifier(s) {
+                self.buf.byte(if info.scoped_private { PRIVATEQUALIFIED } else { PROTECTEDQUALIFIED });
+                match q {
+                    Qualifier::Pkg(p) => self.package_typeref(p),
+                    Qualifier::Class(c) => self.class_typeref(c),
+                }
+            }
+        }
+    }
+
     fn has_access_scope(&self, s: SymId) -> bool {
         let d = self.access_declaration(s);
         if self.loaded_access_scope(d).is_some() {
@@ -3503,10 +3530,12 @@ impl<'w, 'a> P<'w, 'a> {
     }
 
     /// A var's setter `x_=(x$1: T): Unit`, which scalac 3.8 pickles for a var of a class and
-    /// for a top-level one in its file's `$package`, where a downstream's assignment calls it.
+    /// for a top-level one in its file's `$package`, where a downstream's assignment calls it:
+    /// where dotty's `Desugar.isSetterNeeded` makes one (`typer::setters::setter_needed`), with
+    /// the var's access (`Desugar.valDef` takes the var's modifiers).
     fn setter(&mut self, s: SymId) {
         let info = self.sym_info(s);
-        if !matches!(info.owner, Owner::Class(_) | Owner::Package(_)) {
+        if !crate::typer::setters::setter_needed(&self.w.syms, s) {
             return;
         }
         let ty = self.w.sig_of(s).ret;
@@ -3530,13 +3559,19 @@ impl<'w, 'a> P<'w, 'a> {
             self.synth_rhs("setter stub", unit, Synth::Unit, &[]);
         }
         let mut flags = Vec::new();
-        self.access_flags(info.mods & !(if info.scoped_private { mods::PRIVATE } else { 0 }), &mut flags);
+        if info.mods & mods::PRIVATE != 0 && !info.scoped_private && matches!(info.owner, Owner::Class(_)) {
+            flags.extend_from_slice(&[PRIVATE, LOCAL]);
+        }
+        if info.mods & mods::PROTECTED != 0 && !self.has_access_scope(s) {
+            flags.push(PROTECTED);
+        }
         if info.mods & mods::OVERRIDE != 0 {
             flags.push(OVERRIDE);
         }
         flags.push(MUTABLE);
         flags.push(FIELDACCESSOR);
         self.write_flags(&flags);
+        self.member_access_qualifier(s, &info);
         if let Some(d) = info.def {
             let annots = self.w.ast(info.file).def(d).annots.clone();
             self.source_annotations(info.file, &annots, annot::Dest::Setter, &mut |_, _| {});
@@ -4597,20 +4632,35 @@ impl<'w, 'a> P<'w, 'a> {
 
     /// `type MirroredMonoType = C` and `def fromProduct(x$0: Product): MirroredMonoType`.
     fn mirror_members(&mut self, c: ClassId, tparams: &[TParamId]) {
-        let addr = self.buf.addr();
-        self.buf.byte(TYPEDEF);
-        let len = self.buf.begin_length();
-        let n = self.names.simple("MirroredMonoType");
-        self.buf.nat(n as u64);
-        self.mark_tree();
-        self.buf.byte(TYPEBOUNDS);
-        let b = self.buf.begin_length();
-        self.mono_type(c, tparams.len());
-        self.buf.end_length(b);
-        self.write_flags(&[SYNTHETIC]);
-        self.synthetic_position(addr);
-        self.buf.end_length(len);
-        let mono_addr = addr;
+        // dotty's `SyntheticMembers.addMirrorSupport`: a concrete `MirroredMonoType` the companion
+        // has is the one the mirror names (`monoType`'s `existing`), and a `fromProduct` it
+        // defines stands for the synthetic one (`addMethod`'s `existingDef`).
+        let companion = self.w.syms.class(c).companion;
+        let existing_mono = companion.and_then(|o| self.concrete_alias_member(o, "MirroredMonoType"));
+        let product = self.scala_trait("Product").unwrap_or(ANY);
+        let existing_from_product = companion.is_some_and(|o| self.clashing_member(o, "fromProduct", &[], &[vec![product]]));
+        let mono = match existing_mono {
+            Some(a) => Err(a),
+            None => {
+                let addr = self.buf.addr();
+                self.buf.byte(TYPEDEF);
+                let len = self.buf.begin_length();
+                let n = self.names.simple("MirroredMonoType");
+                self.buf.nat(n as u64);
+                self.mark_tree();
+                self.buf.byte(TYPEBOUNDS);
+                let b = self.buf.begin_length();
+                self.mono_type(c, tparams.len());
+                self.buf.end_length(b);
+                self.write_flags(&[SYNTHETIC]);
+                self.synthetic_position(addr);
+                self.buf.end_length(len);
+                Ok(addr)
+            }
+        };
+        if existing_from_product {
+            return;
+        }
         let fa = self.buf.addr();
         self.buf.byte(DEFDEF);
         let fl = self.buf.begin_length();
@@ -4626,10 +4676,7 @@ impl<'w, 'a> P<'w, 'a> {
         self.synthetic_position(pa);
         self.buf.end_length(pl);
         self.mark_tree();
-        self.buf.byte(TYPEREFSYMBOL);
-        self.buf.reference(mono_addr);
-        self.buf.byte(THIS);
-        self.companion_this_typeref(c);
+        self.mono_ref(c, mono);
         let mark = self.body_begin();
         self.from_product(c, pa);
         match self.body_end(mark) {
@@ -4639,15 +4686,36 @@ impl<'w, 'a> P<'w, 'a> {
                 self.elided_bodies += 1;
                 self.mark_tree();
                 self.elided_byte();
-                self.buf.byte(TYPEREFSYMBOL);
-                self.buf.reference(mono_addr);
-                self.buf.byte(THIS);
-                self.companion_this_typeref(c);
+                self.mono_ref(c, mono);
             }
         }
         self.write_flags(&[SYNTHETIC]);
         self.synthetic_position(fa);
         self.buf.end_length(fl);
+    }
+
+    /// The mirror's `MirroredMonoType` of the case class `c`: the synthetic one written at its
+    /// address, else the companion's own.
+    fn mono_ref(&mut self, c: ClassId, mono: Result<usize, AliasId>) {
+        match mono {
+            Ok(addr) => {
+                self.buf.byte(TYPEREFSYMBOL);
+                self.buf.reference(addr);
+                self.buf.byte(THIS);
+                self.companion_this_typeref(c);
+            }
+            Err(a) => self.alias_ref(a),
+        }
+    }
+
+    /// The type member `name` of the class `o` as a lookup finds it, the class's own first, then
+    /// its bases' in linearization order, where it is an alias: an abstract one is none (dotty's
+    /// `Deferred`).
+    fn concrete_alias_member(&self, o: ClassId, name: &str) -> Option<AliasId> {
+        let n = self.w.interner.lookup(name)?;
+        let bases: Vec<ClassId> = std::iter::once(o).chain(self.w.syms.class(o).base_types.iter().skip(1).map(|&(b, _)| b)).collect();
+        let a = bases.iter().find_map(|&b| self.w.syms.class(b).type_aliases.get(&n).copied())?;
+        (!self.w.syms.aliases[a.idx()].is_abstract()).then_some(a)
     }
 
     /// A mirror's `MirroredMonoType`: the class, its type parameters as `? <: AnyKind`.
@@ -5189,7 +5257,7 @@ impl<'w, 'a> P<'w, 'a> {
 
     /// A member val as a path: `TERMREF x prefix`.
     fn member_termref(&mut self, s: SymId) {
-        let (owner, name) = self.sym_head(s);
+        let (owner, _) = self.sym_head(s);
         if self.is_local(Key::Sym(s)) {
             self.placed = true;
             self.buf.byte(TERMREFSYMBOL);
@@ -5197,7 +5265,7 @@ impl<'w, 'a> P<'w, 'a> {
             self.term_owner_prefix(s, owner);
             return;
         }
-        let n = self.simple_name(name);
+        let n = self.sym_name(s);
         self.buf.byte(TERMREF);
         self.buf.nat(n as u64);
         self.term_owner_prefix(s, owner);
@@ -5508,9 +5576,28 @@ impl<'w, 'a> P<'w, 'a> {
         }
     }
 
-    /// A type argument: a wildcard is a `TYPEBOUNDS`, anything else the type.
+    /// A type argument: a wildcard is a `TYPEBOUNDS`, anything else the type. A wildcard the
+    /// typer captured (`Box[?]`'s argument as a fresh `_`, `capture_wildcards`) is the wildcard
+    /// again, `? >: lo <: hi`, as scalac's trees keep the argument.
     fn ty_arg(&mut self, a: TypeId) {
+        if let Type::Param(p) = self.w.types.get(a) {
+            if self.is_capture(p) {
+                let (lo, hi) = (self.w.syms.tparam(p).lower, self.w.syms.tparam(p).upper);
+                self.buf.byte(TYPEBOUNDS);
+                let len = self.buf.begin_length();
+                self.ty(lo);
+                self.ty(hi);
+                self.buf.end_length(len);
+                return;
+            }
+        }
         self.ty(a);
+    }
+
+    /// Whether `p` is a wildcard the typer captured: a `_` no binder in scope declares, which
+    /// stands for the unknown type of a value's wildcard argument (TASTY.md, "The binders").
+    fn is_capture(&self, p: TParamId) -> bool {
+        self.w.syms.tparam(p).name == crate::names::WILDCARD && !self.tparams.iter().any(|(q, _)| *q == p)
     }
 
     fn tparam_ref(&mut self, p: TParamId) {
@@ -5533,6 +5620,12 @@ impl<'w, 'a> P<'w, 'a> {
                 self.buf.reference(binder);
                 self.buf.nat(i as u64);
                 self.buf.end_length(len);
+            }
+            // A captured wildcard outside a type argument: its upper bound, as dotty avoids a
+            // capture where it would escape.
+            None if self.is_capture(p) => {
+                let upper = self.w.syms.tparam(p).upper;
+                self.ty(upper);
             }
             None => {
                 let name = self.name(self.w.syms.tparam(p).name);

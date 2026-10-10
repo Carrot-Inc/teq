@@ -288,6 +288,8 @@ function $str(x) {
   if (x.toString !== Object.prototype.toString) return x.toString();
   return (x.$className || "Object") + "@" + $hash(x).toString(16);
 }
+// The program's `x.toString`, a call, which `null` fails as any member selected from it does.
+function $toStr(x) { return x === null ? x.toString() : $str(x); }
 // What `println` and `print` show of a value: the unit as Scala.js prints it, `undefined`, which a
 // concatenation and `toString` render as `()`.
 function $printed(x) { return x === undefined ? "undefined" : $str(x); }
@@ -576,6 +578,9 @@ function $productElement(p, i) {
 }
 // A case object equals itself alone: one nested in a class has an instance per enclosing instance.
 const $caseObjectProto = { __proto__: $caseProto, toString() { return this.$className; }, equals(that) { return this === that; } };
+// `scala.reflect.Enum.ordinal`, an abstract member: the receiver's own implementation, else the one
+// `DesugarEnums` gives an enum case, its `$ordinal`; `null` fails as a member selected from it does.
+function $enumOrdinal(e) { return typeof e.ordinal === "function" ? e.ordinal() : e.$ordinal; }
 const $enumValueProto = { toString() { return this.$name; }, hashCode: $nameHash };
 // A module of the split output cannot name a superclass of another module while it loads.
 function $ext(c, parent) {

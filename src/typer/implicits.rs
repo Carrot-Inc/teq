@@ -3709,9 +3709,10 @@ impl<'a> Worker<'a> {
         };
         let l = self.prog.list(&args);
         let kind = self.syms.sym(g).kind;
-        // A Scala 2 implicit def is called even without parameters; an implicit object is
-        // the module itself.
-        let has_params = !sig.clauses.is_empty() || kind == SymKind::Def;
+        // A Scala 2 implicit def is called even without parameters, as a given with type
+        // parameters is (dotty's `Parsers.givenDef` makes it a def); an implicit object is the
+        // module itself.
+        let has_params = !sig.clauses.is_empty() || !sig.tparams.is_empty() || kind == SymKind::Def;
         let mut te = match owner {
             _ if matches!(kind, SymKind::Object(_)) => {
                 let SymKind::Object(c) = kind else { unreachable!() };

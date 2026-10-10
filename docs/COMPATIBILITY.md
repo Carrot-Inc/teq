@@ -117,7 +117,6 @@ a JDK member as `not supported on JavaScript`. Beyond that:
 - JVM, which links scala-library's bytecode: `Duration(1.5, SECONDS)`, `e.canEqual(x)` on an `Equals` and
   `sb.length()` of a `StringBuilder` are rejected where scalac types them, `f"n=$n%04d"` fails with
   `NoSuchMethodError`, a derived `Show` prints a case object as `Nil()`, `eq` on strings compares by value.
-- A file's top-level `export` clauses are not written to a module's products.
 - `-deprecation`, `-feature` and `-Wtostring-interpolated` have no counterpart, `-Wconf` is not read, the
   `-Wunused` kinds other than `imports` report nothing, `@nowarn("msg=...")` silences every warning of its
   definition, and a cast between primitives that no conversion makes warns where it is written but not where
@@ -145,7 +144,10 @@ a JDK member as `not supported on JavaScript`. Beyond that:
   `LazyList` is written `LazyList.cons(x, xs)`); `"abc".toSeq` is a `Vector[Char]`; `"a.b".split(".")` splits
   on the character, a `Char` and a one-character `String` being one value; a test or a cast against
   `Array[Int]` takes every array; a `Map`, a `Set` or a `Seq` is no function at run time (one is wrapped where
-  a function is expected), so a type test of a function type is false for it and a cast to one fails.
+  a function is expected), so a type test of a function type is false for it and a cast to one fails; a cast
+  from a function type to a function type of another arity is not tested, since Scala.js's `js.FunctionN` are
+  scala's function types here and a cast to one is unchecked under Scala.js (a cast written to `js.FunctionN`
+  is unchecked whatever its source).
 - `java.time` is scala-java-time's, from its jar on the class path, and the region zone ids its tzdb jar's,
   as a Scala.js build takes them, rather than a copy of the JDK's in the standard library.
 - `Throwable` extends the native `Error`, and a value JavaScript throws reaches a `catch` as

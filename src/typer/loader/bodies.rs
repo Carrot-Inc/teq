@@ -671,7 +671,16 @@ impl<'a> Worker<'a> {
     /// plain types, each as the type it names with its argument lists; the builtins (`Object`,
     /// `Any`) are left out, as the loader left them out of `ClassInfo::parents`.
     fn conv_parents(&mut self, cv: &mut Conv, parents: &[Term]) -> Vec<Parent> {
+        self.conv_template_parents(cv, parents, false)
+    }
+
+    /// A template's parents as pickled (dotty's `TreeUnpickler.readParents`), but a builtin one
+    /// (`Object()`), which teq's classes leave implicit as their sources do. An anonymous class's
+    /// source names its first parent whatever it is (`new AnyRef { .. }`), so `anonymous` keeps
+    /// a builtin one that is all its template has.
+    fn conv_template_parents(&mut self, cv: &mut Conv, parents: &[Term], anonymous: bool) -> Vec<Parent> {
         let mut out = Vec::with_capacity(parents.len());
+        let mut builtin = None;
         for p in parents {
             // `{ val h$0 = ..; val h$1 = ..; new A(h$0, z = h$1, ..) }`: named arguments out of
             // order, which the call's temporaries hold in the order the source wrote them;
@@ -738,6 +747,7 @@ impl<'a> Worker<'a> {
                     _ => None,
                 };
                 if class.map_or(false, |k| self.syms.class(k).kind == ClassKind::Builtin) {
+                    builtin.get_or_insert(resolved);
                     continue;
                 }
                 cv.ty(TyExpr::Resolved(resolved))
@@ -786,6 +796,10 @@ impl<'a> Worker<'a> {
                 args.push((push_list(&mut cv.ast.expr_lists, &items), using));
             }
             out.push(Parent { ty, args });
+        }
+        if let (true, true, Some(t)) = (anonymous, out.is_empty(), builtin) {
+            let ty = cv.ty(TyExpr::Resolved(t));
+            out.push(Parent { ty, args: Vec::new() });
         }
         out
     }
@@ -2174,7 +2188,10 @@ impl<'a> Worker<'a> {
         if !self.converts_product(cv) {
             return None;
         }
-        let name = cv.tasty.simple(cv.tasty.source_name(n))?;
+        if !cv.tasty.is_inline_accessor(n) {
+            return None;
+        }
+        let name = cv.tasty.name(cv.tasty.source_name(n));
         let rest = name.strip_prefix("inline$")?;
         let target = rest.rsplit_once("$$").map_or(rest, |(_, t)| t);
         Some(self.interner.intern(target))
@@ -2184,7 +2201,12 @@ impl<'a> Worker<'a> {
     /// qualifier's class (`C.this`) has no member of the name and its companion has (the
     /// accessor `inline$p$C$$hidden` of `object C`'s private `hidden`).
     fn accessor_receiver(&mut self, cv: &mut Conv, q: &Term, member: Name) -> ExprId {
-        if let TermKind::QualThis(t) = &q.kind {
+        let this = match &q.kind {
+            TermKind::QualThis(t) => Some(t),
+            TermKind::Path(TType::This(t)) => Some(&**t),
+            _ => None,
+        };
+        if let Some(t) = this {
             if let Some(k) = self.this_class_of(cv, t) {
                 self.complete_class(k);
                 let companion = self.syms.class(k).companion.filter(|&o| self.syms.class(o).kind == ClassKind::Object);
@@ -2195,6 +2217,15 @@ impl<'a> Worker<'a> {
                     if let Some(m) = self.syms.class(o).module_sym {
                         return cv.expr(Expr::SymRef(m));
                     }
+                }
+                // `C.this` as `C`, where the accessor's member is the class's own: an expansion
+                // over a subclass's instance reads `C`'s private member, which the accessor's
+                // body names and the subclass has not.
+                if self.syms.class(k).members.contains_key(&member) {
+                    let qe = self.conv_expr(cv, q);
+                    let ty = self.syms.this_type(k);
+                    let ty = cv.ty(TyExpr::Resolved(ty));
+                    return cv.expr(Expr::Typed(qe, ty));
                 }
             }
         }
@@ -2280,12 +2311,13 @@ impl<'a> Worker<'a> {
                         let q = self.conv_path(cv, pkg);
                         return cv.expr(Expr::Select(q, name));
                     }
+                    // `Predef.classOf[T]` is the compiler's intrinsic (dotty's `Predef_classOf`, which
+                    // the typer folds to the class), typed from the bare name whichever `Predef`
+                    // is loaded: scala-library's own is a stub that answers `null`.
+                    if name == names::CLASS_OF && self.is_predef_path(cv, prefix) {
+                        return cv.expr(Expr::Ident(name));
+                    }
                     if self.is_unloaded_predef(cv, prefix) {
-                        // `Predef.classOf[T]` is the compiler's form, typed from the bare name,
-                        // where the std's `Predef` stands; scala-library's has a body.
-                        if name == names::CLASS_OF && !self.loaded.as_ref().map_or(false, |l| l.scala_library) {
-                            return cv.expr(Expr::Ident(name));
-                        }
                         let q = self.conv_path(cv, pkg);
                         let name = if self.name_str(name) == "$conforms" { self.interner.intern("conforms") } else { name };
                         return cv.expr(Expr::Select(q, name));
@@ -2982,12 +3014,13 @@ impl<'a> Worker<'a> {
             TermKind::Path(TType::LocalTerm(addr, prefix)) => (prefix.as_deref().cloned(), None, Some(*addr)),
             _ => return None,
         };
-        let text = match (name, addr) {
-            (Some(n), _) => tasty.name(tasty.source_name(n)),
-            (None, Some(a)) => Decoder::new(&tasty).name_at(a).map(|n| tasty.name(n))?,
+        // An accessor by its derived name (`INLINEACCESSOR`), not by a simple name's spelling.
+        let accessor = match (name, addr) {
+            (Some(n), _) => tasty.is_inline_accessor(n),
+            (None, Some(a)) => Decoder::new(&tasty).name_at(a).map_or(false, |n| tasty.is_inline_accessor(n)),
             _ => return None,
         };
-        if !text.starts_with("inline$") {
+        if !accessor {
             return None;
         }
         // The prefix may be an accessor itself (`inline$IsUnionOf.inline$singleton`).
@@ -3015,7 +3048,8 @@ impl<'a> Worker<'a> {
                 terms.def_with_body(a)
             }
             None => def.template.stats.iter().find_map(|s| match s {
-                Stat::Def(sig, rhs) if tasty.name(tasty.source_name(sig.name)) == text => Some((sig.clone(), rhs.clone())),
+                // The same name is one entry of the file's name table.
+                Stat::Def(sig, rhs) if name.map(|n| tasty.source_name(n)) == Some(tasty.source_name(sig.name)) => Some((sig.clone(), rhs.clone())),
                 _ => None,
             })?,
         };
@@ -3026,10 +3060,8 @@ impl<'a> Worker<'a> {
     fn names_accessor(&self, cv: &Conv, t: &TType) -> bool {
         let tasty = &cv.tasty;
         match t {
-            TType::TermRef(_, n) => tasty.name(tasty.source_name(*n)).starts_with("inline$"),
-            TType::LocalTerm(addr, _) => {
-                !cv.locals.contains_key(addr) && Decoder::new(tasty).name_at(*addr).map_or(false, |n| tasty.name(n).starts_with("inline$"))
-            }
+            TType::TermRef(_, n) => tasty.is_inline_accessor(*n),
+            TType::LocalTerm(addr, _) => !cv.locals.contains_key(addr) && Decoder::new(tasty).name_at(*addr).map_or(false, |n| tasty.is_inline_accessor(n)),
             _ => false,
         }
     }
@@ -3302,11 +3334,14 @@ impl<'a> Worker<'a> {
     /// `scala.Predef` where the std stands for it: under the lean std always (its wrappers are
     /// the std's own members on the wrapped types), otherwise when no jar defines the object.
     fn is_unloaded_predef(&mut self, cv: &Conv, t: &TType) -> bool {
+        self.is_predef_path(cv, t) && (self.std_binds() || !matches!(self.pkg_term(self.b.scala_pkg, names::PREDEF), Some(r) if r.sym().is_some()))
+    }
+
+    /// `scala.Predef` as a path.
+    fn is_predef_path(&self, cv: &Conv, t: &TType) -> bool {
         let TType::TermRef(pkg, obj) = t else { return false };
         let TType::Package(p) = &**pkg else { return false };
-        cv.tasty.simple(*p) == Some("scala")
-            && cv.tasty.simple(cv.tasty.source_name(*obj)) == Some("Predef")
-            && (self.std_binds() || !matches!(self.pkg_term(self.b.scala_pkg, names::PREDEF), Some(r) if r.sym().is_some()))
+        cv.tasty.simple(*p) == Some("scala") && cv.tasty.simple(cv.tasty.source_name(*obj)) == Some("Predef")
     }
 
     /// `Predef.$conforms[T]`, the evidence scalac passes for a conversion that is the identity.
@@ -4557,7 +4592,7 @@ impl<'a> Worker<'a> {
             cv.scope.extend(cd.template.params.iter().map(|p| (cv.locals[&p.addr], p.addr)));
             cv.parent_params = Some((cd.addr, names));
         }
-        let mut parents = self.conv_parents(cv, &cd.template.parents);
+        let mut parents = self.conv_template_parents(cv, &cd.template.parents, !named);
         // A product's local case class is read as the program's own: its pickle extends
         // `Product` and `Serializable` as scalac's `Desugar` makes it, which teq's typer gives a
         // case class by its rules, as the loader reads a top-level one.
@@ -4880,11 +4915,14 @@ impl<'a> Worker<'a> {
         }
         let product = self.converts_product(cv);
         let taken = if product { cv.renamed.contains_key(&addr) } else { cv.locals.iter().any(|(&a, &n)| n == name && a != addr) };
-        let name = if name == names::WILDCARD || !taken { name } else { self.interner.intern(&format!("{}$b{}", self.name_ref(name), addr)) };
+        let renamed = if name == names::WILDCARD || !taken { name } else { self.interner.intern(&format!("{}$b{}", self.name_ref(name), addr)) };
         if product {
-            cv.scope.push((name, addr));
+            cv.scope.push((renamed, addr));
+            if renamed != name {
+                cv.reader().binder_sources.insert(renamed, name);
+            }
         }
-        name
+        renamed
     }
 
     /// For a product's body, the binders of `binders` (by address and pickled name) that shadow

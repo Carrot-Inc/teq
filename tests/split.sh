@@ -106,7 +106,7 @@ fi
 dir=out/split/hello
 rm -rf $dir
 timeout 20 "$TEQ" compiler build tests/dce/hello.scala --split $dir > $dir.log 2>&1 || bad "hello build"
-expect "modules of hello" "$(ls $dir | sort | tr '\n' ' ')" "_root_.mjs main.mjs rt.mjs std.mjs "
+expect "modules of hello" "$(ls $dir | LC_ALL=C sort | tr '\n' ' ')" "_root_.mjs main.mjs rt.mjs std.mjs "
 size=$(cat $dir/*.mjs | wc -c)
 if [ "$size" -lt 6000 ]; then ok; else bad "hello is $size bytes"; fi
 
@@ -368,6 +368,19 @@ for case in tests/split/outline tests/split/cycle tests/cases/macro_fresh_names;
   fi
   rm -rf "$work"
 done
+
+# A macro reading its source file's path (tests/cases/macro_source_path) gets it as the build was
+# given it, as scalac's does (`SourceFileMethods.path`): the same relative build from two places of
+# a checkout writes the same output, which names the path as given.
+work=$(mktemp -d)
+for place in one two/deeper; do
+  mkdir -p "$work/$place/tests/cases"
+  cp -r tests/cases/macro_source_path "$work/$place/tests/cases/"
+  (cd "$work/$place" && timeout 20 "$teq" compiler build tests/cases/macro_source_path -o out.js > /dev/null 2>&1)
+done
+if [ -s "$work/one/out.js" ] && cmp -s "$work/one/out.js" "$work/two/deeper/out.js"; then ok; else bad "macro_source_path: the output depends on the checkout's place"; fi
+expect "macro_source_path: the path as given" "$(cd "$work/one" && timeout 20 node out.js 2>&1 | cut -d' ' -f1)" "tests/cases/macro_source_path/use.scala"
+rm -rf "$work"
 
 # A file's identity in a name (`program_keys`) is the shortest suffix of its path that no other
 # file of the build shares: `b/Use.scala` of tests/split/quote_keys goes by `Use.scala` alone and

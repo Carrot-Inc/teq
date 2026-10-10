@@ -22,6 +22,7 @@ object Use:
     println(Api.a5(Array(new V(6))))
     println(Api.w1(new W("s")).value)
     println(Api.w2(new W(21)))
+    println(Api.c1('a'))
     val box: Box[FB] = new FBBox
     println(box.get.name)
     println(box.put(new FB))

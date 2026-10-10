@@ -1,0 +1,4 @@
+anon
+obj
+23
+named both

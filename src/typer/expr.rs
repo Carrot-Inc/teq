@@ -303,6 +303,11 @@ impl<'a> Worker<'a> {
 
     pub fn new_local(&mut self, name: Name, kind: SymKind, ty: TypeId, span: Span) -> SymId {
         let file = self.env.file;
+        // A product's binder renamed apart is its own name's local (`ReaderTables::binder_sources`).
+        let name = match &self.cur_ast().reader {
+            Some(r) if !r.binder_sources.is_empty() => r.binder_sources.get(&name).copied().unwrap_or(name),
+            _ => name,
+        };
         let sym = self.syms.new_sym(name, kind, 0, Owner::Local, file, None, span);
         let sig = self.value_sig(ty);
         let mut s = self.syms.sym_mut(sym);
@@ -397,10 +402,16 @@ impl<'a> Worker<'a> {
         }
     }
 
+    /// The program's `x.toString`: the conversion its type has, and on a string the call itself,
+    /// which a `null` receiver throws on, as dotty's typed tree keeps it (`"z".toString()`) and
+    /// `BCodeBodyBuilder.genApply` invokes it (the concatenation's rendering, `genStringConcat`,
+    /// is another conversion). A backend may elide it on a string by construction
+    /// (`Program::is_non_null_string`); a JavaScript Char, a string never `null`, has none.
     pub fn to_string_call(&mut self, te: TExprId, ty: TypeId) -> TExprId {
         match self.str_conversion(ty) {
             Some(kind) => self.prog.to_string_call(te, kind),
-            None => te,
+            None if self.dealias(ty) == self.b.t_char => te,
+            None => self.prog.to_string_call(te, StrKind::Str),
         }
     }
 

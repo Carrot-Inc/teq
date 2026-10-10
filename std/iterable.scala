@@ -67,7 +67,7 @@ def joinStrings(xs: IterableOnce[Any], start: String, sep: String, end: String):
   var first = true
   xs.foreach: x =>
     if first then first = false else s = s + sep
-    s = s + x.toString
+    s = s + x
   s + end
 
 // Everything a collection offers beyond traversal. `CC` is the collection type that `map` and
@@ -1035,7 +1035,7 @@ final class LazyList[+A](compute: () => Option[(A, LazyList[A])]) extends Iterab
         go = false
       else cur.evaluated() match
         case Some((h, t)) =>
-          parts.push(h.toString)
+          parts.push("" + h)
           cur = t
         case None => go = false
     "LazyList(" + parts.mkString(", ") + ")"

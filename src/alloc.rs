@@ -1500,6 +1500,7 @@ mod tests {
         ("src/products.rs", 1, "alloc::spawn_in for the publication's steps"),
         ("src/task/client.rs", 1, "starts the daemon process"),
         ("src/task/daemon.rs", 4, "alloc::spawn for the watch, per connection and per test run's client watcher, alloc::spawn_in per resident's build"),
+        ("src/task/export.rs", 1, "starts git check-ignore for the staleness check"),
         ("src/task/fetch.rs", 2, "starts curl; alloc::spawn_in per transfer worker of a cold fetch"),
         ("src/task/job.rs", 2, "starts dev's dev command and run's JVM, once per platform's branch; taskkill runs to its end through status"),
         ("src/task/resident.rs", 2, "alloc::spawn for the thread that drains the resident's stderr; the other starts the resident"),

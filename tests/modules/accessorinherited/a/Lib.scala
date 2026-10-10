@@ -13,3 +13,15 @@ class Lib extends Parent:
 
 final class Fin extends Parent:
   inline def g(x: Int): Int = secret(x) * 2
+
+// A private member an inline method reads, the method expanded downstream over a subclass's
+// instance: the member is the class's own, which the accessor's body reads on the class.
+class Holder:
+  private val x = 7
+  inline def n: Int = x
+
+class Gen[A](a: A):
+  private val held: A = a
+  private var reads = 0
+  inline def get: A = { reads += 1; held }
+  def seen = reads

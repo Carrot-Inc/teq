@@ -443,22 +443,14 @@ compare_suites() {
   names=$(cd out/tests && find . -maxdepth 1 -type f \( -name '*.js' -o -name '*.actual' \) -printf '%f\n' | LC_ALL=C sort)
   [ "$names" = "$(cd "$1" && find . -maxdepth 1 -type f \( -name '*.js' -o -name '*.actual' \) -printf '%f\n' | LC_ALL=C sort)" ] ||
     { echo "cross-ship: the suite on aarch64 wrote other files than the native suite ($(wc -l <<< "$names") native): $(diff <(echo "$names") <(cd "$1" && find . -maxdepth 1 -type f \( -name '*.js' -o -name '*.actual' \) -printf '%f\n' | LC_ALL=C sort) | grep '^[<>]' | head -5 | tr '\n' ' ')"; return 1; }
-  # Both suites' outputs with their checkouts' paths normalised (tests/support/identity-root.py), the native
-  # suite's root the one bench/pgo.sh recorded beside its outputs, this run's the tree's own: a macro that writes
-  # the source's absolute path (sourcecode's File) must not tell the two machines apart.
-  local nroot cmp_dir
-  nroot=$(cat out/tests/.root 2> /dev/null) || nroot=
-  cmp_dir=$(mktemp -d) || return 1
-  cp -R out/tests "$cmp_dir/native" && cp -R "$1" "$cmp_dir/here" || { rm -rf -- "$cmp_dir"; return 1; }
-  [ -z "$nroot" ] || python3 tests/support/identity-root.py "$nroot" "$cmp_dir/native" || { rm -rf -- "$cmp_dir"; return 1; }
-  python3 tests/support/identity-root.py "$(pwd -P)" "$cmp_dir/here" || { rm -rf -- "$cmp_dir"; return 1; }
+  # A macro reads a source's path as the suite gives it, relative (`SourceFileMethods.path`), so the two
+  # machines' outputs compare as they are.
   same=0 total=0
   local differing=
   for f in $names; do
     total=$((total + 1))
-    if cmp -s "$cmp_dir/native/$f" "$cmp_dir/here/$f"; then same=$((same + 1)); else differing="$differing $f"; fi
+    if cmp -s "out/tests/$f" "$1/$f"; then same=$((same + 1)); else differing="$differing $f"; fi
   done
-  rm -rf -- "$cmp_dir"
   [ $total -gt 0 ] && [ $same -eq $total ] || { echo "cross-ship: $same of $total outputs of the suite on aarch64 are the native suite's; differing:$differing"; return 1; }
 }
 

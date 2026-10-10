@@ -602,10 +602,12 @@ impl Export {
         input_digests(&self.root)
     }
 
-    /// What changed in the build definition since the export; nothing when it is current.
+    /// What changed in the build definition since the export; nothing when it is current. A file added
+    /// that git ignores (Metals' `metals.sbt`) is a tool's, not the build's, and does not count.
     pub fn stale_inputs(&self) -> Stale {
         let now = self.current_inputs();
         let mut stale = Stale::default();
+        let mut added = Vec::new();
         for (file, digest) in &now {
             match self.inputs.get(file) {
                 Some(d) if d == digest => {}
@@ -615,9 +617,11 @@ impl Export {
                         stale.line_ends.push(file.clone());
                     }
                 }
-                None => stale.changes.push(format!("{} added", file)),
+                None => added.push(file.as_str()),
             }
         }
+        let ignored = git_ignored(&self.root, &added);
+        stale.changes.extend(added.iter().filter(|f| !ignored.contains(**f)).map(|f| format!("{} added", f)));
         stale.changes.extend(self.inputs.keys().filter(|f| !now.contains_key(*f)).map(|f| format!("{} removed", f)));
         stale
     }
@@ -787,6 +791,39 @@ fn line_ends_alone(file: &Path, recorded: &str) -> bool {
 }
 
 /// The digests of a build's definition files, by path relative to the root.
+/// The files among `files` (paths relative to `root`) that git ignores. None without git on the path or
+/// outside a repository.
+fn git_ignored(root: &Path, files: &[&str]) -> BTreeSet<String> {
+    use std::io::Write;
+    use std::process::{Command, Stdio};
+    if files.is_empty() {
+        return BTreeSet::new();
+    }
+    let Ok(mut child) = Command::new("git")
+        .arg("-C")
+        .arg(root)
+        .args(["check-ignore", "--stdin", "-z"])
+        .env("GIT_TERMINAL_PROMPT", "0")
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .spawn()
+    else {
+        return BTreeSet::new();
+    };
+    if let Some(mut stdin) = child.stdin.take() {
+        for file in files {
+            if stdin.write_all(file.as_bytes()).and_then(|_| stdin.write_all(b"\0")).is_err() {
+                break;
+            }
+        }
+    }
+    let Ok(out) = child.wait_with_output() else {
+        return BTreeSet::new();
+    };
+    out.stdout.split(|b| *b == 0).filter(|s| !s.is_empty()).map(|s| String::from_utf8_lossy(s).into_owned()).collect()
+}
+
 pub fn input_digests(root: &Path) -> BTreeMap<String, String> {
     let mut files: Vec<PathBuf> = std::fs::read_dir(root).map(|es| es.flatten().map(|e| e.path()).filter(|p| p.is_file() && p.extension().is_some_and(|x| x == "sbt")).collect()).unwrap_or_default();
     let properties = root.join("project/build.properties");

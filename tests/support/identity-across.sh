@@ -19,9 +19,6 @@ command -v timeout > /dev/null || { echo "identity: no GNU timeout on the PATH" 
 # The working directory of both modes, under the checkout: the same relative paths on every machine.
 work=out/identity
 refuse() { echo "identity: $*" >&2; exit 1; }
-# The checkout's root, as the file system spells it: what an output that embeds a source's path holds.
-checkout=$(cd "$(git rev-parse --show-toplevel)" && pwd -P) || refuse "no checkout root"
-export checkout
 # revision_of <version line>: the commit a binary says it is built from, which must be the checkout's or one whose
 # compiler sources are the checkout's (bench/ship-manifest.sh's rule), else its outputs are no evidence of this
 # commit.
@@ -59,9 +56,6 @@ run_case() {
   fi
   grep -v -E '^(checked|built|ran) .* in |^  (read|parse|type|reach|emit|write) ' "$dir/log" > "$dir/log.cmp"
   rm -f -- "$dir/log"
-  # The checkout's absolute path, which a macro writes into an output (sourcecode's File), the same placeholder on
-  # every machine (tests/support/identity-root.py: text files, and class files by their constant pool).
-  "$py" tests/support/identity-root.py "$checkout" "$dir" || echo "identity: the checkout's path could not be normalised under $dir" >&2
 }
 # invalid <exit code>: a run that is no evidence: a timeout, a command not run, a signal.
 invalid() { case $1 in 124 | 125 | 126 | 127 | 1[3-9][0-9] | 2[0-9][0-9]) return 0 ;; esac; return 1; }

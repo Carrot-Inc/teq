@@ -39,7 +39,7 @@ sealed trait Try[+T]:
     case Success(v) => Try(f(v)).flatten
     case Failure(e) => Failure(e)
   def filter(p: T => Boolean): Try[T] = flatMap: v =>
-    if p(v) then Success(v) else Failure(new NoSuchElementException("Predicate does not hold for " + v.toString))
+    if p(v) then Success(v) else Failure(new NoSuchElementException("Predicate does not hold for " + v))
   def withFilter(p: T => Boolean): Try[T] = filter(p)
   def foreach[U](f: T => U): Unit = this match
     case Success(v) =>

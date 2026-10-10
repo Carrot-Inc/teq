@@ -159,15 +159,10 @@ package java.lang:
     def newInteger(s: String): Integer = Integer.valueOf(parseInt(s))
     @jvm("getstatic java/lang/Integer.TYPE:Ljava/lang/Class;")
     def TYPE: Class[?] = classOf[Int]
-    @js("2147483647")
-    @jvm("getstatic java/lang/Integer.MAX_VALUE:I")
-    def MAX_VALUE: Int
-    @js("-2147483648")
-    @jvm("getstatic java/lang/Integer.MIN_VALUE:I")
-    def MIN_VALUE: Int
-    @js("32")
-    @jvm("getstatic java/lang/Integer.SIZE:I")
-    def SIZE: Int
+    // The JDK's constants (`ConstantValue`), of their constant types as dotty reads them.
+    final val MAX_VALUE: 2147483647 = 2147483647
+    final val MIN_VALUE: -2147483648 = -2147483648
+    final val SIZE: 32 = 32
     @js("$1")
     @jvm("invokestatic java/lang/Integer.valueOf(I)Ljava/lang/Integer;")
     def valueOf(i: Int): Integer
@@ -287,15 +282,9 @@ package java.lang:
     def newLong(s: String): Long = Long.valueOf(parseLong(s))
     @jvm("getstatic java/lang/Long.TYPE:Ljava/lang/Class;")
     def TYPE: Class[?] = classOf[scala.Long]
-    @js("9223372036854775807n")
-    @jvm("getstatic java/lang/Long.MAX_VALUE:J")
-    def MAX_VALUE: scala.Long
-    @js("-9223372036854775808n")
-    @jvm("getstatic java/lang/Long.MIN_VALUE:J")
-    def MIN_VALUE: scala.Long
-    @js("64")
-    @jvm("getstatic java/lang/Long.SIZE:I")
-    def SIZE: Int
+    final val MAX_VALUE: 9223372036854775807L = 9223372036854775807L
+    final val MIN_VALUE: -9223372036854775808L = -9223372036854775808L
+    final val SIZE: 64 = 64
     @js("$1")
     @jvm("invokestatic java/lang/Long.valueOf(J)Ljava/lang/Long;")
     def valueOf(l: scala.Long): Long
@@ -518,12 +507,8 @@ package java.lang:
     def newDouble(s: String): Double = Double.valueOf(parseDouble(s))
     @jvm("getstatic java/lang/Double.TYPE:Ljava/lang/Class;")
     def TYPE: Class[?] = classOf[scala.Double]
-    @js("Number.MAX_VALUE")
-    @jvm("getstatic java/lang/Double.MAX_VALUE:D")
-    def MAX_VALUE: scala.Double
-    @js("Number.MIN_VALUE")
-    @jvm("getstatic java/lang/Double.MIN_VALUE:D")
-    def MIN_VALUE: scala.Double
+    final val MAX_VALUE: 1.7976931348623157e308 = 1.7976931348623157e308
+    final val MIN_VALUE: 4.9e-324 = 4.9e-324
     @js("Infinity")
     @jvm("getstatic java/lang/Double.POSITIVE_INFINITY:D")
     def POSITIVE_INFINITY: scala.Double
@@ -1132,18 +1117,10 @@ package java.lang:
     def newCharacter(value: Char): Character = Character.valueOf(value)
     @jvm("getstatic java/lang/Character.TYPE:Ljava/lang/Class;")
     def TYPE: Class[?] = classOf[Char]
-    @js("65535")
-    @jvm("getstatic java/lang/Character.MAX_VALUE:C")
-    def MAX_VALUE: Char
-    @js("0")
-    @jvm("getstatic java/lang/Character.MIN_VALUE:C")
-    def MIN_VALUE: Char
-    @js("2")
-    @jvm("getstatic java/lang/Character.MIN_RADIX:I")
-    def MIN_RADIX: Int
-    @js("36")
-    @jvm("getstatic java/lang/Character.MAX_RADIX:I")
-    def MAX_RADIX: Int
+    final val MAX_VALUE: '\uffff' = '\uffff'
+    final val MIN_VALUE: '\u0000' = '\u0000'
+    final val MIN_RADIX: 2 = 2
+    final val MAX_RADIX: 36 = 36
     @js("$charCode($1)")
     @jvm("invokestatic java/lang/Character.hashCode(C)I")
     def hashCode(c: Char): Int
@@ -1217,12 +1194,8 @@ package java.lang:
   @javaDefined
   @jvmClass("java/lang/Math")
   object Math:
-    @js("Math.PI")
-    @jvm("getstatic java/lang/Math.PI:D")
-    def PI: scala.Double
-    @js("Math.E")
-    @jvm("getstatic java/lang/Math.E:D")
-    def E: scala.Double
+    final val PI: 3.141592653589793 = 3.141592653589793
+    final val E: 2.718281828459045 = 2.718281828459045
     @js("$max($1, $2)")
     @jvm("rt $1:L $2:L rtcall numMax(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;")
     def max[T <: Int | scala.Long | scala.Float | scala.Double](a: T, b: T): T
@@ -1406,7 +1379,7 @@ package java.lang:
     def this(capacity: Int) = this("")
     @jvm("invokevirtual java/lang/StringBuilder.append(Ljava/lang/Object;)Ljava/lang/StringBuilder;")
     def append(x: Any): StringBuilder =
-      s = s + x.toString
+      s = s + x
       this
     @jvm("invokevirtual java/lang/StringBuilder.append(Ljava/lang/String;)Ljava/lang/StringBuilder;")
     def append(x: String): StringBuilder =
@@ -1454,7 +1427,7 @@ package java.lang:
     @jvm("invokevirtual java/lang/StringBuilder.insert(IC)Ljava/lang/StringBuilder;")
     def insert(at: Int, c: Char): StringBuilder = insert(at, c.toString)
     @jvm("invokevirtual java/lang/StringBuilder.insert(ILjava/lang/Object;)Ljava/lang/StringBuilder;")
-    def insert(at: Int, x: Any): StringBuilder = insert(at, x.toString)
+    def insert(at: Int, x: Any): StringBuilder = insert(at, "" + x)
     @javaDefined
     @jvm("invokevirtual java/lang/StringBuilder.reverse()Ljava/lang/StringBuilder;")
     def reverse(): StringBuilder =
@@ -1516,7 +1489,7 @@ package java.lang:
     def this(capacity: Int) = this("")
     @jvm("invokevirtual java/lang/StringBuffer.append(Ljava/lang/Object;)Ljava/lang/StringBuffer;")
     def append(x: Any): StringBuffer =
-      s = s + x.toString
+      s = s + x
       this
     @jvm("invokevirtual java/lang/StringBuffer.append(Ljava/lang/String;)Ljava/lang/StringBuffer;")
     def append(x: String): StringBuffer =

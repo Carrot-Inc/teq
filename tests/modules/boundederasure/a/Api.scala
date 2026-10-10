@@ -28,6 +28,7 @@ object Api:
   def a5[T <: V](x: Array[T]): Int = x(0).n
   def w1(w: W[String]): W[String] = new W(w.value + "!")
   def w2(w: W[Int]): Int = w.value * 2
+  def c1[T <: Char](x: T): T = x
 
 class Box[T <: Foo](t: T):
   def get: T = t

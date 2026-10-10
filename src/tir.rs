@@ -159,6 +159,12 @@ impl StrConv {
         self.0 & Self::CALL == 0
     }
 
+    /// The byte, which tells a call from a rendering of the same kind.
+    #[inline]
+    pub fn bits(self) -> u8 {
+        self.0
+    }
+
     #[inline]
     pub fn kind(self) -> StrKind {
         match self.0 & !Self::CALL {
@@ -447,6 +453,10 @@ pub struct TQuotePat {
     pub type_params: Vec<TParamId>,
     /// How many of `type_params`, the first, the pattern declares (`type t <: AnyVal`).
     pub declared: u32,
+    /// Which of `type_params` take their upper bound once the match is done, dotty's `@fromAbove`
+    /// (`QuotesAndSplices.typedQuotePattern` gives it a variable the pattern binds in a
+    /// contravariant position): the others take their lower bound.
+    pub from_above: Vec<bool>,
     /// The type parameters of the enclosing definitions that the pattern mentions, with the
     /// expressions whose `Type` values they take when the match runs.
     pub types: Vec<(TParamId, TExprId)>,
@@ -1382,6 +1392,18 @@ impl Program {
     /// `inner.toString` as the program wrote it.
     pub fn to_string_call(&mut self, inner: TExprId, kind: StrKind) -> TExprId {
         self.add(TExpr::ToStr(inner, StrConv::call(kind)))
+    }
+
+    /// Whether the node is a string by construction, never `null`, on which the program's
+    /// `toString` is the string itself: a literal, a concatenation, a rendering, or a `toString`
+    /// call of a value of no user's class (a number's, a String's, which returns itself). A
+    /// call of a reference's `toString` returns what its method returns, `null` included.
+    pub fn is_non_null_string(&self, e: TExprId) -> bool {
+        match self.expr(e) {
+            TExpr::Str(_) | TExpr::StrConcat(_) => true,
+            TExpr::ToStr(_, conv) => conv.is_rendering() || conv.kind() != StrKind::Generic,
+            _ => false,
+        }
     }
 
     #[inline]

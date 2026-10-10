@@ -267,7 +267,7 @@ final class StringBuilder(init: String = "") extends java.lang.CharSequence, jav
   private var text = init
   @jvm("$0 $1 builder_append")
   def append(x: Any): StringBuilder =
-    text = text + x.toString
+    text = text + x
     this
   @jvm("invokevirtual java/lang/StringBuilder.append(Ljava/lang/String;)Ljava/lang/StringBuilder;")
   def ++=(s: String): StringBuilder = append(s)
@@ -281,7 +281,7 @@ final class StringBuilder(init: String = "") extends java.lang.CharSequence, jav
   def appendAll(s: String): StringBuilder = append(s)
   @jvm("$0 $1:I $2 builder_insert")
   def insert(index: Int, x: Any): StringBuilder =
-    text = text.substring(0, index) + x.toString + text.substring(index)
+    text = text.substring(0, index) + x + text.substring(index)
     this
   @jvm("invokevirtual java/lang/StringBuilder.deleteCharAt(I)Ljava/lang/StringBuilder;")
   def deleteCharAt(index: Int): StringBuilder =
@@ -368,7 +368,7 @@ final class StringContext(val parts: String*):
     var i = 0
     while i < parts.length do
       out = out + (if escaped then StringContext.processEscapes(parts(i)) else parts(i))
-      if i < args.length then out = out + args(i).toString
+      if i < args.length then out = out + args(i)
       i += 1
     out
   def s(args: Any*): String = interleave(args, true)

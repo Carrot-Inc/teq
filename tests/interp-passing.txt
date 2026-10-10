@@ -257,6 +257,8 @@ enum_category
 enum_extends_class
 enum_gadt
 enum_nested
+enum_ordinal_dispatch
+enum_ordinal_null
 enum_parents
 enum_reference
 enum_settings
@@ -406,6 +408,7 @@ given_memo_walk_levels
 given_not_given_fallback
 given_param_bounds_scope
 given_patterns
+given_polymorphic_def
 given_pref_gadt_local_object
 given_selector_end
 given_with_self_alias
@@ -692,6 +695,7 @@ macro_char_buffer
 macro_ctor_member_type
 macro_ctor_param_annots
 macro_default_getters
+macro_derivation
 macro_enum_case_type_ref
 macro_environment
 macro_files
@@ -714,6 +718,7 @@ macro_package_prefix
 macro_param_clauses
 macro_param_has_default
 macro_pattern_intersection
+macro_pattern_type_bounds
 macro_patterns
 macro_position_implicit
 macro_position_nested
@@ -732,6 +737,7 @@ macro_refinement_info_equality
 macro_refinement_members
 macro_refinement_param_kinds
 macro_reflective_call
+macro_source_path
 macro_std_body_return
 macro_std_ext_shared
 macro_string_from_bytes
@@ -867,6 +873,7 @@ package_alias_beside_object
 package_blocks
 package_main
 package_object_braces
+package_object_import_parent
 package_object_parents
 package_val_object_accessor
 pair_extractor
@@ -1242,6 +1249,7 @@ throwable_init_cause
 time_clock
 time_formatter_value_widths
 time_formatter_widths
+to_string_null
 toplevel_init_cycle_a
 toplevel_init_cycle_b
 toplevel_init_eta
@@ -1361,6 +1369,7 @@ value_import_given_shadows_own
 value_import_givens
 value_of
 var_default_init
+var_setter_member
 vc_box_any
 vc_box_array
 vc_box_ascription

@@ -2809,7 +2809,15 @@ impl<'a> Gen<'a> {
                     return string;
                 }
                 let t = self.expr_static(inner);
-                self.string_value_of(&t);
+                match &t {
+                    // The program's `x.toString` on a reference is the call, which `null` throws
+                    // on, as dotty's `genApply` invokes it; a rendering writes `null`.
+                    JType::L(n) if !conv.is_rendering() => {
+                        let owner = if &**n == STRING { STRING } else { OBJECT };
+                        self.invoke(Invoke::Virtual, owner, false, "toString", &[], &JType::L(Rc::from(STRING)));
+                    }
+                    _ => self.string_value_of(&t),
+                }
                 JType::L(Rc::from(STRING))
             }
             TExpr::Js(template, args) => self.intrinsic(e, template, args),

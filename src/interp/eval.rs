@@ -253,7 +253,7 @@ impl<'a, 't> Interp<'a, 't> {
                 self.eval_unary(op, v)
             }
             TExpr::StrConcat(items) => self.eval_concat(items, fr, cx),
-            TExpr::ToStr(inner, conv) => self.eval_to_str(inner, conv.kind(), fr, cx),
+            TExpr::ToStr(inner, conv) => self.eval_to_str(inner, conv, fr, cx),
             TExpr::Js(s, args) => {
                 if !self.typer.withheld_notes.is_empty() {
                     self.note_withheld_body(e);
@@ -326,8 +326,25 @@ impl<'a, 't> Interp<'a, 't> {
     }
 
     #[inline(never)]
-    fn eval_to_str(&mut self, inner: TExprId, kind: StrKind, fr: &Rc<Frame>, cx: &Ctx) -> R {
+    fn eval_to_str(&mut self, inner: TExprId, conv: StrConv, fr: &Rc<Frame>, cx: &Ctx) -> R {
         let v = self.eval(inner, fr, cx)?;
+        // The program's `x.toString` is a call, which `null` throws on, and whose result is what
+        // the method returns, `null` included (dotty's `genApply`); a rendering writes `null`.
+        if !conv.is_rendering() {
+            match &v {
+                Value::Null => return self.throw_named("NullPointerException", "Cannot invoke \"Object.toString()\" because the value is null"),
+                Value::Obj(o) => {
+                    let m = self.member(o.class, crate::names::TO_STRING);
+                    let r = self.invoke_member(v.clone(), m, crate::names::TO_STRING, Vec::new())?;
+                    return match r {
+                        Value::Str(_) | Value::Null => Ok(r),
+                        other => Ok(Value::string(self.to_str(&other)?)),
+                    };
+                }
+                _ => {}
+            }
+        }
+        let kind = conv.kind();
         self.prof_alloc(|a| a.strings += 1);
         if let (StrKind::Str, Value::Str(_)) = (kind, &v) {
             return Ok(v);
@@ -1904,26 +1921,43 @@ impl<'a, 't> Interp<'a, 't> {
                     self.call_static(sym, vals)
                 }
             }
+            // An abstract member the std answers natively for its own values: an object's class's
+            // implementation first, the native for a receiver whose class has none (an enum case's
+            // synthesized `ordinal`) or is no object, and `null`'s ordinary failure.
             Template::AbstractBuiltin(b, sym) => {
                 let mut vals = self.eval_list(args, fr, cx)?;
-                if matches!(vals.first(), Some(Value::Obj(_))) {
-                    let recv = vals.remove(0);
-                    self.invoke(recv, sym, vals)
-                } else {
-                    b(self, &vals)
+                match vals.first() {
+                    Some(Value::Obj(o)) => {
+                        let (m, name) = self.object_member(o.class, sym);
+                        if matches!(m, Member::Missing) {
+                            return b(self, &vals);
+                        }
+                        let recv = vals.remove(0);
+                        self.invoke_member(recv, m, name, vals)
+                    }
+                    Some(Value::Null) => {
+                        let recv = vals.remove(0);
+                        self.invoke(recv, sym, vals)
+                    }
+                    _ => b(self, &vals),
                 }
             }
             Template::Missing(name) => self.unsupported(format!("no builtin for {}", name)),
         }
     }
 
-    /// A class member an object receiver answers through dispatch: one without a body, or any
-    /// member of an abstract class, whose objects are its subclasses'.
+    /// A member an object receiver answers through dispatch: a class's or a trait's member
+    /// without a body (`scala.reflect.Enum.ordinal`), or any member of an abstract class, whose
+    /// objects are its subclasses'.
     fn is_dispatched_class_member(&mut self, sym: SymId) -> bool {
         let info = self.syms().sym(sym);
-        let in_class = matches!(info.owner, Owner::Class(c) if self.syms().class(c).kind != ClassKind::Trait) && !info.is_extension;
-        let abstract_owner = matches!(info.owner, Owner::Class(c) if self.syms().class(c).mods & mods::ABSTRACT != 0);
-        in_class && (abstract_owner || self.typer.declared_without_body(sym))
+        let Owner::Class(c) = info.owner else { return false };
+        if info.is_extension {
+            return false;
+        }
+        let class = self.syms().class(c);
+        let abstract_owner = class.kind != ClassKind::Trait && class.mods & mods::ABSTRACT != 0;
+        abstract_owner || self.typer.declared_without_body(sym)
     }
 
     fn resolve_template(&mut self, s: StrRef) -> Template {

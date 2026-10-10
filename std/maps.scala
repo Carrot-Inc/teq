@@ -302,7 +302,7 @@ abstract class Map[K, +V] extends IterableOps[(K, V), Iterable, Map[K, V]], scal
   override def apply(key: K): V = get(key) match
     case Some(v) => v
     case None => default(key)
-  def default(key: K): V = noSuchElement("key not found: " + key.toString)
+  def default(key: K): V = noSuchElement("key not found: " + key)
   override def getOrElse[V1 >: V](key: K, default: => V1): V1 = get(key) match
     case Some(v) => v
     case None => default
@@ -349,7 +349,7 @@ abstract class Map[K, +V] extends IterableOps[(K, V), Iterable, Map[K, V]], scal
   override def flatMap[B](f: ((K, V)) => IterableOnce[B]): Iterable[B] = fromArray(Vector.wrap(rawItems(this)).flatMap(f).unsafeArray)
   def filterKeys(p: K => Boolean): Map[K, V] = filter(e => p(e._1))
   override def mkString(start: String, sep: String, end: String): String =
-    joinStrings(Vector.wrap(rawItems(this).map(e => e._1.toString + " -> " + e._2.toString)), start, sep, end)
+    joinStrings(Vector.wrap(rawItems(this).map(e => "" + e._1 + " -> " + e._2)), start, sep, end)
 
   def equals(that: Any): Boolean = that match
     case m: Map[?, ?] =>
@@ -524,7 +524,7 @@ final class MapView[K, +V](entries: () => Iterator[(K, V)], lookup: K => Option[
   def get(key: K): Option[V] = lookup(key)
   def apply(key: K): V = lookup(key) match
     case Some(v) => v
-    case None => noSuchElement("key not found: " + key.toString)
+    case None => noSuchElement("key not found: " + key)
   def getOrElse[V1 >: V](key: K, default: => V1): V1 = lookup(key).getOrElse(default)
   def contains(key: K): Boolean = lookup(key).isDefined
   def keys: View[K] = new View(() => entries().map(e => e._1), "View")

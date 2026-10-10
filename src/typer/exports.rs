@@ -1556,10 +1556,11 @@ impl<'a> Worker<'a> {
             if self.syms.class(c).kind == ClassKind::Object && c != owner && self.derives_from(c, owner) {
                 let imp = self.import_at(i);
                 let name = self.syms.sym(sym).name;
+                // An import of a package brings what its package object has.
                 let brings = match imp.target {
-                    ImportTarget::ClassMember(_, orig) => orig == name,
-                    ImportTarget::ClassGivens(_) => self.syms.is_given(sym),
-                    ImportTarget::ClassAll(_) => imp.name.is_none() && !self.import_hides(imp, name),
+                    ImportTarget::ClassMember(_, orig) | ImportTarget::PkgMember(_, orig) => orig == name,
+                    ImportTarget::ClassGivens(_) | ImportTarget::PkgGivens(_) => self.syms.is_given(sym),
+                    ImportTarget::ClassAll(_) | ImportTarget::PkgAll(_) => imp.name.is_none() && !self.import_hides(imp, name),
                     _ => false,
                 };
                 if brings {
@@ -1571,6 +1572,11 @@ impl<'a> Worker<'a> {
             let Some(obj) = self.syms.pkg(p).package_object else { continue };
             if let Some(&m) = self.exports_of(obj).as_ref().and_then(|e| e.via.get(&sym)) {
                 return TraitMemberSite::Module(m);
+            }
+            // A package object of another module's products, which has no such table: what it
+            // inherits is its package's, reached through it, as the import of one above.
+            if obj != owner && self.derives_from(obj, owner) {
+                return TraitMemberSite::Module(obj);
             }
         }
         TraitMemberSite::This(None)

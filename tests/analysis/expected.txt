@@ -232,8 +232,6 @@ twomains_b tmb.Use$package run annotation-tree
 unused_b unb.Use$package run annotation-tree
 valaccessor_b vab.Use$package run annotation-tree
 writtensetter_b wsb.Use$package run annotation-tree
-members mem.Base b_= var-parameter-setter
-members mem.Impl b_= var-parameter-setter
 members mem.Impl mem;Impl;init; secondary-constructor
 hkbounds_a ha.Functor$.given_Functor_Option ha;Functor;init; hk-parameter-name
 enum_a na.Opt$.Some MirroredMonoType mirror-prefix
@@ -260,7 +258,6 @@ enum_a na.Planet <parents> enum-serializable
 enum_a na.Planet $new enum-new
 hkbounds_a ha.Functor$.given_Functor_List <parents> alias-expanded
 sealed_a sa.Expr <parents> mirror-companion
-typemembers_b tmb.MapRegistry entries_= private-var-setter
 
 # The fixtures' API mappings.
 fingerprint_literal fp.Fp inner inline-fingerprint

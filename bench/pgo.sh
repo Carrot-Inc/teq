@@ -241,9 +241,6 @@ use() {
   # The suite into out/tests, emptied first, at its own bound: the outputs the Linux aarch64 suite compares with.
   rm -rf out/tests
   smoke=$(TEQ=./$binary TEQ_TEST_OUT=out/tests TEQ_TEST_TIMEOUT=20 timeout 300 tests/run.sh 2>&1)
-  # The checkout's path as the file system spells it, which a macro writes into an output (sourcecode's File):
-  # bench/cross-ship.sh's comparison of another machine's suite with this one normalises both by their roots.
-  pwd -P > out/tests/.root
   local smoke_status=$?
   echo "$smoke" > "$dir/suite.log"
   [ $smoke_status -eq 0 ] || echo "$smoke"

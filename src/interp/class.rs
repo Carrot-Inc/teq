@@ -1544,7 +1544,8 @@ impl<'a, 't> Interp<'a, 't> {
                     None => vec![m],
                 };
                 for alt in alts {
-                    if matches!(self.syms().sym(alt).kind, SymKind::Overloaded(_)) {
+                    // A concrete var's setter has no body: a call of it is the var's assignment.
+                    if matches!(self.syms().sym(alt).kind, SymKind::Overloaded(_)) || crate::typer::setters::is_concrete_setter(self.syms(), alt) {
                         continue;
                     }
                     index.entry(self.syms().dispatch_name(alt)).or_insert(alt);

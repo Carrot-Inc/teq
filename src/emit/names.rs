@@ -353,7 +353,8 @@ impl Renames {
             }
             for &m in info.member_order.iter().chain(info.ctor_syms.iter().flatten()) {
                 let sym = syms.sym(m);
-                if matches!(sym.kind, SymKind::Val | SymKind::Var | SymKind::Def | SymKind::Given) && sym.owner == Owner::Class(c) && !syms.product_synthetics.contains_key(&m) {
+                // A concrete var's setter has no output: its call is the var's assignment.
+                if matches!(sym.kind, SymKind::Val | SymKind::Var | SymKind::Def | SymKind::Given) && sym.owner == Owner::Class(c) && !syms.product_synthetics.contains_key(&m) && !crate::typer::setters::is_concrete_setter(syms, m) {
                     names.push(member_name(m));
                 }
             }

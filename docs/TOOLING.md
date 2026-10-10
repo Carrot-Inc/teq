@@ -166,9 +166,10 @@ What sbt would find by compiling or running the build's code is declared:
 A `TeqCommand` writes sources into the directory appended to `run` (sbt's `Compile / sourceManaged / "teq"`,
 the exported build's `target/teq/<project>/compile/src_managed`, relative to the command's working directory);
 sbt's compile runs it, and so does `teq`, again when the files its `inputs` globs match or the files its
-arguments name change (its script among them), or when one of its `outputs` is missing: the files or
-directories under the build's root the program writes besides that directory, a module of the application's
-assets say, which `teq` checks as it checks the directory and whose unchanged files keep their times. The
+arguments name change (its script among them), or when one of its `outputs` the last run made is gone: the files
+or directories under the build's root the program writes besides that directory, a module of the application's
+assets say, which `teq` checks as it checks the directory and whose unchanged files keep their times; an output
+the run leaves empty (that directory, for a command writing elsewhere) is not waited for. The
 first word `teq` is the build's own binary, sbt's `teqResolvedBinary` and under `teq` the one running, never
 a `teq` of the `PATH`: a Scala script runs through `teq interp`, with no JVM and no other tool on any machine.
 
@@ -335,7 +336,8 @@ stops (`sessionIdleSeconds`), which the folder's `.zed/settings.json` can change
 During a build that takes longer than a moment the status bar shows `teq: checking <project>`; the check for
 files changed on disk that a session makes every three seconds while idle is not shown. An export
 changed after the server started is read again within seconds; a build definition changed since the export was
-written is a warning on `build.sbt` naming `sbt teqExportAll`. An sbt build without an export is exported by
+written is a warning on `build.sbt` naming `sbt teqExportAll` (a build file git ignores, such as Metals'
+`project/metals.sbt`, is a tool's and does not count). An sbt build without an export is exported by
 the server itself, once: it runs `sbt teqExportAll` with the published sbt-teq of its own version loaded for
 that run alone, which writes `teq.lock` under the build's `target/teq/` (at its root under the driver), and
 again when that file goes, after an `sbt clean`; a run that fails is a diagnostic

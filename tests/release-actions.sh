@@ -538,7 +538,6 @@ printf '[package]\nname = "teq"\nversion = "0.1.7"\n' > "$x/Cargo.toml"
 echo '[toolchain]' > "$x/rust-toolchain.toml"
 echo 'object A' > "$x/tests/cases/end_markers.scala"
 echo ':' > "$x/tests/support/jars.sh"
-cp tests/support/identity-root.py "$x/tests/support/"
 printf '#!/bin/bash\n[ "$1" = restore ] && [ -f "$2" ]\n' > "$x/bench/actions/jars.sh"
 # The training's stand-in: one run of the instrumented binary in its place (the trainer, or qemu_wrapper's script).
 cat > "$x/bench/pgo.sh" << 'EOF'

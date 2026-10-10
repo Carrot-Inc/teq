@@ -1944,7 +1944,9 @@ impl<'a> Gen<'a> {
         let members: Vec<SymId> = info.member_order.iter().chain(info.extensions.iter()).copied().collect();
         for s in members {
             let sinfo = syms.sym(s);
-            if sinfo.intrinsic.is_some() || matches!(sinfo.kind, SymKind::Object(_) | SymKind::EnumValue(_) | SymKind::Param) {
+            // A concrete var's setter is the var's `x_$eq`, written with its field or, in a trait,
+            // with its declarations.
+            if sinfo.intrinsic.is_some() || matches!(sinfo.kind, SymKind::Object(_) | SymKind::EnumValue(_) | SymKind::Param) || crate::typer::setters::is_concrete_setter(syms, s) {
                 continue;
             }
             let f = cx.fun_of_sym[s.idx()];

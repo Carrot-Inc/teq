@@ -578,9 +578,9 @@ fn install_quotes(it: &mut Table) {
     });
     reg!(it, "$quoteMatch", |it, a| {
         let index = it.int_arg(a, 1)? as usize;
-        let (body, pat_ty, holes, tparams, type_syms) = {
+        let (body, pat_ty, holes, tparams, from_above, type_syms) = {
             let p = &it.prog().quote_pats[index];
-            (p.body, p.ty, p.holes.clone(), p.type_params.clone(), p.types.iter().map(|&(q, _)| q).collect::<Vec<_>>())
+            (p.body, p.ty, p.holes.clone(), p.type_params.clone(), p.from_above.clone(), p.types.iter().map(|&(q, _)| q).collect::<Vec<_>>())
         };
         let mut subst: Subst = Vec::new();
         for (i, q) in type_syms.iter().enumerate() {
@@ -588,14 +588,15 @@ fn install_quotes(it: &mut Table) {
         }
         let pat_ty = it.typer.types.in_view_here(pat_ty);
         let pat_ty = it.typer.types.subst(pat_ty, &subst);
-        let mut m = Matcher { holes: &holes, tparams: &tparams, hole_vals: vec![None; holes.len()], type_vals: vec![None; tparams.len()], locals: Vec::new(), subst };
+        let mut m = Matcher { holes: &holes, tparams: &tparams, hole_vals: vec![None; holes.len()], type_bounds: vec![HoleBounds::default(); tparams.len()], type_vals: vec![None; tparams.len()], locals: Vec::new(), subst };
         let matched = match (arg(a, 0), body) {
             (Value::Tree(t), Some(b)) => {
                 let s = it.materialize(t)?;
                 let ok = m.expr(it, b, s);
                 if it.trace {
                     let (ps, ss) = (it.show_tree(TreeRef::Expr(b)), it.show_tree(TreeRef::Expr(s)));
-                    let bound: Vec<String> = m.type_vals.iter().map(|v| v.map(|t| it.typer.show(t)).unwrap_or_else(|| "?".into())).collect();
+                    let show = |it: &mut Interp, ts: &[TypeId]| ts.iter().map(|&t| it.typer.show(t)).collect::<Vec<_>>().join(" | ");
+                    let bound: Vec<String> = m.type_bounds.clone().iter().map(|b| format!("{} .. {}", show(it, &b.lo), show(it, &b.hi))).collect();
                     eprintln!("quote pattern {} against {}: {} {:?}", ps, ss, ok, bound);
                 }
                 ok
@@ -606,6 +607,7 @@ fn install_quotes(it: &mut Table) {
         if !matched {
             return it.make_none();
         }
+        m.approximate(it, &from_above);
         let mut results: Vec<Value> = Vec::new();
         for (i, v) in m.hole_vals.iter().enumerate() {
             let _ = i;
@@ -634,7 +636,7 @@ fn install_quotes(it: &mut Table) {
     q!(it, "Quotes.Expr.matches", |it, a| {
         let x = it.expr_arg(a, 0)?;
         let y = it.expr_arg(a, 1)?;
-        let mut m = Matcher { holes: &[], tparams: &[], hole_vals: Vec::new(), type_vals: Vec::new(), locals: Vec::new(), subst: Vec::new() };
+        let mut m = Matcher { holes: &[], tparams: &[], hole_vals: Vec::new(), type_bounds: Vec::new(), type_vals: Vec::new(), locals: Vec::new(), subst: Vec::new() };
         Ok(Value::Bool(m.expr(it, x, y)))
     });
     q!(it, "Quotes.Expr.isExprOf", |it, a| {
@@ -719,6 +721,12 @@ struct Matcher<'m> {
     holes: &'m [SymId],
     tparams: &'m [TParamId],
     hole_vals: Vec<Option<TExprId>>,
+    /// The bounds the match gathers for each type variable (`tparams`), dotty's GADT constraint
+    /// over the pattern's type holes (`QuoteMatcher.instrumentTypeHoles`): what the scrutinee's
+    /// types put below it and above it, beside the bounds the pattern declares.
+    type_bounds: Vec<HoleBounds>,
+    /// Each type variable's type, chosen from its bounds once the whole tree has matched
+    /// (`typeHoleApproximation`).
     type_vals: Vec<Option<TypeId>>,
     /// Binders of the pattern paired with those of the scrutinee.
     locals: Vec<(SymId, SymId)>,
@@ -748,7 +756,7 @@ impl<'m> Matcher<'m> {
                 }
                 return match self.hole_vals[i] {
                     Some(prev) => {
-                        let mut inner = Matcher { holes: &[], tparams: &[], hole_vals: Vec::new(), type_vals: Vec::new(), locals: Vec::new(), subst: Vec::new() };
+                        let mut inner = Matcher { holes: &[], tparams: &[], hole_vals: Vec::new(), type_bounds: Vec::new(), type_vals: Vec::new(), locals: Vec::new(), subst: Vec::new() };
                         inner.expr(it, prev, s)
                     }
                     None => {
@@ -933,55 +941,64 @@ impl<'m> Matcher<'m> {
         params.iter().any(|q| self.tparams.contains(q))
     }
 
-    /// Whether the scrutinee's type `s` fits the pattern's `p`, binding the pattern's type
-    /// variables: both in the reader's view first, a pattern's type being its record's (a peer's
-    /// or the base's) and a scrutinee's what its tree records, so that the comparisons below are
-    /// of two ids of one view.
+    /// Whether the scrutinee's type `s` fits the pattern's `p` (`scType <:< pattern.tpe`, dotty's
+    /// `isSubTypeUnderEnv`), constraining the pattern's type variables.
     fn unify(&mut self, it: &mut Interp, p: TypeId, s: TypeId) -> bool {
+        self.constrain(it, p, s, 1)
+    }
+
+    /// Whether the scrutinee's type `s` and the pattern's `p` relate as `variance` says (`1`: `s
+    /// <: p`, `-1`: `p <: s`, `0`: both), each type variable `p` holds taking the bound the
+    /// relation puts on it, as the subtype check under the match's GADT constraint adds it
+    /// (an intersection or a union decomposed as dotty's `TypeComparer` does, one of two
+    /// alternatives tried with the other's constraint rolled back): both in the reader's view
+    /// first, a pattern's type being its record's (a peer's or the base's) and a scrutinee's
+    /// what its tree records, so that the comparisons below are of two ids of one view.
+    fn constrain(&mut self, it: &mut Interp, p: TypeId, s: TypeId, variance: i8) -> bool {
+        if variance == 0 {
+            return self.constrain(it, p, s, 1) && self.constrain(it, p, s, -1);
+        }
+        let below = variance > 0;
         let (p, s) = (it.typer.types.in_view_here(p), it.typer.types.in_view_here(s));
         let p = it.typer.zonk(p);
         let p = it.typer.types.subst(p, &self.subst);
         let s = it.typer.zonk(s);
         if let Type::Param(tp) = it.typer.types.get(p) {
             if let Some(i) = self.tparams.iter().position(|&x| x == tp) {
-                return match self.type_vals[i] {
-                    Some(prev) => it.typer.is_same(prev, s),
-                    None => {
-                        self.type_vals[i] = Some(s);
-                        true
-                    }
-                };
+                return if below { self.add_lower(it, i, s) } else { self.add_upper(it, i, s) };
             }
         }
+        let relate = |it: &mut Interp, p: TypeId, s: TypeId| if below { it.conforms(s, p) } else { it.conforms(p, s) };
         if self.tparams.is_empty() {
-            return it.conforms(s, p);
+            return relate(it, p, s);
         }
         let mut params = Vec::new();
         it.typer.collect_type_params(p, &mut params);
         if !params.iter().any(|q| self.tparams.contains(q)) {
-            return it.conforms(s, p);
+            return relate(it, p, s);
         }
         let sd = it.typer.dealias(s);
         // An alias in the pattern (`'[Lens[f, t]]`) matches what it stands for.
         let p = it.typer.deref_alias(p);
-        // An intersection fits where one of its parts does (`Computed[..] & TransformerOverrides`
-        // against `'[Computed[path, tail]]`), as its subtype check has it.
-        if let (Type::Inter(a, b), false) = (it.typer.types.get(sd), matches!(it.typer.types.get(p), Type::Inter(..))) {
-            let before = self.type_vals.clone();
-            if self.unify(it, p, a) {
-                return true;
-            }
-            self.type_vals = before;
-            return self.unify(it, p, b);
+        let (pt, st) = (it.typer.types.get(p), it.typer.types.get(sd));
+        // The side that has to be below both parts of an intersection, or above both parts of a
+        // union, is compared with each; the side that has one of two parts to compare is tried
+        // with each in turn (`Computed[..] & TransformerOverrides` against `'[Computed[path,
+        // tail]]`; `t & Tuple` against a tuple).
+        match (pt, st, below) {
+            (Type::Inter(a, b), _, true) | (Type::Union(a, b), _, false) => return self.constrain(it, a, s, variance) && self.constrain(it, b, s, variance),
+            (_, Type::Union(a, b), true) | (_, Type::Inter(a, b), false) => return self.constrain(it, p, a, variance) && self.constrain(it, p, b, variance),
+            (Type::Union(a, b), _, true) | (Type::Inter(a, b), _, false) => return self.either(it, |m, it| m.constrain(it, a, s, variance), |m, it| m.constrain(it, b, s, variance)),
+            (_, Type::Inter(a, b), true) | (_, Type::Union(a, b), false) => return self.either(it, |m, it| m.constrain(it, p, a, variance), |m, it| m.constrain(it, p, b, variance)),
+            _ => {}
         }
-        match (it.typer.types.get(p), it.typer.types.get(sd)) {
-            // `Mirror.Product { type MirroredElemLabels = labels } & Mirror.ProductOf[A]`: each
-            // part against the scrutinee's type, a refinement's members against its members.
-            (Type::Inter(a, b), _) => self.unify(it, a, s) && self.unify(it, b, s),
+        match (pt, st) {
+            // `Mirror.Product { type MirroredElemLabels = labels } & Mirror.ProductOf[A]`: the
+            // parent against the scrutinee's type, a refinement's member as the scrutinee's.
             (Type::Refined(parent, r), _) => {
-                let Refinement::Alias(name, rhs) = it.typer.types.refinement(r) else { return self.unify(it, parent, s) };
+                let Refinement::Alias(name, rhs) = it.typer.types.refinement(r) else { return self.constrain(it, parent, s, variance) };
                 let Some(member) = it.typer.member_type(s, name) else { return false };
-                self.unify(it, parent, s) && self.unify(it, rhs, member)
+                self.constrain(it, parent, s, variance) && self.constrain(it, rhs, member, 0)
             }
             // `h *: t` against a `TupleN`: its first element and the rest as a cons chain, as
             // scalac's subtype check reads a tuple class.
@@ -992,23 +1009,145 @@ impl<'m> Matcher<'m> {
                 for &e in elems[1..].iter().rev() {
                     rest = it.typer.types.class(c1, &[e, rest]);
                 }
-                self.unify(it, h, elems[0]) && self.unify(it, t, rest)
+                self.constrain(it, h, elems[0], variance) && self.constrain(it, t, rest, variance)
             }
+            // The arguments of a class by its parameters' variances: the scrutinee's base type at
+            // the pattern's class (`s <: p`), or the pattern's at the scrutinee's (`p <: s`).
             (Type::Class(c1, a1), _) => {
-                let base = if let Type::Class(c2, _) = it.typer.types.get(sd) {
-                    if c1 == c2 { Some(sd) } else { it.typer.base_type(sd, c1) }
+                let (class, xs, ys) = if below {
+                    let base = match st {
+                        Type::Class(c2, _) if c1 == c2 => Some(sd),
+                        _ => it.typer.base_type(sd, c1),
+                    };
+                    let Some(base) = base else { return false };
+                    let Type::Class(_, a2) = it.typer.types.get(base) else { return false };
+                    (c1, it.typer.types.items(a1).to_vec(), it.typer.types.items(a2).to_vec())
                 } else {
-                    it.typer.base_type(sd, c1)
+                    let Type::Class(c2, a2) = st else { return relate(it, p, s) };
+                    let base = if c1 == c2 { Some(p) } else { it.typer.base_type(p, c2) };
+                    let Some(base) = base else { return false };
+                    let Type::Class(_, pa) = it.typer.types.get(base) else { return false };
+                    (c2, it.typer.types.items(pa).to_vec(), it.typer.types.items(a2).to_vec())
                 };
-                let Some(base) = base else { return false };
-                let Type::Class(_, a2) = it.typer.types.get(base) else { return false };
-                let (xs, ys) = (it.typer.types.items(a1).to_vec(), it.typer.types.items(a2).to_vec());
-                xs.len() == ys.len() && xs.into_iter().zip(ys).all(|(x, y)| self.unify(it, x, y))
+                if xs.len() != ys.len() {
+                    return false;
+                }
+                let variances: Vec<i8> = it.typer.syms.class(class).tparams.iter().map(|&q| it.typer.syms.tparam(q).variance).collect();
+                xs.into_iter().zip(ys).enumerate().all(|(k, (x, y))| {
+                    let v = variances.get(k).copied().unwrap_or(0);
+                    self.constrain(it, x, y, variance * v)
+                })
             }
-            (Type::Union(a, b), Type::Union(c, d)) => self.unify(it, a, c) && self.unify(it, b, d),
-            _ => it.conforms(s, p),
+            _ => relate(it, p, s),
         }
     }
+
+    /// The first alternative, or the second with what the first constrained rolled back.
+    fn either(&mut self, it: &mut Interp, first: impl FnOnce(&mut Self, &mut Interp) -> bool, second: impl FnOnce(&mut Self, &mut Interp) -> bool) -> bool {
+        let before = self.type_bounds.clone();
+        if first(self, it) {
+            return true;
+        }
+        self.type_bounds = before;
+        second(self, it)
+    }
+
+    /// `s` below the type variable `i`: below every bound gathered above it, and below what it
+    /// declares above itself, which puts `s` below another variable a bound names (`type b <:
+    /// a`), as the GADT constraint keeps a variable's dependencies.
+    fn add_lower(&mut self, it: &mut Interp, i: usize, s: TypeId) -> bool {
+        if self.type_bounds[i].lo.iter().any(|&l| l == s || it.typer.is_same(l, s)) {
+            return true;
+        }
+        self.type_bounds[i].lo.push(s);
+        let uppers = self.type_bounds[i].hi.clone();
+        if !uppers.into_iter().all(|h| it.conforms(s, h)) {
+            return false;
+        }
+        let declared = it.typer.syms.tparam(self.tparams[i]).upper;
+        self.constrain(it, declared, s, 1)
+    }
+
+    /// `s` above the type variable `i`: above every bound gathered below it and what it declares
+    /// below itself.
+    fn add_upper(&mut self, it: &mut Interp, i: usize, s: TypeId) -> bool {
+        if self.type_bounds[i].hi.iter().any(|&h| h == s || it.typer.is_same(h, s)) {
+            return true;
+        }
+        self.type_bounds[i].hi.push(s);
+        let lowers = self.type_bounds[i].lo.clone();
+        if !lowers.into_iter().all(|l| it.conforms(l, s)) {
+            return false;
+        }
+        let declared = it.typer.syms.tparam(self.tparams[i]).lower;
+        self.constrain(it, declared, s, -1)
+    }
+
+    /// Each type variable's type once the tree has matched, from its full bounds
+    /// (`QuoteMatcher.typeHoleApproximation`): the join of what is below it, its declared lower
+    /// bound among them, another variable a bound names standing for that one's type.
+    fn approximate(&mut self, it: &mut Interp, from_above: &[bool]) {
+        let mut done: Vec<Option<TypeId>> = vec![None; self.tparams.len()];
+        let mut visiting = vec![false; self.tparams.len()];
+        for i in 0..self.tparams.len() {
+            self.approximate_one(it, i, from_above, &mut done, &mut visiting);
+        }
+        self.type_vals = done;
+    }
+
+    /// A variable marked `@fromAbove` takes the meet of what is above it, its declared upper
+    /// bound among them; any other the join of what is below it.
+    fn approximate_one(&mut self, it: &mut Interp, i: usize, from_above: &[bool], done: &mut Vec<Option<TypeId>>, visiting: &mut Vec<bool>) -> TypeId {
+        if let Some(t) = done[i] {
+            return t;
+        }
+        let param = it.typer.types.param(self.tparams[i]);
+        if visiting[i] {
+            return param;
+        }
+        visiting[i] = true;
+        let above = from_above.get(i).copied().unwrap_or(false);
+        let info = it.typer.syms.tparam(self.tparams[i]);
+        let declared = it.typer.types.subst(if above { info.upper } else { info.lower }, &self.subst);
+        let mut named = Vec::new();
+        it.typer.collect_type_params(declared, &mut named);
+        let mut by_hole: Subst = Vec::new();
+        for q in named {
+            if let Some(j) = self.tparams.iter().position(|&x| x == q) {
+                let t = self.approximate_one(it, j, from_above, done, visiting);
+                by_hole.push((q, t));
+            }
+        }
+        let declared = it.typer.types.subst(declared, &by_hole);
+        let (gathered, trivial) = if above { (self.type_bounds[i].hi.clone(), ANY) } else { (self.type_bounds[i].lo.clone(), NOTHING) };
+        let mut bounds: Vec<TypeId> = Vec::new();
+        for t in std::iter::once(declared).chain(gathered) {
+            if t == trivial || bounds.iter().any(|&l| l == t || it.typer.is_same(l, t)) {
+                continue;
+            }
+            bounds.push(t);
+        }
+        // The join of the lower bounds (the meet of the upper ones): a bound below (above)
+        // another is subsumed by it, the rest their union (intersection), in order.
+        let subsumed = |it: &mut Interp, t: TypeId, u: TypeId| if above { it.conforms(u, t) } else { it.conforms(t, u) };
+        let mut kept: Vec<TypeId> = Vec::new();
+        for (k, &t) in bounds.iter().enumerate() {
+            let gone = bounds.iter().enumerate().any(|(j, &u)| j != k && subsumed(it, t, u) && !(j > k && subsumed(it, u, t)));
+            if !gone {
+                kept.push(t);
+            }
+        }
+        let t = kept.into_iter().reduce(|a, b| if above { it.typer.types.inter(a, b) } else { it.typer.types.union(a, b) }).unwrap_or(trivial);
+        done[i] = Some(t);
+        t
+    }
+}
+
+/// What a match has put below and above a pattern's type variable.
+#[derive(Clone, Default)]
+struct HoleBounds {
+    lo: Vec<TypeId>,
+    hi: Vec<TypeId>,
 }
 
 impl<'a, 't> Interp<'a, 't> {
@@ -6720,7 +6859,7 @@ fn install_context(it: &mut Table) {
     });
     q!(it, "Reflect.SourceFileMethods.SourceFile.getJPath", |it, a| match arg(a, 0) {
         Value::Src(f) => {
-            let path = it.absolute_source_path(f);
+            let path: Rc<str> = Rc::from(it.typer.source(f).path.as_str());
             let c = it.quoted_class(&["java", "nio", "file", "Path"])?;
             let value = it.construct_new(c, vec![Value::Str(path)], &Frame::new(None))?;
             it.make_some(value)
@@ -6730,7 +6869,7 @@ fn install_context(it: &mut Table) {
     // The older spelling of `getJPath`, which scalactic's `Position` macro still calls.
     q!(it, "Reflect.SourceFileMethods.SourceFile.jpath", |it, a| match arg(a, 0) {
         Value::Src(f) => {
-            let path = it.absolute_source_path(f);
+            let path: Rc<str> = Rc::from(it.typer.source(f).path.as_str());
             let c = it.quoted_class(&["java", "nio", "file", "Path"])?;
             it.construct_new(c, vec![Value::Str(path)], &Frame::new(None))
         }
@@ -6744,10 +6883,12 @@ fn install_context(it: &mut Table) {
         }
         _ => it.unsupported("a SourceFile was expected"),
     });
+    // The path as the compiler was given it, relative where it was (dotty's
+    // `SourceFileMethods.path`, the source's `path`), as `jpath` and `getJPath` are.
     q!(it, "Reflect.SourceFileMethods.SourceFile.path", |it, a| match arg(a, 0) {
         Value::Src(f) => {
             let path = it.typer.source(f).path.clone();
-            Ok(Value::string(absolute_path(&path)))
+            Ok(Value::string(path))
         }
         _ => it.unsupported("a SourceFile was expected"),
     });
@@ -6890,43 +7031,6 @@ fn escape_char(c: char, quote: char, out: &mut String) {
         c if (c as u32) < 0x20 || (0x7f..0xa0).contains(&(c as u32)) => out.push_str(&format!("\\u{:04x}", c as u32)),
         c => out.push(c),
     }
-}
-
-impl<'a, 't> Interp<'a, 't> {
-    /// The absolute path of a source file, computed once per file.
-    fn absolute_source_path(&mut self, f: FileId) -> Rc<str> {
-        if let Some(p) = self.abs_paths.get(&f) {
-            return p.clone();
-        }
-        let p: Rc<str> = Rc::from(absolute_path(&self.typer.source(f).path));
-        self.abs_paths.insert(f, p.clone());
-        p
-    }
-}
-
-fn absolute_path(path: &str) -> String {
-    use std::path::Component;
-    static CWD: std::sync::OnceLock<Option<std::path::PathBuf>> = std::sync::OnceLock::new();
-    let path = std::path::Path::new(path);
-    let absolute = if path.is_absolute() {
-        path.to_path_buf()
-    } else {
-        match CWD.get_or_init(|| std::env::current_dir().ok()) {
-            Some(cwd) => cwd.join(path),
-            None => return path.to_string_lossy().into_owned(),
-        }
-    };
-    let mut out = std::path::PathBuf::new();
-    for part in absolute.components() {
-        match part {
-            Component::ParentDir => {
-                out.pop();
-            }
-            Component::CurDir => {}
-            other => out.push(other),
-        }
-    }
-    out.to_string_lossy().into_owned()
 }
 
 // ---- printers ----

@@ -1,9 +1,16 @@
-//! The setter of an abstract var. A `var x: T` that a class declares without a value stands for
-//! two abstract members, the getter `x` and the setter `x_=(x$1: T): Unit`, which a subclass
+//! The setter of a var. A `var x: T` that a class declares without a value stands for two
+//! abstract members, the getter `x` and the setter `x_=(x$1: T): Unit`, which a subclass
 //! implements with a var or with a `def x` and a `def x_=`. The namer makes the setter beside
 //! the var (`mods::SETTER`, without a definition); a pickle declares it, and the loader marks it
 //! so. An assignment through such a var calls the setter, and a read calls the getter, unless
 //! the var belongs to a JavaScript type, whose vars are properties.
+//!
+//! A concrete var has its setter too where dotty's `Desugar.isSetterNeeded` gives it one
+//! (`setter_needed`): a member like any other, selected by its name and an alternative of the
+//! written methods of that name (`o.x_=(v)`). It cannot be overridden (scalac's "cannot override
+//! a mutable variable"), so its call is the assignment of the var, which `Memoize` makes its
+//! body (`build_call`); a pickle holds it with the body `()` (`Desugar.valDef`), which the loader
+//! reads so too.
 
 use super::*;
 use crate::ast::mods;
@@ -13,9 +20,9 @@ use crate::tir::TExpr;
 use std::sync::Arc;
 
 impl<'a> Worker<'a> {
-    /// The signature of the setter the namer made for an abstract var: the var's type taken by
-    /// a parameter of its own, named as scalac names it.
-    pub(super) fn abstract_setter_sig(&mut self, setter: SymId) -> MethodSig {
+    /// The signature of the setter the namer made for a var: the var's type taken by a parameter
+    /// of its own, named as scalac names it.
+    pub(super) fn setter_sig(&mut self, setter: SymId) -> MethodSig {
         let (file, span) = {
             let s = self.syms.sym(setter);
             (s.file, s.span)
@@ -45,6 +52,25 @@ impl<'a> Worker<'a> {
         let setter = setter_of_var(&self.syms, self.interner, s)?;
         self.sig_of(setter);
         Some(setter)
+    }
+
+    /// `r.x_=(v)` of a concrete var's setter: the assignment `r.x = v`, the body dotty's `Memoize`
+    /// gives the setter, which nothing overrides; the pickle writes the call (`Form::Member`).
+    pub(super) fn setter_assignment(&mut self, call: &super::apply::MethodCall, args: crate::ast::ListRef) -> Option<TExprId> {
+        let var = concrete_var_of_setter(&self.syms, self.interner, call.sym)?;
+        let &[value] = self.prog.expr_list(args) else { return None };
+        let target = match call.recv {
+            Some(r) => self.prog.add(TExpr::Field(r, var)),
+            None => self.prog.add(TExpr::Static(var)),
+        };
+        let ty = self.sig_of(var).ret;
+        let ty = self.types.subst(ty, &call.owner_subst);
+        self.prog.set_type(target, ty);
+        let assign = self.prog.add(TExpr::Assign(target, value));
+        if self.capturing() {
+            self.capture_form(assign, crate::tir::capture::Form::Member(call.sym));
+        }
+        Some(assign)
     }
 
     /// `this` and its type, where the typer read an unqualified name `y` as the method `this.y`:
@@ -82,13 +108,49 @@ impl<'a> Worker<'a> {
     }
 }
 
-/// The var whose setter `setter` is: the member of its class named without the `_=`, beside
-/// the methods of that name it may be overloaded with.
+/// Whether the var `var` has a setter, as dotty's `Desugar.isSetterNeeded` has it: a member of
+/// a class that is not private (`private[q]` is no `Private` there), and every member of a trait
+/// or of a package object, which a top-level var is.
+pub fn setter_needed(syms: &Symbols, var: SymId) -> bool {
+    let info = syms.sym(var);
+    if info.kind != SymKind::Var {
+        return false;
+    }
+    match info.owner {
+        Owner::Package(_) => true,
+        Owner::Class(c) => info.mods & mods::PRIVATE == 0 || info.scoped_private || syms.class(c).kind == crate::symbols::ClassKind::Trait,
+        Owner::Local => false,
+    }
+}
+
+/// The var whose setter `setter` is: the member of its class, or the top-level definition of its
+/// package, named without the `_=`, beside the methods of that name it may be overloaded with.
 pub fn var_of_setter(syms: &Symbols, interner: &Interner, setter: SymId) -> Option<SymId> {
     let info = syms.sym(setter);
-    let Owner::Class(c) = info.owner else { return None };
     let name = interner.lookup(interner.get(info.name).strip_suffix("_=")?)?;
-    own_var(syms, c, name)
+    match info.owner {
+        Owner::Class(c) => own_var(syms, c, name),
+        Owner::Package(p) => {
+            let v = syms.pkg(p).entries.get(&name)?.term?;
+            (syms.sym(v).kind == SymKind::Var && syms.sym(v).owner == Owner::Package(p)).then_some(v)
+        }
+        Owner::Local => None,
+    }
+}
+
+/// The concrete var whose setter `s` is: the var a call of `s` assigns.
+pub fn concrete_var_of_setter(syms: &Symbols, interner: &Interner, s: SymId) -> Option<SymId> {
+    let info = syms.sym(s);
+    if info.mods & mods::SETTER == 0 || info.mods & mods::ABSTRACT != 0 || info.kind != SymKind::Def {
+        return None;
+    }
+    var_of_setter(syms, interner, s)
+}
+
+/// Whether `s` is a concrete var's setter, which no output holds: a call of it is the assignment.
+pub fn is_concrete_setter(syms: &Symbols, s: SymId) -> bool {
+    let info = syms.sym(s);
+    info.kind == SymKind::Def && info.mods & mods::SETTER != 0 && info.mods & mods::ABSTRACT == 0
 }
 
 /// The var `name` that the class `c` itself declares.
@@ -107,7 +169,10 @@ pub fn setter_of_var(syms: &Symbols, interner: &Interner, var: SymId) -> Option<
     let entry = syms.class(c).members.get(&name).copied()?;
     let single = [entry];
     let candidates = syms.alternatives(entry).unwrap_or(&single);
-    candidates.iter().copied().find(|&s| syms.sym(s).owner == Owner::Class(c) && syms.sym(s).kind == SymKind::Def && syms.sym(s).mods & mods::SETTER != 0)
+    candidates.iter().copied().find(|&s| {
+        let si = syms.sym(s);
+        si.owner == Owner::Class(c) && si.kind == SymKind::Def && si.mods & mods::SETTER != 0 && si.mods & mods::ABSTRACT != 0
+    })
 }
 
 /// Whether `s` is an abstract var, whose setter is declared beside it.
@@ -117,7 +182,7 @@ pub fn is_abstract_var(syms: &Symbols, interner: &Interner, s: SymId) -> bool {
 
 /// The abstract var whose setter `s` is: the var an assignment through which calls `s`.
 pub fn abstract_var_of_setter(syms: &Symbols, interner: &Interner, s: SymId) -> Option<SymId> {
-    if syms.sym(s).mods & mods::SETTER == 0 {
+    if syms.sym(s).mods & mods::SETTER == 0 || syms.sym(s).mods & mods::ABSTRACT == 0 {
         return None;
     }
     var_of_setter(syms, interner, s).filter(|&v| setter_of_var(syms, interner, v) == Some(s))

@@ -378,7 +378,9 @@ impl<'a> Worker<'a> {
                 self.enter_interop_annots(file, owner, def, Some(sym));
                 let abstract_var = kind == SymKind::Var && matches!(def.kind, DefKind::Val { rhs: None, .. }) && def.mods & mods::INCOMPLETE == 0;
                 if abstract_var && matches!(owner, Owner::Class(_)) {
-                    self.enter_abstract_setter(owner, sym);
+                    self.enter_setter(owner, sym, true);
+                } else if !abstract_var && super::setters::setter_needed(&self.syms, sym) {
+                    self.enter_setter(owner, sym, false);
                 }
             }
             DefKind::Fun(_) if def.name == names::INIT => self.enter_secondary_ctor(file, owner, id),
@@ -644,19 +646,22 @@ impl<'a> Worker<'a> {
         term.map_or(false, |s| self.syms.sym(s).kind == SymKind::Given)
     }
 
-    /// The setter `x_=(x$1: T): Unit` of an abstract `var x` of a class, abstract and without a
-    /// definition (`mods::SETTER`), whose signature the var's gives (`complete_sig_inner`). The
-    /// var is read through its getter, as a def implementing it is.
-    fn enter_abstract_setter(&mut self, owner: Owner, var: SymId) {
+    /// The setter `x_=(x$1: T): Unit` of a `var x` (dotty's `Desugar.valDef`), without a
+    /// definition (`mods::SETTER`), whose signature the var's gives (`complete_sig_inner`). An
+    /// abstract var's is abstract, and the var is read through its getter, as a def implementing
+    /// it is; a concrete var's call is the var's assignment (`typer::setters`).
+    fn enter_setter(&mut self, owner: Owner, var: SymId, is_abstract: bool) {
         let (name, span, file, var_mods, scoped_private) = {
             let v = self.syms.sym(var);
             (v.name, v.span, v.file, v.mods, v.scoped_private)
         };
         let setter_name = self.interner.intern(&format!("{}_=", self.interner.get(name)));
-        let m = mods::ABSTRACT | mods::SETTER | var_mods & (mods::PRIVATE | mods::PROTECTED);
+        let m = if is_abstract { mods::ABSTRACT } else { 0 } | mods::SETTER | var_mods & (mods::PRIVATE | mods::PROTECTED);
         let setter = self.syms.new_sym(setter_name, SymKind::Def, m, owner, file, None, span);
         self.syms.sym_mut(setter).scoped_private = scoped_private;
-        self.syms.sym_mut(var).needs_accessor = true;
+        if is_abstract {
+            self.syms.sym_mut(var).needs_accessor = true;
+        }
         self.register_term(owner, setter);
     }
 
@@ -684,6 +689,9 @@ impl<'a> Worker<'a> {
                 self.note_scoped_private(file, sym);
                 if !native || m & mods::FIELD != 0 {
                     self.register_term(Owner::Class(cid), sym);
+                    if m & mods::FIELD != 0 && super::setters::setter_needed(&self.syms, sym) {
+                        self.enter_setter(Owner::Class(cid), sym, false);
+                    }
                 }
                 self.enter_param_annots(file, p, sym);
                 if clause.is_using {

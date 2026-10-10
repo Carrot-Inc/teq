@@ -74,12 +74,7 @@ impl<'a> Worker<'a> {
                 continue;
             }
             let t = self.syms.sym(target);
-            let base = self.name_str(t.name);
-            let name = if setter { format!("{}_=", base) } else { base };
-            let name = match self.extensible(c) {
-                true => format!("inline${}$${}", self.expanded_prefix(c), name),
-                false => format!("inline${}", name),
-            };
+            let name = accessor_text(&self.inline_accessor_parts(c, target, setter));
             let is_final = t.mods & mods::PROTECTED == 0 && !t.scoped_private;
             out.push(InlineAccessor { target, setter, name, is_final, recv });
         }
@@ -119,11 +114,17 @@ impl<'a> Worker<'a> {
     /// naming `inline_accessors` gives it (`inline$x`, `inline$fix$acc$Counter$$x` in a class a
     /// subclass can extend).
     pub fn inline_accessor_name(&self, c: ClassId, target: SymId) -> String {
+        accessor_text(&self.inline_accessor_parts(c, target, false))
+    }
+
+    /// The parts of the derived name of `c`'s accessor of `target` (a setter's of `target_=`), as
+    /// `PrepareInlineable.MakeInlineableMap.accessorNameOf` makes it: the class's full name, its
+    /// segments, where `c` is extensible (`EXPANDPREFIX`es, empty otherwise), and the member's name.
+    pub fn inline_accessor_parts(&self, c: ClassId, target: SymId, setter: bool) -> (Vec<String>, String) {
         let base = self.name_str(self.syms.sym(target).name);
-        match self.extensible(c) {
-            true => format!("inline${}$${}", self.expanded_prefix(c), base),
-            false => format!("inline${}", base),
-        }
+        let member = if setter { format!("{}_=", base) } else { base };
+        let prefix = if self.extensible(c) { self.expanded_prefix(c) } else { Vec::new() };
+        (prefix, member)
     }
 
     /// Whether `c` is a class another can extend, whose accessors' names scalac expands by the
@@ -133,8 +134,9 @@ impl<'a> Worker<'a> {
         matches!(info.kind, ClassKind::Class | ClassKind::Trait) && info.mods & mods::FINAL == 0 && !self.name_str(info.name).contains("$anon")
     }
 
-    /// `fix$acc$Counter` of `fix.acc.Counter`: the class's full name with `$` for `.`.
-    fn expanded_prefix(&self, c: ClassId) -> String {
+    /// `fix`, `acc`, `Counter` of `fix.acc.Counter`: the class's full name's segments, which
+    /// the accessor's name joins with `$`.
+    fn expanded_prefix(&self, c: ClassId) -> Vec<String> {
         let mut segs = vec![self.name_str(self.syms.class(c).name)];
         let mut owner = self.syms.class(c).owner;
         loop {
@@ -159,7 +161,15 @@ impl<'a> Worker<'a> {
             }
         }
         segs.reverse();
-        segs.join("$")
+        segs
+    }
+}
+
+/// An accessor's name as its text: `inline$x`, `inline$fix$acc$Counter$$x`.
+pub fn accessor_text((prefix, member): &(Vec<String>, String)) -> String {
+    match prefix.is_empty() {
+        true => format!("inline${}", member),
+        false => format!("inline${}$${}", prefix.join("$"), member),
     }
 }
 

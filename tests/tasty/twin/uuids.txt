@@ -5,10 +5,10 @@ bodies/fix/bodies/Pretty.tasty 00ac072766647bec0074c2b833c9e9ca
 casts/fix/casts/CastA.tasty 00b636d295339fe400d0a00ad1da3295
 casts/fix/casts/CastB.tasty 00b536d295339fe400d0940aa1da3e99
 casts/fix/casts/CastLib.tasty 003f8d393df022dc005d25e6b084e5d8
-clash/fix/clash/ClashMaker.tasty 0033bd4799756b92006d178caeabc3d0
+clash/fix/clash/ClashMaker.tasty 0033bd4799756b92004bcbc7515dd5d0
 clash/fix/clash/ClashOverloaded.tasty 0005f5f1b161d4e80080f14add0285d7
 clash/fix/clash/ClashSingle.tasty 000eb3359278e8e800095c00db11de9e
-compdsl/fix/shapes/CompDsl.tasty 00ffe7fcd9787ea500b11c04fe76cde7
+compdsl/fix/shapes/CompDsl.tasty 00ffe7fcd9787ea500b0ab873a68c2e7
 depbounds/fix/depbounds/DbBounds.tasty 0081d9a0ea0dd5cc00949740bf6c74f4
 depbounds/fix/depbounds/DbCtx.tasty 0040aec70d9fe5eb00bfa432f7a131b1
 depbounds/fix/depbounds/DbParent.tasty 00da6a621d1e61e80036d984f85ba58a
@@ -40,10 +40,10 @@ facades/fix/facades/JsPoint.tasty 00672af04ea3b7d700cf97438eb4ab93
 facades/fix/facades/facades$package.tasty 008814d2fa90a1c100f2db43358a8fb3
 guard/fix/guard/Steps.tasty 0055005555ad43c500d13bfe691629fa
 guard/fix/guard/guard$package.tasty 0072fb784cc7ceba00eb7d5d6ac0cbb8
-hkbounds/fix/hkb/HkCompiler.tasty 001364c277054ded00dce0545eccfeaf
-hkbounds/fix/hkb/HkLow.tasty 0008b877a4df42d6003d0e18b1608594
+hkbounds/fix/hkb/HkCompiler.tasty 001364c277054ded00701c298b6e69af
+hkbounds/fix/hkb/HkLow.tasty 0008b877a4df42d600893c05cdcb7f94
 hkbounds/fix/hkb/HkStrm.tasty 006cdcb2e082fed600f13382b4d6b193
-hkbounds/fix/hkb/HkTarget.tasty 00a70a870534a3e9007ef26bb9961eab
+hkbounds/fix/hkb/HkTarget.tasty 00a70a870534a3e90070bee923b8d7ab
 hkbounds/fix/hkb/hkbounds$package.tasty 0065fa2467ad4bda00a59a09f1fc8591
 inlforms/fix/inlforms/IfEqv.tasty 008f02b5b952fcd10062304b77a16bfa
 inlforms/fix/inlforms/IfFacade.tasty 00b8ebddf844b7c8008382327da7e4a9
@@ -54,7 +54,7 @@ inlres/fix/inlres/InlT.tasty 006e76b966199fe900ffb71f7e33a081
 interparts/fix/interparts/InterpParts.tasty 00cd65e446d690b40011d8fe18e903fd
 jvarargs/fix/jvarargs/JVarargs.tasty 005de7c1001ab7a200713d91bea468e3
 localcase/fix/shapes/Deferring.tasty 00f2414611f885ee0091ffbbfe5c87ff
-localcase/fix/shapes/LocalDefer.tasty 00b2fb2f7409daf200ce79d4b45b43b0
+localcase/fix/shapes/LocalDefer.tasty 00b2fb2f7409daf200f147d62193c1b0
 members/fix/members/Container.tasty 00da16106c3cd8dd007735d8a918b48c
 members/fix/members/Holder.tasty 00183d087efee2c4002ff891073837ae
 members/fix/members/Registry.tasty 0084064e595f1cd800d640e5059e67e4
@@ -66,7 +66,7 @@ pkgobjname/fix/ponforeign/Token$package.tasty 00af0f7d3eba9dd400dbe5ebbe5654a1
 polybounds/fix/polybounds/PbCtx.tasty 00349592fa53eceb00e50db4686b18f4
 polybounds/fix/polybounds/PbLower.tasty 00bd1595b29d35b30032ceee32a34f02
 polybounds/fix/polybounds/PbParent.tasty 00552c471657fbe800611f871913d4cf
-qualified/fix/shapes/QaApplicative.tasty 003326413a29c0e80047cdc5079b2caa
+qualified/fix/shapes/QaApplicative.tasty 003326413a29c0e800443e95cc6513aa
 qualified/fix/shapes/QaClient.tasty 00887f32949650d000a64bf5aed67dd0
 qualified/fix/shapes/QaFoldOps.tasty 00ae63019ee97fd000a3adc2de78d788
 qualified/fix/shapes/QaFunctor.tasty 004e68cfc727bce9001470b184e96685

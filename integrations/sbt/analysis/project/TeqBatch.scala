@@ -32,7 +32,7 @@ object TeqBatch:
 
   private def command(teq: String, check: Boolean, classDir: File, classpath: Seq[File], root: File, removed: Seq[String]): Seq[String] =
     val build = if check then Seq("check") else Seq("build", "--target", "jvm")
-    Seq(teq) ++ build ++ Seq("--std=scala-library", "--products", classDir.getAbsolutePath,
+    Seq(teq, "compiler") ++ build ++ Seq("--std=scala-library", "--products", classDir.getAbsolutePath,
       "--classpath", (classDir +: classpath).map(_.getAbsolutePath).mkString(File.pathSeparator), "--sourceroot", root.getAbsolutePath,
       "--analysis-version", TeqAnalysis.version.toString) ++ removed.flatMap(Seq("--removed", _))
 

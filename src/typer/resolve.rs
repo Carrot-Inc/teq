@@ -667,9 +667,10 @@ impl<'a> Worker<'a> {
         }
     }
 
-    /// A given that takes parameters, a method rather than a path.
+    /// A given that takes type or term parameters, a method rather than a path (dotty's
+    /// `Parsers.givenDef`).
     fn is_given_with_clauses(&mut self, s: SymId) -> bool {
-        self.syms.sym(s).kind == SymKind::Given && !self.sig_of(s).clauses.is_empty()
+        self.syms.sym(s).kind == SymKind::Given && self.is_method_sym(s)
     }
 
     /// A value in scope whose type is a class: the type its members are selected on.
@@ -1128,7 +1129,40 @@ impl<'a> Worker<'a> {
             }
         }
         let obj = self.syms.pkg(p).package_object?;
-        self.module_term(obj, name)
+        self.module_term(obj, name).or_else(|| self.package_object_inherited(obj, name))
+    }
+
+    /// A member the package object `obj` inherits, which is its package's as the object's own
+    /// are (dotty's `PackageClassDenotation.computeMembersNamed`: the package objects'
+    /// non-private members but `Any`'s and `Object`'s), whatever module the object came from.
+    fn package_object_inherited(&mut self, obj: ClassId, name: Name) -> Option<TermRef> {
+        // A package object whose completion is under way is passed over, as
+        // `computeMembersNamed` passes over a package object `isCompleting`: its class's
+        // completion, or its table's, whose parents may name a path through its own package
+        // (`import p.sub.T; package object p extends T`, the file's imports then being read).
+        let completing = self.syms.class(obj).state().get() == Completion::InProgress
+            || self.export_stack.iter().any(|f| f.owner == super::exports::ExportOwner::Class(obj));
+        if completing {
+            return None;
+        }
+        let ty = self.types.class(obj, &[]);
+        if let Some((s, _)) = self.find_member(ty, name) {
+            let Owner::Class(owner) = self.syms.sym(s).owner else { return None };
+            if owner == obj || owner == self.b.any_ref || self.syms.sym(s).mods & mods::PRIVATE != 0 {
+                return None;
+            }
+            return Some(TermRef::ModuleMember(obj, s));
+        }
+        // An extension method a base declares, applied on the package object.
+        for j in 1..self.syms.class_raw(obj).base_types.len() {
+            let b = self.syms.class_raw(obj).base_types[j].0;
+            self.complete_class(b);
+            let found = self.syms.class_raw(b).extensions.iter().copied().find(|&e| self.syms.sym(e).name == name && self.syms.sym(e).mods & mods::PRIVATE == 0);
+            if let Some(e) = found {
+                return Some(TermRef::ModuleMember(obj, e));
+            }
+        }
+        None
     }
 
     pub(super) fn program_source(&self, f: FileId) -> bool {
@@ -1146,6 +1180,14 @@ impl<'a> Worker<'a> {
         }
         if let Some(obj) = pkg.package_object {
             self.module_extensions(obj, name, out);
+            // And those it inherits, the package's as its own are (dotty's
+            // `PackageClassDenotation.computeMembersNamed`).
+            for i in 1..self.syms.class_raw(obj).base_types.len() {
+                let b = self.syms.class_raw(obj).base_types[i].0;
+                self.complete_class(b);
+                let found: Vec<SymId> = self.syms.class_raw(b).extensions.iter().copied().filter(|&s| self.syms.sym(s).name == name && !out.contains(&s)).collect();
+                out.extend(found);
+            }
         }
         if !self.syms.pkg(p).has_exports() {
             return;
@@ -2118,6 +2160,25 @@ impl<'a> Worker<'a> {
             },
             _ => None,
         }
+    }
+
+    /// Whether the written type's head names an alias of the std's `scala.scalajs.js` package
+    /// (`js.Function2`), a JavaScript type a cast leaves untested, before the alias is expanded into
+    /// scala's function type.
+    pub(super) fn written_js_alias(&mut self, id: TyExprId) -> bool {
+        let ast = self.cur_ast();
+        let head = match ast.ty(id) {
+            TyExpr::Apply(f, _) => f,
+            _ => id,
+        };
+        let found = match ast.ty(head) {
+            TyExpr::Name(n) => self.lookup_type(n),
+            TyExpr::Select(q, n) => self.lookup_type_in_path(q, n),
+            _ => None,
+        };
+        let Some(TypeRef::Alias(a)) = found else { return false };
+        let Some(js) = self.scalajs_pkg() else { return false };
+        matches!(self.syms.alias(a).owner, Owner::Package(p) if p == js)
     }
 
     /// The type `n` selected from the package or object that the path `q` names.
@@ -4435,7 +4496,9 @@ impl<'a> Worker<'a> {
         for &b in &bases {
             for m in self.syms.class(b).member_order.clone() {
                 let info = self.syms.sym(m);
-                if info.mods & mods::PRIVATE != 0 {
+                // A concrete var's setter goes with its var, which a conflict names (scalac's
+                // "other members with override errors" lists the setter beside it).
+                if info.mods & mods::PRIVATE != 0 || super::setters::is_concrete_setter(&self.syms, m) {
                     continue;
                 }
                 let name = info.name;

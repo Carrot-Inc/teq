@@ -14,6 +14,7 @@ pub enum Key {
     ExpandPrefix(u32, u32),
     DefaultGetter(u32, u32),
     SuperAccessor(u32),
+    InlineAccessor(u32),
     ObjectClass(u32),
     BodyRetainer(u32),
     /// `params`: a name reference per term parameter, a clause of type parameters as its
@@ -51,6 +52,29 @@ impl Names {
         let i = self.get(Key::Simple(s.to_string()));
         self.simple.insert(s.to_string(), i);
         i
+    }
+
+    /// The name of a generated inline accessor of `member` (`typer::accessors`), as scalac's
+    /// `PrepareInlineable.MakeInlineableMap.accessorNameOf` derives it for the accessor's symbol:
+    /// `InlineAccessorName` over the member's name, expanded by the class's full name where the
+    /// class is extensible (`prefix`, its segments: `INLINEACCESSOR(EXPANDED(EXPANDPREFIX(p, C), x))`).
+    /// A simple name of the same spelling (a string literal, a user's `def inline$x`) is another
+    /// name, as `NameBuffer` keeps a `SimpleName` and a `DerivedName` apart.
+    pub fn inline_accessor(&mut self, prefix: &[String], member: &str) -> u32 {
+        // The prefix numbered before the member, as `NameBuffer.nameIndex` numbers a qualified name's parts.
+        let inner = match prefix.split_first() {
+            Some((first, rest)) => {
+                let mut q = self.simple(first);
+                for seg in rest {
+                    let seg = self.simple(seg);
+                    q = self.get(Key::ExpandPrefix(q, seg));
+                }
+                let member = self.simple(member);
+                self.get(Key::Expanded(q, member))
+            }
+            None => self.simple(member),
+        };
+        self.get(Key::InlineAccessor(inner))
     }
 
     /// The simple name of the interned name `n`, whose text is `text`.
@@ -114,6 +138,11 @@ impl Names {
     pub fn signed(&mut self, name: &str, target: Option<&str>, params: &[SigParam], result: &str) -> u32 {
         let original = self.simple(name);
         let target = target.filter(|t| *t != name).map(|t| self.simple(t));
+        self.signed_of(original, target, params, result)
+    }
+
+    /// The same of a name given by its reference (an inline accessor's derived name).
+    pub fn signed_of(&mut self, original: u32, target: Option<u32>, params: &[SigParam], result: &str) -> u32 {
         let result = self.qualified(result);
         let params = params
             .iter()
@@ -190,6 +219,7 @@ impl Names {
                     write_nat(p, *i as u64);
                 }),
                 Key::SuperAccessor(u) => with_length(&mut body, tag::SUPERACCESSOR, |p| write_nat(p, *u as u64)),
+                Key::InlineAccessor(u) => with_length(&mut body, tag::INLINEACCESSOR, |p| write_nat(p, *u as u64)),
                 Key::ObjectClass(u) => with_length(&mut body, tag::OBJECTCLASS, |p| write_nat(p, *u as u64)),
                 Key::BodyRetainer(u) => with_length(&mut body, tag::BODYRETAINER, |p| write_nat(p, *u as u64)),
                 Key::Signed { original, target, result, params } => {

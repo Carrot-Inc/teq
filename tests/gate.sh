@@ -43,7 +43,10 @@
 # (bench/app/export-accept.sh), beside the identity line, which still fails on any difference; and with --app, the
 # application's modules built one against another's products and compared with the whole build, the Scala.js
 # check chain and the JVM API chain (bench/app/chain.sh), which fails on a build's failure or a mismatch
-# the list CHAIN_KNOWN names does not list (none when it is unset, which the line's result says). One line runs only
+# the list CHAIN_KNOWN names does not list (none when it is unset, which the line's result says); and with --app
+# and APP_CYPRESS, the application's end-to-end suite run by that script over the binary's own build of the
+# application (its services, its API, its served bundle), which fails on a failing spec (app-cypress; skipped
+# without the script). One line runs only
 # when --only names it, at a release and nightly: app-scalac, scalac 3.8.4 as the oracle of teq's diagnostics on the
 # API's main and test lists (tests/scalac-oracle.sh, then bench/app/api-scalac-diff.sh with the lists' scalacOptions
 # APP_SCALAC_OPTIONS and APP_TEST_SCALAC_OPTIONS, both into the attempt's directory), which fails on a difference
@@ -88,7 +91,7 @@ while [ $# -gt 0 ]; do
 done
 [ -n "$wt" ] || usage
 # The application's lists, kept outside the repository, named from the caller's directory.
-for v in APP_MODULES APP_CLASSPATH APP_SCALAC_OPTIONS APP_TEST_MODULES APP_TEST_CLASSPATH APP_TEST_SCALAC_OPTIONS CHAIN_KNOWN SCALAC_KNOWN; do
+for v in APP_MODULES APP_CLASSPATH APP_SCALAC_OPTIONS APP_TEST_MODULES APP_TEST_CLASSPATH APP_TEST_SCALAC_OPTIONS CHAIN_KNOWN SCALAC_KNOWN APP_CYPRESS; do
   [ -n "${!v}" ] && export "$v=$(absolute "${!v}")"
 done
 [ -z "$manifest" ] || [ -f "$manifest" ] || { echo "gate: no manifest $manifest" >&2; exit 2; }
@@ -131,7 +134,7 @@ machine=(
   "rust-warnings ./tests/rust-warnings.sh"
 )
 compare="budget runtime sentinel"
-local_lines="size instructions instructions-derive app-export app-export-accept app-api app-api-test app-chain app-scalac"
+local_lines="size instructions instructions-derive app-export app-export-accept app-api app-api-test app-chain app-cypress app-scalac"
 # The lines run only when --only names them: the scalac oracle, at a release and nightly.
 optional="app-scalac"
 names=" $compare $local_lines "
@@ -353,6 +356,16 @@ local_half() {
         timeout 600 "$root/bench/app/chain.sh" "$app" "$bin" "$out/app-chain/$side" $side > "$out/app-chain-$side.log" 2>&1 || code=1
       done
       result app-chain local $(($(now) - s)) $code "$(chain_counts "$out/app-chain-frontend.log" "$out/app-chain-api.log")$([ -n "$CHAIN_KNOWN" ] || echo "; no CHAIN_KNOWN, no known rows")" "$file"
+    fi
+  fi
+  if selected app-cypress; then
+    if [ -z "$app" ] || [ -z "${APP_CYPRESS:-}" ]; then
+      result app-cypress local 0 skip "needs --app and APP_CYPRESS, the application's end-to-end suite script" "$file"
+    else
+      s=$(now)
+      timeout 7200 "$APP_CYPRESS" "$bin" "$out/app-cypress" > "$out/app-cypress.log" 2>&1
+      code=$?
+      result app-cypress local $(($(now) - s)) $code "$(tail -1 "$out/app-cypress.log")" "$file"
     fi
   fi
   if selected app-scalac; then

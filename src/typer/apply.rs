@@ -1113,7 +1113,13 @@ impl<'a> Worker<'a> {
         let is_var = matches!(self.find_member(qty, name), Some((s, _)) if self.syms.sym(s).kind == SymKind::Var);
         if !is_var && qty != ERROR {
             let setter = self.interner.intern(&format!("{}_=", self.name_ref(name)));
-            if self.find_member(qty, setter).is_some() || self.has_lexical_extension_for(qty, setter) {
+            // The setter a class has or exports (an export of a var forwards its setter too,
+            // dotty's `typedAssign` selecting `pre.member(setterName)`).
+            let exported = |w: &mut Self| match w.class_of(qty) {
+                Some(c) => w.exports_of(c).is_some_and(|e| e.terms.contains_key(&setter)),
+                None => false,
+            };
+            if self.find_member(qty, setter).is_some() || exported(self) || self.has_lexical_extension_for(qty, setter) {
                 let lists = vec![ArgList { args: vec![ArgSrc::Ast(rhs)], using: false, span }];
                 let (te, _) = self.apply_member(tq, qty, setter, None, lists, span, None);
                 return Ok((te, self.b.t_unit));
@@ -3836,6 +3842,11 @@ impl<'a> Worker<'a> {
     }
 
     pub(super) fn build_call(&mut self, call: &MethodCall, args: ListRef) -> TExprId {
+        if super::setters::is_concrete_setter(&self.syms, call.sym) {
+            if let Some(te) = self.setter_assignment(call, args) {
+                return te;
+            }
+        }
         let info = self.syms.sym(call.sym);
         if let Some(import) = info.js_import {
             return self.build_import_call(call.sym, TExpr::JsImport(import), args);
@@ -3873,13 +3884,16 @@ impl<'a> Worker<'a> {
             return te;
         }
         if info.kind == SymKind::Given {
-            if args.is_empty() {
+            // A given with type or term parameters is a method, one without a lazy val (dotty's
+            // `Parsers.givenDef`): only the latter is read as a value.
+            let impl_class = info.impl_class;
+            if args.is_empty() && !self.is_method_sym(call.sym) {
                 return match call.recv {
                     Some(r) => self.prog.add(TExpr::Field(r, call.sym)),
                     None => self.prog.add(TExpr::Static(call.sym)),
                 };
             }
-            if let Some(impl_class) = info.impl_class {
+            if let Some(impl_class) = impl_class {
                 // The class of a given of a class or trait instance takes that instance first.
                 let args = match call.recv {
                     Some(r) if self.outer_class(impl_class).is_some() => {
@@ -3895,7 +3909,7 @@ impl<'a> Worker<'a> {
                 return te;
             }
         }
-        if info.name == names::INIT {
+        if self.syms.sym(call.sym).name == names::INIT {
             return self.prog.add(TExpr::NewVia(call.sym, args));
         }
         if let Some(te) = self.companion_widening(call, args) {

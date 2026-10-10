@@ -5,7 +5,7 @@
 //! global, a helper of the runtime, a local of an enclosing scope, or a name that a binder
 //! nested in the block gives a read of the local itself.
 
-use super::expr::{double_global, prim_text, test_text, to_str_text, unary_text, THROW, UNWRAP_JS};
+use super::expr::{double_global, prim_text, test_text, to_str_conv_text, unary_text, THROW, UNWRAP_JS};
 use super::names::{is_js_identifier, sanitize, RESERVED};
 use super::share::{HoleKind, HoleNode};
 use super::Emitter;
@@ -1705,7 +1705,7 @@ impl<'a> Emitter<'a> {
                 self.walk_list(w, items);
             }
             TExpr::ToStr(inner, conv) => {
-                self.walk_text(w, to_str_text(conv.kind()));
+                self.walk_text(w, to_str_conv_text(prog, inner, conv));
                 self.walk(w, inner);
             }
             TExpr::Js(t, args) => {

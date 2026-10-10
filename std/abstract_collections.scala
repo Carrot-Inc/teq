@@ -12,7 +12,7 @@ trait Map[K, +V] extends Iterable[(K, V)]:
   def isDefinedAt(key: K): Boolean = contains(key)
   def apply(key: K): V = get(key) match
     case Some(v) => v
-    case None => throw new NoSuchElementException("key not found: " + key.toString)
+    case None => throw new NoSuchElementException("key not found: " + key)
   def getOrElse[V1 >: V](key: K, default: => V1): V1 = get(key) match
     case Some(v) => v
     case None => default

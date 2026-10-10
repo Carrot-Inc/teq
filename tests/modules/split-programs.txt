@@ -10,6 +10,7 @@ held  logic.scala ui.scala views.scala
 taken  parts.scala use.scala
 publish  extra.scala greet.scala logic.scala text.scala
 cycle  a.scala b.scala
+reflect  plugins.scala zeta.scala
 # Out, each with its reason:
 #   anon_order, cycles, inferred, owned, quote_keys, inline_stored_tests, retype, retype_bridges,
 #     retype_cacheable, retype_errors, retype_jar_state, retype_quotes, retype_state  one package:
@@ -20,10 +21,6 @@ cycle  a.scala b.scala
 #   classpath  its upstream is a jar the program names, not a module of its own
 #   facade  no expected output: tests/split builds it alone
 #   reader  the reader's fixtures, a jar's bodies, no module of the program's
-#   reflect  `Reflect.lookupInstantiatableClass` finds the classes the build registers, which
-#     are the program's own (`reflective_registrations`): an upstream module's annotated classes
-#     would have to be read from every product class's annotations,
-#     a follow-up
 #   retype_kept, retype_reads, retype_roots, retype_state_pair  a watch session's programs
 #     (tests/split-watch.sh), whose packages the session edits; no .expected of their own
 #     outputs for the halves

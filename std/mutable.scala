@@ -217,7 +217,7 @@ class HashMap[K, V](private val raw: RawMap[K, V] = newRawMap[K, V]) extends Ite
   def get(key: K): Option[V] = if raw.rawHas(key) then Some(raw.rawGet(key)) else None
   override def apply(key: K): V =
     if raw.rawHas(key) then raw.rawGet(key)
-    else noSuchElement("key not found: " + key.toString)
+    else noSuchElement("key not found: " + key)
   override def getOrElse[V1 >: V](key: K, default: => V1): V1 = if raw.rawHas(key) then raw.rawGet(key) else default
   def getOrElseUpdate(key: K, default: => V): V =
     if raw.rawHas(key) then raw.rawGet(key)

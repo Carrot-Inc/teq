@@ -926,6 +926,14 @@ impl<'a> Worker<'a> {
         mentioned.retain(|p| !type_params.iter().any(|&(q, _)| q == *p));
         let types = self.type_values_for(&mentioned, span);
         let quotes = self.captured_quotes(span);
+        // The variables the pattern binds (not those it declares) in a contravariant position,
+        // where their first occurrence stands in the holes' types, in the source's order.
+        let vars: Vec<TParamId> = type_params.iter().map(|&(p, _)| p).collect();
+        let hole_types: Vec<TypeId> = holes.iter().map(|&(_, _, ty)| ty).collect();
+        let mut from_above = self.pattern_vars_from_above(&hole_types, &vars);
+        for f in from_above.iter_mut().take(declared.len()) {
+            *f = false;
+        }
         let pat = self.prog.quote_pats.len();
         self.prog.quote_pats.push(TQuotePat {
             body: Some(te),
@@ -933,10 +941,56 @@ impl<'a> Worker<'a> {
             holes: holes.iter().map(|&(h, _, _)| h).collect(),
             type_params: type_params.iter().map(|&(p, _)| p).collect(),
             declared: declared.len() as u32,
+            from_above,
             types: types.clone(),
             quotes,
         });
         self.quote_match_pattern(pat, sty, binders, types.iter().map(|&(_, e)| e).collect(), span)
+    }
+
+    /// Whether each of `vars` is first met in a contravariant position of `types`, read in order
+    /// and covariantly at their roots, as dotty's `TreeMapWithVariance` meets a pattern's `Bind`s.
+    fn pattern_vars_from_above(&mut self, types: &[TypeId], vars: &[TParamId]) -> Vec<bool> {
+        let mut first: Vec<Option<i8>> = vec![None; vars.len()];
+        for &t in types {
+            self.first_variances(t, 1, vars, &mut first);
+        }
+        first.into_iter().map(|v| v.map_or(false, |v| v < 0)).collect()
+    }
+
+    fn first_variances(&mut self, t: TypeId, variance: i8, vars: &[TParamId], first: &mut [Option<i8>]) {
+        let t = self.zonk(t);
+        match self.types.get(t) {
+            Type::Param(p) => {
+                if let Some(i) = vars.iter().position(|&q| q == p) {
+                    first[i].get_or_insert(variance);
+                }
+            }
+            Type::Class(c, args) => {
+                let args = self.types.items(args).to_vec();
+                let variances: Vec<i8> = self.syms.class(c).tparams.iter().map(|&q| self.syms.tparam(q).variance).collect();
+                for (k, a) in args.into_iter().enumerate() {
+                    self.first_variances(a, variance * variances.get(k).copied().unwrap_or(0), vars, first);
+                }
+            }
+            Type::AppParam(p, args) => {
+                let args = self.types.items(args).to_vec();
+                let variances = self.syms.tparam(p).hk_variances.clone();
+                for (k, a) in args.into_iter().enumerate() {
+                    self.first_variances(a, variance * variances.get(k).copied().unwrap_or(0), vars, first);
+                }
+            }
+            Type::Union(a, b) | Type::Inter(a, b) => {
+                self.first_variances(a, variance, vars, first);
+                self.first_variances(b, variance, vars, first);
+            }
+            Type::BoundedWild(lo, hi) => {
+                self.first_variances(lo, -variance, vars, first);
+                self.first_variances(hi, variance, vars, first);
+            }
+            Type::Lambda(_, body) | Type::Poly(_, body) => self.first_variances(body, variance, vars, first),
+            _ => {}
+        }
     }
 
     /// `case '[T]` against a `Type`.
@@ -959,8 +1013,10 @@ impl<'a> Worker<'a> {
         mentioned.retain(|p| !type_params.iter().any(|&(q, _)| q == *p));
         let types = self.type_values_for(&mentioned, span);
         let quotes = self.captured_quotes(span);
+        let vars: Vec<TParamId> = type_params.iter().map(|&(p, _)| p).collect();
+        let from_above = self.pattern_vars_from_above(&[ty], &vars);
         let pat = self.prog.quote_pats.len();
-        self.prog.quote_pats.push(TQuotePat { body: None, ty, holes: Vec::new(), type_params: type_params.iter().map(|&(p, _)| p).collect(), declared: 0, types: types.clone(), quotes });
+        self.prog.quote_pats.push(TQuotePat { body: None, ty, holes: Vec::new(), type_params: vars, declared: 0, from_above, types: types.clone(), quotes });
         self.quote_match_pattern(pat, sty, binders, types.iter().map(|&(_, e)| e).collect(), span)
     }
 
@@ -2924,7 +2980,7 @@ impl<'c> Copier<'c> {
                 match op {
                     CastOp::Written if self.stored.is_none() => {
                         let from = self.copy_type(t, a).unwrap_or(ANY);
-                        match t.cast_lowering(from, to) {
+                        match t.cast_lowering(from, to, false) {
                             super::prims::CastLowering::Op(op) if !matches!((op, t.prog.expr(a)), (CastOp::Unbox(..), TExpr::Null)) => TExpr::Cast(a, op, to),
                             // The tree that fills a hole takes the cast's type where its own
                             // does not conform to it (an abstract type member's cast its erasure

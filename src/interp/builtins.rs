@@ -2314,10 +2314,19 @@ fn install_typer_templates(it: &mut Table) {
         let i = int(it, a, 1)?;
         it.product_element_name(&arg(a, 0), i)
     });
-    reg!(it, "$0.$ordinal", |_it, a| match arg(a, 0) {
-        Value::Obj(o) => Ok(Value::Int(o.ordinal.get())),
-        _ => Ok(Value::Int(0)),
-    });
+    // An enum case's ordinal, which `null` has none of, as a call of `ordinal()` on it.
+    fn case_ordinal(it: &mut Interp<'_, '_>, a: &[Value]) -> R {
+        match arg(a, 0) {
+            Value::Obj(o) => Ok(Value::Int(o.ordinal.get())),
+            Value::Null => it.throw_named("NullPointerException", "Cannot invoke \"ordinal()\" because the value is null"),
+            _ => Ok(Value::Int(0)),
+        }
+    }
+    reg!(it, "$0.$ordinal", |it, a| case_ordinal(it, a));
+    // `ordinal` called through `scala.reflect.Enum` on an enum case, whose class has no member of
+    // its own (`Template::AbstractBuiltin` dispatches to one first): the synthesized ordinal
+    // `DesugarEnums` gives the case, as `$0.$ordinal`.
+    reg!(it, "scala.reflect.Enum.ordinal", |it, a| case_ordinal(it, a));
     reg!(it, "$enumValueOf($0, $1, $2)", |it, a| {
         let values = array(it, a, 0)?.borrow().clone();
         let name = text(it, a, 1)?;

@@ -16,7 +16,7 @@
 // expect: 61:71: error: method weight needs to be a stable, immutable value to override value weight in class Letter
 // expect: 62:72: error: value route must be declared lazy to override lazy value route in class Letter
 // expect: 63:77: error: lazy value weight may not override non-lazy value weight in class Letter
-// expect: 64:72: error: variable notes cannot override mutable variable notes in class Letter
+// expect: 64:72: error: error overriding variable notes in class Letter of type String;
 // expect: 65:69: error: method absent overrides nothing
 // expect: 66:77: error: method cost has weaker access privileges than method cost in class Letter; it should be public
 // expect: 68:46: error: method seal cannot override final member method seal in class Sealed2

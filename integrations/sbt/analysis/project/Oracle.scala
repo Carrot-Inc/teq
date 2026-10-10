@@ -182,7 +182,7 @@ object Oracle extends AutoPlugin:
       val products = productsDir(root, "teq", name)
       IO.delete(products)
       val upstreamProducts = upstreamNames.map(productsDir(root, "teq", _).getPath)
-      val command = Seq(teq, "build", "--target", "jvm", "--std=scala-library", "--products", products.getPath,
+      val command = Seq(teq, "compiler", "build", "--target", "jvm", "--std=scala-library", "--products", products.getPath,
         "--classpath", (upstreamProducts ++ jars).mkString(":"), "--sourceroot", root.getPath, "--analysis-version", TeqAnalysis.version.toString, src.getPath)
       val stdout = new StringBuilder
       val started = System.nanoTime()

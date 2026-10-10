@@ -937,6 +937,9 @@ impl<'a> Parser<'a> {
             annots: Vec::new(),
             kind: DefKind::Class(Box::new(class)),
         });
+        // The class stands where its `new` does, to the end of its template, as scalac's tree
+        // places it; not the definition whose body holds it (`close_def_ranges`).
+        self.ast.def_ranges[def.idx()] = span;
         self.ast.add_expr(Expr::NewAnon(def), span)
     }
 

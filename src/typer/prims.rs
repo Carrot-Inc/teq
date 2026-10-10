@@ -1341,10 +1341,15 @@ impl<'a> Worker<'a> {
     /// a cast (`TypeTestsCasts.transformAsInstanceOf`, `cast_lowering`); a cast of a stored inline
     /// body or of a quote is kept as written, its types filled in where it is instantiated.
     pub(super) fn lower_cast(&mut self, recv: TExprId, recv_ty: TypeId, t: TypeId, span: Span) -> (TExprId, TypeId) {
+        self.lower_cast_written(recv, recv_ty, t, span, false)
+    }
+
+    /// `lower_cast` of a cast whose target, as written, names a JavaScript type (`js_written`).
+    pub(super) fn lower_cast_written(&mut self, recv: TExprId, recv_ty: TypeId, t: TypeId, span: Span, js_written: bool) -> (TExprId, TypeId) {
         if self.quote.level > 0 || self.checks_inline_definition() {
             return self.cast_node(recv, CastOp::Written, t);
         }
-        let lowering = self.cast_lowering(recv_ty, t);
+        let lowering = self.cast_lowering(recv_ty, t, js_written);
         if lowering == CastLowering::Fail {
             // `tpd.primitiveConversion`'s warning, where scalac's erasure meets the cast.
             let from = self.dealias(recv_ty);
@@ -1509,9 +1514,15 @@ impl<'a> Worker<'a> {
     /// test cannot make here (`test_for`), so a primitive operand fails with `Nothing`'s own
     /// message. A value class is tested as its box, which it always is outside the JVM; a
     /// JavaScript type is never tested, as under Scala.js.
-    pub(super) fn cast_lowering(&mut self, from: TypeId, to: TypeId) -> CastLowering {
+    pub(super) fn cast_lowering(&mut self, from: TypeId, to: TypeId, js_written: bool) -> CastLowering {
         use super::site::Erased;
         if from == ERROR || to == ERROR {
+            return CastLowering::Same;
+        }
+        // A cast to a JavaScript type is never tested, as under Scala.js (`JSCodeGen.genAsInstanceOf` of
+        // the IR type `any`): a target written as the std's `js.FunctionN`, an alias of scala's function
+        // type, is the value itself.
+        if js_written {
             return CastLowering::Same;
         }
         let target = self.cast_erasure(to);
@@ -1553,6 +1564,17 @@ impl<'a> Worker<'a> {
         if let Erased::Of(c, 0) = target {
             if self.syms.class(c).js != JsKind::Scala {
                 return CastLowering::Same;
+            }
+        }
+        // Outside the JVM a function is a JavaScript function whatever its arity, and Scala.js's
+        // `js.FunctionN` are scala's function types here, so a cast from a function type to one of
+        // another arity is the one Scala.js leaves untested, a cast to a JavaScript type: the value
+        // itself (docs/COMPATIBILITY.md).
+        if !self.jvm {
+            if let (Erased::Of(f, 0), Erased::Of(t, 0)) = (source, target) {
+                if self.is_function_class(f) && self.is_function_class(t) {
+                    return CastLowering::Same;
+                }
             }
         }
         let test = self.test_for(erased, from, Span::default(), true);
@@ -1808,8 +1830,9 @@ impl<'a> Worker<'a> {
                 if name == names::AS_INSTANCE_OF {
                     // The type as written, a `*:` chain kept as its spelling erases it
                     // (`TypeErasure.tupleArity`).
+                    let js_written = self.written_js_alias(ids[0]);
                     let t = self.resolve_declared_type(ids[0]);
-                    return Some(self.lower_cast(recv, recv_ty, t, span));
+                    return Some(self.lower_cast_written(recv, recv_ty, t, span, js_written));
                 }
                 let t = self.resolve_type(ids[0]);
                 let unchecked = self.expr_marks.get(&recv).map_or(false, |&m| m & super::MARK_UNCHECKED != 0);

@@ -1097,7 +1097,6 @@ pub struct InterpCaches {
     option_shape: Option<Option<Rc<natives::OptionShape>>>,
     plain_classes: FxMap<&'static str, Option<(ClassId, Rc<[u32]>)>>,
     named_slots: FxMap<(ClassId, &'static str), u32>,
-    abs_paths: FxMap<FileId, Rc<str>>,
     names: FxMap<&'static str, Name>,
     lambda_variances: FxMap<crate::types::TParamId, u64>,
     lambda_of: FxMap<crate::types::TParamId, crate::types::TypeId>,
@@ -1169,7 +1168,6 @@ impl InterpCaches {
             option_shape,
             plain_classes: _,
             named_slots: _,
-            abs_paths: _,
             names: _,
             lambda_variances: _,
             lambda_of: _,
@@ -1300,8 +1298,6 @@ pub struct Interp<'a, 't> {
     store_shapes: Option<Option<Rc<natives::StoreShapes>>>,
     plain_classes: FxMap<&'static str, Option<(ClassId, Rc<[u32]>)>>,
     named_slots: FxMap<(ClassId, &'static str), u32>,
-    /// Per source file its absolute path, for `SourceFile.getJPath`.
-    abs_paths: FxMap<FileId, Rc<str>>,
     /// The structural variance of each parameter of a type lambda whose `typeParams` a macro
     /// read, as scalac's `LambdaParam.paramVariance` gives it.
     lambda_variances: FxMap<crate::types::TParamId, u64>,
@@ -1397,7 +1393,6 @@ impl<'a, 't> Interp<'a, 't> {
             store_shapes: None,
             plain_classes: FxMap::default(),
             named_slots: FxMap::default(),
-            abs_paths: FxMap::default(),
             lambda_variances: FxMap::default(),
             lambda_of: FxMap::default(),
             val_type_refs: FxMap::default(),
@@ -1459,7 +1454,6 @@ impl<'a, 't> Interp<'a, 't> {
             option_shape: self.option_shape,
             plain_classes: self.plain_classes,
             named_slots: self.named_slots,
-            abs_paths: self.abs_paths,
             lambda_variances: self.lambda_variances,
             lambda_of: self.lambda_of,
             names: self.names,
@@ -1518,7 +1512,6 @@ impl<'a, 't> Interp<'a, 't> {
         self.option_shape = c.option_shape;
         self.plain_classes = c.plain_classes;
         self.named_slots = c.named_slots;
-        self.abs_paths = c.abs_paths;
         self.lambda_variances = c.lambda_variances;
         self.lambda_of = c.lambda_of;
         self.names = c.names;

@@ -184,7 +184,10 @@ against master's diagnostics; `app-api-test` the test sources the same way, over
 `--products` build of the main lists, the boundary sbt compiles the tests across (a macro body the
 products withhold fails there, not in one program); `app-chain` builds each main module over its
 upstreams' products and compares with the whole build, its permitted mismatches `CHAIN_KNOWN` (the format
-of `bench/app/chain.sh`'s header; none when unset, every mismatch failing the line).
+of `bench/app/chain.sh`'s header; none when unset, every mismatch failing the line); `app-cypress` runs the
+application's end-to-end suite through the script `APP_CYPRESS` names, over the binary's own build of the
+application (its services, its API and its served bundle), a failing spec failing the line, since a build's
+identity cannot see a change of run-time semantics (skipped without the script).
 
 `app-scalac` runs only when `--only` names it, at each release and nightly, not at a landing (scalac's
 two compiles take minutes): scalac 3.8.4 as the oracle of teq's diagnostics on the main and test lists

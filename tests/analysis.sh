@@ -16,9 +16,10 @@
 # tests/analysis/compare_test.py checks that compare.py fails recorded dumps with any part of one
 # side taken away, changed, added or moved.
 #
-# The cases: every module case of tests/modules (but misuse, whose b does not compile), each
-# module a project over the modules before it, and the cases of tests/analysis/cases. The
-# oracle has to be there: without sbt, or when a scalac compile fails, the suite fails.
+# The cases: every module case of tests/modules (but those with an expect-errors.txt, whose b
+# does not compile by design), each module a project over the modules before it, and the cases
+# of tests/analysis/cases. The oracle has to be there: without sbt, or when a scalac compile
+# fails, the suite fails.
 #
 #   tests/analysis.sh [case...]      TEQ names the binary (target/release/teq by default)
 #
@@ -56,7 +57,9 @@ if [ $# -gt 0 ]; then
 else
   for d in tests/modules/*/; do
     c=$(basename "$d")
-    [ "$c" = misuse ] && continue
+    # A case whose downstream is refused by design (`expect-errors.txt`) has no analysis to
+    # compare, and its failed compile would end sbt's batch.
+    [ -f "$d/expect-errors.txt" ] && continue
     cases+=("$root/tests/modules/$c")
   done
   for d in tests/analysis/cases/*/; do

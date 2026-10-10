@@ -90,7 +90,7 @@ package scala.collection.immutable:
       if i >= 0 then Some(unsafeCast(entries(i)._2)) else None
     def apply(key: Long): T = get(key) match
       case Some(v) => v
-      case None => noSuchElement("key not found: " + key.toString)
+      case None => noSuchElement("key not found: " + key)
     def getOrElse[S >: T](key: Long, default: => S): S = get(key).getOrElse(default)
     def updated[S >: T](key: Long, value: S): LongMap[S] =
       val i = search(key)
@@ -129,7 +129,7 @@ package scala.collection.immutable:
     override def toMap[K2, V2](implicit ev: ((Long, T)) <:< (K2, V2)): scala.Map[K2, V2] = unsafeCast(scala.Map.from(this))
     override def className: String = "LongMap"
     override def mkString(start: String, sep: String, end: String): String =
-      joinStrings(Vector.wrap(entries.map(e => e._1.toString + " -> " + e._2.toString)), start, sep, end)
+      joinStrings(Vector.wrap(entries.map(e => "" + e._1 + " -> " + e._2)), start, sep, end)
     override def equals(that: Any): Boolean = that match
       case m: LongMap[?] => scala.Map.from(this).equals(scala.Map.from(m))
       case m: scala.Map[?, ?] => scala.Map.from(this).equals(m)
