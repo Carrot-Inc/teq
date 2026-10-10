@@ -117,6 +117,7 @@ capture_w
 capture_x
 case_class_below_superclass
 case_class_equals_alias
+case_class_generic_bridge
 case_class_generic_member
 case_class_hash_elements
 case_class_inherited_members

@@ -449,6 +449,15 @@ impl<'a> Worker<'a> {
             Owner::Class(c) if self.syms.class(c).js != JsKind::Scala => None,
             // The runtime calls `toString`, `hashCode` and `equals` by their plain names.
             Owner::Class(_) if matches!(name, names::TO_STRING | names::HASH_CODE | names::EQUALS) && self.matches_any_member(m) => None,
+            // So do its product functions `Product`'s and `Equals`' members the rule gives, which
+            // an implementation or its bridge answers under that name (dotty's `matchingMember`
+            // at the class site: `productElement(i: A)` of a `Supply[Int]`).
+            Owner::Class(_)
+                if matches!(name, names::PRODUCT_ARITY | names::PRODUCT_ELEMENT | names::PRODUCT_PREFIX | names::PRODUCT_ELEMENT_NAME | names::CAN_EQUAL_METHOD)
+                    && self.matches_product_member(m) =>
+            {
+                None
+            }
             Owner::Class(c) => {
                 self.complete_class(c);
                 // Another parameter list than `Any`'s member of the name is an alternative of it

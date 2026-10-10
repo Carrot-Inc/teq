@@ -3273,6 +3273,15 @@ impl<'a> Worker<'a> {
         b == self.b.any_ref || Some(b) == self.b.product || Some(b) == self.equals_class() || Some(b) == self.b.reflect_enum || self.is_java_lang_object(b)
     }
 
+    /// Whether `m` has the name and the signature, at its own class, of a member of `Product` or
+    /// `Equals` the rule gives (`productElement(n: Int)`, `canEqual(that: Any)`): the member the
+    /// runtime's product functions call by its plain name (`$productElement` and kin).
+    pub(super) fn matches_product_member(&mut self, m: SymId) -> bool {
+        let name = self.syms.sym(m).name;
+        let product = synthetic::PRODUCT_ARITY | synthetic::PRODUCT_ELEMENT | synthetic::PRODUCT_PREFIX | synthetic::PRODUCT_ELEMENT_NAME | synthetic::CAN_EQUAL;
+        synthetic::MEMBERS.iter().any(|&(bit, n, param)| bit & product != 0 && n == name && self.matches_synthesized(m, param))
+    }
+
     /// Whether `s` has the signature of a member taking `param` by rule: no type parameters, no
     /// parameter or one empty list (`toString()`), or the one parameter of that type.
     fn matches_synthesized(&mut self, s: SymId, param: synthetic::Param) -> bool {
