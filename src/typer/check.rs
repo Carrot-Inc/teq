@@ -3147,11 +3147,12 @@ impl<'a> Worker<'a> {
         let superclass = self.syms.class(c).superclass;
         let mut synthesized = 0;
         let mut existing = Vec::new();
+        let holders = if wanted == 0 { Vec::new() } else { self.definition_holders(c) };
         for (bit, name, param) in synthetic::MEMBERS {
             if wanted & bit == 0 {
                 continue;
             }
-            let found = self.existing_def(c, name, param);
+            let found = self.existing_def_among(c, name, param, &holders);
             if let Some(s) = found {
                 existing.push((bit, s));
             }
@@ -3175,7 +3176,7 @@ impl<'a> Worker<'a> {
         if synthesized & synthetic::EQUALS != 0 {
             // A value class is final (`Namer`).
             let is_final = self.syms.class(c).mods & mods::FINAL != 0 || value_class;
-            if !is_final || self.existing_def(c, names::CAN_EQUAL_METHOD, synthetic::Param::Any).is_some() {
+            if !is_final || self.existing_def_among(c, names::CAN_EQUAL_METHOD, synthetic::Param::Any, &holders).is_some() {
                 synthesized |= synthetic::EQUALS_CALLS_CAN_EQUAL;
             }
         }
@@ -3226,14 +3227,11 @@ impl<'a> Worker<'a> {
     /// concrete member over an abstract one of an unrelated parent, while an abstract
     /// redeclaration hides what it overrides), unless that is the declaration the rule
     /// implements (`Any`'s, `Product`'s, `Equals`'s, `Enum`'s).
-    fn existing_def(&mut self, c: ClassId, name: Name, param: synthetic::Param) -> Option<SymId> {
-        // Only a base that is no declaration the rule implements can hold the definition: where
-        // none has the name, there is none (a case class over `Product` and `Any` alone).
-        let candidate = (0..self.syms.class(c).base_types.len()).any(|i| {
-            let b = self.syms.class(c).base_types[i].0;
-            self.syms.class(b).members.contains_key(&name) && !self.declares_by_rule(b)
-        });
-        if !candidate {
+    /// `holders` are `c`'s `definition_holders`.
+    fn existing_def_among(&mut self, c: ClassId, name: Name, param: synthetic::Param, holders: &[ClassId]) -> Option<SymId> {
+        // Where no base that can hold the definition has the name, there is none (a case class
+        // over `Product` and `Any` alone).
+        if !holders.iter().any(|&b| self.syms.class(b).members.contains_key(&name)) {
             return None;
         }
         let mut abstract_in: Vec<ClassId> = Vec::new();
@@ -3257,6 +3255,12 @@ impl<'a> Worker<'a> {
             }
         }
         None
+    }
+
+    /// The bases of `c` that can hold an existing definition: none whose declarations the rule
+    /// implements, none without members (`java.io.Serializable`).
+    fn definition_holders(&self, c: ClassId) -> Vec<ClassId> {
+        self.syms.class(c).base_types.iter().map(|&(b, _)| b).filter(|&b| !self.syms.class(b).members.is_empty() && !self.declares_by_rule(b)).collect()
     }
 
     /// Whether `b` is a class whose declarations the rule implements (`Any`'s, `Object`'s,
@@ -5227,7 +5231,17 @@ impl<'a> Worker<'a> {
         // A concrete class's own members without a body too (`class C { given x: Int }`), as
         // scalac's "needs to be abstract"; an object's are E067 (`misplaced_abstract_member`).
         let own = (which == Abstracts::Declared && self.syms.class(c).kind == ClassKind::Class) as usize;
+        // A case class or object and an enum case are given every abstract member of `Product`,
+        // `Equals` and `Enum` by rule or have an existing definition of it (`SyntheticMembers`),
+        // so those parents need no walk.
+        let completed_by_rule = {
+            let info = self.syms.class(c);
+            which == Abstracts::Declared && (info.mods & mods::CASE != 0 || info.kind == ClassKind::EnumCase)
+        };
         for &(b, bt) in bases.iter().skip(1 - own) {
+            if completed_by_rule && self.is_desugared_parent(b) {
+                continue;
+            }
             let members = self.syms.class(b).member_order.clone();
             for m in members.into_iter().chain(self.syms.class(b).extensions.clone()) {
                 // A deferred given is implemented by the search, or reported there.
