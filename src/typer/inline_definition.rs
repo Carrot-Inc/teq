@@ -336,6 +336,41 @@ impl<'a> Worker<'a> {
         self.check_definition_in(sym, env);
     }
 
+    /// The record of the library inline method `sym`, demanded by its first call: its class
+    /// converted (or its product's package checked) as the retype path converts it, then the
+    /// converted body checked as a program's definition is, its parameters at their declared
+    /// types, in its definition's scope. Under the loader's lock, as a library body is typed
+    /// (`library_body`): the record, its nodes and its deferred calls' records are the shared
+    /// region's, typed once and every worker's when the lock is released, and they live as long
+    /// as the loader, whose products a watch session drops with the whole typing state when a
+    /// directory of them changes.
+    pub(super) fn demand_library_definition(&mut self, sym: SymId) {
+        if self.syms.sym(sym).def.is_none() {
+            if let Some(obj) = self.loaded.as_ref().and_then(|l| l.product_package_members.get(&sym).copied()) {
+                self.check_product_package(obj);
+            } else {
+                let Owner::Class(c) = self.syms.sym(sym).owner else { return };
+                if !self.convert_library_class(c) {
+                    return;
+                }
+            }
+        }
+        if self.syms.sym(sym).def.is_none() {
+            return;
+        }
+        self.with_loader_for(crate::measure::Hold::Body, |w| {
+            if w.inline_definitions.contains_key(&sym) {
+                return;
+            }
+            let (file, owner, span) = {
+                let s = w.syms.sym(sym);
+                (s.file, s.owner, s.span)
+            };
+            let env = w.env_at(file, owner, span.start);
+            w.outside_annotation(|t| t.check_definition_in(sym, env));
+        });
+    }
+
     /// The body of a std inline method the program may never expand, typed as the definition
     /// check types a program's, for the language server's records of its document alone
     /// (`index::demand_std_document`): nothing stored, no diagnostic and no deferred check kept,
@@ -401,7 +436,11 @@ impl<'a> Worker<'a> {
             (s.file, s.def)
         };
         let Some(def_id) = def_id else { return };
-        if !self.program_file(file) || self.is_body_file(file) {
+        // A library's body (`demand_library_definition`) is its producer's, which scalac typed:
+        // what its check reports is teq's limit, never the program's diagnostic, and a body
+        // with an error keeps the retype path (`library_entry`).
+        let library = self.library_inline(sym);
+        if !library && (!self.program_file(file) || self.is_body_file(file)) {
             return;
         }
         let def = self.ast(file).def(def_id);
@@ -421,7 +460,7 @@ impl<'a> Worker<'a> {
         let diag_mark = self.diags.items.len();
         let (matches_mark, bounds_mark) = (self.deferred_matches.len(), self.deferred_bounds.len());
         // What the check records of the body its expansions by substitution record again.
-        let keeps_index = self.index.is_some();
+        let keeps_index = self.index.is_some() && !library;
         let index = if keeps_index { None } else { self.index.take() };
         let index_mark = self.index_mark();
         let notes = Notes { sym, tparams: sig.tparams.clone(), pattern_tparams: Vec::new(), reducible: Vec::new(), deferred: Vec::new(), type_args: Vec::new(), splices: Vec::new(), leaf_tests: Vec::new(), imports: Vec::new(), hoisted: Vec::new(), pending_imports: Vec::new(), unplaced_aliases: Vec::new(), pending_aliases: Vec::new(), aliases: Vec::new(), classes: Vec::new(), class_bodies: Vec::new(), inline_vals: Vec::new(), inferred_vals: Vec::new(), held: None };
@@ -479,7 +518,7 @@ impl<'a> Worker<'a> {
         // (`match_checked_at_definition`); those of a body typed on the way stay.
         let in_definition = |f: FileId, s: Span| f == file && s.start >= def_span.start && s.end <= def_span.end;
         let mut later = self.deferred_matches.split_off(matches_mark);
-        let reported = held.is_none();
+        let reported = held.is_none() && !library;
         later.retain(|m| reported || !in_definition(m.file, m.span));
         for m in later.iter_mut().filter(|m| in_definition(m.file, m.span)) {
             m.definition = Some(sym);
@@ -500,7 +539,7 @@ impl<'a> Worker<'a> {
         // range, promoted after it, covers what stays.
         self.diags_cut_at(diag_mark);
         let reported: Vec<Diagnostic> = self.diags.items.drain(diag_mark..).collect();
-        let within = |d: &Diagnostic| d.of_body && d.file == file && d.span.start >= def_span.start && d.span.end <= def_span.end;
+        let within = |d: &Diagnostic| (d.of_body || library) && d.file == file && d.span.start >= def_span.start && d.span.end <= def_span.end;
         let (own, other): (Vec<Diagnostic>, Vec<Diagnostic>) = reported.into_iter().partition(within);
         self.diags.items.extend(other);
         // A body with an error fails, held back or not: its errors are the build's, reported here
@@ -512,7 +551,7 @@ impl<'a> Worker<'a> {
             Some(form) => DefinitionState::Held(form),
             None => DefinitionState::Checked,
         };
-        if held.is_none() || failed {
+        if !library && (held.is_none() || failed) {
             self.diags.items.extend(own.iter().cloned());
         }
         let typed_body = body;
@@ -654,7 +693,7 @@ impl<'a> Worker<'a> {
         // (`demand_local_definition`), as any other is.
         self.demand_definition(sym);
         let record = self.inline_definitions.get(&sym)?.clone();
-        if record.state != DefinitionState::Failed {
+        if record.state != DefinitionState::Failed || self.library_inline(sym) {
             return None;
         }
         if !self.types.contains_error(ret_ty) {

@@ -184,14 +184,16 @@ impl<'a> Worker<'a> {
     /// its pickle: not inside the expansion of an ordinary inline method, which scalac's pickle
     /// holds as the call (a transparent one's expansion it holds). A quote's body is captured
     /// whatever file it is in, a library's included: a transparent macro's expansion copies it
-    /// into an owned body.
+    /// into an owned body; so is a library's inline body under its definition check, whose
+    /// record a transparent expansion copies into an owned body alike.
     fn capture_of_unit(&mut self) -> Option<(FileId, &mut Capture)> {
         let unit = self.typing_unit();
         let pickled = self.inline.sites.iter().all(|s| self.syms.sym(s.callee).mods & crate::ast::mods::TRANSPARENT != 0);
         let quoted = self.quote.level > 0;
         let annotation = self.typing_annotation;
+        let stored = self.inline.checking > 0 && self.inline.notes.last().is_some_and(|n| self.library_inline(n.sym));
         let c = self.prog.capture.as_deref_mut()?;
-        (pickled && (quoted || c.owns(unit) || annotation)).then_some((unit, c))
+        (pickled && (quoted || c.owns(unit) || annotation || stored)).then_some((unit, c))
     }
 
     /// The class `c`, made while inline methods expand: not in the pickle where one of them is

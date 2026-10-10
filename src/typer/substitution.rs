@@ -247,14 +247,18 @@ impl Walk {
 
 impl<'a> Worker<'a> {
     /// The record a call of `sym` is expanded from, or why the call takes the retype path, the
-    /// entry decision, made before the expansion has any effect: a library's, the std's or a
-    /// body file's method; otherwise the record demanded whatever the typing order, and then a call met
+    /// entry decision, made before the expansion has any effect: the std's method; a library's
+    /// whose record its converted body did not give (`library_entry`); otherwise the record
+    /// demanded whatever the typing order, and then a call met
     /// while its body is typed (a cycle through the method), a body the capture of the product
     /// modes holds back (one that makes a class) or a `summonFrom` the check holds back, which
     /// the retype path keeps; a local method called before its definition across a val an
     /// import reads is scalac's E039. A failed record's call is the plain call before this
     /// (`failed_definition_call`).
     pub(super) fn substitution_entry(&mut self, sym: SymId) -> Result<Arc<InlineDefinition>, Fallback> {
+        if self.library_inline(sym) {
+            return self.library_entry(sym);
+        }
         let info = self.syms.sym(sym);
         let (file, local) = (info.file, info.owner == Owner::Local);
         if info.def.is_none() || !self.program_file(file) || self.is_body_file(file) {
@@ -287,6 +291,28 @@ impl<'a> Worker<'a> {
         }
     }
 
+    /// Whether `sym` is an inline method whose body a library's TASTy gives, a jar's or a
+    /// directory of products' (scala-library's under `--std=scala-library` among them): dotty
+    /// expands the body its producer typed at the definition and pickled
+    /// (`TreeUnpickler.createSymbol`'s `LazyBodyAnnotation`, `Inlines.bodyToInline`), which
+    /// teq's record of the converted body typed as the definition check types a program's
+    /// stands for.
+    pub(super) fn library_inline(&self, sym: SymId) -> bool {
+        self.is_library_member(sym) || self.is_product_top_def(sym)
+    }
+
+    /// The record of the library method `sym`, made from its converted body on the first call
+    /// (`demand_library_definition`), or the retype path where the check did not give one: a
+    /// body the check fails is teq's limit, not the program's error (scalac typed it), and a
+    /// held one keeps its forms for the retype path, as a program's does.
+    fn library_entry(&mut self, sym: SymId) -> Result<Arc<InlineDefinition>, Fallback> {
+        self.demand_definition(sym);
+        match self.inline_definitions.get(&sym) {
+            Some(def) if def.state == DefinitionState::Checked && def.body.is_some() && def.walk_lack.is_none() => Ok(def.clone()),
+            _ => Err(Fallback::Library),
+        }
+    }
+
     /// The record of a call's callee, checked on the call if the walk has not met its
     /// definition yet, so that what a call gives does not depend on the typing order.
     pub(super) fn demand_definition(&mut self, sym: SymId) {
@@ -295,7 +321,9 @@ impl<'a> Worker<'a> {
         }
         // The check is the definition's whatever becomes of an attempt that asked for it.
         let promoted = self.promote_begin(sym);
-        if self.syms.sym(sym).owner == Owner::Local {
+        if self.library_inline(sym) {
+            self.demand_library_definition(sym);
+        } else if self.syms.sym(sym).owner == Owner::Local {
             self.demand_local_definition(sym);
         } else {
             self.check_inline_definition(sym);
