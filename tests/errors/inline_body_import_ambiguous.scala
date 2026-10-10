@@ -1,4 +1,4 @@
-// expect: 13:33: error: ambiguous given instances for Int: given_Int, value
+// expect: 13:33: error: ambiguous given instances for Int: value, given_Int
 // expect: 1 error found
 // An inline body's import and given of one block stand in one scope where the body expands, as
 // they do in the block: an implicit `Int` imported by a wildcard and a local `given Int` are

@@ -401,9 +401,26 @@ impl<'a, 't> Interp<'a, 't> {
         }
     }
 
+    /// A `Constant` of a literal's value, with its kind's tag (dotty's `Constants`: `UnitTag` 2 to
+    /// `ClazzTag` 13), which the kinds' type tests compare: the literal's own, read off the value's
+    /// kind as the literal made it.
     fn make_constant(&mut self, v: Value) -> R {
         let c = self.quoted_class(&["scala", "quoted", "Reflect", "Constant"])?;
-        self.construct_new(c, vec![v], &Frame::new(None))
+        let tag = match &v {
+            Value::Unit => 2,
+            Value::Bool(_) => 3,
+            Value::Byte(_) => 4,
+            Value::Short(_) => 5,
+            Value::Char(_) => 6,
+            Value::Int(_) => 7,
+            Value::Long(_) => 8,
+            Value::Float(_) => 9,
+            Value::Double(_) => 10,
+            Value::Str(_) => 11,
+            Value::Null => 12,
+            _ => 13,
+        };
+        self.construct_new(c, vec![v, Value::Int(tag)], &Frame::new(None))
     }
 
     fn macro_ctx(&mut self) -> R<Rc<MacroCtx>> {

@@ -660,8 +660,13 @@ impl<'a> Worker<'a> {
                 None => self.walked_type(&walk, te),
             }
         } else if !body.declared {
-            let t = self.walked_type(&walk, te);
-            self.solve_inferred(t)
+            match self.inferred_call_result(call, subst, args) {
+                Some(t) => t,
+                None => {
+                    let t = self.walked_type(&walk, te);
+                    self.solve_inferred(t)
+                }
+            }
         } else {
             let (subst, paths, this_paths) = walk.demand.bindings();
             self.declared_result(sig, &subst[..call_subst], &paths[..call_paths], this_paths, ret_ty)
@@ -2495,6 +2500,24 @@ impl<'a> Worker<'a> {
         }
     }
 
+    /// Whether an `inline match`'s scrutinee names `erasedValue`, which scalac marks erased
+    /// (`InlineReducer.reduceInlineMatch`: `existsSubTree(_.symbol.isErased)`, `erasedValueMethods`)
+    /// and, impure, drops: a scrutinee without a value. A scala-library build calls the method.
+    pub(super) fn names_erased_value(&mut self, e: TExprId) -> bool {
+        let called: Vec<SymId> = self.prog.descendants(e).filter_map(|x| match self.prog.expr(x) {
+            TExpr::CallStatic(s, _) | TExpr::CallMethod(_, s, _) => Some(s),
+            _ => None,
+        }).collect();
+        called.into_iter().any(|s| self.intrinsic_of(s) == Some(super::inline::Intrinsic::ErasedValue))
+    }
+
+    /// Whether an `inline match`'s scrutinee no case reads may go unevaluated, as scalac's
+    /// `Inliner.isElideableExpr` lets `dropUnusedDefs` drop its binding: a pure value (a lazy
+    /// val's read is not one, its initialiser runs) or a closure.
+    pub(super) fn elideable_scrutinee(&mut self, e: TExprId) -> bool {
+        matches!(self.prog.expr(e), TExpr::Lambda(..)) || self.is_pure_value(e)
+    }
+
     /// A reference scalac's `refPurity` finds at least idempotent: a stable member or local.
     fn idempotent_ref(&self, s: SymId) -> bool {
         let info = self.syms.sym(s);
@@ -2517,10 +2540,18 @@ impl<'a> Worker<'a> {
         let sty = self.walked_type(w, s2);
         let sty = self.solve_in(sty);
         let constant = self.fold_constant(s2).or_else(|| self.fold_type(sty));
-        let erased = self.inline.erased.take() == Some(s2);
-        let mut scrutinee = WalkScrutinee { expr: s2, ty: sty, constant, erased, bound: None };
+        // A scrutinee with an `erasedValue` anywhere in it is erased (`existsSubTree(_.symbol.isErased)`).
+        let mut parts = self.erased_tested(s2);
+        let marked = self.inline.erased.take() == Some(s2);
+        if marked {
+            parts.push(s2);
+        }
+        let erased = marked || !parts.is_empty() || self.names_erased_value(s2);
+        let erased_parts: std::rc::Rc<[TExprId]> = parts.into();
+        let mut scrutinee = WalkScrutinee { expr: s2, ty: sty, constant, erased, bound: None, erased_parts };
         // The cases are the copy's, which nothing the reduction makes changes.
         let (first, n) = (cases.range().start, cases.len as usize);
+        let unusable_mark = self.inline.unusable.len();
         // The patterns and guards are the reduction's, no part of what it gives.
         self.store_case_pats(cases);
         for i in 0..n {
@@ -2537,6 +2568,7 @@ impl<'a> Worker<'a> {
             let mut solved: Subst = Vec::new();
             let mut bound_args: Vec<SymId> = Vec::new();
             scrutinee.bound = None;
+            self.inline.unusable.truncate(unusable_mark);
             // Each case an attempt: one that does not match goes whole.
             let mark = self.attempt();
             let mut stuck = false;
@@ -2598,12 +2630,26 @@ impl<'a> Worker<'a> {
                 let later = self.prog.cases[first + j].body;
                 self.discard(w, later);
             }
+            // The scrutinee is evaluated once whatever the case reads of it: scalac binds it
+            // (`InlineReducer.reduceInlineMatch`'s `$scrutineeN`) and drops the binding unused
+            // only where it is elideable (`Inliner.dropUnusedDefs`).
+            if scrutinee.bound.is_none() && !scrutinee.erased && !self.elideable_scrutinee(s2) {
+                stmts.insert(0, TStmt::Expr(s2));
+            }
             let body = self.specialised_part(w, c.body, &solved);
+            // The case's body is checked for the unusable binders before it reduces any further
+            // (`cleanupUnusable` on the reduced match): a part the copy left reads the stored binder.
+            if self.inline.unusable.len() > unusable_mark {
+                let unusable = &self.inline.unusable[unusable_mark..];
+                let originals: Vec<SymId> = w.inst.renames.iter().filter(|(_, c)| unusable.contains(c)).map(|(&r, _)| r).collect();
+                self.report_unusable_reads(unusable_mark, body, &originals, Span::default());
+            }
             let body = self.walk(w, body);
             self.pop_scope();
             for s in bound_args {
                 self.inline.args.remove(&s);
             }
+            self.drop_unusable(unusable_mark, &mut stmts);
             let ty = self.walked_type(w, body);
             if stmts.is_empty() {
                 return body;
@@ -2830,8 +2876,12 @@ impl<'a> Worker<'a> {
                 self.syms.sym_mut(sym).sig = Some(Arc::new(sig));
                 w.binder_types.insert(sym, ty);
                 // A binder over a constant stands for the constant, as scalac's reduced
-                // projection does, so that a guard on it folds.
-                match s.constant {
+                // projection does, so that a guard on it folds; one over an erased scrutinee is
+                // erased and unusable (`adjustErased`), whatever its type.
+                if s.erased {
+                    self.inline.unusable.push(sym);
+                }
+                match s.constant.filter(|_| !s.erased) {
                     Some(v) => {
                         let (lit, _) = self.constant(v);
                         self.inline.args.insert(sym, InlineArg { expr: lit, ty, source: None });
@@ -2849,7 +2899,7 @@ impl<'a> Worker<'a> {
                 let wildcard = matches!(self.prog.pats[inner.idx()], TPat::Wildcard);
                 let Some(narrowed) = self.walked_type_pattern(w, pt, s.ty, solved, !wildcard) else { return false };
                 let narrowed = if wildcard { narrowed } else { self.narrowed_to(s.ty, narrowed) };
-                let mut inner_scrutinee = WalkScrutinee { expr: s.expr, ty: narrowed, constant: s.constant, erased: s.erased, bound: s.bound };
+                let mut inner_scrutinee = WalkScrutinee { expr: s.expr, ty: narrowed, constant: s.constant, erased: s.erased, bound: s.bound, erased_parts: s.erased_parts.clone() };
                 let ok = self.reduce_pattern(w, inner, &mut inner_scrutinee, stmts, solved, bound_args);
                 s.bound = inner_scrutinee.bound;
                 ok
@@ -2923,9 +2973,14 @@ impl<'a> Worker<'a> {
             if matches!(self.prog.pats[sub.idx()], TPat::Wildcard) {
                 continue;
             }
-            let value = self.walked_scrutinee_ref(s, stmts, span);
-            let expr = self.prog.add(TExpr::Field(value, field));
-            let mut elem = WalkScrutinee { expr, ty: fty, constant, erased: s.erased, bound: None };
+            let (expr, erased) = match self.erased_free_projection(s.expr, s.erased, &s.erased_parts, c, i) {
+                Some(item) => (self.copy_expr(item), false),
+                None => {
+                    let value = self.walked_scrutinee_ref(s, stmts, span);
+                    (self.prog.add(TExpr::Field(value, field)), s.erased)
+                }
+            };
+            let mut elem = WalkScrutinee { expr, ty: fty, constant, erased, bound: None, erased_parts: s.erased_parts.clone() };
             if !self.reduce_pattern(w, sub, &mut elem, stmts, solved, bound_args) {
                 return false;
             }
@@ -3043,6 +3098,9 @@ struct WalkScrutinee {
     constant: Option<LitVal>,
     erased: bool,
     bound: Option<TExprId>,
+    /// The erased values the whole scrutinee holds (`erased_tested`), which a field's projection
+    /// is free of or not.
+    erased_parts: std::rc::Rc<[TExprId]>,
 }
 
 /// `TEQ_INLINE_MEASURE=copy`, a measurement's setting: a call the walk takes is copied as the walk

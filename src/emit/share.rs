@@ -252,6 +252,7 @@ const T_CLOSURE: u64 = 56;
 const T_NESTED: u64 = 57;
 const T_HOLE_AGAIN: u64 = 58;
 const T_CAST: u64 = 59;
+const T_SLOT: u64 = 60;
 
 /// An argument of an outlined expansion: where the call site's expression stands in its tree.
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
@@ -740,6 +741,44 @@ impl<'a> Enc<'a> {
         self.tok2(s.0 as u64, key);
     }
 
+    /// The member a call or a read on a receiver names, by what the output writes where that is
+    /// the member's dispatch alone: a public member of a class no expansion makes, neither an
+    /// extension nor a JavaScript member, is written `r.name` whichever override the receiver's
+    /// type selected (`Emitter::member_name`, `Symbols::dispatch_name`), with what `extra`
+    /// keys: a call's arguments its parameters' defaults leave (`emit_call_args`), a read's
+    /// accessor call. So a given object read at its own class (`tpd.ref`),
+    /// `Tag.given_Tag_Int.name` at one site and `Tag.given_Tag_String.name` at the next, is the
+    /// one shape it is in the output. Any other member by its symbol.
+    fn member(&mut self, s: SymId, extra: u64) {
+        let info = self.syms.sym(s);
+        let plain = match info.owner {
+            Owner::Class(c) => {
+                !self.is_site_class(c) && !info.is_extension && info.mods & crate::ast::mods::PRIVATE == 0 && !self.syms.js_member(s)
+            }
+            _ => false,
+        };
+        if !plain {
+            return self.sym(s);
+        }
+        self.tok(T_SLOT);
+        let n = self.syms.dispatch_name(s);
+        let h = self.name_hash(n);
+        self.tok2(n.0 as u64, h);
+        self.tok(extra);
+    }
+
+    /// A call's method (`member`): an `apply`, which the emitter may write as a function's
+    /// call, and a method of more than 64 parameters by their symbol.
+    fn method(&mut self, s: SymId) {
+        let info = self.syms.sym(s);
+        let params: Vec<bool> = info.sig.as_ref().map_or(Vec::new(), |sig| sig.clauses.iter().flat_map(|c| c.params.iter().map(|p| p.has_default)).collect());
+        if info.name == crate::names::APPLY || params.len() > 64 {
+            return self.sym(s);
+        }
+        let defaults = params.iter().enumerate().fold(0u64, |bits, (i, &d)| if d { bits | 1 << i } else { bits });
+        self.member(s, defaults);
+    }
+
     fn class(&mut self, c: ClassId) {
         if self.is_site_class(c) {
             self.tok(T_SITE_CLASS);
@@ -1050,7 +1089,13 @@ impl<'a> Enc<'a> {
             TExpr::Field(r, s) => {
                 self.tok(T_FIELD);
                 self.expr(r);
-                self.sym(s);
+                // On `this` the emitter may read a constructor's local of the class it writes.
+                if matches!(self.prog.expr(r), TExpr::This) {
+                    self.sym(s);
+                } else {
+                    let accessor = self.syms.sym(s).needs_accessor;
+                    self.member(s, accessor as u64);
+                }
             }
             TExpr::CallStatic(s, args) => {
                 self.tok(T_CALL_STATIC);
@@ -1064,7 +1109,7 @@ impl<'a> Enc<'a> {
             TExpr::CallMethod(r, s, args) => {
                 self.tok(T_CALL_METHOD);
                 self.expr(r);
-                self.sym(s);
+                self.method(s);
                 self.list(args);
             }
             TExpr::CallClosure(f, args) => {

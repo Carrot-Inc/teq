@@ -527,6 +527,7 @@ impl<'a> Worker<'a> {
         let mut widened = Vec::new();
         let mut opaque = Vec::new();
         let mut spread = Vec::new();
+        let mut erased = Vec::new();
         if let Some(b) = body {
             // What the notes name of a typing the body dropped (an alternative tried and
             // discarded) is no part of it.
@@ -550,6 +551,9 @@ impl<'a> Worker<'a> {
             opaque.sort();
             spread = nodes.keys().copied().filter(|&e| self.prog.is_spread(e)).collect();
             spread.sort();
+            // The lean library's call is the intrinsic's, deferred: each expansion evaluates it anew.
+            erased = nodes.keys().copied().filter(|&e| !notes.deferred.contains(&e) && self.calls_erased_value(e)).collect();
+            erased.sort();
             let body_roots = self.stored_roots(std::iter::once(b));
             self.definition_leaves(&body_roots, &params, &notes.deferred, &mut leaves);
         }
@@ -590,6 +594,7 @@ impl<'a> Worker<'a> {
             widened,
             opaque,
             spread,
+            erased,
             hoisted,
             imports: if body.is_some() { notes.imports } else { Vec::new() },
             node_types,
@@ -662,11 +667,30 @@ impl<'a> Worker<'a> {
         if self.types.contains_error(record.ty) {
             return Some(ERROR);
         }
+        Some(self.inferred_at_call(call, subst, args, &record))
+    }
+
+    /// The type of a plain call of `sym`, a method of the program whose result is inferred,
+    /// where its definition passed the check: the result the check inferred, which scalac's
+    /// method type keeps (`Namer.inferredResultType`), not the expansion's own (a
+    /// `constValue[ToString[N]]` body's call at `1` is a `ToString[1]`, which is `"1"`).
+    pub(super) fn inferred_call_result(&mut self, call: &super::apply::MethodCall, subst: &Subst, args: &[TExprId]) -> Option<TypeId> {
+        let record = self.inline_definitions.get(&call.sym)?.clone();
+        if record.state != DefinitionState::Checked || self.types.contains_error(record.ty) {
+            return None;
+        }
+        Some(self.inferred_at_call(call, subst, args, &record))
+    }
+
+    /// The type the check inferred, instantiated with the call's type arguments and its
+    /// arguments' paths, reduced (`ToString[7]` the `"7"` it is).
+    fn inferred_at_call(&mut self, call: &super::apply::MethodCall, subst: &Subst, args: &[TExprId], record: &InlineDefinition) -> TypeId {
         let mut subst = subst.clone();
         subst.extend(call.owner_subst.iter().copied());
         let ty = self.types.subst(record.ty, &subst);
         let paths: Vec<(SymId, TypeId)> = record.params.iter().zip(args).filter_map(|(&p, &a)| self.argument_path(a).map(|path| (p, path))).collect();
-        Some(if paths.is_empty() || !self.types.has_paths(ty) { ty } else { self.subst_paths(ty, &paths) })
+        let ty = if paths.is_empty() || !self.types.has_paths(ty) { ty } else { self.subst_paths(ty, &paths) };
+        self.normalize(ty)
     }
 
     /// Whether the match at `span` belongs to the body of an inline method the definition check
@@ -746,6 +770,9 @@ impl<'a> Worker<'a> {
         }
         for (i, &e) in def.spread.iter().enumerate() {
             note(e, Meta::Spread(i as u32));
+        }
+        for (i, &e) in def.erased.iter().enumerate() {
+            note(e, Meta::Erased(i as u32));
         }
         for (i, imp) in def.imports.iter().enumerate() {
             note(imp.block, Meta::Import(i as u32));
@@ -1150,6 +1177,7 @@ impl<'a> Worker<'a> {
                 Meta::Widened(_) => self.prog.mark_widened(copy),
                 Meta::Opaque(_) => self.prog.mark_opaque(copy),
                 Meta::Spread(_) => self.prog.mark_spread(copy),
+                Meta::Erased(_) => self.note_erased_value(copy, Span::default()),
                 Meta::Import(i) => {
                     let imp = def.imports[i as usize];
                     inst.imports.push(BlockImport { block: copy, ..imp });
@@ -1732,7 +1760,7 @@ impl<'a> Worker<'a> {
         let Some(body) = body else { return (None, ERROR, Vec::new()) };
         let tparams = sig.tparams.iter().map(|&p| (self.syms.tparam(p).name, p)).collect();
         let frame = self.env.frames.len();
-        self.env.frames.push(Frame::Locals { names: Vec::new(), tparams, givens: Vec::new(), classes: Vec::new(), aliases: Vec::new() });
+        self.env.frames.push(Frame::Locals { names: Vec::new(), tparams, givens: Vec::new(), classes: Vec::new(), aliases: Vec::new(), owner: self.sites.owners.len() as u32 + 1 });
         let outer_ext_scope = self.ext_scope;
         if let Some(scope) = self.ext_scope_of(sym, sig, def) {
             self.ext_scope = Some(scope);
@@ -2145,6 +2173,7 @@ enum Meta {
     Widened(u32),
     Opaque(u32),
     Spread(u32),
+    Erased(u32),
     Import(u32),
     Alias(u32),
 }
@@ -2234,6 +2263,7 @@ impl InlineDefinition {
             diagnostics: Vec::new(),
             widened: Vec::new(),
             opaque: Vec::new(),
+            erased: Vec::new(),
             spread: Vec::new(),
             hoisted: Vec::new(),
             imports: Vec::new(),

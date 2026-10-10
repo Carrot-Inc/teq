@@ -670,7 +670,12 @@ impl<'a> Worker<'a> {
                         continue;
                     }
                     if let (true, Type::BoundedWild(lo, hi)) = (bounded, self.types.get(ys[i])) {
-                        let (xlo, xhi) = self.types.wild_bounds(xs[i]).unwrap_or((xs[i], xs[i]));
+                        let (xlo, xhi) = match self.types.wild_bounds(xs[i]) {
+                            // A wildcard argument is bounded by its parameter's declared bounds too
+                            // (`TypeComparer.isSubArg`: `tp1 & paramBounds(tparam)`).
+                            Some((xlo, xhi)) => self.within_param_bounds(c2, i, xlo, xhi, &ys),
+                            None => (xs[i], xs[i]),
+                        };
                         if !(self.is_sub(lo, xlo) && self.is_sub(xhi, hi)) {
                             return false;
                         }
@@ -1547,6 +1552,85 @@ impl<'a> Worker<'a> {
         let t = self.solve_in(t);
         let t = self.normalize(t);
         self.widen_lit(t)
+    }
+
+    /// The bounds of a wildcard argument of `c`'s `i`-th parameter met with the parameter's own,
+    /// instantiated with the arguments `args` of the type it is compared with
+    /// (`TypeComparer.isSubArgs`' `paramBounds`, `tparam.info.substApprox(tparams2, args2)`): a
+    /// wildcard argument stands for the end of its bounds its occurrence's variance takes
+    /// (`subst_approx`), and a bound this cannot instantiate is not met.
+    fn within_param_bounds(&mut self, c: ClassId, i: usize, lo: TypeId, hi: TypeId, args: &[TypeId]) -> (TypeId, TypeId) {
+        let Some(&p) = self.syms.class(c).tparams.get(i) else { return (lo, hi) };
+        let (upper, lower) = (self.syms.tparam(p).upper, self.syms.tparam(p).lower);
+        if upper == ANY && lower == NOTHING {
+            return (lo, hi);
+        }
+        let tparams = self.syms.class(c).tparams.clone();
+        let hi = match upper {
+            ANY => hi,
+            u => match self.subst_approx(u, &tparams, args, 1, false) {
+                Some(u) if hi == ANY => u,
+                Some(u) => self.types.inter(hi, u),
+                None => hi,
+            },
+        };
+        let lo = match lower {
+            NOTHING => lo,
+            l => match self.subst_approx(l, &tparams, args, -1, false) {
+                Some(l) if lo == NOTHING => l,
+                Some(l) => self.types.union(lo, l),
+                None => lo,
+            },
+        };
+        (lo, hi)
+    }
+
+    /// `t` with the parameters `tparams` replaced by `args`, a wildcard argument by the end of its
+    /// bounds the occurrence's variance `variance` takes: the upper in a covariant position, the
+    /// lower in a contravariant one, the wildcard itself as an invariant class argument (`as_arg`).
+    /// dotty's `Substituters.SubstApproxMap`, whose `range` an `ApproximatingTypeMap` composes
+    /// through applications by their parameters' variances. `None` where a replaced parameter
+    /// stands where this does not follow it (an invariant position outside an argument, a type
+    /// it does not take apart).
+    fn subst_approx(&mut self, t: TypeId, tparams: &[TParamId], args: &[TypeId], variance: i8, as_arg: bool) -> Option<TypeId> {
+        match self.types.get(t) {
+            Type::Param(p) => {
+                let Some(i) = tparams.iter().position(|&q| q == p) else { return Some(t) };
+                let a = *args.get(i)?;
+                match self.types.wild_bounds(a) {
+                    None => Some(a),
+                    Some((lo, hi)) => match variance {
+                        v if v > 0 => Some(hi),
+                        v if v < 0 => Some(lo),
+                        _ if as_arg => Some(a),
+                        _ => None,
+                    },
+                }
+            }
+            Type::Class(c, list) => {
+                let items = self.types.items(list).to_vec();
+                if items.is_empty() {
+                    return Some(t);
+                }
+                let variances: Vec<i8> = self.syms.class(c).tparams.iter().map(|&q| self.syms.tparam(q).variance).collect();
+                let mut out = Vec::with_capacity(items.len());
+                for (k, &x) in items.iter().enumerate() {
+                    let v = variance * variances.get(k).copied().unwrap_or(0);
+                    out.push(self.subst_approx(x, tparams, args, v, true)?);
+                }
+                Some(self.types.class(c, &out))
+            }
+            Type::Union(a, b) => {
+                let (a, b) = (self.subst_approx(a, tparams, args, variance, false)?, self.subst_approx(b, tparams, args, variance, false)?);
+                Some(self.types.union(a, b))
+            }
+            Type::Inter(a, b) => {
+                let (a, b) = (self.subst_approx(a, tparams, args, variance, false)?, self.subst_approx(b, tparams, args, variance, false)?);
+                Some(self.types.inter(a, b))
+            }
+            Type::Any | Type::Nothing | Type::Error | Type::Lit(_) | Type::Ctor(_) | Type::This(_) | Type::Term(_) | Type::Decl(_) | Type::Blocked(_) | Type::Wild => Some(t),
+            _ => None,
+        }
     }
 
     /// Whether a literal type occurs in `t`, looking through the bounds of an open variable.

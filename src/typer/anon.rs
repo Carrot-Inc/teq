@@ -1870,7 +1870,7 @@ impl<'a> Worker<'a> {
             clause_env.frames.pop();
         }
         let tparams = self.syms.class(c).tparams.iter().map(|&p| (self.syms.tparam(p).name, p)).collect();
-        clause_env.frames.push(Frame::Locals { names: Vec::new(), tparams, givens: Vec::new(), classes: Vec::new(), aliases: Vec::new() });
+        clause_env.frames.push(Frame::Locals { names: Vec::new(), tparams, givens: Vec::new(), classes: Vec::new(), aliases: Vec::new(), owner: self.sites.owners.len() as u32 });
         // The path's typing is an attempt: kept where it gives the enclosing instance, gone
         // otherwise.
         let mark = self.attempt();

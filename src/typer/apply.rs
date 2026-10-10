@@ -1144,6 +1144,58 @@ impl<'a> Worker<'a> {
         }
     }
 
+    /// The type a reference to a parameterless structural given has: dotty makes the given a
+    /// module (`Parsers.givenDef`'s `ModuleDef`), whose reference is of its class, every member
+    /// of the body visible (`t.self`), while the search compares it by the type it was declared
+    /// with (`Applications.widenGiven`), which is its signature's.
+    #[inline]
+    pub(super) fn given_object_type(&mut self, s: SymId) -> Option<TypeId> {
+        let info = self.syms.sym(s);
+        let c = info.impl_class.filter(|_| info.kind == SymKind::Given)?;
+        self.given_object_type_of(s, c)
+    }
+
+    fn given_object_type_of(&mut self, s: SymId, c: ClassId) -> Option<TypeId> {
+        let sig = self.sig_of(s);
+        (sig.tparams.is_empty() && sig.clauses.is_empty() && self.syms.class(c).tparams.is_empty()).then(|| self.types.class(c, &[]))
+    }
+
+    /// Whether `s` may name a module read inside its own class (`enclosing_module_class`): a
+    /// given or a lazy val, which every other read of a name is not.
+    #[inline(always)]
+    fn may_read_module(&self, s: SymId) -> bool {
+        let info = self.syms.sym(s);
+        info.kind == SymKind::Given || info.kind == SymKind::Val && info.mods & crate::ast::mods::LAZY != 0
+    }
+
+    /// A module's name read inside its own class: that class's `this`.
+    #[cold]
+    #[inline(never)]
+    fn module_read_callee(&mut self, s: SymId) -> Option<Callee> {
+        let k = self.enclosing_module_class(s)?;
+        let ty = self.module_ref_type(s, k);
+        Some(Callee::Value(self.this_ref(k), ty))
+    }
+
+    /// A local object's lazy val read inside its class: that class's `this`.
+    #[cold]
+    #[inline(never)]
+    fn local_module_read_callee(&mut self, s: SymId) -> Option<Callee> {
+        let c = self.enclosing_module_class(s)?;
+        let ty = self.sig_of(s).ret;
+        Some(Callee::Value(self.this_ref(c), ty))
+    }
+
+    /// The type of a module's name read inside its class `k`: its class's, or a local or inner
+    /// object's own.
+    fn module_ref_type(&mut self, s: SymId, k: ClassId) -> TypeId {
+        match self.given_object_type(s) {
+            Some(t) => t,
+            None if self.syms.class(k).tparams.is_empty() => self.types.class(k, &[]),
+            None => self.sig_of(s).ret,
+        }
+    }
+
     fn is_path(&self, e: TExprId) -> bool {
         match self.prog.expr(e) {
             TExpr::Module(_) | TExpr::This | TExpr::Super(_) | TExpr::Local(_) | TExpr::Static(_) => true,
@@ -1160,6 +1212,7 @@ impl<'a> Worker<'a> {
             return Callee::Method { recv: None, sym: s, owner_subst: Vec::new(), prefix: None };
         }
         let ty = self.sig_of(s).ret;
+        let ty = self.given_object_type(s).unwrap_or(ty);
         if let Some(c) = self.module_alias(s, ty) {
             let te = self.prog.add(TExpr::Module(c));
             if self.deps.is_some() {
@@ -1525,6 +1578,7 @@ impl<'a> Worker<'a> {
             return Callee::Method { recv: Some(recv), sym: s, owner_subst, prefix };
         }
         let ret = self.sig_of(s).ret;
+        let ret = self.given_object_type(s).unwrap_or(ret);
         let mut ty = self.types.subst(ret, &owner_subst);
         if self.types.has_paths(ty) {
             let prefix = self.prefix_of(recv, recv_ty);
@@ -2067,6 +2121,13 @@ impl<'a> Worker<'a> {
     }
 
     pub(super) fn term_callee(&mut self, r: TermRef, name: Name, span: Span) -> Option<Callee> {
+        if let TermRef::This(_, s) | TermRef::ModuleMember(_, s) | TermRef::Global(s) = r {
+            if self.may_read_module(s) {
+                if let Some(callee) = self.module_read_callee(s) {
+                    return Some(callee);
+                }
+            }
+        }
         Some(match r {
             TermRef::SelfAlias(c) => {
                 self.complete_class(c);
@@ -2080,20 +2141,22 @@ impl<'a> Worker<'a> {
                         self.capture_form(te, crate::tir::capture::Form::Constant(s));
                     }
                     Callee::Value(te, ty)
-                } else if self.syms.sym(s).kind == SymKind::Def {
-                    Callee::Method { recv: None, sym: s, owner_subst: Vec::new(), prefix: None }
-                } else if let Some(c) = self.enclosing_local_object(s) {
-                    let ty = self.sig_of(s).ret;
-                    Callee::Value(self.this_ref(c), ty)
                 } else {
-                    let ty = self.sig_of(s).ret;
-                    let local = self.prog.add(TExpr::Local(s));
-                    let te = if self.syms.sym(s).by_name {
-                        self.prog.add(TExpr::CallClosure(local, ListRef::EMPTY))
-                    } else {
-                        local
+                    let (kind, lazy, by_name) = {
+                        let info = self.syms.sym(s);
+                        (info.kind, info.mods & crate::ast::mods::LAZY != 0, info.by_name)
                     };
-                    Callee::Value(te, ty)
+                    match (kind, lazy) {
+                        (SymKind::Def, _) => Callee::Method { recv: None, sym: s, owner_subst: Vec::new(), prefix: None },
+                        // A local object's lazy val read inside its class.
+                        (_, true) if self.enclosing_module_class(s).is_some() => self.local_module_read_callee(s)?,
+                        _ => {
+                            let ty = self.sig_of(s).ret;
+                            let local = self.prog.add(TExpr::Local(s));
+                            let te = if by_name { self.prog.add(TExpr::CallClosure(local, ListRef::EMPTY)) } else { local };
+                            Callee::Value(te, ty)
+                        }
+                    }
                 }
             }
             TermRef::This(c, s) => {
@@ -3372,24 +3435,43 @@ impl<'a> Worker<'a> {
             }
             None if inline_callee => {
                 // What the expansion copies or reads of its arguments is expanded first: a plain
-                // call among them pending.
+                // call among them pending. A transparent method's keeps such a call pending in each
+                // copy of its argument (`pend_copy`), which the later phase expands where it
+                // survives, as dotty's `Inlining` expands each copy.
+                let mut kept_pending = Vec::new();
                 if self.attempts.pending_len() != 0 {
                     let mut roots = args_out.clone();
                     roots.extend(call.recv);
                     roots.extend(call.ext_recv.map(|(r, _)| r));
-                    self.expand_pending_in(&roots);
+                    let transparent = self.syms.sym(call.sym).mods & crate::ast::mods::TRANSPARENT != 0;
+                    match self.copyable_pending_in(&roots).filter(|_| transparent) {
+                        Some(nodes) => kept_pending = nodes,
+                        None => {
+                            self.expand_pending_in(&roots);
+                        }
+                    }
                 }
                 let expanded = self.expand_inline(&call, &sig, &subst, &args_out, ret_ty, span, expected);
                 self.inline.arg_types = outer_arg_types;
                 match expanded {
                     Some((e, t)) => {
+                        if !kept_pending.is_empty() {
+                            self.drop_pending_copied(&kept_pending, e);
+                        }
                         ty = t;
                         e
                     }
                     None => self.build_call(&call, l),
                 }
             }
-            None => self.build_call(&call, l),
+            None => {
+                let te = self.build_call(&call, l);
+                // scala-library's `erasedValue` is a plain method: a call the trees keep is used.
+                if self.syms.sym(call.sym).name == crate::names::ERASED_VALUE && self.intrinsic_of(call.sym) == Some(super::inline::Intrinsic::ErasedValue) {
+                    self.note_erased_value(te, span);
+                }
+                te
+            }
         };
         if self.inline.checking > 0 && ctor.is_none() && !sig.tparams.is_empty() {
             self.note_type_args(te, &subst[call.owner_subst.len()..]);
@@ -4412,7 +4494,7 @@ impl<'a> Worker<'a> {
                         (te, self.expand_unadapted(te, pty).unwrap_or(ty))
                     }
                     ArgSlot::Held { named: true, written, .. } if matches!(arg, ArgSrc::Ast(_)) => return self.type_named_arg_cached(e, written, pty, spread),
-                    ArgSlot::Held { written, unadapted, .. } => match self.type_arg_cached(e, written, pty, unadapted) {
+                    ArgSlot::Held { written, .. } => match self.type_arg_cached(e, written, pty) {
                         (te, ty, true) => (te, self.expand_unadapted(te, pty).unwrap_or(ty)),
                         (te, ty, false) => (te, ty),
                     },
@@ -4544,26 +4626,21 @@ impl<'a> Worker<'a> {
     /// inside the typing (`hasInnerErrors`, 450).
     /// Whether the typing left its transparent call pending (`takes_unadapted`), the third.
     #[inline(never)]
-    fn type_arg_cached(&mut self, e: ExprId, written: ExprId, pty: TypeId, unadapted: bool) -> (TExprId, TypeId, bool) {
+    fn type_arg_cached(&mut self, e: ExprId, written: ExprId, pty: TypeId) -> (TExprId, TypeId, bool) {
         let retained = self.arg_typing_begin(e);
         let diags = self.diags.items.len();
         // A transparent call that is the argument, through parentheses (dotty's `Parens` is no
         // tree), is left unexpanded (`takes_unadapted`); one in braces is a block's expression,
         // adapted inside it (`typedBlock`).
-        let outer = match unadapted {
-            true => {
-                let ast = self.cur_ast();
-                let mut at = e;
-                let mut braced = ast.is_braced(at);
-                while let Expr::Parens(inner) = ast.expr(at) {
-                    at = inner;
-                    braced |= ast.is_braced(at);
-                }
-                let call = (!braced).then(|| (self.env.file, ast.expr_span(at)));
-                std::mem::replace(&mut self.unadapted_call, call)
-            }
-            false => self.unadapted_call,
-        };
+        let ast = self.cur_ast();
+        let mut at = e;
+        let mut braced = ast.is_braced(at);
+        while let Expr::Parens(inner) = ast.expr(at) {
+            at = inner;
+            braced |= ast.is_braced(at);
+        }
+        let call = (!braced).then(|| (self.env.file, ast.expr_span(at)));
+        let outer = std::mem::replace(&mut self.unadapted_call, call);
         let outer_node = self.unadapted_node.take();
         let typed = self.type_expr(e, Some(pty));
         self.unadapted_call = outer;
@@ -6034,52 +6111,28 @@ impl<'a> Worker<'a> {
         let mut rest = lists.split_off(1);
         // Same-named extensions are overloads whose first argument list is the receiver: the
         // receiver decides, and the lists after it only between receivers it leaves equally
-        // specific, over every alternative the receiver applies to (scalac's
-        // `resolveOverloaded`); a receiver more specific than the others wins whatever follows.
-        if exts.len() > 1 && targs.is_none() {
+        // specific, over every alternative the receiver applies to, on the arguments typed alone
+        // (scalac's `resolveOverloaded`, `pretypeArgs`); a receiver more specific than the others
+        // wins whatever follows. None applying, or several, is scalac's E134 or E051.
+        let ext = if exts.len() > 1 {
             let calls: Vec<MethodCall> = exts
                 .iter()
                 .map(|&sym| MethodCall { recv: Some(recv), sym, owner_subst: owner_subst.clone(), ext_recv: Some((te, ty)), prefix: None })
                 .collect();
-            if let Some(i) = self.pick_by_arguments(&calls, te, ty, &mut rest, expected) {
-                self.direct_ext_targs = false;
-                let call = calls.into_iter().nth(i).unwrap();
-                return self.apply_method(call, None, None, rest, span, expected, false);
-            }
-        }
-        // Otherwise (`appliedTo(targ)` and `appliedTo(targs)` with explicit type arguments, or
-        // no alternative the receiver decides): the ones whose own clause takes the arguments,
-        // and among those the first that applies.
-        let fitting: Vec<SymId> = if exts.len() > 1 { exts.iter().copied().filter(|&e| self.extension_accepts(e, &rest, false)).collect() } else { exts.clone() };
-        let candidates = if fitting.is_empty() { exts } else { fitting };
-        let last = candidates.len() - 1;
-        // Each candidate is an attempt of its own over the same arguments, typed once.
-        if last > 0 {
-            self.arg_cache_open(&rest);
-        }
-        for (i, &ext) in candidates.iter().enumerate() {
-            let call = MethodCall { recv: Some(recv), sym: ext, owner_subst: owner_subst.clone(), ext_recv: Some((te, ty)), prefix: None };
-            // The explicit type arguments of a direct call cover the extension's own parameters
-            // too, for each candidate tried.
-            self.direct_ext_targs = targs.is_some();
-            if i == last {
-                let r = self.apply_method(call, None, targs, rest, span, expected, false);
-                if last > 0 {
-                    self.arg_cache_close();
+            match self.resolve_extension_overload(&calls, targs, te, ty, &mut rest, expected) {
+                Ok(i) => exts[i],
+                Err(msg) => {
+                    self.error(span, msg);
+                    return Some((self.prog.add(TExpr::Unit), ERROR));
                 }
-                return r;
             }
-            let mark = self.attempt();
-            self.arg_cache_attempt(mark);
-            let result = self.apply_method(call, None, targs, rest.clone(), span, expected, false);
-            if !self.attempt_reported(&mark) {
-                self.close(mark);
-                self.arg_cache_close();
-                return result;
-            }
-            self.retract(mark);
-        }
-        None
+        } else {
+            exts[0]
+        };
+        let call = MethodCall { recv: Some(recv), sym: ext, owner_subst, ext_recv: Some((te, ty)), prefix: None };
+        // The explicit type arguments of a direct call cover the extension's own parameters too.
+        self.direct_ext_targs = targs.is_some();
+        self.apply_method(call, None, targs, rest, span, expected, false)
     }
 
     /// Arity check that lets same-named extensions differ in their parameter count.
@@ -7709,6 +7762,11 @@ impl<'a> Worker<'a> {
             // The arguments choose among a given's overloads, outside its attempt, as dotty's
             // overload resolution of `f(qual)` against the call's prototype; none chosen, it fails.
             let Some(call) = self.choose_given_extension(calls, recv, recv_ty, lists, expected) else { continue };
+            // `f(qual)` applies the using clauses before the extension's own parameters
+            // (`tryExtension`): one without an instance passes the given over.
+            if !self.prefix_resolves(&call, recv_ty, None, lists, span, false) {
+                continue;
+            }
             let Some((b, best, best_aside)) = found.take() else {
                 found = Some((i, call, aside));
                 continue;
@@ -7912,6 +7970,12 @@ impl<'a> Worker<'a> {
     /// so that a given, an inline one's expansion and its warnings among them, is resolved once;
     /// one the application does not take goes.
     fn prefix_holds(&mut self, call: &MethodCall, recv_ty: TypeId, targs: Option<ListRef>, lists: &Option<Vec<ArgList>>, span: Span) -> bool {
+        self.prefix_resolves(call, recv_ty, targs, lists, span, true)
+    }
+
+    /// `prefix_holds`; with `keep` the givens it resolved are the application's, else dropped
+    /// (a given's extension weighed among others, which is applied later if selected).
+    fn prefix_resolves(&mut self, call: &MethodCall, recv_ty: TypeId, targs: Option<ListRef>, lists: &Option<Vec<ArgList>>, span: Span, keep: bool) -> bool {
         let sig = self.sig_arc(call.sym);
         let info = self.syms.sym(call.sym);
         let (ext_clauses, ext_tparams) = (info.ext_clauses as usize, info.ext_tparams as usize);
@@ -7990,7 +8054,7 @@ impl<'a> Worker<'a> {
         }
         self.given_ambiguity = None;
         self.retract(mark);
-        if hold {
+        if hold && keep {
             self.attempts.inferred = resolved;
         }
         hold

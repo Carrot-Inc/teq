@@ -51,7 +51,7 @@ impl<'a> Worker<'a> {
         let outer = std::mem::replace(&mut self.typing_annotation, true);
         self.with_env(env, |t| {
             if !tparams.is_empty() {
-                t.env.frames.push(super::Frame::Locals { names: Vec::new(), tparams: tparams.to_vec(), givens: Vec::new(), classes: Vec::new(), aliases: Vec::new() });
+                t.env.frames.push(super::Frame::Locals { names: Vec::new(), tparams: tparams.to_vec(), givens: Vec::new(), classes: Vec::new(), aliases: Vec::new(), owner: t.sites.owners.len() as u32 });
             }
             for a in annots {
                 let mark = t.diags.items.len();

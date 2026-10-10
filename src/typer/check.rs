@@ -1475,7 +1475,7 @@ impl<'a> Worker<'a> {
     /// Whether `owner` is a block, a class made in one (an anonymous class among them) or a
     /// class nested in such a class: what it defines is typed where the block is, inside the
     /// expansion under way if the block is an inline method's. Any other definition's body is
-    /// typed on its own, whatever asked for it (`outside_inline`).
+    /// typed on its own, whatever asked for it (`outside_inline`, `outside_quotes`).
     pub(super) fn made_in_block(&self, mut owner: Owner) -> bool {
         loop {
             match owner {
@@ -1672,7 +1672,7 @@ impl<'a> Worker<'a> {
             }
             DefKind::Fun(f) => {
                 let ids = t.make_tparams(&f.tparams);
-                t.env.frames.push(Frame::Locals { names: Vec::new(), tparams: ids.clone(), givens: Vec::new(), classes: Vec::new(), aliases: Vec::new() });
+                t.env.frames.push(Frame::Locals { names: Vec::new(), tparams: ids.clone(), givens: Vec::new(), classes: Vec::new(), aliases: Vec::new(), owner: t.sites.owners.len() as u32 });
                 t.resolve_tparam_bounds(&f.tparams, &ids);
                 t.erased_tags = (t.syms.sym(sym).jvm_evidence && t.erases_evidence()).then_some(0);
                 let clauses = t.resolve_clauses(&f.clauses, None, &f.tparams, &ids, None);
@@ -1718,7 +1718,7 @@ impl<'a> Worker<'a> {
                         return sig;
                     }
                     let ids = t.make_tparams(&g.tparams);
-                    t.env.frames.push(Frame::Locals { names: Vec::new(), tparams: ids.clone(), givens: Vec::new(), classes: Vec::new(), aliases: Vec::new() });
+                    t.env.frames.push(Frame::Locals { names: Vec::new(), tparams: ids.clone(), givens: Vec::new(), classes: Vec::new(), aliases: Vec::new(), owner: t.sites.owners.len() as u32 });
                     t.resolve_tparam_bounds(&g.tparams, &ids);
                     let clauses = t.resolve_clauses(&g.clauses, None, &g.tparams, &ids, None);
                     let ret = t.resolve_declared_type(g.ty);
@@ -2135,7 +2135,7 @@ impl<'a> Worker<'a> {
             _ => (body, ast::ListRef::EMPTY),
         };
         let frame = self.env.frames.len();
-        self.env.frames.push(Frame::Locals { names: Vec::new(), tparams: Vec::new(), givens: Vec::new(), classes: Vec::new(), aliases: Vec::new() });
+        self.env.frames.push(Frame::Locals { names: Vec::new(), tparams: Vec::new(), givens: Vec::new(), classes: Vec::new(), aliases: Vec::new(), owner: self.sites.owners.len() as u32 });
         let default_exprs: Vec<Option<ast::ExprId>> = f.clauses.iter().flat_map(|cl| cl.params.iter().map(|p| p.default)).collect();
         let defaults = self.enter_params(&sig, &default_exprs, frame);
         let params: Vec<SymId> = sig.clauses.iter().flat_map(|cl| cl.params.iter().map(|p| p.sym)).collect();
@@ -2262,6 +2262,7 @@ impl<'a> Worker<'a> {
         // The body's typing is its definition's whatever becomes of an attempt that asked for
         // it.
         let promoted = self.promote_begin(sym);
+        let erased_mark = self.erased_values.len();
         let pending = self.attempts.pending_len();
         let p = self.body_prof(sym);
         // A member's body is typed as the walk types it, whichever expansion or search
@@ -2271,7 +2272,7 @@ impl<'a> Worker<'a> {
         let ty = if self.made_in_block(self.syms.sym(sym).owner) {
             self.as_own_unit(|t| t.type_retained(retained, |t| t.type_body_in(sym, sig, expected, true)))
         } else {
-            self.as_own_unit(|t| t.outside_search(|t| t.outside_inline(|t| t.type_retained(retained, |t| t.type_body_in(sym, sig, expected, false)))))
+            self.as_own_unit(|t| t.outside_search(|t| t.outside_inline(|t| t.outside_quotes(|t| t.type_retained(retained, |t| t.type_body_in(sym, sig, expected, false))))))
         };
         self.phase_end(p);
         // The body's typing is kept whatever demanded it (an attempt abandoned after it inferred
@@ -2282,6 +2283,10 @@ impl<'a> Worker<'a> {
         // A body is a unit of its own, published when typed: its plain inline calls expand at its
         // end, what they write its definition's.
         self.flush_pending_since(pending);
+        if self.erased_values.len() > erased_mark {
+            let roots: Vec<TExprId> = self.fun_of_sym.get(&sym).and_then(|&f| self.prog.funs[f.idx()].body).into_iter().chain(self.val_init.get(&sym).copied()).collect();
+            self.report_erased_values(erased_mark, &roots);
+        }
         self.promote_end(promoted);
         self.body_depth -= 1;
         ty
@@ -2457,7 +2462,7 @@ impl<'a> Worker<'a> {
         // The parameters join the frame clause by clause while the defaults are typed: a default
         // sees the earlier clauses, as in scalac, so `size = size` names the enclosing member.
         let frame = self.env.frames.len();
-        self.env.frames.push(Frame::Locals { names: Vec::new(), tparams, givens: Vec::new(), classes: Vec::new(), aliases: Vec::new() });
+        self.env.frames.push(Frame::Locals { names: Vec::new(), tparams, givens: Vec::new(), classes: Vec::new(), aliases: Vec::new(), owner: self.sites.owners.len() as u32 + 1 });
         let outer_ext_scope = self.ext_scope;
         if let Some(scope) = self.ext_scope_of(sym, sig, def) {
             self.ext_scope = Some(scope);
@@ -2503,7 +2508,6 @@ impl<'a> Worker<'a> {
         // The interpreter runs the body of a templated def where it has no builtin for it.
         let has_intrinsic = (self.syms.sym(sym).intrinsic.is_some() || self.body_is_native(sym)) && !((self.interp || self.for_interpreter) && body.is_some());
         let mut result_ty = expected.unwrap_or(ERROR);
-        let first_expr = self.prog.exprs.len();
         let typed = match body {
             Some(b) if !has_intrinsic => Some(match expected {
                 Some(t) if t == self.b.t_unit => {
@@ -2563,12 +2567,8 @@ impl<'a> Worker<'a> {
                 if def.annots.iter().any(|a| a.name == names::TAILREC) {
                     // The check reads the calls the body's plain inline calls expand to, as
                     // scalac's runs after its `Inlining` phase.
-                    self.attempts.tracking_moved += 1;
-                    let moved_at = self.attempts.moved.len();
                     self.flush_pending_since(pending);
-                    self.attempts.tracking_moved -= 1;
-                    let moved = self.attempts.moved.split_off(moved_at);
-                    self.check_tailrec(sym, f, first_expr, &moved, def.span);
+                    self.check_tailrec(sym, f, def.span);
                 }
             }
         } else if let Some(e) = typed {
@@ -2735,6 +2735,7 @@ impl<'a> Worker<'a> {
     fn check_class_now(&mut self, c: ClassId) {
         self.complete_class(c);
         let pending = self.attempts.pending_len();
+        let erased_mark = self.erased_values.len();
         let (file, def_id, kind, js) = {
             let i = self.syms.class(c);
             (i.file, i.def, i.kind, i.js)
@@ -2818,7 +2819,7 @@ impl<'a> Worker<'a> {
                 tclass.ctor_params.iter().map(|&s| (t.syms.sym(s).name, s)).collect();
             let param_types: Vec<(TypeId, bool)> =
                 t.syms.class(c).ctor.iter().flat_map(|cl| cl.params.iter().map(|p| (p.ty, p.by_name))).collect();
-            t.env.frames.push(Frame::Locals { names, tparams: Vec::new(), givens: Vec::new(), classes: Vec::new(), aliases: Vec::new() });
+            t.env.frames.push(Frame::Locals { names, tparams: Vec::new(), givens: Vec::new(), classes: Vec::new(), aliases: Vec::new(), owner: t.sites.owners.len() as u32 });
             let mut i = 0;
             for clause in clauses {
                 for p in &clause.params {
@@ -2919,6 +2920,13 @@ impl<'a> Worker<'a> {
         // The class's `TClass` is published once pushed: the plain inline calls of its statements
         // expand first.
         self.flush_pending_since(pending);
+        if self.erased_values.len() > erased_mark {
+            let roots: Vec<TExprId> = tclass.init.iter().filter_map(|i| match *i {
+                TInit::Field(_, e) | TInit::Stmt(e) => Some(e),
+                TInit::Parent(..) => None,
+            }).chain(tclass.parent_args.iter().flat_map(|&l| self.prog.expr_list(l).to_vec())).collect();
+            self.report_erased_values(erased_mark, &roots);
+        }
         self.push_class_body(tclass);
     }
 
@@ -3172,7 +3180,7 @@ impl<'a> Worker<'a> {
         }
         self.settle_class(c);
         let tparams = self.syms.class(c).tparams.iter().map(|&p| (self.syms.tparam(p).name, p)).collect();
-        outside.frames.push(Frame::Locals { names, tparams, givens, classes: Vec::new(), aliases: Vec::new() });
+        outside.frames.push(Frame::Locals { names, tparams, givens, classes: Vec::new(), aliases: Vec::new(), owner: self.sites.owners.len() as u32 });
         let enum_class = match (kind, owner) {
             (ClassKind::EnumCase, Owner::Class(companion)) => self.syms.class(companion).companion,
             _ => None,
@@ -3402,7 +3410,7 @@ impl<'a> Worker<'a> {
             let tparams: Vec<(crate::intern::Name, TParamId)> =
                 self.syms.class(c).tparams.iter().map(|&p| (self.syms.tparam(p).name, p)).collect();
             let mut env = self.env_for(file, Owner::Class(c));
-            env.frames.push(Frame::Locals { names, tparams, givens, classes: Vec::new(), aliases: Vec::new() });
+            env.frames.push(Frame::Locals { names, tparams, givens, classes: Vec::new(), aliases: Vec::new(), owner: self.sites.owners.len() as u32 });
             self.with_env(env, |t| {
                 let outer_case = t.parent_args_of.replace(c);
                 let r = t.construct_parent(parent, sig, owner_subst, lists, span);

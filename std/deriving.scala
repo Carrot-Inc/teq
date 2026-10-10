@@ -23,7 +23,9 @@ object Mirror:
 
   trait Product extends Mirror:
     def fromProduct(p: scala.Product): MirroredMonoType
-    def fromTuple(t: MirroredElemTypes): MirroredMonoType = fromProduct(t)
+    // scala-library's is an extension of `ProductOf[T]` whose `Elems <: p.MirroredElemTypes`, a type
+    // parameter's bound naming the receiver, the using clause's refinement fixes, which teq's
+    // signatures and inference do not yet: a member here, no element evidence asked.
     def fromProductTyped[P <: scala.Product](x: P): MirroredMonoType = fromProduct(x)
 
   // scalac's `Singleton` fixes `MirroredMonoType = this.type`, since a case object is its own
@@ -36,3 +38,8 @@ object Mirror:
   type Of[T] = Mirror { type MirroredType = T; type MirroredMonoType = T; type MirroredElemTypes <: Tuple }
   type ProductOf[T] = Mirror.Product { type MirroredType = T; type MirroredMonoType = T; type MirroredElemTypes <: Tuple }
   type SumOf[T] = Mirror.Sum { type MirroredType = T; type MirroredMonoType = T; type MirroredElemTypes <: Tuple }
+
+  // scala-library's extension of a product's mirror over the tuple of its elements' types.
+  extension [T](p: ProductOf[T])
+    def fromTuple(t: p.MirroredElemTypes): T =
+      p.fromProduct(t)

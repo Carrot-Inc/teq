@@ -7,10 +7,14 @@ use crate::tir::*;
 use crate::types::SymId;
 
 impl<'a> Worker<'a> {
-    /// `first_expr` is where the expressions of the body start in `Program::exprs`, so that the
-    /// recursive calls are counted without a walk; `moved` the roots of the expansions moved into
-    /// the body's inline calls (`state::expand_pending`), which the count leaves out.
-    pub fn check_tailrec(&mut self, sym: SymId, f: FunId, first_expr: usize, moved: &[TExprId], span: Span) {
+    /// The recursive calls are those of the body as its inline calls expanded it (the check runs
+    /// after them, as scalac's `TailRec` after `Inlining`), counted by a walk of what the body
+    /// reaches, as `TailRec.transformDefDef` walks the transformed tree: an inline argument's
+    /// tree that the expansion copied, and an expansion's root moved into its call's node, are
+    /// counted where they stand, not where they were made. A lambda's body is walked, its calls
+    /// in no tail position; neither a local def's (scalac warns of a call there, which teq does
+    /// not) nor a class's the body makes (`TailRecElimination.transform`'s `DefDef` and `TypeDef`).
+    pub fn check_tailrec(&mut self, sym: SymId, f: FunId, span: Span) {
         let name = self.name_str(self.syms.sym(sym).name);
         if !self.syms.is_effectively_final(sym) {
             let msg = format!(
@@ -24,11 +28,7 @@ impl<'a> Worker<'a> {
         let Some(body) = fun.body else { return };
         let arity = fun.params.len();
         let is_self_call = |e: &TExpr| matches!(e, TExpr::CallStatic(s, _) | TExpr::CallMethod(_, s, _) if *s == sym);
-        let calls = self.prog.exprs[first_expr..]
-            .iter()
-            .enumerate()
-            .filter(|&(i, e)| is_self_call(e) && !moved.iter().any(|m| m.idx() == first_expr + i))
-            .count();
+        let calls = self.prog.descendants(body).without_local_defs().filter(|&e| is_self_call(&self.prog.expr(e))).count();
         if calls == 0 {
             let msg = format!("TailRec optimisation not applicable, method {} contains no recursive calls", name);
             self.error(span, msg);

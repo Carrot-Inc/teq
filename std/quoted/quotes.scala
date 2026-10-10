@@ -95,29 +95,29 @@ trait ToExpr[T]:
 
 object ToExpr:
   import Reflect.*
-  private def lit[T](c: Any): Expr[T] = (Literal(Constant(c)).asExpr).asInstanceOf[Expr[T]]
+  private def lit[T](c: Any, tag: Int): Expr[T] = (Literal(new Constant(c, tag)).asExpr).asInstanceOf[Expr[T]]
   given BooleanToExpr[T <: Boolean]: ToExpr[T] with
-    def apply(x: T)(using Quotes): Expr[T] = lit(x)
+    def apply(x: T)(using Quotes): Expr[T] = lit(x, 3)
   given ByteToExpr[T <: Byte]: ToExpr[T] with
-    def apply(x: T)(using Quotes): Expr[T] = lit(x)
+    def apply(x: T)(using Quotes): Expr[T] = lit(x, 4)
   given ShortToExpr[T <: Short]: ToExpr[T] with
-    def apply(x: T)(using Quotes): Expr[T] = lit(x)
+    def apply(x: T)(using Quotes): Expr[T] = lit(x, 5)
   given IntToExpr[T <: Int]: ToExpr[T] with
-    def apply(x: T)(using Quotes): Expr[T] = lit(x)
+    def apply(x: T)(using Quotes): Expr[T] = lit(x, 7)
   given LongToExpr[T <: Long]: ToExpr[T] with
-    def apply(x: T)(using Quotes): Expr[T] = lit(x)
+    def apply(x: T)(using Quotes): Expr[T] = lit(x, 8)
   given FloatToExpr[T <: Float]: ToExpr[T] with
-    def apply(x: T)(using Quotes): Expr[T] = lit(x)
+    def apply(x: T)(using Quotes): Expr[T] = lit(x, 9)
   given DoubleToExpr[T <: Double]: ToExpr[T] with
-    def apply(x: T)(using Quotes): Expr[T] = lit(x)
+    def apply(x: T)(using Quotes): Expr[T] = lit(x, 10)
   given CharToExpr[T <: Char]: ToExpr[T] with
-    def apply(x: T)(using Quotes): Expr[T] = lit(x)
+    def apply(x: T)(using Quotes): Expr[T] = lit(x, 6)
   given StringToExpr[T <: String]: ToExpr[T] with
-    def apply(x: T)(using Quotes): Expr[T] = lit(x)
+    def apply(x: T)(using Quotes): Expr[T] = lit(x, 11)
   given UnitToExpr: ToExpr[Unit] with
-    def apply(x: Unit)(using Quotes): Expr[Unit] = lit(x)
+    def apply(x: Unit)(using Quotes): Expr[Unit] = lit(x, 2)
   given ClassToExpr[T <: Class[?]]: ToExpr[T] with
-    def apply(x: T)(using Quotes): Expr[T] = lit(x)
+    def apply(x: T)(using Quotes): Expr[T] = lit(x, 13)
   given NoneToExpr: ToExpr[None.type] with
     def apply(x: None.type)(using Quotes): Expr[None.type] = '{ None }
   given NilToExpr: ToExpr[Nil.type] with

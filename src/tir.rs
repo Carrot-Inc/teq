@@ -518,6 +518,10 @@ pub struct InlineDefinition {
     pub opaque: Vec<TExprId>,
     /// The body's arrays spread into a varargs `Program::spread_bits` marks, which its copies keep.
     pub spread: Vec<TExprId>,
+    /// The body's calls of `erasedValue`, scala-library's a plain method: each copy an expansion
+    /// makes is an erased value as the call is (`Erasure.checkNotErased`), which the unit's end
+    /// reports where the trees keep it (`Worker::erased_values`).
+    pub erased: Vec<TExprId>,
     /// The temporaries the typing hoisted an operand into (`Worker::hoist`), which an expansion
     /// does without where the operand or the call's receiver becomes stable.
     pub hoisted: Vec<SymId>,
@@ -1513,15 +1517,22 @@ pub struct Descendants<'a> {
     exprs: Vec<TExprId>,
     pats: Vec<TPatId>,
     tests: Vec<TestId>,
+    local_defs: bool,
 }
 
 impl Program {
     pub fn descendants(&self, root: TExprId) -> Descendants<'_> {
-        Descendants { prog: self, exprs: vec![root], pats: Vec::new(), tests: Vec::new() }
+        Descendants { prog: self, exprs: vec![root], pats: Vec::new(), tests: Vec::new(), local_defs: true }
     }
 }
 
 impl<'a> Descendants<'a> {
+    /// The walk without the bodies of the local defs, which run apart from their block.
+    pub fn without_local_defs(mut self) -> Self {
+        self.local_defs = false;
+        self
+    }
+
     fn push_cases(&mut self, l: ListRef) {
         for case in &self.prog.cases[l.range()] {
             self.pats.push(case.pat);
@@ -1610,7 +1621,8 @@ impl<'a> Iterator for Descendants<'a> {
                             self.pats.push(p);
                             self.exprs.push(e);
                         }
-                        TStmt::Fun(f) => self.exprs.extend(prog.funs[f.idx()].body),
+                        TStmt::Fun(f) if self.local_defs => self.exprs.extend(prog.funs[f.idx()].body),
+                        TStmt::Fun(_) => {}
                     }
                 }
             }

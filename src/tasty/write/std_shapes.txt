@@ -14218,6 +14218,8 @@ scala.Tuple	<init>	:scala.Product
 scala.Tuple	toArray	-:java.lang.Object[]
 scala.Tuple	toIArray	-:java.lang.Object[]
 scala.Tuple	toList	-:scala.collection.immutable.List
+scala.Tuple$	canEqualEmptyTuple	-:scala.CanEqual
+scala.Tuple$	canEqualTuple	[4],scala.CanEqual,scala.CanEqual:scala.CanEqual
 scala.Tuple$	fromArray	[1],java.lang.Object:scala.Product
 scala.Tuple$	fromIArray	[1],java.lang.Object:scala.Product
 scala.Tuple$	fromProduct	scala.Product:scala.Product
@@ -20927,6 +20929,7 @@ scala.deprecatedOverriding$	<init>$default$1	-:java.lang.String
 scala.deprecatedOverriding$	<init>$default$2	-:java.lang.String
 scala.deriving	Mirror	object
 scala.deriving.Mirror	<init>	:scala.deriving.Mirror
+scala.deriving.Mirror$	fromTuple	[1],scala.deriving.Mirror$.Product,scala.Product:java.lang.Object
 scala.deriving.Mirror$.Product	<init>	:scala.deriving.Mirror$.Product
 scala.deriving.Mirror$.Product	fromProduct	scala.Product:java.lang.Object
 scala.deriving.Mirror$.Singleton	<init>	:scala.deriving.Mirror$.Singleton
