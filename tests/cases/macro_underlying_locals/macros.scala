@@ -5,6 +5,8 @@ import scala.quoted.*
 object U:
   inline def shown(inline x: Any): String = ${ shownImpl('x) }
   inline def proxied(x: Int): String = ${ shownImpl('x) }
+  // A proxy inside the argument of another inline method's proxy: replaced at its depth.
+  inline def nestedExpr(x: Int): String = proxied(x + 1)
   def shownImpl(x: Expr[Any])(using Quotes): Expr[String] =
     import quotes.reflect.*
     Expr(x.asTerm.underlyingArgument.show)

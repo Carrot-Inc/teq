@@ -2970,16 +2970,19 @@ fn install_trees(it: &mut Table) {
     q!(it, "Reflect.TermMethods.Term.underlyingArgument", |it, a| {
         let t = it.tree_arg(a, 0)?;
         let mut e = it.materialize(t)?;
-        // dotty's `MapToUnderlying` restricted to `InlineProxy | Synthetic` bindings: an inline
-        // method's parameter proxy gives the argument it is bound to; a user's local stays a
-        // reference, whose right side a splice would evaluate again.
+        // dotty's `MapToUnderlying.transform` with `skipLocal = isOneOf(InlineProxy | Synthetic)`:
+        // every inline method's parameter proxy in the tree, at any depth, gives the argument it
+        // is bound to (`x + 1` of a proxy `x` is `a.+(2).+(1)`); a user's local stays a reference,
+        // whose right side a splice would evaluate again.
         if let Some(ctx) = it.macro_ctx.clone() {
-            for _ in 0..64 {
-                let TExpr::Local(s) = it.prog().expr(e) else { break };
-                match ctx.params.get(&s).or_else(|| ctx.bindings.get(&s)).copied() {
-                    Some(arg) if arg != e => e = arg,
-                    _ => break,
-                }
+            let mut proxies: FxMap<SymId, TExprId> = FxMap::default();
+            for (&s, &arg) in ctx.bindings.iter().chain(ctx.params.iter()) {
+                proxies.insert(s, arg);
+            }
+            if !proxies.is_empty() {
+                let outer = std::mem::replace(&mut it.typer.inline.copy_locals, proxies);
+                e = it.typer.copy_expr(e);
+                it.typer.inline.copy_locals = outer;
             }
         }
         Ok(Value::Tree(TreeRef::Expr(e)))

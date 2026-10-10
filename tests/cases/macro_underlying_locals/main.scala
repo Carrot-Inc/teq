@@ -8,4 +8,5 @@ object Effects:
   println(U.shown(a))
   println(U.twice(a))
   println(U.proxied(a + 1))
+  println(U.nestedExpr(a + 2))
   println(U.shown(Effects.effect(2)))
