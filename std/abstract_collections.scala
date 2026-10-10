@@ -47,6 +47,8 @@ object Set:
 trait BufferedIterator[+A] extends Iterator[A]:
   def head: A
   def headOption: Option[A] = if hasNext then Some(head) else None
+  // scala-library's: an iterator already buffered is its own buffered iterator.
+  override def buffered: this.type = this
 
 // scala-library's value classes of `Predef`'s wrappers, whose operations teq's arrays and strings
 // have without one: what a library's type test of a wrapper names (scalactic's

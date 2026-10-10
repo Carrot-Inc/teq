@@ -18,6 +18,8 @@ case class V(n: Int) extends Ordered[V]:
   println(s"${List(1).hasDefiniteSize} ${Iterator(1).hasDefiniteSize} ${Iterator().hasDefiniteSize}")
   val it = List("a", "b", "c").iterator.buffered
   println(it.head + it.next() + it.head + it.headOption)
+  val again: scala.collection.BufferedIterator[String] = it.buffered
+  println(s"${again eq it} ${again.next()} ${it.hasNext}")
   println("a.b.c".replaceAllLiterally(".", "-"))
   println(List(V(2), V(1)).sorted(using Ordering.ordered[V]))
   println(scala.compat.Platform.currentTime > 0)
