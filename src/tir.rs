@@ -683,6 +683,10 @@ pub enum HeldForm {
     /// `summonFrom` of a case the definition does not type (a pattern other than `x: T`, `_:
     /// T` and `_`, a guard), or in a quote.
     SummonFrom,
+    /// An inline parameter applied in a quote (`'{ (c: Ctx) ?=> lambda(using c) }`), whose
+    /// argument's closure the expansion reduces there before the macro reads the quote
+    /// (`InlineTyper.typedApply`'s `BetaReduce`), where a stored quote names the parameter's proxy.
+    QuotedApplication,
 }
 
 impl HeldForm {
@@ -691,6 +695,7 @@ impl HeldForm {
             HeldForm::LocalClass => "local class",
             HeldForm::SamLambda => "SAM lambda",
             HeldForm::SummonFrom => "summonFrom",
+            HeldForm::QuotedApplication => "an inline parameter applied in a quote",
         }
     }
 }

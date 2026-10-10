@@ -268,6 +268,35 @@ impl<'a> Worker<'a> {
         }
     }
 
+    /// Under the definition check, the application of `f` in a quote, where `f` reads an inline
+    /// parameter of the method checked: held for the retype path, whose typing of the quote at the
+    /// call has the argument's closure in place and reduces its application (`beta_reduce`), as
+    /// dotty's `InlineTyper.typedApply` does before the macro reads the quote.
+    pub(super) fn note_quoted_application(&mut self, f: TExprId) {
+        if self.quote.level == 0 || !self.checks_inline_definition() {
+            return;
+        }
+        let TExpr::Local(p) = self.prog.expr(f) else { return };
+        let Some(sym) = self.inline.notes.last().map(|n| n.sym) else { return };
+        // Whether `p` is an `inline` parameter, as the expansion reads it (`InlineBody::inline_params`).
+        let (file, def) = {
+            let s = self.syms.sym(sym);
+            (s.file, s.def)
+        };
+        let Some(def) = def else { return };
+        let sig = self.sig_arc(sym);
+        let inline_param = match &self.ast(file).def(def).kind {
+            DefKind::Fun(fun) => {
+                let flags = fun.clauses.iter().flat_map(|c| c.params.iter().map(|q| q.mods & crate::ast::mods::INLINE != 0));
+                sig.clauses.iter().flat_map(|c| c.params.iter().map(|q| q.sym)).zip(flags).any(|(q, inline)| q == p && inline)
+            }
+            _ => false,
+        };
+        if inline_param {
+            self.note_held(HeldForm::QuotedApplication);
+        }
+    }
+
     /// A type test of `t`, which an expansion takes from its type arguments when `t` names a type
     /// parameter of the method.
     pub(super) fn note_leaf_test(&mut self, test: TestId, t: TypeId) {
