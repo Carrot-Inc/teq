@@ -5363,7 +5363,7 @@ pos/t4502.scala	accepts
 pos/t4524.scala	accepts	
 pos/t4545.scala	accepts	
 pos/t4547.scala	accepts	
-pos/t4579.scala	rejects	error overriding method next in class Iterator of type (): A: method next of type String has incompatible type
+pos/t4579.scala	rejects	object creation impossible
 pos/t4593.scala	accepts	
 pos/t460.scala	accepts	
 pos/t4603	oos	java
@@ -5371,7 +5371,7 @@ pos/t464.scala	accepts
 pos/t4651.scala	accepts	
 pos/t4692.scala	accepts	
 pos/t4716.scala	accepts	
-pos/t4717.scala	rejects	error overriding method next in class Iterator of type (): A: method next of type B has incompatible type
+pos/t4717.scala	accepts	
 pos/t4737	oos	java
 pos/t4744	oos	java
 pos/t4757	accepts	
