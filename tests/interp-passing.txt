@@ -597,6 +597,7 @@ inline_guard_constant_type
 inline_hk_alias_summon
 inline_if_literal_type
 inline_inferred_result_dependent
+inline_local_class_secondary_ctor
 inline_local_forward_unused_import
 inline_match
 inline_match_erased_projection
@@ -609,6 +610,7 @@ inline_nested_anon_capture
 inline_ops
 inline_outline
 inline_parameter_pure_block
+inline_parameter_purity
 inline_recursive_proxies
 inline_reduce_local_extractor
 inline_reduce_local_value
@@ -808,6 +810,7 @@ macro_quote_deferred_inline_types
 macro_quote_inline_deferred
 macro_quote_pattern_result
 macro_quote_refined
+macro_quoted_application_reduce
 macro_quoted_inline_application
 macro_quoted_parameter_application
 macro_quotes_qualifier

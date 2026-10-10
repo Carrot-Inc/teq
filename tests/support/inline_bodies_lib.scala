@@ -10,6 +10,7 @@ import scala.quoted.*
 
 object Bodies:
   inline def value(x: Int): x.type = constValue[x.type]
+  inline def both(x: Int): String = constValue[x.type].toString + "/" + x.toString
   inline def code(x: Int): String = codeOf(x)
   inline def codeInline(inline x: Int): String = codeOf(x)
   inline def code2(inline x: Int): String = codeInline(x + 1)
@@ -86,3 +87,29 @@ trait Tagged:
     d.join(x)
 
 object Tag extends Tagged
+
+// A quote's application of an inline parameter reduced as a whole (`BetaReduce`): a curried one, an
+// argument of a constant type, an effect bound once before the closure's body.
+object Reduce:
+  inline def curried(inline f: Int => Int => Int): String = ${ showImpl('{ f(1)(2) }) }
+  inline def folded(inline f: Int => Int): String = ${ showImpl('{ f(1 + 2) }) }
+  inline def runCurried(inline f: Int => Int => Int): Int = ${ passImpl('{ f(1)(2) }) }
+  inline def runEffect(inline f: Int => Int): Int = ${ passImpl('{ f({ println("a"); 1 }) }) }
+  def showImpl(e: Expr[Int])(using Quotes): Expr[String] =
+    import quotes.reflect.*
+    Expr(e.asTerm.show)
+  def passImpl(e: Expr[Int])(using Quotes): Expr[Int] = e
+
+// A local class with a secondary constructor that reads the method's parameter.
+object Ctors:
+  inline def make(n: Int): Int =
+    class C(val v: Int):
+      def this() = this(n)
+      def get: Int = v
+    new C().get
+  inline def make2(n: Int): String =
+    class D(val v: Int, val w: String):
+      def this(s: String) = this(n, s)
+      def this() = this("d")
+      def get: String = w + v
+    new D().get + new D("e").get + new D(1, "f").get

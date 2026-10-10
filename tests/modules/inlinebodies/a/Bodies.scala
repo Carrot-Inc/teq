@@ -8,6 +8,7 @@ import scala.compiletime.{codeOf, constValue, erasedValue}
 
 object Bodies:
   inline def value(x: Int): x.type = constValue[x.type]
+  inline def both(x: Int): String = constValue[x.type].toString + "/" + x.toString
   inline def code(x: Int): String = codeOf(x)
   inline def make(x: Int): () => Int =
     class C { def value: Int = x }
@@ -30,3 +31,17 @@ trait Tagged:
     new D().join(x)
 
 object Tag extends Tagged
+
+// A local class with secondary constructors, which the copy's constructions go through.
+object Ctors:
+  inline def make(n: Int): Int =
+    class C(val v: Int):
+      def this() = this(n)
+      def get: Int = v
+    new C().get
+  inline def make2(n: Int): String =
+    class D(val v: Int, val w: String):
+      def this(s: String) = this(n, s)
+      def this() = this("d")
+      def get: String = w + v
+    new D().get + new D("e").get + new D(1, "f").get

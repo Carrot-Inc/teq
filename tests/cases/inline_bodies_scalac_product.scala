@@ -6,9 +6,11 @@
 // shows the expansion's typed argument, a constant folded, a by-value argument evaluated once into
 // its proxy; each expansion's local class is a class of its own; an `erasedValue` an inline match
 // tests is consumed; a generic class's match-type alias is seen from the receiver; a quote applying an
-// inline parameter sees the argument's closure reduced (monocle's `Focus`). scalac prints the lines
+// inline parameter sees the argument's closure reduced (monocle's `Focus`), a curried one at each list, an
+// effect bound once (`BetaReduce`); a lazy val's path binds its singleton, its initialiser run once; a local
+// class constructs through its copied secondary constructors. scalac prints the lines
 // of the .expected file.
-import inlinebodies.{Bodies, Counter, Focus, K0, Quoted, Tag}
+import inlinebodies.{Bodies, Counter, Ctors, Focus, K0, Quoted, Reduce, Tag}
 var effects = 0
 case class P(a: Int, b: String)
 def effect(n: Int): Int = { effects += 1; n }
@@ -36,3 +38,13 @@ def effect(n: Int): Int = { effects += 1; n }
   println(Quoted.shape(x => x + 1))
   println(Tag.derived(3))
   println(Tag.derived(300))
+  println(Bodies.value({ val f: Int => Int = x => x + 1; 3 }))
+  lazy val l: 3 = { println("init"); 3 }
+  println(Bodies.both(l))
+  println(Bodies.both(l))
+  println(Reduce.curried(x => y => x + y))
+  println(Reduce.folded(x => x + 3))
+  println(Reduce.runCurried(x => y => x + y))
+  println(Reduce.runEffect(x => { println("b"); x + x }))
+  println(Ctors.make(7))
+  println(Ctors.make2(4))

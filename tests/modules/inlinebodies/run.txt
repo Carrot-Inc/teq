@@ -6,3 +6,9 @@ true,false
 5
 p3smd
 bigp300smd
+3
+init
+3/3
+3/3
+7
+d4e4f1

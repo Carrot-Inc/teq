@@ -1501,3 +1501,6 @@ zip_entry_times
 zip_time_precision
 given_import_bounds
 given_import_bound_situated
+inline_local_class_secondary_ctor
+inline_parameter_purity
+macro_quoted_application_reduce
