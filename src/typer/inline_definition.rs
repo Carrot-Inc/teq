@@ -1140,6 +1140,11 @@ impl<'a> Worker<'a> {
         self.instantiate_tree_mapped(roots, &d.args, &subst, &inst.renames, &d.paths, stored_copy, map, &mut d.members, &mut d.copied_classes);
         d.copied += (self.prog.exprs.len() - mark) as u64;
         if !d.copied_classes.is_empty() {
+            // A whole copy renamed every binder before it copied anything (`begin_demand_in`): each
+            // is in the terms of the classes copied now, as a demanded part's own binders are.
+            if !d.on_demand {
+                fresh = def.binders.iter().filter_map(|b| inst.renames.get(b).copied()).collect();
+            }
             self.binders_in_class_copies(&fresh, &d.copied_classes);
         }
         let specialised = !Arc::ptr_eq(&subst, &d.subst);
