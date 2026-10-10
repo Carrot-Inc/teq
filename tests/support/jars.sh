@@ -11,7 +11,8 @@
 # zio-interop-cats, zio-interop-tracer, cats-effect-kernel, cats-effect-std, cats-effect, cats-mtl, fs2-core,
 # macrotask-executor), scalajs-react 4.0.0's thirteen jars (sjr-<artifact>) with microlibs'
 # compile-time and types 4.2.1 from the coursier cache; scalatest 3.2.20's core, matchers-core,
-# shouldmatchers, mustmatchers and compatible jars with scalactic (scalatest-<artifact>, scalactic); junit 4.13.2; the JVM `_3` artifacts of the ZIO runtime's
+# shouldmatchers, mustmatchers and compatible jars with scalactic (scalatest-<artifact>, scalactic), its Scala.js core
+# with scalactic and scala-xml 2.1.0 (scalatest-core-sjs, scalactic-sjs, scala-xml-sjs); junit 4.13.2; the JVM `_3` artifacts of the ZIO runtime's
 # set (zio-jvm, zio-stacktracer-jvm, zio-internal-macros-jvm, izumi-reflect-jvm,
 # izumi-reflect-boopickle-jvm, scala-collection-compat-jvm, zio-test-jvm), chimney-jvm and chimney-macro-commons-jvm, tapir-core-jvm (1.13.29) with magnolia123-jvm,
 # sttp-model-core-jvm, sttp-shared-core-jvm and sttp-shared-ws-jvm; abi-callbacks-lib,
@@ -628,6 +629,9 @@ jar_of() {
     shapeless3-deriving) echo "$M2/org/typelevel/shapeless3-deriving_sjs1_3/3.5.0/shapeless3-deriving_sjs1_3-3.5.0.jar" ;;
     munit) echo "$M2/org/scalameta/munit_sjs1_3/1.3.4/munit_sjs1_3-1.3.4.jar" ;;
     munit-diff) echo "$M2/org/scalameta/munit-diff_sjs1_3/1.3.4/munit-diff_sjs1_3-1.3.4.jar" ;;
+    scalatest-core-sjs) echo "$M2/org/scalatest/scalatest-core_sjs1_3/3.2.20/scalatest-core_sjs1_3-3.2.20.jar" ;;
+    scalactic-sjs) echo "$M2/org/scalactic/scalactic_sjs1_3/3.2.20/scalactic_sjs1_3-3.2.20.jar" ;;
+    scala-xml-sjs) echo "$M2/org/scala-lang/modules/scala-xml_sjs1_3/2.1.0/scala-xml_sjs1_3-2.1.0.jar" ;;
     monocle-core) echo "$M2/dev/optics/monocle-core_sjs1_3/3.3.0/monocle-core_sjs1_3-3.3.0.jar" ;;
     monocle-macro) echo "$M2/dev/optics/monocle-macro_sjs1_3/3.3.0/monocle-macro_sjs1_3-3.3.0.jar" ;;
     refined) echo "$M2/eu/timepit/refined_sjs1_3/0.11.4/refined_sjs1_3-0.11.4.jar" ;;
