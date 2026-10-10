@@ -28,6 +28,7 @@ java.io.ByteArrayInputStream	markSupported	:scala.Boolean
 java.io.ByteArrayInputStream	pos	-:scala.Int
 java.io.ByteArrayInputStream	read	:scala.Int
 java.io.ByteArrayInputStream	read	scala.Byte[],scala.Int,scala.Int:scala.Int
+java.io.ByteArrayInputStream	read	scala.Byte[]:scala.Int
 java.io.ByteArrayInputStream	readAllBytes	:scala.Byte[]
 java.io.ByteArrayInputStream	readNBytes	scala.Byte[],scala.Int,scala.Int:scala.Int
 java.io.ByteArrayInputStream	readNBytes	scala.Int:scala.Byte[]
@@ -44,6 +45,7 @@ java.io.ByteArrayOutputStream	toByteArray	:scala.Byte[]
 java.io.ByteArrayOutputStream	toString	:java.lang.String
 java.io.ByteArrayOutputStream	toString	java.lang.String:java.lang.String
 java.io.ByteArrayOutputStream	write	scala.Byte[],scala.Int,scala.Int:scala.Unit
+java.io.ByteArrayOutputStream	write	scala.Byte[]:scala.Unit
 java.io.ByteArrayOutputStream	write	scala.Int:scala.Unit
 java.io.ByteArrayOutputStream	writeBytes	scala.Byte[]:scala.Unit
 java.io.ByteArrayOutputStream	writeTo	java.io.OutputStream:scala.Unit
@@ -84,6 +86,7 @@ java.io.DataOutputStream	flush	:scala.Unit
 java.io.DataOutputStream	out	-:java.io.OutputStream
 java.io.DataOutputStream	size	:scala.Int
 java.io.DataOutputStream	write	scala.Byte[],scala.Int,scala.Int:scala.Unit
+java.io.DataOutputStream	write	scala.Byte[]:scala.Unit
 java.io.DataOutputStream	write	scala.Int:scala.Unit
 java.io.DataOutputStream	writeBoolean	scala.Boolean:scala.Unit
 java.io.DataOutputStream	writeByte	scala.Int:scala.Unit
@@ -192,6 +195,7 @@ java.io.FilterInputStream	mark	scala.Int:scala.Unit
 java.io.FilterInputStream	markSupported	:scala.Boolean
 java.io.FilterInputStream	read	:scala.Int
 java.io.FilterInputStream	read	scala.Byte[],scala.Int,scala.Int:scala.Int
+java.io.FilterInputStream	read	scala.Byte[]:scala.Int
 java.io.FilterInputStream	readAllBytes	:scala.Byte[]
 java.io.FilterInputStream	readNBytes	scala.Byte[],scala.Int,scala.Int:scala.Int
 java.io.FilterInputStream	readNBytes	scala.Int:scala.Byte[]
@@ -202,6 +206,8 @@ java.io.FilterOutputStream	<init>	java.io.OutputStream:java.io.FilterOutputStrea
 java.io.FilterOutputStream	close	:scala.Unit
 java.io.FilterOutputStream	flush	:scala.Unit
 java.io.FilterOutputStream	out	-:java.io.OutputStream
+java.io.FilterOutputStream	write	scala.Byte[],scala.Int,scala.Int:scala.Unit
+java.io.FilterOutputStream	write	scala.Byte[]:scala.Unit
 java.io.FilterOutputStream	write	scala.Int:scala.Unit
 java.io.Flushable	<init>	:java.io.Flushable
 java.io.Flushable	flush	:scala.Unit
@@ -289,6 +295,7 @@ java.io.PrintWriter	println	:scala.Unit
 java.io.PrintWriter	println	java.lang.Object:scala.Unit
 java.io.PrintWriter	write	java.lang.String:scala.Unit
 java.io.PrintWriter	write	scala.Char[],scala.Int,scala.Int:scala.Unit
+java.io.PrintWriter	write	scala.Int:scala.Unit
 java.io.PushbackInputStream	<init>	java.io.InputStream,scala.Int:java.io.PushbackInputStream
 java.io.PushbackInputStream	<init>	java.io.InputStream:java.io.PushbackInputStream
 java.io.PushbackInputStream	available	:scala.Int
@@ -300,6 +307,7 @@ java.io.PushbackInputStream	markSupported	:scala.Boolean
 java.io.PushbackInputStream	pos	-:scala.Int
 java.io.PushbackInputStream	read	:scala.Int
 java.io.PushbackInputStream	read	scala.Byte[],scala.Int,scala.Int:scala.Int
+java.io.PushbackInputStream	read	scala.Byte[]:scala.Int
 java.io.PushbackInputStream	readAllBytes	:scala.Byte[]
 java.io.PushbackInputStream	readNBytes	scala.Byte[],scala.Int,scala.Int:scala.Int
 java.io.PushbackInputStream	readNBytes	scala.Int:scala.Byte[]
@@ -321,6 +329,7 @@ java.io.StringWriter	getBuffer	:java.lang.StringBuffer
 java.io.StringWriter	toString	:java.lang.String
 java.io.StringWriter	write	java.lang.String:scala.Unit
 java.io.StringWriter	write	scala.Char[],scala.Int,scala.Int:scala.Unit
+java.io.StringWriter	write	scala.Int:scala.Unit
 java.io.UTFDataFormatException	<init>	:java.io.UTFDataFormatException
 java.io.UTFDataFormatException	<init>	java.lang.String:java.io.UTFDataFormatException
 java.io.UTFDataFormatException	addSuppressed	java.lang.Throwable:scala.Unit
@@ -1025,6 +1034,8 @@ java.lang.ProcessBuilder$.NullInputStream	close	:scala.Unit
 java.lang.ProcessBuilder$.NullInputStream	mark	scala.Int:scala.Unit
 java.lang.ProcessBuilder$.NullInputStream	markSupported	:scala.Boolean
 java.lang.ProcessBuilder$.NullInputStream	read	:scala.Int
+java.lang.ProcessBuilder$.NullInputStream	read	scala.Byte[],scala.Int,scala.Int:scala.Int
+java.lang.ProcessBuilder$.NullInputStream	read	scala.Byte[]:scala.Int
 java.lang.ProcessBuilder$.NullInputStream	readAllBytes	:scala.Byte[]
 java.lang.ProcessBuilder$.NullInputStream	readNBytes	scala.Byte[],scala.Int,scala.Int:scala.Int
 java.lang.ProcessBuilder$.NullInputStream	readNBytes	scala.Int:scala.Byte[]
@@ -1034,6 +1045,8 @@ java.lang.ProcessBuilder$.NullInputStream	transferTo	java.io.OutputStream:scala.
 java.lang.ProcessBuilder$.NullOutputStream	<init>	:java.lang.ProcessBuilder$.NullOutputStream
 java.lang.ProcessBuilder$.NullOutputStream	close	:scala.Unit
 java.lang.ProcessBuilder$.NullOutputStream	flush	:scala.Unit
+java.lang.ProcessBuilder$.NullOutputStream	write	scala.Byte[],scala.Int,scala.Int:scala.Unit
+java.lang.ProcessBuilder$.NullOutputStream	write	scala.Byte[]:scala.Unit
 java.lang.ProcessBuilder$.NullOutputStream	write	scala.Int:scala.Unit
 java.lang.ProcessBuilder$.Redirect	<init>	:java.lang.ProcessBuilder$.Redirect
 java.lang.ProcessBuilder$.Redirect	equals	java.lang.Object:scala.Boolean
@@ -2312,8 +2325,12 @@ java.text.DecimalFormat	<init>	:java.text.DecimalFormat
 java.text.DecimalFormat	<init>	java.lang.String,java.text.DecimalFormatSymbols:java.text.DecimalFormat
 java.text.DecimalFormat	<init>	java.lang.String:java.text.DecimalFormat
 java.text.DecimalFormat	applyPattern	java.lang.String:scala.Unit
+java.text.DecimalFormat	format	java.lang.Object,java.lang.StringBuffer,java.text.FieldPosition:java.lang.StringBuffer
+java.text.DecimalFormat	format	java.lang.Object:java.lang.String
 java.text.DecimalFormat	format	scala.Double,java.lang.StringBuffer,java.text.FieldPosition:java.lang.StringBuffer
+java.text.DecimalFormat	format	scala.Double:java.lang.String
 java.text.DecimalFormat	format	scala.Long,java.lang.StringBuffer,java.text.FieldPosition:java.lang.StringBuffer
+java.text.DecimalFormat	format	scala.Long:java.lang.String
 java.text.DecimalFormat	getDecimalFormatSymbols	:java.text.DecimalFormatSymbols
 java.text.DecimalFormat	getGroupingSize	:scala.Int
 java.text.DecimalFormat	getMaximumFractionDigits	:scala.Int
@@ -2365,6 +2382,7 @@ java.text.Format	format	java.lang.Object,java.lang.StringBuffer,java.text.FieldP
 java.text.Format	format	java.lang.Object:java.lang.String
 java.text.NumberFormat	<init>	:java.text.NumberFormat
 java.text.NumberFormat	format	java.lang.Object,java.lang.StringBuffer,java.text.FieldPosition:java.lang.StringBuffer
+java.text.NumberFormat	format	java.lang.Object:java.lang.String
 java.text.NumberFormat	format	scala.Double,java.lang.StringBuffer,java.text.FieldPosition:java.lang.StringBuffer
 java.text.NumberFormat	format	scala.Double:java.lang.String
 java.text.NumberFormat	format	scala.Long,java.lang.StringBuffer,java.text.FieldPosition:java.lang.StringBuffer
@@ -2671,6 +2689,7 @@ java.util.AbstractQueue	offer	java.lang.Object:scala.Boolean
 java.util.AbstractQueue	peek	:java.lang.Object
 java.util.AbstractQueue	poll	:java.lang.Object
 java.util.AbstractQueue	remove	:java.lang.Object
+java.util.AbstractQueue	remove	java.lang.Object:scala.Boolean
 java.util.AbstractQueue	removeAll	java.util.Collection:scala.Boolean
 java.util.AbstractQueue	removeIf	java.util.function.Predicate:scala.Boolean
 java.util.AbstractQueue	retainAll	java.util.Collection:scala.Boolean
@@ -2950,6 +2969,7 @@ java.util.HashMap	merge	java.lang.Object,java.lang.Object,java.util.function.BiF
 java.util.HashMap	put	java.lang.Object,java.lang.Object:java.lang.Object
 java.util.HashMap	putAll	java.util.Map:scala.Unit
 java.util.HashMap	putIfAbsent	java.lang.Object,java.lang.Object:java.lang.Object
+java.util.HashMap	remove	java.lang.Object,java.lang.Object:scala.Boolean
 java.util.HashMap	remove	java.lang.Object:java.lang.Object
 java.util.HashMap	replace	java.lang.Object,java.lang.Object,java.lang.Object:scala.Boolean
 java.util.HashMap	replace	java.lang.Object,java.lang.Object:java.lang.Object
@@ -3011,6 +3031,7 @@ java.util.IdentityHashMap	merge	java.lang.Object,java.lang.Object,java.util.func
 java.util.IdentityHashMap	put	java.lang.Object,java.lang.Object:java.lang.Object
 java.util.IdentityHashMap	putAll	java.util.Map:scala.Unit
 java.util.IdentityHashMap	putIfAbsent	java.lang.Object,java.lang.Object:java.lang.Object
+java.util.IdentityHashMap	remove	java.lang.Object,java.lang.Object:scala.Boolean
 java.util.IdentityHashMap	remove	java.lang.Object:java.lang.Object
 java.util.IdentityHashMap	replace	java.lang.Object,java.lang.Object,java.lang.Object:scala.Boolean
 java.util.IdentityHashMap	replace	java.lang.Object,java.lang.Object:java.lang.Object
@@ -3035,6 +3056,7 @@ java.util.List	hashCode	:scala.Int
 java.util.List	indexOf	java.lang.Object:scala.Int
 java.util.List	isEmpty	:scala.Boolean
 java.util.List	iterator	:java.util.Iterator
+java.util.List	remove	java.lang.Object:scala.Boolean
 java.util.List	remove	scala.Int:java.lang.Object
 java.util.List	removeAll	java.util.Collection:scala.Boolean
 java.util.List	removeIf	java.util.function.Predicate:scala.Boolean
@@ -3314,6 +3336,7 @@ java.util.Queue	offer	java.lang.Object:scala.Boolean
 java.util.Queue	peek	:java.lang.Object
 java.util.Queue	poll	:java.lang.Object
 java.util.Queue	remove	:java.lang.Object
+java.util.Queue	remove	java.lang.Object:scala.Boolean
 java.util.Queue	removeAll	java.util.Collection:scala.Boolean
 java.util.Queue	removeIf	java.util.function.Predicate:scala.Boolean
 java.util.Queue	retainAll	java.util.Collection:scala.Boolean
@@ -3479,10 +3502,12 @@ java.util.Spliterator$.OfPrimitive	<init>	[3]:java.util.Spliterator$.OfPrimitive
 java.util.Spliterator$.OfPrimitive	characteristics	:scala.Int
 java.util.Spliterator$.OfPrimitive	estimateSize	:scala.Long
 java.util.Spliterator$.OfPrimitive	forEachRemaining	java.lang.Object:scala.Unit
+java.util.Spliterator$.OfPrimitive	forEachRemaining	java.util.function.Consumer:scala.Unit
 java.util.Spliterator$.OfPrimitive	getComparator	:java.util.Comparator
 java.util.Spliterator$.OfPrimitive	getExactSizeIfKnown	:scala.Long
 java.util.Spliterator$.OfPrimitive	hasCharacteristics	scala.Int:scala.Boolean
 java.util.Spliterator$.OfPrimitive	tryAdvance	java.lang.Object:scala.Boolean
+java.util.Spliterator$.OfPrimitive	tryAdvance	java.util.function.Consumer:scala.Boolean
 java.util.Spliterator$.OfPrimitive	trySplit	:java.util.Spliterator$.OfPrimitive
 java.util.Spliterators$	emptySpliterator	[1]:java.util.Spliterator
 java.util.Spliterators$	iterator	[1],java.util.Spliterator:java.util.Iterator
@@ -3550,6 +3575,7 @@ java.util.TreeMap	pollLastEntry	:java.util.Map$.Entry
 java.util.TreeMap	put	java.lang.Object,java.lang.Object:java.lang.Object
 java.util.TreeMap	putAll	java.util.Map:scala.Unit
 java.util.TreeMap	putIfAbsent	java.lang.Object,java.lang.Object:java.lang.Object
+java.util.TreeMap	remove	java.lang.Object,java.lang.Object:scala.Boolean
 java.util.TreeMap	remove	java.lang.Object:java.lang.Object
 java.util.TreeMap	replace	java.lang.Object,java.lang.Object,java.lang.Object:scala.Boolean
 java.util.TreeMap	replace	java.lang.Object,java.lang.Object:java.lang.Object
@@ -3649,6 +3675,7 @@ java.util.concurrent.ConcurrentHashMap	merge	java.lang.Object,java.lang.Object,j
 java.util.concurrent.ConcurrentHashMap	put	java.lang.Object,java.lang.Object:java.lang.Object
 java.util.concurrent.ConcurrentHashMap	putAll	java.util.Map:scala.Unit
 java.util.concurrent.ConcurrentHashMap	putIfAbsent	java.lang.Object,java.lang.Object:java.lang.Object
+java.util.concurrent.ConcurrentHashMap	remove	java.lang.Object,java.lang.Object:scala.Boolean
 java.util.concurrent.ConcurrentHashMap	remove	java.lang.Object:java.lang.Object
 java.util.concurrent.ConcurrentHashMap	replace	java.lang.Object,java.lang.Object,java.lang.Object:scala.Boolean
 java.util.concurrent.ConcurrentHashMap	replace	java.lang.Object,java.lang.Object:java.lang.Object
@@ -3669,6 +3696,7 @@ java.util.concurrent.ConcurrentLinkedQueue	iterator	:java.util.Iterator
 java.util.concurrent.ConcurrentLinkedQueue	offer	java.lang.Object:scala.Boolean
 java.util.concurrent.ConcurrentLinkedQueue	peek	:java.lang.Object
 java.util.concurrent.ConcurrentLinkedQueue	poll	:java.lang.Object
+java.util.concurrent.ConcurrentLinkedQueue	remove	:java.lang.Object
 java.util.concurrent.ConcurrentLinkedQueue	remove	java.lang.Object:scala.Boolean
 java.util.concurrent.ConcurrentLinkedQueue	removeAll	java.util.Collection:scala.Boolean
 java.util.concurrent.ConcurrentLinkedQueue	removeIf	java.util.function.Predicate:scala.Boolean
@@ -4250,6 +4278,7 @@ java.util.zip.CRC32	<init>	:java.util.zip.CRC32
 java.util.zip.CRC32	getValue	:scala.Long
 java.util.zip.CRC32	reset	:scala.Unit
 java.util.zip.CRC32	update	scala.Byte[],scala.Int,scala.Int:scala.Unit
+java.util.zip.CRC32	update	scala.Byte[]:scala.Unit
 java.util.zip.CRC32	update	scala.Int:scala.Unit
 java.util.zip.Checksum	<init>	:java.util.zip.Checksum
 java.util.zip.Checksum	getValue	:scala.Long
@@ -4304,6 +4333,7 @@ java.util.zip.DeflaterOutputStream	finish	:scala.Unit
 java.util.zip.DeflaterOutputStream	flush	:scala.Unit
 java.util.zip.DeflaterOutputStream	out	-:java.io.OutputStream
 java.util.zip.DeflaterOutputStream	write	scala.Byte[],scala.Int,scala.Int:scala.Unit
+java.util.zip.DeflaterOutputStream	write	scala.Byte[]:scala.Unit
 java.util.zip.DeflaterOutputStream	write	scala.Int:scala.Unit
 java.util.zip.GZIPInputStream	<init>	java.io.InputStream,scala.Int:java.util.zip.GZIPInputStream
 java.util.zip.GZIPInputStream	<init>	java.io.InputStream:java.util.zip.GZIPInputStream
@@ -4318,7 +4348,9 @@ java.util.zip.GZIPInputStream	inf	-:java.util.zip.Inflater
 java.util.zip.GZIPInputStream	len	-:scala.Int
 java.util.zip.GZIPInputStream	mark	scala.Int:scala.Unit
 java.util.zip.GZIPInputStream	markSupported	:scala.Boolean
+java.util.zip.GZIPInputStream	read	:scala.Int
 java.util.zip.GZIPInputStream	read	scala.Byte[],scala.Int,scala.Int:scala.Int
+java.util.zip.GZIPInputStream	read	scala.Byte[]:scala.Int
 java.util.zip.GZIPInputStream	readAllBytes	:scala.Byte[]
 java.util.zip.GZIPInputStream	readNBytes	scala.Byte[],scala.Int,scala.Int:scala.Int
 java.util.zip.GZIPInputStream	readNBytes	scala.Int:scala.Byte[]
@@ -4333,6 +4365,8 @@ java.util.zip.GZIPOutputStream	finish	:scala.Unit
 java.util.zip.GZIPOutputStream	flush	:scala.Unit
 java.util.zip.GZIPOutputStream	out	-:java.io.OutputStream
 java.util.zip.GZIPOutputStream	write	scala.Byte[],scala.Int,scala.Int:scala.Unit
+java.util.zip.GZIPOutputStream	write	scala.Byte[]:scala.Unit
+java.util.zip.GZIPOutputStream	write	scala.Int:scala.Unit
 java.util.zip.Inflater	<init>	:java.util.zip.Inflater
 java.util.zip.Inflater	<init>	scala.Boolean:java.util.zip.Inflater
 java.util.zip.Inflater	end	:scala.Unit
@@ -4364,6 +4398,7 @@ java.util.zip.InflaterInputStream	mark	scala.Int:scala.Unit
 java.util.zip.InflaterInputStream	markSupported	:scala.Boolean
 java.util.zip.InflaterInputStream	read	:scala.Int
 java.util.zip.InflaterInputStream	read	scala.Byte[],scala.Int,scala.Int:scala.Int
+java.util.zip.InflaterInputStream	read	scala.Byte[]:scala.Int
 java.util.zip.InflaterInputStream	readAllBytes	:scala.Byte[]
 java.util.zip.InflaterInputStream	readNBytes	scala.Byte[],scala.Int,scala.Int:scala.Int
 java.util.zip.InflaterInputStream	readNBytes	scala.Int:scala.Byte[]
@@ -4449,6 +4484,7 @@ java.util.zip.ZipInputStream	mark	scala.Int:scala.Unit
 java.util.zip.ZipInputStream	markSupported	:scala.Boolean
 java.util.zip.ZipInputStream	read	:scala.Int
 java.util.zip.ZipInputStream	read	scala.Byte[],scala.Int,scala.Int:scala.Int
+java.util.zip.ZipInputStream	read	scala.Byte[]:scala.Int
 java.util.zip.ZipInputStream	readAllBytes	:scala.Byte[]
 java.util.zip.ZipInputStream	readNBytes	scala.Byte[],scala.Int,scala.Int:scala.Int
 java.util.zip.ZipInputStream	readNBytes	scala.Int:scala.Byte[]
@@ -4466,6 +4502,7 @@ java.util.zip.ZipOutputStream	setComment	java.lang.String:scala.Unit
 java.util.zip.ZipOutputStream	setLevel	scala.Int:scala.Unit
 java.util.zip.ZipOutputStream	setMethod	scala.Int:scala.Unit
 java.util.zip.ZipOutputStream	write	scala.Byte[],scala.Int,scala.Int:scala.Unit
+java.util.zip.ZipOutputStream	write	scala.Byte[]:scala.Unit
 java.util.zip.ZipOutputStream	write	scala.Int:scala.Unit
 org.scalajs.dom	BlobPropertyBag	object
 org.scalajs.dom	Event	object
@@ -9962,6 +9999,7 @@ org.scalajs.dom.HTMLSelectElement	propertyIsEnumerable	java.lang.String:scala.Bo
 org.scalajs.dom.HTMLSelectElement	querySelector	java.lang.String:org.scalajs.dom.Element
 org.scalajs.dom.HTMLSelectElement	querySelectorAll	java.lang.String:org.scalajs.dom.NodeList
 org.scalajs.dom.HTMLSelectElement	releasePointerCapture	scala.Double:scala.Unit
+org.scalajs.dom.HTMLSelectElement	remove	:scala.Unit
 org.scalajs.dom.HTMLSelectElement	remove	scala.Int:scala.Unit
 org.scalajs.dom.HTMLSelectElement	remove$default$1	-:scala.Int
 org.scalajs.dom.HTMLSelectElement	removeAttribute	java.lang.String:scala.Unit
@@ -14090,6 +14128,7 @@ scala.MatchError	addSuppressed	java.lang.Throwable:scala.Unit
 scala.MatchError	fillInStackTrace	:java.lang.Throwable
 scala.MatchError	getCause	:java.lang.Throwable
 scala.MatchError	getLocalizedMessage	:java.lang.String
+scala.MatchError	getMessage	:java.lang.String
 scala.MatchError	getStackTrace	:java.lang.StackTraceElement[]
 scala.MatchError	getSuppressed	:java.lang.Throwable[]
 scala.MatchError	initCause	java.lang.Throwable:java.lang.Throwable
@@ -16248,6 +16287,7 @@ scala.collection.SortedMap	minBy	[1],scala.Function1,scala.math.Ordering:scala.T
 scala.collection.SortedMap	minByOption	[1],scala.Function1,scala.math.Ordering:scala.Option
 scala.collection.SortedMap	minOption	[1],scala.math.Ordering:scala.Option
 scala.collection.SortedMap	mkString	java.lang.String,java.lang.String,java.lang.String:java.lang.String
+scala.collection.SortedMap	mkString	java.lang.String:java.lang.String
 scala.collection.SortedMap	newSpecificBuilder	-:scala.collection.mutable.Builder
 scala.collection.SortedMap	nonEmpty	-:scala.Boolean
 scala.collection.SortedMap	ordering	-:scala.math.Ordering
@@ -16295,6 +16335,7 @@ scala.collection.SortedMap$	from	[2],scala.collection.IterableOnce,scala.math.Or
 scala.collection.SortedMap$	newBuilder	[2],scala.math.Ordering:scala.collection.mutable.Builder
 scala.collection.SortedSet	&	scala.collection.Set:scala.collection.SortedSet
 scala.collection.SortedSet	&~	scala.collection.Set:scala.collection.SortedSet
+scala.collection.SortedSet	+	java.lang.Object,java.lang.Object,scala.collection.immutable.Seq:scala.collection.SortedSet
 scala.collection.SortedSet	+	java.lang.Object:scala.collection.SortedSet
 scala.collection.SortedSet	++	scala.collection.IterableOnce:scala.collection.SortedSet
 scala.collection.SortedSet	-	java.lang.Object:scala.collection.SortedSet
@@ -16392,6 +16433,7 @@ scala.collection.SortedSet	toVector	-:scala.collection.immutable.Vector
 scala.collection.SortedSet	view	-:scala.collection.View
 scala.collection.SortedSet$	apply	[1],scala.collection.immutable.Seq,scala.math.Ordering:scala.collection.SortedSet
 scala.collection.SortedSet$	empty	[1],scala.math.Ordering:scala.collection.SortedSet
+scala.collection.SortedSet$	from	[1],scala.collection.IterableOnce,scala.math.Ordering:scala.collection.SortedSet
 scala.collection.SortedSet$	newBuilder	[1],scala.math.Ordering:scala.collection.mutable.Builder
 scala.collection.StrictOptimizedIterableOps	++	[1],scala.collection.IterableOnce:java.lang.Object
 scala.collection.StrictOptimizedIterableOps	<init>	[3]:scala.collection.StrictOptimizedIterableOps
@@ -17664,6 +17706,7 @@ scala.collection.immutable.ListMap$	mapFactory	[2]:scala.collection.Factory
 scala.collection.immutable.ListMap$	newBuilder	[2]:scala.collection.mutable.ReusableBuilder
 scala.collection.immutable.ListSet	&	scala.collection.Set:scala.collection.immutable.ListSet
 scala.collection.immutable.ListSet	&~	scala.collection.Set:scala.collection.immutable.ListSet
+scala.collection.immutable.ListSet	+	java.lang.Object,java.lang.Object,scala.collection.immutable.Seq:scala.collection.immutable.ListSet
 scala.collection.immutable.ListSet	+	java.lang.Object:scala.collection.immutable.ListSet
 scala.collection.immutable.ListSet	++	scala.collection.IterableOnce:scala.collection.immutable.ListSet
 scala.collection.immutable.ListSet	-	java.lang.Object:scala.collection.immutable.ListSet
@@ -17812,6 +17855,7 @@ scala.collection.immutable.LongMap	minBy	[1],scala.Function1,scala.math.Ordering
 scala.collection.immutable.LongMap	minByOption	[1],scala.Function1,scala.math.Ordering:scala.Option
 scala.collection.immutable.LongMap	minOption	[1],scala.math.Ordering:scala.Option
 scala.collection.immutable.LongMap	mkString	java.lang.String,java.lang.String,java.lang.String:java.lang.String
+scala.collection.immutable.LongMap	mkString	java.lang.String:java.lang.String
 scala.collection.immutable.LongMap	newSpecificBuilder	-:scala.collection.mutable.Builder
 scala.collection.immutable.LongMap	nonEmpty	-:scala.Boolean
 scala.collection.immutable.LongMap	partition	scala.Function1:scala.Tuple2
@@ -17912,6 +17956,7 @@ scala.collection.immutable.Map	minBy	[1],scala.Function1,scala.math.Ordering:sca
 scala.collection.immutable.Map	minByOption	[1],scala.Function1,scala.math.Ordering:scala.Option
 scala.collection.immutable.Map	minOption	[1],scala.math.Ordering:scala.Option
 scala.collection.immutable.Map	mkString	java.lang.String,java.lang.String,java.lang.String:java.lang.String
+scala.collection.immutable.Map	mkString	java.lang.String:java.lang.String
 scala.collection.immutable.Map	newSpecificBuilder	-:scala.collection.mutable.Builder
 scala.collection.immutable.Map	nonEmpty	-:scala.Boolean
 scala.collection.immutable.Map	partition	scala.Function1:scala.Tuple2
@@ -18769,11 +18814,13 @@ scala.collection.immutable.Range	collect	[1],scala.PartialFunction:scala.collect
 scala.collection.immutable.Range	collectFirst	[1],scala.PartialFunction:scala.Option
 scala.collection.immutable.Range	collectionClassName	-:java.lang.String
 scala.collection.immutable.Range	concat	[1],scala.collection.IterableOnce:scala.collection.immutable.IndexedSeq
+scala.collection.immutable.Range	contains	[1],java.lang.Object:scala.Boolean
 scala.collection.immutable.Range	contains	scala.Int:scala.Boolean
 scala.collection.immutable.Range	copyToArray	[1],java.lang.Object,scala.Int,scala.Int:scala.Int
 scala.collection.immutable.Range	copyToArray	[1],java.lang.Object,scala.Int:scala.Int
 scala.collection.immutable.Range	copyToArray	[1],java.lang.Object:scala.Int
 scala.collection.immutable.Range	corresponds	[1],scala.collection.IterableOnce,scala.Function2:scala.Boolean
+scala.collection.immutable.Range	count	scala.Function1:scala.Int
 scala.collection.immutable.Range	distinctBy	[1],scala.Function1:scala.collection.immutable.IndexedSeq
 scala.collection.immutable.Range	drop	scala.Int:scala.collection.immutable.Range
 scala.collection.immutable.Range	dropRight	scala.Int:scala.collection.immutable.Range
@@ -19010,6 +19057,7 @@ scala.collection.immutable.Seq$	tabulate	[1],scala.Int,scala.Function1:scala.col
 scala.collection.immutable.Seq$	unapplySeq	[1],scala.collection.immutable.Seq:scala.collection.SeqOps
 scala.collection.immutable.Set	&	scala.collection.Set:scala.collection.immutable.Set
 scala.collection.immutable.Set	&~	scala.collection.Set:scala.collection.immutable.Set
+scala.collection.immutable.Set	+	java.lang.Object,java.lang.Object,scala.collection.immutable.Seq:scala.collection.immutable.Set
 scala.collection.immutable.Set	+	java.lang.Object:scala.collection.immutable.Set
 scala.collection.immutable.Set	++	[1],scala.collection.IterableOnce:scala.collection.immutable.Set
 scala.collection.immutable.Set	++	scala.collection.IterableOnce:scala.collection.immutable.Set
@@ -19200,6 +19248,7 @@ scala.collection.immutable.TreeMap$	apply	[2],scala.collection.immutable.Seq,sca
 scala.collection.immutable.TreeMap$	empty	[2],scala.math.Ordering:scala.collection.immutable.TreeMap
 scala.collection.immutable.TreeMap$	from	[2],scala.collection.IterableOnce,scala.math.Ordering:scala.collection.immutable.TreeMap
 scala.collection.immutable.TreeSet	+	java.lang.Object:scala.collection.immutable.TreeSet
+scala.collection.immutable.TreeSet	++	[1],scala.collection.IterableOnce:scala.collection.immutable.Set
 scala.collection.immutable.TreeSet	++	scala.collection.IterableOnce:scala.collection.immutable.TreeSet
 scala.collection.immutable.TreeSet	-	java.lang.Object:scala.collection.immutable.TreeSet
 scala.collection.immutable.TreeSet	apply	java.lang.Object:scala.Boolean
@@ -19207,6 +19256,7 @@ scala.collection.immutable.TreeSet	className	-:java.lang.String
 scala.collection.immutable.TreeSet	collect	[1],scala.PartialFunction:scala.collection.immutable.Set
 scala.collection.immutable.TreeSet	collectFirst	[1],scala.PartialFunction:scala.Option
 scala.collection.immutable.TreeSet	collectionClassName	-:java.lang.String
+scala.collection.immutable.TreeSet	concat	[1],scala.collection.IterableOnce:scala.collection.immutable.Set
 scala.collection.immutable.TreeSet	concat	scala.collection.IterableOnce:scala.collection.immutable.TreeSet
 scala.collection.immutable.TreeSet	contains	java.lang.Object:scala.Boolean
 scala.collection.immutable.TreeSet	copyToArray	[1],java.lang.Object,scala.Int,scala.Int:scala.Int
@@ -20212,6 +20262,7 @@ scala.collection.mutable.HashMap	minBy	[1],scala.Function1,scala.math.Ordering:s
 scala.collection.mutable.HashMap	minByOption	[1],scala.Function1,scala.math.Ordering:scala.Option
 scala.collection.mutable.HashMap	minOption	[1],scala.math.Ordering:scala.Option
 scala.collection.mutable.HashMap	mkString	java.lang.String,java.lang.String,java.lang.String:java.lang.String
+scala.collection.mutable.HashMap	mkString	java.lang.String:java.lang.String
 scala.collection.mutable.HashMap	newSpecificBuilder	-:scala.collection.mutable.Builder
 scala.collection.mutable.HashMap	nonEmpty	-:scala.Boolean
 scala.collection.mutable.HashMap	partition	scala.Function1:scala.Tuple2
@@ -21369,7 +21420,9 @@ scala.concurrent.duration.FiniteDuration	<init>	scala.Long,java.util.concurrent.
 scala.concurrent.duration.FiniteDuration	>	scala.concurrent.duration.Duration:scala.Boolean
 scala.concurrent.duration.FiniteDuration	>=	scala.concurrent.duration.Duration:scala.Boolean
 scala.concurrent.duration.FiniteDuration	compare	scala.concurrent.duration.Duration:scala.Int
+scala.concurrent.duration.FiniteDuration	div	scala.Double:scala.concurrent.duration.Duration
 scala.concurrent.duration.FiniteDuration	div	scala.Long:scala.concurrent.duration.FiniteDuration
+scala.concurrent.duration.FiniteDuration	div	scala.concurrent.duration.Duration:scala.Double
 scala.concurrent.duration.FiniteDuration	equals	java.lang.Object:scala.Boolean
 scala.concurrent.duration.FiniteDuration	gt	scala.concurrent.duration.Duration:scala.Boolean
 scala.concurrent.duration.FiniteDuration	gteq	scala.concurrent.duration.Duration:scala.Boolean
@@ -21377,11 +21430,16 @@ scala.concurrent.duration.FiniteDuration	isFinite	-:scala.Boolean
 scala.concurrent.duration.FiniteDuration	length	-:scala.Long
 scala.concurrent.duration.FiniteDuration	lt	scala.concurrent.duration.Duration:scala.Boolean
 scala.concurrent.duration.FiniteDuration	lteq	scala.concurrent.duration.Duration:scala.Boolean
+scala.concurrent.duration.FiniteDuration	max	scala.concurrent.duration.Duration:scala.concurrent.duration.Duration
 scala.concurrent.duration.FiniteDuration	max	scala.concurrent.duration.FiniteDuration:scala.concurrent.duration.FiniteDuration
+scala.concurrent.duration.FiniteDuration	min	scala.concurrent.duration.Duration:scala.concurrent.duration.Duration
 scala.concurrent.duration.FiniteDuration	min	scala.concurrent.duration.FiniteDuration:scala.concurrent.duration.FiniteDuration
+scala.concurrent.duration.FiniteDuration	minus	scala.concurrent.duration.Duration:scala.concurrent.duration.Duration
 scala.concurrent.duration.FiniteDuration	minus	scala.concurrent.duration.FiniteDuration:scala.concurrent.duration.FiniteDuration
+scala.concurrent.duration.FiniteDuration	mul	scala.Double:scala.concurrent.duration.Duration
 scala.concurrent.duration.FiniteDuration	mul	scala.Long:scala.concurrent.duration.FiniteDuration
 scala.concurrent.duration.FiniteDuration	neg	:scala.concurrent.duration.Duration
+scala.concurrent.duration.FiniteDuration	plus	scala.concurrent.duration.Duration:scala.concurrent.duration.Duration
 scala.concurrent.duration.FiniteDuration	plus	scala.concurrent.duration.FiniteDuration:scala.concurrent.duration.FiniteDuration
 scala.concurrent.duration.FiniteDuration	toCoarsest	-:scala.concurrent.duration.FiniteDuration
 scala.concurrent.duration.FiniteDuration	toDays	-:scala.Long
@@ -22215,6 +22273,7 @@ scala.scalajs.js.Date	propertyIsEnumerable	java.lang.String:scala.Boolean
 scala.scalajs.js.Date	toDateString	:java.lang.String
 scala.scalajs.js.Date	toISOString	:java.lang.String
 scala.scalajs.js.Date	toJSON	:java.lang.String
+scala.scalajs.js.Date	toLocaleString	:java.lang.String
 scala.scalajs.js.Date	toTimeString	:java.lang.String
 scala.scalajs.js.Date	toUTCString	:java.lang.String
 scala.scalajs.js.Date	valueOf	:scala.Double
