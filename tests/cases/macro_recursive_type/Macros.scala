@@ -39,3 +39,14 @@ object Recursive:
     val shape = built match
       case RecursiveType(u) => "built " + show(u) + " " + (built.recThis match { case RecursiveThis(b) => b =:= built })
     Expr(read + " | " + shape)
+
+  // An equal recursive type built twice is the one type, its self the one it has (dotty's
+  // interned `RecType`, its cached `recThis`).
+  inline def stable: String = ${ stableImpl }
+
+  def stableImpl(using q: Quotes): Expr[String] =
+    import q.reflect.*
+    val r1 = RecursiveType(_ => TypeRepr.of[Box])
+    val t1 = r1.recThis
+    val r2 = RecursiveType(_ => TypeRepr.of[Box])
+    Expr((r1 =:= r2).toString + " " + (t1 =:= r1.recThis).toString + " " + (t1 =:= r2.recThis).toString)

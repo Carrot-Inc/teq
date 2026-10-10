@@ -5062,7 +5062,10 @@ fn install_types(it: &mut Table) {
         info.state().done_fresh();
         drop(info);
         it.rec_markers.remove(&open);
-        it.rec_markers.insert(rt, marker);
+        // An equal recursive type is the same one, interned (`unique(rt.derivedRecType(..))`),
+        // whose self stays the one it has (its cached `recThis`); the provisional self of this
+        // construction names the type as well.
+        it.rec_markers.entry(rt).or_insert(marker);
         it.rec_binders.insert(marker, rt);
         Ok(Value::Type(rt))
     });

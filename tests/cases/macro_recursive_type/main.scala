@@ -13,3 +13,4 @@ type P = AnyRef { type T; def g: Int }
   println(Recursive.of[R])
   println(Recursive.of[S])
   println(Recursive.of[P])
+  println(Recursive.stable)
