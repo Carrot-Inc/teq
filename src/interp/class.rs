@@ -741,35 +741,46 @@ impl<'a, 't> Interp<'a, 't> {
             }
         }
         let this = Value::Obj(obj.clone());
-        let n = self.prog().classes[ti].init.len();
-        for i in 0..n {
-            let init = match self.prog().classes[ti].init[i] {
+        // What an entry is, to find it again: an initialiser that reads a library val of this class
+        // has its field placed where the val stands in the template (`library_val`), which may be
+        // before the entry being run, so the loop goes on after that entry wherever it now stands;
+        // a field placed before it is read on demand, as one placed after it runs in this loop.
+        let key = |init: &TInit| match *init {
+            TInit::Field(s, e) => (0u8, s.0, e.0),
+            TInit::Stmt(e) => (1, 0, e.0),
+            TInit::Parent(b, _) => (2, b.0, 0),
+        };
+        let mut i = 0;
+        while i < self.prog().classes[ti].init.len() {
+            let ran = key(&self.prog().classes[ti].init[i]);
+            let at = i;
+            i += 1;
+            let init = match self.prog().classes[ti].init[at] {
                 TInit::Field(s, e) => (0, s, e, None),
                 TInit::Stmt(e) => (1, SymId(0), e, None),
                 TInit::Parent(b, call) => (2, SymId(0), TExprId(0), Some((b, call))),
             };
             match init {
                 (0, s, e, _) => {
-                    let m = self.syms().sym(s).mods;
-                    if m & mods::LAZY != 0 {
-                        continue;
-                    }
-                    let key = self.field_key(s);
-                    if self.syms().sym(s).overridden_by_param {
+                    // A lazy val is read on demand; a val a constructor parameter overrides keeps
+                    // the parameter's value.
+                    if self.syms().sym(s).mods & mods::LAZY == 0 {
+                        let field = self.field_key(s);
                         let v = self.eval(e, frame, cx)?;
-                        if matches!(self.read_slot(&this, key), Value::Absent) {
-                            self.write_slot(&this, key, v);
+                        if !self.syms().sym(s).overridden_by_param || matches!(self.read_slot(&this, field), Value::Absent) {
+                            self.write_slot(&this, field, v);
                         }
-                        continue;
                     }
-                    let v = self.eval(e, frame, cx)?;
-                    self.write_slot(&this, key, v);
                 }
                 (1, _, e, _) => {
                     self.eval(e, frame, cx)?;
                 }
                 (_, _, _, Some((tr, call))) => self.trait_init(obj, c, tr, call, frame, cx)?,
                 _ => unreachable!(),
+            }
+            let list = &self.prog().classes[ti].init;
+            if list.get(at).map(key) != Some(ran) {
+                i = list.iter().position(|x| key(x) == ran).map_or(i, |p| p + 1);
             }
         }
         Ok(())
