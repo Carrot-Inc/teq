@@ -5114,7 +5114,7 @@ impl<'a> Worker<'a> {
         let targs: Vec<TypeId> =
             self.syms.class(c).tparams.clone().iter().map(|&p| self.types.param(p)).collect();
         let self_ty = self.types.class(c, &targs);
-        let mut linearisations: Vec<Vec<(ClassId, TypeId)>> = Vec::with_capacity(parents.len());
+        let mut linearisations: Vec<ParentBases> = Vec::with_capacity(parents.len());
         let mut parent_types = Vec::new();
         let (file, kind, is_anon) = {
             let i = self.syms.class(c);
@@ -5224,9 +5224,14 @@ impl<'a> Worker<'a> {
                 .copied()
                 .zip(self.types.items(pargs).iter().copied())
                 .collect();
+            // A parent without type arguments (`Product`, most traits) is its class's base types
+            // as they stand, read where the linearisation merges them; one with arguments or
+            // through a prefix is seen through them.
+            if subst.is_empty() && prefix.is_none() {
+                linearisations.push(ParentBases::Of(pc));
+                continue;
+            }
             let inherited: Vec<(ClassId, TypeId)> = self.syms.class(pc).base_types.clone();
-            // A parent without type arguments (`Product`, most traits) is its linearisation as is,
-            // without a substitution; one through a prefix is seen from it.
             let mut seen: Vec<(ClassId, TypeId)> =
                 if subst.is_empty() { inherited } else { inherited.into_iter().map(|(bc, bt)| (bc, self.types.subst(bt, &subst))).collect() };
             if let Some(p) = prefix {
@@ -5234,7 +5239,7 @@ impl<'a> Worker<'a> {
                     *bt = self.outer_seen_from(*bt, p, pc);
                 }
             }
-            linearisations.push(seen);
+            linearisations.push(ParentBases::Seen(seen));
         }
         if !trait_superclasses.is_empty() {
             superclass = self.superclass_with_traits(superclass, &trait_superclasses);
@@ -5437,13 +5442,22 @@ impl<'a> Worker<'a> {
         &mut self,
         c: ClassId,
         self_ty: TypeId,
-        parents: Vec<Vec<(ClassId, TypeId)>>,
+        parents: Vec<ParentBases>,
         checked: bool,
     ) -> (Vec<(ClassId, TypeId)>, bool) {
-        let mut base: Vec<(ClassId, TypeId)> = Vec::with_capacity(1 + parents.iter().map(Vec::len).sum::<usize>());
+        let bases_of = |t: &Self, lin: &'_ ParentBases| -> usize {
+            match lin {
+                ParentBases::Of(k) => t.syms.class(*k).base_types.len(),
+                ParentBases::Seen(v) => v.len(),
+            }
+        };
+        let mut base: Vec<(ClassId, TypeId)> = Vec::with_capacity(1 + parents.iter().map(|lin| bases_of(self, lin)).sum::<usize>());
         base.push((c, self_ty));
         for lin in parents.iter().rev() {
-            base.extend_from_slice(lin);
+            match lin {
+                ParentBases::Of(k) => base.extend_from_slice(&self.syms.class(*k).base_types),
+                ParentBases::Seen(v) => base.extend_from_slice(v),
+            }
         }
         // The linearisation of a single parent names no class twice.
         if parents.len() < 2 {
@@ -6122,4 +6136,11 @@ fn chain_heads(ast: &crate::ast::Ast, id: TyExprId) -> Option<usize> {
         heads += 1;
     }
     matches!(ast.ty(tail), TyExpr::Name(_) | TyExpr::Select(..)).then_some(heads)
+}
+
+/// A parent's linearisation for `Worker::linearise`: its class's base types as they stand, or
+/// those seen through its type arguments or its prefix.
+pub(super) enum ParentBases {
+    Of(ClassId),
+    Seen(Vec<(ClassId, TypeId)>),
 }

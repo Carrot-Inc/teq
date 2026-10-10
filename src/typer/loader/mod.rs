@@ -2074,7 +2074,7 @@ impl<'a> Worker<'a> {
             }
             linearisations.push(seen);
         }
-        let (mut base, _) = self.linearise(c, self_ty, linearisations.clone(), false);
+        let (mut base, _) = self.linearise(c, self_ty, linearisations.iter().cloned().map(super::resolve::ParentBases::Seen).collect(), false);
         self.narrow_base_types(c, &mut base, &linearisations);
         if let Some(parent) = superclass {
             let subclasses = &mut self.syms.class_mut(parent).subclasses;

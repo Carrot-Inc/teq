@@ -4946,9 +4946,8 @@ impl<'a> Worker<'a> {
     /// scalac's check along the linearisation: what an earlier ancestor defines cannot override
     /// a final member of a later one.
     fn check_final_overrides(&mut self, c: ClassId) {
-        let bases: Vec<(ClassId, TypeId)> = self.syms.class(c).base_types.clone();
-        for j in 2..bases.len() {
-            let (b, bt) = bases[j];
+        for j in 2..self.syms.class(c).base_types.len() {
+            let (b, bt) = self.syms.class(c).base_types[j];
             let finals: Vec<SymId> = self
                 .syms
                 .class(b)
@@ -4963,7 +4962,7 @@ impl<'a> Worker<'a> {
             for p in finals {
                 let name = self.syms.sym(p).name;
                 for i in 1..j {
-                    let (a, at) = bases[i];
+                    let (a, at) = self.syms.class(c).base_types[i];
                     let Some(&m) = self.syms.class(a).members.get(&name) else { continue };
                     if self.syms.sym(m).owner != Owner::Class(a) || self.syms.alternatives(m).is_some() || self.syms.sym(m).kind != SymKind::Def {
                         continue;
