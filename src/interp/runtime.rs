@@ -661,13 +661,7 @@ impl<'a, 't> Interp<'a, 't> {
             Some(n) => Rc::from(n),
             None => self.runtime_class_name(c),
         };
-        let qname: Rc<str> = Rc::from(crate::emit::array_class_name(&element, dims));
-        if let Some(v) = self.class_values.get(&qname) {
-            return Value::Class(v.clone());
-        }
-        let v = Rc::new(ClassValue { class: Some(self.typer.b.array), qname: qname.clone() });
-        self.class_values.insert(qname, v.clone());
-        Value::Class(v)
+        self.class_value_named(&crate::emit::array_class_name(&element, dims))
     }
 
     pub(super) fn class_value_of(&mut self, c: ClassId) -> Value {
@@ -688,7 +682,9 @@ impl<'a, 't> Interp<'a, 't> {
             return Value::Class(c.clone());
         }
         let qname: Rc<str> = Rc::from(qname);
-        let c = Rc::new(ClassValue { class: None, qname: qname.clone() });
+        // An array's class, whichever its element, is of the array class.
+        let class = qname.starts_with('[').then_some(self.typer.b.array);
+        let c = Rc::new(ClassValue { class, qname: qname.clone() });
         self.class_values.insert(qname, c.clone());
         Value::Class(c)
     }

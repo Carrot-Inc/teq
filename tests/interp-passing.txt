@@ -173,6 +173,7 @@ charbuffer_wrap_view
 charset_decode_writable
 charset_encode_consumes
 charset_utf8_replacement
+class_literal_arrays
 class_of
 class_tag_classes
 class_tag_evidence_erased

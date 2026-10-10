@@ -779,6 +779,11 @@ fn install_core(it: &mut Table) {
         Value::Class(c) => Ok(Value::Bool(matches!(&*c.qname, "int" | "long" | "double" | "float" | "short" | "byte" | "char" | "boolean" | "void"))),
         _ => Ok(Value::Bool(false)),
     });
+    // scala-library's `arrayClass` (`std/classtag.scala`): the class of an array of the class's values.
+    reg!(it, "scala.reflect.ClassTag.arrayClassOf", |it, a| match arg(a, 1) {
+        Value::Class(c) => Ok(it.class_value_named(&crate::emit::array_class_name(&c.qname, 1))),
+        _ => Ok(Value::Null),
+    });
     reg!(it, "java.lang.Class.isArray", |_it, a| match arg(a, 0) {
         Value::Class(c) => Ok(Value::Bool(c.qname.starts_with('['))),
         _ => Ok(Value::Bool(false)),

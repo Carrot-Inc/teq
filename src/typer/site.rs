@@ -399,18 +399,14 @@ impl<'a> Worker<'a> {
                 return self.tag_of_erased(class, erased, subject);
             }
         };
-        // `ClassTag[Array[E]]` is the element's tag's `wrap`, the JVM array class of `E`. The
-        // element's tag is asked for on every target: where an array has no kind, the array's
-        // tag is that of the one array class, and a program without the element's is
-        // rejected all the same.
+        // `ClassTag[Array[E]]` is the element's tag's `wrap`, the array class of `E`
+        // (`Synthesizer.synthesizedClassTag`'s `etag.select(nme.wrap)`), on every target.
         if c == self.b.array {
             let Type::Class(_, elem) = self.types.get(subject) else { return None };
             let elem = *self.types.items(elem).first()?;
             let elem_tag = self.types.class(class, &[elem]);
             let evidence = self.resolve_given(elem_tag, crate::source::Span::default())?;
-            if self.jvm {
-                return self.wrapped_tag(class, evidence);
-            }
+            return self.wrapped_tag(class, evidence);
         }
         self.tag_of_class(class, c, matches!(self.types.get(subject), Type::Any), subject)
     }

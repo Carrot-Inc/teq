@@ -166,6 +166,12 @@ function $classValue(c) {
   return Object.prototype.hasOwnProperty.call(c, "$class") ? c.$class : (c.$class = $makeClass(c, c.prototype.$qname));
 }
 function $classNamed(qname) { return $primClasses[qname] ??= $makeClass(null, qname); }
+// The class of an array of a class's values, named by the class as `classOf[Array[T]]` is.
+function $arrayClassOf(c) {
+  const n = c.$qname;
+  const k = { int: "I", long: "J", double: "D", float: "F", boolean: "Z", char: "C", byte: "B", short: "S" }[n];
+  return $classNamed("[" + (k ?? (n === "void" ? "Lscala.runtime.BoxedUnit;" : n[0] === "[" ? n : "L" + n + ";")));
+}
 // The `Class` of a Scala class the output has no constructor for, with the qualified names of
 // its ancestors, which `isAssignableFrom` reads; a module run again under --hot names them anew.
 function $classData(qname, ancestors) {
