@@ -451,9 +451,10 @@ impl<'a> Worker<'a> {
             Owner::Class(_) if matches!(name, names::TO_STRING | names::HASH_CODE | names::EQUALS) && self.matches_any_member(m) => None,
             Owner::Class(c) => {
                 self.complete_class(c);
-                // Another parameter list than `Any`'s member of the name is an alternative of it,
-                // in a program's class, whose check names it (`check_overrides`).
-                let beside_any = matches!(name, names::TO_STRING | names::HASH_CODE | names::EQUALS) && self.program_file(self.syms.class(c).file);
+                // Another parameter list than `Any`'s member of the name is an alternative of it
+                // (dotty's `matchingMember` keeps both), in a program's class or one read from
+                // the products, with the same name in either; teq's own std keeps its names.
+                let beside_any = matches!(name, names::TO_STRING | names::HASH_CODE | names::EQUALS) && !self.std_source(self.syms.class(c).file);
                 match self.overridden_dispatch(c, m) {
                     Some(inherited) => inherited,
                     None => (beside_any || !self.keeps_plain_name(m)).then(|| {
