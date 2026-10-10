@@ -5427,7 +5427,7 @@ impl<'a, 't> Interp<'a, 't> {
                 self.narrow_variances(hi, v, params, out, depth + 1);
             }
             Type::Lambda(_, b) | Type::Poly(_, b) => self.narrow_variances(b, v, params, out, depth + 1),
-            Type::Refined(parent, _) => self.narrow_variances(parent, v, params, out, depth + 1),
+            Type::Refined(parent, _) | Type::Rec(parent) => self.narrow_variances(parent, v, params, out, depth + 1),
             Type::AppVar(_, args) | Type::AppMember(_, args) | Type::Alias(_, args) => {
                 let args: Vec<TypeId> = self.typer.types.items(args).to_vec();
                 for a in args {
