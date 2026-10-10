@@ -6,6 +6,7 @@ package inlinebodies
 
 import scala.compiletime.{codeOf, constValue, erasedValue}
 import scala.deriving.Mirror
+import scala.quoted.*
 
 object Bodies:
   inline def value(x: Int): x.type = constValue[x.type]
@@ -41,3 +42,24 @@ trait Kind[Mono[_]]:
   inline def count[F[_], T](using gen: Mirror.ProductOf[T]): Int = Sizes.size[Kind.this.type, LiftP[F, gen.MirroredElemTypes]]
 
 object K0 extends Kind[Id]
+
+trait Ctx
+
+class Mk[S]:
+  transparent inline def apply[T](inline lambda: Ctx ?=> S => T): Any = ${ Shapes.of[S, T]('{ (c: Ctx) ?=> lambda(using c) }) }
+
+object Focus:
+  def apply[S] = new Mk[S]
+
+object Shapes:
+  def of[S: Type, T: Type](lambda: Expr[Ctx ?=> S => T])(using Quotes): Expr[String] =
+    import quotes.reflect.*
+    def shape(t: Term): String = t match
+      case Inlined(_, _, b) => shape(b)
+      case Block(List(DefDef(_, _, _, Some(body))), Closure(_, _)) => "Lambda(" + shape(body) + ")"
+      case Typed(e, _) => shape(e)
+      case Block(Nil, e) => shape(e)
+      case Select(_, n) => "Select(" + n + ")"
+      case Apply(f, _) => "Apply(" + shape(f) + ")"
+      case _ => "other"
+    Expr(shape(lambda.asTerm))

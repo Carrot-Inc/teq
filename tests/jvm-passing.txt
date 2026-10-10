@@ -564,6 +564,7 @@ inline_arg_summoned
 inline_arg_summoned_resolution
 inline_arg_throwing_branch
 inline_arg_wrapped
+inline_bodies_scalac_product
 inline_body_import_nested_given
 inline_definition_clean
 inline_definition_const_singleton
@@ -614,6 +615,8 @@ inline_retained_match
 inline_retained_match_effects
 inline_substitution_anon_parent_args
 inline_substitution_case_binder_scope
+inline_substitution_class_alias
+inline_substitution_class_branch_this
 inline_substitution_class_graph
 inline_substitution_classes
 inline_substitution_code_of
@@ -794,6 +797,7 @@ macro_quote_deferred_inline_types
 macro_quote_inline_deferred
 macro_quote_pattern_result
 macro_quote_refined
+macro_quoted_inline_application
 macro_quotes_qualifier
 macro_receiver_copy
 macro_records
