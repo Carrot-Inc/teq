@@ -21,3 +21,4 @@ integrations/vite/NOTICE
 integrations/vite/LICENSE
 integrations/vite/node_modules/
 integrations/vite/package-lock.json
+tests/scalajs-test/node_modules/

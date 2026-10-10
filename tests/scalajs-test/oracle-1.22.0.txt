@@ -1,0 +1,33 @@
+cjs	fixture.CjsSuite	defined		
+cjs	fixture.CjsSuite.node's argument	test fixture.CjsSuite.node's argument	Success	
+cjs	fixture.CjsSuite.the environment's variable	test fixture.CjsSuite.the environment's variable	Success	
+dom	fixture.DomSuite	defined		
+dom	fixture.DomSuite	test an element is appended to the document	Success	
+dom	fixture.DomSuite	test the page is http://localhost/ and keeps storage	Success	
+dom	fixture.DomSuite	test the program runs in the window's realm	Success	
+esm	fixture.EsmSuite	defined		
+esm	fixture.EsmSuite.an imported module	test fixture.EsmSuite.an imported module	Success	
+suites	fixture.MunitExcluded	defined		
+suites	fixture.MunitInherited	defined		
+suites	fixture.MunitInherited.inherited	test fixture.MunitInherited.inherited	Success	
+suites	fixture.MunitSuite	defined		
+suites	fixture.MunitSuite.fails	test fixture.MunitSuite.fails	Failure	munit.ComparisonFailException: suites/src/test/scala/fixture/MunitSuite.scala:11
+suites	fixture.MunitSuite.is ignored	test fixture.MunitSuite.is ignored	Ignored	
+suites	fixture.MunitSuite.passes	test fixture.MunitSuite.passes	Success	
+suites	fixture.MunitSuite.passes asynchronously	test fixture.MunitSuite.passes asynchronously	Success	
+suites	fixture.ScalatestNeedsArgument	defined		
+suites	fixture.ScalatestNeedsArgument	test fixture.ScalatestNeedsArgument	Error	org.scalajs.testing.common.RPCCore$RPCException: java.lang.InstantiationException: fixture.ScalatestNeedsArgument
+suites	fixture.ScalatestSuite	defined		
+suites	fixture.ScalatestSuite	test fails	Failure	org.scalatest.exceptions.TestFailedException: 6 did not equal 7
+suites	fixture.ScalatestSuite	test is canceled	Canceled	
+suites	fixture.ScalatestSuite	test is ignored	Ignored	
+suites	fixture.ScalatestSuite	test is pending	Pending	
+suites	fixture.ScalatestSuite	test passes	Success	
+suites	fixture.UtestSuite	defined		
+suites	fixture.UtestSuite	nested fixture.UtestSuite fails	Failure	utest.AssertionError: Core.twice(4) == 9
+suites	fixture.UtestSuite	nested fixture.UtestSuite group.nested	Success	
+suites	fixture.UtestSuite	nested fixture.UtestSuite passes	Success	
+suites	fixture.ZioSuite	defined		
+suites	fixture.ZioSuite	test zio - fails	Failure	java.lang.Exception:   [31m- fails[0m
+suites	fixture.ZioSuite	test zio - is ignored	Ignored	
+suites	fixture.ZioSuite	test zio - passes	Success	
