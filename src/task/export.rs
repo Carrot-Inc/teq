@@ -207,13 +207,19 @@ pub struct TestContext {
 }
 
 /// A Scala.js test configuration's JavaScript environment: its kind (`node`, `jsdom`, or the build
-/// tool's name of another), the executable, its arguments and environment variables.
+/// tool's name of another), the executable, its arguments and environment variables; where sbt-teq
+/// exports them, `NodeJSEnv`'s source-map policy (`sourceMap`: `disable`, `enable`,
+/// `enableIfAvailable`) and, for jsdom, the package root it is required from and the lockfile that
+/// installs it there (`packageRoot`, `lockfile`).
 #[derive(Clone, Default, PartialEq, Eq, Debug)]
 pub struct JsEnv {
     pub kind: String,
     pub executable: Option<String>,
     pub args: Vec<String>,
     pub env: BTreeMap<String, String>,
+    pub source_map: Option<String>,
+    pub package_root: Option<String>,
+    pub lockfile: Option<String>,
 }
 
 impl TestContext {
@@ -240,7 +246,65 @@ impl TestContext {
             (None, None) => String::new(),
         }
     }
+
+    /// How teq runs a Scala.js configuration's link, as sbt-scalajs does: its module kind and an
+    /// environment of node or jsdom, jsdom installed by a lockfile at its package root; else why not.
+    pub fn js_test(&self) -> Result<(ModuleKind, &JsEnv), String> {
+        let (Some(kind), Some(env)) = (self.module_kind.as_deref(), self.js_env.as_ref()) else {
+            return Err("the export does not say how the build tool runs its tests (moduleKind, jsEnv): export it again".to_string());
+        };
+        let kind = ModuleKind::parse(kind).ok_or_else(|| format!("its test link's module kind is {}, not NoModule, CommonJSModule or ESModule", kind))?;
+        match env.kind.as_str() {
+            "node" => {}
+            "jsdom" if env.lockfile.as_deref().is_some_and(|l| !l.is_empty()) => {}
+            "jsdom" => return Err("its suites run under jsdom, and the build's root holds no lockfile of npm, yarn or pnpm that installs jsdom".to_string()),
+            other => return Err(format!("its suites run in the JavaScript environment {}: teq runs them under node and under jsdom alone", other)),
+        }
+        Ok((kind, env))
+    }
 }
+
+/// `scalaJSLinkerConfig`'s `ModuleKind`.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum ModuleKind {
+    NoModule,
+    CommonJs,
+    EsModule,
+}
+
+impl ModuleKind {
+    pub fn parse(name: &str) -> Option<ModuleKind> {
+        match name {
+            "NoModule" => Some(ModuleKind::NoModule),
+            "CommonJSModule" => Some(ModuleKind::CommonJs),
+            "ESModule" => Some(ModuleKind::EsModule),
+            _ => None,
+        }
+    }
+
+    pub fn name(self) -> &'static str {
+        match self {
+            ModuleKind::NoModule => "NoModule",
+            ModuleKind::CommonJs => "CommonJSModule",
+            ModuleKind::EsModule => "ESModule",
+        }
+    }
+}
+
+/// A Scala.js test configuration's link (`Export::test_link`): the root of its entry point and
+/// the file it is written to.
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub struct TestLink {
+    pub harness: PathBuf,
+    pub out: PathBuf,
+}
+
+/// The entry point of a Scala.js test link: the start of Scala.js's test bridge, as sbt-scalajs's
+/// module initializer of a test link calls it (`TestAdapterInitializer`), in a package of teq's own,
+/// since a program with a file in a Scala.js package keeps the std's facades out.
+pub const HARNESS_MAIN: &str = "dev.teq.test.TestMain";
+const HARNESS_FILE: &str = "dev/teq/test/TestMain.scala";
+const HARNESS_SOURCE: &str = "package dev.teq.test\n\n// The entry point of teq's link of a Scala.js test configuration (`teq test`).\nobject TestMain:\n  def main(args: Array[String]): Unit = org.scalajs.testing.bridge.Bridge.start()\n";
 
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct Framework {
@@ -748,6 +812,19 @@ impl Export {
         for why in p.unsupported.get(verb).into_iter().flatten() {
             add(format!("{}: {}", project, why));
         }
+        if verb == "test" && p.platform == Platform::Js && self.exporter == Exporter::Sbt {
+            if let Some(test) = p.configurations.get("test").and_then(|c| c.test.as_ref()).filter(|t| !t.frameworks.is_empty()) {
+                match test.js_test() {
+                    Err(why) => add(format!("{}: {}", project, why)),
+                    Ok((kind, env)) if env.kind == "jsdom" && kind != ModuleKind::NoModule => add(format!(
+                        "{}: Test / jsEnv is JSDOMNodeJSEnv, which runs a script alone, and the test link is a {} (sbt-scalajs refuses the pair too)",
+                        project,
+                        kind.name()
+                    )),
+                    Ok(_) => {}
+                }
+            }
+        }
         out
     }
 
@@ -904,6 +981,9 @@ impl Export {
         if jvm {
             args.extend(["--target", "jvm", "--std=scala-library", "--all-mains", "--analysis-version", "3", "-o"].map(str::to_string));
             args.push(self.classes(key));
+        } else if let Some(link) = self.test_link(key) {
+            args.extend(["--analysis-version", "3", "--main", HARNESS_MAIN, "-o"].map(str::to_string));
+            args.push(self.relative(&link.out));
         } else {
             args.push("--check".to_string());
         }
@@ -928,7 +1008,41 @@ impl Export {
             }
             None => inputs.extend(roots.iter().map(|r| self.path(r))),
         }
+        if let Some(link) = self.test_link(key) {
+            inputs.push(link.harness);
+        }
         inputs
+    }
+
+    /// The test link of a Scala.js project's test configuration with frameworks whose run sbt-teq's
+    /// export describes (`moduleKind`): the session of the configuration links the program whose entry
+    /// point starts Scala.js's test bridge (`HARNESS_SOURCE`, under `harness`, one of the session's
+    /// inputs) into one file, named for the module kind node loads it as (`.cjs` is CommonJS and
+    /// `.mjs` an ES module whatever a `package.json` above says).
+    pub fn test_link(&self, key: &Key) -> Option<TestLink> {
+        let project = self.projects.get(&key.project)?;
+        let test = project.configurations.get(&key.configuration)?.test.as_ref()?;
+        let module_kind = ModuleKind::parse(test.module_kind.as_deref()?)?;
+        if project.platform != Platform::Js || key.configuration != "test" || test.frameworks.is_empty() || self.exporter != Exporter::Sbt {
+            return None;
+        }
+        let dir = self.path(&format!("target/teq/{}/{}", key.project, key.configuration));
+        let name = match module_kind {
+            ModuleKind::NoModule => "main.js",
+            ModuleKind::CommonJs => "main.cjs",
+            ModuleKind::EsModule => "main.mjs",
+        };
+        Some(TestLink { harness: dir.join("harness"), out: dir.join("link").join(name) })
+    }
+
+    /// The test link's entry point written under its harness root, unless it is there already.
+    pub fn write_harness(&self, link: &TestLink) -> Result<(), String> {
+        let file = link.harness.join(HARNESS_FILE);
+        if std::fs::read_to_string(&file).is_ok_and(|t| t == HARNESS_SOURCE) {
+            return Ok(());
+        }
+        let dir = file.parent().expect("a file under the root");
+        std::fs::create_dir_all(dir).and_then(|()| std::fs::write(&file, HARNESS_SOURCE)).map_err(|e| format!("cannot write {}: {}", file.display(), e))
     }
 
     /// The session's inputs that exist: generated sources not generated yet are left out.
@@ -1356,6 +1470,9 @@ fn configuration(value: &Value) -> Result<Configuration, String> {
             executable: e.get("executable").and_then(Value::str).map(str::to_string),
             args: strings(e.get("args")),
             env: string_map(e.get("env")),
+            source_map: e.get("sourceMap").and_then(Value::str).map(str::to_string),
+            package_root: e.get("packageRoot").and_then(Value::str).map(str::to_string),
+            lockfile: e.get("lockfile").and_then(Value::str).map(str::to_string),
         }),
     });
     Ok(Configuration {

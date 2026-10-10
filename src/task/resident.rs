@@ -31,6 +31,9 @@ pub struct Resident {
     /// The classes of each source file and their version 3 dependencies, as the answers so far
     /// leave them.
     pub analysis: View,
+    /// Of a resident writing one JavaScript file, a test link's: whether the last build that
+    /// passed wrote an ES module.
+    pub es_module: Option<bool>,
 }
 
 /// What a build answered.
@@ -83,7 +86,7 @@ impl Resident {
                 }
             }
         });
-        Ok(Resident { key, args, inputs, child, stdin, stdout, stderr, started: false, analysis: View::default() })
+        Ok(Resident { key, args, inputs, child, stdin, stdout, stderr, started: false, analysis: View::default(), es_module: None })
     }
 
     /// A build of every file whose modification time moved; the first answers the resident's
@@ -112,6 +115,9 @@ impl Resident {
         });
         if let Err(e) = merged {
             self.analysis = View::unreadable(e);
+        }
+        if let Some(m) = parsed("esModule").and_then(|v| v.bool()) {
+            self.es_module = Some(m);
         }
         Ok(Answer {
             ok: parsed("ok").and_then(|v| v.bool()) == Some(true),

@@ -10,7 +10,10 @@
 //! configuration's first `test` and again when what it was started with changed or it died.
 
 use super::analysis::View;
-use super::export::{Entry, Export, Key, MainClass, Platform, TestContext};
+use super::events::Tally;
+use super::export::ModuleKind;
+use super::{jsdom, jsrunner};
+use super::export::{Entry, Export, Exporter, Key, MainClass, Platform, TestContext};
 use super::generators;
 use super::resident::{Answer, Resident};
 use super::runner::{self, Jar, Runner, Spec};
@@ -44,6 +47,9 @@ struct Changes {
     resident: Key,
     all: bool,
     files: BTreeSet<String>,
+    /// Of a Scala.js test configuration, whose link names no class file: the digest of each source
+    /// file of the last full run's view.
+    sources: BTreeMap<String, String>,
 }
 
 struct State {
@@ -192,6 +198,19 @@ impl Reply {
 
     fn exit(&mut self, code: i32) {
         self.send(obj([("exit", Json::Num(code as f64))]));
+    }
+
+    /// The request's output as a JavaScript test run writes it, from the runner and from the
+    /// threads reading node's output, each text sent whole under one lock.
+    fn shared_out(&self) -> jsrunner::Output {
+        let stream = Mutex::new(self.stream.try_clone().ok());
+        Arc::new(move |text: &str| {
+            if let Some(s) = stream.lock().unwrap_or_else(|e| e.into_inner()).as_mut() {
+                let mut line = obj([("out", text.into())]).to_text();
+                line.push('\n');
+                let _ = s.write_all(line.as_bytes());
+            }
+        })
     }
 
     /// Where the request's builds, on threads of their own, tell their progress (an artifact
@@ -564,6 +583,8 @@ struct TestRequest {
     changed: bool,
     list: bool,
     verbose: bool,
+    /// `--events <file>`: where every event of the run is written, a line each (`Event::line`).
+    events: Option<PathBuf>,
 }
 
 /// `test`: each test configuration's closure compiled as `compile` does, then its suites run on
@@ -571,12 +592,27 @@ struct TestRequest {
 fn test(state: &Arc<State>, export: &Arc<Export>, request: &Request, reply: &mut Reply) -> i32 {
     let mut words: Vec<String> = Vec::new();
     let (mut changed, mut list, mut verbose) = (false, false, false);
-    for a in &request.args {
+    let mut events = None;
+    let mut args = request.args.iter();
+    while let Some(a) = args.next() {
         match a.as_str() {
             "--changed" => changed = true,
             "--list" => list = true,
             "--verbose" | "-v" => verbose = true,
+            "--events" => match args.next() {
+                Some(file) => events = Some(request.cwd.join(file)),
+                None => {
+                    reply.err("teq: --events needs a file\n");
+                    return 2;
+                }
+            },
             _ => words.push(a.clone()),
+        }
+    }
+    if let Some(file) = &events {
+        if let Err(e) = std::fs::write(file, "") {
+            reply.err(&format!("teq: cannot write {}: {}\n", file.display(), e));
+            return 2;
         }
     }
     let named = words.first().filter(|w| export.projects.contains_key(*w)).cloned();
@@ -594,7 +630,7 @@ fn test(state: &Arc<State>, export: &Arc<Export>, request: &Request, reply: &mut
                 }
                 return 2;
             }
-            if project.platform != Platform::Jvm {
+            if project.platform != Platform::Jvm && export.exporter == Exporter::Mill {
                 reply.err(&format!("teq: {}\n", scalajs_suites(export, name)));
                 return 2;
             }
@@ -604,15 +640,15 @@ fn test(state: &Arc<State>, export: &Arc<Export>, request: &Request, reply: &mut
             }
             vec![Key::new(name, "test")]
         }
-        // Every project with frameworks, but those the export records what the build tool alone
-        // runs of for its test, and the Scala.js projects, whose suites teq does not run yet: named
-        // in the summary and failing the run, never skipped unsaid.
+        // Every project with frameworks, on either platform, but those the export records what the
+        // build tool alone runs of for its test, and a Mill build's Scala.js projects, whose suites teq
+        // does not run yet: named in the summary and failing the run, never skipped unsaid.
         None => {
             let mut keys = Vec::new();
             // A test configuration the export left out with its reasons is left out here, named.
             left_out.extend(export.projects.iter().filter(|(_, p)| !p.configurations.contains_key("test") && p.unsupported.get("test").is_some_and(|w| !w.is_empty())).map(|(n, _)| n.clone()));
             for (n, p) in export.projects.iter().filter(|(_, p)| p.configurations.get("test").and_then(|c| c.test.as_ref()).is_some_and(|t| !t.frameworks.is_empty())) {
-                if p.platform != Platform::Jvm {
+                if p.platform != Platform::Jvm && export.exporter == Exporter::Mill {
                     scalajs_left_out.push(n.clone());
                 } else if export.refusals("test", n).is_empty() {
                     keys.push(Key::new(n, "test"))
@@ -624,7 +660,7 @@ fn test(state: &Arc<State>, export: &Arc<Export>, request: &Request, reply: &mut
         }
     };
     let patterns = Patterns::new(&words[usize::from(named.is_some())..]);
-    let asked = TestRequest { keys, patterns, changed, list, verbose };
+    let asked = TestRequest { keys, patterns, changed, list, verbose, events };
     if asked.keys.is_empty() && left_out.is_empty() && scalajs_left_out.is_empty() {
         reply.out("teq: no project with test frameworks\n");
         return 0;
@@ -638,14 +674,18 @@ fn test(state: &Arc<State>, export: &Arc<Export>, request: &Request, reply: &mut
     super::with_left_out(code, &left_out)
 }
 
-/// Why a Scala.js project's suites do not run, naming how its build tool runs them: the link's module
-/// kind and the JavaScript environment.
+/// Why a Scala.js project of a Mill build's export does not run its suites, naming how Mill runs them:
+/// the link's module kind and the JavaScript environment. teq runs them as sbt-scalajs does, which
+/// it has not been checked against Mill's run of them.
 fn scalajs_suites(export: &Export, name: &str) -> String {
     let how = export.configuration(&Key::new(name, "test")).and_then(|c| c.test.as_ref()).map_or_else(String::new, |t| t.js_run());
     format!("{} is a Scala.js project, whose suites{} teq does not run yet", name, how)
 }
 
 fn test_configuration(state: &Arc<State>, export: &Arc<Export>, request: &Request, asked: &TestRequest, key: &Key, reply: &mut Reply) -> i32 {
+    if export.projects.get(&key.project).is_some_and(|p| p.platform == Platform::Js) {
+        return test_js_configuration(state, export, request, asked, key, reply);
+    }
     let started = Instant::now();
     let running = running(state);
     let Some(owner) = plan(export, &running, std::slice::from_ref(key)).into_iter().next() else { return 2 };
@@ -745,7 +785,7 @@ fn test_configuration(state: &Arc<State>, export: &Arc<Export>, request: &Reques
         }
         return incomplete;
     }
-    let mut selected: Vec<suites::Suite> = suites::assign(&defined, &r.fingerprints).into_iter().filter(|s| !context.exclude.contains(&s.name) && asked.patterns.matches(&s.name)).collect();
+    let mut selected = chosen(&defined, &r.fingerprints, &context, asked);
     if asked.changed {
         let changes = state.changes.lock().unwrap_or_else(|e| e.into_inner());
         let why_every = match changes.get(key) {
@@ -767,7 +807,7 @@ fn test_configuration(state: &Arc<State>, export: &Arc<Export>, request: &Reques
         let why = if asked.changed { "no suite depends on what changed" } else { "no suite to run" };
         reply.out(&format!("{}: {}\n", key, why));
         if every && incomplete == 0 {
-            state.changes.lock().unwrap_or_else(|e| e.into_inner()).insert(key.clone(), Changes { resident: owner, all: false, files: BTreeSet::new() });
+            state.changes.lock().unwrap_or_else(|e| e.into_inner()).insert(key.clone(), Changes { resident: owner, all: false, files: BTreeSet::new(), sources: BTreeMap::new() });
         }
         return incomplete;
     }
@@ -780,29 +820,21 @@ fn test_configuration(state: &Arc<State>, export: &Arc<Export>, request: &Reques
         }
     }
     let names: Vec<(usize, usize, String)> = selected.iter().map(|s| (s.framework, s.fingerprint, s.name.clone())).collect();
-    let result = r.run(&directories, &names, asked.verbose, request.tty, &mut |line| reply.out(line));
+    let mut tally = Tally::default();
+    let result = r.run(&directories, &names, asked.verbose, request.tty, &mut tally, &mut |line| reply.out(line));
     drop(finished);
     let stderr = r.drain_stderr();
     if !stderr.is_empty() {
         reply.err(&stderr);
     }
     match result {
-        Ok(done) => {
+        Ok(ms) => {
             if every && incomplete == 0 {
-                state.changes.lock().unwrap_or_else(|e| e.into_inner()).insert(key.clone(), Changes { resident: owner, all: false, files: BTreeSet::new() });
+                state.changes.lock().unwrap_or_else(|e| e.into_inner()).insert(key.clone(), Changes { resident: owner, all: false, files: BTreeSet::new(), sources: BTreeMap::new() });
             }
-            let n = selected.len();
-            reply.out(&format!(
-                "{}: {} suite{}, {} passed, {} failed in {} ms (built in {} ms)\n",
-                key,
-                n,
-                if n == 1 { "" } else { "s" },
-                done.passed,
-                done.failed,
-                done.ms,
-                built_ms
-            ));
-            i32::from(done.failed > 0).max(incomplete)
+            reply.out(&summary(key, selected.len(), &tally, ms, built_ms));
+            write_events(asked, key, &tally, reply);
+            i32::from(tally.failed() > 0).max(incomplete)
         }
         Err(e) => {
             if let Some(r) = runner.take() {
@@ -812,6 +844,235 @@ fn test_configuration(state: &Arc<State>, export: &Arc<Export>, request: &Reques
             1
         }
     }
+}
+
+/// The run's events appended to the `--events` file, if one was asked for.
+fn write_events(asked: &TestRequest, key: &Key, tally: &Tally, reply: &mut Reply) {
+    let Some(file) = &asked.events else { return };
+    let text: String = tally.events.iter().map(|e| e.line(&key.project)).collect();
+    let written = std::fs::OpenOptions::new().append(true).open(file).and_then(|mut f| f.write_all(text.as_bytes()));
+    if let Err(e) = written {
+        reply.err(&format!("teq: cannot write {}: {}\n", file.display(), e));
+    }
+}
+
+/// The suites a run takes of those discovered: each with the fingerprint it was found by, less
+/// those a `Tests.Exclude` names, matching the patterns as `testOnly` matches them.
+fn chosen(defined: &[suites::Defined], prints: &[runner::Fingerprint], context: &TestContext, asked: &TestRequest) -> Vec<suites::Suite> {
+    suites::assign(defined, prints).into_iter().filter(|s| !context.exclude.contains(&s.name) && asked.patterns.matches(&s.name)).collect()
+}
+
+/// The digest of each source file of the view, read from the build's root.
+fn source_digests(export: &Export, view: &View) -> BTreeMap<String, String> {
+    view.sources().filter_map(|f| Some((f.to_string(), super::sha256::hex(&std::fs::read(export.root.join(f)).ok()?)))).collect()
+}
+
+/// `test` of a Scala.js test configuration: its resident links the program whose entry point
+/// starts Scala.js's test bridge (`Export::test_link`), whose analysis finds the suites; a fresh
+/// node per run loads it as the export's module kind says in the export's environment
+/// (`jsrunner`), and the frameworks' fingerprints come from the bridge. An empty discovered set
+/// fails, before any listing or selection: a configuration with frameworks and no suite has
+/// run nothing (an empty `--changed` selection does not fail).
+fn test_js_configuration(state: &Arc<State>, export: &Arc<Export>, request: &Request, asked: &TestRequest, key: &Key, reply: &mut Reply) -> i32 {
+    let started = Instant::now();
+    let conf = export.configuration(key).expect("a test configuration");
+    let context = conf.test.clone().unwrap_or_default();
+    if context.frameworks.is_empty() {
+        reply.out(&format!("{}: no test framework\n", key));
+        return 0;
+    }
+    let (module_kind, js_env) = match context.js_test() {
+        Ok((kind, env)) => (kind, env.clone()),
+        Err(why) => {
+            reply.err(&format!("teq: {}: {}\n", key, why));
+            return 2;
+        }
+    };
+    let Some(link) = export.test_link(key) else {
+        reply.err(&format!("teq: {}: the export does not say how the build tool runs its tests: export it again\n", key));
+        return 2;
+    };
+    // The configuration's own resident links its program: held through the run, so that no other
+    // build rewrites the link node reads.
+    let slot = slot(state, key);
+    let mut resident = slot.lock().unwrap_or_else(|e| e.into_inner());
+    if !built(state, export, request, key, &mut resident, reply) {
+        return 1;
+    }
+    let built_ms = started.elapsed().as_millis();
+    let r = resident.as_ref().expect("built");
+    let view = &r.analysis;
+    if let Some(why) = &view.unreadable {
+        reply.err(&format!("teq: {}: the analysis does not read: {}\n", key, why));
+        return 1;
+    }
+    let input = match (module_kind, r.es_module == Some(true)) {
+        (ModuleKind::EsModule, _) => jsrunner::Input::EsModule(link.out.clone()),
+        (ModuleKind::NoModule, false) => jsrunner::Input::Script(link.out.clone()),
+        (ModuleKind::CommonJs, false) => jsrunner::Input::CommonJs(link.out.clone()),
+        (kind, true) => {
+            reply.err(&format!(
+                "teq: {}: the test link imports or exports JavaScript modules, and the export's module kind is {}: teq writes an ES module for such a program, which a {} run cannot load (set the Test configuration's scalaJSLinkerConfig to ESModule)\n",
+                key,
+                kind.name(),
+                kind.name()
+            ));
+            return 2;
+        }
+    };
+    let jsdom = js_env.kind == "jsdom";
+    let env = jsrunner::Env {
+        executable: js_env.executable.clone().unwrap_or_else(|| "node".to_string()),
+        args: js_env.args.clone(),
+        env: js_env.env.clone(),
+        cwd: export.path("."),
+        source_map: match js_env.source_map.as_deref() {
+            Some("disable") => jsrunner::SourceMap::Disable,
+            Some("enable") => jsrunner::SourceMap::Enable,
+            _ => jsrunner::SourceMap::EnableIfAvailable,
+        },
+        jsdom: jsdom.then(|| export.path(js_env.package_root.as_deref().unwrap_or("."))),
+    };
+    if jsdom {
+        if let Err(e) = jsdom::ready(export, &js_env, &request.environment, &|line| reply.sink().line(line)) {
+            reply.err(&format!("teq: {}: {}\n", key, e));
+            return 2;
+        }
+    }
+    let candidates = view.candidates(&conf.sources);
+    let out = reply.shared_out();
+    let finished = Finished(Arc::new(AtomicBool::new(false)));
+    let mut run = match jsrunner::JsRun::start(&env, &input, &request.environment, asked.verbose, out.clone()) {
+        Ok(run) => run,
+        Err(e) => {
+            reply.err(&format!("teq: {}: {}\n", key, e));
+            return 1;
+        }
+    };
+    kill_when_gone(reply, &finished, run.process(), key);
+    let classes: Vec<String> = context.frameworks.iter().map(|f| f.class.clone()).collect();
+    let found = match run.detect(&classes) {
+        Ok(found) => found,
+        Err(e) => {
+            reply.err(&format!("teq: {}: {}\n", key, e));
+            return 1;
+        }
+    };
+    let mut prints: Vec<runner::Fingerprint> = Vec::new();
+    let mut missing = 0;
+    for (i, f) in found.iter().enumerate() {
+        match f {
+            Some(info) => {
+                for (j, (kind, module, name, no_args)) in info.fingerprints.iter().enumerate() {
+                    prints.push(runner::Fingerprint { framework: i, index: j, kind: *kind, module: *module, name: name.clone(), no_args: *no_args });
+                }
+            }
+            // A framework the export names that the link does not hold leaves its suites unrun:
+            // never a pass.
+            None => {
+                reply.err(&format!("teq: {}: the test framework {} is not in the test link\n", key, classes[i]));
+                missing += 1;
+            }
+        }
+    }
+    let incomplete = i32::from(missing > 0);
+    let defined = suites::defined(&candidates, &prints);
+    if defined.is_empty() {
+        let _ = run.finish();
+        reply.err(&format!("teq: {}: no suite of the test frameworks ({}) among the test sources: a run of nothing is no pass\n", key, classes.join(", ")));
+        return 1;
+    }
+    if asked.list {
+        for d in &defined {
+            out(&format!("{}\n", d));
+        }
+        return match run.finish() {
+            Ok(()) => incomplete,
+            Err(e) => {
+                reply.err(&format!("teq: {}: {}\n", key, e));
+                1
+            }
+        };
+    }
+    let mut selected = chosen(&defined, &prints, &context, asked);
+    let digests = source_digests(export, view);
+    if asked.changed {
+        let changes = state.changes.lock().unwrap_or_else(|e| e.into_inner());
+        let why_every = match changes.get(key) {
+            None => Some("no earlier run in this daemon's life".to_string()),
+            Some(c) if c.resident != *key || c.all => Some("its resident started anew since the last run".to_string()),
+            Some(_) => view.deps_missing.as_ref().map(|why| format!("the dependencies are unavailable: {}", why)),
+        };
+        match (why_every, changes.get(key)) {
+            (Some(why), _) => reply.err(&format!("teq: {}: every suite, {}\n", key, why)),
+            (None, Some(c)) => {
+                let edited: BTreeSet<String> = digests.iter().filter(|(f, d)| c.sources.get(*f) != Some(*d)).map(|(f, _)| f.clone()).collect();
+                let affected = view.affected_by_sources(&edited);
+                selected.retain(|s| affected.contains(&s.name));
+            }
+            (None, None) => {}
+        }
+    }
+    let every = asked.patterns.is_empty();
+    let record = |state: &State| {
+        state.changes.lock().unwrap_or_else(|e| e.into_inner()).insert(key.clone(), Changes { resident: key.clone(), all: false, files: BTreeSet::new(), sources: digests.clone() });
+    };
+    if selected.is_empty() {
+        let _ = run.finish();
+        let why = if asked.changed { "no suite depends on what changed" } else { "no suite to run" };
+        reply.out(&format!("{}: {}\n", key, why));
+        if every && incomplete == 0 {
+            record(state);
+        }
+        return incomplete;
+    }
+    let mut tally = Tally::default();
+    let run_started = Instant::now();
+    let mut result = Ok(());
+    for (i, framework) in context.frameworks.iter().enumerate() {
+        let Some(info) = &found[i] else { continue };
+        let defs: Vec<jsrunner::TaskDef> = selected.iter().filter(|s| s.framework == i).map(|s| jsrunner::TaskDef { name: s.name.clone(), fingerprint: prints.iter().find(|p| p.framework == i && p.index == s.fingerprint).expect("assigned").clone() }).collect();
+        if defs.is_empty() {
+            continue;
+        }
+        result = run.run_framework(i as i32, &info.implementation, &framework.arguments, &defs, request.tty, &mut tally);
+        if result.is_err() {
+            break;
+        }
+    }
+    let result = result.and_then(|()| run.finish());
+    drop(finished);
+    let ms = run_started.elapsed().as_millis() as u64;
+    match result {
+        Ok(()) => {
+            if every && incomplete == 0 {
+                record(state);
+            }
+            out(&summary(key, selected.len(), &tally, ms, built_ms));
+            write_events(asked, key, &tally, reply);
+            i32::from(tally.failed() > 0).max(incomplete)
+        }
+        Err(e) => {
+            reply.err(&format!("teq: {}: {}\n", key, e));
+            1
+        }
+    }
+}
+
+/// The line that ends a configuration's run: its suites, the events by status, the run's time
+/// and the build's.
+fn summary(key: &Key, suites: usize, tally: &Tally, ms: u64, built_ms: u128) -> String {
+    format!(
+        "{}: {} suite{}, {} passed, {} failed{} in {} ms (built in {} ms)\n",
+        key,
+        suites,
+        if suites == 1 { "" } else { "s" },
+        tally.passed(),
+        tally.failed(),
+        tally.others(),
+        ms,
+        built_ms
+    )
 }
 
 /// The resident's build in its slot, held by the caller, its diagnostics and notes printed;
@@ -1053,6 +1314,11 @@ fn build_in(state: &State, export: &Export, key: &Key, env: &BTreeMap<String, St
         Ok(notes) => notes,
         Err(e) => return (Err(e), Vec::new()),
     };
+    if let Some(link) = export.test_link(key) {
+        if let Err(e) = export.write_harness(&link) {
+            return (Err(e), notes);
+        }
+    }
     let inputs = export.inputs_of(key);
     if resident.as_ref().is_some_and(|r| r.inputs != inputs) {
         log(&format!("restarting {}: its existing source roots changed", key));

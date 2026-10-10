@@ -213,6 +213,23 @@ impl View {
                 }
             }
         }
+        self.dependents(reached)
+    }
+
+    /// The classes of the source files, and every class whose dependencies reach one of them,
+    /// transitively: what a change of those files reaches where no class file says it (a Scala.js
+    /// link).
+    pub fn affected_by_sources(&self, sources: &BTreeSet<String>) -> BTreeSet<String> {
+        let reached = self.files.iter().filter(|(path, _)| sources.contains(&***path)).flat_map(|(_, f)| f.classes.iter().map(|c| c.name)).collect();
+        self.dependents(reached)
+    }
+
+    /// The source files the view holds.
+    pub fn sources(&self) -> impl Iterator<Item = &str> {
+        self.files.keys().map(|k| &**k)
+    }
+
+    fn dependents(&self, mut reached: BTreeSet<Id>) -> BTreeSet<String> {
         let mut dependents: HashMap<Id, Vec<Id>> = HashMap::new();
         for file in self.files.values() {
             for (class, on) in &file.deps {

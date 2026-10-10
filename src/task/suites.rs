@@ -107,7 +107,7 @@ mod tests {
     use super::*;
 
     fn print(framework: usize, index: usize, kind: Kind, module: bool, name: &str) -> Fingerprint {
-        Fingerprint { framework, index, kind, module, name: name.to_string() }
+        Fingerprint { framework, index, kind, module, name: name.to_string(), no_args: true }
     }
 
     #[test]

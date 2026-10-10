@@ -4,6 +4,7 @@
 //! `<cache root>/runner/<sha1 of the classes>/` at first use; and the runner's JVM, which the
 //! daemon keeps warm per test configuration, spoken to in the protocol `Runner.java` states.
 
+use super::events::{Event, Frame, Selector, Status, Tally, Thrown};
 use super::export::{join_paths, Framework};
 use super::fetch;
 use std::collections::BTreeMap;
@@ -15,10 +16,9 @@ use std::time::{Duration, Instant, SystemTime};
 
 const PACKAGE: &str = "dev/teq/runner";
 const MAIN: &str = "dev.teq.runner.Runner";
-const CLASSES: [(&str, &[u8]); 4] = [
+const CLASSES: [(&str, &[u8]); 3] = [
     ("Runner.class", include_bytes!("runner/dev/teq/runner/Runner.class")),
-    ("Runner$1.class", include_bytes!("runner/dev/teq/runner/Runner$1.class")),
-    ("Runner$Counts.class", include_bytes!("runner/dev/teq/runner/Runner$Counts.class")),
+    ("Runner$Events.class", include_bytes!("runner/dev/teq/runner/Runner$Events.class")),
     ("Runner$Forwarded.class", include_bytes!("runner/dev/teq/runner/Runner$Forwarded.class")),
 ];
 /// The least Java the runner's class files load on.
@@ -132,12 +132,9 @@ pub struct Fingerprint {
     pub kind: Kind,
     pub module: bool,
     pub name: String,
-}
-
-pub struct Done {
-    pub failed: u64,
-    pub passed: u64,
-    pub ms: u64,
+    /// A subclass fingerprint's `requireNoArgConstructor`, which Scala.js's bridge sends back
+    /// with a task's definition (the JVM's runner keeps the fingerprint itself).
+    pub no_args: bool,
 }
 
 pub struct Runner {
@@ -155,6 +152,29 @@ pub struct Runner {
 /// A field of a command, its tabs, line breaks and backslashes escaped.
 fn field(text: &str) -> String {
     text.replace('\\', "\\\\").replace('\t', "\\t").replace('\n', "\\n").replace('\r', "\\r")
+}
+
+/// A field of the runner's line, its escapes undone.
+fn unescape(text: &str) -> String {
+    if !text.contains('\\') {
+        return text.to_string();
+    }
+    let mut out = String::with_capacity(text.len());
+    let mut chars = text.chars();
+    while let Some(c) = chars.next() {
+        if c != '\\' {
+            out.push(c);
+            continue;
+        }
+        match chars.next() {
+            Some('t') => out.push('\t'),
+            Some('n') => out.push('\n'),
+            Some('r') => out.push('\r'),
+            Some(other) => out.push(other),
+            None => out.push('\\'),
+        }
+    }
+    out
 }
 
 /// A java argument file of the class path, `-cp` and the path. java's launcher reads the file in
@@ -315,7 +335,7 @@ impl Runner {
                 "ready" => return Ok(()),
                 "fingerprint" => {
                     let kind = if at(3) == "annotated" { Kind::Annotated } else { Kind::Subclass };
-                    self.fingerprints.push(Fingerprint { framework: at(1).parse().unwrap_or(0), index: at(2).parse().unwrap_or(0), kind, module: at(4) == "true", name: at(5).to_string() });
+                    self.fingerprints.push(Fingerprint { framework: at(1).parse().unwrap_or(0), index: at(2).parse().unwrap_or(0), kind, module: at(4) == "true", name: at(5).to_string(), no_args: true });
                 }
                 "missing" => {
                     let class = at(1).parse::<usize>().ok().and_then(|i| self.spec.frameworks.get(i)).map_or(String::new(), |f| f.class.clone());
@@ -327,8 +347,9 @@ impl Runner {
     }
 
     /// Runs the suites, each `(framework, fingerprint, name)`, through a class loader over the
-    /// directories, each line the frameworks and the suites write passed to `out` as it comes.
-    pub fn run(&mut self, directories: &[PathBuf], suites: &[(usize, usize, String)], verbose: bool, ansi: bool, out: &mut dyn FnMut(&str)) -> Result<Done, String> {
+    /// directories: each event counted into `tally`, the lines the frameworks and the suites write
+    /// and those that report an event passed to `out` as they come; the run's milliseconds.
+    pub fn run(&mut self, directories: &[PathBuf], suites: &[(usize, usize, String)], verbose: bool, ansi: bool, tally: &mut Tally, out: &mut dyn FnMut(&str)) -> Result<u64, String> {
         let flag = |b: bool| if b { "1" } else { "0" };
         let mut commands = format!("run\t{}\t{}\n", flag(verbose), flag(ansi));
         for d in directories {
@@ -339,14 +360,52 @@ impl Runner {
         }
         commands.push_str("go\n");
         self.send(&commands)?;
+        // What was thrown, its causes after it, until the event or the crash it belongs to.
+        let mut thrown: Vec<Thrown> = Vec::new();
         loop {
             let Some((before, fields)) = self.next()? else { return Err(self.gone()) };
             if !before.is_empty() {
                 out(&before);
             }
-            if fields.first().map(String::as_str) == Some("done") {
-                let number = |i: usize| fields.get(i).and_then(|n| n.parse::<u64>().ok()).unwrap_or(0);
-                return Ok(Done { failed: number(1), passed: number(2), ms: number(3) });
+            let at = |i: usize| fields.get(i).map_or("", String::as_str);
+            match at(0) {
+                "throwable" | "cause" => {
+                    if at(0) == "throwable" {
+                        thrown.clear();
+                    }
+                    thrown.push(Thrown { text: at(1).to_string(), frames: Vec::new(), cause: None });
+                }
+                "frame" => {
+                    if let Some(t) = thrown.last_mut() {
+                        t.frames.push(Frame { class: at(1).to_string(), text: at(2).to_string() });
+                    }
+                }
+                "event" | "crashed" => {
+                    let chained = thrown.drain(..).rev().fold(None, |cause: Option<Box<Thrown>>, mut t| {
+                        t.cause = cause;
+                        Some(Box::new(t))
+                    });
+                    let thrown = chained.map(|t| *t);
+                    let event = if at(0) == "crashed" {
+                        Event::crashed(at(1), thrown)
+                    } else {
+                        let selector = match at(4) {
+                            "test" => Selector::Test(at(5).to_string()),
+                            "nestedTest" => Selector::NestedTest(at(5).to_string(), at(6).to_string()),
+                            "nestedSuite" => Selector::NestedSuite(at(5).to_string()),
+                            "wildcard" => Selector::Wildcard(at(5).to_string()),
+                            _ => Selector::Suite,
+                        };
+                        let status = at(2).parse::<i64>().ok().and_then(Status::of_ordinal).unwrap_or(Status::Error);
+                        Event { suite: at(1).to_string(), name: at(3).to_string(), selector, status, thrown, ms: at(7).parse().unwrap_or(-1), crashed: false }
+                    };
+                    let lines = tally.add(event, verbose);
+                    if !lines.is_empty() {
+                        out(&lines);
+                    }
+                }
+                "done" => return Ok(at(1).parse::<u64>().unwrap_or(0)),
+                _ => {}
             }
         }
     }
@@ -365,7 +424,7 @@ impl Runner {
         let line = String::from_utf8_lossy(&bytes);
         Ok(Some(match line.find(&self.token) {
             Some(at) => {
-                let fields = line[at + self.token.len()..].trim_end_matches(['\n', '\r']).split('\t').skip(1).map(str::to_string).collect();
+                let fields = line[at + self.token.len()..].trim_end_matches(['\n', '\r']).split('\t').skip(1).map(unescape).collect();
                 (line[..at].to_string(), fields)
             }
             None => (line.into_owned(), Vec::new()),
@@ -444,9 +503,9 @@ mod tests {
         assert!(written.starts_with(dir.join("runner")));
         assert_eq!(std::fs::read(written.join(PACKAGE).join("Runner.class")).unwrap(), CLASSES[0].1);
         assert_eq!(classes_under(&dir).unwrap(), written);
-        std::fs::remove_file(written.join(PACKAGE).join("Runner$Counts.class")).unwrap();
+        std::fs::remove_file(written.join(PACKAGE).join("Runner$Events.class")).unwrap();
         assert_eq!(classes_under(&dir).unwrap(), written);
-        assert!(written.join(PACKAGE).join("Runner$Counts.class").is_file(), "an incomplete directory is written again");
+        assert!(written.join(PACKAGE).join("Runner$Events.class").is_file(), "an incomplete directory is written again");
         let _ = std::fs::remove_dir_all(&dir);
     }
 
@@ -469,6 +528,7 @@ mod tests {
     #[test]
     fn fields_and_arguments_escaped() {
         assert_eq!(field("a\tb\\c\nd\re"), "a\\tb\\\\c\\nd\\re");
+        assert_eq!(unescape(&field("a\tb\\c\nd\re\\n")), "a\tb\\c\nd\re\\n");
         let utf8 = |s: &str| Ok(s.as_bytes().to_vec());
         assert_eq!(argfile_of(r#"C:\a "b";d"#, utf8).unwrap(), br#"-cp
 "C:\\a \"b\";d"
