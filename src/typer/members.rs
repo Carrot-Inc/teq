@@ -2131,8 +2131,19 @@ impl<'a> Worker<'a> {
         loop {
             match self.types.get(t) {
                 Type::Rec(body) => t = self.opened_rec(body, prefix),
-                // `goAnd`: either side's refinement.
-                Type::Inter(a, b) => return self.refined_term_through(a, name, prefix).or_else(|| self.refined_term_through(b, name, prefix)),
+                // `goAnd`: the two sides' denotations met (`Denotation.meet`): one side's where
+                // the other refines no member of the name, two vals' types intersected; two
+                // different methods are an overload, which no refinement narrows (`Overloaded
+                // definitions introduced by refinements cannot be resolved`): the class's member.
+                Type::Inter(a, b) => {
+                    let (x, y) = (self.refined_term_through(a, name, prefix), self.refined_term_through(b, name, prefix));
+                    return match (x, y) {
+                        (Some(x), None) | (None, Some(x)) => Some(x),
+                        (Some(x), Some(y)) if x == y => Some(x),
+                        (Some(Refinement::Val(n, s, tx)), Some(Refinement::Val(_, _, ty))) => Some(Refinement::Val(n, s, self.types.inter(tx, ty))),
+                        _ => None,
+                    };
+                }
                 Type::Refined(p, r) => {
                     let refinement = self.types.refinement(r);
                     if matches!(refinement, Refinement::Term(n, ..) | Refinement::Val(n, ..) if n == name) {
