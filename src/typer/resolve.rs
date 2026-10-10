@@ -7,6 +7,18 @@ use crate::symbols::*;
 use crate::types::*;
 use std::sync::Arc;
 
+/// A block being typed, as its deferred aliases need it (`Namer.indexExpanded`'s context per
+/// statement): the depth of its frame, where its imports start, its statements and the first
+/// statement the typing has not reached.
+#[derive(Clone, Debug)]
+pub struct LocalBlock {
+    pub file: FileId,
+    pub stmts: ListRef,
+    pub frame_depth: usize,
+    pub imports_scope: usize,
+    pub next: usize,
+}
+
 /// A refinement whose members are being resolved: dotty's refinement class, whose statements
 /// `Typer.typedRefinedTypeTree` indexes as a scope. A name among its type members, or one of a type
 /// member its parent has, is that member of the refined type itself, `RecThis.T`
@@ -4168,12 +4180,19 @@ impl<'a> Worker<'a> {
         };
         let def = self.ast(file).def(def_id);
         let DefKind::TypeAlias { tparams, rhs, lower, upper } = &def.kind else { return };
-        // A block's alias is completed in the block, where it is named or stands
-        // (`declare_local_alias`).
+        // A block's alias is completed in its own context, whichever statement names it first:
+        // the block's frames and the imports before its statement (`Namer.indexExpanded`).
         if owner == Owner::Local {
-            let depth = self.env.frames.len();
-            let (ids, ty, bounds) = self.resolve_alias_def(a, tparams, *rhs, *lower, *upper);
-            self.env.frames.truncate(depth);
+            let env = self.local_alias_env(a);
+            let (ids, ty, bounds) = match env {
+                Some(env) => self.with_env(env, |t| t.resolve_alias_def(a, tparams, *rhs, *lower, *upper)),
+                None => {
+                    let depth = self.env.frames.len();
+                    let r = self.resolve_alias_def(a, tparams, *rhs, *lower, *upper);
+                    self.env.frames.truncate(depth);
+                    r
+                }
+            };
             self.finish_alias(a, ids, ty, bounds);
             return;
         }
@@ -4213,6 +4232,44 @@ impl<'a> Worker<'a> {
         }
     }
 
+    /// The environment of the deferred alias `a`'s definition: its block's frames as they stand
+    /// (every definition of the block is entered before its statements are typed), the imports
+    /// of the enclosing scopes and the block's own before the alias's statement; those the typing
+    /// has not reached yet are resolved for it, quietly (their statement enters them). None where
+    /// the alias's block is not being typed.
+    fn local_alias_env(&mut self, a: AliasId) -> Option<Env> {
+        let &(frame_depth, at) = self.local_alias_sites.get(&a)?;
+        let b = self.local_blocks.iter().rev().find(|b| b.frame_depth == frame_depth)?.clone();
+        if self.env.frames.len() < frame_depth {
+            return None;
+        }
+        let frames = self.env.frames[..frame_depth].to_vec();
+        let mut imports: Vec<ResolvedImport> = self.env.imports.iter().copied().filter(|i| (i.depth as usize) <= frame_depth).collect();
+        let ast = self.ast(b.file);
+        let pending: Vec<u32> = ast.stmt_list(b.stmts)[b.next.min(at)..at].iter().filter_map(|s| match s {
+            ast::Stmt::Import(i) => Some(*i),
+            _ => None,
+        }).collect();
+        if !pending.is_empty() {
+            let mode = std::mem::take(&mut self.unused.mode);
+            let index = self.index.take();
+            let scope = b.imports_scope.min(imports.len());
+            let mut env = Env { file: b.file, frames: frames.clone(), imports: imports.clone() };
+            for i in pending {
+                let clauses = self.ast(b.file).import_stmt(i);
+                let resolved: Vec<ResolvedImport> = self.with_env(env.clone(), |t| clauses.iter().filter_map(|imp| t.resolve_import(imp, clauses)).collect());
+                for imp in resolved {
+                    env.frames.truncate(frame_depth);
+                    env.push_import(scope, imp);
+                }
+            }
+            self.unused.mode = mode;
+            self.index = index;
+            imports = env.imports;
+        }
+        Some(Env { file: b.file, frames, imports })
+    }
+
     /// A type alias local to a block, entered in the block's scope where the block's definitions
     /// are and completed where it stands, under the imports before it (`Namer.index`, whose
     /// completers keep the import context of their definition): its right-hand side is resolved
@@ -4236,6 +4293,10 @@ impl<'a> Worker<'a> {
             deprecated: def.mods & crate::ast::mods::DEPRECATED != 0,
         });
         self.syms.alias_cells.set(a.0, Completion::NotStarted);
+        if let Some(b) = self.local_blocks.last() {
+            let at = self.ast(file).stmt_list(b.stmts).iter().position(|s| matches!(s, ast::Stmt::Def(x) if *x == d)).unwrap_or(b.next);
+            self.local_alias_sites.insert(a, (b.frame_depth, at));
+        }
         if let Some(Frame::Locals { aliases, .. }) = self.env.frames.last_mut() {
             aliases.push((def.name, a));
         }

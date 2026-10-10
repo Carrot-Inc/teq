@@ -3581,6 +3581,7 @@ impl<'a> Worker<'a> {
         let import_aliases = self.inline.import_aliases.len();
         let pending_imports = if self.inline.checking > 0 { self.pending_imports_mark() } else { None };
         self.push_scope();
+        self.local_blocks.push(super::resolve::LocalBlock { file, stmts, frame_depth: self.env.frames.len(), imports_scope, next: 0 });
         let cursor = items.iter().any(|s| matches!(s, Stmt::Def(d) if matches!(ast.def(*d).kind, DefKind::Fun(_)) && ast.def(*d).mods & mods::INLINE != 0));
         if cursor {
             let frame = self.env.frames.len() - 1;
@@ -3695,6 +3696,9 @@ impl<'a> Worker<'a> {
                     b.at = i;
                 }
             }
+            if let Some(b) = self.local_blocks.last_mut() {
+                b.next = i;
+            }
             match *s {
                 Stmt::Expr(e) if i + 1 == n => result = Some(self.type_expr_adapted(e, expected)),
                 Stmt::Expr(e) => {
@@ -3728,6 +3732,9 @@ impl<'a> Worker<'a> {
             self.inline.blocks.pop();
         }
         self.pop_scope();
+        if let Some(b) = self.local_blocks.pop() {
+            self.local_alias_sites.retain(|_, &mut (depth, _)| depth != b.frame_depth);
+        }
         self.env.imports.truncate(imports_scope);
         self.inline.body_imports.truncate(body_imports);
         for alias in self.inline.import_aliases.drain(import_aliases..) {

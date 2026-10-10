@@ -1370,6 +1370,12 @@ pub struct Worker<'a> {
     pub case_binders: Vec<(Name, TypeId)>,
     /// The refinements whose members are being resolved, innermost last (`resolve::RefineScope`).
     pub refine_scopes: Vec<resolve::RefineScope>,
+    /// The blocks being typed, innermost last, each with what its deferred aliases are completed
+    /// in (`resolve::LocalBlock`).
+    pub local_blocks: Vec<resolve::LocalBlock>,
+    /// Each deferred alias of a block being typed, with its block's frame depth and its
+    /// statement's place: where it is completed whichever statement names it first.
+    pub local_alias_sites: crate::intern::FxMap<AliasId, (usize, usize)>,
     /// The type the last typed pattern (`x: T`) gave its binder, which the enclosing `Bind`
     /// reads: the ascription with its wildcard arguments inferred from the scrutinee.
     pub last_typed_pattern: Option<(crate::ast::PatId, TypeId)>,
@@ -2326,6 +2332,8 @@ impl<'a> Worker<'a> {
             other_view_memos: Default::default(),
             case_binders: Vec::new(),
             refine_scopes: Vec::new(),
+            local_blocks: Default::default(),
+            local_alias_sites: Default::default(),
             last_typed_pattern: None,
             refutable_is_error: false,
             applied_extension: None,
@@ -2648,6 +2656,8 @@ impl<'a> Worker<'a> {
             other_view_memos: Default::default(),
             case_binders: Default::default(),
             refine_scopes: Default::default(),
+            local_blocks: Default::default(),
+            local_alias_sites: Default::default(),
             last_typed_pattern: Default::default(),
             refutable_is_error: false,
             applied_extension: None,
