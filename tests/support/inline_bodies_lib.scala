@@ -5,6 +5,7 @@
 package inlinebodies
 
 import scala.compiletime.{codeOf, constValue, erasedValue}
+import scala.deriving.Mirror
 
 object Bodies:
   inline def value(x: Int): x.type = constValue[x.type]
@@ -25,3 +26,18 @@ object Bodies:
 
 class Counter(start: Int):
   inline def plus(n: Int): Int = start + Bodies.value(n)
+
+type Id[t] = t
+type Lift0[F[_], T] <: Tuple = T match
+  case EmptyTuple => EmptyTuple
+  case a *: b => F[a] *: Lift0[F, b]
+
+object Sizes:
+  inline def size[K, E <: Tuple]: Int = constValue[Tuple.Size[E]]
+
+trait Kind[Mono[_]]:
+  type LiftP[F[_], T] <: Tuple = Mono[T] match
+    case Tuple => Lift0[F, Mono[T]]
+  inline def count[F[_], T](using gen: Mirror.ProductOf[T]): Int = Sizes.size[Kind.this.type, LiftP[F, gen.MirroredElemTypes]]
+
+object K0 extends Kind[Id]

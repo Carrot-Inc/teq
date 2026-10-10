@@ -2051,6 +2051,11 @@ impl<'c> Copier<'c> {
     fn ty_under(&self, t: &mut Worker, ty: TypeId, subst: &Subst) -> TypeId {
         let ty = t.types.import(ty);
         let mut ty = t.types.subst(ty, subst);
+        // A match-type alias of a generic class the substitution instantiates is the class's copy
+        // seen through it (`Worker::specialise_aliases`), as the retype path's types are.
+        if t.types.is_reducible(ty) {
+            ty = t.specialise_aliases(ty, subst);
+        }
         if self.stored.is_some() && !self.classes.is_empty() {
             ty = t.with_class_copies(ty, &self.classes);
         }

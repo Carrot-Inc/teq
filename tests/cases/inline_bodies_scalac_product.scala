@@ -5,9 +5,11 @@
 // a constant argument is the parameter's path (`constValue[x.type]` of `value(3)` is 3); `codeOf`
 // shows the expansion's typed argument, a constant folded, a by-value argument evaluated once into
 // its proxy; each expansion's local class is a class of its own; an `erasedValue` an inline match
-// tests is consumed. scalac prints the lines of the .expected file.
-import inlinebodies.{Bodies, Counter}
+// tests is consumed; a generic class's match-type alias is seen from the receiver. scalac prints
+// the lines of the .expected file.
+import inlinebodies.{Bodies, Counter, K0}
 var effects = 0
+case class P(a: Int, b: String)
 def effect(n: Int): Int = { effects += 1; n }
 @main def run(): Unit =
   println(Bodies.value(3))
@@ -25,3 +27,4 @@ def effect(n: Int): Int = { effects += 1; n }
   println(Bodies.kind)
   println(s"${Bodies.kindOf[Int]},${Bodies.kindOf[String]},${Bodies.kindOf[Boolean]}")
   println(new Counter(10).plus(2))
+  println(K0.count[Option, P])

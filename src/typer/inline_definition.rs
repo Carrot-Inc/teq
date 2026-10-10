@@ -1006,6 +1006,12 @@ impl<'a> Worker<'a> {
         // the loader typed it: in this reader's view before the substitution.
         let t = self.types.in_view_here(t);
         let mut t = self.types.subst(t, subst);
+        // A match-type alias of a generic class the substitution instantiates (`Kind.this.LiftP[F,
+        // T]` expanded on `K0`) is the class's copy seen through it, as the retype path's types are
+        // (`subst_inline_tparams`).
+        if self.types.is_reducible(t) {
+            t = self.specialise_aliases(t, subst);
+        }
         if self.types.has_paths(t) {
             t = self.subst_paths(t, &d.paths);
             for &(c, path) in d.this_paths.iter().rev() {
