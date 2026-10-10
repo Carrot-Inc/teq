@@ -60,64 +60,6 @@ fn owner_path(syms: &Symbols, interner: &crate::intern::Interner, owner: Owner, 
     }
 }
 
-/// The names a reflective call of `name` with parameters of the erased classes `classes`
-/// reaches its method by, in the order to try them: the alternative of an overloaded name that
-/// takes those classes, by their simple and by their qualified names (`erased_signature`), then
-/// the method that keeps the plain name. The call names the method by its encoded name and its
-/// parameters' classes, as Scala.js's `genReflectiveCall` names a reflective proxy; an array's
-/// class, which does not say its element, leaves the plain name alone. `Object` is the erasure of
-/// `Any`, `AnyRef`, `Matchable` and an unbounded type parameter alike, which an alternative's name
-/// spells as its parameter is written: each spelling is tried, at most `SPELLINGS` names in all.
-pub fn reflective_names(syms: &Symbols, interner: &crate::intern::Interner, name: &str, classes: &[ClassId]) -> Vec<String> {
-    const SPELLINGS: usize = 16;
-    const OBJECT: [&str; 4] = ["Any", "AnyRef", "Object", "Matchable"];
-    let mut out = Vec::with_capacity(3);
-    let array = |c: ClassId| syms.class(c).kind == ClassKind::Builtin && interner.get(syms.class(c).name) == "Array";
-    if !classes.iter().any(|&c| array(c)) {
-        let spellings = |c: ClassId| -> Vec<&str> {
-            let own = interner.get(syms.class(c).name);
-            let object = matches!(syms.class(c).owner, Owner::Package(p) if matches!(interner.get(syms.pkg(p).name), "scala" | "lang")) && OBJECT.contains(&own);
-            let mut all = vec![own];
-            if object {
-                all.extend(OBJECT.iter().copied().filter(|&o| o != own));
-            }
-            all
-        };
-        let mut suffixes = vec![String::new()];
-        for (i, &c) in classes.iter().enumerate() {
-            let mut next = Vec::new();
-            for prefix in &suffixes {
-                for spelling in spellings(c) {
-                    if next.len() < SPELLINGS {
-                        next.push(if i > 0 { format!("{}${}", prefix, spelling) } else { spelling.to_string() });
-                    }
-                }
-            }
-            suffixes = next;
-        }
-        if classes.is_empty() {
-            suffixes = vec!["0".to_string()];
-        }
-        for suffix in suffixes {
-            out.push(format!("{}${}", name, suffix));
-        }
-        let mut qualified = String::new();
-        for (i, &c) in classes.iter().enumerate() {
-            if i > 0 {
-                qualified.push('$');
-            }
-            owner_path(syms, interner, syms.class(c).owner, &mut qualified);
-            qualified.push_str(interner.get(syms.class(c).name));
-        }
-        let qualified = format!("{}${}", name, qualified);
-        if !classes.is_empty() && !out.contains(&qualified) {
-            out.push(qualified);
-        }
-    }
-    out.push(name.to_string());
-    out
-}
-
 fn overload_outcome(choice: &Result<usize, Failure>) -> Outcome {
     match choice {
         Ok(_) => Outcome::Found,

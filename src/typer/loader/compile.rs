@@ -825,7 +825,9 @@ impl<'a> Worker<'a> {
         Some(init)
     }
 
-    /// `classOf[T]`: the class value of a class type, a builtin or an array included.
+    /// `classOf[T]`: the class value of a class type, a builtin or an array included, an array by
+    /// its element's class and its dimensions where its erasure says them (dotty's `clsOf` of the
+    /// erasure).
     pub fn type_class_of(&mut self, ty: TypeId, span: Span) -> (crate::tir::TExprId, TypeId) {
         let ty = self.dealias(ty);
         let c = match self.types.get(ty) {
@@ -839,7 +841,12 @@ impl<'a> Worker<'a> {
             return (self.prog.add(crate::tir::TExpr::Unit), ERROR);
         };
         let result = self.types.class(class, &[ty]);
-        (self.prog.add(crate::tir::TExpr::ClassOf(c)), result)
+        let (c, dims) = match self.stable_erasure(ty) {
+            Some(super::super::site::Erased::Of(e, dims)) if c == self.b.array && dims > 0 => (self.runtime_tuple_class(e), dims),
+            Some(super::super::site::Erased::Null(dims)) if c == self.b.array && dims > 0 => (self.b.null, dims),
+            _ => (c, 0),
+        };
+        (self.prog.add(crate::tir::TExpr::ClassOf(c, dims)), result)
     }
 
     /// Whether `f` is the pseudo file of a converted library class or body.

@@ -180,6 +180,9 @@ enum Template {
     /// first argument is a receiver.
     Body(SymId, bool),
     Missing(Rc<str>),
+    /// A reflective call by signature, which reads the types of its class literals
+    /// (`Interp::call_by_signature`).
+    Reflective,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]

@@ -206,7 +206,7 @@ impl<'a> Worker<'a> {
                     let void = self.prog.add_str("$classNamed(\"java.lang.Void\")");
                     let classes: Vec<crate::tir::TExprId> = erased
                         .iter()
-                        .map(|&k| if k == self.b.unit { self.prog.add(TExpr::Js(void, crate::ast::ListRef::EMPTY)) } else { self.prog.add(TExpr::ClassOf(k)) })
+                        .map(|&k| if k == self.b.unit { self.prog.add(TExpr::Js(void, crate::ast::ListRef::EMPTY)) } else { self.prog.add(TExpr::ClassOf(k, 0)) })
                         .collect();
                     let classes = self.prog.list(&classes);
                     let classes = self.prog.add(TExpr::ArrayLit(classes));
@@ -228,7 +228,7 @@ impl<'a> Worker<'a> {
         let template = self.prog.add_str(template);
         let name = self.prog.add_str(name);
         let name = self.prog.add(TExpr::Str(name));
-        let class = self.prog.add(TExpr::ClassOf(c));
+        let class = self.prog.add(TExpr::ClassOf(c, 0));
         let args = self.prog.list(&[name, class, rest]);
         self.prog.add(TExpr::Js(template, args))
     }
@@ -453,3 +453,149 @@ impl<'a> Worker<'a> {
 }
 
 type FxMapBool = crate::intern::FxMap<ClassId, bool>;
+
+/// The signatures a reflective call names a method by, as scala-library's `Selectable` looks one
+/// up (`getMethod(name, paramTypes*)`) and Scala.js names a reflective proxy
+/// (`JSCodeGen.genReflectiveCall`): the run-time names of the classes of the parameters' erasures
+/// (`TypeErasure.erasure`), `Class.getName`'s: `int`, `java.lang.String`, `[I` for an array of the
+/// element's erasure, a value class's parameter its underlying type's (a class literal of a
+/// value class is that class's, so a call passing it finds no method, as on the JVM). Read from
+/// the types alone, without completing anything, for the reach of the output and the interpreter.
+impl<'a> Worker<'a> {
+    /// The name of the class of the erasure of `t`: a parameter's, where a value class erases to its
+    /// underlying type and the unit to its box (`erase_value_class`), or a class literal's.
+    pub fn reflective_class_name(&self, t: TypeId, erase_value_class: bool) -> String {
+        self.reflective_class_name_at(t, erase_value_class, 0)
+    }
+
+    fn reflective_class_name_at(&self, t: TypeId, erase_value_class: bool, depth: u32) -> String {
+        const OBJECT: &str = "java.lang.Object";
+        if depth > 16 {
+            return OBJECT.to_string();
+        }
+        match self.types.get(t) {
+            Type::Class(c, args) => {
+                // An array's element keeps a value class and the unit as its own (`[LMeter;`).
+                if c == self.b.array {
+                    let element = self.types.items(args).first().map_or(OBJECT.to_string(), |&e| self.reflective_class_name_at(e, false, depth + 1));
+                    return crate::emit::array_class_name(&element, 1);
+                }
+                let info = self.syms.class(c);
+                if erase_value_class && c == self.b.unit {
+                    return "scala.runtime.BoxedUnit".to_string();
+                }
+                if erase_value_class && info.value_class {
+                    if let Some(under) = info.ctor.first().and_then(|cl| cl.params.first()).map(|p| p.ty) {
+                        // A class parameter stands for the argument the type gives it.
+                        let under = match self.types.get(under) {
+                            Type::Param(p) => info.tparams.iter().position(|&q| q == p).and_then(|i| self.types.items(args).get(i).copied()).unwrap_or(under),
+                            _ => under,
+                        };
+                        return self.reflective_class_name_at(under, true, depth + 1);
+                    }
+                }
+                self.class_literal_name(c, 0)
+            }
+            Type::Param(p) | Type::AppParam(p, _) => self.reflective_class_name_at(self.syms.tparam(p).upper, erase_value_class, depth + 1),
+            _ => OBJECT.to_string(),
+        }
+    }
+
+    /// `Class.getName` of `classOf` of the class `c`, or of the array of `dims` dimensions of it
+    /// (`TExpr::ClassOf`): `int`, `java.lang.String`, `[I`.
+    pub fn class_literal_name(&self, c: ClassId, dims: u8) -> String {
+        let info = self.syms.class(c);
+        let scala_object = matches!(self.interner.get(info.name), "Matchable" | "Singleton") && matches!(info.owner, Owner::Package(p) if p == self.b.scala_pkg);
+        let element = match crate::emit::class_of_name(&self.syms, &self.interner, c) {
+            Some(n) => n,
+            None if c == self.b.any_ref || c == self.b.any_val || scala_object => "java.lang.Object".to_string(),
+            None => self.runtime_class_name_of(c),
+        };
+        if dims == 0 { element } else { crate::emit::array_class_name(&element, dims) }
+    }
+
+    /// `Class.getName` of a class: its packages joined with dots, an enclosing class with `$`.
+    fn runtime_class_name_of(&self, c: ClassId) -> String {
+        let info = self.syms.class(c);
+        let mut s = match info.owner {
+            Owner::Package(p) => {
+                let mut path = Vec::new();
+                let mut at = Some(p);
+                while let Some(k) = at.filter(|&k| k != ROOT_PKG) {
+                    path.push(self.interner.get(self.syms.pkg(k).name).to_string());
+                    at = self.syms.pkg(k).parent;
+                }
+                path.reverse();
+                path.into_iter().map(|p| p + ".").collect::<String>()
+            }
+            Owner::Class(o) => {
+                let mut outer = self.runtime_class_name_of(o);
+                if !outer.ends_with('$') {
+                    outer.push('$');
+                }
+                outer
+            }
+            Owner::Local => String::new(),
+        };
+        s.push_str(self.interner.get(info.name));
+        if info.kind == ClassKind::Object {
+            s.push('$');
+        }
+        s
+    }
+
+    /// The classes a method's parameters erase to, as a reflective call names them; none for a
+    /// member whose signature is not complete.
+    pub fn reflective_signature(&self, m: SymId) -> Option<Vec<String>> {
+        let info = self.syms.sym(m);
+        let sig = info.sig.as_ref()?;
+        Some(sig.clauses.iter().filter(|cl| !cl.is_using).flat_map(|cl| cl.params.iter()).map(|p| {
+            if p.by_name {
+                "scala.Function0".to_string()
+            } else if p.repeated {
+                "scala.collection.immutable.Seq".to_string()
+            } else {
+                self.reflective_class_name(p.ty, true)
+            }
+        }).collect())
+    }
+
+    /// The classes a reflective call names, its class literals' (`TExpr::ClassOf`); none where one
+    /// is not a class literal.
+    pub fn reflective_call_classes(&self, literals: &[crate::tir::TExprId]) -> Option<Vec<String>> {
+        literals.iter().map(|&e| match self.prog.expr(e) {
+            crate::tir::TExpr::ClassOf(c, dims) => Some(self.class_literal_name(c, dims)),
+            _ => None,
+        }).collect()
+    }
+}
+
+/// The name of the reflective proxy of the method `name` taking parameters of the classes
+/// `classes` (Scala.js's `MethodName.reflectiveProxy`): a JavaScript identifier, the name and the
+/// classes' names mangled into it as `$proxyName` in rt.js does.
+pub fn reflective_proxy_name(name: &str, classes: &[String]) -> String {
+    let mut out = String::new();
+    mangle_proxy_part(name, &mut out);
+    out.push_str("$$r");
+    for c in classes {
+        out.push('$');
+        mangle_proxy_part(c, &mut out);
+    }
+    out
+}
+
+fn mangle_proxy_part(part: &str, out: &mut String) {
+    for ch in part.chars() {
+        match ch {
+            '.' => out.push('_'),
+            '[' => out.push_str("$A"),
+            ';' => {}
+            '$' => out.push_str("$S"),
+            c if c.is_ascii_alphanumeric() || c == '_' => out.push(c),
+            c => {
+                use std::fmt::Write;
+                let _ = write!(out, "$u{:x}", c as u32);
+            }
+        }
+    }
+}

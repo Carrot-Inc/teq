@@ -492,7 +492,7 @@ impl<'a> Worker<'a> {
                     match *p.exprs.raw(i) {
                         TExpr::Str(t) => work.push(Node::Str(t.0)),
                         TExpr::Local(x) | TExpr::Static(x) => work.push(Node::Sym(x.0)),
-                        TExpr::Super(crate::tir::SuperTarget::Class(c) | crate::tir::SuperTarget::Mixin(c)) | TExpr::Module(c) | TExpr::ClassOf(c) => work.push(Node::Class(c.0)),
+                        TExpr::Super(crate::tir::SuperTarget::Class(c) | crate::tir::SuperTarget::Mixin(c)) | TExpr::Module(c) | TExpr::ClassOf(c, _) => work.push(Node::Class(c.0)),
                         TExpr::Field(e, x) => {
                             work.push(Node::Expr(e.0));
                             work.push(Node::Sym(x.0));

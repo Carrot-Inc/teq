@@ -2636,7 +2636,7 @@ impl<'a> Gen<'a> {
                 None => JType::object(),
             },
             TExpr::Module(c) | TExpr::New(c, _) => self.class_type(c),
-            TExpr::ClassOf(_) => JType::L(Rc::from("java/lang/Class")),
+            TExpr::ClassOf(..) => JType::L(Rc::from("java/lang/Class")),
             TExpr::NewVia(s, _) => match self.cx.input.syms.sym(s).owner {
                 Owner::Class(c) => self.class_type(c),
                 _ => JType::object(),
@@ -2814,7 +2814,7 @@ impl<'a> Gen<'a> {
             TExpr::Super(_) => self.load_this(),
             TExpr::Static(s) => self.load_static(s),
             TExpr::Module(c) => self.load_module(c),
-            TExpr::ClassOf(c) => self.class_of(e, c),
+            TExpr::ClassOf(c, dims) => self.class_of(e, c, dims),
             TExpr::Field(r, s) => self.field_read(r, s),
             TExpr::CallStatic(s, args) => self.call_static(s, args),
             TExpr::CallMethod(r, s, args) => self.call_method(r, s, args),
@@ -3519,8 +3519,21 @@ impl<'a> Gen<'a> {
     }
 
     /// `classOf[C]`: the class constant, or a primitive's `TYPE`.
-    fn class_of(&mut self, e: TExprId, c: ClassId) -> JType {
+    fn class_of(&mut self, e: TExprId, c: ClassId, dims: u8) -> JType {
         let class = JType::L(Rc::from("java/lang/Class"));
+        // An array of a known element says its dimensions (`TExpr::ClassOf`).
+        if dims > 0 {
+            let element = match crate::emit::class_of_name(self.cx.input.syms, self.cx.input.interner, c) {
+                Some(n) => n,
+                None => self.class_name(c).to_string(),
+            };
+            let name = crate::emit::array_class_name(&element, dims).replace('.', "/");
+            let i = self.cw.cp.class(&name);
+            self.ldc(i);
+            let vt = self.vt(&class);
+            self.code.push(vt);
+            return class;
+        }
         let info = self.cx.input.syms.class(c);
         // `classOf[Array[T]]` is the array class of `T`'s erasure, which the node's type says.
         if info.kind == ClassKind::Builtin && self.cx.input.interner.get(info.name) == "Array" {

@@ -81,9 +81,12 @@ a JDK member as `not supported on JavaScript`. Beyond that:
   has (`docs/CLI.md`), which throws `UnsupportedOperationException` when run, as the file system does.
 - `Ordering` covers tuples up to 5. The `ClassTag` evidence of the std's array-making members is erased: a
   tag passed to `Array.fill` is typed and not evaluated, a program's own tag dispatched.
-- A structural call names its method by the classes of its parameters only where the call gives them as
-  literals (as Scala.js's reflective proxies are named); under `--std=scala-library` scala-library's
-  `Selectable` reflects as on the JVM, which throws `UnsupportedOperationException` on JavaScript.
+- A reflective call reaches the method whose parameters erase to the classes it gives, through the
+  reflective proxy Scala.js names by them (a value class's argument and result its underlying value, as
+  the JVM's method takes and gives it), and a missing one throws `NoSuchMethodException`; a receiver of a
+  JavaScript type (a string, a number, an array) has no proxies, where the JVM finds the JDK's method.
+  Under `--std=scala-library` scala-library's `Selectable` reflects as on the JVM, which throws
+  `UnsupportedOperationException` on JavaScript.
 - Regular expressions run on the JS engine behind a translator of Java's syntax, which has no possessive
   quantifiers, atomic groups, flags switched inside a pattern (`a(?i)b`), `UNICODE_CHARACTER_CLASS` (`(?U)`),
   the POSIX classes but `\p{Lower}`, `\p{Upper}` and `\p{Alpha}`, Java's own property names

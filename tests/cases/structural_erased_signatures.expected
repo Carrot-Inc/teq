@@ -1,0 +1,14 @@
+f Meter Meter(1)
+show 7
+value class param no such method Box.f(Meter)
+value class result 5
+array int 2
+array string -2
+array array 1
+array long no such method Box.g([J)
+wrong signature no such method Box.f(java.lang.String)
+int for meter 4
+objects k 1 b c List(2)
+long n long 4
+short no such method Box.n(short)
+no parameters no such method Box.n()

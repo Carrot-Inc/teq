@@ -438,8 +438,9 @@ impl<'a> Worker<'a> {
         self.linked_class_tag(class, c, any, tagged)
     }
 
-    /// The tag of an erasure: of its class, wrapped once per dimension on the JVM, and of the
-    /// one array class elsewhere. `Nothing` and `Null` have no tag, as under scalac.
+    /// The tag of an erasure: of its class, wrapped once per dimension on the JVM, and elsewhere of
+    /// the array class of the element and the dimensions (`TExpr::ClassOf`). `Nothing` and `Null`
+    /// have no tag, as under scalac.
     fn tag_of_erased(&mut self, class: ClassId, erased: Erased, tagged: TypeId) -> Option<TExprId> {
         match erased {
             Erased::Nothing(_) | Erased::Null(_) => None,
@@ -453,23 +454,29 @@ impl<'a> Worker<'a> {
                 let element = self.tag_of_erased(class, Erased::Of(c, dims - 1), element)?;
                 self.wrapped_tag(class, element)
             }
-            Erased::Of(..) => self.tag_of_class(class, self.b.array, false, tagged),
+            Erased::Of(c, dims) => {
+                let c = if self.link_mode() { c } else { self.runtime_tuple_class(c) };
+                self.linked_class_tag_of(class, c, dims, false, tagged)
+            }
         }
     }
 
     /// The classes of the erasures of a method's parameters, its using clauses aside, as dotty's
-    /// `Dynamic.addClassOfs` gives a structural call and `Selectable.applyDynamic` looks a method up
-    /// by (`getMethod(name, paramTypes*)`); none where a parameter's erasure is not stable.
-    pub fn erased_parameter_classes(&mut self, sig: &MethodSig) -> Option<Vec<ClassId>> {
+    /// `Dynamic.addClassOfs` gives a structural call (`clsOf` of the erasure) and
+    /// `Selectable.applyDynamic` looks a method up by them (`getMethod(name, paramTypes*)`): a
+    /// class, an array by its element's class and its dimensions (`TExpr::ClassOf`); none where a
+    /// parameter's erasure is not stable.
+    pub fn erased_parameter_classes(&mut self, sig: &MethodSig) -> Option<Vec<(ClassId, u8)>> {
         let params: Vec<TypeId> = sig.clauses.iter().filter(|cl| !cl.is_using).flat_map(|cl| cl.params.iter().map(|p| p.ty)).collect();
         let mut classes = Vec::with_capacity(params.len());
         for p in params {
             classes.push(match self.stable_erasure(p)? {
-                Erased::Of(c, 0) => c,
-                // `classOf` of an array is the array class on every target.
-                Erased::Of(..) => self.b.array,
-                Erased::Null(_) => self.b.null,
-                Erased::Nothing(_) => self.b.any_ref,
+                // A parameter of `Unit` erases to the boxed unit.
+                Erased::Of(c, 0) if c == self.b.unit => (self.class_at(&["scala", "runtime", "BoxedUnit"]).unwrap_or(c), 0),
+                Erased::Of(c, dims) => (c, dims),
+                Erased::Null(dims) => (self.b.null, dims),
+                // `Nothing`'s runtime class has no `classOf` here; `Object`'s stands for it.
+                Erased::Nothing(dims) => (self.b.any_ref, dims),
             });
         }
         Some(classes)
@@ -657,10 +664,16 @@ impl<'a> Worker<'a> {
     /// In link mode the tag is scala-library's, an interface whose instances `ClassTag$` makes:
     /// `ClassTag.apply(classOf[T])`, and `ClassTag.Any` for `Any`, as scalac's.
     fn linked_class_tag(&mut self, class: ClassId, c: ClassId, any: bool, tagged: TypeId) -> Option<TExprId> {
+        self.linked_class_tag_of(class, c, 0, any, tagged)
+    }
+
+    fn linked_class_tag_of(&mut self, class: ClassId, c: ClassId, dims: u8, any: bool, tagged: TypeId) -> Option<TExprId> {
         let module = self.syms.class(class).companion?;
         self.complete_class(module);
         let special = if any {
             Some("Any")
+        } else if dims > 0 {
+            None
         } else if c == self.b.any_val {
             Some("AnyVal")
         } else if c == self.b.unit {
@@ -678,7 +691,7 @@ impl<'a> Worker<'a> {
         if special.is_some() {
             return Some(self.prog.add(TExpr::Field(recv, sym)));
         }
-        let of = self.prog.add(TExpr::ClassOf(c));
+        let of = self.prog.add(TExpr::ClassOf(c, dims));
         let l = self.prog.list(&[of]);
         let call = self.prog.add(TExpr::CallMethod(recv, sym, l));
         // An inline body's record keeps the type arguments of each of its generic calls.

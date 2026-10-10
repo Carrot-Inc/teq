@@ -131,7 +131,7 @@ impl<'a, 't> Interp<'a, 't> {
             TExpr::This | TExpr::Super(_) => Ok(cx.this.clone()),
             TExpr::Static(s) => self.static_value(s),
             TExpr::Module(c) => self.module(c),
-            TExpr::ClassOf(c) => Ok(self.class_value_of(c)),
+            TExpr::ClassOf(c, dims) => Ok(self.class_literal(c, dims)),
             TExpr::Field(r, s) => {
                 let recv = self.eval(r, fr, cx)?;
                 if let Value::Obj(o) = &recv {
@@ -2094,6 +2094,7 @@ impl<'a, 't> Interp<'a, 't> {
                 }
             }
             Template::Missing(name) => self.unsupported(format!("no builtin for {}", name)),
+            Template::Reflective => self.call_by_signature(args, fr, cx),
         }
     }
 
@@ -2122,6 +2123,7 @@ impl<'a, 't> Interp<'a, 't> {
                 let name = self.qualified_name(sym);
                 let abstract_member = self.is_dispatched_class_member(sym);
                 match self.builtins.get(&*name) {
+                    _ if &*name == "scala.reflect.callBySignature" => Template::Reflective,
                     Some(b) if abstract_member => Template::AbstractBuiltin(b.clone(), sym),
                     Some(b) => Template::Builtin(b.clone()),
                     None => {

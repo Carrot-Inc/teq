@@ -677,15 +677,15 @@ fn install_core(it: &mut Table) {
         let name = it.to_str(&arg(a, 1))?;
         let n = it.typer.interner.intern(&name);
         let types = if a.len() > 2 { arg(a, 2) } else { Value::Null };
-        let classes: Option<Vec<ClassId>> = match &types {
+        let classes: Option<Vec<String>> = match &types {
             Value::Null => None,
             v => it.elements_of(v)?.iter().map(|c| match c {
-                Value::Class(c) => c.class,
+                Value::Class(c) => Some(c.qname.to_string()),
                 _ => None,
             }).collect(),
         };
         let found = match (c.class, &classes) {
-            (Some(k), Some(classes)) => it.signature_alternative(k, &name, classes).is_some(),
+            (Some(k), Some(classes)) => it.signature_member(k, &name, classes).is_some(),
             (Some(k), None) => !matches!(it.member(k, n), Member::Missing),
             (None, _) => false,
         } || Interp::internal_methods(&c.qname).contains(&name.as_str());
@@ -706,17 +706,22 @@ fn install_core(it: &mut Table) {
         let name = it.to_str(&arg(a, 1))?;
         let args = it.list_items(&arg(a, 3))?;
         let recv = arg(a, 0);
-        if let (Value::Obj(o), types @ (Value::Obj(_) | Value::Array(_))) = (&recv, arg(a, 2)) {
-            let classes: Option<Vec<ClassId>> = it.elements_of(&types)?.iter().map(|c| match c {
-                Value::Class(c) => c.class,
+        let types = arg(a, 2);
+        if let (Value::Obj(o), Value::Obj(_) | Value::Array(_)) = (&recv, &types) {
+            let classes: Option<Vec<String>> = it.elements_of(&types)?.iter().map(|c| match c {
+                Value::Class(c) => Some(c.qname.to_string()),
                 _ => None,
             }).collect();
-            if let Some(alt) = classes.and_then(|classes| it.signature_alternative(o.class, &name, &classes)) {
+            if let Some(alt) = classes.and_then(|classes| it.signature_member(o.class, &name, &classes)) {
                 return it.invoke(recv, alt, args);
             }
         }
         if let Some(r) = it.internal_call(&recv, &name, &args) {
             return r;
+        }
+        // The method `getMethod` found by its signature, which no other of its name stands for.
+        if matches!(types, Value::Obj(_) | Value::Array(_)) && matches!(recv, Value::Obj(_)) {
+            return it.throw_named("NoSuchMethodException", &name);
         }
         let n = it.typer.interner.intern(&name);
         it.call_named(recv, n, args)
@@ -2353,33 +2358,6 @@ fn install_typer_templates(it: &mut Table) {
     reg!(it, "$productElement($0, $1)", |it, a| {
         let i = int(it, a, 1)?;
         it.product_element(&arg(a, 0), i)
-    });
-    reg!(it, "scala.reflect.memberByName", |it, a| {
-        let name = text(it, a, 1)?;
-        it.reflective_member(arg(a, 0), &name, Vec::new())
-    });
-    reg!(it, "scala.reflect.callBySignature", |it, a| {
-        let name = text(it, a, 1)?;
-        let classes = it.elements_of(&arg(a, 2))?;
-        let args = array(it, a, 3)?.borrow().clone();
-        let classes: Option<Vec<ClassId>> = classes.iter().map(|c| match c {
-            Value::Class(c) => c.class,
-            _ => None,
-        }).collect();
-        let recv = arg(a, 0);
-        // The method of the name whose parameters erase to the classes, as scala-library's
-        // `Selectable.applyDynamic` finds it (`getMethod(name, paramTypes*)`), dispatched on the
-        // object's class; else the output's names of it, as the JavaScript call tries them.
-        if let (Some(classes), Value::Obj(o)) = (&classes, &recv) {
-            if let Some(alt) = it.signature_alternative(o.class, &name, classes) {
-                return it.invoke(recv, alt, args);
-            }
-        }
-        let names = match classes {
-            Some(classes) => crate::typer::reflective_names(it.syms(), it.typer.interner, &name, &classes),
-            None => vec![name.to_string()],
-        };
-        it.reflective_call(recv, &names, args)
     });
     reg!(it, "$productElementName($0, $1)", |it, a| {
         let i = int(it, a, 1)?;

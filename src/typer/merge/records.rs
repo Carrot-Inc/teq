@@ -315,7 +315,7 @@ pub(in crate::typer) fn texpr<M: Mapping + ?Sized>(m: &M, e: &mut TExpr) {
             },
             m.ty(t),
         ),
-        ClassOf(c) => ClassOf(m.class(c)),
+        ClassOf(c, dims) => ClassOf(m.class(c), dims),
         SeqLit(items) => SeqLit(m.expr_list(items)),
         ArrayLit(items) => ArrayLit(m.expr_list(items)),
         Index(x, i) => Index(m.expr(x), i),

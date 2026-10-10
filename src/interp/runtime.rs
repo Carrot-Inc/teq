@@ -426,20 +426,69 @@ impl<'a, 't> Interp<'a, 't> {
         }
     }
 
-    /// A member of an object by its name, as a reflective structural call reaches it.
-    pub(super) fn reflective_member(&mut self, recv: Value, name: &str, args: Vec<Value>) -> R {
-        let missing = |it: &mut Self| it.throw_named("RuntimeException", &format!("{} is not a member", name));
-        let Value::Obj(o) = &recv else { return missing(self) };
-        let n = self.typer.interner.intern(name);
-        match self.member(o.class, n) {
-            Member::Missing => missing(self),
-            m => self.invoke_member(recv.clone(), m, n, args),
+    /// A reflective call by signature (`std/reflect_selectable.scala`): the method of the name of
+    /// the receiver's class or its nearest ancestor whose parameters erase to the classes the call
+    /// names (`Worker::reflective_signature`), called as the output's reflective proxy calls it, a
+    /// value class's argument its underlying value and its result so erased; else the call's
+    /// failure, a `NoSuchMethodException`. The classes are the call's literals' where it gives
+    /// literals (`Worker::reflective_call_classes`), else the run-time classes' names.
+    pub(super) fn call_by_signature(&mut self, args: crate::ast::ListRef, fr: &Rc<Frame>, cx: &Ctx) -> R {
+        let list = self.prog().expr_list(args).to_vec();
+        let literals = match list.get(2).map(|&e| self.prog().expr(e)) {
+            Some(crate::tir::TExpr::SeqLit(items)) => Some(self.prog().expr_list(items).to_vec()),
+            _ => None,
+        };
+        let call = literals.and_then(|l| self.typer.reflective_call_classes(&l));
+        let vals = self.eval_list(args, fr, cx)?;
+        let [recv, name, classes, call_args, fail] = &vals[..] else { return self.unsupported("a reflective call of other arguments".to_string()) };
+        let (recv, fail) = (recv.clone(), fail.clone());
+        let name = name.as_str().unwrap_or("").to_string();
+        let classes = match call {
+            Some(classes) => classes,
+            None => self.elements_of(classes)?.iter().map(|c| match c {
+                Value::Class(c) => c.qname.to_string(),
+                _ => "null".to_string(),
+            }).collect(),
+        };
+        let call_args = match call_args {
+            Value::Array(a) => a.borrow().clone(),
+            _ => Vec::new(),
+        };
+        if let Value::Obj(o) = &recv {
+            if let Some(m) = self.signature_member(o.class, &name, &classes) {
+                let Some(sig) = self.syms().sym(m).sig.clone() else { return self.unsupported(format!("the signature of {}", name)) };
+                let params: Vec<_> = sig.clauses.iter().filter(|cl| !cl.is_using).flat_map(|cl| cl.params.iter().cloned()).collect();
+                let mut passed = Vec::with_capacity(call_args.len());
+                for (p, a) in params.iter().zip(call_args) {
+                    passed.push(match self.value_class_of(p.ty) {
+                        Some(v) if !p.by_name && !p.repeated => self.construct_new(v, vec![a], fr)?,
+                        _ => a,
+                    });
+                }
+                let result = self.invoke(recv, m, passed)?;
+                let field = self.value_class_of(sig.ret).and_then(|v| self.syms().class(v).ctor.first().and_then(|cl| cl.params.first()).map(|p| p.sym));
+                return match field {
+                    Some(field) => self.get_field(result, field),
+                    None => Ok(result),
+                };
+            }
+        }
+        let signature = format!("{}({})", name, classes.join(","));
+        self.apply_value(fail, vec![recv, Value::string(signature)])
+    }
+
+    /// The value class `t` is an instance of.
+    fn value_class_of(&self, t: crate::types::TypeId) -> Option<ClassId> {
+        match self.typer.types.get(t) {
+            crate::types::Type::Class(v, _) if self.syms().class(v).value_class => Some(v),
+            _ => None,
         }
     }
 
-    /// The method `name` of the class `class` or the nearest of its ancestors whose parameters erase to
-    /// `classes` (`Worker::erased_parameter_classes`), the declaration a reflective call names.
-    pub(super) fn signature_alternative(&mut self, class: ClassId, name: &str, classes: &[ClassId]) -> Option<SymId> {
+    /// The method `name` of the class `class` or the nearest of its ancestors whose parameters erase
+    /// to the classes `classes` (`Worker::reflective_signature`), the declaration a reflective call
+    /// names.
+    pub(super) fn signature_member(&mut self, class: ClassId, name: &str, classes: &[String]) -> Option<SymId> {
         let n = self.typer.interner.lookup(name)?;
         let bases: Vec<ClassId> = self.syms().class(class).base_types.iter().map(|&(b, _)| b).collect();
         for k in bases {
@@ -453,30 +502,13 @@ impl<'a, 't> Interp<'a, 't> {
                 if !matches!(self.syms().sym(alt).kind, SymKind::Def | SymKind::Val | SymKind::Var) {
                     continue;
                 }
-                let sig = self.typer.sig_arc(alt);
-                if self.typer.erased_parameter_classes(&sig).as_deref() == Some(classes) {
+                self.typer.sig_arc(alt);
+                if self.typer.reflective_signature(alt).as_deref() == Some(classes) {
                     return Some(alt);
                 }
             }
         }
         None
-    }
-
-    /// The method a reflective call by signature reaches: by the first of the names it goes by
-    /// that the object's class has (`typer::reflective_names`), as the output's call tries them.
-    pub(super) fn reflective_call(&mut self, recv: Value, names: &[String], args: Vec<Value>) -> R {
-        if let Value::Obj(o) = &recv {
-            let class = o.class;
-            for name in names {
-                let Some(n) = self.typer.interner.lookup(name) else { continue };
-                match self.member(class, n) {
-                    Member::Missing => {}
-                    m => return self.invoke_member(recv.clone(), m, n, args),
-                }
-            }
-        }
-        let name = names.last().map_or("", |n| n.as_str());
-        self.throw_named("RuntimeException", &format!("{} is not a member", name))
     }
 
     /// `productPrefix`: the class's definition, else an enum value's name or the class's.
@@ -619,6 +651,25 @@ impl<'a, 't> Interp<'a, 't> {
     // ---- classes ----
 
     /// `classOf[C]`: the class value named as the JVM names it.
+    /// `classOf` of a class, or of an array of `dims` dimensions of it (`TExpr::ClassOf`), whose
+    /// value is the array class's, named by its element.
+    pub(super) fn class_literal(&mut self, c: ClassId, dims: u8) -> Value {
+        if dims == 0 {
+            return self.class_value_of(c);
+        }
+        let element: Rc<str> = match crate::emit::class_of_name(self.syms(), self.typer.interner, c) {
+            Some(n) => Rc::from(n),
+            None => self.runtime_class_name(c),
+        };
+        let qname: Rc<str> = Rc::from(crate::emit::array_class_name(&element, dims));
+        if let Some(v) = self.class_values.get(&qname) {
+            return Value::Class(v.clone());
+        }
+        let v = Rc::new(ClassValue { class: Some(self.typer.b.array), qname: qname.clone() });
+        self.class_values.insert(qname, v.clone());
+        Value::Class(v)
+    }
+
     pub(super) fn class_value_of(&mut self, c: ClassId) -> Value {
         let qname: Rc<str> = match crate::emit::class_of_name(self.syms(), self.typer.interner, c) {
             Some(n) => Rc::from(n),

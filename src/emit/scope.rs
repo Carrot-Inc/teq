@@ -1599,7 +1599,7 @@ impl<'a> Emitter<'a> {
             TExpr::This | TExpr::Super(_) => w.this(self.this_name),
             TExpr::Static(s) => self.walk_static(w, s),
             TExpr::Module(c) => self.walk_module(w, c),
-            TExpr::ClassOf(c) => {
+            TExpr::ClassOf(c, _) => {
                 for helper in ["$traitClass", "$boxedClass", "$classValue", "$classNamed", "$classData"] {
                     w.name(helper);
                 }

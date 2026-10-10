@@ -583,7 +583,7 @@ impl<'a> Worker<'a> {
         }
         match self.prog.expr(body) {
             TExpr::Int(_) | TExpr::Long(_) | TExpr::Double(_) | TExpr::Bool(_) | TExpr::Char(_) | TExpr::Str(_) | TExpr::Unit | TExpr::Null => true,
-            TExpr::This | TExpr::Module(_) | TExpr::Throw(..) | TExpr::ClassOf(_) => true,
+            TExpr::This | TExpr::Module(_) | TExpr::Throw(..) | TExpr::ClassOf(..) => true,
             TExpr::Block(stmts, res) => stmts.is_empty() && matches!(self.prog.expr(res), TExpr::Unit),
             TExpr::Static(s) => matches!(self.syms.sym(s).kind, SymKind::Object(_) | SymKind::EnumValue(_)),
             // An object of the class, read through its accessor.

@@ -86,8 +86,8 @@ whichever override its type selects, as the output writes it (`--no-outline` wri
 the whole program, so a call by name lands on the same member in every module, and the output has no
 indentation, line breaks or runtime comments. A name JavaScript code can see keeps its own: the members of
 JS types, what the runtime calls on any value (`toString`, `equals`, `hashCode`, `apply`, `foreach`, `_1`),
-what a `js.Dynamic` selection or a `@js` template names, the members a reflective structural call names
-(`f` and, of an overloaded `f`, the alternative its parameters' classes name: `f$Int`), and every member of
+what a `js.Dynamic` selection or a `@js` template names, the reflective proxies a reflective call names
+(`f$$r$int`, `g$$r$$AI` for an `Array[Int]`), and every member of
 a class that an exported definition takes or returns, transitively; esbuild or another minifier then renames
 the rest.
 

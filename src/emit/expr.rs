@@ -30,7 +30,7 @@ impl<'a> Emitter<'a> {
         let simple = match prog.expr(e) {
             TExpr::Int(_) | TExpr::Long(_) | TExpr::Double(_) | TExpr::Bool(_) | TExpr::Char(_)
             | TExpr::Str(_) | TExpr::Unit | TExpr::Local(_) | TExpr::This | TExpr::Super(_) | TExpr::Static(_)
-            | TExpr::Module(_) | TExpr::ClassOf(_) | TExpr::Lambda(..) | TExpr::JsImport(_) | TExpr::JsGlobal(..) => true,
+            | TExpr::Module(_) | TExpr::ClassOf(..) | TExpr::Lambda(..) | TExpr::JsImport(_) | TExpr::JsGlobal(..) => true,
             TExpr::Field(r, _) | TExpr::Unary(_, r) | TExpr::ToStr(r, _) | TExpr::TypeTest(r, _) | TExpr::Cast(r, ..)
             | TExpr::Index(r, _) | TExpr::Spread(r) | TExpr::JsSelect(r, _) => self.is_simple(r),
             TExpr::New(c, _) if self.closure_anons.contains_key(&c) => true,
@@ -324,7 +324,7 @@ impl<'a> Emitter<'a> {
         let file_init = |p: Purity| if self.init_before(e).is_some() { p.min(Purity::Idempotent) } else { p };
         match self.peek(e) {
             TExpr::Int(_) | TExpr::Long(_) | TExpr::Double(_) | TExpr::Bool(_) | TExpr::Char(_) | TExpr::Str(_) | TExpr::Unit
-            | TExpr::Null | TExpr::This | TExpr::Super(_) | TExpr::ClassOf(_) | TExpr::Lambda(..) => Purity::Pure,
+            | TExpr::Null | TExpr::This | TExpr::Super(_) | TExpr::ClassOf(..) | TExpr::Lambda(..) => Purity::Pure,
             // An object's first access runs its initialiser, where it has one (`refPurity`: a
             // module of a no-inits class is a pure path).
             TExpr::Module(c) => file_init(if self.has_body.get(c.idx()).copied().unwrap_or(true) { Purity::Idempotent } else { Purity::Pure }),
@@ -408,20 +408,19 @@ impl<'a> Emitter<'a> {
         if linear { 0 } else { binds }
     }
 
-    /// A reflective call by signature (`std/reflect_selectable.scala`), the method's name and the
-    /// classes of its parameters literals: the names of the method in the output, to try in
-    /// order (`typer::reflective_names`).
-    pub(super) fn reflective_call_names(&self, text: &str, args: &[TExprId]) -> Option<Vec<String>> {
-        if text != "$callBySignature($0, $1, $2, $3)" {
+    /// A reflective call by signature (`std/reflect_selectable.scala`) whose classes are literals:
+    /// the reflective proxy it calls and the signature a missing one's exception names
+    /// (`reach::Reach::reflective_calls`). In an outlined expansion whose name or classes are its
+    /// function's parameters, the call names the proxy at run time.
+    pub(super) fn reflective_call(&self, text: &str, args: &[TExprId]) -> Option<&'a (String, String)> {
+        if text != "$callBySignature($0, $1, $2, $3, $4)" {
             return None;
         }
-        let TExpr::Str(name) = self.peek(args[1]) else { return None };
-        let mut classes = Vec::new();
-        for &c in self.seq_literal_items(args[2])? {
-            let TExpr::ClassOf(c) = self.peek(c) else { return None };
-            classes.push(c);
+        let hole = |e: TExprId| self.hole_of(e).is_some();
+        if hole(args[1]) || hole(args[2]) || self.seq_literal_items(args[2]).is_some_and(|items| items.iter().any(|&i| hole(i))) {
+            return None;
         }
-        Some(crate::typer::reflective_names(self.syms, self.interner, &self.prog.strings[name.idx()], &classes))
+        self.reach.reflective_calls.get(&args[2])
     }
 
     pub(super) fn seq_literal_items(&self, e: TExprId) -> Option<&'a [TExprId]> {
@@ -578,7 +577,7 @@ impl<'a> Emitter<'a> {
                 }
                 None => self.emit_accessor_call(c),
             },
-            TExpr::ClassOf(c) => self.emit_class_of(c),
+            TExpr::ClassOf(c, dims) => self.emit_class_of(c, dims),
             TExpr::Field(r, s) if self.syms.js_member(s) => match self.global_scope_member(r, s) {
                 // An undeclared global would throw; a facade reads it as undefined.
                 Some(name) => {
@@ -808,18 +807,17 @@ impl<'a> Emitter<'a> {
             TExpr::Js(template, args) => {
                 let t = &prog.strings[template.idx()];
                 let args = prog.expr_list(args);
-                if let Some(names) = self.reflective_call_names(t, args) {
-                    self.out.push_str("$callByNames(");
+                if let Some((proxy, signature)) = self.reflective_call(t, args) {
+                    self.out.push_str("$callProxy(");
                     self.emit_value(args[0]);
-                    self.out.push_str(", [");
-                    for (i, n) in names.iter().enumerate() {
-                        if i > 0 {
-                            self.out.push_str(", ");
-                        }
-                        js_string(n, &mut self.out);
-                    }
-                    self.out.push_str("], ");
+                    self.out.push_str(", ");
+                    js_string(proxy, &mut self.out);
+                    self.out.push_str(", ");
                     self.emit_value(args[3]);
+                    self.out.push_str(", ");
+                    js_string(signature, &mut self.out);
+                    self.out.push_str(", ");
+                    self.emit_value(args[4]);
                     self.out.push(')');
                     return;
                 }

@@ -1253,9 +1253,10 @@ impl<'a> Enc<'a> {
                     }
                 }
             }
-            TExpr::ClassOf(c) => {
+            TExpr::ClassOf(c, dims) => {
                 self.tok(T_CLASS_OF);
                 self.class(c);
+                self.tok(dims as u64);
             }
             TExpr::SeqLit(l) => {
                 self.tok(T_SEQ);
@@ -1643,7 +1644,7 @@ impl<'a> Enc<'a> {
         let prog = self.prog;
         match prog.expr(e) {
             TExpr::Int(_) | TExpr::Long(_) | TExpr::Double(_) | TExpr::Bool(_) | TExpr::Char(_) | TExpr::Str(_) | TExpr::Unit
-            | TExpr::Null | TExpr::Module(_) | TExpr::Static(_) | TExpr::ClassOf(_) | TExpr::JsImport(_) | TExpr::JsGlobal(..) => return true,
+            | TExpr::Null | TExpr::Module(_) | TExpr::Static(_) | TExpr::ClassOf(..) | TExpr::JsImport(_) | TExpr::JsGlobal(..) => return true,
             TExpr::Local(s) => {
                 if self.is_bound(s) {
                     return false;
@@ -1692,7 +1693,7 @@ impl<'a> Enc<'a> {
         let prog = self.prog;
         match prog.expr(e) {
             TExpr::Int(_) | TExpr::Long(_) | TExpr::Double(_) | TExpr::Bool(_) | TExpr::Char(_) | TExpr::Str(_) | TExpr::Unit
-            | TExpr::This | TExpr::Super(_) | TExpr::Static(_) | TExpr::Module(_) | TExpr::ClassOf(_) | TExpr::JsImport(_)
+            | TExpr::This | TExpr::Super(_) | TExpr::Static(_) | TExpr::Module(_) | TExpr::ClassOf(..) | TExpr::JsImport(_)
             | TExpr::JsGlobal(..) | TExpr::Null => {}
             TExpr::Local(s) => out.used.push(s),
             TExpr::Field(r, _) | TExpr::Unary(_, r) | TExpr::ToStr(r, _) | TExpr::Index(r, _) | TExpr::Spread(r) | TExpr::JsSelect(r, _)

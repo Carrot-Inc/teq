@@ -35,7 +35,7 @@ mod members;
 mod namedtuple;
 mod namer;
 mod overload;
-pub use overload::reflective_names;
+pub use reflective::reflective_proxy_name;
 mod pat;
 pub mod prep;
 pub mod prims;

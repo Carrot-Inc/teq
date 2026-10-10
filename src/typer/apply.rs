@@ -6743,7 +6743,7 @@ impl<'a> Worker<'a> {
                 }
             }
             if takes_classes {
-                let Some(classes) = self.erased_parameter_classes(&sig) else {
+                let Some(erased) = self.erased_parameter_classes(&sig) else {
                     let msg = format!(
                         "Structural access not allowed on method {} because it has a parameter type with an unstable erasure",
                         self.name_str(name)
@@ -6755,8 +6755,8 @@ impl<'a> Worker<'a> {
                     Some(k) => self.types.class(k, &[WILD]),
                     None => ANY,
                 };
-                for c in classes {
-                    let class_of = self.prog.add(TExpr::ClassOf(c));
+                for (c, dims) in erased {
+                    let class_of = self.prog.add(TExpr::ClassOf(c, dims));
                     self.prog.set_type(class_of, class_ty);
                     dynamic_lists[0].args.push(ArgSrc::Typed(class_of, class_ty));
                 }

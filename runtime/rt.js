@@ -250,6 +250,8 @@ function $isInstance(cls, x) {
   // Every value but `null` is an `Object`, `()` the boxed unit.
   if (cls.$qname === "java.lang.Object") return x !== null;
   if (x == null) return false;
+  // An array's class, which names its element, takes every array: an array does not say its own.
+  if (cls.$qname.charCodeAt(0) === 91) return Array.isArray(x);
   if (typeof x !== "object" && typeof x !== "function") return $getClass(x).$qname === cls.$qname;
   if (cls.$trait !== undefined) return $isA(x, cls.$trait);
   return cls.$ctor !== null ? x instanceof cls.$ctor : $getClass(x) === cls;
@@ -647,22 +649,32 @@ function $productElementName(p, i) {
 }
 // A member of an object by its name, as a reflective structural call reaches it: a method is
 // called, a field read. A name no member has is a TypeError, as under Scala.js.
-function $memberByName(x, name) {
-  const m = x[name];
-  if (m === undefined) throw new TypeError(name + " is not a member of " + $str(x));
-  return typeof m === "function" ? m.call(x) : m;
+// A reflective call: the receiver's reflective proxy of the method's name and the classes of its
+// parameters' erasures (`typer::reflective_proxy_name`), else `fail`'s NoSuchMethodException of
+// the receiver's class, the method's name and the classes.
+function $callProxy(x, proxy, args, signature, fail) {
+  const m = x === null || x === undefined ? undefined : x[proxy];
+  return typeof m === "function" ? m.apply(x, args) : fail(x, signature);
 }
-// A reflective call: the method by the first of the names it goes by that the object has
-// (`typer::reflective_names`), an alternative's of an overloaded name before the plain one.
-function $callByNames(x, names, args) {
-  for (const name of names) {
-    const m = x[name];
-    if (typeof m === "function") return m.apply(x, args);
+// One whose classes are no literals names the proxy by the classes' names at run time.
+function $callBySignature(x, name, classes, args, fail) {
+  const names = [];
+  for (const c of classes) names.push(c.$qname);
+  const proxy = $proxyName(name) + "$$r" + names.map((n) => "$" + $proxyName(n)).join("");
+  return $callProxy(x, proxy, args, name + "(" + names.join(",") + ")", fail);
+}
+function $proxyName(n) {
+  let out = "";
+  for (const ch of n) {
+    if (ch === ".") out += "_";
+    else if (ch === "[") out += "$A";
+    else if (ch === ";") continue;
+    else if (ch === "$") out += "$S";
+    else if (/[A-Za-z0-9_]/.test(ch)) out += ch;
+    else out += "$u" + ch.codePointAt(0).toString(16);
   }
-  throw new TypeError(names[names.length - 1] + " is not a method of " + $str(x));
+  return out;
 }
-// One whose parameters' classes are no literals reaches the method of the plain name.
-function $callBySignature(x, name, classes, args) { return $callByNames(x, [name], args); }
 function $productElement(p, i) {
   if (typeof p.productElement === "function") return p.productElement(i);
   const f = p.$fields;
