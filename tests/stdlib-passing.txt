@@ -102,10 +102,13 @@ capture_u
 capture_w
 capture_x
 case_class_below_superclass
+case_class_equals_alias
+case_class_generic_bridge
 case_class_generic_member
 case_class_hash_elements
 case_class_inherited_members
 case_class_join_union
+case_class_nested_hidden
 case_class_own_unapply
 case_class_parents
 case_class_synthesized_members
@@ -732,6 +735,9 @@ member_fallback_macro
 member_fallback_macro_clauses
 member_fallback_named
 member_fallback_shapes
+member_retry_dependent
+member_retry_lambda_order
+member_retry_transparent
 memberaliases
 mirror_declared_type
 mirror_derives
