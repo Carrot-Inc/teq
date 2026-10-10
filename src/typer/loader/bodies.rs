@@ -853,12 +853,18 @@ impl<'a> Worker<'a> {
                 let declared = self.sig_of(sym).ret;
                 // A `final val` of a literal type: its value is the type's, and the field is of
                 // the widened type; the member keeps the literal type, a constant that a
-                // reference folds as scalac folds it.
+                // reference folds as scalac folds it. Its right side is kept, which a getter does
+                // not wait for and the constructor still runs (dotty's `Memoize` and
+                // `Constructors`); without one the value is the type's literal.
                 let (ty, init) = match self.types.get(declared) {
                     Type::Lit(v) => {
                         let v = self.types.lit_val(v);
                         let widened = self.widened_lit(v);
-                        (widened, Some(self.lit_expr(cv, v)))
+                        let init = match rhs.as_ref() {
+                            Some(r) => self.conv_expr(cv, r),
+                            None => self.lit_expr(cv, v),
+                        };
+                        (widened, Some(init))
                     }
                     _ => (declared, rhs.as_ref().map(|r| self.conv_expr(cv, r))),
                 };
