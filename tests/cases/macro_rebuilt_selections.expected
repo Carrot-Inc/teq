@@ -2,4 +2,5 @@ Typed(Repeated(1, "a", 2.5))
 another tree
 == == true
 > > false
+== == true
 eq eq true

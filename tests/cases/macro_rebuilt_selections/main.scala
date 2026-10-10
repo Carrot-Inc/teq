@@ -5,6 +5,8 @@
   val x = 6
   println(M.rebuilt(x == 6))
   println(M.rebuilt(x > 7))
+  val l = 6L
+  println(M.rebuilt(x == l))
   val s = "str"
   val t: AnyRef = s
   println(M.rebuilt(t eq s))

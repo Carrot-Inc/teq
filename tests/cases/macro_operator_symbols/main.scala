@@ -8,3 +8,9 @@
   println(Ops.same(x + y, x + l))
   println(Ops.same(x < y, y < x))
   println(Ops.same(x == y, y == 2))
+  val s = "s"
+  println(Ops.same(s + x, x + s))
+  println(Ops.same(x + s, s + x))
+  println(Ops.same(x == l, x == y))
+  println(Ops.same(x == l, y == l))
+  println(Ops.same(x.toLong == l, x == l))

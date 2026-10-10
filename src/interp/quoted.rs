@@ -81,7 +81,10 @@ pub enum PendingKind {
     /// gives; the operation itself and its result's type where it is a primitive one, which an
     /// application to one argument makes again, as dotty's `Select` of the operator's symbol
     /// applies that operator whatever the receiver's static type (`left.select(sel.symbol)`).
-    Operator(Name, TypeId, Option<(PrimOp, TypeId)>),
+    /// The operation's payload also holds the types the typer promoted the receiver and the
+    /// argument to (`Program::promoted_bits`), which the view leaves out and an application
+    /// converts its operands to again.
+    Operator(Name, TypeId, Option<(PrimOp, TypeId, Option<TypeId>, Option<TypeId>)>),
     /// `New(tpt)`.
     New(TypeId),
     /// `Select(New(tpt), <init>)`.
@@ -1536,8 +1539,12 @@ impl<'a, 't> Interp<'a, 't> {
                     let name = self.typer.interner.intern(prim_name(op));
                     let method = self.operator_type(op, l, r, e);
                     let result = self.prog().type_of(e).unwrap_or(ANY);
-                    let fun = self.pending(Pending { recv: Some(TreeRef::Expr(l)), kind: PendingKind::Operator(name, method, Some((op, result))), targs: Vec::new() });
-                    View::Apply(fun, vec![TreeRef::Expr(r)])
+                    // The operands as the program wrote them, the promotions to the operator's type
+                    // left out: scalac's `x.==(l)` selects `Int.==(Long)` on `x`.
+                    let (lo, lt) = self.unpromoted(l);
+                    let (ro, rt) = self.unpromoted(r);
+                    let fun = self.pending(Pending { recv: Some(TreeRef::Expr(lo)), kind: PendingKind::Operator(name, method, Some((op, result, lt, rt))), targs: Vec::new() });
+                    View::Apply(fun, vec![TreeRef::Expr(ro)])
                 }
                 TExpr::Unary(op, x) => {
                     let name = self.typer.interner.intern(unary_name(op));
@@ -1777,10 +1784,17 @@ impl<'a, 't> Interp<'a, 't> {
     }
 
     fn concat_view(&mut self, items: &[TExprId]) -> View {
+        // The operands as written: what the lowering rendered to a string is shown unrendered,
+        // as scalac's `x.+(s)` (`Int.+(String)`) and `s.+(x)` (`String.+(Any)`) have it. A longer
+        // chain's left part stays the lowered concatenation, which a splice may take back.
+        let written = |it: &Self, x: TExprId| match it.prog().expr(x) {
+            TExpr::ToStr(inner, conv) if conv.is_rendering() => inner,
+            _ => x,
+        };
         let n = items.len();
         let plus = self.typer.interner.intern("+");
         let left = if n <= 2 {
-            TreeRef::Expr(items[0])
+            TreeRef::Expr(written(self, items[0]))
         } else {
             let l = self.typer.prog.list(&items[..n - 1]);
             let e = self.typer.prog.add(TExpr::StrConcat(l));
@@ -1798,7 +1812,7 @@ impl<'a, 't> Interp<'a, 't> {
         let result = self.typer.b.t_string;
         let method = self.method_type(MethodTypeRepr { names, types: vec![param], result, open: Vec::new(), kind: ClauseKind::Plain });
         let fun = self.pending(Pending { recv: Some(left), kind: PendingKind::Operator(plus, method, None), targs: Vec::new() });
-        View::Apply(fun, vec![TreeRef::Expr(items[n - 1])])
+        View::Apply(fun, vec![TreeRef::Expr(written(self, items[n - 1]))])
     }
 
     /// The tree `e` as the end of a chain of `+`, where it is a `String`: what an ascription or
@@ -2094,13 +2108,15 @@ impl<'a, 't> Interp<'a, 't> {
                 Ok(te)
             }
             // The primitive operation the operator was read from, on the receiver and the argument.
-            PendingKind::Operator(_, _, Some((op, result))) if applied && args.len() == 1 && p.recv.is_some() => {
+            PendingKind::Operator(_, _, Some((op, result, recv_to, arg_to))) if applied && args.len() == 1 && p.recv.is_some() => {
                 let recv = self.materialize(p.recv.expect("checked"))?;
                 let arg = match self.named_arg(args[0])? {
                     Some((_, a)) => a,
                     None => args[0],
                 };
                 let arg = self.materialize(arg)?;
+                let recv = self.promote_to(recv, recv_to);
+                let arg = self.promote_to(arg, arg_to);
                 let te = self.typer.prog.add(TExpr::Prim(op, recv, arg));
                 self.typer.prog.set_type(te, result);
                 Ok(te)
@@ -4721,6 +4737,45 @@ impl<'a, 't> Interp<'a, 't> {
 
     /// The type of an operand of a builtin operator before the typer widened it to the
     /// operator's rank.
+    /// An operand of a builtin operator as the program wrote it, the widenings the typer added to
+    /// bring it to the operator's type left out, and that type. The typer leaves those untyped
+    /// (`Worker::promote`), which every copy of the tree keeps, while a written `x.toLong` is
+    /// typed: `x.==(l)` selects `Int.==(Long)` on `x`, `x.toLong.==(l)` `Long.==(Long)`.
+    fn unpromoted(&mut self, x: TExprId) -> (TExprId, Option<TypeId>) {
+        let b = &self.typer.b;
+        let target = match self.prog().expr(x) {
+            _ if self.prog().type_of(x).is_some() => return (x, None),
+            TExpr::Unary(UnOp::IntToLong | UnOp::CharToLong, _) => b.t_long,
+            TExpr::Unary(UnOp::CharToInt | UnOp::ByteToInt | UnOp::ShortToInt, _) => b.t_int,
+            TExpr::Unary(UnOp::IntToFloat | UnOp::LongToFloat, _) => b.t_float,
+            TExpr::Unary(UnOp::IntToDouble | UnOp::LongToDouble | UnOp::FloatToDouble, _) => b.t_double,
+            TExpr::Unary(UnOp::ByteToShort, _) => b.t_short,
+            _ => return (x, None),
+        };
+        let mut at = x;
+        while let TExpr::Unary(op, inner) = self.prog().expr(at) {
+            let widening = matches!(op, UnOp::IntToLong | UnOp::CharToLong | UnOp::CharToInt | UnOp::ByteToInt | UnOp::ShortToInt | UnOp::IntToFloat | UnOp::LongToFloat | UnOp::IntToDouble | UnOp::LongToDouble | UnOp::FloatToDouble | UnOp::ByteToShort);
+            if !widening || self.prog().type_of(at).is_some() {
+                break;
+            }
+            at = inner;
+        }
+        (at, Some(target))
+    }
+
+    /// An operand converted to the type a builtin operator's promotion gave the one it stands
+    /// for, as the typer converts it (`Worker::promote`).
+    fn promote_to(&mut self, x: TExprId, to: Option<TypeId>) -> TExprId {
+        let Some(to) = to else { return x };
+        let Some(rank) = self.typer.is_numeric(to) else { return x };
+        let from = self.expr_type_or_any(x);
+        let promoted = self.typer.convert_rank(x, from, rank);
+        if promoted != x {
+            self.typer.prog.set_type(promoted, to);
+        }
+        promoted
+    }
+
     fn operand_type(&mut self, x: TExprId) -> TypeId {
         let operand = match self.prog().expr(x) {
             TExpr::Unary(UnOp::IntToLong | UnOp::CharToInt | UnOp::CharToLong | UnOp::IntToFloat | UnOp::IntToDouble | UnOp::ByteToShort | UnOp::ByteToInt | UnOp::ShortToInt | UnOp::LongToFloat | UnOp::LongToDouble | UnOp::FloatToDouble, inner) => inner,

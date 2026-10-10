@@ -1042,7 +1042,7 @@ pub struct Records {
 }
 
 /// What tells two selections of a primitive operator apart (`Records::operators`).
-pub(crate) type OperatorKey = (Name, crate::types::TypeId, Option<(crate::tir::PrimOp, crate::types::TypeId)>, value::SymRef);
+pub(crate) type OperatorKey = (Name, crate::types::TypeId, Option<(crate::tir::PrimOp, crate::types::TypeId, Option<crate::types::TypeId>, Option<crate::types::TypeId>)>, value::SymRef);
 
 impl Records {
     fn next_build(&mut self) {

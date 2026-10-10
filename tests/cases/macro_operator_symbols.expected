@@ -4,3 +4,8 @@
 + Int false
 < Int true
 == Int true
++ String false
++ Int false
+== Int false
+== Int true
+== Long false

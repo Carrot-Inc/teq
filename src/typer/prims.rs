@@ -168,7 +168,9 @@ impl<'a> Worker<'a> {
         te
     }
 
-    /// An operand of a builtin operator converted to the operator's rank.
+    /// An operand of a builtin operator converted to the operator's rank. The conversions stay
+    /// untyped, which tells them from a written `x.toLong` in a macro's view of the tree
+    /// (`Interp::unpromoted`).
     fn promote(&mut self, te: TExprId, from: TypeId, rank: u8) -> TExprId {
         let promoted = self.convert_rank(te, from, rank);
         if self.capturing() {
