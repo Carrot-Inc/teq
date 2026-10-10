@@ -899,7 +899,8 @@ impl<'a> Worker<'a> {
         };
         let rhs = self.alias_body(a);
         let d = AliasId(self.syms.aliases.len() as u32);
-        self.syms.aliases.push(AliasInfo { name, owner, file, def: None, tparams: Vec::new(), rhs: ERROR, bounds: None, deprecated });
+        let js = self.syms.aliases[a.idx()].js;
+        self.syms.aliases.push(AliasInfo { name, owner, file, def: None, tparams: Vec::new(), rhs: ERROR, bounds: None, deprecated, js });
         self.syms.alias_cells.set(d.0, Completion::Done);
         self.derived_aliases.insert((a, prefix), d);
         let seen = |t: &mut Self, ty: TypeId| -> TypeId {

@@ -2684,7 +2684,8 @@ impl<'a> Worker<'a> {
                 // `x.asInstanceOf[js.Array[Int]]`: a cast to a JavaScript type, which Scala.js leaves
                 // untested and the std holds as an alias of a Scala type, kept as the body spelled it.
                 if let [target] = &targs[..] {
-                    if (self.selects_named(cv, f, "asInstanceOf") || self.selects_named(cv, f, "$asInstanceOf$")) && self.names_scalajs_alias(cv, target) {
+                    let mut cx = super::MapCx::new(cv.file);
+                    if (self.selects_named(cv, f, "asInstanceOf") || self.selects_named(cv, f, "$asInstanceOf$")) && self.names_js_type(&mut cx, target) {
                         cv.ast.js_alias_types.push(items[0]);
                     }
                 }
@@ -3641,23 +3642,6 @@ impl<'a> Worker<'a> {
             }
             _ => false,
         }
-    }
-
-    /// Whether a type, as a body writes it, is a member of Scala.js's `scala.scalajs.js` that the
-    /// std holds as an alias of a Scala type (`js.Array[Int]`, `js.Function1[A, B]`).
-    fn names_scalajs_alias(&mut self, cv: &Conv, t: &TType) -> bool {
-        let head = match t {
-            TType::Applied(h, _) => &**h,
-            _ => t,
-        };
-        let TType::TypeRef(prefix, n) = head else { return false };
-        let TType::Package(p) = &**prefix else { return false };
-        if cv.tasty.name(*p) != "scala.scalajs.js" {
-            return false;
-        }
-        let Some(js) = self.scalajs_pkg() else { return false };
-        let name = self.conv_name(cv, *n);
-        matches!(self.pkg_type(js, name), Some(super::super::resolve::TypeRef::Alias(a)) if matches!(self.syms.alias(a).owner, Owner::Package(o) if o == js))
     }
 
     /// Whether a qualifier lies under `scala.scalajs`, the packages of the std's facade layer:

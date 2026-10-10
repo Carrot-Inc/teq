@@ -60,7 +60,7 @@ cake = {'Defs', 'DefsPlatform', 'Cake', 'Outer', 'Module', 'ModuleImpl', 'Module
         'FoHier', 'FoHierUse', 'FoPaths', 'FoInto',
         'FoCap', 'FoEff', 'FoReq', 'FoBackend', 'FoPlain', 'FoCapBackend', 'FoAbstract', 'FoConcrete',
         'FoGR', 'FoMapped', 'FoBoth', 'FoIgnore', 'FoLeaf', 'FoRunner', 'FoMaps'}
-facades = {'JsStack', 'JsMap', 'Date', 'JsMath', 'JsGlobals', 'JsArr', 'JsPath', 'JsPathDefault', 'JsEmitter', 'JsBindings', 'JsOptions', 'JsPoint', 'JsMathOps', 'facades$package'}
+facades = {'JsCasts', 'JsStack', 'JsMap', 'Date', 'JsMath', 'JsGlobals', 'JsArr', 'JsPath', 'JsPathDefault', 'JsEmitter', 'JsBindings', 'JsOptions', 'JsPoint', 'JsMathOps', 'facades$package'}
 runtime = {'Folds', 'Wilds', 'Atomics', 'Refs', 'Inspectors', 'Apps', 'Clocks', 'Cell', 'Metric', 'Promise', 'Ref', 'PatchRef', 'Cause', 'Bag', 'Slot', 'Slots', 'Token', 'Tokens', 'Keeper', 'Effects', 'Concurrents', 'Pairs'}
 pext = {'pext_inlined$package': 'fix/pext/inlined', 'pext_dsl$package': 'fix/pext/dsl', 'PonApi': 'fix/ponapi', 'Token$package': 'fix/ponforeign'}
 tname = {'Variance', 'Counter'}

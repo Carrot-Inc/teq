@@ -350,6 +350,10 @@ pub struct AliasInfo {
     pub bounds: Option<(TypeId, TypeId)>,
     /// Annotated `@deprecated` (`typer::deprecation`).
     pub deprecated: bool,
+    /// Whether its right side names a JavaScript type the std holds as an alias of a Scala type
+    /// (`type Values = js.Array[Int]`), through any aliases of one: set as the alias completes,
+    /// since `rhs` holds the Scala type (`Worker::alias_names_js`).
+    pub js: bool,
 }
 
 impl AliasInfo {
@@ -1420,7 +1424,7 @@ mod tests {
             let c = syms.new_class(Name(1), ClassKind::Class, 0, Owner::Package(ROOT_PKG), FileId(0), None, Span::default());
             let p = syms.new_tparam(Name(2), 0);
             let s = syms.new_sym(Name(5), SymKind::Def, 0, Owner::Package(ROOT_PKG), FileId(0), None, Span::default());
-            let a = AliasId(syms.aliases.push(AliasInfo { name: Name(6), owner: Owner::Package(ROOT_PKG), file: FileId(0), def: None, tparams: Vec::new(), rhs: ERROR, bounds: None, deprecated: false }));
+            let a = AliasId(syms.aliases.push(AliasInfo { name: Name(6), owner: Owner::Package(ROOT_PKG), file: FileId(0), def: None, tparams: Vec::new(), rhs: ERROR, bounds: None, deprecated: false, js: false }));
             syms.syms.fork();
             syms.classes.fork();
             syms.tparams.fork();

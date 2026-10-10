@@ -1,0 +1,9 @@
+// tests/tasty/fixtures/JsCasts.tasty (TASTy 28.8, 904 bytes)
+package fix.facades
+@SourceFile object JsCasts extends Object {
+  <synthetic> private def writeReplace(): AnyRef = ...
+  type Numbers = Array[Int]
+  type Again = Numbers
+  def numbers(x: Any): Numbers = ...
+  def again(x: Any): Again = ...
+}

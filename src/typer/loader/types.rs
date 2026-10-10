@@ -1033,6 +1033,56 @@ impl<'a> Worker<'a> {
         self.named_fun_type_in(file, clause.is_using, clause.params, r, crate::source::Span::default())
     }
 
+    /// The alias a type's head names (`Values` of `Values`, `js.Array` of `js.Array[Int]`),
+    /// by its address in the same pickle or through a package or the members of a class or an
+    /// object; none for any other type.
+    pub(super) fn named_alias(&mut self, cx: &mut MapCx, t: &TType) -> Option<AliasId> {
+        let head = match t {
+            TType::Applied(h, _) => &**h,
+            _ => t,
+        };
+        // A type definition of the same pickle, named by its address.
+        if let TType::LocalType(addr, _) = head {
+            return self.loaded_tables(cx).aliases.get(addr).copied();
+        }
+        let TType::TypeRef(prefix, n) = head else { return None };
+        let tasty = self.tasty(cx.file);
+        let name = self.intern_name(&tasty, *n);
+        let package = match &**prefix {
+            TType::Package(p) => Some(*p),
+            TType::This(inner) => match &**inner {
+                TType::Package(p) => Some(*p),
+                _ => None,
+            },
+            _ => None,
+        };
+        let found = match package {
+            Some(p) => {
+                let pkg = self.resolve_package(cx, p);
+                self.pkg_type(pkg, name)
+            }
+            None => match self.scope_of(cx, prefix) {
+                Some(Scope::Class(c)) => self.member_type_of(c, name),
+                Some(Scope::Pkg(p)) => self.pkg_type(p, name),
+                None => None,
+            },
+        };
+        match found {
+            Some(TypeRef::Alias(a)) => Some(a),
+            _ => None,
+        }
+    }
+
+    /// Whether a type names a JavaScript type the std holds as an alias of a Scala type
+    /// (`js.Array[Int]`), or an alias of one (`type Values = js.Array[Int]`), as
+    /// `Worker::alias_names_js` tells.
+    pub(super) fn names_js_type(&mut self, cx: &mut MapCx, t: &TType) -> bool {
+        match self.named_alias(cx, t) {
+            Some(a) => self.alias_names_js(a),
+            None => false,
+        }
+    }
+
     /// A type member `name` of the class `c` or its ancestors: a nested class or an alias. An
     /// object nested under the same name is no type (`object Expr` beside `type Expr[A]`).
     /// The type alias a pickled type names at its head, applied or annotated (`Count` with `type

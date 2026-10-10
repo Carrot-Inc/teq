@@ -2335,8 +2335,25 @@ impl<'a> Worker<'a> {
             _ => None,
         };
         let Some(TypeRef::Alias(a)) = found else { return false };
+        self.alias_names_js(a)
+    }
+
+    /// Whether the alias stands for a JavaScript type: one of the std's `scala.scalajs.js`
+    /// package (`js.Array`), or one whose right side names such a type through any aliases
+    /// (`type Values = js.Array[Int]`). A cast to it is one to a JS type, which
+    /// `JSCodeGen.genAsInstanceOf` leaves untested by the type's symbol after dealiasing
+    /// (`typeSymbol.isJSType`), where the std holds the type as an alias of a Scala one.
+    pub(crate) fn alias_names_js(&mut self, a: AliasId) -> bool {
         let Some(js) = self.scalajs_pkg() else { return false };
-        matches!(self.syms.alias(a).owner, Owner::Package(p) if p == js)
+        if matches!(self.syms.alias(a).owner, Owner::Package(p) if p == js) {
+            return true;
+        }
+        // One this thread is completing (an alias naming itself) stays as it stands.
+        let state = self.syms.alias(a).state();
+        if !(state.get() == Completion::InProgress && state.mine()) {
+            self.complete_alias(a);
+        }
+        self.syms.alias(a).js
     }
 
     /// The type `n` selected from the package or object that the path `q` names.
@@ -4341,6 +4358,7 @@ impl<'a> Worker<'a> {
             rhs: ERROR,
             bounds: None,
             deprecated: def.mods & crate::ast::mods::DEPRECATED != 0,
+            js: false,
         });
         self.syms.alias_cells.set(a.0, Completion::NotStarted);
         if let Some(b) = self.local_blocks.last() {
@@ -4383,6 +4401,7 @@ impl<'a> Worker<'a> {
             rhs: ERROR,
             bounds: None,
             deprecated: def.mods & crate::ast::mods::DEPRECATED != 0,
+            js: false,
         });
         self.syms.alias_cells.set(a.0, Completion::InProgress);
         let depth = self.env.frames.len();
@@ -4419,6 +4438,10 @@ impl<'a> Worker<'a> {
             };
             match rhs {
                 Some(rhs) => {
+                    // Read off the right side as written, which its resolved Scala type no longer
+                    // tells (`js.Array[Int]` is `Array[Int]`).
+                    let js = t.written_js_alias(rhs);
+                    t.syms.aliases[a.idx()].js = js;
                     let mut ty = t.resolve_type_ctor(rhs);
                     if let (Some(u), Type::Match(scrut, m)) = (upper, t.types.get(ty)) {
                         let bound = t.resolve_type(u);
