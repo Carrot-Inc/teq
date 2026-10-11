@@ -1569,43 +1569,51 @@ impl<'a> Worker<'a> {
 
     /// What an item shows of its target, its signature seen from `owner` where it is a member
     /// of that type, its kind, and a method's clauses read from that signature.
+    /// The detail, kind and call clauses of the member `s`, by `info` where an intersection's meet
+    /// gave it its own information, else by its signature, seen from the instance `owner` of its
+    /// owner.
+    fn describe_member(&mut self, s: SymId, info: crate::typer::subtype::JointInfo, owner: Option<TypeId>) -> (String, u32, Vec<CallClause>) {
+        let (sym_kind, sym_owner, mods) = {
+            let info = self.syms.sym(s);
+            (info.kind, info.owner, info.mods)
+        };
+        if let SymKind::Object(c) = sym_kind {
+            return (format!("object {}", self.class_path(c)), kind::MODULE, Vec::new());
+        }
+        let subst = owner.map(|o| self.owner_subst(o)).unwrap_or_default();
+        let sig = match info {
+            Some(info) => info,
+            None => self.sig_arc(s),
+        };
+        let text = self.sig_text_in(&sig, &subst);
+        let clauses = if sym_kind == SymKind::Def {
+            let receiver = self.syms.sym(s).ext_clauses as usize;
+            self.call_clauses(&sig, &subst, receiver)
+        } else {
+            Vec::new()
+        };
+        let kind = match sym_kind {
+            SymKind::Def => kind::METHOD,
+            SymKind::EnumValue(_) => kind::ENUM_MEMBER,
+            _ => {
+                let ret = self.types.subst(sig.ret, &subst);
+                if self.as_function(ret).is_some() {
+                    kind::FUNCTION
+                } else if matches!(sym_owner, Owner::Class(_)) {
+                    kind::FIELD
+                } else {
+                    kind::VARIABLE
+                }
+            }
+        };
+        let _ = mods;
+        let text = if matches!(sym_kind, SymKind::Def) { text } else { text.trim_start_matches(": ").to_string() };
+        (text, kind, clauses)
+    }
+
     fn describe_candidate(&mut self, target: Cand, owner: Option<TypeId>) -> (String, u32, Vec<CallClause>) {
         match target {
-            Cand::Sym(s) => {
-                let (sym_kind, sym_owner, mods) = {
-                    let info = self.syms.sym(s);
-                    (info.kind, info.owner, info.mods)
-                };
-                if let SymKind::Object(c) = sym_kind {
-                    return (format!("object {}", self.class_path(c)), kind::MODULE, Vec::new());
-                }
-                let subst = owner.map(|o| self.owner_subst(o)).unwrap_or_default();
-                let sig = self.sig_arc(s);
-                let text = self.sig_text_in(&sig, &subst);
-                let clauses = if sym_kind == SymKind::Def {
-                    let receiver = self.syms.sym(s).ext_clauses as usize;
-                    self.call_clauses(&sig, &subst, receiver)
-                } else {
-                    Vec::new()
-                };
-                let kind = match sym_kind {
-                    SymKind::Def => kind::METHOD,
-                    SymKind::EnumValue(_) => kind::ENUM_MEMBER,
-                    _ => {
-                        let ret = self.types.subst(sig.ret, &subst);
-                        if self.as_function(ret).is_some() {
-                            kind::FUNCTION
-                        } else if matches!(sym_owner, Owner::Class(_)) {
-                            kind::FIELD
-                        } else {
-                            kind::VARIABLE
-                        }
-                    }
-                };
-                let _ = mods;
-                let text = if matches!(sym_kind, SymKind::Def) { text } else { text.trim_start_matches(": ").to_string() };
-                (text, kind, clauses)
-            }
+            Cand::Sym(s) => self.describe_member(s, None, owner),
             Cand::Class(c) => {
                 let (k, mods) = {
                     let info = self.syms.class(c);
@@ -1979,6 +1987,18 @@ impl<'a> Worker<'a> {
         let start = out.len();
         for n in self.member_names(t) {
             if !self.offered(n, prefix) || self.name_ref(n) == "<init>" {
+                continue;
+            }
+            // On an intersection, the denotations its meet makes, each described by its own
+            // information (`intersection_denotations`).
+            if let Some(denots) = self.intersection_denotations(t, n).filter(|d| !d.is_empty()) {
+                for ((s, owner_ty), info) in denots {
+                    if !self.member_reachable(s, through_this, t) || self.is_setter(s) {
+                        continue;
+                    }
+                    let (detail, kind, clauses) = self.describe_member(s, info, Some(owner_ty));
+                    out.push(Candidate { name: self.name_str(n), target: Cand::Sym(s), rank: Rank::Member, detail, kind, import: None, clauses });
+                }
                 continue;
             }
             if let Some((s, owner_ty)) = self.find_member(t, n) {

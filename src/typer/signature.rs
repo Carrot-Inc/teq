@@ -962,7 +962,14 @@ impl<'a> Worker<'a> {
         if t == ERROR || self.types.contains_error(t) {
             return Vec::new();
         }
-        if let Some((s, owner_ty)) = self.find_member(t, n) {
+        // On an intersection, the denotations its meet makes, each shown by its own information
+        // (`intersection_denotations`): `R["k"] & R["v"]`'s `get(k: "k" | "v")` once.
+        if let Some(denots) = self.intersection_denotations(t, n).filter(|d| !d.is_empty()) {
+            let shown = self.denotations_shown(denots, n, through_this, t);
+            if !shown.is_empty() {
+                return shown;
+            }
+        } else if let Some((s, owner_ty)) = self.find_member(t, n) {
             let shown = self.alternatives_seen_from(s, owner_ty, n, Some((through_this, t)));
             if !shown.is_empty() {
                 return shown;
@@ -991,6 +998,30 @@ impl<'a> Worker<'a> {
             }
             _ => Vec::new(),
         }
+    }
+
+    /// The denotations of an intersection's member `n`, those the site reaches from the receiver
+    /// `recv_ty`, each by its information seen from the instance of its owner it is a member of.
+    fn denotations_shown(&mut self, denots: Vec<super::subtype::Denot>, n: crate::intern::Name, through_this: bool, recv_ty: TypeId) -> Vec<Shown> {
+        let mut out = Vec::new();
+        for ((s, owner_ty), info) in denots {
+            if !self.member_reachable(s, through_this, recv_ty) {
+                continue;
+            }
+            let subst = self.owner_subst(owner_ty);
+            let sig = match info {
+                Some(info) => info,
+                None => self.sig_arc(s),
+            };
+            match self.syms.sym(s).kind {
+                SymKind::Def => out.push(self.method_shown(n, s, &sig, subst, false)),
+                _ => {
+                    let ty = self.types.subst(sig.ret, &subst);
+                    out.extend(self.value_signatures(ty));
+                }
+            }
+        }
+        out
     }
 
     /// The alternatives of `s`, members of `owner_ty`, those the site reaches from a receiver

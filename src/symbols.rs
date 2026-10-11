@@ -1013,6 +1013,25 @@ impl Symbols {
         set
     }
 
+    /// An overloaded set of members that are not alternatives of one class (an intersection's
+    /// members kept apart, dotty's `MultiDenotation`): neither its alternatives nor their owner
+    /// are marked as overloaded, and the passes over the sets pass it by (`superseded`), so that
+    /// how they are named and dispatched stays their classes' whatever a selection meets.
+    pub fn new_overloaded_view(&mut self, like: SymId, owner: Owner, alts: Vec<SymId>) -> SymId {
+        let (name, file, span) = {
+            let s = self.sym(like);
+            (s.name, s.file, s.span)
+        };
+        let index = self.overloads.push((SymId(0), Vec::new()));
+        let set = self.new_sym(name, SymKind::Overloaded(index), 0, owner, file, None, span);
+        *self.overloads.get_mut(index) = (set, alts);
+        let mut info = self.sym_mut(set);
+        info.superseded = true;
+        info.sig = Some(Arc::new(MethodSig::value(ERROR)));
+        info.state().done_fresh();
+        set
+    }
+
     pub fn new_tparam(&mut self, name: Name, variance: i8) -> TParamId {
         TParamId(self.tparams.push(TParamInfo { name, variance, arity: 0, upper: ANY, lower: NOTHING, hk_variances: Vec::new() }))
     }

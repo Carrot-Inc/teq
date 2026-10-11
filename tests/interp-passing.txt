@@ -642,7 +642,13 @@ intersection_bounds_over_params
 intersection_denotation_meet
 intersection_generic_overloads
 intersection_joint_member
+intersection_member_binders
 intersection_member_bounds_meet
+intersection_member_gate
+intersection_member_lambdas
+intersection_member_overload
+intersection_member_ranges
+intersection_member_receivers
 irrefutable_extractor_exhaustive
 iterable_to_iterator
 iterator_laziness
@@ -913,6 +919,7 @@ overload_apply
 overload_basic
 overload_class_generic
 overload_class_inheritance
+overload_expected_result_retry
 overload_explicit_targs
 overload_exports
 overload_extensions

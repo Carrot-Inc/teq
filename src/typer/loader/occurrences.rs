@@ -856,7 +856,7 @@ impl<'a> Worker<'a> {
     /// (`goRefined`, 900: the refinement's info meets the parent's member), `narrow` carrying
     /// the narrowest met; a this-type reads its class and its self type as dotty's
     /// `ClassInfo.selfType` has them, `givenSelf & cls` (5597 to 5610); an intersection's two
-    /// members are merged (`goAnd`, 996) by `merge_members`, the typer's `meet_members`; a
+    /// members are merged (`goAnd`, 996) by `merge_members`, the typer's `merge_infos`; a
     /// union's member is its join's (`goOr`, `OrType.join`), the typer's `union_join`; a class
     /// gives the member and its result seen from `pre` (`member_result_type`), an opaque type
     /// outside its scope its bound's.
@@ -905,7 +905,7 @@ impl<'a> Worker<'a> {
                         // Scored against the whole receiver's base classes at every merge, as
                         // `goAnd` passes `pre` down (996) and `linearScore` searches it (427).
                         let bases = self.receiver_base_classes(pre, 0);
-                        self.merge_members(&bases, l, r)
+                        self.merge_members(pre, &bases, l, r)
                     }
                     (l, r) => l.or(r),
                 }
@@ -960,33 +960,36 @@ impl<'a> Worker<'a> {
     }
 
     /// The members an intersection's two components give one name, merged as the typer merges
-    /// them (`meet_members`, dotty's `mergeSingleDenot`); one symbol through both components
-    /// has the meet of the information each gives it (`infoMeet`, `Denotations.scala` 541).
+    /// them (`merge_infos`, dotty's `mergeSingleDenot`, over their whole informations seen from
+    /// the receiver); one symbol through both components is one member seen from the whole
+    /// receiver, whose result is the meet of the results each gives it (the upper bound
+    /// `argForParam` gives an invariant parameter of two instances).
     /// `None` where a member is a definition the tables do not know (a local trait's), whose
     /// deferredness and owner they do not tell.
-    fn merge_members(&mut self, bases: &[ClassId], left: (DocTarget, TypeId), right: (DocTarget, TypeId)) -> Option<(DocTarget, TypeId)> {
+    fn merge_members(&mut self, pre: TypeId, bases: &[ClassId], left: (DocTarget, TypeId), right: (DocTarget, TypeId)) -> Option<(DocTarget, TypeId)> {
         let ((sa, ta), (sb, tb)) = (left, right);
         if sa == sb {
             let meet = self.meet_types(ta, tb);
             return Some((sa, meet));
         }
         let (DocTarget::Shared(Target::Sym(a)), DocTarget::Shared(Target::Sym(b))) = (sa, sb) else { return None };
-        // The second's type parameters read as the first's, as the typer's meet compares them
-        // (`tp2.resType.subst(tp2, tp1)`).
-        let (pa, pb) = (self.sig_arc(a).tparams.clone(), self.sig_arc(b).tparams.clone());
-        let tb = if !pa.is_empty() && pa.len() == pb.len() {
-            let renaming: Subst = pb.iter().zip(&pa).map(|(&p, &q)| (p, self.types.param(q))).collect();
-            self.types.subst(tb, &renaming)
-        } else {
-            tb
-        };
-        Some(match self.meet_members(bases, (a, ta), (b, tb), (false, false)) {
+        // Their whole informations seen from the receiver, merged as the typer merges them
+        // (`merge_infos`): the result of the one taken, or the met result of the two.
+        let (ia, ib) = (self.member_info_on(pre, a), self.member_info_on(pre, b));
+        let ib = self.renamed_info(&ib, &ia);
+        Some(match self.merge_infos(bases, (a, &ia), (b, &ib), (false, false)) {
             Meet::First => (sa, ta),
             Meet::Second => (sb, tb),
-            Meet::Joint(first) => {
+            Meet::Joint(first, _) => {
                 let meet = self.meet_types(ta, tb);
                 (if first { sa } else { sb }, meet)
             }
+            // An overload, whose alternative the pickle's signature named: the one the score
+            // prefers.
+            Meet::Apart => match self.meet_score(bases, a, b) >= 0 {
+                true => (sa, ta),
+                false => (sb, tb),
+            },
         })
     }
 

@@ -6,14 +6,16 @@ use crate::tir::{TExpr, TExprId};
 
 const CLASS_OF_DEPTH: u32 = 64;
 
-/// What an intersection's member of one name is, of the members its two parts give
-/// (`Worker::meet_members`): the first's, the second's, or one member of both whose symbol is
-/// the first's (`true`) or the second's.
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+/// What an intersection's member of one name is, of the members of matching signatures its two
+/// parts give (`Worker::merge_infos`, dotty's `mergeSingleDenot`): the first's, the second's, one
+/// member of both whose symbol is the first's (`true`) or the second's, of their joint
+/// information, or the two apart, an overload (`MultiDenotation`).
+#[derive(Clone, Debug)]
 pub(super) enum Meet {
     First,
     Second,
-    Joint(bool),
+    Joint(bool, std::sync::Arc<MethodSig>),
+    Apart,
 }
 
 /// The information an intersection's member carries where its parts' members make one member
@@ -21,6 +23,10 @@ pub(super) enum Meet {
 /// symbol's signature in its own terms with the results met, the other part's result seen from
 /// its owner; `None` where the member is one part's as it stands.
 pub type JointInfo = Option<std::sync::Arc<MethodSig>>;
+
+/// A member of an intersection's part as dotty's `SingleDenotation` has it: its symbol, the
+/// instance of its owner it is a member of, and its joint information.
+pub(super) type Denot = ((SymId, TypeId), JointInfo);
 
 impl<'a> Worker<'a> {
     pub fn fresh_var(&mut self) -> TypeId {
@@ -1360,6 +1366,19 @@ impl<'a> Worker<'a> {
         true
     }
 
+    /// Whether the value parameters of two polymorphic functions' function types `x` and `y`
+    /// erase to the same classes, a type parameter to its bound's (dotty's `Signature.paramsSig`);
+    /// a parameter whose type holds an uninstantiated variable erases to nothing yet and matches
+    /// any (`Signature.consistentParams`' wildcard, `tpnme.Uninstantiated`).
+    fn poly_params_consistent(&mut self, x: TypeId, y: TypeId) -> bool {
+        let (Some((xs, _)), Some((ys, _))) = (self.as_function(x), self.as_function(y)) else { return true };
+        xs.len() == ys.len()
+            && xs.iter().zip(&ys).all(|(&p, &q)| {
+                let (p, q) = (self.deref(p), self.deref(q));
+                self.types.has_vars(p) || self.types.has_vars(q) || self.erased_class(p, 0) == self.erased_class(q, 0)
+            })
+    }
+
     /// Polymorphic function types are compared up to the names of their type parameters, by
     /// their function types; one conforms to `scala.PolyFunction` and to what its function type
     /// conforms to, as it erases to that.
@@ -1370,6 +1389,12 @@ impl<'a> Worker<'a> {
             (Type::Poly(..), Type::Poly(..)) => {
                 let (Some((ps, x)), Some((qs, y))) = (self.poly_binders(a), self.poly_binders(b)) else { return false };
                 if ps.len() != qs.len() {
+                    return false;
+                }
+                // The parameters erase alike, each function's under its own binders' bounds
+                // (`comparePoly`'s `signature.consistentParams`, TypeComparer.scala 838):
+                // `[T <: Int | String] => T => T` is no `[T <: Int & String] => T => T`.
+                if !self.poly_params_consistent(x, y) {
                     return false;
                 }
                 let renaming: Subst = qs.iter().zip(&ps).map(|(&q, &p)| (q, self.types.param(p))).collect();
@@ -3020,10 +3045,14 @@ impl<'a> Worker<'a> {
     /// The member `name` of an intersection's parts `a` and `b`, merged as dotty's `goAnd`
     /// merges `go(a)` and `go(b)` (`Types.scala`, `findMember`, at the 3.8.4 tag) against the
     /// whole receiver `pre`'s base classes, a part that is an intersection itself folded in with
-    /// them, the joint information of the member it makes in `joint`. The second part is another
-    /// class, whose private members are its own; a method of another shape there overloads the
-    /// first's (dotty's `MultiDenotation` of members whose signatures do not match). `reversed`:
-    /// `b` is dotty's first part (a self type's).
+    /// them, the joint information of the member it makes in `joint`. Each part's member is seen
+    /// from the whole receiver, as a class part's `ClassDenotation.findMember` sees it with `pre`
+    /// (`seen_from_whole`): one symbol through two instances of its owner is one member then.
+    /// Two members of matching signatures merge as `mergeSingleDenot` merges them
+    /// (`merge_single`); members that do not merge, or whose signatures do not match, are an
+    /// overload (dotty's `MultiDenotation`), whose alternatives an application takes from
+    /// `intersection_denotations`. The second part is another class, whose private members are
+    /// its own. `reversed`: `b` is dotty's first part (a self type's).
     fn find_member_meet(&mut self, pre: TypeId, (a, b): (TypeId, TypeId), name: Name, private_until: usize, reversed: bool, joint: &mut JointInfo) -> Option<(SymId, TypeId)> {
         let (mut ja, mut jb) = (None, None);
         let first = self.find_member_in_part(pre, a, name, private_until, &mut ja);
@@ -3031,23 +3060,45 @@ impl<'a> Worker<'a> {
         let (found, info) = match (first, second) {
             // The same denotation through both parts (dotty's `denot1 eq denot2`).
             (Some(fa), Some(fb)) if fa == fb => (Some(fa), ja),
-            (Some((sa, ta)), Some((sb, tb))) => {
+            (Some(fa), Some(fb)) => {
+                let da = self.seen_from_whole(pre, (fa, ja));
+                let db = self.seen_from_whole(pre, (fb, jb));
+                let ((sa, ta), _) = da;
+                let ((sb, tb), _) = db;
                 let overloaded = self.syms.alternatives(sa).is_some() || self.syms.alternatives(sb).is_some();
-                if (sa != sb || overloaded) && self.overloads_across(sa, ta, sb, tb) {
+                // A part's refinement that stays an alternative beside the member makes the
+                // member an overload, whose alternatives an application takes from
+                // `intersection_denotations`.
+                let refined = !overloaded && (self.refinement_alternative(a, name, &da).is_some() || self.refinement_alternative(b, name, &db).is_some());
+                if refined {
                     (Some((self.merged_overload(sa, ta, sb, tb), ta)), None)
+                } else if da.0 == db.0 {
+                    // One symbol through two instances of its owner, seen from the whole
+                    // receiver alike: one member.
+                    (Some(da.0), da.1)
                 } else if overloaded {
-                    // Each alternative of the second matches one of the first's: the first's set,
-                    // whose alternatives the receiver meets with their matches where it applies
-                    // one (`intersection_denotations`).
-                    (Some((sa, ta)), None)
+                    if self.overloads_across(sa, ta, sb, tb) {
+                        (Some((self.merged_overload(sa, ta, sb, tb), ta)), None)
+                    } else {
+                        // Each alternative of the second matches one of the first's: the first's
+                        // set, whose alternatives the receiver meets with their matches where it
+                        // applies one (`intersection_denotations`).
+                        (Some((sa, ta)), None)
+                    }
                 } else {
-                    // Two matching members, one symbol through two instances of its owner
-                    // included (`G[Any] & G[String]`'s `get`).
-                    let (found, info) = match reversed {
-                        false => self.meet_parts(pre, ((sa, ta), ja), ((sb, tb), jb)),
-                        true => self.meet_parts(pre, ((sb, tb), jb), ((sa, ta), ja)),
+                    let (d1, d2) = if reversed { (db, da) } else { (da, db) };
+                    let matched = {
+                        let (i1, i2) = (self.denot_info(&d1), self.denot_info(&d2));
+                        self.infos_match(&i1, &i2)
                     };
-                    (Some(found), info)
+                    match matched.then(|| self.merge_single(pre, &d1, &d2)) {
+                        Some(Meet::First) => (Some(d1.0), d1.1),
+                        Some(Meet::Second) => (Some(d2.0), d2.1),
+                        Some(Meet::Joint(true, info)) => (Some(d1.0), Some(info)),
+                        Some(Meet::Joint(false, info)) => (Some(d2.0), Some(info)),
+                        // Two members kept apart: an overload of the two.
+                        Some(Meet::Apart) | None => (Some((self.merged_overload(sa, ta, sb, tb), ta)), None),
+                    }
                 }
             }
             (Some(f), _) => (Some(f), ja),
@@ -3065,24 +3116,247 @@ impl<'a> Worker<'a> {
         }
     }
 
+    /// The member `s` a part of the receiver `pre` gives as a member of the instance `t` of its
+    /// owner, with the joint information it carries, seen from the whole receiver as dotty's class
+    /// lookup sees it (`ClassDenotation.findMember` with `pre`, whose denotations are `asSeenFrom`
+    /// it): where the owner is a base class of the receiver under another instance than `t`, the
+    /// one the receiver's base type is (`prefix_base_type`), the information seen from it
+    /// (`seen_from_instance`). `R["k"] & R["v"]`'s `get(k: K)` takes `"k" | "v"`. An overloaded
+    /// set's alternatives are seen so one by one (`part_denotations`).
+    fn seen_from_whole(&mut self, pre: TypeId, ((s, t), joint): Denot) -> Denot {
+        let Owner::Class(owner) = self.syms.sym(s).owner else { return ((s, t), joint) };
+        if self.syms.alternatives(s).is_some() || !matches!(self.types.get(t), Type::Class(_, args) if args != EMPTY_LIST) {
+            return ((s, t), joint);
+        }
+        let Some(whole) = self.prefix_base_type(pre, owner, &mut Vec::new()) else { return ((s, t), joint) };
+        if whole == t {
+            return ((s, t), joint);
+        }
+        match self.seen_from_instance(s, whole, &joint) {
+            Some(info) => ((s, whole), Some(info)),
+            None => ((s, whole), joint),
+        }
+    }
+
+    /// The instance of the class `c` the receiver `pre` has as a whole, as dotty's `baseType`
+    /// gives it (`Types.scala` at the 3.8.4 tag): an intersection's the meet of its parts'
+    /// (`AndType`'s `baseTp1 & baseTp2`, `met_instances`), a refinement's its parent's, a type
+    /// parameter's its bound's, a class's `this` with a self type its `cls & self`'s, any other
+    /// type's `base_type`.
+    fn prefix_base_type(&mut self, pre: TypeId, c: ClassId, seen: &mut Vec<TParamId>) -> Option<TypeId> {
+        let t = self.deref(pre);
+        if let Type::This(k) = self.types.get(t) {
+            if self.syms.class(k).declared_self.is_some() {
+                return match self.dependent_underlying(t) {
+                    Some(under) if under != t => self.prefix_base_type(under, c, seen),
+                    _ => self.base_type(t, c),
+                };
+            }
+        }
+        let t = self.dealias(t);
+        match self.types.get(t) {
+            // Every part, however many (`ClassDenotation.baseTypeOf` meets both operands).
+            Type::Inter(a, b) => {
+                let x = self.prefix_base_type(a, c, seen);
+                let y = self.prefix_base_type(b, c, seen);
+                match (x, y) {
+                    (Some(x), Some(y)) => Some(self.met_instances(c, x, y)),
+                    (x, y) => x.or(y),
+                }
+            }
+            Type::Refined(parent, _) => self.prefix_base_type(parent, c, seen),
+            // A parameter's bound, once on the way down: bounds that name each other end there.
+            Type::Param(p) => {
+                let upper = self.syms.tparam(p).upper;
+                if upper == ANY || seen.contains(&p) {
+                    return None;
+                }
+                let upper = self.types.translate(self.types.view_here(), upper);
+                seen.push(p);
+                let found = self.prefix_base_type(upper, c, seen);
+                seen.pop();
+                found
+            }
+            // An applied parameter's bound applied (`F[Int]` of `F[X] <: R["k"] & R["v"]`), a
+            // union's join and a proxy's underlying type, as `baseTypeOf` takes a `TypeProxy`'s
+            // super type: the instance met through them as written receivers meet it.
+            Type::AppParam(p, args) => {
+                if seen.contains(&p) {
+                    return None;
+                }
+                let upper = self.app_param_upper(p, args)?;
+                seen.push(p);
+                let found = self.prefix_base_type(upper, c, seen);
+                seen.pop();
+                found
+            }
+            Type::Union(..) => match self.union_join(t) {
+                Some(j) if j != t => self.prefix_base_type(j, c, seen),
+                _ => self.base_type(t, c),
+            },
+            Type::This(_) | Type::Term(_) | Type::Select(..) | Type::Member(..) | Type::AppMember(..) | Type::Decl(_) | Type::Alias(..) | Type::Match(..) => match self.dependent_underlying(t) {
+                Some(under) if under != t => self.prefix_base_type(under, c, seen),
+                _ => self.base_type(t, c),
+            },
+            _ => self.base_type(t, c),
+        }
+    }
+
+    /// The meet of two instances `x` and `y` of the class `c`, as dotty's `glb` makes it of two
+    /// applications of one class and `NamedType.argForParam` reads it (`TypeComparer`'s
+    /// `dropIfSuper` and `distributeAnd`'s `glbArgs`, `Types.scala`'s `argForParam` of an
+    /// `AndType`, at the 3.8.4 tag): an instance conforming to the other is the meet; else the
+    /// argument of a covariant parameter is the intersection of the two, of a contravariant one
+    /// their union, of an invariant one the same argument where they are the same and else the
+    /// wildcard whose bounds are both arguments' met (`TypeBounds.&`: one within the other, else
+    /// the union of the lower bounds to the intersection of the upper ones).
+    fn met_instances(&mut self, c: ClassId, x: TypeId, y: TypeId) -> TypeId {
+        if x == y {
+            return x;
+        }
+        let (Type::Class(cx, xs), Type::Class(cy, ys)) = (self.types.get(x), self.types.get(y)) else { return x };
+        if cx != c || cy != c {
+            return x;
+        }
+        if self.frozen_sub(x, y) {
+            return x;
+        }
+        if self.frozen_sub(y, x) {
+            return y;
+        }
+        let (xs, ys) = (self.types.items(xs).to_vec(), self.types.items(ys).to_vec());
+        let tparams = self.syms.class(c).tparams.clone();
+        let mut args = Vec::with_capacity(xs.len());
+        for (i, (&a, &b)) in xs.iter().zip(&ys).enumerate() {
+            let variance = tparams.get(i).map_or(0, |&p| self.syms.tparam(p).variance);
+            let arg = match variance {
+                _ if a == b => a,
+                v if v > 0 => self.met_type(a, b),
+                v if v < 0 => self.joined_type(a, b),
+                _ => {
+                    let wild = |w: &Self, t: TypeId| w.types.wild_bounds(t).unwrap_or((t, t));
+                    let ((lo1, hi1), (lo2, hi2)) = (wild(self, a), wild(self, b));
+                    if !self.types.is_wild(a) && !self.types.is_wild(b) && self.frozen_sub(a, b) && self.frozen_sub(b, a) {
+                        a
+                    } else if self.frozen_sub(lo1, lo2) && self.frozen_sub(hi2, hi1) {
+                        b
+                    } else if self.frozen_sub(lo2, lo1) && self.frozen_sub(hi1, hi2) {
+                        a
+                    } else {
+                        let lo = self.joined_type(lo1, lo2);
+                        let hi = self.met_type(hi1, hi2);
+                        self.types.bounded_wild(lo, hi)
+                    }
+                }
+            };
+            args.push(arg);
+        }
+        self.types.class(c, &args)
+    }
+
+    /// The information of `s` (`joint` where a meet made it) seen from `base`, an instance of its
+    /// owner some of whose arguments are wildcards (`met_instances`): dotty's `asSeenFrom`, the
+    /// exact arguments substituted and each wildcard's parameter a range its positions approximate
+    /// (`approx_ranges`, dotty's `ApproximatingTypeMap`): a parameter's type at a parameter's
+    /// variance, the result at a result's. `None` where no argument is a wildcard, the instance's
+    /// substitution being the information then.
+    fn seen_from_instance(&mut self, s: SymId, base: TypeId, joint: &JointInfo) -> Option<std::sync::Arc<MethodSig>> {
+        let Type::Class(c, list) = self.types.get(base) else { return None };
+        let args = self.types.items(list).to_vec();
+        if !args.iter().any(|&a| self.types.is_wild(a)) {
+            return None;
+        }
+        let sig = match joint {
+            Some(j) => j.clone(),
+            None => self.sig_arc(s),
+        };
+        let tparams = self.syms.class(c).tparams.clone();
+        let mut exact: Subst = Vec::new();
+        let (mut ranged, mut ranges) = (Vec::new(), Vec::new());
+        for (&p, &a) in tparams.iter().zip(&args) {
+            match self.types.wild_bounds(a) {
+                Some(bounds) => {
+                    ranged.push(p);
+                    ranges.push(bounds);
+                }
+                None => exact.push((p, a)),
+            }
+        }
+        let mut out = (*sig).clone();
+        for clause in &mut out.clauses {
+            for p in &mut clause.params {
+                let t = self.types.subst(p.ty, &exact);
+                p.ty = self.approx_ranges(t, &ranged, &ranges, -1);
+            }
+        }
+        let t = self.types.subst(sig.ret, &exact);
+        out.ret = self.approx_ranges(t, &ranged, &ranges, 1);
+        Some(std::sync::Arc::new(out))
+    }
+
     /// The alternatives of `name` on the receiver `t` where it is an intersection, each with
     /// the instance of its owner it is seen as and its joint information: dotty's
     /// `Denotation.meet` of the parts' denotations (`Denotations.scala`, `meet` and `mergeDenot`,
-    /// at the 3.8.4 tag), each alternative of one part merged with the alternative of the other
-    /// that matches it (`members_match`) as `meet_parts` takes them, the unmatched kept. What an
-    /// overloaded selection on an intersection resolves among (`C & R` whose `f(x: Int): Any`
-    /// and `f(x: Int): String` make one alternative of the met result beside the others). None
-    /// where `t` is no intersection.
-    pub(super) fn intersection_denotations(&mut self, t: TypeId, name: Name) -> Option<Vec<((SymId, TypeId), JointInfo)>> {
-        let d = self.deref(t);
-        let d = self.dealias(d);
-        if !matches!(self.types.get(d), Type::Inter(..)) {
-            return None;
-        }
-        Some(self.part_denotations(t, d, name, 1))
+    /// at the 3.8.4 tag), each seen from the whole receiver (`seen_from_whole`), each alternative
+    /// of one part merged with the first of the other's whose signature it matches
+    /// (`merge_denotation`), the unmatched and the unmergeable kept. What an overloaded selection
+    /// on an intersection resolves among (`C & R` whose `f(x: Int): Any` and `f(x: Int): String`
+    /// make one alternative of the met result beside the others). The receiver is followed to
+    /// its intersection as `find_member_from` follows it (`Types.findMember`'s `go`: a type
+    /// parameter's bound, `T <: R["k"] & R["v"]`, a path's underlying type, an alias, a
+    /// refinement's parent, a union's join, a class's `this` with a self type as `givenSelf &
+    /// cls`), the receiver as written the prefix throughout. None where it reaches no
+    /// intersection.
+    pub(super) fn intersection_denotations(&mut self, t: TypeId, name: Name) -> Option<Vec<Denot>> {
+        self.denotations_under(t, t, name, &mut Vec::new())
     }
 
-    fn part_denotations(&mut self, pre: TypeId, t: TypeId, name: Name, private_until: usize) -> Vec<((SymId, TypeId), JointInfo)> {
+    fn denotations_under(&mut self, pre: TypeId, t: TypeId, name: Name, seen: &mut Vec<TParamId>) -> Option<Vec<Denot>> {
+        let t = self.deref(t);
+        if let Type::This(c) = self.types.get(t) {
+            if self.syms.class(c).declared_self.is_some() {
+                let under = self.dependent_underlying(t)?;
+                let Type::Inter(cls, given) = self.types.get(under) else { return self.denotations_under(pre, under, name, seen) };
+                // dotty's `givenSelf & cls`: the self type's members first, the class's own
+                // private members its own.
+                let mut acc = self.part_denotations(pre, given, name, 0);
+                for d in self.part_denotations(pre, cls, name, 1) {
+                    self.merge_denotation(pre, &mut acc, d);
+                }
+                return Some(acc);
+            }
+        }
+        let t = self.dealias(t);
+        match self.types.get(t) {
+            Type::Inter(..) => Some(self.part_denotations(pre, t, name, 1)),
+            Type::Param(p) => {
+                let upper = self.syms.tparam(p).upper;
+                if upper == ANY || seen.contains(&p) {
+                    return None;
+                }
+                let upper = self.types.translate(self.types.view_here(), upper);
+                seen.push(p);
+                let found = self.denotations_under(pre, upper, name, seen);
+                seen.pop();
+                found
+            }
+            Type::AppParam(p, args) => {
+                let upper = self.app_param_upper(p, args)?;
+                self.denotations_under(pre, upper, name, seen)
+            }
+            Type::Union(..) => {
+                let j = self.union_join(t)?;
+                self.denotations_under(pre, j, name, seen)
+            }
+            Type::This(_) | Type::Term(_) | Type::Select(..) | Type::Member(..) | Type::AppMember(..) | Type::Decl(_) | Type::Refined(..) | Type::Alias(..) | Type::Match(..) => {
+                let under = self.dependent_underlying(t)?;
+                self.denotations_under(pre, under, name, seen)
+            }
+            _ => None,
+        }
+    }
+
+    fn part_denotations(&mut self, pre: TypeId, t: TypeId, name: Name, private_until: usize) -> Vec<Denot> {
         let t = self.deref(t);
         let t = self.dealias(t);
         if let Type::Inter(a, b) = self.types.get(t) {
@@ -3095,119 +3369,532 @@ impl<'a> Worker<'a> {
         let mut joint = None;
         let Some((s, owner)) = self.find_member_from(pre, t, name, private_until, &mut joint) else { return Vec::new() };
         match self.syms.alternatives(s).map(|alts| alts.to_vec()) {
-            Some(alts) => alts
-                .into_iter()
-                .map(|alt| {
-                    let owner_ty = match self.syms.sym(alt).owner {
-                        Owner::Class(c) => self.base_type(t, c).unwrap_or(owner),
-                        _ => owner,
-                    };
-                    ((alt, owner_ty), None)
-                })
-                .collect(),
-            None => vec![((s, owner), joint)],
+            // A class's alternatives in dotty's scope order, the last declared first.
+            Some(mut alts) => {
+                alts.sort_by_key(|&a| std::cmp::Reverse(self.syms.sym(a).span.start));
+                alts.into_iter()
+                    .map(|alt| {
+                        let owner_ty = match self.syms.sym(alt).owner {
+                            Owner::Class(c) => self.base_type(t, c).unwrap_or(owner),
+                            _ => owner,
+                        };
+                        self.seen_from_whole(pre, ((alt, owner_ty), None))
+                    })
+                    .collect()
+            }
+            None => {
+                let d = self.seen_from_whole(pre, ((s, owner), joint));
+                match self.refinement_alternative(t, name, &d) {
+                    Some(r) => vec![d, r],
+                    None => vec![d],
+                }
+            }
         }
     }
 
-    /// `mergeDenot` of the denotations so far and one more: merged with the first that matches
-    /// it, kept apart where none does; the same denotation again is dropped.
-    fn merge_denotation(&mut self, pre: TypeId, acc: &mut Vec<((SymId, TypeId), JointInfo)>, d: ((SymId, TypeId), JointInfo)) {
+    /// `mergeDenot` of the denotations so far and one more: the same denotation again dropped,
+    /// else merged with the first whose signature it matches as `mergeSingleDenot` merges two
+    /// (`merge_single`), kept beside that one where the two do not merge, kept apart at the end
+    /// where none matches.
+    fn merge_denotation(&mut self, pre: TypeId, acc: &mut Vec<Denot>, d: Denot) {
         for i in 0..acc.len() {
             if acc[i].0 == d.0 {
                 return;
             }
-            let ((s1, t1), _) = acc[i];
-            let ((s2, t2), _) = d;
-            if self.members_match(s1, t1, s2, t2) {
-                let first = acc[i].clone();
-                acc[i] = self.meet_parts(pre, first, d);
-                return;
+            let (ia, id) = (self.denot_info(&acc[i]), self.denot_info(&d));
+            if !self.infos_match(&ia, &id) {
+                continue;
             }
+            let first = acc[i].clone();
+            match self.merge_single(pre, &first, &d) {
+                Meet::First => {}
+                Meet::Second => acc[i] = d,
+                Meet::Joint(true, info) => acc[i] = (first.0, Some(info)),
+                Meet::Joint(false, info) => acc[i] = (d.0, Some(info)),
+                Meet::Apart => acc.insert(i + 1, d),
+            }
+            return;
         }
         acc.push(d);
     }
 
-    /// Of two members of one name and matching parameters, found on an intersection's first
-    /// and second part each with the type its owner is seen as and the joint information it
-    /// carries, the one `meet_members` takes, with the joint member's information where the two
-    /// make one (dotty's `infoMeet`): the scoring symbol's signature, its result met with the
-    /// other's. The results are compared and met with the second's type parameters renamed to
-    /// the first's (`tp2.resType.subst(tp2, tp1)`); members of different numbers of them make
-    /// no joint information.
-    fn meet_parts(&mut self, pre: TypeId, ((sa, ta), ja): ((SymId, TypeId), JointInfo), ((sb, tb), jb): ((SymId, TypeId), JointInfo)) -> ((SymId, TypeId), JointInfo) {
-        let ia = ja.clone().unwrap_or_else(|| self.sig_arc(sa));
-        let ib = jb.clone().unwrap_or_else(|| self.sig_arc(sb));
-        let renaming = |w: &Self, from: &MethodSig, to: &MethodSig| -> Option<Subst> {
-            (from.tparams.len() == to.tparams.len()).then(|| from.tparams.iter().zip(&to.tparams).map(|(&p, &q)| (p, w.types.param(q))).collect())
+    /// The information of the denotation `d`: its joint information where a meet made one, else
+    /// its symbol's signature, under the substitution of the instance of its owner it is a member
+    /// of (dotty's `SingleDenotation.info`, `asSeenFrom` its prefix).
+    pub(super) fn denot_info(&mut self, ((s, t), joint): &Denot) -> MethodSig {
+        let sig = match joint {
+            Some(j) => j.clone(),
+            None => self.sig_arc(*s),
         };
-        let (sub_a, sub_b) = (self.owner_subst(ta), self.owner_subst(tb));
-        let ra = self.types.subst(ia.ret, &sub_a);
-        let rb = self.types.subst(ib.ret, &sub_b);
-        let b_in_a = renaming(self, &ib, &ia);
-        let rb_a = match &b_in_a {
-            Some(r) if !r.is_empty() => self.types.subst(rb, r),
-            _ => rb,
-        };
-        if self.types.contains_error(ra) || self.types.contains_error(rb_a) {
-            return ((sa, ta), ja);
-        }
-        let hidden = (!self.is_accessible(sa), !self.is_accessible(sb));
-        let bases = self.receiver_base_classes(pre, 0);
-        match self.meet_members(&bases, (sa, ra), (sb, rb_a), hidden) {
-            Meet::First => ((sa, ta), ja),
-            Meet::Second => ((sb, tb), jb),
-            Meet::Joint(first) if b_in_a.is_none() => match first {
-                true => ((sa, ta), ja),
-                false => ((sb, tb), jb),
-            },
-            Meet::Joint(true) => {
-                let ret = self.types.inter(ia.ret, rb_a);
-                ((sa, ta), Some(std::sync::Arc::new(MethodSig { tparams: ia.tparams.clone(), clauses: ia.clauses.clone(), ret })))
+        let subst = self.owner_subst(*t);
+        let mut out = (*sig).clone();
+        if !subst.is_empty() {
+            for clause in &mut out.clauses {
+                for p in &mut clause.params {
+                    p.ty = self.types.subst(p.ty, &subst);
+                }
             }
-            Meet::Joint(false) => {
-                let a_in_b = renaming(self, &ia, &ib).unwrap_or_default();
-                let ra_b = if a_in_b.is_empty() { ra } else { self.types.subst(ra, &a_in_b) };
-                let ret = self.types.inter(ra_b, ib.ret);
-                ((sb, tb), Some(std::sync::Arc::new(MethodSig { tparams: ib.tparams.clone(), clauses: ib.clauses.clone(), ret })))
-            }
+            out.ret = self.types.subst(out.ret, &subst);
         }
+        out
     }
 
-    /// Which of two members of one name and matching parameters the member of an intersection
-    /// is, as dotty's `mergeSingleDenot` decides it (`Denotations.scala`, `meet`, at the 3.8.4
-    /// tag): `s1` of type `r1` from the first part, `s2` of type `r2` from the second, `bases`
-    /// the whole receiver's base classes (`receiver_base_classes`). An inaccessible member gives
-    /// way to an accessible one (`hidden`); else the symbol score prefers the member at least
-    /// as concrete as the other (`isAsConcrete`), then the one whose owner derives from the
-    /// other's or comes first in `bases` (`linearScore`), then the wider access boundary, then a
-    /// method over a value; the member whose type conforms to the other's, unconstrained, wins
-    /// where the score allows it (`overrides`); else the two make one member, the scoring
-    /// symbol's with the meet of the types (`infoMeet`), the first's where the score is even.
-    /// The selection of the program's typer and of a library document's index alike.
-    pub(super) fn meet_members(&mut self, bases: &[ClassId], (s1, r1): (SymId, TypeId), (s2, r2): (SymId, TypeId), hidden: (bool, bool)) -> Meet {
+    /// The whole information of the member `s` of the receiver `pre`, seen from the instance of
+    /// its owner the receiver is as a whole (`prefix_base_type`, `seen_from_instance`): what a
+    /// library document's index merges (`merge_infos`).
+    pub(super) fn member_info_on(&mut self, pre: TypeId, s: SymId) -> MethodSig {
+        let base = match self.syms.sym(s).owner {
+            Owner::Class(c) => self.prefix_base_type(pre, c, &mut Vec::new()),
+            _ => None,
+        };
+        let Some(base) = base else { return (*self.sig_arc(s)).clone() };
+        let joint = self.seen_from_instance(s, base, &None);
+        self.denot_info(&((s, base), joint))
+    }
+
+    /// Of two denotations of one name and matching signatures, found on an intersection's first
+    /// and second part, the one dotty's `mergeSingleDenot` takes over their whole information
+    /// (`merge_infos`), the second's type parameters read as the first's (`tp2.subst(tp2, tp1)`).
+    /// A refinement's denotation, which has no symbol (`refinement_alternative`), scores as
+    /// dotty's `!sym.exists`: 2 against the other, the first's checked first.
+    fn merge_single(&mut self, pre: TypeId, d1: &Denot, d2: &Denot) -> Meet {
+        let ((s1, _), _) = *d1;
+        let ((s2, _), _) = *d2;
+        let i1 = self.denot_info(d1);
+        let i2 = self.denot_info(d2);
+        if self.types.contains_error(i1.ret) || self.types.contains_error(i2.ret) {
+            return Meet::First;
+        }
+        let i2 = self.renamed_info(&i2, &i1);
+        let score = match (self.is_refinement_denot(d1), self.is_refinement_denot(d2)) {
+            (true, _) => Some(-2),
+            (_, true) => Some(2),
+            _ => None,
+        };
+        let hidden = match score {
+            Some(_) => (false, false),
+            None => (!self.is_accessible(s1), !self.is_accessible(s2)),
+        };
+        let bases = self.receiver_base_classes(pre, 0);
+        self.merge_scored(&bases, (s1, &i1), (s2, &i2), hidden, score)
+    }
+
+    /// Whether `d` is a refinement's denotation (`refinement_alternative`): the member it
+    /// refines, the refined type its prefix in the place of an instance of its owner.
+    pub(super) fn is_refinement_denot(&self, ((_, t), _): &Denot) -> bool {
+        matches!(self.types.get(*t), Type::Refined(..))
+    }
+
+    /// The refinement of `name` that the part `t` of an intersection's receiver makes of the
+    /// member `d` (seen from the whole receiver), where it stays a member of its own beside it:
+    /// dotty's `goRefined` meets the refinement's information with the member's, which stay two
+    /// alternatives where their signatures do not match (`Denotation.meet`'s
+    /// `MultiDenotation`: `Rec["k", String] & Rec["v", Int]`'s `get(k: "k"): String` beside
+    /// the member's `get(k: "k" | "v"): Any`). A method refinement alone, whose parameters erase
+    /// as the member's: a call of it is a call of the member, as the reflective call dotty makes
+    /// of a symbol-less alternative finds that method. Its denotation is the member's symbol
+    /// with the refined type as its prefix (`is_refinement_denot`) and its information.
+    fn refinement_alternative(&mut self, t: TypeId, name: Name, d: &Denot) -> Option<Denot> {
+        let Some(r @ Refinement::Term(..)) = self.refined_term(t, name) else { return None };
+        let rinfo = self.refinement_sig(r);
+        let info = self.denot_info(d);
+        if rinfo.clauses.is_empty() || rinfo.tparams.len() != info.tparams.len() || rinfo.clauses.len() != info.clauses.len() {
+            return None;
+        }
+        let shape = |s: &MethodSig| s.clauses.iter().map(|c| c.params.len()).collect::<Vec<_>>();
+        if shape(&rinfo) != shape(&info) {
+            return None;
+        }
+        let pairs: Vec<(ParamSig, ParamSig)> = rinfo.clauses.iter().flat_map(|c| c.params.iter().cloned()).zip(info.clauses.iter().flat_map(|c| c.params.iter().cloned())).collect();
+        for (p, q) in &pairs {
+            if self.param_signature(p) != self.param_signature(q) {
+                return None;
+            }
+        }
+        if self.infos_match(&info, &rinfo) {
+            return None;
+        }
+        let mut refined = self.deref(t);
+        while let Type::Alias(..) = self.types.get(refined) {
+            refined = self.reduce_head(refined)?;
+        }
+        if !matches!(self.types.get(refined), Type::Refined(..)) {
+            return None;
+        }
+        Some(((d.0 .0, refined), Some(rinfo)))
+    }
+
+    /// `info` read in the binders of `to`, the information it is compared with: its type
+    /// parameters as `to`'s where they are as many, and its term parameters' paths as `to`'s
+    /// where the clauses take as many (`tp2.subst(tp2, tp1)` of `matchingMethodParams`,
+    /// `compareMethod` and `infoMeet`: `y: x.T` of one method and `y: x.T` of the other are one
+    /// type then). Its parameters' types and its result are rewritten; its `tparams` and its
+    /// parameters' symbols stay its own, whose bounds `renamed_bounds` reads in `to`'s terms.
+    pub(super) fn renamed_info(&mut self, info: &MethodSig, to: &MethodSig) -> MethodSig {
+        let mut out = info.clone();
+        let types: Subst = if !info.tparams.is_empty() && info.tparams.len() == to.tparams.len() && info.tparams != to.tparams {
+            info.tparams.iter().zip(&to.tparams).map(|(&p, &q)| (p, self.types.param(q))).collect()
+        } else {
+            Vec::new()
+        };
+        let same_shape = info.clauses.len() == to.clauses.len() && info.clauses.iter().zip(&to.clauses).all(|(x, y)| x.params.len() == y.params.len());
+        let terms: Vec<(SymId, TypeId)> = if same_shape {
+            let pairs: Vec<(SymId, SymId)> = info.clauses.iter().zip(&to.clauses).flat_map(|(x, y)| x.params.iter().zip(&y.params).map(|(p, q)| (p.sym, q.sym))).filter(|(p, q)| p != q).collect();
+            pairs.into_iter().map(|(p, q)| (p, self.types.mk(Type::Term(q)))).collect()
+        } else {
+            Vec::new()
+        };
+        if types.is_empty() && terms.is_empty() {
+            return out;
+        }
+        let rename = |w: &mut Self, t: TypeId| {
+            let t = if types.is_empty() { t } else { w.types.subst(t, &types) };
+            w.subst_paths(t, &terms)
+        };
+        for clause in &mut out.clauses {
+            for p in &mut clause.params {
+                p.ty = rename(self, p.ty);
+            }
+        }
+        out.ret = rename(self, out.ret);
+        out
+    }
+
+    /// The bounds of the type parameter `q`, one of `from`, read in the terms of `to`, the type
+    /// parameters `from`'s are compared with (`tp2.paramInfos.subst(tp2, tp1)`).
+    fn renamed_bounds(&mut self, q: TParamId, from: &[TParamId], to: &[TParamId]) -> (TypeId, TypeId) {
+        let view = self.types.view_here();
+        let (lower, upper) = (self.syms.tparam(q).lower, self.syms.tparam(q).upper);
+        let (lower, upper) = (self.types.translate(view, lower), self.types.translate(view, upper));
+        if from == to || from.len() != to.len() {
+            return (lower, upper);
+        }
+        let renaming: Subst = from.iter().zip(to).map(|(&p, &q)| (p, self.types.param(q))).collect();
+        (self.types.subst(lower, &renaming), self.types.subst(upper, &renaming))
+    }
+
+    /// Which member of an intersection two members of one name and matching signatures make, as
+    /// dotty's `mergeSingleDenot` decides it (`Denotations.scala`, `meet`, at the 3.8.4 tag):
+    /// `s1` of the information `i1` from the first part, `s2` of `i2` from the second, the second's
+    /// type parameters read as the first's, `bases` the whole receiver's base classes
+    /// (`receiver_base_classes`). An inaccessible member gives way to an accessible one
+    /// (`hidden`); else the symbol score prefers the member at least as concrete as the other
+    /// (`isAsConcrete`), then the one whose owner derives from the other's or comes first in
+    /// `bases` (`linearScore`), then the wider access boundary, then a method over a value; the
+    /// member whose whole information conforms to the other's, unconstrained, wins where the score
+    /// allows it (`overrides`); else the two make one member of the joint information
+    /// (`infoMeet`), the scoring symbol's, the first's where the score is even; else, both
+    /// symbols existing (no score of 2), they stay apart (`MultiDenotation`). The selection of the
+    /// program's typer and of a library document's index alike.
+    pub(super) fn merge_infos(&mut self, bases: &[ClassId], first: (SymId, &MethodSig), second: (SymId, &MethodSig), hidden: (bool, bool)) -> Meet {
+        self.merge_scored(bases, first, second, hidden, None)
+    }
+
+    /// `merge_infos` where the symbol score is known (`Some(2)` or `Some(-2)`: one of the two has
+    /// no symbol, whose information is taken alone where the two do not meet).
+    fn merge_scored(&mut self, bases: &[ClassId], (s1, i1): (SymId, &MethodSig), (s2, i2): (SymId, &MethodSig), hidden: (bool, bool), score: Option<i32>) -> Meet {
         match hidden {
             (true, false) => return Meet::Second,
             (false, true) => return Meet::First,
             _ => {}
         }
-        let score = self.meet_score(bases, s1, s2);
-        let mark = self.snapshot();
-        let second = score <= 0 && self.is_sub(r2, r1) && self.snapshot() == mark;
-        self.rollback(mark);
-        if second {
+        let score = match score {
+            Some(score) => score,
+            None => self.meet_score(bases, s1, s2),
+        };
+        // `matchNullaryLoosely`: `()T` and `=> T` alike where either member is Java's, `Any`'s or
+        // a Scala 2 class's (teq's stand-in: the members a call takes with or without Java's
+        // parentheses, `has_java_parens`); a member without a symbol is none of them.
+        let loose = (score != -2 && self.has_java_parens(s1)) || (score != 2 && self.has_java_parens(s2));
+        if score <= 0 && self.info_overrides_loosely(i2, i1, loose) {
             return Meet::Second;
         }
-        let first = score >= 0 && self.is_sub(r1, r2) && self.snapshot() == mark;
-        self.rollback(mark);
-        if first {
+        if score >= 0 && self.info_overrides_loosely(i1, i2, loose) {
             return Meet::First;
         }
-        Meet::Joint(score >= 0)
+        match self.info_meet(i1, i2) {
+            Some(mut joint) => {
+                // The joint information is the first's (`tp1.derivedLambdaType`); the second's
+                // symbol, where it is taken, has its own parameters, the joint's paths over the
+                // first's rebound to them, and its own defaults.
+                if score < 0 && score > -2 {
+                    let own = self.sig_arc(s2);
+                    let to = MethodSig { tparams: joint.tparams.clone(), clauses: own.clauses.clone(), ret: own.ret };
+                    joint = self.renamed_info(&joint, &to);
+                    for (clause, theirs) in joint.clauses.iter_mut().zip(&own.clauses) {
+                        for (p, q) in clause.params.iter_mut().zip(&theirs.params) {
+                            p.has_default = q.has_default;
+                            p.sym = q.sym;
+                        }
+                    }
+                }
+                Meet::Joint(score >= 0, std::sync::Arc::new(joint))
+            }
+            None if score == 2 => Meet::First,
+            None if score == -2 => Meet::Second,
+            None => Meet::Apart,
+        }
     }
 
+    /// Whether `t` is a value's information: no parameters and no type parameters (dotty's
+    /// `ExprType` or value type, whose signature is `NotAMethod`).
+    fn is_value_info(info: &MethodSig) -> bool {
+        info.tparams.is_empty() && info.clauses.is_empty()
+    }
+
+    /// `a <: b` without constraining a type variable (dotty's `frozen_<:<`).
+    fn frozen_sub(&mut self, a: TypeId, b: TypeId) -> bool {
+        if a == b {
+            return true;
+        }
+        let mark = self.snapshot();
+        let sub = self.is_sub(a, b) && self.snapshot() == mark;
+        self.rollback(mark);
+        sub
+    }
+
+    /// The meet of two types as dotty's `&` makes it: the one that conforms to the other, else
+    /// their intersection.
+    fn met_type(&mut self, a: TypeId, b: TypeId) -> TypeId {
+        if self.frozen_sub(a, b) {
+            a
+        } else if self.frozen_sub(b, a) {
+            b
+        } else {
+            self.types.inter(a, b)
+        }
+    }
+
+    /// The join of two types as dotty's `|` makes it: the one the other conforms to, else their
+    /// union.
+    fn joined_type(&mut self, a: TypeId, b: TypeId) -> TypeId {
+        if self.frozen_sub(a, b) {
+            b
+        } else if self.frozen_sub(b, a) {
+            a
+        } else {
+            self.types.union(a, b)
+        }
+    }
+
+    /// Whether two members' informations match as dotty's `matchesLoosely` has them for Scala
+    /// definitions (`Denotations.scala` at the 3.8.4 tag, `Signature.matchDegree`): two values
+    /// fully, a value and a method of no parameters at all (`MethodNotAMethodMatch`); two methods
+    /// where the numbers of their type parameters and of each clause's parameters are the same
+    /// and their parameters erase alike, and, where their results erase differently
+    /// (`ParamMatch`), their parameter types are the same (`info.matches`, the second's type
+    /// parameters read as the first's). teq compares the clauses' arities where dotty flattens
+    /// them (`docs/internal/DIFFERENCES.md`).
+    pub(super) fn infos_match(&mut self, a: &MethodSig, b: &MethodSig) -> bool {
+        let (va, vb) = (Self::is_value_info(a), Self::is_value_info(b));
+        if va || vb {
+            let other = if va { b } else { a };
+            return other.tparams.is_empty() && other.clauses.iter().all(|c| c.params.is_empty());
+        }
+        if a.tparams.len() != b.tparams.len() || a.clauses.len() != b.clauses.len() || a.clauses.iter().zip(&b.clauses).any(|(x, y)| x.params.len() != y.params.len()) {
+            return false;
+        }
+        let pairs: Vec<(&ParamSig, &ParamSig)> = a.clauses.iter().flat_map(|c| c.params.iter()).zip(b.clauses.iter().flat_map(|c| c.params.iter())).collect();
+        for &(p, q) in &pairs {
+            if self.param_signature(p) != self.param_signature(q) {
+                return false;
+            }
+        }
+        if self.signature_class(a.ret) == self.signature_class(b.ret) {
+            return true;
+        }
+        let b = self.renamed_info(b, a);
+        let pairs: Vec<(TypeId, TypeId)> = a.clauses.iter().flat_map(|c| c.params.iter().map(|p| p.ty)).zip(b.clauses.iter().flat_map(|c| c.params.iter().map(|p| p.ty))).collect();
+        pairs.into_iter().all(|(x, y)| self.frozen_sub(x, y) && self.frozen_sub(y, x))
+    }
+
+    /// The class a parameter contributes to its method's signature: a by-name one's `Function0`,
+    /// a repeated one's `Seq`, else its type's (`signature_class`).
+    fn param_signature(&mut self, p: &ParamSig) -> ClassId {
+        if p.by_name {
+            return self.b.functions.first().copied().flatten().unwrap_or(self.b.any_ref);
+        }
+        if p.repeated {
+            return self.b.seq.unwrap_or(self.b.any_ref);
+        }
+        self.signature_class(p.ty)
+    }
+
+    /// The class a type contributes to a signature (dotty's `sigName` of its erasure): a literal
+    /// type's class, a union's the class both sides erase to (`erasedLub`, where it is one of
+    /// them), else `erased_class`'s.
+    fn signature_class(&mut self, t: TypeId) -> ClassId {
+        let t = self.deref(t);
+        match self.types.get(t) {
+            Type::Lit(_) => {
+                let class = self.widen_lit(t);
+                self.erased_class(class, 0)
+            }
+            Type::Union(a, b) => {
+                let (x, y) = (self.signature_class(a), self.signature_class(b));
+                if x == y { x } else { self.b.any_ref }
+            }
+            _ => self.erased_class(t, 0),
+        }
+    }
+
+    /// Whether the information `a` conforms to `b`, unconstrained: dotty's `a.overrides(b)`
+    /// (`Types.scala` at the 3.8.4 tag: `widenExpr frozen_<:<`, a method type's `compareMethod`
+    /// and a polymorphic one's `comparePoly`): two values by their types; two methods of the same
+    /// shape whose type parameters' bounds in `b` lie within those in `a` (`matchingPolyParams`),
+    /// whose parameter types are the same (`matchingMethodParams`), whose clause of `b` is
+    /// implicit only where `a`'s is, and whose result in `a` conforms to `b`'s. `b`'s type
+    /// parameters are read as `a`'s.
+    fn info_overrides(&mut self, a: &MethodSig, b: &MethodSig) -> bool {
+        let (va, vb) = (Self::is_value_info(a), Self::is_value_info(b));
+        if va != vb {
+            return false;
+        }
+        if va {
+            return self.frozen_sub(a.ret, b.ret);
+        }
+        if a.tparams.len() != b.tparams.len() || a.clauses.len() != b.clauses.len() {
+            return false;
+        }
+        for (&p, &q) in a.tparams.iter().zip(&b.tparams) {
+            if p == q {
+                continue;
+            }
+            let (pl, pu) = self.renamed_bounds(p, &a.tparams, &a.tparams);
+            let (ql, qu) = self.renamed_bounds(q, &b.tparams, &a.tparams);
+            if !(self.frozen_sub(pl, ql) && self.frozen_sub(qu, pu)) {
+                return false;
+            }
+        }
+        for (x, y) in a.clauses.iter().zip(&b.clauses) {
+            if x.params.len() != y.params.len() || ((y.is_using || y.is_implicit) && !(x.is_using || x.is_implicit)) {
+                return false;
+            }
+            for (p, q) in x.params.iter().zip(&y.params) {
+                if p.by_name != q.by_name || p.repeated != q.repeated || !(self.frozen_sub(p.ty, q.ty) && self.frozen_sub(q.ty, p.ty)) {
+                    return false;
+                }
+            }
+        }
+        self.frozen_sub(a.ret, b.ret)
+    }
+
+    /// `info_overrides`, and where the match is loose (`overrides`' `matchLoosely`) the two
+    /// compared again with a method of one empty clause read as a value of its result
+    /// (`widenNullaryMethod`), where one of them is such a method.
+    fn info_overrides_loosely(&mut self, a: &MethodSig, b: &MethodSig, loose: bool) -> bool {
+        if self.info_overrides(a, b) {
+            return true;
+        }
+        if !loose {
+            return false;
+        }
+        let nullary = |info: &MethodSig| match (info.tparams.is_empty(), info.clauses.as_slice()) {
+            (true, [c]) if c.params.is_empty() && !c.is_using => Some(MethodSig::value(info.ret)),
+            _ => None,
+        };
+        match (nullary(a), nullary(b)) {
+            (None, None) => false,
+            (wa, wb) => {
+                let (wa, wb) = (wa.unwrap_or_else(|| a.clone()), wb.unwrap_or_else(|| b.clone()));
+                self.info_overrides(&wa, &wb)
+            }
+        }
+    }
+
+    /// The joint information of two members' (`infoMeet`, `Denotations.scala` 541 at the 3.8.4
+    /// tag), `b`'s type parameters read as `a`'s: two values' the meet of their types; two methods'
+    /// of the same type parameters and clauses whose parameter types are the same and whose
+    /// clauses are implicit alike (`matchingMethodParams`, `isImplicitMethod`) the first's
+    /// parameters, a name the two disagree on synthetic (`mergeParamNames`: `x$0`), the type
+    /// parameters' bounds met, the results met; none (`NoType`) for any other pair, a value and a
+    /// method among them.
+    fn info_meet(&mut self, a: &MethodSig, b: &MethodSig) -> Option<MethodSig> {
+        let (va, vb) = (Self::is_value_info(a), Self::is_value_info(b));
+        if va && vb {
+            let ret = self.met_type(a.ret, b.ret);
+            return Some(MethodSig::value(ret));
+        }
+        if va || vb || a.tparams.len() != b.tparams.len() || a.clauses.len() != b.clauses.len() {
+            return None;
+        }
+        let mut clauses = a.clauses.clone();
+        for (clause, y) in clauses.iter_mut().zip(&b.clauses) {
+            if clause.params.len() != y.params.len() || (clause.is_using || clause.is_implicit) != (y.is_using || y.is_implicit) {
+                return None;
+            }
+            for (i, (p, q)) in clause.params.iter_mut().zip(&y.params).enumerate() {
+                if p.by_name != q.by_name || p.repeated != q.repeated || !(self.frozen_sub(p.ty, q.ty) && self.frozen_sub(q.ty, p.ty)) {
+                    return None;
+                }
+                if p.name != q.name {
+                    p.name = self.interner.intern(&format!("x${}", i));
+                }
+            }
+        }
+        let ret = self.met_type(a.ret, b.ret);
+        let mut joint = MethodSig { tparams: a.tparams.clone(), clauses, ret };
+        self.meet_tparam_bounds(&mut joint, &b.tparams);
+        Some(joint)
+    }
+
+    /// The bounds of `joint`'s type parameters met with those of `theirs` (`paramInfos & ...` of
+    /// `infoMeet`'s polymorphic case): where they differ, fresh parameters of the met bounds stand
+    /// for the first's.
+    fn meet_tparam_bounds(&mut self, joint: &mut MethodSig, theirs: &[TParamId]) {
+        let mut fresh: Subst = Vec::new();
+        let mut bounds = Vec::new();
+        let own = joint.tparams.clone();
+        for (&p, &q) in own.iter().zip(theirs) {
+            if p == q {
+                continue;
+            }
+            let (pl, pu) = self.renamed_bounds(p, &own, &own);
+            // The second's bounds as they stand, its own binders not read as the first's: the
+            // tag's `infoMeet` meets `tp2.paramInfos` unsubstituted (`Denotations.scala` 575),
+            // where `matchingPolyParams` substitutes them to compare (`info_overrides`).
+            let (ql, qu) = self.renamed_bounds(q, theirs, theirs);
+            if pl == ql && pu == qu {
+                continue;
+            }
+            let lower = if self.frozen_sub(ql, pl) { pl } else if self.frozen_sub(pl, ql) { ql } else { self.types.union(pl, ql) };
+            let upper = self.met_type(pu, qu);
+            if lower == pl && upper == pu {
+                continue;
+            }
+            bounds.push((p, lower, upper));
+        }
+        if bounds.is_empty() {
+            return;
+        }
+        for &(p, _, _) in &bounds {
+            let (name, variance) = (self.syms.tparam(p).name, self.syms.tparam(p).variance);
+            let q = self.syms.new_tparam(name, variance);
+            fresh.push((p, self.types.param(q)));
+        }
+        for (k, &(_, lower, upper)) in bounds.iter().enumerate() {
+            let Type::Param(q) = self.types.get(fresh[k].1) else { continue };
+            let (lower, upper) = (self.types.subst(lower, &fresh), self.types.subst(upper, &fresh));
+            self.syms.tparams[q.idx()].lower = lower;
+            self.syms.tparams[q.idx()].upper = upper;
+        }
+        for t in &mut joint.tparams {
+            if let Some(&(_, q)) = fresh.iter().find(|(p, _)| p == t) {
+                if let Type::Param(q) = self.types.get(q) {
+                    *t = q;
+                }
+            }
+        }
+        for clause in &mut joint.clauses {
+            for p in &mut clause.params {
+                p.ty = self.types.subst(p.ty, &fresh);
+            }
+        }
+        joint.ret = self.types.subst(joint.ret, &fresh);
+    }
     /// `mergeSingleDenot`'s `symScore` of two existing symbols, neither a bridge: above zero for
     /// `s1`, below for `s2`.
-    fn meet_score(&mut self, bases: &[ClassId], s1: SymId, s2: SymId) -> i32 {
+    pub(super) fn meet_score(&mut self, bases: &[ClassId], s1: SymId, s2: SymId) -> i32 {
         // dotty's `Deferred`: a member without a body, which an `abstract override` one (a trait's
         // stackable member, `ABSTRACT` and `OVERRIDE` from a pickle) is not.
         let deferred = |w: &Self, s: SymId| {
@@ -3455,17 +4142,29 @@ impl<'a> Worker<'a> {
         if let Some(&set) = self.merged_overloads.get(&(a, b)) {
             return set;
         }
-        let view = self.types.view_here();
-        let (ta, tb) = (self.types.translate(view, ta), self.types.translate(view, tb));
-        let mut alts: Vec<SymId> = self.syms.alternatives(a).map_or_else(|| vec![a], |l| l.to_vec());
-        let own = alts.clone();
-        for s in self.syms.alternatives(b).map_or_else(|| vec![b], |l| l.to_vec()) {
-            if !self.matches_among(s, tb, &own, ta) {
-                alts.push(s);
+        // Two members of single names are the two alternatives whatever their instances (their
+        // signatures do not match, or their informations do not merge); of an overloaded name,
+        // the second's alternatives that match none of the first's join them.
+        let alts = if a == b {
+            vec![a]
+        } else if self.syms.alternatives(a).is_none() && self.syms.alternatives(b).is_none() {
+            vec![a, b]
+        } else {
+            let view = self.types.view_here();
+            let (ta, tb) = (self.types.translate(view, ta), self.types.translate(view, tb));
+            let mut alts: Vec<SymId> = self.syms.alternatives(a).map_or_else(|| vec![a], |l| l.to_vec());
+            let own = alts.clone();
+            for s in self.syms.alternatives(b).map_or_else(|| vec![b], |l| l.to_vec()) {
+                if !self.matches_among(s, tb, &own, ta) {
+                    alts.push(s);
+                }
             }
-        }
+            alts
+        };
         let owner = self.syms.sym(a).owner;
-        let set = self.syms.new_overloaded(a, owner, alts);
+        // A view of members of other classes, which neither marks them as overloads nor their
+        // class as having some (their names in the output stay their own).
+        let set = self.syms.new_overloaded_view(a, owner, alts);
         self.merged_overloads.insert((a, b), set);
         set
     }
@@ -3488,25 +4187,25 @@ impl<'a> Worker<'a> {
                 if self.syms.class(c).tparams.is_empty() {
                     return Subst::new();
                 }
-                let tparams = self.syms.class(c).tparams.clone();
-                let items: Vec<TypeId> = self.types.items(args).to_vec();
-                tparams
-                    .into_iter()
-                    .zip(items)
-                    .map(|(p, a)| {
-                        // A member read through an open wildcard has the parameter's declared
-                        // bound, as under scalac (`other.toLocalDate` on a `ChronoLocalDateTime[?]`
-                        // is a `ChronoLocalDate`); the bound, read raw from the parameter's record,
-                        // in the reader's view before it is looked at (the canonicalisation rule).
-                        if a != WILD {
-                            return (p, a);
-                        }
-                        let upper = self.syms.tparam(p).upper;
-                        let upper = self.types.translate(self.types.view_here(), upper);
-                        let bounded = matches!(self.types.get(upper), Type::Class(_, bargs) if self.types.items(bargs).is_empty());
-                        (p, if bounded { upper } else { a })
-                    })
-                    .collect()
+                // The parameters and the arguments read in place, one pair at a time.
+                let n = self.syms.class(c).tparams.len().min(self.types.items(args).len());
+                let mut subst = Vec::with_capacity(n);
+                for i in 0..n {
+                    let (p, a) = (self.syms.class(c).tparams[i], self.types.items(args)[i]);
+                    // A member read through an open wildcard has the parameter's declared
+                    // bound, as under scalac (`other.toLocalDate` on a `ChronoLocalDateTime[?]`
+                    // is a `ChronoLocalDate`); the bound, read raw from the parameter's record,
+                    // in the reader's view before it is looked at (the canonicalisation rule).
+                    if a != WILD {
+                        subst.push((p, a));
+                        continue;
+                    }
+                    let upper = self.syms.tparam(p).upper;
+                    let upper = self.types.translate(self.types.view_here(), upper);
+                    let bounded = matches!(self.types.get(upper), Type::Class(_, bargs) if self.types.items(bargs).is_empty());
+                    subst.push((p, if bounded { upper } else { a }));
+                }
+                subst
             }
             _ => Vec::new(),
         }

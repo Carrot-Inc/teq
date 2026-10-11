@@ -1809,6 +1809,14 @@ impl<'a, 't> Interp<'a, 't> {
             info.alternative || info.dispatch == crate::symbols::Dispatch::Named
         };
         let m = if by_signature { self.alternative_member(class, s) } else { self.member(class, name) };
+        // A method no overload names apart whose implementation in the receiver's class is one
+        // of an overloaded name there, which names it apart (`R.f` implemented by `Both.f[U <:
+        // String]` beside `C.f[T]`, `Both` read from products): found by its signature, as an
+        // alternative's is, the interpreter dispatching by symbols and signatures, not names.
+        let m = match m {
+            Member::Missing if !by_signature => self.alternative_member(class, s),
+            m => m,
+        };
         if matches!(m, Member::Missing) && self.name(name) == "valueOf" && matches!(self.runtime_class_name(class).as_ref(), "scala.String$" | "java.lang.String$") {
             let takes_chars = self.syms().sym(s).sig.as_ref().and_then(|sig| sig.clauses.first()).and_then(|c| c.params.first()).map(|p| p.ty);
             let takes_chars = takes_chars.map_or(false, |t| match self.typer.types.get(t) {
