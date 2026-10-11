@@ -29,7 +29,8 @@
 # tests/support/traitfields_lib.scala compiled the same way for the JVM; deferred-lib,
 # tests/support/deferred_lib.scala compiled the same way for the JVM; outer-lib,
 # tests/support/outer_lib.scala compiled the same way; defaults-lib, tests/support/defaults_lib.scala
-# compiled the same way; lazyorder-lib, tests/support/lazyorder_lib.scala compiled the same way; state-lib,
+# compiled the same way; lazyorder-lib, tests/support/lazyorder_lib.scala compiled the same way; ctorinit-lib,
+# tests/support/ctorinit_lib.scala compiled the same way; state-lib,
 # tests/support/state_lib.scala compiled the same way under a directory named like scala-library's; scala2-lib,
 # tests/support/scala2_lib compiled by Scala 2.13; scala2-traits, tests/support/scala2_traits compiled so, traits alone,
 # and scala2-traits-padded, that jar with Java classes stored first, scala2-traits-mixed with a Scala 3 class too; universal-lib, tests/support/universal_lib.scala
@@ -330,6 +331,20 @@ lazyorder_lib_jar() {
   fi
   echo "$jar"
 }
+# tests/support/ctorinit_lib.scala compiled by scalac into a jar: constructors whose statements read a val
+# the template defines before them.
+ctorinit_lib_jar() {
+  local src=tests/support/ctorinit_lib.scala
+  local jar=$scratch-ctorinit-lib.jar
+  local dir=$scratch-ctorinit-lib.$$
+  if [ ! -f "$jar" ] || [ "$src" -nt "$jar" ]; then
+    mkdir -p "$dir" && cp "$src" "$dir/"
+    timeout 200 scala-cli --power package --library -S "${SCALA_VERSION:-3.8.4}" "$dir/ctorinit_lib.scala" --server=false -q -o "$jar.$$" -f > /dev/null 2>&1 \
+      && mv -f "$jar.$$" "$jar" || rm -f "$jar.$$" "$jar"
+    rm -rf "$dir"
+  fi
+  echo "$jar"
+}
 # tests/support/depfun_lib.scala compiled by scalac into a jar: dependent function types in TASTy.
 depfun_lib_jar() {
   local src=tests/support/depfun_lib.scala
@@ -563,6 +578,7 @@ jar_of() {
     depfun-lib) depfun_lib_jar ;;
     inlinebodies-lib) inline_bodies_lib_jar ;;
     lazyorder-lib) lazyorder_lib_jar ;;
+    ctorinit-lib) ctorinit_lib_jar ;;
     view-lib) view_lib_jar ;;
     nestedcompanion-lib) nestedcompanion_lib_jar ;;
     extend-lib) extend_lib_jar ;;

@@ -819,6 +819,7 @@ macro_fresh_nested_site
 macro_heal_types
 macro_hole_cast
 macro_identity_hash
+macro_jar_ctor_val
 macro_jdk_bodies
 macro_jvm_template_body
 macro_lambda_quotes
