@@ -2095,15 +2095,6 @@ impl<'a, 't> Interp<'a, 't> {
             }
             Template::Missing(name) => self.unsupported(format!("no builtin for {}", name)),
             Template::Reflective => self.call_by_signature(args, fr, cx),
-            Template::StringMember(b, name) => {
-                let vals = self.eval_list(args, fr, cx)?;
-                if matches!(vals.first(), Some(Value::Null)) {
-                    return self.throw_named("NullPointerException", &format!("Cannot invoke \"String.{}()\" because the value is null", name));
-                }
-                let r = b(self, &vals);
-                self.recycle_vec(vals);
-                r
-            }
         }
     }
 
@@ -2136,7 +2127,16 @@ impl<'a, 't> Interp<'a, 't> {
                 let string_member = name.strip_prefix("scala.String.").map(Rc::<str>::from);
                 match self.builtins.get(&*name) {
                     _ if &*name == "scala.reflect.callBySignature" => Template::Reflective,
-                    Some(b) if string_member.is_some() => Template::StringMember(b.clone(), string_member.unwrap()),
+                    // A `null` receiver throws as the JVM's call does, after the arguments.
+                    Some(b) if string_member.is_some() => {
+                        let (b, name) = (b.clone(), string_member.unwrap());
+                        Template::Builtin(Rc::new(move |it: &mut Interp<'_, '_>, a: &[Value]| {
+                            if matches!(a.first(), Some(Value::Null)) {
+                                return it.throw_named("NullPointerException", &format!("Cannot invoke \"String.{}()\" because the value is null", name));
+                            }
+                            b(it, a)
+                        }))
+                    }
                     Some(b) if abstract_member => Template::AbstractBuiltin(b.clone(), sym),
                     Some(b) => Template::Builtin(b.clone()),
                     None => {
