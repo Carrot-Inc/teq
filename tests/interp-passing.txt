@@ -694,8 +694,6 @@ intersection_generic_overloads
 intersection_joint_member
 intersection_member_binders
 intersection_member_bounds_meet
-int_remainder_negative_zero
-int_sign
 intersection_member_gate
 intersection_member_lambdas
 intersection_member_overload
