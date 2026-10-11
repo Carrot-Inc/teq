@@ -287,6 +287,7 @@ discard_through_var_bound
 double_equals
 double_shortest_digits
 dummy_implicit
+duration_hierarchy
 duration_names
 duration_syntax_import
 duration_time_unit
@@ -315,7 +316,6 @@ equality_default
 equals_trait
 erasure_shapes
 eta_by_name_inferred
-equals_trait
 eta_sam_conversion
 eta_sam_widening
 eta_underscore_typevars

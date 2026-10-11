@@ -446,6 +446,7 @@ pure-args-byname-noinline
 puzzle
 puzzler54
 quote-MacroOverride
+quoted-sematics-1
 rainwater
 recursive-with-option
 reduce-projections
