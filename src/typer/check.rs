@@ -6095,7 +6095,7 @@ impl<'a> Worker<'a> {
     }
 
     /// A val implementing a parameterless def of a parent trait is reached through a method.
-    fn mark_accessors(&mut self, c: ClassId) {
+    pub(super) fn mark_accessors(&mut self, c: ClassId) {
         // The members' flags are records of the shared region when the class is a prefix one.
         // The flags are written under the loader's lock where the members are the shared
         // region's (`shared_write`); the signatures are read outside it.
