@@ -8,7 +8,7 @@
 # runtime suites on a machine other than the one that recorded bench/budgets.txt and
 # bench/runtime-budgets.txt, the prop suite without the crates of proptests/ fetched, and the
 # test runner's classes without a javac (a javac other than 17's only notes a difference). Each suite's whole
-# output goes to out/all/<suite>.log and its time and verdict to a line of out/all/times.txt
+# output goes to out/all/<suite>.log as it runs, and its time and verdict to a line of out/all/times.txt
 # (`<suite> <seconds> ok|FAIL`), which a run on another machine keeps (the GitHub workflow's artifacts).
 cd "$(dirname "$0")/.."
 # The compiler the suites test, target/release/teq unless TEQ names another; the repository's launcher runs
@@ -34,11 +34,12 @@ suite() {
     return
   fi
   local out start=$SECONDS
-  out=$("$@" 2>&1)
+  # Written as the suite runs, so that a run cut short keeps what it printed.
+  "$@" > "$logs/$name.log" 2>&1
   local code=$?
+  out=$(cat "$logs/$name.log")
   local last
   last=$(tail -1 <<< "$out")
-  printf '%s\n' "$out" > "$logs/$name.log"
   if [ $code -ne 0 ]; then
     status=1
     echo "$out"
