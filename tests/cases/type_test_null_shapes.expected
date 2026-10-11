@@ -1,0 +1,10 @@
+catch: caught x,none
+field: other,s:t
+loose: other,other,s:s
+names: List(a),List(s)
+failed: other,failure,other
+pair: other,b2
+gen: false,true,true
+genLazy: None,Some(1),Some(s)
+concrete: None,Some(s),false,false
+arrays: other,bool,other,bool

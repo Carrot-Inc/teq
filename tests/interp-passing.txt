@@ -1417,6 +1417,7 @@ type_test_class_pattern
 type_test_erased_bound
 type_test_null_guard
 type_test_null_scrutinee
+type_test_null_shapes
 type_test_selected_singleton
 type_test_synthesis
 type_test_tagged_inline

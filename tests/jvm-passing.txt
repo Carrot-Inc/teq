@@ -1508,3 +1508,4 @@ inline_parameter_purity
 inline_type_test_null
 macro_quoted_application_reduce
 pattern_array_gadt
+type_test_null_shapes
