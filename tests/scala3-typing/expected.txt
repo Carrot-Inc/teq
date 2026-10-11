@@ -59,7 +59,7 @@ neg/7380.scala	same
 neg/7380a.scala	superset	+4 lines: HasFields is a trait; it cannot be instantiated
 neg/7722.scala	accepts	
 neg/8702.scala	accepts	
-neg/9107.scala	different	no given instance
+neg/9107.scala	different	Cannot prove that X match { case Inv[t] => Int } =:= X match { case Inv[t] => t }.
 neg/EmptyCaseClassParams.scala	accepts	
 neg/EmptyEnum.scala	same	
 neg/EqualityStrawman1.scala	same	
@@ -121,7 +121,7 @@ neg/capture1.scala	std	App
 neg/caseclass-access.scala	same	
 neg/cb-companion-leaks.scala	syntax	expected end of statement, found {}
 neg/cc-fresh-levels.scala	syntax	expected {}, found {}
-neg/cc-only-defs.scala	syntax	expected identifier, found {}
+neg/cc-only-defs.scala	syntax	expected {}, found {}
 neg/checkNoConflict	same	
 neg/clashes.scala	same	
 neg/class-mods.scala	subset	4/6 lines
@@ -942,7 +942,7 @@ neg/i24355.scala	same
 neg/i24371.scala	syntax	expected end of statement, found {}
 neg/i24375.scala	std	x
 neg/i24460.scala	different	no given instance
-neg/i24496.scala	syntax	expected identifier, found {}
+neg/i24496.scala	syntax	expected an expression, found {}
 neg/i2463.scala	same	
 neg/i2464.scala	same	
 neg/i24681.scala	syntax	expected {}, found {}
@@ -993,7 +993,7 @@ neg/i25717.scala	syntax	expected identifier, found {}
 neg/i25856.scala	same	
 neg/i26416.scala	syntax	expected {}, found {}
 neg/i2642.scala	syntax	expected {}, found {}
-neg/i26683.scala	superset	+4 lines: no given instance
+neg/i26683.scala	superset	+4 lines: Cannot prove that Probe[Pick[X]] =:= "not-const".
 neg/i2672.scala	same	
 neg/i2677.scala	same	
 neg/i2712.scala	same	
@@ -1347,7 +1347,7 @@ neg/i8715.scala	same
 neg/i8730.scala	syntax	expected identifier, found {}
 neg/i8731.scala	accepts	
 neg/i8731a.scala	syntax	expected 'do' before the end marker
-neg/i8736.scala	superset	+2 lines: type {} not found
+neg/i8736.scala	superset	+1 lines: type {} not found
 neg/i8752.scala	superset	+1 lines: {} is not a member of the package
 neg/i876.scala	superset	+1 lines: type mismatch
 neg/i8827a.scala	same	
@@ -1763,7 +1763,7 @@ neg/singleton-ops-any.scala	superset	+8 lines: type mismatch
 neg/singleton-ops-boolean.scala	syntax	expected {}, found {}
 neg/singleton-ops-double.scala	different	cannot resolve import
 neg/singleton-ops-float.scala	different	cannot resolve import
-neg/singleton-ops-int.scala	superset	+9 lines: no given instance
+neg/singleton-ops-int.scala	superset	+9 lines: Cannot prove that 4 =:= 3.
 neg/singleton-ops-long.scala	different	cannot resolve import
 neg/singleton-ops-match-type-scrutinee.scala	same	
 neg/singleton-ops-recursive-match-type.scala	same	
@@ -2069,12 +2069,12 @@ pos/6322.scala	accepts
 pos/6362.scala	accepts	
 pos/6687.scala	rejects	type mismatch
 pos/6697.scala	accepts	
-pos/6709.scala	rejects	type mismatch
+pos/6709.scala	rejects	value {} is not a member of {}
 pos/7512.scala	accepts	
 pos/8313.scala	accepts	
 pos/8647.scala	accepts	
 pos/8649.scala	accepts	
-pos/8778.scala	rejects	type mismatch
+pos/8778.scala	rejects	value {} is not a member of {}
 pos/8905-2.scala	accepts	
 pos/8905.scala	accepts	
 pos/9239.scala	rejects	type argument --[d] does not conform to upper bound Bin
@@ -2712,7 +2712,7 @@ pos/i12897	accepts
 pos/i12909.scala	accepts	
 pos/i12910.scala	accepts	
 pos/i12915.scala	accepts	
-pos/i12945	rejects	no given instance
+pos/i12945	rejects	Cannot prove that x.Out =:= 7.
 pos/i12949.scala	accepts	
 pos/i12950	accepts	
 pos/i12953.scala	accepts	
@@ -2752,7 +2752,7 @@ pos/i13468	accepts
 pos/i13476.scala	accepts	
 pos/i13487.scala	rejects	type argument Foo[A] does not have the same kind as its bound [_[_],_]
 pos/i13490.scala	rejects	cannot resolve import
-pos/i13503.scala	rejects	no given instance
+pos/i13503.scala	rejects	Cannot prove that s.Out =:= 123.
 pos/i13512.scala	accepts	
 pos/i1352.scala	accepts	
 pos/i13526.scala	rejects	missing parameter type
@@ -2910,7 +2910,7 @@ pos/i15331.scala	syntax	expected {}, found {}
 pos/i15347.scala	accepts	
 pos/i15365.scala	accepts	
 pos/i15377.scala	accepts	
-pos/i15398.scala	rejects	no given instance
+pos/i15398.scala	rejects	Cannot prove that "Tuple23" =:= "Tuple".
 pos/i1540.scala	oos	extractors
 pos/i15405.scala	accepts	
 pos/i1540b.scala	oos	extractors
@@ -3519,7 +3519,7 @@ pos/i23225.scala	syntax	expected {}, found {}
 pos/i23237a.scala	accepts	
 pos/i23237b.scala	rejects	type mismatch
 pos/i2324.scala	accepts	
-pos/i23261.scala	rejects	no given instance
+pos/i23261.scala	rejects	Cannot prove that FloatToString[Float] =:= "-0.0f".
 pos/i23266.scala	syntax	expected {}, found {}
 pos/i23299.scala	accepts	
 pos/i23310.scala	accepts	
@@ -3546,7 +3546,7 @@ pos/i23752.scala	accepts
 pos/i23752min.scala	accepts	
 pos/i23773.scala	accepts	
 pos/i23773a.scala	accepts	
-pos/i23774.scala	rejects	no given instance
+pos/i23774.scala	rejects	Cannot prove that (Case[Nothing, Nothing]) =:= (Case[Any, Iterable[Any]]).
 pos/i23774typeclass.scala	rejects	value {} is not a member of {}
 pos/i23817	accepts	
 pos/i23817_2	accepts	
