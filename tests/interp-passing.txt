@@ -553,6 +553,8 @@ init_companions
 init_field_zero
 init_files
 init_order
+inline_abstract_type_test
+inline_anon_by_name
 inline_anon_receiver_this
 inline_anon_shared
 inline_arg_conversion
@@ -565,6 +567,7 @@ inline_arg_summoned
 inline_arg_summoned_resolution
 inline_arg_throwing_branch
 inline_arg_wrapped
+inline_bodies_scalac_product
 inline_body_import_nested_given
 inline_definition_clean
 inline_definition_const_singleton
@@ -596,6 +599,7 @@ inline_guard_constant_type
 inline_hk_alias_summon
 inline_if_literal_type
 inline_inferred_result_dependent
+inline_local_class_secondary_ctor
 inline_local_forward_unused_import
 inline_match
 inline_match_erased_projection
@@ -607,6 +611,8 @@ inline_named_local_class_twice
 inline_nested_anon_capture
 inline_ops
 inline_outline
+inline_parameter_pure_block
+inline_parameter_purity
 inline_recursive_proxies
 inline_reduce_local_extractor
 inline_reduce_local_value
@@ -616,6 +622,8 @@ inline_retained_match_effects
 inline_self_member
 inline_substitution_anon_parent_args
 inline_substitution_case_binder_scope
+inline_substitution_class_alias
+inline_substitution_class_branch_this
 inline_substitution_class_graph
 inline_substitution_classes
 inline_substitution_code_of
@@ -648,6 +656,7 @@ inline_summon_body_givens
 inline_summon_from_guards
 inline_this_receiver
 inline_tuples
+inline_type_test_null
 inline_val_expansion_check
 inline_val_pure_path
 inner_class_creators
@@ -797,12 +806,16 @@ macro_pattern_type_bounds
 macro_patterns
 macro_position_implicit
 macro_position_nested
+macro_position_result
 macro_position_units
 macro_quote_cancel
 macro_quote_deferred_inline_types
 macro_quote_inline_deferred
 macro_quote_pattern_result
 macro_quote_refined
+macro_quoted_application_reduce
+macro_quoted_inline_application
+macro_quoted_parameter_application
 macro_quotes_qualifier
 macro_receiver_copy
 macro_records
@@ -1405,6 +1418,7 @@ type_test_class_pattern
 type_test_erased_bound
 type_test_null_guard
 type_test_null_scrutinee
+type_test_null_shapes
 type_test_selected_singleton
 type_test_synthesis
 type_test_tagged_inline

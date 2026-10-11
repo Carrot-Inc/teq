@@ -1,5 +1,5 @@
 bodies/fix/bodies/Base.tasty 0015f1e5d307cdd2003cc94795b3f991
-bodies/fix/bodies/Bodies.tasty 0013922b3bd01cb6003c28431ee7acf5
+bodies/fix/bodies/Bodies.tasty 0013922b3bd01cb6003c31301efdbff5
 bodies/fix/bodies/Point.tasty 001a65b4fda50a92004694affdc6e1d0
 bodies/fix/bodies/Pretty.tasty 00ac072766647bec0074c2b833c9e9ca
 calllift/fix/calllift/CallLift.tasty 004f5cd4f8b548b8001effbb083af0f2

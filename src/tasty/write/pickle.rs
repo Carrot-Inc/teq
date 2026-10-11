@@ -1778,7 +1778,9 @@ impl<'w, 'a> P<'w, 'a> {
     fn secondary_constructors(&mut self, c: ClassId, info: &ClassInfo) {
         let funs: Vec<crate::tir::FunId> = self.index.tclasses.get(&c).map(|&i| self.w.prog.classes[i as usize].ctors.clone()).unwrap_or_default();
         for &s in &info.ctors {
-            let f = funs.iter().copied().find(|&f| self.w.prog.funs[f.idx()].sym == s);
+            // A local class of a stored inline body has no typed class of the program's: its
+            // constructors are their symbols' functions, as its methods are (`value_or_method`).
+            let f = funs.iter().copied().find(|&f| self.w.prog.funs[f.idx()].sym == s).or_else(|| self.w.fun_of_sym.get(&s).copied());
             let addr = self.buf.addr();
             self.define(Key::Sym(s), addr);
             self.buf.byte(DEFDEF);

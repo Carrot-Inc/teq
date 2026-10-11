@@ -329,8 +329,9 @@ object ListMap extends MapFactory[ListMap]:
     case _ => wrap(Map.from(entries))
   // The empty map is the shared instance, as in Scala.
   def wrap[K, V](m: Map[K, V]): ListMap[K, V] = if m.isEmpty then empty else new ListMap(m)
-  // Reached through Iterable, a transform may give a List rather than a Map (`Map.fromResults`).
-  def wrapResults[K, V](m: Map[K, V]): Map[K, V] = m match
+  // Reached through Iterable, a transform may give a List rather than a Map (`Map.fromResults`): the
+  // value is tested as any value, whose class a type pattern over `Map` would take for granted.
+  def wrapResults[K, V](m: Map[K, V]): Map[K, V] = (m: Any) match
     case m: Map[?, ?] => wrap(unsafeCast(m))
     case _ => m
   def newBuilder[K, V]: scala.collection.mutable.ReusableBuilder[(K, V), ListMap[K, V]] =

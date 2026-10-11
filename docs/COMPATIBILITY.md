@@ -57,9 +57,13 @@ libraries compiled from their jars run against scalac's output. The remaining di
   and pass by running without an error).
 - Types carry no annotations (`AnnotatedType(t, annot)` is `t`, the type tree of a `T*` parameter is
   `Seq[T]`, so Magnolia's `repeated` answers `false`).
-- An inline method of a library is expanded by typing its body again at the call, so a member only the
-  argument's class has is accepted on the parameter inside the body, `constValue` of a parameter's singleton
-  is no constant and `codeOf` gives the argument's source text.
+- An inline method of a library is expanded from its body as the library's TASTy holds it, checked once
+  in its definition's scope as a program's own method is, so `constValue` of a parameter's singleton is the
+  argument's constant and `codeOf` shows the typed argument, as scalac's expansion does (a by-value
+  argument's proxy shown by the parameter's name). A body that check does not take is expanded by typing
+  it again at the call, where a member only the argument's class has is accepted on the parameter: of the
+  library bodies the suites expand (50 on the JVM, 27 of them scala-library's, and 23 on JavaScript), the one
+  whose quote applies an inline parameter.
 - The mirror of a case object or a parameterless enum case is an object of its own
   (`summon[Mirror.Of[O.type]] eq O` is false), and `fromProductTyped` is a member of `Mirror.Product` rather
   than an extension, which does not check the element types.

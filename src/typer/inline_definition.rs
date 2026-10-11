@@ -336,6 +336,39 @@ impl<'a> Worker<'a> {
         self.check_definition_in(sym, env);
     }
 
+    /// The record of the library inline method `sym`, demanded by its first call: its class
+    /// converted (or its product's package checked) as the retype path converts it, then the
+    /// converted body checked as a program's definition is, its parameters at their declared
+    /// types, in its definition's scope. In the demanding worker's chunk, as the retype path
+    /// types a library body at a call and as a program's record another worker's file demands is
+    /// made: what the check writes besides the record (the closures it makes classes of,
+    /// `sam_classes`, among others) is that worker's, which its copies read; the merge keeps one
+    /// record. It lives as long as the loader, whose products a watch session drops with the
+    /// whole typing state when a directory of them changes.
+    pub(super) fn demand_library_definition(&mut self, sym: SymId) {
+        if self.syms.sym(sym).def.is_none() {
+            if let Some(obj) = self.loaded.as_ref().and_then(|l| l.product_package_members.get(&sym).copied()) {
+                self.check_product_package(obj);
+            } else {
+                let Owner::Class(c) = self.syms.sym(sym).owner else { return };
+                if !self.convert_library_class(c) {
+                    return;
+                }
+            }
+        }
+        if self.syms.sym(sym).def.is_none() {
+            return;
+        }
+        let (file, owner, span) = {
+            let s = self.syms.sym(sym);
+            (s.file, s.owner, s.span)
+        };
+        let env = self.env_at(file, owner, span.start);
+        let entered = self.deps_set_aside();
+        self.outside_annotation(|t| t.check_definition_in(sym, env));
+        self.deps_leave(entered);
+    }
+
     /// The body of a std inline method the program may never expand, typed as the definition
     /// check types a program's, for the language server's records of its document alone
     /// (`index::demand_std_document`): nothing stored, no diagnostic and no deferred check kept,
@@ -401,7 +434,11 @@ impl<'a> Worker<'a> {
             (s.file, s.def)
         };
         let Some(def_id) = def_id else { return };
-        if !self.program_file(file) || self.is_body_file(file) {
+        // A library's body (`demand_library_definition`) is its producer's, which scalac typed:
+        // what its check reports is teq's limit, never the program's diagnostic, and a body
+        // with an error keeps the retype path (`library_entry`).
+        let library = self.library_inline(sym);
+        if !library && (!self.program_file(file) || self.is_body_file(file)) {
             return;
         }
         let def = self.ast(file).def(def_id);
@@ -421,7 +458,7 @@ impl<'a> Worker<'a> {
         let diag_mark = self.diags.items.len();
         let (matches_mark, bounds_mark) = (self.deferred_matches.len(), self.deferred_bounds.len());
         // What the check records of the body its expansions by substitution record again.
-        let keeps_index = self.index.is_some();
+        let keeps_index = self.index.is_some() && !library;
         let index = if keeps_index { None } else { self.index.take() };
         let index_mark = self.index_mark();
         let notes = Notes { sym, tparams: sig.tparams.clone(), pattern_tparams: Vec::new(), reducible: Vec::new(), deferred: Vec::new(), type_args: Vec::new(), splices: Vec::new(), leaf_tests: Vec::new(), imports: Vec::new(), hoisted: Vec::new(), pending_imports: Vec::new(), unplaced_aliases: Vec::new(), pending_aliases: Vec::new(), aliases: Vec::new(), classes: Vec::new(), class_bodies: Vec::new(), inline_vals: Vec::new(), inferred_vals: Vec::new(), held: None };
@@ -479,7 +516,7 @@ impl<'a> Worker<'a> {
         // (`match_checked_at_definition`); those of a body typed on the way stay.
         let in_definition = |f: FileId, s: Span| f == file && s.start >= def_span.start && s.end <= def_span.end;
         let mut later = self.deferred_matches.split_off(matches_mark);
-        let reported = held.is_none();
+        let reported = held.is_none() && !library;
         later.retain(|m| reported || !in_definition(m.file, m.span));
         for m in later.iter_mut().filter(|m| in_definition(m.file, m.span)) {
             m.definition = Some(sym);
@@ -500,7 +537,9 @@ impl<'a> Worker<'a> {
         // range, promoted after it, covers what stays.
         self.diags_cut_at(diag_mark);
         let reported: Vec<Diagnostic> = self.diags.items.drain(diag_mark..).collect();
-        let within = |d: &Diagnostic| d.of_body && d.file == file && d.span.start >= def_span.start && d.span.end <= def_span.end;
+        // A library's: whatever its check reported in the body's pseudo file, a place it gave
+        // none included.
+        let within = |d: &Diagnostic| d.file == file && (library || d.of_body && d.span.start >= def_span.start && d.span.end <= def_span.end);
         let (own, other): (Vec<Diagnostic>, Vec<Diagnostic>) = reported.into_iter().partition(within);
         self.diags.items.extend(other);
         // A body with an error fails, held back or not: its errors are the build's, reported here
@@ -512,7 +551,7 @@ impl<'a> Worker<'a> {
             Some(form) => DefinitionState::Held(form),
             None => DefinitionState::Checked,
         };
-        if held.is_none() || failed {
+        if !library && (held.is_none() || failed) {
             self.diags.items.extend(own.iter().cloned());
         }
         let typed_body = body;
@@ -654,7 +693,7 @@ impl<'a> Worker<'a> {
         // (`demand_local_definition`), as any other is.
         self.demand_definition(sym);
         let record = self.inline_definitions.get(&sym)?.clone();
-        if record.state != DefinitionState::Failed {
+        if record.state != DefinitionState::Failed || self.library_inline(sym) {
             return None;
         }
         if !self.types.contains_error(ret_ty) {
@@ -887,7 +926,7 @@ impl<'a> Worker<'a> {
     /// their room: every field set for this copy, the tables over the record's nodes, the maps
     /// new ones.
     pub(super) fn begin_demand_in(&mut self, def: &InlineDefinition, index: Arc<StoredIndex>, bindings: Bindings, on_demand: bool, demand: &mut Demand, inst: &mut Instance) {
-        let Bindings { args, subst, paths, this, this_paths, mark_leaves } = bindings;
+        let Bindings { args, subst, paths, this, this_paths, mark_leaves, owner_params } = bindings;
         let mut subst = subst;
         inst.tparams.clear();
         for &p in &index.local_tparams {
@@ -909,6 +948,7 @@ impl<'a> Worker<'a> {
         demand.this = this;
         demand.this_paths = this_paths;
         demand.mark_leaves = mark_leaves;
+        demand.owner_params = owner_params;
         demand.on_demand = on_demand;
         demand.names_classes = on_demand;
         demand.bound = (0, 0);
@@ -967,6 +1007,12 @@ impl<'a> Worker<'a> {
         // the loader typed it: in this reader's view before the substitution.
         let t = self.types.in_view_here(t);
         let mut t = self.types.subst(t, subst);
+        // A match-type alias of a generic class the substitution instantiates (`Kind.this.LiftP[F,
+        // T]` expanded on `K0`) is the class's copy seen through it, as the retype path's types are
+        // (`subst_inline_tparams`).
+        if d.owner_params && self.types.is_reducible(t) {
+            t = self.specialise_aliases(t, subst);
+        }
         if self.types.has_paths(t) {
             t = self.subst_paths(t, &d.paths);
             for &(c, path) in d.this_paths.iter().rev() {
@@ -1095,12 +1141,17 @@ impl<'a> Worker<'a> {
         // The classes of an expansion's copy take the output's names; one of the census or a
         // measurement takes none.
         let names_classes = d.names_classes;
-        let stored_copy = super::quoted::StoredCopy { index: &d.index, this: d.this, this_paths: &d.this_paths, bound: d.bound, leaves_for_demand: d.on_demand.then_some(&d.index.reducible), classes: &def.classes, names_classes };
+        let stored_copy = super::quoted::StoredCopy { index: &d.index, this: d.this, this_paths: &d.this_paths, bound: d.bound, leaves_for_demand: d.on_demand.then_some(&d.index.reducible), classes: &def.classes, names_classes, owner_params: d.owner_params };
         d.part.start();
         let map = super::quoted::CopyMap { exprs: &mut inst.exprs, tests: &mut inst.tests, types: &mut inst.types, part: &mut d.part };
         self.instantiate_tree_mapped(roots, &d.args, &subst, &inst.renames, &d.paths, stored_copy, map, &mut d.members, &mut d.copied_classes);
         d.copied += (self.prog.exprs.len() - mark) as u64;
         if !d.copied_classes.is_empty() {
+            // A whole copy renamed every binder before it copied anything (`begin_demand_in`): each
+            // is in the terms of the classes copied now, as a demanded part's own binders are.
+            if !d.on_demand {
+                fresh = def.binders.iter().filter_map(|b| inst.renames.get(b).copied()).collect();
+            }
             self.binders_in_class_copies(&fresh, &d.copied_classes);
         }
         let specialised = !Arc::ptr_eq(&subst, &d.subst);
@@ -1451,7 +1502,10 @@ impl<'a> Worker<'a> {
             if filled == tested {
                 return test;
             }
-            let derived = if matches!(self.types.get(filled), Type::Param(_) | Type::AppParam(..)) {
+            // A type parameter still is one where the expansion is itself a stored body's (an inline
+            // definition's, a quote's), which derives the test again; elsewhere it is erased to its
+            // upper bound, as `TypeTestsCasts` erases the tested type (`test_for`).
+            let derived = if matches!(self.types.get(filled), Type::Param(_) | Type::AppParam(..)) && (self.quote.level > 0 || self.checks_inline_definition()) {
                 let copy = self.prog.add_test(TypeTest::Always);
                 self.prog.deferred_tests.insert(copy, filled);
                 copy
@@ -1558,7 +1612,7 @@ impl<'a> Worker<'a> {
                 args.insert(p, self.prog.add(TExpr::Local(fresh)));
             }
             let paths = def.params.iter().filter_map(|&p| args.get(&p).and_then(|&a| self.argument_path(a)).map(|path| (p, path))).collect();
-            let bindings = Bindings { args, subst: subst.clone(), paths, this: None, this_paths: Vec::new(), mark_leaves: true };
+            let bindings = Bindings { args, subst: subst.clone(), paths, this: None, this_paths: Vec::new(), mark_leaves: true, owner_params: false };
             copies.push(self.instantiate_definition(def, &bindings)?);
             arguments.push(bindings.args);
         }
@@ -1864,6 +1918,9 @@ impl<'a> Worker<'a> {
             TExpr::Char(_) => char,
             TExpr::Unit | TExpr::While(..) | TExpr::Assign(..) => unit,
             TExpr::Throw(..) | TExpr::Return(_) => NOTHING,
+            // A by-name parameter's node is its thunk, which its read applies: its symbol's type
+            // is the value's (dotty's `ExprType`), no type of the node.
+            TExpr::Local(s) if self.syms.sym(s).by_name => return None,
             TExpr::Local(s) | TExpr::Static(s) | TExpr::Field(_, s) => {
                 let sig = self.sig_of(s);
                 if !sig.tparams.is_empty() || !sig.clauses.is_empty() {
@@ -2009,6 +2066,9 @@ pub struct Bindings {
     /// Whether the copy's leaves are marked as the output's: not for the expansion by
     /// substitution, whose bindings mark the arguments as the retype path's do.
     pub mark_leaves: bool,
+    /// Whether `subst` binds the type parameters of the method's class (the receiver's type
+    /// arguments), whose match-type aliases the copy's types see through them.
+    pub owner_params: bool,
 }
 
 /// One copy of a stored body (`Worker::instantiate_definition`): its root, the fresh binders
@@ -2056,6 +2116,8 @@ pub struct Demand {
     this: Option<TExprId>,
     this_paths: Vec<(ClassId, TypeId)>,
     mark_leaves: bool,
+    /// `Bindings::owner_params`.
+    owner_params: bool,
     /// Whether the copy leaves the branches and the reduced matches' cases for the walk.
     on_demand: bool,
     /// Whether the classes the copy makes take the output's names: an expansion's, made on
@@ -2112,6 +2174,7 @@ impl Demand {
             this: None,
             this_paths: Vec::new(),
             mark_leaves: false,
+            owner_params: false,
             on_demand: false,
             names_classes: false,
             bound: (0, 0),
@@ -2189,7 +2252,7 @@ pub(super) struct StoredIndex {
     sizes: std::sync::Mutex<FxMap<TExprId, u64>>,
     reducible: FxMap<TExprId, ()>,
     leaf_tests: FxMap<TestId, ()>,
-    local_tparams: Vec<TParamId>,
+    pub(super) local_tparams: Vec<TParamId>,
     /// The first of the record's nodes and how far they run (`StoredTable`).
     nodes: (u32, u32),
     /// Each node of that range as a copy reads it (`Worker::stored_nodes`).
@@ -2405,7 +2468,7 @@ object H extends Holder:
             args.insert(p, w.prog.add(TExpr::Local(arg)));
             paths.push((p, w.types.mk(Type::Term(arg))));
         }
-        (proxy, Bindings { args, subst, paths, this: Some(this), this_paths: vec![(c, path)], mark_leaves: true })
+        (proxy, Bindings { args, subst, paths, this: Some(this), this_paths: vec![(c, path)], mark_leaves: true, owner_params: false })
     }
 
     /// The receiver stands for `This` in the copy's tree, a node of its own at each use, and
@@ -2482,7 +2545,7 @@ inline def g: String =
             assert_eq!(at, vec![(false, 0), (true, 1)]);
             let inner = g.imports.iter().find(|i| i.block != g.body.unwrap()).unwrap().block;
             assert!(w.prog.descendants(g.body.unwrap()).any(|e| e == inner) && matches!(w.prog.expr(inner), TExpr::Block(..)));
-            let bindings = Bindings { args: FxMap::default(), subst: Vec::new(), paths: Vec::new(), this: None, this_paths: Vec::new(), mark_leaves: true };
+            let bindings = Bindings { args: FxMap::default(), subst: Vec::new(), paths: Vec::new(), this: None, this_paths: Vec::new(), mark_leaves: true, owner_params: false };
             let copy = w.instantiate_definition(&g, &bindings).expect("an instance");
             assert_eq!(copy.imports.len(), 2);
             for (stored, copied) in g.imports.iter().zip(&copy.imports) {
@@ -2515,7 +2578,7 @@ inline def pick[T]: Any = inline erasedValue[T] match
             assert_eq!(def.state, DefinitionState::Checked);
             assert_eq!(def.pattern_tparams.len(), 1);
             let t = w.sig_of(sym).tparams[0];
-            let bindings = Bindings { args: FxMap::default(), subst: vec![(t, ANY)], paths: Vec::new(), this: None, this_paths: Vec::new(), mark_leaves: true };
+            let bindings = Bindings { args: FxMap::default(), subst: vec![(t, ANY)], paths: Vec::new(), this: None, this_paths: Vec::new(), mark_leaves: true, owner_params: false };
             let mut copy = w.instantiate_definition(&def, &bindings).expect("an instance");
             let fresh = copy.tparams.iter().find(|(p, _)| *p == def.pattern_tparams[0]).map(|&(_, f)| f).expect("the fresh variable");
             let TExpr::Match(_, cases) = w.prog.expr(copy.reducible[0]) else { panic!("a match") };
@@ -2563,7 +2626,7 @@ inline def pick[T]: Any = inline erasedValue[T] match
         crate::with_typed_program("demand", CASES, &[], |w| {
             let (sym, def) = record_of(w, "pick");
             let t = w.sig_of(sym).tparams[0];
-            let bindings = Bindings { args: FxMap::default(), subst: vec![(t, ANY)], paths: Vec::new(), this: None, this_paths: Vec::new(), mark_leaves: false };
+            let bindings = Bindings { args: FxMap::default(), subst: vec![(t, ANY)], paths: Vec::new(), this: None, this_paths: Vec::new(), mark_leaves: false, owner_params: false };
             let index = Arc::new(w.stored_index(&def));
             let (mut demand, mut inst) = w.begin_demand(&def, index, bindings.clone(), true);
             let root = w.demand_roots(&mut demand, &def, &mut inst, &[def.body.unwrap()], None)[0];
@@ -2717,7 +2780,7 @@ def three(): Int = 3
                 let path = w.parameter_path(arg, constant, proxy);
                 let mut args = FxMap::default();
                 args.insert(x, w.prog.add(TExpr::Local(proxy)));
-                (Bindings { args, subst: Vec::new(), paths: vec![(x, path)], this: None, this_paths: Vec::new(), mark_leaves: true }, proxy)
+                (Bindings { args, subst: Vec::new(), paths: vec![(x, path)], this: None, this_paths: Vec::new(), mark_leaves: true, owner_params: false }, proxy)
             };
             let literal = w.prog.add(TExpr::Int(3));
             let (bindings, _) = bind(w, literal, Some(LitVal::Int(3)), int);
@@ -2745,7 +2808,7 @@ def three(): Int = 3
             let path = w.parameter_path(module, None, proxy);
             let mut args = FxMap::default();
             args.insert(y, w.prog.add(TExpr::Local(proxy)));
-            let copy = w.instantiate_definition(&wrap, &Bindings { args, subst: Vec::new(), paths: vec![(y, path)], this: None, this_paths: Vec::new(), mark_leaves: true }).unwrap();
+            let copy = w.instantiate_definition(&wrap, &Bindings { args, subst: Vec::new(), paths: vec![(y, path)], this: None, this_paths: Vec::new(), mark_leaves: true, owner_params: false }).unwrap();
             let root = copy.types.get(copy.root).unwrap();
             assert!(w.mentions_term(root, proxy), "an object's parameter is its proxy's path: {}", w.show(root));
         });
