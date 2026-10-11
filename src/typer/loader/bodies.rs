@@ -853,12 +853,18 @@ impl<'a> Worker<'a> {
                 let declared = self.sig_of(sym).ret;
                 // A `final val` of a literal type: its value is the type's, and the field is of
                 // the widened type; the member keeps the literal type, a constant that a
-                // reference folds as scalac folds it.
+                // reference folds as scalac folds it. Its right side is kept, which a getter does
+                // not wait for and the constructor still runs (dotty's `Memoize` and
+                // `Constructors`); without one the value is the type's literal.
                 let (ty, init) = match self.types.get(declared) {
                     Type::Lit(v) => {
                         let v = self.types.lit_val(v);
                         let widened = self.widened_lit(v);
-                        (widened, Some(self.lit_expr(cv, v)))
+                        let init = match rhs.as_ref() {
+                            Some(r) => self.conv_expr(cv, r),
+                            None => self.lit_expr(cv, v),
+                        };
+                        (widened, Some(init))
                     }
                     _ => (declared, rhs.as_ref().map(|r| self.conv_expr(cv, r))),
                 };
@@ -4570,20 +4576,7 @@ impl<'a> Worker<'a> {
             cv.scope.extend(cd.template.params.iter().map(|p| (cv.locals[&p.addr], p.addr)));
             cv.parent_params = Some((cd.addr, names));
         }
-        let mut parents = self.conv_template_parents(cv, &cd.template.parents, !named);
-        // A product's local case class is read as the program's own: its pickle extends
-        // `Product` and `Serializable` as scalac's `Desugar` makes it, which teq's typer gives a
-        // case class by its rules, as the loader reads a top-level one.
-        if self.converts_product(cv) && named && !module && flags.has(tags::CASE) {
-            let product = self.b.product;
-            parents.retain(|p| match cv.ast.tys[p.ty.idx()] {
-                TyExpr::Resolved(t) => match self.types.get(t) {
-                    Type::Class(pc, _) => Some(pc) != product && !(self.name_str(self.syms.class(pc).name) == "Serializable" && matches!(self.syms.class(pc).owner, Owner::Package(k) if self.pkg_description(k) == "java.io")),
-                    _ => true,
-                },
-                _ => true,
-            });
-        }
+        let parents = self.conv_template_parents(cv, &cd.template.parents, !named);
         cv.parent_params = outer_params;
         cv.scope.truncate(scope_mark);
         // Inside the local class `C.this` of an enclosing class is an outer `this`.

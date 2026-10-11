@@ -8,6 +8,7 @@
 //! parameter of a lambda type by its binder's address and its position: nothing is inferred
 //! from a name.
 
+use crate::tir::synthetic;
 use super::buf::{Slot, TreeBuf};
 use super::names::{Names, SigParam};
 use super::{Product, Unit, UnitKind};
@@ -1574,7 +1575,10 @@ impl<'w, 'a> P<'w, 'a> {
     /// `Serializable`, an enum `scala.reflect.Enum`, as `Desugar` does. A trait's parents are
     /// types.
     fn parents(&mut self, c: ClassId, info: &ClassInfo) {
-        let parents: Vec<TypeId> = info.parents.iter().copied().filter(|&p| p != self.w.b.t_any_ref).collect();
+        // The parents the desugaring gave the class (`ClassInfo::desugared_parents`) are written
+        // after the source's, below, in scalac's spelling.
+        let written = &info.parents[..info.parents.len() - info.desugared_parents as usize];
+        let parents: Vec<TypeId> = written.iter().copied().filter(|&p| p != self.w.b.t_any_ref).collect();
         let first_is_class = parents.first().map_or(false, |&p| !self.is_trait_type(p));
         let calls = info.kind != ClassKind::Trait;
         if info.value_class && !parents.iter().any(|&p| p == self.w.b.t_any_val) {
@@ -1954,9 +1958,22 @@ impl<'w, 'a> P<'w, 'a> {
             self.buf.end_length(app);
             self.annotation_tree("scala.annotation.internal", "Repeated");
             self.buf.end_length(len);
+        } else if let Some(a) = self.written_field_alias(p) {
+            // A case class's field as it is written (`n: Count`), as scalac pickles it, which the
+            // loader reads the equality's order from (`SymInfo::declared_alias`).
+            self.mark_tree();
+            self.alias_ref(a);
         } else {
             self.tpt(p.ty);
         }
+    }
+
+    /// The alias a parameter's type is written as, where one without type parameters names it.
+    fn written_field_alias(&self, p: &ParamSig) -> Option<AliasId> {
+        if p.sym == SymId(u32::MAX) {
+            return None;
+        }
+        self.w.syms.sym(p.sym).declared_alias().filter(|&a| self.w.syms.alias(a).tparams.is_empty())
     }
 
     /// `Seq[T] @Repeated` as a type.
@@ -2106,10 +2123,10 @@ impl<'w, 'a> P<'w, 'a> {
         } else if info.value_class {
             let int = self.w.b.t_int;
             let boolean = self.w.b.t_boolean;
-            if !self.user_defines(c, "hashCode") {
+            if self.synthesizes(c, synthetic::HASH_CODE) {
                 self.synth_def("hashCode", &[], true, int, &[OVERRIDE, SYNTHETIC], Synth::ValueHashCode(c));
             }
-            if !self.user_defines(c, "equals") {
+            if self.synthesizes(c, synthetic::EQUALS) {
                 self.synth_def("equals", &[("x$0", ANY)], false, boolean, &[OVERRIDE, SYNTHETIC], Synth::ValueEquals(c));
             }
         }
@@ -3971,7 +3988,15 @@ impl<'w, 'a> P<'w, 'a> {
         self.buf.byte(TEMPLATE);
         let len = self.buf.begin_length();
         // Parents.
-        let declared: Vec<TypeId> = obj.class.filter(|_| !obj.synthetic).map(|o| self.w.syms.class(o).parents.clone()).unwrap_or_default();
+        // The parents the desugaring gave the object are appended below, in scalac's spelling.
+        let declared: Vec<TypeId> = obj
+            .class
+            .filter(|_| !obj.synthetic)
+            .map(|o| {
+                let info = self.w.syms.class(o);
+                info.parents[..info.parents.len() - info.desugared_parents as usize].to_vec()
+            })
+            .unwrap_or_default();
         let declared: Vec<TypeId> = declared.into_iter().filter(|&t| t != self.w.b.t_any_ref).collect();
         if obj.synthetic {
             let t = self.w.b.t_any_ref;
@@ -4112,19 +4137,35 @@ impl<'w, 'a> P<'w, 'a> {
         info.kind == ClassKind::Trait && self.w.files.as_slice().get(info.file.0 as usize).map_or(false, |f| f.is_std) && !self.w.in_jar(info.file) && STD_TRAITS_LIBRARY_CLASSES.contains(&scala_name(self.w, c).as_str())
     }
 
-    /// The members `SyntheticMembers` gives a case object.
+    /// The members `SyntheticMembers` gives a case object (`caseModuleSymbols`), those it does not
+    /// define (`TClass::synthesized`).
     fn case_object_members(&mut self, o: Option<ClassId>) {
         let int = self.w.b.t_int;
         let boolean = self.w.b.t_boolean;
         let string = self.w.b.t_string;
         let body = |f: fn(ClassId) -> Synth| o.map_or(Synth::Elided, f);
-        self.synth_def("hashCode", &[], true, int, &[OVERRIDE, SYNTHETIC], body(Synth::HashCode));
-        self.synth_def("toString", &[], true, string, &[OVERRIDE, SYNTHETIC], body(Synth::ToString));
-        self.synth_def("canEqual", &[("that", ANY)], false, boolean, &[OVERRIDE, SYNTHETIC], body(Synth::CanEqual));
-        self.synth_def("productArity", &[], false, int, &[OVERRIDE, SYNTHETIC], body(Synth::ProductArity));
-        self.synth_def("productPrefix", &[], false, string, &[OVERRIDE, SYNTHETIC], body(Synth::ProductPrefix));
-        self.synth_def("productElement", &[("n", int)], false, ANY, &[OVERRIDE, SYNTHETIC], body(Synth::ProductElement));
-        self.synth_def("productElementName", &[("n", int)], false, string, &[OVERRIDE, SYNTHETIC], body(Synth::ProductElementName));
+        let takes = |p: &Self, bit: u16| o.map_or(true, |k| p.synthesizes(k, bit));
+        if takes(self, synthetic::HASH_CODE) {
+            self.synth_def("hashCode", &[], true, int, &[OVERRIDE, SYNTHETIC], body(Synth::HashCode));
+        }
+        if takes(self, synthetic::TO_STRING) {
+            self.synth_def("toString", &[], true, string, &[OVERRIDE, SYNTHETIC], body(Synth::ToString));
+        }
+        if takes(self, synthetic::CAN_EQUAL) {
+            self.synth_def("canEqual", &[("that", ANY)], false, boolean, &[OVERRIDE, SYNTHETIC], body(Synth::CanEqual));
+        }
+        if takes(self, synthetic::PRODUCT_ARITY) {
+            self.synth_def("productArity", &[], false, int, &[OVERRIDE, SYNTHETIC], body(Synth::ProductArity));
+        }
+        if takes(self, synthetic::PRODUCT_PREFIX) {
+            self.synth_def("productPrefix", &[], false, string, &[OVERRIDE, SYNTHETIC], body(Synth::ProductPrefix));
+        }
+        if takes(self, synthetic::PRODUCT_ELEMENT) {
+            self.synth_def("productElement", &[("n", int)], false, ANY, &[OVERRIDE, SYNTHETIC], body(Synth::ProductElement));
+        }
+        if takes(self, synthetic::PRODUCT_ELEMENT_NAME) {
+            self.synth_def("productElementName", &[("n", int)], false, string, &[OVERRIDE, SYNTHETIC], body(Synth::ProductElementName));
+        }
     }
 
     /// `<init>$default$N` in a class's companion for each constructor parameter with a default.
@@ -4439,26 +4480,14 @@ impl<'w, 'a> P<'w, 'a> {
                 let si = self.w.syms.sym(s);
                 si.def.is_some() && si.owner == Owner::Class(c)
             })
-            || matches!(name, "hashCode" | "equals" | "toString") && self.inherits_concrete(c, n)
     }
 
-    /// Whether a class inherits a concrete `hashCode`, `equals` or `toString` from a parent other
-    /// than `Any`'s, which `SyntheticMembers`' `existingDef` takes for the class's own: a
-    /// program's class's, or scala-library's function classes' `toString`.
-    fn inherits_concrete(&self, c: ClassId, n: Name) -> bool {
-        let info = self.w.syms.class(c);
-        info.base_types.iter().map(|&(b, _)| b).filter(|&b| b != c).any(|b| {
-            let bi = self.w.syms.class(b);
-            let full = scala_name(self.w, b);
-            if matches!(full.as_str(), "scala.Any" | "scala.AnyRef" | "java.lang.Object" | "scala.Product" | "scala.Equals" | "java.io.Serializable" | "scala.Serializable") {
-                return false;
-            }
-            let library_function = full.strip_prefix("scala.Function").map_or(false, |k| k.parse::<u32>().is_ok()) && self.w.interner.get(n) == "toString";
-            library_function
-                || bi.members.get(&n).map_or(false, |&s| {
-                    let si = self.w.syms.sym(s);
-                    si.owner == Owner::Class(b) && si.def.is_some() && si.mods & mods::ABSTRACT == 0 && !self.w.files.as_slice().get(si.file.0 as usize).map_or(false, |f| f.is_std)
-                })
+    /// Whether a class extends one of scala-library's function classes, whose `toString`
+    /// (`<function1>`) dotty's `existingDef` takes for the class's own: the lean std's classes
+    /// define none, and the pickle is scalac's.
+    fn inherits_library_function(&self, c: ClassId) -> bool {
+        self.w.syms.class(c).base_types.iter().map(|&(b, _)| b).filter(|&b| b != c).any(|b| {
+            scala_name(self.w, b).strip_prefix("scala.Function").map_or(false, |k| k.parse::<u32>().is_ok())
         })
     }
 
@@ -4470,32 +4499,40 @@ impl<'w, 'a> P<'w, 'a> {
         let string = self.w.b.t_string;
         let any = ANY;
         // A value class's: of its field, and without `eq` (`SyntheticMembers`).
-        if !self.user_defines(c, "hashCode") {
+        if self.synthesizes(c, synthetic::HASH_CODE) {
             let body = if info.value_class { Synth::ValueHashCode(c) } else { Synth::HashCode(c) };
             self.synth_def("hashCode", &[], true, int, &[OVERRIDE, SYNTHETIC], body);
         }
-        if !self.user_defines(c, "equals") {
+        if self.synthesizes(c, synthetic::EQUALS) {
             let body = if info.value_class { Synth::ValueEquals(c) } else { Synth::Equals(c) };
             self.synth_def("equals", &[("x$0", any)], false, boolean, &[OVERRIDE, SYNTHETIC], body);
         }
-        if !self.user_defines(c, "toString") {
+        if self.synthesizes(c, synthetic::TO_STRING) {
             self.synth_def("toString", &[], true, string, &[OVERRIDE, SYNTHETIC], Synth::ToString(c));
         }
-        if !self.user_defines(c, "canEqual") {
+        if self.synthesizes(c, synthetic::CAN_EQUAL) {
             self.synth_def("canEqual", &[("that", any)], false, boolean, &[OVERRIDE, SYNTHETIC], Synth::CanEqual(c));
         }
-        if !self.user_defines(c, "productArity") {
+        if self.synthesizes(c, synthetic::PRODUCT_ARITY) {
             self.synth_def("productArity", &[], false, int, &[OVERRIDE, SYNTHETIC], Synth::ProductArity(c));
         }
-        if !self.user_defines(c, "productPrefix") {
+        if self.synthesizes(c, synthetic::PRODUCT_PREFIX) {
             self.synth_def("productPrefix", &[], false, string, &[OVERRIDE, SYNTHETIC], Synth::ProductPrefix(c));
         }
-        if !self.user_defines(c, "productElement") {
+        if self.synthesizes(c, synthetic::PRODUCT_ELEMENT) {
             self.synth_def("productElement", &[("n", int)], false, any, &[OVERRIDE, SYNTHETIC], Synth::ProductElement(c));
         }
-        if !self.user_defines(c, "productElementName") {
+        if self.synthesizes(c, synthetic::PRODUCT_ELEMENT_NAME) {
             self.synth_def("productElementName", &[("n", int)], false, string, &[OVERRIDE, SYNTHETIC], Synth::ProductElementName(c));
         }
+    }
+
+    /// Whether the class `c` takes the member `bit` by rule (`TClass::synthesized`, dotty's
+    /// `existingDef`), as scalac pickles it: a `toString` a library's function class defines,
+    /// which the lean std's do not, is scala-library's (`inherits_library_function`).
+    fn synthesizes(&self, c: ClassId, bit: u16) -> bool {
+        let by_rule = self.index.tclasses.get(&c).map_or(true, |&i| self.w.prog.classes[i as usize].synthesized & bit != 0);
+        by_rule && !(bit == synthetic::TO_STRING && self.inherits_library_function(c))
     }
 
     /// What `Desugar` adds after the body: `copy` with its default getters, an enum case's

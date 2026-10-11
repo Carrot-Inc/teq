@@ -106,7 +106,7 @@ impl Program {
             + classes
                 .own()
                 .iter()
-                .map(|c| array(&c.ctor_params) + array(&c.ctor_defaults) + array(&c.init) + array(&c.methods) + array(&c.ctors) + array(&c.forwarders) + array(&c.super_accessors) + array(&c.bridges) + array(&c.deferred_givens))
+                .map(|c| array(&c.ctor_params) + array(&c.ctor_defaults) + array(&c.init) + array(&c.methods) + array(&c.ctors) + array(&c.forwarders) + array(&c.super_accessors) + array(&c.bridges) + array(&c.deferred_givens) + c.lists.as_deref().map_or(0, |l| size_of::<crate::tir::TClassLists>() + array(&l.equals_order) + array(&l.existing_defs) + array(&l.constants)))
                 .sum::<usize>()
             + top_funs.held()
             + top_vals.held()

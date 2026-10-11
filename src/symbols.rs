@@ -126,12 +126,27 @@ pub struct ClassInfo {
     pub made_at: Option<FileId>,
     pub tparams: Vec<TParamId>,
     pub parents: Vec<TypeId>,
+    /// How many of `parents`, at the end, dotty's `Desugar.classDef` gives the class rather than
+    /// its source: `Product` and `Serializable` of a case class or object, an enum's `Enum`.
+    pub desugared_parents: u8,
+    /// How many of `base_types` after the class itself are classes `Desugar.classDef` gives a
+    /// case class or an enum (`Serializable`, `Product`, `Equals`, `Enum`), as the linearisation
+    /// places them first: walks to which they bring nothing (givens, target names, trait
+    /// initialisers, outer instances) start after them, so that they cost no case class a visit.
+    pub rule_prefix: u8,
+    /// Whether a parent the source writes did not resolve (an error was reported there): what
+    /// the class inherits is unknown, so it is not held to implement it.
+    pub parent_failed: bool,
     /// The class this one extends, directly or through a trait that extends a class.
     pub superclass: Option<ClassId>,
     /// The classes that have this one as their superclass.
     pub subclasses: Vec<ClassId>,
     pub members: FxMap<Name, SymId>,
     pub member_order: Vec<SymId>,
+    /// The names of `members` and `extensions`, a bit each (`name_bit`), set wherever either
+    /// gains one: dotty's `memberNames` of the class's own scope, so that a lookup of a name
+    /// whose bit is clear needs no probe of the table (`ClassInfo::may_have`).
+    pub names_mask: u64,
     pub nested: FxMap<Name, ClassId>,
     pub type_aliases: FxMap<Name, AliasId>,
     pub companion: Option<ClassId>,
@@ -207,15 +222,6 @@ impl ClassInfo {
         }
         name
     }
-
-    /// Whether the class has the parents scalac's desugaring adds by rule, without extending them
-    /// here (`std/prelude.scala`): a case class or object, a tuple, an enum or an enum case,
-    /// which scalac makes extend `Product` and `java.io.Serializable` (`Desugar.classDef` 969 to
-    /// 970, an enum through `scala.reflect.Enum`, which extends both). The parents are
-    /// `Symbols::is_synthetic_parent`'s.
-    pub fn is_product_by_rule(&self) -> bool {
-        self.mods & crate::ast::mods::CASE != 0 || matches!(self.kind, ClassKind::Enum | ClassKind::EnumCase)
-    }
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -268,6 +274,12 @@ pub struct SymInfo {
     /// Set for a val with an initialiser that a constructor parameter of a subclass overrides:
     /// the parameter is set first and keeps the field.
     pub overridden_by_param: bool,
+    /// The type alias a case class's field is declared as (`n: Count` with `type Count = Long`),
+    /// through `declared_alias`: dotty's `info.typeSymbol` is the alias, no primitive class, so
+    /// `SyntheticMembers.equalsBody` compares it with the references (`tir::equals_order`), while
+    /// `chooseHashcode`'s `classSymbol` sees through it; the products pickle the field's type as
+    /// it is written. The alias's id plus one, 0 for none, which the record's padding holds.
+    pub declared_alias_id: u32,
     pub is_main: bool,
     /// For givens backed by a class (`given ... with`).
     pub impl_class: Option<ClassId>,
@@ -295,6 +307,17 @@ pub struct SymInfo {
     /// Whether the method has a name of its own in the output, which `Symbols::dispatch_names`
     /// holds: an alternative of an overloaded name.
     pub dispatch: Dispatch,
+}
+
+impl SymInfo {
+    /// The type alias a case class's field is declared as (`SymInfo::declared_alias_id`).
+    pub fn declared_alias(&self) -> Option<AliasId> {
+        self.declared_alias_id.checked_sub(1).map(AliasId)
+    }
+
+    pub fn set_declared_alias(&mut self, a: Option<AliasId>) {
+        self.declared_alias_id = a.map_or(0, |a| a.0 + 1);
+    }
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -811,10 +834,9 @@ impl Symbols {
         info
     }
     #[inline]
-    /// Whether `c` is one of the parents a product by rule has (`ClassInfo::is_product_by_rule`):
+    /// Whether `c` is one of the parents `Desugar.classDef` gives a case class or object:
     /// `scala.Product`, its parent `scala.Equals`, and `java.io.Serializable`, the std's or a
-    /// jar's. Conformance, the JVM's interfaces and the membership a test of one sees at run time
-    /// are derived from these.
+    /// jar's (the JVM's interfaces list them as scalac's backend does).
     pub fn is_synthetic_parent(&self, interner: &crate::intern::Interner, c: ClassId) -> bool {
         // Each is a trait: a class, the most a test meets, is none of them at once.
         let info = self.class(c);
@@ -876,6 +898,7 @@ impl Symbols {
             subclasses: Vec::new(),
             members: FxMap::default(),
             member_order: Vec::new(),
+            names_mask: 0,
             nested: FxMap::default(),
             type_aliases: FxMap::default(),
             companion: None,
@@ -893,6 +916,9 @@ impl Symbols {
             local_module: None,
             inner_object: None,
             stateful: false,
+            desugared_parents: 0,
+            rule_prefix: 0,
+            parent_failed: false,
             has_exports: false,
             self_alias: crate::names::EMPTY,
             has_imports: false,
@@ -944,6 +970,7 @@ impl Symbols {
             needs_setter: false,
             scoped_private: false,
             overridden_by_param: false,
+            declared_alias_id: 0,
             is_main: false,
             impl_class: None,
             by_name: false,
@@ -978,6 +1005,29 @@ impl Symbols {
         match info.dispatch {
             Dispatch::Named => *self.dispatch_names.get(&s).expect("a named method has its name"),
             _ => info.name,
+        }
+    }
+
+    /// dotty's `fullName` of a class: its owners' names outermost first, joined by `.`, an
+    /// object's class with its `$` (`pk.O$.E`), as a message names an enum.
+    pub fn scala_full_name(&self, interner: &crate::intern::Interner, c: ClassId) -> String {
+        let info = self.class(c);
+        let module = info.kind == ClassKind::Object || info.inner_object.is_some() || info.local_module.is_some();
+        let own = format!("{}{}", interner.get(info.name), if module { "$" } else { "" });
+        match info.owner {
+            Owner::Class(o) => format!("{}.{}", self.scala_full_name(interner, o), own),
+            Owner::Package(p) => {
+                let mut segs = Vec::new();
+                let mut at = Some(p);
+                while let Some(k) = at.filter(|&k| k != ROOT_PKG) {
+                    segs.push(interner.get(self.pkg(k).name).to_string());
+                    at = self.pkg(k).parent;
+                }
+                segs.reverse();
+                segs.push(own);
+                segs.join(".")
+            }
+            Owner::Local => own,
         }
     }
 
@@ -1062,6 +1112,12 @@ impl Symbols {
         let info = &mut self.classes[c.idx()];
         info.members.insert(name, s);
         info.member_order.push(s);
+        info.names_mask |= name_bit(name);
+    }
+
+    /// Notes a name `c`'s table or extensions gained otherwise than by `add_member`.
+    pub fn note_member_name(&mut self, c: ClassId, name: Name) {
+        self.classes[c.idx()].names_mask |= name_bit(name);
     }
 
     /// Whether a private member `name` of `c` would share its run-time name with a member of a
@@ -1758,5 +1814,19 @@ mod tests {
         f.syms.class_mut(f.c).parents = vec![own];
         let store: &TypeStore = &f.store;
         f.syms.each_unpublished_type(&mut |what, t| crate::types::view::published(store, what, t));
+    }
+}
+
+/// A name's bit in `ClassInfo::names_mask`.
+#[inline]
+pub const fn name_bit(n: Name) -> u64 {
+    1 << (n.0.wrapping_mul(0x9E37_79B9) >> 26)
+}
+
+impl ClassInfo {
+    /// Whether the class's table or extensions may have the name: false only where neither has.
+    #[inline]
+    pub fn may_have(&self, n: Name) -> bool {
+        self.names_mask & name_bit(n) != 0
     }
 }

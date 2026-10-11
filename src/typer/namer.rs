@@ -197,6 +197,7 @@ impl<'a> Worker<'a> {
         }
         if let Owner::Class(c) = owner {
             self.syms.class_mut(c).member_order.push(sym);
+            self.syms.note_member_name(c, name);
         }
     }
 
@@ -439,7 +440,10 @@ impl<'a> Worker<'a> {
                             .or_default()
                             .extensions
                             .push(sym),
-                        Owner::Class(c) => self.syms.class_mut(c).extensions.push(sym),
+                        Owner::Class(c) => {
+                            self.syms.class_mut(c).extensions.push(sym);
+                            self.syms.note_member_name(c, def.name);
+                        }
                         Owner::Local => {}
                     }
                 } else {

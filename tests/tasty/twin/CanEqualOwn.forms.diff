@@ -1,0 +1,7 @@
+24,27c24
+<     {
+<       <synthetic> val $1: CanEqualCalls.type = CanEqualCalls
+<       $1.n = $1.n +{(Int): Int} 1
+<     }
+---
+>     CanEqualCalls.n = CanEqualCalls.n +{(Int): Int} 1

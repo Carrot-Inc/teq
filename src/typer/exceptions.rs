@@ -245,6 +245,12 @@ impl<'a> Worker<'a> {
                 let upper = self.syms.tparam(p).upper;
                 upper != ANY && self.is_reference(upper)
             }
+            // A higher-kinded parameter applied, `TRAV[E]` of a `TRAV[e] <: Iterable[e]`, is its
+            // bound applied (dotty's `AppliedType.superType`).
+            Type::AppParam(p, args) => match self.app_param_upper(p, args) {
+                Some(upper) => self.is_reference(upper),
+                None => false,
+            },
             Type::Lit(_) => {
                 let class = self.widen_lit(t);
                 self.is_reference(class)
@@ -287,6 +293,10 @@ impl<'a> Worker<'a> {
                 let upper = self.syms.tparam(p).upper;
                 upper != ANY && self.is_value(upper)
             }
+            Type::AppParam(p, args) => match self.app_param_upper(p, args) {
+                Some(upper) => self.is_value(upper),
+                None => false,
+            },
             Type::Lit(_) => {
                 let class = self.widen_lit(t);
                 self.is_value(class)

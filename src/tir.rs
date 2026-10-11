@@ -733,6 +733,160 @@ pub enum TInit {
     Parent(ClassId, ParentCall),
 }
 
+/// The members a class may take by rule (`TClass::synthesized`), dotty's `caseClassSynthesized`
+/// in its order and then an enum value's `ordinal`, each with the parameter it takes: `Any` for
+/// the two equalities, `Int` for the two element accessors.
+pub mod synthetic {
+    use crate::intern::Name;
+    use crate::names;
+
+    pub const HASH_CODE: u16 = 1 << 0;
+    pub const EQUALS: u16 = 1 << 1;
+    pub const TO_STRING: u16 = 1 << 2;
+    pub const CAN_EQUAL: u16 = 1 << 3;
+    pub const PRODUCT_ARITY: u16 = 1 << 4;
+    pub const PRODUCT_PREFIX: u16 = 1 << 5;
+    pub const PRODUCT_ELEMENT: u16 = 1 << 6;
+    pub const PRODUCT_ELEMENT_NAME: u16 = 1 << 7;
+    pub const ORDINAL: u16 = 1 << 8;
+    /// With `EQUALS`: the synthesized `equals` ends with `that.canEqual(this)`, the class not
+    /// being final or having a `canEqual` of its own (`SyntheticMembers.equalsBody`).
+    pub const EQUALS_CALLS_CAN_EQUAL: u16 = 1 << 15;
+    /// `HASH_CODE`, `EQUALS` or `TO_STRING` shifted by this: none is synthesized, the existing
+    /// definition (`existingDef`) being the superclass's or one it inherits, which the JS
+    /// registration of a shape leaves to the prototype chain.
+    pub const INHERITED: u32 = 9;
+
+    /// A case class's (`caseSymbols`); a case object's lacks `equals` (`caseModuleSymbols`).
+    pub const CASE: u16 = HASH_CODE | EQUALS | TO_STRING | CAN_EQUAL | PRODUCT_ARITY | PRODUCT_PREFIX | PRODUCT_ELEMENT | PRODUCT_ELEMENT_NAME;
+    /// An enum value's (`nonJavaEnumValueSymbols`); one of a Java enum takes `productPrefix` alone.
+    pub const ENUM_VALUE: u16 = PRODUCT_PREFIX | TO_STRING | ORDINAL | HASH_CODE;
+    /// A value class's (`valueSymbols`).
+    pub const VALUE: u16 = HASH_CODE | EQUALS;
+
+    #[derive(Clone, Copy, PartialEq, Eq)]
+    pub enum Param {
+        None,
+        Any,
+        Int,
+    }
+
+    pub const MEMBERS: [(u16, Name, Param); 9] = [
+        (HASH_CODE, names::HASH_CODE, Param::None),
+        (EQUALS, names::EQUALS, Param::Any),
+        (TO_STRING, names::TO_STRING, Param::None),
+        (CAN_EQUAL, names::CAN_EQUAL_METHOD, Param::Any),
+        (PRODUCT_ARITY, names::PRODUCT_ARITY, Param::None),
+        (PRODUCT_PREFIX, names::PRODUCT_PREFIX, Param::None),
+        (PRODUCT_ELEMENT, names::PRODUCT_ELEMENT, Param::Int),
+        (PRODUCT_ELEMENT_NAME, names::PRODUCT_ELEMENT_NAME, Param::Int),
+        (ORDINAL, names::ORDINAL, Param::None),
+    ];
+}
+
+/// How a `final val` of a constant type is stored (`constant_val`): its initialiser is the
+/// literal, or the literal is the type it declares and the initialiser runs for its effects.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum ConstVal {
+    Literal,
+    Declared(crate::types::LitId),
+}
+
+/// dotty's `SymUtils.isConstExprFinalVal`, the storage `Memoize`, `Mixin` and `Constructors` give a
+/// `final val` of a constant type: no field holds it and its getter answers the constant, an
+/// initialiser that is no literal running for its effects alone. The constant type is the literal
+/// one the val declares (or a pickle's), or the literal an untyped val is initialised with, to
+/// which the typer folds its reads (`Worker::constant_step`). A member of a JavaScript type keeps
+/// its field (`sjsNeedsField`).
+pub fn constant_val(prog: &Program, syms: &crate::symbols::Symbols, types: &crate::types::TypeStore, asts: &crate::ast::Asts, s: SymId, init: TExprId) -> Option<ConstVal> {
+    use crate::ast::mods;
+    use crate::symbols::{JsKind, Owner, SymKind};
+    let info = syms.sym(s);
+    if info.kind != SymKind::Val || info.mods & mods::FINAL == 0 || info.mods & (mods::LAZY | mods::GIVEN | mods::INLINE) != 0 {
+        return None;
+    }
+    if !matches!(info.owner, Owner::Class(c) if syms.class(c).js == JsKind::Scala) {
+        return None;
+    }
+    let literal = matches!(prog.expr(init), TExpr::Int(_) | TExpr::Long(_) | TExpr::Double(_) | TExpr::Bool(_) | TExpr::Char(_) | TExpr::Str(_));
+    if let Some(crate::types::Type::Lit(l)) = info.sig.as_ref().map(|sig| types.get(sig.ret)) {
+        return Some(if literal { ConstVal::Literal } else { ConstVal::Declared(l) });
+    }
+    let file = info.file.0 as usize;
+    let untyped = file < asts.len() && info.def.is_some_and(|d| asts[file].defs.get(d.idx()).is_some_and(|def| matches!(def.kind, crate::ast::DefKind::Val { ty: None, .. })));
+    (untyped && literal && !prog.is_widened(init)).then_some(ConstVal::Literal)
+}
+
+/// dotty's `SyntheticMembers.chooseHashcode`: whether the case class `c` has fields and none of a
+/// primitive class (`isPrimitiveValueClass`), so that its `hashCode` by rule is
+/// `MurmurHash3.productHash`, through `productArity` and `productElement`, rather than the mix of
+/// its fields.
+pub fn hashes_through_elements(syms: &crate::symbols::Symbols, types: &crate::types::TypeStore, c: ClassId) -> bool {
+    let fields = case_field_types(syms, c);
+    !fields.is_empty() && !fields.into_iter().any(|t| t.is_some_and(|t| is_primitive_value_class(syms, types, t)))
+}
+
+/// dotty's `SyntheticMembers.equalsBody`'s `sortedAccessors`: the indices of the case class
+/// `c`'s fields (its first parameter list, `Product`'s order) in the order its `equals` by rule
+/// compares them, those of a primitive class first (`isPrimitiveValueClass`), each group in
+/// declaration order, so that a cheap unequal field decides before an `equals` of a reference.
+/// Whether `equals_order` of `c` is another than the fields' order: a reference field comes
+/// before a primitive one.
+pub fn equals_reorders(syms: &crate::symbols::Symbols, types: &crate::types::TypeStore, c: ClassId) -> bool {
+    let info = syms.class(c);
+    let Some(cl) = info.ctor.first() else { return false };
+    if cl.params.len() < 2 {
+        return false;
+    }
+    let mut reference_seen = false;
+    for p in &cl.params {
+        let primitive = !p.repeated && syms.sym(p.sym).declared_alias().is_none() && is_primitive_value_class(syms, types, p.ty);
+        if primitive && reference_seen {
+            return true;
+        }
+        reference_seen |= !primitive;
+    }
+    false
+}
+
+pub fn equals_order(syms: &crate::symbols::Symbols, types: &crate::types::TypeStore, c: ClassId) -> Vec<usize> {
+    // The declared type's symbol (`accessor.info.typeSymbol`), an alias's being no class, where
+    // the hash reads the class behind it (`hashes_through_elements`).
+    let primitive: Vec<bool> = syms
+        .class(c)
+        .ctor
+        .first()
+        .map(|cl| cl.params.iter().map(|p| !p.repeated && syms.sym(p.sym).declared_alias().is_none() && is_primitive_value_class(syms, types, p.ty)).collect())
+        .unwrap_or_default();
+    let fields = primitive.len();
+    let mut order: Vec<usize> = (0..fields).collect();
+    // Already in order where no reference comes before a primitive, the usual case.
+    if primitive.windows(2).any(|w| !w[0] && w[1]) {
+        order.sort_by_key(|&i| !primitive[i]);
+    }
+    order
+}
+
+/// The declared types of the case class's fields, `None` for a repeated one, whose accessor is a
+/// `Seq` (`xs: Int*`).
+fn case_field_types(syms: &crate::symbols::Symbols, c: ClassId) -> Vec<Option<TypeId>> {
+    syms.class(c).ctor.first().map(|cl| cl.params.iter().map(|p| (!p.repeated).then_some(p.ty)).collect()).unwrap_or_default()
+}
+
+/// dotty's `isPrimitiveValueClass` of a field's declared type's `typeSymbol`, a literal type's
+/// being its class's (`x: 1` is an `Int`).
+fn is_primitive_value_class(syms: &crate::symbols::Symbols, types: &crate::types::TypeStore, t: TypeId) -> bool {
+    match types.get(t) {
+        crate::types::Type::Class(k, _) => {
+            let ki = syms.class(k);
+            use crate::names::*;
+            ki.kind == crate::symbols::ClassKind::Builtin && matches!(ki.name, INT | LONG | DOUBLE | FLOAT | CHAR | BYTE | SHORT | BOOLEAN | UNIT)
+        }
+        crate::types::Type::Lit(l) => !matches!(types.lit_val(l), crate::types::LitVal::Str(_)),
+        _ => false,
+    }
+}
+
 #[derive(Clone)]
 pub struct TClass {
     pub id: ClassId,
@@ -749,12 +903,18 @@ pub struct TClass {
     /// Statements (in `Program::stmts`) that run before those arguments are passed: the
     /// temporaries of named arguments written out of parameter order.
     pub parent_prelude: ListRef,
-    /// Which of `toString`, `equals` and `hashCode` (bits 0 to 2) a case class or case object
-    /// inherits from its superclass, where scalac makes none of its own.
-    pub inherited_case_members: u8,
+    /// The members dotty's `SyntheticMembers.caseAndValueMethods` gives a case class, case object,
+    /// enum value or value class (`synthetic`'s bits), with the `ordinal` `Desugar` gives an enum
+    /// class case: those of its kind's set that `existingDef` finds no definition of, which the
+    /// targets and the products implement by rule. A class the compiler makes without a body (a
+    /// tuple) defines none of them.
+    pub synthesized: u16,
     /// Whether a case class's companion goes without the synthetic `unapply` (`unapplySeq`),
     /// withdrawn by one it declares or inherits (`Worker::synthetic_unapply_retracted`).
     pub retracted_unapply: bool,
+    /// The record's lists that few classes have (`TClassLists`), apart so that a body without
+    /// them is no larger: a resident session keeps the bodies of every build since a full one.
+    pub lists: Option<Box<TClassLists>>,
     pub init: Vec<TInit>,
     pub methods: Vec<FunId>,
     /// The secondary constructors: the body of each is a block whose one statement is the
@@ -775,6 +935,41 @@ pub struct TClass {
     /// `init`, is the search where the class is defined (`Worker::implement_deferred_givens`).
     /// Not a member of the class's table, so that every lookup finds the trait's declaration.
     pub deferred_givens: Vec<(SymId, SymId)>,
+}
+
+/// The lists of a class body that most classes leave empty (`TClass::lists`).
+#[derive(Clone, Default)]
+pub struct TClassLists {
+    /// The indices of a case class's fields in the order its synthesized `equals` compares them
+    /// (`equals_order`), where that is not their declaration order; empty otherwise.
+    pub equals_order: Vec<u16>,
+    /// For each member of the kind's set the class does not get by rule, the definition dotty's
+    /// `existingDef` takes in its place (`synthetic`'s bit, the member), which a lookup of the name
+    /// finds before the bases' other definitions.
+    pub existing_defs: Vec<(u16, SymId)>,
+    /// The constant vals of the class's body (`constant_val`) with their constants as literals,
+    /// which a getter answers whatever the constructor has run (`Memoize`); a right side that is
+    /// no literal stays in `init`, the constructor's work.
+    pub constants: Vec<(SymId, TExprId)>,
+}
+
+impl TClass {
+    pub fn equals_order(&self) -> &[u16] {
+        self.lists.as_deref().map_or(&[], |l| &l.equals_order)
+    }
+
+    pub fn existing_defs(&self) -> &[(u16, SymId)] {
+        self.lists.as_deref().map_or(&[], |l| &l.existing_defs)
+    }
+
+    pub fn constants(&self) -> &[(SymId, TExprId)] {
+        self.lists.as_deref().map_or(&[], |l| &l.constants)
+    }
+
+    /// The lists, made where the class has none yet.
+    pub fn lists_mut(&mut self) -> &mut TClassLists {
+        self.lists.get_or_insert_with(Default::default)
+    }
 }
 
 /// `@jsImport("module", "name")`; the name `default` is the default export and `*` the namespace.

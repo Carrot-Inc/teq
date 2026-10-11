@@ -4003,6 +4003,26 @@ impl<'a> Worker<'a> {
 
     /// Resolves parameter clauses. `existing` holds pre-created symbols (constructor params);
     /// context bounds become a trailing using clause.
+    /// The type alias the type `id` is written as, applied or annotated (`Count`, `F[Int]`,
+    /// `Count @unchecked`), where it resolves to the class `class_name`: dotty's `typeSymbol` of it
+    /// is the alias, whatever class it expands to. A name that is the class's own names the class,
+    /// and is not looked up again.
+    fn written_alias(&mut self, id: TyExprId, class_name: Name) -> Option<AliasId> {
+        let ast = self.cur_ast();
+        let span = ast.ty_spans[id.idx()];
+        let found = match ast.ty(id) {
+            TyExpr::Name(n) | TyExpr::Select(_, n) if n == class_name => None,
+            TyExpr::Name(n) => self.lookup_type_at(n, span),
+            TyExpr::Select(q, n) => self.lookup_type_in_path(q, n),
+            TyExpr::Apply(f, _) | TyExpr::Unchecked(f) | TyExpr::UncheckedVariance(f) => return self.written_alias(f, class_name),
+            _ => None,
+        };
+        match found {
+            Some(TypeRef::Alias(a)) => Some(a),
+            _ => None,
+        }
+    }
+
     pub fn resolve_clauses(
         &mut self,
         clauses: &[ast::ParamClause],
@@ -4052,11 +4072,22 @@ impl<'a> Worker<'a> {
                         sym
                     }
                 };
+                // A case class's field whose type names an alias of a primitive class
+                // (`SymInfo::declared_alias`), which its equality orders.
+                let primitive = match (ci, class_owner) {
+                    (0, Some(c)) if self.syms.class(c).mods & mods::CASE != 0 => match self.types.get(ty) {
+                        Type::Class(k, _) if self.syms.class(k).kind == ClassKind::Builtin => Some(self.syms.class(k).name),
+                        _ => None,
+                    },
+                    _ => None,
+                };
+                let declared_alias = primitive.and_then(|k| self.written_alias(p.ty, k));
                 {
                     let mut s = self.syms.sym_mut(sym);
                     s.sig = Some(Arc::new(MethodSig::value(local_ty)));
                     s.state().set(Completion::Done);
                     s.by_name = by_name;
+                    s.set_declared_alias(declared_alias);
                 }
                 // Later parameters and the result type can name it (`y: x.type`), and a using
                 // parameter is the given of `quotes.type` there.
@@ -4833,6 +4864,7 @@ impl<'a> Worker<'a> {
         if kind == ClassKind::Trait && parents.first().is_some_and(|&(t, _)| self.dealias(t) == ANY) {
             self.syms.class_mut(c).mods |= mods::UNIVERSAL;
         }
+        self.desugared_parents(c, kind, &mut parents);
         self.set_parents(c, parents);
         // The self type may name a class that extends this one (tapir's
         // `EndpointTransputMacros[T] { this: EndpointTransput[T] => }`), so it is resolved once
@@ -5008,7 +5040,8 @@ impl<'a> Worker<'a> {
 
     /// Whether an ancestor trait has parameters, using clauses or context bounds for `c` to fill in.
     pub(super) fn has_evidence_traits(&self, c: ClassId) -> bool {
-        self.syms.class(c).base_types.iter().skip(1).any(|&(b, _)| self.has_trait_params(b))
+        let info = self.syms.class(c);
+        info.base_types[1 + info.rule_prefix as usize..].iter().any(|&(b, _)| self.has_trait_params(b))
     }
 
     pub(super) fn is_evidence_trait(&self, c: ClassId) -> bool {
@@ -5032,11 +5065,135 @@ impl<'a> Worker<'a> {
         })
     }
 
+    /// The parents dotty's `Desugar.classDef` adds after the written ones: `Product` and
+    /// `Serializable` to a case class or case object that is no enum case, `scala.reflect.Enum`
+    /// to an enum. One the class writes itself is not written twice.
+    fn desugared_parents(&mut self, c: ClassId, kind: ClassKind, parents: &mut Vec<(TypeId, Span)>) {
+        let (is_case, span, before) = {
+            let info = self.syms.class(c);
+            (info.mods & mods::CASE != 0, info.span, info.desugared_parents)
+        };
+        let added: [Option<ClassId>; 2] = match kind {
+            ClassKind::Class | ClassKind::Object if is_case => [self.b.product, self.java_serializable_class()],
+            ClassKind::Enum => [self.b.reflect_enum, None],
+            _ => {
+                if before != 0 {
+                    self.syms.class_mut(c).desugared_parents = 0;
+                }
+                return;
+            }
+        };
+        parents.reserve(2);
+        let mut count = 0;
+        for p in added.into_iter().flatten() {
+            let written = parents.iter().any(|&(t, _)| match self.types.get(t) {
+                Type::Class(k, _) => k == p,
+                _ => self.class_of(t) == Some(p),
+            });
+            if !written {
+                // `Product` and `Enum` have their class types among the builtins.
+                // `java.io.Serializable`'s, once complete, is the first of its base types.
+                let t = match p {
+                    _ if Some(p) == self.b.product => self.b.t_product,
+                    _ if Some(p) == self.b.reflect_enum => self.b.t_enum,
+                    _ => match self.syms.class(p).base_types.first() {
+                        Some(&(k, t)) if k == p && self.syms.class(p).tparams.is_empty() => t,
+                        _ => self.types.class(p, &[]),
+                    },
+                };
+                debug_assert_eq!(t, self.types.class(p, &[]), "the class type of {}", self.class_path(p));
+                parents.push((t, span));
+                count += 1;
+            }
+        }
+        if before != count {
+            self.syms.class_mut(c).desugared_parents = count;
+        }
+    }
+
+    /// The leading bases after the class itself that are classes `Desugar.classDef` gives
+    /// (`ClassInfo::rule_prefix`).
+    fn rule_prefix_of(&self, base: &[(ClassId, TypeId)]) -> u8 {
+        base.iter().skip(1).take(4).take_while(|&&(b, _)| self.is_desugared_parent(b)).count() as u8
+    }
+
+    /// The names of the members of the classes `Desugar.classDef` gives
+    /// (`Worker::rule_member_names`).
+    /// Whether `c`'s own table has a name of a member of the classes `Desugar.classDef` gives,
+    /// read off `own`, its names mask, first (`Worker::rule_member_names`, kept once those classes
+    /// are complete).
+    fn meets_rule_names(&mut self, c: ClassId, own: u64) -> bool {
+        if self.rule_member_names.is_empty() {
+            let (names, complete) = self.rule_class_member_names();
+            if !complete {
+                let info = self.syms.class(c);
+                return names.iter().any(|&n| own & crate::symbols::name_bit(n) != 0 && info.members.contains_key(&n));
+            }
+            self.rule_member_names = names;
+        }
+        let info = self.syms.class(c);
+        debug_assert!(info.base_types[1..1 + info.rule_prefix as usize].iter().all(|&(b, _)| self.syms.class(b).members.keys().all(|n| self.rule_member_names.contains(n))));
+        self.rule_member_names.iter().any(|&n| own & crate::symbols::name_bit(n) != 0 && info.members.contains_key(&n))
+    }
+
+    fn rule_class_member_names(&mut self) -> (Vec<Name>, bool) {
+        let classes = [self.b.product, self.b.equals, self.b.reflect_enum, self.java_serializable_class()];
+        let mut names: Vec<Name> = Vec::new();
+        for c in classes.into_iter().flatten() {
+            names.extend(self.syms.class(c).members.keys().copied());
+        }
+        names.sort_unstable();
+        names.dedup();
+        (names, self.rule_names_complete())
+    }
+
+    /// Whether every class `Desugar.classDef` gives is complete.
+    fn rule_names_complete(&self) -> bool {
+        let classes = [self.b.product, self.b.equals, self.b.reflect_enum, self.java_serializable.flatten()];
+        classes.into_iter().flatten().all(|c| self.syms.class(c).state() == Completion::Done)
+    }
+
+    /// What the walks passing over the classes `Desugar.classDef` gives (`rule_prefix`) take of
+    /// them: top-level traits without parameters, statements, givens, exports, overloads, type
+    /// members, nested classes, a self type or a target name, none of them native.
+    pub(super) fn brings_walks_nothing(&mut self, b: ClassId) -> bool {
+        let (plain, file) = {
+            let info = self.syms.class(b);
+            let plain = info.kind == ClassKind::Trait
+                && matches!(info.owner, Owner::Package(_))
+                && info.ctor.is_empty()
+                && info.givens.is_empty()
+                && !info.has_exports
+                && !info.has_overloads
+                && info.type_aliases.is_empty()
+                && info.nested.is_empty()
+                && info.declared_self.is_none()
+                && info.js == JsKind::Scala;
+            (plain, info.file)
+        };
+        plain && !self.trait_has_statements(b) && !self.file_declares_target_name(file)
+    }
+
+    /// `java.io.Serializable`, looked up once.
+    fn java_serializable_class(&mut self) -> Option<ClassId> {
+        if let Some(found) = self.java_serializable {
+            return found;
+        }
+        let found = self.class_at(&["java", "io", "Serializable"]);
+        self.java_serializable = Some(found);
+        found
+    }
+
     pub(super) fn set_parents(&mut self, c: ClassId, parents: Vec<(TypeId, Span)>) {
+        // A class linearised again: what `base_type` kept of it goes (dotty invalidates a
+        // class's `baseTypeCache` when its parents change).
+        if !self.syms.class(c).base_types.is_empty() {
+            self.base_type_cache.clear();
+        }
         let targs: Vec<TypeId> =
             self.syms.class(c).tparams.clone().iter().map(|&p| self.types.param(p)).collect();
         let self_ty = self.types.class(c, &targs);
-        let mut linearisations: Vec<Vec<(ClassId, TypeId)>> = Vec::with_capacity(parents.len());
+        let mut linearisations: Vec<ParentBases> = Vec::with_capacity(parents.len());
         let mut parent_types = Vec::new();
         let (file, kind, is_anon) = {
             let i = self.syms.class(c);
@@ -5045,8 +5202,23 @@ impl<'a> Worker<'a> {
         let is_case_of_enum = kind == ClassKind::EnumCase;
         let mut superclass: Option<ClassId> = None;
         let mut trait_superclasses: Vec<(ClassId, ClassId, Span)> = Vec::new();
-        for (pt, span) in parents {
+        let mut parent_failed = false;
+        // The parents `desugared_parents` added, last: complete plain traits without type
+        // arguments, every check below holding of them by construction, and their base types
+        // their linearisation as they stand.
+        let written = parents.len() - (self.syms.class(c).desugared_parents as usize).min(parents.len());
+        for (i, (pt, span)) in parents.into_iter().enumerate() {
+            if i >= written {
+                if let Type::Class(pc, _) = self.types.get(pt) {
+                    if self.syms.class(pc).state() == Completion::Done {
+                        parent_types.push(pt);
+                        linearisations.push(ParentBases::Of(pc));
+                        continue;
+                    }
+                }
+            }
             let pt = self.deref_alias(pt);
+            parent_failed |= pt == ERROR;
             // A class nested in a class, through its prefix (`extends H.o.I`, an alias of it): its
             // base types are seen from the prefix, as dotty's `baseType` of a parent `TypeRef`.
             let (class_pt, prefix) = match self.types.get(pt) {
@@ -5074,6 +5246,20 @@ impl<'a> Worker<'a> {
                 continue;
             }
             self.complete_class(pc);
+            let pinfo = self.syms.class(pc);
+            // A complete trait without type parameters, superclass, seal or private constructor
+            // (`Product`, `Serializable`): every check below holds of it, and its base types are
+            // its linearisation as they stand.
+            let plain_trait = pinfo.kind == ClassKind::Trait
+                && pinfo.tparams.is_empty()
+                && pinfo.superclass.is_none()
+                && pinfo.mods & (mods::SEALED | mods::PRIVATE_CTOR) == 0
+                && pinfo.state() == Completion::Done;
+            if plain_trait && prefix.is_none() && !self.is_partial_function(pc) {
+                parent_types.push(pt);
+                linearisations.push(ParentBases::Of(pc));
+                continue;
+            }
             let pinfo = self.syms.class(pc);
             // Nothing is emitted for a native JS class, so extending one costs no inheritance.
             let is_class = pinfo.kind == ClassKind::Class && pinfo.js != JsKind::Native;
@@ -5144,14 +5330,22 @@ impl<'a> Worker<'a> {
                 .copied()
                 .zip(self.types.items(pargs).iter().copied())
                 .collect();
+            // A parent without type arguments (`Product`, most traits) is its class's base types
+            // as they stand, read where the linearisation merges them; one with arguments or
+            // through a prefix is seen through them.
+            if subst.is_empty() && prefix.is_none() {
+                linearisations.push(ParentBases::Of(pc));
+                continue;
+            }
             let inherited: Vec<(ClassId, TypeId)> = self.syms.class(pc).base_types.clone();
-            let mut seen: Vec<(ClassId, TypeId)> = inherited.into_iter().map(|(bc, bt)| (bc, self.types.subst(bt, &subst))).collect();
+            let mut seen: Vec<(ClassId, TypeId)> =
+                if subst.is_empty() { inherited } else { inherited.into_iter().map(|(bc, bt)| (bc, self.types.subst(bt, &subst))).collect() };
             if let Some(p) = prefix {
                 for (_, bt) in seen.iter_mut() {
                     *bt = self.outer_seen_from(*bt, p, pc);
                 }
             }
-            linearisations.push(seen);
+            linearisations.push(ParentBases::Seen(seen));
         }
         if !trait_superclasses.is_empty() {
             superclass = self.superclass_with_traits(superclass, &trait_superclasses);
@@ -5159,7 +5353,22 @@ impl<'a> Worker<'a> {
         // The standard library picks the collection type of `SeqOps` through its first parent.
         let checked = linearisations.len() > 1 && !self.source(file).is_std;
         let (base, conflicting) = self.linearise(c, self_ty, linearisations, checked);
-        let has_native_base = base.iter().skip(1).any(|&(b, _)| self.syms.class(b).js == JsKind::Native);
+        // One pass over the bases: a native JS one, the types they bring, a declared self type.
+        let (mut has_native_base, mut inherits_types, mut self_typed) = (false, false, false);
+        // `Product`, `Equals`, `Serializable` and `Enum` bring no native class, self type, type
+        // member or nested class.
+        let rule_prefix = self.rule_prefix_of(&base);
+        debug_assert!(base[1..1 + rule_prefix as usize].iter().all(|&(b, _)| self.brings_walks_nothing(b)), "a class Desugar.classDef gives brings {} what a walk passing over it misses", self.class_path(c));
+        for &(b, _) in &base[1 + rule_prefix as usize..] {
+            let bi = self.syms.class(b);
+            has_native_base |= bi.js == JsKind::Native;
+            self_typed |= bi.declared_self.is_some();
+            inherits_types = inherits_types
+                || !bi.type_aliases.is_empty()
+                || bi.inherits_types
+                || bi.nested.values().any(|&n| self.is_opaque_path_class(n))
+                || (bi.kind != ClassKind::Object && !bi.nested.is_empty());
+        }
         if let Some(parent) = superclass.filter(|_| kind != ClassKind::Trait) {
             if !self.syms.class(parent).subclasses.contains(&c) {
                 if self.shared_class(parent) {
@@ -5169,16 +5378,11 @@ impl<'a> Worker<'a> {
                 }
             }
         }
-        let inherits_types = base.iter().skip(1).any(|&(b, _)| {
-            let bi = self.syms.class(b);
-            !bi.type_aliases.is_empty()
-                || bi.inherits_types
-                || bi.nested.values().any(|&n| self.is_opaque_path_class(n))
-                || (bi.kind != ClassKind::Object && !bi.nested.is_empty())
-        });
         let mut info = self.syms.class_mut(c);
         info.parents = parent_types;
+        info.parent_failed = parent_failed;
         info.base_types = base;
+        info.rule_prefix = rule_prefix;
         info.superclass = superclass;
         info.inherits_types = inherits_types;
         if has_native_base && info.js == JsKind::Scala {
@@ -5189,7 +5393,10 @@ impl<'a> Worker<'a> {
         }
         if info.base_types.len() > 1 {
             self.mark_members_meeting_inherited(c);
-            self.check_self_types(c);
+            // A base that declares no self type asks nothing of `c`'s.
+            if self_typed {
+                self.check_self_types(c);
+            }
         }
         if checked && !conflicting {
             self.check_conflicting_members(c);
@@ -5315,8 +5522,26 @@ impl<'a> Worker<'a> {
         let file = self.syms.class(c).file;
         let is_std = self.source(file).is_std;
         let in_jar = self.in_jar(file);
-        let inherits_overloads = self.syms.class(c).base_types[1..].iter().any(|&(b, _)| self.syms.class(b).has_overloads);
+        let info = self.syms.class(c);
+        let inherits_overloads = info.base_types[1 + info.rule_prefix as usize..].iter().any(|&(b, _)| self.syms.class(b).has_overloads);
         self.syms.class_mut(c).has_overloads |= inherits_overloads;
+        // Names that no base has meet nothing: a class whose names mask shares no bit with the
+        // bases' after the leading classes `Desugar.classDef` gives (`rule_prefix`), nor any name
+        // with those classes' few members, has no member to mark.
+        let (own, others, prefix) = {
+            let info = self.syms.class(c);
+            let prefix = 1 + info.rule_prefix as usize;
+            (info.names_mask, info.base_types[prefix..].iter().fold(0, |m, &(b, _)| m | self.syms.class(b).names_mask), prefix)
+        };
+        if own & others == 0 {
+            if prefix == 1 {
+                return;
+            }
+            if !self.meets_rule_names(c, own) {
+                return;
+            }
+        }
+        let mut inherited: Option<super::check::BaseNames> = Some(self.base_member_names(c));
         for i in 0..self.syms.class(c).member_order.len() {
             let info = self.syms.class(c);
             let m = info.member_order[i];
@@ -5327,7 +5552,10 @@ impl<'a> Worker<'a> {
             if kind != SymKind::Def && !is_val {
                 continue;
             }
-            let meets = info.base_types[1..].iter().any(|&(b, _)| {
+            // A name none of the bases has meets nothing there (the bases' names gathered once).
+            let named = inherited.get_or_insert_with(|| self.base_member_names(c)).has(name);
+            let info = self.syms.class(c);
+            let meets = named && info.base_types[1..].iter().any(|&(b, _)| {
                 self.syms.class(b).members.get(&name).map_or(false, |&p| match self.syms.sym(p).kind {
                     SymKind::Overloaded(_) => true,
                     SymKind::Def => (!is_std || in_jar) && !is_val,
@@ -5353,12 +5581,22 @@ impl<'a> Worker<'a> {
         &mut self,
         c: ClassId,
         self_ty: TypeId,
-        parents: Vec<Vec<(ClassId, TypeId)>>,
+        parents: Vec<ParentBases>,
         checked: bool,
     ) -> (Vec<(ClassId, TypeId)>, bool) {
-        let mut base: Vec<(ClassId, TypeId)> = vec![(c, self_ty)];
+        let bases_of = |t: &Self, lin: &'_ ParentBases| -> usize {
+            match lin {
+                ParentBases::Of(k) => t.syms.class(*k).base_types.len(),
+                ParentBases::Seen(v) => v.len(),
+            }
+        };
+        let mut base: Vec<(ClassId, TypeId)> = Vec::with_capacity(1 + parents.iter().map(|lin| bases_of(self, lin)).sum::<usize>());
+        base.push((c, self_ty));
         for lin in parents.iter().rev() {
-            base.extend_from_slice(lin);
+            match lin {
+                ParentBases::Of(k) => base.extend_from_slice(&self.syms.class(*k).base_types),
+                ParentBases::Seen(v) => base.extend_from_slice(v),
+            }
         }
         // The linearisation of a single parent names no class twice.
         if parents.len() < 2 {
@@ -5414,6 +5652,159 @@ impl<'a> Worker<'a> {
             .any(|(&p, (&x, &y))| self.syms.tparam(p).variance == 0 && x != y && !self.is_same(x, y))
     }
 
+    /// Whether two of the bases of `c` have members of one name (with their extensions when
+    /// `extensions` holds), without which no pair of inherited members is there to check (a case
+    /// class over one trait, `Product` and `Serializable`). A class with many members is taken to.
+    pub(super) fn bases_share_a_name(&self, c: ClassId, extensions: bool) -> bool {
+        let info = self.syms.class(c);
+        // Bases whose names masks share no bit, no two of them, share no name. The leading
+        // classes `Desugar.classDef` gives (`rule_prefix`) are one lineage, `Product` over
+        // `Equals`, whose names they may share: their masks are taken as one.
+        let prefix = 1 + info.rule_prefix as usize;
+        let mut seen = info.base_types[1..prefix].iter().fold(0, |m, &(b, _)| m | self.syms.class(b).names_mask);
+        if info.base_types[prefix..].iter().all(|&(b, _)| {
+            let mask = self.syms.class(b).names_mask;
+            let apart = seen & mask == 0;
+            seen |= mask;
+            apart
+        }) {
+            return false;
+        }
+        if info.desugared_parents > 0 && info.parents.len() <= info.desugared_parents as usize + 1 {
+            return self.parents_share_a_name(c, extensions);
+        }
+        // Bases whose names masks share no bit share no name: no two of the others, and none of
+        // them with the desugared parents.
+        let (mut seen, mut sugared, mut meets, mut d) = (0u64, 0u64, false, 0);
+        for &(b, _) in info.base_types.iter().skip(1) {
+            let mask = self.syms.class(b).names_mask;
+            if d < 4 && self.is_desugared_parent(b) {
+                d += 1;
+                sugared |= mask;
+                continue;
+            }
+            meets |= seen & mask != 0;
+            seen |= mask;
+        }
+        if !meets && seen & sugared == 0 {
+            return false;
+        }
+        let mut named = [(Name(0), 0u32); 64];
+        let mut n = 0;
+        // The parents `Desugar.classDef` gives (`Product` with `Equals`, `Serializable`, `Enum`) share
+        // no name in a way either walk acts on: one extends the other, or holds no member, and
+        // all are the std's. Only the other bases' names are collected, each also looked up in
+        // theirs.
+        let mut desugared: [ClassId; 4] = [c; 4];
+        let mut d = 0;
+        for (i, &(b, _)) in info.base_types.iter().enumerate().skip(1) {
+            if d < desugared.len() && self.is_desugared_parent(b) {
+                desugared[d] = b;
+                d += 1;
+                continue;
+            }
+            let bi = self.syms.class(b);
+            let own = if extensions { &bi.extensions[..] } else { &[] };
+            if n + bi.member_order.len() + own.len() > named.len() {
+                return true;
+            }
+            for &m in bi.member_order.iter().chain(own) {
+                named[n] = (self.syms.sym(m).name, i as u32);
+                n += 1;
+            }
+        }
+        let named = &mut named[..n];
+        let in_desugared = |name: Name| {
+            desugared[..d].iter().any(|&k| {
+                let ki = self.syms.class(k);
+                let own = if extensions { &ki.extensions[..] } else { &[] };
+                ki.member_order.iter().chain(own).any(|&m| self.syms.sym(m).name == name)
+            })
+        };
+        if named.iter().any(|&(name, _)| in_desugared(name)) {
+            return true;
+        }
+        named.sort_unstable();
+        named.windows(2).any(|w| w[0].0 == w[1].0 && w[0].1 != w[1].1)
+    }
+
+    /// `bases_share_a_name` of a class with one written parent at most beside those
+    /// `Desugar.classDef` gives: a pair of members of two bases of one parent is handled by that
+    /// parent, which derives from both owners (dotty's `OverridingPairs.isHandledByParent`), so
+    /// only a name in the bases of two parents is left. Each base is taken with the first parent
+    /// that has it.
+    fn parents_share_a_name(&self, c: ClassId, extensions: bool) -> bool {
+        let info = self.syms.class(c);
+        let mut parents = [c; 4];
+        if info.parents.len() > parents.len() {
+            return true;
+        }
+        for (k, &p) in info.parents.iter().enumerate() {
+            let class_ty = match self.types.get(p) {
+                Type::Nested(_, class) => class,
+                _ => p,
+            };
+            let Type::Class(pc, _) = self.types.get(class_ty) else { return true };
+            parents[k] = pc;
+        }
+        let parents = &parents[..info.parents.len()];
+        // Parents whose bases' names masks share no bit share no name.
+        let mut full = [0u64; 4];
+        for (k, &p) in parents.iter().enumerate() {
+            full[k] = self.syms.class(p).base_types.iter().fold(0, |m, &(b, _)| m | self.syms.class(b).names_mask);
+        }
+        let full = &full[..parents.len()];
+        if !(0..full.len()).any(|i| (i + 1..full.len()).any(|j| full[i] & full[j] != 0)) {
+            return false;
+        }
+        // The bases that have members, each with the parent it is taken with.
+        let mut holders = [(c, 0u32); 8];
+        let mut n = 0;
+        for &(b, _) in &info.base_types[1..] {
+            let bi = self.syms.class(b);
+            if bi.member_order.is_empty() && (!extensions || bi.extensions.is_empty()) {
+                continue;
+            }
+            let Some(g) = parents.iter().position(|&p| p == b || self.syms.class(p).base_types.iter().any(|&(x, _)| x == b)) else {
+                return true;
+            };
+            if n == holders.len() {
+                return true;
+            }
+            holders[n] = (b, g as u32);
+            n += 1;
+        }
+        let holders = &holders[..n];
+        if holders.iter().all(|&(_, g)| g == holders[0].1) {
+            return false;
+        }
+        // Two groups share a name only where their names masks share its bit.
+        let mut masks = [0u64; 4];
+        for &(b, g) in holders {
+            masks[g as usize] |= self.syms.class(b).names_mask;
+        }
+        let masks = &masks[..parents.len()];
+        if !(0..masks.len()).any(|i| (i + 1..masks.len()).any(|j| masks[i] & masks[j] != 0)) {
+            return false;
+        }
+        let mut named = [(Name(0), 0u32); 64];
+        let mut n = 0;
+        for &(b, g) in holders {
+            let bi = self.syms.class(b);
+            let own = if extensions { &bi.extensions[..] } else { &[] };
+            if n + bi.member_order.len() + own.len() > named.len() {
+                return true;
+            }
+            for &m in bi.member_order.iter().chain(own) {
+                named[n] = (self.syms.sym(m).name, g);
+                n += 1;
+            }
+        }
+        let named = &mut named[..n];
+        named.sort_unstable();
+        named.windows(2).any(|w| w[0].0 == w[1].0 && w[0].1 != w[1].1)
+    }
+
     /// Two ancestors that define one concrete member: the earlier one in the linearisation has
     /// to override it, and override a member both inherit, unless the class defines it itself.
     /// A pair that a direct parent inherits as well was checked with that parent. Two methods
@@ -5422,6 +5813,9 @@ impl<'a> Worker<'a> {
     /// `c`, which gets an entry that joins the alternatives of the two ancestors.
     #[cold]
     fn check_conflicting_members(&mut self, c: ClassId) {
+        if !self.bases_share_a_name(c, false) {
+            return;
+        }
         let bases: Vec<ClassId> = self.syms.class(c).base_types.iter().skip(1).map(|&(b, _)| b).collect();
         let direct: Vec<ClassId> = self.syms.class(c).parents.clone().iter().filter_map(|&p| self.class_of(p)).collect();
         let extends = |t: &Self, sub: ClassId, sup: ClassId| t.syms.class(sub).base_types.iter().any(|&(x, _)| x == sup);
@@ -5480,6 +5874,10 @@ impl<'a> Worker<'a> {
             self.add_joined_entry(c, like);
         }
         for (name, first, second, marked) in conflicts {
+            // A member the rule gives the class is its own, which overrides both.
+            if self.record_synthesizes(c, name) {
+                continue;
+            }
             let is_method = |t: &Self, k: ClassId| {
                 let entry = t.syms.sym(t.syms.class(k).members[&name]);
                 matches!(entry.kind, SymKind::Def | SymKind::Overloaded(_))
@@ -5500,6 +5898,9 @@ impl<'a> Worker<'a> {
     /// parameters of a concrete one of `second`.
     pub(super) fn check_inherited_conflicts(&mut self) {
         for (c, name, first, second, marked) in std::mem::take(&mut self.inherited_pairs) {
+            if self.record_synthesizes(c, name) {
+                continue;
+            }
             let bases: Vec<(ClassId, TypeId)> = self.syms.class(c).base_types.clone();
             let Some(&(_, second_ty)) = bases.iter().find(|&&(b, _)| b == second) else { continue };
             let mut conflict = false;
@@ -5921,4 +6322,11 @@ fn chain_heads(ast: &crate::ast::Ast, id: TyExprId) -> Option<usize> {
         heads += 1;
     }
     matches!(ast.ty(tail), TyExpr::Name(_) | TyExpr::Select(..)).then_some(heads)
+}
+
+/// A parent's linearisation for `Worker::linearise`: its class's base types as they stand, or
+/// those seen through its type arguments or its prefix.
+pub(super) enum ParentBases {
+    Of(ClassId),
+    Seen(Vec<(ClassId, TypeId)>),
 }

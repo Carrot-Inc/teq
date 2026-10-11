@@ -1123,7 +1123,7 @@ impl<'a> Gen<'a> {
         let written = |name: &str| cx.input.interner.lookup(name).map_or(false, |n| syms.class(object).members.contains_key(&n));
         let enum_type = self.class_type(e);
         let string = JType::L(Rc::from(STRING));
-        let display = cx.input.interner.get(syms.class(e).name).to_string();
+        let display = syms.scala_full_name(cx.input.interner, e);
         let values: Vec<(SymId, u32, String)> = syms
             .class(e)
             .children
@@ -1137,7 +1137,39 @@ impl<'a> Gen<'a> {
             self.enum_mirror_members(e, object);
         }
 
-        if !written("fromOrdinal") {
+        // dotty's `enumLookupMethods`: `$values(ordinal)` where every case is a value, whose every
+        // failure is the `NoSuchElementException`, else the value case of the ordinal.
+        let stored = all_values && cx.has_enum_fields(e) && values.len() == syms.class(e).children.len();
+        if !written("fromOrdinal") && stored {
+            let array = JType::L(Rc::from(format!("[{}", self.desc_of(&enum_type))));
+            let module = self.this_name.clone();
+            self.begin_method(false, false, &[(None, JType::I)], enum_type.clone(), &[]);
+            let fail = self.code.new_label();
+            self.getstatic(&module, "$values", &array);
+            let store = self.store_new(&array);
+            self.load(store, &array);
+            self.jump_if(op::IFNULL, 1, fail);
+            self.load(1, &JType::I);
+            self.jump_if(op::IFLT, 1, fail);
+            self.load(1, &JType::I);
+            self.load(store, &array);
+            self.code.op(op::ARRAYLENGTH);
+            self.code.pop();
+            self.code.push(VT::Int);
+            self.jump_if(op::IF_ICMPGE, 2, fail);
+            self.load(store, &array);
+            self.load(1, &JType::I);
+            self.code.op(op::AALOAD);
+            self.code.popn(2);
+            let vt = self.vt(&enum_type);
+            self.code.push(vt);
+            self.return_value(&enum_type);
+            self.code.bind(fail);
+            self.load(1, &JType::I);
+            self.invoke(Invoke::Static, STRING, false, "valueOf", &[JType::I], &string);
+            self.throw_with("java/util/NoSuchElementException", &format!("enum {} has no case with ordinal: ", display));
+            self.end_method(ACC_PUBLIC, "fromOrdinal", &method_desc(&[JType::I], &enum_type));
+        } else if !written("fromOrdinal") {
             self.begin_method(false, false, &[(None, JType::I)], enum_type.clone(), &[]);
             for (v, ordinal, _) in &values {
                 let next = self.code.new_label();
@@ -1223,7 +1255,7 @@ impl<'a> Gen<'a> {
         self.code.end_path();
     }
 
-    fn desc_of(&self, t: &JType) -> String {
+    pub(super) fn desc_of(&self, t: &JType) -> String {
         let mut d = String::new();
         t.desc(&mut d);
         d

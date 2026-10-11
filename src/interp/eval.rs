@@ -1935,7 +1935,7 @@ impl<'a, 't> Interp<'a, 't> {
     /// Whether the value is an instance of the class or trait `c`.
     pub(super) fn is_instance(&mut self, v: &Value, c: ClassId) -> bool {
         match v {
-            Value::Obj(o) => self.is_subclass(o.class, c) || self.clause_is_instance(v, c) || self.product_by_rule(o.class, c),
+            Value::Obj(o) => self.is_subclass(o.class, c) || self.clause_is_instance(v, c),
             Value::Fun(f) => {
                 let info = self.syms().class(c);
                 let name = self.name(info.name);
@@ -1987,13 +1987,6 @@ impl<'a, 't> Interp<'a, 't> {
         let Owner::Package(p) = info.owner else { return 0 };
         let pkg = self.package_path(p);
         crate::tir::boxed::ancestor(pkg.strip_suffix('.').unwrap_or(&pkg), self.name(info.name))
-    }
-
-    /// Whether `c` is a parent a product by rule has (`Symbols::is_synthetic_parent`: `Product`,
-    /// `Equals`, `java.io.Serializable`) and `k` such a product (`ClassInfo::is_product_by_rule`),
-    /// which extends none of them.
-    fn product_by_rule(&self, k: ClassId, c: ClassId) -> bool {
-        self.syms().is_synthetic_parent(&self.typer.interner, c) && (self.syms().class(k).is_product_by_rule() || self.syms().class(k).base_types.iter().any(|&(x, _)| self.syms().class(x).is_product_by_rule()))
     }
 
     pub(super) fn is_subclass(&self, k: ClassId, c: ClassId) -> bool {

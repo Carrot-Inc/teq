@@ -80,6 +80,8 @@ impl<'a> Worker<'a> {
         }
         self.given_fast.clear();
         self.head_sigs.clear();
+        self.base_type_cache.clear();
+        self.target_name_files.clear();
         self.package_levels.clear();
         // The infix tuples noted by node (`Worker::infix_tuples`) are of the files' earlier parses.
         self.infix_tuples.retain(|&(f, _), _| !changes.iter().any(|c| c.file == f));

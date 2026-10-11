@@ -109,6 +109,9 @@ pub struct SpaceScratch {
     plain: Vec<PlainCase>,
     classes: Vec<ClassId>,
     covered_classes: Vec<ClassId>,
+    /// Whether a covered class is one `Desugar.classDef` gives (`rule_prefix`), which the
+    /// coverage scans then read too.
+    covered_rule: bool,
     /// The array type of the test `plain` classified last, where the target tests an array by
     /// its elements, and those of the unguarded cases so far.
     array_test: Option<TypeId>,
@@ -133,6 +136,7 @@ impl SpaceScratch {
         self.plain.clear();
         self.classes.clear();
         self.covered_classes.clear();
+        self.covered_rule = false;
         self.array_test = None;
         self.arrays.clear();
         self.roots.clear();
@@ -488,8 +492,16 @@ impl<'t, 'a> Spaces<'t, 'a> {
         })
     }
 
+    /// The bases of `c` a covered class may be among: after the leading classes
+    /// `Desugar.classDef` gives (`rule_prefix`) unless a case covers one of those.
+    fn coverage_bases(&self, c: ClassId) -> &[(ClassId, TypeId)] {
+        let info = self.t.syms.class(c).info;
+        let from = if self.sc.covered_rule { 1 } else { 1 + info.rule_prefix as usize };
+        &info.base_types[from.min(info.base_types.len())..]
+    }
+
     fn covered_by_base(&self, c: ClassId) -> bool {
-        self.t.syms.class(c).base_types.iter().skip(1).any(|(b, _)| self.sc.covered_classes.contains(b))
+        self.coverage_bases(c).iter().any(|(b, _)| self.sc.covered_classes.contains(b))
     }
 
     // ---- plain cases ----
@@ -655,7 +667,7 @@ impl<'t, 'a> Spaces<'t, 'a> {
     fn class_covered(&self, c: ClassId) -> bool {
         let covered = &self.sc.covered_classes;
         covered.contains(&c)
-            || self.t.syms.class(c).base_types.iter().skip(1).any(|(b, _)| covered.contains(b))
+            || self.coverage_bases(c).iter().any(|(b, _)| covered.contains(b))
             // `Int` and `Double` share a run-time type, so a `Double` case takes the `Int`s too.
             || (c == self.t.b.int && covered.contains(&self.t.b.double))
     }
@@ -779,6 +791,7 @@ impl<'t, 'a> Spaces<'t, 'a> {
                         if array.is_none() {
                             for k in classes {
                                 let c = self.sc.classes[k];
+                                self.sc.covered_rule |= self.t.is_desugared_parent(c);
                                 self.sc.covered_classes.push(c);
                             }
                         }

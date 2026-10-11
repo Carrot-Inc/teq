@@ -120,7 +120,9 @@ if grep -q '\$hot' $dir/a.a.mjs; then bad "\$hot without --hot"; else ok; fi
 rm -rf $dir
 timeout 20 "$TEQ" compiler build tests/split/cycle --split $dir --module-per-file a,b --hot > $dir.log 2>&1 || bad "hot build"
 expect "modules under --module-per-file a,b" "$(ls $dir | sort | tr '\n' ' ')" "a.a.mjs app.mjs b.b.mjs hot-build.mjs hot-refresh.mjs main.mjs rt.mjs std.mjs "
-expect "\$hot of a.a.mjs calls its object accessors" "$(grep -o 'function \$hot() {.*}' $dir/a.a.mjs)" 'function $hot() { AConst$(); }'
+# Color's companion is an object of a.a as AConst is: main's `Color.valueOf` is its member
+# (dotty's `enumLookupMethods`).
+expect "\$hot of a.a.mjs calls its object accessors" "$(grep -o 'function \$hot() {.*}' $dir/a.a.mjs)" 'function $hot() { Color$(); AConst$(); }'
 expect "the accessor of AConst reports the object" "$(grep -o 'function AConst\$() {.*}' $dir/a.a.mjs)" 'function AConst$() { return AConst$i ?? $hotObj(new AConst$M(), "a.AConst$"); }'
 # What --hot writes for a development server. Every module ends with a footer that tells the
 # runtime that it ran, with its address and the hash of its text: a --module-per-file module
@@ -138,10 +140,10 @@ held='if (import.meta.hot) { import.meta.hot.accept($hotFailing(import.meta.url)
 expect "main.mjs tells that the page has booted" "$(footer $dir/main.mjs)" 'if (import.meta.hot) $hotBooted(import.meta.url, HASH, ID);'
 expect "a.a.mjs gives its \$hot" "$(footer $dir/a.a.mjs)" "$swapped"
 expect "a.a.mjs gives what app.mjs takes, again once its enum values exist" "$(grep -F '$hotProvide(' $dir/a.a.mjs)" '$hotProvide("a.a");
-$hotProvide("a.a", () => ({ $file17k0ehk, Color$Green, Color$Red, Widget, aTop$, describe }));'
+$hotProvide("a.a", () => ({ $file17k0ehk, Color$, Color$Green, Color$M, Color$Red, Widget, aTop$, describe }));'
 expect "app.mjs imports no per-file module" "$(grep -c '^import .*"\./[ab]\.[ab]\.mjs"' $dir/app.mjs)" "0"
-expect "app.mjs takes a.a's definitions through the runtime" "$(grep -B1 -F '$hotUse("a.a"' $dir/app.mjs)" 'let $file17k0ehk, Color$Green, Color$Red, Widget, aTop$, describe;
-$hotUse("a.a", ($m) => { $file17k0ehk = $m.$file17k0ehk; Color$Green = $m.Color$Green; Color$Red = $m.Color$Red; Widget = $m.Widget; aTop$ = $m.aTop$; describe = $m.describe; });'
+expect "app.mjs takes a.a's definitions through the runtime" "$(grep -B1 -F '$hotUse("a.a"' $dir/app.mjs)" 'let $file17k0ehk, Color$Green, Color$M, Color$, Color$Red, Widget, aTop$, describe;
+$hotUse("a.a", ($m) => { $file17k0ehk = $m.$file17k0ehk; Color$Green = $m.Color$Green; Color$M = $m.Color$M; Color$ = $m.Color$; Color$Red = $m.Color$Red; Widget = $m.Widget; aTop$ = $m.aTop$; describe = $m.describe; });'
 for module in app std rt hot-refresh; do
   expect "$module.mjs must not run again" "$(footer $dir/$module.mjs)" "$held"
 done
@@ -345,7 +347,7 @@ console.log(reported.filter((r) => r.startsWith("a.")).join(" "));
 EOF
 probe=$(cd out/split && timeout 20 node ./small-flags.probe.mjs 2>&1)
 expect "\$enums runs once and \$hot is callable" "$(echo "$probe" | tail -2 | head -1)" "true function A+mode-Fast"
-expect "objects reported under --hot" "$(echo "$probe" | tail -1)" "a.AConst\$:AConst\$M"
+expect "objects reported under --hot" "$(echo "$probe" | tail -1)" "a.AConst\$:AConst\$M a.Color\$:Color\$M"
 timeout 20 "$TEQ" compiler build tests/split/cycle --module-per-file a > $dir.log 2>&1
 expect "--module-per-file without --split" "$?,$(head -c 6 $dir.log)" "2,usage:"
 

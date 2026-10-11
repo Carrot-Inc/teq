@@ -899,9 +899,10 @@ impl<'w, 'a> Walk<'w, 'a> {
         };
         self.count(construct, status, Some(e), ctx);
         let items = prog.expr_list(args);
-        let values = matches!(form, Some(Form::EnumMember(_)));
+        // An enum lookup pickles its key alone (`prims.rs`).
+        let lookup = matches!(form, Some(Form::EnumMember(_)));
         for (i, &a) in items.iter().enumerate() {
-            let pickled = ctx.pickled && !(values && i == 0);
+            let pickled = ctx.pickled && !(lookup && i != 1);
             self.expr(a, Ctx { pickled, param: None, ..ctx });
         }
     }

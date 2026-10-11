@@ -1192,7 +1192,7 @@ impl<'a> Worker<'a> {
                     .iter()
                     .filter_map(|&other| self.syms.class(other).members.get(&name).copied())
                     .any(|s| !self.is_abstract_member(s));
-                if implemented || !self.is_abstract_member(m) {
+                if implemented || !self.is_abstract_member(m) || self.implemented_by_any(m) {
                     continue;
                 }
                 if open.is_some() {
@@ -1454,8 +1454,9 @@ impl<'a> Worker<'a> {
             captures: captures.len(),
             parent_args: None,
             parent_prelude: ast::ListRef::EMPTY,
-            inherited_case_members: 0,
+            synthesized: 0,
             retracted_unapply: false,
+            lists: None,
             init: self.parent_inits(c, &mut Vec::new()),
             methods: vec![f],
             forwarders: Vec::new(),
@@ -1858,12 +1859,19 @@ impl<'a> Worker<'a> {
     /// Whether `c` or a trait it mixes in is nested in a class: the bases an outer accessor is
     /// defined for (`define_outer_accessors_unlocked`).
     fn has_outer_accessor_bases(&self, c: ClassId) -> bool {
-        self.syms.class(c).base_types.iter().any(|&(b, _)| (b == c || self.syms.class(b).kind == ClassKind::Trait) && self.enclosing_instance_class(b).is_some())
+        // The traits `Desugar.classDef` gives (`rule_prefix`) are top-level.
+        let info = self.syms.class(c);
+        let own = std::iter::once(&info.base_types[0]).chain(&info.base_types[1 + info.rule_prefix as usize..]);
+        own.into_iter().any(|&(b, _)| (b == c || self.syms.class(b).kind == ClassKind::Trait) && self.enclosing_instance_class(b).is_some())
     }
 
     pub(super) fn define_outer_accessors_unlocked(&mut self, c: ClassId) -> Vec<FunId> {
         let mut funs = Vec::new();
-        let bases: Vec<ClassId> = self.syms.class(c).base_types.iter().map(|&(b, _)| b).collect();
+        // The traits `Desugar.classDef` gives (`rule_prefix`) are top-level.
+        let bases: Vec<ClassId> = {
+            let info = self.syms.class(c);
+            std::iter::once(&info.base_types[0]).chain(&info.base_types[1 + info.rule_prefix as usize..]).map(|&(b, _)| b).collect()
+        };
         for b in bases {
             if b != c && self.syms.class(b).kind != ClassKind::Trait {
                 continue;

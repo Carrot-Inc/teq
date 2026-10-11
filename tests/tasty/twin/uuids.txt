@@ -5,6 +5,10 @@ bodies/fix/bodies/Pretty.tasty 00ac072766647bec0074c2b833c9e9ca
 calllift/fix/calllift/CallLift.tasty 004f5cd4f8b548b8001effbb083af0f2
 calllift/fix/calllift/LiftExports.tasty 00889a6bed7b49c5008986e1ba9f19d3
 calllift/fix/calllift/LiftShapes.tasty 004dd62878200ec9002a5718bc4bd3b4
+canequal/fix/canequal/CanEqualCalls.tasty 004a4907f60f34da00188cb79caa29a3
+canequal/fix/canequal/CanEqualOpen.tasty 007a49622ef6269100115451d0096dd3
+canequal/fix/canequal/CanEqualOwn.tasty 003357ef2ec347a90091155bde6b21eb
+canequal/fix/canequal/CanEqualPlain.tasty 00d130243b7d809200430e489e310fd0
 casts/fix/casts/CastA.tasty 00b636d295339fe400d0a00ad1da3295
 casts/fix/casts/CastB.tasty 00b536d295339fe400d0940aa1da3e99
 casts/fix/casts/CastLib.tasty 003f8d393df022dc005d25e6b084e5d8

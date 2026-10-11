@@ -1297,7 +1297,7 @@ impl<'a> Worker<'a> {
         }
     }
 
-    fn is_path(&self, e: TExprId) -> bool {
+    pub(super) fn is_path(&self, e: TExprId) -> bool {
         match self.prog.expr(e) {
             TExpr::Module(_) | TExpr::This | TExpr::Super(_) | TExpr::Local(_) | TExpr::Static(_) => true,
             TExpr::Field(recv, _) => self.is_path(recv),
@@ -2106,7 +2106,7 @@ impl<'a> Worker<'a> {
 
     /// `final val x = 1` without a type is a constant in Scala: a use is replaced by the literal
     /// (`constant_value`), another worker's initialiser read through its chunk.
-    fn constant_of(&mut self, s: SymId) -> Option<TExpr> {
+    pub(super) fn constant_of(&mut self, s: SymId) -> Option<TExpr> {
         let mut s = s;
         for _ in 0..8 {
             if let Some(literal) = self.constant_by_signature(s) {
@@ -5838,20 +5838,6 @@ impl<'a> Worker<'a> {
                 member = Some(taken);
                 declared = true;
             }
-        }
-        if let Some(helper) = member.and_then(|(sym, _)| self.product_helper(sym)) {
-            match lists.first_mut() {
-                Some(first) if !first.using => first.args.insert(0, ArgSrc::Typed(recv, recv_ty)),
-                _ => lists.insert(0, ArgList { args: vec![ArgSrc::Typed(recv, recv_ty)], using: false, span }),
-            }
-            let callee = Callee::Method { recv: None, sym: helper, owner_subst: Vec::new(), prefix: None, refined: None };
-            let (te, ty) = self.apply_callee(callee, targs, lists, span, expected);
-            if self.capturing() {
-                if let Some((sym, _)) = member {
-                    self.capture_form(te, Form::Member(sym));
-                }
-            }
-            return (te, ty);
         }
         if member.is_none() {
             // The receiver's path is taken where a recursive refinement is opened at it alone.

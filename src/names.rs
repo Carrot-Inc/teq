@@ -208,4 +208,7 @@ well_known! {
     UNCHECKED_VARIANCE = "uncheckedVariance",
     CONS_TUPLE = "*:",
     ERASED_VALUE = "erasedValue",
+    CAN_EQUAL_METHOD = "canEqual",
+    PRODUCT_ELEMENT_NAME = "productElementName",
+    PRODUCT_ITERATOR = "productIterator",
 }

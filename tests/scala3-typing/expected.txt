@@ -897,7 +897,7 @@ neg/i22752.scala	accepts
 neg/i22792.scala	same	
 neg/i22851.scala	same	
 neg/i22890	oos	java
-neg/i22903.scala	oos	extractors
+neg/i22903.scala	superset	+1 lines: {} needs to be abstract
 neg/i22906.scala	std	1
 neg/i2292.scala	syntax	expected a definition, found {}
 neg/i22941.scala	same	
@@ -1825,7 +1825,7 @@ neg/summon-function.scala	same
 neg/summonFrom-ambiguous-bind.scala	same	
 neg/summonFrom-ambiguous.scala	same	
 neg/summonInline.scala	same	
-neg/supertraits.scala	subset	3/4 lines
+neg/supertraits.scala	same	
 neg/surrogates.scala	syntax	character literal does not fit in a Char
 neg/symlits.scala	superset	+1 lines: No given instance of type scala.quoted.Quotes was found for a quote
 neg/syntax-error-recovery.scala	syntax	expected {}, found {}
@@ -3506,7 +3506,7 @@ pos/i23022.scala	accepts
 pos/i23025.scala	accepts	
 pos/i23032.scala	accepts	
 pos/i23054.scala	accepts	
-pos/i23086.scala	rejects	no given instance
+pos/i23086.scala	accepts	
 pos/i23095	accepts	
 pos/i23113.scala	accepts	
 pos/i23119.scala	accepts	
@@ -4048,7 +4048,7 @@ pos/i7247.scala	accepts
 pos/i7296.scala	accepts	
 pos/i7304.scala	accepts	
 pos/i7342	accepts	
-pos/i7359.scala	rejects	type mismatch
+pos/i7359.scala	accepts	
 pos/i7375.scala	accepts	
 pos/i7383.scala	accepts	
 pos/i739.scala	accepts	
@@ -4847,7 +4847,7 @@ pos/singleton-ops-test-issue-8280.scala	accepts
 pos/singleton-ops-test-issue-8287.scala	accepts	
 pos/singletons.scala	rejects	type mismatch
 pos/singletontrait.scala	accepts	
-pos/sip23-aliasing.scala	rejects	no given instance
+pos/sip23-aliasing.scala	accepts	
 pos/sip23-negative-literals.scala	accepts	
 pos/slick-migration-api-example.scala	accepts	
 pos/so68877939.scala	accepts	
@@ -5177,7 +5177,7 @@ pos/t2441pos.scala	accepts
 pos/t2444.scala	accepts	
 pos/t245.scala	accepts	
 pos/t2454.scala	accepts	
-pos/t247.scala	rejects	{} needs to be abstract
+pos/t247.scala	std	DefaultMap
 pos/t2484.scala	std	JApplet
 pos/t2486.scala	accepts	
 pos/t2500.scala	rejects	type mismatch
@@ -5764,7 +5764,7 @@ pos/traits.scala	accepts
 pos/traits_1.scala	accepts	
 pos/transparent-inline.scala	accepts	
 pos/transparent-intersect.scala	accepts	
-pos/transparent-union.scala	rejects	type mismatch
+pos/transparent-union.scala	accepts	
 pos/tryTyping.scala	accepts	
 pos/tryWithoutHandler.scala	accepts	
 pos/tuple-deconstruct-upcast.scala	accepts	

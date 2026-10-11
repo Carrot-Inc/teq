@@ -312,12 +312,12 @@ pub struct Renames {
 const RUNTIME_CALLED: &[&str] = &[
     "toString", "equals", "hashCode", "foreach", "iterator", "hasNext", "next", "drop", "apply", "applyOrElse",
     "isDefinedAt", "_1", "_2", "constructor", "exception", "productArity", "productElement", "productPrefix",
-    "compareTo",
+    "productElementName", "productIterator", "canEqual", "compareTo",
 ];
 
 /// Property names that the runtime and the emitter put on instances behind a `$`, which a short
 /// name must not meet through the `$` of an accessor-backed field.
-const RUNTIME_PROPERTIES: &[&str] = &["name", "ordinal", "className", "fields", "own", "body", "traitInit", "init"];
+const RUNTIME_PROPERTIES: &[&str] = &["name", "ordinal", "className", "fields", "eqFields", "values", "own", "body", "traitInit", "init"];
 
 impl Renames {
     pub fn compute(

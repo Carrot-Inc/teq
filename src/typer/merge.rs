@@ -1451,6 +1451,7 @@ impl Remap {
             &mut b.js_exception,
             &mut b.cons_tuple,
             &mut b.product,
+            &mut b.equals,
             &mut b.reflect_enum,
             &mut b.tuple_trait,
             &mut b.non_empty_tuple,
@@ -1458,12 +1459,10 @@ impl Remap {
         ] {
             *c = c.map(|c| self.class(c));
         }
-        for (_, s) in &mut b.product_helpers {
-            *s = self.sym(*s);
-        }
         w.sites.class_tag = w.sites.class_tag.map(|c| self.class(c));
         w.sites.not_given_class = w.sites.not_given_class.map(|c| self.class(c));
         w.unit_ops = w.unit_ops.map(|o| o.map(|c| self.class(c)));
+        w.java_serializable = w.java_serializable.map(|o| o.map(|c| self.class(c)));
         w.prog.partial_function = w.prog.partial_function.map(|c| self.class(c));
         w.prog.throwable = w.prog.throwable.map(|c| self.class(c));
         w.prog.js_exception = w.prog.js_exception.map(|c| self.class(c));
@@ -2199,11 +2198,6 @@ impl<'a> Worker<'a> {
                 *mine = theirs;
             }
         }
-        for (k, s) in &ob.product_helpers {
-            if !b.product_helpers.iter().any(|(k2, _)| k2 == k) {
-                b.product_helpers.push((k.clone(), *s));
-            }
-        }
         if self.sites.class_tag.is_none() {
             self.sites.class_tag = o.sites.class_tag;
         }
@@ -2212,6 +2206,9 @@ impl<'a> Worker<'a> {
         }
         if self.unit_ops.is_none() {
             self.unit_ops = o.unit_ops;
+        }
+        if self.java_serializable.is_none() {
+            self.java_serializable = o.java_serializable;
         }
         if self.prog.partial_function.is_none() {
             self.prog.partial_function = o.prog.partial_function;
@@ -2529,6 +2526,8 @@ impl<'a> Worker<'a> {
         self.given_fast.clear();
         self.given_fits.clear();
         self.head_sigs.clear();
+        self.base_type_cache.clear();
+        self.target_name_files.clear();
         self.given_preferences.clear();
         self.given_orders.clear();
         self.implicit_scopes.clear();

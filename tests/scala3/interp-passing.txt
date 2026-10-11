@@ -51,6 +51,7 @@ classof-object
 collective-extensions
 concat-two-strings
 constValueTuple
+constructors
 curried-using-threading
 dead-code-elimination
 defaultGetters
@@ -72,6 +73,7 @@ enum-Option1
 enum-Tree
 enum-approx
 enum-in-trait
+enum-ordinal-java
 enums-precise
 enums-thunk
 erased-inline-product-3
@@ -85,6 +87,8 @@ final-var
 flat-flat-flat
 for-desugar-strawman
 forvaleq
+fully-abstract-nat-1
+fully-abstract-nat-3
 function-arity
 functionXXL
 genericTupleMembers
@@ -103,9 +107,11 @@ i10068b
 i10082
 i10178
 i10285
+i10527
 i10724
 i10857
 i10905
+i1099
 i11008
 i11045
 i1140
@@ -139,6 +145,7 @@ i13146a
 i13183
 i13215
 i13216
+i13304
 i13334
 i13358
 i13490.min
@@ -189,6 +196,7 @@ i16108
 i16213
 i16252
 i16390
+i16728
 i16785
 i17021
 i17021.defs
@@ -201,6 +209,7 @@ i17555
 i17584
 i17584a
 i1773
+i17761
 i1779
 i17930
 i1820
@@ -213,6 +222,7 @@ i18612-d
 i18638
 i18884
 i1915
+i19178
 i19396
 i1960
 i19711
@@ -260,6 +270,7 @@ i2456
 i24573
 i24673
 i24826
+i24877
 i24926
 i25000
 i25000b
@@ -281,6 +292,7 @@ i3248
 i3248b
 i3248c
 i3396
+i3548
 i3624
 i4037
 i4073b
@@ -291,10 +303,12 @@ i4364b
 i4410
 i4430
 i4451
+i4496a
 i4557a
 i4558
 i4559
 i4563
+i4600b
 i4754
 i4935
 i4935b
@@ -329,6 +343,7 @@ i6996
 i7031
 i7110
 i7287
+i7359
 i7375
 i7410
 i7424
@@ -356,6 +371,7 @@ i8903
 i8931
 i9056
 i9132
+i9404
 i9439
 i9473
 i9507
@@ -415,6 +431,8 @@ numeric-range
 opaque-inline2
 option-fold
 ordered
+outer-accessors
+outerPatternMatch
 overload_directly_applicable
 overloads
 partialFunctions
@@ -428,6 +446,7 @@ pure-args-byname-noinline
 puzzle
 puzzler54
 quote-MacroOverride
+quoted-sematics-1
 rainwater
 recursive-with-option
 reduce-projections
@@ -463,6 +482,7 @@ t107
 t1309
 t1333
 t1335
+t13418
 t1360
 t1434
 t1500b
@@ -496,6 +516,7 @@ t3048
 t3088
 t3112
 t3199b
+t3232
 t3242b
 t3269
 t3395
@@ -528,6 +549,7 @@ t4122
 t429
 t4297
 t4351
+t4400
 t4415
 t4482
 t4558
@@ -644,6 +666,7 @@ tuple-product
 tuple-underscore-syntax
 tuples-empty
 typable
+type-test-binding
 unapplyArray
 unroll-inferredFinal
 value-class-partial-func-depmet

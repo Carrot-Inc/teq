@@ -2809,6 +2809,8 @@ impl<'c, 'a> Collector<'c, 'a> {
     /// no class, then the traits; `Product` and `Serializable` after a case class's and a case
     /// object's, `scala.reflect.Enum` after an enum's. Each is a dependency by inheritance.
     fn parents(&mut self, c: ClassId, kind: ClassKind, mods: crate::ast::Mods, parents: &[TypeId]) {
+        // The parents the desugaring gave the class are written after the source's, below.
+        let parents = &parents[..parents.len() - self.w.syms.class(c).desugared_parents as usize];
         let inherit = if self.is_local(c) { Context::LocalInheritance } else { Context::Inheritance };
         let first_class = parents.first().and_then(|&p| self.class_of_parent(p)).filter(|&pc| self.w.syms.class(pc).kind != ClassKind::Trait);
         if first_class.is_none() && self.w.syms.class(c).value_class {

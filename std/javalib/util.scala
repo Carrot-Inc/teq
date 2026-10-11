@@ -1,9 +1,6 @@
 // The Java platform layer for JavaScript, `java.util` and `java.io`: see lang.scala.
 package java.io:
 
-  @jvmClass("java/io/Serializable")
-  trait Serializable extends Any
-
   @jvmClass("java/io/Closeable")
   trait Closeable extends java.lang.AutoCloseable
 

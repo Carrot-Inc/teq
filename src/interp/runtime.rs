@@ -6,6 +6,22 @@ use super::value::*;
 use super::*;
 use crate::symbols::ClassKind;
 
+/// The members of `Product` and `Equals` the rule's product functions read a class's definition of,
+/// by the bit `Interp::product_defs` keeps; any other name is asked for at once.
+const PRODUCT_DEFS: [(u16, crate::intern::Name); 6] = [
+    (1, crate::names::PRODUCT_ITERATOR),
+    (2, crate::names::PRODUCT_ARITY),
+    (4, crate::names::PRODUCT_ELEMENT),
+    (8, crate::names::PRODUCT_PREFIX),
+    (16, crate::names::PRODUCT_ELEMENT_NAME),
+    (32, crate::names::CAN_EQUAL_METHOD),
+];
+const PRODUCT_DEFS_KNOWN: u16 = 1 << 15;
+
+fn product_def_bit(name: crate::intern::Name) -> u16 {
+    PRODUCT_DEFS.iter().find(|&&(_, n)| n == name).map_or(u16::MAX, |&(bit, _)| bit)
+}
+
 impl<'a, 't> Interp<'a, 't> {
     pub(super) fn to_str(&mut self, v: &Value) -> R<String> {
         Ok(match v {
@@ -152,6 +168,9 @@ impl<'a, 't> Interp<'a, 't> {
 
     // ---- products ----
 
+    /// A case class's `toString` by rule, `ScalaRunTime._toString`: `productIterator.mkString(
+    /// productPrefix + "(", ",", ")")`, each read from the fields where the class takes it by
+    /// rule too; a case object's or an enum value's is its name.
     pub(super) fn case_to_string(&mut self, v: &Value) -> R<String> {
         let Value::Obj(o) = v else { return self.to_str(v) };
         if let Some(name) = &o.name {
@@ -162,17 +181,97 @@ impl<'a, 't> Interp<'a, 't> {
         if info.kind == ClassKind::Object || info.local_module.is_some() || info.inner_object.is_some() {
             return Ok(display.to_string());
         }
-        let mut out = display.to_string();
+        // A tuple, of no display name, renders as its own `toString` does.
+        let mut out = if display.is_empty() { String::new() } else { self.product_prefix(v)? };
         out.push('(');
-        for (i, &key) in fields.iter().enumerate() {
-            if i > 0 {
-                out.push(',');
+        let class = o.class;
+        let defs = self.product_defs(class);
+        if defs & product_def_bit(crate::names::PRODUCT_ITERATOR) != 0 {
+            let iterator = self.call_by_name(v.clone(), "productIterator", Vec::new())?;
+            let mut first = true;
+            while self.call_by_name(iterator.clone(), "hasNext", Vec::new())?.as_bool().unwrap_or(false) {
+                let x = self.call_by_name(iterator.clone(), "next", Vec::new())?;
+                if !std::mem::replace(&mut first, false) {
+                    out.push(',');
+                }
+                out.push_str(&self.to_str(&x)?);
             }
-            let field = self.read_slot(v, key);
-            out.push_str(&self.to_str(&field)?);
+        } else if defs & (product_def_bit(crate::names::PRODUCT_ARITY) | product_def_bit(crate::names::PRODUCT_ELEMENT)) != 0 {
+            let arity = self.product_arity(v)?;
+            for i in 0..arity {
+                if i > 0 {
+                    out.push(',');
+                }
+                let x = self.product_element(v, i)?;
+                out.push_str(&self.to_str(&x)?);
+            }
+        } else {
+            for (i, &key) in fields.iter().enumerate() {
+                if i > 0 {
+                    out.push(',');
+                }
+                let field = self.read_slot(v, key);
+                out.push_str(&self.to_str(&field)?);
+            }
         }
         out.push(')');
         Ok(out)
+    }
+
+    /// The definition of `name` an instance of `c` has in the program or a library, which wins
+    /// over what the rule gives a product (dotty's `existingDef`): not `Product`'s or `Equals`'s
+    /// own, nor a template without a body.
+    pub(super) fn defined_member(&mut self, c: ClassId, name: crate::intern::Name) -> Option<Member> {
+        if self.product_defs(c) & product_def_bit(name) == 0 {
+            return None;
+        }
+        self.defined_member_now(c, name)
+    }
+
+    /// Which of the members `PRODUCT_DEFS` names `c` defines (`defined_member_now`), by bit,
+    /// computed once per class: the rule's `toString`, `equals` and `hashCode` ask for them at
+    /// every call.
+    pub(super) fn product_defs(&mut self, c: ClassId) -> u16 {
+        let known = self.product_defs[c.idx()];
+        if known != 0 {
+            return known;
+        }
+        let mut bits = PRODUCT_DEFS_KNOWN;
+        for (bit, name) in PRODUCT_DEFS {
+            if self.defined_member_now(c, name).is_some() {
+                bits |= bit;
+            }
+        }
+        self.product_defs[c.idx()] = bits;
+        bits
+    }
+
+    fn defined_member_now(&mut self, c: ClassId, name: crate::intern::Name) -> Option<Member> {
+        let (product, equals) = (self.typer.b.product, self.typer.equals_class());
+        match self.member(c, name) {
+            Member::Fun(_, k) if Some(k) == product || Some(k) == equals => None,
+            m @ (Member::Fun(..) | Member::Field(_) | Member::Lazy(..)) => Some(m),
+            _ => None,
+        }
+    }
+
+    /// `p.canEqual(that)`: the class's definition, else what the rule gives a case class or case
+    /// object (`that.isInstanceOf[C]`) and `EnumValue` an enum value (`this eq that`); a product
+    /// of no shape compares classes.
+    pub(super) fn can_equal(&mut self, p: &Value, that: &Value) -> R<bool> {
+        let Value::Obj(o) = p else { return Ok(false) };
+        let name = crate::names::CAN_EQUAL_METHOD;
+        if let Some(m) = self.defined_member(o.class, name) {
+            return Ok(self.invoke_member(p.clone(), m, name, vec![that.clone()])?.as_bool().unwrap_or(false));
+        }
+        if o.name.is_some() {
+            return Ok(p.same(that));
+        }
+        let Value::Obj(t) = that else { return Ok(false) };
+        Ok(match self.case_class_of(o.class) {
+            Some(c) => self.is_subclass(t.class, c),
+            None => o.class == t.class,
+        })
     }
 
     pub(super) fn case_equals(&mut self, a: &Value, b: &Value) -> R<bool> {
@@ -182,10 +281,11 @@ impl<'a, 't> Interp<'a, 't> {
         let (Value::Obj(x), Value::Obj(y)) = (a, b) else { return Ok(false) };
         // A case object equals itself alone: one nested in a class has an instance per
         // enclosing instance, and two of them are not equal.
-        if matches!(self.shape(x.class), Shape::CaseObject(_)) {
+        if matches!(self.shape_ref(x.class), Shape::CaseObject(_)) {
             return Ok(false);
         }
-        let Some((fields, _)) = self.case_info(x.class) else { return Ok(false) };
+        // The fields in `SyntheticMembers.equalsBody`'s order, the primitive ones first.
+        let Some(fields) = self.case_compared_fields(x.class) else { return Ok(false) };
         // An instance of a subclass may equal one of the case class itself, as under scalac,
         // when the case class defines no equals of its own.
         let related = if x.class == y.class {
@@ -203,14 +303,15 @@ impl<'a, 't> Interp<'a, 't> {
                 return Ok(false);
             }
         }
-        Ok(true)
+        // `SyntheticMembers.equalsBody`: `that.canEqual(this)` after the fields.
+        self.can_equal(b, a)
     }
 
     fn case_class_of(&mut self, c: ClassId) -> Option<ClassId> {
         let mut at = Some(c);
         let mut steps = 0;
         while let Some(k) = at {
-            if matches!(self.shape(k), Shape::Case(..) | Shape::CaseObject(_)) {
+            if matches!(self.shape_ref(k), Shape::Case(..) | Shape::CaseObject(_)) {
                 return Some(k);
             }
             steps += 1;
@@ -234,6 +335,23 @@ impl<'a, 't> Interp<'a, 't> {
             return Ok(str_hash(&prefix));
         }
         let mut h = mix(PRODUCT_SEED, str_hash(&prefix));
+        // dotty's `SyntheticMembers.chooseHashcode`: reference fields hash through `productArity`
+        // and `productElement` (`MurmurHash3.productHash`), which a class may define.
+        let class = o.class;
+        let defs = self.product_defs(class);
+        let reads_elements = defs & (product_def_bit(crate::names::PRODUCT_ARITY) | product_def_bit(crate::names::PRODUCT_ELEMENT)) != 0;
+        if reads_elements && self.case_class_of(class).is_some_and(|c| crate::tir::hashes_through_elements(&self.typer.syms, &self.typer.types, c)) {
+            let n = self.product_arity(v)?;
+            if n == 0 {
+                return Ok(h);
+            }
+            for i in 0..n {
+                let x = self.product_element(v, i)?;
+                let k = self.hash(&x)?;
+                h = mix(h, k);
+            }
+            return Ok(finalize_hash(h, n));
+        }
         for &key in fields.iter() {
             let field = self.read_slot(v, key);
             let k = self.hash(&field)?;
@@ -242,46 +360,39 @@ impl<'a, 't> Interp<'a, 't> {
         Ok(finalize_hash(h, fields.len() as i32))
     }
 
+    /// `productArity`: the class's definition, else the case fields' count by rule.
     pub(super) fn product_arity(&mut self, v: &Value) -> R<i32> {
         let Value::Obj(o) = v else { return Ok(0) };
-        if let Some((fields, _)) = self.case_info(o.class) {
-            return Ok(fields.len() as i32);
+        let name = crate::names::PRODUCT_ARITY;
+        if let Some(m) = self.defined_member(o.class, name) {
+            return Ok(self.invoke_member(v.clone(), m, name, Vec::new())?.as_i32().unwrap_or(0));
         }
-        let name = self.typer.interner.intern("productArity");
-        let m = self.member(o.class, name);
-        match m {
-            Member::Missing => Ok(0),
-            m => Ok(self.invoke_member(v.clone(), m, name, Vec::new())?.as_i32().unwrap_or(0)),
-        }
+        Ok(self.case_info(o.class).map_or(0, |(fields, _)| fields.len() as i32))
     }
 
+    /// `productElement(i)`: the class's definition, else the case field by rule.
     pub(super) fn product_element(&mut self, v: &Value, i: i32) -> R {
         let Value::Obj(o) = v else { return self.throw_named("IndexOutOfBoundsException", &i.to_string()) };
-        if let Some((fields, _)) = self.case_info(o.class) {
-            // A body of `productElement` the class has, an override of the case class's, answers
-            // as the JVM dispatches it; the case fields stand for the synthesized one alone.
-            let name = self.typer.interner.intern("productElement");
-            if let m @ Member::Fun(..) = self.member(o.class, name) {
-                return self.invoke_member(v.clone(), m, name, vec![Value::Int(i)]);
-            }
-            if i < 0 || i as usize >= fields.len() {
-                return self.throw_named("IndexOutOfBoundsException", &i.to_string());
-            }
-            let x = self.read_slot(v, fields[i as usize]);
-            return Ok(if let Value::Absent = x { Value::Null } else { x });
+        let name = crate::names::PRODUCT_ELEMENT;
+        if let Some(m) = self.defined_member(o.class, name) {
+            return self.invoke_member(v.clone(), m, name, vec![Value::Int(i)]);
         }
-        let name = self.typer.interner.intern("productElement");
-        let m = self.member(o.class, name);
-        match m {
-            Member::Missing => self.throw_named("IndexOutOfBoundsException", &i.to_string()),
-            m => self.invoke_member(v.clone(), m, name, vec![Value::Int(i)]),
+        let Some((fields, _)) = self.case_info(o.class) else { return self.throw_named("IndexOutOfBoundsException", &i.to_string()) };
+        if i < 0 || i as usize >= fields.len() {
+            return self.throw_named("IndexOutOfBoundsException", &i.to_string());
         }
+        let x = self.read_slot(v, fields[i as usize]);
+        Ok(if let Value::Absent = x { Value::Null } else { x })
     }
 
     /// A case class's field name, a class's own `productElementName`, or the empty name of any
     /// other product, as the runtime's `$productElementName` answers.
     pub(super) fn product_element_name(&mut self, v: &Value, i: i32) -> R {
         let Value::Obj(o) = v else { return self.throw_named("IndexOutOfBoundsException", &i.to_string()) };
+        let name = crate::names::PRODUCT_ELEMENT_NAME;
+        if let Some(m) = self.defined_member(o.class, name) {
+            return self.invoke_member(v.clone(), m, name, vec![Value::Int(i)]);
+        }
         let mut at = Some(o.class);
         let mut steps = 0;
         while let Some(k) = at {
@@ -326,12 +437,19 @@ impl<'a, 't> Interp<'a, 't> {
         }
     }
 
+    /// `productPrefix`: the class's definition, else an enum value's name or the class's.
     pub(super) fn product_prefix(&mut self, v: &Value) -> R<String> {
         let Value::Obj(o) = v else { return Ok(String::new()) };
+        let name = crate::names::PRODUCT_PREFIX;
+        if let Some(m) = self.defined_member(o.class, name) {
+            let prefix = self.invoke_member(v.clone(), m, name, Vec::new())?;
+            return self.to_str(&prefix);
+        }
         if let Some(name) = &o.name {
             return Ok(name.to_string());
         }
         match self.case_info(o.class) {
+            Some((fields, display)) if display.is_empty() => Ok(format!("Tuple{}", fields.len())),
             Some((_, display)) => Ok(display.to_string()),
             None => Ok(self.name(self.syms().class(o.class).name).to_string()),
         }

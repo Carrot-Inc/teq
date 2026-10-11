@@ -1,0 +1,8 @@
+46c46
+<     <synthetic> val x$2: Int = (x$0.productElement{(Int): java.lang.Object}(1)).$asInstanceOf${([1]): java.lang.Object}[Int]
+---
+>     <synthetic> val x$1: Int = (x$0.productElement{(Int): java.lang.Object}(1)).$asInstanceOf${([1]): java.lang.Object}[Int]
+48c48
+<     new CanEqualPlain{(java.lang.String, Int, Boolean): fix.canequal.CanEqualPlain}(s$1, x$2, b$1)
+---
+>     new CanEqualPlain{(java.lang.String, Int, Boolean): fix.canequal.CanEqualPlain}(s$1, x$1, b$1)

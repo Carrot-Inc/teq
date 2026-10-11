@@ -1246,10 +1246,10 @@ impl<'a> Worker<'a> {
         self.phase_end(p);
     }
 
-    /// A member of `Product`, whose defaults a class implements without `override`, as the
-    /// abstract members of scalac's `Product` are.
+    /// A member of `Product` or `Equals`, whose runtime templates a class implements without
+    /// `override`, as the abstract members of scalac's `Product` and `Equals` are.
     fn is_product_member(&self, s: SymId) -> bool {
-        matches!(self.syms.sym(s).owner, Owner::Class(c) if Some(c) == self.b.product)
+        matches!(self.syms.sym(s).owner, Owner::Class(c) if Some(c) == self.b.product || Some(c) == self.equals_class())
     }
 
     /// The signature of `sym`, completed on the way, as a borrow for the reads that follow at
@@ -2835,8 +2835,9 @@ impl<'a> Worker<'a> {
             parent_args: None,
             parent_via: None,
             parent_prelude: ast::ListRef::EMPTY,
-            inherited_case_members: 0,
+            synthesized: 0,
             retracted_unapply: false,
+            lists: None,
             init: Vec::new(),
             methods: Vec::new(),
             ctors: Vec::new(),
@@ -2850,6 +2851,15 @@ impl<'a> Worker<'a> {
             tclass.ctor_params.insert(0, outer);
             tclass.ctor_defaults.insert(0, None);
             tclass.captures = 1;
+        }
+        let (synthesized, existing_defs) = self.synthesized_record(c);
+        tclass.synthesized = synthesized;
+        if !existing_defs.is_empty() {
+            tclass.lists_mut().existing_defs = existing_defs;
+        }
+        if tclass.synthesized & synthetic::EQUALS != 0 && crate::tir::equals_reorders(&self.syms, &self.types, c) {
+            let order = crate::tir::equals_order(&self.syms, &self.types, c);
+            tclass.lists_mut().equals_order = order.into_iter().map(|k| k as u16).collect();
         }
         let Some(def_id) = def_id else {
             self.push_class_body(tclass);
@@ -2880,7 +2890,6 @@ impl<'a> Worker<'a> {
             tclass.parent_prelude = call.prelude;
         }
         if def.mods & mods::CASE != 0 {
-            tclass.inherited_case_members = self.inherited_case_members(c);
             tclass.retracted_unapply = self.synthetic_unapply_retracted(c);
         }
         self.selector_bodies(c, &mut tclass);
@@ -2962,18 +2971,21 @@ impl<'a> Worker<'a> {
             for child in children {
                 self.check_class(child);
             }
-            // A synthesized companion is only emitted when it holds the values.
+            // A synthesized companion holds the values of a stateful enum, and the `$values` and
+            // lookups of any (dotty's `enumScaffolding`); it is emitted where it is reached. One
+            // read from the products is the library's, its body converted where it is reached.
             let info = self.syms.class(c);
-            if let (true, Some(companion)) = (info.stateful, info.companion) {
-                if self.syms.class(companion).def.is_none() {
+            if let (false, Some(companion)) = (info.children.is_empty(), info.companion) {
+                if self.syms.class(companion).def.is_none() && !self.is_library_class(companion) {
                     self.check_class(companion);
                 }
             }
         }
         self.check_overrides(c);
         self.check_variances(c);
-        if !matches!(kind, ClassKind::Trait | ClassKind::Enum) && def.mods & mods::ABSTRACT == 0 && !self.is_body_file(file) {
-            tclass.forwarders = self.check_implements_all(c, Abstracts::Declared);
+        if !matches!(kind, ClassKind::Trait | ClassKind::Enum) && def.mods & mods::ABSTRACT == 0 && !self.is_body_file(file) && !self.syms.class(c).parent_failed {
+            let implemented = tclass.synthesized | self.enum_value_parent_members(c) | self.inherited_synthesized(c);
+            tclass.forwarders = self.check_implements_all(c, Abstracts::Declared, implemented);
         }
         if js == JsKind::Object {
             // scalac checked a jar's trait, whose vars come with their setters.
@@ -3104,25 +3116,263 @@ impl<'a> Worker<'a> {
         call.filter(|_| self.syms.class(e).stateful)
     }
 
-    /// Which of `toString`, `equals` and `hashCode` (bits 0 to 2) a case class takes from its
-    /// superclass: it defines none itself, and the first concrete one behind it in the
-    /// linearisation belongs to the superclass or to what that class extends.
-    fn inherited_case_members(&self, c: ClassId) -> u8 {
-        let info = self.syms.class(c);
-        let Some(parent) = info.superclass else { return 0 };
-        let mut kept = 0;
-        for (bit, name) in [names::TO_STRING, names::EQUALS, names::HASH_CODE].into_iter().enumerate() {
-            if info.members.contains_key(&name) {
+    /// The members dotty's `SyntheticMembers.caseAndValueMethods` gives `c` (`TClass::synthesized`),
+    /// with an enum class case's `ordinal`: of its kind's set, those `existingDef` finds no
+    /// definition of.
+    pub(super) fn synthesized_members(&mut self, c: ClassId) -> u16 {
+        self.synthesized_record(c).0
+    }
+
+    /// `synthesized_members` with, for each member of the kind's set that is not synthesized, the
+    /// existing definition `existingDef` found (`TClass::existing_defs`).
+    pub(super) fn synthesized_record(&mut self, c: ClassId) -> (u16, Vec<(u16, SymId)>) {
+        let (kind, is_case, singleton, value_class, is_module) = {
+            let i = self.syms.class(c);
+            let is_module = i.kind == ClassKind::Object || i.local_module.is_some() || i.inner_object.is_some();
+            (i.kind, i.mods & mods::CASE != 0, i.singleton.is_some(), i.value_class, is_module)
+        };
+        let wanted = if kind == ClassKind::EnumCase && singleton {
+            if self.is_java_enum_value(c) { synthetic::PRODUCT_PREFIX } else { synthetic::ENUM_VALUE }
+        } else if kind == ClassKind::EnumCase {
+            // A class case's `ordinal` is `Desugar.enumCaseMeths`'.
+            synthetic::CASE | synthetic::ORDINAL
+        } else if is_case {
+            if is_module { synthetic::CASE & !synthetic::EQUALS } else { synthetic::CASE }
+        } else if value_class {
+            synthetic::VALUE
+        } else {
+            0
+        };
+        if wanted == 0 {
+            return (0, Vec::new());
+        }
+        let superclass = self.syms.class(c).superclass;
+        let held = self.held_rule_names(c);
+        // A member no base can hold a definition of is synthesized without a lookup.
+        let mut synthesized = wanted & !held;
+        let mut existing = Vec::new();
+        let lookups: &[(u16, Name, synthetic::Param)] = if wanted & held == 0 { &[] } else { &synthetic::MEMBERS };
+        for &(bit, name, param) in lookups {
+            if wanted & held & bit == 0 {
                 continue;
             }
-            let definer = info.base_types.iter().skip(1).map(|&(b, _)| b).find(|&b| {
-                self.syms.class(b).members.get(&name).map_or(false, |&m| !self.is_abstract_member(m))
-            });
-            let from_superclass =
-                definer.map_or(false, |b| self.syms.class(parent).base_types.iter().any(|&(x, _)| x == b));
-            kept |= (from_superclass as u8) << bit;
+            let found = self.existing_def_among(c, name, param);
+            if let Some(s) = found {
+                existing.push((bit, s));
+            }
+            match found {
+                None => synthesized |= bit,
+                Some(s) if bit & (synthetic::HASH_CODE | synthetic::EQUALS | synthetic::TO_STRING) != 0 => {
+                    let definer = match self.syms.sym(s).owner {
+                        Owner::Class(k) => Some(k),
+                        _ => None,
+                    };
+                    let inherited = definer.is_some_and(|k| {
+                        k != c && superclass.is_some_and(|p| self.syms.class(p).base_types.iter().any(|&(x, _)| x == k))
+                    });
+                    if inherited {
+                        synthesized |= bit << synthetic::INHERITED;
+                    }
+                }
+                Some(_) => {}
+            }
         }
-        kept
+        if synthesized & synthetic::EQUALS != 0 {
+            // A value class is final (`Namer`).
+            let is_final = self.syms.class(c).mods & mods::FINAL != 0 || value_class;
+            if !is_final || (held & synthetic::CAN_EQUAL != 0 && self.existing_def_among(c, names::CAN_EQUAL_METHOD, synthetic::Param::Any).is_some()) {
+                synthesized |= synthetic::EQUALS_CALLS_CAN_EQUAL;
+            }
+        }
+        (synthesized, existing)
+    }
+
+    /// Whether the rule gives `c` a member named `name` (`synthesized_members`), which is then the
+    /// class's own and overrides what it inherits of the name (dotty's synthesized
+    /// `productPrefix` over `Product`'s and a trait's).
+    pub(super) fn record_synthesizes(&mut self, c: ClassId, name: Name) -> bool {
+        let Some(&(bit, _, _)) = synthetic::MEMBERS.iter().find(|&&(_, n, _)| n == name) else { return false };
+        let info = self.syms.class(c);
+        if info.mods & mods::CASE == 0 && !info.value_class && info.kind != ClassKind::EnumCase {
+            return false;
+        }
+        self.synthesized_members(c) & bit != 0
+    }
+
+    /// The members the rule gives a case class, value class or enum case `c` derives from
+    /// (`class D extends K` of a case class `K`), which implement what `Product` declares.
+    /// Such a base is a class, an enum case or an object being no parent, so it is one of the
+    /// superclasses of `c`.
+    fn inherited_synthesized(&mut self, c: ClassId) -> u16 {
+        let mut by_rule = 0;
+        let mut next = self.syms.class(c).superclass;
+        for _ in 1..self.syms.class(c).base_types.len() {
+            let Some(b) = next else { break };
+            let info = self.syms.class(b);
+            next = info.superclass;
+            let synthesizes = matches!(info.kind, ClassKind::Class | ClassKind::Object | ClassKind::EnumCase)
+                && (info.mods & mods::CASE != 0 || info.value_class || info.kind == ClassKind::EnumCase);
+            if synthesizes {
+                by_rule |= self.synthesized_members(b) | self.enum_value_parent_members(b);
+            }
+        }
+        by_rule
+    }
+
+    /// The members `scala.runtime.EnumValue` gives a value case, a parent of every one
+    /// (`DesugarEnums.enumValueCreator`), which teq leaves to the runtime's rule.
+    fn enum_value_parent_members(&self, c: ClassId) -> u16 {
+        let info = self.syms.class(c);
+        if info.kind == ClassKind::EnumCase && info.singleton.is_some() {
+            synthetic::CAN_EQUAL | synthetic::PRODUCT_ARITY | synthetic::PRODUCT_ELEMENT | synthetic::PRODUCT_ELEMENT_NAME
+        } else {
+            0
+        }
+    }
+
+    /// dotty's `existingDef`: the member of `c` the synthesized one would be, `matchingMember`'s
+    /// first concrete definition of its name and parameter in the linearisation (a lookup takes a
+    /// concrete member over an abstract one of an unrelated parent, while an abstract
+    /// redeclaration hides what it overrides), unless that is the declaration the rule
+    /// implements (`Any`'s, `Product`'s, `Equals`'s, `Enum`'s).
+    /// Asked only for a name some base that can hold a definition has (`held_rule_names`).
+    fn existing_def_among(&mut self, c: ClassId, name: Name, param: synthetic::Param) -> Option<SymId> {
+        let mut abstract_in: Vec<ClassId> = Vec::new();
+        for i in 0..self.syms.class(c).base_types.len() {
+            let (b, bt) = self.syms.class(c).base_types[i];
+            let mut k = 0;
+            while let Some(s) = self.own_alternative(b, name, k) {
+                k += 1;
+                if self.is_private(s) || !self.matches_synthesized_at(s, param, b, bt) {
+                    continue;
+                }
+                if self.is_abstract_member(s) {
+                    abstract_in.push(b);
+                    continue;
+                }
+                // `trait R extends H { override def hashCode: Int }`: the member is R's, deferred.
+                if abstract_in.iter().any(|&a| self.syms.class(a).base_types.iter().any(|&(x, _)| x == b)) {
+                    return None;
+                }
+                return (!self.declares_by_rule(b)).then_some(s);
+            }
+        }
+        None
+    }
+
+    /// Which of the names `synthetic::MEMBERS` gives (their bits) a base of `c` that can hold an
+    /// existing definition has: none whose declarations the rule implements, none without members
+    /// (`java.io.Serializable`). `existingDef` of another name is none (a case class over `Product`
+    /// and `Any` alone), which is told without a lookup per name.
+    fn held_rule_names(&self, c: ClassId) -> u16 {
+        // The rule's names as a names mask: a base whose mask has none of them holds none.
+        const RULE_NAMES: u64 = {
+            let (mut mask, mut i) = (0, 0);
+            while i < synthetic::MEMBERS.len() {
+                mask |= crate::symbols::name_bit(synthetic::MEMBERS[i].1);
+                i += 1;
+            }
+            mask
+        };
+        let mut held = 0;
+        // The leading classes `Desugar.classDef` gives (`rule_prefix`) are the rule's own.
+        let info = self.syms.class(c);
+        for &(b, _) in std::iter::once(&info.base_types[0]).chain(&info.base_types[1 + info.rule_prefix as usize..]) {
+            let bi = self.syms.class(b);
+            if bi.names_mask & RULE_NAMES == 0 || self.declares_by_rule(b) {
+                continue;
+            }
+            for &(bit, name, _) in &synthetic::MEMBERS {
+                if bi.may_have(name) && bi.members.contains_key(&name) {
+                    held |= bit;
+                }
+            }
+        }
+        held
+    }
+
+    /// Whether `b` is a class whose declarations the rule implements (`Any`'s, `Object`'s,
+    /// `Product`'s, `Equals`'s, `Enum`'s).
+    fn declares_by_rule(&self, b: ClassId) -> bool {
+        b == self.b.any_ref || Some(b) == self.b.product || Some(b) == self.equals_class() || Some(b) == self.b.reflect_enum || self.is_java_lang_object(b)
+    }
+
+    /// Whether `m` has the name and the signature, at its own class, of a member of `Product` or
+    /// `Equals` the rule gives (`productElement(n: Int)`, `canEqual(that: Any)`): the member the
+    /// runtime's product functions call by its plain name (`$productElement` and kin).
+    pub(super) fn matches_product_member(&mut self, m: SymId) -> bool {
+        let name = self.syms.sym(m).name;
+        let product = synthetic::PRODUCT_ARITY | synthetic::PRODUCT_ELEMENT | synthetic::PRODUCT_PREFIX | synthetic::PRODUCT_ELEMENT_NAME | synthetic::CAN_EQUAL;
+        synthetic::MEMBERS.iter().any(|&(bit, n, param)| bit & product != 0 && n == name && self.matches_synthesized(m, param))
+    }
+
+    /// Whether `s` has the signature of a member taking `param` by rule: no type parameters, no
+    /// parameter or one empty list (`toString()`), or the one parameter of that type.
+    fn matches_synthesized(&mut self, s: SymId, param: synthetic::Param) -> bool {
+        self.matches_synthesized_under(s, param, &Subst::default())
+    }
+
+    /// `matches_synthesized` of `s`, a member of the base `b` that the class sees as `bt`: its
+    /// signature at the class site, `b`'s type parameters taken as `bt`'s arguments (dotty's
+    /// `matchingMember`, `trait T[A] { def productElement(i: A) }` under `T[Int]`).
+    fn matches_synthesized_at(&mut self, s: SymId, param: synthetic::Param, b: ClassId, bt: TypeId) -> bool {
+        let subst: Subst = match self.types.get(bt) {
+            Type::Class(_, args) => self.syms.class(b).tparams.iter().copied().zip(self.types.items(args).iter().copied()).collect(),
+            _ => Subst::default(),
+        };
+        self.matches_synthesized_under(s, param, &subst)
+    }
+
+    fn matches_synthesized_under(&mut self, s: SymId, param: synthetic::Param, subst: &Subst) -> bool {
+        let sig = self.sig_arc(s);
+        if !sig.tparams.is_empty() {
+            return false;
+        }
+        let param_ty = |w: &mut Self, t: TypeId| {
+            let t = if subst.is_empty() { t } else { w.types.subst(t, subst) };
+            w.deref_alias(t)
+        };
+        match (param, sig.clauses.as_slice()) {
+            (synthetic::Param::None, []) => true,
+            (synthetic::Param::None, [cl]) => cl.params.is_empty(),
+            (synthetic::Param::Any, [cl]) if !cl.is_using && cl.params.len() == 1 => {
+                let t = param_ty(self, cl.params[0].ty);
+                t == ANY || t == self.b.t_any_ref || self.class_of(t).is_some_and(|k| self.is_java_lang_object(k))
+            }
+            (synthetic::Param::Int, [cl]) if !cl.is_using && cl.params.len() == 1 => param_ty(self, cl.params[0].ty) == self.b.t_int,
+            _ => false,
+        }
+    }
+
+    /// Whether the value case `c` is one of an enum extending `java.lang.Enum`.
+    fn is_java_enum_value(&self, c: ClassId) -> bool {
+        let Owner::Class(companion) = self.syms.class(c).owner else { return false };
+        let Some(e) = self.syms.class(companion).companion else { return false };
+        self.syms.class(e).superclass.is_some_and(|s| {
+            let info = self.syms.class(s);
+            self.interner.get(info.name) == "Enum" && matches!(info.owner, Owner::Package(p) if self.pkg_is(p, "java.lang"))
+        })
+    }
+
+    /// Whether `Any`'s concrete `equals`, `hashCode` or `toString` implements the abstract member
+    /// `m` (scala's `Equals.equals`), as the member a lookup finds over a deferred one.
+    pub(super) fn implemented_by_any(&mut self, m: SymId) -> bool {
+        self.synthesized_by_rule(m, synthetic::HASH_CODE | synthetic::EQUALS | synthetic::TO_STRING)
+    }
+
+    /// Whether the member `m` is one of `synthesized`, by its name and parameter.
+    fn synthesized_by_rule(&mut self, m: SymId, synthesized: u16) -> bool {
+        if synthesized == 0 {
+            return false;
+        }
+        let name = self.syms.sym(m).name;
+        synthetic::MEMBERS.iter().any(|&(bit, n, param)| synthesized & bit != 0 && n == name && self.matches_synthesized(m, param))
+    }
+
+    /// `java.lang.Object`, read from a jar or the std's.
+    fn is_java_lang_object(&self, k: ClassId) -> bool {
+        let info = self.syms.class(k);
+        info.name == names::OBJECT && matches!(info.owner, Owner::Package(p) if self.pkg_is(p, "java.lang"))
     }
 
     /// The parent clause that names the superclass of `c`, when the class names one itself rather
@@ -3143,7 +3393,12 @@ impl<'a> Worker<'a> {
             (i.file, i.kind, i.superclass)
         };
         let clause = self.superclass_clause(c, parents);
-        let all_accepted = self.syms.class(c).parents.len() >= parents.len();
+        // The parents the class writes, which the desugaring's follow (`desugared_parents`).
+        let written = {
+            let info = self.syms.class(c);
+            info.parents.len() - info.desugared_parents as usize
+        };
+        let all_accepted = written >= parents.len();
         for p in parents.iter().filter(|_| all_accepted) {
             let of_trait = self.evidence_trait_of(c, p);
             let span = self.ast(file).ty_spans[p.ty.idx()];
@@ -3353,13 +3608,14 @@ impl<'a> Worker<'a> {
     }
 
     /// Whether the body of the trait `b` has statements to run.
-    fn trait_has_statements(&self, b: ClassId) -> bool {
+    pub(super) fn trait_has_statements(&self, b: ClassId) -> bool {
         let info = self.syms.class(b);
         info.kind == ClassKind::Trait && info.has_statements && info.js == JsKind::Scala
     }
 
     pub(super) fn inherits_trait_statements(&self, c: ClassId) -> bool {
-        self.syms.class(c).base_types.iter().skip(1).any(|&(b, _)| self.trait_has_statements(b))
+        let info = self.syms.class(c);
+        info.base_types[1 + info.rule_prefix as usize..].iter().any(|&(b, _)| self.trait_has_statements(b))
     }
 
     /// The trait bodies a constructor of `c` runs, ancestors first as scalac orders them, each
@@ -3374,7 +3630,8 @@ impl<'a> Worker<'a> {
             _ => info.superclass.map(|s| self.syms.class(s).info),
         };
         let mut inits = Vec::new();
-        for &(b, _) in info.base_types.iter().skip(1).rev() {
+        // The traits `Desugar.classDef` gives (`rule_prefix`) take no arguments and run nothing.
+        for &(b, _) in info.base_types[1 + info.rule_prefix as usize..].iter().rev() {
             if let Some(at) = params.iter().position(|(tr, _)| *tr == b) {
                 inits.push(TInit::Parent(b, params.swap_remove(at).1));
             } else if self.trait_has_statements(b)
@@ -3615,6 +3872,18 @@ impl<'a> Worker<'a> {
                 self.class_member_body(sym);
                 if let (Some(_), Some(init)) = (rhs, self.readable_init(sym)) {
                     tclass.init.push(TInit::Field(sym, init));
+                    // dotty's `Memoize`: a constant val's getter answers the constant whatever
+                    // the constructor has run; the record gives the targets that have no type
+                    // store its literal (`TClass::constants`), the right side staying the
+                    // constructor's work where the val stands (`Constructors`).
+                    match crate::tir::constant_val(&self.prog, &self.syms, &self.types, &self.asts, sym, init) {
+                        Some(crate::tir::ConstVal::Declared(l)) => {
+                            let lit = self.literal_expr(self.types.lit_val(l));
+                            tclass.lists_mut().constants.push((sym, lit));
+                        }
+                        Some(crate::tir::ConstVal::Literal) => tclass.lists_mut().constants.push((sym, init)),
+                        None => {}
+                    }
                 }
             }
             DefKind::Fun(_) if def.name == names::INIT => {
@@ -3850,6 +4119,12 @@ impl<'a> Worker<'a> {
             // call reaches the JS primitives that implement it; a default method has a body.
             return match s.owner {
                 Owner::Class(c) if Some(c) == self.b.reflect_enum => true,
+                // So are `Product`'s `productArity` and `productElement` and `Equals`'s
+                // `canEqual`, whose templates answer for the classes the rule gives them
+                // (`SyntheticMembers`): a trait's own `canEqual` implements it.
+                Owner::Class(c) if Some(c) == self.b.product || Some(c) == self.equals_class() => {
+                    matches!(s.name, names::PRODUCT_ARITY | names::PRODUCT_ELEMENT | names::CAN_EQUAL_METHOD) && declared_abstract()
+                }
                 Owner::Class(c) => s.java_defined && self.syms.class(c).kind == ClassKind::Trait && declared_abstract(),
                 _ => false,
             };
@@ -3890,6 +4165,24 @@ impl<'a> Worker<'a> {
     /// there, so what a check read depended on the merges made before it, the workers' order.
     /// The flags only ever turn on, and every merge a body makes is made by the end, so the
     /// decisions made again contain the ones made on the way whatever the order was.
+    /// The names `c`'s bases enter as a mask (their `names_mask`): all a walk of `c`'s own members
+    /// over its bases can meet in their tables, gathered once per class as dotty's `memberNames`
+    /// is, so that a member none of them names goes without a probe of each base.
+    pub(super) fn base_member_names(&self, c: ClassId) -> BaseNames {
+        let mut mask = 0;
+        for &(b, _) in &self.syms.class(c).base_types[1..] {
+            debug_assert!(self.names_mask_covers(b), "the names mask of {} lacks a name of its table", self.class_path(b));
+            mask |= self.syms.class(b).names_mask;
+        }
+        BaseNames(mask)
+    }
+
+    /// Whether `b`'s `names_mask` has the bit of every name of its table and extensions.
+    pub(super) fn names_mask_covers(&self, b: ClassId) -> bool {
+        let bi = self.syms.class(b);
+        bi.members.keys().all(|&n| bi.may_have(n)) && bi.extensions.iter().all(|&e| bi.may_have(self.syms.sym(e).name))
+    }
+
     pub(super) fn decide_override_pairs(&mut self) {
         let pairs = std::mem::take(&mut self.override_pairs);
         if pairs.is_empty() {
@@ -3919,8 +4212,8 @@ impl<'a> Worker<'a> {
             }
             return;
         }
-        // The `@targetName`s of the ancestors' alternatives, gathered once for the selectors.
-        let mut ancestor_targets: Option<Vec<Name>> = None;
+        let mut inherited: Option<BaseNames> = None;
+        let mut targets: Option<Vec<(ClassId, SymId, Name)>> = None;
         for i in 0..self.own_member_count(c) {
             let m = self.own_member(c, i);
             let (name, is_ext, m_mods, has_def) = {
@@ -3936,7 +4229,7 @@ impl<'a> Worker<'a> {
             // A selector is checked where it meets something: dotty's `OverridingPairs.Cursor`
             // pairs a member with the members its ancestors declare of its name, and it carries
             // no modifier the checks below read alone.
-            if m_mods & mods::SELECTOR != 0 && !self.syms.sym(m).alternative && !self.selector_meets_inherited(c, name, &mut ancestor_targets) {
+            if m_mods & mods::SELECTOR != 0 && !self.syms.sym(m).alternative && !self.selector_meets_inherited(c, name, &mut inherited, &mut targets) {
                 continue;
             }
             if m_mods & (mods::LAZY | mods::OVERRIDE) == 0 && self.syms.sym(m).kind == SymKind::Val && self.is_private(m) {
@@ -3950,8 +4243,15 @@ impl<'a> Worker<'a> {
             // Whether `m` overrides a method whose name in the output may not be the plain one,
             // and whether it is overloaded with a method it inherits.
             let (mut named_root, mut overloads_inherited) = (false, false);
-            for j in 1..self.syms.class(c).base_types.len() {
+            // A name none of the bases has meets nothing there (the bases' names gathered once).
+            let named = inherited.get_or_insert_with(|| self.base_member_names(c)).has(name);
+            for j in (1..self.syms.class(c).base_types.len()).filter(|_| named) {
                 let (b, bt) = self.syms.class(c).base_types[j];
+                // A base that declares nothing (`java.io.Serializable`) has nothing to override.
+                let bi = self.syms.class(b);
+                if if is_ext { bi.extensions.is_empty() } else { bi.members.is_empty() } {
+                    continue;
+                }
                 let mut k = 0;
                 while let Some(p) = self.inherited_member(b, name, is_ext, k) {
                     k += 1;
@@ -3995,7 +4295,7 @@ impl<'a> Worker<'a> {
                 self.error_at(m, "abstract override modifier only allowed for members of traits".to_string());
             }
             if self.syms.sym(m).kind == SymKind::Def && !is_ext {
-                self.check_target_name_clashes(c, m);
+                self.check_target_name_clashes(c, m, &mut targets);
             }
             if overrides {
                 continue;
@@ -4012,6 +4312,19 @@ impl<'a> Worker<'a> {
                 Agreement::Params
             };
             let overrides_any = any == Agreement::Same;
+            // Another parameter list beside `Any`'s member of the name is an alternative of it,
+            // named apart in the output (`dispatch_name`).
+            let beside_any = matches!(name, names::TO_STRING | names::HASH_CODE | names::EQUALS)
+                && !is_ext
+                && self.syms.sym(m).kind == SymKind::Def
+                && any == Agreement::Params;
+            if beside_any {
+                if self.alternatives_named {
+                    self.dispatch_name(m);
+                } else {
+                    self.dispatch_pending.push(m);
+                }
+            }
             if any == Agreement::Result {
                 let msg = format!(
                     "error overriding method {} in class Any of type {}: {} of type {} has incompatible type",
@@ -4029,10 +4342,13 @@ impl<'a> Worker<'a> {
                 self.error_at(m, msg);
             }
         }
-        if self.syms.class(c).parents.len() > 1 {
+        // A pair of members of two bases is checked here only where no one parent derives from
+        // both owners (dotty's `OverridingPairs.isHandledByParent`): the precheck tells.
+        let shared = self.syms.class(c).parents.len() > 1 && self.bases_share_a_name(c, true);
+        if shared {
             self.check_inherited_pairs(c);
         }
-        if self.syms.class(c).base_types.len() > 2 {
+        if shared && self.syms.class(c).base_types.len() > 2 {
             self.check_final_overrides(c);
         }
         if self.syms.class(c).inherits_types {
@@ -4266,6 +4582,7 @@ impl<'a> Worker<'a> {
     /// implements. Two concrete ones are the conflict that `set_parents` reports. A pair that a
     /// direct parent inherits as well was checked with that parent.
     #[cold]
+    /// Asked where two parents' bases share a name (`bases_share_a_name`).
     fn check_inherited_pairs(&mut self, c: ClassId) {
         let bases: Vec<(ClassId, TypeId)> = self.syms.class(c).base_types[1..].to_vec();
         let direct: Vec<ClassId> = self.syms.class(c).parents.clone().iter().filter_map(|&p| self.class_of(p)).collect();
@@ -4280,6 +4597,10 @@ impl<'a> Worker<'a> {
                 }
                 let name = self.syms.sym(m).name;
                 let earlier_ones = seen.entry(name).or_default();
+                if earlier_ones.is_empty() {
+                    earlier_ones.push((m, b, bt));
+                    continue;
+                }
                 let earlier_ones: Vec<(SymId, ClassId, TypeId)> = {
                     earlier_ones.push((m, b, bt));
                     earlier_ones[..earlier_ones.len() - 1].to_vec()
@@ -4553,30 +4874,65 @@ impl<'a> Worker<'a> {
     }
 
     /// Whether an ancestor of `c` declares a member called `name`, or an alternative whose
-    /// `@targetName` is `name`, which `check_target_name_clashes` compares; those names are
-    /// gathered once per class into `targets`.
-    fn selector_meets_inherited(&mut self, c: ClassId, name: Name, targets: &mut Option<Vec<Name>>) -> bool {
-        let bases = self.syms.class(c).base_types.len();
-        for j in 1..bases {
-            let b = self.syms.class(c).base_types[j].0;
-            if self.syms.class(b).members.contains_key(&name) {
-                return true;
+    /// `@targetName` is `name`, which `check_target_name_clashes` compares: the bases' names
+    /// (`base_member_names`) and the ancestors' target names (`inherited_targets`) gathered once
+    /// per class, a base whose names lack `name` passed over.
+    fn selector_meets_inherited(&mut self, c: ClassId, name: Name, names: &mut Option<BaseNames>, targets: &mut Option<Vec<(ClassId, SymId, Name)>>) -> bool {
+        if names.get_or_insert_with(|| self.base_member_names(c)).has(name) {
+            for j in 1..self.syms.class(c).base_types.len() {
+                let bi = self.syms.class(self.syms.class(c).base_types[j].0);
+                if bi.may_have(name) && bi.members.contains_key(&name) {
+                    return true;
+                }
             }
         }
-        if targets.is_none() {
-            let mut found = Vec::new();
-            for j in 1..bases {
-                let b = self.syms.class(c).base_types[j].0;
-                for k in 0..self.syms.class(b).member_order.len() {
-                    let q = self.syms.class(b).member_order[k];
-                    if self.syms.sym(q).alternative {
-                        found.extend(self.declared_target_name(q));
+        self.inherited_targets(c, targets);
+        targets.as_ref().is_some_and(|t| t.iter().any(|&(_, _, t)| t == name))
+    }
+
+    /// The alternatives of `c`'s ancestors that declare a `@targetName`, with their bases and
+    /// names, gathered into `targets` where it is empty.
+    fn inherited_targets(&mut self, c: ClassId, targets: &mut Option<Vec<(ClassId, SymId, Name)>>) {
+        if targets.is_some() {
+            return;
+        }
+        let mut found = Vec::new();
+        // The classes `Desugar.classDef` gives (`rule_prefix`) declare none.
+        for j in 1 + self.syms.class(c).rule_prefix as usize..self.syms.class(c).base_types.len() {
+            let b = self.syms.class(c).base_types[j].0;
+            if !self.file_declares_target_name(self.syms.class(b).file) {
+                continue;
+            }
+            for k in 0..self.syms.class(b).member_order.len() {
+                let q = self.syms.class(b).member_order[k];
+                if self.syms.sym(q).alternative {
+                    if let Some(t) = self.declared_target_name(q) {
+                        found.push((b, q, t));
                     }
                 }
             }
-            *targets = Some(found);
         }
-        targets.as_ref().is_some_and(|t| t.contains(&name))
+        *targets = Some(found);
+    }
+
+    /// Whether a definition of `f` carries `@targetName` (`Worker::target_name_files`), read
+    /// once per file.
+    pub(super) fn file_declares_target_name(&mut self, f: crate::source::FileId) -> bool {
+        let i = f.0 as usize;
+        match self.target_name_files.get(i) {
+            Some(1) => return false,
+            Some(2) => return true,
+            _ => {}
+        }
+        let declares = match self.interner.lookup("targetName") {
+            Some(name) => self.ast(f).defs.iter().any(|d| d.annots.iter().any(|a| a.name == name)),
+            None => false,
+        };
+        if self.target_name_files.len() <= i {
+            self.target_name_files.resize(i + 1, 0);
+        }
+        self.target_name_files[i] = 1 + declares as u8;
+        declares
     }
 
     fn declared_target_name(&mut self, m: SymId) -> Option<Name> {
@@ -4588,26 +4944,22 @@ impl<'a> Worker<'a> {
     }
 
     /// scalac's E120 for an inherited member: a method whose `@targetName` is the name of an
-    /// inherited method of the same erased signature.
-    fn check_target_name_clashes(&mut self, c: ClassId, m: SymId) {
-        let bases: Vec<(ClassId, TypeId)> = self.syms.class(c).base_types[1..].to_vec();
+    /// inherited method of the same erased signature. `inherited` holds the bases' alternatives
+    /// that declare a target name, gathered once per class.
+    fn check_target_name_clashes(&mut self, c: ClassId, m: SymId, inherited: &mut Option<Vec<(ClassId, SymId, Name)>>) {
         let own_name = self.syms.sym(m).name;
         let mut candidates: Vec<(ClassId, SymId, Name)> = Vec::new();
         if let Some(target) = self.declared_target_name(m) {
-            for &(b, _) in &bases {
-                if let Some(&q) = self.syms.class(b).members.get(&target) {
+            for j in 1..self.syms.class(c).base_types.len() {
+                let b = self.syms.class(c).base_types[j].0;
+                let bi = self.syms.class(b);
+                if let Some(&q) = bi.may_have(target).then(|| bi.members.get(&target)).flatten() {
                     candidates.push((b, q, target));
                 }
             }
         }
-        for &(b, _) in &bases {
-            let alternatives: Vec<SymId> = self.syms.class(b).member_order.iter().copied().filter(|&s| self.syms.sym(s).alternative).collect();
-            for q in alternatives {
-                if self.declared_target_name(q) == Some(own_name) {
-                    candidates.push((b, q, own_name));
-                }
-            }
-        }
+        self.inherited_targets(c, inherited);
+        candidates.extend(inherited.as_ref().unwrap().iter().copied().filter(|&(_, _, t)| t == own_name));
         for (b, q, target) in candidates {
             if self.syms.sym(q).kind != SymKind::Def || self.is_private(q) {
                 continue;
@@ -4651,9 +5003,17 @@ impl<'a> Worker<'a> {
     /// scalac's check along the linearisation: what an earlier ancestor defines cannot override
     /// a final member of a later one.
     fn check_final_overrides(&mut self, c: ClassId) {
-        let bases: Vec<(ClassId, TypeId)> = self.syms.class(c).base_types.clone();
-        for j in 2..bases.len() {
-            let (b, bt) = bases[j];
+        // The names of the bases before the one at hand: a final member no earlier base names
+        // meets nothing there (their names masks).
+        let mut earlier = self.syms.class(self.syms.class(c).base_types[1].0).names_mask;
+        for j in 2..self.syms.class(c).base_types.len() {
+            let (b, bt) = self.syms.class(c).base_types[j];
+            let mask = self.syms.class(b).names_mask;
+            let meets = mask & earlier != 0;
+            earlier |= mask;
+            if !meets {
+                continue;
+            }
             let finals: Vec<SymId> = self
                 .syms
                 .class(b)
@@ -4668,7 +5028,7 @@ impl<'a> Worker<'a> {
             for p in finals {
                 let name = self.syms.sym(p).name;
                 for i in 1..j {
-                    let (a, at) = bases[i];
+                    let (a, at) = self.syms.class(c).base_types[i];
                     let Some(&m) = self.syms.class(a).members.get(&name) else { continue };
                     if self.syms.sym(m).owner != Owner::Class(a) || self.syms.alternatives(m).is_some() || self.syms.sym(m).kind != SymKind::Def {
                         continue;
@@ -4965,25 +5325,51 @@ impl<'a> Worker<'a> {
             }
             let nested = self.syms.class(c).base_types.iter().skip(1).any(|&(b, _)| self.outer_accessors.get(&b).is_some());
             if nested {
-                self.check_implements_all(c, Abstracts::OuterAccessors);
+                self.check_implements_all(c, Abstracts::OuterAccessors, 0);
             }
         }
     }
 
     /// Returns the abstract members that an export clause of `c` implements, with their targets.
-    fn check_implements_all(&mut self, c: ClassId, which: Abstracts) -> Vec<(SymId, SymId)> {
-        let bases: Vec<(ClassId, TypeId)> = self.syms.class(c).base_types.clone();
+    /// A member of `synthesized` (`TClass::synthesized`) is implemented by rule.
+    fn check_implements_all(&mut self, c: ClassId, which: Abstracts, synthesized: u16) -> Vec<(SymId, SymId)> {
+        // The base types as a list of the check's own, made where an abstract member is to be
+        // matched: most classes inherit none.
+        let mut copied: Option<Vec<(ClassId, TypeId)>> = None;
         let mut missing: Vec<(String, SymId, TypeId)> = Vec::new();
         // A member left unimplemented beside an incomplete definition of its name, whose body
         // is unknown rather than missing.
         let mut unknown = false;
         let mut forwarders = Vec::new();
+        // The class's own deferred declarations of what the rule gives it.
+        let mut own_deferred: Vec<SymId> = Vec::new();
         // A concrete class's own members without a body too (`class C { given x: Int }`), as
         // scalac's "needs to be abstract"; an object's are E067 (`misplaced_abstract_member`).
         let own = (which == Abstracts::Declared && self.syms.class(c).kind == ClassKind::Class) as usize;
-        for &(b, bt) in bases.iter().skip(1 - own) {
-            let members = self.syms.class(b).member_order.clone();
-            for m in members.into_iter().chain(self.syms.class(b).extensions.clone()) {
+        // A case class or object and an enum case are given every abstract member of `Product`,
+        // `Equals` and `Enum` by rule or have an existing definition of it (`SyntheticMembers`),
+        // so those parents need no walk.
+        let completed_by_rule = {
+            let info = self.syms.class(c);
+            which == Abstracts::Declared && (info.mods & mods::CASE != 0 || info.kind == ClassKind::EnumCase)
+        };
+        // Of a class completed by rule, the leading classes `Desugar.classDef` gives
+        // (`rule_prefix`) are passed over without a visit.
+        let prefix = if completed_by_rule { 1 + self.syms.class(c).rule_prefix as usize } else { 1 };
+        for j in ((1 - own)..1.min(self.syms.class(c).base_types.len())).chain(prefix..self.syms.class(c).base_types.len()) {
+            let (b, bt) = self.syms.class(c).base_types[j];
+            if completed_by_rule && self.is_desugared_parent(b) {
+                continue;
+            }
+            // The base's members and then its extensions, read in place.
+            let mut i = 0;
+            while let Some(m) = {
+                let bi = self.syms.class(b);
+                let declared = bi.member_order.len();
+                let at = if i < declared { bi.member_order.get(i) } else { bi.extensions.get(i - declared) };
+                i += 1;
+                at.copied()
+            } {
                 // A deferred given is implemented by the search, or reported there.
                 if !self.is_abstract_member(m) || self.is_deferred_given(m) {
                     continue;
@@ -4997,21 +5383,31 @@ impl<'a> Worker<'a> {
                 }
                 let name = self.syms.sym(m).name;
                 let is_ext = self.syms.sym(m).is_extension;
+                if !is_ext && self.synthesized_by_rule(m, synthesized) {
+                    // The member the rule gives implements what the class inherits; its own
+                    // deferred declaration stays one (`RefChecks.checkNoAbstractDecls`).
+                    if b == c {
+                        own_deferred.push(m);
+                    }
+                    continue;
+                }
                 // `Any`'s `toString`, `hashCode` and `equals` implement an abstract redeclaration of
                 // theirs (scala-library's `Equals.equals`), as dotty's `RefChecks.isImplemented`
                 // finds a concrete member matching it loosely with the parameter types compared
                 // (`matchesLoosely(.., alwaysCompareTypes = true)`, relaxed on the result): one of
                 // `Any`'s parameters, not an `equals(s: String)`, a type incompatible otherwise
-                // being the override check's error. An inherited one: the class's own hides `Any`'s
-                // among its members (`nonPrivateMembersNamed`), except in a case class, whose are
-                // synthesized over a deferred one (`SyntheticMembers.existingDef`).
-                let case_class = self.syms.class(c).mods & mods::CASE != 0;
-                if matches!(name, names::TO_STRING | names::HASH_CODE | names::EQUALS) && (b != c || case_class) && self.any_member_agreement(m) != Agreement::Params {
+                // being the override check's error. A trait's: its deferred member meets the
+                // concrete one of the superclass chain among the class's members, the concrete
+                // preferred (`Denotations.mergeSingleDenot`); the class's or a superclass's own
+                // hides `Any`'s (`computeMembersNamed`).
+                let from_trait = self.syms.class(b).kind == ClassKind::Trait;
+                if from_trait && matches!(name, names::TO_STRING | names::HASH_CODE | names::EQUALS) && self.any_member_agreement(m) != Agreement::Params {
                     continue;
                 }
                 // The class's own member is the most derived: whatever of its name it inherits it
                 // overrides, which implements nothing of it (`class C extends T { override def x:
                 // Int }` over a concrete `T.x`).
+                let bases: &Vec<(ClassId, TypeId)> = copied.get_or_insert_with(|| self.syms.class(c).base_types.clone());
                 let implemented = bases.iter().enumerate().filter(|&(i, _)| b != c || i == 0).any(|(i, &(other, ot))| {
                     let mut k = 0;
                     while let Some(s) = self.inherited_member(other, name, is_ext, k) {
@@ -5067,6 +5463,7 @@ impl<'a> Worker<'a> {
             }
         }
         if !missing.is_empty() && self.link_mode() {
+            let bases = copied.take().unwrap_or_else(|| self.syms.class(c).base_types.clone());
             missing.retain(|&(_, m, bt)| !self.inherited_export_implements(c, &bases, m, bt));
         }
         if !missing.is_empty() {
@@ -5076,8 +5473,33 @@ impl<'a> Worker<'a> {
             missing.sort_by(|a, b| a.0.cmp(&b.0));
             missing.dedup_by(|a, b| a.0 == b.0);
             self.report_unimplemented(c, &missing, unknown);
+        } else if !own_deferred.is_empty() {
+            self.report_deferred_declarations(c, &own_deferred);
         }
         forwarders
+    }
+
+    /// dotty's `RefChecks.checkNoAbstractDecls`, which runs where every member is implemented: a
+    /// concrete class's own deferred declaration that nothing below it implements, here one of a
+    /// member the rule gives the class beside it (`case class C(x: Int) { override def toString:
+    /// String }`).
+    #[cold]
+    fn report_deferred_declarations(&mut self, c: ClassId, decls: &[SymId]) {
+        let (span, file) = {
+            let i = self.syms.class(c);
+            (i.span, i.file)
+        };
+        let mut errors = vec![format!("{} needs to be abstract, since", self.class_description(c))];
+        for &m in decls {
+            // dotty's `infoString`: a method without parameters is of type `=> T`.
+            let parameterless = self.syms.sym(m).kind == SymKind::Def && self.sig_of(m).clauses.is_empty();
+            let ty = self.sig_string(m);
+            let what = format!("{} of type {}{}", self.member_description(m, None), if parameterless { "=> " } else { "" }, ty);
+            errors.push(format!("there is a deferred declaration of {} which is not implemented in a subclass", what));
+        }
+        // dotty's `abstractErrorMessage`.
+        let msg = if errors.len() <= 2 { errors.join(" ") } else { format!("{}:\n{}", errors[0], errors[1..].join("\n")) };
+        self.diags.error(file, span, msg);
     }
 
     /// Whether an export of a class above `c` implements the abstract member `m`, which nothing else
@@ -5560,6 +5982,7 @@ impl<'a> Worker<'a> {
     fn mark_accessors_unlocked(&mut self, c: ClassId) {
         let bases: Vec<ClassId> = self.syms.class(c).base_types.iter().map(|&(b, _)| b).skip(1).collect();
         let members = self.syms.class(c).member_order.clone();
+        let mut inherited: Option<BaseNames> = None;
         for m in members {
             // The setter of an abstract var is declared in the output whether or not a call
             // has completed it.
@@ -5589,7 +6012,9 @@ impl<'a> Worker<'a> {
             // the reach checks after the final passes (a library's subclass) takes it from its base
             // here, the ones checked before in `settle_val_accessors`.
             let mut over_accessor = false;
-            for &b in &bases {
+            // A name none of the bases has meets nothing there (the bases' names gathered once).
+            let named = inherited.get_or_insert_with(|| self.base_member_names(c)).has(name);
+            for &b in bases.iter().filter(|_| named) {
                 let Some(p) = self.syms.class(b).members.get(&name).copied() else { continue };
                 if self.syms.sym(p).kind != SymKind::Def {
                     let info = self.syms.sym(p);
@@ -5617,7 +6042,7 @@ impl<'a> Worker<'a> {
             } else if self.syms.class(c).has_overloads {
                 // The alternative without parameters of an overloaded name, whose name in the
                 // output the accessor takes.
-                let implemented = bases.iter().find_map(|&b| {
+                let implemented = bases.iter().filter(|_| named).find_map(|&b| {
                     let mut k = 0;
                     while let Some(p) = self.own_alternative(b, name, k) {
                         k += 1;
@@ -5867,4 +6292,16 @@ enum Boundary {
     Root,
     Class(ClassId),
     Package(PkgId),
+}
+
+/// The names of a class's bases, a bit each (`Worker::base_member_names`).
+#[derive(Clone, Copy)]
+pub(super) struct BaseNames(u64);
+
+impl BaseNames {
+
+    /// Whether a base may have the name: false only where none has.
+    pub(super) fn has(self, n: Name) -> bool {
+        self.0 & crate::symbols::name_bit(n) != 0
+    }
 }

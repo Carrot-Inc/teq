@@ -58,6 +58,9 @@ struct FieldDef {
     lazy_owner: Option<ClassId>,
     init: Option<TExprId>,
     mutable: bool,
+    /// A `final val` of a constant type (`tir::constant_val`): no field, a getter answering the
+    /// constant, the initialiser run for its effects where it is no literal.
+    constant: Option<ConstVal>,
 }
 
 impl<'a> Gen<'a> {
@@ -438,22 +441,47 @@ impl<'a> Gen<'a> {
         self.end_method(ACC_PUBLIC | ACC_STATIC, &format!("{}$", name), &method_desc(&types, ret));
     }
 
-    /// A trait's `final val` of a constant type (`final val limit = 5`), whose getter scalac
-    /// writes in the trait itself, a default method answering the constant: no class mixing the
-    /// trait in has a field, a getter or a setter for it.
-    /// It is one as the typer's `constant_step` has it: written without a type or with a literal
-    /// one, its initialiser a literal.
-    fn is_trait_constant(&self, s: SymId, init: TExprId) -> bool {
-        let cx = self.cx;
-        let info = cx.input.syms.sym(s);
-        let untyped = info.def.map_or(false, |d| matches!(cx.input.asts[info.file.0 as usize].def(d).kind, crate::ast::DefKind::Val { ty: None, .. }))
-            || info.sig.as_ref().map_or(false, |sig| matches!(cx.input.types.get(sig.ret), Type::Lit(_)));
-        info.kind == SymKind::Val
-            && info.mods & mods::FINAL != 0
-            && info.mods & (mods::LAZY | mods::GIVEN) == 0
-            && matches!(info.owner, Owner::Class(t) if cx.is_interface(t))
-            && untyped
-            && matches!(cx.input.prog.expr(init), TExpr::Int(_) | TExpr::Long(_) | TExpr::Double(_) | TExpr::Bool(_) | TExpr::Char(_) | TExpr::Str(_))
+    /// dotty's `isConstExprFinalVal` of the val `s` initialised with `init` (`tir::constant_val`):
+    /// no field holds it, in its class or a class that mixes its trait in.
+    fn constant(&self, s: SymId, init: TExprId) -> Option<ConstVal> {
+        let input = &self.cx.input;
+        constant_val(input.prog, input.syms, input.types, input.asts, s, init)
+    }
+
+    /// The constant a constant val's getter answers: its literal initialiser, or the literal
+    /// type it declares (`Memoize.transformDefDef`).
+    fn constant_value(&mut self, constant: Option<ConstVal>, init: TExprId, ty: &JType) {
+        let Some(ConstVal::Declared(l)) = constant else {
+            self.expr(init, ty);
+            return;
+        };
+        let pushed = match self.cx.input.types.lit_val(l) {
+            LitVal::Int(v) => {
+                self.iconst(v);
+                JType::I
+            }
+            LitVal::Long(v) => {
+                self.lconst(v);
+                JType::J
+            }
+            LitVal::Double(bits) => {
+                self.dconst(f64::from_bits(bits));
+                JType::D
+            }
+            LitVal::Char(c) => {
+                self.iconst(c as i32);
+                JType::C
+            }
+            LitVal::Bool(b) => {
+                self.iconst(b as i32);
+                JType::Z
+            }
+            LitVal::Str(n) => {
+                self.sconst(self.cx.input.interner.get(n));
+                JType::L(Rc::from(STRING))
+            }
+        };
+        self.adapt(&pushed, ty);
     }
 
     /// The value of default `d` as its getter returns it: a by-name parameter's default is typed
@@ -674,27 +702,35 @@ impl<'a> Gen<'a> {
             None => Rc::from(OBJECT),
         };
         let mut interfaces: Vec<String> = Vec::new();
+        let mut listed: Vec<ClassId> = enum_class.or(superclass).into_iter().collect();
+        let mut desugared: Vec<ClassId> = Vec::new();
         // A library class the std's stands for (`link_library_class`) goes by the same name.
         for &(b, _) in info.base_types.iter().skip(1) {
             let bname = &cx.class_names[b.idx()];
             if syms.class(b).kind == ClassKind::Trait && syms.class(b).js == JsKind::Scala && **bname != *name && !interfaces.contains(bname) {
+                if is_desugared_parent(syms, cx.input.interner, b) {
+                    desugared.push(b);
+                    continue;
+                }
                 interfaces.push(bname.clone());
+                listed.push(b);
             }
         }
-        // The parents a product by rule has (`ClassInfo::is_product_by_rule`, `Desugar.classDef`).
-        if info.is_product_by_rule() {
-            for parent in [PRODUCT, SERIALIZABLE] {
-                if !interfaces.iter().any(|i| i == parent) {
-                    interfaces.push(parent.to_string());
-                }
+        // The parents `Desugar.classDef` gives (`Product` and `java.io.Serializable`, an enum's
+        // `Enum`) as scalac's backend lists them: in the order of the parents clause, the reverse
+        // of the linearisation's, less one another parent or the superclass brings
+        // (`directlyInheritedTraits` less the redundant, `CoreBTypesFromSymbols`): `Product` alone
+        // below `RuntimeException`, `Enum` alone for an enum.
+        desugared.reverse();
+        for (i, &d) in desugared.iter().enumerate() {
+            let brought = listed.iter().chain(desugared.iter().enumerate().filter(|&(j, _)| j != i).map(|(_, k)| k)).any(|&k| syms.class(k).base_types.iter().skip(1).any(|&(x, _)| x == d));
+            if !brought {
+                interfaces.push(cx.class_names[d.idx()].to_string());
             }
         }
         // A case object is its own mirror, as scalac's: `Mirror.Singleton`.
         if is_case_object && !interfaces.iter().any(|i| i == super::callable::MIRROR_SINGLETON) {
             interfaces.push(super::callable::MIRROR_SINGLETON.to_string());
-        }
-        if is_enum {
-            interfaces.push(ENUM.to_string());
         }
         let case_companion = info.companion.filter(|&k| is_object && cx.has_case_companion(k));
         if case_companion.map_or(false, |k| cx.has_product_mirror(k)) && !interfaces.iter().any(|i| i == super::callable::MIRROR_PRODUCT) {
@@ -735,7 +771,7 @@ impl<'a> Gen<'a> {
         }
 
         let fields = if is_trait { Vec::new() } else { self.class_fields(tc, n_captures) };
-        for f in &fields {
+        for f in fields.iter().filter(|f| f.constant.is_none()) {
             let mut d = String::new();
             let stored = if f.lazy { JType::object() } else { f.ty.clone() };
             stored.desc(&mut d);
@@ -993,6 +1029,14 @@ impl<'a> Gen<'a> {
                     if f.lazy {
                         continue;
                     }
+                    // `Constructors`: a constant's initialiser that is no literal runs for its
+                    // effects alone.
+                    if let Some(constant) = f.constant {
+                        if let ConstVal::Declared(_) = constant {
+                            self.statement(e);
+                        }
+                        continue;
+                    }
                     self.load(slot, this);
                     self.expr(e, &f.ty);
                     self.putfield(&owner, &f.name, &f.ty);
@@ -1124,7 +1168,7 @@ impl<'a> Gen<'a> {
         for &p in &tc.ctor_params[captures..] {
             let ty = self.sym_type(p);
             let name = self.field_name(p);
-            out.push(FieldDef { sym: p, name, ty, lazy: false, lazy_owner: None, init: None, mutable: syms.sym(p).kind == SymKind::Var });
+            out.push(FieldDef { sym: p, name, ty, lazy: false, lazy_owner: None, init: None, mutable: syms.sym(p).kind == SymKind::Var, constant: None });
         }
         for init in &tc.init {
             let TInit::Field(s, e) = *init else { continue };
@@ -1136,7 +1180,8 @@ impl<'a> Gen<'a> {
             let ty = self.sym_type(s);
             let name = self.field_name(s);
             let lazy = self.is_lazy_member(s);
-            out.push(FieldDef { sym: s, name, ty, lazy, lazy_owner: None, init: Some(e), mutable: syms.sym(s).kind == SymKind::Var });
+            let constant = self.constant(s, e);
+            out.push(FieldDef { sym: s, name, ty, lazy, lazy_owner: None, init: Some(e), mutable: syms.sym(s).kind == SymKind::Var, constant });
         }
         let inherited = self.traits_implemented_above(tc.id);
         let bases: Vec<ClassId> = syms.class(tc.id).base_types.iter().skip(1).map(|&(b, _)| b).collect();
@@ -1160,7 +1205,7 @@ impl<'a> Gen<'a> {
                 held_syms.insert(p, ());
                 held_names.insert(name.clone(), ());
                 let ty = self.sym_type(p);
-                out.push(FieldDef { sym: p, name, ty, lazy: false, lazy_owner: None, init: None, mutable: syms.sym(p).kind == SymKind::Var });
+                out.push(FieldDef { sym: p, name, ty, lazy: false, lazy_owner: None, init: None, mutable: syms.sym(p).kind == SymKind::Var, constant: None });
             }
             if idx == u32::MAX {
                 let read = self.class_file_trait_fields(b);
@@ -1180,7 +1225,7 @@ impl<'a> Gen<'a> {
                 let TInit::Field(s, e) = *init else { continue };
                 // A constant is the trait's own getter, of no field, which overrides a val of
                 // its name further up as a val would (a trait parameter's: `Mixin` 301-303).
-                if self.is_trait_constant(s, e) {
+                if self.constant(s, e).is_some() {
                     let name = self.field_name(s);
                     held_names.entry(name).or_insert(());
                     continue;
@@ -1196,9 +1241,9 @@ impl<'a> Gen<'a> {
                 held_names.insert(name.clone(), ());
                 let ty = self.sym_type(s);
                 if self.is_lazy_member(s) {
-                    out.push(FieldDef { sym: s, name, ty, lazy: true, lazy_owner: Some(b), init: Some(e), mutable: false });
+                    out.push(FieldDef { sym: s, name, ty, lazy: true, lazy_owner: Some(b), init: Some(e), mutable: false , constant: None });
                 } else {
-                    out.push(FieldDef { sym: s, name, ty, lazy: false, lazy_owner: None, init: None, mutable: syms.sym(s).kind == SymKind::Var });
+                    out.push(FieldDef { sym: s, name, ty, lazy: false, lazy_owner: None, init: None, mutable: syms.sym(s).kind == SymKind::Var , constant: None });
                 }
             }
         }
@@ -1487,6 +1532,8 @@ impl<'a> Gen<'a> {
                 (None, None) => HolderInit::Unit,
             };
             self.lazy_holder_body(&f.name, &f.ty, init);
+        } else if let (Some(constant), Some(init)) = (f.constant, f.init) {
+            self.constant_value(Some(constant), init, &f.ty);
         } else {
             self.load(0, &this);
             self.getfield(&owner, &f.name, &f.ty);
@@ -1502,7 +1549,8 @@ impl<'a> Gen<'a> {
         // So is the implementation of a deferred given, as dotty's `implementDeferredGivens` makes it,
         // and the getter of a class's given object, scalac's module.
         let module = self.cx.inner_given_objects.contains_key(&f.sym);
-        let access = if (from_trait && fin) || module || self.implements_deferred(f.sym) { ACC_PUBLIC | ACC_FINAL } else { ACC_PUBLIC };
+        // A constant's getter is final, as the val is (`Memoize`).
+        let access = if (from_trait && fin) || module || self.implements_deferred(f.sym) || f.constant.is_some() { ACC_PUBLIC | ACC_FINAL } else { ACC_PUBLIC };
         self.end_method(access, &f.name, &getter_desc);
         let getter = MRef {
             owner: owner.clone(),
@@ -1673,14 +1721,19 @@ impl<'a> Gen<'a> {
                     self.return_value(&ty);
                     self.end_method(ACC_PUBLIC | ACC_STATIC, &format!("{}$", name), &method_desc(&[this.clone()], &ty));
                 }
-                TInit::Field(s, e) if self.is_trait_constant(s, e) => {
+                TInit::Field(s, e) if self.constant(s, e).is_some() => {
+                    let constant = self.constant(s, e);
                     let ty = self.sym_type(s);
                     let name = self.field_name(s);
                     self.begin_method(false, false, &[], ty.clone(), &[e]);
-                    self.expr(e, &ty);
+                    self.constant_value(constant, e, &ty);
                     self.return_value(&ty);
                     self.end_method(ACC_PUBLIC, &name, &method_desc(&[], &ty));
                     self.trait_static_forwarder(&name, &[], &ty);
+                    // `Constructors`: an initialiser that is no literal runs in `$init$`.
+                    if let Some(ConstVal::Declared(_)) = constant {
+                        runs.push((None, e));
+                    }
                 }
                 TInit::Field(s, e) => {
                     let ty = self.sym_type(s);
@@ -1774,7 +1827,7 @@ impl<'a> Gen<'a> {
                 self.class_file_trait_fields(b).fields.iter().map(|f| (f.sym, Some(f.ty.clone()))).collect()
             } else {
                 cx.input.prog.classes[idx as usize].init.iter().filter_map(|init| match *init {
-                    TInit::Field(s, e) if !self.is_trait_constant(s, e) => Some((s, None)),
+                    TInit::Field(s, e) if self.constant(s, e).is_none() => Some((s, None)),
                     _ => None,
                 }).collect()
             };
@@ -1795,7 +1848,7 @@ impl<'a> Gen<'a> {
                 // its value; nothing where the class's member is a lazy val or a constructor
                 // parameter (163-168), or a trait after this one holds the field.
                 let name = self.field_name(s);
-                let held = by_name.get(name.as_str()).map(|&i| &fields[i]).filter(|f| !f.lazy && !params.contains(&f.sym)).filter(|f| match syms.sym(f.sym).owner {
+                let held = by_name.get(name.as_str()).map(|&i| &fields[i]).filter(|f| !f.lazy && f.constant.is_none() && !params.contains(&f.sym)).filter(|f| match syms.sym(f.sym).owner {
                     Owner::Class(k) if k == c => true,
                     Owner::Class(t) => position(t) >= position(b),
                     _ => false,
@@ -1882,9 +1935,9 @@ impl<'a> Gen<'a> {
                 [p] => p.clone(),
                 _ => continue,
             };
-            out.push(FieldDef { sym: s, name: name.to_string(), ty, lazy, lazy_owner: lazy.then_some(b), init: None, mutable });
+            out.push(FieldDef { sym: s, name: name.to_string(), ty, lazy, lazy_owner: lazy.then_some(b), init: None, mutable , constant: None });
         }
-        // A val whose getter the trait defines, of no setter, is a constant (`is_trait_constant`).
+        // A val whose getter the trait defines, of no setter, is a constant (`constant`).
         let constants = members
             .iter()
             .filter(|&(_, &s)| syms.sym(s).kind == SymKind::Val && !self.is_lazy_member(s) && !out.iter().any(|f| f.sym == s))
@@ -2556,64 +2609,26 @@ impl<'a> Gen<'a> {
     }
 
     /// The members scalac synthesizes for value class `c` that the class does not define or
-    /// inherit, with their parameters and results, in the order of scalac's companion:
-    /// `hashCode` and `equals`, and a case class's `toString` and product members.
+    /// inherit (`TClass::synthesized`), with their parameters and results, in the order of
+    /// scalac's companion: `hashCode` and `equals`, and a case class's `toString` and product
+    /// members.
     pub(super) fn vc_synthesized(&mut self, c: ClassId) -> Vec<(&'static str, Vec<JType>, JType)> {
         let cx = self.cx;
         let string = JType::L(Rc::from(STRING));
         let object = JType::object();
-        let mut all = vec![("hashCode", vec![], JType::I), ("equals", vec![object.clone()], JType::Z)];
-        if cx.is_case_class(c) {
-            all.extend([
-                ("toString", vec![], string.clone()),
-                ("canEqual", vec![object.clone()], JType::Z),
-                ("productArity", vec![], JType::I),
-                ("productPrefix", vec![], string.clone()),
-                ("productElement", vec![JType::I], object),
-                ("productElementName", vec![JType::I], string),
-            ]);
-        }
-        all.retain(|(name, params, _)| !self.vc_defines(c, name, params));
-        all
-    }
-
-    /// Whether member `name` of value class `c` taking `params` is concrete where the class or a
-    /// universal trait it extends declares it, which is then no synthesized one (`existingDef`,
-    /// `SyntheticMembers.scala` 82-89: the member `c`'s type sees, unless it is deferred or the
-    /// root's own): the first declaration in the linearization whose erased parameters are
-    /// `params`, a program's with a body, or a jar class file's method that is not abstract. The
-    /// box inherits it.
-    pub(super) fn vc_defines(&mut self, c: ClassId, name: &str, params: &[JType]) -> bool {
-        let cx = self.cx;
-        let syms = cx.input.syms;
-        let Some(n) = cx.input.interner.lookup(name) else { return false };
-        let desc = method_desc(params, &JType::V);
-        let want = &desc[..desc.len() - 1];
-        let bases: Vec<ClassId> = syms.class(c).base_types.iter().map(|&(b, _)| b).collect();
-        for b in bases {
-            // `Any`, `Object`, `Product` and `Equals` declare what scalac synthesizes.
-            if syms.class(b).kind == ClassKind::Builtin || matches!(&*self.class_name(b), OBJECT | PRODUCT | EQUALS) {
-                return false;
-            }
-            // A jar's class, by its class file (its members' signatures may be unread).
-            if let Some(cf) = cx.class_files.get(&b) {
-                if let Some(m) = cf.methods.iter().find(|m| m.name == name && m.descriptor.starts_with(want) && m.access & ACC_STATIC == 0) {
-                    return m.access & ACC_ABSTRACT == 0;
-                }
-                continue;
-            }
-            let declared: Vec<SymId> = match syms.class(b).members.get(&n) {
-                Some(&m) => syms.alternatives(m).map_or_else(|| vec![m], |alts| alts.to_vec()),
-                None => Vec::new(),
-            };
-            for s in declared {
-                if self.param_types(s) == params {
-                    let f = cx.fun_of_sym[s.idx()];
-                    return f != u32::MAX && cx.input.prog.funs[f as usize].body.is_some();
-                }
-            }
-        }
-        false
+        let kind = if cx.is_case_class(c) { synthetic::CASE } else { synthetic::VALUE };
+        let synthesized = cx.synthesized(c) & kind;
+        let all = [
+            (synthetic::HASH_CODE, "hashCode", vec![], JType::I),
+            (synthetic::EQUALS, "equals", vec![object.clone()], JType::Z),
+            (synthetic::TO_STRING, "toString", vec![], string.clone()),
+            (synthetic::CAN_EQUAL, "canEqual", vec![object.clone()], JType::Z),
+            (synthetic::PRODUCT_ARITY, "productArity", vec![], JType::I),
+            (synthetic::PRODUCT_PREFIX, "productPrefix", vec![], string.clone()),
+            (synthetic::PRODUCT_ELEMENT, "productElement", vec![JType::I], object),
+            (synthetic::PRODUCT_ELEMENT_NAME, "productElementName", vec![JType::I], string),
+        ];
+        all.into_iter().filter(|&(bit, ..)| synthesized & bit != 0).map(|(_, name, params, ret)| (name, params, ret)).collect()
     }
 
     /// The code of synthesized member `member` of value class `c`, returning `ret`, over the
@@ -2685,7 +2700,7 @@ impl<'a> Gen<'a> {
                     _ => self.jump_if(op::IF_ICMPNE, 2, no),
                 }
                 // A `canEqual` of the class's own is asked last, `that.canEqual(this)` (297-332).
-                if self.vc_defines(c, "canEqual", std::slice::from_ref(&object)) {
+                if self.cx.synthesized(c) & synthetic::EQUALS_CALLS_CAN_EQUAL != 0 {
                     self.load(ps, &object);
                     self.checkcast(&class);
                     self.load(us, u);
@@ -2702,26 +2717,11 @@ impl<'a> Gen<'a> {
                 self.return_value(ret);
             }
             "toString" => {
-                let info = syms.class(c);
-                let display = info.product_name(cx.input.interner.get(info.name)).to_string();
-                let sb = "java/lang/StringBuilder";
-                let sb_type = JType::L(Rc::from(sb));
-                self.new_object(sb);
-                self.invoke(Invoke::Special, sb, false, "<init>", &[], &JType::V);
-                self.sconst(&format!("{}(", display));
-                self.invoke(Invoke::Virtual, sb, false, "append", &[string.clone()], &sb_type);
+                // `ScalaRunTime._toString` of the box, which reads its `productPrefix` and
+                // elements through it.
                 self.load(us, u);
-                let param = match u {
-                    JType::L(_) if u.is_string() => u.clone(),
-                    JType::L(_) => object.clone(),
-                    JType::B | JType::S => JType::I,
-                    _ => u.clone(),
-                };
-                self.adapt(u, &param);
-                self.invoke(Invoke::Virtual, sb, false, "append", &[param], &sb_type);
-                self.sconst(")");
-                self.invoke(Invoke::Virtual, sb, false, "append", &[string.clone()], &sb_type);
-                self.invoke(Invoke::Virtual, sb, false, "toString", &[], &string);
+                self.vc_box(c, u);
+                self.invoke(Invoke::Static, SCALA_RUNTIME, false, "_toString", &[JType::L(Rc::from(PRODUCT))], &string);
                 self.return_value(ret);
             }
             "canEqual" => {
@@ -2797,13 +2797,17 @@ impl<'a> Gen<'a> {
         if !is_case && !is_enum_case {
             return;
         }
+        // The members the rule gives the class (`TClass::synthesized`); an enum value's
+        // `productArity`, `productElement`, `productElementName` and `canEqual` are scala's
+        // `EnumValue`'s, which its class does not extend.
+        let synthesized = cx.synthesized(c);
+        let takes = |bit: u16| synthesized & bit != 0;
+        let enum_value = |bit: u16| is_value_case && bit & (synthetic::PRODUCT_ARITY | synthetic::PRODUCT_ELEMENT | synthetic::PRODUCT_ELEMENT_NAME | synthetic::CAN_EQUAL) != 0;
         let owner = self.this_name.clone();
         let this = JType::L(owner.clone());
         let string = JType::L(Rc::from(STRING));
         let object = JType::object();
         let display = info.product_name(cx.input.interner.get(info.name)).to_string();
-        let is_tuple = display.strip_prefix("Tuple").map_or(false, |r| !r.is_empty() && r.bytes().all(|b| b.is_ascii_digit()))
-            && info.def.is_none();
         let fields: Vec<SymId> = if is_value_case || is_object {
             Vec::new()
         } else {
@@ -2812,36 +2816,39 @@ impl<'a> Gen<'a> {
         let field_refs: Vec<(String, JType)> = fields.iter().map(|&f| (self.field_name(f), self.sym_type(f))).collect();
 
         // productPrefix, productArity, productElement
-        self.begin_method(false, false, &[], string.clone(), &[]);
-        if is_value_case {
-            self.load(0, &this);
-            self.getfield(&owner, "$name", &string);
-        } else {
-            self.sconst(&display);
+        if takes(synthetic::PRODUCT_PREFIX) {
+            self.begin_method(false, false, &[], string.clone(), &[]);
+            if is_value_case {
+                self.load(0, &this);
+                self.getfield(&owner, "$name", &string);
+            } else {
+                self.sconst(&display);
+            }
+            self.return_value(&string);
+            self.end_method(ACC_PUBLIC, "productPrefix", "()Ljava/lang/String;");
         }
-        self.return_value(&string);
-        self.end_method(ACC_PUBLIC, "productPrefix", "()Ljava/lang/String;");
 
-        self.begin_method(false, false, &[], JType::I, &[]);
-        self.iconst(field_refs.len() as i32);
-        self.return_value(&JType::I);
-        self.end_method(ACC_PUBLIC, "productArity", "()I");
+        if takes(synthetic::PRODUCT_ARITY) || enum_value(synthetic::PRODUCT_ARITY) {
+            self.begin_method(false, false, &[], JType::I, &[]);
+            self.iconst(field_refs.len() as i32);
+            self.return_value(&JType::I);
+            self.end_method(ACC_PUBLIC, "productArity", "()I");
+        }
 
-        // A field of a value class is its box, as scalac's `productElement` and `_toString` give
-        // it, and hashed as the box (`Statics.anyHash(new V(..))`); `equals` compares the
-        // underlying values.
-        let boxed: Vec<bool> = fields.iter().map(|&f| syms.sym(f).sig.as_ref().map_or(false, |sig| self.value_class_type(sig.ret).is_some())).collect();
-        self.element_switch(&object, field_refs.len(), |g, i| {
-            let (name, ty) = &field_refs[i];
-            g.load(0, &this);
-            g.getfield(&owner, name, ty);
-            g.adapt_from_sym(fields[i], ty, &object);
-        });
-        self.end_method(ACC_PUBLIC, "productElement", "(I)Ljava/lang/Object;");
+        // A field of a value class is its box, as scalac's `productElement` gives it, and hashed
+        // as the box (`Statics.anyHash(new V(..))`); `equals` compares the underlying values.
+        if takes(synthetic::PRODUCT_ELEMENT) || enum_value(synthetic::PRODUCT_ELEMENT) {
+            self.element_switch(&object, field_refs.len(), |g, i| {
+                let (name, ty) = &field_refs[i];
+                g.load(0, &this);
+                g.getfield(&owner, name, ty);
+                g.adapt_from_sym(fields[i], ty, &object);
+            });
+            self.end_method(ACC_PUBLIC, "productElement", "(I)Ljava/lang/Object;");
+        }
 
         // `java.lang.Enum` answers `ordinal`, `hashCode` and `equals` with final methods.
-        let java_enum = cx.enum_of_case(c).map_or(false, |e| cx.is_java_enum(e));
-        if is_enum_case && !java_enum {
+        if takes(synthetic::ORDINAL) {
             self.begin_method(false, false, &[], JType::I, &[]);
             if is_value_case {
                 self.load(0, &this);
@@ -2853,85 +2860,37 @@ impl<'a> Gen<'a> {
             self.end_method(ACC_PUBLIC, "ordinal", "()I");
         }
 
-        let inherits = |g: &Self, name: crate::intern::Name| {
-            syms.class(c).base_types.iter().any(|&(b, _)| {
-                syms.class(b).members.get(&name).map_or(false, |&m| {
-                    let f = g.cx.fun_of_sym[m.idx()];
-                    syms.sym(m).intrinsic.is_some() || (f != u32::MAX && g.cx.input.prog.funs[f as usize].body.is_some())
-                })
-            })
-        };
-
-        // Product's own members, which scala-library leaves abstract or answers with "".
-        let defined_below_product = |g: &Self, name: &str| {
-            g.cx.input.interner.lookup(name).map_or(false, |name| {
-                syms.class(c).base_types.iter().any(|&(b, _)| {
-                    let jar = g.cx.class_files.get(&b).map_or(false, |cf| {
-                        cf.methods.iter().any(|m| m.name == g.cx.input.interner.get(name) && m.access & (ACC_ABSTRACT | ACC_STATIC) == 0)
-                    });
-                    !matches!(g.cx.class_names[b.idx()].as_str(), PRODUCT | EQUALS)
-                        && (jar || syms.class(b).members.get(&name).map_or(false, |&m| {
-                            let f = g.cx.fun_of_sym[m.idx()];
-                            f != u32::MAX && g.cx.input.prog.funs[f as usize].body.is_some()
-                        }))
-                })
-            })
-        };
-        if !defined_below_product(self, "canEqual") {
+        if takes(synthetic::CAN_EQUAL) || enum_value(synthetic::CAN_EQUAL) {
             self.begin_method(false, false, &[(None, object.clone())], JType::Z, &[]);
             self.load(1, &object);
             self.instance_of(&owner);
             self.return_value(&JType::Z);
             self.end_method(ACC_PUBLIC, "canEqual", "(Ljava/lang/Object;)Z");
         }
-        if !defined_below_product(self, "productElementName") {
+        if takes(synthetic::PRODUCT_ELEMENT_NAME) || enum_value(synthetic::PRODUCT_ELEMENT_NAME) {
             let names: Vec<String> = fields.iter().map(|&f| cx.input.interner.get(syms.sym(f).name).to_string()).collect();
             self.element_switch(&string, names.len(), |g, i| g.sconst(&names[i]));
             self.end_method(ACC_PUBLIC, "productElementName", "(I)Ljava/lang/String;");
         }
 
-        if !inherits(self, n::TO_STRING) {
+        // `toString`: an enum value's name, a case object's own name, a case class's
+        // `ScalaRunTime._toString(this)`, which reads the members it calls through the instance.
+        if takes(synthetic::TO_STRING) {
             self.begin_method(false, false, &[], string.clone(), &[]);
             if is_value_case {
                 self.load(0, &this);
                 self.getfield(&owner, "$name", &string);
-            } else if field_refs.is_empty() && (is_object || !is_case) {
+            } else if is_object {
                 self.sconst(&display);
             } else {
-                let sb = "java/lang/StringBuilder";
-                let sb_type = JType::L(Rc::from(sb));
-                self.new_object(sb);
-                self.invoke(Invoke::Special, sb, false, "<init>", &[], &JType::V);
-                self.sconst(&if is_tuple { "(".to_string() } else { format!("{}(", display) });
-                self.invoke(Invoke::Virtual, sb, false, "append", &[string.clone()], &sb_type);
-                for (i, (name, ty)) in field_refs.iter().enumerate() {
-                    if i > 0 {
-                        self.sconst(",");
-                        self.invoke(Invoke::Virtual, sb, false, "append", &[string.clone()], &sb_type);
-                    }
-                    self.load(0, &this);
-                    self.getfield(&owner, name, ty);
-                    if boxed[i] {
-                        self.adapt_from_sym(fields[i], ty, &object);
-                    }
-                    let param = match ty {
-                        _ if boxed[i] => object.clone(),
-                        JType::L(_) if ty.is_string() => ty.clone(),
-                        JType::L(_) => object.clone(),
-                        JType::B | JType::S => JType::I,
-                        _ => ty.clone(),
-                    };
-                    self.invoke(Invoke::Virtual, sb, false, "append", &[param], &sb_type);
-                }
-                self.sconst(")");
-                self.invoke(Invoke::Virtual, sb, false, "append", &[string.clone()], &sb_type);
-                self.invoke(Invoke::Virtual, sb, false, "toString", &[], &string);
+                self.load(0, &this);
+                self.invoke(Invoke::Static, SCALA_RUNTIME, false, "_toString", &[JType::L(Rc::from(PRODUCT))], &string);
             }
             self.return_value(&string);
             self.end_method(ACC_PUBLIC, "toString", "()Ljava/lang/String;");
         }
 
-        if !inherits(self, n::HASH_CODE) && !java_enum {
+        if takes(synthetic::HASH_CODE) {
             self.begin_method(false, false, &[], JType::I, &[]);
             if is_value_case {
                 self.load(0, &this);
@@ -2940,6 +2899,17 @@ impl<'a> Gen<'a> {
             } else if field_refs.is_empty() {
                 self.sconst(&display);
                 self.invoke(Invoke::Virtual, STRING, false, "hashCode", &[], &JType::I);
+            } else if hashes_through_elements(syms, cx.input.types, c) {
+                // dotty's `SyntheticMembers.chooseHashcode` for reference fields: `MurmurHash3.productHash`
+                // from the seed of the name, through `productArity` and `productElement`.
+                let murmur = "scala/util/hashing/MurmurHash3$";
+                let product = JType::L(Rc::from(PRODUCT));
+                self.getstatic(murmur, "MODULE$", &JType::L(Rc::from(murmur)));
+                self.load(0, &this);
+                let seed = crate::interp::value::mix(0xcafebabeu32 as i32, crate::interp::value::str_hash(&display));
+                self.iconst(seed);
+                self.iconst(1);
+                self.invoke(Invoke::Virtual, murmur, false, "productHash", &[product, JType::I, JType::Z], &JType::I);
             } else {
                 // MurmurHash3.productHash, as scalac's case classes hash.
                 self.iconst(0xcafebabeu32 as i32);
@@ -2960,7 +2930,9 @@ impl<'a> Gen<'a> {
             self.end_method(ACC_PUBLIC, "hashCode", "()I");
         }
 
-        if is_case && !is_object && !inherits(self, n::EQUALS) {
+        // `SyntheticMembers.equalsBody`: the same class, the primitive fields compared first, then
+        // the others, then `that.canEqual(this)` unless the class is final with the rule's.
+        if takes(synthetic::EQUALS) {
             self.begin_method(false, false, &[(None, object.clone())], JType::Z, &[]);
             let no = self.code.new_label();
             let yes = self.code.new_label();
@@ -2973,7 +2945,8 @@ impl<'a> Gen<'a> {
             self.load(1, &object);
             self.checkcast(&owner);
             let that = self.store_new(&this);
-            for (name, ty) in &field_refs {
+            let order = cx.equals_order(c, field_refs.len());
+            for (name, ty) in order.iter().filter_map(|&i| field_refs.get(i)) {
                 self.load(0, &this);
                 self.getfield(&owner, name, ty);
                 self.load(that, &this);
@@ -3003,6 +2976,12 @@ impl<'a> Gen<'a> {
                     }
                     _ => self.jump_if(op::IF_ICMPNE, 2, no),
                 }
+            }
+            if takes(synthetic::EQUALS_CALLS_CAN_EQUAL) {
+                self.load(that, &this);
+                self.load(0, &this);
+                self.invoke(Invoke::Virtual, &owner, false, "canEqual", &[object.clone()], &JType::Z);
+                self.jump_if(op::IFEQ, 1, no);
             }
             self.code.bind(yes);
             self.iconst(1);
@@ -3052,7 +3031,7 @@ impl<'a> Gen<'a> {
             }
             let ty = self.sym_type(s);
             let fname = self.field_name(s);
-            fields.push(FieldDef { sym: s, name: fname, ty, lazy: !eager, lazy_owner: None, init: Some(init), mutable: syms.sym(s).kind == SymKind::Var });
+            fields.push(FieldDef { sym: s, name: fname, ty, lazy: !eager, lazy_owner: None, init: Some(init), mutable: syms.sym(s).kind == SymKind::Var , constant: None });
         }
         for f in &fields {
             let mut d = String::new();
@@ -3237,4 +3216,15 @@ fn module_field_flags(syms: &Symbols, m: SymId) -> u16 {
     } else {
         MODULE_FIELD
     }
+}
+
+/// Whether `c` is a parent `Desugar.classDef` gives: `Product`, its `Equals`, `java.io.Serializable`
+/// (`Symbols::is_synthetic_parent`) or `scala.reflect.Enum`.
+fn is_desugared_parent(syms: &crate::symbols::Symbols, interner: &crate::intern::Interner, c: ClassId) -> bool {
+    if syms.is_synthetic_parent(interner, c) {
+        return true;
+    }
+    let info = syms.class(c);
+    let Owner::Package(p) = info.owner else { return false };
+    interner.get(info.name) == "Enum" && interner.get(syms.pkg(p).name) == "reflect" && syms.pkg(p).parent.is_some_and(|q| interner.get(syms.pkg(q).name) == "scala")
 }
