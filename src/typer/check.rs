@@ -4894,10 +4894,12 @@ impl<'a> Worker<'a> {
         let mut found = Vec::new();
         for j in 1..self.syms.class(c).base_types.len() {
             let b = self.syms.class(c).base_types[j].0;
-            let alternatives: Vec<SymId> = self.syms.class(b).member_order.iter().copied().filter(|&s| self.syms.sym(s).alternative).collect();
-            for q in alternatives {
-                if let Some(t) = self.declared_target_name(q) {
-                    found.push((b, q, t));
+            for k in 0..self.syms.class(b).member_order.len() {
+                let q = self.syms.class(b).member_order[k];
+                if self.syms.sym(q).alternative {
+                    if let Some(t) = self.declared_target_name(q) {
+                        found.push((b, q, t));
+                    }
                 }
             }
         }
