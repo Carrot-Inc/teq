@@ -1138,6 +1138,11 @@ impl<'a> Worker<'a> {
     /// A term of a package: a member of its package object, which the loader spills into the
     /// package, is read through the object.
     fn package_term(syms: &Symbols, s: SymId) -> TermRef {
+        // A reference resolves a deprecated member of a package here: the std's, whose reading
+        // left the checks off (`Syntax::std`), turns them on before the reference is checked.
+        if syms.sym(s).mods & crate::ast::mods::DEPRECATED != 0 {
+            super::deprecation::note_deprecated();
+        }
         match syms.sym(s).owner {
             Owner::Class(c) => TermRef::ModuleMember(c, s),
             _ => TermRef::Global(s),
