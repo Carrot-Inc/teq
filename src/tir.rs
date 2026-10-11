@@ -234,8 +234,10 @@ pub enum TExpr {
     /// erasure leaves of the cast (`TypeTestsCasts.transformAsInstanceOf`), the operand evaluated
     /// first. A cast its erasure makes redundant is the operand itself, retyped as an ascription is.
     Cast(TExprId, CastOp, TypeId),
-    /// `classOf[C]`: the class value of `C`, a builtin included.
-    ClassOf(ClassId),
+    /// `classOf[C]`: the class value of `C`, a builtin included; with dimensions, of the array of
+    /// that many of `C` (`classOf[Array[Int]]` is `Int`'s of one), as the erasure `Erased::Of`
+    /// says it. The array class of no dimensions is an array's whose element is not known.
+    ClassOf(ClassId, u8),
     /// Varargs packed into a runtime sequence.
     SeqLit(ListRef),
     /// Raw JS array and element access, used for compiler-internal packing.
@@ -1875,7 +1877,7 @@ impl<'a> Iterator for Descendants<'a> {
         match prog.expr(e) {
             TExpr::Int(_) | TExpr::Long(_) | TExpr::Double(_) | TExpr::Bool(_) | TExpr::Char(_) | TExpr::Str(_)
             | TExpr::Unit | TExpr::Local(_) | TExpr::This | TExpr::Super(_) | TExpr::Static(_) | TExpr::Module(_)
-            | TExpr::ClassOf(_) | TExpr::JsImport(_) | TExpr::JsGlobal(..) | TExpr::Null => {}
+            | TExpr::ClassOf(..) | TExpr::JsImport(_) | TExpr::JsGlobal(..) | TExpr::Null => {}
             TExpr::Field(r, _) | TExpr::Unary(_, r) | TExpr::ToStr(r, _) | TExpr::Index(r, _) | TExpr::Spread(r)
             | TExpr::JsSelect(r, _) | TExpr::Return(r) | TExpr::Throw(r, _) | TExpr::Lambda(_, r) | TExpr::Splice(r) => {
                 self.exprs.push(r)

@@ -6700,9 +6700,24 @@ impl<'a> Worker<'a> {
         let key = self.prog.add_str(&self.name_str(name));
         let key = self.prog.add(TExpr::Str(key));
         let mut dynamic_lists = vec![ArgList { args: vec![ArgSrc::Typed(key, self.b.t_string)], using: false, span }];
-        let mut lists = lists.into_iter();
+        let mut lists = lists.into_iter().peekable();
         let mut typed: Vec<ArgSrc> = Vec::new();
-        for clause in sig.clauses.iter().filter(|cl| !cl.is_using) {
+        // Every list's arguments, a contextual one's resolved where the call gives none, as dotty's
+        // `handleStructural` passes the call's arguments (`vargss.flatten`).
+        for clause in sig.clauses.iter() {
+            if clause.is_using && !lists.peek().is_some_and(|l| l.using) {
+                for p in &clause.params {
+                    match self.resolve_given_typed(p.ty, span) {
+                        Some((te, _)) => typed.push(ArgSrc::Typed(te, p.ty)),
+                        None => {
+                            let msg = format!("no given instance of type {} was found for parameter {}", self.show(p.ty), self.name_str(p.name));
+                            self.error(Span::new(span.end, span.end), msg);
+                            return failed(self, &[]);
+                        }
+                    }
+                }
+                continue;
+            }
             let Some(list) = lists.next() else {
                 let msg = format!("missing argument list for method {}", self.name_str(name));
                 self.error(span, msg);
@@ -6743,31 +6758,20 @@ impl<'a> Worker<'a> {
                 }
             }
             if takes_classes {
-                let params: Vec<TypeId> = sig.clauses.iter().filter(|cl| !cl.is_using).flat_map(|cl| cl.params.iter().map(|p| p.ty)).collect();
-                let mut classes = Vec::with_capacity(params.len());
-                for p in params {
-                    match self.stable_erasure(p) {
-                        Some(super::site::Erased::Of(c, 0)) => classes.push(c),
-                        // `classOf` of an array is the array class on every target.
-                        Some(super::site::Erased::Of(..)) => classes.push(self.b.array),
-                        Some(super::site::Erased::Null(_)) => classes.push(self.b.null),
-                        Some(super::site::Erased::Nothing(_)) => classes.push(self.b.any_ref),
-                        None => {
-                            let msg = format!(
-                                "Structural access not allowed on method {} because it has a parameter type with an unstable erasure",
-                                self.name_str(name)
-                            );
-                            self.error(span, msg);
-                            return (self.prog.add(TExpr::Unit), ERROR);
-                        }
-                    }
-                }
+                let Some(erased) = self.erased_parameter_classes(&sig) else {
+                    let msg = format!(
+                        "Structural access not allowed on method {} because it has a parameter type with an unstable erasure",
+                        self.name_str(name)
+                    );
+                    self.error(span, msg);
+                    return (self.prog.add(TExpr::Unit), ERROR);
+                };
                 let class_ty = match class_class {
                     Some(k) => self.types.class(k, &[WILD]),
                     None => ANY,
                 };
-                for c in classes {
-                    let class_of = self.prog.add(TExpr::ClassOf(c));
+                for (c, dims) in erased {
+                    let class_of = self.prog.add(TExpr::ClassOf(c, dims));
                     self.prog.set_type(class_of, class_ty);
                     dynamic_lists[0].args.push(ArgSrc::Typed(class_of, class_ty));
                 }

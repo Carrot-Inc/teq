@@ -1929,7 +1929,7 @@ impl<'a> Worker<'a> {
             | TExpr::Super(_)
             | TExpr::Static(_)
             | TExpr::Module(_)
-            | TExpr::ClassOf(_)
+            | TExpr::ClassOf(..)
             | TExpr::JsImport(_)
             | TExpr::JsGlobal(..)
             | TExpr::Null => self.prog.expr(e),
@@ -2453,7 +2453,7 @@ impl<'a> Worker<'a> {
     /// cannot, and an `inline match` folds its tuple scrutinee at every case.
     fn may_yield_literal(&self, e: TExprId) -> bool {
         match self.prog.expr(e) {
-            TExpr::New(..) | TExpr::NewVia(..) | TExpr::Lambda(..) | TExpr::SeqLit(_) | TExpr::ArrayLit(_) | TExpr::Module(_) | TExpr::ClassOf(_) | TExpr::Unit | TExpr::Null => false,
+            TExpr::New(..) | TExpr::NewVia(..) | TExpr::Lambda(..) | TExpr::SeqLit(_) | TExpr::ArrayLit(_) | TExpr::Module(_) | TExpr::ClassOf(..) | TExpr::Unit | TExpr::Null => false,
             TExpr::Block(_, res) => self.may_yield_literal(res),
             _ => true,
         }
@@ -2482,7 +2482,7 @@ impl<'a> Worker<'a> {
             TExpr::Local(s) => bound.contains(&s),
             TExpr::Static(s) => std_sym(self, s) && self.note_fractional(s, fractional),
             TExpr::Module(c) => std_class(self, c),
-            TExpr::ClassOf(_) => false,
+            TExpr::ClassOf(..) => false,
             TExpr::Field(r, s) => std_sym(self, s) && self.note_fractional(s, fractional) && self.fold_candidate(r, bound, fractional),
             TExpr::CallStatic(s, args) => std_sym(self, s) && self.note_fractional(s, fractional) && list(self, args, bound, fractional),
             TExpr::CallMethod(r, s, args) => {

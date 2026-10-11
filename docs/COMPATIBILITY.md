@@ -70,19 +70,23 @@ On JavaScript and in the interpreter a program and the libraries it loads run on
 a JDK member as `not supported on JavaScript`. Beyond that:
 
 - `BigDecimal` and `BigInt` have no `until`/`to` ranges.
-- `Locale` has no locale data, and the system zone is the engine's offset (the interpreter's `Z`) where the
-  JVM names a region; in the interpreter a region zone id is not found, scala-java-time-tzdb building its
+- `Locale` has no locale data: its display names are English, for the languages and regions its constants
+  name, another code being its own name; the system zone is the engine's offset (the interpreter's `Z`) where
+  the JVM names a region; in the interpreter a region zone id is not found, scala-java-time-tzdb building its
   data as JavaScript objects, which the interpreter does not run.
-- `PartialFunction` cannot be extended, and `ClassTag` is a final class, so a program cannot define one with an
-  overriding `unapply`.
 - `BigDecimal` and `BigInt` have no `until`/`to` ranges, no construction from a `Float` or an `Array[Char]`,
   no `BigInt.probablePrime` or random constructors; `new java.lang.Integer(1)` is rejected.
 - `java.time` comes from scala-java-time's jar on the classpath, region zone ids from its tzdb jar, and the
   system zone is the engine's offset; without the jar a build types the part of `java.time` the interpreter
   has (`docs/CLI.md`), which throws `UnsupportedOperationException` when run, as the file system does.
-  `Locale` has no locale data; `Date.from` and `toInstant` are missing.
-- `FiniteDuration` is the only `Duration`, `Ordering` covers tuples up to 5, `PartialFunction` cannot be
-  extended, and `ClassTag` is a final class, so a program cannot define one with an overriding `unapply`.
+- `Ordering` covers tuples up to 5. The `ClassTag` evidence of the std's array-making members is erased: a
+  tag passed to `Array.fill` is typed and not evaluated, a program's own tag dispatched.
+- A reflective call reaches the method whose parameters erase to the classes it gives, through the
+  reflective proxy Scala.js names by them (a value class's argument and result its underlying value, as
+  the JVM's method takes and gives it), and a missing one throws `NoSuchMethodException`; a receiver of a
+  JavaScript type (a string, a number, an array) has no proxies, where the JVM finds the JDK's method.
+  Under `--std=scala-library` scala-library's `Selectable` reflects as on the JVM, which throws
+  `UnsupportedOperationException` on JavaScript.
 - Regular expressions run on the JS engine behind a translator of Java's syntax, which has no possessive
   quantifiers, atomic groups, flags switched inside a pattern (`a(?i)b`), `UNICODE_CHARACTER_CLASS` (`(?U)`),
   the POSIX classes but `\p{Lower}`, `\p{Upper}` and `\p{Alpha}`, Java's own property names

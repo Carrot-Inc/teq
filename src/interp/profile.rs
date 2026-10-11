@@ -161,6 +161,8 @@ impl<'a, 't> Interp<'a, 't> {
         Some(self.prof_fun_slow(f))
     }
 
+    #[cold]
+    #[inline(never)]
     fn prof_fun_slow(&mut self, f: FunId) -> usize {
         let p = self.prof.as_mut().unwrap();
         let row = match ProfState::cached(&mut p.fun_rows, f.idx()) {
@@ -183,6 +185,8 @@ impl<'a, 't> Interp<'a, 't> {
         Some(self.prof_lambda_slow(body))
     }
 
+    #[cold]
+    #[inline(never)]
     fn prof_lambda_slow(&mut self, body: TExprId) -> usize {
         let p = self.prof.as_mut().unwrap();
         let row = match ProfState::cached(&mut p.lambda_rows, body.idx()) {
@@ -204,6 +208,8 @@ impl<'a, 't> Interp<'a, 't> {
         Some(self.prof_ctor_slow(c))
     }
 
+    #[cold]
+    #[inline(never)]
     fn prof_ctor_slow(&mut self, c: ClassId) -> usize {
         let p = self.prof.as_mut().unwrap();
         let row = match ProfState::cached(&mut p.ctor_rows, c.idx()) {
@@ -225,6 +231,8 @@ impl<'a, 't> Interp<'a, 't> {
         Some(self.prof_builtin_slow(name))
     }
 
+    #[cold]
+    #[inline(never)]
     fn prof_builtin_slow(&mut self, name: &Rc<str>) -> usize {
         let p = self.prof.as_mut().unwrap();
         let row = match p.builtin_rows.get(name) {
@@ -248,6 +256,8 @@ impl<'a, 't> Interp<'a, 't> {
         Some(self.prof_template_slow(s))
     }
 
+    #[cold]
+    #[inline(never)]
     fn prof_template_slow(&mut self, s: StrRef) -> usize {
         let p = self.prof.as_mut().unwrap();
         let row = match ProfState::cached(&mut p.template_rows, s.idx()) {
@@ -287,6 +297,8 @@ impl<'a, 't> Interp<'a, 't> {
         }
     }
 
+    #[cold]
+    #[inline(never)]
     fn prof_exit_slow(&mut self, i: usize) {
         let steps = self.steps;
         let Some(p) = self.prof.as_mut() else { return };

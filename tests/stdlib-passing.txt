@@ -156,13 +156,17 @@ charsequence_members
 charsequence_release
 charset_decode_writable
 charset_encode_consumes
+class_literal_arrays
 class_of
+class_tag_classes
+class_tag_evidence_erased
 class_tag_of_bottoms
 class_tag_of_compound
 class_tag_of_opaque
 class_tag_of_types
 class_tag_of_unit_arrays
 class_tag_unapply
+class_tag_void_array
 class_tags
 classes
 clone_without_parens
@@ -694,6 +698,7 @@ local_object_import
 local_objects
 local_traits
 local_type_aliases
+locale_display_names
 lone_surrogate_literal
 long_buffer_order
 long_range_boundaries
@@ -726,6 +731,7 @@ macro_fresh_nested_site
 macro_heal_types
 macro_hole_cast
 macro_identity_hash
+macro_jdk_bodies
 macro_jvm_template_body
 macro_lambda_quotes
 macro_library_super
@@ -756,10 +762,12 @@ macro_refinement_clause_kinds
 macro_refinement_info_equality
 macro_refinement_members
 macro_refinement_param_kinds
+macro_reflective_arrays
 macro_reflective_call
 macro_std_body_return
 macro_std_ext_shared
 macro_string_from_bytes
+macro_structural_calls
 macro_symbol_signature
 macro_sys_env
 macro_asexpr_partial
@@ -852,6 +860,9 @@ number_boxes
 numeric
 object_member
 objects_deep_equals
+objects_equals_identity
+objects_java_equality
+objects_jdk_bodies
 opaque_bound
 opaque_intersection_bound
 opaque_into_union
@@ -897,6 +908,7 @@ overload_vals
 overloads_by_using_clause
 override_enclosing_type_member
 override_inferred
+override_nullary_any
 package_alias_beside_object
 package_blocks
 package_main
@@ -910,6 +922,7 @@ param_clauses
 paren_pattern_types
 partial_application_once
 partial_function_apply
+partial_function_classes
 partial_function_match_body
 partial_sites
 pattern_abstract_scrutinee
@@ -1197,6 +1210,8 @@ tailcalls
 tailcalls_std
 tailrec_inline_choose
 tailrec_param_shadow
+template_arguments_once
+template_arguments_throwing
 template_pattern_vals
 this_rooted_type_path
 this_type_intersection
@@ -1351,6 +1366,8 @@ vc_null_interpolation
 vc_stable_pattern
 vdom_dsl
 vector_trie
+view_operations
+view_sizes_sorted
 widened_double_text
 wildcard_bounds
 wildcard_lower_bound

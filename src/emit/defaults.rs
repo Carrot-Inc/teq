@@ -172,7 +172,7 @@ impl<'a> Defaults<'a> {
     pub fn effect_free(&self, e: TExprId) -> bool {
         match self.prog.expr(e) {
             TExpr::Int(_) | TExpr::Long(_) | TExpr::Double(_) | TExpr::Bool(_) | TExpr::Char(_) | TExpr::Str(_) | TExpr::Unit | TExpr::Null | TExpr::This => true,
-            TExpr::Lambda(..) | TExpr::ClassOf(_) => true,
+            TExpr::Lambda(..) | TExpr::ClassOf(..) => true,
             TExpr::Local(s) => {
                 let info = self.syms.sym(s);
                 matches!(info.kind, SymKind::Val | SymKind::Param) && info.mods & (mods::MUTABLE | mods::LAZY) == 0

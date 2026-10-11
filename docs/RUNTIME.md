@@ -86,8 +86,10 @@ whichever override its type selects, as the output writes it (`--no-outline` wri
 the whole program, so a call by name lands on the same member in every module, and the output has no
 indentation, line breaks or runtime comments. A name JavaScript code can see keeps its own: the members of
 JS types, what the runtime calls on any value (`toString`, `equals`, `hashCode`, `apply`, `foreach`, `_1`),
-what a `js.Dynamic` selection or a `@js` template names, and every member of a class that an exported
-definition takes or returns, transitively; esbuild or another minifier then renames the rest.
+what a `js.Dynamic` selection or a `@js` template names, the reflective proxies a reflective call names
+(`f$$r$int`, `g$$r$$AI` for an `Array[Int]`), and every member of
+a class that an exported definition takes or returns, transitively; esbuild or another minifier then renames
+the rest.
 
 `--size-report` prints where the bytes went: the total and the runtime, a line per module of a split build,
 per package and per jar, the anonymous classes by the expression that makes them, the outlined functions by

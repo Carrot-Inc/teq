@@ -156,7 +156,7 @@ impl<'a> Worker<'a> {
             TExpr::Int(_) | TExpr::Long(_) | TExpr::Double(_) | TExpr::Bool(_) | TExpr::Char(_) | TExpr::Str(_) | TExpr::Unit | TExpr::Null => Purity::PURE_PATH,
             TExpr::This | TExpr::Super(_) => Purity::PURE_PATH,
             // `classOf[T]`, `Predef.classOf`.
-            TExpr::ClassOf(_) => Purity::PURE,
+            TExpr::ClassOf(..) => Purity::PURE,
             TExpr::Local(s) => self.ref_purity(s),
             // A member of an object: its selection on the object.
             TExpr::Static(s) => {

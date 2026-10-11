@@ -131,7 +131,7 @@ impl<'a, 't> Interp<'a, 't> {
             TExpr::This | TExpr::Super(_) => Ok(cx.this.clone()),
             TExpr::Static(s) => self.static_value(s),
             TExpr::Module(c) => self.module(c),
-            TExpr::ClassOf(c) => Ok(self.class_value_of(c)),
+            TExpr::ClassOf(c, dims) => Ok(self.class_literal(c, dims)),
             TExpr::Field(r, s) => {
                 let recv = self.eval(r, fr, cx)?;
                 if let Value::Obj(o) = &recv {
@@ -2093,7 +2093,19 @@ impl<'a, 't> Interp<'a, 't> {
                     _ => b(self, &vals),
                 }
             }
+            rare @ (Template::Missing(_) | Template::Reflective) => self.template_rare(rare, args, fr, cx),
+        }
+    }
+
+    /// The templates few calls take, a missing builtin and a reflective call, apart from the
+    /// dispatch every template call runs.
+    #[cold]
+    #[inline(never)]
+    fn template_rare(&mut self, t: Template, args: ListRef, fr: &Rc<Frame>, cx: &Ctx) -> R {
+        match t {
             Template::Missing(name) => self.unsupported(format!("no builtin for {}", name)),
+            Template::Reflective => self.call_by_signature(args, fr, cx),
+            _ => unreachable!("a common template"),
         }
     }
 
@@ -2121,7 +2133,21 @@ impl<'a, 't> Interp<'a, 't> {
                 crate::typer::bundle::entered_at(&self.typer.prog.strings, s.0, crate::typer::bundle::Entry::Template);
                 let name = self.qualified_name(sym);
                 let abstract_member = self.is_dispatched_class_member(sym);
+                // `java.lang.String`'s methods, the std's extensions of the builtin `String`
+                // (`std/javalib/string.scala`), whose first argument is the receiver.
+                let string_member = name.strip_prefix("scala.String.").map(Rc::<str>::from);
                 match self.builtins.get(&*name) {
+                    _ if &*name == "scala.reflect.callBySignature" => Template::Reflective,
+                    // A `null` receiver throws as the JVM's call does, after the arguments.
+                    Some(b) if string_member.is_some() => {
+                        let (b, name) = (b.clone(), string_member.unwrap());
+                        Template::Builtin(Rc::new(move |it: &mut Interp<'_, '_>, a: &[Value]| {
+                            if matches!(a.first(), Some(Value::Null)) {
+                                return it.throw_named("NullPointerException", &format!("Cannot invoke \"String.{}()\" because the value is null", name));
+                            }
+                            b(it, a)
+                        }))
+                    }
                     Some(b) if abstract_member => Template::AbstractBuiltin(b.clone(), sym),
                     Some(b) => Template::Builtin(b.clone()),
                     None => {

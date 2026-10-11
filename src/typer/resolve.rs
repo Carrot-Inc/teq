@@ -5347,12 +5347,6 @@ impl<'a> Worker<'a> {
             } else if let Some(sc) = self.syms.class(pc).superclass {
                 trait_superclasses.push((pc, sc, span));
             }
-            // The JVM runtime (std/jvm.scala) holds the one class behind every literal.
-            if self.is_partial_function(pc) && !(self.jvm && self.source(self.env.file).is_std) {
-                let msg = "PartialFunction cannot be extended; write a { case ... } literal, PartialFunction.fromFunction or Function.unlift";
-                self.error(span, msg);
-                continue;
-            }
             let pinfo = self.syms.class(pc);
             let (sealed, pfile) = (pinfo.mods & mods::SEALED != 0, pinfo.file);
             // A subclass may use a protected constructor; a private one stays with its class.

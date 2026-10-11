@@ -38,6 +38,28 @@ pub(super) struct Alt {
     pub refined: Option<Arc<MethodSig>>,
 }
 
+/// The packages and classes around a definition, each name followed by `_`, as a qualified
+/// erased signature writes them (`scala_Int`).
+fn owner_path(syms: &Symbols, interner: &crate::intern::Interner, owner: Owner, out: &mut String) {
+    match owner {
+        Owner::Package(p) => {
+            let info = syms.pkg(p);
+            if let Some(parent) = info.parent {
+                owner_path(syms, interner, Owner::Package(parent), out);
+                out.push_str(interner.get(info.name));
+                out.push('_');
+            }
+        }
+        Owner::Class(c) => {
+            let info = syms.class(c);
+            owner_path(syms, interner, info.owner, out);
+            out.push_str(interner.get(info.name));
+            out.push('_');
+        }
+        Owner::Local => {}
+    }
+}
+
 fn overload_outcome(choice: &Result<usize, Failure>) -> Outcome {
     match choice {
         Ok(_) => Outcome::Found,
@@ -1138,23 +1160,7 @@ impl<'a> Worker<'a> {
     }
 
     fn owner_path(&self, owner: Owner, out: &mut String) {
-        match owner {
-            Owner::Package(p) => {
-                let info = self.syms.pkg(p);
-                if let Some(parent) = info.parent {
-                    self.owner_path(Owner::Package(parent), out);
-                    out.push_str(self.interner.get(info.name));
-                    out.push('_');
-                }
-            }
-            Owner::Class(c) => {
-                let info = self.syms.class(c);
-                self.owner_path(info.owner, out);
-                out.push_str(self.interner.get(info.name));
-                out.push('_');
-            }
-            Owner::Local => {}
-        }
+        owner_path(&self.syms, self.interner, owner, out)
     }
 
     /// Names every alternative of an overloaded name; two of one class that end up with one

@@ -11,7 +11,12 @@ trait Ordering[T] extends java.util.Comparator[T]:
   def equiv(a: T, b: T): Boolean = compare(a, b) == 0
   def max[U <: T](a: U, b: U): U = if compare(a, b) >= 0 then a else b
   def min[U <: T](a: U, b: U): U = if compare(a, b) <= 0 then a else b
-  def reverse: Ordering[T] = Ordering.fromCompare((a, b) => compare(b, a))
+  // scala-library's: the reverse knows the ordering it reverses (`Ordering.Reverse`), which a sorted
+  // view sorted again by it reads (`isReverseOf`).
+  def reverse: Ordering[T] = new Ordering.Reverse(this)
+  def isReverseOf(other: Ordering[?]): Boolean = other match
+    case that: Ordering.Reverse[?] => that.outer == this
+    case _ => false
   def on[U](f: U => T): Ordering[U] = Ordering.fromCompare((a, b) => compare(f(a), f(b)))
   def orElse(other: Ordering[T]): Ordering[T] =
     Ordering.fromCompare: (a, b) =>
@@ -41,6 +46,15 @@ def compareDoubles(a: Double, b: Double): Int
 
 object Ordering:
   def apply[T](implicit ord: Ordering[T]): Ordering[T] = ord
+  // scala-library's `Ordering.Reverse`: equal to another reverse of an equal ordering.
+  final class Reverse[T](val outer: Ordering[T]) extends Ordering[T]:
+    def compare(a: T, b: T): Int = outer.compare(b, a)
+    override def reverse: Ordering[T] = outer
+    override def isReverseOf(other: Ordering[?]): Boolean = other == outer
+    override def equals(that: Any): Boolean = that match
+      case r: Reverse[?] => (this eq r) || outer == r.outer
+      case _ => false
+    override def hashCode: Int = outer.hashCode * 41
   def fromCompare[T](f: (T, T) => Int): Ordering[T] = FunctionOrdering(f)
   def fromLessThan[T](lt: (T, T) => Boolean): Ordering[T] =
     FunctionOrdering((a, b) => if lt(a, b) then -1 else if lt(b, a) then 1 else 0)

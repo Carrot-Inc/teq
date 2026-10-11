@@ -2934,8 +2934,8 @@ impl<'c> Copier<'c> {
                 TExpr::Static(self.member_ref(s))
             }
             TExpr::Module(c) if self.stored_trigger(t, c).is_some() => TExpr::Module(self.stored_class_copy(t, c)),
-            TExpr::ClassOf(c) if self.stored_trigger(t, c).is_some() => TExpr::ClassOf(self.stored_class_copy(t, c)),
-            TExpr::Int(_) | TExpr::Long(_) | TExpr::Double(_) | TExpr::Bool(_) | TExpr::Char(_) | TExpr::Str(_) | TExpr::Unit | TExpr::This | TExpr::Super(_) | TExpr::Static(_) | TExpr::Module(_) | TExpr::JsImport(_) | TExpr::JsGlobal(..) | TExpr::Null | TExpr::ClassOf(_) => t.prog.expr(e),
+            TExpr::ClassOf(c, dims) if self.stored_trigger(t, c).is_some() => TExpr::ClassOf(self.stored_class_copy(t, c), dims),
+            TExpr::Int(_) | TExpr::Long(_) | TExpr::Double(_) | TExpr::Bool(_) | TExpr::Char(_) | TExpr::Str(_) | TExpr::Unit | TExpr::This | TExpr::Super(_) | TExpr::Static(_) | TExpr::Module(_) | TExpr::JsImport(_) | TExpr::JsGlobal(..) | TExpr::Null | TExpr::ClassOf(..) => t.prog.expr(e),
             TExpr::Field(r, s) => {
                 let r = self.expr(t, r);
                 TExpr::Field(r, self.member_ref(s))

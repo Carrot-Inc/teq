@@ -187,6 +187,9 @@ pub struct Emitter<'a> {
     chunk: u32,
     simple_cache: &'a [AtomicU8],
     tmp_counter: u32,
+    /// The local `val`s whose initialisers cannot be `null`, noted where the walks meet their
+    /// definitions (`never_null`).
+    never_null_locals: crate::intern::FxMap<SymId, ()>,
     array_seq: Option<ClassId>,
     /// Top-level vals whose initializer is a literal are plain consts.
     const_vals: &'a [bool],
@@ -685,6 +688,30 @@ pub(super) fn class_of_name(syms: &Symbols, interner: &Interner, c: ClassId) -> 
     Some(name.to_string())
 }
 
+/// `Class.getName` of the array of `dims` dimensions of the class `getName` calls `element`:
+/// `[I`, `[[Ljava.lang.String;`, an array of units one of `BoxedUnit`s.
+pub(super) fn array_class_name(element: &str, dims: u8) -> String {
+    let mut s = "[".repeat(dims as usize);
+    match element {
+        "int" => s.push('I'),
+        "long" => s.push('J'),
+        "double" => s.push('D'),
+        "float" => s.push('F'),
+        "boolean" => s.push('Z'),
+        "char" => s.push('C'),
+        "byte" => s.push('B'),
+        "short" => s.push('S'),
+        "void" => s.push_str("Lscala.runtime.BoxedUnit;"),
+        n if n.starts_with('[') => s.push_str(n),
+        n => {
+            s.push('L');
+            s.push_str(n);
+            s.push(';');
+        }
+    }
+    s
+}
+
 pub(super) fn is_function_class(syms: &Symbols, interner: &Interner, c: ClassId) -> bool {
     let info = syms.class(c);
     let Owner::Package(p) = info.owner else { return false };
@@ -865,6 +892,7 @@ impl<'a> Emitter<'a> {
             chunk: 1,
             simple_cache,
             tmp_counter: 0,
+            never_null_locals: Default::default(),
             array_seq,
             const_vals: &layout.const_vals,
             file_inits: &layout.file_inits,
@@ -1156,6 +1184,7 @@ impl<'a> Emitter<'a> {
     /// emitter wrote before it.
     fn begin_item(&mut self) {
         self.tmp_counter = 0;
+        self.never_null_locals.clear();
         self.scope_names.clear();
         for s in self.named_locals.drain(..) {
             self.sym_names[s.idx()] = None;
@@ -2551,6 +2580,7 @@ impl<'a> Emitter<'a> {
         self.emit_object_members(tc.id);
         self.emit_forwarders(tc);
         self.emit_bridges(tc);
+        self.emit_reflective_proxies(tc);
         self.emit_super_accessors(tc);
         self.emit_secondary_ctors(tc);
         if info.value_class && info.mods & mods::CASE == 0 {
@@ -2683,6 +2713,31 @@ impl<'a> Emitter<'a> {
             let to = self.sym_name(implementation);
             self.line();
             let _ = write!(self.out, "{}(...$a) {{ return this.{}(...$a); }}", from, to);
+        }
+    }
+
+    /// The reflective proxies of the class (Scala.js's `genReflCallProxy`): each calls its member
+    /// with the arguments a reflective call passes, of the classes its parameters erase to, a value
+    /// class's argument its underlying value, and gives the member's result so erased.
+    fn emit_reflective_proxies(&mut self, tc: &TClass) {
+        let Some(proxies) = self.reach.reflective_proxies.get(&tc.id) else { return };
+        for p in proxies {
+            let n = self.sym_name(p.member);
+            let info = self.syms.sym(p.member);
+            let names: Vec<String> = (0..p.boxes.len()).map(|i| format!("$a{}", i)).collect();
+            let mut call = format!("this.{}", n);
+            if info.kind == SymKind::Def || info.needs_accessor {
+                let args: Vec<String> = p.boxes.iter().zip(&names).map(|(b, a)| match b {
+                    Some(v) => format!("new {}({})", self.class_name(*v), a),
+                    None => a.clone(),
+                }).collect();
+                let _ = write!(call, "({})", args.join(", "));
+            }
+            if let Some(field) = p.unbox {
+                call = format!("({}){}", call, self.field_access(field));
+            }
+            self.line();
+            let _ = write!(self.out, "{}({}) {{ return {}; }}", p.name, names.join(", "), call);
         }
     }
 
@@ -3198,7 +3253,15 @@ impl<'a> Emitter<'a> {
 
     /// `classOf[C]`: the `Class` of an emitted Scala class is the one `getClass` gives its
     /// instances; a builtin or a class the output has no constructor for is named.
-    pub(super) fn emit_class_of(&mut self, c: ClassId) {
+    pub(super) fn emit_class_of(&mut self, c: ClassId, dims: u8) {
+        // An array is of the one array class here, which no array value tells apart: the class
+        // of an array of a known element names it where the compiler reads it (a reflective
+        // call's proxy), not at run time (the interpreter's `class_literal` names it, for the
+        // reflection a JVM build's macro runs).
+        if dims > 0 {
+            self.out.push_str("$classNamed(\"[Ljava.lang.Object;\")");
+            return;
+        }
         let qualified = self.qualified_name(c);
         let (pkg, simple) = qualified.rsplit_once('.').unwrap_or(("", &qualified));
         // A JS char is a string.

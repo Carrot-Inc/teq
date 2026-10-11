@@ -4067,7 +4067,7 @@ impl<'c, 'a> Collector<'c, 'a> {
                 self.list(l);
             }
             TExpr::SeqLit(l) | TExpr::ArrayLit(l) | TExpr::ObjLit(l) => self.list(l),
-            TExpr::ClassOf(c) => self.named_class(c),
+            TExpr::ClassOf(c, _) => self.named_class(c),
             TExpr::JsImport(_) | TExpr::JsGlobal(..) => {}
             TExpr::Try(i) => {
                 let t = self.w.prog.tries[i as usize].clone();

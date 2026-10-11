@@ -107,7 +107,7 @@ trait IterableOps[+A, +CC[_], +C] extends IterableOnce[A]:
   def toIndexedSeq: IndexedSeq[A] = toVector
   def toSet[B >: A]: Set[B] = Set.from(this)
   def toBuffer[B >: A]: scala.collection.mutable.ArrayBuffer[B] = scala.collection.mutable.ArrayBuffer.from(this)
-  def view: View[A] = new View(() => iterator, "View")
+  def view: View[A] = View.over(() => iterator)
 
   def size: Int =
     var n = 0
@@ -312,6 +312,22 @@ trait IterableOps[+A, +CC[_], +C] extends IterableOnce[A]:
     val arr = rawItems(this)
     buildC(arraySlice(arr, 0, Math.max(0, arr.length - Math.max(n, 0))))
   def splitAt(n: Int): (C, C) = (take(n), drop(n))
+  def tails: Iterator[C] =
+    val arr = rawItems(this)
+    Iterator.range(0, arr.length + 1).map(i => buildC(arraySlice(arr, i, arr.length)))
+  def inits: Iterator[C] =
+    val arr = rawItems(this)
+    Iterator.range(0, arr.length + 1).map(i => buildC(arraySlice(arr, 0, arr.length - i)))
+  def corresponds[B](that: IterableOnce[B])(p: (A, B) => Boolean): Boolean =
+    val a = iterator
+    val b = that.iterator
+    var same = true
+    while same && a.hasNext && b.hasNext do same = p(a.next(), b.next())
+    same && !a.hasNext && !b.hasNext
+  def ++:[B >: A](prefix: IterableOnce[B]): CC[B] =
+    val out: RawBuffer[B] = iterableToArray(prefix)
+    foreach(x => out.push(x))
+    buildCC(out)
   def takeWhile(p: A => Boolean): C =
     val out = emptyBuffer[A]
     val it = iterator
@@ -433,7 +449,7 @@ trait SeqOps[+A, +CC[_], +C] extends IterableOps[A, CC, C]:
   override def size: Int = length
   override def isEmpty: Boolean = length == 0
   override def toSeq: Seq[A] = unsafeCast(this)
-  override def view: View[A] = new View(() => iterator, "SeqView")
+  override def view: scala.collection.SeqView[A] = new scala.collection.SeqView.Id(this)
   def lengthIs: Int = length
   def lengthCompare(len: Int): Int =
     val n = length
@@ -526,30 +542,17 @@ trait SeqOps[+A, +CC[_], +C] extends IterableOps[A, CC, C]:
     val out: RawBuffer[B] = iterableToArray(prefix)
     foreach(x => out.push(x))
     buildCC(out)
-  def ++:[B >: A](prefix: IterableOnce[B]): CC[B] = prependedAll(prefix)
+  override def ++:[B >: A](prefix: IterableOnce[B]): CC[B] = prependedAll(prefix)
   def padTo[B >: A](len: Int, elem: B): CC[B] =
     val out: RawBuffer[B] = copyArray(rawItems(this))
     while out.length < len do out.push(elem)
     buildCC(out)
-
-  def tails: Iterator[C] =
-    val arr = rawItems(this)
-    Iterator.range(0, arr.length + 1).map(i => buildC(arraySlice(arr, i, arr.length)))
-  def inits: Iterator[C] =
-    val arr = rawItems(this)
-    Iterator.range(0, arr.length + 1).map(i => buildC(arraySlice(arr, 0, arr.length - i)))
 
   def sameElements[B >: A](that: IterableOnce[B]): Boolean =
     val a = iterator
     val b = that.iterator
     var same = true
     while same && a.hasNext && b.hasNext do same = a.next() == b.next()
-    same && !a.hasNext && !b.hasNext
-  def corresponds[B](that: IterableOnce[B])(p: (A, B) => Boolean): Boolean =
-    val a = iterator
-    val b = that.iterator
-    var same = true
-    while same && a.hasNext && b.hasNext do same = p(a.next(), b.next())
     same && !a.hasNext && !b.hasNext
   def startsWith[B >: A](that: IterableOnce[B], offset: Int = 0): Boolean =
     val a = iterator.drop(offset)
@@ -660,7 +663,7 @@ trait IndexedSeq[+A] extends SeqOps[A, IndexedSeq, IndexedSeq[A]], Seq[A]:
       f(apply(i))
       i += 1
   override def iterator: Iterator[A] = Iterator.tabulate(length)(apply)
-  override def view: View[A] = new View(() => iterator, "IndexedSeqView")
+  override def view: scala.collection.IndexedSeqView[A] = new scala.collection.IndexedSeqView.Id(this)
   def buildCC[B](items: RawBuffer[B]): IndexedSeq[B] = Vector.wrap(items)
 
 object IndexedSeq:
@@ -956,46 +959,10 @@ object Iterator:
       case None => if fill() then step() else exhausted
     new FnIterator(() => fill(), () => step())
 
-// A collection traversed only on demand, anew each time, over the iterator of its source. The
-// prefix names the kind of the source in toString; it survives the operations that keep a
-// sequence a sequence, as in Scala.
-final class View[+A](source: () => Iterator[A], prefix: String) extends SeqOps[A, View, View[A]], Iterable[A]:
-  def buildCC[B](items: RawBuffer[B]): View[B] = new View(() => Iterator.over(items), prefix)
-  private def lazily[B](f: Iterator[A] => Iterator[B]): View[B] = new View(() => f(source()), prefix)
-  private def plainly[B](f: Iterator[A] => Iterator[B]): View[B] = new View(() => f(source()), "View")
-  override def iterator: Iterator[A] = source()
-  def foreach[U](f: A => U): Unit = source().foreach(f)
-  override def view: View[A] = this
-  override def isEmpty: Boolean = !source().hasNext
-  def length: Int =
-    var n = 0
-    source().foreach(_ => n += 1)
-    n
-  def apply(i: Int): A =
-    val it = source().drop(i)
-    if i < 0 || !it.hasNext then indexOutOfBounds(i.toString) else it.next()
-  override def toSeq: Seq[A] = toList
-  def force: IndexedSeq[A] = toVector
-  override def map[B](f: A => B): View[B] = lazily(_.map(f))
-  override def take(n: Int): View[A] = lazily(_.take(n))
-  override def drop(n: Int): View[A] = lazily(_.drop(n))
-  override def slice(from: Int, until: Int): View[A] = lazily(_.slice(from, until))
-  override def flatMap[B](f: A => IterableOnce[B]): View[B] = plainly(_.flatMap(f))
-  override def filter(p: A => Boolean): View[A] = plainly(_.filter(p))
-  override def collect[B](pf: PartialFunction[A, B]): View[B] = plainly(_.collect(pf))
-  override def takeWhile(p: A => Boolean): View[A] = plainly(_.takeWhile(p))
-  override def dropWhile(p: A => Boolean): View[A] = plainly(_.dropWhile(p))
-  override def zip[B](that: IterableOnce[B]): View[(A, B)] = plainly(_.zip(that))
-  override def zipWithIndex: View[(A, Int)] = plainly(_.zipWithIndex)
-  override def scanLeft[B](z: B)(op: (B, A) => B): View[B] = plainly(_.scanLeft(z)(op))
-  override def concat[B >: A](suffix: IterableOnce[B]): View[B] = plainly(_ ++ suffix)
-  override def tapEach[U](f: A => U): View[A] = plainly(_.tapEach(f))
-  override def collectionClassName: String = prefix
-  override def toString: String = prefix + "(<not computed>)"
-
 // A list whose cells are computed on first use and remembered.
 final class LazyList[+A](compute: () => Option[(A, LazyList[A])]) extends IterableOps[A, LazyList, LazyList[A]], Iterable[A]:
   override def collectionClassName: String = "LazyList"
+  override def view: scala.collection.SeqView[A] = new scala.collection.SeqView.OfLinear(this)
   private var forced = false
   private var cell: Option[(Any, LazyList[Any])] = None
   private def evaluated(): Option[(A, LazyList[A])] =

@@ -1411,9 +1411,12 @@ impl<'a, 't> Interp<'a, 't> {
                 TExpr::Str(s) => View::Literal(Value::str(&self.prog().strings[s.idx()])),
                 TExpr::Unit => View::Literal(Value::Unit),
                 TExpr::Null => View::Literal(Value::Null),
-                TExpr::ClassOf(c) => {
+                TExpr::ClassOf(c, dims) => {
                     let n = self.syms().class(c).tparams.len();
-                    let ty = self.typer.types.class(c, &vec![ANY; n]);
+                    let mut ty = self.typer.types.class(c, &vec![ANY; n]);
+                    for _ in 0..dims {
+                        ty = self.typer.types.class(self.typer.b.array, &[ty]);
+                    }
                     View::Literal(Value::Type(ty))
                 }
                 TExpr::Local(_) if self.outer_this_of(e).is_some() => View::This(self.outer_this_of(e)),
@@ -2449,7 +2452,7 @@ impl<'a, 't> Interp<'a, 't> {
     pub(super) fn tree_kind(&mut self, t: TreeRef) -> R<&'static str> {
         Ok(match t {
             TreeRef::Expr(e) => match self.prog().expr(e) {
-                TExpr::Int(_) | TExpr::Long(_) | TExpr::Double(_) | TExpr::Bool(_) | TExpr::Char(_) | TExpr::Str(_) | TExpr::Unit | TExpr::Null | TExpr::ClassOf(_) => "Literal",
+                TExpr::Int(_) | TExpr::Long(_) | TExpr::Double(_) | TExpr::Bool(_) | TExpr::Char(_) | TExpr::Str(_) | TExpr::Unit | TExpr::Null | TExpr::ClassOf(..) => "Literal",
                 TExpr::Local(_) if self.outer_this_of(e).is_some() => "This",
                 TExpr::Local(_) | TExpr::Static(_) | TExpr::Module(_) | TExpr::JsImport(_) | TExpr::JsGlobal(..) | TExpr::ObjLit(_) => "Ident",
                 TExpr::This => "This",
