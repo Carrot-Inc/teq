@@ -47,8 +47,11 @@ impl<'a, 't> Interp<'a, 't> {
             return Some(i as usize);
         }
         if !self.typer.is_library_class(c) {
-            // A class the check pass has not reached yet, met while a macro runs.
-            if self.syms().class(c).def.is_none() || self.syms().class(c).owner == Owner::Local {
+            // A class the check pass has not reached yet, met while a macro runs; an enum's
+            // synthesized companion, which holds its lookups, is checked as any.
+            let info = self.syms().class(c);
+            let enum_companion = info.companion.is_some_and(|e| self.syms().class(e).kind == ClassKind::Enum);
+            if (info.def.is_none() && !enum_companion) || info.owner == Owner::Local {
                 return None;
             }
             // A class the interpreter reaches is every worker's: checked under the loader's
@@ -486,11 +489,19 @@ impl<'a, 't> Interp<'a, 't> {
             ordinal: Cell::new(ordinal),
             hash: Cell::new(0), slot: Cell::new(0), born: Cell::new(0), made: Cell::new(super::made_now()) });
         let v = Value::Obj(obj.clone());
-        self.made.insert_static(sym, v.clone(), self.records.runs);
+        // A stateful enum's case is its companion's field, set once the construction returns
+        // (`enum_value`), as scalac's `val A = $new(..)` is.
+        let stateful = self.enum_of_case(case).map_or(false, |e| self.syms().class(e).stateful);
+        if !stateful {
+            self.made.insert_static(sym, v.clone(), self.records.runs);
+        }
         self.enter()?;
         let r = self.construct(&obj, case, Vec::new());
         self.depth -= 1;
         r?;
+        if stateful {
+            self.made.insert_static(sym, v.clone(), self.records.runs);
+        }
         Ok(v)
     }
 
@@ -500,8 +511,14 @@ impl<'a, 't> Interp<'a, 't> {
         let Owner::Class(companion) = self.syms().sym(sym).owner else { return self.make_enum_value(case, sym) };
         let stateful = self.enum_of_case(case).map_or(false, |e| self.syms().class(e).stateful);
         if stateful {
-            self.module(companion)?;
-            return Ok(self.made.statics.get(&sym).cloned().unwrap_or(Value::Null));
+            // The companion's field of the case, which it sets once the case's construction
+            // returns (`create_stateful_enum_values`), as scalac's `val A = $new(..)` does.
+            let m = self.module(companion)?;
+            let key = self.field_key(sym);
+            return Ok(match self.read_slot(&m, key) {
+                Value::Absent => Value::Null,
+                v => v,
+            });
         }
         let v = self.make_enum_value(case, sym)?;
         if self.has_body(companion) {
@@ -566,6 +583,15 @@ impl<'a, 't> Interp<'a, 't> {
     /// Runs the primary constructor of `c` on `obj`: the parameters become fields, the
     /// superclass is constructed, the body runs.
     fn construct(&mut self, obj: &Rc<Object>, c: ClassId, args: Vec<Value>) -> R<()> {
+        // dotty's `Memoize`: a constant val's getter answers the constant whatever the
+        // constructors have run (a trait's body reading it first), so the instance holds it
+        // before the first of them.
+        if obj.class == c {
+            let this = Value::Obj(obj.clone());
+            for (key, v) in self.constant_slots(c).iter() {
+                self.write_slot(&this, *key, v.clone());
+            }
+        }
         let ti = self.tclass_index(c);
         self.halt_on_withheld()?;
         let Some(ti) = ti else {
@@ -870,6 +896,39 @@ impl<'a, 't> Interp<'a, 't> {
             self.write_slot(this, key, v);
         }
         Ok(())
+    }
+
+    /// The `$values` the companion `m` of an enum whose cases are all values stores after its
+    /// cases (dotty's `enumScaffolding`), as a new array: `None` before the last case of a
+    /// stateful enum is made, whose cases are the companion's slots, written in order
+    /// (`create_stateful_enum_values`).
+    pub(super) fn enum_values(&mut self, m: &Value) -> R<Option<Vec<Value>>> {
+        let Value::Obj(o) = m else { return Ok(None) };
+        let Some(e) = self.syms().class(o.class).companion else { return Ok(None) };
+        // The array is made once, when the last case exists, and kept (`$values`).
+        if let Some(values) = self.enum_values.get(&e) {
+            return Ok(Some(values.to_vec()));
+        }
+        let (stateful, children) = {
+            let info = self.syms().class(e);
+            (info.stateful, info.children.clone())
+        };
+        let mut out = Vec::with_capacity(children.len());
+        for case in children {
+            let Some(sym) = self.syms().class(case).singleton else { return Ok(None) };
+            let v = if stateful {
+                let key = self.field_key(sym);
+                self.read_slot(m, key)
+            } else {
+                self.static_value(sym)?
+            };
+            if let Value::Absent = v {
+                return Ok(None);
+            }
+            out.push(v);
+        }
+        self.enum_values.insert(e, Rc::from(out.clone()));
+        Ok(Some(out))
     }
 
     /// Whether the constructor of `c` runs statements or initialisers of the body.
@@ -1348,6 +1407,15 @@ impl<'a, 't> Interp<'a, 't> {
             if self.declares_abstractly(k, name) {
                 declared.push((k, false));
             }
+            // Past the class's own declarations, the record decides a member of the rule's set
+            // (`TClass::existing_defs`): the definition `existingDef` took, which the bases'
+            // order would not find first (`Product`'s abstract `productElement` before
+            // `T[Int]`'s).
+            if k == c {
+                if let Some(m) = self.record_member(c, name) {
+                    return m;
+                }
+            }
             if k == c && value_class && matches!(name, crate::names::EQUALS | crate::names::HASH_CODE) {
                 let defines = self.syms().class(c).members.contains_key(&name);
                 if !defines {
@@ -1472,28 +1540,85 @@ impl<'a, 't> Interp<'a, 't> {
     }
 
     /// The `toString`, `equals` and `hashCode` a case class, case object or enum value gets by
-    /// rule, unless scalac lets it inherit them.
+    /// rule (`TClass::synthesized`), where it has no definition of its own or inherited.
+    /// The member the record of `c` names for `name`: the rule's where it synthesizes it, before
+    /// a base's body an abstract redeclaration hides (`Member::Missing` for a member of `Product`,
+    /// which the builtins answer by rule), else the existing definition `existingDef` took.
+    fn record_member(&mut self, c: ClassId, name: Name) -> Option<Member> {
+        let (bit, _, _) = synthetic::MEMBERS.iter().copied().find(|&(_, n, _)| n == name)?;
+        let synthesized = self.tclass_field(c, |tc| tc.synthesized).unwrap_or(0);
+        if synthesized & bit != 0 {
+            return match name {
+                crate::names::TO_STRING | crate::names::EQUALS | crate::names::HASH_CODE => self.shape_member(c, name),
+                _ => Some(Member::Missing),
+            };
+        }
+        let existing = self.tclass_field(c, |tc| tc.existing_defs().iter().find(|&&(b, _)| b == bit).map(|&(_, s)| s)).flatten()?;
+        let Owner::Class(k) = self.syms().sym(existing).owner else { return None };
+        match self.own_member(k, name) {
+            Member::Missing => None,
+            m => Some(m),
+        }
+    }
+
+    /// The constant vals of `c` and its bases with their constants (`Interp::constant_slots`).
+    fn constant_slots(&mut self, c: ClassId) -> Rc<[(FieldKey, Value)]> {
+        if let Some(s) = &self.constant_slots[c.idx()] {
+            return s.clone();
+        }
+        let bases: Vec<ClassId> = self.syms().class(c).base_types.iter().map(|&(b, _)| b).collect();
+        let mut slots = Vec::new();
+        for b in bases {
+            let Some(ti) = self.tclass_index(b) else { continue };
+            let constants = self.prog().classes[ti].constants().to_vec();
+            for (s, e) in constants {
+                let v = match self.prog().expr(e) {
+                    TExpr::Int(v) => Value::Int(v),
+                    TExpr::Long(v) => Value::Long(v),
+                    TExpr::Double(v) => Value::Double(v),
+                    TExpr::Bool(v) => Value::Bool(v),
+                    TExpr::Char(v) => Value::Char(v),
+                    TExpr::Str(id) => Value::Str(self.string_lit(id)),
+                    _ => continue,
+                };
+                let key = self.field_key(s);
+                slots.push((key, v));
+            }
+        }
+        let slots: Rc<[(FieldKey, Value)]> = Rc::from(slots);
+        self.constant_slots[c.idx()] = Some(slots.clone());
+        slots
+    }
+
     fn shape_member(&mut self, c: ClassId, name: Name) -> Option<Member> {
         let shape = self.shape(c);
-        let bit = match name {
-            crate::names::TO_STRING => 0,
-            crate::names::EQUALS => 1,
-            crate::names::HASH_CODE => 2,
+        let (bit, member) = match name {
+            crate::names::TO_STRING => (synthetic::TO_STRING, 0),
+            crate::names::EQUALS => (synthetic::EQUALS, 1),
+            crate::names::HASH_CODE => (synthetic::HASH_CODE, 2),
             _ => return None,
         };
         if matches!(shape, Shape::Plain) {
             return None;
         }
-        let inherited = self.tclass_field(c, |tc| tc.inherited_case_members).unwrap_or(0);
-        if inherited & (1 << bit) != 0 {
+        let synthesized = self.tclass_field(c, |tc| tc.synthesized).unwrap_or(u16::MAX);
+        if synthesized & bit == 0 {
             return None;
         }
-        Some(match (shape, bit) {
+        Some(match (shape, member) {
             (_, 0) => Member::CaseToString,
             (Shape::EnumValue, 1) => Member::AnyEquals,
             (_, 1) => Member::CaseEquals,
             _ => Member::CaseHash,
         })
+    }
+
+    /// The shape of `c`, made once, borrowed: a test of its kind copies none of its fields.
+    pub(super) fn shape_ref(&mut self, c: ClassId) -> &Shape {
+        if self.shapes[c.idx()].is_none() {
+            self.shape(c);
+        }
+        self.shapes[c.idx()].as_ref().expect("the shape is made")
     }
 
     pub(super) fn shape(&mut self, c: ClassId) -> Shape {
@@ -1510,8 +1635,10 @@ impl<'a, 't> Interp<'a, 't> {
         } else if is_case {
             let params: Vec<SymId> = info.ctor.first().map(|cl| cl.params.iter().map(|p| p.sym).collect()).unwrap_or_default();
             let keys: Vec<FieldKey> = params.into_iter().map(|p| self.field_key(p)).collect();
+            let order = self.tclass_field(c, |tc| tc.equals_order().to_vec()).unwrap_or_default();
+            let compared: Rc<[FieldKey]> = if order.is_empty() { Rc::from(keys.clone()) } else { order.iter().filter_map(|&i| keys.get(i as usize).cloned()).collect() };
             let display = if self.is_tuple_name(&name) { Rc::from("") } else { name };
-            Shape::Case(Rc::from(keys), display)
+            Shape::Case(Rc::from(keys), display, compared)
         } else {
             Shape::Plain
         };
@@ -1529,9 +1656,35 @@ impl<'a, 't> Interp<'a, 't> {
         let mut at = Some(c);
         let mut steps = 0;
         while let Some(k) = at {
+            match self.shape_ref(k) {
+                Shape::Case(fields, display, _) => return Some((fields.clone(), display.clone())),
+                Shape::CaseObject(name) => {
+                    let name = name.clone();
+                    return Some((Rc::from(Vec::new()), name));
+                }
+                _ => {}
+            }
+            steps += 1;
+            if steps > self.syms().classes.len() {
+                break;
+            }
+            at = self.syms().class(k).superclass;
+        }
+        None
+    }
+
+    /// The case class's fields in the order its `equals` by rule compares them.
+    pub(super) fn case_compared_fields(&mut self, c: ClassId) -> Option<Rc<[FieldKey]>> {
+        self.case_shape(c).map(|(_, _, compared)| compared)
+    }
+
+    fn case_shape(&mut self, c: ClassId) -> Option<(Rc<[FieldKey]>, Rc<str>, Rc<[FieldKey]>)> {
+        let mut at = Some(c);
+        let mut steps = 0;
+        while let Some(k) = at {
             match self.shape(k) {
-                Shape::Case(fields, display) => return Some((fields, display)),
-                Shape::CaseObject(name) => return Some((Rc::from(Vec::new()), name)),
+                Shape::Case(fields, display, compared) => return Some((fields, display, compared)),
+                Shape::CaseObject(name) => return Some((Rc::from(Vec::new()), name, Rc::from(Vec::new()))),
                 _ => {}
             }
             steps += 1;

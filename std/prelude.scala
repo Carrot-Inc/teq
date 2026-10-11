@@ -203,12 +203,12 @@ def identity[A](x: A): A = x
 
 type Serializable = java.io.Serializable
 
-// What a case class, a case object, an enum case or a tuple is: its elements by position. Those
-// classes are products without extending the trait, which the compiler knows; a class of the
-// program that extends it implements the members itself. A call of a concrete member that
-// resolves to the trait's own goes to the function below it, since a product by rule has no
-// body of the trait.
+// What a case class, a case object, an enum case or a tuple is: its elements by position. A case
+// class or object takes `Product` among its parents and the members it does not define by rule
+// (dotty's `SyntheticMembers`), which the runtime answers from its shape after any definition the
+// class has; a class of the program that extends the trait implements them itself.
 trait Equals extends Any:
+  @js("$canEqual($0, $1)")
   def canEqual(that: Any): Boolean
 
 trait Product extends Any with Equals:
@@ -226,14 +226,8 @@ trait Product extends Any with Equals:
   // takes them from scala-library's `Product` alone.
   @js("$productElementName($0, $1)")
   def productElementName(n: Int): String
-  def productElementNames: Iterator[String] = productElementNamesImpl(this)
-  def productIterator: Iterator[Any] = productIteratorImpl(this)
-  def canEqual(that: Any): Boolean = canEqualImpl(this, that)
-
-def productIteratorImpl(p: Product): Iterator[Any] = Iterator.tabulate(p.productArity)(p.productElement)
-def productElementNamesImpl(p: Product): Iterator[String] = Iterator.tabulate(p.productArity)(p.productElementName)
-// What scalac's case class answers: `that.isInstanceOf[C]`.
-def canEqualImpl(p: Equals, that: Any): Boolean = that != null && p.getClass == that.getClass
+  def productElementNames: Iterator[String] = Iterator.tabulate(productArity)(productElementName)
+  def productIterator: Iterator[Any] = Iterator.tabulate(productArity)(productElement)
 
 extension [A](a: A)
   @predef

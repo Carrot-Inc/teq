@@ -6,10 +6,10 @@ constructor default                         1          0        0            0  
 enum companion member                       0          2        0            0          0
 field selection                             1          0        0            0          1
 folded operator                             0          1        0            0          0
-helper for a member                         0          1        0            0          0
-literal                                     8          0        0            0          1
+literal                                     7          0        0            0          0
 local reference                            13          0        0            0          1
 local val                                   1          0        0            0          0
+method call                                 1          0        0            0          0
 named argument                              0          1        0            0          0
 operator                                    0          1        0            0          0
 synthesized definition                      0          0        0            2          0

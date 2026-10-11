@@ -142,8 +142,14 @@ impl<'a> Worker<'a> {
     // ---- the alternatives of a name in a class ----
 
     /// The `k`-th alternative that `b` itself defines for `name`.
+    #[inline]
     pub(super) fn own_alternative(&self, b: ClassId, name: Name, k: usize) -> Option<SymId> {
-        let &entry = self.syms.class(b).members.get(&name)?;
+        let info = self.syms.class(b);
+        if !info.may_have(name) {
+            debug_assert!(!info.members.contains_key(&name), "the names mask of {} lacks {}", self.class_path(b), self.name_str(name));
+            return None;
+        }
+        let &entry = info.members.get(&name)?;
         match self.syms.alternatives(entry) {
             Some(alts) => alts.iter().copied().filter(|&a| self.syms.sym(a).owner == Owner::Class(b)).nth(k),
             None => (k == 0).then_some(entry),
@@ -243,6 +249,7 @@ impl<'a> Worker<'a> {
         }
         let set = self.syms.new_overloaded(all[0], Owner::Class(c), all);
         self.syms.class_mut(c).members.insert(name, set);
+        self.syms.note_member_name(c, name);
         self.syms.class_mut(c).has_overloads = true;
         // The entry it replaces stands for nothing any more.
         if let SymKind::Overloaded(_) = self.syms.sym(entry).kind {
@@ -408,6 +415,7 @@ impl<'a> Worker<'a> {
         info.meets_inherited = true;
         info.merge_pending = true;
         self.syms.class_mut(c).members.insert(name, set);
+        self.syms.note_member_name(c, name);
     }
 
     // ---- names in the output ----
@@ -449,11 +457,24 @@ impl<'a> Worker<'a> {
             Owner::Class(c) if self.syms.class(c).js != JsKind::Scala => None,
             // The runtime calls `toString`, `hashCode` and `equals` by their plain names.
             Owner::Class(_) if matches!(name, names::TO_STRING | names::HASH_CODE | names::EQUALS) && self.matches_any_member(m) => None,
+            // So do its product functions `Product`'s and `Equals`' members the rule gives, which
+            // an implementation or its bridge answers under that name (dotty's `matchingMember`
+            // at the class site: `productElement(i: A)` of a `Supply[Int]`).
+            Owner::Class(_)
+                if matches!(name, names::PRODUCT_ARITY | names::PRODUCT_ELEMENT | names::PRODUCT_PREFIX | names::PRODUCT_ELEMENT_NAME | names::CAN_EQUAL_METHOD)
+                    && self.matches_product_member(m) =>
+            {
+                None
+            }
             Owner::Class(c) => {
                 self.complete_class(c);
+                // Another parameter list than `Any`'s member of the name is an alternative of it
+                // (dotty's `matchingMember` keeps both), in a program's class or one read from
+                // the products, with the same name in either; teq's own std keeps its names.
+                let beside_any = matches!(name, names::TO_STRING | names::HASH_CODE | names::EQUALS) && !self.std_source(self.syms.class(c).file);
                 match self.overridden_dispatch(c, m) {
                     Some(inherited) => inherited,
-                    None => (!self.keeps_plain_name(m)).then(|| {
+                    None => (beside_any || !self.keeps_plain_name(m)).then(|| {
                         let entry = self.settled_entry(c, name).unwrap_or(m);
                         self.suffixed_name(m, entry)
                     }),
@@ -872,6 +893,9 @@ impl<'a> Worker<'a> {
             Owner::Class(rc) => Some(rc),
             _ => None,
         }).collect();
+        if self.subclasses.unindexed.is_empty() {
+            self.subclasses.unindexed = [self.b.product, self.b.equals, self.b.reflect_enum, self.java_serializable.flatten()].into_iter().flatten().collect();
+        }
         let below = self.subclasses.below(&self.syms, &owners);
         for root in roots {
             let (name, Owner::Class(rc)) = (self.syms.sym(root).name, self.syms.sym(root).owner) else { continue };
@@ -1079,6 +1103,11 @@ impl<'a> Worker<'a> {
                 };
                 if !matches!(self.types.get(rest), Type::Union(..)) {
                     return self.erased_name(rest, qualified, depth + 1, out);
+                }
+                // dotty's `erasedLub` of the parts' classes (`Tag | Other` is a `Serializable`).
+                if let Some(super::site::Erased::Of(c, 0)) = self.stable_erasure(rest) {
+                    let erased = self.types.class(c, &[]);
+                    return self.erased_name(erased, qualified, depth + 1, out);
                 }
                 match self.class_of(rest) {
                     Some(c) => {
@@ -3536,12 +3565,17 @@ pub struct SubclassIndex {
     scanned_own: usize,
     below: FxMap<ClassId, Vec<ClassId>>,
     incomplete: Vec<ClassId>,
+    /// The classes `Desugar.classDef` gives, which a class's leading bases (`rule_prefix`) are
+    /// and which are not indexed there: below one of them a scan answers.
+    pub unindexed: Vec<ClassId>,
 }
 
 impl SubclassIndex {
     fn index(&mut self, syms: &Symbols, d: ClassId) {
-        for &(b, _) in &syms.class(d).base_types {
-            if b != d {
+        let info = syms.class(d);
+        for &(b, _) in &info.base_types[1 + info.rule_prefix as usize..] {
+            // A base without members (`java.io.Serializable`) owns no root declaration.
+            if b != d && syms.class(b).names_mask != 0 && !self.unindexed.contains(&b) {
                 let ds = self.below.entry(b).or_default();
                 if ds.last() != Some(&d) {
                     ds.push(d);
@@ -3581,6 +3615,12 @@ impl SubclassIndex {
         });
         let mut out: FxMap<ClassId, Vec<ClassId>> = FxMap::default();
         for &rc in owners {
+            if self.unindexed.contains(&rc) {
+                let mut ds: Vec<ClassId> = (0..shared).chain(base..own).map(|d| ClassId(d as u32)).filter(|&d| d != rc && syms.class(d).base_types.iter().any(|&(b, _)| b == rc)).collect();
+                ds.sort_unstable();
+                out.insert(rc, ds);
+                continue;
+            }
             let mut ds = self.below.get(&rc).cloned().unwrap_or_default();
             ds.extend(incomplete.iter().copied().filter(|&d| d != rc && syms.class(d).base_types.iter().any(|&(b, _)| b == rc)));
             ds.sort_unstable();

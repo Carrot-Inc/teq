@@ -147,11 +147,10 @@ pub struct Builtins {
     /// `Product` as a type; `ERROR` without the standard library.
     pub t_product: TypeId,
     pub t_singleton: TypeId,
+    /// `Equals`, `Product`'s parent, and its type.
+    pub equals: Option<ClassId>,
     pub t_equals: TypeId,
-    /// The interned name `Serializable` once the interner holds it, which `java.io.Serializable`'s
-    /// check by name compares first (`Worker::is_serializable_type`).
-    pub serializable_name: std::cell::Cell<Option<Name>>,
-    /// `scala.reflect.Enum`, which enum classes and cases are without extending it.
+    /// `scala.reflect.Enum`, the parent `Desugar.classDef` gives every enum.
     pub reflect_enum: Option<ClassId>,
     pub t_enum: TypeId,
     pub tuple_trait: Option<ClassId>,
@@ -165,9 +164,6 @@ pub struct Builtins {
     pub tuple_member_bits: [u64; 4],
     /// The members of scala-library's `Predef`, which the lean std defines in package `scala`.
     pub predef_names: std::collections::HashSet<Name, crate::intern::FxBuild>,
-    /// The concrete members of `Product` with the std functions that stand in for them on a
-    /// receiver without the trait's body (`derive::product_helper`).
-    pub product_helpers: Vec<(Name, SymId)>,
     pub scala_pkg: PkgId,
     /// The numeric rank of the first type ids (`prims::R_BYTE` to `R_DOUBLE`), which the
     /// primitive types are among; `NO_RANK` for the others.
@@ -955,6 +951,18 @@ pub struct Worker<'a> {
     /// A candidate's declared result as the head rejection reads it against a class, per
     /// candidate and class (`implicits::HeadSig`): kept like `given_fits`, cleared by a retype.
     pub head_sigs: FxMap<(SymId, ClassId), std::sync::Arc<implicits::HeadSig>>,
+    /// dotty's `baseTypeCache`: `base_type` of a class type without inference variables, per type
+    /// and base class, once the class is complete; forgotten where a class's base types are made
+    /// again (`forget_base_types`), by a retype and at the merge.
+    pub base_type_cache: FxMap<(TypeId, ClassId), Option<TypeId>>,
+    /// Per file, whether a definition of it carries `@targetName` (1 none, 2 one, 0 not read):
+    /// only a member of such a file declares a target name (`declared_target_name`), which every
+    /// class reads of its ancestors (`inherited_targets`). Forgotten by a retype and at the merge.
+    pub target_name_files: Vec<u8>,
+    /// The names of the members of the classes `Desugar.classDef` gives (`Product`, `Equals`,
+    /// `Serializable`, `Enum`), read once they are complete: which a case class's own names are
+    /// tested against in place of their tables (`mark_members_meeting_inherited`).
+    pub rule_member_names: Vec<Name>,
     /// A match-type alias of a generic class seen through a prefix (`K0.LiftP` for `Kind`'s
     /// `LiftP`), copied with the class's parameters as the prefix instantiates them, per
     /// alias and prefix.
@@ -1232,6 +1240,8 @@ pub struct Worker<'a> {
     /// `scala.scalajs.js.internal.UnitOps` once looked up, which is in the implicit scope of `Unit`
     /// on JavaScript.
     pub unit_ops: Option<Option<ClassId>>,
+    /// `java.io.Serializable` once looked up, the parent `Desugar.classDef` gives a case class.
+    pub java_serializable: Option<Option<ClassId>>,
     /// Whether the program runs under the interpreter, which tells a `Char` from a `String`.
     pub interp: bool,
     /// Set while a body is typed for the interpreter on the JVM (`deferred_body`): a def with a
@@ -2018,10 +2028,10 @@ impl<'a> Worker<'a> {
             js_exception: None,
             cons_tuple: None,
             product: None,
+            equals: None,
             t_product: ERROR,
             t_singleton: ERROR,
             t_equals: ERROR,
-            serializable_name: std::cell::Cell::new(None),
             reflect_enum: None,
             t_enum: ERROR,
             tuple_trait: None,
@@ -2030,7 +2040,6 @@ impl<'a> Worker<'a> {
             tuple_members: Vec::new(),
             tuple_member_bits: [0; 4],
             predef_names: Default::default(),
-            product_helpers: Vec::new(),
             scala_pkg,
             num_rank,
         };
@@ -2184,6 +2193,9 @@ impl<'a> Worker<'a> {
             trace_starts: Vec::new(),
             given_fits: FxMap::default(),
             head_sigs: FxMap::default(),
+            base_type_cache: FxMap::default(),
+            target_name_files: Vec::new(),
+            rule_member_names: Vec::new(),
             derived_aliases: FxMap::default(),
             derived_opaques: Default::default(),
             function_targets: Vec::new(),
@@ -2280,6 +2292,7 @@ impl<'a> Worker<'a> {
             deferred_bounds: Vec::new(),
             jvm: false,
             unit_ops: None,
+            java_serializable: None,
             interp: false,
             for_interpreter: false,
             erased_tags: None,
@@ -2511,6 +2524,9 @@ impl<'a> Worker<'a> {
             trace_starts: Default::default(),
             given_fits: self.given_fits.clone(),
             head_sigs: self.head_sigs.clone(),
+            base_type_cache: FxMap::default(),
+            target_name_files: self.target_name_files.clone(),
+            rule_member_names: self.rule_member_names.clone(),
             derived_aliases: self.derived_aliases.clone(),
             derived_opaques: self.derived_opaques.attach(),
             arity_classes: self.arity_classes.attach(),
@@ -2600,6 +2616,7 @@ impl<'a> Worker<'a> {
             dialect: self.dialect,
             jvm: self.jvm,
             unit_ops: self.unit_ops,
+            java_serializable: self.java_serializable,
             interp: self.interp,
             for_interpreter: self.for_interpreter,
             erased_tags: None,
@@ -3753,7 +3770,8 @@ impl<'a> Worker<'a> {
         self.b.product = self.entered_std_class("Product");
         self.b.t_product = self.b.product.map_or(ERROR, |p| self.types.class(p, &[]));
         self.note_singleton_class();
-        self.b.t_equals = self.entered_std_class("Equals").map_or(ERROR, |e| self.types.class(e, &[]));
+        self.b.equals = self.entered_std_class("Equals");
+        self.b.t_equals = self.b.equals.map_or(ERROR, |e| self.types.class(e, &[]));
         self.b.reflect_enum = self.entered_scala_reflect_class("Enum");
         self.b.t_enum = self.b.reflect_enum.map_or(ERROR, |e| self.types.class(e, &[]));
         self.b.tuple_members = crate::typer::arity::TUPLE_MEMBERS.iter().map(|n| self.interner.intern(n)).collect();
@@ -3762,10 +3780,6 @@ impl<'a> Worker<'a> {
             self.b.tuple_member_bits[(n.0 / 64 % 4) as usize] |= 1 << (n.0 % 64);
         }
         self.b.predef_names = crate::stdindex::STD_INDEX.iter().flat_map(|f| f.predef).map(|n| self.interner.intern(n)).collect();
-        self.b.product_helpers = [("productIterator", "productIteratorImpl"), ("productElementNames", "productElementNamesImpl"), ("canEqual", "canEqualImpl")]
-            .iter()
-            .filter_map(|&(member, helper)| Some((self.interner.intern(member), self.entered_std_def(helper)?)))
-            .collect();
         self.b.tuple_trait = self.entered_std_class("Tuple");
         self.b.non_empty_tuple = self.entered_std_class("NonEmptyTuple");
         self.b.empty_tuple = self.empty_tuple_class();
@@ -4105,11 +4119,6 @@ impl<'a> Worker<'a> {
         let name = self.interner.intern(name);
         let scala = self.b.scala_pkg;
         self.demand_term(scala, name)
-    }
-
-    fn entered_std_def(&mut self, name: &str) -> Option<SymId> {
-        let name = self.interner.intern(name);
-        self.syms.pkg(self.b.scala_pkg).entries.get(&name).and_then(|e| e.term)
     }
 
     pub(super) fn std_object(&mut self, name: &str) -> Option<ClassId> {

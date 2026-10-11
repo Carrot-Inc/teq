@@ -119,10 +119,6 @@ pub struct Layout {
     pub has_body: Vec<bool>,
     /// Per class: the number its registration and type tests use, `UNNUMBERED` for the rest.
     pub class_numbers: Vec<u32>,
-    /// The numbers of the parents a product by rule has (`Symbols::is_synthetic_parent`:
-    /// `scala.Product`, `scala.Equals`, `java.io.Serializable`) where a test asks for them, which
-    /// such a product (`ClassInfo::is_product_by_rule`) carries without extending them.
-    pub product_numbers: Vec<u32>,
     /// The number of the partial functions' trait where a test asks for it, which a partial
     /// function value carries on its prototype.
     pub partial_function_number: Option<u32>,
@@ -180,7 +176,6 @@ impl Layout {
             file_inits,
             has_body: vec![false; syms.classes.len()],
             class_numbers: Vec::new(),
-            product_numbers: Vec::new(),
             partial_function_number: None,
             anon_parent_args: FxMap::default(),
             local_captures: FxMap::default(),
@@ -320,19 +315,8 @@ impl Layout {
         for (n, c) in numbered.into_iter().enumerate() {
             self.class_numbers[c.idx()] = n as u32;
         }
-        // The parents of the products by rule and the partial functions' trait where a reached
-        // test of the output asks for them.
-        self.product_numbers.clear();
-        self.partial_function_number = None;
-        for c in (0..syms.classes.len()).map(|i| ClassId(i as u32)).filter(|&c| tested(c)) {
-            if prog.partial_function == Some(c) {
-                self.partial_function_number = Some(self.class_numbers[c.idx()]);
-            }
-            if syms.is_synthetic_parent(interner, c) && !self.product_numbers.contains(&self.class_numbers[c.idx()]) {
-                self.product_numbers.push(self.class_numbers[c.idx()]);
-            }
-        }
-        self.product_numbers.sort_unstable();
+        // The partial functions' trait where a reached test of the output asks for it.
+        self.partial_function_number = prog.partial_function.filter(|&c| tested(c)).map(|c| self.class_numbers[c.idx()]);
     }
 
     /// Everything in one module.

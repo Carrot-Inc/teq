@@ -2585,6 +2585,8 @@ impl<'c> Copier<'c> {
         // to it, their parameters, and every construction through them (`NewVia`).
         let ctors: Vec<SymId> = info.ctors.iter().map(|&s| self.member(t, s, nc)).collect();
         let primary_ctor = info.primary_ctor.map(|s| self.member(t, s, nc));
+        let names_mask = members.keys().fold(0, |m, &n| m | crate::symbols::name_bit(n))
+            | extensions.iter().fold(0, |m, &e| m | crate::symbols::name_bit(t.syms.sym(e).name));
         let givens: Vec<SymId> = info.givens.iter().map(|&s| self.sym(s)).collect();
         let parents: Vec<TypeId> = info.parents.iter().map(|&p| self.ty(t, p)).collect();
         let base_types: Vec<(ClassId, TypeId)> =
@@ -2619,6 +2621,7 @@ impl<'c> Copier<'c> {
         let superclass = info.superclass.map(|k| self.classes.get(&k).copied().unwrap_or(k));
         copy.superclass = superclass;
         copy.nested = info.nested.iter().map(|(&n, &k)| (n, self.classes.get(&k).copied().unwrap_or(k))).collect();
+        copy.names_mask = names_mask;
         copy.members = members;
         copy.member_order = member_order;
         copy.selectors = selectors;
@@ -2627,6 +2630,7 @@ impl<'c> Copier<'c> {
         copy.primary_ctor = primary_ctor;
         copy.givens = givens;
         copy.base_types = base_types;
+        copy.rule_prefix = info.rule_prefix;
         copy.this_type = this_type;
         copy.declared_self = declared_self;
         copy.self_alias = info.self_alias;
@@ -2635,6 +2639,7 @@ impl<'c> Copier<'c> {
         copy.has_overloads = info.has_overloads;
         copy.has_statements = info.has_statements;
         copy.stateful = info.stateful;
+        copy.desugared_parents = info.desugared_parents;
         drop(copy);
         if let Some(sup) = superclass.filter(|&k| Some(k) != info.superclass && !t.syms.class(k).subclasses.contains(&nc)) {
             t.syms.class_mut(sup).subclasses.push(nc);
@@ -2678,6 +2683,14 @@ impl<'c> Copier<'c> {
                 TInit::Parent(k, call) => TInit::Parent(k, self.parent_call(t, call)),
             })
             .collect();
+        let constants: Vec<(SymId, TExprId)> = tc.constants().iter().map(|&(s, e)| (self.sym(s), self.expr(t, e))).collect();
+        let lists = tc.lists.as_deref().map(|l| {
+            Box::new(crate::tir::TClassLists {
+                equals_order: l.equals_order.clone(),
+                existing_defs: l.existing_defs.iter().map(|&(bit, s)| (bit, self.sym(s))).collect(),
+                constants,
+            })
+        });
         let methods: Vec<FunId> = tc.methods.iter().map(|&f| self.fun(t, f)).collect();
         let ctors: Vec<FunId> = tc.ctors.iter().map(|&f| self.fun(t, f)).collect();
         // Each copy is its member's function, as the class's typing registers its methods: a call
@@ -2722,8 +2735,9 @@ impl<'c> Copier<'c> {
             parent_args,
             parent_via: tc.parent_via.map(|s| self.sym(s)),
             parent_prelude,
-            inherited_case_members: tc.inherited_case_members,
+            synthesized: tc.synthesized,
             retracted_unapply: tc.retracted_unapply,
+            lists,
             init,
             methods,
             ctors,

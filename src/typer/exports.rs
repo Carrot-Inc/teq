@@ -789,7 +789,9 @@ impl<'a> Worker<'a> {
         if info.kind == ClassKind::Object {
             return false;
         }
-        info.parents.iter().all(|&parent| match self.types.get(parent) {
+        // The parents `Desugar.classDef` gives, last (`desugared_parents`), export nothing.
+        let written = info.parents.len() - (info.desugared_parents as usize).min(info.parents.len());
+        info.parents[..written].iter().all(|&parent| match self.types.get(parent) {
             Type::Class(pc, _) => matches!(self.class_exports.get(&pc), Some(ExportSlot::Empty)),
             _ => true,
         })

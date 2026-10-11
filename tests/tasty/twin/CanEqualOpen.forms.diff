@@ -1,0 +1,8 @@
+40c40
+<     <synthetic> val s$2: String = (x$0.productElement{(Int): java.lang.Object}(0)).$asInstanceOf${([1]): java.lang.Object}[String]
+---
+>     <synthetic> val s$1: String = (x$0.productElement{(Int): java.lang.Object}(0)).$asInstanceOf${([1]): java.lang.Object}[String]
+42c42
+<     new CanEqualOpen{(java.lang.String, Long): fix.canequal.CanEqualOpen}(s$2, n$1)
+---
+>     new CanEqualOpen{(java.lang.String, Long): fix.canequal.CanEqualOpen}(s$1, n$1)

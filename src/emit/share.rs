@@ -1358,7 +1358,7 @@ impl<'a> Enc<'a> {
             self.opt_expr(d);
         }
         self.tok(tc.captures as u64);
-        self.tok(tc.inherited_case_members as u64);
+        self.tok(tc.synthesized as u64);
         self.tok(tc.retracted_unapply as u64);
         self.stmts(tc.parent_prelude);
         match tc.parent_args {

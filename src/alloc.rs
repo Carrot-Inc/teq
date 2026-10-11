@@ -628,7 +628,10 @@ unsafe fn remap(block: *mut u8, old_size: usize, new_size: usize) -> *mut u8 {
     let new = map(new_size);
     if !new.is_null() {
         std::ptr::copy_nonoverlapping(block, new, old_size.min(new_size));
-        unmap(block, old_size);
+        // The block's contents have moved: its pages go back with the mapping kept, which would
+        // otherwise hold the array's old written pages resident until it is taken or aged (the
+        // class bodies' array past 16,384 records, 5.5 MB of a resident check).
+        unmap(block, 0);
     }
     new
 }

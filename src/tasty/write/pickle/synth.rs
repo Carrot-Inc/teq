@@ -364,8 +364,8 @@ impl<'w, 'a> P<'w, 'a> {
         if fields.is_empty() {
             return self.int_literal(h);
         }
-        let primitive = fields.iter().any(|&(_, t)| self.numeric_class(self.w.widen_lit(t)).is_some() || self.is_unit(t));
-        if !primitive {
+        // The targets' decision (`tir::hashes_through_elements`).
+        if crate::tir::hashes_through_elements(&self.w.syms, &self.w.types, c) {
             // MurmurHash3.productHash(this, Statics.mix(0xcafebabe, "C".hashCode), true)
             self.term_at(None);
             let l = self.open_tree(APPLY);
@@ -488,9 +488,13 @@ impl<'w, 'a> P<'w, 'a> {
                 self.buf.byte(TRUECONST);
             }
             [t] => t(self),
-            _ => {
+            // dotty's `reduceBalanced`: halves past 100 terms, from the left below.
+            _ if terms.len() > 100 => {
                 let (l, r) = terms.split_at(terms.len() / 2);
                 self.boolean_op("&&", &mut |p| p.and_balanced(l), &mut |p| p.and_balanced(r));
+            }
+            [init @ .., last] => {
+                self.boolean_op("&&", &mut |p| p.and_balanced(init), &mut |p| last(p));
             }
         }
     }
@@ -525,13 +529,20 @@ impl<'w, 'a> P<'w, 'a> {
     /// `equals` of a case class (`SyntheticMembers.equalsBody`): `this.eq(that) || (that match
     /// { case x$0 @ (_: C @unchecked) => fields && x$0.canEqual(this); case _ => false })`.
     fn equals_body(&mut self, c: ClassId, that: usize, value_class: bool) {
-        let mut fields = self.case_fields(c);
-        // The primitive fields first.
-        fields.sort_by_key(|&(_, t)| if self.numeric_class(self.w.widen_lit(t)).is_some() { 0 } else { 1 });
+        let fields = self.case_fields(c);
+        // The record's decisions (`TClass`): the fields in the order the targets compare them,
+        // the primitive ones first, and whether `that.canEqual(this)` ends the comparison, which
+        // a final class's own `canEqual` keeps (`SyntheticMembers.equalsBody`).
+        let record = self.index.tclasses.get(&c).map(|&i| {
+            let tc = &self.w.prog.classes[i as usize];
+            (tc.synthesized & crate::tir::synthetic::EQUALS_CALLS_CAN_EQUAL != 0, tc.equals_order().to_vec())
+        });
+        let (calls_can_equal, order) = record.unwrap_or_else(|| (!value_class && self.w.syms.class(c).mods & mods::FINAL == 0, Vec::new()));
+        let mut fields: Vec<(String, TypeId)> = if order.is_empty() { fields } else { order.iter().filter_map(|&k| fields.get(k as usize).cloned()).collect() };
         if value_class {
             fields.truncate(1);
         }
-        let final_class = value_class || self.w.syms.class(c).mods & mods::FINAL != 0;
+        let final_class = !calls_can_equal;
         let class_ty = self.synth_class_type(c);
         let mut eq_compare = |p: &mut Self| {
             p.term_at(None);

@@ -66,7 +66,7 @@ impl<'a> Worker<'a> {
         // Most classes inherit no given from a trait: nothing to look at. A library trait not
         // yet complete may not have entered its givens.
         let info = self.syms.class(c);
-        if !info.base_types.iter().skip(1).any(|&(b, _)| {
+        if !info.base_types[1 + info.rule_prefix as usize..].iter().any(|&(b, _)| {
             let base = self.syms.class(b);
             base.kind == ClassKind::Trait && (!base.givens.is_empty() || self.syms.class_done(b).is_none())
         }) {

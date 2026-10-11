@@ -196,7 +196,6 @@ pub struct Emitter<'a> {
     has_body: &'a [bool],
     /// Per class: the number its registration and type tests carry (`layout::Layout`).
     class_numbers: &'a [u32],
-    product_numbers: &'a [u32],
     partial_function_number: Option<u32>,
     anon_parent_args: &'a crate::intern::FxMap<ClassId, u32>,
     local_captures: &'a crate::intern::FxMap<ClassId, u32>,
@@ -871,7 +870,6 @@ impl<'a> Emitter<'a> {
             file_inits: &layout.file_inits,
             has_body: &layout.has_body,
             class_numbers: &layout.class_numbers,
-            product_numbers: &layout.product_numbers,
             partial_function_number: layout.partial_function_number,
             anon_parent_args: &layout.anon_parent_args,
             local_captures: &layout.local_captures,
@@ -2408,6 +2406,7 @@ impl<'a> Emitter<'a> {
                 self.line();
                 let _ = write!(self.out, "{} = {};", instance_of(&accessor_of(&name)), this);
                 self.emit_stateful_enum_values(tc.id);
+                self.emit_enum_store(tc.id, this);
             }
             if is_enum_value {
                 self.line();
@@ -2490,14 +2489,26 @@ impl<'a> Emitter<'a> {
             self.leave_scope();
             self.close("}");
         }
-        for &p in tc.ctor_params.iter().chain(tc.init.iter().filter_map(|i| match i {
-            TInit::Field(s, _) => Some(s),
+        let fields = tc.init.iter().filter_map(|i| match *i {
+            TInit::Field(s, e) => Some((s, Some(e))),
             _ => None,
-        })) {
+        });
+        for (p, init) in tc.ctor_params.iter().map(|&p| (p, None)).chain(fields) {
             if self.syms.sym(p).needs_accessor {
                 let n = self.sym_name(p);
                 self.line();
-                let _ = write!(self.out, "{0}() {{ return this.${0}; }}", n);
+                // `Memoize`'s getter of a constant val answers the constant, which no field holds.
+                let constant = tc.constants().iter().find(|&&(s, _)| s == p).map(|&(_, lit)| lit);
+                match init.and(constant).filter(|_| self.reach.constant_vals.binary_search(&p).is_ok()) {
+                    Some(e) => {
+                        let _ = write!(self.out, "{}() {{ return ", n);
+                        self.emit_value(e);
+                        self.out.push_str("; }");
+                    }
+                    None => {
+                        let _ = write!(self.out, "{0}() {{ return this.${0}; }}", n);
+                    }
+                }
                 if self.syms.sym(p).needs_setter {
                     let setter = self.setter_name(p);
                     self.line();
@@ -2593,6 +2604,15 @@ impl<'a> Emitter<'a> {
         for init in &tc.init {
             match init {
                 TInit::Field(sym, _) if self.syms.sym(*sym).mods & mods::LAZY != 0 => {}
+                // A constant val has no field (`Memoize`): a read is folded, or finds the literal
+                // on the prototype or in the getter (`emit_registration`), whatever the
+                // constructors have run; a right side that is no literal runs here for its
+                // effects (`Constructors`).
+                TInit::Field(sym, e) if self.reach.constant_vals.binary_search(sym).is_ok() => {
+                    if !layout::is_literal_init(self.prog, *e) {
+                        self.emit_stmt(*e, &Ctx::Discard);
+                    }
+                }
                 // The field may hold what a subclass took as a parameter in its place.
                 TInit::Field(sym, e) if self.syms.sym(*sym).overridden_by_param => {
                     let field = self.field_name(*sym);
@@ -2961,6 +2981,18 @@ impl<'a> Emitter<'a> {
             }
             _ => info.base_types[..own_len].iter().map(|&(b, _)| b).collect(),
         };
+        // `Memoize`'s getter of a constant val, where a read through a receiver reaches it: the
+        // literal on the prototype, for the instances and a trait's classes (before `$cls`,
+        // which takes a trait's members).
+        for &(s, lit) in tc.constants() {
+            let read = self.reach.fields_read[s.idx()] || self.reach.init_read[s.idx()];
+            if read && self.reach.constant_vals.binary_search(&s).is_ok() {
+                let field = self.field_access(s);
+                let _ = write!(self.out, "{}.prototype{} = ", name, field);
+                self.emit_value(lit);
+                self.out.push_str("; ");
+            }
+        }
         let _ = write!(self.out, "$cls({}, ", name);
         let shown = if self.is_tuple_name(display) { "" } else { display };
         js_string(shown, &mut self.out);
@@ -2986,13 +3018,27 @@ impl<'a> Emitter<'a> {
         }
         let mut traits = String::new();
         let mut numbers: Vec<u32> = Vec::new();
-        for (i, &b) in own[1..].iter().enumerate() {
-            traits.push_str(if i > 0 { ", " } else { "[" });
-            self.hold(b, Held::Parent);
-            traits.push_str(&self.class_name(b));
+        // An instance of a shape below no superclass takes the parents of its desugaring through
+        // the shape's prototype (`$productBase`); one the walk left unreached
+        // (`process_class_from`) is no class of the output.
+        let chained = (is_case || info.singleton.is_some()) && superclass.is_none();
+        // A tuple the compiler makes answers scala-library's `ProductN` members by its shape,
+        // which is what their bodies compute (`existingDef` finds them): the bodies read `_1` as
+        // a method, which the tuple holds as a field.
+        let made_tuple = info.def.is_none() && self.is_tuple_name(display);
+        for &b in &own[1..] {
+            let desugared = chained && self.reach.desugared.binary_search(&b).is_ok();
+            let product_n = made_tuple && self.interner.get(self.syms.class(b).name).strip_prefix("Product").is_some_and(|n| !n.is_empty() && n.bytes().all(|d| d.is_ascii_digit()));
+            if self.reach.classes[b.idx()] && !desugared && !product_n {
+                traits.push_str(if traits.is_empty() { "[" } else { ", " });
+                self.hold(b, Held::Parent);
+                traits.push_str(&self.class_name(b));
+            }
             // A base no type test asks for (a builtin the library's class stands behind) has no
-            // number, and no marker to set.
-            if let Some(n) = self.numbered(b) {
+            // number, and no marker to set; nor has a parent of the desugaring no reached test
+            // asks for (`Reach::tested_traits`), by a type test or a trait's `classOf`.
+            let asked = !desugared || self.reach.tested_traits.get(b.idx()).copied().unwrap_or(false) || self.reach.uses_assignable_from;
+            if let Some(n) = self.numbered(b).filter(|_| asked) {
                 numbers.push(n);
             }
         }
@@ -3000,21 +3046,9 @@ impl<'a> Emitter<'a> {
         // its own number goes on its prototype, which the cases inherit.
         if info.kind == ClassKind::Enum && superclass.is_some() {
             numbers.push(self.class_number(tc.id));
-            if traits.is_empty() {
-                traits.push('[');
-            }
         }
-        // A product by rule is a `Product`, an `Equals` and a `java.io.Serializable` to a test, as
-        // the typer has it (`Symbols::is_synthetic_parent`).
-        if info.is_product_by_rule() {
-            for &n in self.product_numbers {
-                if !numbers.contains(&n) {
-                    numbers.push(n);
-                    if traits.is_empty() {
-                        traits.push('[');
-                    }
-                }
-            }
+        if traits.is_empty() && !numbers.is_empty() {
+            traits.push('[');
         }
         let mut ids = String::new();
         if !traits.is_empty() {
@@ -3031,6 +3065,7 @@ impl<'a> Emitter<'a> {
             String::new()
         };
         let has_fields = shape.starts_with('[');
+        let shape_kind = shape.as_bytes().first().copied();
         let mut args: Vec<(String, &str)> = vec![(shape, "0"), (traits, "[]"), (ids, "[]"), (ordinal, "")];
         while args.last().map_or(false, |(a, _)| a.is_empty()) {
             args.pop();
@@ -3039,10 +3074,14 @@ impl<'a> Emitter<'a> {
             let _ = write!(self.out, ", {}", if arg.is_empty() { *empty } else { arg.as_str() });
         }
         self.out.push_str(");");
-        // The registration gives a case class the three methods it does not define itself; where
-        // the superclass has one, scalac makes none, so the inherited one shows again.
-        for (bit, method) in ["toString", "equals", "hashCode"].into_iter().enumerate() {
-            if tc.inherited_case_members & (1 << bit) != 0 {
+        if Some(tc.id) == self.reach.product {
+            let _ = write!(self.out, " $productBase({});", name);
+        }
+        // Where the superclass's chain has the member the rule would make (`existingDef`), the
+        // inherited one shows: the registration copies the shape's when that chain is not linked
+        // yet, as in a module of the split output.
+        for (bit, method) in [(synthetic::TO_STRING, "toString"), (synthetic::EQUALS, "equals"), (synthetic::HASH_CODE, "hashCode")] {
+            if tc.synthesized & (bit << synthetic::INHERITED) != 0 {
                 let _ = write!(self.out, " delete {}.prototype.{};", name, method);
             }
         }
@@ -3051,10 +3090,49 @@ impl<'a> Emitter<'a> {
         if !matches!(info.kind, ClassKind::Trait | ClassKind::Enum) {
             self.redeclared_trait_methods(&name, &own, info.superclass);
         }
-        // An instance of a subclass may equal one of the case class itself, as under scalac.
-        let defines_equals = info.base_types.iter().any(|&(b, _)| self.syms.class(b).members.contains_key(&crate::names::EQUALS));
-        if is_case && !info.subclasses.is_empty() && !defines_equals {
-            let _ = write!(self.out, " {0}.prototype.equals = $subEquals({0});", name);
+        // A member the record gives by rule where a base the registration copies or the prototype
+        // chain reaches holds a definition, which an abstract redeclaration hides (dotty's
+        // `existingDef` finds a deferred member): the shape's member on the class's prototype,
+        // or none of `Product`'s so that the runtime answers by rule.
+        let proto = match shape_kind {
+            Some(b'3') => Some("$enumValueProto"),
+            Some(b'2') => Some("$caseObjectProto"),
+            Some(b'[') => Some("$caseProto"),
+            _ => None,
+        };
+        if let Some(proto) = proto {
+            for (bit, member, _) in synthetic::MEMBERS {
+                if tc.synthesized & bit == 0 || !self.base_defines(tc.id, member) {
+                    continue;
+                }
+                let method = self.interner.get(member);
+                if matches!(member, crate::names::TO_STRING | crate::names::EQUALS | crate::names::HASH_CODE) {
+                    let _ = write!(self.out, " {0}.prototype.{1} = {2}.{1};", name, method, proto);
+                } else {
+                    let _ = write!(self.out, " {}.prototype.{} = undefined;", name, method);
+                }
+            }
+        }
+        // The rule's `toString` of an instance of a class with a definition of a member it reads,
+        // `ScalaRunTime._toString`, reads that member.
+        if self.reach.product_to_string.binary_search(&tc.id).is_ok() {
+            let _ = write!(self.out, " {}.prototype.toString = $productToString;", name);
+        }
+        // So does its `hashCode` of reference fields, `MurmurHash3.productHash`.
+        if self.reach.product_hash.binary_search(&tc.id).is_ok() {
+            let _ = write!(self.out, " {}.prototype.hashCode = $productHash;", name);
+        }
+        // An instance of a subclass may equal one of the case class itself, as under scalac, and
+        // the rule's `equals` ends with `that.canEqual(this)`, which a definition below the class
+        // answers.
+        if is_case && tc.synthesized & synthetic::EQUALS != 0 {
+            let syms = self.syms;
+            let can_equal = self.reach.can_equal_defined.iter().any(|&d| syms.class(d).base_types.iter().any(|&(b, _)| b == tc.id));
+            if can_equal {
+                let _ = write!(self.out, " {0}.prototype.equals = $productEquals({0});", name);
+            } else if !info.subclasses.is_empty() {
+                let _ = write!(self.out, " {0}.prototype.equals = $subEquals({0});", name);
+            }
         }
         // A partial function value takes the trait's prototype, and with it, where a test asks for
         // the trait, its number.
@@ -3063,6 +3141,20 @@ impl<'a> Emitter<'a> {
             if let Some(n) = self.partial_function_number {
                 let _ = write!(self.out, " {}.prototype.$i{} = true;", name, n);
             }
+        }
+        // The fields in the order `equals` by rule compares them, the primitive ones first, where
+        // that is not `$fields`' (`TClass::equals_order`).
+        if has_fields && !tc.equals_order().is_empty() {
+            let fields: Vec<SymId> = info.ctor.first().map(|c| c.params.iter().map(|p| p.sym).collect()).unwrap_or_default();
+            let _ = write!(self.out, " {}.prototype.$eqFields = [", name);
+            for (i, &k) in tc.equals_order().iter().enumerate() {
+                if i > 0 {
+                    self.out.push_str(", ");
+                }
+                let n = self.field_name(fields[k as usize]);
+                js_string(&n, &mut self.out);
+            }
+            self.out.push_str("];");
         }
         // The field names `productElementName` answers, by their Scala names.
         if has_fields && self.reach.uses_element_names {
@@ -3202,6 +3294,27 @@ impl<'a> Emitter<'a> {
             && reach::RUNTIME_THROWN.contains(&self.interner.get(info.name))
     }
 
+    /// Whether a base of `c` other than the classes whose declarations the rule implements
+    /// (`Any`, `Object`, `Product`, `Equals`, `Enum`, `Serializable`) has a concrete member named
+    /// `name`, which the prototype chain or the registration's copy of a trait would find.
+    fn base_defines(&self, c: ClassId, name: crate::intern::Name) -> bool {
+        self.syms.class(c).base_types.iter().skip(1).any(|&(b, _)| {
+            let info = self.syms.class(b);
+            // A base of any owner, a nested one too (`existingDef` looks at every base): the rule's
+            // declarers alone hold no definition.
+            let declarer = info.kind == ClassKind::Builtin
+                || self.syms.is_synthetic_parent(self.interner, b)
+                || match info.owner {
+                    Owner::Package(p) => {
+                        let (pkg, n) = (self.interner.get(self.syms.pkg(p).name), self.interner.get(info.name));
+                        matches!((pkg, n), ("lang", "Object") | ("reflect", "Enum"))
+                    }
+                    _ => false,
+                };
+            !declarer && info.members.get(&name).is_some_and(|&s| !self.reach.abstract_syms.get(s.idx()).copied().unwrap_or(false))
+        })
+    }
+
     /// The run-time number of a class the output tests for, if it is one.
     fn numbered(&self, c: ClassId) -> Option<u32> {
         let n = self.class_numbers[c.idx()];
@@ -3264,6 +3377,41 @@ impl<'a> Emitter<'a> {
             js_string(self.interner.get(info.name), &mut self.out);
             let _ = write!(self.out, ", {});", info.ordinal);
         }
+    }
+
+    /// The `$values` of an enum whose cases are all values, which its companion stores after the
+    /// cases (dotty's `enumScaffolding`), where a lookup reads it (`Reach::enum_stores`).
+    fn emit_enum_store(&mut self, companion: ClassId, this: &str) {
+        let syms = self.syms;
+        let Some(e) = self.enum_store_of(companion) else { return };
+        let e = syms.class(e);
+        self.line();
+        let _ = write!(self.out, "{}.$values = [", this);
+        for (i, &case) in e.children.iter().enumerate() {
+            if i > 0 {
+                self.out.push_str(", ");
+            }
+            let Some(sym) = syms.class(case).singleton else { continue };
+            if e.stateful {
+                let n = self.sym_name(sym);
+                let _ = write!(self.out, "{}.{}", this, n);
+            } else {
+                let n = self.enum_value_name(sym);
+                self.note_name(&n);
+                self.out.push_str(&n);
+            }
+        }
+        self.out.push_str("];");
+    }
+
+    /// The enum whose `$values` the companion `companion` stores (`emit_enum_store`): one whose
+    /// cases are all values, reached, where a lookup reads it.
+    pub(super) fn enum_store_of(&self, companion: ClassId) -> Option<ClassId> {
+        let syms = self.syms;
+        let e = syms.class(companion).companion.filter(|&e| syms.class(e).kind == ClassKind::Enum)?;
+        let children = &syms.class(e).children;
+        let read = self.reach.enum_stores.binary_search(&companion).is_ok();
+        (read && !children.is_empty() && children.iter().all(|&c| syms.class(c).singleton.is_some() && self.reach.classes[c.idx()])).then_some(e)
     }
 
     /// The values of the given enum cases as constants of the module, created when it loads. In a

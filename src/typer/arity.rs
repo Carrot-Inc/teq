@@ -67,6 +67,7 @@ impl<'a> Worker<'a> {
         info.tparams = vec![a];
         info.underlying = Some(underlying);
         info.base_types = vec![(c, self_ty)];
+        info.rule_prefix = 0;
         info.state().set(Completion::Done);
         self.b.by_name = Some(c);
         self.arity_classes.insert(name, c);
@@ -107,6 +108,7 @@ impl<'a> Worker<'a> {
         info.tparams = vec![a];
         info.underlying = Some(underlying);
         info.base_types = vec![(c, self_ty)];
+        info.rule_prefix = 0;
         info.state().set(Completion::Done);
         self.b.repeated = Some(c);
         self.arity_classes.insert(name, c);
@@ -239,10 +241,13 @@ impl<'a> Worker<'a> {
 
     #[cold]
     fn synthesize_tuple(&mut self, n: usize) -> ClassId {
-        self.with_loader(|w| w.synthesize_tuple_unlocked(n))
+        // `java.io.Serializable`, the parent `Desugar.classDef` gives the case class `TupleN`,
+        // entered before the lock, so that every tuple class has it whichever file named it.
+        let serializable = self.class_at(&["java", "io", "Serializable"]);
+        self.with_loader(|w| w.synthesize_tuple_unlocked(n, serializable))
     }
 
-    fn synthesize_tuple_unlocked(&mut self, n: usize) -> ClassId {
+    fn synthesize_tuple_unlocked(&mut self, n: usize, serializable: Option<ClassId>) -> ClassId {
         let scala = self.b.scala_pkg;
         let name = self.interner.intern(&format!("Tuple{}", n));
         if let Some(&c) = self.arity_classes.get(&name) {
@@ -282,10 +287,16 @@ impl<'a> Worker<'a> {
         }
         let targs: Vec<TypeId> = tparams.iter().map(|&p| self.types.param(p)).collect();
         let self_ty = self.types.class(c, &targs);
-        // The supertypes teq's own std declares; under `--std=scala-library` the library's come through
-        // `link_library_class`, and nothing is read from the classpath here.
+        // The supertypes teq's own std declares, with `Product` and its `Equals` and
+        // `java.io.Serializable` as scala-library's tuples have them (`Desugar.classDef`'s
+        // parents of a case class, the last first in the linearisation); under
+        // `--std=scala-library` the library's come through `link_library_class`.
         let mut base_types = vec![(c, self_ty)];
-        for parent in ["NonEmptyTuple", "Tuple"] {
+        if let Some(sz) = serializable {
+            let st = self.types.class(sz, &[]);
+            base_types.push((sz, st));
+        }
+        for parent in ["NonEmptyTuple", "Tuple", "Product", "Equals"] {
             let name = self.interner.intern(parent);
             if let Some(p) = self.syms.pkg(scala).entries.get(&name).and_then(|e| e.class) {
                 let pt = self.types.class(p, &[]);
@@ -297,6 +308,7 @@ impl<'a> Worker<'a> {
         info.ctor = vec![ClauseSig { params, is_using: false, is_implicit: false }];
         info.ctor_syms = vec![syms];
         info.base_types = base_types;
+        info.rule_prefix = 0;
         info.state().set(Completion::Done);
         self.register_arity_class(n, c, ArityTable::Tuples);
         c
@@ -356,6 +368,7 @@ impl<'a> Worker<'a> {
         let mut info = self.syms.class_mut(c);
         info.tparams = tparams;
         info.base_types = vec![(c, self_ty)];
+        info.rule_prefix = 0;
         info.state().set(Completion::Done);
         self.register_arity_class(n, c, if context { ArityTable::ContextFunctions } else { ArityTable::Functions });
         c

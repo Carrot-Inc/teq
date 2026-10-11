@@ -165,6 +165,8 @@ pub(in crate::typer) fn symbol<M: Mapping + ?Sized>(m: &M, memo: &mut SigMemo, s
         k => k,
     };
     s.impl_class = s.impl_class.map(|c| m.class(c));
+    let alias = s.declared_alias().map(|a| m.alias(a));
+    s.set_declared_alias(alias);
     if let Some(x) = s.sig.as_mut() {
         sig(m, memo, x);
     }
@@ -428,6 +430,15 @@ pub(in crate::typer) fn tclass<M: Mapping + ?Sized>(m: &M, tc: &mut TClass) {
     for (a, b) in &mut tc.deferred_givens {
         *a = m.sym(*a);
         *b = m.sym(*b);
+    }
+    if let Some(l) = tc.lists.as_deref_mut() {
+        for (_, s) in &mut l.existing_defs {
+            *s = m.sym(*s);
+        }
+        for (s, e) in &mut l.constants {
+            *s = m.sym(*s);
+            *e = m.expr(*e);
+        }
     }
 }
 

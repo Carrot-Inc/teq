@@ -117,27 +117,10 @@ def avalanche(h0: Int): Int =
 
 def finalizeHash(hash: Int, length: Int): Int = avalanche(hash ^ length)
 
-@jvm("$0:L checkcast scala/Product invokeinterface scala/Product.productPrefix()Ljava/lang/String;")
-def productPrefixOf(x: Any): String
-
 @jvm("$0:L invokevirtual java/lang/Object.getClass()Ljava/lang/Class; invokevirtual java/lang/Class.getName()Ljava/lang/String;")
 def classNameOf(x: Any): String
 
 def matchErrorMessage(obj: Any): String = stringOf(obj) + " (of class " + classNameOf(obj) + ")"
-
-def enumValueOf(values: Array[Any], name: String, enumName: String): Any =
-  var i = 0
-  var found = -1
-  while found < 0 && i < values.length do
-    if productPrefixOf(values(i)) == name then found = i
-    i += 1
-  if found < 0 then throw new IllegalArgumentException("enum " + enumName + " has no case with name: " + name)
-  values(found)
-
-def enumFromOrdinal(values: Array[Any], ordinal: Int, enumName: String): Any =
-  if ordinal < 0 || ordinal >= values.length || values(ordinal) == null then
-    throw new NoSuchElementException("enum " + enumName + " has no case with ordinal: " + ordinal.toString)
-  values(ordinal)
 
 // The first `n` elements of a sequence behind a `true`, then the rest of it when `rest` is set;
 // empty when the sequence is shorter, or longer without `rest`.

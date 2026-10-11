@@ -1,0 +1,8 @@
+11
+object-init
+0
+trait-init
+class-init
+7
+9
+8

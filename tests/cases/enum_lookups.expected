@@ -1,0 +1,13 @@
+List(-1, -1)
+List(true, true)
+List(enum E has no case with ordinal: 0, enum E has no case with ordinal: 0)
+true
+List(A, B)
+List(A, B)
+A B
+enum E has no case with name: Z
+enum E has no case with ordinal: 5
+enum E has no case with ordinal: -1
+X enum M has no case with ordinal: 1
+enum K has no case with ordinal: 0
+enum O$.F has no case with name: Z enum O$.F has no case with ordinal: 2 List(G, H)

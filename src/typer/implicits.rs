@@ -587,7 +587,8 @@ impl<'a> Worker<'a> {
             return true;
         }
         // A base not yet complete (a library trait) has not entered its givens.
-        info.declared_self.is_none() && info.base_types.iter().skip(1).all(|&(b, _)| self.syms.class_done(b).map_or(false, |b| b.givens.is_empty()))
+        // The classes `Desugar.classDef` gives (`rule_prefix`) have none.
+        info.declared_self.is_none() && info.base_types[1 + info.rule_prefix as usize..].iter().all(|&(b, _)| self.syms.class_done(b).map_or(false, |b| b.givens.is_empty()))
     }
 
     fn build_class_given_index(&mut self, c: ClassId) -> Option<Arc<GivenIndex>> {
@@ -1424,9 +1425,10 @@ impl<'a> Worker<'a> {
             // that path (dotty's `addCompanion(pre, companion)`): one per enclosing instance. An
             // object's own class has the object itself (a module class's `companionModule`).
             let through: Vec<TypeId> = seen.through.iter().filter(|&&(k, _)| k == c).map(|&(_, p)| p).collect();
+            let named_through = !through.is_empty();
             let info = self.syms.class(c);
             let module = info.inner_object.or_else(|| info.companion.and_then(|m| self.syms.class(m).inner_object));
-            if let Some(val) = module.filter(|_| !through.is_empty()) {
+            if let Some(val) = module.filter(|_| named_through) {
                 for p in through {
                     let path = self.types.mk(Type::Select(p, val));
                     if !paths.contains(&path) {
@@ -1434,19 +1436,21 @@ impl<'a> Worker<'a> {
                     }
                 }
             }
-            let n_bases = self.syms.class(c).base_types.len();
-            for i in 0..n_bases {
-                let mut b = self.syms.class(c).base_types[i].0;
+            // Each base read once: the object it is or its companion, then the objects it is
+            // nested in; the class's own inner companion reached through a path is that path's.
+            for &(base, _) in self.syms.class(c).base_types.iter() {
+                let mut b = base;
                 loop {
                     let info = self.syms.class(b);
-                    let module = if self.is_module_class(b) { Some(b) } else { info.companion };
-                    let module = module.filter(|&m| !(b == c && seen.through.iter().any(|&(k, _)| k == c) && self.syms.class(m).inner_object.is_some()));
-                    if let Some(m) = module.filter(|&m| self.is_module_class(m)) {
+                    let is_module = info.kind == ClassKind::Object || info.inner_object.is_some();
+                    let module = if is_module { Some(b) } else { info.companion.filter(|&m| self.is_module_class(m)) };
+                    let module = module.filter(|&m| !(b == c && named_through && self.syms.class(m).inner_object.is_some()));
+                    if let Some(m) = module {
                         if !scopes.contains(&m) {
                             scopes.push(m);
                         }
                     }
-                    match self.syms.class(b).owner {
+                    match info.owner {
                         Owner::Class(o) if self.is_module_class(o) => b = o,
                         _ => break,
                     }
@@ -4029,10 +4033,33 @@ impl<'a> Worker<'a> {
             self.is_sub(ret_b, sig_a.ret)
         };
         // `b`'s type parameters, instantiated to `a`'s, keep their bounds: a `C[X] <: Set[X]`
-        // takes no `C[X] <: Iterable[X]` of the other.
-        let ok = ok && self.hk_bounds_hold(&sig_b, &subst);
+        // takes no `C[X] <: Iterable[X]` of the other, and an `A <: Singleton` no `A` of the
+        // other (dotty's `instantiateWithTypeVars` in `Applications.isAsGood`).
+        let ok = ok && self.hk_bounds_hold(&sig_b, &subst) && self.first_order_bounds_hold(&sig_b, &subst);
         self.rollback(mark);
         ok
+    }
+
+    /// Whether each first-order type parameter of `sig`, opened by `subst`, can lie within its
+    /// bounds beside what the comparison constrained it to.
+    fn first_order_bounds_hold(&mut self, sig: &MethodSig, subst: &Subst) -> bool {
+        for &tp in &sig.tparams {
+            let info = self.syms.tparam(tp);
+            let (arity, upper, lower) = (info.arity, info.upper, info.lower);
+            if arity != 0 || (upper == ANY && lower == NOTHING) {
+                continue;
+            }
+            let var = self.types.param(tp);
+            let var = self.types.subst(var, subst);
+            if self.deref(var) == ERROR {
+                continue;
+            }
+            let (upper, lower) = (self.types.subst(upper, subst), self.types.subst(lower, subst));
+            if !((upper == ANY || self.is_sub(var, upper)) && (lower == NOTHING || self.is_sub(lower, var))) {
+                return false;
+            }
+        }
+        true
     }
 
     /// `t` with every argument at a contravariant parameter replaced by `arg => Unit`, as

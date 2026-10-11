@@ -1075,7 +1075,10 @@ impl<'a> Worker<'a> {
                 bases.push((b, t));
             }
         }
+        // The builtin, complete before, meets more bases (`base_type_cache`).
+        self.base_type_cache.clear();
         self.syms.class_mut(c).base_types = bases;
+        self.syms.class_mut(c).rule_prefix = 0;
         if self.syms.class(c).base_types.len() > 1 {
             self.mark_members_meeting_inherited(c);
         }
@@ -1669,6 +1672,7 @@ impl<'a> Worker<'a> {
             let targs: Vec<TypeId> = self.syms.class(c).tparams.clone().iter().map(|&p| self.types.param(p)).collect();
             let self_ty = self.types.class(c, &targs);
             self.syms.class_mut(c).base_types = vec![(c, self_ty)];
+            self.syms.class_mut(c).rule_prefix = 0;
             // An opaque type conforms to its declared bound; an abstract type read so, whose
             // definition is its bounds (`type +[X <: Int, Y <: Int] <: Int` of
             // `scala.compiletime.ops.int`), to its upper one.
@@ -1713,36 +1717,23 @@ impl<'a> Worker<'a> {
             self.set_tparam_bounds(&mut cx, id, &tp.info);
         }
         let mut parents: Vec<TypeId> = sig.parents.iter().map(|p| self.map_type(&mut cx, p)).collect();
-        // An enum of another module is read as the program's own: that it is a
-        // `scala.reflect.Enum` is the typer's rule (`Typer::is_enum_value`), not a parent whose
-        // members it would take.
-        if matches!(kind, ClassKind::Enum | ClassKind::EnumCase) && self.loaded.as_ref().map_or(false, |l| l.is_product_class(c)) {
-            let reflect_enum = self.b.reflect_enum;
-            parents.retain(|&p| !matches!(self.types.get(p), Type::Class(pc, _) if Some(pc) == reflect_enum));
-        }
-        // A case class of another module is read as the program's own: its pickle extends
-        // `Product` and `Serializable` as scalac's `Desugar` makes it, which teq's typer gives a
-        // case class of source by its rules, not as parents (an inferred type over the classes
-        // of two modules is then the one it is within one program).
-        if sig.mods.flags.has(tags::CASE) && matches!(kind, ClassKind::Class | ClassKind::EnumCase) && self.loaded.as_ref().map_or(false, |l| l.is_product_class(c)) {
-            let product = self.b.product;
-            parents.retain(|&p| match self.types.get(p) {
-                Type::Class(pc, _) => Some(pc) != product && !(self.name_str(self.syms.class(pc).name) == "Serializable" && matches!(self.syms.class(pc).owner, Owner::Package(k) if self.pkg_description(k) == "java.io")),
-                _ => true,
-            });
-        }
-        // So are a case object and a companion: the parents teq's writer appends after the
-        // declared ones, as scalac's `Desugar` and `SyntheticMembers` do (a case object's
-        // `Product`, `Serializable` and `Mirror.Singleton`, a companion's mirror), which teq's
-        // typer gives by its rules, are taken off the end, as many as the pickle's origins
-        // record (kind 11); a parent the source declares stays.
+        // A case object and a companion of another module are read as the program's own: of the
+        // parents teq's writer appends after the declared ones, as many as the pickle's origins
+        // record (kind 11), the mirrors (a case object's `Mirror.Singleton`, a companion's), which
+        // teq's typer gives by its rules, are taken off; the `Product` and `Serializable` of
+        // dotty's `Desugar.classDef` stay, as a case class's and an enum's `Enum` do.
         if kind == ClassKind::Object && self.loaded.as_ref().map_or(false, |l| l.is_product_class(c)) {
             let appended = match &self.loaded.as_ref().unwrap().file(lc.file).provenance {
                 crate::tasty::origins::Found::Read(o) => o.appended.binary_search_by_key(&lc.addr, |&(a, _)| a).ok().map_or(0, |i| o.appended[i].1),
                 _ => 0,
             };
             let keep = parents.len().saturating_sub(appended as usize);
-            parents.truncate(keep);
+            let tail = parents.split_off(keep);
+            for p in tail {
+                if matches!(self.types.get(p), Type::Class(pc, _) if self.is_desugared_parent(pc)) {
+                    parents.push(p);
+                }
+            }
         }
         if let Some((_, t)) = sig.self_type.as_ref().filter(|_| !sig.mods.flags.has(tags::OBJECT)) {
             let declared = self.map_type(&mut cx, t);
@@ -1756,11 +1747,17 @@ impl<'a> Worker<'a> {
             self.enter_loaded_ctor(c, &mut cx, ctor, &sig.accessors);
             self.enter_loaded_ctor_access(c, &ctor.mods);
         }
-        // As in source: the values of an enum with parameters or a superclass are created by
-        // its companion, with the arguments their cases pass.
+        // As in source (`resolve.rs`): the values of an enum with parameters, a superclass or an
+        // initialiser in its body (a val with a right side, a statement) are created by its
+        // companion, in order, with the arguments their cases pass, so that a lookup while they
+        // are made answers as `DesugarEnums.enumScaffolding`'s `$values` does.
         if kind == ClassKind::Enum {
             let info = self.syms.class(c);
-            if info.superclass.is_some() || info.ctor.iter().any(|cl| !cl.params.is_empty()) {
+            let initialisers = sig.index.statements
+                || sig.index.members.iter().any(|m| {
+                    (m.tag == tags::VALDEF && m.has_body && !m.flags.has(tags::LAZY)) || (m.tag == tags::DEFDEF && m.flags.has(tags::GIVEN))
+                });
+            if info.superclass.is_some() || info.ctor.iter().any(|cl| !cl.params.is_empty()) || initialisers {
                 self.syms.class_mut(c).stateful = true;
             }
         }
@@ -2015,6 +2012,9 @@ impl<'a> Worker<'a> {
     /// Base types through the linearisation, without the checks a source class gets: the
     /// library was checked by scalac.
     fn set_loaded_parents(&mut self, c: ClassId, parents: Vec<TypeId>) {
+        if !self.syms.class(c).base_types.is_empty() {
+            self.base_type_cache.clear();
+        }
         let targs: Vec<TypeId> = self.syms.class(c).tparams.clone().iter().map(|&p| self.types.param(p)).collect();
         let self_ty = self.types.class(c, &targs);
         let mut linearisations: Vec<Vec<(ClassId, TypeId)>> = Vec::with_capacity(parents.len());
@@ -2076,7 +2076,7 @@ impl<'a> Worker<'a> {
             }
             linearisations.push(seen);
         }
-        let (mut base, _) = self.linearise(c, self_ty, linearisations.clone(), false);
+        let (mut base, _) = self.linearise(c, self_ty, linearisations.iter().cloned().map(super::resolve::ParentBases::Seen).collect(), false);
         self.narrow_base_types(c, &mut base, &linearisations);
         if let Some(parent) = superclass {
             let subclasses = &mut self.syms.class_mut(parent).subclasses;
@@ -2084,6 +2084,8 @@ impl<'a> Worker<'a> {
                 subclasses.push(c);
             }
         }
+        let rule_prefix = base.iter().skip(1).take(4).take_while(|&&(b, _)| self.is_desugared_parent(b)).count() as u8;
+        debug_assert!(base[1..1 + rule_prefix as usize].iter().all(|&(b, _)| self.brings_walks_nothing(b)), "a class Desugar.classDef gives brings {} what a walk passing over it misses", self.class_path(c));
         let inherits_types = base.iter().skip(1).any(|&(b, _)| {
             let bi = self.syms.class(b);
             !bi.type_aliases.is_empty()
@@ -2094,6 +2096,7 @@ impl<'a> Worker<'a> {
         let mut info = self.syms.class_mut(c);
         info.parents = parent_types;
         info.base_types = base;
+        info.rule_prefix = rule_prefix;
         info.superclass = superclass;
         info.inherits_types = inherits_types;
         if has_native_base && info.js == JsKind::Scala {
@@ -2255,6 +2258,7 @@ impl<'a> Worker<'a> {
                 }
             }
         }
+        let mut first_terms = true;
         for clause in &ctor.clauses {
             let Clause::Terms(ps) = clause else { continue };
             let is_using = is_using_clause(ps);
@@ -2274,6 +2278,16 @@ impl<'a> Worker<'a> {
                 }
                 let kind = if flags.has(tags::MUTABLE) { SymKind::Var } else { SymKind::Val };
                 let (ty, by_name, repeated) = self.map_param_type(cx, &p.ty);
+                // A case class's field whose type names an alias of a primitive class, which its
+                // equality orders as a reference (`SymInfo::declared_alias`).
+                let primitive = match self.types.get(ty) {
+                    Type::Class(k, _) if self.syms.class(k).kind == ClassKind::Builtin => Some(self.syms.class(k).name),
+                    _ => None,
+                };
+                let declared_alias = match primitive {
+                    Some(k) if first_terms && self.syms.class(c).mods & mods::CASE != 0 => self.pickled_alias(cx, &p.ty, k),
+                    _ => None,
+                };
                 let field_ty = match (repeated, self.seq_class()) {
                     (true, Some(seq)) => self.types.class(seq, &[ty]),
                     _ => ty,
@@ -2284,6 +2298,7 @@ impl<'a> Worker<'a> {
                     s.sig = Some(Arc::new(MethodSig::value(field_ty)));
                     s.state().set(Completion::Done);
                     s.by_name = by_name;
+                    s.set_declared_alias(declared_alias);
                 }
                 if !self.syms.class(c).members.contains_key(&name) {
                     self.register_term(Owner::Class(c), sym);
@@ -2301,6 +2316,7 @@ impl<'a> Worker<'a> {
                 syms.push(sym);
             }
             clauses.push(sig);
+            first_terms = false;
             syms_per_clause.push(syms);
         }
         // `class C` is pickled with the empty clause of `class C()`.
@@ -2462,7 +2478,9 @@ impl<'a> Worker<'a> {
             s.is_extension = true;
             s.ext_tparams = ext_tparams as u8;
             s.ext_clauses = ext_clauses as u8;
+            let name = s.name;
             self.syms.class_mut(c).extensions.push(sym);
+            self.syms.note_member_name(c, name);
         } else if !self.join_value_and_method(c, sym) {
             self.register_term(Owner::Class(c), sym);
         }
@@ -2654,6 +2672,7 @@ impl<'a> Worker<'a> {
             self.syms.class_mut(c).members.insert(name, set);
         }
         self.syms.class_mut(c).member_order.push(sym);
+        self.syms.note_member_name(c, name);
         true
     }
 

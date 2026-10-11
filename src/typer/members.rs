@@ -1021,6 +1021,7 @@ impl<'a> Worker<'a> {
         info.underlying = underlying;
         info.parents = parents;
         info.base_types = base_types;
+        info.rule_prefix = 0;
         info.state().set(Completion::Done);
         d
     }

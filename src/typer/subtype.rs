@@ -468,12 +468,6 @@ impl<'a> Worker<'a> {
         if (b == self.b.t_product || b == self.b.t_equals) && !matches!(self.types.get(a), Type::Var(_) | Type::Error | Type::BoundedWild(..)) && self.is_product(a) {
             return true;
         }
-        if self.is_serializable_type(b) && !matches!(self.types.get(a), Type::Var(_) | Type::Error | Type::BoundedWild(..)) && self.is_serializable_by_rule(a) {
-            return true;
-        }
-        if b == self.b.t_enum && !matches!(self.types.get(a), Type::Var(_) | Type::Error | Type::BoundedWild(..)) && self.is_enum_value(a) {
-            return true;
-        }
         let (ta, tb) = (self.types.get(a), self.types.get(b));
         if let Type::BoundedWild(_, hi) = ta {
             return self.is_sub(hi, b);
@@ -1661,27 +1655,20 @@ impl<'a> Worker<'a> {
                 if c == target {
                     return Some(t);
                 }
+                // dotty's `baseTypeCache`: the base type of a class type, kept per type and base
+                // class once the class is complete and where the type has no inference variable.
+                if let Some(&kept) = self.base_type_cache.get(&(t, target)) {
+                    return kept;
+                }
                 if self.loaded.is_some() && self.jdk_class_unrelated(c, target) {
                     return None;
                 }
                 self.complete_class(c);
-                let found = self.syms.class(c).base_types.iter().find(|(bc, _)| *bc == target).map(|&(_, t)| t);
-                let bt = match found {
-                    Some(bt) => bt,
-                    None if c == self.b.string => self.string_interface(target)?,
-                    None if c == self.b.array => self.array_interface(target)?,
-                    None if self.b.js_dynamic.is_some() && !self.jvm && matches!(self.syms.class(target).name, crate::names::FUNCTION | crate::names::OBJECT) && self.is_function_class(c) => self.function_interface(target)?,
-                    None => return None,
-                };
-                let subst: Subst = self
-                    .syms
-                    .class(c)
-                    .tparams
-                    .iter()
-                    .copied()
-                    .zip(self.types.items(args).iter().copied())
-                    .collect();
-                Some(self.types.subst(bt, &subst))
+                let found = self.class_base_type(c, args, target);
+                if self.syms.class(c).state() == Completion::Done && !self.types.has_vars(t) {
+                    self.base_type_cache.insert((t, target), found);
+                }
+                found
             }
             Type::Param(p) => {
                 let upper = self.syms.tparam(p).upper;
@@ -1720,6 +1707,20 @@ impl<'a> Worker<'a> {
             }
             _ => None,
         }
+    }
+
+    /// `base_type` of the class type `c[args]`, `c` complete.
+    fn class_base_type(&mut self, c: ClassId, args: TList, target: ClassId) -> Option<TypeId> {
+        let found = self.syms.class(c).base_types.iter().find(|(bc, _)| *bc == target).map(|&(_, t)| t);
+        let bt = match found {
+            Some(bt) => bt,
+            None if c == self.b.string => self.string_interface(target)?,
+            None if c == self.b.array => self.array_interface(target)?,
+            None if self.b.js_dynamic.is_some() && !self.jvm && matches!(self.syms.class(target).name, crate::names::FUNCTION | crate::names::OBJECT) && self.is_function_class(c) => self.function_interface(target)?,
+            None => return None,
+        };
+        let subst: Subst = self.syms.class(c).tparams.iter().copied().zip(self.types.items(args).iter().copied()).collect();
+        Some(self.types.subst(bt, &subst))
     }
 
     /// The type a path's value has, the upper bound of an abstract member, the parent of a
@@ -1965,26 +1966,6 @@ impl<'a> Worker<'a> {
 
     /// The rank of a numeric primitive type (`prims::R_BYTE` to `R_DOUBLE`).
     #[inline]
-    /// Whether `t` is `java.io.Serializable`, which a product by rule is (`is_serializable_by_rule`):
-    /// its name compared first, as an id.
-    fn is_serializable_type(&self, t: TypeId) -> bool {
-        let Type::Class(c, args) = self.types.get(t) else { return false };
-        if args != EMPTY_LIST {
-            return false;
-        }
-        let name = match self.b.serializable_name.get() {
-            Some(n) => n,
-            None => match self.interner.lookup("Serializable") {
-                Some(n) => {
-                    self.b.serializable_name.set(Some(n));
-                    n
-                }
-                None => return false,
-            },
-        };
-        self.syms.class(c).name == name && self.syms.is_synthetic_parent(&self.interner, c)
-    }
-
     pub fn is_numeric(&self, t: TypeId) -> Option<u8> {
         match self.b.num_rank.get(t.idx()) {
             Some(&r) if r != super::NO_RANK => Some(r),
@@ -2086,6 +2067,8 @@ impl<'a> Worker<'a> {
         }
     }
 
+    /// dotty's `isTransparent()`: a type deriving only from transparent classes, `Any`,
+    /// `Matchable`, `Object`, `AnyVal` and the transparent traits.
     fn transparent_join(&mut self, j: TypeId) -> bool {
         match self.types.get(j) {
             Type::Any => true,
@@ -2093,8 +2076,8 @@ impl<'a> Worker<'a> {
             Type::Class(c, _) => {
                 c == self.b.any_ref
                     || c == self.b.any_val
-                    || Some(c) == self.b.product
-                    || matches!(self.interner.get(self.syms.class(c).name), "Matchable" | "Serializable" | "Equals" | "Object")
+                    || matches!(self.interner.get(self.syms.class(c).name), "Matchable" | "Object")
+                    || self.is_transparent_trait_type(j)
             }
             _ => false,
         }
@@ -2164,9 +2147,39 @@ impl<'a> Worker<'a> {
                 minimal.push(t);
             }
         }
+        // dotty's `dropTransparentTraits` in `widenInferred`: a transparent trait (`Product`,
+        // `java.io.Serializable`, one declared `transparent`) leaves the intersection where a base
+        // that is none remains, as `Set(a, b)` of two case objects of `S` is a `Set[S]`.
+        if minimal.iter().any(|&t| !self.is_transparent_trait_type(t)) {
+            minimal.retain(|&t| !self.is_transparent_trait_type(t));
+        }
+        // dotty's `widenOr`: a join that is transparent (`Product & Serializable` of two case
+        // classes) leaves the union as it is, where a member's selection joins it (`OrType.join`).
+        if !self.join_wild && minimal.iter().all(|&t| self.transparent_join(t)) {
+            return None;
+        }
         minimal.reverse();
         let (&first, rest) = minimal.split_first()?;
         Some(rest.iter().fold(first, |acc, &t| self.types.inter(acc, t)))
+    }
+
+    /// dotty's `isTransparent(traitOnly = true)`: a trait declared `transparent` (`Product`,
+    /// `scala.reflect.Enum`) or assumed so (`java.io.Serializable`, `java.lang.Comparable`).
+    fn is_transparent_trait_type(&self, t: TypeId) -> bool {
+        let Type::Class(c, _) = self.types.get(t) else { return false };
+        let info = self.syms.class(c);
+        if info.kind != ClassKind::Trait {
+            return false;
+        }
+        if info.mods & crate::ast::mods::TRANSPARENT != 0 || Some(c) == self.b.product || Some(c) == self.b.reflect_enum {
+            return true;
+        }
+        let assumed = match self.interner.get(info.name) {
+            "Serializable" => "java.io",
+            "Comparable" => "java.lang",
+            _ => return false,
+        };
+        matches!(info.owner, Owner::Package(p) if self.pkg_path(p) == assumed)
     }
 
     fn lub_as_class(&mut self, a: TypeId, b: TypeId, c: ClassId) -> Option<TypeId> {

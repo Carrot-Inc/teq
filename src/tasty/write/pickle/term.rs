@@ -5852,7 +5852,8 @@ impl<'w, 'a> P<'w, 'a> {
     /// `super` would pass over.
     fn superclass_of_enclosing(&mut self) -> Option<ClassId> {
         let &c = self.enclosing.last()?;
-        let parents = self.w.syms.class(c).parents.clone();
+        let info = self.w.syms.class(c);
+        let parents = info.parents[..info.parents.len() - info.desugared_parents as usize].to_vec();
         let first = parents.first().copied()?;
         let Type::Class(k, _) = self.w.types.get(first) else { return None };
         let traits = parents.iter().skip(1).any(|&p| matches!(self.w.types.get(p), Type::Class(t, _) if self.w.syms.class(t).kind == ClassKind::Trait));

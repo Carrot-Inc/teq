@@ -114,12 +114,20 @@ capture_this
 capture_u
 capture_w
 capture_x
+case_class_below_superclass
+case_class_generic_member
+case_class_hash_elements
+case_class_inherited_members
+case_class_join_union
 case_class_own_unapply
 case_class_selectors
 case_companion_nested
 case_copy_clauses
 case_copy_nested
 case_lambda_parameter
+case_class_parents
+case_class_synthesized_members
+case_class_tostring_overload
 case_lambda_pinned_constructor
 case_lambda_tuples
 cast_array_kinds
@@ -198,6 +206,9 @@ conditional_precedence
 conformance_extras
 cons_pattern_binders
 console_streams
+constant_final_val_accessor
+constant_final_val_early
+constant_final_vals
 constant_member_receiver
 constant_singleton_inferred
 constant_singleton_path
@@ -276,6 +287,7 @@ discard_through_var_bound
 double_equals
 double_shortest_digits
 dummy_implicit
+duration_hierarchy
 duration_names
 duration_syntax_import
 duration_time_unit
@@ -291,6 +303,7 @@ enum_category
 enum_extends_class
 enum_gadt
 enum_mixed_from_ordinal
+enum_lookups
 enum_nested
 enum_ordinal_dispatch
 enum_ordinal_null
@@ -566,6 +579,7 @@ inline_arg_throwing_branch
 inline_arg_wrapped
 inline_bodies_scalac_product
 inline_body_import_nested_given
+inline_constant_final
 inline_definition_clean
 inline_definition_const_singleton
 inline_definition_conversion_targs
@@ -1373,6 +1387,7 @@ tuple_member_extension
 tuple_named_arguments
 tuple_ops_type_args
 tuple_xxl
+tuple_xxl_product
 tuple_xxl_typed
 tupling_priority
 type_lambda_hk_binders
@@ -1464,6 +1479,7 @@ uuid
 val_implements_def_and_val
 val_overrides_tostring
 val_refinement_subst
+value_class_can_equal
 value_class_signature_only
 value_classes
 value_import
@@ -1471,6 +1487,7 @@ value_import_given_old_implicits
 value_import_given_shadows_own
 value_import_givens
 value_of
+value_of_singletons
 var_default_init
 var_setter_member
 vc_box_any
@@ -1510,3 +1527,8 @@ inline_type_test_null
 macro_quoted_application_reduce
 pattern_array_gadt
 type_test_null_shapes
+case_class_nested_hidden
+case_class_equals_alias
+case_class_generic_bridge
+applied_param_reference
+open_iterator_map

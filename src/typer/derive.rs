@@ -172,8 +172,9 @@ impl<'a> Worker<'a> {
         n
     }
 
-    /// Whether every value of `t` is a `Product`: a case class, a case object, an enum or one of
-    /// its cases, a tuple, or a class that extends the trait.
+    /// Whether every value of `t` is a `Product`: a class that extends the trait (a case class or
+    /// object and an enum by their desugaring), or a tuple, whose traits the lean std leaves
+    /// without the parent scala-library gives them.
     pub fn is_product(&mut self, t: TypeId) -> bool {
         self.every_value_by_rule(t, |w, c| {
             let b = &w.b;
@@ -182,18 +183,7 @@ impl<'a> Worker<'a> {
             }
             w.complete_class(c);
             let info = w.syms.class(c);
-            info.is_product_by_rule() || info.base_types.iter().any(|&(base, _)| Some(base) == w.b.product || Some(base) == w.b.tuple_trait)
-        })
-    }
-
-    /// Whether every value of `t` is a `java.io.Serializable` by rule: a product by rule
-    /// (`ClassInfo::is_product_by_rule`) or a class that extends one, as `Desugar.classDef` makes
-    /// a case class extend the trait; not `Product`, `Tuple` or a class that extends them alone.
-    pub fn is_serializable_by_rule(&mut self, t: TypeId) -> bool {
-        self.every_value_by_rule(t, |w, c| {
-            w.complete_class(c);
-            let info = w.syms.class(c);
-            info.is_product_by_rule() || info.base_types.iter().any(|&(base, _)| w.syms.class(base).is_product_by_rule())
+            info.base_types.iter().any(|&(base, _)| Some(base) == w.b.product || Some(base) == w.b.tuple_trait)
         })
     }
 
@@ -219,33 +209,18 @@ impl<'a> Worker<'a> {
         }
     }
 
-    /// Whether every value of the type is an enum value: an enum class or case, which is a
-    /// `scala.reflect.Enum` by rule, as it is a `Product`.
-    pub fn is_enum_value(&mut self, t: TypeId) -> bool {
-        let t = self.deref(t);
-        match self.types.get(t) {
-            Type::Class(c, _) => {
-                if Some(c) == self.b.reflect_enum {
-                    return true;
-                }
-                self.complete_class(c);
-                let info = self.syms.class(c);
-                matches!(info.kind, ClassKind::Enum | ClassKind::EnumCase)
-                    || info.base_types.iter().any(|&(base, _)| Some(base) == self.b.reflect_enum)
-            }
-            Type::Union(x, y) => self.is_enum_value(x) && self.is_enum_value(y),
-            Type::Inter(x, y) => self.is_enum_value(x) || self.is_enum_value(y),
-            Type::Param(p) => {
-                let upper = self.syms.tparam(p).upper;
-                upper != ANY && self.is_enum_value(upper)
-            }
-            Type::This(_) | Type::Term(_) | Type::Select(..) | Type::Member(..) | Type::AppMember(..) | Type::Decl(_) | Type::Refined(..) | Type::Match(..) | Type::Alias(..) | Type::Nested(..) | Type::Rec(_) => {
-                match self.dependent_underlying(t) {
-                    Some(u) => self.is_enum_value(u),
-                    None => false,
-                }
-            }
-            _ => false,
+    /// Whether `b` is a parent dotty's `Desugar.classDef` gives a case class, a case object or an
+    /// enum, or one of its bases: `Product` with `Equals`, `java.io.Serializable`,
+    /// `scala.reflect.Enum`.
+    #[inline(always)]
+    pub fn is_desugared_parent(&self, b: ClassId) -> bool {
+        if Some(b) == self.b.product || Some(b) == self.b.reflect_enum || Some(b) == self.b.equals {
+            return true;
+        }
+        // The one `java.io.Serializable` of its package, once looked up (`java_serializable`).
+        match self.java_serializable {
+            Some(found) => found == Some(b),
+            None => self.syms.is_synthetic_parent(self.interner, b),
         }
     }
 
@@ -257,8 +232,8 @@ impl<'a> Worker<'a> {
         self.syms.pkg(pkg).entries.get(&name).and_then(|e| e.class)
     }
 
-    /// A member of `Product` on a value that is one without extending the trait; `productPrefix`
-    /// of such a value is the builtin's (`prims.rs`).
+    /// A member of `Product` on a tuple, which the lean std's tuple traits do not extend;
+    /// `productPrefix` of one is the builtin's (`prims.rs`).
     pub fn product_member(&mut self, recv_ty: TypeId, name: Name) -> Option<(SymId, TypeId)> {
         let product = self.b.product?;
         if name == names::PRODUCT_PREFIX || !self.syms.class(product).members.contains_key(&name) || !self.is_product(recv_ty) {
@@ -266,22 +241,6 @@ impl<'a> Worker<'a> {
         }
         let pt = self.types.class(product, &[]);
         self.find_member(pt, name)
-    }
-
-    /// The std function that stands in for a concrete member of `Product` (`productIterator`,
-    /// `canEqual`, the latter declared by `Equals`) when a call resolves to the trait's own definition: the receiver is a product
-    /// by rule or is typed as `Product`, and neither has a body of the trait to call.
-    pub fn product_helper(&self, member: SymId) -> Option<SymId> {
-        // On the JVM the members are scala-library's and every case class defines `canEqual`:
-        // the call is virtual, as scalac's, so a class's own `canEqual` answers.
-        if self.jvm {
-            return None;
-        }
-        let s = self.syms.sym(member);
-        if !matches!(s.owner, Owner::Class(c) if Some(c) == self.b.product || Some(c) == self.equals_class()) {
-            return None;
-        }
-        self.b.product_helpers.iter().find(|&&(n, _)| n == s.name).map(|&(_, h)| h)
     }
 
     /// Whether `c` is `scala.deriving.Mirror`, `Mirror.Product` or `Mirror.Sum`, whose givens the

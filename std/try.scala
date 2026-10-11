@@ -12,7 +12,8 @@ object JsError:
     case js.JavaScriptException(e) => e
     case _ => t
 
-sealed trait Try[+T]:
+// `Product` and `Serializable`, as scala-library's `Try`.
+sealed trait Try[+T] extends Product, java.io.Serializable:
   def isSuccess: Boolean = this match
     case Success(_) => true
     case Failure(_) => false
