@@ -830,6 +830,7 @@ opaque_type_test
 opaque_union_erasure
 opaquemembers
 open_expected
+open_iterator_map
 open_result_bounds
 operator_object_header
 operator_order
