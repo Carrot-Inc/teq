@@ -19,7 +19,9 @@
 # session over an upstream module's products that another build rewrites between two requests,
 # once keeping every file's size and time, once with a request for a file whose time was kept,
 # once killed on the way (the session reads the last whole publication); a session over an
-# upstream's products whose inline body is replaced and put back; and a
+# upstream's products whose inline body is replaced and put back; a session over
+# tests/split/late_std_class, whose walk meets a std class the typer completes after its final
+# passes, by the names its members go by; and a
 # session over tests/split/given_memo that adds a local given to a body and removes it, and changes
 # a file's import of givens and changes it back, through the given search's kept memos.
 # Every session types its full builds at the automatic count and every fresh build it is compared
@@ -282,6 +284,27 @@ build "$src/Main.scala"
 expect "macro_std_override: the macro reaches the override" "$(field ok),$(field incremental)" "true,true"
 retype_runs "macro_std_override: the retype runs" "true"
 same_as_fresh "macro_std_override: the macro reaches the override" "$src"
+stop
+rm -rf "$work/out"
+
+# A std class the typer completes after its final passes, an anonymous class of a std body the
+# reach types, whose method overrides one alternative of an inherited overloaded name, has the
+# method named once its completion is done (`Worker::mark_members_meeting_inherited`), before the
+# walk meets the class: a fresh build's walk marks it by the name a call through the parent goes
+# by, as the session's walks after the first build do. Each build is a fresh one's.
+src=$work/late_std_class
+cp -r tests/split/late_std_class "$src"
+TEQ_SESSION_PARTS=1 TEQ_KEPT_SETTLE=wait start "$src" --split "$work/out"
+expect "late_std_class: first build" "$(field ok)" 'true'
+same_as_fresh "late_std_class: first build" "$src"
+printf '// a comment\n' | cat - "$src/Main.scala" > "$src/Main.tmp" && mv "$src/Main.tmp" "$src/Main.scala"
+build "$src/Main.scala"
+expect "late_std_class: a comment inserted" "$(field ok),$(field incremental)" "true,true"
+same_as_fresh "late_std_class: a comment inserted" "$src"
+sed -i.bak 's/println("label")/println("label2")/' "$src/Main.scala"
+build "$src/Main.scala"
+expect "late_std_class: a literal changed" "$(field ok),$(field incremental)" "true,true"
+same_as_fresh "late_std_class: a literal changed" "$src"
 stop
 rm -rf "$work/out"
 
