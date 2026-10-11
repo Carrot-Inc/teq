@@ -1048,6 +1048,7 @@ poly_context_function
 poly_function_outer_bound
 poly_functions
 poly_named_params
+predef_copy_array
 predef_std
 predef_unimport_redefined
 predef_wrap_string_linked
