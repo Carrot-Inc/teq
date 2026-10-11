@@ -49,7 +49,7 @@ jobs:
             minutes: 35
             jars: true
           - group: watch
-            suites: split-watch
+            suites: split-watch check-watch jvm-watch lsp task runner-classes watch-memory split-determinism
             minutes: 45
             jars: true
           - group: interp
