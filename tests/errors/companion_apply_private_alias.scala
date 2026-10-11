@@ -1,7 +1,7 @@
-// expect: 20:34: error: type mismatch: found String, required A
-// expect: 20:39: error: type mismatch: found String, required A
-// expect: 29:27: error: type mismatch: found String, required A
-// expect: 31:38: error: type mismatch: found String, required A
+// expect: 20:34: error: type mismatch: found String, required
+// expect: 20:39: error: type mismatch: found String, required
+// expect: 29:27: error: type mismatch: found String, required Derived.Event
+// expect: 31:38: error: type mismatch: found String, required
 // expect: 4 errors found
 
 // A case class's companion `apply` takes the class's whole declared parameter-list structure

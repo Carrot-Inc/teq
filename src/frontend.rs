@@ -187,8 +187,8 @@ fn mark_type_prefix(ast: &Ast, t: TyExprId, used: &mut UsedNames) {
 pub fn parse_one(text: &str, interner: &Interner, syntax: parser::Syntax) -> (Vec<Ast>, FileErrors) {
     let mut closed: Vec<u32> = Vec::new();
     loop {
-        let lexed = lexer::lex_closing(text, interner, &closed);
-        let parsed = parser::parse(text, &lexed, &closed, interner, syntax);
+        let mut lexed = lexer::lex_closing(text, interner, &closed);
+        let parsed = parser::parse(text, &mut lexed, &closed, interner, syntax);
         match parsed.boundary {
             Some(b) if closed.len() < lexer::MAX_RELEXES && !closed.contains(&b) => {
                 closed.push(b);

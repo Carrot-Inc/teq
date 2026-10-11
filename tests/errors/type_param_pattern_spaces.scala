@@ -23,5 +23,5 @@ object Main:
   def k[F[X] <: A](v: A) = v match { case _: F[Int] @unchecked => 2; case _ => 3 }
   def main(args: Array[String]): Unit = ()
 // expect: 16:24: warning: match may not be exhaustive; missing: First, Other(_)
-// expect: 20:25: warning: match may not be exhaustive; missing: B, C
+// expect: 20:25: warning: match may not be exhaustive; missing: B(), C()
 // expect: 2 warnings found, errors under --werror

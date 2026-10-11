@@ -44,3 +44,7 @@ def finalBound(x: Any): Int = x match { case b @ ExS(v) => val y: Box[String] = 
 trait S extends java.io.Serializable { def foo: String = "S" }
 def serial(x: Integer | S): String = x match { case b: java.io.Serializable => b.foo; case _ => "other" }
 def absorbed(x: A | B): Int = x match { case b: B => val s: Int = b; 0; case _ => 1 }
+def listBinder(x: Any): Any = x match { case l: List[t] => val a: t = 1; a; case _ => 0 }
+def listHead(x: Any): Any = x match { case l: List[t] => val a: t = l.head; a; case _ => 0 }
+// expect: 47:71: error: type mismatch: found Int, required t
+// absent: 48:

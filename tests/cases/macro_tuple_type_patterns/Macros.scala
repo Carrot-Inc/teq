@@ -8,7 +8,7 @@ object Fields:
   def describeImpl[A: Type](m: Expr[Mirror.Of[A]])(using Quotes): Expr[String] =
     import quotes.reflect.*
     def go[Ls: Type, Ts: Type](idx: Int): List[String] =
-      (Type.of[Ls], Type.of[Ts]) match
+      ((Type.of[Ls], Type.of[Ts]): @unchecked) match
         case ('[l *: ll], '[t *: tt]) =>
           val name = TypeRepr.of[l] match
             case ConstantType(StringConstant(n)) => n

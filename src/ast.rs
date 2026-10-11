@@ -557,6 +557,9 @@ pub struct Ast {
     pub val_copies: crate::intern::FxMap<DefId, DefId>,
     /// `import scala.language.future`: the migration warnings of the next version are errors.
     pub source_future: bool,
+    /// `import language.experimental.relaxedLambdaSyntax` was met: a lambda after `:` may stand on
+    /// the colon's line (dotty's `followingIsLambdaAfterColon`, case 1b).
+    pub relaxed_lambdas: bool,
     pub top_level: Vec<DefId>,
     /// `private[pkg]` and `protected[pkg]`: where the name of the definition or parameter
     /// starts, and `pkg`.
@@ -827,6 +830,7 @@ impl Ast {
             default_inits: Vec::new(),
             val_copies: crate::intern::FxMap::default(),
             source_future: false,
+            relaxed_lambdas: false,
             top_level: Vec::new(),
             access_scopes: Vec::new(),
             has_quotes: false,

@@ -12,7 +12,7 @@ package scala
 // `Vector.wrap` makes in O(1) for the std's transient arrays, which no version shares; a
 // derived version of a flat vector longer than a leaf goes through the trie the flat vector
 // chunks into once, memoised on it.
-final class Vector[+A](root: RawBuffer[Any], depth: Int, offset: Int, trieLength: Int, items: RawBuffer[A], itemCount: Int, private var chunked: Vector[Any] = null) extends SeqOps[A, Vector, Vector[A]], IndexedSeq[A]:
+sealed class Vector[+A](root: RawBuffer[Any], depth: Int, offset: Int, trieLength: Int, items: RawBuffer[A], itemCount: Int, private var chunked: Vector[Any] = null) extends SeqOps[A, Vector, Vector[A]], IndexedSeq[A]:
   def length: Int = trieLength + itemCount
   def buildCC[B](items: RawBuffer[B]): Vector[B] = Vector.wrap(items)
   // The elements as one array: the tail itself when the vector is flat and ends with it.

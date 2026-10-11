@@ -24,11 +24,11 @@ object Gen:
   def unapply[B](g: Gen[B]): Option[String] = Some(s"own ${g.x}")
 
 @main def run(): Unit =
-  println(G(7) match { case G(n) => n; case _ => -1 })
+  println((G(7): @unchecked) match { case G(n) => n; case _ => -1 })
   println(G("abcd") match { case G(n) => n; case _ => -1 })
   println((G("abc"): Any) match { case G(n) => n; case _ => -1 })
-  println(Both(7) match { case Both(n) => n; case _ => -1 })
+  println((Both(7): @unchecked) match { case Both(n) => n; case _ => -1 })
   println(Inh(2) match { case Inh(n) => n; case _ => -1 })
-  println(Multi(3) match { case Multi(n) => n; case _ => -1 })
+  println((Multi(3): @unchecked) match { case Multi(n) => n; case _ => -1 })
   println("s" match { case Multi(n) => n; case _ => -1 })
-  println(Gen(5) match { case Gen(s) => s })
+  println((Gen(5): @unchecked) match { case Gen(s) => s })

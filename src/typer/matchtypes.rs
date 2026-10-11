@@ -704,7 +704,7 @@ impl<'a> Worker<'a> {
     /// Whether two classes have no common instance: neither derives from the other, and one is
     /// final, or their nearest non-trait ancestors are unrelated, or every child of a sealed one
     /// is disjoint from the other.
-    fn disjoint_classes(&mut self, c1: ClassId, c2: ClassId) -> bool {
+    pub(super) fn disjoint_classes(&mut self, c1: ClassId, c2: ClassId) -> bool {
         if c1 == c2 || self.class_derives(c1, c2) || self.class_derives(c2, c1) {
             return false;
         }
@@ -733,7 +733,7 @@ impl<'a> Worker<'a> {
         self.syms.class(sub).base_types.iter().any(|&(b, _)| b == sup)
     }
 
-    fn is_final_class(&self, c: ClassId) -> bool {
+    pub(super) fn is_final_class(&self, c: ClassId) -> bool {
         let info = self.syms.class(c);
         match info.kind {
             ClassKind::Object | ClassKind::Builtin => true,

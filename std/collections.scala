@@ -1,6 +1,6 @@
 package scala
 
-final class ArraySeq[+A](private val items: Array[A]) extends SeqOps[A, ArraySeq, ArraySeq[A]], IndexedSeq[A]:
+sealed class ArraySeq[+A](private val items: Array[A]) extends SeqOps[A, ArraySeq, ArraySeq[A]], IndexedSeq[A]:
   def buildCC[B](items: RawBuffer[B]): ArraySeq[B] = new ArraySeq(untaggedArray(items))
   override def iterator: Iterator[A] = arrayIterator(items)
   def length: Int = items.length

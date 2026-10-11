@@ -52,7 +52,7 @@ neg/6314.scala	same
 neg/6570-1.scala	same	
 neg/6570.scala	syntax	expected identifier, found {}
 neg/6571.scala	same	
-neg/6709.scala	superset	+4 lines: type mismatch
+neg/6709.scala	same	
 neg/6890.scala	accepts	
 neg/7043.scala	syntax	expected {}, found {}
 neg/7380.scala	same	
@@ -591,7 +591,7 @@ neg/i15301.scala	same
 neg/i1531.scala	same	
 neg/i15311.scala	different	type mismatch
 neg/i15312.scala	same	
-neg/i15352.scala	superset	+1 lines: type mismatch
+neg/i15352.scala	accepts	
 neg/i15372.scala	same	
 neg/i15377.scala	accepts	
 neg/i15381.scala	same	
@@ -751,7 +751,7 @@ neg/i18533	oos	java
 neg/i18545.scala	accepts	
 neg/i18552.scala	accepts	
 neg/i18584	oos	java
-neg/i18588.scala	accepts	
+neg/i18588.scala	same	
 neg/i18632.scala	accepts	
 neg/i18650.min.scala	same	
 neg/i18650.min2.scala	same	
@@ -817,7 +817,7 @@ neg/i20245	different	cannot resolve export
 neg/i20265-1.scala	accepts	
 neg/i20265.scala	superset	+3 lines: X is not a legal path
 neg/i2030.scala	same	
-neg/i20317a.scala	syntax	expected {}, found {}
+neg/i20317a.scala	different	value {} is not a member of {}
 neg/i2032.scala	accepts	
 neg/i2033.scala	superset	+2 lines: type {} not found
 neg/i20338a.scala	same	
@@ -887,7 +887,7 @@ neg/i22589c.scala	same
 neg/i22592.scala	accepts	
 neg/i22593a.scala	accepts	
 neg/i22593b	accepts	
-neg/i22620.scala	accepts	
+neg/i22620.scala	same	
 neg/i22660.scala	same	
 neg/i22670	accepts	
 neg/i22671.scala	same	
@@ -1007,7 +1007,7 @@ neg/i2771c.scala	same
 neg/i2778.scala	same	
 neg/i280.scala	same	
 neg/i2808.scala	same	
-neg/i2871.scala	syntax	expected {}, found {}
+neg/i2871.scala	same	
 neg/i2887a.scala	different	type mismatch
 neg/i2887b.scala	syntax	expected identifier, found {}
 neg/i2887c.scala	different	type mismatch
@@ -1227,7 +1227,7 @@ neg/i6419.scala	accepts
 neg/i6419b.scala	same	
 neg/i6450.scala	subset	1/4 lines
 neg/i6475.scala	same	
-neg/i6501.scala	syntax	expected {}, found {}
+neg/i6501.scala	accepts	
 neg/i6503.scala	same	
 neg/i6601.scala	oos	enum-extends
 neg/i6606.scala	different	type mismatch
@@ -1321,7 +1321,7 @@ neg/i803.scala	same
 neg/i8032.scala	subset	1/2 lines
 neg/i8050.scala	same	
 neg/i8096.scala	syntax	expected a definition, found {}
-neg/i8150.scala	syntax	expected identifier, found {}
+neg/i8150.scala	same	
 neg/i8175.scala	same	
 neg/i8186.scala	same	
 neg/i8194.scala	accepts	
@@ -2017,7 +2017,7 @@ pos/10747-onnxmin.scala	accepts
 pos/10747-shapeless-min-spec.scala	accepts	
 pos/10747-shapeless-min.scala	accepts	
 pos/10867.scala	accepts	
-pos/11463.scala	rejects	type mismatch
+pos/11463.scala	accepts	
 pos/11484	oos	java
 pos/11512	oos	java
 pos/11973.scala	accepts	
@@ -2031,7 +2031,7 @@ pos/13469.scala	accepts
 pos/13491.scala	accepts	
 pos/13495.scala	rejects	{} is not a member of the package
 pos/13633.scala	syntax	expected {}, found {}
-pos/13855.scala	rejects	type mismatch
+pos/13855.scala	accepts	
 pos/14952.scala	rejects	type argument T does not conform to upper bound Tuple
 pos/1567	accepts	
 pos/16583.scala	rejects	type mismatch
@@ -2261,7 +2261,7 @@ pos/compile1.scala	accepts
 pos/complex-self-call.scala	accepts	
 pos/compound.scala	accepts	
 pos/concats.scala	accepts	
-pos/conforms.scala	rejects	type mismatch
+pos/conforms.scala	accepts	
 pos/conformsWild.scala	accepts	
 pos/constants.scala	accepts	
 pos/constfold.scala	std	App
@@ -2716,7 +2716,7 @@ pos/i12945	rejects	no given instance
 pos/i12949.scala	accepts	
 pos/i12950	accepts	
 pos/i12953.scala	accepts	
-pos/i12955.scala	rejects	type mismatch
+pos/i12955.scala	accepts	
 pos/i12958.scala	accepts	
 pos/i12973.scala	accepts	
 pos/i12991.scala	accepts	
@@ -2850,7 +2850,7 @@ pos/i14782.scala	accepts
 pos/i14783.scala	rejects	type mismatch
 pos/i14807.scala	std	Month
 pos/i14821.scala	accepts	
-pos/i14830.scala	syntax	expected {}, found {}
+pos/i14830.scala	rejects	type mismatch
 pos/i14832.scala	syntax	expected {}, found {}
 pos/i14858	accepts	
 pos/i14896.scala	syntax	expected {}, found {}
@@ -3205,7 +3205,7 @@ pos/i18649.scala	accepts
 pos/i1865.scala	accepts	
 pos/i18654	oos	java
 pos/i1866.scala	accepts	
-pos/i1867.scala	syntax	expected identifier, found {}
+pos/i1867.scala	accepts	
 pos/i1868.scala	accepts	
 pos/i1870.scala	accepts	
 pos/i18713.scala	accepts	
@@ -3286,7 +3286,7 @@ pos/i19687b.scala	accepts
 pos/i19687c.scala	accepts	
 pos/i19687d.scala	accepts	
 pos/i19687e.scala	accepts	
-pos/i19692.scala	rejects	type mismatch
+pos/i19692.scala	accepts	
 pos/i19702	accepts	
 pos/i19706.scala	std	Matches
 pos/i19710.scala	std	Filter
@@ -3580,7 +3580,7 @@ pos/i24412.scala	accepts
 pos/i24414	accepts	
 pos/i24456.scala	accepts	
 pos/i24479.scala	accepts	
-pos/i24496.scala	syntax	expected identifier, found {}
+pos/i24496.scala	accepts	
 pos/i24507-jframe.scala	std	JFrame
 pos/i24537.scala	rejects	value {} is not a member of {}
 pos/i24543.scala	syntax	expected {}, found {}
@@ -3697,7 +3697,7 @@ pos/i2797a	accepts
 pos/i2833.scala	accepts	
 pos/i2840.scala	accepts	
 pos/i2856.scala	accepts	
-pos/i2858.scala	syntax	expected {}, found {}
+pos/i2858.scala	accepts	
 pos/i2888.scala	accepts	
 pos/i2903.scala	accepts	
 pos/i2906.scala	syntax	expected a definition, found {}
@@ -3919,7 +3919,7 @@ pos/i5650.scala	accepts
 pos/i5655	oos	java
 pos/i566.scala	accepts	
 pos/i5666.scala	accepts	
-pos/i5699.scala	syntax	expected end of statement, found {}
+pos/i5699.scala	accepts	
 pos/i5700.scala	accepts	
 pos/i5711.scala	accepts	
 pos/i5720.scala	accepts	
@@ -4628,7 +4628,7 @@ pos/no-selftype.scala	accepts
 pos/nonlocal-unchecked.scala	accepts	
 pos/nontrivial-intersection-gadt.scala	rejects	type mismatch
 pos/not-looping-implicit.scala	accepts	
-pos/nowarnannot.scala	rejects	missing argument for parameter {}
+pos/nowarnannot.scala	accepts	
 pos/null-hashcode.scala	accepts	
 pos/null.scala	accepts	
 pos/nullarify.scala	accepts	
@@ -5814,7 +5814,7 @@ pos/unary-with-type-params.scala	accepts
 pos/unchecked-a.scala	syntax	expected {}, found {}
 pos/unchecked-scrutinee.scala	accepts	
 pos/unicode-decode.scala	accepts	
-pos/unify-wildcard-patterns.scala	rejects	type mismatch
+pos/unify-wildcard-patterns.scala	accepts	
 pos/uninitialized-future-migration.scala	accepts	
 pos/unions.scala	rejects	type mismatch
 pos/val-same-name-tuple-elem.scala	accepts	

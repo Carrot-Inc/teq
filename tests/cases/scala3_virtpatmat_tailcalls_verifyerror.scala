@@ -2,7 +2,7 @@
 // shouldn't result in a verify error when run...
 object Test {
   def main(args: Array[String]): Unit = ()
-  @annotation.tailrec
+  @annotation.tailrec @annotation.nowarn
   final def test(meh: Boolean): Boolean = {
     Some("a") match {
       case x =>

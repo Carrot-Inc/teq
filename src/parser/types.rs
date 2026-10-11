@@ -307,7 +307,7 @@ impl<'a> Parser<'a> {
     fn parse_infix_type(&mut self, bar: bool) -> TyExprId {
         let mut stack: Vec<(TyExprId, Token, Span)> = Vec::new();
         let mut top = self.parse_simple_type();
-        while self.at_infix_type_op(bar) && self.can_start_type(1) {
+        while self.at_infix_type_op(bar) && (self.can_start_type(1) || self.at_refinement_block(1)) {
             let op = self.bump();
             let (prec, right) = super::expr::op_precedence(self.interner.get(op.name));
             top = self.reduce_type_ops(&mut stack, top, prec, !right, op.name);
@@ -368,6 +368,21 @@ impl<'a> Parser<'a> {
             },
             _ => false,
         }
+    }
+
+    /// A refinement without a parent at token `n`: the region the lexer opens for a brace
+    /// (`A & { type T = Int }`, `A & {}`), whatever it holds, as dotty's `simpleType1` reads any
+    /// `{` it starts at.
+    fn at_refinement_block(&self, n: usize) -> bool {
+        self.toks.get(self.pos + n).is_some_and(|t| t.kind == Tok::Indent && t.span.end > t.span.start)
+    }
+
+    /// `_root_.scala.AnyRef`, the parent of a refinement written without one, which no
+    /// definition in scope shadows.
+    fn root_any_ref(&mut self, at: Span) -> TyExprId {
+        let root = self.ast.add_ty(TyExpr::Name(names::ROOT), at);
+        let scala = self.ast.add_ty(TyExpr::Select(root, names::SCALA), at);
+        self.ast.add_ty(TyExpr::Select(scala, names::ANY_REF), at)
     }
 
     /// scalac's `canStartInfixTypeTokens`: what may follow an infix type operator.
@@ -442,14 +457,19 @@ impl<'a> Parser<'a> {
                 let n = self.bump().name;
                 self.ast.add_ty(TyExpr::Name(n), start)
             }
-            // `{ def m: T }` alone, a refinement of `AnyRef` (dotty's `simpleType1`: a
-            // `RefinedTypeTree` over an empty parent, typed as `Object`), which the lexer hands over
-            // as a block.
-            Tok::Indent if !self.template_type && matches!(self.kind_at(1), Tok::KwDef | Tok::KwVal | Tok::KwVar | Tok::KwType) => {
+            // `{ def m: T }` or `{}` alone or as an operand, a refinement of `AnyRef` (dotty's
+            // `simpleType1`: any `{` there starts a `RefinedTypeTree` over an empty parent, typed
+            // as `Object`, its declarations possibly none), which the lexer hands over as a block.
+            Tok::Indent if !self.template_type && self.at_refinement_block(0) => {
                 let members = self.refinement_members(1);
-                let root = self.ast.add_ty(TyExpr::Name(names::ROOT), start);
-                let scala = self.ast.add_ty(TyExpr::Select(root, names::SCALA), start);
-                let any_ref = self.ast.add_ty(TyExpr::Select(scala, names::ANY_REF), start);
+                let any_ref = self.root_any_ref(start);
+                self.ast.add_ty(TyExpr::Refined(any_ref, members), start.to(self.prev_span()))
+            }
+            // The same after a `:` (`val y: {} = ..`), where the lexer opens no region for the
+            // brace.
+            Tok::LBrace if !self.template_type => {
+                let members = self.parse_brace_refinement();
+                let any_ref = self.root_any_ref(start);
                 self.ast.add_ty(TyExpr::Refined(any_ref, members), start.to(self.prev_span()))
             }
             Tok::LParen => {
@@ -597,21 +617,75 @@ impl<'a> Parser<'a> {
             }
             let first = defs.len();
             p.parse_def(&mut defs);
-            for &d in &defs[first..] {
-                let def = p.ast.def(d);
-                let has_body = match &def.kind {
-                    DefKind::Val { rhs, .. } => rhs.is_some(),
-                    DefKind::Fun(f) => f.body.is_some(),
-                    DefKind::TypeAlias { .. } => false,
-                    _ => true,
-                };
-                if has_body {
-                    p.error_at(def.span, "refinement cannot have a body");
-                }
-            }
+            p.check_refinement_defs(&defs[first..]);
         });
         self.end_region();
         push_list(&mut self.ast.def_lists, &defs)
+    }
+
+    /// The members of a refinement in braces the lexer opened no region for, up to and with
+    /// its `}`, possibly none.
+    fn parse_brace_refinement(&mut self) -> ListRef {
+        self.expect(Tok::LBrace);
+        let mut defs = Vec::new();
+        loop {
+            while matches!(self.kind(), Tok::Semi | Tok::Newline) {
+                self.bump();
+            }
+            if matches!(self.kind(), Tok::RBrace | Tok::Eof) {
+                break;
+            }
+            if !self.at_def_start() {
+                let (at, found) = self.found();
+                self.error_at(at, format!("expected a declaration, found {}", found));
+                self.bump();
+                continue;
+            }
+            let first = defs.len();
+            self.parse_def(&mut defs);
+            self.check_refinement_defs(&defs[first..]);
+        }
+        self.expect(Tok::RBrace);
+        push_list(&mut self.ast.def_lists, &defs)
+    }
+
+    /// A refinement's members are declarations without modifiers (dotty's `refineStatSeq`,
+    /// `checkLegal`): one with a modifier, or with a body, is an error.
+    fn check_refinement_defs(&mut self, defs: &[DefId]) {
+        const NAMED: [(Mods, &str); 14] = [
+            (mods::PRIVATE, "private"),
+            (mods::PROTECTED, "protected"),
+            (mods::ABSTRACT, "abstract"),
+            (mods::FINAL, "final"),
+            (mods::SEALED, "sealed"),
+            (mods::IMPLICIT, "implicit"),
+            (mods::GIVEN, "given"),
+            (mods::LAZY, "lazy"),
+            (mods::OVERRIDE, "override"),
+            (mods::INLINE, "inline"),
+            (mods::TRANSPARENT, "transparent"),
+            (mods::INFIX, "infix"),
+            (mods::OPEN, "open"),
+            (mods::OPAQUE, "opaque"),
+        ];
+        for &d in defs {
+            let def = self.ast.def(d);
+            let named: Vec<&str> = NAMED.iter().filter(|&&(m, _)| def.mods & m != 0).map(|&(_, n)| n).collect();
+            if !named.is_empty() {
+                let span = def.span;
+                self.error_at(span, format!("refinement cannot be `{}`", named.join("`, `")));
+                continue;
+            }
+            let has_body = match &def.kind {
+                DefKind::Val { rhs, .. } => rhs.is_some(),
+                DefKind::Fun(f) => f.body.is_some(),
+                DefKind::TypeAlias { .. } => false,
+                _ => true,
+            };
+            if has_body {
+                self.error_at(def.span, "refinement cannot have a body");
+            }
+        }
     }
 
     pub(super) fn parse_type_args(&mut self) -> ListRef {

@@ -1,5 +1,6 @@
 // `TypeTest[S, T]` is not synthesized for a `T` at the bottom, nor for `AnyVal`, `AnyRef` and
-// `Object` (Synthesizer.scala 97 and 105-106).
+// `Object` (Synthesizer.scala 97 and 105-106); the failure is reported with `TypeTest`'s
+// `@implicitNotFound` text (MissingImplicitArgument.userDefinedImplicitNotFoundTypeMessage).
 import scala.reflect.TypeTest
 object Main:
   val a = summon[TypeTest[Any, AnyVal]]
@@ -7,8 +8,8 @@ object Main:
   val c = summon[TypeTest[Any, Null]]
   val d = summon[TypeTest[Any, AnyRef]]
   val e = summon[TypeTest[Int, Null]]
-// expect: 5:40: error: no given instance of type TypeTest[Any, AnyVal] was found for parameter x
-// expect: 6:41: error: no given instance of type TypeTest[Any, Nothing] was found for parameter x
-// expect: 7:38: error: no given instance of type TypeTest[Any, Null] was found for parameter x
-// expect: 8:40: error: no given instance of type TypeTest[Any, AnyRef] was found for parameter x
-// expect: 9:38: error: no given instance of type TypeTest[Int, Null] was found for parameter x
+// expect: 6:40: error: No TypeTest available for [Any, AnyVal]
+// expect: 7:41: error: No TypeTest available for [Any, Nothing]
+// expect: 8:38: error: No TypeTest available for [Any, Null]
+// expect: 9:40: error: No TypeTest available for [Any, AnyRef]
+// expect: 10:38: error: No TypeTest available for [Int, Null]

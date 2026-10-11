@@ -17,6 +17,6 @@ object Main {
     println((C(1): Any) match { case C(`k`) => "yes"; case _ => "no" })
     println(C(2) match { case C(`k`) => "field"; case `whole` => "whole"; case _ => "no" })
     println(C(3) match { case C(x) if x == k => "guard"; case C(x) => s"bound $x" })
-    try C(4) match { case C(`k`) => println("field") } catch { case _: MatchError => println("MatchError") }
+    try (C(4): @unchecked) match { case C(`k`) => println("field") } catch { case _: MatchError => println("MatchError") }
   }
 }
