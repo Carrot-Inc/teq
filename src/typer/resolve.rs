@@ -2391,13 +2391,12 @@ impl<'a> Worker<'a> {
     }
 
     /// The `*:` chain `id` spells where `t`, its resolved type, is the tuple class of the chain's
-    /// heads alone, an `Array` of one included.
+    /// heads alone, an `Array` of one included. A chain behind an alias, a selection, a second
+    /// alias or a substitution, which scalac also erases as the chain (`TypeErasure.tupleArity`),
+    /// is resolved to the tuple class with its spelling gone: the declared view a type would need
+    /// for it is E1's.
     pub(super) fn spelled_cons(&mut self, id: TyExprId, t: TypeId) -> Option<TypeId> {
         let ast = self.cur_ast();
-        let cons_of = |e: TyExprId| match ast.ty(e) {
-            TyExpr::Apply(f, args) if args.len == 2 && matches!(ast.ty(f), TyExpr::Name(names::CONS_TUPLE)) => Some(ast.ty_list(args)[1]),
-            _ => None,
-        };
         let Type::Class(c, targs) = self.types.get(t) else { return None };
         if c == self.b.array {
             let TyExpr::Apply(_, args) = ast.ty(id) else { return None };
@@ -2405,14 +2404,10 @@ impl<'a> Worker<'a> {
             let spelled = self.spelled_cons(elem_expr, elem)?;
             return Some(self.types.class(c, &[spelled]));
         }
-        let mut tail = cons_of(id)?;
-        let mut heads = 1;
-        while let Some(next) = cons_of(tail) {
-            tail = next;
-            heads += 1;
-        }
+        let TyExpr::Apply(..) = ast.ty(id) else { return None };
+        let heads = chain_heads(ast, id)?;
         let elems = self.types.items(targs).to_vec();
-        if !matches!(ast.ty(tail), TyExpr::Name(_) | TyExpr::Select(..)) || !self.is_tuple_class(c) || elems.len() != heads {
+        if !self.is_tuple_class(c) || elems.len() != heads {
             return None;
         }
         let (cons, empty) = (self.b.cons_tuple?, self.b.empty_tuple?);
@@ -3506,7 +3501,9 @@ impl<'a> Worker<'a> {
             let itself = self.types.param(id);
             for (bound, upper) in [(tp.upper, true), (tp.lower, false)] {
                 let Some(b) = bound else { continue };
-                let t = self.resolve_type(b);
+                // An upper bound is declared as a signature's type is: a `*:` chain stays the chain
+                // it is spelled as, which scalac erases a parameter it bounds to (`Product`).
+                let t = if upper { self.resolve_declared_type(b) } else { self.resolve_type(b) };
                 if t == itself || self.eta_reduce(t) == itself {
                     let msg = format!("cyclic reference involving type {}", self.name_str(tp.name));
                     self.error(tp.span, msg);
@@ -4145,6 +4142,23 @@ impl<'a> Worker<'a> {
         if kind == ClassKind::Enum {
             self.syms.class_mut(c).stateful = !ctor.is_empty() || self.body_has_initializers(&cls.body);
         }
+        // A case class's selectors (`mods::SELECTOR`) take their fields' types with the class, as
+        // the fields do, so that no selector's signature is completed and published on its own:
+        // the field's own signature where it is a value's, as it is. Where the class check makes
+        // no selector bodies (`emits_bodies`), each is completed where it is first asked for, as
+        // dotty's completer does (`complete_sig_inner`).
+        if let Some(first) = ctor.first().filter(|_| self.emits_bodies && self.has_selectors(c)) {
+            for (i, p) in first.params.iter().enumerate() {
+                let Some(s) = self.selector_of_field(c, i) else { continue };
+                if self.syms.sym(s).sig.is_none() {
+                    let Some(field) = self.syms.sym(p.sym).sig.clone() else { continue };
+                    let sig = if field.tparams.is_empty() && field.clauses.is_empty() { field } else { Arc::new(MethodSig::value(field.ret)) };
+                    let mut info = self.syms.sym_mut(s);
+                    info.sig = Some(sig);
+                    info.state().set(Completion::Done);
+                }
+            }
+        }
         self.syms.class_mut(c).ctor = ctor;
 
         let mut parents: Vec<(TypeId, Span)> = Vec::new();
@@ -4231,6 +4245,12 @@ impl<'a> Worker<'a> {
                 let t = self.types.class(e, &args);
                 parents.insert(0, (t, self.syms.class(c).span));
             }
+        }
+        // A trait whose first parent is `Any` as resolved, written so or through an alias, is
+        // universal (`mods::UNIVERSAL`): dotty's `Namer.ensureFirstIsClass` keeps a real class
+        // first, where a trait first gets `Object` before it.
+        if kind == ClassKind::Trait && parents.first().is_some_and(|&(t, _)| self.dealias(t) == ANY) {
+            self.syms.class_mut(c).mods |= mods::UNIVERSAL;
         }
         self.set_parents(c, parents);
         // The self type may name a class that extends this one (tapir's
@@ -5304,4 +5324,19 @@ fn kind_only(ast: &crate::ast::Ast, b: TyExprId) -> bool {
         }),
         None => true,
     }
+}
+
+/// The heads of the `*:` chain `id` spells, where its tail is written as a name (`EmptyTuple`).
+fn chain_heads(ast: &crate::ast::Ast, id: TyExprId) -> Option<usize> {
+    let cons_of = |e: TyExprId| match ast.ty(e) {
+        TyExpr::Apply(f, args) if args.len == 2 && matches!(ast.ty(f), TyExpr::Name(names::CONS_TUPLE)) => Some(ast.ty_list(args)[1]),
+        _ => None,
+    };
+    let mut tail = cons_of(id)?;
+    let mut heads = 1;
+    while let Some(next) = cons_of(tail) {
+        tail = next;
+        heads += 1;
+    }
+    matches!(ast.ty(tail), TyExpr::Name(_) | TyExpr::Select(..)).then_some(heads)
 }

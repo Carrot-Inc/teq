@@ -1328,8 +1328,9 @@ impl<'a, 't> Interp<'a, 't> {
                 TExpr::Super(_) => View::Super,
                 TExpr::Field(r, s) if matches!(self.prog().expr(r), TExpr::This) => View::Ident(SymRef::Term(s)),
                 TExpr::Field(r, s) => View::Select(TreeRef::Expr(r), SymRef::Term(s), self.syms().sym(s).name),
-                TExpr::CallMethod(r, s, args) if self.assigned_var(s).is_some() && args.len == 1 => {
-                    // An assignment through an abstract var, which scalac's tree keeps as one.
+                TExpr::CallMethod(r, s, args) if self.assigned_var(s).is_some() && args.len == 1 && self.prog().is_setter_assign(e) => {
+                    // An assignment through an abstract var, which scalac's tree keeps as one; a
+                    // call of the setter written so is an application.
                     let var = self.assigned_var(s).expect("an abstract var's setter");
                     let value = self.prog().expr_list(args)[0];
                     let target = self.typer.prog.add(TExpr::Field(r, var));
@@ -1415,13 +1416,7 @@ impl<'a, 't> Interp<'a, 't> {
                     View::Apply(fun, items)
                 }
                 TExpr::Prim(op, l, r) => {
-                    let primitive = self.prog().type_of(l).map_or(false, |t| self.typer.is_primitive(t));
-                    let text = match op {
-                        PrimOp::RefEq if primitive => "==",
-                        PrimOp::RefNe if primitive => "!=",
-                        _ => prim_name(op),
-                    };
-                    let name = self.typer.interner.intern(text);
+                    let name = self.typer.interner.intern(prim_name(op));
                     let method = self.operator_type(op, l, r, e);
                     let fun = self.pending(Pending { recv: Some(TreeRef::Expr(l)), kind: PendingKind::Operator(name, method), targs: Vec::new() });
                     View::Apply(fun, vec![TreeRef::Expr(r)])
@@ -2300,7 +2295,7 @@ impl<'a, 't> Interp<'a, 't> {
                 // A member of `this` named unqualified, which the view shows as an `Ident`.
                 TExpr::Field(r, _) if matches!(self.prog().expr(r), TExpr::This) => "Ident",
                 TExpr::Field(..) | TExpr::Unary(..) | TExpr::ToStr(..) | TExpr::Index(..) | TExpr::JsSelect(..) => "Select",
-                TExpr::CallMethod(_, s, args) if args.len == 1 && self.assigned_var(s).is_some() => "Assign",
+                TExpr::CallMethod(_, s, args) if args.len == 1 && self.assigned_var(s).is_some() && self.prog().is_setter_assign(e) => "Assign",
                 TExpr::CallMethod(_, s, args) | TExpr::CallStatic(s, args) => {
                     if args.is_empty() && !self.takes_arguments(s) {
                         if matches!(self.prog().expr(e), TExpr::CallMethod(..)) { "Select" } else { "Ident" }
@@ -2455,10 +2450,10 @@ pub(crate) fn prim_name(op: PrimOp) -> &'static str {
         Le => "<=",
         Gt => ">",
         Ge => ">=",
-        RefEq => "eq",
-        RefNe => "ne",
-        Eq => "==",
-        Ne => "!=",
+        RefEq | Eq => "==",
+        RefNe | Ne => "!=",
+        Same => "eq",
+        NotSame => "ne",
         BoolAnd => "&&",
         BoolOr => "||",
     }
@@ -4407,8 +4402,7 @@ impl<'a, 't> Interp<'a, 't> {
             ("x", self.operand_type(r))
         } else {
             match op {
-                PrimOp::RefEq | PrimOp::RefNe | PrimOp::Eq | PrimOp::Ne if lty == self.typer.b.t_string => ("x$0", ANY),
-                PrimOp::RefEq | PrimOp::RefNe => ("x$0", self.typer.b.t_any_ref),
+                PrimOp::Same | PrimOp::NotSame => ("x$0", self.typer.b.t_any_ref),
                 _ => ("x$0", ANY),
             }
         };

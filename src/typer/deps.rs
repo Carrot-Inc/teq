@@ -642,6 +642,8 @@ fn prim_name(op: PrimOp) -> &'static str {
         Ge => ">=",
         RefEq | Eq => "==",
         RefNe | Ne => "!=",
+        Same => "eq",
+        NotSame => "ne",
         BoolAnd => "&&",
         BoolOr => "||",
     }
@@ -3829,7 +3831,7 @@ impl<'c, 'a> Collector<'c, 'a> {
             TExpr::CallMethod(r, s, args) => {
                 // An assignment through an abstract var, which scalac's tree keeps as the var's
                 // selection assigned.
-                let assigned = super::setters::abstract_var_of_setter(&self.w.syms, self.w.interner, s);
+                let assigned = super::setters::abstract_var_of_setter(&self.w.syms, self.w.interner, s).filter(|_| self.w.prog.is_setter_assign(e));
                 if !self.forwarded.contains_key(&e) {
                     self.term_node(assigned.unwrap_or(s), Some(r));
                     self.expr(r);

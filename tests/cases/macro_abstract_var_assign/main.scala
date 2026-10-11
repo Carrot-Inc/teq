@@ -15,3 +15,5 @@ class Cell:
   println(cell.n)
   val c = Cell()
   println(Probe.assignment { c.n = 3 })
+  println(Probe.assignment { t.x_=(4) })
+  println(cell.n)

@@ -64,6 +64,9 @@ struct Writer<'a> {
     /// The symbols the file defines, known from the first pass.
     planned: Option<FxMap<u32, ()>>,
     depth: u32,
+    /// The symbols a `SYMANNOT` entry marks `@scala.volatile`: a var's field, which scalac 2
+    /// annotates and this rewriting leaves out.
+    volatile: FxMap<u32, ()>,
 }
 
 const MAX_DEPTH: u32 = 100;
@@ -85,6 +88,7 @@ impl<'a> Writer<'a> {
             packages: FxMap::default(),
             planned: None,
             depth: 0,
+            volatile: FxMap::default(),
         }
     }
 
@@ -101,6 +105,33 @@ impl<'a> Writer<'a> {
             self.children.entry(s.owner).or_default().push(i);
             self.syms.insert(i, s);
         }
+        // `SYMANNOT sym_Ref info_Ref ...`, the info a `TYPEREFtpe` of the annotation class.
+        for i in 0..self.p.len() as u32 {
+            if self.p.tag(i) != pk::SYMANNOT {
+                continue;
+            }
+            let mut c = self.p.body(i);
+            let (sym, info) = (c.nat() as u32, c.nat() as u32);
+            if self.p.tag(info) != pk::TYPEREFTPE {
+                continue;
+            }
+            let mut t = self.p.body(info);
+            let (_, class) = (t.nat(), t.nat() as u32);
+            if self.p.tag(class) == pk::EXTREF && self.p.name(self.p.body(class).nat() as u32) == "volatile" {
+                self.volatile.insert(sym, ());
+            }
+        }
+    }
+
+    /// Whether the accessor `i` or the field behind it (the local `x ` beside a getter `x`) is
+    /// `@volatile`: the class implementing the trait gives its field `ACC_VOLATILE`, as dotty's
+    /// `Scala2Unpickler` reads the annotation and `Mixin` copies it.
+    fn volatile_field(&self, i: u32, s: &LocalSym) -> bool {
+        if self.volatile.contains_key(&i) {
+            return true;
+        }
+        let field = format!("{} ", self.p.name(s.name));
+        self.children.get(&s.owner).is_some_and(|cs| cs.iter().any(|c| self.volatile.contains_key(c) && self.p.name(self.syms[c].name) == field))
     }
 
     // ---- names ----
@@ -629,6 +660,12 @@ impl<'a> Writer<'a> {
                 w.byte(t::MUTABLE);
             }
             w.modifiers(&s, Kind::Term);
+            if w.volatile_field(i, &s) {
+                w.sized(t::ANNOTATION, |w| {
+                    w.scala_type("volatile");
+                    w.byte(t::UNITCONST);
+                });
+            }
         });
     }
 

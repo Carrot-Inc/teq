@@ -109,6 +109,8 @@ pub struct ClassFile {
     pub source_file: Option<String>,
     /// Whether the file was written by a Scala compiler (`TASTY`, `Scala` or `ScalaSig` attribute).
     pub scala: bool,
+    /// Whether the file carries the `TASTY` attribute: a class Scala 3 pickled, in its `.tasty`.
+    pub tasty: bool,
     /// The raw `bytes` of a `ScalaSignature` or `ScalaLongSignature` annotation: the symbol
     /// table scalac 2 pickled, still encoded (`scala2::pickle::decode_signature`).
     pub scala_sig: Option<Vec<u8>>,
@@ -331,7 +333,11 @@ impl ClassFile {
                         cf.permitted.push(pool.class(r.u16()?)?);
                     }
                 }
-                "TASTY" | "Scala" | "ScalaSig" => cf.scala = true,
+                "TASTY" => {
+                    cf.scala = true;
+                    cf.tasty = true;
+                }
+                "Scala" | "ScalaSig" => cf.scala = true,
                 _ => {}
             }
             r.pos = end;

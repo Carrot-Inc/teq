@@ -208,10 +208,10 @@ type Serializable = java.io.Serializable
 // program that extends it implements the members itself. A call of a concrete member that
 // resolves to the trait's own goes to the function below it, since a product by rule has no
 // body of the trait.
-trait Equals:
+trait Equals extends Any:
   def canEqual(that: Any): Boolean
 
-trait Product extends Equals:
+trait Product extends Any with Equals:
   @js("$productArity($0)")
   @jvm("$0:L invokeinterface scala/Product.productArity()I")
   def productArity: Int

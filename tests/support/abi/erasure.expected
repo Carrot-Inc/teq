@@ -1,0 +1,12 @@
+erasure/API arrays([Ljava/lang/CharSequence;)[Ljava/lang/CharSequence; public
+erasure/API bound(Lscala/Product;)Lscala/Product; public
+erasure/API direct(Lscala/Product;)Lscala/Product; public
+erasure/API gen(Ljava/lang/Object;)Ljava/lang/Object; public
+erasure/API left(Ljava/lang/CharSequence;)Ljava/lang/CharSequence; public
+erasure/API nullable(Ljava/lang/String;)Ljava/lang/String; public
+erasure/API prim(Ljava/lang/Object;)Ljava/lang/Object; public
+erasure/API right(Ljava/io/Serializable;)Ljava/io/Serializable; public
+erasure/API rserial(Ljava/io/Serializable;)Ljava/io/Serializable; public
+erasure/API serial(Ljava/io/Serializable;)Ljava/io/Serializable; public
+erasure/API spec([I)[I public
+erasure/API union(Ljava/lang/CharSequence;)Ljava/lang/CharSequence; public

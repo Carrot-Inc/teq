@@ -2560,6 +2560,8 @@ impl<'c> Copier<'c> {
             member_order.push(ns);
         }
         let extensions: Vec<SymId> = info.extensions.iter().map(|&s| self.member(t, s, nc)).collect();
+        // A case class's selectors, members copied above.
+        let selectors: Vec<Option<SymId>> = info.selectors.iter().map(|s| s.map(|s| self.sym(s))).collect();
         let givens: Vec<SymId> = info.givens.iter().map(|&s| self.sym(s)).collect();
         let parents: Vec<TypeId> = info.parents.iter().map(|&p| self.ty(t, p)).collect();
         let base_types: Vec<(ClassId, TypeId)> =
@@ -2596,6 +2598,7 @@ impl<'c> Copier<'c> {
         copy.nested = info.nested.iter().map(|(&n, &k)| (n, self.classes.get(&k).copied().unwrap_or(k))).collect();
         copy.members = members;
         copy.member_order = member_order;
+        copy.selectors = selectors;
         copy.extensions = extensions;
         copy.givens = givens;
         copy.base_types = base_types;
@@ -3079,6 +3082,9 @@ impl<'c> Copier<'c> {
             self.set_copy_type(t, id, ty);
         }
         t.prog.copy_span(e, id);
+        if t.prog.is_setter_assign(e) {
+            t.prog.mark_setter_assign(id);
+        }
         if t.capturing() {
             self.captured(t, e, id);
         }

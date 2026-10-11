@@ -177,7 +177,8 @@ impl<'a> Cx<'a> {
     /// companion class taking them, named as scalac names it.
     fn mirror_class(&self, o: ClassId) -> Option<String> {
         let info = self.input.syms.class(o);
-        if !self.program_file(info.file) || info.kind != ClassKind::Object || !matches!(info.owner, Owner::Package(_)) {
+        // An opaque type's companion is nested in its file's `$package` object: no mirror class.
+        if !self.program_file(info.file) || info.kind != ClassKind::Object || !matches!(info.owner, Owner::Package(_)) || self.opaque_companion(o) {
             return None;
         }
         let name = self.class_names[o.idx()].strip_suffix('$')?;
@@ -352,9 +353,36 @@ impl<'a> Gen<'a> {
         let prefixes: Vec<String> = bases.iter().map(|b| cx.class_names[b.idx()].replace('/', "$")).collect();
         let written = |name: &str| cx.input.interner.lookup(name).map_or(false, |n| bases.iter().any(|&b| cx.input.syms.class(b).members.contains_key(&n)));
         let qualified = |name: &str, separator: &str| name.find(separator).map_or(false, |i| prefixes.iter().any(|p| *p == name[..i])) && !written(name);
+        // The member a method of the table is, the first declaration of its name and descriptor
+        // in the module class's linearisation (the overriding one), with whether it is protected
+        // or private: such a member gets none, though its class file's method is public (dotty's
+        // `addForwarders` over `sortedMembersBasedOnFlags(.., excluded = ExcludedForwarder)`):
+        // `App.args`, but not a public override of a protected member; a qualified private one
+        // (`private[p]`) does. A library member whose signature nothing completed is told by its
+        // name alone.
+        let mut declarations: Vec<(String, Option<String>, bool)> = Vec::new();
+        for &b in &bases {
+            for m in cx.members_in_order(b) {
+                let info = cx.input.syms.sym(m);
+                if info.owner != Owner::Class(b) || !matches!(info.kind, SymKind::Def | SymKind::Val | SymKind::Var | SymKind::Given) {
+                    continue;
+                }
+                let hidden = info.mods & crate::ast::mods::PROTECTED != 0 || info.mods & crate::ast::mods::PRIVATE != 0 && !info.scoped_private;
+                if info.sig.is_some() {
+                    let r = self.mref(m);
+                    declarations.push((r.name.clone(), Some(r.desc.clone()), hidden));
+                } else {
+                    declarations.push((encode(cx.input.interner.get(info.name)), None, hidden));
+                }
+            }
+        }
         for ((access, name, desc), declared) in table.iter().zip(declared) {
             let access = *access;
             if declared || name.starts_with('<') || access & (ACC_STATIC | ACC_PRIVATE | ACC_BRIDGE) != 0 {
+                continue;
+            }
+            let member = declarations.iter().find(|(n, d, _)| n == name && d.as_ref().map_or(true, |d| d == desc));
+            if member.is_some_and(|&(_, _, hidden)| hidden) {
                 continue;
             }
             let trait_setter = qualified(name, "$_setter_$");
@@ -415,7 +443,8 @@ impl<'a> Gen<'a> {
                 // A trait's given with parameters is a default method, which no class implements
                 // again (`is_given_def`).
                 let given_def = self.is_given_def(m);
-                if info.owner != Owner::Class(b) || info.mods & crate::ast::mods::PRIVATE != 0 || !(matches!(info.kind, SymKind::Def | SymKind::Val | SymKind::Var) || given_def) {
+                let private = info.mods & crate::ast::mods::PRIVATE != 0 && !info.scoped_private;
+                if info.owner != Owner::Class(b) || private || !(matches!(info.kind, SymKind::Def | SymKind::Val | SymKind::Var) || given_def) {
                     continue;
                 }
                 let f = cx.fun_of_sym[m.idx()];
@@ -1254,33 +1283,6 @@ impl<'a> Gen<'a> {
             self.getfield(&owner, &field, &t);
             self.return_value(&t);
             self.end_method(ACC_PUBLIC, &format!("copy$default${}", i + 1), &method_desc(&[], &t));
-        }
-    }
-
-    /// The selectors `_1` .. `_N` of case class `c`, scalac's `productElemMeths`, which its
-    /// pattern match on the class calls: one per parameter of the first clause, of the
-    /// parameter's erased type, reading the parameter's accessor, unless the parameter is itself
-    /// named so or the class defines a member of that name.
-    pub fn selector_members(&mut self, c: ClassId) {
-        let cx = self.cx;
-        let syms = cx.input.syms;
-        let params: Vec<SymId> = syms.class(c).ctor.first().map_or(Vec::new(), |cl| cl.params.iter().map(|p| p.sym).collect());
-        let owner = self.this_name.clone();
-        let this = JType::L(owner.clone());
-        for (i, &p) in params.iter().enumerate() {
-            let name = format!("_{}", i + 1);
-            let named = cx.input.interner.lookup(&name);
-            let defined = named.map_or(false, |n| params.iter().any(|&q| syms.sym(q).name == n) || syms.class(c).members.get(&n).map_or(false, |&m| syms.sym(m).owner == Owner::Class(c)));
-            if defined {
-                continue;
-            }
-            let ty = self.sym_type(p);
-            let accessor = self.field_name(p);
-            self.begin_method(false, false, &[], ty.clone(), &[]);
-            self.load(0, &this);
-            self.invoke(Invoke::Virtual, &owner, false, &accessor, &[], &ty);
-            self.return_value(&ty);
-            self.end_method(ACC_PUBLIC, &name, &method_desc(&[], &ty));
         }
     }
 

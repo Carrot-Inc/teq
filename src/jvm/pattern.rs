@@ -90,7 +90,10 @@ impl<'a> Gen<'a> {
                 // A value class's underlying value compares as its box (`pattern == scrutinee`,
                 // dotty's `EqualTest`, `PatternMatcher.scala` 811-812, the operand boxed by erasure).
                 let vc_slot = self.m.vc_slots.iter().any(|&(s, _)| s == slot);
-                if !ty.is_ref() && !vc_slot {
+                // So does a value class's instance as the pattern, against a primitive too (`1 match
+                // { case `key` => }` for a `key: V` is `key == 1`, `V`'s box unequal to the number).
+                let vc_pattern = self.recorded_type(e).and_then(|rt| self.value_class_of(rt)).is_some();
+                if !ty.is_ref() && !vc_slot && !vc_pattern {
                     let et = self.static_type(e);
                     if !et.is_ref() && et != JType::V {
                         use crate::typer::prims::*;

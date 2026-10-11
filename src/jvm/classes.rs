@@ -128,6 +128,10 @@ impl<'a> Gen<'a> {
             let this = self.lifted_this_type();
             params.push((None, this));
         }
+        let key_slot = params.len() as u16;
+        if l.key {
+            params.push((None, JType::object()));
+        }
         for c in &l.captures {
             params.push((Some(c.sym), if c.cell { JType::L(Rc::from(OBJECT_REF)) } else { c.ty.clone() }));
         }
@@ -153,6 +157,10 @@ impl<'a> Gen<'a> {
         }
         self.begin_method(true, false, &params, l.ret.clone(), &roots);
         self.m.lambda = is_lambda;
+        self.m.closure = is_lambda || matches!(p.body, PendingBody::Lazy(..));
+        if l.key {
+            self.m.return_key = Some(key_slot);
+        }
         if l.this {
             self.m.this_slot = Some(0);
         }
@@ -266,6 +274,9 @@ impl<'a> Gen<'a> {
     /// nothing can override it.
     pub fn method_body(&mut self, sym: SymId, params: &[SymId], body: TExprId) {
         let cx = self.cx;
+        if self.an.returns_through_closure(cx, body) {
+            return self.keyed_body(sym, params, body);
+        }
         let (calls, _) = cx.input.prog.tail_self_calls(sym, params.len(), body);
         if calls > 0 && cx.input.syms.is_effectively_final(sym) && params.iter().all(|p| self.m.locals.get(p).map_or(false, |l| !l.cell)) {
             let head = self.code.new_label();
@@ -274,6 +285,60 @@ impl<'a> Gen<'a> {
         }
         self.tail(body);
         self.m.tail = None;
+    }
+
+    /// A def's body that a closure it makes returns from, as dotty's
+    /// `NonLocalReturns.nonLocalReturnTry` writes it: a fresh key of each run, which the closures
+    /// capture and their `return`s throw in a `NonLocalReturnControl`, and around the body the
+    /// handler that returns the value of one carrying this run's key and throws any other on.
+    fn keyed_body(&mut self, sym: SymId, params: &[SymId], body: TExprId) {
+        let object = JType::object();
+        let control = JType::L(Rc::from(NON_LOCAL_RETURN));
+        self.new_object(OBJECT);
+        self.invoke(Invoke::Special, OBJECT, false, "<init>", &[], &JType::V);
+        let key = self.store_new(&object);
+        let outer_key = self.m.return_key.replace(key);
+        let (start, end, handler) = (self.code.new_label(), self.code.new_label(), self.code.new_label());
+        // A handler's frame holds the locals of the whole protected range.
+        let protected = self.code.locals_mark();
+        self.code.bind(start);
+        let from = self.code.pc();
+        let cx = self.cx;
+        let (calls, _) = cx.input.prog.tail_self_calls(sym, params.len(), body);
+        let tail = calls > 0 && cx.input.syms.is_effectively_final(sym) && params.iter().all(|p| self.m.locals.get(p).map_or(false, |l| !l.cell));
+        if tail {
+            let head = self.code.new_label();
+            self.code.bind(head);
+            self.m.tail = Some(TailLoop { sym, params: params.to_vec(), head });
+        }
+        self.tail(body);
+        self.m.tail = None;
+        if self.code.pc() == from {
+            self.code.op(op::NOP);
+        }
+        self.code.bind(end);
+        let index = self.cw.cp.class(NON_LOCAL_RETURN);
+        self.code.add_handler(Handler { start, end, handler, catch_type: index });
+        self.code.locals_release(protected);
+        let vt = self.vt(&control);
+        self.code.bind_handler(handler, vt);
+        let caught = self.store_new(&control);
+        let rethrow = self.code.new_label();
+        self.load(caught, &control);
+        self.invoke(Invoke::Virtual, NON_LOCAL_RETURN, false, "key", &[], &object);
+        self.load(key, &object);
+        self.jump_if(op::IF_ACMPNE, 2, rethrow);
+        self.load(caught, &control);
+        self.invoke(Invoke::Virtual, NON_LOCAL_RETURN, false, "value", &[], &object);
+        let ret = self.m.ret.clone();
+        self.adapt(&object, &ret);
+        self.return_value(&ret);
+        self.code.bind(rethrow);
+        self.load(caught, &control);
+        self.code.op(op::ATHROW);
+        self.code.pop();
+        self.code.end_path();
+        self.m.return_key = outer_key;
     }
 
     fn emit_fun(&mut self, f: FunId) {
@@ -681,6 +746,38 @@ impl<'a> Gen<'a> {
             self.cw.field(access, &field, &d);
         }
         if is_object {
+            // An object nested in this one is a module val of it, a term member that is no method,
+            // so a static final field of its module class (dotty's `addClassFields`), which nothing
+            // assigns: the nested object is read through its own `MODULE$`.
+            // Its flags are the module term's (`javaFieldFlags`): private for a private object.
+            let syms = cx.input.syms;
+            let mut nested: Vec<(SymId, ClassId)> = Vec::new();
+            for &m in &syms.class(c).member_order {
+                if let SymKind::Object(k) = syms.sym(m).kind {
+                    if syms.sym(m).owner == Owner::Class(c) {
+                        nested.push((m, k));
+                    }
+                }
+            }
+            let mut module_fields: Vec<(u16, String, String)> = Vec::new();
+            for (m, k) in nested {
+                if cx.input.reach.classes[k.idx()] {
+                    module_fields.push((module_field_flags(syms, m), encode(cx.input.interner.get(syms.class(k).name)), format!("L{};", self.class_name(k))));
+                }
+            }
+            // And a companion the backend makes where the program has none (`emit_class_unit`),
+            // public as a synthesized companion is.
+            let mut made: Vec<(u16, String, String)> = Vec::new();
+            for &k in syms.class(c).nested.values() {
+                if syms.class(k).companion.is_none() && (cx.has_case_companion(k) || cx.has_value_companion(k) || cx.has_default_companion(k)) {
+                    made.push((MODULE_FIELD, encode(cx.input.interner.get(syms.class(k).name)), format!("L{}$;", self.class_name(k))));
+                }
+            }
+            made.sort();
+            module_fields.extend(made);
+            for (flags, field, desc) in module_fields {
+                self.cw.field(flags, &field, &desc);
+            }
             self.cw.field(MODULE_FIELD, "MODULE$", &format!("L{};", name));
             self.module_clinit(tc, &fields);
         }
@@ -777,9 +874,6 @@ impl<'a> Gen<'a> {
             if cx.has_copy(c) {
                 self.copy_members(c);
             }
-            if is_case || (info.kind == ClassKind::EnumCase && info.singleton.is_none()) {
-                self.selector_members(c);
-            }
             if let Some(k) = case_companion {
                 self.companion_members(k, Some(c));
             }
@@ -869,11 +963,11 @@ impl<'a> Gen<'a> {
     fn class_body(&mut self, tc: &TClass, fields: &[FieldDef], this: &JType) {
         let owner = self.this_name.clone();
         let slot = self.m.this_slot.unwrap_or(0);
-        // The `$init$` of the Scala 2 traits the typer counts no statement of run in their place
+        // The `$init$` of the traits the typer schedules no initialiser of run in their place
         // among the traits', before the class's own body.
         let order: Vec<ClassId> = self.cx.input.syms.class(tc.id).base_types.iter().skip(1).rev().map(|&(b, _)| b).collect();
         let place = |b: ClassId| order.iter().position(|&x| x == b).unwrap_or(usize::MAX);
-        let mut scala2 = self.scala2_trait_inits(tc).into_iter().peekable();
+        let mut scala2 = self.unscheduled_trait_inits(tc).into_iter().peekable();
         for init in &tc.init {
             let before = match *init {
                 TInit::Parent(b, _) => place(b),
@@ -915,25 +1009,25 @@ impl<'a> Gen<'a> {
         self.invoke(Invoke::Static, &base, true, "$init$", &[JType::L(base.clone())], &JType::V);
     }
 
-    /// The Scala 2 traits a class mixes in anew whose class file declares an `$init$` the typer
-    /// leaves out, least derived first: the transcoded pickle keeps no private member and no
-    /// statement, so a trait whose initialisers are all private, or whose body is statements
-    /// alone, counts none, where dotty's `Mixin` calls the `$init$` of every trait but a
-    /// `NoInits` one (`superCallOpt`).
-    fn scala2_trait_inits(&self, tc: &TClass) -> Vec<ClassId> {
+    /// The traits a class mixes in anew that have an `$init$` the typer schedules no call of,
+    /// least derived first, as dotty's `Mixin` calls the `$init$` of every such trait but a
+    /// `NoInits` one (`superCallOpt`): the typer's parent initialisers count no lazy val (a
+    /// trait of lazy vals alone has one), and a Scala 2 trait's transcoded pickle keeps no
+    /// private member and no statement. A trait of neither the build nor a class file has none
+    /// known here.
+    fn unscheduled_trait_inits(&self, tc: &TClass) -> Vec<ClassId> {
         let cx = self.cx;
         let syms = cx.input.syms;
         let inherited = self.traits_implemented_above(tc.id);
         let mut out = Vec::new();
         for &(b, _) in syms.class(tc.id).base_types.iter().skip(1).rev() {
-            if syms.class(b).kind != ClassKind::Trait || inherited.contains(&b) || cx.tclass_of[b.idx()] != u32::MAX {
+            if syms.class(b).kind != ClassKind::Trait || inherited.contains(&b) {
                 continue;
             }
             if tc.init.iter().any(|i| matches!(*i, TInit::Parent(t, _) if t == b)) {
                 continue;
             }
-            let Some(file) = cx.class_files.get(&b) else { continue };
-            if cx.scala2_pickles.contains_key(&b) && file.methods.iter().any(|m| m.name == "$init$" && m.access & ACC_STATIC != 0) {
+            if (cx.tclass_of[b.idx()] != u32::MAX || cx.class_files.contains_key(&b)) && self.trait_has_init(b) {
                 out.push(b);
             }
         }
@@ -1862,7 +1956,7 @@ impl<'a> Gen<'a> {
     /// getter where the class has none, and the setter storing into the field, nothing where the
     /// class's own getter overrides the val; a Scala 2 trait's private var, a field with its
     /// getter and setter; its private lazy val and its object, each a lazy holder. The trait's
-    /// `$init$` stores their initial values (`scala2_trait_inits`).
+    /// `$init$` stores their initial values (`unscheduled_trait_inits`).
     fn class_file_storage(&mut self, c: ClassId) {
         let cx = self.cx;
         let syms = cx.input.syms;
@@ -2137,6 +2231,9 @@ impl<'a> Gen<'a> {
                 continue;
             }
             let Some(&(ib, isym)) = decls.iter().find(|&&(_, s)| has_body(s)) else { continue };
+            if !key.1 && redeclared_away(cx, &info, isym, ib) {
+                continue;
+            }
             let im = self.mref(isym);
             let winner_bases: Vec<ClassId> = syms.class(ib).base_types.iter().map(|&(b, _)| b).collect();
             for &(b, s) in decls {
@@ -2198,7 +2295,7 @@ impl<'a> Gen<'a> {
                 if sinfo.kind != SymKind::Def || !implemented(cx, s) || done.contains(&sinfo.name) || defines(cx, &info, sinfo.name) {
                     continue;
                 }
-                if !inherited.iter().any(|&k| syms.class(k).members.contains_key(&sinfo.name)) {
+                if !inherited.iter().any(|&k| syms.class(k).members.contains_key(&sinfo.name)) || redeclared_away(cx, &info, s, b) {
                     continue;
                 }
                 done.push(sinfo.name);
@@ -2321,7 +2418,10 @@ impl<'a> Gen<'a> {
             if self.cw.has_method(text, desc) {
                 continue;
             }
-            let Some(b) = bases.iter().copied().find(|&b| self.defines_object_method(b, name, desc)) else { continue };
+            // The class's member of the name, as dotty's `isInImplementingClass` asks for it.
+            let declared: Vec<(ClassId, bool)> =
+                bases.iter().filter_map(|&b| self.declares_object_method(b, name, desc).map(|concrete| (b, concrete))).collect();
+            let Some(b) = syms.member_declaration(&declared) else { continue };
             if syms.class(b).kind != ClassKind::Trait || inherited(b) {
                 continue;
             }
@@ -2338,19 +2438,25 @@ impl<'a> Gen<'a> {
         }
     }
 
-    /// Whether `b` declares `toString`, `hashCode` or `equals` with a body: a jar's class in its
-    /// class file, a class of the program as a member the program reaches.
-    fn defines_object_method(&self, b: ClassId, name: crate::intern::Name, desc: &str) -> bool {
+    /// Whether `b` declares `toString`, `hashCode` or `equals`, and with a body: a jar's class in
+    /// its class file, a class of the program as a member, abstract or one the program reaches.
+    fn declares_object_method(&self, b: ClassId, name: crate::intern::Name, desc: &str) -> Option<bool> {
         let cx = self.cx;
         if let Some(cf) = cx.class_files.get(&b) {
             let text = cx.input.interner.get(name);
-            return cf.methods.iter().any(|m| m.name == text && m.descriptor == desc && m.access & (ACC_ABSTRACT | ACC_STATIC) == 0);
+            let m = cf.methods.iter().find(|m| m.name == text && m.descriptor == desc && m.access & ACC_STATIC == 0)?;
+            return Some(m.access & ACC_ABSTRACT == 0);
         }
         let syms = cx.input.syms;
-        syms.class(b).members.get(&name).is_some_and(|&m| {
-            let f = cx.fun_of_sym[m.idx()];
-            syms.sym(m).owner == Owner::Class(b) && f != u32::MAX && cx.input.prog.funs[f as usize].body.is_some() && cx.input.reach.funs[f as usize]
-        })
+        let &m = syms.class(b).members.get(&name)?;
+        if syms.sym(m).owner != Owner::Class(b) {
+            return None;
+        }
+        if !concrete_member(cx, m) {
+            return Some(false);
+        }
+        let f = cx.fun_of_sym[m.idx()];
+        (f != u32::MAX && cx.input.prog.funs[f as usize].body.is_some() && cx.input.reach.funs[f as usize]).then_some(true)
     }
 
     // ---- case classes, case objects and enum values ----
@@ -2859,6 +2965,14 @@ impl<'a> Gen<'a> {
         let path = &cx.input.sources[file.0 as usize].path;
         self.cw.source_file(path.rsplit(std::path::is_separator).next().unwrap_or(path));
         self.line_file = file;
+        // The companions of the file's top-level opaque types are its nested objects, static
+        // final fields nothing assigns, as an object's are (`emit_class`).
+        for &k in cx.opaque_companions.get(&file.0).map_or(&[][..], |v| &v[..]) {
+            let field = encode(cx.input.interner.get(syms.class(k).name));
+            let desc = format!("L{};", self.class_name(k));
+            let flags = syms.class(k).module_sym.map_or(MODULE_FIELD, |m| module_field_flags(syms, m));
+            self.cw.field(flags, &field, &desc);
+        }
         self.cw.field(MODULE_FIELD, "MODULE$", &format!("L{};", name));
 
         let group = cx.file_group[file.0 as usize];
@@ -3001,6 +3115,37 @@ fn implemented(cx: &super::Cx, s: SymId) -> bool {
         && (info.mods & mods::ABSTRACT == 0 || cx.input.stackable.map_or(false, |st| st.contains_key(&s)))
 }
 
+/// Whether a member has a body, as the member choice reads it: an `abstract override` of
+/// another module's trait has one (`Input::stackable`), which dotty takes for no `Deferred`.
+fn concrete_member(cx: &super::Cx, s: SymId) -> bool {
+    !cx.input.reach.is_abstract(cx.input.syms, s) || cx.input.stackable.map_or(false, |st| st.contains_key(&s))
+}
+
+/// Whether an abstract redeclaration in a base of the class overrides `b`'s definition `s`, so
+/// that it is no member of the class (`Symbols::member_declaration`) and dotty's
+/// `MixinOps.isInImplementingClass` writes no forwarder to it: per alternative, each base's of
+/// the output name `s` has (an overriding alternative takes the name of the one it overrides).
+fn redeclared_away(cx: &super::Cx, info: &ClassInfo, s: SymId, b: ClassId) -> bool {
+    let syms = cx.input.syms;
+    let (name, d) = (syms.sym(s).name, syms.dispatch_name(s));
+    let declared: Vec<(ClassId, bool)> = info
+        .base_types
+        .iter()
+        .skip(1)
+        .filter_map(|&(k, _)| {
+            let &m = syms.class(k).members.get(&name)?;
+            let single = [m];
+            let alts = syms.alternatives(m).unwrap_or(&single);
+            let a = alts.iter().copied().find(|&a| {
+                let i = syms.sym(a);
+                matches!(i.kind, SymKind::Def | SymKind::Val | SymKind::Var | SymKind::Given) && i.owner == Owner::Class(k) && syms.dispatch_name(a) == d
+            })?;
+            Some((k, concrete_member(cx, a)))
+        })
+        .collect();
+    declared.iter().any(|&(_, concrete)| !concrete) && syms.member_declaration(&declared) != Some(b)
+}
+
 /// Whether a class has an entry of its own for the name. For a class that mixes in another
 /// module's trait, or in the product mode, the placeholder that joins two ancestors' methods of
 /// the name before a lookup settles it is none: the name may never be looked up in the class.
@@ -3014,4 +3159,16 @@ fn defines(cx: &super::Cx, info: &ClassInfo, name: crate::intern::Name) -> bool 
 /// The member name `x_=` of the setter of the var `x`, where some member has it.
 fn setter_member_name(interner: &crate::intern::Interner, var: Name) -> Option<Name> {
     interner.lookup(&format!("{}_=", interner.get(var)))
+}
+
+/// The flags of the static final field that holds a nested object in its owner's module class,
+/// as dotty's `javaFieldFlags` derives them from the module term (`BCodeUtils.javaFlags`): private
+/// for a private object, public for a qualified private one (`private[p]`) as for any other.
+fn module_field_flags(syms: &Symbols, m: SymId) -> u16 {
+    let info = syms.sym(m);
+    if info.mods & mods::PRIVATE != 0 && !info.scoped_private {
+        ACC_PRIVATE | ACC_STATIC | ACC_FINAL
+    } else {
+        MODULE_FIELD
+    }
 }

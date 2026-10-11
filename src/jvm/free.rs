@@ -15,6 +15,9 @@ pub struct Free {
     /// In the order of the first reference.
     pub syms: Vec<SymId>,
     pub this: bool,
+    /// A lambda's or a lazy val initialiser's: a `return` in it, or in a closure it makes, leaves
+    /// the def around it, which dotty's `NonLocalReturns` does through the def's key, a capture.
+    pub nonlocal: bool,
 }
 
 #[derive(Default)]
@@ -32,14 +35,27 @@ struct Collector<'a, 'c> {
     referenced: Vec<SymId>,
     declared: Vec<SymId>,
     this: bool,
+    /// How many closures (lambdas, lazy val initialisers) the walk is inside of the code it
+    /// started at; a `return` met inside one is non-local.
+    closures: u32,
+    nonlocal: bool,
 }
 
 impl Analysis {
     /// The captures of the body of a lambda with the given parameters.
     pub fn of_lambda(&mut self, cx: &Cx, params: &[SymId], body: TExprId) -> Free {
-        let mut c = Collector { cx, an: self, referenced: Vec::new(), declared: params.to_vec(), this: false };
+        let mut c = Collector { cx, an: self, referenced: Vec::new(), declared: params.to_vec(), this: false, closures: 1, nonlocal: false };
         c.expr(body);
         c.finish()
+    }
+
+    /// Whether a def's body returns through a closure it makes (a lambda, a local lazy val's
+    /// initialiser): the def then makes the key its non-local returns carry and catches them
+    /// (dotty's `NonLocalReturns.nonLocalReturnTry`).
+    pub fn returns_through_closure(&mut self, cx: &Cx, body: TExprId) -> bool {
+        let mut c = Collector { cx, an: self, referenced: Vec::new(), declared: Vec::new(), this: false, closures: 0, nonlocal: false };
+        c.expr(body);
+        c.nonlocal
     }
 
     /// The captures of a local def: what its body and its defaults refer to.
@@ -53,14 +69,15 @@ impl Analysis {
         }
         self.in_progress.push(sym);
         let fun = &cx.input.prog.funs[f as usize];
-        let mut c = Collector { cx, an: self, referenced: Vec::new(), declared: fun.params.clone(), this: false };
+        let mut c = Collector { cx, an: self, referenced: Vec::new(), declared: fun.params.clone(), this: false, closures: 0, nonlocal: false };
         for &d in fun.defaults.iter().flatten() {
             c.expr(d);
         }
         if let Some(body) = fun.body {
             c.expr(body);
         }
-        let free = Rc::new(c.finish());
+        // A local def's returns are its own, caught where it makes its key.
+        let free = Rc::new(Free { nonlocal: false, ..c.finish() });
         self.in_progress.pop();
         // A def that was cut short by a cycle is looked at again from the top.
         if self.in_progress.is_empty() {
@@ -79,7 +96,7 @@ impl Analysis {
             return Rc::new(Free::default());
         }
         self.in_progress.push(sym);
-        let mut c = Collector { cx, an: self, referenced: Vec::new(), declared: vec![sym], this: false };
+        let mut c = Collector { cx, an: self, referenced: Vec::new(), declared: vec![sym], this: false, closures: 1, nonlocal: false };
         c.expr(init);
         let free = Rc::new(c.finish());
         self.in_progress.pop();
@@ -98,12 +115,13 @@ impl Collector<'_, '_> {
                 syms.push(s);
             }
         }
-        Free { syms, this: self.this }
+        Free { syms, this: self.this, nonlocal: self.nonlocal }
     }
 
     fn merge(&mut self, free: &Free) {
         self.referenced.extend_from_slice(&free.syms);
         self.this |= free.this;
+        self.nonlocal |= free.nonlocal;
     }
 
     fn list(&mut self, l: ListRef) {
@@ -133,7 +151,11 @@ impl Collector<'_, '_> {
             TExpr::Local(s) => self.local(s),
             TExpr::This | TExpr::Super(_) => self.this = true,
             TExpr::Field(r, _) | TExpr::Unary(_, r) | TExpr::ToStr(r, _) | TExpr::TypeTest(r, _) | TExpr::Cast(r, ..) | TExpr::Index(r, _)
-            | TExpr::Spread(r) | TExpr::JsSelect(r, _) | TExpr::Return(r) => self.expr(r),
+            | TExpr::Spread(r) | TExpr::JsSelect(r, _) => self.expr(r),
+            TExpr::Return(r) => {
+                self.nonlocal |= self.closures > 0;
+                self.expr(r);
+            }
             TExpr::CallStatic(s, args) => {
                 let info = self.cx.input.syms.sym(s);
                 if info.owner == Owner::Local {
@@ -154,7 +176,9 @@ impl Collector<'_, '_> {
             | TExpr::ObjLit(args) => self.list(args),
             TExpr::Lambda(params, body) => {
                 self.declared.extend_from_slice(prog.sym_list(params));
+                self.closures += 1;
                 self.expr(body);
+                self.closures -= 1;
             }
             TExpr::If(c, t, els) => {
                 self.expr(c);

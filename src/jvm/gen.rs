@@ -107,6 +107,9 @@ pub struct Lifted {
     pub name: String,
     pub desc: String,
     pub this: bool,
+    /// The key of the def its non-local returns leave is its first capture, after `this`
+    /// (`Free::nonlocal`).
+    pub key: bool,
     pub captures: Vec<Capture>,
     pub params: Vec<JType>,
     pub ret: JType,
@@ -167,6 +170,11 @@ pub struct MethodCx {
     pub before_super: bool,
     /// The method is a lifted lambda, so a `return` in it would leave the def around it.
     pub lambda: bool,
+    /// The method is a lifted lambda or a local lazy val's initialiser: a `return` in it throws
+    /// `NonLocalReturnControl` with the key of the def it leaves (dotty's `NonLocalReturns`).
+    pub closure: bool,
+    /// The slot of that key: the def's, which it makes, or the closure's capture of it.
+    pub return_key: Option<u16>,
     /// In a value class's `m$extension`, `this` is the underlying value of this type.
     pub this_underlying: Option<JType>,
     /// The `try` blocks with a finalizer the code being generated stands in, innermost last: a
@@ -197,6 +205,8 @@ impl Default for MethodCx {
             cells: Vec::new(),
             before_super: false,
             lambda: false,
+            closure: false,
+            return_key: None,
             this_underlying: None,
             finalizers: Vec::new(),
             vc_slots: Vec::new(),
@@ -484,14 +494,19 @@ impl<'a> Gen<'a> {
                         }
                         _ => self.class_type(c),
                     },
-                    // An opaque type erases to its underlying type; one that is a parameter
-                    // (`opaque type D[A] = A`) to the argument.
+                    // An opaque type erases to its underlying type over its arguments, as an alias
+                    // does (`TypeErasure`): `opaque type D[A] = A` to the argument, `Arr[Int]` of
+                    // `opaque type Arr[A] = Array[A]` to `[I`.
                     ClassKind::Opaque => match info.underlying {
                         Some(u) => match cx.input.types.get(u) {
                             Type::Param(p) => match info.tparams.iter().position(|&q| q == p).and_then(|i| cx.input.types.items(args).get(i).copied()) {
                                 Some(arg) => self.erase(arg),
                                 None => self.erase(u),
                             },
+                            _ if !info.tparams.is_empty() && cx.input.types.items(args).len() == info.tparams.len() => {
+                                let s: Subst = info.tparams.iter().copied().zip(cx.input.types.items(args).iter().copied()).collect();
+                                self.erase(cx.input.types.subst(u, &s))
+                            }
                             _ => self.erase(u),
                         },
                         None => JType::object(),
@@ -778,8 +793,24 @@ impl<'a> Gen<'a> {
         }
         match (x, y) {
             (Lub::Array(ex), Lub::Array(ey)) if reference(&ex) && reference(&ey) => Lub::Array(Box::new(self.lub(*ex, *ey))),
-            (Lub::Class(a), Lub::Class(b)) => self.erased_lub(a, b).map_or(Lub::Erased(JType::object()), Lub::Class),
-            _ => Lub::Erased(JType::object()),
+            (x, y) => match (self.lub_bases(&x), self.lub_bases(&y)) {
+                (Some(a), Some(b)) => self.erased_lub(&a, &b).map_or(Lub::Erased(JType::object()), Lub::Class),
+                _ => Lub::Erased(JType::object()),
+            },
+        }
+    }
+
+    /// The base classes `erasedLub` walks of a part, in linearisation order: a class's, and the
+    /// builtin `String`'s as the JDK's class file declares its interfaces (`Serializable`,
+    /// `Comparable`, `CharSequence`, `Constable`, `ConstantDesc`, linearised the last first), those
+    /// the program knows; a JDK class the std stands in for has the parents its stand-in declares.
+    fn lub_bases(&self, l: &Lub) -> Option<Vec<ClassId>> {
+        const STRING_BASES: [&str; 5] = ["java/lang/constant/ConstantDesc", "java/lang/constant/Constable", "java/lang/CharSequence", "java/lang/Comparable", "java/io/Serializable"];
+        let cx = self.cx;
+        match l {
+            Lub::Class(c) => Some(cx.input.syms.class(*c).base_types.iter().map(|&(k, _)| k).collect()),
+            Lub::Erased(s) if s.is_string() => Some(STRING_BASES.iter().filter_map(|name| cx.class_by_name.get(*name).copied()).collect()),
+            _ => None,
         }
     }
 
@@ -801,16 +832,18 @@ impl<'a> Gen<'a> {
         }
     }
 
-    /// scalac's `erasedLub` of two classes: of `a`'s base classes in linearisation order those
-    /// `b` derives from, the classes up to the first trait and that trait (its `takeUntil`); of
-    /// those, the last that no other derives from (`TreeSeqMap | VectorMap` is the trait
-    /// `StrictOptimizedMapOps`, `PA | PB` of two subclasses of `P0` is `P0`).
-    fn erased_lub(&self, a: ClassId, b: ClassId) -> Option<ClassId> {
+    /// scalac's `erasedLub` (`TypeErasure.erasedLub`) of two parts by their base classes: of the
+    /// first's in linearisation order those the second derives from (is among its bases), the
+    /// classes up to the first trait and that trait (its `takeUntil`); of those, the last that no
+    /// other derives from (`TreeSeqMap | VectorMap` is the trait `StrictOptimizedMapOps`, `PA |
+    /// PB` of two subclasses of `P0` is `P0`, `String | Both` `CharSequence` and `Both | String`
+    /// `Serializable` for a `Both extends CharSequence with Serializable`).
+    fn erased_lub(&self, a: &[ClassId], b: &[ClassId]) -> Option<ClassId> {
         let syms = self.cx.input.syms;
         let derives = |x: ClassId, y: ClassId| x == y || syms.class(x).base_types.iter().any(|&(k, _)| k == y);
         let mut candidates: Vec<ClassId> = Vec::new();
-        for &(k, _) in &syms.class(a).base_types {
-            if !derives(b, k) {
+        for &k in a {
+            if !b.contains(&k) {
                 continue;
             }
             candidates.push(k);
@@ -1717,17 +1750,28 @@ impl<'a> Gen<'a> {
             }
         }
         let mut name = encode(self.cx.input.interner.get(info.name));
+        // Extensions of one name overload by their erased parameters, as scalac's do; only those
+        // that erase alike (which scalac refuses as a double definition) are named apart, `m$x1`.
         if info.is_extension {
             let siblings: &[SymId] = match info.owner {
                 Owner::Class(c) => &syms.class(c).extensions,
                 Owner::Package(p) => syms.pkg(p).entries.get(&info.name).map_or(&[], |e| &e.extensions),
                 Owner::Local => &[],
             };
-            let mut same: Vec<SymId> = siblings.iter().copied().filter(|&e| syms.sym(e).name == info.name).collect();
+            let mine = self.erased_param_types(s);
+            let mut same: Vec<SymId> = siblings.iter().copied().filter(|&e| syms.sym(e).name == info.name && syms.sym(e).file == info.file).collect();
+            same.retain(|&e| e == s || self.erased_param_types(e) == mine);
             same.sort_by(|&a, &b| crate::emit::layout::compare_syms(syms, self.cx.input.interner, a, b));
-            let member_too = matches!(info.owner, Owner::Class(c) if syms.class(c).members.contains_key(&info.name));
+            let member_too = match info.owner {
+                Owner::Class(c) => syms.class(c).members.get(&info.name).is_some_and(|&m| {
+                    let single = [m];
+                    let alts: Vec<SymId> = syms.alternatives(m).unwrap_or(&single).to_vec();
+                    alts.iter().any(|&a| syms.sym(a).kind == SymKind::Def && self.erased_param_types(a) == mine)
+                }),
+                _ => false,
+            };
             if let Some(rank) = same.iter().position(|&e| e == s) {
-                if rank > 0 || member_too || (same.len() > 1 && matches!(info.owner, Owner::Package(_))) {
+                if rank > 0 || member_too {
                     name.push_str(&format!("$x{}", rank + member_too as usize));
                 }
             }
@@ -2881,8 +2925,24 @@ impl<'a> Gen<'a> {
             }
             TExpr::Spread(inner) => self.expr_static(inner),
             TExpr::Return(v) => {
-                if self.m.lambda {
-                    self.unsupported("not supported on the JVM yet: return from a lambda");
+                // Out of a closure, the throw dotty's `NonLocalReturns.nonLocalReturnThrow` writes,
+                // which the def's handler takes by its key.
+                if self.m.closure {
+                    let Some(key) = self.m.return_key else {
+                        self.unsupported("a non-local return of a def that makes no key");
+                        return JType::V;
+                    };
+                    let object = JType::object();
+                    self.new_object(NON_LOCAL_RETURN);
+                    self.load(key, &object);
+                    self.expr(v, &object);
+                    self.invoke(Invoke::Special, NON_LOCAL_RETURN, false, "<init>", &[object.clone(), object], &JType::V);
+                    self.code.op(op::ATHROW);
+                    self.code.pop();
+                    self.code.end_path();
+                    self.code.op(op::ACONST_NULL);
+                    self.code.push(VT::Null);
+                    return JType::object();
                 }
                 let ret = self.m.ret.clone();
                 if let Some(frame) = self.m.finalizers.last().copied() {
@@ -4012,6 +4072,9 @@ impl<'a> Gen<'a> {
 
     fn call_static(&mut self, s: SymId, args: ListRef) -> JType {
         let cx = self.cx;
+        if let Some(array) = self.spread_conversion(s, args) {
+            return self.wrapped_spread(array);
+        }
         let info = cx.input.syms.sym(s);
         if let Some((_, JMember::Method(_))) = cx.input.java_member(s) {
             return self.call_java_static(s, args);
@@ -4313,6 +4376,18 @@ impl<'a> Gen<'a> {
             TExpr::CallStatic(s, args) | TExpr::CallMethod(_, s, args) => (s, args),
             _ => return None,
         };
+        let array = self.spread_conversion(s, args)?;
+        let JType::L(class) = self.erase(self.recorded_type(array)?) else { return None };
+        let references = |d: &str| d.starts_with("[L") || d.starts_with("[[");
+        let fits = &*class == want || (references(want) && references(&class));
+        fits.then_some(array)
+    }
+
+    /// The array `arr*` of the typer's conversion `s(args)` to the sequence a varargs parameter
+    /// takes (`copyArrayToImmutableIndexedSeq`, `wrapRefArray`, ..), where the typer marked it
+    /// spread (`Program::spread_bits`); a conversion the program writes has none.
+    fn spread_conversion(&mut self, s: SymId, args: ListRef) -> Option<TExprId> {
+        let cx = self.cx;
         let info = cx.input.syms.sym(s);
         let name = cx.input.interner.get(info.name);
         let conversion = name == "copyArrayToImmutableIndexedSeq" || name == "genericWrapArray" || (name.starts_with("wrap") && name.ends_with("Array"));
@@ -4320,19 +4395,52 @@ impl<'a> Gen<'a> {
         if !conversion || !matches!(&*self.class_name(owner), "scala/Predef$" | "scala/LowPriorityImplicits" | "scala/LowPriorityImplicits2") {
             return None;
         }
-        let items = cx.input.prog.expr_list(args);
-        let &[array] = items else { return None };
-        if !cx.input.prog.is_spread(array) {
-            return None;
-        }
-        let JType::L(class) = self.erase(self.recorded_type(array)?) else { return None };
-        let references = |d: &str| d.starts_with("[L") || d.starts_with("[[");
-        let fits = &*class == want || (references(want) && references(&class));
-        fits.then_some(array)
+        let &[array] = cx.input.prog.expr_list(args) else { return None };
+        cx.input.prog.is_spread(array).then_some(array)
+    }
+
+    /// An array spread into a Scala varargs parameter, wrapped as it is, not copied: dotty's
+    /// `ElimRepeated.arrayToSeq` (`tpd.wrapArray`), `ScalaRunTime.wrapRefArray` for an array of
+    /// references, `wrapIntArray` and its siblings for a primitive one, `genericWrapArray` for one
+    /// of a type parameter, so a later write to the array shows in the sequence.
+    fn wrapped_spread(&mut self, array: TExprId) -> JType {
+        let t = self.static_type(array);
+        let wrap = match &t {
+            JType::L(d) if &**d == "[Lscala/runtime/BoxedUnit;" => "wrapUnitArray",
+            JType::L(d) if d.starts_with("[L") || d.starts_with("[[") => "wrapRefArray",
+            JType::L(d) => match &d[..] {
+                "[Z" => "wrapBooleanArray",
+                "[B" => "wrapByteArray",
+                "[C" => "wrapCharArray",
+                "[D" => "wrapDoubleArray",
+                "[F" => "wrapFloatArray",
+                "[I" => "wrapIntArray",
+                "[J" => "wrapLongArray",
+                "[S" => "wrapShortArray",
+                _ => "genericWrapArray",
+            },
+            _ => "genericWrapArray",
+        };
+        let param = match wrap {
+            "wrapRefArray" => JType::L(Rc::from("[Ljava/lang/Object;")),
+            "genericWrapArray" => JType::object(),
+            _ => t.clone(),
+        };
+        let module = "scala/runtime/ScalaRunTime$";
+        let module_type = JType::L(Rc::from(module));
+        self.getstatic(module, "MODULE$", &module_type);
+        self.expr(array, &param);
+        let seq = JType::L(Rc::from("scala/collection/immutable/ArraySeq"));
+        self.invoke(Invoke::Virtual, module, false, wrap, &[param], &seq);
+        seq
     }
 
     fn call_method(&mut self, r: TExprId, s: SymId, args: ListRef) -> JType {
         let cx = self.cx;
+        if let Some(array) = self.spread_conversion(s, args) {
+            self.statement(r);
+            return self.wrapped_spread(array);
+        }
         if cx.input.syms.js_member(s) {
             self.unsupported("a member of a JavaScript type");
             return JType::V;
@@ -4857,12 +4965,15 @@ impl<'a> Gen<'a> {
                 None => JType::object(),
             });
         }
+        if free.nonlocal {
+            all.push(JType::object());
+        }
         for c in &captures {
             all.push(if c.cell { JType::L(Rc::from(OBJECT_REF)) } else { c.ty.clone() });
         }
         all.extend(params.iter().cloned());
         let desc = method_desc(&all, &ret);
-        Rc::new(Lifted { name, desc, this: free.this, captures, params, ret })
+        Rc::new(Lifted { name, desc, this: free.this, key: free.nonlocal, captures, params, ret })
     }
 
     fn load_captures(&mut self, lifted: &Lifted) {
@@ -4871,6 +4982,18 @@ impl<'a> Gen<'a> {
             if let (Some(u), Some(c)) = (self.m.this_underlying.clone(), self.this_class) {
                 self.adapt(&t, &u);
                 self.vc_box(c, &u);
+            }
+        }
+        if lifted.key {
+            match self.m.return_key {
+                Some(slot) => {
+                    self.load(slot, &JType::object());
+                }
+                None => {
+                    self.unsupported("a non-local return of a def that makes no key");
+                    self.code.op(op::ACONST_NULL);
+                    self.code.push(VT::Null);
+                }
             }
         }
         for c in &lifted.captures {
@@ -4908,7 +5031,7 @@ impl<'a> Gen<'a> {
         let name = self.fresh_name("$default$thunk");
         let object = JType::object();
         let desc = method_desc(&captured, &object);
-        let lifted = Rc::new(Lifted { name, desc, this: false, captures: Vec::new(), params: Vec::new(), ret: object });
+        let lifted = Rc::new(Lifted { name, desc, this: false, key: false, captures: Vec::new(), params: Vec::new(), ret: object });
         self.pending.push(Pending { lifted: lifted.clone(), body: PendingBody::JarGetter(getter) });
         let ft = self.function_type(0);
         self.call_site(&lifted, &ft, "apply", &captured);
@@ -4930,6 +5053,9 @@ impl<'a> Gen<'a> {
         if lifted.this {
             let this = self.lifted_this_type();
             captured.push(this);
+        }
+        if lifted.key {
+            captured.push(JType::object());
         }
         for c in &lifted.captures {
             captured.push(if c.cell { JType::L(Rc::from(OBJECT_REF)) } else { c.ty.clone() });
@@ -5331,7 +5457,7 @@ impl<'a> Gen<'a> {
                     self.code.bind(skip);
                 }
             }
-            TExpr::Prim(op @ (PrimOp::Lt | PrimOp::Le | PrimOp::Gt | PrimOp::Ge | PrimOp::RefEq | PrimOp::RefNe), a, b) => {
+            TExpr::Prim(op @ (PrimOp::Lt | PrimOp::Le | PrimOp::Gt | PrimOp::Ge | PrimOp::RefEq | PrimOp::RefNe | PrimOp::Same | PrimOp::NotSame), a, b) => {
                 self.compare(op, a, b, target, jump_if)
             }
             TExpr::TypeTest(inner, test) => {
@@ -5352,6 +5478,14 @@ impl<'a> Gen<'a> {
     }
 
     fn compare(&mut self, op_: PrimOp, a: TExprId, b: TExprId, target: Label, jump_if: bool) {
+        if let PrimOp::Same | PrimOp::NotSame = op_ {
+            // `eq` and `ne` are reference identity, a string's and a box's too (scalac's `ID`).
+            let object = JType::object();
+            self.expr(a, &object);
+            self.expr(b, &object);
+            let same = (op_ == PrimOp::Same) == jump_if;
+            return self.jump_if(if same { op::IF_ACMPEQ } else { op::IF_ACMPNE }, 2, target);
+        }
         let (ta, tb) = (self.static_type(a), self.static_type(b));
         let is_eq = matches!(op_, PrimOp::RefEq | PrimOp::RefNe);
         // A NaN operand makes the comparison false: the jump that tests it is not taken, the
@@ -5513,7 +5647,7 @@ impl<'a> Gen<'a> {
                 }
                 return JType::Z;
             }
-            Lt | Le | Gt | Ge | RefEq | RefNe | BoolAnd | BoolOr => return self.cond_of_prim(op_, a, b),
+            Lt | Le | Gt | Ge | RefEq | RefNe | Same | NotSame | BoolAnd | BoolOr => return self.cond_of_prim(op_, a, b),
         };
         self.expr(a, &t);
         // The shift distance of a long is an int.

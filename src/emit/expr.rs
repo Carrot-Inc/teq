@@ -941,14 +941,14 @@ impl<'a> Emitter<'a> {
 
     fn emit_prim(&mut self, op: PrimOp, a: TExprId, b: TExprId, bare: bool) {
         use PrimOp::*;
-        if matches!(op, RefEq | RefNe | Eq | Ne) {
+        if matches!(op, RefEq | RefNe | Same | NotSame | Eq | Ne) {
             self.hold_compared(a);
             self.hold_compared(b);
         }
         let (pre, mid, post) = prim_text(op, self.int_literal_nonzero(b));
         self.note_text(pre);
         match op {
-            Lt | Le | Gt | Ge | RefEq | RefNe => self.emit_comparison(a, mid, b, bare),
+            Lt | Le | Gt | Ge | RefEq | RefNe | Same | NotSame => self.emit_comparison(a, mid, b, bare),
             BoolAnd | BoolOr => {
                 if !bare {
                     self.out.push('(');
@@ -2196,7 +2196,7 @@ fn template_shape(t: &str) -> Shape {
 
 /// Per binary operation, in the order of `PrimOp`: the text before the left operand, between
 /// the two and after the right one.
-const PRIM_TEXT: [(PrimOp, &str, &str, &str); 45] = {
+const PRIM_TEXT: [(PrimOp, &str, &str, &str); 47] = {
     use PrimOp::*;
     [
         (IntAdd, "(", " + ", " | 0)"),
@@ -2245,6 +2245,8 @@ const PRIM_TEXT: [(PrimOp, &str, &str, &str); 45] = {
         // JavaScript's `&` and `|` give a number.
         (BoolStrictAnd, "!!(", " & ", ")"),
         (BoolStrictOr, "!!(", " | ", ")"),
+        (Same, "(", " === ", ")"),
+        (NotSame, "(", " !== ", ")"),
     ]
 };
 

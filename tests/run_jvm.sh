@@ -28,7 +28,9 @@
 # corpus's jars in the coursier cache the check is left out. And the static forwarders of a
 # mirror class have to stand in scalac's order: javap's listing of
 # tests/support/forwarders/forwarders.scala against forwarders.expected, javap's of scalac's
-# class file (left out without javap). And each program of tests/support/abi, built as a module's
+# class file (left out without javap). And a class's constructor calls the `$init$` of the traits it mixes in anew in
+# scalac's order: tests/support/trait_inits/list.sh's listing of trait_inits.scala against trait_inits.expected,
+# listed from scalac's class files (left out without javap). And each program of tests/support/abi, built as a module's
 # products, has scalac's layout of the members its `// abi:` line names: the names, descriptors and
 # flags tests/support/abi/listing.py reads from its class files against <name>.expected, which
 # tests/support/abi/expected.sh writes from scalac 3.8.4's.
@@ -186,6 +188,21 @@ forwarder_order() {
     return 1
   fi
 }
+trait_inits() {
+  command -v javap > /dev/null || return 0
+  local work=$out/trait_inits
+  rm -rf "$work"
+  if ! timeout 60 "$TEQ" compiler build tests/support/trait_inits/trait_inits.scala --target jvm --products "$work" > "$work.log" 2>&1; then
+    echo "TRAIT INITS: the fixture does not build (see $work.log)"
+    return 1
+  fi
+  bash tests/support/trait_inits/list.sh "$work" > "$work.txt"
+  if ! diff tests/support/trait_inits/trait_inits.expected "$work.txt" > "$work.diff"; then
+    echo "TRAIT INITS: a constructor's trait initialisers are not scalac's"
+    head -10 "$work.diff"
+    return 1
+  fi
+}
 abi_layout() {
   command -v python3 > /dev/null || return 0
   local f name work fails=0
@@ -210,6 +227,7 @@ abi_layout() {
 if [ -z "$VERSION" ]; then
   same_jars || status=1
   forwarder_order || status=1
+  trait_inits || status=1
   abi_layout || status=1
 fi
 count() { grep -c "^$1 " "$out/results.txt"; }

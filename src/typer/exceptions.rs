@@ -230,7 +230,14 @@ impl<'a> Worker<'a> {
         let t = self.deref(t);
         match self.types.get(t) {
             Type::Nothing => true,
-            Type::Class(c, _) => c == self.b.null || self.is_reference_class(c),
+            // A universal trait takes `null` but derives from no `Object` (`mods::UNIVERSAL`), as
+            // its resolved parents say.
+            Type::Class(c, _) => {
+                if self.syms.class(c).kind == ClassKind::Trait {
+                    self.complete_class(c);
+                }
+                c == self.b.null || self.is_reference_class(c) && self.syms.class(c).mods & crate::ast::mods::UNIVERSAL == 0
+            }
             Type::Union(a, b) => self.is_reference(a) && self.is_reference(b),
             Type::Inter(a, b) => self.is_reference(a) || self.is_reference(b),
             Type::Param(p) => {

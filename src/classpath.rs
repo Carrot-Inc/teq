@@ -203,11 +203,15 @@ pub struct Classpath {
     /// (their manifest's target `js`): only such a source was compiled against the Scala.js
     /// library.
     scalajs: Vec<bool>,
-    /// Per source, whether it looks written by scalac 2: no TASTy file and a module class
-    /// (`Foo$.class`). Its top-level class files are read for their pickles on the JVM, where
-    /// its class files run as they are.
+    /// Per source, whether it may hold classes scalac 2 wrote: any but a scala-library jar, which
+    /// scala-library 3.8 replaces. Which of its classes are is read class by class (`is_scala2`),
+    /// whose top-level class files are read for their pickles on the JVM, where its class files
+    /// run as they are.
     scala2: Vec<bool>,
     any_scala2: bool,
+    /// Per source that may hold Scala 2 classes, per entry, whether its class file says scalac 2
+    /// wrote it, read on the first question (`is_scala2`).
+    scala2_classes: Vec<Vec<std::sync::OnceLock<bool>>>,
     /// Every package path of the classpath with its ancestors, built on the first pickle read.
     package_dirs: Option<FxMap<String, ()>>,
     /// Per source, whether it is a directory of teq's products (`teq-products.json` in it):
@@ -260,6 +264,7 @@ impl Classpath {
             scalajs: Vec::with_capacity(paths.len()),
             scala2: vec![false; paths.len()],
             any_scala2: false,
+            scala2_classes: (0..paths.len()).map(|_| Vec::new()).collect(),
             package_dirs: None,
             products: vec![false; paths.len()],
             product_inits: FxMap::default(),
@@ -321,7 +326,6 @@ impl Classpath {
             };
             cp.caches.push(jar_cache);
             let mut scalajs = js_products;
-            let (mut tasty_seen, mut module_seen) = (false, false);
             for i in 0..source.len() {
                 let name = source.name(i);
                 scalajs |= name.ends_with(".sjsir");
@@ -342,18 +346,20 @@ impl Classpath {
                     }
                 };
                 let f = CpFile { jar: j as u16, entry: i as u32 };
-                tasty_seen |= tasty;
-                module_seen |= !tasty && stem.ends_with('$');
                 if tasty {
                     cp.packages[p].files.push(f);
                 } else {
                     cp.packages[p].classes.push(f);
                 }
             }
-            // Scala 2's own library is what scala-library 3.8 replaces.
-            if module_seen && !tasty_seen && !is_scala_library_jar(path) {
+            // Any source may hold classes scalac 2 wrote, each told by its own TASTy or class file
+            // as dotty's `ClassfileParser.unpickleOrParseInnerClasses` reads each class's
+            // attributes (`is_scala2`), whatever else the source holds; Scala 2's own library is
+            // what scala-library 3.8 replaces.
+            if !is_scala_library_jar(path) {
                 cp.scala2[j] = true;
                 cp.any_scala2 = true;
+                cp.scala2_classes[j] = (0..source.len()).map(|_| std::sync::OnceLock::new()).collect();
                 for i in 0..source.len() {
                     let name = source.name(i);
                     let Some(dir) = name.strip_suffix("package.class").filter(|d| d.is_empty() || d.ends_with('/')) else { continue };
@@ -439,8 +445,29 @@ impl Classpath {
         self.products.iter().all(|&p| p)
     }
 
+    /// Whether scalac 2 wrote the class file `f`, as dotty's `ClassfileParser` dispatches on each
+    /// class (`unpickleOrParseInnerClasses`), whatever the other classes of its jar are: a class
+    /// whose TASTy the class path holds (its stem's or an enclosing class's, `is_scala`) is Scala
+    /// 3's, read from that TASTy; any other by its own class file, read once, Scala 2's where it
+    /// carries scalac 2's pickle (`ScalaSig`) or is a compilation artifact of a Scala compiler
+    /// without TASTy (the `Scala` attribute alone: a module class, an inner class).
     pub fn is_scala2(&self, f: CpFile) -> bool {
-        self.scala2[f.jar as usize]
+        let j = f.jar as usize;
+        if !self.scala2[j] || !self.entry_name(f).ends_with(".class") {
+            return false;
+        }
+        *self.scala2_classes[j][f.entry as usize].get_or_init(|| {
+            let name = self.entry_name(f);
+            let dir = name.rfind('/').map_or("", |at| &name[..at]);
+            if let Some(&p) = self.by_path.get(dir) {
+                let p = p as usize;
+                let tasty_stems = self.tasty_stems[p].get_or_init(|| self.first_by_stem(&self.packages[p].files));
+                if self.is_scala(tasty_stems, f) {
+                    return false;
+                }
+            }
+            self.sources[j].read(f.entry as usize).ok().and_then(|bytes| ClassFile::parse(&bytes).ok()).is_some_and(|cf| cf.scala && !cf.tasty)
+        })
     }
 
     pub fn holds_scala2(&self) -> bool {
@@ -472,7 +499,7 @@ impl Classpath {
                 self.stats.files_cached += 1;
                 bytes
             }
-            None if self.scala2[j] => {
+            None if self.is_scala2(f) => {
                 self.inflated[j] |= self.caches[j].is_some();
                 self.transcode(f)?
             }

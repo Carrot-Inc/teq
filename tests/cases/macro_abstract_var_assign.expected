@@ -3,3 +3,5 @@ Assign(x, 7)
 Assign(x, 0)
 10
 Assign(n, 3)
+Apply(x_=, 4)
+10

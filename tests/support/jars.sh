@@ -28,7 +28,9 @@
 # tests/support/outer_lib.scala compiled the same way; defaults-lib, tests/support/defaults_lib.scala
 # compiled the same way; lazyorder-lib, tests/support/lazyorder_lib.scala compiled the same way; state-lib,
 # tests/support/state_lib.scala compiled the same way under a directory named like scala-library's; scala2-lib,
-# tests/support/scala2_lib compiled by Scala 2.13;
+# tests/support/scala2_lib compiled by Scala 2.13; scala2-traits, tests/support/scala2_traits compiled so, traits alone,
+# and scala2-traits-padded, that jar with Java classes stored first, scala2-traits-mixed with a Scala 3 class too; universal-lib, tests/support/universal_lib.scala
+# compiled by scalac;
 # fixtures, the TASTy files of tests/tasty as a jar but those of fix.rdecl and fix.rjava, and fixtures-jvm the
 # class files of their sources for the JVM (`fixtures_jvm_jar`); fixtures-rdecl, those
 # (tests/tasty/src/reader_decl.scala and reader_java.scala), which the bodies of fix.reader reach in another jar; fixtures-shadow, those of
@@ -206,6 +208,19 @@ state_lib_jar() {
   fi
   echo "$jar"
 }
+# tests/support/universal_lib.scala compiled by scalac, as universal-lib.
+universal_lib_jar() {
+  local src=tests/support/universal_lib.scala
+  local jar=$scratch-universal-lib.jar
+  if [ ! -f "$jar" ] || [ "$src" -nt "$jar" ]; then
+    local work=$jar.$$.d
+    mkdir -p "$work" && cp "$src" "$work/"
+    timeout 200 scala-cli --power package --library -S "${SCALA_VERSION:-3.8.4}" "$work/universal_lib.scala" --server=false -q -o "$jar.$$" -f > /dev/null 2>&1 \
+      && mv -f "$jar.$$" "$jar" || rm -f "$jar.$$" "$jar"
+    rm -rf "$work"
+  fi
+  echo "$jar"
+}
 reflect_lib_jar() {
   local src=tests/support/reflect_lib.scala
   local jar=$scratch-reflect-lib.jar
@@ -376,6 +391,74 @@ scala2_lib_jar() {
   fi
   echo "$jar"
 }
+# tests/support/scala2_traits/, a Scala 2.13 library of traits alone (no module class), as a jar.
+scala2_traits_jar() {
+  local src=tests/support/scala2_traits
+  local jar=$scratch-scala2-traits.jar
+  if [ ! -f "$jar" ] || [ -n "$(find "$src" -newer "$jar" -name '*.scala')" ]; then
+    timeout 200 scala-cli --power package --library -S 2.13.16 "$src"/*.scala --server=false -q -o "$jar.$$" -f > /dev/null 2>&1 \
+      && mv -f "$jar.$$" "$jar" || rm -f "$jar.$$" "$jar"
+  fi
+  echo "$jar"
+}
+# scala2-traits with tests/support/scala2_traits_pad's Java classes stored first: a jar whose first class files are
+# Java's, each class of it Scala 2's or not by its own class file.
+scala2_traits_padded_jar() {
+  local traits pad=tests/support/scala2_traits_pad
+  traits=$(scala2_traits_jar)
+  local jar=$scratch-scala2-traits-padded.jar
+  [ -f "$traits" ] || { echo "$jar"; return; }
+  if [ ! -f "$jar" ] || [ "$traits" -nt "$jar" ] || [ -n "$(find "$pad" -newer "$jar" -name '*.java')" ]; then
+    local work=$jar.$$.d
+    rm -rf "$work" && mkdir -p "$work"
+    if timeout 60 javac --release 8 -nowarn -d "$work" "$pad"/*.java > /dev/null 2>&1; then
+      python3 - "$work" "$traits" "$jar.$$" <<'PY' && mv -f "$jar.$$" "$jar" || rm -f "$jar.$$" "$jar"
+import os, sys, zipfile
+work, traits, out = sys.argv[1:4]
+with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as z:
+    for root, _, files in sorted(os.walk(work)):
+        for f in sorted(files):
+            path = os.path.join(root, f)
+            z.write(path, os.path.relpath(path, work))
+    with zipfile.ZipFile(traits) as t:
+        for info in t.infolist():
+            z.writestr(info, t.read(info.filename))
+PY
+    fi
+    rm -rf "$work"
+  fi
+  echo "$jar"
+}
+# scala2-traits-padded with tests/support/scala2_traits_pad/Other.scala compiled by scalac 3 added, its class file
+# and TASTy: a jar of Scala 2 traits, Java classes and a Scala 3 class.
+scala2_traits_mixed_jar() {
+  local padded src=tests/support/scala2_traits_pad/Other.scala
+  padded=$(scala2_traits_padded_jar)
+  local jar=$scratch-scala2-traits-mixed.jar
+  [ -f "$padded" ] || { echo "$jar"; return; }
+  if [ ! -f "$jar" ] || [ "$padded" -nt "$jar" ] || [ "$src" -nt "$jar" ]; then
+    local work=$jar.$$.d
+    rm -rf "$work" && mkdir -p "$work"
+    cp "$src" "$work/"
+    if timeout 200 scala-cli compile -S "${SCALA_VERSION:-3.8.4}" --server=false -q "$work/Other.scala" -d "$work/out" > /dev/null 2>&1; then
+      python3 - "$padded" "$work/out" "$jar.$$" <<'PY' && mv -f "$jar.$$" "$jar" || rm -f "$jar.$$" "$jar"
+import os, sys, zipfile
+padded, out, dest = sys.argv[1:4]
+with zipfile.ZipFile(dest, "w", zipfile.ZIP_DEFLATED) as z:
+    with zipfile.ZipFile(padded) as p:
+        for info in p.infolist():
+            z.writestr(info, p.read(info.filename))
+    for root, _, files in sorted(os.walk(out)):
+        for f in sorted(files):
+            if f.endswith(".class") or f.endswith(".tasty"):
+                path = os.path.join(root, f)
+                z.write(path, os.path.relpath(path, out))
+PY
+    fi
+    rm -rf "$work"
+  fi
+  echo "$jar"
+}
 # tests/support/places_lib (its README): the library compiled by scalac against decl_v1/, as
 # places-lib-1.0.jar with places-lib-1.0-sources.jar beside it (lib/'s files under pl/), the same jar
 # alone in another directory (places-lib-nosrc), and decl/ as places-decl-1.0.jar, which the tests
@@ -451,6 +534,10 @@ jar_of() {
     nestedcompanion-lib) nestedcompanion_lib_jar ;;
     state-lib) state_lib_jar ;;
     scala2-lib) scala2_lib_jar ;;
+    scala2-traits) scala2_traits_jar ;;
+    scala2-traits-padded) scala2_traits_padded_jar ;;
+    scala2-traits-mixed) scala2_traits_mixed_jar ;;
+    universal-lib) universal_lib_jar ;;
     places-lib) places_lib_jar ;;
     places-lib-nosrc) places_lib_nosrc_jar ;;
     places-decl) places_decl_jar ;;

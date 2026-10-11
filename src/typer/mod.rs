@@ -1208,6 +1208,11 @@ pub struct Worker<'a> {
     /// reads of upstream products keeps their link path's model, its pickles naming what
     /// scalac's do (a product's top-level definition through its file's object).
     pub writes_products: bool,
+    /// Whether what the typing committed is read on (a target's products, a module's, a run, an
+    /// analysis): a check that only reports leaves the case class selectors' bodies, which no
+    /// report reads, to their first use (`selector_bodies`, `type_member_body_with`), as it
+    /// leaves the expansions' outlines (`InlineState::outlines`).
+    pub emits_bodies: bool,
     /// How many bodies withheld from their products the typing met (`Expr::Withheld`), each an
     /// error: what stops the interpreter before it runs on past one.
     pub withheld_met: u32,
@@ -2247,6 +2252,7 @@ impl<'a> Worker<'a> {
             open_world: false,
             jvm_volatile: FxMap::default(),
             writes_products: false,
+            emits_bodies: true,
             withheld_met: 0,
             dialect: crate::dialect::Dialect::default(),
             deferred_bounds: Vec::new(),
@@ -2560,6 +2566,7 @@ impl<'a> Worker<'a> {
             open_world: self.open_world,
             jvm_volatile: FxMap::default(),
             writes_products: self.writes_products,
+            emits_bodies: self.emits_bodies,
             withheld_met: 0,
             dialect: self.dialect,
             jvm: self.jvm,

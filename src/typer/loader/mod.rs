@@ -565,6 +565,21 @@ fn is_pattern_field(tasty: &TastyFile, e: &Entry) -> bool {
     e.tag == tags::VALDEF && is_pattern_field_name(Some(&tasty.name(e.name)))
 }
 
+/// Whether teq supplies a loaded class's synthetic member of the name itself, as it does for a
+/// class of the build, where scalac's pickle holds a definition of it: a case class's product
+/// members, `copy` and its default getters (the typer's `apply_copy`, the backends' product
+/// helpers), a companion's `unapply`, `unapplySeq` and `fromProduct` (the patterns go by the case
+/// accessors, the mirrors are derived), an enum's lookup methods (`DesugarEnums.enumLookupMethods`
+/// as the typer's builtins answer them) and an object's `writeReplace`; a derived name (a default
+/// getter's) is told by its kind.
+fn supplied_synthetic(name: &str) -> bool {
+    matches!(
+        name,
+        "equals" | "hashCode" | "toString" | "canEqual" | "productArity" | "productPrefix" | "productElement" | "productElementName" | "copy"
+            | "unapply" | "unapplySeq" | "fromProduct" | "ordinal" | "values" | "valueOf" | "fromOrdinal" | "$values" | "$new" | "writeReplace"
+    )
+}
+
 pub(super) fn is_pattern_field_name(name: Option<&str>) -> bool {
     name.map_or(false, |n| n.len() > 1 && n.starts_with('$') && n[1..].bytes().all(|b| b.is_ascii_digit()))
 }
@@ -2003,6 +2018,12 @@ impl<'a> Worker<'a> {
         let mut parent_types = Vec::new();
         let mut superclass: Option<ClassId> = None;
         let kind = self.syms.class(c).kind;
+        // A trait whose first parent is `Any` as completed and dealiased, written so or through an
+        // alias, is universal (`mods::UNIVERSAL`), as a source trait is (dotty's
+        // `Namer.ensureFirstIsClass`).
+        if kind == ClassKind::Trait && parents.first().is_some_and(|&p| self.deref_alias(p) == ANY) {
+            self.syms.class_mut(c).mods |= mods::UNIVERSAL;
+        }
         for pt in parents {
             let pt = self.deref_alias(pt);
             // A class nested in a class through its prefix: its base types seen from the prefix,
@@ -2306,23 +2327,29 @@ impl<'a> Worker<'a> {
             self.enter_loaded_secondary_ctor(c, file, e);
             return;
         }
-        // Of what scalac synthesizes for a case class, `apply` is kept for the companion of an
-        // enum case: the patterns go by the case accessors, `copy` teq derives itself, and a
-        // plain case class's companion is applied through the constructor, as the program's
-        // own are. The field of a tuple pattern in a class body (`val (a, b) = ..` is a
-        // synthetic `$1` the accessors read) and an inline accessor are members like any other.
-        // Another module's classes are the program's own as teq compiles them: a case class
-        // or an enum case is made by its constructor there too, whatever `apply` the companion
-        // writes itself. A companion nested in a class keeps its `apply`: a member of the
-        // companion (`Desugar.classDef`), which constructs with the companion's own enclosing
-        // instance, and which a jar's bodies call on the companion, its `this` included.
-        if f.has(tags::SYNTHETIC)
-            && !f.has(tags::CASEACCESSOR)
-            && !is_pattern_field(&tasty, e)
-            && !tasty.is_inline_accessor(e.name)
-            && (tasty.simple(e.name) != Some("apply") || (self.is_plain_case_companion(c) && !explicit_apply && !self.keeps_synthetic_apply(c)) || product)
-        {
-            return;
+        // A synthetic definition is a member as written (dotty's `TreeUnpickler.readNewDef`
+        // reads every one), a case class's selectors `_N` (`Desugar.productElemMeths`), the field
+        // of a tuple pattern in a class body (`val (a, b) = ..` is a synthetic `$1` the
+        // accessors read) and an inline accessor among them, but those teq supplies itself, as it
+        // does for a class of the build (`supplied_synthetic`). Of `apply`, it keeps the one of
+        // the companion of an enum case: a plain case class's companion is applied through the
+        // constructor, as the program's own are; another module's classes are the program's own
+        // as teq compiles them, a case class or an enum case made by its constructor there too,
+        // whatever `apply` the companion writes itself. A companion nested in a class keeps its
+        // `apply`: a member of the companion (`Desugar.classDef`), which constructs with the
+        // companion's own enclosing instance, and which a jar's bodies call on the companion,
+        // its `this` included.
+        if f.has(tags::SYNTHETIC) && !f.has(tags::CASEACCESSOR) {
+            let supplied = match tasty.simple(e.name) {
+                Some("apply") => (self.is_plain_case_companion(c) && !explicit_apply && !self.keeps_synthetic_apply(c)) || product,
+                Some(n) => supplied_synthetic(n),
+                // A derived name is one teq derives itself (a default getter from its parameter's
+                // default, a super accessor), but an inline accessor's and a pattern field's.
+                None => !tasty.is_inline_accessor(e.name) && !is_pattern_field(&tasty, e),
+            };
+            if supplied {
+                return;
+            }
         }
         if e.tag == tags::TYPEDEF {
             return;

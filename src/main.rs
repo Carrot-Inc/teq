@@ -1648,6 +1648,7 @@ fn compile() -> i32 {
     // A Scala.js module's products record the expansions too, for a downstream to outline them
     // as the whole program does.
     typer.inline.outlines = (opts.command != "check" || opts.products.is_some()) && !opts.jvm && !opts.interp && !opts.no_outline;
+    typer.emits_bodies = opts.command != "check" || opts.products.is_some() || opts.interp || opts.analysis_version.is_some();
     if opts.jvm {
         typer.set_jvm();
     }

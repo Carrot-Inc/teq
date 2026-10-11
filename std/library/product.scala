@@ -3,7 +3,7 @@
 // compiler builds, in place of scala-library's abstract declarations.
 package scala
 
-trait Product:
+trait Product extends Any:
   @js("$productArity($0)")
   @jvm("$0:L invokeinterface scala/Product.productArity()I")
   def productArity: Int
@@ -22,4 +22,4 @@ trait Product:
 
 def productIteratorImpl(p: Product): Iterator[Any] = Iterator.tabulate(p.productArity)(p.productElement)
 def productElementNamesImpl(p: Product): Iterator[String] = Iterator.tabulate(p.productArity)(p.productElementName)
-def canEqualImpl(p: Product, that: Any): Boolean = that != null && p.getClass == that.getClass
+def canEqualImpl(p: Equals, that: Any): Boolean = that != null && p.getClass == that.getClass

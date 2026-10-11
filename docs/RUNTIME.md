@@ -102,6 +102,5 @@ development output, the release output and the release output through esbuild an
   whole-program class knowledge, which is what Scala.js's optimizer wins on adts and boxing and what keeps
   dispatch and adts behind scalac on the JVM; closures and by-name arguments allocate on the JVM.
 - The standard library's sort is a fifth of collections on node; its array operations grow buffers by copying.
-- The JVM backend rejects `return` from a lambda and a `try` as a constructor argument (`not supported on the
-  JVM yet`).
+- The JVM backend rejects a `try` as a constructor argument (`not supported on the JVM yet`).
 - `docs/COMPATIBILITY.md` is where behaviour differs from scalac.

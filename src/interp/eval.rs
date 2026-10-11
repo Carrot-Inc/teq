@@ -1607,8 +1607,8 @@ impl<'a, 't> Interp<'a, 't> {
                 };
                 Value::Bool(r)
             }
-            RefEq => Value::Bool(x.same(&y)),
-            RefNe => Value::Bool(!x.same(&y)),
+            RefEq | Same => Value::Bool(x.same(&y)),
+            RefNe | NotSame => Value::Bool(!x.same(&y)),
             Eq => Value::Bool(self.equal(&x, &y)?),
             Ne => Value::Bool(!self.equal(&x, &y)?),
             BoolXor => Value::Bool(!x.same(&y)),

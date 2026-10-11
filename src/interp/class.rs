@@ -1225,6 +1225,11 @@ impl<'a, 't> Interp<'a, 't> {
         let types = self.flat_params(s);
         let mut erased: Option<(String, Option<Name>)> = None;
         let mut found = Member::Missing;
+        // The alternative each base declares once an abstract one came first, with its body, for
+        // the class's member as dotty chooses it per alternative (`MixinOps.isInImplementingClass`
+        // over the alternatives of `nonPrivateMember`, `Symbols::member_declaration`): an abstract
+        // redeclaration overrides the bodies of the bases it derives from.
+        let mut declared: Vec<(ClassId, Option<FunId>)> = Vec::new();
         for k in self.resolution_chain(c) {
             let Some(&m) = self.syms().class(k).members.get(&name) else { continue };
             let alts: Vec<SymId> = match self.syms().alternatives(m) {
@@ -1271,10 +1276,22 @@ impl<'a, 't> Interp<'a, 't> {
                     own.iter().copied().find(|&a| self.typer.erased_signature(a, true) == key && self.typer.target_name_of(a) == target)
                 });
             let Some(a) = pick else { continue };
-            if let Some(f) = self.fun_of(a) {
-                if self.prog().funs[f.idx()].body.is_some() {
+            let body = self.fun_of(a).filter(|f| self.prog().funs[f.idx()].body.is_some());
+            match body {
+                Some(f) if declared.is_empty() => {
                     found = Member::Fun(f, k);
                     break;
+                }
+                Some(f) => declared.push((k, Some(f))),
+                None if self.typer.is_abstract_member(a) => declared.push((k, None)),
+                None => {}
+            }
+        }
+        if !declared.is_empty() {
+            let pairs: Vec<(ClassId, bool)> = declared.iter().map(|&(k, f)| (k, f.is_some())).collect();
+            if let Some(k) = self.syms().member_declaration(&pairs) {
+                if let Some(&(_, Some(f))) = declared.iter().find(|&&(x, _)| x == k) {
+                    found = Member::Fun(f, k);
                 }
             }
         }
@@ -1315,10 +1332,21 @@ impl<'a, 't> Interp<'a, 't> {
         let info = self.syms().class(c);
         let superclass = info.superclass.filter(|_| info.kind != ClassKind::Trait);
         let value_class = info.value_class && info.mods & mods::CASE == 0;
+        // The declarations met once an abstract one came first, for the class's member as dotty
+        // chooses it (`Symbols::member_declaration`): an abstract redeclaration overrides the
+        // bodies of the bases it derives from.
+        let mut declared: Vec<(ClassId, bool)> = Vec::new();
         for k in self.own_bases(c) {
             let m = self.own_member(k, name);
             if !matches!(m, Member::Missing) {
-                return m;
+                if declared.is_empty() {
+                    return m;
+                }
+                declared.push((k, true));
+                continue;
+            }
+            if self.declares_abstractly(k, name) {
+                declared.push((k, false));
             }
             if k == c && value_class && matches!(name, crate::names::EQUALS | crate::names::HASH_CODE) {
                 let defines = self.syms().class(c).members.contains_key(&name);
@@ -1329,6 +1357,9 @@ impl<'a, 't> Interp<'a, 't> {
                     }
                 }
             }
+        }
+        if let Some(k) = self.syms().member_declaration(&declared) {
+            return self.own_member(k, name);
         }
         if let Some(m) = self.shape_member(c, name) {
             return m;
@@ -1342,6 +1373,13 @@ impl<'a, 't> Interp<'a, 't> {
             crate::names::HASH_CODE => Member::AnyHash,
             _ => Member::Missing,
         }
+    }
+
+    /// Whether `k` declares a method of the name without a body.
+    fn declares_abstractly(&mut self, k: ClassId, name: Name) -> bool {
+        let Some(sym) = self.dispatch_sym(k, name) else { return false };
+        let info = self.syms().sym(sym);
+        info.kind == SymKind::Def && info.owner == Owner::Class(k) && self.typer.is_abstract_member(sym)
     }
 
     /// The few JDK members a macro reaches on an object the interpreter made itself: a

@@ -805,7 +805,7 @@ impl<'a> Worker<'a> {
             (names::CLONE, []) => helper(self, "$cloneObject($0)", self.b.t_any_ref),
             (names::EQUALS, [list]) if list.args.len() == 1 && list.args[0].ast().is_some() => {
                 let (that, _) = self.type_expr(list.args[0].ast().unwrap(), None);
-                let te = self.prog.add(TExpr::Prim(PrimOp::RefEq, this, that));
+                let te = self.prog.add(TExpr::Prim(PrimOp::Same, this, that));
                 if self.capturing() {
                     self.capture_form(te, Form::SuperOp(name));
                 }
@@ -1205,12 +1205,21 @@ impl<'a> Worker<'a> {
     pub(super) fn is_method_sym(&mut self, s: SymId) -> bool {
         match self.syms.sym(s).kind {
             SymKind::Def | SymKind::Overloaded(_) => true,
-            SymKind::Given => {
-                let sig = self.sig_of(s);
-                !sig.clauses.is_empty() || !sig.tparams.is_empty()
-            }
+            SymKind::Given => self.is_method_given(s),
             _ => false,
         }
+    }
+
+    /// A given of parameters, or an inline given, an inline method of no parameters too
+    /// (dotty's `Desugar` makes `inline given g: T = e` an `inline def`), which a selection
+    /// expands.
+    #[inline(never)]
+    fn is_method_given(&mut self, s: SymId) -> bool {
+        if self.syms.sym(s).mods & crate::ast::mods::INLINE != 0 {
+            return true;
+        }
+        let sig = self.sig_of(s);
+        !sig.clauses.is_empty() || !sig.tparams.is_empty()
     }
 
     /// The type a reference to a parameterless structural given has: dotty makes the given a
@@ -3099,7 +3108,8 @@ impl<'a> Worker<'a> {
                 }
             },
         };
-        let mut subst = call.owner_subst.clone();
+        // The owner's substitution, empty for a receiver of no type parameters, which is not copied.
+        let mut subst = if call.owner_subst.is_empty() { Subst::new() } else { call.owner_subst.clone() };
         let first_var = self.tvars.len();
         let widen_mark = self.pending_widenings.len();
         for (i, &tp) in sig.tparams.iter().enumerate() {
@@ -3816,7 +3826,7 @@ impl<'a> Worker<'a> {
                     alts.iter().all(|&a| self.sig_of(a).clauses.iter().all(|c| c.is_using))
                 });
             if loops || (empty_parens && next_apply.is_none()) {
-                if empty_parens && rest.len() == 1 && self.has_java_parens(call.sym) {
+                if empty_parens && rest.len() == 1 && self.takes_java_parens(call.sym) {
                     return Some((te, ty));
                 }
                 if loops || !self.has_apply_extension(ty) {
@@ -6194,7 +6204,7 @@ impl<'a> Worker<'a> {
     /// parentheses, so scalac takes both forms.
     fn drops_java_parens(&mut self, sym: SymId, lists: &[ArgList]) -> bool {
         let empty_parens = lists.len() == 1 && lists[0].args.is_empty() && !lists[0].using;
-        if !empty_parens || self.syms.sym(sym).kind != SymKind::Def || !self.has_java_parens(sym) {
+        if !empty_parens || self.syms.sym(sym).kind != SymKind::Def || !self.takes_java_parens(sym) {
             return false;
         }
         let ext_clauses = self.syms.sym(sym).ext_clauses as usize;
@@ -6205,6 +6215,23 @@ impl<'a> Worker<'a> {
     pub(super) fn has_java_parens(&self, sym: SymId) -> bool {
         let info = self.syms.sym(sym);
         info.java_defined || matches!(info.name, names::TO_STRING | names::HASH_CODE | names::CLONE) || self.in_java_package(sym) || self.string_member_of_std(sym) || self.scala2_std_member(sym)
+    }
+
+    /// Whether `f()` calls a parameterless `f`: dotty's `matchNullaryLoosely` holds of the method
+    /// or of one it overrides (`allOverriddenSymbols`, the declarations `root_declarations` finds by
+    /// their parameters, as `auto_applied` asks them): scala-library's `StringBuilder.length` over
+    /// `CharSequence.length()`, called either way; a Java method of other parameters (`charAt(int)`
+    /// beside a nullary `charAt`) is none it overrides.
+    pub(super) fn takes_java_parens(&mut self, sym: SymId) -> bool {
+        if self.has_java_parens(sym) {
+            return true;
+        }
+        if !matches!(self.syms.sym(sym).owner, Owner::Class(_)) {
+            return false;
+        }
+        let mut roots = Vec::new();
+        self.root_declarations(sym, 0, &mut roots);
+        roots.into_iter().any(|r| r != sym && self.has_java_parens(r))
     }
 
     /// The std's `println()`, which stands for scala-library's `Predef.println()`: a Scala 2

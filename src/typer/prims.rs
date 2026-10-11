@@ -1130,7 +1130,14 @@ impl<'a> Worker<'a> {
         let b_bool = self.b.t_boolean;
         let operand_ty = self.solve_in(operand_ty);
         let rty = self.dealias(operand_ty);
-        let rty = self.numeric_bound(rty).unwrap_or(rty);
+        // As the left operand's (`binop`): a type parameter bounded by a primitive takes the
+        // bound's operator, `Int.+(x: Int)` taking a `T <: Int` as scalac's overload does.
+        let rty = match self.types.get(rty) {
+            Type::Inter(..) => self.primitive_side(rty),
+            Type::Param(_) => self.primitive_bound(rty),
+            _ => self.numeric_bound(rty),
+        }
+        .unwrap_or(rty);
         if rty == b_string && op == names::PLUS {
             let ls = self.to_str(tl, lty);
             let l = self.prog.list(&[ls, tr]);
@@ -1256,6 +1263,9 @@ impl<'a> Worker<'a> {
     fn prefix_on(&mut self, op: Name, te: TExprId, ty: TypeId, span: Span) -> (TExprId, TypeId) {
         let ty = self.dealias(ty);
         let ty = self.widen_lit(ty);
+        // A type parameter bounded by a primitive has the bound's prefix operators (`!x` of a
+        // `T <: Boolean`), as scalac finds `unary_!` on the bound.
+        let ty = self.primitive_bound(ty).unwrap_or(ty);
         let b = &self.b;
         let (t_int, t_long, t_double, t_float, t_bool) = (b.t_int, b.t_long, b.t_double, b.t_float, b.t_boolean);
         let unop = match op {
@@ -1803,8 +1813,8 @@ impl<'a> Worker<'a> {
             names::EQ | names::NE if one_arg => {
                 let (tr, _) = self.type_expr(arg(0)?, None);
                 let prim = match name {
-                    names::EQ => PrimOp::RefEq,
-                    _ => PrimOp::RefNe,
+                    names::EQ => PrimOp::Same,
+                    _ => PrimOp::NotSame,
                 };
                 let te = self.prog.add(TExpr::Prim(prim, recv, tr));
                 if self.capturing() {
@@ -1837,7 +1847,9 @@ impl<'a> Worker<'a> {
                     return Some(self.lower_cast_written(recv, recv_ty, t, span, js_written));
                 }
                 let t = self.resolve_type(ids[0]);
-                let unchecked = self.expr_marks.get(&recv).map_or(false, |&m| m & super::MARK_UNCHECKED != 0);
+                // `x.isInstanceOf[T @unchecked]` as a pattern's `case _: T @unchecked` is.
+                let unchecked = self.expr_marks.get(&recv).map_or(false, |&m| m & super::MARK_UNCHECKED != 0)
+                    || super::pat::type_unchecked(self.cur_ast(), ids[0]);
                 let test = self.test_for(t, recv_ty, span, unchecked);
                 self.mark_leaf_test(test, reads);
                 if self.inline.checking > 0 {
@@ -1856,12 +1868,27 @@ impl<'a> Worker<'a> {
                 if self.syms.class(enum_class).kind != ClassKind::Enum {
                     return None;
                 }
-                // Only an enum whose cases are all values has these members.
+                // Only an enum whose cases are all values has `values` and `valueOf`; every enum has
+                // `fromOrdinal`, a class case's ordinal a hole that throws (dotty's
+                // `DesugarEnums.enumLookupMethods`), here a null in the values by ordinal.
                 let cases = self.syms.class(enum_class).children.clone();
                 let values: Option<Vec<SymId>> =
                     cases.iter().map(|&c| self.syms.class(c).singleton).collect();
-                let items: Vec<TExprId> =
-                    values?.into_iter().map(|s| self.prog.add(TExpr::Static(s))).collect();
+                let items: Vec<TExprId> = match values {
+                    Some(values) => values.into_iter().map(|s| self.prog.add(TExpr::Static(s))).collect(),
+                    None if name == names::FROM_ORDINAL => {
+                        let mut by_ordinal: Vec<Option<SymId>> = Vec::new();
+                        for &c in &cases {
+                            let at = self.syms.class(c).ordinal as usize;
+                            if by_ordinal.len() <= at {
+                                by_ordinal.resize(at + 1, None);
+                            }
+                            by_ordinal[at] = self.syms.class(c).singleton;
+                        }
+                        by_ordinal.into_iter().map(|v| self.prog.add(v.map_or(TExpr::Null, TExpr::Static))).collect()
+                    }
+                    None => return None,
+                };
                 let items = self.prog.list(&items);
                 let all = self.prog.add(TExpr::ArrayLit(items));
                 if self.capturing() && name == names::VALUES {

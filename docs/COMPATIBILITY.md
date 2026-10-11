@@ -105,12 +105,9 @@ a JDK member as `not supported on JavaScript`. Beyond that:
 
 ### The JVM target, sbt and warnings
 
-- JVM: `return` from a lambda is `not supported on the JVM yet`; a member whose `Nothing` or `Null` result is
-  inferred erases to `Object` where scalac's descriptor names `Nothing$`, and teq's class files differ from
-  scalac's in a listed set of shapes, so a module compiled by scalac does not link against teq's output.
-- JVM, which links scala-library's bytecode: `Duration(1.5, SECONDS)`, `e.canEqual(x)` on an `Equals` and
-  `sb.length()` of a `StringBuilder` are rejected where scalac types them, `f"n=$n%04d"` fails with
-  `NoSuchMethodError`, a derived `Show` prints a case object as `Nil()`, `eq` on strings compares by value.
+- JVM: a member whose `Nothing` or `Null` result is inferred erases to `Object` where scalac's descriptor names
+  `Nothing$` or `Null$`, and teq's class files differ from scalac's in a listed set of shapes, so a module
+  compiled by scalac does not link against teq's output.
 - Under `-Wunused:implicits`, a using clause of an `extension` is one parameter its methods share, where
   scalac's is one per method: a method that does not use it warns in scalac, not here while another method
   uses it. Under `-Wunused:imports`, what a macro's or an inline method's expansion names uses no import:
@@ -136,7 +133,8 @@ a JDK member as `not supported on JavaScript`. Beyond that:
   which only unions and `Any` see: an `Int` type test takes integral doubles, as a cast to `Int` does (an
   `Any` holding `7` passes a cast to `Double` or `Byte`, one holding a `String` a cast to `Char`),
   `('a': Any) == (97: Any)` is false, and an `Any`-keyed `Map` compares keys as JavaScript does (`1` and
-  `1.0` one key, `1L` another).
+  `1.0` one key, `1L` another). On JavaScript and in the interpreter strings and numbers are values, so `eq`
+  of two equal strings or boxes is true, as under Scala.js.
 - `hashCode` is `MurmurHash3` with Scala.js's hash of a `Double`; the unit is `()` in a concatenation and
   as `toString`, where Scala.js has `undefined`, which `println` and `print` show as Scala.js does;
   `(1: Any).isInstanceOf[AnyRef]` is false; `Option(x)` is `None` for `undefined` as for `null`; the bare

@@ -455,7 +455,7 @@ neg/i12384.scala	same
 neg/i1240b.scala	accepts	
 neg/i12430.scala	std	collection
 neg/i12432.scala	std	annotation
-neg/i12448.scala	std	A
+neg/i12448.scala	same	
 neg/i12456.scala	accepts	
 neg/i12457.scala	std	R
 neg/i12462.scala	same	
@@ -728,7 +728,7 @@ neg/i18171.scala	superset	+1 lines: type argument T does not conform to upper bo
 neg/i18188.scala	accepts	
 neg/i18234.scala	subset	1/63 lines
 neg/i18244.scala	same	
-neg/i18265.scala	oos	abstract-def
+neg/i18265.scala	same	
 neg/i18274.scala	same	
 neg/i18302a.scala	std	PolyFunction
 neg/i18302b.scala	std	PolyFunction
@@ -1109,7 +1109,7 @@ neg/i4470a.scala	different	type {} is already defined
 neg/i4470b.scala	different	type {} is already defined
 neg/i4470c.scala	different	type {} is already defined
 neg/i4496b.scala	same	
-neg/i4520.scala	accepts	
+neg/i4520.scala	same	
 neg/i4557.scala	different	C0 takes 1 type argument(s), 2 given
 neg/i4557a.scala	oos	inheritance
 neg/i4564.scala	same	
@@ -1939,7 +1939,7 @@ neg/tuple-filter.scala	std	Filter
 neg/tuple-isMappedBy-2.scala	accepts	
 neg/tuple-isMappedBy.scala	same	
 neg/tuple-oob1.scala	same	
-neg/tuple-ops.scala	superset	+1 lines: type mismatch
+neg/tuple-ops.scala	same	
 neg/tuple-patterns.scala	same	
 neg/tupled-function-instances.scala	superset	+3 lines: {} is not a member of the package
 neg/type-cast-purity.scala	syntax	'erased' is not part of the supported Scala subset
@@ -2714,7 +2714,7 @@ pos/i12910.scala	accepts
 pos/i12915.scala	accepts	
 pos/i12945	rejects	no given instance
 pos/i12949.scala	accepts	
-pos/i12950	rejects	operator {} cannot be applied
+pos/i12950	accepts	
 pos/i12953.scala	accepts	
 pos/i12955.scala	rejects	type mismatch
 pos/i12958.scala	accepts	
@@ -3840,7 +3840,7 @@ pos/i4526b.scala	accepts
 pos/i4557.scala	accepts	
 pos/i4557a.scala	accepts	
 pos/i4561.scala	accepts	
-pos/i4564.scala	rejects	value {} is not a member of {}
+pos/i4564.scala	accepts	
 pos/i4582.scala	accepts	
 pos/i4586.scala	accepts	
 pos/i4588.scala	accepts	

@@ -1,7 +1,11 @@
+mirrors/E exposed()I public,static
 mirrors/O mirrors$T$_setter_$mirrors$T$$pvl_$eq(I)V public,static,synthetic
 mirrors/O mirrors$T$_setter_$v_$eq(I)V public,static,synthetic
 mirrors/O r()I public,static
 mirrors/O v()I public,static
+mirrors/Q all()I public,static
+mirrors/Q qual()I public,static
+mirrors/Q scoped()I public,static
 mirrors/V a$$b()I public,static
 mirrors/W mirrors$T$$x()I public,static
 mirrors/X executionStart()J public,static

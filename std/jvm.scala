@@ -135,7 +135,7 @@ def enumValueOf(values: Array[Any], name: String, enumName: String): Any =
   values(found)
 
 def enumFromOrdinal(values: Array[Any], ordinal: Int, enumName: String): Any =
-  if ordinal < 0 || ordinal >= values.length then
+  if ordinal < 0 || ordinal >= values.length || values(ordinal) == null then
     throw new NoSuchElementException("enum " + enumName + " has no case with ordinal: " + ordinal.toString)
   values(ordinal)
 

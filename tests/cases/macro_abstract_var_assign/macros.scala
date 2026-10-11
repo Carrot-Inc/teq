@@ -1,7 +1,9 @@
 import scala.quoted.*
 
 // An assignment through an abstract var is an `Assign` of the var's selection to a macro, as in
-// scalac's tree, and an `Assign` a macro builds of such a selection calls the setter.
+// scalac's tree, and an `Assign` a macro builds of such a selection calls the setter; a call of the
+// setter written so (`t.x_=(4)`) is an `Apply`, as dotty's `Typer.typedAssign` leaves it (master: an
+// `Assign`).
 object Probe:
   inline def assignment(inline e: Any): String = ${ assignmentImpl('e) }
   def assignmentImpl(e: Expr[Any])(using Quotes): Expr[String] =
@@ -10,6 +12,7 @@ object Probe:
       case Assign(Select(_, name), Literal(c)) => s"Assign($name, ${c.value})"
       case Assign(Ident(name), Literal(c)) => s"Assign($name, ${c.value})"
       case Assign(_, _) => "Assign"
+      case Apply(Select(_, name), List(Literal(c))) => s"Apply($name, ${c.value})"
       case other => "not an Assign"
     Expr(text)
 
