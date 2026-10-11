@@ -716,24 +716,26 @@ impl TypeStore {
     /// The type standing for a library type of an unsupported shape, described as
     /// `<shape>: <spelling>`.
     pub fn blocked(&self, description: &str) -> TypeId {
+        let b = self.blocked_id(description);
+        self.mk(Type::Blocked(b))
+    }
+
+    /// The description's entry of the blocked sub-store, interned, without a type over it.
+    fn blocked_id(&self, description: &str) -> BlockedId {
         let h = hash_of(description);
         let find = || self.blocked_index.find(h, |i| &**self.blocked.get(i as usize) == description);
-        let id = match find() {
-            Some(id) => id,
-            None => {
-                let Ok(held) = self.insert_lock() else { return self.mk(Type::Blocked(BlockedId(self.blocked_apart(h, description)))) };
-                let again = if held.is_some() { find() } else { None };
-                match again {
-                    Some(id) => id,
-                    None => {
-                        let id = self.blocked.push(description.into()) as u32;
-                        self.blocked_index.insert(h, id);
-                        id
-                    }
-                }
+        if let Some(id) = find() {
+            return BlockedId(id);
+        }
+        let Ok(held) = self.insert_lock() else { return BlockedId(self.blocked_apart(h, description)) };
+        if held.is_some() {
+            if let Some(id) = find() {
+                return BlockedId(id);
             }
-        };
-        self.mk(Type::Blocked(BlockedId(id)))
+        }
+        let id = self.blocked.push(description.into()) as u32;
+        self.blocked_index.insert(h, id);
+        BlockedId(id)
     }
 
     /// The description's entry of the blocked sub-store where there is one, entering none.
@@ -2510,7 +2512,9 @@ impl TypeStore {
         if remade.is_empty() {
             return 0;
         }
-        let Type::Blocked(b) = self.get(self.blocked(RETIRED)) else { unreachable!("a blocked type") };
+        // The description alone: a type over it is found by the index, whose slots of the entries
+        // an earlier merge retired hold that very type.
+        let b = self.blocked_id(RETIRED);
         let _held = self.serial.hold();
         for &i in &remade {
             // No reader holds the entry: nothing names it, and the workers are gone.
