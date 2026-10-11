@@ -1,7 +1,8 @@
 #!/bin/bash
 # Compile-time evaluation of inline arguments: tests/cases/inline_fold_std.scala is built and
 # its JavaScript searched for the constants the interpreter folded and for the calls that
-# have to stay (an effect, a computation over the budget).
+# have to stay (an effect, a computation over the budget). The std's `println` is overloaded
+# (`println()` beside `println(x: Any)`), which the output names apart: `println$Any`.
 cd "$(dirname "$0")/.."
 TEQ=${TEQ:-./target/release/teq}
 . tests/support/jars.sh
@@ -17,7 +18,7 @@ js=out/fold/inline_fold_std.js
 if ! timeout 20 "$TEQ" compiler build tests/cases/inline_fold_std.scala -o "$js" > out/fold/build.log 2>&1; then
   bad "build: $(tail -1 out/fold/build.log)"
 else
-  for text in 'println(3 + 3 | 0)' 'println(6 + 6 | 0)' '"aaa-4/5" + "!"' 'println("yes")' '"n=" + 3' 'println("four")' '"8" + "!"' 'bump() + bump()' 'counter$()' '.sum() + ' '0 + 0 | 0'; do
+  for text in 'println$Any(3 + 3 | 0)' 'println$Any(6 + 6 | 0)' '"aaa-4/5" + "!"' 'println$Any("yes")' '"n=" + 3' 'println$Any("four")' '"8" + "!"' 'bump() + bump()' 'counter$()' '.toList().sum(' '0 + 0 | 0'; do
     if grep -qF -- "$text" "$js"; then ok; else bad "the output lacks $text"; fi
   done
   for text in '"ab".length' 'ArraySeq([1, 2, 3])' 'startsWith' '$split("x,y,z"' 'Math.sqrt' 'Vector$().apply(' 'Option$().apply(7)' 'Map$().apply(' 'new Random(3n)'; do
@@ -55,7 +56,7 @@ if [ ${#outputs[@]} = 4 ]; then
     diff "${outputs[0]}" "${outputs[2]}" | head -5
   fi
   js=out/fold/targets-js-folded.js
-  for text in 'println(4 + 4 | 0)' '"[" + "1,2"' 'println("yes")' '$dstr(1.4142135623730951)'; do
+  for text in 'println$Any(4 + 4 | 0)' '"[" + "1,2"' 'println$Any("yes")' '$dstr(1.4142135623730951)'; do
     if grep -qF -- "$text" "$js"; then ok; else bad "fold_targets lacks $text"; fi
   done
   for text in '"0.3333333333333333"' '"2.5"' '"1.5;2.5"' '"0.30000000000000004"' '"96354"' '"1.5"'; do
@@ -83,7 +84,7 @@ else
     'effect("if not and")|if (!(f & ' 'effect("while "|while (!!((i < 2) & ' 'rec(n - 1|!!((n === 0) | rec('; do
     if grep -F -- "${pair%%|*}" "$js" | grep -qF -- "${pair#*|}"; then ok; else bad "boolean_strict_operators lacks ${pair#*|}"; fi
   done
-  if grep -qF -- 'println("folded")' "$js" && ! grep -qF -- '"kept"' "$js"; then ok; else bad "boolean_strict_operators keeps inline if true | false"; fi
+  if grep -qF -- 'println$Any("folded")' "$js" && ! grep -qF -- '"kept"' "$js"; then ok; else bad "boolean_strict_operators keeps inline if true | false"; fi
 fi
 echo "$pass passed, $fail failed"
 [ $fail = 0 ]

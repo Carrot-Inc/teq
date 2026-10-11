@@ -19,7 +19,9 @@
 # session over an upstream module's products that another build rewrites between two requests,
 # once keeping every file's size and time, once with a request for a file whose time was kept,
 # once killed on the way (the session reads the last whole publication); a session over an
-# upstream's products whose inline body is replaced and put back; and a
+# upstream's products whose inline body is replaced and put back; a session over
+# tests/split/late_std_class, whose walk meets a std class the typer completes after its final
+# passes, by the names its members go by; and a
 # session over tests/split/given_memo that adds a local given to a body and removes it, and changes
 # a file's import of givens and changes it back, through the given search's kept memos.
 # Every session types its full builds at the automatic count and every fresh build it is compared
@@ -255,10 +257,9 @@ kept_step Main.scala "a comment inserted after they were" true
 stop
 rm -rf "$work/out"
 
-# The two sides of what a retype adds outside its units (`Kept::added_outside`): a macro whose run
-# takes a path the first build's did not and types std bodies (`toList`, `count`) that no walk asks
-# for keeps the reach, which a walk from the roots would not meet either; tests/jvm-watch.sh has
-# the other side, inline_fold_std's fold adding template calls the next walk calls.
+# What a retype adds outside its units (`Kept::added_outside`): a macro whose run takes a path the
+# first build's did not and types std bodies (`toList`, `count`) that no walk asks for keeps the
+# reach, which a walk from the roots would not meet either.
 src=$work/kept_reach_macro
 cp -r tests/split/kept_reach_macro "$src"
 TEQ_SESSION_PARTS=1 TEQ_KEPT_SETTLE=wait start "$src" --split "$work/out"
@@ -283,6 +284,27 @@ build "$src/Main.scala"
 expect "macro_std_override: the macro reaches the override" "$(field ok),$(field incremental)" "true,true"
 retype_runs "macro_std_override: the retype runs" "true"
 same_as_fresh "macro_std_override: the macro reaches the override" "$src"
+stop
+rm -rf "$work/out"
+
+# A std class the typer completes after its final passes, an anonymous class of a std body the
+# reach types, whose method overrides one alternative of an inherited overloaded name, has the
+# method named once its completion is done (`Worker::mark_members_meeting_inherited`), before the
+# walk meets the class: a fresh build's walk marks it by the name a call through the parent goes
+# by, as the session's walks after the first build do. Each build is a fresh one's.
+src=$work/late_std_class
+cp -r tests/split/late_std_class "$src"
+TEQ_SESSION_PARTS=1 TEQ_KEPT_SETTLE=wait start "$src" --split "$work/out"
+expect "late_std_class: first build" "$(field ok)" 'true'
+same_as_fresh "late_std_class: first build" "$src"
+printf '// a comment\n' | cat - "$src/Main.scala" > "$src/Main.tmp" && mv "$src/Main.tmp" "$src/Main.scala"
+build "$src/Main.scala"
+expect "late_std_class: a comment inserted" "$(field ok),$(field incremental)" "true,true"
+same_as_fresh "late_std_class: a comment inserted" "$src"
+sed -i.bak 's/println("label")/println("label2")/' "$src/Main.scala"
+build "$src/Main.scala"
+expect "late_std_class: a literal changed" "$(field ok),$(field incremental)" "true,true"
+same_as_fresh "late_std_class: a literal changed" "$src"
 stop
 rm -rf "$work/out"
 
@@ -1307,6 +1329,14 @@ for case in tests/cases/*.scala tests/cases/*/ tests/interop/*.scala tests/inter
   [ -f "$suite/$name.expected" ] || continue
   # A case whose header includes sources (`//> using file`, the scripts' library) is teq interp's alone.
   grep -q -h '^//> using files\? ' "$case" "$case"/*.scala 2> /dev/null && continue
+  # A case whose `// std:` line names the std modes its expectations hold under, and not the lean
+  # std's, has no build here (tests/run_stdlib.sh leaves out `// std: lean` the same way).
+  modes=$(grep -h -o '^// std: .*' "$case" "$case"/*.scala 2> /dev/null | head -1 | sed 's|^// std: ||')
+  if [ -n "$modes" ] && [[ " $modes " != *" lean "* ]]; then
+    echo "skip $name: its std is $modes"
+    ok
+    continue
+  fi
   rm -rf "$src" "$work/out"
   mkdir -p "$src"
   if [ -d "$case" ]; then cp -r "$case"/. "$src"; else cp "$case" "$src/"; fi

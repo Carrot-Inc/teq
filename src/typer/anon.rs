@@ -88,6 +88,9 @@ impl<'a> Worker<'a> {
         }
         self.set_parents(c, parents);
         self.syms.class_mut(c).state().set(Completion::Done);
+        // Its entries meeting inherited alternatives are named where it is made, as after
+        // `complete_class` (a std body's class typed after the final passes).
+        self.late_naming_done();
         let extends_class = class_parent.filter(|&k| self.syms.class(c).superclass == Some(k));
         if let (Some(k), None) = (extends_class, parent_args) {
             let parent_ty = self.syms.class(c).parents.first().copied();

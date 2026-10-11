@@ -24,6 +24,8 @@
 # has to be 2, its line on stderr out and nothing printed after the call, as scalac's run has it;
 # shutdown_hooks runs again ending by `System.exit`, a SIGTERM and an uncaught exception, and
 # stdin_lines with lines on its stdin.
+# The interpreter runs on the lean std: a case whose `// std:` line names the modes its expectations
+# hold under, and not the lean std's, is skipped (tests/run_stdlib.sh leaves out `// std: lean`).
 # The programs under tests/using include sources through their headers' directives, which no case
 # can (every other suite builds a case alone): each runs once, its output against its .expected.
 # Several tests run at once (JOBS, by default the number of cores).
@@ -57,6 +59,12 @@ run_one() {
   if other_os "$src"; then
     echo "skip $name" > "$out/$name.result"
     echo "$name" > "$out/$name.otheros"
+    return
+  fi
+  modes=$(grep -h -o '^// std: .*' "$src" "$src"/*.scala 2> /dev/null | head -1 | sed 's|^// std: ||')
+  if [ -n "$modes" ] && [[ " $modes " != *" lean "* ]]; then
+    echo "skip $name" > "$out/$name.result"
+    echo "$name" > "$out/$name.otherstd"
     return
   fi
   if [ -f "tests/lean-expected/$name.expected" ]; then
@@ -110,8 +118,10 @@ done
 nojar=$(cat "$out"/*.nojar 2> /dev/null | tr '\n' ' ')
 [ -n "$nojar" ] && echo "counted as passed, a jar of theirs not in the coursier cache: $nojar"
 cat "$out"/*.otheros 2> /dev/null | sort > "$out/otheros.txt"
-skipped=$(grep '^skip ' "$out/results.txt" | cut -d' ' -f2 | sort | comm -23 - "$out/otheros.txt" | tr '\n' ' ')
+otherstd=$(cat "$out"/*.otherstd 2> /dev/null | sort)
+skipped=$(grep '^skip ' "$out/results.txt" | cut -d' ' -f2 | sort | comm -23 - "$out/otheros.txt" | comm -23 - <(printf '%s\n' "$otherstd") | tr '\n' ' ')
 [ -n "$skipped" ] && echo "skipped (expectations from Scala.js): $skipped"
+[ -n "$otherstd" ] && echo "skipped (another std's): $(tr '\n' ' ' <<< "$otherstd")"
 otheros=$(tr '\n' ' ' < "$out/otheros.txt")
 [ -n "$otheros" ] && echo "skipped (another system's): $otheros"
 grep '^pass ' "$out/results.txt" | cut -d' ' -f2 | sort > "$out/passing.txt"

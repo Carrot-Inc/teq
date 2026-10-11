@@ -112,7 +112,11 @@ output of JavaScript and the interpreter for a case of a departure they keep (`.
 JVM's). A `// teq: <flags>` line in a test passes flags to teq; a
 `// os: windows` or `// os: unix` line keeps a case of `run_interp.sh` and `run_jvm.sh` to that system, where
 Git's bash is Windows (the `windows_*` cases are the interpreter's acceptance on Windows, their expectations
-the Windows JDK's). `bench/budget.sh` and `tests/runtime.sh` skip on any machine but the one that recorded their
+the Windows JDK's); a `// std: <modes>` line names the std modes a case's expectations hold under, which
+`run_stdlib.sh` (scala-library's) and the lean std's suites (`run_interp.sh`, `split-watch.sh`) honour. The JVM's
+expectations are JDK 24's; where another major words a JDK message otherwise, `tests/jvm-expected/<name>.jdk<major>.expected`
+holds scalac's output on that major (`run_jvm.sh`'s header). `tests/all.sh` keeps each suite's whole output and time
+under `out/all/`. `bench/budget.sh` and `tests/runtime.sh` skip on any machine but the one that recorded their
 budgets.
 
 Evidence that a change leaves the output alone, or what it moves:
@@ -214,6 +218,18 @@ apart. A difference the known list `SCALAC_KNOWN` does not pin by both records' 
 the line, and so does a line of that list whose difference is gone. Each new difference is classified
 before it is listed: a defect of teq's (a task-list line), a recorded departure from scalac, or a warning of scalac's
 teq has no rule for.
+
+The GitHub gate, `.github/workflows/gate.yml`, runs the full suite set of `tests/all.sh` on GitHub's hosted
+runners for every push to GitHub's `dev`, where every landing goes, for every pull request (which targets `dev`),
+and by hand. GitHub's `master` is green only: it is fast-forwarded to a `dev` head whose run is green in every job,
+and never pushed to otherwise. One job per group of suites, each within its bound, every suite in one of them but
+`budget`, `runtime` and `watch-memory`, whose numbers are the recording machine's (the workflow's `excluded:` lines;
+`tests/gate-coverage.sh` fails a suite neither run nor excluded); `tests/gate.sh` runs those on the maintainers'
+machines. It needs nothing
+of the maintainers' machines: one job builds the release binary, one prepares the jars once (the Maven ones from
+the cache `tests/support/jars.sh` keys or from Maven Central, the built ones handed on as an artifact,
+`bench/actions/jars.sh`), the scala3 checkout is fetched at the commit the harnesses' baselines name, and each
+job keeps its suites' output and times (`out/all/`) as an artifact. Its runners hold Temurin 21 and node 22.
 
 ## The timing lines on a machine
 

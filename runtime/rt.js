@@ -1166,9 +1166,12 @@ function $mapHash(m) {
   });
   return $unorderedHash(a, b, c, n, $mapSeed);
 }
+// A tuple's elements are its own fields, or getters on its prototype where scala-library's
+// `ProductN` declares them (the field then behind a `$`).
+function $tupleElement(p, name) { return Object.prototype.hasOwnProperty.call(p, name) ? p[name] : p[name](); }
 function $jsObj(...pairs) {
   const o = {};
-  for (const p of pairs) o[p._1] = p._2;
+  for (const p of pairs) o[$tupleElement(p, "_1")] = $tupleElement(p, "_2");
   return o;
 }
 function $jsSet(target, key, value) { target[key] = value; }

@@ -20,7 +20,7 @@ def bump(): Int =
   println(label("x,y,z".split(",").length))
   println(twice(bump()))
   println(counter)
-  println(twice((1 to 100000).sum))
+  println(twice((1 to 100000).toList.sum))
   println(pick(math.sqrt(16.0) == 4.0, "four", "other"))
   println(label(Map("a" -> 1, "b" -> 2).values.sum))
   println(shout(Option(7).map(_ + 1).getOrElse(0).toString))

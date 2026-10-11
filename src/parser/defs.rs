@@ -268,7 +268,9 @@ impl<'a> Parser<'a> {
         };
         self.reject_modifiers(m, &spans, allowed);
         let m = if annots.iter().any(|a| a.name == names::DEPRECATED) {
-            crate::typer::deprecation::note_deprecated();
+            if !self.syntax.std {
+                crate::typer::deprecation::note_deprecated();
+            }
             m | mods::DEPRECATED
         } else {
             m

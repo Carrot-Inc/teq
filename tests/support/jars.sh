@@ -29,7 +29,8 @@
 # tests/support/traitfields_lib.scala compiled the same way for the JVM; deferred-lib,
 # tests/support/deferred_lib.scala compiled the same way for the JVM; outer-lib,
 # tests/support/outer_lib.scala compiled the same way; defaults-lib, tests/support/defaults_lib.scala
-# compiled the same way; lazyorder-lib, tests/support/lazyorder_lib.scala compiled the same way; state-lib,
+# compiled the same way; lazyorder-lib, tests/support/lazyorder_lib.scala compiled the same way; ctorinit-lib,
+# tests/support/ctorinit_lib.scala compiled the same way; state-lib,
 # tests/support/state_lib.scala compiled the same way under a directory named like scala-library's; scala2-lib,
 # tests/support/scala2_lib compiled by Scala 2.13; scala2-traits, tests/support/scala2_traits compiled so, traits alone,
 # and scala2-traits-padded, that jar with Java classes stored first, scala2-traits-mixed with a Scala 3 class too; universal-lib, tests/support/universal_lib.scala
@@ -330,6 +331,20 @@ lazyorder_lib_jar() {
   fi
   echo "$jar"
 }
+# tests/support/ctorinit_lib.scala compiled by scalac into a jar: constructors whose statements read a val
+# the template defines before them.
+ctorinit_lib_jar() {
+  local src=tests/support/ctorinit_lib.scala
+  local jar=$scratch-ctorinit-lib.jar
+  local dir=$scratch-ctorinit-lib.$$
+  if [ ! -f "$jar" ] || [ "$src" -nt "$jar" ]; then
+    mkdir -p "$dir" && cp "$src" "$dir/"
+    timeout 200 scala-cli --power package --library -S "${SCALA_VERSION:-3.8.4}" "$dir/ctorinit_lib.scala" --server=false -q -o "$jar.$$" -f > /dev/null 2>&1 \
+      && mv -f "$jar.$$" "$jar" || rm -f "$jar.$$" "$jar"
+    rm -rf "$dir"
+  fi
+  echo "$jar"
+}
 # tests/support/depfun_lib.scala compiled by scalac into a jar: dependent function types in TASTy.
 depfun_lib_jar() {
   local src=tests/support/depfun_lib.scala
@@ -563,6 +578,7 @@ jar_of() {
     depfun-lib) depfun_lib_jar ;;
     inlinebodies-lib) inline_bodies_lib_jar ;;
     lazyorder-lib) lazyorder_lib_jar ;;
+    ctorinit-lib) ctorinit_lib_jar ;;
     view-lib) view_lib_jar ;;
     nestedcompanion-lib) nestedcompanion_lib_jar ;;
     extend-lib) extend_lib_jar ;;
@@ -738,7 +754,8 @@ jars_of() {
 # those (every quoted `$M2/...` path of this file): the sources jars tests/lsp.sh's libraries scenario reads beside
 # sourcecode's two versions and scala-library's; scala3-library, which tests/task.sh's export pins; and the class
 # path of the example's jvmapp tests (integrations/sbt/example/teq.lock's), over which tests/task.sh runs munit's
-# suites.
+# suites; and the Scala.js test frameworks' jars of tests/task.sh's export of tests/scalajs-test (munit 1.3.4 and
+# 1.2.1, scalatest 3.2.20's modules, utest, the zio runtime's), which it reads from the coursier cache.
 maven_extras() {
   printf '%s\n' \
     "$M2/com/lihaoyi/sourcecode_3/0.4.2/sourcecode_3-0.4.2-sources.jar" \
@@ -751,7 +768,28 @@ maven_extras() {
     "$M2/junit/junit/4.13.2/junit-4.13.2.jar" \
     "$M2/org/hamcrest/hamcrest-core/1.3/hamcrest-core-1.3.jar" \
     "$M2/org/scala-sbt/test-interface/1.0/test-interface-1.0.jar" \
-    "$M2/org/portable-scala/portable-scala-reflect_2.13/1.1.3/portable-scala-reflect_2.13-1.1.3.jar"
+    "$M2/org/portable-scala/portable-scala-reflect_2.13/1.1.3/portable-scala-reflect_2.13-1.1.3.jar" \
+    "$M2/org/scalameta/munit_sjs1_3/1.2.1/munit_sjs1_3-1.2.1.jar" \
+    "$M2/org/scalameta/munit-diff_sjs1_3/1.2.1/munit-diff_sjs1_3-1.2.1.jar" \
+    "$M2/org/scalatest/scalatest_sjs1_3/3.2.20/scalatest_sjs1_3-3.2.20.jar" \
+    "$M2/org/scalatest/scalatest-diagrams_sjs1_3/3.2.20/scalatest-diagrams_sjs1_3-3.2.20.jar" \
+    "$M2/org/scalatest/scalatest-featurespec_sjs1_3/3.2.20/scalatest-featurespec_sjs1_3-3.2.20.jar" \
+    "$M2/org/scalatest/scalatest-flatspec_sjs1_3/3.2.20/scalatest-flatspec_sjs1_3-3.2.20.jar" \
+    "$M2/org/scalatest/scalatest-freespec_sjs1_3/3.2.20/scalatest-freespec_sjs1_3-3.2.20.jar" \
+    "$M2/org/scalatest/scalatest-funspec_sjs1_3/3.2.20/scalatest-funspec_sjs1_3-3.2.20.jar" \
+    "$M2/org/scalatest/scalatest-funsuite_sjs1_3/3.2.20/scalatest-funsuite_sjs1_3-3.2.20.jar" \
+    "$M2/org/scalatest/scalatest-matchers-core_sjs1_3/3.2.20/scalatest-matchers-core_sjs1_3-3.2.20.jar" \
+    "$M2/org/scalatest/scalatest-mustmatchers_sjs1_3/3.2.20/scalatest-mustmatchers_sjs1_3-3.2.20.jar" \
+    "$M2/org/scalatest/scalatest-propspec_sjs1_3/3.2.20/scalatest-propspec_sjs1_3-3.2.20.jar" \
+    "$M2/org/scalatest/scalatest-refspec_sjs1_3/3.2.20/scalatest-refspec_sjs1_3-3.2.20.jar" \
+    "$M2/org/scalatest/scalatest-shouldmatchers_sjs1_3/3.2.20/scalatest-shouldmatchers_sjs1_3-3.2.20.jar" \
+    "$M2/org/scalatest/scalatest-wordspec_sjs1_3/3.2.20/scalatest-wordspec_sjs1_3-3.2.20.jar" \
+    "$M2/com/lihaoyi/utest_sjs1_3/0.9.1/utest_sjs1_3-0.9.1.jar" \
+    "$M2/com/lihaoyi/sourcecode_sjs1_3/0.4.3-M5/sourcecode_sjs1_3-0.4.3-M5.jar" \
+    "$M2/io/github/cquiroz/scala-java-time_sjs1_3/2.6.0/scala-java-time_sjs1_3-2.6.0.jar" \
+    "$M2/io/github/cquiroz/scala-java-time-tzdb_sjs1_3/2.6.0/scala-java-time-tzdb_sjs1_3-2.6.0.jar" \
+    "$M2/io/github/cquiroz/scala-java-locales_sjs1_3/1.5.4/scala-java-locales_sjs1_3-1.5.4.jar" \
+    "$M2/io/github/cquiroz/cldr-api_sjs1_3/4.5.0/cldr-api_sjs1_3-4.5.0.jar"
 }
 # The scala-library jar a JVM build links against when --classpath names none, for `run_jvm`: the newest 3.x
 # release of the coursier caches, found as the compiler's `classpath::find_scala_library` (src/classpath.rs) finds
@@ -793,16 +831,22 @@ PY
 # then node on the file with the program's arguments, their streams in that order (the raw `teq run`, retired
 # with the project verbs at the top level, printed the same stream); a build that fails keeps its exit code and
 # message, and node does not run. The build and the run are under one bound, as the raw run that did both was:
-# the timeout ends them, and whatever they started, at <seconds> (exit 124). Self-contained, so that it runs as
-# well in a shell it is exported to.
+# the timeout ends them, and whatever they started, at <seconds> (exit 124). With RUN_DIAGNOSTICS naming a file,
+# the build's streams go to that file instead, the compiler's diagnostics apart from the program's output (an
+# expectation that real Scala recorded is the program's stdout alone). Self-contained, so that it runs as well in
+# a shell it is exported to.
 run_js() {
   local seconds=$1
   shift
-  TEQ=$TEQ timeout "$seconds" bash -c 'out=$1 build=()
+  TEQ=$TEQ RUN_DIAGNOSTICS=${RUN_DIAGNOSTICS-} timeout "$seconds" bash -c 'out=$1 build=()
     shift
     while [ $# -gt 0 ] && [ "$1" != -- ]; do build+=("$1"); shift; done
     [ $# = 0 ] || shift
-    "$TEQ" compiler build "${build[@]}" -o "$out" && exec node "$out" "$@"' run_js "$@"
+    if [ -n "$RUN_DIAGNOSTICS" ]; then
+      "$TEQ" compiler build "${build[@]}" -o "$out" > "$RUN_DIAGNOSTICS" 2>&1
+    else
+      "$TEQ" compiler build "${build[@]}" -o "$out"
+    fi && exec node "$out" "$@"' run_js "$@"
 }
 # run_jvm <seconds> <jar or class directory> [<class path>] [--build <build arguments...>] [-- <program
 # arguments...>]: java on a JVM build's output as the raw `teq run --target jvm` started it: -Xss512m (the std's
@@ -810,8 +854,9 @@ run_js() {
 # with the scala-library jar the build linked against put first where they name none (as the compiler puts it on
 # its own class path, `scala_library_jar`, looked up before the bound), and TeqMain, the entry point of a build
 # without --all-mains. With --build, `teq compiler build <build arguments...> -o <out>` first, under the same one
-# bound (the build arguments give --target jvm), its failure keeping its exit code and message; without, the
-# output is built already and java alone has the bound.
+# bound (the build arguments give --target jvm), its failure keeping its exit code and message, its streams in the
+# file RUN_DIAGNOSTICS names where it names one (as `run_js`); without, the output is built already and java alone
+# has the bound.
 run_jvm() {
   local seconds=$1 out=$2 cp=
   shift 2
@@ -820,13 +865,17 @@ run_jvm() {
     shift
   fi
   case ":$cp:" in *"/scala-library-"*) ;; *) cp="$(scala_library_jar)${cp:+:$cp}" ;; esac
-  TEQ=$TEQ timeout "$seconds" bash -c 'out=$1 cp=$2
+  TEQ=$TEQ RUN_DIAGNOSTICS=${RUN_DIAGNOSTICS-} timeout "$seconds" bash -c 'out=$1 cp=$2
     shift 2
     if [ "${1-}" = --build ]; then
       shift
       build=()
       while [ $# -gt 0 ] && [ "$1" != -- ]; do build+=("$1"); shift; done
-      "$TEQ" compiler build "${build[@]}" -o "$out" || exit
+      if [ -n "$RUN_DIAGNOSTICS" ]; then
+        "$TEQ" compiler build "${build[@]}" -o "$out" > "$RUN_DIAGNOSTICS" 2>&1 || exit
+      else
+        "$TEQ" compiler build "${build[@]}" -o "$out" || exit
+      fi
     fi
     [ $# = 0 ] || shift
     exec java -Xss512m -Xshare:auto -cp "$out:$cp" TeqMain "$@"' run_jvm "$out" "$cp" "$@"

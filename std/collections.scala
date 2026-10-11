@@ -732,6 +732,14 @@ extension [K: scala.reflect.ClassTag, V: scala.reflect.ClassTag](a: Array[(K, V)
   * without a copy (`xs.joined` for an `extension (xs: IterableOnce[A])`). */
 implicit def genericWrapArray[T](xs: Array[T]): ArraySeq[T] = ArraySeq.unsafeWrapArray(xs)
 
+/** scala-library's `Predef.copyArrayToImmutableIndexedSeq` (`LowPriorityImplicits2`): a copy of the array as an
+  * immutable `IndexedSeq`, `null` for `null`. Not implicit here: scala-library's `genericWrapArray` gives a mutable
+  * `ArraySeq`, so that this copy is its one conversion to an immutable `IndexedSeq`; the lean std's gives the
+  * immutable `ArraySeq` over the array itself, which a second conversion beside it would make ambiguous. */
+@deprecated("implicit conversions from Array to immutable.IndexedSeq are implemented by copying; use `toIndexedSeq` explicitly if you want to copy, or use the more efficient non-copying ArraySeq.unsafeWrapArray", since = "2.13.0")
+def copyArrayToImmutableIndexedSeq[T](xs: Array[T]): IndexedSeq[T] =
+  if xs eq null then null else xs.toIndexedSeq
+
 /** The array of `head` and of what `rest` holds. Where `rest` is written out, the compiler
   * puts the array literal of the elements in the place of the call. */
 @jvmEvidence

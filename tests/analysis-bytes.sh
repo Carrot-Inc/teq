@@ -3,13 +3,18 @@
 # the products of a build and the class files of a session are the same bytes with the request
 # and without it, and the graph and the dependencies are the same whatever the typer's threads
 # and a session's history.
-#   products  every module of every case of tests/modules (but misuse, and a case whose build
+#   products  every module of every case of tests/modules (but a case whose build
 #             tests/modules/deferred.txt defers, which has no products) and of tests/analysis/cases
 #             built into its products against the upstream products, without the request, with
 #             each version and with each under --threads 4: the class files, the .tasty files and
 #             the manifest are the same bytes, and the answers under four threads are the same
 #             as under one but for their phases' times (`ms`); the Scala.js module's check build (`teq compiler check --products`) the
 #             same with and without each version;
+#   refused   the b of a case with an expect-errors.txt, which misuses a's API by design
+#             (tests/modules.sh's diags, the case tests/analysis.sh leaves out): every one of
+#             those builds is refused, with the file's diagnostics and no products, and its answer
+#             is the failed answer of the version asked (`failed_answer`), the same under four
+#             threads as under one;
 #   session   three JVM sessions over a copy of tests/modules/basic/a, two with the request (one
 #             version each), taken through the same edits (a body, a signature, a type error, its
 #             fix, a file added and removed): after every build the class directories are the
@@ -30,7 +35,10 @@
 #             "The contract between the plugin and the compiler"), version 2 the graph; and so is
 #             each of the own directory's, an alias-only `$package` and an unlisted class file
 #             beside them; a `package object`'s members are the class `p.package`, their class
-#             files teq's `p.<File>$package`, and one with parents names no class twice.
+#             files teq's `p.<File>$package`, and one with parents names no class twice; what an
+#             inline method's body reads is its own class's dependencies, not those of a caller
+#             the file puts first, at one thread and at four (scalac's collector meets the body
+#             in its class's tree).
 # Needs scala-library's jar in the coursier cache (tests/support/jars.sh), without which it
 # counts as passed.
 cd "$(dirname "$0")/.."
@@ -65,7 +73,6 @@ failed_answer() {
 
 for d in tests/modules/*/ tests/analysis/cases/*/; do
   c=$(basename "$d")
-  [ "$c" = misuse ] && continue
   grep -q "^$c build " tests/modules/deferred.txt 2> /dev/null && continue
   modules=()
   for m in a b c main; do
@@ -87,6 +94,24 @@ for d in tests/modules/*/ tests/analysis/cases/*/; do
       "$TEQ" compiler build --target jvm --classpath "$plain_cp" --products "$work/$c/$v/$m" --sourceroot "$root" "${extra[@]}" "$src" > "$work/$c-$m-$v.json" 2> "$work/$c-$m-$v.err"
       echo $? > "$work/$c-$m-$v.exit"
     done
+    if [ "$m" = b ] && [ -f "$d/expect-errors.txt" ]; then
+      refused=0
+      for v in plain api threads deps deps4; do
+        [ "$(cat "$work/$c-$m-$v.exit")" = 1 ] || refused=1
+        cmp -s "$d/expect-errors.txt" "$work/$c-$m-$v.err" || refused=1
+        [ -e "$work/$c/$v/$m" ] && refused=1
+      done
+      check "$c/$m refused with and without the analysis" $refused
+      graph=0
+      failed_answer "$(cat "$work/$c-$m-api.json")" 2 || graph=1
+      same_answer "$work/$c-$m-api.json" "$work/$c-$m-threads.json" || graph=1
+      check "$c/$m failed answer of the graph under --threads 4" $graph
+      deps=0
+      failed_answer "$(cat "$work/$c-$m-deps.json")" 3 || deps=1
+      same_answer "$work/$c-$m-deps.json" "$work/$c-$m-deps4.json" || deps=1
+      check "$c/$m failed answer of the dependencies under --threads 4" $deps
+      continue
+    fi
     same=0
     for v in api threads deps deps4; do
       diff -r "$work/$c/plain/$m" "$work/$c/$v/$m" > /dev/null || same=1
@@ -252,6 +277,31 @@ done < "$work/deps-session.txt"
 echo "deps session: $(grep -c '^ok' "$work/deps-session.txt") of $(wc -l < "$work/deps-session.txt" | tr -d ' ') checks"
 
 # What the request is answered with.
+# An inline method's body checked where a caller before its class in the file first expands it: the
+# names it reads (`compiletime`) are its class's dependencies and not the caller's, as with the
+# caller after it, and at four threads as at one. The unit's last class, which a package-level
+# tree's records go to (`responsibleForImports`), is the same in both orders.
+io=$work/inline-order
+mkdir -p "$io/first" "$io/last"
+use='object Use:\n  val n: Int = Lib.answer\n'
+lib='object Lib:\n  inline def answer: Int = compiletime.constValue[42]\n'
+printf "package io\n\n$use\n${lib}\nclass Last\n" > "$io/first/A.scala"
+printf "package io\n\n$lib\n${use}\nclass Last\n" > "$io/last/A.scala"
+for v in first last first4; do
+  extra=()
+  [ $v = first4 ] && extra=(--threads 4)
+  dir=$io/${v%4}
+  "$TEQ" compiler build --target jvm --classpath "$SL" --products "$io/$v-out" --sourceroot "$dir" --analysis-version 3 "${extra[@]}" "$dir/A.scala" > "$io/$v.json" 2> /dev/null
+done
+python3 - "$io" << 'EOF' > /dev/null 2>&1
+import json, sys
+def deps(v):
+    a = json.load(open(sys.argv[1] + "/" + v + ".json"))
+    return {c: dict(d, binaries=sorted(b[1:] for b in d["binaries"])) for f in a["api"]["files"] for c, d in f["deps"].items()}
+first, last, first4 = deps("first"), deps("last"), deps("first4")
+sys.exit(0 if first == last == first4 and "compiletime" in first["io.Lib"]["names"] and "compiletime" not in first["io.Use"]["names"] else 1)
+EOF
+check "an inline method's body's names are its class's dependencies whatever calls it first" $?
 answer=$(printf 'quit\n' | timeout 60 "$TEQ" compiler watch --check --analysis-version 2 tests/modules/basic/a 2> /dev/null | head -1)
 python3 -c 'import json, sys; a = json.loads(sys.argv[1]); sys.exit(0 if a.get("ok") and a.get("analysisVersion") == 2 and sorted(f["file"] for f in a["api"]["files"]) == sorted(f["file"] for f in a["analysis"]) and a["analysis"] else 1)' "$answer" 2> /dev/null
 check "a check session without --own answers the graph of every file" $?

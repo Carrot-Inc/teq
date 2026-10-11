@@ -470,6 +470,11 @@ impl<'a> Worker<'a> {
             Some(c) => c.made.get(&file).map_or(0, |keys| keys.len()),
             None => usize::MAX,
         };
+        // What the body refers to is its own definition's, whichever typing asked for the check
+        // (an expansion in another class's body, the walk of the method's own class): scalac's
+        // collector meets the body in its class's tree (`ExtractDependencies`'
+        // `resolveDependencyFromClass`).
+        let recorded = self.deps_enter_sym(sym, super::deps::Comp::Body(sym));
         let ((body, ty, defaults), notes) = self.outside_search(|t| {
             t.outside_inline(|t| {
                 t.inline.checking += 1;
@@ -480,6 +485,7 @@ impl<'a> Worker<'a> {
                 (typed, notes)
             })
         });
+        self.deps_leave(recorded);
         self.case_binders = case_binders;
         if keeps_index {
             self.index_keep_body(sym, index_mark);
