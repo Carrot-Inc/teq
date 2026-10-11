@@ -1343,7 +1343,14 @@ impl<'a> Worker<'a> {
 
     fn member_callee(&mut self, recv: TExprId, recv_ty: TypeId, s: SymId) -> Callee {
         let name = self.syms.sym(s).name;
-        match self.find_member(recv_ty, name) {
+        // A member of `this` whose self type is an intersection carries the joint information
+        // the meet gives it, as a selection's does (`selection_member`).
+        let mut joint = None;
+        let found = self.find_member_joint(recv_ty, recv_ty, name, &mut joint);
+        if let (Some(info), Some((found, _))) = (joint, found) {
+            self.joint_sig = Some((Some(recv), found, info));
+        }
+        match found {
             Some((found, owner_ty)) => {
                 // What the lookup by type finds may be the settled entry of what the scope held.
                 let s = if self.syms.alternatives(found).is_some() { found } else { s };

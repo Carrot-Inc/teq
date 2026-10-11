@@ -132,3 +132,14 @@ object InlineCalls:
   def qualifiedSummon(using i: Int): Int = scala.Predef.summon[Int]
   def operator: Int = Transparent.`+!`(1)
   def renamedPlain: Int = { import Transparent.{other as plus}; plus(1) }
+trait Keyed[K]:
+  def get(k: K): Base
+  def held: K
+trait PickA:
+  def pick(x: List[Int]): Left
+trait PickB:
+  def pick(x: List[String]): Right
+object Instances:
+  def keyed(r: Keyed[Left] & Keyed[Right]): Int = r.get(new Left).value
+  def held(r: Keyed[Base] & Keyed[Left]): Int = r.held.value
+  def apart(x: PickA & PickB): Int = x.pick(List(1)).value

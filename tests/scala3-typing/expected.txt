@@ -1273,7 +1273,7 @@ neg/i7359-g.scala	same
 neg/i7359.scala	accepts	
 neg/i7387.scala	std	B
 neg/i739.scala	same	
-neg/i7425.scala	superset	+2 lines: class C inherits f as Int and as (): Int, which are both called f$0 in the JavaScript output, since no ancestor declares the two together; declare the alternatives in one trait
+neg/i7425.scala	same	
 neg/i7438.scala	syntax	expected {}, found {}
 neg/i7459.scala	same	
 neg/i7526.scala	same	
@@ -4268,7 +4268,7 @@ pos/i9515.scala	accepts
 pos/i9525	oos	java
 pos/i9529.scala	accepts	
 pos/i9530.scala	rejects	value {} is not a member of {}
-pos/i9531.scala	rejects	type mismatch
+pos/i9531.scala	accepts	
 pos/i9533.scala	accepts	
 pos/i9562.scala	accepts	
 pos/i9567.scala	accepts	

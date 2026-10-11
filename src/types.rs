@@ -914,6 +914,36 @@ impl TypeStore {
         }
     }
 
+    /// Whether `t` names one of the type parameters `tparams` anywhere in it, as `names_term`
+    /// asks of term parameters.
+    pub fn names_tparam(&self, t: TypeId, tparams: &[TParamId]) -> bool {
+        let list = |l: TList| self.items(l).iter().any(|&x| self.names_tparam(x, tparams));
+        match self.get(t) {
+            Type::Param(p) => tparams.contains(&p),
+            Type::AppParam(p, args) => tparams.contains(&p) || list(args),
+            Type::Member(p, _) => self.names_tparam(p, tparams),
+            Type::Nested(p, c) => self.names_tparam(p, tparams) || self.names_tparam(c, tparams),
+            Type::AppMember(m, args) => self.names_tparam(m, tparams) || list(args),
+            Type::Class(_, args) | Type::AppVar(_, args) | Type::Alias(_, args) => list(args),
+            Type::Lambda(ps, b) | Type::Poly(ps, b) => list(ps) || self.names_tparam(b, tparams),
+            Type::Union(a, b) | Type::Inter(a, b) | Type::BoundedWild(a, b) => self.names_tparam(a, tparams) || self.names_tparam(b, tparams),
+            Type::Refined(p, r) => {
+                self.names_tparam(p, tparams)
+                    || match self.refinement(r) {
+                        Refinement::Alias(_, x) => self.names_tparam(x, tparams),
+                        Refinement::Bounds(_, lo, hi) => self.names_tparam(lo, tparams) || self.names_tparam(hi, tparams),
+                        Refinement::Term(_, _, l) => list(l),
+                        Refinement::Val(_, _, x) => self.names_tparam(x, tparams),
+                    }
+            }
+            Type::Match(s, m) => {
+                let info = self.match_info(m);
+                self.names_tparam(s, tparams) || self.names_tparam(info.bound, tparams) || info.cases.iter().any(|c| self.names_tparam(c.pattern, tparams) || self.names_tparam(c.body, tparams))
+            }
+            _ => false,
+        }
+    }
+
     /// The class a class type, a class's `this` or a class through a prefix (`p.C`) names.
     #[inline]
     pub fn named_class(&self, t: TypeId) -> Option<ClassId> {

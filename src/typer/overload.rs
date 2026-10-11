@@ -30,6 +30,12 @@ pub(super) struct Alt {
     /// The joint information `sig` is, of an intersection's alternative met with its match
     /// (`subtype::intersection_denotations`), which its application types it by.
     pub info: super::subtype::JointInfo,
+    /// The place of an intersection's alternative among the denotations the meet made, the
+    /// order dotty lists them in (`MultiDenotation.alternatives`).
+    pub denoted: Option<u32>,
+    /// A refinement's alternative (`subtype::refinement_alternative`): its own information,
+    /// which a message shows, `sig` being the one every refinement's alternative of the set has.
+    pub refined: Option<Arc<MethodSig>>,
 }
 
 fn overload_outcome(choice: &Result<usize, Failure>) -> Outcome {
@@ -78,6 +84,11 @@ struct ArgShape {
 struct ListInfo {
     shapes: Vec<ArgShape>,
     types: Vec<Option<TypeId>>,
+    /// The literal type of an argument that is a literal typed without an expected type, whose
+    /// type teq widens where dotty's typer keeps its `ConstantType`: what a parameter that takes
+    /// the literal and not its class is applicable to (`f(k: "k")` beside `f(k: "v")`). Empty
+    /// where no argument is such a literal.
+    literals: Vec<Option<TypeId>>,
     /// The function literals that were typed with the parameter types the candidates agree on,
     /// each with its type and the type of its result.
     lambdas: Vec<Option<(TExprId, TypeId, TypeId)>>,
@@ -1567,8 +1578,10 @@ impl<'a> Worker<'a> {
     // ---- resolution ----
 
     fn alternatives_of(&mut self, set: SymId, recv_ty: Option<TypeId>, ctor: Option<ClassId>) -> Vec<Alt> {
-        // On an intersection the parts' alternatives met (dotty's `Denotation.meet`): each with
-        // the owner's instance it is seen as and the information it carries.
+        // On an intersection the parts' alternatives met (dotty's `Denotation.meet`): each a
+        // denotation of its own, with the owner's instance it is seen as and the information it
+        // carries (`Typer.adaptOverloaded`'s reference per alternative denotation), one symbol
+        // standing for one alternative at most.
         let denoted = match (recv_ty, ctor) {
             (Some(rt), None) => {
                 let name = self.syms.sym(set).name;
@@ -1576,49 +1589,61 @@ impl<'a> Worker<'a> {
             }
             _ => None,
         };
-        let syms: Vec<SymId> = match (&denoted, self.syms.alternatives(set)) {
-            (Some(d), _) => d.iter().map(|&((s, _), _)| s).collect(),
-            (None, Some(alts)) => alts.to_vec(),
-            (None, None) => vec![set],
+        let from_meet = denoted.is_some();
+        let mut denots: Vec<super::subtype::Denot> = match (denoted, self.syms.alternatives(set)) {
+            (Some(d), _) => d,
+            (None, alts) => {
+                let syms = alts.map_or_else(|| vec![set], |a| a.to_vec());
+                syms.into_iter()
+                    .map(|sym| {
+                        let owner_ty = match (recv_ty, self.syms.sym(sym).owner) {
+                            (Some(rt), Owner::Class(oc)) => self.base_type(rt, oc),
+                            _ => None,
+                        };
+                        ((sym, owner_ty.unwrap_or(NOTHING)), None)
+                    })
+                    .collect()
+            }
         };
         // An alternative the call site cannot access is no candidate: zio's `protected
         // someOrElse[B]`, kept for binary compatibility beside the public one.
         let restricted = crate::ast::mods::PRIVATE | crate::ast::mods::PROTECTED;
-        let syms = if syms.iter().any(|&s| self.syms.sym(s).mods & restricted != 0) {
-            let accessible: Vec<SymId> = syms.iter().copied().filter(|&s| self.is_given_accessible(s)).collect();
-            if accessible.is_empty() { syms } else { accessible }
-        } else {
-            syms
-        };
+        if denots.iter().any(|((s, _), _)| self.syms.sym(*s).mods & restricted != 0) {
+            let accessible: Vec<_> = denots.iter().filter(|((s, _), _)| self.is_given_accessible(*s)).cloned().collect();
+            if !accessible.is_empty() {
+                denots = accessible;
+            }
+        }
         // One of a jar that is `private[p]` or `protected[p]` is none outside `p` (http4s's
         // deprecated `private[client] def translate` beside the public one), a protected one
         // apart from subclasses.
         let qualified = |t: &Self, s: SymId| t.syms.sym(s).mods & crate::ast::mods::QUALIFIED != 0;
-        let syms = if syms.iter().any(|&s| qualified(self, s)) {
-            let accessible: Vec<SymId> = syms.iter().copied().filter(|&s| self.qualified_reachable(s)).collect();
-            if accessible.is_empty() { syms } else { accessible }
-        } else {
-            syms
-        };
-        let mut alts: Vec<Alt> = syms
+        if denots.iter().any(|((s, _), _)| qualified(self, *s)) {
+            let accessible: Vec<_> = denots.iter().filter(|((s, _), _)| self.qualified_reachable(*s)).cloned().collect();
+            if !accessible.is_empty() {
+                denots = accessible;
+            }
+        }
+        // The alternatives without a symbol, a refinement's, are one reference, whose
+        // information is the last's (dotty's `designatorFor` names such a reference by its name
+        // alone, and each `TermRef(prefix, name, alt)` of `adaptOverloaded` sets that one's
+        // denotation): `"z"` is ambiguous among three refinements, each taking it.
+        let refined: Vec<bool> = if from_meet { denots.iter().map(|d| self.is_refinement_denot(d)).collect() } else { Vec::new() };
+        let shared = denots.iter().zip(&refined).filter(|(_, &r)| r).last().and_then(|(d, _)| d.1.clone());
+        let mut alts: Vec<Alt> = denots
             .into_iter()
-            .map(|sym| {
-                if let Some(((_, owner_ty), info)) = denoted.as_ref().and_then(|d| d.iter().find(|((s, _), _)| *s == sym)).cloned() {
-                    let owner_subst = self.owner_subst(owner_ty);
-                    let sig = match &info {
-                        Some(i) => i.clone(),
-                        None => self.sig_arc(sym),
-                    };
-                    return Alt { sym, sig, owner_subst, ctor: None, info };
+            .enumerate()
+            .map(|(k, ((sym, owner_ty), info))| {
+                let owner_subst = if owner_ty == NOTHING { Vec::new() } else { self.owner_subst(owner_ty) };
+                if refined.get(k) == Some(&true) {
+                    let sig = shared.clone().unwrap_or_else(|| self.sig_arc(sym));
+                    return Alt { sym, sig: sig.clone(), owner_subst, ctor: None, info: Some(sig), denoted: from_meet.then_some(k as u32), refined: info };
                 }
-                let owner_subst = match (recv_ty, self.syms.sym(sym).owner) {
-                    (Some(rt), Owner::Class(oc)) => match self.base_type(rt, oc) {
-                        Some(bt) => self.owner_subst(bt),
-                        None => Vec::new(),
-                    },
-                    _ => Vec::new(),
+                let sig = match &info {
+                    Some(i) => i.clone(),
+                    None => self.sig_arc(sym),
                 };
-                Alt { sym, sig: self.sig_arc(sym), owner_subst, ctor: None, info: None }
+                Alt { sym, sig, owner_subst, ctor: None, info, denoted: from_meet.then_some(k as u32), refined: None }
             })
             .collect();
         if let Some(c) = ctor {
@@ -1643,7 +1668,7 @@ impl<'a> Worker<'a> {
                 }
             }
             if !replaced {
-                alts.push(Alt { sym: set, sig, owner_subst: Vec::new(), ctor: Some(c), info: None });
+                alts.push(Alt { sym: set, sig, owner_subst: Vec::new(), ctor: Some(c), info: None, denoted: None, refined: None });
             }
         }
         alts
@@ -1779,6 +1804,7 @@ impl<'a> Worker<'a> {
         let result = match choice {
             Ok(i) => {
                 let alt = &alts[i];
+                self.pass_typed_literals(alt, targs, &mut lists, &infos);
                 let retyped = self.pass_typed_lambdas(alt, &mut lists, &infos);
                 let r = match alt.ctor {
                     Some(c) => self.apply_companion_apply(c, targs, lists, span, expected),
@@ -1870,10 +1896,10 @@ impl<'a> Worker<'a> {
         let first_var = self.tvars.len();
         let mut alts: Vec<Alt> = Vec::new();
         if let Some((sym, sig)) = &primary {
-            alts.push(Alt { sym: *sym, sig: sig.clone(), owner_subst: Vec::new(), ctor: Some(c), info: None });
+            alts.push(Alt { sym: *sym, sig: sig.clone(), owner_subst: Vec::new(), ctor: Some(c), info: None, denoted: None, refined: None });
         }
         for (s, sig) in secondaries {
-            alts.push(Alt { sym: s, sig, owner_subst: Vec::new(), ctor: None, info: None });
+            alts.push(Alt { sym: s, sig, owner_subst: Vec::new(), ctor: None, info: None, denoted: None, refined: None });
         }
         let mut lists = lists;
         let mut infos: Vec<Option<ListInfo>> = Vec::new();
@@ -1886,6 +1912,7 @@ impl<'a> Worker<'a> {
         let result = match choice {
             Ok(i) => {
                 let alt = &alts[i];
+                self.pass_typed_literals(alt, targs, &mut lists, &infos);
                 let retyped = self.pass_typed_lambdas(alt, &mut lists, &infos);
                 let r = match alt.ctor {
                     Some(_) => {
@@ -1951,7 +1978,7 @@ impl<'a> Worker<'a> {
         }
         let alts: Vec<Alt> = distinct
             .iter()
-            .map(|&(sym, bt)| Alt { sym, sig: self.sig_arc(sym), owner_subst: self.owner_subst(bt), ctor: None, info: None })
+            .map(|&(sym, bt)| Alt { sym, sig: self.sig_arc(sym), owner_subst: self.owner_subst(bt), ctor: None, info: None, denoted: None, refined: None })
             .collect();
         let mut infos = Vec::new();
         match self.resolve_overloaded(&alts, targs, lists, &mut infos, expected, false, false) {
@@ -1982,7 +2009,7 @@ impl<'a> Worker<'a> {
             .map(|&s| {
                 let sig = self.sig_arc(s);
                 let sig = if self.member_of_inner_class(s) { self.sig_seen_from_enclosing(sig) } else { sig };
-                Alt { sym: s, sig, owner_subst: owner_subst.clone(), ctor: None, info: None }
+                Alt { sym: s, sig, owner_subst: owner_subst.clone(), ctor: None, info: None, denoted: None, refined: None }
             })
             .collect();
         let mut synthetic_at = None;
@@ -1996,7 +2023,7 @@ impl<'a> Worker<'a> {
             let own = self.syms.sym(sym).owner;
             let at = alts.iter().rposition(|a| self.syms.sym(a.sym).owner == own).map_or(0, |i| i + 1);
             synthetic_at = Some(at);
-            alts.insert(at, Alt { sym, sig, owner_subst: Vec::new(), ctor: None, info: None });
+            alts.insert(at, Alt { sym, sig, owner_subst: Vec::new(), ctor: None, info: None, denoted: None, refined: None });
         }
         let choose = |i: usize| if Some(i) == synthetic_at { Unapply::Synthetic } else { Unapply::Method(alts[i].sym) };
         if alts.len() == 1 {
@@ -2099,7 +2126,7 @@ impl<'a> Worker<'a> {
         let alts: Vec<SymId> = self.syms.alternatives(s).map_or_else(|| vec![s], |a| a.to_vec());
         let (_, sig) = self.synthetic_unapply(c);
         alts.into_iter().find(|&m| {
-            let alt = Alt { sym: m, sig: self.sig_arc(m), owner_subst: Vec::new(), ctor: None, info: None };
+            let alt = Alt { sym: m, sig: self.sig_arc(m), owner_subst: Vec::new(), ctor: None, info: None, denoted: None, refined: None };
             self.syms.sym(m).owner == Owner::Class(companion) && self.matches_loosely(&alt, &sig)
         })
     }
@@ -2133,7 +2160,7 @@ impl<'a> Worker<'a> {
         }
         let (_, sig) = self.synthetic_unapply(c);
         Some(candidates.into_iter().any(|(m, owner_subst)| {
-            let alt = Alt { sym: m, sig: self.sig_arc(m), owner_subst, ctor: None, info: None };
+            let alt = Alt { sym: m, sig: self.sig_arc(m), owner_subst, ctor: None, info: None, denoted: None, refined: None };
             self.matches_loosely(&alt, &sig)
         }))
     }
@@ -2191,7 +2218,7 @@ impl<'a> Worker<'a> {
     ) -> Result<usize, String> {
         let alts: Vec<Alt> = calls
             .iter()
-            .map(|call| Alt { sym: call.sym, sig: self.sig_arc(call.sym), owner_subst: call.owner_subst.clone(), ctor: None, info: None })
+            .map(|call| Alt { sym: call.sym, sig: self.sig_arc(call.sym), owner_subst: call.owner_subst.clone(), ctor: None, info: None, denoted: None, refined: None })
             .collect();
         let span = lists.first().map_or(Span::default(), |l| l.span);
         lists.insert(0, ArgList { args: vec![ArgSrc::Typed(recv, recv_ty)], using: false, span });
@@ -2321,7 +2348,7 @@ impl<'a> Worker<'a> {
                     (Some(_), false) => self.kept_from_partial(alts, &cands, &fitting, k, &shapes),
                     _ => Vec::new(),
                 };
-                infos[li] = Some(ListInfo { types: vec![None; shapes.len()], lambdas: vec![None; shapes.len()], shapes, function_names: Vec::new() });
+                infos[li] = Some(ListInfo { types: vec![None; shapes.len()], literals: Vec::new(), lambdas: vec![None; shapes.len()], shapes, function_names: Vec::new() });
                 return match fitting.first() {
                     Some(&i) if kept.is_empty() => Ok(i),
                     Some(&i) => {
@@ -2385,7 +2412,7 @@ impl<'a> Worker<'a> {
                 return Ok(self.adapt_by_result(alts, best[0], &pool, &explicit, explicit_lists.len(), expected));
             }
             if k + 1 == explicit_lists.len() {
-                return self.break_tie(alts, best, &applicable, explicit_lists.len());
+                return self.break_tie(alts, best, &applicable, &explicit, &upto, expected);
             }
         }
         unreachable!()
@@ -2403,8 +2430,16 @@ impl<'a> Worker<'a> {
     }
 
     /// What dotc falls back on between alternatives of which none is most specific: those
-    /// whose result takes no further arguments, then those that declare no default arguments.
-    fn break_tie(&mut self, alts: &[Alt], best: Vec<usize>, applicable: &[usize], applied: usize) -> Result<usize, Failure> {
+    /// whose result takes no further arguments, then those that declare no default arguments,
+    /// then the resolution again with the expected type's result kept (`resolveOverloaded1`'s
+    /// `deepPt`, Applications.scala 2762, the first having ignored it, `IgnoredProto`): of those
+    /// the last list's arguments still apply to with their result conforming to it, under the
+    /// constraints those arguments put on the type parameters (`f[T](a: A[T]): T` takes an
+    /// `AB <: A[Int]` as an `Int`), the most specific; none of them being none applicable. An
+    /// earlier list constrains nothing there: dotty resolves a later list on the alternatives
+    /// mapped past the earlier ones (`resolveMapped`, `skipParamClause`'s `instantiate`).
+    fn break_tie(&mut self, alts: &[Alt], best: Vec<usize>, applicable: &[usize], explicit: &[TypeId], lists: &[&ListInfo], expected: Option<TypeId>) -> Result<usize, Failure> {
+        let applied = lists.len();
         let uncurried: Vec<usize> =
             applicable.iter().copied().filter(|&i| alts[i].explicit_clauses().count() <= applied).collect();
         if let [one] = uncurried.as_slice() {
@@ -2414,7 +2449,32 @@ impl<'a> Worker<'a> {
         if let [one] = no_defaults.as_slice() {
             return Ok(*one);
         }
-        Err(Failure::Ambiguous(best))
+        let Some(exp) = self.concrete_expected(expected).filter(|&t| t != ANY && t != self.b.t_unit) else {
+            return Err(Failure::Ambiguous(best));
+        };
+        let conforming: Vec<usize> = applicable
+            .iter()
+            .copied()
+            .filter(|&i| {
+                let mark = self.snapshot();
+                let subst = self.alt_subst(&alts[i], explicit);
+                let ok = self.is_applicable_in(&alts[i], &subst, lists, applied - 1) && {
+                    let value = self.value_type(&alts[i], &subst, applied);
+                    self.is_compatible(value, exp)
+                };
+                self.rollback(mark);
+                ok
+            })
+            .collect();
+        if conforming.is_empty() {
+            return Err(Failure::NoneApplicable);
+        }
+        // Compared by the list being resolved, as dotty's retry resolves the problem mapped to it
+        // (`resolveMapped` of each further clause).
+        match self.narrow_most_specific(alts, conforming, explicit, Some(applied - 1)).as_slice() {
+            [one] => Ok(*one),
+            best => Err(Failure::Ambiguous(best.to_vec())),
+        }
     }
 
     /// Several arguments for the one parameter of an alternative are passed as a tuple, when
@@ -2736,6 +2796,7 @@ impl<'a> Worker<'a> {
         let mappings: Vec<Option<Mapping>> =
             cands.iter().map(|&i| alts[i].clause(k).and_then(|cl| Self::map_args(cl, &shapes))).collect();
         let mut types = vec![None; shapes.len()];
+        let mut literals: Vec<Option<TypeId>> = Vec::new();
         let mut lambdas = vec![None; shapes.len()];
         let mut function_names = Vec::new();
         for j in 0..shapes.len() {
@@ -2858,12 +2919,29 @@ impl<'a> Worker<'a> {
             // Against an open variable an argument keeps the type arguments open that nothing
             // in it settles, for the parameter of the chosen alternative to settle; that takes an
             // application which solves them afterwards.
+            let agreed = common.is_some();
             let expected = match common {
                 Some((t, _)) => Some(t),
                 None if open => Some(self.fresh_var()),
                 None => None,
             };
             let (te, ty) = self.type_expr(value, expected);
+            // A literal written as the argument is of its literal type too (dotty's
+            // `ConstantType`, which teq's typing without an expected type widens): what the
+            // applicability test and the chosen alternative take where a parameter takes the
+            // literal and not its class (`f("k")` beside `f(k: "k")` and `f(k: "v")`,
+            // `pass_typed_literals`). A constant an expansion folded is no literal (`(1: Any)` of a
+            // transparent method stays `Any`).
+            let written = matches!(self.cur_ast().expr(value), Expr::IntLit(_) | Expr::LongLit(_) | Expr::DoubleLit(_) | Expr::BoolLit(_) | Expr::CharLit(_) | Expr::StringLit(_));
+            if !agreed && written {
+                if let Some(v) = self.fold_constant(te) {
+                    let lit = self.types.lit(v);
+                    if lit != ty {
+                        literals.resize(shapes.len(), None);
+                        literals[j] = Some(lit);
+                    }
+                }
+            }
             if !takers.is_empty() {
                 function_names.extend(names.iter().map(|&n| (n, te, takers.clone())));
             }
@@ -2886,7 +2964,7 @@ impl<'a> Worker<'a> {
             // declared type, as scalac chose among them at the definition.
             types[j] = Some(self.proxy_declared(te).unwrap_or(ty));
         }
-        ListInfo { shapes, types, lambdas, function_names }
+        ListInfo { shapes, types, literals, lambdas, function_names }
     }
 
     /// A function literal that was typed ahead goes to the chosen alternative as it is, as
@@ -2895,6 +2973,55 @@ impl<'a> Worker<'a> {
     /// `{ case ... }` and meets a partial function is typed again, what its first typing reported
     /// not reported twice and its matches checked as the second typing has them
     /// (`quiet_repeated_matches`; a trait taking it is never typed ahead, `as_function`).
+    /// A literal argument typed ahead (`ListInfo::literals`) goes to the chosen alternative at its
+    /// literal type where the parameter takes that and not the literal's class, as dotty's cached
+    /// argument is of its `ConstantType` (`f[T <: Singleton](x: T)` beside `f[T](x: T)` takes
+    /// `1` as `1`); elsewhere at the widened type it was typed at.
+    fn pass_typed_literals(&mut self, alt: &Alt, targs: Option<ListRef>, lists: &mut [ArgList], infos: &[Option<ListInfo>]) {
+        if infos.iter().flatten().all(|i| i.literals.is_empty()) {
+            return;
+        }
+        // The type arguments written, resolved again apart from the typing that reports them.
+        let explicit: Vec<TypeId> = match targs {
+            Some(l) => {
+                let mark = self.attempt();
+                let ids = self.cur_ast().ty_list(l).to_vec();
+                let explicit = ids.iter().map(|&t| self.resolve_type_ctor(t)).collect();
+                self.retract(mark);
+                explicit
+            }
+            None => Vec::new(),
+        };
+        let explicit_lists: Vec<usize> = (0..lists.len()).filter(|&i| !lists[i].using).collect();
+        for (k, &li) in explicit_lists.iter().enumerate() {
+            let Some(info) = infos.get(li).and_then(|i| i.as_ref()) else { continue };
+            if info.literals.is_empty() {
+                continue;
+            }
+            let Some(clause) = alt.clause(k) else { continue };
+            let Some(mapping) = Self::map_args(clause, &info.shapes) else { continue };
+            for (j, lit) in info.literals.iter().enumerate() {
+                let Some(lit) = *lit else { continue };
+                let (te, ty) = match lists[li].args[j] {
+                    ArgSrc::Typed(te, ty) | ArgSrc::Named(_, te, ty) => (te, ty),
+                    _ => continue,
+                };
+                let declared = clause.params[mapping.param(j)].ty;
+                let mark = self.snapshot();
+                let subst = self.alt_subst(alt, &explicit);
+                let pty = self.types.subst(declared, &subst);
+                let takes_literal = !self.is_compatible(ty, pty) && self.is_compatible(lit, pty);
+                self.rollback(mark);
+                if takes_literal {
+                    lists[li].args[j] = match info.shapes[j].name {
+                        Some(name) => ArgSrc::Named(name, te, lit),
+                        None => ArgSrc::Typed(te, lit),
+                    };
+                }
+            }
+        }
+    }
+
     fn pass_typed_lambdas(&mut self, alt: &Alt, lists: &mut [ArgList], infos: &[Option<ListInfo>]) -> bool {
         let mut retyped = false;
         let explicit_lists: Vec<usize> = (0..lists.len()).filter(|&i| !lists[i].using).collect();
@@ -2955,13 +3082,19 @@ impl<'a> Worker<'a> {
     /// parameters of `alt`. Leaves its constraints for the caller to roll back.
     fn is_applicable(&mut self, alt: &Alt, explicit: &[TypeId], lists: &[&ListInfo]) -> bool {
         let subst = self.alt_subst(alt, explicit);
-        for (k, info) in lists.iter().enumerate() {
+        self.is_applicable_in(alt, &subst, lists, 0)
+    }
+
+    /// `is_applicable` under the substitution `subst` of `alt`'s type parameters, whose variables
+    /// the arguments constrain for the caller to read on, from the list `from` on.
+    fn is_applicable_in(&mut self, alt: &Alt, subst: &Subst, lists: &[&ListInfo], from: usize) -> bool {
+        for (k, info) in lists.iter().enumerate().skip(from) {
             let Some(clause) = alt.clause(k) else {
                 // `x.toString()` next to `toString(radix)`: the empty parentheses of Java.
                 if k == 0 && info.shapes.is_empty() && self.takes_java_parens(alt.sym) {
                     return true;
                 }
-                return k == 0 && self.function_result_takes(alt, &subst, info);
+                return k == 0 && self.function_result_takes(alt, subst, info);
             };
             let Some(mapping) = Self::map_args(clause, &info.shapes) else { return false };
             for j in 0..info.shapes.len() {
@@ -2970,7 +3103,7 @@ impl<'a> Worker<'a> {
                 // are not widened one by one.
                 if info.shapes[j].shape == Shape::Splice {
                     let Some(ty) = info.types[j] else { continue };
-                    let elem = self.types.subst(declared, &subst);
+                    let elem = self.types.subst(declared, subst);
                     let Some(seq) = self.seq_class() else { continue };
                     let wanted = self.types.class(seq, &[elem]);
                     let mark = self.snapshot();
@@ -2984,7 +3117,7 @@ impl<'a> Worker<'a> {
                 if !self.view_compat && info.types[j].map_or(false, |ty| self.class_rules_out(ty, declared)) {
                     return false;
                 }
-                let pty = self.types.subst(declared, &subst);
+                let pty = self.types.subst(declared, subst);
                 if let Some((_, _, result)) = info.lambdas[j] {
                     let wanted = match self.as_partial_function(pty) {
                         Some((_, r)) => Some(r),
@@ -2995,7 +3128,7 @@ impl<'a> Worker<'a> {
                     }
                 }
                 let Some(ty) = info.types[j] else { continue };
-                if !self.is_compatible(ty, pty) {
+                if !self.is_compatible(ty, pty) && !info.literals.get(j).copied().flatten().map_or(false, |lit| self.is_compatible(lit, pty)) {
                     return false;
                 }
             }
@@ -3313,20 +3446,35 @@ impl<'a> Worker<'a> {
             Failure::NoneApplicable => "None of the overloaded alternatives of ".to_string(),
             Failure::Ambiguous(_) => "Ambiguous overload. The overloaded alternatives of ".to_string(),
         };
-        let first = alts.first().map_or(set, |a| a.sym);
-        out.push_str(&self.method_description_of(first));
-        out.push_str(" with types");
         // The class's own declarations, latest first, then what it inherits, as dotty's member
         // lookup lists them; the class's is the first alternative's owner.
+        let first = alts.first().map_or(set, |a| a.sym);
         let own = self.syms.sym(first).owner;
         let mut sorted = listed.clone();
-        sorted.sort_by_key(|&i| {
-            let s = self.syms.sym(alts[i].sym);
-            std::cmp::Reverse((alts[i].ctor.is_none(), s.owner == own, s.span.start))
-        });
+        // An intersection's alternatives in the order its meet made them.
+        if sorted.iter().all(|&i| alts[i].denoted.is_some()) {
+            sorted.sort_by_key(|&i| alts[i].denoted);
+        } else {
+            sorted.sort_by_key(|&i| {
+                let s = self.syms.sym(alts[i].sym);
+                std::cmp::Reverse((alts[i].ctor.is_none(), s.owner == own, s.span.start))
+            });
+        }
+        // A refinement's alternative has no symbol to describe: dotty describes its information.
+        let shown = |a: &Alt| a.refined.clone().unwrap_or_else(|| a.sig.clone());
+        match sorted.first().map(|&i| &alts[i]).filter(|a| a.refined.is_some()) {
+            Some(a) => {
+                let sig = shown(a);
+                out.push_str(&format!("method {}", self.sig_text(&sig)));
+            }
+            None => out.push_str(&self.method_description_of(first)),
+        }
+        out.push_str(" with types");
+        let refinements = sorted.iter().any(|&i| alts[i].refined.is_some());
         for i in sorted {
             out.push_str("\n ");
-            out.push_str(&self.sig_text(&alts[i].sig));
+            let sig = shown(&alts[i]);
+            out.push_str(&self.sig_text(&sig));
         }
         out.push('\n');
         out.push_str(match failure {
@@ -3359,6 +3507,9 @@ impl<'a> Worker<'a> {
                 };
                 out.push_str(&format!("expected type {}", exp));
             }
+        }
+        if refinements && matches!(failure, Failure::Ambiguous(_)) {
+            out.push_str("\n\nNote: Overloaded definitions introduced by refinements cannot be resolved");
         }
         out
     }

@@ -4,7 +4,8 @@
 built from these sources with scala-cli 1.17.1 and Scala 3.8.4, `libb` against `liba` 1.0, so that
 the scenario's documents hold a reference to another jar (`B extends A`), a renamed import, a named
 argument, `this` and `super`, locals and parameters, a type lambda, a refinement, an inline method
-and a context bound, the joins and intersections the members are selected through, an opaque type bounded
+and a context bound, the joins and intersections the members are selected through (one member through two
+instances of its class, two members an intersection keeps apart), an opaque type bounded
 by an intersection, local traits' intersection, a member of `Any`, an inline `summon`, constructors whose type arguments
 the call infers, and inline calls and plain ones that an import renames, a qualified path or a
 backquoted operator spells (`Cases.scala`),

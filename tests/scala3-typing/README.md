@@ -59,6 +59,21 @@ conforming prefix (`TypeComparer.compareNamed`, `X$ <:< X.type`):
   `qctx.tasty.Tree`); what remains is `quotes.reflect.Tree` through two paths in `i14783` and
   `given QC()` of a trait in `i8623`.
 
+## An intersection's members met as dotty's `findMember` and `mergeSingleDenot` (2026-10-10)
+
+`neg/i7425` moved from `superset` to `same`: `C & D` with `C.f: Int` and `D.f(): Int` keeps the two
+members apart (dotty's `MultiDenotation`, a value-like method against one of an empty clause), and the
+set that stands for them is a view no class owns, so the naming pass no longer takes `C.f` and `D.f` for
+alternatives of `C` and reports their JavaScript names (`f$0`); the lines left are scalac's own.
+
+`pos/i9531` moved from `rejects` to `accepts`: a literal argument is of its literal type to overload
+resolution (dotty's `ConstantType`), so `exprQuote[T <: Singleton](x: T)` applies to `1` beside
+`exprQuote[T](x: T)(using s, dummy: Null = null)`, is the more specific, and infers `T` as `1`.
+
+`neg/i8736` stays `superset`, for the lines its `{}` type adds; the three calls' diagnostics are
+asserted as scalac's (two `Any` results refused, one ambiguity among the refinements) by
+`tests/errors/intersection_member_i8736.scala`.
+
 ## A member's retry types again what its application did not cache (2026-10-09)
 
 `pos/i18645` moved from `rejects` to `accepts`: `x.pprint(() => ( 234 ))` fails against the member's

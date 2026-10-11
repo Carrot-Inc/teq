@@ -1416,6 +1416,11 @@ async function completionCases() {
     ["an extension of a generic given", "class A\ntrait Ops[T] { extension (a: T) def found: Int = 1 }\nobject Test { given ops[T]: Ops[T] = new Ops[T] {}; val x = (new A).fou|nd }", ["found"], []],
     ["an inherited extension through the companion whose substitution takes it", "trait Base\nclass A extends Base\ntrait Ext[T] { extension (t: T) def found: Int = 1 }\nobject A extends Ext[String]\nobject Base extends Ext[A]\nobject Test { val x = (new A).fou|nd }", ["found"], []],
     ["an inherited extension's signature at its site", "class A\ntrait Ext[T] { extension (t: T) def found: T = t }\nobject A extends Ext[A]\nobject Test { val x = (new A).fou|nd }", ["found"], [], (items) => items.some((i) => i.label === "found" && i.detail === "(t: A): A")],
+    // An intersection's members as dotty's `findMember` meets them: one symbol through two
+    // instances of its class one member seen from the whole receiver, two members whose
+    // informations do not meet an item each.
+    ["one member through two instances of its class, one item seen from the whole receiver", "trait R[K <: String] { def get(k: K): Any }\nobject Test { def r: R[\"k\"] & R[\"v\"] = ???; val x = r.ge|t(\"v\") }", ["get"], [], (items) => same(items.filter((i) => i.label === "get").map((i) => i.detail), ["(k: \"k\" | \"v\"): Any"])],
+    ["two members an intersection keeps apart, an item each", "trait A { def f(x: List[Int]): Any }\ntrait B { def f(x: List[String]): Any }\nobject Test { def ab: A & B = ???; val x = ab.f|(List(1)) }", ["f"], [], (items) => same(items.filter((i) => i.label === "f").map((i) => i.detail).sort(), ["(x: List[Int]): Any", "(x: List[String]): Any"])],
     ["a type through a stable value's member", "class Inner { class Found }\nclass Outer { val inner = new Inner }\nobject Test { val o = new Outer; val x: o.inner.Fou|nd = ??? }", ["Found"], []],
     ["a private class and alias of a qualified type left out", "object Lib { private class Hidden; class Shown }\nclass Lib2 { private type Hidden2 = Int }\nobject Test { val x: Lib.|Shown = ???; val lib = new Lib2; val y: lib.Hid|den2 = ??? }", ["Shown"], ["Hidden", "Hidden2"]],
     ["a default argument sees the clauses before its own", "object Test { def f(first: Int, second: Int = fir|st)(third: Int = sec|ond): Int = second }", ["second"], ["first"]],
@@ -1577,6 +1582,10 @@ async function signatureCases() {
     ["a constructed instance's apply at the inferred type arguments", "class C[T](x: T) { def apply(y: T): T = y }\nobject A { val r = new C(1)(|2) }", [["apply(y: Int): Int", "y: Int"]]],
     ["a parent's constructor in `extends`", "class Parent(x: Int, y: String)\nclass Child extends Parent(1, |\"a\")", [["Parent(x: Int, y: String)", "y: String"]]],
     ["a generic case class pattern, its fields at the scrutinee's type", "case class Pair[T](x: T, y: Int)\nobject A { def f(p: Pair[String]) = p match { case Pair(a, |b) => a } }", [["Pair(x: String, y: Int)", "y: Int"]]],
+    // An intersection's member: one symbol through two instances of its class one signature seen
+    // from the whole receiver; two members kept apart both, the one the build chose active.
+    ["one member through two instances of its class, seen from the whole receiver", "trait R[K <: String] { def get(k: K): Any }\nobject A { def r: R[\"k\"] & R[\"v\"] = ???; val x = r.get(|\"v\") }", [["get(k: \"k\" | \"v\"): Any", "k: \"k\" | \"v\""]]],
+    ["two members an intersection keeps apart, the build's choice active", "trait P { def f(x: List[Int]): Any }\ntrait Q { def f(x: List[String]): Any }\nobject A { def pq: P & Q = ???; val x = pq.f(|List(1)) }", [["f(x: List[Int]): Any", "x: List[Int]", 2]]],
   ]
   let k = 0
   for (const [name, marked, wanted] of cases) {
@@ -3089,6 +3098,19 @@ async function libraries() {
       check("a fixture document: an intersection's member, the second part's (dotty's meet)", sameLocs(r, [partB]), r)
       r = await c.result("textDocument/definition", at_(casesDoc, "def opaqueBoth(x: Meets.Both): Int = x.n", 0, 39))
       check("a fixture document: an intersection's member through an opaque type's bound", sameLocs(r, [partB]), r)
+      // One member through two instances of its class, seen from the whole receiver; a result
+      // of the parameter's type, the instances' results met (`Keyed[Base] & Keyed[Left]`'s `held`
+      // a `Left`); two members whose informations do not meet, the one the pickle names.
+      r = await c.result("textDocument/definition", at_(casesDoc, "def keyed(r: Keyed[Left] & Keyed[Right]): Int = r.get(new Left).value", 0, 50))
+      check("a fixture document: one member through two instances of its class", sameLocs(r, [at(casesDoc, "trait Keyed[K]:\n  def get", 0, 22, 3)]), r)
+      r = await c.result("textDocument/definition", at_(casesDoc, "def keyed(r: Keyed[Left] & Keyed[Right]): Int = r.get(new Left).value", 0, 64))
+      check("a fixture document: a selection on its result", sameLocs(r, [at(casesDoc, "trait Base:\n  def value", 0, 18, 5)]), r)
+      r = await c.result("textDocument/definition", at_(casesDoc, "def held(r: Keyed[Base] & Keyed[Left]): Int = r.held.value", 0, 53))
+      check("a fixture document: a result of the instances' parameter, the results met", sameLocs(r, [leftValue]), r)
+      r = await c.result("textDocument/definition", at_(casesDoc, "def apart(x: PickA & PickB): Int = x.pick(List(1)).value", 0, 37))
+      check("a fixture document: two members kept apart, the one the call applies", sameLocs(r, [at(casesDoc, "trait PickA:\n  def pick", 0, 19, 4)]), r)
+      r = await c.result("textDocument/definition", at_(casesDoc, "def apart(x: PickA & PickB): Int = x.pick(List(1)).value", 0, 51))
+      check("a fixture document: a selection on the applied one's result", sameLocs(r, [leftValue]), r)
       // A constructor whose type arguments the call infers (`NEW` of the type constructor, then
       // `TYPEAPPLY`): its instance at those arguments, alone and joined with another.
       r = await c.result("textDocument/definition", at_(casesDoc, "def inferred: Int = new Box(new Left).get.value", 0, 42))
