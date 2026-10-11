@@ -1,0 +1,34 @@
+7c7
+<     lazy val id: Int = g{(Int, Int)}(1, 2)
+---
+>     lazy val id: Int = g{(Int, Int): Int}(1, 2)
+10c10
+<       f{(Int)(Int)}(a$1)(f$default$2{(Int): Int}(a$1))
+---
+>       f{(Int, Int): Int}(a$1)(f$default$2{(Int): Int}(a$1))
+15c15
+<     f{(Int)(Int)}(path)(f$default$2{(Int): Int}(path))
+---
+>     f{(Int, Int): Int}(path)(f$default$2{(Int): Int}(path))
+20c20
+<       <synthetic> val a$2: Int = {
+---
+>       <synthetic> val a$1: Int = {
+24c24
+<       f{(Int)(Int)}(a$2)(f$default$2{(Int): Int}(a$2))
+---
+>       f{(Int, Int): Int}(a$1)(f$default$2{(Int): Int}(a$1))
+30,31c30,31
+<       <synthetic> val b$1: Int = touched{()}()
+<       <synthetic> val a$3: Int = {
+---
+>       <synthetic> val b$2: Int = touched{(): Int}()
+>       <synthetic> val a$1: Int = {
+35c35
+<       g{(Int, Int)}(a = a$3, b = b$1)
+---
+>       g{(Int, Int): Int}(a = a$1, b = b$2)
+41c41
+<     LiftExports.sum{(Int, Int): Int}(a = 1, b = LiftExports.Defaults.unit)
+---
+>     LiftShapes.sum{(Int, Int): Int}(a = 1, b = LiftShapes.Defaults.unit)

@@ -5,7 +5,7 @@
 use super::*;
 use super::shapes::{sig_of_text, Inverse};
 use crate::tir::capture::{Form, NodeRecords, PatForm, Wrap};
-use crate::tir::{PrimOp, TExpr, TExprId, TPat, TPatId, TStmt, UnOp};
+use crate::tir::{DefaultOf, DEFAULT_RECEIVER, PrimOp, TExpr, TExprId, TPat, TPatId, TStmt, UnOp};
 
 /// What the receiver of a selection is.
 #[derive(Clone, Copy)]
@@ -445,9 +445,6 @@ impl<'w, 'a> P<'w, 'a> {
     }
 
     fn term_node(&mut self, e: TExprId) {
-        if !self.lifted_terms.is_empty() && self.lifted_terms.contains_key(&e) {
-            return self.lifted_ref(e);
-        }
         if let Some(&inlined) = self.inlined_open.last() {
             self.note_expansion_leaf(inlined, e);
         }
@@ -873,6 +870,21 @@ impl<'w, 'a> P<'w, 'a> {
                 };
                 self.new_instance(c, Some(s), recs.targs, &args, e)
             }
+            // A default getter's application as the plan has it (`typer::elaborate`): scalac's
+            // `recv.m$default$N[T..](args)..`, a constructor's on the companion.
+            TExpr::Default(of, at, l) => {
+                let items = self.w.prog.expr_list(l).to_vec();
+                let index = (at & !DEFAULT_RECEIVER) as usize;
+                let (recv, priors) = if at & DEFAULT_RECEIVER != 0 { (items.first().copied(), items[1..].to_vec()) } else { (None, items) };
+                let getter = match (of, self.default_forwarder) {
+                    (DefaultOf::Ctor(c), _) => Getter::Ctor(c),
+                    (DefaultOf::Method(s), _) if self.w.syms.sym(s).name == crate::names::INIT => Getter::Method(s, None),
+                    (DefaultOf::Method(s), Some((m, o, n))) if m == s && recv.is_some() => Getter::Forwarder(s, o, n),
+                    (DefaultOf::Method(s), _) => Getter::Method(s, Some(recv.map_or(Qual::Owner, Qual::Expr))),
+                };
+                let targs: Vec<TypeId> = recs.targs.map(|l| self.w.types.items(l).to_vec()).unwrap_or_default();
+                self.default_arg(getter, index, &targs, &priors)
+            }
             TExpr::Lambda(params, body) => match form {
                 None => {
                     let params = self.w.prog.sym_list(params).to_vec();
@@ -1052,6 +1064,18 @@ impl<'w, 'a> P<'w, 'a> {
             TExpr::ObjLit(l) if matches!(form, Some(Form::DynamicLiteral(_))) => {
                 let items = self.w.prog.expr_list(l).to_vec();
                 self.dynamic_literal(&items)
+            }
+            // A repeated argument the plan bound (`Lifter.liftArg` of `Typed(seq, <repeated>)`):
+            // the sequence literal, its reference passed as `xs*`.
+            TExpr::SeqLit(l) if matches!(form, Some(Form::Repeated(_))) => {
+                let Some(Form::Repeated(t)) = form else { unreachable!() };
+                let items = self.w.prog.expr_list(l).to_vec();
+                let r = self.open(REPEATED);
+                self.tpt(t);
+                for i in items {
+                    self.term(i);
+                }
+                self.buf.end_length(r);
             }
             TExpr::ArrayLit(l) => match form {
                 Some(Form::EnumMember(n)) => self.enum_member(e, n, &[]),
@@ -1577,10 +1601,17 @@ impl<'w, 'a> P<'w, 'a> {
     /// `head` applied to the type arguments and to `args` split by the clauses of `s`.
     fn applied(&mut self, s: SymId, targs: Option<TList>, args: &[TExprId], head: impl FnOnce(&mut Self), qual: Option<Qual>) {
         // A call of an export's forwarder (`export_call`), which `head` selects by its name.
-        let getter = match (self.forwarder_name, qual) {
-            (Some(n), Some(Qual::Expr(o))) => Getter::Forwarder(s, o, n),
-            _ => Getter::Method(s, qual),
+        // A call of an export's forwarder (`export_call`), whose defaults are the forwarder's.
+        let forwarder = match (self.forwarder_name, qual) {
+            (Some(n), Some(Qual::Expr(o))) => Some((s, o, n)),
+            _ => None,
         };
+        let outer_forwarder = std::mem::replace(&mut self.default_forwarder, forwarder);
+        self.applied_args(s, targs, args, head, qual);
+        self.default_forwarder = outer_forwarder;
+    }
+
+    fn applied_args(&mut self, s: SymId, targs: Option<TList>, args: &[TExprId], head: impl FnOnce(&mut Self), qual: Option<Qual>) {
         let receiver = self.select_receiver.take();
         let evidence = std::mem::take(&mut self.call_evidence);
         let appended = self.appended_varargs(s, receiver.map(|(c, _)| c));
@@ -1605,9 +1636,6 @@ impl<'w, 'a> P<'w, 'a> {
         if args.len() != total {
             return self.fail(format!("a call of {} with {} arguments for {} parameters", self.name(self.w.syms.sym(s).name), args.len(), total));
         }
-        let lens: Vec<usize> = clauses.iter().map(|c| c.len()).collect();
-        // A by-name argument is not evaluated at the call, a repeated one is its sequence's.
-        let by_name: Vec<bool> = clauses.iter().flatten().map(|p| p.by_name || p.repeated).collect();
         let targs: Vec<TypeId> = targs.map(|l| self.w.types.items(l).to_vec()).unwrap_or_default();
         // scalac's call of a polymorphic method has its type arguments, a type constructor
         // for a higher-kinded parameter.
@@ -1677,27 +1705,7 @@ impl<'w, 'a> P<'w, 'a> {
                 }
             }
         }
-        // The block of a call whose defaults scalac evaluates after its arguments: its receiver
-        // where it is no path, its arguments the call evaluates, then its defaults, each a val
-        // of the block in that order (`Applications`' `liftArgs`).
-        let receiver_expr = match qual {
-            Some(Qual::Expr(r)) => Some(r),
-            _ => None,
-        };
-        if self.hoisted_after_default(&lens, args) {
-            return self.fail("a later clause's named arguments the typer hoists before an earlier clause's default".to_string());
-        }
-        let binds = self.lift_plan(&lens, args, &by_name, receiver_expr);
-        let defaults_lifted = !binds.is_empty();
-        if defaults_lifted {
-            if lifted.is_some() {
-                return self.fail("a right-associative call whose defaults scalac lifts".to_string());
-            }
-            for &(e, _) in &binds {
-                self.lifted_terms.insert(e, crate::tasty::write::pickle::Lifted::Pending(Vec::new()));
-            }
-        }
-        let block = (lifted.is_some() || defaults_lifted).then(|| {
+        let block = lifted.is_some().then(|| {
             let b = self.open(BLOCK);
             self.term_at(None);
             b
@@ -1734,7 +1742,7 @@ impl<'w, 'a> P<'w, 'a> {
                             lifted_ref = Some(self.buf.forward_reference());
                             continue;
                         }
-                        self.argument(args[at], u, getter, at, &targs, &args[..at]);
+                        self.argument(args[at], u);
                     }
                     if let Some(elem) = appended.filter(|_| order.last() == Some(ci)) {
                         self.empty_varargs(elem);
@@ -1747,29 +1755,6 @@ impl<'w, 'a> P<'w, 'a> {
                 }
             }
             self.buf.end_length(opens[layers.len() - 1 - i]);
-        }
-        if let Some(b) = block.filter(|_| defaults_lifted) {
-            let params: Vec<ParamSig> = clauses.iter().flatten().cloned().collect();
-            for (e, at) in binds.clone() {
-                let ty = match at {
-                    Some(i) if matches!(self.records(e).form, Some(Form::Default)) => self.w.types.subst(params[i].ty, &subst),
-                    _ => self.node_type(e).map(|t| self.w.widen_lit(t)).unwrap_or(ANY),
-                };
-                let name = match at {
-                    Some(i) => format!("{}$1", self.name(params[i].name)),
-                    None => "$1".to_string(),
-                };
-                self.lifted_val(e, &name, ty, |p| match at {
-                    Some(i) if matches!(p.records(e).form, Some(Form::Default)) => {
-                        p.within(Some(e), |p| p.default_arg(getter, i, &targs, &args[..i]))
-                    }
-                    _ => p.term_unnamed(e),
-                });
-            }
-            for (e, _) in binds {
-                self.lifted_terms.remove(&e);
-            }
-            self.buf.end_length(b);
         }
         if let (Some(b), Some(e), Some(slot)) = (block, lifted, lifted_ref) {
             let addr = self.buf.addr();
@@ -1849,207 +1834,18 @@ impl<'w, 'a> P<'w, 'a> {
         Some((m, args, name))
     }
 
-    /// What a call's block binds, in order, as scalac's typer lifts a call with defaults
-    /// (`Applications`' `liftFun` and `liftArgs`), clause by clause: where a clause takes a
-    /// default, the receiver when it is no stable path and the arguments of the clauses before
-    /// it that the call evaluates, which the default's getter takes again; where a named argument
-    /// of a clause follows a default, the clause's arguments the call evaluates, then its
-    /// defaults. A by-name or repeated parameter's argument, and a by-name parameter's default,
-    /// stay in place. `None` stands for the receiver.
-    fn lift_plan(&self, lens: &[usize], args: &[TExprId], by_name: &[bool], receiver: Option<TExprId>) -> Vec<(TExprId, Option<usize>)> {
-        let mut binds: Vec<(TExprId, Option<usize>)> = Vec::new();
-        let bound = |binds: &mut Vec<(TExprId, Option<usize>)>, e: TExprId, at: Option<usize>| {
-            if !binds.iter().any(|&(x, _)| x == e) {
-                binds.push((e, at));
-            }
-        };
-        let is_default = |a: TExprId| matches!(self.records(a).form, Some(Form::Default));
-        let strict = |at: usize| !by_name.get(at).copied().unwrap_or(false);
-        let mut from = 0;
-        for &n in lens {
-            let to = (from + n).min(args.len());
-            let clause = &args[from.min(args.len())..to];
-            if clause.iter().any(|&a| is_default(a)) {
-                if let Some(r) = receiver.filter(|&r| !self.is_stable_path(r)) {
-                    bound(&mut binds, r, None);
-                }
-                for at in 0..from.min(args.len()) {
-                    let a = args[at];
-                    if !is_default(a) && strict(at) && self.evaluated_argument(a) {
-                        bound(&mut binds, a, Some(at));
-                    }
-                }
-            }
-            if self.names_after_default(&[n], clause) {
-                for (i, &a) in clause.iter().enumerate() {
-                    if !is_default(a) && strict(from + i) && self.evaluated_argument(a) {
-                        bound(&mut binds, a, Some(from + i));
-                    }
-                }
-                for (i, &a) in clause.iter().enumerate() {
-                    if is_default(a) && strict(from + i) {
-                        bound(&mut binds, a, Some(from + i));
-                    }
-                }
-            }
-            from += n;
-        }
-        binds
-    }
-
-    /// Whether a later clause's argument is a temporary the typer hoisted out of the call (a
-    /// named argument out of order) while an earlier clause takes a default the block would bind
-    /// after it: scalac evaluates the earlier clause's default first.
-    fn hoisted_after_default(&self, lens: &[usize], args: &[TExprId]) -> bool {
-        let is_default = |a: TExprId| matches!(self.records(a).form, Some(Form::Default));
-        let hoisted = |a: TExprId| match self.w.prog.expr(a) {
-            TExpr::Local(s) => self.w.interner.get(self.w.syms.sym(s).name).starts_with("h$"),
-            _ => false,
-        };
-        let mut from = 0;
-        let mut defaulted = false;
-        for &n in lens {
-            let clause = &args[from.min(args.len())..(from + n).min(args.len())];
-            if defaulted && clause.iter().any(|&a| hoisted(a)) {
-                return true;
-            }
-            defaulted |= clause.iter().any(|&a| is_default(a));
-            from += n;
-        }
-        false
-    }
-
-    /// A path whose value no evaluation between two reads of it changes: a val, a parameter, an
-    /// object, `this`, a literal and their stable selections, never a var's read.
-    fn is_stable_path(&self, x: TExprId) -> bool {
-        let stable = |s: SymId| !matches!(self.w.syms.sym(s).kind, SymKind::Var) && self.w.syms.sym(s).mods & mods::MUTABLE == 0;
-        match self.w.prog.expr(x) {
-            TExpr::Local(s) | TExpr::Static(s) => self.records(x).is_empty() && stable(s),
-            TExpr::This | TExpr::Module(_) | TExpr::Int(_) | TExpr::Long(_) | TExpr::Double(_) | TExpr::Bool(_) | TExpr::Char(_) | TExpr::Str(_) | TExpr::Unit | TExpr::Null => self.records(x).is_empty(),
-            TExpr::Field(r, s) => self.records(x).is_empty() && stable(s) && self.is_stable_path(r),
-            _ => false,
-        }
-    }
-
-    /// Whether a clause has a default before an argument the source names: scalac then lifts
-    /// the arguments it evaluates and the defaults into a block, in that order (`{ val x1$1 =
-    /// p(1); val x3$1 = p(3); val x2$1 = t$default$2; t(x1$1, x2$1, x3 = x3$1) }`), which a call
-    /// of the arguments in the parameters' order would evaluate otherwise.
-    fn names_after_default(&self, lens: &[usize], args: &[TExprId]) -> bool {
-        let mut at = 0;
-        lens.iter().any(|&n| {
-            let clause = &args[at.min(args.len())..(at + n).min(args.len())];
-            at += n;
-            clause.iter().position(|&a| matches!(self.records(a).form, Some(Form::Default))).map_or(false, |d| clause[d..].iter().any(|&a| !matches!(self.records(a).form, Some(Form::Default))))
-        })
-    }
-
-    /// Whether an argument's evaluation can be told from its place: neither a path, a literal
-    /// nor a closure, which scalac's `isPureExpr` leaves in place, whatever name it is passed by.
-    fn evaluated_argument(&self, a: TExprId) -> bool {
-        let recs = self.records(a);
-        let named_only = recs.form.is_none() && recs.targs.is_none() && recs.inline_calls.is_empty() && recs.builtin.is_none() && matches!(recs.wraps.as_slice(), [] | [Wrap::Named(_)]);
-        // scalac's `isPureExpr`: a lazy val's and an object's reads are idempotent, not pure, and
-        // an argument is evaluated where the source has it unless it is pure.
-        let pure = named_only
-            && match self.w.prog.expr(a) {
-                TExpr::Local(s) => !matches!(self.w.syms.sym(s).kind, SymKind::Var) && self.w.syms.sym(s).mods & (mods::MUTABLE | mods::LAZY) == 0,
-                TExpr::Int(_) | TExpr::Long(_) | TExpr::Double(_) | TExpr::Bool(_) | TExpr::Char(_) | TExpr::Str(_) | TExpr::Unit | TExpr::Null | TExpr::This => true,
-                _ => false,
-            };
-        !pure && !matches!(self.w.prog.expr(a), TExpr::Lambda(..))
-    }
-
-    /// A reference to a term a call's block binds, its name around it where the argument is
-    /// named.
-    fn lifted_ref(&mut self, e: TExprId) {
-        let named = match self.records(e).wraps.last() {
-            Some(Wrap::Named(n)) => Some(*n),
-            _ => None,
-        };
-        self.within_argument(e, |p| {
-            match named {
-                Some(n) => {
-                    p.buf.byte(NAMEDARG);
-                    let name = p.names.simple(&p.name(n));
-                    p.buf.nat(name as u64);
-                    p.within_argument(e, |p| p.buf.byte(TERMREFDIRECT));
-                }
-                None => {
-                    p.term_at(Some(e));
-                    p.buf.byte(TERMREFDIRECT);
-                }
-            }
-            let at = match p.lifted_terms.get(&e) {
-                Some(crate::tasty::write::pickle::Lifted::At(a)) => Some(*a),
-                _ => None,
-            };
-            match at {
-                Some(a) => p.buf.reference(a),
-                None => {
-                    let slot = p.buf.forward_reference();
-                    if let Some(crate::tasty::write::pickle::Lifted::Pending(slots)) = p.lifted_terms.get_mut(&e) {
-                        slots.push(slot);
-                    }
-                }
-            }
-        })
-    }
-
-    /// The val of a call's block a term is bound to, the references to it filled.
-    fn lifted_val(&mut self, e: TExprId, name: &str, ty: TypeId, rhs: impl FnOnce(&mut Self)) {
-        let addr = self.buf.addr();
-        if let Some(crate::tasty::write::pickle::Lifted::Pending(slots)) = self.lifted_terms.insert(e, crate::tasty::write::pickle::Lifted::At(addr)) {
-            for s in slots {
-                self.buf.fill(s, addr);
-            }
-        }
-        self.term_at(None);
-        let l = self.open(VALDEF);
-        let n = self.names.simple(name);
-        self.buf.nat(n as u64);
-        self.tpt(ty);
-        // Its own value, not a reference to itself.
-        let bound = self.lifted_terms.remove(&e);
-        rhs(self);
-        if let Some(b) = bound {
-            self.lifted_terms.insert(e, b);
-        }
-        self.write_flags(&[SYNTHETIC]);
-        self.buf.end_length(l);
-    }
-
-    /// A term without the name a named argument's wrap gives it.
-    fn term_unnamed(&mut self, e: TExprId) {
-        let recs = self.records(e);
-        match recs.wraps.split_last() {
-            Some((Wrap::Named(_), inner)) => {
-                if self.unwritten_conversion(e, &recs).is_some() {
-                    return self.fail("a converted named argument scalac lifts".to_string());
-                }
-                let inner = inner.to_vec();
-                self.wrapped(e, &inner, &recs)
-            }
-            _ => self.term(e),
-        }
-    }
-
     /// Whether evaluating an operand later changes nothing: a path or a literal.
     fn is_pure_operand(&self, e: TExprId) -> bool {
         self.records(e).is_empty()
             && matches!(self.w.prog.expr(e), TExpr::Int(_) | TExpr::Long(_) | TExpr::Double(_) | TExpr::Bool(_) | TExpr::Char(_) | TExpr::Str(_) | TExpr::Unit | TExpr::Null | TExpr::Local(_) | TExpr::This | TExpr::Module(_))
     }
 
-    fn argument(&mut self, a: TExprId, u: ParamUse, getter: Getter, index: usize, targs: &[TypeId], prior: &[TExprId]) {
-        if !self.lifted_terms.is_empty() && self.lifted_terms.contains_key(&a) {
-            return self.lifted_ref(a);
-        }
+    fn argument(&mut self, a: TExprId, u: ParamUse) {
         let recs = self.records(a);
         if let Some(why) = u.ty.and_then(|t| self.js_conversion(a, t)) {
             return self.fail(why.to_string());
         }
         match (self.w.prog.expr(a), recs.form) {
-            (TExpr::Unit, Some(Form::Default)) => self.within(Some(a), |p| p.default_arg(getter, index, targs, prior)),
             (TExpr::Lambda(ps, body), Some(Form::ByName)) if ps.len == 0 => self.term(body),
             (TExpr::SeqLit(l), Some(Form::Repeated(t))) if recs.wraps.is_empty() => self.within(Some(a), |p| {
                 let items = p.w.prog.expr_list(l).to_vec();
@@ -2173,16 +1969,11 @@ impl<'w, 'a> P<'w, 'a> {
         let index = before + (index - starts[ci]);
         let earlier: Vec<usize> = earlier_groups.iter().map(|&(_, n)| n).collect();
         let takes = tparams > 0 || clause_of > 0;
-        // The earlier clauses' arguments the getter takes: bound by the call's block, or stable
-        // paths read again.
+        // The earlier clauses' arguments the getter takes, as the plan passes them: the values
+        // it bound, paths, a by-name argument's tree again (`spliceMeth`).
         let taken: Vec<TExprId> = earlier_groups.iter().flat_map(|&(at, n)| (at..at + n).map(|i| prior.get(i).copied())).collect::<Option<Vec<_>>>().unwrap_or_default();
-        if taken.len() < before || taken.iter().any(|&x| !self.lifted_terms.contains_key(&x) && !self.is_stable_path(x)) {
-            return self.fail("a default argument after arguments that are not paths".to_string());
-        }
-        if let Getter::Method(_, Some(Qual::Expr(r))) = getter {
-            if !self.lifted_terms.contains_key(&r) && !self.is_stable_path(r) {
-                return self.fail("a default of a call on a receiver that is no stable path".to_string());
-            }
+        if taken.len() < before {
+            return self.fail("a default getter's application without the arguments it takes".to_string());
         }
         let std_owner = match getter {
             Getter::Method(m, _) => match (self.is_std_sym(m), owner_class) {
@@ -2198,7 +1989,22 @@ impl<'w, 'a> P<'w, 'a> {
                 return;
             }
         }
-        let n = self.names.default_getter(&name, index as u32);
+        // A getter selected on `super` in a trait is its accessor on the trait's `this`
+        // (`SuperAccessors`: `T.this.super$T$$m$default$N`).
+        let mixin = match getter {
+            Getter::Method(_, Some(Qual::Expr(r))) => match self.w.prog.expr(r) {
+                TExpr::Super(crate::tir::SuperTarget::Mixin(t)) => Some(t),
+                _ => None,
+            },
+            _ => None,
+        };
+        let n = match mixin {
+            Some(t) => {
+                let full = self.owner_full_name(self.w.syms.class(t).owner, &self.name(self.w.syms.class(t).name));
+                self.super_getter_accessor_name(&full, &name, index as u32)
+            }
+            None => self.names.default_getter(&name, index as u32),
+        };
         let opens: Vec<crate::tasty::write::buf::Slot> = earlier.iter().map(|_| self.open(APPLY)).collect();
         let ta = (tparams > 0 && !targs.is_empty()).then(|| self.open(TYPEAPPLY));
         if takes {
@@ -2216,13 +2022,28 @@ impl<'w, 'a> P<'w, 'a> {
             let sl = self.open(SELECTIN);
             let signed = self.names.signed_ref(n, &params, &result);
             self.buf.nat(signed as u64);
-            self.getter_qualifier(getter);
-            self.getter_owner(getter, owner_class);
+            match mixin {
+                Some(t) => {
+                    self.term_at(None);
+                    self.qual_this(t);
+                    self.class_typeref(t);
+                }
+                None => {
+                    self.getter_qualifier(getter);
+                    self.getter_owner(getter, owner_class);
+                }
+            }
             self.buf.end_length(sl);
         } else {
             self.buf.byte(SELECT);
             self.buf.nat(n as u64);
-            self.getter_qualifier(getter);
+            match mixin {
+                Some(t) => {
+                    self.term_at(None);
+                    self.qual_this(t);
+                }
+                None => self.getter_qualifier(getter),
+            }
         }
         if let Some(l) = ta {
             for &t in targs {
@@ -2231,9 +2052,24 @@ impl<'w, 'a> P<'w, 'a> {
             self.buf.end_length(l);
         }
         let mut at = 0;
+        let taken_params: Vec<ParamSig> = clauses[..clause_of].iter().flat_map(|c| c.params.iter().cloned()).collect();
         for (i, &k) in earlier.iter().enumerate() {
-            for &x in &taken[at..at + k] {
-                self.term(x);
+            for (j, &x) in taken[at..at + k].iter().enumerate() {
+                let p = taken_params.get(at + j);
+                match (self.w.prog.expr(x), self.records(x).form) {
+                    (TExpr::Lambda(ps, body), Some(Form::ByName)) if ps.len == 0 => self.term(body),
+                    (TExpr::SeqLit(_), Some(Form::Repeated(_))) => self.term(x),
+                    // A sequence the plan bound, passed again as the getter's repeated
+                    // argument: `xs*`.
+                    _ if p.is_some_and(|p| p.repeated) => {
+                        let elem = p.map_or(ANY, |p| p.ty);
+                        let tl = self.open(TYPED);
+                        self.term(x);
+                        self.repeated_tpt(elem);
+                        self.buf.end_length(tl);
+                    }
+                    _ => self.term(x),
+                }
             }
             at += k;
             self.buf.end_length(opens[earlier.len() - 1 - i]);
@@ -2598,7 +2434,7 @@ impl<'w, 'a> P<'w, 'a> {
         let name = self.name(info.name);
         let sig = self.w.sig_of(s).clone();
         let targs: Vec<TypeId> = targs.map(|l| self.w.types.items(l).to_vec()).unwrap_or_default();
-        let defaulted = args.iter().any(|&a| matches!(self.records(a).form, Some(Form::Default)));
+        let defaulted = args.iter().any(|&a| matches!(self.w.prog.expr(a), TExpr::Default(..)));
         // An inline body keeps its calls, the transparent `summon`'s among them
         // (`Predef.summon[Show[Int]](given_Show_Int)`): the call of `Predef`'s member.
         let target = match target {
@@ -3750,7 +3586,7 @@ impl<'w, 'a> P<'w, 'a> {
         self.w.complete_class(c);
         let ctor = self.w.syms.class(c).ctor.clone();
         let plain = ctor.len() == 1 && ctor[0].params.len() == args.len() && ctor[0].params.iter().all(|p| !p.repeated && !p.by_name)
-            && args.iter().all(|&a| !matches!(self.records(a).form, Some(Form::Default)));
+            && args.iter().all(|&a| !matches!(self.w.prog.expr(a), TExpr::Default(..)));
         // A local case class outside a quote: its construction, which is what scalac's local
         // companion's `apply` makes and which nothing but a quote's reflection tells from it; the
         // writer does not write the local companion.
@@ -3862,36 +3698,14 @@ impl<'w, 'a> P<'w, 'a> {
         let mut ctor = ctor;
         let java = self.is_java_class(c);
         if java && ctor.len() == 1 {
-            let given = args.iter().rposition(|&a| !matches!(self.records(a).form, Some(Form::Default))).map_or(0, |i| i + 1);
+            let given = args.iter().rposition(|&a| !matches!(self.w.prog.expr(a), TExpr::Default(..))).map_or(0, |i| i + 1);
             args = &args[..given];
             ctor[0].params.truncate(given);
         }
         let eliding = self.elide_args.is_some();
-        let annotation = self.in_annotation;
         let block = prelude.filter(|l| l.len > 0 && !eliding).map(|l| {
             let b = self.open(BLOCK);
             (b, l)
-        });
-        // A default before a named argument: the arguments the call evaluates and the defaults
-        // bound in a block first, as for a method's call (`applied`).
-        let lens: Vec<usize> = ctor.iter().map(|c| c.params.len()).collect();
-        let by_name: Vec<bool> = ctor.iter().flat_map(|c| c.params.iter().map(|p| p.by_name || p.repeated)).collect();
-        if !eliding && !annotation && self.hoisted_after_default(&lens, args) {
-            return self.fail("a later clause's named arguments the typer hoists before an earlier clause's default".to_string());
-        }
-        let binds: Vec<(TExprId, usize)> = if eliding || annotation { Vec::new() } else { self.lift_plan(&lens, args, &by_name, None).into_iter().filter_map(|(e, at)| Some((e, at?))).collect() };
-        if !binds.is_empty() {
-            if block.is_some() {
-                return self.fail("a constructor call of named arguments out of order and after a default".to_string());
-            }
-            for &(e, _) in &binds {
-                self.lifted_terms.insert(e, crate::tasty::write::pickle::Lifted::Pending(Vec::new()));
-            }
-        }
-        let lifting = (!binds.is_empty()).then(|| {
-            let b = self.open(BLOCK);
-            self.term_at(None);
-            b
         });
         let given_params = ctor.first().map_or(0, |cl| cl.params.len());
         // A constructor of using clauses only takes a trailing `()` (scalac's
@@ -3945,8 +3759,7 @@ impl<'w, 'a> P<'w, 'a> {
             self.qual_this(c);
             self.class_typeref(c);
             self.buf.end_length(sl);
-            self.ctor_args(c, via, targs, args, &clauses, ta, opens, block);
-            return self.lifted_ctor_args(c, via, targs, args, &ctor_params(&clauses), binds, lifting);
+            return self.ctor_args(targs, args, &clauses, ta, opens, block);
         }
         self.buf.byte(NEW);
         if object {
@@ -3979,8 +3792,7 @@ impl<'w, 'a> P<'w, 'a> {
             self.class_typeref(c);
         }
         self.buf.end_length(sl);
-        self.ctor_args(c, via, targs, args, &clauses, ta, opens, block);
-        self.lifted_ctor_args(c, via, targs, args, &ctor_params(&clauses), binds, lifting)
+        self.ctor_args(targs, args, &clauses, ta, opens, block)
     }
 
     /// Whether an expression is a stable path `path_type` writes: a local or parameter, `this`,
@@ -4055,35 +3867,7 @@ impl<'w, 'a> P<'w, 'a> {
     /// A constructor call's type arguments and argument clauses after its selection, and the
     /// block of the temporaries it was written in.
     #[allow(clippy::too_many_arguments)]
-    /// The vals of a constructor call's block (`ctor_call`), its arguments' and then its
-    /// defaults', the references to them filled.
-    fn lifted_ctor_args(&mut self, c: ClassId, via: Option<SymId>, targs: &[TypeId], args: &[TExprId], params: &[ParamSig], binds: Vec<(TExprId, usize)>, lifting: Option<crate::tasty::write::buf::Slot>) {
-        let Some(b) = lifting else { return };
-        let own: Vec<TParamId> = self.w.syms.class(c).tparams.to_vec();
-        let subst: Subst = own.iter().copied().zip(targs.iter().copied()).collect();
-        for &(e, i) in &binds {
-            let default = matches!(self.records(e).form, Some(Form::Default));
-            let ty = if default { self.w.types.subst(params[i].ty, &subst) } else { self.node_type(e).map(|t| self.w.widen_lit(t)).unwrap_or(ANY) };
-            let name = format!("{}$1", self.name(params[i].name));
-            self.lifted_val(e, &name, ty, |p| {
-                if default {
-                    let getter = match via {
-                        Some(s) => Getter::Method(s, None),
-                        None => Getter::Ctor(c),
-                    };
-                    p.within(Some(e), |p| p.default_arg(getter, i, targs, &args[..i]))
-                } else {
-                    p.term_unnamed(e)
-                }
-            });
-        }
-        for (e, _) in binds {
-            self.lifted_terms.remove(&e);
-        }
-        self.buf.end_length(b);
-    }
-
-    fn ctor_args(&mut self, c: ClassId, via: Option<SymId>, targs: &[TypeId], args: &[TExprId], clauses: &[ClauseSig], ta: Option<crate::tasty::write::buf::Slot>, opens: Vec<crate::tasty::write::buf::Slot>, block: Option<(crate::tasty::write::buf::Slot, ListRef)>) {
+    fn ctor_args(&mut self, targs: &[TypeId], args: &[TExprId], clauses: &[ClauseSig], ta: Option<crate::tasty::write::buf::Slot>, opens: Vec<crate::tasty::write::buf::Slot>, block: Option<(crate::tasty::write::buf::Slot, ListRef)>) {
         if let Some(l) = ta {
             for &t in targs {
                 self.tpt(t);
@@ -4096,10 +3880,6 @@ impl<'w, 'a> P<'w, 'a> {
                 let primitive = if p.by_name || p.repeated { None } else { self.numeric_class(p.ty) };
                 let ty = (!p.by_name && !p.repeated).then_some(p.ty);
                 let u = ParamUse { repeated: p.repeated, elem: p.repeated.then_some(p.ty), expected: None, primitive, ty };
-                let getter = match via {
-                    Some(s) => Getter::Method(s, None),
-                    None => Getter::Ctor(c),
-                };
                 match self.elide_args.clone() {
                     Some(reason) => {
                         self.pending_withheld = Some(reason);
@@ -4112,7 +3892,7 @@ impl<'w, 'a> P<'w, 'a> {
                             self.ty(p.ty);
                         }
                     }
-                    None => self.argument(args[at], u, getter, at, targs, &args[..at]),
+                    None => self.argument(args[at], u),
                 }
                 at += 1;
             }
@@ -4836,7 +4616,12 @@ impl<'w, 'a> P<'w, 'a> {
         self.define(Key::Sym(s), addr);
         self.term_at(None);
         let l = self.open(VALDEF);
-        let n = self.simple_name(info.name);
+        // A temporary of an application's plan has the fresh name `Lifter.lift` gives it.
+        let lifted = (info.mods & mods::LIFTED != 0).then(|| self.w.interner.get(info.name).rsplit_once('$')).flatten().and_then(|(p, k)| Some((p.to_string(), k.parse::<u32>().ok()?)));
+        let n = match lifted {
+            Some((prefix, k)) => self.names.unique(&prefix, k),
+            None => self.simple_name(info.name),
+        };
         self.buf.nat(n as u64);
         let recorded = self.w.prog.capture.as_deref().and_then(|c| c.local_of(s));
         let t = self.inferred_from_inline_call(s, init).or_else(|| recorded.and_then(|r| r.ty)).unwrap_or_else(|| self.w.sig_of(s).ret);
@@ -6496,7 +6281,4 @@ fn prim_name(op: PrimOp) -> &'static str {
     }
 }
 
-/// The parameters of a constructor's clauses in order.
-fn ctor_params(clauses: &[ClauseSig]) -> Vec<ParamSig> {
-    clauses.iter().flat_map(|c| c.params.iter().cloned()).collect()
-}
+

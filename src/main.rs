@@ -1861,14 +1861,14 @@ fn compile() -> i32 {
         std::process::exit(1);
     }
     let all_sources = typer.all_sources();
-    let typer::Worker { prog, syms, file_pkgs, .. } = typer.w;
+    let typer::Worker { prog, syms, file_pkgs, types, .. } = typer.w;
     let split = opts
         .split
         .as_ref()
         .map(|_| emit::Split { files: files.as_slice(), file_pkgs: file_pkgs.own(), module_per_file: &opts.module_per_file, hot: opts.hot });
     let options = emit::Options { release: opts.release, size_report: opts.size_report.then(|| all_sources.as_slice()), outline: !opts.no_outline };
     let t_emit_start = Instant::now();
-    let (mut output, size_report) = emit::emit(&prog, &syms, &interner, array_seq, &reach, split, options, None);
+    let (mut output, size_report) = emit::emit(&prog, &syms, &types, &interner, array_seq, &reach, split, options, None);
     let t_emit = Instant::now();
     measure::report_parts(&mut report, measure::Pass::Emit, t_emit - t_emit_start, &[("before the emit", (t_emit_start - t_computed).saturating_sub(cache_time))]);
 

@@ -1,0 +1,6 @@
+// tests/tasty/fixtures/SgMarks.tasty (TASTy 28.8, 612 bytes)
+package fix.supergetter
+@SourceFile object SgMarks extends Object {
+  <synthetic> private def writeReplace(): AnyRef = ...
+  def mark(s: Predef.String): Int = ...
+}

@@ -613,14 +613,6 @@ enum Responsible {
     Main(FileId, PkgId, Name),
 }
 
-/// What a call's arguments are passed to, for the default getters of the ones left out.
-#[derive(Clone, Copy)]
-enum Callee {
-    Method(SymId),
-    Ctor(ClassId),
-    Apply(ClassId),
-}
-
 /// The method a builtin binary operator of teq's IR is in scalac's tree.
 fn prim_name(op: PrimOp) -> &'static str {
     use PrimOp::*;
@@ -3825,7 +3817,6 @@ impl<'c, 'a> Collector<'c, 'a> {
                 if !self.forwarded.contains_key(&e) {
                     self.term_node(s, None);
                 }
-                self.defaults(Callee::Method(s), args);
                 self.list(args);
             }
             TExpr::CallMethod(r, s, args) => {
@@ -3836,9 +3827,10 @@ impl<'c, 'a> Collector<'c, 'a> {
                     self.term_node(assigned.unwrap_or(s), Some(r));
                     self.expr(r);
                 }
-                if assigned.is_none() {
-                    self.defaults(Callee::Method(s), args);
-                }
+                self.list(args);
+            }
+            TExpr::Default(of, at, args) => {
+                self.default_getter(of, (at & !DEFAULT_RECEIVER) as usize + 1);
                 self.list(args);
             }
             TExpr::CallClosure(f, args) => {
@@ -3916,13 +3908,10 @@ impl<'c, 'a> Collector<'c, 'a> {
                 }
             }
             TExpr::New(c, args) => {
-                if self.applied.contains_key(&e) {
-                    self.defaults(Callee::Apply(c), args);
-                } else {
+                if !self.applied.contains_key(&e) {
                     let t = self.type_of(e).unwrap_or_else(|| self.w.syms.this_type(c));
                     self.tree_type(t);
                     self.ctor_call(c, t);
-                    self.defaults(Callee::Ctor(c), args);
                 }
                 self.walk_class(c);
                 self.list(args);
@@ -4378,36 +4367,34 @@ impl<'c, 'a> Collector<'c, 'a> {
         None
     }
 
-    /// The arguments a call leaves to the parameters' defaults: the default getters scalac
-    /// calls for them, `m$default$N` of the method's class, a constructor's and a case class
-    /// `apply`'s `$lessinit$greater$default$N` of the companion.
-    fn defaults(&mut self, callee: Callee, args: ListRef) {
-        let items: Vec<TExprId> = self.w.prog.expr_list(args).to_vec();
-        let Some(capture) = self.w.prog.capture.as_deref() else { return };
-        let defaulted: Vec<usize> = items.iter().enumerate().filter(|(_, e)| matches!(capture.forms.get(e), Some(Form::Default))).map(|(i, _)| i + 1).collect();
-        if defaulted.is_empty() {
-            return;
-        }
-        for n in defaulted {
-            match callee {
-                Callee::Method(s) => {
-                    let name = format!("{}$default${}", crate::jvm::names::encode(self.w.name_ref(self.w.syms.sym(s).name)), n);
-                    self.use_name(name);
-                    match self.w.syms.sym(s).owner {
-                        Owner::Class(o) => self.class_dep(o, Context::MemberRef),
-                        Owner::Package(p) => {
-                            let file = self.w.syms.sym(s).file;
-                            if let Some(t) = self.package_member_target(PackageMember::Sym(s), file, p) {
-                                self.package_object_dep(t);
-                            }
-                        }
-                        Owner::Local => {}
-                    }
-                }
-                Callee::Ctor(c) | Callee::Apply(c) => {
-                    self.use_name(format!("$lessinit$greater$default${}", n));
+    /// The default getter a call applies where the source left an argument out, `n` its number:
+    /// `m$default$N` of the method's class, a constructor's (a case class `apply`'s too)
+    /// `$lessinit$greater$default$N` of the companion.
+    fn default_getter(&mut self, of: DefaultOf, n: usize) {
+        match of {
+            DefaultOf::Method(s) if self.w.syms.sym(s).name == crate::names::INIT => {
+                self.use_name(format!("$lessinit$greater$default${}", n));
+                if let Owner::Class(c) = self.w.syms.sym(s).owner {
                     self.companion_ref(c);
                 }
+            }
+            DefaultOf::Method(s) => {
+                let name = format!("{}$default${}", crate::jvm::names::encode(self.w.name_ref(self.w.syms.sym(s).name)), n);
+                self.use_name(name);
+                match self.w.syms.sym(s).owner {
+                    Owner::Class(o) => self.class_dep(o, Context::MemberRef),
+                    Owner::Package(p) => {
+                        let file = self.w.syms.sym(s).file;
+                        if let Some(t) = self.package_member_target(PackageMember::Sym(s), file, p) {
+                            self.package_object_dep(t);
+                        }
+                    }
+                    Owner::Local => {}
+                }
+            }
+            DefaultOf::Ctor(c) => {
+                self.use_name(format!("$lessinit$greater$default${}", n));
+                self.companion_ref(c);
             }
         }
     }

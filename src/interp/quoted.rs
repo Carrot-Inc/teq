@@ -1294,6 +1294,12 @@ impl<'a, 't> Interp<'a, 't> {
         }
     }
 
+    /// `m$default$N`, the name of the getter of `m`'s parameter `index`.
+    fn default_getter_name(&mut self, m: SymId, index: u32) -> Name {
+        let text = format!("{}$default${}", self.typer.interner.get(self.syms().sym(m).name), index + 1);
+        self.typer.interner.intern(&text)
+    }
+
     fn sym_of_template(&mut self, s: StrRef) -> Option<SymId> {
         self.prog().template_syms.get(&s).copied()
     }
@@ -1414,6 +1420,31 @@ impl<'a, 't> Interp<'a, 't> {
                     let _ = s;
                     let fun = self.pending(Pending { recv: None, kind: PendingKind::Ctor(ty), targs: Vec::new() });
                     View::Apply(fun, items)
+                }
+                // A default getter's application, as scalac's tree has it: `recv.m$default$N(args)`,
+                // a constructor's `C.$lessinit$greater$default$N(args)`.
+                TExpr::Default(of, at, args) => {
+                    let exprs = self.prog().expr_list(args).to_vec();
+                    let (recv, priors) = if at & DEFAULT_RECEIVER != 0 { (Some(TreeRef::Expr(exprs[0])), &exprs[1..]) } else { (None, &exprs[..]) };
+                    let index = at & !DEFAULT_RECEIVER;
+                    let items: Vec<TreeRef> = priors.iter().map(|&x| TreeRef::Expr(x)).collect();
+                    match of {
+                        DefaultOf::Ctor(c) if items.is_empty() => View::Ident(SymRef::Default(c, index)),
+                        DefaultOf::Ctor(c) => {
+                            let fun = self.pending(Pending { recv: None, kind: PendingKind::Ref(SymRef::Default(c, index)), targs: Vec::new() });
+                            View::Apply(fun, items)
+                        }
+                        DefaultOf::Method(s) => {
+                            let name = self.default_getter_name(s, index);
+                            match recv {
+                                Some(r) if items.is_empty() => View::Select(r, SymRef::None, name),
+                                recv => {
+                                    let fun = self.pending(Pending { recv, kind: PendingKind::Named(name), targs: Vec::new() });
+                                    View::Apply(fun, items)
+                                }
+                            }
+                        }
+                    }
                 }
                 TExpr::Prim(op, l, r) => {
                     let name = self.typer.interner.intern(prim_name(op));
@@ -2301,6 +2332,14 @@ impl<'a, 't> Interp<'a, 't> {
                         if matches!(self.prog().expr(e), TExpr::CallMethod(..)) { "Select" } else { "Ident" }
                     } else {
                         "Apply"
+                    }
+                }
+                TExpr::Default(of, at, args) => {
+                    let priors = args.len as usize - (at & DEFAULT_RECEIVER != 0) as usize;
+                    match (of, priors, at & DEFAULT_RECEIVER != 0) {
+                        (DefaultOf::Ctor(_), 0, _) => "Ident",
+                        (DefaultOf::Method(_), 0, true) => "Select",
+                        _ => "Apply",
                     }
                 }
                 TExpr::Js(s, args) => match self.sym_of_template(s) {

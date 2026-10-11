@@ -256,6 +256,24 @@ impl<'a> Worker<'a> {
         }
     }
 
+    /// The name `te` was passed by as a named argument, where the capture has one.
+    pub(super) fn captured_name(&self, te: TExprId) -> Option<crate::intern::Name> {
+        let c = self.prog.capture.as_deref()?;
+        c.wraps.get(&te)?.iter().find_map(|w| match *w {
+            Wrap::Named(n) => Some(n),
+            _ => None,
+        })
+    }
+
+    /// `te` without the name it was passed by (`Capture::unname`).
+    #[cold]
+    #[inline(never)]
+    pub(super) fn capture_unname(&mut self, te: TExprId) {
+        if let Some((unit, c)) = self.capture_of_unit() {
+            c.unname(unit, te);
+        }
+    }
+
     #[cold]
     #[inline(never)]
     pub(super) fn capture_pat(&mut self, p: TPatId, f: PatForm) {
@@ -828,7 +846,6 @@ pub(super) fn map_form(f: Form, types: &TypeStore, ty: &mut dyn FnMut(TypeId) ->
         Form::JsObject(t) => Form::JsObject(ty(t)),
         Form::ByName
         | Form::Folded(_)
-        | Form::Default
         | Form::Promotion
         | Form::Widening
         | Form::Op(_)
@@ -1028,16 +1045,6 @@ impl<'a> Worker<'a> {
         thunk
     }
 
-    /// The `Unit` that stands for an omitted argument of a parameter with a default.
-    #[inline]
-    pub(super) fn default_placeholder(&mut self) -> TExprId {
-        let unit = self.prog.add(TExpr::Unit);
-        if self.capturing() {
-            self.capture_form(unit, Form::Default);
-        }
-        unit
-    }
-
     /// Marks the conversions `convert_rank` put between `outer` and `inner` with `form`.
     #[cold]
     #[inline(never)]
@@ -1088,6 +1095,19 @@ impl<'a> Worker<'a> {
             return;
         }
         let own: Vec<TypeId> = subst[call.owner_subst.len().min(subst.len())..].iter().map(|&(_, t)| if self.types.has_vars(t) { self.zonk(t) } else { t }).collect();
+        // The getters' applications among the arguments take the call's type arguments
+        // (`spliceMeth`), which the pickle's call writes.
+        if !own.is_empty() {
+            for &a in args {
+                let d = match self.prog.expr(a) {
+                    TExpr::Lambda(_, body) => body,
+                    _ => a,
+                };
+                if matches!(self.prog.expr(d), TExpr::Default(crate::tir::DefaultOf::Method(m), ..) if m == call.sym) {
+                    self.capture_targs(d, &own);
+                }
+            }
+        }
         let targs = self.types.list(&own);
         let transparent = self.syms.sym(call.sym).mods & crate::ast::mods::TRANSPARENT != 0;
         let binds = self.inline.last_binds;
@@ -1248,7 +1268,7 @@ mod tests {
         let outer = c.mark(unit);
         c.form(unit, e, Form::Promotion);
         let inner = c.mark(unit);
-        c.form(unit, e, Form::Default);
+        c.form(unit, e, Form::ByName);
         c.drop_since(unit, inner);
         assert_eq!(c.forms.get(&e), Some(&Form::Promotion));
         c.drop_since(unit, outer);
@@ -1336,7 +1356,7 @@ mod tests {
         let mut c = Capture::new(vec![true, true], vec![true, true]);
         let (edited, other) = (FileId(0), FileId(1));
         c.targs(edited, TExprId(1), types.list(&[ANY]));
-        c.form(edited, TExprId(1), Form::Default);
+        c.form(edited, TExprId(1), Form::ByName);
         c.wrap(edited, TExprId(2), Wrap::Named(crate::names::APPLY));
         c.local(edited, SymId(3)).ty = Some(ANY);
         c.form(other, TExprId(4), Form::ByName);

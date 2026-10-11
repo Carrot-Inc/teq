@@ -13,6 +13,7 @@ mod depfun;
 pub mod deprecation;
 mod deferred;
 mod derive;
+pub(crate) mod elaborate;
 mod exceptions;
 pub mod feature;
 pub mod exports;
@@ -654,6 +655,13 @@ pub struct Worker<'a> {
     /// Set while the arguments of a constructor in an annotation are typed: scalac lifts none of
     /// them (`Applications.isAnnotConstr`), where it lifts an ordinary call's.
     pub annotation_args: bool,
+    /// Typing an inline method's ordinary default getters alone, which are methods of their own
+    /// (`Desugar.addDefaultGetters`): no body, no inline parameter's default.
+    pub inline_getters_only: bool,
+    /// The purity of references as written where their node says otherwise (`note_written_ref`).
+    pub written_purity: crate::intern::FxMap<TExprId, elaborate::Purity>,
+    /// Set where a term is resolved through an export, for the reference's purity.
+    pub ref_exported: bool,
     /// The last target measured for the divergence check: the type, its size, its classes and
     /// its shape with open variables blanked out.
     pub measured_target: Option<(TypeId, u32, u64, TypeId)>,
@@ -1142,18 +1150,19 @@ pub struct Worker<'a> {
     pub anon_captures: FxMap<ClassId, Vec<SymId>>,
     /// What the expression that creates an anonymous class passes on to the superclass.
     pub anon_parent_args: FxMap<ClassId, crate::tir::ParentCall>,
-    /// The members each trait calls through `super`, which the classes mixing it in bind.
-    pub mixin_supers: FxMap<ClassId, Vec<SymId>>,
+    /// The members each trait calls through `super`, and the getters it selects so, which the
+    /// classes mixing it in bind.
+    pub mixin_supers: FxMap<ClassId, Vec<crate::tir::SuperCall>>,
     /// The same of the traits of the shared region, a library's or the std's, whose bodies are
     /// typed under the loader's lock by whichever worker needs one first: every worker's, read
     /// and written by the lock's holder (`note_mixin_super`, `bind_mixin_supers`), joined to
     /// `mixin_supers` at the merge.
-    pub shared_mixin_supers: std::sync::Arc<std::sync::Mutex<FxMap<ClassId, Vec<SymId>>>>,
+    pub shared_mixin_supers: std::sync::Arc<std::sync::Mutex<FxMap<ClassId, Vec<crate::tir::SuperCall>>>>,
     /// The (class, member) pairs whose super call was reported unbindable.
     pub super_problems_told: FxMap<(ClassId, SymId), ()>,
     /// What the last binding of the mixins' super calls saw: how many of the program's classes
     /// it bound, and each trait's calls (`bind_mixin_supers`).
-    pub mixins_bound: (usize, FxMap<ClassId, Vec<SymId>>),
+    pub mixins_bound: (usize, FxMap<ClassId, Vec<crate::tir::SuperCall>>),
     /// The definitions whose type is left to inference and whose inference reported an error,
     /// its own or that of a body it asked for on the way: the type it gave may be nonsense, so
     /// a retype puts the old signature of such a one back (`incremental.rs`).
@@ -2055,6 +2064,9 @@ impl<'a> Worker<'a> {
             search_byname: false,
             typing_annotation: false,
             annotation_args: false,
+            inline_getters_only: false,
+            written_purity: Default::default(),
+            ref_exported: false,
             measured_target: None,
             defining: None,
             conversion_indexes: FxMap::default(),
@@ -2382,6 +2394,9 @@ impl<'a> Worker<'a> {
             search_byname: Default::default(),
             typing_annotation: false,
             annotation_args: false,
+            inline_getters_only: false,
+            written_purity: Default::default(),
+            ref_exported: false,
             measured_target: Default::default(),
             defining: Default::default(),
             conversion_indexes: self.conversion_indexes.clone(),

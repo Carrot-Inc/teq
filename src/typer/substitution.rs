@@ -566,7 +566,7 @@ impl<'a> Worker<'a> {
         span: Span,
         def: &Arc<InlineDefinition>,
     ) -> (TExprId, TypeId) {
-        let mut bound = self.bind_inline_call(call, sig, subst, args, body, ret_ty, span, true);
+        let mut bound = self.bind_inline_call(call, sig, subst, args, body, ret_ty, span);
         let mut targs: Subst = Vec::with_capacity(subst.len() + call.owner_subst.len());
         for &(p, t) in subst {
             let t = self.zonk(t);
@@ -583,8 +583,7 @@ impl<'a> Worker<'a> {
         for i in 0..bound.params.len() {
             let p = bound.params[i];
             bargs.insert(p.sym, self.prog.add(TExpr::Local(p.proxy)));
-            let constant = if p.later { None } else { p.constant };
-            let path = if p.later { self.types.mk(Type::Term(p.proxy)) } else { self.parameter_path(p.arg, constant, p.proxy) };
+            let path = self.parameter_path(p.arg, p.constant, p.proxy);
             paths.push((p.sym, path));
         }
         let this = bound.this_proxy.map(|p| self.prog.add(TExpr::Local(p)));
@@ -625,27 +624,17 @@ impl<'a> Worker<'a> {
         if !def.imports.is_empty() {
             walk.param_proxies = bound.params.iter().map(|p| (p.sym, p.proxy)).collect();
         }
+        // The stored defaults are the definition's; a call's omission is its getter's
+        // application among the arguments.
         for at in 0..bound.params.len() {
-            let stored_default = def.defaults.get(at).copied().flatten();
-            if !bound.params[at].later {
-                match (on_demand, stored_default) {
-                    (true, Some(d)) => walk.pruned += walk.demand.pruned_size(&self.prog, d),
-                    (false, Some(_)) => {
-                        let d = walk.inst.defaults[at].expect("the copy of a default");
-                        self.discard(&mut walk, d);
-                    }
-                    _ => {}
+            match (on_demand, def.defaults.get(at).copied().flatten()) {
+                (true, Some(d)) => walk.pruned += walk.demand.pruned_size(&self.prog, d),
+                (false, Some(_)) => {
+                    let d = walk.inst.defaults[at].expect("the copy of a default");
+                    self.discard(&mut walk, d);
                 }
-                continue;
+                _ => {}
             }
-            let d = if on_demand {
-                let d = stored_default.expect("the default of a missing argument");
-                self.demand_in_walk(&mut walk, d, None)
-            } else {
-                walk.inst.defaults[at].expect("the default of a missing argument")
-            };
-            let te = self.walk(&mut walk, d);
-            self.bind_parameter(&mut bound, at, te);
         }
         let root = walk.inst.root;
         let te = self.walk(&mut walk, root);
@@ -965,7 +954,7 @@ impl<'a> Worker<'a> {
                 }
                 self.resolved(w, e)
             }
-            TExpr::CallStatic(_, args) => {
+            TExpr::CallStatic(_, args) | TExpr::Default(_, _, args) => {
                 self.walk_list(w, args);
                 self.resolved(w, e)
             }

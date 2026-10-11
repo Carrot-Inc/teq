@@ -752,22 +752,9 @@ impl<'a> Worker<'a> {
                 }
                 cv.ty(TyExpr::Resolved(resolved))
             };
-            // A product's parent call passes the constructor's own default getters where the
-            // source left the arguments out (`T.$lessinit$greater$default$2`): left out again, the
-            // typer supplies them as for the program's own parent (`without_own_defaults`).
-            let lists: Vec<&[Term]> = if self.converts_product(cv) && hoisted.is_empty() {
-                let mut before = 0;
-                lists
-                    .into_iter()
-                    .map(|list| {
-                        let kept = own_defaults_trimmed(cv, list, before);
-                        before += list.len();
-                        kept
-                    })
-                    .collect()
-            } else {
-                lists
-            };
+            // A product's parent call passes the constructor's default getters' applications
+            // where the source left the arguments out (`T.$lessinit$greater$default$2`), which
+            // the typer types as the plan's (`Worker::getter_application`).
             // `C()` passes nothing: the type carries the arguments, an empty list would have the
             // typer infer them from nothing.
             let mut args = Vec::with_capacity(lists.len());
@@ -927,7 +914,16 @@ impl<'a> Worker<'a> {
                     })
                     .flatten()
                     .collect();
-                let method_terms: Vec<Vec<Name>> = msig.clauses.iter().map(|cl| cl.params.iter().map(|p| p.name).collect()).collect();
+                // The clauses in the declaration's order, which the getters take and number
+                // the parameters by: a right-associative extension's first clause before its
+                // receiver's (`Desugar.extMethod`), which the signature keeps first.
+                let declared: Vec<usize> = {
+                    let info = self.syms.sym(sym);
+                    let right_assoc = info.is_extension && self.name_ref(name).ends_with(':');
+                    let ext_clauses = info.ext_clauses as usize;
+                    right_assoc.then(|| msig.right_assoc_order(ext_clauses)).flatten().unwrap_or_else(|| (0..msig.clauses.len()).collect())
+                };
+                let method_terms: Vec<Vec<Name>> = declared.iter().map(|&c| msig.clauses[c].params.iter().map(|p| p.name).collect()).collect();
                 for (getter, d) in defaults.iter().filter(|((n, _), _)| *n == name).map(|(_, d)| *d) {
                     cv.lambda_targets.extend(lambda_targets(d));
                     // The getter repeats the method's type parameters as its own, and the
@@ -958,12 +954,12 @@ impl<'a> Worker<'a> {
                     }
                 }
                 let mut clauses = Vec::with_capacity(msig.clauses.len());
-                let mut index = 0;
                 let synthetic_apply = name == names::APPLY && sig.mods.flags.has(tags::SYNTHETIC);
-                for cl in &msig.clauses {
+                for (ci, cl) in msig.clauses.iter().enumerate() {
                     let mut params = Vec::with_capacity(cl.params.len());
-                    for p in &cl.params {
-                        index += 1;
+                    let before: usize = declared.iter().take_while(|&&c| c != ci).map(|&c| msig.clauses[c].params.len()).sum();
+                    for (k, p) in cl.params.iter().enumerate() {
+                        let index = before + k + 1;
                         let ty = cv.ty(TyExpr::Resolved(p.ty));
                         // The getters are named for the method alone; only one alternative of
                         // an overloaded name has defaults, and its parameters carry the flag.
@@ -2527,6 +2523,14 @@ impl<'a> Worker<'a> {
 
     fn conv_expr_now(&mut self, cv: &mut Conv, t: &Term) -> ExprId {
         match &t.kind {
+            // A sequence literal on its own, a repeated argument a call's plan bound
+            // (`Lifter.liftArg`).
+            TermKind::Repeated(elem, elems) => {
+                let elem = self.conv_type(cv, elem);
+                let items: Vec<ExprId> = elems.iter().map(|e| self.conv_expr(cv, e)).collect();
+                let l = push_list(&mut cv.ast.expr_lists, &items);
+                cv.expr(Expr::SeqLit(l, elem))
+            }
             TermKind::Path(p) => self.conv_path(cv, p),
             TermKind::Const(c) => self.conv_const(cv, c),
             // `var x: T = _`, the zero of the variable's type.
@@ -3489,19 +3493,11 @@ impl<'a> Worker<'a> {
     /// The arguments of `recv.m(a, recv.m$default$2)` without the trailing ones that are the
     /// method's own defaults: the std's `m` of an array supplies its default itself, or has no
     /// such parameter and does what the default does (munit calls an array's `indexWhere` so).
-    /// With `leading`, a getter applied to the earlier clauses' arguments counts too (a
-    /// product's call, where a default the source left out is the getter's call), and the
-    /// clause's arguments follow the earlier clauses' in the getters' numbering.
-    fn without_own_defaults<'t>(&self, cv: &Conv, f: &Term, args: &'t [Term], leading: bool) -> &'t [Term] {
+    fn without_own_defaults<'t>(&self, cv: &Conv, f: &Term, args: &'t [Term]) -> &'t [Term] {
         let mut head = f;
-        let mut before = 0;
         loop {
             match &head.kind {
                 TermKind::TypeApply(inner, ..) => head = inner,
-                TermKind::Apply(inner, earlier) if leading => {
-                    before += earlier.len();
-                    head = inner;
-                }
                 _ => break,
             }
         }
@@ -3512,14 +3508,14 @@ impl<'a> Worker<'a> {
             let mut a = &args[end - 1];
             loop {
                 match &a.kind {
-                    TermKind::Apply(g, inner) if inner.is_empty() || leading => a = g,
+                    TermKind::Apply(g, inner) if inner.is_empty() => a = g,
                     TermKind::TypeApply(g, ..) => a = g,
                     _ => break,
                 }
             }
             let own = match &a.kind {
                 TermKind::Select(_, d) | TermKind::SelectIn(_, d, ..) => match cv.tasty.names.get(cv.tasty.source_name(*d) as usize) {
-                    Some(TName::DefaultGetter(u, index)) => *index as usize + 1 == before + end && cv.tasty.simple(*u).is_some() && cv.tasty.simple(*u) == cv.tasty.simple(callee),
+                    Some(TName::DefaultGetter(u, index)) => *index as usize + 1 == end && cv.tasty.simple(*u).is_some() && cv.tasty.simple(*u) == cv.tasty.simple(callee),
                     _ => false,
                 },
                 _ => false,
@@ -3530,29 +3526,6 @@ impl<'a> Worker<'a> {
             end -= 1;
         }
         &args[..end]
-    }
-
-    /// A product's call that passes its callee's own default getter where the source left an
-    /// argument out before named ones (`c.copy(c.copy$default$1, balance = b, ..)`): the named
-    /// arguments alone, as the source wrote them. `None` where an argument it passes is
-    /// neither a default getter of its own nor named.
-    fn named_without_defaults(&self, cv: &Conv, f: &Term, args: &[Term]) -> Option<Vec<Term>> {
-        let trimmed = self.without_own_defaults(cv, f, args, true);
-        if !args[..trimmed.len()].iter().any(|a| matches!(a.kind, TermKind::NamedArg(..))) {
-            return None;
-        }
-        let mut kept = Vec::new();
-        let mut dropped = false;
-        for (i, a) in args.iter().enumerate() {
-            match &a.kind {
-                TermKind::NamedArg(..) => kept.push(a.clone()),
-                // The argument at `i` is the callee's own default where the arguments up to it,
-                // trimmed of the trailing ones that are, end at or before it.
-                _ if self.without_own_defaults(cv, f, &args[..=i], true).len() <= i => dropped = true,
-                _ => return None,
-            }
-        }
-        dropped.then_some(kept)
     }
 
     /// Whether `f`, under its type application, selects the member `name`.
@@ -3762,21 +3735,14 @@ impl<'a> Worker<'a> {
     }
 
     fn conv_apply(&mut self, cv: &mut Conv, f: &Term, args: &[Term]) -> ExprId {
-        // Through an array's `ArrayOps`, whose std members lack some of scala-library's
-        // parameters, and in a product's body, where the source left them out: elsewhere the
-        // default getters stay, a JS facade's among them.
-        let product = self.converts_product(cv);
-        let named_only: Vec<Term>;
-        let args = match product {
-            true => match self.named_without_defaults(cv, f, args) {
-                Some(named) => {
-                    named_only = named;
-                    &named_only[..]
-                }
-                None => self.without_own_defaults(cv, f, args, true),
-            },
+        // The default getters' applications a body passes stay, as `TreeUnpickler` reads them:
+        // the typer types each as the plan's (`Worker::getter_application`). Through an array's
+        // `ArrayOps`, whose std members lack some of scala-library's parameters, a library
+        // body's trailing ones are left out for the std's member to take its own.
+        let args = match self.converts_product(cv) {
+            true => args,
             false => {
-                let trimmed = self.without_own_defaults(cv, f, args, false);
+                let trimmed = self.without_own_defaults(cv, f, args);
                 if trimmed.len() < args.len() && (self.on_array_ops_local(cv, f) || self.through_array_ops(cv, f)) { trimmed } else { args }
             }
         };
@@ -4885,6 +4851,10 @@ impl<'a> Worker<'a> {
                 if sig.mods.flags.has(tags::MUTABLE) {
                     m |= mods::MUTABLE;
                 }
+                // A temporary of an application's plan, which `Lifter.lift` gives a fresh name.
+                if m == 0 && sig.mods.flags.has(tags::SYNTHETIC) && is_lifted_name(&cv.tasty, sig.name) {
+                    m |= mods::LIFTED;
+                }
                 let d = cv.ast.add_def(Def { name, span: cv.span, mods: m, annots: Vec::new(), kind: DefKind::Val { pat: None, ty, rhs: init } });
                 cv.def_at.push((d, sig.addr));
                 out.push(Stmt::Def(d));
@@ -5825,30 +5795,13 @@ fn term_param_count(sig: &DefSig) -> usize {
     sig.clauses.iter().map(|c| if let Clause::Terms(ps) = c { ps.len() } else { 0 }).sum()
 }
 
-/// The argument lists of a call, the first first.
-/// A constructor call's argument list without its trailing default getters of the constructor
-/// (`$lessinit$greater$default$N`, `N` the parameter's place among the call's, `before` the
-/// parameters of the lists before this one).
-fn own_defaults_trimmed<'t>(cv: &Conv, list: &'t [Term], before: usize) -> &'t [Term] {
-    let mut end = list.len();
-    while end > 0 {
-        let mut a = &list[end - 1];
-        while let TermKind::Apply(g, _) | TermKind::TypeApply(g, ..) = &a.kind {
-            a = g;
-        }
-        let own = match &a.kind {
-            TermKind::Select(_, d) | TermKind::SelectIn(_, d, ..) => match cv.tasty.names.get(cv.tasty.source_name(*d) as usize) {
-                Some(TName::DefaultGetter(u, index)) => *index as usize + 1 == before + end && cv.tasty.simple(*u) == Some("<init>"),
-                _ => false,
-            },
-            _ => false,
-        };
-        if !own {
-            break;
-        }
-        end -= 1;
+
+/// `xs$1`, `$1`: a fresh name (`UniqueName`), which `Lifter.lift` gives a lifted temporary.
+fn is_lifted_name(tasty: &TastyFile, n: NameRef) -> bool {
+    match tasty.names.get(n as usize) {
+        Some(TName::Unique { separator, .. }) => tasty.simple(*separator) == Some("$"),
+        _ => false,
     }
-    &list[..end]
 }
 
 fn call_lists(call: &Term) -> Vec<&[Term]> {

@@ -177,6 +177,7 @@ impl<'a, 't> Interp<'a, 't> {
                 let args = self.eval_args(None, args, fr, cx)?;
                 self.apply_value(fv, args)
             }
+            TExpr::Default(of, at, args) => self.default_arg(of, at, args, fr, cx),
             TExpr::New(c, args) => {
                 self.init_file_of_class(c)?;
                 // A case class's companion is initialised before the arguments run, as scalac's
@@ -453,47 +454,198 @@ impl<'a, 't> Interp<'a, 't> {
         Ok(out)
     }
 
-    /// The arguments of a call of `sym`: an omitted one, which the typer writes as `()` where
-    /// the parameter has a default, arrives as `Absent` for the callee to fill in.
-    pub(super) fn eval_args(&mut self, sym: Option<SymId>, args: ListRef, fr: &Rc<Frame>, cx: &Ctx) -> R<Vec<Value>> {
-        let mut out = self.take_vec(args.len as usize);
-        for i in 0..args.len as usize {
-            let item = self.prog().expr_lists[args.start as usize + i];
-            if let (TExpr::Unit, Some(s)) = (self.prog().expr(item), sym) {
-                if self.param_has_default(s, i) {
-                    out.push(Value::Absent);
-                    continue;
-                }
-            }
-            out.push(self.eval(item, fr, cx)?);
-        }
-        Ok(out)
+    /// The arguments of a call, in order: an argument the source left out is its default
+    /// getter's application (`TExpr::Default`), evaluated where the typer put it.
+    pub(super) fn eval_args(&mut self, _sym: Option<SymId>, args: ListRef, fr: &Rc<Frame>, cx: &Ctx) -> R<Vec<Value>> {
+        self.eval_list(args, fr, cx)
     }
 
-    fn eval_ctor_args(&mut self, c: ClassId, args: ListRef, fr: &Rc<Frame>, cx: &Ctx) -> R<Vec<Value>> {
-        let mut out = self.take_vec(args.len as usize);
-        for i in 0..args.len as usize {
-            let item = self.prog().expr_lists[args.start as usize + i];
-            if let TExpr::Unit = self.prog().expr(item) {
-                if self.ctor_param_has_default(c, i) {
-                    out.push(Value::Absent);
-                    continue;
-                }
-            }
-            out.push(self.eval(item, fr, cx)?);
-        }
-        Ok(out)
+    fn eval_ctor_args(&mut self, _c: ClassId, args: ListRef, fr: &Rc<Frame>, cx: &Ctx) -> R<Vec<Value>> {
+        self.eval_list(args, fr, cx)
     }
 
-    /// Whether the `i`th argument a `new` passes may be omitted; an anonymous class passes its
-    /// superclass's arguments on.
-    fn ctor_param_has_default(&self, c: ClassId, i: usize) -> bool {
-        let info = self.syms().class(c);
-        let c = match (info.kind, info.superclass) {
-            (ClassKind::Anon, Some(sup)) => sup,
-            _ => c,
+    /// A default getter's application (`TExpr::Default`), as scalac's `m$default$N` runs: the
+    /// default of the method the receiver's class runs for the call, or of the nearest member
+    /// that method overrides that declares one (`findDefaultGetter` selects the getter on the
+    /// receiver), with the receiver as `this` and the earlier clauses' arguments bound to their
+    /// parameters; a constructor's in the scope of the `new`.
+    fn default_arg(&mut self, of: DefaultOf, at: u32, args: ListRef, fr: &Rc<Frame>, cx: &Ctx) -> R {
+        let index = (at & !DEFAULT_RECEIVER) as usize;
+        let items = self.prog().expr_list(args).to_vec();
+        let (recv, priors) = if at & DEFAULT_RECEIVER != 0 { (Some(items[0]), &items[1..]) } else { (None, &items[..]) };
+        let on_super = recv.is_some_and(|r| matches!(self.prog().expr(r), TExpr::Super(_)));
+        let mixin = recv.and_then(|r| match self.prog().expr(r) {
+            TExpr::Super(SuperTarget::Mixin(tr)) => Some(tr),
+            _ => None,
+        });
+        let recv = match recv {
+            Some(r) => Some(self.eval(r, fr, cx)?),
+            None => None,
         };
-        self.syms().class(c).ctor.iter().flat_map(|cl| cl.params.iter()).nth(i).map_or(false, |p| p.has_default)
+        let mut vals = Vec::with_capacity(priors.len());
+        for &p in priors {
+            vals.push(self.eval(p, fr, cx)?);
+        }
+        let (f, from, this, parent, class) = match of {
+            DefaultOf::Ctor(c) => {
+                let Some(ti) = self.tclass_index(c) else {
+                    let name = self.class_path(c);
+                    return self.unsupported(format!("{} has no constructor to take a default from", name));
+                };
+                let (params, default, captures) = {
+                    let tc = &self.prog().classes[ti];
+                    (tc.ctor_params.clone(), tc.ctor_defaults.get(tc.captures + index).copied().flatten(), tc.captures)
+                };
+                let Some(d) = default else {
+                    let name = self.class_path(c);
+                    return self.unsupported(format!("{} has no default for its parameter {}", name, index + 1));
+                };
+                let bound: Vec<(SymId, Value)> = params[captures..].iter().copied().zip(vals).collect();
+                let by_name = self.syms().class(c).ctor.iter().flat_map(|cl| cl.params.iter()).nth(index).is_some_and(|p| p.by_name);
+                return self.eval_default(d, by_name, bound, Some(fr.clone()), cx.this.clone(), cx.class);
+            }
+            // A getter selected on `super` inside a trait: the getter of the member after the
+            // trait in the instance's linearisation, as the trait's `super` call runs it.
+            DefaultOf::Method(s) => {
+                let s = match (mixin, &recv) {
+                    (Some(tr), Some(Value::Obj(o))) => {
+                        let class = o.class;
+                        let found = match self.mixin_super_target(class, tr, s) {
+                            Some(t) => Some(t),
+                            None => self.typer.mixin_super_target_of(class, tr, s),
+                        };
+                        found.flatten().unwrap_or(s)
+                    }
+                    _ => s,
+                };
+                self.default_target(s, index, recv, on_super, fr, cx)?
+            }
+        };
+        let Some(d) = self.prog().funs[f.idx()].defaults.get(from).copied().flatten() else {
+            let name = self.qualified_name(self.prog().funs[f.idx()].sym);
+            return self.unsupported(format!("{} has no default for its parameter {}", name, from + 1));
+        };
+        let params: Vec<SymId> = self.prog().funs[f.idx()].params.iter().take(vals.len()).copied().collect();
+        let bound: Vec<(SymId, Value)> = params.into_iter().zip(vals).collect();
+        let sym = self.prog().funs[f.idx()].sym;
+        let by_name = self.syms().sym(sym).sig.as_ref().and_then(|sig| sig.clauses.iter().flat_map(|cl| cl.params.iter()).nth(from).map(|p| p.by_name)).unwrap_or(false);
+        self.eval_default(d, by_name, bound, parent, this, class)
+    }
+
+    /// The function whose default a getter's application of `s`'s parameter `index` runs, the
+    /// parameter's place there, and what it runs with: the receiver, the scope its class reads
+    /// its captures from, its class.
+    #[allow(clippy::type_complexity)]
+    fn default_target(&mut self, s: SymId, index: usize, recv: Option<Value>, on_super: bool, fr: &Rc<Frame>, cx: &Ctx) -> R<(FunId, usize, Value, Option<Rc<Frame>>, Option<ClassId>)> {
+        let (owner, file, is_ctor) = {
+            let info = self.syms().sym(s);
+            (info.owner, info.file, info.name == crate::names::INIT)
+        };
+        let declared = |w: &mut Self, m: SymId| w.typer.default_declarer(m, index).unwrap_or(m);
+        let owned = |w: &mut Self, m: SymId| match w.syms().sym(m).owner {
+            Owner::Class(c) => Some(c),
+            _ => None,
+        };
+        // A secondary constructor's default, in the scope of the `new`.
+        if is_ctor {
+            let Some(f) = self.fun_of(s) else { return self.unsupported("a constructor without a body".to_string()) };
+            return Ok((f, index, cx.this.clone(), Some(fr.clone()), owned(self, s)));
+        }
+        let recv = match (recv, owner) {
+            (Some(r), _) => Some(r),
+            (None, Owner::Class(c)) => Some(self.module(c)?),
+            (None, _) => None,
+        };
+        match recv {
+            Some(Value::Obj(o)) if !on_super => {
+                let class = o.class;
+                let (m, _) = self.object_member(class, s);
+                let (f, owner_class) = match m {
+                    Member::Fun(f, k) => (f, Some(k)),
+                    Member::Ext(f) => (f, None),
+                    // An inline method, which nothing dispatches to: its own getters.
+                    _ if self.syms().sym(s).mods & crate::ast::mods::INLINE != 0 => match self.fun_of(s) {
+                        Some(f) => (f, owned(self, s)),
+                        None => {
+                            let name = self.qualified_name(s);
+                            return self.unsupported(format!("{} has no default getters", name));
+                        }
+                    },
+                    _ => {
+                        let name = self.qualified_name(s);
+                        return self.unsupported(format!("the default getter of {} on this receiver", name));
+                    }
+                };
+                let implementation = self.prog().funs[f.idx()].sym;
+                let declarer = declared(self, implementation);
+                if declarer == implementation {
+                    let parent = match owner_class {
+                        Some(k) if k == class => o.env.clone(),
+                        _ => None,
+                    };
+                    return Ok((f, index, Value::Obj(o), parent, owner_class));
+                }
+                let Some(g) = self.fun_of(declarer) else {
+                    let name = self.qualified_name(declarer);
+                    return self.unsupported(format!("{} has no body to take its default from", name));
+                };
+                let k = owned(self, declarer);
+                let parent = if k == Some(class) { o.env.clone() } else { None };
+                Ok((g, index, Value::Obj(o), parent, k))
+            }
+            Some(r) => {
+                let declarer = declared(self, s);
+                let Some(f) = self.fun_of(declarer) else {
+                    let name = self.qualified_name(declarer);
+                    return self.unsupported(format!("{} has no body to take its default from", name));
+                };
+                Ok((f, index, r, None, owned(self, declarer)))
+            }
+            None if owner == Owner::Local => {
+                let Some(v) = fr.find(s) else {
+                    let name = self.qualified_name(s);
+                    return self.unsupported(format!("the local method {} is not in scope", name));
+                };
+                match &v {
+                    Value::Fun(c) => match &c.kind {
+                        ClosureKind::LocalDef(f) => Ok((*f, index, c.this.clone(), Some(c.env.clone()), c.class)),
+                        _ => self.unsupported("a local default getter of a function value".to_string()),
+                    },
+                    _ => self.unsupported("a local default getter of a value".to_string()),
+                }
+            }
+            None => {
+                self.init_file_of(s, owner, file)?;
+                let Some(f) = self.fun_of(s) else {
+                    let name = self.qualified_name(s);
+                    return self.unsupported(format!("{} has no body to take its default from", name));
+                };
+                Ok((f, index, Value::Unit, None, None))
+            }
+        }
+    }
+
+    /// Evaluates the default `d` in a frame of its own that binds the getter's parameters: a
+    /// by-name parameter's, kept as its thunk, to its value, as its getter returns it.
+    fn eval_default(&mut self, d: TExprId, by_name: bool, bound: Vec<(SymId, Value)>, parent: Option<Rc<Frame>>, this: Value, class: Option<ClassId>) -> R {
+        self.enter()?;
+        let key = self.fresh_key();
+        let cx = Ctx { this, def_key: key, class, tail: None };
+        let frame = self.take_frame(parent, bound.len());
+        for (p, v) in bound {
+            frame.bind(p, v);
+        }
+        let r = match self.prog().expr(d) {
+            TExpr::Lambda(ps, body) if by_name && ps.len == 0 => self.eval(body, &frame, &cx),
+            _ if by_name => match self.eval(d, &frame, &cx) {
+                Ok(thunk) => self.apply_value(thunk, Vec::new()),
+                other => other,
+            },
+            _ => self.eval(d, &frame, &cx),
+        };
+        self.release_frame(frame);
+        self.depth -= 1;
+        r
     }
 
     /// The arguments that create an anonymous class: its captures, then what goes on to its
@@ -534,21 +686,12 @@ impl<'a, 't> Interp<'a, 't> {
                         vals.push(v);
                     }
                 }
-            } else if matches!(self.prog().expr(item), TExpr::Unit) && self.ctor_param_has_default(c, i - captures.len()) {
-                vals.push(Value::Absent);
             } else {
                 vals.push(self.eval(item, fr, cx)?);
             }
         }
         let env = if bound.is_empty() { fr.clone() } else { Frame::with(Some(fr.clone()), bound) };
         Ok((env, vals))
-    }
-
-    fn param_has_default(&self, s: SymId, i: usize) -> bool {
-        match &self.syms().sym(s).sig {
-            Some(sig) => sig.clauses.iter().flat_map(|c| c.params.iter()).nth(i).map_or(false, |p| p.has_default),
-            None => false,
-        }
     }
 
     // ---- locals ----

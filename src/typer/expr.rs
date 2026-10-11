@@ -1600,6 +1600,22 @@ impl<'a> Worker<'a> {
                 self.end_chain(te, ty);
                 (te, ty)
             }
+            // The elements of a repeated parameter's argument, as the call's typing makes them.
+            Expr::SeqLit(l, elem) => {
+                let elem = self.resolve_type(elem);
+                let items: Vec<TExprId> = ast.expr_list(l).to_vec().into_iter().map(|a| self.check_expr(a, elem)).collect();
+                let l = self.prog.list(&items);
+                let seq = self.prog.add(TExpr::SeqLit(l));
+                if self.capturing() {
+                    self.capture_form(seq, crate::tir::capture::Form::Repeated(elem));
+                }
+                let ty = match self.seq_class() {
+                    Some(seq_class) => self.types.class(seq_class, &[elem]),
+                    None => ERROR,
+                };
+                self.prog.set_type(seq, ty);
+                (seq, ty)
+            }
             Expr::Typed(inner, ty) => {
                 if matches!(ast.ty(ty), TyExpr::Repeated(_)) {
                     // Where a library body reads a repeated parameter as a value (`m.attrs` of a
@@ -3947,11 +3963,11 @@ impl<'a> Worker<'a> {
                     let kind = if def.mods & mods::MUTABLE != 0 { SymKind::Var } else { SymKind::Val };
                     let sym = self.new_local(def.name, kind, declared.unwrap_or(ERROR), def.span);
                     let mut s = self.syms.sym_mut(sym);
-                    s.mods |= def.mods & (mods::LAZY | mods::IMPLICIT);
+                    s.mods |= def.mods & (mods::LAZY | mods::IMPLICIT | mods::LIFTED);
                     if declared.is_none() {
                         s.state().set(Completion::InProgress);
                     }
-                    let lost = def.mods & !(mods::LAZY | mods::IMPLICIT | mods::MUTABLE);
+                    let lost = def.mods & !(mods::LAZY | mods::IMPLICIT | mods::MUTABLE | mods::LIFTED);
                     if self.capturing() && lost != 0 {
                         self.capture_local(sym, |l| l.mods = lost);
                     }
@@ -4024,6 +4040,7 @@ impl<'a> Worker<'a> {
                     self.type_body(sym, &sig, Some(ret));
                 } else if self.is_inline_callee(sym) {
                     self.check_local_inline_definition(sym);
+                    self.type_local_inline_getters(sym, &sig);
                 }
                 if let Some(&f) = self.fun_of_sym.get(&sym) {
                     out.push(TStmt::Fun(f));

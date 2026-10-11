@@ -2,6 +2,9 @@ bodies/fix/bodies/Base.tasty 0015f1e5d307cdd2003cc94795b3f991
 bodies/fix/bodies/Bodies.tasty 0013922b3bd01cb6003c28431ee7acf5
 bodies/fix/bodies/Point.tasty 001a65b4fda50a92004694affdc6e1d0
 bodies/fix/bodies/Pretty.tasty 00ac072766647bec0074c2b833c9e9ca
+calllift/fix/calllift/CallLift.tasty 004f5cd4f8b548b8001effbb083af0f2
+calllift/fix/calllift/LiftExports.tasty 00889a6bed7b49c5008986e1ba9f19d3
+calllift/fix/calllift/LiftShapes.tasty 004dd62878200ec9002a5718bc4bd3b4
 casts/fix/casts/CastA.tasty 00b636d295339fe400d0a00ad1da3295
 casts/fix/casts/CastB.tasty 00b536d295339fe400d0940aa1da3e99
 casts/fix/casts/CastLib.tasty 003f8d393df022dc005d25e6b084e5d8
@@ -52,6 +55,9 @@ inlres/fix/inlres/InlD.tasty 00fc97d834c883c1009111d8b8883ae0
 inlres/fix/inlres/InlRes.tasty 005026245ac732b0003480a79c84e4a8
 inlres/fix/inlres/InlT.tasty 006e76b966199fe900ffb71f7e33a081
 interparts/fix/interparts/InterpParts.tasty 00cd65e446d690b40011d8fe18e903fd
+jargetter/fix/jargetter/JgLog.tasty 003fcd585d6fbcdd00427de165928bd4
+jargetter/fix/jargetter/JgSocket.tasty 00f38de41d3ff4c100c5addf62d3ecf0
+jargetter/fix/jargetter/JgSocketImpl.tasty 00f75370921b84dc00dfefbfeb41a3fe
 jvarargs/fix/jvarargs/JVarargs.tasty 005de7c1001ab7a200713d91bea468e3
 localcase/fix/shapes/Deferring.tasty 00f2414611f885ee0091ffbbfe5c87ff
 localcase/fix/shapes/LocalDefer.tasty 00b2fb2f7409daf2008147d6219351b0
@@ -109,6 +115,10 @@ seqpat/fix/seqpat/SpWords.tasty 003c10f8f9048eb0006db1ab182aa8f3
 shadow/fix/shadow/Shadowed.tasty 00a0a87ad47afdea00d8263f7d1106e3
 shadow/fix/shadow/shadow$package.tasty 0003c21c5c8ba4d80085b9fd7e9944a6
 stdforms/fix/stdforms/StdForms.tasty 0031f946c31c55cb00b7c1422983d4fd
+supergetter/fix/supergetter/SgBase.tasty 006d43c865ad67dd004ea5925045a2e0
+supergetter/fix/supergetter/SgLayer.tasty 00af18e60f8a7cc80048a4f7767d1f9e
+supergetter/fix/supergetter/SgMarks.tasty 007b1431b145c4d800aac8e97e4c6994
+supergetter/fix/supergetter/SgMixed.tasty 00302716e54f02eb006c213e2c38ffe8
 targetname/fix/tname/Counter.tasty 0013ba4c0a4d25b500613dc64cbabab8
 targetname/fix/tname/Variance.tasty 001016bd5b32b0b9001b63d7745a77ca
 unmod33/fix/unmod/UmAliases.tasty 0074b453e5238fc100f2ab264466109c

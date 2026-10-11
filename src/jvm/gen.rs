@@ -2833,6 +2833,7 @@ impl<'a> Gen<'a> {
             }
             TExpr::New(c, args) => self.new_(e, c, args),
             TExpr::NewVia(s, args) => self.new_via(s, args),
+            TExpr::Default(of, at, args) => self.default_arg(of, at, args),
             TExpr::Lambda(params, body) => self.lambda(params, body),
             TExpr::While(c, body) => {
                 let head = self.code.new_label();
@@ -3878,26 +3879,18 @@ impl<'a> Gen<'a> {
 
     // ---- calls ----
 
-    /// The arguments of a call against the parameter types. A `()` standing in for a parameter
-    /// with a default is the call of the default's getter, which takes the arguments before it.
-    fn arguments(&mut self, callee: Option<SymId>, args: ListRef, params: &[JType], getter: &dyn Fn(&mut Self, usize, &[(u16, JType)])) {
-        let cx = self.cx;
-        let defaults: Vec<bool> = match callee.and_then(|s| cx.input.syms.sym(s).info.sig.as_ref()) {
-            Some(sig) => sig.clauses.iter().flat_map(|c| c.params.iter().map(|p| p.has_default)).collect(),
-            None => Vec::new(),
-        };
+    /// The arguments of a call against the parameter types, evaluated as they stand: an
+    /// argument the source left out is its default getter's application (`TExpr::Default`).
+    fn arguments(&mut self, callee: Option<SymId>, args: ListRef, params: &[JType]) {
         // A right-associative extension takes its arguments in another order than they are
         // written and evaluated: evaluated in theirs into locals, then loaded in its.
         let order = callee.and_then(|s| self.jvm_param_order(s)).filter(|o| o.len() == params.len());
         let Some(order) = order else {
-            self.arguments_with(&defaults, args, params, getter);
+            self.arguments_with(args, params);
             return;
         };
-        let mut written = vec![JType::object(); params.len()];
-        for (j, &k) in order.iter().enumerate() {
-            written[k] = params[j].clone();
-        }
-        self.arguments_with(&defaults, args, &written, getter);
+        let written = self.signature_order(&order, params);
+        self.arguments_with(args, &written);
         let mut slots = vec![0u16; written.len()];
         for k in (0..written.len()).rev() {
             slots[k] = self.store_new(&written[k]);
@@ -3905,6 +3898,15 @@ impl<'a> Gen<'a> {
         for &k in &order {
             self.load(slots[k], &written[k]);
         }
+    }
+
+    /// Parameter types in the class file's order (`jvm_param_order`) put back in the signature's.
+    fn signature_order(&self, order: &[usize], params: &[JType]) -> Vec<JType> {
+        let mut written = vec![JType::object(); params.len()];
+        for (j, &k) in order.iter().enumerate() {
+            written[k] = params[j].clone();
+        }
+        written
     }
 
     /// The arguments an enum case passes to the constructor of its enum.
@@ -3919,68 +3921,71 @@ impl<'a> Gen<'a> {
     }
 
     /// The same for the secondary constructor `via` of `c` when one is named.
-    pub fn ctor_arguments_of(&mut self, c: ClassId, via: Option<SymId>, args: ListRef, params: &[JType]) {
+    pub fn ctor_arguments_of(&mut self, _c: ClassId, _via: Option<SymId>, args: ListRef, params: &[JType]) {
+        self.arguments_with(args, params);
+    }
+
+    /// The default `i` of a constructor of `c`, the secondary `via` where named, with the
+    /// arguments of the clauses before its own in `temps`, left as `types[i]`, as scalac's caller
+    /// gets it: a JDK class's evaluated where it stands, having no getter; a named local class's
+    /// from its static getter, which takes the captures first; the companion's getter where the
+    /// companion holds them (scalac's layout), each taking the parameters of the clauses before
+    /// the default's; a jar class's as its class files declare it; else the class's static one.
+    fn ctor_default(&mut self, c: ClassId, via: Option<SymId>, i: usize, temps: &[(u16, JType)], types: &[JType]) {
         let cx = self.cx;
-        let flags: Vec<bool> = match via {
-            Some(s) => cx.input.syms.sym(s).sig.as_ref().map_or(Vec::new(), |sig| {
-                sig.clauses.iter().flat_map(|cl| cl.params.iter().map(|p| p.has_default)).collect()
-            }),
-            None => cx.input.syms.class(c).ctor.iter().flat_map(|cl| cl.params.iter().map(|p| p.has_default)).collect(),
-        };
-        let types = params.to_vec();
         if cx.jvm_class(c).is_some() {
             let defaults: Vec<Option<TExprId>> = match (via, cx.tclass_of.get(c.idx()).copied().filter(|&i| i != u32::MAX)) {
                 (Some(s), _) => cx.input.prog.funs.iter().find(|f| f.sym == s).map_or(Vec::new(), |f| f.defaults.clone()),
-                (None, Some(i)) => cx.input.prog.classes[i as usize].ctor_defaults[self.capture_count(c)..].to_vec(),
+                (None, Some(k)) => cx.input.prog.classes[k as usize].ctor_defaults[self.capture_count(c)..].to_vec(),
                 (None, None) => Vec::new(),
             };
-            return self.arguments_with(&flags, args, params, &|g: &mut Self, i, _| match defaults.get(i).copied().flatten() {
-                Some(d) => g.expr(d, &types[i]),
-                None => g.adapt(&JType::V, &types[i]),
-            });
+            match defaults.get(i).copied().flatten() {
+                Some(d) => self.expr(d, &types[i]),
+                None => self.adapt(&JType::V, &types[i]),
+            }
+            return;
         }
         let owner = self.class_name(c);
+        let n = self.capture_count(c);
+        if via.is_none() && n > 0 && cx.input.syms.class(c).kind != ClassKind::Anon {
+            let mut before = self.anon_ctor_params(c);
+            self.load_class_captures(c);
+            for (slot, t) in temps {
+                self.load(*slot, t);
+                before.push(t.clone());
+            }
+            self.invoke(Invoke::Static, &owner, false, &format!("$lessinit$greater$default${}", n + i + 1), &before, &types[i]);
+            return;
+        }
+        let name = format!("$lessinit$greater$default${}", i + 1);
         // A class whose companion holds the getters (scalac's layout): each takes the parameters
-        // of the clauses before the default's.
-        // Per parameter, where its clause starts and the type its getter returns: a by-name
-        // parameter's value (`companion_default_getters`).
-        let shapes: Option<Vec<(usize, Option<TypeId>)>> = cx.ctor_defaults_on_companion(c).then(|| {
+        // of the clauses before the default's, a by-name parameter's returning the value.
+        if cx.ctor_defaults_on_companion(c) {
             let clauses: Vec<ClauseSig> = match via {
                 Some(s) => cx.input.syms.sym(s).sig.as_ref().map_or(Vec::new(), |sig| sig.clauses.clone()),
                 None => cx.input.syms.class(c).ctor.clone(),
             };
-            let mut out = Vec::new();
-            let mut start = 0;
-            for cl in &clauses {
-                out.extend(cl.params.iter().map(|p| (start, p.by_name.then_some(p.ty))));
-                start += cl.params.len();
-            }
-            out
-        });
-        self.arguments_with(&flags, args, params, &|g: &mut Self, i, temps| {
-            let name = format!("$lessinit$greater$default${}", i + 1);
-            if let Some(shapes) = &shapes {
-                let (before, by_name) = shapes.get(i).copied().unwrap_or((i, None));
-                let module: Rc<str> = Rc::from(g.cx.companion_name(c));
-                g.getstatic(&module, "MODULE$", &JType::L(module.clone()));
-                let ret = match by_name {
-                    Some(t) => g.erase(t),
-                    None => types[i].clone(),
-                };
-                let desc = method_desc(&types[..before], &ret);
-                g.getter_call(Invoke::Virtual, &module, false, name, &desc, temps, &types[i], by_name.is_some());
-                return;
-            }
-            if g.jar_ctor_default(c, &name, temps, &types[i]) {
-                return;
-            }
-            for (slot, t) in temps {
-                g.load(*slot, t);
-            }
-            let before: Vec<JType> = temps.iter().map(|(_, t)| t.clone()).collect();
-            let interface = g.cx.is_interface(c);
-            g.invoke(Invoke::Static, &owner, interface, &name, &before, &types[i]);
-        });
+            let (before, by_name) = clause_shape(&clauses, i);
+            let module: Rc<str> = Rc::from(cx.companion_name(c));
+            self.getstatic(&module, "MODULE$", &JType::L(module.clone()));
+            let ret = match by_name {
+                Some(t) => self.erase(t),
+                None => types[i].clone(),
+            };
+            let desc = method_desc(&types[..before], &ret);
+            self.getter_call(Invoke::Virtual, &module, false, name, &desc, temps, &ret, false);
+            self.adapt(&ret, &types[i]);
+            return;
+        }
+        if self.jar_ctor_default(c, &name, temps, &types[i]) {
+            return;
+        }
+        for (slot, t) in temps {
+            self.load(*slot, t);
+        }
+        let before: Vec<JType> = temps.iter().map(|(_, t)| t.clone()).collect();
+        let interface = self.cx.is_interface(c);
+        self.invoke(Invoke::Static, &owner, interface, &name, &before, &types[i]);
     }
 
     /// A jar class's constructor default as scalac's class files have it: the companion's getter,
@@ -4014,59 +4019,20 @@ impl<'a> Gen<'a> {
         true
     }
 
-    /// A parameter without an argument, written or not, takes its default.
-    fn arguments_with(&mut self, defaults: &[bool], args: ListRef, params: &[JType], getter: &dyn Fn(&mut Self, usize, &[(u16, JType)])) {
+    /// The arguments as written, each against its parameter's type: a Java method's array
+    /// parameter takes an array of its own.
+    fn arguments_with(&mut self, args: ListRef, params: &[JType]) {
         let cx = self.cx;
-        let written = cx.input.prog.expr_list(args);
-        let n = written.len().max(params.len().min(defaults.len()));
-        let items: Vec<Option<TExprId>> = (0..n).map(|i| written.get(i).copied()).collect();
-        let uses_default = |i: usize, a: Option<TExprId>| {
-            defaults.get(i).copied().unwrap_or(false) && a.map_or(true, |a| matches!(cx.input.prog.expr(a), TExpr::Unit))
-        };
-        if !items.iter().enumerate().any(|(i, &a)| uses_default(i, a)) {
-            for (i, &a) in items.iter().enumerate() {
-                let want = params.get(i).cloned().unwrap_or_else(JType::object);
-                if let Some(a) = a {
-                    if let JType::L(n) = &want {
-                        if n.starts_with('[') {
-                            let n = n.to_string();
-                            self.java_array_argument(a, &n);
-                            continue;
-                        }
-                    }
-                    self.expr(a, &want);
-                }
-            }
-            return;
-        }
-        // The arguments that are written run first, as they do at a JS call site; the defaults
-        // follow in parameter order, each seeing the parameters before it.
-        let mut temps: Vec<(u16, JType)> = Vec::new();
-        for (i, &a) in items.iter().enumerate() {
+        for (i, &a) in cx.input.prog.expr_list(args).iter().enumerate() {
             let want = params.get(i).cloned().unwrap_or_else(JType::object);
-            match a {
-                // A placeholder: the verifier wants every slot below a later one assigned, and
-                // holding a value of the slot's type where a later argument branches (a null, not
-                // the boxed unit, which no frame of a reference type admits).
-                Some(a) if !uses_default(i, Some(a)) => self.expr(a, &want),
-                _ if matches!(want, JType::L(_)) => {
-                    self.code.op(op::ACONST_NULL);
-                    self.code.push(VT::Null);
+            if let JType::L(n) = &want {
+                if n.starts_with('[') {
+                    let n = n.to_string();
+                    self.java_array_argument(a, &n);
+                    continue;
                 }
-                _ => self.adapt(&JType::V, &want),
             }
-            let slot = self.store_new(&want);
-            temps.push((slot, want));
-        }
-        for (i, &a) in items.iter().enumerate() {
-            if uses_default(i, a) {
-                getter(self, i, &temps[..i]);
-                let (slot, want) = temps[i].clone();
-                self.store(slot, &want);
-            }
-        }
-        for (slot, t) in &temps {
-            self.load(*slot, t);
+            self.expr(a, &want);
         }
     }
 
@@ -4100,39 +4066,244 @@ impl<'a> Gen<'a> {
             let lifted = self.lifted_fun(s);
             self.load_captures(&lifted);
             let params = lifted.params.clone();
-            self.arguments(Some(s), args, &params, &|g: &mut Self, i, temps| g.local_default(s, i, temps));
+            self.arguments(Some(s), args, &params);
             let owner = self.this_name.clone();
             let n = lifted.captures.len() + lifted.this as usize + lifted.params.len();
             self.invoke_desc(Invoke::Static, &owner, self.is_interface, &lifted.name, &lifted.desc, n, &lifted.ret);
             return lifted.ret.clone();
         }
         let m = self.mref(s);
-        let module = self.load_file_module(info.file);
+        self.load_file_module(info.file);
         let params = m.params.clone();
-        self.arguments(Some(s), args, &params, &|g: &mut Self, i, temps| {
-            let module_type = JType::L(module.clone());
-            g.getstatic(&module, "MODULE$", &module_type);
-            g.default_getter_call(s, i, temps);
-        });
+        self.arguments(Some(s), args, &params);
         self.invoke_mref(&m);
         m.ret.clone()
     }
 
-    /// Calls `name$default$N` with the arguments of the clauses before the default's, the first
-    /// of `temps`; the receiver is on the stack. A jar's getter is called as its class file
-    /// declares it, the program's as `emit_fun` writes it, which is scalac's layout.
-    fn default_getter_call(&mut self, s: SymId, i: usize, temps: &[(u16, JType)]) {
+    /// A default getter's application (`TExpr::Default`), as scalac's caller makes it: the
+    /// receiver and the arguments of the clauses before the parameter's evaluated into locals in
+    /// that order, then the getter the call's method has called: on the receiver or the file's
+    /// object (`m$default$N`), a local def's lifted getter, a constructor's (`ctor_default`), a
+    /// value class's method's `m$default$N$extension`. What it leaves is the parameter's type, a
+    /// by-name parameter's value, which the typer's thunk around it passes.
+    fn default_arg(&mut self, of: DefaultOf, at: u32, args: ListRef) -> JType {
+        let cx = self.cx;
+        let items = cx.input.prog.expr_list(args).to_vec();
+        let index = (at & !DEFAULT_RECEIVER) as usize;
+        let (recv, priors) = if at & DEFAULT_RECEIVER != 0 { (Some(items[0]), items[1..].to_vec()) } else { (None, items) };
+        match of {
+            DefaultOf::Ctor(c) => {
+                let types = self.ctor_param_types(c);
+                let temps = self.default_priors(&priors, &types);
+                self.ctor_default(c, None, index, &temps, &types);
+                types.get(index).cloned().unwrap_or_else(JType::object)
+            }
+            DefaultOf::Method(s) if cx.input.syms.sym(s).name == crate::names::INIT => {
+                let Owner::Class(c) = cx.input.syms.sym(s).owner else {
+                    self.unsupported("the default of a constructor of no class");
+                    return JType::V;
+                };
+                let types = self.param_types(s);
+                let temps = self.default_priors(&priors, &types);
+                self.ctor_default(c, Some(s), index, &temps, &types);
+                types.get(index).cloned().unwrap_or_else(JType::object)
+            }
+            DefaultOf::Method(s) => self.method_default(s, index, recv, &priors),
+        }
+    }
+
+    /// How many of `s`'s parameters, flattened, come before the clause of parameter `i`: those
+    /// its default getter takes.
+    pub fn clause_start(&self, s: SymId, i: usize) -> usize {
+        match self.cx.input.syms.sym(s).info.sig.as_ref() {
+            Some(sig) => clause_shape(&sig.clauses, i).0,
+            None => i,
+        }
+    }
+
+    /// The arguments of a constructor of `c` whose every parameter has a default and which a
+    /// parent passes nothing: each default's getter applied to the values before its clause.
+    pub fn all_ctor_defaults(&mut self, c: ClassId, types: &[JType]) {
+        let clauses = self.cx.input.syms.class(c).ctor.clone();
+        let mut temps: Vec<(u16, JType)> = Vec::with_capacity(types.len());
+        for (i, t) in types.iter().enumerate() {
+            let before = clause_shape(&clauses, i).0.min(temps.len());
+            let prior = temps[..before].to_vec();
+            self.ctor_default(c, None, i, &prior, types);
+            let slot = self.store_new(t);
+            temps.push((slot, t.clone()));
+        }
+        for (slot, t) in &temps {
+            self.load(*slot, t);
+        }
+    }
+
+    /// The arguments of a getter's application in locals, each of its parameter's type in the
+    /// signature's order.
+    fn default_priors(&mut self, priors: &[TExprId], types: &[JType]) -> Vec<(u16, JType)> {
+        let mut temps = Vec::with_capacity(priors.len());
+        for (k, &a) in priors.iter().enumerate() {
+            let t = types.get(k).cloned().unwrap_or_else(JType::object);
+            self.expr(a, &t);
+            let slot = self.store_new(&t);
+            temps.push((slot, t));
+        }
+        temps
+    }
+
+    /// The default `i` of method `s`'s parameters, `recv` its receiver where the call has one.
+    fn method_default(&mut self, s: SymId, i: usize, recv: Option<TExprId>, priors: &[TExprId]) -> JType {
+        let cx = self.cx;
+        let info = cx.input.syms.sym(s);
+        if recv.is_none() && info.owner == Owner::Local {
+            let lifted = self.lifted_fun(s);
+            let types = lifted.params.clone();
+            let temps = self.default_priors(priors, &types);
+            return self.local_default(s, i, &temps);
+        }
+        if let Some(r) = recv {
+            if let Some(t) = self.value_class_default(r, s, i, priors) {
+                return t;
+            }
+        }
         let m = self.mref(s);
-        // The parameter's type in the signature's order, the order of `temps`.
-        let want = match self.jvm_param_order(s) {
-            Some(order) => order.iter().position(|&k| k == i).map_or_else(|| m.params[i].clone(), |j| m.params[j].clone()),
-            None => m.params[i].clone(),
+        let types = match self.jvm_param_order(s).filter(|o| o.len() == m.params.len()) {
+            Some(order) => self.signature_order(&order, &m.params),
+            None => m.params.clone(),
         };
+        match recv {
+            // A getter selected on `super` inside a trait: the accessor the classes mixing the
+            // trait in implement (`SuperAccessors`), on the trait's `this`.
+            Some(r) if matches!(cx.input.prog.expr(r), TExpr::Super(SuperTarget::Mixin(_))) => {
+                let TExpr::Super(SuperTarget::Mixin(t)) = cx.input.prog.expr(r) else { unreachable!() };
+                let accessor = self.super_getter_accessor_ref(t, s, i);
+                self.receiver(r, s);
+                let owner_type = JType::L(accessor.owner.clone());
+                let slot = self.store_new(&owner_type);
+                let temps = self.default_priors(priors, &types);
+                self.load(slot, &owner_type);
+                let shape = self.default_getter_shape(s, i);
+                let want = if shape.by_name { shape.ret.clone() } else { m.params[i].clone() };
+                let args = self.getter_args(s, shape.before, &temps);
+                self.getter_call(Invoke::Interface, &accessor.owner, true, accessor.name, &accessor.desc, &args, &want, false);
+                want
+            }
+            Some(r) => {
+                // A getter selected on `super` is the superclass's or the class's, as
+                // `Applications.findDefaultGetter` selects it on the receiver: `invokespecial`.
+                let special = match cx.input.prog.expr(r) {
+                    TExpr::Super(target) => {
+                        let owner = match target {
+                            SuperTarget::Chain => self.this_class.and_then(|c| cx.input.syms.class(c).superclass),
+                            SuperTarget::Class(c) | SuperTarget::Mixin(c) => Some(c),
+                        };
+                        owner.map(|c| (self.class_name(c), cx.input.syms.class(c).kind == ClassKind::Trait))
+                    }
+                    _ => None,
+                };
+                self.receiver(r, s);
+                let owner_type = JType::L(m.owner.clone());
+                let slot = self.store_new(&owner_type);
+                let temps = self.default_priors(priors, &types);
+                self.load(slot, &owner_type);
+                self.default_getter_value(s, i, &temps, special)
+            }
+            None => {
+                let temps = self.default_priors(priors, &types);
+                self.load_file_module(info.file);
+                self.default_getter_value(s, i, &temps, None)
+            }
+        }
+    }
+
+    /// The getter of default `i` of method `s` called on the receiver on the stack with the
+    /// arguments in `temps`, leaving the parameter's type, a by-name one's value.
+    fn default_getter_value(&mut self, s: SymId, i: usize, temps: &[(u16, JType)], special: Option<(Rc<str>, bool)>) -> JType {
+        let m = self.mref(s);
         let shape = self.default_getter_shape(s, i);
-        let args = if self.linked_owner(s).is_some() { temps.to_vec() } else { self.getter_args(s, shape.before, temps) };
+        let want = if shape.by_name {
+            shape.ret.clone()
+        } else {
+            match self.jvm_param_order(s) {
+                Some(order) => order.iter().position(|&k| k == i).map_or_else(|| m.params[i].clone(), |j| m.params[j].clone()),
+                None => m.params[i].clone(),
+            }
+        };
+        let args = self.getter_args(s, shape.before, temps);
         let before: Vec<JType> = args.iter().map(|(_, t)| t.clone()).collect();
         let (name, desc) = self.default_getter_ref(s, i, &before);
-        self.getter_call(m.kind, &m.owner, m.owner_is_interface, name, &desc, &args, &want, shape.by_name);
+        match special {
+            Some((owner, interface)) => self.getter_call(Invoke::Special, &owner, interface, name, &desc, &args, &want, false),
+            None => self.getter_call(m.kind, &m.owner, m.owner_is_interface, name, &desc, &args, &want, false),
+        }
+        want
+    }
+
+    /// The default of a method a value class declares, as `call_extension` calls the method: its
+    /// getter on the underlying value, the companion's `m$default$N$extension` where it holds
+    /// them, the class's `m$default$N` on the box otherwise; None for any other method.
+    fn value_class_default(&mut self, r: TExprId, s: SymId, i: usize, priors: &[TExprId]) -> Option<JType> {
+        let cx = self.cx;
+        let Owner::Class(c) = cx.input.syms.sym(s).owner else { return None };
+        if !cx.input.syms.class(c).value_class || cx.input.syms.sym(s).kind != SymKind::Def {
+            return None;
+        }
+        let u = self.vc_underlying(c);
+        if cx.vc_on_companion(c) {
+            let rest = self.erased_param_types(s);
+            let module: Rc<str> = Rc::from(cx.companion_name(c));
+            let module_type = JType::L(module.clone());
+            self.expr(r, &u);
+            let recv = self.store_new(&u);
+            let temps = self.default_priors(priors, &rest);
+            let shape = self.default_getter_shape(s, i);
+            let (before, gret) = (shape.before, shape.ret.clone());
+            let getter = format!("{}$default${}$extension", self.source_method_name(s), shape.index);
+            let mut gparams = vec![u.clone()];
+            gparams.extend(rest[..before].iter().cloned());
+            let mut gtemps = vec![(recv, u.clone())];
+            gtemps.extend(temps.iter().take(before).cloned());
+            let want = if shape.by_name { gret.clone() } else { rest[i].clone() };
+            self.getstatic(&module, "MODULE$", &module_type);
+            self.getter_call(Invoke::Virtual, &module, false, getter, &method_desc(&gparams, &gret), &gtemps, &want, false);
+            return Some(want);
+        }
+        if cx.tclass_of[c.idx()] != u32::MAX && !cx.input.link.jar_classes.contains_key(&c) {
+            let rest = self.erased_param_types(s);
+            let owner = self.class_name(c);
+            self.expr(r, &u);
+            let recv = self.store_new(&u);
+            let temps = self.default_priors(priors, &rest);
+            let shape = self.default_getter_shape(s, i);
+            let desc = method_desc(&rest[..shape.before], &shape.ret);
+            let getter = format!("{}$default${}", self.source_method_name(s), shape.index);
+            let want = if shape.by_name { shape.ret.clone() } else { rest[i].clone() };
+            self.load(recv, &u);
+            self.vc_box(c, &u);
+            self.getter_call(Invoke::Virtual, &owner, false, getter, &desc, &temps, &want, false);
+            return Some(want);
+        }
+        let companion: &'a crate::classfile::ClassFile = cx.vc_companions.get(&c)?;
+        let base = encode(cx.input.interner.get(cx.input.syms.sym(s).name));
+        let getter = format!("{}$default${}$extension", base, i + 1);
+        let Some(gm) = companion.methods.iter().find(|m| m.name == getter) else {
+            self.unsupported("a default argument of a value class's extension method without its getter");
+            return Some(JType::V);
+        };
+        let (gparams, gret) = parse_method_desc(&gm.descriptor);
+        let module = JType::L(Rc::from(companion.name.as_str()));
+        self.expr(r, &u);
+        let recv = self.store_new(&u);
+        let temps = self.default_priors(priors, &gparams[1..]);
+        self.getstatic(&companion.name, "MODULE$", &module);
+        self.load(recv, &u);
+        self.adapt(&u, &gparams[0]);
+        for ((slot, t), p) in temps.iter().zip(&gparams[1..]) {
+            self.load(*slot, t);
+            self.adapt(t, p);
+        }
+        self.invoke_desc(Invoke::Virtual, &companion.name, false, &getter, &gm.descriptor, gparams.len(), &gret);
+        Some(gret)
     }
 
     /// The name and descriptor of the getter of default `i` of method `s`: a jar's as its class
@@ -4226,7 +4397,7 @@ impl<'a> Gen<'a> {
             return None;
         }
         let params = m.params.clone();
-        self.arguments(Some(s), args, &params, &|_, _, _| {});
+        self.arguments(Some(s), args, &params);
         self.invoke_mref(&m);
         Some(m.ret.clone())
     }
@@ -4234,7 +4405,7 @@ impl<'a> Gen<'a> {
     fn call_java_static(&mut self, s: SymId, args: ListRef) -> JType {
         let m = self.mref(s);
         let params = m.params.clone();
-        self.arguments(Some(s), args, &params, &|_, _, _| {});
+        self.arguments(Some(s), args, &params);
         self.invoke_mref(&m);
         self.java_value(m.ret.clone())
     }
@@ -4491,24 +4662,7 @@ impl<'a> Gen<'a> {
         }
         self.receiver(r, s);
         let params = m.params.clone();
-        let uses_default = {
-            let items = cx.input.prog.expr_list(args);
-            let sig = cx.input.syms.sym(s).info.sig.as_ref();
-            let flags: Vec<bool> = sig.map_or(Vec::new(), |sig| sig.clauses.iter().flat_map(|c| c.params.iter().map(|p| p.has_default)).collect());
-            items.iter().enumerate().any(|(i, &a)| flags.get(i).copied().unwrap_or(false) && matches!(cx.input.prog.expr(a), TExpr::Unit))
-        };
-        if uses_default {
-            // The getter runs on the same receiver.
-            let owner_type = JType::L(m.owner.clone());
-            let recv = self.store_new(&owner_type);
-            self.load(recv, &owner_type);
-            self.arguments(Some(s), args, &params, &|g: &mut Self, i, temps| {
-                g.load(recv, &owner_type);
-                g.default_getter_call(s, i, temps);
-            });
-        } else {
-            self.arguments(Some(s), args, &params, &|_, _, _| {});
-        }
+        self.arguments(Some(s), args, &params);
         self.invoke_mref(&m);
         if java {
             return self.java_value(m.ret.clone());
@@ -4539,20 +4693,7 @@ impl<'a> Gen<'a> {
             self.getstatic(&module, "MODULE$", &module_type);
             self.load(recv, &u);
             let rest = own[1..].to_vec();
-            // The default's getter takes the underlying value and the arguments of the clauses
-            // before the default's; a by-name parameter's returns the value, which a thunk calling
-            // the getter, its receiver and those arguments captured, passes (`getter_call`).
-            self.arguments(Some(s), args, &rest, &|g: &mut Self, i, temps| {
-                let shape = g.default_getter_shape(s, i);
-                let (before, gret) = (shape.before, shape.ret);
-                let getter = format!("{}$default${}$extension", g.source_method_name(s), shape.index);
-                let mut gparams = vec![u.clone()];
-                gparams.extend(rest[..before].iter().cloned());
-                let mut gtemps = vec![(recv, u.clone())];
-                gtemps.extend(temps.iter().take(before).cloned());
-                g.getstatic(&module, "MODULE$", &module_type);
-                g.getter_call(Invoke::Virtual, &module, false, getter, &method_desc(&gparams, &gret), &gtemps, &rest[i], shape.by_name);
-            });
+            self.arguments(Some(s), args, &rest);
             self.invoke_desc(Invoke::Virtual, &module, false, &name, &method_desc(&own, &ret), own.len(), &ret);
             return Some(ret);
         }
@@ -4567,14 +4708,7 @@ impl<'a> Gen<'a> {
             let recv = self.store_new(&u);
             self.load(recv, &u);
             let rest = own[1..].to_vec();
-            self.arguments(Some(s), args, &rest, &|g: &mut Self, i, temps| {
-                g.load(recv, &u);
-                g.vc_box(c, &u);
-                let shape = g.default_getter_shape(s, i);
-                let desc = method_desc(&rest[..shape.before], &shape.ret);
-                let getter = format!("{}$default${}", g.source_method_name(s), shape.index);
-                g.getter_call(Invoke::Virtual, &owner, false, getter, &desc, temps, &rest[i], shape.by_name);
-            });
+            self.arguments(Some(s), args, &rest);
             self.invoke(Invoke::Static, &owner, false, &name, &own, &ret);
             return Some(ret);
         }
@@ -4594,30 +4728,7 @@ impl<'a> Gen<'a> {
         self.load(recv, &u);
         self.adapt(&u, &params[0]);
         let rest: Vec<JType> = params[1..].iter().zip(&own[1..]).map(|(d, o)| if d == o { o.clone() } else { d.clone() }).collect();
-        let base = match self.target_name(s) {
-            Some(_) => encode(cx.input.interner.get(cx.input.syms.sym(s).name)),
-            None => name.strip_suffix("$extension").unwrap_or(&name).to_string(),
-        };
-        // The default's getter is `m$default$N$extension`, on the underlying value and the
-        // parameters of the clauses before the default's.
-        self.arguments(Some(s), args, &rest, &|g: &mut Self, i, temps| {
-            let getter = format!("{}$default${}$extension", base, i + 1);
-            let Some(gm) = companion.methods.iter().find(|m| m.name == getter) else {
-                g.unsupported("a default argument of a value class's extension method without its getter");
-                g.adapt(&JType::V, &rest[i]);
-                return;
-            };
-            let (gparams, gret) = parse_method_desc(&gm.descriptor);
-            g.getstatic(&companion.name, "MODULE$", &module);
-            g.load(recv, &u);
-            g.adapt(&u, &gparams[0]);
-            for ((slot, t), p) in temps.iter().zip(&gparams[1..]) {
-                g.load(*slot, t);
-                g.adapt(t, p);
-            }
-            g.invoke_desc(Invoke::Virtual, &companion.name, false, &getter, &gm.descriptor, gparams.len(), &gret);
-            g.adapt(&gret, &rest[i]);
-        });
+        self.arguments(Some(s), args, &rest);
         self.invoke_desc(Invoke::Virtual, &companion.name, false, &name, &desc, params.len(), &desc_ret);
         Some(if desc_ret == ret { ret } else { desc_ret })
     }
@@ -4628,7 +4739,7 @@ impl<'a> Gen<'a> {
         let m = self.mref(helper);
         let params = m.params.clone();
         self.expr(r, &params[0]);
-        self.arguments(Some(s), args, &params[1..], &|_, _, _| {});
+        self.arguments(Some(s), args, &params[1..]);
         let name = self.cx.input.interner.get(self.cx.input.syms.sym(helper).name).to_string();
         self.helper_call(&name, 2)
     }
@@ -4826,23 +4937,26 @@ impl<'a> Gen<'a> {
         }
     }
 
-    /// The declared arguments of a named local class's constructor, a left-out one through its
-    /// default getter, which takes the captures in front of the arguments before it.
-    fn ctor_arguments_after_captures(&mut self, c: ClassId, args: ListRef, captured: &[JType], rest: ListRef, params: &[JType]) {
+    /// The declared arguments of a named local class's constructor, after its captures.
+    fn ctor_arguments_after_captures(&mut self, _c: ClassId, _args: ListRef, _captured: &[JType], rest: ListRef, params: &[JType]) {
+        self.arguments_with(rest, params);
+    }
+
+    /// What a named local class captures, loaded as a `new` of it passes them
+    /// (`load_new_captures`), for its static default getter.
+    fn load_class_captures(&mut self, c: ClassId) {
         let cx = self.cx;
-        let flags: Vec<bool> = cx.input.syms.class(c).ctor.iter().flat_map(|cl| cl.params.iter().map(|p| p.has_default)).collect();
-        let owner = self.class_name(c);
-        let n = self.capture_count(c);
-        let types = params.to_vec();
-        self.arguments_with(&flags, rest, params, &|g: &mut Self, i, temps| {
-            g.load_new_captures(c, args, n);
-            let mut before: Vec<JType> = captured.to_vec();
-            for (slot, t) in temps {
-                g.load(*slot, t);
-                before.push(t.clone());
+        for s in self.class_captured(c) {
+            let info = cx.input.syms.sym(s);
+            if info.kind == SymKind::Def && info.owner == Owner::Local {
+                continue;
             }
-            g.invoke(Invoke::Static, &owner, false, &format!("$lessinit$greater$default${}", n + i + 1), &before, &types[i]);
-        });
+            if self.is_capturable(s) || (info.owner == Owner::Local && self.lazy_thunk(s)) {
+                self.load_capture(s);
+            } else {
+                self.unsupported("a default argument of a local class that captures this kind of value");
+            }
+        }
     }
 
     fn is_capturable(&self, s: SymId) -> bool {
@@ -5103,18 +5217,27 @@ impl<'a> Gen<'a> {
         let ret = self.return_type(s);
         let lifted = self.make_lifted(name, &free, params, ret);
         self.lifted.insert(s, lifted.clone());
+        // A local inline method has its getters alone (`Desugar.addDefaultGetters`), which
+        // take their names from it.
         let f = cx.fun_of_sym[s.idx()];
-        if f != u32::MAX {
+        if f != u32::MAX && cx.input.prog.funs[f as usize].body.is_some() {
             self.pending.push(Pending { lifted: lifted.clone(), body: PendingBody::Fun(FunId(f)) });
         }
         lifted
     }
 
-    fn local_default(&mut self, s: SymId, i: usize, temps: &[(u16, JType)]) {
+    /// Whether parameter `i` of the def `s`, flattened, is by-name.
+    pub(super) fn local_param_by_name(&self, s: SymId, i: usize) -> bool {
+        self.cx.input.syms.sym(s).sig.as_ref().is_some_and(|sig| clause_shape(&sig.clauses, i).1.is_some())
+    }
+
+    /// The default `i` of the local def `s`, its getter applied to `temps`: the value it leaves.
+    fn local_default(&mut self, s: SymId, i: usize, temps: &[(u16, JType)]) -> JType {
         let cx = self.cx;
         let f = cx.fun_of_sym[s.idx()];
         if f == u32::MAX {
-            return self.unsupported("the default of a local def without a body");
+            self.unsupported("the default of a local def without a body");
+            return JType::V;
         }
         let lifted = match self.lifted_defaults.get(&(s, i)) {
             Some(l) => l.clone(),
@@ -5122,8 +5245,13 @@ impl<'a> Gen<'a> {
                 let free = self.an.of_fun(cx, s);
                 let fun = self.lifted_fun(s);
                 let name = format!("{}$default${}", fun.name, i + 1);
-                let params: Vec<JType> = fun.params[..i].to_vec();
-                let ret = fun.params[i].clone();
+                let params: Vec<JType> = fun.params[..self.clause_start(s, i)].to_vec();
+                // A by-name parameter's getter returns the value (`Desugar.addDefaultGetters`).
+                let by_name = cx.input.syms.sym(s).sig.as_ref().and_then(|sig| clause_shape(&sig.clauses, i).1);
+                let ret = match by_name {
+                    Some(t) => self.erase(t),
+                    None => fun.params[i].clone(),
+                };
                 let l = self.make_lifted(name, &free, params, ret);
                 self.lifted_defaults.insert((s, i), l.clone());
                 self.pending.push(Pending { lifted: l.clone(), body: PendingBody::Default(FunId(f), i) });
@@ -5137,6 +5265,7 @@ impl<'a> Gen<'a> {
         let owner = self.this_name.clone();
         let n = lifted.captures.len() + lifted.this as usize + lifted.params.len();
         self.invoke_desc(Invoke::Static, &owner, self.is_interface, &lifted.name, &lifted.desc, n, &lifted.ret);
+        lifted.ret.clone()
     }
 
     // ---- local lazy vals ----
@@ -5226,36 +5355,15 @@ impl<'a> Gen<'a> {
     fn tail_jump(&mut self, recv: Option<TExprId>, args: ListRef) {
         let cx = self.cx;
         let tail = self.m.tail.as_ref().unwrap();
-        let (sym, params, head) = (tail.sym, tail.params.clone(), tail.head);
+        let (params, head) = (tail.params.clone(), tail.head);
         let types: Vec<JType> = params.iter().map(|p| self.m.locals[p].ty.clone()).collect();
         let items = cx.input.prog.expr_list(args).to_vec();
-        let flags: Vec<bool> = cx.input.syms.sym(sym).sig.as_ref().map_or(Vec::new(), |sig| {
-            sig.clauses.iter().flat_map(|c| c.params.iter().map(|p| p.has_default)).collect()
-        });
         let mark = self.code.locals_mark();
         let mut temps: Vec<(u16, JType)> = Vec::new();
-        let is_default = |i: usize, a: TExprId| flags.get(i).copied().unwrap_or(false) && matches!(cx.input.prog.expr(a), TExpr::Unit);
         for (i, &a) in items.iter().enumerate() {
-            if is_default(i, a) {
-                self.adapt(&JType::V, &types[i]);
-            } else {
-                self.expr(a, &types[i]);
-            }
+            self.expr(a, &types[i]);
             let slot = self.store_new(&types[i]);
             temps.push((slot, types[i].clone()));
-        }
-        for (i, &a) in items.iter().enumerate() {
-            if !is_default(i, a) {
-                continue;
-            }
-            if cx.input.syms.sym(sym).owner == Owner::Local {
-                self.local_default(sym, i, &temps[..i]);
-            } else {
-                self.load_this();
-                self.default_getter_call(sym, i, &temps[..i]);
-            }
-            let (slot, t) = temps[i].clone();
-            self.store(slot, &t);
         }
         if let Some(r) = recv {
             let this_type = match self.this_class {
@@ -5923,4 +6031,18 @@ fn desc_type(d: &str) -> JType {
         Some(b'L') => JType::L(Rc::from(d[1..].trim_end_matches(';'))),
         _ => JType::L(Rc::from(d)),
     }
+}
+
+/// Where the clause of flattened parameter `i` starts among `clauses`, and its type where the
+/// parameter is by-name: what a constructor's default getter takes and returns.
+pub(super) fn clause_shape(clauses: &[ClauseSig], i: usize) -> (usize, Option<TypeId>) {
+    let mut start = 0;
+    for cl in clauses {
+        if i < start + cl.params.len() {
+            let p = &cl.params[i - start];
+            return (start, p.by_name.then_some(p.ty));
+        }
+        start += cl.params.len();
+    }
+    (i, None)
 }

@@ -176,7 +176,7 @@ impl Dumper<'_> {
                 }
                 self.expr(body, owner);
             }
-            Expr::Tuple(l) | Expr::NamedTuple(_, l) | Expr::New(_, l) | Expr::Interp(_, _, l) => self.exprs(l, owner),
+            Expr::Tuple(l) | Expr::NamedTuple(_, l) | Expr::New(_, l) | Expr::Interp(_, _, l) | Expr::SeqLit(l, _) => self.exprs(l, owner),
             Expr::NewAnon(d) => self.def(d, owner),
             Expr::Try(i) => {
                 let t = ast.try_expr(i);

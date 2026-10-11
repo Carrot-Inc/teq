@@ -570,7 +570,7 @@ impl<'a> Worker<'a> {
                 out.extend_from_slice(prog.sym_list(params));
                 self.tree_binders(body, out);
             }
-            TExpr::CallStatic(_, args) | TExpr::New(_, args) | TExpr::NewVia(_, args) | TExpr::StrConcat(args) | TExpr::Js(_, args) | TExpr::SeqLit(args) | TExpr::ArrayLit(args) | TExpr::ObjLit(args) => {
+            TExpr::CallStatic(_, args) | TExpr::New(_, args) | TExpr::NewVia(_, args) | TExpr::StrConcat(args) | TExpr::Js(_, args) | TExpr::SeqLit(args) | TExpr::ArrayLit(args) | TExpr::ObjLit(args) | TExpr::Default(_, _, args) => {
                 list(self, args, out)
             }
             TExpr::CallMethod(r, _, args) | TExpr::CallClosure(r, args) => {
@@ -2696,7 +2696,7 @@ impl<'c> Copier<'c> {
             methods,
             ctors,
             forwarders: tc.forwarders.iter().map(|&(a, b)| (self.sym(a), self.sym(b))).collect(),
-            super_accessors: tc.super_accessors.iter().map(|sa| SuperAccessor { of_trait: sa.of_trait, member: self.sym(sa.member), target: sa.target.map(|s| self.sym(s)) }).collect(),
+            super_accessors: tc.super_accessors.iter().map(|sa| SuperAccessor { of_trait: sa.of_trait, member: self.sym(sa.member), target: sa.target.map(|s| self.sym(s)), getter: sa.getter }).collect(),
             bridges: tc.bridges.iter().map(|&(a, b)| (self.sym(a), self.sym(b))).collect(),
             deferred_givens: tc.deferred_givens.iter().map(|&(a, b)| (self.sym(a), self.sym(b))).collect(),
         });
@@ -2938,6 +2938,21 @@ impl<'c> Copier<'c> {
             }
             TExpr::New(c, args) => TExpr::New(c, self.list(t, args)),
             TExpr::NewVia(s, args) => TExpr::NewVia(s, self.list(t, args)),
+            // A getter of a method the copy defines anew is its copy's, as the call's is.
+            TExpr::Default(of, at, args) => {
+                let of = match of {
+                    DefaultOf::Method(s) if at & DEFAULT_RECEIVER != 0 => DefaultOf::Method(self.member_ref(s)),
+                    DefaultOf::Method(s) => {
+                        let s = self.sym(s);
+                        self.note_local(s);
+                        DefaultOf::Method(s)
+                    }
+                    DefaultOf::Ctor(c) if self.stored_class_body(c).is_some() => DefaultOf::Ctor(self.stored_class(t, c)),
+                    DefaultOf::Ctor(c) if t.syms.class(c).kind == ClassKind::Anon => DefaultOf::Ctor(self.class(t, c)),
+                    DefaultOf::Ctor(c) => DefaultOf::Ctor(c),
+                };
+                TExpr::Default(of, at, self.list(t, args))
+            }
             TExpr::Lambda(params, body) => {
                 let params = self.syms(t, params);
                 TExpr::Lambda(params, self.expr(t, body))

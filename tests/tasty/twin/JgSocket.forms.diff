@@ -1,0 +1,6 @@
+7,8c7,8
+<     <synthetic> val cont$1: Boolean @uncheckedVariance = send$default$2
+<     send{(Int, Boolean, java.lang.String): java.lang.String}(x$1, cont$1, label = "two")
+---
+>     <synthetic> val cont$2: Boolean = send$default$2
+>     send{(Int, Boolean, java.lang.String): java.lang.String}(x$1, cont$2, label = "two")

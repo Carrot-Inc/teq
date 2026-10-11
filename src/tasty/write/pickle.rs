@@ -162,13 +162,6 @@ impl Lines {
 /// source, the byte offset of its point (none for a synthetic span), whether it is a
 /// definition (whose point the origins' kind 1 records) and whether its source is not its
 /// parent's, which a `SOURCE` after it says.
-/// A term a call's block binds: the references to it written before its val, or the val's
-/// address.
-enum Lifted {
-    Pending(Vec<Slot>),
-    At(usize),
-}
-
 #[derive(Clone, Copy)]
 struct ClassHead {
     kind: ClassKind,
@@ -313,9 +306,6 @@ struct P<'w, 'a> {
     /// The module classes whose templates got parents after the declared ones, by their wide
     /// `TYPEDEF` addresses, with how many (TeqOrigins kind 11).
     appended_parents: Vec<(usize, u32)>,
-    /// The terms of a call lifted into its block's vals: the references written before a val,
-    /// or its address once written.
-    lifted_terms: FxMap<crate::tir::TExprId, Lifted>,
     /// The census's keys counted inside the bodies being written, which a rollback takes back.
     counted: Vec<String>,
     /// The local classes of the body being written that are written, so that a block writes each
@@ -376,6 +366,9 @@ struct P<'w, 'a> {
     /// The name of the export forwarder the selection about to be written calls, where the
     /// export renames its member.
     forwarder_name: Option<Name>,
+    /// While an export forwarder's call's arguments are written: the member, the exporting
+    /// object and the forwarder's name, whose getter a default of the call is.
+    default_forwarder: Option<(SymId, crate::tir::TExprId, Name)>,
     /// The definitions with a point, by their final address, and the byte offsets of their
     /// names: the `TeqOrigins` section's `definitions` (`origins.rs`).
     definitions: Vec<(u32, u32)>,
@@ -514,7 +507,6 @@ impl<'w, 'a> P<'w, 'a> {
             inlined_leaves: Vec::new(),
             inlined_leaf_tests: Vec::new(),
             appended_parents: Vec::new(),
-            lifted_terms: FxMap::default(),
             counted: Vec::new(),
             written_locals: FxMap::default(),
             by_name_params: FxMap::default(),
@@ -546,6 +538,7 @@ impl<'w, 'a> P<'w, 'a> {
             retained_params: Vec::new(),
             expected_anon: None,
             forwarder_name: None,
+            default_forwarder: None,
             definitions: Vec::new(),
             errors: Vec::new(),
             source_path: source_path.to_string(),
@@ -2155,16 +2148,21 @@ impl<'w, 'a> P<'w, 'a> {
     /// `super$<trait>$$m` for each member `m` a trait calls through `super`, which scalac's
     /// `SuperAccessors` adds before pickling: abstract, an artifact.
     fn super_accessors(&mut self, c: ClassId) {
-        let called: Vec<SymId> = self.w.mixin_supers.get(&c).cloned().unwrap_or_default();
+        let called: Vec<crate::tir::SuperCall> = self.w.mixin_supers.get(&c).cloned().unwrap_or_default();
         if called.is_empty() {
             return;
         }
         let full = self.owner_full_name(self.w.syms.class(c).owner, &self.name(self.w.syms.class(c).name));
-        for m in called {
+        for call in called {
+            let m = call.member;
             let info = self.sym_info(m);
             // The member as the trait sees it, scalac's `superInfo`: a generic parent's type
             // parameters bound as the trait's base type binds them.
             let sig = self.w.member_sig_seen_from(m, c);
+            if let Some(index) = call.getter {
+                self.super_getter_accessor(&full, &info, &sig, index as usize);
+                continue;
+            }
             let addr = self.buf.addr();
             self.buf.byte(DEFDEF);
             let len = self.buf.begin_length();
@@ -2182,9 +2180,48 @@ impl<'w, 'a> P<'w, 'a> {
         }
     }
 
+    /// The accessor of `super.m$default$N` in a trait, beside the member's: abstract, an
+    /// artifact, of the getter's shape (`superInfo`): the method's type parameters, the clauses
+    /// before the parameter's, its type `@uncheckedVariance`.
+    fn super_getter_accessor(&mut self, full: &str, info: &SymInfo, sig: &MethodSig, index: usize) {
+        let Some((declared_index, pos, ty)) = getter_place(self.w, info, sig, index) else { return };
+        let order = declared_clause_order(self.w, info, sig);
+        let declared: Vec<ClauseSig> = order.iter().map(|&i| sig.clauses[i].clone()).collect();
+        let addr = self.buf.addr();
+        self.buf.byte(DEFDEF);
+        let len = self.buf.begin_length();
+        let n = self.super_getter_accessor_name(full, &self.name(info.name), declared_index as u32);
+        self.buf.nat(n as u64);
+        let tmark = self.tparams.len();
+        let pmark = self.params.len();
+        self.def_params(&sig.tparams, &declared[..pos], None);
+        self.mark_tree();
+        self.unchecked_variance(ty);
+        self.tparams.truncate(tmark);
+        self.params.truncate(pmark);
+        self.write_flags(&[ARTIFACT]);
+        self.synthetic_position(addr);
+        self.buf.end_length(len);
+    }
+
     /// `super$a$b$C$$m`: the super accessor of an expanded name, the trait's qualified name
     /// as expand-prefix names.
     fn super_accessor_name(&mut self, trait_full: &str, member: &str) -> u32 {
+        use super::names::Key as NK;
+        let expanded = self.expanded_member_name(trait_full, member);
+        self.names.get(NK::SuperAccessor(expanded))
+    }
+
+    /// `super$a$b$C$$m$default$N`: the super accessor of the getter of an expanded name
+    /// (`SuperAccessorName(DefaultGetterName(ExpandedName))`).
+    pub(super) fn super_getter_accessor_name(&mut self, trait_full: &str, member: &str, index: u32) -> u32 {
+        use super::names::Key as NK;
+        let expanded = self.expanded_member_name(trait_full, member);
+        let getter = self.names.get(NK::DefaultGetter(expanded, index));
+        self.names.get(NK::SuperAccessor(getter))
+    }
+
+    fn expanded_member_name(&mut self, trait_full: &str, member: &str) -> u32 {
         use super::names::Key as NK;
         let mut segs = trait_full.split(['.', '$']).filter(|s| !s.is_empty());
         let first = segs.next().unwrap_or("");
@@ -2194,8 +2231,7 @@ impl<'w, 'a> P<'w, 'a> {
             prefix = self.names.get(NK::ExpandPrefix(prefix, m));
         }
         let member = self.names.simple(member);
-        let expanded = self.names.get(NK::Expanded(prefix, member));
-        self.names.get(NK::SuperAccessor(expanded))
+        self.names.get(NK::Expanded(prefix, member))
     }
 
     /// The forwarders an `export` clause makes, and the clause itself: a type as a final alias,
@@ -6401,6 +6437,21 @@ thread_local! {
 /// The clauses of a method as its declaration pickles them, by their index in the signature: a
 /// right-associative extension's first explicit clause before its receiver's, as scalac's
 /// `paramss` hold them, every other method's in order.
+/// Where the parameter at `index` of `sig`, counted across its clauses, stands among the
+/// declared clauses (`declared_clause_order`): its getter's index, its clause's place, its type.
+pub(super) fn getter_place(w: &Worker, info: &SymInfo, sig: &MethodSig, index: usize) -> Option<(usize, usize, TypeId)> {
+    let order = declared_clause_order(w, info, sig);
+    let starts: Vec<usize> = sig.clauses.iter().scan(0, |acc, c| {
+        let at = *acc;
+        *acc += c.params.len();
+        Some(at)
+    }).collect();
+    let ci = (0..sig.clauses.len()).find(|&ci| starts[ci] <= index && index < starts[ci] + sig.clauses[ci].params.len())?;
+    let pos = order.iter().position(|&o| o == ci)?;
+    let before: usize = order[..pos].iter().map(|&o| sig.clauses[o].params.len()).sum();
+    Some((before + index - starts[ci], pos, sig.clauses[ci].params[index - starts[ci]].ty))
+}
+
 pub(super) fn declared_clause_order(w: &Worker, info: &SymInfo, sig: &MethodSig) -> Vec<usize> {
     let swapped = (info.is_extension && w.interner.get(info.name).ends_with(':')).then(|| sig.right_assoc_order(info.ext_clauses as usize)).flatten();
     swapped.unwrap_or_else(|| (0..sig.clauses.len()).collect())

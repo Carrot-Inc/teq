@@ -75,13 +75,14 @@ depparams = {'DpCtx', 'DpFn', 'DpTypes', 'DpBase', 'DpDerived', 'DpInherited', '
 depbounds = {'DbCtx', 'DbParent', 'DbBounds', 'DbPolyNames'}
 polybounds = {'PbCtx', 'PbParent', 'PbLower'}
 casts = {'CastA', 'CastB', 'CastLib'}
+jargetter = {'JgLog', 'JgSocket', 'JgSocketImpl'}
 unmod = {'UmBodies', 'UmSyntax', 'UmReuse', 'UmDefine', 'UmMethod', 'UmNested', 'UmSetter33', 'UmArg', 'UmStep', 'UmSub', 'UmScope', 'UmAliases', 'UmPt', 'UmEq', 'UmSetterOnly', 'UmSetterUse'}
 with zipfile.ZipFile(sys.argv[1], 'w', zipfile.ZIP_DEFLATED) as z:
     for f in sorted(os.listdir('tests/tasty/fixtures')):
         stem = f[:-len('.tasty')]
         if stem in rdecl:
             continue
-        pkg = 'fix/reader' if stem in reader else 'fix/casts' if stem in casts else pext[stem] if stem in pext else 'fix/q38' if stem == 'Quotes38' else 'fix/clash' if stem in clash else 'fix/hkb' if stem in hkb else 'fix/unmod' if stem in unmod else 'fix/depparams' if stem in depparams else 'fix/depbounds' if stem in depbounds else 'fix/polybounds' if stem in polybounds else 'fix/wave6' if stem in wave6 else 'fix/retain' if stem in retain else 'fix/shadow' if stem in shadow else 'fix/guard' if stem in guard else 'fix/overloads' if stem in overloads else 'fix/tname' if stem in tname else 'fix/facades' if stem in facades else 'fix/members' if stem in members else 'fix/runtime' if stem in runtime else 'fix/rassoc' if stem in ('RightAssoc', 'Vec') else 'fix/bodies' if stem in bodies else 'fix/cake' if stem in cake else 'fix/qpat' if stem in ('LayerBox', 'LayerMacros', 'QpFns', 'QpProbe') else 'fix/qp38' if stem == 'Qp38' else 'fix/shapes'
+        pkg = 'fix/reader' if stem in reader else 'fix/jargetter' if stem in jargetter else 'fix/casts' if stem in casts else pext[stem] if stem in pext else 'fix/q38' if stem == 'Quotes38' else 'fix/clash' if stem in clash else 'fix/hkb' if stem in hkb else 'fix/unmod' if stem in unmod else 'fix/depparams' if stem in depparams else 'fix/depbounds' if stem in depbounds else 'fix/polybounds' if stem in polybounds else 'fix/wave6' if stem in wave6 else 'fix/retain' if stem in retain else 'fix/shadow' if stem in shadow else 'fix/guard' if stem in guard else 'fix/overloads' if stem in overloads else 'fix/tname' if stem in tname else 'fix/facades' if stem in facades else 'fix/members' if stem in members else 'fix/runtime' if stem in runtime else 'fix/rassoc' if stem in ('RightAssoc', 'Vec') else 'fix/bodies' if stem in bodies else 'fix/cake' if stem in cake else 'fix/qpat' if stem in ('LayerBox', 'LayerMacros', 'QpFns', 'QpProbe') else 'fix/qp38' if stem == 'Qp38' else 'fix/shapes'
         z.write(os.path.join('tests/tasty/fixtures', f), pkg + '/' + f)
 PY
   echo "$jar"

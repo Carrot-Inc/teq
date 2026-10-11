@@ -30,7 +30,6 @@ enum Status {
 struct Param {
     by_name: bool,
     repeated: bool,
-    has_default: bool,
 }
 
 #[derive(Clone, Copy)]
@@ -208,7 +207,7 @@ impl<'w, 'a> Walk<'w, 'a> {
 
     fn params_of(&self, s: SymId) -> Vec<Param> {
         match &self.w.syms.sym(s).sig {
-            Some(sig) => sig.clauses.iter().flat_map(|c| c.params.iter().map(|p| Param { by_name: p.by_name, repeated: p.repeated, has_default: p.has_default })).collect(),
+            Some(sig) => sig.clauses.iter().flat_map(|c| c.params.iter().map(|p| Param { by_name: p.by_name, repeated: p.repeated })).collect(),
             None => Vec::new(),
         }
     }
@@ -255,7 +254,7 @@ impl<'w, 'a> Walk<'w, 'a> {
     }
 
     fn ctor_params(&self, c: ClassId) -> Vec<Param> {
-        self.w.syms.class(c).ctor.iter().flat_map(|cl| cl.params.iter().map(|p| Param { by_name: p.by_name, repeated: p.repeated, has_default: p.has_default })).collect()
+        self.w.syms.class(c).ctor.iter().flat_map(|cl| cl.params.iter().map(|p| Param { by_name: p.by_name, repeated: p.repeated })).collect()
     }
 
     fn stmts(&mut self, l: crate::ast::ListRef, ctx: Ctx) {
@@ -288,11 +287,11 @@ impl<'w, 'a> Walk<'w, 'a> {
             return;
         }
         // The temporaries typed `Any` in the place of their value's type: a hoisted operand's
-        // and argument's (`h$`), a packed comprehension's (`u$`).
+        // and argument's (`h$`), a plan's (`$1`), a packed comprehension's (`u$`).
         let (synthetic, ty) = {
             let info = self.w.syms.sym(v);
             let name = self.w.name_ref(info.name);
-            (name.starts_with("h$") || name.starts_with("u$"), info.sig.as_ref().map_or(ERROR, |s| s.ret))
+            (name.starts_with("h$") || info.mods & crate::ast::mods::LIFTED != 0 || name.starts_with("u$"), info.sig.as_ref().map_or(ERROR, |s| s.ret))
         };
         let local = self.c.locals.get(&v);
         if local.map_or(false, |l| l.mods != 0) {
@@ -536,11 +535,16 @@ impl<'w, 'a> Walk<'w, 'a> {
                     _ => self.count("literal", Status::Derived, Some(e), ctx),
                 }
             }
-            TExpr::Unit => match (form, ctx.param) {
-                (Some(Form::Default), _) => self.count("default argument", Status::Captured, Some(e), ctx),
-                (_, Some(p)) if p.has_default => self.count("default argument", Status::Missing, Some(e), ctx),
-                _ => self.count("literal", Status::Derived, Some(e), ctx),
-            },
+            TExpr::Unit => self.count("literal", Status::Derived, Some(e), ctx),
+            TExpr::Default(of, _, args) => {
+                let generic = match of {
+                    DefaultOf::Method(s) => self.has_tparams(s),
+                    DefaultOf::Ctor(c) => !self.w.syms.class(c).tparams.is_empty(),
+                };
+                let status = self.targs_status(e, generic);
+                self.count("default argument", status, Some(e), ctx);
+                self.list(args, inner);
+            }
             TExpr::Local(_) if !self.counting => {}
             TExpr::Local(s) => {
                 let hole = ctx.quote.and_then(|q| prog.quotes.try_get(q)).map_or(false, |q| q.holes.iter().any(|&(h, _)| h == s));

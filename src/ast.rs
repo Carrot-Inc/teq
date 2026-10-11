@@ -98,6 +98,9 @@ pub enum Expr {
     /// `((a, b))`: a tuple in its own parentheses is one infix argument, `a op (b, c)` has two.
     Parens(ExprId),
     Typed(ExprId, TyExprId),
+    /// A sequence literal a pickle holds on its own (`SeqLiteral`): the elements of a repeated
+    /// parameter's argument that a call's plan bound (`Lifter.liftArg`), of the element type.
+    SeqLit(ListRef, TyExprId),
     /// `e: @unchecked`, which keeps a match on `e` from being checked for exhaustivity.
     Unchecked(ExprId),
     /// `new C[T](args)`, needed when the companion object defines its own `apply`.
@@ -325,6 +328,10 @@ pub mod mods {
     /// trait's first parent otherwise): its first parent written `Any`, as a jar's pickle declares
     /// it, and Java's `Serializable` and `Cloneable` (`ClassfileParser.parseParents`).
     pub const UNIVERSAL: Mods = 1 << 30;
+    /// A temporary an application's plan binds in front of the call (dotty's
+    /// `EtaExpansion.Lifter`): the receiver, an argument or a default getter's application,
+    /// evaluated once where the plan has it (`typer::elaborate`).
+    pub const LIFTED: Mods = 1 << 31;
 }
 
 #[derive(Clone, Debug)]

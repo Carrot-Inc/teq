@@ -1,0 +1,22 @@
+Options(a,3,false,[app],80,List())
+Options(b,3,true,[app],80,List())
+note c
+Options(c,3,false,[app],120,List())
+Options(d,5,false,[app],80,List(x, y))
+Options(e,3,false,[e],80,List())
+note [f]
+note f
+Options(f,3,false,[f],40,List())
+shape r=100e-2
+shape r=250e-2
+shape r=1000e-3
+shape r=2500e-3
+main/info: start
+main/warn: warned
+note nested
+  main/info: nested
+other/info: ctx
+List(0, 1, 2, 3, 4)
+List(10, 12, 14)
+List(0, 3, 6)
+4

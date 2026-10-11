@@ -174,6 +174,33 @@ impl Collector<'_, '_> {
             }
             TExpr::New(_, args) | TExpr::NewVia(_, args) | TExpr::StrConcat(args) | TExpr::Js(_, args) | TExpr::SeqLit(args) | TExpr::ArrayLit(args)
             | TExpr::ObjLit(args) => self.list(args),
+            // A getter's application takes what its getter captures: a local def's, or a local
+            // class's for its constructor's getter, which receives them as the constructor does.
+            TExpr::Default(of, _, args) => {
+                match of {
+                    DefaultOf::Method(s) if self.cx.input.syms.sym(s).owner == Owner::Local && self.cx.input.syms.sym(s).kind == SymKind::Def => {
+                        let free = self.an.of_fun(self.cx, s);
+                        self.merge(&free);
+                    }
+                    DefaultOf::Ctor(c) => {
+                        let idx = self.cx.tclass_of.get(c.idx()).copied().unwrap_or(u32::MAX);
+                        if idx != u32::MAX && self.cx.input.syms.class(c).kind != ClassKind::Anon {
+                            let tc = &prog.classes[idx as usize];
+                            for &k in &tc.ctor_params[..tc.captures] {
+                                let info = self.cx.input.syms.sym(k);
+                                if info.owner == Owner::Local && info.kind == SymKind::Def {
+                                    let free = self.an.of_fun(self.cx, k);
+                                    self.merge(&free);
+                                } else {
+                                    self.local(k);
+                                }
+                            }
+                        }
+                    }
+                    _ => {}
+                }
+                self.list(args);
+            }
             TExpr::Lambda(params, body) => {
                 self.declared.extend_from_slice(prog.sym_list(params));
                 self.closures += 1;
@@ -382,6 +409,25 @@ impl CellWalk<'_, '_> {
                 }
             }
             TExpr::NewVia(_, args) | TExpr::StrConcat(args) | TExpr::Js(_, args) | TExpr::SeqLit(args) | TExpr::ArrayLit(args) | TExpr::ObjLit(args) => {
+                self.list(args)
+            }
+            // A local constructor's getter takes the class's captures as its constructor does;
+            // a local def's getter is the def's.
+            TExpr::Default(of, _, args) => {
+                match of {
+                    DefaultOf::Method(s) => self.reference(s),
+                    DefaultOf::Ctor(c) => {
+                        let idx = self.cx.tclass_of.get(c.idx()).copied().unwrap_or(u32::MAX);
+                        if idx != u32::MAX && self.cx.input.syms.class(c).kind != ClassKind::Anon {
+                            let captured = self.cx.input.prog.classes[idx as usize].ctor_params[..self.capture_count(c)].to_vec();
+                            self.depth += 1;
+                            for k in captured {
+                                self.reference(k);
+                            }
+                            self.depth -= 1;
+                        }
+                    }
+                }
                 self.list(args)
             }
             TExpr::Lambda(_, body) => self.nested(body),

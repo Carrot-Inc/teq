@@ -17,6 +17,8 @@ pub enum Key {
     InlineAccessor(u32),
     ObjectClass(u32),
     BodyRetainer(u32),
+    /// `underlying$num`, a fresh name (`UniqueName`), of no underlying name where it is `$num`.
+    Unique { separator: u32, num: u32, underlying: Option<u32> },
     /// `params`: a name reference per term parameter, a clause of type parameters as its
     /// negated length.
     Signed { original: u32, target: Option<u32>, result: u32, params: Vec<i32> },
@@ -128,6 +130,13 @@ impl Names {
         self.get(Key::ObjectClass(u))
     }
 
+    /// `prefix$num`, as `UniqueName.fresh(prefix)` names a lifted temporary.
+    pub fn unique(&mut self, prefix: &str, num: u32) -> u32 {
+        let separator = self.simple("$");
+        let underlying = (!prefix.is_empty()).then(|| self.simple(prefix));
+        self.get(Key::Unique { separator, num, underlying })
+    }
+
     pub fn default_getter(&mut self, method: &str, index: u32) -> u32 {
         let u = self.simple(method);
         self.get(Key::DefaultGetter(u, index))
@@ -222,6 +231,13 @@ impl Names {
                 Key::InlineAccessor(u) => with_length(&mut body, tag::INLINEACCESSOR, |p| write_nat(p, *u as u64)),
                 Key::ObjectClass(u) => with_length(&mut body, tag::OBJECTCLASS, |p| write_nat(p, *u as u64)),
                 Key::BodyRetainer(u) => with_length(&mut body, tag::BODYRETAINER, |p| write_nat(p, *u as u64)),
+                Key::Unique { separator, num, underlying } => with_length(&mut body, tag::UNIQUE, |p| {
+                    write_nat(p, *separator as u64);
+                    write_nat(p, *num as u64);
+                    if let Some(u) = underlying {
+                        write_nat(p, *u as u64);
+                    }
+                }),
                 Key::Signed { original, target, result, params } => {
                     let t = if target.is_some() { tag::TARGETSIGNED } else { tag::SIGNED };
                     with_length(&mut body, t, |p| {

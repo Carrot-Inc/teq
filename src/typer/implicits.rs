@@ -4344,6 +4344,69 @@ impl<'a> Worker<'a> {
         }
     }
 
+    /// The defaults of the using parameters of the given `g`'s call `te` that no given was found
+    /// for, as at a call: each clause that leaves parameters to their defaults applied again with
+    /// the givens found and the others left out (`Typer.adaptNoArgsImplicitMethod`), whose plan
+    /// lifts the function part and the earlier clauses' arguments first (`liftFun`) and applies the
+    /// getters to them (`Worker::elaborate_clause`); a given of a class instance's, its class's
+    /// constructor's (`findDefaultGetter` of a given class's `given def`). The arguments are
+    /// updated in `te` and in `args`; the getter applications and the temporaries to bind around
+    /// the given's expression are returned, and `te` again where its receiver was lifted.
+    #[allow(clippy::type_complexity)]
+    fn given_defaults(&mut self, te: TExprId, g: SymId, sig: &MethodSig, omitted: &[(usize, usize, TypeId, bool)], args: &mut [TExprId], span: Span) -> (TExprId, Vec<TExprId>, Vec<TStmt>) {
+        let (of, recv, list, offset) = match self.prog.expr(te) {
+            TExpr::CallStatic(_, l) => (DefaultOf::Method(g), None, l, 0),
+            TExpr::CallMethod(r, _, l) => (DefaultOf::Method(g), Some(r), l, 0),
+            TExpr::New(c, l) => {
+                let declared: usize = sig.clauses.iter().map(|cl| cl.params.len()).sum();
+                (DefaultOf::Ctor(c), None, l, l.len as usize - declared)
+            }
+            _ => return (te, Vec::new(), Vec::new()),
+        };
+        let mut plan = super::elaborate::CallPlan::new(of, std::sync::Arc::new(sig.clone()), false);
+        let outer = std::mem::take(&mut self.hoisted);
+        let mut all = self.prog.expr_list(list).to_vec();
+        let mut receiver = recv;
+        let mut first = 0usize;
+        for clause in &sig.clauses {
+            let n = clause.params.len();
+            let mut types = vec![ANY; n];
+            let mut left: Vec<usize> = Vec::new();
+            for &(_, index, ty, _) in omitted.iter().filter(|o| o.1 >= first && o.1 < first + n) {
+                left.push(index - first);
+                types[index - first] = ty;
+            }
+            if !left.is_empty() {
+                let order: Vec<usize> = (0..n).filter(|k| !left.contains(k)).collect();
+                let written = super::elaborate::ClauseArgs { inherit: None, omitted: left, order };
+                // The clause's own arguments end the slice: the later clauses are elaborated in
+                // their turn, one using clause at a time.
+                self.elaborate_clause(&mut plan, &mut receiver, &mut all[offset..offset + first + n], first, &written, &types, span);
+            }
+            first += n;
+        }
+        let lifted = std::mem::replace(&mut self.hoisted, outer);
+        for (k, &a) in all.iter().enumerate() {
+            self.prog.expr_lists[list.start as usize + k] = a;
+        }
+        for (k, a) in args.iter_mut().enumerate() {
+            if let Some(&b) = all.get(offset + k) {
+                *a = b;
+            }
+        }
+        let te = match (receiver, recv) {
+            (Some(r), Some(old)) if r != old => {
+                let call = self.prog.add(TExpr::CallMethod(r, g, list));
+                if let Some(t) = self.prog.type_of(te) {
+                    self.prog.set_type(call, t);
+                }
+                call
+            }
+            _ => te,
+        };
+        (te, plan.defaults, lifted)
+    }
+
     fn try_given(&mut self, given: GivenRef, target: Option<TypeId>, span: Span, solve: bool) -> Attempt {
         let (g, scope) = given;
         if self.implicit_budget == 0 {
@@ -4397,6 +4460,9 @@ impl<'a> Worker<'a> {
         // synthesis reads as a class.
         self.solve_pinned_vars(first_var);
         let mut args = Vec::new();
+        // The parameters without a given that take their defaults: where each argument stands,
+        // the parameter's place among the given's, its type, whether it is by-name.
+        let mut omitted: Vec<(usize, usize, TypeId, bool)> = Vec::new();
         let mut knot = None;
         if let Some(open) = open {
             let step = self.step(Step::Divergence);
@@ -4416,8 +4482,11 @@ impl<'a> Worker<'a> {
             let expands_now = inline_callee && !self.defers_plain_inline(g);
             self.attempts.given_args += expands_now as u32;
             let mut paths: Vec<(SymId, TypeId)> = Vec::new();
+            let mut flat = 0usize;
             'clauses: for clause in &sig.clauses {
                 for p in &clause.params {
+                    let index = flat;
+                    flat += 1;
                     let pty = self.types.subst(p.ty, &subst);
                     let pty = if dependent { self.subst_paths(pty, &paths) } else { pty };
                     match self.resolve_given_pick(pty, span, p.by_name) {
@@ -4437,8 +4506,8 @@ impl<'a> Worker<'a> {
                         // No given for a parameter with a default: the default, as at a call
                         // (http4s' `UrlForm.entityEncoder(implicit charset: Charset = UTF-8)`).
                         Pick::NoMatch if p.has_default => {
-                            let omitted = self.default_placeholder();
-                            args.push(omitted);
+                            omitted.push((args.len(), index, pty, p.by_name));
+                            args.push(self.prog.add(TExpr::Unit));
                         }
                         Pick::NoMatch => {
                             if self.given_trace() {
@@ -4589,6 +4658,13 @@ impl<'a> Worker<'a> {
                 }
             }
         };
+        let (defaults, lifted) = if omitted.is_empty() {
+            (Vec::new(), Vec::new())
+        } else {
+            let (call, defaults, lifted) = self.given_defaults(te, g, &sig, &omitted, &mut args, span);
+            te = call;
+            (defaults, lifted)
+        };
         if self.capturing() {
             if let (Some(ic), TExpr::New(c, _)) = (impl_class, self.prog.expr(te)) {
                 if c == ic {
@@ -4706,6 +4782,18 @@ impl<'a> Worker<'a> {
         if self.capturing() && !sig.tparams.is_empty() {
             let own: Vec<TypeId> = subst.iter().filter(|(p, _)| sig.tparams.contains(p)).map(|&(_, t)| t).collect();
             self.capture_call_targs(te, &own);
+            for &d in &defaults {
+                self.capture_targs(d, &own);
+            }
+        }
+        // The temporaries the plan of the given's defaults bound, evaluated first.
+        if !lifted.is_empty() {
+            let stmts = self.prog.stmts.push_slice(&lifted);
+            let ty = self.prog.type_of(te);
+            te = self.prog.add(TExpr::Block(stmts, te));
+            if let Some(t) = ty {
+                self.prog.set_type(te, t);
+            }
         }
         // A nested by-name request referred to this instance: it becomes a lazy local that the
         // thunks inside read once the instance exists.
