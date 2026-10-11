@@ -1,0 +1,7 @@
+{
+  "private": true,
+  "description": "The jsdom of the Scala.js test fixture's dom project (JSDOMNodeJSEnv 1.1.1 requires it from here).",
+  "devDependencies": {
+    "jsdom": "27.4.0"
+  }
+}

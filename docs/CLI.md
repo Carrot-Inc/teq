@@ -19,6 +19,7 @@ teq compiler build src/ --split out/       # one ES module per package instead (
       --module-per-file pkg,...             # and one per file for these packages and the ones below them
       --hot                       # modules that a page can re-execute once it has booted
 teq compiler watch src/ --split out/       # the same, then rebuild on commands from stdin
+teq compiler watch src/ -o out/main.js     # the one file resident likewise, answering whether it is an ES module
 teq compiler build src/ --target jvm -o out/main.jar   # JVM class files linked against scala-library's
                                   # jar, which runs beside them (java -cp out/main.jar:scala-library.jar
                                   # TeqMain); without .jar, -o names a directory of .class files

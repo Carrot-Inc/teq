@@ -99,6 +99,7 @@ object HashSet:
 
 // A sorted array: lookups are binary searches, updates copy the array like the other sets do.
 class SortedSet[A](private val items: RawBuffer[A], val ordering: Ordering[A]) extends SetOps[A, SortedSet[A]], IterableOps[A, Set, SortedSet[A]], Set[A]:
+  override def +(elem: A): SortedSet[A] = incl(elem)
   override def buildC(sorted: RawBuffer[A]): SortedSet[A] = new TreeSet(sorted, ordering)
   override def iterator: Iterator[A] = Iterator.over(items)
   @jvmEvidence

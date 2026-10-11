@@ -673,6 +673,16 @@ mod tests {
     }
 
     #[test]
+    fn a_list_in_a_list_item_reads() {
+        let text = "a:\n  - arguments:\n      - \"--exclude-tags=Slow\"\n    class: munit.Framework\n  - arguments: []\n    class: x\n";
+        let v = parse(text).unwrap();
+        let items = v.get("a").unwrap().items();
+        let args: Vec<&str> = items[0].get("arguments").unwrap().items().iter().filter_map(Value::str).collect();
+        assert_eq!(args, ["--exclude-tags=Slow"]);
+        assert_eq!(items[0].get("class").and_then(Value::str), Some("munit.Framework"));
+    }
+
+    #[test]
     fn scalars_of_every_shape_read_and_write_back() {
         let text = "teq: 0.1.2\nformat: 1\nbinaries: {}\na:\n  bare: x.y/z:1@b\n  empty: \"\"\n  escapes: \"\\\"\\\\\\n\\r\\t\\u0000\\u007f\\u0085\\u009f\\ufeff\\uffff\"\n  \"false\": false\n  \"int\": -12\n  list: []\n  map: {}\n  number: \"2\"\n  \"on\": \"on\"\n  text: a few words\n  unicode: \"é 😀\"\n  zero: 0\n";
         let value = parse(text).unwrap();

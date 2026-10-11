@@ -37,6 +37,10 @@ pub struct MacroCtx {
     pub owner_class: Option<ClassId>,
     /// The argument each proxy of the inline method's parameters stands for.
     pub params: FxMap<SymId, TExprId>,
+    /// The argument each parameter of the inline methods under expansion, and its proxy, is bound
+    /// to, a local's included, which `underlyingArgument` takes as dotty's `MapToUnderlying`
+    /// takes an inline proxy's right-hand side.
+    pub bindings: FxMap<SymId, TExprId>,
     /// The positions of the inline calls under expansion, the outermost first, and the info
     /// messages the run gave so far: what orders its messages among the build's
     /// (`Worker::flush_infos`).
@@ -74,8 +78,13 @@ pub enum PendingKind {
     Named(Name),
     /// A builtin operator of the typed program (`1 + 1`) by name, applied as `Named` is, with
     /// the method type of the alternative the typer chose: what `tpe` of scalac's `Select`
-    /// gives.
-    Operator(Name, TypeId),
+    /// gives; the operation itself and its result's type where it is a primitive one, which an
+    /// application to one argument makes again, as dotty's `Select` of the operator's symbol
+    /// applies that operator whatever the receiver's static type (`left.select(sel.symbol)`).
+    /// The operation's payload also holds the types the typer promoted the receiver and the
+    /// argument to (`Program::promoted_bits`), which the view leaves out and an application
+    /// converts its operands to again.
+    Operator(Name, TypeId, Option<(PrimOp, TypeId, Option<TypeId>, Option<TypeId>)>),
     /// `New(tpt)`.
     New(TypeId),
     /// `Select(New(tpt), <init>)`.
@@ -1229,7 +1238,8 @@ pub(super) enum View {
     Apply(TreeRef, Vec<TreeRef>),
     TypeApply(TreeRef, Vec<TypeId>),
     New(TypeId),
-    This,
+    /// `this`, or `C.this` of an enclosing class `C` (dotty's `This(Some(C))`).
+    This(Option<ClassId>),
     Super,
     Typed(TreeRef, TypeId),
     Repeated(Vec<TreeRef>, TypeId),
@@ -1257,6 +1267,58 @@ pub(super) enum View {
 }
 
 impl<'a, 't> Interp<'a, 't> {
+    /// The class `C` when the expression is the local the typer reads an enclosing class's `this`
+    /// through (`$this…`, typed `C.this`): dotty's tree has `This(Some(C))` there, as teq's
+    /// pickle writes it (`QUALTHIS`).
+    fn outer_this_of(&mut self, e: TExprId) -> Option<ClassId> {
+        let TExpr::Local(s) = self.prog().expr(e) else { return None };
+        if !self.typer.name_ref(self.syms().sym(s).name).starts_with("$this") {
+            return None;
+        }
+        let ret = self.typer.sig_of(s).ret;
+        let t = self.typer.zonk(ret);
+        match self.typer.types.get(t) {
+            Type::This(c) => Some(c),
+            _ => None,
+        }
+    }
+
+    /// The class whose `this` the expression is, by its type: an inline argument's `this` is its
+    /// call site's, not the class the expansion stands in.
+    fn this_class(&mut self, e: TExprId) -> Option<ClassId> {
+        let site = self.macro_ctx.as_ref().and_then(|m| m.owner_class);
+        let Some(t) = self.prog().type_of(e) else { return site };
+        let t = self.typer.zonk(t);
+        match self.typer.types.get(t) {
+            Type::This(c) => Some(c),
+            _ => self.typer.class_of(t).or(site),
+        }
+    }
+
+    /// Whether a member `s` selected on `r` is dotty's `Ident`: `typedIdent` keeps the identifier
+    /// where `prefixIsElidable` holds (tpd.scala), for a member of a static owner, or a parameter
+    /// or parameter accessor of a class other than a trait, read in that class; a member of any
+    /// other class (`this`'s, or an enclosing class's) is `ref`'s `Select(This(C), name)`.
+    fn member_ident(&mut self, r: TExprId, s: SymId) -> bool {
+        let (c, enclosing) = match self.prog().expr(r) {
+            TExpr::This => match self.this_class(r) {
+                Some(c) => (c, true),
+                None => return true,
+            },
+            _ => match self.outer_this_of(r) {
+                Some(c) => (c, false),
+                None => return false,
+            },
+        };
+        if self.typer.is_static_owner(Owner::Class(c)) {
+            return true;
+        }
+        let Owner::Class(owner) = self.syms().sym(s).owner else { return true };
+        let param = self.syms().class(owner).ctor_syms.iter().any(|clause| clause.contains(&s));
+        let trait_ = |k: ClassKind| k == ClassKind::Trait;
+        param && enclosing && !trait_(self.syms().class(c).kind) && !trait_(self.syms().class(owner).kind)
+    }
+
     /// Whether a method symbol takes arguments: a selection of it awaits an `Apply`.
     fn takes_arguments(&mut self, s: SymId) -> bool {
         let info = self.syms().sym(s);
@@ -1267,6 +1329,32 @@ impl<'a, 't> Interp<'a, 't> {
             }
             _ => false,
         }
+    }
+
+    /// The selection that stands for the symbol of the operator selection `i` selects: the
+    /// run's first of its name, method type, operation and receiver's class (`Records::operators`),
+    /// so that equal operators are one symbol, as the primitive class's method is dotty's.
+    fn canonical_operator(&mut self, i: u32) -> R<u32> {
+        let p = self.pending_of(i)?;
+        let PendingKind::Operator(name, method, prim) = p.kind else { return Ok(i) };
+        let owner = match p.recv {
+            Some(r) => {
+                let ty = self.tree_type(r)?;
+                self.type_symbol(ty)
+            }
+            None => SymRef::None,
+        };
+        let key: super::OperatorKey = (name, method, prim, owner);
+        let found = self.records.operators.iter().find(|(k, _)| *k == key).map(|&(_, at)| at);
+        if let Some(at) = found {
+            // One of an earlier run is stale in this one, and gives way to this selection.
+            if self.records.pending.get(at).is_some() {
+                return Ok(at);
+            }
+            self.records.operators.retain(|(k, _)| *k != key);
+        }
+        self.records.operators.push((key, i));
+        Ok(i)
     }
 
     fn pending(&mut self, p: Pending) -> TreeRef {
@@ -1328,11 +1416,12 @@ impl<'a, 't> Interp<'a, 't> {
                     let ty = self.typer.types.class(c, &vec![ANY; n]);
                     View::Literal(Value::Type(ty))
                 }
+                TExpr::Local(_) if self.outer_this_of(e).is_some() => View::This(self.outer_this_of(e)),
                 TExpr::Local(s) | TExpr::Static(s) => View::Ident(SymRef::Term(s)),
                 TExpr::Module(c) => View::Ident(self.module_sym(c)),
-                TExpr::This => View::This,
+                TExpr::This => View::This(self.this_class(e)),
                 TExpr::Super(_) => View::Super,
-                TExpr::Field(r, s) if matches!(self.prog().expr(r), TExpr::This) => View::Ident(SymRef::Term(s)),
+                TExpr::Field(r, s) if self.member_ident(r, s) => View::Ident(SymRef::Term(s)),
                 TExpr::Field(r, s) => View::Select(TreeRef::Expr(r), SymRef::Term(s), self.syms().sym(s).name),
                 TExpr::CallMethod(r, s, args) if self.assigned_var(s).is_some() && args.len == 1 && self.prog().is_setter_assign(e) => {
                     // An assignment through an abstract var, which scalac's tree keeps as one; a
@@ -1347,7 +1436,7 @@ impl<'a, 't> Interp<'a, 't> {
                 TExpr::CallMethod(r, s, args) => {
                     let exprs = self.prog().expr_list(args).to_vec();
                     let items: Vec<TreeRef> = exprs.iter().map(|&x| TreeRef::Expr(x)).collect();
-                    let recv = if matches!(self.prog().expr(r), TExpr::This) { None } else { Some(TreeRef::Expr(r)) };
+                    let recv = if self.member_ident(r, s) { None } else { Some(TreeRef::Expr(r)) };
                     match (recv, items.is_empty() && !self.takes_arguments(s)) {
                         (Some(r), true) => View::Select(r, SymRef::Term(s), self.syms().sym(s).name),
                         (None, true) => View::Ident(SymRef::Term(s)),
@@ -1449,8 +1538,13 @@ impl<'a, 't> Interp<'a, 't> {
                 TExpr::Prim(op, l, r) => {
                     let name = self.typer.interner.intern(prim_name(op));
                     let method = self.operator_type(op, l, r, e);
-                    let fun = self.pending(Pending { recv: Some(TreeRef::Expr(l)), kind: PendingKind::Operator(name, method), targs: Vec::new() });
-                    View::Apply(fun, vec![TreeRef::Expr(r)])
+                    let result = self.prog().type_of(e).unwrap_or(ANY);
+                    // The operands as the program wrote them, the promotions to the operator's type
+                    // left out: scalac's `x.==(l)` selects `Int.==(Long)` on `x`.
+                    let (lo, lt) = self.unpromoted(l);
+                    let (ro, rt) = self.unpromoted(r);
+                    let fun = self.pending(Pending { recv: Some(TreeRef::Expr(lo)), kind: PendingKind::Operator(name, method, Some((op, result, lt, rt))), targs: Vec::new() });
+                    View::Apply(fun, vec![TreeRef::Expr(ro)])
                 }
                 TExpr::Unary(op, x) => {
                     let name = self.typer.interner.intern(unary_name(op));
@@ -1503,7 +1597,12 @@ impl<'a, 't> Interp<'a, 't> {
                     let fun = self.pending(Pending { recv: Some(TreeRef::Expr(x)), kind: PendingKind::Named(name), targs: vec![ty] });
                     View::TypeApply(fun, vec![ty])
                 }
-                TExpr::SeqLit(l) | TExpr::ArrayLit(l) => {
+                // A vararg: its sequence literal ascribed the repeated type.
+                TExpr::SeqLit(_) => {
+                    let elem = self.seq_elem_type(e);
+                    View::Typed(TreeRef::SeqLiteral(e), self.typer.repeated_type(elem))
+                }
+                TExpr::ArrayLit(l) => {
                     let items: Vec<TreeRef> = self.prog().expr_list(l).iter().map(|&x| TreeRef::Expr(x)).collect();
                     let elem = self.seq_elem_type(e);
                     View::Repeated(items, elem)
@@ -1637,6 +1736,11 @@ impl<'a, 't> Interp<'a, 't> {
                 let (fun, args) = self.partial_of(i)?;
                 View::Apply(fun, args)
             }
+            TreeRef::SeqLiteral(e) => {
+                let TExpr::SeqLit(l) = self.prog().expr(e) else { unreachable!("a sequence literal") };
+                let items: Vec<TreeRef> = self.prog().expr_list(l).iter().map(|&x| TreeRef::Expr(x)).collect();
+                View::Repeated(items, self.seq_elem_type(e))
+            }
             TreeRef::Pending(i) => {
                 let p = self.pending_of(i)?;
                 if !p.targs.is_empty() {
@@ -1645,9 +1749,10 @@ impl<'a, 't> Interp<'a, 't> {
                 }
                 match (p.recv, p.kind) {
                     (Some(r), PendingKind::Sym(s)) => View::Select(r, SymRef::Term(s), self.syms().sym(s).name),
-                    (Some(r), PendingKind::Named(n) | PendingKind::Operator(n, _)) => View::Select(r, SymRef::None, n),
+                    (Some(r), PendingKind::Named(n)) => View::Select(r, SymRef::None, n),
+                    (Some(r), PendingKind::Operator(n, ..)) => View::Select(r, SymRef::Operator(i), n),
                     (None, PendingKind::Sym(s)) => View::Ident(SymRef::Term(s)),
-                    (None, PendingKind::Named(n) | PendingKind::Operator(n, _)) => {
+                    (None, PendingKind::Named(n) | PendingKind::Operator(n, ..)) => {
                         let _ = n;
                         View::Ident(SymRef::None)
                     }
@@ -1679,10 +1784,17 @@ impl<'a, 't> Interp<'a, 't> {
     }
 
     fn concat_view(&mut self, items: &[TExprId]) -> View {
+        // The operands as written: what the lowering rendered to a string is shown unrendered,
+        // as scalac's `x.+(s)` (`Int.+(String)`) and `s.+(x)` (`String.+(Any)`) have it. A longer
+        // chain's left part stays the lowered concatenation, which a splice may take back.
+        let written = |it: &Self, x: TExprId| match it.prog().expr(x) {
+            TExpr::ToStr(inner, conv) if conv.is_rendering() => inner,
+            _ => x,
+        };
         let n = items.len();
         let plus = self.typer.interner.intern("+");
         let left = if n <= 2 {
-            TreeRef::Expr(items[0])
+            TreeRef::Expr(written(self, items[0]))
         } else {
             let l = self.typer.prog.list(&items[..n - 1]);
             let e = self.typer.prog.add(TExpr::StrConcat(l));
@@ -1699,8 +1811,8 @@ impl<'a, 't> Interp<'a, 't> {
         let names = vec![self.typer.interner.intern(name)];
         let result = self.typer.b.t_string;
         let method = self.method_type(MethodTypeRepr { names, types: vec![param], result, open: Vec::new(), kind: ClauseKind::Plain });
-        let fun = self.pending(Pending { recv: Some(left), kind: PendingKind::Operator(plus, method), targs: Vec::new() });
-        View::Apply(fun, vec![TreeRef::Expr(items[n - 1])])
+        let fun = self.pending(Pending { recv: Some(left), kind: PendingKind::Operator(plus, method, None), targs: Vec::new() });
+        View::Apply(fun, vec![TreeRef::Expr(written(self, items[n - 1]))])
     }
 
     /// The tree `e` as the end of a chain of `+`, where it is a `String`: what an ascription or
@@ -1840,7 +1952,7 @@ impl<'a, 't> Interp<'a, 't> {
     /// A tree as an expression of the IR: a pending selection becomes the call it stands for.
     pub(super) fn materialize(&mut self, t: TreeRef) -> R<TExprId> {
         match t {
-            TreeRef::Expr(e) => Ok(e),
+            TreeRef::Expr(e) | TreeRef::SeqLiteral(e) => Ok(e),
             TreeRef::Stmt(i) => match self.prog().stmts[i as usize] {
                 TStmt::Expr(e) => Ok(e),
                 _ => self.unsupported("a definition where a term was expected"),
@@ -1932,7 +2044,8 @@ impl<'a, 't> Interp<'a, 't> {
                 let name = self.syms().sym(s).name;
                 Pending { kind: PendingKind::Named(name), ..p }
             }
-            PendingKind::Operator(name, _) => Pending { kind: PendingKind::Named(name), ..p },
+            PendingKind::Operator(_, _, Some(_)) if applied && args.len() == 1 && p.recv.is_some() => p,
+            PendingKind::Operator(name, ..) => Pending { kind: PendingKind::Named(name), ..p },
             _ => p,
         };
         match p.kind {
@@ -1963,6 +2076,8 @@ impl<'a, 't> Interp<'a, 't> {
                         let _ = r;
                         self.typer.prog.add(TExpr::Module(c))
                     }
+                    // A member of a JS type as the typer applies it: a property, brackets, a call.
+                    (Some(r), _, _) if !is_ext && self.syms().js_member(s) && self.syms().sym(s).intrinsic.is_none() => self.typer.build_js_member_call(r, s, l),
                     (Some(r), _, _) if !is_ext => self.typer.prog.add(TExpr::CallMethod(r, s, l)),
                     (Some(r), _, _) => {
                         let mut all = vec![r];
@@ -1992,7 +2107,21 @@ impl<'a, 't> Interp<'a, 't> {
                 }
                 Ok(te)
             }
-            PendingKind::Named(name) | PendingKind::Operator(name, _) => {
+            // The primitive operation the operator was read from, on the receiver and the argument.
+            PendingKind::Operator(_, _, Some((op, result, recv_to, arg_to))) if applied && args.len() == 1 && p.recv.is_some() => {
+                let recv = self.materialize(p.recv.expect("checked"))?;
+                let arg = match self.named_arg(args[0])? {
+                    Some((_, a)) => a,
+                    None => args[0],
+                };
+                let arg = self.materialize(arg)?;
+                let recv = self.promote_to(recv, recv_to);
+                let arg = self.promote_to(arg, arg_to);
+                let te = self.typer.prog.add(TExpr::Prim(op, recv, arg));
+                self.typer.prog.set_type(te, result);
+                Ok(te)
+            }
+            PendingKind::Named(name) | PendingKind::Operator(name, ..) => {
                 let Some(r) = p.recv else {
                     return self.unsupported(format!("a reference to {} without a definition", self.typer.name_ref(name)));
                 };
@@ -2238,6 +2367,7 @@ impl<'a, 't> Interp<'a, 't> {
     /// The static type of a tree.
     pub(super) fn tree_type(&mut self, t: TreeRef) -> R<TypeId> {
         Ok(match t {
+            TreeRef::SeqLiteral(e) => self.prog().type_of(e).map_or(ANY, |ty| self.typer.zonk(ty)),
             TreeRef::Expr(e) => {
                 // A stable val's reference has its singleton type, as scalac's `Ident` has,
                 // which `widen` takes to the declared type.
@@ -2296,7 +2426,7 @@ impl<'a, 't> Interp<'a, 't> {
                     PendingKind::Ref(SymRef::Class(c)) => self.typer.types.class(c, &[]),
                     PendingKind::Ref(_) => ANY,
                     PendingKind::Named(_) => ANY,
-                    PendingKind::Operator(_, method) => method,
+                    PendingKind::Operator(_, method, _) => method,
                 }
             }
             TreeRef::Def(s) => self.typer.sig_of(s).ret,
@@ -2320,16 +2450,17 @@ impl<'a, 't> Interp<'a, 't> {
         Ok(match t {
             TreeRef::Expr(e) => match self.prog().expr(e) {
                 TExpr::Int(_) | TExpr::Long(_) | TExpr::Double(_) | TExpr::Bool(_) | TExpr::Char(_) | TExpr::Str(_) | TExpr::Unit | TExpr::Null | TExpr::ClassOf(_) => "Literal",
+                TExpr::Local(_) if self.outer_this_of(e).is_some() => "This",
                 TExpr::Local(_) | TExpr::Static(_) | TExpr::Module(_) | TExpr::JsImport(_) | TExpr::JsGlobal(..) | TExpr::ObjLit(_) => "Ident",
                 TExpr::This => "This",
                 TExpr::Super(_) => "Super",
                 // A member of `this` named unqualified, which the view shows as an `Ident`.
-                TExpr::Field(r, _) if matches!(self.prog().expr(r), TExpr::This) => "Ident",
+                TExpr::Field(r, s) if self.member_ident(r, s) => "Ident",
                 TExpr::Field(..) | TExpr::Unary(..) | TExpr::ToStr(..) | TExpr::Index(..) | TExpr::JsSelect(..) => "Select",
                 TExpr::CallMethod(_, s, args) if args.len == 1 && self.assigned_var(s).is_some() && self.prog().is_setter_assign(e) => "Assign",
                 TExpr::CallMethod(_, s, args) | TExpr::CallStatic(s, args) => {
                     if args.is_empty() && !self.takes_arguments(s) {
-                        if matches!(self.prog().expr(e), TExpr::CallMethod(..)) { "Select" } else { "Ident" }
+                        if matches!(self.prog().expr(e), TExpr::CallMethod(r, s, _) if !self.member_ident(r, s)) { "Select" } else { "Ident" }
                     } else {
                         "Apply"
                     }
@@ -2357,7 +2488,8 @@ impl<'a, 't> Interp<'a, 't> {
                 },
                 TExpr::CallClosure(..) | TExpr::New(..) | TExpr::NewVia(..) | TExpr::Prim(..) | TExpr::StrConcat(_) | TExpr::Throw(..) => "Apply",
                 TExpr::TypeTest(..) | TExpr::Cast(..) => "TypeApply",
-                TExpr::SeqLit(_) | TExpr::ArrayLit(_) => "Repeated",
+                TExpr::SeqLit(_) => "Typed",
+                TExpr::ArrayLit(_) => "Repeated",
                 TExpr::Spread(_) => "Typed",
                 TExpr::Lambda(..) | TExpr::Block(..) => "Block",
                 TExpr::If(..) => "If",
@@ -2399,6 +2531,7 @@ impl<'a, 't> Interp<'a, 't> {
             TreeRef::Alias(_) => "TypeDef",
             TreeRef::NamedArg(_) => "NamedArg",
             TreeRef::Partial(_) => "Apply",
+            TreeRef::SeqLiteral(_) => "Repeated",
             TreeRef::Pending(i) => {
                 let p = self.pending_of(i)?;
                 if !p.targs.is_empty() {
@@ -2600,6 +2733,7 @@ impl<'a, 't> Interp<'a, 't> {
     fn tree_symbol(&mut self, t: TreeRef) -> R<SymRef> {
         Ok(match t {
             TreeRef::Expr(e) => match self.prog().expr(e) {
+                TExpr::Local(_) if self.outer_this_of(e).is_some() => self.outer_this_of(e).map_or(SymRef::None, SymRef::Class),
                 TExpr::Local(s) | TExpr::Static(s) | TExpr::Field(_, s) | TExpr::CallMethod(_, s, _) | TExpr::CallStatic(s, _) => SymRef::Term(s),
                 TExpr::Module(c) => self.module_sym(c),
                 TExpr::New(c, _) => SymRef::Ctor(c),
@@ -2625,10 +2759,11 @@ impl<'a, 't> Interp<'a, 't> {
             TreeRef::Pending(i) => match self.pending_of(i)?.kind {
                 PendingKind::Sym(s) => SymRef::Term(s),
                 PendingKind::New(ty) | PendingKind::Ctor(ty) => self.ctor_sym(ty),
-                PendingKind::Named(_) | PendingKind::Operator(..) => SymRef::None,
+                PendingKind::Operator(..) => SymRef::Operator(self.canonical_operator(i)?),
+                PendingKind::Named(_) => SymRef::None,
                 PendingKind::Ref(r) => r,
             },
-            TreeRef::Case(_) | TreeRef::NamedArg(_) | TreeRef::Partial(_) => SymRef::None,
+            TreeRef::Case(_) | TreeRef::NamedArg(_) | TreeRef::Partial(_) | TreeRef::SeqLiteral(_) => SymRef::None,
             TreeRef::LambdaDef(e) | TreeRef::LambdaClosure(e) | TreeRef::LambdaRef(e) => SymRef::Lambda(e),
             TreeRef::Ctor(c) => SymRef::Ctor(c),
             TreeRef::Alias(a) => SymRef::Alias(a),
@@ -2668,6 +2803,10 @@ impl<'a, 't> Interp<'a, 't> {
             SymRef::Default(c, i) => {
                 let init = self.default_init(c, i)?;
                 return Ok(TreeRef::Expr(init));
+            }
+            SymRef::Operator(i) => {
+                let kind @ PendingKind::Operator(..) = self.pending_of(i)?.kind else { unreachable!("an operator's symbol is of its selection") };
+                return Ok(self.pending(Pending { recv: Some(qual), kind, targs: Vec::new() }));
             }
             other => {
                 let shown = self.symbol_name(other);
@@ -2842,15 +2981,24 @@ fn install_trees(it: &mut Table) {
             None => Ok(Value::Type(it.tree_type(t)?)),
         }
     });
+    // dotty's `MapToUnderlying`: a local's reference is its binding's right-hand side, an inline
+    // parameter's or proxy's its argument's, a local val's its initialiser's.
     q!(it, "Reflect.TermMethods.Term.underlyingArgument", |it, a| {
         let t = it.tree_arg(a, 0)?;
         let mut e = it.materialize(t)?;
+        // dotty's `MapToUnderlying.transform` with `skipLocal = isOneOf(InlineProxy | Synthetic)`:
+        // every inline method's parameter proxy in the tree, at any depth, gives the argument it
+        // is bound to (`x + 1` of a proxy `x` is `a.+(2).+(1)`); a user's local stays a reference,
+        // whose right side a splice would evaluate again.
         if let Some(ctx) = it.macro_ctx.clone() {
-            while let TExpr::Local(s) = it.prog().expr(e) {
-                match ctx.params.get(&s) {
-                    Some(&arg) if arg != e => e = arg,
-                    _ => break,
-                }
+            let mut proxies: FxMap<SymId, TExprId> = FxMap::default();
+            for (&s, &arg) in ctx.bindings.iter().chain(ctx.params.iter()) {
+                proxies.insert(s, arg);
+            }
+            if !proxies.is_empty() {
+                let outer = std::mem::replace(&mut it.typer.inline.copy_locals, proxies);
+                e = it.typer.copy_expr(e);
+                it.typer.inline.copy_locals = outer;
             }
         }
         Ok(Value::Tree(TreeRef::Expr(e)))
@@ -2979,7 +3127,7 @@ fn install_trees(it: &mut Table) {
                 // The operator selected again under its name keeps the alternative's type.
                 let kind = match original {
                     TreeRef::Pending(i) => match it.pending_of(i)?.kind {
-                        PendingKind::Operator(was, method) if was == n => PendingKind::Operator(n, method),
+                        PendingKind::Operator(was, method, prim) if was == n => PendingKind::Operator(n, method, prim),
                         _ => PendingKind::Named(n),
                     },
                     _ => PendingKind::Named(n),
@@ -3139,6 +3287,10 @@ fn install_trees(it: &mut Table) {
         }
         let e = it.expr_arg(a, 1)?;
         let ty = it.type_tree_arg(a, 2)?;
+        // A sequence literal ascribed the repeated type is the vararg itself.
+        if matches!(it.typer.types.get(ty), Type::Class(c, _) if Some(c) == it.typer.b.repeated) && matches!(it.prog().expr(e), TExpr::SeqLit(_)) {
+            return Ok(Value::Tree(TreeRef::Expr(e)));
+        }
         Ok(Value::Tree(TreeRef::Expr(it.chain_end(e, ty))))
     });
     q!(it, "Reflect.Typed.unapply", |it, a| {
@@ -3209,7 +3361,7 @@ fn install_trees(it: &mut Table) {
             None => ANY,
         };
         it.typer.prog.set_type(te, ty);
-        Ok(Value::Tree(TreeRef::Expr(te)))
+        Ok(Value::Tree(TreeRef::SeqLiteral(te)))
     });
     q!(it, "Reflect.Repeated.unapply", |it, a| {
         let t = it.tree_arg(a, 1)?;
@@ -4502,7 +4654,7 @@ impl<'a, 't> Interp<'a, 't> {
             TreeRef::Pending(i) => {
                 let p = self.pending_of(i)?;
                 match p.kind {
-                    PendingKind::Operator(_, method) => return Ok(Some(method)),
+                    PendingKind::Operator(_, method, _) => return Ok(Some(method)),
                     PendingKind::Sym(s) if self.takes_arguments(s) => {
                         let recv = match p.recv {
                             Some(r) => Some(self.materialize(r)?),
@@ -4585,6 +4737,45 @@ impl<'a, 't> Interp<'a, 't> {
 
     /// The type of an operand of a builtin operator before the typer widened it to the
     /// operator's rank.
+    /// An operand of a builtin operator as the program wrote it, the widenings the typer added to
+    /// bring it to the operator's type left out, and that type. The typer leaves those untyped
+    /// (`Worker::promote`), which every copy of the tree keeps, while a written `x.toLong` is
+    /// typed: `x.==(l)` selects `Int.==(Long)` on `x`, `x.toLong.==(l)` `Long.==(Long)`.
+    fn unpromoted(&mut self, x: TExprId) -> (TExprId, Option<TypeId>) {
+        let b = &self.typer.b;
+        let target = match self.prog().expr(x) {
+            _ if self.prog().type_of(x).is_some() => return (x, None),
+            TExpr::Unary(UnOp::IntToLong | UnOp::CharToLong, _) => b.t_long,
+            TExpr::Unary(UnOp::CharToInt | UnOp::ByteToInt | UnOp::ShortToInt, _) => b.t_int,
+            TExpr::Unary(UnOp::IntToFloat | UnOp::LongToFloat, _) => b.t_float,
+            TExpr::Unary(UnOp::IntToDouble | UnOp::LongToDouble | UnOp::FloatToDouble, _) => b.t_double,
+            TExpr::Unary(UnOp::ByteToShort, _) => b.t_short,
+            _ => return (x, None),
+        };
+        let mut at = x;
+        while let TExpr::Unary(op, inner) = self.prog().expr(at) {
+            let widening = matches!(op, UnOp::IntToLong | UnOp::CharToLong | UnOp::CharToInt | UnOp::ByteToInt | UnOp::ShortToInt | UnOp::IntToFloat | UnOp::LongToFloat | UnOp::IntToDouble | UnOp::LongToDouble | UnOp::FloatToDouble | UnOp::ByteToShort);
+            if !widening || self.prog().type_of(at).is_some() {
+                break;
+            }
+            at = inner;
+        }
+        (at, Some(target))
+    }
+
+    /// An operand converted to the type a builtin operator's promotion gave the one it stands
+    /// for, as the typer converts it (`Worker::promote`).
+    fn promote_to(&mut self, x: TExprId, to: Option<TypeId>) -> TExprId {
+        let Some(to) = to else { return x };
+        let Some(rank) = self.typer.is_numeric(to) else { return x };
+        let from = self.expr_type_or_any(x);
+        let promoted = self.typer.convert_rank(x, from, rank);
+        if promoted != x {
+            self.typer.prog.set_type(promoted, to);
+        }
+        promoted
+    }
+
     fn operand_type(&mut self, x: TExprId) -> TypeId {
         let operand = match self.prog().expr(x) {
             TExpr::Unary(UnOp::IntToLong | UnOp::CharToInt | UnOp::CharToLong | UnOp::IntToFloat | UnOp::IntToDouble | UnOp::ByteToShort | UnOp::ByteToInt | UnOp::ShortToInt | UnOp::LongToFloat | UnOp::LongToDouble | UnOp::FloatToDouble, inner) => inner,
@@ -5775,6 +5966,10 @@ impl<'a, 't> Interp<'a, 't> {
             SymRef::Any => "Any".to_string(),
             SymRef::Nothing => "Nothing".to_string(),
             SymRef::None => "<none>".to_string(),
+            SymRef::Operator(i) => match self.pending_of(i).map(|p| p.kind) {
+                Ok(PendingKind::Operator(name, ..)) => self.typer.name_ref(name).to_string(),
+                _ => "<none>".to_string(),
+            },
         }
     }
 
@@ -5850,6 +6045,14 @@ impl<'a, 't> Interp<'a, 't> {
             SymRef::Lambda(_) => self.innermost_site_sym().map_or(SymRef::None, SymRef::Term),
             SymRef::TParam(_) | SymRef::Any | SymRef::Nothing => SymRef::PkgClass(self.typer.b.scala_pkg),
             SymRef::None => SymRef::None,
+            // The primitive class of the operator's receiver.
+            SymRef::Operator(i) => match self.pending_of(i).map(|p| p.recv) {
+                Ok(Some(recv)) => match self.tree_type(recv) {
+                    Ok(ty) => self.type_symbol(ty),
+                    Err(_) => SymRef::None,
+                },
+                _ => SymRef::None,
+            },
         }
     }
 
@@ -6050,6 +6253,7 @@ impl<'a, 't> Interp<'a, 't> {
             }
             SymRef::Pkg(_) | SymRef::PkgClass(_) | SymRef::Root => f |= F_PACKAGE | F_MODULE,
             SymRef::Splice(_) => f |= F_SYNTHETIC | F_MACRO,
+            SymRef::Operator(_) => f |= F_METHOD,
             SymRef::Site(run, i) => match self.site_entry(run, i as usize) {
                 Some(SiteOwner::Lambda(_)) => f |= F_METHOD | F_SYNTHETIC,
                 Some(SiteOwner::PatternTemp(_)) => f |= F_SYNTHETIC,
@@ -7205,6 +7409,34 @@ impl<'a, 't> Interp<'a, 't> {
     }
 
     /// The tree as Scala source, as `Printer.TreeCode` shows it.
+    /// The prefix `SourceCode.printType` writes for `ThisType` of a class (`printFullClassName`:
+    /// its enclosing classes' names, then `.this`) or of an object (its path, packages included,
+    /// the empty and root packages left out).
+    fn this_prefix_text(&mut self, c: ClassId) -> String {
+        let info = self.syms().class(c);
+        let (kind, owner, name) = (info.kind, info.owner, info.name);
+        let own = self.typer.name_ref(name).trim_end_matches('$').to_string();
+        if matches!(kind, ClassKind::Object | ClassKind::GivenImpl) {
+            return match owner {
+                Owner::Package(p) => format!("{}{}", self.package_path(p), own),
+                Owner::Class(o) => format!("{}.{}", self.this_prefix_text(o), own),
+                _ => own,
+            };
+        }
+        let mut names = vec![own];
+        let mut at = owner;
+        while let Owner::Class(o) = at {
+            let i = self.syms().class(o);
+            if matches!(i.kind, ClassKind::Object | ClassKind::GivenImpl) {
+                break;
+            }
+            names.push(self.typer.name_ref(i.name).to_string());
+            at = i.owner;
+        }
+        names.reverse();
+        format!("{}.this", names.join("."))
+    }
+
     pub(super) fn show_tree(&mut self, t: TreeRef) -> String {
         let mut out = String::new();
         if let Err(_) = self.show_tree_into(t, &mut out, 0) {
@@ -7216,7 +7448,17 @@ impl<'a, 't> Interp<'a, 't> {
     fn show_tree_into(&mut self, t: TreeRef, out: &mut String, indent: usize) -> R<()> {
         match self.view(t)? {
             View::Literal(v) => out.push_str(&self.show_constant(&v)?),
-            View::Ident(s) => out.push_str(&self.symbol_name(s).trim_end_matches('$').to_string()),
+            // dotty's `SourceCode` prints an `Ident` by its type: a member of an enclosing class
+            // as `C.this.x`, one of an object as its path (`pkg.Obj.x`).
+            View::Ident(s) => {
+                if let SymRef::Term(sym) = s {
+                    if let Owner::Class(c) = self.syms().sym(sym).owner {
+                        out.push_str(&self.this_prefix_text(c));
+                        out.push('.');
+                    }
+                }
+                out.push_str(&self.symbol_name(s).trim_end_matches('$').to_string())
+            }
             View::Select(q, _, n) => {
                 self.show_tree_into(q, out, indent)?;
                 out.push('.');
@@ -7248,7 +7490,12 @@ impl<'a, 't> Interp<'a, 't> {
                 out.push_str("new ");
                 out.push_str(&self.show_type_repr(ty));
             }
-            View::This => out.push_str("this"),
+            View::This(None) => out.push_str("this"),
+            View::This(Some(c)) => {
+                let name = self.typer.name_ref(self.syms().class(c).name).trim_end_matches('$').to_string();
+                out.push_str(&name);
+                out.push_str(".this");
+            }
             View::Super => out.push_str("super"),
             View::Typed(e, ty) => {
                 out.push('(');
@@ -7522,7 +7769,11 @@ impl<'a, 't> Interp<'a, 't> {
                 out.push_str("))");
             }
             View::New(ty) => out.push_str(&format!("New(Inferred({}))", self.show_type_structure(ty))),
-            View::This => out.push_str("This(None)"),
+            View::This(None) => out.push_str("This(None)"),
+            View::This(Some(c)) => {
+                let name = self.typer.name_ref(self.syms().class(c).name).trim_end_matches('$').to_string();
+                out.push_str(&format!("This(Some(\"{}\"))", name));
+            }
             View::Super => out.push_str("Super(This(None), None)"),
             View::Typed(e, ty) => {
                 out.push_str("Typed(");

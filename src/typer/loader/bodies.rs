@@ -2681,6 +2681,14 @@ impl<'a> Worker<'a> {
                     return fe;
                 }
                 let items: Vec<TyExprId> = targs.iter().map(|a| self.conv_type_arg(cv, a)).collect();
+                // `x.asInstanceOf[js.Array[Int]]`: a cast to a JavaScript type, which Scala.js leaves
+                // untested and the std holds as an alias of a Scala type, kept as the body spelled it.
+                if let [target] = &targs[..] {
+                    let mut cx = super::MapCx::new(cv.file);
+                    if (self.selects_named(cv, f, "asInstanceOf") || self.selects_named(cv, f, "$asInstanceOf$")) && self.names_js_type(&mut cx, target) {
+                        cv.ast.js_alias_types.push(items[0]);
+                    }
+                }
                 // A projection the loader could not read (`Array[?]#T`) leaves the arguments to
                 // inference; one it reads as the wildcard's bound (`EndpointInput[?]#T`) stays.
                 if targs.iter().any(|a| self.projects_wildcard(a)) && items.iter().any(|&t| matches!(cv.ast.ty(t), TyExpr::Resolved(r) if self.types.contains_error(r))) {
@@ -4699,6 +4707,17 @@ impl<'a> Worker<'a> {
                         }
                         other => (Vec::new(), self.conv_type(cv, other)),
                     };
+                    // `type L = js.Array[Int]`: a JavaScript type the std holds as an alias of a
+                    // Scala type, kept as the body spelled it, as a cast's (`written_js_alias`);
+                    // `type M = L` names the local alias, which the typer follows.
+                    let mut cx = super::MapCx::new(cv.file);
+                    let written = match &sig.rhs {
+                        TType::Lambda { kind: LambdaKind::Type, result, .. } => &**result,
+                        other => other,
+                    };
+                    if self.names_js_type(&mut cx, written) {
+                        cv.ast.js_alias_types.push(rhs);
+                    }
                     Some(cv.ast.add_def(Def { name, span: cv.span, mods: 0, annots: Vec::new(), kind: DefKind::TypeAlias { tparams, rhs: Some(rhs), lower: None, upper: None } }))
         }
     }

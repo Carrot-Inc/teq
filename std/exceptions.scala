@@ -63,6 +63,15 @@ package java.lang:
         s.println("Caused by: " + c)
         c = c.getCause
 
+    @jvm("invokevirtual java/lang/Throwable.printStackTrace(Ljava/io/PrintStream;)V")
+    @javaDefined
+    def printStackTrace(s: java.io.PrintStream): Unit =
+      s.println(this)
+      var c = getCause
+      while c != null do
+        s.println("Caused by: " + c)
+        c = c.getCause
+
     // The stack is not walked: an empty array, where the JVM has the frames, unless the program
     // set one, which JavaScript keeps in a property of the error.
     @js("($0.$stackTrace?.slice() ?? [])")

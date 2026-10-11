@@ -1,4 +1,4 @@
-// tests/tasty/fixtures/JsArr.tasty (TASTy 28.8, 963 bytes)
+// tests/tasty/fixtures/JsArr.tasty (TASTy 28.8, 978 bytes)
 package fix.facades
 @JSType @SourceFile @native trait JsArr extends Object {
   @JSBracketAccess def apply(i: Int): Predef.String = ...

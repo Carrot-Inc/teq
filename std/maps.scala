@@ -289,6 +289,14 @@ def rawMapHash(a: Any): Int
 // library implements the four, the std's own map is `PersistentMap` over the hash trie index.
 @predef
 abstract class Map[K, +V] extends IterableOps[(K, V), Iterable, Map[K, V]], scala.collection.Map[K, V]:
+  // `collection.Map`'s, of this map's kind: `IterableOps`'s bodies, written out rather than called
+  // through `super`, a call the reach answers with the member of that name of every class.
+  override def filter(p: ((K, V)) => Boolean): Map[K, V] =
+    val out = emptyBuffer[(K, V)]
+    foreach(x => if p(x) then out.push(x))
+    buildC(out)
+  override def tail: Map[K, V] =
+    if isEmpty then unsupportedOperation(null) else drop(1)
   def get(key: K): Option[V]
   def iterator: Iterator[(K, V)]
   def updated[V1 >: V](key: K, value: V1): Map[K, V1]
@@ -625,6 +633,9 @@ trait SetOps[A, +C] extends IterableOnce[A]:
 
 @predef
 trait Set[A] extends SetOps[A, Set[A]], IterableOps[A, Set, Set[A]], Iterable[A], scala.collection.Set[A]:
+  // `collection.Set`'s, the set of this kind with the element (`immutable.SetOps.+`).
+  override def +(elem: A): Set[A] = incl(elem)
+  override def +(elem1: A, elem2: A, elems: A*): Set[A] = concat(elems.prepended(elem2).prepended(elem1))
   def buildCC[B](items: RawBuffer[B]): Set[B] = Set.from(Vector.wrap(items))
   override def toSet[B >: A]: Set[B] = unsafeCast(this)
   def equals(that: Any): Boolean = that match

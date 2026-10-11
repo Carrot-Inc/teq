@@ -177,6 +177,10 @@ trait IterableOps[+A, +CC[_], +C] extends IterableOnce[A]:
     var acc = z
     foreach(x => acc = op(acc, x))
     acc
+  // scala-library's deprecated `IterableOnceOps` members, which libraries built on 2.12's
+  // collections still call (ScalaTest's `ArgsParser`, scalactic's `Prettifier`).
+  def /:[B](z: B)(op: (B, A) => B): B = foldLeft(z)(op)
+  def hasDefiniteSize: Boolean = true
   def foldRight[B](z: B)(op: (A, B) => B): B =
     val arr = rawItems(this)
     var acc = z
@@ -675,6 +679,24 @@ abstract class Iterator[+A] extends IterableOps[A, Iterator, Iterator[A]]:
   def hasNext: Boolean
   def next(): A
   def foreach[U](f: A => U): Unit = while hasNext do f(next())
+  override def hasDefiniteSize: Boolean = !hasNext
+  // scala-library's: the iterator whose next element `head` reads without taking it.
+  def buffered: scala.collection.BufferedIterator[A] =
+    val self = this
+    new scala.collection.BufferedIterator[A]:
+      private var hd: A = null.asInstanceOf[A]
+      private var hdDefined: Boolean = false
+      def head: A =
+        if !hdDefined then
+          hd = self.next()
+          hdDefined = true
+        hd
+      def hasNext: Boolean = hdDefined || self.hasNext
+      def next(): A =
+        if hdDefined then
+          hdDefined = false
+          hd
+        else self.next()
   override def iterator: Iterator[A] = this
   def buildCC[B](items: RawBuffer[B]): Iterator[B] = Iterator.over(items)
   def length: Int = size

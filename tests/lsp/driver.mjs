@@ -3664,7 +3664,8 @@ async function leanStdSessions() {
 /** The references, implementations and callers of a std definition asked from the app as the
  * session's first query into the std (docs/TARGETS.md, "Navigation"): complete, every std file
  * demanded first, those the program never entered (`duration.scala` and `bignum.scala`, whose
- * names it never uses) and those it entered (`ordering.scala`) alike, their exact spans. */
+ * names it never uses) and those it entered (`ordering.scala`, the trait's declaration) alike, their
+ * exact spans. */
 async function leanStdComplete() {
   const root = join(work, "link/lean3")
   // A cache of its own: the documents its last checks put a pipe and a link in place of are
@@ -3688,12 +3689,11 @@ async function leanStdComplete() {
     await c.result("initialize", { processId: null, rootUri: uriOf(root), capabilities: { general: { positionEncodings: ["utf-16"] } } })
     c.notify("initialized", {})
     const refs = await c.result("textDocument/references", { ...at_(app, "Ordered[Version]"), context: { includeDeclaration: false } })
-    const ordering = (refs ?? []).map((l) => fileURLToPath(l.uri)).find((d) => d.endsWith("/ordering.scala"))
-    if (!ordering) throw new Error(`no std document among ${JSON.stringify(refs)}`)
-    const std = (file) => join(dirname(ordering), file)
+    const math = (refs ?? []).map((l) => fileURLToPath(l.uri)).find((d) => d.endsWith("/math.scala"))
+    if (!math) throw new Error(`no std document among ${JSON.stringify(refs)}`)
+    const std = (file) => join(dirname(math), file)
     const uses = [
       at(app, "Ordered[Version]", 0, 0, 7),
-      at(std("ordering.scala"), "def ordered[T <: Ordered[T]]", 0, 17, 7),
       at(std("math.scala"), "Ordered, Ordering}", 0, 0, 7),
       at(std("duration.scala"), "extends Ordered[Deadline]", 0, 8, 7),
       at(std("bignum.scala"), "Ordered[BigDecimal]", 0, 0, 7),

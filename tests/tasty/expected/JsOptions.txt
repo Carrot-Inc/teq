@@ -1,4 +1,4 @@
-// tests/tasty/fixtures/JsOptions.tasty (TASTy 28.8, 842 bytes)
+// tests/tasty/fixtures/JsOptions.tasty (TASTy 28.8, 857 bytes)
 package fix.facades
 @JSType @SourceFile trait JsOptions extends Object {
   @ExposedJSMember val name: Predef.String

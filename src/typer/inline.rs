@@ -47,6 +47,10 @@ const SCALAJS_VERSION: &str = "1.21.0";
 
 #[derive(Default)]
 pub struct InlineState {
+    /// The inline proxies a copy replaces by the arguments they are bound to, at every depth of
+    /// the tree (`copy_expr`): dotty's `MapToUnderlying` over `InlineProxy` bindings, which a
+    /// macro's `underlyingArgument` sets for one copy.
+    pub copy_locals: FxMap<SymId, TExprId>,
     pub depth: u32,
     /// Whether the last expansion's value is a block of the receiver's and the arguments'
     /// bindings around the body's expansion, for the capture (`capture::InlineCall::binds`).
@@ -280,6 +284,8 @@ impl InlineState {
             args_this: _,
             // Read as the expansion that set it returns.
             last_binds: _,
+            // Set and emptied around one copy (`underlyingArgument`).
+            copy_locals: _,
             // Kept by a local of the code that wrote the entry (a proxy, a binder, a local
             // `inline val`) or by an expression, neither of which a body typed on its own
             // names; what an `inline val` was evaluated to is read again after its body.
@@ -1893,6 +1899,13 @@ impl<'a> Worker<'a> {
     /// A fresh copy of a typed expression, so that a substituted argument is evaluated at each
     /// use and no node is shared between two places of the tree.
     pub fn copy_expr(&mut self, e: TExprId) -> TExprId {
+        if let TExpr::Local(s) = self.prog.expr(e) {
+            if let Some(&arg) = self.inline.copy_locals.get(&s) {
+                if arg != e {
+                    return self.copy_expr(arg);
+                }
+            }
+        }
         // A typed tree copied outside every expansion has its pending plain calls expanded first,
         // so that no copy keeps a call of an inline method; inside one,
         // the expansion's arguments were (`expand_pending_in`).
@@ -3392,6 +3405,11 @@ impl<'a> Worker<'a> {
         })
     }
 
+    /// The binder scalac's typer gives a `summonFrom` case `_: T` (`WildcardParamName.fresh()`).
+    fn wildcard_binder_name(&mut self) -> Name {
+        self.interner.intern("_$1")
+    }
+
     /// A case of `summonFrom` as a program writes it, scalac's rule: `x: T`, `_: T`, `given T`
     /// (the parser's binder over the typed wildcard) or `_`.
     fn summon_from_written_case(&self, pat: PatId) -> Option<(Option<Name>, Option<TyExprId>)> {
@@ -3466,13 +3484,10 @@ impl<'a> Worker<'a> {
                     let always = self.prog.add_test(TypeTest::Always);
                     let wildcard = self.prog.add_pat(TPat::Wildcard);
                     let test = self.prog.add_pat(TPat::Test(always, t, wildcard));
-                    match binder {
-                        Some(name) => {
-                            let sym = self.new_local(name, SymKind::Val, t, pat_span);
-                            self.prog.add_pat(TPat::Bind(sym, Some(test)))
-                        }
-                        None => test,
-                    }
+                    // `_: T` as `_$1: T`, as `summon_from` binds it.
+                    let name = binder.unwrap_or_else(|| self.wildcard_binder_name());
+                    let sym = self.new_local(name, SymKind::Val, t, pat_span);
+                    self.prog.add_pat(TPat::Bind(sym, Some(test)))
                 }
                 None => self.prog.add_pat(TPat::Wildcard),
             };
@@ -3516,6 +3531,10 @@ impl<'a> Worker<'a> {
         let outer_origin = std::mem::replace(&mut self.profile.summon, super::profile::Origin::SummonFrom);
         for c in &clauses {
             let Some((binder, ty)) = self.summon_from_case(c.pat) else { continue };
+            // `case _: T` binds the given found as `case _$1: T`, scalac's typer's rewrite
+            // (`Typer.typedMatch`), whose binding the expansion keeps: the given is evaluated.
+            let wildcard = binder.is_none() && ty.is_some();
+            let binder = if wildcard { Some(self.wildcard_binder_name()) } else { binder };
             let found = match ty {
                 Some(ty) => {
                     let t = self.resolve_type(ty);
@@ -3533,7 +3552,7 @@ impl<'a> Worker<'a> {
                 let sym = self.new_local(name, SymKind::Val, ty, span);
                 stmts.push(TStmt::Val(sym, te));
                 self.bind_local(name, sym);
-                if ast.given_binds.contains(&c.pat) {
+                if wildcard || ast.given_binds.contains(&c.pat) {
                     self.syms.sym_mut(sym).mods |= crate::ast::mods::GIVEN;
                     self.bind_given(sym);
                 }

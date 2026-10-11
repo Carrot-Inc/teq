@@ -1,0 +1,11 @@
+Holder.this.name
+Holder.this.size.+(1)
+Holder.this
+Ident("name")
+Select(This(Some("Holder")), "size")
+Holder.this.name
+Holder.this.size.*(2)
+Holder.this
+This(Some("Holder"))
+Select(This(Some("Holder")), "name")
+shown.Config.limit.*(2)

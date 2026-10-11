@@ -213,7 +213,11 @@ fresh `teq compiler build --split`. A macro's own state lasts one build, as unde
 nothing but a cache is kept across retypes when `--cacheable-state a.b.Cache` names it.
 `teq compiler watch src/ --target jvm -o out/classes` keeps a JVM build resident for a build tool: the class files
 whose bytes changed are rewritten, the rest left alone, and an answer that typed files carries the classes
-each defines (`analysis`) for the tool's discovery.
+each defines (`analysis`) for the tool's discovery. `teq compiler watch src/ -o out/main.js` keeps the one-file
+JavaScript build of `build -o` resident instead of the split one: the file is rewritten whole when its text
+changes, and the answer says whether it is an ES module (`"esModule":true`, the program importing or exporting)
+or a script; with `--analysis-version` the JavaScript builds answer the analysis too, which is how `teq test`
+links a Scala.js test configuration and finds its suites (docs/TOOLING.md, "Tests").
 
 Hot swapping in a page is the `--hot` output above: the server re-executes the edited per-file module and
 its importers, and the page reloads where a swap cannot hold. The figures, for a production application of

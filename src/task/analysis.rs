@@ -67,6 +67,9 @@ struct File {
     local: Vec<Box<str>>,
     /// Per class of the file, the classes of the build it depends on.
     deps: Vec<(Id, Vec<Id>)>,
+    /// The file's classes by the API graph's names, which `deps` uses and which name a top-level
+    /// definition's object (`p.F$package`) where `classes` names the definition (`p.given`).
+    api: Vec<Id>,
 }
 
 /// A class of the test sources as discovery matches it against the frameworks' fingerprints.
@@ -157,13 +160,22 @@ impl View {
             let raw = |key: &str| fields.iter().find(|(k, _)| k == key).map(|(_, v)| *v);
             let Some(Json::Str(path)) = raw("file").and_then(|f| Json::parse(f).ok()) else { return Err("the API graph names a file without its path".to_string()) };
             let mut deps = Vec::new();
+            let mut api: Vec<Id> = Vec::new();
+            if let Some(products) = raw("products").and_then(|p| Json::parse(p).ok()) {
+                api.extend(products.arr().iter().filter_map(|pair| pair.arr().first().and_then(Json::str)).map(|n| self.names.id(n)));
+            }
             for (class, record) in raw("deps").map(top_level_fields).unwrap_or_default() {
                 let on = top_level_fields(record).into_iter().find(|(k, _)| k == "classes").and_then(|(_, v)| Json::parse(v).ok());
                 let on: Vec<Id> = on.as_ref().map_or(&[][..], Json::arr).iter().filter_map(|pair| pair.arr().first().and_then(Json::str)).map(|n| self.names.id(n)).collect();
-                deps.push((self.names.id(&class), on));
+                let id = self.names.id(&class);
+                api.push(id);
+                deps.push((id, on));
             }
+            api.sort_unstable();
+            api.dedup();
             if let Some(file) = self.files.get_mut(normal(&path).as_str()) {
                 file.deps = deps;
+                file.api = api;
             }
         }
         Ok(())
@@ -207,12 +219,47 @@ impl View {
         let mut reached: BTreeSet<Id> = BTreeSet::new();
         for file in self.files.values() {
             let local = file.local.iter().any(|l| class_files.contains(&**l));
+            let mut any = false;
             for c in &file.classes {
                 if local || c.files.iter().any(|f| class_files.contains(&**f)) {
                     reached.insert(c.name);
+                    any = true;
                 }
             }
+            // The API graph's names of the file's classes too, which its dependencies use.
+            if any {
+                reached.extend(file.api.iter().copied());
+            }
         }
+        self.dependents(reached)
+    }
+
+    /// The classes of the source files, and every class whose dependencies reach one of them,
+    /// transitively: what a change of those files reaches where no class file says it (a Scala.js
+    /// link).
+    pub fn affected_by_sources(&self, sources: &BTreeSet<String>) -> BTreeSet<String> {
+        let reached = self.files.iter().filter(|(path, _)| sources.contains(&***path)).flat_map(|(_, f)| f.classes.iter().map(|c| c.name).chain(f.api.iter().copied())).collect();
+        self.dependents(reached)
+    }
+
+    /// The classes of source files an answer removes, and every class whose dependencies reached
+    /// one of them, read off the view before the answer is folded in: what a deletion reaches,
+    /// which the view after it no longer tells.
+    pub fn removed_reach(&self, removed: &[String]) -> BTreeSet<String> {
+        let removed: BTreeSet<String> = removed.iter().map(|p| normal(p)).collect();
+        if removed.is_empty() {
+            return BTreeSet::new();
+        }
+        let reached = self.files.iter().filter(|(path, _)| removed.contains(&***path)).flat_map(|(_, f)| f.classes.iter().map(|c| c.name).chain(f.api.iter().copied())).collect();
+        self.dependents(reached)
+    }
+
+    /// The source files the view holds.
+    pub fn sources(&self) -> impl Iterator<Item = &str> {
+        self.files.keys().map(|k| &**k)
+    }
+
+    fn dependents(&self, mut reached: BTreeSet<Id>) -> BTreeSet<String> {
         let mut dependents: HashMap<Id, Vec<Id>> = HashMap::new();
         for file in self.files.values() {
             for (class, on) in &file.deps {
@@ -341,6 +388,22 @@ mod tests {
 
     fn fields<'a>(analysis: &'a str, api: Option<&'a str>, incremental: bool, removed: &'a [String]) -> Fields<'a> {
         Fields { analysis: Some(analysis), api, api_errors: None, incremental, removed }
+    }
+
+    #[test]
+    fn a_removed_file_of_top_level_definitions_reaches_its_dependents_through_the_api_names() {
+        let a = analysis(&[
+            ("test/p/G.scala", vec![class("p.given", "class", (true, true, false), &["p.Greeting"], &["p/given.class"])], &[]),
+            ("test/p/S.scala", vec![class("p.S", "class", (true, true, false), &["munit.FunSuite"], &["p/S.class"])], &[]),
+            ("test/p/O.scala", vec![class("p.O", "class", (true, true, false), &["munit.FunSuite"], &["p/O.class"])], &[]),
+        ]);
+        let g = api(&[("test/p/G.scala", &[("p.G$package", &[])]), ("test/p/S.scala", &[("p.S", &["p.G$package"])]), ("test/p/O.scala", &[("p.O", &[])])]);
+        let mut view = View::default();
+        view.merge(&fields(&a, Some(&g), false, &[])).unwrap();
+        let reached = view.removed_reach(&["test/p/G.scala".to_string()]);
+        assert!(reached.contains("p.S") && !reached.contains("p.O"), "{:?}", reached);
+        assert!(view.affected_by_sources(&["test/p/G.scala".to_string()].into_iter().collect()).contains("p.S"));
+        assert!(view.removed_reach(&[]).is_empty());
     }
 
     #[test]

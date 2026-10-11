@@ -369,6 +369,7 @@ projects:
           env: {}
           executable: node
           kind: node
+          sourceMap: enableIfAvailable
         moduleKind: NoModule
         resources:
           - sjs/src/test/resources

@@ -289,6 +289,7 @@ projects:
           env: {}
           executable: node
           kind: node
+          sourceMap: enableIfAvailable
         moduleKind: NoModule
         resources:
           - sjsapp/src/test/resources
@@ -373,6 +374,7 @@ projects:
           env: {}
           executable: node
           kind: node
+          sourceMap: enableIfAvailable
         moduleKind: NoModule
         resources:
           - sjscore/src/test/resources

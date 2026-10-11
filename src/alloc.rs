@@ -1506,6 +1506,7 @@ mod tests {
         ("src/task/export.rs", 1, "starts git check-ignore for the staleness check"),
         ("src/task/fetch.rs", 2, "starts curl; alloc::spawn_in per transfer worker of a cold fetch"),
         ("src/task/job.rs", 2, "starts dev's dev command and run's JVM, once per platform's branch; taskkill runs to its end through status"),
+        ("src/task/jsrunner.rs", 2, "alloc::spawn for the threads that forward node's stdout and stderr; the other starts node"),
         ("src/task/resident.rs", 2, "alloc::spawn for the thread that drains the resident's stderr; the other starts the resident"),
         ("src/task/runner.rs", 2, "alloc::spawn for the thread that drains the test runner's stderr; the other starts the runner's JVM"),
         ("src/typer/thread.rs", 1, "a builder for the stack's size; alloc::enter is the first statement of the closure"),

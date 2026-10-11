@@ -1,4 +1,4 @@
-// tests/tasty/fixtures/Date.tasty (TASTy 28.8, 786 bytes)
+// tests/tasty/fixtures/Date.tasty (TASTy 28.8, 801 bytes)
 package fix.facades
 @JSType @SourceFile @JSGlobal @native class Date(ms: Double) extends Object {
   def getTime(): Double = ...

@@ -1477,6 +1477,7 @@ impl<'a> Worker<'a> {
             rhs: ERROR,
             bounds: abstract_member.then_some((NOTHING, ANY)),
             deprecated: e.deprecated,
+            js: false,
         });
         self.loaded_mut().aliases.insert(aid, LAlias { file, addr: e.addr });
         self.loaded_mut().tables[file as usize].aliases.insert(e.addr, aid);
@@ -1668,7 +1669,9 @@ impl<'a> Worker<'a> {
                 (alias, bounds) => (alias, bounds.as_ref()),
             };
             let under = self.map_type(&mut cx, alias);
+            let js = self.names_js_type(&mut cx, alias);
             self.syms.class_mut(c).underlying = Some(under);
+            self.syms.class_mut(c).underlying_js = js;
             let targs: Vec<TypeId> = self.syms.class(c).tparams.clone().iter().map(|&p| self.types.param(p)).collect();
             let self_ty = self.types.class(c, &targs);
             self.syms.class_mut(c).base_types = vec![(c, self_ty)];
@@ -2891,10 +2894,17 @@ impl<'a> Worker<'a> {
             }
             other => (Vec::new(), self.map_type_ctor(&mut cx, other), None),
         };
+        // The right side as the pickle names it, which the mapped Scala type no longer tells.
+        let js = match &sig.rhs {
+            TType::Lambda { result, .. } => self.names_js_type(&mut cx, result),
+            TType::Bounds(..) => false,
+            other => self.names_js_type(&mut cx, other),
+        };
         let mut info = self.syms.alias_mut(a);
         info.tparams = ids;
         info.rhs = rhs;
         info.bounds = bounds;
+        info.js = js;
         info.state().set(Completion::Done);
     }
 
