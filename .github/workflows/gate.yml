@@ -203,8 +203,12 @@ jobs:
         uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           workspaces: proptests
+      # Built here, outside the suite's own bound, so that tests/prop.sh's build finds it done and the cache is kept.
       - if: matrix.rust
-        run: cd proptests && timeout 600 cargo fetch --locked
+        run: |
+          cd proptests
+          timeout 600 cargo fetch --locked
+          timeout 900 cargo build --tests --locked
       - run: |
           export COURSIER_CACHE="$HOME/.cache/coursier/v1"
           export SCALA3="$HOME/teq-ref/scala3"
