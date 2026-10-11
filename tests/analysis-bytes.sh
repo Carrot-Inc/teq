@@ -30,7 +30,10 @@
 #             "The contract between the plugin and the compiler"), version 2 the graph; and so is
 #             each of the own directory's, an alias-only `$package` and an unlisted class file
 #             beside them; a `package object`'s members are the class `p.package`, their class
-#             files teq's `p.<File>$package`, and one with parents names no class twice.
+#             files teq's `p.<File>$package`, and one with parents names no class twice; what an
+#             inline method's body reads is its own class's dependencies, not those of a caller
+#             the file puts first, at one thread and at four (scalac's collector meets the body
+#             in its class's tree).
 # Needs scala-library's jar in the coursier cache (tests/support/jars.sh), without which it
 # counts as passed.
 cd "$(dirname "$0")/.."
@@ -252,6 +255,31 @@ done < "$work/deps-session.txt"
 echo "deps session: $(grep -c '^ok' "$work/deps-session.txt") of $(wc -l < "$work/deps-session.txt" | tr -d ' ') checks"
 
 # What the request is answered with.
+# An inline method's body checked where a caller before its class in the file first expands it: the
+# names it reads (`compiletime`) are its class's dependencies and not the caller's, as with the
+# caller after it, and at four threads as at one. The unit's last class, which a package-level
+# tree's records go to (`responsibleForImports`), is the same in both orders.
+io=$work/inline-order
+mkdir -p "$io/first" "$io/last"
+use='object Use:\n  val n: Int = Lib.answer\n'
+lib='object Lib:\n  inline def answer: Int = compiletime.constValue[42]\n'
+printf "package io\n\n$use\n${lib}\nclass Last\n" > "$io/first/A.scala"
+printf "package io\n\n$lib\n${use}\nclass Last\n" > "$io/last/A.scala"
+for v in first last first4; do
+  extra=()
+  [ $v = first4 ] && extra=(--threads 4)
+  dir=$io/${v%4}
+  "$TEQ" compiler build --target jvm --classpath "$SL" --products "$io/$v-out" --sourceroot "$dir" --analysis-version 3 "${extra[@]}" "$dir/A.scala" > "$io/$v.json" 2> /dev/null
+done
+python3 - "$io" << 'EOF' > /dev/null 2>&1
+import json, sys
+def deps(v):
+    a = json.load(open(sys.argv[1] + "/" + v + ".json"))
+    return {c: dict(d, binaries=sorted(b[1:] for b in d["binaries"])) for f in a["api"]["files"] for c, d in f["deps"].items()}
+first, last, first4 = deps("first"), deps("last"), deps("first4")
+sys.exit(0 if first == last == first4 and "compiletime" in first["io.Lib"]["names"] and "compiletime" not in first["io.Use"]["names"] else 1)
+EOF
+check "an inline method's body's names are its class's dependencies whatever calls it first" $?
 answer=$(printf 'quit\n' | timeout 60 "$TEQ" compiler watch --check --analysis-version 2 tests/modules/basic/a 2> /dev/null | head -1)
 python3 -c 'import json, sys; a = json.loads(sys.argv[1]); sys.exit(0 if a.get("ok") and a.get("analysisVersion") == 2 and sorted(f["file"] for f in a["api"]["files"]) == sorted(f["file"] for f in a["analysis"]) and a["analysis"] else 1)' "$answer" 2> /dev/null
 check "a check session without --own answers the graph of every file" $?
