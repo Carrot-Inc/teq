@@ -190,7 +190,8 @@ with `TEQ=target/checks/teq` (its header has the modes).
 
 `tests/gate.sh` is what a change passes before it merges; it runs on the maintainers' machines with
 the scripts under `tests/` (its header has the lines and their bounds). A contributor runs
-`tests/all.sh`. Its machine lines reach the remote machines through the scripts `REMOTE_AGENT` names.
+`tests/all.sh`. Its machine lines reach the remote machines through the scripts `REMOTE_AGENT` names;
+its size, instruction and memory lines run on the reference machine, where their budgets were recorded.
 Its application lines (`--app`) read lists that stay outside the repository with the application.
 `bench/app/app-lists.sh <checkout> <project> <dir>` writes them from the application's sbt build, through
 sbt-teq's `teqInputs` (the plugin added to that run alone; until a release has the task, a local SNAPSHOT
