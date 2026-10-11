@@ -12,6 +12,7 @@
 #
 # excluded: budget   bench/budgets.txt's instruction counts are the recording machine's, which the suite skips elsewhere
 # excluded: runtime  bench/runtime-budgets.txt's timings are the recording machine's, which the suite skips elsewhere
+# excluded: watch-memory  tests/watch-memory/budgets.txt's footprints are the recording machine's: a runner's end 27% under to 31% over the Linux record by session and its automatic count has none (run 38126009201)
 name: gate
 # It runs on dev, where every landing is pushed, and on pull requests; master moves only to a dev head whose run is
 # green in every job.
@@ -126,10 +127,6 @@ jobs:
           - group: task
             suites: task runner-classes
             minutes: 30
-            jars: true
-          - group: memory
-            suites: watch-memory
-            minutes: 45
             jars: true
           - group: determinism
             suites: split-determinism

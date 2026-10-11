@@ -222,9 +222,10 @@ teq has no rule for.
 The GitHub gate, `.github/workflows/gate.yml`, runs the full suite set of `tests/all.sh` on GitHub's hosted
 runners for every push to GitHub's `dev`, where every landing goes, for every pull request (which targets `dev`),
 and by hand. GitHub's `master` is green only: it is fast-forwarded to a `dev` head whose run is green in every job,
-and never pushed to otherwise. One job per group of suites, each within
-its bound, every suite in one of them but `budget` and `runtime`, whose numbers are the recording machine's (the
-workflow's `excluded:` lines; `tests/gate-coverage.sh` fails a suite neither run nor excluded). It needs nothing
+and never pushed to otherwise. One job per group of suites, each within its bound, every suite in one of them but
+`budget`, `runtime` and `watch-memory`, whose numbers are the recording machine's (the workflow's `excluded:` lines;
+`tests/gate-coverage.sh` fails a suite neither run nor excluded); `tests/gate.sh` runs those on the maintainers'
+machines. It needs nothing
 of the maintainers' machines: one job builds the release binary, one prepares the jars once (the Maven ones from
 the cache `tests/support/jars.sh` keys or from Maven Central, the built ones handed on as an artifact,
 `bench/actions/jars.sh`), the scala3 checkout is fetched at the commit the harnesses' baselines name, and each
