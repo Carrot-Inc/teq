@@ -485,7 +485,6 @@ givens_anonymous
 givens_byname
 givens_chained_packages
 given_selector_end
-given_selector_end
 givens_imports
 givens_lambdas
 givens_local_imports
@@ -497,7 +496,6 @@ givens_ranking
 givens_scope
 givens_self_reference
 givens_unions
-given_with_self_alias
 given_with_self_alias
 harmonize_literals
 harmonize_runtime
