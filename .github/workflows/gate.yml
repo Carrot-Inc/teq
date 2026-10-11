@@ -13,9 +13,11 @@
 # excluded: budget   bench/budgets.txt's instruction counts are the recording machine's, which the suite skips elsewhere
 # excluded: runtime  bench/runtime-budgets.txt's timings are the recording machine's, which the suite skips elsewhere
 name: gate
+# It runs on dev, where every landing is pushed, and on pull requests; master moves only to a dev head whose run is
+# green in every job.
 on:
   push:
-    branches: [master]
+    branches: [dev]
   pull_request:
   workflow_dispatch:
 permissions: {}

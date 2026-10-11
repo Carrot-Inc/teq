@@ -190,16 +190,7 @@ with `TEQ=target/checks/teq` (its header has the modes).
 
 `tests/gate.sh` is what a change passes before it merges; it runs on the maintainers' machines with
 the scripts under `tests/` (its header has the lines and their bounds). A contributor runs
-`tests/all.sh`.
-
-The GitHub gate, `.github/workflows/gate.yml`, runs the full suite set of `tests/all.sh` on GitHub's hosted
-runners for every pull request and every push to master, and by hand: one job per group of suites, each within
-its bound, every suite in one of them but `budget` and `runtime`, whose numbers are the recording machine's (the
-workflow's `excluded:` lines; `tests/gate-coverage.sh` fails a suite neither run nor excluded). It needs nothing
-of the maintainers' machines: one job builds the release binary, one prepares the jars once (the Maven ones from
-the cache `tests/support/jars.sh` keys or from Maven Central, the built ones handed on as an artifact,
-`bench/actions/jars.sh`), the scala3 checkout is fetched at the commit the harnesses' baselines name, and each
-job keeps its suites' output and times (`out/all/`) as an artifact. Its runners hold Temurin 21 and node 22. Its machine lines reach the remote machines through the scripts `REMOTE_AGENT` names.
+`tests/all.sh`. Its machine lines reach the remote machines through the scripts `REMOTE_AGENT` names.
 Its application lines (`--app`) read lists that stay outside the repository with the application.
 `bench/app/app-lists.sh <checkout> <project> <dir>` writes them from the application's sbt build, through
 sbt-teq's `teqInputs` (the plugin added to that run alone; until a release has the task, a local SNAPSHOT
@@ -227,6 +218,17 @@ apart. A difference the known list `SCALAC_KNOWN` does not pin by both records' 
 the line, and so does a line of that list whose difference is gone. Each new difference is classified
 before it is listed: a defect of teq's (a task-list line), a recorded departure from scalac, or a warning of scalac's
 teq has no rule for.
+
+The GitHub gate, `.github/workflows/gate.yml`, runs the full suite set of `tests/all.sh` on GitHub's hosted
+runners for every push to GitHub's `dev`, where every landing goes, for every pull request (which targets `dev`),
+and by hand. GitHub's `master` is green only: it is fast-forwarded to a `dev` head whose run is green in every job,
+and never pushed to otherwise. One job per group of suites, each within
+its bound, every suite in one of them but `budget` and `runtime`, whose numbers are the recording machine's (the
+workflow's `excluded:` lines; `tests/gate-coverage.sh` fails a suite neither run nor excluded). It needs nothing
+of the maintainers' machines: one job builds the release binary, one prepares the jars once (the Maven ones from
+the cache `tests/support/jars.sh` keys or from Maven Central, the built ones handed on as an artifact,
+`bench/actions/jars.sh`), the scala3 checkout is fetched at the commit the harnesses' baselines name, and each
+job keeps its suites' output and times (`out/all/`) as an artifact. Its runners hold Temurin 21 and node 22.
 
 ## The timing lines on a machine
 
