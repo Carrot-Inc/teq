@@ -684,6 +684,12 @@ impl<'a> Worker<'a> {
                     }
                 }
             }
+            // A given object provides its own class too, which a path to it widens to.
+            if let Some(Type::Class(own, _)) = self.syms.sym(g).impl_class.and_then(|_| self.given_object_type(g)).map(|t| self.types.get(t)) {
+                if !bases.contains(&own) {
+                    index.by_class.entry(own).or_default().push(g);
+                }
+            }
             for b in bases {
                 index.by_class.entry(b).or_default().push(g);
                 for &ext in &self.syms.class(b).extensions {
@@ -966,6 +972,30 @@ impl<'a> Worker<'a> {
         }
     }
 
+    /// Whether two references of the implicit scope to one given are one candidate (`TermRefSet`'s
+    /// `=:=` of their prefixes): the same scope, an object's own given wherever the scope reaches
+    /// the object, or receivers that are one value.
+    fn same_receiver(&mut self, (g, a): GivenRef, (_, b): GivenRef) -> bool {
+        if a == b {
+            return true;
+        }
+        let path = |s: GivenScope| matches!(s, GivenScope::Path(_));
+        let own = !matches!(self.syms.sym(g).owner, Owner::Class(o) if self.syms.class(o).kind != ClassKind::Object);
+        if own && !path(a) && !path(b) {
+            return true;
+        }
+        let receiver = |w: &mut Self, s: GivenScope| match s {
+            GivenScope::Module(m) => Some(w.types.class(m, &[])),
+            GivenScope::Path(p) => Some(p),
+            _ => None,
+        };
+        let (Some(x), Some(y)) = (receiver(self, a), receiver(self, b)) else { return false };
+        let mark = self.snapshot();
+        let same = self.is_same(x, y);
+        self.rollback(mark);
+        same
+    }
+
     /// Whether the given matches an import's bound (dotty's `Denotations.matchesImportBound`):
     /// `NoViewsAllowed.normalizedCompatible` of its signature as it is reached (`open_given_sig`:
     /// the trait's parameters as the object instantiates them, its own fresh within their
@@ -1246,17 +1276,26 @@ impl<'a> Worker<'a> {
                 index.select(wanted, scope, &mut selected);
             }
         }
-        // A given is one candidate per path it is reached through, dotty's `TermRefSet` (a
-        // symbol under each prefix): `o.item` and `o2.item` are two; one an object of the scope
-        // inherits stays one, read on the first object.
-        if selected.iter().any(|&(_, scope)| matches!(scope, GivenScope::Path(_))) {
-            let key = |&(g, scope): &GivenRef| (g, if let GivenScope::Path(p) = scope { p.0 + 1 } else { 0 });
-            selected.sort_by_key(key);
-            selected.dedup_by_key(|r| key(r));
-        } else {
-            selected.sort_by_key(|&(g, _)| g);
-            selected.dedup_by_key(|&mut (g, _)| g);
+        // A given is one candidate per receiver it is read on, dotty's `TermRefSet` (a symbol
+        // under each prefix): `o.item` and `o2.item` are two, and so are `X.s` and `Y.s` of a
+        // trait's given that the objects `X` and `Y` of the scope inherit; an object's own given
+        // is one, wherever the scope reaches the object; two receivers that are one value are
+        // one (`alias.U` and `O.U` of an `alias: O.type`), compared before any candidate is
+        // instantiated. The scopes of one given stay in the order they were reached (the
+        // objects before the paths); receivers are compared only where two scopes give one given.
+        selected.sort_by_key(|&(g, _)| g);
+        let (mut kept, mut group) = (0, 0);
+        for i in 0..selected.len() {
+            let r = selected[i];
+            if kept == 0 || selected[kept - 1].0 != r.0 {
+                group = kept;
+            } else if (group..kept).any(|k| self.same_receiver(r, selected[k])) {
+                continue;
+            }
+            selected[kept] = r;
+            kept += 1;
         }
+        selected.truncate(kept);
         self.given_tree.restricted += selected.iter().any(|&(g, _)| self.restricted_visibility(g)) as u32;
         out.extend(selected.iter().copied().filter(|&(g, scope)| self.is_given_accessible(g) && (!matches!(scope, GivenScope::Path(_)) || self.scope_accessible(scope))));
         if ground {
@@ -1339,6 +1378,14 @@ impl<'a> Worker<'a> {
         self.syms.sym(g).mods & (crate::ast::mods::PRIVATE | crate::ast::mods::PROTECTED) != 0
     }
 
+    /// The type whose implicit scope a view or an extension of a value of type `t` searches: `t`
+    /// widened, as dotty's `ImplicitSearch.wildProto` takes `argument.tpe.widen`, so that the
+    /// object of a path's prefix is no part of it (`y.twice` of a `y: O.x.type` does not see `O`'s
+    /// givens, where `summon[O.x.type]` does).
+    pub(super) fn view_scope_type(&mut self, t: TypeId) -> TypeId {
+        self.widen_path(t)
+    }
+
     /// The objects of the implicit scope of `t` (`implicit_scope_objects`), where the extensions
     /// and conversions of the scope are looked up.
     pub fn implicit_scope_modules(&mut self, t: TypeId) -> Vec<ClassId> {
@@ -1374,9 +1421,12 @@ impl<'a> Worker<'a> {
                 self.complete_class(c);
             }
             // The companion of an inner class the type names through a path is reached through
-            // that path (dotty's `addCompanion(pre, companion)`): one per enclosing instance.
+            // that path (dotty's `addCompanion(pre, companion)`): one per enclosing instance. An
+            // object's own class has the object itself (a module class's `companionModule`).
             let through: Vec<TypeId> = seen.through.iter().filter(|&&(k, _)| k == c).map(|&(_, p)| p).collect();
-            if let Some(val) = self.syms.class(c).companion.and_then(|m| self.syms.class(m).inner_object).filter(|_| !through.is_empty()) {
+            let info = self.syms.class(c);
+            let module = info.inner_object.or_else(|| info.companion.and_then(|m| self.syms.class(m).inner_object));
+            if let Some(val) = module.filter(|_| !through.is_empty()) {
                 for p in through {
                     let path = self.types.mk(Type::Select(p, val));
                     if !paths.contains(&path) {
@@ -1538,10 +1588,24 @@ impl<'a> Worker<'a> {
                     Refinement::Term(..) => {}
                 }
             }
+            // A path's info and its prefix (dotty's `collectParts` of a `TermRef`): `B.x.type` of
+            // a val the object `B` inherits has `B`'s scope beside its type's, as an object's own
+            // member has its object's.
             Type::This(_) | Type::Term(_) | Type::Select(..) => {
                 let under = self.path_underlying(t);
                 if under != t {
                     self.classes_in(under, out, seen);
+                }
+                let prefix = match self.types.get(t) {
+                    Type::Select(p, _) => Some(p),
+                    Type::Term(s) => match self.syms.sym(s).owner {
+                        Owner::Class(o) if self.syms.class(o).kind == ClassKind::Object => Some(self.types.class(o, &[])),
+                        _ => None,
+                    },
+                    _ => None,
+                };
+                if let Some(p) = prefix {
+                    self.classes_in(p, out, seen);
                 }
             }
             // An abstract type member's scope is its prefix's and its bounds' (dotty's
@@ -1680,7 +1744,8 @@ impl<'a> Worker<'a> {
         }
         let contextual = refs.len();
         let mut outer = Vec::new();
-        self.implicit_scope_givens(recv_ty, wanted, &mut outer);
+        let scope_ty = self.view_scope_type(recv_ty);
+        self.implicit_scope_givens(scope_ty, wanted, &mut outer);
         outer.retain(|&(g, _)| !refs.iter().any(|&(known, _)| known == g));
         refs.append(&mut outer);
         (refs.into_iter().map(|r| (r, self.sig_of(r.0).ret)).collect(), contextual, levels)
@@ -1749,8 +1814,6 @@ impl<'a> Worker<'a> {
         }
     }
 
-    /// `X.type` of an implicit object or a stable given `X`: the path itself is the one value of
-    /// the type, reached through the enclosing class that has it as a member.
     /// The value of the stable path `s` (a local, a top-level val, a member of an enclosing
     /// class or of an object) as an expression where the typer stands; none for a member of a
     /// class that is no enclosing one.
@@ -1777,21 +1840,6 @@ impl<'a> Worker<'a> {
             Owner::Package(_) => self.prog.add(TExpr::Static(s)),
             Owner::Local => self.prog.add(TExpr::Local(s)),
         })
-    }
-
-    fn singleton_given(&mut self, target: TypeId) -> Option<(TExprId, TypeId)> {
-        let t = self.deref(target);
-        let s = match self.types.get(t) {
-            Type::Term(s) | Type::Select(_, s) => s,
-            _ => return None,
-        };
-        let info = self.syms.sym(s);
-        if info.mods & (crate::ast::mods::IMPLICIT | crate::ast::mods::GIVEN) == 0 || !matches!(info.kind, SymKind::Val | SymKind::Object(_)) {
-            return None;
-        }
-        let te = self.stable_path_expr(s)?;
-        self.prog.set_type(te, t);
-        Some((te, t))
     }
 
     /// The givens the compiler supplies where no definition provides one, as scalac synthesizes
@@ -1949,10 +1997,6 @@ impl<'a> Worker<'a> {
         if self.types.contains_error(target) {
             self.given_early(pre, Early::ErrorTarget);
             return Pick::Found(self.prog.add(TExpr::Unit), target);
-        }
-        if let Some((te, ty)) = self.singleton_given(target) {
-            self.given_early(pre, Early::Singleton);
-            return Pick::Found(te, ty);
         }
         if byname || self.given_stack.iter().any(|open| open.byname) {
             if let Some((te, ty)) = self.recursive_ref(target, byname, span) {
@@ -2795,7 +2839,7 @@ impl<'a> Worker<'a> {
     /// candidate passes to the shape pass.
     fn may_provide(&mut self, g: SymId, target_class: Option<ClassId>) -> bool {
         let Some(tc) = target_class else { return true };
-        let ret = self.sig_of(g).ret;
+        let ret = self.candidate_head_type(g);
         let mut classes = Vec::new();
         let unknown = !self.inter_classes_known(ret, &mut classes);
         if unknown && !self.settled_owner(g) {
@@ -2805,6 +2849,17 @@ impl<'a> Worker<'a> {
             self.complete_class(gc);
             self.syms.class(gc).base_types.iter().any(|&(b, _)| b == tc)
         })
+    }
+
+    /// The type a candidate's class test reads: its result, or a given object's class, which a
+    /// path to it widens to and which derives from the declared parents (`given_object_type`).
+    fn candidate_head_type(&mut self, g: SymId) -> TypeId {
+        if self.syms.sym(g).impl_class.is_some() {
+            if let Some(class) = self.given_object_type(g) {
+                return class;
+            }
+        }
+        self.sig_of(g).ret
     }
 
     /// The classes of the parts of an intersection, or the class of the type itself, and whether
@@ -3014,7 +3069,7 @@ impl<'a> Worker<'a> {
         for &i in &fitting {
             let given = candidates[i];
             if let Some(b) = best_so_far {
-                if self.compare_givens(found[b].given.0, given.0) > 0 {
+                if self.compare_given_refs(found[b].given, given) > 0 {
                     self.profile.given.pruned += 1;
                     continue;
                 }
@@ -3060,7 +3115,7 @@ impl<'a> Worker<'a> {
                     in_place = Some(mark);
                     let s = found.len() - 1;
                     best_so_far = match best_so_far {
-                        Some(b) if self.compare_givens(given.0, found[b].given.0) <= 0 => Some(b),
+                        Some(b) if self.compare_given_refs(given, found[b].given) <= 0 => Some(b),
                         _ => Some(s),
                     };
                     if coherent {
@@ -3101,8 +3156,7 @@ impl<'a> Worker<'a> {
                 self.retract(mark);
             }
             if self.given_ambiguity.is_none() {
-                let names: Vec<String> =
-                    found.iter().map(|s| self.name_str(self.syms.sym(s.given.0).name)).collect();
+                let names: Vec<String> = found.iter().map(|s| self.given_ref_name(s.given)).collect();
                 let wanted = self.target_shape(target, &mut Vec::new());
                 self.given_ambiguity = Some(format!(
                     "ambiguous given instances for {}: {}",
@@ -3300,7 +3354,7 @@ impl<'a> Worker<'a> {
         if self.syms.sym(g).state() == Completion::InProgress {
             return (live, false);
         }
-        let ret = self.sig_of(g).ret;
+        let ret = self.candidate_head_type(g);
         let ret = self.deref(ret);
         if self.types.has_vars(ret) {
             return (live, false);
@@ -3534,7 +3588,10 @@ impl<'a> Worker<'a> {
     /// which the scope of the search would read (`fit_decision` rules the members of generic
     /// owners out before asking).
     fn fits_target(&mut self, given: GivenRef, target: TypeId) -> (bool, bool) {
-        let Some((_, subst, sig)) = self.open_given_sig(given) else { return (false, false) };
+        let Some((site, subst, sig)) = self.open_given_sig(given) else { return (false, false) };
+        if let Some(reference) = self.given_reference(given.0, site, &sig, target) {
+            return (self.is_sub(reference, target), false);
+        }
         let mut ret = self.types.subst(sig.ret, &subst);
         let mut context_free = !self.types.has_paths(ret) && !self.mentions_tparam_of(ret, None);
         if self.types.has_paths(ret) {
@@ -3557,6 +3614,70 @@ impl<'a> Worker<'a> {
         }
         let fits = self.is_sub(ret, target) && self.hk_bounds_hold(&sig, &subst);
         (fits, context_free)
+    }
+
+    /// A stable candidate as its reference where the target holds a path, dotty's candidate
+    /// `TermRef(receiver, member)` compared as it is (`compareNamed`): the given `u` that the
+    /// object `B` inherits is `B.u` for `summon[B.u.type]` (and `B.u.type | Null`), no `C.u` of
+    /// another instance; an object's or a package's member and a local are the member itself.
+    /// None for a candidate with parameters, a def, a var, or a target without a path, where its
+    /// type is compared, the reference's own widened to it.
+    fn given_reference(&mut self, g: SymId, site: Option<(TraitMemberSite, ClassId)>, sig: &MethodSig, target: TypeId) -> Option<TypeId> {
+        if !self.has_singleton_part(target) {
+            return None;
+        }
+        self.given_reference_path(g, site, sig)
+    }
+
+    /// Whether `t` is a path or a union or intersection with one among its parts (`B.x.type |
+    /// Null`), where a stable candidate's reference says more than its type.
+    #[inline]
+    fn has_singleton_part(&mut self, t: TypeId) -> bool {
+        let t = self.deref(t);
+        self.types.has_paths(t) && self.singleton_part_of(t)
+    }
+
+    #[cold]
+    #[inline(never)]
+    fn singleton_part_of(&mut self, t: TypeId) -> bool {
+        match self.types.get(t) {
+            Type::This(_) | Type::Term(_) | Type::Select(..) => true,
+            Type::Union(a, b) | Type::Inter(a, b) => self.has_singleton_part(a) || self.has_singleton_part(b),
+            _ => false,
+        }
+    }
+
+    /// The path a stable candidate is, read on the receiver its site gives (`given_reference`).
+    fn given_reference_path(&mut self, g: SymId, site: Option<(TraitMemberSite, ClassId)>, sig: &MethodSig) -> Option<TypeId> {
+        let info = self.syms.sym(g);
+        if !sig.tparams.is_empty() || !sig.clauses.is_empty() || info.by_name || info.mods & crate::ast::mods::MUTABLE != 0 {
+            return None;
+        }
+        match info.kind {
+            SymKind::Object(c) => return Some(self.types.class(c, &[])),
+            SymKind::Val | SymKind::Given => {}
+            _ => return None,
+        }
+        Some(match (info.owner, site) {
+            // A member of a class or trait (`open_given_sig` gives it a site): through its receiver.
+            (Owner::Class(_), Some((site, _))) => {
+                let prefix = self.site_prefix(site)?;
+                self.types.mk(Type::Select(prefix, g))
+            }
+            _ => self.types.mk(Type::Term(g)),
+        })
+    }
+
+    /// The path a member of a class or trait is read on from its site: the object, the
+    /// enclosing instance's `this`, the path of the implicit scope or the imported value.
+    fn site_prefix(&mut self, site: TraitMemberSite) -> Option<TypeId> {
+        Some(match site {
+            TraitMemberSite::Module(m) => self.types.class(m, &[]),
+            TraitMemberSite::This(Some(k)) => self.this_prefix(k),
+            TraitMemberSite::Path(p) => p,
+            TraitMemberSite::Value(v) => self.import_value_prefix(v),
+            TraitMemberSite::This(None) => return None,
+        })
     }
 
     /// Whether the bound of each higher-kinded type parameter the target instantiated holds:
@@ -3632,15 +3753,117 @@ impl<'a> Worker<'a> {
 
     /// The success that is preferred over every other one, if there is one.
     fn most_specific_given(&mut self, found: &[Success]) -> Option<usize> {
+        // Of two successes ranked alike whose references are one value, the first found, as
+        // dotty's `disambiguate` keeps `alt1` where `alt1.ref =:= alt2.ref` (`given x: U.type = U`
+        // beside `given y: U.type = U`).
+        let beats = |w: &mut Self, i: usize, j: usize| match w.compare_given_refs(found[i].given, found[j].given) {
+            0 => i < j && w.same_reference(found[i].given, found[j].given),
+            c => c > 0,
+        };
         let mut best = 0;
         for i in 1..found.len() {
-            if self.compare_givens(found[i].given.0, found[best].given.0) > 0 {
+            if beats(self, i, best) {
                 best = i;
             }
         }
-        let beats_all =
-            (0..found.len()).all(|i| i == best || self.compare_givens(found[best].given.0, found[i].given.0) > 0);
+        let beats_all = (0..found.len()).all(|i| i == best || beats(self, best, i));
         beats_all.then_some(best)
+    }
+
+    /// A candidate's name in a report, through the object it is read on where a class or trait
+    /// declares it (`Y.s` beside `X.s`, as scalac names the two references).
+    fn given_ref_name(&mut self, (g, scope): GivenRef) -> String {
+        let name = self.name_str(self.syms.sym(g).name);
+        match (scope, self.syms.sym(g).owner) {
+            (GivenScope::Module(m), Owner::Class(o)) if self.syms.class(o).kind != ClassKind::Object => {
+                format!("{}.{}", self.name_str(self.syms.class(m).name), name)
+            }
+            _ => name,
+        }
+    }
+
+    /// dotty's `compare` of two candidates (`Applications.compare`): by the givens themselves
+    /// (`compare_givens`); one given read on two receivers, whose owners are one, by its types
+    /// seen from each receiver (`compareWithTypes`'s `isAsGood` both ways: `Box[A]` of an
+    /// object extending `G[A]` over the `Box[B]` of one extending `G[B]`, for a `Box[A | B]`),
+    /// and on a tie by the receivers (`comparePrefixes`): each widened, an object to the
+    /// intersection of its parents, the more specific one wins (`B.M` over `A.M` where the
+    /// object `B` extends a trait extending the trait the object `A` extends, which declares `M`).
+    pub(super) fn compare_given_refs(&mut self, a: GivenRef, b: GivenRef) -> i32 {
+        if a.0 != b.0 || a.1 == b.1 {
+            return self.compare_givens(a.0, b.0);
+        }
+        let by_type = self.as_good_seen(a, b) as i32 - self.as_good_seen(b, a) as i32;
+        if by_type != 0 {
+            return by_type;
+        }
+        let (Some(p1), Some(p2)) = (self.widened_receiver(a), self.widened_receiver(b)) else { return 0 };
+        let mark = self.snapshot();
+        let wins1 = self.is_sub(p1, p2);
+        self.rollback(mark);
+        let wins2 = self.is_sub(p2, p1);
+        self.rollback(mark);
+        match (wins1, wins2) {
+            (true, false) => 1,
+            (false, true) => -1,
+            _ => 0,
+        }
+    }
+
+    /// `is_as_good_given` of two references to one given, each signature seen from its receiver
+    /// (`open_given_sig`): `x`'s own type parameters as they are, `y`'s open.
+    fn as_good_seen(&mut self, x: GivenRef, y: GivenRef) -> bool {
+        let mark = self.snapshot();
+        let ok = (|| {
+            let (_, mut subst_x, sig_x) = self.open_given_sig(x)?;
+            let (_, subst_y, sig_y) = self.open_given_sig(y)?;
+            subst_x.truncate(subst_x.len() - sig_x.tparams.len());
+            let ret_x = self.types.subst(sig_x.ret, &subst_x);
+            let ret_y = self.types.subst(sig_y.ret, &subst_y);
+            let ok = if self.syms.is_scala2_implicit(x.0) {
+                let (ret_x, ret_y) = (self.flip_contravariant(ret_x), self.flip_contravariant(ret_y));
+                self.is_sub(ret_x, ret_y)
+            } else {
+                self.is_sub(ret_y, ret_x)
+            };
+            Some(ok && self.hk_bounds_hold(&sig_y, &subst_y))
+        })()
+        .unwrap_or(false);
+        self.rollback(mark);
+        ok
+    }
+
+    /// The receiver a candidate is read on, widened as dotty's `widenPrefix` widens it: a path to
+    /// its type, an object to the intersection of its parents.
+    fn widened_receiver(&mut self, given: GivenRef) -> Option<TypeId> {
+        let (site, _, _) = self.open_given_sig(given)?;
+        let prefix = self.site_prefix(site?.0)?;
+        let widened = self.widen_path(prefix);
+        let class = match self.types.get(widened) {
+            Type::Class(c, _) => Some(c),
+            Type::Nested(_, class) => self.class_of(class),
+            _ => None,
+        };
+        match class.filter(|&c| self.is_module_class(c)) {
+            Some(c) => {
+                let parents = self.syms.class(c).parents.clone();
+                parents.into_iter().reduce(|x, y| self.types.inter(x, y))
+            }
+            None => Some(widened),
+        }
+    }
+
+    /// Whether two stable candidates are references to one value (`=:=` of their paths).
+    fn same_reference(&mut self, a: GivenRef, b: GivenRef) -> bool {
+        let path = |w: &mut Self, given: GivenRef| {
+            let (site, _, sig) = w.open_given_sig(given)?;
+            w.given_reference_path(given.0, site, &sig)
+        };
+        let (Some(x), Some(y)) = (path(self, a), path(self, b)) else { return false };
+        let mark = self.snapshot();
+        let same = self.is_same(x, y);
+        self.rollback(mark);
+        same
     }
 
     /// Where an opaque type is transparent the givens of its underlying type apply to it as
@@ -4145,7 +4368,12 @@ impl<'a> Worker<'a> {
         // argument is found.
         let dependent = self.types.has_paths(sig.ret) || sig.clauses.iter().any(|cl| cl.params.iter().any(|p| self.types.has_paths(p.ty)));
         let mut approx: Vec<(TypeId, TypeId)> = Vec::new();
-        if let Some(t) = target {
+        let reference = target.and_then(|t| self.given_reference(g, site, &sig, t));
+        if let (Some(t), Some(r)) = (target, reference) {
+            if !self.is_sub(r, t) {
+                return Attempt::Mismatch;
+            }
+        } else if let Some(t) = target {
             let check = if dependent {
                 let params: Vec<SymId> = sig.clauses.iter().flat_map(|cl| cl.params.iter().map(|p| p.sym)).collect();
                 self.approx_paths(ret, &params, &mut approx)
@@ -4488,14 +4716,17 @@ impl<'a> Worker<'a> {
         }
         // A given object is its module: the instance is of its class, as a reference to it by its
         // name is (`given_object_type`), whichever of the two a body read from a pickle holds;
-        // through the path of the implicit scope it is reached on, the class through that path
-        // (dotty's `TypeRef(p, C$)` under the module's `TermRef(p, given)`).
-        let ty = match self.given_object_type(g) {
-            Some(class) => match site {
-                Some((TraitMemberSite::Path(p), _)) => self.nested_type(p, class),
-                _ => class,
+        // through the receiver it is read on (an object, a path of the implicit scope), the class
+        // through that receiver (dotty's `TypeRef(p, C$)` under the module's `TermRef(p, given)`).
+        // A stable candidate found for a target that holds a path is that reference, as dotty
+        // types the candidate's tree (`TermRef(receiver, member)`), the summoned value's type.
+        let ty = match (reference, self.given_object_type(g)) {
+            (Some(r), _) => r,
+            (None, Some(class)) => match site.and_then(|(site, _)| self.site_prefix(site)) {
+                Some(p) => self.nested_type(p, class),
+                None => class,
             },
-            None => self.zonk(ret),
+            (None, None) => self.zonk(ret),
         };
         if self.given_trace() {
             let a = self.show(ty);

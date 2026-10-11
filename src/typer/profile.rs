@@ -365,21 +365,18 @@ impl Step {
 pub enum Early {
     DepthLimit,
     ErrorTarget,
-    Singleton,
     RecursiveRef,
     BareVar,
     NotGiven,
 }
 
 impl Early {
-    const ALL: [Early; 6] =
-        [Early::DepthLimit, Early::ErrorTarget, Early::Singleton, Early::RecursiveRef, Early::BareVar, Early::NotGiven];
+    const ALL: [Early; 5] = [Early::DepthLimit, Early::ErrorTarget, Early::RecursiveRef, Early::BareVar, Early::NotGiven];
 
     fn name(self) -> &'static str {
         match self {
             Early::DepthLimit => "the depth limit",
             Early::ErrorTarget => "an erroneous target",
-            Early::Singleton => "a singleton given's path",
             Early::RecursiveRef => "a recursive reference to an open instance",
             Early::BareVar => "an unconstrained type variable",
             Early::NotGiven => "a NotGiven target, answered by the negated search",

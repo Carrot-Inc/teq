@@ -1327,7 +1327,7 @@ impl<'a> Worker<'a> {
         // types read.
         let own = self.sig_of(proxy).ret;
         let refined = matches!(self.types.get(own), Type::Refined(..));
-        if let Some(path) = self.argument_path(arg).filter(|_| !refined) {
+        if let Some(path) = self.call_argument_path(arg).filter(|_| !refined) {
             return path;
         }
         self.types.mk(Type::Term(proxy))

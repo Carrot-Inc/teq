@@ -532,9 +532,14 @@ impl<'a> Gen<'a> {
                 LitVal::Bool(_) => JType::Z,
                 LitVal::Str(_) => JType::L(Rc::from(STRING)),
             },
-            // As scalac erases them: a path to its type, an abstract member to its upper
-            // bound, a refinement to its parent.
+            // As scalac erases them: a path to its type (a given object's to its class, the
+            // module class its `TermRef` widens to), an abstract member to its upper bound, a
+            // refinement to its parent.
             Type::This(c) => self.class_type(c),
+            Type::Term(s) | Type::Select(_, s) if cx.given_objects.contains_key(&s) || cx.inner_given_objects.contains_key(&s) => {
+                let k = cx.given_objects.get(&s).or_else(|| cx.inner_given_objects.get(&s)).copied().unwrap();
+                self.class_type(k)
+            }
             Type::Term(s) | Type::Select(_, s) => match cx.input.syms.sym(s).sig.as_ref().map(|sig| sig.ret) {
                 Some(ret) => self.erase(ret),
                 None => JType::object(),

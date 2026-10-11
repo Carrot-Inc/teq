@@ -2377,15 +2377,19 @@ impl<'a> Worker<'a> {
     }
 
     /// The path of the val an import selects on, the prefix of the types it brings: `v.type`,
-    /// or `C.this.v` for a val of an enclosing class's instance, as it is read elsewhere.
+    /// `C.this.v` for a val of an enclosing class's instance, or `O.v` for one the object `O`
+    /// inherits, as it is read elsewhere.
     pub(super) fn import_value_prefix(&mut self, value: super::ValueImport) -> TypeId {
         let (v, module, through) = self.import_values[value.0 as usize];
         match (through, module) {
+            // An object nested in a class, read on the value it is selected on (`o.R`).
+            (Some(_), _) => self.import_value_type(value),
             (None, Some(c)) if self.syms.class(c).kind != ClassKind::Object => {
                 let this = self.this_prefix(c);
                 self.types.mk(Type::Select(this, v))
             }
-            _ => self.types.mk(Type::Term(v)),
+            (None, Some(o)) => self.object_member_path(o, v),
+            (None, None) => self.types.mk(Type::Term(v)),
         }
     }
 
@@ -8315,7 +8319,7 @@ impl<'a> Worker<'a> {
         let by_givens = |w: &mut Self, a: usize, b: usize| match cands[a].1.cmp(&cands[b].1) {
             std::cmp::Ordering::Greater => 1,
             std::cmp::Ordering::Less => -1,
-            std::cmp::Ordering::Equal => w.compare_givens(cands[a].0 .0 .0, cands[b].0 .0 .0),
+            std::cmp::Ordering::Equal => w.compare_given_refs(cands[a].0 .0, cands[b].0 .0),
         };
         let mut found: Option<(usize, MethodCall, super::state::SetAside)> = None;
         // The ambiguities being healed: a candidate has to be strictly better than each of them.
@@ -8644,6 +8648,7 @@ impl<'a> Worker<'a> {
     /// until the caller truncates it.
     pub(super) fn implicit_scope_extensions(&mut self, t: TypeId, name: Name) -> Vec<SymId> {
         let mut out = Vec::new();
+        let t = self.view_scope_type(t);
         for found in self.implicit_scope_objects(t) {
             let m = match found {
                 GivenScope::Module(m) => m,
