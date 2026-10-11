@@ -2210,7 +2210,7 @@ impl<'a> Worker<'a> {
     /// The constructor proxy of the class `name` nested in the class of the value an import
     /// opens, where no term of the name is a member: dotty's proxy is a member of that class.
     fn value_class_term(&mut self, v: ValueImport, name: Name) -> Option<TermRef> {
-        let prefix = self.import_value_prefix(v);
+        let prefix = self.import_value_probe(v);
         let c = self.nested_class_through(prefix, name).filter(|&c| self.needs_constructor_proxy(c))?;
         Some(TermRef::ValueClass(v, c))
     }
@@ -2227,9 +2227,23 @@ impl<'a> Worker<'a> {
         self.value_has_type(v, member).then_some(TypeRef::ValueMember(v, member))
     }
 
+    /// What a lookup through the value an import opens asks for the members it has: the value's
+    /// path, or for a val an object inherits its declared type, as `value_import_term` reads the
+    /// terms. A member's existence does not depend on the object, and the object is not
+    /// completed for it: a name of the object's own parents may be looked up through the import
+    /// while they are resolved (`import throwables.syntax.*` beside `object throwables extends
+    /// Wrapper[Throwable]`). The member found is read through the object (`import_value_type`).
+    fn import_value_probe(&mut self, v: ValueImport) -> TypeId {
+        let (_, module, through) = self.import_values[v.0 as usize];
+        match (through, module) {
+            (None, Some(o)) if self.syms.class(o).kind == ClassKind::Object => self.import_value_ret(v),
+            _ => self.import_value_prefix(v),
+        }
+    }
+
     /// Whether the value an import opens has the type member or nested class `name`.
     fn value_has_type(&mut self, v: ValueImport, name: Name) -> bool {
-        let prefix = self.import_value_prefix(v);
+        let prefix = self.import_value_probe(v);
         let mark = self.snapshot();
         let found = self.member_type(prefix, name).is_some() || self.nested_class_through(prefix, name).is_some();
         self.rollback(mark);

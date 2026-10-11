@@ -1598,7 +1598,7 @@ neg/mixin-forwarder-clash1.scala	same
 neg/mixin-forwarder-clash2	same	
 neg/modifier-not-allowed.scala	same	
 neg/module-class-name.scala	same	
-neg/moduleSubtyping.scala	subset	1/4 lines
+neg/moduleSubtyping.scala	same	
 neg/more-specific.scala	different	{} is not a member of the package
 neg/mt-deskolemize-2.scala	superset	+1 lines: Recursion limit exceeded.
 neg/mt-deskolemize-2b.scala	superset	+1 lines: Recursion limit exceeded.
@@ -2710,7 +2710,7 @@ pos/i1287	accepts
 pos/i12896.scala	accepts	
 pos/i12897	accepts	
 pos/i12909.scala	accepts	
-pos/i12910.scala	rejects	type mismatch
+pos/i12910.scala	accepts	
 pos/i12915.scala	accepts	
 pos/i12945	rejects	no given instance
 pos/i12949.scala	accepts	
@@ -2847,7 +2847,7 @@ pos/i14771.scala	accepts
 pos/i14776-patmat.scala	accepts	
 pos/i14776.scala	accepts	
 pos/i14782.scala	accepts	
-pos/i14783.scala	rejects	value {} is not a member of {}
+pos/i14783.scala	rejects	type mismatch
 pos/i14807.scala	std	Month
 pos/i14821.scala	accepts	
 pos/i14830.scala	syntax	expected {}, found {}
@@ -3621,7 +3621,7 @@ pos/i2527b.scala	accepts
 pos/i25292.scala	accepts	
 pos/i25347.scala	accepts	
 pos/i25362	rejects	No given instance of type Mirror.ProductOf[BigTuple] was found.
-pos/i25417.scala	rejects	cannot reduce summonFrom with
+pos/i25417.scala	accepts	
 pos/i25427.scala	accepts	
 pos/i25442.scala	accepts	
 pos/i25500.scala	accepts	
@@ -3670,7 +3670,7 @@ pos/i26646-b-joint	oos	java
 pos/i26646-b-separate	oos	java
 pos/i26646-c-joint	oos	java
 pos/i26646-c-separate	oos	java
-pos/i26656.scala	rejects	value {} is not a member of {}
+pos/i26656.scala	accepts	
 pos/i2671.scala	accepts	
 pos/i2672.scala	accepts	
 pos/i2673.scala	accepts	
@@ -4171,7 +4171,7 @@ pos/i8606.scala	accepts
 pos/i8612.scala	accepts	
 pos/i8615.scala	accepts	
 pos/i8615b.scala	accepts	
-pos/i8623.scala	rejects	value {} is not a member of {}
+pos/i8623.scala	rejects	QC is a trait; it cannot be instantiated
 pos/i864.scala	accepts	
 pos/i8666.scala	accepts	
 pos/i8712.scala	accepts	

@@ -5531,7 +5531,15 @@ impl<'w, 'a> P<'w, 'a> {
                     self.buf.byte(TERMREF);
                     self.buf.nat(n as u64);
                 }
-                self.ty(prefix);
+                // A member an object inherits is read on the object's module val, as scalac
+                // pickles `B.U` (`TERMREF U (TERMREF B)`), not on its module class.
+                match self.w.types.get(prefix) {
+                    Type::Class(o, _) if self.w.syms.class(o).kind == ClassKind::Object => {
+                        let this = self.w.types.mk(Type::This(o));
+                        self.ty(this);
+                    }
+                    _ => self.ty(prefix),
+                }
             }
             Type::Member(prefix, name) => {
                 self.placed = true;

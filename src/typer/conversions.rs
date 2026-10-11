@@ -379,7 +379,9 @@ impl<'a> Worker<'a> {
 
     /// The candidate conversions level by level, as the given search orders its levels: the
     /// enclosing blocks and classes from the inside out with their imports, the package
-    /// clauses, and last the implicit scopes of `scope_tys`.
+    /// clauses, and last the implicit scopes of `scope_tys`: the argument's type, widened, and
+    /// the expected type where there is one, as it is (dotty's `wildProto`, a `ViewProto` of
+    /// `argument.tpe.widen` and `pt`).
     fn conversion_levels(&mut self, scope_tys: &[TypeId], pick: Pick<'_>) -> Vec<Vec<ConvRef>> {
         let mut levels: Vec<Vec<ConvRef>> = Vec::new();
         // One buffer for the conversions of a level, which the level's list takes as refs.
@@ -447,7 +449,8 @@ impl<'a> Worker<'a> {
             }
         }
         let mut scope = Vec::new();
-        for &t in scope_tys {
+        for (i, &t) in scope_tys.iter().enumerate() {
+            let t = if i == 0 { self.view_scope_type(t) } else { t };
             // The objects of the implicit scope, and the paths it holds, whose members are
             // read on them (dotty's `OfTypeImplicits.refs` of the `addPath` references).
             for found in self.implicit_scope_objects(t) {

@@ -217,6 +217,7 @@ conversion_receivers
 conversion_result_interpolation
 conversion_shapes
 conversion_specificity
+conversion_target_path_scope
 conversion_to_type_param
 conversion_using_after_receiver
 conversions
@@ -382,6 +383,7 @@ given_fits_site_bound_alias
 given_fits_site_hk_arg
 given_fits_site_match_alias
 given_fits_site_package_aux
+given_fits_site_param_result
 given_fits_site_refined_bound
 given_fits_site_refined_parent
 given_fits_site_refined_result
@@ -417,10 +419,13 @@ given_not_given_fallback
 given_not_given_negation
 given_not_given_shadowed
 given_object_module
+given_object_singleton_reference
+given_one_symbol_two_receivers_by_type
 given_param_bounds_scope
 given_patterns
 given_polymorphic_def
 given_pref_gadt_local_object
+given_receivers_one_value
 given_selector_end
 given_with_self_alias
 givens_ambiguity_healed
@@ -452,8 +457,10 @@ iarray_ops
 immutable_hash_map
 immutable_queue
 implicit_lambda_params
+implicit_object_through_extending_object
 import_class_instance_val
 import_from_value
+import_inherited_object_beside_parents
 import_nested_given
 import_nested_object
 import_nested_objects
@@ -820,6 +827,7 @@ nested_class_prefix_review
 nested_class_prefix_types
 nested_classes
 nested_companion_lib
+nested_object_given_receivers
 nested_object_path_patterns
 nested_object_singleton
 nested_objects

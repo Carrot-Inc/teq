@@ -948,6 +948,8 @@ impl<'a> Worker<'a> {
         }
         match self.types.get(t) {
             Type::This(_) => Some(t),
+            // An object stands for itself as its class type.
+            Type::Class(c, _) if self.syms.class(c).kind == ClassKind::Object => Some(t),
             Type::Term(v) => match self.declared_singleton(v) {
                 Some(u) => self.stable_path(u, depth + 1),
                 None => Some(t),
@@ -957,7 +959,11 @@ impl<'a> Worker<'a> {
                 match self.declared_singleton(v) {
                     Some(u) => self.stable_path(u, depth + 1),
                     None if np == p => Some(t),
-                    None => Some(self.types.mk(Type::Select(np, v))),
+                    // Read on the object the prefix names (`alias.U` of an `alias: O.type` is `O.U`).
+                    None => Some(match self.types.get(np) {
+                        Type::Class(o, _) => self.object_member_path(o, v),
+                        _ => self.types.mk(Type::Select(np, v)),
+                    }),
                 }
             }
             _ => None,
@@ -983,14 +989,70 @@ impl<'a> Worker<'a> {
         holds
     }
 
-    /// The singleton type a stable val is declared with, if any.
+    /// dotty's `compareNamed` of a module class against its module's `TermRef` (`X$ <:< X.type`):
+    /// the class of an object nested in a class, or of a given object, seen through the prefix
+    /// `p1` (`p1.U$`, bare through its owner's `this`) conforms to the object's path `p2.U` where
+    /// `p1` conforms to `p2`, so that `B.U` is no `C.U` of another instance; the bare class of a
+    /// given object of an object or a package conforms to its path, one value (`isStaticOwner`).
+    fn module_class_holds(&mut self, a: TypeId, tb: Type) -> bool {
+        let (p2, v) = match tb {
+            Type::Select(p, v) => (Some(p), v),
+            Type::Term(v) => (None, v),
+            _ => return false,
+        };
+        let (p1, class) = match self.types.get(a) {
+            Type::Nested(p, class) => (Some(p), class),
+            Type::Class(..) => (None, a),
+            _ => return false,
+        };
+        let Type::Class(c, _) = self.types.get(class) else { return false };
+        if self.module_val_of_class(c) != Some(v) {
+            return false;
+        }
+        let Some(p2) = p2 else { return p1.is_none() };
+        let p1 = match p1 {
+            Some(p) => p,
+            None => {
+                let Owner::Class(o) = self.syms.class(c).owner else { return false };
+                self.types.mk(Type::This(o))
+            }
+        };
+        self.is_sub_prefix(p1, p2)
+    }
+
+    /// The val that holds the one instance of the class `c` where `c` is an object's: the lazy
+    /// val of an object nested in a class, or a given object without parameters (`given u: T
+    /// with {}`, a module in dotty), whose class has its name and owner.
+    pub(super) fn module_val_of_class(&self, c: ClassId) -> Option<SymId> {
+        let info = self.syms.class(c);
+        if info.inner_object.is_some() {
+            return info.inner_object;
+        }
+        if info.kind != ClassKind::GivenImpl {
+            return None;
+        }
+        let g = match info.owner {
+            Owner::Class(o) => self.syms.class(o).members.get(&info.name).copied(),
+            Owner::Package(p) => self.syms.pkg(p).entries.get(&info.name).and_then(|e| e.term),
+            Owner::Local => None,
+        }?;
+        let s = self.syms.sym(g);
+        (s.kind == SymKind::Given && s.impl_class == Some(c) && s.mods & crate::ast::mods::LAZY != 0).then_some(g)
+    }
+
+    /// The singleton type a stable val is declared with, if any: a path, or an object's type
+    /// (`val alias: O.type`), which is the object's one value.
     fn declared_singleton(&self, v: SymId) -> Option<TypeId> {
         let info = self.syms.sym(v);
         if !matches!(info.kind, SymKind::Val | SymKind::Param) || info.by_name || info.mods & crate::ast::mods::MUTABLE != 0 {
             return None;
         }
         let ret = info.sig.as_ref()?.ret;
-        matches!(self.types.get(ret), Type::This(_) | Type::Term(_) | Type::Select(..)).then_some(ret)
+        match self.types.get(ret) {
+            Type::This(_) | Type::Term(_) | Type::Select(..) => Some(ret),
+            Type::Class(c, args) if args == EMPTY_LIST && self.syms.class(c).kind == ClassKind::Object => Some(ret),
+            _ => None,
+        }
     }
 
     fn is_sub_dependent(&mut self, a: TypeId, b: TypeId) -> bool {
@@ -1079,6 +1141,9 @@ impl<'a> Worker<'a> {
                         self.rollback(mark);
                         self.is_sub(y, b)
                     }
+                    // An object's type is the path of a val declared with it (`O` and an
+                    // `alias: O.type`).
+                    Type::Class(..) | Type::Nested(..) => self.stable_path(b, 0) == Some(a) || self.module_class_holds(a, tb),
                     _ => false,
                 };
             }

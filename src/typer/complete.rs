@@ -2159,7 +2159,8 @@ impl<'a> Worker<'a> {
         if let Some(predef) = self.loaded.as_ref().and_then(|l| l.predef) {
             of_class(self, predef, &mut names);
         }
-        for m in self.implicit_scope_modules(t) {
+        let scope_ty = self.view_scope_type(t);
+        for m in self.implicit_scope_modules(scope_ty) {
             of_class(self, m, &mut names);
             let givens: Vec<SymId> = self.syms.class_raw(m).givens.clone();
             for g in givens {

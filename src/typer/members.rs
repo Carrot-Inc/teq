@@ -46,6 +46,20 @@ impl<'a> Worker<'a> {
         }
     }
 
+    /// The path of the member `s` read on the object `o`, dotty's `TermRef(o, s)`: a member a
+    /// class or trait declares is one value per instance, read through the object (`B.U` and
+    /// `C.U` of a trait's object `U` that the objects `B` and `C` extend); an object's own member
+    /// is one value wherever it is reached from, the member itself.
+    pub fn object_member_path(&mut self, o: ClassId, s: SymId) -> TypeId {
+        match self.syms.sym(s).owner {
+            Owner::Class(k) if k != o && self.syms.class(k).kind != ClassKind::Object => {
+                let object = self.types.class(o, &[]);
+                self.types.mk(Type::Select(object, s))
+            }
+            _ => self.types.mk(Type::Term(s)),
+        }
+    }
+
     /// `p.Inner` for a class nested in a class or trait that `p`'s type derives from: the class
     /// through the prefix (`inner_class_through`).
     #[cold]
@@ -1065,6 +1079,14 @@ impl<'a> Worker<'a> {
                 self.complete_class(c);
                 self.syms.this_type(c)
             }
+            // A given object is its module: its path widens to its class (through the prefix),
+            // as dotty's `TermRef` of a module widens to the module class (`B.u.type` has the
+            // members of `given u: T with { .. }`'s body).
+            Type::Term(s) if self.syms.sym(s).impl_class.is_some() && self.given_object_type(s).is_some() => self.given_object_type(s).unwrap(),
+            Type::Select(p, s) if self.syms.sym(s).impl_class.is_some() && self.given_object_type(s).is_some() => {
+                let class = self.given_object_type(s).unwrap();
+                self.nested_type(p, class)
+            }
             Type::Term(s) => {
                 let ret = self.sig_of(s).ret;
                 self.constant_type(s, ret).unwrap_or_else(|| self.deref(ret))
@@ -1358,14 +1380,17 @@ impl<'a> Worker<'a> {
                     if let Some(refined) = self.refined_term(np, name) {
                         return self.refinement_sig(refined).ret;
                     }
-                    let object = matches!(self.types.get(np), Type::Class(c, _) if self.syms.class(c).kind == ClassKind::Object);
+                    let object = match self.types.get(np) {
+                        Type::Class(c, _) if self.syms.class(c).kind == ClassKind::Object => Some(c),
+                        _ => None,
+                    };
                     match self.find_member(np, name) {
-                        // A member of an object is one value wherever it is reached from, the
-                        // path `member_path` gives it (`D2.M`).
-                        Some((found, _)) if object && matches!(self.syms.sym(found).kind, SymKind::Val | SymKind::Given | SymKind::EnumValue(_)) && !self.syms.sym(found).by_name => {
-                            self.types.mk(Type::Term(found))
+                        // A member read on an object is the path `member_path` gives it (`D2.M`,
+                        // `B.U` of a trait's `U`).
+                        Some((found, _)) if object.is_some() && matches!(self.syms.sym(found).kind, SymKind::Val | SymKind::Given | SymKind::EnumValue(_)) && !self.syms.sym(found).by_name => {
+                            self.object_member_path(object.unwrap(), found)
                         }
-                        Some((found, _)) if object && matches!(self.syms.sym(found).kind, SymKind::Object(_)) => {
+                        Some((found, _)) if object.is_some() && matches!(self.syms.sym(found).kind, SymKind::Object(_)) => {
                             let SymKind::Object(c) = self.syms.sym(found).kind else { unreachable!() };
                             self.types.class(c, &[])
                         }
@@ -1665,7 +1690,10 @@ impl<'a> Worker<'a> {
             }
             TExpr::Module(c) => Some(self.types.class(c, &[])),
             TExpr::This | TExpr::Super(_) => {
-                let c = self.this_class()?;
+                let c = match self.inline.args_this {
+                    Some(site) => site?,
+                    None => self.this_class()?,
+                };
                 Some(self.this_prefix(c))
             }
             // The enclosing instance of an inner class is its outer class's `this`.
@@ -1686,13 +1714,16 @@ impl<'a> Worker<'a> {
         if !matches!(self.syms.sym(s).kind, SymKind::Val | SymKind::Given | SymKind::EnumValue(_)) {
             return None;
         }
-        // A member of an object is one value wherever it is reached from.
-        if let crate::tir::TExpr::Module(_) = self.prog.expr(recv) {
-            return Some(self.types.mk(Type::Term(s)));
+        // A member of an object is one value wherever it is reached from; one a class or trait
+        // declares, one per object (`object_member_path`).
+        if let crate::tir::TExpr::Module(o) = self.prog.expr(recv) {
+            return Some(self.object_member_path(o, s));
         }
         let p = self.path_of(recv)?;
-        if matches!(self.types.get(p), Type::Class(c, _) if self.syms.class(c).kind == ClassKind::Object) {
-            return Some(self.types.mk(Type::Term(s)));
+        if let Type::Class(o, _) = self.types.get(p) {
+            if self.syms.class(o).kind == ClassKind::Object {
+                return Some(self.object_member_path(o, s));
+            }
         }
         Some(self.types.mk(Type::Select(p, s)))
     }
@@ -1716,21 +1747,27 @@ impl<'a> Worker<'a> {
                 }
                 SymKind::Def | SymKind::Overloaded(_) => Err("a method"),
                 _ if info.by_name => Err("a by-name parameter"),
-                _ => Ok(match prefix {
-                    Some(p) => t.types.mk(Type::Select(p, s)),
+                _ => Ok(match prefix.map(|p| (p, t.types.get(p))) {
+                    Some((_, Type::Class(o, _))) if t.syms.class(o).kind == ClassKind::Object => t.object_member_path(o, s),
+                    Some((p, _)) => t.types.mk(Type::Select(p, s)),
                     None => t.types.mk(Type::Term(s)),
                 }),
             }
         };
+        let object = |t: &mut Self, c: ClassId| (t.syms.class(c).kind == ClassKind::Object).then(|| t.types.class(c, &[]));
         match r {
-            TermRef::Local(s) | TermRef::Global(s) | TermRef::ModuleMember(_, s) => with_sym(self, None, s),
+            TermRef::Local(s) | TermRef::Global(s) => with_sym(self, None, s),
+            TermRef::ModuleMember(c, s) => {
+                let p = object(self, c);
+                with_sym(self, p, s)
+            }
             TermRef::ValueMember(v, m) => {
                 let p = self.import_value_prefix(v);
                 with_sym(self, Some(p), m)
             }
             TermRef::This(c, s) => {
-                if self.syms.class(c).kind == ClassKind::Object {
-                    return with_sym(self, None, s);
+                if let Some(p) = object(self, c) {
+                    return with_sym(self, Some(p), s);
                 }
                 let p = self.this_prefix(c);
                 with_sym(self, Some(p), s)

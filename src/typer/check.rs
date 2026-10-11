@@ -2518,8 +2518,15 @@ impl<'a> Worker<'a> {
                     // A `final val` keeps a literal type, as in Scala.
                     result_ty = if def.mods & mods::FINAL != 0 { self.solve_in(t) } else { self.solve_inferred(t) };
                     result_ty = self.widen_soft(e, result_ty);
-                    // A path type inferred (`sing(c)` for a `[T <: Singleton]`) widens as well.
-                    if def.mods & mods::FINAL == 0 && matches!(self.types.get(result_ty), Type::Term(_) | Type::Select(..)) {
+                    // A path type inferred (`sing(c)` for a `[T <: Singleton]`) widens as well,
+                    // but for an object's, which stays its singleton as dotty keeps a module's
+                    // `TermRef` (`val chosen = summon[B.u.type]` of a given object `u` is a
+                    // `B.u.type`, `val w = summon[B.W.type]` of an object `W` too).
+                    let module = match self.types.get(result_ty) {
+                        Type::Term(s) | Type::Select(_, s) => self.inner_object_of_sym(s).is_some() || self.given_object_type(s).is_some(),
+                        _ => false,
+                    };
+                    if def.mods & mods::FINAL == 0 && !module && matches!(self.types.get(result_ty), Type::Term(_) | Type::Select(..)) {
                         let widened = self.widen_path(result_ty);
                         result_ty = self.widen_lit(widened);
                     }

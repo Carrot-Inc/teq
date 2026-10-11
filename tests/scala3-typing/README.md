@@ -31,6 +31,34 @@ regression.
 - `proposed-cases/` are programs scalac accepts and teq rejects, with the output of
   `scala-cli run -S 3.8.4` as `.expected`, in the format of `tests/cases`.
 
+## A given object's path widens to its class (2026-10-10)
+
+A path to a given object (`given T with { .. }`, a module in dotty) widens to the object's class, as a
+module's `TermRef` widens to its module class, and a stable candidate found for a target that holds a
+path is that reference:
+
+- `pos/i12910` moved from `rejects` to `accepts`: `t.Out` of the given `Type[varchar]` with `type Out =
+  String` is `String`, so `Placeholder[varchar]` is a `Placeholder[varchar, String]`.
+- `pos/i25417` moved from `rejects` to `accepts`: `mirror.IronType` of the inline given `Mirror[Foo.T]`
+  with `type IronType = String` is `String`, so `Decoder[mirror.IronType]` finds `Decoder[String]` and
+  the `summonFrom` reduces.
+
+## An object nested in a class is read through its prefix (2026-10-10)
+
+A member a class or trait declares, read on an object or a path, keeps that receiver in its path
+(dotty's `TermRef(prefix, member)`), and an object's class conforms to the object's path through a
+conforming prefix (`TypeComparer.compareNamed`, `X$ <:< X.type`):
+
+- `neg/moduleSubtyping` moved from `subset` to `same`: `Test.o.type` is no `C.this.o.type`, so the
+  four assignments between them are refused, where `Test.o` read as the bare `o` let three through.
+- `pos/i26656` moved from `rejects` to `accepts`: the transparent `Parser` gives `this$0.Parser1`, the
+  object's class through the receiver's proxy, which conforms to the extension's `Parser1.type`
+  through `ImmutLexerFlow`.
+- `pos/i14783` and `pos/i8623` stay `rejects` with another first error: the extension of an object
+  nested in a trait is found through its path (`w.x.foo` over `ctx.inner.X`, `unseal.pos` over
+  `qctx.tasty.Tree`); what remains is `quotes.reflect.Tree` through two paths in `i14783` and
+  `given QC()` of a trait in `i8623`.
+
 ## A member's retry types again what its application did not cache (2026-10-09)
 
 `pos/i18645` moved from `rejects` to `accepts`: `x.pprint(() => ( 234 ))` fails against the member's

@@ -1285,8 +1285,11 @@ impl<'a> Worker<'a> {
         self.complete_class(owner);
         let this = self.self_type_of(owner);
         let (sym, _) = self.find_member(this, name)?;
-        let prefix = if self.syms.class(owner).kind == ClassKind::Object { self.types.class(owner, &[]) } else { self.types.mk(Type::This(owner)) };
-        Some(self.types.mk(Type::Select(prefix, sym)))
+        if self.syms.class(owner).kind == ClassKind::Object {
+            return Some(self.object_member_path(owner, sym));
+        }
+        let this = self.types.mk(Type::This(owner));
+        Some(self.types.mk(Type::Select(this, sym)))
     }
 
     fn path_singleton(&mut self, cx: &mut MapCx, t: &TType) -> Option<TypeId> {
@@ -1311,6 +1314,7 @@ impl<'a> Worker<'a> {
                 let prefix = match path.as_deref() {
                     Some(this @ TType::This(_)) => match self.scope_of(cx, this) {
                         Some(Scope::Class(c)) if self.syms.class(c).kind != ClassKind::Object => Some(self.types.mk(Type::This(c))),
+                        Some(Scope::Class(c)) => Some(self.types.class(c, &[])),
                         _ => None,
                     },
                     Some(p @ (TType::LocalTerm(..) | TType::TermRef(..))) => self.path_singleton(cx, p),
@@ -1351,8 +1355,8 @@ impl<'a> Worker<'a> {
                                 found?
                             }
                         };
-                        let prefix = (self.syms.class(c).kind != ClassKind::Object).then(|| self.types.mk(Type::This(c)));
-                        (prefix, s)
+                        let prefix = if self.syms.class(c).kind == ClassKind::Object { self.types.class(c, &[]) } else { self.types.mk(Type::This(c)) };
+                        (Some(prefix), s)
                     }
                     // A member of a structural type (`x.asInstanceOf[{ def ctx: C }].ctx`):
                     // no path, the member's type.
@@ -1372,8 +1376,13 @@ impl<'a> Worker<'a> {
             }
             _ => return None,
         };
-        // A member of an object is a path of its own, as the typer makes it.
-        let prefix = prefix.filter(|&p| !matches!(self.types.get(p), Type::Class(c, _) if self.syms.class(c).kind == ClassKind::Object));
+        // A member of an object is read on it as the typer reads it (`object_member_path`): the
+        // member itself where the object declares it, through the object where a trait does.
+        let object = prefix.and_then(|p| match self.types.get(p) {
+            Type::Class(c, _) if self.syms.class(c).kind == ClassKind::Object => Some(c),
+            _ => None,
+        });
+        let prefix = prefix.filter(|_| object.is_none());
         let info = self.syms.sym(sym);
         match info.kind {
             SymKind::Object(c) => Some(self.types.class(c, &[])),
@@ -1395,15 +1404,17 @@ impl<'a> Worker<'a> {
                 let ret = self.sig_of(sym).ret;
                 match self.types.get(ret) {
                     Type::Class(c, _) if self.syms.class(c).kind == ClassKind::Object => Some(ret),
-                    _ => Some(match prefix {
-                        Some(p) => self.types.mk(Type::Select(p, sym)),
-                        None => self.types.mk(Type::Term(sym)),
+                    _ => Some(match (object, prefix) {
+                        (Some(o), _) => self.object_member_path(o, sym),
+                        (None, Some(p)) => self.types.mk(Type::Select(p, sym)),
+                        (None, None) => self.types.mk(Type::Term(sym)),
                     }),
                 }
             }
-            _ => Some(match prefix {
-                Some(p) => self.types.mk(Type::Select(p, sym)),
-                None => self.types.mk(Type::Term(sym)),
+            _ => Some(match (object, prefix) {
+                (Some(o), _) => self.object_member_path(o, sym),
+                (None, Some(p)) => self.types.mk(Type::Select(p, sym)),
+                (None, None) => self.types.mk(Type::Term(sym)),
             }),
         }
     }

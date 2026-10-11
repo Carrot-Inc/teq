@@ -66,6 +66,9 @@ pub struct InlineState {
     pub sites: Vec<InlineSite>,
     /// The environment of the outermost call site, where `summonInline` searches.
     pub site_env: Option<Arc<Env>>,
+    /// Set while the path of an argument of the call under expansion is read: the class whose
+    /// `this` the argument reads, the call site's (`call_argument_path`).
+    pub args_this: Option<Option<ClassId>>,
     /// The imports of the blocks of the body under expansion that enclose the point being
     /// typed, each with the frame of its block: the expanded body stands at the call site with
     /// them, so its searches see them, each import beside the givens of its block.
@@ -273,6 +276,8 @@ impl InlineState {
             folding: _,
             // Set while a constant is read off a typed tree, which asks for no body.
             as_typed: _,
+            // Set while an argument's path is read, which types nothing.
+            args_this: _,
             // Read as the expansion that set it returns.
             last_binds: _,
             // Kept by a local of the code that wrote the entry (a proxy, a binder, a local
@@ -432,6 +437,9 @@ pub struct InlineSite {
     /// The expression of a library body being typed at the call, where the call is in one: the
     /// place a diagnostic of an outer level's expansion is inlined from.
     pub call_node: Option<crate::ast::ExprId>,
+    /// The class whose `this` the call's arguments read, the call site's, which the body's
+    /// environment is not (`call_argument_path`).
+    pub this_class: Option<ClassId>,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -796,7 +804,8 @@ impl<'a> Worker<'a> {
         let env = if owner == Owner::Local { self.env.clone() } else { self.env_at(body.file, owner, def_span.start) };
         let at_end = std::mem::replace(&mut self.inline.site_at_end, false);
         let call_node = self.body_node.filter(|n| n.file == self.env.file).map(|n| n.call);
-        let site = InlineSite { callee: sym, file: self.env.file, span, body_file: body.file, body_span: body.span, at_end, call_node };
+        let this_class = self.this_class();
+        let site = InlineSite { callee: sym, file: self.env.file, span, body_file: body.file, body_span: body.span, at_end, call_node, this_class };
         let outer_site_env = self.inline.site_env.clone();
         let givens_mark = self.inline.outer_scopes.len();
         if self.inline.depth == 0 {
@@ -1114,7 +1123,7 @@ impl<'a> Worker<'a> {
                 // (`inst.type`) binds the proxy to the argument's own path, as scalac's binding
                 // does, so that the body conforms to the result type in the call's terms.
                 let local_ty = match dependent_result && !later {
-                    true => self.argument_path(te).unwrap_or(local_ty),
+                    true => self.call_argument_path(te).unwrap_or(local_ty),
                     false => local_ty,
                 };
                 let proxy = self.new_local(p.name, SymKind::Val, local_ty, span);
@@ -1333,6 +1342,18 @@ impl<'a> Worker<'a> {
                 }
             }
         }
+    }
+
+    /// The path of an argument of the call under expansion, read where the call stands: the
+    /// body's environment is its definition's, whose `this` is not the argument's (`summon`'s
+    /// argument `this.R.given` in `Outer` is `Outer.this.R.given`, no member of `Predef`), as
+    /// dotty's binding takes the argument's own type (`Inliner.paramBindingDef`).
+    pub(super) fn call_argument_path(&mut self, te: TExprId) -> Option<TypeId> {
+        let site_this = self.inline.sites.last().map(|s| s.this_class);
+        let outer = std::mem::replace(&mut self.inline.args_this, site_this);
+        let path = self.argument_path(te);
+        self.inline.args_this = outer;
+        path
     }
 
     /// The singleton type of a stable argument: a val, a parameter, an object or a given that
