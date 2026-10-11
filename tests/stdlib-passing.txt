@@ -112,6 +112,10 @@ case_class_own_unapply
 case_class_parents
 case_class_synthesized_members
 case_class_tostring_overload
+case_companion_nested
+case_copy_clauses
+case_copy_nested
+case_lambda_parameter
 case_lambda_pinned_constructor
 case_lambda_tuples
 cast_array_nothing
@@ -256,6 +260,7 @@ enum_parents
 enum_settings
 enumvalues
 equality_default
+eta_by_name_inferred
 eta_sam_conversion
 eta_sam_widening
 eta_underscore_typevars
@@ -437,6 +442,7 @@ import_from_value
 import_nested_given
 import_nested_object
 import_nested_objects
+import_object_val_given
 import_private_nested
 import_selector_nested_through_bound
 import_selector_numeric_builtin
@@ -580,6 +586,7 @@ inline_tuples
 inline_val_expansion_check
 inline_val_pure_path
 inner_class_creators
+inner_class_creators_receiver
 inserted_apply_value
 int_remainder_negative_zero
 int_sign
@@ -588,7 +595,9 @@ interp_order
 interpolator_patterns
 intersection_alias_outside_bounds
 intersection_bounds_over_params
+intersection_denotation_meet
 intersection_generic_overloads
+intersection_joint_member
 intersection_member_bounds_meet
 irrefutable_extractor_exhaustive
 iterator_laziness
@@ -774,6 +783,7 @@ mutable_map_overloads
 mutable_set_map_result
 name_precedence
 name_transformer
+named_args_lifting
 named_default_branch
 named_then_positional
 named_tuple_linked
@@ -813,6 +823,7 @@ object_inherited_protected
 object_member
 objects_deep_equals
 opaque_bound
+opaque_intersection_bound
 opaque_into_union
 opaque_trait_prefix
 opaque_type_test
@@ -1200,6 +1211,7 @@ tuple_named_arguments
 tuple_ops_type_args
 tuple_xxl_product
 tupling_priority
+type_lambda_hk_binders
 type_members
 type_on_next_line
 type_pattern_lower_bounds
@@ -1270,6 +1282,9 @@ typer_state_tuple_index
 typer_state_tuple_index_compound
 typer_state_tuple_index_order
 typer_state_widened_ascription
+unapply_selection
+unapply_selection_prefix
+unapply_selection_synthetic
 unchecked_variance_local
 union_join_lower_bound
 union_joins
@@ -1283,6 +1298,7 @@ unions
 unreachable_deep_split
 untupled_partial_lambda
 url_encoder
+using_conversion_param
 using_default
 util_sorting
 uuid
