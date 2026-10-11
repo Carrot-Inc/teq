@@ -27,7 +27,7 @@ def looseField(x: Any): String = x match
   case Loose(s: String) => "s:" + s
   case _ => "other"
 def names(xs: Seq[(String, Boolean)]): Seq[String] = xs.flatMap {
-  case (name: String, _) => Some(name)
+  case (name: String, _) if name.length >= 0 => Some(name)
   case _ => None
 }
 def anyNames(xs: Seq[(Any, Boolean)]): Seq[String] = xs.flatMap {
@@ -43,8 +43,8 @@ def pair(t: (String, Int)): String = t match
 def direct[A](array: Array[A]): String = array match
   case x: Array[Boolean] => "bool"
   case _ => "other"
-def viaCast[A](array: Array[A]): String = (array.asInstanceOf[AnyRef]: @unchecked) match
-  case x: Array[Boolean] => "bool"
+def viaCast[A](array: Array[A]): String = array.asInstanceOf[AnyRef] match
+  case x: (Array[Boolean] @unchecked) => "bool"
   case _ => "other"
 @main def run(): Unit =
   println(s"catch: ${caught(() => throw new IllegalStateException("x"))},${caught(() => 1)}")
