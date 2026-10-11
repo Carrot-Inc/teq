@@ -744,9 +744,12 @@ impl<'w, 'a> P<'w, 'a> {
                 Some(Form::Constant(s)) => self.constant_read(s),
                 Some(f) => self.unsupported_form(f),
             },
-            TExpr::ClassOf(c) => {
+            TExpr::ClassOf(c, dims) => {
                 self.buf.byte(CLASSCONST);
-                let t = self.class_applied_wild(c);
+                let mut t = self.class_applied_wild(c);
+                for _ in 0..dims {
+                    t = self.w.types.class(self.w.b.array, &[t]);
+                }
                 self.ty(t);
             }
             TExpr::Local(s) => self.local_ref(s),

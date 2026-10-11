@@ -430,17 +430,19 @@ pub fn uses_quotes(asts: &Asts, files: &[SourceFile]) -> bool {
     (0..asts.len()).any(|i| files.get(i).map_or(false, |f| !f.is_std) && asts[i].has_quotes)
 }
 
+/// Moves an AST a parser thread wrote with its own interner into the build's, `map` taking each
+/// of the thread's names to the build's: every name the parser writes.
 fn remap_names(ast: &mut Ast, map: &[Name]) {
     let m = |n: &mut Name| *n = map[n.0 as usize];
     for e in &mut ast.exprs {
         match e {
             Expr::Ident(n) | Expr::Select(_, n) | Expr::NamedArg(n, _) | Expr::Infix(_, n, _)
-            | Expr::Prefix(n, _) | Expr::Interp(n, _, _) | Expr::Super(n) => m(n),
+            | Expr::Prefix(n, _) | Expr::Interp(n, _, _) | Expr::Super(n) | Expr::QualThis(n) => m(n),
             _ => {}
         }
     }
     for p in &mut ast.pats {
-        if let Pat::Bind(n, _) = p {
+        if let Pat::Bind(n, _) | Pat::NamedField(n, _) | Pat::Interp(n, _, _) = p {
             m(n);
         }
     }
@@ -450,13 +452,14 @@ fn remap_names(ast: &mut Ast, map: &[Name]) {
         }
     }
     ast.name_lists.iter_mut().for_each(m);
-    ast.param_annots.iter_mut().for_each(|a| m(&mut a.name));
+    ast.param_annots.iter_mut().chain(&mut ast.inline_annots).chain(ast.nowarn_ascriptions.iter_mut().map(|(_, a)| a)).for_each(|a| m(&mut a.name));
     ast.package.iter_mut().for_each(m);
     ast.access_scopes.iter_mut().for_each(|(_, n)| m(n));
+    ast.language_scopes.iter_mut().for_each(|(n, _, _)| m(n));
     for lp in &mut ast.lambda_params {
         m(&mut lp.name);
     }
-    let clauses = ast.imports.iter_mut().chain(&mut ast.local_imports).chain(&mut ast.exports);
+    let clauses = ast.imports.iter_mut().chain(&mut ast.local_imports).chain(&mut ast.exports).chain(&mut ast.language_imports);
     for imp in clauses.chain(&mut ast.top_exports) {
         imp.path.iter_mut().for_each(m);
         if let ImportSel::Name(n, alias) = &mut imp.sel {
@@ -494,11 +497,13 @@ fn remap_names(ast: &mut Ast, map: &[Name]) {
             DefKind::Class(c) => {
                 remap_tparams(&mut c.tparams);
                 remap_clauses(&mut c.clauses);
+                m(&mut c.self_alias);
             }
             DefKind::TypeAlias { tparams, .. } => remap_tparams(tparams),
             DefKind::Given(g) => {
                 remap_tparams(&mut g.tparams);
                 remap_clauses(&mut g.clauses);
+                m(&mut g.self_alias);
             }
         }
     }
@@ -544,5 +549,43 @@ mod tests {
         let text = "package p:\n  object A:\n    def f = 1\npackage q:\n  object B:\n    def g = 2\n";
         let (first, second) = (text.find("  object A").unwrap(), text.find("  object B").unwrap());
         assert_eq!(units(&[text]), second - first);
+    }
+
+    #[test]
+    fn a_parser_threads_names_are_the_builds() {
+        let text = "import scala.language.implicitConversions\nimport scala.annotation.{nowarn, switch}\n\
+            trait Show:\n  def show: String\n\
+            class Outer(val n: Int):\n  outer =>\n  class Inner:\n    def back: Outer = outer\n    def same: Boolean = Outer.this eq outer\n\
+            given shown: Show with\n  me =>\n  def show: String = me.toString\n\
+            final class VerPat(sc: StringContext):\n  def unapplySeq(s: String): Option[Seq[String]] = None\n\
+            extension (sc: StringContext) def ver: VerPat = VerPat(sc)\n\
+            case class Size(width: Int, height: Int)\n\
+            object Use:\n  def f(x: Any): String =\n    import scala.language.postfixOps\n    x match\n      case Size(width = w) => w.toString\n      case ver\"v$rest\" => rest\n      case n: Int => (n: @switch) match\n        case 1 => \"one\"\n        case _ => \"other\"\n      case _ => (x.toString: @nowarn)\n";
+        // A thread's interner and the build's, whose names other files took first.
+        let local = Interner::new();
+        let (mut parsed, errors) = parse_one(text, &local, parser::Syntax::default());
+        assert!(errors.is_empty(), "{:?}", errors);
+        let build = Interner::new();
+        for i in 0..40 {
+            build.intern(&format!("taken{}", i));
+        }
+        let map: Vec<Name> = (0..local.len()).map(|n| build.intern(local.get(Name(n as u32)))).collect();
+        assert_ne!(local.lookup("outer"), build.lookup("outer"));
+        let ast = &mut parsed[0];
+        remap_names(ast, &map);
+        let name = |n: Name| build.get(n).to_string();
+        let aliases: Vec<String> = ast.defs.iter().filter_map(|d| match &d.kind {
+            DefKind::Class(c) if c.self_alias != crate::names::EMPTY => Some(name(c.self_alias)),
+            DefKind::Given(g) if g.self_alias != crate::names::EMPTY => Some(name(g.self_alias)),
+            _ => None,
+        }).collect();
+        assert_eq!(aliases, ["outer", "me"]);
+        assert!(ast.exprs.iter().any(|e| matches!(e, Expr::QualThis(n) if name(*n) == "Outer")));
+        assert!(ast.pats.iter().any(|p| matches!(p, Pat::NamedField(n, _) if name(*n) == "width")));
+        assert!(ast.pats.iter().any(|p| matches!(p, Pat::Interp(n, _, _) if name(*n) == "ver")));
+        assert!(ast.language_imports.iter().any(|i| matches!(i.sel, ImportSel::Name(n, _) if name(n) == "implicitConversions")));
+        assert!(ast.language_scopes.iter().any(|&(n, _, _)| name(n) == "postfixOps"));
+        assert!(ast.inline_annots.iter().any(|a| name(a.name) == "switch"));
+        assert!(ast.nowarn_ascriptions.iter().any(|(_, a)| name(a.name) == "nowarn"));
     }
 }

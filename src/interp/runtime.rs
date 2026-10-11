@@ -426,15 +426,78 @@ impl<'a, 't> Interp<'a, 't> {
         }
     }
 
-    /// A member of an object by its name, as a reflective structural call reaches it.
-    pub(super) fn reflective_member(&mut self, recv: Value, name: &str, args: Vec<Value>) -> R {
-        let missing = |it: &mut Self| it.throw_named("RuntimeException", &format!("{} is not a member", name));
-        let Value::Obj(o) = &recv else { return missing(self) };
-        let n = self.typer.interner.intern(name);
-        match self.member(o.class, n) {
-            Member::Missing => missing(self),
-            m => self.invoke_member(recv.clone(), m, n, args),
+    /// A reflective call by signature (`std/reflect_selectable.scala`): the method of the name of
+    /// the receiver's class or its nearest ancestor whose parameters erase to the classes the call
+    /// names (`Worker::reflective_sig`), called as the output's reflective proxy calls it, a
+    /// value class's argument its underlying value and its result so erased; else the call's
+    /// failure, a `NoSuchMethodException`. The classes are the call's literals' where it gives
+    /// literals (`Worker::reflective_call_classes`), else the run-time classes' names.
+    pub(super) fn call_by_signature(&mut self, args: crate::ast::ListRef, fr: &Rc<Frame>, cx: &Ctx) -> R {
+        let list = self.prog().expr_list(args).to_vec();
+        let literals = match list.get(2).map(|&e| self.prog().expr(e)) {
+            Some(crate::tir::TExpr::SeqLit(items)) => Some(self.prog().expr_list(items).to_vec()),
+            _ => None,
+        };
+        let call = literals.and_then(|l| self.typer.reflective_call_classes(&l));
+        let vals = self.eval_list(args, fr, cx)?;
+        let [recv, name, classes, call_args, fail] = &vals[..] else { return self.unsupported("a reflective call of other arguments".to_string()) };
+        let (recv, fail) = (recv.clone(), fail.clone());
+        let name = name.as_str().unwrap_or("").to_string();
+        let classes = match call {
+            Some(classes) => classes,
+            None => self.elements_of(classes)?.iter().map(|c| match c {
+                Value::Class(c) => c.qname.to_string(),
+                _ => "null".to_string(),
+            }).collect(),
+        };
+        let call_args = match call_args {
+            Value::Array(a) => a.borrow().clone(),
+            _ => Vec::new(),
+        };
+        if let Value::Obj(o) = &recv {
+            if let Some((m, sig)) = self.signature_member(o.class, &name, &classes) {
+                let mut passed = Vec::with_capacity(call_args.len());
+                for (b, a) in sig.boxes.iter().zip(call_args) {
+                    passed.push(match b {
+                        Some(v) => self.construct_new(*v, vec![a], fr)?,
+                        None => a,
+                    });
+                }
+                let result = self.invoke(recv, m, passed)?;
+                return match sig.unbox {
+                    Some(field) => self.get_field(result, field),
+                    None => Ok(result),
+                };
+            }
         }
+        let class = match self.class_of_value(&recv) {
+            Value::Class(c) => c.qname.to_string(),
+            _ => "null".to_string(),
+        };
+        self.apply_value(fail, vec![Value::string(format!("{}.{}({})", class, name, classes.join(",")))])
+    }
+
+    /// The method `name` of the class `class` or the nearest of its ancestors whose parameters erase
+    /// to the classes `classes` (`Worker::reflective_sig`), the declaration a reflective call names,
+    /// with its signature.
+    pub(super) fn signature_member(&mut self, class: ClassId, name: &str, classes: &[String]) -> Option<(SymId, crate::typer::ReflectiveSig)> {
+        let n = self.typer.interner.lookup(name)?;
+        let bases: Vec<ClassId> = self.syms().class(class).base_types.iter().map(|&(b, _)| b).collect();
+        for k in bases {
+            let Some(&entry) = self.syms().class(k).members.get(&n) else { continue };
+            let alts: Vec<SymId> = match self.syms().alternatives(entry) {
+                Some(alts) => alts.to_vec(),
+                None => vec![entry],
+            };
+            for alt in alts {
+                // A val is its getter, a method of no parameters.
+                match self.typer.reflective_sig(alt) {
+                    Some(sig) if sig.classes == classes => return Some((alt, sig)),
+                    _ => {}
+                }
+            }
+        }
+        None
     }
 
     /// `productPrefix`: the class's definition, else an enum value's name or the class's.
@@ -577,6 +640,29 @@ impl<'a, 't> Interp<'a, 't> {
     // ---- classes ----
 
     /// `classOf[C]`: the class value named as the JVM names it.
+    /// `classOf` of a class, or of an array of `dims` dimensions of it (`TExpr::ClassOf`), named by
+    /// its element as the JVM's (`[I`): the interpreter's reflection is what a JVM build's macro
+    /// asks scala-library's `Selectable` for (`getMethod(name, paramTypes*)`), where JavaScript's
+    /// output has the one array class (`Emitter::emit_class_of`).
+    pub(super) fn class_literal(&mut self, c: ClassId, dims: u8) -> Value {
+        if dims == 0 {
+            return self.class_value_of(c);
+        }
+        self.array_class_literal(c, dims)
+    }
+
+    /// The class literal of an array, which few programs write, apart from the dispatch every
+    /// expression runs, where the literal of a class inlines.
+    #[cold]
+    #[inline(never)]
+    fn array_class_literal(&mut self, c: ClassId, dims: u8) -> Value {
+        let element: Rc<str> = match crate::emit::class_of_name(self.syms(), self.typer.interner, c) {
+            Some(n) => Rc::from(n),
+            None => self.runtime_class_name(c),
+        };
+        self.class_value_named(&crate::emit::array_class_name(&element, dims))
+    }
+
     pub(super) fn class_value_of(&mut self, c: ClassId) -> Value {
         let qname: Rc<str> = match crate::emit::class_of_name(self.syms(), self.typer.interner, c) {
             Some(n) => Rc::from(n),
@@ -595,7 +681,9 @@ impl<'a, 't> Interp<'a, 't> {
             return Value::Class(c.clone());
         }
         let qname: Rc<str> = Rc::from(qname);
-        let c = Rc::new(ClassValue { class: None, qname: qname.clone() });
+        // An array's class, whichever its element, is of the array class.
+        let class = qname.starts_with('[').then_some(self.typer.b.array);
+        let c = Rc::new(ClassValue { class, qname: qname.clone() });
         self.class_values.insert(qname, c.clone());
         Value::Class(c)
     }

@@ -206,7 +206,7 @@ impl<'a> Worker<'a> {
                     let void = self.prog.add_str("$classNamed(\"java.lang.Void\")");
                     let classes: Vec<crate::tir::TExprId> = erased
                         .iter()
-                        .map(|&k| if k == self.b.unit { self.prog.add(TExpr::Js(void, crate::ast::ListRef::EMPTY)) } else { self.prog.add(TExpr::ClassOf(k)) })
+                        .map(|&k| if k == self.b.unit { self.prog.add(TExpr::Js(void, crate::ast::ListRef::EMPTY)) } else { self.prog.add(TExpr::ClassOf(k, 0)) })
                         .collect();
                     let classes = self.prog.list(&classes);
                     let classes = self.prog.add(TExpr::ArrayLit(classes));
@@ -228,7 +228,7 @@ impl<'a> Worker<'a> {
         let template = self.prog.add_str(template);
         let name = self.prog.add_str(name);
         let name = self.prog.add(TExpr::Str(name));
-        let class = self.prog.add(TExpr::ClassOf(c));
+        let class = self.prog.add(TExpr::ClassOf(c, 0));
         let args = self.prog.list(&[name, class, rest]);
         self.prog.add(TExpr::Js(template, args))
     }
@@ -453,3 +453,180 @@ impl<'a> Worker<'a> {
 }
 
 type FxMapBool = crate::intern::FxMap<ClassId, bool>;
+
+/// A method's signature as a reflective call names it, and the adaptation its reflective proxy
+/// makes: the run-time names of the classes of its parameters' erasures, as scala-library's
+/// `Selectable` looks a method up (`getMethod(name, paramTypes*)`) and Scala.js names a reflective
+/// proxy; per parameter, the value class whose instance the method takes for the underlying value
+/// a reflective call passes; and the field of the value class the method gives.
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub struct ReflectiveSig {
+    pub classes: Vec<String>,
+    pub boxes: Vec<Option<ClassId>>,
+    pub unbox: Option<SymId>,
+}
+
+/// The run-time names of erased classes (`Class.getName`'s: `int`, `java.lang.String`, `[I` for an
+/// array of the element's erasure) and the signatures reflective calls name methods by.
+impl<'a> Worker<'a> {
+    /// The reflective signature of the method `m`: its parameters' erasures, every parameter list
+    /// of it a run-time one, contextual ones included (`TypeErasure.erasure` of the method type
+    /// joins its lists), a by-name parameter a `Function0`, a repeated one a `Seq`; a value class
+    /// its underlying type's, the unit `BoxedUnit`, as the JVM's method takes them. The one
+    /// erasure the call's classes (`erased_parameter_classes`), the interpreter's lookup and the
+    /// output's proxies read.
+    pub fn reflective_sig(&mut self, m: SymId) -> Option<ReflectiveSig> {
+        if !matches!(self.syms.sym(m).kind, SymKind::Def | SymKind::Val | SymKind::Var) {
+            return None;
+        }
+        let sig = self.sig_arc(m);
+        let mut classes = Vec::new();
+        let mut boxes = Vec::new();
+        for p in sig.clauses.iter().flat_map(|cl| cl.params.iter()) {
+            if p.by_name {
+                classes.push("scala.Function0".to_string());
+                boxes.push(None);
+            } else if p.repeated {
+                classes.push("scala.collection.immutable.Seq".to_string());
+                boxes.push(None);
+            } else {
+                classes.push(self.erased_parameter_name(p.ty, 0));
+                boxes.push(self.value_class_of_type(p.ty));
+            }
+        }
+        let unbox = self.value_class_of_type(sig.ret).and_then(|v| self.syms.class(v).ctor.first().and_then(|cl| cl.params.first()).map(|p| p.sym));
+        Some(ReflectiveSig { classes, boxes, unbox })
+    }
+
+    /// The value class `t` is an instance of, through aliases.
+    fn value_class_of_type(&mut self, t: TypeId) -> Option<ClassId> {
+        let t = self.dealias(t);
+        match self.types.get(t) {
+            Type::Class(c, _) if self.syms.class(c).value_class => Some(c),
+            _ => None,
+        }
+    }
+
+    /// The run-time name of the erasure of a method's parameter of type `t`: `stable_erasure`'s,
+    /// a value class through its underlying type, the unit its box, a type parameter or an
+    /// abstract type through its bound (`TypeErasure`'s `TypeParamRef` and `TypeBounds` cases).
+    fn erased_parameter_name(&mut self, t: TypeId, depth: u32) -> String {
+        const OBJECT: &str = "java.lang.Object";
+        if depth > 16 {
+            return OBJECT.to_string();
+        }
+        let t = self.dealias(t);
+        if let Type::Class(c, args) = self.types.get(t) {
+            if c == self.b.unit {
+                return "scala.runtime.BoxedUnit".to_string();
+            }
+            let info = self.syms.class(c);
+            if info.value_class {
+                if let Some(under) = info.ctor.first().and_then(|cl| cl.params.first()).map(|p| p.ty) {
+                    let subst: crate::types::Subst = info.tparams.iter().copied().zip(self.types.items(args).iter().copied()).collect();
+                    let under = self.types.subst(under, &subst);
+                    return self.erased_parameter_name(under, depth + 1);
+                }
+            }
+        }
+        match self.stable_erasure(t) {
+            Some(super::site::Erased::Of(c, dims)) => self.class_literal_name(c, dims),
+            Some(super::site::Erased::Null(dims)) => self.class_literal_name(self.b.null, dims),
+            // `Nothing`'s runtime class has no class literal here; `Object`'s stands for it, at
+            // the call as here.
+            Some(super::site::Erased::Nothing(dims)) => self.class_literal_name(self.b.any_ref, dims),
+            None => match {
+                let d = self.deref(t);
+                self.types.get(d)
+            } {
+                Type::Param(p) | Type::AppParam(p, _) => {
+                    let upper = self.syms.tparam(p).upper;
+                    self.erased_parameter_name(upper, depth + 1)
+                }
+                _ => OBJECT.to_string(),
+            },
+        }
+    }
+
+    /// `Class.getName` of `classOf` of the class `c`, or of the array of `dims` dimensions of it
+    /// (`TExpr::ClassOf`): `int`, `java.lang.String`, `[I`.
+    pub fn class_literal_name(&self, c: ClassId, dims: u8) -> String {
+        let info = self.syms.class(c);
+        let scala_object = matches!(self.interner.get(info.name), "Matchable" | "Singleton") && matches!(info.owner, Owner::Package(p) if p == self.b.scala_pkg);
+        let element = match crate::emit::class_of_name(&self.syms, &self.interner, c) {
+            Some(n) => n,
+            None if c == self.b.any_ref || c == self.b.any_val || scala_object => "java.lang.Object".to_string(),
+            None => self.runtime_class_name_of(c),
+        };
+        if dims == 0 { element } else { crate::emit::array_class_name(&element, dims) }
+    }
+
+    /// `Class.getName` of a class: its packages joined with dots, an enclosing class with `$`.
+    fn runtime_class_name_of(&self, c: ClassId) -> String {
+        let info = self.syms.class(c);
+        let mut s = match info.owner {
+            Owner::Package(p) => {
+                let mut path = Vec::new();
+                let mut at = Some(p);
+                while let Some(k) = at.filter(|&k| k != ROOT_PKG) {
+                    path.push(self.interner.get(self.syms.pkg(k).name).to_string());
+                    at = self.syms.pkg(k).parent;
+                }
+                path.reverse();
+                path.into_iter().map(|p| p + ".").collect::<String>()
+            }
+            Owner::Class(o) => {
+                let mut outer = self.runtime_class_name_of(o);
+                if !outer.ends_with('$') {
+                    outer.push('$');
+                }
+                outer
+            }
+            Owner::Local => String::new(),
+        };
+        s.push_str(self.interner.get(info.name));
+        if info.kind == ClassKind::Object {
+            s.push('$');
+        }
+        s
+    }
+
+    /// The classes a reflective call names, its class literals' (`TExpr::ClassOf`); none where one
+    /// is not a class literal.
+    pub fn reflective_call_classes(&self, literals: &[crate::tir::TExprId]) -> Option<Vec<String>> {
+        literals.iter().map(|&e| match self.prog.expr(e) {
+            crate::tir::TExpr::ClassOf(c, dims) => Some(self.class_literal_name(c, dims)),
+            _ => None,
+        }).collect()
+    }
+}
+
+/// The name of the reflective proxy of the method `name` taking parameters of the classes
+/// `classes` (Scala.js's `MethodName.reflectiveProxy`): a JavaScript identifier, the name and the
+/// classes' names mangled into it as `$proxyName` in rt.js does.
+pub fn reflective_proxy_name(name: &str, classes: &[String]) -> String {
+    let mut out = String::new();
+    mangle_proxy_part(name, &mut out);
+    out.push_str("$$r");
+    for c in classes {
+        out.push('$');
+        mangle_proxy_part(c, &mut out);
+    }
+    out
+}
+
+fn mangle_proxy_part(part: &str, out: &mut String) {
+    for ch in part.chars() {
+        match ch {
+            '.' => out.push('_'),
+            '[' => out.push_str("$A"),
+            ';' => {}
+            '$' => out.push_str("$S"),
+            c if c.is_ascii_alphanumeric() || c == '_' => out.push(c),
+            c => {
+                use std::fmt::Write;
+                let _ = write!(out, "$u{:x}", c as u32);
+            }
+        }
+    }
+}

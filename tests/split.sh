@@ -15,7 +15,9 @@
 # macro program built with the interpreter's natives and without them (TEQ_NO_NATIVES=1) agrees;
 # and no module of those builds declares a name twice; and that the core corpus (bench/gen.py),
 # which is large enough for the parser's, the emitter's and the writer's threads, gives the same
-# bytes with one worker (`TEQ_WORKERS=1`) as with the machine's, split and as one file. A
+# bytes with one worker (`TEQ_WORKERS=1`) as with the machine's, split and as one file; and that
+# names_parsed_on_threads beside a generated file large enough for the parser's threads runs as
+# alone, its names and the std's read where those threads wrote them. A
 # program's `// jars:` line puts those jars on its class path (tests/support/jars.sh); without
 # one of them in the coursier cache it counts as passed.
 cd "$(dirname "$0")/.."
@@ -48,6 +50,8 @@ for src in tests/cases/*.scala tests/cases/*/ tests/interop/*.scala tests/intero
   expected="$suite/$name.expected"
   [ "$src" = "$STUB" ] && continue
   [ -f "$expected" ] || continue
+  # A departure the lean targets keep has their output apart (tests/run.sh).
+  [ -f "tests/lean-expected/$name.expected" ] && expected="tests/lean-expected/$name.expected"
   # A program of the JVM's platform (files, the process) has no JavaScript run (tests/run.sh).
   grep -q -h '^//> using platform jvm' "$src" "$src"/*.scala 2> /dev/null && continue
   # The interop programs are written against the stub; a case takes the std's Scala.js layer.
@@ -661,6 +665,20 @@ if diff -rq "$work/all" "$work/one" > "$work/split.diff" 2>&1; then ok; else bad
 timeout 60 "$TEQ" compiler build "$work/src" -o "$work/all.js" > "$work/all.log" 2>&1 || bad "workers: the build: $(head -2 "$work/all.log")"
 TEQ_WORKERS=1 timeout 120 "$TEQ" compiler build "$work/src" -o "$work/one.js" > "$work/one.log" 2>&1 || bad "workers: the build with one worker: $(head -2 "$work/one.log")"
 check "$work/all.js" "$work/one.js" "workers: the build differs with one worker"
+rm -rf "$work"
+
+# The names the parser's threads write, each thread with an interner of its own whose names are
+# moved into the build's (`frontend::remap_names`): a case beside a generated file that takes the
+# program past the threshold, its files and the std files it names parsed on threads, runs as it
+# does alone.
+work=$(mktemp -d)
+python3 -c 'print("object Padding:"); [print(f"  def padding{i}(x: Int): Int = x + {i} * 3 - {i}") for i in range(6000)]' > "$work/Padding.scala"
+if timeout 120 "$TEQ" compiler build "$work/Padding.scala" tests/cases/names_parsed_on_threads.scala --split "$work/out" > "$work/build.log" 2>&1; then
+  timeout 60 node "$work/out/main.mjs" > "$work/actual" 2>&1
+  check tests/cases/names_parsed_on_threads.expected "$work/actual" "threads: names_parsed_on_threads beside a large file"
+else
+  bad "threads: names_parsed_on_threads beside a large file: $(grep -m2 error "$work/build.log" | tr '\n' ' ')"
+fi
 rm -rf "$work"
 
 echo "$pass passed, $fail failed"

@@ -37,7 +37,7 @@ enum Event {
     Local(Id),
     Class(Id),
     Static(Id),
-    ClassOf(Id),
+    ClassOf(Id, u8),
     Field(bool, Id),
     CallStatic(Id),
     CallMethod(bool, Id),
@@ -482,9 +482,9 @@ impl<'c> Meet for Recorder<'c> {
         self.events.push(Event::Static(id));
     }
 
-    fn class_of(&mut self, _cx: Cx, c: ClassId) {
+    fn class_of(&mut self, _cx: Cx, c: ClassId, dims: u8) {
         let id = Recorder::class(self, c);
-        self.events.push(Event::ClassOf(id));
+        self.events.push(Event::ClassOf(id, dims));
     }
 
     fn field(&mut self, _cx: Cx, of_this: bool, s: SymId) {
@@ -564,8 +564,8 @@ impl<'c> Meet for Recorder<'c> {
     fn template(&mut self, cx: Cx, template: StrRef, args: ListRef) {
         let prog = cx.prog;
         let text = &prog.strings[template.idx()];
-        let read = self.js_visible || text.starts_with("$memberByName") || text.starts_with("$callByName");
-        let strings: Vec<Option<String>> = match read {
+        let read = self.js_visible || text.starts_with("$callBySignature");
+        let mut strings: Vec<Option<String>> = match read {
             true => prog
                 .expr_list(args)
                 .iter()
@@ -576,6 +576,16 @@ impl<'c> Meet for Recorder<'c> {
                 .collect(),
             false => Vec::new(),
         };
+        // A reflective call names its proxy by the types of its class literals.
+        if text.starts_with("$callBySignature") {
+            if let Some(&classes) = prog.expr_list(args).get(2) {
+                let literals = match prog.expr(classes) {
+                    TExpr::SeqLit(items) => Some(prog.expr_list(items)),
+                    _ => None,
+                };
+                strings.extend(literals.and_then(|l| cx.typer.reflective_call_classes(l)).into_iter().flatten().map(Some));
+            }
+        }
         self.events.push(Event::Template(text.clone(), strings));
     }
 
@@ -987,6 +997,36 @@ impl Kept {
                 Place::Val => {}
             }
         }
+        // The reflective calls and proxies name the classes and members the retype made anew.
+        let class = |c: ClassId| classes.get(&c).copied().unwrap_or(c);
+        let sym = |s: SymId| syms.get(&s).copied().unwrap_or(s);
+        r.reflective_calls = std::mem::take(&mut r.reflective_calls)
+            .into_iter()
+            .map(|((name, call), v)| ((name, call.into_iter().map(|(c, dims)| (class(c), dims)).collect()), v))
+            .collect();
+        r.reflective_member_sigs = std::mem::take(&mut r.reflective_member_sigs)
+            .into_iter()
+            .map(|(m, sig)| {
+                let sig = sig.map(|mut sig| {
+                    sig.boxes = sig.boxes.into_iter().map(|b| b.map(class)).collect();
+                    sig.unbox = sig.unbox.map(sym);
+                    sig
+                });
+                (sym(m), sig)
+            })
+            .collect();
+        r.reflective_proxies = std::mem::take(&mut r.reflective_proxies)
+            .into_iter()
+            .map(|(c, proxies)| {
+                let proxies = proxies.into_iter().map(|mut p| {
+                    p.member = sym(p.member);
+                    p.unbox = p.unbox.map(sym);
+                    p.boxes = p.boxes.into_iter().map(|b| b.map(class)).collect();
+                    p
+                });
+                (class(c), proxies.collect())
+            })
+            .collect();
         Ok(())
     }
 

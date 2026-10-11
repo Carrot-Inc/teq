@@ -198,6 +198,9 @@ package java.lang:
   @jvmClass("java/lang/NoSuchMethodException")
   class NoSuchMethodException(message: String = null) extends ReflectiveOperationException(message)
 
+  @jvmClass("java/lang/NoSuchFieldException")
+  class NoSuchFieldException(message: String = null) extends ReflectiveOperationException(message)
+
   @jvmClass("java/lang/ClassNotFoundException")
   class ClassNotFoundException(message: String = null, cause: Throwable = null) extends ReflectiveOperationException(message):
     if cause != null then initCause(cause)

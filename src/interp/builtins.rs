@@ -669,18 +669,62 @@ fn install_core(it: &mut Table) {
         Value::Class(c) => Ok(Value::Str(c.qname.clone())),
         _ => Ok(Value::Null),
     });
+    // The method of the name and, where the call names them, of the parameters' classes (the
+    // signature `Selectable.applyDynamic` looks a structural call's method up by): the Method
+    // keeps them for its `invoke`.
     reg!(it, "java.lang.Class.getMethod", |it, a| {
         let Value::Class(c) = arg(a, 0) else { return Ok(Value::Null) };
         let name = it.to_str(&arg(a, 1))?;
         let n = it.typer.interner.intern(&name);
-        let found = c.class.map_or(false, |k| !matches!(it.member(k, n), Member::Missing)) || Interp::internal_methods(&c.qname).contains(&name.as_str());
+        let types = if a.len() > 2 { arg(a, 2) } else { Value::Null };
+        let classes: Option<Vec<String>> = match &types {
+            Value::Null => None,
+            v => it.elements_of(v)?.iter().map(|c| match c {
+                Value::Class(c) => Some(c.qname.to_string()),
+                _ => None,
+            }).collect(),
+        };
+        let found = match (c.class, &classes) {
+            (Some(k), Some(classes)) => it.signature_member(k, &name, classes).is_some(),
+            (Some(k), None) => !matches!(it.member(k, n), Member::Missing),
+            (None, _) => false,
+        } || Interp::internal_methods(&c.qname).contains(&name.as_str());
         if !found {
             return it.throw_named("NoSuchMethodException", &format!("{}.{}()", c.qname, name));
         }
         let Some(method) = it.typer.class_at(&["java", "lang", "reflect", "Method"]) else {
             return it.unsupported("java.lang.reflect.Method is missing from the standard library");
         };
-        it.construct_new(method, vec![Value::string(name)], &Frame::new(None))
+        let types = if classes.is_some() { types } else { Value::Null };
+        it.construct_new(method, vec![Value::string(name), types], &Frame::new(None))
+    });
+    reg!(it, "java.lang.Class.getField", |it, a| {
+        let name = it.to_str(&arg(a, 1))?;
+        it.throw_named("NoSuchFieldException", &name)
+    });
+    reg!(it, "java.lang.reflect.invokeBySignature", |it, a| {
+        let name = it.to_str(&arg(a, 1))?;
+        let args = it.list_items(&arg(a, 3))?;
+        let recv = arg(a, 0);
+        let types = arg(a, 2);
+        if let (Value::Obj(o), Value::Obj(_) | Value::Array(_)) = (&recv, &types) {
+            let classes: Option<Vec<String>> = it.elements_of(&types)?.iter().map(|c| match c {
+                Value::Class(c) => Some(c.qname.to_string()),
+                _ => None,
+            }).collect();
+            if let Some((alt, _)) = classes.and_then(|classes| it.signature_member(o.class, &name, &classes)) {
+                return it.invoke(recv, alt, args);
+            }
+        }
+        if let Some(r) = it.internal_call(&recv, &name, &args) {
+            return r;
+        }
+        // The method `getMethod` found by its signature, which no other of its name stands for.
+        if matches!(types, Value::Obj(_) | Value::Array(_)) && matches!(recv, Value::Obj(_)) {
+            return it.throw_named("NoSuchMethodException", &name);
+        }
+        let n = it.typer.interner.intern(&name);
+        it.call_named(recv, n, args)
     });
     // The public methods by name: the members of a class of the program, and the internal
     // methods the interpreter answers on the reflection API's values.
@@ -697,7 +741,7 @@ fn install_core(it: &mut Table) {
         }
         let mut out = Vec::with_capacity(names.len());
         for n in names {
-            out.push(it.construct_new(method, vec![Value::string(n)], &Frame::new(None))?);
+            out.push(it.construct_new(method, vec![Value::string(n), Value::Null], &Frame::new(None))?);
         }
         Ok(Value::array(out))
     });
@@ -739,9 +783,34 @@ fn install_core(it: &mut Table) {
         Value::Class(c) => Ok(Value::Bool(c.qname.starts_with('['))),
         _ => Ok(Value::Bool(false)),
     });
-    // The element class of an array is not kept: `Object` stands for it.
+    // An array class's element, read from its name (`[I`, `[Ljava.lang.String;`); `Object` for any
+    // other, which an array value's class is here (`java.util.ArrayList`), as scala-library's
+    // `ArrayOps` asks of it.
     reg!(it, "java.lang.Class.getComponentType", |it, a| match arg(a, 0) {
-        Value::Class(_) => Ok(it.class_value_named("java.lang.Object")),
+        Value::Class(c) => match c.qname.strip_prefix('[') {
+            Some(element) => {
+                let name = match element.as_bytes().first() {
+                    Some(b'I') => "int",
+                    Some(b'J') => "long",
+                    Some(b'D') => "double",
+                    Some(b'F') => "float",
+                    Some(b'Z') => "boolean",
+                    Some(b'C') => "char",
+                    Some(b'B') => "byte",
+                    Some(b'S') => "short",
+                    Some(b'L') => element.strip_prefix('L').and_then(|e| e.strip_suffix(';')).unwrap_or("java.lang.Object"),
+                    _ => element,
+                };
+                Ok(it.class_value_named(name))
+            }
+            None => Ok(it.class_value_named("java.lang.Object")),
+        },
+        _ => Ok(Value::Null),
+    });
+    // scala-library's `arrayClass` (`std/classtag_kinds.scala`): the class of an array of the
+    // class's values, named by it (`class_literal`).
+    reg!(it, "scala.reflect.arrayClassOf", |it, a| match arg(a, 0) {
+        Value::Class(c) => Ok(it.class_value_named(&crate::emit::array_class_name(&c.qname, 1))),
         _ => Ok(Value::Null),
     });
     reg!(it, "java.lang.Class.isAssignableFrom", |it, a| match (arg(a, 0), arg(a, 1)) {
@@ -1910,7 +1979,16 @@ fn install_java(it: &mut Table) {
         Ok(Value::Unit)
     });
     reg!(it, "java.io.PrintStream.flush", |_it, _a| Ok(Value::Unit));
-    reg!(it, "java.util.Objects.equals", |it, a| Ok(Value::Bool(it.equal(&arg(a, 1), &arg(a, 2))?)));
+    // Java's equality: the same object, else `a.equals(b)` as the boxes of their widths answer,
+    // never Scala's cooperative `==`.
+    reg!(it, "java.util.Objects.equals", |it, a| {
+        let (x, y) = (arg(a, 1), arg(a, 2));
+        Ok(Value::Bool(match (&x, &y) {
+            (Value::Null, _) => matches!(y, Value::Null),
+            (Value::Obj(p), Value::Obj(q)) if Rc::ptr_eq(p, q) => true,
+            _ => it.equals_method(&x, &y)?,
+        }))
+    });
     reg!(it, "java.util.Objects.hashCode", |it, a| match arg(a, 1) {
         Value::Null => Ok(Value::Int(0)),
         v => Ok(Value::Int(it.hash_code(&v)?)),
@@ -1922,7 +2000,11 @@ fn install_java(it: &mut Table) {
         }
         v => Ok(v),
     });
-    reg!(it, "java.util.Objects.toString", |it, a| Ok(Value::string(it.to_str(&arg(a, 1))?)));
+    // `toString(o, nullDefault)` as well, which the JDK's class gives a JVM build's macro.
+    reg!(it, "java.util.Objects.toString", |it, a| match arg(a, 1) {
+        Value::Null if a.len() > 2 => Ok(arg(a, 2)),
+        v => Ok(Value::string(it.to_str(&v)?)),
+    });
     reg!(it, "java.util.Objects.isNull", |_it, a| Ok(Value::Bool(matches!(arg(a, 1), Value::Null))));
     reg!(it, "java.util.Objects.nonNull", |_it, a| Ok(Value::Bool(!matches!(arg(a, 1), Value::Null))));
     reg!(it, "java.util.Arrays.copyOf", |it, a| {
@@ -2301,15 +2383,6 @@ fn install_typer_templates(it: &mut Table) {
     reg!(it, "$productElement($0, $1)", |it, a| {
         let i = int(it, a, 1)?;
         it.product_element(&arg(a, 0), i)
-    });
-    reg!(it, "scala.reflect.memberByName", |it, a| {
-        let name = text(it, a, 1)?;
-        it.reflective_member(arg(a, 0), &name, Vec::new())
-    });
-    reg!(it, "scala.reflect.callByName", |it, a| {
-        let name = text(it, a, 1)?;
-        let args = array(it, a, 2)?.borrow().clone();
-        it.reflective_member(arg(a, 0), &name, args)
     });
     reg!(it, "$productElementName($0, $1)", |it, a| {
         let i = int(it, a, 1)?;

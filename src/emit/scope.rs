@@ -556,6 +556,10 @@ impl<'a> Renderable<'a> {
             }
             r.templates.insert(text, names);
         }
+        // The parameters a template call binds its arguments to (`Emitter::template_binds`).
+        for k in 0..10 {
+            add(&mut r.stems, &format!("$t{}", k));
+        }
         for &name in &reach.globals {
             add(&mut r.stems, interner.get(name));
         }
@@ -1431,7 +1435,14 @@ impl<'a> Emitter<'a> {
                 TStmt::Fun(f) => self.walk_fun(w, f),
                 TStmt::Expr(x) if self.is_idle(x) => {}
                 TStmt::Expr(x) => self.walk(w, x),
-                TStmt::Val(_, init) => self.walk(w, init),
+                TStmt::Val(sym, init) => {
+                    self.walk(w, init);
+                    // A plan's temporary written at its use, or not at all, is no local the
+                    // output reads (`Emitter::emit_block_stmts`' `sunk` and `dropped`).
+                    if !moved.contains(&sym) {
+                        self.note_val_init(sym, init);
+                    }
+                }
                 TStmt::Pat(p, init) => {
                     w.name("$matchError");
                     self.walk(w, init);
@@ -1595,7 +1606,7 @@ impl<'a> Emitter<'a> {
             TExpr::This | TExpr::Super(_) => w.this(self.this_name),
             TExpr::Static(s) => self.walk_static(w, s),
             TExpr::Module(c) => self.walk_module(w, c),
-            TExpr::ClassOf(c) => {
+            TExpr::ClassOf(c, _) => {
                 for helper in ["$traitClass", "$boxedClass", "$classValue", "$classNamed", "$classData"] {
                     w.name(helper);
                 }
@@ -1776,11 +1787,23 @@ impl<'a> Emitter<'a> {
                 for name in &free {
                     w.name(name);
                 }
+                // An argument evaluated before the text is written once, outside the arrow
+                // function whose parameters name it there (`Emitter::template_binds`).
+                let binds = self.template_binds(t, args);
+                let binders: Vec<String> = (0..args.len()).filter(|&k| binds & (1 << k) != 0).map(|k| format!("$t{}", k)).collect();
+                for (k, &a) in args.iter().enumerate() {
+                    if binds & (1 << k) != 0 {
+                        self.walk(w, a);
+                    }
+                }
                 // An argument the template has no placeholder for is not written.
                 for (k, names) in &around {
                     let Some(&a) = args.get(*k as usize) else { continue };
+                    if binds & (1 << k) != 0 {
+                        continue;
+                    }
                     let mark = w.top;
-                    for n in names {
+                    for n in names.iter().chain(binders.iter()) {
                         w.bind_fixed(n);
                     }
                     // A spread of literal varargs is written as its elements.

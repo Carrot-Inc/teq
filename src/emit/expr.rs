@@ -30,7 +30,7 @@ impl<'a> Emitter<'a> {
         let simple = match prog.expr(e) {
             TExpr::Int(_) | TExpr::Long(_) | TExpr::Double(_) | TExpr::Bool(_) | TExpr::Char(_)
             | TExpr::Str(_) | TExpr::Unit | TExpr::Local(_) | TExpr::This | TExpr::Super(_) | TExpr::Static(_)
-            | TExpr::Module(_) | TExpr::ClassOf(_) | TExpr::Lambda(..) | TExpr::JsImport(_) | TExpr::JsGlobal(..) => true,
+            | TExpr::Module(_) | TExpr::ClassOf(..) | TExpr::Lambda(..) | TExpr::JsImport(_) | TExpr::JsGlobal(..) => true,
             TExpr::Field(r, _) | TExpr::Unary(_, r) | TExpr::ToStr(r, _) | TExpr::TypeTest(r, _) | TExpr::Cast(r, ..)
             | TExpr::Index(r, _) | TExpr::Spread(r) | TExpr::JsSelect(r, _) => self.is_simple(r),
             TExpr::New(c, _) if self.closure_anons.contains_key(&c) => true,
@@ -296,6 +296,170 @@ impl<'a> Emitter<'a> {
         }
     }
 
+    /// The purity of a template's argument, as scalac's `exprPurity` ranks the tree: `Pure`
+    /// evaluates to the same value and has no effect, so it may be written anywhere, twice or
+    /// never; `Idempotent` has an effect the first time alone (a lazy val, an object with an
+    /// initialiser, a top-level val whose file is initialised first, a checked cast), so it may
+    /// be written again but not before an effect that precedes it; anything else is `Impure`: a
+    /// call, a primitive operation that does not fold to a constant (`isPureApply`), a var, a
+    /// by-name parameter. A literal, `this`, a class literal and a function are `Pure`, a stable
+    /// local or field `Pure` over a `Pure` receiver; an outlined function's parameter goes by
+    /// value or as a thunk to call.
+    fn arg_purity(&self, e: TExprId) -> Purity {
+        if let Some((_, kind)) = self.hole_of(e) {
+            return if kind == HoleKind::Value { Purity::Pure } else { Purity::Impure };
+        }
+        let reference = |s: SymId| {
+            let info = self.syms.sym(s);
+            if info.mods & mods::MUTABLE != 0 || info.by_name || (info.kind == SymKind::Param && info.mods & mods::INLINE != 0) {
+                return Purity::Impure;
+            }
+            match info.kind {
+                SymKind::Val | SymKind::Param if info.mods & mods::LAZY != 0 => Purity::Idempotent,
+                SymKind::Val | SymKind::Param => Purity::Pure,
+                SymKind::Given | SymKind::Object(_) | SymKind::EnumValue(_) => Purity::Idempotent,
+                _ => Purity::Impure,
+            }
+        };
+        let file_init = |p: Purity| if self.init_before(e).is_some() { p.min(Purity::Idempotent) } else { p };
+        match self.peek(e) {
+            TExpr::Int(_) | TExpr::Long(_) | TExpr::Double(_) | TExpr::Bool(_) | TExpr::Char(_) | TExpr::Str(_) | TExpr::Unit
+            | TExpr::Null | TExpr::This | TExpr::Super(_) | TExpr::ClassOf(..) | TExpr::Lambda(..) => Purity::Pure,
+            // An object's first access runs its initialiser, where it has one (`refPurity`: a
+            // module of a no-inits class is a pure path).
+            TExpr::Module(c) => file_init(if self.has_body.get(c.idx()).copied().unwrap_or(true) { Purity::Idempotent } else { Purity::Pure }),
+            TExpr::Local(s) => reference(s),
+            // A constant is a literal (`refPurity`: a constant type is a pure path), whatever the
+            // object it is read through.
+            TExpr::Static(s) | TExpr::Field(_, s) if self.const_vals.get(s.idx()).copied().unwrap_or(false) => Purity::Pure,
+            TExpr::Static(s) => file_init(reference(s)),
+            TExpr::Field(r, s) => reference(s).min(self.arg_purity(r)),
+            TExpr::Cast(r, op, _) => match op {
+                CastOp::Written | CastOp::Nothing => self.arg_purity(r),
+                CastOp::Check(..) | CastOp::Unbox(..) => self.arg_purity(r).min(Purity::Idempotent),
+            },
+            _ if self.is_closure(e) => Purity::Pure,
+            _ => Purity::Impure,
+        }
+    }
+
+    /// The arguments a template call binds before its text, a bit per argument. A call evaluates
+    /// each strict argument once, in order, before its body (`tpd.evalOnce`; Scala.js's `genApply`
+    /// keeps one tree per argument), where the text writes an argument where it puts it: twice,
+    /// never, behind a condition, out of order, or after something of the text that can throw
+    /// (`$0.substring($1)` reads `null`'s property before `$1`; `template_slots`). The text stands
+    /// as written where every argument with an effect comes first, in order, where the text
+    /// always evaluates it and nothing before it can throw, an impure one once (an idempotent one
+    /// may come again); else each of them, `Pure` ones aside, is bound, in order, as a parameter
+    /// of an arrow function the call applies to them, so that all of them run before the text. A
+    /// spread argument, the last, is written as it stands.
+    /// Whether the value of `e` cannot be `null`: `this`, a literal, an object, an instance being
+    /// made, a closure, an array or object literal of a template, and a local `val` such a value
+    /// initialised (`never_null_locals`, which the walks note at the definition, before any use).
+    pub(super) fn never_null(&self, e: TExprId) -> bool {
+        match self.peek(e) {
+            TExpr::This | TExpr::Str(_) | TExpr::Int(_) | TExpr::Long(_) | TExpr::Double(_) | TExpr::Bool(_) | TExpr::Char(_) | TExpr::Module(_) | TExpr::New(..)
+            | TExpr::Lambda(..) | TExpr::ArrayLit(_) | TExpr::SeqLit(_) => true,
+            TExpr::Js(t, _) => {
+                let text = self.prog.strings[t.idx()].trim_start();
+                text.starts_with('[') || text.starts_with('{') || text.starts_with("new ")
+            }
+            TExpr::Local(s) => self.never_null_locals.contains_key(&s),
+            _ => self.is_closure(e),
+        }
+    }
+
+    /// Notes a local `val` whose initialiser cannot be `null` (`never_null`).
+    pub(super) fn note_val_init(&mut self, sym: SymId, init: TExprId) {
+        let info = self.syms.sym(sym);
+        if info.mods & (mods::MUTABLE | mods::LAZY) == 0 && self.never_null(init) {
+            self.never_null_locals.insert(sym, ());
+        }
+    }
+
+    /// Whether evaluating `e` can neither have an effect nor throw, so that whether it runs before
+    /// a template's text fails cannot be told: a literal, a constant, a local's or `this`'s field's
+    /// value, a closure, an array literal of such, and arithmetic and comparisons of such, an
+    /// integral division aside.
+    fn arg_quiet(&self, e: TExprId) -> bool {
+        if let Some((_, kind)) = self.hole_of(e) {
+            return kind == HoleKind::Value;
+        }
+        let plain = |s: SymId| {
+            let info = self.syms.sym(s);
+            !info.by_name && info.mods & mods::LAZY == 0 && matches!(info.kind, SymKind::Val | SymKind::Var | SymKind::Param)
+        };
+        match self.peek(e) {
+            TExpr::Int(_) | TExpr::Long(_) | TExpr::Double(_) | TExpr::Bool(_) | TExpr::Char(_) | TExpr::Str(_) | TExpr::Unit
+            | TExpr::Null | TExpr::This | TExpr::ClassOf(..) | TExpr::Lambda(..) => true,
+            TExpr::Static(s) | TExpr::Field(_, s) if self.const_vals.get(s.idx()).copied().unwrap_or(false) => true,
+            TExpr::Local(s) => plain(s),
+            TExpr::Field(r, s) => matches!(self.peek(r), TExpr::This) && plain(s) && !self.syms.sym(s).needs_accessor,
+            TExpr::Prim(op, a, b) => {
+                !matches!(op, PrimOp::IntDiv | PrimOp::IntRem | PrimOp::LongDiv | PrimOp::LongRem | PrimOp::Eq | PrimOp::Ne)
+                    && self.arg_quiet(a)
+                    && self.arg_quiet(b)
+            }
+            TExpr::Unary(_, a) => self.arg_quiet(a),
+            TExpr::ArrayLit(items) => self.prog.expr_list(items).iter().all(|&i| self.arg_quiet(i)),
+            _ => self.is_closure(e),
+        }
+    }
+
+    pub(super) fn template_binds(&self, template: StrRef, args: &[TExprId]) -> u64 {
+        let text = &self.prog.strings[template.idx()];
+        // The receiver of a member of a static object is no argument: an inline method's body
+        // reads such an object where it names `this` (`Inliner.canElideThis`, a static owner).
+        let static_receiver = self.prog.template_syms.get(&template).is_some_and(|&s| {
+            let info = self.syms.sym(s);
+            matches!(info.owner, Owner::Class(_)) && !info.is_extension
+        }) && args.first().is_some_and(|&a| matches!(self.peek(a), TExpr::Module(_)));
+        let (mut effects, mut impure) = (0u64, 0u64);
+        for (k, &a) in args.iter().enumerate().take(64) {
+            if k == 0 && static_receiver {
+                continue;
+            }
+            match self.arg_purity(a) {
+                Purity::Pure => {}
+                Purity::Idempotent => effects |= 1 << k,
+                Purity::Impure => {
+                    effects |= 1 << k;
+                    impure |= 1 << k;
+                }
+            }
+        }
+        if effects == 0 {
+            return 0;
+        }
+        // The arguments whose evaluation can be told from its absence, which something of the text
+        // that throws before them would skip.
+        let loud = (0..args.len().min(64)).filter(|&k| effects & (1 << k) != 0 && !self.arg_quiet(args[k])).fold(0u64, |m, k| m | 1 << k);
+        // A placeholder's argument that cannot be `null` is accessed without a throw.
+        template_bound(text, effects, impure, loud, |k: usize| args.get(k).is_some_and(|&a| self.never_null(a)))
+    }
+
+    /// A reflective call by signature (`std/reflect_selectable.scala`) whose classes are literals:
+    /// the reflective proxy it calls and the signature a missing one's exception names
+    /// (`reach::Reach::reflective_calls`). In an outlined expansion whose name or classes are its
+    /// function's parameters, the call names the proxy at run time.
+    pub(super) fn reflective_call(&self, text: &str, args: &[TExprId]) -> Option<&'a (String, String)> {
+        if text != "$callBySignature($0, $1, $2, $3, $4)" {
+            return None;
+        }
+        let hole = |e: TExprId| self.hole_of(e).is_some();
+        let items = self.seq_literal_items(args[2])?;
+        if hole(args[1]) || hole(args[2]) || items.iter().any(|&i| hole(i)) {
+            return None;
+        }
+        let TExpr::Str(name) = self.peek(args[1]) else { return None };
+        let mut classes = Vec::with_capacity(items.len());
+        for &i in items {
+            let TExpr::ClassOf(c, dims) = self.peek(i) else { return None };
+            classes.push((c, dims));
+        }
+        self.reach.reflective_calls.get(&(self.prog.strings[name.idx()].clone(), classes))
+    }
+
     pub(super) fn seq_literal_items(&self, e: TExprId) -> Option<&'a [TExprId]> {
         match self.peek(e) {
             TExpr::SeqLit(items) => Some(self.prog.expr_list(items)),
@@ -450,7 +614,7 @@ impl<'a> Emitter<'a> {
                 }
                 None => self.emit_accessor_call(c),
             },
-            TExpr::ClassOf(c) => self.emit_class_of(c),
+            TExpr::ClassOf(c, dims) => self.emit_class_of(c, dims),
             TExpr::Field(r, s) if self.syms.js_member(s) => match self.global_scope_member(r, s) {
                 // An undeclared global would throw; a facade reads it as undefined.
                 Some(name) => {
@@ -680,7 +844,32 @@ impl<'a> Emitter<'a> {
             TExpr::Js(template, args) => {
                 let t = &prog.strings[template.idx()];
                 let args = prog.expr_list(args);
-                let wrap = !bare && matches!(template_shape(t), Shape::Compound { .. });
+                if let Some((proxy, signature)) = self.reflective_call(t, args) {
+                    self.out.push_str("$callProxy(");
+                    self.emit_value(args[0]);
+                    self.out.push_str(", ");
+                    js_string(proxy, &mut self.out);
+                    self.out.push_str(", ");
+                    self.emit_value(args[3]);
+                    self.out.push_str(", ");
+                    js_string(signature, &mut self.out);
+                    self.out.push_str(", ");
+                    self.emit_value(args[4]);
+                    self.out.push(')');
+                    return;
+                }
+                // The arguments evaluated once before the text: `(($t0) => text)(a0)`.
+                let binds = self.template_binds(template, args);
+                let bound = || (0..args.len()).filter(move |&k| binds & (1 << k) != 0);
+                if binds != 0 {
+                    self.out.push_str("((");
+                    for (n, k) in bound().enumerate() {
+                        let _ = write!(self.out, "{}$t{}", if n > 0 { ", " } else { "" }, k);
+                    }
+                    self.out.push_str(") => ");
+                }
+                let compound = matches!(template_shape(t), Shape::Compound { .. });
+                let wrap = if binds != 0 { compound || t.trim_start().starts_with('{') } else { !bare && compound };
                 if wrap {
                     self.out.push('(');
                 }
@@ -697,7 +886,10 @@ impl<'a> Emitter<'a> {
                         if cond {
                             self.enter_cond();
                         }
-                        if t[start..i].ends_with("...") {
+                        if binds & (1 << idx) != 0 {
+                            self.out.push_str(&t[start..i]);
+                            let _ = write!(self.out, "$t{}", idx);
+                        } else if t[start..i].ends_with("...") {
                             self.out.push_str(&t[start..i - 3]);
                             self.emit_template_spread(args.get(idx).copied(), &t[i + 2..]);
                         } else {
@@ -725,6 +917,18 @@ impl<'a> Emitter<'a> {
                 }
                 self.out.push_str(&t[start..]);
                 if wrap {
+                    self.out.push(')');
+                }
+                if binds != 0 {
+                    self.out.push_str(")(");
+                    for (n, k) in bound().enumerate() {
+                        if n > 0 {
+                            self.out.push_str(", ");
+                        }
+                        self.enter_cond();
+                        self.emit_value(args[k]);
+                        self.leave_cond();
+                    }
                     self.out.push(')');
                 }
             }
@@ -1358,7 +1562,10 @@ impl<'a> Emitter<'a> {
                 TStmt::Fun(_) => {}
                 TStmt::Expr(x) => self.emit_stmt(x, &Ctx::Discard),
                 TStmt::Val(sym, _) if self.sunk.contains_key(&sym) || self.dropped.contains_key(&sym) => {}
-                TStmt::Val(sym, init) => self.emit_local_val(sym, init),
+                TStmt::Val(sym, init) => {
+                    self.emit_local_val(sym, init);
+                    self.note_val_init(sym, init);
+                }
                 TStmt::Pat(pat, init) => self.emit_pattern_val(pat, init),
             }
         }
@@ -2148,6 +2355,163 @@ enum Shape {
     Compound { conditional: bool },
 }
 
+/// A template's placeholders in the order its text writes them, as the emission substitutes
+/// them: the argument, whether the text may skip it or evaluate it again there (past a
+/// conditional operator, `?`, `&&`, `||`, or an arrow function's `=>`, outside a string), and
+/// whether it is spread.
+/// The placeholders of a template's text in the order JavaScript evaluates them, each with
+/// whether it stands behind a condition, whether it is spread, and whether something that can
+/// throw has run before it: a property read on a value the text was given or computed
+/// (`$0.substring($1)` reads `null`'s property before evaluating `$1`), an index read once its
+/// key is evaluated (`$0[$1]` evaluates `$1` first), or a call that has returned. A property or an
+/// index assigned (`$0.f = $1`, `$0[$1] = $2`) fails only after the value is evaluated. A name's
+/// property (`Math.imul`) is a namespace's, which cannot be `null`, and so is a placeholder's whose
+/// argument `non_null` says cannot be.
+/// The arguments a template's text `t` binds (`Emitter::template_binds`), a bit per argument:
+/// none where it stands as written, else every one of `effects` but a spread. `impure` are the
+/// arguments an evaluation again would tell, `loud` those whose evaluation can be told from its
+/// absence, and `non_null` the placeholders whose argument cannot be `null`. A spread argument is
+/// written where it stands, never bound, so that what the text can throw before it binds nothing:
+/// JavaScript evaluates a call's arguments after its callee, as Scala.js's `JSMethodApply` keeps.
+fn template_bound(t: &str, effects: u64, impure: u64, loud: u64, non_null: impl Fn(usize) -> bool) -> u64 {
+    let (mut written, mut spread) = (0u64, 0u64);
+    let mut last = None;
+    let mut linear = true;
+    template_slots(t, non_null, |k, cond, spreads, throws| {
+        if k >= 64 || effects & (1 << k) == 0 {
+            return;
+        }
+        // Something before it can throw, which the call's arguments, evaluated first, precede.
+        if throws && !spreads && loud & (1 << k) != 0 {
+            linear = false;
+        }
+        let again = written & (1 << k) != 0;
+        if spreads {
+            spread |= 1 << k;
+        } else if cond && (!again || impure & (1 << k) != 0) {
+            linear = false;
+        }
+        if again {
+            if impure & (1 << k) != 0 {
+                linear = false;
+            }
+            return;
+        }
+        if last.map_or(false, |l| k < l) {
+            linear = false;
+        }
+        written |= 1 << k;
+        last = Some(k);
+    });
+    let binds = effects & !spread;
+    if binds & !written != 0 {
+        linear = false;
+    }
+    if linear { 0 } else { binds }
+}
+
+fn template_slots(t: &str, non_null: impl Fn(usize) -> bool, mut slot: impl FnMut(usize, bool, bool, bool)) {
+    #[derive(Clone, Copy, PartialEq)]
+    enum Prev {
+        None,
+        Slot(usize),
+        Name,
+        Number,
+        Close,
+        Other,
+    }
+    #[derive(Clone, Copy, PartialEq)]
+    enum Open {
+        Call,
+        Group,
+        Index(bool),
+        Array,
+    }
+    let b = t.as_bytes();
+    // Whether what follows `at` assigns (`=`, not `==` or `=>`).
+    let assigned = |at: usize| {
+        let rest = t[at..].trim_start().as_bytes();
+        rest.first() == Some(&b'=') && !matches!(rest.get(1), Some(b'=' | b'>'))
+    };
+    let mut cond = false;
+    let mut throws = false;
+    let mut quote = 0u8;
+    let mut prev = Prev::None;
+    let mut open: Vec<Open> = Vec::new();
+    let mut i = 0;
+    while i < b.len() {
+        let c = b[i];
+        if c == b'$' && b.get(i + 1).map_or(false, |d| d.is_ascii_digit()) {
+            let k = (b[i + 1] - b'0') as usize;
+            slot(k, cond, t[..i].ends_with("..."), throws);
+            prev = Prev::Slot(k);
+            i += 2;
+            continue;
+        }
+        if quote != 0 {
+            if c == b'\\' {
+                i += 1;
+            } else if c == quote {
+                quote = 0;
+                prev = Prev::Other;
+            }
+            i += 1;
+            continue;
+        }
+        let maybe_null = |prev: Prev| match prev {
+            Prev::Slot(k) => !non_null(k),
+            Prev::Close => true,
+            _ => false,
+        };
+        match c {
+            b'"' | b'\'' | b'`' => quote = c,
+            b'?' => cond = true,
+            b'&' | b'|' if b.get(i + 1) == Some(&c) => cond = true,
+            b'=' if b.get(i + 1) == Some(&b'>') => cond = true,
+            b'.' if !t[i..].starts_with("...") => {
+                let mut end = i + 1;
+                while end < b.len() && (b[end].is_ascii_alphanumeric() || b[end] == b'_' || b[end] == b'$') {
+                    end += 1;
+                }
+                if !assigned(end) {
+                    throws |= maybe_null(prev);
+                }
+            }
+            b'[' => open.push(if matches!(prev, Prev::Slot(_) | Prev::Name | Prev::Close) { Open::Index(maybe_null(prev)) } else { Open::Array }),
+            b'(' => open.push(if matches!(prev, Prev::Slot(_) | Prev::Name | Prev::Close) { Open::Call } else { Open::Group }),
+            b')' | b']' => {
+                match open.pop() {
+                    Some(Open::Call) => throws = true,
+                    Some(Open::Index(maybe_null)) if !assigned(i + 1) => throws |= maybe_null,
+                    _ => {}
+                }
+                prev = Prev::Close;
+                i += 1;
+                continue;
+            }
+            _ => {}
+        }
+        if c.is_ascii_digit() && !matches!(prev, Prev::Name) {
+            while i < b.len() && (b[i].is_ascii_alphanumeric() || b[i] == b'.' && b.get(i + 1).map_or(false, |d| d.is_ascii_digit())) {
+                i += 1;
+            }
+            prev = Prev::Number;
+            continue;
+        }
+        if c.is_ascii_alphabetic() || c == b'_' || c == b'$' {
+            while i < b.len() && (b[i].is_ascii_alphanumeric() || b[i] == b'_' || b[i] == b'$') {
+                i += 1;
+            }
+            prev = Prev::Name;
+            continue;
+        }
+        if !c.is_ascii_whitespace() && c != b'.' {
+            prev = Prev::Other;
+        }
+        i += 1;
+    }
+}
+
 fn template_shape(t: &str) -> Shape {
     let b = t.trim().as_bytes();
     let mut i = 0;
@@ -2443,7 +2807,7 @@ pub(super) fn op_texts() -> impl Iterator<Item = &'static str> {
 
 #[cfg(test)]
 mod tests {
-    use super::{template_shape, Shape};
+    use super::{template_bound, template_shape, Shape};
 
     #[test]
     fn tables_follow_the_operations() {
@@ -2471,4 +2835,28 @@ mod tests {
             assert_eq!(template_shape(t), Shape::Compound { conditional: true }, "{}", t);
         }
     }
+
+    #[test]
+    fn arguments_templates_bind() {
+        let maybe_null = |_: usize| false;
+        // An argument after a member of a receiver that can be `null` is evaluated first.
+        assert_eq!(template_bound("$0.startsWith($1)", 0b10, 0b10, 0b10, maybe_null), 0b10);
+        assert_eq!(template_bound("$0.startsWith($1)", 0b10, 0b10, 0b10, |_| true), 0);
+        // Twice, behind a condition, or never: once, before the text.
+        assert_eq!(template_bound("($0 < $1 ? -1 : $0 > $1 ? 1 : 0)", 0b11, 0b11, 0b11, maybe_null), 0b11);
+        assert_eq!(template_bound("1", 0b1, 0b1, 0b1, maybe_null), 0b1);
+        // A spread is written where it stands, after the callee as JavaScript evaluates it: what
+        // the text reads before it binds nothing.
+        assert_eq!(template_bound("($0)[$1](...$2)", 0b101, 0b101, 0b101, maybe_null), 0);
+        assert_eq!(template_bound("new ($0)(...$1)", 0b11, 0b11, 0b11, maybe_null), 0);
+    }
+}
+
+/// scalac's purity levels of an expression (`TreeInfo.PurityLevel`), as a template's argument
+/// needs them, the weakest first.
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug)]
+pub(super) enum Purity {
+    Impure,
+    Idempotent,
+    Pure,
 }

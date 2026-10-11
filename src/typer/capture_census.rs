@@ -765,7 +765,7 @@ impl<'w, 'a> Walk<'w, 'a> {
                 self.count("cast", status, Some(e), ctx);
                 self.expr(a, inner);
             }
-            TExpr::ClassOf(_) => self.count("class literal", Status::Derived, Some(e), ctx),
+            TExpr::ClassOf(..) => self.count("class literal", Status::Derived, Some(e), ctx),
             TExpr::SeqLit(l) => {
                 let status = if matches!(form, Some(Form::Repeated(_))) { Status::Captured } else { Status::Missing };
                 self.count("repeated arguments", status, Some(e), ctx);

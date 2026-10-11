@@ -203,10 +203,19 @@ impl<'a, 't> Interp<'a, 't> {
 
     // ---- shapes ----
 
+    // Each shape is read through its cache on every native call; the first reading, which finds
+    // the classes, stays out of line, so that the interpreter's dispatch, where the read inlines,
+    // carries the read alone.
     pub(super) fn list_shape(&mut self) -> Option<Rc<ListShape>> {
-        if let Some(s) = &self.list_shape {
-            return s.clone();
+        match &self.list_shape {
+            Some(s) => s.clone(),
+            None => self.list_shape_first(),
         }
+    }
+
+    #[cold]
+    #[inline(never)]
+    fn list_shape_first(&mut self) -> Option<Rc<ListShape>> {
         let shape = (|| {
             let cons = self.known_class("::")?;
             let nil = self.known_class("Nil")?;
@@ -222,9 +231,15 @@ impl<'a, 't> Interp<'a, 't> {
     }
 
     pub(super) fn option_shape(&mut self) -> Option<Rc<OptionShape>> {
-        if let Some(s) = &self.option_shape {
-            return s.clone();
+        match &self.option_shape {
+            Some(s) => s.clone(),
+            None => self.option_shape_first(),
         }
+    }
+
+    #[cold]
+    #[inline(never)]
+    fn option_shape_first(&mut self) -> Option<Rc<OptionShape>> {
         let shape = (|| {
             let some = self.known_class("Some")?;
             let none = self.known_class("None")?;
@@ -240,9 +255,15 @@ impl<'a, 't> Interp<'a, 't> {
     }
 
     pub(super) fn store_shapes(&mut self) -> Option<Rc<StoreShapes>> {
-        if let Some(s) = &self.store_shapes {
-            return s.clone();
+        match &self.store_shapes {
+            Some(s) => s.clone(),
+            None => self.store_shapes_first(),
         }
+    }
+
+    #[cold]
+    #[inline(never)]
+    fn store_shapes_first(&mut self) -> Option<Rc<StoreShapes>> {
         let shapes = (|| {
             let map = self.shape_of("PersistentMap", &["index", "entries", "dead", "fallback", "compacted"])?;
             let set = self.shape_of("HashSet", &["index", "entries", "dead", "compacted"])?;

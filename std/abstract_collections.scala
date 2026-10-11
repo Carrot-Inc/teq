@@ -143,10 +143,238 @@ object EvidenceIterableFactory:
       def fromSpecific(it: IterableOnce[A]): CC[A] = factory.from(it)
       def newBuilder: scala.collection.mutable.Builder[A, CC[A]] = factory.newBuilder[A]
 
-// scala-library's views by their names in this package, which the std's one `View` stands for.
 type View[+A] = scala.View[A]
-type SeqView[+A] = scala.View[A]
-type IndexedSeqView[+A] = scala.View[A]
+
+// scala-library's `SeqView` and `IndexedSeqView`, the views of a sequence and of an indexed one:
+// an element is read by its index from the source (`apply` and `length` abstract, an indexed view's
+// iterator reading them), each operation a lazy adapter over its source that keeps the kind of the
+// view where scala-library's result type does (`map`, `take`, `reverse`); one that may not gives a
+// `View` (`filter`, `flatMap`). A sorted view sorts its source once, at its first element asked.
+trait SeqView[+A] extends SeqOps[A, View, View[A]], View[A]:
+  override def view: SeqView[A] = this
+  // A view is no sequence: its elements copied into one (`IterableOnceOps.toSeq`), as an adapter
+  // extending a view class and `SeqView` would otherwise take the std's `SeqOps.toSeq`.
+  override def toSeq: Seq[A] = toList
+  override def map[B](f: A => B): SeqView[B] = new SeqView.Map(this, f)
+  override def appended[B >: A](elem: B): SeqView[B] = new SeqView.Appended(this, elem)
+  override def prepended[B >: A](elem: B): SeqView[B] = new SeqView.Prepended(elem, this)
+  override def reverse: SeqView[A] = new SeqView.Reverse(this)
+  override def take(n: Int): SeqView[A] = new SeqView.Take(this, n)
+  override def drop(n: Int): SeqView[A] = new SeqView.Drop(this, n)
+  override def takeRight(n: Int): SeqView[A] = new SeqView.TakeRight(this, n)
+  override def dropRight(n: Int): SeqView[A] = new SeqView.DropRight(this, n)
+  override def tapEach[U](f: A => U): SeqView[A] = new SeqView.Map(this, (a: A) => { f(a); a })
+  // scala-library overloads these with a sequence, whose result stays a `SeqView`; the std hides
+  // an inherited method of the name unless it declares the alternatives together.
+  override def concat[B >: A](suffix: IterableOnce[B]): View[B] = super.concat(suffix)
+  def concat[B >: A](suffix: SeqOps[B, AnyConstr, ?]): SeqView[B] = new SeqView.Concat(this, suffix)
+  override def appendedAll[B >: A](suffix: IterableOnce[B]): View[B] = super.concat(suffix)
+  def appendedAll[B >: A](suffix: SeqOps[B, AnyConstr, ?]): SeqView[B] = new SeqView.Concat(this, suffix)
+  override def prependedAll[B >: A](prefix: IterableOnce[B]): View[B] = prefix match
+    case xs: Iterable[?] => View.over(() => unsafeCast[Iterable[?], Iterable[B]](xs).iterator ++ iterator)
+    case _ => View.from(prefix.iterator ++ iterator)
+  def prependedAll[B >: A](prefix: SeqOps[B, AnyConstr, ?]): SeqView[B] = new SeqView.Concat(prefix, this)
+  override def sorted[B >: A](implicit ord: Ordering[B]): SeqView[A] = new SeqView.Sorted(this, length, ord)
+  // scala-library's `SeqOps.isEmpty` and `lengthCompare` (`IterableOps.sizeCompare`): a known size,
+  // else the elements walked as far as the comparison needs; `size` is the length.
+  override def isEmpty: Boolean = lengthCompare(0) == 0
+  override def lengthCompare(len: Int): Int =
+    if len < 0 then 1
+    else
+      val known = knownSize
+      if known >= 0 then Integer.compare(known, len)
+      else
+        var i = 0
+        val it = iterator
+        var result = 0
+        var done = false
+        while !done && it.hasNext do
+          if i == len then
+            result = 1
+            done = true
+          else
+            it.next()
+            i += 1
+        if done then result else i - len
+  override def collectionClassName: String = "SeqView"
+
+object SeqView:
+  class Id[+A](underlying: SeqOps[A, AnyConstr, ?]) extends SeqView[A]:
+    def apply(idx: Int): A = underlying.apply(idx)
+    def length: Int = underlying.length
+    def iterator: Iterator[A] = underlying.iterator
+    override def knownSize: Int = underlying.knownSize
+    override def isEmpty: Boolean = underlying.isEmpty
+  // A linear sequence of the std that is no `SeqOps` (`LazyList`): indexed by walking it.
+  final class OfLinear[+A](underlying: Iterable[A]) extends SeqView[A]:
+    def apply(idx: Int): A =
+      val it = underlying.iterator.drop(idx)
+      if idx < 0 || !it.hasNext then indexOutOfBounds(idx.toString) else it.next()
+    def length: Int = underlying.size
+    def iterator: Iterator[A] = underlying.iterator
+    override def isEmpty: Boolean = underlying.isEmpty
+  class Map[+A, +B](underlying: SeqOps[A, AnyConstr, ?], f: A => B) extends scala.View.Map[A, B](underlying, f), SeqView[B]:
+    def apply(idx: Int): B = f(underlying(idx))
+    def length: Int = underlying.length
+  class Appended[+A](underlying: SeqOps[A, AnyConstr, ?], elem: A) extends scala.View.Appended(underlying, elem), SeqView[A]:
+    def apply(idx: Int): A = if idx == underlying.length then elem else underlying(idx)
+    def length: Int = underlying.length + 1
+  class Prepended[+A](elem: A, underlying: SeqOps[A, AnyConstr, ?]) extends scala.View.Prepended(elem, underlying), SeqView[A]:
+    def apply(idx: Int): A = if idx == 0 then elem else underlying(idx - 1)
+    def length: Int = underlying.length + 1
+  class Concat[A](prefix: SeqOps[A, AnyConstr, ?], suffix: SeqOps[A, AnyConstr, ?]) extends scala.View.Concat[A](prefix, suffix), SeqView[A]:
+    def apply(idx: Int): A =
+      val l = prefix.length
+      if idx < l then prefix(idx) else suffix(idx - l)
+    def length: Int = prefix.length + suffix.length
+  class Reverse[A](underlying: SeqOps[A, AnyConstr, ?]) extends SeqView[A]:
+    def apply(i: Int): A = underlying.apply(size - 1 - i)
+    def length: Int = underlying.size
+    def iterator: Iterator[A] = underlying.reverseIterator
+    override def knownSize: Int = underlying.knownSize
+    override def isEmpty: Boolean = underlying.isEmpty
+  class Take[+A](underlying: SeqOps[A, AnyConstr, ?], n: Int) extends scala.View.Take(underlying, n), SeqView[A]:
+    def apply(idx: Int): A = if idx < n then underlying(idx) else indexOutOfBounds(idx.toString)
+    def length: Int = Math.min(underlying.length, normN)
+  class TakeRight[+A](underlying: SeqOps[A, AnyConstr, ?], n: Int) extends scala.View.TakeRight(underlying, n), SeqView[A]:
+    private val delta = Math.max(underlying.size - Math.max(n, 0), 0)
+    def length: Int = underlying.size - delta
+    def apply(i: Int): A = underlying.apply(i + delta)
+  class Drop[A](underlying: SeqOps[A, AnyConstr, ?], n: Int) extends scala.View.Drop[A](underlying, n), SeqView[A]:
+    def length: Int = Math.max(underlying.size - normN, 0)
+    def apply(i: Int): A = underlying.apply(i + normN)
+    override def drop(n: Int): SeqView[A] = new Drop(underlying, this.n + n)
+  class DropRight[A](underlying: SeqOps[A, AnyConstr, ?], n: Int) extends scala.View.DropRight[A](underlying, n), SeqView[A]:
+    private val len = Math.max(underlying.size - Math.max(n, 0), 0)
+    def length: Int = len
+    def apply(i: Int): A = underlying.apply(i)
+  // scala-library's `Sorted`: the source's length taken at once, its elements sorted once, when one
+  // is first asked for. Sorted again by its order's reverse it is the same elements reversed
+  // (`ReverseSorted`), by another order the source while it is unsorted (`elems`): neither sorts.
+  class Sorted[A, B >: A](underlying0: SeqOps[A, AnyConstr, ?], len: Int, ord: Ordering[B]) extends SeqView[A]:
+    outer =>
+    private var underlying: SeqOps[A, AnyConstr, ?] = underlying0
+    private var evaluated = false
+    private lazy val sortedElems: Seq[A] =
+      val res: Seq[A] =
+        if len == 0 then Nil
+        else if len == 1 then List(underlying.head)
+        else underlying.toList.sorted(unsafeCast[Ordering[B], Ordering[A]](ord))
+      evaluated = true
+      underlying = null
+      res
+    private def elems: SeqOps[A, AnyConstr, ?] = if evaluated then sortedElems else underlying
+    def apply(i: Int): A = sortedElems.apply(i)
+    def length: Int = len
+    def iterator: Iterator[A] = Iterator.empty ++ sortedElems.iterator
+    override def knownSize: Int = len
+    override def isEmpty: Boolean = len == 0
+    override def reverse: SeqView[A] = new ReverseSorted
+    override def sorted[B1 >: A](implicit ord1: Ordering[B1]): SeqView[A] =
+      if ord1 == ord then this
+      else if ord1.isReverseOf(ord) then reverse
+      else new Sorted(elems, len, ord1)
+    private class ReverseSorted extends SeqView[A]:
+      private lazy val reversedElems = new SeqView.Reverse(sortedElems)
+      def apply(i: Int): A = reversedElems.apply(i)
+      def length: Int = len
+      def iterator: Iterator[A] = Iterator.empty ++ reversedElems.iterator
+      override def knownSize: Int = len
+      override def isEmpty: Boolean = len == 0
+      override def reverse: SeqView[A] = outer
+      override def sorted[B1 >: A](implicit ord1: Ordering[B1]): SeqView[A] =
+        if ord1 == ord then outer
+        else if ord1.isReverseOf(ord) then this
+        else new Sorted(elems, len, ord1)
+
+trait IndexedSeqView[+A] extends IndexedSeqOps[A, View, View[A]], SeqView[A]:
+  override def view: IndexedSeqView[A] = this
+  // scala-library's `IndexedSeqOps.knownSize` and `lengthCompare`, which its `SeqView` leaves to
+  // `IndexedSeqOps`: the size is the length, compared without reading an element.
+  override def knownSize: Int = length
+  override def lengthCompare(len: Int): Int = Integer.compare(length, len)
+  def view(from: Int, until: Int): IndexedSeqView[A] = slice(from, until)
+  override def iterator: Iterator[A] = new IndexedSeqView.IndexedSeqViewIterator(this)
+  override def reverseIterator: Iterator[A] = new IndexedSeqView.IndexedSeqViewReverseIterator(this)
+  override def appended[B >: A](elem: B): IndexedSeqView[B] = new IndexedSeqView.Appended(this, elem)
+  override def prepended[B >: A](elem: B): IndexedSeqView[B] = new IndexedSeqView.Prepended(elem, this)
+  override def take(n: Int): IndexedSeqView[A] = new IndexedSeqView.Take(this, n)
+  override def takeRight(n: Int): IndexedSeqView[A] = new IndexedSeqView.TakeRight(this, n)
+  override def drop(n: Int): IndexedSeqView[A] = new IndexedSeqView.Drop(this, n)
+  override def dropRight(n: Int): IndexedSeqView[A] = new IndexedSeqView.DropRight(this, n)
+  override def map[B](f: A => B): IndexedSeqView[B] = new IndexedSeqView.Map(this, f)
+  override def reverse: IndexedSeqView[A] = new IndexedSeqView.Reverse(this)
+  override def slice(from: Int, until: Int): IndexedSeqView[A] = new IndexedSeqView.Slice(this, from, until)
+  override def tapEach[U](f: A => U): IndexedSeqView[A] = new IndexedSeqView.Map(this, (a: A) => { f(a); a })
+  def concat[B >: A](suffix: SomeIndexedSeqOps[B]): IndexedSeqView[B] = new IndexedSeqView.Concat(this, unsafeCast[SomeIndexedSeqOps[B], SeqOps[B, AnyConstr, ?]](suffix))
+  def appendedAll[B >: A](suffix: SomeIndexedSeqOps[B]): IndexedSeqView[B] = new IndexedSeqView.Concat(this, unsafeCast[SomeIndexedSeqOps[B], SeqOps[B, AnyConstr, ?]](suffix))
+  def prependedAll[B >: A](prefix: SomeIndexedSeqOps[B]): IndexedSeqView[B] = new IndexedSeqView.Concat(unsafeCast[SomeIndexedSeqOps[B], SeqOps[B, AnyConstr, ?]](prefix), this)
+  override def collectionClassName: String = "IndexedSeqView"
+
+object IndexedSeqView:
+  // scala-library's iterators of an indexed view, reading its length once and an element by index.
+  final class IndexedSeqViewIterator[A](self: IndexedSeqView[A]) extends Iterator[A]:
+    private var current = 0
+    private var remainder = self.length
+    override def knownSize: Int = remainder
+    def hasNext: Boolean = remainder > 0
+    def next(): A =
+      if remainder > 0 then
+        val r = self(current)
+        current += 1
+        remainder -= 1
+        r
+      else Iterator.empty.next()
+    override def drop(n: Int): Iterator[A] =
+      if n > 0 then
+        current += n
+        remainder = Math.max(0, remainder - n)
+      this
+  final class IndexedSeqViewReverseIterator[A](self: IndexedSeqView[A]) extends Iterator[A]:
+    private var remainder = self.length
+    private var pos = remainder - 1
+    def hasNext: Boolean = remainder > 0
+    def next(): A =
+      if remainder > 0 then
+        val r = self(pos)
+        pos -= 1
+        remainder -= 1
+        r
+      else Iterator.empty.next()
+  class Id[+A](underlying: SeqOps[A, AnyConstr, ?]) extends SeqView.Id(underlying), IndexedSeqView[A]
+  class Appended[+A](underlying: SeqOps[A, AnyConstr, ?], elem: A) extends SeqView.Appended(underlying, elem), IndexedSeqView[A]
+  class Prepended[+A](elem: A, underlying: SeqOps[A, AnyConstr, ?]) extends SeqView.Prepended(elem, underlying), IndexedSeqView[A]
+  class Concat[A](prefix: SeqOps[A, AnyConstr, ?], suffix: SeqOps[A, AnyConstr, ?]) extends SeqView.Concat[A](prefix, suffix), IndexedSeqView[A]
+  class Take[A](underlying: SeqOps[A, AnyConstr, ?], n: Int) extends SeqView.Take(underlying, n), IndexedSeqView[A]
+  class TakeRight[A](underlying: SeqOps[A, AnyConstr, ?], n: Int) extends SeqView.TakeRight(underlying, n), IndexedSeqView[A]
+  class Drop[A](underlying: SeqOps[A, AnyConstr, ?], n: Int) extends SeqView.Drop[A](underlying, n), IndexedSeqView[A]
+  class DropRight[A](underlying: SeqOps[A, AnyConstr, ?], n: Int) extends SeqView.DropRight[A](underlying, n), IndexedSeqView[A]
+  class Map[A, B](underlying: SeqOps[A, AnyConstr, ?], f: A => B) extends SeqView.Map(underlying, f), IndexedSeqView[B]
+  class Reverse[A](underlying: SeqOps[A, AnyConstr, ?]) extends SeqView.Reverse[A](underlying), IndexedSeqView[A]:
+    override def reverse: IndexedSeqView[A] = underlying match
+      case x: IndexedSeqView[?] => unsafeCast(x)
+      case _ => super.reverse
+  class Slice[A](underlying: SeqOps[A, AnyConstr, ?], from: Int, until: Int) extends IndexedSeqView[A]:
+    protected val lo: Int = Math.max(from, 0)
+    protected val hi: Int = Math.min(Math.max(until, 0), underlying.length)
+    protected val len: Int = Math.max(hi - lo, 0)
+    def apply(i: Int): A = underlying(lo + i)
+    def length: Int = len
+
+// scala-library's `ArrayOps.ArrayView`: an array's view, indexed as the array is, printed with
+// its elements. It stands beside the view it extends, so that the file of the array's operations
+// (collections.scala), whose classes every program that converts or extends an array completes,
+// names the view only in the result of `view`, and the views' files are read when a program asks.
+final class ArrayView[A](a: Array[A]) extends IndexedSeqView[A]:
+  def length: Int = a.length
+  def apply(i: Int): A = a(i)
+  override def toString: String = mkString("ArrayView(", ", ", ")")
+
+// scala-library's `collection.AnyConstr`, the type constructor of any sequence's operations.
+type AnyConstr[X] = Any
+// scala-library's `IndexedSeqView.SomeIndexedSeqOps`: the std's `IndexedSeq` and the library classes
+// beside it are no `IndexedSeqOps`.
+type SomeIndexedSeqOps[A] = IndexedSeqOps[A, AnyConstr, ?] | IndexedSeq[A]
 
 // scala-library's deprecated names of the collections before 2.13 (scala/collection/package.scala),
 // which libraries built on it still name.

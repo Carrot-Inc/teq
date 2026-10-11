@@ -976,7 +976,7 @@ impl<'a> Worker<'a> {
             | TExpr::This
             | TExpr::Super(_)
             | TExpr::Module(_)
-            | TExpr::ClassOf(_)
+            | TExpr::ClassOf(..)
             | TExpr::JsImport(_)
             | TExpr::JsGlobal(..) => self.resolved(w, e),
             TExpr::Static(_) => self.resolved(w, e),

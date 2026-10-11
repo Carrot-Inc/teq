@@ -147,7 +147,7 @@ impl Collector<'_, '_> {
         let prog = self.cx.input.prog;
         match prog.expr(e) {
             TExpr::Int(_) | TExpr::Long(_) | TExpr::Double(_) | TExpr::Bool(_) | TExpr::Char(_) | TExpr::Str(_)
-            | TExpr::Unit | TExpr::Static(_) | TExpr::Module(_) | TExpr::ClassOf(_) | TExpr::JsImport(_) | TExpr::JsGlobal(..) => {}
+            | TExpr::Unit | TExpr::Static(_) | TExpr::Module(_) | TExpr::ClassOf(..) | TExpr::JsImport(_) | TExpr::JsGlobal(..) => {}
             TExpr::Local(s) => self.local(s),
             TExpr::This | TExpr::Super(_) => self.this = true,
             TExpr::Field(r, _) | TExpr::Unary(_, r) | TExpr::ToStr(r, _) | TExpr::TypeTest(r, _) | TExpr::Cast(r, ..) | TExpr::Index(r, _)
@@ -382,7 +382,7 @@ impl CellWalk<'_, '_> {
         let prog = self.cx.input.prog;
         match prog.expr(e) {
             TExpr::Int(_) | TExpr::Long(_) | TExpr::Double(_) | TExpr::Bool(_) | TExpr::Char(_) | TExpr::Str(_)
-            | TExpr::Unit | TExpr::Static(_) | TExpr::Module(_) | TExpr::ClassOf(_) | TExpr::JsImport(_) | TExpr::JsGlobal(..) | TExpr::This
+            | TExpr::Unit | TExpr::Static(_) | TExpr::Module(_) | TExpr::ClassOf(..) | TExpr::JsImport(_) | TExpr::JsGlobal(..) | TExpr::This
             | TExpr::Super(_) => {}
             TExpr::Local(s) => self.reference(s),
             TExpr::Field(r, _) | TExpr::Unary(_, r) | TExpr::ToStr(r, _) | TExpr::TypeTest(r, _) | TExpr::Cast(r, ..) | TExpr::Index(r, _)

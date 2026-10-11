@@ -5,7 +5,8 @@
 # tests/jvm-expected/<name>.expected, since the interpreter formats numbers as the JVM does;
 # without such a file the test is skipped. A `// interp-expected: js` line keeps the Scala.js
 # expectation: the interpreter runs the std's JavaScript platform layer, so where that layer is
-# a Scala.js library's (scala-java-locales' java.text) its output is Scala.js's.
+# a Scala.js library's (scala-java-locales' java.text) its output is Scala.js's. A test with
+# tests/lean-expected/<name>.expected, a departure the lean targets keep, is compared with that.
 #
 # tests/interp-passing.txt lists the tests that pass; a listed test that fails is a regression and
 # fails the script, an unlisted one that passes is reported so that it can be added
@@ -58,7 +59,9 @@ run_one() {
     echo "$name" > "$out/$name.otheros"
     return
   fi
-  if grep -q -h '^// interp-expected: js' "$src" "$src"/*.scala 2>/dev/null; then
+  if [ -f "tests/lean-expected/$name.expected" ]; then
+    expected="tests/lean-expected/$name.expected"
+  elif grep -q -h '^// interp-expected: js' "$src" "$src"/*.scala 2>/dev/null; then
     :
   elif grep -q -h '^//> using platform js' "$src" "$src"/*.scala 2>/dev/null; then
     expected="tests/jvm-expected/$name.expected"

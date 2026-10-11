@@ -1,0 +1,11 @@
+France
+German
+English (United States)
+Japanese
+Italy
+List(United Kingdom, Canada, Italy, Japan)
+true
+country NPE null
+language NPE null
+name NPE Cannot invoke "Object.hashCode()" because "key" is null
+empty country NPE null

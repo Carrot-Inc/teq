@@ -1,7 +1,7 @@
 #!/bin/bash
 # Every program of tests/cases that uses no JavaScript interop and does not carry `// std: lean`, built with `--std=scala-library`
 # (scala-library from the coursier cache as the standard library, its bodies compiled from
-# TASTy) and compared with the .expected file its lean-std build is checked with.
+# TASTy) and compared with its .expected file (scalac's, a lean departure's tests/lean-expected aside).
 # tests/stdlib-passing.txt lists the programs that pass under the mode; a listed one that fails
 # is a regression, and --update rewrites the list from this run. Skips, and counts as passed,
 # without the jar in the cache. STDLIB_REASONS=1 prints the first error of each failure.

@@ -1306,7 +1306,8 @@ package java.util:
   @javaDefined
   @jvmClass("java/util/Objects")
   object Objects:
-    @js("$eq($1, $2)")
+    // Java's equality, not Scala's `==`: a boxed number equals one of its own class alone.
+    @js("$objectsEquals($1, $2)")
     @jvm("invokestatic java/util/Objects.equals(Ljava/lang/Object;Ljava/lang/Object;)Z")
     def equals(a: Any, b: Any): Boolean
     @js("($1 === null ? 0 : $hashCode($1))")
@@ -1327,6 +1328,28 @@ package java.util:
     @js("($1 !== null)")
     @jvm("invokestatic java/util/Objects.nonNull(Ljava/lang/Object;)Z")
     def nonNull(x: Any): Boolean
+    // The JDK's bodies, which a macro of the JVM's build runs too.
+    @jvm("invokestatic java/util/Objects.requireNonNullElse(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;")
+    def requireNonNullElse[T](obj: T, defaultObj: T): T =
+      if obj != null then obj
+      else if defaultObj != null then defaultObj
+      else throw new NullPointerException("defaultObj")
+    @jvm("invokestatic java/util/Objects.requireNonNullElseGet(Ljava/lang/Object;Ljava/util/function/Supplier;)Ljava/lang/Object;")
+    def requireNonNullElseGet[T](obj: T, supplier: java.util.function.Supplier[? <: T]): T =
+      if obj != null then obj
+      else
+        if supplier == null then throw new NullPointerException("supplier")
+        val made: T = supplier.get()
+        if made == null then throw new NullPointerException("supplier.get()")
+        made
+    @jvm("invokestatic java/util/Objects.toString(Ljava/lang/Object;Ljava/lang/String;)Ljava/lang/String;")
+    def toString(x: Any, nullDefault: String): String = if x != null then x.toString else nullDefault
+    @jvm("invokestatic java/util/Objects.compare(Ljava/lang/Object;Ljava/lang/Object;Ljava/util/Comparator;)I")
+    def compare[T](a: T, b: T, c: Comparator[? >: T]): Int = if a.asInstanceOf[AnyRef] eq b.asInstanceOf[AnyRef] then 0 else c.compare(a, b)
+    @jvm("invokestatic java/util/Objects.checkIndex(II)I")
+    def checkIndex(index: Int, length: Int): Int =
+      if index < 0 || index >= length then throw new IndexOutOfBoundsException(s"Index $index out of bounds for length $length")
+      index
     // Arrays compare element by element, nested ones deeply; anything else by `equals`, so a
     // boxed `1` is not a boxed `1L`, and floating points compare by their bits (`-0.0` is not
     // `0.0`, a NaN is itself).

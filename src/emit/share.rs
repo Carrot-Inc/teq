@@ -498,13 +498,16 @@ pub(crate) struct Enc<'a> {
     nested: Vec<ClassId>,
     ok: bool,
     pub ol: Option<Ol<'a>>,
+    /// Inside the name and the class literals of a reflective call, which the outlined function
+    /// keeps as they stand: the call names its reflective proxy by them where it is compiled.
+    fixed: u32,
     /// Boxed so that an encoding hands it to the one it starts inside without copying it.
     memo: Option<Box<Memo>>,
 }
 
 impl<'a> Enc<'a> {
     pub fn new(prog: &'a Program, syms: &'a Symbols, interner: &'a Interner) -> Enc<'a> {
-        Enc { prog, syms, interner, exact: Vec::new(), stable: FxHasher::default(), bound_count: 0, stamp: 1, nested: Vec::new(), ok: true, ol: None, memo: Some(Box::default()) }
+        Enc { prog, syms, interner, exact: Vec::new(), stable: FxHasher::default(), bound_count: 0, stamp: 1, nested: Vec::new(), ok: true, ol: None, fixed: 0, memo: Some(Box::default()) }
     }
 
     /// The exact stream, the stable hash, and whether the encoded tree can be shared.
@@ -1225,8 +1228,22 @@ impl<'a> Enc<'a> {
             TExpr::Js(s, args) => {
                 self.tok(T_JS);
                 let prog = self.prog;
-                self.text(&prog.strings[s.idx()]);
-                self.list(args);
+                let text = &prog.strings[s.idx()];
+                self.text(text);
+                // A reflective call's name and classes are its shape's own: two calls of other
+                // signatures share no function.
+                if text.starts_with("$callBySignature") && prog.expr_list(args).len() == 5 {
+                    let list = prog.expr_list(args);
+                    self.tok(list.len() as u64);
+                    for (k, &a) in list.iter().enumerate() {
+                        let fixed = k == 1 || k == 2;
+                        self.fixed += fixed as u32;
+                        self.expr(a);
+                        self.fixed -= fixed as u32;
+                    }
+                } else {
+                    self.list(args);
+                }
             }
             TExpr::TypeTest(a, t) => {
                 self.tok(T_TYPE_TEST);
@@ -1253,9 +1270,10 @@ impl<'a> Enc<'a> {
                     }
                 }
             }
-            TExpr::ClassOf(c) => {
+            TExpr::ClassOf(c, dims) => {
                 self.tok(T_CLASS_OF);
                 self.class(c);
+                self.tok(dims as u64);
             }
             TExpr::SeqLit(l) => {
                 self.tok(T_SEQ);
@@ -1554,7 +1572,7 @@ impl<'a> Enc<'a> {
     fn outline_hole(&mut self, e: TExprId) -> bool {
         let prog = self.prog;
         let ol = self.ol.as_ref().unwrap();
-        if e == ol.root {
+        if e == ol.root || self.fixed > 0 {
             return false;
         }
         let nested = prog.is_expansion(e);
@@ -1643,7 +1661,7 @@ impl<'a> Enc<'a> {
         let prog = self.prog;
         match prog.expr(e) {
             TExpr::Int(_) | TExpr::Long(_) | TExpr::Double(_) | TExpr::Bool(_) | TExpr::Char(_) | TExpr::Str(_) | TExpr::Unit
-            | TExpr::Null | TExpr::Module(_) | TExpr::Static(_) | TExpr::ClassOf(_) | TExpr::JsImport(_) | TExpr::JsGlobal(..) => return true,
+            | TExpr::Null | TExpr::Module(_) | TExpr::Static(_) | TExpr::ClassOf(..) | TExpr::JsImport(_) | TExpr::JsGlobal(..) => return true,
             TExpr::Local(s) => {
                 if self.is_bound(s) {
                     return false;
@@ -1692,7 +1710,7 @@ impl<'a> Enc<'a> {
         let prog = self.prog;
         match prog.expr(e) {
             TExpr::Int(_) | TExpr::Long(_) | TExpr::Double(_) | TExpr::Bool(_) | TExpr::Char(_) | TExpr::Str(_) | TExpr::Unit
-            | TExpr::This | TExpr::Super(_) | TExpr::Static(_) | TExpr::Module(_) | TExpr::ClassOf(_) | TExpr::JsImport(_)
+            | TExpr::This | TExpr::Super(_) | TExpr::Static(_) | TExpr::Module(_) | TExpr::ClassOf(..) | TExpr::JsImport(_)
             | TExpr::JsGlobal(..) | TExpr::Null => {}
             TExpr::Local(s) => out.used.push(s),
             TExpr::Field(r, _) | TExpr::Unary(_, r) | TExpr::ToStr(r, _) | TExpr::Index(r, _) | TExpr::Spread(r) | TExpr::JsSelect(r, _)
