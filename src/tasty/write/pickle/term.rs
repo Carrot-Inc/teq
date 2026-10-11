@@ -175,6 +175,9 @@ struct ParamUse {
     primitive: Option<ClassId>,
     /// The parameter's type as the call instantiates it.
     ty: Option<TypeId>,
+    /// `ty` where it is a defined type, an argument's expected type: none where it still names
+    /// the callee's or its class's type parameters (a function value's `apply`; `isFullyDefined`).
+    defined: Option<TypeId>,
 }
 
 impl<'w, 'a> P<'w, 'a> {
@@ -1712,6 +1715,12 @@ impl<'w, 'a> P<'w, 'a> {
                 }
             }
         }
+        // The callee's and its class's type parameters, which a defined formal names none of
+        // (`ParamUse::defined`).
+        let mut formals: Vec<TParamId> = sig.tparams.clone();
+        if let Owner::Class(c) = info.owner {
+            formals.extend(self.w.syms.class(c).tparams.iter().copied());
+        }
         let block = lifted.is_some().then(|| {
             let b = self.open(BLOCK);
             self.term_at(None);
@@ -1742,7 +1751,8 @@ impl<'w, 'a> P<'w, 'a> {
                         let expected = matches!(self.w.prog.expr(args[at]), TExpr::Lambda(..)).then(|| self.w.types.subst(p.ty, &subst));
                         let primitive = if p.by_name || p.repeated { None } else { self.numeric_class(p.ty) };
                         let ty = (!p.by_name && !p.repeated).then(|| self.w.types.subst(p.ty, &subst));
-                        let u = ParamUse { repeated: p.repeated, elem: p.repeated.then_some(p.ty), expected, primitive, ty };
+                        let defined = ty.filter(|&t| !self.names_any_param(t, &formals));
+                        let u = ParamUse { repeated: p.repeated, elem: p.repeated.then_some(p.ty), expected, primitive, ty, defined };
                         if lifted == Some(args[at]) {
                             self.term_at(Some(args[at]));
                             self.buf.byte(TERMREFDIRECT);
@@ -1886,32 +1896,14 @@ impl<'w, 'a> P<'w, 'a> {
                 // An argument is typed against the parameter's type as the call instantiates
                 // it, which an anonymous class's instance is ascribed where its class's bound
                 // does not conform (`Typer.ensureNoLocalRefs`); a formal that still names the
-                // callee's or its class's type parameters (a function value's `apply`) is no
-                // defined type (`isFullyDefined`).
-                let pt = u.ty.filter(|&t| !self.names_formals(t, getter));
+                // callee's or its class's type parameters is none (`ParamUse::defined`).
+                let pt = u.defined;
                 let outer_anon = std::mem::replace(&mut self.expected_anon, pt.map(|t| (a, t)));
                 self.term(a);
                 self.expected_anon = outer_anon;
                 self.expected_fn = outer;
             }
         }
-    }
-
-    /// Whether `t` names a type parameter of the callee `getter` calls or of its class: a formal
-    /// the call did not instantiate.
-    fn names_formals(&mut self, t: TypeId, getter: Getter) -> bool {
-        let (s, c) = match getter {
-            Getter::Method(s, _) | Getter::Forwarder(s, ..) => (Some(s), match self.w.syms.sym(s).owner {
-                Owner::Class(c) => Some(c),
-                _ => None,
-            }),
-            Getter::Ctor(c) => (None, Some(c)),
-        };
-        let mut formals: Vec<TParamId> = s.map(|s| self.w.sig_of(s).tparams.clone()).unwrap_or_default();
-        if let Some(c) = c {
-            formals.extend(self.w.syms.class(c).tparams.iter().copied());
-        }
-        !formals.is_empty() && self.names_any_param(t, &formals)
     }
 
     fn names_any_param(&self, t: TypeId, formals: &[TParamId]) -> bool {
@@ -3741,6 +3733,18 @@ impl<'w, 'a> P<'w, 'a> {
     /// arguments after those a local class's captures take; `prelude` the temporaries of named
     /// arguments, before the call in a block.
     fn ctor_call(&mut self, c: ClassId, via: Option<SymId>, targs: &[TypeId], args: &[TExprId], new_ty: TypeId, prelude: Option<ListRef>) {
+        // The type parameters of the constructor called, through `via` or the class's own, and of
+        // its class, which a defined formal names none of (`ParamUse::defined`).
+        let formals: Vec<TParamId> = match via {
+            Some(s) => {
+                let mut f = self.w.sig_of(s).tparams.clone();
+                if let Owner::Class(k) = self.w.syms.sym(s).owner {
+                    f.extend(self.w.syms.class(k).tparams.iter().copied());
+                }
+                f
+            }
+            None => self.w.syms.class(c).tparams.clone(),
+        };
         let own = self.w.syms.class(c).tparams.len();
         if targs.len() != own && c != self.w.b.any_ref {
             return self.fail(format!("a constructor call of {} with {} of its {} type arguments", self.name(self.w.syms.class(c).name), targs.len(), own));
@@ -3845,7 +3849,7 @@ impl<'w, 'a> P<'w, 'a> {
             self.qual_this(c);
             self.class_typeref(c);
             self.buf.end_length(sl);
-            return self.ctor_args(targs, args, &clauses, ta, opens, block);
+            return self.ctor_args(targs, args, &clauses, &formals, ta, opens, block);
         }
         self.buf.byte(NEW);
         if object {
@@ -3878,7 +3882,7 @@ impl<'w, 'a> P<'w, 'a> {
             self.class_typeref(c);
         }
         self.buf.end_length(sl);
-        self.ctor_args(targs, args, &clauses, ta, opens, block)
+        self.ctor_args(targs, args, &clauses, &formals, ta, opens, block)
     }
 
     /// Whether an expression is a stable path `path_type` writes: a local or parameter, `this`,
@@ -3953,7 +3957,7 @@ impl<'w, 'a> P<'w, 'a> {
     /// A constructor call's type arguments and argument clauses after its selection, and the
     /// block of the temporaries it was written in.
     #[allow(clippy::too_many_arguments)]
-    fn ctor_args(&mut self, targs: &[TypeId], args: &[TExprId], clauses: &[ClauseSig], ta: Option<crate::tasty::write::buf::Slot>, opens: Vec<crate::tasty::write::buf::Slot>, block: Option<(crate::tasty::write::buf::Slot, ListRef)>) {
+    fn ctor_args(&mut self, targs: &[TypeId], args: &[TExprId], clauses: &[ClauseSig], formals: &[TParamId], ta: Option<crate::tasty::write::buf::Slot>, opens: Vec<crate::tasty::write::buf::Slot>, block: Option<(crate::tasty::write::buf::Slot, ListRef)>) {
         if let Some(l) = ta {
             for &t in targs {
                 self.tpt(t);
@@ -3965,7 +3969,8 @@ impl<'w, 'a> P<'w, 'a> {
             for p in &clause.params {
                 let primitive = if p.by_name || p.repeated { None } else { self.numeric_class(p.ty) };
                 let ty = (!p.by_name && !p.repeated).then_some(p.ty);
-                let u = ParamUse { repeated: p.repeated, elem: p.repeated.then_some(p.ty), expected: None, primitive, ty };
+                let defined = ty.filter(|&t| !self.names_any_param(t, formals));
+                let u = ParamUse { repeated: p.repeated, elem: p.repeated.then_some(p.ty), expected: None, primitive, ty, defined };
                 match self.elide_args.clone() {
                     Some(reason) => {
                         self.pending_withheld = Some(reason);
