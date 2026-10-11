@@ -2093,8 +2093,19 @@ impl<'a, 't> Interp<'a, 't> {
                     _ => b(self, &vals),
                 }
             }
+            rare @ (Template::Missing(_) | Template::Reflective) => self.template_rare(rare, args, fr, cx),
+        }
+    }
+
+    /// The templates few calls take, a missing builtin and a reflective call, apart from the
+    /// dispatch every template call runs.
+    #[cold]
+    #[inline(never)]
+    fn template_rare(&mut self, t: Template, args: ListRef, fr: &Rc<Frame>, cx: &Ctx) -> R {
+        match t {
             Template::Missing(name) => self.unsupported(format!("no builtin for {}", name)),
             Template::Reflective => self.call_by_signature(args, fr, cx),
+            _ => unreachable!("a common template"),
         }
     }
 
