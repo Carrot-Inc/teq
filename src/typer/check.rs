@@ -4207,8 +4207,6 @@ impl<'a> Worker<'a> {
             }
             return;
         }
-        // The `@targetName`s of the ancestors' alternatives, gathered once for the selectors.
-        let mut ancestor_targets: Option<Vec<Name>> = None;
         let mut inherited: Option<BaseNames> = None;
         let mut targets: Option<Vec<(ClassId, SymId, Name)>> = None;
         for i in 0..self.own_member_count(c) {
@@ -4226,7 +4224,7 @@ impl<'a> Worker<'a> {
             // A selector is checked where it meets something: dotty's `OverridingPairs.Cursor`
             // pairs a member with the members its ancestors declare of its name, and it carries
             // no modifier the checks below read alone.
-            if m_mods & mods::SELECTOR != 0 && !self.syms.sym(m).alternative && !self.selector_meets_inherited(c, name, &mut ancestor_targets) {
+            if m_mods & mods::SELECTOR != 0 && !self.syms.sym(m).alternative && !self.selector_meets_inherited(c, name, &mut inherited, &mut targets) {
                 continue;
             }
             if m_mods & (mods::LAZY | mods::OVERRIDE) == 0 && self.syms.sym(m).kind == SymKind::Val && self.is_private(m) {
@@ -4871,30 +4869,39 @@ impl<'a> Worker<'a> {
     }
 
     /// Whether an ancestor of `c` declares a member called `name`, or an alternative whose
-    /// `@targetName` is `name`, which `check_target_name_clashes` compares; those names are
-    /// gathered once per class into `targets`.
-    fn selector_meets_inherited(&mut self, c: ClassId, name: Name, targets: &mut Option<Vec<Name>>) -> bool {
-        let bases = self.syms.class(c).base_types.len();
-        for j in 1..bases {
-            let b = self.syms.class(c).base_types[j].0;
-            if self.syms.class(b).members.contains_key(&name) {
-                return true;
-            }
-        }
-        if targets.is_none() {
-            let mut found = Vec::new();
-            for j in 1..bases {
-                let b = self.syms.class(c).base_types[j].0;
-                for k in 0..self.syms.class(b).member_order.len() {
-                    let q = self.syms.class(b).member_order[k];
-                    if self.syms.sym(q).alternative {
-                        found.extend(self.declared_target_name(q));
-                    }
+    /// `@targetName` is `name`, which `check_target_name_clashes` compares: the bases' names
+    /// (`base_member_names`) and the ancestors' target names (`inherited_targets`) gathered once
+    /// per class, a base whose names lack `name` passed over.
+    fn selector_meets_inherited(&mut self, c: ClassId, name: Name, names: &mut Option<BaseNames>, targets: &mut Option<Vec<(ClassId, SymId, Name)>>) -> bool {
+        if names.get_or_insert_with(|| self.base_member_names(c)).has(name) {
+            for j in 1..self.syms.class(c).base_types.len() {
+                let bi = self.syms.class(self.syms.class(c).base_types[j].0);
+                if bi.may_have(name) && bi.members.contains_key(&name) {
+                    return true;
                 }
             }
-            *targets = Some(found);
         }
-        targets.as_ref().is_some_and(|t| t.contains(&name))
+        self.inherited_targets(c, targets);
+        targets.as_ref().is_some_and(|t| t.iter().any(|&(_, _, t)| t == name))
+    }
+
+    /// The alternatives of `c`'s ancestors that declare a `@targetName`, with their bases and
+    /// names, gathered into `targets` where it is empty.
+    fn inherited_targets(&mut self, c: ClassId, targets: &mut Option<Vec<(ClassId, SymId, Name)>>) {
+        if targets.is_some() {
+            return;
+        }
+        let mut found = Vec::new();
+        for j in 1..self.syms.class(c).base_types.len() {
+            let b = self.syms.class(c).base_types[j].0;
+            let alternatives: Vec<SymId> = self.syms.class(b).member_order.iter().copied().filter(|&s| self.syms.sym(s).alternative).collect();
+            for q in alternatives {
+                if let Some(t) = self.declared_target_name(q) {
+                    found.push((b, q, t));
+                }
+            }
+        }
+        *targets = Some(found);
     }
 
     fn declared_target_name(&mut self, m: SymId) -> Option<Name> {
@@ -4920,19 +4927,7 @@ impl<'a> Worker<'a> {
                 }
             }
         }
-        if inherited.is_none() {
-            let mut found = Vec::new();
-            for j in 1..self.syms.class(c).base_types.len() {
-                let b = self.syms.class(c).base_types[j].0;
-                let alternatives: Vec<SymId> = self.syms.class(b).member_order.iter().copied().filter(|&s| self.syms.sym(s).alternative).collect();
-                for q in alternatives {
-                    if let Some(t) = self.declared_target_name(q) {
-                        found.push((b, q, t));
-                    }
-                }
-            }
-            *inherited = Some(found);
-        }
+        self.inherited_targets(c, inherited);
         candidates.extend(inherited.as_ref().unwrap().iter().copied().filter(|&(_, _, t)| t == own_name));
         for (b, q, target) in candidates {
             if self.syms.sym(q).kind != SymKind::Def || self.is_private(q) {
