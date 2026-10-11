@@ -109,6 +109,14 @@ enum Failure {
     Ambiguous(Vec<usize>),
 }
 
+/// The extractor `select_unapply` chose: an `unapply` method, or a case class's synthetic one,
+/// whose pattern reads the class's fields.
+#[derive(Clone, Copy)]
+pub(super) enum Unapply {
+    Method(SymId),
+    Synthetic,
+}
+
 /// A reference to an overloaded name that no alternative answers.
 pub(super) struct Unresolved {
     pub msg: String,
@@ -1955,6 +1963,208 @@ impl<'a> Worker<'a> {
     /// Which of several extension methods that take the receiver equally well a call means:
     /// to Scala they are overloaded methods whose first argument list is the receiver, so the
     /// argument lists that follow decide. `None` leaves the choice to the caller.
+    /// The extractor of a pattern `Q(..)` among the `unapply` alternatives `set` of `Q`'s type
+    /// `owner_ty` (declared or inherited) and, for a case class `C[Ts]`'s companion, the synthetic
+    /// `unapply[Ts](x$1: C[Ts]): C[Ts]` dotty's `Desugar` declares there, as dotty's
+    /// `trySelectUnapply` (Applications.scala) selects it: the whole set resolved as an
+    /// application to the scrutinee's type, then to a wildcard argument, else the first attempt's
+    /// failure, reported; a lone alternative whatever it takes. The synthetic one is an ordinary
+    /// candidate, a member of the companion, unless withdrawn
+    /// (`synthetic_unapply_retracted`).
+    pub(super) fn select_unapply(&mut self, set: SymId, owner_ty: TypeId, synthetic: Option<(ClassId, Option<TypeId>)>, sty: TypeId, span: Span) -> Option<Unapply> {
+        let syms: Vec<SymId> = self.syms.alternatives(set).map_or_else(|| vec![set], |a| a.to_vec());
+        let owner_subst = self.owner_subst(owner_ty);
+        // A member of a class nested in a class (a companion nested in a trait, `Ctor.unapply(t:
+        // FoHier.this.Type[A])`) is seen from the enclosing instance, as `trySelectUnapply`
+        // selects `unapply` on the qualifier and an application sees a member (`apply_method`).
+        let mut alts: Vec<Alt> = syms
+            .iter()
+            .map(|&s| {
+                let sig = self.sig_arc(s);
+                let sig = if self.member_of_inner_class(s) { self.sig_seen_from_enclosing(sig) } else { sig };
+                Alt { sym: s, sig, owner_subst: owner_subst.clone(), ctor: None, info: None }
+            })
+            .collect();
+        let mut synthetic_at = None;
+        if let Some((c, prefix)) = synthetic.filter(|&(c, _)| !self.synthetic_unapply_retracted(c)) {
+            let (sym, sig) = self.synthetic_unapply(c);
+            let sig = match prefix {
+                Some(p) => self.synthetic_unapply_through(sig, p, c),
+                None => sig,
+            };
+            // Among the companion's own declarations, after them, before what it inherits.
+            let own = self.syms.sym(sym).owner;
+            let at = alts.iter().rposition(|a| self.syms.sym(a.sym).owner == own).map_or(0, |i| i + 1);
+            synthetic_at = Some(at);
+            alts.insert(at, Alt { sym, sig, owner_subst: Vec::new(), ctor: None, info: None });
+        }
+        let choose = |i: usize| if Some(i) == synthetic_at { Unapply::Synthetic } else { Unapply::Method(alts[i].sym) };
+        if alts.len() == 1 {
+            return Some(choose(0));
+        }
+        let mut first_failure = None;
+        for arg in [sty, NOTHING] {
+            let mark = self.snapshot();
+            let reported = self.diags.items.len();
+            let dummy = self.prog.add(TExpr::Unit);
+            self.prog.set_type(dummy, arg);
+            let mut lists = vec![ArgList { args: vec![ArgSrc::Typed(dummy, arg)], using: false, span }];
+            let choice = self.resolve_overloaded(&alts, None, &mut lists, &mut Vec::new(), None, true, false);
+            self.drop_reported_since(reported);
+            self.rollback(mark);
+            match choice {
+                Ok(i) => return Some(choose(i)),
+                Err(f) => {
+                    first_failure.get_or_insert(f);
+                }
+            }
+        }
+        let failure = first_failure.unwrap_or(Failure::NoneApplicable);
+        let dummy = self.prog.add(TExpr::Unit);
+        let lists = vec![ArgList { args: vec![ArgSrc::Typed(dummy, sty)], using: false, span }];
+        let msg = self.overload_failure(set, &alts, &failure, &lists, &[], None);
+        self.error(span, msg);
+        None
+    }
+
+    /// The synthetic `unapply[Ts](x$1: C[Ts]): C[Ts]` of the case class `c`'s companion, as a
+    /// symbol of its own (outside the companion's table) that overloading resolution ranks as the
+    /// companion's member, its owner (`compareWithTypes` counts it); its span is the class's, so
+    /// that a failure lists it after the companion's own, as scalac does. It is made where it is
+    /// asked: no tree keeps it, and a worker's own records take other ids at the merge, which
+    /// the writer reads after.
+    fn synthetic_unapply(&mut self, c: ClassId) -> (SymId, Arc<MethodSig>) {
+        self.settle_class(c);
+        let info = self.syms.class(c);
+        let (tparams, file, span) = (info.tparams.clone(), info.file, info.span);
+        let owner = info.companion.map_or(Owner::Local, Owner::Class);
+        let self_ty = self.syms.this_type(c);
+        let name = self.interner.intern("x$1");
+        let param = self.syms.new_sym(name, SymKind::Param, 0, Owner::Local, file, None, span);
+        let psig = self.value_sig(self_ty);
+        self.syms.sym_mut(param).sig = Some(psig);
+        let clause = ClauseSig { params: vec![ParamSig { name, ty: self_ty, by_name: false, repeated: false, has_default: false, sym: param }], is_using: false, is_implicit: false };
+        let sig = Arc::new(MethodSig { tparams, clauses: vec![clause], ret: self_ty });
+        let sym = self.syms.new_sym(names::UNAPPLY, SymKind::Def, 0, owner, file, None, span);
+        {
+            let mut s = self.syms.sym_mut(sym);
+            s.sig = Some(sig.clone());
+            s.state().done_fresh();
+        }
+        (sym, sig)
+    }
+
+    /// The synthetic `unapply` of the case class `c` selected on its companion through `prefix`
+    /// (`Use.this.Product.Extraction`): the companion's member seen from the qualifier
+    /// (`asSeenFrom`), `C[Ts]` through the prefix, as the constructor of `prefix.C` sees its
+    /// own (`ctor_sig_through`, `nested_type`).
+    fn synthetic_unapply_through(&mut self, sig: Arc<MethodSig>, prefix: TypeId, c: ClassId) -> Arc<MethodSig> {
+        let mut seen = (*self.ctor_sig_through(sig, prefix, c)).clone();
+        for p in seen.clauses.iter_mut().flat_map(|cl| cl.params.iter_mut()) {
+            if matches!(self.types.get(p.ty), Type::Class(k, _) if k == c) {
+                p.ty = self.nested_type(prefix, p.ty);
+            }
+        }
+        if matches!(self.types.get(seen.ret), Type::Class(k, _) if k == c) {
+            seen.ret = self.nested_type(prefix, seen.ret);
+        }
+        Arc::new(seen)
+    }
+
+    /// Whether the synthetic extractor of the case class `c` (`unapply`, `unapplySeq` for a
+    /// repeated last parameter) is withdrawn, as dotty's `Namer.invalidateIfClashingSynthetic`
+    /// withdraws it: its companion declares one of the name whose signature matches it
+    /// (`matchesLoosely`), or inherits a concrete one that matches it as seen from the
+    /// companion (`matches`). The typer's patterns, the TASTy writer and the JVM backend read
+    /// this one decision.
+    pub(crate) fn synthetic_unapply_retracted(&mut self, c: ClassId) -> bool {
+        if let Some(&r) = self.retracted_unapplies.get(&c) {
+            return r;
+        }
+        // A companion with no candidate of the name, the usual case, is asked again as cheaply as
+        // it is looked up: only the comparison of signatures is kept.
+        let Some(r) = self.synthetic_unapply_clashes(c) else { return false };
+        self.retracted_unapplies.insert(c, r);
+        r
+    }
+
+    /// The `unapply` a library's companion declares with the synthetic one's signature (a Scala 2
+    /// case class's, whose result is an `Option`), which a pattern taking the synthetic extractor
+    /// names; `None` where the companion has none (the loader leaves out what Scala 3
+    /// synthesizes, the identity).
+    pub(crate) fn declared_synthetic_unapply(&mut self, c: ClassId) -> Option<SymId> {
+        let companion = self.syms.class(c).companion?;
+        self.complete_class(companion);
+        let &s = self.syms.class(companion).members.get(&names::UNAPPLY)?;
+        let alts: Vec<SymId> = self.syms.alternatives(s).map_or_else(|| vec![s], |a| a.to_vec());
+        let (_, sig) = self.synthetic_unapply(c);
+        alts.into_iter().find(|&m| {
+            let alt = Alt { sym: m, sig: self.sig_arc(m), owner_subst: Vec::new(), ctor: None, info: None };
+            self.syms.sym(m).owner == Owner::Class(companion) && self.matches_loosely(&alt, &sig)
+        })
+    }
+
+    fn synthetic_unapply_clashes(&mut self, c: ClassId) -> Option<bool> {
+        self.settle_class(c);
+        let companion = self.syms.class(c).companion?;
+        self.complete_class(companion);
+        let repeated = self.syms.class(c).info.ctor.first().and_then(|cl| cl.params.last()).map_or(false, |p| p.repeated);
+        let name = if repeated { names::UNAPPLY_SEQ } else { names::UNAPPLY };
+        let alternatives = |t: &Self, s: SymId| t.syms.alternatives(s).map_or_else(|| vec![s], |a| a.to_vec());
+        let mut candidates: Vec<(SymId, Subst)> = Vec::new();
+        if let Some(&s) = self.syms.class(companion).members.get(&name) {
+            for m in alternatives(self, s) {
+                if self.syms.sym(m).owner == Owner::Class(companion) && self.syms.sym(m).kind == SymKind::Def {
+                    candidates.push((m, Vec::new()));
+                }
+            }
+        }
+        let bases: Vec<(ClassId, TypeId)> = self.syms.class(companion).base_types.iter().skip(1).copied().collect();
+        for (b, bt) in bases {
+            let Some(&s) = self.syms.class(b).members.get(&name) else { continue };
+            for m in alternatives(self, s) {
+                if self.syms.sym(m).owner == Owner::Class(b) && self.syms.sym(m).kind == SymKind::Def && !self.is_abstract_member(m) {
+                    candidates.push((m, self.owner_subst(bt)));
+                }
+            }
+        }
+        if candidates.is_empty() {
+            return None;
+        }
+        let (_, sig) = self.synthetic_unapply(c);
+        Some(candidates.into_iter().any(|(m, owner_subst)| {
+            let alt = Alt { sym: m, sig: self.sig_arc(m), owner_subst, ctor: None, info: None };
+            self.matches_loosely(&alt, &sig)
+        }))
+    }
+
+    /// Whether the alternative's signature matches the method signature `sig` (its result
+    /// aside), dotty's `matches` through `TypeComparer.matchingMethodParams`: as many type
+    /// parameters, as many clauses, each parameter's type the same once the type parameters are
+    /// renamed, a by-name or repeated one's mode part of its type; implicitness is ignored.
+    fn matches_loosely(&mut self, alt: &Alt, sig: &MethodSig) -> bool {
+        if alt.sig.tparams.len() != sig.tparams.len() || alt.sig.clauses.len() != sig.clauses.len() {
+            return false;
+        }
+        let mut renaming = alt.owner_subst.clone();
+        renaming.extend(alt.sig.tparams.iter().zip(&sig.tparams).map(|(&p, &q)| (p, self.types.param(q))));
+        alt.sig.clauses.iter().zip(&sig.clauses).all(|(a, b)| {
+            a.params.len() == b.params.len()
+                && a.params.iter().zip(&b.params).all(|(p, q)| {
+                    if p.by_name != q.by_name || p.repeated != q.repeated {
+                        return false;
+                    }
+                    let pt = self.types.subst(p.ty, &renaming);
+                    pt == q.ty || {
+                        let mark = self.snapshot();
+                        let same = self.is_sub(pt, q.ty) && self.is_sub(q.ty, pt);
+                        self.rollback(mark);
+                        same
+                    }
+                })
+        })
+    }
+
     pub(super) fn pick_by_arguments(
         &mut self,
         calls: &[MethodCall],
@@ -2361,7 +2571,7 @@ impl<'a> Worker<'a> {
                 // `() => e` has no parameter types to tell the alternatives apart by: its shape
                 // does, a trait taking it through SAM conversion included.
                 if lps.is_empty() || lps.iter().any(|p| p.ty.is_none()) {
-                    Shape::Lambda(lps.len(), lps.len() == 1 && lps[0].name == names::CASE_PARAM)
+                    Shape::Lambda(lps.len(), lps.len() == 1 && lps[0].cases)
                 } else {
                     Shape::Plain
                 }
@@ -3106,8 +3316,14 @@ impl<'a> Worker<'a> {
         let first = alts.first().map_or(set, |a| a.sym);
         out.push_str(&self.method_description_of(first));
         out.push_str(" with types");
+        // The class's own declarations, latest first, then what it inherits, as dotty's member
+        // lookup lists them; the class's is the first alternative's owner.
+        let own = self.syms.sym(first).owner;
         let mut sorted = listed.clone();
-        sorted.sort_by_key(|&i| std::cmp::Reverse((alts[i].ctor.is_none(), self.syms.sym(alts[i].sym).span.start)));
+        sorted.sort_by_key(|&i| {
+            let s = self.syms.sym(alts[i].sym);
+            std::cmp::Reverse((alts[i].ctor.is_none(), s.owner == own, s.span.start))
+        });
         for i in sorted {
             out.push_str("\n ");
             out.push_str(&self.sig_text(&alts[i].sig));

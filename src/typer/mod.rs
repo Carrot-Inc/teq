@@ -739,6 +739,21 @@ pub struct Worker<'a> {
     /// In a secondary constructor of a class nested in a class: that class and the
     /// constructor's outer parameter, which stands for its `this` there (`outer_this_sym`).
     pub ctor_outer: Option<(ClassId, SymId)>,
+    /// A case class's `copy` applied as dotty's synthesized method: a constructor call that
+    /// eta-expands over a missing list as a method does.
+    pub copy_application: bool,
+    /// The match of a case lambda expected to take several parameters, and the tuple of them
+    /// it matches on, in the place of its scrutinee's name.
+    pub case_scrutinee: Option<(crate::ast::ExprId, TExprId, TypeId)>,
+    /// The case class whose creator application is typed and the class of the instance its
+    /// companion's `apply` is selected on (`companion_apply_sig`); the receiver class of `r.C(..)`.
+    pub apply_seen_from: Option<(ClassId, ClassId)>,
+    pub creator_receiver: Option<(ClassId, ClassId)>,
+    /// The class `K` and the receiver a private alias of `K` is seen from, while a companion's
+    /// `apply` signature is resolved (`companion_apply_sig`).
+    pub private_alias_prefix: Option<(ClassId, TypeId)>,
+    /// `synthetic_unapply_retracted`'s decisions, per case class.
+    pub retracted_unapplies: crate::intern::FxMap<ClassId, bool>,
     /// The type arguments a macro gave `Select.overloaded`, for the application of the member
     /// it names in the place of written ones.
     pub macro_targs: Option<(Name, Vec<TypeId>)>,
@@ -2064,6 +2079,12 @@ impl<'a> Worker<'a> {
             direct_ext_targs: false,
             ctor_prefix: None,
             ctor_outer: None,
+            copy_application: false,
+            case_scrutinee: None,
+            apply_seen_from: None,
+            creator_receiver: None,
+            private_alias_prefix: None,
+            retracted_unapplies: Default::default(),
             macro_targs: None,
             dropped_type_list: None,
             assign_op_target: None,
@@ -2384,6 +2405,12 @@ impl<'a> Worker<'a> {
             direct_ext_targs: Default::default(),
             ctor_prefix: None,
             ctor_outer: None,
+            copy_application: false,
+            case_scrutinee: None,
+            apply_seen_from: None,
+            creator_receiver: None,
+            private_alias_prefix: None,
+            retracted_unapplies: Default::default(),
             macro_targs: None,
             dropped_type_list: Default::default(),
             assign_op_target: None,

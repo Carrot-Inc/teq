@@ -1028,6 +1028,25 @@ impl<'a, 't> Interp<'a, 't> {
         fields[slot] = v;
     }
 
+    /// What a field holds before its initialiser runs (read from a constructor its own
+    /// initialiser calls): the zero of its erased type, as on the JVM, `null` for a reference.
+    fn field_zero(&mut self, s: SymId) -> Value {
+        let Some(ty) = self.syms().sym(s).sig.as_ref().map(|sig| sig.ret) else { return Value::Null };
+        let ty = self.typer.dealias(ty);
+        let b = &self.typer.b;
+        match ty {
+            t if t == b.t_int => Value::Int(0),
+            t if t == b.t_long => Value::Long(0),
+            t if t == b.t_double => Value::Double(0.0),
+            t if t == b.t_float => Value::Float(0.0),
+            t if t == b.t_boolean => Value::Bool(false),
+            t if t == b.t_char => Value::Char(0),
+            t if t == b.t_short => Value::Short(0),
+            t if t == b.t_byte => Value::Byte(0),
+            _ => Value::Null,
+        }
+    }
+
     pub(super) fn get_field(&mut self, recv: Value, s: SymId) -> R {
         match &recv {
             Value::Obj(o) => {
@@ -1040,7 +1059,7 @@ impl<'a, 't> Interp<'a, 't> {
                 let name = self.syms().dispatch_name(s);
                 let m = self.member(class, name);
                 match m {
-                    Member::Missing | Member::Field(_) => Ok(Value::Null),
+                    Member::Missing | Member::Field(_) => Ok(self.field_zero(s)),
                     m => self.invoke_member(recv, m, name, Vec::new()),
                 }
             }

@@ -25,6 +25,19 @@ const MAX_STEPS: u32 = 4096;
 
 impl<'a> Worker<'a> {
     /// The prefix of the type members of `c` inside its body: `C.this`, or the object itself.
+    /// Whether the alias `a` is declared private, unqualified, in the program.
+    pub(super) fn private_alias(&self, a: AliasId) -> bool {
+        let info = &self.syms.aliases[a.idx()];
+        // A library's, as its pickle flags it.
+        let Some(d) = info.def else { return self.loaded.as_ref().map_or(false, |l| l.private_aliases.contains_key(&a)) };
+        if self.in_jar(info.file) || self.is_body_file(info.file) {
+            return false;
+        }
+        let ast = self.ast(info.file);
+        let def = ast.def(d);
+        def.mods & crate::ast::mods::PRIVATE != 0 && !ast.access_scopes.iter().any(|&(at, _)| at == def.span.start)
+    }
+
     pub fn this_prefix(&mut self, c: ClassId) -> TypeId {
         if self.syms.class(c).kind == ClassKind::Object {
             self.types.class(c, &[])
@@ -584,6 +597,11 @@ impl<'a> Worker<'a> {
         let mut found = None;
         for &(b, bt) in &self.syms.class(c).base_types {
             if let Some(&a) = self.syms.class(b).type_aliases.get(&name) {
+                // A private member of a base class is no member of the class (dotty's
+                // `MissingType`: "a private member in a base class").
+                if b != c && self.private_alias(a) {
+                    continue;
+                }
                 let concrete = !self.syms.aliases[a.idx()].is_abstract();
                 if found.is_none() || concrete {
                     found = Some((b, a, bt));

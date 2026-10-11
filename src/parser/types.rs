@@ -176,7 +176,10 @@ impl<'a> Parser<'a> {
         self.type_lambda(&params, &bounds, body, start)
     }
 
-    /// `[X, Y >: L <: U]` of a type lambda or a polymorphic function type or literal.
+    /// `[X, Y >: L <: U, F[Z]]` of a type lambda or a polymorphic function type or literal. A
+    /// higher-kinded binder takes a clause of its own, as dotty's `typeParamClause` parses it,
+    /// and is bounded by a type lambda over that clause, `[Z] =>> Any` where it declares no upper
+    /// bound (dotty's `F <: [Z] =>> Any`), which carries its kind to typing.
     pub(super) fn parse_type_params_of_lambda(&mut self) -> (Vec<Name>, Vec<LambdaBounds>) {
         self.expect(Tok::LBracket);
         let mut params = Vec::new();
@@ -187,13 +190,64 @@ impl<'a> Parser<'a> {
                 self.error_at(self.prev_span(), "no `+/-` variance annotation allowed here");
             }
             params.push(self.expect_ident().0);
-            bounds.push(self.parse_inner_bounds());
+            let (inner, inner_bounds, _) = if self.at(Tok::LBracket) { self.parse_hk_clause() } else { Default::default() };
+            bounds.push(self.parse_kind_bound(&inner, &inner_bounds));
             if !self.list_continues(Tok::RBracket, &mut cut) {
                 break;
             }
         }
         self.expect(Tok::RBracket);
         (params, bounds)
+    }
+
+    /// The bounds of a parameter that may take a clause of its own, `inner` with its bounds:
+    /// `>: L` and `<: U` written over that clause, or where it writes no upper one a type lambda
+    /// of the clause with `Any` as its result, the kind dotty's `lambdaAbstract(hkparams, bounds)`
+    /// keeps as the bound.
+    fn parse_kind_bound(&mut self, inner: &[Name], inner_bounds: &[LambdaBounds]) -> LambdaBounds {
+        let lower = if self.eat(Tok::Supertype) { Some(self.parse_hk_bound(inner, inner_bounds)) } else { None };
+        let upper = if self.eat(Tok::Subtype) {
+            Some(self.parse_hk_bound(inner, inner_bounds))
+        } else if inner.is_empty() {
+            None
+        } else {
+            let start = self.span();
+            let any = self.ast.add_ty(TyExpr::Resolved(crate::types::ANY), start);
+            Some(self.type_lambda(inner, inner_bounds, any, start))
+        };
+        (lower, upper)
+    }
+
+    /// The `[_]` of a higher-kinded parameter: its own parameters' names, bounds and variances,
+    /// each of them parsed as dotty's `typeParamClauseOpt(ParamOwner.Hk)` parses it, so that one
+    /// taking a clause of its own (`F[G[_]]`) has that kind as its bound; their names scope over
+    /// the bounds (`S[T] <: Semigroup[T]`).
+    fn parse_hk_clause(&mut self) -> (Vec<Name>, Vec<LambdaBounds>, Vec<i8>) {
+        let mut inner = Vec::new();
+        let mut inner_bounds = Vec::new();
+        let mut hk_variances = Vec::new();
+        self.expect(Tok::LBracket);
+        loop {
+            hk_variances.push(if self.eat_op(names::PLUS) {
+                1
+            } else if self.eat_op(names::MINUS) {
+                -1
+            } else {
+                0
+            });
+            if self.eat(Tok::Underscore) {
+                inner.push(names::WILDCARD);
+            } else {
+                inner.push(self.expect_ident().0);
+            }
+            let (own, own_bounds, _) = if self.at(Tok::LBracket) { self.parse_hk_clause() } else { Default::default() };
+            inner_bounds.push(self.parse_kind_bound(&own, &own_bounds));
+            if !self.eat(Tok::Comma) {
+                break;
+            }
+        }
+        self.expect(Tok::RBracket);
+        (inner, inner_bounds, hk_variances)
     }
 
     pub(super) fn record_lambda_bounds(&mut self, id: TyExprId, bounds: &[LambdaBounds]) {
@@ -210,15 +264,6 @@ impl<'a> Parser<'a> {
         }
         let ids: Vec<TyExprId> = bounds.iter().flat_map(|&(lo, hi)| [lo.unwrap_or(crate::ast::NO_BOUND), hi.unwrap_or(crate::ast::NO_BOUND)]).collect();
         Some(push_list(&mut self.ast.ty_lists, &ids))
-    }
-
-    /// The bounds of a type lambda's or a polymorphic function's parameter, or of a
-    /// higher-kinded parameter's own parameter (`E[+x <: Node]`): `>: L` and `<: U`, dotty's
-    /// `typeBounds` (`TypeBoundsTree(lower, upper)`).
-    fn parse_inner_bounds(&mut self) -> LambdaBounds {
-        let lower = if self.eat(Tok::Supertype) { Some(self.parse_type()) } else { None };
-        let upper = if self.eat(Tok::Subtype) { Some(self.parse_type()) } else { None };
-        (lower, upper)
     }
 
     /// Replaces each `*`, `+*` and `-*` among the type arguments from `mark` on with a fresh
@@ -625,40 +670,8 @@ impl<'a> Parser<'a> {
             } else {
                 self.expect_ident()
             };
-            // The `[_]` of a higher-kinded parameter; the kinds of its own parameters are not kept,
-            // their names scope over the bounds (`S[T] <: Semigroup[T]`).
-            let mut arity = 0u8;
-            let mut inner = Vec::new();
-            let mut inner_bounds = Vec::new();
-            let mut hk_variances = Vec::new();
-            if self.eat(Tok::LBracket) {
-                loop {
-                    hk_variances.push(if self.eat_op(names::PLUS) {
-                        1
-                    } else if self.eat_op(names::MINUS) {
-                        -1
-                    } else {
-                        0
-                    });
-                    if self.eat(Tok::Underscore) {
-                        inner.push(names::WILDCARD);
-                    } else {
-                        inner.push(self.expect_ident().0);
-                    }
-                    if self.eat(Tok::LBracket) {
-                        while !self.at(Tok::RBracket) && !self.at(Tok::Eof) {
-                            self.bump();
-                        }
-                        self.expect(Tok::RBracket);
-                    }
-                    inner_bounds.push(self.parse_inner_bounds());
-                    arity = arity.saturating_add(1);
-                    if !self.eat(Tok::Comma) {
-                        break;
-                    }
-                }
-                self.expect(Tok::RBracket);
-            }
+            let (inner, inner_bounds, hk_variances) = if self.at(Tok::LBracket) { self.parse_hk_clause() } else { Default::default() };
+            let arity = inner.len().min(u8::MAX as usize) as u8;
             let mut tp = TypeParam {
                 name,
                 span,
@@ -676,6 +689,12 @@ impl<'a> Parser<'a> {
             }
             if self.eat(Tok::Subtype) {
                 tp.upper = Some(self.parse_hk_bound(&inner, &inner_bounds));
+            } else if inner_bounds.iter().any(|&(lo, hi)| lo.is_some() || hi.is_some()) {
+                // The clause's own parameters bounded or of a kind of their own (`G[H[_]]`):
+                // the parameter's bound is the lambda of them, which keeps it.
+                let start = self.span();
+                let any = self.ast.add_ty(TyExpr::Resolved(crate::types::ANY), start);
+                tp.upper = Some(self.type_lambda(&inner, &inner_bounds, any, start));
             }
             while self.eat(Tok::Colon) {
                 if self.eat(Tok::LBrace) {

@@ -4805,7 +4805,7 @@ impl<'a> Worker<'a> {
                 if p.inferred {
                     cv.mark_inferred(ty);
                 }
-                params.push(LambdaParam { name, span: cv.span, ty: Some(ty), implicit, contextual });
+                params.push(LambdaParam { name, span: cv.span, ty: Some(ty), implicit, contextual, cases: false });
             }
         }
         let body = self.conv_expr(cv, rhs);
@@ -5096,7 +5096,7 @@ impl<'a> Worker<'a> {
         let l = self.conv_cases(cv, cases);
         let scrutinee = cv.expr(Expr::Ident(names::CASE_PARAM));
         let body = cv.expr(Expr::Match(scrutinee, l));
-        let param = LambdaParam { name: names::CASE_PARAM, span: cv.span, ty: None, implicit: false, contextual: false };
+        let param = LambdaParam { name: names::CASE_PARAM, span: cv.span, ty: None, implicit: false, contextual: false, cases: true };
         let params = push_list(&mut cv.ast.lambda_params, &[param]);
         let lambda = cv.expr(Expr::Lambda(params, body));
         let mut path = cv.expr(Expr::Ident(names::ROOT));

@@ -304,7 +304,7 @@ impl<'a> Worker<'a> {
         if let Some(list) = written {
             let clause = ClauseSig { params, is_using: true, is_implicit: false };
             let mut typed = Vec::new();
-            self.type_clause_args(&clause, list, subst, &mut typed);
+            self.type_clause_args(&clause, list, subst, &mut typed, false);
             return if typed.len() == count { typed } else { Vec::new() };
         }
         let file = self.env.file;

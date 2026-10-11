@@ -8,18 +8,15 @@ libraries compiled from their jars run against scalac's output. The remaining di
 
 ### Syntax and definitions
 
-- A local trait referring to the values of its block is `not supported yet`, a trait nested in a local class
-  that reads them fails (at run time on JavaScript), and a local enum reading a value of the enclosing scope
-  is `a local enum cannot refer to n: its values are made once`.
+- A local trait referring to the values of its block, or a trait nested in a local class reading them, is
+  `not supported yet`, and a local enum reading a value of the enclosing scope is `a local enum cannot refer
+  to n: its values are made once`.
 - A case class nested in a class compares its fields alone: `a.Item(1) == b.Item(1)` is true where scalac's
   `equals` tests the outer instance too, as its patterns do (and teq's); a match through a prefix that misses
   another instance's class (`case b.Item(n)` on an `a.Item`) is not warned of as inexhaustive, its run failing
   with a `MatchError` as scalac's does.
-- A wildcard or `given` import from a stable `val` of a package or object (`import dom.window.*`) reports
-  the val as no object or package; a named selector works.
-- Confirmed, fix queued: `c.copy(a = 1)(2)` drops the second argument list, a local `lazy val (a, b) = e` is
-  eager, an overloaded `unapply` is taken by its first alternative, a companion's own `unapply` is bypassed by
-  a constructor pattern, and a by-name method eta-expanded without an expected type runs its argument once.
+- An overloaded `unapply` with an `AnyVal` alternative, matched on a scrutinee typed `Any`, is resolved as
+  if `Any` were no `AnyVal` (scalac's overloading takes the `AnyVal` alternative there).
 
 ### Types and inference
 
@@ -176,6 +173,10 @@ a JDK member as `not supported on JavaScript`. Beyond that:
   type from it (a member selected from it still sees the case). Accepted beyond scalac: `Codec[Int]` for a
   constructor `apply` that needs arguments, `xs.map(parse)` for a `parse` with a trailing default, a lambda's
   value discarded for a type variable bounded above by `Unit`, a macro defined and used in one compilation.
+- A `lazy val (a, b) = (e1, e2)` whose tuple is written out evaluates each element once: a member's tuple at
+  the first read of either variable, a local's element at the first read of its variable. scalac 3.8.4
+  evaluates the element at every read (its `makePatDef` makes each variable a `def` of its element), a defect
+  dotty fixed after 3.8.4.
 - `println(())` and `print(())` print `undefined` on JavaScript and in the interpreter, as under Scala.js, and
   `()` on the JVM, as under scalac; a bare `println` prints an empty line on every target.
 - JVM: a `null` from an erased Java result of type `Int` (a missing key of a `java.util.HashMap[String, Int]`)

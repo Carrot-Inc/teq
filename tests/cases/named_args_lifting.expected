@@ -1,0 +1,11 @@
+Draft(1,first,Some(x),2)
+Draft(1,second,None,3)
+effect description
+Draft(1,first,None,4)
+effect
+1 2 w
+c a
+5 1 v
+a
+4 9 y
+c a

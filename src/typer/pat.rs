@@ -18,7 +18,14 @@ impl<'a> Worker<'a> {
     ) -> (TExprId, TypeId) {
         let ast = self.cur_ast();
         let partial = std::mem::take(&mut self.partial_match);
-        let (ts, sty) = self.type_expr(scrut, None);
+        // The tuple of a case lambda's parameters, which its match is on (`type_lambda`).
+        let (ts, sty) = match self.case_scrutinee.take() {
+            Some((e, te, ty)) if e == scrut => (te, ty),
+            other => {
+                self.case_scrutinee = other;
+                self.type_expr(scrut, None)
+            }
+        };
         // Over a parameter of the body under expansion the patterns are typed against the
         // parameter's declared type, as scalac typed them at the definition.
         let sty = match self.proxy_declared(ts) {
@@ -375,9 +382,27 @@ impl<'a> Worker<'a> {
                 }
                 // A class that is no case class may still have an `unapply` in its companion.
                 let is_case = class.map_or(false, |c| self.syms.class(c).mods & crate::ast::mods::CASE != 0 || self.syms.class(c).kind == ClassKind::EnumCase);
-                if !is_case || class.map_or(false, |c| self.companion_unapply_takes(path, c, sty)) {
-                    if let Some(p) = self.extractor_pattern(path, &subs_list, sty, span) {
+                if !is_case {
+                    if let Some(p) = self.extractor_pattern(path, &subs_list, sty, span, None) {
                         return p;
+                    }
+                }
+                // A case class's companion applies its own `unapply` where `select_unapply` takes
+                // it over the synthetic one, which reads the fields.
+                if let Some(c) = class.filter(|_| is_case) {
+                    match self.companion_own_unapply(c, path, sty, span) {
+                        Some(Some(chosen)) => {
+                            if let Some(p) = self.extractor_pattern(path, &subs_list, sty, span, Some(chosen)) {
+                                return p;
+                            }
+                        }
+                        Some(None) => {}
+                        None => {
+                            for &s in subs_list.iter() {
+                                self.type_pattern(s, ERROR);
+                            }
+                            return self.prog.add_pat(TPat::Wildcard);
+                        }
                     }
                 }
                 let Some(c) = class.or_else(|| self.pattern_class(path, true)) else {
@@ -1168,31 +1193,29 @@ impl<'a> Worker<'a> {
         info.mods & mods::CASE == 0 && info.base_types.iter().any(|&(b, _)| b == seq || Some(b) == general)
     }
 
-    /// Whether the companion of the case class `c`, which `path` names, declares an `unapply`
-    /// of its own beside the case class's, and the scrutinee is no `c`: overload resolution on
-    /// the scrutinee picks it (`case Constructor(params, ctor)` on a `Type[A]`).
-    fn companion_unapply_takes(&mut self, path: ExprId, c: ClassId, sty: TypeId) -> bool {
-        let scrut = self.deref(sty);
-        let unrelated = match self.class_of(scrut) {
-            Some(k) => self.base_type(scrut, c).is_none() && !self.derives_from(c, k),
-            None => matches!(self.types.get(scrut), Type::Member(..) | Type::AppMember(..)),
+    /// The `unapply` of the case class `c`'s companion that a constructor pattern applies:
+    /// `Some(None)` for the synthetic one (a companion without its own, or one `select_unapply`
+    /// passes over), `Some(Some(m))` for the companion's method `m`, `None` where the selection
+    /// failed and said so. The companion is the one `path` names, through its prefix where it has
+    /// one (`Product.Extraction` in a class deriving the cake), which the selection sees its
+    /// members from, as dotty selects `unapply` on the qualifier (`trySelectUnapply`).
+    fn companion_own_unapply(&mut self, c: ClassId, path: ExprId, sty: TypeId, span: Span) -> Option<Option<SymId>> {
+        let Some(companion) = self.syms.class(c).companion else { return Some(None) };
+        let companion_ty = self.types.class(companion, &[]);
+        let Some((unapply, owner_ty)) = self.find_member(companion_ty, names::UNAPPLY) else { return Some(None) };
+        let prefix = {
+            let mark = self.attempt();
+            let (_, named) = self.type_expr(path, None);
+            self.retract(mark);
+            match self.types.get(named) {
+                Type::Nested(p, _) => Some(p),
+                _ => None,
+            }
         };
-        if !unrelated {
-            return false;
+        match self.select_unapply(unapply, owner_ty, Some((c, prefix)), sty, span)? {
+            super::overload::Unapply::Synthetic => Some(None),
+            super::overload::Unapply::Method(m) => Some(Some(m)),
         }
-        // Typed for its type alone: what the typing wrote goes.
-        let mark = self.attempt();
-        let (_, companion) = self.type_expr(path, None);
-        self.retract(mark);
-        if companion == ERROR {
-            return false;
-        }
-        let Some((unapply, _)) = self.find_member(companion, names::UNAPPLY) else { return false };
-        let alts = self.syms.alternatives(unapply).map_or_else(|| vec![unapply], |a| a.to_vec());
-        alts.iter().any(|&a| {
-            let first = self.sig_of(a).clauses.first().and_then(|cl| cl.params.first()).map(|p| p.ty);
-            first.map_or(false, |t| self.class_of(t) != Some(c))
-        })
     }
 
     /// Reports a pattern whose class is unrelated to the scrutinee type.

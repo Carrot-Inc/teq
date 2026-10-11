@@ -2745,6 +2745,7 @@ impl<'a> Worker<'a> {
             parent_via: None,
             parent_prelude: ast::ListRef::EMPTY,
             inherited_case_members: 0,
+            retracted_unapply: false,
             init: Vec::new(),
             methods: Vec::new(),
             ctors: Vec::new(),
@@ -2789,6 +2790,7 @@ impl<'a> Worker<'a> {
         }
         if def.mods & mods::CASE != 0 {
             tclass.inherited_case_members = self.inherited_case_members(c);
+            tclass.retracted_unapply = self.synthetic_unapply_retracted(c);
         }
         let env = self.env_at(file, Owner::Class(c), def.span.start);
         self.with_env(env, |t| {
@@ -4110,6 +4112,104 @@ impl<'a> Worker<'a> {
     /// from `c`: `m_owner` is the ancestor `m` comes from, or `None` for a member of `c` itself.
     /// Returns whether `m` counts as overriding `p`; different parameters make the two unrelated,
     /// which is an overload scalac would accept and teq rejects.
+    /// Whether `m` in class `c` keeps the access `p` it overrides grants, dotty's
+    /// `RefChecks.isOverrideAccessOK`: `m` public, or protected where `p` is, and relaxing `p`'s
+    /// access boundary (`p`'s within `m`'s, or `m`'s that of the companion object of the class
+    /// that bounds `p`, a class not local to a block).
+    fn override_access_ok(&mut self, c: ClassId, m: SymId, p: SymId) -> bool {
+        let mb = self.access_boundary(m, c);
+        if mb == Boundary::Root {
+            return true;
+        }
+        let (m_mods, p_mods) = (self.syms.sym(m).mods, self.syms.sym(p).mods);
+        let protected_ok = p_mods & mods::PROTECTED == 0 || m_mods & mods::PROTECTED != 0;
+        if !protected_ok {
+            return false;
+        }
+        let ob = self.access_boundary(p, c);
+        let companion_ok = match (ob, mb) {
+            (Boundary::Class(k), Boundary::Class(o)) => {
+                self.syms.class(k).owner != Owner::Local && self.syms.class(o).kind == ClassKind::Object && self.syms.class(k).companion == Some(o)
+            }
+            _ => false,
+        };
+        let java_protected = p_mods & mods::PROTECTED != 0 && matches!(self.syms.sym(p).owner, Owner::Class(k) if self.is_java_class(k));
+        self.boundary_within(ob, mb) || companion_ok || java_protected
+    }
+
+    /// The access boundary of the member `s` seen from the class `base`, dotty's
+    /// `accessBoundary`: its class where it is private, what its qualifier names (`private[p]`,
+    /// `protected[p]`), `base` where it is protected, the root otherwise.
+    fn access_boundary(&mut self, s: SymId, base: ClassId) -> Boundary {
+        let info = self.syms.sym(s);
+        let (mods_s, owner, file, at) = (info.mods, info.owner, info.file, info.span.start);
+        let qualifier = if self.in_jar(file) || self.is_body_file(file) {
+            (mods_s & mods::QUALIFIED != 0).then(|| self.loaded.as_ref().and_then(|l| l.access_within.get(&s).map(|&(n, _)| n))).flatten()
+        } else {
+            self.ast(file).access_scopes.iter().find(|&&(a, _)| a == at).map(|&(_, n)| n)
+        };
+        if let Some(scope) = qualifier {
+            let mut o = owner;
+            loop {
+                match o {
+                    Owner::Class(k) if self.syms.class(k).name == scope => return Boundary::Class(k),
+                    Owner::Class(k) => o = self.syms.class(k).owner,
+                    Owner::Package(p) => {
+                        let mut q = Some(p);
+                        while let Some(pk) = q {
+                            if self.syms.pkg(pk).name == scope {
+                                return Boundary::Package(pk);
+                            }
+                            q = self.syms.pkg(pk).parent;
+                        }
+                        return Boundary::Root;
+                    }
+                    Owner::Local => return Boundary::Root,
+                }
+            }
+        }
+        match owner {
+            Owner::Class(k) if mods_s & mods::PRIVATE != 0 => Boundary::Class(k),
+            _ if mods_s & mods::PROTECTED != 0 => Boundary::Class(base),
+            _ => Boundary::Root,
+        }
+    }
+
+    /// Whether the boundary `inner` lies within `outer`, dotty's `isContainedIn`.
+    fn boundary_within(&self, inner: Boundary, outer: Boundary) -> bool {
+        if outer == Boundary::Root || inner == outer {
+            return true;
+        }
+        let mut at = match inner {
+            Boundary::Root => return false,
+            Boundary::Class(k) => self.syms.class(k).owner,
+            Boundary::Package(p) => match self.syms.pkg(p).parent {
+                Some(q) => Owner::Package(q),
+                None => return false,
+            },
+        };
+        loop {
+            match at {
+                Owner::Class(k) => {
+                    if outer == Boundary::Class(k) {
+                        return true;
+                    }
+                    at = self.syms.class(k).owner;
+                }
+                Owner::Package(p) => {
+                    if outer == Boundary::Package(p) {
+                        return true;
+                    }
+                    match self.syms.pkg(p).parent {
+                        Some(q) => at = Owner::Package(q),
+                        None => return false,
+                    }
+                }
+                Owner::Local => return false,
+            }
+        }
+    }
+
     fn check_override(&mut self, c: ClassId, m: SymId, m_owner: Option<TypeId>, p: SymId, p_owner: TypeId) -> bool {
         let (m_kind, m_mods, m_lazy) = {
             let s = self.syms.sym(m);
@@ -4171,8 +4271,13 @@ impl<'a> Worker<'a> {
             "error overriding {p} of type {pt}: {m} of type {mt} has incompatible type"
         } else if own && self.is_private(m) {
             "private {m} cannot override {p}"
-        } else if own && m_mods & mods::PROTECTED != 0 && p_mods & (mods::PROTECTED | mods::PRIVATE) == 0 {
-            "{m} has weaker access privileges than {p}; it should be public"
+        } else if own && !self.override_access_ok(c, m, p) {
+            // `RefChecks.overrideAccessError`: what the overridden member's own access asks.
+            if p_mods & mods::PROTECTED != 0 {
+                "{m} has weaker access privileges than {p}; it should be at least protected"
+            } else {
+                "{m} has weaker access privileges than {p}; it should be public"
+            }
         } else if own && m_mods & mods::OVERRIDE == 0 && (!p_abstract || p_deferred) && !self.is_product_member(p) {
             "{m} needs `override` modifier to override {p}"
         } else {
@@ -5446,4 +5551,10 @@ fn view_reads_wanted() -> bool {
     !*OFF.get_or_init(|| std::env::var_os("TEQ_VIEW_READS").is_some_and(|v| v == "0"))
 }
 
-
+/// Where a member is accessible: everywhere, within a class, within a package.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+enum Boundary {
+    Root,
+    Class(ClassId),
+    Package(PkgId),
+}

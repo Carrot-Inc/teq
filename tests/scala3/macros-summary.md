@@ -19,12 +19,12 @@
 | gap | standard library | 37 |
 | gap | typing | 13 |
 | gap | other | 9 |
-| gap | syntax | 3 |
 | gap | named tuples and named patterns | 2 |
-| left out on purpose | inline/macro/compiletime | 77 |
+| gap | syntax | 2 |
+| left out on purpose | inline/macro/compiletime | 79 |
 | left out on purpose | Java | 6 |
 | left out on purpose | extends App | 6 |
-| left out on purpose | match / dependent / structural types | 3 |
+| left out on purpose | match / dependent / structural types | 2 |
 | left out on purpose | exceptions (throw/try) | 2 |
 | left out on purpose | Scala 2 syntax (postfix, `f _`, XML, procedure syntax) | 2 |
 | left out on purpose | reflection (getClass/classOf/ClassTag/deriving) | 1 |
@@ -40,12 +40,11 @@
 - 1 × `type mismatch: found String, required String & T` (expr-map-3: `val s2: String & T = s`)
 - 1 × `no given instance of type ToExpr[(String, List[String], String, String, List[String])] was found for parameter to` (expr-mirror-info: `Expr((mirroredLabel, mirroredElemLabels, mirroredMonoTypeString, mirroredTypeStr`)
 - 1 × `expected end of statement, found identifier` (f-interpolator-tests: `end `f interpolator baseline``)
-- 1 × `expected ']', found '['` (i16734a: `println(variances[[A, F[B]] =>> F[A]])`)
 - 1 × `not found: GivenSelector` (i21225: `val givenSelector: Selector = GivenSelector(None)`)
 - 1 × `not found: MethodTypeKind` (i22260: `val tpe = MethodType(MethodTypeKind.Contextual)("x" :: Nil)(_ => TypeRepr.of[Int`)
 - 1 × `type mismatch: found S => Int, required S => 1` (i5941: `Iso[S, 1](Function.const($ident))(Function.const(1))`)
-- 1 × `type argument Function1 does not have the same kind as its parameter T` (i6518: `val classSym = TypeRepr.of[Function1].classSymbol.get`)
-- 1 × `type argument T does not have the same kind as its parameter T` (i8520: `val t = TypeRepr.of[T].typeSymbol.memberTypes.map(x => (x.name, variance(x.flags`)
+- 1 × `type argument Function1 does not have the same kind as its bound` (i6518: `val classSym = TypeRepr.of[Function1].classSymbol.get`)
+- 1 × `type argument T does not have the same kind as its bound` (i8520: `val t = TypeRepr.of[T].typeSymbol.memberTypes.map(x => (x.name, variance(x.flags`)
 - 1 × `there is no parameter named clsFlags` (newClassParams: `val cls = Symbol.newClass(`)
 - 1 × `too many arguments: expected 5` (newClassParamsExtendsClassParams: `val cls = Symbol.newClass(Symbol.spliceOwner, name, parents = _ => parents.map(_`)
 - 1 × `Not a constant` (opaque-inline: `val em = EmailAddress("a@b.c")`)
@@ -54,11 +53,11 @@
 - 1 × `not found: augmentString` (reflect-inline: `Expr(augmentString(x.valueOrAbort).stripMargin)`)
 - 1 × ``yield` or `do` expected` (simple-interpreter: `for kSchema <- interpretSchema(kSchemaExpr)`)
 - 1 × `not a match` (switch-match: `unswitch {`)
-- 1 × `type argument List does not have the same kind as its parameter T` (tasty-construct-types: `val x6T = TypeRepr.of[List].appliedTo(List(TypeRepr.of[Int]))`)
+- 1 × `type argument List does not have the same kind as its bound` (tasty-construct-types: `val x6T = TypeRepr.of[List].appliedTo(List(TypeRepr.of[Int]))`)
 - 1 × `value box is not a member of Int` (tasty-extractors-1: `printTree(Int.box(x = 9))`)
 - 1 × `Expected statically known StringContext` (tasty-interpolation-1: `println(s2"Hello $w!")`)
 - 1 × `Parameter must be a known constant` (tasty-macro-const: `println(natConst(2))`)
-- 1 × `type argument a does not have the same kind as its parameter T[_]` (tasty-simplified: `case Wrap[Apply[a]] => F[a]`)
+- 1 × `type argument a does not have the same kind as its bound [_]` (tasty-simplified: `case Wrap[Apply[a]] => F[a]`)
 
 ## wrong-output (52)
 

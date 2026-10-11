@@ -47,6 +47,9 @@ pub struct Loaded {
     /// The type aliases of a jar declared `private[p]`, which a wildcard import from outside
     /// `p` does not see (zio's `private[zio] type Callback` in its package object).
     pub qualified_private_aliases: SharedMap<AliasId, ()>,
+    /// The aliases a pickle flags `private` without a qualifier, which a subclass does not
+    /// inherit (`Worker::private_alias`).
+    pub private_aliases: SharedMap<AliasId, ()>,
     /// The members of a jar declared `private[p]` or `protected[p]`, with the simple name of `p`
     /// and whether they are `protected`.
     pub access_within: SharedMap<SymId, (Name, bool)>,
@@ -292,6 +295,7 @@ impl Loaded {
             cp,
             jar_files,
             qualified_private_aliases: SharedMap::new(),
+            private_aliases: SharedMap::new(),
             access_within: SharedMap::new(),
             bridged: FxMap::default(),
             target_names: SharedMap::new(),
@@ -1343,6 +1347,14 @@ impl<'a> Worker<'a> {
                 self.syms.class_mut(cid).companion = Some(obj);
                 self.syms.class_mut(obj).companion = Some(cid);
             }
+            // An inner companion object entered after its class: the two are companions, as
+            // `Desugar.classDef` makes them members of one class.
+            if inner_object && companion_class {
+                if let Some(class) = self.existing_class(owner, name) {
+                    self.syms.class_mut(cid).companion = Some(class);
+                    self.syms.class_mut(class).companion = Some(cid);
+                }
+            }
             if kind == ClassKind::EnumCase {
                 if let Owner::Class(companion) = owner {
                     if let Some(en) = self.syms.class(companion).companion.filter(|&en| self.syms.class(en).kind == ClassKind::Enum) {
@@ -1452,6 +1464,8 @@ impl<'a> Worker<'a> {
         self.loaded_mut().tables[file as usize].aliases.insert(e.addr, aid);
         if e.qualified_private {
             self.loaded_mut().qualified_private_aliases.insert(aid, ());
+        } else if e.flags.has(tags::PRIVATE) {
+            self.loaded_mut().private_aliases.insert(aid, ());
         }
         match owner {
             Owner::Package(p) => self.syms.pkgs[p.idx()].entries.entry(name).or_default().alias = Some(aid),
@@ -2175,6 +2189,30 @@ impl<'a> Worker<'a> {
         }
     }
 
+    /// The parameter types of the loaded class `c`'s constructor, clause by clause, read again
+    /// from its pickle with the private aliases of the class `k` seen from `prefix`
+    /// (`private_alias_prefix`): what its companion's `apply` takes as selected on an instance of
+    /// a subclass of `k` (`TypeOps.asSeenFrom`).
+    pub(in crate::typer) fn loaded_ctor_types_seen_from(&mut self, c: ClassId, k: ClassId, prefix: TypeId) -> Option<Vec<Vec<TypeId>>> {
+        let lc = *self.loaded.as_ref()?.classes.get(&c)?;
+        if lc.value_case || self.syms.class(c).kind == ClassKind::Opaque {
+            return None;
+        }
+        let tasty = self.tasty(lc.file);
+        let mut decoder = Decoder::new(&tasty);
+        let sig = decoder.class_sig(lc.addr);
+        let ctor = sig.ctor.as_ref()?;
+        let mut cx = MapCx::new(lc.file);
+        let outer = std::mem::replace(&mut self.private_alias_prefix, Some((k, prefix)));
+        let mut out = Vec::new();
+        for clause in &ctor.clauses {
+            let Clause::Terms(ps) = clause else { continue };
+            out.push(ps.iter().map(|p| self.map_param_type(&mut cx, &p.ty).0).collect());
+        }
+        self.private_alias_prefix = outer;
+        Some(out)
+    }
+
     fn enter_loaded_ctor(&mut self, c: ClassId, cx: &mut MapCx, ctor: &DefSig, accessors: &[crate::tasty::tree::Param]) {
         let tasty = self.tasty(cx.file);
         let file_id = self.syms.class(c).file;
@@ -2275,12 +2313,14 @@ impl<'a> Worker<'a> {
         // synthetic `$1` the accessors read) and an inline accessor are members like any other.
         // Another module's classes are the program's own as teq compiles them: a case class
         // or an enum case is made by its constructor there too, whatever `apply` the companion
-        // writes itself.
+        // writes itself. A companion nested in a class keeps its `apply`: a member of the
+        // companion (`Desugar.classDef`), which constructs with the companion's own enclosing
+        // instance, and which a jar's bodies call on the companion, its `this` included.
         if f.has(tags::SYNTHETIC)
             && !f.has(tags::CASEACCESSOR)
             && !is_pattern_field(&tasty, e)
             && !tasty.is_inline_accessor(e.name)
-            && (tasty.simple(e.name) != Some("apply") || (self.is_plain_case_companion(c) && !explicit_apply) || product)
+            && (tasty.simple(e.name) != Some("apply") || (self.is_plain_case_companion(c) && !explicit_apply && !self.keeps_synthetic_apply(c)) || product)
         {
             return;
         }

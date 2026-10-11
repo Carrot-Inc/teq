@@ -35,13 +35,14 @@ const NULL_VALUE: &str = "scala/runtime/LazyVals$NullValue$";
 
 /// How a lazy holder's getter computes the value the first time (`lazy_holder_body`).
 #[derive(Clone)]
-enum HolderInit {
+pub(super) enum HolderInit {
     /// The trait's static `x$(T)`, which runs the lazy val's or object's initialiser.
     TraitStatic(Rc<str>),
     Expr(TExprId),
     Unit,
-    /// A Scala 2 trait's object: its module class made with the instance as its outer
-    /// reference, `new T$cell$(this)` (dotty's `Mixin`, 286-295).
+    /// A Scala 2 trait's object, or the companion of a case class nested in the class: its
+    /// module class made with the instance as its outer reference, `new T$cell$(this)` (dotty's
+    /// `Mixin`, 286-295).
     Module { class: Rc<str>, outer: Rc<str> },
 }
 
@@ -802,6 +803,10 @@ impl<'a> Gen<'a> {
             }
             self.jar_bridges(c);
             self.jar_trait_mixins(c);
+            self.inner_case_companion_getters(c);
+            if let Some(k) = info.companion.filter(|_| info.inner_object.is_some()) {
+                self.inner_written_companion_members(k, c);
+            }
         }
         self.drain_pending();
         self.finish_class(&name)
@@ -1434,7 +1439,7 @@ impl<'a> Gen<'a> {
     /// `LazyVals$NullValue$`, as scalac's holders hold it, so that it is computed once too (the
     /// read that computes it answers the value itself, a later one the holder's, as scalac's
     /// `mkThreadSafeDef`); an initialiser that throws leaves the holder empty.
-    fn lazy_holder_body(&mut self, name: &str, ty: &JType, init: HolderInit) {
+    pub(super) fn lazy_holder_body(&mut self, name: &str, ty: &JType, init: HolderInit) {
         let owner = self.this_name.clone();
         let this = JType::L(owner.clone());
         let object = JType::object();

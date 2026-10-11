@@ -681,8 +681,13 @@ impl<'w, 'a> P<'w, 'a> {
         }
     }
 
-    fn class_info(&self, c: ClassId) -> ClassInfo {
-        (*self.w.syms.class(c)).clone()
+    /// The class's record, its constructor clauses as declared (`Worker::declared_ctor`).
+    fn class_info(&mut self, c: ClassId) -> ClassInfo {
+        let mut info = (*self.w.syms.class(c)).clone();
+        if let Some(ctor) = self.w.declared_ctor(c) {
+            info.ctor = ctor;
+        }
+        info
     }
 
     /// What a path to a class reads of it, without copying its members.
@@ -4608,8 +4613,8 @@ impl<'w, 'a> P<'w, 'a> {
         }
         let repeated = info.ctor.first().map_or(false, |cl| cl.params.last().map_or(false, |p| p.repeated));
         let unapply = if repeated { "unapplySeq" } else { "unapply" };
-        let scrutinee = vec![vec![self.class_applied(c, &tparams)]];
-        if !clashes(self, unapply, &scrutinee) {
+        // Withdrawn as the typer withdrew it for the program's patterns, by dotty's rule.
+        if !self.w.synthetic_unapply_retracted(c) {
             let addr = self.buf.addr();
             self.buf.byte(DEFDEF);
             let len = self.buf.begin_length();
@@ -5805,12 +5810,10 @@ impl<'w, 'a> P<'w, 'a> {
         for id in ids.iter() {
             match id {
                 Some(id) => {
+                    // A higher-kinded parameter's bounds as a class's or a method's are written,
+                    // over a lambda of its own parameters.
                     let info = self.w.syms.tparam(*id).clone();
-                    self.buf.byte(TYPEBOUNDS);
-                    let b = self.buf.begin_length();
-                    self.ty(info.lower);
-                    self.ty(info.upper);
-                    self.buf.end_length(b);
+                    self.bounds(&info);
                     let n = self.simple_name(info.name);
                     self.buf.nat(n as u64);
                 }

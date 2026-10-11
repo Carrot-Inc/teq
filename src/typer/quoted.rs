@@ -2688,6 +2688,7 @@ impl<'c> Copier<'c> {
             parent_via: tc.parent_via.map(|s| self.sym(s)),
             parent_prelude,
             inherited_case_members: tc.inherited_case_members,
+            retracted_unapply: tc.retracted_unapply,
             init,
             methods,
             ctors,

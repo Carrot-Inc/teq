@@ -2029,7 +2029,7 @@ impl<'a> Worker<'a> {
             merged.push(match variance {
                 1 if self.soft_lub => self.soft_lub(xs[i], ys[i]),
                 1 => self.lub(xs[i], ys[i]),
-                -1 => self.types.inter(xs[i], ys[i]),
+                -1 => self.contravariant_meet(xs[i], ys[i]),
                 _ if xs[i] == ys[i] => xs[i],
                 // The join for member selection reads differing invariant arguments as a
                 // bounded wildcard, dotc's `lubArgs`: `? >: glb <: lub` of the two, each read
@@ -2047,6 +2047,19 @@ impl<'a> Worker<'a> {
         let (px, py) = (px.unwrap_or(this), py.unwrap_or(this));
         let prefix = if px == py { px } else { self.types.union(px, py) };
         Some(self.nested_type(prefix, class))
+    }
+
+    /// The meet of two contravariant arguments of a join: two by-name types meet in the by-name
+    /// type of their meet (dotty's `glb` of two `ExprType`s), so that the join of `(=> T) => T`
+    /// and `(=> Int) => Int` still takes its argument by name.
+    fn contravariant_meet(&mut self, x: TypeId, y: TypeId) -> TypeId {
+        if self.b.by_name.is_some() {
+            if let (Some(a), Some(b)) = (self.by_name_arg(x), self.by_name_arg(y)) {
+                let meet = self.types.inter(a, b);
+                return self.by_name_type(meet);
+            }
+        }
+        self.types.inter(x, y)
     }
 
     /// `? >: glb <: lub` of two invariant arguments: the narrower of the lower bounds where one
@@ -2283,9 +2296,19 @@ impl<'a> Worker<'a> {
             }
         }
         // Lower bounds that amount to `Nothing` say nothing, as scalac reads them: the choice is
-        // the upper bounds' then, where there are any.
-        if choice == NOTHING && !uppers.is_empty() && !result.map_or(false, |r| self.taken_from_below(v, &uppers, r)) {
-            choice = self.choice_from_uppers(v, &uppers, false);
+        // the upper bounds' then, where there are any. A kind alone, a type lambda ending in
+        // `Any` (`F[X, Y <: X]`'s), is no upper bound (dotc's `hasUpperBound`, `isTopOfSomeKind`).
+        if choice == NOTHING && !uppers.is_empty() {
+            let kinds_only: Vec<TypeId>;
+            let bounding: &[TypeId] = if uppers.iter().any(|&u| self.kind_alone(u)) {
+                kinds_only = uppers.iter().copied().filter(|&u| !self.kind_alone(u)).collect();
+                &kinds_only
+            } else {
+                &uppers
+            };
+            if !bounding.is_empty() && !result.map_or(false, |r| self.taken_from_below(v, bounding, r)) {
+                choice = self.choice_from_uppers(v, bounding, false);
+            }
         }
         // Bounded by nothing but itself (an inner application's variable unified with it) and
         // used only contravariantly in the result, it is maximised as an unconstrained one is:
@@ -2329,6 +2352,15 @@ impl<'a> Worker<'a> {
         self.tvars[v].inst = Some(choice);
         self.trail.push(Undo::Inst(v));
         uppers.into_iter().all(|u| self.is_sub(choice, u))
+    }
+
+    /// Whether `t` is a type lambda ending in `Any`: a higher-kinded parameter's kind, bounding
+    /// nothing (dotc's `isTopOfSomeKind`).
+    fn kind_alone(&self, t: TypeId) -> bool {
+        match self.types.get(t) {
+            Type::Lambda(_, body) => body == ANY || self.kind_alone(body),
+            _ => false,
+        }
     }
 
     fn taken_from_below(&mut self, v: TVarId, uppers: &[TypeId], result: TypeId) -> bool {

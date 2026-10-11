@@ -2124,6 +2124,14 @@ impl<'a> Worker<'a> {
                 if self.alias_by_name(a) {
                     return self.match_alias_ctor(a);
                 }
+                // A private alias named where a companion's `apply` is seen from a receiver is the
+                // receiver's member of the name (`companion_apply_sig`).
+                if let Some((k, prefix)) = self.private_alias_prefix {
+                    if self.syms.aliases[a.idx()].owner == Owner::Class(k) && self.private_alias(a) {
+                        let name = self.syms.aliases[a.idx()].name;
+                        return self.types.mk(Type::Member(prefix, name));
+                    }
+                }
                 let info = &self.syms.aliases[a.idx()];
                 let t = if info.tparams.is_empty() || info.rhs == ERROR {
                     info.rhs
@@ -2562,7 +2570,21 @@ impl<'a> Worker<'a> {
                 }
                 let t = self.types.apply_ctor(ctor, &resolved);
                 if t == ERROR {
-                    self.error(span, "this type does not take type arguments");
+                    // An argument of another kind than its parameter's is what fails a type
+                    // lambda's application (`Int` for its `F[X]`).
+                    let mut kinds = false;
+                    if params.len() == resolved.len() && !self.is_body_file(self.env.file) {
+                        for (i, (&p, &a)) in params.iter().zip(&resolved).enumerate() {
+                            if a != NOTHING && !self.types.contains_error(a) && !self.has_same_kind(a, p) {
+                                let msg = self.kind_mismatch(a, p);
+                                self.error(ast.ty_spans[arg_ids[i].idx()], msg);
+                                kinds = true;
+                            }
+                        }
+                    }
+                    if !kinds {
+                        self.error(span, "this type does not take type arguments");
+                    }
                 } else if params.len() == resolved.len() {
                     let through = match self.types.get(ctor) {
                         Type::Lambda(_, body) => match self.types.get(body) {
@@ -2680,28 +2702,10 @@ impl<'a> Worker<'a> {
             }
             TyExpr::Lambda(params, body) => {
                 let names: Vec<Name> = ast.name_lists[params.range()].to_vec();
-                let mut frame_tparams = Vec::new();
-                let mut ps = Vec::new();
-                let mut ids = Vec::new();
-                for n in names {
-                    let p = self.syms.new_tparam(n, 0);
-                    frame_tparams.push((n, p));
-                    ps.push(self.types.param(p));
-                    ids.push(p);
-                }
-                self.env.frames.push(Frame::Locals {
-                    names: Vec::new(),
-                    tparams: frame_tparams,
-                    givens: Vec::new(),
-                    classes: Vec::new(),
-                    aliases: Vec::new(),
-                    owner: self.sites.owners.len() as u32,
-                });
                 // The bounds of the parameters (`[x <: Node] =>> SynEv[x]`), which may name
                 // each other, so they are resolved with the parameters in scope.
-                if let Some(&(_, bl)) = ast.lambda_bounds.iter().find(|(l, _)| *l == id) {
-                    self.resolve_lambda_bounds(bl, &ids);
-                }
+                let bounds = ast.lambda_bounds.iter().find(|(l, _)| *l == id).map(|&(_, bl)| bl);
+                let (_, ps) = self.poly_params(&names, bounds);
                 let b = self.resolve_type(body);
                 self.env.frames.pop();
                 let l = self.types.list(&ps);
@@ -2910,9 +2914,10 @@ impl<'a> Worker<'a> {
         }
     }
 
-    /// The type parameters of a polymorphic function type or literal, pushed as a frame the
-    /// caller pops, with the bounds `bounds` (`Ast::lambda_bounds`, `Ast::poly_lambda_bounds`)
-    /// resolved in their scope, as dotty's `typeParamClause` types each `TypeBoundsTree`.
+    /// The type parameters of a type lambda or a polymorphic function type or literal, pushed as
+    /// a frame the caller pops, with the bounds `bounds` (`Ast::lambda_bounds`,
+    /// `Ast::poly_lambda_bounds`) resolved in their scope, as dotty's `typeParamClause` types each
+    /// `TypeBoundsTree`.
     pub(super) fn poly_params(&mut self, names: &[Name], bounds: Option<ListRef>) -> (Vec<TParamId>, Vec<TypeId>) {
         let mut frame_tparams = Vec::with_capacity(names.len());
         let mut ids = Vec::with_capacity(names.len());
@@ -2941,6 +2946,12 @@ impl<'a> Worker<'a> {
                     self.syms.tparams[id.idx()].lower = l;
                 }
                 if upper != crate::ast::NO_BOUND {
+                    // A higher-kinded binder's bound is a type lambda over its own clause (`F[X]`'s
+                    // `[X] =>> Any`, `Parser::parse_type_params_of_lambda`), dotty's kind: its
+                    // arity is the binder's.
+                    if let TyExpr::Lambda(own, _) = self.cur_ast().ty(upper) {
+                        self.syms.tparams[id.idx()].arity = own.len.min(u8::MAX as u32) as u8;
+                    }
                     let u = self.resolve_type(upper);
                     self.syms.tparams[id.idx()].upper = u;
                 }
@@ -2981,8 +2992,8 @@ impl<'a> Worker<'a> {
             let arity = self.param_arity(p);
             // A library body's kinds were checked by scalac, against scala-library's parameters
             // (`TypeRepr.of[T <: AnyKind]`), which the std may declare of one kind only.
-            if a != NOTHING && self.type_arity(a) != arity && !self.is_body_file(self.env.file) {
-                let msg = self.kind_mismatch(a, p, arity);
+            if a != NOTHING && !self.is_body_file(self.env.file) && !self.has_same_kind(a, p) {
+                let msg = self.kind_mismatch(a, p);
                 self.error(span, msg);
                 continue;
             }
@@ -3023,14 +3034,119 @@ impl<'a> Worker<'a> {
         }
     }
 
-    pub(super) fn kind_mismatch(&mut self, arg: TypeId, p: TParamId, arity: usize) -> String {
-        let shape = if arity == 0 { String::new() } else { format!("[{}]", vec!["_"; arity].join(", ")) };
-        format!(
-            "type argument {} does not have the same kind as its parameter {}{}",
-            self.show(arg),
-            self.name_str(self.syms.tparam(p).name),
-            shape
-        )
+    /// dotc's `Checking.preCheckKind` message: the parameter's bound shown as its own clause
+    /// (`[G[_]]` for `F[G[_]]`), nothing for a proper type.
+    pub(super) fn kind_mismatch(&mut self, arg: TypeId, p: TParamId) -> String {
+        let clause = self.kind_clause(p);
+        let shown = self.show(arg);
+        if clause.is_empty() {
+            format!("type argument {shown} does not have the same kind as its bound")
+        } else {
+            format!("type argument {shown} does not have the same kind as its bound {clause}")
+        }
+    }
+
+    fn kind_clause(&self, p: TParamId) -> String {
+        let info = self.syms.tparam(p);
+        match self.types.get(info.upper) {
+            Type::Lambda(l, _) => {
+                let parts: Vec<String> = self
+                    .types
+                    .items(l)
+                    .iter()
+                    .map(|&q| match self.types.get(q) {
+                        Type::Param(q) => format!("{}{}", self.name_str(self.syms.tparam(q).name), self.kind_clause(q)),
+                        _ => "_".to_string(),
+                    })
+                    .collect();
+                format!("[{}]", parts.join(","))
+            }
+            _ if info.arity > 0 => format!("[{}]", vec!["_"; info.arity as usize].join(",")),
+            _ => String::new(),
+        }
+    }
+
+    /// Whether `arg` has the kind of the parameter `p`, as dotc's `preCheckKind` asks it with
+    /// `TypeApplications.hasSameKindAs`: the kinds of the parameters each takes, compared
+    /// recursively (bounds and variances aside), `AnyKind` on either side of any kind.
+    pub(super) fn has_same_kind(&mut self, arg: TypeId, p: TParamId) -> bool {
+        // The usual case, a proper type for a first-order parameter: both kinds are a proper
+        // type's (or the parameter's any kind), without building either.
+        let info = self.syms.tparam(p);
+        if info.arity == 0
+            && !matches!(self.types.get(info.upper), Type::Lambda(..))
+            && !matches!(self.types.get(arg), Type::Ctor(..) | Type::Lambda(..) | Type::Param(..) | Type::Decl(..))
+            && self.type_arity(arg) == 0
+        {
+            return true;
+        }
+        let want = self.param_kind(p);
+        let have = self.type_kind(arg);
+        want.same(&have)
+    }
+
+    /// A parameter's kind: its bound's, a type lambda over its own clause (`F[G[_]]`'s
+    /// `[G[_]] =>> Any`), or, declared without one (`F[_]`), as many proper types as it takes.
+    fn param_kind(&mut self, p: TParamId) -> Kind {
+        let info = self.syms.tparam(p);
+        let (upper, arity) = (info.upper, info.arity);
+        match self.types.get(upper) {
+            Type::Lambda(l, _) => {
+                let qs: Vec<TypeId> = self.types.items(l).to_vec();
+                Kind::Of(qs.into_iter().map(|q| match self.types.get(q) {
+                    Type::Param(q) => self.param_kind(q),
+                    _ => Kind::Any,
+                }).collect())
+            }
+            Type::Class(c, _) if self.is_scala_class(c, "AnyKind") => Kind::Any,
+            // A bound that did not resolve says nothing of the kind (and was reported).
+            _ if self.types.contains_error(upper) => Kind::Any,
+            _ => Kind::proper_params(arity as usize),
+        }
+    }
+
+    /// The kind of a type given as a type argument: a class's or an alias's from its parameters, a
+    /// type lambda's from its clause; one teq cannot read whole is compared by its arity alone.
+    fn type_kind(&mut self, t: TypeId) -> Kind {
+        match self.types.get(t) {
+            Type::Ctor(c) => {
+                let tparams = self.syms.class_done(c).map(|info| info.tparams.clone()).or_else(|| {
+                    let info = self.syms.class(c);
+                    info.def.is_none().then(|| info.tparams.clone())
+                });
+                match tparams {
+                    Some(ps) => Kind::Of(ps.into_iter().map(|q| self.param_kind(q)).collect()),
+                    None => self.source_class_kind(c),
+                }
+            }
+            Type::Lambda(l, _) => {
+                let qs: Vec<TypeId> = self.types.items(l).to_vec();
+                Kind::Of(qs.into_iter().map(|q| match self.types.get(q) {
+                    Type::Param(q) => self.param_kind(q),
+                    _ => Kind::Any,
+                }).collect())
+            }
+            Type::Param(p) => self.param_kind(p),
+            Type::Decl(a) => {
+                let ps = self.syms.aliases[a.idx()].tparams.clone();
+                Kind::Of(ps.into_iter().map(|q| self.param_kind(q)).collect())
+            }
+            _ => match self.type_arity(t) {
+                0 => Kind::Of(Vec::new()),
+                n => Kind::Of((0..n).map(|_| Kind::Any).collect()),
+            },
+        }
+    }
+
+    /// A program's class not completed yet: its parameters' kinds as written.
+    fn source_class_kind(&self, c: ClassId) -> Kind {
+        let info = self.syms.class(c);
+        let ast = self.ast(info.file);
+        let tparams = match &ast.def(info.def.unwrap()).kind {
+            DefKind::Class(cls) if cls.kind != ast::ClassKind::EnumCase => &cls.tparams,
+            _ => return Kind::Of((0..self.class_arity(c)).map(|_| Kind::Any).collect()),
+        };
+        Kind::Of(tparams.iter().map(|tp| ast_kind(ast, tp.upper, tp.arity as usize)).collect())
     }
 
     #[cold]
@@ -3325,6 +3441,14 @@ impl<'a> Worker<'a> {
                 self.syms.tparams[p.idx()].arity = tp.arity;
                 if !tp.hk_variances.is_empty() {
                     self.syms.tparams[p.idx()].hk_variances = tp.hk_variances.clone();
+                }
+                // A kind written as the bound (`F[G[_]]`'s `[G[_]] =>> Any`) names nothing, so
+                // it is the parameter's from the start, where a written bound waits for the
+                // class it may name (`resolve_tparam_bounds_of`): an argument's kind is read
+                // before then, in the class's parents.
+                if let Some(b) = tp.upper.filter(|&b| tp.arity > 0 && kind_only(self.cur_ast(), b)) {
+                    let u = self.resolve_type(b);
+                    self.syms.tparams[p.idx()].upper = u;
                 }
                 (tp.name, p)
             })
@@ -5061,7 +5185,7 @@ impl Binding for TypeRef {
     }
 }
 
-fn ty_mentions(ast: &ast::Ast, ty: TyExprId, name: Name) -> bool {
+pub(super) fn ty_mentions(ast: &ast::Ast, ty: TyExprId, name: Name) -> bool {
     let any = |l: ast::ListRef| ast.ty_list(l).iter().any(|&t| ty_mentions(ast, t, name));
     match ast.ty(ty) {
         TyExpr::Name(n) => n == name,
@@ -5109,5 +5233,61 @@ fn ordered_wait(done: impl Fn() -> bool) {
             return;
         }
         std::thread::sleep(std::time::Duration::from_millis(1));
+    }
+}
+
+/// A kind's outline, what dotc's `hasSameKindAs` compares: the kinds of the parameters a type
+/// takes, none for a proper type; `Any` stands for `AnyKind` and for what teq does not know.
+pub(super) enum Kind {
+    Any,
+    Of(Vec<Kind>),
+}
+
+impl Kind {
+    fn proper_params(n: usize) -> Kind {
+        Kind::Of((0..n).map(|_| Kind::Of(Vec::new())).collect())
+    }
+
+    fn same(&self, other: &Kind) -> bool {
+        match (self, other) {
+            (Kind::Any, _) | (_, Kind::Any) => true,
+            (Kind::Of(a), Kind::Of(b)) => a.len() == b.len() && a.iter().zip(b).all(|(x, y)| x.same(y)),
+        }
+    }
+}
+
+/// The kind a parameter is written with: a type lambda bound's clause, each of its parameters
+/// by its own upper bound (`Ast::lambda_bounds`, a lower and an upper one per parameter), or as
+/// many proper types as it takes.
+fn ast_kind(ast: &crate::ast::Ast, bound: Option<TyExprId>, arity: usize) -> Kind {
+    if let Some(b) = bound {
+        if let TyExpr::Lambda(own, _) = ast.ty(b) {
+            let bounds = ast.lambda_bounds.iter().find(|(l, _)| *l == b).map(|&(_, bl)| ast.ty_lists[bl.range()].to_vec());
+            return Kind::Of(
+                (0..own.len as usize)
+                    .map(|i| match bounds.as_ref().and_then(|bs| bs.get(2 * i + 1).copied()).filter(|&x| x != crate::ast::NO_BOUND) {
+                        Some(x) => ast_kind(ast, Some(x), 0),
+                        None => Kind::Of(Vec::new()),
+                    })
+                    .collect(),
+            );
+        }
+    }
+    Kind::proper_params(arity)
+}
+
+/// Whether `b` is a kind and no more: a type lambda with `Any` as its result whose parameters
+/// have no lower bound and upper bounds that are kinds alone, as the parser writes `F[G[_]]`'s.
+fn kind_only(ast: &crate::ast::Ast, b: TyExprId) -> bool {
+    let TyExpr::Lambda(_, body) = ast.ty(b) else { return false };
+    if !matches!(ast.ty(body), TyExpr::Resolved(t) if t == ANY) {
+        return false;
+    }
+    match ast.lambda_bounds.iter().find(|(l, _)| *l == b) {
+        Some(&(_, bl)) => ast.ty_lists[bl.range()].chunks(2).all(|pair| match *pair {
+            [lower, upper] => lower == crate::ast::NO_BOUND && (upper == crate::ast::NO_BOUND || kind_only(ast, upper)),
+            _ => false,
+        }),
+        None => true,
     }
 }
