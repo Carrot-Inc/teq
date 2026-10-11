@@ -23,7 +23,9 @@ pub struct Syntax {
 }
 
 pub struct Parser<'a> {
-    toks: &'a [Token],
+    /// The lexer's tokens, one of which a single-line lambda's region replaces with its end
+    /// while it is parsed (`Tok::EndLambda`), restored after.
+    toks: &'a mut [Token],
     syntax: Syntax,
     pos: usize,
     text: &'a str,
@@ -101,9 +103,9 @@ pub struct Parsed {
     pub boundary: Option<u32>,
 }
 
-pub fn parse(text: &str, lexed: &LexResult, closed: &[u32], interner: &Interner, syntax: Syntax) -> Parsed {
+pub fn parse(text: &str, lexed: &mut LexResult, closed: &[u32], interner: &Interner, syntax: Syntax) -> Parsed {
     let mut p = Parser {
-        toks: &lexed.tokens,
+        toks: &mut lexed.tokens,
         syntax,
         pos: 0,
         text,
@@ -263,7 +265,8 @@ impl<'a> Parser<'a> {
     /// or an initializer follows.
     #[inline]
     pub(super) fn at_header_end(&self) -> bool {
-        matches!(self.kind(), Tok::Newline | Tok::Semi | Tok::Outdent | Tok::Eof | Tok::Eq)
+        // A `}` closes the braces after a `:` a refinement's declarations stand in.
+        matches!(self.kind(), Tok::Newline | Tok::Semi | Tok::Outdent | Tok::RBrace | Tok::Eof | Tok::Eq)
             || (self.at(Tok::ColonEol) && self.kind_at(1) == Tok::Indent)
     }
 
@@ -1170,6 +1173,10 @@ impl<'a> Parser<'a> {
                 self.ast.strict_equality = true;
             } else if matches!(out[i].sel, ImportSel::Name(names::FUTURE, r) if r != Some(names::WILDCARD)) {
                 self.ast.source_future = true;
+            } else if let ImportSel::Name(n, _) = out[i].sel {
+                if self.interner.get(n) == "relaxedLambdaSyntax" && out[i].path.last().map_or(false, |&q| self.interner.get(q) == "experimental") {
+                    self.ast.relaxed_lambdas = true;
+                }
             }
             self.language_scratch.push(out[i].clone());
         }

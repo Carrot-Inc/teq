@@ -250,7 +250,7 @@ object ArraySeq:
 
 // A queue over an array copied on each update, as the other immutable sequences here are:
 // scala-library's two-list queue has the same operations and order.
-final class Queue[+A](private val items: RawBuffer[A]) extends SeqOps[A, Queue, Queue[A]], Seq[A]:
+sealed class Queue[+A](private val items: RawBuffer[A]) extends SeqOps[A, Queue, Queue[A]], Seq[A]:
   def buildCC[B](items: RawBuffer[B]): Queue[B] = new Queue(items)
   override def iterator: Iterator[A] = Iterator.over(items)
   def length: Int = items.length

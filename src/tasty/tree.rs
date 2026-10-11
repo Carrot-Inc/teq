@@ -197,6 +197,8 @@ pub struct Param {
     /// Whether scalac inferred the type.
     pub inferred: bool,
     pub flags: Flags,
+    /// The text of the parameter's `@implicitNotFound`.
+    pub implicit_not_found: Option<NameRef>,
 }
 
 #[derive(Clone, Debug)]
@@ -213,6 +215,8 @@ pub struct Mods {
     pub within: Option<TType>,
     /// The name `@targetName("name")` gives the definition in the class file.
     pub target_name: Option<NameRef>,
+    /// The text of an `@implicitNotFound` annotation, which a missing given of the class reports.
+    pub implicit_not_found: Option<NameRef>,
     /// `@scala.volatile`, which a field of the definition carries as `ACC_VOLATILE`.
     pub volatile: bool,
 }
@@ -849,6 +853,13 @@ impl<'a> Decoder<'a> {
                         };
                         self.r.pos = call;
                     }
+                    if matches!(&class, TType::TypeRef(_, n) if self.file.simple(*n) == Some("implicitNotFound")) && call < annot_end {
+                        mods.implicit_not_found = match self.annotation_args().first() {
+                            Some(AnnotArg::Str(n)) => Some(*n),
+                            _ => None,
+                        };
+                        self.r.pos = call;
+                    }
                     // `@Child[C]` keeps its type argument in the constructor call alone.
                     let applied = if self.r.pos < annot_end { self.annotation_class() } else { TType::Unknown(0) };
                     mods.annots.push(if matches!(applied, TType::Applied(..)) { applied } else { class });
@@ -890,7 +901,7 @@ impl<'a> Decoder<'a> {
             flags.clear(PRIVATE);
             flags.clear(PROTECTED);
         }
-        Param { addr, name, ty, inferred, flags }
+        Param { addr, name, ty, inferred, flags, implicit_not_found: mods.implicit_not_found }
     }
 
     pub(super) fn clauses(&mut self, end: usize) -> Vec<Clause> {

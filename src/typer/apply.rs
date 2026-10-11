@@ -1007,6 +1007,184 @@ impl<'a> Worker<'a> {
         if p == ROOT_PKG { "<root>".to_string() } else { self.name_str(self.syms.pkg(p).name).to_string() }
     }
 
+    /// dotty's `userDefinedImplicitNotFoundTypeMessage` (messages.scala, `MissingImplicitArgument`):
+    /// the `@implicitNotFound` text of the type `t` a given was searched for; one that starts
+    /// with `explain=` explains and is no message (`userDefinedImplicitNotFoundMessage`).
+    pub(super) fn implicit_not_found_message(&mut self, t: TypeId) -> Option<String> {
+        let text = self.type_not_found_text(t, 0)?;
+        (!text.starts_with("explain=")).then_some(text)
+    }
+
+    /// The `recur` of `userDefinedImplicitNotFoundTypeMessage`: a class's own text with its
+    /// arguments (`AppliedType`, `TypeRef`), else the first of its base classes', their
+    /// parameters as seen from it (`ClassInfo`); an alias, an abstract type, a parameter, a path
+    /// or a refinement through what it stands for (`TypeProxy`); the first side of an
+    /// intersection that has one, else the second (`AndType`).
+    fn type_not_found_text(&mut self, t: TypeId, depth: u32) -> Option<String> {
+        if depth > 16 {
+            return None;
+        }
+        let t = self.deref(t);
+        let d = depth + 1;
+        match self.types.get(t) {
+            Type::Class(c, args) => {
+                let args = self.types.items(args).to_vec();
+                if let Some(m) = self.class_not_found_text(c, &args) {
+                    return Some(m);
+                }
+                self.complete_class(c);
+                let bases: Vec<ClassId> = self.syms.class(c).base_types.iter().skip(1).map(|&(b, _)| b).collect();
+                bases.into_iter().find_map(|b| {
+                    // The base class's parameters as seen from the type (`asSeenFrom(pt, sym)`).
+                    let args: Vec<TypeId> = match self.base_type(t, b).map(|bt| self.types.get(bt)) {
+                        Some(Type::Class(_, l)) => self.types.items(l).to_vec(),
+                        _ => Vec::new(),
+                    };
+                    self.class_not_found_text(b, &args)
+                })
+            }
+            Type::Inter(a, b) => self.type_not_found_text(a, d).or_else(|| self.type_not_found_text(b, d)),
+            Type::Param(p) => {
+                let upper = self.syms.tparam(p).upper;
+                self.type_not_found_text(upper, d)
+            }
+            Type::AppParam(p, args) => {
+                let upper = self.app_param_upper(p, args)?;
+                self.type_not_found_text(upper, d)
+            }
+            Type::Lit(_) => {
+                let class = self.widen_lit(t);
+                self.type_not_found_text(class, d)
+            }
+            Type::This(_) | Type::Term(_) | Type::Select(..) | Type::Member(..) | Type::AppMember(..) | Type::Decl(_) | Type::Refined(..) | Type::Alias(..) | Type::Match(..) => {
+                let under = self.dependent_underlying(t)?;
+                self.type_not_found_text(under, d)
+            }
+            _ => None,
+        }
+    }
+
+    /// dotty's `userDefinedImplicitNotFoundParamMessage`: the `@implicitNotFound` text of the
+    /// using parameter `param` (named `name`) of `method`, or of the constructor of the class
+    /// `ctor`, which comes before the type's, formatted in dotty's common context
+    /// (`formatAnnotationMessage`): its `${T}` the type parameters of the method and of the
+    /// classes enclosing it (`substitutableTypeSymbolsInScope`), as the call's `subst` gives
+    /// them, the receiver's arguments for its class's (`asSeenFrom(methodOwnerType, ..)`).
+    fn param_not_found_message(&mut self, method: SymId, ctor: Option<ClassId>, param: SymId, name: Name, subst: &Subst) -> Option<String> {
+        let (file, def, mut tparams, enclosing) = match ctor {
+            Some(c) => {
+                let info = self.syms.class(c);
+                (info.file, info.def, info.tparams.clone(), info.owner)
+            }
+            None => {
+                let (file, def, owner) = {
+                    let info = self.syms.sym(method);
+                    (info.file, info.def, info.owner)
+                };
+                (file, def, self.sig_arc(method).tparams.clone(), owner)
+            }
+        };
+        tparams.extend(self.enclosing_tparams(enclosing));
+        let raw = match def {
+            Some(d) => {
+                let ast = self.ast(file);
+                let clauses = match &ast.def(d).kind {
+                    crate::ast::DefKind::Fun(f) => &f.clauses,
+                    crate::ast::DefKind::Class(k) => &k.clauses,
+                    _ => return None,
+                };
+                let p = clauses.iter().flat_map(|c| c.params.iter()).find(|p| p.name == name)?;
+                let annot = ast.param_annots(p).iter().find(|a| self.name_ref(a.name) == "implicitNotFound")?;
+                ast.str(*ast.str_lists[annot.args.range()].first()?).to_string()
+            }
+            // A jar's method or class, whose parameter's annotation its pickle carries.
+            None => self.loaded.as_ref()?.param_not_found.get(&param)?.clone(),
+        };
+        if raw.starts_with("explain=") {
+            return None;
+        }
+        let names: Vec<String> = tparams.iter().map(|&p| self.name_ref(self.syms.tparam(p).name).to_string()).collect();
+        let args: Vec<TypeId> = tparams
+            .iter()
+            .map(|&p| {
+                let t = self.types.param(p);
+                let t = self.types.subst(t, subst);
+                self.solve_in(t)
+            })
+            .collect();
+        Some(self.format_not_found(&raw, &names, &args))
+    }
+
+    /// The `@implicitNotFound` text a class declares, its type parameters' `${A}` replaced by
+    /// `args`.
+    fn class_not_found_text(&mut self, c: ClassId, args: &[TypeId]) -> Option<String> {
+        let (file, def) = {
+            let info = self.syms.class(c);
+            (info.file, info.def)
+        };
+        let raw = match def {
+            Some(d) => {
+                let ast = self.ast(file);
+                let annot = ast.def(d).annots.iter().find(|a| self.name_ref(a.name) == "implicitNotFound")?;
+                ast.str(*ast.str_lists[annot.args.range()].first()?).to_string()
+            }
+            // A jar's class, whose annotation its pickle carries.
+            None => self.loaded.as_ref()?.implicit_not_found.get(&c)?.clone(),
+        };
+        let mut names: Vec<String> = self.syms.class(c).tparams.iter().map(|&p| self.name_ref(self.syms.tparam(p).name).to_string()).collect();
+        // The classes enclosing it (`substitutableTypeSymbolsInScope`): their parameters as
+        // they stand, the type's prefix not carrying their arguments here.
+        let owner = self.syms.class(c).owner;
+        let outer = self.enclosing_tparams(owner);
+        let mut args = args.to_vec();
+        args.truncate(names.len());
+        for p in outer {
+            names.push(self.name_ref(self.syms.tparam(p).name).to_string());
+            args.push(self.types.param(p));
+        }
+        Some(self.format_not_found(&raw, &names, &args))
+    }
+
+    /// The type parameters of the classes from `owner` out to its package, innermost first
+    /// (the classes' part of dotty's `substitutableTypeSymbolsInScope`).
+    fn enclosing_tparams(&mut self, mut owner: Owner) -> Vec<TParamId> {
+        let mut out = Vec::new();
+        for _ in 0..32 {
+            let Owner::Class(k) = owner else { break };
+            let info = self.syms.class(k);
+            out.extend(info.tparams.iter().copied());
+            owner = info.owner;
+        }
+        out
+    }
+
+    /// dotty's `formatAnnotationMessage` (`userDefinedErrorString`): `${A}` of the parameter
+    /// named `A` among `names` replaced by its argument among `args`, `?A` for one without.
+    fn format_not_found(&mut self, raw: &str, names: &[String], args: &[TypeId]) -> String {
+        let mut out = String::with_capacity(raw.len());
+        let mut rest = raw;
+        while let Some(at) = rest.find("${") {
+            out.push_str(&rest[..at]);
+            let after = &rest[at + 2..];
+            let Some(end) = after.find('}') else {
+                out.push_str(&rest[at..]);
+                rest = "";
+                break;
+            };
+            let name = after[..end].trim();
+            match names.iter().position(|n| n == name).and_then(|i| args.get(i)) {
+                Some(&arg) => out.push_str(&self.show(arg)),
+                None => {
+                    out.push('?');
+                    out.push_str(name);
+                }
+            }
+            rest = &after[end + 1..];
+        }
+        out.push_str(rest);
+        out
+    }
+
     /// The class that `q` names in `q.apply`: `C`, `Obj.C` or `pkg.C`, with or without type
     /// arguments. A class with an explicit companion is named by the companion instead.
     pub(in crate::typer) fn ctor_ref(&mut self, q: ExprId) -> Option<(ClassId, Option<ListRef>)> {
@@ -1175,10 +1353,10 @@ impl<'a> Worker<'a> {
         let te = match self.resolve_given(ty, span) {
             Some(te) => te,
             None => {
-                let msg = self
-                    .given_ambiguity
-                    .take()
-                    .unwrap_or_else(|| format!("no given instance of type {} was found", self.show(ty)));
+                let msg = match self.given_ambiguity.take().or_else(|| self.implicit_not_found_message(ty)) {
+                    Some(m) => m,
+                    None => format!("no given instance of type {} was found", self.show(ty)),
+                };
                 let msg = msg + &self.given_failure_notes();
                 self.given_failure_error(span, msg, ty);
                 self.prog.add(TExpr::Unit)
@@ -2464,6 +2642,69 @@ impl<'a> Worker<'a> {
         self.apply_named_callee_recorded(callee, targs, lists, span, expected)
     }
 
+    /// A case class's companion where a function is expected is its `apply`, with scalac's
+    /// warning (dotty's `adaptNoArgsOther`, `caseCompanion`): `val g: Int => F = F`, `xs.map(F)`,
+    /// `Scope.F` of an object of source or of products. `apply_callee` asks it of the resolved
+    /// term applied to nothing where a type is expected, named or selected: the module here,
+    /// reached through a block where its prefix is evaluated first, or the constructor's proxy
+    /// (`inserted_proxy_apply`), which stands for the companion a case class without one has.
+    #[inline(never)]
+    fn inserted_module_apply(&mut self, te: TExprId, ty: TypeId, span: Span, expected: Option<TypeId>) -> Option<(TExprId, TypeId)> {
+        let module = match self.prog.expr(te) {
+            TExpr::Block(_, inner) => inner,
+            _ => te,
+        };
+        let TExpr::Module(o) = self.prog.expr(module) else { return None };
+        let k = self.companion_class(o).filter(|&k| self.syms.class(k).mods & crate::ast::mods::CASE != 0)?;
+        if !self.inserts_apply(expected) || self.function_base(self.types.class(o, &[])).is_some() {
+            return None;
+        }
+        self.warn_inserted_apply(k, span);
+        Some(self.apply_member(te, ty, names::APPLY, None, Vec::new(), span, expected))
+    }
+
+    /// `inserted_module_apply` for the constructor proxy of the case class `c`.
+    #[inline(never)]
+    fn inserted_proxy_apply(&mut self, c: ClassId, span: Span, expected: Option<TypeId>) -> Option<(TExprId, TypeId)> {
+        let info = self.syms.class(c);
+        if info.mods & crate::ast::mods::CASE == 0 || info.kind != ClassKind::Class || !self.inserts_apply(expected) {
+            return None;
+        }
+        self.warn_inserted_apply(c, span);
+        Some(self.apply_companion_apply(c, None, Vec::new(), span, expected))
+    }
+
+    /// Whether the expected type asks for a function (dotty's `functionExpected`), outside a
+    /// library body, whose trees scalac typed already.
+    fn inserts_apply(&mut self, expected: Option<TypeId>) -> bool {
+        expected.map_or(false, |t| self.as_function(t).is_some()) && !self.is_body_file(self.env.file)
+    }
+
+    /// The warning at the name the selection or identifier `span` ends in, with the tree of the
+    /// companion of the case class `k` as scalac shows it: its static path, or as written where
+    /// an instance reaches it.
+    fn warn_inserted_apply(&mut self, k: ClassId, span: Span) {
+        let written = self.source(self.env.file).text.get(span.start as usize..span.end as usize).unwrap_or("").to_string();
+        let name_len = written.rsplit('.').next().map_or(0, |n| n.len()) as u32;
+        let at = Span { start: span.end - name_len.min(span.end - span.start), end: span.end };
+        let text = self.static_path_text(k).unwrap_or(written);
+        self.warn(at, format!("The method `apply` is inserted. The auto insertion will be deprecated, please write `{}.apply` explicitly.", text));
+    }
+
+    /// The class `k`'s companion as scalac prints a tree that reaches it statically (dotty's
+    /// `RefinedPrinter.toTextPrefixOf`): its packages and enclosing objects, without the root,
+    /// `scala` and `java.lang` packages (`isOmittablePrefix`). None for one an instance owns.
+    fn static_path_text(&mut self, k: ClassId) -> Option<String> {
+        let info = self.syms.class(k);
+        let name = self.interner.get(info.name).to_string();
+        match info.owner {
+            Owner::Package(p) if p == crate::symbols::ROOT_PKG || p == self.b.scala_pkg || Some(p) == self.java_lang_pkg() => Some(name),
+            Owner::Package(p) => Some(format!("{}.{}", self.pkg_path(p), name)),
+            Owner::Class(o) if self.syms.class(o).kind == ClassKind::Object => Some(format!("{}.{}", self.static_path_text(o)?, name)),
+            _ => None,
+        }
+    }
+
     #[cold]
     #[inline(never)]
     fn apply_named_callee_recorded(
@@ -2515,7 +2756,22 @@ impl<'a> Worker<'a> {
             }
             Callee::Selection { recv, recv_ty, name } => self.apply_member(recv, recv_ty, name, targs, lists, span, expected),
             Callee::Ctor(c) => {
+                // A proxy is the companion's unless a `new` names the class, or it is reached
+                // through an outer instance, which the proxy's application takes in place.
+                if lists.is_empty() && targs.is_none() && expected.is_some() && !self.explicit_new && !self.new_prefixed {
+                    if let Some(typed) = self.inserted_proxy_apply(c, span, expected) {
+                        return typed;
+                    }
+                }
+                // `Make[String]` of a case class: the proxy's `apply` with the type arguments,
+                // expanded as any method that needs arguments is (dotty's
+                // `tryInsertApplyOrImplicit` for a term applied to types, then eta-expansion),
+                // without the warning of an `apply` inserted on the companion itself.
                 if let (Some(ta), true) = (targs, lists.is_empty()) {
+                    let proxy = !self.explicit_new && !self.new_prefixed && self.syms.class(c).kind == ClassKind::Class && self.syms.class(c).mods & crate::ast::mods::CASE != 0;
+                    if proxy && Self::required_arity(&self.syms.class(c).ctor).is_some() {
+                        return self.apply_companion_apply(c, targs, Vec::new(), span, expected);
+                    }
                     if let Some(r) = self.summon_type_application(c, None, ta, span, expected) {
                         return r;
                     }
@@ -2537,6 +2793,11 @@ impl<'a> Worker<'a> {
                     self.report_blocked_type(ty, span);
                 }
                 if lists.is_empty() && targs.is_none() {
+                    if expected.is_some() && matches!(self.prog.expr(te), TExpr::Module(_) | TExpr::Block(..)) {
+                        if let Some(typed) = self.inserted_module_apply(te, ty, span, expected) {
+                            return typed;
+                        }
+                    }
                     return (te, ty);
                 }
                 // A polymorphic function value applied: its type parameters take the explicit
@@ -3121,6 +3382,9 @@ impl<'a> Worker<'a> {
         let outer_base = std::mem::replace(&mut self.app_base, self.tvars.len() as u32);
         let r = self.apply_method_in(call, ctor, targs, lists, span, expected, trial);
         self.app_base = outer_base;
+        if self.app_depth == 0 && !self.mismatch_renders.is_empty() {
+            self.render_mismatches(0);
+        }
         r
     }
 
@@ -3151,6 +3415,36 @@ impl<'a> Worker<'a> {
         match &self.joint_sig {
             Some((r, s, _)) if *r == recv && *s == sym => self.joint_sig.take().map(|(_, _, info)| info),
             _ => None,
+        }
+    }
+
+    /// The type mismatches reported under the application at `depth` or deeper, its arguments
+    /// typed, rendered from the types their variables were instantiated to, what is still open by
+    /// `reported_mismatch`: dotty renders a `TypeMismatch` lazily with the constraint of the
+    /// attempt it was reported in (`TypeMismatch.msg`'s `mapCtx`), which the application's
+    /// interpolation, made after the attempt is committed, does not reach (`simpleApply` under
+    /// `tryEither`). What an application left (one that returned before solving) is rendered once
+    /// the outermost is typed.
+    fn render_mismatches(&mut self, depth: u32) {
+        let renders = std::mem::take(&mut self.mismatch_renders);
+        for (at, old, found, expected, note_len, at_depth) in renders {
+            if at_depth < depth {
+                self.mismatch_renders.push((at, old, found, expected, note_len, at_depth));
+                continue;
+            }
+            if self.diags.items.get(at).map_or(true, |d| d.msg != old) {
+                continue;
+            }
+            let (found, expected) = (self.zonk(found), self.zonk(expected));
+            // A variable the failure left at the error type keeps the message as reported.
+            if self.types.contains_error(found) || self.types.contains_error(expected) {
+                continue;
+            }
+            let (found, expected, _) = self.reported_mismatch(found, expected);
+            // What the message adds after the types (a match type's note) stays.
+            let note = &old[old.len() - note_len..];
+            let msg = format!("type mismatch: found {}, required {}{}", self.show(found), self.show(expected), note);
+            self.diags.items[at].msg = msg;
         }
     }
 
@@ -3558,13 +3852,12 @@ impl<'a> Worker<'a> {
                             None => {
                                 let missing_tag = self.missing_tag(p.ty, target, open_tag);
                                 let target = self.solve_bounded_in(target);
-                                let msg = self.given_ambiguity.take().or(missing_tag).unwrap_or_else(|| {
-                                    format!(
-                                        "no given instance of type {} was found for parameter {}",
-                                        self.show(target),
-                                        self.name_str(p.name)
-                                    )
-                                });
+                                let msg = self.given_ambiguity.take().or(missing_tag);
+                                let msg = msg.or_else(|| self.param_not_found_message(call.sym, ctor.as_ref().map(|&(c, _)| c), p.sym, p.name, &subst));
+                                let msg = match msg.or_else(|| self.implicit_not_found_message(target)) {
+                                    Some(m) => m,
+                                    None => format!("no given instance of type {} was found for parameter {}", self.show(target), self.name_str(p.name)),
+                                };
                                 let msg = msg + &self.given_failure_notes();
                                 // At the end of what is applied so far, as dotty's
                                 // `adaptNoArgsImplicitMethod` asks for the argument
@@ -4116,9 +4409,17 @@ impl<'a> Worker<'a> {
         let ty = self.deref(ty);
         // A constant an ascription or a plain inline call widened has the widened type for a
         // dependent parameter too (`Elem[T, n.type]` of `(1, "x")((g(0): Int))`).
-        let ty = if self.widened_constant(arg) { self.widen_lit(ty) } else { ty };
+        let widened = self.widened_constant(arg);
+        let ty = if widened { self.widen_lit(ty) } else { ty };
         if self.types.is_path(ty) {
             return ty;
+        }
+        // A constant's type is its literal type, a stable one that dotty's `safeSubstParam`
+        // substitutes as it is: `h(1)` of `def h(a: Int): a.type` is a `1`.
+        if !widened {
+            if let Some(v) = self.fold_constant_as_typed(arg) {
+                return self.types.lit(v);
+            }
         }
         let ty = self.solve_bounded_in(ty);
         self.widen_path(ty)
@@ -4162,6 +4463,10 @@ impl<'a> Worker<'a> {
         held: &[TVarId],
         span: Span,
     ) {
+        // What was reported under the application is rendered as its typing leaves it.
+        if !self.mismatch_renders.is_empty() {
+            self.render_mismatches(self.app_depth);
+        }
         // The variables of the result type with their variances, walked when an unconstrained
         // variable first asks and again after a solution that touched one of them (an
         // instantiation lets other variables show through). The variables between `first_var`
@@ -5113,7 +5418,12 @@ impl<'a> Worker<'a> {
                 // A transparent call a member's cache holds unexpanded is expanded as it is
                 // adapted (`expand_unadapted`).
                 let (te, ty) = match self.arg_slot(e) {
-                    ArgSlot::None => self.type_expr(e, Some(pty)),
+                    ArgSlot::None => {
+                        let vars_mark = self.tvars.len();
+                        let typed = self.type_expr(e, Some(pty));
+                        self.interpolate_applied_arg(e, typed.1, pty, vars_mark);
+                        typed
+                    }
                     ArgSlot::Cached(te, ty) => {
                         self.retry_typed.insert(te, ());
                         (te, self.expand_unadapted(te, pty).unwrap_or(ty))
@@ -5143,6 +5453,56 @@ impl<'a> Worker<'a> {
                 let (te, ty) = self.type_for_lambda(pat, rest, pty, span);
                 self.note_erroneous_arg(ty);
                 self.adapt(te, ty, pty, span)
+            }
+        }
+    }
+
+    /// An argument that is an application, typed against an open variable of the call: its own
+    /// variables are instantiated as dotty's `interpolateTypeVars` instantiates those of an
+    /// `Apply` tree, which nothing outside depends on yet (no `constrainResult` for an `Apply`):
+    /// a covariant one from below, a contravariant one from above, a nonvariant one left open.
+    /// `foldLeft(Map())` thus has a `Map[K, Nothing]` before the lambda, whose `K` the lambda's
+    /// parameter then maximizes (`Map[Any, Nothing]`), where `foldLeft(Map.empty)` leaves both open.
+    /// It is part of the argument's typing (`typedUnadapted`'s `simplify`), so the typing a
+    /// member's cache keeps (`type_arg_cached`) is interpolated already.
+    #[inline]
+    fn interpolate_applied_arg(&mut self, e: ExprId, ty: TypeId, pty: TypeId, vars_mark: usize) {
+        // An argument that made no variable, or a formal that is none, is passed at a test.
+        if self.tvars.len() != vars_mark {
+            self.interpolate_applied_arg_now(e, ty, pty, vars_mark);
+        }
+    }
+
+    #[inline(never)]
+    fn interpolate_applied_arg_now(&mut self, e: ExprId, ty: TypeId, pty: TypeId, vars_mark: usize) {
+        let formal = self.deref(pty);
+        if !matches!(self.types.get(formal), Type::Var(_)) {
+            return;
+        }
+        let ast = self.cur_ast();
+        let mut head = e;
+        while let Expr::Parens(inner) = ast.expr(head) {
+            head = inner;
+        }
+        if !matches!(ast.expr(head), Expr::Apply(..) | Expr::UsingApply(..)) {
+            return;
+        }
+        let ty = self.zonk(ty);
+        for (w, sign) in self.var_variances(ty) {
+            if !self.tvars.made_since(w, vars_mark) || self.tvars[w].inst.is_some() {
+                continue;
+            }
+            match sign {
+                1 if self.tvars[w].lower.is_empty() => self.instantiate(w, NOTHING),
+                1 => {
+                    self.solve_var(w);
+                }
+                -1 => {
+                    let uppers = self.tvars[w].upper.clone();
+                    let top = uppers.into_iter().reduce(|a, b| self.types.inter(a, b)).unwrap_or(ANY);
+                    self.instantiate(w, top);
+                }
+                _ => {}
             }
         }
     }
@@ -5270,7 +5630,9 @@ impl<'a> Worker<'a> {
         let call = (!braced).then(|| (self.env.file, ast.expr_span(at)));
         let outer = std::mem::replace(&mut self.unadapted_call, call);
         let outer_node = self.unadapted_node.take();
+        let vars_mark = self.tvars.len();
         let typed = self.type_expr(e, Some(pty));
+        self.interpolate_applied_arg(e, typed.1, pty, vars_mark);
         self.unadapted_call = outer;
         let deferred = std::mem::replace(&mut self.unadapted_node, outer_node) == Some(typed.0);
         match self.cache_arg(e, typed) {
@@ -5288,7 +5650,9 @@ impl<'a> Worker<'a> {
     fn type_named_arg_cached(&mut self, e: ExprId, written: ExprId, pty: TypeId, spread: bool) -> TExprId {
         let retained = self.arg_typing_begin(e);
         let diags = self.diags.items.len();
+        let vars_mark = self.tvars.len();
         let (te, ty) = self.type_expr(e, Some(pty));
+        self.interpolate_applied_arg(e, ty, pty, vars_mark);
         let arg_span = self.cur_ast().expr_span(e);
         self.mark_spread_array(spread, te, ty);
         let adapted = self.typed_arg(te, ty, pty, arg_span);
@@ -5909,7 +6273,11 @@ impl<'a> Worker<'a> {
                 return self.apply_overloaded_member(recv, recv_ty, sym, name, targs, lists, span, expected);
             }
             self.check_access(sym, Some(recv_ty), span);
-            if self.syms.sym(sym).mods & crate::ast::mods::PROTECTED != 0 {
+            let sym_mods = self.syms.sym(sym).mods;
+            if sym_mods & crate::ast::mods::PRIVATE != 0 {
+                self.note_private_selection(sym, recv, recv_ty, false);
+            }
+            if sym_mods & crate::ast::mods::PROTECTED != 0 {
                 self.check_protected_access(sym, recv, recv_ty, span);
             }
             let mut callee = self.member_callee_in(recv, recv_ty, Some(owner_ty), sym);

@@ -685,6 +685,12 @@ pub struct Worker<'a> {
     /// Under a member's application (`apply::apply_member_or_extension`, `logging` deep): each
     /// type mismatch reported, by its diagnostic's index and span, with the type it required.
     pub mismatches: Vec<(usize, Span, TypeId)>,
+    /// The type mismatches reported under the applications under way, by their diagnostic's
+    /// index and text, with the types found and required, the length of the note after them and
+    /// the depth of the application they were reported under: rendered again from the types as
+    /// that application's typing leaves them, before it solves its variables
+    /// (`apply::render_mismatches`).
+    pub mismatch_renders: Vec<(usize, String, TypeId, TypeId, usize, u32)>,
     pub logging: u32,
     /// How many method applications are under way (`apply::apply_method_in`), and the depth at
     /// which a member's retry on the qualifier runs (`apply::retry_on_qualifier`): the application
@@ -1209,6 +1215,13 @@ pub struct Worker<'a> {
     /// The secondary constructor whose self call is being typed, which is no alternative of it.
     pub excluded_ctor: Option<SymId>,
     pub variance_skip: Vec<TypeId>,
+    /// The private members, and whether as read alone, that a selection through another
+    /// instance checked and found sound (`note_private_selection`).
+    pub variance_checked: FxMap<(SymId, bool), ()>,
+    /// While a partial function's body is typed, the own types of the branches of each match and
+    /// conditional typed, by the node: the type dotty's `typedBlock` reads its result with
+    /// (`Worker::result_leaks`).
+    pub branch_types: Option<FxMap<TExprId, Vec<TypeId>>>,
     /// The entry point named on the command line, by its object or its method.
     pub main_name: Option<Name>,
     /// Whether an entry point is chosen at all: a resident check has no program to run, so
@@ -2096,6 +2109,7 @@ impl<'a> Worker<'a> {
             interp_parts: None,
             interp_call: None,
             mismatches: Vec::new(),
+            mismatch_renders: Vec::new(),
             logging: 0,
             app_depth: 0,
             retry_depth: None,
@@ -2170,6 +2184,8 @@ impl<'a> Worker<'a> {
             unchecked_variance: Default::default(),
             excluded_ctor: None,
             variance_skip: Vec::new(),
+            variance_checked: FxMap::default(),
+            branch_types: None,
             for_packs: Vec::new(),
             for_bases: Vec::new(),
             given_indexes: FxMap::default(),
@@ -2434,6 +2450,7 @@ impl<'a> Worker<'a> {
             interp_parts: None,
             interp_call: None,
             mismatches: Vec::new(),
+            mismatch_renders: Vec::new(),
             logging: 0,
             app_depth: 0,
             retry_depth: None,
@@ -2606,6 +2623,8 @@ impl<'a> Worker<'a> {
             inference_failed: FxMap::default(),
             excluded_ctor: Default::default(),
             variance_skip: Default::default(),
+            variance_checked: FxMap::default(),
+            branch_types: None,
             main_name: self.main_name,
             choose_entry: self.choose_entry,
             open_world: self.open_world,

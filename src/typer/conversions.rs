@@ -164,19 +164,21 @@ impl<'a> Worker<'a> {
     /// A given, or a Scala 2 implicit without plain parameters, of a type that derives from
     /// `Conversion`.
     pub fn is_conversion_given(&mut self, g: SymId) -> bool {
-        let Some(conversion) = self.b.conversion else { return false };
+        self.conversion_class_of(g).is_some()
+    }
+
+    /// The class a given is a conversion through: `Conversion`, or `<:<`, which dotty's
+    /// `viewCandidateKind` counts as a view too (`isConforms`: evidence `ev: A <:< B` or
+    /// `A =:= B` in scope converts an `A`).
+    fn conversion_class_of(&mut self, g: SymId) -> Option<ClassId> {
         let sig = self.sig_of(g);
         if sig.clauses.iter().any(|c| !c.is_using) {
-            return false;
+            return None;
         }
         let ret = sig.ret;
-        match self.class_of(ret) {
-            Some(c) => {
-                self.complete_class(c);
-                self.syms.class(c).base_types.iter().any(|&(b, _)| b == conversion)
-            }
-            None => false,
-        }
+        let c = self.class_of(ret)?;
+        self.complete_class(c);
+        [self.b.conversion, self.b.sub_evidence].into_iter().flatten().find(|&k| self.syms.class(c).base_types.iter().any(|&(b, _)| b == k))
     }
 
     pub(super) fn shape_of(&mut self, g: SymId) -> Option<Shape> {
@@ -187,7 +189,7 @@ impl<'a> Worker<'a> {
             return Some(Shape { tparams: sig.tparams.clone(), from: param.ty, to: sig.ret });
         }
         let ret = sig.ret;
-        let conversion = self.b.conversion?;
+        let conversion = self.conversion_class_of(g)?;
         let bt = self.base_type(ret, conversion)?;
         let Type::Class(_, args) = self.types.get(bt) else { return None };
         let args = self.types.items(args);
@@ -766,9 +768,8 @@ impl<'a> Worker<'a> {
             // The receiver and the result the caller accepted fix the given's parameters before
             // its using clauses are resolved (`defaultToNoBackend[X, P, S](using ev: X =>
             // Step2[P, S]): Conversion[X, ..]`).
-            let conversion = self.b.conversion;
-            let target = match conversion {
-                Some(conversion) if self.is_conversion_given(g) => {
+            let target = match self.conversion_class_of(g) {
+                Some(conversion) => {
                     let result = self.fresh_var();
                     let bound = self.snapshot();
                     if !accept(self, result) {

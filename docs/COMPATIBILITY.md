@@ -20,22 +20,17 @@ libraries compiled from their jars run against scalac's output. The remaining di
 
 ### Types and inference
 
-- `val g: Int => F = F` for a case class `F` is rejected (scalac inserts `.apply`); `F.apply` works.
-- `xs.foldLeft(List.empty)(...)` is rejected, `List.empty`'s type variable being solved before the lambda
-  (`foldLeft(Nil)` works), and `val z: 1 = foo(1).zero` cannot take the literal type from the expected type.
-- `<:<` and `=:=` evidence is filled in, never reasoned from (with `ev: A <:< String`, `a.length` is written
-  `ev(a).length`); a type variable bound by a type test (`case l: List[t]`) is a wildcard the case cannot use.
-- A match whose expected type is a match type gets no dependent typing of its cases (write the cast); on a
-  receiver typed `Tuple` or `X <: Tuple` the members of `Tuple` are typed by their bounds (`head: Any`,
-  `tail: Tuple`), `Tuple.Union` is not reduced, and a named tuple lacks `_1` and `NamedTuple`'s members.
+- The companion of a case class that has no object of its own is no value: `val o = F` is rejected, where
+  scalac's is an object (where a function is expected, `F` is `F.apply` as under scalac).
+- `val z: 1 = foo(1).zero` of a `def foo[T](x: T): Box[T]` over an invariant `Box` is rejected: the literal
+  settles `T` as `Int` before the selection's expected type is seen, where scalac keeps `(1 : Int)` until then.
+- On a receiver typed `Tuple` or `X <: Tuple` the members of `Tuple` are typed by their bounds (`head: Any`,
+  `tail: Tuple`), and a named tuple has only `toTuple` and `size` of `NamedTuple`'s members on JavaScript and
+  in the interpreter.
 - A failed member call is retried as an extension or a conversion of the receiver, as scalac retries it,
   except as a right-associative extension operator (`one() +: d` failing on `d`'s own `+:` is not taken by an
   `extension (x: Int) def +:(d: D)`); the member's error then stands.
-- Exhaustivity: a match with a sequence pattern of fixed length (`List(a, b)`) or a stable identifier that is
-  no enum case is not checked for missing cases, a type splits at most 64 times per match (beyond that nothing
-  is reported), and a nested pattern that can never match is not reported; a type test of a trait over a class
-  that is not final is warned unreachable (scalac: reachable, a subclass may mix the trait in).
-- The variance check leaves private members out.
+- Exhaustivity: a type splits at most 64 times per match; beyond that nothing is reported.
 
 ### Givens and implicits
 

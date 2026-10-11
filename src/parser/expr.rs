@@ -3,7 +3,16 @@ use crate::ast::*;
 use crate::intern::Name;
 use crate::names;
 use crate::source::Span;
-use crate::token::Tok;
+use crate::token::{Tok, Token};
+
+/// The lambda a `:` passes (`Parser::colon_lambda`): one before an indented body, one on the
+/// colon's line under `relaxedLambdaSyntax`, or a single case there.
+#[derive(Clone, Copy, PartialEq)]
+enum ColonLambda {
+    Indented,
+    SingleLine,
+    Case,
+}
 
 pub(super) fn op_precedence(op: &str) -> (u8, bool) {
     let right = op.ends_with(':');
@@ -812,7 +821,7 @@ impl<'a> Parser<'a> {
     fn symbolic_is_operator(&self) -> bool {
         let n = if self.kind_at(1) == Tok::Newline { 2 } else { 1 };
         !matches!(self.kind_at(n), Tok::KwIf | Tok::KwWhile | Tok::KwFor | Tok::KwTry | Tok::KwThrow)
-            && (self.expr_start_at(n) || matches!(self.kind_at(n), Tok::LBracket | Tok::Eof))
+            && (self.expr_start_at(n) || matches!(self.kind_at(n), Tok::LBracket | Tok::Eof | Tok::EndLambda))
     }
 
     fn parse_infix_prec(&mut self, min_prec: u8) -> ExprId {
@@ -1297,15 +1306,23 @@ impl<'a> Parser<'a> {
         matches!(prev.kind, Tok::Ident | Tok::RParen | Tok::RBracket | Tok::KwThis | Tok::KwSuper | Tok::KwNew | Tok::Outdent)
     }
 
-    /// Detects `: x =>` / `: (x, y) =>` followed by an indented body.
-    fn at_colon_lambda(&self) -> bool {
+    /// The lambda the `:` at the current token passes, if one follows it (dotty's
+    /// `Parsers.followingIsLambdaAfterColon`): parameters and an arrow, `: x =>` or
+    /// `: (x, y) =>`, before an indented body; under `relaxedLambdaSyntax` also one whose body
+    /// stands on the colon's line outside parentheses, where `(x: A => B)` is an ascription,
+    /// and `: case p => e`.
+    fn colon_lambda(&self) -> Option<ColonLambda> {
         if !self.at(Tok::Colon) {
-            return false;
+            return None;
         }
-        let mut i = 1usize;
-        match self.kind_at(1) {
+        self.params_and_arrow(1)
+    }
+
+    /// dotty's `isParamsAndArrow` at the token `i` ahead.
+    fn params_and_arrow(&self, mut i: usize) -> Option<ColonLambda> {
+        match self.kind_at(i) {
             Tok::Ident | Tok::Underscore => i += 1,
-            Tok::LParen => {
+            Tok::LParen | Tok::LBracket => {
                 let mut depth = 0usize;
                 loop {
                     match self.kind_at(i) {
@@ -1316,16 +1333,131 @@ impl<'a> Parser<'a> {
                                 break;
                             }
                         }
-                        Tok::Eof | Tok::Newline | Tok::Indent | Tok::Outdent => return false,
+                        Tok::Eof | Tok::Newline | Tok::Indent | Tok::Outdent => return None,
                         _ => {}
                     }
                     i += 1;
                 }
                 i += 1;
             }
-            _ => return false,
+            Tok::KwCase if i == 1 && self.ast.relaxed_lambdas => return Some(ColonLambda::Case),
+            _ => return None,
         }
-        matches!(self.kind_at(i), Tok::Arrow | Tok::CtxArrow) && self.kind_at(i + 1) == Tok::Indent
+        self.arrow_indent(i)
+    }
+
+    /// dotty's `isArrowIndent` at the token `i` ahead: an arrow before an indented body, or
+    /// under `relaxedLambdaSyntax` before another lambda's parameters or, outside parentheses,
+    /// a body on the same line.
+    fn arrow_indent(&self, i: usize) -> Option<ColonLambda> {
+        if !matches!(self.kind_at(i), Tok::Arrow | Tok::CtxArrow) {
+            return None;
+        }
+        let next = self.toks.get(self.pos + i + 1).copied();
+        match next.map(|t| (t.kind, t.span.start == t.span.end)) {
+            Some((Tok::Indent, true)) | Some((Tok::Eof, _)) | None => Some(ColonLambda::Indented),
+            Some((Tok::Newline | Tok::Outdent | Tok::Semi, _)) => None,
+            _ if self.ast.relaxed_lambdas => match self.params_and_arrow(i + 1) {
+                Some(k) => Some(k),
+                None if !self.in_parens() => Some(ColonLambda::SingleLine),
+                None => None,
+            },
+            _ => None,
+        }
+    }
+
+    /// Opens a single-line lambda's region at the current token (dotty's `SingleLineLambda`): the
+    /// first token after a line break outside the brackets and blocks opened since, or a layout
+    /// token where the line ends, gives way to the region's end (`Tok::EndLambda`), as dotty's
+    /// scanner inserts `ENDlambda` there, so that nothing the body's parse reads crosses the
+    /// line. The token's index and the token come back for `leave_single_line`.
+    fn enter_single_line(&mut self) -> Option<(usize, Token)> {
+        let from = self.pos;
+        let mut depth = 0i32;
+        let mut stop = None;
+        for i in from..self.toks.len() {
+            let t = self.toks[i];
+            if i > from && depth <= 0 {
+                let layout = matches!(t.kind, Tok::Newline | Tok::Indent | Tok::Outdent) && t.span.start == t.span.end;
+                let prev_end = self.toks[i - 1].span.end as usize;
+                let broke = self.text.get(prev_end..t.span.start as usize).is_some_and(|between| between.contains('\n'));
+                if layout || broke || t.kind == Tok::Eof {
+                    stop = Some(i);
+                    break;
+                }
+            }
+            match t.kind {
+                Tok::LParen | Tok::LBracket | Tok::LBrace | Tok::Indent | Tok::InterpStart => depth += 1,
+                Tok::RParen | Tok::RBracket | Tok::RBrace | Tok::Outdent | Tok::InterpEnd => depth -= 1,
+                _ => {}
+            }
+        }
+        let stop = stop?;
+        let saved = self.toks[stop];
+        let at = self.toks[stop - 1].span.end;
+        self.toks[stop] = Token { kind: Tok::EndLambda, span: Span::new(at, at), name: crate::names::EMPTY };
+        Some((stop, saved))
+    }
+
+    /// Closes the region `enter_single_line` opened, its token restored: a body that ended
+    /// before the line's end leaves a token there, an error (E040,
+    /// `end of single-line lambda expected, but ';' found`).
+    fn leave_single_line(&mut self, region: Option<(usize, Token)>) {
+        let Some((stop, saved)) = region else { return };
+        let ended = self.pos == stop;
+        let before = self.pos < stop;
+        if !ended && before {
+            let (at, found) = self.found();
+            self.error_at(at, format!("end of single-line lambda expected, but {} found", found));
+        }
+        self.toks[stop] = saved;
+    }
+
+    /// `: case p if g => e` under `relaxedLambdaSyntax`: one case, its body an expression, as a
+    /// function of it (dotty's `singleCaseMatch`), on its line.
+    fn parse_single_case_lambda(&mut self) -> ExprId {
+        let start = self.span();
+        let mut region = self.enter_single_line();
+        self.expect(Tok::KwCase);
+        let mark = self.error_events;
+        let pat = self.parse_pattern();
+        let guard = if self.eat(Tok::KwIf) { Some(self.parse_infix_expr()) } else { None };
+        let broken = self.error_events != mark;
+        self.expect(Tok::Arrow);
+        // The region's end right after the arrow before an indented body is that indent
+        // (`caseClause(exprOnly)`): the body is the block, past the region.
+        let indented = region.is_some_and(|(stop, saved)| stop == self.pos && saved.kind == Tok::Indent && saved.span.start == saved.span.end);
+        let body = if indented {
+            self.leave_single_line(region.take());
+            self.parse_block()
+        } else {
+            self.parse_expr()
+        };
+        let cases = push_list(&mut self.ast.cases, &[CaseClause { pat, guard, body }]);
+        if broken {
+            self.ast.broken_cases.push(cases.start);
+        }
+        let lambda = self.case_lambda(cases, start);
+        self.leave_single_line(region);
+        lambda
+    }
+
+    /// Whether the innermost region open at the current token is a `(...)`.
+    fn in_parens(&self) -> bool {
+        let mut depth = 0u32;
+        for i in (0..self.pos).rev() {
+            match self.toks[i].kind {
+                Tok::RParen | Tok::RBracket | Tok::RBrace | Tok::Outdent => depth += 1,
+                Tok::LParen | Tok::LBracket | Tok::LBrace | Tok::Indent => {
+                    if depth == 0 {
+                        return self.toks[i].kind == Tok::LParen;
+                    }
+                    depth -= 1;
+                }
+                _ => {}
+            }
+        }
+        false
     }
 
     pub(super) fn parse_postfix(&mut self, mut e: ExprId, start: Span) -> ExprId {
@@ -1367,9 +1499,19 @@ impl<'a> Parser<'a> {
                     let args = push_list(&mut self.ast.expr_lists, &[body]);
                     e = self.ast.add_expr(Expr::Apply(e, args), start.to(self.prev_span()));
                 }
-                Tok::Colon if self.at_colon_lambda() => {
+                Tok::Colon if self.colon_lambda().is_some() => {
+                    let kind = self.colon_lambda();
                     self.bump();
-                    let lambda = self.parse_colon_lambda();
+                    let lambda = match kind {
+                        Some(ColonLambda::Case) => self.parse_single_case_lambda(),
+                        Some(ColonLambda::SingleLine) => {
+                            let region = self.enter_single_line();
+                            let lambda = self.parse_colon_lambda();
+                            self.leave_single_line(region);
+                            lambda
+                        }
+                        _ => self.parse_colon_lambda(),
+                    };
                     let args = push_list(&mut self.ast.expr_lists, &[lambda]);
                     e = self.ast.add_expr(Expr::Apply(e, args), start.to(self.prev_span()));
                 }

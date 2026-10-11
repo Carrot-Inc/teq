@@ -4,6 +4,7 @@ abstract_member_type_test
 abstract_var_accessors
 access_qualifiers
 adt
+alias_tuple_exhaustivity
 annotated_type_params
 annotations_ignored
 anon_classes
@@ -189,7 +190,9 @@ collection_class_name
 collection_map_hierarchy
 collection_partial_failure
 collections
+colon_lambda_relaxed
 companion_apply_unqualified
+companion_as_function
 companion_init_order
 comparable_boxes
 concat_order
@@ -326,6 +329,7 @@ eta_untupled
 etavalues
 evalorder
 evidence
+evidence_conversion
 exc_basics
 exc_control
 exc_resource
@@ -392,6 +396,7 @@ float_nan_bits
 float_parse_decimal_hex
 float_strings
 fold_targets
+foldleft_empty_lambda
 foldleft_nil_lambda
 for_case
 for_in_parens
@@ -690,11 +695,13 @@ intersection_alias_outside_bounds
 intersection_bounds_over_params
 intersection_denotation_meet
 intersection_generic_overloads
+intersection_given_object
 intersection_joint_member
 intersection_member_binders
 intersection_member_bounds_meet
 intersection_member_gate
 intersection_member_lambdas
+intersection_member_meet
 intersection_member_overload
 intersection_member_ranges
 intersection_member_receivers
@@ -877,6 +884,7 @@ map_key_contract
 map_store_callbacks
 maps
 marker_traits
+match_type_dependent
 match_type_sealed_leaves
 match_types
 match_types_tuples
@@ -918,6 +926,7 @@ named_default_branch
 named_then_positional
 named_tuple_linked
 named_tuple_map_values
+named_tuple_size
 named_tuples
 nan_comparisons
 negative_literal_space
@@ -1097,6 +1106,7 @@ refinement_member_meet
 refinement_member_scope
 refinement_member_variance
 refinement_nested_scope
+refinement_operand
 refinement_rec_anchor
 refinement_signature_exemptions
 refinement_term_scope
@@ -1274,6 +1284,7 @@ secondary_ctor_parent
 self_alias
 self_alias_anon
 self_alias_forms
+self_alias_override
 self_alias_shadowing
 self_alias_type_path
 self_type_member
@@ -1450,6 +1461,7 @@ type_test_selected_singleton
 type_test_synthesis
 type_test_tagged_inline
 type_test_tagged_patterns
+type_test_widened_selector
 typeclass_instance_extension
 typeclasses
 typed_pattern_capture

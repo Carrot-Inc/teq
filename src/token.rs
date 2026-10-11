@@ -5,6 +5,10 @@ use crate::source::Span;
 #[repr(u8)]
 pub enum Tok {
     Eof,
+    /// The end of a single-line lambda's region, which the parser puts in place of the token
+    /// after its line while the lambda is parsed (dotty's scanner-inserted `ENDlambda`); never
+    /// lexed.
+    EndLambda,
     Newline,
     Indent,
     Outdent,
@@ -142,6 +146,7 @@ impl Tok {
         use Tok::*;
         match self {
             Eof => "end of file",
+            EndLambda => "end of single-line lambda",
             Newline => "new line",
             Indent => "indented block",
             Outdent => "end of indented block",

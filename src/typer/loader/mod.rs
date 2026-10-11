@@ -50,6 +50,11 @@ pub struct Loaded {
     /// The aliases a pickle flags `private` without a qualifier, which a subclass does not
     /// inherit (`Worker::private_alias`).
     pub private_aliases: SharedMap<AliasId, ()>,
+    /// The `@implicitNotFound` text of a jar's class (`Worker::implicit_not_found_message`).
+    pub implicit_not_found: SharedMap<ClassId, String>,
+    /// The `@implicitNotFound` text of a parameter of a jar's method
+    /// (`Worker::param_not_found_message`).
+    pub param_not_found: SharedMap<SymId, String>,
     /// The members of a jar declared `private[p]` or `protected[p]`, with the simple name of `p`
     /// and whether they are `protected`.
     pub access_within: SharedMap<SymId, (Name, bool)>,
@@ -296,6 +301,8 @@ impl Loaded {
             jar_files,
             qualified_private_aliases: SharedMap::new(),
             private_aliases: SharedMap::new(),
+            implicit_not_found: SharedMap::new(),
+            param_not_found: SharedMap::new(),
             access_within: SharedMap::new(),
             bridged: FxMap::default(),
             target_names: SharedMap::new(),
@@ -1746,6 +1753,9 @@ impl<'a> Worker<'a> {
         if sig.mods.flags.has(tags::SEALED) {
             self.enter_sealed_children(c, &mut cx, &sig.mods.annots);
         }
+        if let Some(text) = sig.mods.implicit_not_found.and_then(|n| self.tasty(cx.file).simple(n).map(str::to_string)) {
+            self.loaded_mut().implicit_not_found.insert(c, text);
+        }
         if let Some(ctor) = &sig.ctor {
             self.enter_loaded_ctor(c, &mut cx, ctor, &sig.accessors);
             self.enter_loaded_ctor_access(c, &ctor.mods);
@@ -1840,10 +1850,14 @@ impl<'a> Worker<'a> {
     }
 
     /// The children of a sealed class are its `@Child[C]` annotations, so that a match over it
-    /// knows them before any of them is completed.
+    /// knows them before any of them is completed: in the order of their definitions, the
+    /// annotations' reversed, as dotty's `SymDenotation.children` reads them (each child's
+    /// annotation is prepended as it is entered). One a completed child entered already keeps
+    /// its place among them.
     fn enter_sealed_children(&mut self, c: ClassId, cx: &mut MapCx, annots: &[TType]) {
         let tasty = self.tasty(cx.file);
-        for a in annots {
+        let mut ordered: Vec<ClassId> = Vec::new();
+        for a in annots.iter().rev() {
             let TType::Applied(class, args) = a else { continue };
             let is_child = matches!(&**class, TType::TypeRef(_, n) if tasty.simple(*n) == Some("Child"));
             if !is_child || args.len() != 1 {
@@ -1867,10 +1881,17 @@ impl<'a> Worker<'a> {
                     }
                 }
             };
-            if k != c && !self.syms.class(c).children.contains(&k) {
-                self.syms.class_mut(c).children.push(k);
+            if k != c && !ordered.contains(&k) {
+                ordered.push(k);
             }
         }
+        let entered = std::mem::take(&mut self.syms.class_mut(c).children);
+        for k in entered {
+            if !ordered.contains(&k) {
+                ordered.push(k);
+            }
+        }
+        self.syms.class_mut(c).children = ordered;
     }
 
     /// The ordinal of a product's enum case, the case at `addr` of the enum's companion: its
@@ -2314,6 +2335,9 @@ impl<'a> Worker<'a> {
                 let terms = &mut self.loaded_mut().tables[cx.file as usize].terms;
                 for addr in std::iter::once(p.addr).chain(accessor.map(|a| a.addr)) {
                     terms.entry(addr).or_insert(sym);
+                }
+                if let Some(text) = p.implicit_not_found.and_then(|n| tasty.simple(n).map(str::to_string)) {
+                    self.loaded_mut().param_not_found.insert(sym, text);
                 }
                 sig.params.push(ParamSig { name, ty, by_name, repeated, has_default: p.flags.has(tags::HASDEFAULT), sym });
                 syms.push(sym);
@@ -2791,6 +2815,9 @@ impl<'a> Worker<'a> {
                     s.by_name = by_name;
                 }
                 self.loaded_mut().tables[ls.file as usize].terms.insert(p.addr, psym);
+                if let Some(text) = p.implicit_not_found.and_then(|n| tasty.simple(n).map(str::to_string)) {
+                    self.loaded_mut().param_not_found.insert(psym, text);
+                }
                 cs.params.push(ParamSig { name, ty, by_name, repeated, has_default: p.flags.has(tags::HASDEFAULT), sym: psym });
             }
             out.push(cs);

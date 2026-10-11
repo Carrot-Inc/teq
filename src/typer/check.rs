@@ -5651,9 +5651,13 @@ impl<'a> Worker<'a> {
     /// contravariant one only in contravariant positions. Results, vals and parents are
     /// covariant positions; method parameters and the upper bounds of method type parameters
     /// flip the position, a `var`, an alias and the argument of an invariant parameter make it
-    /// invariant. Private members and plain constructor parameters are construction-only and
-    /// not checked, as under scalac. The standard library keeps `Array[A]` in its covariant
-    /// collections and is not checked.
+    /// invariant. Plain constructor parameters are construction-only and not checked; a private
+    /// member is local to `this` until a selection through another instance (or a companion's)
+    /// makes it a member of every instance, which checks it (`note_private_selection`), as
+    /// dotty's `PrivateLocal` (VarianceChecker.relativeVariance) loses `Local` in
+    /// `isAccessibleFrom`; a qualified private member and a private class parameter are never
+    /// local. The standard library keeps `Array[A]` in its covariant collections and is not
+    /// checked.
     fn check_variances(&mut self, c: ClassId) {
         let (file, span) = {
             let i = self.syms.class(c);
@@ -5677,53 +5681,15 @@ impl<'a> Worker<'a> {
         }
         for i in 0..self.own_member_count(c) {
             let m = self.own_member(c, i);
-            let (kind, m_mods, has_def, m_file, m_span) = {
+            let (m_mods, has_def) = {
                 let s = self.syms.sym(m);
-                (s.kind, s.mods, s.def.is_some(), s.file, s.span)
+                (s.mods, s.def.is_some())
             };
             let is_field_param = m_mods & mods::FIELD != 0 && self.is_ctor_param(c, m);
-            if m_mods & mods::PRIVATE != 0 || !(has_def || is_field_param) {
+            if !(has_def || is_field_param) || self.local_private(c, m) {
                 continue;
             }
-            self.variance_skip.clear();
-            if !self.unchecked_variance.is_empty() {
-                let tys = self.member_type_exprs(c, m);
-                self.collect_unchecked_variance(m_file, &tys);
-            }
-            let sign = match kind {
-                SymKind::Var => 0,
-                SymKind::Val | SymKind::Def | SymKind::Given => 1,
-                _ => continue,
-            };
-            self.sig_of(m);
-            let sig = self.sig_arc(m);
-            let mut positions: Vec<(TypeId, i8, crate::source::Span, String)> = Vec::new();
-            for &tp in &sig.tparams {
-                let (upper, lower) = (self.syms.tparam(tp).upper, self.syms.tparam(tp).lower);
-                let what = format!("type parameter {}", self.name_str(self.syms.tparam(tp).name));
-                positions.push((upper, -1, m_span, what.clone()));
-                positions.push((lower, 1, m_span, what));
-            }
-            for p in sig.clauses.iter().flat_map(|cl| cl.params.iter()) {
-                let what = format!("parameter {}", self.name_str(p.name));
-                positions.push((p.ty, -1, self.syms.sym(p.sym).span, what));
-            }
-            let result_at = positions.len();
-            positions.push((sig.ret, sign, m_span, self.member_description(m, None)));
-            for (i, (t, sign, span, what)) in positions.into_iter().enumerate() {
-                // A def's result is shown in its info, as `VarianceChecker` reports the
-                // symbol's (`=> R`, `(x: Int): R`).
-                if i == result_at && kind == SymKind::Def {
-                    if let Some((p, required)) = self.variance_violation(t, sign) {
-                        let shown = self.show_method_info(&sig);
-                        self.report_variance_at(p, required, &shown, m_file, span, &what);
-                    }
-                    break;
-                }
-                if self.report_variance(t, sign, m_file, span, &what) {
-                    break;
-                }
-            }
+            self.check_member_variance(c, m, false);
         }
         let mut aliases: Vec<AliasId> = self.syms.class(c).type_aliases.values().copied().collect();
         aliases.sort();
@@ -5759,6 +5725,138 @@ impl<'a> Worker<'a> {
             }
         }
         self.variance_skip.clear();
+    }
+
+    /// Whether the member `m` of `c` is private to `this` until another instance selects it:
+    /// private, not qualified, no class parameter (dotty's `canBeLocal`).
+    fn local_private(&self, c: ClassId, m: SymId) -> bool {
+        let info = self.syms.sym(m);
+        info.mods & mods::PRIVATE != 0 && !self.has_access_scope(info.file, info.span.start) && !self.is_ctor_param(c, m)
+    }
+
+    /// The variance check of the member `m` of `c`, by its signature's positions; a `var` stands
+    /// in an invariant position unless it is private and only read through other instances
+    /// (`assigned` false), as dotty's `validateDefinition` keeps a private var covariant unless
+    /// `AssignedNonLocally`. Whether an error was reported.
+    fn check_member_variance(&mut self, c: ClassId, m: SymId, read_only: bool) -> bool {
+        let (kind, m_mods, m_file, m_span) = {
+            let s = self.syms.sym(m);
+            (s.kind, s.mods, s.file, s.span)
+        };
+        self.variance_skip.clear();
+        if !self.unchecked_variance.is_empty() {
+            let tys = self.member_type_exprs(c, m);
+            self.collect_unchecked_variance(m_file, &tys);
+        }
+        let sign = match kind {
+            SymKind::Var if read_only => 1,
+            SymKind::Var => 0,
+            SymKind::Val | SymKind::Def | SymKind::Given => 1,
+            _ => return false,
+        };
+        self.sig_of(m);
+        let sig = self.sig_arc(m);
+        let mut positions: Vec<(TypeId, i8, crate::source::Span, String)> = Vec::new();
+        for &tp in &sig.tparams {
+            let (upper, lower) = (self.syms.tparam(tp).upper, self.syms.tparam(tp).lower);
+            let what = format!("type parameter {}", self.name_str(self.syms.tparam(tp).name));
+            positions.push((upper, -1, m_span, what.clone()));
+            positions.push((lower, 1, m_span, what));
+        }
+        for p in sig.clauses.iter().flat_map(|cl| cl.params.iter()) {
+            let what = format!("parameter {}", self.name_str(p.name));
+            positions.push((p.ty, -1, self.syms.sym(p.sym).span, what));
+        }
+        let mut what = self.member_description(m, None);
+        // dotty's `privateParamAddendum`: a private class parameter is never local.
+        if m_mods & mods::PRIVATE != 0 && m_mods & mods::FIELD != 0 && self.is_ctor_param(c, m) {
+            let (var_or_val, instead) = if kind == SymKind::Var { ("var", " and add\na field inside the class instead") } else { ("val", "") };
+            what.push_str(&format!(
+                "\n\nImplementation limitation: private {var_or_val} parameters cannot be inferred to be local\nand therefore are always variance-checked.\n\nPotential fix: remove the private {var_or_val} modifiers on the parameter {}{instead}.",
+                self.name_str(self.syms.sym(m).name)
+            ));
+        }
+        let result_at = positions.len();
+        positions.push((sig.ret, sign, m_span, what));
+        for (i, (t, sign, span, what)) in positions.into_iter().enumerate() {
+            // A def's result is shown in its info, as `VarianceChecker` reports the
+            // symbol's (`=> R`, `(x: Int): R`).
+            if i == result_at && kind == SymKind::Def {
+                if let Some((p, required)) = self.variance_violation(t, sign) {
+                    let shown = self.show_method_info(&sig);
+                    self.report_variance_at(p, required, &shown, m_file, span, &what);
+                    return true;
+                }
+                return false;
+            }
+            if self.report_variance(t, sign, m_file, span, &what) {
+                return true;
+            }
+        }
+        false
+    }
+
+    /// Whether the local `l` stands for `c.this` in a class nested in `c` (`this_ref`, a
+    /// constructor's outer parameter), being of that singleton's type: dotty's prefix `c.this`.
+    fn local_is_this(&mut self, l: SymId, c: ClassId) -> bool {
+        let ty = self.sig_of(l).ret;
+        matches!(self.types.get(ty), Type::This(k) if k == c)
+    }
+
+    /// A private member of a class selected through `recv`, typed `recv_ty`, or assigned
+    /// through it: where `recv` is no `this` of the member's class (nor the object itself), the
+    /// member is every instance's, and its variance is checked as any member's (dotty's
+    /// `isAccessibleFrom` resetting `Local`, `typedAssign`'s `AssignedNonLocally`), with the
+    /// other alternatives of its name, which the selection's denotation filtered alike. An error
+    /// is reported once however many selections meet it; a member found sound is not checked
+    /// again.
+    #[inline]
+    pub(super) fn note_private_selection(&mut self, s: SymId, recv: TExprId, recv_ty: TypeId, assigned: bool) {
+        if self.syms.sym(s).mods & mods::PRIVATE != 0 {
+            self.note_private_selection_of(s, recv, recv_ty, assigned);
+        }
+    }
+
+    #[inline(never)]
+    fn note_private_selection_of(&mut self, s: SymId, recv: TExprId, recv_ty: TypeId, assigned: bool) {
+        let (owner, s_mods, s_file, name) = {
+            let info = self.syms.sym(s);
+            (info.owner, info.mods, info.file, info.name)
+        };
+        let Owner::Class(c) = owner else { return };
+        if s_mods & mods::PRIVATE == 0 || self.source(s_file).is_std || !self.in_variant_scope(c) || !self.local_private(c, s) {
+            return;
+        }
+        match self.prog.expr(recv) {
+            TExpr::This => return,
+            TExpr::Module(o) if o == c => return,
+            TExpr::Local(l) if self.local_is_this(l, c) => return,
+            _ => {}
+        }
+        let recv_ty = self.deref(recv_ty);
+        if matches!(self.types.get(recv_ty), Type::This(k) if k == c) {
+            return;
+        }
+        let mut alts: Vec<SymId> = (0..self.own_member_count(c)).map(|i| self.own_member(c, i)).filter(|&m| self.syms.sym(m).name == name && self.local_private(c, m)).collect();
+        if !alts.contains(&s) {
+            alts.push(s);
+        }
+        let skip = std::mem::take(&mut self.variance_skip);
+        for m in alts {
+            let read_only = !(assigned && m == s);
+            if self.variance_checked.contains_key(&(m, read_only)) {
+                continue;
+            }
+            let mark = self.diags.items.len();
+            if self.check_member_variance(c, m, read_only) {
+                if self.diags.items[..mark].contains(&self.diags.items[mark]) {
+                    self.diags.items.truncate(mark);
+                }
+            } else {
+                self.variance_checked.insert((m, read_only), ());
+            }
+        }
+        self.variance_skip = skip;
     }
 
     /// The type expressions of a member's signature: parameters, bounds and result, or the

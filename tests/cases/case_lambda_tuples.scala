@@ -27,6 +27,7 @@ object Main:
     case (1, 2) => "one two"
     case (a, b) => s"$a $b"
 
+  @annotation.nowarn
   def main(args: Array[String]): Unit =
     println(split("md:hover:[a:b]:x", ':'))
     println(split("a/b/[c/d]", '/'))

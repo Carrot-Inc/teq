@@ -2,7 +2,7 @@
 // expect: warning: match may not be exhaustive; missing: (false, false)
 // expect: warning: match may not be exhaustive; missing: Some(Green)
 // expect: warning: match may not be exhaustive; missing: (Red, B)
-// expect: warning: match may not be exhaustive; missing: String
+// expect: warning: match may not be exhaustive; missing: _: String
 // expect: warning: match may not be exhaustive; missing: A(_)
 // expect: 6 warnings found, errors under --werror
 // teq: --werror

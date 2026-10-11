@@ -2555,7 +2555,7 @@ impl<'a> Worker<'a> {
         vars && self.var_variances(result).iter().any(|&(w, s)| w == v && s == 1)
     }
 
-    fn occurs(&self, v: TVarId, t: TypeId) -> bool {
+    pub(super) fn occurs(&self, v: TVarId, t: TypeId) -> bool {
         let mut vars = Vec::new();
         self.collect_vars(t, &mut vars);
         vars.contains(&v)
@@ -3513,12 +3513,20 @@ impl<'a> Worker<'a> {
     }
 
     /// The information of the denotation `d`: its joint information where a meet made one, else
-    /// its symbol's signature, under the substitution of the instance of its owner it is a member
-    /// of (dotty's `SingleDenotation.info`, `asSeenFrom` its prefix).
+    /// its symbol's signature, a structural given's with its class for the result (dotty's given
+    /// module is a reference of its class, `given_object_type`), under the substitution of the
+    /// instance of its owner it is a member of (dotty's `SingleDenotation.info`, `asSeenFrom` its
+    /// prefix).
     pub(super) fn denot_info(&mut self, ((s, t), joint): &Denot) -> MethodSig {
         let sig = match joint {
             Some(j) => j.clone(),
-            None => self.sig_arc(*s),
+            None => {
+                let own = self.sig_arc(*s);
+                match self.given_object_type(*s) {
+                    Some(class) => std::sync::Arc::new(MethodSig { tparams: own.tparams.clone(), clauses: own.clauses.clone(), ret: class }),
+                    None => own,
+                }
+            }
         };
         let subst = self.owner_subst(*t);
         let mut out = (*sig).clone();
