@@ -699,6 +699,7 @@ intersection_member_binders
 intersection_member_bounds_meet
 intersection_member_gate
 intersection_member_lambdas
+intersection_member_meet
 intersection_member_overload
 intersection_member_ranges
 intersection_member_receivers
