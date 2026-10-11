@@ -651,6 +651,11 @@ impl<'a> Worker<'a> {
         if cf.inner_classes.iter().any(|i| i.inner == cf.name && i.outer.is_some() && i.access & ACC_STATIC != 0) {
             m |= mods::JAVA_STATIC;
         }
+        // Universal traits as dotty's `ClassfileParser.parseParents` reads them; `Comparable`, of
+        // that list too, has its `Object` back from its generic signature.
+        if matches!(cf.name.as_str(), "java/io/Serializable" | "java/lang/Cloneable") {
+            m |= mods::UNIVERSAL;
+        }
         let c = match placeholder {
             Some(c) => {
                 let mut info = self.syms.class_mut(c);
@@ -885,7 +890,7 @@ impl<'a> Worker<'a> {
 
     /// The JDK class that a class of the std's platform layer stands for, named by its
     /// `@jvmClass` annotation.
-    fn std_jvm_class(&self, c: ClassId) -> Option<String> {
+    pub(super) fn std_jvm_class(&self, c: ClassId) -> Option<String> {
         let info = self.syms.class(c);
         if !self.source(info.file).is_std || self.in_jar(info.file) {
             return None;

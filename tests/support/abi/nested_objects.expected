@@ -1,0 +1,7 @@
+nested/Owner$ Color:Lnested/Owner$Color$; public,static,final
+nested/Owner$ Hidden:Lnested/Owner$Hidden$; private,static,final
+nested/Owner$ Nested:Lnested/Owner$Nested$; public,static,final
+nested/Owner$ Other:Lnested/Owner$Other$; public,static,final
+nested/Owner$ Point:Lnested/Owner$Point$; public,static,final
+nested/Owner$ Scoped:Lnested/Owner$Scoped$; public,static,final
+nested/Owner$ weird$minusname:Lnested/Owner$weird$minusname$; public,static,final

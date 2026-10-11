@@ -1937,6 +1937,9 @@ impl<'a> Worker<'a> {
                 self.erased_values.push((id, file, at));
             }
         }
+        if self.prog.is_setter_assign(e) {
+            self.prog.mark_setter_assign(id);
+        }
         if self.interpolations.contains_key(&e) {
             self.interpolations.insert(id, ());
         }
@@ -2150,8 +2153,8 @@ impl<'a> Worker<'a> {
                         return None;
                     }
                     return match op {
-                        PrimOp::Eq | PrimOp::RefEq => Some(Bool(a_null && b_null)),
-                        PrimOp::Ne | PrimOp::RefNe => Some(Bool(!(a_null && b_null))),
+                        PrimOp::Eq | PrimOp::RefEq | PrimOp::Same => Some(Bool(a_null && b_null)),
+                        PrimOp::Ne | PrimOp::RefNe | PrimOp::NotSame => Some(Bool(!(a_null && b_null))),
                         _ => None,
                     };
                 }

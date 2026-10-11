@@ -2657,7 +2657,7 @@ impl<'a> Worker<'a> {
     fn shape_fits(&mut self, alt: &Alt, k: usize, args: &[ArgShape], untupled: bool, partial: bool) -> bool {
         let Some(clause) = alt.clause(k) else {
             // `x.toString()` next to `toString(radix)`: the empty parentheses of Java.
-            if k == 0 && args.is_empty() && self.has_java_parens(alt.sym) {
+            if k == 0 && args.is_empty() && self.takes_java_parens(alt.sym) {
                 return true;
             }
             // A result that is a function takes the arguments through its `apply`, as does one
@@ -2958,7 +2958,7 @@ impl<'a> Worker<'a> {
         for (k, info) in lists.iter().enumerate() {
             let Some(clause) = alt.clause(k) else {
                 // `x.toString()` next to `toString(radix)`: the empty parentheses of Java.
-                if k == 0 && info.shapes.is_empty() && self.has_java_parens(alt.sym) {
+                if k == 0 && info.shapes.is_empty() && self.takes_java_parens(alt.sym) {
                     return true;
                 }
                 return k == 0 && self.function_result_takes(alt, &subst, info);

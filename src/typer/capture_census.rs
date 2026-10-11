@@ -705,7 +705,7 @@ impl<'w, 'a> Walk<'w, 'a> {
                 self.cases(cases, inner);
             }
             TExpr::Prim(op, a, b) => {
-                let ambiguous = matches!(op, PrimOp::RefEq | PrimOp::RefNe | PrimOp::Eq | PrimOp::Ne);
+                let ambiguous = matches!(op, PrimOp::RefEq | PrimOp::RefNe | PrimOp::Same | PrimOp::NotSame | PrimOp::Eq | PrimOp::Ne);
                 let status = match (form, ambiguous) {
                     (Some(Form::Op(_) | Form::SwappedOp(_) | Form::SuperOp(_)), _) => Status::Captured,
                     (_, true) => Status::Missing,

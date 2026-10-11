@@ -73,18 +73,31 @@ impl<'a> Worker<'a> {
         Some(assign)
     }
 
-    /// `this` and its type, where the typer read an unqualified name `y` as the method `this.y`:
-    /// the receiver of the setter `y_=` that `y = v` and `y op= v` call.
+    /// The prefix the typer read an unqualified name `y` through as the method `y` and its type:
+    /// `this`, an enclosing class's `C.this` (the local standing for it, `outer_this_sym`, or the
+    /// outer accessors leading to it), an imported object; the receiver of the setter `y_=` that
+    /// `y = v` and `y op= v` call, selected on the getter's prefix as dotty's `Typer.typedAssign`
+    /// selects it.
     pub(super) fn this_receiver(&mut self, tl: TExprId) -> Option<(TExprId, TypeId)> {
         let TExpr::CallMethod(recv, getter, args) = self.prog.expr(tl) else { return None };
-        if !matches!(self.prog.expr(recv), TExpr::This) || args.len != 0 || self.syms.sym(getter).kind != SymKind::Def {
+        if args.len != 0 || self.syms.sym(getter).kind != SymKind::Def {
             return None;
         }
-        let c = self.this_class()?;
-        Some((recv, self.syms.this_type(c)))
+        let ty = match self.prog.expr(recv) {
+            TExpr::This => self.syms.this_type(self.this_class()?),
+            TExpr::Local(s) => self.sig_of(s).ret,
+            TExpr::CallMethod(_, accessor, l) if l.len == 0 => self.sig_of(accessor).ret,
+            TExpr::Module(c) => self.types.class(c, &[]),
+            _ => self.prog.type_of(recv)?,
+        };
+        let ty = match self.types.get(ty) {
+            Type::This(c) => self.syms.this_type(c),
+            _ => ty,
+        };
+        Some((recv, ty))
     }
 
-    /// `y = v` for a method `y` of `this` with a setter `y_=`: the setter's call.
+    /// `y = v` for a method `y` with a setter `y_=` beside it on its prefix: the setter's call.
     pub(super) fn unqualified_setter_call(&mut self, tl: TExprId, name: Name, rhs: crate::ast::ExprId, span: Span) -> Option<(TExprId, TypeId)> {
         let (recv, ty) = self.this_receiver(tl)?;
         let setter = self.interner.intern(&format!("{}_=", self.name_ref(name)));
@@ -101,6 +114,7 @@ impl<'a> Worker<'a> {
                 let args = self.prog.list(&[value]);
                 let call = self.prog.add(TExpr::CallMethod(recv, setter, args));
                 self.prog.set_type(call, self.b.t_unit);
+                self.prog.mark_setter_assign(call);
                 return call;
             }
         }

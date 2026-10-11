@@ -1386,13 +1386,22 @@ impl<'a> Worker<'a> {
         let info = self.syms.sym(sym);
         match info.kind {
             SymKind::Object(c) => Some(self.types.class(c, &[])),
-            // An export forwarder of an object (`final def T: O.type`) is the object's path.
+            // An export forwarder of an object (`final def T: O.type`) is the object's path; a def
+            // of no clauses of the std's object standing for a JDK class's statics stands for a
+            // static field, which is stable as dotty's `ClassfileParser` reads a final one
+            // (`TimeUnit.SECONDS.type` of scala-library's `duration.SECONDS`).
             SymKind::Def => {
+                let owner = info.owner;
                 self.sig_of(sym);
                 let sig = self.syms.sig(sym);
                 let ret = sig.ret;
+                let plain = sig.tparams.is_empty() && sig.clauses.is_empty();
                 match self.types.get(ret) {
-                    Type::Class(c, _) if sig.tparams.is_empty() && sig.clauses.is_empty() && self.syms.class(c).kind == ClassKind::Object => Some(ret),
+                    Type::Class(c, _) if plain && self.syms.class(c).kind == ClassKind::Object => Some(ret),
+                    _ if plain && matches!(owner, Owner::Class(o) if self.syms.class(o).kind == ClassKind::Object && self.std_jvm_class(o).is_some()) => Some(match prefix {
+                        Some(p) => self.types.mk(Type::Select(p, sym)),
+                        None => self.types.mk(Type::Term(sym)),
+                    }),
                     _ => None,
                 }
             }

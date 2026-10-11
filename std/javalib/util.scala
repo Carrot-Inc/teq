@@ -2,7 +2,7 @@
 package java.io:
 
   @jvmClass("java/io/Serializable")
-  trait Serializable
+  trait Serializable extends Any
 
   @jvmClass("java/io/Closeable")
   trait Closeable extends java.lang.AutoCloseable

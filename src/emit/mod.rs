@@ -1490,6 +1490,69 @@ impl<'a> Emitter<'a> {
         }
     }
 
+    /// Corrects what `$cls` copied to the class `name` from its own traits `own[1..]` (in
+    /// linearisation order, the first body winning) where an abstract redeclaration in one of them
+    /// overrides that body: the class's member is then a later trait's, or none, the superclass's
+    /// showing (dotty's `MixinOps.isInImplementingClass`).
+    fn redeclared_trait_methods(&mut self, name: &str, own: &[ClassId], superclass: Option<ClassId>) {
+        let syms = self.syms;
+        // A member's declaration in `k` of the alternative the output names `d` (an overriding
+        // alternative takes the name of the one it overrides), with whether it is concrete: per
+        // alternative, as dotty's `isInImplementingClass` asks it of `nonPrivateMember`'s.
+        let declares = |k: ClassId, n: crate::intern::Name, d: crate::intern::Name| -> Option<(SymId, bool)> {
+            let &m = syms.class(k).members.get(&n)?;
+            let single = [m];
+            let alts = syms.alternatives(m).unwrap_or(&single);
+            alts.iter().copied().find(|&a| {
+                let info = syms.sym(a);
+                matches!(info.kind, SymKind::Def | SymKind::Val | SymKind::Var | SymKind::Given) && info.owner == Owner::Class(k) && syms.dispatch_name(a) == d
+            })
+            .map(|a| (a, !self.reach.is_abstract(syms, a)))
+        };
+        let mut done: Vec<crate::intern::Name> = Vec::new();
+        for &t in own.iter().skip(1) {
+            for &m in &syms.class(t).member_order {
+                let info = syms.sym(m);
+                let d = syms.dispatch_name(m);
+                if info.kind != SymKind::Def || info.owner != Owner::Class(t) || !self.reach.is_abstract(syms, m) || done.contains(&d) {
+                    continue;
+                }
+                done.push(d);
+                let declared: Vec<(ClassId, SymId, bool)> = own.iter().filter_map(|&k| declares(k, info.name, d).map(|(s, c)| (k, s, c))).collect();
+                let copied = declared.iter().find(|d| d.2).map(|d| d.0);
+                let pairs: Vec<(ClassId, bool)> = declared.iter().map(|d| (d.0, d.2)).collect();
+                let member = syms.member_declaration(&pairs);
+                if member == copied || copied == own.first().copied() {
+                    continue;
+                }
+                let Some(&(_, copied_sym, _)) = declared.iter().find(|d| Some(d.0) == copied) else { continue };
+                let js = self.sym_text(copied_sym);
+                match member {
+                    Some(b) => {
+                        let from = self.class_name(b);
+                        let _ = write!(self.out, " {0}.prototype.{1} = {2}.prototype.{1};", name, js, from);
+                    }
+                    // `Object`'s method where no superclass defines one: on JavaScript a class's
+                    // prototype has none of its own.
+                    None if !superclass.is_some_and(|sup| {
+                        syms.class(sup).base_types.iter().any(|&(b, _)| syms.class(b).kind != ClassKind::Builtin && declares(b, info.name, d).is_some_and(|d| d.1))
+                    }) && matches!(d, crate::names::TO_STRING | crate::names::HASH_CODE | crate::names::EQUALS) =>
+                    {
+                        let body = match info.name {
+                            crate::names::TO_STRING => "() { return $anyStr(this); }",
+                            crate::names::HASH_CODE => "() { return $identityHash(this); }",
+                            _ => "(that) { return this === that; }",
+                        };
+                        let _ = write!(self.out, " {}.prototype.{} = function {};", name, js, body);
+                    }
+                    None => {
+                        let _ = write!(self.out, " delete {}.prototype.{};", name, js);
+                    }
+                }
+            }
+        }
+    }
+
     /// The property name of the member `s` of a Scala class as the development output writes
     /// it; the release table maps these to short names.
     fn member_name(&self, s: SymId) -> String {
@@ -2903,6 +2966,11 @@ impl<'a> Emitter<'a> {
             if tc.inherited_case_members & (1 << bit) != 0 {
                 let _ = write!(self.out, " delete {}.prototype.{};", name, method);
             }
+        }
+        // A trait's method that `$cls` copies first but an abstract redeclaration overrides is no
+        // member of the class (`Symbols::member_declaration`): the member's, or the superclass's.
+        if !matches!(info.kind, ClassKind::Trait | ClassKind::Enum) {
+            self.redeclared_trait_methods(&name, &own, info.superclass);
         }
         // An instance of a subclass may equal one of the case class itself, as under scalac.
         let defines_equals = info.base_types.iter().any(|&(b, _)| self.syms.class(b).members.contains_key(&crate::names::EQUALS));

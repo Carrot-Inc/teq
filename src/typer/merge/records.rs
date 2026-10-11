@@ -212,6 +212,9 @@ pub(in crate::typer) fn class<M: Mapping + ?Sized>(m: &M, c: &mut ClassInfo) {
     for syms in &mut c.ctor_syms {
         syms_in(m, syms);
     }
+    for s in c.selectors.iter_mut().flatten() {
+        *s = m.sym(*s);
+    }
     for (b, t) in &mut c.base_types {
         *b = m.class(*b);
         *t = m.ty(*t);

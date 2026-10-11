@@ -2512,7 +2512,7 @@ fn array_element_args_wild(ast: &crate::ast::Ast, ty: crate::ast::TyExprId) -> b
 
 /// `T @unchecked`, or a type with such an argument (`List[T @unchecked]`), which is not warned
 /// about as a type test that cannot be checked.
-fn type_unchecked(ast: &crate::ast::Ast, ty: crate::ast::TyExprId) -> bool {
+pub(super) fn type_unchecked(ast: &crate::ast::Ast, ty: crate::ast::TyExprId) -> bool {
     use crate::ast::TyExpr;
     match ast.ty(ty) {
         TyExpr::Unchecked(_) => true,

@@ -1591,6 +1591,10 @@ impl<'w, 'a> P<'w, 'a> {
             if calls {
                 let t = self.w.b.t_any_ref;
                 self.parent_call(c, t);
+            } else if info.mods & mods::UNIVERSAL != 0 {
+                // A universal trait's first parent is `Any` (dotty's `Namer.ensureFirstIsClass`
+                // keeps it), which a reader takes for the trait's being no `AnyRef`.
+                self.external_tpt("scala", "Any");
             } else {
                 self.external_tpt("java.lang", "Object");
             }
@@ -2118,7 +2122,9 @@ impl<'w, 'a> P<'w, 'a> {
             self.statements_before(c, &mut stmts, self.item_start(&m));
             match m {
                 BodyItem::Sym(s) => {
-                    if ctor_syms.contains(&s) || !(order.contains(&s) || info.extensions.contains(&s) || info.givens.contains(&s)) {
+                    // A selector `_N` is written with the class's other synthesized members.
+                    let selector = self.w.syms.sym(s).mods & mods::SELECTOR != 0;
+                    if selector || ctor_syms.contains(&s) || !(order.contains(&s) || info.extensions.contains(&s) || info.givens.contains(&s)) {
                         continue;
                     }
                     self.member(c, s);

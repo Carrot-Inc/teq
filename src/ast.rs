@@ -307,6 +307,10 @@ pub mod mods {
     /// interface, those marked `static` in a class): no inner class, its type through no prefix,
     /// as dotty enters it in the Java class's companion.
     pub const JAVA_STATIC: Mods = 1 << 26;
+    /// A case class's selector `_N` (dotty's `Desugar.productElemMeths`): a def reading the N-th
+    /// parameter of the first clause, which the namer makes without a definition and whose
+    /// signature the field's gives (`complete_sig_inner`), its body the class's check's.
+    pub const SELECTOR: Mods = 1 << 29;
     /// A deferred given: `given x: T = deferred` in a trait, the marker resolving to
     /// `scala.compiletime.deferred` (scalac's `Deferred | HasDefault`, set as its signature
     /// completes), or one read from a pickle with `HASDEFAULT` and no body. Abstract, and
@@ -316,6 +320,11 @@ pub mod mods {
     /// The definition is annotated `@deprecated` (a program's) or its pickle or class file says
     /// it is deprecated (a library's): its references warn (`typer::deprecation`).
     pub const DEPRECATED: Mods = 1 << 28;
+    /// A class's: a trait that extends `Any` (scalac's universal trait, which derives from no
+    /// `Object`, so is no `AnyRef`; dotty's `Namer.ensureFirstIsClass` puts `Object` before a
+    /// trait's first parent otherwise): its first parent written `Any`, as a jar's pickle declares
+    /// it, and Java's `Serializable` and `Cloneable` (`ClassfileParser.parseParents`).
+    pub const UNIVERSAL: Mods = 1 << 30;
 }
 
 #[derive(Clone, Debug)]

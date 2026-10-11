@@ -787,8 +787,10 @@ impl<'w, 'a> P<'w, 'a> {
             },
             TExpr::CallMethod(r, s, args) => match form {
                 None => {
-                    // An assignment through an abstract var, which scalac's tree keeps as one.
-                    if let (Some(var), [value]) = (crate::typer::setters::abstract_var_of_setter(&self.w.syms, self.w.interner, s), self.w.prog.expr_list(args)) {
+                    // An assignment through an abstract var, which scalac's tree keeps as one; a
+                    // call of the setter written so is an application (`Program::setter_assign_bits`).
+                    let assigned = crate::typer::setters::abstract_var_of_setter(&self.w.syms, self.w.interner, s).filter(|_| self.w.prog.is_setter_assign(e));
+                    if let (Some(var), [value]) = (assigned, self.w.prog.expr_list(args)) {
                         let value = *value;
                         self.receive_by_name(e, r, var);
                         let l = self.open(ASSIGN);
@@ -5491,7 +5493,7 @@ impl<'w, 'a> P<'w, 'a> {
         use PrimOp::*;
         let b = &self.w.b;
         match op {
-            Lt | Le | Gt | Ge | RefEq | RefNe | Eq | Ne | BoolAnd | BoolOr | BoolXor | BoolStrictAnd | BoolStrictOr => b.t_boolean,
+            Lt | Le | Gt | Ge | RefEq | RefNe | Same | NotSame | Eq | Ne | BoolAnd | BoolOr | BoolXor | BoolStrictAnd | BoolStrictOr => b.t_boolean,
             IntShl | IntShr | IntUshr | LongShl | LongShr | LongUshr => if lt == b.t_long { b.t_long } else { b.t_int },
             _ => {
                 let rank = |t: TypeId| if t == b.t_double { 4 } else if t == b.t_float { 3 } else if t == b.t_long { 2 } else { 1 };
@@ -6487,6 +6489,8 @@ fn prim_name(op: PrimOp) -> &'static str {
         Ge => ">=",
         RefEq | Eq => "==",
         RefNe | Ne => "!=",
+        Same => "eq",
+        NotSame => "ne",
         BoolAnd => "&&",
         BoolOr => "||",
     }

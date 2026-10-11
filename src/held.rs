@@ -85,6 +85,7 @@ impl Program {
             widened_bits,
             opaque_bits,
             spread_bits,
+            setter_assign_bits,
             shifts: _,
         } = self;
         exprs.held()
@@ -137,6 +138,7 @@ impl Program {
             + widened_bits.held()
             + opaque_bits.held()
             + spread_bits.held()
+            + setter_assign_bits.held()
             + capture.as_ref().map_or(0, |c| c.held())
     }
 
@@ -165,6 +167,7 @@ impl Symbols {
                         + array(&c.children)
                         + array(&c.ctor)
                         + owners(&c.ctor_syms, array)
+                        + array(&c.selectors)
                         + array(&c.base_types)
                         + array(&c.extensions)
                         + array(&c.givens)

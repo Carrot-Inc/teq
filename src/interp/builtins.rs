@@ -2345,7 +2345,7 @@ fn install_typer_templates(it: &mut Table) {
         let ordinal = int(it, a, 1)?;
         let enum_name = text(it, a, 2)?;
         match values.get(ordinal.max(0) as usize) {
-            Some(v) if ordinal >= 0 => Ok(v.clone()),
+            Some(v) if ordinal >= 0 && !matches!(v, Value::Null) => Ok(v.clone()),
             _ => it.throw_named("NoSuchElementException", &format!("enum {} has no case with ordinal: {}", enum_name, ordinal)),
         }
     });

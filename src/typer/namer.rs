@@ -666,6 +666,63 @@ impl<'a> Worker<'a> {
         self.register_term(owner, setter);
     }
 
+    /// A case class's selectors `_1` .. `_N` (dotty's `Desugar.productElemMeths`), members
+    /// before the class is checked, so that one implements a parent's abstract `_1`: a def per
+    /// parameter of the first clause, unless that parameter is named so or the body defines the
+    /// name as a val or a def of no parameter lists (`mods::SELECTOR`); a def of parameters of the
+    /// name is another alternative. The body is entered first, so a name no member has yet is
+    /// none of the body's: the selector is the name's only member.
+    fn enter_selectors(&mut self, file: FileId, cid: ClassId) {
+        let Some(params) = self.syms.class(cid).ctor_syms.first().cloned() else { return };
+        let mut selectors = Vec::with_capacity(params.len());
+        let mut in_body: Option<Vec<crate::intern::Name>> = None;
+        for (i, &p) in params.iter().enumerate() {
+            let name = self.selector_name(i + 1);
+            let taken = self.syms.class(cid).members.contains_key(&name);
+            if self.syms.sym(p).name == name || taken && in_body.get_or_insert_with(|| self.body_properties(file, cid)).contains(&name) {
+                selectors.push(None);
+                continue;
+            }
+            let span = self.syms.sym(p).span;
+            let selector = self.syms.new_sym(name, SymKind::Def, mods::SELECTOR, Owner::Class(cid), file, None, span);
+            if taken {
+                self.register_term(Owner::Class(cid), selector);
+            } else {
+                self.syms.add_member(cid, selector);
+            }
+            selectors.push(Some(selector));
+        }
+        self.syms.class_mut(cid).selectors = selectors;
+    }
+
+    /// Sizes the member table of a case class for what the namer enters in it at once: its
+    /// parameters, its body's definitions and the selectors of its first clause.
+    fn reserve_case_members(&mut self, cid: ClassId, clauses: &[ast::ParamClause], body: usize) {
+        let params: usize = clauses.iter().map(|c| c.params.len()).sum();
+        let arity = clauses.first().map_or(0, |c| c.params.len());
+        self.syms.class_mut(cid).members.reserve(params + arity + body);
+    }
+
+    /// The names of the vals and the defs of no parameter lists of the class's body.
+    fn body_properties(&self, file: FileId, cid: ClassId) -> Vec<crate::intern::Name> {
+        let mut in_body = Vec::new();
+        if let Some(DefKind::Class(cls)) = self.syms.class(cid).def.map(|d| &self.ast(file).def(d).kind) {
+            for stmt in &cls.body {
+                let Stmt::Def(d) = stmt else { continue };
+                let def = self.ast(file).def(*d);
+                let property = match &def.kind {
+                    DefKind::Val { .. } => true,
+                    DefKind::Fun(f) => f.tparams.is_empty() && f.clauses.is_empty(),
+                    _ => false,
+                };
+                if property {
+                    in_body.push(def.name);
+                }
+            }
+        }
+        in_body
+    }
+
     fn note_scoped_private(&mut self, file: FileId, sym: SymId) {
         let info = self.syms.sym(sym);
         let scopes = &self.ast(file).access_scopes;
@@ -772,8 +829,7 @@ impl<'a> Worker<'a> {
                     ast::ClassKind::Trait => ClassKind::Trait,
                     _ => ClassKind::Enum,
                 };
-                let cid =
-                    self.syms.new_class(def.name, kind, def.mods, owner, file, Some(id), def.span);
+                let cid = self.syms.new_class(def.name, kind, def.mods, owner, file, Some(id), def.span);
                 self.mark_inner_class(cid);
                 self.def_classes.insert(file.0 as usize, id, cid);
                 self.syms.class_mut(cid).has_exports = !cls.exports.is_empty();
@@ -782,6 +838,9 @@ impl<'a> Worker<'a> {
                     return;
                 }
                 self.enter_class_annots(file, def, cid);
+                if def.mods & mods::CASE != 0 {
+                    self.reserve_case_members(cid, &cls.clauses, cls.body.len());
+                }
                 self.enter_ctor_params(file, cid, &cls.clauses);
                 if let Some(obj) = self.existing_object(owner, def.name) {
                     self.syms.class_mut(cid).companion = Some(obj);
@@ -791,6 +850,9 @@ impl<'a> Worker<'a> {
                     self.enter_enum_body(file, owner, cid, id);
                 } else {
                     self.enter_body(file, cid, &cls.body);
+                }
+                if def.mods & mods::CASE != 0 {
+                    self.enter_selectors(file, cid);
                 }
             }
             ast::ClassKind::EnumCase => {}
@@ -860,6 +922,7 @@ impl<'a> Worker<'a> {
         let cid = self.syms.new_class(name, ClassKind::Object, m | mods::FINAL, owner, file, def, span);
         self.record_self_alias(cid);
         let sym = self.syms.new_sym(name, SymKind::Object(cid), m, owner, file, None, span);
+        self.note_scoped_private(file, sym);
         let ty = self.types.class(cid, &[]);
         {
             let mut s = self.syms.sym_mut(sym);
@@ -925,7 +988,9 @@ impl<'a> Worker<'a> {
                 self.register_term(Owner::Class(companion), sym);
             } else {
                 self.register_class(Owner::Class(companion), case_cid);
+                self.reserve_case_members(case_cid, &case_cls.clauses, case_cls.body.len());
                 self.enter_ctor_params(file, case_cid, &case_cls.clauses);
+                self.enter_selectors(file, case_cid);
             }
         }
     }

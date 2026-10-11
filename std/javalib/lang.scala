@@ -8,7 +8,7 @@ package java.lang:
   type Object = AnyRef
 
   @jvmClass("java/lang/Cloneable")
-  trait Cloneable
+  trait Cloneable extends Any
 
   @jvmClass("java/lang/AutoCloseable")
   trait AutoCloseable:

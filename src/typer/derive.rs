@@ -272,6 +272,11 @@ impl<'a> Worker<'a> {
     /// `canEqual`, the latter declared by `Equals`) when a call resolves to the trait's own definition: the receiver is a product
     /// by rule or is typed as `Product`, and neither has a body of the trait to call.
     pub fn product_helper(&self, member: SymId) -> Option<SymId> {
+        // On the JVM the members are scala-library's and every case class defines `canEqual`:
+        // the call is virtual, as scalac's, so a class's own `canEqual` answers.
+        if self.jvm {
+            return None;
+        }
         let s = self.syms.sym(member);
         if !matches!(s.owner, Owner::Class(c) if Some(c) == self.b.product || Some(c) == self.equals_class()) {
             return None;

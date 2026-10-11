@@ -31,6 +31,7 @@ array_overloads_erasure
 array_overloads_override_chain
 array_overloads_same_simple_name
 array_sliding_grouped
+array_spread_alias
 arrays_copy_of
 arrays_generic
 arrays_of_nothing
@@ -58,6 +59,8 @@ block_infix_argument
 block_lambda_stmts
 block_then_select
 boolean_strict_operators
+bounded_param_operators
+bounded_type_test
 box_constructors
 box_float_constructors
 boxed_ancestors
@@ -110,6 +113,7 @@ capture_u
 capture_w
 capture_x
 case_class_own_unapply
+case_class_selectors
 case_companion_nested
 case_copy_clauses
 case_copy_nested
@@ -250,6 +254,7 @@ dummy_implicit
 duration_hierarchy
 duration_names
 duration_syntax_import
+duration_time_unit
 either_merge_adders
 either_right
 else_between_widths_brace_lambda
@@ -261,6 +266,7 @@ enum_cases
 enum_category
 enum_extends_class
 enum_gadt
+enum_mixed_from_ordinal
 enum_nested
 enum_ordinal_dispatch
 enum_ordinal_null
@@ -271,6 +277,7 @@ enum_usage
 enumvalues
 equality_default
 equals_trait
+erasure_shapes
 eta_by_name_inferred
 eta_sam_conversion
 eta_sam_widening
@@ -562,6 +569,7 @@ inline_demanded_this
 inline_expansion_receivers
 inline_expansion_rules
 inline_fold_std
+inline_given_by_name
 inline_guard_constant_type
 inline_hk_alias_summon
 inline_if_literal_type
@@ -870,11 +878,13 @@ new_parameterised_alias
 new_unapplied_alias
 newtype_intersection_erasure
 nio_byte_order
+nonlocal_return_lambda
 nowarn_demanded_body
 null_basics
 null_cast_unboxing
 null_compare_hk_param
 null_equality_tparam
+nullary_over_java_parens
 number_boxes
 numeric
 object_inherited_protected
@@ -896,6 +906,7 @@ operators_members
 option_as_iterable
 ordered_comparable
 ordering_tuples_large
+outer_setter_assign
 outline_widened_operand
 overload_alias_by_name_lambda
 overload_apply
@@ -1326,6 +1337,7 @@ trait_linearisation
 trait_object_methods
 trait_param_shadow
 trait_params
+trait_reabstracted_member
 trait_state
 trait_vals_mixed
 transparent_given_local
@@ -1448,6 +1460,8 @@ vc_box_product
 vc_box_same_erasure
 vc_box_stable
 vc_box_stable_extractor
+vc_null_interpolation
+vc_stable_pattern
 vdom_dsl
 vector_retention
 vector_trie

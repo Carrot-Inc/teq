@@ -12,7 +12,7 @@ local val                                   4          0        0            0  
 method call                                 2          0        0            0          0
 operator                                    8          0        0            0          0
 string concatenation                       24          0        0            0          0
-synthesized definition                      0          0        0            1          0
+synthesized definition                      0          0        0            2          0
 template call                               2          0        0            0          0
 this                                        2          0        0            0          2
 toString call                               4          0        0            0          0

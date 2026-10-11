@@ -340,7 +340,7 @@ function $enumValueOf(values, name, enumName) {
   $fail("IllegalArgumentException", "enum " + enumName + " has no case with name: " + name);
 }
 function $enumFromOrdinal(values, ordinal, enumName) {
-  if (ordinal < 0 || ordinal >= values.length) $fail("NoSuchElementException", "enum " + enumName + " has no case with ordinal: " + ordinal);
+  if (ordinal < 0 || ordinal >= values.length || values[ordinal] === null) $fail("NoSuchElementException", "enum " + enumName + " has no case with ordinal: " + ordinal);
   return values[ordinal];
 }
 function $productPrefix(x) { return x.$name !== undefined ? x.$name : x.$className; }

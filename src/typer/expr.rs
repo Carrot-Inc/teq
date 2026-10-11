@@ -2017,7 +2017,15 @@ impl<'a> Worker<'a> {
         let mark = self.hoisted.len();
         if reorders {
             for (te, ty) in typed.iter_mut() {
-                *te = self.hoist(*te, *ty, span);
+                // A hole is an argument of `StringContext.s(args: Any*)`: a value class's value is
+                // held as the reference it was made, its null kept, as dotty's `Boxing.adaptToType`
+                // passes a tree that conforms already (a JVM local of the class's type is its
+                // underlying value).
+                let held = match self.types.get(*ty) {
+                    Type::Class(c, _) if self.syms.class(c).value_class => ANY,
+                    _ => *ty,
+                };
+                *te = self.hoist(*te, held, span);
             }
         }
         let mut items = Vec::with_capacity(part_ids.len() + arg_ids.len());
@@ -4007,7 +4015,7 @@ impl<'a> Worker<'a> {
             }
             DefKind::Fun(_) => {
                 let Some(&sym) = self.def_syms.get(file.0 as usize, &d) else { return };
-                if self.misplaced_abstract_given(def) {
+                if self.misplaced_abstract_member(def, false) {
                     return;
                 }
                 let sig = self.sig_arc(sym);

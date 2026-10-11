@@ -36,6 +36,7 @@ pub const LITERALSTRING: u8 = 33;
 pub const LITERALNULL: u8 = 34;
 pub const LITERALCLASS: u8 = 35;
 pub const LITERALENUM: u8 = 36;
+pub const SYMANNOT: u8 = 40;
 pub const ANNOTATEDTPE: u8 = 42;
 pub const SUPERTPE: u8 = 46;
 pub const EXISTENTIALTPE: u8 = 48;

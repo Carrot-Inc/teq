@@ -3483,6 +3483,11 @@ impl<'a> Worker<'a> {
             }
             Type::Class(c, args) => {
                 self.settle_class(c);
+                // A class of no type parameters, most receivers, substitutes nothing: neither its
+                // parameters nor the type's arguments are copied.
+                if self.syms.class(c).tparams.is_empty() {
+                    return Subst::new();
+                }
                 let tparams = self.syms.class(c).tparams.clone();
                 let items: Vec<TypeId> = self.types.items(args).to_vec();
                 tparams

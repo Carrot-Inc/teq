@@ -140,6 +140,9 @@ pub struct ClassInfo {
     pub ctor: Vec<ClauseSig>,
     /// Constructor parameter symbols per clause, created by the namer.
     pub ctor_syms: Vec<Vec<SymId>>,
+    /// A case class's selectors `_1` .. `_N` by the index of the parameter of the first clause
+    /// each reads, as the namer entered them (`mods::SELECTOR`); none where it entered none.
+    pub selectors: Vec<Option<SymId>>,
     /// All ancestors (self first), each as a type in terms of this class's type parameters.
     pub base_types: Vec<(ClassId, TypeId)>,
     pub ordinal: u32,
@@ -880,6 +883,7 @@ impl Symbols {
             children: Vec::new(),
             ctor: Vec::new(),
             ctor_syms: Vec::new(),
+            selectors: Vec::new(),
             base_types: Vec::new(),
             ordinal: 0,
             underlying: None,
@@ -952,6 +956,18 @@ impl Symbols {
             alternative: false,
             dispatch: Dispatch::Unknown,
         }))
+    }
+
+    /// Of the declarations of one member in a class's bases, in linearisation order with whether
+    /// each has a body, the one that is the class's member, as dotty's `membersNamed` and
+    /// `Denotations.mergeSingleDenot` choose it: a declaration another declaring base derives from
+    /// is overridden by that one, and of those left the first concrete one wins. None where those
+    /// left are abstract: a trait's abstract redeclaration of `toString` over another trait's body
+    /// leaves the class `Object`'s method (`MixinOps.isInImplementingClass` writes no forwarder).
+    pub fn member_declaration(&self, declared: &[(ClassId, bool)]) -> Option<ClassId> {
+        let derives = |o: ClassId, b: ClassId| o != b && self.class(o).base_types.iter().any(|&(x, _)| x == b);
+        let overridden = |b: ClassId| declared.iter().any(|&(o, _)| derives(o, b));
+        declared.iter().find(|&&(b, concrete)| concrete && !overridden(b)).map(|&(b, _)| b)
     }
 
     /// The name under which the output defines and calls `s`: its own, unless it is an
@@ -1192,6 +1208,7 @@ impl RecordTypes for ClassInfo {
             + self.ctor.iter().map(|c| c.params.capacity() * std::mem::size_of::<ParamSig>()).sum::<usize>()
             + self.ctor_syms.capacity() * std::mem::size_of::<Vec<SymId>>()
             + self.ctor_syms.iter().map(|v| v.capacity() * 4).sum::<usize>()
+            + self.selectors.capacity() * std::mem::size_of::<Option<SymId>>()
             + map_bytes(&self.members)
             + map_bytes(&self.nested)
             + map_bytes(&self.type_aliases)

@@ -116,6 +116,9 @@ pub struct Cx<'a> {
     pub input: Input<'a>,
     pub layout: Layout,
     pub class_names: Vec<String>,
+    /// The companion objects of a file's top-level opaque types, by file, which scalac nests in
+    /// the file's `$package` object (dotty's `Flatten.transformSym`): its static fields.
+    pub opaque_companions: FxMap<u32, Vec<ClassId>>,
     pub class_by_name: FxMap<String, ClassId>,
     /// In the product mode, every class by its binary name, reached or not: whether a value of
     /// one class passes for another without a cast is not the rest of the program's to decide.
@@ -209,6 +212,7 @@ impl<'a> Cx<'a> {
         let mut cx = Cx {
             layout,
             class_names: Vec::with_capacity(n_classes),
+            opaque_companions: FxMap::default(),
             class_by_name: FxMap::default(),
             all_by_name: FxMap::default(),
             tclass_of: vec![u32::MAX; n_classes],
@@ -245,8 +249,12 @@ impl<'a> Cx<'a> {
             cx.file_modules.push(format!("{}{}$package$", pkg, encode(stem)));
         }
         for i in 0..n_classes {
-            let name = cx.make_class_name(ClassId(i as u32));
+            let c = ClassId(i as u32);
+            let name = cx.make_class_name(c);
             cx.class_names.push(name);
+            if cx.opaque_companion(c) && cx.input.reach.classes[i] {
+                cx.opaque_companions.entry(syms.class(c).file.0).or_default().push(c);
+            }
         }
         lap.done("tables: class names", n_classes);
         // Another module's object runs code when it is loaded where its manifest says so.
@@ -375,13 +383,11 @@ impl<'a> Cx<'a> {
             Owner::Package(_) if (self.given_object_classes.contains_key(&c) || self.given_class_classes.contains_key(&c)) && (info.file.0 as usize) < self.file_modules.len() => {
                 self.file_modules[info.file.0 as usize].clone()
             }
+            // The companion of a top-level opaque type is a member of the file's `$package` object,
+            // where the type is, as scalac nests it (dotty's `Flatten.transformSym`); another
+            // module's pickle nests it so too, which the owner below names.
+            Owner::Package(_) if self.opaque_companion(c) && (info.file.0 as usize) < self.file_modules.len() => self.file_modules[info.file.0 as usize].clone(),
             Owner::Package(p) => self.pkg_path(p),
-            // The companion of a top-level opaque type, which another module's pickle nests in its
-            // file's `$package` object as scalac does: a class of the package, as teq's build of
-            // that module names it (a jar's, scalac's, keeps scalac's name).
-            Owner::Class(_) if self.input.reach.product_classes.get(c.idx()).copied().unwrap_or(false) && syms.opaque_companion_package(c, self.input.interner).is_some() => {
-                self.pkg_path(syms.opaque_companion_package(c, self.input.interner).unwrap_or(crate::symbols::ROOT_PKG))
-            }
             Owner::Class(o) => {
                 let mut outer = self.class_names.get(o.idx()).cloned().unwrap_or_else(|| self.make_class_name(o));
                 if !outer.ends_with('$') {
@@ -411,6 +417,15 @@ impl<'a> Cx<'a> {
             _ => {}
         }
         out
+    }
+
+    /// Whether the object `c` of a package is the companion of a top-level opaque type.
+    pub fn opaque_companion(&self, c: ClassId) -> bool {
+        let syms = self.input.syms;
+        let info = syms.class(c);
+        info.kind == ClassKind::Object
+            && matches!(info.owner, Owner::Package(_))
+            && info.companion.is_some_and(|k| syms.class(k).kind == ClassKind::Opaque && syms.class(k).owner == info.owner)
     }
 
     /// The given objects of a package or of objects: a given without parameters with a class of
@@ -777,7 +792,10 @@ pub fn emit(input: Input, classpath: &mut crate::classpath::Classpath, kept: Opt
         // file's top-level given class its def there.
         let has_exports = reach.exports.files.contains_key(&FileId(f as u32));
         let has_given_classes = cx.given_classes.iter().any(|(&g, &k)| syms.sym(g).file.0 as usize == f && matches!(syms.sym(g).owner, Owner::Package(_)) && cx.emits(k));
-        if (has_funs || has_vals || has_exports || has_given_classes) && owned(FileId(f as u32)) {
+        // A top-level opaque type's companion is nested in the `<file>$package` object, whose
+        // mirror class carries the file's `$package` TASTy, as scalac's does.
+        let has_opaque_companions = cx.opaque_companions.contains_key(&(f as u32));
+        if (has_funs || has_vals || has_exports || has_given_classes || has_opaque_companions) && owned(FileId(f as u32)) {
             units.push(Unit::File(FileId(f as u32)));
         }
     }

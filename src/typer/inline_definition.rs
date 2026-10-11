@@ -1879,7 +1879,7 @@ impl<'a> Worker<'a> {
                     LongAdd | LongSub | LongMul | LongDiv | LongRem | LongAnd | LongOr | LongXor | LongShl | LongShr | LongUshr => long,
                     DoubleAdd | DoubleSub | DoubleMul | DoubleDiv | DoubleRem => double,
                     FloatAdd | FloatSub | FloatMul | FloatDiv | FloatRem => float,
-                    Lt | Le | Gt | Ge | RefEq | RefNe | Eq | Ne | BoolAnd | BoolOr | BoolXor | BoolStrictAnd | BoolStrictOr => boolean,
+                    Lt | Le | Gt | Ge | RefEq | RefNe | Same | NotSame | Eq | Ne | BoolAnd | BoolOr | BoolXor | BoolStrictAnd | BoolStrictOr => boolean,
                 }
             }
             TExpr::Unary(op, _) => {

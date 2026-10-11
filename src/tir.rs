@@ -75,6 +75,12 @@ pub enum PrimOp {
     BoolStrictAnd,
     /// `|` of a `Boolean`: both operands, the left first.
     BoolStrictOr,
+    /// `eq`, reference identity (scalac's `ID`, `Object.eq`): a string or a box compares as a
+    /// reference, where `RefEq` of two strings compares their values. Last, so that the
+    /// discriminants before them, which the outline hashes encode, stay what they were.
+    Same,
+    /// `ne`.
+    NotSame,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -831,6 +837,11 @@ pub struct Program {
     /// the sequence the typer converts one to is no sequence a program wrote, and a Java
     /// parameter takes the array itself, as scalac passes it.
     pub spread_bits: Bits,
+    /// The setter calls the typer made of an assignment through an abstract var (`c.x = v`,
+    /// `Worker::assignment`), as bits by expression: scalac's tree keeps an assignment, where a
+    /// call written `c.x_=(v)` is an application (dotty's `Typer.typedAssign`), which the trees a
+    /// macro sees, the pickle and the dependencies tell apart.
+    pub setter_assign_bits: Bits,
     /// What an expansion took from its call site rather than from the body, as bits by
     /// expression: the arguments bound to the parameters, the receiver, the constants of
     /// `constValue` and the givens found. Where such an expression does not name a local of the
@@ -894,6 +905,7 @@ impl Program {
         self.widened_bits.fork();
         self.opaque_bits.fork();
         self.spread_bits.fork();
+        self.setter_assign_bits.fork();
         self.file_tags.fork();
         #[cfg(debug_assertions)]
         self.follow_escapes();
@@ -909,7 +921,7 @@ impl Program {
             let own_base = self.exprs.own_base();
             self.expr_types.follow_escapes(marks.clone(), own_base);
             self.expr_spans.follow_escapes(marks.clone(), own_base);
-            for bits in [&mut self.expansion_bits, &mut self.leaf_bits, &mut self.chain_end_bits, &mut self.taken_then_bits, &mut self.taken_else_bits, &mut self.widened_bits, &mut self.opaque_bits, &mut self.spread_bits] {
+            for bits in [&mut self.expansion_bits, &mut self.leaf_bits, &mut self.chain_end_bits, &mut self.taken_then_bits, &mut self.taken_else_bits, &mut self.widened_bits, &mut self.opaque_bits, &mut self.spread_bits, &mut self.setter_assign_bits] {
                 bits.follow_escapes(marks.clone(), own_base);
             }
         }
@@ -977,6 +989,7 @@ impl Program {
             widened_bits: Bits::attach(self.widened_bits.shared_arc(), worker),
             opaque_bits: Bits::attach(self.opaque_bits.shared_arc(), worker),
             spread_bits: Bits::attach(self.spread_bits.shared_arc(), worker),
+            setter_assign_bits: Bits::attach(self.setter_assign_bits.shared_arc(), worker),
             leaf_bits: Bits::attach(self.leaf_bits.shared_arc(), worker),
             leaf_tests: FxMap::default(),
             stored_tests: FxMap::default(),
@@ -1073,6 +1086,7 @@ impl Default for Program {
             widened_bits: Bits::default(),
             opaque_bits: Bits::default(),
             spread_bits: Bits::default(),
+            setter_assign_bits: Bits::default(),
             leaf_bits: Bits::default(),
             leaf_tests: FxMap::default(),
             stored_tests: FxMap::default(),
@@ -1342,6 +1356,16 @@ impl Program {
     #[inline(always)]
     pub fn is_spread(&self, e: TExprId) -> bool {
         self.spread_bits.has(e.0)
+    }
+
+    /// Marks `e` as `setter_assign_bits` says.
+    pub fn mark_setter_assign(&mut self, e: TExprId) {
+        self.setter_assign_bits.set(e.0);
+    }
+
+    #[inline(always)]
+    pub fn is_setter_assign(&self, e: TExprId) -> bool {
+        self.setter_assign_bits.has(e.0)
     }
 
     /// Whether `e` is an operand of its own where it heads a chain of `+`.

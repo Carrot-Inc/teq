@@ -960,7 +960,7 @@ impl<'a> Worker<'a> {
         };
         // Both interop annotations report a missing body in their own terms.
         let is_interop = |a: &ast::Annot| a.name == names::JS_IMPORT || a.name == names::JS_EXPORT;
-        let misplaced = self.misplaced_abstract_given(def);
+        let misplaced = self.misplaced_abstract_member(def, true);
         if lacks_body && !misplaced && !def.annots.iter().any(is_interop) {
             let msg = format!(
                 "{} needs a body; only @js and @jsImport definitions go without one",
@@ -1440,6 +1440,12 @@ impl<'a> Worker<'a> {
             }
             if self.syms.sym(sym).mods & mods::SETTER != 0 && !self.is_library_member(sym) {
                 let sig = Arc::new(self.setter_sig(sym));
+                self.publish_sig(sym, sig.clone());
+                self.outermost_completion_done();
+                return sig;
+            }
+            if let Some(field) = self.selector_field(sym) {
+                let sig = Arc::new(MethodSig::value(self.sig_arc(field).ret));
                 self.publish_sig(sym, sig.clone());
                 self.outermost_completion_done();
                 return sig;
@@ -2000,10 +2006,17 @@ impl<'a> Worker<'a> {
     }
 
     fn type_member_body_with(&mut self, sym: SymId, sig: Arc<MethodSig>) {
-        let (file, owner, span) = {
+        let (file, owner, span, selector) = {
             let s = self.syms.sym(sym);
-            (s.file, s.owner, s.span)
+            (s.file, s.owner, s.span, s.mods & mods::SELECTOR != 0)
         };
+        // A case class's selector its class's check left to its first use (`selector_bodies`).
+        if selector {
+            if let Some(field) = self.selector_field(sym) {
+                self.selector_body(sym, field);
+                return;
+            }
+        }
         let env = self.env_at(file, owner, span.start);
         let ret = sig.ret;
         let outer_defining = self.defining.take();
@@ -2799,6 +2812,7 @@ impl<'a> Worker<'a> {
             tclass.inherited_case_members = self.inherited_case_members(c);
             tclass.retracted_unapply = self.synthetic_unapply_retracted(c);
         }
+        self.selector_bodies(c, &mut tclass);
         let env = self.env_at(file, Owner::Class(c), def.span.start);
         self.with_env(env, |t| {
             let imports_scope = t.env.imports.len();
@@ -3515,6 +3529,9 @@ impl<'a> Worker<'a> {
         match &def.kind {
             DefKind::Val { rhs, .. } => {
                 let Some(&sym) = self.def_syms.get(file.0 as usize, &d) else { return };
+                if rhs.is_none() && self.no_deferred_members(tclass.id) {
+                    self.misplaced_abstract_member(def, false);
+                }
                 // A val of a jar's class is typed when the program reaches it and read
                 // through a getter, so that only what the program uses is compiled; one that
                 // implements a def of an ancestor is an accessor instead and stays eager. A
@@ -3535,8 +3552,8 @@ impl<'a> Worker<'a> {
             }
             DefKind::Fun(_) => {
                 let Some(&sym) = self.def_syms.get(file.0 as usize, &d) else { return };
-                if self.syms.class(tclass.id).kind == ClassKind::Object {
-                    self.misplaced_abstract_given(def);
+                if self.no_deferred_members(tclass.id) {
+                    self.misplaced_abstract_member(def, false);
                 }
                 if !self.defers_body(sym) {
                     // A member of an anonymous class in a library body is compiled with the
@@ -3602,20 +3619,103 @@ impl<'a> Worker<'a> {
         }
     }
 
-    /// scalac's E067 for an abstract given (`given x: T`, a def flagged `Given` without a body)
-    /// where nothing can implement it: a member of an object or a package, or a local; reported
-    /// when `def` is one.
-    pub(super) fn misplaced_abstract_given(&mut self, def: &ast::Def) -> bool {
-        if def.mods & mods::GIVEN == 0 {
+    /// The field the case class selector `s` (`mods::SELECTOR`) reads: the `_N`'s parameter of
+    /// the first clause.
+    pub(super) fn selector_field(&self, s: SymId) -> Option<SymId> {
+        let info = self.syms.sym(s);
+        let Owner::Class(c) = info.owner else { return None };
+        if info.mods & mods::SELECTOR == 0 {
+            return None;
+        }
+        let n: usize = self.name_str(info.name).strip_prefix('_')?.parse().ok()?;
+        self.syms.class(c).ctor_syms.first()?.get(n.checked_sub(1)?).copied()
+    }
+
+    /// The name of a case class's `n`th selector, `_n`; the first five are the predefined names.
+    pub(super) fn selector_name(&self, n: usize) -> Name {
+        match n {
+            1..=5 => [names::TUPLE_1, names::TUPLE_2, names::TUPLE_3, names::TUPLE_4, names::TUPLE_5][n - 1],
+            _ => self.interner.intern(&format!("_{n}")),
+        }
+    }
+
+    /// Whether the namer entered selectors in `c`: a case class or an enum's class case.
+    pub(super) fn has_selectors(&self, c: ClassId) -> bool {
+        let info = self.syms.class(c);
+        info.mods & mods::CASE != 0 || info.kind == ClassKind::EnumCase
+    }
+
+    /// The case class's selector reading its `i`th field of the first clause, where the namer
+    /// entered one (`mods::SELECTOR`).
+    pub(super) fn selector_of_field(&self, c: ClassId, i: usize) -> Option<SymId> {
+        self.syms.class(c).selectors.get(i).copied().flatten()
+    }
+
+    /// The bodies of the case class's selectors, each reading its field (`this.x`), among the
+    /// class's methods, which every target defines; a check that only reports makes one where
+    /// it is first used (`emits_bodies`, `type_member_body_with`).
+    fn selector_bodies(&mut self, c: ClassId, tclass: &mut TClass) {
+        if !self.emits_bodies || !self.has_selectors(c) {
+            return;
+        }
+        let arity = self.syms.class(c).selectors.len();
+        for i in 0..arity {
+            let Some(s) = self.selector_of_field(c, i) else { continue };
+            let f = match self.fun_of_sym.get(&s) {
+                Some(&f) => f,
+                None => self.selector_body(s, self.syms.class(c).ctor_syms[0][i]),
+            };
+            if !tclass.methods.contains(&f) {
+                tclass.methods.push(f);
+            }
+        }
+    }
+
+    /// The body of the selector `s`, reading `field` (`this.x`).
+    fn selector_body(&mut self, s: SymId, field: SymId) -> FunId {
+        let ty = self.sig_arc(s).ret;
+        let this = self.prog.add(TExpr::This);
+        let read = self.prog.add(TExpr::Field(this, field));
+        self.prog.set_type(read, ty);
+        let f = self.prog.add_fun(crate::tir::TFun { sym: s, params: Vec::new(), defaults: Vec::new(), body: Some(read), body_unconsuming: false });
+        self.fun_of_sym.insert(s, f);
+        f
+    }
+
+    /// scalac's E067 for an abstract member where nothing can implement it (dotty's
+    /// `Checking.checkWellFormed`: a deferred term whose owner is no class, a module or an
+    /// anonymous class): a member of an object or an anonymous class or a local, a def, a val or a
+    /// var, and of a package a given (`givens_only`), whose other members say they need a body;
+    /// reported when `def` is one. A JavaScript or JVM template or `@native` stands for a body.
+    pub(super) fn misplaced_abstract_member(&mut self, def: &ast::Def, givens_only: bool) -> bool {
+        let kind = match &def.kind {
+            DefKind::Fun(f) if f.body.is_none() && def.mods & mods::GIVEN != 0 => "given instance",
+            _ if givens_only => return false,
+            DefKind::Fun(f) if f.body.is_none() => "method",
+            DefKind::Val { rhs: None, .. } if def.mods & mods::MUTABLE != 0 => "variable",
+            DefKind::Val { rhs: None, .. } => "value",
+            _ => return false,
+        };
+        let template = |a: &ast::Annot| matches!(a.name, names::JS | names::JS_IMPORT | names::JS_EXPORT | names::JVM | names::NATIVE);
+        if kind != "given instance" && def.annots.iter().any(template) {
             return false;
         }
-        let DefKind::Fun(f) = &def.kind else { return false };
-        if f.body.is_some() {
-            return false;
+        let msg = format!("Declaration of {} {} not allowed here: only classes can have declared but undefined members", kind, self.name_str(def.name));
+        // An incomplete definition's body is unknown, not missing: dotty's parser gives it an
+        // error tree (`Parsers.funDefOrDcl`'s `expr()` after the missing `=`).
+        if def.mods & mods::INCOMPLETE != 0 {
+            self.dependent_error(def.span, msg);
+        } else {
+            self.error(def.span, msg);
         }
-        let msg = format!("Declaration of given instance {} not allowed here: only classes can have declared but undefined members", self.name_str(def.name));
-        self.error(def.span, msg);
         true
+    }
+
+    /// Whether no member of `c` can be abstract: an object's or an anonymous class's of the program,
+    /// a Scala class (a JavaScript type's members are its own).
+    fn no_deferred_members(&self, c: ClassId) -> bool {
+        let info = self.syms.class(c);
+        matches!(info.kind, ClassKind::Object | ClassKind::Anon) && info.js == JsKind::Scala && !self.is_library_class(c)
     }
 
     /// Whether the definition of `m` carries `@native` (a JVM method whose body is native code).
@@ -3748,6 +3848,8 @@ impl<'a> Worker<'a> {
             }
             return;
         }
+        // The `@targetName`s of the ancestors' alternatives, gathered once for the selectors.
+        let mut ancestor_targets: Option<Vec<Name>> = None;
         for i in 0..self.own_member_count(c) {
             let m = self.own_member(c, i);
             let (name, is_ext, m_mods, has_def) = {
@@ -3756,7 +3858,14 @@ impl<'a> Worker<'a> {
             };
             // A plain constructor parameter is local to its class and overrides nothing, and
             // neither does a private val, which scalac lets share its name with an inherited member.
-            if !has_def && (m_mods & mods::FIELD == 0 || !self.is_ctor_param(c, m)) {
+            // A case class's selector is a definition of the class (`Desugar.productElemMeths`).
+            if !has_def && m_mods & mods::SELECTOR == 0 && (m_mods & mods::FIELD == 0 || !self.is_ctor_param(c, m)) {
+                continue;
+            }
+            // A selector is checked where it meets something: dotty's `OverridingPairs.Cursor`
+            // pairs a member with the members its ancestors declare of its name, and it carries
+            // no modifier the checks below read alone.
+            if m_mods & mods::SELECTOR != 0 && !self.syms.sym(m).alternative && !self.selector_meets_inherited(c, name, &mut ancestor_targets) {
                 continue;
             }
             if m_mods & (mods::LAZY | mods::OVERRIDE) == 0 && self.syms.sym(m).kind == SymKind::Val && self.is_private(m) {
@@ -3821,12 +3930,27 @@ impl<'a> Worker<'a> {
                 continue;
             }
             // A `val toString` or `val hashCode` implements the method of `Any` too, called as
-            // a method through its accessor.
-            let overrides_any = matches!(name, names::TO_STRING | names::HASH_CODE | names::EQUALS | names::CLONE)
+            // a method through its accessor; one of the parameters of `Any`'s and another type
+            // overrides it incompatibly (E164).
+            let any = if matches!(name, names::TO_STRING | names::HASH_CODE | names::EQUALS | names::CLONE)
                 && !is_ext
                 && matches!(self.syms.sym(m).kind, SymKind::Def | SymKind::Val)
-                && self.matches_any_member(m);
-            if overrides_any && m_mods & mods::OVERRIDE == 0 && !self.is_abstract_member(m) {
+            {
+                self.any_member_agreement(m)
+            } else {
+                Agreement::Params
+            };
+            let overrides_any = any == Agreement::Same;
+            if any == Agreement::Result {
+                let msg = format!(
+                    "error overriding method {} in class Any of type {}: {} of type {} has incompatible type",
+                    self.name_str(name),
+                    Self::any_member_type(name),
+                    self.member_description(m, None),
+                    self.sig_string(m)
+                );
+                self.error_at(m, msg);
+            } else if overrides_any && m_mods & mods::OVERRIDE == 0 && !self.is_abstract_member(m) {
                 let msg = format!("method {} needs `override` modifier to override the {} of Any", self.name_str(name), self.name_str(name));
                 self.error_at(m, msg);
             } else if !overrides_any && m_mods & mods::OVERRIDE != 0 {
@@ -4027,18 +4151,43 @@ impl<'a> Worker<'a> {
         self.syms.class(c).ctor_syms.iter().any(|clause| clause.contains(&m))
     }
 
-    /// `toString`, `hashCode` and `equals(that: Any)` with the shapes they have on `Any`.
+    /// Whether `m` overrides `Any`'s member of its name (`any_member_agreement`).
     pub(super) fn matches_any_member(&mut self, m: SymId) -> bool {
+        self.any_member_agreement(m) == Agreement::Same
+    }
+
+    /// How `m` stands to the member of its name every class has, `Any`'s `equals(x$0: Any):
+    /// Boolean`, `hashCode(): Int` and `toString(): String` and `Object`'s `clone(): Object`,
+    /// compared as an inherited member is (`compare_sig_pair`, dotty's `RefChecks.checkOverride`
+    /// on `Any`'s real members) with the complete method type: a parameterless member matches
+    /// the `()` one, as `matchNullaryLoosely` holds of a member of `Any`.
+    pub(super) fn any_member_agreement(&mut self, m: SymId) -> Agreement {
+        let Owner::Class(c) = self.syms.sym(m).owner else { return Agreement::Params };
         let name = self.syms.sym(m).name;
-        let sig = self.sig_of(m);
-        if !sig.tparams.is_empty() || sig.clauses.iter().any(|cl| cl.is_using) {
-            return false;
-        }
-        let params: Vec<&ParamSig> = sig.clauses.iter().flat_map(|cl| cl.params.iter()).collect();
+        let msig = self.sig_arc(m);
+        let (params, ret) = match name {
+            names::EQUALS => {
+                // `m`'s own parameter stands for `Any`'s, whose type names no path to rename.
+                let sym = msig.clauses.iter().flat_map(|cl| cl.params.iter()).next().map_or(m, |p| p.sym);
+                (vec![ParamSig { name: self.interner.intern("x$0"), ty: ANY, by_name: false, repeated: false, has_default: false, sym }], self.b.t_boolean)
+            }
+            names::HASH_CODE => (Vec::new(), self.b.t_int),
+            names::TO_STRING => (Vec::new(), self.b.t_string),
+            names::CLONE => (Vec::new(), self.b.t_any_ref),
+            _ => return Agreement::Params,
+        };
+        let clauses = if msig.clauses.is_empty() && params.is_empty() { Vec::new() } else { vec![ClauseSig { params, is_using: false, is_implicit: false }] };
+        let psig = Arc::new(MethodSig { tparams: Vec::new(), clauses, ret });
+        self.compare_sig_pair(c, msig, None, psig, ANY, false, false)
+    }
+
+    /// `Any`'s member of the name as scalac shows its type.
+    fn any_member_type(name: Name) -> &'static str {
         match name {
-            names::TO_STRING | names::HASH_CODE | names::CLONE => params.is_empty(),
-            names::EQUALS => matches!(params.as_slice(), [p] if p.ty == ANY && !p.by_name && !p.repeated),
-            _ => false,
+            names::EQUALS => "(x$0: Any): Boolean",
+            names::HASH_CODE => "(): Int",
+            names::CLONE => "(): Object",
+            _ => "(): String",
         }
     }
 
@@ -4285,7 +4434,8 @@ impl<'a> Worker<'a> {
             } else {
                 "{m} has weaker access privileges than {p}; it should be public"
             }
-        } else if own && m_mods & mods::OVERRIDE == 0 && (!p_abstract || p_deferred) && !self.is_product_member(p) {
+        } else if own && m_mods & (mods::OVERRIDE | mods::SELECTOR) == 0 && (!p_abstract || p_deferred) && !self.is_product_member(p) {
+            // A case class's selector overrides as if marked (dotty's `RefChecks.autoOverride`).
             "{m} needs `override` modifier to override {p}"
         } else {
             return !own || self.check_target_names(m, p);
@@ -4329,6 +4479,33 @@ impl<'a> Worker<'a> {
         );
         self.error_at(m, msg);
         implements
+    }
+
+    /// Whether an ancestor of `c` declares a member called `name`, or an alternative whose
+    /// `@targetName` is `name`, which `check_target_name_clashes` compares; those names are
+    /// gathered once per class into `targets`.
+    fn selector_meets_inherited(&mut self, c: ClassId, name: Name, targets: &mut Option<Vec<Name>>) -> bool {
+        let bases = self.syms.class(c).base_types.len();
+        for j in 1..bases {
+            let b = self.syms.class(c).base_types[j].0;
+            if self.syms.class(b).members.contains_key(&name) {
+                return true;
+            }
+        }
+        if targets.is_none() {
+            let mut found = Vec::new();
+            for j in 1..bases {
+                let b = self.syms.class(c).base_types[j].0;
+                for k in 0..self.syms.class(b).member_order.len() {
+                    let q = self.syms.class(b).member_order[k];
+                    if self.syms.sym(q).alternative {
+                        found.extend(self.declared_target_name(q));
+                    }
+                }
+            }
+            *targets = Some(found);
+        }
+        targets.as_ref().is_some_and(|t| t.contains(&name))
     }
 
     fn declared_target_name(&mut self, m: SymId) -> Option<Name> {
@@ -4539,33 +4716,36 @@ impl<'a> Worker<'a> {
                 return Agreement::Params;
             }
         }
-        let parameterless = |sig: &MethodSig| sig.clauses.iter().all(|cl| !cl.is_using && cl.params.is_empty());
         // The using clauses count as scalac counts them: `compose[G](using Applicative[G])`
         // and `compose[G]` are two members.
         let using_count = |sig: &MethodSig| sig.clauses.iter().filter(|cl| cl.is_using).count();
         let explicit_only = lenient_using && using_count(&msig) != using_count(&psig);
         let mclauses: Vec<&ClauseSig> = msig.clauses.iter().filter(|cl| !explicit_only || !cl.is_using).collect();
         let pclauses: Vec<&ClauseSig> = psig.clauses.iter().filter(|cl| !explicit_only || !cl.is_using).collect();
-        let same_shape = mclauses.len() == pclauses.len()
-            && mclauses.iter().zip(&pclauses).all(|(a, b)| {
-                a.is_using == b.is_using
-                    && a.params.len() == b.params.len()
-                    && a.params.iter().zip(&b.params).all(|(x, y)| x.by_name == y.by_name && x.repeated == y.repeated)
-            });
-        if !same_shape {
-            // `def f` against `def f()`: the same member with incompatible types, as under scalac.
-            return if parameterless(&msig) && parameterless(&psig) { Agreement::Result } else { Agreement::Params };
+        // The clauses pair up one by one; where one method has clauses past the other's, they
+        // have to be empty: such a pair is a member whose type differs (`def f` against `def
+        // f()`, `f(x: Any)()` against `f(x: Any)`), an incompatible type (E164), as dotty's
+        // `RefChecks` reports one only of a pair whose types match loosely (`trueMatch`,
+        // `Type.matches`, relaxed); clauses that divide the parameters otherwise are no override.
+        let paired = mclauses.len().min(pclauses.len());
+        let same_clause = |a: &ClauseSig, b: &ClauseSig| {
+            a.is_using == b.is_using && a.params.len() == b.params.len() && a.params.iter().zip(&b.params).all(|(x, y)| x.by_name == y.by_name && x.repeated == y.repeated)
+        };
+        let empty_rest = mclauses[paired..].iter().chain(&pclauses[paired..]).all(|cl| cl.params.is_empty() && !cl.is_using);
+        if !empty_rest || !mclauses[..paired].iter().zip(&pclauses[..paired]).all(|(a, b)| same_clause(a, b)) {
+            return Agreement::Params;
         }
+        let same_shape = mclauses.len() == pclauses.len();
         // The parameters a later one's type names are the other method's by position, as
         // scalac matches `f(d: Ctx)(x: d.T)` with `f(c: Ctx)(x: c.T)`.
-        let renamed: Vec<(SymId, TypeId)> = mclauses
+        let renamed: Vec<(SymId, TypeId)> = mclauses[..paired]
             .iter()
-            .zip(&pclauses)
+            .zip(&pclauses[..paired])
             .flat_map(|(a, b)| a.params.iter().zip(&b.params).map(|(x, y)| (x.sym, y.sym)).collect::<Vec<_>>())
             .filter(|&(x, y)| x != y)
             .map(|(x, y)| (x, self.types.mk(Type::Term(y))))
             .collect();
-        for (a, b) in mclauses.iter().zip(&pclauses) {
+        for (a, b) in mclauses[..paired].iter().zip(&pclauses[..paired]) {
             for (x, y) in a.params.iter().zip(&b.params) {
                 let xt = self.subst_paths(x.ty, &renamed);
                 let xt = self.types.subst(xt, &msubst);
@@ -4577,6 +4757,9 @@ impl<'a> Worker<'a> {
                     return Agreement::Params;
                 }
             }
+        }
+        if !same_shape {
+            return Agreement::Result;
         }
         if params_only {
             return Agreement::Same;
@@ -4719,14 +4902,13 @@ impl<'a> Worker<'a> {
     /// Returns the abstract members that an export clause of `c` implements, with their targets.
     fn check_implements_all(&mut self, c: ClassId, which: Abstracts) -> Vec<(SymId, SymId)> {
         let bases: Vec<(ClassId, TypeId)> = self.syms.class(c).base_types.clone();
-        let is_case = self.syms.class(c).mods & mods::CASE != 0;
         let mut missing: Vec<(String, SymId, TypeId)> = Vec::new();
         // A member left unimplemented beside an incomplete definition of its name, whose body
         // is unknown rather than missing.
         let mut unknown = false;
         let mut forwarders = Vec::new();
         // A concrete class's own members without a body too (`class C { given x: Int }`), as
-        // scalac's "needs to be abstract"; an object's are E067 (`misplaced_abstract_given`).
+        // scalac's "needs to be abstract"; an object's are E067 (`misplaced_abstract_member`).
         let own = (which == Abstracts::Declared && self.syms.class(c).kind == ClassKind::Class) as usize;
         for &(b, bt) in bases.iter().skip(1 - own) {
             let members = self.syms.class(b).member_order.clone();
@@ -4744,7 +4926,16 @@ impl<'a> Worker<'a> {
                 }
                 let name = self.syms.sym(m).name;
                 let is_ext = self.syms.sym(m).is_extension;
-                if is_case && matches!(name, names::TO_STRING | names::HASH_CODE | names::EQUALS) {
+                // `Any`'s `toString`, `hashCode` and `equals` implement an abstract redeclaration of
+                // theirs (scala-library's `Equals.equals`), as dotty's `RefChecks.isImplemented`
+                // finds a concrete member matching it loosely with the parameter types compared
+                // (`matchesLoosely(.., alwaysCompareTypes = true)`, relaxed on the result): one of
+                // `Any`'s parameters, not an `equals(s: String)`, a type incompatible otherwise
+                // being the override check's error. An inherited one: the class's own hides `Any`'s
+                // among its members (`nonPrivateMembersNamed`), except in a case class, whose are
+                // synthesized over a deferred one (`SyntheticMembers.existingDef`).
+                let case_class = self.syms.class(c).mods & mods::CASE != 0;
+                if matches!(name, names::TO_STRING | names::HASH_CODE | names::EQUALS) && (b != c || case_class) && self.any_member_agreement(m) != Agreement::Params {
                     continue;
                 }
                 // The class's own member is the most derived: whatever of its name it inherits it

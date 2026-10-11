@@ -100,6 +100,7 @@ pub const STRING: &str = "java/lang/String";
 pub const STRING_BUILDER: &str = "java/lang/StringBuilder";
 pub const BOXED_UNIT: &str = "scala/runtime/BoxedUnit";
 pub const OBJECT_REF: &str = "scala/runtime/ObjectRef";
+pub const NON_LOCAL_RETURN: &str = "scala/runtime/NonLocalReturnControl";
 pub const MATCH_ERROR: &str = "scala/MatchError";
 pub const THROWABLE: &str = "java/lang/Throwable";
 pub const ARRAY: &str = "java/util/ArrayList";

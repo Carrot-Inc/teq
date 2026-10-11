@@ -1,0 +1,4 @@
+inits.LazyMix <init> inits/LazyOnly
+inits.LazyMix <init> inits/WithVal
+inits.Sub <init> inits/Stmt
+inits.Obj$ <clinit> inits/LazyOnly
