@@ -950,6 +950,7 @@ impl TypeStore {
                         Refinement::Val(_, _, x) => self.names_tparam(x, tparams),
                     }
             }
+            Type::Rec(b) => self.names_tparam(b, tparams),
             Type::Match(s, m) => {
                 let info = self.match_info(m);
                 self.names_tparam(s, tparams) || self.names_tparam(info.bound, tparams) || info.cases.iter().any(|c| self.names_tparam(c.pattern, tparams) || self.names_tparam(c.body, tparams))
@@ -1659,6 +1660,12 @@ impl TypeStore {
     /// The body of a `Rec` opened at `prefix` (dotty's `substRecThis`): its `RecThis(0)` is
     /// `prefix`, a path or a closed type, and the indices that reach past it drop by one. On a
     /// body that names no `RecThis(0)` this is the body without its binder (`RecType.closeOver`).
+    /// dotty's `RecType.rebind` (`closeOver`) of a mapped body: a binder where the body still
+    /// names its self, the body with the self's index lowered where it no longer does.
+    pub fn rebind_rec(&self, body: TypeId) -> TypeId {
+        if self.refers_to_rec(body, 0) { self.mk(Type::Rec(body)) } else { self.open_rec(body, ANY) }
+    }
+
     pub fn open_rec(&self, body: TypeId, prefix: TypeId) -> TypeId {
         self.subst_rec_this(body, 0, prefix)
     }

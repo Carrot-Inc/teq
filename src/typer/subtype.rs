@@ -3221,6 +3221,11 @@ impl<'a> Worker<'a> {
                 }
             }
             Type::Refined(parent, _) => self.prefix_base_type(parent, c, seen),
+            // A recursive refinement as its body opened at itself, the proxy's underlying type.
+            Type::Rec(body) => {
+                let opened = self.opened_rec(body, pre);
+                self.prefix_base_type(opened, c, seen)
+            }
             // A parameter's bound, once on the way down: bounds that name each other end there.
             Type::Param(p) => {
                 let upper = self.syms.tparam(p).upper;
@@ -3404,7 +3409,7 @@ impl<'a> Worker<'a> {
                 let j = self.union_join(t)?;
                 self.denotations_under(pre, j, name, seen)
             }
-            Type::This(_) | Type::Term(_) | Type::Select(..) | Type::Member(..) | Type::AppMember(..) | Type::Decl(_) | Type::Refined(..) | Type::Alias(..) | Type::Match(..) => {
+            Type::This(_) | Type::Term(_) | Type::Select(..) | Type::Member(..) | Type::AppMember(..) | Type::Decl(_) | Type::Refined(..) | Type::Rec(_) | Type::Alias(..) | Type::Match(..) => {
                 let under = self.dependent_underlying(t)?;
                 self.denotations_under(pre, under, name, seen)
             }
@@ -3573,6 +3578,10 @@ impl<'a> Worker<'a> {
         let mut refined = self.deref(t);
         while let Type::Alias(..) = self.types.get(refined) {
             refined = self.reduce_head(refined)?;
+        }
+        // A recursive part is its refinements opened at itself (`goRec`).
+        if let Type::Rec(body) = self.types.get(refined) {
+            refined = self.opened_rec(body, refined);
         }
         if !matches!(self.types.get(refined), Type::Refined(..)) {
             return None;

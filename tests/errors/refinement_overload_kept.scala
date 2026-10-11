@@ -17,3 +17,13 @@ def rv: Rec["v", Int] & Rec["k", String] = ???
 def resv: Any = rv.get("k")
 // expect: 15:17: error: Ambiguous overload.
 // expect: 17:17: error: Ambiguous overload.
+// a recursive refinement as a part, its refinement opened at itself (`goRec`), in either order:
+type RecR[K <: String, V] = Rec0[K] { type T = V; def get(k: K): T }
+def a: RecR["k", String] & Rec["v", Int] = ???
+def av: Any = a.get("v")
+def b: Rec["v", Int] & RecR["k", String] = ???
+def bk: Any = b.get("k")
+// expect: 23:15: error: Ambiguous overload.
+// expect: 25:15: error: Ambiguous overload.
+// absent: refinement_overload_kept.scala:22:
+// absent: refinement_overload_kept.scala:24:
