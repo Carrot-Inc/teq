@@ -5438,8 +5438,7 @@ impl<'a> Worker<'a> {
             Type::Param(_) => return None,
             _ => self.widen_path(recv_ty),
         };
-        let prefix = self.path_of(recv).unwrap_or(under);
-        let r = match self.refined_alternatives(under, name, prefix) {
+        let r = match self.refined_alternatives_on(under, name, recv, under) {
             Ok(r) => r?,
             Err(alts) => return Some(Err(alts)),
         };
@@ -5732,8 +5731,8 @@ impl<'a> Worker<'a> {
             return (te, ty);
         }
         if member.is_none() {
-            let prefix = self.path_of(recv).unwrap_or(recv_ty);
-            if let Some(refined) = self.refined_term_through(recv_ty, name, prefix) {
+            // The receiver's path is taken where a recursive refinement is opened at it alone.
+            if let Some(refined) = self.refined_alternatives_on(recv_ty, name, recv, recv_ty).ok().flatten() {
                 let sig = self.refinement_sig(refined);
                 return self.apply_structural(recv, recv_ty, sig, name, targs, lists, span, expected);
             }

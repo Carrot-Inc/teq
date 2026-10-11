@@ -2257,17 +2257,39 @@ impl<'a> Worker<'a> {
     /// them, the rightmost part's last. An overload stays one whatever another part refines
     /// (`MultiDenotation.meet`: `R["k"] & R["v"] & R["z"]`'s three `get`s).
     pub fn refined_alternatives(&mut self, t: TypeId, name: Name, prefix: TypeId) -> Result<Option<Refinement>, Vec<Refinement>> {
+        self.refined_alternatives_at(t, name, &mut RecPrefix::Known(prefix))
+    }
+
+    /// `refined_alternatives` of a receiver's type `t` selected on the receiver `recv`, whose
+    /// path is the prefix a recursive refinement is opened at, `fallback` where it is none. The
+    /// path is taken only where a recursive refinement is met: dotty's `findMember` uses the
+    /// prefix in `goRec` alone (`substRecThis(rt, pre)`).
+    pub fn refined_alternatives_on(&mut self, t: TypeId, name: Name, recv: crate::tir::TExprId, fallback: TypeId) -> Result<Option<Refinement>, Vec<Refinement>> {
+        self.refined_alternatives_at(t, name, &mut RecPrefix::Of(recv, fallback))
+    }
+
+    fn refined_alternatives_at(&mut self, t: TypeId, name: Name, prefix: &mut RecPrefix) -> Result<Option<Refinement>, Vec<Refinement>> {
         let mut t = self.deref(t);
         loop {
             match self.types.get(t) {
-                Type::Rec(body) => t = self.opened_rec(body, prefix),
+                Type::Rec(body) => {
+                    let p = match *prefix {
+                        RecPrefix::Known(p) => p,
+                        RecPrefix::Of(recv, fallback) => {
+                            let p = self.path_of(recv).unwrap_or(fallback);
+                            *prefix = RecPrefix::Known(p);
+                            p
+                        }
+                    };
+                    t = self.opened_rec(body, p)
+                }
                 // `goAnd`: the two sides' denotations met (`Denotation.meet`): one side's where
                 // the other refines no member of the name, two vals' types intersected, two
                 // methods' infos met (`infoMeet`); two methods whose infos do not meet are an
                 // overload, which no refinement narrows (`Overloaded definitions introduced by
                 // refinements cannot be resolved`).
                 Type::Inter(a, b) => {
-                    let (x, y) = (self.refined_alternatives(a, name, prefix), self.refined_alternatives(b, name, prefix));
+                    let (x, y) = (self.refined_alternatives_at(a, name, prefix), self.refined_alternatives_at(b, name, prefix));
                     let (x, y) = match (x, y) {
                         (Err(mut xs), Err(ys)) => {
                             xs.extend(ys);
@@ -2359,6 +2381,14 @@ impl<'a> Worker<'a> {
         let ret = if xret == yret { xret } else { self.types.inter(xret, yret) };
         Some((bounds, params, ret))
     }
+}
+
+/// The prefix a recursive refinement is opened at: known, or the path of a receiver taken when
+/// one is met (`refined_alternatives_on`).
+#[derive(Clone, Copy)]
+enum RecPrefix {
+    Known(TypeId),
+    Of(crate::tir::TExprId, TypeId),
 }
 
 struct Rebase<'r> {
