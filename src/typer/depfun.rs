@@ -355,6 +355,7 @@ impl<'a> Worker<'a> {
                 Type::Param(p) => todo.push(self.syms.tparam(p).upper),
                 Type::Inter(a, b) => todo.extend([b, a]),
                 Type::Refined(p, _) => todo.push(p),
+                Type::Rec(body) => todo.push(body),
                 _ => {}
             }
         }
@@ -596,6 +597,15 @@ impl<'a> Worker<'a> {
                 }
             }
             Type::Refined(p, r) => self.approx_refined(t, p, r, leaves, v),
+            // A recursive refinement's body mapped and the binder rebound, each end of a range
+            // (`ApproximatingTypeMap.derivedRecType`: `range(tp.rebind(lo), tp.rebind(hi))`).
+            Type::Rec(body) => match self.approx(body, leaves, v) {
+                Approx::Exact(b) => Approx::Exact(if b == body { t } else { self.types.rebind_rec(b) }),
+                Approx::Range(lo, hi) => {
+                    let (lo, hi) = (self.types.rebind_rec(lo), self.types.rebind_rec(hi));
+                    range(lo, hi, v)
+                }
+            },
             // Bounds that name a parameter leave no exact type, as their lambda's parameter
             // infos would need approximating (`TypeMap.mapOverLambda`).
             // `derivedLambdaType` (Types.scala 6884): a polymorphic function's bounds at its

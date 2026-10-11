@@ -731,7 +731,7 @@ impl<'a> Worker<'a> {
                 Owner::Class(c) if self.syms.class(c).kind == ClassKind::Object => {
                     let m = self.prog.add(TExpr::Module(c));
                     if self.syms.sym(g).intrinsic.is_some() {
-                        let call = super::apply::MethodCall { recv: Some(m), sym: g, owner_subst: Vec::new(), ext_recv: None, prefix: None };
+                        let call = super::apply::MethodCall { recv: Some(m), sym: g, owner_subst: Vec::new(), ext_recv: None, prefix: None, refined: None };
                         self.build_call(&call, l)
                     } else {
                         self.prog.add(TExpr::CallMethod(m, g, l))

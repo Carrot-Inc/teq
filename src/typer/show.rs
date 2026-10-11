@@ -225,6 +225,7 @@ impl<'a> Worker<'a> {
             Type::Member(p, n) => {
                 match self.types.get(p) {
                     Type::Term(_) | Type::Select(..) | Type::This(_) => self.show_path(p, out),
+                    Type::RecThis(_) => self.show_into(p, out, false),
                     Type::Class(c, args) if self.syms.class(c).kind == ClassKind::Object => {
                         out.push_str(self.interner.get(self.syms.class(c).name));
                         self.show_args(args, out);
@@ -292,6 +293,19 @@ impl<'a> Worker<'a> {
                     out.push(')');
                 }
             }
+            // `{z1 => AnyRef{type T; type U = z1.T}}`, as dotty's `PlainPrinter` shows a `RecType`.
+            Type::Rec(b) => {
+                let n = self.show_recs.get() + 1;
+                self.show_recs.set(n);
+                out.push_str(&format!("{{z{} => ", n));
+                self.show_into(b, out, false);
+                out.push('}');
+                self.show_recs.set(n - 1);
+            }
+            Type::RecThis(k) => match self.show_recs.get().checked_sub(k) {
+                Some(n) if n > 0 => out.push_str(&format!("z{}", n)),
+                _ => out.push_str("<this>"),
+            },
             Type::Refined(..) if self.show_named_function(t, out, nested) => {}
             Type::Refined(..) => {
                 let (parent, rs) = self.types.refinements_of(t);
@@ -451,6 +465,59 @@ impl<'a> Worker<'a> {
                 }
             }
         }
+    }
+
+    /// A method's info as scalac shows it (`PlainPrinter`): `=> R` of a parameterless def,
+    /// `[T](x: T)(using y: Int): R` of one with parameters.
+    pub(super) fn show_method_info(&self, sig: &MethodSig) -> String {
+        let mut out = String::new();
+        if sig.tparams.is_empty() && sig.clauses.is_empty() {
+            out.push_str("=> ");
+            self.show_into(sig.ret, &mut out, false);
+            return out;
+        }
+        if !sig.tparams.is_empty() {
+            out.push('[');
+            for (i, &t) in sig.tparams.iter().enumerate() {
+                if i > 0 {
+                    out.push_str(", ");
+                }
+                out.push_str(self.interner.get(self.syms.tparam(t).name));
+                let (lo, hi) = (self.syms.tparam(t).lower, self.syms.tparam(t).upper);
+                if lo != NOTHING {
+                    out.push_str(" >: ");
+                    self.show_into(lo, &mut out, false);
+                }
+                if hi != ANY {
+                    out.push_str(" <: ");
+                    self.show_into(hi, &mut out, false);
+                }
+            }
+            out.push(']');
+        }
+        for cl in &sig.clauses {
+            out.push('(');
+            if cl.is_using {
+                out.push_str("using ");
+            } else if cl.is_implicit {
+                out.push_str("implicit ");
+            }
+            for (i, p) in cl.params.iter().enumerate() {
+                if i > 0 {
+                    out.push_str(", ");
+                }
+                out.push_str(self.interner.get(p.name));
+                out.push_str(if p.by_name { ": => " } else { ": " });
+                self.show_into(p.ty, &mut out, false);
+                if p.repeated {
+                    out.push('*');
+                }
+            }
+            out.push(')');
+        }
+        out.push_str(": ");
+        self.show_into(sig.ret, &mut out, false);
+        out
     }
 
     fn is_function_type(&self, t: TypeId) -> bool {

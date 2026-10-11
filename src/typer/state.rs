@@ -744,7 +744,7 @@ impl<'a> Worker<'a> {
         // The types as they are solved now: a later rollback of a probe that forced this typing
         // may reopen a variable they name.
         let owner_subst = call.owner_subst.iter().map(|&(p, t)| (p, self.zonk(t))).collect();
-        let call = super::apply::MethodCall { recv: call.recv, sym: call.sym, owner_subst, ext_recv: call.ext_recv, prefix: call.prefix };
+        let call = super::apply::MethodCall { recv: call.recv, sym: call.sym, owner_subst, ext_recv: call.ext_recv, prefix: call.prefix, refined: call.refined.clone() };
         let subst = subst.iter().map(|&(p, t)| (p, self.zonk(t))).collect();
         let arg_types = arg_types.into_iter().map(|(e, t)| (e, self.zonk(t))).collect();
         let ret_ty = self.zonk(ret_ty);

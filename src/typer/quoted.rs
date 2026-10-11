@@ -533,7 +533,7 @@ impl<'a> Worker<'a> {
                 self.collect_type_params(a, out);
                 self.collect_type_params(b, out);
             }
-            Type::Select(p, _) | Type::Member(p, _) | Type::Match(p, _) => self.collect_type_params(p, out),
+            Type::Select(p, _) | Type::Member(p, _) | Type::Match(p, _) | Type::Rec(p) => self.collect_type_params(p, out),
             Type::Refined(p, _) => {
                 let (_, rs) = self.types.refinements_of(t);
                 self.collect_type_params(p, out);
@@ -1639,7 +1639,7 @@ impl<'a> Worker<'a> {
                 TExpr::Field(r, _) => (Some(r), Vec::new()),
                 _ => continue,
             };
-            let call = super::apply::MethodCall { recv, sym: d.sym, owner_subst: d.owner_subst.clone(), ext_recv: None, prefix: d.prefix };
+            let call = super::apply::MethodCall { recv, sym: d.sym, owner_subst: d.owner_subst.clone(), ext_recv: None, prefix: d.prefix, refined: None };
             self.inline.site_at_end = d.at_end;
             let expanded = match self.inline.site_env.clone() {
                 Some(env) => {

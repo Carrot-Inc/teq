@@ -55,6 +55,8 @@ bigdecimal_conv
 bigint_ops
 bigint_random_entry_points
 bigint_random_primes
+block_alias_context
+block_import_alias
 block_infix_argument
 block_lambda_stmts
 block_then_select
@@ -795,6 +797,7 @@ macro_quote_refined
 macro_quotes_qualifier
 macro_receiver_copy
 macro_records
+macro_recursive_type
 macro_refinement_by_name_repeated
 macro_refinement_clause_kinds
 macro_refinement_info_equality
@@ -951,6 +954,7 @@ overload_vals
 overloads_by_using_clause
 override_enclosing_type_member
 override_inferred
+override_through_val_path
 package_alias_beside_object
 package_blocks
 package_main
@@ -991,6 +995,7 @@ pkgobj_inherited_members
 placeholder_params
 placeholder_type_args
 poly_context_function
+poly_function_outer_bound
 poly_functions
 poly_named_params
 predef_std
@@ -1034,7 +1039,17 @@ receiver_type_args_from_expected
 refined_aux_givens
 refined_projection_patterns
 refinement_alias_meets_bounds
+refinement_joint_members
+refinement_match_alias
+refinement_member_completer
+refinement_member_denotation
+refinement_member_meet
+refinement_member_scope
 refinement_member_variance
+refinement_nested_scope
+refinement_rec_anchor
+refinement_signature_exemptions
+refinement_term_scope
 reflective_selectable
 regex_beyond_javascript
 regex_case_properties

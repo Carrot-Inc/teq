@@ -1831,7 +1831,7 @@ impl<'a> Worker<'a> {
                                 if let (Some(_), Some(r)) = (prefix, recv) {
                                     self.note_outer_prefix(alt.sym, r);
                                 }
-                                let call = MethodCall { recv, sym: alt.sym, owner_subst: alt.owner_subst.clone(), ext_recv: None, prefix };
+                                let call = MethodCall { recv, sym: alt.sym, owner_subst: alt.owner_subst.clone(), ext_recv: None, prefix, refined: None };
                                 // An intersection's alternative met with its match: its joint signature.
                                 if let Some(info) = alt.info.clone() {
                                     self.joint_sig = Some((recv, alt.sym, info));
@@ -1916,12 +1916,12 @@ impl<'a> Worker<'a> {
                 let retyped = self.pass_typed_lambdas(alt, &mut lists, &infos);
                 let r = match alt.ctor {
                     Some(_) => {
-                        let call = MethodCall { recv: None, sym: SymId(u32::MAX), owner_subst: Vec::new(), ext_recv: None, prefix: None };
+                        let call = MethodCall { recv: None, sym: SymId(u32::MAX), owner_subst: Vec::new(), ext_recv: None, prefix: None, refined: None };
                         self.apply_method(call, Some((c, alt.sig.clone())), targs, lists, span, expected, false).unwrap()
                     }
                     None => {
                         self.check_access(alt.sym, None, span);
-                        let call = MethodCall { recv: None, sym: alt.sym, owner_subst: Vec::new(), ext_recv: None, prefix: None };
+                        let call = MethodCall { recv: None, sym: alt.sym, owner_subst: Vec::new(), ext_recv: None, prefix: None, refined: None };
                         self.apply_method(call, None, targs, lists, span, expected, false).unwrap()
                     }
                 };
@@ -3514,7 +3514,7 @@ impl<'a> Worker<'a> {
         out
     }
 
-    fn method_description_of(&self, sym: SymId) -> String {
+    pub(super) fn method_description_of(&self, sym: SymId) -> String {
         let info = self.syms.sym(sym);
         match info.owner {
             Owner::Class(c) if info.name == names::INIT => {

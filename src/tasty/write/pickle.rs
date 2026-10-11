@@ -263,6 +263,9 @@ struct P<'w, 'a> {
     /// function type's `apply`), innermost last, each with its `METHODtype`'s address and its
     /// position in the clause: a type names one by `PARAMtype`.
     method_params: Vec<(SymId, usize, u32)>,
+    /// The addresses of the `RECtype`s being written, innermost last: a `RecThis` names its
+    /// binder by its index from the end.
+    rec_binders: Vec<usize>,
     /// The classes whose bodies are being written, innermost last: the `this` a type may name.
     enclosing: Vec<ClassId>,
     /// Types written once in a form that does not depend on where they stand.
@@ -488,6 +491,7 @@ impl<'w, 'a> P<'w, 'a> {
             tparams: Vec::new(),
             params: Vec::new(),
             method_params: Vec::new(),
+            rec_binders: Vec::new(),
             enclosing: Vec::new(),
             shared: FxMap::default(),
             shared_prefixes: FxMap::default(),
@@ -5618,6 +5622,29 @@ impl<'w, 'a> P<'w, 'a> {
             }
             Type::Decl(a) => self.alias_ref(a),
             Type::Refined(parent, r) => self.refined(parent, r),
+            // `RECtype` over the refined chain, its self references `RECthis` to it
+            // (`TreePickler.pickleType`).
+            Type::Rec(body) => {
+                let at = self.buf.addr();
+                self.buf.byte(RECTYPE);
+                self.rec_binders.push(at);
+                self.ty(body);
+                self.rec_binders.pop();
+            }
+            Type::RecThis(k) => {
+                self.placed = true;
+                match self.rec_binders.len().checked_sub(1 + k as usize) {
+                    Some(i) => {
+                        let at = self.rec_binders[i];
+                        self.buf.byte(RECTHIS);
+                        self.buf.reference(at);
+                    }
+                    None => {
+                        self.fail("a refinement's self reference outside its type".to_string());
+                        self.external_typeref("scala", "Nothing");
+                    }
+                }
+            }
             Type::Match(scrutinee, m) => self.match_type(scrutinee, m),
             Type::Alias(a, args) => {
                 let args: Vec<TypeId> = self.w.types.items(args).to_vec();

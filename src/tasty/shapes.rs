@@ -77,7 +77,7 @@ impl Shape {
     /// `this` or a path, a singleton type, a refinement, a projection, a match type, a by-name
     /// parameter of a function type.
     pub fn supported(self) -> bool {
-        matches!(self, Shape::TypeMember | Shape::PathDependent | Shape::Singleton | Shape::Refinement | Shape::Projection | Shape::MatchType | Shape::ByNameInside)
+        matches!(self, Shape::TypeMember | Shape::PathDependent | Shape::Singleton | Shape::Refinement | Shape::Recursive | Shape::Projection | Shape::MatchType | Shape::ByNameInside)
     }
 
     pub fn describe(self) -> &'static str {

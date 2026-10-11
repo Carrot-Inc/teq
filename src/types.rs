@@ -97,6 +97,15 @@ pub enum Type {
     Decl(AliasId),
     /// `T { type A = X }`: the parent with one refinement; several nest, the last one outermost.
     Refined(TypeId, RefineId),
+    /// A refinement whose members refer to each other or to the refined type itself (dotty's
+    /// `RecType`): the binder over the whole refined chain, made only where a member refers to
+    /// it (`RecType.closeOver`). Its members name the refined type as `RecThis(0)`.
+    Rec(TypeId),
+    /// The refined type a `Rec` binds (dotty's `RecThis`), by its de Bruijn index: 0 the nearest
+    /// enclosing `Rec`, 1 the one around it. Two refinements alike up to their binders are one
+    /// type. No lookup sees one free: a `Rec` is opened first, its `RecThis(0)` replaced by the
+    /// prefix the member is seen through (`Types.findMember`'s `goRec`).
+    RecThis(u32),
     /// `S match { case P => T ... }`: the scrutinee and, in the store, the cases and the
     /// declared upper bound. It is reduced by the typer where a use needs it.
     Match(TypeId, MatchId),
@@ -178,6 +187,8 @@ const LOCAL_BIT: u8 = 32;
 /// The type is a path kept apart from the index (`TypeStore::term_unshared`): its provenance,
 /// read wherever the type is and passed on to nothing made of it (`flags_of`).
 const UNSHARED_BIT: u8 = 64;
+/// A `RecThis` occurs in the type, bound or free: what opening a `Rec` rewrites.
+const REC_BIT: u8 = 128;
 
 #[inline]
 fn local_id(id: u32) -> u8 {
@@ -400,7 +411,7 @@ impl TypeStore {
     fn flags_of_parts(&self, t: Type) -> u8 {
         // A prefix or a refinement passes on what it mentions except a wildcard, which counts
         // only where it is a type argument.
-        const THROUGH_PREFIX: u8 = VARS_BIT | PATHS_BIT | REDUCIBLE_BIT | LOCAL_BIT;
+        const THROUGH_PREFIX: u8 = VARS_BIT | PATHS_BIT | REDUCIBLE_BIT | LOCAL_BIT | REC_BIT;
         match t {
             Type::Wild => WILD_BIT,
             Type::BoundedWild(lo, hi) => WILD_BIT | self.entry_flag(lo) | self.entry_flag(hi),
@@ -435,6 +446,8 @@ impl TypeStore {
                 ((self.entry_flag(m) | args) & THROUGH_PREFIX) | (args & APP_PARAM_BIT)
             }
             Type::Refined(p, r) => (self.entry_flag(p) | self.refinement_flags(r)) & THROUGH_PREFIX,
+            Type::Rec(b) => self.entry_flag(b),
+            Type::RecThis(_) => PATHS_BIT | REC_BIT,
             Type::Match(s, m) => REDUCIBLE_BIT | self.entry_flag(s) | self.match_parts(m).fold(0, |acc, a| acc | self.entry_flag(a)),
             _ => 0,
         }
@@ -906,6 +919,7 @@ impl TypeStore {
                         Refinement::Val(_, _, x) => self.names_term(x, terms),
                     }
             }
+            Type::Rec(b) => self.names_term(b, terms),
             Type::Match(s, m) => {
                 let info = self.match_info(m);
                 self.names_term(s, terms) || self.names_term(info.bound, terms) || info.cases.iter().any(|c| self.names_term(c.pattern, terms) || self.names_term(c.body, terms))
@@ -936,6 +950,7 @@ impl TypeStore {
                         Refinement::Val(_, _, x) => self.names_tparam(x, tparams),
                     }
             }
+            Type::Rec(b) => self.names_tparam(b, tparams),
             Type::Match(s, m) => {
                 let info = self.match_info(m);
                 self.names_tparam(s, tparams) || self.names_tparam(info.bound, tparams) || info.cases.iter().any(|c| self.names_tparam(c.pattern, tparams) || self.names_tparam(c.body, tparams))
@@ -1223,6 +1238,7 @@ impl TypeStore {
             | Type::Wild
             | Type::This(_)
             | Type::Term(_)
+            | Type::RecThis(_)
             | Type::Decl(_) => false,
             Type::Class(_, args) | Type::AppParam(_, args) | Type::AppVar(_, args) => {
                 self.items(args).iter().any(|&a| self.contains_error(a))
@@ -1234,6 +1250,7 @@ impl TypeStore {
             Type::Select(p, _) | Type::Member(p, _) => self.contains_error(p),
             Type::Nested(p, c) => self.contains_error(p) || self.contains_error(c),
             Type::Refined(p, r) => self.contains_error(p) || self.refinement_types(r).into_iter().any(|a| self.contains_error(a)),
+            Type::Rec(b) => self.contains_error(b),
             Type::Match(s, m) => self.contains_error(s) || self.match_parts(m).collect::<Vec<_>>().into_iter().any(|a| self.contains_error(a)),
             Type::Alias(_, args) => self.items(args).iter().any(|&a| self.contains_error(a)),
         }
@@ -1276,6 +1293,7 @@ impl TypeStore {
             | Type::Blocked(_)
             | Type::This(_)
             | Type::Term(_)
+            | Type::RecThis(_)
             | Type::Decl(_) => t,
             Type::Param(p) => s.iter().find(|(q, _)| *q == p).map_or(t, |&(_, r)| r),
             Type::Select(p, sym) => {
@@ -1320,6 +1338,15 @@ impl TypeStore {
                     self.mk(Type::Refined(np, nr))
                 }
             }
+            // A substitution's replacements are closed, so the binder captures none of them.
+            Type::Rec(b) => {
+                let nb = self.subst(b, s);
+                if nb == b {
+                    t
+                } else {
+                    self.mk(Type::Rec(nb))
+                }
+            }
             Type::Class(c, args) => {
                 let n = self.subst_list(args, s);
                 if n == args {
@@ -1347,8 +1374,11 @@ impl TypeStore {
                     self.mk(Type::AppVar(v, n))
                 }
             }
+            // A binder's own parameters are not substituted inside it: a recursive refinement
+            // seen through a projection holds the lambda being reduced in its prefix.
             Type::Lambda(ps, body) => {
-                let b = self.subst(body, s);
+                let inner = self.unshadowed(ps, s);
+                let b = self.subst(body, inner.as_ref().unwrap_or(s));
                 if b == body {
                     t
                 } else {
@@ -1356,6 +1386,9 @@ impl TypeStore {
                 }
             }
             Type::Poly(ps, body) => {
+                // Its list holds the parameters, then their bounds: the parameters alone bind.
+                let inner = self.unshadowed_among(self.poly_params(ps), s);
+                let s = inner.as_ref().unwrap_or(s);
                 let b = self.subst(body, s);
                 let items = self.items(ps).to_vec();
                 let k = items.len() / 3;
@@ -1410,6 +1443,8 @@ impl TypeStore {
                 let ncases: Vec<MatchCase> = cases
                     .iter()
                     .map(|c| {
+                        let inner = self.unshadowed(c.binders, s);
+                        let s = inner.as_ref().unwrap_or(s);
                         let (p, b) = (self.subst(c.pattern, s), self.subst(c.body, s));
                         changed |= p != c.pattern || b != c.body;
                         MatchCase { binders: c.binders, pattern: p, body: b }
@@ -1475,6 +1510,244 @@ impl TypeStore {
                 if nl == lo && nh == hi { t } else { self.bounded_wild(nl, nh) }
             }
             _ => t,
+        }
+    }
+
+    /// `s` without the parameters the binder list `ps` binds (a lambda's, a polymorphic
+    /// function's, a match case's), where it maps one of them: None where none is shadowed.
+    fn unshadowed(&self, ps: TList, s: &Subst) -> Option<Subst> {
+        if ps == EMPTY_LIST {
+            return None;
+        }
+        self.unshadowed_among(self.items(ps), s)
+    }
+
+    /// `unshadowed` over the binders `items`, `Param` types.
+    fn unshadowed_among(&self, items: &[TypeId], s: &Subst) -> Option<Subst> {
+        if items.is_empty() || s.is_empty() {
+            return None;
+        }
+        let bound = |q: TParamId| items.iter().any(|&x| matches!(self.get(x), Type::Param(p) if p == q));
+        if !s.iter().any(|&(q, _)| bound(q)) {
+            return None;
+        }
+        Some(s.iter().copied().filter(|&(q, _)| !bound(q)).collect())
+    }
+
+    /// `t` with each direct part through `f` (a refinement's types and a match type's cases
+    /// included), made again only where a part changed.
+    pub fn map_parts(&self, t: TypeId, f: &mut dyn FnMut(TypeId) -> TypeId) -> TypeId {
+        let list = |ts: &Self, l: TList, f: &mut dyn FnMut(TypeId) -> TypeId| {
+            if l == EMPTY_LIST {
+                return l;
+            }
+            let items: Vec<TypeId> = ts.items(l).to_vec();
+            let out: Vec<TypeId> = items.iter().map(|&a| f(a)).collect();
+            if out == items { l } else { ts.list(&out) }
+        };
+        match self.get(t) {
+            Type::Class(c, args) => {
+                let n = list(self, args, f);
+                if n == args { t } else { self.mk(Type::Class(c, n)) }
+            }
+            Type::AppParam(p, args) => {
+                let n = list(self, args, f);
+                if n == args { t } else { self.mk(Type::AppParam(p, n)) }
+            }
+            Type::AppVar(v, args) => {
+                let n = list(self, args, f);
+                if n == args { t } else { self.mk(Type::AppVar(v, n)) }
+            }
+            Type::Alias(a, args) => {
+                let n = list(self, args, f);
+                if n == args { t } else { self.mk(Type::Alias(a, n)) }
+            }
+            Type::AppMember(m, args) => {
+                let (nm, n) = (f(m), list(self, args, f));
+                if nm == m && n == args { t } else { let items = self.items(n).to_vec(); self.apply_ctor(nm, &items) }
+            }
+            Type::Lambda(ps, body) => {
+                let b = f(body);
+                if b == body { t } else { self.mk(Type::Lambda(ps, b)) }
+            }
+            Type::Poly(ps, body) => {
+                let b = f(body);
+                let items = self.items(ps).to_vec();
+                let k = items.len() / 3;
+                let mapped: Vec<TypeId> = items.iter().enumerate().map(|(i, &x)| if i < k { x } else { f(x) }).collect();
+                let nps = if mapped == items { ps } else { self.list(&mapped) };
+                if b == body && nps == ps { t } else { self.mk(Type::Poly(nps, b)) }
+            }
+            Type::Union(a, b) => {
+                let (na, nb) = (f(a), f(b));
+                if na == a && nb == b { t } else { self.union(na, nb) }
+            }
+            Type::Inter(a, b) => {
+                let (na, nb) = (f(a), f(b));
+                if na == a && nb == b { t } else { self.inter(na, nb) }
+            }
+            Type::BoundedWild(lo, hi) => {
+                let (nl, nh) = (f(lo), f(hi));
+                if nl == lo && nh == hi { t } else { self.bounded_wild(nl, nh) }
+            }
+            Type::Select(p, sym) => {
+                let np = f(p);
+                if np == p { t } else { self.mk(Type::Select(np, sym)) }
+            }
+            Type::Member(p, name) => {
+                let np = f(p);
+                if np == p { t } else { self.mk(Type::Member(np, name)) }
+            }
+            Type::Nested(p, c) => {
+                let (np, nc) = (f(p), f(c));
+                if np == p && nc == c { t } else { self.mk(Type::Nested(np, nc)) }
+            }
+            Type::Refined(p, r) => {
+                let np = f(p);
+                let refined = match self.refinement(r) {
+                    Refinement::Alias(n, x) => Refinement::Alias(n, f(x)),
+                    Refinement::Bounds(n, lo, hi) => Refinement::Bounds(n, f(lo), f(hi)),
+                    Refinement::Val(n, sym, x) => Refinement::Val(n, sym, f(x)),
+                    Refinement::Term(n, sym, l) => Refinement::Term(n, sym, list(self, l, f)),
+                };
+                let nr = if refined == self.refinement(r) { r } else { self.refine(refined) };
+                if np == p && nr == r { t } else { self.mk(Type::Refined(np, nr)) }
+            }
+            Type::Rec(b) => {
+                let nb = f(b);
+                if nb == b { t } else { self.mk(Type::Rec(nb)) }
+            }
+            Type::Match(scrut, m) => {
+                let ns = f(scrut);
+                let (cases, bound) = {
+                    let info = self.match_info(m);
+                    (info.cases.to_vec(), info.bound)
+                };
+                let nb = f(bound);
+                let mut changed = ns != scrut || nb != bound;
+                let ncases: Vec<MatchCase> = cases
+                    .iter()
+                    .map(|c| {
+                        let (p, b) = (f(c.pattern), f(c.body));
+                        changed |= p != c.pattern || b != c.body;
+                        MatchCase { binders: c.binders, pattern: p, body: b }
+                    })
+                    .collect();
+                if changed { self.match_type(ns, &ncases, nb) } else { t }
+            }
+            Type::Any
+            | Type::Nothing
+            | Type::Error
+            | Type::Ctor(_)
+            | Type::Param(_)
+            | Type::Var(_)
+            | Type::Lit(_)
+            | Type::Wild
+            | Type::Blocked(_)
+            | Type::This(_)
+            | Type::Term(_)
+            | Type::Decl(_)
+            | Type::RecThis(_) => t,
+        }
+    }
+
+    /// Whether a `RecThis` occurs in the type, bound or free.
+    #[inline]
+    pub fn has_rec_this(&self, t: TypeId) -> bool {
+        self.flag(t) & REC_BIT != 0
+    }
+
+    /// The body of a `Rec` opened at `prefix` (dotty's `substRecThis`): its `RecThis(0)` is
+    /// `prefix`, a path or a closed type, and the indices that reach past it drop by one. On a
+    /// body that names no `RecThis(0)` this is the body without its binder (`RecType.closeOver`).
+    /// dotty's `RecType.rebind` (`closeOver`) of a mapped body: a binder where the body still
+    /// names its self, the body with the self's index lowered where it no longer does.
+    pub fn rebind_rec(&self, body: TypeId) -> TypeId {
+        if self.refers_to_rec(body, 0) { self.mk(Type::Rec(body)) } else { self.open_rec(body, ANY) }
+    }
+
+    pub fn open_rec(&self, body: TypeId, prefix: TypeId) -> TypeId {
+        self.subst_rec_this(body, 0, prefix)
+    }
+
+    fn subst_rec_this(&self, t: TypeId, depth: u32, prefix: TypeId) -> TypeId {
+        if !self.has_rec_this(t) {
+            return t;
+        }
+        match self.get(t) {
+            Type::RecThis(k) if k == depth => prefix,
+            Type::RecThis(k) if k > depth => self.mk(Type::RecThis(k - 1)),
+            Type::RecThis(_) => t,
+            Type::Rec(b) => {
+                let nb = self.subst_rec_this(b, depth + 1, prefix);
+                if nb == b { t } else { self.mk(Type::Rec(nb)) }
+            }
+            _ => self.map_parts(t, &mut |x| self.subst_rec_this(x, depth, prefix)),
+        }
+    }
+
+    /// `t` with each occurrence of the path `this` read as the self of a binder about to be put
+    /// around it (`RecType.apply`'s `parentExp` applied to the new type's `recThis`):
+    /// `RecThis(k)` at `k` binders inside.
+    pub fn abstract_rec(&self, t: TypeId, this: TypeId) -> TypeId {
+        self.abstract_rec_at(t, this, 0)
+    }
+
+    fn abstract_rec_at(&self, t: TypeId, this: TypeId, depth: u32) -> TypeId {
+        if t == this {
+            return self.mk(Type::RecThis(depth));
+        }
+        if !self.has_paths(t) {
+            return t;
+        }
+        match self.get(t) {
+            Type::Rec(b) => {
+                let nb = self.abstract_rec_at(b, this, depth + 1);
+                if nb == b { t } else { self.mk(Type::Rec(nb)) }
+            }
+            _ => self.map_parts(t, &mut |x| self.abstract_rec_at(x, this, depth)),
+        }
+    }
+
+    /// The body of a `Rec` on the spine of a refined chain about to be bound by another, merged
+    /// into it (`RecType.apply`'s normalisation): its self references are the new binder's, and
+    /// the indices past it drop by one.
+    pub fn merge_rec(&self, body: TypeId) -> TypeId {
+        self.lower_past(body, 0)
+    }
+
+    fn lower_past(&self, t: TypeId, depth: u32) -> TypeId {
+        if !self.has_rec_this(t) {
+            return t;
+        }
+        match self.get(t) {
+            Type::RecThis(k) if k > depth => self.mk(Type::RecThis(k - 1)),
+            Type::RecThis(_) => t,
+            Type::Rec(b) => {
+                let nb = self.lower_past(b, depth + 1);
+                if nb == b { t } else { self.mk(Type::Rec(nb)) }
+            }
+            _ => self.map_parts(t, &mut |x| self.lower_past(x, depth)),
+        }
+    }
+
+    /// Whether `RecThis(depth)` occurs in `t`, the binder `depth` levels out: `RecType`'s
+    /// `isReferredToBy`.
+    pub fn refers_to_rec(&self, t: TypeId, depth: u32) -> bool {
+        if !self.has_rec_this(t) {
+            return false;
+        }
+        match self.get(t) {
+            Type::RecThis(k) => k == depth,
+            Type::Rec(b) => self.refers_to_rec(b, depth + 1),
+            _ => {
+                let mut found = false;
+                self.map_parts(t, &mut |x| {
+                    found = found || self.refers_to_rec(x, depth);
+                    x
+                });
+                found
+            }
         }
     }
 
@@ -1860,6 +2133,7 @@ impl TypeStore {
                 out.push(m);
                 out.extend_from_slice(self.entry_items(args));
             }
+            Type::Rec(b) => out.push(b),
             Type::Refined(p, r) => {
                 out.push(p);
                 match self.entry_refinement(r) {
@@ -2271,6 +2545,7 @@ impl TypeStore {
                 ty(p);
                 view::built(self, Sub::Refinements, r.0);
             }
+            Type::Rec(b) => ty(b),
             Type::Match(sc, m) => {
                 ty(sc);
                 view::built(self, Sub::Matches, m.0);
@@ -2914,6 +3189,11 @@ impl ShadowNs<'_> {
                     key.extend([p2, r2]);
                     Self::real(&[p2, r2]).then(|| Type::Refined(TypeId(p2 as u32), RefineId(r2 as u32)))
                 }
+                Type::Rec(b) => {
+                    let b2 = edge(self, b);
+                    key.push(b2);
+                    Self::real(&[b2]).then(|| Type::Rec(TypeId(b2 as u32)))
+                }
                 Type::Match(sc, m) => {
                     let (s2, m2) = (edge(self, sc), self.match_record(m));
                     key.extend([s2, m2]);
@@ -3544,6 +3824,10 @@ impl TypeStore {
                 let r = self.refine(r);
                 self.mk(Type::Refined(p, r))
             }
+            Type::Rec(b) => {
+                let b = part(b);
+                self.mk(Type::Rec(b))
+            }
             Type::Match(s, m) => {
                 let s = part(s);
                 let info = self.entry_match(m).clone();
@@ -3578,6 +3862,65 @@ mod tests {
         let prefix = s.mk(Type::Term(SymId(7)));
         let nested = s.mk(Type::Nested(prefix, inner));
         assert!(s.has_paths(nested) && nested != inner);
+    }
+
+    /// A recursive refinement's self reference is its binder's de Bruijn index: two refinements
+    /// alike up to their binders are one type, a non-recursive one has no binder, and opening
+    /// replaces the nearest binder's references, lowering those that reach past it.
+    #[test]
+    fn a_recursive_refinement_is_bound_by_index() {
+        let s = TypeStore::new();
+        let (t, u) = (Name(901), Name(902));
+        let own = |s: &TypeStore, k: u32| {
+            let this = s.mk(Type::RecThis(k));
+            s.mk(Type::Member(this, t))
+        };
+        let chain = |s: &TypeStore, k: u32| {
+            let a = s.mk(Type::Refined(ANY, s.refine(Refinement::Bounds(t, NOTHING, ANY))));
+            s.mk(Type::Refined(a, s.refine(Refinement::Alias(u, own(s, k)))))
+        };
+        let r1 = s.mk(Type::Rec(chain(&s, 0)));
+        let r2 = s.mk(Type::Rec(chain(&s, 0)));
+        assert_eq!(r1, r2);
+        assert!(s.refers_to_rec(chain(&s, 0), 0));
+        assert!(!s.refers_to_rec(r1, 0));
+        assert!(!s.has_rec_this(ANY));
+        let path = s.mk(Type::Term(SymId(7)));
+        let opened = s.open_rec(chain(&s, 0), path);
+        assert!(!s.has_rec_this(opened));
+        assert_eq!(s.open_rec(chain(&s, 1), path), chain(&s, 0));
+        // Inside a nested binder the outer self is one further out.
+        let nested = s.mk(Type::Rec(chain(&s, 1)));
+        let outer = s.mk(Type::Refined(ANY, s.refine(Refinement::Alias(u, nested))));
+        let inner_opened = s.mk(Type::Rec(s.open_rec(chain(&s, 1), ANY)));
+        assert_ne!(s.open_rec(outer, path), outer);
+        assert!(s.refers_to_rec(outer, 0));
+        assert_eq!(inner_opened, s.mk(Type::Rec(chain(&s, 0))));
+    }
+
+    /// A substitution leaves a binder's own parameters alone inside it: a lambda over `p` within
+    /// a type substituted for `p` (a recursive refinement's prefix holding the lambda being
+    /// reduced) keeps its body.
+    #[test]
+    fn a_substitution_skips_the_parameters_a_binder_binds() {
+        let s = TypeStore::new();
+        let (p, q) = (TParamId(1), TParamId(2));
+        let (pt, qt) = (s.param(p), s.param(q));
+        let body = s.union(pt, qt);
+        let lambda = s.mk(Type::Lambda(s.list(&[pt]), body));
+        let outer = s.inter(pt, lambda);
+        let subst: Subst = vec![(p, ANY), (q, NOTHING)];
+        let inner = s.mk(Type::Lambda(s.list(&[pt]), s.union(pt, NOTHING)));
+        assert_eq!(s.subst(outer, &subst), s.inter(ANY, inner));
+        assert_eq!(s.subst(lambda, &vec![(p, ANY)]), lambda);
+        // `[T <: U] => T => U` substituted for `U`: a bound naming an outer parameter is no binder.
+        let (t, u) = (TParamId(3), TParamId(4));
+        let (tt, ut) = (s.param(t), s.param(u));
+        let fun = s.class(ClassId(9), &[tt, ut]);
+        let poly = s.mk(Type::Poly(s.list(&[tt, NOTHING, ut]), fun));
+        let done = s.mk(Type::Poly(s.list(&[tt, NOTHING, ANY]), s.class(ClassId(9), &[tt, ANY])));
+        assert_eq!(s.subst(poly, &vec![(u, ANY)]), done);
+        assert_eq!(s.subst(poly, &vec![(t, ANY)]), poly);
     }
 
     /// A class a worker made has a tagged id: its mark is sparse, not a table sized by the tag.

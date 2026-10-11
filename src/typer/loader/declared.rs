@@ -430,6 +430,7 @@ impl<'a> Worker<'a> {
             Type::Class(c, _) => Some(c),
             Type::Nested(_, class) => self.sig_erased_class(class),
             Type::Refined(p, _) => self.sig_erased_class(p),
+            Type::Rec(body) => self.sig_erased_class(body),
             Type::Param(p) | Type::AppParam(p, _) => {
                 let u = self.syms.tparam(p).upper;
                 if u == d { None } else { self.sig_erased_class(u) }
@@ -680,6 +681,28 @@ impl<'a> Worker<'a> {
             if r == "scala.runtime.BoxedUnit" { "scala.Unit".to_string() } else { r }
         };
         Some((params, result))
+    }
+
+    /// The signature scalac selects a refinement's method by (`TreePickler.pickleTree`,
+    /// `isRefinedMethod`: the selection's own `tpe.signature`): the refinement's method type
+    /// `sig`, as seen from the receiver, erased as `pickled_signature` erases a declaration's.
+    pub(crate) fn pickled_refinement_signature(&mut self, sig: &crate::symbols::MethodSig, local: &str) -> Option<(Vec<PickledSigParam>, String)> {
+        let mut params = Vec::new();
+        if !sig.tparams.is_empty() {
+            params.push(PickledSigParam::Types(sig.tparams.len()));
+        }
+        for p in sig.clauses.iter().flat_map(|c| c.params.iter()) {
+            let erased = if p.by_name {
+                "scala.Function0".to_string()
+            } else if p.repeated {
+                "scala.collection.immutable.Seq".to_string()
+            } else {
+                self.sig_name(p.ty, false, 0, Some(local))?
+            };
+            params.push(PickledSigParam::Term(erased));
+        }
+        let r = self.sig_name(sig.ret, false, 0, Some(local))?;
+        Some((params, if r == "scala.runtime.BoxedUnit" { "scala.Unit".to_string() } else { r }))
     }
 
     /// Whether `s` is a method of a Java class read from its class file, whose repeated parameter
@@ -1078,7 +1101,7 @@ impl<'a> Worker<'a> {
                 let owner_ty = self.declared_owner_type(recv_ty, s);
                 self.member_callee_in(recv, recv_ty, owner_ty, s)
             }
-            _ => Callee::Method { recv: None, sym: s, owner_subst: Vec::new(), prefix: None },
+            _ => Callee::Method { recv: None, sym: s, owner_subst: Vec::new(), prefix: None, refined: None },
         }
     }
 

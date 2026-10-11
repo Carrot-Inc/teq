@@ -1,0 +1,11 @@
+// tests/tasty/fixtures/RrShapes.tasty (TASTy 28.8, 841 bytes)
+package fix.recrefine
+@SourceFile object RrShapes extends Object {
+  <synthetic> private def writeReplace(): AnyRef = ...
+  type S = AnyRef { type T = Predef.String; def f(): T }
+  type R = AnyRef { type T; type U = T }
+  type P = AnyRef { type T = Predef.String; def g(): Predef.String }
+  def make: S = ...
+  def plain: P = ...
+}
+

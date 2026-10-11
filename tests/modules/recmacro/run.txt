@@ -1,0 +1,3 @@
+rec AnyRef { T = String } { f (): self.T }
+rec AnyRef { T >: Nothing <: Any } { U = self.T }
+plain AnyRef { T = String } { g (): String }

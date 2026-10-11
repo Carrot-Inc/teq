@@ -175,6 +175,9 @@ struct ParamUse {
     primitive: Option<ClassId>,
     /// The parameter's type as the call instantiates it.
     ty: Option<TypeId>,
+    /// `ty` where it is a defined type, an argument's expected type: none where it still names
+    /// the callee's or its class's type parameters (a function value's `apply`; `isFullyDefined`).
+    defined: Option<TypeId>,
 }
 
 impl<'w, 'a> P<'w, 'a> {
@@ -822,6 +825,13 @@ impl<'w, 'a> P<'w, 'a> {
                         return self.dollar_cast(t, |p| p.call(s, Qual::Expr(r), recs.targs, &args));
                     }
                     self.call(s, Qual::Expr(r), recs.targs, &args)
+                }
+                // The member a refinement of the receiver's type declares: selected by the
+                // refinement's own signature, as the selection's denotation has no class.
+                Some(Form::Refined(rsym, list)) => {
+                    self.receive_by_name(e, r, s);
+                    let args = self.w.prog.expr_list(args).to_vec();
+                    self.applied(s, recs.targs, &args, |p| p.refined_select(s, rsym, list, |p| p.term(r)), Some(Qual::Expr(r)))
                 }
                 Some(f) => self.unsupported_form(f),
             },
@@ -1705,6 +1715,12 @@ impl<'w, 'a> P<'w, 'a> {
                 }
             }
         }
+        // The callee's and its class's type parameters, which a defined formal names none of
+        // (`ParamUse::defined`).
+        let mut formals: Vec<TParamId> = sig.tparams.clone();
+        if let Owner::Class(c) = info.owner {
+            formals.extend(self.w.syms.class(c).tparams.iter().copied());
+        }
         let block = lifted.is_some().then(|| {
             let b = self.open(BLOCK);
             self.term_at(None);
@@ -1735,7 +1751,8 @@ impl<'w, 'a> P<'w, 'a> {
                         let expected = matches!(self.w.prog.expr(args[at]), TExpr::Lambda(..)).then(|| self.w.types.subst(p.ty, &subst));
                         let primitive = if p.by_name || p.repeated { None } else { self.numeric_class(p.ty) };
                         let ty = (!p.by_name && !p.repeated).then(|| self.w.types.subst(p.ty, &subst));
-                        let u = ParamUse { repeated: p.repeated, elem: p.repeated.then_some(p.ty), expected, primitive, ty };
+                        let defined = ty.filter(|&t| !self.names_any_param(t, &formals));
+                        let u = ParamUse { repeated: p.repeated, elem: p.repeated.then_some(p.ty), expected, primitive, ty, defined };
                         if lifted == Some(args[at]) {
                             self.term_at(Some(args[at]));
                             self.buf.byte(TERMREFDIRECT);
@@ -1876,8 +1893,29 @@ impl<'w, 'a> P<'w, 'a> {
             }
             _ => {
                 let outer = std::mem::replace(&mut self.expected_fn, u.expected);
+                // An argument is typed against the parameter's type as the call instantiates
+                // it, which an anonymous class's instance is ascribed where its class's bound
+                // does not conform (`Typer.ensureNoLocalRefs`); a formal that still names the
+                // callee's or its class's type parameters is none (`ParamUse::defined`).
+                let pt = u.defined;
+                let outer_anon = std::mem::replace(&mut self.expected_anon, pt.map(|t| (a, t)));
                 self.term(a);
+                self.expected_anon = outer_anon;
                 self.expected_fn = outer;
+            }
+        }
+    }
+
+    fn names_any_param(&self, t: TypeId, formals: &[TParamId]) -> bool {
+        match self.w.types.get(t) {
+            Type::Param(p) | Type::AppParam(p, _) if formals.contains(&p) => true,
+            _ => {
+                let mut found = false;
+                self.w.types.map_parts(t, &mut |x| {
+                    found = found || self.names_any_param(x, formals);
+                    x
+                });
+                found
             }
         }
     }
@@ -2211,6 +2249,25 @@ impl<'w, 'a> P<'w, 'a> {
             _ => self.package_object_class_ref(s),
         }
         self.buf.end_length(l);
+    }
+
+    /// The selection of the class member `s` through the refinement member `rsym` of the
+    /// receiver's type, whose signature's types are `list`: `SELECT` with the refinement's
+    /// signed name (`TreePickler.pickleTree`: a refined method has no defining class, so it is
+    /// selected from the qualifier, by `tree.tpe.signature`).
+    fn refined_select(&mut self, s: SymId, rsym: SymId, list: TList, qual: impl FnOnce(&mut Self)) {
+        let name = self.w.syms.sym(s).name;
+        let sig = self.w.refinement_sig(Refinement::Term(name, rsym, list));
+        let local = self.local_prefix();
+        let Some((params, result)) = self.w.pickled_refinement_signature(&sig, &local) else {
+            return self.fail("the erasure of a refinement's member in a signature".to_string());
+        };
+        self.select_receiver = None;
+        let original = self.sym_name(s);
+        self.buf.byte(SELECT);
+        let n = self.names.signed_of(original, None, &sig_params(params), &result);
+        self.buf.nat(n as u64);
+        qual(self);
     }
 
     /// A member of a local anonymous class selected outside the class's body, where scalac's
@@ -3559,6 +3616,27 @@ impl<'w, 'a> P<'w, 'a> {
             TExpr::CallStatic(s, _) | TExpr::CallMethod(_, s, _) => Some(self.w.sig_of(s).ret),
             _ => None,
         });
+        // A function type with named parameters is a refinement of the function class by its
+        // `apply`, which scalac's typer selects (`goRefined`) and the pickle names by the
+        // refinement's signature (`isRefinedMethod`): `fun.apply{(dc.Ctx): Object}(c)`.
+        if let Some(sig) = ft.and_then(|t| self.named_apply(t)) {
+            if sig.clauses.first().map_or(false, |c| c.params.len() == n) {
+                let local = self.local_prefix();
+                let Some((params, result)) = self.w.pickled_refinement_signature(&sig, &local) else {
+                    return self.fail("the erasure of a function type's apply in a signature".to_string());
+                };
+                let a = self.open(APPLY);
+                self.buf.byte(SELECT);
+                let name = self.names.signed("apply", None, &sig_params(params), &result);
+                self.buf.nat(name as u64);
+                self.term(f);
+                for &x in args {
+                    self.term(x);
+                }
+                self.buf.end_length(a);
+                return;
+            }
+        }
         let context = ft.map_or(false, |t| self.w.as_context_function(t).is_some());
         let fc = if context { self.w.context_function_class(n) } else { self.w.function_class(n) };
         let own = ft.and_then(|t| {
@@ -3655,6 +3733,18 @@ impl<'w, 'a> P<'w, 'a> {
     /// arguments after those a local class's captures take; `prelude` the temporaries of named
     /// arguments, before the call in a block.
     fn ctor_call(&mut self, c: ClassId, via: Option<SymId>, targs: &[TypeId], args: &[TExprId], new_ty: TypeId, prelude: Option<ListRef>) {
+        // The type parameters of the constructor called, through `via` or the class's own, and of
+        // its class, which a defined formal names none of (`ParamUse::defined`).
+        let formals: Vec<TParamId> = match via {
+            Some(s) => {
+                let mut f = self.w.sig_of(s).tparams.clone();
+                if let Owner::Class(k) = self.w.syms.sym(s).owner {
+                    f.extend(self.w.syms.class(k).tparams.iter().copied());
+                }
+                f
+            }
+            None => self.w.syms.class(c).tparams.clone(),
+        };
         let own = self.w.syms.class(c).tparams.len();
         if targs.len() != own && c != self.w.b.any_ref {
             return self.fail(format!("a constructor call of {} with {} of its {} type arguments", self.name(self.w.syms.class(c).name), targs.len(), own));
@@ -3759,7 +3849,7 @@ impl<'w, 'a> P<'w, 'a> {
             self.qual_this(c);
             self.class_typeref(c);
             self.buf.end_length(sl);
-            return self.ctor_args(targs, args, &clauses, ta, opens, block);
+            return self.ctor_args(targs, args, &clauses, &formals, ta, opens, block);
         }
         self.buf.byte(NEW);
         if object {
@@ -3792,7 +3882,7 @@ impl<'w, 'a> P<'w, 'a> {
             self.class_typeref(c);
         }
         self.buf.end_length(sl);
-        self.ctor_args(targs, args, &clauses, ta, opens, block)
+        self.ctor_args(targs, args, &clauses, &formals, ta, opens, block)
     }
 
     /// Whether an expression is a stable path `path_type` writes: a local or parameter, `this`,
@@ -3867,7 +3957,7 @@ impl<'w, 'a> P<'w, 'a> {
     /// A constructor call's type arguments and argument clauses after its selection, and the
     /// block of the temporaries it was written in.
     #[allow(clippy::too_many_arguments)]
-    fn ctor_args(&mut self, targs: &[TypeId], args: &[TExprId], clauses: &[ClauseSig], ta: Option<crate::tasty::write::buf::Slot>, opens: Vec<crate::tasty::write::buf::Slot>, block: Option<(crate::tasty::write::buf::Slot, ListRef)>) {
+    fn ctor_args(&mut self, targs: &[TypeId], args: &[TExprId], clauses: &[ClauseSig], formals: &[TParamId], ta: Option<crate::tasty::write::buf::Slot>, opens: Vec<crate::tasty::write::buf::Slot>, block: Option<(crate::tasty::write::buf::Slot, ListRef)>) {
         if let Some(l) = ta {
             for &t in targs {
                 self.tpt(t);
@@ -3879,7 +3969,8 @@ impl<'w, 'a> P<'w, 'a> {
             for p in &clause.params {
                 let primitive = if p.by_name || p.repeated { None } else { self.numeric_class(p.ty) };
                 let ty = (!p.by_name && !p.repeated).then_some(p.ty);
-                let u = ParamUse { repeated: p.repeated, elem: p.repeated.then_some(p.ty), expected: None, primitive, ty };
+                let defined = ty.filter(|&t| !self.names_any_param(t, formals));
+                let u = ParamUse { repeated: p.repeated, elem: p.repeated.then_some(p.ty), expected: None, primitive, ty, defined };
                 match self.elide_args.clone() {
                     Some(reason) => {
                         self.pending_withheld = Some(reason);
@@ -4012,9 +4103,17 @@ impl<'w, 'a> P<'w, 'a> {
             Some(t) if !cast && !matches!(self.w.types.get(t), Type::Class(k, _) if k == c) => t,
             _ => ty,
         };
-        // A type the members refine: the context's, where it has one, which scalac ascribes the
-        // instance where the refined parents are not one.
+        // The class escapes the block the instance is (`Typer.ensureNoLocalRefs`): the block is
+        // ascribed the class's bound (`TypeOps.avoid`, `classBound`: the parents refined by the
+        // type members the body defines), or the type the context expects where it is defined
+        // and the bound does not conform to it (`AnyRef { def f(x: Int): Int }` of an argument).
         let expected = self.expected_anon.filter(|&(x, _)| x == e && !cast).map(|(_, t)| self.w.zonk(t)).filter(|&t| !self.w.types.has_vars(t) && !self.is_unit(t));
+        let expected = expected.filter(|&pt| {
+            let mark = self.w.snapshot();
+            let bound_conforms = self.w.is_sub(ty, pt);
+            self.w.rollback(mark);
+            !bound_conforms
+        });
         let ty = expected.unwrap_or(ty);
         if expected.is_none() && self.refining_anon_class(c, ty) {
             return self.fail("an anonymous class whose members refine its type".to_string());

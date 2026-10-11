@@ -973,9 +973,14 @@ object Reflect:
 
   object RecursiveThis:
     @js("$quoted") def unapply(x: RecursiveThis): Some[RecursiveType]
+  object RecursiveThisMethods:
+    extension (self: RecursiveThis)
+      @js("$quoted") def binder: RecursiveType
+  export RecursiveThisMethods.*
   object RecursiveThisTypeTest:
     def unapply(x: TypeRepr): Option[RecursiveThis] = if x.isInstanceOf[RecursiveThis] then Some(x.asInstanceOf[RecursiveThis]) else None
   object RecursiveType:
+    @js("$quoted") def apply(parentExp: RecursiveType => TypeRepr): RecursiveType
     @js("$quoted") def unapply(x: RecursiveType): Some[TypeRepr]
   object RecursiveTypeTypeTest:
     def unapply(x: TypeRepr): Option[RecursiveType] = if x.isInstanceOf[RecursiveType] then Some(x.asInstanceOf[RecursiveType]) else None

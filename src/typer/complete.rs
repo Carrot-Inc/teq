@@ -2252,7 +2252,7 @@ impl<'a> Worker<'a> {
                     }
                     _ => (Vec::new(), None),
                 };
-                let call = MethodCall { recv: None, sym: e, owner_subst, ext_recv: None, prefix };
+                let call = MethodCall { recv: None, sym: e, owner_subst, ext_recv: None, prefix, refined: None };
                 let mark = self.snapshot();
                 let applies = self.extension_applicable(&call, t);
                 self.rollback(mark);

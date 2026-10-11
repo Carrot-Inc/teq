@@ -519,6 +519,22 @@ impl<'a> Worker<'a> {
             (_, Type::Any) | (Type::Nothing, _) => return true,
             (Type::Union(x, y), _) => return self.is_sub(x, b) && self.is_sub(y, b),
             (_, Type::Inter(x, y)) => return self.is_sub(a, x) && self.is_sub(a, y),
+            // A recursive refinement on the right is its body with the left side's anchor as its
+            // self, a path or a skolem of the left side (`TypeComparer.compareRec`:
+            // `ensureStableSingleton`), the left side's own recursive types opened at the same
+            // anchor (`fixRecs`); on the left, its body seen through a skolem of it (its
+            // `RecThis`, a singleton of the type).
+            (_, Type::Rec(body)) => {
+                let anchor = self.rec_anchor(a);
+                let left = self.fix_recs(anchor, anchor);
+                let right = self.opened_rec(body, anchor);
+                return self.is_sub(left, right);
+            }
+            (Type::Rec(body), _) => {
+                let anchor = self.rec_anchor(a);
+                let opened = self.opened_rec(body, anchor);
+                return self.is_sub(opened, b);
+            }
             _ => {}
         }
         if let Type::Union(..) = tb {
@@ -534,6 +550,15 @@ impl<'a> Worker<'a> {
         }
         if let Type::Inter(x, y) = ta {
             let mark = self.snapshot();
+            // dotty's `secondTry` sends an `AndType` on the left to `thirdTry`, whose
+            // `compareRefined` takes it whole (its member a refinement of one part names the
+            // other part's member through it); the parts are tried after (`fourthTry`).
+            if let Type::Refined(parent, r) = tb {
+                if self.is_sub(a, parent) && self.refinement_holds(a, parent, r) {
+                    return true;
+                }
+                self.rollback(mark);
+            }
             if self.necessary_either && self.types.has_vars(x) && self.types.has_vars(y) {
                 if let Some(ok) = self.is_sub_inter_necessary(x, y, b, mark) {
                     return ok;
@@ -569,7 +594,7 @@ impl<'a> Worker<'a> {
             return self.is_sub(class, b);
         }
         let dependent = |t: Type| {
-            matches!(t, Type::This(_) | Type::Term(_) | Type::Select(..) | Type::Member(..) | Type::AppMember(..) | Type::Decl(_) | Type::Refined(..))
+            matches!(t, Type::This(_) | Type::Term(_) | Type::Select(..) | Type::Member(..) | Type::AppMember(..) | Type::Decl(_) | Type::Refined(..) | Type::Rec(_))
         };
         // A lambda against an abstract type constructor (`[A] =>> Impl.Type[A]` for `Impl.Type`)
         // reduces before the member rules see it.
@@ -892,6 +917,10 @@ impl<'a> Worker<'a> {
                     under != a && self.is_sub(under, b)
                 }
                 Type::Refined(parent, _) => self.is_sub(parent, b),
+                Type::Rec(body) => {
+                    let opened = self.opened_rec(body, a);
+                    self.is_sub(opened, b)
+                }
                 Type::Union(x, y) => self.is_sub(x, b) && self.is_sub(y, b),
                 Type::Inter(x, y) => {
                     let mark = self.snapshot();
@@ -1076,11 +1105,32 @@ impl<'a> Worker<'a> {
         holds
     }
 
+    /// The variances of a type member a refinement declares, `type T[+A]`: its type lambda's
+    /// parameters'.
+    fn refined_member_variances(&mut self, m: TypeId) -> Vec<i8> {
+        let Type::Member(prefix, name) = self.types.get(m) else { return Vec::new() };
+        let info = match self.type_member(prefix, name) {
+            Some(super::members::MemberInfo::Bounds(_, hi)) => hi,
+            Some(super::members::MemberInfo::Alias(x)) => x,
+            None => return Vec::new(),
+        };
+        match self.types.get(info) {
+            Type::Lambda(ps, _) => self.types.items(ps).iter().filter_map(|&p| match self.types.get(p) {
+                Type::Param(p) => Some(self.syms.tparam(p).variance),
+                _ => None,
+            }).collect(),
+            _ => Vec::new(),
+        }
+    }
+
     fn is_sub_dependent_inner(&mut self, a: TypeId, b: TypeId) -> bool {
         let (ta, tb) = (self.types.get(a), self.types.get(b));
         match (ta, tb) {
             (Type::AppMember(m, xs), Type::AppMember(n, ys)) if m == n || self.member_through_prefix(m, n) => {
-                let variances = self.member_variances(m);
+                let mut variances = self.member_variances(m);
+                if variances.is_empty() {
+                    variances = self.refined_member_variances(m);
+                }
                 if variances.is_empty() {
                     return self.same_args(xs, ys);
                 }
@@ -1158,7 +1208,7 @@ impl<'a> Worker<'a> {
                 if !self.is_sub(a, parent) {
                     return false;
                 }
-                if self.refinement_holds(a, r) {
+                if self.refinement_holds(a, parent, r) {
                     return true;
                 }
                 self.rollback(mark);
@@ -1202,6 +1252,10 @@ impl<'a> Worker<'a> {
                 upper != a && self.is_sub(upper, b)
             }
             Type::Refined(parent, _) => self.is_sub(parent, b),
+            Type::Rec(body) => {
+                let opened = self.opened_rec(body, a);
+                self.is_sub(opened, b)
+            }
             // A type parameter below a member type through its bound (`a <: c.Start` for a
             // pattern's `a`) or what the case fixed it to.
             Type::Param(p) => {
@@ -1368,15 +1422,35 @@ impl<'a> Worker<'a> {
 
     /// Whether the value parameters of two polymorphic functions' function types `x` and `y`
     /// erase to the same classes, a type parameter to its bound's (dotty's `Signature.paramsSig`);
-    /// a parameter whose type holds an uninstantiated variable erases to nothing yet and matches
-    /// any (`Signature.consistentParams`' wildcard, `tpnme.Uninstantiated`).
+    /// a parameter whose erasure holds an uninstantiated variable erases to nothing yet and matches
+    /// any (`Signature.consistentParams`' wildcard, `tpnme.Uninstantiated`), the variable reached
+    /// through a type parameter's bound too (`TypeErasure.sigName`: a `TypeProxy` is signed as its
+    /// underlying type, an uninstantiated `TypeVar` as `Uninstantiated`). `[T <: U] => T => U`
+    /// expected while `U` is inferred takes `[T <: String] => (t: T) => ..`.
     fn poly_params_consistent(&mut self, x: TypeId, y: TypeId) -> bool {
         let (Some((xs, _)), Some((ys, _))) = (self.as_function(x), self.as_function(y)) else { return true };
         xs.len() == ys.len()
             && xs.iter().zip(&ys).all(|(&p, &q)| {
                 let (p, q) = (self.deref(p), self.deref(q));
-                self.types.has_vars(p) || self.types.has_vars(q) || self.erased_class(p, 0) == self.erased_class(q, 0)
+                self.sig_uninstantiated(p, 0) || self.sig_uninstantiated(q, 0) || self.erased_class(p, 0) == self.erased_class(q, 0)
             })
+    }
+
+    /// Whether the signature of `t` is `tpnme.Uninstantiated`: it holds an uninstantiated
+    /// variable, or it is a type parameter whose bound does (`TypeErasure.sigName` of a
+    /// `TypeProxy`, its underlying type's).
+    fn sig_uninstantiated(&mut self, t: TypeId, depth: u32) -> bool {
+        let t = self.deref(t);
+        if self.types.has_vars(t) {
+            return true;
+        }
+        match self.types.get(t) {
+            Type::Param(p) | Type::AppParam(p, _) if depth < 8 => {
+                let upper = self.syms.tparam(p).upper;
+                self.sig_uninstantiated(upper, depth + 1)
+            }
+            _ => false,
+        }
     }
 
     /// Polymorphic function types are compared up to the names of their type parameters, by
@@ -1640,7 +1714,7 @@ impl<'a> Worker<'a> {
                 let bt = self.base_type(class, target)?;
                 Some(self.outer_seen_from(bt, p, c))
             }
-            Type::This(_) | Type::Term(_) | Type::Select(..) | Type::Member(..) | Type::AppMember(..) | Type::Decl(_) | Type::Refined(..) | Type::Match(..) | Type::Alias(..) => {
+            Type::This(_) | Type::Term(_) | Type::Select(..) | Type::Member(..) | Type::AppMember(..) | Type::Decl(_) | Type::Refined(..) | Type::Rec(_) | Type::Match(..) | Type::Alias(..) => {
                 let under = self.dependent_underlying(t)?;
                 self.base_type(under, target)
             }
@@ -1663,6 +1737,7 @@ impl<'a> Worker<'a> {
                 (upper != t && upper != ANY).then_some(upper)
             }
             Type::Refined(parent, _) => Some(parent),
+            Type::Rec(body) => Some(self.opened_rec(body, t)),
             Type::Match(..) | Type::Alias(..) => {
                 let under = self.reduce_head(t).unwrap_or_else(|| self.match_bound(t));
                 (under != t && under != ANY).then_some(under)
@@ -2223,6 +2298,7 @@ impl<'a> Worker<'a> {
                 upper != ANY && upper != t && self.bound_is_singleton(upper)
             }
             Type::Refined(p, _) => self.is_sub(p, self.b.t_singleton),
+            Type::Rec(body) => self.is_sub(body, self.b.t_singleton),
             Type::Inter(x, y) => {
                 let mark = self.trail.len();
                 self.is_sub(x, self.b.t_singleton) || {
@@ -2284,7 +2360,7 @@ impl<'a> Worker<'a> {
                 self.class_of_within(class, depth)
             }
             Type::Nested(_, class) => self.class_of_within(class, depth),
-            Type::This(_) | Type::Term(_) | Type::Select(..) | Type::Member(..) | Type::AppMember(..) | Type::Decl(_) | Type::Refined(..) => {
+            Type::This(_) | Type::Term(_) | Type::Select(..) | Type::Member(..) | Type::AppMember(..) | Type::Decl(_) | Type::Refined(..) | Type::Rec(_) => {
                 let under = self.dependent_underlying(t)?;
                 self.class_of_within(under, depth)
             }
@@ -2985,7 +3061,7 @@ impl<'a> Worker<'a> {
                 let Type::Inter(cls, given) = self.types.get(under) else { return self.find_member_from(pre, under, name, private_until, joint) };
                 self.find_member_meet(pre, (cls, given), name, private_until, true, joint)
             }
-            Type::This(_) | Type::Term(_) | Type::Select(..) | Type::Member(..) | Type::AppMember(..) | Type::Decl(_) | Type::Refined(..) | Type::Alias(..) | Type::Match(..) => {
+            Type::This(_) | Type::Term(_) | Type::Select(..) | Type::Member(..) | Type::AppMember(..) | Type::Decl(_) | Type::Refined(..) | Type::Rec(_) | Type::Alias(..) | Type::Match(..) => {
                 let under = self.dependent_underlying(t)?;
                 self.find_member_from(pre, under, name, private_until, joint)
             }
@@ -3165,6 +3241,11 @@ impl<'a> Worker<'a> {
                 }
             }
             Type::Refined(parent, _) => self.prefix_base_type(parent, c, seen),
+            // A recursive refinement as its body opened at itself, the proxy's underlying type.
+            Type::Rec(body) => {
+                let opened = self.opened_rec(body, pre);
+                self.prefix_base_type(opened, c, seen)
+            }
             // A parameter's bound, once on the way down: bounds that name each other end there.
             Type::Param(p) => {
                 let upper = self.syms.tparam(p).upper;
@@ -3348,7 +3429,7 @@ impl<'a> Worker<'a> {
                 let j = self.union_join(t)?;
                 self.denotations_under(pre, j, name, seen)
             }
-            Type::This(_) | Type::Term(_) | Type::Select(..) | Type::Member(..) | Type::AppMember(..) | Type::Decl(_) | Type::Refined(..) | Type::Alias(..) | Type::Match(..) => {
+            Type::This(_) | Type::Term(_) | Type::Select(..) | Type::Member(..) | Type::AppMember(..) | Type::Decl(_) | Type::Refined(..) | Type::Rec(_) | Type::Alias(..) | Type::Match(..) => {
                 let under = self.dependent_underlying(t)?;
                 self.denotations_under(pre, under, name, seen)
             }
@@ -3517,6 +3598,10 @@ impl<'a> Worker<'a> {
         let mut refined = self.deref(t);
         while let Type::Alias(..) = self.types.get(refined) {
             refined = self.reduce_head(refined)?;
+        }
+        // A recursive part is its refinements opened at itself (`goRec`).
+        if let Type::Rec(body) = self.types.get(refined) {
+            refined = self.opened_rec(body, refined);
         }
         if !matches!(self.types.get(refined), Type::Refined(..)) {
             return None;

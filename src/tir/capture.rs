@@ -354,6 +354,11 @@ pub enum Form {
     /// A `New` of a Java annotation, an annotation's tree: its interface's unsigned constructor
     /// applied to the elements given, each a named argument (`Applications.isJavaAnnotConstr`).
     JavaAnnotation,
+    /// A `CallMethod` of the member a refinement of the receiver's type declares, typed by the
+    /// refinement's signature (`apply::MethodCall::refined`): the refinement's member, with the
+    /// signature's types as seen from the receiver, which the pickle selects it by
+    /// (`TreePickler.pickleTree`, `isRefinedMethod`: `SELECT`, not `SELECTin`).
+    Refined(SymId, TList),
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]

@@ -3328,7 +3328,7 @@ impl<'a> Worker<'a> {
             if !evidence_only && !lists.iter().any(|l| !l.using) {
                 lists.insert(0, ArgList { args: Vec::new(), using: false, span });
             }
-            let call = MethodCall { recv: None, sym: SymId(u32::MAX), owner_subst, ext_recv: None, prefix: None };
+            let call = MethodCall { recv: None, sym: SymId(u32::MAX), owner_subst, ext_recv: None, prefix: None, refined: None };
             let applied = self.with_env(outside.clone(), |t| {
                 let outer = t.parent_args_of.replace(c);
                 let r = t.apply_method(call, Some((b, sig.clone())), None, lists, span, None, false);
@@ -3554,7 +3554,7 @@ impl<'a> Worker<'a> {
         let secondaries: Vec<SymId> =
             self.syms.class(parent).ctors.iter().copied().filter(|&s| Some(s) != self.excluded_ctor && self.ctor_callable_here(s)).collect();
         if secondaries.is_empty() {
-            let call = MethodCall { recv: None, sym: SymId(u32::MAX), owner_subst, ext_recv: None, prefix: None };
+            let call = MethodCall { recv: None, sym: SymId(u32::MAX), owner_subst, ext_recv: None, prefix: None, refined: None };
             return self.apply_method(call, Some((parent, sig)), None, lists, span, None, false).unwrap();
         }
         // Every alternative, the primary included, takes the parent's type arguments.
@@ -5274,7 +5274,7 @@ impl<'a> Worker<'a> {
                 _ => continue,
             };
             self.sig_of(m);
-            let sig = self.syms.sig(m);
+            let sig = self.sig_arc(m);
             let mut positions: Vec<(TypeId, i8, crate::source::Span, String)> = Vec::new();
             for &tp in &sig.tparams {
                 let (upper, lower) = (self.syms.tparam(tp).upper, self.syms.tparam(tp).lower);
@@ -5286,8 +5286,18 @@ impl<'a> Worker<'a> {
                 let what = format!("parameter {}", self.name_str(p.name));
                 positions.push((p.ty, -1, self.syms.sym(p.sym).span, what));
             }
+            let result_at = positions.len();
             positions.push((sig.ret, sign, m_span, self.member_description(m, None)));
-            for (t, sign, span, what) in positions {
+            for (i, (t, sign, span, what)) in positions.into_iter().enumerate() {
+                // A def's result is shown in its info, as `VarianceChecker` reports the
+                // symbol's (`=> R`, `(x: Int): R`).
+                if i == result_at && kind == SymKind::Def {
+                    if let Some((p, required)) = self.variance_violation(t, sign) {
+                        let shown = self.show_method_info(&sig);
+                        self.report_variance_at(p, required, &shown, m_file, span, &what);
+                    }
+                    break;
+                }
                 if self.report_variance(t, sign, m_file, span, &what) {
                     break;
                 }
@@ -5468,6 +5478,37 @@ impl<'a> Worker<'a> {
                 self.variance_violation(a, sign).or_else(|| self.variance_violation(b, sign))
             }
             Type::Lambda(_, body) => self.variance_violation(body, sign),
+            // `TypeAccumulator.foldOver` of a `RefinedType`, which `VarianceChecker.Validator`
+            // folds: the parent, then the refinement's info, an alias invariantly, bounds the
+            // lower contravariantly and the upper covariantly, a method its type parameters'
+            // bounds and its parameters flipped (`LambdaType`'s `paramInfos`) and its result as
+            // it stands; a `RecType` its parent.
+            Type::Refined(parent, r) => {
+                if let Some(found) = self.variance_violation(parent, sign) {
+                    return Some(found);
+                }
+                match self.types.refinement(r) {
+                    Refinement::Alias(_, x) => self.variance_violation(x, 0),
+                    Refinement::Bounds(_, lo, hi) => self.variance_violation(lo, -sign).or_else(|| self.variance_violation(hi, sign)),
+                    Refinement::Val(_, _, x) => self.variance_violation(x, sign),
+                    refinement @ Refinement::Term(..) => {
+                        let sig = self.refinement_sig(refinement);
+                        for &q in &sig.tparams {
+                            let (lo, hi) = (self.syms.tparam(q).lower, self.syms.tparam(q).upper);
+                            if let Some(found) = self.variance_violation(lo, sign).or_else(|| self.variance_violation(hi, -sign)) {
+                                return Some(found);
+                            }
+                        }
+                        for p in sig.clauses.iter().flat_map(|c| c.params.iter()) {
+                            if let Some(found) = self.variance_violation(p.ty, -sign) {
+                                return Some(found);
+                            }
+                        }
+                        self.variance_violation(sig.ret, sign)
+                    }
+                }
+            }
+            Type::Rec(body) => self.variance_violation(body, sign),
             _ => None,
         }
     }

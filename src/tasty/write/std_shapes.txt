@@ -13819,6 +13819,7 @@ scala	None	object
 scala	Option	object
 scala	PartialFunction	object
 scala	Predef	object
+scala	Selectable	object
 scala	Short	object
 scala	StringContext	object
 scala	Symbol	object
@@ -14163,6 +14164,7 @@ scala.Product	productElementNames	-:scala.collection.Iterator
 scala.Product	productIterator	-:scala.collection.Iterator
 scala.Product	productPrefix	-:java.lang.String
 scala.Selectable	<init>	:scala.Selectable
+scala.Selectable$.WithoutPreciseParameterTypes	<init>	:scala.Selectable$.WithoutPreciseParameterTypes
 scala.SerialVersionUID	<init>	scala.Long:scala.SerialVersionUID
 scala.SerialVersionUID	value	-:scala.Long
 scala.Short	<init>	:scala.Short

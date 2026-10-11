@@ -2017,7 +2017,7 @@ impl<'a> Worker<'a> {
         if let Some(Ok(def)) = entry {
             self.inline.entry = Some((sym, def));
         }
-        let call = MethodCall { recv, sym, owner_subst, ext_recv: None, prefix };
+        let call = MethodCall { recv, sym, owner_subst, ext_recv: None, prefix, refined: None };
         self.inline.site_at_end = d.at_end;
         self.inline.arg_types = arg_types;
         let expanded = self.expand_inline(&call, &sig, &subst, &args, ret_ty, d.span, d.expected);
