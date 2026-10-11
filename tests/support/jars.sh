@@ -754,7 +754,8 @@ jars_of() {
 # those (every quoted `$M2/...` path of this file): the sources jars tests/lsp.sh's libraries scenario reads beside
 # sourcecode's two versions and scala-library's; scala3-library, which tests/task.sh's export pins; and the class
 # path of the example's jvmapp tests (integrations/sbt/example/teq.lock's), over which tests/task.sh runs munit's
-# suites.
+# suites; and the Scala.js test frameworks' jars of tests/task.sh's export of tests/scalajs-test (munit 1.3.4 and
+# 1.2.1, scalatest 3.2.20's modules, utest, the zio runtime's), which it reads from the coursier cache.
 maven_extras() {
   printf '%s\n' \
     "$M2/com/lihaoyi/sourcecode_3/0.4.2/sourcecode_3-0.4.2-sources.jar" \
@@ -767,7 +768,28 @@ maven_extras() {
     "$M2/junit/junit/4.13.2/junit-4.13.2.jar" \
     "$M2/org/hamcrest/hamcrest-core/1.3/hamcrest-core-1.3.jar" \
     "$M2/org/scala-sbt/test-interface/1.0/test-interface-1.0.jar" \
-    "$M2/org/portable-scala/portable-scala-reflect_2.13/1.1.3/portable-scala-reflect_2.13-1.1.3.jar"
+    "$M2/org/portable-scala/portable-scala-reflect_2.13/1.1.3/portable-scala-reflect_2.13-1.1.3.jar" \
+    "$M2/org/scalameta/munit_sjs1_3/1.2.1/munit_sjs1_3-1.2.1.jar" \
+    "$M2/org/scalameta/munit-diff_sjs1_3/1.2.1/munit-diff_sjs1_3-1.2.1.jar" \
+    "$M2/org/scalatest/scalatest_sjs1_3/3.2.20/scalatest_sjs1_3-3.2.20.jar" \
+    "$M2/org/scalatest/scalatest-diagrams_sjs1_3/3.2.20/scalatest-diagrams_sjs1_3-3.2.20.jar" \
+    "$M2/org/scalatest/scalatest-featurespec_sjs1_3/3.2.20/scalatest-featurespec_sjs1_3-3.2.20.jar" \
+    "$M2/org/scalatest/scalatest-flatspec_sjs1_3/3.2.20/scalatest-flatspec_sjs1_3-3.2.20.jar" \
+    "$M2/org/scalatest/scalatest-freespec_sjs1_3/3.2.20/scalatest-freespec_sjs1_3-3.2.20.jar" \
+    "$M2/org/scalatest/scalatest-funspec_sjs1_3/3.2.20/scalatest-funspec_sjs1_3-3.2.20.jar" \
+    "$M2/org/scalatest/scalatest-funsuite_sjs1_3/3.2.20/scalatest-funsuite_sjs1_3-3.2.20.jar" \
+    "$M2/org/scalatest/scalatest-matchers-core_sjs1_3/3.2.20/scalatest-matchers-core_sjs1_3-3.2.20.jar" \
+    "$M2/org/scalatest/scalatest-mustmatchers_sjs1_3/3.2.20/scalatest-mustmatchers_sjs1_3-3.2.20.jar" \
+    "$M2/org/scalatest/scalatest-propspec_sjs1_3/3.2.20/scalatest-propspec_sjs1_3-3.2.20.jar" \
+    "$M2/org/scalatest/scalatest-refspec_sjs1_3/3.2.20/scalatest-refspec_sjs1_3-3.2.20.jar" \
+    "$M2/org/scalatest/scalatest-shouldmatchers_sjs1_3/3.2.20/scalatest-shouldmatchers_sjs1_3-3.2.20.jar" \
+    "$M2/org/scalatest/scalatest-wordspec_sjs1_3/3.2.20/scalatest-wordspec_sjs1_3-3.2.20.jar" \
+    "$M2/com/lihaoyi/utest_sjs1_3/0.9.1/utest_sjs1_3-0.9.1.jar" \
+    "$M2/com/lihaoyi/sourcecode_sjs1_3/0.4.3-M5/sourcecode_sjs1_3-0.4.3-M5.jar" \
+    "$M2/io/github/cquiroz/scala-java-time_sjs1_3/2.6.0/scala-java-time_sjs1_3-2.6.0.jar" \
+    "$M2/io/github/cquiroz/scala-java-time-tzdb_sjs1_3/2.6.0/scala-java-time-tzdb_sjs1_3-2.6.0.jar" \
+    "$M2/io/github/cquiroz/scala-java-locales_sjs1_3/1.5.4/scala-java-locales_sjs1_3-1.5.4.jar" \
+    "$M2/io/github/cquiroz/cldr-api_sjs1_3/4.5.0/cldr-api_sjs1_3-4.5.0.jar"
 }
 # The scala-library jar a JVM build links against when --classpath names none, for `run_jvm`: the newest 3.x
 # release of the coursier caches, found as the compiler's `classpath::find_scala_library` (src/classpath.rs) finds
