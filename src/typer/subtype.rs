@@ -1422,15 +1422,35 @@ impl<'a> Worker<'a> {
 
     /// Whether the value parameters of two polymorphic functions' function types `x` and `y`
     /// erase to the same classes, a type parameter to its bound's (dotty's `Signature.paramsSig`);
-    /// a parameter whose type holds an uninstantiated variable erases to nothing yet and matches
-    /// any (`Signature.consistentParams`' wildcard, `tpnme.Uninstantiated`).
+    /// a parameter whose erasure holds an uninstantiated variable erases to nothing yet and matches
+    /// any (`Signature.consistentParams`' wildcard, `tpnme.Uninstantiated`), the variable reached
+    /// through a type parameter's bound too (`TypeErasure.sigName`: a `TypeProxy` is signed as its
+    /// underlying type, an uninstantiated `TypeVar` as `Uninstantiated`). `[T <: U] => T => U`
+    /// expected while `U` is inferred takes `[T <: String] => (t: T) => ..`.
     fn poly_params_consistent(&mut self, x: TypeId, y: TypeId) -> bool {
         let (Some((xs, _)), Some((ys, _))) = (self.as_function(x), self.as_function(y)) else { return true };
         xs.len() == ys.len()
             && xs.iter().zip(&ys).all(|(&p, &q)| {
                 let (p, q) = (self.deref(p), self.deref(q));
-                self.types.has_vars(p) || self.types.has_vars(q) || self.erased_class(p, 0) == self.erased_class(q, 0)
+                self.sig_uninstantiated(p, 0) || self.sig_uninstantiated(q, 0) || self.erased_class(p, 0) == self.erased_class(q, 0)
             })
+    }
+
+    /// Whether the signature of `t` is `tpnme.Uninstantiated`: it holds an uninstantiated
+    /// variable, or it is a type parameter whose bound does (`TypeErasure.sigName` of a
+    /// `TypeProxy`, its underlying type's).
+    fn sig_uninstantiated(&mut self, t: TypeId, depth: u32) -> bool {
+        let t = self.deref(t);
+        if self.types.has_vars(t) {
+            return true;
+        }
+        match self.types.get(t) {
+            Type::Param(p) | Type::AppParam(p, _) if depth < 8 => {
+                let upper = self.syms.tparam(p).upper;
+                self.sig_uninstantiated(upper, depth + 1)
+            }
+            _ => false,
+        }
     }
 
     /// Polymorphic function types are compared up to the names of their type parameters, by
