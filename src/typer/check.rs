@@ -4339,10 +4339,13 @@ impl<'a> Worker<'a> {
                 self.error_at(m, msg);
             }
         }
-        if self.syms.class(c).parents.len() > 1 {
+        // A pair of members of two bases is checked here only where no one parent derives from
+        // both owners (dotty's `OverridingPairs.isHandledByParent`): the precheck tells.
+        let shared = self.syms.class(c).parents.len() > 1 && self.bases_share_a_name(c, true);
+        if shared {
             self.check_inherited_pairs(c);
         }
-        if self.syms.class(c).base_types.len() > 2 {
+        if shared && self.syms.class(c).base_types.len() > 2 {
             self.check_final_overrides(c);
         }
         if self.syms.class(c).inherits_types {
@@ -4576,10 +4579,8 @@ impl<'a> Worker<'a> {
     /// implements. Two concrete ones are the conflict that `set_parents` reports. A pair that a
     /// direct parent inherits as well was checked with that parent.
     #[cold]
+    /// Asked where two parents' bases share a name (`bases_share_a_name`).
     fn check_inherited_pairs(&mut self, c: ClassId) {
-        if !self.bases_share_a_name(c, true) {
-            return;
-        }
         let bases: Vec<(ClassId, TypeId)> = self.syms.class(c).base_types[1..].to_vec();
         let direct: Vec<ClassId> = self.syms.class(c).parents.clone().iter().filter_map(|&p| self.class_of(p)).collect();
         let extends = |t: &Self, sub: ClassId, sup: ClassId| t.syms.class(sub).base_types.iter().any(|&(x, _)| x == sup);
