@@ -5268,7 +5268,18 @@ impl<'a> Worker<'a> {
         // The standard library picks the collection type of `SeqOps` through its first parent.
         let checked = linearisations.len() > 1 && !self.source(file).is_std;
         let (base, conflicting) = self.linearise(c, self_ty, linearisations, checked);
-        let has_native_base = base.iter().skip(1).any(|&(b, _)| self.syms.class(b).js == JsKind::Native);
+        // One pass over the bases: a native JS one, the types they bring, a declared self type.
+        let (mut has_native_base, mut inherits_types, mut self_typed) = (false, false, false);
+        for &(b, _) in &base[1..] {
+            let bi = self.syms.class(b);
+            has_native_base |= bi.js == JsKind::Native;
+            self_typed |= bi.declared_self.is_some();
+            inherits_types = inherits_types
+                || !bi.type_aliases.is_empty()
+                || bi.inherits_types
+                || bi.nested.values().any(|&n| self.is_opaque_path_class(n))
+                || (bi.kind != ClassKind::Object && !bi.nested.is_empty());
+        }
         if let Some(parent) = superclass.filter(|_| kind != ClassKind::Trait) {
             if !self.syms.class(parent).subclasses.contains(&c) {
                 if self.shared_class(parent) {
@@ -5278,13 +5289,6 @@ impl<'a> Worker<'a> {
                 }
             }
         }
-        let inherits_types = base.iter().skip(1).any(|&(b, _)| {
-            let bi = self.syms.class(b);
-            !bi.type_aliases.is_empty()
-                || bi.inherits_types
-                || bi.nested.values().any(|&n| self.is_opaque_path_class(n))
-                || (bi.kind != ClassKind::Object && !bi.nested.is_empty())
-        });
         let mut info = self.syms.class_mut(c);
         info.parents = parent_types;
         info.parent_failed = parent_failed;
@@ -5299,7 +5303,10 @@ impl<'a> Worker<'a> {
         }
         if info.base_types.len() > 1 {
             self.mark_members_meeting_inherited(c);
-            self.check_self_types(c);
+            // A base that declares no self type asks nothing of `c`'s.
+            if self_typed {
+                self.check_self_types(c);
+            }
         }
         if checked && !conflicting {
             self.check_conflicting_members(c);
