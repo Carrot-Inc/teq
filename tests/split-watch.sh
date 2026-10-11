@@ -255,10 +255,9 @@ kept_step Main.scala "a comment inserted after they were" true
 stop
 rm -rf "$work/out"
 
-# The two sides of what a retype adds outside its units (`Kept::added_outside`): a macro whose run
-# takes a path the first build's did not and types std bodies (`toList`, `count`) that no walk asks
-# for keeps the reach, which a walk from the roots would not meet either; tests/jvm-watch.sh has
-# the other side, inline_fold_std's fold adding template calls the next walk calls.
+# What a retype adds outside its units (`Kept::added_outside`): a macro whose run takes a path the
+# first build's did not and types std bodies (`toList`, `count`) that no walk asks for keeps the
+# reach, which a walk from the roots would not meet either.
 src=$work/kept_reach_macro
 cp -r tests/split/kept_reach_macro "$src"
 TEQ_SESSION_PARTS=1 TEQ_KEPT_SETTLE=wait start "$src" --split "$work/out"
@@ -1307,6 +1306,14 @@ for case in tests/cases/*.scala tests/cases/*/ tests/interop/*.scala tests/inter
   [ -f "$suite/$name.expected" ] || continue
   # A case whose header includes sources (`//> using file`, the scripts' library) is teq interp's alone.
   grep -q -h '^//> using files\? ' "$case" "$case"/*.scala 2> /dev/null && continue
+  # A case whose `// std:` line names the std modes its expectations hold under, and not the lean
+  # std's, has no build here (tests/run_stdlib.sh leaves out `// std: lean` the same way).
+  modes=$(grep -h -o '^// std: .*' "$case" "$case"/*.scala 2> /dev/null | head -1 | sed 's|^// std: ||')
+  if [ -n "$modes" ] && [[ " $modes " != *" lean "* ]]; then
+    echo "skip $name: its std is $modes"
+    ok
+    continue
+  fi
   rm -rf "$src" "$work/out"
   mkdir -p "$src"
   if [ -d "$case" ]; then cp -r "$case"/. "$src"; else cp "$case" "$src/"; fi
