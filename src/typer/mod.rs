@@ -1314,8 +1314,8 @@ pub struct Worker<'a> {
     /// The files of sealed std classes completed inside another completion, whose classes
     /// complete once the outermost is done.
     pub sealed_std_files: Vec<FileId>,
-    /// The first overload set of the std files entered after the final passes, whose sets are
-    /// named once no completion is under way.
+    /// The first overload set of the std files entered, or the std classes completed, after the
+    /// final passes, whose sets and unsettled entries are named once no completion is under way.
     pub late_naming_from: Option<usize>,
     /// How deep the lookup of type members through bounds is nested, and how many steps the
     /// outermost lookup may still take (`members.rs`).

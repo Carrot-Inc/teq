@@ -5514,6 +5514,14 @@ impl<'a> Worker<'a> {
                 flags.merge_pending = true;
                 if is_std && !in_jar {
                     self.unsettled_std_entries.push((c, entry));
+                    // A std class completed after the final pass (a class nested in one the
+                    // reach checks, an anonymous class of a std body typed on demand) has its
+                    // entries named once no completion is under way, as a std file entered
+                    // after it has: before the reach meets the class and marks its members by
+                    // the names they go by.
+                    if self.alternatives_named {
+                        self.late_naming_from.get_or_insert(self.syms.overloads.len());
+                    }
                 }
             }
         }
