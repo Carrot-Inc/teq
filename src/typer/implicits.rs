@@ -4624,11 +4624,19 @@ impl<'a> Worker<'a> {
             Owner::Class(c) if self.parent_args_of == Some(c) && self.syms.class(c).superclass.is_some() => {
                 self.prog.add(TExpr::Local(g))
             }
-            Owner::Package(_) => match (impl_class, has_params) {
-                (Some(c), true) => self.prog.add(TExpr::New(c, l)),
-                (None, true) => self.prog.add(TExpr::CallStatic(g, l)),
-                _ => self.prog.add(TExpr::Static(g)),
-            },
+            Owner::Package(_) => {
+                let te = match (impl_class, has_params) {
+                    (Some(c), true) => self.prog.add(TExpr::New(c, l)),
+                    (None, true) => self.prog.add(TExpr::CallStatic(g, l)),
+                    _ => self.prog.add(TExpr::Static(g)),
+                };
+                // A given object's reference keeps its `<file>$package`, as scalac's does where an
+                // ordinary call's argument names it (tests/modules/given).
+                if self.deps.is_some() && (impl_class.is_none() || has_params) {
+                    self.deps_node(te, super::deps::Node::Searched);
+                }
+                te
+            }
             Owner::Class(c) => {
                 let imported = match scope {
                     GivenScope::Value(v) if self.syms.class(c).inner_object.is_some() && self.import_value_class(v) == Some(c) => Some(v),

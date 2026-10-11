@@ -60,6 +60,7 @@ block_import_alias
 block_infix_argument
 block_lambda_stmts
 block_then_select
+boolean_assign_ops
 boolean_strict_operators
 bounded_param_operators
 bounded_type_test
@@ -737,8 +738,10 @@ lexical_extension_ranked_givens
 lexical_extension_ranked_macro
 lexical_extension_ranked_receiver
 lexical_extension_retry_leading
+list_fill_order
 list_map_conserve
 list_reverse_prepend
+local_alias_after_path
 local_alias_path
 local_case_classes
 local_class_capture_body
@@ -793,10 +796,12 @@ macro_jvm_template_body
 macro_lambda_quotes
 macro_library_body_attempt
 macro_library_super
+macro_member_trees
 macro_method_type_by_name
 macro_mirror_summon
 macro_module_members
 macro_named_args
+macro_operator_symbols
 macro_owner_under_check
 macro_owners
 macro_package_prefix
@@ -816,6 +821,7 @@ macro_quote_refined
 macro_quoted_inline_application
 macro_quoted_parameter_application
 macro_quotes_qualifier
+macro_rebuilt_selections
 macro_receiver_copy
 macro_records
 macro_recursive_type
@@ -840,6 +846,7 @@ macro_treemap_method_types
 macro_treemap_typedef
 macro_tuple_type_patterns
 macro_type_bounds_tree_copy
+macro_underlying_locals
 macro_val_type_ref_stable
 macro_val_type_ref_widen
 macro_vector_append
@@ -1224,6 +1231,7 @@ scala3_virtpatmat_opt_sharing
 scala3_virtpatmat_tailcalls_verifyerror
 scala3_virtpatmat_typed
 scala3_z1720
+scala_library_deprecated_members
 script_header
 script_header_block
 secondary_constructors
@@ -1325,6 +1333,7 @@ structural_members
 structural_overload
 structural_reflective_calls
 structural_value_class
+summon_from_wildcard_given
 summoner_sugar
 suppression_disabled
 suppression_inheritance

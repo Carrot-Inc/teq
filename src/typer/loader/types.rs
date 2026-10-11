@@ -877,7 +877,9 @@ impl<'a> Worker<'a> {
                 }
                 Some(Scope::Pkg(p)) => self.type_in_pkg(cx, p, name, t),
                 None => {
-                    // `C[A]#Inner` names the class nested in `C`, with `C`'s arguments.
+                    // `C[A]#Inner` names the class nested in `C`, with `C`'s arguments; a nested
+                    // class of parameters of its own is its constructor, as a class of a package
+                    // is (`Outer#Inner[t]`).
                     if let Some(nested) = self.projected_class(cx, other, name) {
                         if self.is_inner_class(nested) {
                             let prefix = self.map_type(cx, other);
@@ -885,7 +887,7 @@ impl<'a> Worker<'a> {
                                 return ty;
                             }
                         }
-                        return self.types.class(nested, &[]);
+                        return self.class_ref(nested);
                     }
                     // `C[?]#T` for a type parameter `T` of `C`: the argument at its position, a
                     // wildcard read as its upper bound (`EndpointInput[?]#T`, which scalac
@@ -1031,6 +1033,55 @@ impl<'a> Worker<'a> {
         self.named_fun_type_in(file, clause.is_using, clause.params, r, crate::source::Span::default())
     }
 
+    /// The alias or the class a type's head names (`Values` of `Values`, `js.Array` of
+    /// `js.Array[Int]`), by its address in the same pickle or through a package or the members
+    /// of a class or an object; none for any other type.
+    fn named_type_ref(&mut self, cx: &mut MapCx, t: &TType) -> Option<TypeRef> {
+        let head = match t {
+            TType::Applied(h, _) => &**h,
+            _ => t,
+        };
+        // A type definition of the same pickle, named by its address.
+        if let TType::LocalType(addr, _) = head {
+            let tables = self.loaded_tables(cx);
+            return tables.aliases.get(addr).map(|&a| TypeRef::Alias(a)).or_else(|| tables.classes.get(addr).map(|&c| TypeRef::Class(c)));
+        }
+        let TType::TypeRef(prefix, n) = head else { return None };
+        let tasty = self.tasty(cx.file);
+        let name = self.intern_name(&tasty, *n);
+        let package = match &**prefix {
+            TType::Package(p) => Some(*p),
+            TType::This(inner) => match &**inner {
+                TType::Package(p) => Some(*p),
+                _ => None,
+            },
+            _ => None,
+        };
+        let found = match package {
+            Some(p) => {
+                let pkg = self.resolve_package(cx, p);
+                self.pkg_type(pkg, name)
+            }
+            None => match self.scope_of(cx, prefix) {
+                Some(Scope::Class(c)) => self.member_type_of(c, name),
+                Some(Scope::Pkg(p)) => self.pkg_type(p, name),
+                None => None,
+            },
+        };
+        found
+    }
+
+    /// Whether a type names a JavaScript type the std holds as an alias of a Scala type
+    /// (`js.Array[Int]`), or an alias or an opaque type of one (`type Values = js.Array[Int]`),
+    /// as `Worker::alias_names_js` and `Worker::opaque_names_js` tell.
+    pub(super) fn names_js_type(&mut self, cx: &mut MapCx, t: &TType) -> bool {
+        match self.named_type_ref(cx, t) {
+            Some(TypeRef::Alias(a)) => self.alias_names_js(a),
+            Some(TypeRef::Class(c)) => self.opaque_names_js(c),
+            _ => false,
+        }
+    }
+
     /// A type member `name` of the class `c` or its ancestors: a nested class or an alias. An
     /// object nested under the same name is no type (`object Expr` beside `type Expr[A]`).
     /// The type alias a pickled type names at its head, applied or annotated (`Count` with `type
@@ -1060,7 +1111,7 @@ impl<'a> Worker<'a> {
         }
     }
 
-    pub(super) fn member_type_of(&mut self, c: ClassId, name: Name) -> Option<TypeRef> {
+    pub(in crate::typer) fn member_type_of(&mut self, c: ClassId, name: Name) -> Option<TypeRef> {
         if self.syms.class(c).state() == Completion::NotStarted {
             self.complete_class(c);
         }

@@ -2,8 +2,12 @@ package dev.teq.sbt
 
 import java.io.File
 
-import org.scalajs.linker.interface.ModuleKind
+import scala.collection.mutable
+
+import org.scalajs.jsenv.Input
+import org.scalajs.linker.interface.{ModuleInitializer, ModuleKind}
 import org.scalajs.linker.interface.unstable.ReportImpl
+import org.scalajs.testing.adapter.TestAdapterInitializer
 import org.scalajs.sbtplugin.ScalaJSPlugin
 import org.scalajs.sbtplugin.ScalaJSPlugin.autoImport.*
 import sbt.*
@@ -50,12 +54,11 @@ object TeqScalaJSPlugin extends AutoPlugin {
     } ++ scalaJSTest
 
   /** The test run's facts the export records (`Export.teqExportScalaJSTest`): the test link's module kind and
-    * the JavaScript environment, which teq reads (docs/TOOLING.md, "The lockfile and the launchers"). */
+    * the JavaScript environment, which teq reads (docs/TOOLING.md, "The lockfile and the launchers"), and the
+    * reasons teq cannot run the suites as sbt-scalajs does (`Export.teqExportScalaJSTestRefusals`, `testJs`). */
   private val scalaJSTest: Seq[Setting[?]] = Seq(
-    Export.teqExportScalaJSTest := Map(
-      "moduleKind" -> Json.Str((Test / scalaJSLinkerConfig).value.moduleKind.toString),
-      "jsEnv" -> jsEnvJson((Test / jsEnv).value),
-    ),
+    Export.teqExportScalaJSTest := testJs.value.fields,
+    Export.teqExportScalaJSTestRefusals := testJs.value.refusals,
   )
 
   /** A JavaScript environment as the lock records it: its kind (`node` for Node.js, `jsdom` for jsdom's,
@@ -82,6 +85,47 @@ object TeqScalaJSPlugin extends AutoPlugin {
       "args" -> Json.Arr(read[Seq[String]]("args").getOrElse(Nil).map(Json.Str(_))),
       "env" -> Json.Obj(read[Map[String, String]]("env").getOrElse(Map.empty).map { case (k, v) => k -> Json.Str(v) }),
     ) ++ read[String]("executable").map("executable" -> Json.Str(_)))
+  }
+
+  /** How sbt-scalajs runs the `Test` configuration's link, for teqExportAll (`TestJs.of`): the
+    * module kind of `Test / scalaJSLinkerConfig`, whose module split and ES features shape the
+    * linker's files and syntax alone, which teq's one file of ES2015 has its own of, and `Test /
+    * jsEnv`. A module initializer of the build's own before the tests (sbt-scalajs adds the
+    * bridge's) and an input of its own before the link (sbt-scalajs adds the link's, which teq's
+    * run supplies; `TestJs.inputRefusals`) are refusals. The inputs added at the project's level
+    * are read; a definition of `Test / jsEnvInput` other than sbt-scalajs's two (from its
+    * `ScalaJSPluginInternal.scala`) is told by where it stands, its inputs only linking would give. */
+  private lazy val testJs: Def.Initialize[Task[TestJs]] = Def.task {
+    val linker = (Test / scalaJSLinkerConfig).value
+    val env = (Test / jsEnv).value
+    val initializers = (Test / scalaJSModuleInitializers).value
+    val inputs = jsEnvInput.value
+    val root = (LocalRootProject / baseDirectory).value
+    val testScope = Scope(Select(thisProjectRef.value), Select(ConfigKey(Test.name)), Zero, Zero)
+    def relative(path: String): String = IO.relativize(root, new File(path)).getOrElse(path)
+    val testDefinitions = Project.extract(state.value).structure.settings.collect {
+      case s if s.key.key.label == jsEnvInput.key.label && s.key.scope == testScope => s.pos
+    }.collect {
+      case p: FilePosition if !TestJs.fromScalaJS(p.path) => s"${relative(p.path)}:${p.startLine}"
+      case NoPosition => "a place sbt does not tell"
+    }
+    val described = inputs.map {
+      case Input.Script(path) => s"the script ${relative(path.toString)}"
+      case Input.ESModule(path) => s"the ES module ${relative(path.toString)}"
+      case Input.CommonJSModule(path) => s"the CommonJS module ${relative(path.toString)}"
+      case other => other.toString
+    }
+    val refusals = mutable.ArrayBuffer.empty[String]
+    val bridge = ModuleInitializer.fingerprint(ModuleInitializer.mainMethod(TestAdapterInitializer.ModuleClassName, TestAdapterInitializer.MainMethodName))
+    val own = initializers.map(ModuleInitializer.fingerprint).filterNot(_ == bridge)
+    if (own.nonEmpty) refusals += s"Test / scalaJSModuleInitializers runs ${own.mkString(", ")} before the tests, which teq's test link does not"
+    refusals ++= TestJs.inputRefusals(described, testDefinitions)
+    val kind = linker.moduleKind match {
+      case ModuleKind.NoModule => "NoModule"
+      case ModuleKind.CommonJSModule => "CommonJSModule"
+      case ModuleKind.ESModule => "ESModule"
+    }
+    TestJs.of(kind, env, root, refusals.toSeq)
   }
 
   /** The Scala.js linker's own link of the configuration, as the directory's writer. */

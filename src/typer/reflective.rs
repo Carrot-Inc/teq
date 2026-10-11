@@ -354,7 +354,7 @@ impl<'a> Worker<'a> {
     }
 
     /// A package, or an object that is itself static: where Scala.js registers an object.
-    fn is_static_owner(&self, owner: Owner) -> bool {
+    pub(crate) fn is_static_owner(&self, owner: Owner) -> bool {
         match owner {
             Owner::Package(_) => true,
             Owner::Class(o) => {

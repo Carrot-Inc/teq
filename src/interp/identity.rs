@@ -571,6 +571,7 @@ impl<'a, 't> Interp<'a, 't> {
             SymRef::Any => 13,
             SymRef::Nothing => 14,
             SymRef::None => 15,
+            SymRef::Operator(_) => 16,
         }
     }
 }

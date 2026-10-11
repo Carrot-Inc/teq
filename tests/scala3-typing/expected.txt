@@ -2423,7 +2423,7 @@ pos/gadt-strip-refinement.scala	accepts
 pos/gadt-upcast.scala	rejects	type mismatch
 pos/gadt-variant-hkt.scala	rejects	this pattern of type Refl[S$1] can never match a value of type KSUB[F, Option]
 pos/gadts2.scala	accepts	
-pos/gen-traversable-methods.scala	std	GenTraversable
+pos/gen-traversable-methods.scala	accepts	
 pos/getset.scala	accepts	
 pos/given-constrapps.scala	std	App
 pos/given-loop-prevention.scala	accepts	
@@ -3110,7 +3110,7 @@ pos/i17394b	accepts
 pos/i17395-spec.ordered.scala	syntax	expected identifier, found {}
 pos/i17395-spec.scala	syntax	expected identifier, found {}
 pos/i17395.scala	syntax	expected identifier, found {}
-pos/i17465.scala	std	StringOps
+pos/i17465.scala	rejects	type mismatch
 pos/i1747.scala	rejects	method toArray overrides nothing
 pos/i1751.scala	rejects	missing argument for parameter {}
 pos/i17525.scala	accepts	
@@ -4363,7 +4363,7 @@ pos/inline-constant-folding.scala	accepts
 pos/inline-constfold.scala	accepts	
 pos/inline-eta.scala	accepts	
 pos/inline-i1773.scala	accepts	
-pos/inline-i2570.scala	rejects	value {} is not a member of {}
+pos/inline-i2570.scala	accepts	
 pos/inline-joint	syntax	expected identifier, found {}
 pos/inline-match-gadt-nested.scala	accepts	
 pos/inline-match-gadt.scala	accepts	
@@ -5844,7 +5844,7 @@ pos/virtpatmat_exist2.scala	accepts
 pos/virtpatmat_exist3.scala	accepts	
 pos/virtpatmat_exist4.scala	rejects	type {} not found
 pos/virtpatmat_exist_uncurry.scala	accepts	
-pos/virtpatmat_gadt_array.scala	rejects	{} is not a member of the package
+pos/virtpatmat_gadt_array.scala	accepts	
 pos/virtpatmat_infer_single_1.scala	accepts	
 pos/virtpatmat_instof_valuetype.scala	accepts	
 pos/virtpatmat_obj_in_case.scala	accepts	

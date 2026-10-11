@@ -18,6 +18,8 @@ extension (s: String)
   @js("($0 + $1)")
   @jvm("invokevirtual java/lang/String.concat(Ljava/lang/String;)Ljava/lang/String;")
   def ++(other: String): String
+  // scala-library's deprecated `StringOps.replaceAllLiterally` (ScalaTest's `Resources`).
+  def replaceAllLiterally(literal: String, replacement: String): String = s.replace(literal, replacement)
   @js("($0.length === 0 ? $0 : $0[0].toUpperCase() + $0.substring(1))")
   def capitalize: String = if s.isEmpty then s else s.charAt(0).toUpper.toString + s.substring(1)
   @js("($0.length !== 0)")

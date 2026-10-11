@@ -1702,7 +1702,12 @@ impl<'a> Worker<'a> {
         if depth > 0 && self.syms.class(c).kind == ClassKind::Object && self.syms.class(c).local_module.is_none() {
             return self.prog.add(TExpr::Module(c));
         }
-        self.prog.add(TExpr::This)
+        // Typed as a written `this` is, so that the class the receiver stands for is read from
+        // the tree (a macro's `Select(This(Some(C)), name)` of a member named alone).
+        let e = self.prog.add(TExpr::This);
+        let ty = self.syms.this_type(c);
+        self.prog.set_type(e, ty);
+        e
     }
 
     /// The enclosing class whose `this` holds a member declared by `c`: the innermost one that

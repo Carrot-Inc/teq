@@ -1,0 +1,17 @@
+List(1, 2, 3)
+List(1, 2, 4, 5)
+0
+Map(b -> 2)
+1
+List(1, 2)
+6
+true false true
+aabSome(b)
+true b true
+a-b-c
+List(V(1), V(2))
+true
+List((1,a), (2,b), (3,c))
+false
+List(0, 10)
+false false

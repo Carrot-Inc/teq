@@ -1033,9 +1033,16 @@ pub struct Records {
     /// The inner applications of calls with several parameter clauses (`TreeRef::Partial`):
     /// the callee tree and the arguments of one clause.
     partials: Store<(TreeRef, Vec<TreeRef>)>,
+    /// The selection of a primitive class's operator that stands for its symbol, by its name,
+    /// method type, operation and the receiver's class: the first of the run, so that `x + y`
+    /// and `y + x` select one `Int.+(Int)` as dotty's selections of the class's method do.
+    operators: Vec<(OperatorKey, u32)>,
     /// How many expansions the session ran so far: the number of the one under way.
     runs: u32,
 }
+
+/// What tells two selections of a primitive operator apart (`Records::operators`).
+pub(crate) type OperatorKey = (Name, crate::types::TypeId, Option<(crate::tir::PrimOp, crate::types::TypeId, Option<crate::types::TypeId>, Option<crate::types::TypeId>)>, value::SymRef);
 
 impl Records {
     fn next_build(&mut self) {
@@ -1045,6 +1052,7 @@ impl Records {
         self.poly_types.next_build();
         self.named_args.next_build();
         self.partials.next_build();
+        self.operators.clear();
     }
 }
 

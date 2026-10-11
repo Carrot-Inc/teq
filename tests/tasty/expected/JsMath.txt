@@ -1,4 +1,4 @@
-// tests/tasty/fixtures/JsMath.tasty (TASTy 28.8, 937 bytes)
+// tests/tasty/fixtures/JsMath.tasty (TASTy 28.8, 952 bytes)
 package fix.facades
 @JSType @SourceFile @JSGlobal @native object JsMath extends Object {
   def max(a: Double, b: Double): Double = ...

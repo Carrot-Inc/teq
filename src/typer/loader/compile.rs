@@ -799,12 +799,19 @@ impl<'a> Worker<'a> {
     }
 
     fn library_val(&mut self, sym: SymId, c: ClassId) -> Option<TExprId> {
-        if let Some(&init) = self.val_init.get(&sym) {
+        let init = match self.val_init.get(&sym) {
+            Some(&init) => init,
+            None => {
+                self.ensure_body(sym);
+                *self.val_init.get(&sym)?
+            }
+        };
+        let i = self.prog_index.class(&self.prog, c)?;
+        // A val whose body an earlier use typed before its class joined the program (a macro's
+        // expansion in another library body reading it) has its field still to place.
+        if self.prog.classes[i].init.iter().any(|x| matches!(*x, TInit::Field(s, _) if s == sym)) {
             return Some(init);
         }
-        self.ensure_body(sym);
-        let init = *self.val_init.get(&sym)?;
-        let i = self.prog_index.class(&self.prog, c)?;
         // The field joins the class where its definition stands in the template (the loaded
         // class's members, entered in its pickle's order), not after the fields the program read
         // first, so that the class is written alike whatever reads it: scalac's `Memoize` makes

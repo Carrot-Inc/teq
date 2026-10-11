@@ -976,6 +976,7 @@ impl Kept {
         // local def's, a local class's constructor's), under the retype's ids.
         r.getter_funs = std::mem::take(&mut r.getter_funs).into_keys().map(|(s, i)| ((syms.get(&s).copied().unwrap_or(s), i), ())).collect();
         r.getter_ctors = std::mem::take(&mut r.getter_ctors).into_keys().map(|(c, i)| ((classes.get(&c).copied().unwrap_or(c), i), ())).collect();
+        self.setup.remap_syms(&syms);
         for (e, place) in &mut r.roots {
             if let Some(&n) = roots.get(e) {
                 *e = n;

@@ -214,8 +214,10 @@ versions where `teqExportSnapshots` allows them), as is in both modes a jar key 
 A Scala.js project's test configuration records, beside its frameworks, its link's module kind
 (`moduleKind`: `NoModule`, `CommonJSModule` or `ESModule`, the `Test / scalaJSLinkerConfig`'s) and the
 JavaScript environment its suites run in (`jsEnv`: its `kind`, `node`, `jsdom` or another environment's name,
-and its `executable`, `args` and `env`), which `teq test` names when it refuses the project: teq does not run a
-Scala.js project's suites yet.
+and its `executable`, `args` and `env`), which `teq test` runs the suites with (below, under "Tests"). sbt-teq
+adds what that run takes besides: `NodeJSEnv`'s source-map policy (`sourceMap`) and, for jsdom, the package root
+it is required from and the lockfile there that installs it (`packageRoot`, `lockfile`); a Mill build's are
+named when `teq test` refuses the project.
 
 ## The export of a Mill build
 
@@ -296,7 +298,7 @@ the others, names each one left out and exits 2.
 | Verb | |
 |---|---|
 | `compile [project...]` | types the projects' closures (every project by default) and writes class files |
-| `test [project] [pattern...]` | compiles a project's test configuration and runs its suites |
+| `test [project] [pattern...]` | compiles a project's test configuration and runs its suites, on the JVM or under node |
 | `run <project> [alias or main class] [-- args]` | compiles and runs a JVM project's main class |
 | `stage [project]` | compiles and writes a project's Docker stage |
 | `watch <project> [options]` | becomes the project's resident `teq compiler watch`, for a tool that owns the process |
@@ -320,15 +322,47 @@ refuses where sbt would prompt; `teq run api server` runs an alias of `teqRunAli
 its name. The program runs under `JAVA_HOME`'s `java`, else the first on the `PATH`, with the run block's
 options, variables and directory; Ctrl-C reaches it, and its exit code is the verb's.
 
-**Tests.** The runner is a JVM over sbt's test interface, kept per test configuration from its first run; a
-JVM older than `java.outputVersion`, or than 17, is refused. Suites are found as sbt's `definedTests` finds
-them (`--list` prints them) and the patterns applied as `testOnly` applies them; `--changed` keeps the suites
-whose classes depend, transitively, on a class rewritten since the configuration's last full run. Each failure
-is reported as `[fail] <test>: <message>` with the frames in the suite's code, then a line per project with
-its suites, the passed and failed counts and the times; the exit code is 1 when anything failed. Without a
-project every JVM project's suites run; a Scala.js project's are not run yet: naming one is refused, naming its
-link's module kind and JavaScript environment, and a run of every project names each such project left out and
-exits 2.
+**Tests.** On the JVM the runner is a JVM over sbt's test interface, kept per test configuration from its first
+run; a JVM older than `java.outputVersion`, or than 17, is refused. On Scala.js the test configuration's
+resident links the program whose entry point starts Scala.js's test bridge (the std's, `test-bridge` 1.22.0's
+port) into one file, and each run starts a node of its own that loads it, speaking to the bridge as
+sbt-scalajs's test adapter does: the frameworks found by their names, one controller runner per framework,
+each task run through the continuation of `Task.execute` and the tasks it returns after it, then the runner's
+`done`; a run passes when every call was answered and node exited with 0, so a node that ends early fails it.
+The export says how sbt-scalajs runs the link (the test configuration's `moduleKind` and `jsEnv`: `Test /
+scalaJSLinkerConfig`'s module kind and `Test / jsEnv`): a `NoModule` link is a script node runs in its global
+scope, as `NodeJSEnv` runs it from its stdin (a global `require` included), a `CommonJSModule` link is
+`require`d and an `ESModule` link imported, a link of a program that imports a JavaScript module being an ES
+module, which the first two refuse; node takes the environment's executable, arguments and variables and runs
+in the build's root. `JSDOMNodeJSEnv` runs a `NoModule` link inside jsdom's window at `http://localhost/` as
+the environment does (the window is the global object, a jsdom error ends the run), jsdom required from the
+build's root after the root's lockfile is installed there (`npm ci`, or yarn's and pnpm's frozen installs, unless
+it is the lockfile installed last) and checked against the version an npm lockfile pins. Other environments
+(Selenium, Playwright), a jsdom whose root holds no lockfile and jsdom under a module are refused by the
+export's `jsEnv` and `moduleKind`, a module initializer or an input of the build's own in the test link by the
+export's refusals. The test link's module split and ES features shape the linker's files and syntax alone:
+teq's link is one file of ES2015 whatever they say. sbt-scalajs's `Test / jsEnvInput` is the project's own
+`jsEnvInput` followed by the link, which teq supplies itself: the inputs a build adds at the project's level are
+named in the refusal, and a definition of `Test / jsEnvInput` of the build's own by where it stands, since only
+linking would give its inputs. A Mill build's Scala.js projects are not run yet: naming
+one is refused, naming its link's module kind and JavaScript environment, and a run of every project names
+each such project left out and exits 2.
+
+Suites are found as sbt's `definedTests` finds them (`--list` prints them), against the fingerprints the
+frameworks give, and the patterns applied as `testOnly` applies them; `--changed` keeps the suites whose
+classes depend, transitively, on a class rewritten since the configuration's last full run (on Scala.js, on a
+source file edited since), or depended on a source file deleted since, by the dependencies before the deletion. A Scala.js configuration with frameworks whose sources define no suite fails: a run
+of nothing is no pass. A framework the export names that the test link does not hold (one whose jar is Scala 2's IR
+alone, as Scala.js's JUnit runtime that munit brings) is left out with a note, as sbt-scalajs leaves out the
+frameworks its link does not answer for: its suites, if any, do not run. Each failure is reported as `[fail] <test>: <message>` with the frames in the suite's
+code (none on Scala.js, where a throwable's stack is empty: docs/COMPATIBILITY.md), `--verbose` adds a line for
+every other event (`[ignored] <test>`) and the whole trace of a failure, and a line per project ends the run
+with its suites, the passed and failed counts, the ignored, skipped, pending and canceled ones that are not zero,
+and the times; the exit code is 1 when anything failed. `--events <file>` writes every event of the run, a line
+each: the project, the event's name, its selector, its status and the first line of what it threw,
+tab-separated, a suite whose task threw being an `Error` of a `TestSelector` of its name, as sbt reports one.
+Without a project every project's suites run, on either platform, those the export refuses named and the exit
+code 2.
 
 **Stage.** `teq stage api` writes the files of the export's `stage` block under its directory,
 `<layer>/<path in the image>`, so that a Dockerfile copying native-packager's layers

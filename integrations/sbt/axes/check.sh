@@ -17,8 +17,8 @@
 # on every configuration's classpath are, in order, those of sbt's own fullClasspath, and its jars sbt's
 # externalDependencyClasspath (`check-export.py internal`, `classpaths`); the launchers written beside the lock are
 # teq's; the generators sbt alone runs are recorded and `teq compile` refuses gen, naming them, and exits 2 over
-# every project while it compiles the others; `teq compile`, `teq test` (lib's munit suites; sjs's refused, as teq
-# runs no Scala.js suite yet) and `teq run` (app's alias, the arguments passed) over each axis's export of equal
+# every project while it compiles the others; `teq compile`, `teq test` (lib's munit suites, and sjs's under node
+# through Scala.js's test bridge) and `teq run` (app's alias, the arguments passed) over each axis's export of equal
 # give the same answers; `teq dev sjs` runs the dev script of sjs's package.json after npm's install, until SIGINT;
 # sbt's own tasks with teq as the compiler (`TEQ_COMPILER=1`) run lib's suites (`test` twice runs them twice on
 # sbt 1, whose `test` is the full run; sbt 2's is testQuick), app's main and sjs's suites through sbt-scalajs's
@@ -170,7 +170,7 @@ for version in $axes; do
     if [ $code = 2 ]; then echo "compile: exit 2"; else echo "compile: $code $out"; fi
     out=$(timeout 300 ./teq compile lib app sjs 2>&1); echo "compile lib app sjs: $? $(grep -c error <<< "$out")"
     out=$(timeout 300 ./teq test lib 2>&1); echo "test lib: $? $(grep -E '^lib/test: ' <<< "$out" | sed 's/ in [0-9].*//')"
-    out=$(timeout 300 ./teq test sjs 2>&1); echo "test sjs: $? $out"
+    out=$(timeout 300 ./teq test sjs 2>&1); echo "test sjs: $? $(grep -E '^sjs/test: ' <<< "$out" | sed 's/ in [0-9].*//')"
     out=$(timeout 300 ./teq run app hello -- one two 2> /dev/null); echo "run app hello: $? $out"
     timeout 60 ./teq stop > /dev/null 2>&1
   ) > "$work/verbs-$version.txt" 2>&1
@@ -180,9 +180,9 @@ for version in $axes; do
   [ -f "$work/verbs-$version.txt" ] || continue
   if grep -q "^compile gen: refused" "$work/verbs-$version.txt" && grep -q "^compile: exit 2" "$work/verbs-$version.txt" &&
     grep -q "^compile lib app sjs: 0 0" "$work/verbs-$version.txt" && grep -q "^test lib: 0 lib/test: 1 suite, 2 passed, 0 failed$" "$work/verbs-$version.txt" &&
-    grep -q "^test sjs: 2 teq: sjs is a Scala.js project, whose suites (linked as NoModule, run under node) teq does not run yet$" "$work/verbs-$version.txt" &&
+    grep -q "^test sjs: 0 sjs/test: 1 suite, 2 passed, 0 failed$" "$work/verbs-$version.txt" &&
     grep -q "^run app hello: 0 app one two$" "$work/verbs-$version.txt"; then
-    pass "teq over equal's export on sbt $version: gen refused, a bare compile exiting 2, lib, app and sjs compiled, lib's suites passing (sjs's refused, as Scala.js suites are), app's alias run"
+    pass "teq over equal's export on sbt $version: gen refused, a bare compile exiting 2, lib, app and sjs compiled, lib's suites passing and sjs's under node, app's alias run"
   else
     fail "teq over equal's export on sbt $version: $(cat "$work/verbs-$version.txt")"
   fi

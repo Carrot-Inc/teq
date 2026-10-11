@@ -222,6 +222,7 @@ pub(crate) const STD_SOURCES: &[(&str, &str)] = &[
     ("<std>/collections.scala", include_str!("../std/collections.scala")),
     ("<std>/iterable.scala", include_str!("../std/iterable.scala")),
     ("<std>/ordering.scala", include_str!("../std/ordering.scala")),
+    ("<std>/compat.scala", include_str!("../std/compat.scala")),
     ("<std>/javalib/string.scala", include_str!("../std/javalib/string.scala")),
     ("<std>/javalib/charset.scala", include_str!("../std/javalib/charset.scala")),
     ("<std>/strings.scala", include_str!("../std/strings.scala")),
@@ -1054,9 +1055,9 @@ fn parse_file_options(command: &str, args: &[String]) -> Options {
             eprintln!("teq: analysis version {} is not one this teq answers: it answers versions 2 and 3", v);
             std::process::exit(2);
         }
-        let answers = (o.command == "build" && o.jvm) || (o.command == "check" && !o.interp) || (o.command == "watch" && (o.jvm || o.check));
+        let answers = (o.command == "build" && o.jvm) || (o.command == "check" && !o.interp) || o.command == "watch";
         if !answers {
-            eprintln!("--analysis-version belongs to `teq compiler build --target jvm`, `teq compiler check` and `teq compiler watch` with --target jvm or --check");
+            eprintln!("--analysis-version belongs to `teq compiler build --target jvm`, `teq compiler check` and `teq compiler watch`");
             std::process::exit(2);
         }
     }

@@ -31,6 +31,9 @@ pub struct Resident {
     /// The classes of each source file and their version 3 dependencies, as the answers so far
     /// leave them.
     pub analysis: View,
+    /// Of a resident writing one JavaScript file, a test link's: whether the last build that
+    /// passed wrote an ES module.
+    pub es_module: Option<bool>,
 }
 
 /// What a build answered.
@@ -48,6 +51,9 @@ pub struct Answer {
     pub fallback: Option<String>,
     /// What the build says beside its diagnostics (the overlays' refused mappings).
     pub notes: Vec<String>,
+    /// The classes of the source files the build found removed and the classes that depended on
+    /// them, by the dependencies before it (`View::removed_reach`).
+    pub removed_reach: std::collections::BTreeSet<String>,
 }
 
 impl Resident {
@@ -83,7 +89,7 @@ impl Resident {
                 }
             }
         });
-        Ok(Resident { key, args, inputs, child, stdin, stdout, stderr, started: false, analysis: View::default() })
+        Ok(Resident { key, args, inputs, child, stdin, stdout, stderr, started: false, analysis: View::default(), es_module: None })
     }
 
     /// A build of every file whose modification time moved; the first answers the resident's
@@ -103,6 +109,7 @@ impl Resident {
         let raw = |key: &str| fields.iter().find(|(k, _)| k == key).map(|(_, raw)| *raw);
         let strings = |key: &str| parsed(key).map(|v| v.arr().iter().filter_map(Json::str).map(str::to_string).collect::<Vec<_>>()).unwrap_or_default();
         let removed = strings("removed");
+        let removed_reach = self.analysis.removed_reach(&removed);
         let merged = self.analysis.merge(&Fields {
             analysis: raw("analysis"),
             api: raw("api"),
@@ -112,6 +119,9 @@ impl Resident {
         });
         if let Err(e) = merged {
             self.analysis = View::unreadable(e);
+        }
+        if let Some(m) = parsed("esModule").and_then(|v| v.bool()) {
+            self.es_module = Some(m);
         }
         Ok(Answer {
             ok: parsed("ok").and_then(|v| v.bool()) == Some(true),
@@ -123,6 +133,7 @@ impl Resident {
             ms: parsed("ms").and_then(|v| v.get("total").and_then(Json::num)).unwrap_or(0.0),
             fallback: parsed("fallback").and_then(|v| v.str().map(str::to_string)),
             notes: strings("notes"),
+            removed_reach,
         })
     }
 

@@ -71,3 +71,18 @@ trait JsMathOps extends js.Object:
 
 @js.native @JSGlobal("Math")
 val math: JsMathOps = js.native
+
+// Casts in a library body to a JavaScript type through aliases of it, which Scala.js leaves untested
+// (JSCodeGen.genAsInstanceOf, by the type's symbol after dealiasing).
+object JsCasts:
+  type Numbers = js.Array[Int]
+  type Again = Numbers
+  def numbers(x: Any): Numbers = x.asInstanceOf[Numbers]
+  def again(x: Any): Again = x.asInstanceOf[Again]
+  // Through an opaque type and a chain of local aliases, which erasure sees through alike.
+  opaque type Hidden = js.Array[Int]
+  def hidden(x: Any): Any = x.asInstanceOf[Hidden]
+  def local(x: Any): Any =
+    type L = js.Array[Int]
+    type M = L
+    x.asInstanceOf[M]

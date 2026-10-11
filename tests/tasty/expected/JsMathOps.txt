@@ -1,4 +1,4 @@
-// tests/tasty/fixtures/JsMathOps.tasty (TASTy 28.8, 823 bytes)
+// tests/tasty/fixtures/JsMathOps.tasty (TASTy 28.8, 838 bytes)
 package fix.facades
 @JSType @SourceFile @native trait JsMathOps extends Object {
   def abs(x: Double): Double = ...

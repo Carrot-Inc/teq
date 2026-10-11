@@ -6021,7 +6021,10 @@ impl<'a> Worker<'a> {
                     over_accessor |= info.kind == SymKind::Val && info.needs_accessor && p != m && info.owner == Owner::Class(b) && !self.is_private(p);
                     continue;
                 }
-                if self.sig_of(p).clauses.iter().all(|cl| cl.is_using) {
+                // A def without parameters, or of one empty clause, which a Scala val matches as
+                // dotty's `matchesLoosely` does ("a Scala zero-parameter method and a Scala
+                // non-method always match"; a Java one does not).
+                if self.zero_parameter_def(p) {
                     implemented_def = Some(p);
                     break;
                 }
@@ -6047,7 +6050,7 @@ impl<'a> Worker<'a> {
                     while let Some(p) = self.own_alternative(b, name, k) {
                         k += 1;
                         let is_def = self.syms.sym(p).kind == SymKind::Def && self.syms.sym(p).alternative;
-                        if is_def && self.sig_of(p).clauses.iter().all(|cl| cl.is_using) {
+                        if is_def && self.zero_parameter_def(p) {
                             return Some(p);
                         }
                     }
@@ -6067,6 +6070,18 @@ impl<'a> Worker<'a> {
                 self.shared_write(m, |w| w.syms.sym_mut(m).needs_accessor = true);
                 self.name_beside_method(m);
             }
+        }
+    }
+
+    /// Whether a def takes no parameters: no clause but using ones, or, not Java's, one empty
+    /// clause besides them (`def name(): String` of a Scala trait, which a val implements).
+    fn zero_parameter_def(&mut self, p: SymId) -> bool {
+        let sig = self.sig_of(p);
+        let plain: Vec<&ClauseSig> = sig.clauses.iter().filter(|cl| !cl.is_using).collect();
+        match plain.as_slice() {
+            [] => true,
+            [only] => only.params.is_empty() && !self.syms.sym(p).java_defined,
+            _ => false,
         }
     }
 

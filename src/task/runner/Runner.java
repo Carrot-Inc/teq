@@ -13,7 +13,10 @@ import java.net.URLClassLoader;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
+import java.util.IdentityHashMap;
 import java.util.List;
+import java.util.Set;
 
 import sbt.testing.AnnotatedFingerprint;
 import sbt.testing.Event;
@@ -49,12 +52,19 @@ import sbt.testing.TestWildcardSelector;
  *                                    per fingerprint, "missing &lt;framework&gt; &lt;why&gt;" per framework that does not load,
  *                                    then "ready"
  * run &lt;verbose&gt; &lt;ansi&gt;               then "path &lt;directory&gt;" and "suite &lt;framework&gt; &lt;fingerprint&gt; &lt;name&gt;" lines and
- *                                    "go": the suites run, their output written, then "done &lt;failed&gt; &lt;passed&gt; &lt;ms&gt;"
+ *                                    "go": the suites run, their output written and their events sent as they come,
+ *                                    then "done &lt;ms&gt;"
  * ping                               answered by "pong"
  * quit
  * </pre>
+ * An event is sent typed, for the daemon to count and report (src/task/events.rs): "event &lt;suite&gt; &lt;status
+ * ordinal&gt; &lt;name&gt; &lt;selector&gt; &lt;a&gt; &lt;b&gt; &lt;ms&gt;", the selector suite, test, nestedSuite, nestedTest or wildcard
+ * with its names in a and b; a suite whose task, or a framework whose runner, threw is "crashed &lt;name&gt;". Before
+ * either, what it threw: "throwable &lt;toString&gt;", then "cause &lt;toString&gt;" for each cause, each followed by a
+ * "frame &lt;class&gt; &lt;toString&gt;" per frame of its stack.
  * Every line of the protocol it writes opens with the token, so that no output of a suite is
- * taken for one; a suite's stdout and stderr are this process's stdout, in the order written.
+ * taken for one, and escapes its fields as the commands do; a suite's stdout and stderr are this
+ * process's stdout, in the order written.
  */
 public final class Runner {
     private final String token;
@@ -131,7 +141,7 @@ public final class Runner {
             }
         }
         long start = System.nanoTime();
-        Counts counts = new Counts(verbose);
+        Events events = new Events();
         Logger[] loggers = { new Forwarded(verbose, ansi) };
         Thread thread = Thread.currentThread();
         ClassLoader context = thread.getContextClassLoader();
@@ -146,17 +156,17 @@ public final class Runner {
                     }
                 }
                 if (!defs.isEmpty()) {
-                    runFramework(i, defs, loader, loggers, counts);
+                    runFramework(i, defs, loader, loggers, events);
                 }
             }
         } finally {
             thread.setContextClassLoader(context);
         }
         out.flush();
-        say("done", counts.failed, counts.passed, (System.nanoTime() - start) / 1_000_000);
+        say("done", (System.nanoTime() - start) / 1_000_000);
     }
 
-    private void runFramework(int i, List<TaskDef> defs, ClassLoader loader, Logger[] loggers, Counts counts) {
+    private void runFramework(int i, List<TaskDef> defs, ClassLoader loader, Logger[] loggers, Events events) {
         sbt.testing.Runner runner;
         Task[] tasks;
         try {
@@ -164,113 +174,79 @@ public final class Runner {
             tasks = runner.tasks(defs.toArray(new TaskDef[0]));
         } catch (Throwable e) {
             for (TaskDef d : defs) {
-                counts.crashed(d.fullyQualifiedName(), e);
+                events.crashed(d.fullyQualifiedName(), e);
             }
             return;
         }
-        execute(tasks, counts, loggers);
+        execute(tasks, events, loggers);
         try {
             String summary = runner.done();
             if (summary != null && !summary.isEmpty()) {
                 out.println(summary);
             }
         } catch (Throwable e) {
-            counts.crashed(frameworks.get(i), e);
+            events.crashed(frameworks.get(i), e);
         }
     }
 
-    private void execute(Task[] tasks, Counts counts, Logger[] loggers) {
+    private void execute(Task[] tasks, Events events, Logger[] loggers) {
         for (Task task : tasks) {
             String suite = task.taskDef().fullyQualifiedName();
-            EventHandler handler = event -> counts.handle(suite, event);
+            EventHandler handler = event -> events.handle(suite, event);
             try {
-                execute(task.execute(handler, loggers), counts, loggers);
+                execute(task.execute(handler, loggers), events, loggers);
             } catch (Throwable e) {
-                counts.crashed(suite, e);
+                events.crashed(suite, e);
             }
         }
     }
 
-    /**
-     * The passes and failures of a run, each failure printed as it comes with the first line of
-     * its throwable and the throwable's frames in the suite's code; the whole trace when verbose.
-     */
-    private final class Counts {
-        private final boolean verbose;
-        int failed;
-        int passed;
-
-        Counts(boolean verbose) {
-            this.verbose = verbose;
-        }
-
+    /** The events of a run, each sent typed as it comes, with what it threw. */
+    private final class Events {
         synchronized void handle(String suite, Event event) {
-            switch (event.status()) {
-                case Success -> passed++;
-                case Failure, Error -> {
-                    failed++;
-                    failure(suite, named(event), event.throwable().isDefined() ? event.throwable().get() : null);
-                }
-                default -> { }
+            thrown(event.throwable().isDefined() ? event.throwable().get() : null);
+            Selector selector = event.selector();
+            String kind = "suite";
+            String a = "";
+            String b = "";
+            if (selector instanceof TestSelector s) {
+                kind = "test";
+                a = s.testName();
+            } else if (selector instanceof NestedTestSelector s) {
+                kind = "nestedTest";
+                a = s.suiteId();
+                b = s.testName();
+            } else if (selector instanceof NestedSuiteSelector s) {
+                kind = "nestedSuite";
+                a = s.suiteId();
+            } else if (selector instanceof TestWildcardSelector s) {
+                kind = "wildcard";
+                a = s.testWildcard();
             }
+            say("event", suite, event.status().ordinal(), event.fullyQualifiedName(), kind, a, b, event.duration());
         }
 
-        /** A suite whose task threw: its initialiser, or the framework's own code. */
-        synchronized void crashed(String suite, Throwable e) {
-            failed++;
-            failure(suite, suite + " crashed", e);
+        /** A suite whose task threw (its initialiser, or the framework's own code), or a framework's runner. */
+        synchronized void crashed(String name, Throwable e) {
+            thrown(e);
+            say("crashed", name);
         }
 
-        /** The failure, its throwable, and the throwable's frames in the suite's own code. */
-        private void failure(String suite, String what, Throwable e) {
+        /** The throwable, its causes, and the frames of each; a cause met again ends the chain. */
+        private void thrown(Throwable e) {
             if (e == null) {
-                out.println("[fail] " + what);
                 return;
             }
-            if (verbose) {
-                out.print("[fail] " + what + ": ");
-                e.printStackTrace(out);
-                return;
-            }
-            out.println("[fail] " + what + ": " + String.valueOf(e).lines().findFirst().orElse(""));
-            Throwable cause = e;
-            while (cause.getCause() != null && cause.getStackTrace().length == 0) {
-                cause = cause.getCause();
-            }
-            StackTraceElement[] frames = cause.getStackTrace();
-            int shown = 0;
-            for (StackTraceElement frame : frames) {
-                String owner = frame.getClassName();
-                boolean own = owner.equals(suite) || owner.startsWith(suite + "$");
-                if (own && shown < 5) {
-                    out.println("[fail]     at " + frame);
-                    shown++;
+            Set<Throwable> seen = Collections.newSetFromMap(new IdentityHashMap<>());
+            String line = "throwable";
+            for (Throwable t = e; t != null && seen.add(t); t = t.getCause()) {
+                say(line, t);
+                for (StackTraceElement frame : t.getStackTrace()) {
+                    say("frame", frame.getClassName(), frame);
                 }
-            }
-            if (shown == 0 && frames.length > 0) {
-                out.println("[fail]     at " + frames[0]);
-            }
-            if (cause != e) {
-                out.println("[fail]   caused by " + cause);
+                line = "cause";
             }
         }
-    }
-
-    /** The test an event is of: its name and the test its selector names, said once. */
-    private static String named(Event event) {
-        String name = event.fullyQualifiedName();
-        Selector selector = event.selector();
-        String test = "";
-        if (selector instanceof TestSelector s) {
-            test = s.testName();
-        } else if (selector instanceof NestedTestSelector s) {
-            test = s.suiteId() + " " + s.testName();
-        } else if (selector instanceof NestedSuiteSelector s) {
-            test = s.suiteId();
-        } else if (selector instanceof TestWildcardSelector s) {
-            test = s.testWildcard();
-        }
-        return test.isEmpty() || test.equals(name) ? name : test.startsWith(name) ? test : name + " " + test;
     }
 
     /** A framework's logger: info, warnings and errors always, debug and traces when verbose. */
@@ -327,7 +303,18 @@ public final class Runner {
     private void say(Object... fields) {
         StringBuilder line = new StringBuilder(token);
         for (Object field : fields) {
-            line.append('\t').append(String.valueOf(field).replace('\t', ' ').replace('\n', ' ').replace('\r', ' '));
+            line.append('\t');
+            String text = String.valueOf(field);
+            for (int i = 0; i < text.length(); i++) {
+                char c = text.charAt(i);
+                switch (c) {
+                    case '\\' -> line.append("\\\\");
+                    case '\t' -> line.append("\\t");
+                    case '\n' -> line.append("\\n");
+                    case '\r' -> line.append("\\r");
+                    default -> line.append(c);
+                }
+            }
         }
         synchronized (out) {
             out.println(line);

@@ -67,7 +67,7 @@ pub fn run(mut export: Export, args: &[String]) -> i32 {
         let dev = export.projects[name].dev.clone().expect("checked by the snapshot");
         let lockfile = export.path(&dev.lockfile);
         let dir = lockfile.parent().map_or_else(|| export.root.clone(), Path::to_path_buf);
-        if let Err(e) = install(&export, &dev, &lockfile, &dir) {
+        if let Err(e) = install(&export, &[dev.package_manager.clone(), "install".to_string()], &dev.lockfile, &dir, None, &|line| eprintln!("teq dev: {}", line)) {
             eprintln!("teq dev: {}", e);
             return 2;
         }
@@ -226,38 +226,45 @@ fn digest(file: &Path) -> Option<String> {
 }
 
 /// The record of the lockfile last installed, under the build's `target/teq/dev/`.
-fn record_of(export: &Export, dev: &export::Dev) -> PathBuf {
-    export.path(&format!("target/teq/dev/{}.sha256", dev.lockfile))
+fn record_of(export: &Export, lockfile: &str) -> PathBuf {
+    export.path(&format!("target/teq/dev/{}.sha256", lockfile))
 }
 
-fn installed(export: &Export, dev: &export::Dev, lockfile: &Path, dir: &Path) -> bool {
+fn installed(export: &Export, name: &str, lockfile: &Path, dir: &Path) -> bool {
     let Ok(bytes) = std::fs::read(lockfile) else { return false };
-    dir.join("node_modules").is_dir() && std::fs::read_to_string(record_of(export, dev)).is_ok_and(|r| r.trim() == sha256::hex(&bytes))
+    dir.join("node_modules").is_dir() && std::fs::read_to_string(record_of(export, name)).is_ok_and(|r| r.trim() == sha256::hex(&bytes))
 }
 
-/// The package manager's install, unless the lockfile is the one installed last; serialised
-/// through `target/teq/dev/install.lock`, since two projects' loops may share a `package.json`.
-fn install(export: &Export, dev: &export::Dev, lockfile: &Path, dir: &Path) -> Result<(), String> {
-    if installed(export, dev, lockfile, dir) {
+/// The packages of a lockfile (`name`, from the build's root) installed into `dir` by `command`,
+/// unless the lockfile is the one installed last; serialised through
+/// `target/teq/dev/install.lock`, since two projects' loops, or a loop and a test run, may share
+/// a `package.json`. `environment` is the variables the command runs with, the process's own
+/// when none; `progress` hears of the install.
+pub fn install(export: &Export, command: &[String], name: &str, dir: &Path, environment: Option<&BTreeMap<String, String>>, progress: &dyn Fn(&str)) -> Result<(), String> {
+    let lockfile = export.path(name);
+    if installed(export, name, &lockfile, dir) {
         return Ok(());
     }
-    let record = record_of(export, dev);
+    let record = record_of(export, name);
     let lock_file = export.path("target/teq/dev/install.lock");
     if let Some(parent) = record.parent() {
         std::fs::create_dir_all(parent).map_err(|e| format!("cannot create {}: {}", parent.display(), e))?;
     }
     let lock = std::fs::OpenOptions::new().create(true).truncate(false).write(true).open(&lock_file).map_err(|e| format!("cannot open {}: {}", lock_file.display(), e))?;
     lock.lock().map_err(|e| format!("cannot hold {}: {}", lock_file.display(), e))?;
-    if installed(export, dev, lockfile, dir) {
+    if installed(export, name, &lockfile, dir) {
         return Ok(());
     }
-    let install = [dev.package_manager.clone(), "install".to_string()];
-    eprintln!("teq dev: {} in {}", install.join(" "), dir.display());
-    let status = shell_command(&install, &[]).current_dir(dir).status().map_err(|e| format!("cannot run {}: {}", install.join(" "), e))?;
-    if !status.success() {
-        return Err(format!("{} failed ({})", install.join(" "), status));
+    progress(&format!("{} in {}", command.join(" "), dir.display()));
+    let mut c = shell_command(command, &[]);
+    if let Some(vars) = environment {
+        c.env_clear().envs(vars);
     }
-    let bytes = std::fs::read(lockfile).map_err(|e| format!("{} wrote no {}: {}", install.join(" "), lockfile.display(), e))?;
+    let status = c.current_dir(dir).status().map_err(|e| format!("cannot run {}: {}", command.join(" "), e))?;
+    if !status.success() {
+        return Err(format!("{} failed ({})", command.join(" "), status));
+    }
+    let bytes = std::fs::read(&lockfile).map_err(|e| format!("{} wrote no {}: {}", command.join(" "), lockfile.display(), e))?;
     std::fs::write(&record, format!("{}\n", sha256::hex(&bytes))).map_err(|e| format!("cannot write {}: {}", record.display(), e))
 }
 

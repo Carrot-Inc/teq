@@ -3,9 +3,10 @@
 // from TASTy: native classes bound to globals (`Map`, `Date` by its Scala name) and to imports
 // of node's modules (a named export, the default export, the namespace), a `@JSGlobalScope`
 // object, `@JSName` and `@JSBracketAccess` members, an overload under its JS name, a property
-// `def`, a binding of an object's def, a JS trait and class that are not native, and the
-// operations of `js.UndefOr`, which Scala.js puts in the implicit scope of `Unit`; members of a
-// top-level native val imported by name (an overload, a val renamed).
+// `def`, a binding of an object's def, a JS trait and class that are not native, casts to a JS
+// type through aliases of it, an opaque type of it and local aliases of a body (left untested),
+// and the operations of `js.UndefOr`, which Scala.js puts in the implicit scope of `Unit`; members
+// of a top-level native val imported by name (an overload, a val renamed).
 package facadesjar
 
 import fix.facades.*
@@ -55,3 +56,9 @@ import scala.scalajs.js
   println(min(3, 1))
   println(min(3, 2, 4))
   println(e > 2.7)
+  // A body's casts to js.Array[Int] through aliases, left untested as Scala.js leaves them.
+  val shaped = js.Dynamic.literal(length = 3)
+  println(JsCasts.numbers(shaped).length + JsCasts.again(shaped).length)
+  // Through an opaque type, in its scope and outside it, and a body's chain of local aliases.
+  def length(x: Any): Int = x.asInstanceOf[js.Array[Int]].length
+  println(length(JsCasts.hidden(shaped)) + length(shaped.asInstanceOf[JsCasts.Hidden]) + length(JsCasts.local(shaped)))

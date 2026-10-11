@@ -1,4 +1,4 @@
-// tests/tasty/fixtures/JsPath.tasty (TASTy 28.8, 893 bytes)
+// tests/tasty/fixtures/JsPath.tasty (TASTy 28.8, 908 bytes)
 package fix.facades
 @JSType @SourceFile @JSImport @native object JsPath extends Object {
   def basename(p: Predef.String): Predef.String = ...

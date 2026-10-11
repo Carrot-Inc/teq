@@ -62,4 +62,7 @@ package java.lang:
     def getMethodName: String = methodName
     def getFileName: String = fileName
     def getLineNumber: Int = lineNumber
+    // No frame of teq's is a native method's (Scala.js's javalib answers false alike); scala's
+    // Boolean, which java.lang's own would shadow here.
+    def isNativeMethod: scala.Boolean = false
     override def toString: String = s"$declaringClass.$methodName($fileName:$lineNumber)"

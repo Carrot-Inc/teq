@@ -162,6 +162,10 @@ pub struct ClassInfo {
     pub base_types: Vec<(ClassId, TypeId)>,
     pub ordinal: u32,
     pub underlying: Option<TypeId>,
+    /// Of an opaque type: whether its right side names a JavaScript type the std holds as an
+    /// alias of a Scala type (`opaque type O = js.Array[Int]`), which `underlying` no longer
+    /// tells, as `AliasInfo::js` of an alias.
+    pub underlying_js: bool,
     pub extensions: Vec<SymId>,
     pub givens: Vec<SymId>,
     /// For enum cases without parameters: the value symbol in the enum companion.
@@ -355,6 +359,10 @@ pub struct AliasInfo {
     pub bounds: Option<(TypeId, TypeId)>,
     /// Annotated `@deprecated` (`typer::deprecation`).
     pub deprecated: bool,
+    /// Whether its right side names a JavaScript type the std holds as an alias of a Scala type
+    /// (`type Values = js.Array[Int]`), through any aliases of one: set as the alias completes,
+    /// since `rhs` holds the Scala type (`Worker::alias_names_js`).
+    pub js: bool,
 }
 
 impl AliasInfo {
@@ -910,6 +918,7 @@ impl Symbols {
             base_types: Vec::new(),
             ordinal: 0,
             underlying: None,
+            underlying_js: false,
             extensions: Vec::new(),
             givens: Vec::new(),
             singleton: None,
@@ -1426,7 +1435,7 @@ mod tests {
             let c = syms.new_class(Name(1), ClassKind::Class, 0, Owner::Package(ROOT_PKG), FileId(0), None, Span::default());
             let p = syms.new_tparam(Name(2), 0);
             let s = syms.new_sym(Name(5), SymKind::Def, 0, Owner::Package(ROOT_PKG), FileId(0), None, Span::default());
-            let a = AliasId(syms.aliases.push(AliasInfo { name: Name(6), owner: Owner::Package(ROOT_PKG), file: FileId(0), def: None, tparams: Vec::new(), rhs: ERROR, bounds: None, deprecated: false }));
+            let a = AliasId(syms.aliases.push(AliasInfo { name: Name(6), owner: Owner::Package(ROOT_PKG), file: FileId(0), def: None, tparams: Vec::new(), rhs: ERROR, bounds: None, deprecated: false, js: false }));
             syms.syms.fork();
             syms.classes.fork();
             syms.tparams.fork();

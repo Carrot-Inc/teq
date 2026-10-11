@@ -552,10 +552,33 @@ impl<'w, 'a> P<'w, 'a> {
             }
             let mut inherited: Vec<SymId> = Vec::new();
             for (&n, &s) in bi.members.iter() {
-                if info.members.get(&n).map_or(false, |&own| self.w.syms.sym(own).owner == Owner::Class(c)) {
+                let alts = self.w.syms.alternatives(s).map(|a| a.to_vec()).unwrap_or_else(|| vec![s]);
+                let Some(&own) = info.members.get(&n) else {
+                    inherited.extend(alts);
                     continue;
+                };
+                // The class's own alternatives hide the inherited ones they override, those of the
+                // same erased parameters, and not the name's other overloads, which a selection on
+                // the class still finds (`Set`'s own `+(elem)` beside `SetOps`'s `+(elem1, elem2,
+                // elems*)`).
+                let own_alts = self.w.syms.alternatives(own).map(|a| a.to_vec()).unwrap_or_else(|| vec![own]);
+                let mut overridden: Vec<String> = Vec::new();
+                for o in own_alts {
+                    if self.w.syms.sym(o).owner == Owner::Class(c) {
+                        if let Ok(Some((params, _))) = self.member_signature(o) {
+                            overridden.push(sig_text(&params, ""));
+                        }
+                    }
                 }
-                inherited.extend(self.w.syms.alternatives(s).map(|a| a.to_vec()).unwrap_or_else(|| vec![s]));
+                for a in alts {
+                    let params = match self.member_signature(a) {
+                        Ok(Some((params, _))) => Some(sig_text(&params, "")),
+                        _ => None,
+                    };
+                    if params.map_or(overridden.is_empty(), |p| !overridden.contains(&p)) {
+                        inherited.push(a);
+                    }
+                }
             }
             for s in inherited {
                 let si = self.w.syms.sym(s);

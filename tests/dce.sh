@@ -134,5 +134,13 @@ echo object > out/dce/reflect_unused.expected
 runs out/dce/reflect_unused.expected out/dce/reflect_unused.actual reflect_unused
 absent $out 'Unnamed' '$reflect' '$qname'
 
+# A map's `filter` and `tail` are its own members' calls: a class's `filter` and `tail` that nothing
+# calls are dropped (the std writes those of the maps without a `super` call, which the reach answers
+# with every class's member of the name).
+out=out/dce/map_filter.js
+run_js 20 $out tests/dce/map_filter.scala > out/dce/map_filter.actual 2>&1 || bad "map_filter build"
+runs tests/dce/map_filter.expected out/dce/map_filter.actual map_filter
+absent $out 'new Box(-1)' 'Box(this.x - 1'
+
 echo "$pass passed, $fail failed"
 [ $fail = 0 ]
