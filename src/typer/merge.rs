@@ -17,8 +17,9 @@
 //! the base grows by follows the sources' order and not the workers'; the base's own numbering
 //! of what it held at the join (the completions' and the exports' types) is the loader's.
 //! Then the check (`Worker::check_merge`: the roots the promotion handed over, or the same walk
-//! again over every record from the first of each arena, the sweep), then the overlays go
-//! (`TypeStore::reclaim_overlays`).
+//! again over every record from the first of each arena, the sweep), then the base's types that
+//! name a worker's id, the originals of what the promotion made again, are retired
+//! (`TypeStore::retire_remade`), and the overlays go (`TypeStore::reclaim_overlays`).
 //!
 //! What the walk covers: the symbol table's records (a symbol's owner, kind, signature and
 //! implementing class; a class's owner, parameters, parents, members, nested classes,
@@ -2572,6 +2573,10 @@ impl<'a> Worker<'a> {
             self.diags.error(crate::source::NO_FILE, crate::source::Span::default(), problem.clone());
         }
         let started = std::time::Instant::now();
+        // The base's types the promotion made again, which name the workers' ids, retired before
+        // anything reads the store whole (`complete_erased_jar_classes`) or a later fork's workers
+        // probe it.
+        self.types.retire_remade(remap.types_from);
         self.types.reclaim_overlays();
         let reclaimed_in = started.elapsed();
         clock.part("reclamation");
@@ -2939,6 +2944,32 @@ mod tests {
         let m = merge.ty(late);
         assert!(s.get(m) == Type::Class(ClassId(77), EMPTY_LIST) && !s.mentions_local(m));
         assert_eq!(merge.ty(plain), plain);
+    }
+
+    /// The originals of what the merge made again, the base's types over a worker's id, are
+    /// retired: a scan of the store's unions meets the new ids alone, and the same structure
+    /// made again, as a later fork's worker with the same ids would make it, is a type of its own.
+    #[test]
+    fn the_merge_retires_the_base_types_it_made_again() {
+        let mut made = Vec::new();
+        let s = joined(1, |s, lock| {
+            s.enter_overlay(0);
+            lock.lock();
+            let local = s.class(ClassId(LOCAL_BASE + 5), &[]);
+            made.push(local);
+            made.push(s.union(local, s.class(ClassId(41), &[])));
+            lock.unlock();
+        });
+        let [local, union] = made[..] else { unreachable!() };
+        let from = s.bound(Sub::Types);
+        let merge = renumbering(&s, from, keep(), moved(&[(5, 77)]));
+        let m = merge.ty(union);
+        assert_eq!(s.retire_remade(from), 2);
+        let parts = s.union_parts();
+        assert!(parts.iter().all(|&t| !s.mentions_local(t)), "a part over a worker's id");
+        assert!(parts.contains(&s.class(ClassId(77), &[])) && s.get(m) == Type::Union(s.class(ClassId(77), &[]), s.class(ClassId(41), &[])));
+        let again = s.class(ClassId(LOCAL_BASE + 5), &[]);
+        assert!(again != local && s.get(again) == Type::Class(ClassId(LOCAL_BASE + 5), EMPTY_LIST));
     }
 
     /// A stored inline body's result type, its calls' type arguments and its deferred call's

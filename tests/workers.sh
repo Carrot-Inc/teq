@@ -380,6 +380,14 @@ same_build jvm_vars 2 tests/workers/jvm_vars --target jvm
 # `local_case_classes`, `local_enums`, `inline_arg_summoned_resolution` in both JVM modes).
 same_build jvm_local_types 2 tests/workers/jvm_local_types --target jvm
 
+# A member's signature completed on a worker names the worker's type parameter (`T | UB`), and its
+# publication makes the signature's types in the base: the merge makes them again under the
+# parameter's new id and retires the originals (`TypeStore::retire_remade`), which the JVM backend's
+# completion of the classes a union erases through scans the store for (without, "no record
+# 134217728" in `complete_erased_jar_classes` at two and sixteen workers; boundederasure/a of
+# tests/modules at two, three and four).
+same_build jvm_union_tparams 2 tests/workers/jvm_union_tparams --target jvm
+
 # The classes stored inline bodies make (an anonymous class, a lambda's class of a trait with one
 # abstract method), copied at each expansion by substitution in whichever worker types the call,
 # named by the site of the expansion and numbered in its order: the files are those one worker
