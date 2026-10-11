@@ -793,16 +793,22 @@ PY
 # then node on the file with the program's arguments, their streams in that order (the raw `teq run`, retired
 # with the project verbs at the top level, printed the same stream); a build that fails keeps its exit code and
 # message, and node does not run. The build and the run are under one bound, as the raw run that did both was:
-# the timeout ends them, and whatever they started, at <seconds> (exit 124). Self-contained, so that it runs as
-# well in a shell it is exported to.
+# the timeout ends them, and whatever they started, at <seconds> (exit 124). With RUN_DIAGNOSTICS naming a file,
+# the build's streams go to that file instead, the compiler's diagnostics apart from the program's output (an
+# expectation that real Scala recorded is the program's stdout alone). Self-contained, so that it runs as well in
+# a shell it is exported to.
 run_js() {
   local seconds=$1
   shift
-  TEQ=$TEQ timeout "$seconds" bash -c 'out=$1 build=()
+  TEQ=$TEQ RUN_DIAGNOSTICS=${RUN_DIAGNOSTICS-} timeout "$seconds" bash -c 'out=$1 build=()
     shift
     while [ $# -gt 0 ] && [ "$1" != -- ]; do build+=("$1"); shift; done
     [ $# = 0 ] || shift
-    "$TEQ" compiler build "${build[@]}" -o "$out" && exec node "$out" "$@"' run_js "$@"
+    if [ -n "$RUN_DIAGNOSTICS" ]; then
+      "$TEQ" compiler build "${build[@]}" -o "$out" > "$RUN_DIAGNOSTICS" 2>&1
+    else
+      "$TEQ" compiler build "${build[@]}" -o "$out"
+    fi && exec node "$out" "$@"' run_js "$@"
 }
 # run_jvm <seconds> <jar or class directory> [<class path>] [--build <build arguments...>] [-- <program
 # arguments...>]: java on a JVM build's output as the raw `teq run --target jvm` started it: -Xss512m (the std's
@@ -810,8 +816,9 @@ run_js() {
 # with the scala-library jar the build linked against put first where they name none (as the compiler puts it on
 # its own class path, `scala_library_jar`, looked up before the bound), and TeqMain, the entry point of a build
 # without --all-mains. With --build, `teq compiler build <build arguments...> -o <out>` first, under the same one
-# bound (the build arguments give --target jvm), its failure keeping its exit code and message; without, the
-# output is built already and java alone has the bound.
+# bound (the build arguments give --target jvm), its failure keeping its exit code and message, its streams in the
+# file RUN_DIAGNOSTICS names where it names one (as `run_js`); without, the output is built already and java alone
+# has the bound.
 run_jvm() {
   local seconds=$1 out=$2 cp=
   shift 2
@@ -820,13 +827,17 @@ run_jvm() {
     shift
   fi
   case ":$cp:" in *"/scala-library-"*) ;; *) cp="$(scala_library_jar)${cp:+:$cp}" ;; esac
-  TEQ=$TEQ timeout "$seconds" bash -c 'out=$1 cp=$2
+  TEQ=$TEQ RUN_DIAGNOSTICS=${RUN_DIAGNOSTICS-} timeout "$seconds" bash -c 'out=$1 cp=$2
     shift 2
     if [ "${1-}" = --build ]; then
       shift
       build=()
       while [ $# -gt 0 ] && [ "$1" != -- ]; do build+=("$1"); shift; done
-      "$TEQ" compiler build "${build[@]}" -o "$out" || exit
+      if [ -n "$RUN_DIAGNOSTICS" ]; then
+        "$TEQ" compiler build "${build[@]}" -o "$out" > "$RUN_DIAGNOSTICS" 2>&1 || exit
+      else
+        "$TEQ" compiler build "${build[@]}" -o "$out" || exit
+      fi
     fi
     [ $# = 0 ] || shift
     exec java -Xss512m -Xshare:auto -cp "$out:$cp" TeqMain "$@"' run_jvm "$out" "$cp" "$@"

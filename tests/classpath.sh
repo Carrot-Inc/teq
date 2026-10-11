@@ -21,6 +21,24 @@ with_fixture_classes() {
 fail=0
 passed=0
 skipped=0
+# A run's build keeps its diagnostics apart from the program's output, which its expectation holds alone (real
+# Scala recorded the program's stdout): `diagnostics <log> <expectation> <row>` compares the build's streams with
+# the file beside the expectation that ends in .diagnostics in the place of .expected (what scalac 3.8.4 reports
+# for the program, in teq's spelling: its summary of the deprecations left unreported, say), and with nothing
+# without one. A row passes when both agree.
+diagnostics() {
+  local want=${2%.expected}.diagnostics
+  if [ -f "$want" ]; then
+    diff -q "$want" "$1" > /dev/null && return 0
+    echo "FAIL $3: the build's diagnostics"
+    diff "$want" "$1" | head -10
+  else
+    [ -s "$1" ] || return 0
+    echo "FAIL $3: the build's diagnostics, where none are expected"
+    head -10 "$1"
+  fi
+  return 1
+}
 for src in tests/classpath/*.scala; do
   jars_of "$src"
   if [ -n "$JARS_MISSING" ]; then
@@ -86,13 +104,15 @@ for src in tests/classpath/jvm/*.scala tests/classpath/jvm/*/; do
   # The JDK's own warnings on stderr (`sun.misc.Unsafe` under scala-library's lazy vals) are
   # not the program's output.
   jvm_cp=$(with_scala_library "$JARS_CP")
-  run_jvm 120 "out/classpath/$name.jar" "$jvm_cp" --build "$src" --target jvm --classpath "$jvm_cp" 2>&1 \
+  rm -f "out/classpath/$name.diagnostics"
+  RUN_DIAGNOSTICS=out/classpath/$name.diagnostics run_jvm 120 "out/classpath/$name.jar" "$jvm_cp" --build "$src" --target jvm --classpath "$jvm_cp" 2>&1 \
     | { grep -v '^WARNING: ' > "out/classpath/$name.actual" || true; }
   if [ "${PIPESTATUS[0]}" = 0 ] && diff -q "$expected" "out/classpath/$name.actual" > /dev/null; then
-    passed=$((passed + 1))
+    diagnostics "out/classpath/$name.diagnostics" "$expected" "$src (jvm run)" && passed=$((passed + 1)) || fail=1
   else
     echo "FAIL $src (jvm run)"
     diff "$expected" "out/classpath/$name.actual" | head -10
+    head -10 "out/classpath/$name.diagnostics" 2> /dev/null
     fail=1
   fi
 done
@@ -129,13 +149,21 @@ entry_points() {
     expected=$(grep -F "$m: " "$entry/launched.expected" | sed "s|^$m: ||")
     for chosen in $(printf '%s\n' "$m" "${m##*.}" | sort -u); do
       for target in $targets; do
+        diag=out/classpath/$name-main.diagnostics
+        rm -f "$diag"
         case $target in
-          js) actual=$(run_js 60 "out/classpath/$name-main.js" "$entry"/*.scala --main "$chosen" -- a b 2>&1) ;;
-          jvm) actual=$(run_jvm 60 "out/classpath/$name-main.jar" "$SL" --build "$entry"/*.scala --target jvm --classpath "$SL" --main "$chosen" -- a b 2>&1) ;;
-          interp) actual=$(timeout 60 "$TEQ" interp "$entry"/*.scala --main "$chosen" -- a b 2>&1) ;;
+          js) actual=$(RUN_DIAGNOSTICS=$diag run_js 60 "out/classpath/$name-main.js" "$entry"/*.scala --main "$chosen" -- a b 2>&1) ;;
+          jvm) actual=$(RUN_DIAGNOSTICS=$diag run_jvm 60 "out/classpath/$name-main.jar" "$SL" --build "$entry"/*.scala --target jvm --classpath "$SL" --main "$chosen" -- a b 2>&1) ;;
+          # The interpreter's diagnostics and the program's stderr share a stream: the program's stdout is compared.
+          interp) actual=$(timeout 60 "$TEQ" interp "$entry"/*.scala --main "$chosen" -- a b 2> "$diag") ;;
         esac
-        if [ "$actual" = "$expected" ]; then passed=$((passed + 1)); else
+        if [ "$actual" != "$expected" ]; then
           echo "FAIL $entry: --main $chosen on $target: $actual"
+          head -10 "$diag" 2> /dev/null
+          fail=1
+        elif diagnostics "$diag" "$entry/launched.expected" "$entry: --main $chosen on $target"; then
+          passed=$((passed + 1))
+        else
           fail=1
         fi
       done
@@ -186,21 +214,24 @@ for src in tests/classpath/js/*.scala; do
     [ "$target" = interp ] && std_flag=
     output="out/classpath/$name.js"
     [ "$target" = jvm ] && output="out/classpath/$name.jar"
-    rm -f "out/classpath/$name.err"
+    diag=out/classpath/$name.diagnostics
+    rm -f "out/classpath/$name.err" "$diag"
     if [ "$target" = jvm ]; then
       # java's own messages (JDK 24 warns of scala-library's `LazyVals` reaching `sun.misc.Unsafe`)
       # are kept apart from the program's output, as tests/run_jvm.sh keeps them.
-      run_jvm 120 "$output" "$cp" --build "$src" --target "$target" $std_flag --classpath "$cp" $flags > "out/classpath/$name.actual" 2> "out/classpath/$name.err"
+      RUN_DIAGNOSTICS=$diag run_jvm 120 "$output" "$cp" --build "$src" --target "$target" $std_flag --classpath "$cp" $flags > "out/classpath/$name.actual" 2> "out/classpath/$name.err"
     elif [ "$target" = interp ]; then
-      timeout 120 "$TEQ" interp "$src" --classpath "$cp" $flags > "out/classpath/$name.actual" 2>&1
+      # The interpreter's diagnostics and the program's stderr share a stream: the program's stdout is compared.
+      timeout 120 "$TEQ" interp "$src" --classpath "$cp" $flags > "out/classpath/$name.actual" 2> "$diag"
     else
-      run_js 120 "$output" "$src" --target "$target" $std_flag --classpath "$cp" $flags > "out/classpath/$name.actual" 2>&1
+      RUN_DIAGNOSTICS=$diag run_js 120 "$output" "$src" --target "$target" $std_flag --classpath "$cp" $flags > "out/classpath/$name.actual" 2>&1
     fi
     if [ $? -eq 0 ] && diff -q "$expected" "out/classpath/$name.actual" > /dev/null; then
-      passed=$((passed + 1))
+      diagnostics "$diag" "$expected" "$src ($target run${std_flag:+, $std_flag})" && passed=$((passed + 1)) || fail=1
     else
       echo "FAIL $src ($target run${std_flag:+, $std_flag})"
       diff "$expected" "out/classpath/$name.actual" | head -10
+      head -10 "$diag" 2> /dev/null
       [ -s "out/classpath/$name.err" ] && grep -v "^WARNING" "out/classpath/$name.err" | head -10
       fail=1
     fi

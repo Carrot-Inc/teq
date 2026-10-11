@@ -1,0 +1,10 @@
+bigint_ops: warning: there was 1 deprecation warning; re-run with --deprecation for details
+buffer_append_varargs: warning: there were 2 deprecation warnings; re-run with --deprecation for details
+either_right: warning: there were 10 deprecation warnings; re-run with --deprecation for details
+int_sign: warning: there were 2 deprecation warnings; re-run with --deprecation for details
+iterable_to_iterator: warning: there were 2 deprecation warnings; re-run with --deprecation for details
+jar_inner_class_bounds: warning: there was 1 deprecation warning; re-run with --deprecation for details
+mutable_multimap: warning: there were 5 deprecation warnings; re-run with --deprecation for details
+overload_std_collections: warning: there were 3 deprecation warnings; re-run with --deprecation for details
+std_map_set_buffer: warning: there was 1 deprecation warning; re-run with --deprecation for details
+views: warning: there was 1 deprecation warning; re-run with --deprecation for details
