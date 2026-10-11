@@ -1598,6 +1598,7 @@ impl<'a> Worker<'a> {
                         }
                     }
                     Type::Refined(parent, _) => work.push(parent),
+                    Type::Rec(body) => work.push(body),
                     Type::Inter(a, b) | Type::Union(a, b) => work.extend([a, b]),
                     _ => {}
                 }

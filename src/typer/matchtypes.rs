@@ -766,6 +766,7 @@ impl<'a> Worker<'a> {
                 Type::Member(..) | Type::AppMember(..) | Type::Decl(_) => self.member_upper(t),
                 Type::This(_) | Type::Term(_) | Type::Select(..) => self.path_underlying(t),
                 Type::Refined(parent, _) => parent,
+                Type::Rec(body) => body,
                 Type::Wild => ANY,
                 Type::BoundedWild(_, hi) => hi,
                 Type::Var(_) | Type::AppVar(..) => ANY,

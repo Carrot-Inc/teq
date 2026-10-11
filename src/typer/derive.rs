@@ -209,7 +209,7 @@ impl<'a> Worker<'a> {
                 let upper = self.syms.tparam(p).upper;
                 upper != ANY && self.every_value_by_rule(upper, class_by_rule)
             }
-            Type::This(_) | Type::Term(_) | Type::Select(..) | Type::Member(..) | Type::AppMember(..) | Type::Decl(_) | Type::Refined(..) | Type::Match(..) | Type::Alias(..) | Type::Nested(..) => {
+            Type::This(_) | Type::Term(_) | Type::Select(..) | Type::Member(..) | Type::AppMember(..) | Type::Decl(_) | Type::Refined(..) | Type::Match(..) | Type::Alias(..) | Type::Nested(..) | Type::Rec(_) => {
                 match self.dependent_underlying(t) {
                     Some(u) => self.every_value_by_rule(u, class_by_rule),
                     None => false,
@@ -239,7 +239,7 @@ impl<'a> Worker<'a> {
                 let upper = self.syms.tparam(p).upper;
                 upper != ANY && self.is_enum_value(upper)
             }
-            Type::This(_) | Type::Term(_) | Type::Select(..) | Type::Member(..) | Type::AppMember(..) | Type::Decl(_) | Type::Refined(..) | Type::Match(..) | Type::Alias(..) | Type::Nested(..) => {
+            Type::This(_) | Type::Term(_) | Type::Select(..) | Type::Member(..) | Type::AppMember(..) | Type::Decl(_) | Type::Refined(..) | Type::Match(..) | Type::Alias(..) | Type::Nested(..) | Type::Rec(_) => {
                 match self.dependent_underlying(t) {
                     Some(u) => self.is_enum_value(u),
                     None => false,

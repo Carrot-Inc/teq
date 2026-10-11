@@ -847,7 +847,7 @@ impl<'a> Worker<'a> {
     /// An anonymous class instance has the members its body defines, which a refinement type
     /// expected of it asks for (`val s: AnyRef { def m: Int } = new AnyRef { def m = 1 }`).
     fn conforms_as_anon(&mut self, te: TExprId, expected: TypeId) -> bool {
-        if !matches!(self.types.get(expected), Type::Refined(..)) {
+        if !matches!(self.types.get(expected), Type::Refined(..) | Type::Rec(_)) {
             return false;
         }
         let mut e = te;
@@ -877,7 +877,7 @@ impl<'a> Worker<'a> {
         }
         rs.into_iter().all(|r| match self.types.refinement(r) {
             Refinement::Term(name, ..) | Refinement::Val(name, ..) => self.find_member(own, name).is_some(),
-            _ => self.refinement_holds(own, r),
+            _ => self.refinement_holds(own, parent, r),
         })
     }
 
@@ -2110,7 +2110,7 @@ impl<'a> Worker<'a> {
         let values_ty = self.types.class(array, &[ANY]);
         self.prog.set_type(values_array, values_ty);
         let call_args = self.prog.list(&[parts_array, values_array]);
-        let call = super::apply::MethodCall { recv: None, sym: format, owner_subst: Vec::new(), ext_recv: None, prefix: None };
+        let call = super::apply::MethodCall { recv: None, sym: format, owner_subst: Vec::new(), ext_recv: None, prefix: None, refined: None };
         (self.build_call(&call, call_args), t_string)
     }
 
@@ -2466,7 +2466,7 @@ impl<'a> Worker<'a> {
         }
         let zero = self.zero_of(elem).unwrap_or_else(|| self.prog.add(TExpr::Null));
         let lists = vec![ArgList { args: vec![ArgSrc::Ast(len), ArgSrc::Typed(zero, elem)], using: false, span }];
-        let callee = super::apply::Callee::Method { recv: None, sym, owner_subst: Vec::new(), prefix: None };
+        let callee = super::apply::Callee::Method { recv: None, sym, owner_subst: Vec::new(), prefix: None, refined: None };
         self.apply_callee(callee, None, lists, span, expected)
     }
 
@@ -2499,7 +2499,7 @@ impl<'a> Worker<'a> {
         let (len, _) = self.type_expr(len, Some(int));
         let args = self.prog.list(&[len]);
         let array = self.types.class(self.b.array, &[elem]);
-        let call = super::apply::MethodCall { recv: Some(evidence), sym, owner_subst: Vec::new(), ext_recv: None, prefix: None };
+        let call = super::apply::MethodCall { recv: Some(evidence), sym, owner_subst: Vec::new(), ext_recv: None, prefix: None, refined: None };
         let call = self.build_call(&call, args);
         self.prog.set_type(call, array);
         Some((call, array))
@@ -3389,6 +3389,7 @@ impl<'a> Worker<'a> {
             }
             Type::Union(a, b) | Type::Inter(a, b) => self.type_names_local_class(a, locals, d) || self.type_names_local_class(b, locals, d),
             Type::Refined(p, _) => self.type_names_local_class(p, locals, d),
+            Type::Rec(body) => self.type_names_local_class(body, locals, d),
             Type::Lambda(_, body) | Type::Poly(_, body) => self.type_names_local_class(body, locals, d),
             _ => false,
         }
@@ -3580,6 +3581,7 @@ impl<'a> Worker<'a> {
         let import_aliases = self.inline.import_aliases.len();
         let pending_imports = if self.inline.checking > 0 { self.pending_imports_mark() } else { None };
         self.push_scope();
+        self.local_blocks.push(super::resolve::LocalBlock { file, stmts, frame_depth: self.env.frames.len(), imports_scope, next: 0 });
         let cursor = items.iter().any(|s| matches!(s, Stmt::Def(d) if matches!(ast.def(*d).kind, DefKind::Fun(_)) && ast.def(*d).mods & mods::INLINE != 0));
         if cursor {
             let frame = self.env.frames.len() - 1;
@@ -3669,7 +3671,7 @@ impl<'a> Worker<'a> {
                     }
                     ast::ClassKind::EnumCase => {}
                 },
-                DefKind::TypeAlias { rhs, .. } if !rhs.map_or(false, |r| self.names_term_path(r)) => self.enter_local_alias(file, *d),
+                DefKind::TypeAlias { rhs, .. } if !rhs.map_or(false, |r| self.names_term_path(r)) => self.declare_local_alias(file, *d),
                 // A lazy val with a declared type may be named before its definition, by the
                 // lazy vals and methods above it.
                 DefKind::Val { pat: None, ty: Some(t), rhs: Some(_) } if def.mods & mods::LAZY != 0 => {
@@ -3693,6 +3695,9 @@ impl<'a> Worker<'a> {
                 if let Some(b) = self.inline.blocks.last_mut() {
                     b.at = i;
                 }
+            }
+            if let Some(b) = self.local_blocks.last_mut() {
+                b.next = i;
             }
             match *s {
                 Stmt::Expr(e) if i + 1 == n => result = Some(self.type_expr_adapted(e, expected)),
@@ -3727,6 +3732,9 @@ impl<'a> Worker<'a> {
             self.inline.blocks.pop();
         }
         self.pop_scope();
+        if let Some(b) = self.local_blocks.pop() {
+            self.local_alias_sites.retain(|_, &mut (depth, _)| depth != b.frame_depth);
+        }
         self.env.imports.truncate(imports_scope);
         self.inline.body_imports.truncate(body_imports);
         for alias in self.inline.import_aliases.drain(import_aliases..) {
@@ -3874,6 +3882,7 @@ impl<'a> Worker<'a> {
             // An alias over a path of the block (`type Elem = et.Underlying`) is entered where it
             // stands, once the path's value is.
             DefKind::TypeAlias { rhs: Some(r), .. } if self.names_term_path(*r) => self.enter_local_alias(file, d),
+            DefKind::TypeAlias { .. } => self.complete_local_alias(d),
             DefKind::Class(cls) => {
                 let Some(&c) = self.def_classes.get(file.0 as usize, &d) else { return };
                 if self.deps.is_some() {
@@ -4081,7 +4090,6 @@ impl<'a> Worker<'a> {
                 self.defining = outer_defining;
                 out.push(TStmt::Val(sym, init));
             }
-            _ => {}
         }
     }
 

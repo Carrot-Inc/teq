@@ -578,7 +578,7 @@ neg/i1501a.scala	same
 neg/i1503.scala	same	
 neg/i15065.scala	same	
 neg/i15144.scala	same	
-neg/i15158.scala	different	type {} not found
+neg/i15158.scala	different	Recursion limit exceeded.
 neg/i15177.FakeEnum.min.alt1.scala	same	
 neg/i15177.constr-dep.scala	same	
 neg/i15177.ub.scala	subset	1/2 lines
@@ -716,7 +716,7 @@ neg/i17981.scala	same
 neg/i1802.scala	different	{} is not a member of the package
 neg/i18020.scala	syntax	expected {}, found {}
 neg/i18020b.scala	syntax	expected {}, found {}
-neg/i18035.scala	accepts	
+neg/i18035.scala	same	
 neg/i18047.scala	same	
 neg/i18058.scala	same	
 neg/i1806.scala	syntax	expected identifier, found {}
@@ -772,7 +772,7 @@ neg/i18750-format.scala	syntax	expected a pattern, found {}
 neg/i18750.scala	syntax	expected a pattern, found {}
 neg/i18862-future.scala	accepts	
 neg/i18884.scala	same	
-neg/i18922.scala	accepts	
+neg/i18922.scala	same	
 neg/i18933.scala	syntax	expected a definition, found {}
 neg/i1905.scala	accepts	
 neg/i1907.scala	same	
@@ -1814,12 +1814,12 @@ neg/static-no-companion.scala	accepts
 neg/struct-given.scala	superset	+1 lines: value {} is not a member of {}
 neg/structural-2.scala	syntax	expected identifier, found {}
 neg/structural-gadt.scala	same	
-neg/structural-recursive-both1-gadt.scala	superset	+6 lines: type {} not found
-neg/structural-recursive-both2-gadt.scala	superset	+6 lines: type {} not found
-neg/structural-recursive-pattern-gadt.scala	superset	+6 lines: type {} not found
-neg/structural-recursive-scrutinee-gadt.scala	superset	+6 lines: type {} not found
+neg/structural-recursive-both1-gadt.scala	same	
+neg/structural-recursive-both2-gadt.scala	same	
+neg/structural-recursive-pattern-gadt.scala	same	
+neg/structural-recursive-scrutinee-gadt.scala	same	
 neg/structural.scala	syntax	expected identifier, found {}
-neg/structuralNoSuchMethod.scala	accepts	
+neg/structuralNoSuchMethod.scala	same	
 neg/subtyping.scala	same	
 neg/summon-function.scala	same	
 neg/summonFrom-ambiguous-bind.scala	same	
@@ -1894,7 +1894,7 @@ neg/targetName-override-2.scala	same
 neg/targetName-override.scala	same	
 neg/targetName-override0	oos	java
 neg/targetName-override1	oos	java
-neg/targetName-refine.scala	accepts	
+neg/targetName-refine.scala	same	
 neg/targetName-toplevel.scala	accepts	
 neg/tate.scala	syntax	expected {}, found {}
 neg/tcpoly_overloaded.scala	same	
@@ -2045,7 +2045,7 @@ pos/20088b.scala	syntax	expected identifier, found {}
 pos/20519.scala	accepts	
 pos/20519b.scala	accepts	
 pos/20519c.scala	accepts	
-pos/20538.scala	rejects	no given instance
+pos/20538.scala	accepts	
 pos/20538b.scala	accepts	
 pos/21400.scala	accepts	
 pos/21400b.scala	accepts	
@@ -2173,7 +2173,7 @@ pos/anonBridge.scala	accepts
 pos/anonClassSubtyping.scala	accepts	
 pos/anykind.scala	syntax	expected identifier, found {}
 pos/applied_constructor_types.scala	syntax	expected {}, found {}
-pos/apply-equiv.scala	rejects	type {} not found
+pos/apply-equiv.scala	accepts	
 pos/approximateUnion.scala	syntax	expected {}, found {}
 pos/argDenot-alpakka.min.scala	accepts	
 pos/argDenot-alpakka.scala	rejects	contravariant type In occurs in invariant position in type  = Flow[In, O, Mat] of type Repr
@@ -2259,7 +2259,7 @@ pos/compare-singletons.scala	accepts
 pos/compile.scala	accepts	
 pos/compile1.scala	accepts	
 pos/complex-self-call.scala	accepts	
-pos/compound.scala	rejects	type {} not found
+pos/compound.scala	accepts	
 pos/concats.scala	accepts	
 pos/conforms.scala	rejects	type mismatch
 pos/conformsWild.scala	accepts	
@@ -2655,7 +2655,7 @@ pos/i12178.scala	rejects	no given instance
 pos/i12180a.scala	rejects	values of types {} and {} cannot be compared
 pos/i12180b.scala	rejects	values of types {} and {} cannot be compared
 pos/i12194-opaque.scala	accepts	
-pos/i12211.scala	std	WithoutPreciseParameterTypes
+pos/i12211.scala	accepts	
 pos/i12216.scala	rejects	value {} is not a member of {}
 pos/i12218.scala	accepts	
 pos/i12226.scala	std	App
@@ -2779,7 +2779,7 @@ pos/i13848.scala	accepts
 pos/i1385.scala	accepts	
 pos/i13859.scala	rejects	no given instance
 pos/i13871.scala	rejects	cannot resolve import
-pos/i13889.scala	rejects	value {} is not a member of {}
+pos/i13889.scala	accepts	
 pos/i13900.scala	rejects	{} is already defined
 pos/i13935.scala	accepts	
 pos/i13941.scala	accepts	
@@ -3102,8 +3102,8 @@ pos/i17255	oos	java
 pos/i17257.min.scala	accepts	
 pos/i17310.scala	accepts	
 pos/i1737.scala	accepts	
-pos/i17380.scala	rejects	type {} not found
-pos/i17381.scala	rejects	type {} not found
+pos/i17380.scala	accepts	
+pos/i17381.scala	accepts	
 pos/i17391	oos	java
 pos/i17394	accepts	
 pos/i17394b	accepts	
@@ -3485,7 +3485,7 @@ pos/i22608.scala	accepts
 pos/i22643.scala	rejects	value {} is not a member of {}
 pos/i22645a.scala	rejects	value {} is not a member of {}
 pos/i22645b.scala	rejects	value {} is not a member of {}
-pos/i22648.scala	rejects	type {} not found
+pos/i22648.scala	accepts	
 pos/i22676.scala	accepts	
 pos/i22713.scala	rejects	{} is not a member of the package
 pos/i22724.scala	accepts	
@@ -3723,7 +3723,7 @@ pos/i3083.scala	accepts
 pos/i3129.scala	accepts	
 pos/i3130a.scala	accepts	
 pos/i3130b.scala	std	App
-pos/i3130c.scala	rejects	type mismatch
+pos/i3130c.scala	accepts	
 pos/i3130d.scala	accepts	
 pos/i3139.scala	accepts	
 pos/i3149.scala	accepts	
@@ -3920,7 +3920,7 @@ pos/i5655	oos	java
 pos/i566.scala	accepts	
 pos/i5666.scala	accepts	
 pos/i5699.scala	syntax	expected end of statement, found {}
-pos/i5700.scala	rejects	type {} not found
+pos/i5700.scala	accepts	
 pos/i5711.scala	accepts	
 pos/i5720.scala	accepts	
 pos/i5750.scala	accepts	
@@ -3982,7 +3982,7 @@ pos/i6384.scala	std	App
 pos/i6385.scala	std	App
 pos/i6395.scala	accepts	
 pos/i6419.scala	accepts	
-pos/i6443.scala	rejects	type {} not found
+pos/i6443.scala	accepts	
 pos/i6450.scala	rejects	type mismatch
 pos/i6451.scala	accepts	
 pos/i6505.scala	rejects	type mismatch
@@ -4063,8 +4063,8 @@ pos/i7424b.scala	rejects	type mismatch
 pos/i7424c.scala	rejects	type mismatch
 pos/i7428.scala	accepts	
 pos/i743.scala	accepts	
-pos/i7445a.scala	rejects	type {} not found
-pos/i7445b.scala	rejects	type {} not found
+pos/i7445a.scala	accepts	
+pos/i7445b.scala	accepts	
 pos/i7452.scala	rejects	no given instance
 pos/i7458.scala	accepts	
 pos/i7467.scala	syntax	expected {}, found {}
@@ -4075,7 +4075,7 @@ pos/i7525	oos	java
 pos/i7532.scala	accepts	
 pos/i7575.scala	std	Dynamic
 pos/i7586.scala	rejects	no given instance
-pos/i7602.scala	rejects	type {} not found
+pos/i7602.scala	accepts	
 pos/i7648.scala	accepts	
 pos/i7650	rejects	{} is already defined
 pos/i7653.scala	syntax	expected identifier, found {}
@@ -4274,7 +4274,7 @@ pos/i9562.scala	accepts
 pos/i9567.scala	accepts	
 pos/i9568.scala	accepts	
 pos/i9626.scala	accepts	
-pos/i9667.scala	rejects	type {} not found
+pos/i9667.scala	rejects	type mismatch
 pos/i9676.scala	rejects	type mismatch
 pos/i9717	accepts	
 pos/i974.scala	accepts	
@@ -4545,7 +4545,7 @@ pos/literals.scala	accepts
 pos/local-objects.scala	accepts	
 pos/local-signature.scala	accepts	
 pos/localmodules.scala	accepts	
-pos/lookuprefined.scala	rejects	type {} not found
+pos/lookuprefined.scala	accepts	
 pos/lookupswitch.scala	accepts	
 pos/looping-givens.scala	accepts	
 pos/looping-jsig.scala	accepts	
@@ -4674,7 +4674,7 @@ pos/overrideDataRace.scala	accepts
 pos/overrides.scala	syntax	expected {}, found {}
 pos/overzealous-assert-genbcode.scala	accepts	
 pos/p11210-multiowner.scala	accepts	
-pos/p11210-refinement.scala	rejects	type mismatch
+pos/p11210-refinement.scala	accepts	
 pos/p11210-values.scala	accepts	
 pos/package-case.scala	accepts	
 pos/package-indented.scala	accepts	
@@ -4751,7 +4751,7 @@ pos/privates.scala	accepts
 pos/product-to-tuple.scala	rejects	type mismatch
 pos/profile-test.scala	accepts	
 pos/projection.scala	accepts	
-pos/projections.scala	rejects	type {} not found
+pos/projections.scala	accepts	
 pos/propagate.scala	accepts	
 pos/protected-static	oos	java
 pos/provably-disjoint-infinite-recursion-1.scala	accepts	
@@ -4768,7 +4768,7 @@ pos/realizable-mut.scala	rejects	a singleton type needs a val, a parameter or an
 pos/rebind.scala	rejects	error overriding method foo in class Foo of type Inner: method foo in trait Bar of type Bar.this.Inner has incompatible type
 pos/recursive-opaques.scala	accepts	
 pos/reference	rejects	only defs are allowed in an extension
-pos/refinedSubtyping.scala	rejects	type {} not found
+pos/refinedSubtyping.scala	accepts	
 pos/refinements.scala	syntax	expected identifier, found {}
 pos/relax_implicit_divergence.scala	std	Equiv
 pos/renaming-imports.scala	rejects	{} is not a member of the package
@@ -5048,7 +5048,7 @@ pos/t1107a.scala	accepts
 pos/t1107b	accepts	
 pos/t1119.scala	accepts	
 pos/t1123.scala	accepts	
-pos/t112606A.scala	rejects	type mismatch
+pos/t112606A.scala	accepts	
 pos/t1131.scala	syntax	expected identifier, found {}
 pos/t1133.scala	accepts	
 pos/t1136.scala	accepts	
@@ -5412,7 +5412,7 @@ pos/t522.scala	rejects	foo is abstract; it cannot be instantiated
 pos/t5240.scala	syntax	expected {}, found {}
 pos/t5245.scala	accepts	
 pos/t530.scala	accepts	
-pos/t5305.scala	rejects	type {} not found
+pos/t5305.scala	accepts	
 pos/t5313.scala	rejects	cannot resolve import
 pos/t5330.scala	accepts	
 pos/t5330b.scala	accepts	
@@ -5666,7 +5666,7 @@ pos/t8364.scala	std	Dynamic
 pos/t8367.scala	accepts	
 pos/t8369a.scala	accepts	
 pos/t8376	oos	java
-pos/t839.scala	rejects	type mismatch
+pos/t839.scala	accepts	
 pos/t851.scala	accepts	
 pos/t873.scala	accepts	
 pos/t892.scala	accepts	
@@ -5790,7 +5790,7 @@ pos/typealiases.scala	accepts
 pos/typeclass-aggregates.scala	syntax	expected identifier, found {}
 pos/typeclass-encoding.scala	rejects	value {} is not a member of {}
 pos/typeclass-encoding3.scala	syntax	expected {}, found {}
-pos/typeclass-encoding3b.scala	rejects	operator {} cannot be applied
+pos/typeclass-encoding3b.scala	rejects	value {} is not a member of {}
 pos/typeclass-scaling.scala	syntax	expected identifier, found {}
 pos/typeclasses-arrow.scala	std	is
 pos/typeclasses-arrow0.scala	accepts	

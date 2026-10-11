@@ -74,6 +74,44 @@ resolution (dotty's `ConstantType`), so `exprQuote[T <: Singleton](x: T)` applie
 asserted as scalac's (two `Any` results refused, one ambiguity among the refinements) by
 `tests/errors/intersection_member_i8736.scala`.
 
+## A path's member reloaded by its name (2026-10-10)
+
+Three tests moved from `rejects` to `accepts` when a member selected on a path started taking its info
+from the member of that name in the prefix's type, an override included, as dotty's `NamedType.withPrefix`
+reloads a member over a path prefix (`infoDependsOnPrefix`): `pos/t839`, `pos/t112606A` and `pos/i3130c`,
+whose `file.treeBuilder.global` is the object's `nsc.type`, not `TreeBuilder`'s `Global`. A detail moved
+within its category: `pos/typeclass-encoding3b` stays `rejects`, its `IntOps.this.commons.This` now `Int`
+through the override, so its first error is a later one (`value add is not a member of T`).
+
+## Refinements as dotty's (2026-10-10)
+
+Twenty-six tests moved when a refinement's members became one scope closed over its self (dotty's
+`RecType`), a refined member's call took the refinement's denotation, structural conformance and the
+variance check took refinements as dotty does, and a block's alias was completed under the block's imports:
+
+- `rejects` to `accepts` (18): the members naming each other or the parent's members, `pos/i5700`, `i7602`,
+  `i7445a`, `i7445b` (a match-type alias naming itself), `i17381`, `i22648`, `i17380`, `i6443`, `apply-equiv`,
+  `projections`, `lookuprefined`, `20538`; a member refined twice met from both refinements (`Types.findMember`'s
+  `goRefined`), `refinedSubtyping`; an intersection's refined member (`goAnd`) and an intersection compared whole
+  against a refinement (`TypeComparer.secondTry`), `compound`, `i13889`; a generic refinement member's result,
+  `p11210-refinement`; a block's alias under the block's imports (`Namer.index`), `t5305`.
+- `std` to `accepts`: `pos/i12211`, `Selectable.WithoutPreciseParameterTypes` in the lean std.
+- `accepts` to `same` (5): the variance of a refinement's members (`VarianceChecker`), `neg/i18035`; a member
+  `@targetName` renames in structural conformance (`TypeComparer.hasMatchingMember`), `neg/i18922`,
+  `targetName-refine`; a structural member's erased signature (`sigsOK`), `structuralNoSuchMethod`.
+- `superset` to `same` (4): `neg/structural-recursive-{both1,both2,pattern,scrutinee}-gadt`, their false
+  `type S not found` at the refinements gone.
+
+A detail moved within its category: `neg/i15158` stays `different`, its block's recursive match alias now
+found and hitting the recursion limit as a class member's does (scalac's too, at a class member), where
+`type Rec not found` stood. So did `pos/i9667`'s, which stays `rejects`: `this.B` inside the refinement is
+the refinement's self now (`TypeAssigner.assignType`), and `type B not found` gives way to the mismatch left.
+An anonymous instance's type keeps its own aliases alone (`Selectable{type D = C}`), where scalac's
+`TypeOps.classBound` gives every member over the local class's parents, a recursive refinement
+(`{z1 => Selectable{type B; type D <: A; val x: A; val xx: z1.x.M; val y: z1.B; ..}}`). Re-recorded over
+35c4230fb, `neg/i7425`'s detail moves too: its first error is now the JavaScript naming clash master's binary
+reports first as well, where master's record still has `value f is not a member`.
+
 ## A member's retry types again what its application did not cache (2026-10-09)
 
 `pos/i18645` moved from `rejects` to `accepts`: `x.pprint(() => ( 234 ))` fails against the member's

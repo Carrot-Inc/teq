@@ -137,8 +137,8 @@ them; set `teqCompiler := false` for that project, or move the sources into a pr
 
 ## Not yet
 
-- Signatures: `AnyKind` and recursive refinements stay blocked, and a member using one reports
-  `not supported yet` where it is applied.
+- Signatures: `AnyKind` stays blocked, and a member using it reports `not supported yet` where it is
+  applied.
 - Library bodies: a quote pattern with a higher-order hole (`$f(y)`) is refused, and so are
   `compiletime.testing`'s `typeChecks` and `typeCheckErrors`.
 - `--std=scala-library`: besides the `f` interpolator, a class nested in a generic class is not

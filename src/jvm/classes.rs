@@ -644,7 +644,7 @@ impl<'a> Gen<'a> {
             return true;
         }
         erased.iter().zip(own).zip(&declared).all(|((e, o), &t)| {
-            e == o || !matches!(cx.input.types.get(t), Type::Class(..) | Type::Union(..) | Type::Inter(..) | Type::Lit(_) | Type::Refined(..))
+            e == o || !matches!(cx.input.types.get(t), Type::Class(..) | Type::Union(..) | Type::Inter(..) | Type::Lit(_) | Type::Refined(..) | Type::Rec(_))
         })
     }
 

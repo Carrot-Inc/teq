@@ -24,11 +24,52 @@ pub struct MapCx {
     /// How many arguments the type constructor being mapped is applied to, which gives a
     /// Java class its arity.
     applied_to: Option<usize>,
+    /// The recursive types being mapped, innermost last, by address: a `RECthis` (or a
+    /// refinement tree's own `this`) is `RecThis` of its index from the end.
+    recs: Vec<Addr>,
+    /// The vals of the refinements on a recursive type's spine, by its address and their name:
+    /// made where a path through the self names one first (`a.type` before or after `val a`),
+    /// and taken by the member where it is mapped.
+    rec_vals: Vec<(Addr, Name, SymId)>,
+    /// The recursive type whose spine the refinement being mapped is on, if any.
+    spine_rec: Option<Addr>,
+    /// The recursive types being mapped, by address, with the parent their refined chain
+    /// refines and the names of the vals and methods the chain's refinements declare: a path
+    /// through the self to another name selects the parent's member (`RecThis.a` of `P`'s `a`).
+    rec_parents: Vec<(Addr, TType, Vec<Name>)>,
+}
+
+/// The recursive type a prefix is the self reference of: `RECthis`, or a refinement tree's own
+/// `THIS`.
+fn rec_self(prefix: &TType) -> Option<Addr> {
+    match prefix {
+        TType::RecThis(addr) => Some(*addr),
+        TType::This(inner) => match &**inner {
+            TType::RecThis(addr) => Some(*addr),
+            _ => None,
+        },
+        _ => None,
+    }
+}
+
+/// Whether the term path `t` selects down from a recursive type's self (`a.b` over `RECthis`, or
+/// over the open refinement tree's `this`), however many selections above it.
+fn through_rec_self(t: &TType) -> bool {
+    match t {
+        TType::TermRef(p, _) | TType::LocalTerm(_, Some(p)) => rec_self(p).is_some() || through_rec_self(p),
+        _ => false,
+    }
 }
 
 impl MapCx {
     pub fn new(file: u32) -> MapCx {
-        MapCx { file, binders: Vec::new(), term_binders: Vec::new(), applied_to: None }
+        MapCx { file, binders: Vec::new(), term_binders: Vec::new(), applied_to: None, recs: Vec::new(), rec_vals: Vec::new(), spine_rec: None, rec_parents: Vec::new() }
+    }
+
+    /// The `RecThis` of the recursive type at `addr`, where it is being mapped.
+    fn rec_this(&self, addr: Addr) -> Option<Type> {
+        let at = self.recs.iter().rposition(|&a| a == addr)?;
+        Some(Type::RecThis((self.recs.len() - 1 - at) as u32))
     }
 }
 
@@ -176,7 +217,42 @@ impl<'a> Worker<'a> {
                     None => self.blocked(cx, Shape::Refinement, t),
                 }
             }
-            TType::Rec(..) | TType::RecThis(_) => self.blocked(cx, Shape::Recursive, t),
+            // `RECtype` over a refined chain (or a refinement tree whose members name it), its
+            // self references `RecThis`: closed over as the source's is (`RecType.closeOver`).
+            TType::Rec(addr, body) => {
+                let tasty = self.tasty(cx.file);
+                let mut own = Vec::new();
+                let mut chain: &TType = body;
+                while let TType::Refined(p, members) = chain {
+                    for (n, info) in members {
+                        let is_type = matches!(info, Some(TType::Alias(_) | TType::Bounds(..) | TType::Lambda { kind: LambdaKind::Type, .. }));
+                        if !is_type {
+                            own.push(self.intern_name(&tasty, *n));
+                        }
+                    }
+                    chain = p;
+                }
+                cx.rec_parents.push((*addr, chain.clone(), own));
+                cx.recs.push(*addr);
+                let outer_spine = cx.spine_rec.replace(*addr);
+                let mapped = self.map_type(cx, body);
+                cx.spine_rec = outer_spine;
+                cx.recs.pop();
+                cx.rec_parents.pop();
+                cx.rec_vals.retain(|&(a, _, _)| a != *addr);
+                if mapped == ERROR || self.types.contains_error(mapped) {
+                    return mapped;
+                }
+                if self.types.refers_to_rec(mapped, 0) {
+                    self.types.mk(Type::Rec(mapped))
+                } else {
+                    self.types.open_rec(mapped, ANY)
+                }
+            }
+            TType::RecThis(addr) => match cx.rec_this(*addr) {
+                Some(this) => self.types.mk(this),
+                None => self.blocked(cx, Shape::Recursive, t),
+            },
             TType::Super(..) => self.blocked(cx, Shape::SuperType, t),
             TType::Lambda { kind: LambdaKind::Type, binder, params, result } => {
                 let tasty = self.tasty(cx.file);
@@ -324,6 +400,14 @@ impl<'a> Worker<'a> {
         if Decoder::new(&tasty).tag_at(addr) == crate::tasty::tags::BIND {
             return WILD;
         }
+        // A refinement tree's member named by its definition through the refinement's `this`.
+        if let Some(this) = prefix.and_then(rec_self).and_then(|a| cx.rec_this(a)) {
+            if let Some(n) = Decoder::new(&tasty).name_at(addr) {
+                let name = self.intern_name(&tasty, n);
+                let this = self.types.mk(this);
+                return self.types.mk(Type::Member(this, name));
+            }
+        }
         let kind = Decoder::new(&tasty).local_type_kind(addr);
         let shape = match kind {
             LocalKind::AbstractMember => match prefix {
@@ -426,14 +510,15 @@ impl<'a> Worker<'a> {
                 Some(self.this_prefix(c))
             }
             TType::TermRef(..) | TType::LocalTerm(..) | TType::ParamRef(..) => self.path_singleton(cx, prefix),
-            TType::RecThis(_) | TType::Rec(..) => None,
+            TType::RecThis(addr) => cx.rec_this(*addr).map(|this| self.types.mk(this)),
+            TType::Rec(..) => None,
             other => {
                 // A class through a prefix (`o.Inner[A]#T`, dotty's `TypeRef(o, Inner)`) is a
                 // prefix with its own: the member is seen from it.
                 let ty = self.map_type(cx, other);
                 let ty = self.deref_alias(ty);
                 match self.types.get(ty) {
-                    Type::Class(..) | Type::Nested(..) | Type::Refined(..) => Some(ty),
+                    Type::Class(..) | Type::Nested(..) | Type::Refined(..) | Type::Rec(_) => Some(ty),
                     _ => None,
                 }
             }
@@ -443,14 +528,34 @@ impl<'a> Worker<'a> {
     /// `T { type A = X; def m: R }`: the parent refined member by member; a term member gets a
     /// symbol carrying its signature. None for a member of a shape teq does not read.
     fn map_refined(&mut self, cx: &mut MapCx, parent: &TType, members: &[(u32, Option<TType>)]) -> Option<TypeId> {
+        // The parent stays on the spine; the members' types are off it.
+        let spine = cx.spine_rec;
         let mut t = self.map_type(cx, parent);
         if self.types.contains_error(t) {
             return None;
         }
         let tasty = self.tasty(cx.file);
         let file_id = self.loaded_file(cx).file_id;
+        cx.spine_rec = None;
+        let mapped = self.map_refined_members(cx, &tasty, file_id, spine, members, &mut t);
+        cx.spine_rec = spine;
+        mapped.map(|_| t)
+    }
+
+    /// The val `name` of the refinements on the spine of the recursive type at `addr`: the one a
+    /// path or the member made first, else a fresh one.
+    fn rec_val(&mut self, cx: &mut MapCx, addr: Addr, name: Name, file_id: crate::source::FileId) -> SymId {
+        if let Some(&(_, _, s)) = cx.rec_vals.iter().find(|&&(a, n, _)| a == addr && n == name) {
+            return s;
+        }
+        let sym = self.syms.new_sym(name, SymKind::Val, crate::ast::mods::ABSTRACT, Owner::Local, file_id, None, crate::source::Span::default());
+        cx.rec_vals.push((addr, name, sym));
+        sym
+    }
+
+    fn map_refined_members(&mut self, cx: &mut MapCx, tasty: &std::sync::Arc<crate::tasty::TastyFile>, file_id: crate::source::FileId, spine: Option<Addr>, members: &[(u32, Option<TType>)], t: &mut TypeId) -> Option<()> {
         for (n, info) in members {
-            let name = self.intern_name(&tasty, *n);
+            let name = self.intern_name(tasty, *n);
             let info = info.as_ref()?;
             let r = match info {
                 TType::Alias(a) => Refinement::Alias(name, self.map_type_ctor(cx, a)),
@@ -470,19 +575,22 @@ impl<'a> Worker<'a> {
                 TType::Lambda { kind: LambdaKind::Method | LambdaKind::Poly, .. } => self.map_refined_method(cx, name, info)?,
                 other => {
                     let ty = self.map_type(cx, other);
-                    let sym = self.syms.new_sym(name, SymKind::Val, crate::ast::mods::ABSTRACT, Owner::Local, file_id, None, crate::source::Span::default());
+                    let sym = match spine {
+                        Some(addr) => self.rec_val(cx, addr, name, file_id),
+                        None => self.syms.new_sym(name, SymKind::Val, crate::ast::mods::ABSTRACT, Owner::Local, file_id, None, crate::source::Span::default()),
+                    };
                     let mut s = self.syms.sym_mut(sym);
                     s.sig = Some(std::sync::Arc::new(MethodSig::value(ty)));
                     s.state().set(Completion::Done);
                     let r = self.types.refine(Refinement::Val(name, sym, ty));
-                    t = self.types.mk(Type::Refined(t, r));
+                    *t = self.types.mk(Type::Refined(*t, r));
                     continue;
                 }
             };
             let r = self.types.refine(r);
-            t = self.types.mk(Type::Refined(t, r));
+            *t = self.types.mk(Type::Refined(*t, r));
         }
-        Some(t)
+        Some(())
     }
 
     /// A refinement's method, `def run(c: Ctx)(x: c.T): c.T` or `def run[A](a: A): a.type`: a
@@ -675,8 +783,27 @@ impl<'a> Worker<'a> {
             let pkg = self.resolve_package(cx, p);
             return self.type_in_pkg(cx, pkg, name, t);
         }
+        // A member of the recursive type being mapped, by its self reference: `RecThis.T`, as
+        // the source makes it inside the refinement.
+        if let Some(addr) = rec_self(prefix) {
+            return match cx.rec_this(addr) {
+                Some(this) => {
+                    let this = self.types.mk(this);
+                    self.types.mk(Type::Member(this, name))
+                }
+                None => self.blocked(cx, Shape::Recursive, t),
+            };
+        }
+        // A member of a path down from the recursive type's self: `RecThis.a.T`, `RecThis.a.b.T`,
+        // the full prefix mapped as dotty's reader builds it (`TYPEREF T` over `TERMREF`s over
+        // `RECthis` or over the refinement tree's own `this`, `TreeUnpickler.readType`).
+        if through_rec_self(prefix) {
+            return match self.path_singleton(cx, prefix) {
+                Some(path) => self.types.mk(Type::Member(path, name)),
+                None => self.blocked(cx, Shape::Recursive, t),
+            };
+        }
         match prefix {
-            TType::RecThis(_) => self.blocked(cx, Shape::Recursive, t),
             other => match self.scope_of(cx, other) {
                 Some(Scope::Class(c)) => {
                     let found = match self.member_type_of(c, name) {
@@ -1304,6 +1431,36 @@ impl<'a> Worker<'a> {
             }
         }
         let tasty = self.tasty(cx.file);
+        // A val of the recursive type being mapped, through its self: `RecThis.a`, the path the
+        // source makes inside the refinement (a `TERMREF` over `RECthis` or over the refinement
+        // tree's own `this`, a definition of the tree by its address).
+        let through_self = match t {
+            TType::TermRef(prefix, n) => rec_self(prefix).map(|a| (a, self.intern_name(&tasty, *n))),
+            TType::LocalTerm(addr, Some(prefix)) => match (rec_self(prefix), Decoder::new(&tasty).name_at(*addr)) {
+                (Some(a), Some(n)) => Some((a, self.intern_name(&tasty, n))),
+                _ => None,
+            },
+            _ => None,
+        };
+        if let Some((addr, name)) = through_self {
+            let this = cx.rec_this(addr)?;
+            let this = self.types.mk(this);
+            // A name the refinements do not declare is the parent's member, selected on the
+            // self as the source selects it (`P { type T = a.b.T }`'s `a`).
+            let inherited = match cx.rec_parents.iter().rev().find(|(a, ..)| *a == addr) {
+                Some((_, parent, own)) if !own.contains(&name) => Some(parent.clone()),
+                _ => None,
+            };
+            if let Some(parent) = inherited {
+                let parent = self.map_type(cx, &parent);
+                if let Some((sym, _)) = self.find_member(parent, name) {
+                    return Some(self.types.mk(Type::Select(this, sym)));
+                }
+            }
+            let file_id = self.loaded_file(cx).file_id;
+            let sym = self.rec_val(cx, addr, name, file_id);
+            return Some(self.types.mk(Type::Select(this, sym)));
+        }
         let (prefix, sym) = match t {
             // A local selected through a path (`this.subtype.typeInfo`, as an export forwarder
             // is typed) keeps the path as its prefix.
@@ -1321,6 +1478,15 @@ impl<'a> Worker<'a> {
                     _ => None,
                 };
                 (prefix, sym)
+            }
+            // A member of a path down from the recursive type's self: the path, then the member
+            // its type gives (`RecThis.a.b`).
+            TType::TermRef(prefix, n) if through_rec_self(prefix) => {
+                let name = self.intern_name(&tasty, *n);
+                let p = self.path_singleton(cx, prefix)?;
+                let under = self.widen_path(p);
+                let (s, _) = self.find_member(under, name)?;
+                (Some(p), s)
             }
             TType::TermRef(prefix, n) => {
                 let name = self.intern_name(&tasty, *n);

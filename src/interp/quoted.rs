@@ -2439,8 +2439,11 @@ impl<'a, 't> Interp<'a, 't> {
             Type::Lit(_) => "ConstantType",
             Type::Wild | Type::BoundedWild(..) => "TypeBounds",
             Type::This(_) => "ThisType",
+            Type::Term(s) if self.rec_binders.contains_key(&s) => "RecursiveThis",
             Type::Term(_) | Type::Select(..) => "TermRef",
             Type::Refined(..) => "Refinement",
+            Type::Rec(_) => "RecursiveType",
+            Type::RecThis(_) => "RecursiveThis",
             Type::Match(..) => "MatchType",
             Type::Lambda(..) => "TypeLambda",
             Type::Param(p) if self.lambda_of.contains_key(&p) => "ParamRef",
@@ -2455,6 +2458,44 @@ impl<'a, 't> Interp<'a, 't> {
             Type::Blocked(b) if self.typer.types.blocked_description(b).starts_with("<method>") => "MethodType",
             Type::Blocked(b) if self.typer.types.blocked_description(b).starts_with("<poly>") => "PolyType",
             _ => "TypeRef",
+        }
+    }
+
+    /// The self of the recursive type `rt` as a value outside its binder: a val of the type,
+    /// made once per type.
+    fn rec_marker(&mut self, rt: TypeId) -> TypeId {
+        if let Some(&s) = self.rec_markers.get(&rt) {
+            return self.typer.types.mk(Type::Term(s));
+        }
+        let name = self.typer.interner.intern("z");
+        let file = self.typer.env.file;
+        let sym = self.typer.syms.new_sym(name, SymKind::Val, 0, Owner::Local, file, None, crate::source::Span::default());
+        let sig = self.typer.value_sig(rt);
+        let mut info = self.typer.syms.sym_mut(sym);
+        info.sig = Some(sig);
+        info.state().done_fresh();
+        drop(info);
+        self.rec_markers.insert(rt, sym);
+        self.rec_binders.insert(sym, rt);
+        self.typer.types.mk(Type::Term(sym))
+    }
+
+    /// `RecursiveType.underlying`: the body with its self the marker of `rt`.
+    fn rec_underlying(&mut self, rt: TypeId) -> R<TypeId> {
+        let rt = self.typer.zonk(rt);
+        let Type::Rec(body) = self.typer.types.get(rt) else { return self.unsupported("underlying of a type that is no recursive type") };
+        let this = self.rec_marker(rt);
+        Ok(self.typer.types.open_rec(body, this))
+    }
+
+    /// `RecursiveThis.binder`.
+    fn rec_binder(&mut self, t: TypeId) -> R<TypeId> {
+        match self.typer.types.get(t) {
+            Type::Term(s) => match self.rec_binders.get(&s) {
+                Some(&b) => Ok(b),
+                None => self.unsupported("binder of a type that is no recursive type's self"),
+            },
+            _ => self.unsupported("binder of a type that is no recursive type's self"),
         }
     }
 
@@ -4155,10 +4196,11 @@ impl<'a, 't> Interp<'a, 't> {
                 if ret == t { SymRef::None } else { self.type_symbol(ret) }
             }
             Type::Lambda(_, b) | Type::Poly(_, b) => self.type_symbol(b),
-            Type::Refined(p, _) | Type::AppMember(p, _) => self.type_symbol(p),
+            Type::Refined(p, _) | Type::AppMember(p, _) | Type::Rec(p) => self.type_symbol(p),
             Type::Nested(_, c) => self.type_symbol(c),
             Type::Blocked(_) => self.pkg_form(t).map_or(SymRef::None, |(_, p)| p),
-            Type::Member(..)
+            Type::RecThis(_)
+            | Type::Member(..)
             | Type::Union(..)
             | Type::Inter(..)
             | Type::Var(_)
@@ -4974,6 +5016,59 @@ fn install_types(it: &mut Table) {
         let r = it.typer.types.refine(r);
         Ok(Value::Type(it.typer.types.mk(Type::Refined(parent, r))))
     });
+    // `QuotesImpl`'s `RecursiveType` and `RecursiveThis` (dotty's `RecType`, `RecThis`): the
+    // binder's body read with its self a value of the type (`recThis`), and a recursive type made
+    // of a body built over that self (`RecType.apply`, normalised).
+    q!(it, "Reflect.RecursiveType.unapply", |it, a| {
+        let t = it.type_arg(a, 1)?;
+        let u = it.rec_underlying(t)?;
+        it.make_some(Value::Type(u))
+    });
+    q!(it, "Reflect.RecursiveTypeMethods.RecursiveType.underlying", |it, a| {
+        let t = it.type_arg(a, 0)?;
+        Ok(Value::Type(it.rec_underlying(t)?))
+    });
+    q!(it, "Reflect.RecursiveTypeMethods.RecursiveType.recThis", |it, a| {
+        let t = it.type_arg(a, 0)?;
+        Ok(Value::Type(it.rec_marker(t)))
+    });
+    q!(it, "Reflect.RecursiveThis.unapply", |it, a| {
+        let t = it.type_arg(a, 1)?;
+        let b = it.rec_binder(t)?;
+        it.make_some(Value::Type(b))
+    });
+    q!(it, "Reflect.RecursiveThisMethods.RecursiveThis.binder", |it, a| {
+        let t = it.type_arg(a, 0)?;
+        Ok(Value::Type(it.rec_binder(t)?))
+    });
+    q!(it, "Reflect.RecursiveType.apply", |it, a| {
+        let parent_exp = arg(a, 1);
+        // The type under construction, whose self the body names through `recThis`.
+        let name = it.typer.interner.intern("z");
+        let file = it.typer.env.file;
+        let marker = it.typer.syms.new_sym(name, SymKind::Val, 0, Owner::Local, file, None, crate::source::Span::default());
+        let self_ty = it.typer.types.mk(Type::Term(marker));
+        let open = it.typer.types.mk(Type::Rec(self_ty));
+        it.rec_markers.insert(open, marker);
+        it.rec_binders.insert(marker, open);
+        let parent = it.apply_value(parent_exp, vec![Value::Type(open)])?;
+        let Value::Type(parent) = parent else { return it.unsupported("a RecursiveType body that is no type") };
+        let body = it.typer.types.abstract_rec(parent, self_ty);
+        let body = it.typer.normalised_rec(body);
+        let rt = it.typer.types.mk(Type::Rec(body));
+        let sig = it.typer.value_sig(rt);
+        let mut info = it.typer.syms.sym_mut(marker);
+        info.sig = Some(sig);
+        info.state().done_fresh();
+        drop(info);
+        it.rec_markers.remove(&open);
+        // An equal recursive type is the same one, interned (`unique(rt.derivedRecType(..))`),
+        // whose self stays the one it has (its cached `recThis`); the provisional self of this
+        // construction names the type as well.
+        it.rec_markers.entry(rt).or_insert(marker);
+        it.rec_binders.insert(marker, rt);
+        Ok(Value::Type(rt))
+    });
     q!(it, "Reflect.ByNameType.apply", |it, a| {
         let t = it.type_arg(a, 1)?;
         Ok(Value::Type(it.typer.by_name_type(t)))
@@ -5426,7 +5521,7 @@ impl<'a, 't> Interp<'a, 't> {
                 self.narrow_variances(hi, v, params, out, depth + 1);
             }
             Type::Lambda(_, b) | Type::Poly(_, b) => self.narrow_variances(b, v, params, out, depth + 1),
-            Type::Refined(parent, _) => self.narrow_variances(parent, v, params, out, depth + 1),
+            Type::Refined(parent, _) | Type::Rec(parent) => self.narrow_variances(parent, v, params, out, depth + 1),
             Type::AppVar(_, args) | Type::AppMember(_, args) | Type::Alias(_, args) => {
                 let args: Vec<TypeId> = self.typer.types.items(args).to_vec();
                 for a in args {

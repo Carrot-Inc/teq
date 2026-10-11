@@ -703,7 +703,7 @@ impl<'a> Worker<'a> {
         };
         let text = self.prog.add_str(&format!("index out of bounds: {}", i));
         let message = self.prog.add(TExpr::Str(text));
-        let callee = super::apply::Callee::Method { recv: None, sym, owner_subst: Vec::new(), prefix: None };
+        let callee = super::apply::Callee::Method { recv: None, sym, owner_subst: Vec::new(), prefix: None, refined: None };
         let list = super::apply::ArgList { args: vec![super::apply::ArgSrc::Typed(message, self.b.t_string)], using: false, span };
         Some(self.apply_callee(callee, None, vec![list], span, None))
     }

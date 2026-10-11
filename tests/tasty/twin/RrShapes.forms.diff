@@ -1,0 +1,12 @@
+3,4c3,4
+<   type S = AnyRef { type T = String; def f(): T }
+<   type R = AnyRef { type T; type U = T }
+---
+>   type S = AnyRef { type T = String; def f(): this#T }
+>   type R = AnyRef { type T; type U = this#T }
+6,7c6,7
+<   def make: S = new RrBox{(): fix.recrefine.RrBox}()
+<   def plain: P = new RrBox{(): fix.recrefine.RrBox}()
+---
+>   def make: AnyRef { type T = String; def f(): this#T } = new RrBox{(): fix.recrefine.RrBox}()
+>   def plain: AnyRef { type T = String; def g(): String } = new RrBox{(): fix.recrefine.RrBox}()

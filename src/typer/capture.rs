@@ -230,6 +230,21 @@ impl<'a> Worker<'a> {
         }
     }
 
+    /// The call `te` of the class member `sym` on `recv` typed by the refinement `r` of the
+    /// receiver's type (`Form::Refined`).
+    #[cold]
+    #[inline(never)]
+    pub(super) fn capture_refined_selection(&mut self, te: TExprId, recv: TExprId, sym: SymId, r: Refinement) {
+        let Refinement::Term(_, rsym, list) = r else { return };
+        let mut e = te;
+        while let TExpr::Block(_, inner) = self.prog.expr(e) {
+            e = inner;
+        }
+        if matches!(self.prog.expr(e), TExpr::CallMethod(q, s, _) if s == sym && q == recv) {
+            self.capture_form(e, Form::Refined(rsym, list));
+        }
+    }
+
     /// The tree of a converted pickle the node `te` was typed from.
     #[cold]
     #[inline(never)]
@@ -844,6 +859,7 @@ pub(super) fn map_form(f: Form, types: &TypeStore, ty: &mut dyn FnMut(TypeId) ->
         Form::GivenCall(s) => Form::GivenCall(sym(s)),
         Form::DynamicLiteral(s) => Form::DynamicLiteral(sym(s)),
         Form::JsObject(t) => Form::JsObject(ty(t)),
+        Form::Refined(s, l) => Form::Refined(sym(s), list(l, ty)),
         Form::ByName
         | Form::Folded(_)
         | Form::Promotion

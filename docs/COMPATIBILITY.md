@@ -187,6 +187,5 @@ a JDK member as `not supported on JavaScript`. Beyond that:
 
 - `C.super`; name-based extractors (`isEmpty`/`get`); exports that forward to a value (`export field.*`), an
   export path naming objects and packages; overloaded methods in a non-native JS class (Scala.js chooses
-  between the alternatives at run time); `erased`, rejected wherever it appears; `AnyKind`; recursive
-  refinements (`{ type T; def f: T }`); `scala.compiletime.testing.typeChecks`. `transparent trait` and
-  `@throws` are accepted and change nothing.
+  between the alternatives at run time); `erased`, rejected wherever it appears; `AnyKind`;
+  `scala.compiletime.testing.typeChecks`. `transparent trait` and `@throws` are accepted and change nothing.

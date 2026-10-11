@@ -1214,9 +1214,18 @@ impl<'a> Decoder<'a> {
                 TType::Annotated(Box::new(underlying), Box::new(annot))
             }
             REFINEDTPT => {
+                // The refinement's members name it through `THIS(SHAREDtype <the refinement>)`
+                // (`TreePickler.pickleTree` registers the refinement class's type at the tree):
+                // with the tree open, that is its self reference, and a refinement whose members
+                // make one is the recursive type `TypeAssigner.assignType` closes it over.
+                let start = self.r.pos as Addr;
                 self.r.byte();
                 let end = self.r.end();
                 let parent = self.read_tpt();
+                let opened = !self.open_shared.contains(&start);
+                if opened {
+                    self.open_shared.push(start);
+                }
                 let mut members = Vec::new();
                 while self.r.pos < end {
                     let at = self.r.pos as Addr;
@@ -1236,7 +1245,12 @@ impl<'a> Decoder<'a> {
                         _ => self.skip_tree(),
                     }
                 }
-                TType::Refined(Box::new(parent), members)
+                if opened {
+                    self.open_shared.pop();
+                }
+                let refers = members.iter().any(|(_, info)| info.as_ref().is_some_and(|t| t.mentions_rec_this(start)));
+                let refined = TType::Refined(Box::new(parent), members);
+                if opened && refers { TType::Rec(start, Box::new(refined)) } else { refined }
             }
             MATCHTPT => {
                 self.r.byte();

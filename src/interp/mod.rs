@@ -1111,6 +1111,8 @@ pub struct InterpCaches {
     names: FxMap<&'static str, Name>,
     lambda_variances: FxMap<crate::types::TParamId, u64>,
     lambda_of: FxMap<crate::types::TParamId, crate::types::TypeId>,
+    rec_markers: FxMap<crate::types::TypeId, crate::types::SymId>,
+    rec_binders: FxMap<crate::types::SymId, crate::types::TypeId>,
     prof_state: Option<Box<profile::ProfState>>,
     /// `Program::shifts` when the caches were put away.
     shifts: u32,
@@ -1182,6 +1184,8 @@ impl InterpCaches {
             names: _,
             lambda_variances: _,
             lambda_of: _,
+            rec_markers: _,
+            rec_binders: _,
             prof_state: _,
             shifts: _,
             walk_hint: _,
@@ -1314,6 +1318,10 @@ pub struct Interp<'a, 't> {
     lambda_variances: FxMap<crate::types::TParamId, u64>,
     /// The lambda each parameter a macro met belongs to: such a parameter is a `ParamRef`.
     lambda_of: FxMap<crate::types::TParamId, crate::types::TypeId>,
+    /// The self of each recursive type a macro opened (`RecursiveType.underlying`, `recThis`):
+    /// a val of the type standing for its `RecThis` outside the binder, and back.
+    rec_markers: FxMap<crate::types::TypeId, crate::types::SymId>,
+    rec_binders: FxMap<crate::types::SymId, crate::types::TypeId>,
     /// The `Symbol.typeRef` of each val it was asked of: scalac's `TypeRef` to a term, whose
     /// `typeSymbol` is the term, where the `TermRef` of the same val has its class.
     val_type_refs: FxMap<crate::types::SymId, crate::types::TypeId>,
@@ -1406,6 +1414,8 @@ impl<'a, 't> Interp<'a, 't> {
             named_slots: FxMap::default(),
             lambda_variances: FxMap::default(),
             lambda_of: FxMap::default(),
+            rec_markers: FxMap::default(),
+            rec_binders: FxMap::default(),
             val_type_refs: FxMap::default(),
             names: FxMap::default(),
             walk_hint: 0,
@@ -1467,6 +1477,8 @@ impl<'a, 't> Interp<'a, 't> {
             named_slots: self.named_slots,
             lambda_variances: self.lambda_variances,
             lambda_of: self.lambda_of,
+            rec_markers: self.rec_markers,
+            rec_binders: self.rec_binders,
             names: self.names,
             prof_state: self.prof_state,
             shifts: self.typer.prog.shifts,
@@ -1525,6 +1537,8 @@ impl<'a, 't> Interp<'a, 't> {
         self.named_slots = c.named_slots;
         self.lambda_variances = c.lambda_variances;
         self.lambda_of = c.lambda_of;
+        self.rec_markers = c.rec_markers;
+        self.rec_binders = c.rec_binders;
         self.names = c.names;
         self.prof_state = c.prof_state;
         self.walk_hint = c.walk_hint;

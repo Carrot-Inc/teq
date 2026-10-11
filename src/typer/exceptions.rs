@@ -216,6 +216,7 @@ impl<'a> Worker<'a> {
                 lower != NOTHING && lower != t && self.null_conforms(lower)
             }
             Type::Refined(parent, _) => self.null_conforms(parent),
+            Type::Rec(body) => self.null_conforms(body),
             Type::Match(..) | Type::Alias(..) | Type::Nested(..) => match self.dependent_underlying(t) {
                 Some(u) => self.null_conforms(u),
                 None => false,
@@ -248,7 +249,7 @@ impl<'a> Worker<'a> {
                 let class = self.widen_lit(t);
                 self.is_reference(class)
             }
-            Type::This(_) | Type::Term(_) | Type::Select(..) | Type::Member(..) | Type::AppMember(..) | Type::Decl(_) | Type::Refined(..) | Type::Match(..) | Type::Alias(..) | Type::Nested(..) => {
+            Type::This(_) | Type::Term(_) | Type::Select(..) | Type::Member(..) | Type::AppMember(..) | Type::Decl(_) | Type::Refined(..) | Type::Match(..) | Type::Alias(..) | Type::Nested(..) | Type::Rec(_) => {
                 match self.dependent_underlying(t) {
                     Some(u) => self.is_reference(u),
                     None => false,
@@ -290,7 +291,7 @@ impl<'a> Worker<'a> {
                 let class = self.widen_lit(t);
                 self.is_value(class)
             }
-            Type::This(_) | Type::Term(_) | Type::Select(..) | Type::Member(..) | Type::AppMember(..) | Type::Decl(_) | Type::Refined(..) | Type::Match(..) | Type::Alias(..) | Type::Nested(..) => {
+            Type::This(_) | Type::Term(_) | Type::Select(..) | Type::Member(..) | Type::AppMember(..) | Type::Decl(_) | Type::Refined(..) | Type::Match(..) | Type::Alias(..) | Type::Nested(..) | Type::Rec(_) => {
                 match self.dependent_underlying(t) {
                     Some(u) => self.is_value(u),
                     None => false,
