@@ -1685,7 +1685,11 @@ pub(super) fn untyped_tables<'w>(w: &'w mut Worker, mode: TablesMode) -> Vec<Tab
         }
         map(m, super_problems_told, |r, (c, s)| (r.class(c), r.sym(s)), |_, _| {});
         map(m, inference_failed, |r, s| r.sym(s), |_, _| {});
-        map(m, mixin_supers, |r, c| r.class(c), |r, syms| syms_in(r, syms));
+        map(m, mixin_supers, |r, c| r.class(c), |r, calls| {
+            for k in calls.iter_mut() {
+                k.member = r.sym(k.member);
+            }
+        });
         map(m, any_members, |r, (c, n)| (r.class(c), n), |r, s| *s = r.sym(*s));
         syms_in(m, dispatch_pending);
         for (a, b) in named_like.iter_mut() {

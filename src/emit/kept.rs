@@ -59,6 +59,8 @@ enum Event {
     TryEnd(bool),
     PatSeq,
     PatRest,
+    /// A default getter's application, of a constructor's where the flag is set.
+    DefaultGetter(bool, Id, u32),
     /// A part of a definition the walk reads begins.
     Part(&'static str),
     Sym(Id),
@@ -391,6 +393,7 @@ impl<'c> Recorder<'c> {
             let id = self.sym(a.member);
             self.events.push(Event::Sym(id));
             self.opt_sym(a.target);
+            self.events.push(Event::Fact(a.getter.map_or(0, |i| i as u64 + 1)));
         }
         self.events.push(Event::Part("bridges"));
         for &(a, b) in &tc.bridges {
@@ -607,6 +610,14 @@ impl<'c> Meet for Recorder<'c> {
 
     fn pat_rest(&mut self, _cx: Cx) {
         self.events.push(Event::PatRest);
+    }
+
+    fn default_getter(&mut self, _cx: Cx, of: DefaultOf, index: u32) {
+        let event = match of {
+            DefaultOf::Method(s) => Event::DefaultGetter(false, self.sym(s), index),
+            DefaultOf::Ctor(c) => Event::DefaultGetter(true, Recorder::class(self, c), index),
+        };
+        self.events.push(event);
     }
 }
 
@@ -937,6 +948,7 @@ impl Kept {
         }
         let mut funs: FxMap<FunId, FunId> = FxMap::default();
         let mut classes: FxMap<ClassId, ClassId> = FxMap::default();
+        let mut syms: FxMap<SymId, SymId> = FxMap::default();
         let mut roots: FxMap<TExprId, TExprId> = FxMap::default();
         for (b, a) in before.iter().zip(after) {
             for (&o, &n) in b.funs.iter().zip(&a.funs) {
@@ -952,6 +964,7 @@ impl Kept {
                 }
             }
             for (&o, &n) in b.syms.iter().zip(&a.syms) {
+                syms.insert(o, n);
                 for v in [&mut r.bridged, &mut r.vals, &mut r.triggers, &mut r.forwarded, &mut r.fields_read, &mut r.init_read, &mut r.declared] {
                     let marked = std::mem::replace(&mut v[o.idx()], false);
                     v[n.idx()] |= marked;
@@ -959,6 +972,10 @@ impl Kept {
             }
             roots.extend(b.roots.iter().copied().zip(a.roots.iter().copied()));
         }
+        // The getters the output calls of the defs and the classes the units' typing made (a
+        // local def's, a local class's constructor's), under the retype's ids.
+        r.getter_funs = std::mem::take(&mut r.getter_funs).into_keys().map(|(s, i)| ((syms.get(&s).copied().unwrap_or(s), i), ())).collect();
+        r.getter_ctors = std::mem::take(&mut r.getter_ctors).into_keys().map(|(c, i)| ((classes.get(&c).copied().unwrap_or(c), i), ())).collect();
         for (e, place) in &mut r.roots {
             if let Some(&n) = roots.get(e) {
                 *e = n;

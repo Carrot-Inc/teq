@@ -35,14 +35,20 @@ impl<'a> Emitter<'a> {
             | TExpr::Index(r, _) | TExpr::Spread(r) | TExpr::JsSelect(r, _) => self.is_simple(r),
             TExpr::New(c, _) if self.closure_anons.contains_key(&c) => true,
             TExpr::CallStatic(_, args) | TExpr::New(_, args) | TExpr::NewVia(_, args) | TExpr::StrConcat(args)
-            | TExpr::Js(_, args) | TExpr::SeqLit(args) | TExpr::ArrayLit(args) | TExpr::ObjLit(args) => {
-                list_simple(self, args)
-            }
+            | TExpr::Js(_, args) | TExpr::SeqLit(args) | TExpr::ArrayLit(args) | TExpr::ObjLit(args)
+            | TExpr::Default(_, _, args) => list_simple(self, args),
             TExpr::CallMethod(r, _, args) | TExpr::CallClosure(r, args) => {
                 self.is_simple(r) && list_simple(self, args)
             }
             TExpr::Prim(_, a, b) => self.is_simple(a) && self.is_simple(b),
             TExpr::If(c, t, Some(els)) => self.is_simple(c) && self.is_simple(t) && self.is_simple(els),
+            TExpr::Block(stmts, res) if self.block_moves_all(e) => {
+                let sunk: Vec<TExprId> = prog.stmts[stmts.range()].iter().filter_map(|s| match *s {
+                    TStmt::Val(_, x) => Some(x),
+                    _ => None,
+                }).collect();
+                self.is_simple(res) && sunk.iter().all(|&x| self.is_simple(x))
+            }
             TExpr::Block(stmts, res) => {
                 let stmts = &prog.stmts[stmts.range()];
                 stmts.iter().all(|s| matches!(*s, TStmt::Expr(x) if self.is_simple(x))) && self.is_simple(res)
@@ -63,31 +69,11 @@ impl<'a> Emitter<'a> {
 
     /// The arguments of a call of the def or method `s`, without the `undefined` an omitted
     /// argument stands for behind the last one written: a default of the JS function covers it.
-    pub(super) fn emit_call_args(&mut self, s: SymId, args: ListRef) {
-        let params: Vec<bool> = match &self.syms.sym(s).sig {
-            Some(sig) => sig.clauses.iter().flat_map(|c| c.params.iter().map(|p| p.has_default)).collect(),
-            None => Vec::new(),
-        };
-        self.emit_args_with_defaults(args, &params);
-    }
-
-    pub(super) fn emit_ctor_args(&mut self, c: ClassId, args: ListRef) {
-        let params: Vec<bool> = self.syms.class(c).ctor.iter().flat_map(|c| c.params.iter().map(|p| p.has_default)).collect();
-        self.emit_args_with_defaults(args, &params);
-    }
-
-    fn emit_args_with_defaults(&mut self, args: ListRef, has_default: &[bool]) {
-        let items = self.prog.expr_list(args);
-        let mut keep = items.len();
-        while keep > 0 {
-            match self.peek(items[keep - 1]) {
-                TExpr::Spread(inner) if self.seq_literal_items(inner).map_or(false, |l| l.is_empty()) => keep -= 1,
-                TExpr::Unit if has_default.get(keep - 1) == Some(&true) => keep -= 1,
-                _ => break,
-            }
-        }
-        self.out.push('(');
-        self.emit_more_args(ListRef { start: args.start, len: keep as u32 }, "");
+    /// The arguments of the call `e`, a getter's application its callee's JavaScript default
+    /// computes left out (`defaults::Lowering`).
+    pub(super) fn emit_call_args(&mut self, e: TExprId, args: ListRef) {
+        let omitted = self.omitted_args(e);
+        self.emit_args_omitting(args, &omitted);
     }
 
     /// The arguments after an opening parenthesis that may hold one already, and the closing one.
@@ -192,7 +178,8 @@ impl<'a> Emitter<'a> {
     /// The constructor arguments of an anonymous class are the bindings its body captures, passed
     /// as they are: a lazy val or a local def as the function that stands for it, a `var` as a
     /// cell that reads and writes the variable itself.
-    fn emit_capture_args(&mut self, c: ClassId, args: ListRef) {
+    fn emit_capture_args(&mut self, e: TExprId, c: ClassId, args: ListRef) {
+        let omitted = self.omitted_args(e);
         self.out.push('(');
         let captures = match self.local_captures.get(&c) {
             Some(&n) => n as usize,
@@ -202,6 +189,10 @@ impl<'a> Emitter<'a> {
             if i > 0 {
                 self.out.push_str(", ");
             }
+            if omitted.get(i) == Some(&true) {
+                self.out.push_str("undefined");
+                continue;
+            }
             let TExpr::Local(s) = self.peek(a) else {
                 self.emit_expr(a);
                 continue;
@@ -210,17 +201,23 @@ impl<'a> Emitter<'a> {
                 self.emit_expr(a);
                 continue;
             }
-            let captured_here = self.captures.contains(&s);
-            let name = self.local_ref(s);
-            if self.syms.sym(s).kind != SymKind::Var {
-                self.out.push_str(&name);
-            } else if captured_here {
-                self.out.push_str(name.strip_suffix(".v").unwrap_or(&name));
-            } else {
-                let _ = write!(self.out, "$ref(() => {0}, ($v) => {{ {0} = $v; }})", name);
-            }
+            self.emit_capture_ref(s);
         }
         self.out.push(')');
+    }
+
+    /// A local class's capture of `s` as its constructor and its getters take it: a `var` the
+    /// scope does not hold in a cell of its own passed as one.
+    pub(super) fn emit_capture_ref(&mut self, s: SymId) {
+        let captured_here = self.captures.contains(&s);
+        let name = self.local_ref(s);
+        if self.syms.sym(s).kind != SymKind::Var {
+            self.out.push_str(&name);
+        } else if captured_here {
+            self.out.push_str(name.strip_suffix(".v").unwrap_or(&name));
+        } else {
+            let _ = write!(self.out, "$ref(() => {0}, ($v) => {{ {0} = $v; }})", name);
+        }
     }
 
     /// `(a, b) => f(a, b)` is `f` itself. Besides saving a call this keeps the identity of an
@@ -251,6 +248,10 @@ impl<'a> Emitter<'a> {
         }
         match self.prog.expr(e) {
             TExpr::CallStatic(s, _) => self.needs_init(s, Some(e)),
+            // A def's getter, which runs where the def would.
+            TExpr::Default(DefaultOf::Method(s), at, _) if at & DEFAULT_RECEIVER == 0 && matches!(self.syms.sym(s).owner, Owner::Package(_)) => {
+                self.needs_init(s, Some(e))
+            }
             TExpr::Static(s) if !is_eager_top_val(self.syms, s, self.const_vals) => self.needs_init(s, Some(e)),
             TExpr::New(c, _) if self.reach.trigger_classes.get(c.idx()).copied().unwrap_or(false) && Some(e) != self.checked => {
                 let file = self.syms.class(c).file;
@@ -262,7 +263,7 @@ impl<'a> Emitter<'a> {
 
     /// `(init(), ` in front of an access that runs its file's initialiser first, whose `)`
     /// follows it.
-    fn open_init(&mut self, e: TExprId) -> bool {
+    pub(super) fn open_init(&mut self, e: TExprId) -> bool {
         let Some(init) = self.init_before(e).and_then(|file| self.file_init(file)) else { return false };
         let _ = write!(self.out, "({}(), ", init);
         true
@@ -335,6 +336,7 @@ impl<'a> Emitter<'a> {
             return false;
         }
         match self.prog.expr(e) {
+            TExpr::Block(_, res) if self.block_moves_all(e) => self.is_statement_node(res),
             TExpr::Block(stmts, res) => {
                 let stmts = &self.prog.stmts[stmts.range()];
                 !stmts.iter().all(|s| matches!(*s, TStmt::Expr(x) if self.is_simple(x))) || self.is_statement_node(res)
@@ -357,6 +359,12 @@ impl<'a> Emitter<'a> {
     }
 
     fn emit_expr_as(&mut self, e: TExprId, bare: bool) {
+        // A temporary of a plan written where it is used (`defaults::Lowering`).
+        if let TExpr::Local(s) = self.prog.expr(e) {
+            if let Some(v) = self.sunk.remove(&s) {
+                return self.emit_expr_as(v, bare);
+            }
+        }
         if let Some((n, kind)) = self.hole_of(e) {
             let _ = write!(self.out, "$k{}", n);
             if kind == HoleKind::Thunk {
@@ -381,6 +389,7 @@ impl<'a> Emitter<'a> {
         let prog = self.prog;
         let (open, close) = if bare { ("", "") } else { ("(", ")") };
         match prog.expr(e) {
+            TExpr::Default(of, at, l) => self.emit_default(e, of, at, l),
             TExpr::Int(v) => {
                 if v < 0 {
                     let _ = write!(self.out, "{}{}{}", open, v, close);
@@ -470,7 +479,7 @@ impl<'a> Emitter<'a> {
                 let init = self.open_init(e);
                 let n = self.local_ref(s);
                 self.out.push_str(&n);
-                self.emit_call_args(s, args);
+                self.emit_call_args(e, args);
                 if init {
                     self.out.push(')');
                 }
@@ -519,7 +528,7 @@ impl<'a> Emitter<'a> {
                 self.out.push('.');
                 let n = self.sym_name(s);
                 self.out.push_str(&n);
-                self.emit_call_args(s, args);
+                self.emit_call_args(e, args);
             }
             TExpr::CallClosure(f, args) => self.emit_closure_call(f, args),
             TExpr::New(c, args) if self.closure_anons.contains_key(&c) => {
@@ -530,7 +539,7 @@ impl<'a> Emitter<'a> {
             TExpr::NewVia(s, args) => {
                 let factory = self.ctor_factory(s);
                 self.out.push_str(&factory);
-                self.emit_args(args);
+                self.emit_call_args(e, args);
             }
             TExpr::New(c, args) => {
                 let init = self.open_init(e);
@@ -540,9 +549,9 @@ impl<'a> Emitter<'a> {
                 self.out.push_str("new ");
                 self.out.push_str(&n);
                 if self.syms.class(c).kind == ClassKind::Anon || self.local_captures.contains_key(&c) {
-                    self.emit_capture_args(c, args);
+                    self.emit_capture_args(e, c, args);
                 } else {
-                    self.emit_ctor_args(c, args);
+                    self.emit_call_args(e, args);
                 }
                 if let Some(touch) = touch {
                     self.close_touch(touch);
@@ -603,6 +612,12 @@ impl<'a> Emitter<'a> {
                 self.emit_value(els);
                 self.leave_cond();
                 self.out.push_str(close);
+            }
+            TExpr::Block(_, res) if self.block_moves_all(e) => {
+                let (call, lowering) = self.block_lowering(e).expect("a plan's block");
+                self.install_lowering(call, lowering);
+                self.emit_expr_as(res, bare);
+                self.uninstall_lowering(call, e);
             }
             TExpr::Block(stmts, res) => {
                 let effects: Vec<TExprId> = prog.stmts[stmts.range()]
@@ -840,7 +855,12 @@ impl<'a> Emitter<'a> {
         }
     }
 
-    fn emit_receiver(&mut self, r: TExprId) {
+    pub(super) fn emit_receiver(&mut self, r: TExprId) {
+        if let TExpr::Local(s) = self.prog.expr(r) {
+            if let Some(v) = self.sunk.remove(&s) {
+                return self.emit_receiver(v);
+            }
+        }
         if let TExpr::Js(t, _) = self.peek(r) {
             if template_shape(&self.prog.strings[t.idx()]) != Shape::Atomic && self.hole_of(r).is_none() && self.site_of(r).is_none() {
                 self.out.push('(');
@@ -1163,7 +1183,7 @@ impl<'a> Emitter<'a> {
     fn finish(&mut self, e: TExprId, ctx: &Ctx) {
         if matches!(ctx, Ctx::Return) {
             if let Some((recv, args)) = self.tail_call(e) {
-                self.emit_tail_jump(recv, args);
+                self.emit_tail_jump(e, recv, args);
                 return;
             }
         }
@@ -1245,18 +1265,21 @@ impl<'a> Emitter<'a> {
     /// Assigns the parameters of the loop and continues it. The arguments read the copies of the
     /// current iteration; a left-out default argument reads the parameters already assigned, as
     /// a default of the JS function does.
-    fn emit_tail_jump(&mut self, recv: Option<TExprId>, args: ListRef) {
+    fn emit_tail_jump(&mut self, call: TExprId, recv: Option<TExprId>, args: ListRef) {
         let tail = self.tail.as_ref().unwrap();
         let params = tail.params.clone();
         let receiver = tail.receiver.clone();
         let fun = &self.prog.funs[tail.fun.idx()];
         let syms = fun.params.clone();
         let defaults = fun.defaults.clone();
+        // A getter's application the call leaves to the function's default: the default, which
+        // reads the parameters the jump assigned before it, the getter's arguments.
+        let omitted = self.omitted_args(call);
         for (i, &a) in self.prog.expr_list(args).iter().enumerate() {
             self.line();
             let _ = write!(self.out, "{} = ", params[i]);
             match defaults[i] {
-                Some(d) if matches!(self.prog.expr(a), TExpr::Unit) => {
+                Some(d) if omitted.get(i) == Some(&true) => {
                     let plain: Vec<Option<Rc<str>>> = syms.iter().map(|&p| self.sym_names[p.idx()].take()).collect();
                     for (&p, name) in syms.iter().zip(&params) {
                         self.sym_names[p.idx()] = Some(name.clone());
@@ -1265,6 +1288,14 @@ impl<'a> Emitter<'a> {
                     for (&p, name) in syms.iter().zip(plain) {
                         self.sym_names[p.idx()] = name;
                     }
+                }
+                // One a member it overrides declares: that member's getter, of the parameters
+                // the jump assigned.
+                None if omitted.get(i) == Some(&true) => {
+                    let sym = fun.sym;
+                    let before = crate::typer::elaborate::clause_start(self.syms.sym(sym).sig.as_ref().expect("a method's signature"), i);
+                    let getter = self.getter_name(sym, i);
+                    let _ = write!(self.out, "{}.{}({})", self.this_name, getter, params[..before].join(", "));
                 }
                 _ => self.emit_value(a),
             }
@@ -1318,6 +1349,7 @@ impl<'a> Emitter<'a> {
             if let TStmt::Fun(f) = s {
                 self.mark_stmt();
                 self.emit_function(*f, FunKind::Local);
+                self.emit_fun_getters(*f);
             }
         }
         for s in items {
@@ -1325,6 +1357,7 @@ impl<'a> Emitter<'a> {
             match *s {
                 TStmt::Fun(_) => {}
                 TStmt::Expr(x) => self.emit_stmt(x, &Ctx::Discard),
+                TStmt::Val(sym, _) if self.sunk.contains_key(&sym) || self.dropped.contains_key(&sym) => {}
                 TStmt::Val(sym, init) => self.emit_local_val(sym, init),
                 TStmt::Pat(pat, init) => self.emit_pattern_val(pat, init),
             }
@@ -1343,9 +1376,17 @@ impl<'a> Emitter<'a> {
         let prog = self.prog;
         match prog.expr(e) {
             TExpr::Block(stmts, res) => {
+                let lowering = self.block_lowering(e);
+                let call = lowering.as_ref().map(|(c, _)| *c);
+                if let Some((c, l)) = lowering {
+                    self.install_lowering(c, l);
+                }
                 self.emit_block_stmts(stmts);
                 self.mark_stmt();
                 self.emit_stmt(res, ctx);
+                if let Some(c) = call {
+                    self.uninstall_lowering(c, e);
+                }
             }
             TExpr::If(c, t, els)
                 if !self.is_simple(e) || !matches!(ctx, Ctx::Return) || els.is_none() || self.jumps(e) =>

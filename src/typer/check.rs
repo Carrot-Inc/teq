@@ -583,13 +583,28 @@ impl<'a> Worker<'a> {
     /// program's or a library's, for every worker, whichever typed its body; a worker's own
     /// local trait for this worker until the merge.
     pub(super) fn note_mixin_super(&mut self, c: ClassId, m: SymId) {
+        self.note_mixin_super_call(c, crate::tir::SuperCall::member(m));
+    }
+
+    /// Notes that trait `c` selects the getter of `m`'s parameter `index` through `super`
+    /// (`super.m$default$N`, `Applications.findDefaultGetter` on a `super` receiver), which
+    /// `SuperAccessors` gives an accessor before the member's.
+    pub(super) fn note_mixin_super_getter(&mut self, c: ClassId, m: SymId, index: u32) {
+        self.note_mixin_super_call(c, crate::tir::SuperCall { member: m, getter: Some(index) });
+    }
+
+    fn note_mixin_super_call(&mut self, c: ClassId, call: crate::tir::SuperCall) {
         let mut shared = self.shared_class(c).then(|| self.shared_mixin_supers.lock().unwrap_or_else(|e| e.into_inner()));
         let calls = match &mut shared {
             Some(shared) => shared.entry(c).or_default(),
             None => self.mixin_supers.entry(c).or_default(),
         };
-        if !calls.contains(&m) {
-            calls.push(m);
+        if calls.contains(&call) {
+            return;
+        }
+        match call.getter.and_then(|_| calls.iter().position(|k| k.member == call.member && k.getter.is_none())) {
+            Some(at) => calls.insert(at, call),
+            None => calls.push(call),
         }
     }
 
@@ -647,7 +662,7 @@ impl<'a> Worker<'a> {
     }
 
     fn bind_mixin_supers_unlocked(&mut self) {
-        let mut calls: FxMap<ClassId, Vec<SymId>> = self.mixin_supers.clone();
+        let mut calls: FxMap<ClassId, Vec<crate::tir::SuperCall>> = self.mixin_supers.clone();
         for (&tr, theirs) in self.shared_mixin_supers.lock().unwrap_or_else(|e| e.into_inner()).iter() {
             let mine = calls.entry(tr).or_default();
             for &m in theirs {
@@ -683,7 +698,17 @@ impl<'a> Worker<'a> {
                     continue;
                 }
                 let Some(members) = calls.get(&tr).cloned() else { continue };
-                for member in members {
+                for call in members {
+                    let member = call.member;
+                    // A getter selected on `super`: the one of the member the target takes the
+                    // default from, as `findDefaultGetter` selects it after the trait.
+                    if let Some(index) = call.getter {
+                        let target = self.mixin_super_target_in(&bases, at, member).filter(|&t| self.syms.sym(t).kind == SymKind::Def);
+                        if let Some(d) = target.and_then(|t| self.default_declarer(t, index as usize)) {
+                            accessors.push(SuperAccessor { of_trait: tr, member, target: Some(d), getter: Some(index) });
+                        }
+                        continue;
+                    }
                     let name = self.syms.sym(member).name;
                     let concrete = |t: &mut Self, b: ClassId| t.concrete_super_member(b, member);
                     let target = self.mixin_super_target_in(&bases, at, member);
@@ -710,8 +735,8 @@ impl<'a> Worker<'a> {
                                 self.diags.error(file, span, msg);
                             }
                         }
-                        Some(_) => accessors.push(SuperAccessor { of_trait: tr, member, target }),
-                        None if of_any => accessors.push(SuperAccessor { of_trait: tr, member, target }),
+                        Some(_) => accessors.push(SuperAccessor { of_trait: tr, member, target, getter: None }),
+                        None if of_any => accessors.push(SuperAccessor { of_trait: tr, member, target, getter: None }),
                         None if !implemented => {}
                         None => {
                             let msg = format!(
@@ -1803,7 +1828,7 @@ impl<'a> Worker<'a> {
                 }
             }
             TExpr::CallStatic(_, args) | TExpr::New(_, args) | TExpr::NewVia(_, args) | TExpr::StrConcat(args)
-            | TExpr::Js(_, args) | TExpr::SeqLit(args) | TExpr::ArrayLit(args) | TExpr::ObjLit(args) => {
+            | TExpr::Js(_, args) | TExpr::SeqLit(args) | TExpr::ArrayLit(args) | TExpr::ObjLit(args) | TExpr::Default(_, _, args) => {
                 for &a in prog.expr_list(args) {
                     self.nonlocal_returns(a, in_lambda, out);
                 }
@@ -1967,6 +1992,7 @@ impl<'a> Worker<'a> {
         if self.is_inline_callee(sym) {
             self.check_inline_definition(sym);
             if !self.is_retained_inline(sym) {
+                self.type_inline_getters(sym);
                 return;
             }
         }
@@ -1994,6 +2020,45 @@ impl<'a> Worker<'a> {
         if self.shared_sym(sym) {
             self.publish_body(sym);
         }
+    }
+
+    /// The ordinary default getters of the inline method `sym`, which `Desugar.addDefaultGetters`
+    /// makes methods of their own that a call applies (an inline parameter's getter is inline):
+    /// a function of no body holding those defaults, typed as a method's are. What they report
+    /// the definition check reported already.
+    fn type_inline_getters(&mut self, sym: SymId) {
+        let info = self.syms.sym(sym);
+        if info.kind != SymKind::Def || info.def.is_none() || info.owner == Owner::Local || self.fun_of_sym.contains_key(&sym) {
+            return;
+        }
+        let sig = self.sig_arc(sym);
+        let ordinary = sig.clauses.iter().flat_map(|c| c.params.iter()).any(|p| p.has_default && self.syms.sym(p.sym).mods & mods::INLINE == 0);
+        if !ordinary {
+            return;
+        }
+        let mark = self.diags.items.len();
+        let outer = std::mem::replace(&mut self.inline_getters_only, true);
+        self.type_member_body_with(sym, sig);
+        self.inline_getters_only = outer;
+        self.drop_reported_since(mark);
+    }
+
+    /// A local inline method's ordinary getters, local functions beside it with its captures,
+    /// as a member's are its class's (`Desugar.addDefaultGetters` makes them for a local method
+    /// too): a function of no body the block holds where the method stands.
+    pub(super) fn type_local_inline_getters(&mut self, sym: SymId, sig: &Arc<MethodSig>) {
+        if self.fun_of_sym.contains_key(&sym) {
+            return;
+        }
+        let ordinary = sig.clauses.iter().flat_map(|c| c.params.iter()).any(|p| p.has_default && self.syms.sym(p.sym).mods & mods::INLINE == 0);
+        if !ordinary {
+            return;
+        }
+        let mark = self.diags.items.len();
+        let outer = std::mem::replace(&mut self.inline_getters_only, true);
+        self.type_body(sym, sig, Some(sig.ret));
+        self.inline_getters_only = outer;
+        self.drop_reported_since(mark);
     }
 
     fn type_member_body(&mut self, sym: SymId) {
@@ -2479,6 +2544,12 @@ impl<'a> Worker<'a> {
         let outer_returns = std::mem::take(&mut self.returns);
         let (body, default_exprs): (Option<ast::ExprId>, Vec<Option<ast::ExprId>>) = match &def.kind {
             DefKind::Val { rhs, .. } => (*rhs, Vec::new()),
+            // An inline method's ordinary getters alone: an inline parameter's getter is inline
+            // and stays with the stored body.
+            DefKind::Fun(f) if self.inline_getters_only => (
+                None,
+                f.clauses.iter().flat_map(|c| c.params.iter().map(|p| p.default.filter(|_| p.mods & mods::INLINE == 0))).collect(),
+            ),
             DefKind::Fun(f) => (
                 if self.inline.retained > 0 { self.retained_bodies.get(&sym).copied().or(f.body) } else { f.body },
                 f.clauses.iter().flat_map(|c| c.params.iter().map(|p| p.default)).collect(),

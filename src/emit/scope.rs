@@ -1406,12 +1406,17 @@ impl<'a> Emitter<'a> {
     }
 
     fn walk_block(&mut self, w: &mut Walk, stmts: ListRef, res: Option<TExprId>) {
+        self.walk_block_moving(w, stmts, res, &[]);
+    }
+
+    fn walk_block_moving(&mut self, w: &mut Walk, stmts: ListRef, res: Option<TExprId>, moved: &[SymId]) {
         let prog = self.prog;
         let items = &prog.stmts[stmts.range()];
         let mark = w.top;
         let mut binders = Vec::new();
         for s in items {
             match *s {
+                TStmt::Val(sym, _) if moved.contains(&sym) => {}
                 TStmt::Val(sym, _) => binders.push(sym),
                 TStmt::Fun(f) => binders.push(prog.funs[f.idx()].sym),
                 TStmt::Pat(p, _) => self.pattern_binders(p, &mut binders),
@@ -1541,6 +1546,36 @@ impl<'a> Emitter<'a> {
         let prog = self.prog;
         match prog.expr(e) {
             TExpr::Int(_) | TExpr::Long(_) | TExpr::Bool(_) | TExpr::Char(_) | TExpr::Str(_) | TExpr::Unit | TExpr::Null | TExpr::Splice(_) => {}
+            // What `Emitter::emit_default` writes: the getter on the receiver, the def or the class.
+            TExpr::Default(of, at, args) => {
+                let items = prog.expr_list(args).to_vec();
+                let (recv, priors) = if at & DEFAULT_RECEIVER != 0 { (items.first().copied(), &items[1..]) } else { (None, &items[..]) };
+                match of {
+                    DefaultOf::Method(s) if self.syms.js_member(s) || self.syms.sym(s).js_import.is_some() || self.syms.sym(s).js_global.is_some() => return,
+                    DefaultOf::Method(s) if self.syms.sym(s).name == crate::names::INIT => {
+                        if let Owner::Class(c) = self.syms.sym(s).owner {
+                            self.walk_class(w, c);
+                        }
+                    }
+                    DefaultOf::Method(_) if recv.is_some_and(|r| matches!(prog.expr(r), TExpr::Super(_))) => {
+                        w.this(self.this_name);
+                        if let Some(TExpr::Super(SuperTarget::Class(c) | SuperTarget::Mixin(c))) = recv.map(|r| prog.expr(r)) {
+                            self.walk_class(w, c);
+                        }
+                    }
+                    DefaultOf::Method(_) if recv.is_some() => self.walk(w, recv.unwrap()),
+                    DefaultOf::Method(s) => self.walk_ref(w, s),
+                    DefaultOf::Ctor(c) => {
+                        self.walk_class(w, c);
+                        for s in self.ctor_captures(c) {
+                            self.walk_capture_ref(w, s);
+                        }
+                    }
+                }
+                for &p in priors {
+                    self.walk(w, p);
+                }
+            }
             TExpr::Double(v) => {
                 if let Some(g) = double_global(v) {
                     w.name(g);
@@ -1644,7 +1679,14 @@ impl<'a> Emitter<'a> {
                 self.walk(w, c);
                 self.walk(w, body);
             }
-            TExpr::Block(stmts, res) => self.walk_block(w, stmts, Some(res)),
+            TExpr::Block(stmts, res) => {
+                // A plan's temporaries its call writes elsewhere or not at all bind no name.
+                let moved: Vec<SymId> = match self.block_lowering(e) {
+                    Some((_, l)) => l.sunk.iter().map(|&(t, _)| t).chain(l.dropped.iter().copied()).collect(),
+                    None => Vec::new(),
+                };
+                self.walk_block_moving(w, stmts, Some(res), &moved);
+            }
             TExpr::Assign(target, value) => {
                 match prog.expr(target) {
                     TExpr::Static(s) if self.syms.sym(s).owner == Owner::Local => w.read(s),
@@ -1798,6 +1840,20 @@ impl<'a> Emitter<'a> {
         }
     }
 
+    /// What `emit_capture_ref` writes: a captured `var` the scope does not hold in a cell of its
+    /// own is passed as one whose setter binds `$v` around a write of it.
+    fn walk_capture_ref(&mut self, w: &mut Walk, s: SymId) {
+        if self.syms.sym(s).kind == SymKind::Var && !self.captures.contains(&s) {
+            w.name("$ref");
+            self.walk_ref(w, s);
+            w.bind_fixed("$v");
+            self.walk_ref(w, s);
+            w.pop();
+        } else {
+            self.walk_ref(w, s);
+        }
+    }
+
     /// What `emit_capture_args` writes: a captured `var` the scope does not hold in a field is
     /// passed as a cell whose setter binds `$v` around a write of it.
     fn walk_capture_args(&mut self, w: &mut Walk, c: ClassId, args: ListRef) {
@@ -1807,13 +1863,7 @@ impl<'a> Emitter<'a> {
         };
         for (i, &a) in self.prog.expr_list(args).iter().enumerate() {
             match self.peek(a) {
-                TExpr::Local(s) if i < captures && self.syms.sym(s).kind == SymKind::Var && !self.captures.contains(&s) => {
-                    w.name("$ref");
-                    self.walk_ref(w, s);
-                    w.bind_fixed("$v");
-                    self.walk_ref(w, s);
-                    w.pop();
-                }
+                TExpr::Local(s) if i < captures => self.walk_capture_ref(w, s),
                 _ => self.walk(w, a),
             }
         }

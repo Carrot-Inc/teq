@@ -1,7 +1,8 @@
-// Calls with defaults the writer withholds, whose bodies the pinned census counts
-// (tests/tasty/expected/bodies.census): an earlier by-name argument, an
-// intervening using clause, a repeated earlier clause, and a later clause's named arguments the
-// typer hoists before an earlier clause's default.
+// Calls with defaults whose plan the writer writes as scalac's typer makes it
+// (`Applications.TypedApply`), which the pinned census counts as written
+// (tests/tasty/expected/bodies.census): an earlier by-name argument, an intervening using clause,
+// a repeated earlier clause, and a later clause's named arguments out of order after an earlier
+// clause's default.
 package probe.defaults
 
 object Withheld {

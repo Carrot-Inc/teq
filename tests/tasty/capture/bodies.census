@@ -9,7 +9,7 @@ case class pattern                          2          0        0            0  
 closure                                     3          0        0            0          1
 concatenation operand                       4          0        0            0          4
 constructor call                            2          1        0            0          0
-default argument                            0          1        0            0          1
+default argument                            1          0        0            0          1
 field initialiser                           1          0        0            0          0
 field selection                             4          0        0            0          0
 function application                        2          0        0            0          0

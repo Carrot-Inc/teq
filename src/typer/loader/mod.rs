@@ -1783,21 +1783,23 @@ impl<'a> Worker<'a> {
         // program's own traits (`Worker::bind_mixin_supers`).
         if kind == ClassKind::Trait && self.loaded.as_ref().map_or(false, |l| l.is_product_class(c)) {
             let tasty = self.tasty(lc.file);
-            let called: Vec<Name> = sig
+            // A getter's accessor (`super$T$$m$default$N`) names the member and its parameter.
+            let called: Vec<(Name, Option<u32>)> = sig
                 .index
                 .members
                 .iter()
                 .filter(|e| e.tag == tags::DEFDEF && e.flags.has(tags::ARTIFACT))
                 .filter_map(|e| super_accessor_member(&tasty, e.name))
-                .map(|n| self.interner.intern(&n))
+                .map(|(n, getter)| (self.interner.intern(&n), getter))
                 .collect();
-            for name in called {
+            for (name, getter) in called {
                 let parents: Vec<TypeId> = self.syms.class(c).parents.clone();
                 let found = parents.iter().rev().find_map(|&p| self.find_member(p, name).map(|(m, _)| m));
                 if let Some(m) = found {
                     let calls = self.mixin_supers.entry(c).or_default();
-                    if !calls.contains(&m) {
-                        calls.push(m);
+                    let call = crate::tir::SuperCall { member: m, getter };
+                    if !calls.contains(&call) {
+                        calls.push(call);
                     }
                 }
             }
@@ -3376,11 +3378,16 @@ fn package_segment(seg: &str) -> std::borrow::Cow<'_, str> {
 }
 
 /// The member a super accessor `super$a$b$C$$m` calls: `m`.
-fn super_accessor_member(tasty: &TastyFile, n: crate::tasty::NameRef) -> Option<String> {
+fn super_accessor_member(tasty: &TastyFile, n: crate::tasty::NameRef) -> Option<(String, Option<u32>)> {
     let crate::tasty::TName::SuperAccessor(u) = tasty.names.get(n as usize)? else { return None };
+    let member = |u: crate::tasty::NameRef| match tasty.names.get(u as usize) {
+        Some(crate::tasty::TName::Expanded(_, m)) => tasty.name(*m),
+        _ => tasty.name(u),
+    };
     match tasty.names.get(*u as usize)? {
-        crate::tasty::TName::Expanded(_, m) => Some(tasty.name(*m)),
-        _ => Some(tasty.name(*u)),
+        // `super$T$$m$default$N`: the getter of the member's parameter `N - 1`.
+        crate::tasty::TName::DefaultGetter(e, index) => Some((member(*e), Some(*index))),
+        _ => Some((member(*u), None)),
     }
 }
 

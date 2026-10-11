@@ -1,3 +1,4 @@
+mod defaults;
 mod expr;
 pub(crate) mod layout;
 mod module;
@@ -154,6 +155,16 @@ struct SharedSymbols<'a>(&'a Symbols);
 pub struct Emitter<'a> {
     prog: &'a Program,
     syms: &'a Symbols,
+    types: &'a TypeStore,
+    /// While a plan's call is written: its temporaries written where they are used, with their
+    /// values, and those bound to a getter's application the call leaves out
+    /// (`defaults::Lowering`).
+    sunk: crate::intern::FxMap<SymId, TExprId>,
+    /// The method or constructor whose parameters are being written.
+    params_of: Option<DefaultOf>,
+    dropped: crate::intern::FxMap<SymId, ()>,
+    /// The arguments each call of a plan being written leaves out, by the call.
+    lowered: crate::intern::FxMap<TExprId, Vec<bool>>,
     interner: &'a Interner,
     out: String,
     indent: usize,
@@ -385,6 +396,7 @@ const SPLIT_CHUNK_ITEMS: usize = 64;
 pub fn emit(
     prog: &Program,
     syms: &Symbols,
+    types: &TypeStore,
     interner: &Interner,
     array_seq: Option<ClassId>,
     reach: &reach::Reach,
@@ -454,7 +466,7 @@ pub fn emit(
     lap.done("renderable", 0);
     let renderable = &renderable;
     let renames = release.then(|| {
-        let e = Emitter::new(prog, shared, interner, &simple_cache, array_seq, &layout, reach, &naming, outline, renderable);
+        let e = Emitter::new(prog, shared, types, interner, &simple_cache, array_seq, &layout, reach, &naming, outline, renderable);
         let primitive_trait = |c: ClassId| {
             let info = syms.class(c);
             matches!(interner.get(info.name), "CharSequence" | "Number") && matches!(info.owner, Owner::Package(p) if interner.get(syms.pkg(p).name) == "lang")
@@ -462,7 +474,7 @@ pub fn emit(
         Renames::compute(syms, reach, |s| e.member_name(s), |c| e.extension_names(c), primitive_trait)
     });
     let new_emitter = || {
-        let mut e = Emitter::new(prog, shared, interner, &simple_cache, array_seq, &layout, reach, &naming, outline, renderable);
+        let mut e = Emitter::new(prog, shared, types, interner, &simple_cache, array_seq, &layout, reach, &naming, outline, renderable);
         e.deferred_extends = split.is_some();
         e.hot = split.is_some_and(|s| s.hot);
         e.release = release;
@@ -527,6 +539,7 @@ pub fn emit(
                 let at = e.out.len();
                 e.begin_item();
                 e.emit_function(prog.top_funs[i], FunKind::TopLevel);
+                e.emit_fun_getters(prog.top_funs[i]);
                 measure(e, Def::Sym(prog.funs[prog.top_funs[i].idx()].sym), at, &mut chunk.sizes);
             }
         }
@@ -818,6 +831,7 @@ impl<'a> Emitter<'a> {
     fn new(
         prog: &'a Program,
         shared: SharedSymbols<'a>,
+        types: &'a TypeStore,
         interner: &'a Interner,
         simple_cache: &'a [AtomicU8],
         array_seq: Option<ClassId>,
@@ -831,7 +845,12 @@ impl<'a> Emitter<'a> {
         Emitter {
             prog,
             syms,
+            types,
             interner,
+            sunk: Default::default(),
+            params_of: None,
+            dropped: Default::default(),
+            lowered: Default::default(),
             out: String::new(),
             indent: 0,
             sym_names: vec![None; syms.syms.len()],
@@ -1849,10 +1868,24 @@ impl<'a> Emitter<'a> {
         self.emit_params_after_captures(0, params, defaults)
     }
 
+    /// `emit_params` of the function of a method or a constructor `of`, whose JavaScript parameter
+    /// defaults are those `defaults::Defaults::initializer` allows: none where a value of the
+    /// parameter's type may be `undefined`; an override's call of the getter of the default a
+    /// member it overrides declares.
+    fn emit_params_of(&mut self, of: DefaultOf, captures: usize, params: &[SymId], defaults: &[Option<TExprId>]) -> usize {
+        let outer = std::mem::replace(&mut self.params_of, Some(of));
+        let mark = self.emit_params_after_captures(captures, params, defaults);
+        self.params_of = outer;
+        mark
+    }
+
     /// The parameter list of a constructor whose first `captures` parameters are the locals a
     /// lifted class captures, `$c0, $c1, ...`, followed by the declared ones.
     fn emit_params_after_captures(&mut self, captures: usize, params: &[SymId], defaults: &[Option<TExprId>]) -> usize {
         let mark = self.scope_names.len();
+        // The method's or constructor's own parameters: a closure in one of their defaults has
+        // no getter of theirs (`Desugar.addDefaultGetters` gives the method alone getters).
+        let of = self.params_of.take();
         self.out.push('(');
         for i in 0..captures {
             let _ = write!(self.out, "{}$c{}", if i > 0 { ", " } else { "" }, i);
@@ -1875,7 +1908,30 @@ impl<'a> Emitter<'a> {
                 _ => self.name_ctor_param(p, n),
             };
             self.out.push_str(&n);
-            if let Some(Some(d)) = defaults.get(i) {
+            // A default the loader gives a parameter that declares none (a jar override's evidence
+            // the std erases, `default_erased_evidence`) is the parameter's own: no call omits it.
+            let given = defaults.get(i).copied().flatten().is_some();
+            let initializer = match of {
+                Some(of) => self.defaults().initializer(of, i - captures) || (given && self.defaults().param(of, i - captures).is_some_and(|p| !p.has_default)),
+                None => true,
+            };
+            if let (None, Some(DefaultOf::Method(m)), true) = (defaults.get(i).copied().flatten(), of, initializer) {
+                // The default a member it overrides declares: that member's getter, which
+                // JavaScript finds on `this` (`defaults::Defaults::js_declarer`).
+                let before = crate::typer::elaborate::clause_start(self.syms.sym(m).sig.as_ref().expect("a method's signature"), i);
+                let getter = self.getter_name(m, i);
+                let _ = write!(self.out, " = this.{}(", getter);
+                for (k, &q) in params[..before].iter().enumerate() {
+                    if k > 0 {
+                        self.out.push_str(", ");
+                    }
+                    let qn = self.sym_name(q);
+                    self.out.push_str(&qn);
+                }
+                self.out.push(')');
+                continue;
+            }
+            if let (Some(Some(d)), true) = (defaults.get(i), initializer) {
                 self.out.push_str(" = ");
                 self.enter_cond();
                 // A constructor's default runs before the body: a capture it reads is the
@@ -1945,7 +2001,7 @@ impl<'a> Emitter<'a> {
             FunKind::Method => (None, None),
         };
         let outer_region = std::mem::replace(&mut self.init_file, defaults_region);
-        let mark = self.emit_params(&fun.params, &fun.defaults);
+        let mark = self.emit_params_of(DefaultOf::Method(fun.sym), 0, &fun.params, &fun.defaults);
         self.init_file = region;
         self.entry_check = entry_check;
         self.out.push_str(if kind == FunKind::Local { " => " } else { " " });
@@ -2265,10 +2321,10 @@ impl<'a> Emitter<'a> {
                 }
                 self.out.push_str(") ");
             } else if n_captures > 0 {
-                self.emit_params_after_captures(n_captures, &tc.ctor_params, &tc.ctor_defaults);
+                self.emit_params_of(DefaultOf::Ctor(tc.id), n_captures, &tc.ctor_params, &tc.ctor_defaults);
                 self.out.push(' ');
             } else {
-                self.emit_params(&tc.ctor_params, &tc.ctor_defaults);
+                self.emit_params_of(DefaultOf::Ctor(tc.id), 0, &tc.ctor_params, &tc.ctor_defaults);
                 self.out.push(' ');
             }
             self.open("{");
@@ -2315,7 +2371,7 @@ impl<'a> Emitter<'a> {
                 self.line();
                 self.out.push_str("super");
                 match tc.parent_args {
-                    Some(args) if !is_anon => self.emit_ctor_args(superclass.unwrap(), args),
+                    Some(args) if !is_anon => self.emit_parent_args(superclass.unwrap(), args),
                     Some(args) => {
                         self.out.push('(');
                         for i in 0..args.len {
@@ -2334,7 +2390,7 @@ impl<'a> Emitter<'a> {
                 self.line();
                 let _ = write!(self.out, "{}{}{}{}{}", SUPER_FIELDS[0], this, SUPER_FIELDS[1], own_name, SUPER_FIELDS[2]);
                 match tc.parent_args {
-                    Some(args) if !is_anon => self.emit_ctor_args(parent, args),
+                    Some(args) if !is_anon => self.emit_parent_args(parent, args),
                     Some(args) => {
                         self.out.push('(');
                         for i in 0..args.len {
@@ -2474,11 +2530,13 @@ impl<'a> Emitter<'a> {
         }
         let mut methods = tc.methods.clone();
         methods.sort_by(|&a, &b| layout::compare_syms(self.syms, self.interner, prog.funs[a.idx()].sym, prog.funs[b.idx()].sym));
-        for m in methods {
+        for &m in &methods {
             if self.reach.funs[m.idx()] {
                 self.emit_function(m, FunKind::Method);
             }
+            self.emit_method_getters(m, &methods);
         }
+        self.emit_ctor_getters(idx);
         self.emit_object_members(tc.id);
         self.emit_forwarders(tc);
         self.emit_bridges(tc);
@@ -2679,7 +2737,7 @@ impl<'a> Emitter<'a> {
             if has_after {
                 self.declare_fixed("$t");
             }
-            let mark = self.emit_params(&params, &defaults);
+            let mark = self.emit_params_of(DefaultOf::Method(fun.sym), 0, &params, &defaults);
             self.out.push(' ');
             self.open("{");
             self.emit_block_stmts(ListRef { start: stmts.start, len: stmts.len - 1 });
@@ -2791,9 +2849,30 @@ impl<'a> Emitter<'a> {
         format!("{}$super{}", self.sym_name(member), self.class_number(tr))
     }
 
+    /// The accessor of `super.member$default$N` inside trait `tr` (`SuperAccessors`).
+    pub(super) fn super_getter_accessor_name(&mut self, tr: ClassId, member: SymId, index: usize) -> String {
+        format!("{}$super{}", self.getter_name(member, index), self.class_number(tr))
+    }
+
     fn emit_super_accessors(&mut self, tc: &TClass) {
         let superclass = self.syms.class(tc.id).superclass.map(|s| self.syms.class(s));
         for a in &tc.super_accessors {
+            // A getter selected on `super`: the getter of the member after the trait that
+            // declares the default, called as the member's accessor calls the member.
+            if let Some(i) = a.getter {
+                let Some(target) = a.target else { continue };
+                let Owner::Class(owner) = self.syms.sym(target).owner else { continue };
+                let name = self.super_getter_accessor_name(a.of_trait, a.member, i as usize);
+                let g = self.getter_name(target, i as usize);
+                self.line();
+                if superclass.map_or(false, |s| s.base_types.iter().any(|&(b, _)| b == owner)) {
+                    let _ = write!(self.out, "{}(...$a) {{ return super.{}(...$a); }}", name, g);
+                } else {
+                    let class = self.class_name(owner);
+                    let _ = write!(self.out, "{}(...$a) {{ return {}.prototype.{}.call(this, ...$a); }}", name, class, g);
+                }
+                continue;
+            }
             let name = self.super_accessor_name(a.of_trait, a.member);
             let Some(target) = a.target else {
                 let body = match self.interner.get(self.syms.sym(a.member).name) {

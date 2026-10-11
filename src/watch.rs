@@ -1790,7 +1790,7 @@ fn finish_build(
     t.rank_files();
     let split = emit::Split { files: sources.as_slice(), file_pkgs: t.file_pkgs.own(), module_per_file: &opts.module_per_file, hot: opts.hot };
     let options = emit::Options { release: opts.release, size_report: None, outline: !opts.no_outline };
-    let (output, _) = emit::emit(&t.prog, &t.syms, t.interner, array_seq, reach, Some(split), options, Some(cache));
+    let (output, _) = emit::emit(&t.prog, &t.syms, &t.types, t.interner, array_seq, reach, Some(split), options, Some(cache));
     report.ms.emit = t_emit.elapsed();
     note_parts(report, Duration::ZERO, true);
     let emit::Output::Modules(mut modules) = output else { unreachable!() };

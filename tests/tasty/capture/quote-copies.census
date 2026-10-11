@@ -2,7 +2,7 @@ construct                             derived   captured  missing  unsupported  
 binder pattern                              4          0        0            0          0
 block                                       3          0        0            0          0
 closure                                     2          0        0            0          2
-copied record                               0          5        0            0          0
+copied record                               0          3        0            0          0
 inline method body                          0          2        0            0          0
 literal                                     6          0        0            0          0
 local reference                            19          0        0            0          5
@@ -15,7 +15,7 @@ operator                                    3          0        0            0  
 quote                                       3          0        0            0          0
 sequence pattern                            0          2        0            0          0
 splice in a quote                           1          0        0            0          0
-temporary                                   0          4        0            0          0
+temporary                                   4          0        0            0          0
 this                                        8          0        0            0          8
 transparent expansion's bindings            0          1        0            0          0
 transparent inline expansion                0          2        0            0          0

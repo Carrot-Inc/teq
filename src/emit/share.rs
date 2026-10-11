@@ -253,6 +253,7 @@ const T_NESTED: u64 = 57;
 const T_HOLE_AGAIN: u64 = 58;
 const T_CAST: u64 = 59;
 const T_SLOT: u64 = 60;
+const T_DEFAULT: u64 = 61;
 
 /// An argument of an outlined expansion: where the call site's expression stands in its tree.
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
@@ -1136,6 +1137,27 @@ impl<'a> Enc<'a> {
                 self.sym(s);
                 self.list(args);
             }
+            TExpr::Default(of, at, args) => {
+                self.tok(T_DEFAULT);
+                match of {
+                    DefaultOf::Method(s) => {
+                        // A local method's getter is the method's own, which a shared expansion
+                        // must not take outside the scope it is in.
+                        if self.ol.is_some() && !self.is_bound(s) && self.syms.sym(s).owner == Owner::Local {
+                            self.ok = false;
+                            self.ol.as_mut().unwrap().free_seen.push(s);
+                        }
+                        self.tok(0);
+                        self.sym(s);
+                    }
+                    DefaultOf::Ctor(c) => {
+                        self.tok(1);
+                        self.class(c);
+                    }
+                }
+                self.tok(at as u64);
+                self.list(args);
+            }
             TExpr::Lambda(params, body) => {
                 self.tok(T_LAMBDA);
                 let prog = self.prog;
@@ -1386,6 +1408,7 @@ impl<'a> Enc<'a> {
             self.class(acc.of_trait);
             self.sym(acc.member);
             self.opt_sym(acc.target);
+            self.tok(acc.getter.map_or(0, |i| i as u64 + 1));
         }
         self.tok(tc.bridges.len() as u64);
         for &(a, b) in &tc.bridges {
@@ -1704,7 +1727,7 @@ impl<'a> Enc<'a> {
                 self.scan_list(args, out);
             }
             TExpr::NewVia(_, args) | TExpr::StrConcat(args) | TExpr::Js(_, args) | TExpr::SeqLit(args) | TExpr::ArrayLit(args)
-            | TExpr::ObjLit(args) => self.scan_list(args, out),
+            | TExpr::ObjLit(args) | TExpr::Default(_, _, args) => self.scan_list(args, out),
             TExpr::CallMethod(r, _, args) | TExpr::CallClosure(r, args) => {
                 self.scan(r, out);
                 self.scan_list(args, out);

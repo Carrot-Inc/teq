@@ -72,7 +72,7 @@ pub struct Input<'a> {
     pub open_world: bool,
     /// In the product mode, the members each trait calls through `super`, whose accessors it
     /// declares whether or not a class of the program mixes it in.
-    pub mixin_supers: Option<&'a FxMap<ClassId, Vec<SymId>>>,
+    pub mixin_supers: Option<&'a FxMap<ClassId, Vec<crate::tir::SuperCall>>>,
     /// In the product mode, the `abstract override` members of other modules' traits: marked
     /// abstract, they have an implementation a class mixing the trait in forwards to.
     pub stackable: Option<&'a FxMap<SymId, ()>>,
@@ -134,7 +134,7 @@ pub struct Cx<'a> {
     pub file_group: Vec<u32>,
     pub helpers: runtime::Helpers,
     /// Per trait the members its `super` calls name, which it declares as abstract accessors.
-    pub super_called: FxMap<ClassId, Vec<SymId>>,
+    pub super_called: FxMap<ClassId, Vec<crate::tir::SuperCall>>,
     /// Per file the offsets its lines start at, made when a line of the file is first asked.
     line_starts: Vec<std::sync::OnceLock<Vec<u32>>>,
     /// Per package its path as binary names begin with it, made when first asked.
@@ -285,8 +285,9 @@ impl<'a> Cx<'a> {
             cx.tclass_of[tc.id.idx()] = i as u32;
             for a in &tc.super_accessors {
                 let members = cx.super_called.entry(a.of_trait).or_default();
-                if !members.contains(&a.member) {
-                    members.push(a.member);
+                let call = crate::tir::SuperCall { member: a.member, getter: a.getter };
+                if !members.contains(&call) {
+                    members.push(call);
                 }
             }
         }

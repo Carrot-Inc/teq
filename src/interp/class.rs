@@ -524,7 +524,7 @@ impl<'a, 't> Interp<'a, 't> {
         let plan = self.ctor_plan(c);
         self.halt_on_withheld()?;
         let args = match plan {
-            Some(slots) => match self.plain_args(c, &slots, args) {
+            Some(slots) => match self.plain_args(&slots, args) {
                 Ok(args) => {
                     let prof = self.prof_ctor(c);
                     let v = self.construct_plain(c, &slots, args);
@@ -1768,7 +1768,7 @@ impl<'a, 't> Interp<'a, 't> {
 
     pub(super) fn super_accessor(&mut self, class: ClassId, tr: ClassId, member: SymId) -> Option<Option<SymId>> {
         let ti = self.tclass_index(class)?;
-        self.prog().classes[ti].super_accessors.iter().find(|a| a.of_trait == tr && a.member == member).map(|a| a.target)
+        self.prog().classes[ti].super_accessors.iter().find(|a| a.of_trait == tr && a.member == member && a.getter.is_none()).map(|a| a.target)
     }
 
     // ---- invocation ----

@@ -1,0 +1,4 @@
+9c9
+<     val unit: Int = touch{()}()
+---
+>     val unit: Int = LiftShapes.touch{(): Int}()

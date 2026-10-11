@@ -1667,8 +1667,11 @@ impl<'a> Gen<'a> {
     /// The abstract accessors of trait `t`, one per member its `super` calls name.
     pub fn super_accessor_declarations(&mut self, t: ClassId) {
         let members = self.cx.super_called.get(&t).cloned().unwrap_or_default();
-        for member in members {
-            let m = self.super_accessor_ref(t, member);
+        for call in members {
+            let m = match call.getter {
+                Some(i) => self.super_getter_accessor_ref(t, call.member, i as usize),
+                None => self.super_accessor_ref(t, call.member),
+            };
             if !self.cw.has_method(&m.name, &m.desc) {
                 self.cw.method(ACC_PUBLIC | ACC_ABSTRACT | ACC_SYNTHETIC, &m.name, &m.desc, None);
             }
@@ -1681,6 +1684,10 @@ impl<'a> Gen<'a> {
         let cx = self.cx;
         let this = JType::L(self.this_name.clone());
         for a in tc.super_accessors.clone() {
+            if let Some(i) = a.getter {
+                self.super_getter_accessor(tc.id, a.of_trait, a.member, a.target, i as usize);
+                continue;
+            }
             let m = self.super_accessor_ref(a.of_trait, a.member);
             if self.cw.has_method(&m.name, &m.desc) {
                 continue;
@@ -1725,6 +1732,60 @@ impl<'a> Gen<'a> {
             self.return_value(&m.ret);
             self.end_method(ACC_PUBLIC | ACC_SYNTHETIC, &m.name, &m.desc);
         }
+    }
+
+    /// The accessor through which trait `t` selects the getter of `member`'s default `i` on
+    /// `super` (`T$$super$m$default$N`, `SuperAccessors`): the getter's shape, a method of the
+    /// trait's interface.
+    pub fn super_getter_accessor_ref(&mut self, t: ClassId, member: SymId, i: usize) -> MRef {
+        let m = self.mref(member);
+        let shape = self.default_getter_shape(member, i);
+        let mut accessor = (*m).clone();
+        accessor.name = format!("{}$default${}", self.super_accessor_name(t, member), shape.index);
+        accessor.owner = self.class_name(t);
+        accessor.owner_is_interface = true;
+        accessor.kind = Invoke::Interface;
+        accessor.params = m.params[..shape.before].to_vec();
+        accessor.ret = shape.ret.clone();
+        accessor.desc = method_desc(&accessor.params, &accessor.ret);
+        accessor
+    }
+
+    /// A class's implementation of the accessor of a getter selected on `super` in trait `t`:
+    /// `invokespecial` of the getter of `target`, the member after the trait in the class's
+    /// linearisation that declares the default.
+    fn super_getter_accessor(&mut self, c: ClassId, t: ClassId, member: SymId, target: Option<SymId>, i: usize) {
+        let cx = self.cx;
+        let m = self.super_getter_accessor_ref(t, member, i);
+        let Some(target) = target else { return };
+        let Owner::Class(o) = cx.input.syms.sym(target).owner else { return };
+        if self.cw.has_method(&m.name, &m.desc) {
+            return;
+        }
+        let this = JType::L(self.this_name.clone());
+        let params: Vec<(Option<SymId>, JType)> = m.params.iter().map(|t| (None, t.clone())).collect();
+        self.begin_method(false, false, &params, m.ret.clone(), &[]);
+        self.load(0, &this);
+        let shape = self.default_getter_shape(target, i);
+        let tm = self.mref(target);
+        let taken: Vec<JType> = tm.params[..shape.before].to_vec();
+        let mut slot = 1u16;
+        for (k, t) in m.params.iter().enumerate() {
+            self.load(slot, t);
+            if let Some(to) = taken.get(k) {
+                self.adapt(t, to);
+            }
+            slot += if t.wide() { 2 } else { 1 };
+        }
+        let (name, desc) = self.default_getter_ref(target, i, &taken);
+        let through = self.super_call_owner(c, o);
+        let owner = self.class_name(through);
+        let interface = cx.input.syms.class(through).kind == ClassKind::Trait;
+        let (ps, ret) = parse_method_desc(&desc);
+        self.invoke_desc(Invoke::Special, &owner, interface, &name, &desc, ps.len(), &ret);
+        self.adapt(&ret, &m.ret);
+        self.return_value(&m.ret);
+        self.end_method(ACC_PUBLIC | ACC_SYNTHETIC, &m.name, &m.desc);
     }
 
     /// The class an `invokespecial` of a super call from class `c` names for a method defined

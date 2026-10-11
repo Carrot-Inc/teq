@@ -12,7 +12,7 @@ comprehension unpacking                     0          2        0            0  
 concatenation operand                       4          0        0            0          4
 constant read                               0          1        0            0          0
 constructor call                            0          4        0            0          0
-default argument                            0          3        0            0          3
+default argument                            3          0        0            0          3
 field selection                             3          0        0            0          0
 function application                        1          0        0            0          0
 if                                          1          0        0            0          0
@@ -23,7 +23,7 @@ local reference                            54          0        0            0  
 local val                                  14          0        0            0          0
 match                                       3          0        0            0          1
 method call                                16          9        0            0          5
-module reference                           15          0        0            0         15
+module reference                           18          0        0            0         18
 named argument                              0          3        0            0          2
 operand promotion                           0          3        0            0          3
 operator                                   17          0        0            0          0
@@ -36,7 +36,7 @@ sequence pattern                            0          1        0            0  
 string concatenation                        4          0        0            0          0
 synthesized definition                      0          0        0            1          0
 template call                               5          0        0            0          0
-temporary                                   0          2        0            0          0
+temporary                                   2          0        0            0          0
 this                                        1          0        0            0          1
 toString call                               1          0        0            0          0
 type test                                   0          1        0            0          0

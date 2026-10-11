@@ -144,7 +144,8 @@ impl<'a> Gen<'a> {
             }
             PendingBody::Default(f, i) => {
                 let fun = &cx.input.prog.funs[f.idx()];
-                (fun.params[..*i].to_vec(), fun.defaults[*i], fun.defaults[*i].into_iter().collect())
+                let before = self.clause_start(fun.sym, *i);
+                (fun.params[..before].to_vec(), fun.defaults[*i], fun.defaults[*i].into_iter().collect())
             }
             PendingBody::Lazy(_, init) => (Vec::new(), Some(*init), vec![*init]),
             PendingBody::JarGetter(_) => unreachable!(),
@@ -242,6 +243,12 @@ impl<'a> Gen<'a> {
             (PendingBody::Fun(f), Some(body)) => {
                 let fun = &cx.input.prog.funs[f.idx()];
                 self.method_body(fun.sym, &fun.params, body);
+            }
+            // A by-name parameter's getter returns the value (`Desugar.addDefaultGetters`).
+            (PendingBody::Default(f, i), Some(body)) if self.local_param_by_name(cx.input.prog.funs[f.idx()].sym, *i) => {
+                let ret = l.ret.clone();
+                self.default_value(body, true, &ret);
+                self.return_value(&ret);
             }
             (_, Some(body)) => self.tail(body),
             (_, None) => {
@@ -376,6 +383,8 @@ impl<'a> Gen<'a> {
                     self.trait_static_forwarder(&m.name, &m.params, &m.ret);
                 }
             }
+            // An inline method is not output; its ordinary getters below are.
+            None if info.mods & mods::INLINE != 0 => {}
             None => {
                 if self.is_interface || self.abstract_class {
                     if !self.cw.has_method(&m.name, &m.desc) {
@@ -830,7 +839,8 @@ impl<'a> Gen<'a> {
             self.trait_members(tc);
             self.super_accessor_declarations(c);
             if !cx.ctor_defaults_on_companion(c) {
-                self.ctor_default_getters(&tc.ctor_params, &tc.ctor_defaults);
+                let clauses = cx.input.syms.class(c).ctor.clone();
+                self.ctor_default_getters(Some(c), &tc.ctor_params, &tc.ctor_defaults, &clauses);
             }
         } else {
             self.constructor(tc, &fields, &super_name, enum_class.or(superclass), superclass.is_some(), is_value_case, is_object, is_anon);
@@ -1066,26 +1076,6 @@ impl<'a> Gen<'a> {
                 _ => {}
             }
         }
-        let flags: Vec<bool> = cx.input.syms.class(b).ctor.iter().flat_map(|cl| cl.params.iter().map(|p| p.has_default)).collect();
-        let defaulted = args.iter().enumerate().any(|(i, &a)| flags.get(i) == Some(&true) && matches!(prog.expr(a), TExpr::Unit));
-        if defaulted {
-            // A left-out argument is its default getter's, of the trait's companion as scalac
-            // lays it out, called after the written arguments as a class's constructor's are.
-            let types = self.ctor_param_types(b);
-            self.ctor_arguments(b, call.args, &types);
-            let mut slots = vec![0u16; types.len()];
-            for i in (0..types.len()).rev() {
-                slots[i] = self.store_new(&types[i]);
-            }
-            for (i, p) in params.into_iter().enumerate() {
-                let Some(f) = fields.iter().find(|f| f.sym == p) else { continue };
-                self.load(slot, this);
-                self.load(slots[i], &types[i]);
-                self.adapt(&types[i], &f.ty);
-                self.putfield(&owner, &f.name, &f.ty);
-            }
-            return true;
-        }
         for (p, arg) in params.into_iter().zip(args) {
             match fields.iter().find(|f| f.sym == p) {
                 Some(f) => {
@@ -1242,6 +1232,7 @@ impl<'a> Gen<'a> {
         // An anonymous class over a class receives the arguments of the superclass's
         // constructor, evaluated where the instance is created, after its captures.
         let anon_super = if is_anon { self.anon_super_params(tc.id) } else { None };
+
         for t in anon_super.iter().flat_map(|(_, _, types)| types.iter()) {
             params.push((None, t.clone()));
         }
@@ -1347,11 +1338,10 @@ impl<'a> Gen<'a> {
                         self.m.before_super = false;
                     }
                     None if types.is_empty() => {}
-                    // Every parameter of the superclass has a default.
+                    // Every parameter of the superclass has a default: each its getter's.
                     None if cx.input.syms.class(e).ctor.iter().all(|cl| cl.params.iter().all(|p| p.has_default)) => {
-                        let none = crate::ast::ListRef::EMPTY;
                         self.m.before_super = true;
-                        self.super_arguments(e, none, &types);
+                        self.all_ctor_defaults(e, &types);
                         self.m.before_super = false;
                     }
                     None => {
@@ -1395,7 +1385,8 @@ impl<'a> Gen<'a> {
         self.end_method(ctor_access, "<init>", &method_desc(&types, &JType::V));
 
         if !cx.ctor_defaults_on_companion(tc.id) {
-            self.ctor_default_getters(&tc.ctor_params, &tc.ctor_defaults);
+            let clauses = cx.input.syms.class(tc.id).ctor.clone();
+            self.ctor_default_getters(Some(tc.id), &tc.ctor_params, &tc.ctor_defaults, &clauses);
         }
     }
 
@@ -1440,19 +1431,44 @@ impl<'a> Gen<'a> {
         let types: Vec<JType> = params.iter().map(|p| p.1.clone()).collect();
         self.end_method(ACC_PUBLIC, "<init>", &method_desc(&types, &JType::V));
         if !self.this_class.map_or(false, |c| cx.ctor_defaults_on_companion(c)) {
-            self.ctor_default_getters(&fun.params, &fun.defaults);
+            let clauses: Vec<ClauseSig> = cx.input.syms.sym(fun.sym).sig.as_ref().map_or(Vec::new(), |sig| sig.clauses.clone());
+            self.ctor_default_getters(None, &fun.params, &fun.defaults, &clauses);
         }
     }
 
     /// The defaults of a constructor of a class whose companion is not static (an inner or a
-    /// local class), as static getters of the class that take the parameters before.
-    fn ctor_default_getters(&mut self, params: &[SymId], defaults: &[Option<TExprId>]) {
+    /// local class), as static getters of the class: each takes what the class captures, then
+    /// the parameters of the clauses before the default's own, as a companion's getter does.
+    /// The static getters of a class's constructor defaults (`class`'s, a local class taking
+    /// what it captures first, as its constructor does: a `var` as its cell).
+    fn ctor_default_getters(&mut self, class: Option<ClassId>, params: &[SymId], defaults: &[Option<TExprId>], clauses: &[ClauseSig]) {
+        let declared: usize = clauses.iter().map(|c| c.params.len()).sum();
+        let captures = params.len().saturating_sub(declared);
+        let captured: Vec<SymId> = match class {
+            Some(c) if captures > 0 && self.cx.input.syms.class(c).kind != ClassKind::Anon => self.class_captured(c),
+            _ => params[..captures].to_vec(),
+        };
         for (i, d) in defaults.iter().enumerate() {
             let Some(d) = *d else { continue };
-            let before: Vec<(Option<SymId>, JType)> = params[..i].iter().map(|&p| (Some(p), self.sym_type(p))).collect();
+            if i < captures {
+                continue;
+            }
+            let upto = captures + super::gen::clause_shape(clauses, i - captures).0;
+            let mut before: Vec<(Option<SymId>, JType)> = captured.iter().map(|&p| (Some(p), self.anon_capture_type(p))).collect();
+            before.extend(params[captures..upto.min(i)].iter().map(|&p| (Some(p), self.sym_type(p))));
             let ret = self.sym_type(params[i]);
+            let by_name = super::gen::clause_shape(clauses, i - captures).1.is_some();
             self.begin_method(true, false, &before, ret.clone(), &[d]);
-            self.expr(d, &ret);
+            for &s in &captured {
+                if self.held(s) == Held::Cell {
+                    let ty = self.sym_type(s);
+                    if let Some(local) = self.m.locals.get_mut(&s) {
+                        local.ty = ty;
+                        local.cell = true;
+                    }
+                }
+            }
+            self.default_value(d, by_name, &ret);
             self.return_value(&ret);
             let types: Vec<JType> = before.iter().map(|p| p.1.clone()).collect();
             self.end_method(ACC_PUBLIC | ACC_STATIC, &format!("$lessinit$greater$default${}", i + 1), &method_desc(&types, &ret));
@@ -2292,6 +2308,11 @@ impl<'a> Gen<'a> {
             }
             for &s in &syms.class(b).member_order {
                 let sinfo = syms.sym(s);
+                // A product's getter is its method's, as the whole program's class has it
+                // (`getter_forwarders`).
+                if syms.product_synthetics.contains_key(&s) {
+                    continue;
+                }
                 if sinfo.kind != SymKind::Def || !implemented(cx, s) || done.contains(&sinfo.name) || defines(cx, &info, sinfo.name) {
                     continue;
                 }
@@ -2300,21 +2321,66 @@ impl<'a> Gen<'a> {
                 }
                 done.push(sinfo.name);
                 let m = self.mref(s);
-                if self.cw.has_method(&m.name, &m.desc) {
-                    continue;
+                if !self.cw.has_method(&m.name, &m.desc) {
+                    let params: Vec<(Option<SymId>, JType)> = m.params.iter().map(|t| (None, t.clone())).collect();
+                    self.begin_method(false, false, &params, m.ret.clone(), &[]);
+                    self.load_this();
+                    let mut slot = 1u16;
+                    for t in &m.params {
+                        self.load(slot, t);
+                        slot += if t.wide() { 2 } else { 1 };
+                    }
+                    self.invoke_desc(Invoke::Special, &m.owner, true, &m.name, &m.desc, m.params.len(), &m.ret);
+                    self.return_value(&m.ret);
+                    self.end_method(ACC_PUBLIC | ACC_SYNTHETIC, &m.name, &m.desc);
                 }
-                let params: Vec<(Option<SymId>, JType)> = m.params.iter().map(|t| (None, t.clone())).collect();
-                self.begin_method(false, false, &params, m.ret.clone(), &[]);
-                self.load_this();
-                let mut slot = 1u16;
-                for t in &m.params {
-                    self.load(slot, t);
-                    slot += if t.wide() { 2 } else { 1 };
-                }
-                self.invoke_desc(Invoke::Special, &m.owner, true, &m.name, &m.desc, m.params.len(), &m.ret);
-                self.return_value(&m.ret);
-                self.end_method(ACC_PUBLIC | ACC_SYNTHETIC, &m.name, &m.desc);
+                self.getter_forwarders(s, &inherited);
             }
+        }
+    }
+
+    /// The getters of the defaults the trait member `s` declares where a superclass's member of
+    /// its name has a getter of the same parameter: a getter is a member
+    /// (`Desugar.addDefaultGetters`), the trait's winning in Scala's linearisation where the
+    /// JVM's resolution takes the superclass's, so the class forwards to it.
+    fn getter_forwarders(&mut self, s: SymId, inherited: &[ClassId]) {
+        let cx = self.cx;
+        let syms = cx.input.syms;
+        let Some(sig) = syms.sym(s).sig.clone() else { return };
+        let name = syms.sym(s).name;
+        let declares = |m: SymId, i: usize| syms.sym(m).sig.as_ref().and_then(|sig| sig.clauses.iter().flat_map(|c| c.params.iter()).nth(i).map(|p| p.has_default)).unwrap_or(false);
+        let n: usize = sig.clauses.iter().map(|c| c.params.len()).sum();
+        for i in 0..n {
+            if !declares(s, i) {
+                continue;
+            }
+            let theirs = inherited.iter().any(|&k| {
+                syms.class(k).members.get(&name).is_some_and(|&m| match syms.alternatives(m) {
+                    Some(alts) => alts.iter().any(|&a| declares(a, i)),
+                    None => declares(m, i),
+                })
+            });
+            if !theirs {
+                continue;
+            }
+            let m = self.mref(s);
+            let shape = self.default_getter_shape(s, i);
+            let (getter, desc) = self.default_getter_ref(s, i, &m.params[..shape.before]);
+            if self.cw.has_method(&getter, &desc) {
+                continue;
+            }
+            let (params, ret) = parse_method_desc(&desc);
+            let taken: Vec<(Option<SymId>, JType)> = params.iter().map(|t| (None, t.clone())).collect();
+            self.begin_method(false, false, &taken, ret.clone(), &[]);
+            self.load_this();
+            let mut slot = 1u16;
+            for t in &params {
+                self.load(slot, t);
+                slot += if t.wide() { 2 } else { 1 };
+            }
+            self.invoke_desc(Invoke::Special, &m.owner, true, &getter, &desc, params.len(), &ret);
+            self.return_value(&ret);
+            self.end_method(ACC_PUBLIC | ACC_SYNTHETIC, &getter, &desc);
         }
     }
 

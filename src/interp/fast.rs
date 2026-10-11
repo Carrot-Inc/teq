@@ -390,35 +390,13 @@ impl<'a, 't> Interp<'a, 't> {
         }
     }
 
-    /// The arguments of a plain construction, an omitted one replaced by its default when that
-    /// is a literal; `Err` hands them back for the full path.
-    pub(super) fn plain_args(&mut self, c: ClassId, slots: &[u32], args: Vec<Value>) -> Result<Vec<Value>, Vec<Value>> {
+    /// The arguments of a plain construction, one per slot; `Err` hands them back for the full
+    /// path.
+    pub(super) fn plain_args(&mut self, slots: &[u32], args: Vec<Value>) -> Result<Vec<Value>, Vec<Value>> {
         if args.len() != slots.len() {
             return Err(args);
         }
-        if !args.iter().any(|a| matches!(a, Value::Absent)) {
-            return Ok(args);
-        }
-        let Some(ti) = self.tclass_index(c) else { return Err(args) };
-        let mut filled = args.clone();
-        for (i, a) in filled.iter_mut().enumerate() {
-            if !matches!(a, Value::Absent) {
-                continue;
-            }
-            let Some(d) = self.prog().classes[ti].ctor_defaults.get(i).copied().flatten() else { return Err(args) };
-            *a = match self.prog().expr(d) {
-                TExpr::Int(v) => Value::Int(v),
-                TExpr::Long(v) => Value::Long(v),
-                TExpr::Double(v) => Value::Double(v),
-                TExpr::Bool(v) => Value::Bool(v),
-                TExpr::Char(v) => Value::Char(v),
-                TExpr::Str(s) => Value::Str(self.string_lit(s)),
-                TExpr::Unit => Value::Unit,
-                TExpr::Null => Value::Null,
-                _ => return Err(args),
-            };
-        }
-        Ok(filled)
+        Ok(args)
     }
 
     /// An instance of a class with a plain constructor: the arguments stored in their slots.

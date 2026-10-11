@@ -277,7 +277,7 @@ impl<'a> Worker<'a> {
         }
         let op_text = self.name_ref(op);
         if op_text.ends_with(':') {
-            return self.type_right_assoc(l, op, r, span, expected);
+            return self.type_right_assoc(l, op, r, Vec::new(), span, expected);
         }
         let is_assign_op = op_text.len() > 1
             && op_text.ends_with('=')
@@ -328,8 +328,14 @@ impl<'a> Worker<'a> {
     ) -> Option<(TExprId, TypeId)> {
         let op_text = self.name_ref(op);
         let assign_op = op_text.len() > 1 && op_text.ends_with('=') && !op_text.starts_with('=') && !matches!(op_text, "<=" | ">=" | "!=");
-        if matches!(op, names::EQEQ | names::NEQ) || op_text.ends_with(':') || assign_op {
+        if matches!(op, names::EQEQ | names::NEQ) || assign_op {
             return None;
+        }
+        // `(l op: r)(b)`: the application `r.op:(l)` is the function part the lists apply, as
+        // dotty's `Desugar.binop` makes it before `typedApply` types it with their prototype, so a
+        // later clause's default is the method's (an extension's `rightAssocParams` order).
+        if op_text.ends_with(':') {
+            return Some(self.type_right_assoc(l, op, r, lists, span, expected));
         }
         // `(l && r)(ev)`: on anything but a Boolean `&&` is a method, whose further clauses the
         // lists fill (zio-test's `TestTrace.&&` takes `A <:< Boolean`); a Boolean's result is
@@ -580,6 +586,7 @@ impl<'a> Worker<'a> {
         l: ExprId,
         op: Name,
         r: ExprId,
+        more: Vec<ArgList>,
         span: Span,
         expected: Option<TypeId>,
     ) -> (TExprId, TypeId) {
@@ -601,26 +608,32 @@ impl<'a> Worker<'a> {
                     a => a,
                 })
                 .collect();
-            let lists = vec![ArgList { args, using: false, span }];
+            let mut lists = vec![ArgList { args, using: false, span }];
+            lists.extend(more);
             let (te, ty) = self.apply_member(tr, rty, op, None, lists, span, expected);
             return (self.wrap_hoisted(mark, te), ty);
         }
         let (tl, lty) = self.type_expr(l, None);
         let lty = self.solve_in(lty);
         if lty == ERROR {
+            self.type_args_for_errors(&more);
             return (self.prog.add(TExpr::Unit), ERROR);
         }
-        let mut lists = Some(vec![ArgList { args: vec![ArgSrc::Typed(tr, rty)], using: false, span }]);
+        let mut first = vec![ArgList { args: vec![ArgSrc::Typed(tr, rty)], using: false, span }];
+        first.extend(more.iter().cloned());
+        let mut lists = Some(first);
         if let Some(res) = self.try_extensions(tl, lty, rty, op, None, &mut lists, span, expected) {
             return res;
         }
         // `r` converted to something with the member (`LazyList`'s `#::` through `toDeferrer`).
-        let member_lists = [ArgList { args: vec![ArgSrc::Typed(tl, lty)], using: false, span }];
+        let mut member_lists = vec![ArgList { args: vec![ArgSrc::Typed(tl, lty)], using: false, span }];
+        member_lists.extend(more.iter().cloned());
         if let Some((te, ty)) = self.apply_through_conversion(tr, rty, op, None, &member_lists, span, expected) {
             return (self.wrap_hoisted(mark, te), ty);
         }
         let msg = format!("value {} is not a member of {}", self.name_str(op), self.show(rty));
         self.error(span, msg);
+        self.type_args_for_errors(&more);
         (self.prog.add(TExpr::Unit), ERROR)
     }
 

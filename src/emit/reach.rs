@@ -103,11 +103,21 @@ pub struct Reach {
     /// In link mode, the forwarders of the program's `export` clauses, which the JVM writes as
     /// methods (`typer::export_plan`), made before the walk, whose roots their targets are.
     pub exports: std::sync::Arc<crate::typer::export_plan::JvmExports>,
+    /// The default getters the JavaScript output calls (a `TExpr::Default` it does not leave to
+    /// the callee's parameter default, an override's parameter default an overridden member
+    /// declares): of the class members of a name, the defs, the constructors, each with the
+    /// parameter's place.
+    pub getter_names: crate::intern::FxMap<(Name, u32), ()>,
+    pub getter_funs: crate::intern::FxMap<(SymId, u32), ()>,
+    pub getter_ctors: crate::intern::FxMap<(ClassId, u32), ()>,
 }
 
 impl Reach {
     fn empty() -> Reach {
         Reach {
+            getter_names: Default::default(),
+            getter_funs: Default::default(),
+            getter_ctors: Default::default(),
             classes: Vec::new(),
             funs: Vec::new(),
             bridged: Vec::new(),
@@ -394,8 +404,11 @@ fn link_root_members(typer: &Worker, std_files: &[bool], products: bool) -> (Vec
         // What `private[p]` opens to the rest of its package is kept, since a downstream module
         // may be in the package, whether it reads the products or builds over the sources.
         let private = info.mods & crate::ast::mods::PRIVATE != 0 && !info.scoped_private;
+        // An inline method is not output, but its ordinary default getters are methods of
+        // their own that a later caller's expansion applies (`Desugar.addDefaultGetters`).
+        let getters = || typer.fun_of_sym.get(&m).is_some_and(|&f| typer.prog.funs[f.idx()].body.is_none() && typer.prog.funs[f.idx()].defaults.iter().any(Option::is_some));
         matches!(info.kind, SymKind::Def | SymKind::Val | SymKind::Var | SymKind::Given)
-            && info.mods & crate::ast::mods::INLINE == 0
+            && (info.mods & crate::ast::mods::INLINE == 0 || getters())
             && !private
             && !quoted
     };
@@ -678,15 +691,27 @@ fn rounds<'a, T: Typing<'a>>(t: &mut T, mut w: Walker, setup: &mut Setup, lap: &
         let pending = std::mem::take(&mut w.pending);
         w.reach.asked.extend_from_slice(&pending);
         let typed: Vec<(SymId, DeferredBody)> = pending.into_iter().filter_map(|s| t.deferred_body(s).map(|f| (s, f))).collect();
-        lap.done("bodies typed", typed.len());
+        let getters = std::mem::take(&mut w.pending_getters);
+        w.reach.asked.extend(getters.iter().map(|&(s, _)| s));
+        let getters_typed: Vec<(SymId, u32, FunId)> = getters
+            .into_iter()
+            .filter_map(|(s, i)| match t.deferred_body(s) {
+                Some(DeferredBody::Fun(f)) => Some((s, i, f)),
+                _ => None,
+            })
+            .collect();
+        lap.done("bodies typed", typed.len() + getters_typed.len());
         // A library trait typed now, or in an earlier build of a watch session, may call
         // `super`: the classes that mix it in get the accessor, and its target is reached.
         t.bind_mixin_supers();
         lap.done("mixin supers bound", 0);
         w.grow(Cx::of(t.w()));
-        let accessor_targets: Vec<SymId> = t.w().prog.classes.iter().flat_map(|tc| tc.super_accessors.iter().filter_map(|a| a.target)).collect();
-        for target in accessor_targets {
-            w.reach_fun_of(Cx::of(t.w()), target);
+        let accessor_targets: Vec<(SymId, Option<u32>)> = t.w().prog.classes.iter().flat_map(|tc| tc.super_accessors.iter().filter_map(|a| a.target.map(|t| (t, a.getter)))).collect();
+        for (target, getter) in accessor_targets {
+            match getter {
+                Some(i) => w.reach_getter(Cx::of(t.w()), target, i),
+                None => w.reach_fun_of(Cx::of(t.w()), target),
+            }
         }
         for c in classes {
             if t.w().is_library_class(c) {
@@ -695,6 +720,10 @@ fn rounds<'a, T: Typing<'a>>(t: &mut T, mut w: Walker, setup: &mut Setup, lap: &
                 w.std_checked.insert(c, ());
                 w.reach_class(Cx::of(t.w()), c);
             }
+        }
+        for (sym, i, f) in getters_typed {
+            w.fun_of[sym.idx()] = slot(f.idx());
+            w.work.push(Work::Getter(f, i));
         }
         for (sym, body) in typed {
             match body {
@@ -734,7 +763,7 @@ fn rounds<'a, T: Typing<'a>>(t: &mut T, mut w: Walker, setup: &mut Setup, lap: &
             w.reach.reflective = registrations;
             w.reach.reflective_reached = true;
         }
-        if w.work.is_empty() && w.pending.is_empty() && w.pending_classes.is_empty() && w.pending_extenders.is_empty() && w.pending_packages.is_empty() && !(w.wants_runtime_exceptions && !w.runtime_exceptions_found) && !(w.wants_reflect && !w.reflect_found) {
+        if w.work.is_empty() && w.pending.is_empty() && w.pending_getters.is_empty() && w.pending_classes.is_empty() && w.pending_extenders.is_empty() && w.pending_packages.is_empty() && !(w.wants_runtime_exceptions && !w.runtime_exceptions_found) && !(w.wants_reflect && !w.reflect_found) {
             w.reach.js_names.sort_unstable();
             w.reach.js_names.dedup();
             w.reach.globals.sort_unstable();
@@ -1005,6 +1034,10 @@ enum Work {
     /// class walk saw before they were known, and its IR.
     Init(ClassId),
     Fun(FunId),
+    /// The getter of a function's default the output calls, apart from the function's body:
+    /// a member of its own (`Desugar.addDefaultGetters`), which dispatch to the body may never
+    /// reach.
+    Getter(FunId, u32),
 }
 
 /// Lists indexed by class, kept as linked nodes so that an empty list costs one word.
@@ -1106,6 +1139,10 @@ struct Walker {
     work: Vec<Work>,
     /// Defs of the standard library whose bodies the walk needs next.
     pending: Vec<SymId>,
+    /// Library methods typed for a getter of theirs alone (`reach_getter`), and the getters
+    /// already reached.
+    pending_getters: Vec<(SymId, u32)>,
+    getters_reached: FxMap<(SymId, u32), ()>,
     /// Classes of the classpath the walk reached, which the typer compiles from their TASTy.
     pending_classes: Vec<ClassId>,
     /// The products' files of top-level definitions the walk reached a definition of, before
@@ -1193,6 +1230,8 @@ impl Walker {
             super_called: FxMap::default(),
             work: Vec::new(),
             pending: Vec::new(),
+            pending_getters: Vec::new(),
+            getters_reached: FxMap::default(),
             pending_classes: Vec::new(),
             pending_packages: Vec::new(),
             library: false,
@@ -1466,6 +1505,14 @@ impl Walker {
                     let from = self.bases_registered[c.idx()] as usize;
                     self.process_class_from(cx, c, from);
                 }
+                Work::Getter(f, i) => {
+                    self.current_fun = Some(f);
+                    self.place = Some(self.local_places.get(&f).copied().unwrap_or(Place::Fun(f)));
+                    self.region = None;
+                    if let Some(d) = cx.prog.funs[f.idx()].defaults.get(i as usize).copied().flatten() {
+                        self.walk(cx, d);
+                    }
+                }
                 Work::Fun(f) => {
                     self.current_fun = Some(f);
                     self.place = Some(self.local_places.get(&f).copied().unwrap_or(Place::Fun(f)));
@@ -1479,6 +1526,8 @@ impl Walker {
                     for &d in fun.defaults.iter().flatten() {
                         self.walk(cx, d);
                     }
+                    self.inherited_defaults(cx, f);
+                    self.tail_call_defaults(cx, f);
                     let info = cx.syms.sym(fun.sym);
                     self.region = match info.owner {
                         Owner::Package(_) => Some(info.file),
@@ -1572,6 +1621,29 @@ impl Walker {
         }
         self.reach.funs[f.idx()] = true;
         self.work.push(Work::Fun(f));
+    }
+
+    /// The getter of method `s`'s default `i`, which a receiver's class takes from `s`
+    /// (`Applications.findDefaultGetter` selects it by name): a member of its own
+    /// (`Desugar.addDefaultGetters`), written and walked whether or not dispatch reaches the
+    /// method's body; a library's method typed for it, its body left unreached.
+    fn reach_getter(&mut self, cx: Cx, s: SymId, i: u32) {
+        if self.getters_reached.insert((s, i), ()).is_some() {
+            return;
+        }
+        self.reach.getter_names.insert((cx.syms.sym(s).name, i), ());
+        if let Some(f) = index(self.fun_of[s.idx()]) {
+            self.work.push(Work::Getter(FunId(f as u32), i));
+            return;
+        }
+        if self.link_member(cx, s) {
+            return;
+        }
+        let info = cx.syms.sym(s);
+        let in_std = self.std_files.get(info.file.0 as usize).copied().unwrap_or(true);
+        if in_std && info.kind == SymKind::Def {
+            self.pending_getters.push((s, i));
+        }
     }
 
     /// Whether the reach writes a std file's classes and top-level definitions whole: in a JVM
@@ -2205,8 +2277,13 @@ impl Walker {
         for &(_, target) in &tc.forwarders {
             self.reach_static(cx, target);
         }
-        for target in tc.super_accessors.iter().filter_map(|a| a.target) {
-            self.reach_fun_of(cx, target);
+        for a in &tc.super_accessors {
+            // A getter's accessor calls the getter alone (`reach_getter`).
+            match (a.target, a.getter) {
+                (Some(target), Some(i)) => self.reach_getter(cx, target, i),
+                (Some(target), None) => self.reach_fun_of(cx, target),
+                (None, _) => {}
+            }
         }
     }
 
@@ -2382,11 +2459,30 @@ pub(super) trait Meet {
     fn try_end(&mut self, cx: Cx, wraps: bool);
     fn pat_seq(&mut self, cx: Cx);
     fn pat_rest(&mut self, cx: Cx);
+    /// A default getter's application the output writes (`TExpr::Default`).
+    fn default_getter(&mut self, cx: Cx, of: DefaultOf, index: u32);
 }
 
 pub(super) fn visit_list<M: Meet>(m: &mut M, cx: Cx, l: ListRef) {
     for &e in cx.prog.expr_list(l) {
         visit(m, cx, e);
+    }
+}
+
+/// The JavaScript lowering's view of the program (`defaults`).
+pub(super) fn defaults_of(cx: Cx<'_>) -> super::defaults::Defaults<'_> {
+    super::defaults::Defaults { prog: cx.prog, syms: cx.syms, types: &cx.typer.types, interner: cx.interner }
+}
+
+/// The arguments of the call `call`, a getter's application its callee's JavaScript parameter
+/// default computes being no call of the getter.
+fn visit_args<M: Meet>(m: &mut M, cx: Cx, call: TExprId, l: ListRef) {
+    let lowering = defaults_of(cx).lower(&[], call);
+    for (k, &a) in cx.prog.expr_list(l).iter().enumerate() {
+        match cx.prog.expr(a) {
+            TExpr::Default(_, _, args) if lowering.as_ref().is_some_and(|l| l.omits(k)) => visit_list(m, cx, args),
+            _ => visit(m, cx, a),
+        }
     }
 }
 
@@ -2420,12 +2516,12 @@ pub(super) fn visit<M: Meet>(m: &mut M, cx: Cx, e: TExprId) {
             m.field(cx, matches!(prog.expr(r), TExpr::This), s);
         }
         TExpr::CallStatic(s, args) => {
-            visit_list(m, cx, args);
+            visit_args(m, cx, e, args);
             m.call_static(cx, s);
         }
         TExpr::CallMethod(r, s, args) => {
             visit(m, cx, r);
-            visit_list(m, cx, args);
+            visit_args(m, cx, e, args);
             m.call_method(cx, matches!(prog.expr(r), TExpr::Super(_)), s);
         }
         TExpr::CallClosure(f, args) => {
@@ -2440,12 +2536,16 @@ pub(super) fn visit<M: Meet>(m: &mut M, cx: Cx, e: TExprId) {
             visit(m, cx, a);
         }
         TExpr::New(c, args) => {
-            visit_list(m, cx, args);
+            visit_args(m, cx, e, args);
             m.new(cx, c);
         }
         TExpr::NewVia(s, args) => {
-            visit_list(m, cx, args);
+            visit_args(m, cx, e, args);
             m.new_via(cx, s);
+        }
+        TExpr::Default(of, at, args) => {
+            visit_list(m, cx, args);
+            m.default_getter(cx, of, at & !DEFAULT_RECEIVER);
         }
         TExpr::Lambda(params, body) => {
             visit(m, cx, body);
@@ -2463,7 +2563,22 @@ pub(super) fn visit<M: Meet>(m: &mut M, cx: Cx, e: TExprId) {
             visit(m, cx, body);
         }
         TExpr::Block(stmts, res) => {
+            // A plan's temporary of a getter's application its call leaves to the callee's default.
+            let dropped: Vec<SymId> = match prog.stmts[stmts.range()].first() {
+                Some(TStmt::Val(t, _)) if cx.syms.sym(*t).mods & mods::LIFTED != 0 => {
+                    defaults_of(cx).lower(&prog.stmts[stmts.range()], res).map(|l| l.dropped).unwrap_or_default()
+                }
+                _ => Vec::new(),
+            };
             for s in &prog.stmts[stmts.range()] {
+                if let TStmt::Val(t, x) = *s {
+                    if dropped.contains(&t) {
+                        if let TExpr::Default(_, _, args) = prog.expr(x) {
+                            visit_list(m, cx, args);
+                            continue;
+                        }
+                    }
+                }
                 match *s {
                     // An object without a body in statement position is left out of the output.
                     TStmt::Expr(x) if matches!(prog.expr(x), TExpr::Module(c) if m.object_left_out(c)) => {}
@@ -2844,6 +2959,96 @@ impl Meet for Walker {
 
     fn pat_rest(&mut self, cx: Cx) {
         self.reach_array_seq(cx);
+    }
+
+    fn default_getter(&mut self, cx: Cx, of: DefaultOf, index: u32) {
+        match of {
+            DefaultOf::Ctor(c) => {
+                self.reach.getter_ctors.insert((c, index), ());
+                self.reach_class(cx, c);
+            }
+            // A secondary constructor's, a static getter of its class.
+            DefaultOf::Method(s) if cx.syms.sym(s).name == names::INIT => {
+                self.reach.getter_funs.insert((s, index), ());
+                self.reach_fun_of(cx, s);
+            }
+            DefaultOf::Method(s) if matches!(cx.syms.sym(s).owner, Owner::Class(_)) => {
+                self.reach.getter_names.insert((cx.syms.sym(s).name, index), ());
+                // The getters it dispatches to: the overrides' the call reaches, and the one of
+                // the member the method takes the default from, whether or not its body is.
+                let declarer = defaults_of(cx).js_declarer(s, index as usize).unwrap_or(s);
+                self.call_method(cx, false, s);
+                self.reach_getter(cx, declarer, index);
+            }
+            DefaultOf::Method(s) => {
+                self.reach.getter_funs.insert((s, index), ());
+                if cx.syms.sym(s).owner != Owner::Local {
+                    self.call_static(cx, s);
+                }
+            }
+        }
+    }
+}
+
+impl Walker {
+    /// A function whose self-calls in tail position the JavaScript output writes as a loop
+    /// (`Emitter::tail_loop_of`): a default such a call applies is its getter's value, the
+    /// function's entry, which computes it, being left out.
+    fn tail_call_defaults(&mut self, cx: Cx, f: FunId) {
+        let fun = &cx.prog.funs[f.idx()];
+        let Some(body) = fun.body else { return };
+        if fun.defaults.iter().all(Option::is_none) || !cx.syms.is_effectively_final(fun.sym) || cx.prog.tail_self_calls(fun.sym, fun.params.len(), body).0 == 0 {
+            return;
+        }
+        let s = fun.sym;
+        for (i, d) in fun.defaults.iter().enumerate() {
+            if d.is_none() {
+                continue;
+            }
+            match cx.syms.sym(s).owner {
+                Owner::Class(_) => {
+                    self.reach.getter_names.insert((cx.syms.sym(s).name, i as u32), ());
+                }
+                _ => {
+                    self.reach.getter_funs.insert((s, i as u32), ());
+                }
+            }
+        }
+    }
+
+    /// An override whose parameter takes the default a member it overrides declares calls that
+    /// member's getter for it in its JavaScript parameter default (`defaults::Defaults::initializer`).
+    fn inherited_defaults(&mut self, cx: Cx, f: FunId) {
+        let fun = &cx.prog.funs[f.idx()];
+        let s = fun.sym;
+        let info = cx.syms.sym(s);
+        let Owner::Class(c) = info.owner else { return };
+        if info.kind != SymKind::Def || info.is_extension || info.name == names::INIT || fun.defaults.iter().all(Option::is_some) {
+            return;
+        }
+        // Only where an ancestor has a member of the name with a default.
+        let name = info.name;
+        let any = cx.syms.class(c).base_types.iter().skip(1).any(|&(b, _)| {
+            cx.syms.class(b).members.get(&name).is_some_and(|&m| {
+                let alts: Vec<SymId> = match cx.syms.alternatives(m) {
+                    Some(a) => a.to_vec(),
+                    None => vec![m],
+                };
+                alts.iter().any(|&a| cx.syms.sym(a).sig.as_ref().is_some_and(|sig| sig.clauses.iter().any(|cl| cl.params.iter().any(|p| p.has_default))))
+            })
+        });
+        if !any {
+            return;
+        }
+        let d = defaults_of(cx);
+        for i in 0..fun.defaults.len() {
+            if fun.defaults[i].is_some() || !d.initializer(DefaultOf::Method(s), i) {
+                continue;
+            }
+            if let Some(declarer) = d.js_declarer(s, i).filter(|&x| x != s) {
+                self.reach_getter(cx, declarer, i as u32);
+            }
+        }
     }
 }
 

@@ -502,8 +502,6 @@ pub(super) struct BoundParam {
     repeated: bool,
     is_using: bool,
     is_macro: bool,
-    /// A default the expansion by substitution binds from its copy of the record's.
-    pub later: bool,
 }
 
 /// What an inline method body is made of, wherever it comes from.
@@ -663,7 +661,7 @@ impl<'a> Worker<'a> {
         })
     }
 
-    fn inline_body(&mut self, sym: SymId) -> Option<InlineBody> {
+    pub(super) fn inline_body(&mut self, sym: SymId) -> Option<InlineBody> {
         let (file, def_id) = {
             let s = self.syms.sym(sym);
             (s.file, s.def)
@@ -920,7 +918,7 @@ impl<'a> Worker<'a> {
         span: Span,
         expected: Option<TypeId>,
     ) -> (TExprId, TypeId) {
-        let mut bound = self.bind_inline_call(call, sig, subst, args, body, ret_ty, span, false);
+        let mut bound = self.bind_inline_call(call, sig, subst, args, body, ret_ty, span);
         let ret_ty = bound.ret_ty;
         let outer_return = self.return_to.take();
         let outer_returns = std::mem::take(&mut self.returns);
@@ -981,10 +979,10 @@ impl<'a> Worker<'a> {
     /// The receiver and the arguments of a call of an inline method bound for its body, as scalac
     /// binds them: the receiver first, then each argument in clause order, an ordinary one to a
     /// proxy val evaluated once unless it is stable or a constant, a by-name or `inline` one to
-    /// its tree, which each use copies (`InlineState::args`). A missing argument with a default
-    /// takes the default: typed here for the retype path, left for the expansion by substitution
-    /// to bind from its copy of the record's (`defaults_later`, `bind_parameter`). The frame the
-    /// body's names stand in is pushed; `unbind_inline_call` pops it.
+    /// its tree, which each use copies (`InlineState::args`). An argument left to its default is
+    /// the default getter's application the call's plan made (`Applications.matchArgs`), bound as
+    /// any argument is; a `()` written is a value. The frame the body's names stand in is pushed;
+    /// `unbind_inline_call` pops it.
     #[allow(clippy::too_many_arguments)]
     pub(super) fn bind_inline_call(
         &mut self,
@@ -995,7 +993,6 @@ impl<'a> Worker<'a> {
         body: &InlineBody,
         ret_ty: TypeId,
         span: Span,
-        defaults_later: bool,
     ) -> BoundCall {
         let sym = call.sym;
         let bind = self.part(Part::Bind);
@@ -1072,7 +1069,6 @@ impl<'a> Worker<'a> {
             for p in &clause.params {
                 let dependent_result = self.types.has_paths(sig.ret) && self.mentions_term(sig.ret, p.sym);
                 let is_inline = body.inline_params.get(index).copied().unwrap_or(false);
-                let default = body.defaults.get(index).copied().flatten();
                 let local_ty = self.sig_of(p.sym).ret;
                 let local_ty = self.types.subst(local_ty, subst);
                 let local_ty = self.zonk(local_ty);
@@ -1088,12 +1084,12 @@ impl<'a> Worker<'a> {
                     }
                     None => self.prog.add(TExpr::Unit),
                 };
+                // The method's own default getter applied: its expansion, which teq's output has
+                // in the place of scalac's getter.
+                let arg = self.own_getter_expansion(sym, sig, subst, body, Some(&bound), arg, span);
                 index += 1;
-                let later = defaults_later && p.has_default && default.is_some() && matches!(self.prog.expr(arg), TExpr::Unit);
-                let te = match (p.by_name, self.prog.expr(arg), default) {
-                    (true, TExpr::Lambda(ps, inner), _) if ps.is_empty() => inner,
-                    (_, TExpr::Unit, Some(_)) if later => arg,
-                    (_, TExpr::Unit, Some(d)) if p.has_default => self.check_expr(d, local_ty),
+                let te = match self.prog.expr(arg) {
+                    TExpr::Lambda(ps, inner) if p.by_name && ps.is_empty() => inner,
                     _ => arg,
                 };
                 if bound.result_names.is_none() && self.result_is_singleton_of(sig.ret, p.sym, declared) {
@@ -1122,7 +1118,7 @@ impl<'a> Worker<'a> {
                 // A stable argument of a method whose result type names the parameter
                 // (`inst.type`) binds the proxy to the argument's own path, as scalac's binding
                 // does, so that the body conforms to the result type in the call's terms.
-                let local_ty = match dependent_result && !later {
+                let local_ty = match dependent_result {
                     true => self.call_argument_path(te).unwrap_or(local_ty),
                     false => local_ty,
                 };
@@ -1135,12 +1131,10 @@ impl<'a> Worker<'a> {
                 // this one is done (`summonAsArray0[b](i + 1, arr)` after a nested one).
                 let outer = self.inline.param_proxies.insert(p.sym, proxy);
                 bound.outer_proxies.push((p.sym, outer));
-                let param = BoundParam { sym: p.sym, name: p.name, proxy, arg: te, constant: None, declared, local_ty, by_name: p.by_name, inline: is_inline, repeated: p.repeated, is_using: clause.is_using, is_macro, later };
+                let param = BoundParam { sym: p.sym, name: p.name, proxy, arg: te, constant: None, declared, local_ty, by_name: p.by_name, inline: is_inline, repeated: p.repeated, is_using: clause.is_using, is_macro };
                 bound.params.push(param);
                 let at = bound.params.len() - 1;
-                if !later {
-                    self.bind_parameter(&mut bound, at, te);
-                }
+                self.bind_parameter(&mut bound, at, te);
                 self.bind_local(p.name, proxy);
                 if receiver.is_none() && !clause.is_using {
                     receiver = Some(proxy);
@@ -1171,6 +1165,113 @@ impl<'a> Worker<'a> {
     /// constant, one the interpreter can evaluate to its value (marked as the output's, not the
     /// language's constant), a by-name, `inline`, constant or stable one standing for its tree at
     /// each use, any other to its proxy val; a using parameter also a given of its declared type.
+    /// `arg` with the applications of the inline method `sym`'s own default getters in it
+    /// expanded (`inline_getter_expansion`): an argument, or a by-name one's thunk of one.
+    #[allow(clippy::too_many_arguments)]
+    pub(super) fn own_getter_expansion(&mut self, sym: SymId, sig: &MethodSig, subst: &Subst, body: &InlineBody, bound: Option<&BoundCall>, arg: TExprId, span: Span) -> TExprId {
+        match self.prog.expr(arg) {
+            // An inline parameter's getter is inline (`Desugar.addDefaultGetters`): its
+            // expansion stands for its application; another's is a method the call applies.
+            TExpr::Default(DefaultOf::Method(m), at, l) if m == sym && body.inline_params.get((at & !DEFAULT_RECEIVER) as usize).copied().unwrap_or(false) => {
+                let index = (at & !DEFAULT_RECEIVER) as usize;
+                let items = self.prog.expr_list(l).to_vec();
+                let priors = if at & DEFAULT_RECEIVER != 0 { items[1..].to_vec() } else { items };
+                let ty = self.prog.type_of(arg).unwrap_or(ANY);
+                self.inline_getter_expansion(sym, sig, subst, body, bound, index, &priors, ty, span)
+            }
+            TExpr::Lambda(ps, inner) if ps.is_empty() && matches!(self.prog.expr(inner), TExpr::Default(DefaultOf::Method(m), ..) if m == sym) => {
+                let e = self.own_getter_expansion(sym, sig, subst, body, bound, inner, span);
+                if e == inner {
+                    return arg;
+                }
+                self.by_name_thunk(e)
+            }
+            // An ordinary getter's application, called, whose arguments may be an inline
+            // parameter's getter's, expanded where they stand.
+            TExpr::Default(DefaultOf::Method(m), at, l) if m == sym => {
+                let items = self.prog.expr_list(l).to_vec();
+                let expanded: Vec<TExprId> = items.iter().map(|&x| self.own_getter_expansion(sym, sig, subst, body, bound, x, span)).collect();
+                if expanded == items {
+                    return arg;
+                }
+                let l = self.prog.list(&expanded);
+                let d = self.prog.add(TExpr::Default(DefaultOf::Method(m), at, l));
+                if let Some(t) = self.prog.type_of(arg) {
+                    self.prog.set_type(d, t);
+                }
+                self.prog.copy_span(arg, d);
+                if let Some(targs) = self.prog.capture.as_deref().and_then(|c| c.targs.get(&arg)).copied() {
+                    let targs = self.types.items(targs).to_vec();
+                    self.capture_targs(d, &targs);
+                }
+                d
+            }
+            _ => arg,
+        }
+    }
+
+    /// The default getter `index` of the inline method `sym` applied to `priors`, expanded
+    /// where the call is, as scalac's getter is (`Desugar.addDefaultGetters`, `getterParamss`,
+    /// `toMethParam`): its parameters are those of the clauses before the default's, strict
+    /// unless by-name, an inline parameter's too, each bound once to its argument, a strict
+    /// parameter's being that parameter's binding (scalac's lifted value); the default is typed
+    /// with their names standing for them. An inline parameter's getter is inline itself, its
+    /// expansion substituted at each use; another's is an ordinary method, which the binding of
+    /// its parameter evaluates once. Without the call's binding (a getter's application the plan
+    /// lifted out of the call), each strict prior is bound to a val of its own.
+    #[allow(clippy::too_many_arguments)]
+    fn inline_getter_expansion(&mut self, sym: SymId, sig: &MethodSig, subst: &Subst, body: &InlineBody, bound: Option<&BoundCall>, index: usize, priors: &[TExprId], ty: TypeId, span: Span) -> TExprId {
+        let Some(d) = body.defaults.get(index).copied().flatten() else {
+            let msg = format!("the default argument of {} has no tree to expand", self.name_str(self.syms.sym(sym).name));
+            self.error(span, msg);
+            return self.prog.add(TExpr::Unit);
+        };
+        let params: Vec<(ParamSig, bool)> = sig.clauses.iter().flat_map(|c| c.params.iter().map(move |p| (p.clone(), c.is_using))).collect();
+        self.env.frames.push(Frame::Locals { names: Vec::new(), tparams: Vec::new(), givens: Vec::new(), classes: Vec::new(), aliases: Vec::new(), owner: self.sites.owners.len() as u32 });
+        let mut stmts: Vec<TStmt> = Vec::new();
+        for (k, &prior) in priors.iter().enumerate() {
+            let Some((p, is_using)) = params.get(k).cloned() else { break };
+            let pty = self.sig_of(p.sym).ret;
+            let pty = self.types.subst(pty, subst);
+            let local = self.new_local(p.name, SymKind::Val, pty, span);
+            let inline_param = body.inline_params.get(k).copied().unwrap_or(false);
+            if p.by_name {
+                let tree = match self.prog.expr(prior) {
+                    TExpr::Lambda(ps, inner) if ps.is_empty() => inner,
+                    _ => prior,
+                };
+                let tree = self.own_getter_expansion(sym, sig, subst, body, bound, tree, span);
+                self.inline.args.insert(local, InlineArg { expr: tree, ty: pty, source: None });
+            } else if let Some(bound) = bound.filter(|b| !inline_param && k < b.params.len()) {
+                // The parameter's own binding, which holds the argument's value once.
+                let proxy = bound.params[k].proxy;
+                let value = match self.inline.args.get(&proxy).copied() {
+                    Some(a) => a.expr,
+                    None => self.prog.add(TExpr::Local(proxy)),
+                };
+                self.inline.args.insert(local, InlineArg { expr: value, ty: pty, source: None });
+            } else {
+                let value = self.own_getter_expansion(sym, sig, subst, body, bound, prior, span);
+                stmts.push(TStmt::Val(local, value));
+            }
+            self.bind_local(p.name, local);
+            if is_using {
+                self.bind_given(local);
+            }
+        }
+        let te = self.check_expr(d, ty);
+        self.env.frames.pop();
+        if stmts.is_empty() {
+            return te;
+        }
+        let l = self.prog.stmts.push_slice(&stmts);
+        let block = self.prog.add(TExpr::Block(l, te));
+        if let Some(t) = self.prog.type_of(te) {
+            self.prog.set_type(block, t);
+        }
+        block
+    }
+
     pub(super) fn bind_parameter(&mut self, bound: &mut BoundCall, at: usize, te: TExprId) {
         let BoundParam { name, proxy, declared, local_ty, by_name, inline, repeated, is_using, is_macro, .. } = bound.params[at];
         // An argument that folds to a constant is bound as that constant, as scalac's
@@ -1827,6 +1928,7 @@ impl<'a> Worker<'a> {
             }
             TExpr::New(c, args) => TExpr::New(c, self.copy_list(args)),
             TExpr::NewVia(s, args) => TExpr::NewVia(s, self.copy_list(args)),
+            TExpr::Default(of, at, args) => TExpr::Default(of, at, self.copy_list(args)),
             TExpr::Lambda(params, body) => TExpr::Lambda(params, self.copy_expr(body)),
             TExpr::If(c, t, els) => {
                 let c = self.copy_expr(c);

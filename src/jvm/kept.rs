@@ -223,6 +223,7 @@ fn own(cx: &Cx, unit: Unit) -> u64 {
         if let Some(t) = a.target {
             sym_key(syms, t, &mut h);
         }
+        h.write_u32(a.getter.map_or(u32::MAX, |i| i));
     }
     h.write_u8(0xff);
     for &(a, b) in tc.forwarders.iter().chain(&tc.bridges) {
@@ -395,6 +396,7 @@ fn facts(cx: &Cx, prev: &Snapshot) -> (Digests, Snapshot) {
             for a in &tc.super_accessors {
                 h.write_u32(a.of_trait.0);
                 sym_key(syms, a.member, h);
+                h.write_u32(a.getter.map_or(u32::MAX, |i| i));
                 if let Some(t) = a.target {
                     sym_key(syms, t, h);
                 }
@@ -506,7 +508,8 @@ fn facts(cx: &Cx, prev: &Snapshot) -> (Digests, Snapshot) {
             t.hash(&mut e);
             let mut keys: Vec<u64> = members.iter().map(|&m| {
                 let mut k = FxHasher::default();
-                sym_key(syms, m, &mut k);
+                sym_key(syms, m.member, &mut k);
+                m.getter.hash(&mut k);
                 k.finish()
             }).collect();
             keys.sort_unstable();

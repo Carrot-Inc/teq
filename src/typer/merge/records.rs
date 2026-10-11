@@ -284,6 +284,14 @@ pub(in crate::typer) fn texpr<M: Mapping + ?Sized>(m: &M, e: &mut TExpr) {
         CallClosure(f, args) => CallClosure(m.expr(f), m.expr_list(args)),
         New(c, args) => New(m.class(c), m.expr_list(args)),
         NewVia(s, args) => NewVia(m.sym(s), m.expr_list(args)),
+        Default(of, at, args) => Default(
+            match of {
+                DefaultOf::Method(s) => DefaultOf::Method(m.sym(s)),
+                DefaultOf::Ctor(c) => DefaultOf::Ctor(m.class(c)),
+            },
+            at,
+            m.expr_list(args),
+        ),
         Lambda(params, body) => Lambda(m.sym_list(params), m.expr(body)),
         If(c, t, f) => If(m.expr(c), m.expr(t), f.map(|f| m.expr(f))),
         While(c, b) => While(m.expr(c), m.expr(b)),

@@ -1,0 +1,8 @@
+3c3
+<   <artifact> def super$fix$supergetter$SgLayer$$f(a: Int): Int
+---
+>   <artifact> def super$fix$supergetter$SgLayer$$f(a: Int = <default>): Int
+5c5
+<   <artifact> def super$fix$supergetter$SgLayer$$g(x: Int)(y: Int): Int
+---
+>   <artifact> def super$fix$supergetter$SgLayer$$g(x: Int)(y: Int = <default>): Int

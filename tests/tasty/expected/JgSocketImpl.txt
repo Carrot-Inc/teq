@@ -1,0 +1,5 @@
+// tests/tasty/fixtures/JgSocketImpl.tasty (TASTy 28.8, 716 bytes)
+package fix.jargetter
+@SourceFile class JgSocketImpl() extends Object, JgSocket {
+  def send(x: Int, cont: Boolean, label: Predef.String): Predef.String = ...
+}

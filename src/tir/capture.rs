@@ -271,9 +271,6 @@ pub enum Form {
     /// A literal that stands for a read of a constant, an `inline val`'s or a constant member's
     /// behind `this` or an object: the reference, which scalac's pickle keeps (`k * 2`).
     Constant(SymId),
-    /// A `Unit` that stands for an omitted argument: the application of the parameter's
-    /// default getter to the arguments of the clauses before it.
-    Default,
     /// A `SeqLit` of repeated arguments: `REPEATED` with the elements' type.
     Repeated(TypeId),
     /// A `Unary` the typer put around an operand of a builtin operator to promote it: the
@@ -556,6 +553,17 @@ impl Capture {
             Some(old) if self.wraps.get(&e) != Some(&old) => self.changed_by(unit, Prior::Wraps(e, old)),
             Some(_) => {}
         }
+    }
+
+    /// `e` without the name it was passed by: a copy of a named argument passed again as a
+    /// default getter's argument, which takes it by position.
+    pub fn unname(&mut self, unit: FileId, e: TExprId) {
+        let Some(layers) = self.wraps.get(&e) else { return };
+        if !layers.iter().any(|l| matches!(l, Wrap::Named(_))) {
+            return;
+        }
+        let kept: Vec<Wrap> = layers.iter().copied().filter(|l| !matches!(l, Wrap::Named(_))).collect();
+        self.set_wraps(unit, e, kept);
     }
 
     /// The layers `ws` around `e` in the place of what it had.

@@ -58,6 +58,17 @@ impl Frame {
         Rc::new(Frame { parent, vals: RefCell::new(vals), slot: Cell::new(0), born: Cell::new(0), made: Cell::new(made_now()) })
     }
 
+    /// The value `sym` has in this frame or the nearest enclosing one that binds it.
+    pub fn find(self: &Rc<Self>, sym: SymId) -> Option<Value> {
+        let mut f = self;
+        loop {
+            if let Some((_, v)) = f.vals.borrow().iter().rev().find(|(s, _)| *s == sym) {
+                return Some(v.clone());
+            }
+            f = f.parent.as_ref()?;
+        }
+    }
+
     pub fn bind(self: &Rc<Self>, sym: SymId, v: Value) {
         written(self.born.get(), self.made.get(), || Some(Node::Frame(self.clone())), |other| format!("a local of a frame{}", if other { " another run opened" } else { "" }));
         self.vals.borrow_mut().push((sym, v));

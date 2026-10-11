@@ -9,7 +9,7 @@ use super::bodies::Conv;
 use super::super::apply::{ArgList, Callee, StaticPath};
 use crate::ast::{DeclRef, Expr, ExprId, ListRef};
 use crate::source::Span;
-use crate::tir::{TExpr, TExprId};
+use crate::tir::{DefaultOf, TExpr, TExprId};
 use crate::intern::Name;
 use crate::names;
 use crate::symbols::*;
@@ -1006,8 +1006,8 @@ impl<'a> Worker<'a> {
                         if name == names::APPLY {
                             break 'typed self.apply_companion_apply(c, targs.or(class_targs), lists, span, expected);
                         }
-                        if let Some(ty) = default.and_then(|n| self.ctor_param_default(c, n)) {
-                            break 'typed (self.prog.add(TExpr::Unit), ty);
+                        if let Some((n, ty)) = default.and_then(|n| Some((n, self.ctor_param_default(c, n)?))) {
+                            break 'typed self.getter_application(DefaultOf::Ctor(c), n - 1, None, &[], targs, ty, lists, span);
                         }
                     }
                 }

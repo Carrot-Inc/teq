@@ -536,7 +536,7 @@ impl<'a> Worker<'a> {
     fn js_call_args(&mut self, params: &[ParamSig], args: ListRef) -> ListRef {
         let mut flat = self.prog.expr_list(args).to_vec();
         while let Some((&last, p)) = flat.last().zip(params.get(flat.len().wrapping_sub(1))) {
-            if p.has_default && matches!(self.prog.expr(last), TExpr::Unit) {
+            if p.has_default && matches!(self.prog.expr(last), TExpr::Default(..)) {
                 flat.pop();
             } else {
                 break;

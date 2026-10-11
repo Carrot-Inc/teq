@@ -1144,6 +1144,7 @@ impl<'a> Worker<'a> {
         }
         if pkg.has_exports() {
             if let Some(&r) = self.pkg_exports_of(p).as_ref().and_then(|e| e.terms.get(&name)) {
+                self.ref_exported = true;
                 return Some(r);
             }
         }
@@ -1165,6 +1166,7 @@ impl<'a> Worker<'a> {
                 return found;
             }
             if let Some(&r) = self.pkg_exports_of(p).as_ref().and_then(|e| e.terms.get(&name)) {
+                self.ref_exported = true;
                 return Some(r);
             }
         }
@@ -1190,6 +1192,7 @@ impl<'a> Worker<'a> {
             // Another module's top-level exports, its package objects entered now.
             if self.syms.pkg(p).has_exports() {
                 if let Some(&r) = self.pkg_exports_of(p).as_ref().and_then(|e| e.terms.get(&name)) {
+                    self.ref_exported = true;
                     return Some(r);
                 }
             }
@@ -1299,6 +1302,7 @@ impl<'a> Worker<'a> {
             }
         }
         if let Some(r) = self.exports_of(c).and_then(|e| e.terms.get(&name).copied()) {
+            self.ref_exported = true;
             return Some(r);
         }
         if self.extension_call_head {
@@ -1363,6 +1367,8 @@ impl<'a> Worker<'a> {
     }
 
     fn lookup_term_at_opt(&mut self, name: Name, span: Option<Span>) -> Option<TermRef> {
+        // Whether the name resolves through an export (`note_written_ref`), this lookup's alone.
+        self.ref_exported = false;
         if name == names::ROOT {
             return Some(TermRef::Package(ROOT_PKG));
         }
@@ -5102,6 +5108,7 @@ impl Binding for TermRef {
                     }
                 }
                 if let Some(r) = t.exports_of(c).as_ref().and_then(|e| e.terms.get(&name)).copied() {
+                    t.ref_exported = true;
                     return Some(r);
                 }
                 if t.extension_call_head {

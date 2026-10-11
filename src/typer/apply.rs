@@ -598,7 +598,7 @@ impl<'a> Worker<'a> {
                     if let Some(n) = self.ctor_default_index(name) {
                         if let Some((c, _)) = self.ctor_ref(q) {
                             if let Some(ty) = self.ctor_param_default(c, n) {
-                                return (self.prog.add(TExpr::Unit), ty);
+                                return self.getter_application(DefaultOf::Ctor(c), n - 1, None, &[], targs, ty, lists, span);
                             }
                         }
                     }
@@ -752,6 +752,22 @@ impl<'a> Worker<'a> {
             && info.superclass.map_or(false, |s| {
                 named_parent.map_or(true, |k| k == s) && self.syms.class(s).base_types.iter().any(|&(x, _)| x == owner)
             });
+        // A product's getter selected on `super` (`super.m$default$N`, in a trait through its
+        // accessor) is applied as the source's call has it: the getter's application on
+        // `super` (`Applications.findDefaultGetter`).
+        if self.loaded.as_ref().is_some_and(|l| !l.product_synthetics.is_empty() && l.product_synthetics.contains_key(&m)) {
+            let target = if in_trait {
+                SuperTarget::Mixin(c)
+            } else if through_chain {
+                SuperTarget::Chain
+            } else {
+                SuperTarget::Class(owner)
+            };
+            let recv = self.prog.add(TExpr::Super(target));
+            if let Some(r) = self.default_getter_selection(recv, owner_ty, name, targs, &lists, span) {
+                return r;
+            }
+        }
         let target = if in_trait {
             self.note_mixin_super(c, m);
             SuperTarget::Mixin(c)
@@ -2251,11 +2267,22 @@ impl<'a> Worker<'a> {
         })
     }
 
+    /// A member's reference written as a name keeps the purity its writing gives (`exprPurity`
+    /// of an `Ident`, `Worker::note_written_ref`): its node selects it on its owner.
+    #[inline(always)]
+    fn written_member(&mut self, callee: Callee) -> Callee {
+        if let Callee::Value(te, _) = callee {
+            let exported = std::mem::take(&mut self.ref_exported);
+            self.note_written_ref(te, exported);
+        }
+        callee
+    }
+
     pub(super) fn term_callee(&mut self, r: TermRef, name: Name, span: Span) -> Option<Callee> {
         if let TermRef::This(_, s) | TermRef::ModuleMember(_, s) | TermRef::Global(s) = r {
             if self.may_read_module(s) {
                 if let Some(callee) = self.module_read_callee(s) {
-                    return Some(callee);
+                    return Some(self.written_member(callee));
                 }
             }
         }
@@ -2299,19 +2326,25 @@ impl<'a> Worker<'a> {
                     None => (self.syms.this_type(c), s),
                 };
                 let this = self.this_ref(c);
-                self.member_callee(this, self_ty, s)
+                let callee = self.member_callee(this, self_ty, s);
+                self.written_member(callee)
             }
             TermRef::ModuleMember(c, s) => {
                 let module_ty = self.types.class(c, &[]);
                 // A member imported from a local object is selected on the object's lazy val,
                 // one from an object nested in a class on the enclosing instance's.
                 let module = self.module_ref(c, span)?;
-                self.member_callee(module, module_ty, s)
+                let callee = self.member_callee(module, module_ty, s);
+                self.written_member(callee)
             }
-            TermRef::Global(s) => self.global_callee(s),
+            TermRef::Global(s) => {
+                let callee = self.global_callee(s);
+                self.written_member(callee)
+            }
             TermRef::ValueMember(v, m) => {
                 let (recv, recv_ty) = self.import_value_ref(v, span)?;
-                self.member_callee(recv, recv_ty, m)
+                let callee = self.member_callee(recv, recv_ty, m);
+                self.written_member(callee)
             }
             TermRef::Class(c) => Callee::Ctor(c),
             // The imported proxy applies as its selection on the value: `o.Inner(args)`.
@@ -3024,6 +3057,17 @@ impl<'a> Worker<'a> {
     }
 
     #[allow(clippy::too_many_arguments)]
+    /// The plan of an application of `sym`, or of the constructor `ctor` names.
+    #[cold]
+    #[inline(never)]
+    fn call_plan(&self, ctor: &Option<(ClassId, Arc<MethodSig>)>, sym: SymId, sig: &Arc<MethodSig>) -> super::elaborate::CallPlan {
+        let of = match ctor {
+            Some((c, _)) => DefaultOf::Ctor(*c),
+            None => DefaultOf::Method(sym),
+        };
+        super::elaborate::CallPlan::new(of, sig.clone(), self.annotation_args)
+    }
+
     fn apply_method_in_now(
         &mut self,
         call: MethodCall,
@@ -3237,6 +3281,9 @@ impl<'a> Worker<'a> {
         // qualifier that takes the application over (`retry_on_qualifier`), or alone (1438).
         let mut stopped = false;
         let hoist_mark = self.hoisted.len();
+        // The application's plan, made where a clause leaves an argument out or reorders its
+        // arguments (`typer::elaborate`).
+        let mut plan: Option<super::elaborate::CallPlan> = None;
         let paths_mark = self.param_paths.len();
         let inline_callee = ctor.is_none() && self.is_inline_callee(call.sym);
         let outer_recording = std::mem::replace(&mut self.inline.record_args, inline_callee);
@@ -3323,18 +3370,22 @@ impl<'a> Worker<'a> {
                     let outer = std::mem::replace(&mut self.note_paths, dependent);
                     let is_java = self.is_java_method(call.sym);
                     let java = std::mem::replace(&mut self.java_varargs, is_java);
-                    let hoisted = self.type_clause_args(clause, list, &subst, &mut args_out, sig.clauses.iter().any(|c| c.params.iter().any(|p| p.has_default)));
+                    let mut written = super::elaborate::ClauseArgs { inherit: ctor.is_none().then_some((call.sym, first_arg)), ..Default::default() };
+                    self.type_clause_args_planned(clause, list, &subst, &mut args_out, Some(&mut written), false);
                     self.java_varargs = java;
-                    if hoisted {
-                        self.hoist_receiver(&mut call, hoist_mark, span);
+                    if written.planned() {
+                        let p = plan.get_or_insert_with(|| self.call_plan(&ctor, call.sym, &sig));
+                        self.elaborate_written(p, &mut call.recv, &mut args_out, first_arg, &written, clause, &subst, span);
                     }
                     self.note_paths = outer;
                     if dependent {
                         ret_ty = self.subst_param_paths(clause, &args_out[first_arg..], ret_ty, &mut subst);
                     }
                 } else {
+                    let clause_first = args_out.len();
                     let determined = self.vars_of_applied_clauses(&sig.clauses[..ci], &subst);
-                    for p in &clause.params {
+                    let mut defaulted: Vec<usize> = Vec::new();
+                    for (k, p) in clause.params.iter().enumerate() {
                         let target = self.param_type(p.ty, &subst);
                         self.solve_selected_in(target, &determined);
                         let open_tag = self.open_tag(target);
@@ -3362,11 +3413,16 @@ impl<'a> Worker<'a> {
                                 }
                                 args_out.push(if p.by_name { self.by_name_thunk(te) } else { te });
                             }
-                            // No given: the parameter's default, as scalac falls back to it.
-                            None if p.has_default && self.given_ambiguity.is_none() => {
+                            // No given: the parameter's default, as scalac falls back to it, the
+                            // clause applied again with the givens found as named arguments and
+                            // this one left out (`Typer.adaptNoArgsImplicitMethod`), which the
+                            // clause's plan completes below.
+                            // A default of its own or one a member it overrides declares
+                            // (`SymDenotations.hasDefaultParams`).
+                            None if (p.has_default || (ctor.is_none() && self.default_declarer(call.sym, clause_first + k).is_some())) && self.given_ambiguity.is_none() => {
                                 self.failed_givens.clear();
-                                let omitted = self.default_placeholder();
-                                args_out.push(omitted);
+                                defaulted.push(k);
+                                args_out.push(self.prog.add(TExpr::Unit));
                             }
                             None => {
                                 let missing_tag = self.missing_tag(p.ty, target, open_tag);
@@ -3394,6 +3450,12 @@ impl<'a> Worker<'a> {
                             }
                         }
                     }
+                    if !defaulted.is_empty() {
+                        let order: Vec<usize> = (0..clause.params.len()).filter(|k| !defaulted.contains(k)).collect();
+                        let written = super::elaborate::ClauseArgs { inherit: None, omitted: defaulted, order };
+                        let p = plan.get_or_insert_with(|| self.call_plan(&ctor, call.sym, &sig));
+                        self.elaborate_written(p, &mut call.recv, &mut args_out, clause_first, &written, clause, &subst, span);
+                    }
                 }
                 continue;
             }
@@ -3415,10 +3477,12 @@ impl<'a> Worker<'a> {
                     let before = self.diags.items.len();
                     let is_java = self.is_java_method(call.sym);
                     let java = std::mem::replace(&mut self.java_varargs, is_java);
-                    let hoisted = self.type_clause_args(clause, list, &subst, &mut args_out, sig.clauses.iter().any(|c| c.params.iter().any(|p| p.has_default)));
+                    let mut written = super::elaborate::ClauseArgs { inherit: ctor.is_none().then_some((call.sym, first_arg)), ..Default::default() };
+                    self.type_clause_args_planned(clause, list, &subst, &mut args_out, Some(&mut written), false);
                     self.java_varargs = java;
-                    if hoisted {
-                        self.hoist_receiver(&mut call, hoist_mark, span);
+                    if written.planned() {
+                        let p = plan.get_or_insert_with(|| self.call_plan(&ctor, call.sym, &sig));
+                        self.elaborate_written(p, &mut call.recv, &mut args_out, first_arg, &written, clause, &subst, span);
                     }
                     self.note_paths = outer;
                     self.stringify_printed_double(&call, &mut args_out);
@@ -3519,10 +3583,14 @@ impl<'a> Worker<'a> {
                     };
                     let mut syms = Vec::new();
                     let mut tys = Vec::new();
+                    let clause_first = args_out.len();
                     for (i, p) in clause.params.iter().enumerate() {
                         if i >= expanded {
-                            let omitted = self.default_placeholder();
-                            args_out.push(omitted);
+                            let ty = self.param_type(p.ty, &subst);
+                            let earlier = args_out[..clause_first].to_vec();
+                            let pl = plan.get_or_insert_with(|| self.call_plan(&ctor, call.sym, &sig));
+                            let d = self.default_application(pl, call.recv, &earlier, clause_first + i, ty);
+                            args_out.push(if p.by_name { self.by_name_thunk(d) } else { d });
                             continue;
                         }
                         let mut pty = self.param_type(p.ty, &subst);
@@ -3764,6 +3832,9 @@ impl<'a> Worker<'a> {
         if self.capturing() && !sig.tparams.is_empty() && !(inline_callee && !self.keeps_inline_calls()) {
             let targs: Vec<TypeId> = subst[call.owner_subst.len()..].iter().map(|&(_, t)| t).collect();
             self.capture_targs(te, &targs);
+            for &d in plan.as_ref().map_or(&[][..], |p| &p.defaults[..]) {
+                self.capture_targs(d, &targs);
+            }
         }
         if self.capturing() && !evidence.is_empty() && !(inline_callee && !self.keeps_inline_calls()) {
             self.capture_evidence(te, evidence);
@@ -4340,6 +4411,23 @@ impl<'a> Worker<'a> {
         out: &mut Vec<TExprId>,
         defaults: bool,
     ) -> bool {
+        self.type_clause_args_planned(clause, list, subst, out, None, defaults)
+    }
+
+    /// `type_clause_args` for an application's plan (`Worker::elaborate_clause`): what the
+    /// arguments leave to the defaults and the order they were written in go to `plan`, where an
+    /// omitted argument holds its place with `()`, and nothing is bound here. A parameter without
+    /// a default of its own takes one a member it overrides declares (`plan.inherit`). Without a
+    /// plan, `defaults` picks the lifter of reordered arguments (`keep_call_order`).
+    pub fn type_clause_args_planned(
+        &mut self,
+        clause: &ClauseSig,
+        list: ArgList,
+        subst: &Subst,
+        out: &mut Vec<TExprId>,
+        mut plan: Option<&mut super::elaborate::ClauseArgs>,
+        defaults: bool,
+    ) -> bool {
         let ast = self.cur_ast();
         let n = clause.params.len();
         if n == 1 && list.args.len() > 1 && !clause.params[0].repeated {
@@ -4505,15 +4593,37 @@ impl<'a> Worker<'a> {
                 continue;
             }
             let Some(&arg) = slots[i].first() else {
-                if !p.has_default && !misplaced {
+                let has_default = p.has_default
+                    || match plan.as_deref() {
+                        Some(super::elaborate::ClauseArgs { inherit: Some((m, from)), .. }) => {
+                            let (m, from) = (*m, *from);
+                            self.default_declarer(m, from + i).is_some()
+                        }
+                        _ => false,
+                    };
+                if !has_default && !misplaced {
                     let msg = format!("missing argument for parameter {}", self.name_str(p.name));
                     self.arity_error(&list, msg);
                 }
-                // The parameter's default getter is used (`CheckUnused`'s default arguments).
-                if p.has_default {
-                    self.use_default(p.sym);
+                if has_default {
+                    // The getter the call applies is used (`CheckUnused`'s default arguments):
+                    // the parameter's own, or that of the overridden member that declares it.
+                    let declaring = match plan.as_deref() {
+                        _ if p.has_default => Some(p.sym),
+                        Some(super::elaborate::ClauseArgs { inherit: Some((m, from)), .. }) => {
+                            let (m, from) = (*m, *from);
+                            self.default_declarer(m, from + i).and_then(|d| self.sig_of(d).clauses.iter().flat_map(|c| c.params.iter()).nth(from + i).map(|q| q.sym))
+                        }
+                        _ => None,
+                    };
+                    if let Some(q) = declaring {
+                        self.use_default(q);
+                    }
+                    if let Some(pl) = plan.as_deref_mut() {
+                        pl.omitted.push(i);
+                    }
                 }
-                results[i] = Some(if p.has_default { self.default_placeholder() } else { self.prog.add(TExpr::Unit) });
+                results[i] = Some(self.prog.add(TExpr::Unit));
                 continue;
             };
             let arg = match arg {
@@ -4534,7 +4644,13 @@ impl<'a> Worker<'a> {
             }
         }
         let mut results: Vec<TExprId> = results.into_iter().map(|r| r.unwrap()).collect();
-        let reordered = self.keep_call_order(&order, &mut results, out, list.span, defaults);
+        let reordered = match plan {
+            Some(pl) => {
+                pl.order = order;
+                false
+            }
+            None => self.keep_call_order(&order, &mut results, out, list.span, defaults),
+        };
         if self.capturing() {
             self.capture_named_args(clause, &list, &results);
         }
@@ -4671,15 +4787,6 @@ impl<'a> Worker<'a> {
                     !matches!(s.kind, SymKind::Val | SymKind::Var) || s.mods & crate::ast::mods::LAZY != 0 || ctor.contains(&m)
                 })
             }
-        }
-    }
-
-    /// The receiver of a call whose arguments were bound to temporaries is evaluated before them.
-    fn hoist_receiver(&mut self, call: &mut MethodCall, mark: usize, span: Span) {
-        if let Some(r) = call.recv {
-            let mut recv = [r];
-            self.hoist_before(mark, &mut recv, span);
-            call.recv = Some(recv[0]);
         }
     }
 
@@ -5485,6 +5592,13 @@ impl<'a> Worker<'a> {
             Some(m) => Some(m),
             None => self.selection_member(recv, recv_ty, name).or_else(|| self.product_member(recv_ty, name)),
         };
+        // A product's getter, a member its class has where the whole program's has not, is
+        // applied as the source's call has it.
+        if member.is_some_and(|(sym, _)| self.loaded.as_ref().is_some_and(|l| !l.product_synthetics.is_empty() && l.product_synthetics.contains_key(&sym))) {
+            if let Some(r) = self.default_getter_selection(recv, recv_ty, name, targs, &lists, span) {
+                return r;
+            }
+        }
         // A library body's selection of an overloaded name calls the alternative its TASTy
         // declares, seen from the receiver's type at the class that declares it.
         let mut declared = false;
@@ -5750,7 +5864,16 @@ impl<'a> Worker<'a> {
             // only has to be evaluated (an object for the body it may run).
             if let Some(&r) = self.exports_of(c).as_ref().and_then(|e| e.terms.get(&name)) {
                 if let Some(callee) = self.term_callee(r, name, span) {
+                    let reference = lists.is_empty() && targs.is_none();
                     let (te, ty) = self.apply_callee(callee, targs, lists, span, expected);
+                    // The forwarder selected on the exporting object (`Select` of a stable member).
+                    if reference {
+                        let on = self.expr_purity(recv);
+                        self.note_written_ref(te, true);
+                        if let Some(p) = self.written_purity.get(&te).copied() {
+                            self.written_purity.insert(te, p.min(on));
+                        }
+                    }
                     if self.deps.is_some() {
                         self.deps_node(te, super::deps::Node::Export(c, name, recv));
                     }
@@ -5805,11 +5928,13 @@ impl<'a> Worker<'a> {
         if let Some(field) = self.copy_default_field(recv_ty, name) {
             return self.apply_member(recv, recv_ty, field, None, lists.unwrap_or_default(), span, expected);
         }
-        // `x.m$default$n` in a library body, the default of the nth parameter of `x.m`, is what
-        // a missing argument is: the callee supplies it.
-        if let Some(ty) = self.member_default_type(recv_ty, name) {
-            return (self.prog.add(TExpr::Unit), ty);
+        // `x.m$default$n` in a library body: the application of the getter of the nth
+        // parameter of `x.m`, as the plan of a source's call has it (`typer::elaborate`).
+        let l = lists.take().unwrap_or_default();
+        if let Some(r) = self.default_getter_selection(recv, recv_ty, name, targs, &l, span) {
+            return r;
         }
+        lists = Some(l);
         let msg = format!("value {} is not a member of {}", self.name_str(name), self.show(recv_ty));
         // What a class whose header, or an ancestor's, the parser could not complete lacks is
         // unknown.
@@ -6955,16 +7080,42 @@ impl<'a> Worker<'a> {
         given
     }
 
-    fn member_default_type(&mut self, recv_ty: TypeId, name: Name) -> Option<TypeId> {
+    /// The getter `name`, `m$default$n`, selected on a receiver of type `recv_ty` in a library
+    /// body or a product's: whose default it is, the parameter's place among the callee's, its
+    /// type, and whether the receiver is the callee's. A constructor's (`$lessinit$greater$default$n`
+    /// on the companion); a member's, an extension the receiver's class defines among them;
+    /// and one of a method the std has as an extension (`indexWhere` on a `String`), whose
+    /// clauses after its receiver's are scala-library's member's, the receiver its argument.
+    fn member_default_getter(&mut self, recv_ty: TypeId, name: Name) -> Option<(DefaultOf, usize, TypeId, bool)> {
         let text = self.name_str(name);
         let (member, n) = text.rsplit_once("$default$")?;
         let n: usize = n.parse().ok()?;
+        let i = n.checked_sub(1)?;
+        // A constructor's, on the companion of its class or trait.
         if member == "<init>" || member == "$lessinit$greater" {
-            return self.ctor_default_type(recv_ty, n);
+            let o = self.class_of(recv_ty)?;
+            let c = match self.companion_class(o) {
+                Some(c) => c,
+                None => self.syms.class(o).companion.filter(|&k| self.syms.class(k).kind == ClassKind::Trait).unwrap_or(o),
+            };
+            return Some((DefaultOf::Ctor(c), i, self.ctor_param_default(c, n)?, false));
         }
         let member = self.interner.intern(member);
-        let Some((sym, owner_ty)) = self.find_member(recv_ty, member) else {
-            return self.extension_default_type(member, n);
+        let found = match self.find_member(recv_ty, member) {
+            Some(f) => Some(f),
+            None => self.class_extension(recv_ty, member),
+        };
+        let Some((sym, owner_ty)) = found else {
+            for sym in self.lexical_extensions(member) {
+                let ext_clauses = self.syms.sym(sym).ext_clauses as usize;
+                let sig = self.sig_of(sym);
+                let skipped: usize = sig.clauses.iter().take(ext_clauses).map(|c| c.params.len()).sum();
+                let p = sig.clauses.iter().skip(ext_clauses).flat_map(|c| c.params.iter()).nth(i);
+                if let Some(p) = p.filter(|p| p.has_default) {
+                    return Some((DefaultOf::Method(sym), skipped + i, p.ty, false));
+                }
+            }
+            return None;
         };
         let alts: Vec<SymId> = match self.syms.alternatives(sym) {
             Some(set) => set.to_vec(),
@@ -6972,36 +7123,155 @@ impl<'a> Worker<'a> {
         };
         let subst = self.owner_subst(owner_ty);
         for alt in alts {
+            let j = self.signature_param_index(alt, i);
+            if self.default_declarer(alt, j).is_none() {
+                continue;
+            }
             let sig = self.sig_of(alt);
-            let p = sig.clauses.iter().flat_map(|c| c.params.iter()).nth(n.checked_sub(1)?);
-            if let Some(ty) = p.filter(|p| p.has_default).map(|p| p.ty) {
-                return Some(self.types.subst(ty, &subst));
+            if let Some(ty) = sig.clauses.iter().flat_map(|c| c.params.iter()).nth(j).map(|p| p.ty) {
+                return Some((DefaultOf::Method(alt), j, self.types.subst(ty, &subst), true));
             }
         }
         None
     }
 
-    /// The default of the nth parameter of an extension method `name` in scope, where a
-    /// library body asks for `x.m$default$n` of a method the std has as an extension
-    /// (`indexWhere` on a `String`).
-    fn extension_default_type(&mut self, name: Name, n: usize) -> Option<TypeId> {
-        for sym in self.lexical_extensions(name) {
-            let ext_clauses = self.syms.sym(sym).ext_clauses as usize;
-            let sig = self.sig_of(sym);
-            let p = sig.clauses.iter().skip(ext_clauses).flat_map(|c| c.params.iter()).nth(n.checked_sub(1)?);
-            if let Some(p) = p.filter(|p| p.has_default) {
-                return Some(p.ty);
-            }
-        }
-        None
+    /// The extension `name` the class of `recv_ty`, or a base class, defines, seen from it.
+    fn class_extension(&mut self, recv_ty: TypeId, name: Name) -> Option<(SymId, TypeId)> {
+        let c = self.class_of(recv_ty)?;
+        self.complete_class(c);
+        let bases = self.syms.class(c).base_types.clone();
+        bases.into_iter().find_map(|(b, bt)| self.syms.class(b).extensions.iter().copied().find(|&x| self.syms.sym(x).name == name).map(|x| (x, bt)))
     }
 
-    /// `C.<init>$default$n` on the companion `C`: the default of the nth constructor parameter
-    /// of the class, which the constructor supplies for a missing argument.
-    fn ctor_default_type(&mut self, recv_ty: TypeId, n: usize) -> Option<TypeId> {
-        let o = self.class_of(recv_ty)?;
-        let c = self.companion_class(o).unwrap_or(o);
-        self.ctor_param_default(c, n)
+    /// The place, among the parameters of `m` as its signature has them, of the `i`th of its
+    /// declaration's: a right-associative extension's first clause is declared before its
+    /// receiver's (`Desugar.extMethod`), which the signature keeps first.
+    fn signature_param_index(&mut self, m: SymId, i: usize) -> usize {
+        match self.right_assoc_declared_order(m) {
+            Some((order, sizes)) => {
+                let mut k = i;
+                for c in order {
+                    if k < sizes[c] {
+                        return sizes[..c].iter().sum::<usize>() + k;
+                    }
+                    k -= sizes[c];
+                }
+                i
+            }
+            None => i,
+        }
+    }
+
+    /// The clauses of a right-associative extension `m` in its declaration's order, with each
+    /// clause's size.
+    fn right_assoc_declared_order(&mut self, m: SymId) -> Option<(Vec<usize>, Vec<usize>)> {
+        if !self.is_right_assoc_extension(m) {
+            return None;
+        }
+        let ext_clauses = self.syms.sym(m).ext_clauses as usize;
+        let sig = self.sig_of(m);
+        let order = sig.right_assoc_order(ext_clauses)?;
+        Some((order, sig.clauses.iter().map(|c| c.params.len()).collect()))
+    }
+
+    /// `recv.m$default$n[T..](args)..` of a pickled body: the getter's application to the
+    /// receiver, an extension's receiver argument first.
+    fn default_getter_selection(&mut self, recv: TExprId, recv_ty: TypeId, name: Name, targs: Option<ListRef>, lists: &[ArgList], span: Span) -> Option<(TExprId, TypeId)> {
+        let (of, index, ty, on_receiver) = self.member_default_getter(recv_ty, name)?;
+        let (on, leading) = match of {
+            DefaultOf::Method(_) if on_receiver => (Some(recv), Vec::new()),
+            DefaultOf::Method(_) => (None, vec![recv]),
+            DefaultOf::Ctor(_) => (None, Vec::new()),
+        };
+        Some(self.getter_application(of, index, on, &leading, targs, ty, lists.to_vec(), span))
+    }
+
+    /// A getter's application a pickled body spells (`x.m$default$n[T..](args)`): the plan's
+    /// node, the receiver and `leading` (an extension's receiver argument) before the arguments
+    /// the getter is applied to, typed against the callee's parameters before its own; the type
+    /// arguments the callee's type parameters, or its class's for a constructor's, which the
+    /// getter repeats.
+    #[allow(clippy::too_many_arguments)]
+    pub(in crate::typer) fn getter_application(&mut self, of: DefaultOf, index: usize, recv: Option<TExprId>, leading: &[TExprId], targs: Option<ListRef>, ty: TypeId, lists: Vec<ArgList>, span: Span) -> (TExprId, TypeId) {
+        let (params, tparams): (Vec<ParamSig>, Vec<TParamId>) = match of {
+            DefaultOf::Method(m) => {
+                let sig = self.sig_of(m);
+                (sig.clauses.iter().flat_map(|c| c.params.iter().cloned()).collect(), sig.tparams.clone())
+            }
+            DefaultOf::Ctor(c) => (
+                self.syms.class(c).ctor.iter().flat_map(|cl| cl.params.iter().cloned()).collect(),
+                self.syms.class(c).tparams.to_vec(),
+            ),
+        };
+        let targs: Vec<TypeId> = match targs {
+            Some(l) => self.cur_ast().ty_list(l).to_vec().into_iter().map(|t| self.resolve_type(t)).collect(),
+            None => Vec::new(),
+        };
+        let subst: crate::types::Subst = match targs.len() == tparams.len() {
+            true => tparams.iter().copied().zip(targs.iter().copied()).collect(),
+            false => Vec::new(),
+        };
+        let ty = self.types.subst(ty, &subst);
+        let params: Vec<ParamSig> = params.into_iter().map(|p| ParamSig { ty: self.types.subst(p.ty, &subst), ..p }).collect();
+        // A right-associative extension's getter takes the clauses in its declaration's order.
+        let lists = match of {
+            DefaultOf::Method(m) => match self.right_assoc_declared_order(m) {
+                Some((order, _)) => {
+                    let mut placed: Vec<(usize, ArgList)> = lists.into_iter().enumerate().map(|(j, l)| (order.get(j).copied().unwrap_or(j), l)).collect();
+                    placed.sort_by_key(|&(c, _)| c);
+                    placed.into_iter().map(|(_, l)| l).collect()
+                }
+                None => lists,
+            },
+            DefaultOf::Ctor(_) => lists,
+        };
+        let mut items: Vec<TExprId> = Vec::new();
+        let mut at = index as u32;
+        if let Some(r) = recv {
+            items.push(r);
+            at |= DEFAULT_RECEIVER;
+        }
+        items.extend_from_slice(leading);
+        let mut k = leading.len();
+        for list in lists {
+            for arg in list.args {
+                let p = params.get(k).cloned();
+                let te = match p {
+                    // A repeated parameter's sequence, passed as `xs*`.
+                    Some(p) if p.repeated => {
+                        let seq = match self.seq_class() {
+                            Some(seq) => self.types.class(seq, &[p.ty]),
+                            None => ANY,
+                        };
+                        let ast = self.cur_ast();
+                        let arg = match arg {
+                            ArgSrc::Ast(e) => match ast.expr(e) {
+                                Expr::Typed(inner, t) if matches!(ast.ty(t), TyExpr::Repeated(_)) => ArgSrc::Ast(inner),
+                                _ => arg,
+                            },
+                            _ => arg,
+                        };
+                        self.type_arg(arg, seq, list.span)
+                    }
+                    Some(p) => {
+                        let te = self.type_arg(arg, p.ty, list.span);
+                        if p.by_name { self.by_name_thunk(te) } else { te }
+                    }
+                    None => self.type_arg(arg, ANY, list.span),
+                };
+                items.push(te);
+                k += 1;
+            }
+        }
+        self.note_super_getter(of, recv, index);
+        let l = self.prog.list(&items);
+        let d = self.prog.add(TExpr::Default(of, at, l));
+        self.prog.set_type(d, ty);
+        if self.capturing() && !subst.is_empty() {
+            self.capture_targs(d, &targs);
+        }
+        let _ = span;
+        (d, ty)
     }
 
     pub(in crate::typer) fn ctor_param_default(&mut self, c: ClassId, n: usize) -> Option<TypeId> {

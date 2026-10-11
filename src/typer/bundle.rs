@@ -514,6 +514,13 @@ impl<'a> Worker<'a> {
                             work.push(Node::Class(c.0));
                             list(&mut work, l, Node::Exprs);
                         }
+                        TExpr::Default(of, _, l) => {
+                            match of {
+                                crate::tir::DefaultOf::Method(x) => work.push(Node::Sym(x.0)),
+                                crate::tir::DefaultOf::Ctor(c) => work.push(Node::Class(c.0)),
+                            }
+                            list(&mut work, l, Node::Exprs);
+                        }
                         TExpr::Lambda(l, e) => {
                             list(&mut work, l, Node::Syms);
                             work.push(Node::Expr(e.0));

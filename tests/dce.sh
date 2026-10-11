@@ -118,6 +118,14 @@ runs tests/dce/expansions_val.expected out/dce/expansions_val.actual expansions_
 once $out 'step body' 'function step\$o'
 present $out 'step\$o[0-9a-f]*("b", () => Tag\$().given_Tag_String, "many ", 2)'
 
+# A jar's getter is a member of its pickle, which a body of the jar applies by name: the getter an
+# override's parameter calls is that one, written once in the class.
+out=out/dce/jar_getter_once.js
+timeout 60 "$TEQ" compiler build tests/dce/jar_getter_once.scala --classpath "$(fixtures_jar)" -o $out > out/dce/jar_getter_once.log 2>&1 || bad "jar_getter_once build"
+timeout 20 node $out > out/dce/jar_getter_once.actual 2>&1
+runs tests/dce/jar_getter_once.expected out/dce/jar_getter_once.actual jar_getter_once
+once $out 'send\$default\$2() {' 'send\$default\$3() {'
+
 # Reflective instantiation costs nothing until a lookup is reached: an annotated class nothing
 # names is dropped, and no registration or registry is written.
 out=out/dce/reflect_unused.js

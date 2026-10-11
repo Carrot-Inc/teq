@@ -259,12 +259,31 @@ pub enum TExpr {
     Throw(TExprId, bool),
     /// An index into `Program::tries`.
     Try(u32),
+    /// The application of a parameter's default getter, where the source left the argument out:
+    /// dotty's `f$default$N` selected on the call's receiver and applied to the arguments of the
+    /// clauses before the parameter's (`Applications.defaultArgument`, `findDefaultGetter`,
+    /// `spliceMeth`). The `u32` is the parameter's place among the callee's, counted across its
+    /// clauses, with `DEFAULT_RECEIVER` set where the list starts with the receiver; the
+    /// arguments of the earlier clauses follow. The getter is the receiver's class's: the one of
+    /// the nearest override that declares the default.
+    Default(DefaultOf, u32, ListRef),
     /// `${ e }` at the top of an inline method's body typed at its definition: a `Lambda` of the
     /// `Quotes` the macro's code `e` takes, `Quotes ?=> Expr[T]` for the node's type `T`, which
     /// runs at each expansion with that expansion's arguments. Only a stored
     /// inline body holds one, and no backend reads a stored body.
     Splice(TExprId),
 }
+
+/// Whose default getter a `TExpr::Default` applies: a method's, a secondary constructor's
+/// `<init>` included, or a class's primary constructor's, whose getters its companion has.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
+pub enum DefaultOf {
+    Method(SymId),
+    Ctor(ClassId),
+}
+
+/// The bit of a `TExpr::Default`'s index that says its list starts with the receiver.
+pub const DEFAULT_RECEIVER: u32 = 1 << 31;
 
 /// A `TExpr` stays three words: a wider node costs the interpreter's dispatch.
 const _: () = assert!(std::mem::size_of::<TExpr>() == 24);
@@ -315,8 +334,42 @@ pub enum SuperTarget {
 pub struct SuperAccessor {
     pub of_trait: ClassId,
     pub member: SymId,
-    /// `None` for the `toString`, `hashCode` or `equals` of `Any`.
+    /// `None` for the `toString`, `hashCode` or `equals` of `Any`; of a getter's accessor, the
+    /// member that declares the default.
     pub target: Option<SymId>,
+    /// The accessor of `super.member$default$N`, the getter of the parameter at this index of
+    /// `member`, counted across its clauses (`SuperAccessors` gives a getter selected on `super`
+    /// an accessor of its own).
+    pub getter: Option<u32>,
+}
+
+/// What a trait calls through `super`: a member, or the getter of the default of one of its
+/// parameters, which a `super` call leaving the argument out applies (`super.f$default$N`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct SuperCall {
+    pub member: SymId,
+    /// The parameter's index, counted across the member's clauses.
+    pub getter: Option<u32>,
+}
+
+impl SuperCall {
+    pub fn member(member: SymId) -> SuperCall {
+        SuperCall { member, getter: None }
+    }
+}
+
+/// A member's getters before the member, as `SuperAccessors` declares a getter's accessor ahead of
+/// the member's: the order a merge sorts a trait's calls in is the one a single typing notes.
+impl Ord for SuperCall {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        (self.member, self.getter.is_none(), self.getter).cmp(&(other.member, other.getter.is_none(), other.getter))
+    }
+}
+
+impl PartialOrd for SuperCall {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -1638,7 +1691,7 @@ impl<'a> Iterator for Descendants<'a> {
             }
             TExpr::Cast(r, CastOp::Written | CastOp::Nothing, _) => self.exprs.push(r),
             TExpr::CallStatic(_, args) | TExpr::New(_, args) | TExpr::NewVia(_, args) | TExpr::StrConcat(args)
-            | TExpr::Js(_, args) | TExpr::SeqLit(args) | TExpr::ArrayLit(args) | TExpr::ObjLit(args) => {
+            | TExpr::Js(_, args) | TExpr::SeqLit(args) | TExpr::ArrayLit(args) | TExpr::ObjLit(args) | TExpr::Default(_, _, args) => {
                 self.exprs.extend_from_slice(prog.expr_list(args));
             }
             TExpr::CallMethod(r, _, args) | TExpr::CallClosure(r, args) => {
