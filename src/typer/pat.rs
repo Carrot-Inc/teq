@@ -291,16 +291,23 @@ impl<'a> Worker<'a> {
                 if ast.reader.is_some() && super::loader::declared::dump_path().is_some() {
                     self.dump_binder_bounds(&binders, span, p);
                 }
-                self.refine_gadt(t, sty);
                 // Conforming only by constraining an open variable of the scrutinee does not
-                // make the test certain, and a reference may be `null`, which no type test takes.
+                // make the test certain, nor does the refinement the case brings (`refine_gadt`):
+                // `TypeTestsCasts` sees the scrutinee's own type. A scrutinee that conforms is
+                // tested as dotty's `transformIsInstanceOf` tests it in a match: `true` where its
+                // type is not null (`isNotNull`), else a test that it is not `null`
+                // (`testNotNull`), which no type pattern takes, whatever the type a stored body's
+                // abstract pattern type comes to at an expansion.
                 let mark = self.snapshot();
-                let always = self.is_sub(sty, t) && self.snapshot() == mark && !self.null_conforms(t);
+                let conforms = self.is_sub(sty, t) && self.snapshot() == mark;
                 self.rollback(mark);
+                self.refine_gadt(t, sty);
+                let always = conforms && !self.scrutinee_may_be_null(sty);
+                let not_null = conforms && !always;
                 // A scrutinee that equals the pattern's type only by the refinement (a captured
                 // wildcard fixed to `Int` by `case l: Leaf[Int]`) keeps its own type past the
                 // case, so the binding takes the pattern's, as under scalac.
-                let equal = always && {
+                let equal = conforms && {
                     let back = self.is_sub(t, sty) && self.snapshot() == mark;
                     self.rollback(mark);
                     back
@@ -315,6 +322,8 @@ impl<'a> Worker<'a> {
                 }
                 let test = if always {
                     self.prog.add_test(TypeTest::Always)
+                } else if not_null {
+                    self.prog.add_test(TypeTest::AnyVal)
                 } else {
                     self.check_sensical_test(t, sty, span);
                     let test = self.test_for(t, sty, span, unchecked);
@@ -324,7 +333,7 @@ impl<'a> Worker<'a> {
                 if self.inline.checking > 0 {
                     self.note_leaf_test(test, t);
                 }
-                let narrowed = if always && !equal { sty } else { self.pattern_binding_type(sty, t) };
+                let narrowed = if conforms && !equal { sty } else { self.pattern_binding_type(sty, t) };
                 let tp = self.type_pattern(inner, narrowed);
                 self.last_typed_pattern = Some((p, narrowed));
                 self.prog.add_pat(TPat::Test(test, t, tp))

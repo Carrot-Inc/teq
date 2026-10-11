@@ -5343,7 +5343,7 @@ impl<'a> Worker<'a> {
                     cv.pat(Pat::StableId(e))
                 }
             }
-            TermKind::Bind { addr, name, ty, body, .. } => {
+            TermKind::Bind { addr, name, ty, body, flags } => {
                 let n = self.conv_name(cv, *name);
                 let n = self.unshadowed(cv, *addr, n);
                 cv.locals.insert(*addr, n);
@@ -5359,7 +5359,13 @@ impl<'a> Worker<'a> {
                     let bind = cv.pat(Pat::Bind(n, None));
                     return cv.pat(Pat::Rest(bind));
                 }
-                cv.pat(Pat::Bind(n, inner))
+                let bind = cv.pat(Pat::Bind(n, inner));
+                // `given x: T`, the binder of a `Given` symbol (`Desugar`'s pattern of a given
+                // binding): a given of the case, as the parser marks the source's.
+                if flags.has(tags::GIVEN) {
+                    cv.ast.given_binds.insert(bind);
+                }
+                bind
             }
             // scalac ascribes an extractor pattern with the class at the type variables it
             // bound (`Done[A$9](a)`); the constructor pattern instantiates the class from the

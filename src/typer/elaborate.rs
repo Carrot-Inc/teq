@@ -175,24 +175,47 @@ impl<'a> Worker<'a> {
                 let args = self.prog.expr_list(args).to_vec();
                 args.into_iter().fold(Purity::PURE, |p, a| p.min(self.expr_purity(a)))
             }
-            // `minOf(exprPurity(expr), stats.map(statPurity))`: a def is pure, an immutable val
-            // its value's purity capped at `Pure` (no path), a var or any other statement impure.
+            // `minOf(exprPurity(expr), stats.map(statPurity))`.
             TExpr::Block(stmts, res) => {
                 let mut p = self.expr_purity(res);
                 for s in self.prog.stmts[stmts.range()].to_vec() {
-                    p = p.min(match s {
-                        TStmt::Val(v, _) if self.syms.sym(v).kind == SymKind::Var || self.syms.sym(v).mods & mods::MUTABLE != 0 => Purity::IMPURE,
-                        TStmt::Val(_, x) => self.expr_purity(x).min(Purity::PURE),
-                        TStmt::Fun(_) => Purity::PURE,
-                        TStmt::Expr(_) | TStmt::Pat(..) => Purity::IMPURE,
-                    });
+                    p = p.min(self.stat_purity(s));
                 }
                 p
             }
             // `e.asInstanceOf[T]`, `Any_typeCast`.
             TExpr::Cast(r, ..) => Purity::PURE.min(self.expr_purity(r)),
+            // A primitive or string operation the typer folds to a constant, over operands as pure
+            // (`isPureApply`: an application of a known pure operation whose type is a constant).
+            TExpr::Unary(_, a) | TExpr::ToStr(a, _) if self.fold_constant_as_typed(e).is_some() => Purity::PURE.min(self.expr_purity(a)),
+            TExpr::Prim(_, a, b) if self.fold_constant_as_typed(e).is_some() => Purity::PURE.min(self.expr_purity(a)).min(self.expr_purity(b)),
+            TExpr::StrConcat(l) if self.fold_constant_as_typed(e).is_some() => {
+                let parts = self.prog.expr_list(l).to_vec();
+                parts.into_iter().fold(Purity::PURE, |p, x| p.min(self.expr_purity(x)))
+            }
+            // A lazy val read through its accessor (`fn.symbol.isStableMember`): idempotent, its
+            // first read running the initialiser.
+            TExpr::CallStatic(s, l) if l.len == 0 && self.lazy_accessor(s) => Purity::IDEMPOTENT,
+            TExpr::CallMethod(r, s, l) if l.len == 0 && self.lazy_accessor(s) => self.expr_purity(r).min(Purity::IDEMPOTENT),
             _ => Purity::IMPURE,
         }
+    }
+
+    /// dotty's `TreeInfo.statPurity`: a local method is pure, an immutable val its value's purity
+    /// capped at `Pure` (no path), a `var` or any other statement impure.
+    pub(super) fn stat_purity(&mut self, s: TStmt) -> Purity {
+        match s {
+            TStmt::Val(v, _) if self.syms.sym(v).kind == SymKind::Var || self.syms.sym(v).mods & mods::MUTABLE != 0 => Purity::IMPURE,
+            TStmt::Val(_, x) => self.expr_purity(x).min(Purity::PURE),
+            TStmt::Fun(_) => Purity::PURE,
+            TStmt::Expr(_) | TStmt::Pat(..) => Purity::IMPURE,
+        }
+    }
+
+    /// Whether `s` is a lazy val's accessor.
+    fn lazy_accessor(&self, s: SymId) -> bool {
+        let info = self.syms.sym(s);
+        info.mods & mods::LAZY != 0 && matches!(info.kind, SymKind::Val | SymKind::Given)
     }
 
     /// dotty's `TreeInfo.refPurity` of a reference to `s`.

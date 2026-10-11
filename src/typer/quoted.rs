@@ -670,13 +670,16 @@ impl<'a> Worker<'a> {
 
     /// A local like `s`, for the definitions of a quote's body renamed at each run.
     pub fn clone_local(&mut self, s: SymId) -> SymId {
-        let (name, kind, mods, file, span, sig) = {
+        let (name, kind, mods, file, span, sig, by_name) = {
             let info = self.syms.sym(s);
-            (info.name, info.kind, info.mods, info.file, info.span, info.sig.clone())
+            (info.name, info.kind, info.mods, info.file, info.span, info.sig.clone(), info.by_name)
         };
         let fresh = self.syms.new_sym(name, kind, mods, Owner::Local, file, None, span);
         let mut info = self.syms.sym_mut(fresh);
         info.sig = sig;
+        // A by-name parameter stays one, its type an `ExprType` that `TreeTypeMap` maps with the
+        // rest of the symbol's info: its reads apply the thunk its callers pass.
+        info.by_name = by_name;
         info.state().set(Completion::Done);
         if self.capturing() {
             self.capture_copy_local(s, fresh);
@@ -1945,6 +1948,9 @@ pub struct StoredCopy<'c> {
     /// Whether the copies of those classes take the output's names (the walk's) or none (the
     /// census's), which consumes none of the counters of the names.
     pub names_classes: bool,
+    /// Whether the substitution binds the method's class's type parameters
+    /// (`Bindings::owner_params`).
+    pub owner_params: bool,
 }
 
 struct Copier<'c> {
@@ -2051,6 +2057,11 @@ impl<'c> Copier<'c> {
     fn ty_under(&self, t: &mut Worker, ty: TypeId, subst: &Subst) -> TypeId {
         let ty = t.types.import(ty);
         let mut ty = t.types.subst(ty, subst);
+        // A match-type alias of a generic class the substitution instantiates is the class's copy
+        // seen through it (`Worker::specialise_aliases`), as the retype path's types are.
+        if self.stored.is_some_and(|s| s.owner_params) && t.types.is_reducible(ty) {
+            ty = t.specialise_aliases(ty, subst);
+        }
         if self.stored.is_some() && !self.classes.is_empty() {
             ty = t.with_class_copies(ty, &self.classes);
         }
@@ -2094,6 +2105,9 @@ impl<'c> Copier<'c> {
             return Some(ty);
         }
         match t.prog.expr(e) {
+            // A by-name parameter's node is its thunk, which its read applies: its symbol's type is
+            // the value's (dotty's `ExprType`), no type of the node.
+            TExpr::Local(s) if t.syms.sym(s).by_name => None,
             TExpr::Local(s) => t.syms.sym(s).sig.as_ref().filter(|sig| sig.tparams.is_empty() && sig.clauses.is_empty()).map(|sig| sig.ret),
             _ => None,
         }
@@ -2381,7 +2395,7 @@ impl<'c> Copier<'c> {
             let nk = self.classes[&k];
             let members: Vec<SymId> = {
                 let info = t.syms.class(k);
-                info.member_order.iter().chain(&info.extensions).copied().collect()
+                info.member_order.iter().chain(&info.extensions).chain(&info.ctors).chain(&info.primary_ctor).copied().collect()
             };
             for m in members {
                 self.member(t, m, nk);
@@ -2394,6 +2408,9 @@ impl<'c> Copier<'c> {
         let receiver = self.stored.as_mut().and_then(|s| s.this.take());
         self.class_depth += 1;
         self.suspended.push((receiver, t.env.frames.len()));
+        // The walk does not enter a class's bodies: they are copied whole, no branch left for a
+        // demand that would copy it where `this` is the receiver again (`Copier::class`).
+        let deferring = std::mem::replace(&mut self.deferring, false);
         for &k in &graph {
             let nk = self.classes[&k];
             let Some(ktc) = self.stored_class_body(k).cloned() else {
@@ -2412,6 +2429,7 @@ impl<'c> Copier<'c> {
             self.fill_class(t, k, nk, ktc);
             t.env.frames.truncate(frame);
         }
+        self.deferring = deferring;
         self.suspended.pop();
         self.class_depth -= 1;
         if let Some(s) = self.stored.as_mut() {
@@ -2562,6 +2580,11 @@ impl<'c> Copier<'c> {
         let extensions: Vec<SymId> = info.extensions.iter().map(|&s| self.member(t, s, nc)).collect();
         // A case class's selectors, members copied above.
         let selectors: Vec<Option<SymId>> = info.selectors.iter().map(|s| s.map(|s| self.sym(s))).collect();
+        // The constructors are the copy's members too (`TreeTypeMap` maps a class's
+        // constructors with its other members): a secondary one, the primary one that stands next
+        // to it, their parameters, and every construction through them (`NewVia`).
+        let ctors: Vec<SymId> = info.ctors.iter().map(|&s| self.member(t, s, nc)).collect();
+        let primary_ctor = info.primary_ctor.map(|s| self.member(t, s, nc));
         let givens: Vec<SymId> = info.givens.iter().map(|&s| self.sym(s)).collect();
         let parents: Vec<TypeId> = info.parents.iter().map(|&p| self.ty(t, p)).collect();
         let base_types: Vec<(ClassId, TypeId)> =
@@ -2600,6 +2623,8 @@ impl<'c> Copier<'c> {
         copy.member_order = member_order;
         copy.selectors = selectors;
         copy.extensions = extensions;
+        copy.ctors = ctors;
+        copy.primary_ctor = primary_ctor;
         copy.givens = givens;
         copy.base_types = base_types;
         copy.this_type = this_type;
@@ -2655,6 +2680,13 @@ impl<'c> Copier<'c> {
             .collect();
         let methods: Vec<FunId> = tc.methods.iter().map(|&f| self.fun(t, f)).collect();
         let ctors: Vec<FunId> = tc.ctors.iter().map(|&f| self.fun(t, f)).collect();
+        // Each copy is its member's function, as the class's typing registers its methods: a call
+        // dispatched by the member (the interpreter's) runs the copy, never a typing of the stored
+        // definition again, where the enclosing class's `this` is the stored body's local.
+        for &f in methods.iter().chain(&ctors) {
+            let s = t.prog.funs[f.idx()].sym;
+            t.fun_of_sym.insert(s, f);
+        }
         let named = std::mem::replace(&mut self.locals, outer).unwrap_or_default();
         let mut bound: Vec<SymId> = ctor_params.clone();
         for &f in methods.iter().chain(&ctors) {
@@ -2900,8 +2932,39 @@ impl<'c> Copier<'c> {
                 TExpr::CallMethod(r, s, self.list(t, args))
             }
             TExpr::CallClosure(f, args) => {
+                // The application of a macro's parameter in a quote (`'{ f(1) }`, Focus's
+                // `lambda(using c)`), whose proxy the run fills with its argument, or of what such
+                // an application gives (`'{ f(1)(2) }`): a closure applied is reduced where the
+                // expansion puts the argument, as `InlineTyper.typedApply` reduces every
+                // application of the inlined tree (`BetaReduce`, then `constToLiteral`).
+                let filled = self.stored.is_none() && self.applies_filled(t, f);
                 let f = self.expr(t, f);
-                TExpr::CallClosure(f, self.list(t, args))
+                let l = self.list(t, args);
+                if filled {
+                    let items = t.prog.expr_list(l).to_vec();
+                    if let Some(reduced) = t.beta_reduce_binding(f, &items) {
+                        use super::elaborate::Purity;
+                        // A pure constant the reduction leaves is its literal (`constToLiteral`).
+                        let is_literal = |t: &Worker, x: TExprId| matches!(t.prog.expr(x), TExpr::Int(_) | TExpr::Long(_) | TExpr::Double(_) | TExpr::Bool(_) | TExpr::Char(_) | TExpr::Str(_));
+                        let reduced = match t.fold_constant(reduced) {
+                            Some(v) if !is_literal(t, reduced) && t.expr_purity(reduced).at_least(Purity::PURE) => t.literal_expr(v),
+                            _ => reduced,
+                        };
+                        // The reduction stands at the application (`seq(..).withSpan(tree.span)`,
+                        // `constToLiteral`'s literal at the span): a tree the reduction made, the
+                        // copy putting a copy of what it puts for a parameter.
+                        t.prog.copy_span(e, reduced);
+                        if let Some(ty) = recorded {
+                            let ty = self.ty(t, ty);
+                            self.set_copy_type(t, reduced, ty);
+                        }
+                        if t.capturing() {
+                            self.reduced_for(t, e, reduced);
+                        }
+                        return reduced;
+                    }
+                }
+                TExpr::CallClosure(f, l)
             }
             TExpr::New(c, args) if self.stored_class_body(c).is_some() => {
                 let nc = self.stored_class(t, c);
@@ -2937,7 +3000,16 @@ impl<'c> Copier<'c> {
                 return id;
             }
             TExpr::New(c, args) => TExpr::New(c, self.list(t, args)),
-            TExpr::NewVia(s, args) => TExpr::NewVia(s, self.list(t, args)),
+            TExpr::NewVia(s, args) => {
+                // A construction through a secondary constructor of a class the body makes
+                // builds the copy, whose constructors are its members (`stored_class`).
+                if let Owner::Class(c) = t.syms.sym(s).owner {
+                    if self.stored_class_body(c).is_some() {
+                        self.stored_class(t, c);
+                    }
+                }
+                TExpr::NewVia(self.sym(s), self.list(t, args))
+            }
             // A getter of a method the copy defines anew is its copy's, as the call's is.
             TExpr::Default(of, at, args) => {
                 let of = match of {
@@ -3230,6 +3302,31 @@ impl<'c> Copier<'c> {
         }
     }
 
+    /// Whether the stored function `f` of an application is a parameter of the quote the run
+    /// fills, or an application of one (`f(1)` of `f(1)(2)`).
+    fn applies_filled(&self, t: &Worker, f: TExprId) -> bool {
+        match t.prog.expr(f) {
+            TExpr::Local(s) => self.params.contains_key(&s),
+            TExpr::CallClosure(g, _) => self.applies_filled(t, g),
+            _ => false,
+        }
+    }
+
+    /// `reduced`, the reduction put for the application `e`, takes the layers written around `e`,
+    /// as an argument put for a parameter does, and the place of `e`'s tree, where the reduction
+    /// stands (`seq(..).withSpan(tree.span)`, `constToLiteral`'s literal at the span).
+    fn reduced_for(&mut self, t: &mut Worker, e: TExprId, reduced: TExprId) {
+        let this = &*self;
+        t.capture_copy_layers(e, reduced, &|w, ty| this.ty(w, ty));
+        if let Some((file, addr)) = t.prog.capture.as_deref().and_then(|c| c.records_of(e).tree) {
+            t.capture_tree(reduced, file, addr);
+        }
+        if let Some(copies) = self.copies.as_mut() {
+            copies.insert(e, reduced);
+            self.occurrences.push((e, reduced));
+        }
+    }
+
     /// What `e` says of the chain of `+` it heads, said of its copy `id`. A condition that a
     /// hole stood in is folded away or not by what filled the hole.
     fn keep_chain_marks(&mut self, t: &mut Worker, e: TExprId, id: TExprId) {
@@ -3406,8 +3503,17 @@ impl<'c> Copier<'c> {
         if let Some(&tested) = t.prog.deferred_tests.get(&test) {
             let filled = self.ty(t, tested);
             // A stored body's test of a type variable of its patterns stays deferred on the copy's
-            // fresh variable, which the case that binds it specialises (`specialise_instance`).
-            if self.stored.is_some() && filled != tested && matches!(t.types.get(filled), Type::Param(_) | Type::AppParam(..)) {
+            // fresh variable, which the case that binds it specialises (`specialise_instance`). One
+            // of the method's own type parameters is the call's type argument: where that is the
+            // caller's type parameter, the test is its erased one (`test_for`, as `TypeTestsCasts`
+            // erases the tested type), unless the expansion is itself a stored body's, which
+            // derives it again.
+            let method_param = match t.types.get(tested) {
+                Type::Param(p) | Type::AppParam(p, _) => self.subst.iter().any(|&(q, _)| q == p) && !self.stored.map_or(false, |s| s.index.local_tparams.contains(&p)),
+                _ => false,
+            };
+            let derived_again = !method_param || t.quote.level > 0 || t.checks_inline_definition();
+            if self.stored.is_some() && filled != tested && derived_again && matches!(t.types.get(filled), Type::Param(_) | Type::AppParam(..)) {
                 let copy = t.prog.add_test(TypeTest::Always);
                 t.prog.deferred_tests.insert(copy, filled);
                 return copy;

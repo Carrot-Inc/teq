@@ -184,14 +184,16 @@ impl<'a> Worker<'a> {
     /// its pickle: not inside the expansion of an ordinary inline method, which scalac's pickle
     /// holds as the call (a transparent one's expansion it holds). A quote's body is captured
     /// whatever file it is in, a library's included: a transparent macro's expansion copies it
-    /// into an owned body.
+    /// into an owned body; so is a library's inline body under its definition check, whose
+    /// record a transparent expansion copies into an owned body alike.
     fn capture_of_unit(&mut self) -> Option<(FileId, &mut Capture)> {
         let unit = self.typing_unit();
         let pickled = self.inline.sites.iter().all(|s| self.syms.sym(s.callee).mods & crate::ast::mods::TRANSPARENT != 0);
         let quoted = self.quote.level > 0;
         let annotation = self.typing_annotation;
+        let stored = self.inline.checking > 0 && self.inline.notes.last().is_some_and(|n| self.library_inline(n.sym));
         let c = self.prog.capture.as_deref_mut()?;
-        (pickled && (quoted || c.owns(unit) || annotation)).then_some((unit, c))
+        (pickled && (quoted || c.owns(unit) || annotation || stored)).then_some((unit, c))
     }
 
     /// The class `c`, made while inline methods expand: not in the pickle where one of them is
@@ -506,7 +508,15 @@ impl<'a> Worker<'a> {
                     };
                     check(from.targs.is_some(), &|to| c.targs.contains_key(&to), "type arguments");
                     check(from.receiver.is_some(), &|to| c.receivers.contains_key(&to), "receiver");
-                    check(from.tree.is_some(), &|to| c.trees.contains_key(&to), "tree");
+                    // A converted body's place goes with each copy of its node; a node the copy
+                    // substitutes (`this` by the receiver's proxy, a parameter by its argument's)
+                    // stands at the place of what stands for it.
+                    let substituted = match (self.prog.expr(e), to.map(|t| self.prog.expr(t))) {
+                        (TExpr::This, Some(_)) => true,
+                        (TExpr::Local(a), Some(TExpr::Local(b))) => a != b && !locals.contains(&(a, b)),
+                        _ => false,
+                    };
+                    check(from.tree.is_some() && !substituted, &|to| c.trees.contains_key(&to), "tree");
                     let form = from.form.as_ref().map(std::mem::discriminant);
                     check(form.is_some(), &|to| c.forms.get(&to).map(std::mem::discriminant) == form, "form");
                     let ws = &from.wraps;

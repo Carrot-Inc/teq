@@ -1,0 +1,4 @@
+false,true,true
+None,Some(1),Some(s)
+None,Some(s),None
+false,true,false

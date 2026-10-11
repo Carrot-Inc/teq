@@ -847,7 +847,7 @@ impl<'a> Worker<'a> {
         let case_binders = std::mem::take(&mut self.case_binders);
         let result = self.with_env(env, |t| match &entry {
             Ok(def) if super::substitution::measures_copy() => {
-                t.copy_for_measure(def, subst, &call.owner_subst);
+                t.copy_for_measure(call.sym, def, subst, &call.owner_subst);
                 t.expand_in_scope(call, sig, subst, args, &body, ret_ty, span, expected)
             }
             Ok(def) => {
@@ -1279,9 +1279,12 @@ impl<'a> Worker<'a> {
         // the interpreter can evaluate is bound to its value too, marked so that the
         // typing of the body does not read it as a constant of the language.
         let fold = self.part(Part::Fold);
-        let constant = (!repeated).then(|| if is_macro { self.fold_structural(te) } else { self.fold_constant(te) }).flatten();
-        let te = match constant {
-            Some(v) => {
+        let binding = (!repeated).then(|| if is_macro { self.fold_structural(te).map(|v| (v, true)) } else { self.binding_constant(te) }).flatten();
+        let constant = binding.map(|(v, _)| v);
+        let te = match binding {
+            // A path that is no pure one stands for the parameter itself (`binding_constant`).
+            Some((_, false)) => te,
+            Some((v, true)) => {
                 let lit = self.literal_expr(v);
                 self.prog.copy_span(te, lit);
                 // The constant stands for the argument as its marks have it: ascribed, or a plain
@@ -2074,6 +2077,41 @@ impl<'a> Worker<'a> {
 
     /// The constant a typed expression evaluates to: one made of literals is folded here, one
     /// made of literals and calls of the standard library is run by the interpreter.
+    /// What an ordinary argument binds its parameter to, as scalac's
+    /// `Inliner.computeParamBindings` binds it to the argument's type where that type is a
+    /// singleton and the argument an idempotent path (`isIdempotentPath`), told apart by the
+    /// typed argument:
+    /// - one of a constant type (a literal, a constant operation, a block ending in one: dotty's
+    ///   block takes its result's type) binds where evaluating it is at least idempotent
+    ///   (`exprPurity`: a closure's creation and a local method are pure, a `var` and an effect
+    ///   are not), and the parameter is the literal, the argument dropped;
+    /// - a path binds where it is an idempotent path, the parameter its singleton, whose
+    ///   constant `x.type` reads; the parameter is the path itself unless the path is pure, so
+    ///   that a lazy val's first read runs its initialiser where the body reads the parameter;
+    /// - anything else, a block ending in a path included (no block is a path), binds the proxy.
+    ///
+    /// The constant and whether the parameter is its literal. teq's typer gives a literal
+    /// argument the parameter's type, so the constant type is the folded constant, which the
+    /// marks of an ascription or a plain inline call widen (`widened_constant`).
+    fn binding_constant(&mut self, e: TExprId) -> Option<(LitVal, bool)> {
+        use super::elaborate::Purity;
+        let path = |t: &Self, x: TExprId| matches!(t.prog.expr(x), TExpr::Local(_) | TExpr::Static(_) | TExpr::Field(..));
+        if path(self, e) {
+            let constant = self.fold_constant(e)?;
+            let p = self.expr_purity(e);
+            return p.at_least(Purity::IDEMPOTENT_PATH).then_some((constant, p.at_least(Purity::PURE)));
+        }
+        let mut res = e;
+        while let TExpr::Block(_, r) = self.prog.expr(res) {
+            res = r;
+        }
+        if path(self, res) {
+            return None;
+        }
+        let constant = self.fold_constant(res)?;
+        self.expr_purity(e).at_least(Purity::IDEMPOTENT).then_some((constant, true))
+    }
+
     /// A constant as scalac's constant folder sees one: a literal, a value of a literal type,
     /// a primitive operation over constants and the concatenation or comparison of constant
     /// strings. What the interpreter evaluated an argument to is not one, unless the dialect

@@ -3557,6 +3557,21 @@ impl<'w, 'a> P<'w, 'a> {
         }
     }
 
+    /// The prefix a local class `c` is named under where a body refers to it: the enclosing
+    /// class's, but where the body is `c`'s own (a secondary constructor's `this(..)`, a `new C`
+    /// in a method of `C`), the class `c` itself stands in, so `c`'s name is the one it has where it
+    /// is defined, as the signature's result is the class's own erased name wherever it is read.
+    fn local_prefix_of(&mut self, c: ClassId) -> String {
+        match self.enclosing.iter().rposition(|&k| k == c) {
+            Some(0) => String::new(),
+            Some(i) => {
+                let k = self.enclosing[i - 1];
+                self.w.library_class_name(k, "")
+            }
+            None => self.local_prefix(),
+        }
+    }
+
     /// `f.apply(args)` of a function value.
     /// `f.apply(args)`: the `apply` the function's type has, a context function's or one a
     /// class of functions overrides, as the typer of scalac selects it.
@@ -3817,7 +3832,7 @@ impl<'w, 'a> P<'w, 'a> {
         };
         let opens: Vec<crate::tasty::write::buf::Slot> = clauses.iter().map(|_| self.open(APPLY)).collect();
         let ta = (!targs.is_empty()).then(|| self.open(TYPEAPPLY));
-        let local = self.local_prefix();
+        let local = self.local_prefix_of(c);
         let object = c == self.w.b.any_ref;
         let sig = match via {
             Some(s) => self.w.pickled_signature(s, &local),
@@ -5668,7 +5683,13 @@ impl<'w, 'a> P<'w, 'a> {
                     // written).
                     let from_site = p.w.prog.span_of(e).map_or(false, |at| p.is_own_source(at.0) && body_at.map(|(g, _)| g) != Some(at.0) && Some(at) != outer.site);
                     match body_at {
-                        Some((file, span)) if p.is_own_source(file) && !quoted && !from_site => p.within_at(file, span, |p| p.node(e, &rest)),
+                        // The expansion's own place where the body holds it (the branch an `inline
+                        // if` reduced to, as `InlineTyper.typedIf` returns the selected tree), else
+                        // the body's.
+                        Some((file, span)) if p.is_own_source(file) && !quoted && !from_site => {
+                            let own = p.w.prog.span_of(e).filter(|&(f, s)| f == file && s.start >= span.start && s.end <= span.end).map_or(span, |(_, s)| s);
+                            p.within_at(file, own, |p| p.node(e, &rest))
+                        }
                         _ => p.within(Some(e), |p| p.node(e, &rest)),
                     }
                     Vec::new()
@@ -6030,10 +6051,30 @@ impl<'w, 'a> P<'w, 'a> {
         if !matches!(kind.as_str(), "s" | "raw") {
             return self.fail(format!("the interpolator {}", kind));
         }
-        // The parts are the strings the typer typed none of; the rest are the arguments.
-        let args: Vec<TExprId> = items.iter().filter(|&&x| !(matches!(self.w.prog.expr(x), TExpr::Str(_)) && self.w.prog.type_of(x).is_none())).map(|&x| self.rendered(x)).collect();
+        // The arguments by their places among the concatenation's items, which the record's parts
+        // tell (as `StringContext.apply(parts*).kind(args*)` keeps the two apart): each part the
+        // typer kept, the first always and another where it is not empty (`kept_part`), is one item,
+        // each argument the item after it; whatever types a copy of the record gives the items.
         let parts: Vec<TypeId> = self.w.types.items(parts).to_vec();
-        if args.len() + 1 != parts.len() {
+        let mut args: Vec<TExprId> = Vec::with_capacity(parts.len().saturating_sub(1));
+        let mut at = 0;
+        for (i, &part) in parts.iter().enumerate() {
+            let written_empty = match self.w.types.get(part) {
+                Type::Lit(l) => matches!(self.w.types.lit_val(l), LitVal::Str(n) if self.w.name_str(n).is_empty()),
+                _ => false,
+            };
+            if i == 0 || !written_empty {
+                at += 1;
+            }
+            if i + 1 < parts.len() {
+                match items.get(at) {
+                    Some(&x) => args.push(self.rendered(x)),
+                    None => return self.fail("an interpolation's arguments".to_string()),
+                }
+                at += 1;
+            }
+        }
+        if at != items.len() {
             return self.fail("an interpolation's arguments".to_string());
         }
         let string = self.w.b.t_string;

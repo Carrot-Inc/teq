@@ -247,14 +247,17 @@ impl Walk {
 
 impl<'a> Worker<'a> {
     /// The record a call of `sym` is expanded from, or why the call takes the retype path, the
-    /// entry decision, made before the expansion has any effect: a library's, the std's or a
-    /// body file's method; otherwise the record demanded whatever the typing order, and then a call met
-    /// while its body is typed (a cycle through the method), a body the capture of the product
-    /// modes holds back (one that makes a class) or a `summonFrom` the check holds back, which
-    /// the retype path keeps; a local method called before its definition across a val an
-    /// import reads is scalac's E039. A failed record's call is the plain call before this
+    /// entry decision, made before the expansion has any effect: the std's method; a library's
+    /// whose record its converted body did not give (`library_entry`); otherwise the record
+    /// demanded whatever the typing order, and then a call met while its body is typed (a cycle
+    /// through the method) or a form the check holds back (`HeldForm`), which the
+    /// retype path keeps; a local method called before its definition across a val an import
+    /// reads is scalac's E039. A failed record's call is the plain call before this
     /// (`failed_definition_call`).
     pub(super) fn substitution_entry(&mut self, sym: SymId) -> Result<Arc<InlineDefinition>, Fallback> {
+        if self.library_inline(sym) {
+            return self.library_entry(sym);
+        }
         let info = self.syms.sym(sym);
         let (file, local) = (info.file, info.owner == Owner::Local);
         if info.def.is_none() || !self.program_file(file) || self.is_body_file(file) {
@@ -287,6 +290,44 @@ impl<'a> Worker<'a> {
         }
     }
 
+    /// Whether `sym` is an inline method whose body a library's TASTy gives, a jar's or a
+    /// directory of products' (scala-library's under `--std=scala-library` among them): dotty
+    /// expands the body its producer typed at the definition and pickled
+    /// (`TreeUnpickler.createSymbol`'s `LazyBodyAnnotation`, `Inlines.bodyToInline`), which
+    /// teq's record of the converted body typed as the definition check types a program's
+    /// stands for.
+    pub(super) fn library_inline(&self, sym: SymId) -> bool {
+        self.is_library_member(sym) || self.is_product_top_def(sym)
+    }
+
+    /// Whether `subst` binds a type parameter of the class the method `sym` is a member of or of
+    /// a class enclosing it (the receiver's type arguments), through which a copy sees those
+    /// classes' match-type aliases (`specialise_aliases`): the copies of other methods' bodies
+    /// skip the walk over their types.
+    pub(super) fn binds_owner_params(&self, sym: SymId, subst: &Subst) -> bool {
+        let mut owner = self.syms.sym(sym).owner;
+        while let Owner::Class(k) = owner {
+            let info = self.syms.class(k);
+            if subst.iter().any(|(p, _)| info.tparams.contains(p)) {
+                return true;
+            }
+            owner = info.owner;
+        }
+        false
+    }
+
+    /// The record of the library method `sym`, made from its converted body on the first call
+    /// (`demand_library_definition`), or the retype path where the check did not give one: a
+    /// body the check fails is teq's limit, not the program's error (scalac typed it), and a
+    /// held one keeps its forms for the retype path, as a program's does.
+    fn library_entry(&mut self, sym: SymId) -> Result<Arc<InlineDefinition>, Fallback> {
+        self.demand_definition(sym);
+        match self.inline_definitions.get(&sym) {
+            Some(def) if def.state == DefinitionState::Checked && def.body.is_some() && def.walk_lack.is_none() => Ok(def.clone()),
+            _ => Err(Fallback::Library),
+        }
+    }
+
     /// The record of a call's callee, checked on the call if the walk has not met its
     /// definition yet, so that what a call gives does not depend on the typing order.
     pub(super) fn demand_definition(&mut self, sym: SymId) {
@@ -295,7 +336,9 @@ impl<'a> Worker<'a> {
         }
         // The check is the definition's whatever becomes of an attempt that asked for it.
         let promoted = self.promote_begin(sym);
-        if self.syms.sym(sym).owner == Owner::Local {
+        if self.library_inline(sym) {
+            self.demand_library_definition(sym);
+        } else if self.syms.sym(sym).owner == Owner::Local {
             self.demand_local_definition(sym);
         } else {
             self.check_inline_definition(sym);
@@ -583,14 +626,20 @@ impl<'a> Worker<'a> {
         for i in 0..bound.params.len() {
             let p = bound.params[i];
             bargs.insert(p.sym, self.prog.add(TExpr::Local(p.proxy)));
-            let path = self.parameter_path(p.arg, p.constant, p.proxy);
+            // A constant argument's type is the parameter's path where it is a literal type; an
+            // ascribed constant or a plain inline call is typed at its widened type, which binds
+            // the proxy (`Inliner.computeParamBindings`: `arg.tpe` where it is a `SingletonType`
+            // of an idempotent path, else `paramBindingDef`'s symbol).
+            let constant = if self.widened_constant(p.arg) { None } else { p.constant };
+            let path = self.parameter_path(p.arg, constant, p.proxy);
             paths.push((p.sym, path));
         }
         let this = bound.this_proxy.map(|p| self.prog.add(TExpr::Local(p)));
         let bound_nodes = (bound_from, self.prog.exprs.len() as u32);
         this_paths.extend_from_slice(&self.inline.this_paths[bound.this_paths_mark..]);
         let (call_subst, call_paths) = (targs.len(), paths.len());
-        let bindings = Bindings { args: bargs, subst: targs, paths, this, this_paths, mark_leaves: false };
+        let owner_params = self.binds_owner_params(call.sym, &targs);
+        let bindings = Bindings { args: bargs, subst: targs, paths, this, this_paths, mark_leaves: false, owner_params };
         let deferred_mark = self.quote.copied_deferred.len();
         let body_root = def.body.expect("a checked record has a body");
         // Under the capture the copy is made whole, the capture's check reading every node of it.
@@ -675,7 +724,7 @@ impl<'a> Worker<'a> {
     /// dropped: the parameters bound to fresh locals, the type arguments the call's, the copy's
     /// tests and patterns left out of the output's and its deferred calls unregistered, the nodes
     /// counted as copied.
-    pub(super) fn copy_for_measure(&mut self, def: &InlineDefinition, subst: &Subst, owner_subst: &Subst) {
+    pub(super) fn copy_for_measure(&mut self, sym: SymId, def: &InlineDefinition, subst: &Subst, owner_subst: &Subst) {
         let mut args: FxMap<SymId, TExprId> = FxMap::default();
         for &p in &def.params {
             let fresh = self.clone_local(p);
@@ -683,7 +732,8 @@ impl<'a> Worker<'a> {
         }
         let paths = def.params.iter().filter_map(|&p| args.get(&p).and_then(|&a| self.argument_path(a)).map(|path| (p, path))).collect();
         let targs: Subst = subst.iter().chain(owner_subst).map(|&(p, t)| (p, self.zonk(t))).collect();
-        let bindings = Bindings { args, subst: targs, paths, this: None, this_paths: Vec::new(), mark_leaves: false };
+        let owner_params = self.binds_owner_params(sym, &targs);
+        let bindings = Bindings { args, subst: targs, paths, this: None, this_paths: Vec::new(), mark_leaves: false, owner_params };
         let deferred_mark = self.quote.copied_deferred.len();
         let copied_mark = self.prog.exprs.len();
         if let Some(inst) = self.instantiate_definition(def, &bindings) {
@@ -995,6 +1045,10 @@ impl<'a> Worker<'a> {
                 e
             }
             TExpr::New(c, _) if w.class_copies.contains_key(&c) => self.finish_class_copy(w, e, c),
+            TExpr::NewVia(s, _) if matches!(self.syms.sym(s).owner, Owner::Class(c) if w.class_copies.contains_key(&c) && self.syms.class(c).kind != ClassKind::Anon) => {
+                let Owner::Class(c) = self.syms.sym(s).owner else { unreachable!() };
+                self.finish_local_copy_via(w, e, c)
+            }
             TExpr::New(_, args) | TExpr::NewVia(_, args) | TExpr::SeqLit(args) | TExpr::ArrayLit(args) | TExpr::ObjLit(args) => {
                 self.walk_list(w, args);
                 e
@@ -1201,6 +1255,22 @@ impl<'a> Worker<'a> {
         }
         let captures = self.settle_local_copy(w, c);
         self.local_copy_new(e, c, &captures, inside, &selfs, &own)
+    }
+
+    /// A creation of the copy of a named local class through one of its secondary constructors
+    /// (`new C()` for a `def this() = this(n)`), the constructor the copy's (`Copier::stored_class`
+    /// copies the constructors with the members): its arguments walked and the class settled
+    /// there, as a creation through the primary constructor settles it (`finish_local_copy`).
+    fn finish_local_copy_via(&mut self, w: &mut Walk, e: TExprId, c: ClassId) -> TExprId {
+        let TExpr::NewVia(s, args) = self.prog.expr(e) else { unreachable!() };
+        let items = self.prog.expr_list(args).to_vec();
+        let own: Vec<TExprId> = items.into_iter().map(|a| self.walk(w, a)).collect();
+        if !w.local_copies.contains_key(&c) {
+            self.settle_local_copy(w, c);
+        }
+        let l = self.prog.list(&own);
+        self.prog.exprs[e.idx()] = TExpr::NewVia(s, l);
+        e
     }
 
     /// The copy `c` of a named local class the stored body makes settled (`finish_local_copy`):
@@ -1524,6 +1594,17 @@ impl<'a> Worker<'a> {
         }
         let ret = self.walked_type(w, e);
         let (tree, ty) = self.run_macro(super::quoted::MacroRun { quotes: q, code, ret, span, mark, t_pre });
+        // A tree the macro made without a place stands at its splice's, as the typing of a splice
+        // gives the node it returns (`Worker::type_expr`): the copy's place, and under the capture
+        // the tree a library's pickle has for the splice; so does a constant under the capture,
+        // where scalac's folding of the splice's `INLINED` leaves the literal.
+        let placeless = self.prog.records_spans() && self.prog.span_of(tree).is_none();
+        if placeless || self.capturing() && self.prog.expr(tree).is_constant() {
+            self.prog.copy_span(e, tree);
+            if let Some((file, addr)) = self.prog.capture.as_deref().and_then(|c| c.records_of(e).tree) {
+                self.capture_tree(tree, file, addr);
+            }
+        }
         if self.first_error_since(w.diag_mark).is_some() {
             w.failed = true;
         }
@@ -2432,7 +2513,7 @@ impl<'a> Worker<'a> {
     /// literal (`isPureApply`), over such operands; a block of vals and local methods over
     /// those. A conditional, a string conversion of a value (its `toString` runs) and any
     /// other application are not.
-    fn is_idempotent(&mut self, e: TExprId) -> bool {
+    pub(super) fn is_idempotent(&mut self, e: TExprId) -> bool {
         match self.prog.expr(e) {
             TExpr::Int(_) | TExpr::Long(_) | TExpr::Double(_) | TExpr::Bool(_) | TExpr::Char(_) | TExpr::Str(_) | TExpr::Unit | TExpr::Null | TExpr::This | TExpr::Module(_) => true,
             TExpr::Local(s) | TExpr::Static(s) => self.idempotent_ref(s),

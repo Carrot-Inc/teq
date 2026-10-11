@@ -564,6 +564,7 @@ inline_arg_summoned
 inline_arg_summoned_resolution
 inline_arg_throwing_branch
 inline_arg_wrapped
+inline_bodies_scalac_product
 inline_body_import_nested_given
 inline_definition_clean
 inline_definition_const_singleton
@@ -606,6 +607,7 @@ inline_named_local_class_twice
 inline_nested_anon_capture
 inline_ops
 inline_outline
+inline_parameter_pure_block
 inline_recursive_proxies
 inline_reduce_local_extractor
 inline_reduce_local_value
@@ -614,6 +616,8 @@ inline_retained_match
 inline_retained_match_effects
 inline_substitution_anon_parent_args
 inline_substitution_case_binder_scope
+inline_substitution_class_alias
+inline_substitution_class_branch_this
 inline_substitution_class_graph
 inline_substitution_classes
 inline_substitution_code_of
@@ -788,12 +792,15 @@ macro_pattern_intersection
 macro_pattern_type_bounds
 macro_position_implicit
 macro_position_nested
+macro_position_result
 macro_position_units
 macro_quote_cancel
 macro_quote_deferred_inline_types
 macro_quote_inline_deferred
 macro_quote_pattern_result
 macro_quote_refined
+macro_quoted_inline_application
+macro_quoted_parameter_application
 macro_quotes_qualifier
 macro_receiver_copy
 macro_records
@@ -1495,3 +1502,11 @@ zip_entry_times
 zip_time_precision
 given_import_bounds
 given_import_bound_situated
+inline_abstract_type_test
+inline_anon_by_name
+inline_local_class_secondary_ctor
+inline_parameter_purity
+inline_type_test_null
+macro_quoted_application_reduce
+pattern_array_gadt
+type_test_null_shapes

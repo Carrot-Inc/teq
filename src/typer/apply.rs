@@ -2773,6 +2773,129 @@ impl<'a> Worker<'a> {
         Some(reduced)
     }
 
+    /// dotty's `BetaReduce.apply` over an application a copy makes, `f(args)` where `f` is a
+    /// closure, possibly under blocks of pure bindings (`isPureBinding`), which the result keeps.
+    /// `reduceApplication` binds each argument to its parameter:
+    /// - a pure local path (`isPurePath`) is put for the parameter itself;
+    /// - any other argument is a val named after the parameter, typed at the argument's constant
+    ///   type or its widened one, in the order of the arguments, so that its effects run once and
+    ///   first; a pure argument of a constant type (or of `Unit`) needs no val;
+    /// - a parameter of a constant type stands for its literal in the copy of the closure's body
+    ///   (`expansion1`), where a pure constant the copy comes to is folded to its literal.
+    ///
+    /// The vals precede the copy (`seq`). A by-name parameter, which dotty binds as a local
+    /// method, leaves the application unreduced, as an arity the closure does not take does.
+    pub(super) fn beta_reduce_binding(&mut self, f: TExprId, args: &[TExprId]) -> Option<TExprId> {
+        use super::elaborate::Purity;
+        match self.prog.expr(f) {
+            TExpr::Lambda(params, body) => {
+                let params = self.prog.sym_list(params).to_vec();
+                if params.len() != args.len() || params.iter().any(|&p| self.syms.sym(p).by_name) {
+                    return None;
+                }
+                let mut map: crate::intern::FxMap<SymId, TExprId> = crate::intern::FxMap::default();
+                let mut bindings: Vec<TStmt> = Vec::new();
+                for (&p, &a) in params.iter().zip(args) {
+                    let purity = self.expr_purity(a);
+                    if matches!(self.prog.expr(a), TExpr::Local(_)) && purity.at_least(Purity::PURE_PATH) {
+                        map.insert(p, a);
+                        continue;
+                    }
+                    let constant = self.argument_constant(a);
+                    let ty = self.prog.type_of(a);
+                    let unit = constant.is_none() && ty.map_or(false, |t| self.deref(t) == self.b.t_unit);
+                    if !((constant.is_some() || unit) && purity.at_least(Purity::PURE)) {
+                        let bound_ty = match constant {
+                            Some(v) => self.types.lit(v),
+                            None => ty.map_or(ANY, |t| self.widen_lit(t)),
+                        };
+                        let span = self.prog.span_of(a).map_or(Span::default(), |(_, s)| s);
+                        let b = self.new_local(self.syms.sym(p).name, SymKind::Val, bound_ty, span);
+                        bindings.push(TStmt::Val(b, a));
+                        if constant.is_none() && !unit {
+                            let r = self.prog.add(TExpr::Local(b));
+                            self.prog.set_type(r, bound_ty);
+                            map.insert(p, r);
+                        }
+                    }
+                    if let Some(v) = constant {
+                        let lit = self.literal_expr(v);
+                        self.prog.copy_span(a, lit);
+                        map.insert(p, lit);
+                    } else if unit {
+                        let u = self.prog.add(TExpr::Unit);
+                        self.prog.set_type(u, self.b.t_unit);
+                        map.insert(p, u);
+                    }
+                }
+                let empty = crate::intern::FxMap::default();
+                let renames = crate::intern::FxMap::default();
+                if self.attempts.pending_len() != 0 {
+                    self.expand_pending_in(&[body]);
+                }
+                let expansion = self.instantiate_quote(body, &empty, &map, &Subst::default(), &renames);
+                let expansion = self.literal_of_pure_constant(expansion);
+                if bindings.is_empty() {
+                    return Some(expansion);
+                }
+                let stmts = self.prog.stmts.push_slice(&bindings);
+                let block = self.prog.add(TExpr::Block(stmts, expansion));
+                if let Some(t) = self.prog.type_of(expansion) {
+                    self.prog.set_type(block, t);
+                }
+                Some(block)
+            }
+            TExpr::Block(stmts, res) => {
+                let pure = self.prog.stmt_list(stmts).to_vec().into_iter().all(|st| self.stat_purity(st).at_least(Purity::PURE));
+                if !pure {
+                    return None;
+                }
+                let reduced = self.beta_reduce_binding(res, args)?;
+                let block = self.prog.add(TExpr::Block(stmts, reduced));
+                if let Some(t) = self.prog.type_of(reduced) {
+                    self.prog.set_type(block, t);
+                }
+                Some(block)
+            }
+            _ => None,
+        }
+    }
+
+    /// The constant of an argument of a constant type, as dotty's typer gives one (a literal, a
+    /// constant operation, a block ending in one), which a path is not, its type being its
+    /// singleton, nor an ascribed constant or a plain inline call's (`widened_constant`).
+    pub(super) fn argument_constant(&mut self, a: TExprId) -> Option<LitVal> {
+        let path = |t: &Self, x: TExprId| matches!(t.prog.expr(x), TExpr::Local(_) | TExpr::Static(_) | TExpr::Field(..));
+        let mut res = a;
+        while let TExpr::Block(_, r) = self.prog.expr(res) {
+            res = r;
+        }
+        if path(self, res) || self.widened_constant(a) {
+            return None;
+        }
+        self.fold_constant(res)
+    }
+
+    /// `e` with a pure constant it comes to as its literal (`BetaReduce`'s `expansion1`), at its
+    /// place: the whole, else a block's result.
+    pub(super) fn literal_of_pure_constant(&mut self, e: TExprId) -> TExprId {
+        use super::elaborate::Purity;
+        if !matches!(self.prog.expr(e), TExpr::Int(_) | TExpr::Long(_) | TExpr::Double(_) | TExpr::Bool(_) | TExpr::Char(_) | TExpr::Str(_)) {
+            if let Some(v) = self.fold_constant(e).filter(|_| self.expr_purity(e).at_least(Purity::PURE)) {
+                let lit = self.literal_expr(v);
+                self.prog.copy_span(e, lit);
+                return lit;
+            }
+        }
+        if let TExpr::Block(stmts, res) = self.prog.expr(e) {
+            let r = self.literal_of_pure_constant(res);
+            if r != res {
+                self.prog.exprs[e.idx()] = TExpr::Block(stmts, r);
+            }
+        }
+        e
+    }
+
     /// `C.apply`: the constructor as a method of the companion. Named without arguments it is a
     /// function value, and that of an enum case produces the enum as the constructor does.
     pub(super) fn apply_companion_apply(

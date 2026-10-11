@@ -2,6 +2,7 @@ pkgobj classes  scala-library's inline `summon[Name]` binds its argument to a lo
 macrowithheld scalac-lean-b  scalac runs the downstream's macro on the JVM, and the Scala.js check build's products are TASTy alone, with no class file for the macro's call of the upstream ("Macro code depends on object Jobs found on the classpath, but could not be loaded"); the scalac-b leg types it over the JVM products
 enumorder classes  the same as downstreammirror: the downstream's `summon[Mirror.SumOf[Kind]]` is a mirror teq synthesizes, whose holder the whole build names after the upstream's file (`eoa/Kind$package$.derivingMirror$Kind`) and the split build after the products' directory (`a$package$`), where scalac's mirror is the companion `Kind$` (which implements `Mirror.Sum` since the JVM ABI alignment): the mirrors part
 ledgerlocalclass classes  the class an expansion of the product's inline body makes carries the pseudo file's SourceFile and line numbers (`a!lla.Lib$package`, line 6), the whole build's Lib.scala's: the JVM product mode's follow-up
+inlinebodies classes  the same as ledgerlocalclass: the classes the two expansions of the upstream's inline body make carry the pseudo file's SourceFile and line numbers (`a!iba.Bodies`, line 4), the whole build's Bodies.scala's (line 13)
 macroquote classes  the same as ledgerlocalclass: a quote's copy of the upstream's anonymous class, made at the downstream's site, carries the pseudo file's SourceFile and line numbers (`a!mqa.Mac`, line 12), the whole build's Mac.scala's (line 26)
 macrotransparent classes  the same as macroquote: the copies the middle module's expansions hold carry `a!mta.T`, line 5, the whole build's T.scala, line 15
 macroderive classes  the same as macroquote: the quote's copies made at the downstream's site carry the pseudo file's SourceFile and line numbers (`a!idlib.Macros`)
@@ -20,6 +21,7 @@ downstreammirror subset  the same as classes: `a` compiled alone writes no holde
 enumorder subset  the same as classes
 inlinejdkctor subset  the same as classes
 ledgerlocalclass subset  the same as classes
+inlinebodies subset  the same as classes
 macroderive subset  the same as classes, and its run stops as jvm-run does
 macroquote subset  the same as classes; `a` compiled alone also leaves out the quote's local class `mqa/Box$1ebb5g8_1479`, which the whole build writes in `a`'s products because `b`'s expansion reaches it
 macrotransparent subset  the same as classes

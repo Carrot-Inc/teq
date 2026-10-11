@@ -6,12 +6,17 @@
 # TASTy bodies decoded and the classes converted to ASTs (`--profile`'s self times, "library bodies decoded
 # from TASTy" and "library classes converted to ASTs", in ms), the library bodies' line of `--time` (the
 # conversion and the typing of the bodies the program reaches, in ms), and the peak memory footprint of
-# `/usr/bin/time -l` (MB). It prints the table and enforces no budget. macOS only.
+# `/usr/bin/time -l` (MB) on macOS, the maximum resident size of GNU `time` on Linux. It prints the table
+# and enforces no budget.
 absolute() { case $1 in /*) echo "$1" ;; *) echo "$PWD/$1" ;; esac; }
 [ $# -ge 2 ] || { echo "usage: bench/reader-budget.sh <master teq> <landing teq> [runs]" >&2; exit 2; }
 master=$(absolute "$1") landing=$(absolute "$2")
 runs=${3:-3}
-[ "$(uname -s)" = Darwin ] || { echo "reader-budget: the footprint of /usr/bin/time -l is macOS's"; exit 2; }
+# The peak: macOS's footprint (`time -l`, bytes), Linux's maximum resident size (`time -f`, KB).
+if [ "$(uname -s)" = Darwin ]; then peak_flags=(-l) peak_awk='/peak memory footprint/ { printf "%.1f", $1 / 1048576 }'; else
+  /usr/bin/time -f '%M' true > /dev/null 2>&1 || { echo "reader-budget: needs /usr/bin/time (GNU time on Linux)"; exit 2; }
+  peak_flags=(-f 'peak resident %M') peak_awk='/^peak resident/ { printf "%.1f", $3 / 1024 }'
+fi
 cd "$(dirname "$0")/.."
 . tests/support/jars.sh
 . tests/support/compiler-words.sh
@@ -24,12 +29,12 @@ one() {
   local src=tests/classpath/js/$3.scala
   jars_of "$src"
   TEQ_CACHE_DIR=$2 timeout 120 "$1" $(compiler_words "$1") build "$src" --classpath "$JARS_CP" -o "$tmp/out.js" --profile > "$tmp/profile.txt" 2>&1 || return 1
-  TEQ_CACHE_DIR=$2 timeout 120 /usr/bin/time -l "$1" $(compiler_words "$1") build "$src" --classpath "$JARS_CP" -o "$tmp/out.js" --time > "$tmp/time.txt" 2>&1 || return 1
+  TEQ_CACHE_DIR=$2 timeout 120 /usr/bin/time "${peak_flags[@]}" "$1" $(compiler_words "$1") build "$src" --classpath "$JARS_CP" -o "$tmp/out.js" --time > "$tmp/time.txt" 2>&1 || return 1
   local decode convert bodies peak
   decode=$(awk '/library bodies decoded from TASTy/ { for (i = 1; i <= NF; i++) if ($(i+1) == "ms" || $(i+1) == "ns") { v = $i; u = $(i+1); break } } END { if (u == "ns") v = v / 1e6; print v + 0 }' "$tmp/profile.txt")
   convert=$(awk '/library classes converted to ASTs/ { for (i = 1; i <= NF; i++) if ($(i+1) == "ms" || $(i+1) == "ns") { v = $i; u = $(i+1); break } } END { if (u == "ns") v = v / 1e6; print v + 0 }' "$tmp/profile.txt")
   bodies=$(awk '$1 == "methods" && $2 == "typed" { print $4 + 0 }' "$tmp/time.txt")
-  peak=$(awk '/peak memory footprint/ { printf "%.1f", $1 / 1048576 }' "$tmp/time.txt")
+  peak=$(awk "$peak_awk" "$tmp/time.txt")
   echo "${decode:-0} ${convert:-0} ${bodies:-0} ${peak:-0}"
 }
 min() { sort -g | head -1; }
