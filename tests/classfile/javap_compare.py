@@ -87,7 +87,9 @@ def javap_member(line):
     throws = ''
     if ' throws ' in line:
         line, thr = line.split(' throws ', 1)
-        throws = ' throws ' + ', '.join(jtype(x) for x in split_top(thr))
+        # JDK 21's javap prints a class of a generic signature's throws clause by its internal name
+        # (`throws E, java/io/IOException`), a later one's dotted.
+        throws = ' throws ' + ', '.join(jtype(x.replace('/', '.')) for x in split_top(thr))
     words = line.split(' ')
     static = ''
     while words and words[0] in MODS:

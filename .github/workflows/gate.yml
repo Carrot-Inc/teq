@@ -1,19 +1,30 @@
-# The gate of tests/all.sh, one job per group of suites so that each stays within a bound. The
-# budget suites skip here: their numbers belong to the machine that recorded them. Every action is
-# pinned by its commit (the release workflow's where it takes the same), and each job's token reads
-# the repository alone. A group whose suites read jars has every jar tests/support/jars.sh names
-# before they run: the Maven ones restored from the cache that file keys, a miss fetched from Maven
-# Central (bench/actions/jars.sh fetch), the ones it builds built with scala-cli (jars_warm); a jar
-# neither has fails the job, so that no suite counts a case of a missing jar as passed.
+# The gate of tests/all.sh: every suite it names runs here, in the build job or in one job of the matrix, but
+# the suites the `excluded:` lines below name with their reasons; tests/gate-coverage.sh checks the jobs'
+# selections against tests/all.sh's list, so that a suite added there and not here fails the build job. One
+# job per group of suites, each within its bound: a group that outgrows its bound is split into jobs that fit,
+# not given more minutes. Every action is pinned by its commit (the release workflow's where it takes the
+# same), and each job's token reads the repository alone. The jars job prepares what the suites read once:
+# every Maven jar tests/support/jars.sh names, restored from the cache that file keys or fetched from Maven
+# Central (bench/actions/jars.sh fetch), and the jars it builds, built with scala-cli and handed on as an
+# artifact (bench/actions/jars.sh pack), which each job that reads jars restores in the place of building
+# them; a jar neither has fails the job, so that no suite counts a case of a missing jar as passed. Each job
+# keeps its suites' whole output and times (tests/all.sh's out/all) as an artifact, whether they passed or not.
+#
+# excluded: budget   bench/budgets.txt's instruction counts are the recording machine's, which the suite skips elsewhere
+# excluded: runtime  bench/runtime-budgets.txt's timings are the recording machine's, which the suite skips elsewhere
+# excluded: watch-memory  tests/watch-memory/budgets.txt's footprints are the recording machine's: a runner's end 27% under to 31% over the Linux record by session and its automatic count has none (run 38126009201)
 name: gate
+# It runs on dev, where every landing is pushed, and on pull requests; master moves only to a dev head whose run is
+# green in every job.
 on:
   push:
-    branches: [master]
+    branches: [dev]
   pull_request:
+  workflow_dispatch:
 permissions: {}
 env:
   CARGO_TERM_COLOR: always
-  # The scala/scala3 commit whose tests/run, tests/neg and tests/pos the harnesses walk; the
+  # The scala/scala3 commit whose tests/run, tests/neg, tests/pos and tests/warn the harnesses walk; the
   # baselines in tests/scala3/*.txt and tests/scala3-typing/expected.txt were recorded on it.
   SCALA3_REF: 7414c83e175a27726eb3f9b18d4185d9c470d884
 jobs:
@@ -29,14 +40,49 @@ jobs:
       - run: rustup toolchain install stable --profile minimal && rustup default stable
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
       - run: cargo build --release
-      - run: tests/rust-warnings.sh
+      - run: tests/all.sh rust-warnings gate-coverage
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: teq
           path: target/release/teq
           if-no-files-found: error
+      - if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: logs-build
+          path: out/all/
+          if-no-files-found: ignore
+  jars:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: temurin
+          java-version: 21
+      - uses: coursier/setup-action@039f736548afa5411c1382f40a5bd9c2d30e0383 # v1.3.9
+        with:
+          apps: scala-cli
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/coursier/v1
+          key: jars-${{ hashFiles('tests/support/jars.sh') }}
+      - run: |
+          export COURSIER_CACHE="$HOME/.cache/coursier/v1"
+          timeout 900 bench/actions/jars.sh fetch
+          timeout 1500 bench/actions/jars.sh pack out/actions/built-jars.tgz
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: built-jars
+          path: out/actions/built-jars.tgz
+          if-no-files-found: error
   suites:
-    needs: build
+    needs: [build, jars]
     runs-on: ubuntu-latest
     timeout-minutes: ${{ matrix.minutes }}
     permissions:
@@ -49,26 +95,52 @@ jobs:
             suites: cases errors parser interop dce size split fold
             minutes: 35
             jars: true
-          - group: watch
-            suites: split-watch
-            minutes: 45
-            jars: true
+            scala3: true
           - group: interp
             suites: interp
-            minutes: 35
+            minutes: 25
             jars: true
           - group: jvm
-            suites: jvm
+            suites: jvm jvm-21
             minutes: 40
             jars: true
           - group: libraries
             suites: tasty classfile classpath stdlib
             minutes: 35
             jars: true
+          - group: modules
+            suites: modules tasty-exec analysis-bytes workers
+            minutes: 50
+            jars: true
+          - group: corpus
+            suites: app planted asymptotics
+            minutes: 25
+            jars: true
+          - group: watch
+            suites: split-watch check-watch jvm-watch
+            minutes: 30
+            jars: true
+          - group: lsp
+            suites: lsp
+            minutes: 30
+            jars: true
+          - group: task
+            suites: task runner-classes
+            minutes: 30
+            jars: true
+          - group: determinism
+            suites: split-determinism
+            minutes: 25
+            jars: true
           - group: scala3
             suites: scala3-run scala3-interp scala3-macros scala3-macros-interp scala3-typing
             minutes: 30
             scala3: true
+          - group: prop
+            suites: prop
+            minutes: 45
+            jars: true
+            rust: true
     name: ${{ matrix.group }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -97,10 +169,15 @@ jobs:
           path: ~/.cache/coursier/v1
           key: jars-${{ hashFiles('tests/support/jars.sh') }}
       - if: matrix.jars
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: built-jars
+          path: out/actions
+      - if: matrix.jars
         run: |
           export COURSIER_CACHE="$HOME/.cache/coursier/v1"
           timeout 900 bench/actions/jars.sh fetch
-          timeout 1200 bash -c '. tests/support/jars.sh && jars_warm'
+          timeout 300 bench/actions/jars.sh restore out/actions/built-jars.tgz
       - if: matrix.scala3
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
@@ -116,7 +193,26 @@ jobs:
             git fetch -q --depth 1 origin "$SCALA3_REF"
             git checkout -q FETCH_HEAD
           fi
+      # The property tests are a crate of their own (proptests/), whose dependencies come from crates.io.
+      - if: matrix.rust
+        run: rustup toolchain install stable --profile minimal && rustup default stable
+      - if: matrix.rust
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          workspaces: proptests
+      # Built here, outside the suite's own bound, so that tests/prop.sh's build finds it done and the cache is kept.
+      - if: matrix.rust
+        run: |
+          cd proptests
+          timeout 600 cargo fetch --locked
+          timeout 900 cargo build --tests --locked
       - run: |
           export COURSIER_CACHE="$HOME/.cache/coursier/v1"
           export SCALA3="$HOME/teq-ref/scala3"
           tests/all.sh ${{ matrix.suites }}
+      - if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: logs-${{ matrix.group }}
+          path: out/all/
+          if-no-files-found: ignore

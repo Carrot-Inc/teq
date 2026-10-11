@@ -285,7 +285,7 @@ pub fn parse_files(
     let workers = crate::workers().min(todo.len()).min(max_workers);
     if !parallel || workers < 2 {
         for &i in &todo {
-            let (asts, errors) = parse_one(&files[i].text, interner, syntax);
+            let (asts, errors) = parse_one(&files[i].text, interner, parser::Syntax { std: files[i].is_std, ..syntax });
             for (span, msg) in errors {
                 diags.error(FileId(i as u32), span, msg);
             }
@@ -312,7 +312,7 @@ pub fn parse_files(
                         loop {
                             let slot = next.fetch_add(1, Ordering::Relaxed);
                             let Some(&i) = order.get(slot) else { break };
-                            let (asts, errors) = parse_one(&files[i].text, &mut local, syntax);
+                            let (asts, errors) = parse_one(&files[i].text, &mut local, parser::Syntax { std: files[i].is_std, ..syntax });
                             if note {
                                 for ast in &asts {
                                     note_used_names(ast, &mut local_used, &local);

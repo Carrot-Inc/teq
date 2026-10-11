@@ -189,6 +189,11 @@ const LOCAL_BIT: u8 = 32;
 const UNSHARED_BIT: u8 = 64;
 /// A `RecThis` occurs in the type, bound or free: what opening a `Rec` rewrites.
 const REC_BIT: u8 = 128;
+/// The blocked type the workers' merge writes over a base entry that named a worker's id and that
+/// it made again under the new ids (`TypeStore::retire_remade`), which nothing else makes: such
+/// an entry is told by its type, no type from there on, kept out of the indexes and of every scan
+/// of the store.
+const RETIRED: &str = "a type of the workers' that their merge made again";
 
 #[inline]
 fn local_id(id: u32) -> u8 {
@@ -711,24 +716,31 @@ impl TypeStore {
     /// The type standing for a library type of an unsupported shape, described as
     /// `<shape>: <spelling>`.
     pub fn blocked(&self, description: &str) -> TypeId {
+        let b = self.blocked_id(description);
+        self.mk(Type::Blocked(b))
+    }
+
+    /// The description's entry of the blocked sub-store, interned, without a type over it.
+    fn blocked_id(&self, description: &str) -> BlockedId {
         let h = hash_of(description);
         let find = || self.blocked_index.find(h, |i| &**self.blocked.get(i as usize) == description);
-        let id = match find() {
-            Some(id) => id,
-            None => {
-                let Ok(held) = self.insert_lock() else { return self.mk(Type::Blocked(BlockedId(self.blocked_apart(h, description)))) };
-                let again = if held.is_some() { find() } else { None };
-                match again {
-                    Some(id) => id,
-                    None => {
-                        let id = self.blocked.push(description.into()) as u32;
-                        self.blocked_index.insert(h, id);
-                        id
-                    }
-                }
+        if let Some(id) = find() {
+            return BlockedId(id);
+        }
+        let Ok(held) = self.insert_lock() else { return BlockedId(self.blocked_apart(h, description)) };
+        if held.is_some() {
+            if let Some(id) = find() {
+                return BlockedId(id);
             }
-        };
-        self.mk(Type::Blocked(BlockedId(id)))
+        }
+        let id = self.blocked.push(description.into()) as u32;
+        self.blocked_index.insert(h, id);
+        BlockedId(id)
+    }
+
+    /// The description's entry of the blocked sub-store where there is one, entering none.
+    fn blocked_found(&self, description: &str) -> Option<BlockedId> {
+        self.blocked_index.find(hash_of(description), |i| &**self.blocked.get(i as usize) == description).map(BlockedId)
     }
 
     #[inline]
@@ -1087,7 +1099,8 @@ impl TypeStore {
     }
 
     /// The parts of every union the store holds, which the JVM's erasure of a union reads the
-    /// base classes of (`complete_erased_jar_classes`).
+    /// base classes of (`complete_erased_jar_classes`); none the workers' merge retired
+    /// (`retire_remade`).
     pub fn union_parts(&self) -> Vec<TypeId> {
         let mut out = Vec::new();
         for i in 0..self.types.len() {
@@ -2219,11 +2232,12 @@ impl TypeStore {
             overlaid: AtomicBool::new(false),
             reclaimed: AtomicBool::new(false),
         };
+        let retired = self.blocked_found(RETIRED);
         for i in 0..self.types.len() {
             let t = *self.types.get(i);
             s.types.push(t);
             s.flags.push(*self.flags.get(i));
-            if !self.entry_unshared(TypeId(i as u32)) {
+            if *self.flags.get(i) & UNSHARED_BIT == 0 && !matches!(t, Type::Blocked(b) if Some(b) == retired) {
                 s.type_index.insert(hash_of(&t), i as u32);
             }
         }
@@ -2478,6 +2492,44 @@ impl TypeStore {
     #[cfg(debug_assertions)]
     pub fn overlays_reclaimed(&self) -> bool {
         self.reclaimed.load(Ordering::Acquire)
+    }
+
+    /// The base's types made from `from` on (the fork's length) that name a worker's arena id:
+    /// what the loader's lock holder made in the base over a worker's records (a program member's
+    /// signature completed on the worker, its type parameters the worker's, exported when it is
+    /// published) or, without the overlays, every worker's. The workers' merge made each again
+    /// under the new ids where a record hands it over (`merge::Remap::promote`); the original
+    /// names ids the merged arenas do not hold, and no record of the merged program names it
+    /// (the merge's check). Each is retired: its entry made the blocked type no one makes
+    /// (`RETIRED`) with no flags, so that no scan of the store meets a worker's id
+    /// (`union_parts`), and a later fork's worker, whose ids are the same numbers, finds no
+    /// type of the last one's by its structure. In the assertion-enabled builds a read of one
+    /// is refused (`view::read`). The owner's, at the merge, no worker running. How many.
+    #[cold]
+    pub fn retire_remade(&self, from: u32) -> usize {
+        let end = self.types.len();
+        let remade: Vec<usize> = (from as usize..end).filter(|&i| *self.flags.get(i) & LOCAL_BIT != 0).collect();
+        if remade.is_empty() {
+            return 0;
+        }
+        // The description alone: a type over it is found by the index, whose slots of the entries
+        // an earlier merge retired hold that very type.
+        let b = self.blocked_id(RETIRED);
+        let _held = self.serial.hold();
+        for &i in &remade {
+            // No reader holds the entry: nothing names it, and the workers are gone.
+            unsafe {
+                *self.types.get_mut(i) = Type::Blocked(b);
+                *self.flags.get_mut(i) = 0;
+            }
+        }
+        remade.len()
+    }
+
+    /// Whether the base's entry `id` is a type the merge retired (`retire_remade`).
+    #[cfg(debug_assertions)]
+    pub fn is_retired(&self, id: u32) -> bool {
+        (id as usize) < self.types.len() && matches!(*self.types.get(id as usize), Type::Blocked(b) if Some(b) == self.blocked_found(RETIRED))
     }
 
     /// The base's one representative of an unshared path's origin (`unshared_copy`): the origin

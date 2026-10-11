@@ -264,6 +264,9 @@ mod checked {
         if id >= crate::arena::LOCAL_BASE && store.overlays_reclaimed() {
             panic!("an overlay's entry of the {} ({}) read after the merge gave the overlays back, at {}", sub.name(), id, Location::caller());
         }
+        if sub == Sub::Types && store.is_retired(id) {
+            panic!("a type of the workers' that their merge made again ({}) read after the merge retired it, at {}", id, Location::caller());
+        }
         check(Some(store), At::Read, sub, id, Location::caller());
     }
 

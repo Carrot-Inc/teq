@@ -78,7 +78,7 @@ if [ ! -f "$lib" ] || [ ! -f "$lib3" ]; then
   echo "FAIL: scala-library or scala3-library 3.8.4 is not in the coursier cache (incomplete validation)"
   exit 1
 fi
-mkdir -p "$b/core/src/core" "$b/app/src/app" "$b/app/test/app" "$b/solo/src/solo" "$b/pair/src/pair" "$b/util/src/util" "$b/pkg/src/pkg" "$b/project"
+mkdir -p "$b/core/src/core" "$b/app/src/app" "$b/app/test/app" "$b/solo/src/solo" "$b/pair/src/pair" "$b/util/src/util" "$b/nest/src/nest" "$b/pkg/src/pkg" "$b/project"
 cat > "$b/core/src/core/Core.scala" <<'EOF'
 package core
 
@@ -104,9 +104,10 @@ object Main:
   def main(args: Array[String]): Unit = println((core.Core.answer + Labels.count).toString + args.map(" " + _).mkString)
 EOF
 # Projects declaring no main class: solo's products hold one (inherited through core's trait),
-# pair's two (an object's own `main` and a `@main` method's class), util's none (a `@main` of an
-# object, whose class is not written, aside), pkg's one, a `@main` of a package object (a block
-# the analysis answers under the file's path, as the resident's other readers expect).
+# pair's two (an object's own `main` and a `@main` method's class), util's none, nest's one (a `@main`
+# of an object, whose class scalac writes as it writes a top-level one's), pkg's one, a `@main` of a
+# package object (a block the analysis answers under the file's path, as the resident's other
+# readers expect).
 cat > "$b/solo/src/solo/Solo.scala" <<'EOF'
 package solo
 
@@ -132,10 +133,12 @@ package util
 
 object Util:
   val n: Int = 1
+EOF
+cat > "$b/nest/src/nest/Nest.scala" <<'EOF'
+package nest
 
-// A `@main` method of an object: sbt runs the class `util.inner`, which the backend does not
-// write yet, so neither it nor Holder (which has no static main) counts among util's products;
-// when the backend writes it, util's single main class is `util.inner`.
+// A `@main` method of an object: its class `nest.inner` is nest's single main class (Holder has
+// no static main), as sbt runs it.
 object Holder:
   @main def inner(): Unit = println("inner")
 EOF
@@ -225,7 +228,7 @@ EOF
 # app also declares `app/more`, which does not exist at first. The main classes are the plugin's
 # shape: app's `mainClasses` the sorted union of the declared class and the aliases' targets, its
 # run block's `mainClass` the declared one; core, solo, pair and util have a block without one.
-# pkg is one more. solo, pair and util are packaged too, with a stage block without `mainClass`
+# nest and pkg are two more. solo, pair and util are packaged too, with a stage block without `mainClass`
 # and without `Main-Class` in their own jar's manifest, the plugin's shape for a build that leaves
 # `Compile / mainClass` alone (an inference fixture: no plugin wrote a stage without the field
 # before): their products decide (one, two, none). STAGE_NONE gives solo's block `mainClassNone`,
@@ -308,6 +311,7 @@ export = {
         "solo": runnable("solo", staged=True),
         "pair": runnable("pair", staged=True),
         "util": runnable("util", staged=True),
+        "nest": runnable("nest"),
         "pkg": runnable("pkg"),
     },
     "jars": table,
@@ -632,8 +636,8 @@ fi
 # Without a word (or with `--` right after the project) the main class is implied as sbt's `run`
 # implies it: the declared one (app's, among its four product mains), else the single one among
 # the project's own products (core's CoreMain, inherited through its trait; solo's, through core's
-# trait from another module), else a refusal naming them after the build (pair's own `main` and
-# `@main` method) or none (util's).
+# trait from another module; nest's, an object's `@main` method), else a refusal naming them after
+# the build (pair's own `main` and `@main` method) or none (util's).
 run_in() { local p=$1; shift; (cd "$b" && timeout 150 "$TEQ" run "$p" "$@" 2> "$work/run.err"); }
 out=$(run_app -- 3)
 code=$?
@@ -648,6 +652,8 @@ out=$(run_in core -- @absent @labels.txt)
 if [ $? = 0 ] && [ "$out" = "core @absent @labels.txt" ]; then pass "run: an @ after -- reaches the program as it is, a file of that name or none"; else fail "run core -- @absent @labels.txt: $out // $(cat "$work/run.err")"; fi
 out=$(run_in pkg -- p q)
 if [ $? = 0 ] && [ "$out" = "hi p q" ]; then pass "run: a @main method of a package object is the single product main, its block answered under the file"; else fail "run pkg: $out // $(cat "$work/run.err")"; fi
+out=$(run_in nest)
+if [ $? = 0 ] && [ "$out" = "inner" ]; then pass "run: a @main method of an object is the single product main, its class written as scalac writes it"; else fail "run nest: $out // $(cat "$work/run.err")"; fi
 out=$(run_in solo -- x y)
 code=$?
 out2=$(run_in solo)
@@ -661,7 +667,7 @@ code2=$?
 err2=$(cat "$work/run.err")
 if [ $code = 2 ] && [ -z "$out" ] && [[ "$err" == *"pair declares no main class and its products hold 2, which sbt's run would ask to choose among: pair.A, pair.b; name one"* ]] && [[ "$err" == *"pair/compile: "* ]] &&
   [ $code2 = 2 ] && [[ "$err2" == *"no main class in util's products"* ]]; then
-  pass "run refuses a project with two main classes among its products and none declared, naming both after the build, and one whose products hold none (an object's @main, whose class is not written, not counted)"
+  pass "run refuses a project with two main classes among its products and none declared, naming both after the build, and one whose products hold none"
 else
   fail "run's implied refusals ($code, $code2): $err // $err2"
 fi
@@ -679,7 +685,7 @@ code3=$?
 out4=$(task stage app)
 code4=$?
 write_export 0.1.7-check.1 80
-if [ $code = 2 ] && [[ "$err" == *"app declares no main class and its products hold 4, which sbt's run would ask to choose among: app.Exit, app.Main, app.Sleep, app.Stubborn; name one"* ]] && [ $code3 = 2 ] && [[ "$out3" == *"core has no run block: its export predates the block"*"(app, pair, pkg, solo, util have one)"* ]] &&
+if [ $code = 2 ] && [[ "$err" == *"app declares no main class and its products hold 4, which sbt's run would ask to choose among: app.Exit, app.Main, app.Sleep, app.Stubborn; name one"* ]] && [ $code3 = 2 ] && [[ "$out3" == *"core has no run block: its export predates the block"*"(app, nest, pair, pkg, solo, util have one)"* ]] &&
   [ $code4 = 0 ] && grep -q "'app.Main'" "$b/app/target/docker/stage/4/opt/docker/bin/app"; then
   pass "run: an export of an older plugin declares none, so app's own products decide, core's and the test sources' mains left out; a project without a block is refused as predating it; the stage block's own class is staged"
 else
@@ -1873,7 +1879,9 @@ refused() {
 }
 refused "a wrong sha1 is refused, nothing left in the cache" "has sha1 $lsha1 and $lsize bytes where the lock pins $(printf '0%.0s' $(seq 40)) and $lsize bytes: refused" "$lurl $(printf '0%.0s' $(seq 40)) $lsize"
 refused "a body past the pinned size is refused" "has more than the $lsize bytes the lock pins: refused" "http://127.0.0.1:$lport/big/teq.exe $lsha1 $lsize"
-refused "a redirect to plain http is refused" "GET http://127.0.0.1:$lport/redirect/teq.exe failed: curl: (1) Protocol \"http\" disabled" "http://127.0.0.1:$lport/redirect/teq.exe $lsha1 $lsize"
+# curl's `--proto-redir =https` refuses the redirect with its error 1 (an unsupported protocol) naming the
+# protocol, in words that vary with its version ("disabled", "not supported or disabled in libcurl").
+refused "a redirect to plain http is refused" "GET http://127.0.0.1:$lport/redirect/teq.exe failed: curl: (1) Protocol \"http\" " "http://127.0.0.1:$lport/redirect/teq.exe $lsha1 $lsize"
 refused "a binary the repository lacks: its answer" "GET http://127.0.0.1:$lport/missing/teq.exe answered 404" "http://127.0.0.1:$lport/missing/teq.exe $lsha1 $lsize"
 refused "plain http to another host is refused" "is not https, which teq fetches over from every host but this one" "http://repo.invalid/teq.exe $lsha1 $lsize"
 refused "a binaries line of other fields is refused" "binaries line for $lc is not <url> <sha1> <size>" "$lurl $lsha1"

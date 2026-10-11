@@ -31,7 +31,9 @@
 # (bench/instr-compare.sh, five runs
 # on the five programs depth_1, gview_1, core-only, realistic-api and realistic-frontend, each within 0.5%, and on
 # derive30 and schema30 recorded apart; both binaries plain builds, the gate refuses a head's or master's whose
-# `--version` ends in pgo or instrumented), whose counts of instructions need no quiet; and with --app, which names
+# `--version` ends in pgo or instrumented), whose counts of instructions need no quiet; the resident sessions' memory
+# over edits against the budgets this machine recorded (tests/watch-memory.sh as the line memory; a crossed budget on
+# another machine says nothing, the footprints being the allocator's and the kernel's); and with --app, which names
 # the application's export build file, the export's identity against master's saved build
 # (bench/app/export-identity.sh), the API check against master's diagnostics (bench/app/api-check.sh, app-api) and the
 # check of the API's test configuration over each binary's own build of the main lists' products, against master's
@@ -134,7 +136,7 @@ machine=(
   "rust-warnings ./tests/rust-warnings.sh"
 )
 compare="budget runtime sentinel"
-local_lines="size instructions instructions-derive app-export app-export-accept app-api app-api-test app-chain app-cypress app-scalac"
+local_lines="size instructions instructions-derive memory app-export app-export-accept app-api app-api-test app-chain app-cypress app-scalac"
 # The lines run only when --only names them: the scalac oracle, at a release and nightly.
 optional="app-scalac"
 names=" $compare $local_lines "
@@ -303,6 +305,13 @@ local_half() {
       code=$?
       result instructions-derive local $(($(now) - s)) $code "$(tail -1 "$out/instructions-derive.log")" "$file"
     fi
+  fi
+  if selected memory; then
+    s=$(now)
+    (cd "$wt" && TEQ=$bin timeout 1500 ./tests/watch-memory.sh) > "$out/memory.log" 2>&1
+    code=$?
+    [ $code != 0 ] || [ -z "$(lacking "$out/memory.log")" ] || { echo "gate: a skip: $(lacking "$out/memory.log")" >> "$out/memory.log"; code=1; }
+    result memory local $(($(now) - s)) $code "$(tail -1 "$out/memory.log")" "$file"
   fi
   if selected app-export; then
     if [ -z "$app" ] || [ -z "$master" ]; then

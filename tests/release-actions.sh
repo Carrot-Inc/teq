@@ -42,7 +42,8 @@ for f in .github/workflows/release.yml .github/workflows/ship-image.yml; do
 done
 # The gate runs a pull request's code with a token that reads the repository, each job's own, and nothing else.
 check ".github/workflows/gate.yml: no pull_request_target" "$(grep -c 'pull_request_target' .github/workflows/gate.yml)" 0
-check ".github/workflows/gate.yml: each job reads the contents alone" "$(grep -c '^    permissions:$' .github/workflows/gate.yml) $(grep -c '^      contents: read$' .github/workflows/gate.yml) $(grep -cE '^      [a-z-]+: (read|write)$' .github/workflows/gate.yml)" "2 2 2"
+gate_jobs=$(sed -n '/^jobs:$/,$p' .github/workflows/gate.yml | grep -cE '^  [a-z][a-z0-9_-]*:$')
+check ".github/workflows/gate.yml: each job reads the contents alone" "$(grep -c '^    permissions:$' .github/workflows/gate.yml) $(grep -c '^      contents: read$' .github/workflows/gate.yml) $(grep -cE '^      [a-z-]+: (read|write)$' .github/workflows/gate.yml)" "$gate_jobs $gate_jobs $gate_jobs"
 if command -v actionlint > /dev/null; then
   check "actionlint" "$(timeout 120 actionlint .github/workflows/release.yml .github/workflows/ship-image.yml .github/workflows/gate.yml 2>&1)" ""
 else

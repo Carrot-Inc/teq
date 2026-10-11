@@ -4,7 +4,9 @@
 // every body written (no `ELIDED`), compiled to class files by scalac 3.8.4 from teq's TASTy alone
 // (-from-tasty, the tree checker after every phase: tests/tasty/fromtasty/Gate.scala's `regen`) and
 // run on the JVM with scala-library alone beside them (tests/tasty/exec/Launch.java runs the main
-// `mainOf` names), each printing its .expected, which scalac's own build printed. A listed program
+// `mainOf` names), each printing its .expected, which scalac's own build printed (on the JDK major
+// of tests/jvm-expected/<name>.jdk<major>.expected where the java at hand is of that major, as
+// tests/run_jvm.sh compares it). A listed program
 // whose products withhold a body fails the line (the closure shrank); `--update` rewrites the list
 // as every case without jars or Scala.js, of one main, that builds with every body
 // written, regenerates and runs as expected, to be read against the previous list. Without
@@ -46,6 +48,8 @@ import java.util.regex.Pattern
         named("tests/tasty/exec/cases", _.toString.endsWith(".scala"))
     else Files.readAllLines(closure).toArray.toVector.map(_.toString).filterNot(_.startsWith("#"))
   val cpus = Runtime.getRuntime.availableProcessors()
+  // The major of the java the programs run on.
+  val jdk = """version "(\d+)""".r.findFirstMatchIn(Sh("java", "-version").mergeErr.timeout(60).check(false).run().out).map(_.group(1)).getOrElse("")
 
   // A case's sources: the file, or the directory's .scala files.
   def sources(src: Path): Vector[Path] =
@@ -71,7 +75,8 @@ import java.util.regex.Pattern
       why(name) = "no expected output"
       Sh.End
     else
-      expected(name) = Paths.get(s"$dir/$name.expected")
+      val ofJdk = Paths.get(s"tests/jvm-expected/$name.jdk$jdk.expected")
+      expected(name) = if jdk.nonEmpty && Files.exists(ofJdk) then ofJdk else Paths.get(s"$dir/$name.expected")
       mainOf(src) match
         case None =>
           why(name) = "no main the source names alone"

@@ -20,6 +20,10 @@ pub struct Syntax {
     /// The language server's index is kept: the parser records the name spans of selections,
     /// operators and import paths (`Ast::name_spans`).
     pub index: bool,
+    /// The lean std's own source: its deprecated definitions turn the reference checks on where
+    /// a reference resolves one (`Worker::package_term`), not where they are read, so that a
+    /// program that names none pays no check (`typer::deprecation::possible`).
+    pub std: bool,
 }
 
 pub struct Parser<'a> {

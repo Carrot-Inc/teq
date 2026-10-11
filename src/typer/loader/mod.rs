@@ -1088,6 +1088,11 @@ impl<'a> Worker<'a> {
         self.syms.class_mut(c).rule_prefix = 0;
         if self.syms.class(c).base_types.len() > 1 {
             self.mark_members_meeting_inherited(c);
+            // A val of the builtin implementing a def the library declares for it (a tuple's
+            // `_1`, `ProductN`'s, which `productElement` reads) is a getter, as dotty's `Getters`
+            // makes every val of a class: `mark_accessors`, which the builtin's check, with no
+            // definition and before these bases, did not run.
+            self.mark_accessors(c);
         }
     }
 

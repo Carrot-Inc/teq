@@ -4,8 +4,8 @@
 #   fetch    every Maven jar tests/support/jars.sh names (its `$M2/...` paths, the coordinates), each missing one
 #            fetched from Maven Central into COURSIER_CACHE's layout and kept only when its SHA-1 is the one Central
 #            serves beside it; the workflow caches the directory, keyed by tests/support/jars.sh.
-#   pack     the jars tests/support/jars.sh builds (jars_warm: scala-cli's, python's), built here, into <file>, a
-#            tarball whose names are the builds' without this checkout's prefix.
+#   pack     the jars tests/support/jars.sh builds (jars_warm: scala-cli's, python's), built here, into <file> (its
+#            directory made where it is missing), a tarball whose names are the builds' without this checkout's prefix.
 #   restore  <file>'s jars put where tests/support/jars.sh looks for them from this checkout, newer than their
 #            sources, so that the suites take them as they are: the same bytes on every platform, with neither
 #            scala-cli nor a JDK there.
@@ -42,7 +42,7 @@ pack() {
     case $name in *.[0-9]*) continue ;; esac
     cp -R "$name" "$stage/scratch${name#"$scratch"}" || { rm -rf -- "$stage"; fail "$name not copied"; }
   done
-  (cd "$stage" && tar -czf - scratch-*) > "$out" || { rm -rf -- "$stage"; fail "$out not written"; }
+  mkdir -p "$(dirname "$out")" && (cd "$stage" && tar -czf - scratch-*) > "$out" || { rm -rf -- "$stage"; fail "$out not written"; }
   echo "jars: $(cd "$stage" && find . -type f | wc -l | tr -d ' ') built files into $out"
   rm -rf -- "$stage"
 }

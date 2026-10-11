@@ -819,6 +819,7 @@ macro_fresh_nested_site
 macro_heal_types
 macro_hole_cast
 macro_identity_hash
+macro_jar_ctor_val
 macro_jdk_bodies
 macro_jvm_template_body
 macro_lambda_quotes
@@ -1069,6 +1070,7 @@ poly_context_function
 poly_function_outer_bound
 poly_functions
 poly_named_params
+predef_copy_array
 predef_std
 predef_unimport_redefined
 predef_wrap_string_linked
@@ -1461,6 +1463,7 @@ tuple_index_dynamic
 tuple_member_extension
 tuple_named_arguments
 tuple_ops_type_args
+tuple_product_getters
 tuple_xxl
 tuple_xxl_product
 tuple_xxl_typed

@@ -155,9 +155,9 @@ expect "own full build runs" "$(run_out app.Main)" "(1,2,3)"
 stop
 rm -rf "$work/out"
 
-# The other side of what a retype adds outside its units (tests/split-watch.sh has the first): a
-# retype of inline_fold_std folds through scala-library's bodies, which adds template calls the
-# walk calls wherever they stand, so the reach is walked from the roots again (src/emit/kept.rs).
+# A retype of inline_fold_std folds its arguments through scala-library's bodies: the session's
+# output after it is a fresh build's, whether the reach is kept or walked from the roots again
+# (src/emit/kept.rs; tests/split-watch.sh has a macro's side of what a retype adds outside its units).
 src=$work/fold
 mkdir -p "$src"
 cp tests/cases/inline_fold_std.scala "$src/"
@@ -165,8 +165,7 @@ TEQ_SESSION_PARTS=1 TEQ_KEPT_SETTLE=wait start "$src" $PIN
 expect "inline_fold_std: first build" "$(field ok)" 'true'
 printf '// a comment\n' | cat - "$src/inline_fold_std.scala" > "$src/fold.tmp" && mv "$src/fold.tmp" "$src/inline_fold_std.scala"
 build "$src/inline_fold_std.scala"
-expect "inline_fold_std: a comment inserted" "$(field ok),$(field incremental),$(field kept)" 'true,true,false'
-if has 'a template call of'; then ok; else bad "inline_fold_std: walked for another reason: $(field walked)"; fi
+expect "inline_fold_std: a comment inserted" "$(field ok),$(field incremental)" 'true,true'
 same_as_fresh "inline_fold_std: a comment inserted" "$src" $PIN
 stop
 rm -rf "$work/out"

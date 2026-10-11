@@ -7,6 +7,11 @@
 # `//> using platform js` directive: doubles print as JS prints them) are compared with
 # tests/jvm-expected/<name>.expected, which real Scala on the JVM produced from the same source
 # without that directive (`scala-cli run -S 3.8.4`); without such a file the test is skipped.
+# The expectations are the output on JDK 24, the JDK the JVM target's references run on; a case
+# that prints a message of the JDK's own which another major words otherwise (an exception's text)
+# has that major's expectation beside, tests/jvm-expected/<name>.jdk<major>.expected, which
+# scalac 3.8.4's run on that JDK wrote (`scala-cli run -S 3.8.4 --jvm system`, that JDK's java
+# first on the PATH, from the repository's root under TZ=UTC), and which a run on that major compares.
 #
 # tests/jvm-passing.txt lists the tests that pass; a listed test that fails is a regression and
 # fails the script, an unlisted one that passes is reported so that it can be added
@@ -37,6 +42,7 @@
 cd "$(dirname "$0")/.."
 TEQ=${TEQ:-./target/release/teq}
 export TZ=UTC  # an archive entry's DOS time is local time: the recorded bytes are UTC's
+JDK_MAJOR=$(java -version 2>&1 | sed -nE '1s/^[^"]*"([0-9]+).*/\1/p')
 JOBS=${JOBS:-$(getconf _NPROCESSORS_ONLN 2>/dev/null || echo 4)}
 LIST=tests/jvm-passing.txt
 out=out/jvm-tests
@@ -79,6 +85,7 @@ run_one() {
       return
     fi
   fi
+  [ -f "tests/jvm-expected/$name.jdk$JDK_MAJOR.expected" ] && expected="tests/jvm-expected/$name.jdk$JDK_MAJOR.expected"
   flags=$(grep -h -o '^// teq: .*' "$src" "$src"/*.scala 2>/dev/null | head -1 | sed 's|^// teq: ||')
   . tests/support/jars.sh
   jars_of "$src"
@@ -115,7 +122,7 @@ run_one() {
   fi
 }
 export -f run_one
-export TEQ VERSION out
+export TEQ VERSION out JDK_MAJOR
 
 for src in tests/cases/*.scala tests/cases/*/; do echo "${src%/}"; done | xargs -P "$JOBS" -I{} bash -c 'run_one {}'
 

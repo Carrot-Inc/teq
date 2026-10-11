@@ -11,6 +11,8 @@ deprecation: -Wconf:any:e
 deprecation: -Wconf:origin=old:s -Werror
 deprecation: -Wconf:any:v -deprecation
 deprecation_kinds: -deprecation
+std_deprecation:
+std_deprecation: -Wconf:cat=deprecation:s -Werror
 deprecation_kinds:
 deprecated_alias: -deprecation -Werror
 deprecated_alias:

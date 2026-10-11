@@ -7,7 +7,9 @@
 # without a JDK or javap, the app suite without the jars its corpus reads, and the budget and
 # runtime suites on a machine other than the one that recorded bench/budgets.txt and
 # bench/runtime-budgets.txt, the prop suite without the crates of proptests/ fetched, and the
-# test runner's classes without a javac (a javac other than 17's only notes a difference).
+# test runner's classes without a javac (a javac other than 17's only notes a difference). Each suite's whole
+# output goes to out/all/<suite>.log as it runs, and its time and verdict to a line of out/all/times.txt
+# (`<suite> <seconds> ok|FAIL`), which a run on another machine keeps (the GitHub workflow's artifacts).
 cd "$(dirname "$0")/.."
 # The compiler the suites test, target/release/teq unless TEQ names another; the repository's launcher runs
 # the suites written in Scala (./teq interp tests/x.scala) under it too, so that they run under the binary they
@@ -19,6 +21,9 @@ if [ -z "$SCALA3" ] && common=$(git rev-parse --path-format=absolute --git-commo
 fi
 status=0
 summary=()
+logs=out/all
+mkdir -p "$logs"
+rm -f "$logs/times.txt"
 only=" $* "
 seen=()
 suite() {
@@ -28,17 +33,21 @@ suite() {
   if [ "$only" != "  " ] && [[ "$only" != *" $name "* ]]; then
     return
   fi
-  local out
-  out=$("$@" 2>&1)
+  local out start=$SECONDS
+  # Written as the suite runs, so that a run cut short keeps what it printed.
+  "$@" > "$logs/$name.log" 2>&1
   local code=$?
+  out=$(cat "$logs/$name.log")
   local last
   last=$(tail -1 <<< "$out")
   if [ $code -ne 0 ]; then
     status=1
     echo "$out"
     summary+=("FAIL  $name: $last")
+    echo "$name $((SECONDS - start)) FAIL" >> "$logs/times.txt"
   else
     summary+=("ok    $name: $last")
+    echo "$name $((SECONDS - start)) ok" >> "$logs/times.txt"
   fi
 }
 suite cases         ./tests/run.sh
@@ -49,13 +58,13 @@ suite dce           ./tests/dce.sh
 suite size          ./teq interp tests/size.scala
 suite split         ./tests/split.sh
 suite split-watch   ./tests/split-watch.sh
-suite split-watch   ./tests/check-watch.sh
-suite split-watch   ./tests/jvm-watch.sh
-suite split-watch   ./tests/lsp.sh
-suite split-watch   ./tests/task.sh
-suite split-watch   ./tests/runner-classes.sh
-suite split-watch   ./tests/watch-memory.sh
-suite split-watch   ./tests/split-determinism.sh
+suite check-watch   ./tests/check-watch.sh
+suite jvm-watch     ./tests/jvm-watch.sh
+suite lsp           ./tests/lsp.sh
+suite task          ./tests/task.sh
+suite runner-classes ./tests/runner-classes.sh
+suite watch-memory  ./tests/watch-memory.sh
+suite split-determinism ./tests/split-determinism.sh
 suite workers       ./tests/workers.sh
 suite budget        ./bench/budget.sh
 suite runtime       ./tests/runtime.sh
@@ -79,6 +88,7 @@ suite scala3-macros tests/scala3/run.sh --suite run-macros
 suite scala3-macros-interp tests/scala3/run.sh --suite run-macros --target interp
 suite scala3-typing python3 tests/scala3-typing/harness.py
 suite rust-warnings ./tests/rust-warnings.sh
+suite gate-coverage ./tests/gate-coverage.sh
 # Outside the groups the gate runs: it needs the crates of proptests/ fetched once, and skips
 # without them.
 suite prop          ./tests/prop.sh

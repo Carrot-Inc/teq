@@ -1138,6 +1138,11 @@ impl<'a> Worker<'a> {
     /// A term of a package: a member of its package object, which the loader spills into the
     /// package, is read through the object.
     fn package_term(syms: &Symbols, s: SymId) -> TermRef {
+        // A reference resolves a deprecated member of a package here: the std's, whose reading
+        // left the checks off (`Syntax::std`), turns them on before the reference is checked.
+        if syms.sym(s).mods & crate::ast::mods::DEPRECATED != 0 {
+            super::deprecation::note_deprecated();
+        }
         match syms.sym(s).owner {
             Owner::Class(c) => TermRef::ModuleMember(c, s),
             _ => TermRef::Global(s),
@@ -4664,6 +4669,14 @@ impl<'a> Worker<'a> {
             while let Some(file) = self.sealed_std_files.pop() {
                 self.complete_file_classes(file);
             }
+            self.late_naming_done();
+        }
+    }
+
+    /// Outside every completion, the overload sets and the unsettled std entries made since the
+    /// final passes named (`name_late_alternatives`).
+    pub(super) fn late_naming_done(&mut self) {
+        if self.completing == 0 {
             if let Some(from) = self.late_naming_from.take() {
                 self.name_late_alternatives(from);
             }
@@ -5621,6 +5634,15 @@ impl<'a> Worker<'a> {
                 flags.merge_pending = true;
                 if is_std && !in_jar {
                     self.unsettled_std_entries.push((c, entry));
+                    // A std class completed after the final pass (a class nested in one the
+                    // reach checks, an anonymous class of a std body typed on demand) has its
+                    // entries named once no completion is under way, as a std file entered
+                    // after it has: before the reach meets the class and marks its members by
+                    // the names they go by. A check that only reports reads no output name and
+                    // leaves them to their first use (`emits_bodies`).
+                    if self.alternatives_named && self.emits_bodies {
+                        self.late_naming_from.get_or_insert(self.syms.overloads.len());
+                    }
                 }
             }
         }

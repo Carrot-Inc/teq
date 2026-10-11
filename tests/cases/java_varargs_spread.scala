@@ -1,12 +1,14 @@
 //> using platform jvm
 // jars: javafix
+// std: scala-library
 // An array spread into a Java varargs as it is written (`f(arr*)`) is the parameter's array
 // itself, as scalac passes it: an array of references for any array of references the elements
 // fit (`CharSequence...` given a `String` array), a primitive array for the same primitive. The
 // callee's writes show in the caller's array, and a stream made of it sees the caller's later
 // writes. A sequence the program wrote, a copy or a wrapper of an array among them, and an array
 // whose elements the parameter boxes, go as a new array. `fix.Varargs` is a Java class of
-// tests/classfile/fixtures.
+// tests/classfile/fixtures; the copies and wrappers are scala-library's (`Predef`, `ScalaRunTime`),
+// so that the program is the JVM's std's alone.
 import java.util.stream.{IntStream, Stream}
 
 object Main:

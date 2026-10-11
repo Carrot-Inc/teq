@@ -553,7 +553,7 @@ impl<'a> Worker<'a> {
         let blocks = slot.blocks.clone();
         // A language server's session records the std's names (`index::navigable`), whose spans
         // the parser keeps for it.
-        let syntax = crate::parser::Syntax { index: self.index.is_some(), ..Default::default() };
+        let syntax = crate::parser::Syntax { index: self.index.is_some(), std: true, ..Default::default() };
         let (mut asts, errors) = crate::frontend::parse_one(text, self.interner, syntax);
         if syntax.index {
             asts.iter_mut().for_each(crate::ast::Ast::shrink_index_spans);
