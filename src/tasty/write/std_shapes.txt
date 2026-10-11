@@ -509,7 +509,6 @@ java.lang.Character$	toString	scala.Char:java.lang.String
 java.lang.Character$	toUpperCase	scala.Char:scala.Char
 java.lang.Character$	valueOf	scala.Char:java.lang.Character
 java.lang.Class	getComponentType	:java.lang.Class
-java.lang.Class	getField	java.lang.String:java.lang.reflect.Field
 java.lang.Class	getMethods	:java.lang.reflect.Method[]
 java.lang.Class	getName	:java.lang.String
 java.lang.Class	getSimpleName	:java.lang.String
@@ -1445,10 +1444,6 @@ java.lang.reflect.AccessibleObject	<init>	:java.lang.reflect.AccessibleObject
 java.lang.reflect.AccessibleObject	isAccessible	:scala.Boolean
 java.lang.reflect.AccessibleObject	setAccessible	scala.Boolean:scala.Unit
 java.lang.reflect.Array$	newInstance	java.lang.Class,scala.Int:java.lang.Object
-java.lang.reflect.Field	get	java.lang.Object:java.lang.Object
-java.lang.reflect.Field	getName	:java.lang.String
-java.lang.reflect.Field	isAccessible	:scala.Boolean
-java.lang.reflect.Field	setAccessible	scala.Boolean:scala.Unit
 java.lang.reflect.Method	getName	:java.lang.String
 java.lang.reflect.Method	isAccessible	:scala.Boolean
 java.lang.reflect.Method	setAccessible	scala.Boolean:scala.Unit

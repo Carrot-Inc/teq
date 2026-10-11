@@ -1620,7 +1620,10 @@ package java.lang.annotation:
 
 package java.lang.reflect:
   // What scala-library's `ensureAccessible` asks of a member it reflects on (its `Selectable`, which
-  // a JVM build's macro runs): every member the interpreter finds is accessible.
+  // a JVM build's macro runs): every member the interpreter finds is accessible. A JVM build's
+  // class is the JDK's, and so is `Field`, which the JDK's `ct.sym` gives every target.
+  @javaDefined
+  @jvmClass("java/lang/reflect/AccessibleObject")
   abstract class AccessibleObject:
     def isAccessible: scala.Boolean = true
     def setAccessible(flag: scala.Boolean): Unit = ()
@@ -1632,11 +1635,6 @@ package java.lang.reflect:
     def getName: String = name
     def invoke(obj: Any, args: Any*): AnyRef = invokeBySignature(obj, name, parameterTypes, args.toList)
     override def toString: String = "public method " + name
-
-  // A public field; a Scala class has none, its vals being private fields behind their getters.
-  final class Field(name: String) extends AccessibleObject:
-    def getName: String = name
-    def get(obj: Any): AnyRef = throw new NoSuchFieldException(name)
 
   @js("$fail(\"UnsupportedOperationException\", \"reflection is not available on JavaScript\")")
   def invokeByName(obj: Any, name: String, args: List[Any]): AnyRef
