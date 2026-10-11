@@ -7,9 +7,8 @@
 # neither has fails the job, so that no suite counts a case of a missing jar as passed.
 name: gate
 on:
-  push:
-    branches: [master]
   pull_request:
+  workflow_dispatch:
 permissions: {}
 env:
   CARGO_TERM_COLOR: always
