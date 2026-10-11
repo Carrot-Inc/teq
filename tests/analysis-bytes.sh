@@ -3,13 +3,18 @@
 # the products of a build and the class files of a session are the same bytes with the request
 # and without it, and the graph and the dependencies are the same whatever the typer's threads
 # and a session's history.
-#   products  every module of every case of tests/modules (but misuse, and a case whose build
+#   products  every module of every case of tests/modules (but a case whose build
 #             tests/modules/deferred.txt defers, which has no products) and of tests/analysis/cases
 #             built into its products against the upstream products, without the request, with
 #             each version and with each under --threads 4: the class files, the .tasty files and
 #             the manifest are the same bytes, and the answers under four threads are the same
 #             as under one but for their phases' times (`ms`); the Scala.js module's check build (`teq compiler check --products`) the
 #             same with and without each version;
+#   refused   the b of a case with an expect-errors.txt, which misuses a's API by design
+#             (tests/modules.sh's diags, the case tests/analysis.sh leaves out): every one of
+#             those builds is refused, with the file's diagnostics and no products, and its answer
+#             is the failed answer of the version asked (`failed_answer`), the same under four
+#             threads as under one;
 #   session   three JVM sessions over a copy of tests/modules/basic/a, two with the request (one
 #             version each), taken through the same edits (a body, a signature, a type error, its
 #             fix, a file added and removed): after every build the class directories are the
@@ -68,7 +73,6 @@ failed_answer() {
 
 for d in tests/modules/*/ tests/analysis/cases/*/; do
   c=$(basename "$d")
-  [ "$c" = misuse ] && continue
   grep -q "^$c build " tests/modules/deferred.txt 2> /dev/null && continue
   modules=()
   for m in a b c main; do
@@ -90,6 +94,24 @@ for d in tests/modules/*/ tests/analysis/cases/*/; do
       "$TEQ" compiler build --target jvm --classpath "$plain_cp" --products "$work/$c/$v/$m" --sourceroot "$root" "${extra[@]}" "$src" > "$work/$c-$m-$v.json" 2> "$work/$c-$m-$v.err"
       echo $? > "$work/$c-$m-$v.exit"
     done
+    if [ "$m" = b ] && [ -f "$d/expect-errors.txt" ]; then
+      refused=0
+      for v in plain api threads deps deps4; do
+        [ "$(cat "$work/$c-$m-$v.exit")" = 1 ] || refused=1
+        cmp -s "$d/expect-errors.txt" "$work/$c-$m-$v.err" || refused=1
+        [ -e "$work/$c/$v/$m" ] && refused=1
+      done
+      check "$c/$m refused with and without the analysis" $refused
+      graph=0
+      failed_answer "$(cat "$work/$c-$m-api.json")" 2 || graph=1
+      same_answer "$work/$c-$m-api.json" "$work/$c-$m-threads.json" || graph=1
+      check "$c/$m failed answer of the graph under --threads 4" $graph
+      deps=0
+      failed_answer "$(cat "$work/$c-$m-deps.json")" 3 || deps=1
+      same_answer "$work/$c-$m-deps.json" "$work/$c-$m-deps4.json" || deps=1
+      check "$c/$m failed answer of the dependencies under --threads 4" $deps
+      continue
+    fi
     same=0
     for v in api threads deps deps4; do
       diff -r "$work/$c/plain/$m" "$work/$c/$v/$m" > /dev/null || same=1
