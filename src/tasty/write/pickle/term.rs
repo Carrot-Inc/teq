@@ -3839,12 +3839,15 @@ impl<'w, 'a> P<'w, 'a> {
                 // A secondary constructor's `this(...)` passes its own outer parameter, which
                 // `ExplicitOuter` adds after pickling (`OuterOps.args` for the `This` call).
                 let this = self.self_init || matches!(self.w.prog.expr(args[0]), TExpr::This) || self.term_type(args[0]).map_or(false, |t| matches!(self.w.types.get(t), Type::This(k) if k == o));
-                // Inside the outer class teq's types name the instance `O.this.I` whatever its
-                // outer instance: one of another instance there is not stated.
-                if !this && self.enclosing.contains(&o) {
-                    return self.fail("an instance of a class of another instance of its enclosing class".to_string());
+                // Another instance's, inside the outer class too (`import other.{I => R}; new
+                // R(3)`): the construction's resolved prefix, the path the typed tree keeps as
+                // the outer argument, stated as the `NEW`'s type (`other.I`), as `Typer.newExpr`
+                // types it; one that is no path is not stated.
+                let path = !this && self.is_simple_path(args[0]);
+                if !this && !path && self.enclosing.contains(&o) {
+                    return self.fail("an instance of a class of another instance of its enclosing class, through no path".to_string());
                 }
-                (!this && self.is_simple_path(args[0])).then_some(args[0])
+                path.then_some(args[0])
             }
             _ => None,
         };
@@ -6219,6 +6222,10 @@ impl<'w, 'a> P<'w, 'a> {
         // `copy` takes the constructor's clauses: the first the copy's own, the later ones
         // (a context bound's evidence) as the constructor call passes them.
         let sizes: Vec<usize> = info.ctor.iter().map(|cl| cl.params.len()).collect();
+        // A class of a class is made with the receiver's enclosing instance first, which
+        // `recv.copy(..)` states through its receiver, as a `new`'s through its prefix.
+        let inner = matches!(info.owner, Owner::Class(o) if self.w.syms.class(o).kind != ClassKind::Object);
+        let args: Vec<TExprId> = if inner && args.len() == sizes.iter().sum::<usize>() + 1 { args[1..].to_vec() } else { args };
         if args.len() != sizes.iter().sum::<usize>() {
             return self.fail("a copy's arguments".to_string());
         }
@@ -6402,12 +6409,9 @@ impl<'w, 'a> P<'w, 'a> {
             }
             "scala.Option".to_string()
         } else if self.w.syms.class(c).def.is_none() || self.w.in_jar(self.w.syms.class(c).file) {
-            let un = crate::names::UNAPPLY;
-            let m = self.w.syms.class(c).companion.and_then(|o| {
-                self.w.complete_class(o);
-                self.w.syms.class(o).members.get(&un).copied()
-            });
-            // A Scala 3 class read without its companion's members has the identity `unapply`.
+            // The synthetic extractor's: one the companion declares with its signature, else the
+            // identity `unapply` of a Scala 3 class, which the loader leaves out.
+            let m = self.w.declared_synthetic_unapply(c);
             match m.map(|m| self.member_signature(m)) {
                 Some(Ok(Some((_, r)))) => r,
                 None => cls.clone(),

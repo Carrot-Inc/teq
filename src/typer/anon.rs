@@ -819,6 +819,29 @@ impl<'a> Worker<'a> {
                 }
             }
         }
+        // A trait has no constructor to take what it names, as a local trait has not
+        // (`check_local_trait_captures`): one that reads the block's values is refused rather
+        // than left reading names no scope of the output has (dotty's `LambdaLift` gives its
+        // methods the proxies, the separate design COMPATIBILITY records).
+        let traits: Vec<ClassId> = nested.iter().copied().filter(|&n| self.syms.class(n).kind == ClassKind::Trait).collect();
+        for t in traits {
+            let Some(index) = self.prog_index.class(&self.prog, t) else { continue };
+            let tc = self.prog.classes[index].clone();
+            let read = self.class_roots(std::slice::from_ref(&tc)).into_iter().find_map(|root| {
+                self.prog.descendants(root).find_map(|e| match self.prog.expr(e) {
+                    TExpr::Local(s) | TExpr::CallStatic(s, _) if captures.contains(&s) => Some(s),
+                    _ => None,
+                })
+            });
+            if let Some(s) = read {
+                let msg = format!(
+                    "not supported yet: a trait nested in a local class referring to {} of its enclosing block; move the class to the top level",
+                    self.name_str(self.syms.sym(s).name)
+                );
+                let span = self.syms.class(t).span;
+                self.error(span, msg);
+            }
+        }
         nested.retain(|&n| self.outer_class(n).is_some() && self.prog_index.class(&self.prog, n).is_some());
         if nested.is_empty() {
             return;
@@ -1429,6 +1452,7 @@ impl<'a> Worker<'a> {
             parent_args: None,
             parent_prelude: ast::ListRef::EMPTY,
             inherited_case_members: 0,
+            retracted_unapply: false,
             init: self.parent_inits(c, &mut Vec::new()),
             methods: vec![f],
             forwarders: Vec::new(),
@@ -1776,9 +1800,12 @@ impl<'a> Worker<'a> {
             return s;
         }
         let o = self.enclosing_instance_class(c).expect("an inner class");
+        // An object nested in a class goes by the object's name, its class's in the program
+        // (`E`) and read from another module's products (`E$` beside a companion class) alike.
         let (file, owner_name, name) = {
             let info = self.syms.class(c);
-            (info.file, self.syms.class(o).name, info.name)
+            let name = info.inner_object.map_or(info.name, |v| self.syms.sym(v).name);
+            (info.file, self.syms.class(o).name, name)
         };
         // A given's class has scalac's, as its class file is scalac's layout (`jvm::static_given_objects`).
         let name = if self.is_library_class(c) && !self.is_product_class(c) || self.syms.class(c).kind == ClassKind::GivenImpl {

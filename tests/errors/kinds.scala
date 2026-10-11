@@ -1,6 +1,6 @@
-// expect: 8:11: error: type argument Int does not have the same kind as its parameter F[_]
-// expect: 9:11: error: type argument Map does not have the same kind as its parameter F[_]
-// expect: 10:15: error: type argument List does not have the same kind as its parameter A
+// expect: 8:11: error: type argument Int does not have the same kind as its bound [_]
+// expect: 9:11: error: type argument Map does not have the same kind as its bound [_]
+// expect: 10:15: error: type argument List does not have the same kind as its bound
 // expect: 3 errors found
 object T:
   class C[F[_]]

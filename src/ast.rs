@@ -152,6 +152,9 @@ pub struct LambdaParam {
     pub implicit: bool,
     /// `x ?=> ...`: the lambda is a context function, its parameters givens inside the body.
     pub contextual: bool,
+    /// The parameter of a `{ case ... }` literal, whose body matches on it: dotty's
+    /// `makeCaseLambda`, the parameter named as its synthetic one is (`x$1`).
+    pub cases: bool,
 }
 
 #[derive(Clone, Copy, Debug)]

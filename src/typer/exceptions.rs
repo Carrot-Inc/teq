@@ -297,7 +297,7 @@ impl<'a> Worker<'a> {
     /// method: the scrutinee goes through it and the sub-patterns match its result, one for
     /// an `Option[T]`, several for an `Option[(A, B, ..)]`; or an `unapplySeq`, whose
     /// `Option[Seq[T]]` the sub-patterns match element by element, `rest*` included.
-    pub fn extractor_pattern(&mut self, path: ExprId, subs: &[crate::ast::PatId], sty: TypeId, span: Span) -> Option<TPatId> {
+    pub fn extractor_pattern(&mut self, path: ExprId, subs: &[crate::ast::PatId], sty: TypeId, span: Span, chosen: Option<SymId>) -> Option<TPatId> {
         let n = self.diags.items.len();
         let (recv, rty) = self.type_expr(path, None);
         self.drop_reported_since(n);
@@ -306,7 +306,7 @@ impl<'a> Worker<'a> {
         if rty == ERROR || !(self.stable_receiver(recv) || self.is_body_file(self.env.file)) {
             return None;
         }
-        self.extractor_pattern_on(recv, rty, subs, sty, span)
+        self.extractor_pattern_on(recv, rty, subs, sty, span, chosen)
     }
 
     /// `case s"a-$x"`: `StringContext(parts).s.unapplySeq(scrutinee)` with the holes as the
@@ -337,7 +337,7 @@ impl<'a> Worker<'a> {
         if self.diags.items.len() > n || rty == ERROR {
             return self.prog.add_pat(TPat::Wildcard);
         }
-        match self.extractor_pattern_on(recv, rty, holes, sty, span) {
+        match self.extractor_pattern_on(recv, rty, holes, sty, span, None) {
             Some(p) => p,
             None => {
                 let msg = format!("{} is not an extractor: it has no unapply or unapplySeq for an interpolated pattern", self.name_str(kind));
@@ -347,53 +347,9 @@ impl<'a> Worker<'a> {
         }
     }
 
-    /// Whether the alternatives of an overloaded extractor all take the scrutinee only through
-    /// a type test and none of their inputs, seen from the receiver, is more specific than the
-    /// rest: dotty's overload resolution of `unapply` against the selector, every alternative
-    /// applicable through the test it adds, reports the ambiguity (`neg/i2378`).
-    fn ambiguous_unapply(&mut self, set: SymId, owner_ty: TypeId, recv: TExprId, rty: TypeId, sty: TypeId) -> bool {
-        let alts: Vec<SymId> = self.syms.alternatives(set).map(|a| a.to_vec()).unwrap_or_default();
-        let owner_subst = self.owner_subst(owner_ty);
-        let prefix = self.path_of(recv).unwrap_or(rty);
-        let c = self.class_of(rty);
-        let mut inputs = Vec::new();
-        for s in alts {
-            let usig = self.sig_of(s);
-            if !usig.tparams.is_empty() {
-                return false;
-            }
-            let Some(pty) = usig.clauses.iter().find(|cl| !cl.is_using && !cl.is_implicit).and_then(|cl| (cl.params.len() == 1).then(|| cl.params[0].ty)) else { continue };
-            let pty = self.types.subst(pty, &owner_subst);
-            let pty = match c {
-                Some(c) if self.types.has_paths(pty) => self.as_seen_from(pty, prefix, c),
-                _ => pty,
-            };
-            if self.types.contains_error(pty) {
-                return false;
-            }
-            inputs.push(pty);
-        }
-        if inputs.len() < 2 {
-            return false;
-        }
-        let mark = self.snapshot();
-        let any_conforms = inputs.iter().any(|&t| self.is_sub(sty, t));
-        self.rollback(mark);
-        if any_conforms {
-            return false;
-        }
-        let most_specific = (0..inputs.len()).any(|i| {
-            (0..inputs.len()).all(|j| {
-                let mark = self.snapshot();
-                let holds = i == j || self.is_sub(inputs[i], inputs[j]);
-                self.rollback(mark);
-                holds
-            })
-        });
-        !most_specific
-    }
-
-    fn extractor_pattern_on(&mut self, recv: TExprId, rty: TypeId, subs: &[crate::ast::PatId], sty: TypeId, span: Span) -> Option<TPatId> {
+    /// The extraction `recv.unapply(scrutinee)` of a pattern, through the alternative `chosen`
+    /// where the caller selected it, else the one `select_unapply` selects.
+    fn extractor_pattern_on(&mut self, recv: TExprId, rty: TypeId, subs: &[crate::ast::PatId], sty: TypeId, span: Span, chosen: Option<SymId>) -> Option<TPatId> {
         let (name, unapply, owner_ty) = match self.find_member(rty, names::UNAPPLY) {
             Some((s, o)) => (names::UNAPPLY, s, o),
             None => {
@@ -402,23 +358,19 @@ impl<'a> Worker<'a> {
             }
         };
         let overloaded = self.syms.alternatives(unapply).is_some_and(|alts| alts.len() > 1);
-        if overloaded && self.ambiguous_unapply(unapply, owner_ty, recv, rty, sty) {
-            let msg = format!(
-                "Ambiguous overload. The overloaded alternatives of method {} in {} both match a scrutinee of type {}",
-                self.name_str(name),
-                self.class_description(match self.syms.sym(unapply).owner {
-                    Owner::Class(c) => c,
-                    _ => return None,
-                }),
-                self.show(sty)
-            );
-            self.error(span, msg);
-            for &s in subs {
-                self.type_pattern(s, ERROR);
-            }
-            return Some(self.prog.add_pat(TPat::Wildcard));
-        }
-        let unapply = self.syms.alternatives(unapply).and_then(|alts| alts.first().copied()).unwrap_or(unapply);
+        let unapply = match chosen {
+            Some(s) => s,
+            None if overloaded => match self.select_unapply(unapply, owner_ty, None, sty, span) {
+                Some(super::overload::Unapply::Method(s)) => s,
+                _ => {
+                    for &p in subs {
+                        self.type_pattern(p, ERROR);
+                    }
+                    return Some(self.prog.add_pat(TPat::Wildcard));
+                }
+            },
+            None => unapply,
+        };
         // A scrutinee wider than what `unapply` takes is tested against that type first.
         // The parameter is seen from the receiver's type (`m: Matcher[A, B]`).
         // The scrutinee goes to the first clause that is not a using clause: an extractor of a
@@ -456,10 +408,7 @@ impl<'a> Worker<'a> {
             None
         };
         if !conforms && tag.is_none() {
-            // An overloaded `unapply` is typed by its first alternative, not by scalac's choice.
-            if !overloaded {
-                self.check_sensical_test(taken, sty, span);
-            }
+            self.check_sensical_test(taken, sty, span);
             // An input of an abstract type no tag tests (`Types.this.Type[A$1]`, `Plain.this.T`):
             // the test passes any value, which scalac warns of (E092).
             if self.abstract_input(taken) && !self.checks_inline_definition() && self.inline.depth == 0 && !self.input_unchecked(unapply) {
@@ -472,7 +421,13 @@ impl<'a> Worker<'a> {
         let arg = self.prog.add(TExpr::Local(scrut));
         self.prog.set_type(arg, narrowed);
         let lists = vec![ArgList { args: vec![ArgSrc::Typed(arg, narrowed)], using: false, span }];
-        let (call, rty) = self.apply_member(recv, rty, name, None, lists, span, None);
+        // The alternative selected is applied, not resolved again for the narrowed scrutinee.
+        let (call, rty) = if overloaded || chosen.is_some() {
+            let callee = self.member_callee_in(recv, rty, Some(owner_ty), unapply);
+            self.apply_callee(callee, None, lists, span, None)
+        } else {
+            self.apply_member(recv, rty, name, None, lists, span, None)
+        };
         let rty = self.solve_in(rty);
         let rty = self.widen_lit(rty);
         // The extractor's result at the pattern, whose shape signature help shows.

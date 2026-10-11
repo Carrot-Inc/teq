@@ -1165,6 +1165,22 @@ impl TypeStore {
     }
 
     /// Whether an unresolved type occurs anywhere inside `t`.
+    /// Whether `t` names a type member through `prefix` (`Member(prefix, _)`).
+    pub fn mentions_member_of(&self, t: TypeId, prefix: TypeId) -> bool {
+        match self.get(t) {
+            Type::Member(p, _) => p == prefix || self.mentions_member_of(p, prefix),
+            Type::Class(_, args) | Type::AppParam(_, args) | Type::AppVar(_, args) | Type::Alias(_, args) => {
+                self.items(args).iter().any(|&a| self.mentions_member_of(a, prefix))
+            }
+            Type::AppMember(m, args) => self.mentions_member_of(m, prefix) || self.items(args).iter().any(|&a| self.mentions_member_of(a, prefix)),
+            Type::Lambda(_, body) | Type::Poly(_, body) => self.mentions_member_of(body, prefix),
+            Type::Union(a, b) | Type::Inter(a, b) | Type::BoundedWild(a, b) => self.mentions_member_of(a, prefix) || self.mentions_member_of(b, prefix),
+            Type::Select(p, _) => self.mentions_member_of(p, prefix),
+            Type::Refined(p, r) => self.mentions_member_of(p, prefix) || self.refinement_types(r).into_iter().any(|a| self.mentions_member_of(a, prefix)),
+            _ => false,
+        }
+    }
+
     pub fn contains_error(&self, t: TypeId) -> bool {
         match self.get(t) {
             Type::Error | Type::Blocked(_) => true,

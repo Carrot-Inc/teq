@@ -468,12 +468,21 @@ impl<'a> Worker<'a> {
                 let (te, ty) = self.type_expr(head, None);
                 self.apply_callee(Callee::Value(te, ty), targs, lists, span, expected)
             }
-            // `new C(a)(b)`: the further argument lists of the constructor.
+            // `new C(a)(b)`: the further argument lists of the constructor, a class nested in a
+            // class made with the enclosing instance its prefix gives, as with one list.
             Expr::New(ty, first) if targs.is_none() => {
                 let mut clauses = vec![(first, false, ast.expr_span(head))];
                 clauses.extend(raw_lists.iter().map(|&(app, args, using)| (args, using, ast.expr_span(app))));
                 let first_written = ast.new_empty_first.contains(&head);
-                return self.type_new(ty, &clauses, first_written, span, expected);
+                // An explicit `new`, its constructor's signature its own (`type_new_expr`).
+                let prefixed = ast.new_outers.contains_key(&head);
+                let outer_prefixed = std::mem::replace(&mut self.new_prefixed, prefixed);
+                let outer_new = std::mem::replace(&mut self.explicit_new, true);
+                let typed = self.type_new(ty, &clauses, first_written, span, expected);
+                self.explicit_new = outer_new;
+                self.new_prefixed = outer_prefixed;
+                self.new_enclosing_instance(head, typed, prefixed);
+                return typed;
             }
             Expr::SymRef(s) => {
                 let r = self.sym_ref_term(s);
@@ -513,7 +522,16 @@ impl<'a> Worker<'a> {
                     name == names::APPLY
                         && t.this_class().and_then(|c| t.companion_class(c)).map_or(false, |k| t.syms.class(k).mods & crate::ast::mods::CASE != 0)
                 };
-                if (synthesized || companion_apply(self)) && self.lookup_term(name).is_none() {
+                // Where the class has the member they shadow what scopes outside it define (dotty
+                // synthesizes them as members, `Desugar.classDef`): only a local or the class's
+                // own member of the name comes before them.
+                let outside = |t: &mut Self| match t.lookup_term(name) {
+                    None => true,
+                    Some(super::resolve::TermRef::Local(_)) => false,
+                    Some(super::resolve::TermRef::This(k, _)) => Some(k) != t.this_class(),
+                    Some(_) => t.this_class().is_some_and(|c| t.has_synthesized_member(c, name)),
+                };
+                if (synthesized || companion_apply(self)) && outside(self) {
                     if let Some(c) = self.this_class() {
                         self.complete_class(c);
                         let self_ty = self.syms.this_type(c);
@@ -1040,6 +1058,38 @@ impl<'a> Worker<'a> {
             }
         }
         Err(self.apply_member(tq, qty, name, None, Vec::new(), span, None))
+    }
+
+    /// The enclosing instance of the companion object `module` nested in a class, which its
+    /// synthesized `apply` constructs with (`Desugar.classDef`): the instance the companion is
+    /// selected on (`o` of `o.C`, its member found through that instance's class, `findRef`);
+    /// inside the companion itself (`C.this`, as a pickle writes `C(..)` there) its own
+    /// enclosing instance; on another value holding the companion, that value's outer instance.
+    fn module_prefix(&mut self, recv: TExprId, module: ClassId) -> Option<TExprId> {
+        let own = self.syms.class(module).inner_object;
+        match self.prog.expr(recv) {
+            TExpr::Field(q, s) if Some(s) == own => return Some(q),
+            TExpr::CallMethod(q, s, args) if args.len == 0 && Some(s) == own => return Some(q),
+            TExpr::This if self.this_class() == Some(module) => {
+                let outer = self.enclosing_instance_class(module)?;
+                return Some(self.this_ref(outer));
+            }
+            _ => {}
+        }
+        self.enclosing_instance_class(module)?;
+        let accessor = self.outer_accessor(module);
+        let call = self.prog.add(TExpr::CallMethod(recv, accessor, crate::ast::ListRef::EMPTY));
+        let ty = self.sig_of(accessor).ret;
+        self.prog.set_type(call, ty);
+        Some(call)
+    }
+
+    /// Whether the companion object `o` holds its case class's synthesized `apply` as a member, as
+    /// the loader keeps it: a library's companion nested in a class, whose `apply` constructs with
+    /// the companion's own enclosing instance (`Desugar.classDef`), which a jar's bodies call on
+    /// the companion. The constructor does not stand for it then (`constructor_next_to_apply`).
+    pub(in crate::typer) fn keeps_synthetic_apply(&self, o: ClassId) -> bool {
+        self.syms.class(o).inner_object.is_some() && self.is_library_class(o) && !self.is_product_class(o)
     }
 
     pub(super) fn companion_class(&self, object: ClassId) -> Option<ClassId> {
@@ -1956,7 +2006,7 @@ impl<'a> Worker<'a> {
     /// enclosing instance, where the call stands in a class deriving from `Outer`.
     #[cold]
     #[inline(never)]
-    fn sig_seen_from_enclosing(&mut self, sig: Arc<MethodSig>) -> Arc<MethodSig> {
+    pub(super) fn sig_seen_from_enclosing(&mut self, sig: Arc<MethodSig>) -> Arc<MethodSig> {
         let ret = self.seen_from_enclosing_this(sig.ret);
         let clauses: Vec<ClauseSig> = sig
             .clauses
@@ -2413,7 +2463,10 @@ impl<'a> Worker<'a> {
                 // The constructor of a `new`, taken before its arguments are typed: an application
                 // of a class's name among them is one.
                 let explicit = std::mem::take(&mut self.explicit_new);
+                let outer_seen = self.apply_seen_from;
+                self.apply_seen_from = if explicit { None } else { self.companion_apply_receiver(c).map(|r| (c, r)) };
                 let (te, ty) = self.apply_ctor(c, targs, lists, span, expected);
+                self.apply_seen_from = outer_seen;
                 if !explicit && self.capturing() && self.syms.class(c).mods & crate::ast::mods::CASE != 0 && matches!(self.prog.expr(te), TExpr::New(..)) {
                     self.capture_form(te, Form::CaseApply);
                 }
@@ -2431,10 +2484,12 @@ impl<'a> Worker<'a> {
                 let head = self.deref(ty);
                 if let Some((ids, fun)) = self.poly_binders(head) {
                     let ps: Vec<TypeId> = ids.iter().map(|&p| self.types.param(p)).collect();
+                    // A type argument of a higher-kinded parameter is a type constructor (`f[List]`),
+                    // as a method's is.
                     let explicit: Vec<TypeId> = match targs {
                         Some(l) => {
                             let ids = self.cur_ast().ty_list(l).to_vec();
-                            ids.iter().map(|&t| self.resolve_type(t)).collect()
+                            ids.iter().map(|&t| self.resolve_type_ctor(t)).collect()
                         }
                         None => Vec::new(),
                     };
@@ -2522,7 +2577,7 @@ impl<'a> Worker<'a> {
                         let first = lists.remove(0);
                         let clause = self.closure_clause(ty, &ptys);
                         let mut f = [te];
-                        if self.type_clause_args(&clause, first, &Vec::new(), &mut args) {
+                        if self.type_clause_args(&clause, first, &Vec::new(), &mut args, false) {
                             self.hoist_before(mark, &mut f, span);
                         }
                         te = f[0];
@@ -2576,7 +2631,7 @@ impl<'a> Worker<'a> {
                     let mut args = Vec::new();
                     let mark = self.hoisted.len();
                     let mut f = [te];
-                    if self.type_clause_args(&clause, first, &Vec::new(), &mut args) {
+                    if self.type_clause_args(&clause, first, &Vec::new(), &mut args, false) {
                         self.hoist_before(mark, &mut f, span);
                     }
                     let ret = self.applied_named_result(ty, &args, &ptys).unwrap_or(ret);
@@ -2669,7 +2724,12 @@ impl<'a> Worker<'a> {
         expected: Option<TypeId>,
     ) -> (TExprId, TypeId) {
         if !lists.is_empty() {
+            // The companion's synthesized `apply`, its signature seen from the receiver
+            // (`companion_apply_sig`).
+            let outer_seen = self.apply_seen_from;
+            self.apply_seen_from = self.companion_apply_receiver(c).map(|r| (c, r));
             let (te, ty) = self.apply_ctor(c, targs, lists, span, expected);
+            self.apply_seen_from = outer_seen;
             if self.deps.is_some() {
                 self.deps_node(te, super::deps::Node::Apply(c));
             }
@@ -2792,7 +2852,13 @@ impl<'a> Worker<'a> {
             return (self.prog.add(TExpr::New(c, crate::ast::ListRef::EMPTY)), ty);
         }
         let enum_parent = info.parents.first().copied().filter(|_| kind == ClassKind::EnumCase);
-        let sig = Arc::new(MethodSig { tparams, clauses: info.ctor.clone(), ret: self_ty });
+        let mut sig = Arc::new(MethodSig { tparams, clauses: info.ctor.clone(), ret: self_ty });
+        // A companion's `apply` takes the written types seen from the instance it is selected on
+        // (`companion_apply_sig`), and a construction through a prefix sees them through it.
+        if let Some((_, r)) = self.apply_seen_from.filter(|&(k, _)| k == c) {
+            self.apply_seen_from = None;
+            sig = self.companion_apply_sig(c, r, sig);
+        }
         let sig = match prefix {
             Some(p) => self.ctor_sig_through(sig, p, c),
             None => sig,
@@ -2948,6 +3014,7 @@ impl<'a> Worker<'a> {
         expected: Option<TypeId>,
         trial: bool,
     ) -> Option<(TExprId, TypeId)> {
+        let copy = std::mem::take(&mut self.copy_application);
         // A standard interpolator's call over literal parts, whose arguments are linted, where
         // the parts were noted (`note_interpolation_parts`): its parts taken, it comes back here.
         if self.interp_parts.is_some() && ctor.is_none() && call.sym.0 != u32::MAX {
@@ -3018,8 +3085,10 @@ impl<'a> Worker<'a> {
                 let ids = self.cur_ast().ty_list(l).to_vec();
                 ids.iter().map(|&t| self.resolve_type_ctor(t)).collect()
             }
+            // A macro's `copy[..](..)` or companion `apply[..](..)` applies the constructor's
+            // signature (`ctor`), whose type parameters the class's are, through no symbol.
             None => match self.macro_targs.take() {
-                Some((name, ts)) if name == self.syms.sym(call.sym).name && ts.len() + explicit_from == sig.tparams.len() => ts,
+                Some((name, ts)) if (ctor.is_some() || name == self.syms.sym(call.sym).name) && ts.len() + explicit_from == sig.tparams.len() => ts,
                 other => {
                     self.macro_targs = other;
                     Vec::new()
@@ -3059,7 +3128,7 @@ impl<'a> Worker<'a> {
             if is_explicit {
                 let arity = self.param_arity(tp);
                 if var != NOTHING && self.type_arity(var) != arity && !self.is_body_file(self.env.file) {
-                    let msg = self.kind_mismatch(var, tp, arity);
+                    let msg = self.kind_mismatch(var, tp);
                     self.error(span, msg);
                 }
                 is_explicit = !self.types.contains_app_param(var);
@@ -3233,7 +3302,7 @@ impl<'a> Worker<'a> {
                     let outer = std::mem::replace(&mut self.note_paths, dependent);
                     let is_java = self.is_java_method(call.sym);
                     let java = std::mem::replace(&mut self.java_varargs, is_java);
-                    let hoisted = self.type_clause_args(clause, list, &subst, &mut args_out);
+                    let hoisted = self.type_clause_args(clause, list, &subst, &mut args_out, sig.clauses.iter().any(|c| c.params.iter().any(|p| p.has_default)));
                     self.java_varargs = java;
                     if hoisted {
                         self.hoist_receiver(&mut call, hoist_mark, span);
@@ -3325,7 +3394,7 @@ impl<'a> Worker<'a> {
                     let before = self.diags.items.len();
                     let is_java = self.is_java_method(call.sym);
                     let java = std::mem::replace(&mut self.java_varargs, is_java);
-                    let hoisted = self.type_clause_args(clause, list, &subst, &mut args_out);
+                    let hoisted = self.type_clause_args(clause, list, &subst, &mut args_out, sig.clauses.iter().any(|c| c.params.iter().any(|p| p.has_default)));
                     self.java_varargs = java;
                     if hoisted {
                         self.hoist_receiver(&mut call, hoist_mark, span);
@@ -3447,6 +3516,16 @@ impl<'a> Worker<'a> {
                             tys.push(ty);
                             continue;
                         }
+                        // Without an expected parameter type a by-name parameter stays one, as
+                        // `EtaExpansion.etaExpand` declares the method's own parameter types:
+                        // `twice` is a `(=> Int) => Int`.
+                        if p.by_name && expected_param.is_none() {
+                            let (s, arg, ty) = self.eta_by_name_param(pty, pty, true, call.sym, (first_index + i) as u32, span);
+                            args_out.push(arg);
+                            syms.push(s);
+                            tys.push(ty);
+                            continue;
+                        }
                         // Implementing a trait, the expansion takes the parameter types of its
                         // method, which the argument adaptations take to the method's (dotc's
                         // lambda `(x: Int) => m(x)` for an `m(x: Long)`, or `m(convert(x))`).
@@ -3482,7 +3561,7 @@ impl<'a> Worker<'a> {
                     // A method with parameters becomes a function value wherever it is named
                     // without arguments, as in Scala 3; constructors do not, and one declared
                     // with `()` has to be called with them.
-                    if exp_fn.is_none() && !clause.params.is_empty() && ctor.is_some() && explicit_lists > 0 {
+                    if exp_fn.is_none() && !clause.params.is_empty() && ctor.is_some() && explicit_lists > 0 && !copy {
                         self.error(span, "missing argument list for the constructor");
                     }
                     // A vararg method has no function type to expand to unless one is expected.
@@ -4230,13 +4309,15 @@ impl<'a> Worker<'a> {
 
     /// Types the arguments of one clause into `out`. True when named arguments were written out
     /// of parameter order and had to be bound to temporaries to keep their evaluation order;
-    /// the caller then hoists what it evaluates before them.
+    /// the caller then hoists what it evaluates before them. `defaults`: whether the method
+    /// called has default parameters (dotty's `hasDefaultParams`), which picks the lifter.
     pub fn type_clause_args(
         &mut self,
         clause: &ClauseSig,
         list: ArgList,
         subst: &Subst,
         out: &mut Vec<TExprId>,
+        defaults: bool,
     ) -> bool {
         let ast = self.cur_ast();
         let n = clause.params.len();
@@ -4432,7 +4513,7 @@ impl<'a> Worker<'a> {
             }
         }
         let mut results: Vec<TExprId> = results.into_iter().map(|r| r.unwrap()).collect();
-        let reordered = self.keep_call_order(&order, &mut results, out, list.span);
+        let reordered = self.keep_call_order(&order, &mut results, out, list.span, defaults);
         if self.capturing() {
             self.capture_named_args(clause, &list, &results);
         }
@@ -4452,7 +4533,10 @@ impl<'a> Worker<'a> {
                     Expr::NamedArg(name, _) => name,
                     _ => continue,
                 },
-                ArgSrc::Named(name, ..) => *name,
+                // One the source writes, typed before: a copy's argument for a parameter the call
+                // leaves out (`apply_copy`, the receiver's field) is no written argument and has no
+                // place.
+                ArgSrc::Named(name, te, _) if self.prog.span_of(*te).is_some() => *name,
                 _ => continue,
             };
             if let Some(i) = clause.params.iter().position(|p| p.name == name) {
@@ -4464,32 +4548,109 @@ impl<'a> Worker<'a> {
         }
     }
 
-    /// Named arguments are evaluated as written, not in parameter order: when the order differs
-    /// and two or more of them have effects, they are bound to temporaries in call order, as
-    /// are the arguments of the clauses before them.
-    fn keep_call_order(&mut self, order: &[usize], results: &mut [TExprId], earlier: &mut [TExprId], span: Span) -> bool {
+    /// Named arguments are evaluated as written, not in parameter order, as dotty's `Application`
+    /// keeps them (Applications.scala 1219): where they are reordered and not every one is safe
+    /// (`isSafeArg`: a pure expression, the default getter's value a copy reads off its receiver
+    /// included), each is bound to a temporary in call order unless the lifter leaves it in place:
+    /// `LiftComplex` for a method with default parameters, which leaves a pure path, else
+    /// `LiftImpure`, which leaves a pure expression (EtaExpansion.scala 177-188). The arguments
+    /// of the clauses before them are bound before them.
+    fn keep_call_order(&mut self, order: &[usize], results: &mut [TExprId], earlier: &mut [TExprId], span: Span, defaults: bool) -> bool {
         let inverted = order.windows(2).any(|w| w[0] > w[1]);
-        if !inverted || self.annotation_args || order.iter().filter(|&&i| !self.is_stable(results[i])).count() < 2 {
+        if !inverted || self.annotation_args {
             return false;
         }
         // Pending plain calls count by their expansions, as where every call expanded as typed.
         let pending: Vec<TExprId> = results.iter().copied().filter(|&e| self.is_pending_call(e)).collect();
         if !pending.is_empty() {
             self.expand_pending_kept(&pending);
-            if order.iter().filter(|&&i| !self.is_stable(results[i])).count() < 2 {
-                return false;
-            }
+        }
+        if order.iter().all(|&i| self.is_pure_expr(results[i])) {
+            return false;
         }
         let mark = self.hoisted.len();
         let mut done = vec![false; results.len()];
         for &i in order {
-            if !done[i] {
-                done[i] = true;
+            if done[i] {
+                continue;
+            }
+            done[i] = true;
+            let kept = if defaults { self.is_pure_path(results[i]) } else { self.is_pure_expr(results[i]) };
+            if !kept {
                 results[i] = self.hoist(results[i], ANY, span);
             }
         }
         self.hoist_before(mark, earlier, span);
         true
+    }
+
+    /// dotty's `isPurePath` (`TreeInfo.exprPurity` at `PurePath`): a literal, `this`, an object,
+    /// a reference to a val or a parameter (no `var`, `lazy val` or by-name one), or a val selected
+    /// on such a path.
+    fn is_pure_path(&self, e: TExprId) -> bool {
+        let pure_ref = |s: SymId| {
+            let info = self.syms.sym(s);
+            info.kind != SymKind::Var && !info.by_name && info.mods & crate::ast::mods::LAZY == 0
+        };
+        if self.is_pending_call(e) {
+            return false;
+        }
+        match self.prog.expr(e) {
+            TExpr::Int(_) | TExpr::Long(_) | TExpr::Double(_) | TExpr::Bool(_) | TExpr::Char(_) | TExpr::Str(_) | TExpr::Unit => true,
+            TExpr::This | TExpr::Super(_) | TExpr::Module(_) => true,
+            TExpr::Local(s) | TExpr::Static(s) => pure_ref(s),
+            TExpr::Field(q, s) => pure_ref(s) && self.is_pure_path(q),
+            _ => false,
+        }
+    }
+
+    /// dotty's `isPureExpr` (`exprPurity` at `Pure` or above): a pure path, a lambda, or a
+    /// construction of pure arguments that `isPureApply` takes as pure, a class's whose instance
+    /// runs no initialisation (a case class's synthetic `apply` included, `isNoInitsRealClass`).
+    fn is_pure_expr(&self, e: TExprId) -> bool {
+        if self.is_pure_path(e) {
+            return true;
+        }
+        match self.prog.expr(e) {
+            TExpr::Lambda(..) => true,
+            TExpr::New(c, args) => self.no_inits_class(c) && self.prog.expr_list(args).iter().all(|&a| self.is_pure_expr(a)),
+            _ => false,
+        }
+    }
+
+    /// Whether constructing `c` runs no initialisation of its own: a class (no trait, no local or
+    /// anonymous one) whose template holds only definitions and constructor fields, dotty's
+    /// `NoInits` (`Namer`'s `isNoInitMember`: a def, a type, a lazy val, a val without a
+    /// right-hand side), read from the source or, for a library's, from its members.
+    fn no_inits_class(&self, c: ClassId) -> bool {
+        let info = self.syms.class(c);
+        if info.kind != ClassKind::Class || info.owner == Owner::Local || info.value_class {
+            return false;
+        }
+        match info.def {
+            Some(d) => {
+                let ast = self.ast(info.file);
+                let crate::ast::DefKind::Class(cls) = &ast.def(d).kind else { return false };
+                cls.body.iter().all(|st| match *st {
+                    crate::ast::Stmt::Import(_) => true,
+                    crate::ast::Stmt::Expr(_) => false,
+                    crate::ast::Stmt::Def(m) => match &ast.def(m).kind {
+                        crate::ast::DefKind::Fun(_) | crate::ast::DefKind::TypeAlias { .. } => true,
+                        // A nested class or trait is a type; an object a val it initialises.
+                        crate::ast::DefKind::Class(k) => matches!(k.kind, crate::ast::ClassKind::Class | crate::ast::ClassKind::Trait),
+                        crate::ast::DefKind::Val { rhs, .. } => rhs.is_none() || ast.def(m).mods & crate::ast::mods::LAZY != 0,
+                        _ => false,
+                    },
+                })
+            }
+            None => {
+                let ctor: Vec<SymId> = info.ctor_syms.iter().flatten().copied().collect();
+                info.members.values().all(|&m| {
+                    let s = self.syms.sym(m);
+                    !matches!(s.kind, SymKind::Val | SymKind::Var) || s.mods & crate::ast::mods::LAZY != 0 || ctor.contains(&m)
+                })
+            }
+        }
     }
 
     /// The receiver of a call whose arguments were bound to temporaries is evaluated before them.
@@ -5424,16 +5585,73 @@ impl<'a> Worker<'a> {
                     return self.apply_member(recv, recv_ty, name, targs, lists, span, expected);
                 }
             }
-            // `Point(1, 2)` with an explicit companion object that defines no `apply`.
-            if let Type::Class(c, _) = self.types.get(recv_ty) {
+            // `Point(1, 2)` with an explicit companion object that defines no `apply`, selected
+            // through a prefix too (`o.Cmd`, the object's class through `o`).
+            if let Type::Class(c, _) = self.types.get(self.types.strip_nested(recv_ty)) {
                 let info = self.syms.class(c);
                 let is_module = info.kind == ClassKind::Object || info.local_module.is_some() || info.inner_object.is_some();
+                let inner = info.inner_object;
                 if let (true, Some(companion)) = (is_module, info.companion) {
                     if self.syms.class(companion).kind == ClassKind::Class {
                         if let (Some(ta), true) = (targs, lists.is_empty()) {
                             if let Some(r) = self.summon_type_application(companion, None, ta, span, expected) {
                                 return r;
                             }
+                        }
+                        // The synthesized `apply` of a companion nested in a class constructs
+                        // inside it (`Desugar.classDef`): its enclosing instance is the one the
+                        // companion is selected on, `o` of `o.C(1)`, the prefix `newExpr` keeps.
+                        if inner.is_some() && self.outer_class(companion).is_some() {
+                            let Some(outer) = self.module_prefix(recv, c) else {
+                                let msg = format!("not supported yet: the companion of {}, a class nested in a class, applied through no path", self.name_str(self.syms.class(companion).name));
+                                self.error(span, msg);
+                                return (self.prog.add(TExpr::Unit), ERROR);
+                            };
+                            // The proxy `apply` a companion without one gets has the class's access
+                            // (`NamerOps.addConstructorApplies`): a protected class's, of a companion
+                            // that is not protected itself, is a protected member of the companion,
+                            // out of reach but inside it and its class, and the object then takes no
+                            // parameters (E050). A case class has no proxy: its companion's `apply`
+                            // is the synthesized member (`NamerOps.needsConstructorProxies`).
+                            let proxy = self.syms.class(companion).mods & crate::ast::mods::CASE == 0;
+                            let protected = self.syms.class(companion).mods & crate::ast::mods::PROTECTED != 0
+                                && self.syms.class(c).mods & crate::ast::mods::PROTECTED == 0;
+                            let inside = self.env.frames.iter().any(|f| matches!(f, super::Frame::Class(k) if *k == c || *k == companion));
+                            if proxy && ((protected && !inside) || !self.is_class_accessible(companion)) {
+                                let owner = match self.syms.class(c).owner {
+                                    Owner::Class(o) => format!(" in {}", self.class_description(o)),
+                                    _ => String::new(),
+                                };
+                                let msg = format!("object {}{} does not take parameters", self.name_str(self.syms.class(companion).name), owner);
+                                self.error(span, msg);
+                                self.type_args_for_errors(&lists);
+                                return (self.prog.add(TExpr::Unit), ERROR);
+                            }
+                            // The class is constructed through the companion's prefix, which is an
+                            // immutable path (dotty's `newExpr`, E083).
+                            if proxy && !self.is_stable_path(recv) {
+                                let prefix = match (self.types.get(recv_ty), self.prog.expr(recv)) {
+                                    (Type::Nested(p, _), _) => Some(p),
+                                    (_, TExpr::Field(q, _) | TExpr::CallMethod(q, _, _)) => self.prog.type_of(q),
+                                    _ => self.prog.type_of(outer),
+                                };
+                                let msg = format!("{} is not a valid class prefix, since it is not an immutable path", self.show(prefix.unwrap_or(recv_ty)));
+                                self.error(span, msg);
+                            }
+                            let outer_prefixed = std::mem::replace(&mut self.new_prefixed, true);
+                            let receiver_class = self.prog.type_of(outer).and_then(|t| self.class_of(t));
+                            let outer_creator = std::mem::replace(&mut self.creator_receiver, receiver_class.map(|r| (companion, r)));
+                            let r = self.apply_companion_apply(companion, targs, lists, span, expected);
+                            self.creator_receiver = outer_creator;
+                            self.new_prefixed = outer_prefixed;
+                            self.pass_outer_applied(r.0, outer);
+                            // The instance's type is the class through the companion's prefix
+                            // (`o.C`), its `apply`'s result seen from `o.C.type`.
+                            let ty = match (self.types.get(recv_ty), self.types.get(r.1)) {
+                                (Type::Nested(p, _), Type::Class(..)) => self.nested_type(p, r.1),
+                                _ => r.1,
+                            };
+                            return (r.0, ty);
                         }
                         return self.apply_companion_apply(companion, targs, lists, span, expected);
                     }
@@ -5478,9 +5696,11 @@ impl<'a> Worker<'a> {
                     if inner && self.is_inner_class(nested) {
                         self.ctor_prefix = Some(self.path_of(recv).unwrap_or(recv_ty));
                     }
+                    let outer_creator = std::mem::replace(&mut self.creator_receiver, Some((nested, c)));
                     let (te, ty) = self.apply_callee(Callee::Ctor(nested), targs, lists, span, expected);
                     self.ctor_prefix = None;
                     self.new_prefixed = outer_prefixed;
+                    self.creator_receiver = outer_creator;
                     let case = self.syms.class(nested).mods & crate::ast::mods::CASE != 0 || self.syms.class(nested).kind == ClassKind::EnumCase;
                     if self.deps.is_some() && case {
                         self.deps_node(te, super::deps::Node::Apply(nested));
@@ -5613,7 +5833,11 @@ impl<'a> Worker<'a> {
     /// The case class whose constructor `C(args)` and `C.apply` mean next to the `apply` methods
     /// of the companion object `recv_ty`.
     fn constructor_next_to_apply(&mut self, recv_ty: TypeId) -> Option<ClassId> {
-        let c = self.class_of(recv_ty).and_then(|o| self.companion_class(o))?;
+        let o = self.class_of(recv_ty)?;
+        if self.keeps_synthetic_apply(o) {
+            return None;
+        }
+        let c = self.companion_class(o)?;
         let mods = self.syms.class(c).mods;
         (mods & crate::ast::mods::CASE != 0 && mods & crate::ast::mods::ABSTRACT == 0).then_some(c)
     }
@@ -5714,7 +5938,7 @@ impl<'a> Worker<'a> {
                 return (self.prog.add(TExpr::Unit), ERROR);
             };
             let mut out = Vec::new();
-            self.type_clause_args(clause, list, &Vec::new(), &mut out);
+            self.type_clause_args(clause, list, &Vec::new(), &mut out, sig.clauses.iter().any(|c| c.params.iter().any(|p| p.has_default)));
             typed.extend(out.into_iter().zip(&clause.params).map(|(te, p)| ArgSrc::Typed(te, p.ty)));
         }
         let mut selected: Option<(SymId, Subst)> = None;
@@ -6465,94 +6689,199 @@ impl<'a> Worker<'a> {
         self.check_ctor_access(c, span);
         let tmp = self.fresh_local("c", recv_ty, span);
         let recv_subst = self.owner_subst(recv_ty);
-        let Some(first) = self.syms.class(c).ctor.first().cloned() else {
+        self.settle_class(c);
+        let info = self.syms.class(c);
+        let Some(first) = info.ctor.first().cloned() else {
             return (recv, recv_ty);
         };
-        let outer_base = std::mem::replace(&mut self.app_base, self.tvars.len() as u32);
-        let first_var = self.tvars.len();
-        let widen_mark = self.pending_widenings.len();
-        let explicit: Vec<TypeId> = match targs {
-            Some(l) => {
-                let ids = self.cur_ast().ty_list(l).to_vec();
-                ids.iter().map(|&t| self.resolve_type_ctor(t)).collect()
+        // dotty's `copyMeths` (Desugar.scala): `copy[Ts](p1: T1 = this.p1, ..)(later clauses): C[Ts]`,
+        // the defaults on the first clause alone, the later clauses (using ones included) applied
+        // as any method's are.
+        let mut clauses = info.ctor.clone();
+        for (i, cl) in clauses.iter_mut().enumerate() {
+            for p in &mut cl.params {
+                p.has_default = i == 0;
             }
-            None => Vec::new(),
-        };
-        self.settle_class(c);
-        let tparams = self.syms.class(c).tparams.clone();
-        if explicit.len() > tparams.len() {
-            self.error(span, "too many type arguments");
         }
-        let mut subst: Subst = Vec::with_capacity(tparams.len());
-        for (i, &tp) in tparams.iter().enumerate() {
-            let t = match explicit.get(i) {
-                Some(&t) => t,
-                None => {
-                    let v = self.fresh_var();
-                    self.tvars.last_mut().unwrap().name = Some(self.syms.tparam(tp).name);
-                    v
+        let sig = Arc::new(MethodSig { tparams: info.tparams.clone(), clauses, ret: info.base_types[0].1 });
+        // A parameter the first list leaves out takes the receiver's field, the default getter's
+        // value, typed as an argument is.
+        let mut lists = lists;
+        if let Some(list) = lists.first_mut().filter(|l| !l.using) {
+            let given = self.filled_params(&first, list);
+            for (i, p) in first.params.iter().enumerate() {
+                if given[i] {
+                    continue;
                 }
-            };
-            subst.push((tp, t));
-        }
-        let self_ty = self.syms.class(c).base_types[0].1;
-        let ret_ty = self.types.subst(self_ty, &subst);
-        if let Some(exp) = self.concrete_expected(expected) {
-            if exp != self.b.t_unit && exp != ANY {
-                let mark = self.snapshot();
-                if !self.is_sub(ret_ty, exp) {
-                    self.rollback(mark);
-                }
-            }
-        }
-        let list = lists.into_iter().next().unwrap_or(ArgList { args: Vec::new(), using: false, span });
-        let given = self.filled_params(&first, &list);
-        for (i, p) in first.params.iter().enumerate() {
-            if given[i] {
-                continue;
-            }
-            let kept = self.types.subst(p.ty, &recv_subst);
-            let pty = self.types.subst(p.ty, &subst);
-            if !self.is_sub(kept, pty) {
-                let msg = format!("type mismatch: found {}, required {}", self.show(kept), self.show(pty));
-                self.error_unless_unknown(span, msg, &[kept, pty]);
-            }
-        }
-        let mut clause = first.clone();
-        for p in &mut clause.params {
-            p.has_default = true;
-        }
-        let mut args = Vec::new();
-        let mark = self.hoisted.len();
-        self.type_clause_args(&clause, list, &subst, &mut args);
-        for (i, p) in first.params.iter().enumerate() {
-            if !given[i] {
+                let kept = self.types.subst(p.ty, &recv_subst);
                 let t = self.prog.add(TExpr::Local(tmp));
-                args[i] = self.prog.add(TExpr::Field(t, p.sym));
+                let field = self.prog.add(TExpr::Field(t, p.sym));
+                list.args.push(ArgSrc::Named(p.name, field, kept));
             }
         }
-        // The copy keeps the evidence and the other parameter lists of the original.
-        let rest: Vec<SymId> =
-            self.syms.class(c).ctor.iter().skip(1).flat_map(|cl| cl.params.iter().map(|p| p.sym)).collect();
-        for sym in rest {
+        let call = MethodCall { recv: None, sym: SymId(u32::MAX), owner_subst: Vec::new(), ext_recv: None, prefix: None };
+        // `copyMeths`' `creatorExpr` constructs inside the class: a class nested in a class is
+        // made with the receiver's own enclosing instance, wherever the copy is written, the
+        // construction under the eta-expansion of a copy applied in part included.
+        let inner = self.outer_class(c).is_some();
+        let outer_prefixed = self.new_prefixed;
+        self.new_prefixed |= inner;
+        self.copy_application = true;
+        let applied = self.apply_method(call, Some((c, sig)), targs, lists, span, expected, false);
+        self.copy_application = false;
+        self.new_prefixed = outer_prefixed;
+        let (te, ty) = applied.unwrap();
+        if inner {
+            let accessor = self.outer_accessor(c);
             let t = self.prog.add(TExpr::Local(tmp));
-            args.push(self.prog.add(TExpr::Field(t, sym)));
+            let outer = self.prog.add(TExpr::CallMethod(t, accessor, ListRef::EMPTY));
+            let mut at = te;
+            while let TExpr::Lambda(_, body) = self.prog.expr(at) {
+                at = body;
+            }
+            self.pass_outer(at, outer);
         }
-        self.solve_application_vars(first_var, widen_mark, ret_ty, &[], &[], span);
-        self.app_base = outer_base;
-        let ret_ty = self.zonk(ret_ty);
-        let l = self.prog.list(&args);
-        let new = self.new_instance(c, l, span);
+        // The receiver first, then the temporaries of the arguments, around the construction.
         let mut stmts = vec![TStmt::Val(tmp, recv)];
-        stmts.extend(self.hoisted.drain(mark..));
+        let value = match self.prog.expr(te) {
+            TExpr::Block(inner, v) if matches!(self.prog.expr(v), TExpr::New(..)) => {
+                stmts.extend_from_slice(self.prog.stmt_list(inner));
+                v
+            }
+            _ => te,
+        };
+        let copied = matches!(self.prog.expr(value), TExpr::New(..));
         let stmts = self.prog.stmts.push_slice(&stmts);
-        let te = self.prog.add(TExpr::Block(stmts, new));
-        if self.capturing() {
-            let targs: Vec<TypeId> = subst.iter().map(|&(_, t)| t).collect();
-            self.capture_targs(new, &targs);
+        let te = self.prog.add(TExpr::Block(stmts, value));
+        if self.capturing() && copied {
             self.capture_form(te, Form::CaseCopy);
         }
-        (te, ret_ty)
+        (te, ty)
+    }
+
+    /// The class whose instance the creator application of the case class `c` selects its
+    /// companion's `apply` on, where that is a proper subclass `R` of the class `K` declaring `c`
+    /// and `K` has private aliases: the receiver of the application (`r.C(..)`), else the
+    /// innermost enclosing class that has `c` as a member.
+    fn companion_apply_receiver(&mut self, c: ClassId) -> Option<ClassId> {
+        let info = self.syms.class(c);
+        let Owner::Class(k) = info.owner else { return None };
+        if info.mods & crate::ast::mods::CASE == 0 || self.syms.class(k).kind == ClassKind::Object {
+            return None;
+        }
+        let aliases: Vec<AliasId> = self.syms.class(k).type_aliases.values().copied().collect();
+        if !aliases.iter().any(|&a| self.private_alias(a)) {
+            return None;
+        }
+        let derives = |t: &Self, r: ClassId| t.syms.class(r).base_types.iter().any(|&(b, _)| b == k);
+        let r = match self.creator_receiver.filter(|&(n, _)| n == c) {
+            Some((_, r)) => r,
+            None => self.env.frames.iter().rev().find_map(|f| match f {
+                super::Frame::Class(f) if *f == k || derives(self, *f) => Some(*f),
+                _ => None,
+            })?,
+        };
+        (r != k && derives(self, r)).then_some(r)
+    }
+
+    /// The constructor clauses of the program's case class `c` as declared, for the products: a
+    /// private alias of the class `k` it is nested in kept as `k`'s member (`k.this.Event`), as
+    /// scalac's pickle has the written type, so that a downstream sees the class's and its
+    /// companion's `apply` from its own receiver (`companion_apply_sig`); `None` where there is
+    /// none to keep.
+    pub(crate) fn declared_ctor(&mut self, c: ClassId) -> Option<Vec<ClauseSig>> {
+        let info = self.syms.class(c);
+        let Owner::Class(k) = info.owner else { return None };
+        if info.def.is_none() || info.mods & crate::ast::mods::CASE == 0 || self.syms.class(k).kind == ClassKind::Object {
+            return None;
+        }
+        let aliases: Vec<AliasId> = self.syms.class(k).type_aliases.values().copied().collect();
+        if !aliases.iter().any(|&a| self.private_alias(a)) {
+            return None;
+        }
+        let ctor = self.syms.class(c).ctor.clone();
+        let sig = Arc::new(MethodSig { tparams: self.syms.class(c).tparams.clone(), clauses: ctor, ret: ANY });
+        let declared = self.companion_apply_sig(c, k, sig.clone());
+        (!Arc::ptr_eq(&declared, &sig)).then(|| declared.clauses.clone())
+    }
+
+    /// The constructor's signature as the companion's synthetic `apply` of the case class `c`
+    /// states it, selected on an instance of `r`: dotty's `Desugar.classDef` gives that `apply`
+    /// the class's whole declared parameter-list structure, its types as written, which seen
+    /// from the receiver (`TypeOps.asSeenFrom`) name a private alias of the base class `k` as a
+    /// member of the receiver it is not (`MissingType`, "a private member in a base class"). Every
+    /// clause's types are read again with `k`'s private aliases seen from `r` (resolved anew from
+    /// the source, or mapped anew from a library's pickle); a parameter whose type names none of
+    /// them keeps its own.
+    fn companion_apply_sig(&mut self, c: ClassId, r: ClassId, sig: Arc<MethodSig>) -> Arc<MethodSig> {
+        let info = self.syms.class(c);
+        let (file, def, owner) = (info.file, info.def, info.owner);
+        let Owner::Class(k) = owner else { return sig };
+        let prefix = self.this_prefix(r);
+        let seen: Vec<Vec<TypeId>> = match def {
+            Some(d) => {
+                let ast = self.ast(file);
+                let crate::ast::DefKind::Class(cls) = &ast.def(d).kind else { return sig };
+                let written: Vec<Vec<TyExprId>> = cls.clauses.iter().map(|cl| cl.params.iter().map(|p| p.ty).collect()).collect();
+                let tparams: Vec<(Name, TParamId)> = cls.tparams.iter().map(|tp| tp.name).zip(sig.tparams.iter().copied()).collect();
+                let env = self.env_at(file, Owner::Class(k), ast.def(d).span.start);
+                let reported = self.diags.items.len();
+                let seen = self.with_env(env, |t| {
+                    t.env.frames.push(super::Frame::Locals { names: Vec::new(), tparams, givens: Vec::new(), classes: Vec::new(), aliases: Vec::new(), owner: t.sites.owners.len() as u32 });
+                    let outer = std::mem::replace(&mut t.private_alias_prefix, Some((k, prefix)));
+                    let seen = written
+                        .iter()
+                        .map(|clause| {
+                            clause
+                                .iter()
+                                .map(|&ty| {
+                                    let ty = match t.cur_ast().ty(ty) {
+                                        TyExpr::Repeated(inner) | TyExpr::ByName(inner) => inner,
+                                        _ => ty,
+                                    };
+                                    t.resolve_type(ty)
+                                })
+                                .collect()
+                        })
+                        .collect();
+                    t.private_alias_prefix = outer;
+                    t.env.frames.pop();
+                    seen
+                });
+                self.drop_reported_since(reported);
+                seen
+            }
+            None => match self.loaded_ctor_types_seen_from(c, k, prefix) {
+                Some(seen) => seen,
+                None => return sig,
+            },
+        };
+        if seen.len() != sig.clauses.len() || seen.iter().zip(&sig.clauses).any(|(s, cl)| s.len() != cl.params.len()) {
+            return sig;
+        }
+        let mut out = (*sig).clone();
+        for (clause, types) in out.clauses.iter_mut().zip(seen) {
+            for (param, ty) in clause.params.iter_mut().zip(types) {
+                if ty != param.ty && !self.types.contains_error(ty) && self.types.mentions_member_of(ty, prefix) {
+                    param.ty = ty;
+                }
+            }
+        }
+        Arc::new(out)
+    }
+
+    /// Whether the class `c` has the member `name` that the compiler gives classes (`copy` a case
+    /// class, `ordinal` an enum's, `productPrefix` a product, `toString` and the rest every class).
+    fn has_synthesized_member(&self, c: ClassId, name: Name) -> bool {
+        let info = self.syms.class(c);
+        let case = info.mods & crate::ast::mods::CASE != 0;
+        match name {
+            names::COPY => case && info.mods & crate::ast::mods::ABSTRACT == 0,
+            names::ORDINAL => matches!(info.kind, ClassKind::Enum | ClassKind::EnumCase),
+            names::PRODUCT_PREFIX => case || info.kind == ClassKind::EnumCase,
+            names::APPLY => false,
+            _ => true,
+        }
     }
 
     /// The parameters of `clause` that the arguments of `list` fill, by name or by position.

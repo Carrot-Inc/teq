@@ -149,7 +149,7 @@ well_known! {
     PRODUCT_PREFIX = "productPrefix",
     COMPARE = "compare",
     DOLLAR_ANON = "$anon",
-    CASE_PARAM = "x$case",
+    CASE_PARAM = "x$1",
     JS_IMPORT = "jsImport",
     JS_EXPORT = "jsExport",
     TUPLED = "tupled",

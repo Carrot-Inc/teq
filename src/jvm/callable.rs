@@ -97,6 +97,25 @@ impl<'a> Cx<'a> {
             && self.input.prog.classes[self.tclass_of[c.idx()] as usize].captures == 0
     }
 
+    /// Whether the program's case class `c`, nested in a class, has the companion `Desugar` gives
+    /// it, an inner module `O$C$` holding its enclosing instance, which the class `O` reaches
+    /// through the lazy `C()` (the companion the products' TASTy declares): one without a
+    /// written companion, constructor defaults aside (their getters are the companion's).
+    pub fn has_inner_case_companion(&self, c: ClassId) -> bool {
+        let info = self.input.syms.class(c);
+        let Owner::Class(o) = info.owner else { return false };
+        let i = self.tclass_of[c.idx()];
+        self.is_case_class(c)
+            && info.kind == ClassKind::Class
+            && info.companion.is_none()
+            && self.input.syms.class(o).kind == ClassKind::Class
+            && i != u32::MAX
+            && self.input.prog.classes[i as usize].captures == 1
+            && self.emits(c)
+            && self.emits(o)
+            && !self.has_ctor_defaults(c)
+    }
+
     /// Whether a constructor of program class `c`, its primary one or a secondary one the output
     /// keeps, has a default.
     pub fn has_ctor_defaults(&self, c: ClassId) -> bool {
@@ -139,10 +158,7 @@ impl<'a> Cx<'a> {
     pub fn has_copy(&self, c: ClassId) -> bool {
         let info = self.input.syms.class(c);
         let case = self.is_case_class(c) || (info.kind == ClassKind::EnumCase && info.singleton.is_none());
-        case
-            && info.kind != ClassKind::Anon
-            && self.emits(c)
-            && self.input.prog.classes[self.tclass_of[c.idx()] as usize].captures == 0
+        case && info.kind != ClassKind::Anon && self.emits(c)
     }
 
     /// The companion class that takes the static forwarders of module class `o`, when both are
@@ -229,6 +245,11 @@ impl<'a> Gen<'a> {
     pub fn emit_class_unit(&mut self, i: usize) -> (String, Vec<u8>) {
         let cx = self.cx;
         let c = cx.input.prog.classes[i].id;
+        if cx.has_inner_case_companion(c) {
+            let companion = self.emit_inner_companion(i);
+            self.extra_classes.push(companion);
+            self.reset_class();
+        }
         let written = cx.input.syms.class(c).companion.filter(|&o| cx.forwarding_class(o) == Some(c));
         self.keep_table = written.is_some() || cx.has_case_companion(c) || cx.has_enum_statics(c) || cx.has_value_companion(c) || cx.has_default_companion(c);
         let module = match written {
@@ -451,6 +472,190 @@ impl<'a> Gen<'a> {
         self.companion_members(c, None);
         self.drain_pending();
         self.finish_class(&name)
+    }
+
+    /// `O$C$` for a case class `C` nested in the class `O` (`has_inner_case_companion`), as
+    /// scalac writes it: the enclosing instance in `$outer`, its constructor taking it, `apply`
+    /// constructing `C` inside it (`new C($outer, ..)`), the identity `unapply`, `toString` and
+    /// the outer accessor.
+    pub fn emit_inner_companion(&mut self, idx: usize) -> (String, Vec<u8>) {
+        let cx = self.cx;
+        let tc = &cx.input.prog.classes[idx];
+        let c = tc.id;
+        self.reset_class();
+        let name: Rc<str> = Rc::from(cx.companion_name(c));
+        self.context = name.to_string();
+        self.cw = ClassWriter::new(ACC_PUBLIC | ACC_FINAL | ACC_SUPER, &name, OBJECT, &["java/io/Serializable".to_string()]);
+        self.this_name = name.clone();
+        self.this_class = None;
+        self.is_interface = false;
+        self.abstract_class = false;
+        let info = cx.input.syms.class(c);
+        let path = &cx.input.sources[info.file.0 as usize].path;
+        self.cw.source_file(path.rsplit(std::path::is_separator).next().unwrap_or(path));
+        self.line_file = info.file;
+        let this = JType::L(name.clone());
+        let outer = self.sym_type(tc.ctor_params[0]);
+        let mut outer_desc = String::new();
+        outer.desc(&mut outer_desc);
+        self.cw.field(ACC_PRIVATE | ACC_FINAL, "$outer", &outer_desc);
+        self.begin_method(false, false, &[(None, outer.clone())], JType::V, &[]);
+        self.load(0, &this);
+        self.invoke(Invoke::Special, OBJECT, false, "<init>", &[], &JType::V);
+        self.load(0, &this);
+        self.load(1, &outer);
+        self.putfield(&name, "$outer", &outer);
+        self.return_value(&JType::V);
+        self.end_method(ACC_PUBLIC, "<init>", &method_desc(&[outer.clone()], &JType::V));
+
+        let case_name = self.class_name(c);
+        let case_type = JType::L(case_name.clone());
+        let params: Vec<(Option<SymId>, JType)> = tc.ctor_params[1..].iter().map(|&p| (Some(p), self.sym_type(p))).collect();
+        let types: Vec<JType> = params.iter().map(|p| p.1.clone()).collect();
+        let init_types: Vec<JType> = std::iter::once(outer.clone()).chain(types.iter().cloned()).collect();
+        if info.mods & crate::ast::mods::ABSTRACT == 0 {
+            self.begin_method(false, false, &params, case_type.clone(), &[]);
+            self.new_object(&case_name);
+            self.load(0, &this);
+            self.getfield(&name, "$outer", &outer);
+            let mut slot = 1u16;
+            for t in &types {
+                self.load(slot, t);
+                slot += if t.wide() { 2 } else { 1 };
+            }
+            self.invoke(Invoke::Special, &case_name, false, "<init>", &init_types, &JType::V);
+            self.return_value(&case_type);
+            self.end_method(ACC_PUBLIC, "apply", &method_desc(&types, &case_type));
+        }
+        if !tc.retracted_unapply {
+            let first = info.ctor.first();
+            let repeated = first.and_then(|cl| cl.params.last()).map_or(false, |p| p.repeated);
+            let extractor = if repeated { "unapplySeq" } else { "unapply" };
+            let no_params = first.map_or(true, |cl| cl.params.is_empty());
+            let ret = if no_params { JType::Z } else { case_type.clone() };
+            self.begin_method(false, false, &[(None, case_type.clone())], ret.clone(), &[]);
+            if no_params {
+                self.iconst(1);
+            } else {
+                self.load(1, &case_type);
+            }
+            self.return_value(&ret);
+            self.end_method(ACC_PUBLIC, extractor, &method_desc(&[case_type.clone()], &ret));
+        }
+        let string = JType::L(Rc::from(STRING));
+        self.begin_method(false, false, &[], string.clone(), &[]);
+        self.sconst(cx.input.interner.get(info.name));
+        self.return_value(&string);
+        self.end_method(ACC_PUBLIC, "toString", "()Ljava/lang/String;");
+        // The outer accessor under scalac's name, which scalac's downstream calls, and under
+        // teq's (`Worker::outer_accessor` of another module's class), which teq's does.
+        let Owner::Class(o) = info.owner else { unreachable!("has_inner_case_companion") };
+        let teq_name = format!("$outer${}${}", cx.input.interner.get(cx.input.syms.class(o).name), cx.input.interner.get(info.name));
+        for (accessor, access) in [(format!("{}$$$outer", name.replace('/', "$")), ACC_PUBLIC | ACC_FINAL), (teq_name, ACC_PUBLIC)] {
+            self.begin_method(false, false, &[], outer.clone(), &[]);
+            self.load(0, &this);
+            self.getfield(&name, "$outer", &outer);
+            self.return_value(&outer);
+            self.end_method(access, &accessor, &method_desc(&[], &outer));
+        }
+        self.drain_pending();
+        self.finish_class(&name)
+    }
+
+    /// In the written companion object `c` of the program's case class `k` nested in a class (an
+    /// inner module, `O$E$`), what scalac's `Desugar` gives it beside its own members: `apply`
+    /// constructing `k` with the companion's enclosing instance (teq's outer accessor of the
+    /// module), the identity `unapply` unless withdrawn, and scalac's outer accessor.
+    pub fn inner_written_companion_members(&mut self, k: ClassId, c: ClassId) {
+        let cx = self.cx;
+        let syms = cx.input.syms;
+        let info = syms.class(k);
+        let (Owner::Class(o), Some(object)) = (info.owner, syms.class(c).inner_object) else { return };
+        let i = cx.tclass_of[k.idx()];
+        if i == u32::MAX || !cx.is_case_class(k) || info.kind != ClassKind::Class || cx.has_ctor_defaults(k) {
+            return;
+        }
+        let tc = &cx.input.prog.classes[i as usize];
+        if tc.captures != 1 {
+            return;
+        }
+        let name = self.this_name.clone();
+        let this = JType::L(name.clone());
+        let outer = self.sym_type(tc.ctor_params[0]);
+        let accessor = format!("$outer${}${}", cx.input.interner.get(syms.class(o).name), cx.input.interner.get(syms.sym(object).name));
+        let case_name = self.class_name(k);
+        let case_type = JType::L(case_name.clone());
+        let params: Vec<(Option<SymId>, JType)> = tc.ctor_params[1..].iter().map(|&p| (Some(p), self.sym_type(p))).collect();
+        let types: Vec<JType> = params.iter().map(|p| p.1.clone()).collect();
+        let init_types: Vec<JType> = std::iter::once(outer.clone()).chain(types.iter().cloned()).collect();
+        let apply_desc = method_desc(&types, &case_type);
+        if info.mods & crate::ast::mods::ABSTRACT == 0 && !self.cw.has_method("apply", &apply_desc) {
+            self.begin_method(false, false, &params, case_type.clone(), &[]);
+            self.new_object(&case_name);
+            self.load(0, &this);
+            self.invoke(Invoke::Virtual, &name, false, &accessor, &[], &outer);
+            let mut slot = 1u16;
+            for t in &types {
+                self.load(slot, t);
+                slot += if t.wide() { 2 } else { 1 };
+            }
+            self.invoke(Invoke::Special, &case_name, false, "<init>", &init_types, &JType::V);
+            self.return_value(&case_type);
+            self.end_method(ACC_PUBLIC, "apply", &apply_desc);
+        }
+        if !tc.retracted_unapply {
+            let first = info.ctor.first();
+            let repeated = first.and_then(|cl| cl.params.last()).map_or(false, |p| p.repeated);
+            let extractor = if repeated { "unapplySeq" } else { "unapply" };
+            let no_params = first.map_or(true, |cl| cl.params.is_empty());
+            let ret = if no_params { JType::Z } else { case_type.clone() };
+            let desc = method_desc(&[case_type.clone()], &ret);
+            if !self.cw.has_method(extractor, &desc) {
+                self.begin_method(false, false, &[(None, case_type.clone())], ret.clone(), &[]);
+                if no_params {
+                    self.iconst(1);
+                } else {
+                    self.load(1, &case_type);
+                }
+                self.return_value(&ret);
+                self.end_method(ACC_PUBLIC, extractor, &desc);
+            }
+        }
+        let scalac_accessor = format!("{}$$$outer", name.replace('/', "$"));
+        let desc = method_desc(&[], &outer);
+        if !self.cw.has_method(&scalac_accessor, &desc) {
+            self.begin_method(false, false, &[], outer.clone(), &[]);
+            self.load(0, &this);
+            self.invoke(Invoke::Virtual, &name, false, &accessor, &[], &outer);
+            self.return_value(&outer);
+            self.end_method(ACC_PUBLIC | ACC_FINAL, &scalac_accessor, &desc);
+        }
+    }
+
+    /// In the class `c` being written, per case class nested in it with the companion
+    /// `has_inner_case_companion` gives it, the lazy getter `C()` of that module, over the
+    /// holder `C$lzy`, as an object nested in a class has its own.
+    pub fn inner_case_companion_getters(&mut self, c: ClassId) {
+        let cx = self.cx;
+        let mut nested: Vec<(crate::intern::Name, ClassId)> = cx.input.syms.class(c).nested.iter().map(|(&n, &k)| (n, k)).collect();
+        nested.sort_by(|a, b| cx.input.interner.get(a.0).cmp(cx.input.interner.get(b.0)));
+        for (n, k) in nested {
+            if !cx.has_inner_case_companion(k) {
+                continue;
+            }
+            let getter = cx.input.interner.get(n).to_string();
+            let module: Rc<str> = Rc::from(cx.companion_name(k));
+            let ty = JType::L(module.clone());
+            let desc = method_desc(&[], &ty);
+            if self.cw.has_method(&getter, &desc) {
+                continue;
+            }
+            self.cw.field(ACC_PRIVATE, &format!("{}$lzy", getter), "Ljava/lang/Object;");
+            self.begin_method(false, false, &[], ty.clone(), &[]);
+            self.lazy_holder_body(&getter, &ty, super::classes::HolderInit::Module { class: module, outer: self.this_name.clone() });
+            self.return_value(&ty);
+            self.end_method(ACC_PUBLIC, &getter, &desc);
+        }
     }
 
     /// `Color$` for an enum whose companion has no body, with its statics.
@@ -722,10 +927,15 @@ impl<'a> Gen<'a> {
         let first = syms.class(c).info.ctor.first();
         let repeated = first.and_then(|cl| cl.params.last()).map_or(false, |p| p.repeated);
         let extractor = if repeated { "unapplySeq" } else { "unapply" };
+        // Present unless the typer withdrew it (`retracted_unapply`): a companion's own
+        // extractor of another result (`unapply(c: C[String]): Option[Int]`) leaves it in place,
+        // as scalac emits both.
         let unapply_params = [case_type.clone()];
-        if !written(extractor, &unapply_params) && !cx.input.syms.class(c).value_class {
-            let no_params = first.map_or(true, |cl| cl.params.is_empty());
-            let ret = if no_params { JType::Z } else { case_type.clone() };
+        let no_params = first.map_or(true, |cl| cl.params.is_empty());
+        let ret = if no_params { JType::Z } else { case_type.clone() };
+        let unapply_desc = method_desc(&unapply_params, &ret);
+        let same_desc = own.iter().any(|(_, n, d)| n == extractor && *d == unapply_desc);
+        if !tc.retracted_unapply && !same_desc && !cx.input.syms.class(c).value_class {
             self.begin_method(false, false, &[(None, case_type.clone())], ret.clone(), &[]);
             if no_params {
                 self.iconst(1);
@@ -733,7 +943,7 @@ impl<'a> Gen<'a> {
                 self.load(1, &case_type);
             }
             self.return_value(&ret);
-            self.end_method(ACC_PUBLIC, extractor, &method_desc(&unapply_params, &ret));
+            self.end_method(ACC_PUBLIC, extractor, &unapply_desc);
         }
 
         if cx.has_product_mirror(c) && !written("fromProduct", &[product.clone()]) {
@@ -996,8 +1206,18 @@ impl<'a> Gen<'a> {
         let tc = &cx.input.prog.classes[cx.tclass_of[c.idx()] as usize];
         let owner = self.this_name.clone();
         let this = JType::L(owner.clone());
-        let params: Vec<(Option<SymId>, JType)> = tc.ctor_params.iter().map(|&p| (Some(p), self.sym_type(p))).collect();
-        let types: Vec<JType> = params.iter().map(|p| p.1.clone()).collect();
+        let all: Vec<(Option<SymId>, JType)> = tc.ctor_params.iter().map(|&p| (Some(p), self.sym_type(p))).collect();
+        let all_types: Vec<JType> = all.iter().map(|p| p.1.clone()).collect();
+        // A class of a class takes its enclosing instance first, which `copy` passes on from its
+        // own field: scalac's `copy` of an inner case class takes the class's parameters alone.
+        let captured: Vec<(String, JType)> = self.class_captures.clone().into_iter().map(|(s, f, _, _)| (f, self.anon_capture_type(s))).collect();
+        if captured.len() != tc.captures || tc.captures > all.len() {
+            return;
+        }
+        let k = tc.captures;
+        let params: Vec<(Option<SymId>, JType)> = all[k..].to_vec();
+        let types: Vec<JType> = all_types[k..].to_vec();
+        let init_types: Vec<JType> = captured.iter().take(k).map(|(_, t)| t.clone()).chain(types.iter().cloned()).collect();
         let prefix = method_desc(&types, &JType::V);
         let prefix = &prefix[..prefix.len() - 1];
         // A value case class's `copy` answers the underlying value, as scalac's erasure has it.
@@ -1012,17 +1232,21 @@ impl<'a> Gen<'a> {
         } else if !self.cw.method_table().iter().any(|(_, n, d)| n == "copy" && d.starts_with(prefix)) {
             self.begin_method(false, false, &params, this.clone(), &[]);
             self.new_object(&owner);
+            for (field, t) in captured.iter().take(k) {
+                self.load(0, &this);
+                self.getfield(&owner, field, t);
+            }
             let mut slot = 1u16;
             for t in &types {
                 self.load(slot, t);
                 slot += if t.wide() { 2 } else { 1 };
             }
-            self.invoke(Invoke::Special, &owner, false, "<init>", &types, &JType::V);
+            self.invoke(Invoke::Special, &owner, false, "<init>", &init_types, &JType::V);
             self.return_value(&this);
             self.end_method(ACC_PUBLIC, "copy", &method_desc(&types, &this));
         }
         let first = cx.input.syms.class(c).ctor.first().map_or(0, |cl| cl.params.len());
-        for (i, &p) in tc.ctor_params.iter().enumerate().take(first) {
+        for (i, &p) in tc.ctor_params[k..].iter().enumerate().take(first) {
             let t = types[i].clone();
             let field = self.field_name(p);
             self.begin_method(false, false, &[], t.clone(), &[]);

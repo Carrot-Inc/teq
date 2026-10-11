@@ -119,7 +119,7 @@ impl<'a> Parser<'a> {
         let span = start.to(self.prev_span());
         let scrutinee = self.ast.add_expr(Expr::Ident(names::CASE_PARAM), start);
         let body = self.ast.add_expr(Expr::Match(scrutinee, cases), span);
-        let param = LambdaParam { name: names::CASE_PARAM, span: start, ty: None, implicit: false, contextual: false };
+        let param = LambdaParam { name: names::CASE_PARAM, span: start, ty: None, implicit: false, contextual: false, cases: true };
         let params = push_list(&mut self.ast.lambda_params, &[param]);
         self.ast.add_expr(Expr::Lambda(params, body), span)
     }
@@ -308,7 +308,7 @@ impl<'a> Parser<'a> {
             self.expect_ident().0
         };
         let ty = if self.eat(Tok::Colon) { Some(self.parse_type()) } else { None };
-        LambdaParam { name, span, ty, implicit: false, contextual: false }
+        LambdaParam { name, span, ty, implicit: false, contextual: false, cases: false }
     }
 
     fn parse_expr_inner(&mut self) -> ExprId {
@@ -1025,7 +1025,7 @@ impl<'a> Parser<'a> {
 
     fn placeholder(&mut self, span: Span) -> (Name, ExprId) {
         let name = self.placeholder_name(self.placeholders.len());
-        self.placeholders.push(LambdaParam { name, span, ty: None, implicit: false, contextual: false });
+        self.placeholders.push(LambdaParam { name, span, ty: None, implicit: false, contextual: false, cases: false });
         (name, self.ast.add_expr(Expr::Ident(name), span))
     }
 

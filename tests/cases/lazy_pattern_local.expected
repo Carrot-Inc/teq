@@ -1,0 +1,29 @@
+before
+init
+1
+2
+3
+skipped
+x next
+some
+5
+nested next
+nested
+4
+list next
+list
+List(2, 3)
+big next
+big
+36
+typed
+q1
+ext next
+rhs
+unapply
+4
+2
+8
+bad not forced
+MatchError
+9

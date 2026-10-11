@@ -136,6 +136,7 @@ i13146a
 i13183
 i13215
 i13216
+i13304
 i13334
 i13358
 i13490.min
@@ -290,6 +291,7 @@ i4557a
 i4558
 i4559
 i4563
+i4600b
 i4754
 i4935
 i4935b
@@ -410,6 +412,7 @@ numeric-range
 opaque-inline2
 option-fold
 ordered
+outer-accessors
 overload_directly_applicable
 overloads
 partialFunctions

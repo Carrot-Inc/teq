@@ -1822,6 +1822,21 @@ impl<'a> Worker<'a> {
         };
     }
 
+    /// `pass_outer` for a method's application that constructs (a case class's `copy`, a
+    /// companion's synthesized `apply`), the construction under the closure of one eta-expanded
+    /// over a missing list included.
+    pub(super) fn pass_outer_applied(&mut self, te: TExprId, outer: TExprId) {
+        let mut at = te;
+        loop {
+            match self.prog.expr(at) {
+                TExpr::Block(_, value) => at = value,
+                TExpr::Lambda(_, body) => at = body,
+                _ => break,
+            }
+        }
+        self.pass_outer(at, outer);
+    }
+
     /// The construction `te` of a class through the prefix `p` of its type where the `new` writes
     /// none (`import o.*; new Inner(1)`, `new A` for `type A = o.Inner`) takes the prefix's value
     /// as its enclosing instance, dotty's outer argument from `tpt.tpe.prefix`.
@@ -1888,19 +1903,25 @@ impl<'a> Worker<'a> {
             tes.push(te);
             tys.push(ty);
         }
-        let ty = self.tuple_type(&tys);
-        let class = self.tuple_class(ids.len());
         let span = ids.first().map_or(Span::default(), |&e| self.cur_ast().expr_span(e));
-        let te = match (ids.len() > 22).then(|| self.tuple_xxl_value(&tes, span)).flatten() {
+        self.construct_tuple(&tes, &tys, span)
+    }
+
+    /// The tuple of the typed elements `tes` of types `tys`: `TupleN`'s construction with its type
+    /// arguments recorded for the products, a TupleXXL's past 22.
+    pub(super) fn construct_tuple(&mut self, tes: &[TExprId], tys: &[TypeId], span: Span) -> (TExprId, TypeId) {
+        let ty = self.tuple_type(tys);
+        let class = self.tuple_class(tes.len());
+        let te = match (tes.len() > 22).then(|| self.tuple_xxl_value(tes, span)).flatten() {
             Some(te) => te,
             None => {
-                let l = self.prog.list(&tes);
+                let l = self.prog.list(tes);
                 self.prog.add(TExpr::New(class, l))
             }
         };
         // A TupleXXL's construction is a call, which records its own.
-        if self.capturing() && ids.len() <= 22 {
-            self.capture_targs(te, &tys);
+        if self.capturing() && tes.len() <= 22 {
+            self.capture_targs(te, tys);
         }
         if self.deps.is_some() {
             self.deps_node(te, super::deps::Node::Apply(class));
@@ -2162,12 +2183,19 @@ impl<'a> Worker<'a> {
         self.explicit_new = outer_new;
         self.new_prefixed = outer_prefixed;
         self.part_end(part);
+        self.new_enclosing_instance(e, typed, prefixed);
+        typed
+    }
+
+    /// The construction `typed` of the `new` expression `e`, with one argument list or several,
+    /// takes its enclosing instance from the prefix the `new` writes (`prefixed`) or else from its
+    /// type's (dotty's outer argument from `tpt.tpe.prefix`).
+    pub(super) fn new_enclosing_instance(&mut self, e: ExprId, typed: (TExprId, TypeId), prefixed: bool) {
         if prefixed {
             self.pass_new_outer(e, typed.0);
         } else if let Type::Nested(p, _) = self.types.get(typed.1) {
             self.prefix_outer(typed.0, p);
         }
-        typed
     }
 
     /// `new C[T](args)`, also with the argument lists an anonymous class expression collects.
@@ -2713,7 +2741,7 @@ impl<'a> Worker<'a> {
             self.check_curried_dependent(exp, span);
         }
         let named_any = expected.and_then(|t| self.named_function(t)).filter(|f| !f.ctx);
-        let named_takes_cases = named_any.as_ref().map_or(false, |f| lps.len() == 1 && lps[0].name == names::CASE_PARAM && f.params.len() > 1);
+        let named_takes_cases = named_any.as_ref().map_or(false, |f| lps.len() == 1 && lps[0].cases && f.params.len() > 1);
         let named = named_any.filter(|f| f.params.len() == lps.len() || named_takes_cases);
         if let (Some(exp), None) = (expected, &named) {
             if let Some((trait_ty, method, sig, subst)) = self.sam_method(exp, lps.len()) {
@@ -2734,19 +2762,27 @@ impl<'a> Worker<'a> {
         // `case (a, b) => ...` where a function of several parameters is expected: the
         // parameters are packed into the tuple that the cases match on.
         let expected_arity = exp_fn.as_ref().map_or(0, |(p, _)| p.len());
-        if lps.len() == 1 && lps[0].name == names::CASE_PARAM && expected_arity > 1 {
+        // dotty's `makeCaseLambda` with `nparams`: the parameters `x$1, .., x$n`, which the
+        // cases see, and the match on their tuple, which no name of the program reaches.
+        if lps.len() == 1 && lps[0].cases && expected_arity > 1 {
             let ptys: Vec<TypeId> = exp_fn.as_ref().unwrap().0.clone();
             let ptys: Vec<TypeId> = ptys.iter().map(|&t| self.solve_if_var(t)).collect();
             let mut params = Vec::with_capacity(ptys.len());
             let mut refs = Vec::with_capacity(ptys.len());
             for (i, &t) in ptys.iter().enumerate() {
-                let s = self.indexed_local("c", i as u32, t, span);
+                let name = if i == 0 { names::CASE_PARAM } else { self.interner.intern(&format!("x${}", i + 1)) };
+                let s = self.new_local(name, SymKind::Val, t, span);
+                self.bind_local(name, s);
                 params.push(s);
                 refs.push(self.prog.add(TExpr::Local(s)));
             }
             let tuple_ty = self.tuple_type(&ptys);
-            let tuple_sym = self.new_local(names::CASE_PARAM, SymKind::Val, tuple_ty, span);
-            self.bind_local(names::CASE_PARAM, tuple_sym);
+            let tuple_sym = self.fresh_local("cases", tuple_ty, span);
+            if let Expr::Match(scrutinee, _) = ast.expr(body) {
+                let te = self.prog.add(TExpr::Local(tuple_sym));
+                self.prog.set_type(te, tuple_ty);
+                self.case_scrutinee = Some((scrutinee, te, tuple_ty));
+            }
             if let (Some(f), Some(fun)) = (named.as_ref().filter(|f| f.params.len() == params.len()), exp_fn.as_mut()) {
                 let paths: Vec<TypeId> = params.iter().map(|&s| self.types.mk(Type::Term(s))).collect();
                 fun.1 = self.instantiate_named(f, &paths);
@@ -2761,6 +2797,7 @@ impl<'a> Worker<'a> {
                 }
                 None => self.type_expr(body, None),
             };
+            self.case_scrutinee = None;
             self.pop_scope();
             let class = self.tuple_class(ptys.len());
             let packed = match (ptys.len() > 22).then(|| self.tuple_xxl_value(&refs, span)).flatten() {
@@ -3953,6 +3990,7 @@ impl<'a> Worker<'a> {
                 }
                 self.sites.owners.truncate(owners_depth);
                 match (pat, sym) {
+                    (Some(p), _) if def.mods & mods::LAZY != 0 => self.lazy_pattern_val(*p, rhs, init, ity, def.span, out),
                     (Some(p), _) => out.push(self.pattern_val(*p, rhs, init, ity)),
                     (None, Some(sym)) => {
                         if declared.is_none() {
@@ -4137,6 +4175,101 @@ impl<'a> Worker<'a> {
             self.check_irrefutable(tp, pat, ity, Some(ast.expr_span(rhs)));
         }
         TStmt::Pat(tp, init)
+    }
+
+    /// `lazy val (a, b) = e`, dotty's `makePatDef` for a lazy definition: a lazy holder of
+    /// `e match { case (a, b) => (a, b) }` and a lazy val per variable reading its element, a
+    /// lone variable being the match itself, so that `e` and the match run once, at the first
+    /// read of any of them.
+    fn lazy_pattern_val(&mut self, pat: ast::PatId, rhs: ExprId, init: TExprId, ity: TypeId, span: Span, out: &mut Vec<TStmt>) {
+        let mark = match self.env.frames.last() {
+            Some(Frame::Locals { names, .. }) => names.len(),
+            _ => 0,
+        };
+        let tp = self.type_pattern(pat, ity);
+        let ast = self.cur_ast();
+        if !matches!(ast.expr(rhs), Expr::Unchecked(_)) {
+            self.check_irrefutable(tp, pat, ity, Some(ast.expr_span(rhs)));
+        }
+        // The pattern's variables are the case's; the definitions bind their names.
+        let binders: Vec<(Name, SymId)> = match self.env.frames.last_mut() {
+            Some(Frame::Locals { names, .. }) => names.drain(mark.min(names.len())..).collect(),
+            _ => Vec::new(),
+        };
+        let items: Vec<(TExprId, TypeId)> = binders
+            .iter()
+            .map(|&(_, b)| {
+                let ty = self.syms.sym(b).sig.as_ref().map_or(ERROR, |s| s.ret);
+                let e = self.prog.add(TExpr::Local(b));
+                self.prog.set_type(e, ty);
+                (e, ty)
+            })
+            .collect();
+        let mut paths = Vec::with_capacity(items.len());
+        let (value, value_ty) = self.pack_pattern_values(&items, span, &mut Vec::new(), &mut paths);
+        let cases = self.prog.cases.push_slice(&[TCase { pat: tp, guard: None, body: value }]);
+        let matched = self.prog.add(TExpr::Match(init, cases));
+        self.prog.set_type(matched, value_ty);
+        let define = |t: &mut Self, name: Name, ty: TypeId, at: Span, value: TExprId, out: &mut Vec<TStmt>| {
+            let sym = t.new_local(name, SymKind::Val, ty, at);
+            t.syms.sym_mut(sym).mods |= mods::LAZY;
+            t.bind_local(name, sym);
+            out.push(TStmt::Val(sym, value));
+        };
+        if let [(name, b)] = binders[..] {
+            let at = self.syms.sym(b).span;
+            define(self, name, value_ty, at, matched, out);
+            return;
+        }
+        let holder = self.fresh_local("pat", value_ty, span);
+        self.syms.sym_mut(holder).mods |= mods::LAZY;
+        out.push(TStmt::Val(holder, matched));
+        for ((&(name, b), &(_, ty)), path) in binders.iter().zip(&items).zip(paths) {
+            let mut e = self.prog.add(TExpr::Local(holder));
+            for (c, i) in path {
+                let field = self.syms.class(c).ctor_syms.concat()[i];
+                e = self.prog.add(TExpr::Field(e, field));
+            }
+            self.prog.set_type(e, ty);
+            let at = self.syms.sym(b).span;
+            define(self, name, ty, at, e, out);
+        }
+    }
+
+    /// The tuple of `items` a lazy pattern's holder keeps, nested in tuples of at most 22
+    /// elements, and for each item the classes and indices of the fields that read it.
+    fn pack_pattern_values(&mut self, items: &[(TExprId, TypeId)], span: Span, at: &mut Vec<(ClassId, usize)>, paths: &mut Vec<Vec<(ClassId, usize)>>) -> (TExprId, TypeId) {
+        match items {
+            [] => (self.prog.add(TExpr::Unit), self.b.t_unit),
+            [(e, t)] if at.is_empty() => {
+                paths.push(Vec::new());
+                (*e, *t)
+            }
+            _ => {
+                // At most 22 groups, each one element or a tuple of its own.
+                let groups: Vec<&[(TExprId, TypeId)]> = items.chunks(items.len().div_ceil(22)).collect();
+                let c = self.tuple_class(groups.len());
+                let mut values = Vec::with_capacity(groups.len());
+                let mut tys = Vec::with_capacity(groups.len());
+                for (i, g) in groups.into_iter().enumerate() {
+                    at.push((c, i));
+                    let (v, t) = match g {
+                        [(e, t)] => {
+                            paths.push(at.clone());
+                            (*e, *t)
+                        }
+                        _ => self.pack_pattern_values(g, span, at, paths),
+                    };
+                    at.pop();
+                    values.push(v);
+                    tys.push(t);
+                }
+                // The ordinary construction, whose type arguments the products state.
+                let (tuple, ty) = self.construct_tuple(&values, &tys, span);
+                self.prog.set_type(tuple, ty);
+                (tuple, ty)
+            }
+        }
     }
 
     // ---- for comprehensions ----

@@ -693,6 +693,9 @@ pub struct TClass {
     /// Which of `toString`, `equals` and `hashCode` (bits 0 to 2) a case class or case object
     /// inherits from its superclass, where scalac makes none of its own.
     pub inherited_case_members: u8,
+    /// Whether a case class's companion goes without the synthetic `unapply` (`unapplySeq`),
+    /// withdrawn by one it declares or inherits (`Worker::synthetic_unapply_retracted`).
+    pub retracted_unapply: bool,
     pub init: Vec<TInit>,
     pub methods: Vec<FunId>,
     /// The secondary constructors: the body of each is a block whose one statement is the
