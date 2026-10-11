@@ -4664,6 +4664,14 @@ impl<'a> Worker<'a> {
             while let Some(file) = self.sealed_std_files.pop() {
                 self.complete_file_classes(file);
             }
+            self.late_naming_done();
+        }
+    }
+
+    /// Outside every completion, the overload sets and the unsettled std entries made since the
+    /// final passes named (`name_late_alternatives`).
+    pub(super) fn late_naming_done(&mut self) {
+        if self.completing == 0 {
             if let Some(from) = self.late_naming_from.take() {
                 self.name_late_alternatives(from);
             }
@@ -5518,8 +5526,9 @@ impl<'a> Worker<'a> {
                     // reach checks, an anonymous class of a std body typed on demand) has its
                     // entries named once no completion is under way, as a std file entered
                     // after it has: before the reach meets the class and marks its members by
-                    // the names they go by.
-                    if self.alternatives_named {
+                    // the names they go by. A check that only reports reads no output name and
+                    // leaves them to their first use (`emits_bodies`).
+                    if self.alternatives_named && self.emits_bodies {
                         self.late_naming_from.get_or_insert(self.syms.overloads.len());
                     }
                 }
