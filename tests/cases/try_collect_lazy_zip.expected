@@ -1,0 +1,8 @@
+Success(40)
+true
+Predicate does not hold for 3
+List(a, bb, ccc)
+List((1,a), (3,c))
+true
+true
+a1 b2 c3 

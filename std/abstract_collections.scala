@@ -65,6 +65,62 @@ final class ArrayOps[A](private val xs: Array[A]) extends AnyVal:
 final class StringOps(private val s: String) extends AnyVal:
   def mkString: String = s
 
+/** scala-library's `LazyZip2`, what `xs.lazyZip(ys)` gives: the pairs of two collections, read off
+  * their iterators as an operation asks for them (`LazyZipOps`). `exists` and `forall` stop at their
+  * answer, and `map`, `flatMap` and `filter` hand `BuildFrom` a view that computes no element before
+  * the builder reads it.
+  */
+final class LazyZip2[+El1, +El2, C1](src: C1, coll1: Iterable[El1], coll2: Iterable[El2]):
+  // The pairs of the two collections' iterators, made afresh on each call.
+  private def zipped[B](f: (El1, El2) => B): Iterator[B] =
+    val elems1 = coll1.iterator
+    val elems2 = coll2.iterator
+    new scala.FnIterator(() => elems1.hasNext && elems2.hasNext, () => f(elems1.next(), elems2.next()))
+  def map[B, C](f: (El1, El2) => B)(implicit bf: BuildFrom[C1, B, C]): C =
+    bf.fromSpecific(src)(scala.View.over(() => zipped(f)))
+  def flatMap[B, C](f: (El1, El2) => Iterable[B])(implicit bf: BuildFrom[C1, B, C]): C =
+    bf.fromSpecific(src)(scala.View.over(() => {
+      val elems1 = coll1.iterator
+      val elems2 = coll2.iterator
+      var current: Iterator[B] = Iterator.empty
+      def advance(): Iterator[B] =
+        while !current.hasNext && elems1.hasNext && elems2.hasNext do current = f(elems1.next(), elems2.next()).iterator
+        current
+      new scala.FnIterator(() => advance().hasNext, () => advance().next())
+    }))
+  def filter[C](p: (El1, El2) => Boolean)(implicit bf: BuildFrom[C1, (El1, El2), C]): C =
+    bf.fromSpecific(src)(scala.View.over(() => {
+      val elems1 = coll1.iterator
+      val elems2 = coll2.iterator
+      var current: Option[(El1, El2)] = None
+      def advance(): Option[(El1, El2)] =
+        while current.isEmpty && elems1.hasNext && elems2.hasNext do
+          val e1 = elems1.next()
+          val e2 = elems2.next()
+          if p(e1, e2) then current = Some((e1, e2))
+        current
+      def take(): (El1, El2) = advance() match
+        case Some(c) =>
+          current = None
+          c
+        case None => Iterator.empty.next()
+      new scala.FnIterator(() => advance().isDefined, () => take())
+    }))
+  def exists(p: (El1, El2) => Boolean): Boolean =
+    val elems1 = coll1.iterator
+    val elems2 = coll2.iterator
+    var res = false
+    while !res && elems1.hasNext && elems2.hasNext do res = p(elems1.next(), elems2.next())
+    res
+  def forall(p: (El1, El2) => Boolean): Boolean = !exists((el1, el2) => !p(el1, el2))
+  def foreach[U](f: (El1, El2) => U): Unit =
+    val elems1 = coll1.iterator
+    val elems2 = coll2.iterator
+    while elems1.hasNext && elems2.hasNext do f(elems1.next(), elems2.next())
+  // What `lazyZip2ToIterable` gives: the pairs as a view.
+  def unzip: (Iterable[El1], Iterable[El2]) = scala.View.over(() => zipped((a, b) => (a, b))).unzip
+  override def toString: String = coll1.toString + ".lazyZip(" + coll2.toString + ")"
+
 /** scala-library's `BuildFrom`: builds a collection like `from` with elements of type `A`, which
   * `ZIO.foreach` and `Future.traverse` take to return the collection they were given.
   */

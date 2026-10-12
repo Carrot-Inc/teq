@@ -28,9 +28,10 @@
 # tests/support/vctraits_lib.scala compiled the same way for the JVM; traitfields-lib,
 # tests/support/traitfields_lib.scala compiled the same way for the JVM; deferred-lib,
 # tests/support/deferred_lib.scala compiled the same way for the JVM; outer-lib,
-# tests/support/outer_lib.scala compiled the same way; defaults-lib, tests/support/defaults_lib.scala
-# compiled the same way; lazyorder-lib, tests/support/lazyorder_lib.scala compiled the same way; ctorinit-lib,
-# tests/support/ctorinit_lib.scala compiled the same way; state-lib,
+# tests/support/outer_lib.scala compiled the same way; unicode-lib, tests/support/unicode_lib.scala compiled
+# the same way; defaults-lib, tests/support/defaults_lib.scala compiled the same way; lazyorder-lib,
+# tests/support/lazyorder_lib.scala compiled the same way; ctorinit-lib, tests/support/ctorinit_lib.scala
+# compiled the same way; state-lib,
 # tests/support/state_lib.scala compiled the same way under a directory named like scala-library's; scala2-lib,
 # tests/support/scala2_lib compiled by Scala 2.13; scala2-traits, tests/support/scala2_traits compiled so, traits alone,
 # and scala2-traits-padded, that jar with Java classes stored first, scala2-traits-mixed with a Scala 3 class too; universal-lib, tests/support/universal_lib.scala
@@ -40,8 +41,10 @@
 # (tests/tasty/src/reader_decl.scala and reader_java.scala), which the bodies of fix.reader reach in another jar; fixtures-shadow, those of
 # tests/tasty/fixtures-shadow, which define again what fixtures defines in fix.shadow; javafix, the Java class files of
 # tests/classfile/fixtures as a jar, and javafixdir, the same as a directory; tasty-inspector, scala3-tasty-inspector
-# 3.8.4 from the coursier cache. maven_extras lists the other Maven files the suites read (sources jars, the example's
-# test class path), which bench/actions/jars.sh fetch fetches with these.
+# 3.8.4 from the coursier cache; reactivemongo-bson-api 1.1.0-noshaded.RC21, play-json and play-functional 3.0.6
+# and macwire-macros 2.6.7 (macwire's `macros` artifact) with macwire-util (its `util`, the Java `@Module`),
+# scala-parser-combinators 2.4.0, lichess' (lila's) JVM `_3` jars. maven_extras lists the other Maven files the suites
+# read (sources jars, the example's test class path), which bench/actions/jars.sh fetch fetches with these.
 M2=${COURSIER_CACHE:-$HOME/Library/Caches/Coursier/v1}/https/repo1.maven.org/maven2
 # The jars built here are named for the checkout, so that the suites of two worktrees running at
 # once do not rewrite each other's.
@@ -80,13 +83,14 @@ depbounds = {'DbCtx', 'DbParent', 'DbBounds', 'DbPolyNames'}
 polybounds = {'PbCtx', 'PbParent', 'PbLower'}
 casts = {'CastA', 'CastB', 'CastLib'}
 jargetter = {'JgLog', 'JgSocket', 'JgSocketImpl'}
+icdef = {'IcDefaults'}
 unmod = {'UmBodies', 'UmSyntax', 'UmReuse', 'UmDefine', 'UmMethod', 'UmNested', 'UmSetter33', 'UmArg', 'UmStep', 'UmSub', 'UmScope', 'UmAliases', 'UmPt', 'UmEq', 'UmSetterOnly', 'UmSetterUse'}
 with zipfile.ZipFile(sys.argv[1], 'w', zipfile.ZIP_DEFLATED) as z:
     for f in sorted(os.listdir('tests/tasty/fixtures')):
         stem = f[:-len('.tasty')]
         if stem in rdecl:
             continue
-        pkg = 'fix/reader' if stem in reader else 'fix/jargetter' if stem in jargetter else 'fix/casts' if stem in casts else pext[stem] if stem in pext else 'fix/q38' if stem == 'Quotes38' else 'fix/clash' if stem in clash else 'fix/hkb' if stem in hkb else 'fix/unmod' if stem in unmod else 'fix/depparams' if stem in depparams else 'fix/depbounds' if stem in depbounds else 'fix/polybounds' if stem in polybounds else 'fix/wave6' if stem in wave6 else 'fix/retain' if stem in retain else 'fix/shadow' if stem in shadow else 'fix/guard' if stem in guard else 'fix/overloads' if stem in overloads else 'fix/tname' if stem in tname else 'fix/facades' if stem in facades else 'fix/members' if stem in members else 'fix/runtime' if stem in runtime else 'fix/rassoc' if stem in ('RightAssoc', 'Vec') else 'fix/bodies' if stem in bodies else 'fix/cake' if stem in cake else 'fix/qpat' if stem in ('LayerBox', 'LayerMacros', 'QpFns', 'QpProbe') else 'fix/qp38' if stem == 'Qp38' else 'fix/shapes'
+        pkg = 'fix/reader' if stem in reader else 'fix/icdef' if stem in icdef else 'fix/jargetter' if stem in jargetter else 'fix/casts' if stem in casts else pext[stem] if stem in pext else 'fix/q38' if stem == 'Quotes38' else 'fix/clash' if stem in clash else 'fix/hkb' if stem in hkb else 'fix/unmod' if stem in unmod else 'fix/depparams' if stem in depparams else 'fix/depbounds' if stem in depbounds else 'fix/polybounds' if stem in polybounds else 'fix/wave6' if stem in wave6 else 'fix/retain' if stem in retain else 'fix/shadow' if stem in shadow else 'fix/guard' if stem in guard else 'fix/overloads' if stem in overloads else 'fix/tname' if stem in tname else 'fix/facades' if stem in facades else 'fix/members' if stem in members else 'fix/runtime' if stem in runtime else 'fix/rassoc' if stem in ('RightAssoc', 'Vec') else 'fix/bodies' if stem in bodies else 'fix/cake' if stem in cake else 'fix/qpat' if stem in ('LayerBox', 'LayerMacros', 'QpFns', 'QpProbe') else 'fix/qp38' if stem == 'Qp38' else 'fix/shapes'
         z.write(os.path.join('tests/tasty/fixtures', f), pkg + '/' + f)
 PY
   echo "$jar"
@@ -125,7 +129,7 @@ PY
 # tests/classfile/fixtures' Java classes they reach. Built when missing or older than a source.
 fixtures_jvm_jar() {
   local jar=$scratch-fixtures-jvm.jar dir=$scratch-fixtures-jvm.$$ src=tests/tasty/src f stale=0
-  local main="cake.scala cake3.scala cake4.scala guard.scala retain.scala runtime.scala targetname.scala wave6.scala shadow.scala reader_decl.scala reader_java.scala casts.scala"
+  local main="cake.scala cake3.scala cake4.scala guard.scala retain.scala runtime.scala targetname.scala wave6.scala shadow.scala reader_decl.scala reader_java.scala casts.scala icdefaults.scala"
   [ -f "$jar" ] || stale=1
   for f in $main reader.scala reader_decl_v1.scala reader_java_v1.scala; do [ "$src/$f" -nt "$jar" ] && stale=1; done
   if [ $stale = 1 ]; then
@@ -299,6 +303,21 @@ outer_lib_jar() {
   if [ ! -f "$jar" ] || [ "$src" -nt "$jar" ]; then
     mkdir -p "$dir" && cp "$src" "$dir/"
     timeout 200 scala-cli --power package --library -S "${SCALA_VERSION:-3.8.4}" "$dir/outer_lib.scala" --server=false -q -o "$jar.$$" -f > /dev/null 2>&1 \
+      && mv -f "$jar.$$" "$jar" || rm -f "$jar.$$" "$jar"
+    rm -rf "$dir"
+  fi
+  echo "$jar"
+}
+# tests/support/unicode_lib.scala compiled by scalac into a jar: a class whose name holds a combining
+# mark, which its class file's name keeps.
+unicode_lib_jar() {
+  local src=tests/support/unicode_lib.scala
+  local jar=$scratch-unicode-lib.jar
+  local dir=$scratch-unicode-lib.$$
+  if [ ! -f "$jar" ] || [ "$src" -nt "$jar" ]; then
+    mkdir -p "$dir" && cp "$src" "$dir/"
+    # The class file's name holds the mark: scalac writes it only under a UTF-8 locale.
+    LC_ALL=C.UTF-8 timeout 200 scala-cli --power package --library -S "${SCALA_VERSION:-3.8.4}" "$dir/unicode_lib.scala" --server=false -q -o "$jar.$$" -f > /dev/null 2>&1 \
       && mv -f "$jar.$$" "$jar" || rm -f "$jar.$$" "$jar"
     rm -rf "$dir"
   fi
@@ -573,6 +592,7 @@ jar_of() {
     traitfields-lib) traitfields_lib_jar ;;
     deferred-lib) deferred_lib_jar ;;
     outer-lib) outer_lib_jar ;;
+    unicode-lib) unicode_lib_jar ;;
     defaults-lib) defaults_lib_jar ;;
     predef-lib) predef_lib_jar ;;
     depfun-lib) depfun_lib_jar ;;
@@ -626,6 +646,12 @@ jar_of() {
     magnolia-jvm) echo "$M2/com/softwaremill/magnolia1_3/magnolia_3/1.3.23/magnolia_3-1.3.23.jar" ;;
     pureconfig-core-jvm) echo "$M2/com/github/pureconfig/pureconfig-core_3/0.17.10/pureconfig-core_3-0.17.10.jar" ;;
     typesafe-config) echo "$M2/com/typesafe/config/1.4.9/config-1.4.9.jar" ;;
+    reactivemongo-bson-api) echo "$M2/org/reactivemongo/reactivemongo-bson-api_3/1.1.0-noshaded.RC21/reactivemongo-bson-api_3-1.1.0-noshaded.RC21.jar" ;;
+    play-json) echo "$M2/org/playframework/play-json_3/3.0.6/play-json_3-3.0.6.jar" ;;
+    play-functional) echo "$M2/org/playframework/play-functional_3/3.0.6/play-functional_3-3.0.6.jar" ;;
+    macwire-macros) echo "$M2/com/softwaremill/macwire/macros_3/2.6.7/macros_3-2.6.7.jar" ;;
+    macwire-util) echo "$M2/com/softwaremill/macwire/util_3/2.6.7/util_3-2.6.7.jar" ;;
+    scala-parser-combinators) echo "$M2/org/scala-lang/modules/scala-parser-combinators_3/2.4.0/scala-parser-combinators_3-2.4.0.jar" ;;
     kantan-csv) echo "$M2/com/nrinaudo/kantan.csv_2.13/0.8.0/kantan.csv_2.13-0.8.0.jar" ;;
     kantan-codecs) echo "$M2/com/nrinaudo/kantan.codecs_2.13/0.6.0/kantan.codecs_2.13-0.6.0.jar" ;;
     kantan-csv-java8) echo "$M2/com/nrinaudo/kantan.csv-java8_2.13/0.8.0/kantan.csv-java8_2.13-0.8.0.jar" ;;

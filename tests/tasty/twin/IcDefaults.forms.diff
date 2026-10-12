@@ -1,0 +1,12 @@
+16,17c16,18
+<   final implicit def Applied[R](dummy: Boolean = <default>): Applied[R] = new Applied[R]{([1], Boolean): Boolean}(dummy)
+<   def applied[R]: Applied[R] = new Applied[R]{([1], Boolean): Boolean}(Applied.<init>$default$1{([1]): Boolean}[R])
+---
+>   implicit def Applied[R](dummy: Boolean = <default>): Applied[R] = new Applied[R]{([1], Boolean): fix.icdef.IcDefaults$.Applied}(dummy)
+>   def Applied$default$1[R]: Boolean @uncheckedVariance = true
+>   def applied[R]: Applied[R] = new Applied[R]{([1], Boolean): fix.icdef.IcDefaults$.Applied}(Applied.<init>$default$1{([1]): Boolean}[R])
+26c27,28
+<   final implicit def Counted(n: Int = <default>): Counted = new Counted{(Int): fix.icdef.IcDefaults$.Counted}(n)
+---
+>   implicit def Counted(n: Int = <default>): Counted = new Counted{(Int): fix.icdef.IcDefaults$.Counted}(n)
+>   def Counted$default$1: Int @uncheckedVariance = 3

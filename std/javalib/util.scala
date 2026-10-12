@@ -1016,6 +1016,22 @@ package java.util:
     override def clear(): Unit = raw.storeClear()
     def iterator(): Iterator[Map.Entry[K, V]] = new StoreIterator[K, V, Map.Entry[K, V]](raw, StoreIterator.ENTRIES)
 
+  // A map whose keys are held weakly on the JVM: here, with no collector to drop them, a hash map
+  // (scala-parser-combinators' cache of a parser's `Regex` per parser).
+  @jvmClass("java/util/WeakHashMap")
+  class WeakHashMap[K, V](initialCapacity: Int) extends AbstractMap[K, V]:
+    def this() = this(16)
+    private val held = new HashMap[K, V]()
+    def size(): Int = held.size()
+    def get(key: Any): V = held.get(key)
+    def containsKey(key: Any): Boolean = held.containsKey(key)
+    def put(key: K, value: V): V = held.put(key, value)
+    def remove(key: Any): V = held.remove(key)
+    override def clear(): Unit = held.clear()
+    def keySet(): Set[K] = held.keySet()
+    def values(): Collection[V] = held.values()
+    def entrySet(): Set[Map.Entry[K, V]] = held.entrySet()
+
   // The JDK's `AbstractMap.equals`, `hashCode` and `toString`: a map equals another of the same
   // mappings whatever its class (a key of the wrong kind for the other is no match), and hashes
   // as the sum of its entries' hashes.
@@ -1505,6 +1521,18 @@ package java.util:
         else return mid
       -(lo + 1)
 
+// `Function` beside the regex `Matcher` whose replacers take one, in the file a program that
+// names `java.util` enters anyway: naming the matcher's overloads reads it, which would enter the
+// rest of `java.util.function` (javalib/atomic.scala) for every such program.
+package java.util.function:
+  @jvmClass("java/util/function/Function")
+  trait Function[T, R]:
+    def apply(t: T): R
+
+  @jvmClass("java/util/function/Function")
+  object Function:
+    def identity[T](): Function[T, T] = t => t
+
 // `java.util.regex` over the JS engine's regular expressions: the members scala-java-time's
 // parsers call, and those scala-library's `scala.util.matching.Regex` calls in link mode, where it
 // runs over this package.
@@ -1598,8 +1626,19 @@ package java.util.regex:
     @js("($1.indices[$2]?.[1] ?? -1)")
     def end(raw: Any, i: Int): Int
 
+  // What a match gives a replacer or the results: its groups and their positions.
+  @jvmClass("java/util/regex/MatchResult")
+  trait MatchResult:
+    def group(): String
+    def group(i: Int): String
+    def groupCount(): Int
+    def start(): Int
+    def start(i: Int): Int
+    def end(): Int
+    def end(i: Int): Int
+
   @jvmClass("java/util/regex/Matcher")
-  final class Matcher(pattern: Pattern, input: String):
+  final class Matcher(pattern: Pattern, input: String) extends MatchResult:
     private var found: Any = null
     private var all: Array[Any] = null
     private var next = 0
@@ -1694,6 +1733,17 @@ package java.util.regex:
     def replaceFirst(replacement: String): String =
       reset()
       Engine.replace(pattern.regex, input, replacement, false, m => m)
+    // The replacer's string read as a replacement (its `$n` the groups), as the JDK's.
+    def replaceAll(replacer: java.util.function.Function[MatchResult, String]): String =
+      reset()
+      val sb = new java.lang.StringBuilder
+      while find() do appendReplacement(sb, replacer.apply(this))
+      appendTail(sb).toString
+    def replaceFirst(replacer: java.util.function.Function[MatchResult, String]): String =
+      reset()
+      val sb = new java.lang.StringBuilder
+      if find() then appendReplacement(sb, replacer.apply(this))
+      appendTail(sb).toString
     def reset(): Matcher =
       found = null
       all = null

@@ -433,7 +433,8 @@ trait IterableOps[+A, +CC[_], +C] extends IterableOnce[A]:
       i += size
     Iterator.over(out)
 
-trait Iterable[+A] extends IterableOps[A, Iterable, Iterable[A]]
+trait Iterable[+A] extends IterableOps[A, Iterable, Iterable[A]]:
+  def lazyZip[B](that: Iterable[B]): scala.collection.LazyZip2[A, B, this.type] = new scala.collection.LazyZip2(this, this, that)
 
 object Iterable:
   def apply[A](elems: A*): Iterable[A] = elems.toList
@@ -673,6 +674,7 @@ object IndexedSeq:
   def fill[A](n: Int)(elem: => A): IndexedSeq[A] = Vector.fill(n)(elem)
   def tabulate[A](n: Int)(f: Int => A): IndexedSeq[A] = Vector.tabulate(n)(f)
   def range(start: Int, end: Int): IndexedSeq[Int] = Range(start, end, 1).toVector
+  def newBuilder[A]: scala.collection.mutable.Builder[A, IndexedSeq[A]] = Vector.newBuilder[A]
 
 // `hasNext` and `next()` are the core, which a library's iterator class implements; the std's
 // own iterators are closures over the two (`FnIterator`). Transformations are lazy where
@@ -960,9 +962,25 @@ object Iterator:
     new FnIterator(() => fill(), () => step())
 
 // A list whose cells are computed on first use and remembered.
-final class LazyList[+A](compute: () => Option[(A, LazyList[A])]) extends IterableOps[A, LazyList, LazyList[A]], Iterable[A]:
+// A `Seq`, as scala-library's `LazyList` is a `LinearSeq`: its length and an element by index
+// force the cells up to them.
+final class LazyList[+A](compute: () => Option[(A, LazyList[A])]) extends SeqOps[A, LazyList, LazyList[A]], Seq[A]:
   override def collectionClassName: String = "LazyList"
   override def view: scala.collection.SeqView[A] = new scala.collection.SeqView.OfLinear(this)
+  def length: Int =
+    var n = 0
+    var cur: LazyList[A] = this
+    while !cur.isEmpty do
+      n += 1
+      cur = cur.tail
+    n
+  def apply(i: Int): A =
+    var cur: LazyList[A] = this
+    var k = i
+    while k > 0 && !cur.isEmpty do
+      cur = cur.tail
+      k -= 1
+    if i < 0 || cur.isEmpty then throw new IndexOutOfBoundsException(i.toString) else cur.head
   private var forced = false
   private var cell: Option[(Any, LazyList[Any])] = None
   private def evaluated(): Option[(A, LazyList[A])] =
@@ -1029,20 +1047,25 @@ final class LazyList[+A](compute: () => Option[(A, LazyList[A])]) extends Iterab
         case None => go = false
     "LazyList(" + parts.mkString(", ") + ")"
 
-object LazyList:
+// A `SeqFactory`, as scala-library's companion is: what `xs.to(LazyList)` takes.
+object LazyList extends SeqFactory[LazyList]:
   def empty[A]: LazyList[A] = new LazyList(() => None)
   object cons:
     def apply[A](head: => A, tail: => LazyList[A]): LazyList[A] = new LazyList(() => Some((head, tail)))
-  def apply[A](elems: A*): LazyList[A] = fromIterator(elems.iterator)
-  def from(start: Int, step: Int = 1): LazyList[Int] = iterate(start)(_ + step)
+  override def apply[A](elems: A*): LazyList[A] = fromIterator(elems.iterator)
+  def from[A](source: IterableOnce[A]): LazyList[A] = fromIterator(source.iterator)
+  def from(start: Int, step: Int): LazyList[Int] = iterate(start)(_ + step)
+  def from(start: Int): LazyList[Int] = from(start, 1)
+  def newBuilder[A]: scala.collection.mutable.Builder[A, LazyList[A]] =
+    scala.collection.mutable.ArrayBuffer.empty[A].mapResult(items => fromIterator(items.iterator))
   def fromIterator[A](it: Iterator[A]): LazyList[A] =
     new LazyList(() => if it.hasNext then Some((it.next(), fromIterator(it))) else None)
   def iterate[A](start: A)(f: A => A): LazyList[A] = cons(start, iterate(f(start))(f))
   def continually[A](elem: => A): LazyList[A] = cons(elem, continually(elem))
-  def fill[A](n: Int)(elem: => A): LazyList[A] = continually(elem).take(n)
-  def tabulate[A](n: Int)(f: Int => A): LazyList[A] = iterate(0)(_ + 1).take(n).map(f)
+  override def fill[A](n: Int)(elem: => A): LazyList[A] = continually(elem).take(n)
+  override def tabulate[A](n: Int)(f: Int => A): LazyList[A] = iterate(0)(_ + 1).take(n).map(f)
   def range(start: Int, end: Int, step: Int = 1): LazyList[Int] = fromIterator(Range(start, end, step).iterator)
-  def unfold[A, S](init: S)(f: S => Option[(A, S)]): LazyList[A] = new LazyList(() => f(init).map((a, s) => (a, unfold(s)(f))))
+  override def unfold[A, S](init: S)(f: S => Option[(A, S)]): LazyList[A] = new LazyList(() => f(init).map((a, s) => (a, unfold(s)(f))))
 
 extension [A, CC[_]](xss: IterableOps[Iterable[A], CC, Any])
   def transpose: CC[CC[A]] =

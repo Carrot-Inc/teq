@@ -1,0 +1,7 @@
+{name="a", age=3}
+JsSuccess(Person(a,3,None),)
+{name="b", age=4, nick="bee"}
+JsSuccess(Person(b,4,Some(bee)),)
+{title="t", members=[{name="a", age=3}, {name="b", age=4, nick="bee"}]}
+JsSuccess(Team(t,List(Person(a,3,None), Person(b,4,Some(bee)))),)
+true

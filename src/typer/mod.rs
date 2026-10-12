@@ -66,6 +66,7 @@ mod tostring;
 pub mod unused;
 mod unused_defs;
 mod unused_edits;
+mod value_exports;
 
 use crate::ast::{Ast, Asts, ListRef};
 use crate::intern::{FxMap, Interner, Name};
@@ -164,7 +165,7 @@ pub struct Builtins {
     pub tuple_members: Vec<Name>,
     /// A bit per `tuple_members` name, by its number modulo 256: a name of no bit is none of
     /// them, which every other member call asks (`Builtins::may_be_tuple_member`).
-    pub tuple_member_bits: [u64; 4],
+    pub tuple_member_bits: [u64; 16],
     /// The members of scala-library's `Predef`, which the lean std defines in package `scala`.
     pub predef_names: std::collections::HashSet<Name, crate::intern::FxBuild>,
     pub scala_pkg: PkgId,
@@ -177,7 +178,133 @@ impl Builtins {
     /// Whether `name` may be one of `tuple_members`: false for most names, at a bit's cost.
     #[inline]
     pub fn may_be_tuple_member(&self, name: Name) -> bool {
-        self.tuple_member_bits[(name.0 / 64 % 4) as usize] & 1 << (name.0 % 64) != 0
+        self.tuple_member_bits[(name.0 / 64 % 16) as usize] & 1 << (name.0 % 64) != 0
+    }
+}
+
+/// One byte per id, 0 until set: the shared region's ids index `base`, a worker's own ids (from
+/// `arena::LOCAL_BASE`, `arena::worker_base`) index `local` from their worker's base, so that a
+/// symbol a worker makes asks for no table over the ids below it (the first worker's own start
+/// past 2^27). One worker's ids at a time: another's, which a worker never meets, starts the local
+/// half over. The local half is forgotten where the worker's own ids start over (`forget_local`:
+/// the fork and the merge), as dotty's per-run caches end with their run.
+#[derive(Clone, Default)]
+struct IdBytes {
+    base: Vec<u8>,
+    local: Vec<u8>,
+    worker: usize,
+}
+
+impl IdBytes {
+    #[inline]
+    fn get(&self, id: u32) -> u8 {
+        match crate::arena::worker_of(id) {
+            None => self.base.get(id as usize).copied().unwrap_or(0),
+            Some(k) if k == self.worker => self.local.get((id - crate::arena::worker_base(k)) as usize).copied().unwrap_or(0),
+            Some(_) => 0,
+        }
+    }
+
+    fn set(&mut self, id: u32, b: u8) {
+        let (cells, i) = match crate::arena::worker_of(id) {
+            None => (&mut self.base, id as usize),
+            Some(k) => {
+                if k != self.worker {
+                    self.local.clear();
+                    self.worker = k;
+                }
+                (&mut self.local, (id - crate::arena::worker_base(k)) as usize)
+            }
+        };
+        if cells.len() <= i {
+            cells.resize(i + 1, 0);
+        }
+        cells[i] = b;
+    }
+
+    fn fill_zero(&mut self) {
+        self.base.fill(0);
+        self.local.fill(0);
+    }
+
+    fn clear(&mut self) {
+        self.base.clear();
+        self.local.clear();
+    }
+
+    fn forget_local(&mut self) {
+        self.local.clear();
+    }
+}
+
+/// A yes or no per symbol, unknown until set: an index into one byte a symbol, where a member's
+/// property is read on every lookup.
+#[derive(Clone, Default)]
+pub struct SymMemo(IdBytes);
+
+impl SymMemo {
+    #[inline]
+    pub fn get(&self, s: SymId) -> Option<bool> {
+        match self.0.get(s.0) {
+            1 => Some(false),
+            2 => Some(true),
+            _ => None,
+        }
+    }
+
+    pub fn set(&mut self, s: SymId, v: bool) {
+        self.0.set(s.0, if v { 2 } else { 1 });
+    }
+
+    pub fn clear(&mut self) {
+        self.0.clear();
+    }
+
+    /// Forgets the answers of the worker's own symbols, whose ids start over.
+    pub fn forget_local(&mut self) {
+        self.0.forget_local();
+    }
+}
+
+/// A yes or no per symbol, unknown until set, which a pass reads anew each time it starts: a
+/// byte a symbol tagged with the pass's stamp, so that starting over clears no table.
+#[derive(Clone)]
+pub struct StampedSymMemo {
+    cells: IdBytes,
+    stamp: u8,
+}
+
+impl Default for StampedSymMemo {
+    fn default() -> StampedSymMemo {
+        StampedSymMemo { cells: IdBytes::default(), stamp: 1 }
+    }
+}
+
+impl StampedSymMemo {
+    #[inline]
+    pub fn get(&self, s: SymId) -> Option<bool> {
+        match self.cells.get(s.0) {
+            b if b >> 1 == self.stamp => Some(b & 1 != 0),
+            _ => None,
+        }
+    }
+
+    pub fn set(&mut self, s: SymId, v: bool) {
+        self.cells.set(s.0, self.stamp << 1 | v as u8);
+    }
+
+    /// Forgets every answer: a new stamp, the table cleared once the stamps run out.
+    pub fn clear(&mut self) {
+        self.stamp += 1;
+        if self.stamp == 0x80 {
+            self.cells.fill_zero();
+            self.stamp = 1;
+        }
+    }
+
+    /// Forgets the answers of the worker's own symbols, whose ids start over.
+    pub fn forget_local(&mut self) {
+        self.cells.forget_local();
     }
 }
 
@@ -753,6 +880,28 @@ pub struct Worker<'a> {
     pub measured_target: Option<(TypeId, u32, u64, TypeId)>,
     /// The alias given whose right-hand side is being typed, which its own search leaves out.
     pub defining: Option<SymId>,
+    /// The body depth of a member whose result type is being inferred, 0 outside one: its plain
+    /// inline calls wait until the type is known, as dotty expands them after typing.
+    pub inferring_depth: u32,
+    /// Whether a member is a lone abstract def, which a concrete one further down a class's
+    /// linearisation implements (`find_member_from`): read once per member.
+    pub lone_abstract_defs: SymMemo,
+    /// Whether a member's complete signature names a path (`sig_names_paths`), read once per member.
+    pub path_sigs: SymMemo,
+    /// Whether a class is a context function class, by class id, read once per class
+    /// (`is_context_function_class_memo`).
+    pub context_function_classes: SymMemo,
+    /// Whether a member's call is on a chain to an inner class's member (`on_inner_chain`).
+    pub inner_chain_members: SymMemo,
+    /// Whether a member's class leaves its name plain for it (`keeps_plain_name`).
+    pub plain_name_members: StampedSymMemo,
+    /// Set while `name_late_alternatives` merges the sets it then names (`settle_merged`).
+    pub naming_late_batch: bool,
+    /// The overload sets the last roots pass told apart (`suffix_clashing_roots`): a naming loop
+    /// whose sets grew passes over them again only for sets past these.
+    pub roots_told: usize,
+    /// The classes Java has nothing more to give (`java_member_miss`), by class index.
+    pub java_members_exhausted: Vec<bool>,
     /// The conversions of a package or class, indexed by member name and result class on the
     /// first conversion lookup in that scope.
     pub conversion_indexes: FxMap<conversions::ScopeKey, std::sync::Arc<conversions::ConversionIndex>>,
@@ -1228,7 +1377,8 @@ pub struct Worker<'a> {
     /// Extractor patterns whose `unapply` returns a `Some`, which cannot fail.
     pub irrefutable_pats: FxMap<TPatId, ()>,
     /// The type patterns over an abstract type that go through a `TypeTest` or a `ClassTag`
-    /// found at the pattern (`tag_pattern`), with the type `x @ (t: T)` binds.
+    /// found at the pattern (`tag_pattern`), with the type `x @ (t: T)` binds, and the quote
+    /// patterns (`quote_match_pattern`), with the type `x @ '[t]` binds.
     pub tag_pats: FxMap<TPatId, TypeId>,
     /// The typed arguments of the calls under way with their types, for a result type that
     /// depends on a parameter (`dest.type`); cleared with the outermost call.
@@ -1312,6 +1462,9 @@ pub struct Worker<'a> {
     pub reflect_param_of: FxMap<SymId, SymId>,
     /// The name being resolved is the head of a call, where a lone package extension is a term.
     pub extension_call_head: bool,
+    /// A name is resolved past the constructor proxies an import brings, for the binding one
+    /// shadows (`Worker::shadowed_by_proxy`).
+    pub skip_proxies: bool,
     /// `@main` methods and the `main(args: Array[String])` methods of top-level objects, each
     /// with the object it runs on when the object inherits it.
     pub entry_points: Vec<(SymId, Option<ClassId>)>,
@@ -1476,6 +1629,9 @@ pub struct Worker<'a> {
     /// For a member selected on an inner-class value made by a call on the outer instance, the
     /// enclosing class and the prefix its `this` is seen from, by the receiver expression.
     pub outer_prefixes: FxMap<TExprId, Vec<(ClassId, TypeId)>>,
+    /// The type of a member selection's receiver, where the program records no expression's
+    /// type, for `outer_steps` to walk a receiver chain by.
+    pub receiver_types: FxMap<TExprId, TypeId>,
     /// Whether a class is a SAM type of a given arity, as the overload shape pass asks.
     pub sam_arity: FxMap<(ClassId, u8), bool>,
     /// The type members whose lookup ran into a cycle, reported once each.
@@ -1977,6 +2133,7 @@ impl<'a> Typer<'a> {
                     let gave_way = w.serial.is_needed();
                     if !gave_way {
                         w.merge_workers(others, &prefix);
+                        w.forget_local_memos();
                     }
                     // Joined through their handles, the threads' own handles are freed here, not
                     // on the ending threads, whose lists they would be lost with (`alloc.rs`).
@@ -2159,7 +2316,7 @@ impl<'a> Worker<'a> {
             non_empty_tuple: None,
             empty_tuple: None,
             tuple_members: Vec::new(),
-            tuple_member_bits: [0; 4],
+            tuple_member_bits: [0; 16],
             predef_names: Default::default(),
             scala_pkg,
             num_rank,
@@ -2210,6 +2367,15 @@ impl<'a> Worker<'a> {
             ref_exported: false,
             measured_target: None,
             defining: None,
+            inferring_depth: 0,
+            lone_abstract_defs: SymMemo::default(),
+            path_sigs: SymMemo::default(),
+            context_function_classes: SymMemo::default(),
+            inner_chain_members: SymMemo::default(),
+            plain_name_members: StampedSymMemo::default(),
+            naming_late_batch: false,
+            roots_told: 0,
+            java_members_exhausted: Vec::new(),
             conversion_indexes: FxMap::default(),
             view_compat: false,
             spread_arg: false,
@@ -2409,6 +2575,7 @@ impl<'a> Worker<'a> {
             reflect_ctor_params: FxMap::default(),
             reflect_param_of: FxMap::default(),
             extension_call_head: false,
+            skip_proxies: false,
             entry_points: Vec::new(),
             main_name: None,
             choose_entry: true,
@@ -2463,6 +2630,7 @@ impl<'a> Worker<'a> {
             poly_rebound: FxMap::default(),
             poly_literal_fun: None,
             outer_prefixes: FxMap::default(),
+            receiver_types: FxMap::default(),
             sam_arity: FxMap::default(),
             member_cycles: Vec::new(),
             merged_overloads: Default::default(),
@@ -2552,6 +2720,15 @@ impl<'a> Worker<'a> {
             ref_exported: false,
             measured_target: Default::default(),
             defining: Default::default(),
+            inferring_depth: 0,
+            lone_abstract_defs: SymMemo::default(),
+            path_sigs: SymMemo::default(),
+            context_function_classes: SymMemo::default(),
+            inner_chain_members: SymMemo::default(),
+            plain_name_members: StampedSymMemo::default(),
+            naming_late_batch: false,
+            roots_told: 0,
+            java_members_exhausted: Vec::new(),
             conversion_indexes: self.conversion_indexes.clone(),
             view_compat: Default::default(),
             spread_arg: false,
@@ -2735,6 +2912,7 @@ impl<'a> Worker<'a> {
             reflect_ctor_params: self.reflect_ctor_params.clone(),
             reflect_param_of: self.reflect_param_of.clone(),
             extension_call_head: Default::default(),
+            skip_proxies: false,
             entry_points: Default::default(),
             deferred_bounds: Default::default(),
             unchecked_variance: self.unchecked_variance.attach(),
@@ -2799,6 +2977,7 @@ impl<'a> Worker<'a> {
             poly_rebound: Default::default(),
             poly_literal_fun: Default::default(),
             outer_prefixes: self.outer_prefixes.clone(),
+            receiver_types: self.receiver_types.clone(),
             sam_arity: self.sam_arity.clone(),
             member_cycles: Default::default(),
             merged_overloads: self.merged_overloads.attach(),
@@ -3202,6 +3381,7 @@ impl<'a> Worker<'a> {
     /// With `attaching`, other workers will attach: the tables they share are kept as the fork
     /// leaves them (`FileMaps::snapshot`, `ExportTables::fork`).
     pub fn fork(&mut self, attaching: bool) {
+        self.forget_local_memos();
         let s = &mut self.syms;
         s.syms.fork();
         s.classes.fork();
@@ -3920,9 +4100,9 @@ impl<'a> Worker<'a> {
         self.b.reflect_enum = self.entered_scala_reflect_class("Enum");
         self.b.t_enum = self.b.reflect_enum.map_or(ERROR, |e| self.types.class(e, &[]));
         self.b.tuple_members = crate::typer::arity::TUPLE_MEMBERS.iter().map(|n| self.interner.intern(n)).collect();
-        self.b.tuple_member_bits = [0; 4];
+        self.b.tuple_member_bits = [0; 16];
         for n in self.b.tuple_members.clone() {
-            self.b.tuple_member_bits[(n.0 / 64 % 4) as usize] |= 1 << (n.0 % 64);
+            self.b.tuple_member_bits[(n.0 / 64 % 16) as usize] |= 1 << (n.0 % 64);
         }
         self.b.predef_names = crate::stdindex::STD_INDEX.iter().flat_map(|f| f.predef).map(|n| self.interner.intern(n)).collect();
         self.b.tuple_trait = self.entered_std_class("Tuple");
@@ -4521,6 +4701,16 @@ impl<'a> Worker<'a> {
         r
     }
 
+    /// The per-member memos' answers for the worker's own symbols, forgotten where those ids
+    /// start over: at the fork and once the merge has renumbered them.
+    pub fn forget_local_memos(&mut self) {
+        self.lone_abstract_defs.forget_local();
+        self.path_sigs.forget_local();
+        self.context_function_classes.forget_local();
+        self.inner_chain_members.forget_local();
+        self.plain_name_members.forget_local();
+    }
+
     pub fn with_env<R>(&mut self, env: Env, f: impl FnOnce(&mut Self) -> R) -> R {
         let saved = std::mem::replace(&mut self.env, env);
         let saved_transparent = std::mem::take(&mut self.transparent);
@@ -4581,15 +4771,21 @@ impl<'a> Worker<'a> {
             .iter()
             .filter_map(|f| if let Frame::Class(c) = f { Some(*c) } else { None })
             .collect();
-        // A top-level opaque type is transparent to the file's top-level definitions and its
-        // companion object, an object's to the object's body.
+        // A top-level opaque type is transparent to the file's top-level definitions, which its
+        // package object holds, an object's to the object's body. The package object holds the
+        // top-level objects named as a top-level type of the file too, an opaque type's companion
+        // or another's (dotty's `Desugar.packageDef`), and those see every opaque type of it.
         let outermost = enclosing.iter().copied().find(|&c| self.syms.class(c).owner != Owner::Local);
-        for &id in &self.file_opaques[file.0 as usize] {
+        // Whether the outermost class is in the package object, asked once a top-level opaque
+        // type asks it, the most files having none.
+        let mut wrapped: Option<bool> = None;
+        for i in 0..self.file_opaques[file.0 as usize].len() {
+            let id = self.file_opaques[file.0 as usize][i];
             let info = self.syms.class(id);
             let visible = match info.owner {
                 Owner::Package(_) => outermost.map_or(true, |c| {
-                    let o = self.syms.class(c);
-                    o.kind == ClassKind::Object && o.name == info.name && o.owner == info.owner
+                    let inside = *wrapped.get_or_insert_with(|| self.in_package_object(c, file));
+                    inside && self.syms.class(c).owner == info.owner
                 }),
                 Owner::Class(o) => enclosing.contains(&o),
                 Owner::Local => false,
@@ -4598,6 +4794,27 @@ impl<'a> Worker<'a> {
                 self.transparent.push(id);
             }
         }
+    }
+}
+
+impl<'a> Worker<'a> {
+    /// Whether a top-level object of the file is named as a top-level type of the file and its
+    /// package, an opaque type or an alias, which puts it in the file's package object.
+    fn in_package_object(&self, c: ClassId, file: FileId) -> bool {
+        let o = self.syms.class(c);
+        let Owner::Package(p) = o.owner else { return false };
+        if o.kind != ClassKind::Object || o.file != file {
+            return false;
+        }
+        let opaque = self.file_opaques[file.0 as usize].iter().any(|&t| {
+            let t = self.syms.class(t);
+            t.name == o.name && t.owner == o.owner
+        });
+        opaque
+            || self.syms.pkg(p).entries.get(&o.name).and_then(|e| e.alias).map_or(false, |a| {
+                let a = self.syms.alias(a);
+                a.file == file && a.owner == o.owner
+            })
     }
 }
 

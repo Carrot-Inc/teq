@@ -407,6 +407,10 @@ impl<'a> Worker<'a> {
                     }
                     _ => pty,
                 };
+                // and from the prefixes of the classes the receiver's class is nested in, as the call
+                // sees it: dotty's `typedUnApply` reads the parameter of `qual.unapply`'s type, a member
+                // seen from the qualifier (`Select()` imported from `tasty: Tasty` takes a `tasty.Select`).
+                let pty = self.seen_from_outer_steps(unapply, recv, pty);
                 if tparams.is_empty() { pty } else { self.generic_extractor_input(pty, &tparams, sty, &owner_subst) }
             }
             _ => sty,

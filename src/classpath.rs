@@ -726,40 +726,11 @@ impl Classpath {
 }
 
 /// The name of a class as its class file spells it: operator characters are written out
-/// (`$colon$colon` for `::`), as `scala.reflect.NameTransformer` does.
+/// (`$colon$colon` for `::`), and a UTF-16 unit that is no part of a Java identifier as its code
+/// (`$u00AC` for reactivemongo's `¬`), as `scala.reflect.NameTransformer.encode` does
+/// (`jvm::names::encode_name`).
 pub fn encode_name(name: &str) -> std::borrow::Cow<'_, str> {
-    if name.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'$' || b >= 0x80) {
-        return std::borrow::Cow::Borrowed(name);
-    }
-    let mut out = String::with_capacity(name.len() * 4);
-    for c in name.chars() {
-        let code = match c {
-            '~' => "$tilde",
-            '=' => "$eq",
-            '<' => "$less",
-            '>' => "$greater",
-            '!' => "$bang",
-            '#' => "$hash",
-            '%' => "$percent",
-            '^' => "$up",
-            '&' => "$amp",
-            '|' => "$bar",
-            '*' => "$times",
-            '/' => "$div",
-            '+' => "$plus",
-            '-' => "$minus",
-            ':' => "$colon",
-            '\\' => "$bslash",
-            '?' => "$qmark",
-            '@' => "$at",
-            other => {
-                out.push(other);
-                continue;
-            }
-        };
-        out.push_str(code);
-    }
-    std::borrow::Cow::Owned(out)
+    crate::jvm::names::encode_name(name)
 }
 
 /// Whether a classpath entry is an artifact of the standard library, which scalac's macro class

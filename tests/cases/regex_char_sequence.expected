@@ -1,0 +1,10 @@
+Some(abc)
+List(abc, def)
+Some(xy)
+Some(2)
+true
+<abc |123| def>
+8
+abc_123_def
+List(abc, 123, def)
+123

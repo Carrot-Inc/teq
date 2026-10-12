@@ -1019,6 +1019,7 @@ impl Ast {
         self.ty_spans.push(span);
         id
     }
+    #[inline]
     pub fn add_def(&mut self, d: Def) -> DefId {
         let id = DefId(self.defs.len() as u32);
         self.defs.push(d);

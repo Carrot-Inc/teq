@@ -322,6 +322,13 @@ class ExportSuite extends munit.FunSuite {
     assertEquals(ignored("-deprecation", "-feature", "-Wconf:any:s", "-language:implicitConversions"), Nil)
   }
 
+  test("scalac's -language:postfixOps reaches teq in --language, which its parser reads") {
+    def flags(options: String*) = ScalacOptions(options).flags(jvm = false)
+    assertEquals(flags("-language:postfixOps"), Seq("--language", "postfixOps"))
+    assertEquals(flags("-language:implicitConversions,postfixOps"), Seq("--language", "implicitConversions,postfixOps"))
+    assertEquals(flags("-language:strictEquality", "-language:postfixOps"), Seq("--strict-equality", "--language", "postfixOps"))
+  }
+
   test("dynamic versions") {
     for (version <- Seq("1.0.+", "latest.release", "[1.0,2.0)", "]1.0,)", "(,2.0]")) assert(Exported.isDynamic(version), version)
     for (version <- Seq("1.0", "1.0-SNAPSHOT", "0.4.3-M5", "0.1.0-pre.2")) assert(!Exported.isDynamic(version), version)
