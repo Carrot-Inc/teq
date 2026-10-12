@@ -657,7 +657,12 @@ impl<'a> Worker<'a> {
         {
             return false;
         }
-        let open = self.attempts.open != 0 || (at == PlainExpansion::Item && !self.var_frames.is_empty());
+        // So does one in the body of a member whose result type is inferred from it: dotty types
+        // the call by the method's result and expands it once the member's type is known
+        // (`Inlines.needsInlining` after the typer), which the macro may read (macwire's
+        // `lazy val api = wire[Api]` beside the others it wires).
+        let inferring = self.inferring_depth != 0 && self.body_depth == self.inferring_depth;
+        let open = self.attempts.open != 0 || (at == PlainExpansion::Item && !self.var_frames.is_empty()) || inferring;
         // A local inline method's call keeps its expansion here: what it checks at the call (a
         // forward reference, scalac's E039 of the typer) is the typer's.
         open && self.syms.sym(sym).mods & crate::ast::mods::TRANSPARENT == 0

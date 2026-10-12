@@ -84,6 +84,50 @@ conforming prefix (`TypeComparer.compareNamed`, `X$ <:< X.type`):
   nested in a trait is found through its path (`w.x.foo` over `ctx.inner.X`, `unseal.pos` over
   `qctx.tasty.Tree`); what remains is `quotes.reflect.Tree` through two paths in `i14783` and
   `given QC()` of a trait in `i8623`.
+## Parsing, exports through values and the lila conformance fixes (2026-10-10)
+
+132 tests move with the fixes lila's compile needed over master `07e685348`, 131 over `feat/local-classes` (`19f48d572`),
+which moved 87 rows of its own; the lists below name the moves against `07e685348` (branch `feat/lila-reference`).
+Most are parse errors gone: an empty case body before the next `case` (`Parsers.block`), postfix operators
+under `postfixOps`, an infix type continued after its operator at a line end, and `using` before a parenthesis.
+
+- `syntax` to `accepts` (45 pos): `20088b`, `end-nested`, `exhaust_alternatives`, `i1269`, `i14707`,
+  `i15029.more`, `i15029`, `i15525`, `i17230.bootstrap`, `i17395`, `i17395-spec.ordered`, `i17395-spec`,
+  `i19304`, `i21790`, `i24076`, `i24750`, `i25943`, `i3588`, `i4198`, `i4449`, `i5498-postfixOps`, `i5773a`,
+  `i5793`, `i8198`, `inline-joint`, `matches`, `news`, `Orderings`, `rangepos`, `t0154`, `t0453`, `t16827`,
+  `t1843`, `t2691`, `t3440`, `t4842`, `t6022`, `t6562`, `t7369`, `tasty-parent-unapply`,
+  `type-test-matchable`, `vec-access-syntax`, `virtpatmat_reach_const`,
+  `wildcard-type-syntax-future-migration`, `wildcard-type-syntax`.
+- `rejects` to `accepts` (29 pos), the typer's fixes (exports and imports through values, members seen from
+  prefixes, overloads, eta-expansion, a protected companion's constructor proxy):
+  `bubbleUpNothing`, `i14626`, `i14953`, `i14966a`, `i14966`, `i16374d`, `i16469`, `i16506`, `i17588`,
+  `i21360`, `i2390`, `i26959-alias`, `i26959-joint`, `i26959`, `i3130c`, `i5288`, `i8368`, `t1049`, `t112606A`,
+  `t4859`, `t839`, `test4refine`, `test4`; `export-proxies` and `i7219`, whose exports through a value forward
+  its types as aliases (`Namer.addForwarder`'s `TypeAlias(pathType.select(sym))`); and `i1401`, `i15177.app`,
+  `t4243`, `t5127`, where a type application of a class makes its type parameters without completing it
+  (`Namer`'s `TypeParamsCompleter`), which master's completion of the whole class turns into a spurious
+  `Cyclic inheritance` (or `type Id not found`).
+- `syntax` to `same` (15 neg): `3559b`, `3559c`, `3559`, `bad-unapplies`, `i1430`, `i14564`, `i6036`, `i7438`,
+  `i9344`, `IsInstanceOfClassTag`, `patmat1`, `t1843-variances`, `t4842`, `t7868`, `tryPatternMatchEq`;
+  `superset` to `same` (5 neg): `i1786` (a package is applied through its top-level `apply` and is no value
+  otherwise, `Typer.checkValue`), `i18650` (master adds `value apply is not a member of Any`), `i24879`, `i8368`,
+  `no-unit`; `accepts` to `subset`: `i18545`.
+- Parsed now, rejected on types or the std (pos `syntax` to `rejects` 14: `20088`, `i13433`, `i13816`,
+  `i14214`, `i22193`, `i5773b`, `i5773`, `i7653`, `multiversal`, `suspend-strawman`, `tasty-named-arguments`,
+  `test-desugar`, `typeclass-scaling`, `zoo2`; to `std` 5: `anykind`, `i1047`, `i16486`, `typeclasses`,
+  `unapplyVal`; to `oos`: `i8530`), and neg `syntax` to `subset` (`i12211`, `inline-foreach`, `structural`,
+  `t6124`), `oos` (`i8730`), `superset` (`typeclass-derivation2`, `zoo`), `std` (`i15525`), `different`
+  (`parser-stability-7`).
+- Neg tests whose errors teq now misses, each a check master lacks too, exposed: `endmarkers1` (a misaligned
+  `end` marker), `experimentalUnapply` (experimental extractors), `patmat2` (unreachable cases) were parse
+  errors; master's binary accepts the parseable reductions of the first two as well (an `end if` after a
+  match, an experimental class and `@experimental` extractors used outside experimental code). `i16876`
+  (unused parameters under `-Wunused:all`) failed on a macro's result type, now inferred.
+- Other moves: `i8333` from `superset` to `same` (a type an export through a value forwards conflicts with the
+  class's type of the name, `Namer.checkNoConflict`, where master refused every such export); `i10857` from
+  `superset` to `different` (`Module.GivenBar(23)` takes the def where the given selector should forward the
+  given alone); `i7086` from `superset` to `std` (`export a.toString` should be refused as a member the class
+  has, `Namer.canForward`; `App` is not in the std); `enumsAccess` from `different` to `subset`.
 
 ## An intersection's members met as dotty's `findMember` and `mergeSingleDenot` (2026-10-10)
 

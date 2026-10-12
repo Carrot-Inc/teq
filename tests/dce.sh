@@ -93,12 +93,13 @@ present $out 'send$String(' 'encode$Int(' 'shorten$String('
 
 # Dispatch: the default of an abstract class that every instantiated class overrides is dropped,
 # a trait's default that a class inherits stays, and the definitions a `super` call goes through
-# all stay.
+# all stay; a call through a class that declares a trait's member abstract again keeps none of the
+# trait's default for an unrelated class of the trait.
 out=out/dce/dispatch.js
 run_js 20 $out tests/dce/dispatch.scala > out/dce/dispatch.actual 2>&1 || bad "dispatch build"
-printf 'square 4\ncircle 3\nHELLO\nGOOD DAY\n[GOOD DAY]\n' > out/dce/dispatch.expected
+printf 'square 4\ncircle 3\nHELLO\nGOOD DAY\n[GOOD DAY]\n2\nloose\n' > out/dce/dispatch.expected
 runs out/dce/dispatch.expected out/dce/dispatch.actual dispatch
-absent $out '"shape"'
+absent $out '"shape"' '"sized default"'
 present $out '"hello"' '"good day"' 'super.greet('
 
 # Inline expansions of one shape: the step's body is written once, as the function its three

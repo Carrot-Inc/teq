@@ -156,7 +156,7 @@ private[teq] object Exported {
   /** A path outside the build's root as a lock without the driver names it: absolute, with `/`. */
   def absolute(file: File): String = file.toPath.toAbsolutePath.normalize.toString.replace('\\', '/')
 
-  def generatedDirectory(project: String): String = s"target/teq/$project/compile/src_managed"
+  def generatedDirectory(project: String, configuration: String = "compile"): String = s"target/teq/$project/$configuration/src_managed"
 
   /** A jar's key in the table: `organization:name:version`, and `:classifier` when it has one. */
   def jarKey(organization: String, name: String, version: String, classifier: Option[String]): String =

@@ -42,6 +42,8 @@ sealed trait Try[+T] extends Product, java.io.Serializable:
   def filter(p: T => Boolean): Try[T] = flatMap: v =>
     if p(v) then Success(v) else Failure(new NoSuchElementException("Predicate does not hold for " + v))
   def withFilter(p: T => Boolean): Try[T] = filter(p)
+  def collect[U](pf: PartialFunction[T, U]): Try[U] = flatMap: v =>
+    Try(if pf.isDefinedAt(v) then pf(v) else throw new NoSuchElementException("Predicate does not hold for " + v))
   def foreach[U](f: T => U): Unit = this match
     case Success(v) =>
       f(v)

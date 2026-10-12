@@ -1,0 +1,21 @@
+{
+  'name': 'a',
+  'age': 3
+}
+Success(Person(a,3,None))
+{
+  'name': 'b',
+  'age': 4,
+  'nick': 'bee'
+}
+{
+  'title': 't',
+  'lead': {
+    'name': 'b',
+    'age': 4,
+    'nick': 'bee'
+  },
+  'size': 2
+}
+Success(Team(t,Person(b,4,Some(bee)),Some(2)))
+true

@@ -58,6 +58,7 @@ object TeqPlugin extends AutoPlugin {
     val teqExportSnapshots = settingKey[Boolean]("Whether teqExportAll writes SNAPSHOT and dynamic versions (a library, the plugin, the compiler) where it would refuse them under teqBuildTool")
     val teqGenerators = settingKey[Seq[TeqCommand]]("Commands that generate a configuration's sources, which sbt's compile runs and teqExportAll exports for teq")
     @transient val teqGenerate = taskKey[Seq[File]]("Runs the configuration's teqGenerators into sourceManaged / teq")
+    val teqReplacesSbtGenerators = settingKey[Boolean]("Whether the configuration's teqGenerators stand for every source and resource generator sbt runs for it, which teqExportAll then records none of for teq to refuse")
     val teqDevCommand = settingKey[Seq[String]]("The command of a Scala.js project's dev loop (teq dev), run from the directory of the package.json at or above its base; by default that package's dev script when the base holds it")
     val teqRunAliases = settingKey[Map[String, String]]("Names for the project's main classes, which teq run takes in their place")
     val teqMainClasses = settingKey[Seq[String]]("The project's main classes for teqExportAll besides Compile / mainClass and the aliases' targets: declared, since finding them takes a compile")
@@ -173,9 +174,14 @@ object TeqPlugin extends AutoPlugin {
     teqRunAliases := Map.empty,
     teqMainClasses := Nil,
     teqGenerators := Nil,
+    teqReplacesSbtGenerators := false,
     Compat.uncached(Compile / teqGenerate, generate),
     Compile / teqGenerate / fileInputs ++= Export.generatorInputs((Compile / teqGenerators).value, (LocalRootProject / baseDirectory).value),
     Compile / sourceGenerators ++= (if ((Compile / teqGenerators).value.nonEmpty) Seq((Compile / teqGenerate).taskValue) else Nil),
+    // Test's own commands (the setting delegates to Compile's where Test sets none), run by sbt's
+    // test compile as Compile's are by its compile.
+    Compat.uncached(Test / teqGenerate, generateTest),
+    Test / sourceGenerators ++= (if ((Test / teqGenerators).value.exists(c => !(Compile / teqGenerators).value.contains(c))) Seq((Test / teqGenerate).taskValue) else Nil),
   ) ++ Export.projectSettings ++ Inputs.projectSettings ++ watched(teqLinkJS, teqServedOutput, Def.setting(true)) ++
     inConfig(Compile)(compilerSettings) ++ inConfig(Test)(compilerSettings)
 
@@ -190,6 +196,14 @@ object TeqPlugin extends AutoPlugin {
       val _ = (Compile / teqGenerate / allInputFiles).value
       Export.generate((Compile / teqGenerators).value, (LocalRootProject / baseDirectory).value, (Compile / sourceManaged).value / "teq", None, streams.value.log)
     }
+  }
+
+  /** `Test / teqGenerate`: Test's own generators, those Compile does not run. */
+  private val generateTest: Def.Initialize[Task[Seq[File]]] = Def.taskIf {
+    if ((Test / teqGenerators).value.filterNot((Compile / teqGenerators).value.contains).exists(_.runsTeq))
+      Export.generate((Test / teqGenerators).value.filterNot((Compile / teqGenerators).value.contains), (LocalRootProject / baseDirectory).value, (Test / sourceManaged).value / "teq", Some(teqResolvedBinary.value), streams.value.log)
+    else
+      Export.generate((Test / teqGenerators).value.filterNot((Compile / teqGenerators).value.contains), (LocalRootProject / baseDirectory).value, (Test / sourceManaged).value / "teq", None, streams.value.log)
   }
 
   /** The dev link into a directory, which `teqLinkJS` runs into `teqServedOutput` and a

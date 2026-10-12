@@ -158,6 +158,7 @@ well_known! {
     ERASED = "erased",
     LANGUAGE = "language",
     STRICT_EQUALITY = "strictEquality",
+    POSTFIX_OPS = "postfixOps",
     FUTURE = "future",
     SYNCHRONIZED = "synchronized",
     NULL = "Null",

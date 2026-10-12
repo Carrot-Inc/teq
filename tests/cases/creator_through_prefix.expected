@@ -1,0 +1,5 @@
+List(a:Match(1), a:Project(2), a:Pair(3,4), a:Pair(5,1), a:Box(x), 11, a:Match(9))
+List(b:Match(1), b:Project(2), b:Pair(3,4), b:Pair(5,1), b:Box(x), 11, b:Match(9))
+c:Match(3)
+c:Project(4)
+2

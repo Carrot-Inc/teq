@@ -1,0 +1,7 @@
+(c:Match(1),c:limit 2,c:Project(3),c:Project(4),List(c:Sort(a)),1,5,c:Pair(5,6))
+(6,c:Project(2))
+c:Match(5)
+c:Project(6)
+List(d:Match(7), d:Sort(b))
+c:Project(8)
+c:Project(9)

@@ -191,6 +191,11 @@ case-insensitive run from their jars today, their macros included. `--std=scala-
 fallback. A JVM build compiles no library: it links against the jars' bytecode, scala-library's
 among them. `docs/LIBRARIES.md` has the details and the measurements.
 
+lila, lichess's server, is the public reference project teq is measured against: its pinned revision's
+sbt build exports with sbt-teq, and its generated sources (Play's routers, its serialised translations)
+come from their own generators under `teq interp`; its compile, its `testFull` suites and its server are
+the gate's lines once they pass (`bench/lila/`, `docs/DEVELOPING.md`'s "lila").
+
 ## Documentation
 
 | | |

@@ -996,6 +996,11 @@ fn parse_file_options(command: &str, args: &[String]) -> Options {
                         if f == "strictEquality" {
                             flags.push(dialect::STRICT_EQUALITY.to_string());
                         }
+                        // An operator with no operand after it is a postfix operator (dotc's
+                        // `postfixOpsEnabled`, `Feature.enabled(postfixOps)`).
+                        if f == "postfixOps" {
+                            o.syntax.postfix_ops = true;
+                        }
                         o.language.push(f.to_string());
                     }
                 }

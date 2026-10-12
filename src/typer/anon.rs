@@ -31,6 +31,9 @@ impl<'a> Worker<'a> {
                 return self.anon_instance(c);
             }
         }
+        if cls.parents.is_empty() {
+            return self.type_parentless_anon(d, cls, span, expected, inlined, stored);
+        }
         let first = &cls.parents[0];
         let class_parent = match self.plain_class_parent(first.ty) {
             Err(()) => return (self.prog.add(TExpr::Unit), ERROR),
@@ -101,6 +104,65 @@ impl<'a> Worker<'a> {
         self.check_class(c);
         let mut captures = self.captured_by(c, first_expr);
         self.add_accessor_captures(c, &mut captures);
+        let tclass = self.checked_class_mut(c).expect("the class was just checked");
+        tclass.ctor_defaults = vec![None; captures.len()];
+        tclass.ctor_params = captures.clone();
+        tclass.parent_args = parent_args.map(|call| call.args);
+        tclass.parent_via = parent_args.and_then(|call| call.via);
+        self.capture_through_nested(c, &captures);
+        self.anon_captures.insert(c, captures);
+        if let Some(call) = parent_args {
+            self.anon_parent_args.insert(c, call);
+        }
+        self.anon_instance(c)
+    }
+
+    /// `new:` or `new { ... }`, a template without parents: its parent is the expected type where
+    /// that is fully defined, free of skolems and its class (`underlyingClassRef`, through a prefix:
+    /// `o.Inner`) one may extend, else `AnyRef`, as dotty's `typedNew` takes the prototype
+    /// (`isFullyDefined`, `isSkolemFree`, `isEligible`: no final class, no top type but `AnyRef`),
+    /// keeping the expected type, prefix and all, as the parent. A prefix that is no path is teq's
+    /// widening of a skolem (`A#AProxy` for dotty's `?1.AProxy`, an unstable argument's). A class
+    /// parent's constructor is called without arguments.
+    fn type_parentless_anon(&mut self, d: DefId, cls: &'a ast::ClassDef, span: Span, expected: Option<TypeId>, inlined: bool, stored: bool) -> (TExprId, TypeId) {
+        let file = self.env.file;
+        let parent = expected.map(|e| self.zonk(e)).filter(|&e| !self.types.has_vars(e)).map(|e| self.dealias(e)).filter(|&e| match self.types.get(e) {
+            Type::Nested(p, _) if !self.types.is_path(p) => false,
+            Type::Class(..) | Type::Nested(..) => match self.types.named_class(e) {
+                Some(k) => {
+                    self.complete_class(k);
+                    let info = self.syms.class(k);
+                    info.mods & mods::FINAL == 0
+                        && matches!(info.kind, ClassKind::Class | ClassKind::Trait)
+                        && !self.is_builtin_type(e)
+                }
+                None => false,
+            },
+            _ => false,
+        });
+        let parent_ty = parent.unwrap_or(self.b.t_any_ref);
+        let class_parent = self.class_of(parent_ty).filter(|&k| parent.is_some() && self.syms.class(k).kind == ClassKind::Class);
+        let name = match self.product_class_name(file, d) {
+            Some(n) => n,
+            None => self.class_name_at(span, stored),
+        };
+        let c = self.syms.new_class(name, ClassKind::Anon, mods::FINAL, Owner::Local, file, Some(d), span);
+        self.record_self_alias(c);
+        self.note_made_at(c, span, stored);
+        if !inlined {
+            self.def_classes.insert(file.0 as usize, d, c);
+        }
+        self.anon_envs.insert(c, Arc::new(self.env.clone()));
+        self.enter_body(file, c, &cls.body);
+        self.syms.class_mut(c).state().set(Completion::InProgress);
+        self.set_parents(c, vec![(parent_ty, span)]);
+        self.syms.class_mut(c).state().set(Completion::Done);
+        let parent_args = class_parent
+            .and_then(|k| self.type_parent_ctor(c, None, k, Some(parent_ty), true).map(|(call, _)| call))
+            .filter(|call| !call.args.is_empty() || call.via.is_some());
+        let first_expr = self.prog.exprs.len();
+        self.check_class(c);
+        let captures = self.captured_by(c, first_expr);
         let tclass = self.checked_class_mut(c).expect("the class was just checked");
         tclass.ctor_defaults = vec![None; captures.len()];
         tclass.ctor_params = captures.clone();

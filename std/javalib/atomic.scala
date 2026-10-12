@@ -162,14 +162,6 @@ package java.util.function:
   trait UnaryOperator[T]:
     def apply(t: T): T
 
-  @jvmClass("java/util/function/Function")
-  trait Function[T, R]:
-    def apply(t: T): R
-
-  @jvmClass("java/util/function/Function")
-  object Function:
-    def identity[T](): Function[T, T] = t => t
-
   @jvmClass("java/util/function/BiFunction")
   trait BiFunction[T, U, R]:
     def apply(t: T, u: U): R

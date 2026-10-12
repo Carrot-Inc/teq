@@ -169,7 +169,8 @@ What sbt would find by compiling or running the build's code is declared:
 
 | Setting | Default | |
 |---|---|---|
-| `Compile / teqGenerators` | none | `TeqCommand(run, inputs, cwd = ".", outputs)`, a program that writes sources |
+| `Compile / teqGenerators` | none | `TeqCommand(run, inputs, cwd = ".", outputs)`, a program that writes sources; `Test / teqGenerators` a test configuration's own |
+| `teqReplacesSbtGenerators` | false | the configuration's commands stand for every source and resource generator sbt runs for it, which the export then records none of |
 | `teqMainClasses` | none | main classes `teq run` takes by name, besides `Compile / mainClass` |
 | `teqRunAliases` | none | names for main classes, which `teq run` takes in their place |
 | `teqDevCommand` | the `dev` script of the nearest `package.json` | a Scala.js project's dev command |
@@ -200,7 +201,11 @@ start script runs `Compile / mainClass` where the build declares it (a build fil
 the main class `teq stage` finds (below).
 
 The export refuses no build for what `teq` could not reproduce: it records it, and the verbs that need
-it refuse at use, naming each reason and its remedy, while the editor and vite read the rest. Recorded are a
+it refuse at use, naming each reason and its remedy, while the editor and vite read the rest. A build
+whose generators teq can run as commands declares them with `teqReplacesSbtGenerators` (for a
+configuration and those extending it): the commands of the configuration then stand for sbt's, which are
+not recorded, a configuration with no command of its own asserting that sbt's write nothing there
+(bench/lila/overlay/LilaTeq.scala does this for lila's routers). Recorded are a
 source generator other than a `TeqCommand` or sbt-buildinfo's of a shape `teq` writes (the editor then
 reads what sbt last generated), a generator of the Test or Runtime configuration, a resource generator, a
 `Tests.Filter`, `Tests.Setup` or `Tests.Cleanup`, and a Docker stage `teq` would not write as

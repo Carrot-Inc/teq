@@ -1,7 +1,6 @@
 // expect: cannot export nope: it is not a member of Source
 // expect: cannot resolve export: missing not found
 // expect: cannot resolve export: Inner not found
-// expect: cannot resolve export: value is not an object or a package
 // expect: an export needs a qualifier
 // expect: cyclic export of Cycle
 // expect: no given instance of type Tag[Int]

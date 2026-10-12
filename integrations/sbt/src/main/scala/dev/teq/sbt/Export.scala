@@ -294,6 +294,9 @@ private[sbt] object Export {
       val sbtPlatform = Compat.platform.value
       val resolvers = externalResolvers.value
       val commands = (Compile / teqGenerators).value
+      // Test's own commands: the setting delegates to Compile's where Test sets none.
+      val testCommands = (Test / teqGenerators).value.filterNot(commands.contains)
+      val replacesSbt = Map("compile" -> (Compile / teqReplacesSbtGenerators).value, "test" -> (Test / teqReplacesSbtGenerators).value)
       val buildInfoBlock = generator.value
       val native = docker.value
       val aliases = teqRunAliases.value
@@ -367,16 +370,21 @@ private[sbt] object Export {
         Compat.definition(task).map(_.key.label) match {
           case Some("teqGenerate") => commands.map(commandJson(root, _, generatedDirectory(name), name, refusals, buildTool))
           case Some("buildInfo") if buildInfo => Seq(buildInfoBlock.fold(whys => sbtRuns(task, Some(whys.mkString("; "))), identity))
+          // One the configuration's commands stand for (`teqReplacesSbtGenerators`) is not recorded.
+          case _ if replacesSbt("compile") => Nil
           case _ => Seq(sbtRuns(task))
         }
       }
       def bySbt(generators: Seq[Json.Value]) = generators.exists(_("kind").str == "sbt")
       val runtimeGenerators = runtime.generators.filterNot(compile.generators.contains).map(sbtRuns(_))
-      val testGenerators = test.generators.filterNot(compile.generators.contains).map(sbtRuns(_))
+      val testGenerators =
+        (if (replacesSbt("test")) Nil else test.generators.filterNot(compile.generators.contains).filterNot(t => Compat.definition(t).exists(_.key.label == "teqGenerate")).map(sbtRuns(_))) ++
+          testCommands.map(commandJson(root, _, generatedDirectory(name, "test"), name, refusals, buildTool))
       // sbt's own resource generator, the plugin descriptors, is the one a configuration has unless
       // the build or a plugin adds another, or the build sets the list; teq runs none.
       def resourceGeneratorsOf(c: Config) =
-        (if (resourceGeneratorsSet.contains(c.config.name)) c.resourceGenerators else c.resourceGenerators.drop(1)).map(sbtRuns(_))
+        if (replacesSbt.getOrElse(c.config.name, false)) Nil
+        else (if (resourceGeneratorsSet.contains(c.config.name)) c.resourceGenerators else c.resourceGenerators.drop(1)).map(sbtRuns(_))
       /** sbt's managed source directories of a configuration, which a configuration whose
         * generators are sbt's reads in the place of teq's directory; one outside the build's
         * root is written as `path` writes it without the driver, and left out with a warning under
@@ -491,7 +499,7 @@ private[sbt] object Export {
           "classpath" -> Json.Arr(classpath(runtime)),
         ) ++ generatorFields(runtimeGenerators, Nil)),
         "test" -> Json.Obj(Map(
-          "sources" -> strings(roots("the source directory", test.sourceDirectories) ++ (if (testGenerators.nonEmpty) managed(Test) else Nil)),
+          "sources" -> strings(roots("the source directory", test.sourceDirectories) ++ (if (bySbt(testGenerators)) managed(Test) else Option.when(testCommands.nonEmpty)(generatedDirectory(name, "test")).toSeq)),
           "resources" -> strings(roots("the resource directory", test.resourceDirectories)),
           "classpath" -> Json.Arr(classpath(test)),
           "flags" -> testFlags,

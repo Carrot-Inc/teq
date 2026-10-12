@@ -750,7 +750,15 @@ impl<'a> Parser<'a> {
         self.ast.add_def(Def { name, span, mods: m, annots, kind })
     }
 
+    /// An extension's methods, a language import among them scoped to them (dotty's
+    /// `extMethods` restoring `languageImportContext`).
     fn parse_extension(&mut self, m: Mods, out: &mut Vec<DefId>) {
+        let saved = self.syntax.postfix_ops;
+        self.parse_extension_scoped(m, out);
+        self.syntax.postfix_ops = saved;
+    }
+
+    fn parse_extension_scoped(&mut self, m: Mods, out: &mut Vec<DefId>) {
         self.bump();
         self.ext_groups += 1;
         let mark = self.error_events;
@@ -933,6 +941,11 @@ impl<'a> Parser<'a> {
             }
             parents.push(Parent { ty, args });
         }
+        self.parse_anon_class_with(parents, start)
+    }
+
+    /// The template of an anonymous class with these parents, none for `new:` or `new { ... }`.
+    pub(super) fn parse_anon_class_with(&mut self, parents: Vec<Parent>, start: Span) -> ExprId {
         let (body, exports, self_type, self_alias) = self.parse_template_body(false);
         if !exports.is_empty() {
             self.error_at(start, "export clauses are not supported in an anonymous class");
@@ -1059,7 +1072,16 @@ impl<'a> Parser<'a> {
             && (self.pos == self.body_at || matches!(self.toks[self.pos - 1].kind, Tok::KwExtends | Tok::KwWith | Tok::Comma))
     }
 
+    /// A template's statements, a language import among them enabling its feature until their
+    /// end, as dotty restores `languageImportContext` after `templateStatSeq`.
     fn parse_template_body(&mut self, is_enum: bool) -> (Vec<Stmt>, ListRef, Option<TyExprId>, Name) {
+        let saved = self.syntax.postfix_ops;
+        let body = self.parse_template_body_scoped(is_enum);
+        self.syntax.postfix_ops = saved;
+        body
+    }
+
+    fn parse_template_body_scoped(&mut self, is_enum: bool) -> (Vec<Stmt>, ListRef, Option<TyExprId>, Name) {
         let mut body = Vec::new();
         if self.at_bare_body() {
             self.bump();

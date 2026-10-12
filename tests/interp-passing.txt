@@ -5,6 +5,7 @@ abstract_var_accessors
 access_qualifiers
 adt
 alias_tuple_exhaustivity
+alias_wildcard_refined_member
 annotated_type_params
 annotations_ignored
 anon_classes
@@ -13,6 +14,7 @@ anon_generic_parent_using
 anon_givens
 anon_instance_refined
 anon_members
+anon_parentless_prefixed
 anon_sites
 any_equals_method
 anyref_parent
@@ -78,6 +80,8 @@ brace_first_line_statements
 brace_next_line
 braces
 branch_var_bound_conversion
+bson_macros
+bson_opaque_list_handler
 buffer_append_varargs
 build_from
 byname_conversion
@@ -118,6 +122,7 @@ capture_u
 capture_w
 capture_x
 case_class_below_superclass
+case_class_copy_through_trait
 case_class_equals_alias
 case_class_generic_bridge
 case_class_generic_member
@@ -133,6 +138,7 @@ case_class_tostring_overload
 case_companion_nested
 case_copy_clauses
 case_copy_nested
+case_empty_body
 case_lambda_parameter
 case_lambda_pinned_constructor
 case_lambda_tuples
@@ -170,6 +176,8 @@ charbuffer_ranges
 charbuffer_wrap_capacity
 charbuffer_wrap_read_only
 charbuffer_wrap_view
+charsequence_members
+charsequence_release
 charset_decode_writable
 charset_encode_consumes
 charset_utf8_replacement
@@ -186,6 +194,7 @@ class_tag_void_array
 class_tags
 classes
 clone_without_parens
+codec_default
 collect
 collect_lambda_match
 collection_as_function
@@ -226,6 +235,8 @@ constant_union_join
 context_bound_merge
 context_closure_written
 context_function_inferred
+context_function_lambda_result
+context_function_member_selection
 context_function_receiver_var
 context_functions
 contravariant_open_var
@@ -249,6 +260,7 @@ conversion_target_path_scope
 conversion_to_type_param
 conversion_using_after_receiver
 conversions
+creator_through_prefix
 cross_features
 data_streams
 deadline_now
@@ -302,6 +314,7 @@ duration_hierarchy
 duration_names
 duration_syntax_import
 duration_time_unit
+duration_time_unit_constants
 either_merge_adders
 either_right
 else_between_widths_brace_lambda
@@ -319,10 +332,12 @@ enum_gadt
 enum_lookups
 enum_mixed_from_ordinal
 enum_nested
+enum_nested_tuple_match
 enum_ordinal_dispatch
 enum_ordinal_null
 enum_parents
 enum_reference
+enum_secondary_ctor
 enum_settings
 enum_usage
 enumvalues
@@ -330,11 +345,13 @@ equality_default
 equals_trait
 erasure_shapes
 eta_by_name_inferred
+eta_expected_parameter_conversion
 eta_sam_conversion
 eta_sam_widening
 eta_underscore_typevars
 eta_unit_result
 eta_untupled
+eta_using_clause_context_result
 etavalues
 evalorder
 evidence
@@ -348,7 +365,15 @@ expected_result_path_param
 expected_type_instantiation
 expected_types
 export_implements
+export_qualified_protected
+export_through_value_import
 export_touch
+export_user_default_named
+export_value_defaults
+export_value_forwarders
+export_value_types
+export_wildcard_implicit_conversion
+export_wildcard_user_members
 exports
 exports_blocked
 exports_cycle
@@ -366,6 +391,7 @@ extension_byname_receiver
 extension_called_by_name
 extension_deepened_overload
 extension_direct_targs
+extension_method_value
 extension_names
 extension_nearest_scope
 extension_not_a_term
@@ -387,6 +413,7 @@ extractor_binder_narrowed
 extractor_irrefutable_tested
 extractor_reachable_after
 extractor_singleton_subpattern
+extractor_through_value_import
 extractor_vals
 f_interpolator_linked
 files_directories
@@ -413,6 +440,7 @@ foldleft_empty_lambda
 foldleft_nil_lambda
 for_case
 for_in_parens
+for_lazy_zip_untupled
 for_map_generator_overload
 for_trailing_map
 function_class_name_field
@@ -524,18 +552,21 @@ hk_bound_given
 hk_bound_members
 hk_bounded_params
 hk_branch_join
+hk_infer_base_type
 hkt
 iarray_ops
 immutable_hash_map
 immutable_queue
 implicit_lambda_params
 implicit_object_through_extending_object
+import_alias_of_trait_object
 import_class_instance_val
 import_from_value
 import_inherited_object_beside_parents
 import_nested_given
 import_nested_object
 import_nested_objects
+import_object_inherited_alias
 import_object_val_given
 import_private_nested
 import_selector_nested_through_bound
@@ -543,6 +574,7 @@ import_selector_numeric_builtin
 import_selectors
 import_stable_val
 import_value_conversion_paths
+import_value_nested_class
 import_value_twice
 import_value_type_member
 import_value_wildcard
@@ -725,6 +757,7 @@ intersection_member_receivers
 irrefutable_extractor_exhaustive
 iterable_to_iterator
 iterator_laziness
+jar_class_unicode_name
 jar_inner_class_bounds
 java_annotation_interface
 java_atomics
@@ -752,6 +785,7 @@ java_tree_map_views
 java_tree_set
 java_util_bits
 java_view_remove_named_apart
+jdk_routes_compiler_subset
 junit_comparison_failure
 jvm_return_finally
 kind_projector
@@ -761,8 +795,10 @@ lambda_from_expected
 lambda_union_expected
 lambdas
 layout_mixed
+lazy_list_seq
 lazy_null_once
 lazy_pattern_local
+lazy_zip_on_demand
 lazyvals
 leading_infix
 leading_infix_backquoted
@@ -845,14 +881,18 @@ macro_fresh_nested_site
 macro_heal_types
 macro_hole_cast
 macro_identity_hash
+macro_inferred_result_type
 macro_jar_ctor_val
 macro_jdk_bodies
 macro_jvm_template_body
+macro_lambda_method_type
 macro_lambda_quotes
 macro_library_body_attempt
 macro_library_super
 macro_member_trees
+macro_method_type_binder
 macro_method_type_by_name
+macro_method_type_result
 macro_mirror_summon
 macro_module_members
 macro_named_args
@@ -897,6 +937,7 @@ macro_structural_calls
 macro_symbol_signature
 macro_sys_env
 macro_sys_props
+macro_system_zone
 macro_target_name_alias
 macro_target_name_dispatch
 macro_top_object_owner
@@ -908,7 +949,11 @@ macro_type_bounds_tree_copy
 macro_underlying_locals
 macro_val_type_ref_stable
 macro_val_type_ref_widen
+macro_value_member_fields
 macro_vector_append
+macwire_module
+macwire_wire
+macwire_wire_untyped
 main_object
 main_qualified
 main_varargs
@@ -924,9 +969,11 @@ match_types
 match_types_tuples
 matchable_as_any
 matcher_replace
+matcher_replace_function
 matchunit
 math_long_extremes
 max_inlines
+member_concrete_over_abstract
 member_eta_over_extension
 member_fallback_macro
 member_fallback_macro_clauses
@@ -968,6 +1015,7 @@ nan_comparisons
 negative_literal_space
 nested_accessor_temps
 nested_case_object_identity
+nested_class_ctor_defaults
 nested_class_inherited
 nested_class_prefix
 nested_class_prefix_givens
@@ -977,8 +1025,8 @@ nested_class_prefix_review
 nested_class_prefix_types
 nested_classes
 nested_companion_lib
-nested_object_given_receivers
 nested_enum_lifetime
+nested_object_given_receivers
 nested_object_path_patterns
 nested_object_singleton
 nested_objects
@@ -988,6 +1036,7 @@ new_array
 new_leading_using_clause
 new_parameterised_alias
 new_unapplied_alias
+new_without_parents
 newtype_intersection_erasure
 nio_byte_order
 nonlocal_return_lambda
@@ -999,8 +1048,10 @@ null_equality_tparam
 nullary_over_java_parens
 number_boxes
 numeric
+object_inherited_member_prefix
 object_inherited_protected
 object_member
+object_prefix_framework
 objects_deep_equals
 objects_equals_identity
 objects_java_equality
@@ -1008,6 +1059,7 @@ objects_jdk_bodies
 opaque_bound
 opaque_intersection_bound
 opaque_into_union
+opaque_package_object_companions
 opaque_trait_prefix
 opaque_type_test
 opaque_union_erasure
@@ -1016,11 +1068,13 @@ open_expected
 open_iterator_map
 open_result_bounds
 open_variable_comparisons
+operator_method_values
 operator_object_header
 operator_order
 operators_members
 option_as_iterable
 ordered_comparable
+ordering_ordered_evidence
 ordering_tuples_large
 outer_setter_assign
 outline_widened_operand
@@ -1029,6 +1083,7 @@ overload_apply
 overload_basic
 overload_class_generic
 overload_class_inheritance
+overload_context_lambda
 overload_expected_result_retry
 overload_explicit_targs
 overload_exports
@@ -1049,7 +1104,10 @@ overload_std_collections
 overload_targetname
 overload_tupled_most_specific
 overload_type_arg_count
+overload_uncurried_retried
 overload_vals
+overloaded_name_argument
+overloaded_name_parameterless_argument
 overloads_by_using_clause
 override_access_local_owner
 override_enclosing_type_member
@@ -1057,6 +1115,7 @@ override_inferred
 override_nullary_any
 override_through_val_path
 package_alias_beside_object
+package_apply
 package_blocks
 package_main
 package_object_braces
@@ -1067,6 +1126,8 @@ pair_extractor
 param_bounded_by_intersection
 param_clauses
 paren_pattern_types
+parser_combinators_regex
+parser_combinators_sequence
 partial_application_once
 partial_function_apply
 partial_function_classes
@@ -1074,6 +1135,7 @@ partial_function_match_body
 partial_functions
 partial_sites
 partial_unification_fixed_args
+path_member_override_prefix
 path_operations
 pattern_abstract_scrutinee
 pattern_equality
@@ -1101,6 +1163,9 @@ poly_context_function
 poly_function_outer_bound
 poly_functions
 poly_named_params
+postfix_import_scoped
+postfix_operators
+postfix_operators_option
 predef_copy_array
 predef_std
 predef_unimport_redefined
@@ -1163,6 +1228,7 @@ reflect_root
 reflect_trait_assignable
 reflective_selectable
 regex_beyond_javascript
+regex_char_sequence
 regex_class_sets
 regex_group_index_checked
 regex_lookbehind_long
@@ -1333,7 +1399,11 @@ self_alias_forms
 self_alias_override
 self_alias_shadowing
 self_alias_type_path
+self_type_exported_term
+self_type_exported_type
+self_type_given_through_this
 self_type_member
+self_type_parent_conforms
 self_types
 sequence_patterns
 set_from_key_set
@@ -1417,6 +1487,7 @@ string_map_indexed_seq
 string_patch_lines
 string_plus_selection
 string_replace_literal
+string_sub_sequence
 string_surrogate_escapes
 string_trim_strip
 string_utf16_units
@@ -1459,6 +1530,7 @@ template_arguments_throwing
 template_pattern_vals
 this_rooted_type_path
 this_type_intersection
+this_type_prefix_params
 throwable_init_cause
 time_clock
 time_formatter_value_widths
@@ -1486,6 +1558,7 @@ trait_vals_mixed
 transparent_given_local
 transparent_match_constant_branch
 transparent_widened_ascription
+try_collect_lazy_zip
 try_without_handlers
 tuple_companion_api
 tuple_element_var_bound
@@ -1504,6 +1577,7 @@ type_lambda_hk_binders
 type_members
 type_on_next_line
 type_op_open_variable
+type_operator_line_end
 type_pattern_lower_bounds
 type_test_bound_constituents
 type_test_class_pattern
@@ -1586,6 +1660,7 @@ unreachable_deep_split
 untupled_partial_lambda
 using_conversion_param
 using_default
+using_lambda_argument
 util_sorting
 uuid
 val_implements_def_and_val
@@ -1594,6 +1669,8 @@ val_refinement_subst
 value_class_can_equal
 value_class_signature_only
 value_classes
+value_export_case_selectors
+value_export_overloads
 value_import
 value_import_given_old_implicits
 value_import_given_shadows_own
@@ -1634,4 +1711,3 @@ zip_digest
 zip_entry_times
 zip_stream_incremental
 zip_time_precision
-enum_nested_tuple_match

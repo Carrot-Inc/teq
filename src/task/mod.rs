@@ -125,7 +125,8 @@ const VERBS: &str = "  compile [project...]       type the projects' closures an
                              one) on its warm runner: those the patterns name, as sbt's testOnly
                              takes them, or with --changed those whose classes depend on the
                              classes written since the last run of every suite; --list prints
-                             the suites as sbt's definedTests, --verbose the frameworks' debug
+                             the suites as sbt's definedTests, --verbose the frameworks' debug,
+                             whole traces and every test with its outcome ([success], [skipped])
   run <project> [alias or main class] [-- args]
                              compile, then run the main class (an alias of the project's run
                              block names one; without a word the declared one, else the single

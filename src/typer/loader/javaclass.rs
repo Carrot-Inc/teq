@@ -1217,6 +1217,23 @@ impl<'a> Worker<'a> {
         if c == self.b.string || c == self.b.any_ref {
             return self.loaded.as_ref().unwrap().scala_library && self.enter_java_builtin_members(c);
         }
+        // A class Java has given all it has is asked no more: every later miss would read its
+        // ancestors again for nothing.
+        if self.java_members_exhausted.get(c.0 as usize).copied().unwrap_or(false) {
+            return false;
+        }
+        let more = self.java_member_miss_now(c);
+        if !more {
+            let i = c.0 as usize;
+            if self.java_members_exhausted.len() <= i {
+                self.java_members_exhausted.resize(i + 1, false);
+            }
+            self.java_members_exhausted[i] = true;
+        }
+        more
+    }
+
+    fn java_member_miss_now(&mut self, c: ClassId) -> bool {
         if self.absorb_java_class(c) {
             return true;
         }

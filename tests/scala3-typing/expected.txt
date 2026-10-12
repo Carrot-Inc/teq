@@ -34,9 +34,9 @@ neg/26037.scala	accepts
 neg/26312	oos	java
 neg/26458.scala	superset	+2 lines: type mismatch
 neg/26888.scala	accepts	
-neg/3559.scala	syntax	expected identifier, found {}
-neg/3559b.scala	syntax	expected identifier, found {}
-neg/3559c.scala	syntax	expected identifier, found {}
+neg/3559.scala	same	
+neg/3559b.scala	same	
+neg/3559c.scala	same	
 neg/3559d.scala	same	
 neg/4376.scala	syntax	expected {}, found {}
 neg/4382.scala	same	
@@ -63,7 +63,7 @@ neg/9107.scala	different	Cannot prove that X match { case Inv[t] => Int } =:= X 
 neg/EmptyCaseClassParams.scala	accepts	
 neg/EmptyEnum.scala	same	
 neg/EqualityStrawman1.scala	same	
-neg/IsInstanceOfClassTag.scala	syntax	expected an expression, found {}
+neg/IsInstanceOfClassTag.scala	same	
 neg/Iter2.scala	superset	+1 lines: type mismatch
 neg/Iter3.scala	subset	1/3 lines
 neg/NoneMatch.scala	same	
@@ -99,7 +99,7 @@ neg/autoTuplingTestb.scala	accepts
 neg/autoUnit.scala	same	
 neg/automatic-tupling-of-function-parameters.scala	same	
 neg/bad-selftype.scala	subset	1/3 lines
-neg/bad-unapplies.scala	syntax	expected an expression, found {}
+neg/bad-unapplies.scala	same	
 neg/badAuxConstr.scala	same	
 neg/beanAccessorsLeaking	same	
 neg/binaryLiterals.scala	syntax	expected end of statement, found {}
@@ -204,7 +204,7 @@ neg/dynamicUpdateDynamicTest4.scala	std	Dynamic
 neg/empty-given.scala	syntax	expected identifier, found {}
 neg/emptyCatch.scala	same	
 neg/endmarkers.scala	std	ArrowAssoc
-neg/endmarkers1.scala	syntax	expected an expression, found {}
+neg/endmarkers1.scala	accepts	
 neg/ensureReported.scala	different	missing parameter type
 neg/enum-List3.scala	accepts	
 neg/enum-constrs.scala	accepts	
@@ -213,7 +213,7 @@ neg/enum-values.scala	same
 neg/enum-variance.scala	same	
 neg/enumWithType.scala	oos	enum-extends
 neg/enums.scala	oos	enum-extends
-neg/enumsAccess.scala	different	illegal reference to defaultX from an enum case; write E5.defaultX
+neg/enumsAccess.scala	subset	4/10 lines
 neg/enumsLabel-singleimpl.scala	accepts	
 neg/enumvalues.scala	superset	+2 lines: {} is not a member of the package
 neg/eql.scala	subset	6/8 lines
@@ -278,7 +278,7 @@ neg/experimentalTests.scala	accepts
 neg/experimentalType.scala	accepts	
 neg/experimentalTypeRHS.scala	accepts	
 neg/experimentalTypes2.scala	accepts	
-neg/experimentalUnapply.scala	syntax	expected an expression, found {}
+neg/experimentalUnapply.scala	accepts	
 neg/export-extension-in-extension.scala	superset	+1 lines: only defs are allowed in an extension
 neg/export-in-extension.scala	superset	+1 lines: only defs are allowed in an extension
 neg/export-leaks.scala	accepts	
@@ -376,7 +376,7 @@ neg/i10715a.scala	same
 neg/i10715b.scala	same	
 neg/i10757.scala	same	
 neg/i10817.scala	accepts	
-neg/i10857.scala	superset	+4 lines: {} is already defined
+neg/i10857.scala	different	{} is already defined
 neg/i10870.scala	same	
 neg/i10901.scala	subset	2/3 lines
 neg/i10927.scala	same	
@@ -442,7 +442,7 @@ neg/i12177.scala	same
 neg/i12188	accepts	
 neg/i12207.scala	same	
 neg/i12208.scala	same	
-neg/i12211.scala	syntax	expected identifier, found {}
+neg/i12211.scala	subset	1/2 lines
 neg/i12220.scala	accepts	
 neg/i12232.scala	same	
 neg/i12245.scala	same	
@@ -540,7 +540,7 @@ neg/i14177a.scala	same
 neg/i14177c.scala	accepts	
 neg/i14187.scala	same	
 neg/i1424.scala	accepts	
-neg/i1430.scala	syntax	expected identifier, found {}
+neg/i1430.scala	same	
 neg/i14303	syntax	expected an expression, found {}
 neg/i14363.scala	same	
 neg/i14367.scala	accepts	
@@ -556,7 +556,7 @@ neg/i14432c.scala	same
 neg/i14432d.scala	accepts	
 neg/i14507.scala	same	
 neg/i14544.scala	subset	1/2 lines
-neg/i14564.scala	syntax	expected {}, found {}
+neg/i14564.scala	same	
 neg/i14659.scala	different	type mismatch
 neg/i14660.scala	accepts	
 neg/i14722.scala	superset	+1 lines: error overriding variable id in class HasId of type String;
@@ -600,7 +600,7 @@ neg/i15448.scala	same
 neg/i15468.scala	same	
 neg/i15474b.scala	accepts	
 neg/i15507.scala	subset	6/10 lines
-neg/i15525.scala	syntax	expected {}, found {}
+neg/i15525.scala	std	element0
 neg/i15567.scala	same	
 neg/i15568.scala	accepts	
 neg/i15569.scala	different	type mismatch
@@ -669,7 +669,7 @@ neg/i16842.scala	same
 neg/i16850.scala	same	
 neg/i16861.scala	same	
 neg/i16872.scala	std	aa
-neg/i16876	different	recursive use of {} needs an explicit result type
+neg/i16876	accepts	
 neg/i1688.scala	subset	1/2 lines
 neg/i16888.scala	same	
 neg/i16920.scala	same	
@@ -678,7 +678,7 @@ neg/i1701.scala	same
 neg/i17021.ext-java	oos	java
 neg/i1703.scala	accepts	
 neg/i1706.scala	std	Object
-neg/i1707.scala	syntax	expected identifier, found {}
+neg/i1707.scala	syntax	expected end of statement, found {}
 neg/i1708.scala	same	
 neg/i17089.scala	same	
 neg/i1708b.scala	accepts	
@@ -709,7 +709,7 @@ neg/i1771.scala	accepts
 neg/i17738-infix-object	same	
 neg/i17738-toplevel-infix.scala	subset	4/5 lines
 neg/i1779.scala	std	_
-neg/i1786.scala	superset	+2 lines: {} is a package, not a value
+neg/i1786.scala	same	
 neg/i1793.scala	superset	+1 lines: cannot resolve import
 neg/i17944.scala	superset	+2 lines: extension method ->> is not applicable to String
 neg/i17981.scala	same	
@@ -748,14 +748,14 @@ neg/i18453.scala	same
 neg/i18458.scala	accepts	
 neg/i1846.scala	syntax	expected a pattern, found {}
 neg/i18533	oos	java
-neg/i18545.scala	accepts	
+neg/i18545.scala	subset	2/5 lines
 neg/i18552.scala	accepts	
 neg/i18584	oos	java
 neg/i18588.scala	same	
 neg/i18632.scala	accepts	
 neg/i18650.min.scala	same	
 neg/i18650.min2.scala	same	
-neg/i18650.scala	superset	+1 lines: value {} is not a member of {}
+neg/i18650.scala	same	
 neg/i18657.scala	same	
 neg/i18670.scala	same	
 neg/i18678.scala	same	
@@ -796,7 +796,7 @@ neg/i19594.scala	std	App
 neg/i19619	oos	java
 neg/i19731.scala	same	
 neg/i19746.scala	different	type mismatch
-neg/i19762.scala	syntax	expected identifier, found {}
+neg/i19762.scala	syntax	unmatched closing bracket
 neg/i19809.scala	accepts	
 neg/i19888.scala	same	
 neg/i1992.scala	accepts	
@@ -813,7 +813,7 @@ neg/i20071b	same
 neg/i20079	same	
 neg/i20105.scala	same	
 neg/i20127.scala	same	
-neg/i20245	different	cannot resolve export
+neg/i20245	different	recursive value unification needs type
 neg/i20265-1.scala	accepts	
 neg/i20265.scala	superset	+3 lines: X is not a legal path
 neg/i2030.scala	same	
@@ -878,8 +878,8 @@ neg/i22440.scala	accepts
 neg/i22498.scala	accepts	
 neg/i22552.scala	superset	+1 lines: Context bounds are not allowed in this position
 neg/i22560.scala	subset	1/3 lines
-neg/i22560b.scala	subset	2/5 lines
-neg/i22560c	subset	2/5 lines
+neg/i22560b.scala	subset	3/5 lines
+neg/i22560c	subset	3/5 lines
 neg/i22575.scala	same	
 neg/i22589.scala	same	
 neg/i22589b.scala	same	
@@ -955,7 +955,7 @@ neg/i24825.scala	same
 neg/i24825b.scala	same	
 neg/i24825c.scala	superset	+1 lines: modifier override is not allowed for this definition
 neg/i24871.scala	same	
-neg/i24879.scala	superset	+1 lines: cannot resolve export
+neg/i24879.scala	same	
 neg/i24891.scala	same	
 neg/i24914.scala	same	
 neg/i24917.scala	accepts	
@@ -1198,7 +1198,7 @@ neg/i5976.scala	subset	1/2 lines
 neg/i5978.scala	superset	+1 lines: TokenParser is a trait; it cannot be instantiated
 neg/i6009b.scala	syntax	expected {}, found {}
 neg/i6035.scala	syntax	expected identifier, found {}
-neg/i6036.scala	syntax	expected identifier, found {}
+neg/i6036.scala	same	
 neg/i6047.scala	syntax	expected {}, found {}
 neg/i6047a.scala	syntax	expected {}, found {}
 neg/i6055.scala	same	
@@ -1259,7 +1259,7 @@ neg/i7060.scala	syntax	expected {}, found {}
 neg/i7068-a.scala	same	
 neg/i7068-b.scala	same	
 neg/i7078.scala	syntax	expected end of statement, found {}
-neg/i7086.scala	superset	+2 lines: cannot resolve export
+neg/i7086.scala	std	App
 neg/i7092.scala	same	
 neg/i7107.scala	same	
 neg/i7137.scala	same	
@@ -1274,7 +1274,7 @@ neg/i7359.scala	accepts
 neg/i7387.scala	std	B
 neg/i739.scala	same	
 neg/i7425.scala	same	
-neg/i7438.scala	syntax	expected {}, found {}
+neg/i7438.scala	same	
 neg/i7459.scala	same	
 neg/i7526.scala	same	
 neg/i7529.scala	accepts	
@@ -1328,10 +1328,10 @@ neg/i8194.scala	accepts
 neg/i8219.scala	std	AnyKind
 neg/i827.scala	same	
 neg/i8299.scala	std	PolyFunction
-neg/i8333.scala	superset	+1 lines: cannot resolve export
+neg/i8333.scala	same	
 neg/i8337.scala	accepts	
 neg/i8362.scala	same	
-neg/i8368.scala	superset	+1 lines: cannot resolve export
+neg/i8368.scala	same	
 neg/i8405.scala	same	
 neg/i8464.scala	std	Id
 neg/i8569.scala	same	
@@ -1344,7 +1344,7 @@ neg/i8681.scala	subset	1/3 lines
 neg/i871.scala	oos	abstract-def
 neg/i8711.scala	subset	2/3 lines
 neg/i8715.scala	same	
-neg/i8730.scala	syntax	expected identifier, found {}
+neg/i8730.scala	oos	extractors
 neg/i8731.scala	accepts	
 neg/i8731a.scala	syntax	expected 'do' before the end marker
 neg/i8736.scala	superset	+1 lines: type {} not found
@@ -1392,7 +1392,7 @@ neg/i9329.scala	same
 neg/i9330.scala	superset	+1 lines: values of types {} and {} cannot be compared
 neg/i9331.scala	syntax	expected a definition, found {}
 neg/i9332.scala	accepts	
-neg/i9344.scala	syntax	expected end of statement, found {}
+neg/i9344.scala	same	
 neg/i9408b	different	type mismatch
 neg/i941.scala	subset	1/3 lines
 neg/i9432.scala	accepts	
@@ -1446,7 +1446,7 @@ neg/infix-then-complex-expr.scala	syntax	expected end of statement, found {}
 neg/infix.scala	syntax	expected {}, found {}
 neg/inline-abstract.scala	superset	+1 lines: {} needs to be abstract
 neg/inline-error-pos.scala	same	
-neg/inline-foreach.scala	syntax	expected identifier, found {}
+neg/inline-foreach.scala	subset	1/2 lines
 neg/inline-non-transparent-no-note.scala	same	
 neg/inline-overload.scala	same	
 neg/inline-override.scala	accepts	
@@ -1630,7 +1630,7 @@ neg/namedTypeParams.scala	syntax	expected identifier, found {}
 neg/nested-module-no-inits.scala	syntax	'erased' is not part of the supported Scala subset
 neg/nested_bounds.scala	same	
 neg/no-self-leaks.scala	syntax	expected identifier, found {}
-neg/no-unit.scala	superset	+1 lines: Unit cannot be instantiated
+neg/no-unit.scala	same	
 neg/noimports-additional.scala	std	Annotation
 neg/noimports.scala	accepts	
 neg/noimports2.scala	accepts	
@@ -1691,7 +1691,7 @@ neg/parser-stability-3.scala	syntax	expected {}, found {}
 neg/parser-stability-4.scala	syntax	expected {}, found {}
 neg/parser-stability-5.scala	syntax	expected {}, found {}
 neg/parser-stability-6.scala	std	x1
-neg/parser-stability-7.scala	syntax	expected end of statement, found {}
+neg/parser-stability-7.scala	different	{} needs to be abstract
 neg/parser-stability-8.scala	std	this
 neg/parser-stability-9.scala	syntax	expected identifier, found {}
 neg/parser-stability.scala	syntax	expected {}, found {}
@@ -1699,8 +1699,8 @@ neg/parsing-overly-long-1.scala	accepts
 neg/parsing-overly-long-2.scala	syntax	expected {}, found {}
 neg/parsing-overly-long-3.scala	syntax	expected an expression, found {}
 neg/partialApplications.scala	syntax	expected {}, found {}
-neg/patmat1.scala	syntax	expected an expression, found {}
-neg/patmat2.scala	syntax	expected an expression, found {}
+neg/patmat1.scala	same	
+neg/patmat2.scala	accepts	
 neg/patternUnsoundness.scala	std	App
 neg/patvars.scala	accepts	
 neg/points.scala	superset	+2 lines: class ColoredPoint has conflicting base types Comparable[Point] and Comparable[ColoredPoint]
@@ -1818,7 +1818,7 @@ neg/structural-recursive-both1-gadt.scala	same
 neg/structural-recursive-both2-gadt.scala	same	
 neg/structural-recursive-pattern-gadt.scala	same	
 neg/structural-recursive-scrutinee-gadt.scala	same	
-neg/structural.scala	syntax	expected identifier, found {}
+neg/structural.scala	same	
 neg/structuralNoSuchMethod.scala	same	
 neg/subtyping.scala	same	
 neg/summon-function.scala	same	
@@ -1843,7 +1843,7 @@ neg/t1625c.scala	same
 neg/t1625d.scala	same	
 neg/t1625e.scala	same	
 neg/t1672b.scala	different	Cannot rewrite recursive call: it is not in tail position
-neg/t1843-variances.scala	syntax	expected an expression, found {}
+neg/t1843-variances.scala	same	
 neg/t2368.scala	same	
 neg/t2712-8.scala	std	App
 neg/t2994.scala	same	
@@ -1854,12 +1854,12 @@ neg/t3683-modified.scala	superset	+2 lines: cyclic reference involving type T
 neg/t4727.scala	different	type mismatch
 neg/t4731.scala	accepts	
 neg/t4815.scala	subset	4/5 lines
-neg/t4842.scala	syntax	expected identifier, found {}
+neg/t4842.scala	same	
 neg/t5063.scala	same	
-neg/t5702-neg-bad-and-wild.scala	syntax	expected an expression, found {}
+neg/t5702-neg-bad-and-wild.scala	syntax	expected {}, found {}
 neg/t5702-neg-bad-brace.scala	syntax	expected a pattern, found {}
 neg/t5729.scala	same	
-neg/t6124.scala	syntax	expected end of statement, found {}
+neg/t6124.scala	subset	6/15 lines
 neg/t6355b.scala	std	Dynamic
 neg/t6455.scala	same	
 neg/t6476.scala	superset	+3 lines: invalid escape sequence
@@ -1875,7 +1875,7 @@ neg/t7278.scala	subset	2/6 lines
 neg/t7292-removal.scala	subset	2/3 lines
 neg/t7294.scala	same	
 neg/t750	oos	java
-neg/t7868.scala	syntax	expected an expression, found {}
+neg/t7868.scala	same	
 neg/t8002-nested-scope.scala	same	
 neg/t8006.scala	superset	+1 lines: value {} is not a member of {}
 neg/t8300-overloading.scala	std	App
@@ -1933,7 +1933,7 @@ neg/transparent-inline.scala	subset	4/5 lines
 neg/transparent-override	accepts	
 neg/transparent-trait.scala	accepts	
 neg/transparent.scala	subset	3/6 lines
-neg/tryPatternMatchEq.scala	syntax	expected an expression, found {}
+neg/tryPatternMatchEq.scala	same	
 neg/tuple-filter-compat.scala	superset	+1 lines: error overriding type X in trait A with bounds[Tup, P] >: OldFilter[Tup, P] <: OldFilter[Tup, P];
 neg/tuple-filter.scala	std	Filter
 neg/tuple-isMappedBy-2.scala	accepts	
@@ -1950,7 +1950,7 @@ neg/type-projections.scala	accepts
 neg/type-qmark.scala	syntax	expected end of statement, found {}
 neg/type-test-syntesize.scala	same	
 neg/typeChecks.scala	different	cannot resolve import
-neg/typeclass-derivation2.scala	syntax	expected identifier, found {}
+neg/typeclass-derivation2.scala	superset	+9 lines: cannot resolve import
 neg/typeclass-encoding2.scala	different	this type does not take type arguments
 neg/typedIdents	same	
 neg/typedapply.scala	subset	3/4 lines
@@ -2010,7 +2010,7 @@ neg/yimports-order.scala	std	Map
 neg/yimports-predef.scala	same	
 neg/yimports-stable	subset	1/2 lines
 neg/zipped.scala	different	value {} is not a member of {}
-neg/zoo.scala	syntax	expected identifier, found {}
+neg/zoo.scala	same	
 pos/10077.scala	rejects	type argument f does not have the same kind as its bound [_[_]]
 pos/10510.scala	rejects	type mismatch
 pos/10747-onnxmin.scala	accepts	
@@ -2040,8 +2040,8 @@ pos/16727	oos	java
 pos/17077.scala	oos	extractors
 pos/18052.scala	rejects	type mismatch
 pos/18789.scala	accepts	
-pos/20088.scala	syntax	expected identifier, found {}
-pos/20088b.scala	syntax	expected identifier, found {}
+pos/20088.scala	rejects	Bar is a trait; it cannot be instantiated
+pos/20088b.scala	accepts	
 pos/20519.scala	accepts	
 pos/20519b.scala	accepts	
 pos/20519c.scala	accepts	
@@ -2054,7 +2054,7 @@ pos/22219.scala	accepts
 pos/22219b.scala	accepts	
 pos/23056.scala	rejects	value {} is not a member of {}
 pos/24707	oos	java
-pos/25198	rejects	not supported yet in a macro: scala.quoted.Reflect$MethodType$ has no member apply (called by foo in object Macros)
+pos/25198	rejects	exception in macro: scala.MatchError: List(List()) (of class scala.::) (called by foo in object Macros)
 pos/26211.scala	accepts	
 pos/26238-min.scala	accepts	
 pos/26238.scala	syntax	expected {}, found {}
@@ -2110,7 +2110,7 @@ pos/MathSpec.scala	rejects	value {} is not a member of {}
 pos/Meter.scala	std	App
 pos/Monoid.scala	accepts	
 pos/NoCyclicReference.scala	accepts	
-pos/Orderings.scala	syntax	expected identifier, found {}
+pos/Orderings.scala	accepts	
 pos/Repeated.scala	rejects	cannot resolve import
 pos/Result.scala	accepts	
 pos/S1.scala	accepts	
@@ -2124,7 +2124,7 @@ pos/SI-7060.scala	accepts
 pos/SI-7100.scala	accepts	
 pos/SI-7638.scala	accepts	
 pos/SI-7638a.scala	accepts	
-pos/StringContext.scala	syntax	expected an expression, found {}
+pos/StringContext.scala	syntax	expected {}, found {}
 pos/Transactions.scala	std	wait
 pos/Tuple.Drop.scala	accepts	
 pos/Tuple.Elem.scala	accepts	
@@ -2171,7 +2171,7 @@ pos/annotationsJava	oos	java
 pos/annotationsJavaRepeatable	oos	java
 pos/anonBridge.scala	accepts	
 pos/anonClassSubtyping.scala	accepts	
-pos/anykind.scala	syntax	expected identifier, found {}
+pos/anykind.scala	std	AnyKind
 pos/applied_constructor_types.scala	syntax	expected {}, found {}
 pos/apply-equiv.scala	accepts	
 pos/approximateUnion.scala	syntax	expected {}, found {}
@@ -2198,7 +2198,7 @@ pos/blockescapes.scala	accepts
 pos/boundary-variations.scala	rejects	{} is not a member of the package
 pos/bounds.scala	accepts	
 pos/bson	syntax	expected {}, found {}
-pos/bubbleUpNothing.scala	rejects	value {} is not a member of {}
+pos/bubbleUpNothing.scala	accepts	
 pos/builders.scala	accepts	
 pos/byNameVarargs.scala	accepts	
 pos/byname-implicits-1.scala	accepts	
@@ -2230,7 +2230,7 @@ pos/case-semi.scala	accepts
 pos/case-signature.scala	accepts	
 pos/caseClassInMethod.scala	accepts	
 pos/caseaccs.scala	accepts	
-pos/caseclass-access.scala	rejects	value {} is not a member of {}
+pos/caseclass-access.scala	accepts	
 pos/cb-companion-joins.scala	syntax	expected end of statement, found {}
 pos/cbproxy-expansion.scala	rejects	a context bound needs a type constructor with one parameter
 pos/cc-backwards-compat	syntax	expected {}, found {}
@@ -2318,7 +2318,7 @@ pos/dynamicExtendsNoImport.scala	std	Dynamic
 pos/eff-compose.scala	syntax	expected {}, found {}
 pos/elidable-tparams.scala	rejects	cannot resolve import
 pos/end-given.scala	accepts	
-pos/end-nested.scala	syntax	expected an expression, found {}
+pos/end-nested.scala	accepts	
 pos/endmarkers.scala	accepts	
 pos/ensuring.scala	rejects	value {} is not a member of {}
 pos/enum-List-control.scala	std	EnumValue
@@ -2354,7 +2354,7 @@ pos/escapingRefs.scala	syntax	expected {}, found {}
 pos/eta.scala	accepts	
 pos/exbound.scala	accepts	
 pos/exhaust_2.scala	accepts	
-pos/exhaust_alternatives.scala	syntax	expected an expression, found {}
+pos/exhaust_alternatives.scala	accepts	
 pos/existential-java-case-class	oos	java
 pos/existentials-harmful.scala	rejects	method random must be called with () argument
 pos/existentials.scala	rejects	method f in class A must be called with () argument
@@ -2375,7 +2375,7 @@ pos/export-in-extension-rename.scala	rejects	only defs are allowed in an extensi
 pos/export-main.scala	accepts	
 pos/export-opaque.scala	accepts	
 pos/export-param-flags	accepts	
-pos/export-proxies.scala	rejects	{} needs to be abstract
+pos/export-proxies.scala	accepts	
 pos/extend-java-enum.scala	accepts	
 pos/extmethods-2.scala	accepts	
 pos/extmethods.scala	rejects	type A is not a member of (x : Int)
@@ -2494,7 +2494,7 @@ pos/i10430	accepts
 pos/i10437.scala	rejects	None of the overloaded alternatives of method apply in class MyClass with types
 pos/i1044.scala	rejects	value {} is not a member of {}
 pos/i1045.scala	accepts	
-pos/i1047.scala	syntax	expected identifier, found {}
+pos/i1047.scala	std	App
 pos/i10477	accepts	
 pos/i10477.scala	accepts	
 pos/i10495.scala	accepts	
@@ -2504,7 +2504,7 @@ pos/i10521.scala	accepts
 pos/i10542.scala	accepts	
 pos/i10567	oos	java
 pos/i1059.scala	syntax	expected {}, found {}
-pos/i10634	rejects	cannot resolve export
+pos/i10634	rejects	value {} is not a member of {}
 pos/i10638.scala	accepts	
 pos/i10667.scala	rejects	type mismatch
 pos/i10693.scala	accepts	
@@ -2558,7 +2558,7 @@ pos/i11185.scala	rejects	type mismatch
 pos/i11220.scala	accepts	
 pos/i11223.scala	accepts	
 pos/i11225.scala	accepts	
-pos/i11226b.scala	rejects	illegal inheritance: self type C of trait C does not conform to self type A of parent trait B
+pos/i11226b.scala	rejects	type {} not found
 pos/i11230.scala	accepts	
 pos/i11234.scala	accepts	
 pos/i11236.scala	accepts	
@@ -2693,7 +2693,7 @@ pos/i12655.scala	accepts
 pos/i12663.scala	rejects	Ambiguous overload. The overloaded alternatives of method asd in class HookComponentBuilder with types
 pos/i12677.scala	accepts	
 pos/i12679.scala	accepts	
-pos/i1269.scala	syntax	expected an expression, found {}
+pos/i1269.scala	accepts	
 pos/i12708.scala	rejects	type mismatch
 pos/i12715	accepts	
 pos/i12722.scala	accepts	
@@ -2743,7 +2743,7 @@ pos/i13392.scala	std	Erased
 pos/i13411.scala	rejects	cannot reduce inline match with
 pos/i13411b	oos	java
 pos/i13426.scala	rejects	missing parameter type
-pos/i13433.scala	syntax	expected {}, found {}
+pos/i13433.scala	rejects	this type cannot be tested at runtime: Matcher[A]
 pos/i13433b.scala	rejects	this type cannot be tested at runtime: Matcher[A]
 pos/i13460.scala	accepts	
 pos/i13461-a.scala	rejects	type mismatch
@@ -2772,7 +2772,7 @@ pos/i13668.scala	rejects	Candidate is a trait; it cannot be instantiated
 pos/i13669.scala	accepts	
 pos/i13739.scala	accepts	
 pos/i1378.scala	accepts	
-pos/i13816.scala	syntax	expected an expression, found {}
+pos/i13816.scala	rejects	throws takes 1 type argument(s), 2 given
 pos/i13820.scala	accepts	
 pos/i13842.scala	accepts	
 pos/i13848.scala	accepts	
@@ -2787,7 +2787,7 @@ pos/i13974.scala	accepts
 pos/i13974a.scala	rejects	this pattern of type Refl[U$1] can never match a value of type SUB[A, (B, C)]
 pos/i13990.scala	accepts	
 pos/i13998.scala	syntax	expected {}, found {}
-pos/i1401.scala	rejects	Cyclic inheritance: trait Buffer extends itself
+pos/i1401.scala	accepts	
 pos/i14010.scala	accepts	
 pos/i14010a.scala	accepts	
 pos/i14013.scala	rejects	type {} not found
@@ -2802,7 +2802,7 @@ pos/i14151c.scala	accepts
 pos/i14152.scala	syntax	expected {}, found {}
 pos/i14160.scala	accepts	
 pos/i14177b.scala	accepts	
-pos/i14214.scala	syntax	expected {}, found {}
+pos/i14214.scala	rejects	no given instance
 pos/i14218.http4s.scala	accepts	
 pos/i14218.scala	accepts	
 pos/i14224.1.scala	accepts	
@@ -2827,7 +2827,7 @@ pos/i14544.scala	accepts
 pos/i14575.scala	accepts	
 pos/i14587.hard-union-tuples.scala	accepts	
 pos/i14588.scala	rejects	this pattern of type (Any, Any, Any, Any, Any, Any, Any, Any, Any, Any, Any, Any, Any, Any, Any, Any, Any, Any, Any, Any, Any, Any, Any, Any) can never match a value of type (Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int)
-pos/i14626.scala	rejects	value {} is not a member of {}
+pos/i14626.scala	accepts	
 pos/i14637.scala	accepts	
 pos/i14642.scala	accepts	
 pos/i14653.scala	accepts	
@@ -2835,7 +2835,7 @@ pos/i14653b.scala	accepts
 pos/i14656.scala	accepts	
 pos/i14660.scala	rejects	type Baz is not a member of Bar
 pos/i14699.scala	accepts	
-pos/i14707.scala	syntax	expected identifier, found {}
+pos/i14707.scala	accepts	
 pos/i14726-upper.scala	rejects	type mismatch
 pos/i14726.scala	rejects	type mismatch
 pos/i14729.scala	accepts	
@@ -2860,15 +2860,15 @@ pos/i14907.scala	accepts
 pos/i14914.scala	accepts	
 pos/i14921	accepts	
 pos/i14932.scala	accepts	
-pos/i14953.scala	rejects	cannot resolve export
-pos/i14966.scala	rejects	cannot resolve export
-pos/i14966a.scala	rejects	cannot resolve export
+pos/i14953.scala	accepts	
+pos/i14966.scala	accepts	
+pos/i14966a.scala	accepts	
 pos/i14999.scala	rejects	values of types {} and {} cannot be compared
 pos/i1500.scala	accepts	
 pos/i15029.bootstrap-reg.scala	accepts	
-pos/i15029.more.scala	syntax	expected an expression, found {}
+pos/i15029.more.scala	accepts	
 pos/i15029.orig.scala	accepts	
-pos/i15029.scala	syntax	expected an expression, found {}
+pos/i15029.scala	accepts	
 pos/i15030.scala	accepts	
 pos/i15050.scala	accepts	
 pos/i15054.scala	accepts	
@@ -2887,7 +2887,7 @@ pos/i15177.FakeEnum.min.alt2.scala	accepts
 pos/i15177.FakeEnum.min.alt3.scala	accepts	
 pos/i15177.FakeEnum.min.scala	accepts	
 pos/i15177.FakeEnum.scala	accepts	
-pos/i15177.app.scala	rejects	type {} not found
+pos/i15177.app.scala	accepts	
 pos/i15177.constr-dep.scala	accepts	
 pos/i15177.hk.scala	accepts	
 pos/i15177.hk2.scala	accepts	
@@ -2924,7 +2924,7 @@ pos/i15514.scala	accepts
 pos/i15522.scala	accepts	
 pos/i15523.avoid.scala	accepts	
 pos/i15523.scala	accepts	
-pos/i15525.scala	syntax	expected {}, found {}
+pos/i15525.scala	accepts	
 pos/i15531.scala	rejects	value {} is not a member of {}
 pos/i15546.scala	accepts	
 pos/i15554.scala	accepts	
@@ -3012,7 +3012,7 @@ pos/i1637.scala	std	App
 pos/i16374a.scala	accepts	
 pos/i16374b.scala	accepts	
 pos/i16374c.scala	accepts	
-pos/i16374d.scala	rejects	value {} is not a member of {}
+pos/i16374d.scala	accepts	
 pos/i1638.scala	accepts	
 pos/i16407.scala	accepts	
 pos/i16408.min1.scala	accepts	
@@ -3027,13 +3027,13 @@ pos/i16451.CanForward.scala	accepts
 pos/i16451.DiffUtil.scala	accepts	
 pos/i16451.default.scala	syntax	expected a pattern, found {}
 pos/i16464.scala	rejects	operator {} cannot be applied
-pos/i16469.scala	rejects	cannot resolve export
+pos/i16469.scala	accepts	
 pos/i16474.scala	accepts	
 pos/i16484.scala	accepts	
-pos/i16486	syntax	expected {}, found {}
+pos/i16486	std	Date
 pos/i16488.scala	accepts	
 pos/i16500.scala	accepts	
-pos/i16506.scala	rejects	missing parameter type
+pos/i16506.scala	accepts	
 pos/i16539.min.scala	accepts	
 pos/i16539.scala	accepts	
 pos/i16544a.scala	std	Dynamic
@@ -3096,7 +3096,7 @@ pos/i17222.izumi.rep	rejects	recursive value qctx needs type
 pos/i17222.scala	syntax	expected {}, found {}
 pos/i17227.scala	accepts	
 pos/i1723.scala	accepts	
-pos/i17230.bootstrap.scala	syntax	expected an expression, found {}
+pos/i17230.bootstrap.scala	accepts	
 pos/i17245.scala	accepts	
 pos/i17255	oos	java
 pos/i17257.min.scala	accepts	
@@ -3107,9 +3107,9 @@ pos/i17381.scala	accepts
 pos/i17391	oos	java
 pos/i17394	accepts	
 pos/i17394b	accepts	
-pos/i17395-spec.ordered.scala	syntax	expected identifier, found {}
-pos/i17395-spec.scala	syntax	expected identifier, found {}
-pos/i17395.scala	syntax	expected identifier, found {}
+pos/i17395-spec.ordered.scala	accepts	
+pos/i17395-spec.scala	accepts	
+pos/i17395.scala	accepts	
 pos/i17465.scala	rejects	type mismatch
 pos/i1747.scala	rejects	method toArray overrides nothing
 pos/i1751.scala	rejects	missing argument for parameter {}
@@ -3119,7 +3119,7 @@ pos/i1755.scala	accepts
 pos/i17556.scala	accepts	
 pos/i1756.scala	rejects	this can be used only in a class, object, or template
 pos/i1757.scala	accepts	
-pos/i17588.scala	rejects	cannot resolve export
+pos/i17588.scala	accepts	
 pos/i17631.scala	accepts	
 pos/i1765.scala	accepts	
 pos/i17735.scala	std	StringBuilder
@@ -3128,7 +3128,7 @@ pos/i17741.scala	accepts
 pos/i1776.scala	accepts	
 pos/i17763	oos	java
 pos/i1777.scala	std	App
-pos/i1786.scala	rejects	{} is a package, not a value
+pos/i1786.scala	rejects	value {} is not a member of {}
 pos/i1790.scala	accepts	
 pos/i1793.scala	rejects	cannot resolve import
 pos/i17948.all.scala	accepts	
@@ -3245,7 +3245,7 @@ pos/i19220.orig.scala	std	Product1
 pos/i19221.orig.scala	std	Product1
 pos/i19221.scala	std	Product1
 pos/i19301.scala	accepts	
-pos/i19304.scala	syntax	expected identifier, found {}
+pos/i19304.scala	accepts	
 pos/i1932	accepts	
 pos/i19354.orig.scala	rejects	cannot resolve import
 pos/i19354.scala	accepts	
@@ -3394,7 +3394,7 @@ pos/i21320b.scala	accepts
 pos/i21352a	rejects	type mismatch
 pos/i21352b.scala	rejects	ambiguous given instances
 pos/i21352c.scala	syntax	expected {}, found {}
-pos/i21360.scala	rejects	type {} not found
+pos/i21360.scala	accepts	
 pos/i21390.zio.scala	accepts	
 pos/i2140.scala	accepts	
 pos/i21402.scala	accepts	
@@ -3424,7 +3424,7 @@ pos/i21757.scala	accepts
 pos/i21768.scala	syntax	expected end of statement, found {}
 pos/i21769.scala	syntax	expected {}, found {}
 pos/i21779	rejects	type mismatch
-pos/i21790.scala	syntax	expected an expression, found {}
+pos/i21790.scala	accepts	
 pos/i2188.scala	accepts	
 pos/i2192.scala	accepts	
 pos/i21931.scala	accepts	
@@ -3450,7 +3450,7 @@ pos/i2212.scala	accepts
 pos/i22137.scala	accepts	
 pos/i2218.scala	accepts	
 pos/i22192.scala	rejects	name is not a field of Some[(name: String)]
-pos/i22193.scala	syntax	expected an expression, found {}
+pos/i22193.scala	rejects	value {} is not a member of {}
 pos/i22257.fixed.scala	rejects	illegal cyclic type reference: alias Node of type Node refers back to the type itself
 pos/i22257.orig.scala	rejects	illegal cyclic type reference: alias FP of type FP refers back to the type itself
 pos/i22257.scala	rejects	illegal cyclic type reference: alias Bound1 of type Bound1 refers back to the type itself
@@ -3553,7 +3553,7 @@ pos/i23817_2	accepts
 pos/i23885	syntax	expected {}, found {}
 pos/i23897.scala	accepts	
 pos/i239-packageObj.scala	accepts	
-pos/i2390.scala	rejects	illegal inheritance: self type CancelAfterFailure of trait CancelAfterFailure does not conform to self type TestSuite of parent trait TestSuiteMixin
+pos/i2390.scala	accepts	
 pos/i2391	accepts	
 pos/i23928.scala	accepts	
 pos/i23952.scala	rejects	type mismatch
@@ -3563,7 +3563,7 @@ pos/i24038a.scala	rejects	type mismatch
 pos/i24038b.scala	accepts	
 pos/i24056.scala	rejects	value {} is not a member of {}
 pos/i24074	oos	java
-pos/i24076.scala	syntax	expected an expression, found {}
+pos/i24076.scala	accepts	
 pos/i24094.scala	accepts	
 pos/i24097-a.scala	accepts	
 pos/i24097-b.scala	accepts	
@@ -3596,7 +3596,7 @@ pos/i24689b.scala	accepts
 pos/i24694	accepts	
 pos/i24696.scala	std	Either
 pos/i24717.scala	rejects	type mismatch
-pos/i24750.scala	syntax	expected an expression, found {}
+pos/i24750.scala	accepts	
 pos/i24765.scala	rejects	missing parameter type
 pos/i24813.scala	std	t
 pos/i24869	syntax	expected {}, found {}
@@ -3646,7 +3646,7 @@ pos/i25866b.scala	accepts
 pos/i25866c.scala	accepts	
 pos/i25866d.scala	accepts	
 pos/i25894	rejects	type {} is already defined
-pos/i25943.scala	syntax	expected identifier, found {}
+pos/i25943.scala	accepts	
 pos/i25947.scala	rejects	type mismatch
 pos/i25979.scala	accepts	
 pos/i26026.scala	accepts	
@@ -3681,9 +3681,9 @@ pos/i26847.scala	accepts
 pos/i26847b	accepts	
 pos/i26885.scala	accepts	
 pos/i26958.scala	rejects	type mismatch
-pos/i26959	rejects	illegal inheritance: self type CompanionTrait of trait CompanionTrait does not conform to self type (Outer.this.Companion : <error>) of parent trait InnerSupport
-pos/i26959-alias	rejects	illegal inheritance: self type CompanionTrait of trait CompanionTrait does not conform to self type (Outer.this.Companion : <error>) of parent trait InnerSupport
-pos/i26959-joint.scala	rejects	illegal inheritance: self type CompanionTrait of trait CompanionTrait does not conform to self type (Outer.this.Companion : <error>) of parent trait InnerSupport
+pos/i26959	accepts	
+pos/i26959-alias	accepts	
+pos/i26959-joint.scala	accepts	
 pos/i2697.scala	accepts	
 pos/i27041.scala	accepts	
 pos/i2723.scala	accepts	
@@ -3764,7 +3764,7 @@ pos/i3553.scala	accepts
 pos/i3561.scala	accepts	
 pos/i3564.scala	accepts	
 pos/i3585.scala	std	App
-pos/i3588.scala	syntax	expected an expression, found {}
+pos/i3588.scala	accepts	
 pos/i3589b.scala	accepts	
 pos/i3590.scala	std	App
 pos/i3591.scala	accepts	
@@ -3818,7 +3818,7 @@ pos/i4184.scala	accepts
 pos/i4185.scala	accepts	
 pos/i4188	syntax	expected identifier, found {}
 pos/i4196.scala	rejects	Cannot rewrite recursive call: it is not in tail position
-pos/i4198.scala	syntax	expected an expression, found {}
+pos/i4198.scala	accepts	
 pos/i4203.scala	accepts	
 pos/i4316.scala	accepts	
 pos/i4318.scala	accepts	
@@ -3829,7 +3829,7 @@ pos/i4395.scala	rejects	not found: {}
 pos/i4395b.scala	rejects	not found: {}
 pos/i4419.scala	accepts	
 pos/i4430.scala	accepts	
-pos/i4449.scala	syntax	expected an expression, found {}
+pos/i4449.scala	accepts	
 pos/i4466a.scala	accepts	
 pos/i4466b.scala	accepts	
 pos/i4471-gadt.scala	rejects	type mismatch
@@ -3866,7 +3866,7 @@ pos/i4837.scala	accepts
 pos/i4854.scala	accepts	
 pos/i4863.scala	accepts	
 pos/i4867.scala	accepts	
-pos/i4884.scala	rejects	Cyclic inheritance: trait MSet extends itself
+pos/i4884.scala	rejects	type argument a does not conform to upper bound D
 pos/i4906.scala	rejects	type argument a does not conform to upper bound D
 pos/i4984.scala	oos	extractors
 pos/i4987.scala	accepts	
@@ -3889,7 +3889,7 @@ pos/i518.scala	accepts
 pos/i5188.scala	accepts	
 pos/i523.scala	accepts	
 pos/i5271.scala	accepts	
-pos/i5288.scala	rejects	type mismatch
+pos/i5288.scala	accepts	
 pos/i5295.scala	accepts	
 pos/i530-import-symbolic.scala	accepts	
 pos/i5309.scala	accepts	
@@ -3905,7 +3905,7 @@ pos/i5418.scala	accepts
 pos/i5427.scala	rejects	no given instance
 pos/i5481.scala	rejects	missing parameter type
 pos/i5492.scala	accepts	
-pos/i5498-postfixOps.scala	syntax	expected an expression, found {}
+pos/i5498-postfixOps.scala	accepts	
 pos/i5526a.scala	accepts	
 pos/i5526b.scala	accepts	
 pos/i5572.scala	accepts	
@@ -3927,10 +3927,10 @@ pos/i5750.scala	accepts
 pos/i576.scala	rejects	value {} is not a member of {}
 pos/i5765.scala	accepts	
 pos/i5766.scala	accepts	
-pos/i5773.scala	syntax	expected identifier, found {}
-pos/i5773a.scala	syntax	expected identifier, found {}
-pos/i5773b.scala	syntax	expected identifier, found {}
-pos/i5793	syntax	expected identifier, found {}
+pos/i5773.scala	rejects	Implicit classes must accept exactly one primary constructor parameter
+pos/i5773a.scala	accepts	
+pos/i5773b.scala	rejects	value {} is not a member of {}
+pos/i5793	accepts	
 pos/i5794.scala	accepts	
 pos/i5827.scala	accepts	
 pos/i5833.scala	accepts	
@@ -4041,7 +4041,7 @@ pos/i7149.scala	accepts
 pos/i7159.scala	rejects	cannot resolve import
 pos/i7175.scala	rejects	{} is not a member of the package
 pos/i7217.scala	accepts	
-pos/i7219.scala	rejects	cannot resolve export
+pos/i7219.scala	accepts	
 pos/i7219b.scala	accepts	
 pos/i7219c.scala	accepts	
 pos/i7247.scala	accepts	
@@ -4078,7 +4078,7 @@ pos/i7586.scala	rejects	no given instance
 pos/i7602.scala	accepts	
 pos/i7648.scala	accepts	
 pos/i7650	rejects	{} is already defined
-pos/i7653.scala	syntax	expected identifier, found {}
+pos/i7653.scala	rejects	type mismatch
 pos/i7655.scala	accepts	
 pos/i7700.scala	accepts	
 pos/i7711	rejects	{} is already defined
@@ -4138,7 +4138,7 @@ pos/i8182.scala	rejects	value {} is not a member of {}
 pos/i8188a.scala	accepts	
 pos/i8188b.scala	accepts	
 pos/i8188c.scala	accepts	
-pos/i8198.scala	syntax	expected identifier, found {}
+pos/i8198.scala	accepts	
 pos/i8241.scala	accepts	
 pos/i8256.scala	accepts	
 pos/i8276.scala	accepts	
@@ -4153,7 +4153,7 @@ pos/i8338.scala	rejects	error overriding method mkX in trait B of type (i: Int):
 pos/i8344-1.scala	rejects	type mismatch
 pos/i8344-2.scala	accepts	
 pos/i8357.scala	accepts	
-pos/i8368.scala	rejects	cannot resolve export
+pos/i8368.scala	accepts	
 pos/i8378.scala	rejects	type mismatch
 pos/i8391.scala	accepts	
 pos/i8397.scala	accepts	
@@ -4162,7 +4162,7 @@ pos/i8424.scala	rejects	ambiguous given instances
 pos/i8449.scala	accepts	
 pos/i8491.scala	rejects	type mismatch
 pos/i8516.scala	accepts	
-pos/i8530.scala	syntax	expected an expression, found {}
+pos/i8530.scala	oos	extractors
 pos/i8537.scala	accepts	
 pos/i8573.scala	accepts	
 pos/i8577.scala	rejects	mac is not an extractor: it has no unapply or unapplySeq for an interpolated pattern
@@ -4364,7 +4364,7 @@ pos/inline-constfold.scala	accepts
 pos/inline-eta.scala	accepts	
 pos/inline-i1773.scala	accepts	
 pos/inline-i2570.scala	accepts	
-pos/inline-joint	syntax	expected identifier, found {}
+pos/inline-joint	accepts	
 pos/inline-match-gadt-nested.scala	accepts	
 pos/inline-match-gadt.scala	accepts	
 pos/inline-match-separate	accepts	
@@ -4519,7 +4519,7 @@ pos/javaConversions-2.10-ambiguity.scala	rejects	{} is not a member of the packa
 pos/jzon	accepts	
 pos/kind-projector-underscores.scala	syntax	expected {}, found {}
 pos/kind-projector.scala	syntax	expected a pattern, found {}
-pos/kindPolySemiGroup.scala	syntax	expected identifier, found {}
+pos/kindPolySemiGroup.scala	syntax	expected {}, found {}
 pos/kinds.scala	rejects	type mismatch
 pos/kinzer.scala	std	JMenu
 pos/ksbug1.scala	accepts	
@@ -4568,7 +4568,7 @@ pos/match-type-inference.scala	rejects	type mismatch
 pos/match-type-printf.scala	std	CharAt
 pos/match.scala	accepts	
 pos/matchable-same-type.scala	accepts	
-pos/matches.scala	syntax	expected an expression, found {}
+pos/matches.scala	accepts	
 pos/matchtype-unusedArg	accepts	
 pos/matchtype.scala	syntax	'erased' is not part of the supported Scala subset
 pos/matrixOps.scala	accepts	
@@ -4600,7 +4600,7 @@ pos/mt-scrutinee-widen3.scala	accepts
 pos/multi-given.scala	syntax	expected end of statement, found {}
 pos/multiLineOps.scala	accepts	
 pos/multiple-additional-imports.scala	std	Annotation
-pos/multiversal.scala	syntax	expected an expression, found {}
+pos/multiversal.scala	rejects	type mismatch
 pos/named-tuple-combinators.scala	std	Concat
 pos/named-tuple-downcast.scala	rejects	type mismatch
 pos/named-tuple-selectable.scala	rejects	value {} is not a member of {}
@@ -4622,7 +4622,7 @@ pos/nested2.scala	accepts
 pos/nestedLambdas.scala	accepts	
 pos/new-array.scala	rejects	new Array takes one type argument
 pos/newline-braces.scala	accepts	
-pos/news.scala	syntax	expected identifier, found {}
+pos/news.scala	accepts	
 pos/no-mirror-derives.scala	accepts	
 pos/no-selftype.scala	accepts	
 pos/nonlocal-unchecked.scala	accepts	
@@ -4761,7 +4761,7 @@ pos/puretest.scala	rejects	cannot resolve import
 pos/range.scala	rejects	{} is not a member of the package
 pos/rangepos-anonapply.scala	accepts	
 pos/rangepos-patmat.scala	accepts	
-pos/rangepos.scala	syntax	expected identifier, found {}
+pos/rangepos.scala	accepts	
 pos/raw-map	oos	java
 pos/rbtree.scala	syntax	expected a definition, found {}
 pos/realizable-mut.scala	rejects	a singleton type needs a val, a parameter or an object
@@ -4964,7 +4964,7 @@ pos/summonInline.scala	accepts
 pos/superacc.scala	syntax	expected identifier, found {}
 pos/supercalls.scala	accepts	
 pos/surrogates.scala	accepts	
-pos/suspend-strawman	syntax	expected identifier, found {}
+pos/suspend-strawman	rejects	{} is not a member of the package
 pos/switch-small.scala	accepts	
 pos/switchUnbox.scala	accepts	
 pos/switches.scala	accepts	
@@ -4998,7 +4998,7 @@ pos/t0091.scala	accepts
 pos/t0093.scala	accepts	
 pos/t0095.scala	syntax	expected {}, found {}
 pos/t0123.scala	accepts	
-pos/t0154.scala	syntax	expected an expression, found {}
+pos/t0154.scala	accepts	
 pos/t0165.scala	accepts	
 pos/t0204.scala	accepts	
 pos/t0227.scala	accepts	
@@ -5008,7 +5008,7 @@ pos/t0301.scala	accepts
 pos/t0304.scala	accepts	
 pos/t0305.scala	std	App
 pos/t0438.scala	accepts	
-pos/t0453.scala	syntax	expected identifier, found {}
+pos/t0453.scala	accepts	
 pos/t0504.scala	accepts	
 pos/t0591.scala	accepts	
 pos/t0599.scala	syntax	expected identifier, found {}
@@ -5035,7 +5035,7 @@ pos/t1035.scala	accepts
 pos/t10350	oos	java
 pos/t10387b.scala	accepts	
 pos/t1048.scala	syntax	expected {}, found {}
-pos/t1049.scala	rejects	illegal inheritance: self type B of class B does not conform to self type Test.this.T of parent class A
+pos/t1049.scala	accepts	
 pos/t1050.scala	accepts	
 pos/t1053.scala	accepts	
 pos/t10533.scala	accepts	
@@ -5110,7 +5110,7 @@ pos/t1625b.scala	accepts
 pos/t1642b.scala	accepts	
 pos/t1659.scala	accepts	
 pos/t1675.scala	accepts	
-pos/t16827.scala	syntax	expected an expression, found {}
+pos/t16827.scala	accepts	
 pos/t1693.scala	rejects	type mismatch
 pos/t1722	accepts	
 pos/t1722-A.scala	accepts	
@@ -5124,7 +5124,7 @@ pos/t1789.scala	accepts
 pos/t1798.scala	accepts	
 pos/t183.scala	accepts	
 pos/t1832.scala	rejects	operator {} cannot be applied
-pos/t1843.scala	syntax	expected an expression, found {}
+pos/t1843.scala	accepts	
 pos/t1858.scala	accepts	
 pos/t1896	accepts	
 pos/t1942	accepts	
@@ -5199,7 +5199,7 @@ pos/t2667.scala	accepts
 pos/t2669.scala	syntax	expected {}, found {}
 pos/t267.scala	std	App
 pos/t2683.scala	syntax	expected {}, found {}
-pos/t2691.scala	syntax	expected an expression, found {}
+pos/t2691.scala	accepts	
 pos/t2693.scala	accepts	
 pos/t2698.scala	accepts	
 pos/t2708.scala	accepts	
@@ -5264,7 +5264,7 @@ pos/t3420.scala	accepts
 pos/t3429	oos	java
 pos/t3430.scala	accepts	
 pos/t344.scala	accepts	
-pos/t3440.scala	syntax	expected identifier, found {}
+pos/t3440.scala	accepts	
 pos/t3452f.scala	accepts	
 pos/t3477.scala	accepts	
 pos/t3486	oos	java
@@ -5342,7 +5342,7 @@ pos/t4176b.scala	accepts
 pos/t4188.scala	accepts	
 pos/t419.scala	accepts	
 pos/t4220.scala	accepts	
-pos/t4243.scala	rejects	Cyclic inheritance: trait Domain extends itself
+pos/t4243.scala	accepts	
 pos/t4257.scala	accepts	
 pos/t4266.scala	accepts	
 pos/t4269.scala	accepts	
@@ -5381,9 +5381,9 @@ pos/t4786.scala	std	App
 pos/t4812.scala	accepts	
 pos/t4831.scala	rejects	cannot resolve import
 pos/t4840.scala	accepts	
-pos/t4842.scala	syntax	expected identifier, found {}
+pos/t4842.scala	accepts	
 pos/t4853.scala	accepts	
-pos/t4859.scala	rejects	C is not a valid class prefix, since it is not an immutable path
+pos/t4859.scala	accepts	
 pos/t4869.scala	syntax	expected {}, found {}
 pos/t4910.scala	accepts	
 pos/t4911.scala	rejects	this pattern of type Bar[Any] can never match a value of type M[T]
@@ -5403,7 +5403,7 @@ pos/t5082.scala	accepts
 pos/t5084.scala	accepts	
 pos/t5099.scala	accepts	
 pos/t5120.scala	accepts	
-pos/t5127.scala	rejects	Cyclic inheritance: trait Abstract2 extends itself
+pos/t5127.scala	accepts	
 pos/t5137.scala	accepts	
 pos/t514.scala	std	App
 pos/t5175.scala	accepts	
@@ -5471,7 +5471,7 @@ pos/t5967.scala	accepts
 pos/t5968.scala	accepts	
 pos/t599.scala	accepts	
 pos/t6008.scala	accepts	
-pos/t6022.scala	syntax	expected an expression, found {}
+pos/t6022.scala	accepts	
 pos/t6022b.scala	std	App
 pos/t6028	accepts	
 pos/t6033.scala	std	App
@@ -5520,7 +5520,7 @@ pos/t6537.scala	accepts
 pos/t6547.scala	accepts	
 pos/t6551.scala	std	Dynamic
 pos/t6552.scala	accepts	
-pos/t6562.scala	syntax	expected identifier, found {}
+pos/t6562.scala	accepts	
 pos/t6575a.scala	accepts	
 pos/t6575b.scala	accepts	
 pos/t6595.scala	accepts	
@@ -5576,7 +5576,7 @@ pos/t7315.scala	accepts
 pos/t7322.scala	accepts	
 pos/t7329.scala	accepts	
 pos/t7364	oos	java
-pos/t7369.scala	syntax	expected an expression, found {}
+pos/t7369.scala	accepts	
 pos/t7377b.scala	rejects	a singleton type needs a val, a parameter or an object
 pos/t7426.scala	accepts	
 pos/t7427.scala	accepts	
@@ -5690,8 +5690,8 @@ pos/targetName-infer-result.scala	rejects	recursive use of {} needs an explicit 
 pos/targetName-override	oos	java
 pos/targetName-override.scala	accepts	
 pos/targetName.scala	accepts	
-pos/tasty-named-arguments.scala	syntax	expected identifier, found {}
-pos/tasty-parent-unapply.scala	syntax	expected an expression, found {}
+pos/tasty-named-arguments.scala	rejects	missing parameter type
+pos/tasty-parent-unapply.scala	accepts	
 pos/tasty-reflect-opaque-api-proto.scala	rejects	cannot resolve import
 pos/tasty-tags-obscure.scala	syntax	expected {}, found {}
 pos/tcpoly_boundedmonad.scala	accepts	
@@ -5721,19 +5721,19 @@ pos/tcpoly_variance_pos.scala	accepts
 pos/tcpoly_wildcards.scala	accepts	
 pos/ted.scala	accepts	
 pos/templateParents.scala	accepts	
-pos/test-desugar.scala	syntax	expected {}, found {}
+pos/test-desugar.scala	rejects	too many arguments
 pos/test-erasure.scala	accepts	
 pos/test-implicits.scala	accepts	
 pos/test-implicits1.scala	accepts	
 pos/test-implicits2.scala	std	WrappedString
 pos/test-inliner2.scala	accepts	
 pos/test-pickler-private-this.scala	accepts	
-pos/test-typers.scala	rejects	value {} is not a member of {}
+pos/test-typers.scala	accepts	
 pos/test.scala	accepts	
 pos/test1.scala	accepts	
-pos/test4.scala	rejects	type {} not found
+pos/test4.scala	accepts	
 pos/test4a.scala	accepts	
-pos/test4refine.scala	rejects	type {} not found
+pos/test4refine.scala	accepts	
 pos/test5.scala	accepts	
 pos/test5refine.scala	accepts	
 pos/testCoercionThis.scala	accepts	
@@ -5783,7 +5783,7 @@ pos/tuplePatDef.scala	accepts
 pos/tupled-function-instances.scala	rejects	{} is not a member of the package
 pos/type-cast-purity.scala	accepts	
 pos/type-projection.scala	rejects	S is not a legal path
-pos/type-test-matchable.scala	syntax	expected an expression, found {}
+pos/type-test-matchable.scala	accepts	
 pos/type-test-syntesize.scala	accepts	
 pos/typealias_dubious.scala	accepts	
 pos/typealiases.scala	accepts	
@@ -5791,11 +5791,11 @@ pos/typeclass-aggregates.scala	syntax	expected identifier, found {}
 pos/typeclass-encoding.scala	rejects	value {} is not a member of {}
 pos/typeclass-encoding3.scala	syntax	expected {}, found {}
 pos/typeclass-encoding3b.scala	rejects	value {} is not a member of {}
-pos/typeclass-scaling.scala	syntax	expected identifier, found {}
+pos/typeclass-scaling.scala	rejects	Maximal number of successive inlines (32) exceeded,
 pos/typeclasses-arrow.scala	std	is
 pos/typeclasses-arrow0.scala	accepts	
 pos/typeclasses-this.scala	std	is
-pos/typeclasses.scala	syntax	expected identifier, found {}
+pos/typeclasses.scala	std	is
 pos/typedIdents	accepts	
 pos/typedapply.scala	accepts	
 pos/typeinferNull.scala	accepts	
@@ -5808,7 +5808,7 @@ pos/unapplyComplex.scala	std	Product2
 pos/unapplyContexts2.scala	accepts	
 pos/unapplyGeneric.scala	std	Product2
 pos/unapplyNeedsMemberType.scala	accepts	
-pos/unapplyVal.scala	syntax	expected an expression, found {}
+pos/unapplyVal.scala	std	App
 pos/unary-eq.scala	accepts	
 pos/unary-with-type-params.scala	accepts	
 pos/unchecked-a.scala	syntax	expected {}, found {}
@@ -5832,7 +5832,7 @@ pos/variances.scala	accepts
 pos/variances_pos.scala	accepts	
 pos/vcblock.scala	accepts	
 pos/vcif.scala	accepts	
-pos/vec-access-syntax.scala	syntax	expected end of statement, found {}
+pos/vec-access-syntax.scala	accepts	
 pos/virtpatmat_alts_subst.scala	accepts	
 pos/virtpatmat_anonfun_for.scala	accepts	
 pos/virtpatmat_binding_opt.scala	accepts	
@@ -5848,13 +5848,13 @@ pos/virtpatmat_gadt_array.scala	accepts
 pos/virtpatmat_infer_single_1.scala	accepts	
 pos/virtpatmat_instof_valuetype.scala	accepts	
 pos/virtpatmat_obj_in_case.scala	accepts	
-pos/virtpatmat_reach_const.scala	syntax	expected an expression, found {}
+pos/virtpatmat_reach_const.scala	accepts	
 pos/whitebox-given.scala	accepts	
 pos/widen-existential.scala	accepts	
 pos/widen-union.scala	accepts	
 pos/wildcard-null-pattern.scala	accepts	
-pos/wildcard-type-syntax-future-migration.scala	syntax	expected an expression, found {}
-pos/wildcard-type-syntax.scala	syntax	expected an expression, found {}
+pos/wildcard-type-syntax-future-migration.scala	accepts	
+pos/wildcard-type-syntax.scala	accepts	
 pos/wildcardBoundInference.scala	syntax	expected {}, found {}
 pos/wildcardDefs.scala	accepts	
 pos/wildcardInInfixType.scala	syntax	expected {}, found {}
@@ -5867,4 +5867,4 @@ pos/zipped.min.scala	accepts
 pos/zipped.scala	rejects	value {} is not a member of {}
 pos/zipper.scala	accepts	
 pos/zoo.scala	accepts	
-pos/zoo2.scala	syntax	expected identifier, found {}
+pos/zoo2.scala	accepts	
