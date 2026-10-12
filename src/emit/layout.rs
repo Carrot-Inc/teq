@@ -128,6 +128,12 @@ pub struct Layout {
     /// How many of the arguments that create a named local class are its captures, which lead
     /// its own parameters.
     pub local_captures: FxMap<ClassId, u32>,
+    /// The members of local traits that take the values of their block first, with how many
+    /// (`TFun::captures`): a call of one passes a captured `var` as its cell.
+    pub proxied: FxMap<SymId, u32>,
+    /// The members of local traits whose lifted method is their one slot (`TFun::lifted`): how
+    /// many proxies a call passes first, and how many arguments a call of the slot has in all.
+    pub lifted: FxMap<SymId, (u32, u32)>,
     /// The anonymous classes the JavaScript output writes as closures where they are created,
     /// each with its index in `Program::classes` (`lower_closures`).
     pub closure_anons: FxMap<ClassId, usize>,
@@ -179,6 +185,8 @@ impl Layout {
             partial_function_number: None,
             anon_parent_args: FxMap::default(),
             local_captures: FxMap::default(),
+            proxied: FxMap::default(),
+            lifted: FxMap::default(),
             closure_anons: FxMap::default(),
             shared: Default::default(),
         };
@@ -231,6 +239,17 @@ impl Layout {
         }
         if tc.captures > 0 && syms.class(tc.id).kind != ClassKind::Anon {
             self.local_captures.insert(tc.id, tc.captures as u32);
+        }
+        if syms.class(tc.id).kind == ClassKind::Trait {
+            for &f in &tc.methods {
+                let fun = &prog.funs[f.idx()];
+                if fun.captures > 0 {
+                    self.proxied.insert(fun.sym, fun.captures);
+                }
+                if fun.lifted {
+                    self.lifted.insert(fun.sym, (fun.captures, fun.params.len() as u32));
+                }
+            }
         }
     }
 
@@ -433,6 +452,7 @@ impl Layout {
 pub fn compare_classes(syms: &Symbols, interner: &Interner, a: ClassId, b: ClassId) -> Ordering {
     let key = |c: ClassId| {
         let info = syms.class(c);
+        let placed = syms.class(syms.placed_class(c));
         let group = if is_arity_class(syms, interner, c) {
             2
         } else if info.kind == ClassKind::Anon {
@@ -442,7 +462,7 @@ pub fn compare_classes(syms: &Symbols, interner: &Interner, a: ClassId, b: Class
         };
         let (rank, start) = match syms.product_class_places.get(&c) {
             Some(&(source, offset)) => (syms.product_sources[source as usize].0, offset),
-            None => syms.place(info.file, info.def, info.span.start),
+            None => syms.place(placed.file, placed.def, placed.span.start),
         };
         (group, rank, start, info.kind as u8)
     };

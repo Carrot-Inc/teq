@@ -162,6 +162,18 @@ around:
   class's constants has the class's operators, `OrType.join`).
 - Details only: `neg/i8736` reports one line fewer beyond scalac's, `pos/i7413` fails later, at a member.
 
+## Local traits read their block's values, overrides keep their access boundary (2026-10-10)
+
+`pos/i17135`, `pos/i503`, `pos/t1237`, `pos/t6231`, `pos/t6231b` and `pos/t6231c` moved from `rejects` to
+`accepts`, and `pos/explicitOuter` to `std` (its `App`): a local trait whose members read the values of
+their block, a type parameter's evidence, an enclosing method's parameter or the enclosing instance, no
+longer reports `not supported yet: a local trait referring to ..`; its members take what they read as
+leading parameters and every call passes them, as dotty's `LambdaLift.addFreeParams` and `addFreeArgs`
+lift it. `neg/t12494` moved to `same` and `neg/i8005` from `subset` to `same`: an override's access is
+checked as dotty's `RefChecks.isOverrideAccessOK` checks it, `protected[C] def f` in `object C`'s `C2`
+narrowing the local trait's (no companion exception for a class of a block) and `private[nio] val
+isReadOnly` narrowing a public val.
+
 ## A member's retry types again what its application did not cache (2026-10-09)
 
 `pos/i18645` moved from `rejects` to `accepts`: `x.pprint(() => ( 234 ))` fails against the member's

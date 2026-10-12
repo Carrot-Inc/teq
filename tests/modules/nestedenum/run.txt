@@ -1,0 +1,8 @@
+true
+false
+1 11 6 1 A
+true
+false
+true
+false
+List(X) true true 1

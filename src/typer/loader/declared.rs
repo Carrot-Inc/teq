@@ -814,6 +814,15 @@ impl<'a> Worker<'a> {
         }
         name
     }
+
+    /// The name of scalac's module class of an object nested in a class, `X$`, which the
+    /// program's own class of it and a pickle's inner object without a companion class go
+    /// without, and a pickle's inner companion object has (`ClassInfo::source_name`).
+    pub(crate) fn module_class_text(&self, c: ClassId) -> Option<String> {
+        let info = self.syms.class(c);
+        info.inner_object?;
+        Some(format!("{}$", info.source_name(&self.interner.get(info.name))))
+    }
 }
 
 /// A parameter of a pickled signature: a clause of type parameters by its length, or the class

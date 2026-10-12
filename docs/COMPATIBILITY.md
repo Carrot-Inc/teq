@@ -8,9 +8,6 @@ libraries compiled from their jars run against scalac's output. The remaining di
 
 ### Syntax and definitions
 
-- A local trait referring to the values of its block, or a trait nested in a local class reading them, is
-  `not supported yet`, and a local enum reading a value of the enclosing scope is `a local enum cannot refer
-  to n: its values are made once`.
 - A case class nested in a class compares its fields alone: `a.Item(1) == b.Item(1)` is true where scalac's
   `equals` tests the outer instance too, as its patterns do (and teq's); a match through a prefix that misses
   another instance's class (`case b.Item(n)` on an `a.Item`) is not warned of as inexhaustive, its run failing
@@ -163,8 +160,8 @@ a JDK member as `not supported on JavaScript`. Beyond that:
   JVM: `NullPointerException`); `null == undefined` is false; an uncaught exception prints node's stack trace.
 - A val read before its initialiser ran is `undefined` (the JVM: `0` or `null`), so `val a: Int = a` fails at
   run time, and a superclass body reading a `val` the subclass overrides sees its own value until the
-  subclass body runs, where scalac reads `0` or `null`; a local enum's values are made once, shared by every
-  run of the block; on JavaScript a concatenation renders an operand as its `+` runs, as under Scala.js.
+  subclass body runs, where scalac reads `0` or `null`; on JavaScript a concatenation renders an operand as its
+  `+` runs, as under Scala.js.
 - A call of a def through a top-level export does not initialise the exporting file, and on JavaScript and in
   the interpreter an export of a trait is no member of the classes below it (`needs to be abstract` where
   scalac accepts), a call being compiled as a call of the original.

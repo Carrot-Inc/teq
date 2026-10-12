@@ -410,11 +410,20 @@ impl<'a> Cx<'a> {
             ClassKind::GivenImpl if self.given_class_classes.contains_key(&c) => {}
             ClassKind::GivenImpl => out.push_str("$G"),
             ClassKind::EnumCase if info.singleton.is_some() => out.push_str("$V"),
-            // Two local classes of one name in one file would share a binary name.
-            _ if info.owner == Owner::Local && info.kind != ClassKind::Anon => match self.input.syms.product_position(info.file, info.def) {
-                Some((token, offset)) => out.push_str(&format!("${}_{}", crate::source::tag_text(token), offset)),
-                None => out.push_str(&format!("${}", self.input.prog.position(info.file, info.span.start))),
-            },
+            // Two local classes of one name in one file would share a binary name; a local enum's
+            // companion is the module class scalac names `E$`, beside the enum's class.
+            _ if info.owner == Owner::Local && info.kind != ClassKind::Anon => {
+                // A local enum's companion made without a definition is placed at its enum.
+                let p = syms.placed_class(c);
+                if p != c {
+                    out.push('$');
+                }
+                let placed = syms.class(p).info.clone();
+                match self.input.syms.product_position(placed.file, placed.def) {
+                    Some((token, offset)) => out.push_str(&format!("${}_{}", crate::source::tag_text(token), offset)),
+                    None => out.push_str(&format!("${}", self.input.prog.position(placed.file, placed.span.start))),
+                }
+            }
             _ => {}
         }
         out

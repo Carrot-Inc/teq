@@ -557,7 +557,10 @@ impl<'a, 't> Interp<'a, 't> {
             registry::frame(env);
         }
         let ordinal = if kind == ClassKind::EnumCase { self.syms().class(c).ordinal as i32 } else { 0 };
-        let obj = Rc::new(Object { class: c, fields: RefCell::new(Vec::new()), env, name: None, ordinal: Cell::new(ordinal), hash: Cell::new(0), slot: Cell::new(0), born: Cell::new(0), made: Cell::new(super::made_now()) });
+        // A value of an enum whose companion makes it (one of a block or a class) is named as
+        // `make_enum_value` names one.
+        let name: Option<Rc<str>> = (kind == ClassKind::EnumCase && self.syms().class(c).singleton.is_some()).then(|| Rc::from(self.name(self.syms().class(c).name)));
+        let obj = Rc::new(Object { class: c, fields: RefCell::new(Vec::new()), env, name, ordinal: Cell::new(ordinal), hash: Cell::new(0), slot: Cell::new(0), born: Cell::new(0), made: Cell::new(super::made_now()) });
         self.enter()?;
         let prof = self.prof_ctor(c);
         let r = self.construct(&obj, c, args);
@@ -694,8 +697,36 @@ impl<'a, 't> Interp<'a, 't> {
 
     fn eval_parent_args(&mut self, sup: ClassId, l: ListRef, frame: &Rc<Frame>, cx: &Ctx) -> R<Vec<Value>> {
         let mut out = Vec::with_capacity(l.len as usize);
+        // What a local superclass captures goes as it is held: a lazy val unforced, the thunk
+        // standing for the val of a local object read in its own body as that lazy val.
+        let captures = self.capture_count(sup);
         for i in 0..l.len as usize {
             let item = self.prog().expr_lists[l.start as usize + i];
+            if i < captures {
+                let param = self.tclass_field(sup, |tc| tc.ctor_params[i]);
+                let lazy = param.is_some_and(|p| self.syms().sym(p).mods & mods::LAZY != 0 && self.syms().sym(p).kind != SymKind::Def);
+                match self.prog().expr(item) {
+                    TExpr::Local(s) if lazy => {
+                        if let Some(v) = self.lookup(item, s, frame) {
+                            out.push(v);
+                            continue;
+                        }
+                    }
+                    TExpr::Lambda(params, body) if lazy && params.len == 0 => {
+                        self.captured(frame, &cx.this);
+                        out.push(Value::Fun(Rc::new(Closure {
+                            kind: ClosureKind::Lazy(body),
+                            env: frame.clone(),
+                            this: cx.this.clone(),
+                            def_key: cx.def_key,
+                            class: cx.class,
+                            hash: Cell::new(0),
+                        })));
+                        continue;
+                    }
+                    _ => {}
+                }
+            }
             if let TExpr::Unit = self.prog().expr(item) {
                 let has_default = self.syms().class(sup).ctor.iter().flat_map(|cl| cl.params.iter()).nth(i).map_or(false, |p| p.has_default);
                 if has_default {
@@ -804,8 +835,11 @@ impl<'a, 't> Interp<'a, 't> {
         let this = Value::Obj(obj.clone());
         let tframe = Frame::with(obj.env.clone(), Vec::with_capacity(params.len()));
         let tcx = Ctx { this: this.clone(), def_key: cx.def_key, class: Some(tr), tail: None };
-        let mut vals = vals.into_iter();
-        for (i, &p) in params.iter().enumerate() {
+        // The values of the block the body reads (its proxies) are read in the instance's scope,
+        // where the class that mixes the trait in holds them.
+        let proxies = self.prog().classes[ti].captures;
+        let mut vals = vals.into_iter().skip(proxies);
+        for (i, &p) in params.iter().enumerate().skip(proxies) {
             let key = self.field_key(p);
             let mut v = vals.next().unwrap_or(Value::Absent);
             if let Value::Absent = v {
@@ -1807,6 +1841,25 @@ impl<'a, 't> Interp<'a, 't> {
         Some(f)
     }
 
+    /// The lifted method named `name` taking `k` proxies that an instance of `c` runs: the first
+    /// along its linearisation (`TFun::lifted`), past a class's member of the source signature.
+    pub(super) fn lifted_method(&mut self, c: ClassId, name: Name, k: u32) -> Option<(FunId, Owner)> {
+        let mut at = Some(c);
+        while let Some(k0) = at {
+            for b in self.own_bases(k0) {
+                if let Some(f) = self.own_method(b, name) {
+                    let fun = &self.prog().funs[f.idx()];
+                    if fun.lifted && fun.captures == k {
+                        return Some((f, Owner::Class(b)));
+                    }
+                }
+            }
+            let info = self.syms().class(k0);
+            at = info.superclass.filter(|_| info.kind != ClassKind::Trait);
+        }
+        None
+    }
+
     pub(super) fn own_member(&mut self, k: ClassId, name: Name) -> Member {
         if let Some(f) = self.own_method(k, name) {
             return Member::Fun(f, k);
@@ -2029,8 +2082,17 @@ impl<'a, 't> Interp<'a, 't> {
     pub(super) fn invoke_member(&mut self, recv: Value, m: Member, name: Name, args: Vec<Value>) -> R {
         match m {
             Member::Fun(f, owner) => {
+                // A member of a local class reads what the class captures where the instance was
+                // made, which the scope of the class encloses, a `var` in its own place: the
+                // instance's class may be a subclass (an enum's case); a lifted member of a trait
+                // nested in a local one, which a class owns, reads its proxies there too.
                 let parent = match &recv {
                     Value::Obj(o) if owner == o.class => o.env.clone(),
+                    Value::Obj(o) => match self.syms().class(owner).owner {
+                        Owner::Local => o.env.clone(),
+                        Owner::Class(_) if self.prog().funs[f.idx()].captures > 0 => o.env.clone(),
+                        _ => None,
+                    },
                     _ => None,
                 };
                 self.call_fun(f, recv, args, parent, Some(owner))

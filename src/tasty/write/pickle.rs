@@ -1459,11 +1459,26 @@ impl<'w, 'a> P<'w, 'a> {
         self.param_setters(&info);
         self.secondary_constructors(c, &info);
         self.count_template_roots(c);
+        // A local enum's companion holds its cases and lookups before and after the members
+        // written, as an enum's object does (`object_template`, `DesugarEnums.enumScaffolding`).
+        let local_enum = self.local_enum_of(&info);
+        if let Some(e) = local_enum {
+            self.enum_cases(e);
+        }
         self.members(c, &info);
+        if let Some(e) = local_enum {
+            self.enum_tail(e);
+        }
         self.inline_accessor_defs(c);
         self.enclosing.pop();
         self.tparams.truncate(tmark);
         self.buf.end_length(len);
+    }
+
+    /// The enum whose companion the class described by `info` is, when that companion is a local
+    /// object (an enum of a block).
+    fn local_enum_of(&self, info: &ClassInfo) -> Option<ClassId> {
+        info.companion.filter(|&e| info.local_module.is_some() && self.w.syms.class(e).kind == ClassKind::Enum)
     }
 
     fn template_param(&mut self, c: ClassId, param: &ParamSig, sym: Option<SymId>, clause: &ClauseSig, case_field: bool) {
@@ -1616,6 +1631,11 @@ impl<'w, 'a> P<'w, 'a> {
         if info.kind == ClassKind::Enum {
             self.external_tpt("scala.reflect", "Enum");
         }
+        // A local enum's companion, a local object, is the enum's `Mirror.Sum` as an object is.
+        if self.local_enum_of(&info).is_some() {
+            self.mark_tree();
+            self.mirror_parent("Sum");
+        }
         if info.mods & mods::CASE != 0 && info.kind == ClassKind::Class {
             if !parents.iter().any(|&p| self.is_scala_class(p, "Product")) {
                 self.external_tpt("scala", "Product");
@@ -1651,11 +1671,14 @@ impl<'w, 'a> P<'w, 'a> {
         let Type::Class(k, _) = self.w.types.get(self.w.types.strip_nested(p)) else { return None };
         let &i = self.index.tclasses.get(&c)?;
         let init = self.w.prog.classes[i as usize].init.clone();
+        // A local trait's proxies lead the arguments, the lifting's, which the pickle leaves out.
+        let proxies = self.index.tclasses.get(&k).map_or(0, |&j| self.w.prog.classes[j as usize].captures);
+        let proxies = if self.w.syms.class(k).kind == ClassKind::Trait { proxies } else { 0 };
         if let Some(pc) = init.iter().find_map(|x| match x {
-            crate::tir::TInit::Parent(t, pc) if *t == k && pc.args.len > 0 => Some(*pc),
+            crate::tir::TInit::Parent(t, pc) if *t == k && pc.args.len as usize > proxies => Some(*pc),
             _ => None,
         }) {
-            return Some((self.w.prog.expr_list(pc.args).to_vec(), pc.via, Some(pc.prelude)));
+            return Some((self.w.prog.expr_list(pc.args)[proxies..].to_vec(), pc.via, Some(pc.prelude)));
         }
         let params: Vec<SymId> = match self.index.tclasses.get(&k) {
             Some(&j) => {
@@ -2141,6 +2164,11 @@ impl<'w, 'a> P<'w, 'a> {
                     // A selector `_N` is written with the class's other synthesized members.
                     let selector = self.w.syms.sym(s).mods & mods::SELECTOR != 0;
                     if selector || ctor_syms.contains(&s) || !(order.contains(&s) || info.extensions.contains(&s) || info.givens.contains(&s)) {
+                        continue;
+                    }
+                    // A proxy of a value of the block held for a trait of a nested class
+                    // (`typer::HeldOf`): `LambdaLift`'s, after the pickle.
+                    if self.w.held_proxy_of.contains_key(&s) {
                         continue;
                     }
                     self.member(c, s);
@@ -2675,7 +2703,10 @@ impl<'w, 'a> P<'w, 'a> {
                 // writes none: it goes with the enum.
                 if kind == ClassKind::Enum {
                     if let Some(co) = self.w.syms.class(k).companion.filter(|&co| self.w.syms.class(co).def.is_none()) {
-                        self.object_def(co);
+                        match self.w.syms.class(co).inner_object {
+                            Some(v) => self.inner_object_def(co, v),
+                            None => self.object_def(co),
+                        }
                     }
                 }
             }
@@ -4222,7 +4253,15 @@ impl<'w, 'a> P<'w, 'a> {
                         Synth::EnumObject(e, k)
                     };
                     self.synth_rhs("enum value", ty, body, &[]);
-                    self.write_flags(&[CASE, STATIC, ENUM]);
+                    // A value is a static member where its companion is a static owner (dotty's
+                    // `Namer` adds `JavaStatic` there): not a local enum's or a class's enum's,
+                    // whose companion is an instance.
+                    let static_owner = self.w.syms.class(e).companion.is_some_and(|m| self.w.syms.class(m).kind == ClassKind::Object);
+                    if !static_owner {
+                        self.write_flags(&[CASE, ENUM]);
+                    } else {
+                        self.write_flags(&[CASE, STATIC, ENUM]);
+                    }
                     self.class_source_annotations(k);
                     let span = self.def_span(ki.file, ki.def, ki.span);
                     self.position_def(addr, span, ki.span.start, ki.file, ki.def);
@@ -4362,7 +4401,8 @@ impl<'w, 'a> P<'w, 'a> {
             }
             Owner::Class(c) => {
                 let ci = self.w.syms.class(c);
-                let outer = self.owner_full_name(ci.owner, &self.name(ci.name));
+                let own = self.w.module_class_text(c).unwrap_or_else(|| self.name(ci.name));
+                let outer = self.owner_full_name(ci.owner, &own);
                 let sep = if ci.kind == ClassKind::Object { "$." } else { "." };
                 format!("{}{}{}", outer, sep, name)
             }
@@ -5153,6 +5193,16 @@ impl<'w, 'a> P<'w, 'a> {
                     self.buf.byte(THIS);
                     self.class_typeref(o);
                     self.placed = true;
+                } else if let Some(v) = oi.local_module {
+                    // A member of a local object, a local enum's companion's value, seen from
+                    // outside it: on the object's val, as scalac's prefix is.
+                    self.placed = true;
+                    self.local_ref(v);
+                } else if let Some(v) = oi.inner_object.filter(|_| self.instance_reachable(o)) {
+                    // A member of an object nested in an enclosing class, a class's enum's
+                    // companion's, seen from outside the object: on its val, as scalac's
+                    // prefix is.
+                    self.member_termref(v);
                 } else {
                     // `Outer#Inner` for a class nested in a class, seen from outside it.
                     self.approximated("class nested in a class, named outside it as a projection");
@@ -5365,6 +5415,15 @@ impl<'w, 'a> P<'w, 'a> {
         self.package_object_terms.insert((p, stem), at);
     }
 
+    /// Whether the instance of the class `c` has a path here: an enclosing class's `this`, a
+    /// local object's val, or the val of an object nested in a class whose instance has one.
+    pub(super) fn instance_reachable(&self, c: ClassId) -> bool {
+        let info = self.w.syms.class(c);
+        self.enclosing.contains(&c)
+            || info.local_module.is_some()
+            || info.inner_object.is_some() && matches!(info.owner, Owner::Class(o) if self.instance_reachable(o))
+    }
+
     fn def_termref(&mut self, k: Key, owner: Owner) {
         self.placed = true;
         self.buf.byte(TERMREFSYMBOL);
@@ -5418,7 +5477,8 @@ impl<'w, 'a> P<'w, 'a> {
                 Some((pkg, name)) => (Some(pkg.to_string()), name.to_string()),
                 None => (Some(String::new()), full),
             },
-            _ => (None, self.name(info.name)),
+            // An object nested in a class: scalac's module class.
+            _ => (None, self.w.module_class_text(c).unwrap_or_else(|| self.name(info.name))),
         }
     }
 
@@ -6557,7 +6617,7 @@ pub fn scala_name(w: &Worker, c: ClassId) -> String {
 
 fn scala_name_now(w: &Worker, c: ClassId) -> String {
     let info = w.syms.class(c);
-    let name = w.interner.get(info.name).to_string();
+    let name = w.module_class_text(c).unwrap_or_else(|| w.interner.get(info.name).to_string());
     if c == w.b.string {
         return "java.lang.String".to_string();
     }

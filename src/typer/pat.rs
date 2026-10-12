@@ -494,7 +494,7 @@ impl<'a> Worker<'a> {
                 }
                 let strict = match self.prog.expr(te) {
                     TExpr::Module(c) => !self.overrides_equals(c),
-                    TExpr::Static(s) => matches!(self.syms.sym(s).kind, SymKind::EnumValue(_)),
+                    TExpr::Static(s) | TExpr::Field(_, s) => matches!(self.syms.sym(s).kind, SymKind::EnumValue(_)),
                     _ => false,
                 };
                 self.prog.add_pat(TPat::Equals(te, strict))

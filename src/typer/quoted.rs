@@ -2386,14 +2386,30 @@ impl<'c> Copier<'c> {
         // in any of them, each given its identity before any is filled, so that their members,
         // parents and owners name the copies.
         let graph = self.stored_graph(t, c);
+        // A local enum's companion made for it is named after the enum's copy, which takes the
+        // name of their common place: named right after the enum, before its cases.
+        let mut order: Vec<ClassId> = graph.clone();
         for &k in &graph {
+            let e = t.syms.placed_class(k);
+            if e == k {
+                continue;
+            }
+            let (Some(at), Some(ae)) = (order.iter().position(|&x| x == k), order.iter().position(|&x| x == e)) else { continue };
+            if at < ae {
+                order.remove(at);
+                order.insert(ae, k);
+            }
+        }
+        for &k in &order {
             let info = t.syms.class(k).info.clone();
+            let placed = t.syms.placed_class(k);
             let name = match (stored.names_classes, info.kind) {
+                (true, _) if placed != k && self.classes.contains_key(&placed) => t.syms.class(self.classes[&placed]).name,
                 (true, ClassKind::Anon) => t.anon_name(info.span),
                 // An enum's case is named inside its companion's copy, which tells the copies
                 // apart, by its own name, which its values print.
                 (true, ClassKind::EnumCase) => info.name,
-                (true, _) => t.local_class_name(info.span, info.name),
+                (true, _) => t.local_class_name(t.copy_naming_span(k), info.name),
                 (false, ClassKind::Anon) => t.interner.intern("$stored"),
                 (false, _) => info.name,
             };
@@ -2404,6 +2420,24 @@ impl<'c> Copier<'c> {
             let nk = t.syms.new_class(name, info.kind, info.mods, owner, info.file, info.def, info.span);
             t.mark_inner_class(nk);
             self.classes.insert(k, nk);
+        }
+        // A local object made without a definition is placed by its enum (`Symbols::placed_class`):
+        // its copy takes its companion and its lazy val now, so that the `this` named next is the
+        // one the copy's place gives it whole and over products alike (`Worker::outer_this_sym`).
+        for &k in &graph {
+            let (companion, local_module) = {
+                let info = t.syms.class(k);
+                if info.def.is_some() || info.local_module.is_none() {
+                    continue;
+                }
+                (info.companion, info.local_module)
+            };
+            let nk = self.classes[&k];
+            let companion = companion.map(|e| self.classes.get(&e).copied().unwrap_or(e));
+            let local_module = local_module.map(|s| self.sym(s));
+            let mut copy = t.syms.class_mut(nk);
+            copy.companion = companion;
+            copy.local_module = local_module;
         }
         // The members of each, and the local that stands for an owner's `C.this` in the classes
         // nested in it, the copy's own, which those copies capture and read: what the bodies
@@ -2697,7 +2731,7 @@ impl<'c> Copier<'c> {
             .map(|i| match *i {
                 TInit::Field(s, e) => TInit::Field(self.sym(s), self.expr(t, e)),
                 TInit::Stmt(e) => TInit::Stmt(self.expr(t, e)),
-                TInit::Parent(k, call) => TInit::Parent(k, self.parent_call(t, call)),
+                TInit::Parent(k, call) => TInit::Parent(self.classes.get(&k).copied().unwrap_or(k), self.parent_call(t, call)),
             })
             .collect();
         let constants: Vec<(SymId, TExprId)> = tc.constants().iter().map(|&(s, e)| (self.sym(s), self.expr(t, e))).collect();
@@ -2817,14 +2851,14 @@ impl<'c> Copier<'c> {
     }
 
     fn fun(&mut self, t: &mut Worker, f: FunId) -> FunId {
-        let (sym, params, defaults, body) = {
+        let (sym, params, defaults, body, captures, lifted) = {
             let fun = &t.prog.funs[f.idx()];
-            (fun.sym, fun.params.clone(), fun.defaults.clone(), fun.body)
+            (fun.sym, fun.params.clone(), fun.defaults.clone(), fun.body, fun.captures, fun.lifted)
         };
         let defaults = defaults.into_iter().map(|d| d.map(|x| self.expr(t, x))).collect();
         let body = body.map(|b| self.expr(t, b));
         let params = params.into_iter().map(|p| self.sym(p)).collect();
-        t.prog.add_fun(TFun { sym: self.sym(sym), params, defaults, body, body_unconsuming: false })
+        t.prog.add_fun(TFun { sym: self.sym(sym), params, defaults, body, body_unconsuming: false, captures, lifted })
     }
 
     fn stmts(&mut self, t: &mut Worker, l: crate::ast::ListRef) -> crate::ast::ListRef {
@@ -2943,6 +2977,15 @@ impl<'c> Copier<'c> {
                 TExpr::Static(self.member_ref(s))
             }
             TExpr::Module(c) if self.stored_trigger(t, c).is_some() => TExpr::Module(self.stored_class_copy(t, c)),
+            // `super[T]` of a trait the stored body defines is its copy's (a local trait's
+            // forwarder, `typer::proxies`).
+            TExpr::Super(SuperTarget::Class(k) | SuperTarget::Mixin(k)) if self.classes.contains_key(&k) => {
+                let nk = self.classes[&k];
+                TExpr::Super(match t.prog.expr(e) {
+                    TExpr::Super(SuperTarget::Mixin(_)) => SuperTarget::Mixin(nk),
+                    _ => SuperTarget::Class(nk),
+                })
+            }
             TExpr::ClassOf(c, dims) if self.stored_trigger(t, c).is_some() => TExpr::ClassOf(self.stored_class_copy(t, c), dims),
             TExpr::Int(_) | TExpr::Long(_) | TExpr::Double(_) | TExpr::Bool(_) | TExpr::Char(_) | TExpr::Str(_) | TExpr::Unit | TExpr::This | TExpr::Super(_) | TExpr::Static(_) | TExpr::Module(_) | TExpr::JsImport(_) | TExpr::JsGlobal(..) | TExpr::Null | TExpr::ClassOf(..) => t.prog.expr(e),
             TExpr::Field(r, s) => {
@@ -3385,14 +3428,14 @@ impl<'c> Copier<'c> {
                 TStmt::Pat(p, self.expr(t, x))
             }
             TStmt::Fun(f) => {
-                let (sym, params, defaults, body) = {
+                let (sym, params, defaults, body, captures, lifted) = {
                     let fun = &t.prog.funs[f.idx()];
-                    (fun.sym, fun.params.clone(), fun.defaults.clone(), fun.body)
+                    (fun.sym, fun.params.clone(), fun.defaults.clone(), fun.body, fun.captures, fun.lifted)
                 };
                 let defaults = defaults.into_iter().map(|d| d.map(|x| self.expr(t, x))).collect();
                 let body = body.map(|b| self.expr(t, b));
                 let params = params.into_iter().map(|p| self.sym(p)).collect();
-                let nf = t.prog.add_fun(TFun { sym: self.sym(sym), params, defaults, body, body_unconsuming: false });
+                let nf = t.prog.add_fun(TFun { sym: self.sym(sym), params, defaults, body, body_unconsuming: false, captures, lifted });
                 TStmt::Fun(nf)
             }
         }

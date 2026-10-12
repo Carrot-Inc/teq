@@ -77,6 +77,42 @@ impl<'a> Emitter<'a> {
     }
 
     /// The arguments after an opening parenthesis that may hold one already, and the closing one.
+    /// The arguments of a call of a local trait's member or initialiser, whose first `proxies`
+    /// are the values of the block it reads: a captured `var` goes as its cell, as to a lifted
+    /// class's constructor (`emit_capture_args`).
+    pub(super) fn emit_proxy_args(&mut self, args: ListRef, proxies: usize, separator: &'static str) {
+        if proxies == 0 {
+            return self.emit_more_args(args, separator);
+        }
+        let items = self.prog.expr_list(args);
+        let mut separator = separator;
+        for &a in &items[..proxies.min(items.len())] {
+            self.out.push_str(separator);
+            separator = ", ";
+            match self.peek(a) {
+                TExpr::Local(s) => self.emit_capture_ref(s),
+                _ => self.emit_value(a),
+            }
+        }
+        let rest = ListRef { start: args.start + proxies.min(items.len()) as u32, len: args.len - proxies.min(items.len()) as u32 };
+        self.emit_more_args(rest, separator);
+    }
+
+    /// How many proxies a call of `s` with `args` passes to its lifted method, when `s` is a local
+    /// trait's lifted member called so (`TFun::lifted`).
+    pub(super) fn lifted_call(&self, s: SymId, args: ListRef) -> Option<u32> {
+        self.lifted.get(&s).filter(|&&(_, total)| total == args.len).map(|&(k, _)| k)
+    }
+
+    /// The name a call of `s` with `args` reaches: a lifted member's lifted method (`name$p<k>`),
+    /// else the member's own.
+    pub(super) fn slot_name(&mut self, s: SymId, args: ListRef) -> String {
+        match self.lifted_call(s, args) {
+            Some(k) => format!("{}$p{}", self.sym_name(s), k),
+            None => self.sym_name(s).to_string(),
+        }
+    }
+
     pub(super) fn emit_more_args(&mut self, args: ListRef, mut separator: &'static str) {
         let prog = self.prog;
         for &a in prog.expr_list(args) {
@@ -180,6 +216,12 @@ impl<'a> Emitter<'a> {
     /// cell that reads and writes the variable itself.
     fn emit_capture_args(&mut self, e: TExprId, c: ClassId, args: ListRef) {
         let omitted = self.omitted_args(e);
+        self.emit_capture_args_omitting(c, args, &omitted);
+    }
+
+    /// `emit_capture_args` with the arguments the callee's defaults compute given: those of a
+    /// creation, or of a local superclass's constructor (`emit_parent_args`).
+    pub(super) fn emit_capture_args_omitting(&mut self, c: ClassId, args: ListRef, omitted: &[bool]) {
         self.out.push('(');
         let captures = match self.local_captures.get(&c) {
             Some(&n) => n as usize,
@@ -203,13 +245,21 @@ impl<'a> Emitter<'a> {
             }
             self.emit_capture_ref(s);
         }
+        // A value of an enum of a block or a class: its name and ordinal after what it takes.
+        let info = self.syms.class(c);
+        if info.singleton.is_some() {
+            self.out.push_str(if args.len > 0 { ", " } else { "" });
+            js_string(self.interner.get(info.name), &mut self.out);
+            let _ = write!(self.out, ", {}", info.ordinal);
+        }
         self.out.push(')');
     }
 
-    /// A local class's capture of `s` as its constructor and its getters take it: a `var` the
-    /// scope does not hold in a cell of its own passed as one.
+    /// A local class's capture of `s` as its constructor and its getters take it, or a local trait's
+    /// member's proxy: a `var` the scope does not hold in a cell of its own (a capture, or a proxy
+    /// parameter of the member being emitted) passed as one.
     pub(super) fn emit_capture_ref(&mut self, s: SymId) {
-        let captured_here = self.captures.contains(&s);
+        let captured_here = self.captures.contains(&s) || self.cell_params.contains(&s);
         let name = self.local_ref(s);
         if self.syms.sym(s).kind != SymKind::Var {
             self.out.push_str(&name);
@@ -653,18 +703,22 @@ impl<'a> Emitter<'a> {
                 let n = self.sym_name(s);
                 match target {
                     // JavaScript's `super` is the prototype behind the class that holds the method.
-                    SuperTarget::Chain if self.this_name == "this" => {
+                    SuperTarget::Chain if self.this_name == "this" && self.lifted_call(s, args).is_none() => {
                         let _ = write!(self.out, "super.{}", n);
                         self.emit_args(args);
                     }
                     SuperTarget::Chain => {
+                        let n = self.slot_name(s, args);
                         let _ = write!(self.out, "super.{}.call({}", n, self.this_name);
-                        self.emit_more_args(args, ", ");
+                        let proxies = self.lifted_call(s, args).unwrap_or(0) as usize;
+                        self.emit_proxy_args(args, proxies, ", ");
                     }
                     SuperTarget::Class(c) => {
                         let class = self.class_name(c);
+                        let n = self.slot_name(s, args);
                         let _ = write!(self.out, "{}.prototype.{}.call({}", class, n, self.this_name);
-                        self.emit_more_args(args, ", ");
+                        let proxies = self.proxied.get(&s).copied().unwrap_or(0) as usize;
+                        self.emit_proxy_args(args, proxies, ", ");
                     }
                     SuperTarget::Mixin(tr) => {
                         let accessor = self.super_accessor_name(tr, s);
@@ -687,6 +741,16 @@ impl<'a> Emitter<'a> {
             // A function value is a JS function, whether a lambda, a lowered anonymous class
             // or an instance of a callable class: the `apply` of its function type is a call.
             TExpr::CallMethod(f, s, args) if self.is_function_apply(s) => self.emit_closure_call(f, args),
+            // A call of a local trait's lifted member: its lifted method, the proxies first.
+            TExpr::CallMethod(r, s, args) if self.lifted_call(s, args).is_some() => {
+                let k = self.lifted_call(s, args).unwrap_or(0) as usize;
+                self.emit_receiver(r);
+                self.out.push('.');
+                let n = self.slot_name(s, args);
+                self.out.push_str(&n);
+                self.out.push('(');
+                self.emit_proxy_args(args, k, "");
+            }
             TExpr::CallMethod(r, s, args) => {
                 self.emit_receiver(r);
                 self.out.push('.');

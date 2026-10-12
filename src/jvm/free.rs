@@ -176,7 +176,7 @@ impl Collector<'_, '_> {
             | TExpr::ObjLit(args) => self.list(args),
             // A getter's application takes what its getter captures: a local def's, or a local
             // class's for its constructor's getter, which receives them as the constructor does.
-            TExpr::Default(of, _, args) => {
+            TExpr::Default(of, at, args) => {
                 match of {
                     DefaultOf::Method(s) if self.cx.input.syms.sym(s).owner == Owner::Local && self.cx.input.syms.sym(s).kind == SymKind::Def => {
                         let free = self.an.of_fun(self.cx, s);
@@ -186,7 +186,9 @@ impl Collector<'_, '_> {
                         let idx = self.cx.tclass_of.get(c.idx()).copied().unwrap_or(u32::MAX);
                         if idx != u32::MAX && self.cx.input.syms.class(c).kind != ClassKind::Anon {
                             let tc = &prog.classes[idx as usize];
-                            for &k in &tc.ctor_params[..tc.captures] {
+                            // The enclosing instance a receiver stands for is the receiver's.
+                            let from = usize::from(at & DEFAULT_RECEIVER != 0);
+                            for &k in tc.ctor_params[..tc.captures].iter().skip(from) {
                                 let info = self.cx.input.syms.sym(k);
                                 if info.owner == Owner::Local && info.kind == SymKind::Def {
                                     let free = self.an.of_fun(self.cx, k);
@@ -413,7 +415,7 @@ impl CellWalk<'_, '_> {
             }
             // A local constructor's getter takes the class's captures as its constructor does;
             // a local def's getter is the def's.
-            TExpr::Default(of, _, args) => {
+            TExpr::Default(of, at, args) => {
                 match of {
                     DefaultOf::Method(s) => self.reference(s),
                     DefaultOf::Ctor(c) => {
@@ -421,7 +423,8 @@ impl CellWalk<'_, '_> {
                         if idx != u32::MAX && self.cx.input.syms.class(c).kind != ClassKind::Anon {
                             let captured = self.cx.input.prog.classes[idx as usize].ctor_params[..self.capture_count(c)].to_vec();
                             self.depth += 1;
-                            for k in captured {
+                            // The enclosing instance a receiver stands for is the receiver's.
+                            for k in captured.into_iter().skip(usize::from(at & DEFAULT_RECEIVER != 0)) {
                                 self.reference(k);
                             }
                             self.depth -= 1;

@@ -799,6 +799,23 @@ impl<'w, 'a> P<'w, 'a> {
                 Some(f) => self.unsupported_form(f),
             },
             TExpr::CallMethod(r, s, args) => match form {
+                // A proxy of a value of the block that a class of the block holds for a trait of
+                // a class nested in it (`typer::HeldOf`): what the source wrote, scalac pickling
+                // before `LambdaLift`.
+                None if self.w.held_proxy_of.contains_key(&s) => {
+                    let args = self.w.prog.expr_list(args).to_vec();
+                    match self.w.held_proxy_of[&s] {
+                        crate::typer::HeldOf::Get(v) => self.local_ref(v),
+                        crate::typer::HeldOf::Set(v) => {
+                            let l = self.open(ASSIGN);
+                            self.local_ref(v);
+                            self.term(args[0]);
+                            self.buf.end_length(l);
+                        }
+                        crate::typer::HeldOf::Call(h) => self.call(h, Qual::Owner, recs.targs, &args),
+                        crate::typer::HeldOf::New(k) => self.new_instance(k, None, recs.targs, &args, e),
+                    }
+                }
                 None => {
                     // An assignment through an abstract var, which scalac's tree keeps as one; a
                     // call of the setter written so is an application (`Program::setter_assign_bits`).
@@ -812,8 +829,18 @@ impl<'w, 'a> P<'w, 'a> {
                         self.buf.end_length(l);
                         return;
                     }
+                    // A call of a local trait's member that passes its proxies first
+                    // (`LambdaLift.addFreeArgs`): the call as written, since scalac pickles before
+                    // the lifting; a lazy val's read through its initialiser is the read.
+                    let lead = self.lifted_lead(s, args);
+                    if lead > 0 {
+                        if let Some(y) = self.w.lifted_lazy.iter().find(|&(_, &m)| m == s).map(|(&y, _)| y) {
+                            self.receive_by_name(e, r, y);
+                            return self.field(r, y, None);
+                        }
+                    }
                     self.receive_by_name(e, r, s);
-                    let args = self.w.prog.expr_list(args).to_vec();
+                    let args = self.w.prog.expr_list(args)[lead..].to_vec();
                     if self.is_std_type_of(s) {
                         return self.std_type_of(recs.targs, &args);
                     }
@@ -1571,6 +1598,11 @@ impl<'w, 'a> P<'w, 'a> {
         if !self.std_object_shape(o) {
             return;
         }
+        // A local object, a local enum's companion, by its val, inside the object too.
+        if let Some(v) = self.w.syms.class(o).local_module {
+            self.placed = true;
+            return self.local_ref(v);
+        }
         let owner = self.w.syms.class(o).owner;
         if self.static_owner(owner) || self.enclosing.contains(&o) {
             return self.module_termref(o);
@@ -1579,7 +1611,20 @@ impl<'w, 'a> P<'w, 'a> {
         self.member_by_name(&name, owner)
     }
 
-    /// `C.this.name` of a member of an enclosing class.
+    /// How many proxies a call of `s` with `args` passes first: a local trait's member that takes
+    /// them, called with them (`TFun::captures`), else none.
+    fn lifted_lead(&self, s: SymId, args: ListRef) -> usize {
+        let Some(&f) = self.w.fun_of_sym.get(&s) else { return 0 };
+        let fun = &self.w.prog.funs[f.idx()];
+        if fun.captures > 0 && fun.params.len() == args.len as usize {
+            fun.captures as usize
+        } else {
+            0
+        }
+    }
+
+    /// `C.this.name` of a member of an enclosing class, `C.this.o.name` of a member of the
+    /// object `o` nested in it.
     fn member_by_name(&mut self, name: &str, owner: Owner) {
         match owner {
             Owner::Class(c) => {
@@ -1587,9 +1632,27 @@ impl<'w, 'a> P<'w, 'a> {
                 let n = self.names.simple(name);
                 self.buf.nat(n as u64);
                 self.term_at(None);
-                self.this_of(c);
+                self.instance_path(c);
             }
             _ => self.fail(format!("the path of {}", name)),
+        }
+    }
+
+    /// The instance of the class `c` as a term: an enclosing class's `this`, a local object's
+    /// val, an object nested in a class by its val on its enclosing instance.
+    fn instance_path(&mut self, c: ClassId) {
+        let info = self.w.syms.class(c);
+        match (info.local_module, info.inner_object, info.owner) {
+            _ if self.enclosing.contains(&c) => self.this_of(c),
+            (Some(v), _, _) => {
+                self.placed = true;
+                self.local_ref(v);
+            }
+            (None, Some(v), Owner::Class(_)) if self.instance_reachable(c) => {
+                let name = self.name(self.w.syms.sym(v).name);
+                self.member_by_name(&name, info.owner);
+            }
+            _ => self.this_of(c),
         }
     }
 
@@ -3586,6 +3649,18 @@ impl<'w, 'a> P<'w, 'a> {
         }
     }
 
+    /// The name the enum `e` has in a signature its companion's members write: a local enum's
+    /// under the class whose body defines it, outside its companion, a local object
+    /// (`p.C$._$E`).
+    pub(super) fn sig_class_name(&mut self, e: ClassId) -> String {
+        if self.w.syms.class(e).owner != Owner::Local {
+            return self.w.library_class_name(e, "");
+        }
+        let at = self.enclosing.iter().rev().copied().find(|&c| self.w.syms.class(c).owner != Owner::Local);
+        let local = at.map_or(String::new(), |c| self.w.library_class_name(c, ""));
+        self.w.library_class_name(e, &local)
+    }
+
     /// `f.apply(args)` of a function value.
     /// `f.apply(args)`: the `apply` the function's type has, a context function's or one a
     /// class of functions overrides, as the typer of scalac selects it.
@@ -3795,7 +3870,15 @@ impl<'w, 'a> P<'w, 'a> {
                 // (`Outer.this` reached from `object Helper`), whose type is `O.this`.
                 // A secondary constructor's `this(...)` passes its own outer parameter, which
                 // `ExplicitOuter` adds after pickling (`OuterOps.args` for the `This` call).
-                let this = self.self_init || matches!(self.w.prog.expr(args[0]), TExpr::This) || self.term_type(args[0]).map_or(false, |t| matches!(self.w.types.get(t), Type::This(k) if k == o));
+                let this = self.self_init
+                    || matches!(self.w.prog.expr(args[0]), TExpr::This)
+                    || self.term_type(args[0]).map_or(false, |t| matches!(self.w.types.get(t), Type::This(k) if k == o))
+                    || matches!(self.w.prog.expr(args[0]), TExpr::Local(s) if self.w.outer_this.get(&o) == Some(&s))
+                    // The enclosing instance read through an outer accessor, which answers it (an
+                    // enum's case passing its enum the instance its companion is nested in).
+                    || matches!(self.w.prog.expr(args[0]), TExpr::CallMethod(_, s, l) if l.len == 0
+                        && matches!(self.w.syms.sym(s).owner, Owner::Class(k) if self.w.outer_accessors.get(&k) == Some(&s))
+                        && self.w.syms.sym(s).sig.as_ref().map_or(false, |sig| matches!(self.w.types.get(sig.ret), Type::Class(k, _) | Type::This(k) if k == o)));
                 // Another instance's, inside the outer class too (`import other.{I => R}; new
                 // R(3)`): the construction's resolved prefix, the path the typed tree keeps as
                 // the outer argument, stated as the `NEW`'s type (`other.I`), as `Typer.newExpr`
@@ -4273,6 +4356,15 @@ impl<'w, 'a> P<'w, 'a> {
             self.undo.push(Undo::Written(c));
         }
         self.add_local(Key::Class(c));
+        // The classes nested in it are this pickle's definitions too, referred to by symbol as
+        // scalac refers to them (`TYPEREFsymbol`), which a reader follows to their definitions.
+        let mut todo: Vec<ClassId> = self.index.nested.get(&c).cloned().unwrap_or_default();
+        while let Some(n) = todo.pop() {
+            if !self.is_local(Key::Class(n)) {
+                self.add_local(Key::Class(n));
+                todo.extend(self.index.nested.get(&n).cloned().unwrap_or_default());
+            }
+        }
         self.class_origins.push((self.buf.addr(), c));
         self.class_def(c);
     }

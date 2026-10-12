@@ -630,6 +630,12 @@ impl<'t, 'a> Spaces<'t, 'a> {
                     }
                     _ => Some(Plain::Literal),
                 },
+                // A value of an enum whose companion is an instance, read on it.
+                TExpr::Field(_, s) if matches!(self.t.syms.sym(s).kind, SymKind::EnumValue(_)) => {
+                    let SymKind::EnumValue(c) = self.t.syms.sym(s).kind else { unreachable!() };
+                    self.sc.classes.push(c);
+                    Some(Plain::Covers)
+                }
                 TExpr::Bool(_) | TExpr::Unit => None,
                 TExpr::Int(_) | TExpr::Long(_) | TExpr::Double(_) | TExpr::Char(_) | TExpr::Str(_) => {
                     let Type::Class(c, _) = self.t.types.get(self.lit_class(e)) else { return None };
@@ -694,7 +700,7 @@ impl<'t, 'a> Spaces<'t, 'a> {
                 TExpr::Module(_) | TExpr::Bool(_) | TExpr::Unit => false,
                 TExpr::Static(s) => !matches!(self.t.syms.sym(s).kind, SymKind::EnumValue(_)),
                 TExpr::Local(_) => self.t.local_module_class(e).is_none(),
-                TExpr::Field(_, s) => self.t.inner_object_of_sym(s).is_none(),
+                TExpr::Field(_, s) => self.t.inner_object_of_sym(s).is_none() && !matches!(self.t.syms.sym(s).kind, SymKind::EnumValue(_)),
                 _ => true,
             },
             TPat::Class(_, _, _, subs) => subs.range().any(|i| self.literal_inside(self.t.prog.pat_lists[i])),
@@ -1290,6 +1296,12 @@ impl<'t, 'a> Spaces<'t, 'a> {
                 SymKind::EnumValue(c) => Space::Typ(self.t.types.class(c, &[])),
                 _ => Space::Opaque,
             },
+            // A value of an enum whose companion is an instance, read on it: its case, whatever the
+            // path, as dotty's `SpaceEngine` decomposes an enum by its children (`Symbol.children`).
+            TExpr::Field(_, s) if matches!(self.t.syms.sym(s).kind, SymKind::EnumValue(_)) => {
+                let SymKind::EnumValue(c) = self.t.syms.sym(s).kind else { unreachable!() };
+                Space::Typ(self.t.types.class(c, &[]))
+            }
             TExpr::Int(i) => Space::Lit(Lit::Int(i)),
             TExpr::Long(l) => Space::Lit(Lit::Long(l)),
             TExpr::Double(d) => Space::Lit(Lit::Double(d.to_bits())),

@@ -202,6 +202,8 @@ pub struct Emitter<'a> {
     partial_function_number: Option<u32>,
     anon_parent_args: &'a crate::intern::FxMap<ClassId, u32>,
     local_captures: &'a crate::intern::FxMap<ClassId, u32>,
+    proxied: &'a crate::intern::FxMap<SymId, u32>,
+    lifted: &'a crate::intern::FxMap<SymId, (u32, u32)>,
     /// The anonymous classes written as arrow functions where they are created (`layout::Layout`).
     closure_anons: &'a crate::intern::FxMap<ClassId, usize>,
     /// The anonymous classes that one class of the same body stands for (`share`).
@@ -214,6 +216,9 @@ pub struct Emitter<'a> {
     reach: &'a reach::Reach,
     /// The locals that the anonymous class being emitted holds in fields.
     captures: Vec<SymId>,
+    /// The captured `var`s the function being written takes as its proxies: cells, read and
+    /// written through `.v` (`TFun::captures`).
+    cell_params: Vec<SymId>,
     /// While the body of a lowered anonymous class is written as a closure: what the place
     /// that creates it passes for each local the body captures, innermost class last, other
     /// than a local passed as itself.
@@ -722,9 +727,16 @@ pub(super) fn is_function_class(syms: &Symbols, interner: &Interner, c: ClassId)
 }
 
 /// An object nested in a class or trait beside a companion class of its name, which the output
-/// names apart from the class; a jar's inner companion object carries scalac's `$` already.
-pub(crate) fn beside_companion(interner: &Interner, info: &ClassInfo) -> bool {
-    info.inner_object.is_some() && info.companion.is_some() && !interner.get(info.name).ends_with('$')
+/// names apart from the class.
+pub(crate) fn beside_companion(info: &ClassInfo) -> bool {
+    info.inner_object.is_some() && info.companion.is_some()
+}
+
+/// The name the output takes a class by: an upstream pickle's inner companion object, whose
+/// class has scalac's module class name (`E$`), by the object's name, as the program's own
+/// has it, so that a build over the products names it as the whole program does.
+pub(crate) fn class_name_text<'i>(interner: &'i Interner, info: &ClassInfo) -> &'i str {
+    info.source_name(interner.get(info.name))
 }
 
 /// The classes a definition is nested in, `Outer$Inner$`, without the package.
@@ -732,8 +744,47 @@ fn class_prefix(syms: &Symbols, interner: &Interner, owner: Owner, out: &mut Str
     if let Owner::Class(c) = owner {
         let info = syms.class(c);
         class_prefix(syms, interner, info.owner, out);
-        out.push_str(&sanitize(interner.get(info.name)));
+        out.push_str(&sanitize(class_name_text(interner, &info)));
         out.push('$');
+    }
+}
+
+/// `class_prefix`, a named local class among the owners known by its position as its own name is
+/// (`bare_class_text`), so that the classes nested in two local classes of one name stay apart.
+fn class_prefix_placed(prog: &Program, syms: &Symbols, interner: &Interner, owner: Owner, out: &mut String) {
+    if let Owner::Class(c) = owner {
+        let info = syms.class(c);
+        class_prefix_placed(prog, syms, interner, info.owner, out);
+        out.push_str(&sanitize(class_name_text(interner, &info)));
+        push_module_mark(&info, out);
+        push_local_position(prog, syms, c, out);
+        out.push('$');
+    }
+}
+
+/// The `$` of the module class a local object is (`Desugar.moduleDef`'s `E$`), a local enum's
+/// companion among them, written or made: apart from the class of its name, the enum, whatever
+/// place each is known by (a product's companion and enum may share one).
+fn push_module_mark(info: &ClassInfo, out: &mut String) {
+    if info.local_module.is_some() {
+        out.push('$');
+    }
+}
+
+/// The position a named local class is known by, after its name: a local enum's companion made
+/// without a definition, its enum's (`Symbols::placed_class`).
+fn push_local_position(prog: &Program, syms: &Symbols, c: ClassId, out: &mut String) {
+    let info = syms.class(c);
+    if info.owner == Owner::Local && info.kind != ClassKind::Anon {
+        let info = syms.class(syms.placed_class(c));
+        match syms.product_position(info.file, info.def) {
+            Some((token, offset)) => {
+                let _ = write!(out, "${}_{}", crate::source::tag_text(token), offset);
+            }
+            None => {
+                let _ = write!(out, "${}", prog.position(info.file, info.span.start));
+            }
+        }
     }
 }
 
@@ -756,21 +807,13 @@ pub(super) fn bare_class_text(prog: &Program, syms: &Symbols, interner: &Interne
     let info = syms.class(c);
     let mut s = String::new();
     if prefixed_by_owners(syms, interner, reach, c) {
-        class_prefix(syms, interner, info.owner, &mut s);
+        class_prefix_placed(prog, syms, interner, info.owner, &mut s);
     }
-    s.push_str(&sanitize(interner.get(info.name)));
+    s.push_str(&sanitize(class_name_text(interner, &info)));
+    push_module_mark(&info, &mut s);
     // A named local class is known by its position, like an anonymous one.
-    if info.owner == Owner::Local && info.kind != ClassKind::Anon {
-        match syms.product_position(info.file, info.def) {
-            Some((token, offset)) => {
-                let _ = write!(s, "${}_{}", crate::source::tag_text(token), offset);
-            }
-            None => {
-                let _ = write!(s, "${}", prog.position(info.file, info.span.start));
-            }
-        }
-    }
-    match module_suffix(interner, &info) {
+    push_local_position(prog, syms, c, &mut s);
+    match module_suffix(&info) {
         Some(suffix) => s.push_str(suffix),
         None if info.kind == ClassKind::EnumCase && info.singleton.is_some() => s.push_str("$V"),
         None => naming.avoid_taken(&mut s),
@@ -780,19 +823,19 @@ pub(super) fn bare_class_text(prog: &Program, syms: &Symbols, interner: &Interne
 
 /// The suffix the name of a class the output reaches as an instance (an object's, a given's)
 /// ends in: `accessor_of` makes the accessor of the instance in its place.
-fn module_suffix(interner: &Interner, info: &ClassInfo) -> Option<&'static str> {
+fn module_suffix(info: &ClassInfo) -> Option<&'static str> {
     match info.kind {
         ClassKind::Object => Some("$M"),
         // An object nested in a class is named apart from its companion class.
-        _ if beside_companion(interner, info) => Some("$M"),
+        _ if beside_companion(info) => Some("$M"),
         ClassKind::GivenImpl => Some("$G"),
         _ => None,
     }
 }
 
 /// Whether the class `c` is reached as an instance, through an accessor its name gives.
-pub(super) fn is_module(syms: &Symbols, interner: &Interner, c: ClassId) -> bool {
-    module_suffix(interner, &syms.class(c)).is_some()
+pub(super) fn is_module(syms: &Symbols, c: ClassId) -> bool {
+    module_suffix(&syms.class(c)).is_some()
 }
 
 /// The accessor of the instance of a class named `name` (`Registry$` of `Registry$M`).
@@ -901,12 +944,15 @@ impl<'a> Emitter<'a> {
             partial_function_number: layout.partial_function_number,
             anon_parent_args: &layout.anon_parent_args,
             local_captures: &layout.local_captures,
+            proxied: &layout.proxied,
+            lifted: &layout.lifted,
             closure_anons: &layout.closure_anons,
             shared: &layout.shared,
             outline,
             body: None,
             reach,
             captures: Vec::new(),
+            cell_params: Vec::new(),
             closure_captures: Vec::new(),
             tail: None,
             fn_depth: 0,
@@ -1737,6 +1783,7 @@ impl<'a> Emitter<'a> {
                 }
             }
             None if self.ctor_bindings.contains_key(&s) => self.ctor_bindings[&s].to_string(),
+            None if self.cell_params.contains(&s) => format!("{}.v", self.sym_name(s)),
             None => {
                 let n = self.sym_name(s);
                 if matches!(self.syms.sym(s).owner, Owner::Package(_)) {
@@ -2002,6 +2049,11 @@ impl<'a> Emitter<'a> {
                     js_string(js, &mut self.out);
                 }
             }
+            // A local trait's lifted member is its lifted method alone, apart from the source
+            // signature a class's member of its name has (`TFun::lifted`).
+            FunKind::Method if fun.lifted => {
+                let _ = write!(self.out, "{}$p{}", name, fun.captures);
+            }
             FunKind::Method => self.out.push_str(&name),
             FunKind::Local => {
                 let _ = write!(self.out, "const {} = ", name);
@@ -2028,6 +2080,9 @@ impl<'a> Emitter<'a> {
             FunKind::Method => (None, None),
         };
         let outer_region = std::mem::replace(&mut self.init_file, defaults_region);
+        let cells = self.cell_params.len();
+        let proxies = &fun.params[..fun.captures as usize];
+        self.cell_params.extend(proxies.iter().copied().filter(|&p| self.syms.sym(p).kind == SymKind::Var));
         let mark = self.emit_params_of(DefaultOf::Method(fun.sym), 0, &fun.params, &fun.defaults);
         self.init_file = region;
         self.entry_check = entry_check;
@@ -2046,6 +2101,7 @@ impl<'a> Emitter<'a> {
         self.fn_depth = outer_depth;
         self.nonlocal_return = outer_nonlocal;
         self.leave_params(mark);
+        self.cell_params.truncate(cells);
         self.def_scope = outer_def_scope;
         self.leave_scope();
         if kind == FunKind::Local {
@@ -2255,7 +2311,8 @@ impl<'a> Emitter<'a> {
         self.open("{");
         let is_object = info.kind == ClassKind::Object;
         let is_anon = info.kind == ClassKind::Anon;
-        let n_captures = if is_anon { tc.ctor_params.len() } else { tc.captures };
+        // A trait's captures are its initialiser's proxies, parameters it holds in no field.
+        let n_captures = if is_anon { tc.ctor_params.len() } else if info.kind == ClassKind::Trait { 0 } else { tc.captures };
         if n_captures > 0 {
             self.captures = tc.ctor_params[..n_captures].to_vec();
         }
@@ -2290,8 +2347,13 @@ impl<'a> Emitter<'a> {
         // A trait is never constructed: its body statements form `$traitInit`, which the
         // constructor of every class implementing it calls in linearisation order.
         let is_trait = info.kind == ClassKind::Trait;
-        // The body of a trait with ordinary parameters takes them all as arguments.
-        let takes_arguments = is_trait && info.ctor.iter().any(|cl| !cl.is_using);
+        // The body of a trait with ordinary parameters takes them all as arguments, after the
+        // values of the block it reads (its proxies).
+        let takes_arguments = is_trait && (info.ctor.iter().any(|cl| !cl.is_using) || tc.captures > 0);
+        let cells = self.cell_params.len();
+        if is_trait {
+            self.cell_params.extend(tc.ctor_params[..tc.captures].iter().copied().filter(|&p| self.syms.sym(p).kind == SymKind::Var));
+        }
         // Scala sets the parameter fields of a whole chain of classes before the first body of
         // the chain runs, so that the body of a superclass can read what a subclass takes as a
         // parameter. A class that is extended therefore keeps its body in `$body`, which calls
@@ -2330,9 +2392,16 @@ impl<'a> Emitter<'a> {
             let mark = self.scope_names.len();
             self.enter_scope(Root::Ctor(idx as u32));
             if is_enum_value {
+                // The value of an enum of a block or a class takes its companion's instance and
+                // what it captures first (`Program::enum_value_tail`).
+                self.out.push('(');
+                for i in 0..n_captures {
+                    let _ = write!(self.out, "$c{}, ", i);
+                    self.declare_fixed(&format!("$c{}", i));
+                }
                 self.declare_fixed("$name");
                 self.declare_fixed("$ordinal");
-                self.out.push_str("($name, $ordinal) ");
+                self.out.push_str("$name, $ordinal) ");
             } else if is_trait && !takes_arguments {
                 self.out.push_str("() ");
             } else if is_anon {
@@ -2442,6 +2511,9 @@ impl<'a> Emitter<'a> {
                 let _ = write!(self.out, "{0}.$name = $name; {0}.$ordinal = $ordinal;", this);
             }
             for (i, &p) in tc.ctor_params.iter().enumerate().filter(|_| !is_trait || takes_arguments) {
+                if is_trait && i < tc.captures {
+                    continue;
+                }
                 let captured = i < n_captures;
                 if !captured && !info.value_class && !self.param_needs_field(p, defers_body) {
                     self.ctor_locals.push(p);
@@ -2459,8 +2531,14 @@ impl<'a> Emitter<'a> {
             }
             if let Some(args) = tc.parent_args.filter(|_| superclass.is_none()) {
                 self.line();
-                let _ = write!(self.out, "{}.$init", this);
-                self.emit_args(args);
+                // What the enum captures leads its arguments, a `var` passed as its cell.
+                let enum_class = match info.owner {
+                    Owner::Class(m) => self.syms.class(m).companion,
+                    _ => None,
+                };
+                let captures = enum_class.and_then(|e| self.local_captures.get(&e).copied()).unwrap_or(0) as usize;
+                let _ = write!(self.out, "{}.$init(", this);
+                self.emit_proxy_args(args, captures, "");
                 self.out.push(';');
             }
             // The statements after the self calls of the superclass's secondary constructors run
@@ -2588,6 +2666,7 @@ impl<'a> Emitter<'a> {
         }
         self.close("}");
         self.captures.clear();
+        self.cell_params.truncate(cells);
         if is_object {
             let accessor = self.module_accessor(tc.id);
             self.line();
@@ -2679,7 +2758,8 @@ impl<'a> Emitter<'a> {
                     }
                     self.line();
                     let _ = write!(self.out, "{}.prototype.$traitInit.call({}", trait_name, this);
-                    self.emit_more_args(call.args, ", ");
+                    let proxies = self.local_captures.get(b).copied().unwrap_or(0) as usize;
+                    self.emit_proxy_args(call.args, proxies, ", ");
                     self.out.push(';');
                     if scoped {
                         self.leave_scope();
@@ -2961,9 +3041,27 @@ impl<'a> Emitter<'a> {
                 continue;
             };
             let Owner::Class(owner) = self.syms.sym(target).owner else { continue };
-            let target = self.sym_name(target);
+            // An accessor bound to a local trait's member that takes proxies passes the ones the
+            // class holds (dotty's `ResolveSuper` accessor, after `LambdaLift`).
+            let proxies = self.proxied.get(&target).copied().unwrap_or(0) as usize;
+            let lifted = self.lifted.get(&target).map(|&(k, _)| k);
+            let target_sym = target;
+            let target = match lifted {
+                Some(k) => format!("{}$p{}", self.sym_name(target), k),
+                None => self.sym_name(target).to_string(),
+            };
             self.line();
-            if superclass.map_or(false, |s| s.base_types.iter().any(|&(b, _)| b == owner)) {
+            if proxies > 0 {
+                let class = self.class_name(owner);
+                let _ = write!(self.out, "{}(...$a) {{ return {}.prototype.{}.call(this", name, class, target);
+                let f = self.prog.funs.iter().position(|f| f.sym == target_sym);
+                let held: Vec<SymId> = f.map_or(Vec::new(), |i| self.prog.funs[i].params[..proxies].to_vec());
+                for p in held {
+                    self.out.push_str(", ");
+                    self.emit_capture_ref(p);
+                }
+                self.out.push_str(", ...$a); }");
+            } else if superclass.map_or(false, |s| s.base_types.iter().any(|&(b, _)| b == owner)) {
                 let _ = write!(self.out, "{}(...$a) {{ return super.{}(...$a); }}", name, target);
             } else {
                 let class = self.class_name(owner);
@@ -3018,7 +3116,7 @@ impl<'a> Emitter<'a> {
             Some(group) if case_ancestor.is_none() => group.name.as_str(),
             _ => match case_ancestor {
                 Some(b) => b.product_name(self.interner.get(b.name)),
-                None => info.product_name(self.interner.get(info.name)),
+                None => info.product_name(class_name_text(self.interner, &info)),
             },
         };
         self.line();
@@ -3332,9 +3430,9 @@ impl<'a> Emitter<'a> {
         };
         match self.shared.groups.get(&c) {
             Some(group) => s.push_str(&group.name),
-            None => s.push_str(self.interner.get(info.name)),
+            None => s.push_str(class_name_text(self.interner, &info)),
         }
-        if info.kind == ClassKind::Object || beside_companion(self.interner, &info) {
+        if info.kind == ClassKind::Object || beside_companion(&info) {
             s.push('$');
         }
         s

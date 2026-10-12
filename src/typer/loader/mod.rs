@@ -1150,6 +1150,18 @@ impl<'a> Worker<'a> {
         } else {
             Vec::new()
         };
+        // So has a case class nested in a class: the program's own has no companion there, its
+        // instances made by its constructor (the JVM lays the companion out, `jvm/callable.rs`).
+        let instance_owner = matches!(owner, Owner::Class(o) if !matches!(self.syms.class(o).kind, ClassKind::Object | ClassKind::Builtin));
+        let nested_cases: Vec<Name> = if product && instance_owner {
+            entries
+                .iter()
+                .filter(|e| e.tag == tags::TYPEDEF && e.is_class && e.flags.has(tags::CASE) && !e.flags.has(tags::ENUM) && !tasty.is_object_class(e.name))
+                .map(|e| self.lname(&tasty, e.name))
+                .collect()
+        } else {
+            Vec::new()
+        };
         // A given with a body and no parameters is a given object in scalac's pickle; in teq's
         // model, which another module's classes are read as, a lazy given of a class of its own.
         let given_objects: Vec<Name> = if product {
@@ -1163,9 +1175,9 @@ impl<'a> Worker<'a> {
         };
         for e in entries {
             if e.tag == tags::TYPEDEF {
-                if e.is_class && tasty.is_object_class(e.name) && e.flags.has(tags::SYNTHETIC) && !enum_cases.is_empty() {
+                if e.is_class && tasty.is_object_class(e.name) && e.flags.has(tags::SYNTHETIC) && !(enum_cases.is_empty() && nested_cases.is_empty()) {
                     let name = self.lname(&tasty, e.name);
-                    if enum_cases.contains(&name) {
+                    if enum_cases.contains(&name) || nested_cases.contains(&name) {
                         continue;
                     }
                 }
@@ -1252,14 +1264,11 @@ impl<'a> Worker<'a> {
         let name = self.lname(&tasty, e.name);
         let file_id = self.loaded.as_ref().unwrap().file(file).file_id;
         let mut m = entry_mods(e);
-        // An object nested in a trait or class, a companion too, is an inner class whose
-        // instance the outer holds in a lazy val of the object's name (`ClassInfo::inner_object`);
-        // one with a companion class is not among the outer's nested classes, where the
-        // companion stands under that name. An enum's companion stays a single object, where
-        // its cases are made.
-        let inner_object = is_object
-            && companion != Some(Companion::OfEnum)
-            && matches!(owner, Owner::Class(o) if !matches!(self.syms.class(o).kind, ClassKind::Object | ClassKind::Builtin));
+        // An object nested in a trait or class, a companion too, an enum's as well, is an inner
+        // class whose instance the outer holds in a val of the object's name
+        // (`ClassInfo::inner_object`); one with a companion class is not among the outer's
+        // nested classes, where the companion stands under that name.
+        let inner_object = is_object && matches!(owner, Owner::Class(o) if !matches!(self.syms.class(o).kind, ClassKind::Object | ClassKind::Builtin));
         let is_object = is_object && !inner_object;
         let product = self.loaded.as_ref().map_or(false, |l| l.cp.is_products(l.file(file).cp));
         let kind = if is_object {
@@ -1331,6 +1340,11 @@ impl<'a> Worker<'a> {
             s.state().set(Completion::Done);
             self.register_term(owner, sym);
             self.syms.class_mut(cid).inner_object = Some(sym);
+            // An enum's companion holds its cases, as the program's own does.
+            if let (Some(Companion::OfEnum), Some(en)) = (companion, self.existing_class(owner, name)) {
+                self.syms.class_mut(en).companion = Some(cid);
+                self.syms.class_mut(cid).companion = Some(en);
+            }
         }
         // The library's tuple cons is the one the tuple rules relate to `TupleN` where the
         // standard library does not supply it.
@@ -1544,6 +1558,14 @@ impl<'a> Worker<'a> {
             if let Some(sym) = inner {
                 self.loaded_mut().syms.insert(sym, LSym { file, addr: e.addr, conversion: false });
                 self.loaded_mut().tables[file as usize].terms.insert(e.addr, sym);
+                // The companion an enum of a class made is eager, as the program's own is
+                // (dotty's `LazyVals.transformSyntheticModule`); a written one or a trait's lazy.
+                let made = e.flags.has(tags::SYNTHETIC)
+                    && self.syms.class(o).kind != ClassKind::Trait
+                    && self.nested_object_of(o, name).and_then(|c| self.syms.class(c).companion).is_some_and(|en| self.syms.class(en).kind == ClassKind::Enum);
+                if made {
+                    self.syms.sym_mut(sym).mods &= !mods::LAZY;
+                }
                 // An `implicit object` of a trait is a given of the trait (scalatest's
                 // `UseDefaultAssertions`), found by its singleton type as the path itself.
                 let given = flag_mods(e.flags) & (mods::IMPLICIT | mods::GIVEN);
@@ -1732,12 +1754,13 @@ impl<'a> Worker<'a> {
             self.set_tparam_bounds(&mut cx, id, &tp.info);
         }
         let mut parents: Vec<TypeId> = sig.parents.iter().map(|p| self.map_type(&mut cx, p)).collect();
-        // A case object and a companion of another module are read as the program's own: of the
+        // A case object and a companion, an inner one too, are read as the program's own: of the
         // parents teq's writer appends after the declared ones, as many as the pickle's origins
         // record (kind 11), the mirrors (a case object's `Mirror.Singleton`, a companion's), which
         // teq's typer gives by its rules, are taken off; the `Product` and `Serializable` of
         // dotty's `Desugar.classDef` stay, as a case class's and an enum's `Enum` do.
-        if kind == ClassKind::Object && self.loaded.as_ref().map_or(false, |l| l.is_product_class(c)) {
+        let object = kind == ClassKind::Object || self.syms.class(c).inner_object.is_some();
+        if object && self.loaded.as_ref().map_or(false, |l| l.is_product_class(c)) {
             let appended = match &self.loaded.as_ref().unwrap().file(lc.file).provenance {
                 crate::tasty::origins::Found::Read(o) => o.appended.binary_search_by_key(&lc.addr, |&(a, _)| a).ok().map_or(0, |i| o.appended[i].1),
                 _ => 0,
@@ -1766,16 +1789,18 @@ impl<'a> Worker<'a> {
             self.enter_loaded_ctor_access(c, &ctor.mods);
         }
         // As in source (`resolve.rs`): the values of an enum with parameters, a superclass or an
-        // initialiser in its body (a val with a right side, a statement) are created by its
-        // companion, in order, with the arguments their cases pass, so that a lookup while they
-        // are made answers as `DesugarEnums.enumScaffolding`'s `$values` does.
+        // initialiser in its body (a val with a right side, a statement), or of a class's enum,
+        // are created by its companion, in order, with the arguments their cases pass and the
+        // enclosing instance, so that a lookup while they are made answers as
+        // `DesugarEnums.enumScaffolding`'s `$values` does.
         if kind == ClassKind::Enum {
             let info = self.syms.class(c);
+            let instance = matches!(info.owner, Owner::Class(o) if !matches!(self.syms.class(o).kind, ClassKind::Object | ClassKind::Builtin));
             let initialisers = sig.index.statements
                 || sig.index.members.iter().any(|m| {
                     (m.tag == tags::VALDEF && m.has_body && !m.flags.has(tags::LAZY)) || (m.tag == tags::DEFDEF && m.flags.has(tags::GIVEN))
                 });
-            if info.superclass.is_some() || info.ctor.iter().any(|cl| !cl.params.is_empty()) || initialisers {
+            if instance || info.superclass.is_some() || info.ctor.iter().any(|cl| !cl.params.is_empty()) || initialisers {
                 self.syms.class_mut(c).stateful = true;
             }
         }

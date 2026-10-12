@@ -39,6 +39,7 @@ pub use reflective::{reflective_proxy_name, ReflectiveSig};
 mod pat;
 pub mod prep;
 pub mod prims;
+mod proxies;
 pub mod profile;
 mod quoted;
 mod resolve;
@@ -46,6 +47,7 @@ pub use apply::{ArgList, ArgSrc};
 pub use expr::WITHHELD_TEMPLATE;
 pub use inline::MAX_INLINES;
 pub use measured::reach_mode_error;
+pub use proxies::HeldOf;
 pub use resolve::{TermRef, TypeRef};
 mod referents;
 mod reflective;
@@ -1243,6 +1245,29 @@ pub struct Worker<'a> {
     /// `new A(...)` of a named local class typed before the class was, whose captures are added
     /// to the arguments once they are known.
     pub local_news: Vec<(ClassId, crate::tir::TExprId, bool, Vec<(SymId, crate::tir::TExprId)>)>,
+    /// The named local classes of the block being typed that mix in a local trait of the block
+    /// defined after them, each with what its own body captures: finished once the trait is
+    /// checked, with the forwarders that pass the trait's proxies (`proxies.rs`). Empty outside
+    /// the typing of a block.
+    pub deferred_classes: Vec<(ClassId, Vec<SymId>)>,
+    /// The members of local traits lifted with their proxies (`proxies.rs`), each with the values
+    /// every call of it passes first (dotty's `LambdaLift.addFreeArgs`).
+    pub lifted_members: FxMap<SymId, Vec<SymId>>,
+    /// The lazy vals of local traits whose initialisers read their blocks' values, each with the
+    /// lifted method a read of it calls with the proxies (`y$lzyINIT`).
+    pub lifted_lazy: FxMap<SymId, SymId>,
+    /// What a local class holds besides what its body reads: the proxies its super accessors pass
+    /// to a local trait's lifted member they bind to (dotty's `ResolveSuper` accessors).
+    pub accessor_captures: FxMap<ClassId, Vec<SymId>>,
+    /// The proxies of the block's values that a class of a block holds for the traits of classes
+    /// nested in it (`proxies.rs`, dotty's `LambdaLift.proxyRef` through the intervening real
+    /// class): per class and what it stands for, its member.
+    pub held_proxies: FxMap<(ClassId, HeldOf), SymId>,
+    /// What each such member stands for, which the TASTy writer pickles in its place.
+    pub held_proxy_of: FxMap<SymId, HeldOf>,
+    /// The members of `held_proxies` made before their class's record, joined to it when it is
+    /// made (`push_class_body`).
+    pub pending_held: FxMap<ClassId, Vec<FunId>>,
     /// What each anonymous class receives through its constructor.
     pub anon_captures: FxMap<ClassId, Vec<SymId>>,
     /// What the expression that creates an anonymous class passes on to the superclass.
@@ -2360,6 +2385,13 @@ impl<'a> Worker<'a> {
             erroneous_args: Vec::new(),
             erroneous_lambdas: Vec::new(),
             local_news: Vec::new(),
+            deferred_classes: Vec::new(),
+            lifted_members: FxMap::default(),
+            lifted_lazy: FxMap::default(),
+            accessor_captures: FxMap::default(),
+            held_proxies: FxMap::default(),
+            held_proxy_of: FxMap::default(),
+            pending_held: FxMap::default(),
             anon_captures: FxMap::default(),
             anon_parent_args: FxMap::default(),
             mixin_supers: FxMap::default(),
@@ -2680,6 +2712,13 @@ impl<'a> Worker<'a> {
             erroneous_args: Default::default(),
             erroneous_lambdas: Default::default(),
             local_news: self.local_news.clone(),
+            deferred_classes: Vec::new(),
+            lifted_members: self.lifted_members.clone(),
+            lifted_lazy: self.lifted_lazy.clone(),
+            accessor_captures: self.accessor_captures.clone(),
+            held_proxies: self.held_proxies.clone(),
+            held_proxy_of: self.held_proxy_of.clone(),
+            pending_held: FxMap::default(),
             anon_captures: self.anon_captures.clone(),
             anon_parent_args: self.anon_parent_args.clone(),
             mixin_supers: self.mixin_supers.clone(),
@@ -3171,6 +3210,10 @@ impl<'a> Worker<'a> {
         s.pkgs.fork();
         s.overloads.fork();
         self.prog.fork();
+        // The index over the records, which a typing before the fork caught up with the arena's
+        // records then, built again: those are the shared region's now, and this worker's own
+        // start anew past it (as the merge leaves it).
+        self.prog_index = check::ProgIndex::default();
         self.fun_of_sym.fork();
         self.val_init.fork();
         self.class_done.fork();
