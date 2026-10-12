@@ -2251,7 +2251,7 @@ impl<'a> Worker<'a> {
                     (Found::Module(Some(scope)), Some(c)) => self.scope_extension_site(scope, c),
                     (Found::Lexical, Some(c)) => {
                         let site = self.trait_member_site(e, c);
-                        (self.trait_member_subst(site, c), None)
+                        (self.trait_member_subst(site, c), self.lexical_extension_prefix(e, site, None))
                     }
                     _ => (Vec::new(), None),
                 };

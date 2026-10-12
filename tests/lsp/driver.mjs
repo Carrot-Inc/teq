@@ -223,6 +223,16 @@ class Holder extends Base:
 object Holder:
   def fromCompanion: Holder = Holder()
 
+trait Results:
+  class Status(val code: Int)
+  val Ok = new Status(200)
+
+trait CtrlPage extends Results:
+  extension (s: Status) def page(p: String): String = p
+
+class Ctrl extends CtrlPage:
+  def show = Ok.page("x")
+
 object Complete:
   def enclosing: Int = 6
   def run(param: Int): Int =
@@ -1139,6 +1149,9 @@ async function completion() {
     check("a client without snippets: every item its name alone, no insertTextFormat", list.items.every((i) => i.insertTextFormat === undefined && i.textEdit.newText === i.label), list.items.filter((i) => i.insertTextFormat !== undefined || i.textEdit.newText !== i.label))
     ;[text, offset, list] = await completeIn(c, completing, edit("holder.own(1) + param", "point.no|rm + holder.own(1) + param"), ++v)
     check("member completion: an extension in scope", labels(list).includes("norm") && itemOf(list, "norm")?.kind === 2, labels(list))
+    // An extension the enclosing class inherits, on a class nested in its base: seen from `Ctrl.this`.
+    ;[text, offset, list] = await completeIn(c, completing, edit("def show = Ok.page", "def show = Ok.pa|ge"), ++v)
+    check("member completion: an inherited extension on a nested class of the enclosing class", itemOf(list, "page")?.kind === 2 && /\(p: String\): String$/.test(itemOf(list, "page")?.detail), itemOf(list, "page") ?? labels(list))
     ;[text, offset, list] = await completeIn(c, completing, edit("holder.own(1) + param", "5.|x + holder.own(1) + param"), ++v)
     ls = labels(list)
     check("member completion: the members through a conversion, after the receiver's own", ls.includes("x") && ls.includes("y") && ls.indexOf("x") > ls.indexOf("toInt") && /intToPoint/.test(itemOf(list, "x")?.detail), ls)
@@ -1681,6 +1694,9 @@ async function signatureHelp() {
     rmSync(`${barrier}.start`, { force: true })
   }
   // A client that declares no `labelOffsetSupport` takes each parameter's label as its text.
+  const inherited = join(root, "Inherited.scala")
+  const t3 = "trait Results:\n  class Status(val code: Int)\n  val Ok = new Status(200)\ntrait CtrlPage extends Results:\n  extension (s: Status) def page(p: String): String = p\nclass Ctrl extends CtrlPage:\n  def show = Ok.page(\"x\")\n"
+  writeFileSync(inherited, t3)
   const plain = new Client(root)
   try {
     await plain.result("initialize", { processId: null, rootUri: uriOf(root), capabilities: {} })
@@ -1690,6 +1706,10 @@ async function signatureHelp() {
     const a = await plain.request("textDocument/signatureHelp", { ...doc(file), position: positionAt(t1, at) }, { timeout: 20000 })
     const sig = a.result?.signatures?.[0]
     check("signature help without labelOffsetSupport: each parameter's label its text", sig?.label === "pick(first: Int, second: String): Int" && same(sig.parameters.map((p) => p.label), ["first: Int", "second: String"]) && a.result.activeParameter === 1, a)
+    // An extension the enclosing class inherits, on a class nested in its base: seen from `Ctrl.this`.
+    plain.notify("textDocument/didOpen", { textDocument: { uri: uriOf(inherited), languageId: "scala", version: 1, text: t3 } })
+    const ext = await plain.request("textDocument/signatureHelp", { textDocument: { uri: uriOf(inherited) }, position: positionAt(t3, t3.indexOf("page(\"x\")") + "page(".length) }, { timeout: 20000 })
+    check("signature help: an inherited extension on a nested class of the enclosing class", ext.result?.signatures?.[0]?.label === "page(p: String): String", ext)
     await plain.result("shutdown", null)
     plain.notify("exit", null)
   } catch (e) {

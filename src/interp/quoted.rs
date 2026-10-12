@@ -70,7 +70,7 @@ pub enum PkgForm {
     SymClassRef = 4,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Copy)]
 pub enum PendingKind {
     /// A method resolved to its symbol.
     Sym(SymId),
@@ -714,6 +714,26 @@ pub(super) struct MethodTypeRepr {
     result: TypeId,
     open: Vec<TParamId>,
     kind: ClauseKind,
+}
+
+/// The clauses of the method an `Apply` applies, as its function's `MethodType`s hold them, read
+/// where they are kept, never copied: a method's signature, of which the selection's qualifier
+/// applied the first ones (an extension selected on its own application to its receiver); a
+/// constructor's class; a reflect method type (an operator's, a closure's method's).
+enum Clauses {
+    Sig(std::sync::Arc<MethodSig>, usize),
+    Ctor(ClassId),
+    Method(TypeId),
+}
+
+/// What an `Apply` finds in its function's widened type (`TypeAssigner.assignType`).
+enum ApplyTarget {
+    Method(Clauses),
+    /// A member named whose alternative the arguments choose, a default getter, a constructor of
+    /// no recorded clause: the typer's application resolves it.
+    Resolved,
+    /// No method type: refused, `takesNoParamsMsg`.
+    NotMethod,
 }
 
 /// The kind of a method type's clause, which scalac's `MethodType` keeps
@@ -1569,19 +1589,25 @@ impl<'a, 't> Interp<'a, 't> {
                         Some(sym) => {
                             let info = self.syms().sym(sym);
                             let member = matches!(info.owner, Owner::Class(_)) && !info.is_extension;
+                            // A generic method's call under the type arguments the typer inferred,
+                            // as scalac's tree holds its `TypeApply`.
+                            let exprs = self.prog().expr_list(args).to_vec();
+                            let result = self.prog().type_of(e);
                             if member && !items.is_empty() {
                                 let recv = items[0];
                                 let rest = items[1..].to_vec();
                                 if rest.is_empty() && !self.takes_arguments(sym) {
                                     View::Select(recv, SymRef::Term(sym), self.syms().sym(sym).name)
                                 } else {
-                                    let fun = self.pending(Pending { recv: Some(recv), kind: PendingKind::Sym(sym), targs: Vec::new() });
+                                    let targs = if self.typer.sig_of(sym).tparams.is_empty() { Vec::new() } else { self.inferred_targs(sym, Some(exprs[0]), &exprs[1..], result) };
+                                    let fun = self.pending(Pending { recv: Some(recv), kind: PendingKind::Sym(sym), targs });
                                     View::Apply(fun, rest)
                                 }
                             } else if items.is_empty() && !self.takes_arguments(sym) {
                                 View::Ident(SymRef::Term(sym))
                             } else {
-                                let fun = self.pending(Pending { recv: None, kind: PendingKind::Sym(sym), targs: Vec::new() });
+                                let targs = if self.typer.sig_of(sym).tparams.is_empty() { Vec::new() } else { self.inferred_targs(sym, None, &exprs, result) };
+                                let fun = self.pending(Pending { recv: None, kind: PendingKind::Sym(sym), targs });
                                 View::Apply(fun, items)
                             }
                         }
@@ -2058,9 +2084,18 @@ impl<'a, 't> Interp<'a, 't> {
         };
         match p.kind {
             PendingKind::Sym(s) => {
-                let recv = match p.recv {
-                    Some(r) => Some(self.materialize(r)?),
-                    None => None,
+                // The qualifier is the selection's prefix; where it is an extension's own
+                // application to its receiver (`own_receiver`), the receiver is the first argument.
+                let own = match p.recv {
+                    Some(q) if self.syms().sym(s).is_extension => self.own_receiver(q, s)?,
+                    _ => None,
+                };
+                let (recv, args) = match own {
+                    Some(mut receiver) => {
+                        receiver.extend(args);
+                        (None, receiver)
+                    }
+                    None => (self.selection_prefix(&p, s)?, args),
                 };
                 let (kind, owner, is_ext, name) = {
                     let info = self.syms().sym(s);
@@ -2078,6 +2113,9 @@ impl<'a, 't> Interp<'a, 't> {
                     *a = self.typer.by_name_thunk(*a);
                 }
                 let l = self.typer.prog.list(&args);
+                // A given of no parameters is a value, read as the typer reads it (`is_method_sym`:
+                // dotty's alias given is a lazy val), not called.
+                let kind = if kind == SymKind::Given && !self.typer.is_method_sym(s) { SymKind::Val } else { kind };
                 let te = match (recv, kind, owner) {
                     (Some(r), SymKind::Val | SymKind::Var | SymKind::Param, _) => self.typer.prog.add(TExpr::Field(r, s)),
                     (Some(r), SymKind::Object(c), _) => {
@@ -2086,13 +2124,8 @@ impl<'a, 't> Interp<'a, 't> {
                     }
                     // A member of a JS type as the typer applies it: a property, brackets, a call.
                     (Some(r), _, _) if !is_ext && self.syms().js_member(s) && self.syms().sym(s).intrinsic.is_none() => self.typer.build_js_member_call(r, s, l),
-                    (Some(r), _, _) if !is_ext => self.typer.prog.add(TExpr::CallMethod(r, s, l)),
-                    (Some(r), _, _) => {
-                        let mut all = vec![r];
-                        all.extend(args.iter().copied());
-                        let l = self.typer.prog.list(&all);
-                        self.typer.prog.add(TExpr::CallStatic(s, l))
-                    }
+                    // A member of the prefix, an extension too: the typer's `E.plus(1, 2, 3)`.
+                    (Some(r), _, _) => self.typer.prog.add(TExpr::CallMethod(r, s, l)),
                     (None, SymKind::Object(c), _) => self.typer.prog.add(TExpr::Module(c)),
                     // An enum case is a static of its own, as a reference in source is typed.
                     (None, SymKind::EnumValue(_), _) => self.typer.prog.add(TExpr::Static(s)),
@@ -2210,6 +2243,7 @@ impl<'a, 't> Interp<'a, 't> {
                 self.unsupported(format!("a reference to {} where a term was expected", shown))
             }
             PendingKind::New(ty) | PendingKind::Ctor(ty) => {
+                let ty = self.constructed_type(ty, &p.targs);
                 let Some(c) = self.typer.class_of(ty) else {
                     let shown = self.show_type_repr(ty);
                     return self.unsupported(format!("new of {}, which is no class", shown));
@@ -2346,7 +2380,27 @@ impl<'a, 't> Interp<'a, 't> {
             }
         }
         let ret = self.typer.types.subst(sig.ret, &subst);
+        let ret = self.dependent_result(s, ret, args);
         self.typer.zonk(ret)
+    }
+
+    /// A result that names a parameter's path names its argument's in its place, a member
+    /// selected on it kept a selection on that path, as `TypeAssigner.safeSubstParams` gives an
+    /// application its type; one that names none is as it is (`isResultDependent`'s fast path).
+    /// An extension's receiver is its first argument.
+    fn dependent_result(&mut self, s: SymId, ret: TypeId, args: &[TExprId]) -> TypeId {
+        if !self.typer.types.has_paths(ret) {
+            return ret;
+        }
+        let sig = self.typer.sig_arc(s);
+        let mut terms: Vec<(SymId, TypeId)> = Vec::new();
+        for (p, &a) in sig.clauses.iter().flat_map(|c| c.params.iter()).zip(args) {
+            if self.typer.types.names_term(ret, &[p.sym]) {
+                let path = self.typer.arg_path(a, p.ty);
+                terms.push((p.sym, path));
+            }
+        }
+        self.typer.subst_paths_keeping(ret, &terms)
     }
 
     fn infer_simple(&mut self, p: TypeId, a: TypeId, tparams: &[TParamId], subst: &mut Subst) {
@@ -2426,10 +2480,7 @@ impl<'a, 't> Interp<'a, 't> {
                 let p = self.pending_of(i)?;
                 match p.kind {
                     PendingKind::Sym(s) => {
-                        let recv = match p.recv {
-                            Some(r) => Some(self.materialize(r)?),
-                            None => None,
-                        };
+                        let recv = self.selection_prefix(&p, s)?;
                         self.result_type(s, recv, &[], &p.targs)
                     }
                     PendingKind::New(ty) | PendingKind::Ctor(ty) => ty,
@@ -2449,6 +2500,7 @@ impl<'a, 't> Interp<'a, 't> {
                 return self.tree_type(TreeRef::Expr(init));
             }
             TreeRef::Alias(a) => self.type_def_rhs(SymRef::Alias(a)),
+            TreeRef::Partial(_) => self.partial_method_type(t)?.unwrap_or(ANY),
             _ => ANY,
         })
     }
@@ -2773,12 +2825,423 @@ impl<'a, 't> Interp<'a, 't> {
                 PendingKind::Named(_) => SymRef::None,
                 PendingKind::Ref(r) => r,
             },
-            TreeRef::Case(_) | TreeRef::NamedArg(_) | TreeRef::Partial(_) | TreeRef::SeqLiteral(_) => SymRef::None,
+            // An application's symbol is its function's (`GenericApply`'s denotation, `Trees`).
+            TreeRef::Partial(i) => {
+                let (fun, _) = self.partial_of(i)?;
+                return self.tree_symbol(fun);
+            }
+            TreeRef::Case(_) | TreeRef::NamedArg(_) | TreeRef::SeqLiteral(_) => SymRef::None,
             TreeRef::LambdaDef(e) | TreeRef::LambdaClosure(e) | TreeRef::LambdaRef(e) => SymRef::Lambda(e),
             TreeRef::Ctor(c) => SymRef::Ctor(c),
             TreeRef::Alias(a) => SymRef::Alias(a),
             TreeRef::Default(c, i) => SymRef::Default(c, i),
         })
+    }
+
+    /// `Apply(fun, args)` as dotty's `tpd.Apply` types it (`QuotesImpl`'s `Apply.apply`,
+    /// `TypeAssigner.assignType`), by `fun`'s widened type: of a method type, the clause it
+    /// applies takes as many arguments as `args` holds, else dotty's error and an erroneous
+    /// tree; the application is of that clause's result, the method type of the next clause
+    /// where one follows (`Partial`, no expression) and the call, lowered once with every
+    /// clause's arguments, after the last. Of an erroneous type, erroneous; of any other type,
+    /// refused (`takesNoParamsMsg`). A member named whose alternative the arguments choose is
+    /// left to the typer's application, as dotty's tree holds the alternative its typer chose.
+    fn reflect_apply(&mut self, fun: TreeRef, args: Vec<TreeRef>) -> R<TreeRef> {
+        // An application of an erroneous tree is erroneous without another message, as
+        // `assignType` keeps the `ErrorType` of its function.
+        if let TreeRef::Expr(e) = fun {
+            if self.prog().type_of(e) == Some(ERROR) {
+                return Ok(fun);
+            }
+        }
+        let (root, k) = self.application_root(fun)?;
+        let clauses = match self.apply_target(root)? {
+            ApplyTarget::Method(clauses) => clauses,
+            ApplyTarget::Resolved => {
+                let all = self.applied_args(fun, args)?;
+                return Ok(TreeRef::Expr(self.apply_tree(root, all)?));
+            }
+            ApplyTarget::NotMethod => return self.not_applicable(fun),
+        };
+        let expected = self.clause_arity(&clauses, k)?;
+        if expected != Some(args.len()) {
+            return self.wrong_arity(fun, expected, args.len());
+        }
+        if k + 1 < self.clause_count(&clauses)? {
+            return Ok(TreeRef::Partial(self.records.partials.push((fun, args))));
+        }
+        let all = self.applied_args(fun, args)?;
+        Ok(TreeRef::Expr(self.apply_tree(root, all)?))
+    }
+
+    /// The selection an application applies, the `Partial`s around it unwound, and how many
+    /// argument lists they applied.
+    fn application_root(&self, fun: TreeRef) -> R<(TreeRef, usize)> {
+        let mut root = fun;
+        let mut k = 0;
+        while let TreeRef::Partial(i) = root {
+            match self.records.partials.get(i) {
+                Some(&(inner, _)) => root = inner,
+                None => return self.stale(STALE_TREE),
+            }
+            k += 1;
+        }
+        Ok((root, k))
+    }
+
+    /// Every argument list applied to the selection under `fun`, then `args`, in order: `args`
+    /// alone where `fun` is the selection.
+    fn applied_args(&mut self, fun: TreeRef, args: Vec<TreeRef>) -> R<Vec<TreeRef>> {
+        if !matches!(fun, TreeRef::Partial(_)) {
+            return Ok(args);
+        }
+        let (_, mut clauses) = self.application_spine(fun)?;
+        clauses.push(args);
+        Ok(clauses.into_iter().flatten().collect())
+    }
+
+    /// The selection an application applies and the argument lists applied to it so far, the
+    /// first first: the `Partial`s around it unwound.
+    fn application_spine(&mut self, fun: TreeRef) -> R<(TreeRef, Vec<Vec<TreeRef>>)> {
+        let mut root = fun;
+        let mut clauses = Vec::new();
+        while let TreeRef::Partial(i) = root {
+            let (inner, args) = self.partial_of(i)?;
+            clauses.push(args);
+            root = inner;
+        }
+        clauses.reverse();
+        Ok((root, clauses))
+    }
+
+    /// What `Apply` finds in the widened type of the selection `root` (`assignType`'s match on
+    /// `fun.tpe.widen`): a method's clauses, of a member selected, a constructor, an operator or
+    /// the method behind a closure; a member named or a default getter, which the typer's
+    /// application resolves; or no method.
+    fn apply_target(&mut self, root: TreeRef) -> R<ApplyTarget> {
+        let i = match root {
+            TreeRef::Pending(i) => i,
+            TreeRef::LambdaRef(_) => {
+                return Ok(match self.selection_method_type(root)? {
+                    Some(m) => ApplyTarget::Method(Clauses::Method(m)),
+                    None => ApplyTarget::NotMethod,
+                })
+            }
+            _ => return Ok(ApplyTarget::NotMethod),
+        };
+        // Read in place: the selection is applied on, its signature read once.
+        let (kind, recv, typed) = match self.records.pending.get(i) {
+            Some(p) => (p.kind, p.recv, !p.targs.is_empty()),
+            None => return self.stale(STALE_TREE),
+        };
+        Ok(match kind {
+            PendingKind::Sym(s) => {
+                if !matches!(self.syms().sym(s).kind, SymKind::Def | SymKind::Given) {
+                    return Ok(ApplyTarget::NotMethod);
+                }
+                let sig = self.typer.sig_arc(s);
+                if sig.clauses.is_empty() {
+                    return Ok(ApplyTarget::NotMethod);
+                }
+                let skip = self.applied_by_qualifier(recv, s)?;
+                // A `PolyType` before the clause applied, which no `TypeApply` instantiated: no
+                // method type, refused as `assignType` refuses it. An extension's own type
+                // parameters lead its receiver clause, its method's the clauses after
+                // (`[A](x: A)[B](y: B)`), which a qualifier applying the receiver leaves.
+                let (is_ext, ext_tparams) = (self.syms().sym(s).is_extension, self.syms().sym(s).ext_tparams as usize);
+                let leading = match (skip > 0, is_ext) {
+                    (true, _) => sig.tparams.len().saturating_sub(ext_tparams),
+                    (false, true) => ext_tparams,
+                    (false, false) => sig.tparams.len(),
+                };
+                if leading > 0 && !typed {
+                    return Ok(ApplyTarget::NotMethod);
+                }
+                ApplyTarget::Method(Clauses::Sig(sig, skip))
+            }
+            PendingKind::New(_) => ApplyTarget::NotMethod,
+            PendingKind::Ctor(ty) => {
+                let targs = self.pending_of(i)?.targs;
+                let ty = self.constructed_type(ty, &targs);
+                // A generic class `New` names alone, which no `TypeApply` instantiated: its
+                // constructor's type is a `PolyType`.
+                if matches!(self.typer.types.get(ty), Type::Ctor(_)) {
+                    return Ok(ApplyTarget::NotMethod);
+                }
+                match self.typer.class_of(ty) {
+                    Some(c) => {
+                        self.typer.complete_class(c);
+                        // A class of no recorded clause (a Java class's overloaded constructors)
+                        // is left to the application.
+                        if self.syms().class(c).ctor.is_empty() { ApplyTarget::Resolved } else { ApplyTarget::Method(Clauses::Ctor(c)) }
+                    }
+                    None => ApplyTarget::Resolved,
+                }
+            }
+            PendingKind::Operator(_, method, _) => ApplyTarget::Method(Clauses::Method(method)),
+            PendingKind::Named(_) | PendingKind::Ref(_) => ApplyTarget::Resolved,
+        })
+    }
+
+    /// How many leading clauses of the method `s` the qualifier `recv` of its selection applied:
+    /// none for a prefix, which a qualifier is (dotty's `Select(qual, sym)` is the member of
+    /// `qual`, an extension's receiver its first argument), the extension's own clauses where
+    /// `recv` is the extension's application to its receiver (`own_receiver`).
+    fn applied_by_qualifier(&mut self, recv: Option<TreeRef>, s: SymId) -> R<usize> {
+        match recv {
+            Some(q) if self.syms().sym(s).is_extension && self.own_receiver(q, s)?.is_some() => Ok(self.syms().sym(s).ext_clauses as usize),
+            _ => Ok(0),
+        }
+    }
+
+    /// The receiver's arguments where `q`, the qualifier of a selection of the extension `s`, is
+    /// that extension's own application to its receiver: teq's view of `a -> b` as scalac's
+    /// `ArrowAssoc[A](a).->[B](b)`, whose qualifier stands for scala-library's wrapper of the
+    /// receiver (the view's `CallStatic` of `->` on `a`, or its application rebuilt).
+    fn own_receiver(&mut self, q: TreeRef, s: SymId) -> R<Option<Vec<TreeRef>>> {
+        match q {
+            TreeRef::Expr(e) => Ok(match self.prog().expr(e) {
+                TExpr::CallStatic(t, l) if t == s => Some(self.prog().expr_list(l).iter().map(|&x| TreeRef::Expr(x)).collect()),
+                _ => None,
+            }),
+            TreeRef::Partial(_) => {
+                let (root, k) = self.application_root(q)?;
+                let TreeRef::Pending(i) = root else { return Ok(None) };
+                let p = self.pending_of(i)?;
+                if !matches!(p.kind, PendingKind::Sym(t) if t == s) || p.recv.is_some() || k != self.syms().sym(s).ext_clauses as usize {
+                    return Ok(None);
+                }
+                let (_, clauses) = self.application_spine(q)?;
+                Ok(Some(clauses.into_iter().flatten().collect()))
+            }
+            _ => Ok(None),
+        }
+    }
+
+    /// The number of clauses of the method an application applies, after those its qualifier
+    /// applied.
+    fn clause_count(&mut self, c: &Clauses) -> R<usize> {
+        Ok(match c {
+            Clauses::Sig(sig, skip) => sig.clauses.len() - skip,
+            &Clauses::Ctor(class) => self.syms().class(class).ctor.len(),
+            &Clauses::Method(mut t) => {
+                let mut n = 0;
+                while let Some(m) = self.method_type_parts(t)? {
+                    n += 1;
+                    t = m.result;
+                }
+                n
+            }
+        })
+    }
+
+    /// The number of parameters of the clause `k` (`paramInfos`), none past the last clause.
+    fn clause_arity(&mut self, c: &Clauses, k: usize) -> R<Option<usize>> {
+        Ok(match c {
+            Clauses::Sig(sig, skip) => sig.clauses.get(skip + k).map(|c| c.params.len()),
+            &Clauses::Ctor(class) => self.syms().class(class).ctor.get(k).map(|c| c.params.len()),
+            &Clauses::Method(mut t) => {
+                for _ in 0..k {
+                    match self.method_type_parts(t)? {
+                        Some(m) => t = m.result,
+                        None => return Ok(None),
+                    }
+                }
+                self.method_type_parts(t)?.map(|m| m.types.len())
+            }
+        })
+    }
+
+    /// dotty's refusal of an `Apply` whose function has no method type (`assignType`,
+    /// `takesNoParamsMsg`): "`exprStr(fun)` does not take parameters", a reference's symbol
+    /// located, any other term's "value of type T"; at the macro's call, the tree erroneous.
+    fn not_applicable(&mut self, fun: TreeRef) -> R<TreeRef> {
+        let named = match fun {
+            TreeRef::Expr(e) => match self.prog().expr(e) {
+                TExpr::Local(s) | TExpr::Static(s) | TExpr::Field(_, s) if matches!(self.syms().sym(s).kind, SymKind::Val | SymKind::Var | SymKind::Param | SymKind::Given) => Some(SymRef::Term(s)),
+                _ => None,
+            },
+            // A method or a constructor selected under its `PolyType`.
+            TreeRef::Pending(i) => match self.pending_of(i)?.kind {
+                PendingKind::Sym(s) => Some(SymRef::Term(s)),
+                PendingKind::Ctor(ty) => match self.typer.types.get(ty) {
+                    Type::Ctor(c) => Some(SymRef::Ctor(c)),
+                    _ => self.typer.class_of(ty).map(SymRef::Ctor),
+                },
+                _ => None,
+            },
+            _ => None,
+        };
+        let shown = match named {
+            Some(s) => self.located_symbol(s),
+            None => {
+                let ty = self.tree_type(fun)?;
+                let ty = self.typer.widen_path(ty);
+                format!("value of type {}", self.typer.show(ty))
+            }
+        };
+        let msg = format!("{} does not take parameters", shown);
+        let ctx = self.macro_ctx()?;
+        self.typer.diags.error(ctx.site_file, ctx.site_span, msg);
+        let te = self.typer.prog.add(TExpr::Unit);
+        self.typer.prog.set_type(te, ERROR);
+        Ok(TreeRef::Expr(te))
+    }
+
+    /// A symbol as dotty's `showLocated` names it: `value f in object M`, `method f in object M`,
+    /// `constructor Gen in class Gen`.
+    fn located_symbol(&mut self, r: SymRef) -> String {
+        let (kind, name, owner) = match r {
+            SymRef::Ctor(c) => ("constructor", self.typer.name_ref(self.syms().class(c).name).to_string(), Owner::Class(c)),
+            SymRef::Term(s) => {
+                let sym_kind = self.syms().sym(s).kind;
+                let method_given = sym_kind == SymKind::Given && self.typer.is_method_sym(s);
+                let kind = match sym_kind {
+                    SymKind::Var => "variable",
+                    SymKind::Given if method_given => "method",
+                    SymKind::Given => "given instance",
+                    SymKind::Def | SymKind::Overloaded(_) => "method",
+                    _ => "value",
+                };
+                (kind, self.typer.name_ref(self.syms().sym(s).name).to_string(), self.syms().sym(s).owner)
+            }
+            other => return self.symbol_name(other),
+        };
+        match owner {
+            Owner::Class(c) => {
+                let owner_kind = match self.syms().class(c).kind {
+                    ClassKind::Object => "object",
+                    ClassKind::Trait => "trait",
+                    _ => "class",
+                };
+                let owner = self.typer.name_ref(self.syms().class(c).name).to_string();
+                format!("{} {} in {} {}", kind, name, owner_kind, owner)
+            }
+            _ => format!("{} {}", kind, name),
+        }
+    }
+
+    /// The class a constructor's selection makes: `New`'s type, applied to the type arguments of
+    /// the `TypeApply` around the selection where it names the class alone (macwire's
+    /// `Select(New(TypeIdent(C)), ctor).appliedToTypes(args)`), as the constructor's `PolyType`
+    /// applied to them gives `C[args]`.
+    fn constructed_type(&mut self, ty: TypeId, targs: &[TypeId]) -> TypeId {
+        match self.typer.types.get(ty) {
+            Type::Ctor(c) if !targs.is_empty() => self.typer.types.class(c, targs),
+            _ => ty,
+        }
+    }
+
+    /// dotty's error for an `Apply` whose arguments are not its clause's (`assignType`): the
+    /// method type, the function's type, the counts; at the macro's call, as the tree's position
+    /// is the expansion's. The application is erroneous, of no further message.
+    fn wrong_arity(&mut self, fun: TreeRef, expected: Option<usize>, found: usize) -> R<TreeRef> {
+        let method = match self.selection_method_type(fun)? {
+            Some(t) => self.show_method_message(t)?,
+            None => String::new(),
+        };
+        let fun_type = match fun {
+            TreeRef::Pending(i) => match self.pending_of(i)?.kind {
+                PendingKind::Ctor(ty) => {
+                    let ty = self.constructed_type(ty, &self.pending_of(i)?.targs);
+                    format!("({}#<init> : {})", self.typer.show(ty), method)
+                }
+                PendingKind::Sym(s) => {
+                    let name = self.typer.name_ref(self.syms().sym(s).name).to_string();
+                    let p = self.pending_of(i)?;
+                    let prefix = match self.selection_prefix(&p, s)? {
+                        Some(r) => {
+                            let ty = self.typer.path_of(r).map_or_else(|| self.tree_type(TreeRef::Expr(r)), Ok)?;
+                            format!("{}.", self.typer.show(ty))
+                        }
+                        None => String::new(),
+                    };
+                    format!("({}{} : {})", prefix, name, method)
+                }
+                _ => method.clone(),
+            },
+            _ => method.clone(),
+        };
+        let msg = match expected {
+            Some(n) => format!("wrong number of arguments at inlining (while expanding macro) for {}: {}, expected: {}, found: {}", method, fun_type, n, found),
+            None => format!("{} does not take parameters", fun_type),
+        };
+        let ctx = self.macro_ctx()?;
+        self.typer.diags.error(ctx.site_file, ctx.site_span, msg);
+        let te = self.typer.prog.add(TExpr::Unit);
+        self.typer.prog.set_type(te, ERROR);
+        Ok(TreeRef::Expr(te))
+    }
+
+    /// A method type as dotty's messages show it: `(c: Coll)(using s: String): Api`.
+    fn show_method_message(&mut self, t: TypeId) -> R<String> {
+        let Some(m) = self.method_type_parts(t)? else { return Ok(self.typer.show(t)) };
+        let mut out = String::from(match m.kind {
+            ClauseKind::Using => "(using ",
+            ClauseKind::Implicit => "(implicit ",
+            ClauseKind::Plain => "(",
+        });
+        for (i, (&n, &ty)) in m.names.iter().zip(&m.types).enumerate() {
+            if i > 0 {
+                out.push_str(", ");
+            }
+            let shown = self.typer.show(ty);
+            out.push_str(&format!("{}: {}", self.typer.name_ref(n), shown));
+        }
+        out.push(')');
+        if self.method_type_parts(m.result)?.is_none() {
+            out.push_str(": ");
+        }
+        out.push_str(&self.show_method_message(m.result)?);
+        Ok(out)
+    }
+
+    /// The type of an application waiting for further clauses (`Partial`), as `assignType` gives
+    /// it: the method type of the clauses after those applied, where it names a parameter of an
+    /// applied clause that parameter's argument's path in its place (`safeSubstParams`), as it
+    /// is otherwise (the fast path of a result that is not dependent).
+    fn partial_method_type(&mut self, t: TreeRef) -> R<Option<TypeId>> {
+        let (root, clauses) = self.application_spine(t)?;
+        let Some(mut method) = self.selection_method_type(root)? else { return Ok(None) };
+        // The clauses' parameters, and the types after the applied clauses, which a dependent one
+        // names a parameter in (`isResultDependent`); a reflect method type names none.
+        let (params, ret) = match self.apply_target(root)? {
+            ApplyTarget::Method(Clauses::Sig(sig, skip)) => (sig.clauses[skip..].to_vec(), sig.ret),
+            ApplyTarget::Method(Clauses::Ctor(c)) => (self.syms().class(c).ctor.clone(), ANY),
+            _ => (Vec::new(), ANY),
+        };
+        let later: Vec<TypeId> = std::iter::once(ret).chain(params.iter().skip(clauses.len()).flat_map(|c| c.params.iter().map(|p| p.ty))).filter(|&t| self.typer.types.has_paths(t)).collect();
+        let mut terms: Vec<(SymId, TypeId)> = Vec::new();
+        for (clause, args) in params.iter().zip(&clauses) {
+            let Some(m) = self.method_type_parts(method)? else { return Ok(None) };
+            for (p, &a) in clause.params.iter().zip(args) {
+                if !later.iter().any(|&t| self.typer.types.names_term(t, &[p.sym])) {
+                    continue;
+                }
+                let a = match self.named_arg(a)? {
+                    Some((_, a)) => a,
+                    None => a,
+                };
+                let e = self.materialize(a)?;
+                let path = self.typer.arg_path(e, p.ty);
+                terms.push((p.sym, path));
+            }
+            method = m.result;
+        }
+        Ok(Some(self.subst_method_paths(method, &terms)?))
+    }
+
+    /// A method type with the parameters' paths of `terms` replaced in each clause and in its
+    /// result, a member selected on one kept a selection on its argument's path (`Boxes.ib.T`),
+    /// as dotty's `safeSubstParam` substitutes the binder and keeps the `TypeRef`.
+    fn subst_method_paths(&mut self, t: TypeId, terms: &[(SymId, TypeId)]) -> R<TypeId> {
+        if terms.is_empty() {
+            return Ok(t);
+        }
+        let Some(m) = self.method_type_parts(t)? else { return Ok(self.typer.subst_paths_keeping(t, terms)) };
+        let types = m.types.iter().map(|&x| self.typer.subst_paths_keeping(x, terms)).collect();
+        let result = self.subst_method_paths(m.result, terms)?;
+        Ok(self.method_type(MethodTypeRepr { types, result, ..m }))
     }
 
     fn apply_tree(&mut self, fun: TreeRef, args: Vec<TreeRef>) -> R<TExprId> {
@@ -2805,8 +3268,22 @@ impl<'a, 't> Interp<'a, 't> {
         let s = match sym {
             SymRef::Term(s) => s,
             SymRef::Ctor(c) => {
-                let recv = self.materialize(qual)?;
-                let ty = self.tree_type(TreeRef::Expr(recv))?;
+                // The type `New` names, unapplied where its arguments come after (`TypeIdent(C)`),
+                // which only the constructor's application instantiates.
+                let ty = match qual {
+                    TreeRef::Pending(i) => match self.pending_of(i)?.kind {
+                        PendingKind::New(ty) => Some(ty),
+                        _ => None,
+                    },
+                    _ => None,
+                };
+                let ty = match ty {
+                    Some(ty) => ty,
+                    None => {
+                        let recv = self.materialize(qual)?;
+                        self.tree_type(TreeRef::Expr(recv))?
+                    }
+                };
                 let _ = c;
                 return Ok(self.pending(Pending { recv: None, kind: PendingKind::Ctor(ty), targs: Vec::new() }));
             }
@@ -3177,7 +3654,7 @@ fn install_trees(it: &mut Table) {
     q!(it, "Reflect.Apply.apply", |it, a| {
         let fun = it.tree_arg(a, 1)?;
         let args = it.tree_list(&arg(a, 2))?;
-        Ok(Value::Tree(TreeRef::Expr(it.apply_tree(fun, args)?)))
+        Ok(Value::Tree(it.reflect_apply(fun, args)?))
     });
     q!(it, "Reflect.Apply.unapply", |it, a| {
         let t = it.tree_arg(a, 1)?;
@@ -4662,22 +5139,37 @@ impl<'a, 't> Interp<'a, 't> {
         self.method_type(MethodTypeRepr { names, types: vec![param], result, open: Vec::new(), kind: ClauseKind::Plain })
     }
 
+    /// The prefix of a selection of `s`, its qualifier as an expression: none where there is
+    /// none, or where the qualifier is the extension's own application to its receiver
+    /// (`own_receiver`), which stands for the receiver.
+    fn selection_prefix(&mut self, p: &Pending, s: SymId) -> R<Option<TExprId>> {
+        match p.recv {
+            Some(q) if self.syms().sym(s).is_extension && self.own_receiver(q, s)?.is_some() => Ok(None),
+            Some(q) => Ok(Some(self.materialize(q)?)),
+            None => Ok(None),
+        }
+    }
+
     /// The type of a selection of a method that awaits its arguments, as scalac's typed tree
     /// has it: the method type of its parameter clauses over the receiver's type arguments, and
     /// under a `PolyType` where a generic method is selected without its type arguments; the
     /// same of the method behind a closure. None for a tree that is no such selection.
     fn selection_method_type(&mut self, t: TreeRef) -> R<Option<TypeId>> {
-        let (s, recv, targs) = match t {
+        let (s, recv, targs, skip) = match t {
+            TreeRef::Partial(_) => return self.partial_method_type(t),
             TreeRef::Pending(i) => {
                 let p = self.pending_of(i)?;
                 match p.kind {
                     PendingKind::Operator(_, method, _) => return Ok(Some(method)),
+                    // A constructor selected on its `New`: its class's clauses (`memberType`).
+                    PendingKind::Ctor(ty) => {
+                        let ty = self.constructed_type(ty, &p.targs);
+                        return Ok(self.typer.class_of(ty).map(|c| self.ctor_method_type(ty, c)));
+                    }
                     PendingKind::Sym(s) if self.takes_arguments(s) => {
-                        let recv = match p.recv {
-                            Some(r) => Some(self.materialize(r)?),
-                            None => None,
-                        };
-                        (s, recv, p.targs)
+                        let skip = self.applied_by_qualifier(p.recv, s)?;
+                        let recv = self.selection_prefix(&p, s)?;
+                        (s, recv, p.targs, skip)
                     }
                     _ => return Ok(None),
                 }
@@ -4710,7 +5202,7 @@ impl<'a, 't> Interp<'a, 't> {
             subst.extend(sig.tparams.iter().copied().zip(targs.iter().copied()));
         }
         let mut result = self.typer.types.subst(sig.ret, &subst);
-        for clause in sig.clauses.iter().rev() {
+        for clause in sig.clauses[skip..].iter().rev() {
             let names = clause.params.iter().map(|p| p.name).collect();
             let types = clause
                 .params
@@ -4734,11 +5226,11 @@ impl<'a, 't> Interp<'a, 't> {
     pub(super) fn awaits_arguments(&mut self, t: TreeRef) -> R<bool> {
         Ok(match t {
             TreeRef::Pending(i) => match self.pending_of(i)?.kind {
-                PendingKind::Operator(..) => true,
+                PendingKind::Operator(..) | PendingKind::Ctor(_) => true,
                 PendingKind::Sym(s) => self.takes_arguments(s),
                 _ => false,
             },
-            TreeRef::LambdaRef(_) => true,
+            TreeRef::LambdaRef(_) | TreeRef::Partial(_) => true,
             _ => false,
         })
     }
@@ -8206,6 +8698,12 @@ impl<'a, 't> Interp<'a, 't> {
                 out.push_str(&name);
                 out.push_str(".type");
             }
+            // A type member selected on a path, as a `TypeRef` on a `TermRef` prints: `Boxes.ib.T`.
+            Type::Member(p, name) if self.typer.types.is_path(p) => {
+                self.show_path_into(p, out);
+                out.push('.');
+                out.push_str(self.typer.name_ref(name));
+            }
             Type::This(c) => {
                 let name = self.scalac_class_name(c);
                 out.push_str(&name);
@@ -8224,13 +8722,82 @@ impl<'a, 't> Interp<'a, 't> {
                         out.push_str("=> ");
                         self.show_type_into(u, out);
                     }
-                    None => out.push_str(self.typer.types.blocked_description(b)),
+                    // A method type and a poly type as dotty's `SourceCode.printType` shows them:
+                    // `(s: scala.Predef.String)Api`, `[A _ >: scala.Nothing <: scala.Any](x: A)A`.
+                    None => {
+                        if let Some(m) = self.method_type_parts(t).unwrap_or(None) {
+                            out.push('(');
+                            for (i, (&n, &ty)) in m.names.iter().zip(&m.types).enumerate() {
+                                if i > 0 {
+                                    out.push_str(", ");
+                                }
+                                out.push_str(self.typer.name_ref(n));
+                                out.push_str(": ");
+                                self.show_type_into(ty, out);
+                            }
+                            out.push(')');
+                            self.show_type_into(m.result, out);
+                        } else if let Some(poly) = self.poly_type_parts(t).unwrap_or(None) {
+                            out.push('[');
+                            for (i, &p) in poly.params.iter().enumerate() {
+                                if i > 0 {
+                                    out.push_str(", ");
+                                }
+                                let (lo, hi) = (self.syms().tparam(p).lower, self.syms().tparam(p).upper);
+                                out.push_str(self.typer.name_ref(self.syms().tparam(p).name));
+                                out.push_str(" _ >: ");
+                                self.show_type_into(lo, out);
+                                out.push_str(" <: ");
+                                self.show_type_into(hi, out);
+                            }
+                            out.push(']');
+                            self.show_type_into(poly.result, out);
+                        } else {
+                            out.push_str(self.typer.types.blocked_description(b));
+                        }
+                    }
                 },
             },
             _ => {
                 let shown = self.typer.show(t);
                 out.push_str(&shown);
             }
+        }
+    }
+
+    /// A path as the prefix of a selection prints, without the singleton's `.type`: `Boxes.ib`,
+    /// `x`, `C.this`.
+    fn show_path_into(&mut self, p: TypeId, out: &mut String) {
+        match self.typer.types.get(p) {
+            Type::Term(s) if self.syms().sym(s).owner == Owner::Local => out.push_str(self.typer.name_ref(self.syms().sym(s).name)),
+            // A member of a class or object through its owner's name as a type prints it.
+            Type::Term(s) => match self.syms().sym(s).owner {
+                Owner::Class(c) => {
+                    let owner = self.scalac_class_name(c);
+                    out.push_str(&owner);
+                    out.push('.');
+                    out.push_str(self.typer.name_ref(self.syms().sym(s).name));
+                }
+                _ => {
+                    let full = self.symbol_full_name(SymRef::Term(s));
+                    out.push_str(&full);
+                }
+            },
+            Type::Select(q, s) => {
+                self.show_path_into(q, out);
+                out.push('.');
+                out.push_str(self.typer.name_ref(self.syms().sym(s).name));
+            }
+            Type::This(c) => {
+                let name = self.scalac_class_name(c);
+                out.push_str(&name);
+                out.push_str(".this");
+            }
+            Type::Class(c, _) => {
+                let name = self.scalac_class_name(c);
+                out.push_str(&name);
+            }
+            _ => self.show_type_into(p, out),
         }
     }
 

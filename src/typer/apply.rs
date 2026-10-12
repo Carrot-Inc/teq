@@ -1466,7 +1466,7 @@ impl<'a> Worker<'a> {
         }
     }
 
-    pub(super) fn is_method_sym(&mut self, s: SymId) -> bool {
+    pub(crate) fn is_method_sym(&mut self, s: SymId) -> bool {
         match self.syms.sym(s).kind {
             SymKind::Def | SymKind::Overloaded(_) => true,
             SymKind::Given => self.is_method_given(s),
@@ -4820,7 +4820,7 @@ impl<'a> Worker<'a> {
 
     /// What a parameter's path stands for once an argument is in: the argument's path, the
     /// argument's type where that is a singleton type, its widened type otherwise.
-    pub(super) fn arg_path(&mut self, arg: TExprId, pty: TypeId) -> TypeId {
+    pub(crate) fn arg_path(&mut self, arg: TExprId, pty: TypeId) -> TypeId {
         if let Some(path) = self.path_of(arg) {
             return path;
         }
@@ -10362,11 +10362,8 @@ impl<'a> Worker<'a> {
                         _ => self.inherited_extension_prefix(module.and_then(GivenScope::module)),
                     };
                     let receiver = self.trait_member_receiver(site);
-                    // One an import of an object or a value brings is seen from what it names
-                    // (`"f".in(2)` of `import dsl.*`, `in` of `dsl`'s trait), as dotty's
-                    // `TermRef(dsl.type, in)` is.
-                    if prefix.is_none() && matches!(site, super::exports::TraitMemberSite::Module(_) | super::exports::TraitMemberSite::Value(_)) && self.sig_names_paths(sym) {
-                        prefix = self.path_of(receiver);
+                    if prefix.is_none() {
+                        prefix = self.lexical_extension_prefix(sym, site, Some(receiver));
                     }
                     Some(receiver)
                 }
@@ -10684,6 +10681,26 @@ impl<'a> Worker<'a> {
     /// implicit scope it comes from fixes the trait's types in its signature.
     pub(super) fn inherited_extension_prefix(&mut self, module: Option<ClassId>) -> Option<TypeId> {
         module.map(|m| self.types.class(m, &[]))
+    }
+
+    /// The prefix an extension a trait defines is seen from where it is found lexically and its
+    /// signature names a path: the path of its site's receiver, `C.this` of the enclosing class
+    /// that inherits it (`page` of `CtrlPage` in a subclass, whose `Status` is `C.this.Status`),
+    /// the object or the value whose import brings it (`"f".in(2)` of `import dsl.*`), as dotty's
+    /// lexical reference `C.this.page` or `dsl.in` is seen from its prefix (`Typer.findRef`,
+    /// `TypeOps.asSeenFrom`). Completion and signature help, which build no receiver, see an
+    /// enclosing class's `this` and an object's.
+    pub(super) fn lexical_extension_prefix(&mut self, sym: SymId, site: super::exports::TraitMemberSite, receiver: Option<TExprId>) -> Option<TypeId> {
+        use super::exports::TraitMemberSite;
+        if !matches!(site, TraitMemberSite::This(Some(_)) | TraitMemberSite::Module(_) | TraitMemberSite::Value(_)) || !self.sig_names_paths(sym) {
+            return None;
+        }
+        match (site, receiver) {
+            (_, Some(receiver)) => self.path_of(receiver),
+            (TraitMemberSite::This(Some(k)), None) => Some(self.this_prefix(k)),
+            (TraitMemberSite::Module(m), None) => Some(self.types.class(m, &[])),
+            _ => None,
+        }
     }
 
     fn receiver_param_type(&mut self, call: &MethodCall, fresh: bool) -> Option<TypeId> {

@@ -1068,14 +1068,14 @@ impl<'a> Worker<'a> {
                 Owner::Class(c) if self.syms.class(c).kind != ClassKind::Object => Some(c),
                 _ => None,
             };
-            let subst = match trait_owner {
+            let (subst, prefix) = match trait_owner {
                 Some(c) => {
                     let site = self.trait_member_site(e, c);
-                    self.trait_member_subst(site, c)
+                    (self.trait_member_subst(site, c), self.lexical_extension_prefix(e, site, None))
                 }
-                None => Vec::new(),
+                None => (Vec::new(), None),
             };
-            found.push((e, subst, None));
+            found.push((e, subst, prefix));
         }
         let mark = self.ext_modules.len();
         let in_scope = self.muted(|w| w.implicit_scope_extensions(t, n));
