@@ -216,7 +216,7 @@ impl<'a> Worker<'a> {
         if !self.types.has_paths(t) {
             return t;
         }
-        self.rebase(t, &Rebase { this_of: Some((o, prefix)), terms: &[], approx: false, own: false })
+        self.rebase(t, &Rebase { this_of: Some((o, prefix)), terms: &[], approx: false, own: false, keep: false })
     }
 
     /// The type parameters of the classes enclosing the inner class `c`, mapped to the arguments
@@ -1336,7 +1336,7 @@ impl<'a> Worker<'a> {
         if !self.types.has_paths(t) {
             return t;
         }
-        self.rebase(t, &Rebase { this_of: Some((c, prefix)), terms: &[], approx: false, own: false })
+        self.rebase(t, &Rebase { this_of: Some((c, prefix)), terms: &[], approx: false, own: false, keep: false })
     }
 
     /// `t`, a member's own declaration in class `c`, as seen from `prefix`: `c.this` becomes
@@ -1345,7 +1345,17 @@ impl<'a> Worker<'a> {
         if !self.types.has_paths(t) {
             return t;
         }
-        self.rebase(t, &Rebase { this_of: Some((c, prefix)), terms: &[], approx: false, own: true })
+        self.rebase(t, &Rebase { this_of: Some((c, prefix)), terms: &[], approx: false, own: true, keep: false })
+    }
+
+    /// `t` with the paths of the parameters in `terms` replaced by the argument paths, a type
+    /// member selected on one kept a selection on the argument's path (dotty's
+    /// `TypeAssigner.safeSubstParam`), as a reflection shows the type of an application.
+    pub fn subst_paths_keeping(&mut self, t: TypeId, terms: &[(SymId, TypeId)]) -> TypeId {
+        if terms.is_empty() || !self.types.has_paths(t) {
+            return t;
+        }
+        self.rebase(t, &Rebase { this_of: None, terms, approx: false, own: false, keep: true })
     }
 
     /// `t` with the paths of the parameters in `terms` replaced by the argument paths.
@@ -1353,7 +1363,7 @@ impl<'a> Worker<'a> {
         if terms.is_empty() || !self.types.has_paths(t) {
             return t;
         }
-        self.rebase(t, &Rebase { this_of: None, terms, approx: false, own: false })
+        self.rebase(t, &Rebase { this_of: None, terms, approx: false, own: false, keep: false })
     }
 
     /// `t` with every path over one of `params`, and every member seen through one
@@ -1366,7 +1376,7 @@ impl<'a> Worker<'a> {
         }
         let terms: Vec<(SymId, TypeId)> = params.iter().map(|&p| (p, self.fresh_var())).collect();
         let mark = self.path_approx.len();
-        let out = self.rebase(t, &Rebase { this_of: None, terms: &terms, approx: true, own: false });
+        let out = self.rebase(t, &Rebase { this_of: None, terms: &terms, approx: true, own: false, keep: false });
         approx.extend(self.path_approx.drain(mark..));
         out
     }
@@ -1590,6 +1600,8 @@ impl<'a> Worker<'a> {
                     t
                 } else if r.approx && matches!(self.types.get(np), Type::Var(_)) {
                     self.approx_member(t)
+                } else if r.keep && self.types.is_path(np) {
+                    self.types.mk(Type::Member(np, name))
                 } else {
                     let np = self.projection_prefix(np);
                     // The member whose bounds are being resolved names itself through the new
@@ -2462,4 +2474,8 @@ struct Rebase<'r> {
     /// ancestor's `C.this` written in it names an enclosing instance (an anonymous `Validate`
     /// inside `Validate.contramap` with `type R = self.R`).
     own: bool,
+    /// A type member selected on a path that moves stays a selection on the new path
+    /// (`Boxes.ib.T`), as dotty's substitution of a parameter keeps the `TypeRef`
+    /// (`derivedSelect`), rather than the member's type there.
+    keep: bool,
 }

@@ -391,6 +391,7 @@ extension_byname_receiver
 extension_called_by_name
 extension_deepened_overload
 extension_direct_targs
+extension_inherited_this_prefix
 extension_method_value
 extension_names
 extension_nearest_scope
@@ -857,6 +858,11 @@ lub_invariant_args
 macro_abstract_var_assign
 macro_alias_types
 macro_anon_selection
+macro_apply_clauses
+macro_apply_dependent_type
+macro_apply_many_args
+macro_apply_partial_symbol
+macro_apply_poly_typed
 macro_asexpr_partial
 macro_basic
 macro_bitset
@@ -919,6 +925,7 @@ macro_quoted_application_reduce
 macro_quoted_inline_application
 macro_quoted_parameter_application
 macro_quotes_qualifier
+macro_rebuilt_extension_clauses
 macro_rebuilt_selections
 macro_receiver_copy
 macro_records
@@ -943,6 +950,7 @@ macro_target_name_alias
 macro_target_name_dispatch
 macro_top_object_owner
 macro_tree_map_enum_case
+macro_treemap_clauses
 macro_treemap_method_types
 macro_treemap_typedef
 macro_tuple_type_patterns
@@ -955,6 +963,8 @@ macro_vector_append
 macwire_module
 macwire_wire
 macwire_wire_untyped
+macwire_wire_using
+macwire_wire_using_split
 main_object
 main_qualified
 main_varargs
