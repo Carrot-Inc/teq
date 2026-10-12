@@ -872,7 +872,7 @@ impl<'a> Worker<'a> {
             _ => (Vec::new(), self.b.t_string),
         };
         let mut info = self.syms.sym_mut(sym);
-        info.sig = Some(Arc::new(MethodSig { tparams: Vec::new(), clauses, ret }));
+        info.sig = Some(Arc::new(MethodSig { tparams: Vec::new(), clauses, ret, declared: crate::tir::NO_TYPE }));
         info.state().set(Completion::Done);
         self.any_members.insert((tr, name), sym);
         sym
@@ -2525,7 +2525,7 @@ impl<'a> Worker<'a> {
                 is_implicit: cl.is_implicit,
             })
             .collect();
-        Arc::new(MethodSig { tparams: sig.tparams.clone(), clauses, ret })
+        Arc::new(MethodSig { tparams: sig.tparams.clone(), clauses, ret, declared: crate::tir::NO_TYPE })
     }
 
     /// The signature with the enclosing class's `this` seen from the outer instance's prefix.
@@ -2542,7 +2542,7 @@ impl<'a> Worker<'a> {
                 is_implicit: cl.is_implicit,
             })
             .collect();
-        Arc::new(MethodSig { tparams: sig.tparams.clone(), clauses, ret })
+        Arc::new(MethodSig { tparams: sig.tparams.clone(), clauses, ret, declared: crate::tir::NO_TYPE })
     }
 
     /// The signature of a member as seen from the prefix of the call's receiver.
@@ -2576,7 +2576,7 @@ impl<'a> Worker<'a> {
                 is_implicit: cl.is_implicit,
             })
             .collect();
-        Arc::new(MethodSig { tparams: sig.tparams.clone(), clauses, ret })
+        Arc::new(MethodSig { tparams: sig.tparams.clone(), clauses, ret, declared: crate::tir::NO_TYPE })
     }
 
     /// A signature seen from a prefix and then given the owner's type arguments by `owner_subst`
@@ -3657,7 +3657,7 @@ impl<'a> Worker<'a> {
             return (self.prog.add(TExpr::New(c, crate::ast::ListRef::EMPTY)), ty);
         }
         let enum_parent = info.parents.first().copied().filter(|_| kind == ClassKind::EnumCase);
-        let mut sig = Arc::new(MethodSig { tparams, clauses: info.ctor.clone(), ret: self_ty });
+        let mut sig = Arc::new(MethodSig { tparams, clauses: info.ctor.clone(), ret: self_ty, declared: crate::tir::NO_TYPE });
         // A companion's `apply` takes the written types seen from the instance it is selected on
         // (`companion_apply_sig`), and a construction through a prefix sees them through it.
         if let Some((_, r)) = self.apply_seen_from.filter(|&(k, _)| k == c) {
@@ -8130,7 +8130,7 @@ impl<'a> Worker<'a> {
                 p.has_default = i == 0;
             }
         }
-        let sig = Arc::new(MethodSig { tparams: info.tparams.clone(), clauses, ret: info.base_types[0].1 });
+        let sig = Arc::new(MethodSig { tparams: info.tparams.clone(), clauses, ret: info.base_types[0].1, declared: crate::tir::NO_TYPE });
         // A parameter the first list leaves out takes the receiver's field, the default getter's
         // value, typed as an argument is.
         let mut lists = lists;
@@ -8227,7 +8227,7 @@ impl<'a> Worker<'a> {
             return None;
         }
         let ctor = self.syms.class(c).ctor.clone();
-        let sig = Arc::new(MethodSig { tparams: self.syms.class(c).tparams.clone(), clauses: ctor, ret: ANY });
+        let sig = Arc::new(MethodSig { tparams: self.syms.class(c).tparams.clone(), clauses: ctor, ret: ANY, declared: crate::tir::NO_TYPE });
         let declared = self.companion_apply_sig(c, k, sig.clone());
         (!Arc::ptr_eq(&declared, &sig)).then(|| declared.clauses.clone())
     }
@@ -10645,11 +10645,15 @@ impl<'a> Worker<'a> {
     }
 
     /// A receiver parameter of a class type takes instances of that class only, which settles
-    /// most candidates without instantiating them.
+    /// most candidates without instantiating them; but a `*:` chain, which a tuple class conforms
+    /// to by the subtype check's rule and not by its base classes.
     fn receiver_class_rules_out(&mut self, sym: SymId, recv_ty: TypeId) -> bool {
         let ext_clauses = self.syms.sym(sym).ext_clauses as usize;
         let Some(recv_param) = self.sig_of(sym).clauses.iter().take(ext_clauses).find(|c| !c.is_using).map(|c| c.params[0].ty) else { return false };
         let Type::Class(wanted, _) = self.types.get(recv_param) else { return false };
+        if Some(wanted) == self.b.cons_tuple {
+            return false;
+        }
         let recv_ty = self.deref(recv_ty);
         let Type::Class(actual, _) = self.types.get(recv_ty) else { return false };
         let Some(info) = self.syms.class_done(actual) else { return false };

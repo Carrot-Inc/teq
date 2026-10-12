@@ -109,9 +109,16 @@ a JDK member as `not supported on JavaScript`. Beyond that:
 
 ### The JVM target, sbt and warnings
 
-- JVM: a member whose `Nothing` or `Null` result is inferred erases to `Object` where scalac's descriptor names
-  `Nothing$` or `Null$`, and teq's class files differ from scalac's in a listed set of shapes, so a module
-  compiled by scalac does not link against teq's output.
+- JVM: a build mixing the two compilers' modules meets these shapes, where teq's class files or pickles differ from
+  scalac's: a trait's bridge over a generic parent's method sits in the trait, where scalac's is in each class
+  mixing the trait in, so a class teq compiled against teq's trait throws `AbstractMethodError` over scalac's build
+  of it; a method whose context function result a context closure gives keeps that result, where scalac takes its
+  parameters into the method's (`ContextFunctionResults`); a union of a JDK class the standard library stands in
+  for and another class erases to another class than scalac's (`Integer | String` to `Object` where scalac's is
+  `ConstantDesc`, `StringBuilder | String` to `CharSequence` where scalac's is `Comparable`); a module's products
+  carry no mixin forwarders, no static forwarders from a trait's companion, and a top-level opaque type's references
+  in its companion's signatures and a renamed export of a `@targetName` member as scalac's reader does not take
+  them.
 - Under `-Wunused:implicits`, a using clause of an `extension` is one parameter its methods share, where
   scalac's is one per method: a method that does not use it warns in scalac, not here while another method
   uses it. Under `-Wunused:imports`, what a macro's or an inline method's expansion names uses no import:

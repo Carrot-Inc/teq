@@ -343,6 +343,7 @@ impl Worker<'_> {
                 .map(|cl| ClauseSig { params: cl.params.iter().map(|p| ParamSig { ty: types.subst(p.ty, &subst), ..p.clone() }).collect(), ..cl.clone() })
                 .collect(),
             ret: types.subst(sig.ret, &subst),
+            declared: crate::tir::NO_TYPE,
         }
     }
 

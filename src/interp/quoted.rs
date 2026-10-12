@@ -6177,7 +6177,7 @@ impl<'a, 't> Interp<'a, 't> {
             SymKind::Val
         };
         let sym = self.typer.syms.new_sym(name, kind, crate::ast::mods::ABSTRACT, Owner::Local, file, None, span);
-        let sig = Arc::new(MethodSig { tparams: Vec::new(), clauses, ret });
+        let sig = Arc::new(MethodSig { tparams: Vec::new(), clauses, ret, declared: crate::tir::NO_TYPE });
         let mut s = self.typer.syms.sym_mut(sym);
         s.sig = Some(sig.clone());
         s.state().done_fresh();

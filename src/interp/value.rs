@@ -625,9 +625,14 @@ pub fn double_hash(d: f64) -> i32 {
     double_hash_code(d)
 }
 
+/// `Statics.floatHash`: a whole Float hashes as the Int or Long it equals.
 pub fn float_hash(f: f32) -> i32 {
     let i = f as i32;
-    if i as f32 == f { i } else { float_hash_code(f) }
+    if i as f32 == f {
+        return i;
+    }
+    let l = f as i64;
+    if l as f32 == f { long_hash_code(l) } else { float_hash_code(f) }
 }
 
 /// The hash of a value that has no class of its own: `##` of the primitives.

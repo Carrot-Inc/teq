@@ -288,7 +288,7 @@ impl<'a> Worker<'a> {
 
     /// `in_array`: the type is an array's element, where a value class erases to what its
     /// class wraps, its arguments not substituted (`Array[Wrap[String]]` is `Object[]`).
-    fn sig_name(&mut self, t: TypeId, in_array: bool, depth: u32, lib: Option<&str>) -> Option<String> {
+    pub(in crate::typer) fn sig_name(&mut self, t: TypeId, in_array: bool, depth: u32, lib: Option<&str>) -> Option<String> {
         if depth > 16 {
             return None;
         }

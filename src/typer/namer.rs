@@ -487,6 +487,7 @@ impl<'a> Worker<'a> {
                         bounds: abstract_member.then_some((NOTHING, ANY)),
                         deprecated: def.mods & crate::ast::mods::DEPRECATED != 0,
                         js: false,
+                        declared_rhs: crate::tir::NO_TYPE,
                     });
                     self.def_aliases.insert(file.0 as usize, id, aid);
                     let duplicate = match owner {

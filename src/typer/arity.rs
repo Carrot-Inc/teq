@@ -357,7 +357,7 @@ impl<'a> Worker<'a> {
             Span::default(),
         );
         {
-            let sig = MethodSig { tparams: Vec::new(), clauses: vec![ClauseSig { params, is_using: context, is_implicit: false }], ret };
+            let sig = MethodSig { tparams: Vec::new(), clauses: vec![ClauseSig { params, is_using: context, is_implicit: false }], ret, declared: crate::tir::NO_TYPE };
             let mut info = self.syms.sym_mut(apply);
             info.sig = Some(Arc::new(sig));
             info.state().set(Completion::Done);

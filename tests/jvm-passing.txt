@@ -131,6 +131,7 @@ case_class_inherited_members
 case_class_join_union
 case_class_nested_hidden
 case_class_own_unapply
+case_class_parent_selector_interfaces
 case_class_parents
 case_class_selectors
 case_class_synthesized_members
@@ -166,6 +167,7 @@ cast_unit_trait
 cast_value_class
 catch_all_reachability
 cats_dispatch_rebuild
+chain_receiver_extension
 char_digits_numeric_values
 char_literal_narrowing
 char_surrogates
@@ -269,6 +271,7 @@ deadline_now
 decimal_format
 decimal_format_scientific
 declared_equality
+declared_erasure_bodies
 def_refinement_receiver
 default_names_member
 defaults_byname_lifted
@@ -433,6 +436,7 @@ float_constants_jdk
 float_decimal_literals
 float_decimal_rounding
 float_decimal_selection
+float_hash
 float_hex_minimal
 float_nan_bits
 float_parse_decimal_hex
@@ -768,6 +772,7 @@ java_charsets
 java_collection_contracts
 java_collection_defaults
 java_collection_iterator_removal
+java_collection_to_array
 java_converters_buffer_iterator
 java_enum_parent
 java_identity_hash_map
@@ -781,9 +786,12 @@ java_parens
 java_parens_overloads
 java_queues_threads
 java_tree_map_calls
+java_tree_map_edges
 java_util_bits
 java_varargs_spread
 java_view_remove_named_apart
+jdk_abstract_members
+jdk_abstract_members_jvm
 jdk_routes_compiler_subset
 jdk_statics_import
 jvm_return_finally
@@ -835,6 +843,7 @@ local_imports
 local_imports_blocks
 local_imports_members
 local_lazy_forward
+local_lazy_val_return
 local_object_import
 local_objects
 local_trait_captures
@@ -1206,10 +1215,12 @@ prop_nan_bits
 prop_repeat_negative
 prop_string_index_unchecked
 prop_trim_control
+qualified_private_trait_member
 qualified_this_outer_alias
 quote_tag_collision
 random_subclass
 range_bounds_and_sum
+reader_utf8_boundary
 reader_utf8_pipe
 receiver_type_args_from_expected
 refined_aux_givens
@@ -1514,6 +1525,7 @@ target_name_bridge_alias
 target_name_dispatch
 target_name_qualified_dispatch
 target_name_qualified_lone
+target_name_shared_names
 target_name_unrelated_value
 target_name_unrelated_value_written
 target_name_wildcard_dispatch
@@ -1538,6 +1550,7 @@ trailing_commas
 trait_body
 trait_evidence
 trait_evidence_scope
+trait_generic_bridge_call
 trait_init
 trait_linearisation
 trait_object_methods
@@ -1659,6 +1672,7 @@ uuid
 val_implements_def_and_val
 val_overrides_tostring
 val_refinement_subst
+value_class_array_store
 value_class_can_equal
 value_class_signature_only
 value_classes
@@ -1701,4 +1715,5 @@ wildcard_pattern_binders
 yield_left_of_for
 zip_digest
 zip_entry_times
+zip_stream_incremental
 zip_time_precision

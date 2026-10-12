@@ -28,6 +28,7 @@ pub const ACC_VOLATILE: u16 = 0x0040;
 pub const ACC_INTERFACE: u16 = 0x0200;
 pub const ACC_ABSTRACT: u16 = 0x0400;
 pub const ACC_SYNTHETIC: u16 = 0x1000;
+pub const ACC_ENUM: u16 = 0x4000;
 
 #[derive(Clone, PartialEq, Eq, Hash)]
 enum Const {

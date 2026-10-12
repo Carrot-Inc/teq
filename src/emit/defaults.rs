@@ -629,7 +629,7 @@ impl<'a> super::Emitter<'a> {
     /// The parameters before the clause of parameter `i` of `params`, `clauses` their clauses:
     /// what a getter takes.
     fn getter_params(clauses: &[ClauseSig], params: &[SymId], skip: usize, i: usize) -> Vec<SymId> {
-        let before = crate::typer::elaborate::clause_start(&MethodSig { tparams: Vec::new(), clauses: clauses.to_vec(), ret: ANY }, i);
+        let before = crate::typer::elaborate::clause_start(&MethodSig { tparams: Vec::new(), clauses: clauses.to_vec(), ret: ANY, declared: crate::tir::NO_TYPE }, i);
         params[skip..(skip + before).min(params.len())].to_vec()
     }
 

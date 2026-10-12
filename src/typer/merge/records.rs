@@ -115,7 +115,10 @@ pub(in crate::typer) fn syms_in<M: Mapping + ?Sized>(m: &M, v: &mut [SymId]) {
 }
 
 pub(in crate::typer) fn sig_moves<M: Mapping + ?Sized>(m: &M, sig: &MethodSig) -> bool {
-    sig.tparams.iter().any(|&p| m.tparam(p) != p) || m.ty(sig.ret) != sig.ret || sig.clauses.iter().any(|c| c.params.iter().any(|p| m.sym(p.sym) != p.sym || m.ty(p.ty) != p.ty))
+    sig.tparams.iter().any(|&p| m.tparam(p) != p)
+        || m.ty(sig.ret) != sig.ret
+        || (sig.declared != NO_TYPE && m.ty(sig.declared) != sig.declared)
+        || sig.clauses.iter().any(|c| c.params.iter().any(|p| m.sym(p.sym) != p.sym || m.ty(p.ty) != p.ty))
 }
 
 /// The signature under the new ids: the one it was where nothing in it moved, else a copy shared
@@ -134,6 +137,9 @@ pub(in crate::typer) fn sig<M: Mapping + ?Sized>(m: &M, memo: &mut SigMemo, sig:
         *p = m.tparam(*p);
     }
     moved.ret = m.ty(moved.ret);
+    if moved.declared != NO_TYPE {
+        moved.declared = m.ty(moved.declared);
+    }
     for c in &mut moved.clauses {
         clause(m, c);
     }
@@ -237,11 +243,17 @@ pub(in crate::typer) fn alias<M: Mapping + ?Sized>(m: &M, a: &mut AliasInfo) {
     }
     a.rhs = m.ty(a.rhs);
     a.bounds = a.bounds.map(|(lo, hi)| (m.ty(lo), m.ty(hi)));
+    if a.declared_rhs != NO_TYPE {
+        a.declared_rhs = m.ty(a.declared_rhs);
+    }
 }
 
 pub(in crate::typer) fn tparam<M: Mapping + ?Sized>(m: &M, tp: &mut TParamInfo) {
     tp.upper = m.ty(tp.upper);
     tp.lower = m.ty(tp.lower);
+    if tp.declared_upper != NO_TYPE {
+        tp.declared_upper = m.ty(tp.declared_upper);
+    }
 }
 
 /// A package's entries, givens and package object; its parent too when `parent`: a package of

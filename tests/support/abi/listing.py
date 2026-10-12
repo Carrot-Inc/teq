@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 """tests/support/abi/listing.py <dir> [names...]: the layout of the class files under <dir> as javap shows it, a line
-per class, interface, field and method: `<class> class`, `<class> implements <interface>`, `<class>
-<name>:<descriptor> <flags>` for a field and `<class> <name><descriptor> <flags>` for a method, sorted. With names,
-only the members of those names and the interfaces of those binary names are listed, the members of that name in
+per class, field and method: `<class> class <flags> extends <superclass>`, `<class> implements <interfaces>` (in the
+class file's order), `<class> <name>:<descriptor> <flags>` for a field and `<class> <name><descriptor> <flags>` for a
+method, sorted. With names, only the members of those names and the interface lists naming one of those binary names
+are listed, the members of that name in
 the classes of that simple binary name for `Owner#name` (with a descriptor's beginning, `Owner#name(desc`, the
 members of that name and descriptor; with `+final` after `Owner#name`, an instance field's `final`, which the
-listing leaves out otherwise), and the class lines when `classes` is among them. The corpus of tests/support/abi compares
+listing leaves out otherwise), and the class and interface lines when `classes` is among them. The corpus of tests/support/abi compares
 teq's listing of a program with scalac 3.8.4's, which <name>.expected holds: `listing.py <scalac's output> <names>`
 over `scala-cli compile -S 3.8.4 --jvm system --server=false <name>.scala --compilation-output <dir>`."""
 import os
@@ -63,10 +64,14 @@ def read(path):
         return pool[pool[k][1]]
     access = u(2)
     this = cls(u(2))
-    u(2)
+    sup = u(2)
     interfaces = [cls(u(2)) for _ in range(u(2))]
-    lines = [(this, "class", f"{this} class", f"{this} class")]
-    lines += [(this, i, f"{this} implements {i}", f"{this} implements {i}") for i in interfaces]
+    # The class's flags but ACC_SUPER, which every class file of both compilers sets.
+    head = f"{this} class {flags(access & ~0x0020, 'class')} extends {cls(sup) if sup else '-'}"
+    lines = [(this, "class", head, head)]
+    if interfaces:
+        listed = f"{this} implements {', '.join(interfaces)}"
+        lines.append((this, ("class", *interfaces), listed, listed))
     for kind in ("field", "method"):
         for _ in range(u(2)):
             acc, name, desc = u(2), pool[u(2)], pool[u(2)]
@@ -97,6 +102,11 @@ def main():
                 for this, name, line, final_line in read(os.path.join(d, f)):
                     simple = this.rsplit("/", 1)[-1]
                     member = line.split(" ", 2)[1]
+                    # An interface list is listed with the class lines, or where it names a binary name asked for.
+                    if isinstance(name, tuple):
+                        if not names and not owned and not prefixed or "classes" in names or any(i in names for i in name[1:]):
+                            out.append(line)
+                        continue
                     if (not names and not owned and not prefixed) or name in names or (simple, name) in owned or (name == "class" and "classes" in names) \
                             or any(simple == o and member.startswith(m) for o, m in prefixed):
                         out.append(final_line if (simple, name) in finals else line)

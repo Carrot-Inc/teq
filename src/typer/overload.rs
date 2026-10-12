@@ -1774,7 +1774,7 @@ impl<'a> Worker<'a> {
         if let Some(c) = ctor {
             self.complete_class(c);
             let info = self.syms.class(c);
-            let sig = Arc::new(MethodSig { tparams: info.tparams.clone(), clauses: info.ctor.clone(), ret: info.base_types[0].1 });
+            let sig = Arc::new(MethodSig { tparams: info.tparams.clone(), clauses: info.ctor.clone(), ret: info.base_types[0].1, declared: crate::tir::NO_TYPE });
             // An `apply` with the parameters of the constructor takes its place, as the one
             // scalac would synthesize for a case class is not made then; a library's synthetic
             // `apply` has them under type parameters of its own.
@@ -2220,7 +2220,7 @@ impl<'a> Worker<'a> {
         let psig = self.value_sig(self_ty);
         self.syms.sym_mut(param).sig = Some(psig);
         let clause = ClauseSig { params: vec![ParamSig { name, ty: self_ty, by_name: false, repeated: false, has_default: false, sym: param }], is_using: false, is_implicit: false };
-        let sig = Arc::new(MethodSig { tparams, clauses: vec![clause], ret: self_ty });
+        let sig = Arc::new(MethodSig { tparams, clauses: vec![clause], ret: self_ty, declared: crate::tir::NO_TYPE });
         let sym = self.syms.new_sym(names::UNAPPLY, SymKind::Def, 0, owner, file, None, span);
         {
             let mut s = self.syms.sym_mut(sym);

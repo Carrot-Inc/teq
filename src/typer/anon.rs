@@ -1484,6 +1484,7 @@ impl<'a> Worker<'a> {
             tparams: Vec::new(),
             clauses: vec![ClauseSig { params: param_sigs, is_using: false, is_implicit: false }],
             ret,
+            declared: crate::tir::NO_TYPE,
         });
         {
             let mut s = self.syms.sym_mut(msym);
@@ -1611,6 +1612,7 @@ impl<'a> Worker<'a> {
             tparams: Vec::new(),
             clauses: vec![ClauseSig { params: param_sigs, is_using: false, is_implicit: false }],
             ret,
+            declared: crate::tir::NO_TYPE,
         });
         {
             let mut s = self.syms.sym_mut(msym);
@@ -1723,6 +1725,7 @@ impl<'a> Worker<'a> {
             tparams: Vec::new(),
             clauses: vec![ClauseSig { params: param_sigs, is_using: false, is_implicit: false }],
             ret,
+            declared: crate::tir::NO_TYPE,
         });
         {
             let mut s = self.syms.sym_mut(msym);

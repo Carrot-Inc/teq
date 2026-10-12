@@ -38,7 +38,7 @@ def doubleValue(a: Any): Double
 def charAsLong(a: Any): Long
 @jvm("$0:D d2f f2d")
 def throughFloat(d: Double): Double
-@jvm("$0:D d2f invokestatic java/lang/Float.hashCode(F)I")
+@jvm("$0:D d2f invokestatic scala/runtime/Statics.floatHash(F)I")
 def floatHash(d: Double): Int
 @jvm("$0:D invokestatic java/lang/Double.hashCode(D)I")
 def doubleBitsHash(d: Double): Int

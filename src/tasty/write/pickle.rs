@@ -1988,8 +1988,15 @@ impl<'w, 'a> P<'w, 'a> {
             self.mark_tree();
             self.alias_ref(a);
         } else {
-            self.tpt(p.ty);
+            self.tpt(self.declared_or(p.sym, p.ty));
         }
+    }
+
+    /// The type of symbol `s` as declared (`MethodSig::declared`), as scalac pickles it, where
+    /// the erasure reads more of the declaration than `t` holds; `t` elsewhere.
+    fn declared_or(&self, s: SymId, t: TypeId) -> TypeId {
+        let declared = if s == SymId(u32::MAX) { crate::tir::NO_TYPE } else { self.w.syms.sym(s).sig.as_ref().map_or(crate::tir::NO_TYPE, |sig| sig.declared) };
+        if declared == crate::tir::NO_TYPE { t } else { declared }
     }
 
     /// The alias a parameter's type is written as, where one without type parameters names it.
@@ -2129,7 +2136,7 @@ impl<'w, 'a> P<'w, 'a> {
         self.buf.byte(TYPEBOUNDS);
         let len = self.buf.begin_length();
         self.ty(info.lower);
-        self.ty(info.upper);
+        self.ty(if info.declared_upper != crate::tir::NO_TYPE { info.declared_upper } else { info.upper });
         self.buf.end_length(len);
     }
 
@@ -2798,7 +2805,7 @@ impl<'w, 'a> P<'w, 'a> {
         }
         let ret = if is_def { sig.ret } else { self.constant_type(s, sig.ret).unwrap_or(sig.ret) };
         self.result_tpt = Some(self.buf.addr());
-        self.tpt(ret);
+        self.tpt(self.declared_or(s, ret));
         // `abstract override` has an implementation, which calls the member it overrides.
         let stackable = info.mods & (mods::ABSTRACT | mods::OVERRIDE) == mods::ABSTRACT | mods::OVERRIDE;
         let abstract_member = info.mods & mods::ABSTRACT != 0 && !stackable || self.is_abstract(s);
@@ -3786,7 +3793,9 @@ impl<'w, 'a> P<'w, 'a> {
         match info.bounds {
             Some((lo, hi)) => {
                 // A higher-kinded member's bounds are the lambda's bodies over its parameters
-                // (`type F[X] <: List[X]`), not lambdas of their own.
+                // (`type F[X] <: List[X]`), not lambdas of their own; an upper bound as declared
+                // (`AliasInfo::declared_rhs`).
+                let hi = if info.declared_rhs != crate::tir::NO_TYPE { info.declared_rhs } else { hi };
                 let (lo, hi) = (self.lambda_body(lo, &info.tparams), self.lambda_body(hi, &info.tparams));
                 self.buf.byte(TYPEBOUNDS);
                 let len = self.buf.begin_length();
@@ -3797,7 +3806,7 @@ impl<'w, 'a> P<'w, 'a> {
             None => {
                 self.buf.byte(TYPEBOUNDS);
                 let len = self.buf.begin_length();
-                self.ty(info.rhs);
+                self.ty(if info.declared_rhs != crate::tir::NO_TYPE { info.declared_rhs } else { info.rhs });
                 self.buf.end_length(len);
             }
         }

@@ -4,6 +4,7 @@ use crate::intern::{FxMap, Name};
 use crate::arena::{CellRef, Cells};
 use crate::source::{FileId, Span};
 use crate::types::*;
+use crate::tir::NO_TYPE;
 use std::sync::Arc;
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -82,11 +83,17 @@ pub struct MethodSig {
     pub tparams: Vec<TParamId>,
     pub clauses: Vec<ClauseSig>,
     pub ret: TypeId,
+    /// The erasure provenance (dotty's `TypeErasure` reads the declaration): the type as the source
+    /// declares it, a parameter's (its symbol's signature) or the result's, where the type holds less
+    /// of it than the erasure and the pickle read (`V | V`, which the store makes `V`; an alias of a
+    /// `*:` chain, which a use makes its tuple class); `NO_TYPE` elsewhere (`Worker::declared_view`).
+    /// It sits in the record's padding.
+    pub declared: TypeId,
 }
 
 impl MethodSig {
     pub fn value(ty: TypeId) -> MethodSig {
-        MethodSig { tparams: Vec::new(), clauses: Vec::new(), ret: ty }
+        MethodSig { tparams: Vec::new(), clauses: Vec::new(), ret: ty, declared: NO_TYPE }
     }
 
     /// The clauses of a right-associative extension method, the first `ext_clauses` of them the
@@ -110,7 +117,7 @@ impl MethodSig {
 
 /// What a recursive reference reads for a definition whose result type is being inferred, once
 /// the error is reported.
-pub static ERROR_SIG: MethodSig = MethodSig { tparams: Vec::new(), clauses: Vec::new(), ret: ERROR };
+pub static ERROR_SIG: MethodSig = MethodSig { tparams: Vec::new(), clauses: Vec::new(), ret: ERROR, declared: crate::tir::NO_TYPE };
 
 #[derive(Clone)]
 pub struct ClassInfo {
@@ -379,7 +386,10 @@ pub struct TParamInfo {
     pub lower: TypeId,
     /// The variances a higher-kinded parameter declares for its own parameters (`CC[X, +Y]`);
     /// empty where they are all invariant.
-    pub hk_variances: Vec<i8>,
+    pub hk_variances: Box<[i8]>,
+    /// The upper bound as declared, where the erasure reads more of it than `upper` holds
+    /// (`MethodSig::declared`); `NO_TYPE` elsewhere.
+    pub declared_upper: TypeId,
 }
 
 #[derive(Clone)]
@@ -400,6 +410,11 @@ pub struct AliasInfo {
     /// (`type Values = js.Array[Int]`), through any aliases of one: set as the alias completes,
     /// since `rhs` holds the Scala type (`Worker::alias_names_js`).
     pub js: bool,
+    /// The right-hand side as declared, where the erasure reads more of it than `rhs` holds
+    /// (`MethodSig::declared`): a `*:` chain spelled to the `EmptyTuple` alias, a union of one
+    /// type twice, a reference to such an alias; of an abstract member, its upper bound so;
+    /// `NO_TYPE` elsewhere.
+    pub declared_rhs: TypeId,
 }
 
 impl AliasInfo {
@@ -1149,7 +1164,7 @@ impl Symbols {
     }
 
     pub fn new_tparam(&mut self, name: Name, variance: i8) -> TParamId {
-        TParamId(self.tparams.push(TParamInfo { name, variance, arity: 0, upper: ANY, lower: NOTHING, hk_variances: Vec::new() }))
+        TParamId(self.tparams.push(TParamInfo { name, variance, arity: 0, upper: ANY, lower: NOTHING, hk_variances: Box::new([]), declared_upper: NO_TYPE }))
     }
 
     /// Whether `s` is a member of a JS type, whose members are plain JS properties and methods.
@@ -1292,6 +1307,48 @@ fn sig_each_type(sig: &MethodSig, f: &mut dyn FnMut(TypeId)) {
         }
     }
     f(sig.ret);
+    if sig.declared != NO_TYPE {
+        f(sig.declared);
+    }
+}
+
+/// A declared view (`MethodSig::declared`, `TParamInfo::declared_upper`, `AliasInfo::declared_rhs`) with
+/// the aliases it names expanded to their declared right-hand sides over its arguments: the type
+/// dotty's `TypeErasure` reads the declaration as (`OrType`'s `erasedLub`, `erasePair`'s
+/// `tupleArity`), which the JVM's erasure and the override checks' signatures read. A union or an
+/// intersection the substitution leaves alone stays as written (`V | V`, raw); one whose operands it
+/// changes is made again as the store makes it, dotty's `derivedOrType`, `OrType.make` (`A | A`
+/// over `V` is `V`); a refinement keeps its members over its parent's expansion.
+pub fn expand_declared(syms: &Symbols, types: &TypeStore, t: TypeId) -> TypeId {
+    fn go(syms: &Symbols, types: &TypeStore, t: TypeId, env: &[(TParamId, TypeId)]) -> TypeId {
+        match types.get(t) {
+            Type::Alias(a, args) if syms.aliases[a.idx()].declared_rhs != NO_TYPE => {
+                let info = &syms.aliases[a.idx()];
+                let bound: Vec<(TParamId, TypeId)> = info.tparams.iter().copied().zip(types.items(args).iter().map(|&x| go(syms, types, x, env))).collect();
+                go(syms, types, info.declared_rhs, &bound)
+            }
+            Type::Param(p) => env.iter().find(|&&(q, _)| q == p).map_or(t, |&(_, x)| x),
+            Type::Union(a, b, k) => match (go(syms, types, a, env), go(syms, types, b, env)) {
+                (x, y) if (x, y) == (a, b) => t,
+                (x, y) => types.union_as(k, x, y),
+            },
+            Type::Inter(a, b) => match (go(syms, types, a, env), go(syms, types, b, env)) {
+                (x, y) if (x, y) == (a, b) => t,
+                (x, y) => types.inter(x, y),
+            },
+            Type::Refined(p, r) => match go(syms, types, p, env) {
+                x if x == p => t,
+                x => types.mk(Type::Refined(x, r)),
+            },
+            Type::Class(c, args) if args != EMPTY_LIST => {
+                let items = types.items(args).to_vec();
+                let mapped: Vec<TypeId> = items.iter().map(|&x| go(syms, types, x, env)).collect();
+                if mapped == items { t } else { types.class(c, &mapped) }
+            }
+            _ => t,
+        }
+    }
+    go(syms, types, t, &[])
 }
 
 /// The signature with each type through `f`, the same `Arc` where none moves.
@@ -1308,6 +1365,12 @@ pub fn sig_mapped(sig: &Arc<MethodSig>, f: &mut dyn FnMut(TypeId) -> TypeId) -> 
     let ret = f(sig.ret);
     if ret != sig.ret {
         copy.get_or_insert_with(|| (**sig).clone()).ret = ret;
+    }
+    if sig.declared != NO_TYPE {
+        let declared = f(sig.declared);
+        if declared != sig.declared {
+            copy.get_or_insert_with(|| (**sig).clone()).declared = declared;
+        }
     }
     copy.map_or_else(|| sig.clone(), Arc::new)
 }
@@ -1371,15 +1434,21 @@ impl RecordTypes for ClassInfo {
 impl RecordTypes for TParamInfo {
     const WHAT: &'static str = "a type parameter's bounds (Symbols::tparam)";
     fn heap_bytes(&self) -> usize {
-        self.hk_variances.capacity()
+        self.hk_variances.len()
     }
     fn each_type(&self, f: &mut dyn FnMut(TypeId)) {
         f(self.upper);
         f(self.lower);
+        if self.declared_upper != NO_TYPE {
+            f(self.declared_upper);
+        }
     }
     fn map_types(&mut self, f: &mut dyn FnMut(TypeId) -> TypeId) {
         self.upper = f(self.upper);
         self.lower = f(self.lower);
+        if self.declared_upper != NO_TYPE {
+            self.declared_upper = f(self.declared_upper);
+        }
     }
 }
 
@@ -1394,11 +1463,17 @@ impl RecordTypes for AliasInfo {
             f(lo);
             f(hi);
         }
+        if self.declared_rhs != NO_TYPE {
+            f(self.declared_rhs);
+        }
     }
     fn map_types(&mut self, f: &mut dyn FnMut(TypeId) -> TypeId) {
         self.rhs = f(self.rhs);
         if let Some((lo, hi)) = self.bounds {
             self.bounds = Some((f(lo), f(hi)));
+        }
+        if self.declared_rhs != NO_TYPE {
+            self.declared_rhs = f(self.declared_rhs);
         }
     }
 }
@@ -1492,7 +1567,7 @@ mod tests {
             let c = syms.new_class(Name(1), ClassKind::Class, 0, Owner::Package(ROOT_PKG), FileId(0), None, Span::default());
             let p = syms.new_tparam(Name(2), 0);
             let s = syms.new_sym(Name(5), SymKind::Def, 0, Owner::Package(ROOT_PKG), FileId(0), None, Span::default());
-            let a = AliasId(syms.aliases.push(AliasInfo { name: Name(6), owner: Owner::Package(ROOT_PKG), file: FileId(0), def: None, tparams: Vec::new(), rhs: ERROR, bounds: None, deprecated: false, js: false }));
+            let a = AliasId(syms.aliases.push(AliasInfo { name: Name(6), owner: Owner::Package(ROOT_PKG), file: FileId(0), def: None, tparams: Vec::new(), rhs: ERROR, bounds: None, deprecated: false, js: false, declared_rhs: NO_TYPE }));
             syms.syms.fork();
             syms.classes.fork();
             syms.tparams.fork();

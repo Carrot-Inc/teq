@@ -498,7 +498,7 @@ impl<'a> Worker<'a> {
         // A JavaScript type the forwarded alias names is the forwarder's too (`Worker::alias_names_js`).
         let js = self.forwarded_alias_js(vp, name);
         let a = AliasId(self.syms.aliases.len() as u32);
-        self.syms.aliases.push(AliasInfo { name: alias, owner: Owner::Class(c), file, def: None, tparams: Vec::new(), rhs, bounds: None, deprecated: false, js });
+        self.syms.aliases.push(AliasInfo { name: alias, owner: Owner::Class(c), file, def: None, tparams: Vec::new(), rhs, bounds: None, deprecated: false, js, declared_rhs: crate::tir::NO_TYPE });
         self.syms.alias_cells.set(a.0, Completion::Done);
         self.syms.class_mut(c).type_aliases.insert(alias, a);
         true
@@ -637,7 +637,7 @@ impl<'a> Worker<'a> {
         let s = self.syms.new_sym(alias, SymKind::Def, mods::FINAL | retained, Owner::Class(c), file, None, span);
         {
             let mut info = self.syms.sym_mut(s);
-            info.sig = Some(Arc::new(MethodSig { tparams: sig.tparams.clone(), clauses, ret }));
+            info.sig = Some(Arc::new(MethodSig { tparams: sig.tparams.clone(), clauses, ret, declared: crate::tir::NO_TYPE }));
             info.state().set(Completion::Done);
             info.is_extension = is_extension;
             info.ext_tparams = ext_tparams;

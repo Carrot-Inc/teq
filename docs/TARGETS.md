@@ -151,10 +151,8 @@ is reported as unsupported when a program reaches it; `--split`, `--module-per-f
 Not yet, against scalac's layout: `Signature` attributes, specialised `FunctionN` entry points for library
 lambdas, `FunctionXXL` above 22 parameters (a lambda of that many is an interface of its own arity, so a
 cast to such a function type, which erases to `FunctionXXL`, checks nothing), `writeReplace`, and
-`Serializable` on objects and lambdas (a case class, a tuple and an enum have it); a given is not `final`; an
-object nested in an object is no static field of the outer one; a private member is public in bytecode under
-its own name where scalac widens it under an expanded one; a `try` as a constructor argument and
-`getStackTrace` are missing.
+`Serializable` on lambdas; a private member is public in bytecode under its own name where scalac widens it
+under an expanded one; a `try` as a constructor argument and `getStackTrace` are missing.
 Class files are 2.4 times the JavaScript text, and lazy vals are not thread-safe.
 
 ## The interpreter

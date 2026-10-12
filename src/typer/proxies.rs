@@ -198,7 +198,7 @@ impl<'a> Worker<'a> {
                 let body = self.assignment(target, value);
                 let unit = self.b.t_unit;
                 let clause = ClauseSig { params: vec![ParamSig { name, ty, by_name: false, repeated: false, has_default: false, sym: v }], is_using: false, is_implicit: false };
-                (MethodSig { tparams: Vec::new(), clauses: vec![clause], ret: unit }, vec![v], body)
+                (MethodSig { tparams: Vec::new(), clauses: vec![clause], ret: unit, declared: crate::tir::NO_TYPE }, vec![v], body)
             }
             HeldOf::Call(s) => {
                 let sig = self.sig_of(s).clone();
@@ -236,7 +236,7 @@ impl<'a> Worker<'a> {
                 let l = self.prog.list(&args);
                 let body = self.prog.add(TExpr::CallStatic(s, l));
                 self.prog.set_type(body, sig.ret);
-                (MethodSig { tparams: sig.tparams.clone(), clauses, ret: sig.ret }, params, body)
+                (MethodSig { tparams: sig.tparams.clone(), clauses, ret: sig.ret, declared: crate::tir::NO_TYPE }, params, body)
             }
             HeldOf::New(k) => {
                 let ctor = self.syms.class(k).ctor.clone();
@@ -263,7 +263,7 @@ impl<'a> Worker<'a> {
                 self.env.frames.extend(inner);
                 let ty = self.syms.this_type(k);
                 self.prog.set_type(body, ty);
-                (MethodSig { tparams: Vec::new(), clauses, ret: ty }, params, body)
+                (MethodSig { tparams: Vec::new(), clauses, ret: ty, declared: crate::tir::NO_TYPE }, params, body)
             }
         };
         {
@@ -698,7 +698,7 @@ impl<'a> Worker<'a> {
         let m = self.syms.new_sym(init_name, SymKind::Def, 0, Owner::Class(t), file, def, span);
         {
             let mut info = self.syms.sym_mut(m);
-            info.sig = Some(Arc::new(MethodSig { tparams: Vec::new(), clauses: Vec::new(), ret }));
+            info.sig = Some(Arc::new(MethodSig { tparams: Vec::new(), clauses: Vec::new(), ret, declared: crate::tir::NO_TYPE }));
             info.state().set(Completion::Done);
         }
         self.syms.add_member(t, m);
@@ -986,7 +986,7 @@ impl<'a> Worker<'a> {
             }
             clauses.push(ClauseSig { params: ps, ..*cl });
         }
-        let sig = MethodSig { tparams: msig.tparams.clone(), clauses, ret: msig.ret };
+        let sig = MethodSig { tparams: msig.tparams.clone(), clauses, ret: msig.ret, declared: crate::tir::NO_TYPE };
         let recv = self.prog.add(TExpr::Super(SuperTarget::Class(t)));
         let list = self.prog.list(&args);
         let call = self.prog.add(TExpr::CallMethod(recv, m, list));

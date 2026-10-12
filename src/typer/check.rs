@@ -1705,7 +1705,10 @@ impl<'a> Worker<'a> {
         let t = self;
         match &def.kind {
             DefKind::Val { ty, .. } => match ty {
-                Some(ty) => MethodSig::value(t.resolve_declared_type(*ty)),
+                Some(ty) => {
+                    let (ty, declared) = t.declared_view(*ty, |w| w.resolve_declared_type(*ty));
+                    MethodSig { declared, ..MethodSig::value(t.declared_chain(ty, declared)) }
+                }
                 // An incomplete val's type is unknown unless it was declared.
                 None if def.mods & mods::INCOMPLETE != 0 => MethodSig::value(ERROR),
                 None => {
@@ -1727,7 +1730,7 @@ impl<'a> Worker<'a> {
                 let Owner::Class(c) = t.syms.sym(sym).owner else { return MethodSig::value(ERROR) };
                 let clauses = t.resolve_clauses(&f.clauses, None, &[], &[], None);
                 let info = t.syms.class(c);
-                MethodSig { tparams: info.tparams.clone(), clauses, ret: info.base_types[0].1 }
+                MethodSig { tparams: info.tparams.clone(), clauses, ret: info.base_types[0].1, declared: crate::tir::NO_TYPE }
             }
             DefKind::Fun(f) => {
                 let ids = t.make_tparams(&f.tparams);
@@ -1739,9 +1742,15 @@ impl<'a> Worker<'a> {
                     t.shared_write(sym, |w| w.syms.sym_mut(sym).erased_tags = tags);
                 }
                 let tparams: Vec<TParamId> = ids.iter().map(|&(_, p)| p).collect();
-                let ret = f.ret.map(|r| t.resolve_declared_type(r));
+                let (ret, declared) = match f.ret {
+                    Some(r) => {
+                        let (ty, declared) = t.declared_view(r, |w| w.resolve_declared_type(r));
+                        (Some(t.declared_chain(ty, declared)), declared)
+                    }
+                    None => (None, NO_TYPE),
+                };
                 t.env.frames.pop();
-                let mut sig = MethodSig { tparams, clauses, ret: ret.unwrap_or(ERROR) };
+                let mut sig = MethodSig { tparams, clauses, ret: ret.unwrap_or(ERROR), declared };
                 // A macro without a declared result type has the type its splice's `Expr` holds,
                 // against which a call infers its type arguments before the macro runs.
                 if ret.is_none() && def.mods & mods::INLINE != 0 && def.mods & (mods::TRANSPARENT | mods::INCOMPLETE) == 0 {
@@ -1779,6 +1788,7 @@ impl<'a> Worker<'a> {
                         tparams: info.tparams.clone(),
                         clauses: info.ctor.clone(),
                         ret: info.parents.first().copied().unwrap_or(ERROR),
+                        declared: crate::tir::NO_TYPE,
                     }
                 }
                 None => {
@@ -1789,12 +1799,13 @@ impl<'a> Worker<'a> {
                     t.env.frames.push(Frame::Locals { names: Vec::new(), tparams: ids.clone(), givens: Vec::new(), classes: Vec::new(), aliases: Vec::new(), owner: t.sites.owners.len() as u32 });
                     t.resolve_tparam_bounds(&g.tparams, &ids);
                     let clauses = t.resolve_clauses(&g.clauses, None, &g.tparams, &ids, None);
-                    let ret = t.resolve_declared_type(g.ty);
+                    let (ret, declared) = t.declared_view(g.ty, |w| w.resolve_declared_type(g.ty));
+                    let ret = t.declared_chain(ret, declared);
                     t.env.frames.pop();
                     if t.deferred_candidate(sym) && g.alias.is_some_and(|a| t.is_deferred_marker(a)) {
                         t.shared_write(sym, |w| w.syms.sym_mut(sym).mods |= mods::DEFERRED);
                     }
-                    MethodSig { tparams: ids.iter().map(|&(_, p)| p).collect(), clauses, ret }
+                    MethodSig { tparams: ids.iter().map(|&(_, p)| p).collect(), clauses, ret, declared }
                 }
             },
             _ => MethodSig::value(ERROR),
@@ -2858,6 +2869,7 @@ impl<'a> Worker<'a> {
 
     fn check_class_now(&mut self, c: ClassId) {
         self.complete_class(c);
+        self.read_jdk_superclasses(c);
         let pending = self.attempts.pending_len();
         let erased_mark = self.erased_values.len();
         let (file, def_id, kind, js) = {
@@ -3667,7 +3679,7 @@ impl<'a> Worker<'a> {
             self.settle_class(b);
             let owner_subst: Subst =
                 self.syms.class(b).tparams.iter().copied().zip(self.types.items(targs).iter().copied()).collect();
-            let sig = Arc::new(MethodSig { tparams: Vec::new(), clauses: self.syms.class(b).ctor.clone(), ret: base_ty });
+            let sig = Arc::new(MethodSig { tparams: Vec::new(), clauses: self.syms.class(b).ctor.clone(), ret: base_ty, declared: crate::tir::NO_TYPE });
             let span = clause.map_or(class_span, |p| ast.ty_spans[p.ty.idx()]);
             let mut lists: Vec<ArgList> = clause
                 .map(|p| {
@@ -3811,7 +3823,7 @@ impl<'a> Worker<'a> {
             }
             _ => (self.syms.class(parent).tparams.clone(), Vec::new(), self.syms.class(parent).base_types[0].1),
         };
-        let sig = Arc::new(MethodSig { tparams: sig_tparams, clauses: self.syms.class(parent).ctor.clone(), ret });
+        let sig = Arc::new(MethodSig { tparams: sig_tparams, clauses: self.syms.class(parent).ctor.clone(), ret, declared: crate::tir::NO_TYPE });
         // A parent through a prefix (`Ops` of `Num[T]` in `Integ[T] extends Num[T]`, which is
         // `Integ.this.Ops`) takes its constructor's parameters seen from that prefix, the
         // enclosing classes' arguments the prefix's, as dotty's parent constructor type.
@@ -3937,7 +3949,7 @@ impl<'a> Worker<'a> {
                     is_implicit: cl.is_implicit,
                 })
                 .collect();
-            Arc::new(MethodSig { tparams: own.tparams.clone(), clauses, ret: sig.ret })
+            Arc::new(MethodSig { tparams: own.tparams.clone(), clauses, ret: sig.ret, declared: crate::tir::NO_TYPE })
         };
         let primary = self.syms.class(parent).primary_ctor.filter(|_| self.ctor_accessible(parent)).map(|s| (s, fix(self, sig.clone(), false)));
         let mut alts = Vec::with_capacity(secondaries.len());
@@ -4227,6 +4239,96 @@ impl<'a> Worker<'a> {
         !(self.syms.sym(sym).mods & both == both && self.loaded.as_ref().map_or(false, |l| l.has_body(sym)))
     }
 
+    /// Whether the parameters of `msig` and of `p` erase apart by what a declaration states beyond
+    /// its type (`MethodSig::declared`): their signatures differ, dotty's `Signature` by `sigName`,
+    /// so that the one overrides or implements nothing of the other (`Denotation.matches`):
+    /// `x: V | V` is `Object` where `x: V` is `V`, `x: C` of `type C = Int *: EmptyTuple`
+    /// `Product` where `x: Tuple1[Int]` is `Tuple1`. Only parameters both declare without a type
+    /// parameter are compared: one seen through a binding erases at the binding's place.
+    fn declared_params_apart(&mut self, msig: &MethodSig, p: SymId) -> bool {
+        let declared = |w: &Self, s: SymId| s != SymId(u32::MAX) && declared_of(w, s) != NO_TYPE;
+        let psig = self.sig_arc(p);
+        let params = |sig: &MethodSig| {
+            sig.clauses.iter().flat_map(|c| c.params.iter()).any(|q| declared(self, q.sym))
+                || sig.tparams.iter().any(|&t| self.syms.tparam(t).declared_upper != NO_TYPE)
+        };
+        if !params(msig) && !params(&psig) {
+            return false;
+        }
+        let pairs: Vec<(&ParamSig, &ParamSig)> = msig.clauses.iter().flat_map(|c| c.params.iter()).zip(psig.clauses.iter().flat_map(|c| c.params.iter())).collect();
+        pairs.into_iter().any(|(a, b)| {
+            let (x, y) = (self.declared_sig_name(a), self.declared_sig_name(b));
+            matches!((x, y), (Some(x), Some(y)) if x != y)
+        })
+    }
+
+    /// The class a parameter erases to by its declaration, as dotty's `sigName` names it: by the
+    /// declared view where there is one (`symbols::expand_declared`), a type parameter by its
+    /// bound as declared, a union of a value class `java.lang.Object` (`erasedLub` of
+    /// `ErasedValueType`s); none for another type naming a type parameter.
+    fn declared_sig_name(&mut self, q: &ParamSig) -> Option<String> {
+        if q.by_name || q.repeated {
+            return None;
+        }
+        let view = if q.sym != SymId(u32::MAX) { declared_of(self, q.sym) } else { NO_TYPE };
+        let mut t = if view == NO_TYPE { q.ty } else { crate::symbols::expand_declared(&self.syms, &self.types, view) };
+        // The bound chain followed to its end, as `sigName`'s erasure follows it
+        // (`checkedSuperType`); a cycle, which the bounds' check refuses, names nothing.
+        let mut seen: Vec<TParamId> = Vec::new();
+        while let Type::Param(p) = self.types.get(t) {
+            if seen.contains(&p) {
+                return None;
+            }
+            seen.push(p);
+            let info = self.syms.tparam(p);
+            t = if info.declared_upper != NO_TYPE { crate::symbols::expand_declared(&self.syms, &self.types, info.declared_upper) } else { info.upper };
+        }
+        if self.mentions_param(t) {
+            return None;
+        }
+        // A `*:` chain as `erasePair` names it, before `sig_name` dealiases it to its tuple class:
+        // the class of its arity where it ends in one, `Product` where it ends in the `EmptyTuple`
+        // alias (`tupleArity` -1), as the JVM's erasure has it (`Gen::erase`).
+        let chain = |w: &Self, t: TypeId| match w.types.get(t) {
+            Type::Class(c, _) if Some(c) == w.b.cons_tuple => {
+                let tuples = &w.b.tuples;
+                Some(match w.types.cons_arity(t, c, &|k| tuples.iter().position(|&n| n == Some(k))) {
+                    Some(n) if n <= 22 => format!("scala.Tuple{}", n),
+                    Some(_) => "scala.runtime.TupleXXL".to_string(),
+                    None => "scala.Product".to_string(),
+                })
+            }
+            _ => None,
+        };
+        if let Some(name) = chain(self, t) {
+            return Some(name);
+        }
+        if let Type::Class(c, args) = self.types.get(t) {
+            if c == self.b.array {
+                if let Some(name) = self.types.items(args).first().and_then(|&e| chain(self, e)) {
+                    return Some(format!("{}[]", name));
+                }
+            }
+        }
+        if let Type::Union(a, b, _) = self.types.get(t) {
+            let value_class = |w: &Self, t: TypeId| matches!(w.types.get(t), Type::Class(c, _) if w.syms.class(c).value_class);
+            if value_class(self, a) || value_class(self, b) {
+                return Some("java.lang.Object".to_string());
+            }
+            let (x, y) = (self.sig_name(a, false, 0, None)?, self.sig_name(b, false, 0, None)?);
+            return (x == y).then_some(x);
+        }
+        self.sig_name(t, false, 0, None)
+    }
+
+    /// A member of a std class standing for a JDK class that the JDK declares abstract
+    /// (`absorb_java_class_now`): implemented by a member of its signature alone, as any other
+    /// class's, not by a std member of its name.
+    fn abstract_by_jdk(&self, sym: SymId) -> bool {
+        let s = self.syms.sym(sym);
+        s.intrinsic.is_some() && s.mods & mods::ABSTRACT != 0
+    }
+
     pub(crate) fn is_abstract_member(&self, sym: SymId) -> bool {
         let s = self.syms.sym(sym);
         let declared_abstract = || {
@@ -4256,7 +4358,8 @@ impl<'a> Worker<'a> {
                 Owner::Class(c) if Some(c) == self.b.product || Some(c) == self.equals_class() => {
                     matches!(s.name, names::PRODUCT_ARITY | names::PRODUCT_ELEMENT | names::CAN_EQUAL_METHOD) && declared_abstract()
                 }
-                Owner::Class(c) => s.java_defined && self.syms.class(c).kind == ClassKind::Trait && declared_abstract(),
+                // A member the JDK declares abstract is (`absorb_java_class_now`).
+                Owner::Class(c) => (s.mods & mods::ABSTRACT != 0 || s.java_defined && self.syms.class(c).kind == ClassKind::Trait) && declared_abstract(),
                 _ => false,
             };
         }
@@ -4695,7 +4798,7 @@ impl<'a> Worker<'a> {
             _ => return Agreement::Params,
         };
         let clauses = if msig.clauses.is_empty() && params.is_empty() { Vec::new() } else { vec![ClauseSig { params, is_using: false, is_implicit: false }] };
-        let psig = Arc::new(MethodSig { tparams: Vec::new(), clauses, ret });
+        let psig = Arc::new(MethodSig { tparams: Vec::new(), clauses, ret, declared: crate::tir::NO_TYPE });
         self.compare_sig_pair(c, msig, None, psig, ANY, false, false)
     }
 
@@ -4911,7 +5014,11 @@ impl<'a> Worker<'a> {
             self.shared_write(p, |w| w.syms.sym_mut(p).overridden_by_param = true);
         }
         let msig = self.sig_arc(m);
-        let agreement = self.compare_sigs_of(c, Some(m), msig, m_owner, p, p_owner);
+        let declared_apart = self.declared_params_apart(&msig, p);
+        let agreement = match self.compare_sigs_of(c, Some(m), msig, m_owner, p, p_owner) {
+            Agreement::Same | Agreement::Result if declared_apart => Agreement::Params,
+            agreement => agreement,
+        };
         // A val next to the alternatives of an overloaded name other than the one it implements.
         let overloads = p_kind == SymKind::Def && (m_kind == SymKind::Def || self.syms.sym(p).alternative);
         if agreement == Agreement::Params && (p_abstract || overloads) {
@@ -5211,9 +5318,9 @@ impl<'a> Worker<'a> {
         let nullary_pair = (msig.clauses.is_empty() && empty(&psig)) || (psig.clauses.is_empty() && empty(&msig));
         let java_member = nullary_pair && (self.matches_nullary_loosely(p) || m.is_some_and(|m| self.matches_nullary_loosely(m)));
         if msig.clauses.is_empty() && empty(&psig) && java_member {
-            psig = Arc::new(MethodSig { tparams: psig.tparams.clone(), clauses: Vec::new(), ret: psig.ret });
+            psig = Arc::new(MethodSig { tparams: psig.tparams.clone(), clauses: Vec::new(), ret: psig.ret, declared: crate::tir::NO_TYPE });
         } else if psig.clauses.is_empty() && empty(&msig) && java_member && self.syms.sym(p).kind == SymKind::Def {
-            msig = Arc::new(MethodSig { tparams: msig.tparams.clone(), clauses: Vec::new(), ret: msig.ret });
+            msig = Arc::new(MethodSig { tparams: msig.tparams.clone(), clauses: Vec::new(), ret: msig.ret, declared: crate::tir::NO_TYPE });
         }
         let lenient_using = self.is_std_scala_member(p);
         self.compare_sig_pair(c, msig, m_owner, psig, p_owner, false, lenient_using)
@@ -5413,7 +5520,7 @@ impl<'a> Worker<'a> {
                 is_implicit: cl.is_implicit,
             })
             .collect();
-        Arc::new(MethodSig { tparams: sig.tparams.clone(), clauses, ret })
+        Arc::new(MethodSig { tparams: sig.tparams.clone(), clauses, ret, declared: crate::tir::NO_TYPE })
     }
 
     /// "method f", "value x in trait T".
@@ -5607,9 +5714,11 @@ impl<'a> Worker<'a> {
                             && (!self.is_abstract_member(s) || (self.is_deferred_given(s) && !self.overrides_declaration_of(m, s)))
                             && !self.is_private(s)
                             && !self.is_abstract_override(s)
-                            && ((self.in_std(s) && self.in_std(m)) || {
+                            && ((self.in_std(s) && self.in_std(m) && !self.abstract_by_jdk(m)) || {
                                 let ssig = self.sig_arc(s);
+                                let apart = self.declared_params_apart(&ssig, m);
                                 self.compare_sigs(c, ssig, (i > 0).then_some(ot), m, bt) != Agreement::Params
+                                    && !apart
                                     && self.declared_target_name(s) == self.declared_target_name(m)
                             });
                         if implements {
@@ -5742,7 +5851,7 @@ impl<'a> Worker<'a> {
                 let ty = self.sig_of(s).ret;
                 let unit = self.b.t_unit;
                 let params = vec![ParamSig { name: var_name, ty, by_name: false, repeated: false, has_default: false, sym: param_sym }];
-                let as_setter = Arc::new(MethodSig { tparams: Vec::new(), clauses: vec![ClauseSig { params, is_using: false, is_implicit: false }], ret: unit });
+                let as_setter = Arc::new(MethodSig { tparams: Vec::new(), clauses: vec![ClauseSig { params, is_using: false, is_implicit: false }], ret: unit, declared: crate::tir::NO_TYPE });
                 if self.compare_sig_pair(c, as_setter, (i > 0).then_some(ot), psig.clone(), m_owner, false, false) == Agreement::Same {
                     if !self.syms.js_member(s) {
                         self.shared_write(s, |w| {
@@ -6575,8 +6684,13 @@ impl ProgIndex {
 }
 
 /// The types of a signature that its readers translate: its parameters' and its result.
+/// A parameter's declared view (`MethodSig::declared` of its symbol's signature).
+fn declared_of(w: &Worker, s: SymId) -> TypeId {
+    w.syms.sym(s).sig.as_ref().map_or(NO_TYPE, |sig| sig.declared)
+}
+
 fn sig_types(sig: &MethodSig) -> impl Iterator<Item = TypeId> + '_ {
-    sig.clauses.iter().flat_map(|c| c.params.iter().map(|p| p.ty)).chain([sig.ret])
+    sig.clauses.iter().flat_map(|c| c.params.iter().map(|p| p.ty)).chain([sig.ret]).chain((sig.declared != NO_TYPE).then_some(sig.declared))
 }
 
 /// Whether a worker reads the shared records and the signatures in its view with the overlays

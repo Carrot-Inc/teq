@@ -731,6 +731,30 @@ impl<'a> Gen<'a> {
 
     // ---- classes ----
 
+    /// A class's access flags, dotty's `BCodeUtils.javaFlags` of its symbol: public; a trait an
+    /// abstract interface, any other class `ACC_SUPER`, abstract where declared so (an enum is);
+    /// final where the symbol is `Final` and not abstract: written so, a module class
+    /// (`ModuleClassCreationFlags`), a given object's among them, an anonymous class
+    /// (`Typer.typedNew`), an enum's case (`DesugarEnums`, a value's class being anonymous) or a
+    /// value class (`Namer`); and `ACC_ENUM` for an enum and its class cases (`Enum`).
+    fn class_access(&self, c: ClassId) -> u16 {
+        let cx = self.cx;
+        let info = cx.input.syms.class(c);
+        if info.kind == ClassKind::Trait {
+            return ACC_PUBLIC | ACC_INTERFACE | ACC_ABSTRACT;
+        }
+        let class_case = info.kind == ClassKind::EnumCase && info.singleton.is_none();
+        if info.kind == ClassKind::Enum || info.kind == ClassKind::Class && info.mods & mods::ABSTRACT != 0 {
+            let enum_flag = if info.kind == ClassKind::Enum { ACC_ENUM } else { 0 };
+            return ACC_PUBLIC | ACC_SUPER | ACC_ABSTRACT | enum_flag;
+        }
+        let module = matches!(info.kind, ClassKind::Object) || info.inner_object.is_some() || info.kind == ClassKind::GivenImpl && !cx.given_class_classes.contains_key(&c);
+        // A given class is not (`Desugar.classDef`: the def answering it is).
+        let given_class = cx.given_class_classes.contains_key(&c);
+        let fin = !given_class && (info.mods & mods::FINAL != 0 || module || matches!(info.kind, ClassKind::Anon | ClassKind::EnumCase) || info.value_class);
+        ACC_PUBLIC | ACC_SUPER | if fin { ACC_FINAL } else { 0 } | if class_case { ACC_ENUM } else { 0 }
+    }
+
     pub fn emit_class(&mut self, idx: usize) -> (String, Vec<u8>) {
         let cx = self.cx;
         let prog = cx.input.prog;
@@ -757,24 +781,34 @@ impl<'a> Gen<'a> {
         let mut interfaces: Vec<String> = Vec::new();
         let mut listed: Vec<ClassId> = enum_class.or(superclass).into_iter().collect();
         let mut desugared: Vec<ClassId> = Vec::new();
-        // A library class the std's stands for (`link_library_class`) goes by the same name.
-        for &(b, _) in info.base_types.iter().skip(1) {
+        // In the order of the parents clause, the reverse of the linearisation's (dotty's
+        // `directlyInheritedTraits`, the traits before the superclass), those no other of them
+        // brings first, as `BCodeSkelBuilder.initJClass` lists them; then the ones it leaves out,
+        // the traits another brings or the superclass does, which teq lists for the calls it makes
+        // on them (dotty adds its super calls' targets). A library class the std's stands for
+        // (`link_library_class`) goes by the same name.
+        let before_super = info.base_types.iter().position(|&(b, _)| Some(b) == enum_class.or(superclass)).unwrap_or(info.base_types.len());
+        let mut traits: Vec<(ClassId, bool)> = Vec::new();
+        for (i, &(b, _)) in info.base_types.iter().enumerate().skip(1).rev() {
             let bname = &cx.class_names[b.idx()];
-            if syms.class(b).kind == ClassKind::Trait && syms.class(b).js == JsKind::Scala && **bname != *name && !interfaces.contains(bname) {
+            if syms.class(b).kind == ClassKind::Trait && syms.class(b).js == JsKind::Scala && **bname != *name && !traits.iter().any(|&(t, _)| cx.class_names[t.idx()] == *bname) {
                 if is_desugared_parent(syms, cx.input.interner, b) {
                     desugared.push(b);
                     continue;
                 }
-                interfaces.push(bname.clone());
-                listed.push(b);
+                traits.push((b, i < before_super));
             }
         }
+        let brought = |t: ClassId| traits.iter().any(|&(u, direct)| direct && u != t && syms.class(u).base_types.iter().skip(1).any(|&(x, _)| x == t));
+        let (first, rest): (Vec<_>, Vec<_>) = traits.iter().partition(|&&(t, direct)| direct && !brought(t));
+        for &(b, _) in first.into_iter().chain(rest) {
+            interfaces.push(cx.class_names[b.idx()].clone());
+            listed.push(b);
+        }
         // The parents `Desugar.classDef` gives (`Product` and `java.io.Serializable`, an enum's
-        // `Enum`) as scalac's backend lists them: in the order of the parents clause, the reverse
-        // of the linearisation's, less one another parent or the superclass brings
-        // (`directlyInheritedTraits` less the redundant, `CoreBTypesFromSymbols`): `Product` alone
-        // below `RuntimeException`, `Enum` alone for an enum.
-        desugared.reverse();
+        // `Enum`) as scalac's backend lists them: after the others, less one another parent or the
+        // superclass brings (`directlyInheritedTraits` less the redundant, `CoreBTypesFromSymbols`):
+        // `Product` alone below `RuntimeException`, `Enum` alone for an enum.
         for (i, &d) in desugared.iter().enumerate() {
             let brought = listed.iter().chain(desugared.iter().enumerate().filter(|&(j, _)| j != i).map(|(_, k)| k)).any(|&k| syms.class(k).base_types.iter().skip(1).any(|&(x, _)| x == d));
             if !brought {
@@ -796,16 +830,10 @@ impl<'a> Gen<'a> {
         if (is_object && info.companion.map_or(false, |e| cx.has_enum_fields(e)) || instance_enum_companion) && !interfaces.iter().any(|i| i == super::callable::MIRROR_SUM) {
             interfaces.push(super::callable::MIRROR_SUM.to_string());
         }
-        if is_object || info.inner_object.is_some() {
+        if is_object || info.inner_object.is_some() || cx.given_object_classes.contains_key(&c) || cx.inner_given_object_classes.contains_key(&c) {
             interfaces = super::callable::module_interfaces(interfaces, info.owner == Owner::Local);
         }
-        let access = if is_trait {
-            ACC_PUBLIC | ACC_INTERFACE | ACC_ABSTRACT
-        } else if is_enum || is_abstract {
-            ACC_PUBLIC | ACC_SUPER | ACC_ABSTRACT
-        } else {
-            ACC_PUBLIC | ACC_SUPER
-        };
+        let access = self.class_access(c);
         self.cw = ClassWriter::new(access, &name, &super_name, &interfaces);
 
         self.this_name = name.clone();
