@@ -39,7 +39,7 @@ impl<'a> Worker<'a> {
             p.state().set(crate::symbols::Completion::Done);
         }
         let params = vec![ParamSig { name, ty, by_name: false, repeated: false, has_default: false, sym: param }];
-        MethodSig { tparams: Vec::new(), clauses: vec![ClauseSig { params, is_using: false, is_implicit: false }], ret: self.b.t_unit }
+        MethodSig { tparams: Vec::new(), clauses: vec![ClauseSig { params, is_using: false, is_implicit: false }], ret: self.b.t_unit, declared: crate::tir::NO_TYPE }
     }
 
     /// The setter through which the member `s` is assigned: an abstract var's, outside a

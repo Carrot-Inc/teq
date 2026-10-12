@@ -27,7 +27,6 @@ pub fn module_interfaces(mut interfaces: Vec<String>, owned_by_block: bool) -> V
     }
     interfaces
 }
-const ACC_ENUM: u16 = 0x4000;
 
 /// scalac's order of the forwarders of a mirror class (`sortedMembersBasedOnFlags`): the
 /// members by their source names, the module's own and the inherited ones alike, and the
@@ -1954,6 +1953,7 @@ impl<'a> Gen<'a> {
             tparams: sig.tparams.clone(),
             clauses: sig.clauses.iter().map(|cl| ClauseSig { params: cl.params.iter().map(|p| ParamSig { ty: types.subst(p.ty, &subst), ..p.clone() }).collect(), ..cl.clone() }).collect(),
             ret: types.subst(sig.ret, &subst),
+            declared: crate::tir::NO_TYPE,
         };
         let (params, ret) = self.erase_export_sig(member, &seen);
         accessor.desc = method_desc(&params, &ret);

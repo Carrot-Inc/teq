@@ -226,6 +226,20 @@ pub struct Gen<'a> {
     /// typer's overlays keep past the merge: a table by the id would
     /// take gigabytes per class. A sparse Gen keeps every erasure here.
     erased_overlay: FxMap<TypeId, JType>,
+    /// Whether the types erased are a Java member's signature's, dotty's `TypeErasure` of
+    /// `SourceLanguage.Java`: `Array[T]` of a type parameter is `T[]`, never `Object`, the
+    /// parameter being `JavaDefined` (`isGenericArrayElement`). Its erasures are `erased_java`.
+    java_erasure: bool,
+    erased_java: FxMap<TypeId, JType>,
+    /// Whether the types erased are a signature's (a result, a value's or a parameter's type, a
+    /// bound): `Nothing` and `Null` erase to the runtime's `Nothing$` and `Null$` through the whole
+    /// erasure, a union's lub, an intersection's glb, a refinement's parent and an abstract member's
+    /// bound included, as dotty's erasure keeps the bottom classes and its backend maps them
+    /// (`CoreBTypesFromSymbols`); elsewhere they erase to `Object`. Its erasures are `erased_bottoms`.
+    bottom_markers: bool,
+    erased_bottoms: FxMap<TypeId, JType>,
+    /// The declared views met (`MethodSig::declared`), expanded (`declared_type`).
+    declared: std::cell::RefCell<FxMap<TypeId, TypeId>>,
     class_rc: Vec<Option<Rc<str>>>,
     mrefs: FxMap<SymId, Rc<MRef>>,
     /// The function arities past 1 an erasure or a method's reference used when it was made,
@@ -300,6 +314,11 @@ impl<'a> Gen<'a> {
             erased: Vec::new(),
             sparse: false,
             erased_overlay: FxMap::default(),
+            java_erasure: false,
+            erased_java: FxMap::default(),
+            bottom_markers: false,
+            erased_bottoms: FxMap::default(),
+            declared: Default::default(),
             class_rc: vec![None; cx.input.syms.classes.len()],
             mrefs: FxMap::default(),
             erased_arities: FxMap::default(),
@@ -403,7 +422,7 @@ impl<'a> Gen<'a> {
         if t == NO_TYPE {
             return JType::object();
         }
-        if t.0 >= crate::arena::LOCAL_BASE || self.sparse {
+        if t.0 >= crate::arena::LOCAL_BASE || self.sparse || self.java_erasure || self.bottom_markers {
             return self.erase_overlay(t);
         }
         if let Some(Some(j)) = self.erased.get(t.idx()) {
@@ -424,7 +443,14 @@ impl<'a> Gen<'a> {
     }
 
     fn erase_overlay(&mut self, t: TypeId) -> JType {
-        if let Some(j) = self.erased_overlay.get(&t) {
+        let memo = if self.java_erasure {
+            &self.erased_java
+        } else if self.bottom_markers {
+            &self.erased_bottoms
+        } else {
+            &self.erased_overlay
+        };
+        if let Some(j) = memo.get(&t) {
             let j = j.clone();
             if let Some(&used) = self.erased_arities.get(&t) {
                 self.function_arities |= used;
@@ -434,8 +460,32 @@ impl<'a> Gen<'a> {
         let before = std::mem::take(&mut self.function_arities);
         let j = self.erase_uncached(t);
         self.keep_arities(before, |g, used| g.erased_arities.insert(t, used));
-        self.erased_overlay.insert(t, j.clone());
+        if self.java_erasure {
+            self.erased_java.insert(t, j.clone());
+        } else if self.bottom_markers {
+            self.erased_bottoms.insert(t, j.clone());
+        } else {
+            self.erased_overlay.insert(t, j.clone());
+        }
         j
+    }
+
+    /// `f` over the erasure of member `s`'s signature: Java's for a member that is Java's, its
+    /// bottoms the runtime's markers (`bottom_markers`).
+    fn in_language_of<T>(&mut self, s: SymId, f: impl FnOnce(&mut Self) -> T) -> T {
+        let java = self.cx.java_defined(s);
+        let before = std::mem::replace(&mut self.java_erasure, java);
+        let out = self.in_signature(f);
+        self.java_erasure = before;
+        out
+    }
+
+    /// `f` over a signature's erasure (`bottom_markers`).
+    fn in_signature<T>(&mut self, f: impl FnOnce(&mut Self) -> T) -> T {
+        let before = std::mem::replace(&mut self.bottom_markers, true);
+        let out = f(self);
+        self.bottom_markers = before;
+        out
     }
 
     /// After a memo's entry was made with the arities taken from `before`: notes the ones past 1
@@ -458,6 +508,11 @@ impl<'a> Gen<'a> {
             cx.input.interner.get(info.name).strip_prefix("ContextFunction")?.parse().ok()
         }
         let cx = self.cx;
+        if self.bottom_markers {
+            if let Some(j) = self.bottom_class(t) {
+                return j;
+            }
+        }
         match cx.input.types.get(t) {
             Type::Class(c, args) => {
                 let info = cx.input.syms.class(c);
@@ -518,8 +573,16 @@ impl<'a> Gen<'a> {
             }
             Type::Param(p) => self.erase_param(p),
             Type::AppParam(p, args) => self.erase_applied_param(p, args),
+            // An inference variable's instance erases as a body's type does, a bottom to `Object`:
+            // teq's inference leaves `Nothing` where scalac's infers a real type
+            // (`tests/cases/sam_function_value`, DIFFERENCES), and the marker would refuse the value.
             Type::Var(v) => match cx.input.insts.inst(v) {
-                Some(inst) => self.erase(inst),
+                Some(inst) => {
+                    let before = std::mem::replace(&mut self.bottom_markers, false);
+                    let j = self.erase(inst);
+                    self.bottom_markers = before;
+                    j
+                }
                 None => JType::object(),
             },
             Type::Union(a, b, _) => self.erase_union(a, b, false, &mut Vec::new()),
@@ -568,8 +631,8 @@ impl<'a> Gen<'a> {
             // A class through its prefix erases to the class (dotty's `TypeErasure` of a
             // class `TypeRef`).
             Type::Nested(_, class) => self.erase(class),
-            Type::Decl(a) => match cx.input.syms.aliases[a.idx()].bounds {
-                Some((_, upper)) => self.erase(upper),
+            Type::Decl(a) => match self.member_upper(a) {
+                Some(upper) => self.erase(upper),
                 None => JType::object(),
             },
             Type::Lambda(_, body) | Type::Poly(_, body) => self.erase(body),
@@ -590,6 +653,32 @@ impl<'a> Gen<'a> {
         }
     }
 
+    /// A declared view, expanded (`symbols::expand_declared`) once per view.
+    fn declared_type(&self, t: TypeId) -> TypeId {
+        if let Some(&x) = self.declared.borrow().get(&t) {
+            return x;
+        }
+        let x = crate::symbols::expand_declared(self.cx.input.syms, self.cx.input.types, t);
+        self.declared.borrow_mut().insert(t, x);
+        x
+    }
+
+    /// The upper bound of type parameter `p` as the erasure reads it: as declared where the
+    /// bound holds less of the declaration (`TParamInfo::declared_upper`).
+    fn param_upper(&self, p: TParamId) -> TypeId {
+        let info = self.cx.input.syms.tparam(p);
+        if info.declared_upper != NO_TYPE { self.declared_type(info.declared_upper) } else { info.upper }
+    }
+
+    /// The upper bound of abstract type member `a` as the erasure reads it: as declared where the
+    /// bound holds less of the declaration (an abstract member's `AliasInfo::declared_rhs`), as
+    /// dotty's `checkedSuperType` follows the member's declared info.
+    fn member_upper(&self, a: AliasId) -> Option<TypeId> {
+        let info = &self.cx.input.syms.aliases[a.idx()];
+        let (_, upper) = info.bounds?;
+        Some(if info.declared_rhs != NO_TYPE { self.declared_type(info.declared_rhs) } else { upper })
+    }
+
     /// A type parameter erases as its upper bound does, `Unit` as its box: scalac's
     /// `f[T <: String](t: T): T` is `(String)String`, `f[T <: Unit](t: T): T`
     /// `(BoxedUnit)BoxedUnit`. A bound that names the parameter again where it erases
@@ -599,8 +688,8 @@ impl<'a> Gen<'a> {
             return JType::object();
         }
         self.erasing_params.push(p);
-        let upper = self.cx.input.syms.tparam(p).upper;
-        let j = self.written_bottom(upper).unwrap_or_else(|| self.storage(upper));
+        let upper = self.param_upper(p);
+        let j = self.in_signature(|g| g.storage(upper));
         self.erasing_params.pop();
         j
     }
@@ -613,7 +702,7 @@ impl<'a> Gen<'a> {
         }
         self.erasing_params.push(p);
         let j = match self.applied_upper(p, args) {
-            Applied::Is(t) => self.written_bottom(t).unwrap_or_else(|| self.storage(t)),
+            Applied::Is(t) => self.in_signature(|g| g.storage(t)),
             Applied::ArrayOf(e) => self.array_type(Some(e)),
         };
         self.erasing_params.pop();
@@ -625,7 +714,7 @@ impl<'a> Gen<'a> {
     /// bound's body otherwise, whose class the arguments do not change.
     fn applied_upper(&self, p: TParamId, args: TList) -> Applied {
         let types = self.cx.input.types;
-        let upper = self.cx.input.syms.tparam(p).upper;
+        let upper = self.param_upper(p);
         let Type::Lambda(params, body) = types.get(upper) else { return Applied::Is(upper) };
         let arg_of = |t: TypeId| match types.get(t) {
             Type::Param(x) => types.items(params).iter().position(|&q| matches!(types.get(q), Type::Param(y) if y == x)).and_then(|i| types.items(args).get(i).copied()),
@@ -643,11 +732,10 @@ impl<'a> Gen<'a> {
         }
     }
 
-    /// `Nothing` and `Null` as a signature writes them (a declared result, value or parameter
-    /// type, a bound) erase to scala-library's `Nothing$` and `Null$`, which a scalac caller's
-    /// descriptor names; elsewhere, a type the typer inferred, they erase to `Object`, which a
-    /// value of the type scalac would have inferred there fits.
-    fn written_bottom(&self, t: TypeId) -> Option<JType> {
+    /// The runtime's class of `t` where it is `Nothing` or `Null`, scala-library's `Nothing$` and
+    /// `Null$`, which a scalac caller's descriptor names (dotty's `CoreBTypesFromSymbols`,
+    /// `srNothingRef` and `srNullRef`): a signature's erasure (`bottom_markers`).
+    fn bottom_class(&self, t: TypeId) -> Option<JType> {
         let cx = self.cx;
         let which = match cx.input.types.get(t) {
             Type::Nothing => 0,
@@ -659,19 +747,6 @@ impl<'a> Gen<'a> {
             _ => return None,
         };
         Some(JType::L(Rc::from(super::runtime::ARRAY_MARKERS[which])))
-    }
-
-    /// Whether the source of `s` writes its type (`def f: T`, `val x: T`), which `written_bottom`
-    /// reads.
-    fn type_written(&self, s: SymId) -> bool {
-        let cx = self.cx;
-        let info = cx.input.syms.sym(s);
-        let Some(d) = info.def else { return false };
-        match &cx.input.asts[info.file.0 as usize].def(d).kind {
-            crate::ast::DefKind::Val { ty, .. } => ty.is_some(),
-            crate::ast::DefKind::Fun(f) => f.ret.is_some(),
-            _ => false,
-        }
     }
 
     /// The erasure of `A | B`, scalac's `erasedLub` of the parts' erasures (`Lub`): `Nothing | T`
@@ -728,7 +803,7 @@ impl<'a> Gen<'a> {
                         Applied::ArrayOf(e) if !self.generic_array_element(e) => Lub::Array(Box::new(self.lub_part(e, true, seen))),
                         Applied::ArrayOf(_) => Lub::Erased(JType::object()),
                     },
-                    _ => self.lub_part(cx.input.syms.tparam(p).upper, boxed, seen),
+                    _ => self.lub_part(self.param_upper(p), boxed, seen),
                 };
                 seen.pop();
                 l
@@ -828,6 +903,8 @@ impl<'a> Gen<'a> {
                 e.desc(&mut d);
                 JType::L(Rc::from(d.as_str()))
             }
+            Lub::Nothing if self.bottom_markers => self.array_marker(0),
+            Lub::Null if self.bottom_markers => self.array_marker(1),
             Lub::Nothing | Lub::Null => JType::object(),
             Lub::Value(_, j) | Lub::Erased(j) => j.clone(),
         }
@@ -859,9 +936,9 @@ impl<'a> Gen<'a> {
     fn abstract_upper(&mut self, t: TypeId) -> Option<TypeId> {
         let cx = self.cx;
         match cx.input.types.get(t) {
-            Type::Param(p) | Type::AppParam(p, _) => Some(cx.input.syms.tparam(p).upper),
+            Type::Param(p) | Type::AppParam(p, _) => Some(self.param_upper(p)),
             Type::Member(prefix, name) => self.member_upper_bound(prefix, name),
-            Type::Decl(a) => cx.input.syms.aliases[a.idx()].bounds.map(|(_, upper)| upper),
+            Type::Decl(a) => self.member_upper(a),
             _ => None,
         }
     }
@@ -907,7 +984,7 @@ impl<'a> Gen<'a> {
                         Applied::Is(u) => self.array_bound(u),
                         Applied::ArrayOf(_) => Some(JType::object()),
                     },
-                    _ => self.array_bound(cx.input.syms.tparam(p).upper),
+                    _ => self.array_bound(self.param_upper(p)),
                 };
                 self.erasing_params.pop();
                 b
@@ -947,7 +1024,8 @@ impl<'a> Gen<'a> {
     fn generic_array_element(&mut self, t: TypeId) -> bool {
         let cx = self.cx;
         match cx.input.types.get(t) {
-            Type::Param(_) | Type::AppParam(..) | Type::Member(..) | Type::Decl(_) => self.array_bound(t).is_none(),
+            Type::Param(_) => !self.java_erasure && self.array_bound(t).is_none(),
+            Type::AppParam(..) | Type::Member(..) | Type::Decl(_) => self.array_bound(t).is_none(),
             Type::Inter(a, b) => self.generic_array_element(a) && self.generic_array_element(b),
             Type::Union(a, b, _) => self.generic_array_element(a) || self.generic_array_element(b),
             Type::Var(v) => cx.input.insts.inst(v).map_or(true, |inst| self.generic_array_element(inst)),
@@ -971,7 +1049,7 @@ impl<'a> Gen<'a> {
                 Type::Class(c, _) if cx.input.syms.class(c).value_class => return self.class_type(c),
                 Type::Param(p) | Type::AppParam(p, _) if !seen.contains(&p) => {
                     seen.push(p);
-                    t = cx.input.syms.tparam(p).upper;
+                    t = self.param_upper(p);
                 }
                 Type::Var(v) => match cx.input.insts.inst(v) {
                     Some(inst) => t = inst,
@@ -1190,11 +1268,7 @@ impl<'a> Gen<'a> {
         };
         for &(b, _) in &cx.input.syms.class(c).base_types {
             if let Some(&a) = cx.input.syms.class(b).type_aliases.get(&name) {
-                let info = &cx.input.syms.aliases[a.idx()];
-                return Some(match info.bounds {
-                    Some((_, upper)) => upper,
-                    None => info.rhs,
-                });
+                return Some(self.member_upper(a).unwrap_or(cx.input.syms.aliases[a.idx()].rhs));
             }
         }
         None
@@ -1262,7 +1336,7 @@ impl<'a> Gen<'a> {
                             JType::L(Rc::from(d.as_str()))
                         }
                     },
-                    _ => self.array_type(Some(cx.input.syms.tparam(p).upper)),
+                    _ => self.array_type(Some(self.param_upper(p))),
                 };
                 self.erasing_params.pop();
                 return a;
@@ -1476,7 +1550,7 @@ impl<'a> Gen<'a> {
                 Type::Alias(a, args) => t = self.alias_expansion(a, args)?,
                 Type::Param(p) | Type::AppParam(p, _) if !seen.contains(&p) => {
                     seen.push(p);
-                    t = cx.input.syms.tparam(p).upper;
+                    t = self.param_upper(p);
                 }
                 // A pattern's binder: the scrutinee's type and the tested one (`AnyVal & Meters`).
                 Type::Inter(a, b) => {
@@ -1711,8 +1785,12 @@ impl<'a> Gen<'a> {
             return self.function_type(0);
         }
         match &info.sig {
-            Some(sig) if self.type_written(s) => self.written_bottom(sig.ret).unwrap_or_else(|| self.storage(sig.ret)),
-            Some(sig) => self.storage(sig.ret),
+            // The type as declared where the erasure reads more of it (`MethodSig::declared`).
+            Some(sig) if sig.declared != NO_TYPE => {
+                let declared = self.declared_type(sig.declared);
+                self.in_signature(|g| g.storage(declared))
+            }
+            Some(sig) => self.in_signature(|g| g.storage(sig.ret)),
             None => JType::object(),
         }
     }
@@ -1823,15 +1901,18 @@ impl<'a> Gen<'a> {
     /// body reads as the tuple class of its elements (`ParamSig::ty`). In the order the class
     /// file takes them (`jvm_param_order`).
     fn erased_param_types(&mut self, s: SymId) -> Vec<JType> {
+        self.in_language_of(s, |g| g.erased_params_of(s))
+    }
+
+    fn erased_params_of(&mut self, s: SymId) -> Vec<JType> {
         let cx = self.cx;
         let Some(sig) = cx.input.syms.sym(s).info.sig.as_ref() else { return Vec::new() };
-        let written = cx.input.syms.sym(s).def.is_some();
         let params: Vec<(SymId, Option<TypeId>)> = sig.clauses.iter().flat_map(|c| c.params.iter().map(|p| (p.sym, (!p.by_name && !p.repeated).then_some(p.ty)))).collect();
         let types: Vec<JType> = params
             .into_iter()
             .map(|(p, declared)| match declared {
+                Some(_) if cx.input.syms.sym(p).sig.as_ref().is_some_and(|sig| sig.declared != NO_TYPE) => self.sym_type(p),
                 Some(t) if self.is_cons_chain(t) => self.storage(t),
-                Some(t) if written && self.written_bottom(t).is_some() => self.written_bottom(t).unwrap_or_else(JType::object),
                 _ => self.sym_type(p),
             })
             .collect();
@@ -1896,6 +1977,10 @@ impl<'a> Gen<'a> {
     }
 
     fn erased_return_type(&mut self, s: SymId) -> JType {
+        self.in_language_of(s, |g| g.erased_result_of(s))
+    }
+
+    fn erased_result_of(&mut self, s: SymId) -> JType {
         let cx = self.cx;
         let info = cx.input.syms.sym(s);
         let Some(sig) = info.sig.as_ref() else { return JType::object() };
@@ -1908,10 +1993,11 @@ impl<'a> Gen<'a> {
         if let Some(t) = spelled.filter(|&t| self.is_cons_chain(t)) {
             return self.storage(t);
         }
-        match self.type_written(s) {
-            true => self.written_bottom(ret).unwrap_or_else(|| self.erase(ret)),
-            false => self.erase(ret),
+        if sig.declared != NO_TYPE {
+            let declared = self.declared_type(sig.declared);
+            return self.erase(declared);
         }
+        self.erase(ret)
     }
 
     pub fn mref(&mut self, s: SymId) -> Rc<MRef> {

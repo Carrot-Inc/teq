@@ -207,7 +207,7 @@ impl<'a> Worker<'a> {
         let approx = self.non_dependent_approx(ret, &syms);
         let parent = if ctx { self.ctx_fun_type(&ptys, approx) } else { self.fun_type(&ptys, approx) };
         let apply = self.syms.new_sym(names::APPLY, SymKind::Def, crate::ast::mods::ABSTRACT, Owner::Local, file, None, span);
-        let sig = MethodSig { tparams: Vec::new(), clauses: vec![ClauseSig { params, is_using: ctx, is_implicit: false }], ret };
+        let sig = MethodSig { tparams: Vec::new(), clauses: vec![ClauseSig { params, is_using: ctx, is_implicit: false }], ret, declared: crate::tir::NO_TYPE };
         let l = self.sig_types(&sig);
         {
             let mut s = self.syms.sym_mut(apply);

@@ -740,6 +740,28 @@ impl<'a> Cx<'a> {
         out
     }
 
+    /// Whether `s` is Java's, dotty's `JavaDefined`: marked `@javaDefined`, or a member of a class
+    /// the std defines in a `java` package for the JDK's; a program's or a library's Scala class
+    /// in such a package is Scala's.
+    pub fn java_defined(&self, s: SymId) -> bool {
+        let syms = self.input.syms;
+        if syms.sym(s).java_defined {
+            return true;
+        }
+        if !self.input.sources.get(syms.sym(s).file.0 as usize).is_some_and(|f| f.is_std) {
+            return false;
+        }
+        let mut owner = syms.sym(s).owner;
+        while let Owner::Class(c) = owner {
+            owner = syms.class(c).owner;
+        }
+        let Owner::Package(mut p) = owner else { return false };
+        while let Some(parent) = syms.pkg(p).parent.filter(|&q| q != ROOT_PKG) {
+            p = parent;
+        }
+        syms.pkg(p).parent.is_some() && syms.pkg(p).name == crate::names::JAVA
+    }
+
     /// An object of the std standing for a JDK class's statics (`@jvmClass`): its members are
     /// the class's static methods and fields.
     pub fn jdk_statics(&self, c: ClassId) -> bool {

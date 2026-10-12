@@ -1524,6 +1524,7 @@ impl Remap {
         for s in &w.syms.syms.own()[p.syms as usize..] {
             if let Some(sig) = &s.sig {
                 note(sig.ret);
+                note(sig.declared);
                 for c in &sig.clauses {
                     for param in &c.params {
                         note(param.ty);
@@ -1550,6 +1551,7 @@ impl Remap {
         for tp in &w.syms.tparams.own()[p.tparams as usize..] {
             note(tp.upper);
             note(tp.lower);
+            note(tp.declared_upper);
         }
         for a in &w.syms.aliases.own()[p.aliases as usize..] {
             note(a.rhs);
@@ -1557,6 +1559,7 @@ impl Remap {
                 note(l);
                 note(u);
             }
+            note(a.declared_rhs);
         }
         for &t in w.prog.expr_types.own().iter().skip(p.exprs as usize) {
             if t != NO_TYPE {

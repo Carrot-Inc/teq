@@ -203,6 +203,19 @@ fn visible(access: u16) -> bool {
 
 /// The package path and the simple name of a binary class name: `java/util/Map$Entry` is
 /// `java/util` and `Map$Entry`.
+/// The method of `class` that a std member's `@jvm` template calls as its last instruction
+/// (`invokevirtual java/io/InputStream.read()I`), by name and descriptor.
+fn template_method<'t>(template: &'t str, class: &str) -> Option<(&'t str, &'t str)> {
+    let mut words = template.split_whitespace().rev();
+    let target = words.next()?;
+    if !matches!(words.next()?, "invokevirtual" | "invokeinterface") {
+        return None;
+    }
+    let (owner_name, desc) = target.split_at(target.find('(')?);
+    let (owner, name) = owner_name.rsplit_once('.')?;
+    (owner == class).then_some((name, desc))
+}
+
 fn split_binary(name: &str) -> (&str, &str) {
     match name.rfind('/') {
         Some(at) => (&name[..at], &name[at + 1..]),
@@ -984,6 +997,21 @@ impl<'a> Worker<'a> {
         !(self.in_jar(file) || self.is_body_file(file) || self.source(file).is_std)
     }
 
+    /// Reads the JDK classes that the std's stand-ins among `c`'s superclasses stand for, so that
+    /// their members carry the JDK's `ACC_ABSTRACT` (`absorb_java_class_now`) before `c`'s
+    /// overrides and implementations are checked, whichever worker reads them first. On the JVM
+    /// with a class path only.
+    pub(in crate::typer) fn read_jdk_superclasses(&mut self, c: ClassId) {
+        if !self.jvm || !self.sees_classpath() || self.source(self.syms.class(c).file).is_std {
+            return;
+        }
+        let stand_ins: Vec<ClassId> =
+            self.syms.class(c).base_types.iter().skip(1).map(|&(b, _)| b).filter(|&b| self.syms.class(b).kind == ClassKind::Class && self.std_jvm_class(b).is_some()).collect();
+        for b in stand_ins {
+            self.absorb_java_class(b);
+        }
+    }
+
     fn absorb_java_class(&mut self, c: ClassId) -> bool {
         if self.forked && crate::shared::lock_depth() == 0 && (self.std_jvm_class(c).is_none() || self.java().absorbed_done.contains_key(&c)) {
             crate::measure::looked_up_unlocked(crate::measure::Lookup::JavaClassEntry);
@@ -1033,6 +1061,17 @@ impl<'a> Worker<'a> {
         self.java_mut().classes.replace(class, JClass { source, cf: cf.clone(), companion_of: None, inner: false });
         if let Some(o) = obj.filter(|&o| o != class) {
             self.java_mut().classes.replace(o, JClass { source, cf: cf.clone(), companion_of: Some(class), inner: false });
+        }
+        // The std's members take the JDK's `ACC_ABSTRACT`, as dotty's `ClassfileParser` gives a
+        // Java method `Deferred`: one without a body whose template calls a method the JDK
+        // declares abstract (`InputStream.read()`) is implemented, not overridden, by a subclass.
+        let own: Vec<SymId> = self.syms.class(class).members.values().flat_map(|&m| self.syms.alternatives(m).map_or(vec![m], |a| a.to_vec())).collect();
+        for m in own {
+            let info = self.syms.sym(m);
+            let Some((name, desc)) = info.intrinsic.as_deref().and_then(|t| template_method(t, &binary)) else { continue };
+            if info.owner == Owner::Class(class) && cf.methods.iter().any(|jm| jm.name == name && jm.descriptor == desc && jm.access & ACC_ABSTRACT != 0) {
+                self.syms.sym_mut(m).mods |= mods::ABSTRACT;
+            }
         }
         for (i, m) in cf.methods.iter().enumerate() {
             let universal = matches!(m.name.as_str(), "equals" | "hashCode" | "toString" | "getClass" | "clone" | "<init>" | "<clinit>");
@@ -1378,7 +1417,7 @@ impl<'a> Worker<'a> {
                 } else {
                     self.map_jtype(&mut cx, &msig.ret, false)
                 };
-                Arc::new(MethodSig { tparams, clauses: vec![ClauseSig { params, is_using: false, is_implicit: false }], ret })
+                Arc::new(MethodSig { tparams, clauses: vec![ClauseSig { params, is_using: false, is_implicit: false }], ret, declared: crate::tir::NO_TYPE })
             }
         };
         self.mapping_signature = was_mapping;

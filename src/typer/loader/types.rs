@@ -151,6 +151,60 @@ impl<'a> Worker<'a> {
         mapped
     }
 
+    /// A pickled declared type (a parameter's, a result's, a bound, an alias's right-hand side)
+    /// mapped by `map`, with its declared view (`MethodSig::declared`) where the mapping loses
+    /// what the declaration states for the erasure (`declared_lost`), as the source's resolution
+    /// keeps it (`Worker::declared_view`); `NO_TYPE` elsewhere.
+    pub(in crate::typer) fn map_declared(&mut self, cx: &mut MapCx, t: &TType, map: impl FnOnce(&mut Self, &mut MapCx) -> TypeId) -> (TypeId, TypeId) {
+        let outer = std::mem::replace(&mut self.declared_lost, false);
+        let mapped = map(self, cx);
+        let lost = std::mem::replace(&mut self.declared_lost, outer);
+        if !lost {
+            return (mapped, crate::tir::NO_TYPE);
+        }
+        (mapped, self.declared_ttype(cx, t))
+    }
+
+    /// `t` mapped with its unions kept as written and its references to an alias that declares a
+    /// view as the alias.
+    fn declared_ttype(&mut self, cx: &mut MapCx, t: &TType) -> TypeId {
+        match t {
+            TType::Or(a, b) => {
+                let (x, y) = (self.declared_ttype(cx, a), self.declared_ttype(cx, b));
+                self.types.mk(Type::Union(x, y, UnionKind::Hard))
+            }
+            TType::And(a, b) => {
+                let (x, y) = (self.declared_ttype(cx, a), self.declared_ttype(cx, b));
+                self.types.mk(Type::Inter(x, y))
+            }
+            // A refinement over its parent's view, its members as mapped.
+            TType::Refined(parent, _) => {
+                let refined = self.map_type(cx, t);
+                let (sem, view) = (self.map_type(cx, parent), self.declared_ttype(cx, parent));
+                if sem == view {
+                    return refined;
+                }
+                let mut chain = Vec::new();
+                let mut at = refined;
+                while let Type::Refined(p, r) = self.types.get(at) {
+                    chain.push(r);
+                    at = p;
+                }
+                chain.iter().rev().fold(view, |out, &r| self.types.mk(Type::Refined(out, r)))
+            }
+            TType::Annotated(u, _) | TType::ByName(u) | TType::Alias(u) | TType::BoundedAlias(_, u) => self.declared_ttype(cx, u),
+            _ => {
+                let outer = self.declared_alias_hit.take();
+                let mapped = self.map_type(cx, t);
+                let hit = std::mem::replace(&mut self.declared_alias_hit, outer);
+                match (t, hit) {
+                    (TType::TypeRef(..), Some(a)) => self.types.mk(Type::Alias(a, EMPTY_LIST)),
+                    _ => mapped,
+                }
+            }
+        }
+    }
+
     /// A type that may be a bare type constructor: an argument of a higher-kinded parameter or
     /// the right-hand side of an alias. A Java class or package the type names is not read:
     /// the class becomes a placeholder, the package a sub-package.
@@ -192,6 +246,7 @@ impl<'a> Worker<'a> {
             }
             TType::Or(a, b) => {
                 let (x, y) = (self.map_type(cx, a), self.map_type(cx, b));
+                self.declared_lost |= x == y;
                 self.types.union(x, y)
             }
             TType::ByName(inner) => {
@@ -616,7 +671,7 @@ impl<'a> Worker<'a> {
         cx.term_binders.truncate(mark.1);
         let ret = ret?;
         let sym = self.syms.new_sym(name, SymKind::Def, crate::ast::mods::ABSTRACT, Owner::Local, file_id, None, crate::source::Span::default());
-        let sig = MethodSig { tparams, clauses, ret };
+        let sig = MethodSig { tparams, clauses, ret, declared: crate::tir::NO_TYPE };
         let l = self.sig_types(&sig);
         let mut s = self.syms.sym_mut(sym);
         s.sig = Some(std::sync::Arc::new(sig));

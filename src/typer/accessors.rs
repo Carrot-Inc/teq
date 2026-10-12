@@ -204,7 +204,7 @@ impl<'a> Worker<'a> {
                 let (sig, params, body) = if a.setter {
                     let x = self.new_local(self.interner.intern("x$0"), SymKind::Val, tsig.ret, t_span);
                     let param = ParamSig { name: self.interner.intern("x$0"), ty: tsig.ret, by_name: false, repeated: false, has_default: false, sym: x };
-                    let sig = MethodSig { tparams: Vec::new(), clauses: vec![ClauseSig { params: vec![param], is_using: false, is_implicit: false }], ret: self.b.t_unit };
+                    let sig = MethodSig { tparams: Vec::new(), clauses: vec![ClauseSig { params: vec![param], is_using: false, is_implicit: false }], ret: self.b.t_unit, declared: crate::tir::NO_TYPE };
                     let field = match recv {
                         Some(r) => self.prog.add(TExpr::Field(r, a.target)),
                         None => self.prog.add(TExpr::Static(a.target)),
@@ -231,7 +231,7 @@ impl<'a> Worker<'a> {
                         }
                         clauses.push(ClauseSig { params: ps, ..*cl });
                     }
-                    let sig = MethodSig { tparams: tsig.tparams.clone(), clauses, ret: tsig.ret };
+                    let sig = MethodSig { tparams: tsig.tparams.clone(), clauses, ret: tsig.ret, declared: crate::tir::NO_TYPE };
                     let list = self.prog.list(&args);
                     let call = match recv {
                         Some(r) => self.prog.add(TExpr::CallMethod(r, a.target, list)),
@@ -240,7 +240,7 @@ impl<'a> Worker<'a> {
                     self.prog.set_type(call, tsig.ret);
                     (sig, params, call)
                 } else {
-                    let sig = MethodSig { tparams: Vec::new(), clauses: Vec::new(), ret: tsig.ret };
+                    let sig = MethodSig { tparams: Vec::new(), clauses: Vec::new(), ret: tsig.ret, declared: crate::tir::NO_TYPE };
                     let read = match (t_kind, recv) {
                         (SymKind::Def, Some(r)) => self.prog.add(TExpr::CallMethod(r, a.target, crate::ast::ListRef::EMPTY)),
                         (SymKind::Def, None) => self.prog.add(TExpr::CallStatic(a.target, crate::ast::ListRef::EMPTY)),

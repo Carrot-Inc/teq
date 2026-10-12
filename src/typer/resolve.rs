@@ -2284,6 +2284,10 @@ impl<'a> Worker<'a> {
                     return self.match_alias_ctor(a);
                 }
                 self.complete_alias(a);
+                if self.syms.aliases[a.idx()].declared_rhs != crate::tir::NO_TYPE {
+                    self.declared_lost = true;
+                    self.declared_alias_hit = Some(a);
+                }
                 let info = &self.syms.aliases[a.idx()];
                 if info.is_abstract() {
                     return self.types.mk(Type::Decl(a));
@@ -2664,6 +2668,145 @@ impl<'a> Worker<'a> {
         self.seen_from_receiver_paths(t)
     }
 
+    /// A declared type (a parameter's, a result's, a bound, an alias's right-hand side) as
+    /// `resolve` resolves it, with its declared view (`MethodSig::declared`): what dotty's
+    /// `TypeErasure` reads of the declaration, and its pickle states, that the type normalizes
+    /// away, `NO_TYPE` where nothing is. The view is noted as the type expressions resolve
+    /// (`note_declared`): a union of one type twice (`V | V`, `OrType`'s `erasedLub` of two
+    /// `ErasedValueType`s), a `*:` chain spelled to the `EmptyTuple` alias (`tupleArity`), a
+    /// reference to an alias that declares one, an array of such a type. The views noted are kept
+    /// until the outermost declared type is resolved, keyed by their type expressions: an alias
+    /// completed inside another's resolution notes its own.
+    pub(super) fn declared_view(&mut self, id: TyExprId, resolve: impl FnOnce(&mut Self) -> TypeId) -> (TypeId, TypeId) {
+        let file = self.env.file;
+        self.declaring += 1;
+        let t = resolve(self);
+        self.declaring -= 1;
+        if self.declared_views.is_empty() {
+            return (t, crate::tir::NO_TYPE);
+        }
+        let view = self.declared_views.get(&(file, id)).copied().unwrap_or(crate::tir::NO_TYPE);
+        if self.declaring == 0 {
+            self.declared_views.clear();
+        }
+        (t, view)
+    }
+
+    /// The type a signature declares where its declared view is a `*:` chain behind an alias (or
+    /// an array of one): the chain, as a chain written in place is (`spelled_cons`), so that a body
+    /// selecting a tuple member casts it to the tuple class as dotty's `trySmallGenericTuple`
+    /// does; `t` elsewhere.
+    pub(super) fn declared_chain(&self, t: TypeId, declared: TypeId) -> TypeId {
+        if declared == crate::tir::NO_TYPE {
+            return t;
+        }
+        // An abstract member stays itself; its view is its bound's, for the erasure.
+        if matches!(self.types.get(declared), Type::Alias(a, _) if self.syms.aliases[a.idx()].is_abstract()) {
+            return t;
+        }
+        let x = crate::symbols::expand_declared(&self.syms, &self.types, declared);
+        let chain = |t: TypeId| matches!(self.types.get(t), Type::Class(c, _) if Some(c) == self.b.cons_tuple);
+        match self.types.get(x) {
+            _ if chain(x) => x,
+            Type::Class(c, args) if c == self.b.array && self.types.items(args).first().is_some_and(|&e| chain(e)) => x,
+            _ => t,
+        }
+    }
+
+    fn note_declared(&mut self, id: TyExprId, view: TypeId) {
+        let file = self.env.file;
+        self.declared_views.insert((file, id), view);
+    }
+
+    fn declared_of(&self, id: TyExprId) -> Option<TypeId> {
+        if self.declared_views.is_empty() {
+            return None;
+        }
+        self.declared_views.get(&(self.env.file, id)).copied()
+    }
+
+    /// A reference to an alias that declares a view of its right-hand side: the alias, unapplied.
+    fn note_declared_alias(&mut self, id: TyExprId, r: TypeRef) {
+        if let TypeRef::Alias(a) = r {
+            if self.syms.aliases[a.idx()].declared_rhs != crate::tir::NO_TYPE {
+                let view = self.types.mk(Type::Alias(a, EMPTY_LIST));
+                self.note_declared(id, view);
+            }
+        }
+    }
+
+    /// A union whose operands are one type, or declare views: the union as written, operands kept.
+    fn note_declared_union(&mut self, id: TyExprId, (a, x): (TyExprId, TypeId), (b, y): (TyExprId, TypeId)) {
+        if x != y && self.declared_views.is_empty() {
+            return;
+        }
+        let (va, vb) = (self.declared_of(a), self.declared_of(b));
+        if x == y || va.is_some() || vb.is_some() {
+            let view = self.types.mk(Type::Union(va.unwrap_or(x), vb.unwrap_or(y), UnionKind::Hard));
+            self.note_declared(id, view);
+        }
+    }
+
+    /// A wrapper (`=> T`, `T @unchecked`) of a type that declares a view: the view.
+    fn note_declared_through(&mut self, id: TyExprId, inner: TyExprId) {
+        if let Some(view) = self.declared_of(inner) {
+            self.note_declared(id, view);
+        }
+    }
+
+    /// An intersection with an operand that declares a view: the intersection as written, raw
+    /// (`(V | V) & Any`, which the store makes `V`).
+    fn note_declared_inter(&mut self, id: TyExprId, (a, x): (TyExprId, TypeId), (b, y): (TyExprId, TypeId)) {
+        let (va, vb) = (self.declared_of(a), self.declared_of(b));
+        if va.is_some() || vb.is_some() {
+            let view = self.types.mk(Type::Inter(va.unwrap_or(x), vb.unwrap_or(y)));
+            self.note_declared(id, view);
+        }
+    }
+
+    /// A refinement of a parent that declares a view: the refinement over the parent's view
+    /// (`G[Int] { type T = Int }`, whose erasure is its parent's).
+    fn note_declared_refined(&mut self, id: TyExprId, parent: TyExprId, t: TypeId) {
+        let Some(view) = self.declared_of(parent) else { return };
+        let mut chain = Vec::new();
+        let mut at = t;
+        while let Type::Refined(p, r) = self.types.get(at) {
+            chain.push(r);
+            at = p;
+        }
+        if chain.is_empty() {
+            return;
+        }
+        let mut out = view;
+        for &r in chain.iter().rev() {
+            out = self.types.mk(Type::Refined(out, r));
+        }
+        self.note_declared(id, out);
+    }
+
+    /// An alias that declares a view applied to arguments, the alias with the arguments' views;
+    /// an array of an element that declares one, the array of it.
+    fn note_declared_application(&mut self, id: TyExprId, f: TyExprId, ctor: TypeId, args: &[TyExprId], resolved: &[TypeId]) {
+        // Nothing noted yet: neither the constructor nor an argument declares a view.
+        if self.declared_views.is_empty() {
+            return;
+        }
+        let views: Vec<Option<TypeId>> = args.iter().map(|&a| self.declared_of(a)).collect();
+        let items: Vec<TypeId> = views.iter().zip(resolved).map(|(v, &r)| v.unwrap_or(r)).collect();
+        match self.declared_of(f).map(|v| self.types.get(v)) {
+            Some(Type::Alias(a, _)) => {
+                let l = self.types.list(&items);
+                let view = self.types.mk(Type::Alias(a, l));
+                self.note_declared(id, view);
+            }
+            _ if views.iter().any(Option::is_some) && matches!(self.types.get(ctor), Type::Ctor(c) if c == self.b.array) => {
+                let view = self.types.class(self.b.array, &items);
+                self.note_declared(id, view);
+            }
+            _ => {}
+        }
+    }
+
     /// A type a signature declares (a result's, a value's): as `resolve_type` gives it, but
     /// for a cons tuple whose tail is written as a name of the empty tuple
     /// (`Int *: String *: EmptyTuple`), which stays the `*:` chain it is spelled as, as a
@@ -2735,7 +2878,11 @@ impl<'a> Worker<'a> {
                             self.deps_written_name("AnyRef");
                         }
                     }
-                    return self.type_ref_to_type(r, span, false);
+                    let t = self.type_ref_to_type(r, span, false);
+                    if self.declaring > 0 && matches!(r, TypeRef::Alias(_)) {
+                        self.note_declared_alias(id, r);
+                    }
+                    return t;
                 }
                 match n {
                     names::ANY => ANY,
@@ -2778,7 +2925,13 @@ impl<'a> Worker<'a> {
                     self.deps_export_path(q, n);
                 }
                 match found {
-                    Some(r) => self.type_ref_to_type(r, span, false),
+                    Some(r) => {
+                        let t = self.type_ref_to_type(r, span, false);
+                        if self.declaring > 0 && matches!(r, TypeRef::Alias(_)) {
+                            self.note_declared_alias(id, r);
+                        }
+                        t
+                    }
                     // `scala.Any` from a package whose own `Any` shadows it (`scala.scalajs.js`).
                     None if matches!(n, names::ANY | names::NOTHING)
                         && matches!(self.resolve_type_path(q), Some(TermRef::Package(p)) if p == self.b.scala_pkg) =>
@@ -2796,7 +2949,14 @@ impl<'a> Worker<'a> {
                 let mut operands = None;
                 if matches!(ast.ty(f), TyExpr::Name(names::CONS_TUPLE)) && args.len == 2 {
                     match self.tuple_cons_type(args) {
-                        Ok(t) => return t,
+                        Ok(t) => {
+                            if self.declaring > 0 {
+                                if let Some(chain) = self.spelled_cons(id, t) {
+                                    self.note_declared(id, chain);
+                                }
+                            }
+                            return t;
+                        }
                         Err(resolved) => operands = Some(resolved),
                     }
                 }
@@ -2893,6 +3053,9 @@ impl<'a> Worker<'a> {
                     };
                     self.check_type_args_through(&params, &resolved, &arg_ids, through);
                 }
+                if self.declaring > 0 && t != ERROR && !self.declared_views.is_empty() {
+                    self.note_declared_application(id, f, ctor, &arg_ids, &resolved);
+                }
                 t
             }
             TyExpr::Fun(params, ret) | TyExpr::CtxFun(params, ret) if ast.fun_param_names(id).is_some() => {
@@ -2947,6 +3110,9 @@ impl<'a> Worker<'a> {
                     self.deps_written_name("|");
                 }
                 let (x, y) = (self.resolve_type(a), self.resolve_type(b));
+                if self.declaring > 0 {
+                    self.note_declared_union(id, (a, x), (b, y));
+                }
                 self.types.union(x, y)
             }
             TyExpr::Inter(a, b) => {
@@ -2954,11 +3120,26 @@ impl<'a> Worker<'a> {
                     self.deps_written_name("&");
                 }
                 let (x, y) = (self.resolve_type(a), self.resolve_type(b));
+                if self.declaring > 0 && !self.declared_views.is_empty() {
+                    self.note_declared_inter(id, (a, x), (b, y));
+                }
                 self.types.inter(x, y)
             }
-            TyExpr::ByName(t) | TyExpr::Repeated(t) | TyExpr::Unchecked(t) => self.resolve_type(t),
+            // A by-name parameter's view is its type's (`ParamSig::by_name` says the rest); a
+            // repeated one's erases as its sequence.
+            TyExpr::ByName(t) | TyExpr::Unchecked(t) => {
+                let inner = self.resolve_type(t);
+                if self.declaring > 0 && !self.declared_views.is_empty() {
+                    self.note_declared_through(id, t);
+                }
+                inner
+            }
+            TyExpr::Repeated(t) => self.resolve_type(t),
             TyExpr::UncheckedVariance(t) => {
                 let inner = self.resolve_type(t);
+                if self.declaring > 0 && !self.declared_views.is_empty() {
+                    self.note_declared_through(id, t);
+                }
                 self.unchecked_variance.insert((self.env.file, id), inner);
                 if self.forked && !self.unchecked_variance.to_shared {
                     self.pending_shared.push(super::PendingShared::Variance((self.env.file, id), inner));
@@ -3045,7 +3226,13 @@ impl<'a> Worker<'a> {
                     }
                 }
             }
-            TyExpr::Refined(parent, members) => self.refined_type(parent, members, span),
+            TyExpr::Refined(parent, members) => {
+                let t = self.refined_type(parent, members, span);
+                if self.declaring > 0 && !self.declared_views.is_empty() {
+                    self.note_declared_refined(id, parent, t);
+                }
+                t
+            }
             TyExpr::Lit(e) => self.resolve_literal_type(e, span),
             TyExpr::Error => {
                 self.error_nodes += 1;
@@ -4166,7 +4353,7 @@ impl<'a> Worker<'a> {
                 let p = self.syms.new_tparam(tp.name, tp.variance);
                 self.syms.tparams[p.idx()].arity = tp.arity;
                 if !tp.hk_variances.is_empty() {
-                    self.syms.tparams[p.idx()].hk_variances = tp.hk_variances.clone();
+                    self.syms.tparams[p.idx()].hk_variances = tp.hk_variances.as_slice().into();
                 }
                 // A kind written as the bound (`F[G[_]]`'s `[G[_]] =>> Any`) names nothing, so
                 // it is the parameter's from the start, where a written bound waits for the
@@ -4220,7 +4407,8 @@ impl<'a> Worker<'a> {
                 let Some(b) = bound else { continue };
                 // An upper bound is declared as a signature's type is: a `*:` chain stays the chain
                 // it is spelled as, which scalac erases a parameter it bounds to (`Product`).
-                let t = if upper { self.resolve_declared_type(b) } else { self.resolve_type(b) };
+                let (t, view) = if upper { self.declared_view(b, |w| w.resolve_declared_type(b)) } else { (self.resolve_type(b), crate::tir::NO_TYPE) };
+                let t = self.declared_chain(t, view);
                 if t == itself || self.eta_reduce(t) == itself {
                     let msg = format!("cyclic reference involving type {}", self.name_str(tp.name));
                     self.error(tp.span, msg);
@@ -4229,6 +4417,7 @@ impl<'a> Worker<'a> {
                 let info = &mut self.syms.tparams[id.idx()];
                 if upper {
                     info.upper = t;
+                    info.declared_upper = view;
                 } else {
                     info.lower = t;
                 }
@@ -4277,7 +4466,8 @@ impl<'a> Worker<'a> {
                     TyExpr::Repeated(inner) => matches!(ast.ty(inner), TyExpr::ByName(_)),
                     other => matches!(other, TyExpr::ByName(_)),
                 };
-                let resolved = self.resolve_type(p.ty);
+                let (resolved, declared) = self.declared_view(p.ty, |w| w.resolve_type(p.ty));
+                let resolved = self.declared_chain(resolved, declared);
                 let spelled = self.spelled_cons(p.ty, resolved);
                 // A tuple parameter spelled as a `*:` chain is the chain to its body and its
                 // callers, as scalac has it: a selection of its tuple class's members casts it
@@ -4319,7 +4509,7 @@ impl<'a> Worker<'a> {
                 let declared_alias = primitive.and_then(|k| self.written_alias(p.ty, k));
                 {
                     let mut s = self.syms.sym_mut(sym);
-                    s.sig = Some(Arc::new(MethodSig::value(local_ty)));
+                    s.sig = Some(Arc::new(MethodSig { declared, ..MethodSig::value(local_ty) }));
                     s.state().set(Completion::Done);
                     s.by_name = by_name;
                     s.set_declared_alias(declared_alias);
@@ -4574,6 +4764,7 @@ impl<'a> Worker<'a> {
             bounds: None,
             deprecated: def.mods & crate::ast::mods::DEPRECATED != 0,
             js: false,
+            declared_rhs: crate::tir::NO_TYPE,
         });
         self.syms.alias_cells.set(a.0, Completion::NotStarted);
         if let Some(b) = self.local_blocks.last() {
@@ -4617,6 +4808,7 @@ impl<'a> Worker<'a> {
             bounds: None,
             deprecated: def.mods & crate::ast::mods::DEPRECATED != 0,
             js: false,
+            declared_rhs: crate::tir::NO_TYPE,
         });
         self.syms.alias_cells.set(a.0, Completion::InProgress);
         let depth = self.env.frames.len();
@@ -4657,7 +4849,8 @@ impl<'a> Worker<'a> {
                     // tells (`js.Array[Int]` is `Array[Int]`).
                     let js = t.written_js_alias(rhs);
                     t.syms.aliases[a.idx()].js = js;
-                    let mut ty = t.resolve_type_ctor(rhs);
+                    let (mut ty, view) = t.declared_view(rhs, |w| w.resolve_type_ctor(rhs));
+                    t.syms.aliases[a.idx()].declared_rhs = view;
                     if let (Some(u), Type::Match(scrut, m)) = (upper, t.types.get(ty)) {
                         let bound = t.resolve_type(u);
                         let cases = t.types.match_info(m).cases.to_vec();
@@ -4667,7 +4860,15 @@ impl<'a> Worker<'a> {
                 }
                 None => {
                     let lo = lower.map_or(NOTHING, |b| t.resolve_type(b));
-                    let hi = upper.map_or(ANY, |b| t.resolve_type(b));
+                    // An abstract member's upper bound with its declared view, which its erasure
+                    // reads as dotty's `checkedSuperType` does (`AliasInfo::declared_rhs`).
+                    let (hi, view) = match upper {
+                        Some(b) => t.declared_view(b, |w| w.resolve_type(b)),
+                        None => (ANY, crate::tir::NO_TYPE),
+                    };
+                    if ids.is_empty() {
+                        t.syms.aliases[a.idx()].declared_rhs = view;
+                    }
                     let (lo, hi) = (over(t, lo), over(t, hi));
                     (ids, ERROR, Some((lo, hi)))
                 }
@@ -5229,7 +5430,7 @@ impl<'a> Worker<'a> {
     pub(super) fn seal_primary_ctor(&mut self, c: ClassId) {
         let Some(sym) = self.syms.class(c).primary_ctor else { return };
         let info = self.syms.class(c);
-        let sig = MethodSig { tparams: info.tparams.clone(), clauses: info.ctor.clone(), ret: info.base_types[0].1 };
+        let sig = MethodSig { tparams: info.tparams.clone(), clauses: info.ctor.clone(), ret: info.base_types[0].1, declared: crate::tir::NO_TYPE };
         let mut s = self.syms.sym_mut(sym);
         s.sig = Some(Arc::new(sig));
         s.state().set(Completion::Done);

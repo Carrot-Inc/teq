@@ -1,58 +1,69 @@
-givensi/Base class
+givensi/Base class public,interface,abstract extends java/lang/Object
 givensi/Base given_Show_Int$(Lgivensi/Base;)Lgivensi/Base$given_Show_Int$; public,static
 givensi/Base given_Show_Int()Lgivensi/Base$given_Show_Int$; public
 givensi/Base sized$(Lgivensi/Base;I)Lgivensi/Base$sized; public,static
 givensi/Base sized(I)Lgivensi/Base$sized; public
 givensi/Base$given_Show_Int$ $outer:Lgivensi/Base; private,final,synthetic
 givensi/Base$given_Show_Int$ <init>(Lgivensi/Base;)V public
-givensi/Base$given_Show_Int$ class
+givensi/Base$given_Show_Int$ class public,final extends java/lang/Object
 givensi/Base$given_Show_Int$ givensi$Base$given_Show_Int$$$$outer()Lgivensi/Base; public,final,synthetic
+givensi/Base$given_Show_Int$ implements givensi/Show, java/io/Serializable
 givensi/Base$given_Show_Int$ show(I)Ljava/lang/String; public
 givensi/Base$given_Show_Int$ show(Ljava/lang/Object;)Ljava/lang/String; public,bridge,synthetic
 givensi/Base$sized $outer:Lgivensi/Base; private,final,synthetic
 givensi/Base$sized <init>(Lgivensi/Base;I)V public
-givensi/Base$sized class
+givensi/Base$sized class public extends java/lang/Object
 givensi/Base$sized givensi$Base$sized$$$outer()Lgivensi/Base; public,final,synthetic
+givensi/Base$sized implements givensi/Show
 givensi/Base$sized show(Ljava/lang/Object;)Ljava/lang/String; public,bridge,synthetic
 givensi/Base$sized show(Ljava/lang/String;)Ljava/lang/String; public
-givensi/Level class
+givensi/Level class public,abstract,enum extends java/lang/Object
 givensi/Level given_Show_Long()Lgivensi/Level$given_Show_Long$; public,final
+givensi/Level implements scala/reflect/Enum
 givensi/Level leveled(I)Lgivensi/Level$leveled; public,final
-givensi/Level$ class
-givensi/Level$High class
-givensi/Level$High$ class
-givensi/Level$Low class
-givensi/Level$Low$ class
+givensi/Level$ class public,final extends java/lang/Object
+givensi/Level$ implements scala/deriving/Mirror$Sum, java/io/Serializable
+givensi/Level$High class public,final,enum extends givensi/Level
+givensi/Level$High$ class public,final extends java/lang/Object
+givensi/Level$High$ implements scala/deriving/Mirror$Product, java/io/Serializable
+givensi/Level$Low class public,final,enum extends givensi/Level
+givensi/Level$Low$ class public,final extends java/lang/Object
+givensi/Level$Low$ implements scala/deriving/Mirror$Product, java/io/Serializable
 givensi/Level$given_Show_Long$ $outer:Lgivensi/Level; private,final,synthetic
 givensi/Level$given_Show_Long$ <init>(Lgivensi/Level;)V public
-givensi/Level$given_Show_Long$ class
+givensi/Level$given_Show_Long$ class public,final extends java/lang/Object
 givensi/Level$given_Show_Long$ givensi$Level$given_Show_Long$$$$outer()Lgivensi/Level; public,final,synthetic
+givensi/Level$given_Show_Long$ implements givensi/Show, java/io/Serializable
 givensi/Level$given_Show_Long$ show(J)Ljava/lang/String; public
 givensi/Level$given_Show_Long$ show(Ljava/lang/Object;)Ljava/lang/String; public,bridge,synthetic
 givensi/Level$leveled $outer:Lgivensi/Level; private,final,synthetic
 givensi/Level$leveled <init>(Lgivensi/Level;I)V public
-givensi/Level$leveled class
+givensi/Level$leveled class public extends java/lang/Object
 givensi/Level$leveled givensi$Level$leveled$$$outer()Lgivensi/Level; public,final,synthetic
+givensi/Level$leveled implements givensi/Show
 givensi/Level$leveled show(I)Ljava/lang/String; public
 givensi/Level$leveled show(Ljava/lang/Object;)Ljava/lang/String; public,bridge,synthetic
-givensi/Loud class
+givensi/Loud class public,final extends java/lang/Object
 givensi/Loud sized(I)Lgivensi/Base$sized; public,static
-givensi/Loud$ class
+givensi/Loud$ class public,final extends java/lang/Object
 givensi/Loud$ given_Show_Int()Lgivensi/Base$given_Show_Int$; public,final
-givensi/Scale class
+givensi/Loud$ implements givensi/Base, java/io/Serializable
+givensi/Scale class public extends java/lang/Object
 givensi/Scale given_Show_Boolean()Lgivensi/Scale$given_Show_Boolean$; public,final
 givensi/Scale scaled(I)Lgivensi/Scale$scaled; public,final
 givensi/Scale$given_Show_Boolean$ $outer:Lgivensi/Scale; private,final,synthetic
 givensi/Scale$given_Show_Boolean$ <init>(Lgivensi/Scale;)V public
-givensi/Scale$given_Show_Boolean$ class
+givensi/Scale$given_Show_Boolean$ class public,final extends java/lang/Object
 givensi/Scale$given_Show_Boolean$ givensi$Scale$given_Show_Boolean$$$$outer()Lgivensi/Scale; public,final,synthetic
+givensi/Scale$given_Show_Boolean$ implements givensi/Show, java/io/Serializable
 givensi/Scale$given_Show_Boolean$ show(Ljava/lang/Object;)Ljava/lang/String; public,bridge,synthetic
 givensi/Scale$given_Show_Boolean$ show(Z)Ljava/lang/String; public
 givensi/Scale$scaled $outer:Lgivensi/Scale; private,final,synthetic
 givensi/Scale$scaled <init>(Lgivensi/Scale;I)V public
-givensi/Scale$scaled class
+givensi/Scale$scaled class public extends java/lang/Object
 givensi/Scale$scaled givensi$Scale$scaled$$$outer()Lgivensi/Scale; public,final,synthetic
+givensi/Scale$scaled implements givensi/Show
 givensi/Scale$scaled show(J)Ljava/lang/String; public
 givensi/Scale$scaled show(Ljava/lang/Object;)Ljava/lang/String; public,bridge,synthetic
-givensi/Show class
+givensi/Show class public,interface,abstract extends java/lang/Object
 givensi/Show show(Ljava/lang/Object;)Ljava/lang/String; public,abstract

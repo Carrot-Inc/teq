@@ -1518,6 +1518,7 @@ impl<'a> Worker<'a> {
             bounds: abstract_member.then_some((NOTHING, ANY)),
             deprecated: e.deprecated,
             js: false,
+            declared_rhs: crate::tir::NO_TYPE,
         });
         self.loaded_mut().aliases.insert(aid, LAlias { file, addr: e.addr });
         self.loaded_mut().tables[file as usize].aliases.insert(e.addr, aid);
@@ -2015,8 +2016,13 @@ impl<'a> Worker<'a> {
     }
 
     pub(super) fn set_tparam_bounds(&mut self, cx: &mut MapCx, id: TParamId, info: &TType) {
+        let mut declared_upper = crate::tir::NO_TYPE;
         let (lower, upper) = match info {
-            TType::Bounds(lo, hi) => (self.map_bound(cx, lo, false), self.map_bound(cx, hi, true)),
+            TType::Bounds(lo, hi) => {
+                let (upper, view) = self.map_declared(cx, hi, |w, cx| w.map_bound(cx, hi, true));
+                declared_upper = view;
+                (self.map_bound(cx, lo, false), upper)
+            }
             // `F2[x] >: F[x]`: a lambda over the bounds, each bound a lambda of its own.
             TType::Lambda { result, .. } if matches!(**result, TType::Bounds(..)) => (self.map_bound(cx, info, false), self.map_bound(cx, info, true)),
             TType::Lambda { .. } => (NOTHING, self.map_bound(cx, info, true)),
@@ -2036,8 +2042,9 @@ impl<'a> Worker<'a> {
         let p = &mut self.syms.tparams[id.idx()];
         p.lower = lower;
         p.upper = upper;
+        p.declared_upper = declared_upper;
         if hk_variances.iter().any(|&v| v != 0) {
-            p.hk_variances = hk_variances;
+            p.hk_variances = hk_variances.into();
         }
     }
 
@@ -2848,7 +2855,15 @@ impl<'a> Worker<'a> {
             let mut cs = ClauseSig { params: Vec::with_capacity(ps.len()), is_using, is_implicit: is_implicit_clause(ps) };
             for p in ps {
                 let name = self.lname(&tasty, p.name);
-                let (ty, by_name, repeated) = self.map_param_type(&mut cx, &p.ty);
+                let ((ty, by_name, repeated), declared) = {
+                    let mut shape = (false, false);
+                    let (ty, declared) = self.map_declared(&mut cx, &p.ty, |w, cx| {
+                        let (ty, by_name, repeated) = w.map_param_type(cx, &p.ty);
+                        shape = (by_name, repeated);
+                        ty
+                    });
+                    ((ty, shape.0, shape.1), if shape.1 { crate::tir::NO_TYPE } else { declared })
+                };
                 let local_ty = if repeated {
                     match self.seq_class() {
                         Some(seq) => self.types.class(seq, &[ty]),
@@ -2863,7 +2878,7 @@ impl<'a> Worker<'a> {
                 let psym = self.syms.new_sym(name, SymKind::Param, pm, Owner::Local, file_id, None, Span::default());
                 {
                     let mut s = self.syms.sym_mut(psym);
-                    s.sig = Some(Arc::new(MethodSig::value(local_ty)));
+                    s.sig = Some(Arc::new(MethodSig { declared, ..MethodSig::value(local_ty) }));
                     s.state().set(Completion::Done);
                     s.by_name = by_name;
                 }
@@ -2875,13 +2890,18 @@ impl<'a> Worker<'a> {
             }
             out.push(cs);
         }
+        let mut declared = crate::tir::NO_TYPE;
         let ret = match self.syms.sym(sym).owner {
             // A constructor is pickled with the class's type parameters and a `Unit` result.
             Owner::Class(c) if self.syms.sym(sym).name == names::INIT => {
                 let args: Vec<TypeId> = self.syms.class(c).tparams.clone().iter().map(|&p| self.types.param(p)).collect();
                 self.types.class(c, &args)
             }
-            _ => self.map_type(&mut cx, &sig.ret),
+            _ => {
+                let (ret, view) = self.map_declared(&mut cx, &sig.ret, |w, cx| w.map_type(cx, &sig.ret));
+                declared = view;
+                ret
+            }
         };
         // A given class's def of another module's products as teq types the program's (the
         // namer's `DefKind::Given`): its result is the type the given was declared with, the
@@ -2890,7 +2910,7 @@ impl<'a> Worker<'a> {
             Some(k) => self.given_class_declared(k, &tparams).unwrap_or(ret),
             None => ret,
         };
-        Some(Arc::new(MethodSig { tparams, clauses: out, ret }))
+        Some(Arc::new(MethodSig { tparams, clauses: out, ret, declared }))
     }
 
     /// The type a product's given class `k` was declared with, its last parent, its own type
@@ -2934,6 +2954,15 @@ impl<'a> Worker<'a> {
         }
     }
 
+    /// A pickled alias's right-hand side with its declared view (`AliasInfo::declared_rhs`): the
+    /// view `map_declared` gives, or the right-hand side itself where it is a `*:` chain, which a
+    /// use of the alias makes its tuple class.
+    fn map_declared_rhs(&mut self, cx: &mut MapCx, t: &TType) -> (TypeId, TypeId) {
+        let (rhs, view) = self.map_declared(cx, t, |w, cx| w.map_type_ctor(cx, t));
+        let chain = |w: &Self, t: TypeId| matches!(w.types.get(t), Type::Class(c, _) if Some(c) == w.b.cons_tuple);
+        (rhs, if view != crate::tir::NO_TYPE { view } else if chain(self, rhs) { rhs } else { crate::tir::NO_TYPE })
+    }
+
     pub(super) fn complete_loaded_alias(&mut self, a: AliasId) {
         let Some(la) = self.loaded.as_ref().and_then(|l| l.aliases.get(&a).copied()) else {
             self.syms.alias(a).state().set(Completion::Done);
@@ -2943,6 +2972,7 @@ impl<'a> Worker<'a> {
         let mut decoder = Decoder::new(&tasty);
         let sig = decoder.type_def_sig(la.addr);
         let mut cx = MapCx::new(la.file);
+        let mut declared_rhs = crate::tir::NO_TYPE;
         let (ids, rhs, bounds) = match &sig.rhs {
             TType::Lambda { kind: crate::tasty::tree::LambdaKind::Type, params, result, .. } => {
                 let ids: Vec<TParamId> = params
@@ -2965,14 +2995,24 @@ impl<'a> Worker<'a> {
                         let bounds = (self.map_bound(&mut cx, &sig.rhs, false), self.map_bound(&mut cx, &sig.rhs, true));
                         (ids, ERROR, Some(bounds))
                     }
-                    _ => (ids, self.map_type_ctor(&mut cx, result), None),
+                    _ => {
+                        let (rhs, declared) = self.map_declared_rhs(&mut cx, result);
+                        declared_rhs = declared;
+                        (ids, rhs, None)
+                    }
                 }
             }
             TType::Bounds(lo, hi) => {
-                let bounds = (self.map_bound(&mut cx, lo, false), self.map_bound(&mut cx, hi, true));
+                let (upper, declared) = self.map_declared(&mut cx, hi, |w, cx| w.map_bound(cx, hi, true));
+                declared_rhs = declared;
+                let bounds = (self.map_bound(&mut cx, lo, false), upper);
                 (Vec::new(), ERROR, Some(bounds))
             }
-            other => (Vec::new(), self.map_type_ctor(&mut cx, other), None),
+            other => {
+                let (rhs, declared) = self.map_declared_rhs(&mut cx, other);
+                declared_rhs = declared;
+                (Vec::new(), rhs, None)
+            }
         };
         // The right side as the pickle names it, which the mapped Scala type no longer tells.
         let js = match &sig.rhs {
@@ -2985,6 +3025,7 @@ impl<'a> Worker<'a> {
         info.rhs = rhs;
         info.bounds = bounds;
         info.js = js;
+        info.declared_rhs = declared_rhs;
         info.state().set(Completion::Done);
     }
 

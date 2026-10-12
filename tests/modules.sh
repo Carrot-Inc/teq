@@ -71,7 +71,10 @@
 #            every module's products, teq's (their views; `scalac-client-teq`), and over the
 #            modules scalac built in the over-scalac leg (`scalac-client-scalac`, a case with
 #            over-scalac.txt), and its classes run with java over those class files: client.txt
-#            each time. A client may use what teq's own downstream builds cannot type, as a
+#            each time; and the client scalac compiled over scalac's modules runs over teq's
+#            class files of them (`scalac-client-cross`): a module scalac compiled independently
+#            links against teq's output, which a client compiled over teq's pickles, which state
+#            teq's signatures, cannot tell. A client may use what teq's own downstream builds cannot type, as a
 #            module scalac compiles does.
 # Every case is checked by:
 #   keys     the keys and tokens every product records are the whole build's, and no token is
@@ -812,8 +815,8 @@ PY
     while IFS= read -r f; do csrcs+=("$root/$f"); done < <(sources "$dir/client")
     want=$(cat "$dir/client.txt")
     main=$(main_class "${csrcs[@]}")
-    for side in teq scalac; do
-      [ $side = scalac ] && [ ! -f "$dir/over-scalac.txt" ] && continue
+    for side in teq scalac cross; do
+      [ $side != teq ] && [ ! -f "$dir/over-scalac.txt" ] && continue
       ok=1
       detail=""
       ccp=""
@@ -825,14 +828,17 @@ PY
         elif grep -qx "$m" "$dir/over-scalac.txt"; then
           [ -d "$out/$name/over-$m" ] || { ok=0; detail="no over-scalac products of $m"; }
           ccp=${ccp:+$ccp:}$out/$name/over-$m
-          rcp=$ccp
+          if [ $side = scalac ]; then rcp=$ccp; else rcp=${rcp:+$rcp:}$out/$name/$m; fi
         fi
       done
-      if [ $ok = 1 ]; then
+      # The cross side runs the classes the scalac side compiled.
+      if [ $ok = 1 ] && [ $side != cross ]; then
         log=$(scalac "$ccp:$SL" "$out/$name/client-$side" "${csrcs[@]}") || { ok=0; detail="client by scalac: $log"; }
       fi
+      [ $side = cross ] && { [ -d "$out/$name/client-scalac" ] || { ok=0; detail="no client of the scalac side"; }; }
+      [ $side = cross ] && side_dir=client-scalac || side_dir=client-$side
       if [ $ok = 1 ]; then
-        got=$(timeout 60 java -cp "$out/$name/client-$side:$rcp:$SL" "$main" 2>&1)
+        got=$(timeout 60 java -cp "$out/$name/$side_dir:$rcp:$SL" "$main" 2>&1)
         [ "$got" = "$want" ] || { ok=0; detail="$main printed: $got"$'\n'"expected: $want"; }
       fi
       result "$name" "scalac-client-$side" $ok "$detail"

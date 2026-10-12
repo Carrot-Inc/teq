@@ -860,7 +860,7 @@ Failed to synthesize an instance of type {}:", shown, shown);
             return None;
         }
         let ret = self.types.class(k, &[head_ty]);
-        Some(MethodSig { tparams: Vec::new(), clauses: Vec::new(), ret })
+        Some(MethodSig { tparams: Vec::new(), clauses: Vec::new(), ret, declared: crate::tir::NO_TYPE })
     }
 
     /// `TC.derived` for a given of type `TC[T]`.

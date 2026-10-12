@@ -4639,7 +4639,7 @@ impl<'a> Worker<'a> {
             None => {
                 let own = self.sig_arc(*s);
                 match self.given_object_type(*s) {
-                    Some(class) => std::sync::Arc::new(MethodSig { tparams: own.tparams.clone(), clauses: own.clauses.clone(), ret: class }),
+                    Some(class) => std::sync::Arc::new(MethodSig { tparams: own.tparams.clone(), clauses: own.clauses.clone(), ret: class, declared: crate::tir::NO_TYPE }),
                     None => own,
                 }
             }
@@ -4841,7 +4841,7 @@ impl<'a> Worker<'a> {
                 // first's rebound to them, and its own defaults.
                 if score < 0 && score > -2 {
                     let own = self.sig_arc(s2);
-                    let to = MethodSig { tparams: joint.tparams.clone(), clauses: own.clauses.clone(), ret: own.ret };
+                    let to = MethodSig { tparams: joint.tparams.clone(), clauses: own.clauses.clone(), ret: own.ret, declared: crate::tir::NO_TYPE };
                     joint = self.renamed_info(&joint, &to);
                     for (clause, theirs) in joint.clauses.iter_mut().zip(&own.clauses) {
                         for (p, q) in clause.params.iter_mut().zip(&theirs.params) {
@@ -5055,7 +5055,7 @@ impl<'a> Worker<'a> {
             }
         }
         let ret = self.met_type(a.ret, b.ret);
-        let mut joint = MethodSig { tparams: a.tparams.clone(), clauses, ret };
+        let mut joint = MethodSig { tparams: a.tparams.clone(), clauses, ret, declared: crate::tir::NO_TYPE };
         self.meet_tparam_bounds(&mut joint, &b.tparams);
         Some(joint)
     }

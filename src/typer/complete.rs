@@ -1687,7 +1687,7 @@ impl<'a> Worker<'a> {
             &[only] if self.is_java_class(c) && self.ctor_callable_here(only) => self.sig_arc(only).clauses.clone(),
             _ => return Vec::new(),
         };
-        let sig = MethodSig { tparams: Vec::new(), clauses, ret: ERROR };
+        let sig = MethodSig { tparams: Vec::new(), clauses, ret: ERROR, declared: crate::tir::NO_TYPE };
         self.call_clauses(&sig, &Vec::new(), 0)
     }
 

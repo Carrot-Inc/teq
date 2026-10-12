@@ -1525,6 +1525,17 @@ pub struct Worker<'a> {
     /// Set while the signature of a `@jvmEvidence` definition is resolved where its evidence
     /// is erased: the type parameters whose `ClassTag` bound was left out, by index.
     pub erased_tags: Option<u32>,
+    /// While a declared type is resolved (`declared_view`), how many are: the declared view of
+    /// each type expression resolved so far whose type holds less of it than the erasure reads,
+    /// by its file and id, emptied when the outermost is done.
+    pub declaring: u32,
+    /// Set as a type is mapped where it loses what its declaration states for the erasure (a
+    /// union of one type twice, a reference to an alias that declares a view): the loader's
+    /// signal to make a pickled signature's declared view (`Worker::map_declared`); the alias of
+    /// the last such reference.
+    pub declared_lost: bool,
+    pub declared_alias_hit: Option<AliasId>,
+    pub declared_views: FxMap<(FileId, crate::ast::TyExprId), TypeId>,
     /// The type arguments of a polymorphic function value being applied, which the call of the
     /// function type it instantiates to takes (`poly_pending`).
     pub poly_targs: Option<Vec<TypeId>>,
@@ -2592,6 +2603,10 @@ impl<'a> Worker<'a> {
             interp: false,
             for_interpreter: false,
             erased_tags: None,
+            declaring: 0,
+            declared_lost: false,
+            declared_alias_hit: None,
+            declared_views: FxMap::default(),
             poly_targs: None,
             poly_pending: Vec::new(),
             unsettled_std_entries: Vec::new(),
@@ -2935,6 +2950,10 @@ impl<'a> Worker<'a> {
             interp: self.interp,
             for_interpreter: self.for_interpreter,
             erased_tags: None,
+            declaring: 0,
+            declared_lost: false,
+            declared_alias_hit: None,
+            declared_views: FxMap::default(),
             poly_targs: None,
             poly_pending: Vec::new(),
             cacheable_state: self.cacheable_state.clone(),

@@ -353,7 +353,7 @@ impl<'a> Worker<'a> {
             info.state().done_fresh();
             clause.params.push(ParamSig { name: pname, ty, by_name: false, repeated: false, has_default: false, sym: p });
         }
-        let sig = Arc::new(MethodSig { tparams: Vec::new(), clauses: vec![clause], ret });
+        let sig = Arc::new(MethodSig { tparams: Vec::new(), clauses: vec![clause], ret, declared: crate::tir::NO_TYPE });
         let mut s = self.syms.sym_mut(sym);
         s.sig = Some(sig);
         s.state().done_fresh();
