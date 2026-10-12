@@ -209,6 +209,17 @@ pub struct ClassInfo {
     pub this_type: Option<TypeId>,
     /// Whether an ancestor declares a type member, which a lookup in the body then walks to.
     pub inherits_types: bool,
+    /// Whether no ancestor declares an extension method, as the completion found; false until
+    /// then, where an instance's extensions are looked for along its ancestors.
+    pub no_inherited_extensions: bool,
+    /// Whether the type parameters were made, with their first-order bounds, before the class's
+    /// completion, which a type application of the class asked for (dotty's `TypeParamsCompleter`):
+    /// the completion takes them as they are.
+    pub tparams_made: bool,
+    /// The forwarders of the class's export clauses whose qualifier is a value, each with the
+    /// path it calls its member through (`typer::value_exports`), kept off the symbols: few
+    /// classes have any.
+    pub forwarders: Vec<(SymId, Arc<Forward>)>,
 }
 
 impl ClassInfo {
@@ -321,6 +332,22 @@ pub struct SymInfo {
     /// Whether the method has a name of its own in the output, which `Symbols::dispatch_names`
     /// holds: an alternative of an overloaded name.
     pub dispatch: Dispatch,
+}
+
+/// What a value export's forwarder reaches: the qualifier's steps and the member it calls.
+#[derive(Clone, Debug)]
+pub struct Forward {
+    pub steps: Vec<ForwardStep>,
+    pub target: SymId,
+}
+
+/// A step of a value export's qualifier: a member of the class's `this`, an object, or a member
+/// of what the steps before reached.
+#[derive(Clone, Copy, Debug)]
+pub enum ForwardStep {
+    This(SymId),
+    Module(ClassId),
+    Member(SymId),
 }
 
 impl SymInfo {
@@ -791,6 +818,13 @@ impl Symbols {
         ClassMut { info: self.classes.get_mut(c.0), cells: &self.class_cells, id: c.0 }
     }
     #[inline]
+    /// The path a value export's forwarder `s` calls its member through, `None` for any other
+    /// symbol (`ClassInfo::forwarders`).
+    pub fn forward_of(&self, s: SymId) -> Option<Arc<Forward>> {
+        let Owner::Class(c) = self.sym(s).owner else { return None };
+        self.class(c).forwarders.iter().find(|&&(f, _)| f == s).map(|(_, fwd)| fwd.clone())
+    }
+
     pub fn sym(&self, s: SymId) -> SymRef<'_> {
         SymRef { info: self.syms.get(s.0), cells: &self.sym_cells, bodies: &self.body_cells, id: s.0 }
     }
@@ -964,6 +998,9 @@ impl Symbols {
             declared_self: None,
             this_type: None,
             inherits_types: false,
+            no_inherited_extensions: false,
+            tparams_made: false,
+            forwarders: Vec::new(),
         }))
     }
 

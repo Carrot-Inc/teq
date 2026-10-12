@@ -173,6 +173,14 @@ pub struct Loaded {
     /// The members of products' classes that scalac adds and teq's model of the class has not:
     /// the default getters and the vars' setters, which the release renaming leaves out.
     pub product_synthetics: FxMap<SymId, ()>,
+    /// The members a pickle names by a default getter's name (dotty's `DefaultGetterName`), which
+    /// a wildcard export leaves with their methods (`Namer.addWildcardForwarders`).
+    pub default_getters: FxMap<SymId, ()>,
+    /// The members a pickle marks `SYNTHETIC`, what the compiler made (a default getter, a case
+    /// class's synthesized methods, a super accessor), which a wildcard export passes over as
+    /// dotty's `PrivateOrSynthetic` does (`Namer.addWildcardForwarders`); kept apart from `Mods`,
+    /// whose bits are all taken.
+    pub synthetic_members: FxMap<SymId, ()>,
     /// The vals holding the mirrors of products' classes the program derived, each with its
     /// class: the val stands in the class's file once the class is converted.
     pub product_mirror_vals: Vec<(SymId, ClassId)>,
@@ -352,6 +360,8 @@ impl Loaded {
             product_callee_sources: FxMap::default(),
             product_def_trees: FxMap::default(),
             product_synthetics: FxMap::default(),
+            default_getters: FxMap::default(),
+            synthetic_members: FxMap::default(),
             product_mirror_vals: Vec::new(),
             product_class_places: FxMap::default(),
         }
@@ -1446,9 +1456,13 @@ impl<'a> Worker<'a> {
                 self.demand_std(p, name, crate::stdindex::TYPE);
                 self.syms.pkg(p).entries.get(&name).map_or(false, |e| e.class.is_some() || e.alias.is_some())
             }
+            // An object's class takes no type name: `final type AggregationFramework =
+            // AggregationFramework.type` beside `object AggregationFramework` is a type member,
+            // as in scalac, where the module class is `AggregationFramework$`.
             Owner::Class(c) => {
                 let info = self.syms.class(c);
-                info.nested.contains_key(&name) || info.type_aliases.contains_key(&name)
+                let module_class = |n: ClassId| self.syms.class(n).kind == ClassKind::Object || self.syms.class(n).inner_object.is_some();
+                info.nested.get(&name).is_some_and(|&n| !module_class(n)) || info.type_aliases.contains_key(&name)
             }
             Owner::Local => true,
         };
@@ -2147,12 +2161,14 @@ impl<'a> Worker<'a> {
                 || bi.nested.values().any(|&n| self.is_opaque_path_class(n))
         });
         let has_native_base = base.iter().skip(1).any(|&(b, _)| self.syms.class(b).js == JsKind::Native);
+        let no_inherited_extensions = base.iter().skip(1).all(|&(b, _)| self.syms.class(b).extensions.is_empty());
         let mut info = self.syms.class_mut(c);
         info.parents = parent_types;
         info.base_types = base;
         info.rule_prefix = rule_prefix;
         info.superclass = superclass;
         info.inherits_types = inherits_types;
+        info.no_inherited_extensions = no_inherited_extensions;
         if has_native_base && info.js == JsKind::Scala {
             info.js = JsKind::Object;
         }
@@ -2497,10 +2513,17 @@ impl<'a> Worker<'a> {
         if let SymKind::EnumValue(case) = kind {
             self.syms.class_mut(case).singleton = Some(sym);
         }
+        // A default getter is a member by its name's kind, not its spelling.
+        let default_getter = e.tag == tags::DEFDEF && matches!(tasty.names.get(tasty.source_name(e.name) as usize), Some(crate::tasty::TName::DefaultGetter(..)));
+        if default_getter {
+            self.loaded_mut().default_getters.insert(sym, ());
+        }
+        if f.has(tags::SYNTHETIC) {
+            self.loaded_mut().synthetic_members.insert(sym, ());
+        }
         // What scalac adds to a class that teq's model of the class has not as members: the
         // default getters. A var's setter (`mods::SETTER`) is a member of the model too.
         if product && e.tag == tags::DEFDEF {
-            let default_getter = matches!(tasty.names.get(tasty.source_name(e.name) as usize), Some(crate::tasty::TName::DefaultGetter(..)));
             // And the accessors teq's writer gives a class for its inline bodies.
             let accessor = tasty.is_inline_accessor(e.name);
             if default_getter || accessor {

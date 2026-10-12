@@ -776,41 +776,35 @@ impl<'a> Worker<'a> {
                     }
                     self.rollback(mark);
                 }
-                let ctor = if n == m {
-                    self.types.mk(Type::Ctor(c))
-                } else {
-                    // Partial unification: the leftmost arguments are fixed, the rest abstracted
-                    // over. Each fixed argument is an open variable the class's own argument
-                    // bounds, so that later operands join it as scalac joins the constructors
-                    // it infers: `(Validated[E1, A], Validated[E2, B])` as `(F[A], F[B])` makes
-                    // `F` a `Validated[E1 | E2, _]`.
-                    let fixed: Vec<TypeId> = (0..m - n).map(|_| self.fixed_var()).collect();
-                    let params: Vec<TypeId> = (0..n)
-                        .map(|_| {
-                            let p = self.syms.new_tparam(crate::names::WILDCARD, 0);
-                            self.types.param(p)
-                        })
-                        .collect();
-                    let mut full = fixed;
-                    full.extend(params.iter().copied());
-                    let body = self.types.class(c, &full);
-                    let pl = self.types.list(&params);
-                    self.types.mk(Type::Lambda(pl, body))
-                };
-                // The constructor keeps the variable's higher-kinded bounds (`T[X] <: Iterable[X]`
-                // of a given over `T[A]`), which rule a `Box` out.
-                let uppers: Vec<TypeId> = self.tvars[v].upper.clone();
-                if !uppers.into_iter().all(|u| self.is_sub(ctor, u)) {
+                let mark = self.snapshot();
+                if self.app_var_instance(a, b, v, c, cargs, n, var_below) {
+                    return true;
+                }
+                self.rollback(mark);
+                // Else the variable is a constructor of a base type of the class, the first in
+                // its linearisation that fits, as dotty's `canInstantiate` lifts the argument to
+                // its base classes (`liftToBase`): a `Map[K, V]` as `M[A]` with `M[A] <:
+                // IterableOnce[A]` is an `Iterable[(K, V)]`.
+                if var_below {
                     return false;
                 }
-                if var_below {
-                    let lowers: Vec<TypeId> = self.tvars[v].lower.clone();
-                    if !lowers.into_iter().all(|l| self.is_sub(l, ctor)) {
-                        return false;
+                let bases: Vec<TypeId> = {
+                    self.complete_class(c);
+                    let subst: Subst = self.syms.class(c).tparams.iter().copied().zip(self.types.items(cargs).iter().copied()).collect();
+                    self.syms.class(c).base_types.iter().skip(1).map(|&(_, bt)| bt).collect::<Vec<_>>().into_iter().map(|bt| self.types.subst(bt, &subst)).collect()
+                };
+                for base in bases {
+                    let Type::Class(bc, bargs) = self.types.get(base) else { continue };
+                    if self.types.items(bargs).len() < n {
+                        continue;
                     }
+                    let mark = self.snapshot();
+                    if self.app_var_instance(base, b, v, bc, bargs, n, false) {
+                        return true;
+                    }
+                    self.rollback(mark);
                 }
-                self.instantiate(v, ctor);
-                self.is_sub(a, b)
+                false
             }
             (Type::AppVar(v, _), Type::AppParam(p, _)) | (Type::AppParam(p, _), Type::AppVar(v, _)) => {
                 let ctor = self.types.param(p);
@@ -833,6 +827,16 @@ impl<'a> Worker<'a> {
                     })
             }
             (_, Type::Nested(p2, class2)) if !matches!(ta, Type::AppParam(..) | Type::AppVar(..)) => self.is_sub_nested(a, b, p2, class2),
+            // An unapplied class below a class that takes no parameters is compared by its base
+            // type there, as dotty's `TypeComparer.thirdTryNamed` (`tryBaseType`) compares a
+            // class constructor that is no lambda: the class over its own parameters, a product
+            // by rule as well (`Tuple2 <: Product`).
+            (Type::Ctor(c1), Type::Class(c2, args)) if self.types.items(args).is_empty() && self.syms.class(c2).tparams.is_empty() => {
+                self.complete_class(c1);
+                let own: Vec<TypeId> = self.syms.class(c1).tparams.clone().into_iter().map(|p| self.types.param(p)).collect();
+                let applied = self.types.class(c1, &own);
+                self.is_sub(applied, b)
+            }
             (_, Type::Class(c2, args2)) if !matches!(ta, Type::AppParam(..) | Type::AppVar(..)) => {
                 // A parameter bounded by an intersection conforms through either side, which one
                 // base type of the bound cannot say: `C <: LinearSeq[A] & LinearSeqOps[A, CC, C]`
@@ -3883,6 +3887,49 @@ impl<'a> Worker<'a> {
 
     /// Finds a declared member by name, returning the symbol and the owner type as seen from `t`.
     #[inline]
+    /// `a`, an application of class `c` to `cargs`, as the application `b` of the variable `v` to
+    /// `n` arguments: `v` the constructor of `c` itself, or of `c` with its leftmost arguments
+    /// fixed (partial unification), within the variable's higher-kinded bounds.
+    #[allow(clippy::too_many_arguments)]
+    fn app_var_instance(&mut self, a: TypeId, b: TypeId, v: TVarId, c: ClassId, cargs: TList, n: usize, var_below: bool) -> bool {
+        let m = self.types.items(cargs).len();
+        let ctor = if n == m {
+            self.types.mk(Type::Ctor(c))
+        } else {
+            // Partial unification: the leftmost arguments are fixed, the rest abstracted
+            // over. Each fixed argument is an open variable the class's own argument
+            // bounds, so that later operands join it as scalac joins the constructors
+            // it infers: `(Validated[E1, A], Validated[E2, B])` as `(F[A], F[B])` makes
+            // `F` a `Validated[E1 | E2, _]`.
+            let fixed: Vec<TypeId> = (0..m - n).map(|_| self.fixed_var()).collect();
+            let params: Vec<TypeId> = (0..n)
+                .map(|_| {
+                    let p = self.syms.new_tparam(crate::names::WILDCARD, 0);
+                    self.types.param(p)
+                })
+                .collect();
+            let mut full = fixed;
+            full.extend(params.iter().copied());
+            let body = self.types.class(c, &full);
+            let pl = self.types.list(&params);
+            self.types.mk(Type::Lambda(pl, body))
+        };
+        // The constructor keeps the variable's higher-kinded bounds (`T[X] <: Iterable[X]`
+        // of a given over `T[A]`), which rule a `Box` out.
+        let uppers: Vec<TypeId> = self.tvars[v].upper.clone();
+        if !uppers.into_iter().all(|u| self.is_sub(ctor, u)) {
+            return false;
+        }
+        if var_below {
+            let lowers: Vec<TypeId> = self.tvars[v].lower.clone();
+            if !lowers.into_iter().all(|l| self.is_sub(l, ctor)) {
+                return false;
+            }
+        }
+        self.instantiate(v, ctor);
+        self.is_sub(a, b)
+    }
+
     pub fn find_member(&mut self, t: TypeId, name: Name) -> Option<(SymId, TypeId)> {
         let d = self.deref(t);
         if let Type::Class(c, args) = self.types.get(d) {
@@ -3974,6 +4021,42 @@ impl<'a> Worker<'a> {
         self.find_member_from(pre, upper, name, private_until, joint)
     }
 
+    /// The parameter counts of a method's clauses.
+    fn member_shape(&mut self, s: SymId) -> Vec<usize> {
+        self.sig_of(s).clauses.iter().map(|cl| cl.params.len()).collect()
+    }
+
+    /// Whether the member `name` of `target` reaches `c` along its parents past every class
+    /// declaring a member of that name and shape itself, which hides it there (dotty's
+    /// `SymDenotations.addInherited` through `Denotations.filterDisjoint`).
+    fn inherited_unshadowed(&mut self, c: ClassId, target: ClassId, name: Name, want: &[usize]) -> bool {
+        let mut seen = vec![c];
+        let mut stack = vec![c];
+        while let Some(x) = stack.pop() {
+            if x == target {
+                return true;
+            }
+            if let Some(&m) = self.syms.class(x).members.get(&name) {
+                let own: Vec<SymId> = match self.syms.alternatives(m) {
+                    Some(alts) => alts.iter().copied().filter(|&a| self.syms.sym(a).owner == Owner::Class(x)).collect(),
+                    None => vec![m],
+                };
+                if own.into_iter().any(|a| self.member_shape(a) == want) {
+                    continue;
+                }
+            }
+            for p in self.syms.class(x).parents.clone() {
+                if let Some(pc) = self.class_of(p) {
+                    if !seen.contains(&pc) {
+                        seen.push(pc);
+                        stack.push(pc);
+                    }
+                }
+            }
+        }
+        false
+    }
+
     /// Private members count in the first `private_until` classes of the linearisation; one of
     /// an ancestor is not inherited. `pre` is the receiver the lookup started from, which a
     /// join, a proxy's underlying type and an intersection's parts are searched for: the members
@@ -4053,6 +4136,20 @@ impl<'a> Worker<'a> {
                 break;
             }
         }
+        // An abstract method that a class further down the linearisation defines concretely
+        // (`Cap extends Util, TagFactory` with `Util.tag` implementing `TagFactory.tag`) meets
+        // it as dotty's class lookup meets the parents' denotations (`computeMembersNamed`, then
+        // `toDenot`'s `meet`): `mergeSingleDenot` takes the concrete one (`merge_single`). Only an
+        // inherited member meets a further one, told first; whether it is a lone abstract def (a
+        // trait's or an abstract class's) is decided once per member, and the search for the
+        // concrete one runs apart from the lookup's path. The concrete definition takes part only
+        // where it reaches the class past every own declaration of its shape, as dotty's
+        // `addInherited` keeps of a parent's members those no own one matches (`filterDisjoint`).
+        if let Some((bc, sym, bt)) = found.filter(|&(bc, _, _)| bc != c) {
+            if let Some(concrete) = self.inherited_meeting(t, c, args, name, (bc, sym, bt)) {
+                found = Some(concrete);
+            }
+        }
         let (bc, mut sym, bt) = match found {
             Some(f) => f,
             None => {
@@ -4083,6 +4180,71 @@ impl<'a> Worker<'a> {
             .zip(self.types.items(args).iter().copied())
             .collect();
         Some((sym, self.types.subst(bt, &subst)))
+    }
+
+    /// The concrete member an inherited one meets further down `c`'s linearisation, where the
+    /// inherited one is a lone abstract def (decided once per member): apart from the lookup's
+    /// path, which takes it only for a member it found in a base.
+    #[cold]
+    #[inline(never)]
+    fn inherited_meeting(&mut self, t: TypeId, c: ClassId, args: TList, name: Name, (bc, sym, bt): (ClassId, SymId, TypeId)) -> Option<(ClassId, SymId, TypeId)> {
+        let deferred = match self.lone_abstract_defs.get(sym) {
+            Some(d) => d,
+            None => self.lone_abstract_def_now(bc, sym),
+        };
+        if !deferred {
+            return None;
+        }
+        let at = self.syms.class(c).base_types.iter().position(|&(b, _)| b == bc)?;
+        self.concrete_meeting(t, c, args, name, at, (sym, bt))
+    }
+
+    /// Whether `sym` of `bc` is a lone abstract def, which a concrete one further down a class's
+    /// linearisation can meet: decided once per member (`lone_abstract_defs`).
+    #[cold]
+    #[inline(never)]
+    fn lone_abstract_def_now(&mut self, bc: ClassId, sym: SymId) -> bool {
+        let d = self.syms.sym(sym).kind == SymKind::Def && {
+            let info = self.syms.class(bc);
+            info.kind == ClassKind::Trait || info.mods & crate::ast::mods::ABSTRACT != 0
+        } && self.syms.alternatives(sym).is_none() && self.is_deferred_member(sym);
+        self.lone_abstract_defs.set(sym, d);
+        d
+    }
+
+    /// The concrete member of `name` and the abstract one's shape that a base of `c` after the
+    /// `at`-th defines, where the meet of the two takes it (`mergeSingleDenot`).
+    #[cold]
+    #[inline(never)]
+    fn concrete_meeting(&mut self, t: TypeId, c: ClassId, args: TList, name: Name, at: usize, (sym, bt): (SymId, TypeId)) -> Option<(ClassId, SymId, TypeId)> {
+        let want = self.member_shape(sym);
+        let rest: Vec<(ClassId, TypeId)> = self.syms.class(c).base_types.iter().skip(at + 1).copied().collect();
+        for (bc2, bt2) in rest {
+            let Some(&sym2) = self.syms.class(bc2).members.get(&name) else { continue };
+            if self.syms.alternatives(sym2).is_some() || self.is_private(sym2) || self.is_deferred_member(sym2) || self.syms.sym(sym2).kind != SymKind::Def {
+                continue;
+            }
+            if self.member_shape(sym2) != want {
+                return None;
+            }
+            if self.inherited_unshadowed(c, bc2, name, &want) {
+                return self.meets_as_second(t, c, args, (sym, bt), (sym2, bt2)).then_some((bc2, sym2, bt2));
+            }
+        }
+        None
+    }
+
+    /// Whether, of a class's two inherited members of one name and shape, `second` found further
+    /// down the linearisation than `first`, the meet of the two is the second's symbol, as
+    /// `mergeSingleDenot` decides it (`merge_single`); each owner type seen from `c[args]`.
+    fn meets_as_second(&mut self, t: TypeId, c: ClassId, args: TList, (s1, bt1): (SymId, TypeId), (s2, bt2): (SymId, TypeId)) -> bool {
+        let (bt1, bt2) = if self.types.items(args).is_empty() {
+            (bt1, bt2)
+        } else {
+            let subst: Subst = self.syms.class(c).tparams.iter().copied().zip(self.types.items(args).iter().copied()).collect();
+            (self.types.subst(bt1, &subst), self.types.subst(bt2, &subst))
+        };
+        matches!(self.merge_single(t, &((s1, bt1), None), &((s2, bt2), None)), Meet::Second | Meet::Joint(false, _))
     }
 
     /// The member `name` of an intersection's parts `a` and `b`, merged as dotty's `goAnd`
@@ -4955,13 +5117,9 @@ impl<'a> Worker<'a> {
     /// `mergeSingleDenot`'s `symScore` of two existing symbols, neither a bridge: above zero for
     /// `s1`, below for `s2`.
     pub(super) fn meet_score(&mut self, bases: &[ClassId], s1: SymId, s2: SymId) -> i32 {
-        // dotty's `Deferred`: a member without a body, which an `abstract override` one (a trait's
-        // stackable member, `ABSTRACT` and `OVERRIDE` from a pickle) is not.
-        let deferred = |w: &Self, s: SymId| {
-            let stackable = crate::ast::mods::ABSTRACT | crate::ast::mods::OVERRIDE;
-            w.is_abstract_member(s) && w.syms.sym(s).mods & stackable != stackable
-        };
-        let (d1, d2) = (deferred(self, s1), deferred(self, s2));
+        // dotty's `Deferred`: a member without a body, which an `abstract override` one with its
+        // body (a trait's stackable member, `ABSTRACT` and `OVERRIDE` from a pickle) is not.
+        let (d1, d2) = (self.is_deferred_member(s1), self.is_deferred_member(s2));
         if d1 && !d2 {
             return -1;
         }

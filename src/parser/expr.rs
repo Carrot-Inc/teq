@@ -142,8 +142,17 @@ impl<'a> Parser<'a> {
         self.parse_block_rest(start)
     }
 
-    /// A block's statements after its `Indent`, up to and with the end of its region.
+    /// A block's statements after its `Indent`, up to and with the end of its region; a language
+    /// import among them enables its feature until their end (dotty's `blockStatSeq` restoring
+    /// `languageImportContext`).
     pub(super) fn parse_block_rest(&mut self, start: Span) -> ExprId {
+        let saved = self.syntax.postfix_ops;
+        let block = self.parse_block_rest_scoped(start);
+        self.syntax.postfix_ops = saved;
+        block
+    }
+
+    fn parse_block_rest_scoped(&mut self, start: Span) -> ExprId {
         let derives_mark = self.pending_derives.len();
         let placeholders_mark = self.placeholders.len();
         // `{ x => a; b }`: the lambda's body is the rest of the block, as under scalac.
@@ -628,7 +637,9 @@ impl<'a> Parser<'a> {
         if self.at(Tok::Indent) {
             return self.parse_block();
         }
-        if matches!(self.kind(), Tok::Newline | Tok::Outdent) {
+        // An empty body: the next case, which a line after `=>` starts with no newline between
+        // them (`=>` ends no statement), or the end of the cases (dotc's `block` of no statements).
+        if matches!(self.kind(), Tok::Newline | Tok::Outdent | Tok::KwCase | Tok::RBrace | Tok::Eof) {
             return self.ast.add_expr(Expr::UnitLit, self.span());
         }
         let start = self.span();
@@ -824,6 +835,17 @@ impl<'a> Parser<'a> {
             && (self.expr_start_at(n) || matches!(self.kind_at(n), Tok::LBracket | Tok::Eof | Tok::EndLambda))
     }
 
+    /// Whether the operator at the current token has an operand after it: the next token, or
+    /// the first of the next line, can start one (dotc's `newLineOptWhenFollowing` and
+    /// `canStartExprTokens`).
+    fn operand_follows_operator(&self) -> bool {
+        let starts = |n: usize| matches!(self.kind_at(n), Tok::LBrace | Tok::LBracket | Tok::KwDo) || self.expr_start_at(n);
+        match self.kind_at(1) {
+            Tok::Newline => !self.blank_line_before(1) && starts(2),
+            _ => starts(1),
+        }
+    }
+
     fn parse_infix_prec(&mut self, min_prec: u8) -> ExprId {
         let start = self.span();
         let lhs = self.parse_prefix_expr();
@@ -833,14 +855,27 @@ impl<'a> Parser<'a> {
     fn parse_infix_rest(&mut self, mut lhs: ExprId, start: Span, min_prec: u8) -> ExprId {
         loop {
             let t = self.tok();
+            let postfix = self.syntax.postfix_ops;
             let is_op = match t.kind {
                 Tok::OpIdent => {
-                    !(t.name == names::STAR && matches!(self.kind_at(1), Tok::RParen | Tok::Comma)) && self.symbolic_is_operator()
+                    !(t.name == names::STAR && matches!(self.kind_at(1), Tok::RParen | Tok::Comma)) && (postfix || self.symbolic_is_operator())
                 }
-                Tok::Ident => t.name != names::EMPTY && self.ident_is_operator(),
+                Tok::Ident => t.name != names::EMPTY && (postfix || self.ident_is_operator()),
                 _ => false,
             };
             if !is_op {
+                return lhs;
+            }
+            // An operator no operand follows, on its line or the next, is a postfix operator of
+            // the whole infix expression before it, its operators reduced (dotc's `infixOps`
+            // under `postfixOpsEnabled`): `xs.takeWhile('-' !=)` selects `!=` of `'-'`.
+            if postfix && !self.operand_follows_operator() {
+                if min_prec > 0 {
+                    return lhs;
+                }
+                self.bump();
+                lhs = self.ast.add_expr(Expr::Select(lhs, t.name), start.to(t.span));
+                self.note_name(lhs, t.span);
                 return lhs;
             }
             let (prec, right) = op_precedence(self.interner.get(t.name));
@@ -1143,6 +1178,13 @@ impl<'a> Parser<'a> {
                 self.parse_block()
             }
             Tok::KwIf => self.parse_if(),
+            // `new:` and `new { ... }`: an anonymous class without a parent clause, whose parent the
+            // expected type gives (dotty's `newExpr`, `typedNew`).
+            Tok::KwNew if (self.kind_at(1) == Tok::ColonEol && self.kind_at(2) == Tok::Indent) || (self.kind_at(1) == Tok::Indent && self.toks[self.pos + 1].span.end > self.toks[self.pos + 1].span.start) => {
+                self.bump();
+                self.body_at = self.pos;
+                self.parse_anon_class_with(Vec::new(), start)
+            }
             Tok::KwNew => {
                 self.bump();
                 self.template_type = true;
@@ -1531,12 +1573,14 @@ impl<'a> Parser<'a> {
 
     /// An argument list, whether it is a `using` one. One whose recovery skipped tokens or
     /// stopped short of its `)` is cut (`Ast::cut_args`): noted by its first argument, or, when
-    /// it holds none, in `args_cut` for the application the caller makes.
+    /// it holds none, in `args_cut` for the application the caller makes. A `using` before a
+    /// parenthesis begins a using list, as dotty's `Parsers.parArgumentExprs` takes any leading
+    /// `using`: `f(using (v: V) => v)` passes a function literal.
     pub(super) fn parse_args(&mut self) -> (ListRef, bool) {
         self.expect(Tok::LParen);
         let mut cut = false;
         let using = self.at_soft(names::USING) && self.kind_at(1) != Tok::RParen
-            && !matches!(self.kind_at(1), Tok::Comma | Tok::Dot | Tok::LParen);
+            && !matches!(self.kind_at(1), Tok::Comma | Tok::Dot);
         if using {
             self.bump();
         }

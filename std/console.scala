@@ -25,6 +25,27 @@ package scala.io:
 
   object AnsiColor extends AnsiColor
 
+  // scala-library's Codec over the charsets of java.nio.charset: a charset by its name, the implicit one of
+  // last resort the platform's default.
+  class Codec(val charSet: java.nio.charset.Charset):
+    def name: String = charSet.name()
+    override def toString: String = name
+
+  trait LowPriorityCodecImplicits:
+    implicit lazy val fallbackSystemCodec: Codec = Codec.defaultCharsetCodec
+
+  object Codec extends LowPriorityCodecImplicits:
+    final val ISO8859: Codec = Codec(java.nio.charset.StandardCharsets.ISO_8859_1)
+    final val UTF8: Codec = Codec(java.nio.charset.StandardCharsets.UTF_8)
+    def defaultCharsetCodec: Codec = apply(java.nio.charset.Charset.defaultCharset())
+    def default: Codec = defaultCharsetCodec
+    def apply(encoding: String): Codec = new Codec(java.nio.charset.Charset.forName(encoding))
+    def apply(charSet: java.nio.charset.Charset): Codec = new Codec(charSet)
+    def fromUTF8(bytes: Array[Byte]): Array[Char] = new String(bytes, java.nio.charset.StandardCharsets.UTF_8).toCharArray
+    def toUTF8(cs: CharSequence): Array[Byte] = cs.toString.getBytes(java.nio.charset.StandardCharsets.UTF_8)
+    implicit def string2codec(s: String): Codec = apply(s)
+    implicit def charset2codec(c: java.nio.charset.Charset): Codec = apply(c)
+
 package scala:
   // `out` is the stream `print` writes to, `System.out` unless `withOut` names another for
   // the length of its body.

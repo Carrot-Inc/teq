@@ -53,6 +53,7 @@ hkbounds/fix/hkb/HkLow.tasty 0008b877a4df42d600893c05cdcb7f94
 hkbounds/fix/hkb/HkStrm.tasty 006cdcb2e082fed600f13382b4d6b193
 hkbounds/fix/hkb/HkTarget.tasty 00a70a870534a3e90070bee923b8d7ab
 hkbounds/fix/hkb/hkbounds$package.tasty 0065fa2467ad4bda00a59a09f1fc8591
+icdefaults/fix/icdef/IcDefaults.tasty 00c7fbf70fc070a600d4014ffa263adb
 inlforms/fix/inlforms/IfEqv.tasty 008f02b5b952fcd10062304b77a16bfa
 inlforms/fix/inlforms/IfFacade.tasty 00b8ebddf844b7c8008382327da7e4a9
 inlforms/fix/inlforms/IfImpl.tasty 00f1557a57ae75c50020fd94d2a456ed

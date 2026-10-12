@@ -67,6 +67,7 @@ cleanup() {
   [ -f "$b/teq.lock" ] && (cd "$b" && timeout 30 "$TEQ" stop > /dev/null 2>&1)
   [ -f "$work/r/target/teq/teq.lock" ] && (cd "$work/r" && timeout 30 "$TEQ" stop > /dev/null 2>&1)
   [ -f "$work/js/teq.lock" ] && (cd "$work/js" && timeout 30 "$TEQ" stop > /dev/null 2>&1)
+  [ -f "$work/e/target/teq/teq.lock" ] && (cd "$work/e" && timeout 30 "$TEQ" stop > /dev/null 2>&1)
   [ -n "${server:-}" ] && kill "$server" 2> /dev/null
   rm -rf "$work"
 }
@@ -1715,6 +1716,57 @@ else
   fail "scalajs tests: a resident's test link differs from a fresh build's:$differ"
 fi
 (cd "$js" && timeout 30 "$TEQ" stop > /dev/null 2>&1)
+
+# Test configurations with a framework and nothing under their source roots that could be a suite
+# (lila's 86, most without a test): no runner is started for one; a run of every project stops the
+# residents it started once done with them, keeping the one running before it.
+e=$work/e
+mkdir -p "$e/quiet1/src/quiet1" "$e/quiet1/test" "$e/quiet2/src/quiet2" "$e/quiet2/test" "$e/target/teq" "$e/project"
+printf 'package quiet1\n\nobject Q1:\n  val n: Int = 1\n' > "$e/quiet1/src/quiet1/Q1.scala"
+printf 'package quiet2\n\nobject Q2:\n  val n: Int = 2\n' > "$e/quiet2/src/quiet2/Q2.scala"
+echo 'lazy val quiet1 = project' > "$e/build.sbt"
+echo 'sbt.version=2.0.8' > "$e/project/build.properties"
+python3 - "$e" "$lib" "$lib3" <<'PY'
+import hashlib, importlib.util, os, sys
+spec = importlib.util.spec_from_file_location("lock", os.environ["LOCK_PY"])
+lock = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(lock)
+e, lib, lib3 = sys.argv[1:]
+m2 = lib[: lib.index("/maven2/") + len("/maven2/")]
+def artifact(path):
+    data = open(path, "rb").read()
+    parts = path[len(m2):].split("/")
+    return ":".join([".".join(parts[:-3]), parts[-3], parts[-2]]), f"maven-central {hashlib.sha1(data).hexdigest()} {len(data)}"
+table = dict([artifact(lib3), artifact(lib)])
+flags = {"ignoredScalacOptions": [], "kindProjector": False, "strictEquality": False, "werror": False}
+def project(name):
+    return {"base": name, "platform": "jvm", "scalaVersion": "3.8.4", "configurations": {
+        "compile": {"classpath": list(table), "flags": flags, "generators": [], "mainClasses": [], "resources": [], "sources": [name + "/src"]},
+        "test": {"classpath": [{"configuration": "compile", "project": name}] + list(table), "flags": flags, "resources": [], "sources": [name + "/test"],
+                 "baseDirectory": ".", "envVars": {}, "exclude": [], "fork": False, "javaOptions": [], "frameworks": [{"arguments": [], "class": "munit.Framework"}]}}}
+inputs = {f: hashlib.sha256(open(os.path.join(e, f), "rb").read()).hexdigest() for f in ["build.sbt", "project/build.properties"]}
+digest = hashlib.sha256("".join(f"{f}\0{d}\n" for f, d in sorted(inputs.items())).encode()).hexdigest()
+export = {"teq": "0.1.7-check.1", "format": 1, "binaries": {}, "inputs": {"files": inputs, "sha256": digest}, "java": {"outputVersion": 17},
+          "repositories": [{"id": "maven-central", "url": "https://repo1.maven.org/maven2/"}], "jars": table,
+          "projects": {"quiet1": project("quiet1"), "quiet2": project("quiet2")}}
+open(os.path.join(e, "target/teq/teq.lock"), "w", encoding="utf-8").write(lock.canonical(export))
+PY
+out=$(cd "$e" && timeout 120 "$TEQ" test quiet1 2>&1)
+code=$?
+if [ $code = 0 ] && [ "$out" = "quiet1/test: no suite to run" ] && ! grep -q '^starting the test runner of quiet1/test' "$e/target/teq/task.log"; then
+  pass "a test configuration with nothing that could be a suite starts no test runner"
+else
+  fail "the configuration without suites ($code): $out"
+fi
+out=$(cd "$e" && timeout 120 "$TEQ" test 2>&1)
+code=$?
+if [ $code = 0 ] && [[ "$out" == *"quiet1/test: no suite to run"* ]] && [[ "$out" == *"quiet2/test: no suite to run"* ]] && ! grep -q '^starting the test runner' "$e/target/teq/task.log" \
+  && grep -q '^stopping quiet2/test: its run of several configurations is done with it' "$e/target/teq/task.log" && ! grep -q '^stopping quiet1/test: its run' "$e/target/teq/task.log"; then
+  pass "a test of every project stops the residents it started once done with them, keeping the one running before"
+else
+  fail "the run of several configurations ($code): $out / $(grep -E '^(starting|stopping)' "$e/target/teq/task.log" | head -5)"
+fi
+(cd "$e" && timeout 30 "$TEQ" stop > /dev/null 2>&1)
 
 # The launcher tools/launcher/teq (docs/TARGETS.md, "The launchers") under each POSIX shell
 # present, over a repository on the loopback interface that serves a stand-in for the binary, which

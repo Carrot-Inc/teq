@@ -71,8 +71,10 @@ pub enum TermRef {
     Package(PkgId),
     /// A member of the stable val of a package or an object, imported from the val.
     ValueMember(ValueImport, SymId),
-    /// The constructor proxy of a class nested in the class of such a val, imported from it
-    /// (`import o.*; Inner(1)` is `o.Inner(1)`, dotty's `NamerOps.addConstructorProxies`).
+    /// A class nested in the class of such a val, imported from it and named as a term: its
+    /// constructor proxy (`import o.*; Inner(1)` is `o.Inner(1)`, dotty's
+    /// `NamerOps.addConstructorProxies`) or a case class's synthetic companion, a member of the
+    /// val's class, read on the val.
     ValueClass(ValueImport, ClassId),
     /// The proxy of a class an object inherits from a class or trait that declares it, whose
     /// instance the object is (`import Schema.*; Record(f)` is `Schema.Record(f)`).
@@ -374,7 +376,7 @@ impl<'a> Worker<'a> {
             self.name_str(member).as_str(),
             "==" | "!=" | "##" | "asInstanceOf" | "isInstanceOf" | "equals" | "hashCode" | "toString" | "getClass" | "eq" | "ne" | "synchronized" | "notify" | "notifyAll" | "wait"
         );
-        if universal || self.find_member(ty, member).is_some() || self.has_member_or_std_extension(ty, member) || extension || self.value_has_type(v, member) {
+        if universal || self.find_member(ty, member).is_some() || self.has_member_or_std_extension(ty, member) || extension || self.value_has_type(v, member) || self.value_export_term(ty, member).is_some() {
             return;
         }
         let msg = format!("value {} is not a member of {}", self.name_str(member), self.show(self.widen_lit(ty)));
@@ -925,7 +927,39 @@ impl<'a> Worker<'a> {
         if self.self_type_member_class(c, name).is_some() {
             return Some(TypeRef::Member(c, name));
         }
-        self.exports_of(c)?.types.get(&name).copied()
+        if let Some(r) = self.exports_of(c).and_then(|e| e.types.get(&name).copied()) {
+            return Some(r);
+        }
+        // So is a type a class of the self type exports (lila's `FormHelper`, `self: I18nHelper
+        // & AssetHelper =>`, naming the `Translate` that `I18nHelper` exports), a member of the
+        // self type as dotty's `findRef` finds it through `this`.
+        self.self_type_export(c, |e| e.types.get(&name).copied())
+    }
+
+    /// What `pick` takes of the export table of a class of `c`'s self type, the first that has it.
+    #[inline]
+    pub(super) fn self_type_export<T>(&mut self, c: ClassId, pick: impl Fn(&super::exports::ExportScope) -> Option<T>) -> Option<T> {
+        // Most classes declare no self type: nothing to look through, decided before any work.
+        let declared = self.syms.class(c).declared_self?;
+        self.self_type_export_rest(c, declared, pick)
+    }
+
+    #[cold]
+    #[inline(never)]
+    fn self_type_export_rest<T>(&mut self, c: ClassId, declared: TypeId, pick: impl Fn(&super::exports::ExportScope) -> Option<T>) -> Option<T> {
+        let mut parts: Vec<TypeId> = vec![declared];
+        while let Some(t) = parts.pop() {
+            match self.types.get(t) {
+                Type::Class(k, _) if k != c => {
+                    if let Some(found) = self.exports_of(k).and_then(|e| pick(&e)) {
+                        return Some(found);
+                    }
+                }
+                Type::Inter(a, b) => parts.extend([a, b]),
+                _ => {}
+            }
+        }
+        None
     }
 
     /// Whether `c` or one of its base types declares the type member `name`.
@@ -991,6 +1025,52 @@ impl<'a> Worker<'a> {
         }
     }
 
+    /// Whether completing the program's class `c` would complete a class whose completion is
+    /// under way, its parents read off the syntax (`parent_class`) as far as they are not
+    /// complete.
+    fn completion_reaches_in_progress(&mut self, c: ClassId, seen: &mut Vec<ClassId>) -> bool {
+        // A lookup of a parent's name that meets an import of an object asks again: answered as
+        // reaching one, the object left as it is.
+        thread_local! { static CHECKING: std::cell::Cell<bool> = const { std::cell::Cell::new(false) }; }
+        if seen.is_empty() {
+            if CHECKING.with(|c| c.replace(true)) {
+                return true;
+            }
+            seen.push(c);
+            let reaches = self.completion_reaches_in_progress_of(c, seen);
+            CHECKING.with(|c| c.set(false));
+            return reaches;
+        }
+        if seen.contains(&c) {
+            return false;
+        }
+        seen.push(c);
+        self.completion_reaches_in_progress_of(c, seen)
+    }
+
+    fn completion_reaches_in_progress_of(&mut self, c: ClassId, seen: &mut Vec<ClassId>) -> bool {
+        let info = self.syms.class(c);
+        match info.state().get() {
+            Completion::Done => false,
+            Completion::InProgress => true,
+            Completion::NotStarted => {
+                let (file, owner, span) = (info.file, info.owner, info.span);
+                let Some(def) = info.def else { return false };
+                let parent_tys: Vec<TyExprId> = match &self.ast(file).def(def).kind {
+                    DefKind::Class(cls) => cls.parents.iter().map(|p| p.ty).collect(),
+                    DefKind::Given(g) => vec![g.ty],
+                    _ => Vec::new(),
+                };
+                if parent_tys.is_empty() {
+                    return false;
+                }
+                let env = self.env_at(file, owner, span.start);
+                let parents: Vec<ClassId> = self.with_env(env, |t| parent_tys.iter().filter_map(|&ty| t.parent_class(ty)).collect());
+                parents.into_iter().any(|p| self.completion_reaches_in_progress(p, seen))
+            }
+        }
+    }
+
     /// A type that is nested in the object `c` or exported by it.
     pub fn module_type(&mut self, c: ClassId, name: Name) -> Option<TypeRef> {
         self.complete_loaded_module(c);
@@ -999,6 +1079,14 @@ impl<'a> Worker<'a> {
         }
         if let Some(&a) = self.syms.class(c).type_aliases.get(&name) {
             return Some(self.alias_ref(c, a));
+        }
+        // What the object inherits is known once it is complete: a class header importing it
+        // may be completed first (`import Dsl.*` above `object Dsl extends DslBase`). Not where
+        // the completion would reach the class whose header is being completed (`import O.*`
+        // above `class Y extends Z`, `O` extending a subclass of `Y`): dotty's lookup reads that
+        // class's members as far as they are entered, which the object's own are.
+        if self.syms.class(c).state() == Completion::NotStarted && !self.completion_reaches_in_progress(c, &mut Vec::new()) {
+            self.complete_class(c);
         }
         if self.syms.class(c).inherits_types {
             if let Some(r) = self.inherited_type_member(c, name) {
@@ -1356,6 +1444,14 @@ impl<'a> Worker<'a> {
         if self.extension_call_head {
             return self.module_extension_term(c, name);
         }
+        // A std object standing for a JDK class takes the class's statics it leaves out when one
+        // is asked for, through an import (`import java.lang.Character.*` then `getType`) as
+        // through a selection: on the JVM alone, where the JDK class is what runs; elsewhere the
+        // std's platform layer is all there is (a JavaScript build of scala-library's bodies
+        // would take `Arrays.compare`, which the layer does not implement).
+        if self.jvm && self.loaded.is_some() && self.syms.class(c).def.is_some() && self.java_member_miss(c) {
+            return self.module_term(c, name);
+        }
         None
     }
 
@@ -1424,6 +1520,10 @@ impl<'a> Worker<'a> {
             if let (true, TermRef::Local(local)) = (self.unused.on(), r) {
                 self.mark_alias_read(local);
             }
+            // A constructor proxy outside an application gives way to a binding it shadows.
+            if let TermRef::ValueClass(_, c) = r {
+                return Some(self.proxy_or_shadowed(name, r, c));
+            }
             return Some(r);
         }
         // Without a jar that defines `scala.Predef`, what it holds in source is the std's package
@@ -1432,6 +1532,19 @@ impl<'a> Worker<'a> {
             return Some(TermRef::Package(self.b.scala_pkg));
         }
         TermRef::root_package(self, name)
+    }
+
+    /// A value import's constructor proxy, or the binding it shadows where it is no application's
+    /// head; apart from the lookup's path, which most names take without one.
+    #[cold]
+    #[inline(never)]
+    fn proxy_or_shadowed(&mut self, name: Name, r: TermRef, c: ClassId) -> TermRef {
+        if !self.extension_call_head && self.syms.class(c).mods & mods::CASE == 0 {
+            if let Some(shadowed) = self.shadowed_by_proxy(name) {
+                return shadowed;
+            }
+        }
+        r
     }
 
     /// SLS 2: a definition of the scope beats its imports, a named import beats a wildcard of the
@@ -2243,8 +2356,13 @@ impl<'a> Worker<'a> {
                 let ty = self.import_value_ret(v);
                 // A member the import cannot reach is none it brings, named or not.
                 let Some((m, _)) = self.find_member(ty, orig) else {
-                    let ext = if self.extension_call_head { self.value_extension_term(v, orig) } else { None };
-                    return ext.or_else(|| self.value_class_term(v, orig));
+                    if let Some(r) = self.value_class_term(v, orig) {
+                        return Some(r);
+                    }
+                    if let Some(r) = self.value_export_term(ty, orig) {
+                        return Some(r);
+                    }
+                    return if self.extension_call_head { self.value_extension_term(v, orig) } else { None };
                 };
                 self.is_accessible(m).then_some(TermRef::ValueMember(v, m))
             }
@@ -2255,8 +2373,13 @@ impl<'a> Worker<'a> {
                     return None;
                 }
                 let Some((m, _)) = self.find_member(ty, name) else {
-                    let ext = if self.extension_call_head { self.value_extension_term(v, name) } else { None };
-                    return ext.or_else(|| self.value_class_term(v, name));
+                    if let Some(r) = self.value_class_term(v, name) {
+                        return Some(r);
+                    }
+                    if let Some(r) = self.value_export_term(ty, name).filter(|&r| !self.is_given_ref(r)) {
+                        return Some(r);
+                    }
+                    return if self.extension_call_head { self.value_extension_term(v, name) } else { None };
                 };
                 (!self.syms.is_given(m) && self.is_accessible(m)).then_some(TermRef::ValueMember(v, m))
             }
@@ -2270,12 +2393,46 @@ impl<'a> Worker<'a> {
         }
     }
 
-    /// The constructor proxy of the class `name` nested in the class of the value an import
-    /// opens, where no term of the name is a member: dotty's proxy is a member of that class.
+    /// The class `name` nested in the class of the value an import opens, where no term of the
+    /// name is a member: its constructor proxy (`NamerOps.addConstructorProxies`) or a case class's
+    /// synthetic companion, a member of that class read on the value; a proxy the lookup passes
+    /// (`skip_proxy`) is none.
     fn value_class_term(&mut self, v: ValueImport, name: Name) -> Option<TermRef> {
         let prefix = self.import_value_probe(v);
-        let c = self.nested_class_through(prefix, name).filter(|&c| self.needs_constructor_proxy(c))?;
+        let c = self.nested_class_through(prefix, name).filter(|&c| self.needs_constructor_proxy(c) && !self.skip_proxy(c))?;
         Some(TermRef::ValueClass(v, c))
+    }
+
+    /// Whether the term a class nested in an imported value's class is named by is a constructor
+    /// proxy (a plain class's; a case class's companion is a real one) that the lookup passes.
+    fn skip_proxy(&self, c: ClassId) -> bool {
+        self.skip_proxies && self.syms.class(c).mods & mods::CASE == 0
+    }
+
+    /// The binding a constructor proxy found for `name` shadows, which a name outside an
+    /// application stands for instead (dotty's `Typer.checkNotShadowed`, through `findRef`
+    /// excluding `PhantomSymbol`): none of the empty package's.
+    #[cold]
+    #[inline(never)]
+    fn shadowed_by_proxy(&mut self, name: Name) -> Option<TermRef> {
+        let outer = std::mem::replace(&mut self.skip_proxies, true);
+        let found = self.lookup::<TermRef>(name, None);
+        self.skip_proxies = outer;
+        let owner = match found? {
+            TermRef::Class(c) => self.syms.class(c).owner,
+            TermRef::Package(_) | TermRef::SelfAlias(_) | TermRef::ValueClass(..) => return found,
+            other => self.syms.sym(other.sym()?).owner,
+        };
+        (owner != Owner::Package(ROOT_PKG)).then_some(found?)
+    }
+
+    /// What the class of an imported value exports under `name`, its own clauses' and its
+    /// parents': an export forwarder is a member of the class (dotty's `Namer.addForwarders`), so an
+    /// import of the value brings it as a selection of the value reaches it. The export's target is
+    /// an object's or a package's member, which needs no value.
+    fn value_export_term(&mut self, ty: TypeId, name: Name) -> Option<TermRef> {
+        let c = self.class_of(ty)?;
+        self.exports_of(c).and_then(|e| e.terms.get(&name).copied())
     }
 
     /// The type member `name` of the value an import opens, named or through its wildcard.
@@ -2287,7 +2444,13 @@ impl<'a> Worker<'a> {
             ImportTarget::ValueAll(v) if imp.name.is_none() && !self.import_hides(imp, name) => (v, name),
             _ => return None,
         };
-        self.value_has_type(v, member).then_some(TypeRef::ValueMember(v, member))
+        if self.value_has_type(v, member) {
+            return Some(TypeRef::ValueMember(v, member));
+        }
+        // A type the value's class exports, as an export of a term comes (`value_export_term`).
+        let ty = self.import_value_ret(v);
+        let c = self.class_of(ty)?;
+        self.exports_of(c).and_then(|e| e.types.get(&member).copied())
     }
 
     /// What a lookup through the value an import opens asks for the members it has: the value's
@@ -2302,6 +2465,13 @@ impl<'a> Worker<'a> {
             (None, Some(o)) if self.syms.class(o).kind == ClassKind::Object => self.import_value_ret(v),
             _ => self.import_value_prefix(v),
         }
+    }
+
+    /// The class nested in the class of the value an import opens, or in a base of it, named
+    /// `name`.
+    pub(super) fn value_nested_class(&mut self, v: ValueImport, name: Name) -> Option<ClassId> {
+        let ty = self.import_value_ret(v);
+        self.nested_class_through(ty, name)
     }
 
     /// Whether the value an import opens has the type member or nested class `name`.
@@ -4593,11 +4763,61 @@ impl<'a> Worker<'a> {
     pub fn complete_class_tparams(&mut self, c: ClassId) {
         let info = self.syms.class(c);
         match info.state().get() {
-            // A class without a definition has its type parameters from the start.
-            Completion::NotStarted if info.def.is_some() => self.complete_class(c),
+            // A class without a definition has its type parameters from the start; one whose
+            // parameters were made already has nothing more to give here.
+            Completion::NotStarted if info.def.is_some() => {
+                if !info.tparams_made && !self.make_class_tparams(c) {
+                    self.complete_class(c)
+                }
+            }
             Completion::InProgress if self.forked && !info.state().mine() => self.complete_class(c),
             _ => {}
         }
+    }
+
+    /// The type parameters of class `c` with their first-order bounds, and nothing else of the
+    /// class, as dotty's `TypeParamsCompleter` gives a class's type parameters without completing
+    /// it: a type application of the class needs no more (its constructor's parameters, which
+    /// name other classes, wait for the class's completion), in a build that records dependencies
+    /// or captures the type phase's work as in any other. A class an enum case copies its
+    /// parameters from, an alias or a given completes whole; so does any class once the workers
+    /// fork, where the record is published by its completion alone. Whether they were made.
+    fn make_class_tparams(&mut self, c: ClassId) -> bool {
+        // Once the workers fork, a class's record is published by its completion alone.
+        if self.forked {
+            return false;
+        }
+        let (file, def_id, owner, kind) = {
+            let i = self.syms.class(c);
+            (i.file, i.def, i.owner, i.kind)
+        };
+        let Some(def_id) = def_id else { return false };
+        if kind == ClassKind::EnumCase {
+            return false;
+        }
+        let def = self.ast(file).def(def_id);
+        let DefKind::Class(cls) = &def.kind else { return false };
+        let env = match owner {
+            Owner::Local => self.anon_env(c),
+            _ => self.env_at(file, owner, def.span.start),
+        };
+        let ids = self.make_tparams(&cls.tparams);
+        {
+            let mut info = self.syms.class_mut(c);
+            info.tparams = ids.iter().map(|&(_, p)| p).collect();
+            info.tparams_made = true;
+        }
+        // A bound may name the class itself (`C[A <: C[A]]`), whose parameters are there now.
+        // What the bounds name is the class's dependency, recorded as its completion records it.
+        let outer = if self.deps.is_some() { Some(self.deps_enter_class(c)) } else { None };
+        self.with_env(env, |t| {
+            t.env.frames.push(Frame::Locals { names: Vec::new(), tparams: ids.clone(), givens: Vec::new(), classes: Vec::new(), aliases: Vec::new(), owner: t.sites.owners.len() as u32 });
+            t.resolve_tparam_bounds_of(&cls.tparams, &ids, |tp| tp.arity == 0);
+        });
+        if let Some(outer) = outer {
+            self.deps_leave(outer);
+        }
+        true
     }
 
     /// Waits out another thread's completion of `c` (a library class's, under the loader's lock)
@@ -4677,6 +4897,9 @@ impl<'a> Worker<'a> {
     /// complete their classes, so that the sealed ones know their children.
     pub(super) fn outermost_completion_done(&mut self) {
         if self.completing == 0 {
+            // A file of several sealed classes is completed once (`Option`, `Either` and `List`).
+            self.sealed_std_files.sort_unstable();
+            self.sealed_std_files.dedup();
             while let Some(file) = self.sealed_std_files.pop() {
                 self.complete_file_classes(file);
             }
@@ -4815,13 +5038,22 @@ impl<'a> Worker<'a> {
                 inherited = true;
             }
         }
-        let ids = self.make_tparams(tparam_asts);
+        // The parameters a type application of the class made already, with their first-order
+        // bounds (`make_class_tparams`), are the class's.
+        let made = self.syms.class(c).tparams_made && !inherited;
+        let ids: Vec<(Name, TParamId)> = if made {
+            self.syms.class(c).tparams.iter().map(|&p| (self.syms.tparam(p).name, p)).collect()
+        } else {
+            self.make_tparams(tparam_asts)
+        };
         self.syms.class_mut(c).tparams = ids.iter().map(|&(_, p)| p).collect();
         self.env.frames.push(Frame::Locals { names: Vec::new(), tparams: ids.clone(), givens: Vec::new(), classes: Vec::new(), aliases: Vec::new(), owner: self.sites.owners.len() as u32 });
         // The bound of a higher-kinded parameter names a class that may extend this one
         // (`FromIterator[+C[X] <: Iterable[X]]`, `Iterable extends FromIterator[Iterable]`),
         // so it is resolved once the class is complete enough to be extended.
-        self.resolve_tparam_bounds_of(tparam_asts, &ids, |tp| tp.arity == 0);
+        if !made {
+            self.resolve_tparam_bounds_of(tparam_asts, &ids, |tp| tp.arity == 0);
+        }
         let existing = self.syms.class(c).ctor_syms.clone();
         // Scala copies the type parameters of the enum to a case without their context bounds.
         let bounds_for_ctor: &[ast::TypeParam] = if inherited { &[] } else { tparam_asts };
@@ -4963,9 +5195,14 @@ impl<'a> Worker<'a> {
             self.syms.class_mut(c).state().set(Completion::Done);
             let declared = self.resolve_type(t);
             let self_ty = self.syms.class(c).base_types[0].1;
-            let mut info = self.syms.class_mut(c);
-            info.declared_self = Some(declared);
-            info.this_type = Some(self.types.inter(self_ty, declared));
+            {
+                let mut info = self.syms.class_mut(c);
+                info.declared_self = Some(declared);
+                info.this_type = Some(self.types.inter(self_ty, declared));
+            }
+            if self.syms.class(c).base_types.len() > 1 {
+                self.check_self_types(c);
+            }
         }
         if self.syms.class(c).value_class {
             self.check_value_class(c, cls);
@@ -5443,10 +5680,14 @@ impl<'a> Worker<'a> {
         // member or nested class.
         let rule_prefix = self.rule_prefix_of(&base);
         debug_assert!(base[1..1 + rule_prefix as usize].iter().all(|&(b, _)| self.brings_walks_nothing(b)), "a class Desugar.classDef gives brings {} what a walk passing over it misses", self.class_path(c));
+        // Whether no base declares an extension, which a member call not found reads before it
+        // walks the bases for one (`instance_extension_owner`); the rule prefix's read apart.
+        let mut no_inherited_extensions = base[1..1 + rule_prefix as usize].iter().all(|&(b, _)| self.syms.class(b).extensions.is_empty());
         for &(b, _) in &base[1 + rule_prefix as usize..] {
             let bi = self.syms.class(b);
             has_native_base |= bi.js == JsKind::Native;
             self_typed |= bi.declared_self.is_some();
+            no_inherited_extensions &= bi.extensions.is_empty();
             inherits_types = inherits_types
                 || !bi.type_aliases.is_empty()
                 || bi.inherits_types
@@ -5469,6 +5710,7 @@ impl<'a> Worker<'a> {
         info.rule_prefix = rule_prefix;
         info.superclass = superclass;
         info.inherits_types = inherits_types;
+        info.no_inherited_extensions = no_inherited_extensions;
         if has_native_base && info.js == JsKind::Scala {
             info.js = JsKind::Object;
         }
@@ -5477,8 +5719,10 @@ impl<'a> Worker<'a> {
         }
         if info.base_types.len() > 1 {
             self.mark_members_meeting_inherited(c);
-            // A base that declares no self type asks nothing of `c`'s.
-            if self_typed {
+            // A base that declares no self type asks nothing of `c`'s; a class declaring a self
+            // type of its own is checked once that is resolved (`complete_class_def`), which comes
+            // after its parents.
+            if self_typed && !self.self_type_pending(c) {
                 self.check_self_types(c);
             }
         }
@@ -5487,9 +5731,23 @@ impl<'a> Worker<'a> {
         }
     }
 
+    /// Whether `c` declares a self type its completion has not resolved yet.
+    fn self_type_pending(&self, c: ClassId) -> bool {
+        let info = self.syms.class(c);
+        if info.declared_self.is_some() {
+            return false;
+        }
+        let Some(d) = info.def else { return false };
+        matches!(&self.ast(info.file).def(d).kind, crate::ast::DefKind::Class(cls) if cls.self_type.is_some())
+    }
+
     /// scalac's E058: what `this` is in `c` has to conform to the self type each parent
     /// declares, under the type arguments `c` gives it.
     fn check_self_types(&mut self, c: ClassId) {
+        // Most classes have no ancestor that declares a self type: told without a copy.
+        if !self.syms.class(c).base_types[1..].iter().any(|&(b, _)| self.syms.class(b).declared_self.is_some()) {
+            return;
+        }
         let this = self.syms.this_type(c);
         let bases: Vec<(ClassId, TypeId)> = self.syms.class(c).base_types[1..].to_vec();
         for (b, bt) in bases {
@@ -6131,7 +6389,7 @@ impl Binding for TermRef {
         }
     }
 
-    #[inline]
+    #[inline(always)]
     fn in_frame(t: &mut Worker, frame: usize, innermost_class: bool, name: Name) -> Option<TermRef> {
         match &t.env.frames[frame] {
             Frame::Locals { names, classes, .. } => names
@@ -6180,6 +6438,12 @@ impl Binding for TermRef {
                     t.ref_exported = true;
                     return Some(r);
                 }
+                // What a class of the self type exports is a member of the self type, found
+                // through `this` (lila's `FlashHelper`, `self: I18nHelper =>`, reading the `trans`
+                // that `I18nHelper` exports).
+                if let Some(r) = t.self_type_export(c, |e| e.terms.get(&name).copied()) {
+                    return Some(r);
+                }
                 if t.extension_call_head {
                     return t.class_extension_term(c, name);
                 }
@@ -6226,6 +6490,7 @@ impl Binding for TermRef {
         }
     }
 
+    #[inline]
     fn inherited(t: &Worker, r: TermRef, frame: usize) -> bool {
         let (TermRef::This(k, s) | TermRef::ModuleMember(k, s)) = r else { return false };
         let info = t.syms.sym(s);

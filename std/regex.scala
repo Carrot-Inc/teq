@@ -6,36 +6,37 @@ final class Regex(val regex: String, wholeInput: Boolean = true):
   def pattern: java.util.regex.Pattern = java.util.regex.Pattern.compile(regex)
   def unanchored: Regex = new Regex(regex, false)
   def anchored: Regex = new Regex(regex, true)
-  def findFirstMatchIn(source: String): Option[Regex.Match] = Regex.wrap(source, Regex.exec(regex, "", source))
-  def findFirstIn(source: String): Option[String] = findFirstMatchIn(source).map(m => m.matched)
-  def findAllMatchIn(source: String): Iterator[Regex.Match] =
-    arrayIterator(Regex.all(regex, source).map(m => new Regex.Match(source, m)))
-  def findAllIn(source: String): Iterator[String] = findAllMatchIn(source).map(m => m.matched)
-  def findPrefixMatchOf(source: String): Option[Regex.Match] = Regex.wrap(source, Regex.exec(regex, "y", source))
-  def findPrefixOf(source: String): Option[String] = findPrefixMatchOf(source).map(m => m.matched)
-  def matches(source: String): Boolean = !js.isNull(Regex.exec(regex, "f", source))
-  def replaceAllIn(target: String, replacement: String | (Regex.Match => String)): String =
-    Regex.replace(regex, target, replacement, true, m => new Regex.Match(target, m))
-  def replaceFirstIn(target: String, replacement: String): String =
-    Regex.replace(regex, target, replacement, false, m => new Regex.Match(target, m))
-  def replaceSomeIn(target: String, replacer: Regex.Match => Option[String]): String =
-    Regex.replace(regex, target, (m: Regex.Match) => replacer(m).getOrElse(Regex.quoteReplacement(m.matched)), true, m => new Regex.Match(target, m))
-  def split(toSplit: String): Array[String] = Regex.splitBy(regex, toSplit, 0)
+  // The inputs are CharSequences, as scala-library's: the engine reads their text.
+  def findFirstMatchIn(source: CharSequence): Option[Regex.Match] = Regex.wrap(source, Regex.exec(regex, "", source.toString))
+  def findFirstIn(source: CharSequence): Option[String] = findFirstMatchIn(source).map(m => m.matched)
+  def findAllMatchIn(source: CharSequence): Iterator[Regex.Match] =
+    arrayIterator(Regex.all(regex, source.toString).map(m => new Regex.Match(source, m)))
+  def findAllIn(source: CharSequence): Iterator[String] = findAllMatchIn(source).map(m => m.matched)
+  def findPrefixMatchOf(source: CharSequence): Option[Regex.Match] = Regex.wrap(source, Regex.exec(regex, "y", source.toString))
+  def findPrefixOf(source: CharSequence): Option[String] = findPrefixMatchOf(source).map(m => m.matched)
+  def matches(source: CharSequence): Boolean = !js.isNull(Regex.exec(regex, "f", source.toString))
+  def replaceAllIn(target: CharSequence, replacement: String | (Regex.Match => String)): String =
+    Regex.replace(regex, target.toString, replacement, true, m => new Regex.Match(target, m))
+  def replaceFirstIn(target: CharSequence, replacement: String): String =
+    Regex.replace(regex, target.toString, replacement, false, m => new Regex.Match(target, m))
+  def replaceSomeIn(target: CharSequence, replacer: Regex.Match => Option[String]): String =
+    Regex.replace(regex, target.toString, (m: Regex.Match) => replacer(m).getOrElse(Regex.quoteReplacement(m.matched)), true, m => new Regex.Match(target, m))
+  def split(toSplit: CharSequence): Array[String] = Regex.splitBy(regex, toSplit.toString, 0)
   // What `case r(a, b)` binds: the groups of a match of the whole input (any match when unanchored).
-  def unapplySeq(source: String): Option[List[String]] =
-    Regex.wrap(source, Regex.exec(regex, if wholeInput then "f" else "", source)).map(m => m.subgroups)
+  def unapplySeq(source: CharSequence): Option[List[String]] =
+    Regex.wrap(source, Regex.exec(regex, if wholeInput then "f" else "", source.toString)).map(m => m.subgroups)
   override def toString: String = regex
 
 object Regex:
-  final class Match(val source: String, raw: Any):
+  final class Match(val source: CharSequence, raw: Any):
     def matched: String = Regex.groupOf(raw, 0)
     def group(id: Int | String): String = Regex.groupOf(raw, id)
     def groupCount: Int = Regex.groupCountOf(raw)
     def subgroups: List[String] = List.range(1, groupCount + 1).map(i => Regex.groupOf(raw, i))
     def start: Int = Regex.startOf(raw)
     def end: Int = start + matched.length
-    def before: String = source.substring(0, start)
-    def after: String = source.substring(end)
+    def before: CharSequence = source.subSequence(0, start)
+    def after: CharSequence = source.subSequence(end, source.length)
     override def toString: String = matched
 
   def quote(text: String): String = "\\Q" + text + "\\E"
@@ -43,7 +44,7 @@ object Regex:
   @jvm("$1 invokestatic java/util/regex/Matcher.quoteReplacement(Ljava/lang/String;)Ljava/lang/String;")
   def quoteReplacement(text: String): String
 
-  def wrap(source: String, raw: Any): Option[Match] = if js.isNull(raw) then None else Some(new Match(source, raw))
+  def wrap(source: CharSequence, raw: Any): Option[Match] = if js.isNull(raw) then None else Some(new Match(source, raw))
   @js("$reExec($1, $2, $3)")
   @jvm("rt $1 $2 $3 rtcall regexExec(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)Ljava/lang/Object;")
   def exec(regex: String, mode: String, source: String): Any
