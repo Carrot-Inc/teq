@@ -621,7 +621,7 @@ impl<'a> Worker<'a> {
 
     /// The target of a call of `member` through `super` in the trait at `at` of a class's
     /// linearisation `bases`: the first class after the trait that has it concrete.
-    fn mixin_super_target_in(&mut self, bases: &[ClassId], at: usize, member: SymId) -> Option<SymId> {
+    pub(super) fn mixin_super_target_in(&mut self, bases: &[ClassId], at: usize, member: SymId) -> Option<SymId> {
         bases[at + 1..].iter().copied().find_map(|b| self.concrete_super_member(b, member))
     }
 
@@ -1100,7 +1100,16 @@ impl<'a> Worker<'a> {
     /// library being trusted; a program's methods are typed whether they are used or not. The
     /// methods of an anonymous class are typed with it, since what they capture is settled then.
     pub(super) fn defers_body(&mut self, sym: SymId) -> bool {
-        let local = matches!(self.syms.sym(sym).owner, Owner::Class(c) if self.syms.class(c).owner == Owner::Local);
+        // A member of a class of a body, at any depth of classes, is typed with the body: a
+        // local trait lifts it with what the classes nested in it read (`proxies.rs`).
+        let mut local = false;
+        let mut owner = self.syms.sym(sym).owner;
+        while let Owner::Class(c) = owner {
+            owner = self.syms.class(c).owner;
+            if owner == Owner::Local {
+                local = true;
+            }
+        }
         self.in_std(sym) && !local && self.is_method_sym(sym)
     }
 
@@ -2262,7 +2271,7 @@ impl<'a> Worker<'a> {
         stmts.push(TStmt::Expr(call));
         let l = self.prog.stmts.push_slice(&stmts);
         let body = self.prog.add(TExpr::Block(l, after));
-        let fid = self.prog.add_fun(TFun { sym, params, defaults, body: Some(body), body_unconsuming: false });
+        let fid = self.prog.add_fun(TFun { sym, params, defaults, body: Some(body), body_unconsuming: false, captures: 0, lifted: false });
         self.fun_of_sym.insert(sym, fid);
         tclass.ctors.push(fid);
     }
@@ -2646,7 +2655,7 @@ impl<'a> Worker<'a> {
         if is_method {
             if !has_intrinsic {
                 let body_unconsuming = self.unused.defs_on() && body_ty.is_some_and(|t| t == NOTHING || self.fold_type(t).is_some());
-                let f = self.prog.add_fun(TFun { sym, params, defaults, body: typed, body_unconsuming });
+                let f = self.prog.add_fun(TFun { sym, params, defaults, body: typed, body_unconsuming, captures: 0, lifted: false });
                 self.fun_of_sym.insert(sym, f);
                 if def.annots.iter().any(|a| a.name == names::TAILREC) {
                     // The check reads the calls the body's plain inline calls expand to, as
@@ -2872,6 +2881,16 @@ impl<'a> Worker<'a> {
             tclass.lists_mut().equals_order = order.into_iter().map(|k| k as u16).collect();
         }
         let Some(def_id) = def_id else {
+            // A companion an enum made holds its values, and the outer accessor its cases read
+            // their enum's enclosing instance through.
+            let values = self.instance_enum_values(c);
+            tclass.init.splice(0..0, values);
+            if kind != ClassKind::Trait && self.syms.class(c).inner_object.is_some() {
+                let span = self.syms.class(c).span;
+                let env = self.env_at(file, Owner::Class(c), span.start);
+                let accessors = self.with_env(env, |t| t.define_outer_accessors(c));
+                tclass.methods.extend(accessors);
+            }
             self.push_class_body(tclass);
             return;
         };
@@ -2914,13 +2933,16 @@ impl<'a> Worker<'a> {
             let param_types: Vec<(TypeId, bool)> =
                 t.syms.class(c).ctor.iter().flat_map(|cl| cl.params.iter().map(|p| (p.ty, p.by_name))).collect();
             t.env.frames.push(Frame::Locals { names, tparams: Vec::new(), givens: Vec::new(), classes: Vec::new(), aliases: Vec::new(), owner: t.sites.owners.len() as u32 });
+            // A default stands by its own parameter, after the outer instance an inner class
+            // takes first (`ExplicitOuter`), as `Desugar.classDef`'s getters are its parameters'.
+            let lead = tclass.captures;
             let mut i = 0;
             for clause in clauses {
                 for p in &clause.params {
                     if let Some(d) = p.default {
                         let (ty, by_name) = param_types[i];
                         let te = t.check_expr(d, ty);
-                        tclass.ctor_defaults[i] =
+                        tclass.ctor_defaults[lead + i] =
                             Some(if by_name { t.prog.add(TExpr::Lambda(ast::ListRef::EMPTY, te)) } else { te });
                     }
                     i += 1;
@@ -2976,7 +2998,9 @@ impl<'a> Worker<'a> {
                 }
             }
         }
-        if kind == ClassKind::Enum {
+        // A local enum's cases and companion are checked once the enum's captures are known
+        // (`Worker::finish_local_enum`).
+        if kind == ClassKind::Enum && self.syms.class(c).owner != Owner::Local {
             let children = self.syms.class(c).children.clone();
             for child in children {
                 self.check_class(child);
@@ -3013,6 +3037,11 @@ impl<'a> Worker<'a> {
         if self.capturing() && self.syms.class(c).owner != Owner::Local {
             self.capture_class_annotations(c, file, def_id);
         }
+        // The values of an enum whose companion is an instance (a local object, an object
+        // nested in a class), made first in its constructor as dotty's
+        // `DesugarEnums.expandSimpleEnumCase` places them.
+        let values = self.instance_enum_values(c);
+        tclass.init.splice(0..0, values);
         // The class's `TClass` is published once pushed: the plain inline calls of its statements
         // expand first.
         self.flush_pending_since(pending);
@@ -3024,6 +3053,36 @@ impl<'a> Worker<'a> {
             self.report_erased_values(erased_mark, &roots);
         }
         self.push_class_body(tclass);
+        // A local trait's members take the values of the block they read, which the classes
+        // mixing it in pass (`proxies.rs`).
+        if kind == ClassKind::Trait {
+            self.lift_trait_proxies(c);
+        } else {
+            self.add_trait_forwarders(c);
+        }
+    }
+
+    /// The initialisers of the values of the enum whose companion the class `m` is, when it is an
+    /// instance: each a creation of its case with this instance as its outer.
+    pub(super) fn instance_enum_values(&mut self, m: ClassId) -> Vec<TInit> {
+        let info = self.syms.class(m);
+        let Some(e) = info.companion.filter(|&e| self.syms.class(e).kind == ClassKind::Enum) else { return Vec::new() };
+        if info.local_module.is_none() && info.inner_object.is_none() {
+            return Vec::new();
+        }
+        let children = self.syms.class(e).children.clone();
+        let mut values = Vec::new();
+        self.env.frames.push(Frame::Class(m));
+        for case in children {
+            let Some(v) = self.syms.class(case).singleton else { continue };
+            let span = self.syms.class(case).span;
+            let made = self.new_instance(case, ast::ListRef::EMPTY, span);
+            let ty = self.syms.this_type(case);
+            self.prog.set_type(made, ty);
+            values.push(TInit::Field(v, made));
+        }
+        self.env.frames.pop();
+        values
     }
 
     /// The annotations of a class of an owned file for its pickle: its own, where its owner sees
@@ -3942,12 +4001,26 @@ impl<'a> Worker<'a> {
             DefKind::Class(_) => {
                 let span = def.span;
                 if let Some(&nested) = self.def_classes.get(file.0 as usize, &d) {
+                    // A local enum's cases are checked once its captures are known
+                    // (`finish_local_enum`).
+                    let local_case = self.syms.class(nested).kind == ClassKind::EnumCase && self.syms.class(tclass.id).owner == Owner::Local;
+                    if local_case {
+                        return;
+                    }
                     self.note_nested_stored_class(tclass.id, nested);
                     self.check_class(nested);
                     // The instance of an object nested here is made on the first read of its
                     // lazy val, with this instance as its outer.
                     if let Some(val) = self.syms.class(nested).inner_object {
                         let init = self.new_instance(nested, ast::ListRef::EMPTY, span);
+                        tclass.init.push(TInit::Field(val, init));
+                    }
+                    // The companion an enum made: here, eager in a class (`LazyVals
+                    // .transformSyntheticModule`), lazy in a trait.
+                    let made = self.syms.class(nested).companion.filter(|&m| self.syms.class(nested).kind == ClassKind::Enum && self.syms.class(m).def.is_none());
+                    if let Some((m, val)) = made.and_then(|m| self.syms.class(m).inner_object.map(|v| (m, v))) {
+                        self.check_class(m);
+                        let init = self.new_instance(m, ast::ListRef::EMPTY, span);
                         tclass.init.push(TInit::Field(val, init));
                     }
                 }
@@ -4029,7 +4102,7 @@ impl<'a> Worker<'a> {
         let this = self.prog.add(TExpr::This);
         let read = self.prog.add(TExpr::Field(this, field));
         self.prog.set_type(read, ty);
-        let f = self.prog.add_fun(crate::tir::TFun { sym: s, params: Vec::new(), defaults: Vec::new(), body: Some(read), body_unconsuming: false });
+        let f = self.prog.add_fun(crate::tir::TFun { sym: s, params: Vec::new(), defaults: Vec::new(), body: Some(read), body_unconsuming: false, captures: 0, lifted: false });
         self.fun_of_sym.insert(s, f);
         f
     }
@@ -4691,7 +4764,8 @@ impl<'a> Worker<'a> {
         let ob = self.access_boundary(p, c);
         let companion_ok = match (ob, mb) {
             (Boundary::Class(k), Boundary::Class(o)) => {
-                self.syms.class(k).owner != Owner::Local && self.syms.class(o).kind == ClassKind::Object && self.syms.class(k).companion == Some(o)
+                // `mb.is(Module)`: an object nested in a class is a module class too.
+                self.syms.class(k).owner != Owner::Local && self.is_module_class(o) && self.syms.class(k).companion == Some(o)
             }
             _ => false,
         };

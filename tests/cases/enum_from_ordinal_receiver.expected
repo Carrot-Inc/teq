@@ -1,0 +1,21 @@
+static companion
+argument 0
+enum Shape has no case with ordinal: 0
+outer
+companion
+argument 1
+enum O.E has no case with ordinal: 1
+outer
+receiver
+companion
+argument 2
+enum O.E has no case with ordinal: 2
+mixed receiver
+argument 0
+One
+argument 1
+enum O.Mixed has no case with ordinal: 1
+local companion 0
+enum enum_from_ordinal_receiver$package$._$L has no case with ordinal: 0
+local companion 3
+enum enum_from_ordinal_receiver$package$._$L has no case with ordinal: 3

@@ -3976,7 +3976,9 @@ impl<'a> Worker<'a> {
                 let (s, _) = self.find_member(under, n)?;
                 let info = self.syms.sym(s);
                 Some(match info.kind {
-                    SymKind::Val | SymKind::Given if !info.by_name => Ok(self.types.mk(Type::Select(p, s))),
+                    // An enum's value is a stable val of its companion (`DesugarEnums`), read on
+                    // the companion's path.
+                    SymKind::Val | SymKind::Given | SymKind::EnumValue(_) if !info.by_name => Ok(self.types.mk(Type::Select(p, s))),
                     SymKind::Object(c) => Ok(self.types.class(c, &[])),
                     _ => Err(s),
                 })
@@ -4832,7 +4834,15 @@ impl<'a> Worker<'a> {
             }
         }
         if kind == ClassKind::Enum {
-            self.syms.class_mut(c).stateful = !ctor.is_empty() || self.body_has_initializers(&cls.body);
+            // The values of an enum of a block or of a class are its companion's, made with each
+            // instance of it: its cases call its constructor, which takes what it captures or
+            // its enclosing instance.
+            let instance = match self.syms.class(c).owner {
+                Owner::Local => true,
+                Owner::Class(o) => self.syms.class(o).kind != ClassKind::Object,
+                Owner::Package(_) => false,
+            };
+            self.syms.class_mut(c).stateful = instance || !ctor.is_empty() || self.body_has_initializers(&cls.body);
         }
         // A case class's selectors (`mods::SELECTOR`) take their fields' types with the class, as
         // the fields do, so that no selector's signature is completed and published on its own:

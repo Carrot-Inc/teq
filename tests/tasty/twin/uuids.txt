@@ -65,7 +65,7 @@ jargetter/fix/jargetter/JgSocket.tasty 00f38de41d3ff4c100c5addf62d3ecf0
 jargetter/fix/jargetter/JgSocketImpl.tasty 00f75370921b84dc00dfefbfeb41a3fe
 jvarargs/fix/jvarargs/JVarargs.tasty 005de7c1001ab7a200713d91bea468e3
 localcase/fix/shapes/Deferring.tasty 00f2414611f885ee0091ffbbfe5c87ff
-localcase/fix/shapes/LocalDefer.tasty 00b2fb2f7409daf2008147d6219351b0
+localcase/fix/shapes/LocalDefer.tasty 00680bd7c0d166f2005f87fa28d55db0
 members/fix/members/Container.tasty 00da16106c3cd8dd007735d8a918b48c
 members/fix/members/Holder.tasty 00183d087efee2c4002ff891073837ae
 members/fix/members/Registry.tasty 0084064e595f1cd800d640e5059e67e4

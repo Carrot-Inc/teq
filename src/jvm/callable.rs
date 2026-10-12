@@ -14,6 +14,19 @@ use std::rc::Rc;
 pub const MIRROR_PRODUCT: &str = "scala/deriving/Mirror$Product";
 pub const MIRROR_SUM: &str = "scala/deriving/Mirror$Sum";
 pub const MIRROR_SINGLETON: &str = "scala/deriving/Mirror$Singleton";
+const SERIALIZABLE: &str = "java/io/Serializable";
+
+/// The interfaces of a module class: `interfaces`, then `java/io/Serializable`, which dotty's
+/// `BCodeSkelBuilder` gives every module class (a written object, an object nested in a class, a
+/// companion the backend makes, an object of each enclosing instance, a file's `$package`). An
+/// object a block owns is no module class there: `LambdaLift` drops `Module` from the class it
+/// lifts (`owned_by_block`).
+pub fn module_interfaces(mut interfaces: Vec<String>, owned_by_block: bool) -> Vec<String> {
+    if !owned_by_block && !interfaces.iter().any(|i| i == SERIALIZABLE) {
+        interfaces.push(SERIALIZABLE.to_string());
+    }
+    interfaces
+}
 const ACC_ENUM: u16 = 0x4000;
 
 /// scalac's order of the forwarders of a mirror class (`sortedMembersBasedOnFlags`): the
@@ -84,6 +97,13 @@ impl<'a> Cx<'a> {
             Owner::Class(o) => syms.class(o).kind == ClassKind::Object && self.statically_placed(o),
             Owner::Local => false,
         }
+    }
+
+    /// An enum whose companion is an instance, a local object's or an object's nested in a
+    /// class: its values are the instance's fields, made with it.
+    pub fn instance_enum(&self, e: ClassId) -> bool {
+        let syms = self.input.syms;
+        syms.class(e).companion.is_some_and(|m| syms.class(m).local_module.is_some() || syms.class(m).inner_object.is_some())
     }
 
     /// A case class whose companion module class holds scalac's factory members.
@@ -238,6 +258,53 @@ impl<'a> Cx<'a> {
     pub fn companion_name(&self, c: ClassId) -> String {
         format!("{}$", self.class_names[c.idx()])
     }
+
+    /// A class case of an enum of a class, whose companion is an object of each enclosing
+    /// instance as scalac lays it out: `O$K$` holding
+    /// its `$outer` and the factories (`Desugar.classDef`, `ExplicitOuter`), reached through the
+    /// enclosing instance's `K()` over the field made with it (`LazyVals
+    /// .transformSyntheticModule`). Not a class of a block, nor one a trait holds.
+    pub fn has_instance_case_companion(&self, c: ClassId) -> bool {
+        let syms = self.input.syms;
+        let info = syms.class(c);
+        // A case class of a class has its companion from `has_inner_case_companion`; this is the
+        // class case of an enum of a class, whose companion's instance holds its factories.
+        let case = info.kind == ClassKind::EnumCase && info.singleton.is_none();
+        let Owner::Class(o) = info.owner else { return false };
+        case && info.kind != ClassKind::Anon
+            && !info.value_class
+            && info.companion.is_none()
+            && self.emits(c)
+            && !self.statically_placed(c)
+            && matches!(syms.class(o).kind, ClassKind::Class | ClassKind::Enum)
+            && !self.in_a_block(o)
+            && self.tclass_of[c.idx()] != u32::MAX
+            && self.input.prog.classes[self.tclass_of[c.idx()] as usize].captures == 1
+    }
+
+    /// Whether the class `c` is defined in a block, at any depth of classes.
+    fn in_a_block(&self, c: ClassId) -> bool {
+        let mut at = self.input.syms.class(c).owner;
+        loop {
+            match at {
+                Owner::Local => return true,
+                Owner::Class(k) => at = self.input.syms.class(k).owner,
+                Owner::Package(_) => return false,
+            }
+        }
+    }
+
+    /// The case classes nested in `o` whose companions are objects of `o`'s instances.
+    pub fn instance_case_companions(&self, o: ClassId) -> Vec<ClassId> {
+        let syms = self.input.syms;
+        let mut out: Vec<ClassId> = syms.class(o).nested.values().copied().filter(|&k| self.has_instance_case_companion(k)).collect();
+        if let Some(e) = syms.class(o).companion.filter(|&e| syms.class(e).kind == ClassKind::Enum) {
+            out.extend(syms.class(e).children.iter().copied().filter(|&k| syms.class(k).owner == Owner::Class(o) && self.has_instance_case_companion(k)));
+        }
+        out.sort();
+        out.dedup();
+        out
+    }
 }
 
 impl<'a> Gen<'a> {
@@ -268,6 +335,11 @@ impl<'a> Gen<'a> {
                 let table = std::mem::take(&mut self.module_table);
                 let class = self.mirror(&mirror, &out.0, &table);
                 self.extra_classes.push(class);
+            }
+            if cx.has_instance_case_companion(c) {
+                self.reset_class();
+                let companion = self.emit_instance_companion(i);
+                self.extra_classes.push(companion);
             }
             return out;
         };
@@ -514,7 +586,10 @@ impl<'a> Gen<'a> {
         self.reset_class();
         let name: Rc<str> = Rc::from(cx.companion_name(c));
         self.context = name.to_string();
-        self.cw = ClassWriter::new(ACC_PUBLIC | ACC_FINAL | ACC_SUPER, &name, OBJECT, &["java/io/Serializable".to_string()]);
+        // A case class's companion is its `Mirror.Product`, as scalac's.
+        let mut interfaces: Vec<String> = cx.has_product_mirror(c).then(|| MIRROR_PRODUCT.to_string()).into_iter().collect();
+        interfaces.push("java/io/Serializable".to_string());
+        self.cw = ClassWriter::new(ACC_PUBLIC | ACC_FINAL | ACC_SUPER, &name, OBJECT, &interfaces);
         self.this_name = name.clone();
         self.this_class = None;
         self.is_interface = false;
@@ -576,6 +651,31 @@ impl<'a> Gen<'a> {
         self.sconst(cx.input.interner.get(info.name));
         self.return_value(&string);
         self.end_method(ACC_PUBLIC, "toString", "()Ljava/lang/String;");
+        // `fromProduct`, each element in its place, the case made with the enclosing instance.
+        if cx.has_product_mirror(c) {
+            let product = JType::L(Rc::from(PRODUCT));
+            let object_type = JType::object();
+            self.begin_method(false, false, &[(None, product.clone())], case_type.clone(), &[]);
+            self.new_object(&case_name);
+            self.load(0, &this);
+            self.getfield(&name, "$outer", &outer);
+            for (i, t) in types.iter().enumerate() {
+                self.load(1, &product);
+                self.iconst(i as i32);
+                self.invoke(Invoke::Interface, PRODUCT, true, "productElement", &[JType::I], &object_type);
+                self.adapt(&object_type, t);
+            }
+            self.invoke(Invoke::Special, &case_name, false, "<init>", &init_types, &JType::V);
+            self.return_value(&case_type);
+            let desc = method_desc(&[product.clone()], &case_type);
+            self.end_method(ACC_PUBLIC, "fromProduct", &desc);
+            self.begin_method(false, false, &[(None, product.clone())], object_type.clone(), &[]);
+            self.load(0, &this);
+            self.load(1, &product);
+            self.invoke_desc(Invoke::Virtual, &name, false, "fromProduct", &desc, 1, &case_type);
+            self.return_value(&object_type);
+            self.end_method(ACC_PUBLIC | ACC_BRIDGE | ACC_SYNTHETIC, "fromProduct", &method_desc(&[product], &object_type));
+        }
         // The outer accessor under scalac's name, which scalac's downstream calls, and under
         // teq's (`Worker::outer_accessor` of another module's class), which teq's does.
         let Owner::Class(o) = info.owner else { unreachable!("has_inner_case_companion") };
@@ -685,6 +785,151 @@ impl<'a> Gen<'a> {
             self.return_value(&ty);
             self.end_method(ACC_PUBLIC, &getter, &desc);
         }
+    }
+
+
+    /// `O$K$`, the companion of a case class nested in a class, an object of each instance of the
+    /// class (`has_instance_case_companion`): its enclosing instance in `$outer`, `apply`,
+    /// `unapply`, `toString`, and as a `Mirror.Product` `fromProduct`, each case made with that
+    /// enclosing instance.
+    pub fn emit_instance_companion(&mut self, idx: usize) -> (String, Vec<u8>) {
+        let cx = self.cx;
+        let c = cx.input.prog.classes[idx].id;
+        let Owner::Class(o) = cx.input.syms.class(c).owner else { unreachable!("a nested class") };
+        let interfaces = module_interfaces(cx.has_product_mirror(c).then(|| MIRROR_PRODUCT.to_string()).into_iter().collect(), false);
+        let name: Rc<str> = Rc::from(cx.companion_name(c));
+        self.context = name.to_string();
+        self.cw = ClassWriter::new(ACC_PUBLIC | ACC_FINAL | ACC_SUPER, &name, OBJECT, &interfaces);
+        self.this_name = name.clone();
+        self.this_class = None;
+        self.is_interface = false;
+        self.abstract_class = false;
+        let info = cx.input.syms.class(c);
+        let path = &cx.input.sources[info.file.0 as usize].path;
+        self.cw.source_file(path.rsplit(std::path::is_separator).next().unwrap_or(path));
+        self.line_file = info.file;
+        let this = JType::L(name.clone());
+        let outer_name = self.class_name(o);
+        let outer = JType::L(outer_name.clone());
+        let mut d = String::new();
+        outer.desc(&mut d);
+        self.cw.field(ACC_PRIVATE | ACC_FINAL | ACC_SYNTHETIC, "$outer", &d);
+        self.begin_method(false, false, &[(None, outer.clone())], JType::V, &[]);
+        self.load(0, &this);
+        self.load(1, &outer);
+        self.putfield(&name, "$outer", &outer);
+        self.load(0, &this);
+        self.invoke(Invoke::Special, OBJECT, false, "<init>", &[], &JType::V);
+        self.return_value(&JType::V);
+        self.end_method(ACC_PUBLIC, "<init>", &method_desc(&[outer.clone()], &JType::V));
+
+        let tc = &cx.input.prog.classes[idx];
+        let case_name = self.class_name(c);
+        let case_type = JType::L(case_name.clone());
+        let all: Vec<JType> = tc.ctor_params.iter().map(|&p| self.sym_type(p)).collect();
+        let declared: Vec<(Option<SymId>, JType)> = tc.ctor_params[1..].iter().map(|&p| (Some(p), self.sym_type(p))).collect();
+        let declared_types: Vec<JType> = declared.iter().map(|p| p.1.clone()).collect();
+        self.begin_method(false, false, &declared, case_type.clone(), &[]);
+        self.new_object(&case_name);
+        self.load(0, &this);
+        self.getfield(&name, "$outer", &outer);
+        let mut slot = 1u16;
+        for t in &declared_types {
+            self.load(slot, t);
+            slot += if t.wide() { 2 } else { 1 };
+        }
+        self.invoke(Invoke::Special, &case_name, false, "<init>", &all, &JType::V);
+        self.return_value(&case_type);
+        self.end_method(ACC_PUBLIC, "apply", &method_desc(&declared_types, &case_type));
+
+        let first = cx.input.syms.class(c).info.ctor.first();
+        let repeated = first.and_then(|cl| cl.params.last()).map_or(false, |p| p.repeated);
+        let extractor = if repeated { "unapplySeq" } else { "unapply" };
+        let no_params = first.map_or(true, |cl| cl.params.is_empty());
+        let ret = if no_params { JType::Z } else { case_type.clone() };
+        self.begin_method(false, false, &[(None, case_type.clone())], ret.clone(), &[]);
+        if no_params {
+            self.iconst(1);
+        } else {
+            self.load(1, &case_type);
+        }
+        self.return_value(&ret);
+        self.end_method(ACC_PUBLIC, extractor, &method_desc(&[case_type.clone()], &ret));
+
+        let string = JType::L(Rc::from(STRING));
+        self.begin_method(false, false, &[], string.clone(), &[]);
+        let shown = cx.input.interner.get(cx.input.syms.class(c).name).to_string();
+        self.sconst(&shown);
+        self.return_value(&string);
+        self.end_method(ACC_PUBLIC, "toString", &method_desc(&[], &string));
+
+        if cx.has_product_mirror(c) {
+            let product = JType::L(Rc::from(PRODUCT));
+            let object_type = JType::object();
+            self.begin_method(false, false, &[(None, product.clone())], case_type.clone(), &[]);
+            self.new_object(&case_name);
+            self.load(0, &this);
+            self.getfield(&name, "$outer", &outer);
+            for (i, t) in declared_types.iter().enumerate() {
+                self.load(1, &product);
+                self.iconst(i as i32);
+                self.invoke(Invoke::Interface, PRODUCT, true, "productElement", &[JType::I], &object_type);
+                self.adapt(&object_type, t);
+            }
+            self.invoke(Invoke::Special, &case_name, false, "<init>", &all, &JType::V);
+            self.return_value(&case_type);
+            let desc = method_desc(&[product.clone()], &case_type);
+            self.end_method(ACC_PUBLIC, "fromProduct", &desc);
+            self.begin_method(false, false, &[(None, product.clone())], object_type.clone(), &[]);
+            self.load(0, &this);
+            self.load(1, &product);
+            self.invoke_desc(Invoke::Virtual, &name, false, "fromProduct", &desc, 1, &case_type);
+            self.return_value(&object_type);
+            self.end_method(ACC_PUBLIC | ACC_BRIDGE | ACC_SYNTHETIC, "fromProduct", &method_desc(&[product], &object_type));
+        }
+        self.drain_pending();
+        self.finish_class(&name)
+    }
+
+    /// The enclosing instance's side of `has_instance_case_companion`: the field `K$lzy1` and
+    /// `K()` over it, for each case class nested in the class being written.
+    pub fn instance_case_companion_fields(&mut self, o: ClassId) {
+        for k in self.cx.instance_case_companions(o) {
+            let (field, accessor, ty) = self.instance_companion_slot(k);
+            let mut d = String::new();
+            ty.desc(&mut d);
+            self.cw.field(ACC_PUBLIC | ACC_FINAL, &field, &d);
+            let this = JType::L(self.this_name.clone());
+            self.begin_method(false, false, &[], ty.clone(), &[]);
+            self.load(0, &this);
+            let owner = self.this_name.clone();
+            self.getfield(&owner, &field, &ty);
+            self.return_value(&ty);
+            self.end_method(ACC_PUBLIC | ACC_FINAL, &accessor, &method_desc(&[], &ty));
+        }
+    }
+
+    /// In the constructor of the class being written, after its fields: each instance
+    /// companion made with this instance, eagerly as dotty makes a synthetic module.
+    pub fn init_instance_case_companions(&mut self, o: ClassId) {
+        let this = JType::L(self.this_name.clone());
+        for k in self.cx.instance_case_companions(o) {
+            let (field, _, ty) = self.instance_companion_slot(k);
+            let JType::L(class) = ty.clone() else { continue };
+            self.load(0, &this);
+            self.new_object(&class);
+            self.load(0, &this);
+            self.invoke(Invoke::Special, &class, false, "<init>", &[this.clone()], &JType::V);
+            let owner = self.this_name.clone();
+            self.putfield(&owner, &field, &ty);
+        }
+    }
+
+    /// The field, the accessor and the type of the instance companion of the case class `k`.
+    fn instance_companion_slot(&mut self, k: ClassId) -> (String, String, JType) {
+        let cx = self.cx;
+        let name = encode(cx.input.interner.get(cx.input.syms.class(k).name));
+        (format!("{}$lzy1", name), name, JType::L(Rc::from(cx.companion_name(k))))
     }
 
     /// `Color$` for an enum whose companion has no body, with its statics.
@@ -876,7 +1121,9 @@ impl<'a> Gen<'a> {
         let cx = self.cx;
         let name: Rc<str> = Rc::from(cx.companion_name(c));
         self.context = name.to_string();
-        self.cw = ClassWriter::new(ACC_PUBLIC | ACC_FINAL | ACC_SUPER, &name, OBJECT, interfaces);
+        // The companion of a class a block owns is an object the block owns.
+        let interfaces = module_interfaces(interfaces.to_vec(), cx.input.syms.class(c).owner == Owner::Local);
+        self.cw = ClassWriter::new(ACC_PUBLIC | ACC_FINAL | ACC_SUPER, &name, OBJECT, &interfaces);
         self.this_name = name.clone();
         self.this_class = None;
         self.is_interface = false;
@@ -1115,6 +1362,20 @@ impl<'a> Gen<'a> {
         self.end_method(ACC_PUBLIC | ACC_BRIDGE | ACC_SYNTHETIC, "ordinal", &method_desc(&[object_type], &JType::I));
     }
 
+    /// An enum's value as its companion's own code reads it: a static field, or the field of the
+    /// companion's instance where it is one.
+    fn enum_value_read(&mut self, v: SymId, instance: bool) -> JType {
+        if !instance {
+            return self.static_value(v);
+        }
+        let t = self.sym_type(v);
+        let name = self.field_name(v);
+        self.load_this();
+        let owner = self.this_name.clone();
+        self.getfield(&owner, &name, &t);
+        t
+    }
+
     /// scalac's `fromOrdinal` of an enum's companion, and `values` and `valueOf` where every case
     /// is a value; `object` is the companion being written, whose own definitions win.
     pub fn enum_companion_members(&mut self, e: ClassId, object: ClassId) {
@@ -1123,7 +1384,10 @@ impl<'a> Gen<'a> {
         let written = |name: &str| cx.input.interner.lookup(name).map_or(false, |n| syms.class(object).members.contains_key(&n));
         let enum_type = self.class_type(e);
         let string = JType::L(Rc::from(STRING));
-        let display = syms.scala_full_name(cx.input.interner, e);
+        let display = match cx.input.prog.local_enum_names.iter().find(|&&(x, _)| x == e) {
+            Some((_, name)) => name.clone(),
+            None => syms.scala_full_name(cx.input.interner, e),
+        };
         let values: Vec<(SymId, u32, String)> = syms
             .class(e)
             .children
@@ -1133,7 +1397,9 @@ impl<'a> Gen<'a> {
             .collect();
         let all_values = values.len() == syms.class(e).children.len();
         let object_type = JType::object();
-        if cx.has_enum_fields(e) {
+        // A class's enum's companion is an instance, its values its fields.
+        let instance = cx.instance_enum(e);
+        if cx.has_enum_fields(e) || instance {
             self.enum_mirror_members(e, object);
         }
 
@@ -1176,7 +1442,7 @@ impl<'a> Gen<'a> {
                 self.load(1, &JType::I);
                 self.iconst(*ordinal as i32);
                 self.jump_if(op::IF_ICMPNE, 2, next);
-                let t = self.static_value(*v);
+                let t = self.enum_value_read(*v, instance);
                 self.adapt(&t, &enum_type);
                 self.return_value(&enum_type);
                 self.code.bind(next);
@@ -1214,7 +1480,7 @@ impl<'a> Gen<'a> {
             for (i, (v, _, _)) in values.iter().enumerate() {
                 self.dup();
                 self.iconst(i as i32);
-                let t = self.static_value(*v);
+                let t = self.enum_value_read(*v, instance);
                 self.adapt(&t, &enum_type);
                 self.code.op(op::AASTORE);
                 self.code.popn(3);
@@ -1230,7 +1496,7 @@ impl<'a> Gen<'a> {
                 self.load(1, &string);
                 self.invoke(Invoke::Virtual, STRING, false, "equals", &[JType::object()], &JType::Z);
                 self.jump_if(op::IFEQ, 1, next);
-                let t = self.static_value(*v);
+                let t = self.enum_value_read(*v, instance);
                 self.adapt(&t, &enum_type);
                 self.return_value(&enum_type);
                 self.code.bind(next);
@@ -1724,6 +1990,14 @@ impl<'a> Gen<'a> {
             if self.cw.has_method(&m.name, &m.desc) {
                 continue;
             }
+            // Bound to a local trait's member that takes proxies: its static method with the
+            // ones this class holds (dotty's `ResolveSuper` accessor after `LambdaLift`).
+            if let Some(t) = a.target {
+                if let (Some(proxies), Owner::Class(o)) = (self.member_proxies(t), cx.input.syms.sym(t).owner) {
+                    self.proxied_super_accessor(&m, t, o, &proxies);
+                    continue;
+                }
+            }
             let params: Vec<(Option<SymId>, JType)> = m.params.iter().map(|t| (None, t.clone())).collect();
             self.begin_method(false, false, &params, m.ret.clone(), &[]);
             self.load(0, &this);
@@ -1816,6 +2090,38 @@ impl<'a> Gen<'a> {
         let (ps, ret) = parse_method_desc(&desc);
         self.invoke_desc(Invoke::Special, &owner, interface, &name, &desc, ps.len(), &ret);
         self.adapt(&ret, &m.ret);
+        self.return_value(&m.ret);
+        self.end_method(ACC_PUBLIC | ACC_SYNTHETIC, &m.name, &m.desc);
+    }
+
+    /// The accessor `m` of a `super` call bound to the member `t` of the local trait `o` that takes
+    /// `proxies`: the trait's static `t$` on `this`, the proxies as this class holds them.
+    fn proxied_super_accessor(&mut self, m: &MRef, t: SymId, o: ClassId, proxies: &[SymId]) {
+        let params: Vec<(Option<SymId>, JType)> = m.params.iter().map(|t| (None, t.clone())).collect();
+        self.begin_method(false, false, &params, m.ret.clone(), &[]);
+        let this = JType::L(self.this_name.clone());
+        self.load(0, &this);
+        for &p in proxies {
+            let want = self.anon_capture_type(p);
+            let held = self.load_capture(p);
+            self.adapt(&held, &want);
+        }
+        let tm = self.mref(t);
+        let pm = self.proxied_mref(&tm, proxies);
+        let mut slot = 1u16;
+        for (i, ty) in m.params.iter().enumerate() {
+            self.load(slot, ty);
+            if let Some(to) = tm.params.get(i) {
+                self.adapt(ty, to);
+            }
+            slot += if ty.wide() { 2 } else { 1 };
+        }
+        let owner = self.class_name(o);
+        let mut all = vec![JType::L(owner.clone())];
+        all.extend(pm.params.iter().cloned());
+        let desc = method_desc(&all, &pm.ret);
+        self.invoke_desc(Invoke::Static, &owner, true, &format!("{}$", pm.name), &desc, all.len(), &pm.ret);
+        self.adapt(&pm.ret, &m.ret);
         self.return_value(&m.ret);
         self.end_method(ACC_PUBLIC | ACC_SYNTHETIC, &m.name, &m.desc);
     }

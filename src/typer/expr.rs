@@ -67,7 +67,7 @@ impl<'a> Worker<'a> {
         }
     }
 
-    fn local_object_named(&self, name: Name) -> Option<ClassId> {
+    pub(super) fn local_object_named(&self, name: Name) -> Option<ClassId> {
         let Some(Frame::Locals { names, .. }) = self.env.frames.last() else { return None };
         let s = names.iter().rev().find(|(n, _)| *n == name).map(|&(_, s)| s)?;
         let info = self.syms.sym(s);
@@ -114,8 +114,10 @@ impl<'a> Worker<'a> {
         self.link_local_companion(c, def.name);
     }
 
-    /// A local enum is entered as a top-level one, with its companion and values, and is
-    /// checked not to capture anything, since its values are made once.
+    /// A local enum: a local class, and a local object for its companion, the block's object of
+    /// the name merged with the members the enum makes (its values, its class cases and their
+    /// lookups) or one made for them, whose instance each run of the block makes on its first
+    /// use (`typer::namer::new_local_module`).
     fn enter_local_enum(&mut self, file: FileId, d: ast::DefId) {
         let name = self.cur_ast().def(d).name;
         self.enter_def(file, Owner::Local, d);
@@ -125,7 +127,8 @@ impl<'a> Worker<'a> {
         self.bind_local_class(name, c);
         if let Some(companion) = self.syms.class(c).companion {
             self.anon_envs.insert(companion, env);
-            if let Some(m) = self.syms.class(companion).module_sym {
+            let synthesized = self.syms.class(companion).def.is_none();
+            if let (true, Some(m)) = (synthesized, self.syms.class(companion).local_module) {
                 self.bind_local(name, m);
             }
         }
@@ -206,11 +209,11 @@ impl<'a> Worker<'a> {
         }
     }
 
-    /// The class of the object nested in a class or trait whose instance the lazy val `s` of the
-    /// outer holds, when it is one.
+    /// The class of the object nested in a class or trait whose instance the val `s` of the
+    /// outer holds, when it is one: lazy, or eager for an enum's companion made in a class.
     pub fn inner_object_of_sym(&self, s: SymId) -> Option<ClassId> {
         let info = self.syms.sym(s);
-        if info.mods & mods::LAZY == 0 {
+        if info.kind != SymKind::Val || info.mods & mods::MUTABLE != 0 {
             return None;
         }
         match self.types.get(info.sig.as_ref()?.ret) {
@@ -292,26 +295,25 @@ impl<'a> Worker<'a> {
         self.env.frames.iter().any(|f| matches!(f, Frame::Class(c) if *c == k)).then_some(k)
     }
 
-    fn check_local_enum_captures(&mut self, c: ClassId, first: usize, span: Span) {
-        let captures = self.captured_by(c, first);
-        let Some(&s) = captures.first() else { return };
-        let msg = format!(
-            "a local enum cannot refer to {}: its values are made once; move the enum to the top level or make it a class",
-            self.name_str(self.syms.sym(s).name)
-        );
-        self.error(span, msg);
-    }
-
-    /// A local trait has no constructor to take what it captures, so it is lifted as a
-    /// top-level one and may not refer to the block's values.
-    fn check_local_trait_captures(&mut self, c: ClassId, first: usize, span: Span) {
-        let captures = self.captured_by(c, first);
-        let Some(&s) = captures.first() else { return };
-        let msg = format!(
-            "not supported yet: a local trait referring to {} of its enclosing block; move the trait to the top level",
-            self.name_str(self.syms.sym(s).name)
-        );
-        self.error(span, msg);
+    /// The local enum `e` checked and its captures known: its cases, which pass those to its
+    /// constructor, and its companion `m`, the local object whose instance holds the values,
+    /// made first in its body as dotty's `DesugarEnums.expandSimpleEnumCase` places them, its
+    /// lazy val defined here (`LazyVals.transformLocalDef`).
+    fn finish_local_enum(&mut self, e: ClassId, m: ClassId, out: &mut Vec<TStmt>) {
+        let first = self.prog.exprs.len();
+        let children = self.syms.class(e).children.clone();
+        for &child in &children {
+            // A stored body's enum keeps its cases with it, as its body's nested classes are.
+            self.note_nested_stored_class(e, child);
+            self.check_class(child);
+        }
+        // The companion, its values made first in it (`instance_enum_values`).
+        self.check_class(m);
+        self.finish_local_class(m, first);
+        if let Some(sym) = self.syms.class(m).local_module {
+            let init = self.new_instance(m, ast::ListRef::EMPTY, Span::default());
+            out.push(TStmt::Val(sym, init));
+        }
     }
 
     pub fn value_sig(&mut self, ty: TypeId) -> Arc<MethodSig> {
@@ -1939,6 +1941,9 @@ impl<'a> Worker<'a> {
         if args.len == 0 {
             return;
         }
+        if let TExpr::New(c, _) = self.prog.expr(at) {
+            self.pass_outer_to_defaults(te, c, outer);
+        }
         let mut items = self.prog.expr_list(args).to_vec();
         items[0] = outer;
         let l = self.prog.list(&items);
@@ -2834,6 +2839,20 @@ impl<'a> Worker<'a> {
             }
             _ => self.type_expr(lhs, None),
         };
+        // A `var` of the block written across a trait a class owns: the setter of the proxy the
+        // class of the block holds (`proxies.rs`), in a program that has one.
+        if self.prog.has_block_class_traits() {
+            if let TExpr::CallMethod(recv, g, _) = self.prog.expr(tl) {
+                if let Some(&super::HeldOf::Get(v)) = self.held_proxy_of.get(&g) {
+                    if self.syms.sym(v).kind == SymKind::Var {
+                        let Owner::Class(r) = self.syms.sym(g).owner else { unreachable!("a proxy is a member") };
+                        let ty = self.sig_of(v).ret;
+                        let tr = self.check_expr(rhs, ty);
+                        return (self.held_write(r, v, recv, tr), self.b.t_unit);
+                    }
+                }
+            }
+        }
         // `dynamic.name = v` writes the property.
         if let TExpr::JsSelect(..) = self.prog.expr(tl) {
             let tr = self.check_expr(rhs, ANY);
@@ -3854,6 +3873,7 @@ impl<'a> Worker<'a> {
         let imports_scope = self.env.imports.len();
         let body_imports = self.inline.body_imports.len();
         let import_aliases = self.inline.import_aliases.len();
+        let deferred = self.deferred_classes.len();
         let pending_imports = if self.inline.checking > 0 { self.pending_imports_mark() } else { None };
         self.push_scope();
         self.local_blocks.push(super::resolve::LocalBlock { file, stmts, frame_depth: self.env.frames.len(), imports_scope, next: 0 });
@@ -3922,6 +3942,8 @@ impl<'a> Worker<'a> {
                         self.bind_local_class(def.name, c);
                         self.link_local_companion(c, def.name);
                     }
+                    // The companion of an enum entered before it already.
+                    ast::ClassKind::Object if self.def_classes.get(file.0 as usize, d).is_some() => {}
                     ast::ClassKind::Object => {
                         self.enter_local_object(file, *d);
                         if let Some(&c) = self.def_classes.get(file.0 as usize, d) {
@@ -3932,9 +3954,45 @@ impl<'a> Worker<'a> {
                         }
                     }
                     ast::ClassKind::Enum => {
+                        // An object of the enum's name written after it is its companion, which
+                        // takes the enum's members: entered first.
+                        let later = items.iter().find_map(|t| match t {
+                            Stmt::Def(o) if self.def_classes.get(file.0 as usize, o).is_none()
+                                && matches!(&ast.def(*o).kind, DefKind::Class(k) if k.kind == ast::ClassKind::Object)
+                                && ast.def(*o).name == def.name =>
+                            {
+                                Some(*o)
+                            }
+                            _ => None,
+                        });
+                        if let Some(o) = later {
+                            self.enter_local_object(file, o);
+                            if let Some(&c) = self.def_classes.get(file.0 as usize, &o) {
+                                if stores {
+                                    self.note_stored_class(c);
+                                }
+                            }
+                        }
                         self.enter_local_enum(file, *d);
                         if let Some(&c) = self.def_classes.get(file.0 as usize, d) {
                             let companion = self.syms.class(c).companion;
+                            // A product's inline body's enum is named at each expansion, its
+                            // companion made for it with it.
+                            if !stores {
+                                self.name_retyped_product_class(c);
+                                if let Some(m) = companion.filter(|&m| self.syms.class(m).def.is_none()) {
+                                    let name = self.syms.class(c).name;
+                                    self.syms.class_mut(m).name = name;
+                                }
+                                // Made with the enum where an expansion makes it, its cases too.
+                                if self.syms.class(c).made_at.is_some() {
+                                    let span = self.syms.class(c).span;
+                                    let children = self.syms.class(c).children.clone();
+                                    for k in companion.into_iter().chain(children) {
+                                        self.note_made_at(k, span, false);
+                                    }
+                                }
+                            }
                             classes.extend(std::iter::once(c).chain(companion.filter(|&k| self.syms.class(k).owner == Owner::Local)));
                             if stores {
                                 self.note_stored_class(c);
@@ -4006,6 +4064,9 @@ impl<'a> Worker<'a> {
         if cursor {
             self.inline.blocks.pop();
         }
+        if self.deferred_classes.len() > deferred {
+            self.finish_deferred_classes(deferred, true);
+        }
         self.pop_scope();
         if let Some(b) = self.local_blocks.pop() {
             self.local_alias_sites.retain(|_, &mut (depth, _)| depth != b.frame_depth);
@@ -4021,6 +4082,9 @@ impl<'a> Worker<'a> {
         };
         let l = self.prog.stmts.push_slice(&out);
         let block = self.prog.add(TExpr::Block(l, res));
+        // A call in the block of a local trait's lifted member typed before the trait was
+        // lifted, in a local def or a closure, passes its proxies (`LambdaLift.addFreeArgs`).
+        self.adapt_block_calls(block);
         if !classes.is_empty() && self.capturing() {
             self.capture_block_classes(block, classes);
         }
@@ -4174,6 +4238,8 @@ impl<'a> Worker<'a> {
                     }
                     // A local object is an instance of its lifted class, made once per run of
                     // the block on its first use, as scalac's lazy val holds it.
+                    // A local enum's companion is checked with the enum (`finish_local_enum`).
+                    ast::ClassKind::Object if self.syms.class(c).companion.is_some_and(|e| self.syms.class(e).kind == ClassKind::Enum) => {}
                     ast::ClassKind::Object => {
                         self.check_class(c);
                         self.finish_local_class(c, first);
@@ -4183,15 +4249,21 @@ impl<'a> Worker<'a> {
                         }
                     }
                     ast::ClassKind::Enum => {
-                        if let Some(companion) = self.syms.class(c).companion {
-                            self.anon_envs.insert(companion, env);
+                        let companion = self.syms.class(c).companion;
+                        if let Some(m) = companion {
+                            self.anon_envs.insert(m, env);
                         }
                         self.check_class(c);
-                        self.check_local_enum_captures(c, first, def.span);
+                        self.finish_local_class(c, first);
+                        if let Some(m) = companion {
+                            self.finish_local_enum(c, m, out);
+                        }
                     }
                     ast::ClassKind::Trait => {
                         self.check_class(c);
-                        self.check_local_trait_captures(c, first, def.span);
+                        if !self.deferred_classes.is_empty() {
+                            self.finish_deferred_classes(0, false);
+                        }
                     }
                     _ => {}
                 }

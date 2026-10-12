@@ -569,6 +569,62 @@ impl<'a> Worker<'a> {
         self.hoisted.extend(sorted.into_iter().map(|(_, s)| s));
     }
 
+    /// The applications of the default getters of `of` among the arguments `args`, or the values
+    /// of the temporaries the call's plan lifted them into (`liftedFunType`), made the getters of
+    /// `to` selected on a fresh `recv` each (`DEFAULT_RECEIVER`), where the receiver joins the call
+    /// after its plan: an inner class's enclosing instance (dotty's getter on the creation's
+    /// prefix, `o.C.<init>$default$N`), the class of the block holding a local def.
+    pub(super) fn retarget_defaults(&mut self, args: crate::ast::ListRef, of: DefaultOf, to: DefaultOf, mut recv: impl FnMut(&mut Self) -> TExprId) {
+        for a in self.prog.expr_list(args).to_vec() {
+            let d = match self.prog.expr(a) {
+                TExpr::Local(t) => self.hoisted.iter().rev().find_map(|st| match *st {
+                    TStmt::Val(x, init) if x == t => Some(init),
+                    _ => None,
+                }),
+                _ => Some(a),
+            };
+            let Some(d) = d else { continue };
+            let TExpr::Default(x, at, priors) = self.prog.expr(d) else { continue };
+            if x != of || at & DEFAULT_RECEIVER != 0 {
+                continue;
+            }
+            let mut items = vec![recv(self)];
+            items.extend_from_slice(self.prog.expr_list(priors));
+            let l = self.prog.list(&items);
+            self.prog.exprs[d.idx()] = TExpr::Default(to, at | DEFAULT_RECEIVER, l);
+        }
+    }
+
+    /// The receivers `retarget_defaults` gave the getters of the constructor of `c` in the
+    /// creation `te` (among its arguments, or bound before it in the blocks around it) made
+    /// copies of `outer`: the prefix's value that takes the outer placeholder's place
+    /// (`pass_outer`).
+    pub(super) fn pass_outer_to_defaults(&mut self, te: TExprId, c: ClassId, outer: TExprId) {
+        let mut found = Vec::new();
+        let mut at = te;
+        while let TExpr::Block(stmts, value) = self.prog.expr(at) {
+            for st in self.prog.stmt_list(stmts).to_vec() {
+                if let TStmt::Val(_, init) = st {
+                    found.push(init);
+                }
+            }
+            at = value;
+        }
+        if let TExpr::New(_, args) = self.prog.expr(at) {
+            found.extend_from_slice(self.prog.expr_list(args));
+        }
+        for d in found {
+            let TExpr::Default(DefaultOf::Ctor(x), at, l) = self.prog.expr(d) else { continue };
+            if x != c || at & DEFAULT_RECEIVER == 0 {
+                continue;
+            }
+            let mut items = self.prog.expr_list(l).to_vec();
+            items[0] = self.prior_copy(outer);
+            let l = self.prog.list(&items);
+            self.prog.exprs[d.idx()] = TExpr::Default(DefaultOf::Ctor(x), at, l);
+        }
+    }
+
     /// The application of the default getter of parameter `index` (counted across the
     /// clauses) to the receiver and the arguments of the clauses before it (`spliceMeth`): each
     /// a fresh node, a by-name one a fresh copy of its tree.
@@ -604,7 +660,7 @@ impl<'a> Worker<'a> {
     /// A node of its own for a getter's argument, the call's being the call's: a reference or a
     /// literal made again, any other tree copied with fresh locals (`spliceMeth`'s
     /// `duplicateByNameArg`, a `TreeTypeMap`), so that each definition stands once.
-    fn prior_copy(&mut self, e: TExprId) -> TExprId {
+    pub(super) fn prior_copy(&mut self, e: TExprId) -> TExprId {
         let ty = self.prog.type_of(e);
         let node = match self.prog.expr(e) {
             x @ (TExpr::Local(_) | TExpr::This | TExpr::Module(_) | TExpr::Static(_) | TExpr::Int(_) | TExpr::Long(_) | TExpr::Double(_) | TExpr::Bool(_) | TExpr::Char(_) | TExpr::Str(_) | TExpr::Unit | TExpr::Null) => x,

@@ -112,6 +112,11 @@ pub(super) struct Conv {
     cast_locals: FxMap<Addr, TyExprId>,
     /// The local classes being converted, by address: `$anon.this.T` names their type member `T`.
     local_classes: Vec<Addr>,
+    /// Per class of `local_classes`, its source name and how many blocks enclose it
+    /// (`block_depth`): a member class of a class of a block reaches its enclosing ones by name.
+    local_class_places: Vec<(Name, u32)>,
+    /// How many blocks enclose what is being converted.
+    block_depth: u32,
     /// The module classes of the block's local objects, by address, with the objects' names:
     /// the class is the object's singleton type.
     local_modules: FxMap<Addr, Name>,
@@ -197,6 +202,8 @@ impl Conv {
             local_val_types: FxMap::default(),
             cast_locals: FxMap::default(),
             local_classes: Vec::new(),
+            local_class_places: Vec::new(),
+            block_depth: 0,
             local_modules: FxMap::default(),
             in_inline_pattern: false,
             in_inline_match: false,
@@ -2435,6 +2442,12 @@ impl<'a> Worker<'a> {
         // block binds to that `this` (`conv_block`).
         if let TType::LocalType(addr, _) = class {
             if cv.local_classes.contains(addr) && cv.local_classes.last() != Some(addr) {
+                // From a member class of it, no block between them: `T.this`, as the source wrote.
+                let at = cv.local_classes.iter().rposition(|a| a == addr).expect("an enclosing local class");
+                let (name, depth) = cv.local_class_places[at];
+                if cv.local_class_places.last().map(|&(_, d)| d) == Some(depth) && !self.interner.get(name).starts_with("$anon") {
+                    return cv.expr(Expr::QualThis(name));
+                }
                 let name = match cv.self_vals.iter().find(|&&(a, _)| a == *addr) {
                     Some(&(_, n)) => n,
                     None => {
@@ -4358,12 +4371,16 @@ impl<'a> Worker<'a> {
     /// A block: the local methods that closures of the body are over stay out of it for the
     /// closure to take; a local class becomes the definition its `new` instantiates.
     fn conv_block(&mut self, cv: &mut Conv, stats: &[Stat], expr: &Term) -> ExprId {
-        if !cv.product {
-            return self.conv_block_scoped(cv, stats, expr);
-        }
-        let mark = cv.scope.len();
-        let e = self.conv_block_scoped(cv, stats, expr);
-        cv.scope.truncate(mark);
+        cv.block_depth += 1;
+        let e = if !cv.product {
+            self.conv_block_scoped(cv, stats, expr)
+        } else {
+            let mark = cv.scope.len();
+            let e = self.conv_block_scoped(cv, stats, expr);
+            cv.scope.truncate(mark);
+            e
+        };
+        cv.block_depth -= 1;
         e
     }
 
@@ -4415,14 +4432,36 @@ impl<'a> Worker<'a> {
             }
         }
         self.hold_lambda_defs(cv, stats);
+        // A local enum and its companion, a local object, read as the one enum definition the
+        // source wrote: its cases from the companion, which holds them as dotty's `DesugarEnums`
+        // makes them, the companion's own members an object of its name beside it.
+        let enum_companions: Vec<(Addr, &TClassDef)> = stats
+            .iter()
+            .filter_map(|s| match s {
+                Stat::Class(e) if e.mods.flags.has(tags::ENUM) && !e.mods.flags.has(tags::OBJECT) => {
+                    let name = cv.tasty.source_name(e.name);
+                    stats.iter().find_map(|t| match t {
+                        Stat::Class(m) if m.mods.flags.has(tags::OBJECT) && cv.tasty.source_name(m.name) == name => Some((e.addr, &**m)),
+                        _ => None,
+                    })
+                }
+                _ => None,
+            })
+            .collect();
         for s in stats {
             match s {
                 Stat::Def(sig, Some(_)) if cv.lambda_targets.contains(&sig.addr) => {}
                 // A local object is its class's definition, which holds the instance.
                 Stat::Val(sig, _) if sig.mods.flags.has(tags::OBJECT) => {}
+                // An enum's companion is read with the enum.
+                Stat::Class(cd) if enum_companions.iter().any(|(_, m)| m.addr == cd.addr) => {}
                 Stat::Class(cd) => {
                     let mark = cv.self_vals.len();
-                    let d = self.conv_local_class(cv, cd);
+                    let companion = enum_companions.iter().find(|(e, _)| *e == cd.addr).map(|&(_, m)| m);
+                    let (d, object) = match companion {
+                        Some(m) => self.conv_local_enum(cv, cd, m),
+                        None => (self.conv_local_class(cv, cd), None),
+                    };
                     // The enclosing local class's `this`, which the class just converted
                     // names, as a val of this block for it to capture.
                     let here = cv.local_classes.last().copied();
@@ -4444,6 +4483,9 @@ impl<'a> Worker<'a> {
                     if let Some(d) = d {
                         stmts.push(Stmt::Def(d));
                     }
+                    if let Some(o) = object {
+                        stmts.push(Stmt::Def(o));
+                    }
                 }
                 other => self.conv_stat(cv, other, &mut stmts),
             }
@@ -4455,6 +4497,176 @@ impl<'a> Worker<'a> {
         stmts.push(Stmt::Expr(e));
         let l = push_list(&mut cv.ast.stmts, &stmts);
         cv.expr(Expr::Block(l))
+    }
+
+    /// The local enum `cd` and its companion `m`: the enum's definition with the cases the
+    /// companion holds (a value case a `case` val, a class case a case class), and an object of
+    /// its name for what the companion holds besides, which the source wrote (its synthetic
+    /// members, the lookups and the mirror, are the typer's to make again).
+    fn conv_local_enum(&mut self, cv: &mut Conv, cd: &TClassDef, m: &TClassDef) -> (Option<DefId>, Option<DefId>) {
+        let tasty = cv.tasty.clone();
+        let mut cases = Vec::new();
+        let mut own: Vec<Stat> = Vec::new();
+        // The getters of a class case's defaults, in the companion `Desugar.classDef` makes for
+        // it (`B$`): by the case's name and the parameter's place, read as the default where the
+        // parameter stands, the getter's parameters the case's before it.
+        let mut getters: Vec<(Name, usize, DefSig, Term)> = Vec::new();
+        for s in &m.template.stats {
+            let Stat::Class(k) = s else { continue };
+            if !k.mods.flags.has(tags::OBJECT) || !k.mods.flags.has(tags::SYNTHETIC) {
+                continue;
+            }
+            let module = self.lname(&tasty, tasty.source_name(k.name));
+            let case = self.interner.intern(self.name_str(module).trim_end_matches('$'));
+            for st in &k.template.stats {
+                if let Stat::Def(sig, Some(rhs)) = st {
+                    if let Some((owner, index)) = self.default_getter(cv, sig.name) {
+                        if owner == names::INIT {
+                            getters.push((case, index, sig.clone(), rhs.clone()));
+                        }
+                    }
+                }
+            }
+        }
+        for s in &m.template.stats {
+            match s {
+                Stat::Val(sig, rhs) if sig.mods.flags.has(tags::CASE) && sig.mods.flags.has(tags::ENUM) => {
+                    let name = self.lname(&tasty, tasty.source_name(sig.name));
+                    cv.locals.insert(sig.addr, name);
+                    let parents = rhs.as_ref().map_or(Vec::new(), |r| self.enum_value_parents(cv, r));
+                    cases.push((name, Vec::new(), Vec::new(), parents, sig.addr));
+                }
+                Stat::Class(k) if k.mods.flags.has(tags::CASE) && k.mods.flags.has(tags::ENUM) && !k.mods.flags.has(tags::OBJECT) => {
+                    let name = self.lname(&tasty, tasty.source_name(k.name));
+                    cv.local_types.insert(k.addr, name);
+                    let mut tparams = Vec::with_capacity(k.template.tparams.len());
+                    for p in &k.template.tparams {
+                        let n = self.conv_name(cv, p.name);
+                        cv.local_types.insert(p.addr, n);
+                        let variance = if p.flags.has(tags::COVARIANT) { 1 } else if p.flags.has(tags::CONTRAVARIANT) { -1 } else { 0 };
+                        tparams.push(TypeParam { name: n, span: cv.span, variance, arity: 0, hk_variances: Vec::new(), upper: None, lower: None, context_bounds: Vec::new(), evidence_names: Vec::new(), annots: Vec::new() });
+                    }
+                    let mut fields: Vec<(Name, crate::tasty::tree::Flags)> = Vec::with_capacity(k.template.params.len());
+                    for p in &k.template.params {
+                        let pname = self.conv_name(cv, p.name);
+                        cv.locals.insert(p.addr, pname);
+                        fields.push((pname, p.flags));
+                    }
+                    // The constructor's clauses as written, each parameter with its default.
+                    let ctor_clauses: Vec<Vec<crate::tasty::tree::Param>> = k.template.ctor.iter().flat_map(|(sig, _)| sig.clauses.iter()).filter_map(|c| match c {
+                        Clause::Terms(ps) => Some(ps.clone()),
+                        Clause::Types(_) => None,
+                    }).collect();
+                    let mut clauses = Vec::with_capacity(ctor_clauses.len());
+                    let mut index = 0;
+                    for ps in &ctor_clauses {
+                        let mut params = Vec::with_capacity(ps.len());
+                        for p in ps {
+                            index += 1;
+                            let pname = self.conv_name(cv, p.name);
+                            let ty = self.conv_param_type(cv, &p.ty);
+                            let field = fields.iter().find(|(n, _)| *n == pname).map_or(0, |&(_, f)| mods::FIELD | flag_mods(f) & mods::MUTABLE);
+                            let default = match getters.iter().position(|(c, i, ..)| *c == name && *i == index) {
+                                Some(g) => {
+                                    let (_, _, sig, rhs) = getters[g].clone();
+                                    for clause in &sig.clauses {
+                                        if let Clause::Terms(gps) = clause {
+                                            for gp in gps {
+                                                let n = self.conv_name(cv, gp.name);
+                                                cv.locals.insert(gp.addr, n);
+                                            }
+                                        }
+                                    }
+                                    Some(self.conv_expr(cv, &rhs))
+                                }
+                                None => None,
+                            };
+                            params.push(Param { name: pname, span: cv.span, ty, default, mods: field, annots: ListRef::EMPTY });
+                        }
+                        clauses.push(ParamClause { params, is_using: false, is_implicit: false });
+                    }
+                    if clauses.is_empty() {
+                        clauses.push(ParamClause { params: Vec::new(), is_using: false, is_implicit: false });
+                    }
+                    let parents = self.conv_template_parents(cv, &k.template.parents, false);
+                    let parents = self.enum_case_parents(cv, parents);
+                    cases.push((name, tparams, clauses, parents, k.addr));
+                }
+                // A class case's companion, the lookups, `$new`, the mirror's members: what the
+                // typer makes again; an object the source writes in the companion stays.
+                Stat::Class(k) if k.mods.flags.has(tags::OBJECT) && k.mods.flags.has(tags::SYNTHETIC) => {}
+                Stat::Val(sig, _) | Stat::Def(sig, _) if sig.mods.flags.has(tags::SYNTHETIC) => {}
+                Stat::Type(sig) if sig.mods.flags.has(tags::SYNTHETIC) => {}
+                other => own.push(other.clone()),
+            }
+        }
+        let Some(d) = self.conv_local_class(cv, cd) else { return (None, None) };
+        let mut defs = Vec::with_capacity(cases.len());
+        for (name, tparams, clauses, parents, addr) in cases {
+            let class = ast::ClassDef { kind: ast::ClassKind::EnumCase, tparams, clauses, parents, body: Vec::new(), exports: ListRef::EMPTY, self_type: None, self_alias: crate::names::EMPTY };
+            let case = cv.ast.add_def(Def { name, span: cv.span, mods: mods::CASE | mods::FINAL, annots: Vec::new(), kind: DefKind::Class(Box::new(class)) });
+            cv.def_at.push((case, addr));
+            defs.push(case);
+        }
+        let parents: Vec<Parent> = match &cv.ast.defs[d.idx()].kind {
+            DefKind::Class(cls) => cls.parents.iter().filter(|p| !self.synthetic_enum_parent(cv, p)).cloned().collect(),
+            _ => Vec::new(),
+        };
+        if let DefKind::Class(cls) = &mut cv.ast.defs[d.idx()].kind {
+            cls.kind = ast::ClassKind::Enum;
+            cls.parents = parents;
+            cls.body.extend(defs.into_iter().map(Stmt::Def));
+        }
+        if own.is_empty() {
+            return (Some(d), None);
+        }
+        let mut object = m.clone();
+        object.template.stats = own;
+        object.mods.flags.clear(tags::SYNTHETIC);
+        object.template.parents.retain(|p| !matches!(&p.kind, TermKind::Path(_)));
+        (Some(d), self.conv_local_class(cv, &object))
+    }
+
+    /// The parent a value case of a local enum writes (`case Small extends Planet(k)`), from the
+    /// anonymous class its companion's val makes; none for a value `$new` makes.
+    fn enum_value_parents(&mut self, cv: &mut Conv, rhs: &Term) -> Vec<Parent> {
+        let mut t = rhs;
+        while let TermKind::Typed(inner, ..) = &t.kind {
+            t = inner;
+        }
+        let TermKind::Block(stats, _) = &t.kind else { return Vec::new() };
+        let Some(anon) = stats.iter().find_map(|s| match s {
+            Stat::Class(k) => Some(k),
+            _ => None,
+        }) else {
+            return Vec::new();
+        };
+        let parents = self.conv_template_parents(cv, &anon.template.parents, false);
+        self.enum_case_parents(cv, parents)
+    }
+
+    /// A case's parents as the source writes them: those `DesugarEnums` adds (`EnumValue`,
+    /// `Product`, `Serializable`) left out, and the enum alone left out where it takes no arguments.
+    fn enum_case_parents(&mut self, cv: &mut Conv, parents: Vec<Parent>) -> Vec<Parent> {
+        let kept: Vec<Parent> = parents.into_iter().filter(|p| !self.synthetic_enum_parent(cv, p)).collect();
+        if kept.len() == 1 && kept[0].args.is_empty() {
+            return Vec::new();
+        }
+        kept
+    }
+
+    /// Whether a parent is one dotty's desugaring of an enum adds: `scala.reflect.Enum`,
+    /// `scala.runtime.EnumValue`, `scala.Product`, `java.io.Serializable`, a mirror.
+    fn synthetic_enum_parent(&self, cv: &Conv, p: &Parent) -> bool {
+        let TyExpr::Resolved(t) = cv.ast.tys[p.ty.idx()] else { return false };
+        let Type::Class(k, _) = self.types.get(t) else { return false };
+        let name = self.name_str(self.syms.class(k).name);
+        let pkg = match self.syms.class(k).owner {
+            Owner::Package(q) => self.pkg_description(q),
+            Owner::Class(o) => self.name_str(self.syms.class(o).name).to_string(),
+            Owner::Local => String::new(),
+        };
+        matches!((pkg.as_str(), name.as_str()), ("scala.reflect", "Enum") | ("scala.runtime", "EnumValue") | ("scala", "Product") | ("java.io", "Serializable") | ("Mirror", "Sum") | ("Mirror", "Singleton") | ("Mirror", "Product"))
     }
 
     /// A polymorphic function literal as Scala 3.3 pickles it: a block of one anonymous class
@@ -4577,6 +4789,9 @@ impl<'a> Worker<'a> {
             }
         }
         cv.local_classes.push(cd.addr);
+        let source_name = cv.tasty.source_name(cd.name);
+        let place = (self.lname(&cv.tasty, source_name), cv.block_depth);
+        cv.local_class_places.push(place);
         // A product's local class's parents' calls see its constructor's parameters as plain
         // names in scope, as a class's do (`conv_class_def`).
         let scope_mark = cv.scope.len();
@@ -4638,6 +4853,9 @@ impl<'a> Worker<'a> {
                     body.push(Stmt::Def(d));
                 }
                 Stat::Def(sig, Some(_)) if cv.lambda_targets.contains(&sig.addr) => {}
+                // A trait's super accessor (`super$U$$m`, dotty's `SuperAccessors`), which a
+                // call through `super` reads back as written (`super_accessor_member`).
+                Stat::Def(sig, None) if sig.mods.flags.has(tags::ARTIFACT) && self.super_accessor_member(cv, sig.name).is_some() => {}
                 Stat::Def(sig, rhs) => {
                     let d = self.conv_def(cv, sig, rhs.as_ref(), true);
                     body.push(Stmt::Def(d));
@@ -4656,6 +4874,7 @@ impl<'a> Worker<'a> {
         }
         cv.this_chain.pop();
         cv.local_classes.pop();
+        cv.local_class_places.pop();
         let (kind, class_mods) = if !named {
             (ast::ClassKind::Class, mods::FINAL)
         } else if module {

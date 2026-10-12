@@ -226,6 +226,16 @@ impl ClassInfo {
         }
         name
     }
+
+    /// The name of the class `name` names as the program's own: an upstream pickle's inner
+    /// companion object, whose class has scalac's module class name (`E$`), by the object's
+    /// name, as the program's own class of it has it.
+    pub fn source_name<'a>(&self, name: &'a str) -> &'a str {
+        match name.strip_suffix('$') {
+            Some(stem) if self.inner_object.is_some() && self.companion.is_some() => stem,
+            _ => name,
+        }
+    }
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -730,6 +740,16 @@ impl Symbols {
     /// The tag a name made from a position takes for a definition converted from a product,
     /// the token its producer recorded, and the offset: in the place of the pseudo file's tag
     /// and its line's offset.
+    /// The class whose definition places `c` in the output (its name's position, its order): a
+    /// local enum's companion made without a definition stands at its enum.
+    pub fn placed_class(&self, c: ClassId) -> ClassId {
+        let info = self.class(c);
+        match (info.def, info.local_module, info.companion) {
+            (None, Some(_), Some(e)) => e,
+            _ => c,
+        }
+    }
+
     pub fn product_position(&self, file: FileId, def: Option<crate::ast::DefId>) -> Option<(u64, u32)> {
         self.product_place(file, def).map(|(source, offset)| (self.product_sources[source as usize].1, offset))
     }

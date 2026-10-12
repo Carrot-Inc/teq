@@ -66,6 +66,7 @@ impl Program {
             aside_types,
             template_calls,
             get_class_units,
+            local_enum_names,
             template_syms,
             class_bodies,
             expr_types,
@@ -87,6 +88,8 @@ impl Program {
             spread_bits,
             setter_assign_bits,
             shifts: _,
+            lifted_funs: _,
+            block_class_traits: _,
         } = self;
         exprs.held()
             + pats.held()
@@ -116,6 +119,7 @@ impl Program {
             + array(js_exports)
             + array(template_calls)
             + array(get_class_units)
+            + array(local_enum_names)
             + template_syms.held()
             + class_bodies.held()
             + expr_types.held()

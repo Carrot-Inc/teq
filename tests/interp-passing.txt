@@ -309,9 +309,12 @@ empty_args_ext_apply
 empty_args_given_apply
 empty_failures
 end_markers
+enum_case_defaults
 enum_cases
 enum_category
 enum_extends_class
+enum_from_ordinal_mixed
+enum_from_ordinal_receiver
 enum_gadt
 enum_lookups
 enum_mixed_from_ordinal
@@ -784,7 +787,11 @@ local_alias_after_path
 local_alias_path
 local_case_classes
 local_class_capture_body
+local_class_trait_capture
+local_class_trait_reads
 local_classes
+local_enum_lifetime
+local_enum_shapes
 local_enums
 local_extensions
 local_given_conversion
@@ -794,6 +801,11 @@ local_imports_members
 local_lazy_forward
 local_object_import
 local_objects
+local_trait_captures
+local_trait_dispatch
+local_trait_inline
+local_trait_override
+local_trait_shapes
 local_traits
 local_type_aliases
 locale_display_names
@@ -935,6 +947,7 @@ mirror_refined_alias
 mirror_unchecked_members
 mkstring
 module_init
+module_serializable
 multi
 murmurhash3
 mutable_map_overloads
@@ -965,6 +978,7 @@ nested_class_prefix_types
 nested_classes
 nested_companion_lib
 nested_object_given_receivers
+nested_enum_lifetime
 nested_object_path_patterns
 nested_object_singleton
 nested_objects
@@ -1037,6 +1051,7 @@ overload_tupled_most_specific
 overload_type_arg_count
 overload_vals
 overloads_by_using_clause
+override_access_local_owner
 override_enclosing_type_member
 override_inferred
 override_nullary_any
@@ -1619,3 +1634,4 @@ zip_digest
 zip_entry_times
 zip_stream_incremental
 zip_time_precision
+enum_nested_tuple_match

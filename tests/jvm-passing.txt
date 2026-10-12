@@ -309,9 +309,11 @@ empty_args_ext_apply
 empty_args_given_apply
 empty_failures
 end_markers
+enum_case_defaults
 enum_cases
 enum_category
 enum_extends_class
+enum_from_ordinal_mixed
 enum_gadt
 enum_mixed_from_ordinal
 enum_lookups
@@ -772,6 +774,8 @@ local_alias_path
 local_case_classes
 local_class_capture_body
 local_classes
+local_enum_lifetime
+local_enum_shapes
 local_enums
 local_extensions
 local_given_conversion
@@ -781,6 +785,10 @@ local_imports_members
 local_lazy_forward
 local_object_import
 local_objects
+local_trait_captures
+local_trait_inline
+local_trait_override
+local_trait_shapes
 local_traits
 local_type_aliases
 locale_display_names
@@ -948,6 +956,7 @@ nested_class_prefix_types
 nested_classes
 nested_companion_lib
 nested_object_given_receivers
+nested_enum_lifetime
 nested_object_path_patterns
 nested_object_singleton
 nested_objects
@@ -1580,6 +1589,7 @@ wildcard_param_bound
 wildcard_param_bound_generic
 wildcard_pattern_binders
 yield_left_of_for
+local_trait_dispatch
 zip_digest
 zip_entry_times
 zip_time_precision
@@ -1598,3 +1608,9 @@ case_class_equals_alias
 case_class_generic_bridge
 applied_param_reference
 open_iterator_map
+override_access_local_owner
+enum_from_ordinal_receiver
+local_class_trait_capture
+module_serializable
+local_class_trait_reads
+enum_nested_tuple_match

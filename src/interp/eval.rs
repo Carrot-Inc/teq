@@ -165,10 +165,19 @@ impl<'a, 't> Interp<'a, 't> {
             }
             TExpr::CallMethod(r, s, args) => {
                 if let TExpr::Super(target) = self.prog().expr(r) {
+                    if let SuperTarget::Class(c) = target {
+                        return self.call_super_class(c, s, args, fr, cx);
+                    }
                     let args = self.eval_args(Some(s), args, fr, cx)?;
                     return self.call_super(target, s, args, cx);
                 }
                 let recv = self.eval(r, fr, cx)?;
+                // Only in a program with a lifted member (`Program::lifted_funs`), on an instance.
+                if self.prog().has_lifted_funs() && matches!(recv, Value::Obj(_)) {
+                    if let Some(k) = self.lifted_arity(s, args) {
+                        return self.invoke_lifted(recv, s, k, args, fr, cx);
+                    }
+                }
                 let args = self.eval_args(Some(s), args, fr, cx)?;
                 self.invoke_at(e, recv, s, args)
             }
@@ -500,7 +509,12 @@ impl<'a, 't> Interp<'a, 't> {
                     let name = self.class_path(c);
                     return self.unsupported(format!("{} has no default for its parameter {}", name, index + 1));
                 };
-                let bound: Vec<(SymId, Value)> = params[captures..].iter().copied().zip(vals).collect();
+                let mut bound: Vec<(SymId, Value)> = params[captures..].iter().copied().zip(vals).collect();
+                // The enclosing instance the creation passes, the getter's receiver, for the
+                // capture that stands for it (`Worker::retarget_defaults`).
+                if let (Some(r), true) = (recv, captures > 0) {
+                    bound.push((params[0], r));
+                }
                 let by_name = self.syms().class(c).ctor.iter().flat_map(|cl| cl.params.iter()).nth(index).is_some_and(|p| p.by_name);
                 return self.eval_default(d, by_name, bound, Some(fr.clone()), cx.this.clone(), cx.class);
             }
@@ -710,6 +724,22 @@ impl<'a, 't> Interp<'a, 't> {
                     };
                     if let Some(key) = key {
                         let v = self.read_slot(&cx.this, key);
+                        // A captured lazy val is held unforced: its first read anywhere runs it
+                        // where it is defined (`init_lazy_local`).
+                        if let Value::Fun(c) = &v {
+                            if let ClosureKind::Lazy(init) = &c.kind {
+                                let (init, c) = (*init, c.clone());
+                                let env = c.env.clone();
+                                // The thunk of a local object's val read in its own body stands
+                                // for `this`, which no scope holds.
+                                let value = match self.lookup(e, s, &env) {
+                                    Some(_) => self.init_lazy_local(e, s, init, c, &env)?,
+                                    None => self.apply_value(Value::Fun(c), Vec::new())?,
+                                };
+                                self.write_slot(&cx.this, key, value.clone());
+                                return Ok(value);
+                            }
+                        }
                         if !matches!(v, Value::Absent) {
                             return Ok(v);
                         }
@@ -1091,10 +1121,16 @@ impl<'a, 't> Interp<'a, 't> {
         let n = self.prog().funs[f.idx()].params.len();
         self.prof_alloc(|a| a.frames += 1);
         let frame = self.take_frame(parent, n);
+        // A local trait's member reads a proxy its caller passes as absent where the caller reads
+        // it (`call_super_proxied`).
+        let proxies = self.prog().funs[f.idx()].captures as usize;
         let mut given = args.drain(..);
         for i in 0..n {
             let p = self.prog().funs[f.idx()].params[i];
             let mut v = given.next().unwrap_or(Value::Absent);
+            if i < proxies && matches!(v, Value::Absent) {
+                continue;
+            }
             if let Value::Absent = v {
                 v = match self.prog().funs[f.idx()].defaults[i] {
                     Some(d) => self.eval(d, &frame, cx)?,
@@ -1250,9 +1286,104 @@ impl<'a, 't> Interp<'a, 't> {
         None
     }
 
-    fn call_super(&mut self, target: SuperTarget, s: SymId, args: Vec<Value>, cx: &Ctx) -> R {
+    /// `super[C].s(args)`: the definition of `C`. A member of a local trait called with its
+    /// proxies, each the proxy itself as the caller reads it (`typer::proxies`), runs in a scope
+    /// below the caller's, where it reads the values of the block, a `var` in its own place, as
+    /// the caller reads them.
+    fn call_super_class(&mut self, c: ClassId, s: SymId, args: ListRef, fr: &Rc<Frame>, cx: &Ctx) -> R {
+        let name = self.syms().dispatch_name(s);
+        let member = match self.own_member(c, name) {
+            Member::Missing => self.member(c, name),
+            m => m,
+        };
+        if let Member::Fun(f, owner) = member {
+            let prog = self.prog();
+            let fun = &prog.funs[f.idx()];
+            let k = fun.captures as usize;
+            let passed = k > 0
+                && args.len as usize >= k
+                && (0..k).all(|i| matches!(prog.expr(prog.expr_lists[args.start as usize + i]), TExpr::Local(p) if p == fun.params[i]));
+            if passed {
+                let rest = ListRef { start: args.start + k as u32, len: args.len - k as u32 };
+                let rest = self.eval_args(Some(s), rest, fr, cx)?;
+                let mut all = Vec::with_capacity(k + rest.len());
+                all.resize(k, Value::Absent);
+                all.extend(rest);
+                return self.call_fun(f, cx.this.clone(), all, Some(fr.clone()), Some(owner));
+            }
+        }
+        let args = self.eval_args(Some(s), args, fr, cx)?;
+        self.invoke_member(cx.this.clone(), member, name, args)
+    }
+
+    /// How many proxies a call of `s` with `args` passes to its lifted method, when `s` is a local
+    /// trait's lifted member called so (`TFun::lifted`).
+    fn lifted_arity(&self, s: SymId, args: ListRef) -> Option<u32> {
+        // Only a member of a trait a body owns, or such a trait does, is lifted
+        // (`Dependencies.isLocal`): any other call is told apart by its owner, before its function.
+        let Owner::Class(t) = self.syms().sym(s).owner else { return None };
+        if !self.body_trait(t) {
+            return None;
+        }
+        let &f = self.typer.fun_of_sym.get(&s)?;
+        let fun = &self.prog().funs[f.idx()];
+        (fun.captures > 0 && fun.params.len() == args.len as usize).then_some(fun.captures)
+    }
+
+    /// Whether `t` is a trait owned by a body, or by such a trait (`Worker::dotty_local_trait`).
+    fn body_trait(&self, t: ClassId) -> bool {
+        let info = self.syms().class(t);
+        info.kind == ClassKind::Trait
+            && match info.owner {
+                Owner::Local => true,
+                Owner::Class(o) => self.body_trait(o),
+                Owner::Package(_) => false,
+            }
+    }
+
+    /// A call of a local trait's lifted member: the lifted method of its name and proxies that the
+    /// instance's class runs, which a class's member of the source signature does not override
+    /// (dotty's `LambdaLift` after `Mixin`). A proxy that is the caller's own local is read where
+    /// the method runs, in the instance's scope, a `var` in its one place.
+    fn invoke_lifted(&mut self, recv: Value, s: SymId, k: u32, args: ListRef, fr: &Rc<Frame>, cx: &Ctx) -> R {
+        let own = self.typer.fun_of_sym.get(&s).copied();
+        let (class, env) = match &recv {
+            Value::Obj(o) => (Some(o.class), o.env.clone()),
+            _ => (None, None),
+        };
+        let name = self.syms().dispatch_name(s);
+        let target = match class {
+            Some(c) => self.lifted_method(c, name, k),
+            None => None,
+        }
+        .or_else(|| own.map(|f| (f, self.syms().sym(s).owner)));
+        // A proxy the method runs with is the caller's value, bound to the method's own proxy (the
+        // descriptors agreeing, not the values: dotty passes the caller's to an override that
+        // reads another); the caller's own `var` where it is the method's, read in its one place.
+        let mut values: Vec<Value> = Vec::with_capacity(args.len as usize);
+        let items: Vec<TExprId> = self.prog().expr_list(args).to_vec();
+        for (i, &a) in items.iter().take(k as usize).enumerate() {
+            let same = {
+                let prog = self.prog();
+                target.is_some_and(|(f, _)| matches!(prog.expr(a), TExpr::Local(p) if p == prog.funs[f.idx()].params[i] && self.syms().sym(p).kind == SymKind::Var))
+            };
+            values.push(if same { Value::Absent } else { self.eval(a, fr, cx)? });
+        }
+        // The member's own arguments, a default's placeholder among them.
+        let rest = ListRef { start: args.start + k, len: args.len - k };
+        values.extend(self.eval_args(Some(s), rest, fr, cx)?);
+        match target {
+            Some((f, Owner::Class(owner))) if class.is_some() => self.call_fun(f, recv, values, env, Some(owner)),
+            _ => self.invoke(recv, s, values),
+        }
+    }
+
+    fn call_super(&mut self, target: SuperTarget, s: SymId, mut args: Vec<Value>, cx: &Ctx) -> R {
         let name = self.syms().dispatch_name(s);
         let this = cx.this.clone();
+        // An accessor bound to a local trait's member that takes proxies passes them as read in
+        // the instance's scope.
+        let mut lead = 0usize;
         let member = match target {
             SuperTarget::Chain => {
                 let Some(c) = cx.class else { return self.unsupported("a super call outside a class") };
@@ -1282,6 +1413,7 @@ impl<'a, 't> Interp<'a, 't> {
                 match found {
                     Some(Some(t)) => {
                         let Owner::Class(owner) = self.syms().sym(t).owner else { return self.unsupported("a super accessor to a non-member") };
+                        lead = self.typer.fun_of_sym.get(&t).map_or(0, |&f| self.prog().funs[f.idx()].captures as usize);
                         let n = self.syms().dispatch_name(t);
                         match self.own_member(owner, n) {
                             Member::Missing => self.member(owner, n),
@@ -1292,6 +1424,9 @@ impl<'a, 't> Interp<'a, 't> {
                 }
             }
         };
+        if lead > 0 && args.len() < lead + self.syms().sym(s).sig.as_ref().map_or(0, |sig| sig.clauses.iter().map(|c| c.params.len()).sum()) {
+            args.splice(0..0, std::iter::repeat_with(|| Value::Absent).take(lead));
+        }
         self.invoke_member(this, member, name, args)
     }
 
@@ -1935,7 +2070,7 @@ impl<'a, 't> Interp<'a, 't> {
     /// Whether the value is an instance of the class or trait `c`.
     pub(super) fn is_instance(&mut self, v: &Value, c: ClassId) -> bool {
         match v {
-            Value::Obj(o) => self.is_subclass(o.class, c) || self.clause_is_instance(v, c),
+            Value::Obj(o) => self.is_subclass(o.class, c) || self.clause_is_instance(v, c) || self.serializable_module(o.class, c),
             Value::Fun(f) => {
                 let info = self.syms().class(c);
                 let name = self.name(info.name);
@@ -1987,6 +2122,17 @@ impl<'a, 't> Interp<'a, 't> {
         let Owner::Package(p) = info.owner else { return 0 };
         let pkg = self.package_path(p);
         crate::tir::boxed::ancestor(pkg.strip_suffix('.').unwrap_or(&pkg), self.name(info.name))
+    }
+
+    /// Whether `c` is `java.io.Serializable` and `k` a module class, which the JVM's class gives it
+    /// (dotty's `BCodeSkelBuilder`): an object of a class or package, a companion, not an object a
+    /// block owns, whose class `LambdaLift` makes no module class.
+    fn serializable_module(&self, k: ClassId, c: ClassId) -> bool {
+        let info = self.syms().class(k);
+        (info.kind == ClassKind::Object || info.inner_object.is_some())
+            && info.owner != Owner::Local
+            && self.syms().is_synthetic_parent(&self.typer.interner, c)
+            && self.name(self.syms().class(c).name) == "Serializable"
     }
 
     pub(super) fn is_subclass(&self, k: ClassId, c: ClassId) -> bool {

@@ -64,6 +64,15 @@
 #            3.8.4, each over the ones before it, and the others by teq in the product mode over
 #            those: teq types a downstream against scalac's pickles and writes its own; with
 #            run.txt the last module's classes run with java over the others': run.txt.
+#   over-scalac-js  (a case with over-scalac-js.txt besides) the last module built by teq for
+#            JavaScript, one file and split, and run in the interpreter, over the upstream
+#            modules scalac built: their bodies read from scalac's pickles; each prints run.txt.
+#   scalac-client  (a case with client/ and client.txt) scalac 3.8.4 compiles client/ over
+#            every module's products, teq's (their views; `scalac-client-teq`), and over the
+#            modules scalac built in the over-scalac leg (`scalac-client-scalac`, a case with
+#            over-scalac.txt), and its classes run with java over those class files: client.txt
+#            each time. A client may use what teq's own downstream builds cannot type, as a
+#            module scalac compiles does.
 # Every case is checked by:
 #   keys     the keys and tokens every product records are the whole build's, and no token is
 #            two keys' (else its bundle leg is deferred as ineligible);
@@ -108,6 +117,8 @@ have_scalac=1
 command -v scala-cli > /dev/null 2>&1 || have_scalac=0
 have_java=1
 command -v java > /dev/null 2>&1 || have_java=0
+have_node=1
+command -v node > /dev/null 2>&1 || have_node=0
 
 is_known() { [ -f "$known" ] && grep -q "^$1 $2 " "$known"; }
 is_deferred() { [ -f "$deferred" ] && grep -q "^$1 $2 " "$deferred"; }
@@ -768,6 +779,64 @@ PY
       [ "$got" = "$(cat "$dir/run.txt")" ] || { ok=0; detail="$main printed: $got"$'\n'"expected: $(cat "$dir/run.txt")"; }
     fi
     result "$name" over-scalac $ok "$detail"
+    if [ $ok = 1 ] && [ -f "$dir/over-scalac-js.txt" ] && [ -f "$dir/run.txt" ] && [ $have_node = 1 ]; then
+      jok=1
+      jdetail=""
+      last=${mods[${#mods[@]}-1]}
+      up=""
+      for m in "${mods[@]}"; do [ "$m" = "$last" ] || up=${up:+$up:}$out/$name/over-$m; done
+      jsrcs=()
+      while IFS= read -r f; do jsrcs+=("$f"); done < <(sources "$dir/$last")
+      want=$(cat "$dir/run.txt")
+      if "$teq" compiler build --sourceroot "$(sroot "$last")" --classpath "$up" "${jsrcs[@]}" -o "$out/$name/over-js.js" > "$out/$name.over-js.log" 2>&1; then
+        got=$(timeout 60 node "$out/$name/over-js.js" 2>&1)
+        [ "$got" = "$want" ] || { jok=0; jdetail="${jdetail}js: $got"$'\n'; }
+      else
+        jok=0; jdetail="${jdetail}js build: $(head -20 "$out/$name.over-js.log")"$'\n'
+      fi
+      if "$teq" compiler build --sourceroot "$(sroot "$last")" --classpath "$up" "${jsrcs[@]}" --split "$out/$name/over-split" > "$out/$name.over-split.log" 2>&1; then
+        got=$(timeout 60 node "$out/$name/over-split/main.mjs" 2>&1)
+        [ "$got" = "$want" ] || { jok=0; jdetail="${jdetail}split: $got"$'\n'; }
+      else
+        jok=0; jdetail="${jdetail}split build: $(head -20 "$out/$name.over-split.log")"$'\n'
+      fi
+      got=$(timeout 120 "$teq" interp --classpath "$up" "${jsrcs[@]}" 2>&1)
+      [ "$got" = "$want" ] || { jok=0; jdetail="${jdetail}interp: $got"$'\n'; }
+      [ $jok = 1 ] || jdetail="$jdetail""expected: $want"
+      result "$name" over-scalac-js $jok "$jdetail"
+    fi
+  fi
+  # scalac-client: scalac's client over teq's products and over scalac's.
+  if [ -d "$dir/client" ] && [ -f "$dir/client.txt" ] && [ ! -f "$expect" ] && [ $have_java = 1 ]; then
+    csrcs=()
+    while IFS= read -r f; do csrcs+=("$root/$f"); done < <(sources "$dir/client")
+    want=$(cat "$dir/client.txt")
+    main=$(main_class "${csrcs[@]}")
+    for side in teq scalac; do
+      [ $side = scalac ] && [ ! -f "$dir/over-scalac.txt" ] && continue
+      ok=1
+      detail=""
+      ccp=""
+      rcp=""
+      for m in "${mods[@]}"; do
+        if [ $side = teq ]; then
+          ccp=${ccp:+$ccp:}$out/$name/view-$m
+          rcp=${rcp:+$rcp:}$out/$name/$m
+        elif grep -qx "$m" "$dir/over-scalac.txt"; then
+          [ -d "$out/$name/over-$m" ] || { ok=0; detail="no over-scalac products of $m"; }
+          ccp=${ccp:+$ccp:}$out/$name/over-$m
+          rcp=$ccp
+        fi
+      done
+      if [ $ok = 1 ]; then
+        log=$(scalac "$ccp:$SL" "$out/$name/client-$side" "${csrcs[@]}") || { ok=0; detail="client by scalac: $log"; }
+      fi
+      if [ $ok = 1 ]; then
+        got=$(timeout 60 java -cp "$out/$name/client-$side:$rcp:$SL" "$main" 2>&1)
+        [ "$got" = "$want" ] || { ok=0; detail="$main printed: $got"$'\n'"expected: $want"; }
+      fi
+      result "$name" "scalac-client-$side" $ok "$detail"
+    done
   fi
   # And against the lean check build's pickles where they are not the scala-library build's.
   [ -n "$lean_differs" ] || continue

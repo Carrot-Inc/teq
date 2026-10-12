@@ -1617,6 +1617,8 @@ pub(super) fn untyped_tables<'w>(w: &'w mut Worker, mode: TablesMode) -> Vec<Tab
     let (class_imports, anon_envs, anon_captures, anon_parent_args, inferred_parent_args) = (&mut w.class_imports.local, &mut w.anon_envs, &mut w.anon_captures, &mut w.anon_parent_args, &mut w.inferred_parent_args.local);
     let inferred_trait_args = &mut w.inferred_trait_args.local;
     let (local_news, outer_this, sam_classes, sam_arity, entry_points) = (&mut w.local_news, &mut w.outer_this.local, &mut w.sam_classes, &mut w.sam_arity, &mut w.entry_points);
+    let (lifted_members, lifted_lazy, accessor_captures) = (&mut w.lifted_members, &mut w.lifted_lazy, &mut w.accessor_captures);
+    let (held_proxies, held_proxy_of) = (&mut w.held_proxies, &mut w.held_proxy_of);
     tasks.push(Box::new(move |m| {
         map(m, class_imports, |r, c| r.class(c), |r, imports| {
             if imports.iter().any(|(_, i)| records::env_moves(r, &Env { file: FileId(0), frames: Vec::new(), imports: vec![*i] })) {
@@ -1634,6 +1636,17 @@ pub(super) fn untyped_tables<'w>(w: &'w mut Worker, mode: TablesMode) -> Vec<Tab
             }
         });
         map(m, anon_captures, |r, c| r.class(c), |r, syms| syms_in(r, syms));
+        map(m, lifted_members, |r, s| r.sym(s), |r, syms| syms_in(r, syms));
+        map(m, lifted_lazy, |r, s| r.sym(s), |r, s| *s = r.sym(*s));
+        map(m, accessor_captures, |r, c| r.class(c), |r, syms| syms_in(r, syms));
+        let held = |r: &dyn Mapping, of: super::HeldOf| match of {
+            super::HeldOf::Get(s) => super::HeldOf::Get(r.sym(s)),
+            super::HeldOf::Set(s) => super::HeldOf::Set(r.sym(s)),
+            super::HeldOf::Call(s) => super::HeldOf::Call(r.sym(s)),
+            super::HeldOf::New(c) => super::HeldOf::New(r.class(c)),
+        };
+        map(m, held_proxies, |r, (c, of)| (r.class(c), held(r, of)), |r, s| *s = r.sym(*s));
+        map(m, held_proxy_of, |r, s| r.sym(s), |r, of| *of = held(r, *of));
         map(m, anon_parent_args, |r, c| r.class(c), |r, pc| records::parent_call(r, pc));
         map(m, inferred_parent_args, |r, c| r.class(c), |r, pc| records::parent_call(r, pc));
         map(m, inferred_trait_args, |r, c| r.class(c), |r, calls| {
@@ -2040,6 +2053,11 @@ impl<'a> Worker<'a> {
         }
         union(&mut self.anon_envs, &mut o.anon_envs);
         union(&mut self.anon_captures, &mut o.anon_captures);
+        union(&mut self.lifted_members, &mut o.lifted_members);
+        union(&mut self.lifted_lazy, &mut o.lifted_lazy);
+        union(&mut self.accessor_captures, &mut o.accessor_captures);
+        union(&mut self.held_proxies, &mut o.held_proxies);
+        union(&mut self.held_proxy_of, &mut o.held_proxy_of);
         union(&mut self.anon_parent_args, &mut o.anon_parent_args);
         self.inferred_parent_args.absorb(o.inferred_parent_args.take_local());
         self.inferred_trait_args.absorb(o.inferred_trait_args.take_local());
@@ -2146,6 +2164,11 @@ impl<'a> Worker<'a> {
         for unit in std::mem::take(&mut o.prog.get_class_units) {
             if !self.prog.get_class_units.contains(&unit) {
                 self.prog.get_class_units.push(unit);
+            }
+        }
+        for (e, name) in std::mem::take(&mut o.prog.local_enum_names) {
+            if !self.prog.local_enum_names.iter().any(|&(x, _)| x == e) {
+                self.prog.local_enum_names.push((e, name));
             }
         }
         if self.prog.main.is_none() {

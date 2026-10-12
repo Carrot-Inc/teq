@@ -4,6 +4,9 @@ enumorder classes  the same as downstreammirror: the downstream's `summon[Mirror
 ledgerlocalclass classes  the class an expansion of the product's inline body makes carries the pseudo file's SourceFile and line numbers (`a!lla.Lib$package`, line 6), the whole build's Lib.scala's: the JVM product mode's follow-up
 inlinebodies classes  the same as ledgerlocalclass: the classes the two expansions of the upstream's inline body make carry the pseudo file's SourceFile and line numbers (`a!iba.Bodies`, line 4), the whole build's Bodies.scala's (line 13)
 macroquote classes  the same as ledgerlocalclass: a quote's copy of the upstream's anonymous class, made at the downstream's site, carries the pseudo file's SourceFile and line numbers (`a!mqa.Mac`, line 12), the whole build's Mac.scala's (line 26)
+localenum classes  the same as ledgerlocalclass: the copy of the upstream inline body's local enum, its companion and its cases, made at the downstream's site, carries the pseudo file's SourceFile (`a!lea.Lib`), the whole build's Lib.scala
+localtrait classes  the same as ledgerlocalclass: the copies of the upstream inline body's local trait and class, made at the downstream's site, carry the pseudo file's SourceFile and line numbers (`a!lta.Lib`, line 4), the whole build's Lib.scala's (line 26)
+inlinelocalclass classes  the same as ledgerlocalclass: each expansion's copy of the upstream inline body's local class carries the pseudo file's SourceFile and line numbers (`a!ilca.API`), the whole build's Lib.scala's
 macrotransparent classes  the same as macroquote: the copies the middle module's expansions hold carry `a!mta.T`, line 5, the whole build's T.scala, line 15
 macroderive classes  the same as macroquote: the quote's copies made at the downstream's site carry the pseudo file's SourceFile and line numbers (`a!idlib.Macros`)
 macroderive check  the Scala.js check build over scala-library takes the lean std's IArray, whose `toList` and `lift` scala-library has through `IArray.genericWrapArray`'s ArraySeq: the check build withholds `Enumerated.valueList` and `fromOrdinal`, which the JVM build writes (the std's shapes, among the export's blockers)
@@ -22,6 +25,9 @@ enumorder subset  the same as classes
 inlinejdkctor subset  the same as classes
 ledgerlocalclass subset  the same as classes
 inlinebodies subset  the same as classes
+localenum subset  the same as classes
+localtrait subset  the same as classes
+inlinelocalclass subset  the same as classes
 macroderive subset  the same as classes, and its run stops as jvm-run does
 macroquote subset  the same as classes; `a` compiled alone also leaves out the quote's local class `mqa/Box$1ebb5g8_1479`, which the whole build writes in `a`'s products because `b`'s expansion reaches it
 macrotransparent subset  the same as classes
@@ -81,3 +87,4 @@ productshapes bundle  a case class nested in a class, read from the upstream's p
 nestedcompanion bundle  the same as productshapes bundle: the upstream's companion object of a case class nested in a class (`O$C$`, which `o.C(1)(2)` is applied through over the products), whose getter the split JavaScript build emits on the outer class and the whole build, whose source case class has no companion object, does not; master gives the same for any such class: the loader's inner companion objects, their own line
 privatealias bundle  the same as productshapes bundle: the upstream's companion object of the case class nested in the trait (`Scope$Cmd$`), whose getter the split JavaScript build emits on the trait and the whole build, whose source case class has no companion object, does not: the loader's inner companion objects, their own line
 reabstractoverload readtasty-b  teq's pickle writes `o.toString` of a name overloaded beside `toString(n: Int)` as the selection of the `()` method without its application, which scalac's reader refuses as an invalid prefix (`(): String . ==`); master the same, where every target also ran the reabstracted body (the review's `reviewreabstract` readtasty failure): the pickle's overloaded selections, their own line
+nestedcase readtasty-b  teq's pickle of `k match { case o.K(x, y) => .. }` selects the extractor of a case class nested in a class on `O.this.K` (the writer's `companion_path`, `member_by_name`), where scalac's selects it on the scrutinee's prefix, `o.K`: teq's class types carry no prefix (`feat/nested-prefix`), master's binary writing the same tree; the run over the pickle (scalac-run, over-scalac) reaches `o.K()` and `unapply` as scalac's does

@@ -145,6 +145,43 @@ enum Binop {
 pub(super) const NUMERIC_CONVERSIONS: &[&str] = &["toByte", "toShort", "toChar", "toInt", "toLong", "toFloat", "toDouble"];
 
 impl<'a> Worker<'a> {
+    /// The name the enum `e`'s lookups give it in their messages, dotty's `enumClass.fullName`:
+    /// a local enum's under the class whose body defines it, `_$` before its name
+    /// (`fullNameSeparated`), a top-level body's class being its file's `$package` object.
+    fn enum_full_name(&mut self, e: ClassId) -> String {
+        if self.syms.class(e).owner != Owner::Local {
+            return self.syms.scala_full_name(self.interner, e);
+        }
+        let name = self.name_str(self.syms.class(e).name);
+        let frames = self.anon_envs.get(&e).map(|env| env.frames.clone()).unwrap_or_default();
+        let enclosing = frames.iter().rev().find_map(|f| match f {
+            super::Frame::Class(k) if self.syms.class(*k).owner != Owner::Local => Some(*k),
+            _ => None,
+        });
+        let local = match enclosing {
+            Some(k) => self.library_class_name(k, ""),
+            None => {
+                let file = self.syms.class(e).file;
+                let stem = crate::tasty::write::file_stem(&self.source(file).path);
+                let top: Vec<crate::ast::DefId> = self.ast(file).top_level.to_vec();
+                let pkg = top.iter().find_map(|d| match self.def_syms.get(file.0 as usize, d).map(|&s| self.syms.sym(s).owner) {
+                    Some(Owner::Package(p)) => Some(p),
+                    _ => self.def_classes.get(file.0 as usize, d).and_then(|&c| match self.syms.class(c).owner {
+                        Owner::Package(p) => Some(p),
+                        _ => None,
+                    }),
+                });
+                let path = pkg.map(|p| self.pkg_path(p)).unwrap_or_default();
+                if path.is_empty() { format!("{}$package$", stem) } else { format!("{}.{}$package$", path, stem) }
+            }
+        };
+        let full = format!("{}._${}", local, name);
+        if !self.prog.local_enum_names.iter().any(|&(x, _)| x == e) {
+            self.prog.local_enum_names.push((e, full.clone()));
+        }
+        full
+    }
+
     pub fn is_primitive(&self, t: TypeId) -> bool {
         self.is_numeric(t).is_some() || t == self.b.t_boolean || t == self.b.t_string || t == self.b.t_unit
     }
@@ -166,6 +203,16 @@ impl<'a> Worker<'a> {
             self.capture_form(te, Form::Op(name));
         }
         te
+    }
+
+    /// The lookup `te` of type `ty` of an enum's companion held in the local `held`, where it is
+    /// an instance: bound to its receiver first.
+    fn enum_lookup_held(&mut self, held: Option<SymId>, receiver: TExprId, te: TExprId, ty: TypeId) -> TExprId {
+        let Some(h) = held else { return te };
+        let stmts = self.prog.stmts.push_slice(&[TStmt::Val(h, receiver)]);
+        let block = self.prog.add(TExpr::Block(stmts, te));
+        self.prog.set_type(block, ty);
+        block
     }
 
     /// An operand of a builtin operator converted to the operator's rank. The conversions stay
@@ -456,6 +503,19 @@ impl<'a> Worker<'a> {
                 TExpr::Local(s) | TExpr::Static(s) | TExpr::Field(_, s) => Some(s),
                 _ => None,
             };
+            // A `var` of the block across a trait a class owns: the setter of the proxy the class
+            // of the block holds, of `l base r` read through its getter (`proxies.rs`), in a program
+            // that has one.
+            if let (false, true, TExpr::CallMethod(recv, g, _)) = (has_member, self.prog.has_block_class_traits(), self.prog.expr(tl)) {
+                if let Some(&super::HeldOf::Get(v)) = self.held_proxy_of.get(&g) {
+                    if self.syms.sym(v).kind == SymKind::Var {
+                        let Owner::Class(holder) = self.syms.sym(g).owner else { unreachable!("a proxy is a member") };
+                        let (value, vty) = self.binop_or_member(base, tl, lty, lty, r, span, None);
+                        let value = self.adapt(value, vty, lty, span);
+                        return (self.held_write(holder, v, recv, value), self.b.t_unit);
+                    }
+                }
+            }
             if !has_member && target.map_or(false, |s| self.syms.sym(s).kind == SymKind::Var) {
                 let mark = self.hoisted.len();
                 let tl = self.field_target_once(tl, span);
@@ -2021,9 +2081,10 @@ impl<'a> Worker<'a> {
             // ordinal. The arguments: the companion, the key, the enum's full name, then the value
             // cases with their names or ordinals; each target stores and reads `$values`.
             names::VALUES | names::VALUE_OF | names::FROM_ORDINAL => {
-                let Type::Class(module, _) = self.types.get(recv_ty) else { return None };
+                // The companion through a path too (`p.F` of an instance's own companion).
+                let Some(module) = self.class_of(recv_ty) else { return None };
                 let info = self.syms.class(module);
-                let enum_class = info.companion.filter(|_| info.kind == ClassKind::Object)?;
+                let enum_class = info.companion.filter(|_| self.is_enum_companion(module))?;
                 if self.syms.class(enum_class).kind != ClassKind::Enum {
                     return None;
                 }
@@ -2042,37 +2103,73 @@ impl<'a> Worker<'a> {
                 // The type arguments differ from case to case, which is `E[?]` in Scala.
                 let arity = self.class_arity(enum_class);
                 let enum_ty = self.types.class(enum_class, &vec![WILD; arity]);
-                let full = self.syms.scala_full_name(self.interner, enum_class);
+                let full = self.enum_full_name(enum_class);
                 let full = self.prog.add_str(&full);
                 let full = self.prog.add(TExpr::Str(full));
-                // The companion, after a receiver that is no path to it.
-                let module_ref = self.prog.add(TExpr::Module(module));
-                let recv = if self.is_path(recv) {
-                    module_ref
-                } else {
-                    let stmts = self.prog.stmts.push_slice(&[TStmt::Expr(recv)]);
-                    self.prog.add(TExpr::Block(stmts, module_ref))
+                // A companion that is an instance (a local object's, an object's nested in a class)
+                // is held, evaluated once before the argument, and its value cases are its fields,
+                // read from it: what its `$values` holds, which the lookups take as they are.
+                let instance = self.syms.class(module).local_module.is_some() || self.syms.class(module).inner_object.is_some();
+                let held = instance.then(|| self.fresh_local("enum", recv_ty, Span::default()));
+                let receiver = recv;
+                let recv = match held {
+                    Some(h) => {
+                        let r = self.prog.add(TExpr::Local(h));
+                        let companion = self.types.class(module, &[]);
+                        self.prog.set_type(r, companion);
+                        r
+                    }
+                    // The companion, after a receiver that is no path to it.
+                    None => {
+                        let module_ref = self.prog.add(TExpr::Module(module));
+                        if self.is_path(recv) {
+                            module_ref
+                        } else {
+                            let stmts = self.prog.stmts.push_slice(&[TStmt::Expr(recv)]);
+                            self.prog.add(TExpr::Block(stmts, module_ref))
+                        }
+                    }
                 };
+                let mut refs: Vec<TExprId> = Vec::with_capacity(values.len());
+                for &(v, _, _) in &values {
+                    refs.push(match held {
+                        Some(h) => {
+                            let r = self.prog.add(TExpr::Local(h));
+                            self.prog.add(TExpr::Field(r, v))
+                        }
+                        None => self.prog.add(TExpr::Static(v)),
+                    });
+                }
                 if name == names::VALUES {
                     if !no_args {
                         return None;
                     }
-                    let s = self.prog.add_str("$enumValues($0)");
-                    let l = self.prog.list(&[recv]);
-                    let te = self.prog.add(TExpr::Js(s, l));
+                    let args = self.types.list(&[enum_ty]);
+                    let array = self.types.mk(Type::Class(self.b.array, args));
+                    let te = match held {
+                        // A new array of the companion's value cases, as `$values.clone()` is.
+                        Some(_) => {
+                            let items = self.prog.list(&refs);
+                            let all = self.prog.add(TExpr::ArrayLit(items));
+                            self.prog.set_type(all, array);
+                            all
+                        }
+                        None => {
+                            let s = self.prog.add_str("$enumValues($0)");
+                            let l = self.prog.list(&[recv]);
+                            self.prog.add(TExpr::Js(s, l))
+                        }
+                    };
                     if self.capturing() {
                         self.capture_form(te, Form::EnumMember(name));
                     }
-                    let args = self.types.list(&[enum_ty]);
-                    let array = self.types.mk(Type::Class(self.b.array, args));
-                    return Some((te, array));
+                    return Some((self.enum_lookup_held(held, receiver, te, array), array));
                 }
                 if !one_arg {
                     return None;
                 }
                 let expected = if name == names::VALUE_OF { self.b.t_string } else { self.b.t_int };
                 let (key, _) = self.type_expr(arg(0)?, Some(expected));
-                let refs: Vec<TExprId> = values.iter().map(|&(s, _, _)| self.prog.add(TExpr::Static(s))).collect();
                 let refs = self.prog.list(&refs);
                 let refs = self.prog.add(TExpr::ArrayLit(refs));
                 let (template, keys): (&str, Vec<TExprId>) = if name == names::VALUE_OF {
@@ -2084,7 +2181,7 @@ impl<'a> Worker<'a> {
                         })
                         .collect();
                     ("$enumValueOf($0, $1, $2, $3, $4)", names)
-                } else if enumeration {
+                } else if enumeration && held.is_none() {
                     ("$enumFromOrdinal($0, $1, $2)", Vec::new())
                 } else {
                     let ordinals: Vec<TExprId> = values.iter().map(|&(_, o, _)| self.prog.add(TExpr::Int(o as i32))).collect();
@@ -2102,6 +2199,7 @@ impl<'a> Worker<'a> {
                 if self.capturing() {
                     self.capture_form(te, Form::EnumMember(name));
                 }
+                let te = self.enum_lookup_held(held, receiver, te, enum_ty);
                 Some((te, enum_ty))
             }
             names::GET_CLASS if no_args => {

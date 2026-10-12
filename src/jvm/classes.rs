@@ -354,6 +354,9 @@ impl<'a> Gen<'a> {
     fn emit_fun(&mut self, f: FunId) {
         let cx = self.cx;
         let fun = &cx.input.prog.funs[f.idx()];
+        if fun.captures > 0 {
+            return self.emit_proxied_fun(f);
+        }
         let info = cx.input.syms.sym(fun.sym);
         let m = self.mref(fun.sym);
         let name = cx.input.interner.get(info.name);
@@ -416,6 +419,52 @@ impl<'a> Gen<'a> {
                 self.trait_static_forwarder(&getter, &m.params[..before], &ret);
             }
         }
+    }
+
+    /// A member of a local trait that takes the values of its block first (`TFun::captures`), as
+    /// dotty's `LambdaLift` leaves it: the default method over the proxies and the parameters,
+    /// with its static `m$`, which the forwarders of the classes mixing the trait in call; the
+    /// member as declared stays abstract, the slot every other call goes through.
+    fn emit_proxied_fun(&mut self, f: FunId) {
+        let cx = self.cx;
+        let fun = &cx.input.prog.funs[f.idx()];
+        let info = cx.input.syms.sym(fun.sym);
+        let m = self.mref(fun.sym);
+        let name = cx.input.interner.get(info.name);
+        self.context = format!("{}.{}", self.this_name, name);
+        let k = fun.captures as usize;
+        let declared = &fun.params[k..];
+        if declared.len() != m.params.len() {
+            self.unsupported("a def whose parameters differ from its signature");
+            return;
+        }
+        // A local trait's lifted member has its lifted method alone, as dotty's trait has it.
+        if !fun.lifted && !self.cw.has_method(&m.name, &m.desc) {
+            self.cw.method(ACC_PUBLIC | ACC_ABSTRACT, &m.name, &m.desc, None);
+        }
+        // A default's getter reads the block's values too: the forwarders' implement it.
+        for (i, d) in fun.defaults[k..].iter().enumerate() {
+            if d.is_none() {
+                continue;
+            }
+            let shape = self.default_getter_shape(fun.sym, i);
+            let getter = format!("{}$default${}", self.source_method_name(fun.sym), shape.index);
+            let desc = method_desc(&m.params[..shape.before], &shape.ret);
+            if !self.cw.has_method(&getter, &desc) {
+                self.cw.method(ACC_PUBLIC | ACC_ABSTRACT, &getter, &desc, None);
+            }
+        }
+        let Some(body) = fun.body else { return };
+        let proxies = self.proxy_syms(&fun.params[..k]);
+        let pm = self.proxied_mref(&m, &proxies);
+        let mut params: Vec<(Option<SymId>, JType)> = proxies.iter().zip(&pm.params).map(|(&s, t)| (Some(s), t.clone())).collect();
+        params.extend(declared.iter().zip(&m.params).map(|(&s, t)| (Some(s), t.clone())));
+        self.begin_method(false, false, &params, pm.ret.clone(), &[body]);
+        self.bind_proxies(&proxies);
+        self.code.line(cx.line_of(info.file, info.span.start));
+        self.method_body(fun.sym, &fun.params, body);
+        self.end_method(ACC_PUBLIC, &pm.name, &pm.desc);
+        self.trait_static_forwarder(&pm.name, &pm.params, &pm.ret);
     }
 
     /// scalac's static forwarder `m$(T, args)` of a trait's concrete method `m`, which calls the
@@ -740,8 +789,15 @@ impl<'a> Gen<'a> {
         if case_companion.map_or(false, |k| cx.has_product_mirror(k)) && !interfaces.iter().any(|i| i == super::callable::MIRROR_PRODUCT) {
             interfaces.push(super::callable::MIRROR_PRODUCT.to_string());
         }
-        if is_object && info.companion.map_or(false, |e| cx.has_enum_fields(e)) && !interfaces.iter().any(|i| i == super::callable::MIRROR_SUM) {
+        // The companion of a class's enum, an object of each enclosing instance, is its mirror too.
+        // The companion of a class's enum or of a local enum, an object of each enclosing instance or
+        // of each run of the block: its lookups are its members (`enumLookupMethods`).
+        let instance_enum_companion = (info.inner_object.is_some() || info.local_module.is_some()) && info.companion.is_some_and(|e| syms.class(e).kind == ClassKind::Enum);
+        if (is_object && info.companion.map_or(false, |e| cx.has_enum_fields(e)) || instance_enum_companion) && !interfaces.iter().any(|i| i == super::callable::MIRROR_SUM) {
             interfaces.push(super::callable::MIRROR_SUM.to_string());
+        }
+        if is_object || info.inner_object.is_some() {
+            interfaces = super::callable::module_interfaces(interfaces, info.owner == Owner::Local);
         }
         let access = if is_trait {
             ACC_PUBLIC | ACC_INTERFACE | ACC_ABSTRACT
@@ -843,12 +899,15 @@ impl<'a> Gen<'a> {
             self.end_method(ACC_STATIC, "<clinit>", "()V");
         }
         self.given_object_fields(&tc.init);
+        let instance_enum = cx.enum_of_case(c).or(is_enum.then_some(c)).is_some_and(|e| cx.instance_enum(e));
         if is_value_case {
             self.cw.field(ACC_PRIVATE, "$name", "Ljava/lang/String;");
             self.cw.field(ACC_PRIVATE, "$ordinal", "I");
-            self.cw.field(ACC_PUBLIC | ACC_STATIC, "$instance", &format!("L{};", name));
+            if !instance_enum {
+                self.cw.field(ACC_PUBLIC | ACC_STATIC, "$instance", &format!("L{};", name));
+            }
         }
-        if is_enum {
+        if is_enum && !instance_enum {
             // The values are made together, in declaration order, when the enum is first
             // touched: a read of one initialises its class, and with it this superclass. Those of
             // an enum read through its companion's fields the companion makes (`store_enum_fields`).
@@ -892,6 +951,7 @@ impl<'a> Gen<'a> {
             for f in fields.iter().filter(|f| !cx.private_params.contains_key(&f.sym)) {
                 self.accessors(f);
             }
+            self.instance_case_companion_fields(c);
             self.trait_setters(c, &fields);
             self.class_file_storage(c);
         }
@@ -933,7 +993,7 @@ impl<'a> Gen<'a> {
             if let Some(v) = info.companion.filter(|&v| is_object && cx.has_value_companion(v)) {
                 self.extension_copies(v);
             }
-            if let Some(e) = info.companion.filter(|&e| is_object && syms.class(e).kind == ClassKind::Enum) {
+            if let Some(e) = info.companion.filter(|&e| (is_object || instance_enum_companion) && syms.class(e).kind == ClassKind::Enum) {
                 self.enum_companion_members(e, c);
             }
             if info.value_class && (!is_case || cx.vc_on_companion(c)) {
@@ -1047,10 +1107,23 @@ impl<'a> Gen<'a> {
                 }
                 TInit::Stmt(e) => self.statement(e),
                 TInit::Parent(b, call) => {
+                    // The values of the block a local trait's body reads lead its arguments, and
+                    // go to its `$init$` (`TClass::captures`).
+                    let proxies = self.trait_init_proxies(b);
+                    let k = proxies.as_ref().map_or(0, |p| p.0);
+                    let given: Vec<TExprId> = self.cx.input.prog.expr_list(call.args).iter().take(k).copied().collect();
+                    let call = ParentCall { args: crate::ast::ListRef { start: call.args.start + k as u32, len: call.args.len - k as u32 }, ..call };
                     if !call.args.is_empty() && !self.trait_arguments(b, call, fields, slot, this) {
                         return;
                     }
-                    if self.trait_has_init(b) {
+                    if let Some((_, proxies, declared)) = proxies {
+                        let base = self.class_name(b);
+                        let mut types = vec![JType::L(base.clone())];
+                        types.extend(proxies.iter().map(|&p| self.anon_capture_type(p)));
+                        self.load(slot, this);
+                        self.load_proxies(&proxies, &declared, &given);
+                        self.invoke(Invoke::Static, &base, true, "$init$", &types, &JType::V);
+                    } else if self.trait_has_init(b) {
                         self.call_trait_init(b, slot, this);
                     }
                 }
@@ -1059,6 +1132,24 @@ impl<'a> Gen<'a> {
         for b in scala2 {
             self.call_trait_init(b, slot, this);
         }
+    }
+
+    /// How many of the arguments a class passes to the local trait `b` are the values of the
+    /// block its body reads, and those values as `$init$` takes them.
+    fn trait_init_proxies(&mut self, b: ClassId) -> Option<(usize, Vec<SymId>, Vec<SymId>)> {
+        let cx = self.cx;
+        let idx = cx.tclass_of[b.idx()];
+        if idx == u32::MAX {
+            return None;
+        }
+        let tc = &cx.input.prog.classes[idx as usize];
+        if tc.captures == 0 {
+            return None;
+        }
+        let k = tc.captures;
+        let declared = tc.ctor_params[..k].to_vec();
+        let proxies = self.proxy_syms(&declared);
+        Some((k, proxies, declared))
     }
 
     fn call_trait_init(&mut self, b: ClassId, slot: u16, this: &JType) {
@@ -1269,13 +1360,16 @@ impl<'a> Gen<'a> {
         let mut params: Vec<(Option<SymId>, JType)> = Vec::new();
         // An enum over `java.lang.Enum` passes the name and ordinal of its values up to it.
         let java_enum = cx.is_java_enum(tc.id) || (is_value_case && cx.enum_of_case(tc.id).map_or(false, |e| cx.is_java_enum(e)));
-        if is_value_case || java_enum {
-            params.push((None, JType::L(Rc::from(STRING))));
-            params.push((None, JType::I));
-        }
         let n_captures = if is_anon { tc.ctor_params.len() } else { tc.captures };
         for t in self.anon_ctor_params(tc.id) {
             params.push((None, t));
+        }
+        // The name and ordinal follow what the class captures: a value of an enum of a block or a
+        // class takes its companion's instance first (`enum_value_new`).
+        let name_slot = 1 + params.iter().map(|(_, t)| if t.wide() { 2 } else { 1 }).sum::<u16>();
+        if is_value_case || java_enum {
+            params.push((None, JType::L(Rc::from(STRING))));
+            params.push((None, JType::I));
         }
         let first_super_arg = params.len();
         // An anonymous class over a class receives the arguments of the superclass's
@@ -1310,7 +1404,10 @@ impl<'a> Gen<'a> {
                     let ty = self.sym_type(s);
                     self.m.locals.insert(s, Local { slot, ty, cell: true });
                 }
-                Held::Thunk => {}
+                // The thunk of a lazy val, which a superclass's constructor takes as it is.
+                Held::Thunk => {
+                    self.m.locals.insert(s, Local { slot, ty: stored.clone(), cell: false });
+                }
             }
             slot += if stored.wide() { 2 } else { 1 };
         }
@@ -1320,10 +1417,10 @@ impl<'a> Gen<'a> {
             // Before the enum's constructor runs, whose body may print the value.
             let string = JType::L(Rc::from(STRING));
             self.load(0, &this);
-            self.load(1, &string);
+            self.load(name_slot, &string);
             self.putfield(&owner, "$name", &string);
             self.load(0, &this);
-            self.load(2, &JType::I);
+            self.load(name_slot + 1, &JType::I);
             self.putfield(&owner, "$ordinal", &JType::I);
         }
         // Scala sets the fields a class takes as parameters before the constructor of its
@@ -1347,8 +1444,8 @@ impl<'a> Gen<'a> {
         self.load(0, &this);
         let name_ordinal = if java_enum { vec![JType::L(Rc::from(STRING)), JType::I] } else { Vec::new() };
         if java_enum {
-            self.load(1, &name_ordinal[0]);
-            self.load(2, &JType::I);
+            self.load(name_slot, &name_ordinal[0]);
+            self.load(name_slot + 1, &JType::I);
         }
         let super_params = match enum_class {
             Some(_) if anon_super.is_some() => {
@@ -1422,6 +1519,9 @@ impl<'a> Gen<'a> {
                 self.load(local.slot, &local.ty);
                 self.putfield(&owner, &f.name, &f.ty);
             }
+        }
+        if !is_object {
+            self.init_instance_case_companions(tc.id);
         }
         // An object's body runs in its `<clinit>`, once `MODULE$` holds the instance.
         if !is_object {
@@ -1696,7 +1796,8 @@ impl<'a> Gen<'a> {
         let cx = self.cx;
         let this = JType::L(self.this_name.clone());
         let owner = self.this_name.clone();
-        for &p in &tc.ctor_params {
+        // The values of the block the body reads come first: parameters of `$init$` alone.
+        for &p in &tc.ctor_params[tc.captures..] {
             let ty = self.sym_type(p);
             let name = self.field_name(p);
             self.cw.method(ACC_PUBLIC | ACC_ABSTRACT, &name, &method_desc(&[], &ty), None);
@@ -1759,7 +1860,15 @@ impl<'a> Gen<'a> {
         }
         if self.source_trait_has_init(tc) {
             let roots: Vec<TExprId> = runs.iter().map(|r| r.1).collect();
-            self.begin_method(true, false, &[(None, this.clone())], JType::V, &roots);
+            let proxies = self.proxy_syms(&tc.ctor_params[..tc.captures]);
+            let mut params = vec![(None, this.clone())];
+            for &p in &proxies {
+                let t = self.anon_capture_type(p);
+                params.push((Some(p), t));
+            }
+            let types: Vec<JType> = params.iter().map(|p| p.1.clone()).collect();
+            self.begin_method(true, false, &params, JType::V, &roots);
+            self.bind_proxies(&proxies);
             self.m.this_slot = Some(0);
             for (field, e) in runs {
                 match field {
@@ -1774,7 +1883,7 @@ impl<'a> Gen<'a> {
                 }
             }
             self.return_value(&JType::V);
-            self.end_method(ACC_PUBLIC | ACC_STATIC, "$init$", &method_desc(&[this], &JType::V));
+            self.end_method(ACC_PUBLIC | ACC_STATIC, "$init$", &method_desc(&types, &JType::V));
         }
     }
 
@@ -3006,7 +3115,8 @@ impl<'a> Gen<'a> {
         let reach = cx.input.reach;
         let name: Rc<str> = Rc::from(cx.file_modules[file.0 as usize].as_str());
         self.context = name.to_string();
-        self.cw = ClassWriter::new(ACC_PUBLIC | ACC_FINAL | ACC_SUPER, &name, OBJECT, &[]);
+        let interfaces = super::callable::module_interfaces(Vec::new(), false);
+        self.cw = ClassWriter::new(ACC_PUBLIC | ACC_FINAL | ACC_SUPER, &name, OBJECT, &interfaces);
         self.this_name = name.clone();
         self.this_class = None;
         self.is_interface = false;

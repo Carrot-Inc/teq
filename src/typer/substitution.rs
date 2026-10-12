@@ -1213,7 +1213,8 @@ impl<'a> Worker<'a> {
             self.walk_list(w, call.args);
         }
         self.settle_superclass_copy(w, c);
-        let (index, captures) = self.settle_class_body(w, c);
+        let (index, mut captures) = self.settle_class_body(w, c);
+        self.lift_class_copy(c, &mut captures);
         self.settle_nested_copies(w, c);
         let tc = &self.prog.classes[index];
         let sam = tc.captures > 0 && tc.captures == tc.ctor_params.len();
@@ -1239,7 +1240,12 @@ impl<'a> Worker<'a> {
         let stored_captures = w.def.classes.iter().find(|tc| tc.id == stored).map_or(0, |tc| tc.captures);
         let TExpr::New(_, args) = self.prog.expr(e) else { unreachable!() };
         let items = self.prog.expr_list(args).to_vec();
-        let own: Vec<TExprId> = items[stored_captures.min(items.len())..].iter().map(|&a| self.walk(w, a)).collect();
+        let mut own: Vec<TExprId> = items[stored_captures.min(items.len())..].iter().map(|&a| self.walk(w, a)).collect();
+        // The outer instance the creation passes stays its own (the prefix of `E.A(1)`).
+        if self.outer_class(c).is_some() && !items.is_empty() {
+            let outer = self.walk(w, items[0]);
+            own.insert(0, outer);
+        }
         let inside = self.env.frames.iter().any(|f| matches!(f, super::Frame::Class(k) if *k == c));
         let selfs = self.enclosing_object_selfs();
         match w.local_copies.get(&c) {
@@ -1288,6 +1294,20 @@ impl<'a> Worker<'a> {
         w.local_copies.insert(c, LocalCopy::Settling(Vec::new()));
         self.settle_superclass_copy(w, c);
         let (index, captures) = self.settle_class_body(w, c);
+        // A trait takes no captures: its members and its initialiser take proxies, lifted below.
+        let is_trait = self.syms.class(c).kind == ClassKind::Trait;
+        let mut captures = if is_trait { Vec::new() } else { captures };
+        if !is_trait {
+            self.lift_class_copy(c, &mut captures);
+        }
+        // A class nested in a copied class takes its outer instance first, as the stored one does
+        // (an enum's case, its companion's instance).
+        if let Some(o) = self.outer_class(c) {
+            let outer = self.outer_this_sym(o);
+            if !captures.contains(&outer) {
+                captures.insert(0, outer);
+            }
+        }
         let n = captures.len();
         let body = &mut self.prog.classes[index];
         let own_params: Vec<SymId> = body.ctor_params[stored_captures.min(body.ctor_params.len())..].to_vec();
@@ -1295,6 +1315,9 @@ impl<'a> Worker<'a> {
         body.ctor_params = captures.iter().copied().chain(own_params).collect();
         body.ctor_defaults = std::iter::repeat(None).take(n).chain(own_defaults).collect();
         body.captures = n;
+        if is_trait {
+            self.lift_class_copy(c, &mut Vec::new());
+        }
         self.anon_captures.insert(c, captures.clone());
         let Some(LocalCopy::Settling(pending)) = w.local_copies.insert(c, LocalCopy::Settled(captures.clone())) else { unreachable!() };
         for (p, p_inside, p_selfs) in pending {
@@ -1366,6 +1389,19 @@ impl<'a> Worker<'a> {
     /// The node `e` made the creation of the copy `c` of a named local class with the captures
     /// `captures` and its own arguments `own`, as `new_instance` makes one.
     fn local_copy_new(&mut self, e: TExprId, c: ClassId, captures: &[SymId], inside: bool, selfs: &[(SymId, TExprId)], own: &[TExprId]) -> TExprId {
+        // A class with an outer instance takes the one the creation passes, first in `own`.
+        let outer = self.outer_class(c).map(|o| self.outer_this_sym(o));
+        let (captures, own) = match (outer, captures.first(), own.split_first()) {
+            (Some(o), Some(&first), Some((&passed, rest))) if first == o => {
+                let mut items = vec![passed];
+                items.extend(self.capture_args(&captures[1..], inside, selfs));
+                items.extend_from_slice(rest);
+                let l = self.prog.list(&items);
+                self.prog.exprs[e.idx()] = TExpr::New(c, l);
+                return e;
+            }
+            _ => (captures, own),
+        };
         let mut items = self.capture_args(captures, inside, selfs);
         items.extend_from_slice(own);
         let l = self.prog.list(&items);
@@ -1405,6 +1441,13 @@ impl<'a> Worker<'a> {
             self.walk_prelude(w, tc.parent_prelude);
             if let Some(args) = tc.parent_args {
                 self.walk_list(w, args);
+            }
+        }
+        // What the class passes to its traits' bodies (a local trait's proxies first).
+        for init in &tc.init {
+            if let TInit::Parent(_, call) = *init {
+                self.walk_prelude(w, call.prelude);
+                self.walk_list(w, call.args);
             }
         }
         for (i, d) in tc.ctor_defaults.iter().enumerate() {
@@ -1452,6 +1495,13 @@ impl<'a> Worker<'a> {
             }
             for &a in tc.parent_args.map_or(&[][..], |l| self.prog.expr_list(l)) {
                 self.referenced_in_order(a, &origin, u32::MAX, &mut keyed);
+            }
+        }
+        for init in &tc.init {
+            if let TInit::Parent(_, call) = *init {
+                for &a in self.prog.expr_list(call.args) {
+                    self.referenced_in_order(a, &origin, u32::MAX, &mut keyed);
+                }
             }
         }
         for &(_, part) in &parts {

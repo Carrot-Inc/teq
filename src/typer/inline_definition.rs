@@ -237,6 +237,22 @@ impl<'a> Worker<'a> {
         self.prog.classes.rfind_mut(|t| t.id == c)
     }
 
+    /// Whether the class `c` is a class of the stored body under the definition check.
+    pub(super) fn is_stored_class(&self, c: ClassId) -> bool {
+        self.inline.notes.last().is_some_and(|n| n.classes.contains(&c))
+    }
+
+    /// The body of the class `c` checked, a stored class's among the notes.
+    pub(super) fn checked_class(&mut self, c: ClassId) -> Option<&TClass> {
+        if let Some(n) = self.inline.notes.last() {
+            if n.classes.contains(&c) {
+                return n.class_bodies.iter().rfind(|t| t.id == c);
+            }
+        }
+        let i = self.prog_index.class(&self.prog, c)?;
+        Some(&self.prog.classes[i])
+    }
+
     /// The trees of the stored classes' bodies: their methods' and constructors' bodies and
     /// defaults, their initialisers, their constructor defaults and the arguments to their parent.
     pub(super) fn class_roots(&self, classes: &[TClass]) -> Vec<TExprId> {
@@ -1155,7 +1171,13 @@ impl<'a> Worker<'a> {
             if !d.on_demand {
                 fresh = def.binders.iter().filter_map(|b| inst.renames.get(b).copied()).collect();
             }
-            self.binders_in_class_copies(&fresh, &d.copied_classes);
+            // The binders an earlier part renamed too: a class this part copied may be their type
+            // (a local enum's companion, copied where its val's creation is met).
+            let mut renamed: Vec<SymId> = fresh;
+            renamed.extend(inst.renames.values().copied());
+            renamed.sort_unstable();
+            renamed.dedup();
+            self.binders_in_class_copies(&renamed, &d.copied_classes);
         }
         let specialised = !Arc::ptr_eq(&subst, &d.subst);
         for i in 0..d.part.left.len() {

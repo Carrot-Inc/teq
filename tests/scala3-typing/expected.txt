@@ -2368,7 +2368,7 @@ pos/experimental-imports-top.scala	syntax	'erased' is not part of the supported 
 pos/experimental-inheritance.scala	accepts	
 pos/experimental-package-imports.scala	accepts	
 pos/experimentalErased.scala	syntax	'erased' is not part of the supported Scala subset
-pos/explicitOuter.scala	rejects	not supported yet: a local trait referring to $this18zle24_6 of its enclosing block; move the trait to the top level
+pos/explicitOuter.scala	std	App
 pos/exponential-spec.scala	syntax	expected {}, found {}
 pos/export-enum.scala	accepts	
 pos/export-in-extension-rename.scala	rejects	only defs are allowed in an extension
@@ -3080,7 +3080,7 @@ pos/i17064.scala	accepts
 pos/i17066	oos	java
 pos/i17100.scala	accepts	
 pos/i17100a.scala	std	Dynamic
-pos/i17135.scala	rejects	not supported yet: a local trait referring to Foo of its enclosing block; move the trait to the top level
+pos/i17135.scala	accepts	
 pos/i17149.scala	accepts	
 pos/i17155.scala	accepts	
 pos/i17186a.scala	accepts	
@@ -3875,7 +3875,7 @@ pos/i4996.scala	accepts
 pos/i4999.scala	accepts	
 pos/i5001.scala	accepts	
 pos/i5006.scala	std	asInstanceOf
-pos/i503.scala	rejects	not supported yet: a local trait referring to TypeBool of its enclosing block; move the trait to the top level
+pos/i503.scala	accepts	
 pos/i5033b.scala	accepts	
 pos/i5036.scala	accepts	
 pos/i5039.scala	accepts	
@@ -5075,7 +5075,7 @@ pos/t122.scala	rejects	recursive value v needs type
 pos/t1226.scala	accepts	
 pos/t1236.scala	accepts	
 pos/t1236a.scala	accepts	
-pos/t1237.scala	rejects	not supported yet: a local trait referring to TypeBool of its enclosing block; move the trait to the top level
+pos/t1237.scala	accepts	
 pos/t12396	oos	java
 pos/t124.scala	accepts	
 pos/t12494.scala	accepts	
@@ -5500,9 +5500,9 @@ pos/t6208.scala	std	Queue
 pos/t6210.scala	accepts	
 pos/t6225.scala	accepts	
 pos/t6225b.scala	accepts	
-pos/t6231.scala	rejects	not supported yet: a local trait referring to ev of its enclosing block; move the trait to the top level
-pos/t6231b.scala	rejects	not supported yet: a local trait referring to t of its enclosing block; move the trait to the top level
-pos/t6231c.scala	rejects	not supported yet: a local trait referring to ev of its enclosing block; move the trait to the top level
+pos/t6231.scala	accepts	
+pos/t6231b.scala	accepts	
+pos/t6231c.scala	accepts	
 pos/t6245	oos	java
 pos/t6274.scala	accepts	
 pos/t6275.scala	accepts	

@@ -553,8 +553,9 @@ impl<'a> Worker<'a> {
                 if of_enum_companion && self.lookup_term(name).is_none() {
                     if let Some(c) = self.enclosing_enum_companion() {
                         let module_ty = self.types.class(c, &[]);
-                        let module = self.prog.add(TExpr::Module(c));
-                        return self.apply_member(module, module_ty, name, targs, lists, span, expected);
+                        if let Some(module) = self.module_ref(c, span) {
+                            return self.apply_member(module, module_ty, name, targs, lists, span, expected);
+                        }
                     }
                 }
                 let outer_head = std::mem::replace(&mut self.extension_call_head, !lists.is_empty());
@@ -941,14 +942,17 @@ impl<'a> Worker<'a> {
 
     fn enclosing_enum_companion(&self) -> Option<ClassId> {
         self.env.frames.iter().rev().find_map(|f| match f {
-            super::Frame::Class(c) => {
-                let info = self.syms.class(*c);
-                let of_enum = info.kind == ClassKind::Object
-                    && info.companion.map_or(false, |e| self.syms.class(e).kind == ClassKind::Enum);
-                of_enum.then_some(*c)
-            }
+            super::Frame::Class(c) => self.is_enum_companion(*c).then_some(*c),
             _ => None,
         })
+    }
+
+    /// Whether the class `c` is an enum's companion: an object, or the class of a local object
+    /// or of an object nested in a class, which an enum of a block or a class has.
+    pub(super) fn is_enum_companion(&self, c: ClassId) -> bool {
+        let info = self.syms.class(c);
+        (info.kind == ClassKind::Object || info.local_module.is_some() || info.inner_object.is_some())
+            && info.companion.map_or(false, |e| self.syms.class(e).kind == ClassKind::Enum)
     }
 
     /// An error about how many arguments a list holds: dependent where the parser's recovery cut
@@ -1945,7 +1949,9 @@ impl<'a> Worker<'a> {
                     self.prog.add(TExpr::Block(stmts, module))
                 }
             }
-            SymKind::EnumValue(_) => self.prog.add(TExpr::Static(s)),
+            // A value of an enum whose companion is a local object or an object nested in a class
+            // is a field of the companion's instance.
+            SymKind::EnumValue(_) if !self.instance_enum_value(s) => self.prog.add(TExpr::Static(s)),
             _ => match self.constant_of(s) {
                 // A constant member stands for its value behind a stable path, as in Scala,
                 // where its object need not be initialised; behind any other receiver the
@@ -2438,6 +2444,14 @@ impl<'a> Worker<'a> {
         }
     }
 
+    /// Whether the enum value `s` is a field of its companion's instance: its companion is a local
+    /// object or an object nested in a class, as dotty's companion of such an enum is.
+    pub(super) fn instance_enum_value(&self, s: SymId) -> bool {
+        let Owner::Class(m) = self.syms.sym(s).owner else { return false };
+        let info = self.syms.class(m);
+        info.local_module.is_some() || info.inner_object.is_some()
+    }
+
     /// The object `c` read where its name is: a local object's lazy val, an object nested in a
     /// class on the enclosing instance's.
     fn module_ref(&mut self, c: ClassId, span: Span) -> Option<TExprId> {
@@ -2498,6 +2512,12 @@ impl<'a> Worker<'a> {
                         (_, true) if self.enclosing_module_class(s).is_some() => self.local_module_read_callee(s)?,
                         _ => {
                             let ty = self.sig_of(s).ret;
+                            // Read across a trait a class owns: the proxy the class of the block
+                            // holds, through the enclosing instances (`proxies.rs`).
+                            if let Some(r) = self.held_holder(s) {
+                                let te = self.held_read(r, s);
+                                return Some(Callee::Value(te, ty));
+                            }
                             let local = self.prog.add(TExpr::Local(s));
                             let te = if by_name { self.prog.add(TExpr::CallClosure(local, ListRef::EMPTY)) } else { local };
                             Callee::Value(te, ty)
@@ -3209,6 +3229,8 @@ impl<'a> Worker<'a> {
         let exp = self.deref(exp);
         match self.types.get(exp) {
             Type::Class(ec, _) => ec == c,
+            // `p.C` asks for `C` whatever its prefix (`isRef`).
+            Type::Nested(_, class) => matches!(self.types.get(class), Type::Class(ec, _) if ec == c),
             Type::Var(v) => self.upper_bounds_through_vars(v).into_iter().any(|u| matches!(self.types.get(u), Type::Class(ec, _) if ec == c)),
             _ => false,
         }
@@ -4723,6 +4745,12 @@ impl<'a> Worker<'a> {
         }
         match call.recv {
             Some(r) => self.prog.add(TExpr::CallMethod(r, call.sym, args)),
+            // A local def of the block called across a trait a class owns: through the proxy the
+            // class of the block holds (`proxies.rs`).
+            None if self.prog.has_block_class_traits() && self.syms.sym(call.sym).owner == Owner::Local && self.syms.sym(call.sym).kind == SymKind::Def => match self.held_holder(call.sym) {
+                Some(r) => self.held_call(r, call.sym, args),
+                None => self.prog.add(TExpr::CallStatic(call.sym, args)),
+            },
             None => self.prog.add(TExpr::CallStatic(call.sym, args)),
         }
     }
@@ -6364,7 +6392,7 @@ impl<'a> Worker<'a> {
             }
         }
         if let Some(c) = self.types.named_class(recv_ty) {
-            let module = self.is_module_class(c);
+            let module = self.is_module_class(c) || self.syms.class(c).local_module.is_some();
             // A class nested in the receiver's class or in one it derives from applies through
             // its constructor proxy, a member of the class that declares it
             // (`NamerOps.addConstructorProxies`): on an object, or on an instance whose class it is
@@ -6375,8 +6403,9 @@ impl<'a> Worker<'a> {
             };
             if module || nested.is_some_and(|n| self.outer_class(n).is_some() && self.needs_constructor_proxy(n)) {
                 if let Some(nested) = nested {
-                    // A class nested in an object nested in a class takes the object, the
-                    // receiver, as its outer instance (`Product.Getter(n, f)`).
+                    // A class nested in an object nested in a class or in a local object takes the
+                    // object, the receiver, as its outer instance (`Product.Getter(n, f)`, a local
+                    // enum's class case `E.B(1)`).
                     let inner = self.outer_class(nested).is_some();
                     // The prefix of a creator application is an immutable path, as dotty's
                     // `newExpr` asks of a `new`'s class type (E083).
@@ -6402,8 +6431,10 @@ impl<'a> Worker<'a> {
                     // `applyProxyResultType` gives the proxy's `new` the prefix's type.
                     if inner {
                         self.pass_outer(te, recv);
+                        // The class itself is seen from the receiver; an enum's case widened to
+                        // its enum keeps the enum's one type (`is_inner_class`).
                         let ty = match self.types.get(ty) {
-                            Type::Class(..) => {
+                            Type::Class(k, _) if k == nested && self.is_inner_class(nested) => {
                                 let prefix = self.path_of(recv).unwrap_or(recv_ty);
                                 self.nested_type(prefix, ty)
                             }

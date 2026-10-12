@@ -3945,7 +3945,7 @@ impl<'a> Gen<'a> {
     /// from its static getter, which takes the captures first; the companion's getter where the
     /// companion holds them (scalac's layout), each taking the parameters of the clauses before
     /// the default's; a jar class's as its class files declare it; else the class's static one.
-    fn ctor_default(&mut self, c: ClassId, via: Option<SymId>, i: usize, temps: &[(u16, JType)], types: &[JType]) {
+    fn ctor_default(&mut self, c: ClassId, via: Option<SymId>, recv: Option<TExprId>, i: usize, temps: &[(u16, JType)], types: &[JType]) {
         let cx = self.cx;
         if cx.jvm_class(c).is_some() {
             let defaults: Vec<Option<TExprId>> = match (via, cx.tclass_of.get(c.idx()).copied().filter(|&i| i != u32::MAX)) {
@@ -3963,7 +3963,16 @@ impl<'a> Gen<'a> {
         let n = self.capture_count(c);
         if via.is_none() && n > 0 && cx.input.syms.class(c).kind != ClassKind::Anon {
             let mut before = self.anon_ctor_params(c);
-            self.load_class_captures(c);
+            match recv {
+                // The enclosing instance the creation passes, the getter's receiver, for the
+                // capture that stands for it (`Worker::retarget_defaults`).
+                Some(r) => {
+                    let t = before.first().cloned().unwrap_or_else(JType::object);
+                    self.expr(r, &t);
+                    self.load_class_captures_after(c, 1);
+                }
+                None => self.load_class_captures(c),
+            }
             for (slot, t) in temps {
                 self.load(*slot, t);
                 before.push(t.clone());
@@ -4109,7 +4118,7 @@ impl<'a> Gen<'a> {
             DefaultOf::Ctor(c) => {
                 let types = self.ctor_param_types(c);
                 let temps = self.default_priors(&priors, &types);
-                self.ctor_default(c, None, index, &temps, &types);
+                self.ctor_default(c, None, recv, index, &temps, &types);
                 types.get(index).cloned().unwrap_or_else(JType::object)
             }
             DefaultOf::Method(s) if cx.input.syms.sym(s).name == crate::names::INIT => {
@@ -4119,7 +4128,7 @@ impl<'a> Gen<'a> {
                 };
                 let types = self.param_types(s);
                 let temps = self.default_priors(&priors, &types);
-                self.ctor_default(c, Some(s), index, &temps, &types);
+                self.ctor_default(c, Some(s), None, index, &temps, &types);
                 types.get(index).cloned().unwrap_or_else(JType::object)
             }
             DefaultOf::Method(s) => self.method_default(s, index, recv, &priors),
@@ -4143,7 +4152,7 @@ impl<'a> Gen<'a> {
         for (i, t) in types.iter().enumerate() {
             let before = clause_shape(&clauses, i).0.min(temps.len());
             let prior = temps[..before].to_vec();
-            self.ctor_default(c, None, i, &prior, types);
+            self.ctor_default(c, None, None, i, &prior, types);
             let slot = self.store_new(t);
             temps.push((slot, t.clone()));
         }
@@ -4650,6 +4659,17 @@ impl<'a> Gen<'a> {
         if let Some(t) = self.call_jdk_static(s, args) {
             return t;
         }
+        if let TExpr::Super(SuperTarget::Class(t)) = cx.input.prog.expr(r) {
+            if let Some(proxies) = self.member_proxies(s) {
+                return self.call_proxied(t, s, &m, &proxies, args);
+            }
+        }
+        // A call of a local trait's lifted member: its lifted method, the proxies first.
+        if let Some(proxies) = self.lifted_proxies(s, args) {
+            if !matches!(cx.input.prog.expr(r), TExpr::Super(SuperTarget::Mixin(_))) {
+                return self.call_lifted(r, s, &m, &proxies, args);
+            }
+        }
         if let TExpr::Super(target) = cx.input.prog.expr(r) {
             // `invokespecial` on the superclass, or on the interface of a trait of this class.
             let superclass = self.this_class.and_then(|c| cx.input.syms.class(c).superclass);
@@ -4682,6 +4702,88 @@ impl<'a> Gen<'a> {
             return self.java_value(m.ret.clone());
         }
         m.ret.clone()
+    }
+
+    /// The proxies a call of `s` with `args` passes first, when `s` is a local trait's member
+    /// that takes them (a lifted member, `TFun::lifted`, or a lazy val's initialiser read by the
+    /// block) called with them.
+    fn lifted_proxies(&mut self, s: SymId, args: ListRef) -> Option<Vec<SymId>> {
+        let cx = self.cx;
+        let f = *cx.fun_of_sym.get(s.idx())?;
+        if f == u32::MAX {
+            return None;
+        }
+        let fun = &cx.input.prog.funs[f as usize];
+        if fun.captures == 0 || fun.params.len() != args.len as usize {
+            return None;
+        }
+        self.member_proxies(s)
+    }
+
+    /// `r.s(proxies, args)` of a local trait's lifted member, as dotty's `LambdaLift.addFreeArgs`
+    /// leaves it: the interface's method over the proxies and the parameters, which a class's
+    /// method of the source descriptor does not implement; `super.s(..)` through the superclass.
+    fn call_lifted(&mut self, r: TExprId, s: SymId, m: &MRef, proxies: &[SymId], args: ListRef) -> JType {
+        let cx = self.cx;
+        let fun = &cx.input.prog.funs[cx.fun_of_sym[s.idx()] as usize];
+        let k = fun.captures as usize;
+        let declared: Vec<SymId> = fun.params[..k].to_vec();
+        let mut pm = self.proxied_mref(m, proxies);
+        if let TExpr::Super(_) = cx.input.prog.expr(r) {
+            let superclass = self.this_class.and_then(|c| cx.input.syms.class(c).superclass);
+            self.load_this();
+            if let Some(c) = superclass {
+                pm.owner = self.class_name(c);
+                pm.owner_is_interface = false;
+                pm.kind = Invoke::Special;
+            }
+        } else {
+            self.receiver(r, s);
+        }
+        let given: Vec<TExprId> = cx.input.prog.expr_list(args).iter().take(k).copied().collect();
+        for &p in proxies {
+            let want = self.anon_capture_type(p);
+            match declared.iter().position(|&d| d == p).and_then(|i| given.get(i).copied()) {
+                // A proxy the caller holds as it holds a captured local, a lazy val as the thunk
+                // that a lifted class takes.
+                Some(a) => {
+                    let t = self.load_capture_arg(a, p);
+                    self.adapt(&t, &want);
+                }
+                None => {
+                    let t = self.load_capture(p);
+                    self.adapt(&t, &want);
+                }
+            }
+        }
+        let rest = ListRef { start: args.start + k as u32, len: args.len.saturating_sub(k as u32) };
+        let params = m.params.clone();
+        self.arguments(Some(s), rest, &params);
+        self.invoke_mref(&pm);
+        pm.ret.clone()
+    }
+
+    /// `super[T].s(proxies, args)` of a member of a local trait, as scalac's forwarder calls it:
+    /// the trait's static `s$` on `this`, the proxies as this class holds them.
+    fn call_proxied(&mut self, t: ClassId, s: SymId, m: &MRef, proxies: &[SymId], args: ListRef) -> JType {
+        let cx = self.cx;
+        let fun = &cx.input.prog.funs[cx.fun_of_sym[s.idx()] as usize];
+        let k = fun.captures as usize;
+        let declared: Vec<SymId> = fun.params[..k].to_vec();
+        let owner = self.class_name(t);
+        let this = JType::L(owner.clone());
+        let pm = self.proxied_mref(m, proxies);
+        self.load_this();
+        let given: Vec<TExprId> = cx.input.prog.expr_list(args).iter().take(k).copied().collect();
+        self.load_proxies(proxies, &declared, &given);
+        let rest = ListRef { start: args.start + k as u32, len: args.len.saturating_sub(k as u32) };
+        let params = m.params.clone();
+        self.arguments(Some(s), rest, &params);
+        let mut all = vec![this];
+        all.extend(pm.params.iter().cloned());
+        let desc = method_desc(&all, &pm.ret);
+        self.invoke_desc(Invoke::Static, &owner, true, &format!("{}$", pm.name), &desc, all.len(), &pm.ret);
+        pm.ret.clone()
     }
 
     /// In link mode, a method a value class declares is called as scalac calls it: the
@@ -4883,6 +4985,14 @@ impl<'a> Gen<'a> {
                 self.ctor_arguments_after_captures(c, args, &captured, rest, &declared);
                 params.extend(declared);
             }
+            // A value of an enum of a block or a class: its name and ordinal after its captures.
+            if info.kind == ClassKind::EnumCase && info.singleton.is_some() {
+                let (name, ordinal) = (info.name, info.ordinal);
+                self.sconst(self.cx.input.interner.get(name));
+                self.iconst(ordinal as i32);
+                params.push(JType::L(Rc::from(STRING)));
+                params.push(JType::I);
+            }
             params
         } else if let Some(outer) = self.outer_of_unwritten(c, args) {
             // A class of a class that this build does not write (another module's, a jar's)
@@ -4903,8 +5013,8 @@ impl<'a> Gen<'a> {
     }
 
     /// The type of the enclosing instance a `new` of `c` passes first where this build does not
-    /// write `c`: a class or a given's class nested in a class or trait, made with one argument
-    /// more than its constructor declares.
+    /// write `c`: a class, a given's class or an enum's class case nested in a class or trait (a
+    /// class's enum's companion), made with one argument more than its constructor declares.
     fn outer_of_unwritten(&mut self, c: ClassId, args: ListRef) -> Option<JType> {
         let cx = self.cx;
         if cx.tclass_of[c.idx()] != u32::MAX {
@@ -4912,11 +5022,41 @@ impl<'a> Gen<'a> {
         }
         let info = cx.input.syms.class(c);
         let Owner::Class(o) = info.owner else { return None };
-        if !matches!(info.kind, ClassKind::Class | ClassKind::GivenImpl) || matches!(cx.input.syms.class(o).kind, ClassKind::Object | ClassKind::Builtin) {
+        if !matches!(info.kind, ClassKind::Class | ClassKind::GivenImpl | ClassKind::EnumCase) || matches!(cx.input.syms.class(o).kind, ClassKind::Object | ClassKind::Builtin) {
             return None;
         }
         let declared: usize = info.ctor.iter().map(|cl| cl.params.len()).sum();
         (args.len as usize == declared + 1).then(|| self.class_type(o))
+    }
+
+    /// Loads the argument `a` that hands a lifted class or a local trait's lifted member the
+    /// local `p` it takes, as `p` is held there (`anon_capture_type`).
+    fn load_capture_arg(&mut self, a: TExprId, p: SymId) -> JType {
+        let cx = self.cx;
+        match cx.input.prog.expr(a) {
+            // A value the class takes where the creation reads another local (the outer
+            // instance a local object's lazy val holds) is that local's value.
+            TExpr::Local(s) if s != p && self.held(p) == Held::Value && !self.is_local_def(p) && !self.cx.input.syms.sym(p).by_name => {
+                let t = self.anon_capture_type(p);
+                self.expr(a, &t);
+                t
+            }
+            TExpr::Local(s) if self.is_capturable(s) => self.load_capture(s),
+            // A lazy val this scope holds as its function is passed on as it is.
+            TExpr::Local(s) if cx.input.syms.sym(s).owner == Owner::Local && self.lazy_thunk(s) => self.load_capture(s),
+            TExpr::Local(s) if cx.input.syms.sym(s).owner == Owner::Local && cx.input.syms.sym(s).kind != SymKind::Def => {
+                self.lambda(ListRef::EMPTY, a);
+                self.function_type(0)
+            }
+            _ => {
+                let t = self.expr_static(a);
+                if t == JType::V {
+                    self.unit_value();
+                    return JType::object();
+                }
+                t
+            }
+        }
     }
 
     /// Loads what a lifted class captures: the leading `n` of the arguments of its `new`.
@@ -4925,26 +5065,13 @@ impl<'a> Gen<'a> {
         let items = cx.input.prog.expr_list(args)[..n].to_vec();
         let passed = cx.input.prog.classes[cx.tclass_of[c.idx()] as usize].ctor_params[..n].iter().filter(|&&s| !self.is_local_def(s)).count();
         let through_defs = self.class_captured(c).split_off(passed);
-        for a in items {
-            match cx.input.prog.expr(a) {
-                // A local def is not passed: the class gets a copy of the lifted method.
-                TExpr::Local(s) if cx.input.syms.sym(s).kind == SymKind::Def && cx.input.syms.sym(s).owner == Owner::Local => {}
-                TExpr::Local(s) if self.is_capturable(s) => {
-                    self.load_capture(s);
-                }
-                // A lazy val this scope holds as its function is passed on as it is.
-                TExpr::Local(s) if cx.input.syms.sym(s).owner == Owner::Local && self.lazy_thunk(s) => {
-                    self.load_capture(s);
-                }
-                TExpr::Local(s) if cx.input.syms.sym(s).owner == Owner::Local && cx.input.syms.sym(s).kind != SymKind::Def => {
-                    self.lambda(ListRef::EMPTY, a);
-                }
-                _ => {
-                    if self.expr_static(a) == JType::V {
-                        self.unit_value();
-                    }
-                }
+        let params: Vec<SymId> = cx.input.prog.classes[cx.tclass_of[c.idx()] as usize].ctor_params[..n].to_vec();
+        for (a, p) in items.into_iter().zip(params) {
+            // A local def is not passed: the class gets a copy of the lifted method.
+            if matches!(cx.input.prog.expr(a), TExpr::Local(s) if cx.input.syms.sym(s).kind == SymKind::Def && cx.input.syms.sym(s).owner == Owner::Local) {
+                continue;
             }
+            self.load_capture_arg(a, p);
         }
         for s in through_defs {
             self.load_capture(s);
@@ -4959,8 +5086,13 @@ impl<'a> Gen<'a> {
     /// What a named local class captures, loaded as a `new` of it passes them
     /// (`load_new_captures`), for its static default getter.
     fn load_class_captures(&mut self, c: ClassId) {
+        self.load_class_captures_after(c, 0)
+    }
+
+    /// `load_class_captures` from the capture at `from` on.
+    fn load_class_captures_after(&mut self, c: ClassId, from: usize) {
         let cx = self.cx;
-        for s in self.class_captured(c) {
+        for s in self.class_captured(c).into_iter().skip(from) {
             let info = cx.input.syms.sym(s);
             if info.kind == SymKind::Def && info.owner == Owner::Local {
                 continue;
@@ -4999,7 +5131,12 @@ impl<'a> Gen<'a> {
             return 0;
         }
         let tc = &cx.input.prog.classes[idx as usize];
-        if cx.input.syms.class(c).kind == ClassKind::Anon { tc.ctor_params.len() } else { tc.captures }
+        match cx.input.syms.class(c).kind {
+            ClassKind::Anon => tc.ctor_params.len(),
+            // A local trait's captures are what its `$init$` takes, held by the classes mixing it in.
+            ClassKind::Trait => 0,
+            _ => tc.captures,
+        }
     }
 
     /// The constructor of a lifted class takes what its body captured first: a `var` as its cell.
@@ -5050,6 +5187,89 @@ impl<'a> Gen<'a> {
             Held::Thunk
         } else {
             Held::Value
+        }
+    }
+
+    /// The values a local trait's member or initialiser takes first (`TFun::captures`, a trait's
+    /// `TClass::captures`), held as a lifted class holds its captures (`anon_capture_type`): a
+    /// local def by what it captures, which the trait's copy of it reads (`class_captured`).
+    pub fn proxy_syms(&mut self, proxies: &[SymId]) -> Vec<SymId> {
+        let cx = self.cx;
+        let mut out: Vec<SymId> = Vec::with_capacity(proxies.len());
+        for &p in proxies {
+            if !self.is_local_def(p) {
+                if !out.contains(&p) {
+                    out.push(p);
+                }
+                continue;
+            }
+            let free = self.an.of_fun(cx, p);
+            for &f in &free.syms {
+                if !out.contains(&f) && !self.is_local_def(f) {
+                    out.push(f);
+                }
+            }
+        }
+        out
+    }
+
+    /// The proxies the member `s` of a local trait takes first, when it takes some.
+    pub fn member_proxies(&mut self, s: SymId) -> Option<Vec<SymId>> {
+        let cx = self.cx;
+        let f = *cx.fun_of_sym.get(s.idx())?;
+        if f == u32::MAX {
+            return None;
+        }
+        let fun = &cx.input.prog.funs[f as usize];
+        let k = fun.captures as usize;
+        if k == 0 {
+            return None;
+        }
+        Some(self.proxy_syms(&fun.params[..k]))
+    }
+
+    /// The method `m` taking the proxies first.
+    pub fn proxied_mref(&mut self, m: &MRef, proxies: &[SymId]) -> MRef {
+        let mut params: Vec<JType> = proxies.iter().map(|&p| self.anon_capture_type(p)).collect();
+        params.extend(m.params.iter().cloned());
+        let desc = method_desc(&params, &m.ret);
+        MRef { params, desc, ..m.clone() }
+    }
+
+    /// The proxies a method takes first, bound as the locals they stand for: a `var` read
+    /// through its cell, a lazy val through its thunk.
+    pub fn bind_proxies(&mut self, proxies: &[SymId]) {
+        for &p in proxies {
+            let held = self.held(p);
+            let declared = self.sym_type(p);
+            let ty = self.anon_capture_type(p);
+            if let Some(local) = self.m.locals.get_mut(&p) {
+                match held {
+                    Held::Cell => {
+                        local.cell = true;
+                        local.ty = declared;
+                    }
+                    _ => local.ty = ty,
+                }
+            }
+        }
+    }
+
+    /// Pushes the proxies `proxies` (as `proxy_syms` expands the `declared` ones) that a call
+    /// passes with `args`, each as the caller holds it: an argument that is no read of the proxy
+    /// (a copied inline body's, the argument of its parameter) as its value.
+    pub fn load_proxies(&mut self, proxies: &[SymId], declared: &[SymId], args: &[TExprId]) {
+        let cx = self.cx;
+        for &p in proxies {
+            let want = self.anon_capture_type(p);
+            let arg = declared.iter().position(|&d| d == p).and_then(|i| args.get(i).copied());
+            match arg {
+                Some(a) if !matches!(cx.input.prog.expr(a), TExpr::Local(s) if s == p) => self.expr(a, &want),
+                _ => {
+                    let t = self.load_capture(p);
+                    self.adapt(&t, &want);
+                }
+            }
         }
     }
 

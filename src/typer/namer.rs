@@ -797,8 +797,14 @@ impl<'a> Worker<'a> {
             // An object nested in a class or trait is one instance per enclosing instance; the
             // companion of an enum nested there stays a single object, where the enum's cases
             // are made.
-            ast::ClassKind::Object if matches!(owner, Owner::Class(o) if self.syms.class(o).kind != ClassKind::Object && !self.enum_named_in_body(o, def.name)) => {
-                self.enter_inner_object(file, owner, id);
+            ast::ClassKind::Object if matches!(owner, Owner::Class(o) if self.syms.class(o).kind != ClassKind::Object) => {
+                // The companion an enum of the class made, entered before its object: the
+                // object's definition, a lazy one.
+                let made = self.existing_object(owner, def.name).filter(|&k| self.syms.class(k).def.is_none() && self.syms.class(k).file == file);
+                match made {
+                    Some(k) => self.define_inner_companion(file, k, id),
+                    None => self.enter_inner_object(file, owner, id),
+                }
             }
             ast::ClassKind::Object => {
                 let cid = match self.existing_object(owner, def.name) {
@@ -835,6 +841,11 @@ impl<'a> Worker<'a> {
                     _ => ClassKind::Enum,
                 };
                 let cid = self.syms.new_class(def.name, kind, def.mods, owner, file, Some(id), def.span);
+                // A trait a class of a block owns, whose members read the block's values through the
+                // class (`proxies.rs`): only then is a read looked at for it (`held_holder`).
+                if kind == ClassKind::Trait && matches!(owner, Owner::Class(_)) && self.in_block(cid) && !self.dotty_local_trait(cid) {
+                    self.prog.note_block_class_trait();
+                }
                 self.mark_inner_class(cid);
                 self.def_classes.insert(file.0 as usize, id, cid);
                 self.syms.class_mut(cid).has_exports = !cls.exports.is_empty();
@@ -899,20 +910,53 @@ impl<'a> Worker<'a> {
         self.enter_body(file, cid, &cls.body);
     }
 
-    /// Whether the body of the class `o` defines an enum called `name`, whose companion an
-    /// object of that name is.
-    fn enum_named_in_body(&self, o: ClassId, name: crate::intern::Name) -> bool {
-        let info = self.syms.class(o);
-        let Some(d) = info.def else { return false };
-        let ast = self.ast(info.file);
-        let DefKind::Class(cls) = &ast.def(d).kind else { return false };
-        cls.body.iter().any(|s| match s {
-            Stmt::Def(m) => {
-                let def = ast.def(*m);
-                def.name == name && matches!(&def.kind, DefKind::Class(c) if c.kind == ast::ClassKind::Enum)
-            }
-            _ => false,
-        })
+    /// The companion of an enum nested in a class or trait, made for it: an object nested there
+    /// (`enter_inner_object`'s shape) without a definition, its val eager in a class as dotty's
+    /// `LazyVals.transformSyntheticModule` makes a synthesized companion's, lazy in a trait.
+    fn new_inner_companion(&mut self, file: FileId, owner: Owner, name: crate::intern::Name, span: crate::source::Span) -> ClassId {
+        let cid = self.syms.new_class(name, ClassKind::Class, mods::FINAL, owner, file, None, span);
+        // An object nested in a class, typed through the enclosing instance (`enter_inner_object`).
+        self.mark_inner_class(cid);
+        self.record_self_alias(cid);
+        let ty = self.types.class(cid, &[]);
+        let in_trait = matches!(owner, Owner::Class(o) if self.syms.class(o).kind == ClassKind::Trait);
+        let m = mods::FINAL | if in_trait { mods::LAZY } else { 0 };
+        let sym = self.syms.new_sym(name, SymKind::Val, m, owner, file, None, span);
+        {
+            let mut s = self.syms.sym_mut(sym);
+            s.sig = Some(Arc::new(MethodSig::value(ty)));
+            s.state().set(Completion::Done);
+        }
+        self.syms.class_mut(cid).inner_object = Some(sym);
+        self.register_term(owner, sym);
+        cid
+    }
+
+    /// The object of the class's body that the companion `k` an enum made stands for: `k`
+    /// takes its definition and its body, and its val is lazy, as an object's is.
+    fn define_inner_companion(&mut self, file: FileId, k: ClassId, id: DefId) {
+        let def = self.ast(file).def(id);
+        let DefKind::Class(cls) = &def.kind else { return };
+        self.syms.class_mut(k).def = Some(id);
+        self.def_classes.insert(file.0 as usize, id, k);
+        self.syms.class_mut(k).has_exports = !cls.exports.is_empty();
+        self.enter_class_annots(file, def, k);
+        if let Some(v) = self.syms.class(k).inner_object {
+            self.syms.sym_mut(v).mods |= mods::LAZY;
+        }
+        self.enter_body(file, k, &cls.body);
+    }
+
+    /// The class of a local object made for a local enum, and the lazy val of the block holding
+    /// its instance (`enter_local_object`'s shape, without a definition).
+    fn new_local_module(&mut self, file: FileId, name: crate::intern::Name, span: crate::source::Span) -> ClassId {
+        let c = self.syms.new_class(name, ClassKind::Class, mods::FINAL, Owner::Local, file, None, span);
+        self.record_self_alias(c);
+        let ty = self.types.class(c, &[]);
+        let sym = self.new_local(name, SymKind::Val, ty, span);
+        self.syms.sym_mut(sym).mods |= mods::LAZY;
+        self.syms.class_mut(c).local_module = Some(sym);
+        c
     }
 
     fn new_object(
@@ -946,6 +990,26 @@ impl<'a> Worker<'a> {
         let DefKind::Class(cls) = &def.kind else { return };
         let companion = match self.syms.class(enum_cid).companion {
             Some(c) => c,
+            // A local enum's companion is a local object, made at each run of the block as
+            // dotty's `Desugar.moduleDef` and `LazyVals.transformLocalDef` make it: the block's
+            // object of the name, or one made for the enum.
+            None if owner == Owner::Local => {
+                let c = match self.local_object_named(def.name) {
+                    Some(o) => o,
+                    None => self.new_local_module(file, def.name, def.span),
+                };
+                self.syms.class_mut(enum_cid).companion = Some(c);
+                self.syms.class_mut(c).companion = Some(enum_cid);
+                c
+            }
+            // An enum nested in a class or trait has a companion per enclosing instance, an
+            // object nested there, as dotty's companion of an enum member is.
+            None if matches!(owner, Owner::Class(o) if self.syms.class(o).kind != ClassKind::Object) => {
+                let c = self.new_inner_companion(file, owner, def.name, def.span);
+                self.syms.class_mut(enum_cid).companion = Some(c);
+                self.syms.class_mut(c).companion = Some(enum_cid);
+                c
+            }
             None => {
                 let c = self.new_object(file, owner, def.name, 0, None, def.span);
                 self.syms.class_mut(enum_cid).companion = Some(c);
@@ -975,6 +1039,12 @@ impl<'a> Worker<'a> {
                 Some(*d),
                 member.span,
             );
+            // A class case of an enum whose companion is an object of each enclosing instance is a
+            // class of that object, typed through it (`is_inner_class`); a value case is read as a
+            // stable member of the companion's path, its class unmarked.
+            if !case_cls.clauses.is_empty() {
+                self.mark_inner_class(case_cid);
+            }
             self.def_classes.insert(file.0 as usize, *d, case_cid);
             self.syms.class_mut(case_cid).ordinal = ordinal;
             ordinal += 1;

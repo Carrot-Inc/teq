@@ -709,6 +709,16 @@ pub struct TFun {
     /// call of a method of a literal result type has its literal type): read off the type when
     /// the body is committed, where an unused kind is checked.
     pub body_unconsuming: bool,
+    /// How many of `params`, from the front, are the proxies of a local trait's member: the
+    /// values of the block its body reads, which each class mixing the trait in holds and passes
+    /// (dotty's `LambdaLift.addFreeParams`, `Worker::lift_trait_proxies`). Not the method's own:
+    /// the signature and the pickle leave them out.
+    pub captures: u32,
+    /// The member of a local trait (owned by a term or by such a trait, dotty's
+    /// `Dependencies.isLocal`) whose proxies every call passes (`LambdaLift.addFreeArgs`): its
+    /// lifted method is its one slot, which a class's member of the source signature does not
+    /// override, and a call of it passes `captures` arguments before its own.
+    pub lifted: bool,
 }
 
 /// The call of a parent constructor as the typer hands it over: `TClass::parent_prelude` and
@@ -1037,6 +1047,10 @@ pub struct Program {
     /// The files whose typing met a `getClass`, the caller's for one an inline expansion made:
     /// while there is one, every class carries its qualified name.
     pub get_class_units: Vec<FileId>,
+    /// A local enum's name in its lookups' messages, dotty's `enumClass.fullName` under the class
+    /// or file object whose body defines it (`Worker::enum_full_name`), which the JVM's companion
+    /// members write too.
+    pub local_enum_names: Vec<(ClassId, String)>,
     /// The def behind each `@js` template call, by the template's string: what the interpreter
     /// runs a builtin for, since the text alone does not name it.
     pub template_syms: crate::arena::Layered<StrRef, SymId>,
@@ -1109,6 +1123,12 @@ pub struct Program {
     /// behind them moves down and the file's are typed onto the end, so a position or a count
     /// over these lists from before is stale while the lengths are what they were.
     pub shifts: u32,
+    /// Whether a function is a local trait's lifted member (`TFun::lifted`), shared with the
+    /// workers' programs: the interpreter looks for one at a call only then.
+    pub lifted_funs: std::sync::Arc<std::sync::atomic::AtomicBool>,
+    /// Whether a trait a class of a block owns was entered, shared with the workers' programs: a
+    /// read of a block's value across one is looked for only then (`Worker::held_holder`).
+    pub block_class_traits: std::sync::Arc<std::sync::atomic::AtomicBool>,
 }
 
 /// An inline method's expansion: the method expanded.
@@ -1118,6 +1138,28 @@ pub struct Expansion {
 }
 
 impl Program {
+    /// Whether a function is a local trait's lifted member (`lifted_funs`).
+    #[inline]
+    pub fn has_lifted_funs(&self) -> bool {
+        self.lifted_funs.load(std::sync::atomic::Ordering::Relaxed)
+    }
+
+    /// Records that a function is a local trait's lifted member.
+    pub fn note_lifted_fun(&self) {
+        self.lifted_funs.store(true, std::sync::atomic::Ordering::Relaxed);
+    }
+
+    /// Whether a trait a class of a block owns was entered (`block_class_traits`).
+    #[inline]
+    pub fn has_block_class_traits(&self) -> bool {
+        self.block_class_traits.load(std::sync::atomic::Ordering::Relaxed)
+    }
+
+    /// Records that a trait a class of a block owns was entered.
+    pub fn note_block_class_trait(&self) {
+        self.block_class_traits.store(true, std::sync::atomic::Ordering::Relaxed);
+    }
+
     /// Another worker's program over the same shared regions: its records are its own, the
     /// registers (the top-level definitions, the expansions, ...) merged after the bodies.
     pub fn attach(&self, worker: usize) -> Program {
@@ -1223,7 +1265,10 @@ impl Program {
             aside_types: FxMap::default(),
             template_calls: Vec::new(),
             get_class_units: Vec::new(),
+            local_enum_names: Vec::new(),
             shifts: 0,
+            lifted_funs: self.lifted_funs.clone(),
+            block_class_traits: self.block_class_traits.clone(),
             template_syms: self.template_syms.attach(),
             class_bodies: self.class_bodies.attach(),
             expr_types: Parallel::attach(self.expr_types.shared_arc(), NO_TYPE, worker),
@@ -1320,7 +1365,10 @@ impl Default for Program {
             aside_types: FxMap::default(),
             template_calls: Vec::new(),
             get_class_units: Vec::new(),
+            local_enum_names: Vec::new(),
             shifts: 0,
+            lifted_funs: Default::default(),
+            block_class_traits: Default::default(),
             template_syms: Default::default(),
             class_bodies: Default::default(),
             expr_types: Parallel::new(NO_TYPE),

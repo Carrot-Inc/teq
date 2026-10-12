@@ -930,7 +930,7 @@ impl<'w, 'a> P<'w, 'a> {
         let ordinal = self.w.syms.class(case).ordinal as i32;
         let name = self.name(self.w.syms.class(case).name);
         let Some(&k) = self.enclosing.last() else { return self.fail("an enum's companion".to_string()) };
-        let result = self.w.library_class_name(e, "");
+        let result = self.sig_class_name(e);
         self.term_at(None);
         let l = self.open_tree(APPLY);
         let sl = self.open_tree(SELECTIN);
@@ -1390,7 +1390,7 @@ impl<'w, 'a> P<'w, 'a> {
             p.term_at(None);
             let l = p.open_tree(APPLY);
             let s = p.open_tree(SELECTIN);
-            let result = p.w.library_class_name(e, "");
+            let result = p.sig_class_name(e);
             let fo = p.names.signed("fromOrdinal", None, &[SigParam::Type("scala.Int".into())], &result);
             p.buf.nat(fo as u64);
             p.term_at(None);

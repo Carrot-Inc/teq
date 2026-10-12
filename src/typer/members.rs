@@ -89,11 +89,13 @@ impl<'a> Worker<'a> {
     /// Whether `c` is a class or trait nested in a class or trait (an object nested there is
     /// such a class, `ClassInfo::inner_object`): dotty's non-static class, whose type through an
     /// instance of its owner carries that instance as its prefix (`Type::Nested`) and whose bare
-    /// `Class` is its type through the owner's `this`. An enum nested in a class keeps a single
-    /// companion (DIFFERENCES), and with it one type.
+    /// `Class` is its type through the owner's `this`. An enum nested in a class keeps one type
+    /// (DIFFERENCES); its companion is an object of each enclosing instance, and a case of it a
+    /// class of that object, typed through its path (`B.E.Three`, dotty's `TypeRef(B.E, Three)`).
     pub fn is_inner_class(&self, c: ClassId) -> bool {
         let info = self.syms.class(c);
-        matches!(info.kind, ClassKind::Class | ClassKind::Trait)
+        (matches!(info.kind, ClassKind::Class | ClassKind::Trait)
+            || info.kind == ClassKind::EnumCase && info.singleton.is_none() && matches!(info.owner, Owner::Class(o) if self.syms.class(o).inner_object.is_some()))
             && info.mods & crate::ast::mods::JAVA_STATIC == 0
             && matches!(info.owner, Owner::Class(o) if !matches!(self.syms.class(o).kind, ClassKind::Object | ClassKind::Builtin))
     }

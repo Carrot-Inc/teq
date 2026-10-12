@@ -1842,7 +1842,11 @@ impl<'a> Worker<'a> {
                 }
             }
             Owner::Package(_) => self.prog.add(TExpr::Static(s)),
-            Owner::Local => self.prog.add(TExpr::Local(s)),
+            // Across a trait a class of the block owns: the proxy that class holds (`proxies.rs`).
+            Owner::Local => match self.held_holder(s) {
+                Some(r) => self.held_read(r, s),
+                None => self.prog.add(TExpr::Local(s)),
+            },
         })
     }
 
@@ -4609,7 +4613,10 @@ impl<'a> Worker<'a> {
                 let SymKind::Object(c) = kind else { unreachable!() };
                 self.prog.add(TExpr::Module(c))
             }
-            Owner::Local if has_params => self.prog.add(TExpr::CallStatic(g, l)),
+            Owner::Local if has_params => match self.held_holder(g) {
+                Some(r) => self.held_call(r, g, l),
+                None => self.prog.add(TExpr::CallStatic(g, l)),
+            },
             // The using parameter of an inline method under expansion stands for its argument,
             // eligible at the parameter's declared type and found with the argument's own.
             Owner::Local => match self.inline_arg(g) {
@@ -4618,7 +4625,10 @@ impl<'a> Worker<'a> {
                     ret = own;
                     arg
                 }
-                None => self.prog.add(TExpr::Local(g)),
+                None => match self.held_holder(g) {
+                    Some(r) => self.held_read(r, g),
+                    None => self.prog.add(TExpr::Local(g)),
+                },
             },
             // `this` does not exist yet where the constructor of a superclass is called.
             Owner::Class(c) if self.parent_args_of == Some(c) && self.syms.class(c).superclass.is_some() => {
@@ -4661,7 +4671,10 @@ impl<'a> Worker<'a> {
                     }
                 } else if let Some(v) = self.syms.class(c).local_module {
                     // A given imported from a local object lives on its lazy val.
-                    self.prog.add(TExpr::Local(v))
+                    match self.held_holder(v) {
+                        Some(r) => self.held_read(r, v),
+                        None => self.prog.add(TExpr::Local(v)),
+                    }
                 } else if let Some(v) = self.syms.class(c).inner_object {
                     // One of an object nested in a class is read from the enclosing instance.
                     match self.inner_object_ref(v) {

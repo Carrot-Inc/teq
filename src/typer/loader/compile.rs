@@ -379,7 +379,8 @@ impl<'a> Worker<'a> {
             self.note_class_body(k, d, file);
             // An enum's companion stands where its enum does, as the whole program's does
             // whether the source writes it or not.
-            let enum_of = self.syms.class(k).companion.filter(|&e| self.syms.class(k).kind == ClassKind::Object && self.syms.class(e).kind == ClassKind::Enum);
+            let object = self.syms.class(k).kind == ClassKind::Object || self.syms.class(k).inner_object.is_some();
+            let enum_of = self.syms.class(k).companion.filter(|&e| object && self.syms.class(e).kind == ClassKind::Enum);
             if let Some(lc) = enum_of.filter(|_| self.is_product_class(k)).and_then(|e| self.loaded.as_ref().unwrap().classes.get(&e).copied()) {
                 if lc.file == tasty_file {
                     self.loaded_mut().place_def_at(file, d, tasty_file, lc.addr);

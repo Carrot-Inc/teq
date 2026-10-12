@@ -216,12 +216,14 @@ impl<'a> Defaults<'a> {
         }
         let items = self.prog.expr_list(l);
         let (recv, priors) = if at & DEFAULT_RECEIVER != 0 { (items.first().copied(), &items[1..]) } else { (None, items) };
+        let args = self.prog.expr_list(c.args);
         match (recv, c.recv) {
             (Some(a), Some(b)) if self.same_value(a, b) => {}
             (None, None) => {}
+            // A constructor's getter on the enclosing instance the creation passes first.
+            (Some(a), None) if matches!(c.of, DefaultOf::Ctor(_)) && c.skip > 0 && args.first().is_some_and(|&o| self.same_value(a, o)) => {}
             _ => return false,
         }
-        let args = self.prog.expr_list(c.args);
         priors.len() <= index && priors.iter().enumerate().all(|(j, &p)| args.get(c.skip + j).is_some_and(|&a| self.same_value(p, a)))
     }
 
@@ -459,6 +461,11 @@ impl<'a> super::Emitter<'a> {
             Some(l) => l.omitted,
             None => Vec::new(),
         };
+        // What a local superclass captures goes as it is: a lazy val as its function, a `var` as
+        // its cell.
+        if self.local_captures.contains_key(&c) {
+            return self.emit_capture_args_omitting(c, args, &omitted);
+        }
         self.emit_args_omitting(args, &omitted);
     }
 
@@ -600,7 +607,12 @@ impl<'a> super::Emitter<'a> {
             if k > 0 {
                 self.out.push_str(", ");
             }
-            self.emit_capture_ref(s);
+            match recv {
+                // The enclosing instance the creation passes, the getter's receiver, for the
+                // capture that stands for it (`Worker::retarget_defaults`).
+                Some(r) if k == 0 => self.emit_value(r),
+                _ => self.emit_capture_ref(s),
+            }
         }
         for (k, &p) in priors.iter().enumerate() {
             if k > 0 || !captured.is_empty() {

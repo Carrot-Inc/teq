@@ -529,7 +529,7 @@ impl<'a> Renderable<'a> {
                     }
                     let name = super::bare_class_text(prog, syms, interner, reach, naming, shared, c);
                     add(&mut r.stems, &name);
-                    if super::is_module(syms, interner, c) {
+                    if super::is_module(syms, c) {
                         let accessor = super::accessor_of(&name);
                         add(&mut r.stems, &super::instance_of(&accessor));
                         add(&mut r.stems, &accessor);
@@ -1479,7 +1479,11 @@ impl<'a> Emitter<'a> {
         }
         self.walk_block(w, tc.parent_prelude, None);
         if let Some(args) = tc.parent_args {
-            self.walk_list(w, args);
+            // What a local superclass captures, as `emit_parent_args` passes it.
+            match info.superclass {
+                Some(sup) if info.kind != ClassKind::Anon && self.local_captures.contains_key(&sup) => self.walk_capture_args(w, sup, args),
+                _ => self.walk_list(w, args),
+            }
         }
         if let Some(via) = tc.parent_via {
             for f in super::layout::ctor_chain(prog, self.syms, via) {
@@ -1588,8 +1592,11 @@ impl<'a> Emitter<'a> {
                     DefaultOf::Method(s) => self.walk_ref(w, s),
                     DefaultOf::Ctor(c) => {
                         self.walk_class(w, c);
-                        for s in self.ctor_captures(c) {
-                            self.walk_capture_ref(w, s);
+                        for (k, s) in self.ctor_captures(c).into_iter().enumerate() {
+                            match recv {
+                                Some(r) if k == 0 => self.walk(w, r),
+                                _ => self.walk_capture_ref(w, s),
+                            }
                         }
                     }
                 }

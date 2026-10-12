@@ -99,7 +99,8 @@ impl<'a> Worker<'a> {
         let parent_args = parent_args.filter(|call| extends_class.is_some() && (!call.args.is_empty() || call.via.is_some()));
         let first_expr = self.prog.exprs.len();
         self.check_class(c);
-        let captures = self.captured_by(c, first_expr);
+        let mut captures = self.captured_by(c, first_expr);
+        self.add_accessor_captures(c, &mut captures);
         let tclass = self.checked_class_mut(c).expect("the class was just checked");
         tclass.ctor_defaults = vec![None; captures.len()];
         tclass.ctor_params = captures.clone();
@@ -443,19 +444,34 @@ impl<'a> Worker<'a> {
         self.interner.intern(&text)
     }
 
+    /// The place the copies of the class `c` of a stored body are counted at (`local_class_name`):
+    /// its definition's place in the product it was converted from, which tells its classes
+    /// apart where the converted body gives them one span; else its span.
+    pub(super) fn copy_naming_span(&self, c: ClassId) -> Span {
+        let info = self.syms.class(c);
+        match self.product_position(info.file, info.def) {
+            Some((_, offset)) => Span { start: offset, end: offset },
+            None => info.span,
+        }
+    }
+
     /// Names the class `c` a product's inline body declares, entered again at each expansion of
     /// the body it is retyped for, by the expansion's site and repetition, as the copy of a
     /// stored body's class is (`C$<site>`): the class of the definition's place alone would be
-    /// every expansion's name.
+    /// every expansion's name. A body read from a pickle without teq's origins (scalac's) is
+    /// named so too; its repetitions are counted at the definition's place in the product,
+    /// which tells the classes of one body apart where the converted body gives them one span.
     pub(super) fn name_retyped_product_class(&mut self, c: ClassId) {
         let (file, def, span, name) = {
             let info = self.syms.class(c);
             (info.file, info.def, info.span, info.name)
         };
-        if self.inline.sites.is_empty() || self.product_position(file, def).is_none() {
+        let place = self.product_position(file, def);
+        if self.inline.sites.is_empty() || (place.is_none() && !self.is_body_file(file)) {
             return;
         }
-        let name = self.local_class_name(span, name);
+        let key = place.map_or(span, |(_, offset)| Span { start: offset, end: offset });
+        let name = self.local_class_name(key, name);
         self.syms.class_mut(c).name = name;
         self.note_made_at(c, span, false);
     }
@@ -707,7 +723,11 @@ impl<'a> Worker<'a> {
     pub fn new_instance(&mut self, c: ClassId, args: ast::ListRef, span: Span) -> TExprId {
         if let Some(o) = self.outer_class(c) {
             let inside = self.inside_class(c);
-            let mut items = vec![self.new_outer_arg(c, o, span)];
+            let outer = self.new_outer_arg(c, o, span);
+            // A default the creation leaves to the constructor's getter takes the enclosing
+            // instance the creation passes, its receiver (`retarget_defaults`).
+            self.retarget_defaults(args, DefaultOf::Ctor(c), DefaultOf::Ctor(c), |w| w.prior_copy(outer));
+            let mut items = vec![outer];
             // What the class takes of its lifted owner's captures, passed here where the owner
             // is done; inside the owner they are given once it is (`capture_through_nested`).
             if let Some(captures) = self.anon_captures.get(&c).cloned() {
@@ -723,6 +743,13 @@ impl<'a> Worker<'a> {
         let info = self.syms.class(c);
         if info.owner != Owner::Local || info.kind == ClassKind::Anon {
             return self.prog.add(TExpr::New(c, args));
+        }
+        // A class of the block made across a trait a class owns: through the proxy factory the
+        // class of the block holds (`proxies.rs`).
+        if let Some(r) = self.held_holder_of_class(c) {
+            if let Some(te) = self.held_new(r, c, args) {
+                return te;
+            }
         }
         let inside = self.inside_class(c);
         let selfs = self.enclosing_object_selfs();
@@ -764,7 +791,20 @@ impl<'a> Worker<'a> {
     /// The local class `c` has been checked: what its body captures leads its constructor
     /// parameters, and the instances created so far get those arguments.
     pub(super) fn finish_local_class(&mut self, c: ClassId, first: usize) {
-        let captures = self.captured_by(c, first);
+        let mut captures = self.captured_by(c, first);
+        self.add_accessor_captures(c, &mut captures);
+        // A class mixing in a local trait of the block not checked yet forwards to the trait's
+        // members once it is, with what they read (`finish_deferred_classes`).
+        if self.waits_for_local_trait(c) {
+            self.deferred_classes.push((c, captures));
+            return;
+        }
+        self.settle_local_class(c, captures);
+    }
+
+    /// The local class `c` captures `captures`: they lead its constructor parameters, and the
+    /// instances created so far get those arguments.
+    pub(super) fn settle_local_class(&mut self, c: ClassId, captures: Vec<SymId>) {
         let n = captures.len();
         if let Some(tc) = self.checked_class_mut(c) {
             tc.ctor_params.splice(0..0, captures.iter().copied());
@@ -813,6 +853,10 @@ impl<'a> Worker<'a> {
                 }
             }
             inner.extend(inner.clone().into_iter().filter_map(|n| self.syms.class(n).companion));
+            // The cases of an enum whose companion `k` is, its values' among them.
+            if let Some(e) = self.syms.class(k).companion.filter(|&e| self.syms.class(e).kind == ClassKind::Enum) {
+                inner.extend(self.syms.class(e).children.iter().copied().filter(|&case| self.syms.class(case).owner == Owner::Class(k)));
+            }
             inner.sort();
             inner.dedup();
             for n in inner {
@@ -820,29 +864,6 @@ impl<'a> Worker<'a> {
                     todo.push(n);
                     nested.push(n);
                 }
-            }
-        }
-        // A trait has no constructor to take what it names, as a local trait has not
-        // (`check_local_trait_captures`): one that reads the block's values is refused rather
-        // than left reading names no scope of the output has (dotty's `LambdaLift` gives its
-        // methods the proxies, the separate design COMPATIBILITY records).
-        let traits: Vec<ClassId> = nested.iter().copied().filter(|&n| self.syms.class(n).kind == ClassKind::Trait).collect();
-        for t in traits {
-            let Some(index) = self.prog_index.class(&self.prog, t) else { continue };
-            let tc = self.prog.classes[index].clone();
-            let read = self.class_roots(std::slice::from_ref(&tc)).into_iter().find_map(|root| {
-                self.prog.descendants(root).find_map(|e| match self.prog.expr(e) {
-                    TExpr::Local(s) | TExpr::CallStatic(s, _) if captures.contains(&s) => Some(s),
-                    _ => None,
-                })
-            });
-            if let Some(s) = read {
-                let msg = format!(
-                    "not supported yet: a trait nested in a local class referring to {} of its enclosing block; move the class to the top level",
-                    self.name_str(self.syms.sym(s).name)
-                );
-                let span = self.syms.class(t).span;
-                self.error(span, msg);
             }
         }
         nested.retain(|&n| self.outer_class(n).is_some() && self.prog_index.class(&self.prog, n).is_some());
@@ -1439,22 +1460,23 @@ impl<'a> Worker<'a> {
     /// The body of the SAM class `c`, whose one method `msym` over `param_syms` is `body`, and
     /// its instance; `first_expr` is where the body's expressions start, for its captures.
     fn sam_class_body(&mut self, c: ClassId, msym: SymId, param_syms: Vec<SymId>, body: TExprId, first_expr: usize) -> (TExprId, TypeId) {
-        let captures = self.captured_by(c, first_expr);
         let f = self.prog.add_fun(TFun {
             sym: msym,
             defaults: vec![None; param_syms.len()],
             params: param_syms,
             body: Some(body),
             body_unconsuming: false,
+            captures: 0,
+            lifted: false,
         });
         self.fun_of_sym.insert(msym, f);
         let tclass = TClass {
             parent_via: None,
             ctors: Vec::new(),
             id: c,
-            ctor_defaults: vec![None; captures.len()],
-            ctor_params: captures.clone(),
-            captures: captures.len(),
+            ctor_defaults: Vec::new(),
+            ctor_params: Vec::new(),
+            captures: 0,
             parent_args: None,
             parent_prelude: ast::ListRef::EMPTY,
             synthesized: 0,
@@ -1468,6 +1490,15 @@ impl<'a> Worker<'a> {
             deferred_givens: Vec::new(),
         };
         self.push_class_body(tclass);
+        // A local trait's members that read the block are forwarded to with what they read.
+        self.add_trait_forwarders(c);
+        let mut captures = self.captured_by(c, first_expr);
+        self.add_accessor_captures(c, &mut captures);
+        if let Some(tc) = self.checked_class_mut(c) {
+            tc.ctor_defaults = vec![None; captures.len()];
+            tc.ctor_params = captures.clone();
+            tc.captures = captures.len();
+        }
         self.anon_captures.insert(c, captures);
         self.anon_instance(c)
     }
@@ -1552,7 +1583,13 @@ impl<'a> Worker<'a> {
 
     /// A class body checked, into the program's classes, or kept with the record of the stored
     /// body that makes it (`keep_stored_class`).
-    pub(super) fn push_class_body(&mut self, tclass: TClass) {
+    pub(super) fn push_class_body(&mut self, mut tclass: TClass) {
+        // The proxies of the block's values made for the traits nested in it (`proxies.rs`).
+        if !self.pending_held.is_empty() {
+            if let Some(fs) = self.pending_held.remove(&tclass.id) {
+                tclass.methods.extend(fs);
+            }
+        }
         if let Err(tclass) = self.keep_stored_class(tclass) {
             let id = self.prog.classes.push(tclass);
             self.note_nested_in_check(id);
@@ -1697,6 +1734,11 @@ impl<'a> Worker<'a> {
         }
         if through_anon {
             let sym = self.outer_this_sym(c);
+            // The instance of a class around a block, read across a trait a class of the block
+            // owns: the proxy that class holds (`proxies.rs`).
+            if let Some(r) = self.held_holder_of_this(c) {
+                return self.held_read(r, sym);
+            }
             return self.prog.add(TExpr::Local(sym));
         }
         // `O.this` from a class nested in the object `O` is the module itself (a jar's
@@ -1735,8 +1777,10 @@ impl<'a> Worker<'a> {
     pub(super) fn outer_class(&self, c: ClassId) -> Option<ClassId> {
         let info = self.syms.class(c);
         let Owner::Class(o) = info.owner else { return None };
-        // A Java class's static member class is static: it takes no outer (`cls.isStatic`).
-        (matches!(info.kind, ClassKind::Class | ClassKind::GivenImpl) && info.mods & mods::JAVA_STATIC == 0 && self.syms.class(o).kind != ClassKind::Object).then_some(o)
+        // A Java class's static member class is static: it takes no outer (`cls.isStatic`). An
+        // enum's case is a class of its companion, which an enum of a block or a class has an
+        // instance of per run or per enclosing instance, and a class's enum is a class of it.
+        (matches!(info.kind, ClassKind::Class | ClassKind::GivenImpl | ClassKind::EnumCase | ClassKind::Enum) && info.mods & mods::JAVA_STATIC == 0 && self.syms.class(o).kind != ClassKind::Object).then_some(o)
     }
 
     /// `C.this` from inside a class or trait nested in `C` whose instance does not hold it in a
@@ -1911,7 +1955,7 @@ impl<'a> Worker<'a> {
                 self.syms.add_member(c, s);
                 s
             };
-            let f = self.prog.add_fun(TFun { sym: s, params: Vec::new(), defaults: Vec::new(), body: Some(body), body_unconsuming: false });
+            let f = self.prog.add_fun(TFun { sym: s, params: Vec::new(), defaults: Vec::new(), body: Some(body), body_unconsuming: false, captures: 0, lifted: false });
             self.fun_of_sym.insert(s, f);
             funs.push(f);
         }
@@ -1982,8 +2026,9 @@ impl<'a> Worker<'a> {
         if let Some(&s) = self.outer_this.get(&c) {
             return s;
         }
+        // A local enum's companion made without a definition by its enum's position.
         let (span, file, def) = {
-            let info = self.syms.class(c);
+            let info = self.syms.class(self.syms.placed_class(c));
             (info.span, info.file, info.def)
         };
         // The local stands for `C.this`, so its type is that singleton: a member type reached

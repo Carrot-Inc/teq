@@ -147,7 +147,7 @@ impl Naming {
             }
             let tag = match info.kind {
                 ClassKind::Object => 1,
-                _ if super::beside_companion(interner, info) => 1,
+                _ if super::beside_companion(info) => 1,
                 ClassKind::GivenImpl => 2,
                 ClassKind::EnumCase if info.singleton.is_some() => 3,
                 _ => 0,
@@ -252,7 +252,7 @@ fn class_key_hasher(syms: &Symbols, interner: &Interner, c: ClassId) -> FxHasher
     let mut at = Some(c);
     while let Some(k) = at {
         let info = syms.class(k);
-        let text = interner.get(info.name);
+        let text = super::class_name_text(interner, &info);
         h.write_u32(text.len() as u32);
         h.write(text.as_bytes());
         at = match info.owner {
