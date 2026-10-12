@@ -568,8 +568,7 @@ impl<'a> Worker<'a> {
     fn enter_secondary_ctor(&mut self, file: FileId, owner: Owner, id: DefId) {
         let def = self.ast(file).def(id);
         let c = match owner {
-            // An enum is a class, whose cases may call its secondary constructors.
-            Owner::Class(c) if matches!(self.syms.class(c).kind, ClassKind::Class | ClassKind::Enum) => c,
+            Owner::Class(c) if self.syms.class(c).kind == ClassKind::Class => c,
             Owner::Class(c) if self.syms.class(c).kind == ClassKind::Trait => {
                 self.error(def.span, "Traits cannot have secondary constructors");
                 return;

@@ -4316,21 +4316,17 @@ impl<'a> Worker<'a> {
             Some((site, c)) => self.trait_member_subst(site, c),
             None => Vec::with_capacity(sig.tparams.len()),
         };
-        // `Kind.this` in the signature is the module, path or imported value the given is
-        // reached through (`import tasty.given` brings `tasty.selectTag: ClassTag[tasty.Select]`,
-        // as dotty's import of a value refers to its members through the value's `TermRef`,
-        // `ImportInfo.importedImplicits`).
+        // `Kind.this` in the signature is the module or path the given is reached through.
         let sig = match site {
             // A given a class in scope inherits sees its owner's `this` as that class's (dotty's
             // `TermRef(Sub.this, given)` seen from `Sub.this`).
-            Some((site @ (TraitMemberSite::Module(_) | TraitMemberSite::Path(_) | TraitMemberSite::Value(_) | TraitMemberSite::This(Some(_))), c))
+            Some((site @ (TraitMemberSite::Module(_) | TraitMemberSite::Path(_) | TraitMemberSite::This(Some(_))), c))
                 if !matches!(site, TraitMemberSite::This(Some(k)) if k == c)
                     && (self.types.has_paths(sig.ret) || sig.clauses.iter().any(|cl| cl.params.iter().any(|p| self.types.has_paths(p.ty)))) =>
             {
                 let (prefix, c) = match site {
                     TraitMemberSite::Path(p) => (p, c),
                     TraitMemberSite::Module(m) => (self.types.class(m, &[]), c),
-                    TraitMemberSite::Value(v) => (self.import_value_type(v), c),
                     TraitMemberSite::This(Some(k)) => (self.this_prefix(k), k),
                     _ => unreachable!(),
                 };

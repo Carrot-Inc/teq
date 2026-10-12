@@ -833,7 +833,7 @@ impl<'a> Worker<'a> {
 
     /// `apply_context_function` of a value whose type is the context function `ptys ?=> ret`.
     #[inline(never)]
-    pub(super) fn apply_context_function_to(&mut self, te: TExprId, actual: TypeId, expected: TypeId, ptys: Vec<TypeId>, ret: TypeId, span: Span) -> Option<(TExprId, TypeId)> {
+    fn apply_context_function_to(&mut self, te: TExprId, actual: TypeId, expected: TypeId, ptys: Vec<TypeId>, ret: TypeId, span: Span) -> Option<(TExprId, TypeId)> {
         // An opaque type is its context function type where it is transparent, as dotty's
         // `isContextFunctionType` sees it there through the alias.
         let exp = self.deref(expected);
@@ -2319,8 +2319,7 @@ impl<'a> Worker<'a> {
         let span = self.cur_ast().expr_span(e);
         let part = self.body_part(super::profile::Part::Apply);
         let prefixed = self.cur_ast().new_outers.contains_key(&e);
-        let imported = if prefixed { None } else { self.new_import_prefix(ty) };
-        let outer_prefixed = std::mem::replace(&mut self.new_prefixed, prefixed || imported.is_some());
+        let outer_prefixed = std::mem::replace(&mut self.new_prefixed, prefixed);
         let outer_new = std::mem::replace(&mut self.explicit_new, true);
         let journal = self.unused.journal_len();
         let typed = self.type_new(ty, &[(args, false, span)], false, span, expected);
@@ -2331,13 +2330,6 @@ impl<'a> Worker<'a> {
         self.new_prefixed = outer_prefixed;
         self.part_end(part);
         self.new_enclosing_instance(e, typed, prefixed);
-        // A class named through an import of a value's members takes the value as its enclosing
-        // instance, where its type carries no prefix that passed it.
-        if let Some(v) = imported.filter(|_| !matches!(self.types.get(typed.1), Type::Nested(..))) {
-            if let Some((outer, _)) = self.import_value_ref(v, span) {
-                self.pass_outer(typed.0, outer);
-            }
-        }
         typed
     }
 
@@ -2350,23 +2342,6 @@ impl<'a> Worker<'a> {
         } else if let Type::Nested(p, _) = self.types.get(typed.1) {
             self.prefix_outer(typed.0, p);
         }
-    }
-
-    /// The imported value whose class the class of `new C` is nested in, where `C` is named
-    /// without a prefix through an import of the value's members: the type the import gives is
-    /// `v.C` (dotty's `Typer.findRef`, its `selection` of the import's site), whose prefix is
-    /// the enclosing instance (`ExplicitOuter`'s `outerPrefix`).
-    fn new_import_prefix(&mut self, ty: TyExprId) -> Option<super::ValueImport> {
-        let head = match self.cur_ast().ty(ty) {
-            TyExpr::Apply(f, _) => f,
-            _ => ty,
-        };
-        let TyExpr::Name(n) = self.cur_ast().ty(head) else { return None };
-        if self.import_count() == 0 {
-            return None;
-        }
-        let super::resolve::TypeRef::ValueMember(v, member) = self.lookup_type(n)? else { return None };
-        self.value_nested_class(v, member).is_some().then_some(v)
     }
 
     /// `new C[T](args)`, also with the argument lists an anonymous class expression collects.
@@ -3151,7 +3126,6 @@ impl<'a> Worker<'a> {
             None => {
                 let ret = exp_fn.as_ref().map(|&(_, r)| r);
                 let (tb, bty) = self.type_expr(body, ret);
-                let (tb, bty) = self.apply_context_to_open_result(body, tb, bty, ret);
                 let body_span = self.cur_ast().expr_span(body);
                 let (tb, bty) = self.widen_lambda_result(tb, bty, ret, body_span);
                 (tb, if ret.is_none() { self.widen_unions(bty) } else { bty })
@@ -3257,7 +3231,6 @@ impl<'a> Worker<'a> {
             None => {
                 let ret = exp_fn.as_ref().map(|&(_, r)| r);
                 let (tb, bty) = self.type_expr(body, ret);
-                let (tb, bty) = self.apply_context_to_open_result(body, tb, bty, ret);
                 let body_span = self.cur_ast().expr_span(body);
                 self.widen_lambda_result(tb, bty, ret, body_span)
             }
@@ -3269,33 +3242,6 @@ impl<'a> Worker<'a> {
         let lambda = self.prog.add(TExpr::Lambda(l, tb));
         self.note_erroneous_lambda(lambda, body_own);
         (lambda, ty)
-    }
-
-    /// A lambda's body of a context function type, typed against no result type or an open
-    /// variable, applied to the givens in scope: dotty types the body against the variable, or
-    /// the wildcard of the closure's inferred result, and its `adaptNoArgsOther` inserts the
-    /// `apply` where the expected type is no context function's, which a variable is when the
-    /// upper bound its constraint has is none (`Definitions.asContextFunctionType` reads its
-    /// `hiBound`).
-    fn apply_context_to_open_result(&mut self, e: ExprId, te: TExprId, ty: TypeId, ret: Option<TypeId>) -> (TExprId, TypeId) {
-        // Most bodies have a class's type that is no context function, told apart first, as
-        // `apply_inferred_context` tells them apart, before the variable's bounds are read.
-        if let Type::Class(c, _) = self.types.get(ty) {
-            if !self.is_context_function_class(c) {
-                return (te, ty);
-            }
-        }
-        if let Some(r) = ret {
-            let head = self.deref(r);
-            let Type::Var(v) = self.types.get(head) else { return (te, ty) };
-            for i in 0..self.tvars[v].upper.len() {
-                let u = self.tvars[v].upper[i];
-                if self.as_context_function(u).is_some() {
-                    return (te, ty);
-                }
-            }
-        }
-        self.apply_inferred_context(e, te, ty)
     }
 
     /// The result of a lambda typed against an open variable widens to the numeric upper bound

@@ -338,11 +338,8 @@ impl ExportScope {
                 self.keep_via(from, s);
             }
         }
-        // A wildcard leaves out what is a given alone: an old-style implicit (an implicit class's
-        // conversion) goes with its name, an implicit still (dotty's `addWildcardForwarders`).
-        for &g in &from.givens {
-            let info = syms.sym(g);
-            if mode == Merge::Inherit || (!syms.is_scala3_given(g) && !hidden.contains(&info.name)) {
+        if mode == Merge::Inherit {
+            for &g in &from.givens {
                 self.givens.push(g);
                 self.keep_via(from, g);
             }
@@ -907,8 +904,6 @@ impl<'a> Worker<'a> {
                         } else {
                             match t.resolve_export_path(head, &imp.path) {
                                 Ok(target) => Some(target),
-                                // A value's members are the forwarders of `value_exports`.
-                                Err(_) if matches!(t.export_stack.last().map(|f| f.owner), Some(ExportOwner::Class(c)) if t.export_path_through_value(c, &imp.path)) => None,
                                 Err(msg) => {
                                     build.error(imp.span, msg);
                                     None
@@ -955,7 +950,7 @@ impl<'a> Worker<'a> {
     /// `head` is what the first segment refers to. It is looked up like any identifier inside
     /// the exporting template, which covers nested and sibling objects as well as absolute
     /// package paths.
-    pub(super) fn resolve_export_path(&mut self, head: Option<TermRef>, path: &[Name]) -> Result<ImportTarget, String> {
+    fn resolve_export_path(&mut self, head: Option<TermRef>, path: &[Name]) -> Result<ImportTarget, String> {
         let Some((&first, rest)) = path.split_first() else {
             return Err("an export needs a qualifier, as in `export obj.member`".to_string());
         };
@@ -1495,7 +1490,7 @@ impl<'a> Worker<'a> {
         })
     }
 
-    pub(super) fn parent_class(&mut self, ty: TyExprId) -> Option<ClassId> {
+    fn parent_class(&mut self, ty: TyExprId) -> Option<ClassId> {
         let found = match self.cur_ast().ty(ty) {
             TyExpr::Apply(f, _) => return self.parent_class(f),
             TyExpr::Name(n) => self.lookup_type(n)?,
@@ -1534,10 +1529,6 @@ impl<'a> Worker<'a> {
             if info.base_types.iter().any(|&(b, _)| b == owner) {
                 let module = !innermost && info.kind == ClassKind::Object;
                 return if module { TraitMemberSite::Module(k) } else { TraitMemberSite::This(Some(k)) };
-            }
-            // A member of what its `self: T =>` declares is reached through `this` as well.
-            if info.declared_self.is_some() && self.declared_self_derives(k, owner) {
-                return TraitMemberSite::This(Some(k));
             }
             if let Some(&m) = self.exports_of(k).as_ref().and_then(|e| e.via.get(&sym)) {
                 return TraitMemberSite::Module(m);
@@ -1606,17 +1597,6 @@ impl<'a> Worker<'a> {
     }
 
     /// The type arguments that the class at the site gives to the trait `owner`.
-    /// Whether a class `k`'s declared self type derives from `owner`.
-    fn declared_self_derives(&mut self, k: ClassId, owner: ClassId) -> bool {
-        for s in self.self_type_classes(k) {
-            self.complete_class(s);
-            if self.syms.class(s).base_types.iter().any(|&(b, _)| b == owner) {
-                return true;
-            }
-        }
-        false
-    }
-
     pub fn trait_member_subst(&mut self, site: TraitMemberSite, owner: ClassId) -> Subst {
         if let TraitMemberSite::Path(p) = site {
             return match self.base_type(p, owner) {
@@ -1636,13 +1616,7 @@ impl<'a> Worker<'a> {
         self.complete_class(k);
         match self.syms.class(k).base_types.iter().find(|&&(b, _)| b == owner) {
             Some(&(_, bt)) => self.owner_subst(bt),
-            // A member of what `self: T =>` declares (`given aType: Type[X]` of a `SubBase[X]`
-            // under `self: SubBase[A] =>`), seen through `T`'s base type, as dotty's `asSeenFrom`
-            // of `k.this` reads the self type.
-            None => match self.syms.class(k).declared_self.and_then(|st| self.base_type(st, owner)) {
-                Some(bt) => self.owner_subst(bt),
-                None => Vec::new(),
-            },
+            None => Vec::new(),
         }
     }
 

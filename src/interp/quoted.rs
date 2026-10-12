@@ -1004,13 +1004,8 @@ impl<'m> Matcher<'m> {
             return relate(it, p, s);
         }
         let sd = it.typer.dealias(s);
-        // An alias in the pattern (`'[Lens[f, t]]`) matches what it stands for, which may be a
-        // variable itself (`'[IsProduct[t]]` under `type IsProduct[U <: Product] = U`), as
-        // dotty's `TypeComparer` dealiases a side before it constrains a type hole.
-        let dp = it.typer.deref_alias(p);
-        if dp != p {
-            return self.constrain(it, dp, s, variance);
-        }
+        // An alias in the pattern (`'[Lens[f, t]]`) matches what it stands for.
+        let p = it.typer.deref_alias(p);
         let (pt, st) = (it.typer.types.get(p), it.typer.types.get(sd));
         // The side that has to be below both parts of an intersection, or above both parts of a
         // union, is compared with each; the side that has one of two parts to compare is tried
@@ -2378,10 +2373,8 @@ impl<'a, 't> Interp<'a, 't> {
             TreeRef::SeqLiteral(e) => self.prog().type_of(e).map_or(ANY, |ty| self.typer.zonk(ty)),
             TreeRef::Expr(e) => {
                 // A stable val's reference has its singleton type, as scalac's `Ident` has,
-                // which `widen` takes to the declared type; a reference cast to its own type is
-                // the cast's tree, of that type (`mirrorRef.cast(mirrorType)`).
-                let cast = self.typer.expr_marks.get(&e).is_some_and(|&m| m & crate::typer::MARK_CAST != 0);
-                if let (TExpr::Local(s) | TExpr::Static(s), false) = (self.prog().expr(e), cast) {
+                // which `widen` takes to the declared type.
+                if let TExpr::Local(s) | TExpr::Static(s) = self.prog().expr(e) {
                     if matches!(self.syms().sym(s).kind, SymKind::Val | SymKind::Param) && self.typer.sig_of(s).tparams.is_empty() {
                         let declared = self.typer.sig_of(s).ret;
                         if self.prog().type_of(e).map_or(true, |ty| self.typer.zonk(ty) == declared) {
@@ -3564,10 +3557,7 @@ fn install_trees(it: &mut Table) {
                 let n = items.len() - 1;
                 (items[..n].to_vec(), items[n])
             }
-            _ => match it.method_type_parts(mt)? {
-                Some(m) => (m.types, m.result),
-                None => return it.unsupported("Lambda.apply takes a method type"),
-            },
+            _ => return it.unsupported("Lambda.apply takes the method type as a function type"),
         };
         let span = it.macro_ctx.as_ref().map_or(Span::default(), |c| c.site_span);
         let params: Vec<SymId> = param_tys.iter().map(|&t| it.typer.fresh_local("x", t, span)).collect();
@@ -4239,11 +4229,8 @@ impl<'a, 't> Interp<'a, 't> {
                 for clause in clauses {
                     out.push(clause.into_iter().map(SymRef::Term).collect());
                 }
-                // The class over its own type parameters, the result type dotty's constructor
-                // has (`Box[T]` of `case class Box[T](t: T)`), which `returnTpt` gives.
-                let own: Vec<TypeId> = self.syms().class(c).tparams.clone().into_iter().map(|p| self.typer.types.param(p)).collect();
-                let ret = self.typer.types.class(c, &own);
-                Ok(("<init>".to_string(), out, ret, None))
+                let unit = self.typer.b.t_unit;
+                Ok(("<init>".to_string(), out, unit, None))
             }
             // scalac's tree of a default getter has no right-hand side at expansion time
             // (Magnolia's `defaultValue` answers `None` without `-Yretain-trees`).
@@ -4818,29 +4805,6 @@ impl<'a, 't> Interp<'a, 't> {
         t
     }
 
-    /// A method type of its own, not shared with an equal one, whose parts `set_method_binder`
-    /// fills in afterwards: a binder under construction, with its id in the records.
-    fn method_binder(&mut self, m: MethodTypeRepr) -> (TypeId, u32) {
-        let id = self.records.method_types.push(m);
-        let t = self.typer.types.blocked(&format!("<method>{id}"));
-        (t, id)
-    }
-
-    /// Sets parts of the binder `id`.
-    fn set_method_binder(&mut self, id: u32, set: impl FnOnce(&mut MethodTypeRepr)) {
-        if let Some(m) = self.records.method_types.get_mut(id) {
-            set(m);
-        }
-    }
-
-    /// The binder `id`, of type `t`, whole: an equal method type made later is it.
-    fn finish_method_binder(&mut self, id: u32, t: TypeId) {
-        if let Some(m) = self.records.method_types.get(id) {
-            let whole = m.clone();
-            self.records.method_type_ids.entry(whole).or_insert(t);
-        }
-    }
-
     /// `t` of a by-name parameter's type `=> t` (`ByNameType`).
     fn by_name_underlying(&mut self, t: TypeId) -> R<Option<TypeId>> {
         Ok(self.typer.by_name_arg(t))
@@ -5335,33 +5299,6 @@ fn install_types(it: &mut Table) {
         let bounds = p.params.iter().map(|&tp| Value::Type(it.tparam_bounds(tp))).collect();
         let bounds = it.make_list(bounds)?;
         it.make_tuple(vec![names, bounds, Value::Type(p.result)])
-    });
-    // `MethodType(names)(params, result)`: one binder, as dotty's `MethodType` makes it: given to
-    // the parameters' callback, its `paramInfos` set from what that returns, then given to the
-    // result's callback and its result set, the same binder returned (`Types.MethodType`'s
-    // `initResultType` after `paramInfos`), so that a binder a callback kept reads the types set
-    // since and the references to it stay its own.
-    q!(it, "Reflect.MethodType.apply", |it, a| {
-        let names = it.list_items(&arg(a, 1))?;
-        let (params_fn, result_fn) = (arg(a, 2), arg(a, 3));
-        let mut ns = Vec::with_capacity(names.len());
-        for n in &names {
-            let name = it.to_str(n)?;
-            ns.push(it.typer.interner.intern(&name));
-        }
-        let (binder, id) = it.method_binder(MethodTypeRepr { names: ns.clone(), types: vec![ANY; ns.len()], result: ANY, open: Vec::new(), kind: ClauseKind::Plain });
-        let params = it.apply_value(params_fn, vec![Value::Type(binder)])?;
-        let mut types = Vec::with_capacity(ns.len());
-        for p in it.list_items(&params)? {
-            let Value::Type(t) = p else { return it.unsupported("a MethodType parameter that is no type") };
-            types.push(t);
-        }
-        it.set_method_binder(id, |m| m.types = types);
-        let result = it.apply_value(result_fn, vec![Value::Type(binder)])?;
-        let Value::Type(result) = result else { return it.unsupported("a MethodType result that is no type") };
-        it.set_method_binder(id, |m| m.result = result);
-        it.finish_method_binder(id, binder);
-        Ok(Value::Type(binder))
     });
     q!(it, "Reflect.MethodType.unapply", |it, a| {
         let t = it.type_arg(a, 1)?;
@@ -6436,22 +6373,6 @@ impl<'a, 't> Interp<'a, 't> {
         }
     }
 
-    /// The class whose members a member lookup on the symbol reads (dotty's `lookupPrefix`):
-    /// the class's own, an object's, or a value's through its type (its `namedType`), as
-    /// macwire reads the members of a `@Module` parameter.
-    fn lookup_holder(&mut self, s: SymRef) -> Option<ClassId> {
-        if let Some(c) = self.member_holder(s) {
-            return Some(c);
-        }
-        let SymRef::Term(sym) = s else { return None };
-        let sig = self.typer.sig_arc(sym);
-        if !sig.clauses.is_empty() || !sig.tparams.is_empty() {
-            return None;
-        }
-        let ty = self.typer.widen_path(sig.ret);
-        self.typer.class_of(ty)
-    }
-
     fn class_members(&mut self, c: ClassId, inherited: bool) -> Vec<SymId> {
         self.typer.complete_class(c);
         let mut out: Vec<SymId> = Vec::new();
@@ -6569,14 +6490,6 @@ impl<'a, 't> Interp<'a, 't> {
                     crate::ast::TyExpr::Select(q, n) => t.lookup_type_in_path(q, n),
                     _ => None,
                 };
-                // A Java annotation is an interface, its instance the `new` of it that dotty's
-                // classfile parser gives a constructor for (`@Module` of macwire's util jar).
-                if let Some(TypeRef::Class(c)) = class.filter(|r| matches!(r, TypeRef::Class(c) if t.syms.class(*c).mods & crate::ast::mods::JAVA_ANNOTATION != 0)) {
-                    let te = t.prog.add(TExpr::New(c, crate::ast::ListRef::EMPTY));
-                    let ty = t.types.class(c, &[]);
-                    t.prog.set_type(te, ty);
-                    return Some(te);
-                }
                 let is_class = matches!(class, Some(TypeRef::Class(c)) if t.syms.class(c).kind == ClassKind::Class);
                 if !is_class {
                     return None;
@@ -6954,13 +6867,13 @@ fn install_symbols(it: &mut Table) {
         let s = it.sym_arg(a, 0)?;
         let name = it.str_arg(a, 1)?;
         let n = it.typer.interner.intern(&name);
-        let Some(c) = it.lookup_holder(s) else { return Ok(Value::Sym(SymRef::None)) };
+        let Some(c) = it.member_holder(s) else { return Ok(Value::Sym(SymRef::None)) };
         let found = it.class_members(c, true).into_iter().find(|&m| it.syms().sym(m).name == n && it.is_field_sym(m));
         Ok(Value::Sym(found.map_or(SymRef::None, SymRef::Term)))
     });
     q!(it, "Reflect.SymbolMethods.Symbol.fieldMembers", |it, a| {
         let s = it.sym_arg(a, 0)?;
-        let Some(c) = it.lookup_holder(s) else { return it.make_list(Vec::new()) };
+        let Some(c) = it.member_holder(s) else { return it.make_list(Vec::new()) };
         let members: Vec<SymRef> = it.class_members(c, true).into_iter().filter(|&m| it.is_field_sym(m)).map(SymRef::Term).collect();
         it.sym_values(members)
     });
@@ -6995,13 +6908,13 @@ fn install_symbols(it: &mut Table) {
         let s = it.sym_arg(a, 0)?;
         let name = it.str_arg(a, 1)?;
         let n = it.typer.interner.intern(&name);
-        let Some(c) = it.lookup_holder(s) else { return it.make_list(Vec::new()) };
+        let Some(c) = it.member_holder(s) else { return it.make_list(Vec::new()) };
         let members: Vec<SymRef> = it.class_members(c, true).into_iter().filter(|&m| it.syms().sym(m).name == n && it.is_method_sym_of(m)).map(SymRef::Term).collect();
         it.sym_values(members)
     });
     q!(it, "Reflect.SymbolMethods.Symbol.methodMembers", |it, a| {
         let s = it.sym_arg(a, 0)?;
-        let Some(c) = it.lookup_holder(s) else { return it.make_list(Vec::new()) };
+        let Some(c) = it.member_holder(s) else { return it.make_list(Vec::new()) };
         let members: Vec<SymRef> = it.class_members(c, true).into_iter().filter(|&m| it.is_method_sym_of(m)).map(SymRef::Term).collect();
         it.sym_values(members)
     });

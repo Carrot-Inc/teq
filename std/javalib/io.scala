@@ -210,12 +210,6 @@ package java.io:
     def getCanonicalPath: String = toPath.toAbsolutePath.normalize.toString
     def getCanonicalFile: File = new File(getCanonicalPath, true)
     def toPath: java.nio.file.Path = java.nio.file.Path.of(text)
-    // `file:` and the absolute path, a directory's ending in `/`, quoted as the JDK quotes it
-    // (`new URI("file", null, path, null)`).
-    def toURI: java.net.URI =
-      val abs = getAbsolutePath.replace(File.separatorChar, '/')
-      val slashed = (if abs.startsWith("/") then abs else "/" + abs) + (if !abs.endsWith("/") && isDirectory then "/" else "")
-      new java.net.URI("file", null, slashed, null)
     def exists: Boolean = java.nio.file.Files.exists(toPath)
     def isDirectory: Boolean = java.nio.file.Files.isDirectory(toPath)
     def isFile: Boolean = java.nio.file.Files.isRegularFile(toPath)
@@ -229,12 +223,6 @@ package java.io:
         java.nio.file.Files.delete(toPath)
         true
       catch case _: IOException => false
-    // An empty file where none is: false where the path names something already.
-    def createNewFile(): Boolean =
-      if exists then false
-      else
-        java.nio.file.Files.write(toPath, new Array[Byte](0))
-        true
     def mkdir(): Boolean =
       try
         java.nio.file.Files.createDirectory(toPath)

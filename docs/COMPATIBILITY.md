@@ -8,8 +8,6 @@ libraries compiled from their jars run against scalac's output. The remaining di
 
 ### Syntax and definitions
 
-- A constructor proxy's application that shadows a name with a method or an `apply` is taken, where scalac
-  reports the ambiguity (`ConstrProxyShadows`).
 - A case class nested in a class compares its fields alone: `a.Item(1) == b.Item(1)` is true where scalac's
   `equals` tests the outer instance too, as its patterns do (and teq's); a match through a prefix that misses
   another instance's class (`case b.Item(n)` on an `a.Item`) is not warned of as inexhaustive, its run failing
@@ -40,10 +38,6 @@ libraries compiled from their jars run against scalac's output. The remaining di
 - A given object of a package or an object (`given t: T with ...`) is set once its body has run: a method its
   body calls that reads `t` gets `null` (the interpreter recurses), where scalac's module is set before its
   body runs; inside the body, `t` and a search for `T` are the instance, as in scalac.
-- The givens of an object nested in a trait are not found through an object extending the trait, the
-  implicit scope losing the prefix: `object dsl extends dsl` with `trait dsl { type ReadPref = ReadPref.type
-  => Pref; object ReadPref { given Conversion[ReadPref, Pref] } }` converts no `dsl.ReadPref` function, where
-  scalac sees the given from `dsl` (lila's `lila.db.dsl`).
 
 ### Macros, inline and derivation
 
@@ -189,7 +183,7 @@ a JDK member as `not supported on JavaScript`. Beyond that:
 
 ## Left out on purpose
 
-- `C.super`; name-based extractors (`isEmpty`/`get`); an export path whose head is no member of the exporting
-  class (an imported or an enclosing scope's val); overloaded methods in a non-native JS class (Scala.js chooses
+- `C.super`; name-based extractors (`isEmpty`/`get`); exports that forward to a value (`export field.*`), an
+  export path naming objects and packages; overloaded methods in a non-native JS class (Scala.js chooses
   between the alternatives at run time); `erased`, rejected wherever it appears; `AnyKind`;
   `scala.compiletime.testing.typeChecks`. `transparent trait` and `@throws` are accepted and change nothing.

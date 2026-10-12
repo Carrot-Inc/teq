@@ -1,6 +1,0 @@
-made C
-(A,A,List(),a)
-(B,B,List(A),b)
-(C,C,List(),c)
-(D,D,List(B, C),d)
-List(A)

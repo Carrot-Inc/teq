@@ -1,4 +1,0 @@
-(3,white,p 3 white 1,p 3 white 2)
-(5,q 5 black 1,List(x, x))
-black
-https://x

@@ -668,29 +668,7 @@ fn test(state: &Arc<State>, export: &Arc<Export>, request: &Request, reply: &mut
         reply.out("teq: no project with test frameworks\n");
         return 0;
     }
-    // A run over several configurations (every project's, lila's 86) holds one resident and one
-    // runner at a time: each that the request started is stopped after the last configuration it
-    // serves, so that the overlapping closures of the projects' residents are never all held at
-    // once; those running before the request stay, as a single configuration's run keeps its own.
-    let before: BTreeSet<Key> = running(state).into_iter().collect();
-    let runners_before: BTreeSet<Key> = state.runners.lock().unwrap_or_else(|e| e.into_inner()).iter().filter(|(_, slot)| slot.try_lock().map_or(true, |r| r.is_some())).map(|(k, _)| k.clone()).collect();
-    let last_use = if asked.keys.len() > 1 { last_uses(export, &before, &asked.keys) } else { BTreeMap::new() };
-    let mut code = 0;
-    for (i, key) in asked.keys.iter().enumerate() {
-        code = code.max(test_configuration(state, export, request, &asked, key, reply));
-        if !last_use.is_empty() && !runners_before.contains(key) {
-            if let Some(r) = state.runners.lock().unwrap_or_else(|e| e.into_inner()).get(key).cloned().and_then(|slot| slot.lock().unwrap_or_else(|e| e.into_inner()).take()) {
-                log(&format!("stopping the test runner of {}: its run of several configurations is done with it", key));
-                r.stop();
-            }
-        }
-        for (owner, _) in last_use.iter().filter(|&(o, &at)| at == i && !before.contains(o)) {
-            if let Some(r) = slot(state, owner).lock().unwrap_or_else(|e| e.into_inner()).take() {
-                log(&format!("stopping {}: its run of several configurations is done with it", owner));
-                r.stop();
-            }
-        }
-    }
+    let code = asked.keys.iter().map(|key| test_configuration(state, export, request, &asked, key, reply)).max().unwrap_or(0);
     reply.out(&super::left_out(export, "test", &left_out));
     for n in &scalajs_left_out {
         reply.out(&format!("teq: test left out {}\n", scalajs_suites(export, n)));
@@ -705,23 +683,6 @@ fn test(state: &Arc<State>, export: &Arc<Export>, request: &Request, reply: &mut
 fn scalajs_suites(export: &Export, name: &str) -> String {
     let how = export.configuration(&Key::new(name, "test")).and_then(|c| c.test.as_ref()).map_or_else(String::new, |t| t.js_run());
     format!("{} is a Scala.js project, whose suites{} teq does not run yet", name, how)
-}
-
-/// The residents a run over `keys` builds them with, as `plan` chooses for each in turn over the
-/// residents running and those chosen before it, with the index of the last configuration each
-/// serves.
-fn last_uses(export: &Export, running: &BTreeSet<Key>, keys: &[Key]) -> BTreeMap<Key, usize> {
-    let mut up: Vec<Key> = running.iter().cloned().collect();
-    let mut last = BTreeMap::new();
-    for (i, key) in keys.iter().enumerate() {
-        if let Some(owner) = plan(export, &up, std::slice::from_ref(key)).into_iter().next() {
-            if !up.contains(&owner) {
-                up.push(owner.clone());
-            }
-            last.insert(owner, i);
-        }
-    }
-    last
 }
 
 fn test_configuration(state: &Arc<State>, export: &Arc<Export>, request: &Request, asked: &TestRequest, key: &Key, reply: &mut Reply) -> i32 {
@@ -750,17 +711,6 @@ fn test_configuration(state: &Arc<State>, export: &Arc<Export>, request: &Reques
         return 0;
     }
     let candidates = view.candidates(&conf.sources);
-    // Nothing under the configuration's source roots can be a suite: no runner is started to say
-    // so (lila's 86 test configurations, most without a test).
-    if candidates.is_empty() {
-        if !asked.list {
-            reply.out(&format!("{}: no suite to run\n", key));
-        }
-        if asked.patterns.is_empty() {
-            state.changes.lock().unwrap_or_else(|e| e.into_inner()).insert(key.clone(), Changes { resident: owner, all: false, files: BTreeSet::new(), sources: BTreeMap::new(), removed: BTreeSet::new() });
-        }
-        return 0;
-    }
     let runner_slot = state.runners.lock().unwrap_or_else(|e| e.into_inner()).entry(key.clone()).or_default().clone();
     let mut runner = runner_slot.lock().unwrap_or_else(|e| e.into_inner());
     let spec = match runner_spec(export, key, &context, &request.environment) {

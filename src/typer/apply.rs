@@ -586,7 +586,7 @@ impl<'a> Worker<'a> {
                         return self.apply_declared(d, head, q, name, targs, lists, span, expected);
                     }
                 }
-                match self.resolve_static_path(q, name, !lists.is_empty()) {
+                match self.resolve_static_path(q, name) {
                     StaticPath::Callee(callee) => return self.apply_named_callee(callee, targs, lists, span, expected),
                     StaticPath::Missing(pkg) => {
                         let msg = format!("value {} is not a member of {}", self.name_str(name), self.package_display(pkg));
@@ -993,32 +993,19 @@ impl<'a> Worker<'a> {
     }
 
     /// Resolves `pkg.name` and `pkg.Obj` style paths that are not values by themselves.
-    pub(in crate::typer) fn resolve_static_path(&mut self, q: ExprId, name: Name, applied: bool) -> StaticPath {
+    pub(in crate::typer) fn resolve_static_path(&mut self, q: ExprId, name: Name) -> StaticPath {
         let Some(pkg) = self.package_path(q) else { return StaticPath::NotStatic };
         if self.deps.is_some() {
             self.deps_package_path(pkg);
         }
         match self.pkg_term(pkg, name) {
             None => StaticPath::Missing(pkg),
-            Some(TermRef::Package(sub)) => match self.package_apply(sub).filter(|_| applied) {
-                Some(r) => match self.term_callee(r, names::APPLY, self.cur_ast().expr_span(q)) {
-                    Some(callee) => StaticPath::Callee(callee),
-                    None => StaticPath::NotStatic,
-                },
-                None => StaticPath::NotStatic,
-            },
+            Some(TermRef::Package(_)) => StaticPath::NotStatic,
             Some(r) => match self.term_callee(r, name, self.cur_ast().expr_span(q)) {
                 Some(callee) => StaticPath::Callee(callee),
                 None => StaticPath::NotStatic,
             },
         }
-    }
-
-    /// The top-level `apply` of a package applied as a function (`views.activity(u)` for a
-    /// `package views.activity` holding a `def apply`): dotty's `checkValue` leaves an applied
-    /// package unchecked (a `FunOrPolyProto`) and `tryInsertApplyOrImplicit` selects its `apply`.
-    fn package_apply(&mut self, p: PkgId) -> Option<TermRef> {
-        self.pkg_term(p, names::APPLY).filter(|r| !matches!(r, TermRef::Package(_)))
     }
 
     /// A package as scalac names it in a diagnostic: its simple name, `<root>` for the root.
@@ -1216,54 +1203,10 @@ impl<'a> Worker<'a> {
         }
     }
 
-    /// The `New` a constructor proxy's application makes has a class type whose prefix is to be
-    /// a path, as dotty's `PostTyper` checks it (`checkClassType` with `stablePrefixReq`, E083):
-    /// `outer.Inner(2)` of a `def outer` is refused.
-    fn check_class_prefix(&mut self, recv: TExprId, recv_ty: TypeId, span: Span) {
-        if recv_ty == ERROR || self.is_class_prefix_path(recv) {
-            return;
-        }
-        let t = self.widen_path(recv_ty);
-        let msg = format!("{} is not a valid class prefix, since it is not an immutable path", self.show(t));
-        self.error(span, msg);
-    }
-
-    /// Whether the constructor proxy `apply` of the explicit companion `module` of the class `c`
-    /// is accessible here: dotty gives it the constructor's access, `protected` where the class is
-    /// protected, and the class's qualifier (`NamerOps.addConstructorApplies`), so a private or
-    /// protected one is reached from the companion or the class alone, a qualified one from the
-    /// qualifier's scope.
-    fn proxy_apply_accessible(&self, c: ClassId, module: ClassId) -> bool {
-        let info = self.syms.class(c);
-        let inside = self.env.frames.iter().any(|f| matches!(f, super::Frame::Class(k) if *k == module || *k == c));
-        // The proxy takes the constructor's access, not the class's own `private` (which the
-        // class's name keeps), a private constructor's being the application's own check
-        // (`check_ctor_access`); a case class's `apply` is its own synthetic method.
-        // Protected where the class is and its companion is not (a protected companion's
-        // public `apply` is as reachable as the companion is).
-        let case = info.mods & crate::ast::mods::CASE != 0;
-        if !case && info.mods & crate::ast::mods::PROTECTED != 0 && self.syms.class(module).mods & crate::ast::mods::PROTECTED == 0 {
-            return inside;
-        }
-        let qualified = info.mods & crate::ast::mods::PRIVATE != 0 && self.has_access_scope(info.file, info.span.start);
-        !qualified || inside || self.in_access_scope(info.file, info.span.start, info.owner)
-    }
-
-    /// A path as a class prefix: a stable path, a parameterless val's read through one included
-    /// (its getter's call), no def's call.
-    fn is_class_prefix_path(&self, e: TExprId) -> bool {
-        match self.prog.expr(e) {
-            TExpr::CallMethod(r, s, args) => args.is_empty() && self.syms.sym(s).kind == SymKind::Val && self.is_class_prefix_path(r),
-            TExpr::CallStatic(s, args) => args.is_empty() && self.syms.sym(s).kind == SymKind::Val,
-            TExpr::Field(r, s) => self.syms.sym(s).kind != SymKind::Var && self.is_class_prefix_path(r),
-            _ => self.is_stable_path(e),
-        }
-    }
-
     /// The class that an application of `callee` constructs: a class, or a companion object
     /// without an `apply` of its own.
     pub fn constructed_class(&self, callee: TermRef) -> Option<ClassId> {
-        if let TermRef::Class(c) | TermRef::ValueClass(_, c) = callee {
+        if let TermRef::Class(c) = callee {
             return Some(c);
         }
         let SymKind::Object(o) = self.syms.sym(callee.sym()?).kind else { return None };
@@ -1282,7 +1225,7 @@ impl<'a> Worker<'a> {
         }
         let head = f;
         match self.static_ref(head) {
-            Some(TermRef::Class(_) | TermRef::ValueClass(..)) | Some(TermRef::Package(_)) => false,
+            Some(TermRef::Class(_)) | Some(TermRef::Package(_)) => false,
             Some(r) => match r.sym() {
                 Some(s) => !self.is_method_sym(s) && self.constructed_class(r).is_none(),
                 None => true,
@@ -1605,7 +1548,7 @@ impl<'a> Worker<'a> {
         found
     }
 
-    pub(super) fn member_callee(&mut self, recv: TExprId, recv_ty: TypeId, s: SymId) -> Callee {
+    fn member_callee(&mut self, recv: TExprId, recv_ty: TypeId, s: SymId) -> Callee {
         let name = self.syms.sym(s).name;
         // A member of `this` whose self type is an intersection carries the joint information
         // the meet gives it, as a selection's does (`selection_member`).
@@ -1616,12 +1559,8 @@ impl<'a> Worker<'a> {
         }
         match found {
             Some((found, owner_ty)) => {
-                // What the lookup by type finds may be the settled entry of what the scope held,
-                // or the member the receiver's class has under the name where the scope held one
-                // of a parent it overrides (`Util.tag` imported through an object whose `Cap`
-                // gives its own): the type's, whose owner the owner type is, as dotty selects a
-                // member anew on the prefix.
-                let s = if self.syms.alternatives(found).is_some() || self.syms.alternatives(s).is_none() { found } else { s };
+                // What the lookup by type finds may be the settled entry of what the scope held.
+                let s = if self.syms.alternatives(found).is_some() { found } else { s };
                 self.member_callee_in(recv, recv_ty, Some(owner_ty), s)
             }
             None => self.member_callee_in(recv, recv_ty, None, s),
@@ -1696,7 +1635,7 @@ impl<'a> Worker<'a> {
         self.env.frames.iter().any(|f| matches!(f, super::Frame::Class(c) if self.derives_or_selects(*c, owner)))
     }
 
-    pub(super) fn derives_or_selects(&self, c: ClassId, owner: ClassId) -> bool {
+    fn derives_or_selects(&self, c: ClassId, owner: ClassId) -> bool {
         let derives = |k: ClassId| k == owner || self.syms.class(k).base_types.iter().any(|&(b, _)| b == owner);
         if derives(c) {
             return true;
@@ -1937,18 +1876,10 @@ impl<'a> Worker<'a> {
             Some(t) => self.owner_subst(t),
             None => Vec::new(),
         };
-        // Only along a chain to an inner class's member: a member of one, or a member whose
-        // result is an instance of one, which is decided once per member.
-        let inner_chain = self.on_inner_chain(s);
-        if inner_chain {
-            self.note_inner_receiver(recv, recv_ty);
-        }
         if self.is_method_sym(s) {
             let prefix = self.dependent_prefix(s, recv, recv_ty);
             if prefix.is_some() {
                 self.note_outer_prefix(s, recv);
-            } else if inner_chain {
-                self.note_outer_owner_args(s, recv, &owner_subst);
             }
             if self.is_inline_callee(s) {
                 self.inline.recv_types.insert(recv, recv_ty);
@@ -2050,82 +1981,14 @@ impl<'a> Worker<'a> {
         Callee::Value(te, ty)
     }
 
-    /// The owner's type arguments of a member of an inner class seen from the receiver chain's
-    /// outer instances, as its signature is; apart from the application's path, which most calls
-    /// take with no outer prefix noted.
-    #[cold]
-    #[inline(never)]
-    fn owner_subst_from_outer(&mut self, call: &MethodCall, subst: &mut Subst) {
-        if !self.member_of_inner_class(call.sym) {
-            return;
-        }
-        if let Some(steps) = call.recv.and_then(|r| self.outer_prefixes.get(&r).cloned()) {
-            for (_, t) in subst.iter_mut() {
-                *t = steps.iter().fold(*t, |t, &(outer, path)| self.as_seen_from(t, path, outer));
-            }
-        }
-    }
-
     /// The prefix a member's signature has to be seen from, when it depends on `this`.
     pub(super) fn dependent_prefix(&mut self, s: SymId, recv: TExprId, recv_ty: TypeId) -> Option<TypeId> {
-        self.sig_names_paths(s).then(|| self.prefix_of(recv, recv_ty))
-    }
-
-    /// Whether `c` is a context function class, decided once per class (`context_function_classes`)
-    /// where the arity's slot names none yet: the test reads the class's name.
-    fn is_context_function_class_memo(&mut self, c: ClassId) -> bool {
-        let k = SymId(c.0);
-        if let Some(v) = self.context_function_classes.get(k) {
-            return v;
-        }
-        let v = self.is_context_function_class(c);
-        self.context_function_classes.set(k, v);
-        v
-    }
-
-    /// Whether the signature of `s` names a path, which its prefix may move: decided once its
-    /// signature is complete and kept per symbol (`path_sigs`), as dotty decides a member's
-    /// denotation once rather than at each of its applications.
-    #[inline]
-    pub(super) fn sig_names_paths(&mut self, s: SymId) -> bool {
-        match self.path_sigs.get(s) {
-            Some(v) => v,
-            None => self.sig_names_paths_now(s),
-        }
-    }
-
-    #[cold]
-    #[inline(never)]
-    fn sig_names_paths_now(&mut self, s: SymId) -> bool {
         self.sig_of(s);
         let sig = self.syms.sig(s);
-        let v = self.types.has_paths(sig.ret)
+        let depends = self.types.has_paths(sig.ret)
             || sig.clauses.iter().any(|cl| cl.params.iter().any(|p| self.types.has_paths(p.ty)))
             || sig.tparams.iter().any(|&p| self.types.has_paths(self.syms.tparam(p).upper) || self.types.has_paths(self.syms.tparam(p).lower));
-        if self.syms.sym_cells.get(s.0) == crate::symbols::Completion::Done {
-            self.path_sigs.set(s, v);
-        }
-        v
-    }
-
-    /// The receiver of a call on a chain to an inner class's member, noted by its expression.
-    #[cold]
-    #[inline(never)]
-    fn note_inner_receiver(&mut self, recv: TExprId, recv_ty: TypeId) {
-        if !self.prog.record_types {
-            self.receiver_types.insert(recv, recv_ty);
-        }
-    }
-
-    /// The owner's type arguments may name an outer instance too (`Limit.apply` of an object
-    /// whose parents' arguments name the class it is nested in), for a member of a class nested
-    /// in a class.
-    #[cold]
-    #[inline(never)]
-    fn note_outer_owner_args(&mut self, s: SymId, recv: TExprId, owner_subst: &Subst) {
-        if owner_subst.iter().any(|&(_, t)| self.types.has_paths(t)) {
-            self.note_outer_prefix(s, recv);
-        }
+        depends.then(|| self.prefix_of(recv, recv_ty))
     }
 
     /// A member of an inner class whose signature names the enclosing class's `this`
@@ -2154,8 +2017,6 @@ impl<'a> Worker<'a> {
         let mut steps = Vec::new();
         let mut inner = inner;
         let mut at = recv;
-        // The receivers met on the way, whose types may name outer instances of objects.
-        let mut met: Vec<TypeId> = Vec::new();
         for _ in 0..8 {
             let Owner::Class(outer) = self.syms.class(inner).owner else { break };
             if self.syms.class(outer).kind == ClassKind::Object {
@@ -2168,9 +2029,8 @@ impl<'a> Worker<'a> {
                     TExpr::CallMethod(r, _, _) | TExpr::Field(r, _) => r,
                     _ => break,
                 };
-                let Some(rt) = self.prog.type_of(r).or_else(|| self.receiver_types.get(&r).copied()).or_else(|| self.unrecorded_receiver_type(r)) else { break };
+                let Some(rt) = self.prog.type_of(r) else { break };
                 let rt = self.deref(rt);
-                met.push(rt);
                 if self.instance_of_class(rt, outer) {
                     found = Some((r, rt));
                     break;
@@ -2189,109 +2049,7 @@ impl<'a> Worker<'a> {
             inner = outer;
             at = r;
         }
-        // A receiver whose type is the singleton of an object nested in a class (`framework:
-        // coll.AggregationFramework.type`) gives that class's `this` as the object's prefix (`coll`),
-        // as dotty's prefix types carry it: what a member of the object names of the class.
-        let mut starts: Vec<TypeId> = steps.iter().map(|&(_, p)| p).collect();
-        starts.extend(self.prog.type_of(recv).or_else(|| self.receiver_types.get(&recv).copied()).or_else(|| self.unrecorded_receiver_type(recv)));
-        starts.extend(met);
-        for start in starts {
-            // Not asked whether the signature mentions the class: its `this` may come in with
-            // the steps before (the object's parents' arguments name it).
-            for (k, q) in self.object_prefix_steps(start) {
-                if !steps.iter().any(|&(c, _)| c == k) {
-                    steps.push((k, q));
-                }
-            }
-        }
         steps
-    }
-
-    /// The outer instances a value of type `t` gives where it is an object nested in a class
-    /// (`framework: coll.AggregationFramework.type`): that class's `this` is the object's prefix
-    /// (`coll`), and so on outwards, as dotty's prefix types carry them.
-    pub(super) fn object_prefix_steps(&mut self, t: TypeId) -> Vec<(ClassId, TypeId)> {
-        let mut steps = Vec::new();
-        let mut path = Some(t);
-        for _ in 0..4 {
-            let Some(p) = path else { break };
-            let root = self.object_path_root(p);
-            let Type::Select(q, o) = self.types.get(root) else { break };
-            // An object, or a jar's object nested in a class, whose instance the class holds in
-            // a lazy val of its name (`ClassInfo::inner_object`).
-            let object = matches!(self.syms.sym(o).kind, SymKind::Object(_)) || {
-                let ret = self.sig_of(o).ret;
-                self.class_of(ret).is_some_and(|c| self.syms.class(c).inner_object == Some(o))
-            };
-            let Owner::Class(k) = self.syms.sym(o).owner else { break };
-            if !object {
-                break;
-            }
-            if self.syms.class(k).kind != ClassKind::Object {
-                steps.push((k, q));
-            }
-            path = Some(q);
-        }
-        steps
-    }
-
-    /// The path a value of type `t` is, through vals of singleton types and aliases of them
-    /// (`framework: coll.AggregationFramework` whose alias is `coll.AggregationFramework.type`).
-    fn object_path_root(&mut self, t: TypeId) -> TypeId {
-        let mut t = self.stable_root(t);
-        for _ in 0..4 {
-            let under = if self.types.is_path(t) { self.path_underlying(t) } else { t };
-            let under = self.dealias(under);
-            if !self.types.is_path(under) || under == t {
-                return t;
-            }
-            t = self.stable_root(under);
-        }
-        t
-    }
-
-    /// Whether a call of `s` is on a chain to an inner class's member, its receiver's type wanted
-    /// there (`receiver_types`): a member of an inner class or one whose result is an instance of
-    /// one, read once per member.
-    #[inline]
-    fn on_inner_chain(&mut self, s: SymId) -> bool {
-        match self.inner_chain_members.get(s) {
-            Some(on) => on,
-            None => self.on_inner_chain_now(s),
-        }
-    }
-
-    #[cold]
-    #[inline(never)]
-    fn on_inner_chain_now(&mut self, s: SymId) -> bool {
-        let on = self.member_of_inner_class(s) || self.result_of_inner_class(s);
-        self.inner_chain_members.set(s, on);
-        on
-    }
-
-    /// Whether `s`'s result is an instance of a class nested in a class.
-    fn result_of_inner_class(&mut self, s: SymId) -> bool {
-        let ret = self.sig_of(s).ret;
-        // A class type, the most results, read directly.
-        match self.types.get(ret) {
-            Type::Class(c, _) => self.class_in_class(c),
-            Type::Nested(..) => true,
-            _ => self.class_of(ret).is_some_and(|c| self.class_in_class(c)),
-        }
-    }
-
-    /// The type of a receiver whose type the program does not record (a build that records no
-    /// expression's type, JavaScript's): a val or a parameter as its path, an object, a static
-    /// val; `None` for any other expression.
-    fn unrecorded_receiver_type(&mut self, r: TExprId) -> Option<TypeId> {
-        match self.prog.expr(r) {
-            TExpr::Local(s) | TExpr::Static(s) => Some(match self.syms.sym(s).kind {
-                SymKind::Val | SymKind::Param => self.types.mk(Type::Term(s)),
-                _ => self.sig_of(s).ret,
-            }),
-            TExpr::Module(o) => Some(self.types.class(o, &[])),
-            _ => None,
-        }
     }
 
     /// Whether a value of type `t` is an instance of `k`: its class is `k`, derives from it or
@@ -2312,7 +2070,7 @@ impl<'a> Worker<'a> {
     /// receiver chain's paths.
     #[cold]
     #[inline(never)]
-    pub(super) fn seen_from_outer_steps(&mut self, s: SymId, recv: TExprId, ty: TypeId) -> TypeId {
+    fn seen_from_outer_steps(&mut self, s: SymId, recv: TExprId, ty: TypeId) -> TypeId {
         let Owner::Class(inner) = self.syms.sym(s).owner else { return ty };
         let steps = self.outer_steps(inner, recv, |t, outer| t.mentions_this_of(ty, outer));
         let mut ty = ty;
@@ -2506,22 +2264,16 @@ impl<'a> Worker<'a> {
 
     /// The signature of a member as seen from the prefix of the call's receiver.
     pub(super) fn sig_seen_from(&mut self, sig: Arc<MethodSig>, prefix: TypeId, member: SymId) -> Arc<MethodSig> {
-        self.sig_seen_as(sig, prefix, prefix, member)
-    }
-
-    /// The signature seen from `prefix`, with `inserted` in the place of the `this` it moves:
-    /// the prefix itself, or the stand-in of `prefix_stand_in`.
-    pub(super) fn sig_seen_as(&mut self, sig: Arc<MethodSig>, prefix: TypeId, inserted: TypeId, member: SymId) -> Arc<MethodSig> {
         let Some(c) = self.class_of(prefix) else { return sig };
         let mut whole: Option<Option<TypeId>> = None;
         let mut seen = |t: &mut Self, ty: TypeId| {
-            let ty = t.member_seen_from(ty, inserted, c, member);
+            let ty = t.member_seen_from(ty, prefix, c, member);
             if !t.types.has_paths(ty) {
                 return ty;
             }
             let w = *whole.get_or_insert_with(|| t.intersection_prefix(prefix));
             match w {
-                Some(w) => t.seen_from_parts(ty, inserted, c, w),
+                Some(w) => t.seen_from_parts(ty, prefix, c, w),
                 None => ty,
             }
         };
@@ -2536,23 +2288,6 @@ impl<'a> Worker<'a> {
             })
             .collect();
         Arc::new(MethodSig { tparams: sig.tparams.clone(), clauses, ret })
-    }
-
-    /// A signature seen from a prefix and then given the owner's type arguments by `owner_subst`
-    /// takes the two as one map, as dotty's `AsSeenFromMap` replaces `C.this` by the prefix and the
-    /// class's parameters by its arguments in one pass: a prefix that is no path and names those
-    /// parameters itself (the receiver `Box[(T, U)]` of `self: this.type` inside `Box[T]`) would
-    /// have them replaced a second time. It goes in as a fresh parameter, bounded by it, which the
-    /// substitution replaces by the prefix with the owner's arguments: the parameter and the
-    /// substitution's entry, none where the prefix passes through the substitution unchanged.
-    pub(super) fn prefix_stand_in(&mut self, prefix: TypeId, owner_subst: &Subst) -> Option<(TypeId, (TParamId, TypeId))> {
-        if owner_subst.is_empty() || self.types.is_path(prefix) || self.types.subst(prefix, owner_subst) == prefix {
-            return None;
-        }
-        let name = self.interner.intern("this");
-        let q = self.syms.new_tparam(name, 0);
-        self.syms.tparams[q.idx()].upper = prefix;
-        Some((self.types.param(q), (q, prefix)))
     }
 
     /// `final val x = 1` without a type is a constant in Scala: a use is replaced by the literal
@@ -2669,8 +2404,8 @@ impl<'a> Worker<'a> {
             }
             return None;
         };
-        if let (Some(case), TermRef::ModuleMember(c, s)) = (self.parent_args_of, r) {
-            if self.syms.class(case).owner == Owner::Class(c) && self.syms.class(case).kind == ClassKind::EnumCase && !self.enum_case_ref_allowed(c, s, name) {
+        if let (Some(case), TermRef::ModuleMember(c, _)) = (self.parent_args_of, r) {
+            if self.syms.class(case).owner == Owner::Class(c) && self.syms.class(case).kind == ClassKind::EnumCase {
                 let msg = format!(
                     "illegal reference to {0} from an enum case; write {1}.{0}",
                     self.name_str(name),
@@ -2680,28 +2415,6 @@ impl<'a> Worker<'a> {
             }
         }
         Some(r)
-    }
-
-    /// Whether an enum case's parent may name `s`, a member of the enum's companion `c`, as dotty's
-    /// `Checking.checkEnumCaseRefsLegal` allows it: where an identifier just outside the enum, with the
-    /// companion's cases imported, gives the same symbol: another case, or a member the scope around
-    /// the enum reaches itself.
-    fn enum_case_ref_allowed(&mut self, c: ClassId, s: SymId, name: Name) -> bool {
-        let Some(e) = self.syms.class(c).companion else { return false };
-        let children = self.syms.class(e).children.clone();
-        let case = children.iter().any(|&k| {
-            self.syms.class(k).singleton == Some(s) || self.syms.class(k).companion.is_some_and(|m| self.syms.class(m).singleton == Some(s))
-        });
-        if case {
-            return true;
-        }
-        let (file, owner, at) = {
-            let info = self.syms.class(e);
-            (info.file, info.owner, info.span.start)
-        };
-        let env = self.env_at(file, owner, at);
-        let outside = self.with_env(env, |t| t.quietly(|t| t.lookup_term(name)));
-        outside.and_then(|r| r.sym()) == Some(s)
     }
 
     /// The receiver an extension method of a class or an object that `r` binds is selected on:
@@ -2852,13 +2565,7 @@ impl<'a> Worker<'a> {
                 let recv_ty = self.types.class(m, &[]);
                 Callee::Selection { recv, recv_ty, name: self.syms.class(c).name }
             }
-            TermRef::Package(p) => {
-                // Applied, a package is its top-level `apply` (`activity(u)` inside `views`).
-                if self.extension_call_head {
-                    if let Some(r) = self.package_apply(p) {
-                        return self.term_callee(r, names::APPLY, span);
-                    }
-                }
+            TermRef::Package(_) => {
                 let msg = format!("{} is a package, not a value", self.name_str(name));
                 self.error(span, msg);
                 return None;
@@ -3588,9 +3295,7 @@ impl<'a> Worker<'a> {
         // The class of a given with parameters, which its def's body read from another module's
         // products makes (`new pair2[A, B]()`), as a call of the given does.
         let product_given = kind == ClassKind::GivenImpl && self.is_product_class(c);
-        // An enum's secondary constructor calls another of its own.
-        let enum_self_call = kind == ClassKind::Enum && self.excluded_ctor.is_some();
-        if !(matches!(kind, ClassKind::Class | ClassKind::EnumCase) || product_given || enum_self_call) || is_abstract {
+        if !(matches!(kind, ClassKind::Class | ClassKind::EnumCase) || product_given) || is_abstract {
             let why = match kind {
                 ClassKind::Trait => "is a trait; it",
                 ClassKind::Class => "is abstract; it",
@@ -3830,7 +3535,6 @@ impl<'a> Worker<'a> {
                 return self.apply_interpolation(interp, call, targs, lists, span, expected, trial);
             }
         }
-        let mut stand_in: Option<(TParamId, TypeId)> = None;
         let sig = match &ctor {
             // The constructor of a class nested in a class names the outer class's `this`,
             // the enclosing instance deriving from it where it is constructed or extended.
@@ -3844,14 +3548,7 @@ impl<'a> Worker<'a> {
                         Some(info) => info,
                         None => self.sig_arc(call.sym),
                     };
-                    let inserted = match self.prefix_stand_in(prefix, &call.owner_subst) {
-                        Some((param, entry)) => {
-                            stand_in = Some(entry);
-                            param
-                        }
-                        None => prefix,
-                    };
-                    let sig = self.sig_seen_as(sig, prefix, inserted, call.sym);
+                    let sig = self.sig_seen_from(sig, prefix, call.sym);
                     if self.member_of_inner_class(call.sym) {
                         let sig = match call.recv.and_then(|r| self.outer_prefixes.get(&r).cloned()) {
                             Some(steps) => steps.into_iter().fold(sig, |sig, (outer, path)| self.sig_seen_from_outer(sig, path, outer)),
@@ -3914,14 +3611,6 @@ impl<'a> Worker<'a> {
         };
         // The owner's substitution, empty for a receiver of no type parameters, which is not copied.
         let mut subst = if call.owner_subst.is_empty() { Subst::new() } else { call.owner_subst.clone() };
-        // The owner's type arguments are seen from the receiver chain's outer instances as the
-        // signature is (`Match$[AggregationOps.this.pack.type]` of an object nested in a class).
-        if ctor.is_none() && !self.outer_prefixes.is_empty() {
-            self.owner_subst_from_outer(&call, &mut subst);
-        }
-        if let Some(entry) = stand_in {
-            subst.push(entry);
-        }
         let first_var = self.tvars.len();
         let widen_mark = self.pending_widenings.len();
         for (i, &tp) in sig.tparams.iter().enumerate() {
@@ -3943,10 +3632,7 @@ impl<'a> Worker<'a> {
             // the receiver, as the signature is.
             let (upper, lower) = match call.prefix {
                 Some(prefix) if self.types.has_paths(upper) || self.types.has_paths(lower) => match self.class_of(prefix) {
-                    Some(c) => {
-                        let inserted = stand_in.map_or(prefix, |(q, _)| self.types.param(q));
-                        (self.member_seen_from(upper, inserted, c, call.sym), self.member_seen_from(lower, inserted, c, call.sym))
-                    }
+                    Some(c) => (self.member_seen_from(upper, prefix, c, call.sym), self.member_seen_from(lower, prefix, c, call.sym)),
                     None => (upper, lower),
                 },
                 _ => (upper, lower),
@@ -4076,9 +3762,6 @@ impl<'a> Worker<'a> {
         // A parameter or result type of that method the expansion does not conform to: found
         // and required.
         let mut eta_sam_mismatch: Option<(TypeId, TypeId)> = None;
-        // The context function an expansion's result is expected to be, when its using clauses
-        // are left: its parameters, givens to them, and their types.
-        let mut eta_context: Option<(Vec<SymId>, Vec<TypeId>)> = None;
         // Definition-site givens are positioned at the end of the argument lists applied so far.
         let mut given_site = span;
         let mut normal_seen = 0;
@@ -4158,28 +3841,6 @@ impl<'a> Worker<'a> {
                         ret_ty = self.subst_param_paths(clause, &args_out[first_arg..], ret_ty, &mut subst);
                     }
                 } else {
-                    // An expansion whose result is expected to be a context function takes the
-                    // using clauses left as one: dotty types the expansion's body against it,
-                    // and `typedUnadapted` makes the body that closure (`makeContextualFunction`),
-                    // whose parameters the clauses' search finds (`(x: A) => (c: C) ?=> m(x)(using
-                    // c)` for an `m(x: A)(using C)` where an `A => C ?=> R` is expected).
-                    if !eta.is_empty() && eta_context.is_none() && lists.peek().is_none() && sig.clauses[ci..].iter().all(|c| c.is_using) {
-                        let expected_ret = eta_ret_expected.unwrap_or(ERROR);
-                        if let Some((ptys, ret)) = eta_ret_expected.and_then(|r| self.as_context_function(r)) {
-                            self.push_scope();
-                            let syms: Vec<SymId> = ptys
-                                .iter()
-                                .enumerate()
-                                .map(|(i, &t)| {
-                                    let sym = self.indexed_local("contextual", i as u32 + 1, t, span);
-                                    self.bind_given(sym);
-                                    sym
-                                })
-                                .collect();
-                            eta_ret_expected = Some(self.context_result(expected_ret, &syms, ret));
-                            eta_context = Some((syms, ptys));
-                        }
-                    }
                     let clause_first = args_out.len();
                     let determined = self.vars_of_applied_clauses(&sig.clauses[..ci], &subst);
                     let mut defaulted: Vec<usize> = Vec::new();
@@ -4378,24 +4039,6 @@ impl<'a> Worker<'a> {
                         }
                         _ => clause.params.len(),
                     };
-                    // The expected function's parameter types are the expansion's where it is
-                    // fully defined, or the method's types are not (dotty's `adapt1`, the arity
-                    // `etaExpand` is given): `xs.map(m)` for an `m(x: Long)` of an `Int` list,
-                    // its result open, keeps `Long`.
-                    let from_expected = match &exp_fn {
-                        Some((eps, r)) => {
-                            let tys: Vec<TypeId> = eps.iter().copied().chain(std::iter::once(*r)).collect();
-                            let defined = tys.into_iter().all(|t| {
-                                let z = self.zonk(t);
-                                !self.types.has_vars(z)
-                            });
-                            defined || clause.params.iter().any(|p| {
-                                let t = self.types.subst(p.ty, &subst);
-                                self.types.has_vars(t)
-                            })
-                        }
-                        None => false,
-                    };
                     let mut syms = Vec::new();
                     let mut tys = Vec::new();
                     let clause_first = args_out.len();
@@ -4432,15 +4075,11 @@ impl<'a> Worker<'a> {
                         }
                         // Implementing a trait, the expansion takes the parameter types of its
                         // method, which the argument adaptations take to the method's (dotc's
-                        // lambda `(x: Int) => m(x)` for an `m(x: Long)`, or `m(convert(x))`); so
-                        // does an expected function, whose parameter types the expansion's
-                        // parameters take (`etaExpand` leaves them to be inferred): lila's
-                        // `me.exists(of(f))` of an `Option[Me]` for an `of(f)(user: User)`, a
-                        // `Conversion[Me, User]` in scope.
+                        // lambda `(x: Int) => m(x)` for an `m(x: Long)`, or `m(convert(x))`).
                         let mut adapted_from = None;
                         if let Some(e) = expected_param {
                             let mark = self.snapshot();
-                            if !self.is_sub(e, pty) && (eta_sam.is_some() || from_expected) {
+                            if !self.is_sub(e, pty) && eta_sam.is_some() {
                                 self.rollback(mark);
                                 let view_compat = std::mem::replace(&mut self.view_compat, true);
                                 let fits = self.is_compatible(e, pty);
@@ -4448,7 +4087,7 @@ impl<'a> Worker<'a> {
                                 self.rollback(mark);
                                 if fits {
                                     adapted_from = Some(e);
-                                } else if eta_sam.is_some() {
+                                } else {
                                     eta_sam_mismatch.get_or_insert((e, pty));
                                 }
                             }
@@ -4498,9 +4137,6 @@ impl<'a> Worker<'a> {
                     eta.push((syms, tys));
                 }
             }
-        }
-        if eta_context.is_some() {
-            self.pop_scope();
         }
 
         let mut evidence = Vec::new();
@@ -4647,12 +4283,6 @@ impl<'a> Worker<'a> {
                 if ret != self.b.t_unit && eta_sam_mismatch.is_none() && !self.fits_lambda_result(ty, ret) {
                     eta_sam_mismatch = Some((ty, ret));
                 }
-            }
-            if let Some((syms, ptys)) = eta_context {
-                let l = self.prog.syms(&syms);
-                te = self.prog.add(TExpr::Lambda(l, te));
-                ty = self.closure_type(true, &syms, &ptys, ty, span);
-                self.prog.set_type(te, ty);
             }
         }
         let expanded = !eta.is_empty();
@@ -5110,11 +4740,8 @@ impl<'a> Worker<'a> {
             };
             return self.prog.add(TExpr::NewVia(call.sym, args));
         }
-        // Only a library body spells a widening through the companion, told before the call.
-        if self.cur_ast().reader.is_some() {
-            if let Some(te) = self.companion_widening(call, args) {
-                return te;
-            }
+        if let Some(te) = self.companion_widening(call, args) {
+            return te;
         }
         match call.recv {
             Some(r) => self.prog.add(TExpr::CallMethod(r, call.sym, args)),
@@ -5758,46 +5385,6 @@ impl<'a> Worker<'a> {
         (expanded, ty)
     }
 
-    /// A builtin operator selected with no argument where a function of one parameter is
-    /// expected, eta-expanded as dotc expands the method it is a member of: `0 <` under
-    /// postfixOps, or `'-'.!=`, is `(a0: Int) => 0 < a0`, an unstable receiver evaluated once
-    /// before (Typer.adaptNoArgsUnappliedMethod). None where the operator is no builtin one of
-    /// the receiver's type for the parameter's.
-    fn eta_builtin_operator(&mut self, recv: TExprId, recv_ty: TypeId, op: Name, span: Span, expected: Option<TypeId>) -> Option<(TExprId, TypeId)> {
-        let (ptys, _) = self.as_function(expected?)?;
-        let [pty] = ptys[..] else { return None };
-        let pty = self.solve_in(pty);
-        if matches!(self.types.get(pty), Type::Var(_)) {
-            return None;
-        }
-        let lty = self.widen_path(recv_ty);
-        let lty = self.widen_lit(lty);
-        let equality = op == names::EQEQ || op == names::NEQ;
-        let mark = self.hoisted.len();
-        let tl = self.hoist(recv, lty, span);
-        let local = self.indexed_local("a", 0, pty, span);
-        let tr = self.prog.add(TExpr::Local(local));
-        self.prog.set_type(tr, pty);
-        let (body, ret) = if equality {
-            self.typed_equality(tl, lty, tr, pty, op == names::NEQ, span)
-        } else {
-            match self.typed_binop(op, tl, lty, tr, pty, span) {
-                Some(done) => done,
-                None => {
-                    self.hoisted.truncate(mark);
-                    return None;
-                }
-            }
-        };
-        let ty = self.fun_type(&[pty], ret);
-        let ps = self.prog.syms(&[local]);
-        let lambda = self.prog.add(TExpr::Lambda(ps, body));
-        self.prog.set_type(lambda, ty);
-        let expanded = self.wrap_hoisted(mark, lambda);
-        self.prog.set_type(expanded, ty);
-        Some((expanded, ty))
-    }
-
     /// The parameter of an eta-expansion expected to be by-name (`(=> Int) => Int` for a
     /// `twice(x: => Int)`): a thunk, passed on to a by-name parameter and evaluated for
     /// another; an inline callee substitutes the argument where it reads the parameter, so it
@@ -6155,21 +5742,7 @@ impl<'a> Worker<'a> {
         };
         let open = self.deref(ptys[0]);
         let unknown = matches!(self.types.get(open), Type::Var(v) if self.tvars[v].lower.is_empty() && self.tvars[v].upper.is_empty());
-        // A tuple pattern of as many elements as the function expected takes parameters (dotty's
-        // `typedFunctionValue` turns the generator's `x$1 => x$1 match case (a1, .., aN) => e` into
-        // a function of N parameters): `for (a, b) <- xs.lazyZip(ys)` over `LazyZip2.foreach`. The
-        // pattern matches the tuple of the parameters, as `makeCaseLambda` with N parameters does.
-        let untupled: Option<Vec<TypeId>> = match binder {
-            ForBinder::Pat(p) | ForBinder::CasePat(p) if ptys.len() > 1 => match self.cur_ast().pat(p) {
-                Pat::Tuple(elems) if elems.len as usize == ptys.len() => Some(ptys.iter().map(|&t| self.solve_if_var(t)).collect()),
-                _ => None,
-            },
-            _ => None,
-        };
-        let elem = match &untupled {
-            Some(tys) => self.tuple_type(tys),
-            None => self.solve_if_var(ptys[0]),
-        };
+        let elem = self.solve_if_var(ptys[0]);
         if unknown && ptys.len() == 1 && matches!(binder, ForBinder::Pat(_) | ForBinder::CasePat(_)) {
             self.error(span, "cannot infer the element type of this generator");
         }
@@ -6277,19 +5850,6 @@ impl<'a> Worker<'a> {
             if !generators {
                 self.index_yield_functions(body, tb, ret);
             }
-        }
-        if let Some(tys) = untupled {
-            let xs: Vec<SymId> = tys.iter().enumerate().map(|(i, &t)| self.indexed_local("x", i as u32 + 1, t, span)).collect();
-            let refs: Vec<TExprId> = xs.iter().map(|&x| self.prog.add(TExpr::Local(x))).collect();
-            let l = self.prog.list(&refs);
-            let class = self.tuple_class(tys.len());
-            let tuple = self.prog.add(TExpr::New(class, l));
-            self.prog.set_type(tuple, elem);
-            let stmts = self.prog.stmts.push_slice(&[TStmt::Val(sym, tuple)]);
-            let body = self.prog.add(TExpr::Block(stmts, tb));
-            let params = self.prog.syms(&xs);
-            let ty = self.fun_type(&tys, bty);
-            return (self.prog.add(TExpr::Lambda(params, body)), ty);
         }
         let params = self.prog.syms(&[sym]);
         let ty = self.fun_type(&[elem], bty);
@@ -6494,27 +6054,6 @@ impl<'a> Worker<'a> {
             self.type_args_for_errors(&lists);
             return (self.prog.add(TExpr::Unit), ERROR);
         }
-        // A receiver of a context function type is applied to the givens in scope before a
-        // member other than its `apply` is selected (dotty's `adaptNoArgsOther` against a
-        // selection): `players.contains(p).option(x)` of a `contains(a: A): Eq[A] ?=> Boolean`.
-        // Most receivers have a class's type that is no context function, told apart first.
-        let plain_class = match self.types.get(recv_ty) {
-            // The context function class of that many parameters, where the table holds one, is
-            // the only one there is.
-            Type::Class(c, args) => args == EMPTY_LIST || match self.b.context_functions.get(self.syms.class(c).tparams.len().saturating_sub(1)) {
-                Some(&Some(cf)) => cf != c,
-                _ => !self.is_context_function_class_memo(c),
-            },
-            _ => false,
-        };
-        let lists = if name != names::APPLY && !plain_class {
-            match self.member_of_context_function(recv, recv_ty, name, targs, lists, span, expected, converted) {
-                Ok(r) => return r,
-                Err(lists) => lists,
-            }
-        } else {
-            lists
-        };
         // `s.+(x)`: the member `+(x$0: Any)` scalac gives `String` (`String_+`), which is the
         // concatenation that `s + x` makes.
         let lists = if name == names::PLUS && self.stands_for_string(recv_ty) {
@@ -6750,16 +6289,8 @@ impl<'a> Worker<'a> {
         }
         // A right-associative extension's arguments bound ahead of its call are placed here.
         let mark = self.hoisted.len();
-        // The class among the receiver's that holds an extension of the name, looked for once.
-        if let Some(owner) = self.instance_extension_owner(recv_ty, name) {
-            if let Some((te, ty)) = self.apply_extension_of_instance_in(owner, recv, recv_ty, name, targs, &mut lists, span, expected) {
-                return (self.wrap_hoisted(mark, te), ty);
-            }
-            if lists.is_empty() && targs.is_none() {
-                if let Some(r) = self.eta_extension_of_instance(owner, recv, recv_ty, name, span, expected) {
-                    return r;
-                }
-            }
+        if let Some((te, ty)) = self.apply_extension_of_instance(recv, recv_ty, name, targs, &mut lists, span, expected) {
+            return (self.wrap_hoisted(mark, te), ty);
         }
         if name == names::APPLY {
             // `String(bytes, UTF_8)` is `new String(bytes, UTF_8)`, which the platform layer's
@@ -6788,24 +6319,6 @@ impl<'a> Worker<'a> {
                                 return r;
                             }
                         }
-                        // The proxy `apply` a companion without one gets has the constructor's
-                        // access, protected for a protected class whose companion is not protected
-                        // itself, and the class's qualifier (`NamerOps.addConstructorApplies`): out of
-                        // reach, but inside the companion and its class, the object takes no
-                        // parameters (E050). A case class has no proxy: its companion's `apply` is the
-                        // synthesized member (`NamerOps.needsConstructorProxies`).
-                        let proxy = self.syms.class(companion).mods & crate::ast::mods::CASE == 0;
-                        if proxy && (!self.proxy_apply_accessible(companion, c) || !self.is_class_accessible(companion)) {
-                            let owner = match self.syms.class(c).owner {
-                                Owner::Class(o) => format!(" in {}", self.class_description(o)),
-                                Owner::Package(p) if p != crate::symbols::ROOT_PKG && self.syms.pkg(p).name != names::EMPTY => format!(" in package {}", self.name_str(self.syms.pkg(p).name)),
-                                _ => String::new(),
-                            };
-                            let msg = format!("object {}{} does not take parameters", self.name_str(self.syms.class(companion).name), owner);
-                            self.error(span, msg);
-                            self.type_args_for_errors(&lists);
-                            return (self.prog.add(TExpr::Unit), ERROR);
-                        }
                         // The synthesized `apply` of a companion nested in a class constructs
                         // inside it (`Desugar.classDef`): its enclosing instance is the one the
                         // companion is selected on, `o` of `o.C(1)`, the prefix `newExpr` keeps.
@@ -6815,6 +6328,26 @@ impl<'a> Worker<'a> {
                                 self.error(span, msg);
                                 return (self.prog.add(TExpr::Unit), ERROR);
                             };
+                            // The proxy `apply` a companion without one gets has the class's access
+                            // (`NamerOps.addConstructorApplies`): a protected class's, of a companion
+                            // that is not protected itself, is a protected member of the companion,
+                            // out of reach but inside it and its class, and the object then takes no
+                            // parameters (E050). A case class has no proxy: its companion's `apply`
+                            // is the synthesized member (`NamerOps.needsConstructorProxies`).
+                            let proxy = self.syms.class(companion).mods & crate::ast::mods::CASE == 0;
+                            let protected = self.syms.class(companion).mods & crate::ast::mods::PROTECTED != 0
+                                && self.syms.class(c).mods & crate::ast::mods::PROTECTED == 0;
+                            let inside = self.env.frames.iter().any(|f| matches!(f, super::Frame::Class(k) if *k == c || *k == companion));
+                            if proxy && ((protected && !inside) || !self.is_class_accessible(companion)) {
+                                let owner = match self.syms.class(c).owner {
+                                    Owner::Class(o) => format!(" in {}", self.class_description(o)),
+                                    _ => String::new(),
+                                };
+                                let msg = format!("object {}{} does not take parameters", self.name_str(self.syms.class(companion).name), owner);
+                                self.error(span, msg);
+                                self.type_args_for_errors(&lists);
+                                return (self.prog.add(TExpr::Unit), ERROR);
+                            }
                             // The class is constructed through the companion's prefix, which is an
                             // immutable path (dotty's `newExpr`, E083).
                             if proxy && !self.is_stable_path(recv) {
@@ -6875,10 +6408,10 @@ impl<'a> Worker<'a> {
                     // enum's class case `E.B(1)`).
                     let inner = self.outer_class(nested).is_some();
                     // The prefix of a creator application is an immutable path, as dotty's
-                    // `newExpr` asks of a `new`'s class type (E083); a case class's companion
-                    // `apply` makes its own.
-                    if inner && self.syms.class(nested).mods & crate::ast::mods::CASE == 0 {
-                        self.check_class_prefix(recv, recv_ty, span);
+                    // `newExpr` asks of a `new`'s class type (E083).
+                    if inner && !self.is_stable_path(recv) {
+                        let msg = format!("{} is not a valid class prefix, since it is not an immutable path", self.show(recv_ty));
+                        self.error(span, msg);
                     }
                     let prefixed = inner || self.new_prefixed;
                     let outer_prefixed = std::mem::replace(&mut self.new_prefixed, prefixed);
@@ -6943,30 +6476,6 @@ impl<'a> Worker<'a> {
             }
             if name == names::COPY && self.syms.class(c).mods & crate::ast::mods::CASE != 0 {
                 return self.apply_copy(recv, recv_ty, c, targs, lists, span, expected);
-            }
-            // The `copy` of a case class is a member of what extends it too (scalachess's
-            // `Glyph.MoveAssessment.good`, a `MoveAssessment` trait extending the case class
-            // `Glyph`), the case class's own.
-            if name == names::COPY {
-                let case_base = self.syms.class(c).base_types.iter().map(|&(b, _)| b).find(|&b| b != c && self.syms.class(b).mods & crate::ast::mods::CASE != 0);
-                if let Some(b) = case_base {
-                    let base_ty = self.base_type(recv_ty, b).unwrap_or(recv_ty);
-                    return self.apply_copy(recv, base_ty, b, targs, lists, span, expected);
-                }
-            }
-        }
-        // A builtin operator is a member of the primitive class, found before an extension or a
-        // conversion is (`any2stringadd`'s `+`): selected with no argument where a function is
-        // expected, it is eta-expanded.
-        // Only where a function is expected, told before the receiver's primitive is.
-        if lists.is_empty() && targs.is_none() && expected.is_some_and(|e| self.as_function(e).is_some()) {
-            let prim = self.widen_path(recv_ty);
-            let prim = self.widen_lit(prim);
-            let prim = self.primitive_side(prim).unwrap_or(prim);
-            if name == names::EQEQ || name == names::NEQ || self.prim_op_applies(prim, name) {
-                if let Some(r) = self.eta_builtin_operator(recv, recv_ty, name, span, expected) {
-                    return r;
-                }
             }
         }
         let mut lists = Some(lists);
@@ -7761,54 +7270,6 @@ impl<'a> Worker<'a> {
         }
     }
 
-    /// `Ops.twice` for an extension method `twice` of the object `Ops` named with no argument: the
-    /// method its receiver's clause is the first of, eta-expanded (dotc's `etaExpand` of the
-    /// extension's method), `(e: String) => Ops.twice(e)`; the receiver's type is the expected
-    /// function's parameter where one is expected.
-    fn eta_extension_of_instance(&mut self, owner: ClassId, recv: TExprId, recv_ty: TypeId, name: Name, span: Span, expected: Option<TypeId>) -> Option<(TExprId, TypeId)> {
-        let exts: Vec<SymId> = self.syms.class(owner).extensions.iter().copied().filter(|&s| self.syms.sym(s).name == name).collect();
-        let (param, result) = match expected.and_then(|e| self.as_function(e)) {
-            Some((ps, r)) if ps.len() == 1 => (Some(ps[0]), Some(r)),
-            _ => (None, None),
-        };
-        let param = param.map(|p| self.solve_in(p)).filter(|&p| !matches!(self.types.get(p), Type::Var(_)));
-        let rty = match (param, &exts[..]) {
-            (Some(p), _) => p,
-            (None, [ext]) => {
-                let ext_clauses = self.syms.sym(*ext).ext_clauses as usize;
-                let sig = self.sig_arc(*ext);
-                let clause = sig.clauses.iter().take(ext_clauses).find(|cl| !cl.is_using)?;
-                let [p] = &clause.params[..] else { return None };
-                let owner_ty = self.base_type(recv_ty, owner).unwrap_or(recv_ty);
-                let mut subst = self.owner_subst(owner_ty);
-                for &tp in sig.tparams.iter() {
-                    let v = self.fresh_var();
-                    subst.push((tp, v));
-                }
-                self.types.subst(p.ty, &subst)
-            }
-            _ => return None,
-        };
-        let local = self.indexed_local("e", 0, rty, span);
-        let arg = self.prog.add(TExpr::Local(local));
-        self.prog.set_type(arg, rty);
-        let mut lists = vec![ArgList { args: vec![ArgSrc::Typed(arg, rty)], using: false, span }];
-        let mark = self.attempt();
-        let applied = self.apply_extension_of_instance(recv, recv_ty, name, None, &mut lists, span, result);
-        if self.attempt_failed(&mark) {
-            self.retract(mark);
-            return None;
-        }
-        self.close(mark);
-        let (body, ret) = applied?;
-        let rty = self.solve_in(rty);
-        let ty = self.fun_type(&[rty], ret);
-        let ps = self.prog.syms(&[local]);
-        let lambda = self.prog.add(TExpr::Lambda(ps, body));
-        self.prog.set_type(lambda, ty);
-        Some((lambda, ty))
-    }
-
     /// `F.map(fa)(f)` for an extension method `map` of the type class `Functor[F]`: the first
     /// argument is the receiver of the extension, as in Scala.
     fn apply_extension_of_instance(
@@ -7821,72 +7282,11 @@ impl<'a> Worker<'a> {
         span: Span,
         expected: Option<TypeId>,
     ) -> Option<(TExprId, TypeId)> {
-        let owner = self.instance_extension_owner(recv_ty, name)?;
-        self.apply_extension_of_instance_in(owner, recv, recv_ty, name, targs, lists, span, expected)
-    }
-
-    /// The class among the base classes of the receiver's type that defines an extension method
-    /// named `name`.
-    #[inline]
-    fn instance_extension_owner(&mut self, recv_ty: TypeId, name: Name) -> Option<ClassId> {
-        let c = match self.types.get(recv_ty) {
-            Type::Class(c, _) => c,
-            _ => self.class_of(recv_ty)?,
-        };
+        let c = self.class_of(recv_ty)?;
         self.complete_class(c);
-        // A class none of whose ancestors declares an extension, as its completion found, and
-        // that declares none itself, has none to look for: read on the class's record, the walk
-        // apart from the member call's path.
-        let info = self.syms.class(c);
-        if info.no_inherited_extensions && info.extensions.is_empty() {
-            return None;
-        }
-        self.extension_owner_among_bases(c, name)
-    }
-
-    #[cold]
-    #[inline(never)]
-    fn extension_owner_among_bases(&mut self, c: ClassId, name: Name) -> Option<ClassId> {
-        self.syms.class(c).base_types.iter().map(|&(b, _)| b).find(|&b| {
+        let owner = self.syms.class(c).base_types.iter().map(|&(b, _)| b).find(|&b| {
             self.syms.class(b).extensions.iter().any(|&s| self.syms.sym(s).name == name)
-        })
-    }
-
-    /// The member of a receiver that is a context function, selected on its result once its
-    /// givens are applied (dotty's `adaptNoArgsOther`); the lists back where it is none. Apart
-    /// from the member call's path, which most receivers, of a plain class, do not take.
-    #[cold]
-    #[inline(never)]
-    #[allow(clippy::too_many_arguments)]
-    fn member_of_context_function(
-        &mut self,
-        recv: TExprId,
-        recv_ty: TypeId,
-        name: Name,
-        targs: Option<ListRef>,
-        lists: Vec<ArgList>,
-        span: Span,
-        expected: Option<TypeId>,
-        converted: bool,
-    ) -> Result<(TExprId, TypeId), Vec<ArgList>> {
-        let Some((ptys, ret)) = self.as_context_function(recv_ty) else { return Err(lists) };
-        let Some((te, ty)) = self.apply_context_function_to(recv, recv_ty, ANY, ptys, ret, span) else { return Err(lists) };
-        self.no_receiver_conversion = converted;
-        Ok(self.apply_member_of_class(te, ty, name, targs, lists, span, expected))
-    }
-
-    #[allow(clippy::too_many_arguments)]
-    fn apply_extension_of_instance_in(
-        &mut self,
-        owner: ClassId,
-        recv: TExprId,
-        recv_ty: TypeId,
-        name: Name,
-        targs: Option<ListRef>,
-        lists: &mut Vec<ArgList>,
-        span: Span,
-        expected: Option<TypeId>,
-    ) -> Option<(TExprId, TypeId)> {
+        })?;
         let mut exts: Vec<SymId> = self.syms.class(owner).extensions.iter().copied().filter(|&s| self.syms.sym(s).name == name).collect();
         // Explicit type arguments of a direct call cover the extension's parameters and its
         // own: among same-named extensions, those with that many (`OrElse.unify[I, K, T](x)`
@@ -7913,13 +7313,8 @@ impl<'a> Worker<'a> {
             None => lists,
         };
         let first = ordered.first().filter(|l| (!l.using || in_body) && l.args.len() == 1)?;
-        // The receiver as written, or the parameter of an eta-expansion (`eta_extension_of_instance`).
-        let (arg, typed_recv) = match first.args[0] {
-            ArgSrc::Ast(arg) => (Some(arg), None),
-            ArgSrc::Typed(te, ty) if right_assoc.is_none() => (None, Some((te, ty))),
-            _ => return None,
-        };
-        if arg.map_or(false, |arg| matches!(self.cur_ast().expr(arg), Expr::NamedArg(..))) {
+        let ArgSrc::Ast(arg) = first.args[0] else { return None };
+        if matches!(self.cur_ast().expr(arg), Expr::NamedArg(..)) {
             return None;
         }
         let mut recv = recv;
@@ -7942,11 +7337,7 @@ impl<'a> Worker<'a> {
             }
             *lists = ordered;
         }
-        let (te, ty) = match (arg, typed_recv) {
-            (Some(arg), _) => self.type_expr(arg, None),
-            (None, Some(typed)) => typed,
-            (None, None) => return None,
-        };
+        let (te, ty) = self.type_expr(arg, None);
         let ty = self.solve_in(ty);
         let owner_ty = self.base_type(recv_ty, owner).unwrap_or(recv_ty);
         let owner_subst = self.owner_subst(owner_ty);
@@ -7959,10 +7350,7 @@ impl<'a> Worker<'a> {
         let ext = if exts.len() > 1 {
             let calls: Vec<MethodCall> = exts
                 .iter()
-                .map(|&sym| {
-                    let prefix = self.dependent_prefix(sym, recv, recv_ty);
-                    MethodCall { recv: Some(recv), sym, owner_subst: owner_subst.clone(), ext_recv: Some((te, ty)), prefix, refined: None }
-                })
+                .map(|&sym| MethodCall { recv: Some(recv), sym, owner_subst: owner_subst.clone(), ext_recv: Some((te, ty)), prefix: None, refined: None })
                 .collect();
             match self.resolve_extension_overload(&calls, targs, te, ty, &mut rest, expected) {
                 Ok(i) => exts[i],
@@ -7974,10 +7362,7 @@ impl<'a> Worker<'a> {
         } else {
             exts[0]
         };
-        // Seen from the instance it is selected on (`dsl.in("f")(2)` of an `in` that `dsl`'s trait
-        // declares), as dotty's `TermRef(dsl.type, in)` is.
-        let prefix = self.dependent_prefix(ext, recv, recv_ty);
-        let call = MethodCall { recv: Some(recv), sym: ext, owner_subst, ext_recv: Some((te, ty)), prefix, refined: None };
+        let call = MethodCall { recv: Some(recv), sym: ext, owner_subst, ext_recv: Some((te, ty)), prefix: None, refined: None };
         // The explicit type arguments of a direct call cover the extension's own parameters too.
         self.direct_ext_targs = targs.is_some();
         self.apply_method(call, None, targs, rest, span, expected, false)
@@ -10320,14 +9705,7 @@ impl<'a> Worker<'a> {
                         Some(GivenScope::Path(p)) => Some(p),
                         _ => self.inherited_extension_prefix(module.and_then(GivenScope::module)),
                     };
-                    let receiver = self.trait_member_receiver(site);
-                    // One an import of an object or a value brings is seen from what it names
-                    // (`"f".in(2)` of `import dsl.*`, `in` of `dsl`'s trait), as dotty's
-                    // `TermRef(dsl.type, in)` is.
-                    if prefix.is_none() && matches!(site, super::exports::TraitMemberSite::Module(_) | super::exports::TraitMemberSite::Value(_)) && self.sig_names_paths(sym) {
-                        prefix = self.path_of(receiver);
-                    }
-                    Some(receiver)
+                    Some(self.trait_member_receiver(site))
                 }
                 _ => None,
             };
@@ -10647,19 +10025,13 @@ impl<'a> Worker<'a> {
 
     fn receiver_param_type(&mut self, call: &MethodCall, fresh: bool) -> Option<TypeId> {
         let sig = self.sig_arc(call.sym);
-        let mut stand_in = None;
         let sig = match call.prefix {
-            Some(prefix) => {
-                stand_in = self.prefix_stand_in(prefix, &call.owner_subst);
-                let inserted = stand_in.map_or(prefix, |(param, _)| param);
-                self.sig_seen_as(sig, prefix, inserted, call.sym)
-            }
+            Some(prefix) => self.sig_seen_from(sig, prefix, call.sym),
             None => sig,
         };
         let ext_clauses = self.syms.sym(call.sym).ext_clauses as usize;
         let idx = sig.clauses.iter().take(ext_clauses).position(|c| !c.is_using)?;
         let mut subst = call.owner_subst.clone();
-        subst.extend(stand_in.map(|(_, entry)| entry));
         if !fresh {
             return Some(self.types.subst(sig.clauses[idx].params[0].ty, &subst));
         }

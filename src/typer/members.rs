@@ -179,12 +179,6 @@ impl<'a> Worker<'a> {
         if own.is_empty() {
             return Some(class);
         }
-        // Through its owner's `this` it is the bare class, whose constructor is the class's own
-        // (dotty's unapplied `TypeRef`), not a lambda over it: `new Success[U](..) { .. }` in a
-        // jar's body of a member of the enclosing trait.
-        if !matches!(self.types.get(class), Type::Nested(..)) {
-            return Some(self.types.mk(Type::Ctor(c)));
-        }
         let l = self.types.list(&own_types);
         Some(self.types.mk(Type::Lambda(l, class)))
     }
@@ -371,13 +365,7 @@ impl<'a> Worker<'a> {
     pub fn nested_class_through(&mut self, prefix: TypeId, name: Name) -> Option<ClassId> {
         let under = if self.types.is_path(prefix) { self.path_underlying(prefix) } else { prefix };
         let under = self.dealias(under);
-        let c = match self.types.get(under) {
-            // A member of an intersection is one of either part (dotty's `AndType` member
-            // lookup): `coll.AggregationFramework` of a `GenericCollection[P] & Commands`.
-            Type::Inter(a, b) => return self.nested_class_through(a, name).or_else(|| self.nested_class_through(b, name)),
-            Type::Refined(parent, _) => return self.nested_class_through(parent, name),
-            _ => self.types.named_class(under)?,
-        };
+        let c = self.types.named_class(under)?;
         self.complete_class(c);
         if let Some(&n) = self.syms.class(c).nested.get(&name) {
             return Some(n);
@@ -430,7 +418,7 @@ impl<'a> Worker<'a> {
 
     /// The path a path stands for: a val declared with a singleton type (`val b: a.type`)
     /// names that path, so `b.T` is `a.T`.
-    pub(super) fn stable_root(&mut self, p: TypeId) -> TypeId {
+    fn stable_root(&mut self, p: TypeId) -> TypeId {
         let mut p = p;
         for _ in 0..MAX_DEPTH {
             if !matches!(self.types.get(p), Type::Term(_) | Type::Select(..)) {
@@ -763,14 +751,7 @@ impl<'a> Worker<'a> {
         // The first definition in the linearisation, unless a later one is an alias where it
         // is abstract: an alias implements the abstract members of every trait mixed in.
         let mut found = None;
-        let bases: Vec<(ClassId, TypeId)> = self.syms.class(c).base_types.clone();
-        for (b, bt) in bases {
-            // A jar's class enters its members as it completes, a parent of a complete class
-            // not necessarily so: completed here, as dotty's member lookup completes the
-            // base classes it walks.
-            if b != c && self.syms.class(b).def.is_none() && self.syms.class(b).state() != Completion::Done {
-                self.complete_class(b);
-            }
+        for &(b, bt) in &self.syms.class(c).base_types {
             if let Some(&a) = self.syms.class(b).type_aliases.get(&name) {
                 // A private member of a base class is no member of the class (dotty's
                 // `MissingType`: "a private member in a base class").
@@ -1283,18 +1264,7 @@ impl<'a> Worker<'a> {
                         // it names, whatever the class derives from (dotty's `asSeenFrom` from
                         // the member's owner: `A.this.C` of `class B(x: C) extends A` in `A`).
                         let ty = match self.class_of(under) {
-                            Some(c) => {
-                                let ty = self.member_seen_from(ty, p, c, s);
-                                // A member of an object nested in a class, reached through a path
-                                // whose type is that object's (`framework: coll.Framework.type`):
-                                // the enclosing class's `this` is the object's prefix (`coll`).
-                                if self.types.has_paths(ty) {
-                                    let root = self.stable_root(p);
-                                    self.seen_from_outer_path(ty, root, c)
-                                } else {
-                                    ty
-                                }
-                            }
+                            Some(c) => self.member_seen_from(ty, p, c, s),
                             None => ty,
                         };
                         // The outer class's `this` left by a member of an inner class, as a

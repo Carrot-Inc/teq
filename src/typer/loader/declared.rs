@@ -1019,7 +1019,7 @@ impl<'a> Worker<'a> {
     #[inline(never)]
     pub(in crate::typer) fn apply_declared(&mut self, d: DeclRef, node: ExprId, q: ExprId, name: Name, targs: Option<ListRef>, lists: Vec<ArgList>, span: Span, expected: Option<TypeId>) -> (TExprId, TypeId) {
         let outer_took = self.declared_took.take();
-        let typed = match self.resolve_static_path(q, name, false) {
+        let typed = match self.resolve_static_path(q, name) {
             StaticPath::Callee(callee) => {
                 let callee = self.static_declared(callee, d);
                 self.apply_callee(callee, targs, lists, span, expected)

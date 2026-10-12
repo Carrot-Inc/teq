@@ -93,9 +93,9 @@ package java.lang:
     @js("(typeof $0 === \"string\" ? $0.length === 0 : $0.length() === 0)")
     @jvm("invokeinterface java/lang/CharSequence.isEmpty()Z")
     def isEmpty: scala.Boolean = length == 0
-    // A string's is its `substring`, bounds checked; another sequence's its own.
+    // The JDK's `StringBuilder` answers a `String` too.
     @javaDefined
-    @js("(typeof $0 === \"string\" ? $substring($0, $1, $2) : $0.subSequence($1, $2))")
+    @js("(typeof $0 === \"string\" ? $0 : $0.toString()).substring($1, $2)")
     @jvm("invokeinterface java/lang/CharSequence.subSequence(II)Ljava/lang/CharSequence;")
     def subSequence(start: Int, end: Int): CharSequence
 
@@ -1139,9 +1139,6 @@ package java.lang:
     @js("/[\\p{L}\\p{Nl}\\p{Nd}\\p{Mn}\\p{Mc}\\p{Pc}\\p{Sc}\\p{Cf}\\x00-\\x08\\x0E-\\x1B\\x7F-\\x9F]/u.test($1)")
     @jvm("invokestatic java/lang/Character.isJavaIdentifierPart(C)Z")
     def isJavaIdentifierPart(c: Char): scala.Boolean
-    @js("/[\\p{L}\\p{Nl}\\p{Sc}\\p{Pc}]/u.test($1)")
-    @jvm("invokestatic java/lang/Character.isJavaIdentifierStart(C)Z")
-    def isJavaIdentifierStart(c: Char): scala.Boolean
     @js("/\\p{ID_Start}/u.test($1)")
     @jvm("invokestatic java/lang/Character.isUnicodeIdentifierStart(C)Z")
     def isUnicodeIdentifierStart(c: Char): scala.Boolean

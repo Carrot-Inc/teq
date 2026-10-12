@@ -2460,7 +2460,7 @@ impl<'a> Emitter<'a> {
             let outer_locals = std::mem::replace(&mut self.ctor_locals, tc.ctor_params.clone());
             self.before_super = true;
             if let (Some(via), true) = (tc.parent_via, superclass.is_some()) {
-                via_inits = self.emit_super_via(tc, via, is_anon, "super");
+                via_inits = self.emit_super_via(tc, via, is_anon);
             } else if superclass.is_some() && !makes_function {
                 // A callable class returns the function in place of `this`, which a
                 // superclass constructor could not have made; it constructs nothing anyway.
@@ -2530,28 +2530,16 @@ impl<'a> Emitter<'a> {
                 }
             }
             if let Some(args) = tc.parent_args.filter(|_| superclass.is_none()) {
-                match tc.parent_via {
-                    // A case's call of a secondary constructor of its enum runs its chain into `$init`.
-                    Some(via) => {
-                        let init = format!("{}.$init", this);
-                        for call in self.emit_super_via(tc, via, false, &init) {
-                            self.line();
-                            self.out.push_str(&call);
-                        }
-                    }
-                    None => {
-                        self.line();
-                        // What the enum captures leads its arguments, a `var` passed as its cell.
-                        let enum_class = match info.owner {
-                            Owner::Class(m) => self.syms.class(m).companion,
-                            _ => None,
-                        };
-                        let captures = enum_class.and_then(|e| self.local_captures.get(&e).copied()).unwrap_or(0) as usize;
-                        let _ = write!(self.out, "{}.$init(", this);
-                        self.emit_proxy_args(args, captures, "");
-                        self.out.push(';');
-                    }
-                }
+                self.line();
+                // What the enum captures leads its arguments, a `var` passed as its cell.
+                let enum_class = match info.owner {
+                    Owner::Class(m) => self.syms.class(m).companion,
+                    _ => None,
+                };
+                let captures = enum_class.and_then(|e| self.local_captures.get(&e).copied()).unwrap_or(0) as usize;
+                let _ = write!(self.out, "{}.$init(", this);
+                self.emit_proxy_args(args, captures, "");
+                self.out.push(';');
             }
             // The statements after the self calls of the superclass's secondary constructors run
             // once its body has: with the deferred body of this class, or in its place.
@@ -2941,12 +2929,11 @@ impl<'a> Emitter<'a> {
 
     /// `super(...)` for a parent call that goes to a secondary constructor of the superclass:
     /// the parameters of that constructor are bound to the arguments, then those of the
-    /// constructor its self call goes to, down to the primary constructor's call (`primary`: `super`,
-    /// or an enum case's `$init` of its enum); a self call's arguments cannot refer to `this`, so they
-    /// may run before it. Returns the
+    /// constructor its self call goes to, down to the primary constructor's `super(...)`; a
+    /// self call's arguments cannot refer to `this`, so they may run before it. Returns the
     /// calls that run the statements after each self call, innermost first, for the caller to
     /// place once the superclass's body has run.
-    fn emit_super_via(&mut self, tc: &TClass, via: SymId, anon: bool, primary: &str) -> Vec<String> {
+    fn emit_super_via(&mut self, tc: &TClass, via: SymId, anon: bool) -> Vec<String> {
         let mut inits: Vec<String> = Vec::new();
         let mut placeholders: Vec<String> = Vec::new();
         let mut args: Vec<TExprId> = Vec::new();
@@ -2997,7 +2984,7 @@ impl<'a> Emitter<'a> {
                 }
                 TExpr::New(_, l) => {
                     self.line();
-                    self.out.push_str(primary);
+                    self.out.push_str("super");
                     self.emit_args(l);
                     self.out.push(';');
                     break;

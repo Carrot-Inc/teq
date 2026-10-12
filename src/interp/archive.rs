@@ -404,14 +404,14 @@ pub(super) fn install(it: &mut Table) {
     // The offset of the machine's zone from UTC at an instant, in seconds.
     reg!(it, "java.util.zip.localOffset", |it, a| {
         let seconds = long(it, a, 0)?;
-        if it.pure && it.macro_ctx.is_none() {
+        if it.pure {
             return it.impure("the machine's time zone");
         }
         Ok(Value::Int(offset_at(seconds)))
     });
     // The instant, in seconds, of a local date and time in the machine's zone.
     reg!(it, "java.util.zip.localInstant", |it, a| {
-        if it.pure && it.macro_ctx.is_none() {
+        if it.pure {
             return it.impure("the machine's time zone");
         }
         let mut f = [0i32; 6];
@@ -437,13 +437,13 @@ pub(super) fn install(it: &mut Table) {
     });
     reg!(it, "java.time.timeOffset", |it, a| {
         let seconds = long(it, a, 0)?;
-        if it.pure && it.macro_ctx.is_none() {
+        if it.pure {
             return it.impure("the machine's time zone");
         }
         Ok(Value::Int(offset_at(seconds)))
     });
     reg!(it, "java.time.timeLocalInstant", |it, a| {
-        if it.pure && it.macro_ctx.is_none() {
+        if it.pure {
             return it.impure("the machine's time zone");
         }
         let mut f = [0i32; 6];
@@ -453,26 +453,13 @@ pub(super) fn install(it: &mut Table) {
         Ok(Value::Long(local_to_epoch(f)))
     });
     reg!(it, "java.time.timeZoneName", |it, _a| {
-        if it.pure && it.macro_ctx.is_none() {
+        if it.pure {
             return it.impure("the machine's time zone");
         }
         Ok(Value::string(zone_name()))
     });
-    // The JDK's, in a JVM build, where `java.time` has no bodies: the machine's zone, which a
-    // macro reads as the build's JVM has it (a library's object initialising with it), its id in
-    // its field (`class::jdk_member`).
-    reg!(it, "java.time.ZoneId.systemDefault", |it, _a| {
-        if it.pure && it.macro_ctx.is_none() {
-            return it.impure("the machine's time zone");
-        }
-        let Some(c) = it.typer.class_at(&["java", "time", "ZoneId"]) else {
-            return it.unsupported("java.time.ZoneId is not on the class path");
-        };
-        let fields = std::cell::RefCell::new(vec![Value::string(zone_name())]);
-        Ok(Value::Obj(Rc::new(Object { class: c, fields, env: None, name: None, ordinal: Cell::new(0), hash: Cell::new(0), slot: Cell::new(0), born: Cell::new(0), made: Cell::new(super::made_now()) })))
-    });
     reg!(it, "java.util.zip.zoneName", |it, _a| {
-        if it.pure && it.macro_ctx.is_none() {
+        if it.pure {
             return it.impure("the machine's time zone");
         }
         Ok(Value::string(zone_name()))

@@ -232,32 +232,6 @@ the cache `tests/support/jars.sh` keys or from Maven Central, the built ones han
 `bench/actions/jars.sh`), the scala3 checkout is fetched at the commit the harnesses' baselines name, and each
 job keeps its suites' output and times (`out/all/`) as an artifact. Its runners hold Temurin 21 and node 22.
 
-### lila
-
-lila, lichess's server ([lichess-org/lila](https://github.com/lichess-org/lila)), is teq's public reference
-project: forty sbt modules of Scala 3.8.4 with Play routers, macros (reactivemongo's handlers, play-json's
-formats, macwire's wiring) and a test suite, all of it public, so that what teq compiles, tests and runs of it
-anyone can repeat. `bench/lila/` holds its pin (`pin.json`: the upstream commit, the JDK, sbt, the overlay's
-digests), the oracle's inventory (`tests.json`: the suites and cases `testFull` passes under scalac 3.8.4), the
-generated inputs' digests (`generated.json`), the overlay sbt's `-addPluginSbtFile` adds to lila's build without
-changing its repository (`overlay/plugins.sbt` and `overlay/LilaTeq.scala`, which declares the generators teq runs
-in the place of sbt's: liplay's routers through its routes compiler under `teq interp` (`routes.scala`) and the
-serialised translations (`i18n.scala`, the JDK's bytes)), and the script `lila.scala` with its verbs:
-`checkout` (the pin into a blob-filtered clone, `conf/version.conf` written from the pin as lila's CI writes
-it), `oracle` (`clean;compile;testFull;stage` under sbt, `--runs n`, `--record`), `export`, `compile`, `test`
-and `run` (each with `--teq <binary>`). The pin, the inventory, the digests and the overlay move together:
-a later part moves the pin by running `checkout`, `oracle --record`, `export` and `compile --record` at the new
-commit.
-
-The gate's lines `lila-export`, `lila-compile`, `lila-test` and `lila-run` take lila's checkout (`--lila`) and
-the binary under test, and are mandatory once named: a missing checkout, export, service (`LILA_MONGOD`,
-`LILA_REDIS`), built asset manifest or suite fails the line, never a skip. `lila-test` holds the run to the
-inventory: without `tests.json`, or with an empty one, it fails at the start, and it runs `teq test --verbose`,
-whose runner names every test with its outcome (`[success]`, `[skipped]`, `[fail]`), so that each suite of the
-inventory has to have run in its project with each of its cases passed (`tests/lila-test-verb.sh`). They run only when `--only` names
-them until their time and memory are measured within the gate's budget (two added minutes, 12 GB): the
-measurements of `lila.scala`'s `--runs 3` are the admission's record.
-
 ## The timing lines on a machine
 
 The gate's `budget`, `runtime` and `sentinel` lines compare the head's plain release build with

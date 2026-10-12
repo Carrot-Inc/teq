@@ -419,49 +419,6 @@ impl<'a> Worker<'a> {
         self.deferred_bounds.truncate(marks.2);
     }
 
-    /// The result type of an inline method without one declared whose body is a macro's splice,
-    /// its body typed as the definition check types it (`record_std_inline_body`: nothing
-    /// stored, nothing reported): the type the splice's `Expr` holds, over the method's type
-    /// parameters, which a call infers its type arguments against, as dotty's `Namer` infers it
-    /// from the right-hand side before any expansion. `ERROR` where the typing failed.
-    pub(super) fn inferred_macro_result(&mut self, sym: SymId, sig: &MethodSig) -> TypeId {
-        let (file, owner, span) = {
-            let s = self.syms.sym(sym);
-            (s.file, s.owner, s.span)
-        };
-        if owner == Owner::Local || self.inline_definitions.contains_key(&sym) {
-            return ERROR;
-        }
-        let env = self.env_at(file, owner, span.start);
-        let marks = (self.diags.items.len(), self.deferred_matches.len(), self.deferred_bounds.len());
-        let notes = Notes { sym, tparams: sig.tparams.clone(), pattern_tparams: Vec::new(), reducible: Vec::new(), deferred: Vec::new(), type_args: Vec::new(), splices: Vec::new(), leaf_tests: Vec::new(), imports: Vec::new(), hoisted: Vec::new(), pending_imports: Vec::new(), unplaced_aliases: Vec::new(), pending_aliases: Vec::new(), aliases: Vec::new(), classes: Vec::new(), class_bodies: Vec::new(), inline_vals: Vec::new(), inferred_vals: Vec::new(), held: None };
-        let case_binders = std::mem::take(&mut self.case_binders);
-        let index = self.index.take();
-        let ty = self.outside_annotation(|t| {
-            t.outside_search(|t| {
-                t.outside_inline(|t| {
-                    t.inline.checking += 1;
-                    t.inline.notes.push(notes);
-                    let (_, ty, _) = t.with_env(env, |t| t.type_inline_definition(sym, sig));
-                    t.inline.notes.pop();
-                    t.inline.checking -= 1;
-                    ty
-                })
-            })
-        });
-        self.index = index;
-        self.case_binders = case_binders;
-        let failed = self.diags.items[marks.0..].iter().any(|d| !d.is_warning);
-        self.drop_reported_since(marks.0);
-        self.deferred_matches.truncate(marks.1);
-        self.deferred_bounds.truncate(marks.2);
-        let ty = self.zonk(ty);
-        if failed || self.types.has_vars(ty) || self.types.contains_error(ty) {
-            return ERROR;
-        }
-        ty
-    }
-
     /// The definition check of the local inline method `sym`, which a block of a body the walk
     /// types defines: in the block's scope, the enclosing body's locals and type parameters
     /// in it, and only there, not in a body being expanded or checked, which is copied whole.

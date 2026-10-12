@@ -261,36 +261,12 @@ impl<'a> Worker<'a> {
         }
         let subst: Subst = tparams.iter().copied().zip(items.iter().copied()).collect();
         let expanded = self.types.subst(body, &subst);
-        let expanded = if items.iter().any(|&t| self.types.is_wild(t)) { self.bound_wild_refinements(expanded) } else { expanded };
         // A curried alias applied further (`(Eq |: Derived)[A]`): the rest goes to its lambda.
         if items.len() > tparams.len() {
             let rest = &items[tparams.len()..];
             return Some(self.types.apply_ctor(expanded, rest));
         }
         Some(expanded)
-    }
-
-    /// An alias applied to a wildcard where its right-hand side refines a member as the
-    /// parameter (`Aux[? <: Opt]` for `type Aux[O <: Opt] = Cfg { type Opts = O }`): the member
-    /// is bounded by the wildcard's bounds, `Cfg { type Opts <: Opt }`, as dotty's
-    /// `TypeApplications.Reducer` reduces the application (`applyArg(info).bounds`).
-    fn bound_wild_refinements(&mut self, t: TypeId) -> TypeId {
-        let (parent, rs) = self.types.refinements_of(t);
-        if rs.is_empty() {
-            return t;
-        }
-        let mut out = parent;
-        for r in rs {
-            let r = match self.types.refinement(r) {
-                Refinement::Alias(n, x) => match self.types.wild_bounds(x) {
-                    Some((lo, hi)) => self.types.refine(Refinement::Bounds(n, lo, hi)),
-                    None => r,
-                },
-                _ => r,
-            };
-            out = self.types.mk(Type::Refined(out, r));
-        }
-        out
     }
 
     // ---- reduction ----

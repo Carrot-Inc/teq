@@ -19,9 +19,6 @@ package scala:
     @js("$substring($0, $1)")
     @jvm("invokevirtual java/lang/String.substring(I)Ljava/lang/String;")
     def substring(start: Int): String
-    @js("$substring($0, $1, $2)")
-    @jvm("invokevirtual java/lang/String.subSequence(II)Ljava/lang/CharSequence;")
-    def subSequence(start: Int, end: Int): CharSequence
     @js("$0.indexOf($1)")
     @jvm("$0 $1:L invokestatic java/lang/String.valueOf(Ljava/lang/Object;)Ljava/lang/String; invokevirtual java/lang/String.indexOf(Ljava/lang/String;)I")
     def indexOf(part: String | Char): Int

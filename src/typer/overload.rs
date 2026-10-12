@@ -93,9 +93,6 @@ enum Shape {
     /// A function literal that leaves a parameter type open, with its arity; a `{ case ... }`
     /// literal fits a function of any arity.
     Lambda(usize, bool),
-    /// A context function literal (`x ?=> e`) that leaves a parameter type open: its shape is a
-    /// context function of its arity (dotty's `typeShape`, `isContextual`).
-    ContextLambda(usize),
     Splice,
 }
 
@@ -283,7 +280,7 @@ impl<'a> Worker<'a> {
         // A set merged once the alternatives are named (a std class entered on demand): the
         // roots of its alternatives are told apart first, as the final pass tells them apart
         // before it names the sets.
-        if self.alternatives_named && !self.naming_late_batch {
+        if self.alternatives_named {
             self.suffix_clashing_roots(&[]);
             self.name_alternatives(set);
         }
@@ -312,7 +309,6 @@ impl<'a> Worker<'a> {
         let msig = self.parameters_arc(m);
         let psig = self.parameters_arc(p);
         let psig = self.seen_from_enclosing_outer(c, p, psig);
-        let p_owner = self.owner_seen_from_enclosing(c, p_owner);
         let lenient_using = self.is_std_scala_member(m) || self.is_std_scala_member(p);
         self.compare_sig_pair(c, msig, m_owner, psig, p_owner, true, lenient_using) != Agreement::Params
     }
@@ -359,51 +355,6 @@ impl<'a> Worker<'a> {
             sig = self.sig_seen_from_outer(sig, prefix, k);
         }
         sig
-    }
-
-    /// The base type `owner_ty` of the local or nested class `c` with the `this` of each class it
-    /// names seen from the class enclosing `c` that derives from it: a class extending an inner
-    /// class (`new Parser[String] { .. }` in scala-parser-combinators' `RegexParsers`) has its
-    /// parent's ancestors over the outer trait's `this` (`Parsers.this.Input`), whose members the
-    /// enclosing class defines (`type Elem = Char`), as the parent's prefix (`RegexParsers.this`)
-    /// gives them under dotty's `asSeenFrom`.
-    fn owner_seen_from_enclosing(&mut self, c: ClassId, owner_ty: TypeId) -> TypeId {
-        if !self.types.has_paths(owner_ty) {
-            return owner_ty;
-        }
-        let mut t = owner_ty;
-        for e in self.enclosing_classes(c) {
-            let prefix = self.this_prefix(e);
-            let bases: Vec<ClassId> = self.syms.class(e).base_types.iter().skip(1).map(|&(b, _)| b).collect();
-            for k in bases {
-                if self.mentions_this_of(t, k) {
-                    t = self.as_seen_from(t, prefix, k);
-                }
-            }
-        }
-        t
-    }
-
-    /// The classes enclosing `c`, innermost first, up to an object: a local class's those of the
-    /// body that made it.
-    fn enclosing_classes(&self, k: ClassId) -> Vec<ClassId> {
-        let mut out = Vec::new();
-        let mut at = self.syms.class(k).owner;
-        if at == Owner::Local {
-            if let Some(env) = self.anon_envs.get(&k) {
-                if let Some(h) = env.frames.iter().rev().find_map(|f| match f { super::Frame::Class(x) => Some(*x), _ => None }) {
-                    at = Owner::Class(h);
-                }
-            }
-        }
-        while let Owner::Class(o) = at {
-            if self.syms.class(o).kind == ClassKind::Object || out.len() == 8 {
-                break;
-            }
-            out.push(o);
-            at = self.syms.class(o).owner;
-        }
-        out
     }
 
     /// The signature of `s` for its parameters alone: while the result of `s` is being inferred
@@ -832,27 +783,12 @@ impl<'a> Worker<'a> {
         if self.suffixed_roots.contains_key(&m) {
             return false;
         }
-        // What the class's alternatives say does not change while the roots are suffixed: read
-        // once per member.
-        if let Some(plain) = self.plain_name_members.get(m) {
-            return plain;
-        }
-        let plain = self.alternatives_leave_plain_name(m);
-        self.plain_name_members.set(m, plain);
-        plain
-    }
-
-    /// Whether the alternatives of `m`'s name in its class, but `m` itself, are none that is
-    /// written out: a nameless inline method or a concrete var's setter is not.
-    fn alternatives_leave_plain_name(&mut self, m: SymId) -> bool {
         let (name, Owner::Class(c)) = (self.syms.sym(m).name, self.syms.sym(m).owner) else { return true };
         let Some(entry) = self.settled_entry(c, name) else { return true };
-        // A concrete var's setter has no output, its call being the var's assignment. The
-        // alternatives are read by index, with no copy of them made for every member named.
-        let n = self.syms.alternatives(entry).map_or(0, |a| a.len());
+        let alts: Vec<SymId> = self.syms.alternatives(entry).map_or_else(Vec::new, |a| a.to_vec());
+        // A concrete var's setter has no output, its call being the var's assignment.
         let mut written = 0;
-        for i in 0..n {
-            let a = self.syms.alternatives(entry).map_or(m, |alts| alts[i]);
+        for a in alts {
             if a == m || (!self.nameless_inline(a) && !super::setters::is_concrete_setter(&self.syms, a)) {
                 written += 1;
             }
@@ -911,9 +847,6 @@ impl<'a> Worker<'a> {
     /// like the alternatives of an overloaded name. Which roots that concerns depends on the
     /// classes of the program, not on its method bodies.
     fn suffix_clashing_roots(&mut self, members: &[SymId]) {
-        self.roots_told = self.syms.overloads.len();
-        // The classes are settled here: what a name asked earlier was told is asked again.
-        self.plain_name_members.clear();
         // The roots of the alternatives of one class, of which one at most can keep the plain
         // name, and the roots of one method, which have to agree on its name.
         let mut groups: Vec<(bool, Vec<SymId>)> = Vec::new();
@@ -1412,16 +1345,11 @@ impl<'a> Worker<'a> {
     /// scalac's E120: two definitions of one scope that erasure does not tell apart. With the
     /// same parameter types the second one is a plain redefinition.
     pub(super) fn report_double_definition(&mut self, first: SymId, second: SymId) -> bool {
-        // An export's forwarder is entered after the class's own definitions, so it is the second
-        // of the two (dotty's `checkNoDoubleDeclaration` over the class's declarations in order).
-        let forwarder = |t: &Self, s: SymId| t.syms.forward_of(s).is_some();
-        let (first, second) = match (forwarder(self, first), forwarder(self, second)) {
-            (true, false) => (second, first),
-            (false, true) => (first, second),
-            _ if self.syms.sym(first).span.start <= self.syms.sym(second).span.start => (first, second),
-            _ => (second, first),
+        let (first, second) = match self.syms.sym(first).span.start <= self.syms.sym(second).span.start {
+            true => (first, second),
+            false => (second, first),
         };
-        let identical = self.identical_parameters(first, second) && self.syms.sym(first).name != names::INIT && !forwarder(self, second);
+        let identical = self.identical_parameters(first, second) && self.syms.sym(first).name != names::INIT;
         let (a, b) = (self.erased_signature(first, true), self.erased_signature(second, true));
         if !identical && (a != b || self.erased_result(first, true) != self.erased_result(second, true)) {
             return false;
@@ -1442,19 +1370,11 @@ impl<'a> Worker<'a> {
                 Owner::Class(c) => format!(" in {}", self.class_description(c)),
                 _ => String::new(),
             };
-            // A forwarder is final; a parameterless definition is `def x: T`.
-            let fin = |t: &Self, s: SymId| if forwarder(t, s) { "final " } else { "" };
-            let shown = |t: &mut Self, s: SymId| {
-                let text = t.sig_string(s);
-                if text.starts_with('(') || text.starts_with('[') { text } else { format!(": {}", text) }
-            };
             format!(
-                "Conflicting definitions:\n{}def {n}{} {place}at line {} and\n{}def {n}{} {place}at line {}\nhave the same type after erasure.",
-                fin(self, first),
-                shown(self, first),
+                "Conflicting definitions:\ndef {n}{} {place}at line {} and\ndef {n}{} {place}at line {}\nhave the same type after erasure.",
+                self.sig_string(first),
                 line(self, first),
-                fin(self, second),
-                shown(self, second),
+                self.sig_string(second),
                 line(self, second),
                 n = self.name_str(name),
                 place = if place.is_empty() { String::new() } else { format!("{} ", &place[1..]) },
@@ -1505,12 +1425,9 @@ impl<'a> Worker<'a> {
         self.alternatives_named = true;
         let mut i = 0;
         while i < self.syms.overloads.len() {
-            // A pass the naming of a set ran meanwhile (a std file's late batch) told them apart.
             if i >= suffixed {
                 suffixed = self.syms.overloads.len();
-                if self.roots_told < suffixed {
-                    self.suffix_clashing_roots(&[]);
-                }
+                self.suffix_clashing_roots(&[]);
             }
             let set = self.syms.overloads[i].0;
             if !self.in_jar(self.syms.sym(set).file) && !self.syms.sym(set).superseded {
@@ -1539,9 +1456,6 @@ impl<'a> Worker<'a> {
     /// Names the alternatives of the overload sets entered since `from`, those of a std file
     /// entered after the final passes, and the members whose names wait on them.
     pub(super) fn name_late_alternatives(&mut self, from: usize) {
-        // The sets the merges below settle are told apart and named after them, with every set
-        // from `from`, once: no merge reruns the roots' pass for its own set (`settle_merged`).
-        let outer_batch = std::mem::replace(&mut self.naming_late_batch, true);
         let mut members: Vec<SymId> = std::mem::take(&mut self.dispatch_pending);
         for (c, entry) in std::mem::take(&mut self.unsettled_std_entries) {
             if self.syms.sym(entry).merge_pending {
@@ -1561,19 +1475,15 @@ impl<'a> Worker<'a> {
             }
             i += 1;
         }
-        self.naming_late_batch = outer_batch;
         // The roots suffixed so far and the new ones name what overrides them, in every class.
         let mut suffixed = self.syms.overloads.len();
         self.suffix_clashing_roots(&members);
         members.extend(std::mem::take(&mut self.dispatch_pending));
         let mut i = from;
         while i < self.syms.overloads.len() {
-            // A pass the naming of a set ran meanwhile (a std file's late batch) told them apart.
             if i >= suffixed {
                 suffixed = self.syms.overloads.len();
-                if self.roots_told < suffixed {
-                    self.suffix_clashing_roots(&[]);
-                }
+                self.suffix_clashing_roots(&[]);
             }
             let set = self.syms.overloads[i].0;
             if !self.in_jar(self.syms.sym(set).file) && !self.syms.sym(set).superseded {
@@ -1799,34 +1709,6 @@ impl<'a> Worker<'a> {
         alts
     }
 
-    /// Each alternative's signature as the receiver sees it, the receiver chain's outer
-    /// instances for the `this` of the classes enclosing an inner class's member included, as
-    /// dotty's alternatives are `TermRef`s of the prefix whose infos are seen from it: what a
-    /// single member's application does (`apply_method_in_now`), here before the arguments are
-    /// tried against them. A prefix that names the owner's parameters goes in as the stand-in
-    /// the owner's substitution replaces (`prefix_stand_in`).
-    fn see_alternatives_from(&mut self, alts: &mut [Alt], recv: TExprId, recv_ty: TypeId) {
-        for alt in alts.iter_mut().filter(|a| a.ctor.is_none()) {
-            let Some(prefix) = self.dependent_prefix(alt.sym, recv, recv_ty) else { continue };
-            let inserted = match self.prefix_stand_in(prefix, &alt.owner_subst) {
-                Some((param, entry)) => {
-                    alt.owner_subst.push(entry);
-                    param
-                }
-                None => prefix,
-            };
-            let mut sig = self.sig_seen_as(alt.sig.clone(), prefix, inserted, alt.sym);
-            if self.member_of_inner_class(alt.sym) {
-                self.note_outer_prefix(alt.sym, recv);
-                if let Some(steps) = self.outer_prefixes.get(&recv).cloned() {
-                    sig = steps.into_iter().fold(sig, |sig, (outer, path)| self.sig_seen_from_outer(sig, path, outer));
-                }
-                sig = self.sig_seen_from_enclosing(sig);
-            }
-            alt.sig = sig;
-        }
-    }
-
     /// The alternative of the member set `set` of `recv_ty` that the argument lists select, with
     /// its owner's type arguments, chosen without applying it: dotty types a structural call
     /// before `addClassOfs` looks at the method its selection resolved to.
@@ -1890,8 +1772,15 @@ impl<'a> Worker<'a> {
         let outer_base = std::mem::replace(&mut self.app_base, self.tvars.len() as u32);
         let first_var = self.tvars.len();
         let mut alts = self.alternatives_of(set, recv_ty, ctor);
+        // Each alternative is seen from the receiver's path, as the chosen one is applied: its
+        // owner's `this` and the enclosing classes' are the receiver's (dotty's member denotation
+        // `asSeenFrom` the prefix, `TypeOps.asSeenFrom`).
         if let (Some(r), Some(rt)) = (recv, recv_ty) {
-            self.see_alternatives_from(&mut alts, r, rt);
+            for alt in alts.iter_mut().filter(|a| a.ctor.is_none()) {
+                if let Some(prefix) = self.dependent_prefix(alt.sym, r, rt) {
+                    alt.sig = self.sig_seen_from(alt.sig.clone(), prefix, alt.sym);
+                }
+            }
         }
         // An alternative whose header the parser could not complete is no candidate while a
         // complete one is.
@@ -2580,54 +2469,34 @@ impl<'a> Worker<'a> {
 
     /// What dotc falls back on between alternatives of which none is most specific: those
     /// whose result takes no further arguments, then those that declare no default arguments,
-    /// each taken of every alternative and resolved again among those that are applicable where
-    /// some but not all of them are (dotty's `resolveOverloaded1`, `noCurried` and `noDefaults`);
-    /// where neither narrows, the resolution again with the expected type's result kept (`deepPt`,
-    /// Applications.scala 2852 and 2880, the first having ignored it, `IgnoredProto`): of the
-    /// alternatives left those the last list's arguments still apply to with their result
-    /// conforming to it, under the constraints those arguments put on the type parameters
-    /// (`f[T](a: A[T]): T` takes an `AB <: A[Int]` as an `Int`), the most specific; none of them
-    /// being none applicable. An earlier list constrains nothing there: dotty resolves a later list
-    /// on the alternatives mapped past the earlier ones (`resolveMapped`, `skipParamClause`'s
-    /// `instantiate`).
+    /// then the resolution again with the expected type's result kept (`resolveOverloaded1`'s
+    /// `deepPt`, Applications.scala 2762, the first having ignored it, `IgnoredProto`): of those
+    /// the last list's arguments still apply to with their result conforming to it, under the
+    /// constraints those arguments put on the type parameters (`f[T](a: A[T]): T` takes an
+    /// `AB <: A[Int]` as an `Int`), the most specific; none of them being none applicable. An
+    /// earlier list constrains nothing there: dotty resolves a later list on the alternatives
+    /// mapped past the earlier ones (`resolveMapped`, `skipParamClause`'s `instantiate`).
     fn break_tie(&mut self, alts: &[Alt], best: Vec<usize>, applicable: &[usize], explicit: &[TypeId], lists: &[&ListInfo], expected: Option<TypeId>) -> Result<usize, Failure> {
         let applied = lists.len();
-        let k = applied - 1;
-        let mut pool: Vec<usize> = (0..alts.len()).collect();
-        let mut best = best;
-        loop {
-            let uncurried: Vec<usize> = pool.iter().copied().filter(|&i| alts[i].explicit_clauses().count() <= applied).collect();
-            let no_defaults: Vec<usize> = pool.iter().copied().filter(|&i| !alts[i].has_defaults()).collect();
-            let narrower = if uncurried.len() == 1 {
-                uncurried
-            } else if uncurried.len() > 1 && uncurried.len() < pool.len() {
-                uncurried
-            } else if no_defaults.len() >= 1 && no_defaults.len() < pool.len() {
-                no_defaults
-            } else {
-                break;
-            };
-            pool = narrower;
-            let candidates: Vec<usize> = pool.iter().copied().filter(|i| applicable.contains(i)).collect();
-            if candidates.is_empty() {
-                return Err(Failure::Ambiguous(best));
-            }
-            best = self.narrow_most_specific(alts, candidates, explicit, Some(k));
-            if let [one] = best.as_slice() {
-                return Ok(*one);
-            }
+        let uncurried: Vec<usize> =
+            applicable.iter().copied().filter(|&i| alts[i].explicit_clauses().count() <= applied).collect();
+        if let [one] = uncurried.as_slice() {
+            return Ok(*one);
+        }
+        let no_defaults: Vec<usize> = applicable.iter().copied().filter(|&i| !alts[i].has_defaults()).collect();
+        if let [one] = no_defaults.as_slice() {
+            return Ok(*one);
         }
         let Some(exp) = self.concrete_expected(expected).filter(|&t| t != ANY && t != self.b.t_unit) else {
             return Err(Failure::Ambiguous(best));
         };
-        let conforming: Vec<usize> = pool
+        let conforming: Vec<usize> = applicable
             .iter()
             .copied()
-            .filter(|i| applicable.contains(i))
             .filter(|&i| {
                 let mark = self.snapshot();
                 let subst = self.alt_subst(&alts[i], explicit);
-                let ok = self.is_applicable_in(&alts[i], &subst, lists, k) && {
+                let ok = self.is_applicable_in(&alts[i], &subst, lists, applied - 1) && {
                     let value = self.value_type(&alts[i], &subst, applied);
                     self.is_compatible(value, exp)
                 };
@@ -2640,7 +2509,7 @@ impl<'a> Worker<'a> {
         }
         // Compared by the list being resolved, as dotty's retry resolves the problem mapped to it
         // (`resolveMapped` of each further clause).
-        match self.narrow_most_specific(alts, conforming, explicit, Some(k)).as_slice() {
+        match self.narrow_most_specific(alts, conforming, explicit, Some(applied - 1)).as_slice() {
             [one] => Ok(*one),
             best => Err(Failure::Ambiguous(best.to_vec())),
         }
@@ -2799,9 +2668,7 @@ impl<'a> Worker<'a> {
                 let lps = &ast.lambda_params[params.range()];
                 // `() => e` has no parameter types to tell the alternatives apart by: its shape
                 // does, a trait taking it through SAM conversion included.
-                if !lps.is_empty() && lps.iter().all(|p| p.contextual) && lps.iter().any(|p| p.ty.is_none()) {
-                    Shape::ContextLambda(lps.len())
-                } else if lps.is_empty() || lps.iter().any(|p| p.ty.is_none()) {
+                if lps.is_empty() || lps.iter().any(|p| p.ty.is_none()) {
                     Shape::Lambda(lps.len(), lps.len() == 1 && lps[0].cases)
                 } else {
                     Shape::Plain
@@ -2902,22 +2769,8 @@ impl<'a> Worker<'a> {
         let Some(mapping) = Self::map_args(clause, args) else { return false };
         args.iter().enumerate().all(|(j, a)| match a.shape {
             Shape::Lambda(arity, any_arity) => self.takes_function(clause.params[mapping.param(j)].ty, arity, any_arity, untupled, partial),
-            Shape::ContextLambda(arity) => self.takes_context_function(clause.params[mapping.param(j)].ty, arity),
             _ => true,
         })
-    }
-
-    /// Whether a context function literal of `arity` parameters can stand where `pty` is
-    /// expected: a context function of as many parameters, or what is no class (a type
-    /// parameter, an abstract type) or the top of the classes, which its shape conforms to.
-    fn takes_context_function(&mut self, pty: TypeId, arity: usize) -> bool {
-        let t = self.deref(pty);
-        let t = if matches!(self.types.get(t), Type::Alias(..)) { self.dealias(t) } else { t };
-        let Type::Class(c, args) = self.types.get(t) else { return !matches!(self.types.get(t), Type::Lit(_)) };
-        if self.is_context_function_class(c) {
-            return self.types.items(args).len() - 1 == arity;
-        }
-        c == self.b.any_ref || t == ANY
     }
 
     /// Whether a function literal of `arity` parameters can stand where `pty` is expected; one
@@ -2999,7 +2852,7 @@ impl<'a> Worker<'a> {
                 }
                 continue;
             }
-            let is_lambda = matches!(shapes[j].shape, Shape::Lambda(..) | Shape::ContextLambda(_));
+            let is_lambda = matches!(shapes[j].shape, Shape::Lambda(..));
             let is_cases = matches!(shapes[j].shape, Shape::Lambda(_, true));
             let mut common: Option<(TypeId, Vec<TypeId>)> = None;
             // A `{ case ... }` literal is typed as a partial function when a candidate takes one
@@ -3104,14 +2957,6 @@ impl<'a> Worker<'a> {
             // Against an open variable an argument keeps the type arguments open that nothing
             // in it settles, for the parameter of the chosen alternative to settle; that takes an
             // application which solves them afterwards.
-            // A name of an overloaded method whose alternatives all take parameters is left for
-            // the alternative chosen to type against its parameter, which picks among them: typed
-            // ahead (`FunProto.typedArgs`), such a name stays overloaded. One with a parameterless
-            // alternative is typed ahead as that alternative, which `isAsSpecific` prefers to
-            // every method.
-            if common.is_none() && self.names_overloaded_method(value) {
-                continue;
-            }
             let agreed = common.is_some();
             let expected = match common {
                 Some((t, _)) => Some(t),
@@ -3158,15 +3003,6 @@ impl<'a> Worker<'a> {
             types[j] = Some(self.proxy_declared(te).unwrap_or(ty));
         }
         ListInfo { shapes, types, literals, lambdas, function_names }
-    }
-
-    /// Whether an argument is a bare name of an overloaded method none of whose alternatives
-    /// is parameterless.
-    fn names_overloaded_method(&mut self, value: crate::ast::ExprId) -> bool {
-        let Expr::Ident(n) = self.cur_ast().expr(value) else { return false };
-        let Some(alts) = self.lookup_term(n).and_then(|r| r.sym()).and_then(|s| self.syms.alternatives(s)) else { return false };
-        let alts: Vec<SymId> = alts.to_vec();
-        alts.into_iter().all(|a| self.syms.sym(a).kind == SymKind::Def && !self.sig_of(a).clauses.is_empty())
     }
 
     /// A function literal that was typed ahead goes to the chosen alternative as it is, as

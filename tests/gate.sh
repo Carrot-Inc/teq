@@ -53,14 +53,8 @@
 # API's main and test lists (tests/scalac-oracle.sh, then bench/app/api-scalac-diff.sh with the lists' scalacOptions
 # APP_SCALAC_OPTIONS and APP_TEST_SCALAC_OPTIONS, both into the attempt's directory), which fails on a difference
 # the list SCALAC_KNOWN does not list or a line of it that names no difference (no rows when it is unset, which the
-# line's result says). Four lines over lila, the public reference project, run only when --only names them, until
-# their time and memory are measured within the gate's budget: with --lila naming lila's checkout at
-# bench/lila/pin.json's commit, lila-export (sbt teqExportAll with bench/lila/overlay, JAVA_HOME's JDK the pin's),
-# lila-compile (teq compile of every project and the generated inputs' digests against bench/lila/generated.json),
-# lila-test (the suites and cases against bench/lila/tests.json) and lila-run (the server over MongoDB and Redis,
-# LILA_MONGOD and LILA_REDIS, its home page and an asset), each bench/lila/lila.scala's verb under the binary; a
-# line without --lila, an export, a service or a suite fails, never skips. The paths of the lists and of
-# CHAIN_KNOWN and SCALAC_KNOWN are read from the caller's directory. --only limits the gate to the named lines.
+# line's result says). The paths of the lists and of CHAIN_KNOWN and SCALAC_KNOWN are read from the caller's
+# directory. --only limits the gate to the named lines.
 #
 # Each run's logs go to a new attempt directory, out/gate/<head>/<attempt>/: a suite's <name>.log, each machine's
 # build log, manifest, status and shard output, and under compare/ the comparison's logs, raw runs and manifests. A
@@ -73,7 +67,7 @@ cd "$(dirname "$0")/.."
 root=$PWD
 ra=${REMOTE_AGENT:-}
 usage() {
-  echo "usage: tests/gate.sh <worktree> [--master <binary>] [--master-rev <revision>] [--app <build.json>] [--export-manifest <file>] [--lila <checkout>] [--only <name,...>] [--record]" >&2
+  echo "usage: tests/gate.sh <worktree> [--master <binary>] [--master-rev <revision>] [--app <build.json>] [--export-manifest <file>] [--only <name,...>] [--record]" >&2
   exit 2
 }
 absolute() { case $1 in /*) echo "$1" ;; *) echo "$caller/$1" ;; esac; }
@@ -81,7 +75,6 @@ wt=
 master=
 master_rev=
 app=
-lila=
 manifest=
 only=
 record=0
@@ -92,7 +85,6 @@ while [ $# -gt 0 ]; do
     --pgo) echo "gate: --pgo is gone: the budget line compares plain builds of the head and master on a remote machine (docs/DEVELOPING.md, \"The timing lines on a machine\")" >&2; exit 2 ;;
     --app) [ -n "$2" ] || usage; app=$(absolute "$2"); shift 2 ;;
     --export-manifest) [ -n "$2" ] || usage; manifest=$(absolute "$2"); shift 2 ;;
-    --lila) [ -n "$2" ] || usage; lila=$(absolute "$2"); shift 2 ;;
     --only) [ -n "$2" ] || usage; only=" ${2//,/ } "; shift 2 ;;
     --record) record=1; shift ;;
     -*) usage ;;
@@ -144,10 +136,9 @@ machine=(
   "rust-warnings ./tests/rust-warnings.sh"
 )
 compare="budget runtime sentinel"
-local_lines="size instructions instructions-derive memory app-export app-export-accept app-api app-api-test app-chain app-cypress app-scalac lila-export lila-compile lila-test lila-run"
-# The lines run only when --only names them: the scalac oracle, at a release and nightly; lila's, until their
-# time and memory are measured within the gate's budget (docs/DEVELOPING.md, "lila").
-optional="app-scalac lila-export lila-compile lila-test lila-run"
+local_lines="size instructions instructions-derive memory app-export app-export-accept app-api app-api-test app-chain app-cypress app-scalac"
+# The lines run only when --only names them: the scalac oracle, at a release and nightly.
+optional="app-scalac"
 names=" $compare $local_lines "
 for entry in "${machine[@]}"; do names="$names${entry%% *} "; done
 for name in $only; do
@@ -398,24 +389,6 @@ local_half() {
       result app-scalac local $(($(now) - s)) $code "$(tail -1 "$out/app-scalac.log")$([ -n "$SCALAC_KNOWN" ] || echo "; no SCALAC_KNOWN, no known rows")" "$file"
     fi
   fi
-  # lila, the public reference project (bench/lila/lila.scala): its export with the overlay, then teq's compile,
-  # its testFull inventory and its server over MongoDB and Redis, each against the pin. Mandatory once named: a
-  # missing checkout, export, service or suite fails the line, never a skip.
-  for verb in export compile test run; do
-    selected "lila-$verb" || continue
-    if [ -z "$lila" ]; then
-      result "lila-$verb" local 0 1 "needs --lila, lila's checkout at bench/lila/pin.json's commit" "$file"
-      continue
-    fi
-    s=$(now)
-    # The script keeps its logs and caches outside the repository: under the gate's temporary directory,
-    # its logs copied into the attempt's afterwards.
-    mkdir -p "$tmp/lila" "$out/lila"
-    (cd "$wt" && timeout 3600 "$bin" interp bench/lila/lila.scala -- "$verb" "$lila" "$tmp/lila" --teq "$bin") > "$out/lila-$verb.log" 2>&1
-    code=$?
-    find "$tmp/lila" -maxdepth 2 -name '*.log' -exec cp {} "$out/lila/" \;
-    result "lila-$verb" local $(($(now) - s)) $code "$(grep -E '^(FAIL )?lila: ' "$out/lila-$verb.log" | tail -1)" "$file"
-  done
   now > "$out/local.ended"
 }
 # app_root: the application's checkout, the --app build file's root.

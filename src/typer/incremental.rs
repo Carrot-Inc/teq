@@ -83,12 +83,6 @@ impl<'a> Worker<'a> {
         self.base_type_cache.clear();
         self.target_name_files.clear();
         self.package_levels.clear();
-        // A member's body may come or go with the edit.
-        self.lone_abstract_defs.clear();
-        self.path_sigs.clear();
-        self.inner_chain_members.clear();
-        self.plain_name_members.clear();
-        self.java_members_exhausted.clear();
         // The infix tuples noted by node (`Worker::infix_tuples`) are of the files' earlier parses.
         self.infix_tuples.retain(|&(f, _), _| !changes.iter().any(|c| c.file == f));
         self.inference_failed.clear();

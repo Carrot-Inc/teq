@@ -77,7 +77,6 @@ suite classfile     ./teq interp tests/classfile.scala
 suite classpath     ./tests/classpath.sh
 suite stdlib        ./tests/run_stdlib.sh
 suite app           ./tests/app.sh
-suite lila-test-verb ./tests/lila-test-verb.sh
 suite jvm           ./tests/run_jvm.sh
 suite jvm-21        ./tests/run_jvm.sh --java-output-version=21
 suite interp        ./tests/run_interp.sh

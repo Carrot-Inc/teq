@@ -17,10 +17,6 @@ pub struct Syntax {
     /// `-Xkind-projector`: a `*` among the arguments of a type application stands for a
     /// parameter of a type lambda around it (`Either[String, *]`).
     pub kind_projector: bool,
-    /// `-language:postfixOps`, or an import of `scala.language.postfixOps` from where it is
-    /// written: an operator with no operand after it is a postfix operator (dotc's
-    /// `postfixOpsEnabled`).
-    pub postfix_ops: bool,
     /// The language server's index is kept: the parser records the name spans of selections,
     /// operators and import paths (`Ast::name_spans`).
     pub index: bool,
@@ -1181,8 +1177,6 @@ impl<'a> Parser<'a> {
                 self.ast.strict_equality = true;
             } else if matches!(out[i].sel, ImportSel::Name(names::FUTURE, r) if r != Some(names::WILDCARD)) {
                 self.ast.source_future = true;
-            } else if matches!(out[i].sel, ImportSel::Name(names::POSTFIX_OPS, _)) {
-                self.syntax.postfix_ops = true;
             } else if let ImportSel::Name(n, _) = out[i].sel {
                 if self.interner.get(n) == "relaxedLambdaSyntax" && out[i].path.last().map_or(false, |&q| self.interner.get(q) == "experimental") {
                     self.ast.relaxed_lambdas = true;

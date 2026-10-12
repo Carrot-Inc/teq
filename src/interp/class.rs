@@ -678,14 +678,6 @@ impl<'a, 't> Interp<'a, 't> {
                 };
                 self.construct(obj, sup, vals)?;
             }
-            // An enum case's parent call that goes to a secondary constructor of the enum.
-            (Some(via), None, Some(l)) if self.enum_of_case(c).is_some() => {
-                let vals = match parent_vals.take() {
-                    Some(v) => v,
-                    None => self.eval_args(Some(via), l, &frame, &cx)?,
-                };
-                self.construct_via(obj, via, vals)?;
-            }
             (_, None, Some(l)) => {
                 if let Some(e) = self.enum_of_case(c) {
                     let vals = match parent_vals.take() {
@@ -1554,17 +1546,6 @@ impl<'a, 't> Interp<'a, 't> {
                 _ => Ok(None),
             };
         }
-        // The machine's zone `ZoneId.systemDefault` makes (`archive`), by its id.
-        if self.class_path(o.class) == "java.time.ZoneId" {
-            let id = match o.fields.borrow().first() {
-                Some(Value::Str(s)) => s.to_string(),
-                _ => return Ok(None),
-            };
-            return match member.as_str() {
-                "getId" | "toString" => Ok(Some(Value::string(id))),
-                _ => Ok(None),
-            };
-        }
         if self.class_path(o.class) != "java.nio.file.Path" {
             return Ok(None);
         }
@@ -2300,14 +2281,6 @@ impl<'a, 't> Interp<'a, 't> {
                 }
             }
             ("isEmpty", Value::Str(s)) => Ok(Value::Bool(s.is_empty())),
-            ("subSequence", Value::Str(s)) => {
-                let len = utf16_len(s) as i32;
-                let (start, end) = (args.first().and_then(Value::as_i32).unwrap_or(-1), args.get(1).and_then(Value::as_i32).unwrap_or(-1));
-                if start < 0 || end > len || start > end {
-                    return self.throw_named("StringIndexOutOfBoundsException", &format!("begin {}, end {}, length {}", start, end, len));
-                }
-                Ok(Value::str(&utf16_slice(s, start as usize, end as usize)))
-            }
             ("intValue", v) if v.is_number() => Ok(Value::Int(v.as_i32().unwrap())),
             ("longValue", v) if v.is_number() => Ok(Value::Long(v.as_i64().unwrap())),
             ("doubleValue", v) if v.is_number() => Ok(Value::Double(v.as_f64().unwrap())),

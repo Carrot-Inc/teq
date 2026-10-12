@@ -120,7 +120,6 @@ java.io.File	<init>	java.lang.String,java.lang.String:java.io.File
 java.io.File	<init>	java.lang.String:java.io.File
 java.io.File	canExecute	:scala.Boolean
 java.io.File	compareTo	java.io.File:scala.Int
-java.io.File	createNewFile	:scala.Boolean
 java.io.File	delete	:scala.Boolean
 java.io.File	equals	java.lang.Object:scala.Boolean
 java.io.File	exists	:scala.Boolean
@@ -145,7 +144,6 @@ java.io.File	mkdirs	:scala.Boolean
 java.io.File	renameTo	java.io.File:scala.Boolean
 java.io.File	toPath	:java.nio.file.Path
 java.io.File	toString	:java.lang.String
-java.io.File	toURI	:java.net.URI
 java.io.File$	pathSeparator	-:java.lang.String
 java.io.File$	pathSeparatorChar	-:scala.Char
 java.io.File$	separator	-:java.lang.String
@@ -497,7 +495,6 @@ java.lang.Character$	hashCode	scala.Char:scala.Int
 java.lang.Character$	isDigit	scala.Char:scala.Boolean
 java.lang.Character$	isHighSurrogate	scala.Char:scala.Boolean
 java.lang.Character$	isJavaIdentifierPart	scala.Char:scala.Boolean
-java.lang.Character$	isJavaIdentifierStart	scala.Char:scala.Boolean
 java.lang.Character$	isLetter	scala.Char:scala.Boolean
 java.lang.Character$	isLetterOrDigit	scala.Char:scala.Boolean
 java.lang.Character$	isLowSurrogate	scala.Char:scala.Boolean
@@ -1238,7 +1235,6 @@ java.lang.String	startsWith	java.lang.String:scala.Boolean
 java.lang.String	strip	:java.lang.String
 java.lang.String	stripLeading	:java.lang.String
 java.lang.String	stripTrailing	:java.lang.String
-java.lang.String	subSequence	scala.Int,scala.Int:java.lang.CharSequence
 java.lang.String	substring	scala.Int,scala.Int:java.lang.String
 java.lang.String	substring	scala.Int:java.lang.String
 java.lang.String	toCharArray	:scala.Char[]
@@ -3673,33 +3669,6 @@ java.util.UUID	variant	:scala.Int
 java.util.UUID	version	:scala.Int
 java.util.UUID$	fromString	java.lang.String:java.util.UUID
 java.util.UUID$	randomUUID	:java.util.UUID
-java.util.WeakHashMap	<init>	[2],scala.Int:java.util.WeakHashMap
-java.util.WeakHashMap	<init>	[2]:java.util.WeakHashMap
-java.util.WeakHashMap	clear	:scala.Unit
-java.util.WeakHashMap	compute	java.lang.Object,java.util.function.BiFunction:java.lang.Object
-java.util.WeakHashMap	computeIfAbsent	java.lang.Object,java.util.function.Function:java.lang.Object
-java.util.WeakHashMap	computeIfPresent	java.lang.Object,java.util.function.BiFunction:java.lang.Object
-java.util.WeakHashMap	containsKey	java.lang.Object:scala.Boolean
-java.util.WeakHashMap	containsValue	java.lang.Object:scala.Boolean
-java.util.WeakHashMap	entrySet	:java.util.Set
-java.util.WeakHashMap	equals	java.lang.Object:scala.Boolean
-java.util.WeakHashMap	forEach	java.util.function.BiConsumer:scala.Unit
-java.util.WeakHashMap	get	java.lang.Object:java.lang.Object
-java.util.WeakHashMap	getOrDefault	java.lang.Object,java.lang.Object:java.lang.Object
-java.util.WeakHashMap	hashCode	:scala.Int
-java.util.WeakHashMap	isEmpty	:scala.Boolean
-java.util.WeakHashMap	keySet	:java.util.Set
-java.util.WeakHashMap	merge	java.lang.Object,java.lang.Object,java.util.function.BiFunction:java.lang.Object
-java.util.WeakHashMap	put	java.lang.Object,java.lang.Object:java.lang.Object
-java.util.WeakHashMap	putAll	java.util.Map:scala.Unit
-java.util.WeakHashMap	putIfAbsent	java.lang.Object,java.lang.Object:java.lang.Object
-java.util.WeakHashMap	remove	java.lang.Object,java.lang.Object:scala.Boolean
-java.util.WeakHashMap	remove	java.lang.Object:java.lang.Object
-java.util.WeakHashMap	replace	java.lang.Object,java.lang.Object,java.lang.Object:scala.Boolean
-java.util.WeakHashMap	replace	java.lang.Object,java.lang.Object:java.lang.Object
-java.util.WeakHashMap	size	:scala.Int
-java.util.WeakHashMap	toString	:java.lang.String
-java.util.WeakHashMap	values	:java.util.Collection
 java.util.concurrent	ThreadLocalRandom	object
 java.util.concurrent	TimeUnit	object
 java.util.concurrent.CancellationException	<init>	:java.util.concurrent.CancellationException
@@ -4028,14 +3997,6 @@ java.util.function.UnaryOperator	<init>	[1]:java.util.function.UnaryOperator
 java.util.function.UnaryOperator	apply	java.lang.Object:java.lang.Object
 java.util.regex	Matcher	object
 java.util.regex	Pattern	object
-java.util.regex.MatchResult	<init>	:java.util.regex.MatchResult
-java.util.regex.MatchResult	end	:scala.Int
-java.util.regex.MatchResult	end	scala.Int:scala.Int
-java.util.regex.MatchResult	group	:java.lang.String
-java.util.regex.MatchResult	group	scala.Int:java.lang.String
-java.util.regex.MatchResult	groupCount	:scala.Int
-java.util.regex.MatchResult	start	:scala.Int
-java.util.regex.MatchResult	start	scala.Int:scala.Int
 java.util.regex.Matcher	appendReplacement	java.lang.StringBuilder,java.lang.String:java.util.regex.Matcher
 java.util.regex.Matcher	appendTail	java.lang.StringBuilder:java.lang.StringBuilder
 java.util.regex.Matcher	end	:scala.Int
@@ -4052,9 +4013,7 @@ java.util.regex.Matcher	region	scala.Int,scala.Int:java.util.regex.Matcher
 java.util.regex.Matcher	regionEnd	:scala.Int
 java.util.regex.Matcher	regionStart	:scala.Int
 java.util.regex.Matcher	replaceAll	java.lang.String:java.lang.String
-java.util.regex.Matcher	replaceAll	java.util.function.Function:java.lang.String
 java.util.regex.Matcher	replaceFirst	java.lang.String:java.lang.String
-java.util.regex.Matcher	replaceFirst	java.util.function.Function:java.lang.String
 java.util.regex.Matcher	reset	:java.util.regex.Matcher
 java.util.regex.Matcher	start	:scala.Int
 java.util.regex.Matcher	start	scala.Int:scala.Int
@@ -15095,7 +15054,6 @@ scala.collection.AbstractIterable	iterator	-:scala.collection.Iterator
 scala.collection.AbstractIterable	knownSize	-:scala.Int
 scala.collection.AbstractIterable	last	-:java.lang.Object
 scala.collection.AbstractIterable	lastOption	-:scala.Option
-scala.collection.AbstractIterable	lazyZip	[1],scala.collection.Iterable:scala.collection.LazyZip2
 scala.collection.AbstractIterable	map	[1],scala.Function1:scala.collection.Iterable
 scala.collection.AbstractIterable	max	[1],scala.math.Ordering:java.lang.Object
 scala.collection.AbstractIterable	maxBy	[1],scala.Function1,scala.math.Ordering:java.lang.Object
@@ -15265,7 +15223,6 @@ scala.collection.AbstractSeq	knownSize	-:scala.Int
 scala.collection.AbstractSeq	last	-:java.lang.Object
 scala.collection.AbstractSeq	lastIndexWhere	scala.Function1,scala.Int:scala.Int
 scala.collection.AbstractSeq	lastOption	-:scala.Option
-scala.collection.AbstractSeq	lazyZip	[1],scala.collection.Iterable:scala.collection.LazyZip2
 scala.collection.AbstractSeq	length	-:scala.Int
 scala.collection.AbstractSeq	lengthCompare	scala.Int:scala.Int
 scala.collection.AbstractSeq	max	[1],scala.math.Ordering:java.lang.Object
@@ -15659,7 +15616,6 @@ scala.collection.IndexedSeqView	knownSize	-:scala.Int
 scala.collection.IndexedSeqView	last	-:java.lang.Object
 scala.collection.IndexedSeqView	lastIndexWhere	scala.Function1,scala.Int:scala.Int
 scala.collection.IndexedSeqView	lastOption	-:scala.Option
-scala.collection.IndexedSeqView	lazyZip	[1],scala.collection.Iterable:scala.collection.LazyZip2
 scala.collection.IndexedSeqView	length	-:scala.Int
 scala.collection.IndexedSeqView	lengthCompare	scala.Int:scala.Int
 scala.collection.IndexedSeqView	map	[1],scala.Function1:scala.collection.IndexedSeqView
@@ -15786,7 +15742,6 @@ scala.collection.IndexedSeqView$.Appended	knownSize	-:scala.Int
 scala.collection.IndexedSeqView$.Appended	last	-:java.lang.Object
 scala.collection.IndexedSeqView$.Appended	lastIndexWhere	scala.Function1,scala.Int:scala.Int
 scala.collection.IndexedSeqView$.Appended	lastOption	-:scala.Option
-scala.collection.IndexedSeqView$.Appended	lazyZip	[1],scala.collection.Iterable:scala.collection.LazyZip2
 scala.collection.IndexedSeqView$.Appended	length	-:scala.Int
 scala.collection.IndexedSeqView$.Appended	lengthCompare	scala.Int:scala.Int
 scala.collection.IndexedSeqView$.Appended	map	[1],scala.Function1:scala.collection.IndexedSeqView
@@ -15913,7 +15868,6 @@ scala.collection.IndexedSeqView$.Concat	knownSize	-:scala.Int
 scala.collection.IndexedSeqView$.Concat	last	-:java.lang.Object
 scala.collection.IndexedSeqView$.Concat	lastIndexWhere	scala.Function1,scala.Int:scala.Int
 scala.collection.IndexedSeqView$.Concat	lastOption	-:scala.Option
-scala.collection.IndexedSeqView$.Concat	lazyZip	[1],scala.collection.Iterable:scala.collection.LazyZip2
 scala.collection.IndexedSeqView$.Concat	length	-:scala.Int
 scala.collection.IndexedSeqView$.Concat	lengthCompare	scala.Int:scala.Int
 scala.collection.IndexedSeqView$.Concat	map	[1],scala.Function1:scala.collection.IndexedSeqView
@@ -16040,7 +15994,6 @@ scala.collection.IndexedSeqView$.Drop	knownSize	-:scala.Int
 scala.collection.IndexedSeqView$.Drop	last	-:java.lang.Object
 scala.collection.IndexedSeqView$.Drop	lastIndexWhere	scala.Function1,scala.Int:scala.Int
 scala.collection.IndexedSeqView$.Drop	lastOption	-:scala.Option
-scala.collection.IndexedSeqView$.Drop	lazyZip	[1],scala.collection.Iterable:scala.collection.LazyZip2
 scala.collection.IndexedSeqView$.Drop	length	-:scala.Int
 scala.collection.IndexedSeqView$.Drop	lengthCompare	scala.Int:scala.Int
 scala.collection.IndexedSeqView$.Drop	map	[1],scala.Function1:scala.collection.IndexedSeqView
@@ -16169,7 +16122,6 @@ scala.collection.IndexedSeqView$.DropRight	knownSize	-:scala.Int
 scala.collection.IndexedSeqView$.DropRight	last	-:java.lang.Object
 scala.collection.IndexedSeqView$.DropRight	lastIndexWhere	scala.Function1,scala.Int:scala.Int
 scala.collection.IndexedSeqView$.DropRight	lastOption	-:scala.Option
-scala.collection.IndexedSeqView$.DropRight	lazyZip	[1],scala.collection.Iterable:scala.collection.LazyZip2
 scala.collection.IndexedSeqView$.DropRight	length	-:scala.Int
 scala.collection.IndexedSeqView$.DropRight	lengthCompare	scala.Int:scala.Int
 scala.collection.IndexedSeqView$.DropRight	map	[1],scala.Function1:scala.collection.IndexedSeqView
@@ -16298,7 +16250,6 @@ scala.collection.IndexedSeqView$.Id	knownSize	-:scala.Int
 scala.collection.IndexedSeqView$.Id	last	-:java.lang.Object
 scala.collection.IndexedSeqView$.Id	lastIndexWhere	scala.Function1,scala.Int:scala.Int
 scala.collection.IndexedSeqView$.Id	lastOption	-:scala.Option
-scala.collection.IndexedSeqView$.Id	lazyZip	[1],scala.collection.Iterable:scala.collection.LazyZip2
 scala.collection.IndexedSeqView$.Id	length	-:scala.Int
 scala.collection.IndexedSeqView$.Id	lengthCompare	scala.Int:scala.Int
 scala.collection.IndexedSeqView$.Id	map	[1],scala.Function1:scala.collection.IndexedSeqView
@@ -16592,7 +16543,6 @@ scala.collection.IndexedSeqView$.Map	knownSize	-:scala.Int
 scala.collection.IndexedSeqView$.Map	last	-:java.lang.Object
 scala.collection.IndexedSeqView$.Map	lastIndexWhere	scala.Function1,scala.Int:scala.Int
 scala.collection.IndexedSeqView$.Map	lastOption	-:scala.Option
-scala.collection.IndexedSeqView$.Map	lazyZip	[1],scala.collection.Iterable:scala.collection.LazyZip2
 scala.collection.IndexedSeqView$.Map	length	-:scala.Int
 scala.collection.IndexedSeqView$.Map	lengthCompare	scala.Int:scala.Int
 scala.collection.IndexedSeqView$.Map	map	[1],scala.Function1:scala.collection.IndexedSeqView
@@ -16720,7 +16670,6 @@ scala.collection.IndexedSeqView$.Prepended	knownSize	-:scala.Int
 scala.collection.IndexedSeqView$.Prepended	last	-:java.lang.Object
 scala.collection.IndexedSeqView$.Prepended	lastIndexWhere	scala.Function1,scala.Int:scala.Int
 scala.collection.IndexedSeqView$.Prepended	lastOption	-:scala.Option
-scala.collection.IndexedSeqView$.Prepended	lazyZip	[1],scala.collection.Iterable:scala.collection.LazyZip2
 scala.collection.IndexedSeqView$.Prepended	length	-:scala.Int
 scala.collection.IndexedSeqView$.Prepended	lengthCompare	scala.Int:scala.Int
 scala.collection.IndexedSeqView$.Prepended	map	[1],scala.Function1:scala.collection.IndexedSeqView
@@ -16847,7 +16796,6 @@ scala.collection.IndexedSeqView$.Reverse	knownSize	-:scala.Int
 scala.collection.IndexedSeqView$.Reverse	last	-:java.lang.Object
 scala.collection.IndexedSeqView$.Reverse	lastIndexWhere	scala.Function1,scala.Int:scala.Int
 scala.collection.IndexedSeqView$.Reverse	lastOption	-:scala.Option
-scala.collection.IndexedSeqView$.Reverse	lazyZip	[1],scala.collection.Iterable:scala.collection.LazyZip2
 scala.collection.IndexedSeqView$.Reverse	length	-:scala.Int
 scala.collection.IndexedSeqView$.Reverse	lengthCompare	scala.Int:scala.Int
 scala.collection.IndexedSeqView$.Reverse	map	[1],scala.Function1:scala.collection.IndexedSeqView
@@ -16976,7 +16924,6 @@ scala.collection.IndexedSeqView$.Slice	knownSize	-:scala.Int
 scala.collection.IndexedSeqView$.Slice	last	-:java.lang.Object
 scala.collection.IndexedSeqView$.Slice	lastIndexWhere	scala.Function1,scala.Int:scala.Int
 scala.collection.IndexedSeqView$.Slice	lastOption	-:scala.Option
-scala.collection.IndexedSeqView$.Slice	lazyZip	[1],scala.collection.Iterable:scala.collection.LazyZip2
 scala.collection.IndexedSeqView$.Slice	len	-:scala.Int
 scala.collection.IndexedSeqView$.Slice	length	-:scala.Int
 scala.collection.IndexedSeqView$.Slice	lengthCompare	scala.Int:scala.Int
@@ -17106,7 +17053,6 @@ scala.collection.IndexedSeqView$.Take	knownSize	-:scala.Int
 scala.collection.IndexedSeqView$.Take	last	-:java.lang.Object
 scala.collection.IndexedSeqView$.Take	lastIndexWhere	scala.Function1,scala.Int:scala.Int
 scala.collection.IndexedSeqView$.Take	lastOption	-:scala.Option
-scala.collection.IndexedSeqView$.Take	lazyZip	[1],scala.collection.Iterable:scala.collection.LazyZip2
 scala.collection.IndexedSeqView$.Take	length	-:scala.Int
 scala.collection.IndexedSeqView$.Take	lengthCompare	scala.Int:scala.Int
 scala.collection.IndexedSeqView$.Take	map	[1],scala.Function1:scala.collection.IndexedSeqView
@@ -17235,7 +17181,6 @@ scala.collection.IndexedSeqView$.TakeRight	knownSize	-:scala.Int
 scala.collection.IndexedSeqView$.TakeRight	last	-:java.lang.Object
 scala.collection.IndexedSeqView$.TakeRight	lastIndexWhere	scala.Function1,scala.Int:scala.Int
 scala.collection.IndexedSeqView$.TakeRight	lastOption	-:scala.Option
-scala.collection.IndexedSeqView$.TakeRight	lazyZip	[1],scala.collection.Iterable:scala.collection.LazyZip2
 scala.collection.IndexedSeqView$.TakeRight	length	-:scala.Int
 scala.collection.IndexedSeqView$.TakeRight	lengthCompare	scala.Int:scala.Int
 scala.collection.IndexedSeqView$.TakeRight	map	[1],scala.Function1:scala.collection.IndexedSeqView
@@ -17347,7 +17292,6 @@ scala.collection.Iterable	iterator	-:scala.collection.Iterator
 scala.collection.Iterable	knownSize	-:scala.Int
 scala.collection.Iterable	last	-:java.lang.Object
 scala.collection.Iterable	lastOption	-:scala.Option
-scala.collection.Iterable	lazyZip	[1],scala.collection.Iterable:scala.collection.LazyZip2
 scala.collection.Iterable	map	[1],scala.Function1:scala.collection.Iterable
 scala.collection.Iterable	max	[1],scala.math.Ordering:java.lang.Object
 scala.collection.Iterable	maxBy	[1],scala.Function1,scala.math.Ordering:java.lang.Object
@@ -17688,16 +17632,6 @@ scala.collection.JavaConverters$.AsJavaCollection	i	-:scala.collection.Iterable
 scala.collection.JavaConverters$.AsScala	<init>	[1],scala.Function0:scala.collection.JavaConverters$.AsScala
 scala.collection.JavaConverters$.AsScala	asScala	-:java.lang.Object
 scala.collection.JavaConverters$.AsScala	op	-:java.lang.Object
-scala.collection.LazyZip2	<init>	[3],java.lang.Object,scala.collection.Iterable,scala.collection.Iterable:scala.collection.LazyZip2
-scala.collection.LazyZip2	coll1	-:scala.collection.Iterable
-scala.collection.LazyZip2	coll2	-:scala.collection.Iterable
-scala.collection.LazyZip2	exists	scala.Function2:scala.Boolean
-scala.collection.LazyZip2	filter	[1],scala.Function2,scala.collection.BuildFrom:java.lang.Object
-scala.collection.LazyZip2	flatMap	[2],scala.Function2,scala.collection.BuildFrom:java.lang.Object
-scala.collection.LazyZip2	forall	scala.Function2:scala.Boolean
-scala.collection.LazyZip2	foreach	[1],scala.Function2:scala.Unit
-scala.collection.LazyZip2	map	[2],scala.Function2,scala.collection.BuildFrom:java.lang.Object
-scala.collection.LazyZip2	src	-:java.lang.Object
 scala.collection.Map	++	[1],scala.collection.IterableOnce:scala.collection.Iterable
 scala.collection.Map	++:	[1],scala.collection.IterableOnce:scala.collection.Iterable
 scala.collection.Map	<init>	[2]:scala.collection.Map
@@ -17737,7 +17671,6 @@ scala.collection.Map	isEmpty	-:scala.Boolean
 scala.collection.Map	iterator	-:scala.collection.Iterator
 scala.collection.Map	knownSize	-:scala.Int
 scala.collection.Map	lastOption	-:scala.Option
-scala.collection.Map	lazyZip	[1],scala.collection.Iterable:scala.collection.LazyZip2
 scala.collection.Map	map	[1],scala.Function1:scala.collection.Iterable
 scala.collection.Map	max	[1],scala.math.Ordering:scala.Tuple2
 scala.collection.Map	maxBy	[1],scala.Function1,scala.math.Ordering:scala.Tuple2
@@ -17830,7 +17763,6 @@ scala.collection.MapView	isEmpty	-:scala.Boolean
 scala.collection.MapView	iterator	-:scala.collection.Iterator
 scala.collection.MapView	knownSize	-:scala.Int
 scala.collection.MapView	lastOption	-:scala.Option
-scala.collection.MapView	lazyZip	[1],scala.collection.Iterable:scala.collection.LazyZip2
 scala.collection.MapView	map	[1],scala.Function1:scala.collection.View
 scala.collection.MapView	map	[2],scala.Function1:scala.collection.View
 scala.collection.MapView	mapValues	[1],scala.Function1:scala.collection.MapView
@@ -18072,7 +18004,6 @@ scala.collection.SeqView	knownSize	-:scala.Int
 scala.collection.SeqView	last	-:java.lang.Object
 scala.collection.SeqView	lastIndexWhere	scala.Function1,scala.Int:scala.Int
 scala.collection.SeqView	lastOption	-:scala.Option
-scala.collection.SeqView	lazyZip	[1],scala.collection.Iterable:scala.collection.LazyZip2
 scala.collection.SeqView	length	-:scala.Int
 scala.collection.SeqView	lengthCompare	scala.Int:scala.Int
 scala.collection.SeqView	map	[1],scala.Function1:scala.collection.SeqView
@@ -18200,7 +18131,6 @@ scala.collection.SeqView$.Appended	knownSize	-:scala.Int
 scala.collection.SeqView$.Appended	last	-:java.lang.Object
 scala.collection.SeqView$.Appended	lastIndexWhere	scala.Function1,scala.Int:scala.Int
 scala.collection.SeqView$.Appended	lastOption	-:scala.Option
-scala.collection.SeqView$.Appended	lazyZip	[1],scala.collection.Iterable:scala.collection.LazyZip2
 scala.collection.SeqView$.Appended	length	-:scala.Int
 scala.collection.SeqView$.Appended	lengthCompare	scala.Int:scala.Int
 scala.collection.SeqView$.Appended	map	[1],scala.Function1:scala.collection.SeqView
@@ -18328,7 +18258,6 @@ scala.collection.SeqView$.Concat	knownSize	-:scala.Int
 scala.collection.SeqView$.Concat	last	-:java.lang.Object
 scala.collection.SeqView$.Concat	lastIndexWhere	scala.Function1,scala.Int:scala.Int
 scala.collection.SeqView$.Concat	lastOption	-:scala.Option
-scala.collection.SeqView$.Concat	lazyZip	[1],scala.collection.Iterable:scala.collection.LazyZip2
 scala.collection.SeqView$.Concat	length	-:scala.Int
 scala.collection.SeqView$.Concat	lengthCompare	scala.Int:scala.Int
 scala.collection.SeqView$.Concat	map	[1],scala.Function1:scala.collection.SeqView
@@ -18457,7 +18386,6 @@ scala.collection.SeqView$.Drop	knownSize	-:scala.Int
 scala.collection.SeqView$.Drop	last	-:java.lang.Object
 scala.collection.SeqView$.Drop	lastIndexWhere	scala.Function1,scala.Int:scala.Int
 scala.collection.SeqView$.Drop	lastOption	-:scala.Option
-scala.collection.SeqView$.Drop	lazyZip	[1],scala.collection.Iterable:scala.collection.LazyZip2
 scala.collection.SeqView$.Drop	length	-:scala.Int
 scala.collection.SeqView$.Drop	lengthCompare	scala.Int:scala.Int
 scala.collection.SeqView$.Drop	map	[1],scala.Function1:scala.collection.SeqView
@@ -18587,7 +18515,6 @@ scala.collection.SeqView$.DropRight	knownSize	-:scala.Int
 scala.collection.SeqView$.DropRight	last	-:java.lang.Object
 scala.collection.SeqView$.DropRight	lastIndexWhere	scala.Function1,scala.Int:scala.Int
 scala.collection.SeqView$.DropRight	lastOption	-:scala.Option
-scala.collection.SeqView$.DropRight	lazyZip	[1],scala.collection.Iterable:scala.collection.LazyZip2
 scala.collection.SeqView$.DropRight	len	-:scala.Int
 scala.collection.SeqView$.DropRight	length	-:scala.Int
 scala.collection.SeqView$.DropRight	lengthCompare	scala.Int:scala.Int
@@ -18718,7 +18645,6 @@ scala.collection.SeqView$.Id	knownSize	-:scala.Int
 scala.collection.SeqView$.Id	last	-:java.lang.Object
 scala.collection.SeqView$.Id	lastIndexWhere	scala.Function1,scala.Int:scala.Int
 scala.collection.SeqView$.Id	lastOption	-:scala.Option
-scala.collection.SeqView$.Id	lazyZip	[1],scala.collection.Iterable:scala.collection.LazyZip2
 scala.collection.SeqView$.Id	length	-:scala.Int
 scala.collection.SeqView$.Id	lengthCompare	scala.Int:scala.Int
 scala.collection.SeqView$.Id	map	[1],scala.Function1:scala.collection.SeqView
@@ -18847,7 +18773,6 @@ scala.collection.SeqView$.Map	knownSize	-:scala.Int
 scala.collection.SeqView$.Map	last	-:java.lang.Object
 scala.collection.SeqView$.Map	lastIndexWhere	scala.Function1,scala.Int:scala.Int
 scala.collection.SeqView$.Map	lastOption	-:scala.Option
-scala.collection.SeqView$.Map	lazyZip	[1],scala.collection.Iterable:scala.collection.LazyZip2
 scala.collection.SeqView$.Map	length	-:scala.Int
 scala.collection.SeqView$.Map	lengthCompare	scala.Int:scala.Int
 scala.collection.SeqView$.Map	map	[1],scala.Function1:scala.collection.SeqView
@@ -18976,7 +18901,6 @@ scala.collection.SeqView$.Prepended	knownSize	-:scala.Int
 scala.collection.SeqView$.Prepended	last	-:java.lang.Object
 scala.collection.SeqView$.Prepended	lastIndexWhere	scala.Function1,scala.Int:scala.Int
 scala.collection.SeqView$.Prepended	lastOption	-:scala.Option
-scala.collection.SeqView$.Prepended	lazyZip	[1],scala.collection.Iterable:scala.collection.LazyZip2
 scala.collection.SeqView$.Prepended	length	-:scala.Int
 scala.collection.SeqView$.Prepended	lengthCompare	scala.Int:scala.Int
 scala.collection.SeqView$.Prepended	map	[1],scala.Function1:scala.collection.SeqView
@@ -19104,7 +19028,6 @@ scala.collection.SeqView$.Reverse	knownSize	-:scala.Int
 scala.collection.SeqView$.Reverse	last	-:java.lang.Object
 scala.collection.SeqView$.Reverse	lastIndexWhere	scala.Function1,scala.Int:scala.Int
 scala.collection.SeqView$.Reverse	lastOption	-:scala.Option
-scala.collection.SeqView$.Reverse	lazyZip	[1],scala.collection.Iterable:scala.collection.LazyZip2
 scala.collection.SeqView$.Reverse	length	-:scala.Int
 scala.collection.SeqView$.Reverse	lengthCompare	scala.Int:scala.Int
 scala.collection.SeqView$.Reverse	map	[1],scala.Function1:scala.collection.SeqView
@@ -19234,7 +19157,6 @@ scala.collection.SeqView$.Sorted	knownSize	-:scala.Int
 scala.collection.SeqView$.Sorted	last	-:java.lang.Object
 scala.collection.SeqView$.Sorted	lastIndexWhere	scala.Function1,scala.Int:scala.Int
 scala.collection.SeqView$.Sorted	lastOption	-:scala.Option
-scala.collection.SeqView$.Sorted	lazyZip	[1],scala.collection.Iterable:scala.collection.LazyZip2
 scala.collection.SeqView$.Sorted	len	-:scala.Int
 scala.collection.SeqView$.Sorted	length	-:scala.Int
 scala.collection.SeqView$.Sorted	lengthCompare	scala.Int:scala.Int
@@ -19364,7 +19286,6 @@ scala.collection.SeqView$.Sorted.ReverseSorted	knownSize	-:scala.Int
 scala.collection.SeqView$.Sorted.ReverseSorted	last	-:java.lang.Object
 scala.collection.SeqView$.Sorted.ReverseSorted	lastIndexWhere	scala.Function1,scala.Int:scala.Int
 scala.collection.SeqView$.Sorted.ReverseSorted	lastOption	-:scala.Option
-scala.collection.SeqView$.Sorted.ReverseSorted	lazyZip	[1],scala.collection.Iterable:scala.collection.LazyZip2
 scala.collection.SeqView$.Sorted.ReverseSorted	length	-:scala.Int
 scala.collection.SeqView$.Sorted.ReverseSorted	lengthCompare	scala.Int:scala.Int
 scala.collection.SeqView$.Sorted.ReverseSorted	map	[1],scala.Function1:scala.collection.SeqView
@@ -19491,7 +19412,6 @@ scala.collection.SeqView$.Take	knownSize	-:scala.Int
 scala.collection.SeqView$.Take	last	-:java.lang.Object
 scala.collection.SeqView$.Take	lastIndexWhere	scala.Function1,scala.Int:scala.Int
 scala.collection.SeqView$.Take	lastOption	-:scala.Option
-scala.collection.SeqView$.Take	lazyZip	[1],scala.collection.Iterable:scala.collection.LazyZip2
 scala.collection.SeqView$.Take	length	-:scala.Int
 scala.collection.SeqView$.Take	lengthCompare	scala.Int:scala.Int
 scala.collection.SeqView$.Take	map	[1],scala.Function1:scala.collection.SeqView
@@ -19622,7 +19542,6 @@ scala.collection.SeqView$.TakeRight	knownSize	-:scala.Int
 scala.collection.SeqView$.TakeRight	last	-:java.lang.Object
 scala.collection.SeqView$.TakeRight	lastIndexWhere	scala.Function1,scala.Int:scala.Int
 scala.collection.SeqView$.TakeRight	lastOption	-:scala.Option
-scala.collection.SeqView$.TakeRight	lazyZip	[1],scala.collection.Iterable:scala.collection.LazyZip2
 scala.collection.SeqView$.TakeRight	length	-:scala.Int
 scala.collection.SeqView$.TakeRight	lengthCompare	scala.Int:scala.Int
 scala.collection.SeqView$.TakeRight	map	[1],scala.Function1:scala.collection.SeqView
@@ -19726,7 +19645,6 @@ scala.collection.Set	iterator	-:scala.collection.Iterator
 scala.collection.Set	knownSize	-:scala.Int
 scala.collection.Set	last	-:java.lang.Object
 scala.collection.Set	lastOption	-:scala.Option
-scala.collection.Set	lazyZip	[1],scala.collection.Iterable:scala.collection.LazyZip2
 scala.collection.Set	max	[1],scala.math.Ordering:java.lang.Object
 scala.collection.Set	maxBy	[1],scala.Function1,scala.math.Ordering:java.lang.Object
 scala.collection.Set	maxByOption	[1],scala.Function1,scala.math.Ordering:scala.Option
@@ -19832,7 +19750,6 @@ scala.collection.SortedMap	keysIterator	-:scala.collection.Iterator
 scala.collection.SortedMap	knownSize	-:scala.Int
 scala.collection.SortedMap	lastKey	-:java.lang.Object
 scala.collection.SortedMap	lastOption	-:scala.Option
-scala.collection.SortedMap	lazyZip	[1],scala.collection.Iterable:scala.collection.LazyZip2
 scala.collection.SortedMap	map	[1],scala.Function1:scala.collection.Iterable
 scala.collection.SortedMap	map	[2],scala.Function1,scala.math.Ordering:scala.collection.SortedMap
 scala.collection.SortedMap	max	[1],scala.math.Ordering:scala.Tuple2
@@ -19941,7 +19858,6 @@ scala.collection.SortedSet	knownSize	-:scala.Int
 scala.collection.SortedSet	last	-:java.lang.Object
 scala.collection.SortedSet	lastKey	-:java.lang.Object
 scala.collection.SortedSet	lastOption	-:scala.Option
-scala.collection.SortedSet	lazyZip	[1],scala.collection.Iterable:scala.collection.LazyZip2
 scala.collection.SortedSet	map	[1],scala.Function1,scala.math.Ordering:scala.collection.SortedSet
 scala.collection.SortedSet	max	[1],scala.math.Ordering:java.lang.Object
 scala.collection.SortedSet	maxBy	[1],scala.Function1,scala.math.Ordering:java.lang.Object
@@ -20329,7 +20245,6 @@ scala.collection.View	iterator	-:scala.collection.Iterator
 scala.collection.View	knownSize	-:scala.Int
 scala.collection.View	last	-:java.lang.Object
 scala.collection.View	lastOption	-:scala.Option
-scala.collection.View	lazyZip	[1],scala.collection.Iterable:scala.collection.LazyZip2
 scala.collection.View	map	[1],scala.Function1:scala.collection.View
 scala.collection.View	max	[1],scala.math.Ordering:java.lang.Object
 scala.collection.View	maxBy	[1],scala.Function1,scala.math.Ordering:java.lang.Object
@@ -20429,7 +20344,6 @@ scala.collection.View$.Appended	iterator	-:scala.collection.Iterator
 scala.collection.View$.Appended	knownSize	-:scala.Int
 scala.collection.View$.Appended	last	-:java.lang.Object
 scala.collection.View$.Appended	lastOption	-:scala.Option
-scala.collection.View$.Appended	lazyZip	[1],scala.collection.Iterable:scala.collection.LazyZip2
 scala.collection.View$.Appended	map	[1],scala.Function1:scala.collection.View
 scala.collection.View$.Appended	max	[1],scala.math.Ordering:java.lang.Object
 scala.collection.View$.Appended	maxBy	[1],scala.Function1,scala.math.Ordering:java.lang.Object
@@ -20523,7 +20437,6 @@ scala.collection.View$.Concat	iterator	-:scala.collection.Iterator
 scala.collection.View$.Concat	knownSize	-:scala.Int
 scala.collection.View$.Concat	last	-:java.lang.Object
 scala.collection.View$.Concat	lastOption	-:scala.Option
-scala.collection.View$.Concat	lazyZip	[1],scala.collection.Iterable:scala.collection.LazyZip2
 scala.collection.View$.Concat	map	[1],scala.Function1:scala.collection.View
 scala.collection.View$.Concat	max	[1],scala.math.Ordering:java.lang.Object
 scala.collection.View$.Concat	maxBy	[1],scala.Function1,scala.math.Ordering:java.lang.Object
@@ -20617,7 +20530,6 @@ scala.collection.View$.Drop	iterator	-:scala.collection.Iterator
 scala.collection.View$.Drop	knownSize	-:scala.Int
 scala.collection.View$.Drop	last	-:java.lang.Object
 scala.collection.View$.Drop	lastOption	-:scala.Option
-scala.collection.View$.Drop	lazyZip	[1],scala.collection.Iterable:scala.collection.LazyZip2
 scala.collection.View$.Drop	map	[1],scala.Function1:scala.collection.View
 scala.collection.View$.Drop	max	[1],scala.math.Ordering:java.lang.Object
 scala.collection.View$.Drop	maxBy	[1],scala.Function1,scala.math.Ordering:java.lang.Object
@@ -20713,7 +20625,6 @@ scala.collection.View$.DropRight	iterator	-:scala.collection.Iterator
 scala.collection.View$.DropRight	knownSize	-:scala.Int
 scala.collection.View$.DropRight	last	-:java.lang.Object
 scala.collection.View$.DropRight	lastOption	-:scala.Option
-scala.collection.View$.DropRight	lazyZip	[1],scala.collection.Iterable:scala.collection.LazyZip2
 scala.collection.View$.DropRight	map	[1],scala.Function1:scala.collection.View
 scala.collection.View$.DropRight	max	[1],scala.math.Ordering:java.lang.Object
 scala.collection.View$.DropRight	maxBy	[1],scala.Function1,scala.math.Ordering:java.lang.Object
@@ -20895,7 +20806,6 @@ scala.collection.View$.Map	iterator	-:scala.collection.Iterator
 scala.collection.View$.Map	knownSize	-:scala.Int
 scala.collection.View$.Map	last	-:java.lang.Object
 scala.collection.View$.Map	lastOption	-:scala.Option
-scala.collection.View$.Map	lazyZip	[1],scala.collection.Iterable:scala.collection.LazyZip2
 scala.collection.View$.Map	map	[1],scala.Function1:scala.collection.View
 scala.collection.View$.Map	max	[1],scala.math.Ordering:java.lang.Object
 scala.collection.View$.Map	maxBy	[1],scala.Function1,scala.math.Ordering:java.lang.Object
@@ -20990,7 +20900,6 @@ scala.collection.View$.Prepended	iterator	-:scala.collection.Iterator
 scala.collection.View$.Prepended	knownSize	-:scala.Int
 scala.collection.View$.Prepended	last	-:java.lang.Object
 scala.collection.View$.Prepended	lastOption	-:scala.Option
-scala.collection.View$.Prepended	lazyZip	[1],scala.collection.Iterable:scala.collection.LazyZip2
 scala.collection.View$.Prepended	map	[1],scala.Function1:scala.collection.View
 scala.collection.View$.Prepended	max	[1],scala.math.Ordering:java.lang.Object
 scala.collection.View$.Prepended	maxBy	[1],scala.Function1,scala.math.Ordering:java.lang.Object
@@ -21084,7 +20993,6 @@ scala.collection.View$.Take	iterator	-:scala.collection.Iterator
 scala.collection.View$.Take	knownSize	-:scala.Int
 scala.collection.View$.Take	last	-:java.lang.Object
 scala.collection.View$.Take	lastOption	-:scala.Option
-scala.collection.View$.Take	lazyZip	[1],scala.collection.Iterable:scala.collection.LazyZip2
 scala.collection.View$.Take	map	[1],scala.Function1:scala.collection.View
 scala.collection.View$.Take	max	[1],scala.math.Ordering:java.lang.Object
 scala.collection.View$.Take	maxBy	[1],scala.Function1,scala.math.Ordering:java.lang.Object
@@ -21180,7 +21088,6 @@ scala.collection.View$.TakeRight	iterator	-:scala.collection.Iterator
 scala.collection.View$.TakeRight	knownSize	-:scala.Int
 scala.collection.View$.TakeRight	last	-:java.lang.Object
 scala.collection.View$.TakeRight	lastOption	-:scala.Option
-scala.collection.View$.TakeRight	lazyZip	[1],scala.collection.Iterable:scala.collection.LazyZip2
 scala.collection.View$.TakeRight	map	[1],scala.Function1:scala.collection.View
 scala.collection.View$.TakeRight	max	[1],scala.math.Ordering:java.lang.Object
 scala.collection.View$.TakeRight	maxBy	[1],scala.Function1,scala.math.Ordering:java.lang.Object
@@ -21398,7 +21305,6 @@ scala.collection.immutable.::	knownSize	-:scala.Int
 scala.collection.immutable.::	last	-:java.lang.Object
 scala.collection.immutable.::	lastIndexWhere	scala.Function1,scala.Int:scala.Int
 scala.collection.immutable.::	lastOption	-:scala.Option
-scala.collection.immutable.::	lazyZip	[1],scala.collection.Iterable:scala.collection.LazyZip2
 scala.collection.immutable.::	length	-:scala.Int
 scala.collection.immutable.::	lengthCompare	scala.Int:scala.Int
 scala.collection.immutable.::	map	[1],scala.Function1:scala.collection.immutable.List
@@ -21531,7 +21437,6 @@ scala.collection.immutable.ArraySeq	knownSize	-:scala.Int
 scala.collection.immutable.ArraySeq	last	-:java.lang.Object
 scala.collection.immutable.ArraySeq	lastIndexWhere	scala.Function1,scala.Int:scala.Int
 scala.collection.immutable.ArraySeq	lastOption	-:scala.Option
-scala.collection.immutable.ArraySeq	lazyZip	[1],scala.collection.Iterable:scala.collection.LazyZip2
 scala.collection.immutable.ArraySeq	length	-:scala.Int
 scala.collection.immutable.ArraySeq	lengthCompare	scala.Int:scala.Int
 scala.collection.immutable.ArraySeq	map	[1],scala.Function1:scala.collection.immutable.ArraySeq
@@ -21640,7 +21545,6 @@ scala.collection.immutable.HashMap	keySet	-:scala.collection.immutable.Set
 scala.collection.immutable.HashMap	keysIterator	-:scala.collection.Iterator
 scala.collection.immutable.HashMap	knownSize	-:scala.Int
 scala.collection.immutable.HashMap	lastOption	-:scala.Option
-scala.collection.immutable.HashMap	lazyZip	[1],scala.collection.Iterable:scala.collection.LazyZip2
 scala.collection.immutable.HashMap	max	[1],scala.math.Ordering:scala.Tuple2
 scala.collection.immutable.HashMap	maxBy	[1],scala.Function1,scala.math.Ordering:scala.Tuple2
 scala.collection.immutable.HashMap	maxByOption	[1],scala.Function1,scala.math.Ordering:scala.Option
@@ -21723,7 +21627,6 @@ scala.collection.immutable.HashSet	iterator	-:scala.collection.Iterator
 scala.collection.immutable.HashSet	knownSize	-:scala.Int
 scala.collection.immutable.HashSet	last	-:java.lang.Object
 scala.collection.immutable.HashSet	lastOption	-:scala.Option
-scala.collection.immutable.HashSet	lazyZip	[1],scala.collection.Iterable:scala.collection.LazyZip2
 scala.collection.immutable.HashSet	map	[1],scala.Function1:scala.collection.immutable.HashSet
 scala.collection.immutable.HashSet	max	[1],scala.math.Ordering:java.lang.Object
 scala.collection.immutable.HashSet	maxBy	[1],scala.Function1,scala.math.Ordering:java.lang.Object
@@ -21827,7 +21730,6 @@ scala.collection.immutable.IndexedSeq	knownSize	-:scala.Int
 scala.collection.immutable.IndexedSeq	last	-:java.lang.Object
 scala.collection.immutable.IndexedSeq	lastIndexWhere	scala.Function1,scala.Int:scala.Int
 scala.collection.immutable.IndexedSeq	lastOption	-:scala.Option
-scala.collection.immutable.IndexedSeq	lazyZip	[1],scala.collection.Iterable:scala.collection.LazyZip2
 scala.collection.immutable.IndexedSeq	length	-:scala.Int
 scala.collection.immutable.IndexedSeq	lengthCompare	scala.Int:scala.Int
 scala.collection.immutable.IndexedSeq	map	[1],scala.Function1:scala.collection.immutable.IndexedSeq
@@ -21894,39 +21796,27 @@ scala.collection.immutable.IndexedSeq$	apply	[1],scala.collection.immutable.Seq:
 scala.collection.immutable.IndexedSeq$	empty	[1]:scala.collection.immutable.IndexedSeq
 scala.collection.immutable.IndexedSeq$	fill	[1],scala.Int,scala.Function0:scala.collection.immutable.IndexedSeq
 scala.collection.immutable.IndexedSeq$	from	[1],scala.collection.IterableOnce:scala.collection.immutable.IndexedSeq
-scala.collection.immutable.IndexedSeq$	newBuilder	[1]:scala.collection.mutable.Builder
 scala.collection.immutable.IndexedSeq$	tabulate	[1],scala.Int,scala.Function1:scala.collection.immutable.IndexedSeq
 scala.collection.immutable.IndexedSeq$	unapplySeq	[1],scala.collection.immutable.IndexedSeq:scala.collection.SeqOps
 scala.collection.immutable.LazyList	++	[1],scala.collection.IterableOnce:scala.collection.immutable.LazyList
 scala.collection.immutable.LazyList	++:	[1],scala.collection.IterableOnce:scala.collection.immutable.LazyList
-scala.collection.immutable.LazyList	+:	[1],java.lang.Object:scala.collection.immutable.LazyList
-scala.collection.immutable.LazyList	:+	[1],java.lang.Object:scala.collection.immutable.LazyList
-scala.collection.immutable.LazyList	:++	[1],scala.collection.IterableOnce:scala.collection.immutable.LazyList
-scala.collection.immutable.LazyList	appended	[1],java.lang.Object:scala.collection.immutable.LazyList
-scala.collection.immutable.LazyList	appendedAll	[1],scala.collection.IterableOnce:scala.collection.immutable.LazyList
-scala.collection.immutable.LazyList	apply	scala.Int:java.lang.Object
 scala.collection.immutable.LazyList	className	-:java.lang.String
 scala.collection.immutable.LazyList	collect	[1],scala.PartialFunction:scala.collection.immutable.LazyList
 scala.collection.immutable.LazyList	collectFirst	[1],scala.PartialFunction:scala.Option
 scala.collection.immutable.LazyList	collectionClassName	-:java.lang.String
 scala.collection.immutable.LazyList	concat	[1],scala.collection.IterableOnce:scala.collection.immutable.LazyList
-scala.collection.immutable.LazyList	contains	[1],java.lang.Object:scala.Boolean
 scala.collection.immutable.LazyList	copyToArray	[1],java.lang.Object,scala.Int,scala.Int:scala.Int
 scala.collection.immutable.LazyList	copyToArray	[1],java.lang.Object,scala.Int:scala.Int
 scala.collection.immutable.LazyList	copyToArray	[1],java.lang.Object:scala.Int
 scala.collection.immutable.LazyList	corresponds	[1],scala.collection.IterableOnce,scala.Function2:scala.Boolean
 scala.collection.immutable.LazyList	count	scala.Function1:scala.Int
-scala.collection.immutable.LazyList	distinctBy	[1],scala.Function1:scala.collection.immutable.LazyList
 scala.collection.immutable.LazyList	drop	scala.Int:scala.collection.immutable.LazyList
 scala.collection.immutable.LazyList	dropRight	scala.Int:scala.collection.immutable.LazyList
 scala.collection.immutable.LazyList	dropWhile	scala.Function1:scala.collection.immutable.LazyList
-scala.collection.immutable.LazyList	endsWith	[1],scala.collection.Iterable:scala.Boolean
-scala.collection.immutable.LazyList	equals	java.lang.Object:scala.Boolean
 scala.collection.immutable.LazyList	exists	scala.Function1:scala.Boolean
 scala.collection.immutable.LazyList	filter	scala.Function1:scala.collection.immutable.LazyList
 scala.collection.immutable.LazyList	filterNot	scala.Function1:scala.collection.immutable.LazyList
 scala.collection.immutable.LazyList	find	scala.Function1:scala.Option
-scala.collection.immutable.LazyList	findLast	scala.Function1:scala.Option
 scala.collection.immutable.LazyList	flatMap	[1],scala.Function1:scala.collection.immutable.LazyList
 scala.collection.immutable.LazyList	flatten	[1],scala.Function1:scala.collection.immutable.LazyList
 scala.collection.immutable.LazyList	fold	[1],java.lang.Object,scala.Function2:java.lang.Object
@@ -21943,20 +21833,12 @@ scala.collection.immutable.LazyList	grouped	scala.Int:scala.collection.Iterator
 scala.collection.immutable.LazyList	hasDefiniteSize	-:scala.Boolean
 scala.collection.immutable.LazyList	head	-:java.lang.Object
 scala.collection.immutable.LazyList	headOption	-:scala.Option
-scala.collection.immutable.LazyList	indexOf	[1],java.lang.Object,scala.Int:scala.Int
-scala.collection.immutable.LazyList	indexWhere	scala.Function1,scala.Int:scala.Int
-scala.collection.immutable.LazyList	indices	-:scala.collection.immutable.Range
 scala.collection.immutable.LazyList	inits	-:scala.collection.Iterator
-scala.collection.immutable.LazyList	isDefinedAt	scala.Int:scala.Boolean
 scala.collection.immutable.LazyList	isEmpty	-:scala.Boolean
 scala.collection.immutable.LazyList	iterator	-:scala.collection.Iterator
 scala.collection.immutable.LazyList	knownSize	-:scala.Int
 scala.collection.immutable.LazyList	last	-:java.lang.Object
-scala.collection.immutable.LazyList	lastIndexWhere	scala.Function1,scala.Int:scala.Int
 scala.collection.immutable.LazyList	lastOption	-:scala.Option
-scala.collection.immutable.LazyList	lazyZip	[1],scala.collection.Iterable:scala.collection.LazyZip2
-scala.collection.immutable.LazyList	length	-:scala.Int
-scala.collection.immutable.LazyList	lengthCompare	scala.Int:scala.Int
 scala.collection.immutable.LazyList	map	[1],scala.Function1:scala.collection.immutable.LazyList
 scala.collection.immutable.LazyList	max	[1],scala.math.Ordering:java.lang.Object
 scala.collection.immutable.LazyList	maxBy	[1],scala.Function1,scala.math.Ordering:java.lang.Object
@@ -21971,12 +21853,8 @@ scala.collection.immutable.LazyList	mkString	java.lang.String,java.lang.String,j
 scala.collection.immutable.LazyList	mkString	java.lang.String:java.lang.String
 scala.collection.immutable.LazyList	newSpecificBuilder	-:scala.collection.mutable.Builder
 scala.collection.immutable.LazyList	nonEmpty	-:scala.Boolean
-scala.collection.immutable.LazyList	padTo	[1],scala.Int,java.lang.Object:scala.collection.immutable.LazyList
 scala.collection.immutable.LazyList	partition	scala.Function1:scala.Tuple2
 scala.collection.immutable.LazyList	partitionMap	[2],scala.Function1:scala.Tuple2
-scala.collection.immutable.LazyList	patch	[1],scala.Int,scala.collection.IterableOnce,scala.Int:scala.collection.immutable.LazyList
-scala.collection.immutable.LazyList	prepended	[1],java.lang.Object:scala.collection.immutable.LazyList
-scala.collection.immutable.LazyList	prependedAll	[1],scala.collection.IterableOnce:scala.collection.immutable.LazyList
 scala.collection.immutable.LazyList	product	[1],scala.math.Numeric:java.lang.Object
 scala.collection.immutable.LazyList	reduce	[1],scala.Function2:java.lang.Object
 scala.collection.immutable.LazyList	reduceLeft	[1],scala.Function2:java.lang.Object
@@ -21984,8 +21862,6 @@ scala.collection.immutable.LazyList	reduceLeftOption	[1],scala.Function2:scala.O
 scala.collection.immutable.LazyList	reduceOption	[1],scala.Function2:scala.Option
 scala.collection.immutable.LazyList	reduceRight	[1],scala.Function2:java.lang.Object
 scala.collection.immutable.LazyList	reduceRightOption	[1],scala.Function2:scala.Option
-scala.collection.immutable.LazyList	reverseIterator	-:scala.collection.Iterator
-scala.collection.immutable.LazyList	sameElements	[1],scala.collection.IterableOnce:scala.Boolean
 scala.collection.immutable.LazyList	scan	[1],java.lang.Object,scala.Function2:scala.collection.immutable.LazyList
 scala.collection.immutable.LazyList	scanLeft	[1],java.lang.Object,scala.Function2:scala.collection.immutable.LazyList
 scala.collection.immutable.LazyList	scanRight	[1],java.lang.Object,scala.Function2:scala.collection.immutable.LazyList
@@ -21994,12 +21870,8 @@ scala.collection.immutable.LazyList	sizeCompare	scala.Int:scala.Int
 scala.collection.immutable.LazyList	sizeCompare	scala.collection.Iterable:scala.Int
 scala.collection.immutable.LazyList	slice	scala.Int,scala.Int:scala.collection.immutable.LazyList
 scala.collection.immutable.LazyList	sliding	scala.Int,scala.Int:scala.collection.Iterator
-scala.collection.immutable.LazyList	sortBy	[1],scala.Function1,scala.math.Ordering:scala.collection.immutable.LazyList
-scala.collection.immutable.LazyList	sortWith	scala.Function2:scala.collection.immutable.LazyList
-scala.collection.immutable.LazyList	sorted	[1],scala.math.Ordering:scala.collection.immutable.LazyList
 scala.collection.immutable.LazyList	span	scala.Function1:scala.Tuple2
 scala.collection.immutable.LazyList	splitAt	scala.Int:scala.Tuple2
-scala.collection.immutable.LazyList	startsWith	[1],scala.collection.IterableOnce,scala.Int:scala.Boolean
 scala.collection.immutable.LazyList	sum	[1],scala.math.Numeric:java.lang.Object
 scala.collection.immutable.LazyList	tail	-:scala.collection.immutable.LazyList
 scala.collection.immutable.LazyList	tails	-:scala.collection.Iterator
@@ -22015,27 +21887,17 @@ scala.collection.immutable.LazyList	toList	-:scala.collection.immutable.List
 scala.collection.immutable.LazyList	toMap	[2],scala.<:<:scala.collection.immutable.Map
 scala.collection.immutable.LazyList	toSet	[1]:scala.collection.immutable.Set
 scala.collection.immutable.LazyList	toVector	-:scala.collection.immutable.Vector
-scala.collection.immutable.LazyList	updated	[1],scala.Int,java.lang.Object:scala.collection.immutable.LazyList
 scala.collection.immutable.LazyList	view	-:scala.collection.SeqView
 scala.collection.immutable.LazyList	zip	[1],scala.collection.IterableOnce:scala.collection.immutable.LazyList
 scala.collection.immutable.LazyList	zipWithIndex	-:scala.collection.immutable.LazyList
 scala.collection.immutable.LazyList$	apply	[1],scala.collection.immutable.Seq:scala.collection.immutable.LazyList
-scala.collection.immutable.LazyList$	concat	[1],scala.collection.immutable.Seq:scala.collection.immutable.LazyList
 scala.collection.immutable.LazyList$	cons	-:scala.collection.immutable.LazyList$.cons$
 scala.collection.immutable.LazyList$	cons	object
 scala.collection.immutable.LazyList$	continually	[1],scala.Function0:scala.collection.immutable.LazyList
 scala.collection.immutable.LazyList$	empty	[1]:scala.collection.immutable.LazyList
 scala.collection.immutable.LazyList$	fill	[1],scala.Int,scala.Function0:scala.collection.immutable.LazyList
-scala.collection.immutable.LazyList$	from	[1],scala.collection.IterableOnce:scala.collection.immutable.LazyList
 scala.collection.immutable.LazyList$	from	scala.Int,scala.Int:scala.collection.immutable.LazyList
-scala.collection.immutable.LazyList$	from	scala.Int:scala.collection.immutable.LazyList
-scala.collection.immutable.LazyList$	iterableFactory	[1]:scala.collection.Factory
-scala.collection.immutable.LazyList$	iterate	[1],java.lang.Object,scala.Int,scala.Function1:scala.collection.immutable.LazyList
-scala.collection.immutable.LazyList$	newBuilder	[1]:scala.collection.mutable.Builder
-scala.collection.immutable.LazyList$	range	[1],java.lang.Object,java.lang.Object,java.lang.Object,scala.math.Integral:scala.collection.immutable.LazyList
-scala.collection.immutable.LazyList$	range	[1],java.lang.Object,java.lang.Object,scala.math.Integral:scala.collection.immutable.LazyList
 scala.collection.immutable.LazyList$	tabulate	[1],scala.Int,scala.Function1:scala.collection.immutable.LazyList
-scala.collection.immutable.LazyList$	unapplySeq	[1],scala.collection.immutable.LazyList:scala.collection.SeqOps
 scala.collection.immutable.LazyList$	unfold	[2],java.lang.Object,scala.Function1:scala.collection.immutable.LazyList
 scala.collection.immutable.LazyList$.cons$	apply	[1],scala.Function0,scala.Function0:scala.collection.immutable.LazyList
 scala.collection.immutable.List	++	[1],scala.collection.IterableOnce:scala.collection.immutable.List
@@ -22098,7 +21960,6 @@ scala.collection.immutable.List	knownSize	-:scala.Int
 scala.collection.immutable.List	last	-:java.lang.Object
 scala.collection.immutable.List	lastIndexWhere	scala.Function1,scala.Int:scala.Int
 scala.collection.immutable.List	lastOption	-:scala.Option
-scala.collection.immutable.List	lazyZip	[1],scala.collection.Iterable:scala.collection.LazyZip2
 scala.collection.immutable.List	length	-:scala.Int
 scala.collection.immutable.List	lengthCompare	scala.Int:scala.Int
 scala.collection.immutable.List	map	[1],scala.Function1:scala.collection.immutable.List
@@ -22221,7 +22082,6 @@ scala.collection.immutable.ListMap	keySet	-:scala.collection.immutable.Set
 scala.collection.immutable.ListMap	keysIterator	-:scala.collection.Iterator
 scala.collection.immutable.ListMap	knownSize	-:scala.Int
 scala.collection.immutable.ListMap	lastOption	-:scala.Option
-scala.collection.immutable.ListMap	lazyZip	[1],scala.collection.Iterable:scala.collection.LazyZip2
 scala.collection.immutable.ListMap	max	[1],scala.math.Ordering:scala.Tuple2
 scala.collection.immutable.ListMap	maxBy	[1],scala.Function1,scala.math.Ordering:scala.Tuple2
 scala.collection.immutable.ListMap	maxByOption	[1],scala.Function1,scala.math.Ordering:scala.Option
@@ -22327,7 +22187,6 @@ scala.collection.immutable.ListSet	iterator	-:scala.collection.Iterator
 scala.collection.immutable.ListSet	knownSize	-:scala.Int
 scala.collection.immutable.ListSet	last	-:java.lang.Object
 scala.collection.immutable.ListSet	lastOption	-:scala.Option
-scala.collection.immutable.ListSet	lazyZip	[1],scala.collection.Iterable:scala.collection.LazyZip2
 scala.collection.immutable.ListSet	max	[1],scala.math.Ordering:java.lang.Object
 scala.collection.immutable.ListSet	maxBy	[1],scala.Function1,scala.math.Ordering:java.lang.Object
 scala.collection.immutable.ListSet	maxByOption	[1],scala.Function1,scala.math.Ordering:scala.Option
@@ -22425,7 +22284,6 @@ scala.collection.immutable.LongMap	keysIterator	-:scala.collection.Iterator
 scala.collection.immutable.LongMap	knownSize	-:scala.Int
 scala.collection.immutable.LongMap	lastKey	-:scala.Long
 scala.collection.immutable.LongMap	lastOption	-:scala.Option
-scala.collection.immutable.LongMap	lazyZip	[1],scala.collection.Iterable:scala.collection.LazyZip2
 scala.collection.immutable.LongMap	map	[1],scala.Function1:scala.collection.immutable.LongMap
 scala.collection.immutable.LongMap	max	[1],scala.math.Ordering:scala.Tuple2
 scala.collection.immutable.LongMap	maxBy	[1],scala.Function1,scala.math.Ordering:scala.Tuple2
@@ -22530,7 +22388,6 @@ scala.collection.immutable.Map	keySet	-:scala.collection.immutable.Set
 scala.collection.immutable.Map	keysIterator	-:scala.collection.Iterator
 scala.collection.immutable.Map	knownSize	-:scala.Int
 scala.collection.immutable.Map	lastOption	-:scala.Option
-scala.collection.immutable.Map	lazyZip	[1],scala.collection.Iterable:scala.collection.LazyZip2
 scala.collection.immutable.Map	map	[2],scala.Function1:scala.collection.immutable.Map
 scala.collection.immutable.Map	max	[1],scala.math.Ordering:scala.Tuple2
 scala.collection.immutable.Map	maxBy	[1],scala.Function1,scala.math.Ordering:scala.Tuple2
@@ -22640,7 +22497,6 @@ scala.collection.immutable.Map$.Map1	keySet	-:scala.collection.immutable.Set
 scala.collection.immutable.Map$.Map1	keysIterator	-:scala.collection.Iterator
 scala.collection.immutable.Map$.Map1	knownSize	-:scala.Int
 scala.collection.immutable.Map$.Map1	lastOption	-:scala.Option
-scala.collection.immutable.Map$.Map1	lazyZip	[1],scala.collection.Iterable:scala.collection.LazyZip2
 scala.collection.immutable.Map$.Map1	map	[2],scala.Function1:scala.collection.immutable.Map
 scala.collection.immutable.Map$.Map1	max	[1],scala.math.Ordering:scala.Tuple2
 scala.collection.immutable.Map$.Map1	maxBy	[1],scala.Function1,scala.math.Ordering:scala.Tuple2
@@ -22748,7 +22604,6 @@ scala.collection.immutable.Map$.Map2	keySet	-:scala.collection.immutable.Set
 scala.collection.immutable.Map$.Map2	keysIterator	-:scala.collection.Iterator
 scala.collection.immutable.Map$.Map2	knownSize	-:scala.Int
 scala.collection.immutable.Map$.Map2	lastOption	-:scala.Option
-scala.collection.immutable.Map$.Map2	lazyZip	[1],scala.collection.Iterable:scala.collection.LazyZip2
 scala.collection.immutable.Map$.Map2	map	[2],scala.Function1:scala.collection.immutable.Map
 scala.collection.immutable.Map$.Map2	max	[1],scala.math.Ordering:scala.Tuple2
 scala.collection.immutable.Map$.Map2	maxBy	[1],scala.Function1,scala.math.Ordering:scala.Tuple2
@@ -22858,7 +22713,6 @@ scala.collection.immutable.Map$.Map3	keySet	-:scala.collection.immutable.Set
 scala.collection.immutable.Map$.Map3	keysIterator	-:scala.collection.Iterator
 scala.collection.immutable.Map$.Map3	knownSize	-:scala.Int
 scala.collection.immutable.Map$.Map3	lastOption	-:scala.Option
-scala.collection.immutable.Map$.Map3	lazyZip	[1],scala.collection.Iterable:scala.collection.LazyZip2
 scala.collection.immutable.Map$.Map3	map	[2],scala.Function1:scala.collection.immutable.Map
 scala.collection.immutable.Map$.Map3	max	[1],scala.math.Ordering:scala.Tuple2
 scala.collection.immutable.Map$.Map3	maxBy	[1],scala.Function1,scala.math.Ordering:scala.Tuple2
@@ -22970,7 +22824,6 @@ scala.collection.immutable.Map$.Map4	keySet	-:scala.collection.immutable.Set
 scala.collection.immutable.Map$.Map4	keysIterator	-:scala.collection.Iterator
 scala.collection.immutable.Map$.Map4	knownSize	-:scala.Int
 scala.collection.immutable.Map$.Map4	lastOption	-:scala.Option
-scala.collection.immutable.Map$.Map4	lazyZip	[1],scala.collection.Iterable:scala.collection.LazyZip2
 scala.collection.immutable.Map$.Map4	map	[2],scala.Function1:scala.collection.immutable.Map
 scala.collection.immutable.Map$.Map4	max	[1],scala.math.Ordering:scala.Tuple2
 scala.collection.immutable.Map$.Map4	maxBy	[1],scala.Function1,scala.math.Ordering:scala.Tuple2
@@ -23086,7 +22939,6 @@ scala.collection.immutable.Nil$	iterator	-:scala.collection.Iterator
 scala.collection.immutable.Nil$	knownSize	-:scala.Int
 scala.collection.immutable.Nil$	lastIndexWhere	scala.Function1,scala.Int:scala.Int
 scala.collection.immutable.Nil$	lastOption	-:scala.Option
-scala.collection.immutable.Nil$	lazyZip	[1],scala.collection.Iterable:scala.collection.LazyZip2
 scala.collection.immutable.Nil$	length	-:scala.Int
 scala.collection.immutable.Nil$	lengthCompare	scala.Int:scala.Int
 scala.collection.immutable.Nil$	map	[1],scala.Function1:scala.collection.immutable.List
@@ -23217,7 +23069,6 @@ scala.collection.immutable.NumericRange	knownSize	-:scala.Int
 scala.collection.immutable.NumericRange	last	-:java.lang.Object
 scala.collection.immutable.NumericRange	lastIndexWhere	scala.Function1,scala.Int:scala.Int
 scala.collection.immutable.NumericRange	lastOption	-:scala.Option
-scala.collection.immutable.NumericRange	lazyZip	[1],scala.collection.Iterable:scala.collection.LazyZip2
 scala.collection.immutable.NumericRange	length	-:scala.Int
 scala.collection.immutable.NumericRange	lengthCompare	scala.Int:scala.Int
 scala.collection.immutable.NumericRange	map	[1],scala.Function1:scala.collection.immutable.IndexedSeq
@@ -23341,7 +23192,6 @@ scala.collection.immutable.Queue	knownSize	-:scala.Int
 scala.collection.immutable.Queue	last	-:java.lang.Object
 scala.collection.immutable.Queue	lastIndexWhere	scala.Function1,scala.Int:scala.Int
 scala.collection.immutable.Queue	lastOption	-:scala.Option
-scala.collection.immutable.Queue	lazyZip	[1],scala.collection.Iterable:scala.collection.LazyZip2
 scala.collection.immutable.Queue	length	-:scala.Int
 scala.collection.immutable.Queue	lengthCompare	scala.Int:scala.Int
 scala.collection.immutable.Queue	map	[1],scala.Function1:scala.collection.immutable.Queue
@@ -23471,7 +23321,6 @@ scala.collection.immutable.Range	last	-:scala.Int
 scala.collection.immutable.Range	lastElement	-:scala.Int
 scala.collection.immutable.Range	lastIndexWhere	scala.Function1,scala.Int:scala.Int
 scala.collection.immutable.Range	lastOption	-:scala.Option
-scala.collection.immutable.Range	lazyZip	[1],scala.collection.Iterable:scala.collection.LazyZip2
 scala.collection.immutable.Range	length	-:scala.Int
 scala.collection.immutable.Range	lengthCompare	scala.Int:scala.Int
 scala.collection.immutable.Range	map	[1],scala.Function1:scala.collection.immutable.IndexedSeq
@@ -23595,7 +23444,6 @@ scala.collection.immutable.Seq	knownSize	-:scala.Int
 scala.collection.immutable.Seq	last	-:java.lang.Object
 scala.collection.immutable.Seq	lastIndexWhere	scala.Function1,scala.Int:scala.Int
 scala.collection.immutable.Seq	lastOption	-:scala.Option
-scala.collection.immutable.Seq	lazyZip	[1],scala.collection.Iterable:scala.collection.LazyZip2
 scala.collection.immutable.Seq	length	-:scala.Int
 scala.collection.immutable.Seq	lengthCompare	scala.Int:scala.Int
 scala.collection.immutable.Seq	map	[1],scala.Function1:scala.collection.immutable.Seq
@@ -23723,7 +23571,6 @@ scala.collection.immutable.Set	iterator	-:scala.collection.Iterator
 scala.collection.immutable.Set	knownSize	-:scala.Int
 scala.collection.immutable.Set	last	-:java.lang.Object
 scala.collection.immutable.Set	lastOption	-:scala.Option
-scala.collection.immutable.Set	lazyZip	[1],scala.collection.Iterable:scala.collection.LazyZip2
 scala.collection.immutable.Set	map	[1],scala.Function1:scala.collection.immutable.Set
 scala.collection.immutable.Set	max	[1],scala.math.Ordering:java.lang.Object
 scala.collection.immutable.Set	maxBy	[1],scala.Function1,scala.math.Ordering:java.lang.Object
@@ -23821,7 +23668,6 @@ scala.collection.immutable.TreeMap	keysIterator	-:scala.collection.Iterator
 scala.collection.immutable.TreeMap	knownSize	-:scala.Int
 scala.collection.immutable.TreeMap	lastKey	-:java.lang.Object
 scala.collection.immutable.TreeMap	lastOption	-:scala.Option
-scala.collection.immutable.TreeMap	lazyZip	[1],scala.collection.Iterable:scala.collection.LazyZip2
 scala.collection.immutable.TreeMap	max	[1],scala.math.Ordering:scala.Tuple2
 scala.collection.immutable.TreeMap	maxBy	[1],scala.Function1,scala.math.Ordering:scala.Tuple2
 scala.collection.immutable.TreeMap	maxByOption	[1],scala.Function1,scala.math.Ordering:scala.Option
@@ -23913,7 +23759,6 @@ scala.collection.immutable.TreeSet	knownSize	-:scala.Int
 scala.collection.immutable.TreeSet	last	-:java.lang.Object
 scala.collection.immutable.TreeSet	lastKey	-:java.lang.Object
 scala.collection.immutable.TreeSet	lastOption	-:scala.Option
-scala.collection.immutable.TreeSet	lazyZip	[1],scala.collection.Iterable:scala.collection.LazyZip2
 scala.collection.immutable.TreeSet	map	[1],scala.Function1:scala.collection.immutable.Set
 scala.collection.immutable.TreeSet	max	[1],scala.math.Ordering:java.lang.Object
 scala.collection.immutable.TreeSet	maxBy	[1],scala.Function1,scala.math.Ordering:java.lang.Object
@@ -24022,7 +23867,6 @@ scala.collection.immutable.Vector	knownSize	-:scala.Int
 scala.collection.immutable.Vector	last	-:java.lang.Object
 scala.collection.immutable.Vector	lastIndexWhere	scala.Function1,scala.Int:scala.Int
 scala.collection.immutable.Vector	lastOption	-:scala.Option
-scala.collection.immutable.Vector	lazyZip	[1],scala.collection.Iterable:scala.collection.LazyZip2
 scala.collection.immutable.Vector	length	-:scala.Int
 scala.collection.immutable.Vector	lengthCompare	scala.Int:scala.Int
 scala.collection.immutable.Vector	map	[1],scala.Function1:scala.collection.immutable.Vector
@@ -24194,7 +24038,6 @@ scala.collection.mutable.ArrayBuffer	knownSize	-:scala.Int
 scala.collection.mutable.ArrayBuffer	last	-:java.lang.Object
 scala.collection.mutable.ArrayBuffer	lastIndexWhere	scala.Function1,scala.Int:scala.Int
 scala.collection.mutable.ArrayBuffer	lastOption	-:scala.Option
-scala.collection.mutable.ArrayBuffer	lazyZip	[1],scala.collection.Iterable:scala.collection.LazyZip2
 scala.collection.mutable.ArrayBuffer	length	-:scala.Int
 scala.collection.mutable.ArrayBuffer	lengthCompare	scala.Int:scala.Int
 scala.collection.mutable.ArrayBuffer	map	[1],scala.Function1:scala.collection.mutable.ArrayBuffer
@@ -24892,7 +24735,6 @@ scala.collection.mutable.HashMap	iterator	-:scala.collection.Iterator
 scala.collection.mutable.HashMap	keysIterator	-:scala.collection.Iterator
 scala.collection.mutable.HashMap	knownSize	-:scala.Int
 scala.collection.mutable.HashMap	lastOption	-:scala.Option
-scala.collection.mutable.HashMap	lazyZip	[1],scala.collection.Iterable:scala.collection.LazyZip2
 scala.collection.mutable.HashMap	map	[2],scala.Function1:scala.collection.mutable.HashMap
 scala.collection.mutable.HashMap	mapValues	[1],scala.Function1:scala.collection.MapView
 scala.collection.mutable.HashMap	mapValuesInPlace	scala.Function2:scala.collection.mutable.HashMap
@@ -25005,7 +24847,6 @@ scala.collection.mutable.HashSet	iterator	-:scala.collection.Iterator
 scala.collection.mutable.HashSet	knownSize	-:scala.Int
 scala.collection.mutable.HashSet	last	-:java.lang.Object
 scala.collection.mutable.HashSet	lastOption	-:scala.Option
-scala.collection.mutable.HashSet	lazyZip	[1],scala.collection.Iterable:scala.collection.LazyZip2
 scala.collection.mutable.HashSet	map	[1],scala.Function1:scala.collection.mutable.HashSet
 scala.collection.mutable.HashSet	max	[1],scala.math.Ordering:java.lang.Object
 scala.collection.mutable.HashSet	maxBy	[1],scala.Function1,scala.math.Ordering:java.lang.Object
@@ -25145,7 +24986,6 @@ scala.collection.mutable.ListBuffer	knownSize	-:scala.Int
 scala.collection.mutable.ListBuffer	last	-:java.lang.Object
 scala.collection.mutable.ListBuffer	lastIndexWhere	scala.Function1,scala.Int:scala.Int
 scala.collection.mutable.ListBuffer	lastOption	-:scala.Option
-scala.collection.mutable.ListBuffer	lazyZip	[1],scala.collection.Iterable:scala.collection.LazyZip2
 scala.collection.mutable.ListBuffer	length	-:scala.Int
 scala.collection.mutable.ListBuffer	lengthCompare	scala.Int:scala.Int
 scala.collection.mutable.ListBuffer	map	[1],scala.Function1:scala.collection.mutable.ListBuffer
@@ -25261,7 +25101,6 @@ scala.collection.mutable.Map$.WithDefault	iterator	-:scala.collection.Iterator
 scala.collection.mutable.Map$.WithDefault	keysIterator	-:scala.collection.Iterator
 scala.collection.mutable.Map$.WithDefault	knownSize	-:scala.Int
 scala.collection.mutable.Map$.WithDefault	lastOption	-:scala.Option
-scala.collection.mutable.Map$.WithDefault	lazyZip	[1],scala.collection.Iterable:scala.collection.LazyZip2
 scala.collection.mutable.Map$.WithDefault	mapValues	[1],scala.Function1:scala.collection.MapView
 scala.collection.mutable.Map$.WithDefault	max	[1],scala.math.Ordering:scala.Tuple2
 scala.collection.mutable.Map$.WithDefault	maxBy	[1],scala.Function1,scala.math.Ordering:scala.Tuple2
@@ -25353,7 +25192,6 @@ scala.collection.mutable.PriorityQueue	iterator	-:scala.collection.Iterator
 scala.collection.mutable.PriorityQueue	knownSize	-:scala.Int
 scala.collection.mutable.PriorityQueue	last	-:java.lang.Object
 scala.collection.mutable.PriorityQueue	lastOption	-:scala.Option
-scala.collection.mutable.PriorityQueue	lazyZip	[1],scala.collection.Iterable:scala.collection.LazyZip2
 scala.collection.mutable.PriorityQueue	length	-:scala.Int
 scala.collection.mutable.PriorityQueue	max	[1],scala.math.Ordering:java.lang.Object
 scala.collection.mutable.PriorityQueue	maxBy	[1],scala.Function1,scala.math.Ordering:java.lang.Object
@@ -25460,7 +25298,6 @@ scala.collection.mutable.SortedSet	iterator	-:scala.collection.Iterator
 scala.collection.mutable.SortedSet	knownSize	-:scala.Int
 scala.collection.mutable.SortedSet	last	-:java.lang.Object
 scala.collection.mutable.SortedSet	lastKey	-:java.lang.Object
-scala.collection.mutable.SortedSet	lazyZip	[1],scala.collection.Iterable:scala.collection.LazyZip2
 scala.collection.mutable.SortedSet	map	[1],scala.Function1,scala.math.Ordering:scala.collection.mutable.SortedSet
 scala.collection.mutable.SortedSet	max	[1],scala.math.Ordering:java.lang.Object
 scala.collection.mutable.SortedSet	maxBefore	java.lang.Object:scala.Option
@@ -25580,7 +25417,6 @@ scala.collection.mutable.Stack	knownSize	-:scala.Int
 scala.collection.mutable.Stack	last	-:java.lang.Object
 scala.collection.mutable.Stack	lastIndexWhere	scala.Function1,scala.Int:scala.Int
 scala.collection.mutable.Stack	lastOption	-:scala.Option
-scala.collection.mutable.Stack	lazyZip	[1],scala.collection.Iterable:scala.collection.LazyZip2
 scala.collection.mutable.Stack	length	-:scala.Int
 scala.collection.mutable.Stack	lengthCompare	scala.Int:scala.Int
 scala.collection.mutable.Stack	map	[1],scala.Function1:scala.collection.mutable.Stack
@@ -25726,7 +25562,6 @@ scala.collection.mutable.TreeSet	knownSize	-:scala.Int
 scala.collection.mutable.TreeSet	last	-:java.lang.Object
 scala.collection.mutable.TreeSet	lastKey	-:java.lang.Object
 scala.collection.mutable.TreeSet	lastOption	-:scala.Option
-scala.collection.mutable.TreeSet	lazyZip	[1],scala.collection.Iterable:scala.collection.LazyZip2
 scala.collection.mutable.TreeSet	max	[1],scala.math.Ordering:java.lang.Object
 scala.collection.mutable.TreeSet	maxBefore	java.lang.Object:scala.Option
 scala.collection.mutable.TreeSet	maxBy	[1],scala.Function1,scala.math.Ordering:java.lang.Object
@@ -26156,7 +25991,6 @@ scala.deriving.Mirror$.Sum	<init>	:scala.deriving.Mirror$.Sum
 scala.deriving.Mirror$.Sum	ordinal	java.lang.Object:scala.Int
 scala.inline	<init>	:scala.inline
 scala.io	AnsiColor	object
-scala.io	Codec	object
 scala.io.AnsiColor	<init>	:scala.io.AnsiColor
 scala.io.AnsiColor	BLACK	-:java.lang.String
 scala.io.AnsiColor	BLACK_B	-:java.lang.String
@@ -26202,22 +26036,6 @@ scala.io.AnsiColor$	WHITE	-:java.lang.String
 scala.io.AnsiColor$	WHITE_B	-:java.lang.String
 scala.io.AnsiColor$	YELLOW	-:java.lang.String
 scala.io.AnsiColor$	YELLOW_B	-:java.lang.String
-scala.io.Codec	<init>	java.nio.charset.Charset:scala.io.Codec
-scala.io.Codec	charSet	-:java.nio.charset.Charset
-scala.io.Codec	name	-:java.lang.String
-scala.io.Codec$	ISO8859	-:scala.io.Codec
-scala.io.Codec$	UTF8	-:scala.io.Codec
-scala.io.Codec$	apply	java.lang.String:scala.io.Codec
-scala.io.Codec$	apply	java.nio.charset.Charset:scala.io.Codec
-scala.io.Codec$	charset2codec	java.nio.charset.Charset:scala.io.Codec
-scala.io.Codec$	default	-:scala.io.Codec
-scala.io.Codec$	defaultCharsetCodec	-:scala.io.Codec
-scala.io.Codec$	fallbackSystemCodec	-:scala.io.Codec
-scala.io.Codec$	fromUTF8	scala.Byte[]:scala.Char[]
-scala.io.Codec$	string2codec	java.lang.String:scala.io.Codec
-scala.io.Codec$	toUTF8	java.lang.CharSequence:scala.Byte[]
-scala.io.LowPriorityCodecImplicits	<init>	:scala.io.LowPriorityCodecImplicits
-scala.io.LowPriorityCodecImplicits	fallbackSystemCodec	-:scala.io.Codec
 scala.jdk	CollectionConverters	object
 scala.jdk.CollectionConverters$.CollectionHasAsScala	asScala	-:scala.collection.Iterable
 scala.jdk.CollectionConverters$.CollectionHasAsScala	c	-:java.util.Collection
@@ -27547,7 +27365,6 @@ scala.util.Either$.MergeableEither	merge	-:java.lang.Object
 scala.util.Either$.MergeableEither	x	-:scala.util.Either
 scala.util.Failure	<init>	[1],java.lang.Throwable:scala.util.Failure
 scala.util.Failure	canEqual	java.lang.Object:scala.Boolean
-scala.util.Failure	collect	[1],scala.PartialFunction:scala.util.Try
 scala.util.Failure	exception	-:java.lang.Throwable
 scala.util.Failure	failed	-:scala.util.Try
 scala.util.Failure	filter	scala.Function1:scala.util.Try
@@ -27663,7 +27480,6 @@ scala.util.Sorting$	stableSort	[1],java.lang.Object,scala.Function2:scala.Unit
 scala.util.Sorting$	stableSort	[1],java.lang.Object,scala.math.Ordering:scala.Unit
 scala.util.Success	<init>	[1],java.lang.Object:scala.util.Success
 scala.util.Success	canEqual	java.lang.Object:scala.Boolean
-scala.util.Success	collect	[1],scala.PartialFunction:scala.util.Try
 scala.util.Success	failed	-:scala.util.Try
 scala.util.Success	filter	scala.Function1:scala.util.Try
 scala.util.Success	flatMap	[1],scala.Function1:scala.util.Try
@@ -27691,7 +27507,6 @@ scala.util.Success$	apply	[1],java.lang.Object:scala.util.Success
 scala.util.Success$	unapply	[1],scala.util.Success:scala.Option
 scala.util.Try	<init>	[1]:scala.util.Try
 scala.util.Try	canEqual	java.lang.Object:scala.Boolean
-scala.util.Try	collect	[1],scala.PartialFunction:scala.util.Try
 scala.util.Try	failed	-:scala.util.Try
 scala.util.Try	filter	scala.Function1:scala.util.Try
 scala.util.Try	flatMap	[1],scala.Function1:scala.util.Try
@@ -27834,26 +27649,13 @@ scala.util.hashing.MurmurHash3$	unorderedHash	scala.collection.IterableOnce,scal
 scala.util.hashing.MurmurHash3$	unorderedHash	scala.collection.IterableOnce:scala.Int
 scala.util.matching	Regex	object
 scala.util.matching.Regex	anchored	-:scala.util.matching.Regex
-scala.util.matching.Regex	findAllMatchIn	java.lang.CharSequence:scala.collection.Iterator
-scala.util.matching.Regex	findFirstIn	java.lang.CharSequence:scala.Option
-scala.util.matching.Regex	findFirstMatchIn	java.lang.CharSequence:scala.Option
-scala.util.matching.Regex	findPrefixMatchOf	java.lang.CharSequence:scala.Option
-scala.util.matching.Regex	findPrefixOf	java.lang.CharSequence:scala.Option
-scala.util.matching.Regex	matches	java.lang.CharSequence:scala.Boolean
 scala.util.matching.Regex	pattern	-:java.util.regex.Pattern
 scala.util.matching.Regex	regex	-:java.lang.String
-scala.util.matching.Regex	replaceFirstIn	java.lang.CharSequence,java.lang.String:java.lang.String
-scala.util.matching.Regex	replaceSomeIn	java.lang.CharSequence,scala.Function1:java.lang.String
-scala.util.matching.Regex	split	java.lang.CharSequence:java.lang.String[]
-scala.util.matching.Regex	unapplySeq	java.lang.CharSequence:scala.Option
 scala.util.matching.Regex$	quote	java.lang.String:java.lang.String
 scala.util.matching.Regex$	quoteReplacement	java.lang.String:java.lang.String
-scala.util.matching.Regex$.Match	after	-:java.lang.CharSequence
-scala.util.matching.Regex$.Match	before	-:java.lang.CharSequence
 scala.util.matching.Regex$.Match	end	-:scala.Int
 scala.util.matching.Regex$.Match	groupCount	-:scala.Int
 scala.util.matching.Regex$.Match	matched	-:java.lang.String
-scala.util.matching.Regex$.Match	source	-:java.lang.CharSequence
 scala.util.matching.Regex$.Match	start	-:scala.Int
 scala.util.matching.Regex$.Match	subgroups	-:scala.collection.immutable.List
 scala.volatile	<init>	:scala.volatile

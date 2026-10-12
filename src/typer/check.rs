@@ -263,8 +263,6 @@ impl<'a> Worker<'a> {
         for i in 0..self.syms.pkgs.len() {
             self.pkg_exports_of(PkgId(i as u32));
         }
-        // Value exports make members, once every class they read is complete.
-        self.add_value_forwarders();
     }
 
     /// The tables of the program's scopes that the bodies read, built at the end of the
@@ -1684,23 +1682,6 @@ impl<'a> Worker<'a> {
         sig
     }
 
-    /// `infer_body` with the body's plain inline calls expanded once the result type is set as
-    /// the member's partial signature, which an expansion reading the member then finds rather
-    /// than the recursion (dotty types the body, the member's type with it, before it inlines).
-    fn infer_body_then_expand(&mut self, sym: SymId, partial: &MethodSig, inherited: Option<TypeId>, sig_of: impl Fn(TypeId) -> Arc<MethodSig>) -> TypeId {
-        let pending = self.attempts.pending_len();
-        let outer = std::mem::replace(&mut self.inferring_depth, self.body_depth + 1);
-        let inferred = self.infer_body(sym, partial, inherited);
-        self.inferring_depth = outer;
-        if self.attempts.pending_len() > pending {
-            if inferred != ERROR {
-                self.set_partial_sig(sym, sig_of(inferred));
-            }
-            self.flush_pending_since(pending);
-        }
-        inferred
-    }
-
     fn compute_sig_inner(&mut self, sym: SymId, def: &'a ast::Def) -> MethodSig {
         let t = self;
         match &def.kind {
@@ -1715,7 +1696,7 @@ impl<'a> Worker<'a> {
                     if inherited.is_none() && t.syms.sym(sym).owner != Owner::Local {
                         t.missing_implicit_type(sym, def, "");
                     }
-                    let inferred = t.infer_body_then_expand(sym, &partial, inherited, |ret| Arc::new(MethodSig::value(ret)));
+                    let inferred = t.infer_body(sym, &partial, inherited);
                     if t.shared_sym(sym) {
                         t.publish_body(sym);
                     }
@@ -1742,14 +1723,6 @@ impl<'a> Worker<'a> {
                 let ret = f.ret.map(|r| t.resolve_declared_type(r));
                 t.env.frames.pop();
                 let mut sig = MethodSig { tparams, clauses, ret: ret.unwrap_or(ERROR) };
-                // A macro without a declared result type has the type its splice's `Expr` holds,
-                // against which a call infers its type arguments before the macro runs.
-                if ret.is_none() && def.mods & mods::INLINE != 0 && def.mods & (mods::TRANSPARENT | mods::INCOMPLETE) == 0 {
-                    if let Some(body) = f.body.filter(|&b| matches!(t.ast(t.syms.sym(sym).file).expr(b), ast::Expr::Splice(_))) {
-                        let _ = body;
-                        sig.ret = t.inferred_macro_result(sym, &sig);
-                    }
-                }
                 // An inline method's body is typed where it expands, and the call takes the
                 // type found there. An incomplete method's result is unknown unless declared.
                 if ret.is_none() && def.mods & (mods::INLINE | mods::INCOMPLETE) == 0 {
@@ -1762,8 +1735,7 @@ impl<'a> Worker<'a> {
                         if inherited.is_none() {
                             t.missing_implicit_type(sym, def, "result ");
                         }
-                        let shape = sig.clone();
-                        sig.ret = t.infer_body_then_expand(sym, &sig, inherited, |ret| Arc::new(MethodSig { ret, ..shape.clone() }));
+                        sig.ret = t.infer_body(sym, &sig, inherited);
                         if t.shared_sym(sym) {
                             t.publish_body(sym);
                         }
@@ -2408,11 +2380,8 @@ impl<'a> Worker<'a> {
             self.unused.settle_since(marks);
         }
         // A body is a unit of its own, published when typed: its plain inline calls expand at its
-        // end, what they write its definition's; the body of a member whose type is inferred
-        // expands them once the type is set (`infer_body_then_expand`).
-        if self.inferring_depth != self.body_depth {
-            self.flush_pending_since(pending);
-        }
+        // end, what they write its definition's.
+        self.flush_pending_since(pending);
         if self.erased_values.len() > erased_mark {
             let roots: Vec<TExprId> = self.fun_of_sym.get(&sym).and_then(|&f| self.prog.funs[f.idx()].body).into_iter().chain(self.val_init.get(&sym).copied()).collect();
             self.report_erased_values(erased_mark, &roots);
@@ -3006,8 +2975,6 @@ impl<'a> Worker<'a> {
                 let accessors = t.define_outer_accessors(c);
                 tclass.methods.extend(accessors);
             }
-            let forwarders = t.define_value_forwarders(c);
-            tclass.methods.extend(forwarders);
             t.sites.owners.truncate(owners_depth);
             t.return_to = outer_return;
         });
@@ -4214,17 +4181,6 @@ impl<'a> Worker<'a> {
         let s = self.syms.sym(sym);
         let Some(d) = s.def else { return false };
         matches!(&self.ast(s.file).def(d).kind, DefKind::Fun(f) if f.body.is_none())
-    }
-
-    /// Whether `sym` is deferred, as dotty's `Deferred` flag says: abstract, and not an
-    /// `abstract override` read from a pickle with its body, which `TreeUnpickler` leaves
-    /// concrete (only a definition that lacks a body is `Deferred`).
-    pub(crate) fn is_deferred_member(&self, sym: SymId) -> bool {
-        if !self.is_abstract_member(sym) {
-            return false;
-        }
-        let both = mods::ABSTRACT | mods::OVERRIDE;
-        !(self.syms.sym(sym).mods & both == both && self.loaded.as_ref().map_or(false, |l| l.has_body(sym)))
     }
 
     pub(crate) fn is_abstract_member(&self, sym: SymId) -> bool {

@@ -1470,7 +1470,6 @@ impl<'w, 'a> P<'w, 'a> {
             self.enum_tail(e);
         }
         self.inline_accessor_defs(c);
-        self.value_forwarder_defs(c);
         self.enclosing.pop();
         self.tparams.truncate(tmark);
         self.buf.end_length(len);
@@ -3113,30 +3112,6 @@ impl<'w, 'a> P<'w, 'a> {
 
     /// The accessors of the class's inline bodies (`typer::accessors`), after its members as
     /// scalac's `PrepareInlineable` appends them, each `<synthetic>`.
-    /// The forwarders of the class's value exports (`typer::value_exports`), after its members, as
-    /// final methods: another module's build reads them as members, where an object's export is
-    /// the name of its clause (`Exported` would send them there).
-    fn value_forwarder_defs(&mut self, c: ClassId) {
-        let fwds: Vec<SymId> = self
-            .w
-            .syms
-            .class(c)
-            .member_order
-            .iter()
-            .copied()
-            .filter(|&s| {
-                self.w.syms.sym(s).owner == Owner::Class(c) && self.w.syms.forward_of(s).is_some()
-            })
-            .collect();
-        // In the order the class's methods are emitted (`layout::compare_syms`), which a build
-        // over this pickle keeps.
-        let mut fwds = fwds;
-        fwds.sort_by(|&a, &b| crate::emit::layout::compare_syms(&self.w.syms, &self.w.interner, a, b));
-        for s in fwds {
-            self.value_or_method(s, &[]);
-        }
-    }
-
     fn inline_accessor_defs(&mut self, c: ClassId) {
         let mut accs: Vec<SymId> = self.w.inline_accessor_syms.values().copied().filter(|&a| self.w.syms.sym(a).owner == Owner::Class(c)).collect();
         accs.sort();

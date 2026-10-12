@@ -373,14 +373,6 @@ impl<'a> Worker<'a> {
             }
             None => self.scala_mirror_value(c, &shape, sm, plain.then_some(ty))?,
         };
-        // The reference cast to the mirror's type, as dotty's `Synthesizer.productMirror` gives
-        // `mirrorRef.cast(mirrorType)`: a tree of the refined type, not the val's singleton
-        // (a macro matching the summoned mirror's `tpe` as a `Refinement`); the val declared with
-        // that type, the cast is no node of its own.
-        let value = match plain {
-            true => self.lower_cast(value, ty, ty, Span::default()).0,
-            false => value,
-        };
         Some((value, ty))
     }
 

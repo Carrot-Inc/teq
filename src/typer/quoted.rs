@@ -943,7 +943,7 @@ impl<'a> Worker<'a> {
         self.quote.pattern = Some(PatternHoles::default());
         self.quote.level += 1;
         self.quote.frames.push(Vec::new());
-        let (te, body_ty) = self.type_expr(body, scrutinee_arg);
+        let (te, _) = self.type_expr(body, scrutinee_arg);
         self.quote.frames.pop();
         self.quote.level -= 1;
         let holes = self.quote.pattern.take().map_or(Vec::new(), |p| p.holes);
@@ -964,7 +964,6 @@ impl<'a> Worker<'a> {
         for &(_, _, ty) in &holes {
             self.collect_type_params(ty, &mut mentioned);
         }
-        self.pattern_var_bound_params(&type_params, &mut mentioned);
         mentioned.retain(|p| !type_params.iter().any(|&(q, _)| q == *p));
         let types = self.type_values_for(&mentioned, span);
         let quotes = self.captured_quotes(span);
@@ -987,10 +986,7 @@ impl<'a> Worker<'a> {
             types: types.clone(),
             quotes,
         });
-        // The tree's own type, as dotty's `body2.tpe`: a block answers with its result's.
-        let body_ty = self.prog.type_of(te).unwrap_or(body_ty);
-        let pat_ty = self.expr_type(body_ty);
-        self.quote_match_pattern(pat, sty, pat_ty, binders, types.iter().map(|&(_, e)| e).collect(), span)
+        self.quote_match_pattern(pat, sty, binders, types.iter().map(|&(_, e)| e).collect(), span)
     }
 
     /// Whether each of `vars` is first met in a contravariant position of `types`, read in order
@@ -1055,7 +1051,6 @@ impl<'a> Worker<'a> {
         }
         let mut mentioned = Vec::new();
         self.collect_type_params(ty, &mut mentioned);
-        self.pattern_var_bound_params(&type_params, &mut mentioned);
         mentioned.retain(|p| !type_params.iter().any(|&(q, _)| q == *p));
         let types = self.type_values_for(&mentioned, span);
         let quotes = self.captured_quotes(span);
@@ -1063,25 +1058,11 @@ impl<'a> Worker<'a> {
         let from_above = self.pattern_vars_from_above(&[ty], &vars);
         let pat = self.prog.quote_pats.len();
         self.prog.quote_pats.push(TQuotePat { body: None, ty, holes: Vec::new(), type_params: vars, declared: 0, from_above, types: types.clone(), quotes });
-        let pat_ty = self.quoted_type_of(ty);
-        self.quote_match_pattern(pat, sty, pat_ty, binders, types.iter().map(|&(_, e)| e).collect(), span)
-    }
-
-    /// The type parameters the bounds of a quote pattern's type variables name (`t <: A` for
-    /// `'[Subtype[t]]` under `type Subtype[U <: A] = U`): their `Type` values in scope fill them
-    /// where the pattern matches, as the pattern's bounds are healed with the rest of it.
-    fn pattern_var_bound_params(&self, type_params: &[(TParamId, SymId)], out: &mut Vec<TParamId>) {
-        for &(p, _) in type_params {
-            let (lower, upper) = (self.syms.tparam(p).lower, self.syms.tparam(p).upper);
-            self.collect_type_params(lower, out);
-            self.collect_type_params(upper, out);
-        }
+        self.quote_match_pattern(pat, sty, binders, types.iter().map(|&(_, e)| e).collect(), span)
     }
 
     /// A type variable of a quote type pattern takes the bound of the parameter it stands for,
-    /// as scalac infers it: `case '[t *: ts]` binds `ts <: Tuple`. The parameters are those of
-    /// the constructor dealiased, as dotty's `Typer.typedAppliedTypeTree` takes them: an alias's
-    /// own (`'[IsProduct[t]]` under `type IsProduct[U <: Product] = U` binds `t <: Product`).
+    /// as scalac infers it: `case '[t *: ts]` binds `ts <: Tuple`.
     fn bound_pattern_type_vars(&mut self, t: TyExprId, vars: &[(Name, TParamId)]) {
         let ast = self.cur_ast();
         match ast.ty(t) {
@@ -1094,10 +1075,6 @@ impl<'a> Worker<'a> {
                         self.complete_class(c);
                         self.syms.class(c).tparams.clone()
                     }
-                    Type::Lambda(ps, _) => self.types.items(ps).iter().filter_map(|&q| match self.types.get(q) {
-                        Type::Param(p) => Some(p),
-                        _ => None,
-                    }).collect(),
                     _ => Vec::new(),
                 };
                 for (i, &a) in args.iter().enumerate() {
@@ -1286,11 +1263,7 @@ impl<'a> Worker<'a> {
 
     /// The pattern that runs `$quoteMatch` on the scrutinee and binds its results: an
     /// `Option` of the binders' values, one value or a tuple of them.
-    /// The match of a quote pattern of type `pat_ty` (`Expr[T]` or `Type[t]`, as dotty's
-    /// `QuotesAndSplices.typedQuotePattern` types the `QuotePattern`): what `x @ pattern` binds is
-    /// that type where it conforms to the scrutinee's, and the intersection of the two otherwise,
-    /// as dotty's `Typer.typedBind` types the bind (`pTpe @ '[t]` binds a `Type[t]`).
-    fn quote_match_pattern(&mut self, pat: usize, sty: TypeId, pat_ty: TypeId, binders: Vec<(TPatId, TypeId)>, types: Vec<TExprId>, span: Span) -> TPatId {
+    fn quote_match_pattern(&mut self, pat: usize, sty: TypeId, binders: Vec<(TPatId, TypeId)>, types: Vec<TExprId>, span: Span) -> TPatId {
         let scrut = self.fresh_local("u", sty, span);
         let arg = self.prog.add(TExpr::Local(scrut));
         let index = self.prog.add(TExpr::Int(pat as i32));
@@ -1323,17 +1296,7 @@ impl<'a> Worker<'a> {
         let fl = self.prog.syms(&[field]);
         let pl = self.prog.pat_lists.push_slice(&[value_pat]);
         let inner = self.prog.add_pat(TPat::Class(some, some_ty, fl, pl));
-        let unapply = self.prog.add_pat(TPat::Unapply(scrut, call, inner));
-        let bound = if self.types.contains_error(pat_ty) || self.types.contains_error(sty) {
-            sty
-        } else {
-            let mark = self.snapshot();
-            let narrower = self.is_sub(pat_ty, sty) && self.snapshot() == mark;
-            self.rollback(mark);
-            if narrower { pat_ty } else { self.types.mk(Type::Inter(pat_ty, sty)) }
-        };
-        self.tag_pats.insert(unapply, bound);
-        unapply
+        self.prog.add_pat(TPat::Unapply(scrut, call, inner))
     }
 
     // ---- macros ----
@@ -1680,20 +1643,15 @@ impl<'a> Worker<'a> {
                 roots.extend(self.prog.expr_list(l).iter().copied());
             }
         }
-        let mut kept: FxMap<TExprId, TExprId> = FxMap::default();
-        for &r in &roots {
+        let mut kept: FxMap<TExprId, ()> = FxMap::default();
+        for r in roots {
             for e in self.prog.descendants(r) {
-                kept.entry(e).or_insert(r);
+                kept.insert(e, ());
             }
         }
-        let calls: Vec<(TExprId, TExprId)> = copied.into_iter().filter_map(|e| kept.get(&e).map(|&r| (e, r))).collect();
+        let calls: Vec<TExprId> = copied.into_iter().filter(|e| kept.contains_key(e)).collect();
         let mut expanded_any = false;
-        for (e, root) in calls {
-            // The locals the expansion defines around the call (`lazy val cfg = ..; withSelf(f =>
-            // .. cfg ..)`): a class the call's body makes captures those it reads, as one of a
-            // nested expansion captures the locals of its call site (`InlineState::outer_locals`).
-            let around = self.locals_around(root, e);
-            self.inline.outer_locals.push(around);
+        for e in calls {
             let Some(d) = self.quote.deferred.get(&e).cloned() else { continue };
             let (recv, args) = match self.prog.expr(e) {
                 TExpr::CallMethod(r, _, args) => (Some(r), self.prog.expr_list(args).to_vec()),
@@ -1721,7 +1679,6 @@ impl<'a> Worker<'a> {
                 }
                 expanded_any = true;
             }
-            self.inline.outer_locals.pop();
         }
         // A condition is classified once its calls have expanded (`transparent inline def yes
         // = true` in `if yes then ..`): the copy classified it as a call, which is no constant.
@@ -1732,51 +1689,6 @@ impl<'a> Worker<'a> {
                 }
             }
         }
-    }
-
-    /// The locals the tree `root` defines in scope at its node `at`: the definitions of the
-    /// blocks around it, the parameters of the lambdas and local functions it is in, the binders
-    /// of its cases.
-    fn locals_around(&self, root: TExprId, at: TExprId) -> Vec<SymId> {
-        let contains = |x: TExprId| self.prog.descendants(x).any(|d| d == at);
-        let mut out = Vec::new();
-        for d in self.prog.descendants(root) {
-            match self.prog.expr(d) {
-                TExpr::Lambda(params, body) if contains(body) => out.extend_from_slice(self.prog.sym_list(params)),
-                TExpr::Block(stmts, _) if contains(d) => {
-                    for st in &self.prog.stmts[stmts.range()] {
-                        match *st {
-                            TStmt::Val(v, _) => out.push(v),
-                            TStmt::Pat(p, _) => self.pat_binders(p, &mut out),
-                            TStmt::Fun(f) => {
-                                let fun = &self.prog.funs[f.idx()];
-                                out.push(fun.sym);
-                                if fun.body.is_some_and(|b| contains(b)) {
-                                    out.extend_from_slice(&fun.params);
-                                }
-                            }
-                            TStmt::Expr(_) => {}
-                        }
-                    }
-                }
-                TExpr::Match(_, cases) => {
-                    for c in &self.prog.cases[cases.range()] {
-                        if c.guard.is_some_and(|g| contains(g)) || contains(c.body) {
-                            self.pat_binders(c.pat, &mut out);
-                        }
-                    }
-                }
-                TExpr::Try(i) => {
-                    for c in &self.prog.cases[self.prog.tries[i as usize].cases.range()] {
-                        if contains(c.body) {
-                            self.pat_binders(c.pat, &mut out);
-                        }
-                    }
-                }
-                _ => {}
-            }
-        }
-        out
     }
 
     /// The node `to`, a copy of `from` that a macro made by reflection, expands at the site as

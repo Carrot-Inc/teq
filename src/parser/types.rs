@@ -307,14 +307,8 @@ impl<'a> Parser<'a> {
     fn parse_infix_type(&mut self, bar: bool) -> TyExprId {
         let mut stack: Vec<(TyExprId, Token, Span)> = Vec::new();
         let mut top = self.parse_simple_type();
-        // An operator ending its line continues on the next when that line starts a type (dotc's
-        // `newLineOptWhenFollowing(canStartInfixTypeTokens)`): `0 | 1 |` then `2 | 3`.
-        let continued = |p: &Self| p.kind_at(1) == Tok::Newline && !p.blank_line_before(1) && p.can_start_type(2);
-        while self.at_infix_type_op(bar) && (self.can_start_type(1) || self.at_refinement_block(1) || continued(self)) {
+        while self.at_infix_type_op(bar) && (self.can_start_type(1) || self.at_refinement_block(1)) {
             let op = self.bump();
-            if self.at(Tok::Newline) {
-                self.bump();
-            }
             let (prec, right) = super::expr::op_precedence(self.interner.get(op.name));
             top = self.reduce_type_ops(&mut stack, top, prec, !right, op.name);
             stack.push((top, op, self.span()));

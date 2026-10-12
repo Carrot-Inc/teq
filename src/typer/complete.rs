@@ -382,7 +382,7 @@ impl<'a> Worker<'a> {
         self.file_imports[f] = Some(std::sync::Arc::new(imports));
         let at = Span::new(0, 0);
         let key = |r: TermRef| match r {
-            TermRef::Class(c) | TermRef::ValueClass(_, c) => (0, c.0),
+            TermRef::Class(c) => (0, c.0),
             TermRef::Package(p) => (1, p.0),
             other => (2, other.sym().map_or(u32::MAX, |s| s.0)),
         };

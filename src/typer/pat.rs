@@ -238,9 +238,6 @@ impl<'a> Worker<'a> {
                 Some(TypeRef::Alias(a)) if self.loaded.is_some() => self.aliased_class(a),
                 // A class nested in a class that `c` inherits (`inherited_type_member`).
                 Some(TypeRef::Member(c, n)) if self.inherited_inner_class(c, n).is_some() => self.inherited_inner_class(c, n),
-                // A class nested in the class of a value an import opens (`case Match(q)` after
-                // `import fw.*`), the import's `fw.Match`.
-                Some(TypeRef::ValueMember(v, n)) if self.value_nested_class(v, n).is_some() => self.value_nested_class(v, n),
                 _ => match self.lookup_term(name) {
                     Some(TermRef::Class(c)) => Some(c),
                     // A case class's name imported from a value (`import b.I`): its companion,

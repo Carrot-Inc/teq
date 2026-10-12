@@ -1616,23 +1616,9 @@ impl<'a> Worker<'a> {
                     }
                     None => {
                         let p = self.path_singleton(cx, prefix)?;
-                        // A static of a Java class (`TimeUnit.SECONDS`, the type scala-library's
-                        // `duration.SECONDS` declares), its statics object's member.
-                        let java_static = match self.types.get(p) {
-                            Type::Class(jc, _) if self.is_java_class(jc) => {
-                                let statics = self.syms.class(jc).companion;
-                                statics.and_then(|o| self.module_term(o, name)).and_then(|r| r.sym())
-                            }
-                            _ => None,
-                        };
-                        match java_static {
-                            Some(s) => (None, s),
-                            None => {
-                                let under = self.widen_path(p);
-                                let (s, _) = self.find_member(under, name)?;
-                                (Some(p), s)
-                            }
-                        }
+                        let under = self.widen_path(p);
+                        let (s, _) = self.find_member(under, name)?;
+                        (Some(p), s)
                     }
                 }
                 }
@@ -1648,9 +1634,6 @@ impl<'a> Worker<'a> {
         let prefix = prefix.filter(|_| object.is_none());
         let info = self.syms.sym(sym);
         match info.kind {
-            // An object nested in a class is a path through the instance (`AggregationOps.this.
-            // AggregationFramework`), whose members' types name the instance, as the typer makes it.
-            SymKind::Object(_) if prefix.is_some_and(|p| matches!(self.types.get(p), Type::This(_))) => Some(self.types.mk(Type::Select(prefix.unwrap(), sym))),
             SymKind::Object(c) => Some(self.types.class(c, &[])),
             // An export forwarder of an object (`final def T: O.type`) is the object's path; a def
             // of no clauses of the std's object standing for a JDK class's statics stands for a

@@ -1004,10 +1004,6 @@ impl<T> Store<T> {
         self.items.get(id.wrapping_sub(self.first) as usize)
     }
 
-    fn get_mut(&mut self, id: u32) -> Option<&mut T> {
-        self.items.get_mut(id.wrapping_sub(self.first) as usize)
-    }
-
     fn next_build(&mut self) {
         self.first = self.first.wrapping_add(self.items.len() as u32);
         self.items.clear();

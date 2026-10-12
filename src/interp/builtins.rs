@@ -98,14 +98,10 @@ fn code_point_or_text(it: &mut Interp, a: A, i: usize) -> R<Option<Rc<str>>> {
     }
 }
 
-/// `Character.isJavaIdentifierPart`: a UTF-16 unit by the JDK's table (`jvm::names`); a
-/// supplementary character by letters and digits, `_` and `$`, the currency signs, the combining
-/// marks' blocks and the identifier-ignorable controls.
+/// `Character.isJavaIdentifierPart` without the Unicode tables: letters and digits, `_` and `$`,
+/// the currency signs, the combining marks' blocks and the identifier-ignorable controls.
 fn is_java_identifier_part(c: char) -> bool {
     let n = c as u32;
-    if n <= 0xFFFF {
-        return crate::jvm::names::is_java_identifier_part(n as u16);
-    }
     c.is_alphanumeric()
         || matches!(c, '_' | '$' | '\u{203F}' | '\u{2040}' | '\u{2054}' | '\u{FE33}' | '\u{FE34}' | '\u{FE4D}'..='\u{FE4F}' | '\u{FF3F}')
         || matches!(n, 0xA2..=0xA5 | 0x20A0..=0x20CF)
@@ -902,16 +898,6 @@ fn install_strings(it: &mut Table) {
         }
         Ok(Value::str(&utf16_slice(&s, start as usize, end as usize)))
     });
-    reg!(it, "scala.String.subSequence", |it, a| {
-        let s = text(it, a, 0)?;
-        let len = utf16_len(&s) as i32;
-        let start = int(it, a, 1)?;
-        let end = if a.len() > 2 { int(it, a, 2)? } else { len };
-        if start < 0 || end > len || start > end {
-            return it.throw_named("StringIndexOutOfBoundsException", &format!("Range [{}, {}) out of bounds for length {}", start, end, len));
-        }
-        Ok(Value::str(&utf16_slice(&s, start as usize, end as usize)))
-    });
     reg!(it, "scala.String.drop", |it, a| {
         let s = text(it, a, 0)?;
         let n = int(it, a, 1)?.max(0) as usize;
@@ -1186,13 +1172,6 @@ fn install_strings(it: &mut Table) {
     reg!(it, "scala.StringContext.formatInterpolated", |it, a| {
         let parts = array(it, a, 1)?.borrow().clone();
         let args = array(it, a, 2)?.borrow().clone();
-        Ok(Value::string(it.format_interpolated(&parts, &args)?))
-    });
-    // The same over scala-library (std/jvm.scala's `f"..."`, whose parts the JVM's
-    // `translateEscapes` reads), which a macro of a JVM build runs.
-    reg!(it, "scala.runtime.formatInterpolatedParts", |it, a| {
-        let parts = array(it, a, 0)?.borrow().clone();
-        let args = array(it, a, 1)?.borrow().clone();
         Ok(Value::string(it.format_interpolated(&parts, &args)?))
     });
 }
@@ -1846,11 +1825,6 @@ fn install_java(it: &mut Table) {
         Ok(Value::Bool(is_letter(u) || decimal(u) >= 0))
     });
     reg!(it, "java.lang.Character.isJavaIdentifierPart", |it, a| Ok(Value::Bool(is_java_identifier_part(chr(it, a, 1)?))));
-    // Letters, letter numbers, the currency signs and the connecting punctuation, as the JDK's.
-    reg!(it, "java.lang.Character.isJavaIdentifierStart", |it, a| {
-        let c = chr(it, a, 1)?;
-        Ok(Value::Bool(c.is_alphabetic() || matches!(c, '_' | '$' | '\u{203F}' | '\u{2040}' | '\u{2054}' | '\u{FE33}' | '\u{FE34}' | '\u{FE4D}'..='\u{FE4F}' | '\u{FF3F}') || matches!(c as u32, 0xA2..=0xA5 | 0x20A0..=0x20CF)))
-    });
     reg!(it, "java.lang.Character.isUnicodeIdentifierStart", |it, a| Ok(Value::Bool(chr(it, a, 1)?.is_alphabetic())));
     reg!(it, "java.lang.Character.isUnicodeIdentifierPart", |it, a| {
         let c = chr(it, a, 1)?;

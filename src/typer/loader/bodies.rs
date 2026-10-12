@@ -1355,12 +1355,8 @@ impl<'a> Worker<'a> {
                     let name = self.pattern_type_var(cv, *addr);
                     cv.ty(TyExpr::TypeVar(name))
                 }
-                // A pattern's type variable named outside its case, where scalac's inferred type
-                // let it escape (`map[ReadableField[t]]` of a lambda over `case '[t] =>`): the
-                // abstract type the unpickler gives it, some type within its bounds.
-                Some(_) if Decoder::new(&cv.tasty).tag_at(*addr) == tags::BIND && !cv.in_inline_match => cv.ty(TyExpr::Wildcard),
+                Some(_) if Decoder::new(&cv.tasty).tag_at(*addr) == tags::BIND && !cv.in_inline_match => cv.ty(TyExpr::Resolved(ANY)),
                 Some(name) => cv.ty(TyExpr::Name(name)),
-                None if !cv.in_inline_pattern && Decoder::new(&cv.tasty).tag_at(*addr) == tags::BIND => cv.ty(TyExpr::Wildcard),
                 None if !cv.in_inline_pattern => cv.ty(TyExpr::Resolved(ANY)),
                 None => {
                     let name = self.pattern_type_var(cv, *addr);
@@ -2610,9 +2606,6 @@ impl<'a> Worker<'a> {
                         TType::TermRef(pkg, _) => Some(self.conv_path(cv, pkg)),
                         _ => None,
                     },
-                    // `scala.Predef` selected on the package, as a quote's body pickles a path
-                    // (`'{ scala.Predef.??? }`).
-                    TermKind::Select(pq, pn) if self.selects_unloaded_predef(cv, pq, *pn) => Some(self.conv_expr(cv, pq)),
                     _ => None,
                 };
                 let spilled = if predef.is_none() { self.package_object_owner(cv, q) } else { None };
@@ -3377,14 +3370,6 @@ impl<'a> Worker<'a> {
         self.is_predef_path(cv, t) && (self.std_binds() || !matches!(self.pkg_term(self.b.scala_pkg, names::PREDEF), Some(r) if r.sym().is_some()))
     }
 
-    /// `Predef` selected on the package `scala`, where the std stands for it.
-    fn selects_unloaded_predef(&mut self, cv: &Conv, q: &Term, n: NameRef) -> bool {
-        let TermKind::Path(TType::Package(p)) = &q.kind else { return false };
-        cv.tasty.simple(*p) == Some("scala")
-            && cv.tasty.simple(cv.tasty.source_name(n)) == Some("Predef")
-            && (self.std_binds() || !matches!(self.pkg_term(self.b.scala_pkg, names::PREDEF), Some(r) if r.sym().is_some()))
-    }
-
     /// `scala.Predef` as a path.
     fn is_predef_path(&self, cv: &Conv, t: &TType) -> bool {
         let TType::TermRef(pkg, obj) = t else { return false };
@@ -3706,18 +3691,11 @@ impl<'a> Worker<'a> {
     }
 
     /// `StringContext.apply(parts*).s(args*)`, scalac's spelling of `s"..."` in a body, as the
-    /// interpolation the typer treats natively; scala-library's own `s` is a stub, and its `f` one
-    /// the compiler expands after pickling (dotty's `FormatInterpolatorTransform`).
+    /// interpolation the typer treats natively; scala-library's own `s` is a stub.
     fn conv_interpolation(&mut self, cv: &mut Conv, f: &Term, args: &[Term]) -> Option<ExprId> {
-        // `f[A >: Any](args: A*)` is applied to its type argument first.
-        let f = match &f.kind {
-            TermKind::TypeApply(g, ..) => &**g,
-            _ => f,
-        };
         let (TermKind::Select(recv, method) | TermKind::SelectIn(recv, method, ..)) = &f.kind else { return None };
         let kind = match cv.tasty.simple(cv.tasty.source_name(*method))? {
             "s" => names::S_INTERP,
-            "f" => names::F_INTERP,
             "raw" => names::RAW_INTERP,
             _ => return None,
         };
@@ -3733,7 +3711,7 @@ impl<'a> Worker<'a> {
             // The parts are pickled as written; `s` processes their escapes and `raw` only `$$`,
             // as the parser does for a source interpolation.
             let text = cv.tasty.name(*n);
-            let text = if kind != names::RAW_INTERP {
+            let text = if kind == names::S_INTERP {
                 let mut errors = Vec::new();
                 crate::parser::unescape(&text, true, &mut errors, cv.span)
             } else {
@@ -4940,26 +4918,11 @@ impl<'a> Worker<'a> {
                             }
                             cv.poly_binders.push((*binder, names.clone()));
                             let rhs = self.conv_type(cv, result);
-                            // A parameter's bounds, as the unpickler reads a `TYPEPARAM`'s
-                            // (`type IsProduct[U <: Product] = U`), which a quote type pattern
-                            // over the alias gives its variable.
-                            let bounds: Vec<(Option<TyExprId>, Option<TyExprId>)> = params
-                                .iter()
-                                .map(|p| match &p.info {
-                                    TType::Bounds(lo, hi) => {
-                                        let lower = (!self.names_nothing(cv, lo)).then(|| self.conv_type(cv, lo));
-                                        let upper = (!self.names_any(cv, hi)).then(|| self.conv_type(cv, hi));
-                                        (upper, lower)
-                                    }
-                                    _ => (None, None),
-                                })
-                                .collect();
                             cv.poly_binders.pop();
                             let tparams = names
                                 .iter()
                                 .zip(params)
-                                .zip(bounds)
-                                .map(|((&n, p), (upper, lower))| TypeParam { name: n, span: cv.span, variance: 0, arity: super::types::hk_arity(&p.info), hk_variances: Vec::new(), upper, lower, context_bounds: Vec::new(), evidence_names: Vec::new(), annots: Vec::new() })
+                                .map(|(&n, p)| TypeParam { name: n, span: cv.span, variance: 0, arity: super::types::hk_arity(&p.info), hk_variances: Vec::new(), upper: None, lower: None, context_bounds: Vec::new(), evidence_names: Vec::new(), annots: Vec::new() })
                                 .collect();
                             (tparams, rhs)
                         }
@@ -5305,7 +5268,6 @@ impl<'a> Worker<'a> {
                 self.note_shadowing(cv, &binds, &within, &[]);
             }
             let outer_named = cv.named_pattern_vars.clone();
-            let outer_quoted = cv.quote_type_vars.clone();
             let outer_own = std::mem::take(&mut cv.case_pattern_vars);
             // Every type variable the pattern binds, named (`Box[t]`) or anonymous (scalac's `_$N`
             // for `Box[_]`), is one of the case's.
@@ -5324,7 +5286,6 @@ impl<'a> Worker<'a> {
             let guard = c.guard.as_ref().map(|g| self.conv_expr(cv, g));
             let body = self.conv_expr(cv, &c.body);
             cv.named_pattern_vars = outer_named;
-            cv.quote_type_vars = outer_quoted;
             cv.case_pattern_vars = outer_own;
             out.push(CaseClause { pat, guard, body });
             cv.scope.truncate(mark);

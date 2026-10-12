@@ -1337,13 +1337,6 @@ for case in tests/cases/*.scala tests/cases/*/ tests/interop/*.scala tests/inter
     ok
     continue
   fi
-  # A case only the JVM builds (`// split-watch: jvm`: library bodies compiled against scala-library, or
-  # the JDK's members the std leaves out) is tests/run_jvm.sh's.
-  if grep -q -h '^// split-watch: jvm' "$case" "$case"/*.scala 2> /dev/null; then
-    echo "skip $name: the JVM's alone"
-    ok
-    continue
-  fi
   rm -rf "$src" "$work/out"
   mkdir -p "$src"
   if [ -d "$case" ]; then cp -r "$case"/. "$src"; else cp "$case" "$src/"; fi
