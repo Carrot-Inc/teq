@@ -1,4 +1,4 @@
-// expect: 10:14: error: type mismatch: found String, required A
+// expect: 10:14: error: type mismatch: found "abc", required A
 // expect: 11:25: error: type mismatch: found A, required String
 // expect: 15:18: error: the underlying type Int does not conform to the bound String
 // expect: 3 errors found

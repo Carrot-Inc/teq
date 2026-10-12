@@ -532,7 +532,7 @@ impl<'a> Worker<'a> {
                 Type::Class(c, _) => Some(Erased::Of(c, 0)),
                 _ => None,
             },
-            Type::Union(a, b) => {
+            Type::Union(a, b, _) => {
                 let (a, b) = (self.stable_erasure(a)?, self.stable_erasure(b)?);
                 Some(self.erased_lub(a, b))
             }
@@ -722,11 +722,20 @@ impl<'a> Worker<'a> {
         let arg = self.deref_alias(arg);
         let float = self.b.t_float;
         let value = match self.types.get(arg) {
-            Type::Lit(l) => self.literal_expr(self.types.lit_val(l)),
+            // A `Float` constant is a `Double` node of its value (`literal_expr`), typed `Float`
+            // for the box its target makes of it.
+            Type::Lit(l) => {
+                let v = self.types.lit_val(l);
+                let e = self.literal_expr(v);
+                if matches!(v, crate::types::LitVal::Float(_)) {
+                    self.prog.set_type(e, float);
+                }
+                e
+            }
             _ if arg == self.b.t_unit => self.prog.add(TExpr::Unit),
-            // A `Float` constant is held as a `Double` literal (teq's literal types have no float):
-            // its path is read.
-            Type::Term(s) | Type::Select(_, s) if self.constant_of(s).is_some() && self.sig_of(s).ret != float && self.path_expr(arg).is_some() => {
+            // A `Float` constant val (of the constant type `1.0f` or of `Float`) is held as a
+            // `Double` literal: its path is read.
+            Type::Term(s) | Type::Select(_, s) if self.constant_of(s).is_some() && { let ret = self.sig_of(s).ret; self.widen_lit(ret) != float } && self.path_expr(arg).is_some() => {
                 let literal = self.constant_of(s)?;
                 self.prog.add(literal)
             }

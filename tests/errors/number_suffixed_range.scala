@@ -3,7 +3,7 @@
 // expect: 11:9: error: number too small
 // expect: 12:9: error: number too small
 // expect: 13:11: error: number too large
-// expect: 14:16: error: type mismatch: found Double, required Float
+// expect: 14:16: error: type mismatch: found -1.5, required Float
 // A suffixed number out of its type's range is reported by the parser (dotc's `Parsers.literal`,
 // `FromDigits`): infinite, or zero from nonzero digits; a minus before it is its sign.
 val a = 1e40f

@@ -12,6 +12,7 @@ object Consts:
   final val L = 4L
   final val B = true
   final val C = 'c'
+  final val F = 1.5f
   final lazy val Z: 7 = 7
   final implicit val J: 8 = 8
   val notConstant: 5 = 5

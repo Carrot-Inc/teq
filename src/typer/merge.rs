@@ -785,7 +785,7 @@ impl Remap {
                 let ps = list(p, ps);
                 types.mk(Type::Poly(ps, part(p, b)))
             }
-            Type::Union(a, b) => types.mk(Type::Union(part(p, a), part(p, b))),
+            Type::Union(a, b, soft) => types.mk(Type::Union(part(p, a), part(p, b), soft)),
             Type::Inter(a, b) => types.mk(Type::Inter(part(p, a), part(p, b))),
             Type::Rec(b) => types.mk(Type::Rec(part(p, b))),
             Type::RecThis(k) => types.mk(Type::RecThis(k)),
@@ -1607,13 +1607,11 @@ pub(super) type TableTask<'w> = Box<dyn FnOnce(&dyn Mapping) + Send + 'w>;
 pub(super) fn untyped_tables<'w>(w: &'w mut Worker, mode: TablesMode) -> Vec<TableTask<'w>> {
     use records::{map, syms_in};
     let mut tasks: Vec<TableTask<'w>> = Vec::new();
-    let (fun_of_sym, val_init, interpolations, soft_exprs, soft_syms, class_done) = (&mut w.fun_of_sym.local, &mut w.val_init.local, &mut w.interpolations, &mut w.soft_exprs, &mut w.soft_syms, &mut w.class_done.local);
+    let (fun_of_sym, val_init, interpolations, class_done) = (&mut w.fun_of_sym.local, &mut w.val_init.local, &mut w.interpolations, &mut w.class_done.local);
     tasks.push(Box::new(move |m| {
         map(m, fun_of_sym, |r, s| r.sym(s), |r, f| *f = r.fun(*f));
         map(m, val_init, |r, s| r.sym(s), |r, e| *e = r.expr(*e));
         map(m, interpolations, |r, e| r.expr(e), |_, _| {});
-        map(m, soft_exprs, |r, e| r.expr(e), |_, _| {});
-        map(m, soft_syms, |r, s| r.sym(s), |_, _| {});
         map(m, class_done, |r, c| r.class(c), |_, _| {});
     }));
     let (class_imports, anon_envs, anon_captures, anon_parent_args, inferred_parent_args) = (&mut w.class_imports.local, &mut w.anon_envs, &mut w.anon_captures, &mut w.anon_parent_args, &mut w.inferred_parent_args.local);
@@ -2037,8 +2035,6 @@ impl<'a> Worker<'a> {
             }
         }
         union(&mut self.interpolations, &mut o.interpolations);
-        union(&mut self.soft_exprs, &mut o.soft_exprs);
-        union(&mut self.soft_syms, &mut o.soft_syms);
         for (body, users) in std::mem::take(&mut o.inline_deps) {
             self.inline_deps.entry(body).or_default().extend(users);
         }
@@ -2535,6 +2531,7 @@ impl<'a> Worker<'a> {
         self.implicit_scope_givens.clear();
         self.package_levels.clear();
         self.value_sigs.clear();
+        self.lit_types.clear();
         self.derived_aliases.clear();
         self.inferred_outcomes.clear();
         self.inferred_val_outcomes.clear();
@@ -2968,7 +2965,7 @@ mod tests {
         assert_eq!(s.retire_remade(from), 2);
         let parts = s.union_parts();
         assert!(parts.iter().all(|&t| !s.mentions_local(t)), "a part over a worker's id");
-        assert!(parts.contains(&s.class(ClassId(77), &[])) && s.get(m) == Type::Union(s.class(ClassId(77), &[]), s.class(ClassId(41), &[])));
+        assert!(parts.contains(&s.class(ClassId(77), &[])) && s.get(m) == Type::Union(s.class(ClassId(77), &[]), s.class(ClassId(41), &[]), UnionKind::Hard));
         let again = s.class(ClassId(LOCAL_BASE + 5), &[]);
         assert!(again != local && s.get(again) == Type::Class(ClassId(LOCAL_BASE + 5), EMPTY_LIST));
     }
@@ -3014,7 +3011,7 @@ mod tests {
         });
         let o = made[0];
         let local = s.class(ClassId(LOCAL_BASE + 3), &[]);
-        let over = s.mk(Type::Union(o, NOTHING));
+        let over = s.mk(Type::Union(o, NOTHING, UnionKind::Hard));
         let check = Remap::checking(s.clone(), s.bound(Sub::Types));
         assert_eq!((check.ty(o), check.ty(local), check.ty(over)), (o, local, over));
         assert_eq!(check.sym(SymId(LOCAL_BASE + 1)), SymId(LOCAL_BASE + 1));

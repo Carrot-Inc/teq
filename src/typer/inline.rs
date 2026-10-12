@@ -738,7 +738,6 @@ impl<'a> Worker<'a> {
         span: Span,
         expected: Option<TypeId>,
     ) -> Option<(TExprId, TypeId)> {
-        self.open_receiver = false;
         let sym = call.sym;
         let checked = self.inline.entry.take().filter(|(s, _)| *s == sym).map(|(_, def)| def);
         #[cfg(debug_assertions)]
@@ -937,14 +936,19 @@ impl<'a> Worker<'a> {
             let result = self.result_expr(body.body);
             let ascribed = matches!(self.cur_ast().expr(result), crate::ast::Expr::Typed(..)) || self.widened_constant(te);
             match self.fold_constant(te).filter(|_| !ascribed) {
-                Some(v) => (te, self.types.lit(v)),
+                Some(v) => {
+                    let v = self.folded_as(v, ty);
+                    (te, self.types.lit(v))
+                }
                 None => (te, ty),
             }
         } else if !body.declared {
             let (te, ty) = self.type_expr(body.body, expected);
             match self.inferred_call_result(call, subst, args) {
                 Some(inferred) => (te, inferred),
-                None => (te, self.solve_inferred(ty)),
+                None => {
+                    (te, self.solve_inferred(ty))
+                }
             }
         } else if let Some(own) = self.body_result_type(call, sig, subst, &bound) {
             (self.check_expr(body.body, own), ret_ty)
@@ -1704,7 +1708,7 @@ impl<'a> Worker<'a> {
             Type::Class(_, args) | Type::AppParam(_, args) | Type::AppVar(_, args) | Type::Alias(_, args) => {
                 self.types.items(args).iter().any(|&a| self.mentions_term(a, s))
             }
-            Type::Union(a, b) | Type::Inter(a, b) => self.mentions_term(a, s) || self.mentions_term(b, s),
+            Type::Union(a, b, _) | Type::Inter(a, b) => self.mentions_term(a, s) || self.mentions_term(b, s),
             Type::Refined(parent, r) => {
                 self.mentions_term(parent, s)
                     || match self.types.refinement(r) {
@@ -2062,9 +2066,6 @@ impl<'a> Worker<'a> {
         if self.interpolations.contains_key(&e) {
             self.interpolations.insert(id, ());
         }
-        if self.soft_exprs.contains_key(&e) {
-            self.soft_exprs.insert(id, ());
-        }
         if self.capturing() {
             self.capture_copy(e, id);
         }
@@ -2141,6 +2142,15 @@ impl<'a> Worker<'a> {
         let v = self.fold_tree(e, false);
         self.inline.as_typed = outer;
         self.inline.leaf_reads = reads;
+        v
+    }
+
+    /// `fold_constant_as_typed` with the pending calls in the tree read as their types: the
+    /// constant scalac's typer gives an operation the type of (`ConstFold`).
+    pub(super) fn fold_typed_by_pending_types(&mut self, e: TExprId) -> Option<LitVal> {
+        let outer = std::mem::replace(&mut self.attempts.by_pending_types, true);
+        let v = self.fold_constant_as_typed(e);
+        self.attempts.by_pending_types = outer;
         v
     }
 
@@ -2248,6 +2258,8 @@ impl<'a> Worker<'a> {
         Some(match self.prog.expr(e) {
             TExpr::Int(v) => return literal(self, Int(v)),
             TExpr::Long(v) => return literal(self, Long(v)),
+            // A `Float` literal is a `Double` node of its value, folded as that `Double`, whose
+            // tree's type makes it a `Float` again (`folded_as`).
             TExpr::Double(v) => return literal(self, Double(v.to_bits())),
             TExpr::Bool(v) => return literal(self, Bool(v)),
             TExpr::Char(v) => return literal(self, Char(v)),
@@ -2281,6 +2293,17 @@ impl<'a> Worker<'a> {
                 (UnOp::IntNeg, Int(v)) => Int(v.wrapping_neg()),
                 (UnOp::LongNeg, Long(v)) => Long(v.wrapping_neg()),
                 (UnOp::DoubleNeg, Double(v)) => Double((-f64::from_bits(v)).to_bits()),
+                (UnOp::FloatNeg | UnOp::DoubleNeg, Float(v)) => Float((-f32::from_bits(v)).to_bits()),
+                (UnOp::FloatNeg, Double(v)) => Float((-(f64::from_bits(v) as f32)).to_bits()),
+                (UnOp::FloatToInt, Double(v)) => Int(f64::from_bits(v) as f32 as i32),
+                (UnOp::FloatToLong, Double(v)) => Long(f64::from_bits(v) as f32 as i64),
+                (UnOp::FloatToDouble, Double(v)) => Double(v),
+                (UnOp::IntToFloat, Int(v)) => Float((v as f32).to_bits()),
+                (UnOp::LongToFloat, Long(v)) => Float((v as f32).to_bits()),
+                (UnOp::FloatToInt, Float(v)) => Int(f32::from_bits(v) as i32),
+                (UnOp::FloatToLong, Float(v)) => Long(f32::from_bits(v) as i64),
+                (UnOp::FloatToDouble, Float(v)) => Double((f32::from_bits(v) as f64).to_bits()),
+                (UnOp::DoubleToFloat, Double(v)) => Float((f64::from_bits(v) as f32).to_bits()),
                 (UnOp::DoubleNeg, Int(v)) => Double((-(v as f64)).to_bits()),
                 (UnOp::BoolNot, Bool(v)) => Bool(!v),
                 (UnOp::IntNot, Int(v)) => Int(!v),
@@ -2638,6 +2661,38 @@ impl<'a> Worker<'a> {
         self.constant_type_value(ret)
     }
 
+    /// A folded constant `v` as a constant of the class of `ty`, the type of the tree it folded
+    /// from: the folding holds a `Float` literal as the `Double` of its value and an `Int`
+    /// converted to a `Double` as the `Int` (`fold_tree`), where dotty's `Constant` has the tag of
+    /// the tree's type.
+    pub(super) fn folded_as(&mut self, v: LitVal, ty: TypeId) -> LitVal {
+        use LitVal::*;
+        let ty = self.deref(ty);
+        let class = self.widen_lit(ty);
+        if class == self.b.t_float {
+            match v {
+                Double(d) => Float((f64::from_bits(d) as f32).to_bits()),
+                Int(i) => Float((i as f32).to_bits()),
+                Long(l) => Float((l as f32).to_bits()),
+                _ => v,
+            }
+        } else if class == self.b.t_double {
+            match v {
+                Int(i) => Double((i as f64).to_bits()),
+                Long(l) => Double((l as f64).to_bits()),
+                Float(f) => Double((f32::from_bits(f) as f64).to_bits()),
+                _ => v,
+            }
+        } else if class == self.b.t_long {
+            match v {
+                Int(i) => Long(i as i64),
+                _ => v,
+            }
+        } else {
+            v
+        }
+    }
+
     /// The constant a type stands for, a path's type widened to what it stands for.
     pub(super) fn constant_type_value(&mut self, ty: TypeId) -> Option<LitVal> {
         let widened = self.widen_path(ty);
@@ -2949,7 +3004,7 @@ impl<'a> Worker<'a> {
                     return matches!(self.prog.expr(s.expr), TExpr::Null);
                 }
                 match (self.fold_constant(te), s.constant) {
-                    (Some(a), Some(b)) => a == b || same_number(a, b),
+                    (Some(a), Some(b)) => constant_eq(a, b),
                     _ => false,
                 }
             }
@@ -4117,6 +4172,14 @@ impl<'a> Worker<'a> {
                 }
                 format!("{}{}", text, if float { "f" } else { "d" })
             }
+            LitVal::Float(bits) => {
+                let f = f32::from_bits(bits);
+                let mut text = f.to_string();
+                if f.is_finite() && !text.contains(['.', 'e', 'E']) {
+                    text.push_str(".0");
+                }
+                format!("{}f", text)
+            }
             LitVal::Char(c) => format!("'{}'", char::from_u32(c as u32).unwrap_or('?')),
             LitVal::Bool(b) => b.to_string(),
             LitVal::Str(s) => format!("\"{}\"", self.name_ref(s).escape_default()),
@@ -4309,7 +4372,9 @@ pub(super) fn eval_type_op(module: &str, op: &str, args: &[LitVal], text: impl F
     let render = |v: &LitVal| match v {
         Int(i) => i.to_string(),
         Long(l) => l.to_string(),
-        Double(d) => f64::from_bits(*d).to_string(),
+        // The JVM's `toString`, as `TypeEval` applies it (`1.0`, `3.4028235E38`).
+        Double(d) => crate::types::java_double_string(f64::from_bits(*d)),
+        Float(f) => crate::types::java_float_string(f32::from_bits(*f)),
         Bool(b) => b.to_string(),
         Char(c) => char::from_u32(*c as u32).map_or(String::new(), |c| c.to_string()),
         Str(s) => text(*s),
@@ -4371,18 +4436,49 @@ fn sig_sym(t: &Worker, sig: &MethodSig) -> SymId {
     t.inline.sites.last().map_or(SymId(0), |s| s.callee)
 }
 
-/// Literal patterns compare numbers by value, whatever class the typer gave the literal.
-pub(super) fn same_number(a: LitVal, b: LitVal) -> bool {
-    match (a, b) {
-        (LitVal::Int(x), LitVal::Long(y)) | (LitVal::Long(y), LitVal::Int(x)) => x as i64 == y,
-        (LitVal::Int(x), LitVal::Double(y)) | (LitVal::Double(y), LitVal::Int(x)) => x as f64 == f64::from_bits(y),
-        _ => false,
+/// The equality of two constants as dotty's `ConstFold` decides it (`foldBinop`'s `==`): two
+/// numbers by value in the wider of their kinds (`foldFloatOp` compares `floatValue`s, so
+/// `0.0f == -0.0f` and no NaN equals itself; a `Char` is an `Int`), any other two by identity.
+/// A constant type's identity is the value's bits (`LitVal`'s equality), which this is not.
+pub(super) fn constant_eq(a: LitVal, b: LitVal) -> bool {
+    use LitVal::*;
+    let rank = |v: LitVal| match v {
+        Char(_) | Int(_) => Some(0),
+        Long(_) => Some(1),
+        Float(_) => Some(2),
+        Double(_) => Some(3),
+        _ => None,
+    };
+    let as_i64 = |v: LitVal| match v {
+        Char(c) => c as i64,
+        Int(x) => x as i64,
+        Long(x) => x,
+        _ => 0,
+    };
+    let as_f64 = |v: LitVal| match v {
+        Float(x) => f32::from_bits(x) as f64,
+        Double(x) => f64::from_bits(x),
+        Long(x) => x as f64,
+        v => as_i64(v) as f64,
+    };
+    let as_f32 = |v: LitVal| match v {
+        Float(x) => f32::from_bits(x),
+        Long(x) => x as f32,
+        v => as_i64(v) as f32,
+    };
+    match (rank(a), rank(b)) {
+        (Some(x), Some(y)) => match x.max(y) {
+            0 | 1 => as_i64(a) == as_i64(b),
+            2 => as_f32(a) == as_f32(b),
+            _ => as_f64(a) == as_f64(b),
+        },
+        _ => a == b,
     }
 }
 
 /// scalac folds a binary operation over two constants of one kind, or two numbers.
 fn same_tag_or_numeric(x: LitVal, y: LitVal) -> bool {
-    let numeric = |v: LitVal| matches!(v, LitVal::Int(_) | LitVal::Long(_) | LitVal::Double(_) | LitVal::Char(_));
+    let numeric = |v: LitVal| matches!(v, LitVal::Int(_) | LitVal::Long(_) | LitVal::Double(_) | LitVal::Float(_) | LitVal::Char(_));
     std::mem::discriminant(&x) == std::mem::discriminant(&y) || (numeric(x) && numeric(y))
 }
 
@@ -4393,7 +4489,17 @@ pub(super) fn fold_prim(op: PrimOp, x: LitVal, y: LitVal) -> Option<LitVal> {
         Int(i) => Some(i as f64),
         Long(l) => Some(l as f64),
         Double(d) => Some(f64::from_bits(d)),
+        Float(f) => Some(f32::from_bits(f) as f64),
         Char(c) => Some(c as f64),
+        _ => None,
+    };
+    // A `Float` literal is folded as the `Double` of its value (`fold_tree`), which is exact.
+    let as_f32 = |v: LitVal| match v {
+        Int(i) => Some(i as f32),
+        Long(l) => Some(l as f32),
+        Float(f) => Some(f32::from_bits(f)),
+        Double(d) => Some(f64::from_bits(d) as f32),
+        Char(c) => Some(c as f32),
         _ => None,
     };
     let as_i64 = |v: LitVal| match v {
@@ -4430,12 +4536,18 @@ pub(super) fn fold_prim(op: PrimOp, x: LitVal, y: LitVal) -> Option<LitVal> {
         (DoubleMul, a, b) => Double((as_f64(a)? * as_f64(b)?).to_bits()),
         (DoubleDiv, a, b) => Double((as_f64(a)? / as_f64(b)?).to_bits()),
         (DoubleRem, a, b) => Double((as_f64(a)? % as_f64(b)?).to_bits()),
+        // `Float` arithmetic in `Float` (dotty's `ConstFold` over `FloatTag`).
+        (FloatAdd, a, b) => Float((as_f32(a)? + as_f32(b)?).to_bits()),
+        (FloatSub, a, b) => Float((as_f32(a)? - as_f32(b)?).to_bits()),
+        (FloatMul, a, b) => Float((as_f32(a)? * as_f32(b)?).to_bits()),
+        (FloatDiv, a, b) => Float((as_f32(a)? / as_f32(b)?).to_bits()),
+        (FloatRem, a, b) => Float((as_f32(a)? % as_f32(b)?).to_bits()),
         (Lt, a, b) => Bool(as_f64(a)? < as_f64(b)?),
         (Le, a, b) => Bool(as_f64(a)? <= as_f64(b)?),
         (Gt, a, b) => Bool(as_f64(a)? > as_f64(b)?),
         (Ge, a, b) => Bool(as_f64(a)? >= as_f64(b)?),
-        (Eq | RefEq, a, b) => Bool(a == b || same_number(a, b)),
-        (Ne | RefNe, a, b) => Bool(!(a == b || same_number(a, b))),
+        (Eq | RefEq, a, b) => Bool(constant_eq(a, b)),
+        (Ne | RefNe, a, b) => Bool(!constant_eq(a, b)),
         (BoolAnd | BoolStrictAnd, Bool(a), Bool(b)) => Bool(a && b),
         (BoolOr | BoolStrictOr, Bool(a), Bool(b)) => Bool(a || b),
         (BoolXor, Bool(a), Bool(b)) => Bool(a ^ b),

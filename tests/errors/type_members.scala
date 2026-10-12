@@ -1,5 +1,5 @@
 // expect: 23:18: error: type mismatch: found Container.this.Elem, required Int
-// expect: 24:20: error: type mismatch: found Int, required Container.this.Elem
+// expect: 24:20: error: type mismatch: found 1, required Container.this.Elem
 // expect: 26:8: error: illegal cyclic type reference: upper bound Cyclic.this.T of type T refers back to the type itself
 // expect: 28:8: error: illegal cyclic type reference: upper bound Mutual.this.Y of type X refers back to the type itself
 // expect: 39:19: error: type mismatch: found c.Elem, required Int

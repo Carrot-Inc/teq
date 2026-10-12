@@ -468,6 +468,10 @@ impl<'a> Gen<'a> {
                 self.dconst(f64::from_bits(bits));
                 JType::D
             }
+            LitVal::Float(bits) => {
+                self.fconst(f32::from_bits(bits));
+                JType::F
+            }
             LitVal::Char(c) => {
                 self.iconst(c as i32);
                 JType::C

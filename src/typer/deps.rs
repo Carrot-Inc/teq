@@ -2068,7 +2068,7 @@ impl<'c, 'a> Collector<'c, 'a> {
                 self.bound.truncate(depth);
             }
             Type::Var(_) | Type::AppVar(..) => {}
-            Type::Union(a, b) | Type::Inter(a, b) => {
+            Type::Union(a, b, _) | Type::Inter(a, b) => {
                 self.type_deps(a);
                 self.type_deps(b);
             }
@@ -2077,6 +2077,7 @@ impl<'c, 'a> Collector<'c, 'a> {
                     LitVal::Int(_) => self.w.b.t_int,
                     LitVal::Long(_) => self.w.b.t_long,
                     LitVal::Double(_) => self.w.b.t_double,
+                    LitVal::Float(_) => self.w.b.t_float,
                     LitVal::Char(_) => self.w.b.t_char,
                     LitVal::Bool(_) => self.w.b.t_boolean,
                     LitVal::Str(_) => self.w.b.t_string,
@@ -4482,7 +4483,7 @@ impl<'c, 'a> Collector<'c, 'a> {
                     self.sealed_in(a, seen);
                 }
             }
-            Type::Union(a, b) | Type::Inter(a, b) => {
+            Type::Union(a, b, _) | Type::Inter(a, b) => {
                 self.sealed_in(a, seen);
                 self.sealed_in(b, seen);
             }

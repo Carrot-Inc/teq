@@ -1,5 +1,5 @@
 // expect: type mismatch: found Box[String], required Box[? >: Dog]
-// expect: type mismatch: found String, required
+// expect: type mismatch: found "str", required
 // expect: type mismatch: found Dog, required
 trait Animal:
   def name: String

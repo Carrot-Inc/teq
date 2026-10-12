@@ -1,4 +1,4 @@
-// expect: 12:21: error: type mismatch: found String, required Box[Int]
+// expect: 12:21: error: type mismatch: found "input", required Box[Int]
 // A given conversion whose using clause fixes its result to another type than the required one is
 // no conversion there (scalac: E007 Found ("input" : String), Required: Box[Int]).
 import scala.language.implicitConversions

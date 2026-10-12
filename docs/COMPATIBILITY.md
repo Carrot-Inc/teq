@@ -22,8 +22,6 @@ libraries compiled from their jars run against scalac's output. The remaining di
 
 - The companion of a case class that has no object of its own is no value: `val o = F` is rejected, where
   scalac's is an object (where a function is expected, `F` is `F.apply` as under scalac).
-- `val z: 1 = foo(1).zero` of a `def foo[T](x: T): Box[T]` over an invariant `Box` is rejected: the literal
-  settles `T` as `Int` before the selection's expected type is seen, where scalac keeps `(1 : Int)` until then.
 - On a receiver typed `Tuple` or `X <: Tuple` the members of `Tuple` are typed by their bounds (`head: Any`,
   `tail: Tuple`), and a named tuple has only `toTuple` and `size` of `NamedTuple`'s members on JavaScript and
   in the interpreter.

@@ -7,8 +7,8 @@ braces-mixed	teq	braces-mixed.scala:14: error: type mismatch	typed-after-skip
 braces-mixed	teq	braces-mixed.scala:5: error: unmatched closing bracket	braces
 broken-array	scalac	broken-array.scala:5: error: None of the overloaded alternatives of method * in class Int with types	wording
 broken-array	scalac	broken-array.scala:6: error: None of the overloaded alternatives of method * in class Int with types	wording
-broken-array	teq	broken-array.scala:5: error: operator * cannot be applied to Int and String	wording
-broken-array	teq	broken-array.scala:6: error: operator * cannot be applied to Int and String	wording
+broken-array	teq	broken-array.scala:5: error: operator * cannot be applied to Int and "s"	wording
+broken-array	teq	broken-array.scala:6: error: operator * cannot be applied to Int and "s"	wording
 broken-case	scalac	broken-case.scala:10: error: type mismatch	scalac-tree
 broken-case	scalac	broken-case.scala:11: error: pattern expected	wording
 broken-case	scalac	broken-case.scala:13: error: type mismatch	scalac-tree
@@ -44,7 +44,7 @@ incomplete-consumers	scalac	Use.scala:3: error: missing argument for parameter x
 incomplete-consumers	scalac	Use.scala:4: error: type mismatch	dependent
 incomplete-consumers	scalac	Use.scala:7: error: too many arguments for constructor K in class K	dependent
 incomplete-consumers	scalac	Use.scala:9: error: missing argument for parameter y of method apply in object P	dependent
-incomplete-local-body	teq	incomplete-local-body.scala:6: error: operator + cannot be applied to Int and Boolean	typed-after-skip
+incomplete-local-body	teq	incomplete-local-body.scala:6: error: operator + cannot be applied to Int and true	typed-after-skip
 indentation	scalac	indentation.scala:4: error: type mismatch	scalac-tree
 indentation	scalac	indentation.scala:5: error: not found: a	scalac-tree
 overload-incomplete	scalac	overload-incomplete.scala:10: error: None of the overloaded alternatives of method g in object O with types	dependent

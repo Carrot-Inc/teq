@@ -911,10 +911,13 @@ impl<'a> Worker<'a> {
         // A query is an attempt that goes whole: it marks no import used (`unused.rs`), reports
         // nothing, leaves no constraint.
         let vars = self.tvars.len();
+        let open = self.open_vars.len();
         let demanded = self.attempts.demanded();
         let mark = self.attempt();
         let r = self.with_env(env, f);
         self.retract(mark);
+        // What the query left open is the query's, gone with it.
+        self.open_vars.truncate(open);
         // The probes' variables go with their constraints, so that the next query makes the same
         // types over the same variables rather than new ones; not where work done on demand
         // inside it published something that may name them (a signature completed), as no

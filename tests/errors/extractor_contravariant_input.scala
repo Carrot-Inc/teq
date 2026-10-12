@@ -1,4 +1,4 @@
-// expect: 14:30: error: type mismatch: found String, required Nothing
+// expect: 14:30: error: type mismatch: found "no", required Nothing
 // expect: 17:20: error: type mismatch: found AnyRef, required String
 // A generic `unapply` over a scrutinee that does not conform to its parameter maximises its
 // type parameters as scalac's `maximizeType` does: down to the lower bound where the parameter

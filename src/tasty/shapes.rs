@@ -380,8 +380,8 @@ impl<'a> Classifier<'a> {
                 self.walk(u, found);
             }
             TType::Const(c) => match c {
-                Const::Int(_) | Const::Long(_) | Const::Double(_) | Const::Char(_) | Const::Bool(_) | Const::Str(_) => {}
-                Const::Unit | Const::Byte(_) | Const::Short(_) | Const::Float(_) | Const::Null | Const::Class(_) => {
+                Const::Int(_) | Const::Long(_) | Const::Double(_) | Const::Float(_) | Const::Char(_) | Const::Bool(_) | Const::Str(_) => {}
+                Const::Unit | Const::Byte(_) | Const::Short(_) | Const::Null | Const::Class(_) => {
                     found.hit(Shape::ConstantType)
                 }
             },

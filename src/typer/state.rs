@@ -1583,6 +1583,15 @@ impl<'a> Worker<'a> {
                 Undo::Upper(v) => {
                     self.tvars[v].upper.pop();
                 }
+                Undo::Dep(v) => {
+                    self.tvars[v].pop_dep();
+                }
+                // Given back whatever stays of the instance: the entries the trail undoes below
+                // this one pop the list (`Undo::Dep`).
+                Undo::DropDeps(v) => {
+                    let deps = self.dropped_deps.pop().expect("the dropped dependencies");
+                    self.tvars[v].restore_deps(deps);
+                }
             }
         }
     }
@@ -1600,6 +1609,16 @@ impl<'a> Worker<'a> {
                 }
                 Undo::Lower(v) => Redo::Lower(v, self.tvars[v].lower.pop().unwrap()),
                 Undo::Upper(v) => Redo::Upper(v, self.tvars[v].upper.pop().unwrap()),
+                Undo::Dep(v) => Redo::Dep(v, self.tvars[v].pop_dep().unwrap()),
+                Undo::DropDeps(v) => {
+                    let deps = self.dropped_deps.pop().expect("the dropped dependencies");
+                    self.tvars[v].restore_deps(deps);
+                    // A permanent instance is not replayed (`Undo::Inst`), nor is its drop.
+                    if self.tvars.made_since(v, vars) {
+                        continue;
+                    }
+                    Redo::DropDeps(v)
+                }
             });
         }
         undone

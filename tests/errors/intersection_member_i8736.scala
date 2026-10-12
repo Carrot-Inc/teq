@@ -4,7 +4,7 @@
 // expect:  (k: "k"): String
 // expect:  (k: "v"): Int
 // expect:  (k: "z"): Boolean
-// expect: all match arguments (String)
+// expect: all match arguments ("z")
 // expect: Note: Overloaded definitions introduced by refinements cannot be resolved
 // expect: 3 errors found
 // scala3's neg/i8736 reduced: three parts refining one member with three parameters. The member

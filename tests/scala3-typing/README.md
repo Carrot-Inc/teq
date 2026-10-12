@@ -31,6 +31,32 @@ regression.
 - `proposed-cases/` are programs scalac accepts and teq rejects, with the output of
   `scala-cli run -S 3.8.4` as `.expected`, in the format of `tests/cases`.
 
+## The successor's predecessor (2026-10-11, the last fold)
+
+One test moved with the second code review's findings:
+
+- `neg/i6606` moved from `different` to `subset` (3 of scalac's 5 lines): `S[N]` against a positive
+  constant compares `N` with the constant's predecessor (`TypeComparer.compareS`), so `val t2:
+  S[Int] = 1` is accepted as scalac accepts it, where teq refused it; `t3`, `t4` and `t5` are refused
+  as scalac refuses them. teq still folds `S[-1]` to `0` and `S[-2147483648]` to `-2147483647` and
+  accepts `t1` and `t6`, where scalac's `compareS` takes no successor of a negative argument.
+
+## A converted constant and the instantiation's direction (2026-10-11)
+
+Two tests moved, against the record of the constants part's first cycle, with the first code review's
+findings:
+
+- `pos/i13990` moved from `rejects` to `accepts`: a numeric conversion of a constant tree has the
+  converted constant's type (`ConstFold.Select`, `foldUnop`), so `inline val char2Long: 99L = 'c'.toLong`
+  and `myInt.toChar` of an `inline val myInt = 1 << 6` are the constants `99L` and `'@'`.
+- `pos/i24097-b` moved from `rejects` to `accepts`: `ContextEffect.handle(tag, _.union(env))(v)` against
+  the ascribed `A < (Env[VR] & S)` fails its first comparison of `v`, and the retry instantiates what the
+  types hold open (`adaptToSubType`'s recover, `canDefineFurther`) on the side the constraint narrowed
+  beyond the declared bounds (`Inferencing.instDirection`): `handle`'s `B` from above, `A`, its `S` from
+  below, `Env[VR] & S`, which the comparison then accepts (as the explicit
+  `handle[TypeMap[R], Env[R], A, Env[VR] & S]` is, before and after). Without `instDirection` (taken as 0)
+  the retry failed again.
+
 ## A given object's path widens to its class (2026-10-10)
 
 A path to a given object (`given T with { .. }`, a module in dotty) widens to the object's class, as a
@@ -111,6 +137,30 @@ An anonymous instance's type keeps its own aliases alone (`Selectable{type D = C
 (`{z1 => Selectable{type B; type D <: A; val x: A; val xx: z1.x.M; val y: z1.B; ..}}`). Re-recorded over
 35c4230fb, `neg/i7425`'s detail moves too: its first error is now the JavaScript naming clash master's binary
 reports first as well, where master's record still has `value f is not a member`.
+
+## Constants in the constraint and dotty's interpolation (2026-10-10)
+
+Sixteen tests moved, against master's record, when a literal took its constant type
+(`TypeAssigner.assignType(Literal)`, widened where a variable is instantiated, `ConstraintHandling.widenInferred`),
+operations over constants theirs (`ConstFold`), `Float` constants their own, and an application's variables were
+interpolated by their variances as dotty's `interpolateTypeVars` does, a nonvariant one left open for the trees
+around:
+
+- `neg` to `same` (6): `neg/bounds` and `neg/i4721` (`g("foo")`, `m(1)`: the literal's constant meets the
+  bounds as scalac's does), `neg/harmonize` (an `Int` constant among one other numeric class, the rest a soft
+  union widened by its members), `neg/i18340` (a `-3.5f` and every constant against an abstract `T`),
+  `neg/i23261` (`0.0f` and `-0.0f` two `Float` constants), `neg/i2960` (no second error over the failed
+  quote's type).
+- `pos` from `rejects` to `accepts` (10): `pos/i2998` and `pos/pickleinf` (a variable its result holds
+  invariantly left open through a selection, `val a: 1 = foo(1).zero`, `(new Bar).bar(10)`),
+  `pos/stringConstantFold` and `pos/singletons` (operations over constants and their constant types),
+  `pos/i9531` (an overload over `Singleton` seeing the constant), `pos/i3544` (equality over operands whose
+  variables are still open, `Implicits.assumedCanEqual`), `pos/i8181` (`"blub".putout()`, an extension of
+  `AnyRef` on a constant `String`), `pos/i23261` (match types over `0.0` and `-0.0`), `pos/i18226`
+  (`eliminateInt(x)` for an `F[-R]`: the contravariant `R` instantiated from above, the meet of its upper
+  bounds by `glb`'s `dropIfSuper`, `Row[String]`), `pos/i26550` (`w.value > 0` over a `0 | 1`: a union of one
+  class's constants has the class's operators, `OrType.join`).
+- Details only: `neg/i8736` reports one line fewer beyond scalac's, `pos/i7413` fails later, at a member.
 
 ## A member's retry types again what its application did not cache (2026-10-09)
 

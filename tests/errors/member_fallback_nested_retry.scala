@@ -1,4 +1,4 @@
-// expect: 13:29: error: type mismatch: found String, required Int
+// expect: 13:29: error: type mismatch: found "bad", required Int
 // expect: 13:36: error: not found: undefinedName
 // A member call an extension takes over through the retry on the qualifier, whose later clause
 // holds a call that fails in its first clause: that call is no part of the retry, so the list

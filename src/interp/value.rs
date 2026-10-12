@@ -378,14 +378,15 @@ impl Value {
             LitVal::Int(i) => Value::Int(i),
             LitVal::Long(l) => Value::Long(l),
             LitVal::Double(d) => Value::Double(f64::from_bits(d)),
+            LitVal::Float(f) => Value::Float(f32::from_bits(f)),
             LitVal::Char(c) => Value::Char(c),
             LitVal::Bool(b) => Value::Bool(b),
             LitVal::Str(n) => Value::str(interner.get(n)),
         }
     }
 
-    /// The literal a value stands for, when it is one; a Float, Byte or Short is the Double or
-    /// Int of the same value, since literal types have no case for them.
+    /// The literal a value stands for, when it is one; a Byte or Short is the Int of the same
+    /// value, since literal types have no case for them.
     pub fn to_lit(&self, interner: &crate::intern::Interner) -> Option<LitVal> {
         Some(match self {
             Value::Int(i) => LitVal::Int(*i),
@@ -393,7 +394,7 @@ impl Value {
             Value::Short(s) => LitVal::Int(*s as i32),
             Value::Long(l) => LitVal::Long(*l),
             Value::Double(d) => LitVal::Double(d.to_bits()),
-            Value::Float(f) => LitVal::Double((*f as f64).to_bits()),
+            Value::Float(f) => LitVal::Float(f.to_bits()),
             Value::Char(c) => LitVal::Char(*c),
             Value::Bool(b) => LitVal::Bool(*b),
             Value::Str(s) => LitVal::Str(interner.intern(s)),

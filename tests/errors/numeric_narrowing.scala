@@ -1,5 +1,5 @@
-// expect: type mismatch: found Int, required Byte
-// expect: type mismatch: found Double, required Float
+// expect: type mismatch: found 300, required Byte
+// expect: type mismatch: found 1.5, required Float
 // expect: type mismatch: found Byte, required Char
 // expect: type mismatch: found Null, required Short
 // expect: operator & cannot be applied to Float

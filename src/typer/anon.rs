@@ -235,7 +235,7 @@ impl<'a> Worker<'a> {
                 }
             };
             let Some((sym, owner_ty)) = self.find_member(ty, name) else {
-                let msg = format!("value {} is not a member of {}", self.name_str(name), self.show(ty));
+                let msg = format!("value {} is not a member of {}", self.name_str(name), self.show(self.widen_lit(ty)));
                 self.error(stmt_span, msg);
                 self.type_expr(rhs, None);
                 continue;
@@ -1277,7 +1277,7 @@ impl<'a> Worker<'a> {
                     self.collect_param_variances(a, sign * v, out);
                 }
             }
-            Type::Union(a, b) | Type::Inter(a, b) => {
+            Type::Union(a, b, _) | Type::Inter(a, b) => {
                 self.collect_param_variances(a, sign, out);
                 self.collect_param_variances(b, sign, out);
             }

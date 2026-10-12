@@ -2814,6 +2814,7 @@ impl<'w, 'a> P<'w, 'a> {
         let (lit, class) = match self.w.constant_value(s)? {
             crate::tir::TExpr::Int(i) => (LitVal::Int(i), b.t_int),
             crate::tir::TExpr::Long(l) => (LitVal::Long(l), b.t_long),
+            crate::tir::TExpr::Double(d) if widened == b.t_float => (LitVal::Float((d as f32).to_bits()), b.t_float),
             crate::tir::TExpr::Double(d) => (LitVal::Double(d.to_bits()), b.t_double),
             crate::tir::TExpr::Bool(v) => (LitVal::Bool(v), b.t_boolean),
             crate::tir::TExpr::Char(c) => (LitVal::Char(c), b.t_char),
@@ -5549,7 +5550,7 @@ impl<'w, 'a> P<'w, 'a> {
                 self.approximated("uninstantiated type variable, written as Any");
                 self.external_typeref("scala", "Any");
             }
-            Type::Union(a, b) => {
+            Type::Union(a, b, _) => {
                 self.buf.byte(ORTYPE);
                 let len = self.buf.begin_length();
                 self.ty(a);
@@ -5886,6 +5887,11 @@ impl<'w, 'a> P<'w, 'a> {
             LitVal::Double(bits) => {
                 self.buf.byte(DOUBLECONST);
                 self.buf.long_int(bits as i64);
+            }
+            // `FLOATconst LongInt`, the float's bits as an `Int` (`TreePickler.pickleConstant`).
+            LitVal::Float(bits) => {
+                self.buf.byte(FLOATCONST);
+                self.buf.long_int(bits as i32 as i64);
             }
             LitVal::Char(c) => {
                 self.buf.byte(CHARCONST);

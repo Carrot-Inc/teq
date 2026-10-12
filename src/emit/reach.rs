@@ -3424,7 +3424,7 @@ fn exported_members(typer: &mut Worker) -> Vec<SymId> {
                     types.extend(typer.types.items(args).iter().copied());
                 }
                 Type::AppVar(_, args) | Type::AppParam(_, args) => types.extend(typer.types.items(args).iter().copied()),
-                Type::Union(a, b) | Type::Inter(a, b) => {
+                Type::Union(a, b, _) | Type::Inter(a, b) => {
                     types.push(a);
                     types.push(b);
                 }

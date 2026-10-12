@@ -110,9 +110,6 @@ impl<'a> Worker<'a> {
         let i = self.prog.tries.len() as u32;
         self.prog.tries.push(TTry { body, cases, finalizer, wraps });
         let e = self.prog.add(TExpr::Try(i));
-        if exp.is_none() {
-            self.note_soft(e, result_ty);
-        }
         (e, result_ty)
     }
 
@@ -199,7 +196,7 @@ impl<'a> Worker<'a> {
         match self.types.get(t) {
             Type::Any => true,
             Type::Class(c, _) => c == self.b.null || self.is_reference_class(c),
-            Type::Union(a, b) => self.null_conforms(a) || self.null_conforms(b),
+            Type::Union(a, b, _) => self.null_conforms(a) || self.null_conforms(b),
             Type::Inter(a, b) => self.null_conforms(a) && self.null_conforms(b),
             Type::Term(_) | Type::This(_) | Type::Select(..) => match self.dependent_underlying(t) {
                 Some(under) => self.null_conforms(under),
@@ -239,7 +236,7 @@ impl<'a> Worker<'a> {
                 }
                 c == self.b.null || self.is_reference_class(c) && self.syms.class(c).mods & crate::ast::mods::UNIVERSAL == 0
             }
-            Type::Union(a, b) => self.is_reference(a) && self.is_reference(b),
+            Type::Union(a, b, _) => self.is_reference(a) && self.is_reference(b),
             Type::Inter(a, b) => self.is_reference(a) || self.is_reference(b),
             Type::Param(p) => {
                 let upper = self.syms.tparam(p).upper;
@@ -287,7 +284,7 @@ impl<'a> Worker<'a> {
                 let b = &self.b;
                 [b.int, b.long, b.double, b.float, b.byte, b.short, b.boolean, b.char, b.unit, b.any_val].contains(&c) || self.syms.class(c).value_class
             }
-            Type::Union(a, b) => self.is_value(a) && self.is_value(b),
+            Type::Union(a, b, _) => self.is_value(a) && self.is_value(b),
             Type::Inter(a, b) => self.is_value(a) || self.is_value(b),
             Type::Param(p) => {
                 let upper = self.syms.tparam(p).upper;
@@ -605,7 +602,7 @@ impl<'a> Worker<'a> {
         let mut lower = NOTHING;
         for l in lowers {
             let l = self.zonk(l);
-            lower = if lower == NOTHING { l } else { self.types.mk(Type::Union(lower, l)) };
+            lower = if lower == NOTHING { l } else { self.types.soft_union(lower, l) };
         }
         let mark = self.snapshot();
         let collapsed = self.is_sub(upper, lower) && self.snapshot() == mark;
@@ -647,7 +644,7 @@ impl<'a> Worker<'a> {
         let t = self.deref(sty);
         match self.types.get(t) {
             Type::Class(..) | Type::Any | Type::Lit(_) => false,
-            Type::Union(a, b) | Type::Inter(a, b) => self.abstract_scrutinee(a) || self.abstract_scrutinee(b),
+            Type::Union(a, b, _) | Type::Inter(a, b) => self.abstract_scrutinee(a) || self.abstract_scrutinee(b),
             Type::Alias(..) => {
                 let e = self.deref_alias(t);
                 e == t || self.abstract_scrutinee(e)

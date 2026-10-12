@@ -522,7 +522,7 @@ impl<'a> Gen<'a> {
                 Some(inst) => self.erase(inst),
                 None => JType::object(),
             },
-            Type::Union(a, b) => self.erase_union(a, b, false, &mut Vec::new()),
+            Type::Union(a, b, _) => self.erase_union(a, b, false, &mut Vec::new()),
             Type::Inter(a, b) => {
                 // A value class comes before every other part, as scalac's `ErasedValueType` does,
                 // two of them ordered by their classes; the one chosen erases to its underlying type.
@@ -543,6 +543,7 @@ impl<'a> Gen<'a> {
                 LitVal::Int(_) => JType::I,
                 LitVal::Long(_) => JType::J,
                 LitVal::Double(_) => JType::D,
+                LitVal::Float(_) => JType::F,
                 LitVal::Char(_) => JType::C,
                 LitVal::Bool(_) => JType::Z,
                 LitVal::Str(_) => JType::L(Rc::from(STRING)),
@@ -732,7 +733,7 @@ impl<'a> Gen<'a> {
                 seen.pop();
                 l
             }
-            Type::Union(a, b) => {
+            Type::Union(a, b, _) => {
                 let (la, lb) = (self.lub_part(a, boxed, seen), self.lub_part(b, boxed, seen));
                 self.lub(la, lb)
             }
@@ -932,7 +933,7 @@ impl<'a> Gen<'a> {
                 let (ba, bb) = (self.array_bound(a), self.array_bound(b));
                 if ba == bb { ba } else { ba.or(bb) }
             }
-            Type::Union(a, b) => {
+            Type::Union(a, b, _) => {
                 let (ba, bb) = (self.array_bound(a), self.array_bound(b));
                 if ba == bb { ba } else { None }
             }
@@ -948,7 +949,7 @@ impl<'a> Gen<'a> {
         match cx.input.types.get(t) {
             Type::Param(_) | Type::AppParam(..) | Type::Member(..) | Type::Decl(_) => self.array_bound(t).is_none(),
             Type::Inter(a, b) => self.generic_array_element(a) && self.generic_array_element(b),
-            Type::Union(a, b) => self.generic_array_element(a) || self.generic_array_element(b),
+            Type::Union(a, b, _) => self.generic_array_element(a) || self.generic_array_element(b),
             Type::Var(v) => cx.input.insts.inst(v).map_or(true, |inst| self.generic_array_element(inst)),
             Type::Alias(a, args) => self.alias_expansion(a, args).map_or(true, |x| self.generic_array_element(x)),
             _ => false,
@@ -987,7 +988,7 @@ impl<'a> Gen<'a> {
                     let eb = self.erase_boxed_vc_in(b, seen);
                     return if self.erased_glb_first(&ea, &eb) { ea } else { eb };
                 }
-                Type::Union(a, b) => return self.erase_union(a, b, true, seen),
+                Type::Union(a, b, _) => return self.erase_union(a, b, true, seen),
                 _ => return self.storage(t),
             }
         }

@@ -8,8 +8,8 @@
 // expect: None of the overloaded alternatives of constructor G in class G with types
 // expect: (b: Boolean): G
 // expect: (x: Int): G
-// expect: match arguments (Double)
-// expect: type mismatch: found Int, required String
+// expect: match arguments (1.5)
+// expect: type mismatch: found 1, required String
 // expect: Value classes may not define a secondary constructor
 class B(x: Int):
   def this(s: String) = this(this.toString.length)

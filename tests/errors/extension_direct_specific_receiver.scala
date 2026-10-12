@@ -1,6 +1,6 @@
-// expect: 14:25: error: type mismatch: found String, required Int
-// expect: 15:30: error: type mismatch: found String, required Int
-// expect: 17:29: error: type mismatch: found String, required Int
+// expect: 14:25: error: type mismatch: found "b", required Int
+// expect: 15:30: error: type mismatch: found "b", required Int
+// expect: 17:29: error: type mismatch: found "b", required Int
 // A receiver more specific than every other is taken whatever the argument lists after it take,
 // when the call names the extension directly as when it selects it, though the generic
 // overload would take them (scalac's first-list rule).

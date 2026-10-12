@@ -33,10 +33,6 @@ impl<'a> Worker<'a> {
             None => self.solve_in(sty),
         };
         let pty = self.selector_type(scrut, ts, sty);
-        // A soft union scrutinee binds its cases' variables at the union, as dotc does, and
-        // marks them soft for what is inferred from them.
-        let soft = self.is_soft(ts).then_some(sty);
-        let outer_soft = std::mem::replace(&mut self.soft_scrutinee, soft);
         let clauses = ast.case_list(cases).to_vec();
         // A match whose cases are the expected match type's (dotty's `isMatchTypeShaped`): each
         // body is typed against its case's body, the match is the match type
@@ -98,13 +94,9 @@ impl<'a> Worker<'a> {
             let broken = ast.broken_cases_in(cases);
             self.defer_match_check(sty, out, clauses, partial, span, broken);
         }
-        self.soft_scrutinee = outer_soft;
         let e = self.prog.add(TExpr::Match(ts, l));
         if let Some(record) = self.branch_types.as_mut() {
             record.insert(e, body_types);
-        }
-        if exp.is_none() {
-            self.note_soft(e, result_ty);
         }
         (e, result_ty)
     }
@@ -381,9 +373,6 @@ impl<'a> Worker<'a> {
                     None => (None, sty),
                 };
                 let sym = self.new_local(name, SymKind::Val, ty, span);
-                if self.soft_scrutinee == Some(ty) {
-                    self.soft_syms.insert(sym, ());
-                }
                 self.bind_local(name, sym);
                 if ast.given_binds.contains(&p) {
                     self.syms.sym_mut(sym).mods |= mods::GIVEN;
@@ -774,6 +763,7 @@ impl<'a> Worker<'a> {
         let value = match self.prog.expr(e) {
             TExpr::Int(n) => LitVal::Int(n),
             TExpr::Long(n) => LitVal::Long(n),
+            TExpr::Double(d) if self.prog.type_of(e).is_some_and(|t| self.widen_lit(t) == self.b.t_float) => LitVal::Float((d as f32).to_bits()),
             TExpr::Double(d) => LitVal::Double(d.to_bits()),
             TExpr::Char(c) => LitVal::Char(c),
             TExpr::Bool(b) => LitVal::Bool(b),
@@ -886,7 +876,7 @@ impl<'a> Worker<'a> {
                         self.syms.tparams[p.idx()].upper = if current == ANY { upper } else { self.types.inter(current, upper) };
                     }
                 }
-                Type::Union(a, b) | Type::Inter(a, b) => pending.extend([a, b]),
+                Type::Union(a, b, _) | Type::Inter(a, b) => pending.extend([a, b]),
                 _ => {}
             }
         }
@@ -1037,7 +1027,11 @@ impl<'a> Worker<'a> {
                     kept.push(p);
                 }
             }
-            return kept.into_iter().reduce(|a, b| self.types.mk(Type::Union(a, b))).unwrap_or(t);
+            let kind = match self.types.get(t) {
+                Type::Union(_, _, k) => k,
+                _ => UnionKind::Hard,
+            };
+            return kept.into_iter().reduce(|a, b| self.types.union_as(kind, a, b)).unwrap_or(t);
         }
         let (Some(pc), Some(sc)) = (self.class_of(t), self.class_of(sty)) else { return t };
         self.complete_class(pc);
@@ -1056,7 +1050,7 @@ impl<'a> Worker<'a> {
     fn union_parts(&mut self, t: TypeId, out: &mut Vec<TypeId>, depth: u32) {
         let t = self.deref(t);
         match self.types.get(t) {
-            Type::Union(a, b) if depth > 0 => {
+            Type::Union(a, b, _) if depth > 0 => {
                 self.union_parts(a, out, depth - 1);
                 self.union_parts(b, out, depth - 1);
             }
@@ -1129,7 +1123,7 @@ impl<'a> Worker<'a> {
 
     pub fn union_alternatives(&mut self, t: TypeId, out: &mut Vec<TypeId>) {
         let t = self.deref(t);
-        if let Type::Union(a, b) = self.types.get(t) {
+        if let Type::Union(a, b, _) = self.types.get(t) {
             self.union_alternatives(a, out);
             self.union_alternatives(b, out);
         } else {
@@ -1829,7 +1823,7 @@ impl<'a> Worker<'a> {
                 if hi == t { Some(object) } else { self.bound_erasure(hi, depth + 1) }
             }
             Type::BoundedWild(_, hi) => self.bound_erasure(hi, depth + 1),
-            Type::Union(a, b) => {
+            Type::Union(a, b, _) => {
                 let (a, b) = (self.bound_erasure(a, depth + 1)?, self.bound_erasure(b, depth + 1)?);
                 Some(self.erased_lub(a, b))
             }
@@ -1958,7 +1952,7 @@ impl<'a> Worker<'a> {
                 _ => false,
             },
             Type::Inter(a, b) => self.generic_array_element_at(a, depth + 1) && self.generic_array_element_at(b, depth + 1),
-            Type::Union(a, b) => self.generic_array_element_at(a, depth + 1) || self.generic_array_element_at(b, depth + 1),
+            Type::Union(a, b, _) => self.generic_array_element_at(a, depth + 1) || self.generic_array_element_at(b, depth + 1),
             _ => false,
         }
     }
@@ -1991,7 +1985,7 @@ impl<'a> Worker<'a> {
             Type::BoundedWild(_, hi) => self.array_upper_bound(hi, depth + 1),
             Type::Refined(parent, _) => self.array_upper_bound(parent, depth + 1),
             Type::Rec(body) => self.array_upper_bound(body, depth + 1),
-            Type::Union(a, b) => {
+            Type::Union(a, b, _) => {
                 let (x, y) = (self.array_upper_bound(a, depth + 1), self.array_upper_bound(b, depth + 1));
                 if x == y { x } else { None }
             }
@@ -2034,7 +2028,7 @@ impl<'a> Worker<'a> {
                 }
             }
             Type::Class(c, _) => self.syms.class(c).kind != ClassKind::Object && self.is_reference_class(c),
-            Type::Union(a, b) => self.may_be_null(a, depth + 1) || self.may_be_null(b, depth + 1),
+            Type::Union(a, b, _) => self.may_be_null(a, depth + 1) || self.may_be_null(b, depth + 1),
             Type::Inter(a, b) => self.may_be_null(a, depth + 1) && self.may_be_null(b, depth + 1),
             Type::Param(p) => {
                 let hi = self.syms.tparam(p).upper;
@@ -2140,7 +2134,7 @@ impl<'a> Worker<'a> {
         let t = self.deref(t);
         let t = if matches!(self.types.get(t), Type::Alias(..)) { self.deref_alias(t) } else { t };
         match self.types.get(t) {
-            Type::Union(a, b) => self.erased_classes(a, out, depth) && self.erased_classes(b, out, depth),
+            Type::Union(a, b, _) => self.erased_classes(a, out, depth) && self.erased_classes(b, out, depth),
             Type::Inter(a, b) => {
                 let (mut l, mut r) = (Vec::new(), Vec::new());
                 if !self.erased_classes(a, &mut l, depth) || !self.erased_classes(b, &mut r, depth) {
@@ -2357,7 +2351,7 @@ impl<'a> Worker<'a> {
                 };
                 return self.bound_test(t, hi, sty, span);
             }
-            Type::Union(a, b) => {
+            Type::Union(a, b, _) => {
                 let (x, y) = (self.test_for(a, sty, span, unchecked), self.test_for(b, sty, span, unchecked));
                 TypeTest::Or(x, y)
             }
@@ -2628,7 +2622,7 @@ impl<'a> Worker<'a> {
                 }
                 args == EMPTY_LIST || all_wild || self.args_determined(c, args, ANY)
             }
-            Type::Union(a, b) | Type::Inter(a, b) => self.reified_element(a) && self.reified_element(b),
+            Type::Union(a, b, _) | Type::Inter(a, b) => self.reified_element(a) && self.reified_element(b),
             // A singleton's test looks at the class the path's value has.
             Type::Any | Type::Nothing | Type::Lit(_) | Type::Wild | Type::BoundedWild(..) | Type::Term(_) | Type::Select(..) | Type::This(_) => true,
             _ => false,

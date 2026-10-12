@@ -195,6 +195,10 @@ impl<'a> Worker<'a> {
     /// Whether a value of type `from` widens to the numeric type `to` as scalac's numeric
     /// widening conversion has it.
     pub fn numeric_widening(&self, from: TypeId, to: TypeId) -> bool {
+        // A constant type is no target: `3` is no `3.14`.
+        if matches!(self.types.get(to), Type::Lit(_)) {
+            return false;
+        }
         match (self.is_numeric(from), self.is_numeric(to)) {
             (Some(f), Some(t)) => widens(f, t),
             _ => false,
@@ -266,13 +270,14 @@ impl<'a> Worker<'a> {
             // The short-circuit operators of a Boolean; on anything else `&&` is a method.
             let (tl, lty) = self.type_expr(l, Some(t_bool));
             let lty = self.solve_in(lty);
-            if self.dealias(lty) != t_bool {
+            if self.dealias(lty) != t_bool && self.primitive_side(lty) != Some(t_bool) {
                 let lists = vec![ArgList { args: self.infix_args(r), using: false, span }];
                 return self.apply_member(tl, lty, op, None, lists, span, expected);
             }
             let tr = self.check_right_operand(op, tl, r);
             let prim = if op == names::AMPAMP { PrimOp::BoolAnd } else { PrimOp::BoolOr };
-            return (self.prog.add(TExpr::Prim(prim, tl, tr)), t_bool);
+            let te = self.prog.add(TExpr::Prim(prim, tl, tr));
+            return (te, self.const_folded(te, t_bool, tl, lty));
         }
         if op == names::EQEQ || op == names::NEQ {
             return self.type_equality(l, r, op == names::NEQ, span);
@@ -316,6 +321,25 @@ impl<'a> Worker<'a> {
         typed
     }
 
+    /// A union of one primitive class's constants (a join of branches, `0 | 97`) as that class,
+    /// its join (`OrType.join`), whose operators and comparisons it has; any other type itself.
+    pub(super) fn union_as_class(&mut self, t: TypeId) -> TypeId {
+        match self.types.get(t) {
+            Type::Union(..) => self.primitive_side(t).unwrap_or(t),
+            _ => t,
+        }
+    }
+
+    /// The type whose builtin operators a left operand of type `widened` has: its own where it is
+    /// a primitive (most operands), a numeric opaque type's bound outside its scope, the primitive
+    /// side of an intersection or a union, a type parameter's primitive bound.
+    fn operator_type(&mut self, widened: TypeId) -> TypeId {
+        if self.is_primitive(widened) {
+            return widened;
+        }
+        self.numeric_bound(widened).or_else(|| self.primitive_side(widened)).or_else(|| self.primitive_bound(widened)).unwrap_or(widened)
+    }
+
     /// `(l op r)(args)..`, which is `l.op(r)(args)..`: the further lists fill the clauses of the
     /// operator method after its first (an implicit clause passed explicitly), or apply what a
     /// builtin operator gives. None for an operator the typer reads apart from a method call.
@@ -346,7 +370,7 @@ impl<'a> Worker<'a> {
             let t_bool = self.b.t_boolean;
             let (tl, lty) = self.type_expr(l, Some(t_bool));
             let lty = self.solve_in(lty);
-            if self.dealias(lty) != t_bool {
+            if self.dealias(lty) != t_bool && self.primitive_side(lty) != Some(t_bool) {
                 let mut all = vec![ArgList { args: self.infix_args(r), using: false, span }];
                 all.extend(lists);
                 return Some(self.apply_member(tl, lty, op, None, all, span, expected));
@@ -358,10 +382,12 @@ impl<'a> Worker<'a> {
         }
         let (tl, lty) = self.type_expr(l, None);
         let solved = self.solve_in(lty);
+        let solved = self.instantiate_receiver_var(solved);
         let widened = self.dealias(solved);
-        let prim_lty = self.numeric_bound(widened).or_else(|| self.primitive_side(widened)).or_else(|| self.primitive_bound(widened)).unwrap_or(widened);
+        let prim_lty = self.operator_type(widened);
         if (self.is_primitive(prim_lty) || prim_lty == self.b.t_string) && classify(op).is_some() {
             let (te, ty) = self.binop_or_member(op, tl, prim_lty, widened, r, span, None);
+            let ty = self.const_folded(te, ty, tl, lty);
             return Some(self.apply_callee(super::apply::Callee::Value(te, ty), None, lists, span, expected));
         }
         let keeps_type = self.types.is_path(solved) || matches!(self.types.get(solved), Type::Member(..) | Type::AppMember(..) | Type::Decl(_) | Type::Alias(..));
@@ -381,6 +407,7 @@ impl<'a> Worker<'a> {
             return None;
         }
         let solved = self.solve_in(lty);
+        let solved = self.instantiate_receiver_var(solved);
         let widened = self.dealias(solved);
         let keeps_type = self.types.is_path(solved) || matches!(self.types.get(solved), Type::Member(..) | Type::AppMember(..) | Type::Decl(_) | Type::Alias(..));
         let lty = if keeps_type { solved } else { widened };
@@ -414,7 +441,9 @@ impl<'a> Worker<'a> {
         span: Span,
         expected: Option<TypeId>,
     ) -> (TExprId, TypeId) {
+        let own_ty = lty;
         let solved = self.solve_in(lty);
+        let solved = self.instantiate_receiver_var(solved);
         let widened = self.dealias(solved);
         // A receiver of a singleton type keeps it for the member call: `this += x` is
         // `this.type` where `+=` is; so does one of an abstract member type, whose implicit
@@ -439,8 +468,9 @@ impl<'a> Worker<'a> {
         // A numeric opaque type has the operators of its bound outside its scope; a binder of
         // an intersection with a primitive (`n: Int & T` of a typed pattern) has the primitive's,
         // and a type parameter bounded by a primitive or `String` its bound's.
-        let prim_lty = self.numeric_bound(widened).or_else(|| self.primitive_side(widened)).or_else(|| self.primitive_bound(widened)).unwrap_or(widened);
-        self.binop_or_member(op, tl, prim_lty, lty, r, span, expected)
+        let prim_lty = self.operator_type(widened);
+        let (te, ty) = self.binop_or_member(op, tl, prim_lty, lty, r, span, expected);
+        (te, self.const_folded(te, ty, tl, own_ty))
     }
 
     /// The builtin primitive or `String` that bounds the type parameter `t` from above
@@ -461,8 +491,16 @@ impl<'a> Worker<'a> {
         None
     }
 
-    /// The builtin primitive that an intersection type contains, if one of its sides is one.
-    pub(super) fn primitive_side(&mut self, t: TypeId) -> Option<TypeId> {
+    /// The builtin primitive that an intersection type contains, if one of its sides is one, or
+    /// that a union joins to.
+    pub(crate) fn primitive_side(&mut self, t: TypeId) -> Option<TypeId> {
+        // A union of constants of one primitive class (a join of branches, `1 | 2`) has that
+        // class's operators, its members those of its join (`OrType.join`).
+        if let Type::Union(..) = self.types.get(t) {
+            let j = self.union_join(t)?;
+            let j = self.dealias(j);
+            return (j == self.b.t_boolean || j == self.b.t_string || self.is_numeric(j).is_some()).then_some(j);
+        }
         let Type::Inter(a, b) = self.types.get(t) else { return None };
         for side in [a, b] {
             let side = self.dealias(side);
@@ -639,7 +677,7 @@ impl<'a> Worker<'a> {
         if let Some((te, ty)) = self.apply_through_conversion(tr, rty, op, None, &member_lists, span, expected) {
             return (self.wrap_hoisted(mark, te), ty);
         }
-        let msg = format!("value {} is not a member of {}", self.name_str(op), self.show(rty));
+        let msg = format!("value {} is not a member of {}", self.name_str(op), self.show(self.widen_lit(rty)));
         self.error(span, msg);
         self.type_args_for_errors(&more);
         (self.prog.add(TExpr::Unit), ERROR)
@@ -777,16 +815,32 @@ impl<'a> Worker<'a> {
     fn type_equality(&mut self, l: ExprId, r: ExprId, negate: bool, span: Span) -> (TExprId, TypeId) {
         let (tl, lty) = self.type_expr(l, None);
         let (tr, rty) = self.type_expr(r, None);
-        self.typed_equality(tl, lty, tr, rty, negate, span)
+        let (te, ty) = self.typed_equality(tl, lty, tr, rty, negate, span);
+        (te, self.const_folded(te, ty, tl, lty))
     }
 
     /// `l == r` or `l != r` over operands typed already, as the typer reads the operator in
     /// source: also a macro's reconstruction of `a != b`.
     pub fn typed_equality(&mut self, mut tl: TExprId, lty: TypeId, mut tr: TExprId, rty: TypeId, negate: bool, span: Span) -> (TExprId, TypeId) {
+        // The operands are related with the variables their interpolation left open, as dotty's
+        // `assumedCanEqual` relates them under the default equality (`ltp <:< lift(rtp) || rtp
+        // <:< lift(ltp)`, which constrains them): `Map("a" -> 1) == Map(1 -> 1)` equates the key
+        // variables, where solving each operand alone had made two unrelated maps.
+        if !self.strict_equality() && (self.types.has_vars(lty) || self.types.has_vars(rty)) {
+            let snap = self.snapshot();
+            if !self.is_sub(lty, rty) {
+                self.rollback(snap);
+                if !self.is_sub(rty, lty) {
+                    self.rollback(snap);
+                }
+            }
+        }
         let lty = self.solve_in(lty);
         let lty = self.dealias(lty);
+        let lty = self.union_as_class(lty);
         let rty = self.solve_in(rty);
         let rty = self.dealias(rty);
+        let rty = self.union_as_class(rty);
         if self.unused.on() {
             self.mark_can_equal(lty, rty);
         }
@@ -1058,7 +1112,7 @@ impl<'a> Worker<'a> {
             Type::Param(p) | Type::AppParam(p, _) => tps.map_or(true, |tps| tps.contains(&p)),
             Type::Class(_, args) => self.types.items(args).iter().any(|&a| self.mentions_tparam_of(a, tps)),
             Type::Lambda(_, b) => self.mentions_tparam_of(b, tps),
-            Type::Union(a, b) | Type::Inter(a, b) => {
+            Type::Union(a, b, _) | Type::Inter(a, b) => {
                 self.mentions_tparam_of(a, tps) || self.mentions_tparam_of(b, tps)
             }
             _ => false,
@@ -1152,9 +1206,11 @@ impl<'a> Worker<'a> {
         let operand_ty = self.solve_in(operand_ty);
         let rty = self.dealias(operand_ty);
         // As the left operand's (`binop`): a type parameter bounded by a primitive takes the
-        // bound's operator, `Int.+(x: Int)` taking a `T <: Int` as scalac's overload does.
+        // bound's operator, `Int.+(x: Int)` taking a `T <: Int` as scalac's overload does; a union
+        // of one primitive class's constants (a join of branches) is an argument of that class to
+        // the operator's overloads, as `1 | 2 <: Int` makes it.
         let rty = match self.types.get(rty) {
-            Type::Inter(..) => self.primitive_side(rty),
+            Type::Inter(..) | Type::Union(..) => self.primitive_side(rty),
             Type::Param(_) => self.primitive_bound(rty),
             _ => self.numeric_bound(rty),
         }
@@ -1278,11 +1334,83 @@ impl<'a> Worker<'a> {
             let prim = if name == names::AMPAMP { PrimOp::BoolAnd } else { PrimOp::BoolOr };
             return Some((self.prog.add(TExpr::Prim(prim, te, tr)), self.b.t_boolean));
         }
-        Some(self.binop_or_member(name, te, ty, ty, r, span, expected))
+        let (folded, fty) = self.binop_or_member(name, te, ty, ty, r, span, expected);
+        Some((folded, self.const_folded(folded, fty, te, ty)))
     }
 
-    fn prefix_on(&mut self, op: Name, te: TExprId, ty: TypeId, span: Span) -> (TExprId, TypeId) {
+    fn prefix_on(&mut self, op: Name, operand: TExprId, operand_ty: TypeId, span: Span) -> (TExprId, TypeId) {
+        let (te, ty) = self.prefix_on_typed(op, operand, operand_ty, span);
+        (te, self.const_folded(te, ty, operand, operand_ty))
+    }
+
+    /// dotty's `ConstFold`: a primitive operation over constant trees (a tree of a constant type,
+    /// through an ascription, `ConstantTree`) has the folded constant's type, so `1 + 2` is a `3`
+    /// and `h(1 + 1)` of `def h(a: Int): a.type` a `2`. The value is teq's folding of the tree
+    /// (`fold_constant_as_typed`), which holds scalac's rules; an operation over a plain inline
+    /// call of a type that is no constant is none (`widened_constant`), one of a constant type is
+    /// read as its type, as the typer reads it pending. `first`, of type `first_ty`, is the
+    /// operation's first operand: no constant tree unless its type is a constant or it is an
+    /// ascription (`ConstantTree`'s `Typed`), which spares the walk of every other operation.
+    #[inline]
+    pub(super) fn const_folded(&mut self, te: TExprId, ty: TypeId, first: TExprId, first_ty: TypeId) -> TypeId {
+        let first_ty = self.deref(first_ty);
+        if !matches!(self.types.get(first_ty), Type::Lit(_)) && !self.prog.is_widened(first) {
+            return ty;
+        }
+        self.fold_operation(te, ty)
+    }
+
+    /// `const_folded` of an operation whose first operand is a constant tree.
+    #[inline(never)]
+    fn fold_operation(&mut self, te: TExprId, ty: TypeId) -> TypeId {
+        if ty == ERROR || matches!(self.types.get(ty), Type::Lit(_)) {
+            return ty;
+        }
+        let constant = match self.prog.expr(te) {
+            TExpr::Prim(_, a, b) => self.constant_operand(a) && self.constant_operand(b),
+            TExpr::Unary(_, a) => self.constant_operand(a),
+            TExpr::StrConcat(l) => {
+                let parts = self.prog.expr_list(l).to_vec();
+                parts.into_iter().all(|x| self.constant_operand(x))
+            }
+            TExpr::Int(_) | TExpr::Long(_) | TExpr::Double(_) | TExpr::Bool(_) | TExpr::Char(_) => true,
+            _ => false,
+        };
+        if !constant || self.widened_constant(te) {
+            return ty;
+        }
+        let Some(v) = self.fold_typed_by_pending_types(te) else { return ty };
+        let v = self.folded_as(v, ty);
+        let lit = self.types.lit(v);
+        if self.widen_lit(lit) == self.widen_lit(ty) { lit } else { ty }
+    }
+
+    /// An operand that may be a constant tree, by its shape, whatever types the program records:
+    /// a literal, a reference to a value of a constant type (`ConstantTree` reads a reference by
+    /// its type, as the folding does), an operation, a conversion or a block over such, an
+    /// ascription, a pending inline call (read by its type). The folding decides.
+    fn constant_operand(&mut self, e: TExprId) -> bool {
+        match self.prog.expr(e) {
+            TExpr::Int(_) | TExpr::Long(_) | TExpr::Double(_) | TExpr::Bool(_) | TExpr::Char(_) | TExpr::Str(_) => true,
+            TExpr::Local(s) | TExpr::Static(s) | TExpr::Field(_, s) => match self.syms.sym(s).sig.as_ref() {
+                Some(sig) => {
+                    let ret = sig.ret;
+                    self.fold_type(ret).is_some()
+                }
+                None => false,
+            },
+            TExpr::Unary(_, a) | TExpr::ToStr(a, _) | TExpr::Block(_, a) => self.constant_operand(a),
+            TExpr::Prim(_, a, b) => self.constant_operand(a) && self.constant_operand(b),
+            _ => self.prog.is_widened(e) || self.pending_type(e).is_some(),
+        }
+    }
+
+    fn prefix_on_typed(&mut self, op: Name, te: TExprId, ty: TypeId, span: Span) -> (TExprId, TypeId) {
         let ty = self.dealias(ty);
+        let ty = match self.types.get(ty) {
+            Type::Union(..) => self.primitive_side(ty).unwrap_or(ty),
+            _ => ty,
+        };
         let ty = self.widen_lit(ty);
         // A type parameter bounded by a primitive has the bound's prefix operators (`!x` of a
         // `T <: Boolean`), as scalac finds `unary_!` on the bound.
@@ -1346,6 +1474,11 @@ impl<'a> Worker<'a> {
         if !lists.is_empty() {
             return None;
         }
+        // A union of numeric constants (`1 | 2`) is its join's (`primitive_side`).
+        let recv_ty = match self.types.get(recv_ty) {
+            Type::Union(..) => self.primitive_side(recv_ty)?,
+            _ => recv_ty,
+        };
         let rank = self.is_numeric(recv_ty)?;
         let text = self.name_ref(name);
         let to = match text {
@@ -1365,7 +1498,16 @@ impl<'a> Worker<'a> {
             "doubleValue" if rank != R_CHAR => R_DOUBLE,
             _ => return None,
         };
-        Some((self.convert_rank(recv, recv_ty, to), self.rank_type(to)))
+        let conversion = NUMERIC_CONVERSIONS.contains(&text);
+        let te = self.convert_rank(recv, recv_ty, to);
+        let ty = self.rank_type(to);
+        // A conversion of a constant tree has the converted constant's type (dotty's
+        // `ConstFold.Select`, `foldUnop`'s `toInt` and kin): `2.5f.toInt` is a `2`. A `Byte` or
+        // `Short` one keeps its class, which teq has no constant type of.
+        if conversion {
+            return Some((te, self.const_folded(te, ty, recv, recv_ty)));
+        }
+        Some((te, ty))
     }
 
     /// `recv.asInstanceOf[t]` for a receiver of type `recv_ty`, lowered as dotty's erasure lowers
@@ -1965,9 +2107,11 @@ impl<'a> Worker<'a> {
             names::GET_CLASS if no_args => {
                 // A receiver whose static type is a primitive has the primitive's class, as scalac
                 // rewrites it (`1.getClass` is `classOf[Int]`, `int` printed); it runs for its effects.
-                let primitive = self.is_numeric(recv_ty).is_some() || recv_ty == self.b.t_boolean || recv_ty == self.b.t_unit;
+                // A constant's is its class's (`classOf[Boolean]` for `true`).
+                let class = self.widen_lit(recv_ty);
+                let primitive = self.is_numeric(class).is_some() || class == self.b.t_boolean || class == self.b.t_unit;
                 if primitive {
-                    let (of, ty) = self.type_class_of(recv_ty, span);
+                    let (of, ty) = self.type_class_of(class, span);
                     let l = self.prog.stmts.push_slice(&[TStmt::Expr(recv)]);
                     let te = self.prog.add(TExpr::Block(l, of));
                     self.end_chain(te, ty);

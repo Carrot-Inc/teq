@@ -182,6 +182,12 @@ impl<'a> Worker<'a> {
         owned && !self.renames_constructor(a) && !self.types.head_reducible(self.types.get(self.alias_body(a)))
     }
 
+    /// Whether the alias is a parameterless one of a union (`type MonthNumber = 1 | 2`), which a
+    /// reference gives as its union named (`UnionKind::Named`).
+    pub fn union_alias(&self, a: AliasId) -> bool {
+        self.syms.alias_done(a).is_some_and(|info| info.tparams.is_empty() && matches!(self.types.get(info.rhs), Type::Union(..)))
+    }
+
     fn renames_constructor(&self, a: AliasId) -> bool {
         let info = &self.syms.aliases[a.idx()];
         let args = match self.types.get(self.alias_body(a)) {
@@ -433,7 +439,7 @@ impl<'a> Worker<'a> {
         match self.types.get(t) {
             Type::Nothing => true,
             Type::Inter(a, b) => self.provably_empty(a) || self.provably_empty(b) || self.provably_disjoint(a, b),
-            Type::Union(a, b) => self.provably_empty(a) && self.provably_empty(b),
+            Type::Union(a, b, _) => self.provably_empty(a) && self.provably_empty(b),
             _ => false,
         }
     }
@@ -578,9 +584,9 @@ impl<'a> Worker<'a> {
         }
         let (ta, tb) = (self.types.get(a), self.types.get(b));
         match (ta, tb) {
-            (_, Type::Union(x, y)) => return self.disjoint_at(a, x, depth + 1, pending) && self.disjoint_at(a, y, depth + 1, pending),
+            (_, Type::Union(x, y, _)) => return self.disjoint_at(a, x, depth + 1, pending) && self.disjoint_at(a, y, depth + 1, pending),
             (_, Type::Inter(x, y)) => return self.disjoint_at(a, x, depth + 1, pending) || self.disjoint_at(a, y, depth + 1, pending),
-            (Type::Union(x, y), _) => return self.disjoint_at(x, b, depth + 1, pending) && self.disjoint_at(y, b, depth + 1, pending),
+            (Type::Union(x, y, _), _) => return self.disjoint_at(x, b, depth + 1, pending) && self.disjoint_at(y, b, depth + 1, pending),
             (Type::Inter(x, y), _) => return self.disjoint_at(x, b, depth + 1, pending) || self.disjoint_at(y, b, depth + 1, pending),
             (Type::Any, _) | (_, Type::Any) => return false,
             // Every stable value is a `Singleton`: the class shares no subclass, but its values.
@@ -858,9 +864,9 @@ impl<'a> Worker<'a> {
                 let nb = self.normalize(body);
                 self.types.mk(Type::Lambda(ps, nb))
             }
-            Type::Union(a, b) => {
+            Type::Union(a, b, soft) => {
                 let (na, nb) = (self.normalize(a), self.normalize(b));
-                self.types.union(na, nb)
+                self.types.union_as(soft, na, nb)
             }
             Type::Inter(a, b) => {
                 let (na, nb) = (self.normalize(a), self.normalize(b));

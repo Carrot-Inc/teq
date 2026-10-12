@@ -745,7 +745,7 @@ impl<'w, 'a> P<'w, 'a> {
 
     fn union_members(&self, t: TypeId) -> Vec<TypeId> {
         match self.w.types.get(t) {
-            Type::Union(a, b) => {
+            Type::Union(a, b, _) => {
                 let mut out = self.union_members(a);
                 out.extend(self.union_members(b));
                 out

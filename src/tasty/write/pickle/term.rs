@@ -501,7 +501,7 @@ impl<'w, 'a> P<'w, 'a> {
 
     fn union_parts(&self, t: TypeId) -> Vec<TypeId> {
         match self.w.types.get(t) {
-            Type::Union(a, b) => {
+            Type::Union(a, b, _) => {
                 let mut out = self.union_parts(a);
                 out.extend(self.union_parts(b));
                 out
@@ -601,7 +601,17 @@ impl<'w, 'a> P<'w, 'a> {
         let u = self.unpromoted(x);
         let in_place = u == x && matches!(self.records(x).form, Some(Form::Promotion));
         let t = if in_place { self.natural_type(x).or_else(|| self.node_type(x))? } else { self.node_type(u)? };
-        Some(self.numeric_seen_through(self.w.widen_lit(t)))
+        let t = self.constant_union_class(self.w.widen_lit(t));
+        Some(self.numeric_seen_through(t))
+    }
+
+    /// A union of one primitive class's constants (a join of branches) as that class, its join
+    /// (`OrType.join`), which a selection or an operator on it is resolved in.
+    fn constant_union_class(&mut self, t: TypeId) -> TypeId {
+        match self.w.types.get(t) {
+            Type::Union(..) => self.w.primitive_side(t).unwrap_or(t),
+            _ => t,
+        }
     }
 
     /// An opaque type of a primitive operation's operand as the primitive it stands for: its
@@ -2372,6 +2382,7 @@ impl<'w, 'a> P<'w, 'a> {
         let t = self.term_type(r)?;
         let t = self.w.deref_alias(t);
         let t = self.w.widen_lit(t);
+        let t = self.constant_union_class(t);
         match self.w.types.get(t) {
             Type::Class(c, _) | Type::This(c) => Some((c, t)),
             _ => None,
@@ -5588,6 +5599,9 @@ impl<'w, 'a> P<'w, 'a> {
         };
         let (a, b) = (self.rendered(*a), self.rendered(*b));
         let lt = self.node_type(a).map(|t| self.w.widen_lit(t));
+        // A union of one class's constants (a join of branches) concatenates as that class, its
+        // join (`OrType.join`), as the selection of `+` on it does.
+        let lt = lt.map(|t| self.constant_union_class(t));
         let string = self.w.b.t_string;
         let left_string = lt.map_or(false, |t| t == string || self.w.is_same(t, string));
         let (owner_pkg, owner, param): (String, String, &str) = if left_string {

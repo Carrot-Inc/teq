@@ -1,4 +1,4 @@
-// expect: right_assoc_extension_calls.scala:16:21: error: type mismatch: found Int, required String
+// expect: right_assoc_extension_calls.scala:16:21: error: type mismatch: found 2, required String
 // expect: right_assoc_extension_calls.scala:12:9: error: right-associative extension method must start with a single parameter, consider a tupled parameter instead
 // expect: right_assoc_extension_calls.scala:17:11: error: Too many type arguments for Syntax.*:[A]
 // A right-associative extension method called as a method takes the method's first clause

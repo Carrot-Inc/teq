@@ -6,8 +6,8 @@
 // expect: 38:22: error: missing argument for parameter label
 // expect: 39:20: error: missing argument for parameter width
 // expect: 39:20: error: missing argument for parameter label
-// expect: 40:29: error: type mismatch: found String, required Int
-// expect: 40:34: error: type mismatch: found Int, required String
+// expect: 40:29: error: type mismatch: found "a", required Int
+// expect: 40:34: error: type mismatch: found 1, required String
 // expect: 41:20: error: too many arguments: expected 2
 // expect: 42:27: error: this can be used only in a class, object, or template
 // expect: 43:28: error: not found: size

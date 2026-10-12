@@ -1089,6 +1089,7 @@ impl<'a> Worker<'a> {
             LitVal::Int(_) => self.b.t_int,
             LitVal::Long(_) => self.b.t_long,
             LitVal::Double(_) => self.b.t_double,
+            LitVal::Float(_) => self.b.t_float,
             LitVal::Char(_) => self.b.t_char,
             LitVal::Bool(_) => self.b.t_boolean,
             LitVal::Str(_) => self.b.t_string,
@@ -1100,6 +1101,7 @@ impl<'a> Worker<'a> {
             LitVal::Int(i) => Expr::IntLit(i as i64),
             LitVal::Long(l) => Expr::LongLit(l),
             LitVal::Double(bits) => Expr::DoubleLit(f64::from_bits(bits)),
+            LitVal::Float(bits) => Expr::FloatLit(f32::from_bits(bits)),
             LitVal::Char(c) => Expr::CharLit(c as u32),
             LitVal::Bool(b) => Expr::BoolLit(b),
             LitVal::Str(n) => {

@@ -1,4 +1,4 @@
-// expect: 9:18: error: type mismatch: found String, required Int
+// expect: 9:18: error: type mismatch: found "not an Int", required Int
 // expect: 8:40: warning: unreachable case
 // absent: 8:40: error
 // The impossible type test's error is scalac's erasure phase's, which does not run after a typer

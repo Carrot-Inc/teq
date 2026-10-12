@@ -473,8 +473,6 @@ impl<'a> Worker<'a> {
         let _serial = serial.then(|| SERIAL.lock().unwrap_or_else(|e| e.into_inner()));
         // The working state of one solve or one match starts every item anew, whichever
         // worker types it and whatever that worker typed before.
-        self.joined_soft = false;
-        self.soft_scrutinee = None;
         self.ascribed_constant = None;
         self.refresh_std_if_stale();
         self.sync_arity_tables();
@@ -2160,6 +2158,7 @@ impl<'a> Worker<'a> {
         // expands, after the inlining phase (`expanded_widening`).
         let widened = if in_body { self.expanded_widening(init) } else { self.widened_constant(init) };
         if let Some(v) = self.fold_constant(init).filter(|_| !widened) {
+            let v = self.folded_as(v, ty);
             let lit = self.types.lit(v);
             self.prog.set_type(init, lit);
             return lit;
@@ -2594,14 +2593,25 @@ impl<'a> Worker<'a> {
                     let plain_final = def.mods & (mods::FINAL | mods::INLINE | mods::LAZY) == mods::FINAL && matches!(def.kind, DefKind::Val { .. });
                     if plain_final && matches!(self.prog.expr(e), TExpr::Prim(..) | TExpr::Unary(..)) && !self.widened_constant(e) {
                         if let Some(v) = self.fold_constant_as_typed(e) {
+                            let v = self.folded_as(v, t);
                             let lit = self.literal_expr(v);
                             self.prog.copy_span(e, lit);
+                            let lit_ty = self.types.lit(v);
+                            self.prog.set_type(lit, lit_ty);
                             e = lit;
                         }
                     }
-                    // A `final val` keeps a literal type, as in Scala.
-                    result_ty = if def.mods & mods::FINAL != 0 { self.solve_in(t) } else { self.solve_inferred(t) };
-                    result_ty = self.widen_soft(e, result_ty);
+                    // A `final val` keeps a literal type, as in Scala: dotty's `inferredResultType`
+                    // keeps a `ConstantType` of an `isInlineVal` (final or inline, no method, not
+                    // mutable) and widens every other (`widenInferred`).
+                    let keeps_constant = def.mods & mods::FINAL != 0 && def.mods & mods::MUTABLE == 0 && matches!(def.kind, DefKind::Val { .. });
+                    result_ty = if keeps_constant {
+                        // A constant kept, a union widened by its members (`widenInferred`).
+                        let t = self.solve_in(t);
+                        if matches!(self.types.get(t), Type::Union(..)) { self.widen_unions(t) } else { t }
+                    } else {
+                        self.solve_inferred(t)
+                    };
                     // A path type inferred (`sing(c)` for a `[T <: Singleton]`) widens as well,
                     // but for an object's, which stays its singleton as dotty keeps a module's
                     // `TermRef` (`val chosen = summon[B.u.type]` of a given object `u` is a
@@ -2610,7 +2620,7 @@ impl<'a> Worker<'a> {
                         Type::Term(s) | Type::Select(_, s) => self.inner_object_of_sym(s).is_some() || self.given_object_type(s).is_some(),
                         _ => false,
                     };
-                    if def.mods & mods::FINAL == 0 && !module && matches!(self.types.get(result_ty), Type::Term(_) | Type::Select(..)) {
+                    if !keeps_constant && !module && matches!(self.types.get(result_ty), Type::Term(_) | Type::Select(..)) {
                         let widened = self.widen_path(result_ty);
                         result_ty = self.widen_lit(widened);
                     }
@@ -3769,6 +3779,8 @@ impl<'a> Worker<'a> {
                 r
             })
         };
+        // A parent's type is fully defined (`fullyDefinedType` of the parent in `typedParent`).
+        let ty = self.fully_defined(ty);
         // Named arguments out of parameter order are bound to temporaries in front of the call.
         let (prelude, call) = match self.prog.expr(te) {
             TExpr::Block(stmts, call) => (stmts, call),
@@ -6051,7 +6063,7 @@ impl<'a> Worker<'a> {
                 }
                 None
             }
-            Type::Union(a, b) | Type::Inter(a, b) => {
+            Type::Union(a, b, _) | Type::Inter(a, b) => {
                 self.variance_violation(a, sign).or_else(|| self.variance_violation(b, sign))
             }
             Type::Lambda(_, body) => self.variance_violation(body, sign),

@@ -295,7 +295,8 @@ impl<'a> Worker<'a> {
 
     /// The result type scalac infers for each inline method of the owned files declared without
     /// one, which teq's typer leaves to each expansion: the stored body's type, its singletons
-    /// and constants widened (`Namer.inferredResultType`), `inline_results`.
+    /// and constants widened and a join of branches as a soft union (`Namer.inferredResultType`'s
+    /// `widenInferred(tp, pt, Widen.Unions)`, a transparent method's too), `inline_results`.
     pub fn infer_inline_results(&mut self, owned: &dyn Fn(FileId) -> bool) {
         for i in 0..self.syms.syms.len() as u32 {
             let s = SymId(i);
@@ -314,7 +315,8 @@ impl<'a> Worker<'a> {
                     let body = self.inline_definitions.get(&s).filter(|d| d.state == DefinitionState::Checked).and_then(|d| d.body);
                     let Some(t) = body.and_then(|b| self.prog.type_of(b)).filter(|&t| t != ERROR) else { continue };
                     let t = self.widen_path(t);
-                    self.widen_lit(t)
+                    let t = self.widen_lit(t);
+                    self.widen_or(t, &[])
                 }
             };
             if t != ERROR {

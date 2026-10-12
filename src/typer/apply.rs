@@ -2,7 +2,7 @@ use super::profile::{About, Kind, Outcome};
 use super::resolve::TermRef;
 use super::implicits::GivenScope;
 use super::state::{ArgSlot, Cache, Dual};
-use super::{Worker, Undo};
+use super::Worker;
 use crate::ast::{Expr, ExprId, ListRef, Pat, PatId, TyExpr, TyExprId};
 use crate::intern::Name;
 use crate::names;
@@ -273,24 +273,27 @@ impl<'a> Worker<'a> {
         }
     }
 
-    /// The receiver a member is selected on. A bare polymorphic method there leaves the type
-    /// arguments its result does not fix open for what follows.
+    /// The receiver a member is selected on.
     #[inline]
-    pub(in crate::typer) fn type_receiver(&mut self, q: ExprId, selected: bool, bare: bool) -> (TExprId, TypeId) {
-        let applied = matches!(self.cur_ast().expr(q), Expr::Apply(..) | Expr::UsingApply(..) | Expr::Select(..)).then(|| self.cur_ast().expr_span(q));
-        let outer_applied = std::mem::replace(&mut self.open_applied_receiver, applied);
-        let outer = (std::mem::replace(&mut self.apply_selected, selected), std::mem::replace(&mut self.open_receiver, bare));
+    pub(in crate::typer) fn type_receiver(&mut self, q: ExprId, selected: bool) -> (TExprId, TypeId) {
+        let outer = std::mem::replace(&mut self.apply_selected, selected);
         let (tq, qty) = self.type_expr(q, None);
-        (self.apply_selected, self.open_receiver) = outer;
-        self.open_applied_receiver = outer_applied;
-        let left_open = (bare || applied.is_some()) && std::mem::take(&mut self.receiver_left_open);
-        // A variable of the receiver's type that nothing bounds yet stays open through the
-        // selection, as dotty selects a member on `List[?X]` without instantiating `?X`: the
-        // fresh element variable of an improved lambda parameter (`foldLeft(Nil)((acc, x) =>
-        // acc.::(x))`) is settled by the body, not by `acc`'s first selection. A bounded one is
-        // solved as before.
-        let _ = left_open;
-        let qty = self.solve_bounded_in(qty);
+        self.apply_selected = outer;
+        // A variable of the receiver's type stays open through the selection where the
+        // receiver's interpolation left it so (its type holds it nonvariantly, or a polymorphic
+        // method named without a parameter list made it), as dotty selects a member on `Box[?T]`
+        // without instantiating `?T`: `foo(1).zero` against a `1` makes `?T` a `1`. A receiver
+        // that is a variable itself is instantiated, as the trees around would have a covariant
+        // one.
+        let head = self.deref(qty);
+        let qty = match self.types.get(head) {
+            Type::Var(_) => self.solve_bounded_in(qty),
+            // `?G[Unit]`, whose members are its variable's: dotty's selection instantiates the
+            // constructor bounded below and selects again (`couldInstantiateTypeVar` of an
+            // `AppliedType`), so `fk.foo.bla` over `foo[G[x] >: M[x]]: G[Unit]` selects on `M[Unit]`.
+            Type::AppVar(..) if self.could_instantiate_var(qty, false) => self.zonk(qty),
+            _ => qty,
+        };
         (tq, qty)
     }
 
@@ -612,8 +615,7 @@ impl<'a> Worker<'a> {
                 }
                 let receiver = ast.expr(q);
                 let selected = name == names::APPLY && matches!(receiver, Expr::TypeApply(..));
-                let bare = matches!(receiver, Expr::Ident(_) | Expr::Select(..) | Expr::TypeApply(..));
-                let (tq, qty) = self.type_receiver(q, selected, bare);
+                let (tq, qty) = self.type_receiver(q, selected);
                 // The qualifier's type as the written tree gives it (`written_prefix`), the prefix
                 // its members are selected through: read once, here, and only of a tree whose type
                 // `TypeAssigner` gives otherwise than teq's typing does (an `if`, a match, a block
@@ -2084,7 +2086,7 @@ impl<'a> Worker<'a> {
             Type::Class(_, args) | Type::AppParam(_, args) | Type::AppVar(_, args) | Type::Alias(_, args) => {
                 self.types.items(args).iter().any(|&a| self.mentions_this_of(a, k))
             }
-            Type::Union(a, b) | Type::Inter(a, b) => self.mentions_this_of(a, k) || self.mentions_this_of(b, k),
+            Type::Union(a, b, _) | Type::Inter(a, b) => self.mentions_this_of(a, k) || self.mentions_this_of(b, k),
             Type::Refined(parent, r) => {
                 self.mentions_this_of(parent, k)
                     || match self.types.refinement(r) {
@@ -2317,6 +2319,7 @@ impl<'a> Worker<'a> {
             crate::types::LitVal::Int(v) => TExpr::Int(v),
             crate::types::LitVal::Long(v) => TExpr::Long(v),
             crate::types::LitVal::Double(bits) => TExpr::Double(f64::from_bits(bits)),
+            crate::types::LitVal::Float(bits) => TExpr::Double(f32::from_bits(bits) as f64),
             crate::types::LitVal::Char(c) => TExpr::Char(c),
             crate::types::LitVal::Bool(b) => TExpr::Bool(b),
             crate::types::LitVal::Str(n) => TExpr::Str(self.prog.add_str(self.interner.get(n))),
@@ -3623,6 +3626,15 @@ impl<'a> Worker<'a> {
                 }
                 is_explicit = !self.types.contains_app_param(var);
             }
+            // The variable keeps the bounds its parameter declares, which `instDirection` tells
+            // the constraint's apart from.
+            if let Type::Var(v) = self.types.get(var) {
+                if upper != ANY || lower != NOTHING {
+                    let u = if upper != ANY { self.types.subst(upper, &subst) } else { ANY };
+                    let l = if lower != NOTHING { self.types.subst(lower, &subst) } else { NOTHING };
+                    self.tvars[v].set_declared(l, u);
+                }
+            }
             if upper != ANY {
                 let u = self.types.subst(upper, &subst);
                 if !self.is_sub(var, u) && is_explicit {
@@ -3659,7 +3671,7 @@ impl<'a> Worker<'a> {
                 let msg = format!(
                     "extension method {} is not applicable to {}",
                     self.name_str(self.syms.sym(call.sym).name),
-                    self.show(recv_ty)
+                    self.show(self.widen_lit(recv_ty))
                 );
                 self.error(span, msg);
             }
@@ -4118,51 +4130,26 @@ impl<'a> Worker<'a> {
             evidence = self.erased_evidence(call.sym, &sig, &subst, written, erroneous_arg, given_site, span);
         }
         self.param_paths.truncate(paths_mark);
-        // Type arguments that nothing constrains stay open while the expected type is an open
-        // variable: under a branch guide the join of the branches settles them (`if c then
-        // Map.empty else m`), otherwise the enclosing application does
-        // (`Right(Refined.unsafeApply(t))` against an `Either[String, Refined[T, P]]`).
-        let mut open_in_ret = Vec::new();
-        let mut held = Vec::new();
         if let Some(v) = open_expected {
             self.conform_to_bounds(ret_ty, v, false);
-            let ret_ty = self.zonk(ret_ty);
-            self.collect_vars(ret_ty, &mut open_in_ret);
-            // Under a branch guide a variable the result holds invariantly and only lower bounds
-            // constrain stays open too, as scalac leaves it: the join of the branches equates it
-            // with the other branches' (`if c then pure(Left(e)) else pure(Right(r))` is a
-            // `Fr[Either[E, R]]`, not the `Product & Serializable` of `Fr[Left]` and `Fr[Right]`).
-            if self.tvars[v].guide {
-                for (w, sign) in self.var_variances(ret_ty) {
-                    if sign != 0 || w.idx() < first_var || self.tvars[w].inst.is_some() {
-                        continue;
-                    }
-                    let uppers = self.tvars[w].upper.clone();
-                    if uppers.into_iter().all(|u| { let u = self.deref(u); matches!(self.types.get(u), Type::Var(_)) }) {
-                        held.push(w);
-                    }
-                }
-            }
-        } else if normal_clauses == 0 && ctor.is_none() && (lists.peek().is_some() || (explicit_lists == 0 && !sig.tparams.is_empty() && std::mem::take(&mut self.open_receiver))) {
-            // The arguments go to the result (`withService(f)` for a `def withService[T]: Partial[T]`
-            // whose `apply` takes `f`), or a member of the result is selected (`lens.mod(f)` for
-            // a `def lens[F[_]]: Lens[Holder[F], ..]`): what follows settles the type arguments
-            // the result leaves open, from the expected type and the arguments, as scalac's does.
-            let ret_ty = self.zonk(ret_ty);
-            self.collect_vars(ret_ty, &mut open_in_ret);
-            self.receiver_left_open = !open_in_ret.is_empty();
-        } else if !trial && self.open_applied_receiver == Some(span) {
-            self.open_applied_receiver = None;
-            let ret_ty = self.zonk(ret_ty);
-            for (w, sign) in self.var_variances(ret_ty) {
-                let info = &self.tvars[w];
-                if sign == 0 && info.inst.is_none() && info.lower.is_empty() && info.upper.is_empty() {
-                    open_in_ret.push(w);
-                }
-            }
-            self.receiver_left_open = !open_in_ret.is_empty();
         }
-        self.solve_application_vars(first_var, widen_mark, ret_ty, &open_in_ret, &held, span);
+        // A polymorphic method named without a parameter list (`List.empty`, `Map.empty`) is
+        // adapted to its type arguments as variables without its tree's interpolation (`Typer.adapt`
+        // `readapt(tree.appliedToTypeTrees(typeArgs))`, no `simplify`): the trees around interpolate
+        // them, so `foldLeft(List.empty)` leaves the element open for the lambda (a `List[Any]`).
+        // An inline method's are instantiated before it expands (`Inliner`'s `isFullyDefined` of
+        // the call's type arguments): `p.tail` of scala-library's `tail[This >: this.type]`.
+        // Named so, an inline one has no interpolation of its own either: its type arguments are
+        // defined fully under `ForceDegree.flipBottom` (`Inliner`), one nothing bounds below taking
+        // its upper bound (`meth[R <: Int]: R` expected an `Int` is `meth[Int]`, i7798).
+        let poly_ref = normal_clauses == 0 && ctor.is_none() && sig.clauses.is_empty() && !sig.tparams.is_empty();
+        if poly_ref && inline_callee {
+            self.maximize_bottom_from(first_var);
+        } else if poly_ref {
+            self.leave_vars_open(first_var, ret_ty);
+            self.unsimplified = true;
+        }
+        self.solve_application_vars(first_var, widen_mark, ret_ty, expected, span);
         let ret_ty = self.zonk(ret_ty);
         let l = self.prog.list(&args_out);
         let mut ty = ret_ty;
@@ -4339,7 +4326,7 @@ impl<'a> Worker<'a> {
         }
         let applied = self.apply_callee(Callee::Value(te, ty), None, rest, span, expected);
         let widen_mark = self.pending_widenings.len();
-        self.solve_application_vars(first_var, widen_mark, applied.1, &[], &[], span);
+        self.solve_application_vars(first_var, widen_mark, applied.1, expected, span);
         // The result the next list applies, which signature help reads at the span of the
         // application so far (`factory()(|)`), where some list was applied: its type as the
         // application's variables are solved (`new C(1)(|)` applies a `C[Int]`).
@@ -4451,65 +4438,56 @@ impl<'a> Worker<'a> {
         (self.is_tuple_class(tc) && elems.len() == clause.params.len()).then_some((pt, tc, elems))
     }
 
-    /// Solves the type variables an application made from `first_var` on, then applies the
-    /// numeric widenings its arguments were waiting for. A branch guide and an unconstrained
-    /// variable of `open_in_ret` stay open for the enclosing application.
-    fn solve_application_vars(
-        &mut self,
-        first_var: usize,
-        widen_mark: usize,
-        ret_ty: TypeId,
-        open_in_ret: &[TVarId],
-        held: &[TVarId],
-        span: Span,
-    ) {
+    /// Interpolates the type variables an application made from `first_var` on, as dotty's
+    /// `interpolateTypeVars` does at the application's tree (`instantiate_vars` over the result
+    /// type and the expected one: a variable the result holds nonvariantly stays open for the trees
+    /// around), then applies the numeric widenings its arguments were waiting for. A branch guide
+    /// stays open for the join of the branches.
+    fn solve_application_vars(&mut self, first_var: usize, widen_mark: usize, ret_ty: TypeId, expected: Option<TypeId>, span: Span) {
         // What was reported under the application is rendered as its typing leaves it.
         if !self.mismatch_renders.is_empty() {
             self.render_mismatches(self.app_depth);
         }
-        // The variables of the result type with their variances, walked when an unconstrained
-        // variable first asks and again after a solution that touched one of them (an
-        // instantiation lets other variables show through). The variables between `first_var`
-        // and the end are mostly what the nested searches and expansions left: a rolled-back
-        // candidate's, unconstrained and in no result type.
-        let mut in_ret: Option<Vec<(TVarId, i8)>> = None;
+        if first_var < self.tvars.len() {
+            self.interpolate_application(first_var, ret_ty, expected, span);
+        }
+        if widen_mark < self.pending_widenings.len() {
+            self.apply_pending_widenings(widen_mark);
+        }
+    }
+
+    /// `solve_application_vars`'s interpolation, of an application that made variables.
+    fn interpolate_application(&mut self, first_var: usize, ret_ty: TypeId, expected: Option<TypeId>, span: Span) {
+        let mut qualifying = Vec::new();
+        // The variables an inner tree left open, when any did.
+        let left: crate::intern::FxMap<TVarId, ()> = if self.open_vars.last().is_some_and(|&w| self.tvars.made_since(w, first_var)) {
+            let left_open = self.open_vars.iter().rposition(|&w| !self.tvars.made_since(w, first_var)).map_or(0, |i| i + 1);
+            self.open_vars[left_open..].iter().map(|&w| (w, ())).collect()
+        } else {
+            Default::default()
+        };
         for v in first_var..self.tvars.len() {
             let info = &self.tvars[v];
-            let unconstrained = info.inst.is_none() && info.lower.is_empty() && info.upper.is_empty();
-            let v = self.tvars.id(v);
-            if info.guide || (unconstrained && open_in_ret.contains(&v)) || held.contains(&v) {
+            if info.inst.is_some() {
                 continue;
             }
-            // Nothing is known about it: a variable the result uses only contravariantly is
-            // `Any`, as scalac maximises it, so that `mk` for `def mk[A]: Con[A]` is a `Con[Any]`.
-            if unconstrained {
-                if in_ret.is_none() {
-                    in_ret = Some(self.var_variances(ret_ty));
-                }
-                if in_ret.as_ref().map_or(false, |vars| vars.iter().any(|&(w, s)| w == v && s == -1)) {
-                    self.instantiate(v, ANY);
-                    in_ret = None;
-                    continue;
-                }
+            // Left for the trees around (`leave_vars_open`), or by an inner interpolation.
+            if !left.is_empty() && left.contains_key(&self.tvars.id(v)) {
+                continue;
             }
-            let mark = self.trail.len();
-            if !self.solve_var_directed(v, Some(ret_ty)) {
-                let msg = format!("cannot infer type arguments: conflicting bounds for {}", self.show(ret_ty));
-                self.error(span, msg);
-                break;
+            if info.guide {
+                continue;
             }
-            if let Some(vars) = &in_ret {
-                let touched = |u: &Undo| {
-                    let w = match u {
-                        Undo::Inst(w) | Undo::Lower(w) | Undo::Upper(w) => *w,
-                    };
-                    vars.iter().any(|&(x, _)| x == w)
-                };
-                if self.trail[mark..].iter().any(touched) {
-                    in_ret = None;
-                }
-            }
+            qualifying.push(self.tvars.id(v));
         }
+        if !qualifying.is_empty() && !self.instantiate_vars(&qualifying, first_var, ret_ty, expected) {
+            let msg = format!("cannot infer type arguments: conflicting bounds for {}", self.show(ret_ty));
+            self.error(span, msg);
+        }
+    }
+
+    /// The numeric widenings the arguments of an application were waiting for, from `widen_mark` on.
+    fn apply_pending_widenings(&mut self, widen_mark: usize) {
         for i in widen_mark..self.pending_widenings.len() {
             let (te, actual, pty) = self.pending_widenings[i];
             let target = self.zonk(pty);
@@ -4599,11 +4577,27 @@ impl<'a> Worker<'a> {
         }
         for bound in bounds {
             let bound = self.zonk(bound);
+            // A bound holding a variable an interpolation left open (an earlier element's
+            // `Rule[?P]` of a `List(..)`) is the enclosing tree's to settle, as dotty leaves it:
+            // relating each result to every such bound made a list of n quadratic.
+            if self.mentions_left_open(bound) {
+                continue;
+            }
             let mark = self.snapshot();
             if !self.is_sub(ret_ty, bound) {
                 self.rollback(mark);
             }
         }
+    }
+
+    /// Whether `t` names a variable an interpolation left open (`open_vars`).
+    fn mentions_left_open(&mut self, t: TypeId) -> bool {
+        if self.open_vars.is_empty() || !self.types.has_vars(t) {
+            return false;
+        }
+        let mut vars = Vec::new();
+        self.collect_vars(t, &mut vars);
+        vars.iter().any(|v| self.open_vars.contains(v))
     }
 
     /// The type variables in the parameter types of the argument lists applied so far. As in
@@ -5418,12 +5412,7 @@ impl<'a> Worker<'a> {
                 // A transparent call a member's cache holds unexpanded is expanded as it is
                 // adapted (`expand_unadapted`).
                 let (te, ty) = match self.arg_slot(e) {
-                    ArgSlot::None => {
-                        let vars_mark = self.tvars.len();
-                        let typed = self.type_expr(e, Some(pty));
-                        self.interpolate_applied_arg(e, typed.1, pty, vars_mark);
-                        typed
-                    }
+                    ArgSlot::None => self.type_expr(e, Some(pty)),
                     ArgSlot::Cached(te, ty) => {
                         self.retry_typed.insert(te, ());
                         (te, self.expand_unadapted(te, pty).unwrap_or(ty))
@@ -5453,56 +5442,6 @@ impl<'a> Worker<'a> {
                 let (te, ty) = self.type_for_lambda(pat, rest, pty, span);
                 self.note_erroneous_arg(ty);
                 self.adapt(te, ty, pty, span)
-            }
-        }
-    }
-
-    /// An argument that is an application, typed against an open variable of the call: its own
-    /// variables are instantiated as dotty's `interpolateTypeVars` instantiates those of an
-    /// `Apply` tree, which nothing outside depends on yet (no `constrainResult` for an `Apply`):
-    /// a covariant one from below, a contravariant one from above, a nonvariant one left open.
-    /// `foldLeft(Map())` thus has a `Map[K, Nothing]` before the lambda, whose `K` the lambda's
-    /// parameter then maximizes (`Map[Any, Nothing]`), where `foldLeft(Map.empty)` leaves both open.
-    /// It is part of the argument's typing (`typedUnadapted`'s `simplify`), so the typing a
-    /// member's cache keeps (`type_arg_cached`) is interpolated already.
-    #[inline]
-    fn interpolate_applied_arg(&mut self, e: ExprId, ty: TypeId, pty: TypeId, vars_mark: usize) {
-        // An argument that made no variable, or a formal that is none, is passed at a test.
-        if self.tvars.len() != vars_mark {
-            self.interpolate_applied_arg_now(e, ty, pty, vars_mark);
-        }
-    }
-
-    #[inline(never)]
-    fn interpolate_applied_arg_now(&mut self, e: ExprId, ty: TypeId, pty: TypeId, vars_mark: usize) {
-        let formal = self.deref(pty);
-        if !matches!(self.types.get(formal), Type::Var(_)) {
-            return;
-        }
-        let ast = self.cur_ast();
-        let mut head = e;
-        while let Expr::Parens(inner) = ast.expr(head) {
-            head = inner;
-        }
-        if !matches!(ast.expr(head), Expr::Apply(..) | Expr::UsingApply(..)) {
-            return;
-        }
-        let ty = self.zonk(ty);
-        for (w, sign) in self.var_variances(ty) {
-            if !self.tvars.made_since(w, vars_mark) || self.tvars[w].inst.is_some() {
-                continue;
-            }
-            match sign {
-                1 if self.tvars[w].lower.is_empty() => self.instantiate(w, NOTHING),
-                1 => {
-                    self.solve_var(w);
-                }
-                -1 => {
-                    let uppers = self.tvars[w].upper.clone();
-                    let top = uppers.into_iter().reduce(|a, b| self.types.inter(a, b)).unwrap_or(ANY);
-                    self.instantiate(w, top);
-                }
-                _ => {}
             }
         }
     }
@@ -5630,9 +5569,7 @@ impl<'a> Worker<'a> {
         let call = (!braced).then(|| (self.env.file, ast.expr_span(at)));
         let outer = std::mem::replace(&mut self.unadapted_call, call);
         let outer_node = self.unadapted_node.take();
-        let vars_mark = self.tvars.len();
         let typed = self.type_expr(e, Some(pty));
-        self.interpolate_applied_arg(e, typed.1, pty, vars_mark);
         self.unadapted_call = outer;
         let deferred = std::mem::replace(&mut self.unadapted_node, outer_node) == Some(typed.0);
         match self.cache_arg(e, typed) {
@@ -5650,9 +5587,7 @@ impl<'a> Worker<'a> {
     fn type_named_arg_cached(&mut self, e: ExprId, written: ExprId, pty: TypeId, spread: bool) -> TExprId {
         let retained = self.arg_typing_begin(e);
         let diags = self.diags.items.len();
-        let vars_mark = self.tvars.len();
         let (te, ty) = self.type_expr(e, Some(pty));
-        self.interpolate_applied_arg(e, ty, pty, vars_mark);
         let arg_span = self.cur_ast().expr_span(e);
         self.mark_spread_array(spread, te, ty);
         let adapted = self.typed_arg(te, ty, pty, arg_span);
@@ -5739,7 +5674,10 @@ impl<'a> Worker<'a> {
         }
         match self.prog.expr(te) {
             TExpr::Int(_) | TExpr::Long(_) | TExpr::Double(_) | TExpr::Bool(_) | TExpr::Char(_) | TExpr::Str(_) if !self.widened_constant(te) => match self.fold_constant(te) {
-                Some(v) => self.types.lit(v),
+                Some(v) => {
+                    let v = self.folded_as(v, ty);
+                    self.types.lit(v)
+                }
                 None => ty,
             },
             _ => ty,
@@ -5900,6 +5838,12 @@ impl<'a> Worker<'a> {
         span: Span,
         expected: Option<TypeId>,
     ) -> (TExprId, TypeId) {
+        // A member of a union is its join's (dotty's `findMember` of an `OrType`, `goOr`): a
+        // union of one primitive class's constants (`1 | 2`, a join of branches) has the class's.
+        let recv_ty = match self.types.get(recv_ty) {
+            Type::Union(..) => self.primitive_side(recv_ty).unwrap_or(recv_ty),
+            _ => recv_ty,
+        };
         self.apply_member_of_class(recv, recv_ty, name, targs, lists, span, expected)
     }
 
@@ -6071,7 +6015,10 @@ impl<'a> Worker<'a> {
         let recv_ty = match self.enum_case_new {
             Some((te, precise)) if te == recv => precise,
             _ => {
-                let solved = self.solve_bounded_in(recv_ty);
+                // A variable the receiver's interpolation left open in its type stays open
+                // through the member (`type_receiver`); a receiver that is one is instantiated.
+                let head = self.deref(recv_ty);
+                let solved = if matches!(self.types.get(head), Type::Var(_)) { self.solve_bounded_in(recv_ty) } else { recv_ty };
                 self.capture_wildcards_in(recv, solved)
             }
         };
@@ -6546,7 +6493,8 @@ impl<'a> Worker<'a> {
             return r;
         }
         lists = Some(l);
-        let msg = format!("value {} is not a member of {}", self.name_str(name), self.show(recv_ty));
+        // The receiver shown widened (`NotAMember`'s `site.widen`): `Int` for a `0`.
+        let msg = format!("value {} is not a member of {}", self.name_str(name), self.show(self.widen_lit(recv_ty)));
         // What a class whose header, or an ancestor's, the parser could not complete lacks is
         // unknown.
         if self.incomplete_ancestry(recv_ty) {

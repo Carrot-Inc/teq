@@ -694,7 +694,11 @@ impl<'a> Worker<'a> {
             let result = self.result_expr(body.body);
             let ascribed = matches!(self.ast(body.file).expr(result), crate::ast::Expr::Typed(..)) || self.widened_constant(te);
             match self.fold_constant(te).filter(|_| !ascribed) {
-                Some(v) => self.types.lit(v),
+                Some(v) => {
+                    let walked = self.walked_type(&walk, te);
+                    let v = self.folded_as(v, walked);
+                    self.types.lit(v)
+                }
                 None => self.walked_type(&walk, te),
             }
         } else if !body.declared {
@@ -1881,7 +1885,6 @@ impl<'a> Worker<'a> {
             return;
         }
         let t = self.solve_inferred(t);
-        let t = self.widen_soft(init, t);
         let mut sig = (*self.sig_of(s)).clone();
         if sig.ret != t {
             sig.ret = t;
@@ -2250,9 +2253,9 @@ impl<'a> Worker<'a> {
                     self.types.mk(Type::Alias(a, l))
                 }
             }
-            Type::Union(a, b) => {
+            Type::Union(a, b, soft) => {
                 let (x, y) = (self.members_of_paths(a), self.members_of_paths(b));
-                if (x, y) == (a, b) { t } else { self.types.union(x, y) }
+                if (x, y) == (a, b) { t } else { self.types.union_as(soft, x, y) }
             }
             Type::Inter(a, b) => {
                 let (x, y) = (self.members_of_paths(a), self.members_of_paths(b));
@@ -2988,7 +2991,7 @@ impl<'a> Worker<'a> {
                         ok
                     }
                     _ => match (self.fold_constant(x), s.constant) {
-                        (Some(a), Some(b)) => a == b || super::inline::same_number(a, b),
+                        (Some(a), Some(b)) => super::inline::constant_eq(a, b),
                         _ => false,
                     },
                 }

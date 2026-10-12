@@ -473,10 +473,18 @@ pub struct TVarInfo {
     pub inst: Option<TypeId>,
     pub lower: Vec<TypeId>,
     pub upper: Vec<TypeId>,
+    /// The open variables whose constraint this one's instance can narrow, each with the side
+    /// (`DEP_CO`, `DEP_CONTRA`): those whose bounds name it, dotty's `OrderingConstraint.coDeps`
+    /// and `contraDeps`, and those it is ordered against (`v <: w` narrows `w` where `v` grows,
+    /// `v` where `w` shrinks: the upper and lower lenses), kept with the bounds
+    /// (`Worker::note_bound_deps`) and undone with them (`Undo::Dep`). Most variables have none.
+    /// The dependencies and, for a type parameter's variable with bounds, the bounds it was
+    /// declared with (`TVarExtra`); most variables have neither.
+    extra: Option<Box<TVarExtra>>,
     /// The index of the first variable of the application that was being typed when this one
     /// was made (older variables belong to enclosing applications) in the low 24 bits, which an
     /// index takes at most (`TVarId::TAG_SHIFT`), and the top 8 bits of `shown`'s 24 above them:
-    /// the record stays 72 bytes.
+    /// the record stays 80 bytes.
     base_shown: u32,
     pub solving: bool,
     /// Stands for the join of the branches typed so far (`Worker::branch_guide`).
@@ -496,6 +504,56 @@ impl TVarInfo {
         self.base_shown & ((1 << TVarId::TAG_SHIFT) - 1)
     }
 
+    /// The variables this one's instance can narrow (`deps`).
+    #[inline]
+    pub fn deps(&self) -> &[(TVarId, u8)] {
+        self.extra.as_deref().map_or(&[], |e| e.deps.as_slice())
+    }
+
+    pub fn push_dep(&mut self, d: (TVarId, u8)) {
+        self.extra.get_or_insert_with(Default::default).deps.push(d);
+    }
+
+    pub fn pop_dep(&mut self) -> Option<(TVarId, u8)> {
+        self.extra.as_mut().and_then(|e| e.deps.pop())
+    }
+
+    /// Its dependencies, taken from it (`Worker::drop_deps`).
+    pub fn take_deps(&mut self) -> Vec<(TVarId, u8)> {
+        self.extra.as_mut().map_or_else(Vec::new, |e| std::mem::take(&mut e.deps))
+    }
+
+    /// Its dependencies given back where an undo restores them, beneath any recorded since
+    /// (which the trail undoes first).
+    pub fn restore_deps(&mut self, mut deps: Vec<(TVarId, u8)>) {
+        if !deps.is_empty() {
+            let e = self.extra.get_or_insert_with(Default::default);
+            deps.append(&mut e.deps);
+            e.deps = deps;
+        }
+    }
+
+    /// The lower and upper bounds its type parameter declares (`Nothing` and `Any` where none).
+    pub fn declared(&self) -> (TypeId, TypeId) {
+        self.extra.as_deref().and_then(|e| e.declared).unwrap_or((NOTHING, ANY))
+    }
+
+    /// Whether it stands for a fixed argument of a partial unification (`TVarExtra::fixed`).
+    #[inline]
+    pub fn is_fixed(&self) -> bool {
+        self.extra.as_deref().is_some_and(|e| e.fixed)
+    }
+
+    pub fn set_fixed(&mut self) {
+        self.extra.get_or_insert_with(Default::default).fixed = true;
+    }
+
+    pub fn set_declared(&mut self, lower: TypeId, upper: TypeId) {
+        if lower != NOTHING || upper != ANY {
+            self.extra.get_or_insert_with(Default::default).declared = Some((lower, upper));
+        }
+    }
+
     /// The variable's place among the ones the typing that made it made (`Worker::var_frames`),
     /// plus one, which a message shows it by: a function of that body's, class's or item's own
     /// order, whichever worker typed it and whatever it typed before. 0 where none is kept.
@@ -504,12 +562,35 @@ impl TVarInfo {
     }
 }
 
-const _: () = assert!(std::mem::size_of::<TVarInfo>() == 72);
+const _: () = assert!(std::mem::size_of::<TVarInfo>() == 80);
+
+/// What few variables have (`TVarInfo::extra`).
+#[derive(Clone, Default)]
+pub struct TVarExtra {
+    deps: Vec<(TVarId, u8)>,
+    /// The bounds its type parameter declares, as substituted (`param.binder.paramInfos`), which
+    /// `instDirection` compares the constraint's bounds with.
+    declared: Option<(TypeId, TypeId)>,
+    /// It stands for an argument of the class a higher-kinded variable was unified with, the
+    /// leftmost ones the unification fixes (`F[A] >: Validated[E, A]` makes `F` a
+    /// `Validated[?e, _]` with `?e >: E`), which dotty's `canInstantiate` takes as it is.
+    fixed: bool,
+}
+
+/// A variable named covariantly in another's bound: instantiating it larger narrows that one
+/// (`coDeps`).
+pub const DEP_CO: u8 = 1;
+/// A variable named contravariantly in another's bound (`contraDeps`).
+pub const DEP_CONTRA: u8 = 2;
 
 pub enum Undo {
     Inst(TVarId),
     Lower(TVarId),
     Upper(TVarId),
+    /// The last entry of the variable's `deps`.
+    Dep(TVarId),
+    /// The variable's `deps`, dropped at its instantiation, the last of `Worker::dropped_deps`.
+    DropDeps(TVarId),
 }
 
 #[derive(Clone, Copy)]
@@ -517,6 +598,8 @@ pub enum Redo {
     Inst(TVarId, TypeId),
     Lower(TVarId, TypeId),
     Upper(TVarId, TypeId),
+    Dep(TVarId, (TVarId, u8)),
+    DropDeps(TVarId),
 }
 
 #[derive(Clone, Copy)]
@@ -583,6 +666,7 @@ pub enum ImportTarget {
 pub struct ViewMemos {
     matches: matchtypes::MatchMemos,
     given_fast: FxMap<(TypeId, FileId, u64), (std::sync::Arc<implicits::GivenResult>, Box<[u32]>)>,
+    lit_types: FxMap<crate::types::LitVal, TypeId>,
 }
 
 pub struct Worker<'a> {
@@ -614,6 +698,9 @@ pub struct Worker<'a> {
     /// The first variable of the innermost method application being typed.
     pub app_base: u32,
     pub trail: Vec<Undo>,
+    /// The dependencies of the variables instantiated, as an undo of the trail
+    /// (`Undo::DropDeps`) gives them back, in the trail's order.
+    pub dropped_deps: Vec<Vec<(TVarId, u8)>>,
     /// The attempts under way (`state.rs`).
     pub attempts: state::Attempts,
     /// The argument caches of the applications several attempts apply (`state::ArgCache`), and
@@ -784,16 +871,6 @@ pub struct Worker<'a> {
     /// receiver it names, which takes it in the place of the symbol's signature
     /// (`take_joint_sig`); another receiver or symbol leaves it be.
     pub joint_sig: Option<(Option<TExprId>, SymId, std::sync::Arc<MethodSig>)>,
-    /// Set while the receiver of a member selection is typed, until the application it is
-    /// takes it (an inline expansion under it clears it): a bare reference to a polymorphic method leaves the type arguments its result
-    /// does not fix open, and says so in `receiver_left_open`.
-    pub open_receiver: bool,
-    pub receiver_left_open: bool,
-    /// The span of an application or selection whose member is selected: the type arguments
-    /// that nothing constrains and its result holds invariantly stay open for what follows, as
-    /// scalac does not interpolate them (`Response(status).withEntity(b)(using enc)` for a
-    /// `Response[F[_]]`).
-    pub open_applied_receiver: Option<crate::source::Span>,
     /// The applications with inferred type arguments whose pickled arguments did not check,
     /// by the type expected of them, with whether those were dropped: typed again against
     /// the same type inside an enclosing retry, each takes the same way at once.
@@ -850,6 +927,17 @@ pub struct Worker<'a> {
     pub last_arg_types: Vec<TypeId>,
     /// Numeric arguments typed against an open type variable: (argument, its type, parameter type).
     pub pending_widenings: Vec<(TExprId, TypeId, TypeId)>,
+    /// The type variables an interpolation left open, the result holding them nonvariantly
+    /// (`Inferencing.interpolateTypeVars`): the trees around the one that made them instantiate
+    /// them (`Worker::interpolate_open`), at the latest the definition whose typing made them
+    /// (`var_frame_end`). Ordered by when each was left open, so a tree's own are at the end.
+    pub open_vars: Vec<TVarId>,
+    /// How many variables an interpolation has left open so far: a quote whose typing left one
+    /// open has its nodes' recorded types zonked at its end (`settle_node_types`).
+    pub opened: u32,
+    /// The tree being typed is a polymorphic method named without a parameter list, which dotty
+    /// adapts without simplifying (`leave_vars_open`): its own interpolation is skipped.
+    pub unsimplified: bool,
     /// Operands bound to temporaries so that they are evaluated once and in source order; the
     /// expression that caused them wraps the ones above its mark into a block (`Worker::hoist`).
     pub hoisted: Vec<TStmt>,
@@ -859,17 +947,6 @@ pub struct Worker<'a> {
     /// Pairs whose least upper bound is being computed; a self-referential base type such as
     /// `IterableOps[A, CC, C]` with `C` the collection itself leads back to the same pair.
     pub lub_in_progress: Vec<(TypeId, TypeId)>,
-    /// The expressions whose type is a union `lub` made of their branches (an `if`, a `match`,
-    /// a `try`): soft, as dotc's, it widens to its join where the expression's type is inferred
-    /// (a val's, a lambda's result); a union written in the program is never soft.
-    pub soft_exprs: crate::intern::FxMap<TExprId, ()>,
-    /// Set by `join_lower` when a variable's lower bounds joined to a union (`solve_var_inner`).
-    pub joined_soft: bool,
-    /// The binders of a soft scrutinee (`(if c then a else b) match { case x => .. }`): a val
-    /// inferred from one widens, as dotc's `widenInferred` widens the binder's soft type.
-    pub soft_syms: crate::intern::FxMap<SymId, ()>,
-    /// The type of the soft scrutinee whose patterns are being typed.
-    pub soft_scrutinee: Option<TypeId>,
     /// Whether a join being computed serves member selection on a union, where differing
     /// invariant arguments read as the unknown argument rather than failing the join.
     pub join_wild: bool,
@@ -913,6 +990,11 @@ pub struct Worker<'a> {
     pub given_indexes: FxMap<PkgId, std::sync::Arc<implicits::GivenIndex>>,
     /// Shared signatures for plain values, so that locals do not allocate one each.
     pub value_sigs: FxMap<TypeId, std::sync::Arc<MethodSig>>,
+    /// The constant types of the literals typed, one lookup where the store makes two (the
+    /// constant's and its type's): a memo of the types of the bodies, as `value_sigs` is, kept
+    /// apart per view (`ViewMemos`): a constant made in the worker's overlay is no type of the
+    /// base, which the loader's lock holder makes its types in.
+    pub lit_types: FxMap<crate::types::LitVal, TypeId>,
     pub temp_names: FxMap<(&'static str, u32), Name>,
     /// The package chain of each file, a memo of the worker's own.
     pub file_chains: Vec<Option<std::sync::Arc<[PkgId]>>>,
@@ -2079,6 +2161,7 @@ impl<'a> Worker<'a> {
             tvars: TVars::new(),
             app_base: 0,
             trail: Vec::new(),
+            dropped_deps: Vec::new(),
             attempts: Default::default(),
             attempt_caches: Vec::new(),
             cache_buffers: Vec::new(),
@@ -2142,15 +2225,8 @@ impl<'a> Worker<'a> {
             assign_op_receiver: None,
             written_qualifier: None,
             joint_sig: None,
-            open_receiver: false,
-            receiver_left_open: false,
-            open_applied_receiver: None,
             inferred_outcomes: FxMap::default(),
             inferred_val_outcomes: FxMap::default(),
-            soft_exprs: FxMap::default(),
-            joined_soft: false,
-            soft_syms: FxMap::default(),
-            soft_scrutinee: None,
             converting_receiver: false,
             blocked_conversion: None,
             return_to: None,
@@ -2168,6 +2244,9 @@ impl<'a> Worker<'a> {
             check_capture_keys: Vec::new(),
             last_arg_types: Vec::new(),
             pending_widenings: Vec::new(),
+            open_vars: Vec::new(),
+            opened: 0,
+            unsimplified: false,
             hoisted: Vec::new(),
             tested: Vec::new(),
             lub_in_progress: Vec::new(),
@@ -2191,6 +2270,7 @@ impl<'a> Worker<'a> {
             for_bases: Vec::new(),
             given_indexes: FxMap::default(),
             value_sigs: FxMap::default(),
+            lit_types: FxMap::default(),
             temp_names: FxMap::default(),
             file_chains: vec![None; n_files],
             class_exports: exports::ExportTables::new(),
@@ -2410,6 +2490,7 @@ impl<'a> Worker<'a> {
             tvars: TVars::attach(&self.tvars, worker as u32, self.tvars_at_fork),
             app_base: Default::default(),
             trail: Default::default(),
+            dropped_deps: Default::default(),
             attempts: Default::default(),
             attempt_caches: Vec::new(),
             cache_buffers: Vec::new(),
@@ -2418,10 +2499,6 @@ impl<'a> Worker<'a> {
             // which the merge joins in the work items' order (`merge_workers`).
             index: self.index.as_ref().map(|ix| Box::new(ix.attach())),
             deps: self.deps.as_ref().map(|_| Box::default()),
-            soft_exprs: self.soft_exprs.clone(),
-            soft_syms: self.soft_syms.clone(),
-            joined_soft: false,
-            soft_scrutinee: None,
             ascribed_constant: None,
             inline_deps: Default::default(),
             interpolations: self.interpolations.clone(),
@@ -2483,9 +2560,6 @@ impl<'a> Worker<'a> {
             assign_op_receiver: None,
             written_qualifier: None,
             joint_sig: None,
-            open_receiver: Default::default(),
-            receiver_left_open: Default::default(),
-            open_applied_receiver: Default::default(),
             inferred_outcomes: self.inferred_outcomes.clone(),
             inferred_val_outcomes: self.inferred_val_outcomes.clone(),
             converting_receiver: Default::default(),
@@ -2505,6 +2579,9 @@ impl<'a> Worker<'a> {
             check_capture_keys: Vec::new(),
             last_arg_types: Default::default(),
             pending_widenings: Default::default(),
+            open_vars: Default::default(),
+            opened: 0,
+            unsimplified: false,
             hoisted: Default::default(),
             tested: Default::default(),
             lub_in_progress: Default::default(),
@@ -2523,6 +2600,7 @@ impl<'a> Worker<'a> {
             for_bases: Default::default(),
             given_indexes: self.given_indexes.clone(),
             value_sigs: self.value_sigs.clone(),
+            lit_types: self.lit_types.clone(),
             temp_names: self.temp_names.clone(),
             file_chains: self.file_chains.clone(),
             class_exports: self.class_exports.attach(),
@@ -2735,6 +2813,9 @@ impl<'a> Worker<'a> {
         }
         self.var_frames.truncate(frame);
         let Some((start, _)) = self.var_frames.pop() else { return };
+        if !self.open_vars.is_empty() {
+            self.force_open_vars(start as usize);
+        }
         let made = self.tvars.len() as u32 - start;
         if let Some(outer) = self.var_frames.last_mut() {
             outer.1 += made;
@@ -3059,6 +3140,7 @@ impl<'a> Worker<'a> {
         let other = &mut self.other_view_memos;
         self.matches.swap_memos(&mut other.matches);
         std::mem::swap(&mut self.given_fast, &mut other.given_fast);
+        std::mem::swap(&mut self.lit_types, &mut other.lit_types);
     }
 
     /// What the release is about to make every worker's, checked to name the base alone
