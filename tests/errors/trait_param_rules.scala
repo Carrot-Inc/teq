@@ -2,7 +2,7 @@
 // expect: 14:7: error: parameterized trait Labelled is indirectly implemented, needs to be implemented directly so that arguments can be passed
 // expect: 16:23: error: trait Passing may not call constructor of trait Labelled
 // expect: 17:23: error: missing argument for parameter label
-// expect: 18:27: error: type mismatch: found String, required Int
+// expect: 18:27: error: type mismatch: found "w", required Int
 // expect: 19:21: error: too many arguments: expected 2
 // expect: 22:31: error: too many arguments for constructor Free in trait Free: (): Free
 // expect: 7 errors found

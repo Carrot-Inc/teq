@@ -1,6 +1,6 @@
 // expect: 15:22: error: object creation impossible, since def size: Int in trait Named is not defined
 // expect: 17:18: error: the type arguments of Functor cannot be inferred here; write them out
-// expect: 21:37: error: type mismatch: found String, required Int
+// expect: 21:37: error: type mismatch: found "big", required Int
 // expect: 3 errors found
 
 trait Named:

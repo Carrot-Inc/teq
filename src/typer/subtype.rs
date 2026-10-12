@@ -1,4 +1,4 @@
-use super::{Redo, TVarInfo, Worker, Undo};
+use super::{Redo, TVarInfo, Worker, Undo, DEP_CO, DEP_CONTRA};
 use crate::intern::Name;
 use crate::symbols::*;
 use crate::types::*;
@@ -58,6 +58,13 @@ impl<'a> Worker<'a> {
                 Undo::Upper(v) => {
                     self.tvars[v].upper.pop();
                 }
+                Undo::Dep(v) => {
+                    self.tvars[v].pop_dep();
+                }
+                Undo::DropDeps(v) => {
+                    let deps = self.dropped_deps.pop().expect("the dropped dependencies");
+                    self.tvars[v].restore_deps(deps);
+                }
             }
         }
     }
@@ -65,7 +72,11 @@ impl<'a> Worker<'a> {
     pub fn replay(&mut self, undone: Vec<Redo>) {
         for redo in undone.into_iter().rev() {
             match redo {
-                Redo::Inst(v, t) => self.instantiate(v, t),
+                // The entries its instantiation added are replayed as they were (`Redo::Dep`).
+                Redo::Inst(v, t) => {
+                    self.tvars[v].inst = Some(t);
+                    self.trail.push(Undo::Inst(v));
+                }
                 Redo::Lower(v, t) => {
                     self.tvars[v].lower.push(t);
                     self.trail.push(Undo::Lower(v));
@@ -74,6 +85,11 @@ impl<'a> Worker<'a> {
                     self.tvars[v].upper.push(t);
                     self.trail.push(Undo::Upper(v));
                 }
+                Redo::Dep(v, d) => {
+                    self.tvars[v].push_dep(d);
+                    self.trail.push(Undo::Dep(v));
+                }
+                Redo::DropDeps(v) => self.drop_deps(v),
             }
         }
     }
@@ -81,6 +97,102 @@ impl<'a> Worker<'a> {
     pub(super) fn instantiate(&mut self, v: TVarId, t: TypeId) {
         self.tvars[v].inst = Some(t);
         self.trail.push(Undo::Inst(v));
+        self.note_instance_deps(v, t);
+        self.drop_deps(v);
+    }
+
+    /// `v` instantiated, its dependents moved to its instance's variables (`note_instance_deps`):
+    /// its own are dropped, as dotty's `replace` drops an instantiated parameter's (`dropDeps`),
+    /// and an undo gives them back (`Undo::DropDeps`).
+    #[inline(always)]
+    fn drop_deps(&mut self, v: TVarId) {
+        if !self.tvars[v].deps().is_empty() {
+            self.drop_deps_slow(v);
+        }
+    }
+
+    #[cold]
+    #[inline(never)]
+    fn drop_deps_slow(&mut self, v: TVarId) {
+        let deps = self.tvars[v].take_deps();
+        self.dropped_deps.push(deps);
+        self.trail.push(Undo::DropDeps(v));
+    }
+
+    /// The bound `b` just recorded for `by` (a lower one at `sign` 1, an upper one at -1): each
+    /// open variable it names keeps `by` among the variables whose bounds name it, at the
+    /// variance it is named at (dotty's `OrderingConstraint.adjustDeps`, its `Adjuster`). A bound
+    /// that is a variable alone is an ordering, which both variables' bounds keep (the lenses).
+    #[inline]
+    fn note_bound_deps(&mut self, by: TVarId, b: TypeId, sign: i8) {
+        if self.types.has_vars(b) {
+            self.note_bound_deps_slow(by, b, sign);
+        }
+    }
+
+    #[inline(never)]
+    fn note_bound_deps_slow(&mut self, by: TVarId, b: TypeId, sign: i8) {
+        let b = self.deref(b);
+        if matches!(self.types.get(b), Type::Var(_)) {
+            return;
+        }
+        let mut named = Vec::new();
+        self.collect_var_variances(b, sign, &mut named);
+        for (x, s) in named {
+            if x != by {
+                self.add_dep(x, by, dep_flags(s));
+            }
+        }
+    }
+
+    fn add_dep(&mut self, x: TVarId, by: TVarId, flags: u8) {
+        self.tvars[x].push_dep((by, flags));
+        self.trail.push(Undo::Dep(x));
+    }
+
+    /// `v` instantiated to `t`: whatever `v`'s instance could narrow, `t`'s open variables can
+    /// now, as dotty's `replace` moves a parameter's dependents to its instance's
+    /// (`adjustDeps`): each keeps them at the composed variances (`v <: w` makes `t` a lower bound
+    /// of `w`, an entry `(w, DEP_CO)` of `v`'s).
+    #[inline]
+    fn note_instance_deps(&mut self, v: TVarId, t: TypeId) {
+        if !self.tvars[v].deps().is_empty() && self.types.has_vars(t) {
+            self.note_instance_deps_slow(v, t);
+        }
+    }
+
+    #[inline(never)]
+    fn note_instance_deps_slow(&mut self, v: TVarId, t: TypeId) {
+        let dependents: Vec<(TVarId, u8)> = self.tvars[v].deps().iter().copied().filter(|&(by, _)| self.tvars[by].inst.is_none()).collect();
+        if dependents.is_empty() {
+            return;
+        }
+        let mut named = Vec::new();
+        self.collect_var_variances(t, 1, &mut named);
+        for (y, s) in named {
+            for &(by, f) in &dependents {
+                let g = compose_dep(f, s);
+                if y != by && g != 0 {
+                    self.add_dep(y, by, g);
+                }
+            }
+        }
+    }
+
+    /// dotty's `OrderingConstraint.dependsOn(v, except, co)`: whether an open variable outside
+    /// `excluded` names `v` in its bounds where instantiating `v` larger (`co`) or smaller
+    /// narrows it (`coDeps`, `contraDeps`), or is ordered above (`co`) or below `v` (the upper
+    /// and lower lenses), all of which `deps` keeps.
+    pub(super) fn depends_on(&self, v: TVarId, excluded: &[TVarId], co: bool) -> bool {
+        let want = if co { DEP_CO } else { DEP_CONTRA };
+        self.tvars[v].deps().iter().any(|&(by, f)| f & want != 0 && by != v && self.tvars[by].inst.is_none() && !excluded.contains(&by))
+    }
+
+    /// Whether `v`'s instance can narrow an open variable but itself (`deps`).
+    #[inline]
+    fn has_open_dep(&self, v: TVarId) -> bool {
+        let deps = self.tvars[v].deps();
+        !deps.is_empty() && deps.iter().any(|&(by, _)| by != v && self.tvars[by].inst.is_none())
     }
 
     /// Follows instantiated inference variables at the head of the type.
@@ -164,9 +276,9 @@ impl<'a> Worker<'a> {
                 let zb = self.zonk(b);
                 self.types.mk(Type::Lambda(ps, zb))
             }
-            Type::Union(a, b) => {
+            Type::Union(a, b, soft) => {
                 let (za, zb) = (self.zonk(a), self.zonk(b));
-                self.types.union(za, zb)
+                self.types.union_as(soft, za, zb)
             }
             Type::Inter(a, b) => {
                 let (za, zb) = (self.zonk(a), self.zonk(b));
@@ -372,18 +484,24 @@ impl<'a> Worker<'a> {
             if w == v {
                 return true;
             }
-            // `v <: w` between two open variables is kept as a pair of bounds.
+            // `v <: w` between two open variables is kept as a pair of bounds, and in either's
+            // dependencies (the lenses): `v` growing narrows `w`, `w` shrinking narrows `v`.
             let v_ty = self.types.mk(Type::Var(v));
             if !self.tvars[w].lower.contains(&v_ty) {
                 self.tvars[w].lower.push(v_ty);
                 self.trail.push(Undo::Lower(w));
             }
+            self.add_dep(v, w, DEP_CO);
+            self.add_dep(w, v, DEP_CONTRA);
         }
         // Recorded before the lower bounds are checked so that cyclic constraints terminate.
         self.tvars[v].upper.push(b);
         self.trail.push(Undo::Upper(v));
-        let lowers = self.tvars[v].lower.clone();
-        lowers.into_iter().all(|l| self.is_sub(l, b))
+        self.note_bound_deps(v, b, -1);
+        // The lower bounds as they stand, by index (dotty's `addOneBound` compares the entry it
+        // narrowed, copying no list); a comparison only records bounds after them.
+        let n = self.tvars[v].lower.len();
+        (0..n).all(|k| self.tvars[v].lower.get(k).copied().map_or(true, |l| self.is_sub(l, b)))
     }
 
     fn add_lower(&mut self, v: TVarId, a: TypeId) -> bool {
@@ -396,8 +514,10 @@ impl<'a> Worker<'a> {
         }
         self.tvars[v].lower.push(a);
         self.trail.push(Undo::Lower(v));
-        let uppers = self.tvars[v].upper.clone();
-        uppers.into_iter().all(|u| self.is_sub(a, u))
+        self.note_bound_deps(v, a, 1);
+        // The upper bounds as they stand, by index, as `add_upper` reads the lower ones.
+        let n = self.tvars[v].upper.len();
+        (0..n).all(|k| self.tvars[v].upper.get(k).copied().map_or(true, |u| self.is_sub(a, u)))
     }
 
     /// The upper bounds of `v` that are no open variables, through the variables among them:
@@ -441,6 +561,12 @@ impl<'a> Worker<'a> {
         // even to another reference to it.
         if a == b {
             return a != WILD && !self.is_unresolved_member(a);
+        }
+        // A constant against its own class, the commonest comparison a literal meets.
+        if let Type::Lit(_) = self.types.get(a) {
+            if self.widen_lit(a) == b {
+                return true;
+            }
         }
         // A library body's `C[?]#T` (an unknown argument) against the capture of the same
         // receiver's wildcard, which scalac gave one name: the body was checked by scalac.
@@ -511,7 +637,7 @@ impl<'a> Worker<'a> {
             (Type::Var(v), _) => return self.add_upper(v, b),
             (_, Type::Var(v)) => return self.add_lower(v, a),
             (_, Type::Any) | (Type::Nothing, _) => return true,
-            (Type::Union(x, y), _) => return self.is_sub(x, b) && self.is_sub(y, b),
+            (Type::Union(x, y, _), _) => return self.is_sub(x, b) && self.is_sub(y, b),
             (_, Type::Inter(x, y)) => return self.is_sub(a, x) && self.is_sub(a, y),
             // A recursive refinement on the right is its body with the left side's anchor as its
             // self, a path or a skolem of the left side (`TypeComparer.compareRec`:
@@ -543,6 +669,11 @@ impl<'a> Worker<'a> {
             }
         }
         if let Type::Inter(x, y) = ta {
+            // `b` one of the parts: no comparison (`A & B & C <: B`), but for an unknown argument
+            // or an unresolved member, which nothing conforms to (the `a == b` rule above).
+            if b != WILD && self.is_part_of_inter(b, a) && !self.is_unresolved_member(b) {
+                return true;
+            }
             let mark = self.snapshot();
             // dotty's `secondTry` sends an `AndType` on the left to `thirdTry`, whose
             // `compareRefined` takes it whole (its member a refinement of one part names the
@@ -582,6 +713,15 @@ impl<'a> Worker<'a> {
         }
         if let Some(u) = self.opaque_underlying(b) {
             return self.is_sub(a, u);
+        }
+        // A constant against a path whose underlying type is a constant (`C.x.type` of a
+        // `final val x = 1`): the same atom, compared with that constant before the constant
+        // widens to its class (dotty's `comparePaths`, `compareAtoms` with known singletons).
+        if matches!(ta, Type::Lit(_)) && matches!(tb, Type::Term(_) | Type::Select(..)) {
+            let under = self.widen_path(b);
+            if matches!(self.types.get(under), Type::Lit(_)) {
+                return self.is_sub(a, under);
+            }
         }
         if let Type::Lit(_) = ta {
             let class = self.widen_lit(a);
@@ -644,7 +784,7 @@ impl<'a> Worker<'a> {
                     // bounds, so that later operands join it as scalac joins the constructors
                     // it infers: `(Validated[E1, A], Validated[E2, B])` as `(F[A], F[B])` makes
                     // `F` a `Validated[E1 | E2, _]`.
-                    let fixed: Vec<TypeId> = (0..m - n).map(|_| self.fresh_var()).collect();
+                    let fixed: Vec<TypeId> = (0..m - n).map(|_| self.fixed_var()).collect();
                     let params: Vec<TypeId> = (0..n)
                         .map(|_| {
                             let p = self.syms.new_tparam(crate::names::WILDCARD, 0);
@@ -864,6 +1004,20 @@ impl<'a> Worker<'a> {
         if na != a || nb != b {
             return Some(self.is_sub(na, nb));
         }
+        // dotty's `compareS`: `S[N]` of an open `N` against a natural constant compares `N` with
+        // the constant's predecessor (`2 <: S[?N]` makes `?N >: 1`), either way round.
+        if let Some(arg) = self.successor_arg(b) {
+            if let Some(n) = self.nat_value(a).filter(|&n| n > 0) {
+                let pred = self.types.lit(LitVal::Int(n - 1));
+                return Some(self.is_sub(pred, arg));
+            }
+        }
+        if let Some(arg) = self.successor_arg(a) {
+            if let Some(n) = self.nat_value(b).filter(|&n| n > 0) {
+                let pred = self.types.lit(LitVal::Int(n - 1));
+                return Some(self.is_sub(arg, pred));
+            }
+        }
         let (ta, tb) = (self.types.get(a), self.types.get(b));
         if matches!(ta, Type::Var(_) | Type::Error | Type::Blocked(_) | Type::Nothing) || matches!(tb, Type::Var(_) | Type::Error | Type::Blocked(_) | Type::Any) {
             return None;
@@ -879,7 +1033,7 @@ impl<'a> Worker<'a> {
             }
             (Some(_), None) => {
                 // A stuck match type is a member of a union that names it.
-                if let Type::Union(x, y) = tb {
+                if let Type::Union(x, y, _) = tb {
                     let mark = self.snapshot();
                     if self.is_sub(a, x) {
                         return Some(true);
@@ -915,7 +1069,7 @@ impl<'a> Worker<'a> {
                     let opened = self.opened_rec(body, a);
                     self.is_sub(opened, b)
                 }
-                Type::Union(x, y) => self.is_sub(x, b) && self.is_sub(y, b),
+                Type::Union(x, y, _) => self.is_sub(x, b) && self.is_sub(y, b),
                 Type::Inter(x, y) => {
                     let mark = self.snapshot();
                     if self.is_sub(x, b) {
@@ -1138,9 +1292,29 @@ impl<'a> Worker<'a> {
                     });
             }
             (Type::AppVar(v, xs), Type::AppMember(m, ys)) | (Type::AppMember(m, ys), Type::AppVar(v, xs))
-                if self.types.items(xs).len() == self.types.items(ys).len() =>
+                if self.types.items(xs).len() <= self.types.items(ys).len() =>
             {
-                self.instantiate(v, m);
+                let (n, k) = (self.types.items(xs).len(), self.types.items(ys).len());
+                let ctor = if n == k {
+                    m
+                } else {
+                    // Partial unification, as against a class: `F[Any, Any]` against an abstract
+                    // `T[Any, Any, Any, Any]` makes `F` the `[X, Y] =>> T[?, ?, X, Y]` whose
+                    // leftmost arguments the comparison then fixes (dotty's `canInstantiate`).
+                    let mut full: Vec<TypeId> = (0..k - n).map(|_| self.fixed_var()).collect();
+                    let params: Vec<TypeId> = (0..n)
+                        .map(|_| {
+                            let p = self.syms.new_tparam(crate::names::WILDCARD, 0);
+                            self.types.param(p)
+                        })
+                        .collect();
+                    full.extend(params.iter().copied());
+                    let fl = self.types.list(&full);
+                    let body = self.types.mk(Type::AppMember(m, fl));
+                    let pl = self.types.list(&params);
+                    self.types.mk(Type::Lambda(pl, body))
+                };
+                self.instantiate(v, ctor);
                 return self.is_sub(a, b);
             }
             _ => {}
@@ -1268,7 +1442,7 @@ impl<'a> Worker<'a> {
     fn is_sub_inter_laws(&mut self, x: TypeId, y: TypeId, b: TypeId, mark: usize) -> bool {
         for (side, other) in [(x, y), (y, x)] {
             let side = self.deref(side);
-            if let Type::Union(p, q) = self.types.get(side) {
+            if let Type::Union(p, q, _) = self.types.get(side) {
                 let (op, oq) = (self.types.inter(other, p), self.types.inter(other, q));
                 if self.is_sub(op, b) && self.is_sub(oq, b) {
                     return true;
@@ -1308,7 +1482,7 @@ impl<'a> Worker<'a> {
 
     fn is_sub_union_member(&mut self, a: TypeId, b: TypeId, with_vars: bool, mark: usize) -> bool {
         match self.types.get(b) {
-            Type::Union(x, y) => {
+            Type::Union(x, y, _) => {
                 self.is_sub_union_member(a, x, with_vars, mark) || self.is_sub_union_member(a, y, with_vars, mark)
             }
             _ if self.types.has_vars(b) != with_vars => false,
@@ -1404,6 +1578,7 @@ impl<'a> Worker<'a> {
                 Undo::Inst(v) => self.tvars[v].inst,
                 Undo::Lower(v) => self.tvars[v].lower.last().copied(),
                 Undo::Upper(v) => self.tvars[v].upper.last().copied(),
+                Undo::Dep(_) | Undo::DropDeps(_) => None,
             };
             bound.map_or(false, |t| self.mentions_tparam_of(t, Some(&binders)))
         });
@@ -1830,17 +2005,26 @@ impl<'a> Worker<'a> {
             LitVal::Int(_) => self.b.t_int,
             LitVal::Long(_) => self.b.t_long,
             LitVal::Double(_) => self.b.t_double,
+            LitVal::Float(_) => self.b.t_float,
             LitVal::Char(_) => self.b.t_char,
             LitVal::Bool(_) => self.b.t_boolean,
             LitVal::Str(_) => self.b.t_string,
         }
     }
 
-    /// The type of a `val` or `def` without a declared type: solved and widened.
+    /// The type of a `val` or `def` without a declared type: fully defined and widened
+    /// (`Namer.inferredResultType`'s `widenInferred(tp, pt, Widen.Unions)`).
     pub fn solve_inferred(&mut self, t: TypeId) -> TypeId {
-        let t = self.solve_in(t);
+        let t = self.fully_defined(t);
         let t = self.normalize(t);
-        self.widen_lit(t)
+        let t = self.widen_lit(t);
+        self.widen_unions(t)
+    }
+
+    /// `widen_or` of a union or an intersection at the head of `t`, a definition's or a
+    /// lambda's result inferred, whose paths and constants the definition widens itself.
+    pub(super) fn widen_unions(&mut self, t: TypeId) -> TypeId {
+        if matches!(self.types.get(t), Type::Union(..) | Type::Inter(..)) { self.widen_or(t, &[]) } else { t }
     }
 
     /// The bounds of a wildcard argument of `c`'s `i`-th parameter met with the parameter's own,
@@ -1909,9 +2093,9 @@ impl<'a> Worker<'a> {
                 }
                 Some(self.types.class(c, &out))
             }
-            Type::Union(a, b) => {
+            Type::Union(a, b, soft) => {
                 let (a, b) = (self.subst_approx(a, tparams, args, variance, false)?, self.subst_approx(b, tparams, args, variance, false)?);
-                Some(self.types.union(a, b))
+                Some(self.types.union_as(soft, a, b))
             }
             Type::Inter(a, b) => {
                 let (a, b) = (self.subst_approx(a, tparams, args, variance, false)?, self.subst_approx(b, tparams, args, variance, false)?);
@@ -1922,53 +2106,24 @@ impl<'a> Worker<'a> {
         }
     }
 
-    /// Whether a literal type occurs in `t`, looking through the bounds of an open variable.
-    pub fn mentions_lit(&mut self, t: TypeId) -> bool {
-        let mut seen = Vec::new();
-        self.mentions_lit_in(t, &mut seen)
-    }
-
-    /// `seen` holds the variables whose bounds are being looked through: an F-bounded variable
-    /// (`?T <: Ord[?T]`) names itself in them.
-    fn mentions_lit_in(&mut self, t: TypeId, seen: &mut Vec<TVarId>) -> bool {
-        let t = self.deref_alias(t);
-        match self.types.get(t) {
-            Type::Lit(_) => true,
-            Type::Class(_, args) if self.opaque_underlying(t).is_some() => {
-                let u = self.opaque_underlying(t).unwrap();
-                self.mentions_lit_in(u, seen) || self.list_mentions_lit(args, seen)
-            }
-            Type::Class(_, args) | Type::AppVar(_, args) | Type::AppParam(_, args) => self.list_mentions_lit(args, seen),
-            Type::Union(a, b) | Type::Inter(a, b) => self.mentions_lit_in(a, seen) || self.mentions_lit_in(b, seen),
-            Type::Var(v) => {
-                let (upper, lower) = (self.tvars[v].upper.len(), self.tvars[v].lower.len());
-                if upper + lower == 0 || seen.contains(&v) {
-                    return false;
-                }
-                seen.push(v);
-                (0..upper + lower).any(|i| {
-                    let info = &self.tvars[v];
-                    let b = if i < upper { info.upper[i] } else { info.lower[i - upper] };
-                    let b = self.deref(b);
-                    !matches!(self.types.get(b), Type::Var(_)) && self.mentions_lit_in(b, seen)
-                })
-            }
-            _ => false,
-        }
-    }
-
-    fn list_mentions_lit(&mut self, l: TList, seen: &mut Vec<TVarId>) -> bool {
-        (0..self.types.items(l).len()).any(|i| {
-            let a = self.types.items(l)[i];
-            self.mentions_lit_in(a, seen)
-        })
-    }
-
-    /// The rank of a numeric primitive type (`prims::R_BYTE` to `R_DOUBLE`).
+    /// The rank of a numeric primitive type, a constant's by its class (dotty's
+    /// `classSymbol.isNumericValueClass`, a `ConstantType` being a proxy of its class).
     #[inline]
     pub fn is_numeric(&self, t: TypeId) -> Option<u8> {
         match self.b.num_rank.get(t.idx()) {
             Some(&r) if r != super::NO_RANK => Some(r),
+            Some(_) => None,
+            None => self.is_numeric_constant(t),
+        }
+    }
+
+    #[inline(never)]
+    fn is_numeric_constant(&self, t: TypeId) -> Option<u8> {
+        match self.types.get(t) {
+            Type::Lit(_) => match self.b.num_rank.get(self.widen_lit(t).idx()) {
+                Some(&r) if r != super::NO_RANK => Some(r),
+                _ => None,
+            },
             _ => None,
         }
     }
@@ -1989,8 +2144,14 @@ impl<'a> Worker<'a> {
     }
 
     /// The join of two types: the wider one, the harmonised numeric type or the least common
-    /// base type; unrelated types join to their union, member by member for unions.
+    /// base type; unrelated types join to their union, member by member for unions, soft (dotty's
+    /// `lub`, whose `isSoft` is true but where a written union is widened).
     pub fn lub(&mut self, a: TypeId, b: TypeId) -> TypeId {
+        self.lub_as(UnionKind::Soft, a, b)
+    }
+
+    /// `lub` making a soft or a hard union (`TypeComparer.lub`'s `isSoft`).
+    pub fn lub_as(&mut self, kind: UnionKind, a: TypeId, b: TypeId) -> TypeId {
         let a = self.zonk(a);
         let b = self.zonk(b);
         if a == b {
@@ -2006,6 +2167,13 @@ impl<'a> Worker<'a> {
         for m in others {
             let mut joined = false;
             for i in 0..members.len() {
+                // Two constants are atoms, disjoint unless equal: their lub is their union, soft
+                // (dotty's `mergedLub`, `Atoms.Range`), which an inferred type widens to their
+                // class (`widenInferred`'s `widenOr`); a union's join (`union_join`, `OrType.join`)
+                // joins them.
+                if !self.join_wild && members[i] != m && matches!(self.types.get(members[i]), Type::Lit(_)) && matches!(self.types.get(m), Type::Lit(_)) {
+                    continue;
+                }
                 if let Some(j) = self.join(members[i], m) {
                     members[i] = j;
                     joined = true;
@@ -2018,53 +2186,9 @@ impl<'a> Worker<'a> {
         }
         let mut acc = members[0];
         for &m in &members[1..] {
-            acc = self.types.union(acc, m);
+            acc = self.types.union_as(kind, acc, m);
         }
         acc
-    }
-
-    /// Marks `e` soft where `lub` gave it a union: the join of an `if`'s branches, a match's
-    /// cases or a `try`'s.
-    pub fn note_soft(&mut self, e: TExprId, t: TypeId) {
-        if let Type::Union(..) = self.types.get(t) {
-            self.soft_exprs.insert(e, ());
-        }
-    }
-
-    /// Whether `e` is a soft union: a join expression, a block ending in one, or a binder of a
-    /// soft scrutinee.
-    pub fn is_soft(&self, e: TExprId) -> bool {
-        let mut e = e;
-        loop {
-            if self.soft_exprs.contains_key(&e) {
-                return true;
-            }
-            match self.prog.expr(e) {
-                TExpr::Block(_, res) => e = res,
-                TExpr::Local(s) => return self.soft_syms.contains_key(&s),
-                _ => return false,
-            }
-        }
-    }
-
-    /// dotc's `widenInferred` on a union: the soft union of a join expression widens to its
-    /// join at an inference boundary, a val's or def's inferred type, a lambda's inferred
-    /// result, unless the join is transparent (`Any`, `AnyVal`, `Matchable`, `Product`,
-    /// `Serializable`), where the union stays (`Int | String`). A union written in the program
-    /// is kept (`val copy = hard`).
-    pub fn widen_soft(&mut self, e: TExprId, t: TypeId) -> TypeId {
-        if !self.is_soft(e) {
-            return t;
-        }
-        self.widen_union_join(t)
-    }
-
-    /// The join a soft union widens to, unless it is transparent.
-    pub fn widen_union_join(&mut self, t: TypeId) -> TypeId {
-        match self.union_join(t) {
-            Some(j) if j != ERROR && !self.transparent_join(j) => j,
-            _ => t,
-        }
     }
 
     /// dotty's `isTransparent()`: a type deriving only from transparent classes, `Any`,
@@ -2086,6 +2210,13 @@ impl<'a> Worker<'a> {
     fn join(&mut self, a: TypeId, b: TypeId) -> Option<TypeId> {
         if a == b {
             return Some(a);
+        }
+        // Two constants of one class join to it (or the class and a constant of it).
+        if matches!(self.types.get(a), Type::Lit(_)) || matches!(self.types.get(b), Type::Lit(_)) {
+            let (wa, wb) = (self.widen_lit(a), self.widen_lit(b));
+            if wa == wb {
+                return Some(wa);
+            }
         }
         let mark = self.snapshot();
         if self.is_sub(a, b) {
@@ -2293,7 +2424,7 @@ impl<'a> Worker<'a> {
             return a;
         }
         self.rollback(mark);
-        self.types.union(a, b)
+        self.types.soft_union(a, b)
     }
 
     /// Whether `t` conforms to `Singleton`, as scalac's stable types and those bounded by it
@@ -2319,7 +2450,7 @@ impl<'a> Worker<'a> {
                     self.is_sub(y, self.b.t_singleton)
                 }
             }
-            Type::Union(x, y) => self.is_sub(x, self.b.t_singleton) && self.is_sub(y, self.b.t_singleton),
+            Type::Union(x, y, _) => self.is_sub(x, self.b.t_singleton) && self.is_sub(y, self.b.t_singleton),
             _ => false,
         }
     }
@@ -2411,7 +2542,7 @@ impl<'a> Worker<'a> {
     fn is_numeric_union(&mut self, t: TypeId) -> bool {
         let t = self.deref(t);
         match self.types.get(t) {
-            Type::Union(a, b) => self.is_numeric_union(a) && self.is_numeric_union(b),
+            Type::Union(a, b, _) => self.is_numeric_union(a) && self.is_numeric_union(b),
             _ => self.is_numeric(t).is_some(),
         }
     }
@@ -2422,13 +2553,13 @@ impl<'a> Worker<'a> {
         if self.tvars[v].lower.is_empty() && self.tvars[v].upper.is_empty() {
             self.tvars[v].inst = Some(NOTHING);
             self.trail.push(Undo::Inst(v));
+            self.drop_deps(v);
             return true;
         }
         // A bound that is the variable itself, left by another variable that was unified with
         // it and then instantiated to it, says nothing.
-        let itself = self.types.mk(Type::Var(v));
-        let lowers: Vec<TypeId> = self.tvars[v].lower.clone().into_iter().filter(|&l| self.deref(l) != itself).collect();
-        let uppers: Vec<TypeId> = self.tvars[v].upper.clone().into_iter().filter(|&u| self.deref(u) != itself).collect();
+        let lowers = self.bounds_but_itself(v, true);
+        let uppers = self.bounds_but_itself(v, false);
         // Bounded above and below by an open variable of an enclosing application, it is that
         // variable: `A` of `pure(x)` against a `Fr[B]`, which the other branches of an `if` join
         // into (`pure(Left(e))` and `pure(Right(r))` make `B` an `Either`, not a `Left`).
@@ -2438,13 +2569,14 @@ impl<'a> Worker<'a> {
                 if uppers.iter().any(|&u| self.deref(u) == w_ty) {
                     self.tvars[v].inst = Some(w_ty);
                     self.trail.push(Undo::Inst(v));
+                    self.note_instance_deps(v, w_ty);
+                    self.drop_deps(v);
                     return uppers.into_iter().all(|u| self.is_sub(w_ty, u));
                 }
             }
         }
         let mut choice = NOTHING;
         let mut outer_lowers = Vec::new();
-        let outer_joined = std::mem::replace(&mut self.joined_soft, false);
         for &l in &lowers {
             if let Some(w) = self.outer_var(v, l) {
                 outer_lowers.push(w);
@@ -2505,32 +2637,24 @@ impl<'a> Worker<'a> {
             self.rollback(mark);
             self.choice_from_uppers(v, &uppers, true)
         };
-        let choice = self.widen_inferred(choice, &uppers);
+        let fitted = fits.then_some(choice);
         // A union joined from several lower bounds is soft, as dotc's `lub` makes it, and
-        // widens with the instance (`List(new Box[Int], new Box[String])`); one lower bound
-        // that is a union written in the program stays.
-        let joined_soft = std::mem::replace(&mut self.joined_soft, outer_joined);
-        let choice = {
-            let widened = if joined_soft { self.widen_union_join(choice) } else { choice };
-            if widened == choice {
-                choice
-            } else {
-                let mark = self.snapshot();
-                if uppers.iter().all(|&u| self.is_sub(widened, u)) {
-                    widened
-                } else {
-                    self.rollback(mark);
-                    choice
-                }
-            }
-        };
+        // widens with the instance (`List(new Box[Int], new Box[String])`); a written one widens
+        // its members' singletons (`widenUnion`).
+        let choice = self.widen_inferred(choice, &uppers);
         // An F-bounded variable with nothing below it (`T <: Ord[T]`) is `Nothing`, never a
         // type that contains itself.
         let choice =
             if !uppers.is_empty() && self.types.has_vars(choice) && self.occurs(v, choice) { NOTHING } else { choice };
+        // The choice that fitted the upper bounds, as widening left it, is not compared with them
+        // again (dotty's `instantiateWith` compares nothing), unless a bound names the variable,
+        // which reads its instance once it is made.
+        let compared = fitted == Some(choice) && !uppers.iter().any(|&u| self.types.has_vars(u) && self.occurs(v, u));
         self.tvars[v].inst = Some(choice);
         self.trail.push(Undo::Inst(v));
-        uppers.into_iter().all(|u| self.is_sub(choice, u))
+        self.note_instance_deps(v, choice);
+        self.drop_deps(v);
+        compared || uppers.into_iter().all(|u| self.is_sub(choice, u))
     }
 
     /// Whether `t` is a type lambda ending in `Any`: a higher-kinded parameter's kind, bounding
@@ -2538,6 +2662,32 @@ impl<'a> Worker<'a> {
     fn kind_alone(&self, t: TypeId) -> bool {
         match self.types.get(t) {
             Type::Lambda(_, body) => body == ANY || self.kind_alone(body),
+            _ => false,
+        }
+    }
+
+    /// The lower (`lower`) or upper bounds of `v` but those that are `v` itself.
+    fn bounds_but_itself(&mut self, v: TVarId, lower: bool) -> Vec<TypeId> {
+        let n = if lower { self.tvars[v].lower.len() } else { self.tvars[v].upper.len() };
+        let mut out = Vec::with_capacity(n);
+        for k in 0..n {
+            let b = if lower { self.tvars[v].lower[k] } else { self.tvars[v].upper[k] };
+            if !self.is_var_itself(b, v) {
+                out.push(b);
+            }
+        }
+        out
+    }
+
+    /// Whether `t` is the open variable `v` (through instantiated ones).
+    #[inline]
+    fn is_var_itself(&mut self, t: TypeId, v: TVarId) -> bool {
+        match self.types.get(t) {
+            Type::Var(w) if w == v => true,
+            Type::Var(_) | Type::AppVar(..) => {
+                let t = self.deref_var(t);
+                matches!(self.types.get(t), Type::Var(w) if w == v)
+            }
             _ => false,
         }
     }
@@ -2561,26 +2711,148 @@ impl<'a> Worker<'a> {
         vars.contains(&v)
     }
 
-    /// An instance widens its literal and singleton types as long as it stays within the upper
-    /// bounds, as dotc's `widenInferred` does, so `id(c)` for a `c: 1` is an `Int` unless a `1`
-    /// is expected of it, and `id(own(x))` over `def own(x: B): x.type` a `B`.
-    fn widen_inferred(&mut self, choice: TypeId, uppers: &[TypeId]) -> TypeId {
+    /// An instance widened as dotty's `widenInferred(inst, bound, Widen.Unions)` widens it, as
+    /// long as it stays within the upper bounds: its singleton types (`widenSingle`, a soft union's
+    /// members skipped), then a union by its members (`widenOr`: `widenUnion`, a soft union joined),
+    /// so `id(c)` for a `c: 1` is an `Int` unless a `1` is expected of it, `id(own(x))` over `def
+    /// own(x: B): x.type` a `B`, a join of `1` and `2` an `Int`, and a written `1 | "one"` an `Int |
+    /// String`; an alias of a union is kept (`widen` does not dealias it).
+    pub(super) fn widen_inferred(&mut self, choice: TypeId, uppers: &[TypeId]) -> TypeId {
         // A variable bounded by `Singleton` keeps its instance, as dotc's `isSingletonBounded`
         // does (`new A(r)` for `A[R <: Refl & Singleton]` is an `A[r.type]`).
-        if self.singleton_bounded(uppers) {
+        if self.widens_nothing(choice) || self.singleton_bounded(uppers) {
             return choice;
         }
-        let widened = self.widen_singletons(choice);
-        let widened = self.widen_lit(widened);
-        if widened == choice {
-            return choice;
+        let single = self.widen_single(choice, true, uppers);
+        self.widen_or(single, uppers)
+    }
+
+    /// Whether `widen_inferred` leaves `t` as it is: no singleton, no union at its head.
+    #[inline]
+    fn widens_nothing(&self, t: TypeId) -> bool {
+        !self.types.is_path(t) && !matches!(self.types.get(t), Type::Lit(_) | Type::Union(..) | Type::Inter(..))
+    }
+
+    /// dotty's `widenSingle`: `t`'s singletons widened (`widenSingletons`), where that stays
+    /// within the bounds.
+    fn widen_single(&mut self, t: TypeId, skip_soft: bool, uppers: &[TypeId]) -> TypeId {
+        let w = self.widen_singletons_of(t, skip_soft);
+        if w == t {
+            return t;
         }
+        self.within_uppers(w, t, uppers)
+    }
+
+    /// `w` where it conforms to every upper bound, else `t`.
+    fn within_uppers(&mut self, w: TypeId, t: TypeId, uppers: &[TypeId]) -> TypeId {
         let mark = self.snapshot();
-        if uppers.iter().all(|&u| self.is_sub(widened, u)) {
-            widened
+        if uppers.iter().all(|&u| self.is_sub(w, u)) {
+            w
         } else {
             self.rollback(mark);
-            choice
+            t
+        }
+    }
+
+    /// dotty's `widenOr`: `t`'s `widenUnion`, a join that is transparent giving way to the soft
+    /// union's members widened (`widenSingle(tp, skipSoftUnions = false)`: `'A' | Int` is a
+    /// `Char | Int`).
+    pub(super) fn widen_or(&mut self, t: TypeId, uppers: &[TypeId]) -> TypeId {
+        let w = self.widen_union(t);
+        if w == t {
+            return t;
+        }
+        if self.transparent_join(w) {
+            return self.widen_single(t, false, uppers);
+        }
+        self.within_uppers(w, t, uppers)
+    }
+
+    /// dotty's `widenSingletons`: a singleton widened to its underlying type, the parts of an
+    /// intersection, the members of a soft union where they are not skipped (`OrType`'s
+    /// `widenSingletons`, a hard one kept), read through an alias, which stays where nothing
+    /// changes.
+    fn widen_singletons_of(&mut self, t: TypeId, skip_soft: bool) -> TypeId {
+        let d = self.deref_alias(t);
+        if self.types.is_path(d) {
+            return self.widen_path(d);
+        }
+        match self.types.get(d) {
+            Type::Lit(_) => self.widen_lit(d),
+            Type::Union(a, b, UnionKind::Soft) if !skip_soft => {
+                let (wa, wb) = (self.widen_singletons_of(a, false), self.widen_singletons_of(b, false));
+                if (wa, wb) == (a, b) { t } else { self.lub_as(UnionKind::Soft, wa, wb) }
+            }
+            Type::Inter(a, b) => {
+                let (wa, wb) = (self.widen_singletons_of(a, skip_soft), self.widen_singletons_of(b, skip_soft));
+                if (wa, wb) == (a, b) { t } else { self.types.inter(wa, wb) }
+            }
+            _ => t,
+        }
+    }
+
+    /// dotty's `widenUnion`: a union, not through an alias (`widen` does not dealias), made again
+    /// of its members widened (`widenUnionWithoutNull`), soft or hard as it was, a soft one
+    /// joined (`OrType.join`); the parts of an intersection, a refinement's parent.
+    pub fn widen_union(&mut self, t: TypeId) -> TypeId {
+        if let Type::Alias(..) = self.types.get(t) {
+            return t;
+        }
+        let t = self.deref(t);
+        // A singleton widened through to its class (dotty's `widen`: `c.type` of a `c: 1` is an
+        // `Int`).
+        let t = if self.types.is_path(t) { let w = self.widen_path(t); self.widen_lit(w) } else { self.widen_lit(t) };
+        match self.types.get(t) {
+            Type::Union(_, _, UnionKind::Named) => t,
+            Type::Union(_, _, kind) => {
+                // The members widened, the union made again of them where one changed, and a soft
+                // one joined once (dotty caches each nested `OrType`'s `widenUnion`; a nested
+                // union is a member here, a named one an atom).
+                let mut members = Vec::new();
+                self.widened_members(t, &mut members);
+                let changed = members.iter().any(|&(m, w)| m != w);
+                // Members that widen to themselves: the union as it stands (its join keeps an
+                // alias its members share, `IO[Either[String, Int]]`).
+                let u = if !changed {
+                    t
+                } else {
+                    let mut acc = members[0].1;
+                    for &(_, w) in &members[1..] {
+                        acc = self.lub_as(kind, acc, w);
+                    }
+                    acc
+                };
+                if kind == UnionKind::Soft && matches!(self.types.get(u), Type::Union(..)) {
+                    match self.union_join(u) {
+                        Some(j) if j != ERROR => j,
+                        _ => u,
+                    }
+                } else {
+                    u
+                }
+            }
+            Type::Inter(a, b) => {
+                let (wa, wb) = (self.widen_union(a), self.widen_union(b));
+                if (wa, wb) == (a, b) { t } else { self.types.inter(wa, wb) }
+            }
+            _ => t,
+        }
+    }
+
+    /// The members of a union and what each widens to (`widenUnionWithoutNull`): a singleton
+    /// its class, an intersection its parts', a union nested in it its own members, a named one
+    /// itself.
+    fn widened_members(&mut self, t: TypeId, out: &mut Vec<(TypeId, TypeId)>) {
+        let t = self.deref(t);
+        match self.types.get(t) {
+            Type::Union(a, b, k) if k != UnionKind::Named => {
+                self.widened_members(a, out);
+                self.widened_members(b, out);
+            }
+            _ => {
+                let w = self.widen_union(t);
+                out.push((t, w));
+            }
         }
     }
 
@@ -2600,21 +2872,6 @@ impl<'a> Worker<'a> {
         })
     }
 
-    /// `t` with its singleton types widened, the sides of an intersection too (dotc's
-    /// `widenSingletons`): `x.type & B` over `x: B` is a `B`.
-    fn widen_singletons(&mut self, t: TypeId) -> TypeId {
-        if self.types.is_path(t) {
-            return self.widen_path(t);
-        }
-        match self.types.get(t) {
-            Type::Inter(a, b) => {
-                let (wa, wb) = (self.widen_singletons(a), self.widen_singletons(b));
-                if wa == a && wb == b { t } else { self.types.inter(wa, wb) }
-            }
-            _ => t,
-        }
-    }
-
     fn join_lower(&mut self, v: TVarId, acc: TypeId, l: TypeId) -> TypeId {
         if acc == NOTHING {
             return l;
@@ -2624,11 +2881,7 @@ impl<'a> Worker<'a> {
                 return self.rank_type(x.max(y).max(super::prims::R_INT));
             }
         }
-        let joined = self.lub(acc, l);
-        if let Type::Union(..) = self.types.get(joined) {
-            self.joined_soft = true;
-        }
-        joined
+        self.lub(acc, l)
     }
 
     /// The intersection of the upper bounds. An open variable of an enclosing application among
@@ -2694,6 +2947,666 @@ impl<'a> Worker<'a> {
         }
     }
 
+    /// dotty's `Inferencing.instantiateTypeVars` over `vars`, the variables the tree of type `tp`
+    /// expected to be `pt` made: one its type or expected type holds covariantly is instantiated
+    /// from below, contravariantly from above, one it holds nonvariantly is left open for the trees
+    /// around it (`open_vars`), and one it does not hold from below where something bounds it
+    /// below and from above otherwise (`variances` decides, through the bounds). A variable from
+    /// below waits for one below it, one from above for one above it (`doInstantiate`'s
+    /// suspension). False where a variable's bounds conflict.
+    pub(super) fn instantiate_vars(&mut self, vars: &[TVarId], var_mark: usize, tp: TypeId, pt: Option<TypeId>) -> bool {
+        // Whether an open variable outside the tree's names one of them or is ordered against
+        // one (`dependsOn`, either way): none, and the expected type (made before them) reaches
+        // none of them through its variables' bounds, so their variances are the tree's type's
+        // alone, read through the bounds of the variables made from `var_mark` on.
+        let ordered = vars.iter().any(|&v| self.tvars[v].inst.is_none() && self.has_open_dep(v));
+        let outside = ordered && vars.iter().any(|&v| self.tvars[v].inst.is_none() && (self.depends_on(v, vars, true) || self.depends_on(v, vars, false)));
+        let vs = if outside { self.interp_variances(tp, pt, None) } else { self.interp_variances(tp, None, Some(var_mark)) };
+        // A map where the variances are many; most types hold a few variables.
+        let vmap: Option<crate::intern::FxMap<TVarId, i8>> = (vs.len() > 16).then(|| vs.iter().copied().collect());
+        let variance = |v: TVarId| match &vmap {
+            Some(m) => m.get(&v).copied(),
+            None => vs.iter().find(|&&(w, _)| w == v).map(|&(_, s)| s),
+        };
+        let mut forced: Option<Vec<TVarId>> = None;
+        let mut todo: Vec<(TVarId, i8)> = Vec::new();
+        for &v in vars {
+            if self.tvars[v].inst.is_some() {
+                continue;
+            }
+            match variance(v) {
+                // Neither held nor bounded (what a rolled-back candidate of a search left, most
+                // often): from above, at once (`fromBelow` without a lower bound).
+                None if self.tvars[v].lower.is_empty() && self.tvars[v].upper.is_empty() => self.instantiate(v, ANY),
+                None => todo.push((v, 0)),
+                Some(0) => {
+                    let forced = forced.get_or_insert_with(|| self.match_alias_vars(tp));
+                    if forced.contains(&v) {
+                        todo.push((v, 0));
+                    } else {
+                        self.open_vars.push(v);
+                        self.opened += 1;
+                    }
+                }
+                Some(s) => todo.push((v, s)),
+            }
+        }
+        if todo.is_empty() {
+            return true;
+        }
+        // Nothing any of the tree's variables can narrow (the common application): no proposal is
+        // dropped or turned, and none waits for another.
+        let mut todo = if ordered { self.filter_by_deps(todo) } else { todo };
+        if !ordered || !todo.iter().any(|&(v, _)| self.has_var_bound(v)) {
+            let mut ok = true;
+            for &(v, s) in &todo {
+                if self.tvars[v].inst.is_none() {
+                    let from_below = s == 1 || (s == 0 && self.below_first(v));
+                    ok &= self.instantiate_from(v, from_below, tp);
+                }
+            }
+            return ok;
+        }
+        let mut ok = true;
+        while !todo.is_empty() {
+            let mut suspended = Vec::new();
+            for i in 0..todo.len() {
+                let (v, s) = todo[i];
+                if self.tvars[v].inst.is_some() {
+                    continue;
+                }
+                let from_below = s == 1 || (s == 0 && self.below_first(v));
+                if i + 1 < todo.len() && self.waits_for_later(&todo, i, from_below) {
+                    suspended.push((v, s));
+                    continue;
+                }
+                ok &= self.instantiate_from(v, from_below, tp);
+            }
+            todo = suspended;
+        }
+        ok
+    }
+
+    /// Whether a variable no variance decides is instantiated from below: where it is bounded
+    /// below (`hasLowerBound`, `Nothing` none), and a partial unification's fixed argument where
+    /// any lower bound is recorded, the argument it stands for (dotty's `canInstantiate` takes
+    /// `ZIO[Log, Nothing, _]`'s `Nothing` as it is, which teq's `?e >: Nothing` stands for).
+    fn below_first(&mut self, v: TVarId) -> bool {
+        self.has_lower_bound(v) || (self.tvars[v].is_fixed() && !self.tvars[v].lower.is_empty())
+    }
+
+    /// A fresh variable for a fixed argument of a partial unification (`TVarExtra::fixed`).
+    fn fixed_var(&mut self) -> TypeId {
+        let t = self.fresh_var();
+        if let Type::Var(v) = self.types.get(t) {
+            self.tvars[v].set_fixed();
+        }
+        t
+    }
+
+    /// Whether a bound of `v` is an open variable (an ordering).
+    fn has_var_bound(&mut self, v: TVarId) -> bool {
+        let info = &self.tvars[v];
+        if !info.lower.iter().chain(&info.upper).any(|&b| matches!(self.types.get(b), Type::Var(_) | Type::AppVar(..))) {
+            return false;
+        }
+        let (nl, nu) = (self.tvars[v].lower.len(), self.tvars[v].upper.len());
+        for k in 0..nl + nu {
+            let b = if k < nl { self.tvars[v].lower[k] } else { self.tvars[v].upper[k - nl] };
+            let b = self.deref(b);
+            if matches!(self.types.get(b), Type::Var(_)) {
+                return true;
+            }
+        }
+        false
+    }
+
+    /// Whether the proposal `i`, instantiated from below (`from_below`) or above, waits for a
+    /// later open one below it, or above it (`Constraint.isLess`, as a bound of either): dotty's
+    /// `doInstantiate` suspension.
+    fn waits_for_later(&mut self, todo: &[(TVarId, i8)], i: usize, from_below: bool) -> bool {
+        let v = todo[i].0;
+        let later = |t: &Self, w: TVarId| todo[i + 1..].iter().any(|&(x, _)| x == w) && t.tvars[w].inst.is_none();
+        let own = if from_below { self.tvars[v].lower.len() } else { self.tvars[v].upper.len() };
+        for k in 0..own {
+            let b = if from_below { self.tvars[v].lower[k] } else { self.tvars[v].upper[k] };
+            let b = self.deref(b);
+            if let Type::Var(w) = self.types.get(b) {
+                if later(self, w) {
+                    return true;
+                }
+            }
+        }
+        let vt = self.types.mk(Type::Var(v));
+        for &(w, _) in &todo[i + 1..] {
+            if self.tvars[w].inst.is_some() {
+                continue;
+            }
+            let theirs = if from_below { self.tvars[w].upper.len() } else { self.tvars[w].lower.len() };
+            for k in 0..theirs {
+                let b = if from_below { self.tvars[w].upper[k] } else { self.tvars[w].lower[k] };
+                if self.deref(b) == vt {
+                    return true;
+                }
+            }
+        }
+        false
+    }
+
+    /// The open variables made from `first` on, left open for the trees around (`open_vars`)
+    /// without an interpolation of their own, but those a match alias holds in the result
+    /// (`match_alias_vars`).
+    pub(super) fn leave_vars_open(&mut self, first: usize, ret: TypeId) {
+        let forced = self.match_alias_vars(ret);
+        let from = self.open_vars.iter().rposition(|&w| !self.tvars.made_since(w, first)).map_or(0, |i| i + 1);
+        let left: crate::intern::FxMap<TVarId, ()> = self.open_vars[from..].iter().map(|&w| (w, ())).collect();
+        for i in first..self.tvars.len() {
+            let info = &self.tvars[i];
+            if info.inst.is_some() || info.guide {
+                continue;
+            }
+            let v = self.tvars.id(i);
+            if forced.contains(&v) || left.contains_key(&v) {
+                continue;
+            }
+            self.open_vars.push(v);
+            self.opened += 1;
+        }
+    }
+
+    /// The variables of `tp` that a match alias's application holds (`M[?T]` of `type M[T] = T
+    /// match ...`), which dotty's `simplify` of a tree's type makes fully defined before it
+    /// normalizes the application (`TypeOps.simplify`, `isFullyDefined(tp, ForceDegree.all)` on
+    /// an `isMatchAlias` application), so that an unreducible `M[?T]` is reduced over the
+    /// instance (`M[Int]`); an application that reduces where the method is declared holds none.
+    pub(super) fn match_alias_vars(&mut self, tp: TypeId) -> Vec<TVarId> {
+        let mut out = Vec::new();
+        self.collect_match_alias_vars(tp, &mut out);
+        out
+    }
+
+    fn collect_match_alias_vars(&mut self, t: TypeId, out: &mut Vec<TVarId>) {
+        let t = self.deref(t);
+        if !self.types.has_vars(t) {
+            return;
+        }
+        let parts: Vec<TypeId> = match self.types.get(t) {
+            Type::Alias(a, _) if self.is_match_alias_application(a) => {
+                let mut vars = Vec::new();
+                self.collect_vars(t, &mut vars);
+                for v in vars {
+                    if !out.contains(&v) {
+                        out.push(v);
+                    }
+                }
+                return;
+            }
+            Type::Alias(_, _) => {
+                let e = self.deref_alias(t);
+                if e != t {
+                    return self.collect_match_alias_vars(e, out);
+                }
+                match self.types.get(t) {
+                    Type::Alias(_, args) => self.types.items(args).to_vec(),
+                    _ => return,
+                }
+            }
+            Type::Class(_, args) | Type::AppVar(_, args) | Type::AppParam(_, args) | Type::AppMember(_, args) => self.types.items(args).to_vec(),
+            Type::Union(a, b, _) | Type::Inter(a, b) => vec![a, b],
+            Type::Lambda(_, b) => vec![b],
+            Type::Refined(p, _) => vec![p],
+            _ => return,
+        };
+        for q in parts {
+            self.collect_match_alias_vars(q, out);
+        }
+    }
+
+    /// The argument of `S[arg]`, `scala.compiletime.ops.int`'s successor.
+    fn successor_arg(&mut self, t: TypeId) -> Option<TypeId> {
+        let Type::Class(c, args) = self.types.get(t) else { return None };
+        let items = self.types.items(args);
+        if items.len() != 1 || !self.types.is_op_class(c) || self.name_ref(self.syms.class(c).name) != "S" {
+            return None;
+        }
+        Some(items[0])
+    }
+
+    /// dotty's `natValue`: the natural number a constant type of `Int` is.
+    fn nat_value(&mut self, t: TypeId) -> Option<i32> {
+        match self.fold_type(t) {
+            Some(LitVal::Int(n)) if n >= 0 => Some(n),
+            _ => None,
+        }
+    }
+
+    /// dotty's `isMatchAlias`: an alias whose right-hand side is a match type, or a type lambda
+    /// whose result is one.
+    fn is_match_alias_application(&mut self, a: AliasId) -> bool {
+        if !self.is_match_alias(a) {
+            return false;
+        }
+        let body = self.alias_body(a);
+        match self.types.get(body) {
+            Type::Match(..) => true,
+            Type::Lambda(_, b) => matches!(self.types.get(b), Type::Match(..)),
+            _ => false,
+        }
+    }
+
+    /// dotty's `filterByDeps`: a proposal that would narrow what an open variable outside the
+    /// proposals allows is turned to the other side where it does not occur (`v == 0`), or
+    /// dropped, the variable left open for the trees around: from above where one lies above it
+    /// or holds it in its bounds so that a larger instance narrows it (`dependsOn(co = true)`),
+    /// from below dually. Repeated with the smaller set until nothing changes.
+    fn filter_by_deps(&mut self, todo: Vec<(TVarId, i8)>) -> Vec<(TVarId, i8)> {
+        let mut todo = todo;
+        loop {
+            // The proposals' dependencies on one another do not count (`excluded`).
+            let excluded: Vec<TVarId> = todo.iter().map(|&(v, _)| v).collect();
+            let mut next = Vec::with_capacity(todo.len());
+            for &(v, s) in &todo {
+                let above_ok = !self.depends_on(v, &excluded, true);
+                let below_ok = !self.depends_on(v, &excluded, false);
+                let s = if s == 0 && !above_ok { 1 } else if s == 0 && !below_ok { -1 } else { s };
+                if (s == -1 && !above_ok) || (s == 1 && !below_ok) {
+                    continue;
+                }
+                next.push((v, s));
+            }
+            if next.len() == todo.len() {
+                return next;
+            }
+            // The dropped ones stay open for the trees around.
+            for &(v, _) in &todo {
+                if !next.iter().any(|&(w, _)| w == v) && !self.open_vars.contains(&v) {
+                    self.open_vars.push(v);
+                    self.opened += 1;
+                }
+            }
+            todo = next;
+        }
+    }
+
+    /// `v` instantiated from its lower bounds (teq's solver, which widens as `instanceType` does;
+    /// `Nothing` where nothing bounds it below) or from its upper ones (their intersection, `Any`
+    /// without any).
+    fn instantiate_from(&mut self, v: TVarId, from_below: bool, tp: TypeId) -> bool {
+        if from_below {
+            if !self.has_lower_bound(v) {
+                self.instantiate(v, NOTHING);
+                let uppers: Vec<TypeId> = self.tvars[v].upper.clone();
+                return uppers.into_iter().all(|u| self.is_sub(NOTHING, u));
+            }
+            return self.solve_var_directed(v, Some(tp));
+        }
+        let uppers = self.bounds_but_itself(v, false);
+        if uppers.is_empty() {
+            self.instantiate(v, ANY);
+            return true;
+        }
+        // An upper bound that holds the variable itself (`T <: Ord[T]`) is no instance: from below.
+        let zonked: Vec<TypeId> = uppers.iter().map(|&u| self.zonk(u)).collect();
+        if zonked.iter().any(|&u| self.occurs(v, u)) {
+            return self.solve_var_directed(v, Some(tp));
+        }
+        // The meet of the upper bounds as they stand, open variables included (`approximation`'s
+        // `fullUpperBound`, `_ & _`), which the instantiation of the rest settles; every lower
+        // bound was checked against them as it was recorded (`add_lower`).
+        let choice = zonked.into_iter().fold(ANY, |acc, u| self.glb(acc, u));
+        self.instantiate(v, choice);
+        true
+    }
+
+    /// dotty's `TypeComparer.glb`: the meet of `a` and `b`, a part of either that is a supertype
+    /// of the other dropped (`dropIfSuper`, a frozen comparison; a part the other holds as a part
+    /// is dropped without one), so `R & R` is `R` and `Bus & (Clock & Bus)` is `Clock & Bus`.
+    /// `a`'s parts are dropped first, then `b`'s against what is left of `a` (`mergedGlb`).
+    pub(super) fn glb(&mut self, a: TypeId, b: TypeId) -> TypeId {
+        let (a, b) = (self.deref(a), self.deref(b));
+        if a == b || b == ANY {
+            return a;
+        }
+        if a == ANY {
+            return b;
+        }
+        if a == ERROR || b == ERROR {
+            return ERROR;
+        }
+        if a == NOTHING || b == NOTHING {
+            return NOTHING;
+        }
+        let mut pa = Vec::new();
+        self.inter_parts(a, &mut pa);
+        let mut pb = Vec::new();
+        self.inter_parts(b, &mut pb);
+        let mut ka = Vec::with_capacity(pa.len());
+        for &p in &pa {
+            if !pb.contains(&p) && !self.frozen_sub(b, p) {
+                ka.push(p);
+            }
+        }
+        if ka.is_empty() {
+            return b;
+        }
+        let a2 = if ka.len() == pa.len() { a } else { ka.iter().copied().reduce(|x, y| self.types.inter(x, y)).unwrap() };
+        let mut kb = Vec::with_capacity(pb.len());
+        for &q in &pb {
+            if !ka.contains(&q) && !self.frozen_sub(a2, q) {
+                kb.push(q);
+            }
+        }
+        if kb.is_empty() {
+            return a2;
+        }
+        let b2 = if kb.len() == pb.len() { b } else { kb.iter().copied().reduce(|x, y| self.types.inter(x, y)).unwrap() };
+        self.types.inter(a2, b2)
+    }
+
+    /// The parts of the intersection `t`, in order; `t` itself where it is none.
+    fn inter_parts(&mut self, t: TypeId, out: &mut Vec<TypeId>) {
+        let t = self.deref(t);
+        match self.types.get(t) {
+            Type::Inter(x, y) => {
+                self.inter_parts(x, out);
+                self.inter_parts(y, out);
+            }
+            _ => out.push(t),
+        }
+    }
+
+    /// Whether `part` is `t` or one of the parts of the intersection `t`.
+    fn is_part_of_inter(&mut self, part: TypeId, t: TypeId) -> bool {
+        let t = self.deref(t);
+        if t == part {
+            return true;
+        }
+        match self.types.get(t) {
+            Type::Inter(a, b) => self.is_part_of_inter(part, a) || self.is_part_of_inter(part, b),
+            _ => false,
+        }
+    }
+
+    /// Whether something other than `Any` bounds `v` above (`TypeVar.hasUpperBound`).
+    fn has_upper_bound(&mut self, v: TVarId) -> bool {
+        for k in 0..self.tvars[v].upper.len() {
+            let u = self.tvars[v].upper[k];
+            let u = self.deref(u);
+            if u != ANY && !matches!(self.types.get(u), Type::Var(w) if w == v) {
+                return true;
+            }
+        }
+        false
+    }
+
+    /// `t` with its open variables instantiated as dotty's `IsFullyDefinedAccumulator` does under
+    /// `ForceDegree.all`, at a definition's inferred type (`Namer.inferredResultType`'s
+    /// `fullyDefinedType`) or a class's parent, by `instDecision`: one something bounds below
+    /// from below unless held contravariantly; one nothing bounds below from below where held
+    /// covariantly, or nonvariantly with nothing above it; the others from above, after the
+    /// rest, where `instDirection` (the side the constraint narrowed beyond the declared bounds)
+    /// does not decide first.
+    pub fn fully_defined(&mut self, t: TypeId) -> TypeId {
+        let t = self.zonk(t);
+        if !self.types.has_vars(t) {
+            return t;
+        }
+        self.define_vars_in(t, None);
+        self.solve_in(t)
+    }
+
+    /// dotty's `Inferencing.instDirection`: 1 where the constraint bounds `v` from above beyond
+    /// the bounds its parameter declares and not from below, -1 the other way round, 0 where
+    /// neither or both (each compared frozen, the lower bounds' join against the declared lower
+    /// bound, the declared upper bound against each upper one, an ordering among them).
+    fn inst_direction(&mut self, v: TVarId) -> i8 {
+        let (lo, hi) = self.tvars[v].declared();
+        let mut below = 0;
+        for k in 0..self.tvars[v].lower.len() {
+            let l = self.tvars[v].lower[k];
+            if !self.is_var_itself(l, v) && !self.frozen_sub(l, lo) {
+                below = 1;
+                break;
+            }
+        }
+        let mut above = 0;
+        for k in 0..self.tvars[v].upper.len() {
+            let u = self.tvars[v].upper[k];
+            if !self.is_var_itself(u, v) && !self.frozen_sub(hi, u) {
+                above = 1;
+                break;
+            }
+        }
+        above - below
+    }
+
+    /// `IsFullyDefinedAccumulator`'s `ForceDegree.all` over the open variables of `t` (made from
+    /// `since` on, where given): `instDecision` of each, by `instDirection` first, the maximised
+    /// ones by their variance (`ToMax`) last.
+    fn define_vars_in(&mut self, t: TypeId, since: Option<usize>) {
+        let mut maximize = Vec::new();
+        for (v, s) in self.var_variances(t) {
+            if self.tvars[v].inst.is_some() || since.is_some_and(|m| !self.tvars.made_since(v, m)) {
+                continue;
+            }
+            let direction = self.inst_direction(v);
+            if direction != 0 {
+                self.instantiate_from(v, direction < 0, t);
+                continue;
+            }
+            let min = if self.has_lower_bound(v) { s >= 0 } else { s > 0 || s == 0 && !self.has_upper_bound(v) };
+            if min {
+                self.instantiate_from(v, true, t);
+            } else {
+                maximize.push(v);
+            }
+        }
+        for v in maximize {
+            if self.tvars[v].inst.is_none() {
+                self.instantiate_from(v, false, t);
+            }
+        }
+    }
+
+    /// dotty's `canDefineFurther`: the open variables of `t` instantiated as `isFullyDefined` does
+    /// under `ForceDegree.failBottom`, true where every one could be and one was; none of them
+    /// where one held covariantly or nonvariantly has nothing below it.
+    pub fn can_define_further(&mut self, t: TypeId) -> bool {
+        let t = self.zonk(t);
+        if !self.types.has_vars(t) {
+            return false;
+        }
+        let mark = self.snapshot();
+        let mut maximize = Vec::new();
+        let mut changed = false;
+        for (v, s) in self.var_variances(t) {
+            if self.tvars[v].inst.is_some() {
+                continue;
+            }
+            let direction = self.inst_direction(v);
+            if direction != 0 {
+                self.instantiate_from(v, direction < 0, t);
+                changed = true;
+                continue;
+            }
+            if self.has_lower_bound(v) {
+                if s >= 0 {
+                    self.instantiate_from(v, true, t);
+                    changed = true;
+                } else {
+                    maximize.push(v);
+                }
+            } else if s >= 0 {
+                self.rollback(mark);
+                return false;
+            } else {
+                maximize.push(v);
+            }
+        }
+        for v in maximize {
+            if self.tvars[v].inst.is_none() {
+                self.instantiate_from(v, false, t);
+                changed = true;
+            }
+        }
+        changed
+    }
+
+    /// Whether something other than `Nothing` bounds `v` below (`TypeVar.hasLowerBound`).
+    fn has_lower_bound(&mut self, v: TVarId) -> bool {
+        let info = &self.tvars[v];
+        let mut heads = false;
+        for &l in &info.lower {
+            match self.types.get(l) {
+                Type::Var(_) | Type::AppVar(..) => heads = true,
+                _ if l != NOTHING => return true,
+                _ => {}
+            }
+        }
+        if !heads {
+            return false;
+        }
+        for k in 0..self.tvars[v].lower.len() {
+            let l = self.tvars[v].lower[k];
+            if self.deref(l) != NOTHING {
+                return true;
+            }
+        }
+        false
+    }
+
+    /// dotty's `Inferencing.variances`: the variances of the open variables of `tp` and of the
+    /// expected type `pt`, and through the bounds of each the variables that decide its
+    /// instance: below a covariant one at its variance, above a contravariant one, both ways for a
+    /// nonvariant one, until nothing changes (`propagate`).
+    pub(super) fn interp_variances(&mut self, tp: TypeId, pt: Option<TypeId>, within: Option<usize>) -> Vec<(TVarId, i8)> {
+        let mut out = self.var_variances(tp);
+        if let Some(pt) = pt {
+            if pt != ERROR {
+                self.collect_var_variances(pt, 1, &mut out);
+            }
+        }
+        // The variance each entry's bounds were read at (2: unread), on the stack for the few a
+        // type holds; one whose variance changed since (to nonvariant) is read again. Under
+        // `within`, only the bounds of the variables made from it on are read.
+        let mut read_small = [2i8; 16];
+        let mut read_big: Vec<i8> = Vec::new();
+        loop {
+            let mut changed = false;
+            let mut i = 0;
+            while i < out.len() {
+                let (v, s) = out[i];
+                let was = if i < 16 {
+                    std::mem::replace(&mut read_small[i], s)
+                } else {
+                    if read_big.len() <= i - 16 {
+                        read_big.resize(i - 15, 2);
+                    }
+                    std::mem::replace(&mut read_big[i - 16], s)
+                };
+                if was == s || self.tvars[v].inst.is_some() || within.is_some_and(|m| !self.tvars.made_since(v, m)) {
+                    i += 1;
+                    continue;
+                }
+                changed = true;
+                // A bound that mentions no variable holds none (most).
+                if s >= 0 {
+                    for k in 0..self.tvars[v].lower.len() {
+                        let l = self.tvars[v].lower[k];
+                        if self.types.has_vars(l) {
+                            self.collect_var_variances(l, s, &mut out);
+                        }
+                    }
+                }
+                if s <= 0 {
+                    for k in 0..self.tvars[v].upper.len() {
+                        let u = self.tvars[v].upper[k];
+                        if self.types.has_vars(u) {
+                            self.collect_var_variances(u, s, &mut out);
+                        }
+                    }
+                }
+                i += 1;
+            }
+            if !changed {
+                return out;
+            }
+        }
+    }
+
+    /// The tree of type `ty` expected to be `expected`, whose typing made the variables from
+    /// `mark` on, interpolates those an inner interpolation left open (`Typer.simplify`'s
+    /// `interpolateTypeVars`): its type constrained by the expected one first where that holds
+    /// (`constrainResult`, which can bound a variable by a singleton), then instantiated as
+    /// `instantiate_vars` says.
+    #[inline(never)]
+    pub(super) fn interpolate_open(&mut self, mark: usize, ty: TypeId, expected: Option<TypeId>) {
+        let start = self.open_vars.iter().rposition(|&v| !self.tvars.made_since(v, mark)).map_or(0, |i| i + 1);
+        let vars: Vec<TVarId> = self.open_vars.drain(start..).filter(|&v| self.tvars[v].inst.is_none()).collect();
+        if vars.is_empty() || ty == ERROR {
+            self.open_vars.extend(vars);
+            return;
+        }
+        if let Some(exp) = self.concrete_expected(expected) {
+            if exp != self.b.t_unit && exp != ANY && exp != ERROR {
+                let snap = self.snapshot();
+                if !self.is_sub(ty, exp) {
+                    self.rollback(snap);
+                }
+            }
+        }
+        self.instantiate_vars(&vars, mark, ty, expected);
+    }
+
+    /// A lambda's body, of type `ty`, typed: the variables its typing made from `mark` on are
+    /// instantiated, as dotty's closure is an anonymous method whose result type is inferred
+    /// fully defined (`Namer.inferredResultType`): those `ty` holds as `fully_defined` says,
+    /// the others by their bounds. Its parameters' paths do not reach the trees around.
+    pub(super) fn define_body_vars(&mut self, mark: usize, ty: TypeId) -> TypeId {
+        if !self.open_vars.last().is_some_and(|&v| self.tvars.made_since(v, mark)) {
+            return ty;
+        }
+        let zonked = self.zonk(ty);
+        self.define_vars_in(zonked, Some(mark));
+        self.force_open_vars(mark);
+        self.zonk(ty)
+    }
+
+    /// The recorded types of the nodes from `from` on, zonked: a variable they name that an
+    /// interpolation left open is instantiated by now.
+    pub(super) fn settle_node_types(&mut self, from: usize) {
+        if !self.prog.record_types {
+            return;
+        }
+        for i in from..self.prog.exprs.len() {
+            let te = crate::tir::TExprId(i as u32);
+            if let Some(t) = self.prog.type_of(te) {
+                if self.types.has_vars(t) {
+                    let z = self.zonk(t);
+                    if z != t {
+                        self.prog.set_type(te, z);
+                    }
+                }
+            }
+        }
+    }
+
+    /// The definition whose typing made the variables from `start` on is typed: what is still
+    /// open is instantiated by its bounds (`fullyDefinedType`'s `ForceDegree.all`).
+    pub(super) fn force_open_vars(&mut self, start: usize) {
+        if !self.open_vars.last().is_some_and(|&v| self.tvars.made_since(v, start)) {
+            return;
+        }
+        let from = self.open_vars.iter().rposition(|&v| !self.tvars.made_since(v, start)).map_or(0, |i| i + 1);
+        let vars: Vec<TVarId> = self.open_vars.drain(from..).collect();
+        for v in vars {
+            if self.tvars[v].inst.is_none() {
+                let from_below = self.has_lower_bound(v);
+                self.instantiate_from(v, from_below, ANY);
+            }
+        }
+    }
+
     /// Solves every variable mentioned in `t` and returns the variable-free type.
     pub fn solve_in(&mut self, t: TypeId) -> TypeId {
         let t = self.zonk(t);
@@ -2706,6 +3619,43 @@ impl<'a> Worker<'a> {
             self.solve_var(v);
         }
         self.zonk(t)
+    }
+
+    /// A receiver whose type is still an open variable that something bounds below, as an
+    /// operator finds no member on a variable's upper bound: instantiated from below, as dotty's
+    /// selection retries with `couldInstantiateTypeVar` (`Typer.tryInstantiateTypeVar`), so
+    /// `it + 1` of `fun(it + 1)` over a `Ctx[T] ?=> U` takes `T`'s `Int` (i10082).
+    #[inline]
+    pub(super) fn instantiate_receiver_var(&mut self, t: TypeId) -> TypeId {
+        if self.types.has_vars(t) && self.could_instantiate_var(t, false) { self.zonk(t) } else { t }
+    }
+
+    /// dotty's `couldInstantiateTypeVar`: an open variable bounded below, instantiated from below,
+    /// at the head of `t`, of an application's constructor (`?G[Unit]`, its arguments too) or of
+    /// a match alias's arguments, of a refinement's parent, or of either side of a union or an
+    /// intersection. Whether one was.
+    pub(super) fn could_instantiate_var(&mut self, t: TypeId, applied: bool) -> bool {
+        let t = self.deref(t);
+        match self.types.get(t) {
+            Type::Var(v) => {
+                if !self.has_lower_bound(v) {
+                    return false;
+                }
+                self.instantiate_from(v, true, t);
+                true
+            }
+            Type::AppVar(v, args) => {
+                let head = self.types.mk(Type::Var(v));
+                self.could_instantiate_var(head, true) || self.types.items(args).to_vec().into_iter().any(|a| self.could_instantiate_var(a, true))
+            }
+            Type::Alias(a, args) if self.is_match_alias_application(a) => self.types.items(args).to_vec().into_iter().any(|a| self.could_instantiate_var(a, applied)),
+            Type::Class(_, args) | Type::AppParam(_, args) | Type::AppMember(_, args) | Type::Alias(_, args) if applied => {
+                self.types.items(args).to_vec().into_iter().any(|a| self.could_instantiate_var(a, applied))
+            }
+            Type::Refined(p, _) => self.could_instantiate_var(p, applied),
+            Type::Union(a, b, _) | Type::Inter(a, b) => self.could_instantiate_var(a, applied) || self.could_instantiate_var(b, applied),
+            _ => false,
+        }
     }
 
     /// Solves the variables in `t` that already have bounds; unconstrained ones stay open so
@@ -2750,7 +3700,7 @@ impl<'a> Worker<'a> {
                 }
             }
             Type::Lambda(_, b) => self.maximize_unbounded_vars(b),
-            Type::Union(a, b) | Type::Inter(a, b) => {
+            Type::Union(a, b, _) | Type::Inter(a, b) => {
                 self.maximize_unbounded_vars(a);
                 self.maximize_unbounded_vars(b);
             }
@@ -2783,6 +3733,10 @@ impl<'a> Worker<'a> {
     }
 
     fn collect_var_variances(&mut self, t: TypeId, sign: i8, out: &mut Vec<(TVarId, i8)>) {
+        // A part that mentions no variable holds none (the store's flag, read once).
+        if !self.types.has_vars(t) {
+            return;
+        }
         let t = self.deref(t);
         let note = |out: &mut Vec<(TVarId, i8)>, v: TVarId, sign: i8| match out.iter_mut().find(|(w, _)| *w == v) {
             Some((_, s)) if *s != sign => *s = 0,
@@ -2793,10 +3747,13 @@ impl<'a> Worker<'a> {
             Type::Var(v) => note(out, v, sign),
             Type::Class(c, args) => {
                 self.settle_class(c);
-                let variances: Vec<i8> = self.syms.class(c).tparams.iter().map(|&p| self.syms.tparam(p).variance).collect();
-                let items = self.types.items(args).to_vec();
-                for (i, a) in items.into_iter().enumerate() {
-                    let inner = match variances.get(i).copied().unwrap_or(0) {
+                for i in 0..self.types.items(args).len() {
+                    let a = self.types.items(args)[i];
+                    if !self.types.has_vars(a) {
+                        continue;
+                    }
+                    let declared = self.syms.class(c).tparams.get(i).map_or(0, |&p| self.syms.tparam(p).variance);
+                    let inner = match declared {
                         1 => sign,
                         -1 => -sign,
                         _ => 0,
@@ -2821,10 +3778,7 @@ impl<'a> Worker<'a> {
             // class's; an argument it declares none for, or of a member not found, is invariant.
             Type::AppMember(m, args) => {
                 let m = self.deref(m);
-                let variances: Vec<i8> = match self.types.get(m) {
-                    Type::Member(p, n) => self.type_member_alias(p, n).map(|a| self.syms.aliases[a.idx()].tparams.iter().map(|&q| self.syms.tparam(q).variance).collect()).unwrap_or_default(),
-                    _ => Vec::new(),
-                };
+                let variances = self.member_variances(m);
                 let items = self.types.items(args).to_vec();
                 for (i, a) in items.into_iter().enumerate() {
                     let inner = match variances.get(i).copied().unwrap_or(0) {
@@ -2836,7 +3790,7 @@ impl<'a> Worker<'a> {
                 }
             }
             Type::Lambda(_, b) => self.collect_var_variances(b, sign, out),
-            Type::Union(a, b) | Type::Inter(a, b) => {
+            Type::Union(a, b, _) | Type::Inter(a, b) => {
                 self.collect_var_variances(a, sign, out);
                 self.collect_var_variances(b, sign, out);
             }
@@ -2896,7 +3850,7 @@ impl<'a> Worker<'a> {
                 }
             }
             Type::Lambda(_, b) => self.collect_vars(b, out),
-            Type::Union(a, b) | Type::Inter(a, b) => {
+            Type::Union(a, b, _) | Type::Inter(a, b) => {
                 self.collect_vars(a, out);
                 self.collect_vars(b, out);
             }
@@ -2995,7 +3949,7 @@ impl<'a> Worker<'a> {
             }
             acc = Some(match acc {
                 Some(a) if a == t => a,
-                Some(a) => self.types.union(a, t),
+                Some(a) => self.types.soft_union(a, t),
                 None => t,
             });
         }
@@ -3836,7 +4790,7 @@ impl<'a> Worker<'a> {
                 let class = self.widen_lit(t);
                 self.erased_class(class, 0)
             }
-            Type::Union(a, b) => {
+            Type::Union(a, b, _) => {
                 let (x, y) = (self.signature_class(a), self.signature_class(b));
                 if x == y { x } else { self.b.any_ref }
             }
@@ -4110,7 +5064,7 @@ impl<'a> Worker<'a> {
                 out.extend(bcs1);
                 out
             }
-            Type::Union(a, b) => {
+            Type::Union(a, b, _) => {
                 let bcs1 = self.receiver_base_classes(a, depth + 1);
                 let bcs2 = self.receiver_base_classes(b, depth + 1);
                 let mut out = Vec::new();
@@ -4315,5 +5269,25 @@ impl<'a> Worker<'a> {
             }
             _ => Vec::new(),
         }
+    }
+}
+
+/// The dependency flags of a variable named at variance `s` (`coDeps` where `s >= 0`,
+/// `contraDeps` where `s <= 0`, the `Adjuster`'s test).
+fn dep_flags(s: i8) -> u8 {
+    match s {
+        1 => DEP_CO,
+        -1 => DEP_CONTRA,
+        _ => DEP_CO | DEP_CONTRA,
+    }
+}
+
+/// Flags `f` of a dependency on a variable, carried to a variable its instance names at `s`.
+fn compose_dep(f: u8, s: i8) -> u8 {
+    match s {
+        1 => f,
+        -1 => ((f & DEP_CO) << 1) | ((f & DEP_CONTRA) >> 1),
+        _ if f != 0 => DEP_CO | DEP_CONTRA,
+        _ => 0,
     }
 }

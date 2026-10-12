@@ -618,7 +618,7 @@ impl<'a> Worker<'a> {
                 let (nx, ny) = (self.fix_recs(anchor, x), self.fix_recs(anchor, y));
                 if nx == x && ny == y { t } else { self.types.inter(nx, ny) }
             }
-            Type::Union(x, y) => {
+            Type::Union(x, y, _) => {
                 let (nx, ny) = (self.fix_recs(anchor, x), self.fix_recs(anchor, y));
                 if nx == x && ny == y { t } else { self.types.union(nx, ny) }
             }
@@ -1060,9 +1060,9 @@ impl<'a> Worker<'a> {
                 let nps = self.map_poly_bounds(ps, &mut |w, x| w.specialise_aliases(x, subst));
                 self.types.mk(Type::Poly(nps, nb))
             }
-            Type::Union(x, y) => {
+            Type::Union(x, y, soft) => {
                 let (nx, ny) = (self.specialise_aliases(x, subst), self.specialise_aliases(y, subst));
-                self.types.union(nx, ny)
+                self.types.union_as(soft, nx, ny)
             }
             Type::Inter(x, y) => {
                 let (nx, ny) = (self.specialise_aliases(x, subst), self.specialise_aliases(y, subst));
@@ -1123,9 +1123,9 @@ impl<'a> Worker<'a> {
                 let nps = self.map_poly_bounds(ps, &mut |w, x| w.redirect_alias(x, from, to));
                 self.types.mk(Type::Poly(nps, nb))
             }
-            Type::Union(x, y) => {
+            Type::Union(x, y, soft) => {
                 let (nx, ny) = (self.redirect_alias(x, from, to), self.redirect_alias(y, from, to));
-                self.types.union(nx, ny)
+                self.types.union_as(soft, nx, ny)
             }
             Type::Inter(x, y) => {
                 let (nx, ny) = (self.redirect_alias(x, from, to), self.redirect_alias(y, from, to));
@@ -1201,6 +1201,7 @@ impl<'a> Worker<'a> {
         let value = match self.constant_value(s)? {
             crate::tir::TExpr::Int(v) => LitVal::Int(v),
             crate::tir::TExpr::Long(v) => LitVal::Long(v),
+            crate::tir::TExpr::Double(v) if ret == self.b.t_float => LitVal::Float((v as f32).to_bits()),
             crate::tir::TExpr::Double(v) => LitVal::Double(v.to_bits()),
             crate::tir::TExpr::Bool(v) => LitVal::Bool(v),
             crate::tir::TExpr::Char(v) => LitVal::Char(v),
@@ -1649,9 +1650,9 @@ impl<'a> Worker<'a> {
                 let nps = self.map_poly_bounds(ps, &mut |w, x| w.rebase(x, r));
                 self.types.mk(Type::Poly(nps, nb))
             }
-            Type::Union(a, b) => {
+            Type::Union(a, b, soft) => {
                 let (na, nb) = (self.rebase(a, r), self.rebase(b, r));
-                self.types.union(na, nb)
+                self.types.union_as(soft, na, nb)
             }
             Type::Inter(a, b) => {
                 let (na, nb) = (self.rebase(a, r), self.rebase(b, r));

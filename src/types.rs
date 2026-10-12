@@ -39,6 +39,18 @@ impl TVarId {
     }
 }
 
+/// How a union widens in an inferred type (dotty's `widenInferred`): a soft one, a join the
+/// compiler made (`lub` of branches, of a variable's lower bounds; `OrType.isSoft`), by its
+/// members' join; a hard one, written in the program, by its members' classes, kept a union
+/// (`widenUnion`); a named one, an alias of a union (`type MonthNumber = 1 | 2`), not at all, as
+/// dotty's `widen` does not dealias the alias's `TypeRef`.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
+pub enum UnionKind {
+    Hard,
+    Soft,
+    Named,
+}
+
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub enum Type {
     Any,
@@ -60,7 +72,8 @@ pub enum Type {
     Poly(TList, TypeId),
     Var(TVarId),
     AppVar(TVarId, TList),
-    Union(TypeId, TypeId),
+    /// A union, of its kind (`UnionKind`): hard, soft or named.
+    Union(TypeId, TypeId, UnionKind),
     Inter(TypeId, TypeId),
     /// A literal type such as `1` or `"fast"`; the value sits in the store, so that `Type`
     /// stays three words wide.
@@ -153,15 +166,88 @@ impl Refinement {
     }
 }
 
-/// A `Double` is kept as its bits so that the value can be hashed.
+/// A `Double` or a `Float` is kept as its bits so that the value can be hashed.
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub enum LitVal {
     Int(i32),
     Long(i64),
     Double(u64),
+    Float(u32),
     Char(u16),
     Bool(bool),
     Str(Name),
+}
+
+/// A `Double` as the JVM's `Double.toString` writes it (what scalac's `ops.any.ToString` and its
+/// printer read, `TypeEval`'s `toString`): the decimal the JDK selects (`java_digits`), in
+/// decimal from 10^-3 to below 10^7 (`1.0`, `0.001`), in computerized scientific notation
+/// outside it (`1.0E7`, `3.4028234663852886E38`, `4.9E-324`), `NaN`, `Infinity`, `-0.0`.
+pub fn java_double_string(x: f64) -> String {
+    let a = x.abs();
+    let digits = java_digits(format!("{:e}", a), || format!("{:.1e}", a), |d| d.parse::<f64>() == Ok(a));
+    java_number_string(x.is_nan(), x.is_infinite(), x.is_sign_negative(), x == 0.0, a, digits)
+}
+
+/// A `Float` as the JVM's `Float.toString` writes it (`1.0`, `3.4028235E38`, `1.4E-45`).
+pub fn java_float_string(x: f32) -> String {
+    let a = x.abs();
+    let digits = java_digits(format!("{:e}", a), || format!("{:.1e}", a), |d| d.parse::<f32>() == Ok(a));
+    java_number_string(x.is_nan(), x.is_infinite(), x.is_sign_negative(), x == 0.0, a as f64, digits)
+}
+
+/// The decimal `Double.toString` and `Float.toString` select (the JDK's since 19): among the
+/// decimals that round to the value, those of the fewest digits, or, where that is one, those
+/// of one or two digits, the closest to the value. `shortest` is the shortest decimal closest
+/// to the value (`{:e}`); where it has one digit, the value rounded to two (`two`) is the
+/// closest of one or two digits, taken where it rounds back to the value (`round_trips`):
+/// `Float.MIN_VALUE` is `1.4E-45` where the one digit alone gives `1.0E-45`.
+fn java_digits(shortest: String, two: impl FnOnce() -> String, round_trips: impl Fn(&str) -> bool) -> String {
+    let mantissa = shortest.split_once('e').map_or(shortest.as_str(), |(m, _)| m);
+    if mantissa.chars().filter(|c| c.is_ascii_digit()).count() != 1 {
+        return shortest;
+    }
+    let two = two();
+    if round_trips(&two) { two } else { shortest }
+}
+
+fn java_number_string(nan: bool, infinite: bool, negative: bool, zero: bool, magnitude: f64, shortest: String) -> String {
+    if nan {
+        return "NaN".to_string();
+    }
+    let sign = if negative { "-" } else { "" };
+    if infinite {
+        return format!("{sign}Infinity");
+    }
+    if zero {
+        return format!("{sign}0.0");
+    }
+    // `shortest` is the selected decimal (`java_digits`), `d[.ddd]e<exp>`.
+    let (mantissa, exp) = shortest.split_once('e').unwrap_or((&shortest, "0"));
+    let exp: i32 = exp.parse().unwrap_or(0);
+    let digits: String = mantissa.chars().filter(|c| c.is_ascii_digit()).collect();
+    // A trailing zero of two digits selected (`1.0e-3`) is none of the value's.
+    let digits = match digits.trim_end_matches('0') {
+        "" => "0".to_string(),
+        d => d.to_string(),
+    };
+    if (1e-3..1e7).contains(&magnitude) {
+        if exp >= 0 {
+            let int_len = exp as usize + 1;
+            let (int_part, frac) = if digits.len() > int_len {
+                (digits[..int_len].to_string(), digits[int_len..].to_string())
+            } else {
+                (format!("{digits}{}", "0".repeat(int_len - digits.len())), String::new())
+            };
+            let frac = if frac.is_empty() { "0".to_string() } else { frac };
+            format!("{sign}{int_part}.{frac}")
+        } else {
+            format!("{sign}0.{}{digits}", "0".repeat((-exp - 1) as usize))
+        }
+    } else {
+        let (first, rest) = digits.split_at(1);
+        let rest = if rest.is_empty() { "0" } else { rest };
+        format!("{sign}{first}.{rest}E{exp}")
+    }
 }
 
 pub const ANY: TypeId = TypeId(0);
@@ -445,7 +531,7 @@ impl TypeStore {
                 let local = params.iter().fold(0, |acc, &a| acc | self.entry_flag(a)) & LOCAL_BIT;
                 self.entry_flag(b) | bounds.iter().fold(local, |acc, &a| acc | self.entry_flag(a))
             }
-            Type::Union(a, b) | Type::Inter(a, b) => self.entry_flag(a) | self.entry_flag(b),
+            Type::Union(a, b, _) | Type::Inter(a, b) => self.entry_flag(a) | self.entry_flag(b),
             Type::AppMember(m, args) => {
                 let args = self.list_flags(args);
                 ((self.entry_flag(m) | args) & THROUGH_PREFIX) | (args & APP_PARAM_BIT)
@@ -921,7 +1007,7 @@ impl TypeStore {
             Type::AppMember(m, args) => self.names_term(m, terms) || list(args),
             Type::Class(_, args) | Type::AppParam(_, args) | Type::AppVar(_, args) | Type::Alias(_, args) => list(args),
             Type::Lambda(ps, b) | Type::Poly(ps, b) => list(ps) || self.names_term(b, terms),
-            Type::Union(a, b) | Type::Inter(a, b) | Type::BoundedWild(a, b) => self.names_term(a, terms) || self.names_term(b, terms),
+            Type::Union(a, b, _) | Type::Inter(a, b) | Type::BoundedWild(a, b) => self.names_term(a, terms) || self.names_term(b, terms),
             Type::Refined(p, r) => {
                 self.names_term(p, terms)
                     || match self.refinement(r) {
@@ -952,7 +1038,7 @@ impl TypeStore {
             Type::AppMember(m, args) => self.names_tparam(m, tparams) || list(args),
             Type::Class(_, args) | Type::AppVar(_, args) | Type::Alias(_, args) => list(args),
             Type::Lambda(ps, b) | Type::Poly(ps, b) => list(ps) || self.names_tparam(b, tparams),
-            Type::Union(a, b) | Type::Inter(a, b) | Type::BoundedWild(a, b) => self.names_tparam(a, tparams) || self.names_tparam(b, tparams),
+            Type::Union(a, b, _) | Type::Inter(a, b) | Type::BoundedWild(a, b) => self.names_tparam(a, tparams) || self.names_tparam(b, tparams),
             Type::Refined(p, r) => {
                 self.names_tparam(p, tparams)
                     || match self.refinement(r) {
@@ -1104,7 +1190,7 @@ impl TypeStore {
     pub fn union_parts(&self) -> Vec<TypeId> {
         let mut out = Vec::new();
         for i in 0..self.types.len() {
-            if let Type::Union(a, b) = *self.types.get(i) {
+            if let Type::Union(a, b, _) = *self.types.get(i) {
                 out.push(a);
                 out.push(b);
             }
@@ -1130,7 +1216,7 @@ impl TypeStore {
                     _ => return None,
                 },
                 Type::Class(c, _) => return tuple_arity(c).map(|n| heads + n),
-                Type::Union(a, b) | Type::Inter(a, b) => {
+                Type::Union(a, b, _) | Type::Inter(a, b) => {
                     let n = self.cons_arity(a, cons, tuple_arity)?;
                     return (self.cons_arity(b, cons, tuple_arity)? == n).then_some(heads + n);
                 }
@@ -1143,7 +1229,18 @@ impl TypeStore {
         self.mk(Type::Param(p))
     }
 
+    /// A written union, hard (`A | B`).
     pub fn union(&self, a: TypeId, b: TypeId) -> TypeId {
+        self.union_as(UnionKind::Hard, a, b)
+    }
+
+    /// A union the compiler joined, soft (dotty's `lub`'s `isSoft`).
+    pub fn soft_union(&self, a: TypeId, b: TypeId) -> TypeId {
+        self.union_as(UnionKind::Soft, a, b)
+    }
+
+    /// A union of a kind, as the one a map rebuilds was (`derivedOrType`).
+    pub fn union_as(&self, kind: UnionKind, a: TypeId, b: TypeId) -> TypeId {
         if a == b || b == NOTHING {
             return a;
         }
@@ -1153,7 +1250,7 @@ impl TypeStore {
         if a == ERROR || b == ERROR {
             return ERROR;
         }
-        self.mk(Type::Union(a, b))
+        self.mk(Type::Union(a, b, kind))
     }
 
     pub fn inter(&self, a: TypeId, b: TypeId) -> TypeId {
@@ -1232,7 +1329,7 @@ impl TypeStore {
             }
             Type::AppMember(m, args) => self.mentions_member_of(m, prefix) || self.items(args).iter().any(|&a| self.mentions_member_of(a, prefix)),
             Type::Lambda(_, body) | Type::Poly(_, body) => self.mentions_member_of(body, prefix),
-            Type::Union(a, b) | Type::Inter(a, b) | Type::BoundedWild(a, b) => self.mentions_member_of(a, prefix) || self.mentions_member_of(b, prefix),
+            Type::Union(a, b, _) | Type::Inter(a, b) | Type::BoundedWild(a, b) => self.mentions_member_of(a, prefix) || self.mentions_member_of(b, prefix),
             Type::Select(p, _) => self.mentions_member_of(p, prefix),
             Type::Refined(p, r) => self.mentions_member_of(p, prefix) || self.refinement_types(r).into_iter().any(|a| self.mentions_member_of(a, prefix)),
             _ => false,
@@ -1259,7 +1356,7 @@ impl TypeStore {
             Type::AppMember(m, args) => self.contains_error(m) || self.items(args).iter().any(|&a| self.contains_error(a)),
             Type::Lambda(_, body) => self.contains_error(body),
             Type::Poly(ps, body) => self.contains_error(body) || self.poly_bounds(ps).iter().any(|&a| self.contains_error(a)),
-            Type::Union(a, b) | Type::Inter(a, b) | Type::BoundedWild(a, b) => self.contains_error(a) || self.contains_error(b),
+            Type::Union(a, b, _) | Type::Inter(a, b) | Type::BoundedWild(a, b) => self.contains_error(a) || self.contains_error(b),
             Type::Select(p, _) | Type::Member(p, _) => self.contains_error(p),
             Type::Nested(p, c) => self.contains_error(p) || self.contains_error(c),
             Type::Refined(p, r) => self.contains_error(p) || self.refinement_types(r).into_iter().any(|a| self.contains_error(a)),
@@ -1413,12 +1510,12 @@ impl TypeStore {
                     self.mk(Type::Poly(nps, b))
                 }
             }
-            Type::Union(a, b) => {
+            Type::Union(a, b, soft) => {
                 let (na, nb) = (self.subst(a, s), self.subst(b, s));
                 if na == a && nb == b {
                     t
                 } else {
-                    self.union(na, nb)
+                    self.union_as(soft, na, nb)
                 }
             }
             Type::Inter(a, b) => {
@@ -1510,9 +1607,9 @@ impl TypeStore {
                 let b = self.replace(body, pairs);
                 if b == body { t } else { self.mk(Type::Lambda(ps, b)) }
             }
-            Type::Union(a, b) => {
+            Type::Union(a, b, soft) => {
                 let (na, nb) = (self.replace(a, pairs), self.replace(b, pairs));
-                if na == a && nb == b { t } else { self.union(na, nb) }
+                if na == a && nb == b { t } else { self.union_as(soft, na, nb) }
             }
             Type::Inter(a, b) => {
                 let (na, nb) = (self.replace(a, pairs), self.replace(b, pairs));
@@ -1591,7 +1688,7 @@ impl TypeStore {
                 let nps = if mapped == items { ps } else { self.list(&mapped) };
                 if b == body && nps == ps { t } else { self.mk(Type::Poly(nps, b)) }
             }
-            Type::Union(a, b) => {
+            Type::Union(a, b, _) => {
                 let (na, nb) = (f(a), f(b));
                 if na == a && nb == b { t } else { self.union(na, nb) }
             }
@@ -2141,7 +2238,7 @@ impl TypeStore {
                 out.extend_from_slice(self.entry_items(ps));
                 out.push(b);
             }
-            Type::Union(a, b) | Type::Inter(a, b) | Type::BoundedWild(a, b) => out.extend([a, b]),
+            Type::Union(a, b, _) | Type::Inter(a, b) | Type::BoundedWild(a, b) => out.extend([a, b]),
             Type::AppMember(m, args) => {
                 out.push(m);
                 out.extend_from_slice(self.entry_items(args));
@@ -2580,7 +2677,7 @@ impl TypeStore {
                 list(ps);
                 ty(b);
             }
-            Type::Union(a, b) | Type::Inter(a, b) | Type::BoundedWild(a, b) => {
+            Type::Union(a, b, _) | Type::Inter(a, b) | Type::BoundedWild(a, b) => {
                 ty(a);
                 ty(b);
             }
@@ -3207,11 +3304,11 @@ impl ShadowNs<'_> {
                     key.extend([l, b2]);
                     Self::real(&[l, b2]).then(|| if matches!(shape, Type::Lambda(..)) { Type::Lambda(TList(l as u32), TypeId(b2 as u32)) } else { Type::Poly(TList(l as u32), TypeId(b2 as u32)) })
                 }
-                Type::Union(a, b) | Type::Inter(a, b) | Type::BoundedWild(a, b) => {
+                Type::Union(a, b, _) | Type::Inter(a, b) | Type::BoundedWild(a, b) => {
                     let (a2, b2) = (edge(self, a), edge(self, b));
-                    key.extend([a2, b2]);
+                    key.extend([a2, b2, match shape { Type::Union(_, _, k) => k as u64, _ => 0 }]);
                     Self::real(&[a2, b2]).then(|| match shape {
-                        Type::Union(..) => Type::Union(TypeId(a2 as u32), TypeId(b2 as u32)),
+                        Type::Union(_, _, soft) => Type::Union(TypeId(a2 as u32), TypeId(b2 as u32), soft),
                         Type::Inter(..) => Type::Inter(TypeId(a2 as u32), TypeId(b2 as u32)),
                         _ => Type::BoundedWild(TypeId(a2 as u32), TypeId(b2 as u32)),
                     })
@@ -3836,9 +3933,9 @@ impl TypeStore {
                 let b = part(b);
                 self.mk(Type::Poly(ps, b))
             }
-            Type::Union(a, b) => {
+            Type::Union(a, b, soft) => {
                 let (a, b) = (part(a), part(b));
-                self.mk(Type::Union(a, b))
+                self.mk(Type::Union(a, b, soft))
             }
             Type::Inter(a, b) => {
                 let (a, b) = (part(a), part(b));

@@ -377,7 +377,7 @@ impl<'a> Worker<'a> {
         if universal || self.find_member(ty, member).is_some() || self.has_member_or_std_extension(ty, member) || extension || self.value_has_type(v, member) {
             return;
         }
-        let msg = format!("value {} is not a member of {}", self.name_str(member), self.show(ty));
+        let msg = format!("value {} is not a member of {}", self.name_str(member), self.show(self.widen_lit(ty)));
         self.error(at, msg);
     }
 
@@ -2178,6 +2178,15 @@ impl<'a> Worker<'a> {
                 if self.alias_by_name(a) {
                     return self.match_alias_ctor(a);
                 }
+                // An alias of a union is its union named, which an inferred type does not widen,
+                // as dotty's `widen` does not dealias the alias's `TypeRef`: `val x = 1:
+                // MonthNumber` is a `MonthNumber` (pos/22219).
+                if self.union_alias(a) && self.private_alias_prefix.is_none() {
+                    if let Type::Union(x, y, _) = self.types.get(self.syms.aliases[a.idx()].rhs) {
+                        let named = self.types.union_as(UnionKind::Named, x, y);
+                        return self.in_expansion(named);
+                    }
+                }
                 // A private alias named where a companion's `apply` is seen from a receiver is the
                 // receiver's member of the name (`companion_apply_sig`).
                 if let Some((k, prefix)) = self.private_alias_prefix {
@@ -3836,7 +3845,7 @@ impl<'a> Worker<'a> {
             ast::Expr::DoubleLit(v) => LitVal::Double(v.to_bits()),
             // A literal type is never an untyped number (dotty's `Parsers.literal`, `inTypeOrSingleton`).
             ast::Expr::DecimalLit(s) => LitVal::Double(ast.str(s).parse::<f64>().unwrap_or(0.0).to_bits()),
-            ast::Expr::FloatLit(_) => return self.b.t_float,
+            ast::Expr::FloatLit(v) => LitVal::Float(v.to_bits()),
             ast::Expr::CharLit(c) => LitVal::Char(c as u16),
             ast::Expr::BoolLit(b) => LitVal::Bool(b),
             ast::Expr::StringLit(s) => LitVal::Str(self.interner.intern(ast.str(s))),
@@ -4532,7 +4541,7 @@ impl<'a> Worker<'a> {
                     }
                     continue;
                 }
-                Type::Inter(l, r) | Type::Union(l, r) => {
+                Type::Inter(l, r) | Type::Union(l, r, _) => {
                     pending.push(r);
                     pending.push(l);
                     continue;

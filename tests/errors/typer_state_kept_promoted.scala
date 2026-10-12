@@ -1,4 +1,4 @@
-// expect: 22:26: error: type mismatch: found String, required Int
+// expect: 22:26: error: type mismatch: found "x", required Int
 // expect: 1 error found
 // `h`'s body is typed on demand inside the first alternative of `pair`, after that alternative's
 // own mismatch on `2`; the alternative is retracted keeping the body's error, which stays the

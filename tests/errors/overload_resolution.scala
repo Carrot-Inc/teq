@@ -1,16 +1,16 @@
 // expect: 22:11: error: None of the overloaded alternatives of method area in object Geometry with types
 // expect:  (w: Double, h: Double): Double
 // expect:  (side: Int): Int
-// expect: match arguments (Boolean)
+// expect: match arguments (true)
 // expect: 23:11: error: Ambiguous overload. The overloaded alternatives of method mix in object Geometry with types
 // expect:  (a: Long, b: Int): Int
 // expect:  (a: Int, b: Long): Int
-// expect: both match arguments (Int, Int)
+// expect: both match arguments (1, 2)
 // expect: 24:11: error: Ambiguous overload. The overloaded alternatives of method area in object Geometry with types
 // expect: all match expected type Any
 // expect: 25:11: error: None of the overloaded alternatives of method area in object Geometry with types
-// expect: match arguments (Boolean, Boolean, Boolean)
-// expect: 26:28: error: type mismatch: found String, required Double
+// expect: match arguments (true, false, true)
+// expect: 26:28: error: type mismatch: found "x", required Double
 // expect: 5 errors found
 object Geometry:
   def area(side: Int): Int = side * side

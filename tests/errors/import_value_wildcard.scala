@@ -1,4 +1,4 @@
-// expect: 13:65: error: type mismatch: found Int, required String
+// expect: 13:65: error: type mismatch: found 3, required String
 // A selector `conv as _` leaves the value's conversion out of the wildcard import (scalac: E007).
 import scala.language.implicitConversions
 class Dsl(n: Int):

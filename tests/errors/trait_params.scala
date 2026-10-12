@@ -1,6 +1,6 @@
 // expect: 15:51: error: no given instance of type Show[T] was found for parameter evidence$
 // expect: 16:60: error: no given instance of type Show[Boolean] was found for parameter evidence$
-// expect: 18:54: error: type mismatch: found String, required Int
+// expect: 18:54: error: type mismatch: found "wide", required Int
 // expect: 19:32: error: no given instance of type Show[String] was found for parameter evidence$
 // expect: 4 errors found
 

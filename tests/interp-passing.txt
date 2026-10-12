@@ -218,12 +218,15 @@ constant_final_val_accessor
 constant_final_val_early
 constant_final_vals
 constant_member_receiver
+constant_numeric_conversion
 constant_singleton_inferred
 constant_singleton_path
 constant_typed_literal
+constant_union_join
 context_bound_merge
 context_closure_written
 context_function_inferred
+context_function_receiver_var
 context_functions
 contravariant_open_var
 contravariant_var_maximized
@@ -391,9 +394,13 @@ files_same_target
 files_stream_close
 files_stream_ops
 files_walk_copy
+final_constant_typearg
+float_constant_equality
+float_constant_tostring
 float_constants_jdk
 float_decimal_literals
 float_decimal_rounding
+float_decimal_selection
 float_hex_minimal
 float_nan_bits
 float_parse_decimal_hex
@@ -639,6 +646,7 @@ inline_ops
 inline_outline
 inline_parameter_pure_block
 inline_parameter_purity
+inline_poly_ref_flip_bottom
 inline_recursive_proxies
 inline_reduce_local_extractor
 inline_reduce_local_value
@@ -688,10 +696,13 @@ inline_val_pure_path
 inner_class_creators
 inner_class_creators_receiver
 inserted_apply_value
+inst_direction_bounds
 int_remainder_negative_zero
 int_sign
 interp_escapes
 interp_order
+interpolate_forcing_boundaries
+interpolate_open_variables
 interpolator_patterns
 interpolators
 intersection_alias_outside_bounds
@@ -766,6 +777,9 @@ lexical_extension_retry_leading
 list_fill_order
 list_map_conserve
 list_reverse_prepend
+literal_constant_types
+literal_overload_constant
+literal_union_members
 local_alias_after_path
 local_alias_path
 local_case_classes
@@ -987,6 +1001,7 @@ opaquemembers
 open_expected
 open_iterator_map
 open_result_bounds
+open_variable_comparisons
 operator_object_header
 operator_order
 operators_members
@@ -1043,6 +1058,7 @@ partial_function_classes
 partial_function_match_body
 partial_functions
 partial_sites
+partial_unification_fixed_args
 path_operations
 pattern_abstract_scrutinee
 pattern_equality
@@ -1453,6 +1469,7 @@ trait_reabstracted_member
 trait_state
 trait_vals_mixed
 transparent_given_local
+transparent_match_constant_branch
 transparent_widened_ascription
 try_without_handlers
 tuple_companion_api
@@ -1471,6 +1488,7 @@ tupling_priority
 type_lambda_hk_binders
 type_members
 type_on_next_line
+type_op_open_variable
 type_pattern_lower_bounds
 type_test_bound_constituents
 type_test_class_pattern
@@ -1546,6 +1564,7 @@ union_numeric_widening
 union_patterns
 union_peeling
 union_widening_join
+union_widening_kinds
 union_widening_local
 unions
 unreachable_deep_split

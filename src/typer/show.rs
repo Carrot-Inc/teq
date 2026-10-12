@@ -175,7 +175,7 @@ impl<'a> Worker<'a> {
                 self.show_var(v, out);
                 self.show_args(args, out);
             }
-            Type::Union(a, b) => {
+            Type::Union(a, b, _) => {
                 if nested {
                     out.push('(');
                 }
@@ -197,7 +197,12 @@ impl<'a> Worker<'a> {
                     out.push_str(&l.to_string());
                     out.push('L');
                 }
-                LitVal::Double(bits) => out.push_str(&f64::from_bits(bits).to_string()),
+                // scalac's printer writes a constant by the JVM's `toString` (`1.0`, `3.4028235E38f`).
+                LitVal::Double(bits) => out.push_str(&crate::types::java_double_string(f64::from_bits(bits))),
+                LitVal::Float(bits) => {
+                    out.push_str(&crate::types::java_float_string(f32::from_bits(bits)));
+                    out.push('f');
+                }
                 LitVal::Char(c) => {
                     out.push('\'');
                     out.push(char::from_u32(c as u32).unwrap_or('?'));

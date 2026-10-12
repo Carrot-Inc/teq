@@ -1,4 +1,4 @@
-// expect: 15:45: error: type mismatch: found String, required Int
+// expect: 15:45: error: type mismatch: found "s", required Int
 // expect: 1 error found
 // A body typed on demand for an inferred result inside an extension attempt that gives way to a
 // conversion is its definition's: its error stands, as scalac reports it.

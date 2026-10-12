@@ -1,17 +1,17 @@
 // expect: 28:14: error: Ambiguous overload. The overloaded alternatives of method (k: "k"): String with types
 // expect:  (k: "k"): String
 // expect:  (k: "v"): Int
-// expect: both match arguments (String)
+// expect: both match arguments ("v")
 // expect: Note: Overloaded definitions introduced by refinements cannot be resolved
 // expect: 29:14: error: None of the overloaded alternatives of method get in trait R with types
 // expect:  (k: "v" | "k"): Any
 // expect:  (k: "v"): Int
 // expect:  (k: "k"): String
-// expect: match arguments (String)
+// expect: match arguments ("k")
 // expect: 30:17: error: Ambiguous overload. The overloaded alternatives of method (k: "v"): Int with types
 // expect:  (k: "v"): Int
 // expect:  (k: "k"): String
-// expect: both match arguments (String)
+// expect: both match arguments ("k")
 // absent: intersection_member_refinements.scala:32:
 // expect: 3 errors found
 // Refinements of one member on an intersection's parts, each beside the member seen from the whole

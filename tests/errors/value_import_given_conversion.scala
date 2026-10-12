@@ -1,4 +1,4 @@
-// expect: 7:3: error: type mismatch: found Int, required String
+// expect: 7:3: error: type mismatch: found 1, required String
 // A wildcard from a value leaves its givens out, a `given Conversion` among them.
 class C:
   given Conversion[Int, String] = _.toString

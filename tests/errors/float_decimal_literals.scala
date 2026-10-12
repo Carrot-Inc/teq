@@ -3,10 +3,10 @@
 // expect: float_decimal_literals.scala:15:16: error: number too large
 // expect: float_decimal_literals.scala:16:9: error: number too large
 // expect: float_decimal_literals.scala:17:17: error: number too small
-// expect: float_decimal_literals.scala:18:16: error: type mismatch: found Double, required Float
-// expect: float_decimal_literals.scala:20:16: error: type mismatch: found Double, required Float
-// expect: float_decimal_literals.scala:21:27: error: type mismatch: found Double, required Float
-// expect: float_decimal_literals.scala:23:11: error: type mismatch: found Double, required Float
+// expect: float_decimal_literals.scala:18:16: error: type mismatch: found 1.5, required Float
+// expect: float_decimal_literals.scala:20:16: error: type mismatch: found 1.5, required Float
+// expect: float_decimal_literals.scala:21:27: error: type mismatch: found 1.1, required Float
+// expect: float_decimal_literals.scala:23:11: error: type mismatch: found 1.5, required Float
 // expect: float_decimal_literals.scala:24:
 // An unsuffixed decimal out of the expected type's range, and the `Double`s no `Float` takes; a
 // tuple's element through a branch as well (scalac reports the literal, teq the `if`: the line alone).

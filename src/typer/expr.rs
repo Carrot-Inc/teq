@@ -388,6 +388,16 @@ impl<'a> Worker<'a> {
 
     pub fn str_kind(&mut self, ty: TypeId) -> StrKind {
         let t = self.dealias(ty);
+        // A constant or a union of them is read widened, as dotty reads a String asked of it
+        // (`Types.widenUnion`: `" to " | " until "` is a `String`, `4 | 5` an `Int`); the operand's
+        // own type stays what the typer made it.
+        let t = match self.types.get(t) {
+            Type::Lit(_) | Type::Union(..) => {
+                let w = self.widen_union(t);
+                self.dealias(w)
+            }
+            _ => t,
+        };
         if t == self.b.t_string || t == self.b.t_char {
             StrKind::Str
         } else if t == self.b.t_int || t == self.b.t_boolean || t == self.b.t_byte || t == self.b.t_short {
@@ -466,7 +476,10 @@ impl<'a> Worker<'a> {
             return;
         }
         let span = self.cur_ast().expr_span(self.result_expr(e));
-        let msg = format!("Discarded non-Unit value of type {}. Add `: Unit` to discard silently.", self.show(ty));
+        // The value's type widened (`ValueDiscarding`'s `tp.widen`): `Int` for a `5`.
+        let widened = self.widen_path(ty);
+        let widened = self.widen_lit(widened);
+        let msg = format!("Discarded non-Unit value of type {}. Add `: Unit` to discard silently.", self.show(widened));
         self.warn_as(span, msg, crate::source::Warning::id(crate::warnings::id::VALUE_DISCARDING));
     }
 
@@ -591,6 +604,10 @@ impl<'a> Worker<'a> {
         if actual == exp && !self.is_unresolved_member(actual) {
             return (te, expected);
         }
+        // A constant where its class is expected, the commonest adaptation of a literal.
+        if matches!(self.types.get(actual), Type::Lit(_)) && self.widen_lit(actual) == exp {
+            return (te, actual);
+        }
         if let Some((applied, ty)) = self.apply_context_function(te, actual, exp, span) {
             return self.adapt_typed(applied, ty, expected, span);
         }
@@ -694,6 +711,14 @@ impl<'a> Worker<'a> {
                 }
             }
         }
+        // Variables the value's type or the expected one holds open are instantiated and the
+        // value adapted again (`adaptToSubType`'s `recover`, `canDefineFurther`): `W[?T]` against
+        // a `C[true]` that `W[T]` extends as a `C[Foo[T]]`, a match teq reduces only over an
+        // instantiated `T`.
+        if self.can_define_further(actual) || self.can_define_further(expected) {
+            let actual = self.zonk(actual);
+            return self.adapt_typed(te, actual, expected, span);
+        }
         // Against a singleton type a path is shown as the path it is.
         let found = match self.path_of(te) {
             Some(p) if self.types.has_paths(exp) => p,
@@ -780,7 +805,7 @@ impl<'a> Worker<'a> {
                     .collect();
                 if mapped == items { t } else { self.types.class(c, &mapped) }
             }
-            Type::Union(a, b) => {
+            Type::Union(a, b, _) => {
                 let (x, y) = (self.reported_type(a, variance, d, fbounded), self.reported_type(b, variance, d, fbounded));
                 if (x, y) == (a, b) { t } else { self.types.union(x, y) }
             }
@@ -1088,7 +1113,7 @@ impl<'a> Worker<'a> {
         while let Some(t) = pending.pop() {
             let t = self.deref(t);
             let numeric = match self.types.get(t) {
-                Type::Union(a, b) => {
+                Type::Union(a, b, _) => {
                     pending.extend([a, b]);
                     continue;
                 }
@@ -1108,27 +1133,16 @@ impl<'a> Worker<'a> {
         found
     }
 
-    /// A literal has its literal type where the expected type names one (`"fast" | "slow"`, or
-    /// the argument of a `List[1]`); everywhere else its class, which is where Scala's widening
-    /// of an inferred singleton type would take it anyway.
-    fn literal_type(&mut self, expected: Option<TypeId>, value: LitVal, class: TypeId) -> TypeId {
-        if self.expects_lit(expected) {
-            self.types.lit(value)
-        } else {
-            class
+    /// A literal has its constant type, as dotty's `TypeAssigner.assignType(Literal)` gives it
+    /// (`(1 : Int)`); an inferred type widens it where it is instantiated
+    /// (`ConstraintHandling.widenInferred`), so `List(1)` is a `List[Int]` and `val x = 1` an `Int`.
+    fn literal_type(&mut self, value: LitVal) -> TypeId {
+        if let Some(&t) = self.lit_types.get(&value) {
+            return t;
         }
-    }
-
-    /// Whether the expected type asks a literal for its literal type: it names one. A class
-    /// without arguments names none unless it is opaque, which is the common case.
-    fn expects_lit(&mut self, expected: Option<TypeId>) -> bool {
-        let Some(exp) = expected else { return false };
-        if let Type::Class(c, EMPTY_LIST) = self.types.get(exp) {
-            if self.syms.class(c).kind != ClassKind::Opaque {
-                return false;
-            }
-        }
-        self.mentions_lit(exp)
+        let t = self.types.lit(value);
+        self.lit_types.insert(value, t);
+        t
     }
 
     pub fn literal_expr(&mut self, value: LitVal) -> TExprId {
@@ -1136,6 +1150,8 @@ impl<'a> Worker<'a> {
             LitVal::Int(v) => TExpr::Int(v),
             LitVal::Long(v) => TExpr::Long(v),
             LitVal::Double(bits) => TExpr::Double(f64::from_bits(bits)),
+            // A `Float` is a `Double` node of its value typed `Float`.
+            LitVal::Float(bits) => TExpr::Double(f32::from_bits(bits) as f64),
             LitVal::Char(c) => TExpr::Char(c),
             LitVal::Bool(b) => TExpr::Bool(b),
             LitVal::Str(s) => TExpr::Str(self.prog.add_str(self.interner.get(s))),
@@ -1151,7 +1167,19 @@ impl<'a> Worker<'a> {
                 }
             }
         }
+        let vars_mark = self.tvars.len();
         let (te, ty) = self.type_expr_untracked(e, expected);
+        // The tree's interpolation (`Typer.simplify`): only where an inner one left a variable
+        // of this tree's open, which most trees have none of, and not of a polymorphic method
+        // named without a parameter list (`leave_vars_open`).
+        if !self.open_vars.is_empty() {
+            if self.open_vars.last().is_some_and(|&v| self.tvars.made_since(v, vars_mark)) && !self.unsimplified {
+                self.interpolate_open(vars_mark, ty, expected);
+            }
+            self.unsimplified = false;
+        } else if self.unsimplified {
+            self.unsimplified = false;
+        }
         // The reference the expression makes, checked where a deprecated definition was met
         // or the unused definitions' marks are kept (`deprecation::references_checked`).
         if super::deprecation::references_checked() {
@@ -1465,14 +1493,16 @@ impl<'a> Worker<'a> {
                     Some(Type::Union(..)) => exp = self.numeric_member(exp.unwrap()),
                     _ => {}
                 }
+                // The constant converted to the numeric class expected, a constant of that class
+                // (`Constant.convertTo` in `adapt`): `1` where a `Long` is expected is a `1L`.
                 if exp == Some(self.b.t_long) {
-                    return (self.prog.add(TExpr::Long(v)), self.b.t_long);
+                    return (self.prog.add(TExpr::Long(v)), self.literal_type(LitVal::Long(v)));
                 }
                 if exp == Some(self.b.t_double) {
-                    return (self.prog.add(TExpr::Double(v as f64)), self.b.t_double);
+                    return (self.prog.add(TExpr::Double(v as f64)), self.literal_type(LitVal::Double((v as f64).to_bits())));
                 }
                 if exp == Some(self.b.t_float) {
-                    return (self.prog.add(TExpr::Double(v as f32 as f64)), self.b.t_float);
+                    return (self.prog.add(TExpr::Double(v as f32 as f64)), self.literal_type(LitVal::Float((v as f32).to_bits())));
                 }
                 // An integer literal narrows to the Byte or Short that is expected when it fits.
                 let narrow = if exp == Some(self.b.t_byte) && (i8::MIN as i64..=i8::MAX as i64).contains(&v) {
@@ -1488,15 +1518,15 @@ impl<'a> Worker<'a> {
                 if v < i32::MIN as i64 || v > i32::MAX as i64 {
                     self.error(span, "number too large for Int; use an L suffix for Long");
                 }
-                let ty = self.literal_type(expected, LitVal::Int(v as i32), self.b.t_int);
+                let ty = self.literal_type(LitVal::Int(v as i32));
                 (self.prog.add(TExpr::Int(v as i32)), ty)
             }
             Expr::LongLit(v) => {
-                let ty = self.literal_type(expected, LitVal::Long(v), self.b.t_long);
+                let ty = self.literal_type(LitVal::Long(v));
                 (self.prog.add(TExpr::Long(v)), ty)
             }
             Expr::DoubleLit(v) => {
-                let ty = self.literal_type(expected, LitVal::Double(v.to_bits()), self.b.t_double);
+                let ty = self.literal_type(LitVal::Double(v.to_bits()));
                 (self.prog.add(TExpr::Double(v)), ty)
             }
             Expr::DecimalLit(s) => {
@@ -1511,32 +1541,27 @@ impl<'a> Worker<'a> {
                 let (v, ty) = if float {
                     let v = digits.parse::<f32>().unwrap_or(0.0);
                     self.number_range(v.is_infinite(), v == 0.0 && nonzero(), span);
-                    (v as f64, self.b.t_float)
+                    (v as f64, self.literal_type(LitVal::Float(v.to_bits())))
                 } else {
                     let v = digits.parse::<f64>().unwrap_or(0.0);
                     self.number_range(v.is_infinite(), v == 0.0 && nonzero(), span);
-                    (v, self.literal_type(expected, LitVal::Double(v.to_bits()), self.b.t_double))
+                    (v, self.literal_type(LitVal::Double(v.to_bits())))
                 };
                 (self.prog.add(TExpr::Double(v)), ty)
             }
-            Expr::FloatLit(v) => (self.prog.add(TExpr::Double(v as f64)), self.b.t_float),
+            Expr::FloatLit(v) => (self.prog.add(TExpr::Double(v as f64)), self.literal_type(LitVal::Float(v.to_bits()))),
             Expr::BoolLit(v) => {
-                let ty = self.literal_type(expected, LitVal::Bool(v), self.b.t_boolean);
+                let ty = self.literal_type(LitVal::Bool(v));
                 (self.prog.add(TExpr::Bool(v)), ty)
             }
             Expr::CharLit(v) => {
-                let ty = self.literal_type(expected, LitVal::Char(v as u16), self.b.t_char);
+                let ty = self.literal_type(LitVal::Char(v as u16));
                 (self.prog.add(TExpr::Char(v as u16)), ty)
             }
             Expr::StringLit(s) => {
                 let r = self.prog.add_str(ast.str(s));
-                let ty = match self.expects_lit(expected) {
-                    true => {
-                        let name = self.interner.intern(ast.str(s));
-                        self.types.lit(LitVal::Str(name))
-                    }
-                    false => self.b.t_string,
-                };
+                let name = self.interner.intern(ast.str(s));
+                let ty = self.literal_type(LitVal::Str(name));
                 (self.prog.add(TExpr::Str(r)), ty)
             }
             Expr::UnitLit => (self.prog.add(TExpr::Unit), self.b.t_unit),
@@ -1862,7 +1887,6 @@ impl<'a> Worker<'a> {
                 if let Some(record) = self.branch_types.as_mut() {
                     record.insert(e, vec![branches[0].1, branches[1].1]);
                 }
-                self.note_soft(e, l);
                 (e, l)
             }
         }
@@ -2001,7 +2025,13 @@ impl<'a> Worker<'a> {
             // whose `B` the expected `Long` bounds is widened.
             let (te, ty) = match exp.and_then(|x| self.concrete_expected(Some(x))) {
                 Some(x) => (self.adapt(te, ty, x, self.cur_ast().expr_span(id)), x),
-                None => self.branch_to_var_bound(te, ty, exp, id),
+                None => {
+                    let (te, ty) = self.branch_to_var_bound(te, ty, exp, id);
+                    // The element is `Tuple2.apply`'s argument, its type the lower bound of the
+                    // parameter's variable, which is instantiated widened (`widenInferred`):
+                    // `(1, "a")` is an `(Int, String)` unless the expected element keeps the constant.
+                    (te, self.widen_inferred(ty, exp.as_slice()))
+                }
             };
             tes.push(te);
             tys.push(ty);
@@ -2639,9 +2669,11 @@ impl<'a> Worker<'a> {
         })
     }
 
-    /// Scala's harmonisation of the branches of an `if` or `match` and of vararg elements: when
-    /// every type is a primitive numeric one and the branches that are not `Int` literals all
-    /// have one class, the literals become that class; any other mix is left to the union.
+    /// Scala's harmonisation of the branches of an `if` or `match` and of vararg elements
+    /// (dotty's `Applications.harmonizeWith`): when every type is a primitive numeric one and the
+    /// branches that are not `Int` constants all have one class, the constants become that class;
+    /// any other mix is left to the union. An `Int` constant is a branch of an `Int` constant type
+    /// (`ConstantType(c)` with `c.tag == IntTag`, through a reference's `widenTermRefExpr`).
     pub fn harmonize_literals(&mut self, branches: &mut [(TExprId, TypeId)]) {
         // A plain call of a constant type still pending is its literal here, as scalac's typer
         // reads the constant type; one of `Int` stays a call.
@@ -2654,25 +2686,37 @@ impl<'a> Worker<'a> {
         let mut has_literal = false;
         for &(te, ty) in branches.iter() {
             let ty = self.deref(ty);
-            if self.is_numeric(ty).is_none() {
-                return;
-            }
-            if ty == self.b.t_int && self.int_literal(te).is_some() {
+            if self.int_constant(te, ty).is_some() {
                 has_literal = true;
                 continue;
             }
+            let class = self.widen_lit(ty);
+            if self.is_numeric(class).is_none() {
+                return;
+            }
             match target {
-                Some(t) if t != ty => return,
-                _ => target = Some(ty),
+                Some(t) if t != class => return,
+                _ => target = Some(class),
             }
         }
         let Some(t) = target.filter(|&t| has_literal && t != self.b.t_int) else { return };
         if matches!(self.is_numeric(t), Some(super::prims::R_BYTE | super::prims::R_SHORT)) {
             return;
         }
+        // A constant the target cannot hold exactly leaves every branch as it is (`lossOfPrecision`).
+        let float = t == self.b.t_float;
+        for &(te, ty) in branches.iter() {
+            let ty = self.deref(ty);
+            if let Some(v) = self.int_constant(te, ty) {
+                if float && (v as f32) as i32 != v || t == self.b.t_char && !(0..=u16::MAX as i32).contains(&v) {
+                    return;
+                }
+            }
+        }
         for (te, ty) in branches.iter_mut() {
-            let Some((node, v)) = self.int_literal(*te) else { continue };
-            self.prog.exprs[node.idx()] = if t == self.b.t_long {
+            let at = self.deref(*ty);
+            let Some(v) = self.int_constant(*te, at) else { continue };
+            let lit = if t == self.b.t_long {
                 TExpr::Long(v as i64)
             } else if t == self.b.t_double {
                 TExpr::Double(v as f64)
@@ -2681,8 +2725,27 @@ impl<'a> Worker<'a> {
             } else {
                 TExpr::Char(v as u16)
             };
-            self.prog.set_type(node, t);
+            // The literal node is rewritten; a constant of another shape (a constant `final val`'s
+            // reference) is converted as dotty's `adapt` converts a constant to the target.
+            match self.int_literal(*te) {
+                Some((node, _)) => {
+                    self.prog.exprs[node.idx()] = lit;
+                    self.prog.set_type(node, t);
+                }
+                None => *te = self.adapt(*te, self.b.t_int, t, Span::default()),
+            }
             *ty = t;
+        }
+    }
+
+    /// The value of a branch of type `ty` that harmonisation reads as an `Int` constant.
+    fn int_constant(&self, _te: TExprId, ty: TypeId) -> Option<i32> {
+        match self.types.get(ty) {
+            Type::Lit(l) => match self.types.lit_val(l) {
+                LitVal::Int(v) => Some(v),
+                _ => None,
+            },
+            _ => None,
         }
     }
 
@@ -2711,8 +2774,8 @@ impl<'a> Worker<'a> {
         }
     }
 
-    /// Vararg elements typed against the open variable `pty` harmonise like branches; the `Int`
-    /// bounds the literals recorded (from `lower_mark` on) then stand for the class they became.
+    /// Vararg elements typed against the open variable `pty` harmonise like branches; the bounds
+    /// the `Int` constants recorded (from `lower_mark` on) then stand for the class they became.
     pub fn harmonize_varargs(&mut self, items: &[TExprId], pty: TypeId, lower_mark: usize) {
         let open = self.deref(pty);
         let Type::Var(v) = self.types.get(open) else { return };
@@ -2723,17 +2786,17 @@ impl<'a> Worker<'a> {
         }
         let mut branches: Vec<(TExprId, TypeId)> =
             items.iter().map(|&te| (te, pending(self, te).map_or(ERROR, |(_, actual, _)| actual))).collect();
+        let before: Vec<TypeId> = branches.iter().map(|&(_, ty)| ty).collect();
         self.harmonize_literals(&mut branches);
-        let t_int = self.b.t_int;
-        for &(te, ty) in &branches {
-            if ty == t_int {
+        for (&(te, ty), &old) in branches.iter().zip(&before) {
+            if ty == old {
                 continue;
             }
             if let Some(entry) = self.pending_widenings.iter_mut().rev().find(|(e, _, _)| *e == te) {
-                if entry.1 == t_int {
+                if entry.1 == old {
                     entry.1 = ty;
                     for l in self.tvars[v].lower[lower_mark..].iter_mut() {
-                        if *l == t_int {
+                        if *l == old {
                             *l = ty;
                         }
                     }
@@ -2906,6 +2969,7 @@ impl<'a> Worker<'a> {
             }
             let ret_expected = exp_fn.as_ref().and_then(|&(_, r)| self.concrete_expected(Some(r)));
             let mut body_own = None;
+            let body_mark = self.tvars.len();
             let (tb, bty) = match ret_expected {
                 Some(r) => {
                     let (tb, own) = self.check_expr_own(body, r);
@@ -2914,6 +2978,7 @@ impl<'a> Worker<'a> {
                 }
                 None => self.type_expr(body, None),
             };
+            let bty = self.define_body_vars(body_mark, bty);
             self.case_scrutinee = None;
             self.pop_scope();
             let class = self.tuple_class(ptys.len());
@@ -3032,6 +3097,7 @@ impl<'a> Worker<'a> {
             PartialBody::BlockMatch(..) => Some(self.branch_types.replace(FxMap::default())),
             _ => None,
         };
+        let body_mark = self.tvars.len();
         let (mut tb, bty) = match ret_expected {
             Some(r) => {
                 let (tb, own) = self.check_expr_own(body, r);
@@ -3043,9 +3109,10 @@ impl<'a> Worker<'a> {
                 let (tb, bty) = self.type_expr(body, ret);
                 let body_span = self.cur_ast().expr_span(body);
                 let (tb, bty) = self.widen_lambda_result(tb, bty, ret, body_span);
-                (tb, if ret.is_none() { self.widen_soft(tb, bty) } else { bty })
+                (tb, if ret.is_none() { self.widen_unions(bty) } else { bty })
             }
         };
+        let bty = self.define_body_vars(body_mark, bty);
         self.pop_scope();
         let branches = match outer_branches {
             Some(outer) => std::mem::replace(&mut self.branch_types, outer),
@@ -3135,6 +3202,7 @@ impl<'a> Worker<'a> {
         }
         let ret_expected = exp_fn.as_ref().and_then(|&(_, r)| self.concrete_expected(Some(r)));
         let mut body_own = None;
+        let body_mark = self.tvars.len();
         let (tb, bty) = match ret_expected {
             Some(r) => {
                 let (tb, own) = self.check_expr_own(body, r);
@@ -3148,6 +3216,7 @@ impl<'a> Worker<'a> {
                 self.widen_lambda_result(tb, bty, ret, body_span)
             }
         };
+        let bty = self.define_body_vars(body_mark, bty);
         self.pop_scope();
         let ty = self.closure_type(true, &syms, &param_tys, bty, span);
         let l = self.prog.syms(&syms);
@@ -3503,7 +3572,7 @@ impl<'a> Worker<'a> {
                     work.extend_from_slice(self.types.items(args));
                     work.push(m);
                 }
-                Type::Union(a, b) | Type::Inter(a, b) | Type::BoundedWild(a, b) => work.extend([a, b]),
+                Type::Union(a, b, _) | Type::Inter(a, b) | Type::BoundedWild(a, b) => work.extend([a, b]),
                 Type::Refined(p, r) => {
                     work.push(p);
                     match self.types.refinement(r) {
@@ -3723,6 +3792,17 @@ impl<'a> Worker<'a> {
     fn maximize_bottom_vars(&mut self, t: TypeId) {
         let mut vars = Vec::new();
         self.collect_vars(t, &mut vars);
+        self.maximize_bottom(vars);
+    }
+
+    /// `maximize_bottom_vars` over the variables made from `first` on: an inline call's type
+    /// arguments, which dotty's `Inliner` defines fully under `ForceDegree.flipBottom`.
+    pub(super) fn maximize_bottom_from(&mut self, first: usize) {
+        let vars: Vec<TVarId> = (first..self.tvars.len()).map(|i| self.tvars.id(i)).collect();
+        self.maximize_bottom(vars);
+    }
+
+    fn maximize_bottom(&mut self, vars: Vec<TVarId>) {
         for w in vars {
             let info = &self.tvars[w];
             if info.inst.is_some() || !info.lower.is_empty() {
@@ -3967,8 +4047,9 @@ impl<'a> Worker<'a> {
     /// type constructor variable (`G[B]` of a `traverse`) is left for the join of the branches to
     /// be unified with, so that `Some(x)` and `None` make `G` an `Option`.
     /// The type of an `if` or `match` checked against an expected type: the join of what its
-    /// branches were typed as, which is what scalac gives the tree, where that is known and
-    /// conforms; the expected type otherwise.
+    /// branches were typed as, which is what scalac gives the tree (`typedMatch`'s and `typedIf`'s
+    /// `lub` of the branches, a branch's constant among them), where that is known and conforms;
+    /// the expected type otherwise.
     pub fn joined_branches(&mut self, expected: TypeId, branches: &[TypeId]) -> TypeId {
         let mut acc = NOTHING;
         for &t in branches {
@@ -3976,7 +4057,7 @@ impl<'a> Worker<'a> {
             if t == NOTHING {
                 continue;
             }
-            if t == ERROR || self.types.has_vars(t) || self.mentions_lit(t) {
+            if t == ERROR || self.types.has_vars(t) {
                 return expected;
             }
             acc = if acc == NOTHING { t } else { self.lub(acc, t) };
@@ -4199,8 +4280,7 @@ impl<'a> Worker<'a> {
                     None => {
                         let (te, t) = self.type_expr(rhs, None);
                         let (te, t) = self.apply_inferred_context(rhs, te, t);
-                        let t = self.solve_inferred(t);
-                        (te, self.widen_soft(te, t))
+                        (te, self.solve_inferred(t))
                     }
                 };
                 if def.mods & mods::INLINE != 0 {

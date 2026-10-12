@@ -1,11 +1,11 @@
-// expect: 26:23: error: type mismatch: found Int, required Code[3]
+// expect: 26:23: error: type mismatch: found 1, required Code[3]
 // expect: failed since selector 3
 // expect: matches none of the cases
-// expect: 27:25: error: type mismatch: found Int, required Code[Int]
+// expect: 27:25: error: type mismatch: found 1, required Code[Int]
 // expect: does not match  case 1 => Int
 // expect: and cannot be shown to be disjoint from it either.
-// expect: 28:37: error: type mismatch: found Int, required Area[Shape]
-// expect: 31:25: error: type mismatch: found Boolean, required Elem[Holder.this.X]
+// expect: 28:37: error: type mismatch: found 1, required Area[Shape]
+// expect: 31:25: error: type mismatch: found true, required Elem[Holder.this.X]
 // expect: does not uniquely determine parameter t
 // expect: 32:24: error: type argument Int does not conform to upper bound Tuple
 // expect: 24:6: error: Recursion limit exceeded.

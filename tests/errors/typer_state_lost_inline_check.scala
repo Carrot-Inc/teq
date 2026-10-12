@@ -1,4 +1,4 @@
-// expect: 15:60: error: type mismatch: found String, required Int
+// expect: 15:60: error: type mismatch: found "s", required Int
 // expect: 1 error found
 // An inline definition checked on demand inside an extension attempt that gives way to a
 // conversion: the check's error stands, as scalac reports it.

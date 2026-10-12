@@ -1,5 +1,5 @@
-// expect: 13:11: error: type mismatch: found String, required Int
-// expect: 14:11: error: type mismatch: found String, required Int
+// expect: 13:11: error: type mismatch: found "b", required Int
+// expect: 14:11: error: type mismatch: found "b", required Int
 // The argument lists after the receiver decide only between equally specific receivers: a
 // `String` receiver more specific than every other is taken, and its argument is then wrong,
 // though the generic overload would take it (scalac's first-list rule).

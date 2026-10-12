@@ -167,7 +167,7 @@ impl<'a> Worker<'a> {
             Type::Member(p, _) | Type::Select(p, _) => self.selection_through(p, param),
             Type::AppMember(m, args) => self.selection_through(m, param).or_else(|| list(args)),
             Type::Class(_, args) | Type::AppParam(_, args) | Type::Alias(_, args) => list(args),
-            Type::Union(a, b) | Type::Inter(a, b) | Type::BoundedWild(a, b) => self.selection_through(a, param).or_else(|| self.selection_through(b, param)),
+            Type::Union(a, b, _) | Type::Inter(a, b) | Type::BoundedWild(a, b) => self.selection_through(a, param).or_else(|| self.selection_through(b, param)),
             Type::Refined(p, r) => self.selection_through(p, param).or_else(|| match self.types.refinement(r) {
                 Refinement::Alias(_, x) | Refinement::Val(_, _, x) => self.selection_through(x, param),
                 Refinement::Bounds(_, lo, hi) => self.selection_through(lo, param).or_else(|| self.selection_through(hi, param)),
@@ -583,7 +583,7 @@ impl<'a> Worker<'a> {
                 self.approx_applied(Tycon::Param(p), &items, &variances, leaves, v)
             }
             Type::Class(c, args) => self.approx_class(c, args, leaves, v),
-            Type::Union(a, b) | Type::Inter(a, b) => {
+            Type::Union(a, b, _) | Type::Inter(a, b) => {
                 let union = matches!(self.types.get(t), Type::Union(..));
                 let (x, y) = (self.approx(a, leaves, v), self.approx(b, leaves, v));
                 let join = |w: &mut Self, p: TypeId, q: TypeId| if union { w.types.union(p, q) } else { w.types.inter(p, q) };
@@ -727,9 +727,9 @@ impl<'a> Worker<'a> {
     /// constructors applied part by part (`TypeApplications.appliedTo` of an `AndOrType`).
     fn apply_end(&mut self, p: TParamId, end: TypeId, xs: &[TypeId]) -> TypeId {
         match self.types.get(end) {
-            Type::Union(a, b) => {
+            Type::Union(a, b, soft) => {
                 let (x, y) = (self.apply_end(p, a, xs), self.apply_end(p, b, xs));
-                self.types.union(x, y)
+                self.types.union_as(soft, x, y)
             }
             Type::Inter(a, b) => {
                 let (x, y) = (self.apply_end(p, a, xs), self.apply_end(p, b, xs));
@@ -751,7 +751,7 @@ impl<'a> Worker<'a> {
             Type::Ctor(_) => true,
             Type::Alias(_, given) => given == EMPTY_LIST,
             Type::Lambda(_, body) => matches!(self.types.get(body), Type::Class(..)),
-            Type::Union(a, b) | Type::Inter(a, b) => self.takes_wildcards(a) && self.takes_wildcards(b),
+            Type::Union(a, b, _) | Type::Inter(a, b) => self.takes_wildcards(a) && self.takes_wildcards(b),
             _ => false,
         }
     }

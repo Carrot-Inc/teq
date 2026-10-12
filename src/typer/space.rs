@@ -326,7 +326,7 @@ impl<'a> Worker<'a> {
                     self.classes_of_type(a, out);
                 }
             }
-            Type::Union(a, b) | Type::Inter(a, b) => {
+            Type::Union(a, b, _) | Type::Inter(a, b) => {
                 self.classes_of_type(a, out);
                 self.classes_of_type(b, out);
             }
@@ -734,7 +734,7 @@ impl<'t, 'a> Spaces<'t, 'a> {
         match self.t.types.get(t) {
             Type::Class(k, _) => self.related(c, k),
             Type::Inter(a, b) => self.relates_to_type(c, a, depth - 1) && self.relates_to_type(c, b, depth - 1),
-            Type::Union(a, b) => self.relates_to_type(c, a, depth - 1) || self.relates_to_type(c, b, depth - 1),
+            Type::Union(a, b, _) => self.relates_to_type(c, a, depth - 1) || self.relates_to_type(c, b, depth - 1),
             Type::Param(p) => {
                 let upper = self.t.syms.tparam(p).upper;
                 self.relates_to_type(c, upper, depth - 1)
@@ -1349,8 +1349,8 @@ impl<'t, 'a> Spaces<'t, 'a> {
                     return true;
                 }
             }
-            (Type::Union(x, y), _) => return self.sub(x, b) && self.sub(y, b),
-            (Type::Class(..), Type::Union(x, y)) => return self.sub(a, x) || self.sub(a, y),
+            (Type::Union(x, y, _), _) => return self.sub(x, b) && self.sub(y, b),
+            (Type::Class(..), Type::Union(x, y, _)) => return self.sub(a, x) || self.sub(a, y),
             _ => {}
         }
         if let Some(&r) = self.sc.subs.get(&(a, b)) {
@@ -1398,8 +1398,8 @@ impl<'t, 'a> Spaces<'t, 'a> {
         match (self.t.types.get(t1), self.t.types.get(t2)) {
             (_, Type::Inter(a, b)) => self.disjoint(t1, a) || self.disjoint(t1, b),
             (Type::Inter(a, b), _) => self.disjoint(a, t2) || self.disjoint(b, t2),
-            (_, Type::Union(a, b)) => self.disjoint(t1, a) && self.disjoint(t1, b),
-            (Type::Union(a, b), _) => self.disjoint(a, t2) && self.disjoint(b, t2),
+            (_, Type::Union(a, b, _)) => self.disjoint(t1, a) && self.disjoint(t1, b),
+            (Type::Union(a, b, _), _) => self.disjoint(a, t2) && self.disjoint(b, t2),
             // An abstract type through its upper bound (dotty's `provablyDisjoint` of a type
             // parameter's `superType`).
             (_, Type::Param(p)) => {
@@ -1544,7 +1544,7 @@ impl<'t, 'a> Spaces<'t, 'a> {
         match self.t.types.get(t) {
             Type::Any | Type::Nothing | Type::Ctor(_) => true,
             Type::Class(_, args) => self.t.types.items(args).iter().all(|&a| self.is_ground(a)),
-            Type::Union(a, b) | Type::Inter(a, b) => self.is_ground(a) && self.is_ground(b),
+            Type::Union(a, b, _) | Type::Inter(a, b) => self.is_ground(a) && self.is_ground(b),
             _ => false,
         }
     }

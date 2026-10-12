@@ -7,7 +7,7 @@
 // expect: value extra is not a member of B
 // expect: value nosuch is not a member of Int
 // expect: value nosuch is not a member of String
-// expect: type mismatch: found Int, required T
+// expect: type mismatch: found 0, required T
 // expect: no given instance of type TC[(x : B)] was found
 // expect: No explicit return allowed from inlineable method returns
 // expect: value nosuchLocal is not a member of Int

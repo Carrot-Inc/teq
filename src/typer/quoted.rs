@@ -310,7 +310,14 @@ impl<'a> Worker<'a> {
         self.quote.frames.push(Vec::new());
         self.push_scope();
         let captured = self.capture_mark();
+        let (vars_mark, nodes_mark, opened) = (self.tvars.len(), self.prog.exprs.len(), self.opened);
         let (te, ty) = self.type_expr(body, expected_body);
+        // The quote holds its tree's types as they are, pickled after typing in dotty
+        // (`PickleQuotes`): what its body left open is instantiated here.
+        self.force_open_vars(vars_mark);
+        if opened != self.opened {
+            self.settle_node_types(nodes_mark);
+        }
         // A stable path has its singleton type where the expected type asks for it (`'{ Nil }`
         // for an `Expr[Nil.type]`, scala-library's `Nil` being a val).
         let ty = match expected_body {
@@ -450,7 +457,7 @@ impl<'a> Worker<'a> {
                 }
             }
             Type::Lambda(_, b) => self.collect_path_members(b, out),
-            Type::Union(a, b) | Type::Inter(a, b) => {
+            Type::Union(a, b, _) | Type::Inter(a, b) => {
                 self.collect_path_members(a, out);
                 self.collect_path_members(b, out);
             }
@@ -510,6 +517,11 @@ impl<'a> Worker<'a> {
 
     pub fn collect_type_params(&self, t: TypeId, out: &mut Vec<TParamId>) {
         match self.types.get(t) {
+            Type::Var(v) => {
+                if let Some(inst) = self.tvars[v].inst {
+                    self.collect_type_params(inst, out);
+                }
+            }
             Type::Param(p) => {
                 if !out.contains(&p) {
                     out.push(p);
@@ -529,7 +541,7 @@ impl<'a> Worker<'a> {
                 }
             }
             Type::Lambda(_, b) => self.collect_type_params(b, out),
-            Type::Union(a, b) | Type::Inter(a, b) => {
+            Type::Union(a, b, _) | Type::Inter(a, b) => {
                 self.collect_type_params(a, out);
                 self.collect_type_params(b, out);
             }
@@ -1009,7 +1021,7 @@ impl<'a> Worker<'a> {
                     self.first_variances(a, variance * variances.get(k).copied().unwrap_or(0), vars, first);
                 }
             }
-            Type::Union(a, b) | Type::Inter(a, b) => {
+            Type::Union(a, b, _) | Type::Inter(a, b) => {
                 self.first_variances(a, variance, vars, first);
                 self.first_variances(b, variance, vars, first);
             }
@@ -2043,7 +2055,7 @@ fn classes_named(types: &TypeStore, t: TypeId, out: &mut Vec<ClassId>) {
             }
             classes_named(types, body, out);
         }
-        Type::Union(a, b) | Type::Inter(a, b) => {
+        Type::Union(a, b, _) | Type::Inter(a, b) => {
             classes_named(types, a, out);
             classes_named(types, b, out);
         }
@@ -2894,9 +2906,6 @@ impl<'c> Copier<'c> {
         }
         if marks & StoredNode::INTERPOLATION != 0 {
             t.interpolations.insert(id, ());
-        }
-        if marks & StoredNode::SOFT != 0 {
-            t.soft_exprs.insert(id, ());
         }
     }
 

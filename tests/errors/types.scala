@@ -1,4 +1,4 @@
-// expect: type mismatch: found String, required Int
+// expect: type mismatch: found "hello", required Int
 // expect: not found: missing
 // expect: value nope is not a member of Int
 // expect: no given instance of type Show[Boolean]

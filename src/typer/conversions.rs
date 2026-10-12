@@ -661,7 +661,7 @@ impl<'a> Worker<'a> {
             // not one ascribed a wider type (`44: Int`), whose type is the ascription's.
             // A reference is typed with its literal type widened, so a `val n: 44` is read by
             // its declared type.
-            let numeric_lit = |t: &Self, ty: TypeId| matches!(t.types.get(ty), Type::Lit(l) if matches!(t.types.lit_val(l), LitVal::Int(_) | LitVal::Long(_) | LitVal::Double(_) | LitVal::Char(_)));
+            let numeric_lit = |t: &Self, ty: TypeId| matches!(t.types.get(ty), Type::Lit(l) if matches!(t.types.lit_val(l), LitVal::Int(_) | LitVal::Long(_) | LitVal::Double(_) | LitVal::Float(_) | LitVal::Char(_)));
             let declared = match self.prog.expr(recv) {
                 TExpr::Local(s) | TExpr::Static(s) | TExpr::Field(_, s) => self.syms.sym(s).sig.as_ref().map(|sig| sig.ret),
                 _ => None,
@@ -1254,7 +1254,7 @@ impl<'a> Worker<'a> {
         while let Some(t) = stack.pop() {
             let t = self.deref(t);
             match self.types.get(t) {
-                Type::Union(a, b) => {
+                Type::Union(a, b, _) => {
                     stack.push(b);
                     stack.push(a);
                 }

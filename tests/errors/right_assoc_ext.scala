@@ -1,5 +1,5 @@
 // expect: value +: is not a member of Int
-// expect: type mismatch: found Int, required String
+// expect: type mismatch: found 1, required String
 class Vec(val xs: List[Int])
 extension (x: Int)
   def +:(v: Vec): Vec = Vec(x :: v.xs)

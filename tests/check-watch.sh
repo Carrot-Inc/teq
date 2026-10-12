@@ -141,7 +141,7 @@ if has '"modules":0' && ! [ -e "$work/out" ]; then ok; else bad "first build: wr
 sed -i.bak 's/def tag: String = "tagged"/def tag: String = 42/' "$src/b.scala"
 build "$src/b.scala"
 expect "type error" "$(field ok),$(field incremental)" 'false,true'
-if has '"file":"'"$src"'/b.scala","line":6,"col":21,"endLine":6,"endCol":23,"severity":"error","message":"type mismatch: found Int, required String"'; then ok; else bad "type error diagnostic: $RESULT"; fi
+if has '"file":"'"$src"'/b.scala","line":6,"col":21,"endLine":6,"endCol":23,"severity":"error","message":"type mismatch: found 42, required String"'; then ok; else bad "type error diagnostic: $RESULT"; fi
 if has '"source":"  def tag: String = 42"' && has '"caret":"                    ^^"'; then ok; else bad "type error source and caret: $RESULT"; fi
 expect "type error is also an error of the build answer" "$(echo "$RESULT" | grep -o '"errors":\[{' | wc -l | tr -d ' ')" 1
 
@@ -739,7 +739,7 @@ if has "')', found" && has '"retyped":["'"$src"'/B.scala"]'; then ok; else bad "
 withdraw "$src/A.scala"
 build "$src/B.scala"
 expect "pending text: A's disk text read with B's build" "$(field ok),$(field fallback),$(count error)" 'false,"the inferred type of x changed",1'
-if ! has "')', found" && has '"file":"'"$src"'/A.scala","line":1,"col":38' && has '"message":"type mismatch: found String, required Int"'; then ok; else bad "pending text: A read from disk, its parse error gone: $RESULT"; fi
+if ! has "')', found" && has '"file":"'"$src"'/A.scala","line":1,"col":38' && has '"message":"type mismatch: found \"s\", required Int"'; then ok; else bad "pending text: A read from disk, its parse error gone: $RESULT"; fi
 stop
 # Parse errors survive the full path with their files' trees, and the parse errors of the files
 # that remain are kept when one of them is removed; a fix that comes with a file added back is

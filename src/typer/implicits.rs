@@ -1547,7 +1547,7 @@ impl<'a> Worker<'a> {
                 }
             }
             Type::Lambda(_, b) => self.classes_in(b, out, seen),
-            Type::Union(a, b) | Type::Inter(a, b) => {
+            Type::Union(a, b, _) | Type::Inter(a, b) => {
                 self.classes_in(a, out, seen);
                 self.classes_in(b, out, seen);
             }
@@ -2288,7 +2288,7 @@ impl<'a> Worker<'a> {
             t = self.deref(parent);
         }
         match self.types.get(t) {
-            Type::Union(a, b) => self.exclusive_union_members(a, false, out) && self.exclusive_union_members(b, false, out),
+            Type::Union(a, b, _) => self.exclusive_union_members(a, false, out) && self.exclusive_union_members(b, false, out),
             Type::Class(c, _) if !top && self.exclusive_member(c) => {
                 out.push(c);
                 true
@@ -2333,7 +2333,7 @@ impl<'a> Worker<'a> {
                     }
             }
             Type::Param(_) | Type::Lit(_) => true,
-            Type::Union(a, b) | Type::Inter(a, b) => self.closed_result(a) && self.closed_result(b),
+            Type::Union(a, b, _) | Type::Inter(a, b) => self.closed_result(a) && self.closed_result(b),
             _ => false,
         }
     }
@@ -3647,7 +3647,7 @@ impl<'a> Worker<'a> {
     fn singleton_part_of(&mut self, t: TypeId) -> bool {
         match self.types.get(t) {
             Type::This(_) | Type::Term(_) | Type::Select(..) => true,
-            Type::Union(a, b) | Type::Inter(a, b) => self.has_singleton_part(a) || self.has_singleton_part(b),
+            Type::Union(a, b, _) | Type::Inter(a, b) => self.has_singleton_part(a) || self.has_singleton_part(b),
             _ => false,
         }
     }
@@ -4168,9 +4168,9 @@ impl<'a> Worker<'a> {
                 let ps = self.types.list(&blank);
                 self.types.mk(Type::Lambda(ps, b))
             }
-            Type::Union(a, b) => {
+            Type::Union(a, b, soft) => {
                 let (a, b) = (self.wild_approx(a, size, classes, depth), self.wild_approx(b, size, classes, depth));
-                self.types.union(a, b)
+                self.types.union_as(soft, a, b)
             }
             Type::Inter(a, b) => {
                 let (a, b) = (self.wild_approx(a, size, classes, depth), self.wild_approx(b, size, classes, depth));

@@ -351,6 +351,7 @@ impl<'a> Worker<'a> {
                     LitVal::Int(_) => self.b.t_int,
                     LitVal::Long(_) => self.b.t_long,
                     LitVal::Double(_) => self.b.t_double,
+                    LitVal::Float(_) => self.b.t_float,
                     LitVal::Char(_) => self.b.t_char,
                     LitVal::Bool(_) => self.b.t_boolean,
                     LitVal::Str(_) => self.b.t_string,
@@ -376,7 +377,7 @@ impl<'a> Worker<'a> {
             // The writer's erasures of the shapes the reader matches any name against.
             Type::Refined(parent, _) if lib.is_some() => self.sig_name(parent, in_array, depth + 1, lib),
             Type::Inter(a, b) if lib.is_some() => self.sig_glb(a, b, in_array, depth, lib),
-            Type::Union(a, b) if lib.is_some() => self.sig_lub(a, b, in_array, depth, lib),
+            Type::Union(a, b, _) if lib.is_some() => self.sig_lub(a, b, in_array, depth, lib),
             Type::Member(..) | Type::AppMember(..) | Type::Decl(_) | Type::Match(..) if lib.is_some() => {
                 let w = self.upper_bound_of(t);
                 if w == t {
@@ -520,7 +521,7 @@ impl<'a> Worker<'a> {
             Type::BoundedWild(_, hi) => self.fits_jvm_array(hi, depth + 1),
             Type::Inter(a, b) => self.fits_jvm_array(a, depth + 1) || self.fits_jvm_array(b, depth + 1),
             // scala-library's `T <: AnyRef | Null`.
-            Type::Union(a, b) => self.fits_jvm_array(a, depth + 1) && self.fits_jvm_array(b, depth + 1),
+            Type::Union(a, b, _) => self.fits_jvm_array(a, depth + 1) && self.fits_jvm_array(b, depth + 1),
             _ => false,
         }
     }
@@ -1036,8 +1037,7 @@ impl<'a> Worker<'a> {
                 }
                 let receiver = self.cur_ast().expr(q);
                 let selected = name == names::APPLY && matches!(receiver, Expr::TypeApply(..));
-                let bare = matches!(receiver, Expr::Ident(_) | Expr::Select(..) | Expr::TypeApply(..));
-                let (tq, qty) = self.type_receiver(q, selected, bare);
+                let (tq, qty) = self.type_receiver(q, selected);
                 let outer = self.declared_call.replace((tq, name, d));
                 let typed = self.apply_member(tq, qty, name, targs, lists, span, expected);
                 self.declared_call = outer;

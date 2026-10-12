@@ -105,7 +105,7 @@ neg/beanAccessorsLeaking	same
 neg/binaryLiterals.scala	syntax	expected end of statement, found {}
 neg/block-ending-in-def.scala	different	type mismatch
 neg/blockescapesNeg.scala	accepts	
-neg/bounds.scala	subset	1/2 lines
+neg/bounds.scala	same	
 neg/boundspropagation.scala	superset	+1 lines: type mismatch
 neg/by-name.scala	syntax	'erased' is not part of the supported Scala subset
 neg/byname-implicits-11.scala	same	
@@ -341,7 +341,7 @@ neg/given-eta.scala	same
 neg/given-loop-prevention.scala	accepts	
 neg/given-pattern.scala	same	
 neg/given-triangle.scala	accepts	
-neg/harmonize.scala	superset	+2 lines: type mismatch
+neg/harmonize.scala	same	
 neg/hidden-type-errors	accepts	
 neg/hk-bounds.scala	subset	5/6 lines
 neg/hk-variance.scala	accepts	
@@ -738,7 +738,7 @@ neg/i18302e.scala	syntax	expected end of statement, found {}
 neg/i18302f.scala	std	PolyFunction
 neg/i18302i.scala	std	PolyFunction
 neg/i18302j.scala	std	PolyFunction
-neg/i18340.scala	subset	23/28 lines
+neg/i18340.scala	same	
 neg/i18408a.scala	syntax	expected a definition, found {}
 neg/i18408b.scala	syntax	expected a definition, found {}
 neg/i18408c.scala	syntax	expected a definition, found {}
@@ -908,7 +908,7 @@ neg/i23119.scala	superset	+4 lines: `yield` or `do` expected
 neg/i23155a.scala	same	
 neg/i23156.scala	superset	+1 lines: wrong number of patterns for an extractor of <error>: found 2
 neg/i23179-reverse.scala	subset	1/2 lines
-neg/i23261.scala	subset	3/6 lines
+neg/i23261.scala	same	
 neg/i23350.scala	accepts	
 neg/i23400.scala	syntax	expected end of statement, found {}
 neg/i23402.scala	same	
@@ -1014,7 +1014,7 @@ neg/i2887c.scala	different	type mismatch
 neg/i2901.scala	same	
 neg/i2928.scala	accepts	
 neg/i2950.scala	same	
-neg/i2960.scala	superset	+1 lines: No given instance of type scala.quoted.Quotes was found for a quote
+neg/i2960.scala	same	
 neg/i2971.scala	same	
 neg/i2973.scala	same	
 neg/i2974.scala	same	
@@ -1120,7 +1120,7 @@ neg/i4653.scala	accepts
 neg/i4659.scala	different	type T is not a member of (a : A)
 neg/i4668.scala	same	
 neg/i4709.scala	same	
-neg/i4721.scala	accepts	
+neg/i4721.scala	same	
 neg/i4721a.scala	accepts	
 neg/i4781.scala	same	
 neg/i4819.scala	superset	+1 lines: class Foo inherits concat as [Dummy](suffix: Int): Y and as (suffix: Int): X, which are both called concat$Int in the JavaScript output, since no ancestor declares the two together; declare the alternatives in one trait
@@ -1230,7 +1230,7 @@ neg/i6475.scala	same
 neg/i6501.scala	accepts	
 neg/i6503.scala	same	
 neg/i6601.scala	oos	enum-extends
-neg/i6606.scala	different	type mismatch
+neg/i6606.scala	subset	3/5 lines
 neg/i6622.scala	same	
 neg/i6622a.scala	same	
 neg/i6622b.scala	same	
@@ -2785,7 +2785,7 @@ pos/i13935.scala	accepts
 pos/i13941.scala	accepts	
 pos/i13974.scala	accepts	
 pos/i13974a.scala	rejects	this pattern of type Refl[U$1] can never match a value of type SUB[A, (B, C)]
-pos/i13990.scala	rejects	type mismatch
+pos/i13990.scala	accepts	
 pos/i13998.scala	syntax	expected {}, found {}
 pos/i1401.scala	rejects	Cyclic inheritance: trait Buffer extends itself
 pos/i14010.scala	accepts	
@@ -3161,7 +3161,7 @@ pos/i18163.scala	accepts
 pos/i18175.scala	syntax	expected {}, found {}
 pos/i18183.migration.scala	accepts	
 pos/i18211.scala	syntax	expected {}, found {}
-pos/i18226.scala	rejects	type mismatch
+pos/i18226.scala	accepts	
 pos/i18226a.scala	accepts	
 pos/i18234.scala	syntax	expected {}, found {}
 pos/i18247.scala	accepts	
@@ -3519,7 +3519,7 @@ pos/i23225.scala	syntax	expected {}, found {}
 pos/i23237a.scala	accepts	
 pos/i23237b.scala	rejects	type mismatch
 pos/i2324.scala	accepts	
-pos/i23261.scala	rejects	Cannot prove that FloatToString[Float] =:= "-0.0f".
+pos/i23261.scala	accepts	
 pos/i23266.scala	syntax	expected {}, found {}
 pos/i23299.scala	accepts	
 pos/i23310.scala	accepts	
@@ -3566,7 +3566,7 @@ pos/i24074	oos	java
 pos/i24076.scala	syntax	expected an expression, found {}
 pos/i24094.scala	accepts	
 pos/i24097-a.scala	accepts	
-pos/i24097-b.scala	rejects	type mismatch
+pos/i24097-b.scala	accepts	
 pos/i24192.scala	accepts	
 pos/i24206.scala	rejects	missing parameter type
 pos/i24207.scala	accepts	
@@ -3659,7 +3659,7 @@ pos/i26340	rejects	type {} is already defined
 pos/i26352	accepts	
 pos/i2637.scala	accepts	
 pos/i26388.scala	accepts	
-pos/i26550.scala	rejects	value {} is not a member of {}
+pos/i26550.scala	accepts	
 pos/i26611	accepts	
 pos/i26611b.scala	accepts	
 pos/i26624-dotty-cps-async.scala	accepts	
@@ -3713,7 +3713,7 @@ pos/i2981.scala	accepts
 pos/i2982.scala	accepts	
 pos/i2989.scala	accepts	
 pos/i2997.scala	accepts	
-pos/i2998.scala	rejects	type mismatch
+pos/i2998.scala	accepts	
 pos/i3000.scala	accepts	
 pos/i3050.scala	accepts	
 pos/i3058.scala	accepts	
@@ -3759,7 +3759,7 @@ pos/i3538.scala	rejects	type mismatch
 pos/i3540.scala	rejects	Implicit classes must accept exactly one primary constructor parameter
 pos/i3542-1.scala	accepts	
 pos/i3542-2.scala	accepts	
-pos/i3544.scala	rejects	type mismatch
+pos/i3544.scala	accepts	
 pos/i3553.scala	accepts	
 pos/i3561.scala	accepts	
 pos/i3564.scala	accepts	
@@ -4055,7 +4055,7 @@ pos/i739.scala	accepts
 pos/i7392.scala	accepts	
 pos/i7401.scala	accepts	
 pos/i7403.scala	accepts	
-pos/i7413.scala	rejects	type mismatch
+pos/i7413.scala	rejects	value {} is not a member of {}
 pos/i7414.scala	accepts	
 pos/i7421.scala	syntax	expected end of statement, found {}
 pos/i7424.scala	rejects	this pattern of type Refl[C$1] can never match a value of type =:=[A, Option[B]]
@@ -4133,7 +4133,7 @@ pos/i8143.scala	accepts
 pos/i815.scala	rejects	{} is not a member of the package
 pos/i8151.scala	accepts	
 pos/i8152.scala	accepts	
-pos/i8181.scala	rejects	value {} is not a member of {}
+pos/i8181.scala	accepts	
 pos/i8182.scala	rejects	value {} is not a member of {}
 pos/i8188a.scala	accepts	
 pos/i8188b.scala	accepts	
@@ -4720,7 +4720,7 @@ pos/philippe4.scala	accepts
 pos/pickleAlias.scala	std	Error
 pos/pickleSkolem.scala	accepts	
 pos/pickleTypes.scala	rejects	Refinements cannot introduce overloaded definitions
-pos/pickleinf.scala	rejects	type mismatch
+pos/pickleinf.scala	accepts	
 pos/pmbug.scala	accepts	
 pos/poly-erased-functions.scala	syntax	expected {}, found {}
 pos/poly-inheritance.scala	rejects	type mismatch
@@ -4845,7 +4845,7 @@ pos/singleton-ops-composition.scala	accepts
 pos/singleton-ops-dispatch.scala	accepts	
 pos/singleton-ops-test-issue-8280.scala	accepts	
 pos/singleton-ops-test-issue-8287.scala	accepts	
-pos/singletons.scala	rejects	type mismatch
+pos/singletons.scala	accepts	
 pos/singletontrait.scala	accepts	
 pos/sip23-aliasing.scala	accepts	
 pos/sip23-negative-literals.scala	accepts	
@@ -4953,7 +4953,7 @@ pos/stm.scala	accepts
 pos/strawman-i79.scala	std	App
 pos/strict-pattern-bindings-3.0-migration.scala	rejects	pattern's type String is more specialized than the right hand side expression's type AnyRef
 pos/strict-pattern-bindings-3.1.scala	rejects	pattern's type String is more specialized than the right hand side expression's type AnyRef
-pos/stringConstantFold.scala	rejects	type mismatch
+pos/stringConstantFold.scala	accepts	
 pos/strings.scala	accepts	
 pos/strip-tvars-for-lubbasetypes.scala	accepts	
 pos/sub-cases-exhaustivity.scala	syntax	expected {}, found {}

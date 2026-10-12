@@ -193,7 +193,7 @@ impl<'a> Worker<'a> {
         let t = self.deref(t);
         match self.types.get(t) {
             Type::Class(c, _) => class_by_rule(self, c),
-            Type::Union(x, y) => self.every_value_by_rule(x, class_by_rule) && self.every_value_by_rule(y, class_by_rule),
+            Type::Union(x, y, _) => self.every_value_by_rule(x, class_by_rule) && self.every_value_by_rule(y, class_by_rule),
             Type::Inter(x, y) => self.every_value_by_rule(x, class_by_rule) || self.every_value_by_rule(y, class_by_rule),
             Type::Param(p) => {
                 let upper = self.syms.tparam(p).upper;

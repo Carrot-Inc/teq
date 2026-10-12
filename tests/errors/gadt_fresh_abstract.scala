@@ -1,4 +1,4 @@
-// expect: 11:24: error: type mismatch: found String, required C$1
+// expect: 11:24: error: type mismatch: found "boom", required C$1
 // expect: 1 error found
 // The fresh abstract type a GADT pattern leaves (`C$1` in `X = List[C$1]`) takes no
 // `String`: scalac's `Found: List[String], Required: X`, reported at the list; here at the

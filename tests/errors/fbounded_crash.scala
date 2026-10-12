@@ -1,4 +1,4 @@
-// expect: type mismatch: found Int, required T
+// expect: type mismatch: found 1, required T
 // expect: method apply in class C does not take parameters
 trait Ord[T <: Ord[T]]
 def f[T <: Ord[T]](t: T): T = t

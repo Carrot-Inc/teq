@@ -195,7 +195,7 @@ impl<'a> Worker<'a> {
         let ty = self.deref(ty);
         let ty = self.widen_path(ty);
         let ty = self.widen_lit(ty);
-        if let Type::Union(a, b) = self.types.get(ty) {
+        if let Type::Union(a, b, _) = self.types.get(ty) {
             return self.lint_to_string(a, span) || self.lint_to_string(b, span);
         }
         let w = crate::source::Warning::id(crate::warnings::id::FORMAT_INTERPOLATION_ERROR);

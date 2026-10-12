@@ -134,7 +134,7 @@ pub fn first_blocked(types: &TypeStore, t: TypeId) -> Option<BlockedId> {
             types.items(args).iter().find_map(|&a| first_blocked(types, a))
         }
         Type::Lambda(_, body) => first_blocked(types, body),
-        Type::Union(a, b) | Type::Inter(a, b) => first_blocked(types, a).or_else(|| first_blocked(types, b)),
+        Type::Union(a, b, _) | Type::Inter(a, b) => first_blocked(types, a).or_else(|| first_blocked(types, b)),
         _ => None,
     }
 }
@@ -315,8 +315,7 @@ impl<'a> Worker<'a> {
                     Const::Int(v) | Const::Byte(v) | Const::Short(v) => LitVal::Int(*v),
                     Const::Long(v) => LitVal::Long(*v),
                     Const::Double(bits) => LitVal::Double(*bits),
-                    // The types have no float literal: a float constant's type is `Float`.
-                    Const::Float(_) => return self.b.t_float,
+                    Const::Float(bits) => LitVal::Float(*bits),
                     Const::Char(v) => LitVal::Char(*v as u16),
                     Const::Bool(b) => LitVal::Bool(*b),
                     Const::Str(n) => {

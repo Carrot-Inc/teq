@@ -142,5 +142,14 @@ run_js 20 $out tests/dce/map_filter.scala > out/dce/map_filter.actual 2>&1 || ba
 runs tests/dce/map_filter.expected out/dce/map_filter.actual map_filter
 absent $out 'new Box(-1)' 'Box(this.x - 1'
 
+# A concatenation's operand that is a conditional of two constants, typed by their union, is a String
+# or an Int to the emitter (dotty's `widenUnion`): written as it is, with no conversion around it (the
+# std's `Range.toString`, a conditional of strings and one of numbers).
+out=out/dce/string_operands.js
+run_js 20 $out tests/dce/string_operands.scala > out/dce/string_operands.actual 2>&1 || bad "string_operands build"
+runs tests/dce/string_operands.expected out/dce/string_operands.actual string_operands
+present $out 'this.start) + (this.isInclusive ? " to " : " until ")) + this.end)' '("item" + (flag ? "" : "s"))' '"code " + (flag ? 4 : 5)'
+absent $out '$str(this.isInclusive' '$str(flag'
+
 echo "$pass passed, $fail failed"
 [ $fail = 0 ]

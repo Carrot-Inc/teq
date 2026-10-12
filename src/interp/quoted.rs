@@ -1012,10 +1012,10 @@ impl<'m> Matcher<'m> {
         // with each in turn (`Computed[..] & TransformerOverrides` against `'[Computed[path,
         // tail]]`; `t & Tuple` against a tuple).
         match (pt, st, below) {
-            (Type::Inter(a, b), _, true) | (Type::Union(a, b), _, false) => return self.constrain(it, a, s, variance) && self.constrain(it, b, s, variance),
-            (_, Type::Union(a, b), true) | (_, Type::Inter(a, b), false) => return self.constrain(it, p, a, variance) && self.constrain(it, p, b, variance),
-            (Type::Union(a, b), _, true) | (Type::Inter(a, b), _, false) => return self.either(it, |m, it| m.constrain(it, a, s, variance), |m, it| m.constrain(it, b, s, variance)),
-            (_, Type::Inter(a, b), true) | (_, Type::Union(a, b), false) => return self.either(it, |m, it| m.constrain(it, p, a, variance), |m, it| m.constrain(it, p, b, variance)),
+            (Type::Inter(a, b), _, true) | (Type::Union(a, b, _), _, false) => return self.constrain(it, a, s, variance) && self.constrain(it, b, s, variance),
+            (_, Type::Union(a, b, _), true) | (_, Type::Inter(a, b), false) => return self.constrain(it, p, a, variance) && self.constrain(it, p, b, variance),
+            (Type::Union(a, b, _), _, true) | (Type::Inter(a, b), _, false) => return self.either(it, |m, it| m.constrain(it, a, s, variance), |m, it| m.constrain(it, b, s, variance)),
+            (_, Type::Inter(a, b), true) | (_, Type::Union(a, b, _), false) => return self.either(it, |m, it| m.constrain(it, p, a, variance), |m, it| m.constrain(it, p, b, variance)),
             _ => {}
         }
         match (pt, st) {
@@ -1402,8 +1402,8 @@ impl<'a, 't> Interp<'a, 't> {
                     _ => Value::Int(v),
                 }),
                 TExpr::Long(v) => View::Literal(Value::Long(v)),
-                TExpr::Double(v) => View::Literal(match self.prog().type_of(e).map(|ty| self.typer.types.get(ty)) {
-                    Some(Type::Class(c, _)) if c == self.typer.b.float => Value::Float(v as f32),
+                TExpr::Double(v) => View::Literal(match self.prog().type_of(e).map(|ty| self.typer.widen_lit(ty)) {
+                    Some(t) if t == self.typer.b.t_float => Value::Float(v as f32),
                     _ => Value::Double(v),
                 }),
                 TExpr::Bool(v) => View::Literal(Value::Bool(v)),
@@ -4337,6 +4337,7 @@ impl<'a, 't> Interp<'a, 't> {
                     LitVal::Int(_) => self.typer.b.int,
                     LitVal::Long(_) => self.typer.b.long,
                     LitVal::Double(_) => self.typer.b.double,
+                    LitVal::Float(_) => self.typer.b.float,
                     LitVal::Char(_) => self.typer.b.char,
                     LitVal::Bool(_) => self.typer.b.boolean,
                     LitVal::Str(_) => self.typer.b.string,
@@ -5163,20 +5164,20 @@ fn install_types(it: &mut Table) {
     });
     q!(it, "Reflect.OrType.unapply", |it, a| {
         let t = it.type_arg(a, 1)?;
-        let Type::Union(x, y) = it.typer.types.get(t) else { return it.unsupported("OrType.unapply on a type that is no union") };
+        let Type::Union(x, y, _) = it.typer.types.get(t) else { return it.unsupported("OrType.unapply on a type that is no union") };
         it.make_tuple(vec![Value::Type(x), Value::Type(y)])
     });
     q!(it, "Reflect.AndOrTypeMethods.AndOrType.left", |it, a| {
         let t = it.type_arg(a, 0)?;
         match it.typer.types.get(t) {
-            Type::Inter(x, _) | Type::Union(x, _) => Ok(Value::Type(x)),
+            Type::Inter(x, _) | Type::Union(x, _, _) => Ok(Value::Type(x)),
             _ => it.unsupported("left of a type that is no intersection or union"),
         }
     });
     q!(it, "Reflect.AndOrTypeMethods.AndOrType.right", |it, a| {
         let t = it.type_arg(a, 0)?;
         match it.typer.types.get(t) {
-            Type::Inter(_, y) | Type::Union(_, y) => Ok(Value::Type(y)),
+            Type::Inter(_, y) | Type::Union(_, y, _) => Ok(Value::Type(y)),
             _ => it.unsupported("right of a type that is no intersection or union"),
         }
     });
@@ -5700,7 +5701,7 @@ impl<'a, 't> Interp<'a, 't> {
                     self.narrow_variances(a, v * variances.get(i).copied().unwrap_or(0), params, out, depth + 1);
                 }
             }
-            Type::Union(a, b) | Type::Inter(a, b) => {
+            Type::Union(a, b, _) | Type::Inter(a, b) => {
                 self.narrow_variances(a, v, params, out, depth + 1);
                 self.narrow_variances(b, v, params, out, depth + 1);
             }
@@ -8091,7 +8092,7 @@ impl<'a, 't> Interp<'a, 't> {
                 let v = self.literal(self.typer.types.lit_val(l));
                 out.push_str(&self.show_constant(&v).unwrap_or_default());
             }
-            Type::Union(a, b) => {
+            Type::Union(a, b, _) => {
                 self.show_type_into(a, out);
                 out.push_str(" | ");
                 self.show_type_into(b, out);
@@ -8189,7 +8190,7 @@ impl<'a, 't> Interp<'a, 't> {
                 };
                 format!("ConstantType({}({}))", kind, shown)
             }
-            Type::Union(a, b) => format!("OrType({}, {})", self.show_type_structure(a), self.show_type_structure(b)),
+            Type::Union(a, b, _) => format!("OrType({}, {})", self.show_type_structure(a), self.show_type_structure(b)),
             Type::Inter(a, b) => format!("AndType({}, {})", self.show_type_structure(a), self.show_type_structure(b)),
             Type::Param(p) => format!("TypeRef(NoPrefix(), \"{}\")", self.typer.name_ref(self.syms().tparam(p).name)),
             Type::Any => "TypeRef(ThisType(TypeRef(NoPrefix(), \"scala\")), \"Any\")".to_string(),

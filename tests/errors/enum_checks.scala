@@ -1,5 +1,5 @@
 // expect: 30:24: error: missing argument for parameter rgb
-// expect: 31:29: error: type mismatch: found String, required Int
+// expect: 31:29: error: type mismatch: found "red", required Int
 // expect: 32:32: error: illegal reference to fallback from an enum case; write Rgb.fallback
 // expect: 33:31: error: only the enum itself takes constructor arguments
 // expect: 34:24: error: too many arguments: expected 1
@@ -7,7 +7,7 @@
 // expect: 42:36: warning: match may not be exhaustive; missing: Blue
 // expect: 46:38: warning: match may not be exhaustive; missing: LParen, Ident(_)
 // expect: 50:43: warning: match may not be exhaustive; missing: Flag
-// expect: 54:13: error: type mismatch: found String, required T
+// expect: 54:13: error: type mismatch: found "text", required T
 // expect: 57:22: error: value rgb is not a member of Color
 // expect: 65:31: warning: match may not be exhaustive; missing: Loose
 // expect: 8 errors found

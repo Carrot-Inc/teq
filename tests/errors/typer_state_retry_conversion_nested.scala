@@ -1,4 +1,4 @@
-// expect: 16:49: error: type mismatch: found String, required Int
+// expect: 16:49: error: type mismatch: found "bad", required Int
 // expect: 16:56: error: not found: undefinedName
 // expect: 2 errors found
 // A member whose first list fails gives way to a conversion of its receiver; the converted call's

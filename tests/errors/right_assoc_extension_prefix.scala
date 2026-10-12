@@ -1,5 +1,5 @@
 // expect: 19:22: error: no given instance of type Missing was found for parameter
-// expect: 23:20: error: type mismatch: found Boolean, required Float
+// expect: 23:20: error: type mismatch: found true, required Float
 // expect: 27:20: error: missing parameter type
 // absent: required String
 // The selection `q.op(a)` of a right-associative extension takes the extension once its prefix

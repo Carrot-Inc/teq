@@ -749,7 +749,7 @@ impl<'a> Worker<'a> {
         }
         match self.types.get(t) {
             // A union's or an intersection's parts are finite, unlike a chain of bounds.
-            Type::Union(a, b) | Type::Inter(a, b) => self.expects_function(a, depth) || self.expects_function(b, depth),
+            Type::Union(a, b, _) | Type::Inter(a, b) => self.expects_function(a, depth) || self.expects_function(b, depth),
             _ if depth == 0 => false,
             Type::Param(p) => {
                 let upper = self.syms.tparam(p).upper;

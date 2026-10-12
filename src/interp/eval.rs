@@ -121,7 +121,7 @@ impl<'a, 't> Interp<'a, 't> {
         match self.prog().expr(e) {
             TExpr::Int(v) => Ok(self.int_literal(e, v)),
             TExpr::Long(v) => Ok(Value::Long(v)),
-            TExpr::Double(v) => Ok(if self.prog().type_of(e) == Some(self.typer.b.t_float) { Value::Float(v as f32) } else { Value::Double(v) }),
+            TExpr::Double(v) => Ok(if self.prog().type_of(e).is_some_and(|t| self.typer.widen_lit(t) == self.typer.b.t_float) { Value::Float(v as f32) } else { Value::Double(v) }),
             TExpr::Bool(v) => Ok(Value::Bool(v)),
             TExpr::Char(c) => Ok(Value::Char(c)),
             TExpr::Str(s) => Ok(Value::Str(self.string_lit(s))),

@@ -1259,8 +1259,8 @@ impl<'a> Worker<'a> {
 
     /// The type of a final field with a `ConstantValue`: the constant converted to the declared
     /// type (dotty's `ClassfileParser.parseAttributes`, `ConstantType(convertTo(c, tp))`), a
-    /// boolean's from its int. teq's literal types have no `Byte`, `Short` or `Float`, which keep
-    /// the declared type, as a `final val` of such a literal does.
+    /// boolean's from its int. teq's literal types have no `Byte` or `Short`, which keep the
+    /// declared type.
     fn java_constant_type(&mut self, c: &crate::classfile::ConstValue, declared: TypeId) -> Option<TypeId> {
         use crate::classfile::ConstValue;
         let b = &self.b;
@@ -1270,6 +1270,7 @@ impl<'a> Worker<'a> {
             ConstValue::Int(v) if declared == b.t_char => LitVal::Char(v as u16),
             ConstValue::Long(v) if declared == b.t_long => LitVal::Long(v),
             ConstValue::Double(v) if declared == b.t_double => LitVal::Double(v.to_bits()),
+            ConstValue::Float(v) if declared == b.t_float => LitVal::Float(v.to_bits()),
             ConstValue::Str(ref s) if declared == b.t_string => LitVal::Str(self.interner.intern(s)),
             _ => return None,
         };

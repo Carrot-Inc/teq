@@ -1,7 +1,7 @@
-// expect: 27:26: error: type mismatch: found String, required Int
+// expect: 27:26: error: type mismatch: found "bad", required Int
 // expect: 22:23: error: value toLowerCase is not a member of Int
-// expect: 23:22: error: type mismatch: found String
-// expect: 26:29: error: type mismatch: found Int, required String
+// expect: 23:22: error: type mismatch: found "s"
+// expect: 26:29: error: type mismatch: found 1, required String
 // absent: 24:23:
 // The refusal rows of a member's retry on its qualifier, as scalac's: an error inside an argument
 // makes it an error argument whose member's errors stand (`hasInnerErrors`: a lambda's body that

@@ -892,9 +892,6 @@ impl<'a> Worker<'a> {
         if self.interpolations.contains_key(&e) {
             m |= StoredNode::INTERPOLATION;
         }
-        if self.soft_exprs.contains_key(&e) {
-            m |= StoredNode::SOFT;
-        }
         m
     }
 
@@ -911,7 +908,7 @@ impl<'a> Worker<'a> {
             Type::Any | Type::Nothing | Type::Lit(_) => true,
             Type::Class(c, args) => !stored.contains(&c) && all(args),
             Type::Alias(_, args) => all(args),
-            Type::Union(a, b) | Type::Inter(a, b) => self.closed_type(a, stored) && self.closed_type(b, stored),
+            Type::Union(a, b, _) | Type::Inter(a, b) => self.closed_type(a, stored) && self.closed_type(b, stored),
             _ => false,
         }
     }
@@ -1049,9 +1046,9 @@ impl<'a> Worker<'a> {
                 let b = self.with_class_copies(body, classes);
                 if b == body { t } else { self.types.mk(Type::Lambda(ps, b)) }
             }
-            Type::Union(a, b) => {
+            Type::Union(a, b, soft) => {
                 let (na, nb) = (self.with_class_copies(a, classes), self.with_class_copies(b, classes));
-                if na == a && nb == b { t } else { self.types.union(na, nb) }
+                if na == a && nb == b { t } else { self.types.union_as(soft, na, nb) }
             }
             Type::Inter(a, b) => {
                 let (na, nb) = (self.with_class_copies(a, classes), self.with_class_copies(b, classes));
@@ -1845,6 +1842,8 @@ impl<'a> Worker<'a> {
             (self.check_expr(body, sig.ret), sig.ret)
         } else {
             let (te, ty) = self.type_expr(body, None);
+            // A plain one's result is inferred as a definition's (`inferredResultType`'s
+            // `widenInferred`, a soft union widened).
             let ty = if transparent { self.solve_in(ty) } else { self.solve_inferred(ty) };
             (te, ty)
         };
@@ -2299,13 +2298,12 @@ impl StoredNode {
     pub const EXPANSION: u16 = 8;
     pub const EVALUATED: u16 = 16;
     pub const INTERPOLATION: u16 = 32;
-    pub const SOFT: u16 = 64;
     /// The node is a kept call with its record among the deferred calls.
     pub const DEFERRED: u16 = 128;
     /// The record's metadata names the node (`StoredIndex::meta`).
     pub const META: u16 = 256;
     /// The marks of the output a copy takes.
-    pub const MARKS: u16 = Self::LEAF | Self::EXPANSION | Self::EVALUATED | Self::INTERPOLATION | Self::SOFT;
+    pub const MARKS: u16 = Self::LEAF | Self::EXPANSION | Self::EVALUATED | Self::INTERPOLATION;
 
     #[inline]
     pub fn has(self, flag: u16) -> bool {
@@ -2427,8 +2425,9 @@ inline def f(x: Int, y: String = \"d\"): String =
             assert!(nodes.iter().all(|&e| w.prog.type_of(e).is_none()));
             let body_ty = def.node_types[&def.body.unwrap()];
             assert_eq!(w.show(body_ty), "String");
+            // A literal's node keeps its constant type where it conforms (`TypeAssigner.assignType(Literal)`).
             let default_ty = def.node_types[&def.defaults[1].unwrap()];
-            assert_eq!(w.show(default_ty), "String");
+            assert_eq!(w.show(default_ty), "\"d\"");
         });
     }
 
