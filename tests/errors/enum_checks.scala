@@ -4,12 +4,12 @@
 // expect: 33:31: error: only the enum itself takes constructor arguments
 // expect: 34:24: error: too many arguments: expected 1
 // expect: error: no given instance of type Show[Boolean] was found for parameter evidence$
-// expect: 42:36: warning: match may not be exhaustive; missing: Blue
-// expect: 46:38: warning: match may not be exhaustive; missing: LParen, Ident(_)
-// expect: 50:43: warning: match may not be exhaustive; missing: Flag
+// expect: 42:36: warning: match may not be exhaustive.
+// expect: 46:38: warning: match may not be exhaustive.
+// expect: 50:43: warning: match may not be exhaustive.
 // expect: 54:13: error: type mismatch: found "text", required T
 // expect: 57:22: error: value rgb is not a member of Color
-// expect: 65:31: warning: match may not be exhaustive; missing: Loose
+// expect: 65:31: warning: match may not be exhaustive.
 // expect: 8 errors found
 
 trait Marker
@@ -64,3 +64,7 @@ enum Item:
 
 def bySize(i: Item): String = i match
   case s: Sized => "sized"
+// expect: It would fail on pattern case: Blue
+// expect: It would fail on pattern case: LParen, Ident(_)
+// expect: It would fail on pattern case: Flag
+// expect: It would fail on pattern case: Loose

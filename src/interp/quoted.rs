@@ -1970,6 +1970,7 @@ impl<'a, 't> Interp<'a, 't> {
             TypeTest::Null => self.typer.b.t_null,
             // A class test with its outer test is the class's.
             TypeTest::And(a, b) if matches!(self.prog().tests[b.idx()], TypeTest::Outer(..)) => self.test_type(a),
+            TypeTest::Proven(inner, _) => self.test_type(inner),
             _ => ANY,
         }
     }

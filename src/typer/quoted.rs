@@ -3653,6 +3653,7 @@ impl<'c> Copier<'c> {
         match t.prog.tests[test.idx()] {
             TypeTest::Value(_) | TypeTest::Outer(..) => false,
             TypeTest::Or(a, b) | TypeTest::And(a, b) => self.shared_test(t, a) && self.shared_test(t, b),
+            TypeTest::Proven(inner, _) => self.shared_test(t, inner),
             TypeTest::Class(c) | TypeTest::Trait(c) => self.stored_trigger(t, c).is_none(),
             _ => true,
         }
@@ -3703,6 +3704,7 @@ impl<'c> Copier<'c> {
                 TypeTest::And(a, self.test(t, b))
             }
             TypeTest::Outer(accessor, inner) => TypeTest::Outer(accessor, self.test(t, inner)),
+            TypeTest::Proven(inner, nullable) => TypeTest::Proven(self.test(t, inner), nullable),
             TypeTest::Class(c) if self.stored_trigger(t, c).is_some() => TypeTest::Class(self.outside_reduction(|k| k.stored_class_copy(t, c))),
             TypeTest::Trait(c) if self.stored_trigger(t, c).is_some() => TypeTest::Trait(self.outside_reduction(|k| k.stored_class_copy(t, c))),
             other if self.map.is_some() => other,

@@ -1,7 +1,7 @@
-// expect: 8:22: error: covariant type X occurs in contravariant position in type X of type parameter Y
-// expect: 9:22: error: contravariant type X occurs in covariant position in type X of type parameter Y
-// expect: 10:22: error: contravariant type X occurs in covariant position in type X of type parameter Y
-// expect: 11:22: error: covariant type X occurs in contravariant position in type X of type parameter Y
+// expect: 8:26: error: covariant type X occurs in contravariant position in type  <: X of type Y
+// expect: 9:26: error: contravariant type X occurs in covariant position in type  >: X of type Y
+// expect: 10:26: error: contravariant type X occurs in covariant position in type  >: X of type Y
+// expect: 11:26: error: covariant type X occurs in contravariant position in type  <: X of type Y
 // expect: 4 errors found
 // Adapted from scala3 tests/neg/variances.scala (Apache-2.0, see tests/scala3/README.md): the
 // trait cases without structural types.

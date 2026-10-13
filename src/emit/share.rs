@@ -972,7 +972,7 @@ impl<'a> Enc<'a> {
         if self.prog.deferred_tests.contains_key(&t) {
             self.ok = false;
         }
-        match self.prog.tests[t.idx()] {
+        match self.prog.js_test(t) {
             TypeTest::Class(c) => {
                 self.tok(100);
                 self.class(c);
@@ -1857,7 +1857,7 @@ impl<'a> Enc<'a> {
     }
 
     fn scan_test(&self, t: TestId, out: &mut Scan) {
-        match self.prog.tests[t.idx()] {
+        match self.prog.js_test(t) {
             TypeTest::Value(e) => self.scan(e, out),
             TypeTest::Or(a, b) | TypeTest::And(a, b) => {
                 self.scan_test(a, out);

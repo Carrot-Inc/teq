@@ -92,7 +92,13 @@ impl<'a> Worker<'a> {
         if !matches!(ast.expr(scrut), Expr::Unchecked(_)) {
             // A named tuple is erased by the check, which notes it.
             let broken = ast.broken_cases_in(cases);
-            self.defer_match_check(sty, out, clauses, partial, span, broken);
+            // E029 stands at the scrutinee, where `checkExhaustivity` reports it (`m.selector`,
+            // Space.scala 951), clear of the cases' own warnings, which would hide one standing
+            // over them (`UniqueMessagePositions`); a scrutinee without a place of its own (a
+            // pattern-matching function's) leaves it at the match.
+            let selector = ast.expr_span(scrut);
+            let at = if selector.start >= span.start && selector.end <= span.end && selector.end > selector.start { selector } else { span };
+            self.defer_match_check(sty, out, clauses, partial, at, broken);
         }
         let e = self.prog.add(TExpr::Match(ts, l));
         if let Some(record) = self.branch_types.as_mut() {
@@ -441,10 +447,12 @@ impl<'a> Worker<'a> {
                         return tp;
                     }
                 }
-                let test = if always {
-                    self.prog.add_test(TypeTest::Always)
-                } else if not_null {
-                    self.prog.add_test(TypeTest::AnyVal)
+                // dotty decides on the erased type (`TypeTestsCasts.transformTypeTest`): a scrutinee
+                // that conforms to the pattern's type is tested by each part of it as erased
+                // (`conforming_test`), a generic class's raw class being one its applications do not
+                // conform to.
+                let test = if conforms {
+                    self.conforming_test(t, sty, not_null, span, 0)
                 } else {
                     self.check_sensical_test(t, sty, span);
                     let test = self.test_for(t, sty, span, unchecked);
@@ -1997,6 +2005,96 @@ impl<'a> Worker<'a> {
                 if x == y { x } else { x.or(y) }
             }
             _ => None,
+        }
+    }
+
+    /// The test of a scrutinee of type `sty` that conforms to the pattern type `t`, as dotty's
+    /// `TypeTestsCasts.transformTypeTest` makes it (TypeTestsCasts.scala 324–360): an intersection
+    /// tests both sides (`AndType`), a union each side by its own (`OrType`), the tuple classes by
+    /// the runtime's tests whatever the scrutinee (`isInstanceOfTuple`, 336–352), and any other type
+    /// by its erasure (`transformIsInstanceOf`): nothing, or that the value is not `null`, where the
+    /// scrutinee's type conforms to the erasure (`conforms_to_erasure`), else the erasure's class
+    /// test. That test is `Proven` where the scrutinee's erasure conforms to the pattern's: Scala.js's
+    /// optimizer, deciding on the erased types (`OptimizerCore` 295, 653), makes it the null test.
+    pub(super) fn conforming_test(&mut self, t: TypeId, sty: TypeId, nullable: bool, span: Span, depth: u32) -> TestId {
+        let t = self.deref_alias(t);
+        if depth < 16 {
+            match self.types.get(t) {
+                Type::Inter(a, b) => {
+                    let (x, y) = (self.conforming_test(a, sty, nullable, span, depth + 1), self.conforming_test(b, sty, nullable, span, depth + 1));
+                    return match (self.prog.tests[x.idx()], self.prog.tests[y.idx()]) {
+                        (TypeTest::Always, _) => y,
+                        (_, TypeTest::Always) => x,
+                        _ => self.prog.add_test(TypeTest::And(x, y)),
+                    };
+                }
+                Type::Union(a, b, _) => {
+                    let (x, y) = (self.conforming_test(a, sty, nullable, span, depth + 1), self.conforming_test(b, sty, nullable, span, depth + 1));
+                    return match (self.prog.tests[x.idx()], self.prog.tests[y.idx()]) {
+                        (TypeTest::Always, _) => x,
+                        (_, TypeTest::Always) => y,
+                        _ => self.prog.add_test(TypeTest::Or(x, y)),
+                    };
+                }
+                _ => {}
+            }
+        }
+        let b = &self.b;
+        let tuple = matches!(self.types.get(t), Type::Class(c, _) if [b.tuple_trait, b.non_empty_tuple, b.cons_tuple, b.empty_tuple].contains(&Some(c)));
+        if !tuple && self.conforms_to_erasure(sty, t) {
+            return self.prog.add_test(if nullable { TypeTest::AnyVal } else { TypeTest::Always });
+        }
+        self.check_sensical_test(t, sty, span);
+        // A scrutinee that conforms to the pattern's type makes its test checkable
+        // (`whyUncheckable`'s `X <:< P`): an opaque type or a type argument goes unwarned.
+        let test = self.test_for(t, sty, span, true);
+        let test = self.outer_tested(test, t, span);
+        if self.erasures_conform(sty, t) {
+            self.prog.add_test(TypeTest::Proven(test, nullable))
+        } else {
+            test
+        }
+    }
+
+    /// Whether the scrutinee's type conforms to the erasure of the pattern's (`tp <:< testType`,
+    /// TypeTestsCasts.scala 255–258), as `TypeComparer` compares a type with an erased one: to a
+    /// class without type parameters by the scrutinee's base type (`thirdTryNamed`'s
+    /// `tryBaseType`), to a Java generic class's raw type by the base type's class
+    /// (`JavaDefined`); a Scala generic class's raw type (`Box`, `Tuple2`, `Option`) is a type
+    /// constructor no application conforms to, and an array erases to the JVM's array type
+    /// (`JavaArrayType`), which no Scala type conforms to (TypeComparer.scala 1119–1122).
+    /// A primitive scrutinee is compared as its box (`defn.boxedType(expr.tpe)`, 255), which
+    /// conforms to `Object`.
+    pub(super) fn conforms_to_erasure(&mut self, sty: TypeId, t: TypeId) -> bool {
+        use super::site::Erased;
+        match self.bound_erasure(t, 0) {
+            Some(Erased::Of(c, 0)) if c == self.b.any_ref && matches!(self.bound_erasure(sty, 0), Some(Erased::Of(k, 0)) if self.is_primitive_class(k)) => true,
+            Some(Erased::Of(c, 0)) if self.syms.class(c).tparams.is_empty() => {
+                let erased = self.types.class(c, &[]);
+                self.frozen_sub(sty, erased)
+            }
+            Some(Erased::Of(c, 0)) => self.java_defined_class(c) && self.base_type(sty, c).is_some(),
+            Some(Erased::Of(..)) => false,
+            Some(Erased::Null(d) | Erased::Nothing(d)) => d == 0,
+            None => true,
+        }
+    }
+
+    /// Whether the scrutinee's erasure conforms to the pattern's, as Scala.js's optimizer sees the
+    /// test in its erased IR; `true` where either has none here.
+    fn erasures_conform(&mut self, sty: TypeId, t: TypeId) -> bool {
+        match (self.bound_erasure(sty, 0), self.bound_erasure(t, 0)) {
+            (Some(from), Some(to)) => self.erased_sub(from, to),
+            _ => true,
+        }
+    }
+
+    /// Whether `c` is defined in Java (dotty's `JavaDefined`): read from a class file, or the std's
+    /// stand-in of a JDK class.
+    fn java_defined_class(&mut self, c: ClassId) -> bool {
+        self.is_java_class(c) || self.is_java_placeholder(c) || {
+            let p = self.package_of_class(c);
+            self.jdk_rooted(p)
         }
     }
 

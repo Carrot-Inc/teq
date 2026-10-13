@@ -1,0 +1,28 @@
+tests/errors/exhaustivity_elided.scala:7:20: error: match may not be exhaustive.
+
+It would fail on pattern case: B, C, D, E, F, G
+(More unmatched cases are elided)
+  def f(e: E): Int = e match { case E.A => 1 }
+                     ^
+tests/errors/exhaustivity_elided.scala:9:20: error: match may not be exhaustive.
+
+It would fail on pattern case: B, C, D, E, F, G
+  def g(s: S): Int = s match { case S.A => 1 }
+                     ^
+tests/errors/exhaustivity_elided.scala:11:20: error: match may not be exhaustive.
+
+It would fail on pattern case: B, C, D, E, F, G
+(More unmatched cases are elided)
+  def h(r: R): Int = r match { case R.A => 1 }
+                     ^
+tests/errors/exhaustivity_elided.scala:13:31: error: match may not be exhaustive.
+
+It would fail on pattern case: (N(false, _, _), _), (N(_, false, _), _), (N(_, _, false), _), (N(_, _, _), false)
+  def n(x: (N, Boolean)): Int = x match { case (N(true, true, true), true) => 1 }
+                                ^
+tests/errors/exhaustivity_elided.scala:14:31: error: match may not be exhaustive.
+
+It would fail on pattern case: (N(false, _, _), true)
+  def m(x: (N, Boolean)): Int = x match
+                                ^
+5 errors found

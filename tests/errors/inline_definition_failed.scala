@@ -8,7 +8,7 @@
 // adds its own and that each mismatch is there.
 // expect: value noSuch is not a member of Int
 // expect: type mismatch: found Int, required String
-// expect: match may not be exhaustive; missing: None
+// expect: match may not be exhaustive.
 // expect: value noSuch is not a member of T
 // expect: 10 errors found
 inline def bad(x: Int): Int = x.noSuch
@@ -27,3 +27,4 @@ val g = partial(Some(1)) + partial(Some(2))
 val h: String = generic[Int](6)
 val i: String = genericBoth[Int](7)
 val j: Int = generic(8)
+// expect: It would fail on pattern case: None

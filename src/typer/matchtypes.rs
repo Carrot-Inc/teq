@@ -73,8 +73,10 @@ impl<'a> Worker<'a> {
     /// `S match { case P => T ... }` as a type: each case binds the type variables of its
     /// pattern, which its body may name; a variable in an argument position takes the bound of
     /// the parameter it stands for. Without a declared bound the match type is bounded by the
-    /// union of its bodies, or by `Any` where a body reduces further.
+    /// union of its bodies, or, where a body reduces further, by the bound expected of it (dotty's
+    /// `typedMatchTypeTree`, whose `pt` an alias's declared bound and an enclosing match's case give), else `Any`.
     pub(super) fn match_type_expr(&mut self, scrut: TyExprId, cases: ListRef) -> TypeId {
+        let pt = self.match_pt.take();
         let case_ids: Vec<TyExprId> = self.cur_ast().ty_list(cases).to_vec();
         let scrutinee = self.resolve_type(scrut);
         let mut out = Vec::with_capacity(case_ids.len());
@@ -96,7 +98,12 @@ impl<'a> Worker<'a> {
             let pattern = self.resolve_type(pat);
             self.bind_binder_bounds(pattern, &binders);
             self.env.frames.push(Frame::Locals { names: Vec::new(), tparams: frame_tparams, givens: Vec::new(), classes: Vec::new(), aliases: Vec::new(), owner: self.sites.owners.len() as u32 });
+            // `typedTypeCase` types the body against the match's own expected bound.
+            if matches!(self.cur_ast().ty(body), TyExpr::Match(..)) {
+                self.match_pt = pt;
+            }
             let body = self.resolve_type(body);
+            self.match_pt = None;
             self.env.frames.pop();
             self.case_binders.truncate(mark);
             if bound != ANY {
@@ -108,7 +115,7 @@ impl<'a> Worker<'a> {
                     })
                     .collect();
                 let body_bound = self.types.subst(body, &widened);
-                bound = if self.types.is_reducible(body_bound) { ANY } else { self.lub(bound, body_bound) };
+                bound = if self.types.is_reducible(body_bound) { pt.unwrap_or(ANY) } else { self.lub(bound, body_bound) };
             }
             let binders = self.types.list(&binders);
             out.push(MatchCase { binders, pattern, body });

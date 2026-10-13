@@ -158,6 +158,33 @@ import java.nio.file.{Files, Path, Paths}
         if Files.exists(f) then Files.readAllLines(f).toArray.take(20).foreach(println)
       }
   else println("skip erasure: no javap, or scala-library not in the coursier cache")
+
+  // The type tests of patterns as scalac's erasure writes them: the `instanceof`, `ifnull`, `ifnonnull`
+  // and `checkcast` instructions of teq's class files of tests/classfile/typetests/typetests.scala, per
+  // method (javap_tests.py), have to be expected.txt, the same of scalac's class files, made by
+  //   scala-cli compile -S 3.8.4 --jvm system --server=false tests/classfile/typetests/typetests.scala -d <dir>
+  //   python3 tests/classfile/javap_tests.py <dir> typetests/ > tests/classfile/typetests/expected.txt
+  // A run's output cannot tell a class test from a null test where the scrutinee's type passes both.
+  if javap && Files.isRegularFile(jar) then
+    val dir = Files.createTempDirectory("teq-typetests.")
+    Script.atExit(Sh.remove(dir))
+    val log = dir.resolve("log")
+    val built = Sh(teq, "compiler", "build", "tests/classfile/typetests/typetests.scala", "--target", "jvm", "--classpath", jar.toString, "--products", dir.resolve("out").toString)
+      .stdout(log).mergeErr.timeout(60).check(false).run().ok
+    val tests = if built then Some(Sh("python3", "tests/classfile/javap_tests.py", dir.resolve("out").toString, "typetests/").timeout(120).check(false).run()) else None
+    val actual = dir.resolve("actual")
+    tests.filter(_.ok).foreach(t => Files.writeString(actual, t.lines.map(_ + "\n").mkString))
+    val diffed = if tests.exists(_.ok) then Some(Sh("diff", "tests/classfile/typetests/expected.txt", actual.toString).check(false).run()) else None
+    if diffed.exists(_.ok) && tests.exists(_.lines.nonEmpty) then pass += 1
+    else
+      fail += 1
+      println("FAIL type tests: the instructions are not scalac's")
+      val shown = List(log) ++ diffed.map(_.outFile)
+      shown.foreach { f =>
+        println(s"==> $f <==")
+        if Files.exists(f) then Files.readAllLines(f).toArray.take(20).foreach(println)
+      }
+  else println("skip type tests: no javap, or scala-library not in the coursier cache")
   println(s"classfile: $pass passed, $fail failed")
   Script.exit(if fail == 0 then 0 else 1)
 }

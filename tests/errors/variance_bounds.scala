@@ -2,7 +2,7 @@
 // expect: 16:11: error: covariant type A occurs in contravariant position in type A of parameter a
 // expect: 17:22: error: contravariant type A occurs in covariant position in type A of value a
 // expect: 19:7: error: contravariant type A occurs in covariant position in type => A of method get
-// expect: 30:7: error: covariant type T occurs in invariant position in type Cell[T] of class CovCell
+// expect: 30:7: error: covariant type T occurs in invariant position in type Object with Cell[T] {...} of class CovCell
 // expect: 36:7: error: covariant type A occurs in contravariant position in type => A => Unit of method consume
 // expect: 39:21: error: type argument String does not conform to upper bound Int
 // expect: 41:25: error: type argument Nothing does not conform to lower bound Int

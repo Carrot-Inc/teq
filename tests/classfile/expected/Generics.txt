@@ -1,4 +1,4 @@
-// tests/classfile/fixtures/fix/Generics.class (class file 65.0, 2952 bytes)
+// tests/classfile/fixtures/fix/Generics.class (class file 65.0, 3034 bytes)
 package fix
 class Generics[T <: Comparable[? >: T]] extends Object, Comparable[Generics[T]] {
   val value: T
@@ -8,6 +8,8 @@ class Generics[T <: Comparable[? >: T]] extends Object, Comparable[Generics[T]] 
   static val LIMIT: Int = 42
   static val NAME: String = "generics"
   static val BIG: Long = 1099511627776L
+  static val FMAX: Float = 3.4028235e38f
+  static val TENTH: Float = 0.1f
   def this(x$1: T) = ...
   protected def this(x$1: T, x$2: List[? <: Number]) = ...
   def max[U <: Number & Comparable[U]](x$1: List[? <: U]): U = ...

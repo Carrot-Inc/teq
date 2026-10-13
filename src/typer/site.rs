@@ -232,8 +232,10 @@ impl<'a> Worker<'a> {
         Some(call)
     }
 
-    /// `A <:< B` when `A` conforms to `B`, and `A =:= B` when the two are the same type: the
-    /// identity function, which the search may leave type variables of `B` bound by.
+    /// `A <:< B` when `A` conforms to `B`, and `A =:= B` when the two are the same type, which the
+    /// search may leave type variables of `B` bound by: scala-library's `<:<.refl[A]` (an `implicit
+    /// def` of type `A =:= A`, which both conform to), the tree dotty's search gives and a pickle
+    /// carries; the identity function where the std has no `refl`.
     pub fn evidence_given(&mut self, class: ClassId, target: TypeId, span: Span) -> Option<TExprId> {
         let equal = Some(class) == self.b.eq_evidence;
         if !equal && Some(class) != self.b.sub_evidence {
@@ -248,10 +250,35 @@ impl<'a> Worker<'a> {
             self.rollback(mark);
             return None;
         }
+        if let Some(refl) = self.evidence_refl(from, target) {
+            return Some(refl);
+        }
         let x = self.fresh_local("ev", from, span);
         let body = self.prog.add(TExpr::Local(x));
         let params = self.prog.syms(&[x]);
         Some(self.prog.add(TExpr::Lambda(params, body)))
+    }
+
+    /// `<:<.refl[t]`, the companion's method, typed as the `target` asked for.
+    fn evidence_refl(&mut self, t: TypeId, target: TypeId) -> Option<TExprId> {
+        let module = self.syms.class(self.b.sub_evidence?).companion?;
+        self.complete_class(module);
+        let name = self.interner.intern("refl");
+        let sym = *self.syms.class(module).members.get(&name)?;
+        if self.syms.alternatives(sym).is_some() {
+            return None;
+        }
+        // The call a pickle's `<:<.refl[A]` is read back as, the object's method (Scala.js's
+        // `$m_s_$less$colon$less$().refl()`).
+        let recv = self.prog.add(TExpr::Module(module));
+        let method = super::apply::MethodCall { recv: Some(recv), sym, owner_subst: Vec::new(), ext_recv: None, prefix: None, refined: None };
+        let call = self.build_call(&method, ListRef::EMPTY);
+        let tparams = self.sig_of(sym).tparams.clone();
+        if let [p] = tparams.as_slice() {
+            self.note_type_args(call, &[(*p, t)]);
+        }
+        self.prog.set_type(call, target);
+        Some(call)
     }
 
     /// Whether `t` is a `scala.reflect.ClassTag[_]`.

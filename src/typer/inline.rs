@@ -4381,7 +4381,8 @@ pub(super) fn eval_type_op(module: &str, op: &str, args: &[LitVal], text: impl F
     };
     let lit = |v: LitVal| Some(TypeOpResult::Lit(v));
     match (module, op, args) {
-        ("int", "S", [a]) => lit(Int(int(a)?.checked_add(1)?)),
+        // `TypeEval`'s `natValue`: the successor of a natural number below `Int.MaxValue` alone.
+        ("int", "S", [a]) => lit(Int(int(a).filter(|&n| n >= 0 && n < i32::MAX)? + 1)),
         ("int", "Abs", [a]) => lit(Int(int(a)?.checked_abs()?)),
         ("int", "Negate", [a]) => lit(Int(int(a)?.checked_neg()?)),
         ("int", "ToString", [a]) | ("any", "ToString", [a]) => Some(TypeOpResult::Str(render(a))),

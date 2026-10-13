@@ -1604,6 +1604,13 @@ impl<'a> Worker<'a> {
                 }
                 self.prog.add_test(TypeTest::Outer(accessor, x))
             }
+            TypeTest::Proven(inner, nullable) => {
+                let x = self.specialise_test(inner, subst);
+                if x == inner {
+                    return test;
+                }
+                self.prog.add_test(TypeTest::Proven(x, nullable))
+            }
             _ => test,
         }
     }
@@ -2088,7 +2095,7 @@ impl<'a> Worker<'a> {
             }
             match self.prog.tests[t.idx()] {
                 TypeTest::Or(a, b) | TypeTest::And(a, b) => tests.extend([a, b]),
-                TypeTest::Outer(_, inner) => tests.push(inner),
+                TypeTest::Outer(_, inner) | TypeTest::Proven(inner, _) => tests.push(inner),
                 _ => {}
             }
         }

@@ -14,6 +14,8 @@ public class Generics<T extends Comparable<? super T>> implements Comparable<Gen
     public static final int LIMIT = 42;
     public static final String NAME = "generics";
     public static final long BIG = 1L << 40;
+    public static final float FMAX = Float.MAX_VALUE;
+    public static final float TENTH = 0.1f;
 
     public Generics(T value) { this.value = value; }
     protected Generics(T value, List<? extends Number> numbers) { this(value); this.numbers = numbers; }

@@ -1,6 +1,6 @@
-// expect: 30:28: warning: match may not be exhaustive; missing: Name(_)
+// expect: 30:28: warning: match may not be exhaustive.
 // expect: 34:8: warning: unreachable case
-// expect: 36:28: warning: match may not be exhaustive; missing: Apply(_, _)
+// expect: 36:28: warning: match may not be exhaustive.
 // expect: 42:8: warning: unreachable case
 // expect: 44:8: warning: unreachable case
 // expect: 44:8: error: unreachable case: type C1 and class C2 are unrelated
@@ -67,3 +67,5 @@ def alternativeBefore(x: Shape): Int = x match
   case Sized(n) => n
   case Bare() => 2
 @main def run(): Unit = println(covers(Name("a")) + covered(Name("b")) + option(Name("c")) + product(Name("d")) + impossible(C1()) + constructorAfter(Name("e")))
+// expect: It would fail on pattern case: Name(_)
+// expect: It would fail on pattern case: Apply(_, _)

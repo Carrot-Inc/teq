@@ -45,6 +45,7 @@ mod quoted;
 mod resolve;
 pub use apply::{ArgList, ArgSrc};
 pub use expr::WITHHELD_TEMPLATE;
+pub(crate) use expr::ContextualOrder;
 pub use inline::MAX_INLINES;
 pub use measured::reach_mode_error;
 pub use proxies::HeldOf;
@@ -1666,6 +1667,12 @@ pub struct Worker<'a> {
     pub other_view_memos: ViewMemos,
     /// The type variables of the match type case being resolved, by name.
     pub case_binders: Vec<(Name, TypeId)>,
+    /// The arguments overload resolution typed ahead (`FunProto.typedArgs`) with the places they
+    /// were written, innermost resolution last: the chosen alternative adapts each at its own tree.
+    pub overload_arg_spans: Vec<(TExprId, crate::source::Span)>,
+    /// The bound a match type resolved now is expected to have, dotty's `pt` of `typedMatchTypeTree`: an
+    /// alias's declared bound for its right-hand side, the enclosing match's for a case body.
+    pub match_pt: Option<TypeId>,
     /// The refinements whose members are being resolved, innermost last (`resolve::RefineScope`).
     pub refine_scopes: Vec<resolve::RefineScope>,
     /// The blocks being typed, innermost last, each with what its deferred aliases are completed
@@ -2180,6 +2187,9 @@ impl<'a> Typer<'a> {
             w.settle_js_imports();
             w.run_deferred_matches();
             w.check_outer_accessors_implemented(None);
+            if w.emits_bodies {
+                w.number_contextual_params(0);
+            }
             w.final_passes();
             let p = w.phase(profile::Phase::Final);
             w.check_deferred_bounds();
@@ -2656,6 +2666,8 @@ impl<'a> Worker<'a> {
             matches: matchtypes::MatchState::default(),
             other_view_memos: Default::default(),
             case_binders: Vec::new(),
+            overload_arg_spans: Vec::new(),
+            match_pt: None,
             refine_scopes: Vec::new(),
             local_blocks: Default::default(),
             local_alias_sites: Default::default(),
@@ -3007,6 +3019,8 @@ impl<'a> Worker<'a> {
             matches: Default::default(),
             other_view_memos: Default::default(),
             case_binders: Default::default(),
+            overload_arg_spans: Vec::new(),
+            match_pt: None,
             refine_scopes: Default::default(),
             local_blocks: Default::default(),
             local_alias_sites: Default::default(),

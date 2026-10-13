@@ -379,6 +379,33 @@ impl<'a> Worker<'a> {
         self.new_local(name, SymKind::Val, ty, span)
     }
 
+    /// dotty names the parameters of a context closure the typer makes `contextual$N`, numbered per
+    /// compilation unit as it types them (`ContextFunctionParamName.fresh()`, Desugar.scala
+    /// 2073–2081), which is the source's order, an enclosing closure before one it holds: the
+    /// closures of each program file made since the expression `from` are renamed so, from the first
+    /// number of their file, counting the holes and splices of its quotes, which take one each, as
+    /// the TASTy writer numbers them (`contextual_number`, over the same `ContextualOrder`). A body
+    /// read back from a product is then named as the source's typing names it, and copies of one
+    /// closure (an inline expansion's) as it.
+    pub(super) fn number_contextual_params(&mut self, from: usize) {
+        let order = ContextualOrder::of(&self.prog, &self.syms, &self.interner, from);
+        for i in from..self.prog.exprs.len() {
+            let e = TExprId(i as u32);
+            let TExpr::Lambda(params, _) = self.prog.expr(e) else { continue };
+            let Some(&(file, start, depth)) = order.closures.get(&e) else { continue };
+            let source = self.source(file);
+            if source.is_std || self.in_jar(file) || self.is_body_file(file) {
+                continue;
+            }
+            let Some(first) = order.number(file, start, depth) else { continue };
+            let syms: Vec<SymId> = self.prog.sym_list(params).to_vec();
+            for (k, s) in syms.into_iter().enumerate() {
+                let name = self.interner.intern(&format!("contextual${}", first + k as u32));
+                self.syms.sym_mut(s).name = name;
+            }
+        }
+    }
+
     /// An expected type is only useful for checking when it is not a bare unsolved variable.
     pub fn concrete_expected(&mut self, expected: Option<TypeId>) -> Option<TypeId> {
         let t = self.deref(expected?);
@@ -4963,4 +4990,98 @@ fn line_comment(b: &[u8]) -> Option<usize> {
         k += 1;
     }
     None
+}
+
+/// The context closures of each file in the order dotty names their parameters: a closure the
+/// typer made for an expected context function (its parameters `contextual$..`), a quote's hole and
+/// a macro's splice (one parameter each), by their place, an enclosing closure at the same place
+/// before the one it holds (`A ?=> B ?=> C`, by `depth`), copies of one closure counted once.
+pub(crate) struct ContextualOrder {
+    /// Per file, `(start, depth, parameters)` in order.
+    pub files: FxMap<FileId, Vec<(u32, u32, u32)>>,
+    /// Each closure the typer made, by its file, place and depth.
+    pub closures: FxMap<TExprId, (FileId, u32, u32)>,
+}
+
+impl ContextualOrder {
+    pub(crate) fn of(prog: &Program, syms: &Symbols, interner: &crate::intern::Interner, from: usize) -> ContextualOrder {
+        let contextual = |e: TExprId| match prog.expr(e) {
+            TExpr::Lambda(params, _) => prog.sym_list(params).first().is_some_and(|&p| interner.get(syms.sym(p).name).starts_with("contextual$")),
+            _ => false,
+        };
+        // A closure's place: its own where the build records places, its first parameter's (the
+        // closure's) otherwise.
+        let place = |e: TExprId| {
+            prog.span_of(e).or_else(|| match prog.expr(e) {
+                TExpr::Lambda(params, _) => prog.sym_list(params).first().map(|&p| (syms.sym(p).file, syms.sym(p).span)),
+                _ => None,
+            })
+        };
+        let mut files: FxMap<FileId, Vec<(u32, u32, u32)>> = FxMap::default();
+        let mut closures: FxMap<TExprId, (FileId, u32, u32)> = FxMap::default();
+        // The closure a closure at its place encloses directly (its body), the depth below.
+        let mut inner: FxMap<TExprId, TExprId> = FxMap::default();
+        let mut enclosed: FxMap<TExprId, ()> = FxMap::default();
+        for i in from..prog.exprs.len() {
+            let e = TExprId(i as u32);
+            if !contextual(e) {
+                continue;
+            }
+            let TExpr::Lambda(_, body) = prog.expr(e) else { continue };
+            if contextual(body) && place(body).map(|(_, s)| s.start) == place(e).map(|(_, s)| s.start) {
+                inner.insert(e, body);
+                enclosed.insert(body, ());
+            }
+        }
+        for i in from..prog.exprs.len() {
+            let e = TExprId(i as u32);
+            if !contextual(e) || enclosed.contains_key(&e) {
+                continue;
+            }
+            let Some((file, span)) = place(e) else { continue };
+            let (mut at, mut depth) = (e, 0u32);
+            loop {
+                let TExpr::Lambda(params, _) = prog.expr(at) else { break };
+                closures.insert(at, (file, span.start, depth));
+                files.entry(file).or_default().push((span.start, depth, prog.sym_list(params).len() as u32));
+                match inner.get(&at) {
+                    Some(&next) => {
+                        at = next;
+                        depth += 1;
+                    }
+                    None => break,
+                }
+            }
+        }
+        let mut add = |at: Option<(FileId, crate::source::Span)>| {
+            if let Some((file, span)) = at {
+                files.entry(file).or_default().push((span.start, 0, 1));
+            }
+        };
+        for q in prog.quotes.iter() {
+            for &(_, code) in &q.holes {
+                if code.0 as usize >= from {
+                    add(prog.span_of(code));
+                }
+            }
+        }
+        for i in from..prog.exprs.len() {
+            let e = TExprId(i as u32);
+            if let TExpr::Splice(_) = prog.expr(e) {
+                add(prog.span_of(e));
+            }
+        }
+        for list in files.values_mut() {
+            list.sort_unstable();
+            list.dedup_by_key(|&mut (s, d, _)| (s, d));
+        }
+        ContextualOrder { files, closures }
+    }
+
+    /// The number of the first parameter of the closure at `start` and `depth` of `file`.
+    pub(crate) fn number(&self, file: FileId, start: u32, depth: u32) -> Option<u32> {
+        let list = self.files.get(&file)?;
+        let i = list.iter().position(|&(s, d, _)| s == start && d == depth)?;
+        Some(1 + list[..i].iter().map(|&(_, _, n)| n).sum::<u32>())
+    }
 }

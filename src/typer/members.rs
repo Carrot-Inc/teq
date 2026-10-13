@@ -1559,7 +1559,8 @@ impl<'a> Worker<'a> {
                     t
                 } else if r.approx && matches!(self.types.get(np), Type::Var(_)) {
                     self.approx_member(t)
-                } else if self.types.is_path(np) {
+                } else if self.types.is_path(np) || matches!(self.types.get(np), Type::RecThis(_)) {
+                    // A refined type's own member is a path through its self (`RecThis(0).a`).
                     self.types.mk(Type::Select(np, s))
                 } else {
                     // The path was replaced by a type: the selection is its member's type, the
@@ -1601,6 +1602,9 @@ impl<'a> Worker<'a> {
                 } else if r.approx && matches!(self.types.get(np), Type::Var(_)) {
                     self.approx_member(t)
                 } else if r.keep && self.types.is_path(np) {
+                    self.types.mk(Type::Member(np, name))
+                } else if matches!(self.types.get(np), Type::RecThis(_)) {
+                    // A refined type's own member, through its self (`RecThis(0).T`).
                     self.types.mk(Type::Member(np, name))
                 } else {
                     let np = self.projection_prefix(np);

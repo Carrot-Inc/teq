@@ -598,15 +598,9 @@ package java.lang:
     @jvm("invokestatic java/lang/Float.parseFloat(Ljava/lang/String;)F")
     def parseFloat(s: String): scala.Float = FloatingDecimal.parseFloat(s)
     // The JDK's constants, which scala-library's `scala.Float` reads.
-    @js("3.4028234663852886e+38")
-    @jvm("getstatic java/lang/Float.MAX_VALUE:F")
-    def MAX_VALUE: scala.Float = intBitsToFloat(0x7f7fffff)
-    @js("1.401298464324817e-45")
-    @jvm("getstatic java/lang/Float.MIN_VALUE:F")
-    def MIN_VALUE: scala.Float = intBitsToFloat(1)
-    @js("1.1754943508222875e-38")
-    @jvm("getstatic java/lang/Float.MIN_NORMAL:F")
-    def MIN_NORMAL: scala.Float = intBitsToFloat(0x00800000)
+    final val MAX_VALUE: 3.4028235e38f = 3.4028235e38f
+    final val MIN_VALUE: 1.4e-45f = 1.4e-45f
+    final val MIN_NORMAL: 1.17549435e-38f = 1.17549435e-38f
     @js("Infinity")
     @jvm("getstatic java/lang/Float.POSITIVE_INFINITY:F")
     def POSITIVE_INFINITY: scala.Float = intBitsToFloat(0x7f800000)

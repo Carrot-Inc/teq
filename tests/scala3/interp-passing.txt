@@ -458,6 +458,7 @@ rooted_stringcontext
 run-bug4840
 sammy_repeated
 scala_enum_testing
+selectable-new
 simpleClass
 slice-strings
 spec-self

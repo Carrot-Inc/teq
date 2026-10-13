@@ -88,9 +88,9 @@ impl Items {
     }
 }
 
-/// How many types a match may split into their cases before its analysis is given up.
-const DECOMPOSITIONS: u32 = 64;
 const SHOWN_MISSING: usize = 6;
+/// The uncovered cases `dedup` reads: from ten on it leaves them as they are (Space.scala 177–186).
+const DEDUP_LIMIT: usize = 10;
 
 #[derive(Default)]
 pub struct SpaceScratch {
@@ -167,7 +167,6 @@ enum Plain {
 struct Spaces<'t, 'a> {
     t: &'t mut Worker<'a>,
     sc: SpaceScratch,
-    budget: u32,
     /// Whether the scrutinee is a named tuple, matched as the tuple it erases to and checked
     /// whatever its size (`isNamedTupleType`).
     named: bool,
@@ -179,6 +178,11 @@ struct Spaces<'t, 'a> {
     /// dotc's `isSubspace` of a case against a single type pattern is a subtype test alone
     /// (`computeIsSubspace`, `rhsDecompositionAllowed`).
     decompose_abstract: bool,
+    /// Whether `minus` takes a type it subtracts from as its cases even where nothing of them is
+    /// taken (dotty's `minus(Or(decompose(a)), b)`, Space.scala 274–279): on for the cases a
+    /// warning shows, whose set and order follow that decomposition; off for the questions of
+    /// whether anything is left, which keep an untouched type whole.
+    decompose_untouched: bool,
     /// The scrutinee as the match states it, with its prefixes, and as the spaces see it.
     prefixed: (TypeId, TypeId),
 }
@@ -273,7 +277,7 @@ impl<'a> Worker<'a> {
         self.demand_match_hierarchy(scrut, cases);
         let mut sc = std::mem::take(&mut self.spaces);
         sc.clear();
-        let mut s = Spaces { t: self, sc, budget: DECOMPOSITIONS, named, inexact: false, decompose_abstract: false, prefixed: (stated, scrut) };
+        let mut s = Spaces { t: self, sc, named, inexact: false, decompose_abstract: false, decompose_untouched: false, prefixed: (stated, scrut) };
         s.check(scrut, cases, clauses, partial, span);
         let Spaces { sc, .. } = s;
         self.spaces = sc;
@@ -358,17 +362,21 @@ impl<'t, 'a> Spaces<'t, 'a> {
         // unreachable, and what is left at the end is missing. scalac's `minus` keeps a
         // constructor pattern or an extractor whole against an extractor of another `unapply`
         // (Space.scala, `Prod` against `Prod`), so a constructor pattern meets what the cases
-        // other than irrefutable extractors leave (`remaining_shapes`: `case Apply(f, as)` after
+        // other than irrefutable extractors leave (`shapes_taken`: `case Apply(f, as)` after
         // `case Arity(n)` over its input), and such an extractor what the type tests, the
         // wildcards and the extractors of its own `unapply` leave; a type test or a wildcard
-        // meets what every case leaves (`case _: Apply` after it).
-        let mut remaining = Space::Typ(scrut);
-        let mut remaining_shapes = Space::Typ(scrut);
-        // What the cases leave with a type pattern over an abstract type taking its bound's
-        // children (`decompose_abstract`), once there is one: dotty's `isSubspace` of a case that
-        // is no type against two earlier cases or more subtracts them (`minus`), which decomposes
-        // an abstract type on its right; against one it is a subtype test (`computeIsSubspace`).
-        let mut remaining_abstract: Option<Space> = None;
+        // meets what every case leaves (`case _: Apply` after it). What is left is never made
+        // whole: it is the scrutinee with the cases taken away in turn, searched depth first for
+        // as many of its parts as a question needs (`left_parts`), as dotty's `minus` of a
+        // product makes a `LazyList` of its parts.
+        let whole = Space::Typ(scrut);
+        let mut shapes_taken: Vec<Space> = Vec::new();
+        // Once a type pattern over an abstract type is among the cases, what they leave is taken
+        // with that pattern taking its bound's children (`decompose_abstract`): dotty's
+        // `isSubspace` of a case that is no type against two earlier cases or more subtracts them
+        // (`minus`), which decomposes an abstract type on its right; against one it is a subtype
+        // test (`computeIsSubspace`).
+        let mut abstract_taken = false;
         // The kinds of the earlier unguarded cases, an alternative's per arm, and of the cases
         // whole (a repetition of a case is judged on those).
         let mut kinds: Vec<(CaseKind, Space)> = Vec::new();
@@ -385,108 +393,223 @@ impl<'t, 'a> Spaces<'t, 'a> {
             // An alternative reaches where one of its arms does, each judged by its kind.
             let mut reachable = false;
             for &(arm_kind, arm) in &arms {
-                let left = match arm_kind {
-                    CaseKind::Shape if extractors => remaining_shapes,
+                let (taken, decompose_abstract) = match arm_kind {
+                    CaseKind::Shape if extractors => (shapes_taken.clone(), false),
                     CaseKind::Extractor(..) if kinds.iter().any(|&(k, _)| !arm_kind.judged_by(k)) => {
-                        let mut left = Space::Typ(scrut);
-                        for (k, taken) in kinds.clone() {
-                            if arm_kind.judged_by(k) {
-                                if let Some(l) = self.minus(left, taken) {
-                                    left = self.simplify(l);
-                                }
-                            }
-                        }
-                        left
+                        (kinds.iter().filter(|&&(k, _)| arm_kind.judged_by(k)).map(|&(_, t)| t).collect(), false)
                     }
-                    _ => match remaining_abstract {
-                        // A constructor pattern is dotty's `Prod` whatever its fields (`C()`).
-                        Some(abs) if (arm_kind == CaseKind::Shape || !matches!(arm, Space::Typ(_))) && self.sc.covered.iter().filter(|&&c| c != Space::Empty).count() >= 2 => abs,
-                        _ => remaining,
-                    },
+                    // A constructor pattern is dotty's `Prod` whatever its fields (`C()`).
+                    _ => {
+                        let abs = abstract_taken && (arm_kind == CaseKind::Shape || !matches!(arm, Space::Typ(_))) && self.sc.covered.iter().filter(|&&c| c != Space::Empty).count() >= 2;
+                        (self.sc.covered.clone(), abs)
+                    }
                 };
-                if self.meets(arm, left) {
+                if self.left_meets(arm, &taken, decompose_abstract) {
                     reachable = true;
                     break;
                 }
             }
             let reachable = reachable || (self.catch_all_on_reference(case, scrut) && self.covered_whole(scrut, 16) != Some(true));
-            let taken = if case.guard.is_none() { self.minus(remaining, space) } else { None };
             // A case that takes nothing away (a literal, a guard, a type the algebra cannot
             // split) repeats an earlier one only if their spaces are the same; a case that took
             // something away leaves nothing for a repetition to meet.
-            let duplicate = reachable && taken.is_none() && !self.has_opaque(space) && wholes.iter().any(|&(k, c)| kind.judged_by(k) && self.same(c, space));
-            if (!reachable || duplicate) && self.budget > 0 {
+            let takes_nothing = case.guard.is_some() || self.minus(whole, space).is_none();
+            let duplicate = reachable && takes_nothing && !self.has_opaque(space) && wholes.iter().any(|&(k, c)| kind.judged_by(k) && self.same(c, space));
+            if !reachable || duplicate {
                 self.unreachable(clauses, i);
             }
             if case.guard.is_none() {
-                if let Some(left) = taken {
-                    remaining = self.simplify(left);
-                }
-                let abstract_test = matches!(space, Space::Typ(t) if self.abstract_type(t));
-                if remaining_abstract.is_some() || abstract_test {
-                    let outer = std::mem::replace(&mut self.decompose_abstract, true);
-                    let mut left = match remaining_abstract {
-                        Some(abs) => abs,
-                        None => {
-                            // From the scrutinee again, every earlier case taken with the bound's children.
-                            let mut left = Space::Typ(scrut);
-                            for c in self.sc.covered.clone() {
-                                if let Some(l) = self.minus(left, c) {
-                                    left = self.simplify(l);
-                                }
-                            }
-                            left
-                        }
-                    };
-                    if let Some(l) = self.minus(left, space) {
-                        left = self.simplify(l);
-                    }
-                    self.decompose_abstract = outer;
-                    remaining_abstract = Some(left);
+                if matches!(space, Space::Typ(t) if self.abstract_type(t)) {
+                    abstract_taken = true;
                 }
                 let has_extractor = arms.iter().any(|(k, _)| matches!(k, CaseKind::Extractor(..)));
                 if !extractors && !has_extractor {
-                    remaining_shapes = remaining;
+                    shapes_taken = self.sc.covered.clone();
+                    shapes_taken.push(space);
                 } else {
                     // A constructor pattern is not taken by an extractor's arm.
-                    for &(arm_kind, arm) in &arms {
-                        if !matches!(arm_kind, CaseKind::Extractor(..)) {
-                            if let Some(left) = self.minus(remaining_shapes, arm) {
-                                remaining_shapes = self.simplify(left);
-                            }
-                        }
-                    }
+                    shapes_taken.extend(arms.iter().filter(|(k, _)| !matches!(k, CaseKind::Extractor(..))).map(|&(_, a)| a));
                 }
                 kinds.extend(arms);
                 wholes.push((kind, space));
                 self.sc.covered.push(space);
             }
         }
-        if partial || self.inexact || self.budget == 0 || remaining == Space::Empty || !self.is_checkable(scrut, 0) {
+        if partial || self.inexact || !self.is_checkable(scrut, 0) {
             return;
         }
-        // A type pattern over an abstract type covers its bound's children (`decompose_abstract`):
-        // what the cases leave is taken again with that, as dotc's `checkExhaustivity` subtracts
-        // every case at once.
+        // What the cases leave, in the order of dotc's `checkExhaustivity` (Space.scala 933–952):
+        // the cases are an `Or` folded from the left by prepending, so that `minus` takes the last
+        // case first and the first last; what is left is flattened in its order, deduplicated
+        // (`dedup`) and shown from its start. A type pattern over an abstract type covers its
+        // bound's children (`decompose_abstract`), as `minus` decomposes it on its right.
         let abstract_tests = self.sc.covered.iter().any(|&c| matches!(c, Space::Typ(t) if self.abstract_type(t)));
-        let remaining = if abstract_tests {
-            self.decompose_abstract = true;
-            let mut left = Space::Typ(scrut);
-            for c in self.sc.covered.clone() {
-                if let Some(taken) = self.minus(left, c) {
-                    left = self.simplify(taken);
+        let taken: Vec<Space> = self.sc.covered.iter().rev().copied().collect();
+        let mut left = Vec::new();
+        let outer = std::mem::replace(&mut self.decompose_abstract, abstract_tests);
+        self.decompose_untouched = true;
+        self.left_parts(whole, &taken, DEDUP_LIMIT, &mut left);
+        self.decompose_abstract = outer;
+        if left.is_empty() {
+            self.decompose_untouched = false;
+            return;
+        }
+        // A whole type a case left untouched is its cases, as `minus` decomposes a type it takes
+        // something from; one no case took anything from stays whole (`_`).
+        if taken.iter().any(|&c| c != Space::Empty) {
+            left = self.decomposed_parts(left);
+            left.truncate(DEDUP_LIMIT);
+        }
+        self.dedup(&mut left);
+        self.decompose_untouched = false;
+        let shown = self.show_missing(&left);
+        self.warn_not_exhaustive(span, shown);
+    }
+
+    /// dotty's `dedup` (Space.scala 177–186): of fewer than ten uncovered cases, the first that the
+    /// others cover is left out, one at most.
+    fn dedup(&mut self, parts: &mut Vec<Space>) {
+        if parts.len() <= 1 || parts.len() >= DEDUP_LIMIT {
+            return;
+        }
+        for i in 0..parts.len() {
+            let base = self.sc.stack.len();
+            self.sc.stack.extend(parts.iter().enumerate().filter(|&(j, _)| j != i).map(|(_, &p)| p));
+            let others = Space::Or(self.seal(base));
+            if self.is_subspace(parts[i], others) {
+                parts.remove(i);
+                return;
+            }
+        }
+    }
+
+    /// Whether `left`, what a subtraction left of `a`, is all of `a` (`isSubspace(a, left)`):
+    /// asked with untouched types kept whole, which the decomposition does not change.
+    fn untouched_by(&mut self, a: Space, left: Space) -> bool {
+        let outer = std::mem::replace(&mut self.decompose_untouched, false);
+        let sub = self.is_subspace(a, left);
+        self.decompose_untouched = outer;
+        sub
+    }
+
+    /// Whether every value of `a` is in `b`: nothing of `a` is left once `b` is taken away.
+    fn is_subspace(&mut self, a: Space, b: Space) -> bool {
+        match self.minus(a, b) {
+            None => a == Space::Empty,
+            Some(left) => self.simplify(left) == Space::Empty,
+        }
+    }
+
+    /// Up to `limit` parts of what `base` keeps once each of `taken` is taken away in turn,
+    /// searched depth first: what one case leaves is split into its parts, and each part goes on
+    /// to the next case alone, so that a question asks for no more of the space than it reads
+    /// (dotty's `minus` of two products, `LazyList(range*).flatMap`, Space.scala 285–309). The
+    /// parts come in the order the whole space would list them.
+    fn left_parts(&mut self, base: Space, taken: &[Space], limit: usize, out: &mut Vec<Space>) {
+        enum Step {
+            Enter(Space, usize),
+            Leave((u64, usize), usize),
+        }
+        let mut stack: Vec<Step> = vec![Step::Enter(base, 0)];
+        let mut parts = Vec::new();
+        // A part met again on another way down (the parts of a product's `minus` overlap) is not
+        // searched again: what it leaves is listed again from what its first search found, as
+        // dotty's `flatten` lists it again (dotty's `isSubspace` cache keeps an answer, not a
+        // shape). A search the limit cut short is never met again, the whole search ending there.
+        let mut searched: crate::intern::FxMap<(u64, usize), (usize, usize)> = Default::default();
+        while let Some(step) = stack.pop() {
+            let (s, k) = match step {
+                Step::Enter(s, k) => (s, k),
+                Step::Leave(key, start) => {
+                    searched.insert(key, (start, out.len()));
+                    continue;
+                }
+            };
+            if out.len() >= limit {
+                return;
+            }
+            if s == Space::Empty {
+                continue;
+            }
+            let key = (self.space_digest(s), k);
+            if let Some(&(from, to)) = searched.get(&key) {
+                for i in from..to {
+                    if out.len() >= limit {
+                        return;
+                    }
+                    let found = out[i];
+                    out.push(found);
+                }
+                continue;
+            }
+            stack.push(Step::Leave(key, out.len()));
+            if k == taken.len() {
+                let s = self.simplify(s);
+                if s != Space::Empty {
+                    out.push(s);
+                }
+                continue;
+            }
+            match self.minus(s, taken[k]) {
+                None => stack.push(Step::Enter(s, k + 1)),
+                Some(left) => {
+                    let left = self.simplify(left);
+                    parts.clear();
+                    self.flatten_into(left, &mut parts);
+                    stack.extend(parts.drain(..).rev().map(|p| Step::Enter(p, k + 1)));
                 }
             }
-            self.decompose_abstract = false;
-            left
-        } else {
-            remaining
-        };
-        if remaining == Space::Empty {
-            return;
         }
-        let shown = self.show_missing(remaining);
-        self.t.warn_as(span, format!("match may not be exhaustive; missing: {}", shown), crate::source::Warning::id(crate::warnings::id::PATTERN_MATCH_EXHAUSTIVITY));
+    }
+
+    /// A digest of the space `s` by its structure, wherever its parts stand in the arena.
+    fn space_digest(&self, s: Space) -> u64 {
+        use std::hash::Hasher;
+        let mut h = crate::intern::FxHasher::default();
+        self.digest_into(s, &mut h);
+        h.finish()
+    }
+
+    fn digest_into(&self, s: Space, h: &mut crate::intern::FxHasher) {
+        use std::hash::Hasher;
+        match s {
+            Space::Empty => h.write_u8(0),
+            Space::Typ(t) => {
+                h.write_u8(1);
+                h.write_u32(t.0);
+            }
+            Space::Lit(l) => {
+                h.write_u8(2);
+                let text = format!("{:?}", l);
+                h.write(text.as_bytes());
+            }
+            Space::Prod(c, t, items) => {
+                h.write_u8(3);
+                h.write_u32(c.0);
+                h.write_u32(t.0);
+                for i in 0..items.len as usize {
+                    self.digest_into(self.part(items, i), h);
+                }
+            }
+            Space::Or(items) => {
+                h.write_u8(4);
+                h.write_u32(items.len);
+                for i in 0..items.len as usize {
+                    self.digest_into(self.part(items, i), h);
+                }
+            }
+            Space::Opaque => h.write_u8(5),
+        }
+    }
+
+    /// Whether `arm` meets what the scrutinee keeps once `taken` is taken away: some part of the
+    /// arm the cases leave (`left_parts` of the arm, which stands within the scrutinee).
+    fn left_meets(&mut self, arm: Space, taken: &[Space], decompose_abstract: bool) -> bool {
+        let outer = std::mem::replace(&mut self.decompose_abstract, decompose_abstract);
+        let mut left = Vec::new();
+        self.left_parts(arm, taken, 1, &mut left);
+        self.decompose_abstract = outer;
+        !left.is_empty()
     }
 
     // ---- the arena ----
@@ -896,6 +1019,13 @@ impl<'t, 'a> Spaces<'t, 'a> {
         if partial || total || self.sc.roots.is_empty() {
             return;
         }
+        // Every case guarded: each is `Empty` in the cases' `Or`, which takes nothing from the
+        // scrutinee's space, so it is left whole (`_: T`), undecomposed.
+        if cases.iter().all(|c| c.guard.is_some()) {
+            let shown = vec![self.show_space(Space::Typ(scrut))];
+            self.warn_not_exhaustive(span, shown);
+            return;
+        }
         let mut missing = Vec::new();
         for k in 0..self.sc.roots.len() {
             let (root, fixed) = self.sc.roots[k];
@@ -904,6 +1034,9 @@ impl<'t, 'a> Spaces<'t, 'a> {
         if !missing.is_empty() {
             let mut shown: Vec<String> = Vec::new();
             for (c, fixed) in missing {
+                if shown.len() > SHOWN_MISSING {
+                    break;
+                }
                 self.t.settle_class(c);
                 let arity = self.t.syms.class(c).tparams.len();
                 let t = match fixed {
@@ -921,8 +1054,21 @@ impl<'t, 'a> Spaces<'t, 'a> {
                     shown.push(text);
                 }
             }
-            self.t.warn_as(span, format!("match may not be exhaustive; missing: {}", shown.join(", ")), crate::source::Warning::id(crate::warnings::id::PATTERN_MATCH_EXHAUSTIVITY));
+            self.warn_not_exhaustive(span, shown);
         }
+    }
+
+    /// E029, `PatternMatchExhaustivity`'s text (messages.scala 909–918): the uncovered cases after a
+    /// blank line, six at most, then the addendum on a line of its own where there are more (the
+    /// empty line of none trimmed, as scalac prints it).
+    fn warn_not_exhaustive(&mut self, span: Span, mut shown: Vec<String>) {
+        let more = shown.len() > SHOWN_MISSING;
+        shown.truncate(SHOWN_MISSING);
+        let mut text = format!("match may not be exhaustive.\n\nIt would fail on pattern case: {}", shown.join(", "));
+        if more {
+            text.push_str("\n(More unmatched cases are elided)");
+        }
+        self.t.warn_as(span, text, crate::source::Warning::id(crate::warnings::id::PATTERN_MATCH_EXHAUSTIVITY));
     }
 
     /// Whether an earlier unguarded literal case has the same space, which is the one way a
@@ -1521,10 +1667,6 @@ impl<'t, 'a> Spaces<'t, 'a> {
                 if !splits_into_children(&info) || info.children.is_empty() {
                     return None;
                 }
-                if self.budget == 0 {
-                    return None;
-                }
-                self.budget -= 1;
                 // A case that fixes other type arguments than the scrutinee's cannot occur.
                 let ground = args != EMPTY_LIST && self.is_ground(t);
                 for i in 0..self.t.syms.class(c).children.len() {
@@ -1740,69 +1882,6 @@ impl<'t, 'a> Spaces<'t, 'a> {
         }
     }
 
-    fn any_part(&mut self, items: Items, mut f: impl FnMut(&mut Self, Space) -> bool) -> bool {
-        (0..items.len as usize).any(|i| {
-            let part = self.part(items, i);
-            f(self, part)
-        })
-    }
-
-    /// Whether the two spaces share a value.
-    fn meets(&mut self, a: Space, b: Space) -> bool {
-        match (a, b) {
-            (Space::Empty, _) | (_, Space::Empty) => false,
-            (Space::Opaque, _) | (_, Space::Opaque) => true,
-            (Space::Or(xs), _) => self.any_part(xs, |s, x| s.meets(x, b)),
-            (_, Space::Or(ys)) => self.any_part(ys, |s, y| s.meets(a, y)),
-            (Space::Typ(t1), Space::Typ(t2)) => {
-                self.sub(t1, t2)
-                    || self.sub(t2, t1)
-                    || self.same_class(t1, t2)
-                    || match self.decompose(t1) {
-                        Some(parts) => self.any_part(parts, |s, p| s.meets(p, b)),
-                        None => match self.decompose(t2) {
-                            Some(parts) => self.any_part(parts, |s, p| s.meets(a, p)),
-                            None => !self.disjoint(t1, t2),
-                        },
-                    }
-            }
-            (Space::Typ(t), Space::Prod(_, pt, _)) => {
-                if self.sub(pt, t) {
-                    return true;
-                }
-                if self.same_class(t, pt) || self.sub(t, pt) {
-                    if let Some(p) = self.as_prod(t) {
-                        return self.meets(p, b);
-                    }
-                }
-                match self.decompose(t) {
-                    Some(parts) => self.any_part(parts, |s, p| s.meets(p, b)),
-                    None => !self.disjoint(t, pt),
-                }
-            }
-            (Space::Prod(..), Space::Typ(_)) => self.meets(b, a),
-            (Space::Lit(x), Space::Lit(y)) => x == y,
-            (Space::Lit(l), Space::Typ(t)) => {
-                let lt = self.lit_type(l);
-                self.sub(lt, t)
-                    || match self.decompose(t) {
-                        Some(parts) => self.any_part(parts, |s, p| s.meets(a, p)),
-                        None => false,
-                    }
-            }
-            (Space::Typ(_), Space::Lit(_)) => self.meets(b, a),
-            (Space::Lit(_), Space::Prod(..)) | (Space::Prod(..), Space::Lit(_)) => false,
-            (Space::Prod(c1, _, f1), Space::Prod(c2, _, f2)) => {
-                c1 == c2
-                    && f1.len == f2.len
-                    && (0..f1.len as usize).all(|i| {
-                        let (x, y) = (self.part(f1, i), self.part(f2, i));
-                        self.meets(x, y)
-                    })
-            }
-        }
-    }
-
     /// What `a` keeps once `b` is taken away; None when `b` touches none of it.
     fn minus(&mut self, a: Space, b: Space) -> Option<Space> {
         match (a, b) {
@@ -1860,12 +1939,17 @@ impl<'t, 'a> Spaces<'t, 'a> {
                 let base = self.sc.stack.len();
                 for i in 0..f1.len as usize {
                     let (x, y) = (self.part(f1, i), self.part(f2, i));
-                    // A field b leaves whole keeps the whole product.
+                    // A field b leaves whole keeps the whole product (`range.exists(i =>
+                    // isSubspace(ss1(i), sub(i)))`), its cases taken as they were included.
                     let Some(left) = self.minus(x, y) else {
                         self.sc.stack.truncate(base);
                         return None;
                     };
                     let left = self.simplify(left);
+                    if self.decompose_untouched && left != Space::Empty && self.untouched_by(x, left) {
+                        self.sc.stack.truncate(base);
+                        return None;
+                    }
                     self.sc.stack.push(left);
                 }
                 if self.sc.stack[base..].iter().all(|s| *s == Space::Empty) {
@@ -1894,10 +1978,14 @@ impl<'t, 'a> Spaces<'t, 'a> {
         }
     }
 
-    /// Takes `b` from the cases of `t`; None when `t` has no cases or `b` touches none of them.
+    /// Takes `b` from the cases of `t`; None when `t` has no cases or `b` touches none of them,
+    /// unless untouched types are decomposed (`decompose_untouched`), where it is the cases.
     fn minus_by_parts(&mut self, t: TypeId, b: Space) -> Option<Space> {
         let parts = self.decompose(t)?;
-        self.minus_each(parts, b)
+        match self.minus_each(parts, b) {
+            None if self.decompose_untouched => Some(Space::Or(parts)),
+            left => left,
+        }
     }
 
     /// Takes `b` from every space; None when it touches none of them.
@@ -1981,10 +2069,8 @@ impl<'t, 'a> Spaces<'t, 'a> {
 
     // ---- messages ----
 
-    fn show_missing(&mut self, s: Space) -> String {
-        let mut parts = Vec::new();
-        self.flatten_into(s, &mut parts);
-        // A whole type left over is named by its cases.
+    /// The parts with each whole type that has cases taken as its cases (`Typ`'s `decompose`).
+    fn decomposed_parts(&mut self, parts: Vec<Space>) -> Vec<Space> {
         let mut expanded = Vec::with_capacity(parts.len());
         for p in parts {
             match p {
@@ -1997,20 +2083,13 @@ impl<'t, 'a> Spaces<'t, 'a> {
                 other => expanded.push(other),
             }
         }
-        let mut shown: Vec<String> = Vec::new();
-        for &p in &expanded {
-            let text = self.show_space(p);
-            if !shown.contains(&text) {
-                shown.push(text);
-            }
-        }
-        let more = shown.len() > SHOWN_MISSING;
-        shown.truncate(SHOWN_MISSING);
-        let mut out = shown.join(", ");
-        if more {
-            out.push_str(", ...");
-        }
-        out
+        expanded
+    }
+
+    /// The uncovered cases as the warning shows them, one more than it shows at most, which tells
+    /// whether it elides some (`PatternMatchExhaustivity`'s `lengthCompare(6)`).
+    fn show_missing(&mut self, parts: &[Space]) -> Vec<String> {
+        parts.iter().take(SHOWN_MISSING + 1).map(|&p| self.show_space(p)).collect()
     }
 
     fn show_space(&mut self, s: Space) -> String {
@@ -2030,8 +2109,20 @@ impl<'t, 'a> Spaces<'t, 'a> {
                         return format!("{}({})", self.t.name_str(self.t.syms.class(c).name), heads.join(", "));
                     }
                 }
-                let fields: Vec<String> =
-                    (0..fields.len as usize).map(|i| self.show_field(self.part(fields, i))).collect();
+                // A field the subtraction decomposed is shown by its type (dotty's `Typ` with
+                // `decomposed`, `Some(_)`, `_: T`), one of the product's signature by `_`: the
+                // signature's fields are the product's field types, a decomposed one narrower.
+                let declared = self.field_types(t);
+                let fields: Vec<String> = (0..fields.len as usize)
+                    .map(|i| {
+                        let f = self.part(fields, i);
+                        let signature = declared.filter(|d| (i as u32) < d.len).map(|d| self.sc.field_arena[d.start as usize + i]);
+                        match (f, signature) {
+                            (Space::Typ(ft), Some(st)) if ft != st && !self.is_singleton_type(ft) => self.show_type_space(ft),
+                            _ => self.show_field(f),
+                        }
+                    })
+                    .collect();
                 self.wrap_fields(c, fields)
             }
             Space::Or(items) => {
@@ -2069,12 +2160,23 @@ impl<'t, 'a> Spaces<'t, 'a> {
         Some(heads)
     }
 
+    /// A field as dotty's `display` shows it (Space.scala 838–858): an object by its name, a case
+    /// class or a tuple by its constructor (`Id(_)`, `(_, _)`) whether or not it was decomposed,
+    /// any other type of the product's signature by `_`.
     fn show_field(&mut self, f: Space) -> String {
         match f {
             Space::Typ(t) if self.is_singleton_type(t) => self.show_type_space(t),
+            Space::Typ(t) if self.shown_by_constructor(t) => self.show_type_space(t),
             Space::Lit(_) | Space::Prod(..) => self.show_space(f),
             _ => "_".to_string(),
         }
+    }
+
+    /// Whether a type is shown by its constructor: a tuple, or a case class whose fields the space
+    /// takes apart (`isTupleNType`, `cls.is(CaseClass) && !hasCustomUnapply(cls)`).
+    fn shown_by_constructor(&mut self, t: TypeId) -> bool {
+        let Type::Class(c, _) = self.t.types.get(t) else { return false };
+        (self.t.is_tuple_class(c) || self.t.syms.class(c).mods & mods::CASE != 0) && self.field_types(t).is_some()
     }
 
     fn show_type_space(&mut self, t: TypeId) -> String {

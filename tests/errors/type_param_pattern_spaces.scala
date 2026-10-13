@@ -22,6 +22,8 @@ object Main:
   def j[F[X] <: A](v: A) = v match { case _: F[Int] @unchecked => 2 }
   def k[F[X] <: A](v: A) = v match { case _: F[Int] @unchecked => 2; case _ => 3 }
   def main(args: Array[String]): Unit = ()
-// expect: 16:24: warning: match may not be exhaustive; missing: First, Other(_)
-// expect: 20:25: warning: match may not be exhaustive; missing: B(), C()
+// expect: 16:24: warning: match may not be exhaustive.
+// expect: 20:25: warning: match may not be exhaustive.
 // expect: 2 warnings found, errors under --werror
+// expect: It would fail on pattern case: First, Other(_)
+// expect: It would fail on pattern case: B(), C()

@@ -4432,7 +4432,12 @@ impl<'w, 'a> P<'w, 'a> {
         // The parameters of a closure the typer made for an expected context function are
         // `contextual$N`, numbered per file as scalac's unique names are.
         let contextual = params.first().map_or(false, |&p| self.w.interner.get(self.w.syms.sym(p).name).starts_with("contextual$"));
-        let first = if contextual { Some(self.contextual_number(self.w.prog.span_of(e).map(|(_, s)| s.start), params.len() as u32)) } else { None };
+        let first = if contextual {
+            let depth = self.contextual_depth(e);
+            Some(self.contextual_number(self.w.prog.span_of(e).map(|(_, s)| s.start), depth, params.len() as u32))
+        } else {
+            None
+        };
         // The closure's parameters are in scope of its body: a `Quotes` among them is the one the
         // reflection API's paths there start from.
         let pmark = self.params.len();

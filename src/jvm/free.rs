@@ -279,7 +279,7 @@ impl Collector<'_, '_> {
                 self.test(a);
                 self.test(b);
             }
-            crate::tir::TypeTest::Outer(_, inner) => self.test(inner),
+            crate::tir::TypeTest::Outer(_, inner) | crate::tir::TypeTest::Proven(inner, _) => self.test(inner),
             _ => {}
         }
     }
@@ -515,7 +515,7 @@ impl CellWalk<'_, '_> {
                 self.test(a);
                 self.test(b);
             }
-            crate::tir::TypeTest::Outer(_, inner) => self.test(inner),
+            crate::tir::TypeTest::Outer(_, inner) | crate::tir::TypeTest::Proven(inner, _) => self.test(inner),
             _ => {}
         }
     }

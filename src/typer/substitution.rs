@@ -1733,15 +1733,17 @@ impl<'a> Worker<'a> {
             TPat::Bind(_, Some(inner)) => return self.settle_test(inner, sty),
             _ => return,
         };
-        if matches!(self.prog.tests[test.idx()], TypeTest::Always) || self.types.contains_error(t) {
+        if matches!(self.prog.tests[test.idx()], TypeTest::Always | TypeTest::Proven(..)) || self.types.contains_error(t) {
             return;
         }
         let mark = self.snapshot();
         let always = self.is_sub(sty, t) && self.snapshot() == mark && !self.null_conforms(t);
         self.rollback(mark);
         if always {
-            let always = self.prog.add_test(TypeTest::Always);
-            self.prog.pats[p.idx()] = TPat::Test(always, t, inner);
+            // Tested as `TypeTestsCasts` tests a conforming scrutinee: a generic class's pattern keeps
+            // its class test (`conforming_test`).
+            let settled = self.conforming_test(t, sty, false, Span::default(), 0);
+            self.prog.pats[p.idx()] = TPat::Test(settled, t, inner);
         }
     }
 
