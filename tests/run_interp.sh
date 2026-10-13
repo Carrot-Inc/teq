@@ -30,6 +30,10 @@
 # can (every other suite builds a case alone): each runs once, its output against its .expected.
 # Several tests run at once (JOBS, by default the number of cores).
 cd "$(dirname "$0")/.."
+# The lists are sorted bytewise: `sort -u` and `comm` under a locale's collation would take
+# `tail_calls` and `tailcalls` for one name. The character set stays the locale's, which java's
+# output encoding follows.
+export LC_COLLATE=C
 TEQ=${TEQ:-./target/release/teq}
 export TZ=UTC  # an archive entry's DOS time is local time: the recorded bytes are UTC's
 JOBS=${JOBS:-$(getconf _NPROCESSORS_ONLN 2>/dev/null || echo 4)}

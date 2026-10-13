@@ -71,6 +71,10 @@
 # go to out/fork-one/. The workers and split-determinism suites set their own worker counts and are
 # not among the suites.
 cd "$(dirname "$0")/.."
+# The lists are sorted bytewise: `sort -u` and `comm` under a locale's collation would take
+# `tail_calls` and `tailcalls` for one name. The character set stays the locale's, which java's
+# output encoding follows.
+export LC_COLLATE=C
 TEQ=${TEQ:-./target/release/teq}
 export TEQ
 suites="cases errors interop dce fold interp jvm stdlib classpath split app modules"

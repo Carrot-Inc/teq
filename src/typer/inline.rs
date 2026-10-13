@@ -1322,7 +1322,7 @@ impl<'a> Worker<'a> {
         bound.params[at].constant = constant;
         bound.params[at].arg = te;
         self.mark_leaf(te);
-        if by_name || inline || constant.is_some() || self.is_stable(te) {
+        if by_name || inline || constant.is_some() || self.is_stable(te) || self.idempotent_selection(te) {
             self.inline.args.insert(proxy, InlineArg { expr: te, ty: local_ty, source: None });
         } else {
             bound.stmts.push((at as u32 + 1, TStmt::Val(proxy, te)));
@@ -2124,6 +2124,19 @@ impl<'a> Worker<'a> {
         }
         let constant = self.fold_constant(res)?;
         self.expr_purity(e).at_least(Purity::IDEMPOTENT).then_some((constant, true))
+    }
+
+    /// Whether the argument `e` is a selection that scalac's binding names in the place of a
+    /// proxy (`Inliner.computeParamBindings`: `case _: SingletonType if isIdempotentPath(arg) =>
+    /// arg.tpe`): a member of a singleton type (`call_argument_path`: a val, a given or an object
+    /// that takes nothing, no call still pending) on a qualifier that is a path, the selection
+    /// at least an idempotent path (`TreeInfo.exprPurity` of a `Select`: `refPurity` of the
+    /// member, a lazy val's, a given's or an object's first read running its initialiser, at most
+    /// the qualifier's). A reference without a qualifier is `is_stable`'s; this is
+    /// `Lib$package.top` where another module's `<file>$package` keeps its members (JVM).
+    fn idempotent_selection(&mut self, e: TExprId) -> bool {
+        use super::elaborate::Purity;
+        matches!(self.prog.expr(e), TExpr::Field(..)) && self.call_argument_path(e).is_some() && self.expr_purity(e).at_least(Purity::IDEMPOTENT_PATH)
     }
 
     /// A constant as scalac's constant folder sees one: a literal, a value of a literal type,

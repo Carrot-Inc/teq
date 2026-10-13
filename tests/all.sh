@@ -2,9 +2,9 @@
 # Runs every suite in turn, or only the suites named as arguments (`tests/all.sh cases jvm`), and
 # ends with one line per suite; exits non-zero when any failed or a name is unknown. The
 # output of a failing suite is printed in full, a passing one is summed up by its last line. The
-# two scala3 harnesses skip without a checkout in $SCALA3 and count as passed then, the
-# classpath suite without its jars in the coursier cache, parts of the classfile suite
-# without a JDK or javap, the app suite without the jars its corpus reads, and the budget and
+# scala3 harnesses fail without a checkout in $SCALA3. These skip and count as passed then: the
+# classpath suite without its jars in the coursier cache, parts of the classfile suite without a JDK
+# or javap, the app suite without the jars its corpus reads, and the budget and
 # runtime suites on a machine other than the one that recorded bench/budgets.txt and
 # bench/runtime-budgets.txt, the prop suite without the crates of proptests/ fetched, and the
 # test runner's classes without a javac (a javac other than 17's only notes a difference). Each suite's whole

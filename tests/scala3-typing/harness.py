@@ -47,7 +47,21 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-SCALA3 = os.environ.get("SCALA3", os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "..", "teq-ref", "scala3"))
+
+
+def default_scala3():
+    """`teq-ref/scala3` beside the main working tree, which a linked worktree is not in: the parent
+    of the git common directory, as tests/all.sh resolves it."""
+    try:
+        common = subprocess.run(["git", "-C", HERE, "rev-parse", "--path-format=absolute", "--git-common-dir"],
+                                capture_output=True, text=True, timeout=10).stdout.strip()
+    except (OSError, subprocess.SubprocessError):
+        common = ""
+    main = os.path.dirname(common) if common else os.path.join(HERE, "..", "..")
+    return os.path.join(main, "..", "teq-ref", "scala3")
+
+
+SCALA3 = os.environ.get("SCALA3") or default_scala3()
 TEQ = os.environ.get("TEQ", os.path.join(HERE, "..", "..", "target", "release", "teq"))
 EXPECTED = os.path.join(HERE, "expected.txt")
 TIMEOUT = 15
@@ -315,9 +329,15 @@ def main():
 
     suites = ["neg", "pos"] if args.suite == "all" else [args.suite]
     if not os.path.isdir(os.path.join(SCALA3, "tests")):
-        print(f"skipping: no scala3 checkout at {SCALA3} (set SCALA3)")
-        return 0
+        print(f"no scala3 checkout at {SCALA3} (set SCALA3)", file=sys.stderr)
+        return 2
     tests = [t for s in suites for t in discover(s)]
+    # A run that finds no test of a suite it was asked for proves nothing: an empty or moved checkout
+    # fails rather than passing with every test skipped, the negative tests counted as the positive ones.
+    empty = [s for s in suites if not any(t.suite == s for t in tests)]
+    if empty:
+        print(f"no {' or '.join(empty)} tests under {SCALA3}/tests", file=sys.stderr)
+        return 2
     if args.filter:
         rx = re.compile(args.filter)
         tests = [t for t in tests if rx.search(t.key)]

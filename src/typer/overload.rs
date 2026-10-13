@@ -243,14 +243,16 @@ impl<'a> Worker<'a> {
         let mut all = own.clone();
         let bases: Vec<(ClassId, TypeId)> = self.syms.class(c).base_types.clone();
         // A joined entry (`own` empty) takes a value of the name as an alternative next to the
-        // methods, as a class of one's own does through `join_value_and_method`.
-        let values_too = own.is_empty();
+        // methods, as a class of one's own does through `join_value_and_method`, and so does an
+        // entry of methods: an inherited value their parameters do not match is overloaded by
+        // them, as dotty's `membersNamed` keeps it (`def x(s: String)` beside an inherited `val x`).
+        let values_too = own.is_empty() || own.iter().any(|&m| self.syms.sym(m).kind == SymKind::Def);
         for &(b, bt) in &bases[1..] {
             let mut k = 0;
             while let Some(p) = self.own_alternative(b, name, k) {
                 k += 1;
                 let kind = self.syms.sym(p).kind;
-                if !(kind == SymKind::Def || (values_too && matches!(kind, SymKind::Val | SymKind::Var))) || self.is_private(p) {
+                if !(kind == SymKind::Def || (values_too && matches!(kind, SymKind::Val | SymKind::Var | SymKind::Given))) || self.is_private(p) {
                     continue;
                 }
                 let overridden = all.iter().any(|&m| self.same_parameters(c, &bases, m, p, bt));

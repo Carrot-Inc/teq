@@ -32,6 +32,11 @@ pub(super) struct ClassFileTrait {
 
 /// scalac's marker of a lazy val computed to null (`LazyVals.NullValue`).
 const NULL_VALUE: &str = "scala/runtime/LazyVals$NullValue$";
+/// dotty's thread-safe lazy vals (`LazyVals.transformMemberDefThreadSafe`).
+const VAR_HANDLE: &str = "java/lang/invoke/VarHandle";
+const LAZY_EVALUATING: &str = "scala/runtime/LazyVals$Evaluating$";
+const LAZY_WAITING: &str = "scala/runtime/LazyVals$Waiting";
+const LAZY_CONTROL: &str = "scala/runtime/LazyVals$LazyValControlState";
 
 /// How a lazy holder's getter computes the value the first time (`lazy_holder_body`).
 #[derive(Clone)]
@@ -765,6 +770,7 @@ impl<'a> Gen<'a> {
         self.context = name.to_string();
         let is_trait = info.kind == ClassKind::Trait;
         let is_object = info.kind == ClassKind::Object;
+        let given_module = cx.given_object_classes.contains_key(&c);
         let is_enum = info.kind == ClassKind::Enum;
         let is_anon = info.kind == ClassKind::Anon;
         let enum_class = cx.enum_of_case(c);
@@ -864,6 +870,11 @@ impl<'a> Gen<'a> {
             stored.desc(&mut d);
             let access = if !f.lazy && self.is_volatile(f.sym) {
                 ACC_PRIVATE | ACC_VOLATILE
+            } else if f.lazy && cx.inner_given_objects.contains_key(&f.sym) {
+                // An instance's given object, over dotty's thread-safe holder and its `VarHandle`
+                // (`module_holder_init`).
+                self.cw.field(ACC_PRIVATE | ACC_STATIC, &format!("{}$lzy$lzyHandle", f.name), "Ljava/lang/invoke/VarHandle;");
+                ACC_PRIVATE | ACC_VOLATILE
             } else if cx.private_params.contains_key(&f.sym) {
                 ACC_PRIVATE | ACC_FINAL
             } else {
@@ -914,17 +925,13 @@ impl<'a> Gen<'a> {
             self.cw.field(MODULE_FIELD, "MODULE$", &format!("L{};", name));
             self.module_clinit(tc, &fields);
         }
-        // A given object of a package or of objects is scalac's module class: `<clinit>` makes
-        // the instance, whose constructor runs the body, and stores it in `MODULE$`.
-        if cx.given_object_classes.contains_key(&c) {
-            let this = JType::L(name.clone());
+        // A given object of a package or of objects is scalac's module class, an object's
+        // protocol (`BCodeSkelBuilder`, 181-263): `<clinit>` makes the instance, whose constructor
+        // runs the superclass's alone, stores it in `MODULE$`, then runs the body, which may read
+        // the given through `MODULE$`.
+        if given_module {
             self.cw.field(MODULE_FIELD, "MODULE$", &format!("L{};", name));
-            self.begin_method(true, false, &[], JType::V, &[]);
-            self.new_object(&name);
-            self.invoke(Invoke::Special, &name, false, "<init>", &[], &JType::V);
-            self.putstatic(&name, "MODULE$", &this);
-            self.return_value(&JType::V);
-            self.end_method(ACC_STATIC, "<clinit>", "()V");
+            self.module_clinit(tc, &fields);
         }
         self.given_object_fields(&tc.init);
         let instance_enum = cx.enum_of_case(c).or(is_enum.then_some(c)).is_some_and(|e| cx.instance_enum(e));
@@ -970,7 +977,7 @@ impl<'a> Gen<'a> {
                 self.ctor_default_getters(Some(c), &tc.ctor_params, &tc.ctor_defaults, &clauses);
             }
         } else {
-            self.constructor(tc, &fields, &super_name, enum_class.or(superclass), superclass.is_some(), is_value_case, is_object, is_anon);
+            self.constructor(tc, &fields, &super_name, enum_class.or(superclass), superclass.is_some(), is_value_case, is_object || given_module, is_anon);
             for &f in &tc.ctors {
                 if cx.input.reach.funs[f.idx()] {
                     self.secondary_ctor(f);
@@ -1657,7 +1664,11 @@ impl<'a> Gen<'a> {
         let this = JType::L(owner.clone());
         let getter_desc = method_desc(&[], &f.ty);
         self.begin_method(false, false, &[], f.ty.clone(), &f.init.filter(|_| f.lazy && f.lazy_owner.is_none()).into_iter().collect::<Vec<_>>());
-        if f.lazy {
+        let mut holder_init = None;
+        if f.lazy && f.lazy_owner.is_none() && f.init.is_some() && self.cx.inner_given_objects.contains_key(&f.sym) {
+            self.module_holder_getter(&f.name, &f.ty);
+            holder_init = f.init;
+        } else if f.lazy {
             let init = match (f.lazy_owner, f.init) {
                 (Some(t), _) => HolderInit::TraitStatic(self.class_name(t)),
                 (None, Some(init)) => HolderInit::Expr(init),
@@ -1699,6 +1710,9 @@ impl<'a> Gen<'a> {
         let typed = self.cx.input.syms.sym(f.sym).sig.is_some();
         if typed {
             self.emit_bridges(f.sym, &getter);
+        }
+        if let Some(init) = holder_init {
+            self.module_holder_init(&f.name, init);
         }
         if f.mutable {
             self.begin_method(false, false, &[(None, f.ty.clone())], JType::V, &[]);
@@ -1773,6 +1787,180 @@ impl<'a> Gen<'a> {
         }
         self.code.bind(done);
         self.adapt(&object, ty);
+    }
+
+    /// The getter of an instance's module held as dotty's thread-safe lazy val
+    /// (`LazyVals.transformMemberDefThreadSafe`): the holder read, the module where it is one, else
+    /// `name$lzyINIT` (`module_holder_init`), which makes it once whatever the threads.
+    fn module_holder_getter(&mut self, name: &str, ty: &JType) {
+        let owner = self.this_name.clone();
+        let this = JType::L(owner.clone());
+        let object = JType::object();
+        let JType::L(module) = ty else { unreachable!("a module's type") };
+        let module = module.clone();
+        let ready = self.code.new_label();
+        let done = self.code.new_label();
+        self.load(0, &this);
+        self.getfield(&owner, &format!("{}$lzy", name), &object);
+        self.dup();
+        self.instance_of(&module);
+        self.jump_if(op::IFNE, 1, ready);
+        self.pop_value(&object);
+        self.load(0, &this);
+        self.invoke(Invoke::Special, &owner, false, &format!("{}$lzyINIT", name), &[], &object);
+        self.goto(done);
+        self.code.bind(ready);
+        self.code.bind(done);
+        self.checkcast(&module);
+    }
+
+    /// `name$lzyINIT`, dotty's state machine over the holder: `null`, then `Evaluating` while one
+    /// thread makes the module, `Waiting` once another waits for it, then the module, each step a
+    /// compare-and-set through the holder's `VarHandle` as scalac 3.8's (`LazyVals`'
+    /// `transformMemberDefThreadSafe` over `useVarHandles`), the handle kept in the static
+    /// `name$lzy$lzyHandle` once looked up. An access from the thread making the module waits on
+    /// its own latch, as scalac's does.
+    fn module_holder_init(&mut self, name: &str, init: TExprId) {
+        let owner = self.this_name.clone();
+        let this = JType::L(owner.clone());
+        let object = JType::object();
+        let evaluating = JType::L(Rc::from(LAZY_EVALUATING));
+        let waiting: Rc<str> = Rc::from(LAZY_WAITING);
+        let handle_type = JType::L(Rc::from(VAR_HANDLE));
+        let holder = format!("{}$lzy", name);
+        let handle_field = format!("{}$lzyHandle", holder);
+        self.begin_method(false, false, &[], object.clone(), &[init]);
+        // The holder's handle.
+        self.getstatic(&owner, &handle_field, &handle_type);
+        let vh = self.store_new(&handle_type);
+        // A label's frame holds the locals made before it: made once `vh` is.
+        let have = self.code.new_label();
+        self.load(vh, &handle_type);
+        self.jump_if(op::IFNONNULL, 1, have);
+        let lookup = JType::L(Rc::from("java/lang/invoke/MethodHandles$Lookup"));
+        let class = JType::L(Rc::from("java/lang/Class"));
+        self.invoke(Invoke::Static, "java/lang/invoke/MethodHandles", false, "lookup", &[], &lookup);
+        let class_index = self.cw.cp.class(&owner);
+        self.ldc(class_index);
+        self.code.push(VT::Object(self.cw.cp.class("java/lang/Class")));
+        self.sconst(&holder);
+        let object_index = self.cw.cp.class("java/lang/Object");
+        self.ldc(object_index);
+        self.code.push(VT::Object(self.cw.cp.class("java/lang/Class")));
+        self.invoke(Invoke::Virtual, "java/lang/invoke/MethodHandles$Lookup", false, "findVarHandle", &[class.clone(), JType::L(Rc::from(STRING)), class], &handle_type);
+        self.store(vh, &handle_type);
+        self.load(vh, &handle_type);
+        self.putstatic(&owner, &handle_field, &handle_type);
+        self.code.bind(have);
+        let lp = self.code.new_label();
+        self.code.bind(lp);
+        self.load(0, &this);
+        self.getfield(&owner, &holder, &object);
+        let cur = self.store_new(&object);
+        let not_null = self.code.new_label();
+        self.load(cur, &object);
+        self.jump_if(op::IFNONNULL, 1, not_null);
+        // null: this thread makes the module.
+        self.load(vh, &handle_type);
+        self.load(0, &this);
+        self.code.op(op::ACONST_NULL);
+        self.code.push(VT::Null);
+        self.getstatic(LAZY_EVALUATING, "MODULE$", &evaluating);
+        self.var_handle_cas();
+        self.jump_if(op::IFEQ, 1, lp);
+        self.code.op(op::ACONST_NULL);
+        self.code.push(VT::Null);
+        let result = self.store_new(&object);
+        let (start, end, handler) = (self.code.new_label(), self.code.new_label(), self.code.new_label());
+        let protected = self.code.locals_mark();
+        self.code.bind(start);
+        self.expr(init, &object);
+        self.store(result, &object);
+        self.code.bind(end);
+        self.module_holder_finish(&owner, &holder, vh, result);
+        self.load(result, &object);
+        self.return_value(&object);
+        self.code.add_handler(Handler { start, end, handler, catch_type: 0 });
+        self.code.locals_release(protected);
+        let throwable = JType::L(Rc::from("java/lang/Throwable"));
+        let tvt = self.vt(&throwable);
+        self.code.bind_handler(handler, tvt);
+        let exc = self.store_new(&throwable);
+        self.module_holder_finish(&owner, &holder, vh, result);
+        self.load(exc, &throwable);
+        self.code.op(op::ATHROW);
+        self.code.pop();
+        // A control state: `Evaluating` gets a latch to wait on, `Waiting` is waited on.
+        self.code.bind(not_null);
+        let return_cur = self.code.new_label();
+        let not_evaluating = self.code.new_label();
+        let return_null = self.code.new_label();
+        self.load(cur, &object);
+        self.instance_of(LAZY_CONTROL);
+        self.jump_if(op::IFEQ, 1, return_cur);
+        self.load(cur, &object);
+        self.getstatic(LAZY_EVALUATING, "MODULE$", &evaluating);
+        self.jump_if(op::IF_ACMPNE, 2, not_evaluating);
+        self.load(vh, &handle_type);
+        self.load(0, &this);
+        self.load(cur, &object);
+        self.new_object(&waiting);
+        self.invoke(Invoke::Special, &waiting, false, "<init>", &[], &JType::V);
+        self.var_handle_cas();
+        self.pop_value(&JType::Z);
+        self.goto(lp);
+        self.code.bind(not_evaluating);
+        self.load(cur, &object);
+        self.instance_of(&waiting);
+        self.jump_if(op::IFEQ, 1, return_null);
+        self.load(cur, &object);
+        self.checkcast(&waiting);
+        self.invoke(Invoke::Virtual, "java/util/concurrent/CountDownLatch", false, "await", &[], &JType::V);
+        self.goto(lp);
+        self.code.bind(return_null);
+        self.code.op(op::ACONST_NULL);
+        self.code.push(VT::Null);
+        self.return_value(&object);
+        self.code.bind(return_cur);
+        self.load(cur, &object);
+        self.return_value(&object);
+        self.end_method(ACC_PRIVATE, &format!("{}$lzyINIT", name), "()Ljava/lang/Object;");
+    }
+
+    /// `VarHandle.compareAndSet` over the handle, the receiver, the expected and the new value on
+    /// the stack, a signature-polymorphic call of scalac's descriptor `(Object, Object, Object)Z`.
+    fn var_handle_cas(&mut self) {
+        let object = JType::object();
+        self.invoke(Invoke::Virtual, VAR_HANDLE, false, "compareAndSet", &[object.clone(), object.clone(), object], &JType::Z);
+    }
+
+    /// The end of a making of the module: `Evaluating` to the result, or the latch other threads
+    /// installed to the result and counted down (a failure leaves the holder `null` again).
+    fn module_holder_finish(&mut self, owner: &str, holder: &str, vh: u16, result: u16) {
+        let this = JType::L(Rc::from(owner));
+        let object = JType::object();
+        let handle_type = JType::L(Rc::from(VAR_HANDLE));
+        let evaluating = JType::L(Rc::from(LAZY_EVALUATING));
+        let done = self.code.new_label();
+        self.load(vh, &handle_type);
+        self.load(0, &this);
+        self.getstatic(LAZY_EVALUATING, "MODULE$", &evaluating);
+        self.load(result, &object);
+        self.var_handle_cas();
+        self.jump_if(op::IFNE, 1, done);
+        self.load(0, &this);
+        self.getfield(owner, holder, &object);
+        self.checkcast(LAZY_WAITING);
+        let lock = self.store_new(&JType::L(Rc::from(LAZY_WAITING)));
+        self.load(vh, &handle_type);
+        self.load(0, &this);
+        self.load(lock, &JType::L(Rc::from(LAZY_WAITING)));
+        self.load(result, &object);
+        self.var_handle_cas();
+        self.pop_value(&JType::Z);
+        self.load(lock, &JType::L(Rc::from(LAZY_WAITING)));
+        self.invoke(Invoke::Virtual, "java/util/concurrent/CountDownLatch", false, "countDown", &[], &JType::V);
+        self.code.bind(done);
     }
 
     /// The value on the stack, about to be stored in a lazy holder, with null replaced by

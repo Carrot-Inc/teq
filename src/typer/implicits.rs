@@ -24,6 +24,11 @@ struct ScopeSeen {
     /// The inner classes the type names through a path, with that path: their companion is
     /// reached through it, not as an object of its own.
     through: Vec<(ClassId, TypeId)>,
+    /// Whether an opaque type was met, whose reference through its defining scope's `this` is
+    /// its underlying type where its definition is visible, and whether one was met so: the
+    /// scope of a bare opaque class depends on where it is asked.
+    opaque: bool,
+    site: bool,
 }
 
 const MAX_IMPLICIT_DEPTH: u32 = 32;
@@ -318,6 +323,8 @@ pub struct ScopeList {
     givens: Box<[GivenRef]>,
     restricted: bool,
     plain: bool,
+    /// Whether the scope met an opaque type (`implicit_scope_objects_kept`).
+    opaque: bool,
 }
 
 /// A package level's candidates before the accessibility filter (`Worker::package_levels`):
@@ -660,14 +667,28 @@ impl<'a> Worker<'a> {
             // part.
             let mut parts = Vec::new();
             let mut stack = vec![self.deref(ret)];
+            // A part that is a type parameter, the class's or the given's own, stands for any type
+            // within its bounds, the one its receiver or its instantiation gives (`value: T` of a
+            // `G[T <: Base]` is an `A` through `object A extends G[A]`): no class of its bound
+            // files it, the search specializing it through the receiver (dotty's `eligible`
+            // filters the candidates as seen from their prefix). So does an abstract type member
+            // the owner's `this` names (`value: T` of a `G { type T <: Base }` is an `A` through
+            // `object O extends G { type T = A }`).
+            let mut open = false;
             while let Some(t) = stack.pop() {
                 match self.types.get(t) {
                     Type::Inter(a, b) => {
                         stack.push(b);
                         stack.push(a);
                     }
+                    Type::Param(_) | Type::AppParam(..) => open = true,
+                    Type::Member(prefix, _) if matches!(self.types.get(prefix), Type::This(_)) => open = true,
+                    Type::AppMember(m, _) if matches!(self.types.get(m), Type::Member(p, _) if matches!(self.types.get(p), Type::This(_))) => open = true,
                     _ => parts.extend(self.class_of(t)),
                 }
+            }
+            if open {
+                parts.clear();
             }
             if parts.is_empty() {
                 index.unindexed.push(g);
@@ -685,10 +706,19 @@ impl<'a> Worker<'a> {
                     }
                 }
             }
-            // A given object provides its own class too, which a path to it widens to.
+            // A given object provides its own class too, which a path to it widens to, and the
+            // extensions its body defines are members of that class (dotty's extension search
+            // reads the members of the reference's type, the module's own).
             if let Some(Type::Class(own, _)) = self.syms.sym(g).impl_class.and_then(|_| self.given_object_type(g)).map(|t| self.types.get(t)) {
                 if !bases.contains(&own) {
                     index.by_class.entry(own).or_default().push(g);
+                    self.complete_class(own);
+                    for &ext in &self.syms.class(own).extensions {
+                        let list = index.by_extension.entry(self.syms.sym(ext).name).or_default();
+                        if !list.contains(&g) {
+                            list.push(g);
+                        }
+                    }
                 }
             }
             for b in bases {
@@ -1252,7 +1282,7 @@ impl<'a> Worker<'a> {
         let ground = !self.types.has_vars(t);
         let (tag, id) = wanted.key();
         if ground {
-            if let Some(list) = self.implicit_scope_givens.get(&(t, tag, id)) {
+            if let Some(list) = self.implicit_scope_givens.get(&(t, tag, id)).filter(|l| !l.opaque || self.transparent.is_empty()) {
                 let list = list.clone();
                 self.given_tree.restricted += list.restricted as u32;
                 if list.plain {
@@ -1264,7 +1294,8 @@ impl<'a> Worker<'a> {
             }
         }
         let mut selected = Vec::new();
-        for scope in self.implicit_scope_objects(t) {
+        let (scopes, opaque) = self.implicit_scope_objects_kept(t);
+        for scope in scopes {
             let class = match scope {
                 GivenScope::Module(m) => Some(m),
                 GivenScope::Path(p) => {
@@ -1299,10 +1330,14 @@ impl<'a> Worker<'a> {
         selected.truncate(kept);
         self.given_tree.restricted += selected.iter().any(|&(g, _)| self.restricted_visibility(g)) as u32;
         out.extend(selected.iter().copied().filter(|&(g, scope)| self.is_given_accessible(g) && (!matches!(scope, GivenScope::Path(_)) || self.scope_accessible(scope))));
-        if ground {
+        // Kept as the objects are, a scope that met an opaque type through its defining scope's
+        // `this` not at all (`implicit_scope_objects_kept`).
+        let site = opaque && !self.transparent.is_empty();
+        if ground && !site {
             let list = ScopeList {
                 restricted: selected.iter().any(|&(g, _)| self.restricted_visibility(g)),
                 plain: selected.iter().all(|&(g, scope)| self.plainly_accessible(g) && self.scope_plainly_accessible(scope)),
+                opaque,
                 givens: selected.into_boxed_slice(),
             };
             self.implicit_scope_givens.insert((t, tag, id), Arc::new(list));
@@ -1397,23 +1432,90 @@ impl<'a> Worker<'a> {
     /// without variables: the classes it mentions are completed on the way, so their bases and
     /// companions do not change afterwards.
     pub fn implicit_scope_objects(&mut self, t: TypeId) -> Vec<GivenScope> {
-        let ground = !self.types.has_vars(t);
-        if ground {
-            if let Some(scopes) = self.implicit_scopes.get(&t) {
-                return scopes.to_vec();
-            }
-        }
-        let scopes = self.implicit_scope_objects_now(t);
-        if ground {
-            self.implicit_scopes.insert(t, Arc::from(scopes.as_slice()));
-        }
-        scopes
+        self.implicit_scope_objects_kept(t).0
     }
 
-    fn implicit_scope_objects_now(&mut self, t: TypeId) -> Vec<GivenScope> {
+    /// The objects and paths of the implicit scope of `t`, and whether an opaque type was met
+    /// there. Kept per type, as dotty's `implicitScopeCache`: a reference through an opaque
+    /// type's defining scope's `this` is its underlying type where its definition is visible, so
+    /// a scope that met one there is not kept, and a kept one that met an opaque type is not
+    /// read where some opaque definition is visible.
+    fn implicit_scope_objects_kept(&mut self, t: TypeId) -> (Vec<GivenScope>, bool) {
+        let ground = !self.types.has_vars(t);
+        if ground {
+            if let Some((scopes, opaque)) = self.implicit_scopes.get(&t) {
+                if !*opaque || self.transparent.is_empty() {
+                    return (scopes.to_vec(), *opaque);
+                }
+            }
+        }
+        let (scopes, opaque, site) = self.implicit_scope_objects_now(t);
+        if ground && !site {
+            self.implicit_scopes.insert(t, (Arc::from(scopes.as_slice()), opaque));
+        }
+        (scopes, opaque || site)
+    }
+
+    /// Whether `inner` is an opaque type of an object or of a file's top level, whose external
+    /// reference `Nested(A, inner)` is dotty's `TypeRef(TermRef(.., A), T)`: `A.T` reached
+    /// through a prefix other than its defining scope's `this` (`mark_external_opaques`), which
+    /// stays opaque for the implicit scope where its definition is visible
+    /// (`Implicits.collectParts` takes `t.dealias`, which the self type's alias gives
+    /// `A.this.T` alone); conformance reads it as `T`, as dotty's `TypeComparer.liftToThis`
+    /// lifts it.
+    #[inline]
+    pub(super) fn is_static_opaque(&self, inner: TypeId) -> bool {
+        matches!(self.types.get(inner), Type::Class(c, _) if self.syms.class(c).kind == ClassKind::Opaque && !self.types.is_path_class(c))
+    }
+
+    /// The path an external reference to the opaque type `c` has as its prefix: the object that
+    /// declares it (`TermRef(A)`), or the file's `<file>$package` of a top-level one
+    /// (`Symbols::opaque_holders`).
+    pub(super) fn external_opaque_prefix(&mut self, c: ClassId) -> Option<TypeId> {
+        let info = self.syms.class(c);
+        let holder = match info.owner {
+            Owner::Class(o) if self.syms.class(o).kind == ClassKind::Object => self.syms.class(o).module_sym?,
+            Owner::Package(_) => *self.syms.opaque_holders.get(&info.file)?,
+            _ => return None,
+        };
+        Some(self.types.mk(Type::Term(holder)))
+    }
+
+    /// `t` with each reference to an opaque class of `marks` made an external one (dotty's
+    /// `TypeRef(TermRef(p, A), T)` where the reference was not reached through `A.this`): through
+    /// classes' arguments, unions, intersections and function results, where a member's type
+    /// carries it.
+    pub(super) fn mark_external_opaques(&mut self, t: TypeId, marks: &[ClassId], depth: u32) -> TypeId {
+        if depth > 16 {
+            return t;
+        }
+        match self.types.get(t) {
+            Type::Class(c, args) => {
+                let items: Vec<TypeId> = self.types.items(args).to_vec();
+                let mapped: Vec<TypeId> = items.iter().map(|&a| self.mark_external_opaques(a, marks, depth + 1)).collect();
+                let t = if mapped != items { self.types.class(c, &mapped) } else { t };
+                match marks.contains(&c).then(|| self.external_opaque_prefix(c)).flatten() {
+                    Some(prefix) => self.types.mk(Type::Nested(prefix, t)),
+                    None => t,
+                }
+            }
+            Type::Union(a, b, k) => {
+                let (x, y) = (self.mark_external_opaques(a, marks, depth + 1), self.mark_external_opaques(b, marks, depth + 1));
+                if (x, y) == (a, b) { t } else { self.types.mk(Type::Union(x, y, k)) }
+            }
+            Type::Inter(a, b) => {
+                let (x, y) = (self.mark_external_opaques(a, marks, depth + 1), self.mark_external_opaques(b, marks, depth + 1));
+                if (x, y) == (a, b) { t } else { self.types.mk(Type::Inter(x, y)) }
+            }
+            _ => t,
+        }
+    }
+
+    fn implicit_scope_objects_now(&mut self, t: TypeId) -> (Vec<GivenScope>, bool, bool) {
         let mut classes = Vec::new();
         let mut seen = ScopeSeen::default();
         self.classes_in(t, &mut classes, &mut seen);
+        let (opaque, site) = (seen.opaque, seen.site);
         let mut scopes: Vec<ClassId> = Vec::new();
         let mut paths = seen.paths;
         for c in classes {
@@ -1464,7 +1566,7 @@ impl<'a> Worker<'a> {
                 }
             }
         }
-        scopes.into_iter().map(GivenScope::Module).chain(paths.into_iter().map(GivenScope::Path)).collect()
+        (scopes.into_iter().map(GivenScope::Module).chain(paths.into_iter().map(GivenScope::Path)).collect(), opaque, site)
     }
 
     /// The path `p` and the paths it is selected on as references of the implicit scope, dotty's
@@ -1520,7 +1622,28 @@ impl<'a> Worker<'a> {
             // A type parameter is no anchor: its scope is the scope of its bounds (dotty's
             // `liftToAnchors`: the upper bound alone where the lower is bottom, else both).
             Type::Param(p) => self.classes_in_param_bounds(p, out, seen),
+            // An opaque type reached through its defining scope's `this` where its definition is
+            // visible is its underlying type (dotty's `collectParts` takes `t.dealias`, which the
+            // self type's alias gives), the companion no anchor of it.
+            Type::Class(c, _) if self.syms.class(c).kind == ClassKind::Opaque && self.transparent.contains(&c) => {
+                seen.opaque = true;
+                seen.site = true;
+                if let Some(u) = self.opaque_underlying(t) {
+                    self.classes_in(u, out, seen);
+                }
+            }
+            // An external reference to one stays opaque, its class the anchor (`isOpaqueAlias`).
+            Type::Nested(_, inner) if self.is_static_opaque(inner) => {
+                let Type::Class(c, args) = self.types.get(inner) else { return };
+                if !out.contains(&c) {
+                    out.push(c);
+                }
+                for a in self.types.items(args).to_vec() {
+                    self.classes_in(a, out, seen);
+                }
+            }
             Type::Class(c, args) => {
+                seen.opaque |= self.syms.class(c).kind == ClassKind::Opaque;
                 if !out.contains(&c) {
                     out.push(c);
                 }
@@ -1752,7 +1875,15 @@ impl<'a> Worker<'a> {
         self.implicit_scope_givens(scope_ty, wanted, &mut outer);
         outer.retain(|&(g, _)| !refs.iter().any(|&(known, _)| known == g));
         refs.append(&mut outer);
-        (refs.into_iter().map(|r| (r, self.sig_of(r.0).ret)).collect(), contextual, levels)
+        // A given object's extensions are its class's members: its reference's type is the class.
+        let typed = refs
+            .into_iter()
+            .map(|r| {
+                let object = if self.syms.sym(r.0).impl_class.is_some() { self.given_object_type(r.0) } else { None };
+                (r, object.unwrap_or_else(|| self.sig_of(r.0).ret))
+            })
+            .collect();
+        (typed, contextual, levels)
     }
 
     pub fn resolve_given(&mut self, target: TypeId, span: Span) -> Option<TExprId> {
@@ -2128,8 +2259,9 @@ impl<'a> Worker<'a> {
             Pick::NoMatch if target_class.map_or(false, |c| self.derive_mirror_class(c)) => {
                 match target_class.and_then(|c| self.scala_mirror_given(c, target)) {
                     // The mirror of the class the target names, as long as it has the element
-                    // types and labels the target asks for.
-                    Some((te, ty)) if !self.mirror_target_fixes_members(target) || self.conforms_or_rollback(ty, target) => {
+                    // types and labels the target asks for, which a mismatch reports
+                    // (`Synthesizer.makeProductMirror`'s `checkRefinement`).
+                    Some((te, ty)) if !self.mirror_target_fixes_members(target) || self.check_mirror_refinements(target, ty, span) || self.conforms_or_rollback(ty, target) => {
                         if self.capturing() {
                             self.capture_form(te, crate::tir::capture::Form::Evidence(target));
                         }
@@ -2444,6 +2576,10 @@ impl<'a> Worker<'a> {
         }
         words.extend([4, self.defining.map_or(u32::MAX, |d| d.0), self.parent_args_of.map_or(u32::MAX, |c| c.0), self.transparent.len() as u32]);
         words.extend(self.transparent.iter().map(|c| c.0));
+        if !self.unentered_impls.is_empty() {
+            words.push(6);
+            words.extend(self.unentered_impls.iter().map(|s| s.0));
+        }
         // The file's language settings, which the synthesis of a `CanEqual` reads.
         let (strict, future) = (self.strict_equality(), self.cur_ast().source_future);
         words.extend([5, strict as u32, future as u32]);
@@ -2753,10 +2889,12 @@ impl<'a> Worker<'a> {
         // The implicit scope's candidates are its own eligible list, which no name of the
         // context's hides (`searchImplicit`'s `implicitScope(wildProto).eligible`).
         let hide = level > 0 && !hidden.is_empty();
+        // The deferred implementations not entered yet are no candidates (`unentered_impls`).
+        let excluded = defining.is_some() || !self.unentered_impls.is_empty();
         let mut fits: Vec<u32> = Vec::new();
         for i in 0..buf.cands.len() as u32 {
             let given = buf.cands[i as usize];
-            if defining.is_some_and(|d| self.defined_here(d, given.0)) || hide && hidden.contains(&self.level_name(buf, i)) {
+            if excluded && (defining.is_some_and(|d| self.defined_here(d, given.0)) || self.unentered_impls.contains(&given.0)) || hide && hidden.contains(&self.level_name(buf, i)) {
                 continue;
             }
             if self.fit_decision(given, target, target_class, memoised, heads) {
@@ -2884,6 +3022,13 @@ impl<'a> Worker<'a> {
                 let a_known = self.inter_classes_known(a, out);
                 self.inter_classes_known(b, out) && a_known
             }
+            // A type parameter, the class's or the candidate's own, is the type its receiver or
+            // its instantiation gives, any within its bounds: no class of its bound tells
+            // (`value: T` of a `G[T <: Base]` is an `A` through `object A extends G[A]`).
+            Type::Param(_) | Type::AppParam(..) => false,
+            // So is an abstract type member its owner's `this` names, which the receiver fixes
+            // (`value: T` of a `G { type T <: Base }` is an `A` through `O`'s `type T = A`).
+            Type::Member(prefix, _) if matches!(self.types.get(prefix), Type::This(_)) => false,
             _ => match self.class_of(t) {
                 Some(c) => {
                     if !out.contains(&c) {
@@ -3035,7 +3180,12 @@ impl<'a> Worker<'a> {
                 eprintln!("shape {} vs {} with {}", n, t, bounds.join("; "));
             }
             self.profile.try_start(given.0);
-            let (fits, context_free) = self.fits_target(given, target);
+            // A transparent inline given is matched by its expansion (`try_given`, dotty's
+            // `typedImplicit` adapting the candidate before `<:< pt`), which its declared result,
+            // a wildcard where the expansion is precise, does not tell: past the class test it
+            // is tried.
+            let transparent = self.is_inline_callee(given.0) && self.syms.sym(given.0).mods & crate::ast::mods::TRANSPARENT != 0;
+            let (fits, context_free) = if transparent { (true, false) } else { self.fits_target(given, target) };
             self.profile.try_end(!fits, true);
             self.profile.given.shape_unkept += (self.profile.on && !context_free) as u64;
             self.rollback(mark);
@@ -3799,6 +3949,13 @@ impl<'a> Worker<'a> {
     /// intersection of its parents, the more specific one wins (`B.M` over `A.M` where the
     /// object `B` extends a trait extending the trait the object `A` extends, which declares `M`).
     pub(super) fn compare_given_refs(&mut self, a: GivenRef, b: GivenRef) -> i32 {
+        // Two givens one of which a receiver specializes (`value: T` of `G[T]` read on an object
+        // extending `G[A]`): compared by their reference types, dotty's `alt.widen` (`compare`,
+        // 2367-2373), not by their declarations, and not kept, the comparison being the
+        // receivers'.
+        if a.0 != b.0 && (self.given_seen_from_receiver(a) || self.given_seen_from_receiver(b)) {
+            return self.compare_givens_seen(a, b);
+        }
         if a.0 != b.0 || a.1 == b.1 {
             return self.compare_givens(a.0, b.0);
         }
@@ -3819,6 +3976,58 @@ impl<'a> Worker<'a> {
         }
     }
 
+    /// Whether the type of the given `g` depends on the receiver it is read on: a member of a
+    /// generic class or trait reached through an object or a path whose base type fixes its
+    /// arguments.
+    fn given_seen_from_receiver(&mut self, (g, scope): GivenRef) -> bool {
+        let Owner::Class(o) = self.syms.sym(g).owner else { return false };
+        // A type parameter of the owner, or a type member its `this` names (`given value: T` of a
+        // `trait G { type T }` that `O` fixes), is what the receiver specializes.
+        if self.syms.class(o).tparams.is_empty() && {
+            let ret = self.sig_of(g).ret;
+            !self.types.has_paths(ret)
+        } {
+            return false;
+        }
+        match scope {
+            GivenScope::Module(m) => m != o,
+            GivenScope::Path(_) | GivenScope::Value(_) => true,
+            // A given in scope through an import of an object, or inherited by an enclosing class.
+            GivenScope::Lexical => match self.trait_member_site(g, o) {
+                TraitMemberSite::Module(m) => m != o,
+                TraitMemberSite::This(Some(k)) => k != o,
+                _ => false,
+            },
+        }
+    }
+
+    /// `compare_givens_uncached` over the candidates' types as their receivers see them
+    /// (`as_good_seen`), dotty's `compareWithTypes(alt1.widen, alt2.widen)`.
+    fn compare_givens_seen(&mut self, a: GivenRef, b: GivenRef) -> i32 {
+        let owners = self.compare_given_owners(a.0, b.0);
+        let old_style = self.syms.is_scala2_implicit(a.0) && self.syms.is_scala2_implicit(b.0);
+        if owners != 0 && !old_style {
+            return owners;
+        }
+        let (wins_a, wins_b) = (self.as_good_seen(a, b), self.as_good_seen(b, a));
+        let by_type = match owners {
+            1 if wins_a || !wins_b => 1,
+            -1 if wins_b || !wins_a => -1,
+            0 => wins_a as i32 - wins_b as i32,
+            _ => 0,
+        };
+        if by_type != 0 {
+            return by_type;
+        }
+        let (using_a, using_b) = (!self.sig_of(a.0).clauses.is_empty(), !self.sig_of(b.0).clauses.is_empty());
+        match (using_a, using_b) {
+            (false, false) => 0,
+            (false, true) => 1,
+            (true, false) => -1,
+            (true, true) => self.compare_givens(a.0, b.0),
+        }
+    }
+
     /// `is_as_good_given` of two references to one given, each signature seen from its receiver
     /// (`open_given_sig`): `x`'s own type parameters as they are, `y`'s open.
     fn as_good_seen(&mut self, x: GivenRef, y: GivenRef) -> bool {
@@ -3827,8 +4036,9 @@ impl<'a> Worker<'a> {
             let (_, mut subst_x, sig_x) = self.open_given_sig(x)?;
             let (_, subst_y, sig_y) = self.open_given_sig(y)?;
             subst_x.truncate(subst_x.len() - sig_x.tparams.len());
-            let ret_x = self.types.subst(sig_x.ret, &subst_x);
-            let ret_y = self.types.subst(sig_y.ret, &subst_y);
+            let (ret_x, ret_y) = (self.ranked_ret(x.0, sig_x.ret), self.ranked_ret(y.0, sig_y.ret));
+            let ret_x = self.types.subst(ret_x, &subst_x);
+            let ret_y = self.types.subst(ret_y, &subst_y);
             let ok = if self.syms.is_scala2_implicit(x.0) {
                 let (ret_x, ret_y) = (self.flip_contravariant(ret_x), self.flip_contravariant(ret_y));
                 self.is_sub(ret_x, ret_y)
@@ -4027,14 +4237,15 @@ impl<'a> Worker<'a> {
     /// (`Ord[Int]` over `Ord[Any]` for an `Ord[-T]`).
     fn is_as_good_given(&mut self, a: SymId, b: SymId, old_style: bool) -> bool {
         let (sig_a, sig_b) = (self.sig_arc(a), self.sig_arc(b));
+        let (ret_a, ret_b) = (self.ranked_ret(a, sig_a.ret), self.ranked_ret(b, sig_b.ret));
         let mark = self.snapshot();
         let subst = self.fresh_tparam_subst(&sig_b.tparams);
-        let ret_b = self.types.subst(sig_b.ret, &subst);
+        let ret_b = self.types.subst(ret_b, &subst);
         let ok = if old_style {
-            let (ret_a, ret_b) = (self.flip_contravariant(sig_a.ret), self.flip_contravariant(ret_b));
+            let (ret_a, ret_b) = (self.flip_contravariant(ret_a), self.flip_contravariant(ret_b));
             self.is_sub(ret_a, ret_b)
         } else {
-            self.is_sub(ret_b, sig_a.ret)
+            self.is_sub(ret_b, ret_a)
         };
         // `b`'s type parameters, instantiated to `a`'s, keep their bounds: a `C[X] <: Set[X]`
         // takes no `C[X] <: Iterable[X]` of the other, and an `A <: Singleton` no `A` of the
@@ -4042,6 +4253,24 @@ impl<'a> Worker<'a> {
         let ok = ok && self.hk_bounds_hold(&sig_b, &subst) && self.first_order_bounds_hold(&sig_b, &subst);
         self.rollback(mark);
         ok
+    }
+
+    /// The result type a given is ranked by: a given class's method answers its class, ranked as
+    /// the intersection of the class's parents (`Applications.widenGiven`: a co-defined given's
+    /// result `widenToParents`).
+    fn ranked_ret(&mut self, g: SymId, ret: TypeId) -> TypeId {
+        let Some(k) = self.syms.sym(g).impl_class else { return ret };
+        let Type::Class(rk, args) = self.types.get(ret) else { return ret };
+        if rk != k {
+            return ret;
+        }
+        self.complete_class(k);
+        let (tparams, parents) = {
+            let info = self.syms.class(k);
+            (info.tparams.clone(), info.parents.clone())
+        };
+        let subst: Subst = tparams.iter().copied().zip(self.types.items(args).iter().copied()).collect();
+        parents.iter().map(|&p| self.types.subst(p, &subst)).reduce(|a, b| self.types.inter(a, b)).unwrap_or(ret)
     }
 
     /// Whether each first-order type parameter of `sig`, opened by `subst`, can lie within its
@@ -4468,10 +4697,23 @@ impl<'a> Worker<'a> {
         let dependent = self.types.has_paths(sig.ret) || sig.clauses.iter().any(|cl| cl.params.iter().any(|p| self.types.has_paths(p.ty)));
         let mut approx: Vec<(TypeId, TypeId)> = Vec::new();
         let reference = target.and_then(|t| self.given_reference(g, site, &sig, t));
+        // A transparent inline given is typed by its expansion, which is matched with the target
+        // (dotty's `typedImplicit` adapts the candidate, inlining it, before `<:< pt`): its
+        // declared result constrains its type parameters where it can (`constrainResult`, a
+        // hint whose failure fails nothing: a wildcard where the expansion is precise), the
+        // expansion's type decides.
+        let transparent = self.is_inline_callee(g) && self.syms.sym(g).mods & crate::ast::mods::TRANSPARENT != 0;
+        let mut expanded_target = None;
         if let (Some(t), Some(r)) = (target, reference) {
             if !self.is_sub(r, t) {
                 return Attempt::Mismatch;
             }
+        } else if let (Some(t), true) = (target, transparent) {
+            let mark = self.snapshot();
+            if !self.is_sub(ret, t) {
+                self.rollback(mark);
+            }
+            expanded_target = Some(t);
         } else if let Some(t) = target {
             let check = if dependent {
                 let params: Vec<SymId> = sig.clauses.iter().flat_map(|cl| cl.params.iter().map(|p| p.sym)).collect();
@@ -4565,7 +4807,7 @@ impl<'a> Worker<'a> {
                 }
             }
             self.attempts.given_args -= expands_now as u32;
-            knot = self.given_stack.pop().and_then(|open| open.rec);
+            knot = self.given_stack.pop().and_then(|open| open.rec.map(|rec| (rec, open.target)));
             if let Some(failed) = failed {
                 return failed;
             }
@@ -4617,6 +4859,8 @@ impl<'a> Worker<'a> {
                 let SymKind::Object(c) = kind else { unreachable!() };
                 self.prog.add(TExpr::Module(c))
             }
+            // A local structural given with parameters makes its class (`enter_local_given_class`).
+            Owner::Local if has_params && impl_class.is_some() => self.new_instance(impl_class.unwrap(), l, span),
             Owner::Local if has_params => match self.held_holder(g) {
                 Some(r) => self.held_call(r, g, l),
                 None => self.prog.add(TExpr::CallStatic(g, l)),
@@ -4634,8 +4878,11 @@ impl<'a> Worker<'a> {
                     None => self.prog.add(TExpr::Local(g)),
                 },
             },
-            // `this` does not exist yet where the constructor of a superclass is called.
-            Owner::Class(c) if self.parent_args_of == Some(c) && self.syms.class(c).superclass.is_some() => {
+            // `this` does not exist yet where a parent's constructor is called, a trait's as a
+            // superclass's: its arguments read the class's parameters as locals
+            // (`Contexts.superCallContext`). A deferred given's implementation, searched there
+            // too, is a member's initialiser, which reads them on `this`.
+            Owner::Class(c) if self.parent_args_of == Some(c) && self.deferred_impl_of != Some(c) => {
                 self.prog.add(TExpr::Local(g))
             }
             Owner::Package(_) => {
@@ -4827,6 +5074,15 @@ impl<'a> Worker<'a> {
                     ret = t;
                 }
             }
+            if let Some(t) = expanded_target {
+                if !self.is_sub(ret, t) {
+                    if self.given_trace() {
+                        let (a, b) = (self.show(ret), self.show(t));
+                        eprintln!("expansion mismatch {} : {} vs {}", self.name_str(self.syms.sym(g).name), a, b);
+                    }
+                    return Attempt::Mismatch;
+                }
+            }
         }
         if self.inline.checking > 0 && !sig.tparams.is_empty() {
             let own: Vec<(TParamId, TypeId)> = subst.iter().filter(|(p, _)| sig.tparams.contains(p)).copied().collect();
@@ -4849,8 +5105,9 @@ impl<'a> Worker<'a> {
             }
         }
         // A nested by-name request referred to this instance: it becomes a lazy local that the
-        // thunks inside read once the instance exists.
-        if let Some(rec) = knot {
+        // thunks inside read once the instance exists. The block is the local's, typed by the
+        // request it was opened for (a given class's instance read as that request's type).
+        if let Some((rec, _)) = knot {
             let stmts = self.prog.stmts.push_slice(&[TStmt::Val(rec, te)]);
             let result = self.prog.add(TExpr::Local(rec));
             te = self.prog.add(TExpr::Block(stmts, result));
@@ -4862,6 +5119,7 @@ impl<'a> Worker<'a> {
         // A stable candidate found for a target that holds a path is that reference, as dotty
         // types the candidate's tree (`TermRef(receiver, member)`), the summoned value's type.
         let ty = match (reference, self.given_object_type(g)) {
+            _ if knot.is_some() => self.zonk(knot.unwrap().1),
             (Some(r), _) => r,
             (None, Some(class)) => match site.and_then(|(site, _)| self.site_prefix(site)) {
                 Some(p) => self.nested_type(p, class),

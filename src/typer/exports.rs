@@ -1216,7 +1216,10 @@ impl<'a> Worker<'a> {
                 let sym = self.syms.sym(g);
                 if !is_private(sym.mods) {
                     scope.givens.push(g);
-                    scope.add_term(sym.name, TermRef::ModuleMember(src, g));
+                    match self.alternatives_by_givenness(&info.members, src, g, scope) {
+                        (r, true) => { scope.terms.insert(sym.name, r); }
+                        (r, false) => scope.add_term(sym.name, r),
+                    }
                     if inherited {
                         scope.via.entry(g).or_insert(src);
                     }
@@ -1231,9 +1234,12 @@ impl<'a> Worker<'a> {
                 // What `src` defines under the name stands for what it inherits under it.
                 let overridden = inherited && src_members.contains_key(&sym.name);
                 if !is_private(sym.mods) && sym.kind != SymKind::Given && !hidden.contains(&sym.name) && !defined && !overridden {
-                    // An overloaded name is exported as a whole.
-                    let entry = if sym.alternative { info.members[&sym.name] } else { s };
-                    scope.add_term(sym.name, TermRef::ModuleMember(src, entry));
+                    // An overloaded name is exported as a whole, but for its given alternatives,
+                    // which a given selector brings (`alternatives_by_givenness`).
+                    match if sym.alternative { self.alternatives_by_givenness(&info.members, src, s, scope) } else { (TermRef::ModuleMember(src, s), false) } {
+                        (r, true) => { scope.terms.insert(sym.name, r); }
+                        (r, false) => scope.add_term(sym.name, r),
+                    }
                     if sym.mods & mods::IMPLICIT != 0 {
                         scope.givens.push(s);
                         if inherited {
@@ -1264,6 +1270,33 @@ impl<'a> Worker<'a> {
                     }
                 }
             }
+        }
+    }
+
+    /// What a wildcard brings of the alternative `s` of an overloaded name of `src`, by givenness
+    /// as dotty's `Namer.addWildcardForwarders` forwards them: a given selector the given
+    /// alternative alone, `*` the others, the set where they are all one selector's or where the
+    /// other selector of the clause brought the rest already (then `true`: the set replaces the
+    /// part the scope holds).
+    fn alternatives_by_givenness(&self, members: &crate::intern::FxMap<Name, SymId>, src: ClassId, s: SymId, scope: &ExportScope) -> (TermRef, bool) {
+        let name = self.syms.sym(s).name;
+        let Some(&set) = members.get(&name) else { return (TermRef::ModuleMember(src, s), false) };
+        let Some(alts) = self.syms.alternatives(set) else { return (TermRef::ModuleMember(src, s), false) };
+        let given = |t: &Self, a: SymId| { let i = t.syms.sym(a); i.kind == SymKind::Given || i.mods & mods::GIVEN != 0 };
+        let mine = given(self, s);
+        let ours: Vec<SymId> = alts.iter().copied().filter(|&a| given(self, a) == mine).collect();
+        if ours.len() == alts.len() {
+            return (TermRef::ModuleMember(src, set), false);
+        }
+        // The clause's other selector brought the other alternatives: together they are the set.
+        if let Some(TermRef::ModuleMember(m, e)) = scope.terms.get(&name).copied() {
+            if m == src && alts.contains(&e) && given(self, e) != mine {
+                return (TermRef::ModuleMember(src, set), true);
+            }
+        }
+        match ours.as_slice() {
+            [one] => (TermRef::ModuleMember(src, *one), false),
+            _ => (TermRef::ModuleMember(src, set), false),
         }
     }
 
@@ -1470,7 +1503,8 @@ impl<'a> Worker<'a> {
         };
         let parent_tys: Vec<TyExprId> = match &self.ast(file).def(def).kind {
             DefKind::Class(cls) => cls.parents.iter().map(|p| p.ty).collect(),
-            DefKind::Given(g) => vec![g.ty],
+            DefKind::Given(g) if g.parents.is_empty() => vec![g.ty],
+            DefKind::Given(g) => g.parents.iter().map(|p| p.ty).collect(),
             _ => Vec::new(),
         };
         if parent_tys.is_empty() {

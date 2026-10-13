@@ -7,6 +7,26 @@ use crate::types::*;
 use std::sync::Arc;
 
 impl<'a> Worker<'a> {
+    /// The term of a file's `<file>$package` object (`Symbols::opaque_holders`), the prefix of an
+    /// external reference to the file's top-level opaque types (dotty's `TermRef(p, F$package)`),
+    /// made with the first of them: no package entry holds it.
+    fn enter_opaque_holder(&mut self, file: FileId, owner: Owner) {
+        let stem = crate::tasty::write::file_stem(&self.source(file).path);
+        let name = self.interner.intern(&format!("{}$package", stem));
+        let current = self.syms.opaque_holders.get(&file).copied();
+        if current.is_some_and(|h| h.idx() < self.syms.syms.len() && self.syms.sym(h).file == file && self.syms.sym(h).name == name) {
+            return;
+        }
+        let sym = self.syms.new_sym(name, SymKind::Val, mods::FINAL, owner, file, None, crate::source::Span::default());
+        let sig = self.value_sig(ANY);
+        {
+            let mut info = self.syms.sym_mut(sym);
+            info.sig = Some(sig);
+            info.state().set(Completion::Done);
+        }
+        self.syms.opaque_holders.insert(file, sym);
+    }
+
     /// Enters the definitions of every file: the std files parsed with the program first, in
     /// their slot order, then the program's files. A std file entered later goes through
     /// `enter_file_defs` from `stdlib.rs`.
@@ -132,9 +152,8 @@ impl<'a> Worker<'a> {
         if duplicate {
             let mut msg = self.already_defined(name, old.unwrap());
             let is_method = |s: SymId| matches!(self.syms.sym(s).kind, SymKind::Def | SymKind::Overloaded(_));
-            let is_value = |s: SymId| matches!(self.syms.sym(s).kind, SymKind::Val | SymKind::Var);
             let (o, s) = (old.unwrap(), sym);
-            if (is_method(o) && is_value(s)) || (is_value(o) && is_method(s)) {
+            if (is_method(o) && self.is_value_def(s)) || (self.is_value_def(o) && is_method(s)) {
                 msg.push_str("; overloading a value with a method is not supported");
             }
             self.error(span, msg);
@@ -171,13 +190,27 @@ impl<'a> Worker<'a> {
     fn overloads(&self, old: SymId, sym: SymId) -> bool {
         let (o, s) = (self.syms.sym(old), self.syms.sym(sym));
         let is_method = |k: SymKind| matches!(k, SymKind::Def | SymKind::Overloaded(_));
-        let is_value = |k: SymKind| matches!(k, SymKind::Val | SymKind::Var);
         if s.kind == SymKind::Def && is_method(o.kind) {
             return o.file == s.file || !matches!(s.owner, Owner::Package(_));
         }
-        // A val next to a method of its name in a class: alternatives of one name, as scalac
-        // keeps them.
-        matches!(s.owner, Owner::Class(_)) && ((is_method(o.kind) && is_value(s.kind)) || (is_value(o.kind) && s.kind == SymKind::Def))
+        // A val (a given without parameters is one) next to a method of its name in a class:
+        // alternatives of one name, as scalac keeps them.
+        matches!(s.owner, Owner::Class(_)) && ((is_method(o.kind) && self.is_value_def(sym)) || (self.is_value_def(old) && s.kind == SymKind::Def))
+    }
+
+    /// A val, a var, or a given without type or term parameters, which dotty makes a (lazy) val.
+    fn is_value_def(&self, s: SymId) -> bool {
+        let info = self.syms.sym(s);
+        match info.kind {
+            SymKind::Val | SymKind::Var => true,
+            // A given read from a pickle has its signature, a program's its definition.
+            SymKind::Given => match (info.def, info.sig.as_deref()) {
+                (Some(d), _) => matches!(&self.ast(info.file).def(d).kind, DefKind::Given(g) if g.tparams.is_empty() && g.clauses.is_empty()),
+                (None, Some(sig)) => sig.tparams.is_empty() && sig.clauses.is_empty(),
+                (None, None) => false,
+            },
+            _ => false,
+        }
     }
 
     fn add_alternative(&mut self, owner: Owner, old: SymId, sym: SymId) {
@@ -470,6 +503,9 @@ impl<'a> Worker<'a> {
                     self.def_classes.insert(file.0 as usize, id, cid);
                     self.file_opaques[file.0 as usize].push(cid);
                     self.mark_opaque_in_class(cid);
+                    if let Owner::Package(_) = owner {
+                        self.enter_opaque_holder(file, owner);
+                    }
                     if !self.register_class(owner, cid) {
                         self.def_classes.remove(file.0 as usize, &id);
                         self.file_opaques[file.0 as usize].pop();
@@ -738,7 +774,7 @@ impl<'a> Worker<'a> {
         }
     }
 
-    fn enter_ctor_params(&mut self, file: FileId, cid: ClassId, clauses: &[ast::ParamClause]) {
+    pub(super) fn enter_ctor_params(&mut self, file: FileId, cid: ClassId, clauses: &[ast::ParamClause]) {
         // A native JS class has no fields of its own: a plain parameter only shapes the
         // constructor call and may share its name with a member.
         let native = self.syms.class(cid).js == JsKind::Native;

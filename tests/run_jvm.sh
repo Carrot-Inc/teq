@@ -40,6 +40,10 @@
 # flags tests/support/abi/listing.py reads from its class files against <name>.expected, which
 # tests/support/abi/expected.sh writes from scalac 3.8.4's.
 cd "$(dirname "$0")/.."
+# The lists are sorted bytewise: `sort -u` and `comm` under a locale's collation would take
+# `tail_calls` and `tailcalls` for one name. The character set stays the locale's, which java's
+# output encoding follows.
+export LC_COLLATE=C
 TEQ=${TEQ:-./target/release/teq}
 export TZ=UTC  # an archive entry's DOS time is local time: the recorded bytes are UTC's
 JDK_MAJOR=$(java -version 2>&1 | sed -nE '1s/^[^"]*"([0-9]+).*/\1/p')

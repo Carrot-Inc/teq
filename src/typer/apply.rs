@@ -263,6 +263,97 @@ impl<'a> Worker<'a> {
         self.type_application_now(e, expected)
     }
 
+    /// Where an opaque type's definition is visible, the type of a reference to a member names
+    /// the opaque type externally (dotty's `A.T`, which stays opaque for the implicit scope) where
+    /// the member's declared type names it and either the member is declared outside the
+    /// definition's scope, where only `A.T` can name it, or the reference reaches the member
+    /// through a path whose root is no enclosing `this` (`asSeenFrom` of the prefix `A.T` maps
+    /// `A.this` to `A`): `A.T.of(1)`, an import's `of(1)`, and a top-level member read from the
+    /// top level, whose prefix dotty makes the package's. `T.of(1)` and `mk(1)` of the enclosing
+    /// object read through its `this` keep the reference transparent.
+    #[cold]
+    #[inline(never)]
+    fn external_opaque_result(&mut self, e: ExprId, te: TExprId, ty: TypeId) -> TypeId {
+        let Some(s) = self.referenced_member(te) else { return ty };
+        let ret = match self.syms.sym(s).sig.as_ref() {
+            Some(sig) => sig.ret,
+            None => return ty,
+        };
+        let declared: Vec<ClassId> = self.transparent.clone().into_iter().filter(|&c| self.type_names_class(ret, c, 0)).collect();
+        if declared.is_empty() {
+            return ty;
+        }
+        let owner = self.syms.sym(s).owner;
+        let file = self.syms.sym(s).file;
+        let through = self.reached_externally(e);
+        let marks: Vec<ClassId> = declared.into_iter().filter(|&c| through || !self.opaque_visible_in(c, owner, file)).collect();
+        if marks.is_empty() {
+            return ty;
+        }
+        self.mark_external_opaques(ty, &marks, 0)
+    }
+
+    /// The member a typed reference or call reads.
+    fn referenced_member(&self, te: TExprId) -> Option<SymId> {
+        match self.prog.expr(te) {
+            TExpr::CallMethod(_, s, _) | TExpr::CallStatic(s, _) | TExpr::Field(_, s) | TExpr::Static(s) => Some(s),
+            TExpr::Block(_, r) => self.referenced_member(r),
+            _ => None,
+        }
+    }
+
+    /// Whether `t` names the class `c` in its classes' arguments, unions and intersections.
+    fn type_names_class(&self, t: TypeId, c: ClassId, depth: u32) -> bool {
+        if depth > 16 {
+            return false;
+        }
+        match self.types.get(t) {
+            Type::Class(k, args) => k == c || self.types.items(args).iter().any(|&a| self.type_names_class(a, c, depth + 1)),
+            Type::Union(a, b, _) | Type::Inter(a, b) => self.type_names_class(a, c, depth + 1) || self.type_names_class(b, c, depth + 1),
+            _ => false,
+        }
+    }
+
+    /// Whether the application's function is reached through a path whose root is no enclosing
+    /// class's `this`: a qualified selection on such a root, or a name bound at the top level or
+    /// by an import (dotty's prefix: a package's, an import's path).
+    fn reached_externally(&mut self, e: ExprId) -> bool {
+        let ast = self.cur_ast();
+        let mut f = e;
+        loop {
+            match ast.expr(f) {
+                Expr::Apply(g, _) | Expr::UsingApply(g, _) | Expr::TypeApply(g, _) => f = g,
+                _ => break,
+            }
+        }
+        match ast.expr(f) {
+            Expr::Select(q, _) => self.path_root_external(q, 0),
+            Expr::Ident(n) => self.name_bound_externally(n),
+            _ => false,
+        }
+    }
+
+    fn path_root_external(&mut self, q: ExprId, depth: u32) -> bool {
+        if depth > 32 {
+            return false;
+        }
+        let ast = self.cur_ast();
+        match ast.expr(q) {
+            Expr::Select(_, names::THIS) | Expr::This => false,
+            Expr::Select(inner, _) => self.path_root_external(inner, depth + 1),
+            Expr::Ident(n) => self.name_bound_externally(n),
+            _ => false,
+        }
+    }
+
+    /// Whether `n` is bound here otherwise than as a local or a member of an enclosing class.
+    fn name_bound_externally(&mut self, n: Name) -> bool {
+        let exported = self.ref_exported;
+        let r = self.lookup_term(n);
+        self.ref_exported = exported;
+        matches!(r, Some(TermRef::Global(_) | TermRef::ModuleMember(..) | TermRef::ValueMember(..) | TermRef::Class(_) | TermRef::Package(_)))
+    }
+
     /// An application in a program with library bodies that hold inferred types.
     #[cold]
     #[inline(never)]
@@ -419,7 +510,21 @@ impl<'a> Worker<'a> {
         typed
     }
 
+    /// An application, its type naming an opaque type externally where its definition is
+    /// visible and the reference is external (`external_opaque_result`). A function of its own,
+    /// its body inlined into it, as master's was, so that the typing of an expression, which
+    /// inlines `type_application`, is compiled as before.
+    #[inline(never)]
     fn type_application_now(&mut self, e: ExprId, expected: Option<TypeId>) -> (TExprId, TypeId) {
+        let (te, ty) = self.type_application_body(e, expected);
+        if self.transparent.is_empty() {
+            return (te, ty);
+        }
+        (te, self.external_opaque_result(e, te, ty))
+    }
+
+    #[inline(always)]
+    fn type_application_body(&mut self, e: ExprId, expected: Option<TypeId>) -> (TExprId, TypeId) {
         let ast = self.cur_ast();
         let span = ast.expr_span(e);
         let mut targs: Option<ListRef> = None;
@@ -1722,11 +1827,11 @@ impl<'a> Worker<'a> {
                 // of a parent it overrides (`Util.tag` imported through an object whose `Cap`
                 // gives its own): the type's, whose owner the owner type is, as dotty selects a
                 // member anew on the prefix, where it matches the member named.
-                let s = if self.syms.alternatives(found).is_some() || found != s && self.syms.alternatives(s).is_none() && self.found_matches(recv_ty, s, found, owner_ty) {
-                    found
-                } else {
-                    s
-                };
+                // A given alternative a given selector brought (`export O.given`, `import O.given`)
+                // stands alone, the other alternatives of its name not brought with it (dotty's
+                // `addWildcardForwarders` forwards the given member by itself).
+                let take_found = self.syms.alternatives(found).is_some() || found != s && self.syms.alternatives(s).is_none() && self.found_matches(recv_ty, s, found, owner_ty);
+                let s = if take_found && !self.given_alternative(s) { found } else { s };
                 self.member_callee_in(recv, recv_ty, Some(owner_ty), s)
             }
             None => self.member_callee_in(recv, recv_ty, None, s),
@@ -1775,10 +1880,24 @@ impl<'a> Worker<'a> {
         self.syms.class(owner).ctor_syms.iter().flatten().any(|&p| p == s)
     }
 
+    /// An alternative of a name that is a given, which a given selector brings alone.
+    #[cold]
+    #[inline(never)]
+    fn given_alternative(&self, s: SymId) -> bool {
+        let i = self.syms.sym(s);
+        i.alternative && (i.kind == SymKind::Given || i.mods & crate::ast::mods::GIVEN != 0)
+    }
+
     /// Private members are reachable from their class and its companion only, a top-level
     /// `private[p]` definition from inside `p`.
     pub fn is_accessible(&self, s: SymId) -> bool {
-        let info = self.syms.sym(s);
+        let mut info = self.syms.sym(s);
+        // A deferred given's implementation has its declaration's access (`dcl.copy`).
+        let mut s = s;
+        if info.mods & crate::ast::mods::OVERRIDE != 0 && info.def.is_none() {
+            s = self.access_declaration_of(s);
+            info = self.syms.sym(s);
+        }
         let Owner::Class(owner) = info.owner else {
             let qualified = info.mods & crate::ast::mods::PRIVATE != 0 && self.has_access_scope(info.file, info.span.start);
             return !qualified || self.in_access_scope(info.file, info.span.start, info.owner);
@@ -1978,6 +2097,7 @@ impl<'a> Worker<'a> {
     /// inherits the member, a self type counting as inheritance (SLS 5.2).
     #[cold]
     fn check_protected_access(&mut self, s: SymId, recv: TExprId, recv_ty: TypeId, span: Span) {
+        let s = self.access_declaration_of(s);
         let through_this = matches!(self.prog.expr(recv), TExpr::This | TExpr::Super(_));
         let Some(enclosing_subclass) = self.protected_denied(s, through_this, recv_ty) else { return };
         let Some(owner) = self.access_owner(s, Some(recv_ty)) else { return };
@@ -4189,8 +4309,19 @@ impl<'a> Worker<'a> {
         if explicit.len() > sig.tparams.len().saturating_sub(explicit_from) {
             self.error(span, "too many type arguments");
         }
+        // A bound of a clause after the extension's receiver may name it (`Elems <:
+        // p.MirroredElemTypes`, `Mirror.fromProductTyped`): the receiver's path is in it, as dotty
+        // instantiates the clause once the receiver is applied.
+        let recv_path = match call.ext_recv {
+            Some((recv, recv_ty)) if !sig.tparams.is_empty() => self.receiver_bound_path(&sig, ext_clauses, recv, recv_ty),
+            _ => None,
+        };
         for (i, &tp) in sig.tparams.iter().enumerate() {
             let (upper, lower) = (self.syms.tparam(tp).upper, self.syms.tparam(tp).lower);
+            let (upper, lower) = match recv_path {
+                Some(path) => (self.subst_paths(upper, &[path]), self.subst_paths(lower, &[path])),
+                None => (upper, lower),
+            };
             // A bound naming the owner's `this` (`Tuple.head[This >: this.type]`) is seen from
             // the receiver, as the signature is.
             let (upper, lower) = match call.prefix {
@@ -4991,6 +5122,17 @@ impl<'a> Worker<'a> {
         }
         let paths = self.param_paths.clone();
         self.subst_paths(t, &paths)
+    }
+
+    /// The extension receiver's parameter with the receiver's path, where a type parameter's
+    /// bound names a path (`Elems <: p.MirroredElemTypes`).
+    #[cold]
+    #[inline(never)]
+    fn receiver_bound_path(&mut self, sig: &MethodSig, ext_clauses: usize, recv: TExprId, recv_ty: TypeId) -> Option<(SymId, TypeId)> {
+        if !sig.tparams.iter().any(|&tp| self.types.has_paths(self.syms.tparam(tp).upper) || self.types.has_paths(self.syms.tparam(tp).lower)) {
+            return None;
+        }
+        sig.clauses.iter().take(ext_clauses).find(|c| !c.is_using).map(|c| (c.params[0].sym, self.arg_path(recv, recv_ty)))
     }
 
     /// After a clause is applied, the paths of its parameters in the result type give way to
@@ -9060,11 +9202,15 @@ impl<'a> Worker<'a> {
         span: Span,
         expected: Option<TypeId>,
     ) -> Option<(TExprId, TypeId)> {
-        let alternatives = if several && lexical_pick.is_some() { self.import_alternatives(name) } else { Vec::new() };
+        // dotty's `tryExtension` tries every import of the scope that brings the name
+        // (`altImports`), the nearest's failure included: one object's inherited extension is
+        // another's seen from its own object (`TotalWrapper`'s `value` through `A.*` and `B.*`).
+        let alternatives = if several { self.import_alternatives(name) } else { Vec::new() };
         let lexical = match lexical_pick {
             Some(call) if alternatives.len() > 1 && alternatives.iter().any(|g| g.syms.contains(&call.sym)) => {
                 self.lexical_among_imports(alternatives, recv, recv_ty, targs, lists, span, expected)
             }
+            None if alternatives.len() > 1 => self.lexical_among_imports(alternatives, recv, recv_ty, targs, lists, span, expected),
             Some(call) if !self.sig_of(call.sym).clauses.iter().any(|c| c.is_using) => {
                 if self.lexical_selected.is_some() {
                     self.lexical_selected = Some(true);

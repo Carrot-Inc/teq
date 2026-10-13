@@ -1509,6 +1509,38 @@ impl<'a> Worker<'a> {
         Some(TermRef::ValueMember(v, e))
     }
 
+    /// Whether a type's term path (`A` of `A.T`) is rooted otherwise than in an enclosing class's
+    /// `this` (`external_opaque_result`'s rule for a written type).
+    /// `A.T[X]` of an opaque type whose definition is visible here, written through a path whose
+    /// root is no enclosing `this`: dotty's external reference, as `A.T` is (`TyExpr::Select`).
+    #[cold]
+    #[inline(never)]
+    fn applied_external_opaque(&mut self, f: TyExprId, t: TypeId) -> TypeId {
+        let TyExpr::Select(q, _) = self.cur_ast().ty(f) else { return t };
+        let Type::Class(c, _) = self.types.get(t) else { return t };
+        if !self.transparent.contains(&c) || self.types.is_path_class(c) || !self.type_path_root_external(q, 0) {
+            return t;
+        }
+        self.mark_external_opaques(t, &[c], 0)
+    }
+
+    fn type_path_root_external(&mut self, q: TyExprId, depth: u32) -> bool {
+        if depth > 32 {
+            return false;
+        }
+        match self.cur_ast().ty(q) {
+            TyExpr::Select(_, names::THIS) => false,
+            TyExpr::Select(inner, _) => self.type_path_root_external(inner, depth + 1),
+            TyExpr::Name(n) => {
+                let exported = self.ref_exported;
+                let r = self.lookup_term(n);
+                self.ref_exported = exported;
+                matches!(r, Some(TermRef::Global(_) | TermRef::ModuleMember(..) | TermRef::ValueMember(..) | TermRef::Class(_) | TermRef::Package(_)))
+            }
+            _ => false,
+        }
+    }
+
     pub fn lookup_term(&mut self, name: Name) -> Option<TermRef> {
         self.lookup_term_at_opt(name, None)
     }
@@ -3106,6 +3138,13 @@ impl<'a> Worker<'a> {
                     self.deps_export_path(q, n);
                 }
                 match found {
+                    // `A.T` of an opaque type whose definition is visible here, written through a
+                    // path whose root is no enclosing `this`: dotty's external reference, opaque
+                    // for the implicit scope (`TypeRef(TermRef(A), T)`).
+                    Some(r @ TypeRef::Class(c)) if self.transparent.contains(&c) && !self.types.is_path_class(c) => {
+                        let t = self.type_ref_to_type(r, span, false);
+                        if self.type_path_root_external(q, 0) { self.mark_external_opaques(t, &[c], 0) } else { t }
+                    }
                     Some(r) => {
                         let t = self.type_ref_to_type(r, span, false);
                         if self.declaring > 0 && matches!(r, TypeRef::Alias(_)) {
@@ -3236,6 +3275,9 @@ impl<'a> Worker<'a> {
                 }
                 if self.declaring > 0 && t != ERROR && !self.declared_views.is_empty() {
                     self.note_declared_application(id, f, ctor, &arg_ids, &resolved);
+                }
+                if !self.transparent.is_empty() {
+                    return self.applied_external_opaque(f, t);
                 }
                 t
             }
@@ -4581,7 +4623,7 @@ impl<'a> Worker<'a> {
         self.resolve_tparam_bounds_of(tps, ids, |_| true);
     }
 
-    fn resolve_tparam_bounds_of(&mut self, tps: &[ast::TypeParam], ids: &[(Name, TParamId)], which: impl Fn(&ast::TypeParam) -> bool) {
+    pub(super) fn resolve_tparam_bounds_of(&mut self, tps: &[ast::TypeParam], ids: &[(Name, TParamId)], which: impl Fn(&ast::TypeParam) -> bool) {
         for (tp, &(_, id)) in tps.iter().zip(ids).filter(|(tp, _)| which(tp)) {
             let itself = self.types.param(id);
             for (bound, upper) in [(tp.upper, true), (tp.lower, false)] {
@@ -5388,8 +5430,14 @@ impl<'a> Worker<'a> {
                 let existing = t.syms.class(c).ctor_syms.clone();
                 let ctor = t.resolve_clauses(&g.clauses, Some(existing), &g.tparams, &ids, Some(c));
                 t.syms.class_mut(c).ctor = ctor;
-                let parent = t.resolve_type(g.ty);
-                t.set_parents(c, vec![(parent, t.cur_ast().ty_spans[g.ty.idx()])]);
+                // A structural instance over constructor calls has those parents (`given t: P()
+                // with Q`), else its type is its one parent.
+                let parents: Vec<(TypeId, Span)> = if g.parents.is_empty() {
+                    vec![(t.resolve_type(g.ty), t.cur_ast().ty_spans[g.ty.idx()])]
+                } else {
+                    g.parents.iter().map(|p| (t.resolve_type(p.ty), t.cur_ast().ty_spans[p.ty.idx()])).collect()
+                };
+                t.set_parents(c, parents);
             }
             DefKind::TypeAlias { tparams, rhs, upper, .. } => {
                 let ids = t.make_tparams(tparams);
@@ -6106,6 +6154,9 @@ impl<'a> Worker<'a> {
             info.this_type = Some(self.types.inter(self_ty, declared));
         }
         if info.base_types.len() > 1 {
+            // The implementations of the deferred givens the class inherits are its declarations
+            // before its members meet the inherited ones.
+            self.enter_deferred_implementations(c);
             self.mark_members_meeting_inherited(c);
             // A base that declares no self type asks nothing of `c`'s; a class declaring a self
             // type of its own is checked once that is resolved (`complete_class_def`), which comes
@@ -6285,10 +6336,13 @@ impl<'a> Worker<'a> {
             // A name none of the bases has meets nothing there (the bases' names gathered once).
             let named = inherited.get_or_insert_with(|| self.base_member_names(c)).has(name);
             let info = self.syms.class(c);
+            // A method meets an inherited value of its name too, which it overloads unless their
+            // parameters agree (dotty's `membersNamed` keeps every member no other matches).
             let meets = named && info.base_types[1..].iter().any(|&(b, _)| {
                 self.syms.class(b).members.get(&name).map_or(false, |&p| match self.syms.sym(p).kind {
                     SymKind::Overloaded(_) => true,
                     SymKind::Def => (!is_std || in_jar) && !is_val,
+                    SymKind::Val | SymKind::Var | SymKind::Given => (!is_std || in_jar) && kind == SymKind::Def,
                     _ => false,
                 })
             });
@@ -6948,6 +7002,31 @@ impl Binding for TypeRef {
             TypeRef::ValueMember(v, _) => Some(t.syms.sym(t.import_values[v.0 as usize].0).file),
             TypeRef::Param(_) => None,
         }
+    }
+}
+
+/// Whether `ty` names a member or the singleton of a path rooted at a name `is_param` takes
+/// (`p.MirroredElemTypes`, `p.type`): a parameter's, where it takes a method's parameters.
+pub(super) fn ty_selects_from(ast: &ast::Ast, ty: TyExprId, is_param: &dyn Fn(Name) -> bool) -> bool {
+    fn root(ast: &ast::Ast, ty: TyExprId) -> Option<Name> {
+        match ast.ty(ty) {
+            TyExpr::Name(n) => Some(n),
+            TyExpr::Select(q, _) => root(ast, q),
+            _ => None,
+        }
+    }
+    let any = |l: ast::ListRef| ast.ty_list(l).iter().any(|&t| ty_selects_from(ast, t, is_param));
+    match ast.ty(ty) {
+        TyExpr::Select(q, _) | TyExpr::Singleton(q) => root(ast, q).is_some_and(is_param),
+        TyExpr::Apply(f, args) => ty_selects_from(ast, f, is_param) || any(args),
+        TyExpr::Fun(params, ret) | TyExpr::CtxFun(params, ret) => any(params) || ty_selects_from(ast, ret, is_param),
+        TyExpr::Tuple(items) | TyExpr::NamedTuple(_, items) => any(items),
+        TyExpr::Union(a, b) | TyExpr::Inter(a, b) | TyExpr::BoundedWildcard(a, b) => ty_selects_from(ast, a, is_param) || ty_selects_from(ast, b, is_param),
+        TyExpr::ByName(t) | TyExpr::Repeated(t) | TyExpr::Unchecked(t) | TyExpr::UncheckedVariance(t) | TyExpr::Lambda(_, t) | TyExpr::PolyFun(_, t) => {
+            ty_selects_from(ast, t, is_param)
+        }
+        TyExpr::Project(t, _) | TyExpr::Refined(t, _) => ty_selects_from(ast, t, is_param),
+        _ => false,
     }
 }
 

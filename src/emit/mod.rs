@@ -1507,6 +1507,19 @@ impl<'a> Emitter<'a> {
     }
 
     /// Accessor function returning the singleton instance of an object.
+    /// The class of the given object `s` where it is a static module (`static_given_object`)
+    /// whose body runs something: one that runs nothing has no point between its publication and
+    /// its construction's end, so the lazy val the owner holds answers as the module would,
+    /// smaller.
+    fn given_module_of(&self, s: SymId) -> Option<ClassId> {
+        let k = self.syms.sym(s).impl_class?;
+        (self.syms.static_given_object(k) == Some(s) && self.has_body.get(k.idx()).copied().unwrap_or(false)).then_some(k)
+    }
+
+    fn given_module_class(&self, c: ClassId) -> bool {
+        self.syms.static_given_object(c).is_some_and(|s| self.given_module_of(s) == Some(c))
+    }
+
     fn module_accessor(&mut self, c: ClassId) -> String {
         self.record_class(c);
         let accessor = self.accessor_text(c);
@@ -1903,6 +1916,15 @@ impl<'a> Emitter<'a> {
         let name = self.sym_name(sym);
         self.bindings.defs.push(Def::Sym(sym));
         self.line();
+        // A given object of a package is its module's accessor, which goes by the given's name
+        // where the class is the given's own (`t$G`, `t$`).
+        if let Some(k) = self.given_module_of(sym) {
+            let accessor = self.module_accessor(k);
+            if *name != *accessor {
+                let _ = write!(self.out, "function {}() {{ return {}(); }}", name, accessor);
+            }
+            return;
+        }
         if self.const_vals[sym.idx()] {
             let _ = write!(self.out, "const {} = ", name);
             self.emit_value(init);
@@ -2309,7 +2331,11 @@ impl<'a> Emitter<'a> {
             self.out.push_str("extends Error ");
         }
         self.open("{");
-        let is_object = info.kind == ClassKind::Object;
+        // A given object of a package or of objects is a module as an object is (dotty's static
+        // classification, `LazyVals` 74-105): its instance published after the super call
+        // (`JSCodeGen`, 2308-2313), before its body, and read through its accessor
+        // (`given_module_of`).
+        let is_object = info.kind == ClassKind::Object || self.given_module_class(tc.id);
         let is_anon = info.kind == ClassKind::Anon;
         // A trait's captures are its initialiser's proxies, parameters it holds in no field.
         let n_captures = if is_anon { tc.ctor_params.len() } else if info.kind == ClassKind::Trait { 0 } else { tc.captures };
@@ -2503,7 +2529,11 @@ impl<'a> Emitter<'a> {
             }
             self.before_super = false;
             self.ctor_locals = outer_locals;
-            if is_object {
+            // A module is published after its superclass's constructor, which on JavaScript runs
+            // the superclass's body (`JSCodeGen`, 2308-2313: the module stored after the super
+            // call): here the body a superclass defers runs below (`$body`), and publishes then.
+            let publish_after_body = is_object && runs_body;
+            if is_object && !publish_after_body {
                 self.line();
                 let _ = write!(self.out, "{} = {};", instance_of(&accessor_of(&name)), this);
                 self.emit_stateful_enum_values(tc.id);
@@ -2570,6 +2600,12 @@ impl<'a> Emitter<'a> {
                     let _ = write!(self.out, "if (new.target === {}) ", name);
                 }
                 let _ = write!(self.out, "{}.$body();", this);
+            }
+            if publish_after_body {
+                self.line();
+                let _ = write!(self.out, "{} = {};", instance_of(&accessor_of(&name)), this);
+                self.emit_stateful_enum_values(tc.id);
+                self.emit_enum_store(tc.id, this);
             }
             if !defers_body {
                 for call in &via_inits {
@@ -2638,7 +2674,8 @@ impl<'a> Emitter<'a> {
                 }
             }
         }
-        // A lazy val is a getter that replaces itself with the computed value.
+        // A lazy val is a getter that replaces itself with the computed value; a given object of
+        // the object is its module's accessor.
         for init in &tc.init {
             let TInit::Field(sym, e) = init else { continue };
             if self.syms.sym(*sym).mods & mods::LAZY == 0 {
@@ -2646,6 +2683,13 @@ impl<'a> Emitter<'a> {
             }
             // The val of a companion the typer made, which nothing reads (`is_made_companion_val`).
             if crate::tir::is_made_companion_val(self.syms, *sym) && !self.reach.fields_read[sym.idx()] && !self.reach.init_read[sym.idx()] {
+                continue;
+            }
+            if let Some(k) = self.given_module_of(*sym) {
+                let field = self.field_name(*sym);
+                let accessor = self.module_accessor(k);
+                self.line();
+                let _ = write!(self.out, "get {}() {{ return {}(); }}", field, accessor);
                 continue;
             }
             let field = self.field_name(*sym);

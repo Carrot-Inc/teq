@@ -102,6 +102,10 @@ impl<'a, 't> Interp<'a, 't> {
         if let Some(o) = self.made.module(c) {
             return Ok(Value::Obj(o.clone()));
         }
+        // Read while its superclass constructors run: not published yet.
+        if self.unpublished.iter().any(|&(k, _)| k == c) {
+            return Ok(Value::Null);
+        }
         if self.syms().class(c).js_binding.is_some() {
             let name = self.class_path(c);
             return self.unsupported(format!("{} is a JavaScript object", name));
@@ -127,18 +131,22 @@ impl<'a, 't> Interp<'a, 't> {
             born: Cell::new(0),
             made: Cell::new(super::made_now()),
         });
-        let classes = self.syms().classes.len();
-        self.made.set_module(c, obj.clone(), self.records.runs, classes);
         // The statics of a Java class: its members are the natives the interpreter has for them.
         if java_statics {
+            let classes = self.syms().classes.len();
+            self.made.set_module(c, obj.clone(), self.records.runs, classes);
             super::leave_epoch(outer);
             return Ok(Value::Obj(obj));
         }
+        // Published once the superclass constructors return, before the body runs (`construct`),
+        // as the JVM's `<clinit>` stores `MODULE$` after the super call and then runs the body.
+        self.unpublished.push((c, obj.clone()));
         let r = self.enter().and_then(|_| {
             let r = self.construct(&obj, c, Vec::new());
             self.depth -= 1;
             r
         });
+        self.publish_module(c, &obj);
         super::stamp(&Value::Obj(obj.clone()), super::epoch());
         super::leave_epoch(outer);
         // A module whose initialiser failed is not done: a later run under a larger budget
@@ -148,6 +156,17 @@ impl<'a, 't> Interp<'a, 't> {
             return Err(f);
         }
         Ok(Value::Obj(obj))
+    }
+
+    /// The module class of `s` where it is a given object made as a static module
+    /// (`Symbols::static_given_object`).
+    pub(super) fn static_given_module(&self, s: SymId) -> Option<ClassId> {
+        let info = self.syms().sym(s);
+        if info.kind != SymKind::Given {
+            return None;
+        }
+        let c = info.impl_class?;
+        (self.syms().static_given_object(c) == Some(s)).then_some(c)
     }
 
     // ---- top-level values ----
@@ -362,6 +381,12 @@ impl<'a, 't> Interp<'a, 't> {
     pub(super) fn static_value(&mut self, s: SymId) -> R {
         if let Some(v) = self.made.statics.get(&s) {
             return Ok(v.clone());
+        }
+        // A given object of a package or of objects is a module, its instance published before
+        // its body runs (dotty's static classification), so a read while it is made is the
+        // instance as on the JVM.
+        if let Some(c) = self.static_given_module(s) {
+            return self.module(c);
         }
         let info = self.syms().sym(s);
         let (kind, owner, file) = (info.kind, info.owner, info.file);
@@ -697,10 +722,22 @@ impl<'a, 't> Interp<'a, 't> {
             }
             _ => {}
         }
+        if obj.class == c {
+            self.publish_module(c, obj);
+        }
         if kind == ClassKind::Object {
             self.create_stateful_enum_values(c, &this)?;
         }
         self.run_inits(obj, c, ti, &frame, &cx)
+    }
+
+    /// Publishes the module `obj` of `c` made by `module`, if it is one still unpublished.
+    fn publish_module(&mut self, c: ClassId, obj: &Rc<Object>) {
+        if let Some(i) = self.unpublished.iter().position(|(k, o)| *k == c && Rc::ptr_eq(o, obj)) {
+            self.unpublished.remove(i);
+            let classes = self.syms().classes.len();
+            self.made.set_module(c, obj.clone(), self.records.runs, classes);
+        }
     }
 
     fn eval_parent_args(&mut self, sup: ClassId, l: ListRef, frame: &Rc<Frame>, cx: &Ctx) -> R<Vec<Value>> {
@@ -1917,6 +1954,10 @@ impl<'a, 't> Interp<'a, 't> {
             // A val of a library class is a lazy getter, marked so when its class is checked.
             (sym.kind, sym.mods & mods::LAZY != 0 || (sym.kind == SymKind::Val && self.typer.is_library_member(m)))
         };
+        // A given object of an object is a module, published before its body runs.
+        if let Some(c) = self.static_given_module(m) {
+            return Member::Module(c);
+        }
         match kind {
             SymKind::Val | SymKind::Var | SymKind::Given | SymKind::Param => {
                 if lazy {
@@ -2154,7 +2195,14 @@ impl<'a, 't> Interp<'a, 't> {
                 let frame = Frame::new(env);
                 let key_id = self.fresh_key();
                 let cx = Ctx { this: recv.clone(), def_key: key_id, class: Some(owner), tail: None };
-                let v = self.eval(init, &frame, &cx);
+                // A level of the evaluator's own (`enter`), so that an initialiser reading its
+                // own lazy val again recurses within the bound and its `StackOverflowError`, as a
+                // module's making does, where the JVM's thread waits on its own latch.
+                let v = self.enter().and_then(|_| {
+                    let v = self.eval(init, &frame, &cx);
+                    self.depth -= 1;
+                    v
+                });
                 drop(context);
                 if let Ok(v) = &v {
                     if let Value::Obj(o) = &recv {

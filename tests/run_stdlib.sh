@@ -12,6 +12,10 @@
 # tests/stdlib-summaries.txt instead: scalac 3.8.4's (`scala-cli compile -S 3.8.4`) in teq's spelling, written by
 # hand, so that a program the list gains is checked against scalac's summary, not this run's.
 cd "$(dirname "$0")/.."
+# The lists are sorted bytewise: `sort -u` and `comm` under a locale's collation would take
+# `tail_calls` and `tailcalls` for one name. The character set stays the locale's, which java's
+# output encoding follows.
+export LC_COLLATE=C
 TEQ=${TEQ:-./target/release/teq}
 . tests/support/jars.sh
 LIST=tests/stdlib-passing.txt

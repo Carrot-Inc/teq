@@ -436,6 +436,10 @@ pub struct GivenDef {
     pub clauses: Vec<ParamClause>,
     pub ty: TyExprId,
     pub alias: Option<ExprId>,
+    /// A structural instance's parents where one is a constructor call (`given t: P(1) with Q:`),
+    /// its arguments the instance's superclass call (dotty's `Parsers.givenDef` template over
+    /// `constrApps`); empty for `given t: T with { .. }`, whose one parent is `ty`.
+    pub parents: Vec<Parent>,
     pub body: Vec<Stmt>,
     /// `self =>` at the start of a `given ... with` body, as a class's.
     pub self_alias: Name,

@@ -26148,6 +26148,7 @@ scala.deprecatedOverriding$	<init>$default$1	-:java.lang.String
 scala.deprecatedOverriding$	<init>$default$2	-:java.lang.String
 scala.deriving	Mirror	object
 scala.deriving.Mirror	<init>	:scala.deriving.Mirror
+scala.deriving.Mirror$	fromProductTyped	[1],scala.deriving.Mirror$.Product,[2],scala.Product,scala.deriving.Mirror$.Product:java.lang.Object
 scala.deriving.Mirror$	fromTuple	[1],scala.deriving.Mirror$.Product,scala.Product:java.lang.Object
 scala.deriving.Mirror$.Product	<init>	:scala.deriving.Mirror$.Product
 scala.deriving.Mirror$.Product	fromProduct	scala.Product:java.lang.Object

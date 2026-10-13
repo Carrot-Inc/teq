@@ -5087,7 +5087,13 @@ impl<'w, 'a> P<'w, 'a> {
             if i == 0 && first_class.is_some() {
                 continue;
             }
-            self.tpt(p);
+            // A trait parent the given's class passes arguments to (`given t: Parent(1):`): its
+            // constructor call, as a class's (`parents`).
+            if let Some((args, via, prelude)) = self.trait_args(k, p) {
+                self.parent_or_elided(|w| w.trait_parent_call(p, &args, via, prelude));
+            } else {
+                self.tpt(p);
+            }
         }
         let mut self_type = None;
         if object {
@@ -5300,7 +5306,14 @@ impl<'w, 'a> P<'w, 'a> {
             self.buf.byte(TYPEREF);
             self.buf.nat(n as u64);
         }
-        self.ty(prefix);
+        // An object's term, the prefix of its opaque type's external reference (`TERMREF A`).
+        match self.w.types.get(prefix) {
+            Type::Term(s) if matches!(self.w.syms.sym(s).kind, SymKind::Object(_)) => {
+                let SymKind::Object(o) = self.w.syms.sym(s).kind else { unreachable!() };
+                self.module_termref(o)
+            }
+            _ => self.ty(prefix),
+        }
     }
 
     /// A class unapplied: `TYPEREF name prefix`, or `TYPEREFsymbol addr prefix` for a class of
@@ -5561,6 +5574,12 @@ impl<'w, 'a> P<'w, 'a> {
 
     fn ty(&mut self, t: TypeId) {
         let t = self.w.zonk(t);
+        // An opaque type's external reference outside its defining scope is the reference any
+        // type there writes (`TYPEREF T (TERMREF A)`), shared as one.
+        let t = match self.w.types.get(t) {
+            Type::Nested(_, inner) if self.external_written_bare(inner) => inner,
+            _ => t,
+        };
         if let Some(&a) = self.shared.get(&t) {
             self.shared_type_at(a);
             return;
@@ -5578,6 +5597,21 @@ impl<'w, 'a> P<'w, 'a> {
             self.shared.insert(t, at);
         }
         self.placed |= outer;
+    }
+
+    /// Whether `inner` is an opaque type of an object or of a file's top level written outside
+    /// its defining scope, where its reference names the same prefix as an external one.
+    fn external_written_bare(&self, inner: TypeId) -> bool {
+        let Type::Class(c, _) = self.w.types.get(inner) else { return false };
+        let info = self.w.syms.class(c);
+        if info.kind != ClassKind::Opaque || self.w.types.is_path_class(c) {
+            return false;
+        }
+        match info.owner {
+            Owner::Class(o) => self.w.syms.class(o).kind == ClassKind::Object && !self.enclosing.contains(&o),
+            Owner::Package(p) => !(self.package_members_this.is_some_and(|(_, pk)| pk == p) && self.is_local(Key::Class(c))),
+            Owner::Local => false,
+        }
     }
 
     fn type_now(&mut self, t: TypeId) {
@@ -5769,7 +5803,8 @@ impl<'w, 'a> P<'w, 'a> {
                 self.buf.nat(n as u64);
                 self.ty(prefix);
             }
-            // `TYPEREF C p`, its own arguments applied, as scalac pickles `p.C[Ts]`.
+            // `TYPEREF C p`, its own arguments applied, as scalac pickles `p.C[Ts]`: an opaque
+            // type's external reference `TYPEREF T (TERMREF A)` too.
             Type::Nested(prefix, class) => {
                 let Type::Class(c, args) = self.w.types.get(class) else { return self.ty(class) };
                 let args: Vec<TypeId> = self.w.types.items(args).to_vec();
@@ -5949,6 +5984,14 @@ impl<'w, 'a> P<'w, 'a> {
             return;
         }
         let info = self.sym_info(s);
+        // A file's `<file>$package`, the prefix of its top-level opaque types' external
+        // references (`Symbols::opaque_holders`).
+        if let Owner::Package(p) = info.owner {
+            if self.w.syms.opaque_holders.get(&info.file) == Some(&s) {
+                let stem = super::file_stem(&self.w.files.as_slice()[info.file.0 as usize].path);
+                return self.file_package_term(p, stem);
+            }
+        }
         match info.owner {
             // A local written before the type, a case's binder (`s.MirroredElemTypes`).
             Owner::Local if matches!(self.places.get(&Key::Sym(s)), Some(Place::At(_))) => {

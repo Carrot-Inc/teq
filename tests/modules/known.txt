@@ -1,4 +1,3 @@
-pkgobj classes  scala-library's inline `summon[Name]` binds its argument to a local (`astore 4`, `aload 4`) where the given is a member of the upstream products, and substitutes the build's own val `pa.defaultName` where it is whole: a split build reads an upstream member as a call, not as a path (a follow-up of the product mode)
 macrowithheld scalac-lean-b  scalac runs the downstream's macro on the JVM, and the Scala.js check build's products are TASTy alone, with no class file for the macro's call of the upstream ("Macro code depends on object Jobs found on the classpath, but could not be loaded"); the scalac-b leg types it over the JVM products
 enumorder classes  the same as downstreammirror: the downstream's `summon[Mirror.SumOf[Kind]]` is a mirror teq synthesizes, whose holder the whole build names after the upstream's file (`eoa/Kind$package$.derivingMirror$Kind`) and the split build after the products' directory (`a$package$`), where scalac's mirror is the companion `Kind$` (which implements `Mirror.Sum` since the JVM ABI alignment): the mirrors part
 ledgerlocalclass classes  the class an expansion of the product's inline body makes carries the pseudo file's SourceFile and line numbers (`a!lla.Lib$package`, line 6), the whole build's Lib.scala's: the JVM product mode's follow-up
@@ -31,7 +30,6 @@ inlinelocalclass subset  the same as classes
 macroderive subset  the same as classes, and its run stops as jvm-run does
 macroquote subset  the same as classes; `a` compiled alone also leaves out the quote's local class `mqa/Box$1ebb5g8_1479`, which the whole build writes in `a`'s products because `b`'s expansion reaches it
 macrotransparent subset  the same as classes
-pkgobj subset  the same as classes
 stdforms bundle  the split build's bundle differs in what it reaches, master's binary the same for the first: a product body that calls a member of a `java.util.List` (`l.size()`, `asScala`'s conversion) reaches the lean std's `java.util.Collection`, whose members (`stream`, `spliterator`, `parallelStream`) shift the release renaming's short names; and `Option.flatten`'s and `orNull`'s evidence, which the whole build's typer synthesizes, is read back as the call of `<:<.refl` the product holds, which reaches the std's `<:<` object (read so, since a program may choose that evidence explicitly: `stdformsuser`)
 exportinline classes  the whole build reads `Facade.k`, an object's export of an inline val, as the export it resolves, `{ Facade; Impl.k }`, the split build as the products' forwarder `Facade.k`; master's binary the same (the reading of an object's export of inline members over products)
 exportinline check-lean-whole  the same
@@ -45,7 +43,7 @@ caseobject classes  the same as downstreammirror: the downstream's `summon[Mirro
 caseobject subset  the same as classes
 genericdefaults js-run  the lean Scala.js products withhold `Defs.a`'s and `Box.n`'s bodies: a default whose parameter's type names the method's type parameters, whose getter scalac types as the default (`a$default$1()String`) where teq's pickle has the parameter's type, master's binary the same
 genericdefaults interp-run  the same as js-run
-pkgobjgiven classes  the same as pkgobj: the split build binds the upstream package object's given to a local (`astore_2`, `aload_2`) where the whole build reads it as a path, master's binary the same
+pkgobjgiven classes  the split build's signature of the package object's given class names it through the file's object (`listTC([1], pga.TC): pga.inner.Lib$package$.listTC`), the whole build's through the package (`pga.inner.listTC`): the reader's owner of a product's package-object given class (the summon's proxy, the earlier difference, is gone)
 pkgobjgiven subset  the same as classes
 pkgobjgiven check-lean-whole  the same as classes, in `b`'s lean pickle
 traitparams classes  the pickle of a class whose parent is a product's trait of a using clause alone (`Sorted[Int]`) writes the parent as its type where the whole build writes the constructor call with the evidence (`APPLY(SELECTin <init>, Ordering.Int)`); the class files are the same but for the TASTy's UUID: the frontend's, found by the trait leftovers part (master refused the case on the JVM)
@@ -84,3 +82,4 @@ valueexports bundle  a value export's forwarder of a member with a default: the 
 selftypecompanion js-run  teq's pickle of a creation through a self type's part (`this.Cfg(n, ..)` under `this: Base =>`) writes `new Base#Cfg(..)`, a projection, which the downstream's products build refuses as no valid class prefix, where scalac pickles `Parser.this.Cfg.apply(..)`: the writer's creation of a class a self type's part declares (the legs over scalac's upstream pass)
 selftypecompanion interp-run  the same as js-run
 selftypecompanion readtasty-a  the same as js-run: scalac's tree checker finds `Base.this` in `Impl.use`'s pattern where its own pickle has `Impl.this`
+mirrorproducttyped bundle  the mirrors an upstream body synthesizes are ordered by their classes' files, the whole build's one source by position (`Q`'s before `R`'s) and the lean products' a file per class by the order they were read (`R.tasty` first, `toQ`'s parameter naming it): master's binary the same for `summon[Mirror.ProductOf[Q]]` and `summon[Mirror.ProductOf[R]]` in one upstream body, the mirrors part

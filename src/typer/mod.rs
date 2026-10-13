@@ -1166,7 +1166,10 @@ pub struct Worker<'a> {
     /// The implicit scope of a type without open variables, computed once: the objects whose
     /// members make it up, and per wanted class the givens selected from them before the
     /// accessibility filter, which depends on the scope of the search (`implicits.rs`).
-    pub implicit_scopes: FxMap<TypeId, std::sync::Arc<[implicits::GivenScope]>>,
+    /// Keyed by the type, with whether an opaque type was met (`implicit_scope_objects_kept`):
+    /// a reference through an opaque type's defining scope's `this` is its underlying type where
+    /// its definition is visible, and a scope that met one there is not kept.
+    pub implicit_scopes: FxMap<TypeId, (std::sync::Arc<[implicits::GivenScope]>, bool)>,
     pub implicit_scope_givens: FxMap<(TypeId, u8, u32), std::sync::Arc<implicits::ScopeList>>,
     /// A package clause's level of a given search before the accessibility filter, per package,
     /// file (for the innermost clause, which holds the file's imports), and wanted class
@@ -1312,6 +1315,10 @@ pub struct Worker<'a> {
     /// `parent_args_of`: its own using parameters are the givens of its frame
     /// (`Worker::implement_deferred_givens`).
     pub deferred_impl_of: Option<ClassId>,
+    /// The implementations of deferred givens entered in their class whose own searches have not
+    /// run yet: dotty enters each after its search (`Typer.implementDeferredGivens`, `.entered`
+    /// after `implicitArgTree`), so no search before it sees it.
+    pub unentered_impls: Vec<SymId>,
     /// The classes SAM lambdas implement. Their frame is on the stack while the lambda body
     /// is typed, and a lambda body does not see the method it becomes: `enc` in
     /// `Codec(b => enc.enc(b))` is the outer field.
@@ -2550,6 +2557,7 @@ impl<'a> Worker<'a> {
             inferred_trait_args: Default::default(),
             parent_args_of: None,
             deferred_impl_of: None,
+            unentered_impls: Vec::new(),
             sam_classes: FxMap::default(),
             inline_accessor_syms: FxMap::default(),
             inline_results: FxMap::default(),
@@ -2897,6 +2905,7 @@ impl<'a> Worker<'a> {
             inferred_trait_args: self.inferred_trait_args.attach(),
             parent_args_of: Default::default(),
             deferred_impl_of: None,
+            unentered_impls: Vec::new(),
             sam_classes: self.sam_classes.clone(),
             inline_accessor_syms: self.inline_accessor_syms.clone(),
             inline_results: self.inline_results.clone(),
@@ -4802,6 +4811,39 @@ impl<'a> Worker<'a> {
             }
         }
         env
+    }
+
+    /// Whether the opaque type `c` is transparent to a definition of `owner` in `file`, as
+    /// `compute_transparent` decides it for the scope being typed: inside the object that
+    /// defines it, or for a top-level one inside its file's package object. A definition of a
+    /// block is taken to be inside, its scope's frames no longer known.
+    pub(super) fn opaque_visible_in(&mut self, c: ClassId, owner: Owner, file: FileId) -> bool {
+        let mut chain: Vec<ClassId> = Vec::new();
+        let mut o = owner;
+        for _ in 0..64 {
+            match o {
+                Owner::Class(k) => {
+                    chain.push(k);
+                    o = self.syms.class(k).owner;
+                }
+                Owner::Local => return true,
+                Owner::Package(_) => break,
+            }
+        }
+        let defined = self.syms.class(c).owner;
+        match defined {
+            Owner::Class(d) => chain.contains(&d),
+            Owner::Package(_) => {
+                if self.syms.class(c).file != file {
+                    return false;
+                }
+                match chain.last().copied() {
+                    None => owner == defined,
+                    Some(k) => self.syms.class(k).owner == defined && self.in_package_object(k, file),
+                }
+            }
+            Owner::Local => false,
+        }
     }
 
     fn compute_transparent(&mut self) {

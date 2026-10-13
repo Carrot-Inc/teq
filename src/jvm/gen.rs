@@ -2173,7 +2173,7 @@ impl<'a> Gen<'a> {
         self.code.push(VT::Int);
     }
 
-    fn ldc(&mut self, index: u16) {
+    pub(super) fn ldc(&mut self, index: u16) {
         if index <= 255 {
             self.code.op_u8(op::LDC, index as u8);
         } else {

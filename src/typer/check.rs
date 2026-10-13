@@ -1705,6 +1705,21 @@ impl<'a> Worker<'a> {
         inferred
     }
 
+    /// The clauses of a method a bound of whose type parameters names a parameter: the other
+    /// bounds before the clauses, those after them, once the parameters are bound.
+    #[cold]
+    #[inline(never)]
+    fn compute_dependent_bounds_sig(&mut self, sym: SymId, f: &'a ast::FunDef, ids: &[(Name, TParamId)]) -> Vec<ClauseSig> {
+        let ast = self.cur_ast();
+        let is_param = |n: Name| f.clauses.iter().any(|c| c.params.iter().any(|p| p.name == n));
+        let dependent = |tp: &ast::TypeParam| [tp.upper, tp.lower].into_iter().flatten().any(|b| super::resolve::ty_selects_from(ast, b, &is_param));
+        self.resolve_tparam_bounds_of(&f.tparams, ids, |tp| !dependent(tp));
+        self.erased_tags = (self.syms.sym(sym).jvm_evidence && self.erases_evidence()).then_some(0);
+        let clauses = self.resolve_clauses(&f.clauses, None, &f.tparams, ids, None);
+        self.resolve_tparam_bounds_of(&f.tparams, ids, dependent);
+        clauses
+    }
+
     fn compute_sig_inner(&mut self, sym: SymId, def: &'a ast::Def) -> MethodSig {
         let t = self;
         match &def.kind {
@@ -1739,9 +1754,20 @@ impl<'a> Worker<'a> {
             DefKind::Fun(f) => {
                 let ids = t.make_tparams(&f.tparams);
                 t.env.frames.push(Frame::Locals { names: Vec::new(), tparams: ids.clone(), givens: Vec::new(), classes: Vec::new(), aliases: Vec::new(), owner: t.sites.owners.len() as u32 });
-                t.resolve_tparam_bounds(&f.tparams, &ids);
-                t.erased_tags = (t.syms.sym(sym).jvm_evidence && t.erases_evidence()).then_some(0);
-                let clauses = t.resolve_clauses(&f.clauses, None, &f.tparams, &ids, None);
+                // A bound of a clause after a term clause may name its parameters (an extension's
+                // `Elems <: p.MirroredElemTypes`, `Mirror.fromProductTyped`): resolved once they
+                // are, the others before them.
+                let ast = t.cur_ast();
+                let is_param = |n: Name| f.clauses.iter().any(|c| c.params.iter().any(|p| p.name == n));
+                let dependent_bounds = !f.clauses.is_empty()
+                    && f.tparams.iter().any(|tp| [tp.upper, tp.lower].into_iter().flatten().any(|b| super::resolve::ty_selects_from(ast, b, &is_param)));
+                let clauses = if dependent_bounds {
+                    t.compute_dependent_bounds_sig(sym, f, &ids)
+                } else {
+                    t.resolve_tparam_bounds(&f.tparams, &ids);
+                    t.erased_tags = (t.syms.sym(sym).jvm_evidence && t.erases_evidence()).then_some(0);
+                    t.resolve_clauses(&f.clauses, None, &f.tparams, &ids, None)
+                };
                 if let Some(tags) = t.erased_tags.take() {
                     t.shared_write(sym, |w| w.syms.sym_mut(sym).erased_tags = tags);
                 }
@@ -1784,16 +1810,24 @@ impl<'a> Worker<'a> {
                 }
                 sig
             }
+            // A given class's def answers an instance of the class, of its own type parameters, as
+            // dotty's desugaring of a structural given with parameters makes it (`Parsers.givenDef`'s
+            // `TypeDef`, `Desugar.classDef`'s implicit wrapper `def t(using ..): t = new t`): the
+            // members its body adds are the result's.
             DefKind::Given(g) => match t.syms.sym(sym).impl_class {
                 Some(c) => {
                     t.complete_class(c);
                     let info = t.syms.class(c);
-                    MethodSig {
-                        tparams: info.tparams.clone(),
-                        clauses: info.ctor.clone(),
-                        ret: info.parents.first().copied().unwrap_or(ERROR),
-                        declared: crate::tir::NO_TYPE,
-                    }
+                    let (tparams, clauses) = (info.tparams.clone(), info.ctor.clone());
+                    // A given object, of no parameters, is read as its object
+                    // (`given_object_type`); its value's type stays the one declared.
+                    let ret = if tparams.is_empty() && clauses.iter().all(|c| c.params.is_empty()) {
+                        info.parents.first().copied().unwrap_or(ERROR)
+                    } else {
+                        let own: Vec<TypeId> = tparams.iter().map(|&p| t.types.param(p)).collect();
+                        t.types.class(c, &own)
+                    };
+                    MethodSig { tparams, clauses, ret, declared: crate::tir::NO_TYPE }
                 }
                 None => {
                     if let Some(sig) = t.derived_ctor_sig(g) {
@@ -2956,7 +2990,7 @@ impl<'a> Worker<'a> {
         let def = self.ast(file).def(def_id);
         let (body, clauses, parents): (&[Stmt], &[ast::ParamClause], &[ast::Parent]) = match &def.kind {
             DefKind::Class(cls) => (&cls.body, &cls.clauses, &cls.parents),
-            DefKind::Given(g) => (&g.body, &g.clauses, &[]),
+            DefKind::Given(g) => (&g.body, &g.clauses, &g.parents[..]),
             _ => (&[], &[], &[]),
         };
         if kind == ClassKind::EnumCase && self.unused.on() {
@@ -4702,7 +4736,8 @@ impl<'a> Worker<'a> {
                         && self.any_member_agreement(p) == Agreement::Params;
                     named_root |= overridden && (alternative || meets_inherited || named || beside_any);
                     let inherited = self.syms.sym(p);
-                    overloads_inherited |= !overridden && inherited.kind == SymKind::Def && !is_ext;
+                    // An inherited value a method does not override is an alternative of it too.
+                    overloads_inherited |= !overridden && matches!(inherited.kind, SymKind::Def | SymKind::Val | SymKind::Var | SymKind::Given) && !is_ext;
                     if !inherited.alternative && !is_ext {
                         break;
                     }
@@ -5217,8 +5252,11 @@ impl<'a> Worker<'a> {
             Agreement::Same | Agreement::Result if declared_apart => Agreement::Params,
             agreement => agreement,
         };
-        // A val next to the alternatives of an overloaded name other than the one it implements.
-        let overloads = p_kind == SymKind::Def && (m_kind == SymKind::Def || self.syms.sym(p).alternative);
+        // A val next to the alternatives of an overloaded name other than the one it implements,
+        // and a method beside a value whose parameters it does not take: no pair (dotty's
+        // `matches` of their signatures fails, so neither overrides the other).
+        let overloads = (p_kind == SymKind::Def && (m_kind == SymKind::Def || self.syms.sym(p).alternative))
+            || (m_kind == SymKind::Def && matches!(p_kind, SymKind::Val | SymKind::Var | SymKind::Given));
         if agreement == Agreement::Params && (p_abstract || overloads) {
             return false;
         }
