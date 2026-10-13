@@ -1,0 +1,15 @@
+typetests/O$ inside: instanceof typetests/Box
+typetests/Tests$ generic: instanceof typetests/Box
+typetests/Tests$ applied: instanceof typetests/Box
+typetests/Tests$ plain: ifnull
+typetests/Tests$ fromAny: instanceof typetests/Box
+typetests/Tests$ tuple: instanceof scala/Tuple2
+typetests/Tests$ refined: instanceof typetests/Box
+typetests/Tests$ intersect: instanceof typetests/Box ifnull
+typetests/Tests$ marks: ifnull ifnull
+typetests/Tests$ opaqueTest: instanceof typetests/Box
+typetests/Tests$ values: instanceof "[Ltypetestvalues/V;"
+typetests/Tests$ ints: instanceof "[I"
+typetests/Tests$ strings: instanceof "[Ljava/lang/String;"
+typetests/Tests$ javaIface: ifnull
+typetests/Tests$ option: instanceof scala/Option

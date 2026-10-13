@@ -1,0 +1,7 @@
+/root/x
+false
+NAMED
+{n=3}
+Some(4)
+Some(Success(5))
+Some(Success(six))

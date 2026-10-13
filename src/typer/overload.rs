@@ -1837,7 +1837,9 @@ impl<'a> Worker<'a> {
         } else {
             let outer_base = std::mem::replace(&mut self.app_base, self.tvars.len() as u32);
             let mut infos = Vec::new();
+            let spans_mark = self.overload_arg_spans.len();
             let choice = self.resolve_overloaded(&alts, None, lists, &mut infos, None, false, true);
+            self.overload_arg_spans.truncate(spans_mark);
             self.app_base = outer_base;
             choice.ok()?
         };
@@ -1889,6 +1891,7 @@ impl<'a> Worker<'a> {
     ) -> Result<(TExprId, TypeId), Unresolved> {
         let outer_base = std::mem::replace(&mut self.app_base, self.tvars.len() as u32);
         let first_var = self.tvars.len();
+        let spans_mark = self.overload_arg_spans.len();
         let mut alts = self.alternatives_of(set, recv_ty, ctor);
         if let (Some(r), Some(rt)) = (recv, recv_ty) {
             self.see_alternatives_from(&mut alts, r, rt);
@@ -2007,6 +2010,7 @@ impl<'a> Worker<'a> {
         };
         self.settle_overload_vars(first_var, result.as_ref().ok().map(|&(_, ty)| ty));
         self.app_base = outer_base;
+        self.overload_arg_spans.truncate(spans_mark);
         result
     }
 
@@ -2054,6 +2058,7 @@ impl<'a> Worker<'a> {
         let mut infos: Vec<Option<ListInfo>> = Vec::new();
         let (diag_mark, match_mark) = (self.diags.items.len(), self.deferred_matches.len());
         let prof = self.prof(Kind::Overload, span, alts.first().map_or(About::Class(c), |a| About::Sym(a.sym)));
+        let spans_mark = self.overload_arg_spans.len();
         let choice = self.resolve_overloaded(&alts, targs, &mut lists, &mut infos, expected, false, true);
         if let Some(p) = prof {
             self.profile.exit_counted(p, overload_outcome(&choice));
@@ -2089,6 +2094,7 @@ impl<'a> Worker<'a> {
         };
         self.settle_overload_vars(first_var, Some(result.1));
         self.app_base = outer_base;
+        self.overload_arg_spans.truncate(spans_mark);
         result
     }
 
@@ -2130,10 +2136,10 @@ impl<'a> Worker<'a> {
             .map(|&(sym, bt)| Alt { sym, sig: self.sig_arc(sym), owner_subst: self.owner_subst(bt), ctor: None, info: None, denoted: None, refined: None })
             .collect();
         let mut infos = Vec::new();
-        match self.resolve_overloaded(&alts, targs, lists, &mut infos, expected, false, false) {
-            Ok(i) => Some(alts[i].sym),
-            Err(_) => None,
-        }
+        let spans_mark = self.overload_arg_spans.len();
+        let choice = self.resolve_overloaded(&alts, targs, lists, &mut infos, expected, false, false);
+        self.overload_arg_spans.truncate(spans_mark);
+        choice.ok().map(|i| alts[i].sym)
     }
 
     /// Which of several extension methods that take the receiver equally well a call means:
@@ -2185,7 +2191,9 @@ impl<'a> Worker<'a> {
             let dummy = self.prog.add(TExpr::Unit);
             self.prog.set_type(dummy, arg);
             let mut lists = vec![ArgList { args: vec![ArgSrc::Typed(dummy, arg)], using: false, span }];
+            let spans_mark = self.overload_arg_spans.len();
             let choice = self.resolve_overloaded(&alts, None, &mut lists, &mut Vec::new(), None, true, false);
+            self.overload_arg_spans.truncate(spans_mark);
             self.drop_reported_since(reported);
             self.rollback(mark);
             match choice {
@@ -2372,7 +2380,9 @@ impl<'a> Worker<'a> {
         let span = lists.first().map_or(Span::default(), |l| l.span);
         lists.insert(0, ArgList { args: vec![ArgSrc::Typed(recv, recv_ty)], using: false, span });
         let mut infos = Vec::new();
+        let spans_mark = self.overload_arg_spans.len();
         let choice = self.resolve_overloaded(&alts, targs, lists, &mut infos, expected, false, false);
+        self.overload_arg_spans.truncate(spans_mark);
         let result = match choice {
             Ok(i) => Ok(i),
             Err(failure) => {
@@ -3149,6 +3159,8 @@ impl<'a> Worker<'a> {
                 }
                 _ => te,
             };
+            let at = self.cur_ast().expr_span(value);
+            self.overload_arg_spans.push((te, at));
             list.args[j] = match shapes[j].name {
                 Some(name) => ArgSrc::Named(name, te, ty),
                 None => ArgSrc::Typed(te, ty),

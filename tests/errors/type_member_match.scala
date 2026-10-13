@@ -1,5 +1,5 @@
 // A match on a value of an abstract type is checked through the member's bound.
-// expect: 12:3: warning: match may not be exhaustive; missing: Green
+// expect: 12:3: warning: match may not be exhaustive.
 // expect: 17:30: error: type mismatch: found 1, required String
 // expect: 1 error found
 sealed trait Light
@@ -15,3 +15,4 @@ def name(s: Signal): String = s.current match
   case Red => "stop"
   case Green => "go"
 def bad(s: Signal): String = 1
+// expect: It would fail on pattern case: Green

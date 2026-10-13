@@ -270,6 +270,9 @@ impl<'a> Gen<'a> {
         let cx = self.cx;
         let prog = cx.input.prog;
         let class: Rc<str> = match prog.tests[test.idx()] {
+            // A class test the operand's type proves is the class test still, as scalac's erasure
+            // writes it (`TypeTestsCasts` deciding on the erased class).
+            TypeTest::Proven(inner, _) => return self.test(inner, slot, ty, tested, target, jump_if),
             TypeTest::Always => {
                 if jump_if {
                     self.goto(target);

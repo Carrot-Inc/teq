@@ -76,7 +76,7 @@ CATEGORIES = [
     ("type-mismatch", "E007", sections(("found", "Found:    "), ("required", "Required: ")),
      r"type mismatch: found (?P<found>.+), required (?P<required>[^\n]+)"),
     ("exhaustivity", "E029", sections(("missing", "It would fail on pattern case: ")),
-     r"match may not be exhaustive; missing: (?P<missing>[^\n]+)"),
+     r"match may not be exhaustive\.\n\nIt would fail on pattern case: (?P<missing>[^\n]+)(?:\n\(More unmatched cases are elided\))?"),
     ("already-defined", "E161", r"(?P<name>\S+) is already defined as (?P<existing>[^\n]+)",
      r"(?:(?P<kind>\w+) )?(?P<name>\S+) is already defined(?: as (?P<existing>[^\n]+))?"),
     ("not-member", "E008", r"(?P<member>.+?) is not a member of (?P<owner>[^\n]+)",

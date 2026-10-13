@@ -1159,8 +1159,9 @@ object String:
   def format(fmt: String, args: Any*): String = fmt.formatImpl(taggedArray(iterableToArray(args)))
 
 object Int:
-  val MaxValue: Int = 2147483647
-  val MinValue: Int = -2147483648
+  // scala-library's constants, of their constant types.
+  final val MaxValue: 2147483647 = 2147483647
+  final val MinValue: -2147483648 = -2147483648
   // scalac's widenings, which a library body names when it applies one explicitly; the typer
   // widens by itself, so they take no part in a conversion search.
   def int2long(x: Int): Long = x.toLong
@@ -1168,14 +1169,14 @@ object Int:
   def int2double(x: Int): Double = x.toDouble
 
 object Long:
-  val MaxValue: Long = 9223372036854775807L
-  val MinValue: Long = -9223372036854775807L - 1L
+  final val MaxValue: 9223372036854775807L = 9223372036854775807L
+  final val MinValue: -9223372036854775808L = -9223372036854775808L
   def long2float(x: Long): Float = x.toFloat
   def long2double(x: Long): Double = x.toDouble
 
 object Char:
-  val MaxValue: Char = '\uffff'
-  val MinValue: Char = '\u0000'
+  final val MaxValue: '\uffff' = '\uffff'
+  final val MinValue: '\u0000' = '\u0000'
   def char2int(x: Char): Int = x.toInt
   def char2long(x: Char): Long = x.toLong
   def char2float(x: Char): Float = x.toFloat
@@ -1227,9 +1228,9 @@ object Short:
     def compare(a: Short, b: Short): Int = comparePrimitives(a, b)
 
 object Float:
-  val MaxValue: Float = 3.4028235e38f
-  val MinValue: Float = -3.4028235e38f
-  val MinPositiveValue: Float = 1.4e-45f
+  final val MaxValue: 3.4028235e38f = 3.4028235e38f
+  final val MinValue: -3.4028235e38f = -3.4028235e38f
+  final val MinPositiveValue: 1.4e-45f = 1.4e-45f
   @js("Infinity")
   @jvm("getstatic java/lang/Float.POSITIVE_INFINITY:F")
   def PositiveInfinity: Float
@@ -1255,8 +1256,8 @@ object Float:
     def compare(a: Float, b: Float): Int = compareDoubles(a, b)
 
 object Double:
-  val MaxValue: Double = 1.7976931348623157e308
-  val MinValue: Double = -1.7976931348623157e308
+  final val MaxValue: 1.7976931348623157e308 = 1.7976931348623157e308
+  final val MinValue: -1.7976931348623157e308 = -1.7976931348623157e308
   @js("Infinity")
   @jvm("getstatic java/lang/Double.POSITIVE_INFINITY:D")
   def PositiveInfinity: Double
@@ -1266,4 +1267,4 @@ object Double:
   @js("NaN")
   @jvm("getstatic java/lang/Double.NaN:D")
   def NaN: Double
-  val MinPositiveValue: Double = 4.9e-324
+  final val MinPositiveValue: 4.9e-324 = 4.9e-324

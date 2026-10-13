@@ -4558,12 +4558,57 @@ impl<'a> Worker<'a> {
                 let j = self.union_join(t)?;
                 self.denotations_under(pre, j, name, seen)
             }
+            // A refined type whose refinements name an overloaded member's alternatives refines them
+            // (`goRefined` of a `MultiDenotation`).
+            Type::Refined(..) | Type::Rec(_) if self.types.term_refinements() && self.refines_overload(t, name) => Some(self.part_denotations(pre, t, name, 1)),
             Type::This(_) | Type::Term(_) | Type::Select(..) | Type::Member(..) | Type::AppMember(..) | Type::Decl(_) | Type::Refined(..) | Type::Rec(_) | Type::Alias(..) | Type::Match(..) => {
                 let under = self.dependent_underlying(t)?;
                 self.denotations_under(pre, under, name, seen)
             }
             _ => None,
         }
+    }
+
+    /// The information of the method refinement `r` where its parameters are the denotation `d`'s
+    /// (the same signature, `infos_match`).
+    fn matching_refinement_info(&mut self, r: Refinement, d: &Denot) -> Option<std::sync::Arc<MethodSig>> {
+        let rinfo = self.refinement_sig(r);
+        let info = self.denot_info(d);
+        if rinfo.tparams.len() != info.tparams.len() || !self.infos_match(&info, &rinfo) {
+            return None;
+        }
+        Some(rinfo)
+    }
+
+    /// Every method refinement of `name` along the refined type `t`'s chain, the outermost first, a
+    /// recursive one opened at `t` (the refinements of an anonymous class's overloads).
+    fn term_refinements_named(&mut self, t: TypeId, name: Name) -> Vec<Refinement> {
+        let mut out = Vec::new();
+        let mut t = self.deref(t);
+        let whole = t;
+        for _ in 0..256 {
+            match self.types.get(t) {
+                Type::Rec(body) => t = self.opened_rec(body, whole),
+                Type::Refined(p, r) => {
+                    let refinement = self.types.refinement(r);
+                    if matches!(refinement, Refinement::Term(n, ..) if n == name) {
+                        out.push(refinement);
+                    }
+                    t = p;
+                }
+                _ => break,
+            }
+        }
+        out
+    }
+
+    /// Whether `t` refines the term `name` and its parent has several alternatives of it.
+    fn refines_overload(&mut self, t: TypeId, name: Name) -> bool {
+        if self.term_refinements_named(t, name).is_empty() {
+            return false;
+        }
+        let mut joint = None;
+        self.find_member_from(t, t, name, 1, &mut joint).is_some_and(|(s, _)| self.syms.alternatives(s).is_some())
     }
 
     fn part_denotations(&mut self, pre: TypeId, t: TypeId, name: Name, private_until: usize) -> Vec<Denot> {
@@ -4582,7 +4627,8 @@ impl<'a> Worker<'a> {
             // A class's alternatives in dotty's scope order, the last declared first.
             Some(mut alts) => {
                 alts.sort_by_key(|&a| std::cmp::Reverse(self.syms.sym(a).span.start));
-                alts.into_iter()
+                let denots: Vec<Denot> = alts
+                    .into_iter()
                     .map(|alt| {
                         let owner_ty = match self.syms.sym(alt).owner {
                             Owner::Class(c) => self.base_type(t, c).unwrap_or(owner),
@@ -4590,7 +4636,25 @@ impl<'a> Worker<'a> {
                         };
                         self.seen_from_whole(pre, ((alt, owner_ty), None))
                     })
-                    .collect()
+                    .collect();
+                // Each refinement of the name refines the alternative whose parameters it matches
+                // (`goRefined`'s `pdenot & rinfo` of a `MultiDenotation`), the refinements an
+                // anonymous class's overloads make (`TypeOps.classBound`).
+                let refinements = self.term_refinements_named(t, name);
+                if refinements.is_empty() {
+                    return denots;
+                }
+                let mut out = Vec::with_capacity(denots.len());
+                for d in denots {
+                    // The refinement's information is the alternative's where it conforms (the meet
+                    // of the two is it then, `infoMeet`); the alternative keeps its symbol and owner.
+                    let refined = refinements.iter().find_map(|&r| self.matching_refinement_info(r, &d));
+                    match refined {
+                        Some(rinfo) if self.refined_info_narrows(&d, &rinfo) => out.push((d.0, Some(rinfo))),
+                        _ => out.push(d),
+                    }
+                }
+                out
             }
             None => {
                 let d = self.seen_from_whole(pre, ((s, owner), joint));
@@ -4600,6 +4664,17 @@ impl<'a> Worker<'a> {
                 }
             }
         }
+    }
+
+    /// Whether the refinement's information `rinfo` conforms to the denotation `d`'s: its result below
+    /// the member's, the parameters being the same.
+    fn refined_info_narrows(&mut self, d: &Denot, rinfo: &std::sync::Arc<MethodSig>) -> bool {
+        let info = self.denot_info(d);
+        let renamed = self.renamed_info(rinfo, &info);
+        let mark = self.snapshot();
+        let below = self.is_sub(renamed.ret, info.ret);
+        self.rollback(mark);
+        below
     }
 
     /// `mergeDenot` of the denotations so far and one more: the same denotation again dropped,
@@ -4714,6 +4789,15 @@ impl<'a> Worker<'a> {
     /// with the refined type as its prefix (`is_refinement_denot`) and its information.
     fn refinement_alternative(&mut self, t: TypeId, name: Name, d: &Denot) -> Option<Denot> {
         let Some(r @ Refinement::Term(..)) = self.refined_term(t, name) else { return None };
+        self.denotation_refined_by(t, r, d)
+    }
+
+    /// The denotation `d` refined by the term refinement `r` of `t`, where `r`'s parameters are
+    /// `d`'s and its information another.
+    fn denotation_refined_by(&mut self, t: TypeId, r: Refinement, d: &Denot) -> Option<Denot> {
+        if !matches!(r, Refinement::Term(..)) {
+            return None;
+        }
         let rinfo = self.refinement_sig(r);
         let info = self.denot_info(d);
         if rinfo.clauses.is_empty() || rinfo.tparams.len() != info.tparams.len() || rinfo.clauses.len() != info.clauses.len() {
@@ -4865,7 +4949,7 @@ impl<'a> Worker<'a> {
     }
 
     /// `a <: b` without constraining a type variable (dotty's `frozen_<:<`).
-    fn frozen_sub(&mut self, a: TypeId, b: TypeId) -> bool {
+    pub(super) fn frozen_sub(&mut self, a: TypeId, b: TypeId) -> bool {
         if a == b {
             return true;
         }

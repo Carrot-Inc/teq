@@ -114,6 +114,7 @@ impl<'a> Worker<'a> {
         }
         self.prog.main = None;
         let prefix = super::merge::Prefix::of(self);
+        let exprs_mark = self.prog.exprs.len();
         for change in changes {
             self.check_file(change.file);
         }
@@ -121,6 +122,9 @@ impl<'a> Worker<'a> {
         self.run_deferred_matches();
         let files: Vec<FileId> = changes.iter().map(|c| c.file).collect();
         self.check_outer_accessors_implemented(Some(&files));
+        if self.emits_bodies {
+            self.number_contextual_params(exprs_mark);
+        }
         if self.profile.on {
             self.merge(&prefix);
         }
@@ -376,7 +380,8 @@ impl<'a> Worker<'a> {
 
     /// Whether `a` and `b` are one type written with other symbols for the parameters of the
     /// methods their refinements declare, as a function type naming its parameters is each
-    /// time it is typed (`(x: C) => x.M` of `depmeth` eta-expanded).
+    /// time it is typed (`(x: C) => x.M` of `depmeth` eta-expanded), and for the members their
+    /// refinements stand for, as an anonymous class's are each time it is typed.
     fn same_up_to_refinement_params(&mut self, a: TypeId, b: TypeId, depth: u32) -> bool {
         if a == b {
             return true;
@@ -389,7 +394,14 @@ impl<'a> Worker<'a> {
                 let (xs, ys) = (self.types.items(xs).to_vec(), self.types.items(ys).to_vec());
                 xs.len() == ys.len() && xs.iter().zip(&ys).all(|(&x, &y)| self.same_up_to_refinement_params(x, y, depth + 1))
             }
+            // A self-referential refinement (an anonymous class's bound, closed over its `this`).
+            (Type::Rec(x), Type::Rec(y)) => self.same_up_to_refinement_params(x, y, depth + 1),
             (Type::Refined(pa, ra), Type::Refined(pb, rb)) => {
+                // A value's refinement by its name and type: its symbol stands for the member, which
+                // the retype entered again (an anonymous class's `val item`).
+                if let (Refinement::Val(na, _, ta), Refinement::Val(nb, _, tb)) = (self.types.refinement(ra), self.types.refinement(rb)) {
+                    return na == nb && self.same_up_to_refinement_params(ta, tb, depth + 1) && self.same_up_to_refinement_params(pa, pb, depth + 1);
+                }
                 let (Refinement::Term(na, sa, la), Refinement::Term(nb, sb, lb)) = (self.types.refinement(ra), self.types.refinement(rb)) else {
                     return ra == rb && self.same_up_to_refinement_params(pa, pb, depth + 1);
                 };

@@ -1289,10 +1289,10 @@ impl<'a> Emitter<'a> {
         let test = match op {
             CastOp::Written => return self.emit_expr_as(inner, bare),
             CastOp::Nothing => return self.emit_helper_call("$asNothing", inner),
-            CastOp::Unbox(test, _) => return self.emit_helper_call(unbox_helper(prog.tests[test.idx()]), inner),
+            CastOp::Unbox(test, _) => return self.emit_helper_call(unbox_helper(prog.js_test(test)), inner),
             CastOp::Check(test, _) => test,
         };
-        match prog.tests[test.idx()] {
+        match prog.js_test(test) {
             TypeTest::Class(c) => {
                 self.hold(c, Held::Tested);
                 self.note_text("$as");
@@ -1320,7 +1320,7 @@ impl<'a> Emitter<'a> {
                 // arity: a function's `length` is not its Scala arity (a bound or a rest-parameter function, a
                 // JavaScript function converted to a Scala one), and Scala.js's `js.FunctionN` are scala's
                 // function types here, whose cast Scala.js leaves unchecked (docs/COMPATIBILITY.md).
-                let any_function = matches!(self.prog.tests[test.idx()], TypeTest::Function(_));
+                let any_function = matches!(self.prog.js_test(test), TypeTest::Function(_));
                 if let TExpr::Local(s) = self.peek(inner) {
                     let n = self.local_ref(s);
                     let _ = write!(self.out, "$asT({}, ", n);
@@ -1361,7 +1361,7 @@ impl<'a> Emitter<'a> {
     /// class's or a trait's.
     fn cast_target_name(&self, test: TestId) -> String {
         let prog = self.prog;
-        match prog.tests[test.idx()] {
+        match prog.js_test(test) {
             TypeTest::Class(c) | TypeTest::Trait(c) => self.qualified_name(c),
             TypeTest::Or(_, b) => self.cast_target_name(b),
             TypeTest::Function(n) if n > 22 => "scala.runtime.FunctionXXL".to_string(),
@@ -1377,7 +1377,7 @@ impl<'a> Emitter<'a> {
     pub(super) fn emit_test_as(&mut self, test: TestId, x: &str, bare: bool) {
         let prog = self.prog;
         let (open, close) = if bare { ("", "") } else { ("(", ")") };
-        let t = prog.tests[test.idx()];
+        let t = prog.js_test(test);
         if let Some((text, compound)) = test_text(t) {
             self.note_text(text);
             let n = match t {
@@ -1841,7 +1841,7 @@ impl<'a> Emitter<'a> {
                 }
                 return;
             }
-            (TPat::Test(test, _, inner), _) if matches!(prog.tests[test.idx()], TypeTest::Always) && self.test_hole(HoleNode::TestPat(pat)).is_none() => {
+            (TPat::Test(test, _, inner), _) if matches!(prog.js_test(test), TypeTest::Always) && self.test_hole(HoleNode::TestPat(pat)).is_none() => {
                 return self.emit_pattern_val(inner, init);
             }
             (TPat::Class(c, _, _, subs), TExpr::New(made, args)) if made == c && self.is_tuple_class(c) && subs.len == args.len => {
@@ -1931,9 +1931,9 @@ impl<'a> Emitter<'a> {
                 self.pattern_steps(inner, scrut, out);
             }
             TPat::Test(test, _, inner) => {
-                let tested_by_inner = matches!((prog.tests[test.idx()], prog.pats[inner.idx()]), (TypeTest::Class(a), TPat::Class(b, ..)) if a == b);
-                if !matches!(prog.tests[test.idx()], TypeTest::Always) && !tested_by_inner {
-                    let on_scrutinee = !scrut.starts_with('$') && !matches!(prog.tests[test.idx()], TypeTest::Value(_));
+                let tested_by_inner = matches!((prog.js_test(test), prog.pats[inner.idx()]), (TypeTest::Class(a), TPat::Class(b, ..)) if a == b);
+                if !matches!(prog.js_test(test), TypeTest::Always) && !tested_by_inner {
+                    let on_scrutinee = !scrut.starts_with('$') && !matches!(prog.js_test(test), TypeTest::Value(_));
                     out.push(Step::Test(self.test_to_string(test, scrut), on_scrutinee));
                 }
                 self.pattern_steps(inner, scrut, out);
@@ -2294,9 +2294,9 @@ impl<'a> Emitter<'a> {
                 on_scrutinee.then(|| format!("$k{}({})", n, scrut))
             }
             TPat::Test(test, _, inner) => {
-                let tested_by_inner = matches!((prog.tests[test.idx()], prog.pats[inner.idx()]), (TypeTest::Class(a), TPat::Class(b, ..)) if a == b);
-                if !matches!(prog.tests[test.idx()], TypeTest::Always) && !tested_by_inner {
-                    let value = matches!(prog.tests[test.idx()], TypeTest::Value(_));
+                let tested_by_inner = matches!((prog.js_test(test), prog.pats[inner.idx()]), (TypeTest::Class(a), TPat::Class(b, ..)) if a == b);
+                if !matches!(prog.js_test(test), TypeTest::Always) && !tested_by_inner {
+                    let value = matches!(prog.js_test(test), TypeTest::Value(_));
                     (on_scrutinee && !value).then(|| self.test_to_string(test, scrut))
                 } else {
                     self.scrutinee_test(inner, scrut)
@@ -2315,8 +2315,8 @@ impl<'a> Emitter<'a> {
             TPat::Bind(_, inner) => inner.map_or(false, |i| self.pattern_tests(i)),
             TPat::Test(..) if self.test_hole(HoleNode::TestPat(pat)).is_some() => true,
             TPat::Test(test, _, inner) => {
-                let tested_by_inner = matches!((prog.tests[test.idx()], prog.pats[inner.idx()]), (TypeTest::Class(a), TPat::Class(b, ..)) if a == b);
-                (!matches!(prog.tests[test.idx()], TypeTest::Always) && !tested_by_inner) || self.pattern_tests(inner)
+                let tested_by_inner = matches!((prog.js_test(test), prog.pats[inner.idx()]), (TypeTest::Class(a), TPat::Class(b, ..)) if a == b);
+                (!matches!(prog.js_test(test), TypeTest::Always) && !tested_by_inner) || self.pattern_tests(inner)
             }
             TPat::Equals(..) | TPat::Class(..) | TPat::Alt(_) | TPat::Seq(..) => true,
             TPat::Unapply(_, _, inner) => self.pattern_tests(inner),
@@ -2798,7 +2798,8 @@ pub(super) fn test_text(t: TypeTest) -> Option<(&'static str, bool)> {
         TypeTest::Null => ("$0 === null", true),
         TypeTest::AnyRef => ("$isRef($0)", false),
         TypeTest::AnyVal => ("($0 !== null)", false),
-        TypeTest::Class(_) | TypeTest::Value(_) | TypeTest::Or(..) | TypeTest::And(..) | TypeTest::Outer(..) => return None,
+        // A proven test reaches JavaScript as its null test (`Program::js_test`).
+        TypeTest::Class(_) | TypeTest::Value(_) | TypeTest::Or(..) | TypeTest::And(..) | TypeTest::Outer(..) | TypeTest::Proven(..) => return None,
     })
 }
 

@@ -1121,34 +1121,7 @@ impl<'a> Worker<'a> {
             Some((&first, rest)) => rest.iter().fold(first, |acc, &p| self.types.inter(acc, p)),
             None => self.b.t_any_ref,
         };
-        // The type members the body defines refine the parents, as scalac types the instance.
-        let mut aliases: Vec<AliasId> = self.syms.class(c).type_aliases.values().copied().collect();
-        aliases.sort();
-        for a in aliases {
-            self.complete_alias(a);
-            let (name, rhs, tparams, abstract_member) = {
-                let i = &self.syms.aliases[a.idx()];
-                (i.name, i.rhs, i.tparams.clone(), i.is_abstract())
-            };
-            if abstract_member || rhs == ERROR {
-                continue;
-            }
-            // The class's own declaration (`TypeOps.classBound` refines by `decl.info`): only
-            // its own `this` moves, an enclosing class's `C.this` staying the enclosing instance
-            // where the class derives from `C` too.
-            let this = self.this_prefix(c);
-            let rhs = self.own_seen_from(rhs, this, c);
-            let rhs = if tparams.is_empty() {
-                rhs
-            } else {
-                let ps: Vec<TypeId> = tparams.iter().map(|&p| self.types.param(p)).collect();
-                let l = self.types.list(&ps);
-                self.types.mk(Type::Lambda(l, rhs))
-            };
-            let r = self.types.refine(Refinement::Alias(name, rhs));
-            ty = self.types.mk(Type::Refined(ty, r));
-        }
-        ty = self.refined_by_narrowing_members(c, ty);
+        ty = self.class_bound(c, ty);
         let instance = self.prog.add(TExpr::New(c, l));
         match parent_call.filter(|call| !call.prelude.is_empty()) {
             Some(call) => (self.prog.add(TExpr::Block(call.prelude, instance)), ty),
@@ -1156,55 +1129,361 @@ impl<'a> Worker<'a> {
         }
     }
 
-    /// The parents `ty` of the anonymous class `c` refined by each public val or def of its
-    /// body whose type is strictly narrower than the member it overrides (`new Base { val v: A
-    /// = a }` is a `Base { val v: A }`), as scalac's `classBound` types the instance.
-    fn refined_by_narrowing_members(&mut self, c: ClassId, parents: TypeId) -> TypeId {
-        let mut members: Vec<SymId> = self.syms.class(c).members.values().copied().filter(|&m| self.syms.alternatives(m).is_none()).collect();
-        members.sort();
-        let mut ty = parents;
-        for m in members {
-            let (name, kind, private) = {
-                let i = self.syms.sym(m);
-                (i.name, i.kind, i.mods & crate::ast::mods::PRIVATE != 0)
-            };
-            if private || name == crate::names::INIT || !matches!(kind, SymKind::Val | SymKind::Def) {
-                continue;
-            }
-            let Some((inherited, owner_ty)) = self.find_member(parents, name) else { continue };
-            if self.syms.alternatives(inherited).is_some() || self.is_private(inherited) {
-                continue;
-            }
-            let own = self.sig_arc(m);
-            if !own.tparams.is_empty() {
-                continue;
-            }
-            let theirs = self.sig_arc(inherited);
-            let subst = self.owner_subst(owner_ty);
-            let shape = |sig: &MethodSig| sig.clauses.iter().map(|c| c.params.len()).collect::<Vec<_>>();
-            if !theirs.tparams.is_empty() || shape(&own) != shape(&theirs) {
-                continue;
-            }
-            let this = self.this_prefix(c);
-            let own_ret = self.as_seen_from(own.ret, this, c);
-            let their_ret = self.types.subst(theirs.ret, &subst);
-            let mark = self.trail.len();
-            let narrower = self.is_sub(own_ret, their_ret) && !self.is_sub(their_ret, own_ret);
-            self.rollback(mark);
-            if !narrower {
-                continue;
-            }
-            let r = if kind == SymKind::Val && own.clauses.is_empty() {
-                Refinement::Val(name, m, own_ret)
-            } else {
-                let mut seen = (*own).clone();
-                seen.ret = own_ret;
-                Refinement::Term(name, m, self.sig_types(&seen))
-            };
-            let r = self.types.refine(r);
-            ty = self.types.mk(Type::Refined(ty, r));
+    /// dotty's `TypeOps.classBound` of the anonymous class `c` over the intersection `parents` of its
+    /// parents (TypeOps.scala 422–459): each declaration neither private, a constructor nor a class
+    /// (`isRefinable`), in the order written, refines it where it needs to (`addRefinement`): one
+    /// whose information is strictly narrower than the inherited member's it matches (`suchThat(decl
+    /// .matches(_))`: the alternative of the same parameters, polymorphic or overloaded alike), one no
+    /// parent has where a parent derives from `Selectable`, and `apply` of a `PolyFunction`. Each
+    /// refinement's information avoids the declarations left out (`avoid(decl.info, missingDecls)`):
+    /// a nested class is its own class bound, a private alias what it stands for, a private value its
+    /// type. The class's `this` is the refined type's own (`RecType.closeOver`).
+    fn class_bound(&mut self, c: ClassId, parents: TypeId) -> TypeId {
+        self.class_bound_avoiding(c, parents, &mut Vec::new())
+    }
+
+    fn class_bound_avoiding(&mut self, c: ClassId, parents: TypeId, open: &mut Vec<ClassId>) -> TypeId {
+        if open.contains(&c) || open.len() > 8 {
+            return parents;
         }
-        ty
+        open.push(c);
+        let selectable = self.b.selectable.map_or(false, |s| self.base_type(parents, s).is_some());
+        let poly_function = self.derives_from_poly_function(c);
+        enum Decl {
+            Alias(AliasId),
+            Member(SymId),
+        }
+        let mut missing = Missing::default();
+        let mut decls: Vec<(u32, Decl)> = Vec::new();
+        let aliases: Vec<AliasId> = self.syms.class(c).type_aliases.values().copied().collect();
+        for a in aliases {
+            if self.private_alias(a) {
+                missing.aliases.push(a);
+                continue;
+            }
+            let at = self.syms.aliases[a.idx()].def.map_or(u32::MAX, |d| self.ast(self.syms.class(c).file).def(d).span.start);
+            decls.push((at, Decl::Alias(a)));
+        }
+        missing.classes.extend(self.syms.class(c).nested.values().copied());
+        let entries: Vec<SymId> = self.syms.class(c).members.values().copied().collect();
+        for m in entries {
+            let alts = self.syms.alternatives(m).map_or_else(|| vec![m], |a| a.to_vec());
+            for alt in alts {
+                let info = self.syms.sym(alt);
+                if info.owner != Owner::Class(c) || info.name == crate::names::INIT {
+                    continue;
+                }
+                if info.mods & crate::ast::mods::PRIVATE != 0 {
+                    missing.terms.push(alt);
+                    continue;
+                }
+                if let SymKind::Object(k) = info.kind {
+                    missing.classes.push(k);
+                }
+                decls.push((info.span.start, Decl::Member(alt)));
+            }
+        }
+        decls.sort_by_key(|&(at, ref d)| (at, matches!(d, Decl::Member(_))));
+        let rec_this = self.types.mk(Type::RecThis(0));
+        let mut ty = parents;
+        for (_, decl) in decls {
+            let r = match decl {
+                Decl::Alias(a) => self.alias_refinement(c, a, parents, selectable, rec_this),
+                Decl::Member(m) => self.member_refinement(c, m, parents, selectable, poly_function, rec_this),
+            };
+            if let Some(r) = r {
+                let r = self.avoid_refinement(r, &missing, open);
+                let r = self.types.refine(r);
+                ty = self.types.mk(Type::Refined(ty, r));
+            }
+        }
+        open.pop();
+        if self.types.refers_to_rec(ty, 0) {
+            self.types.mk(Type::Rec(ty))
+        } else {
+            ty
+        }
+    }
+
+    /// Whether the class `c` derives from `scala.PolyFunction`, whose `apply` its refinement always
+    /// carries (`isPolyFunctionApply`).
+    fn derives_from_poly_function(&mut self, c: ClassId) -> bool {
+        let bases: Vec<ClassId> = self.syms.class(c).base_types.iter().map(|&(b, _)| b).collect();
+        bases.into_iter().any(|b| {
+            let info = self.syms.class(b);
+            matches!(info.owner, Owner::Package(p) if p == self.b.scala_pkg) && self.name_ref(info.name) == "PolyFunction"
+        })
+    }
+
+    /// The refinement `r` with its information avoiding `missing` (`TypeOps.avoid`).
+    fn avoid_refinement(&mut self, r: Refinement, missing: &Missing, open: &mut Vec<ClassId>) -> Refinement {
+        if missing.is_empty() {
+            return r;
+        }
+        match r {
+            Refinement::Alias(n, x) => {
+                let (lo, hi) = (self.avoid_missing(x, missing, -1, open, 0), self.avoid_missing(x, missing, 1, open, 0));
+                if lo == hi { Refinement::Alias(n, hi) } else { Refinement::Bounds(n, lo, hi) }
+            }
+            Refinement::Bounds(n, lo, hi) => Refinement::Bounds(n, self.avoid_missing(lo, missing, -1, open, 0), self.avoid_missing(hi, missing, 1, open, 0)),
+            Refinement::Val(n, s, x) => Refinement::Val(n, s, self.avoid_missing(x, missing, 1, open, 0)),
+            Refinement::Term(n, s, l) => {
+                // The type parameters' bounds (two each), then the parameters' types, then the result.
+                let items: Vec<TypeId> = self.types.items(l).to_vec();
+                let k = 2 * self.sig_arc(s).tparams.len();
+                let last = items.len().saturating_sub(1);
+                let out: Vec<TypeId> = items
+                    .iter()
+                    .enumerate()
+                    .map(|(i, &x)| {
+                        let v = if i == last { 1 } else if i < k { if i % 2 == 0 { 1 } else { -1 } } else { -1 };
+                        self.avoid_missing(x, missing, v, open, 0)
+                    })
+                    .collect();
+                Refinement::Term(n, s, self.types.list(&out))
+            }
+        }
+    }
+
+    /// `t` approximated at the variance `v` of its position so that it names none of `missing`,
+    /// as `TypeOps.avoid`'s `AvoidMap` approximates: a missing class by its class bound from above
+    /// (`range(Nothing, classBound(info))`), `Nothing` from below; a missing alias by what it stands
+    /// for; a missing value by its type. An argument of a class that cannot take the range is a
+    /// wildcard of it.
+    fn avoid_missing(&mut self, t: TypeId, missing: &Missing, v: i8, open: &mut Vec<ClassId>, depth: u32) -> TypeId {
+        if depth > 24 {
+            return t;
+        }
+        // A missing class with its arguments and the prefix it is seen from.
+        let missing_class = |w: &Self, t: TypeId| match w.types.get(t) {
+            Type::Class(k, args) if missing.classes.contains(&k) => Some((k, args, None)),
+            Type::Nested(p, inner) => match w.types.get(inner) {
+                Type::Class(k, args) if missing.classes.contains(&k) => Some((k, args, Some(p))),
+                _ => None,
+            },
+            _ => None,
+        };
+        if let Some((k, args, prefix)) = missing_class(self, t) {
+            if v < 0 {
+                return NOTHING;
+            }
+            let parents = self.syms.class(k).parents.clone();
+            let parent = match parents.split_first() {
+                Some((&first, rest)) => rest.iter().fold(first, |acc, &p| self.types.inter(acc, p)),
+                None => self.b.t_any_ref,
+            };
+            let parent = self.avoid_missing(parent, missing, 1, open, depth + 1);
+            let bound = self.class_bound_avoiding(k, parent, open);
+            // The class bound is a lambda over the class's type parameters
+            // (`HKTypeLambda.fromParams(cls.typeParams, raw)`), applied to the arguments of the
+            // occurrence (`Hidden[String]` is `P[String]`), its info seen from the prefix.
+            let subst: Subst = self.syms.class(k).tparams.iter().copied().zip(self.types.items(args).iter().copied()).collect();
+            let bound = if subst.is_empty() { bound } else { self.types.subst(bound, &subst) };
+            let bound = match prefix {
+                Some(p) => self.outer_seen_from(bound, p, k),
+                None => bound,
+            };
+            return self.avoid_missing(bound, missing, 1, open, depth + 1);
+        }
+        match self.types.get(t) {
+            Type::Alias(a, args) if missing.aliases.contains(&a) => {
+                if let Some(e) = self.alias_expansion(a, args) {
+                    return self.avoid_missing(e, missing, v, open, depth + 1);
+                }
+            }
+            Type::Decl(a) if missing.aliases.contains(&a) => {
+                let rhs = self.syms.aliases[a.idx()].rhs;
+                return self.avoid_missing(rhs, missing, v, open, depth + 1);
+            }
+            Type::Member(p, name) if matches!(self.types.get(p), Type::This(_) | Type::RecThis(_)) => {
+                if let Some(&a) = missing.aliases.iter().find(|&&a| self.syms.aliases[a.idx()].name == name) {
+                    let (rhs, bounds) = (self.syms.aliases[a.idx()].rhs, self.syms.aliases[a.idx()].bounds);
+                    let x = match bounds {
+                        Some((lo, hi)) => if v < 0 { lo } else { hi },
+                        None => rhs,
+                    };
+                    return self.avoid_missing(x, missing, v, open, depth + 1);
+                }
+            }
+            Type::Select(_, s) | Type::Term(s) if missing.terms.contains(&s) => {
+                if v < 0 {
+                    return NOTHING;
+                }
+                let ret = self.sig_of(s).ret;
+                return self.avoid_missing(ret, missing, v, open, depth + 1);
+            }
+            _ => {}
+        }
+        if !self.mentions_missing(t, missing, 0) {
+            return t;
+        }
+        if let Type::Class(k, args) = self.types.get(t) {
+            let items: Vec<TypeId> = self.types.items(args).to_vec();
+            let variances: Vec<i8> = self.syms.class(k).tparams.iter().map(|&p| self.syms.tparam(p).variance).collect();
+            let out: Vec<TypeId> = items
+                .iter()
+                .enumerate()
+                .map(|(i, &a)| match variances.get(i).copied().unwrap_or(0) {
+                    0 => {
+                        let (lo, hi) = (self.avoid_missing(a, missing, -1, open, depth + 1), self.avoid_missing(a, missing, 1, open, depth + 1));
+                        if lo == hi { hi } else { self.types.bounded_wild(lo, hi) }
+                    }
+                    w => self.avoid_missing(a, missing, v * w, open, depth + 1),
+                })
+                .collect();
+            return self.types.class(k, &out);
+        }
+        let types = self.types.clone();
+        types.map_parts(t, &mut |x| self.avoid_missing(x, missing, v, open, depth + 1))
+    }
+
+    /// Whether `t` names one of `missing`.
+    fn mentions_missing(&mut self, t: TypeId, missing: &Missing, depth: u32) -> bool {
+        if depth > 24 {
+            return false;
+        }
+        match self.types.get(t) {
+            Type::Class(k, _) if missing.classes.contains(&k) => return true,
+            Type::Alias(a, _) | Type::Decl(a) if missing.aliases.contains(&a) => return true,
+            Type::Select(_, s) | Type::Term(s) if missing.terms.contains(&s) => return true,
+            Type::Member(p, name) if matches!(self.types.get(p), Type::This(_) | Type::RecThis(_)) && missing.aliases.iter().any(|&a| self.syms.aliases[a.idx()].name == name) => return true,
+            _ => {}
+        }
+        let types = self.types.clone();
+        let mut parts = Vec::new();
+        types.map_parts(t, &mut |x| {
+            parts.push(x);
+            x
+        });
+        parts.into_iter().any(|x| self.mentions_missing(x, missing, depth + 1))
+    }
+
+    /// The refinement a type member of the anonymous class `c` adds to `parents`, if it needs one.
+    fn alias_refinement(&mut self, c: ClassId, a: AliasId, parents: TypeId, selectable: bool, rec_this: TypeId) -> Option<Refinement> {
+        self.complete_alias(a);
+        let (name, rhs, tparams, bounds) = {
+            let i = &self.syms.aliases[a.idx()];
+            (i.name, i.rhs, i.tparams.clone(), i.bounds)
+        };
+        if bounds.is_none() && rhs == ERROR || !tparams.is_empty() && bounds.is_some() {
+            return None;
+        }
+        let over = |t: &mut Self, x: TypeId| {
+            let x = t.own_seen_from(x, rec_this, c);
+            if tparams.is_empty() {
+                return x;
+            }
+            let ps: Vec<TypeId> = tparams.iter().map(|&p| t.types.param(p)).collect();
+            let l = t.types.list(&ps);
+            t.types.mk(Type::Lambda(l, x))
+        };
+        // The declaration's information against the inherited one's: an alias is below bounds that
+        // hold it and below an alias to the same type alone.
+        let mark = self.snapshot();
+        let needed = match (self.type_member(parents, name), bounds) {
+            (None, _) => selectable,
+            (Some(super::members::MemberInfo::Alias(t)), None) => !self.is_same(rhs, t),
+            (Some(super::members::MemberInfo::Alias(_)), Some(_)) => false,
+            (Some(super::members::MemberInfo::Bounds(lo, hi)), None) => {
+                self.is_sub(lo, rhs) && self.is_sub(rhs, hi) && !(self.is_same(lo, rhs) && self.is_same(rhs, hi))
+            }
+            (Some(super::members::MemberInfo::Bounds(lo, hi)), Some((l, h))) => {
+                self.is_sub(lo, l) && self.is_sub(h, hi) && !(self.is_sub(l, lo) && self.is_sub(hi, h))
+            }
+        };
+        self.rollback(mark);
+        if !needed {
+            return None;
+        }
+        Some(match bounds {
+            None => Refinement::Alias(name, over(self, rhs)),
+            Some((lo, hi)) => Refinement::Bounds(name, over(self, lo), over(self, hi)),
+        })
+    }
+
+    /// The refinement a val, def, given or object of the anonymous class `c` (one alternative of an
+    /// overloaded name) adds to `parents`, if it needs one: its full information against the
+    /// inherited member's it matches, the type parameters renamed to the inherited ones'.
+    fn member_refinement(&mut self, c: ClassId, m: SymId, parents: TypeId, selectable: bool, poly_function: bool, rec_this: TypeId) -> Option<Refinement> {
+        let (name, kind) = {
+            let i = self.syms.sym(m);
+            (i.name, i.kind)
+        };
+        if !matches!(kind, SymKind::Val | SymKind::Def | SymKind::Given | SymKind::Object(_)) {
+            return None;
+        }
+        let own = self.sig_arc(m);
+        let own_ret = self.own_seen_from(own.ret, rec_this, c);
+        let poly_apply = poly_function && name == crate::names::APPLY;
+        let needed = poly_apply
+            || match self.matching_inherited(c, m, &own, parents) {
+                Some(narrower) => narrower,
+                None => selectable,
+            };
+        if !needed {
+            return None;
+        }
+        Some(if !matches!(kind, SymKind::Def) && own.clauses.is_empty() && own.tparams.is_empty() {
+            Refinement::Val(name, m, own_ret)
+        } else {
+            let mut seen = (*own).clone();
+            seen.ret = own_ret;
+            for clause in &mut seen.clauses {
+                for param in &mut clause.params {
+                    param.ty = self.own_seen_from(param.ty, rec_this, c);
+                }
+            }
+            Refinement::Term(name, m, self.sig_types(&seen))
+        })
+    }
+
+    /// Of the parents' members named as `m`, the one `m` matches (dotty's `Denotation.matches`: the
+    /// same type parameter count, clauses and parameter types once the type parameters are renamed),
+    /// and whether `m`'s information is strictly narrower than its: `Some(false)` for one it does not
+    /// narrow, `None` where nothing matches.
+    fn matching_inherited(&mut self, c: ClassId, m: SymId, own: &MethodSig, parents: TypeId) -> Option<bool> {
+        let name = self.syms.sym(m).name;
+        let (set, _) = self.find_member(parents, name)?;
+        let alts = self.syms.alternatives(set).map_or_else(|| vec![set], |a| a.to_vec());
+        let shape = |sig: &MethodSig| (sig.tparams.len(), sig.clauses.iter().map(|c| c.params.len()).collect::<Vec<_>>());
+        let this = self.this_prefix(c);
+        for alt in alts {
+            if self.is_private(alt) || alt == m {
+                continue;
+            }
+            let theirs = self.sig_arc(alt);
+            if shape(&theirs) != shape(own) {
+                continue;
+            }
+            let subst = match self.syms.sym(alt).owner {
+                Owner::Class(oc) => self.base_type(parents, oc).map_or_else(Vec::new, |bt| self.owner_subst(bt)),
+                _ => Vec::new(),
+            };
+            let rename: Subst = own.tparams.iter().zip(&theirs.tparams).map(|(&x, &y)| (x, self.types.param(y))).collect();
+            let mark = self.snapshot();
+            let mut same = true;
+            for (a, b) in own.clauses.iter().flat_map(|c| c.params.iter()).zip(theirs.clauses.iter().flat_map(|c| c.params.iter())) {
+                let mine = self.types.subst(a.ty, &rename);
+                let mine = self.as_seen_from(mine, this, c);
+                let their = self.types.subst(b.ty, &subst);
+                if !self.is_same(mine, their) {
+                    same = false;
+                    break;
+                }
+            }
+            self.rollback(mark);
+            if !same {
+                continue;
+            }
+            let mine = self.types.subst(own.ret, &rename);
+            let mine = self.as_seen_from(mine, this, c);
+            let their = self.types.subst(theirs.ret, &subst);
+            let mark = self.trail.len();
+            let narrower = self.is_sub(mine, their) && !self.is_sub(their, mine);
+            self.rollback(mark);
+            return Some(narrower);
+        }
+        None
     }
 
     /// The trait with a single abstract method that a lambda of `arity` parameters is expected
@@ -1259,9 +1538,12 @@ impl<'a> Worker<'a> {
             for m in members {
                 let name = self.syms.sym(m).name;
                 // An alternative of an overloaded name is open unless one with its parameters
-                // implements it; the others of its name say nothing about it.
+                // implements it, or overrides it in a class before its own in the linearisation
+                // (dotty's `abstractTermMembers`, member denotations merged by signature: a
+                // `Conversion`'s `apply` hides `Function1`'s, which a subclass's overload of
+                // `apply` makes an alternative); the others of its name say nothing about it.
                 if self.syms.sym(m).alternative {
-                    if self.is_abstract_member(m) && !self.alternative_is_implemented(c, m) {
+                    if self.is_abstract_member(m) && !self.alternative_is_implemented(c, m) && !self.alternative_is_overridden(c, m) {
                         if open.is_some() {
                             return None;
                         }
@@ -1380,6 +1662,26 @@ impl<'a> Worker<'a> {
             while let Some(s) = self.own_alternative(b, name, k) {
                 k += 1;
                 if s != m && !self.is_abstract_member(s) && self.same_parameters(c, &bases, s, m, m_owner) {
+                    return true;
+                }
+            }
+        }
+        false
+    }
+
+    /// Whether a member with the parameters of the alternative `m` is declared in a class before
+    /// `m`'s own in `c`'s linearisation, which hides it from `c`'s members.
+    fn alternative_is_overridden(&mut self, c: ClassId, m: SymId) -> bool {
+        let name = self.syms.sym(m).name;
+        let bases: Vec<(ClassId, TypeId)> = self.syms.class(c).base_types.clone();
+        let Owner::Class(mc) = self.syms.sym(m).owner else { return false };
+        let Some(at) = bases.iter().position(|&(b, _)| b == mc) else { return false };
+        let m_owner = bases[at].1;
+        for &(b, _) in &bases[..at] {
+            let mut k = 0;
+            while let Some(s) = self.own_alternative(b, name, k) {
+                k += 1;
+                if s != m && self.syms.sym(s).kind == SymKind::Def && self.same_parameters(c, &bases, s, m, m_owner) {
                     return true;
                 }
             }
@@ -2126,4 +2428,20 @@ enum Part {
     Nested,
     /// An anonymous or local class inside it: they follow what it captures.
     Lifted { anon: bool },
+}
+
+/// The declarations `TypeOps.classBound` leaves out of an anonymous class's refinements
+/// (`missingDecls`), which their information avoids: its classes and objects' classes, its private
+/// aliases and its private values.
+#[derive(Default)]
+struct Missing {
+    classes: Vec<ClassId>,
+    aliases: Vec<AliasId>,
+    terms: Vec<SymId>,
+}
+
+impl Missing {
+    fn is_empty(&self) -> bool {
+        self.classes.is_empty() && self.aliases.is_empty() && self.terms.is_empty()
+    }
 }

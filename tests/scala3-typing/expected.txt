@@ -1230,7 +1230,7 @@ neg/i6475.scala	same
 neg/i6501.scala	accepts	
 neg/i6503.scala	same	
 neg/i6601.scala	oos	enum-extends
-neg/i6606.scala	subset	3/5 lines
+neg/i6606.scala	same	
 neg/i6622.scala	same	
 neg/i6622a.scala	same	
 neg/i6622b.scala	same	
@@ -3170,8 +3170,8 @@ pos/i18253.scala	accepts
 pos/i18260.scala	rejects	too many arguments
 pos/i18261	accepts	
 pos/i18261.min	accepts	
-pos/i18263.orig.scala	rejects	value {} is not a member of {}
-pos/i18263.scala	rejects	value {} is not a member of {}
+pos/i18263.orig.scala	accepts	
+pos/i18263.scala	accepts	
 pos/i18275.scala	accepts	
 pos/i18276a.scala	accepts	
 pos/i18276b.scala	accepts	
@@ -3561,7 +3561,7 @@ pos/i2397.scala	accepts
 pos/i24007.scala	accepts	
 pos/i24038a.scala	rejects	type mismatch
 pos/i24038b.scala	accepts	
-pos/i24056.scala	rejects	value {} is not a member of {}
+pos/i24056.scala	accepts	
 pos/i24074	oos	java
 pos/i24076.scala	accepts	
 pos/i24094.scala	accepts	
@@ -4274,7 +4274,7 @@ pos/i9562.scala	accepts
 pos/i9567.scala	accepts	
 pos/i9568.scala	accepts	
 pos/i9626.scala	accepts	
-pos/i9667.scala	rejects	type mismatch
+pos/i9667.scala	accepts	
 pos/i9676.scala	rejects	type mismatch
 pos/i9717	accepts	
 pos/i974.scala	accepts	

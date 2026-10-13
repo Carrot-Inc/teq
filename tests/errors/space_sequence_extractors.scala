@@ -10,8 +10,13 @@ def v(x: Vector[Boolean]): Int = x match { case Vector(true, _) => 1 }
 sealed class Shape(val n: Int)
 final class Square(n: Int) extends Shape(n)
 def s(x: Shape): Int = x match { case q: Square => q.n }
-// expect: 6:42: warning: match may not be exhaustive; missing: Some(Vector(false, _*)), Some(Vector(_, _, _, _*)), Some(Vector(_)), Some(Vector())
-// expect: 7:43: warning: match may not be exhaustive; missing: Left(Vector(_, _, _, _*)), Left(Vector(_)), Left(Vector())
-// expect: 8:37: warning: match may not be exhaustive; missing: Some(Array(_, _*))
-// expect: 9:34: warning: match may not be exhaustive; missing: Vector(false, _*), Vector(_, _, _, _*), Vector(_), Vector()
-// expect: 12:24: warning: match may not be exhaustive; missing: _: Shape
+// expect: 6:42: warning: match may not be exhaustive.
+// expect: 7:43: warning: match may not be exhaustive.
+// expect: 8:37: warning: match may not be exhaustive.
+// expect: 9:34: warning: match may not be exhaustive.
+// expect: 12:24: warning: match may not be exhaustive.
+// expect: It would fail on pattern case: Some(Vector(false, _*)), Some(Vector(_, _, _, _*)), Some(Vector(_)), Some(Vector())
+// expect: It would fail on pattern case: Left(Vector(_, _, _, _*)), Left(Vector(_)), Left(Vector())
+// expect: It would fail on pattern case: Some(Array(_, _*))
+// expect: It would fail on pattern case: Vector(false, _*), Vector(_, _, _, _*), Vector(_), Vector()
+// expect: It would fail on pattern case: _: Shape

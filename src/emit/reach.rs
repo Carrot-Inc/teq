@@ -2963,7 +2963,10 @@ pub(super) fn visit<M: Meet>(m: &mut M, cx: Cx, e: TExprId) {
 }
 
 fn visit_test<M: Meet>(m: &mut M, cx: Cx, test: TestId) {
-    match cx.prog.tests[test.idx()] {
+    // A class test its operand's type proves is JavaScript's null test, the JVM's class test.
+    let t = if cx.typer.jvm { cx.prog.tests[test.idx()] } else { cx.prog.js_test(test) };
+    match t {
+        TypeTest::Proven(inner, _) => visit_test(m, cx, inner),
         TypeTest::Class(c) => m.class(cx, c),
         TypeTest::Trait(c) => m.test_trait(cx, c),
         TypeTest::Array => m.test_array(cx),

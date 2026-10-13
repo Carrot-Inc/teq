@@ -6,6 +6,9 @@
 def b(x: Vector[Boolean]): Int = x match { case Vector(true, _) => 1 }
 def h(x: List[Boolean]): Int = x match { case List(true, _) => 1 }
 def v(x: Vector[Int]): Int = x match { case Vector(1) => 1 }
-// expect: 6:34: warning: match may not be exhaustive; missing: Vector(false, _*), Vector(_, _, _, _*), Vector(_), Vector()
-// expect: 7:32: warning: match may not be exhaustive; missing: List(false, _*), List(_, _, _, _*), List(_), Nil
-// expect: 8:30: warning: match may not be exhaustive; missing: Vector(_*)
+// expect: 6:34: warning: match may not be exhaustive.
+// expect: 7:32: warning: match may not be exhaustive.
+// expect: 8:30: warning: match may not be exhaustive.
+// expect: It would fail on pattern case: Vector(false, _*), Vector(_, _, _, _*), Vector(_), Vector()
+// expect: It would fail on pattern case: List(false, _*), List(_, _, _, _*), List(_), Nil
+// expect: It would fail on pattern case: Vector(_*)

@@ -14,7 +14,7 @@ broken-case	scalac	broken-case.scala:11: error: pattern expected	wording
 broken-case	scalac	broken-case.scala:13: error: type mismatch	scalac-tree
 broken-case	scalac	broken-case.scala:9: error: pattern expected	wording
 broken-case	teq	broken-case.scala:11: error: a pattern expected, but '=>' found	wording
-broken-case	teq	broken-case.scala:13: warning: match may not be exhaustive; missing: B(_)	typed-after-skip
+broken-case	teq	broken-case.scala:13: warning: match may not be exhaustive.	typed-after-skip
 broken-case	teq	broken-case.scala:9: error: a pattern expected, but '=>' found	wording
 broken-result	scalac	broken-result.scala:4: warning: Alphanumeric type L is not declared infix; it should not be used as infix operator.	unwarned
 broken-result	teq	broken-result.scala:4: error: not found: build	typed-after-skip

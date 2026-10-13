@@ -1,0 +1,52 @@
+tests/errors/exhaustivity_counterexamples.scala:70:25: error: match may not be exhaustive.
+
+It would fail on pattern case: R20(A0, B1, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _), R20(A0, _, B2, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _), R20(A0, _, _, B3, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _), R20(A0, _, _, _, B4, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _), R20(A0, _, _, _, _, B5, _, _, _, _, _, _, _, _, _, _, _, _, _, _), R20(A0, _, _, _, _, _, B6, _, _, _, _, _, _, _, _, _, _, _, _, _)
+(More unmatched cases are elided)
+  def wide(r: R20): Int = r match
+                          ^
+tests/errors/exhaustivity_counterexamples.scala:81:50: error: match may not be exhaustive.
+
+It would fail on pattern case: (false, false, _)
+  def pairs(b: (Boolean, Boolean, Boolean)): Int = b match
+                                                   ^
+tests/errors/exhaustivity_counterexamples.scala:84:31: error: match may not be exhaustive.
+
+It would fail on pattern case: P(SA, SB), P(SA, SC), P(SA, SD), P(SB, SB), P(SB, SC), P(SB, SD)
+  def alternatives(p: P): Int = p match
+                                ^
+tests/errors/exhaustivity_counterexamples.scala:87:25: error: match may not be exhaustive.
+
+It would fail on pattern case: P(SB, _), P(SB, SA), P(SC, SA), P(SD, SA), P(SB, SC), P(SC, SC)
+(More unmatched cases are elided)
+  def nested(p: P): Int = p match
+                          ^
+tests/errors/exhaustivity_counterexamples.scala:90:29: error: match may not be exhaustive.
+
+It would fail on pattern case: (SA, SB), (SA, SC), (SA, SD), (SC, _), (SD, _), (SB, SA)
+(More unmatched cases are elided)
+  def twice(p: (S, S)): Int = p match
+                              ^
+tests/errors/exhaustivity_counterexamples.scala:93:51: error: match may not be exhaustive.
+
+It would fail on pattern case: (true, None), (false, Some(_)), (_, Some(false))
+  def deduped(x: (Boolean, Option[Boolean])): Int = x match
+                                                    ^
+tests/errors/exhaustivity_counterexamples.scala:96:26: error: match may not be exhaustive.
+
+It would fail on pattern case: _: S
+  def guarded(s: S): Int = s match
+                           ^
+tests/errors/exhaustivity_counterexamples.scala:98:35: error: match may not be exhaustive.
+
+It would fail on pattern case: (SB, _), (SC, false), (SD, false)
+  def mixed(t: (S, Boolean)): Int = t match
+                                    ^
+tests/errors/exhaustivity_counterexamples.scala:105:38: error: match may not be exhaustive.
+
+It would fail on pattern case: (KC, KB, KB), (KA, KA, KB), (KC, KA, KB), (KA, KB, KB), (KC, KB, KB)
+  def unreachable(x: (K, K, K)): Int = x match
+                                       ^
+tests/errors/exhaustivity_counterexamples.scala:110:8: error: unreachable case
+    case (KA, _, KC) => 4
+         ^^^^^^^^^^^
+10 errors found

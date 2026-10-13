@@ -467,6 +467,12 @@ pub enum TypeTest {
     /// scrutinee is of that class: dotty's `PatternMatcher.addOuterTest`, `x.$outer eq p` for a
     /// class through the path `p`, the outer's class test for a projection `P#C`.
     Outer(SymId, TestId),
+    /// A class test the scrutinee's type passes and its erasure does not (`case _: Box[T]` of a
+    /// `Box[T]`, dotty's `TypeTestsCasts.transformIsInstanceOf` comparing with the erased `Box`):
+    /// the JVM and the interpreter make the class test; JavaScript makes the test that the value
+    /// is not `null` where it may be (`true`), which Scala.js's optimizer proves in its erased
+    /// IR (`OptimizerCore`): `Program::js_test`.
+    Proven(TestId, bool),
 }
 
 impl TypeTest {
@@ -1579,6 +1585,28 @@ impl Program {
         }
         self.expr_spans.set(e.0, (file, span));
     }
+    /// The test JavaScript makes for `t`: a class test its operand's type proves is the test that
+    /// it is not `null`, or none (`TypeTest::Proven`).
+    #[inline]
+    pub fn js_test(&self, t: TestId) -> TypeTest {
+        match self.tests[t.idx()] {
+            TypeTest::Proven(_, true) => TypeTest::AnyVal,
+            TypeTest::Proven(_, false) => TypeTest::Always,
+            // Both sides proven (`Box[Int] & Mark`): one null test, or none.
+            TypeTest::And(a, b) => match (self.js_test(a), self.js_test(b)) {
+                (TypeTest::Always, TypeTest::Always) => TypeTest::Always,
+                (TypeTest::Always | TypeTest::AnyVal, TypeTest::Always | TypeTest::AnyVal) => TypeTest::AnyVal,
+                _ => TypeTest::And(a, b),
+            },
+            // A union's sides, each proven: one null test, or none.
+            TypeTest::Or(a, b) => match (self.js_test(a), self.js_test(b)) {
+                (TypeTest::Always, _) | (_, TypeTest::Always) => TypeTest::Always,
+                (TypeTest::AnyVal, TypeTest::AnyVal) => TypeTest::AnyVal,
+                _ => TypeTest::Or(a, b),
+            },
+            other => other,
+        }
+    }
     /// The source an expression was typed from, when it was recorded.
     pub fn span_of(&self, e: TExprId) -> Option<(FileId, Span)> {
         self.expr_spans.get(e.0).filter(|s| s.0 != NO_SPAN.0)
@@ -1902,7 +1930,7 @@ impl<'a> Descendants<'a> {
                 match prog.tests[t.idx()] {
                     TypeTest::Value(e) => self.exprs.push(e),
                     TypeTest::Or(a, b) | TypeTest::And(a, b) => self.tests.extend([a, b]),
-                    TypeTest::Outer(_, t) => self.tests.push(t),
+                    TypeTest::Outer(_, t) | TypeTest::Proven(t, _) => self.tests.push(t),
                     _ => {}
                 }
             } else {

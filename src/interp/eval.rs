@@ -2036,6 +2036,8 @@ impl<'a, 't> Interp<'a, 't> {
     pub(super) fn type_test(&mut self, v: &Value, test: TestId, fr: &Rc<Frame>, cx: &Ctx) -> R<bool> {
         Ok(match self.prog().tests[test.idx()] {
             TypeTest::Always => true,
+            // The JVM's class test.
+            TypeTest::Proven(inner, _) => self.type_test(v, inner, fr, cx)?,
             TypeTest::Class(c) | TypeTest::Trait(c) => self.is_instance(v, c),
             TypeTest::Number => matches!(v, Value::Double(_)),
             TypeTest::Int => matches!(v, Value::Int(_)),

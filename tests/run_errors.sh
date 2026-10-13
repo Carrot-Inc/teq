@@ -1,7 +1,8 @@
 #!/bin/bash
 # Every tests/errors/*.scala, and every directory under tests/errors (a program with the files
 # next to it, such as a teq.toml), has to be rejected with all of its `// expect:` messages and
-# none of its `// absent:` ones (a diagnostic scalac does not give, at its line and column). A
+# none of its `// absent:` ones (a diagnostic scalac does not give, at its line and column), and
+# its whole output equal to a `<name>.check` next to it where there is one. A
 # `// teq: <flags>` line passes those flags to teq, a `// command: build` line builds the program
 # in the place of checking it (for what only a build rejects), a `// jars: <names>` line puts those jars on
 # the class path (tests/support/jars.sh); without one of them in the coursier cache the program
@@ -48,6 +49,14 @@ for src in tests/errors/*.scala tests/errors/*/; do
       fail=1
     fi
   done < <(grep -h '^// absent: ' "$src" "$src"/*.scala 2>/dev/null)
+  # A `<name>.check` next to a program is its complete diagnostics, compared whole: a message's
+  # every line, its blank ones included, which a line's `// expect:` cannot place.
+  check=${src%.scala}.check
+  if [ -f "$check" ] && ! diff -q "$check" - <<< "$out" > /dev/null; then
+    echo "FAIL $src: the diagnostics are not $check"
+    diff "$check" - <<< "$out" | head -20
+    fail=1
+  fi
 done
 # The unused-import warning against scalac's on dotty's corpus and the probes (its own script).
 unused=$(./tests/warnings/unused-imports.sh 2>&1)

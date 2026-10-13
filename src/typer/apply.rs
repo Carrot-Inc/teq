@@ -1030,7 +1030,7 @@ impl<'a> Worker<'a> {
     /// the `@implicitNotFound` text of the type `t` a given was searched for; one that starts
     /// with `explain=` explains and is no message (`userDefinedImplicitNotFoundMessage`).
     pub(super) fn implicit_not_found_message(&mut self, t: TypeId) -> Option<String> {
-        let text = self.type_not_found_text(t, 0)?;
+        let text = self.type_not_found_text(t, t, 0)?;
         (!text.starts_with("explain=")).then_some(text)
     }
 
@@ -1038,8 +1038,9 @@ impl<'a> Worker<'a> {
     /// arguments (`AppliedType`, `TypeRef`), else the first of its base classes', their
     /// parameters as seen from it (`ClassInfo`); an alias, an abstract type, a parameter, a path
     /// or a refinement through what it stands for (`TypeProxy`); the first side of an
-    /// intersection that has one, else the second (`AndType`).
-    fn type_not_found_text(&mut self, t: TypeId, depth: u32) -> Option<String> {
+    /// intersection that has one, else the second (`AndType`). `pt` is the type searched for, which
+    /// the class's type members are seen from.
+    fn type_not_found_text(&mut self, pt: TypeId, t: TypeId, depth: u32) -> Option<String> {
         if depth > 16 {
             return None;
         }
@@ -1048,7 +1049,7 @@ impl<'a> Worker<'a> {
         match self.types.get(t) {
             Type::Class(c, args) => {
                 let args = self.types.items(args).to_vec();
-                if let Some(m) = self.class_not_found_text(c, &args) {
+                if let Some(m) = self.class_not_found_text(c, &args, pt, None) {
                     return Some(m);
                 }
                 self.complete_class(c);
@@ -1059,25 +1060,36 @@ impl<'a> Worker<'a> {
                         Some(Type::Class(_, l)) => self.types.items(l).to_vec(),
                         _ => Vec::new(),
                     };
-                    self.class_not_found_text(b, &args)
+                    self.class_not_found_text(b, &args, pt, None)
                 })
             }
-            Type::Inter(a, b) => self.type_not_found_text(a, d).or_else(|| self.type_not_found_text(b, d)),
+            // A class through its enclosing instance (`o.E[Char]`, dotty's `TypeRef(o, E)`): the enclosing
+            // classes' parameters and members are seen from the prefix.
+            Type::Nested(prefix, inner) => {
+                if let Type::Class(c, args) = self.types.get(inner) {
+                    let args = self.types.items(args).to_vec();
+                    if let Some(m) = self.class_not_found_text(c, &args, pt, Some(prefix)) {
+                        return Some(m);
+                    }
+                }
+                self.type_not_found_text(pt, inner, d)
+            }
+            Type::Inter(a, b) => self.type_not_found_text(pt, a, d).or_else(|| self.type_not_found_text(pt, b, d)),
             Type::Param(p) => {
                 let upper = self.syms.tparam(p).upper;
-                self.type_not_found_text(upper, d)
+                self.type_not_found_text(pt, upper, d)
             }
             Type::AppParam(p, args) => {
                 let upper = self.app_param_upper(p, args)?;
-                self.type_not_found_text(upper, d)
+                self.type_not_found_text(pt, upper, d)
             }
             Type::Lit(_) => {
                 let class = self.widen_lit(t);
-                self.type_not_found_text(class, d)
+                self.type_not_found_text(pt, class, d)
             }
             Type::This(_) | Type::Term(_) | Type::Select(..) | Type::Member(..) | Type::AppMember(..) | Type::Decl(_) | Type::Refined(..) | Type::Alias(..) | Type::Match(..) => {
                 let under = self.dependent_underlying(t)?;
-                self.type_not_found_text(under, d)
+                self.type_not_found_text(pt, under, d)
             }
             _ => None,
         }
@@ -1135,8 +1147,8 @@ impl<'a> Worker<'a> {
     }
 
     /// The `@implicitNotFound` text a class declares, its type parameters' `${A}` replaced by
-    /// `args`.
-    fn class_not_found_text(&mut self, c: ClassId, args: &[TypeId]) -> Option<String> {
+    /// `args` and its type members' by what they are seen from `pt` (`asSeenFrom(pt, sym)`).
+    fn class_not_found_text(&mut self, c: ClassId, args: &[TypeId], pt: TypeId, prefix: Option<TypeId>) -> Option<String> {
         let (file, def) = {
             let info = self.syms.class(c);
             (info.file, info.def)
@@ -1151,15 +1163,42 @@ impl<'a> Worker<'a> {
             None => self.loaded.as_ref()?.implicit_not_found.get(&c)?.clone(),
         };
         let mut names: Vec<String> = self.syms.class(c).tparams.iter().map(|&p| self.name_ref(self.syms.tparam(p).name).to_string()).collect();
-        // The classes enclosing it (`substitutableTypeSymbolsInScope`): their parameters as
-        // they stand, the type's prefix not carrying their arguments here.
-        let owner = self.syms.class(c).owner;
-        let outer = self.enclosing_tparams(owner);
+        // The classes enclosing it (`substitutableTypeSymbolsInScope`): their parameters as seen from the
+        // prefix where the type has one, as they stand otherwise.
+        let mut owner = self.syms.class(c).owner;
         let mut args = args.to_vec();
         args.truncate(names.len());
-        for p in outer {
-            names.push(self.name_ref(self.syms.tparam(p).name).to_string());
-            args.push(self.types.param(p));
+        let under = prefix.map(|q| self.path_underlying(q));
+        for _ in 0..32 {
+            let Owner::Class(k) = owner else { break };
+            let tparams = self.syms.class(k).tparams.clone();
+            let seen: Vec<TypeId> = match under.and_then(|u| self.base_type(u, k)).map(|bt| self.types.get(bt)) {
+                Some(Type::Class(_, l)) => self.types.items(l).to_vec(),
+                _ => Vec::new(),
+            };
+            for (i, &p) in tparams.iter().enumerate() {
+                names.push(self.name_ref(self.syms.tparam(p).name).to_string());
+                args.push(seen.get(i).copied().unwrap_or_else(|| self.types.param(p)));
+            }
+            owner = self.syms.class(k).owner;
+        }
+        // The type members of the class, inherited ones too, and of the enclosing classes where the type
+        // has a prefix (`typeRef.nonClassTypeMembers`), each named in the text and not a parameter: the
+        // member selected on the searched type, or on the prefix.
+        for name in Self::not_found_names(&raw) {
+            if names.iter().any(|n| *n == name) {
+                continue;
+            }
+            let n = self.interner.intern(&name);
+            let seen = if self.class_has_type_member(c, n) {
+                self.member_type(pt, n)
+            } else {
+                prefix.and_then(|q| self.member_type(q, n))
+            };
+            if let Some(t) = seen {
+                names.push(name);
+                args.push(t);
+            }
         }
         Some(self.format_not_found(&raw, &names, &args))
     }
@@ -1173,6 +1212,26 @@ impl<'a> Worker<'a> {
             let info = self.syms.class(k);
             out.extend(info.tparams.iter().copied());
             owner = info.owner;
+        }
+        out
+    }
+
+    /// Whether the class declares or inherits the type member `name`.
+    fn class_has_type_member(&mut self, c: ClassId, name: Name) -> bool {
+        self.complete_class(c);
+        let bases: Vec<ClassId> = self.syms.class(c).base_types.iter().map(|&(b, _)| b).collect();
+        bases.iter().any(|&b| self.syms.class(b).type_aliases.contains_key(&name))
+    }
+
+    /// The names a text's `${A}` placeholders give, in order.
+    fn not_found_names(raw: &str) -> Vec<String> {
+        let mut out = Vec::new();
+        let mut rest = raw;
+        while let Some(at) = rest.find("${") {
+            let after = &rest[at + 2..];
+            let Some(end) = after.find('}') else { break };
+            out.push(after[..end].trim().to_string());
+            rest = &after[end + 1..];
         }
         out
     }
@@ -5918,7 +5977,9 @@ impl<'a> Worker<'a> {
             }
             ArgSrc::Typed(te, ty) | ArgSrc::Named(_, te, ty) => {
                 self.mark_spread_array(spread, te, ty);
-                self.typed_arg(te, ty, pty, span)
+                // One overload resolution typed ahead is adapted where it was written.
+                let at = self.overload_arg_spans.iter().rev().find(|&&(e, _)| e == te).map_or(span, |&(_, at)| at);
+                self.typed_arg(te, ty, pty, at)
             }
             ArgSrc::ForLambda(pat, rest) => {
                 let (te, ty) = self.type_for_lambda(pat, rest, pty, span);

@@ -1,12 +1,13 @@
 package scala
 
 /** Evidence that `From` conforms to `To`. The compiler supplies it where a `using` parameter asks
-  * for it, as the identity function.
+  * for it, as `<:<.refl`, the identity function.
   */
 @implicitNotFound("Cannot prove that ${From} <:< ${To}.")
 sealed trait <:<[-From, +To] extends Function1[From, To]
 
 object <:< :
+  // The evidence the compiler supplies (scala-library's `implicit def refl`), the identity function.
   def refl[A]: A =:= A = unsafeCast((a: A) => a)
   /** scala-library's substitutions: the evidence is the identity function at run time, so a
     * value keeps its representation and only its type changes.

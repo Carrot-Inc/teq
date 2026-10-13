@@ -5971,9 +5971,11 @@ impl<'a> Worker<'a> {
                 self.collect_unchecked_variance(file, &parents);
             }
         }
-        for i in 0..self.syms.class(c).parents.len() {
-            let parent = self.syms.class(c).parents[i];
-            self.report_variance(parent, 1, file, span, &class_desc);
+        // The class's own info, its parents (`ClassInfo`), shown as dotty shows it: `Object with Cell[T] {...}`.
+        let parents = self.syms.class(c).parents.clone();
+        if let Some((p, required)) = parents.iter().find_map(|&t| self.variance_violation(t, 1)) {
+            let shown = self.class_info_text(c);
+            self.report_variance_at(p, required, &shown, file, span, &class_desc);
         }
         for i in 0..self.own_member_count(c) {
             let m = self.own_member(c, i);
@@ -6052,17 +6054,6 @@ impl<'a> Worker<'a> {
         };
         self.sig_of(m);
         let sig = self.sig_arc(m);
-        let mut positions: Vec<(TypeId, i8, crate::source::Span, String)> = Vec::new();
-        for &tp in &sig.tparams {
-            let (upper, lower) = (self.syms.tparam(tp).upper, self.syms.tparam(tp).lower);
-            let what = format!("type parameter {}", self.name_str(self.syms.tparam(tp).name));
-            positions.push((upper, -1, m_span, what.clone()));
-            positions.push((lower, 1, m_span, what));
-        }
-        for p in sig.clauses.iter().flat_map(|cl| cl.params.iter()) {
-            let what = format!("parameter {}", self.name_str(p.name));
-            positions.push((p.ty, -1, self.syms.sym(p.sym).span, what));
-        }
         let mut what = self.member_description(m, None);
         // dotty's `privateParamAddendum`: a private class parameter is never local.
         if m_mods & mods::PRIVATE != 0 && m_mods & mods::FIELD != 0 && self.is_ctor_param(c, m) {
@@ -6072,24 +6063,66 @@ impl<'a> Worker<'a> {
                 self.name_str(self.syms.sym(m).name)
             ));
         }
-        let result_at = positions.len();
-        positions.push((sig.ret, sign, m_span, what));
-        for (i, (t, sign, span, what)) in positions.into_iter().enumerate() {
-            // A def's result is shown in its info, as `VarianceChecker` reports the
-            // symbol's (`=> R`, `(x: Int): R`).
-            if i == result_at && kind == SymKind::Def {
-                if let Some((p, required)) = self.variance_violation(t, sign) {
-                    let shown = self.show_method_info(&sig);
-                    self.report_variance_at(p, required, &shown, m_file, span, &what);
-                    return true;
-                }
-                return false;
-            }
-            if self.report_variance(t, sign, m_file, span, &what) {
+        // dotty's `Traverser`: the member's own info first (`checkInfo`, a method's result), reported at the
+        // definition and shown as its info (`=> R`, `(x: Int): R`); its span holds the parameters', whose errors
+        // `UniqueMessagePositions` then hides. Else each type parameter's bounds (`type B`, shown ` <: A`) and
+        // each parameter's type, at its own definition, in the order written.
+        if kind == SymKind::Def {
+            if let Some((p, required)) = self.variance_violation(sig.ret, sign) {
+                let shown = self.show_method_info(&sig);
+                self.report_variance_at(p, required, &shown, m_file, m_span, &what);
                 return true;
             }
+        } else if self.report_variance(sig.ret, sign, m_file, m_span, &what) {
+            return true;
         }
-        false
+        let written: Vec<(crate::intern::Name, crate::source::Span)> = match self.syms.sym(m).def.map(|d| &self.ast(m_file).def(d).kind) {
+            Some(DefKind::Fun(f)) => f.tparams.iter().map(|tp| (tp.name, tp.span)).collect(),
+            Some(DefKind::Given(g)) => g.tparams.iter().map(|tp| (tp.name, tp.span)).collect(),
+            _ => Vec::new(),
+        };
+        let mut reported = false;
+        for &tp in &sig.tparams {
+            let (name, upper, lower) = {
+                let info = self.syms.tparam(tp);
+                (info.name, info.upper, info.lower)
+            };
+            let span = written.iter().find(|&&(n, _)| n == name).map_or(m_span, |&(_, sp)| sp);
+            // `TypeBounds`' fold: the lower bound flipped first, then the upper.
+            if let Some((p, required)) = self.variance_violation(lower, 1).or_else(|| self.variance_violation(upper, -1)) {
+                let text = self.bounds_text(lower, upper);
+                let what = format!("type {}", self.name_str(name));
+                self.report_variance_at(p, required, &format!(" {}", text.trim_start()), m_file, span, &what);
+                reported = true;
+            }
+        }
+        for p in sig.clauses.iter().flat_map(|cl| cl.params.iter()) {
+            let what = format!("parameter {}", self.name_str(p.name));
+            if self.report_variance(p.ty, -1, m_file, self.syms.sym(p.sym).span, &what) {
+                reported = true;
+            }
+        }
+        reported
+    }
+
+    /// A class's info as dotty shows a `ClassInfo` in a message: its parents, `Object` before a first
+    /// that is a trait, then `{...}` (`Object with Cell[T] {...}`).
+    fn class_info_text(&mut self, c: ClassId) -> String {
+        let parents = self.syms.class(c).parents.clone();
+        let mut shown: Vec<String> = Vec::with_capacity(parents.len() + 1);
+        let first = parents.first().map(|&t| self.deref(t));
+        let first_trait = first.map_or(true, |t| match self.types.get(t) {
+            Type::Class(k, _) => self.syms.class(k).kind == ClassKind::Trait,
+            _ => false,
+        });
+        if first_trait {
+            shown.push("Object".to_string());
+        }
+        for t in parents {
+            let text = self.show(t);
+            shown.push(if text == "AnyRef" { "Object".to_string() } else { text });
+        }
+        format!("{} {{...}}", shown.join(" with "))
     }
 
     /// Whether the local `l` stands for `c.this` in a class nested in `c` (`this_ref`, a

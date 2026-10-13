@@ -206,7 +206,7 @@ pub struct Index {
     pub library_signatures: std::cell::RefCell<FxMap<SymId, Result<Option<(Vec<SigParam>, String)>, String>>>,
     /// The context closures of each file, by their starts with their numbers of parameters,
     /// made when a pickle first numbers one (`quoted::contextual_closures`).
-    pub contextual: std::cell::OnceCell<FxMap<FileId, Vec<(u32, u32)>>>,
+    pub contextual: std::cell::OnceCell<crate::typer::ContextualOrder>,
 }
 
 impl Index {

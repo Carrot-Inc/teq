@@ -26,11 +26,11 @@
 // expect: 97:22: error: type mismatch: found "x", required Int
 // expect: 98:18: error: type mismatch: found "x", required Int
 // expect: 99:21: error: type mismatch: found "x"
-// expect: 100:17: error: type mismatch: found "s", required Int
+// expect: 100:23: error: type mismatch: found "s", required Int
 // expect: 101:38: error: type mismatch: found "s"
 // expect: 102:39: error: type mismatch: found "s"
 // expect: 103:55: error: type mismatch: found "s", required Int
-// expect: 104:29: error: type mismatch: found "s"
+// expect: 104:35: error: type mismatch: found "s"
 // expect: 105:33: error: type mismatch: found "s", required Int
 // expect: 106:17: error: type mismatch: found "s", required Int
 // expect: 107:18: error: type mismatch: found "s", required Int

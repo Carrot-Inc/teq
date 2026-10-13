@@ -1878,7 +1878,7 @@ impl<'a> Worker<'a> {
     /// is an array, two arrays conform as their elements do and an array to `Object` alone
     /// (TypeComparer.scala 1119 to 1122, `JavaArrayType`), so `int[]` is no `Object[]`; an array
     /// of `Nothing` is none of a primitive, as its representation has it (below).
-    fn erased_sub(&mut self, from: super::site::Erased, to: super::site::Erased) -> bool {
+    pub(super) fn erased_sub(&mut self, from: super::site::Erased, to: super::site::Erased) -> bool {
         use super::site::Erased;
         let object = self.b.any_ref;
         match (from, to) {

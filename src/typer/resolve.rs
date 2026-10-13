@@ -4849,10 +4849,16 @@ impl<'a> Worker<'a> {
                     // tells (`js.Array[Int]` is `Array[Int]`).
                     let js = t.written_js_alias(rhs);
                     t.syms.aliases[a.idx()].js = js;
+                    let declared = match (upper, t.cur_ast().ty(rhs)) {
+                        (Some(u), TyExpr::Match(..)) => Some(t.resolve_type(u)),
+                        _ => None,
+                    };
+                    t.match_pt = declared;
                     let (mut ty, view) = t.declared_view(rhs, |w| w.resolve_type_ctor(rhs));
+                    t.match_pt = None;
                     t.syms.aliases[a.idx()].declared_rhs = view;
                     if let (Some(u), Type::Match(scrut, m)) = (upper, t.types.get(ty)) {
-                        let bound = t.resolve_type(u);
+                        let bound = declared.unwrap_or_else(|| t.resolve_type(u));
                         let cases = t.types.match_info(m).cases.to_vec();
                         ty = t.types.match_type(scrut, &cases, bound);
                     }

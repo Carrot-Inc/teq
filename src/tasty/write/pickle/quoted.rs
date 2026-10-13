@@ -83,7 +83,7 @@ impl<'w, 'a> P<'w, 'a> {
     pub(super) fn hole_splice(&mut self, hole: SymId, code: TExprId) {
         let t = self.w.sig_of(hole).ret;
         let start = self.w.prog.span_of(code).map(|(_, s)| s.start);
-        let number = self.contextual_number(start, 1);
+        let number = self.contextual_number(start, 0, 1);
         let outer = std::mem::take(&mut self.open_holes);
         let quoted = std::mem::replace(&mut self.quoted_depth, 0);
         let l = self.open(SPLICE);
@@ -101,7 +101,7 @@ impl<'w, 'a> P<'w, 'a> {
         let &[q] = self.w.prog.sym_list(params) else { return self.fail("a macro's splice of no Quotes".to_string()) };
         let Some(t) = self.node_type(e) else { return self.fail("a macro's splice of no type".to_string()) };
         let start = self.w.prog.span_of(e).map(|(_, s)| s.start);
-        let number = self.contextual_number(start, 1);
+        let number = self.contextual_number(start, 0, 1);
         // A macro of `Unit` whose code is another `Expr`: scalac discards the splice's value,
         // `{ ${ .. }; () }`, the splice of the code's own type.
         let held = self.held_type(lambda);
@@ -352,24 +352,26 @@ impl<'w, 'a> P<'w, 'a> {
         self.open_holes.iter().rev().find(|&&(h, _)| h == s).map(|&(_, code)| code)
     }
 
-    /// The number of the first `contextual$` parameter of the context closure at `start` of
-    /// the pickle's file, of `count` parameters: scalac numbers them per compilation unit in the
-    /// order it types the closures, which is their order in the source.
-    pub(super) fn contextual_number(&mut self, start: Option<u32>, count: u32) -> u32 {
-        let closures = self.index.contextual.get_or_init(|| contextual_closures(self.w));
-        let found = start.and_then(|start| {
-            let list = closures.get(&self.file)?;
-            let i = list.iter().position(|&(s, _)| s == start)?;
-            Some(1 + list[..i].iter().map(|&(_, n)| n).sum::<u32>())
-        });
-        match found {
+    /// The number of the first `contextual$` parameter of the context closure at `start` and
+    /// `depth` (an enclosing closure at its place before it) of the pickle's file, of `count`
+    /// parameters: scalac numbers them per compilation unit in the order it types the closures,
+    /// which is their order in the source, the typer's `ContextualOrder`.
+    pub(super) fn contextual_number(&mut self, start: Option<u32>, depth: u32, count: u32) -> u32 {
+        let order = self.index.contextual.get_or_init(|| crate::typer::ContextualOrder::of(&self.w.prog, &self.w.syms, &self.w.interner, 0));
+        match start.and_then(|start| order.number(self.file, start, depth)) {
             Some(n) => n,
             None => {
-                let total: u32 = closures.get(&self.file).map_or(0, |l| l.iter().map(|&(_, n)| n).sum());
+                let total: u32 = order.files.get(&self.file).map_or(0, |l| l.iter().map(|&(_, _, n)| n).sum());
                 self.contextual_extra += count;
                 total + self.contextual_extra - count + 1
             }
         }
+    }
+
+    /// The depth of the context closure `e` the typer made below enclosing ones at its place.
+    pub(super) fn contextual_depth(&mut self, e: TExprId) -> u32 {
+        let order = self.index.contextual.get_or_init(|| crate::typer::ContextualOrder::of(&self.w.prog, &self.w.syms, &self.w.interner, 0));
+        order.closures.get(&e).map_or(0, |&(_, _, d)| d)
     }
 
     /// The form of a node the capture marks for the quotes, written in its place, if any.
@@ -408,39 +410,3 @@ impl<'w, 'a> P<'w, 'a> {
     }
 }
 
-/// The context closures of every file, each by its start (a hole's code's, a macro's splice's,
-/// a closure's the typer made for an expected context function) with its number of
-/// parameters, in the order of the source: what numbers their `contextual$` parameters.
-fn contextual_closures(w: &Worker) -> FxMap<FileId, Vec<(u32, u32)>> {
-    let mut out: FxMap<FileId, Vec<(u32, u32)>> = FxMap::default();
-    let prog = &w.prog;
-    let mut add = |at: Option<(FileId, Span)>, n: u32| {
-        if let Some((file, span)) = at {
-            out.entry(file).or_default().push((span.start, n));
-        }
-    };
-    for q in prog.quotes.iter() {
-        for &(_, code) in &q.holes {
-            add(prog.span_of(code), 1);
-        }
-    }
-    for i in 0..prog.exprs.len() {
-        let e = TExprId(i as u32);
-        match prog.expr(e) {
-            TExpr::Splice(_) => add(prog.span_of(e), 1),
-            TExpr::Lambda(params, _) => {
-                let params = prog.sym_list(params);
-                let contextual = params.first().map_or(false, |&p| w.interner.get(w.syms.sym(p).name).starts_with("contextual$"));
-                if contextual {
-                    add(prog.span_of(e), params.len() as u32);
-                }
-            }
-            _ => {}
-        }
-    }
-    for list in out.values_mut() {
-        list.sort_unstable();
-        list.dedup_by_key(|&mut (s, _)| s);
-    }
-    out
-}

@@ -8,10 +8,12 @@ alias_tuple_exhaustivity
 alias_wildcard_refined_member
 annotated_type_params
 annotations_ignored
+anon_class_bound_members
 anon_classes
 anon_default_args
 anon_generic_parent_using
 anon_givens
+anon_hidden_generic
 anon_instance_refined
 anon_members
 anon_parentless_prefixed
@@ -603,6 +605,7 @@ infer_open_bounds
 infer_open_expected
 infer_upper_bounds_through_vars
 infer_with_path_param
+inference_leftovers_retired
 infix_and_or_method_clauses
 infix_args
 infix_line_end
@@ -889,6 +892,7 @@ macro_default_getters
 macro_derivation
 macro_enum_case_type_ref
 macro_environment
+macro_evidence_refl
 macro_fresh_names
 macro_fresh_nested_site
 macro_heal_types
@@ -978,6 +982,7 @@ map_iterable_overloads
 map_store_callbacks
 maps
 marker_traits
+match_nested_bound
 match_type_dependent
 match_type_sealed_leaves
 match_types
@@ -1063,6 +1068,7 @@ null_equality_tparam
 nullary_over_java_parens
 number_boxes
 numeric
+numeric_companion_constants
 object_inherited_member_prefix
 object_inherited_protected
 object_member
@@ -1263,6 +1269,7 @@ runtime_exception_caught
 runtime_objects
 sam_by_name_repeated
 sam_conversion
+sam_conversion_after_overloaded_apply
 sam_eta_java_function
 sam_function_value
 sam_lambda_this
@@ -1577,6 +1584,7 @@ tuple_xxl
 tuple_xxl_product
 tuple_xxl_typed
 tupling_priority
+type_evidence_refl
 type_lambda_hk_binders
 type_members
 type_on_next_line
@@ -1586,6 +1594,8 @@ type_pattern_lower_bounds
 type_test_bound_constituents
 type_test_class_pattern
 type_test_erased_bound
+type_test_erased_shapes
+type_test_literal_tag
 type_test_null_guard
 type_test_null_scrutinee
 type_test_null_shapes

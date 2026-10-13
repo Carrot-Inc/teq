@@ -1301,7 +1301,7 @@ impl<'a> Emitter<'a> {
     }
 
     fn walk_test(&mut self, w: &mut Walk, test: TestId) {
-        let t = self.prog.tests[test.idx()];
+        let t = self.prog.js_test(test);
         if let Some((text, _)) = test_text(t) {
             for name in text_names(text).free {
                 w.name(&name);
@@ -1843,8 +1843,8 @@ impl<'a> Emitter<'a> {
                 match op {
                     CastOp::Written => {}
                     CastOp::Nothing => w.name("$asNothing"),
-                    CastOp::Unbox(test, _) => w.name(super::expr::unbox_helper(prog.tests[test.idx()])),
-                    CastOp::Check(test, _) => match prog.tests[test.idx()] {
+                    CastOp::Unbox(test, _) => w.name(super::expr::unbox_helper(prog.js_test(test))),
+                    CastOp::Check(test, _) => match prog.js_test(test) {
                         TypeTest::Class(c) => {
                             w.name("$as");
                             self.walk_class(w, c);
