@@ -1,0 +1,4 @@
+tests/modules/javapackagenullary/b/Use.scala:4:9: error: method f in class C does not take parameters
+  val x = new java.review.C().f()
+          ^^^^^^^^^^^^^^^^^^^^^^^
+1 error found

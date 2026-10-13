@@ -294,6 +294,10 @@ impl<'a> Worker<'a> {
         // One pass per class: its export table, which its given index reads, then the index
         // and the conversions among its givens; most classes have none and cost a lookup.
         for c in classes {
+            // The companion the typer made has no exports or givens.
+            if self.syms.class(c).made_companion && self.syms.class(c).def.is_none() {
+                continue;
+            }
             self.env.file = self.syms.class(c).file;
             self.exports_of(c);
             if let Some(index) = self.class_given_index_of(c) {
@@ -2915,6 +2919,8 @@ impl<'a> Worker<'a> {
             tclass.captures = 1;
         }
         let (synthesized, existing_defs) = self.synthesized_record(c);
+        self.check_synthesized_conflicts(c, synthesized);
+        self.check_companion_apply_defaults(c);
         tclass.synthesized = synthesized;
         if !existing_defs.is_empty() {
             tclass.lists_mut().existing_defs = existing_defs;
@@ -2923,11 +2929,21 @@ impl<'a> Worker<'a> {
             let order = crate::tir::equals_order(&self.syms, &self.types, c);
             tclass.lists_mut().equals_order = order.into_iter().map(|k| k as u16).collect();
         }
+        // A pickle's synthesized companion of a case class, its body read, and the one the parser
+        // makes for a `derives` clause: the rule's `toString`.
+        if def_id.is_some() && (self.syms.class(c).made_companion || self.derives_companion(c)) {
+            if let Some(f) = self.case_companion_to_string(c) {
+                tclass.methods.push(f);
+            }
+        }
         let Some(def_id) = def_id else {
             // A companion an enum made holds its values, and the outer accessor its cases read
             // their enum's enclosing instance through.
             let values = self.instance_enum_values(c);
             tclass.init.splice(0..0, values);
+            if let Some(f) = self.case_companion_to_string(c) {
+                tclass.methods.push(f);
+            }
             if kind != ClassKind::Trait && self.syms.class(c).inner_object.is_some() {
                 let span = self.syms.class(c).span;
                 let env = self.env_at(file, Owner::Class(c), span.start);
@@ -3016,6 +3032,12 @@ impl<'a> Worker<'a> {
             }
             if kind != ClassKind::Trait {
                 let accessors = t.define_outer_accessors(c);
+                if tclass.synthesized & synthetic::EQUALS != 0 && t.syms.class(c).mods & mods::CASE != 0 {
+                    let own = t.outer_accessors.get(&c).copied();
+                    if let Some(own) = own.filter(|&own| accessors.iter().any(|&f| t.prog.funs[f.idx()].sym == own)) {
+                        tclass.lists_mut().eq_outer = Some(own);
+                    }
+                }
                 tclass.methods.extend(accessors);
             }
             let forwarders = t.define_value_forwarders(c);
@@ -3301,6 +3323,137 @@ impl<'a> Worker<'a> {
         (synthesized, existing)
     }
 
+    /// The `toString` member of the companion `m` the typer or the parser makes for a case class,
+    /// entered when the companion is, so that a selection of it types alike whenever the
+    /// companion is checked (its body, `case_companion_to_string`).
+    pub(super) fn made_companion_to_string(&mut self, m: ClassId) -> SymId {
+        if let Some(&s) = self.syms.class(m).members.get(&names::TO_STRING) {
+            if self.syms.sym(s).owner == Owner::Class(m) {
+                return s;
+            }
+        }
+        let (file, span) = (self.syms.class(m).file, self.syms.class(m).span);
+        let ret = self.b.t_string;
+        let s = self.syms.new_sym(names::TO_STRING, SymKind::Def, mods::OVERRIDE, Owner::Class(m), file, None, span);
+        let mut info = self.syms.sym_mut(s);
+        info.sig = Some(Arc::new(MethodSig { tparams: Vec::new(), clauses: vec![ClauseSig { params: Vec::new(), is_using: false, is_implicit: false }], ret, declared: crate::tir::NO_TYPE }));
+        info.state().set(Completion::Done);
+        self.syms.add_member(m, s);
+        s
+    }
+
+    /// Whether the object `m` is the companion the parser makes for a case class's `derives`
+    /// clause where the source writes none (`add_derived_givens`, at the class's place): the
+    /// companion `Desugar.classDef` gives, holding the derived givens.
+    pub(super) fn derives_companion(&self, m: ClassId) -> bool {
+        let info = self.syms.class(m);
+        let (Some(d), Some(k)) = (info.def, info.companion) else { return false };
+        let ki = self.syms.class(k);
+        ki.kind == ClassKind::Class && ki.mods & mods::CASE != 0 && !self.in_jar(info.file) && self.ast(info.file).def(d).span == ki.span
+    }
+
+    /// The `toString` of the companion `Desugar.classDef` gives a case class without a written one,
+    /// the class's name (`companionDefs`' `toString`): a member of the object `m`, defined here.
+    fn case_companion_to_string(&mut self, m: ClassId) -> Option<FunId> {
+        if !self.syms.class(m).made_companion && !self.derives_companion(m) {
+            return None;
+        }
+        let k = self.syms.class(m).companion?;
+        let info = self.syms.class(k);
+        if info.kind != ClassKind::Class || info.mods & mods::CASE == 0 {
+            return None;
+        }
+        let name = info.name;
+        // A pickle's synthesized companion declares it, its body left out with the rule's; the
+        // typer's has it from its making (`made_companion_to_string`).
+        let declared = self.syms.class(m).members.get(&names::TO_STRING).copied().filter(|&s| self.syms.sym(s).owner == Owner::Class(m) && self.syms.sym(s).kind == SymKind::Def);
+        let s = match declared {
+            Some(s) => s,
+            None if self.shared_class(m) => self.with_loader(|w| w.made_companion_to_string(m)),
+            None => self.made_companion_to_string(m),
+        };
+        let text = self.name_str(name).to_string();
+        let lit = self.prog.add_str(&text);
+        let body = self.prog.add(TExpr::Str(lit));
+        let f = self.prog.add_fun(TFun { sym: s, params: Vec::new(), defaults: Vec::new(), body: Some(body), body_unconsuming: false, captures: 0, lifted: false });
+        self.fun_of_sym.insert(s, f);
+        Some(f)
+    }
+
+    /// dotty's `checkNoDoubleDeclaration` over the written companion `o` of a case class whose
+    /// constructor has defaults: the `apply` `Desugar.classDef` gives the companion takes them, so
+    /// a written `apply` of other parameters with defaults of its own is a second overloaded variant
+    /// with defaults; one of the constructor's parameter types replaces the synthesized one.
+    fn check_companion_apply_defaults(&mut self, o: ClassId) {
+        let info = self.syms.class(o);
+        let Some(k) = info.companion.filter(|_| info.def.is_some() && (info.kind == ClassKind::Object || info.inner_object.is_some())) else { return };
+        let ki = self.syms.class(k);
+        if ki.kind != ClassKind::Class || ki.mods & mods::CASE == 0 || ki.mods & mods::ABSTRACT != 0 {
+            return;
+        }
+        // The synthesized `apply` takes the class's type parameters and every constructor clause,
+        // its defaults those of any clause (`Desugar.classDef`).
+        let ctor: Vec<Vec<TypeId>> = ki.ctor.iter().map(|c| c.params.iter().map(|p| p.ty).collect()).collect();
+        if !ki.ctor.iter().any(|c| c.params.iter().any(|p| p.has_default)) {
+            return;
+        }
+        let class_tparams = ki.tparams.clone();
+        let mut k_alt = 0;
+        while let Some(a) = self.own_alternative(o, names::APPLY, k_alt) {
+            k_alt += 1;
+            let sig = self.parameters_of(a).clone();
+            if !sig.clauses.iter().any(|c| c.params.iter().any(|p| p.has_default)) {
+                continue;
+            }
+            // A written `apply` that matches the synthesized one loosely retracts it
+            // (`Namer.invalidateIfClashingSynthetic`'s `matchesLoosely`): as many type parameters,
+            // every clause's parameter types the same, the method's parameters read as the class's.
+            let subst: Subst = sig.tparams.iter().zip(&class_tparams).map(|(&m, &c)| (m, self.types.param(c))).collect();
+            let replaces = sig.tparams.len() == class_tparams.len()
+                && sig.clauses.len() == ctor.len()
+                && sig.clauses.iter().zip(&ctor).all(|(clause, types)| {
+                    clause.params.len() == types.len()
+                        && clause.params.iter().zip(types).all(|(p, &t)| {
+                            let pt = self.types.subst(p.ty, &subst);
+                            pt == t || {
+                                let mark = self.snapshot();
+                                let same = self.is_sub(pt, t) && self.is_sub(t, pt);
+                                self.rollback(mark);
+                                same
+                            }
+                        })
+                });
+            if replaces {
+                continue;
+            }
+            let (file, span) = (self.syms.sym(a).file, self.syms.sym(a).span);
+            self.diags.error(file, span, "two or more overloaded variants of method apply have default arguments".to_string());
+        }
+    }
+
+    /// A member the rule synthesizes beside a deferred declaration of `c`'s own that it matches:
+    /// `existingDef` takes no deferred definition, so dotty enters the synthesized one next to the
+    /// declaration and erasure's `checkNoDoubleDeclaration` refuses the pair (E120). A concrete
+    /// class with such a declaration is refused by `RefChecks` first ("needs to be abstract"),
+    /// after which scalac's erasure never runs.
+    fn check_synthesized_conflicts(&mut self, c: ClassId, synthesized: u16) {
+        if synthesized == 0 || self.syms.class(c).mods & mods::ABSTRACT == 0 {
+            return;
+        }
+        for &(bit, name, param) in &synthetic::MEMBERS {
+            if synthesized & bit == 0 {
+                continue;
+            }
+            let mut k = 0;
+            while let Some(s) = self.own_alternative(c, name, k) {
+                k += 1;
+                if self.is_abstract_member(s) && !self.is_private(s) && self.erases_as_synthesized(s, name, param) {
+                    self.report_synthesized_double_definition(c, bit, s);
+                }
+            }
+        }
+    }
+
     /// Whether the rule gives `c` a member named `name` (`synthesized_members`), which is then the
     /// class's own and overrides what it inherits of the name (dotty's synthesized
     /// `productPrefix` over `Product`'s and a trait's).
@@ -3429,6 +3582,35 @@ impl<'a> Worker<'a> {
     /// `matches_synthesized` of `s`, a member of the base `b` that the class sees as `bt`: its
     /// signature at the class site, `b`'s type parameters taken as `bt`'s arguments (dotty's
     /// `matchingMember`, `trait T[A] { def productElement(i: A) }` under `T[Int]`).
+    /// Whether the declaration `s` has the erased signature of the member the rule synthesizes
+    /// under `name` (`ElimErasedValueType.checkNoClashes`' `sym1.signature == sym2.signature`): its
+    /// parameter lists joined and erased, and its result erased, type parameters gone
+    /// (`def toString[A]: String` erases as `toString(): String`).
+    fn erases_as_synthesized(&mut self, s: SymId, name: Name, param: synthetic::Param) -> bool {
+        // The pairs are of one effective name: a declaration `@targetName` renames meets none.
+        if self.declared_target_name(s).is_some_and(|t| t != name) {
+            return false;
+        }
+        let erased = |w: &mut Self, t: TypeId| {
+            let mut out = String::new();
+            w.erased_name(t, true, 0, &mut out);
+            out
+        };
+        let params = match param {
+            synthetic::Param::None => "0".to_string(),
+            synthetic::Param::Any => erased(self, ANY),
+            synthetic::Param::Int => erased(self, self.b.t_int),
+        };
+        let result = match name {
+            names::EQUALS | names::CAN_EQUAL_METHOD => self.b.t_boolean,
+            names::TO_STRING | names::PRODUCT_PREFIX | names::PRODUCT_ELEMENT_NAME => self.b.t_string,
+            names::PRODUCT_ELEMENT => ANY,
+            _ => self.b.t_int,
+        };
+        let result = erased(self, result);
+        self.erased_signature(s, true) == params && self.erased_result(s, true) == result
+    }
+
     fn matches_synthesized_at(&mut self, s: SymId, param: synthetic::Param, b: ClassId, bt: TypeId) -> bool {
         let subst: Subst = match self.types.get(bt) {
             Type::Class(_, args) => self.syms.class(b).tparams.iter().copied().zip(self.types.items(args).iter().copied()).collect(),
@@ -4061,8 +4243,9 @@ impl<'a> Worker<'a> {
                         tclass.init.push(TInit::Field(val, init));
                     }
                     // The companion an enum made: here, eager in a class (`LazyVals
-                    // .transformSyntheticModule`), lazy in a trait.
-                    let made = self.syms.class(nested).companion.filter(|&m| self.syms.class(nested).kind == ClassKind::Enum && self.syms.class(m).def.is_none());
+                    // .transformSyntheticModule`), lazy in a trait; a case class's, lazy.
+                    let made_for = |t: &Self, k: ClassId| t.syms.class(k).kind == ClassKind::Enum || t.syms.class(k).kind == ClassKind::Class && t.syms.class(k).mods & mods::CASE != 0;
+                    let made = self.syms.class(nested).companion.filter(|&m| made_for(self, nested) && self.syms.class(m).def.is_none());
                     if let Some((m, val)) = made.and_then(|m| self.syms.class(m).inner_object.map(|v| (m, v))) {
                         self.check_class(m);
                         let init = self.new_instance(m, ast::ListRef::EMPTY, span);
@@ -4457,7 +4640,9 @@ impl<'a> Worker<'a> {
             // A plain constructor parameter is local to its class and overrides nothing, and
             // neither does a private val, which scalac lets share its name with an inherited member.
             // A case class's selector is a definition of the class (`Desugar.productElemMeths`).
-            if !has_def && m_mods & mods::SELECTOR == 0 && (m_mods & mods::FIELD == 0 || !self.is_ctor_param(c, m)) {
+            // A member object overrides as a value of its type does (`RefChecks.checkOverride`),
+            // its symbol made apart from its definition's.
+            if !has_def && m_mods & mods::SELECTOR == 0 && (m_mods & mods::FIELD == 0 || !self.is_ctor_param(c, m)) && !self.is_member_object(m) {
                 continue;
             }
             // A selector is checked where it meets something: dotty's `OverridingPairs.Cursor`
@@ -4507,7 +4692,15 @@ impl<'a> Worker<'a> {
                     if overridden && !self.alternatives_named {
                         self.override_pairs.push((m, p));
                     }
-                    named_root |= overridden && (alternative || meets_inherited || named);
+                    // A root beside `Any`'s member of the name is named apart (`dispatch_name`),
+                    // its name maybe still pending: the override takes that name too.
+                    let beside_any = overridden
+                        && !(alternative || meets_inherited || named)
+                        && matches!(name, names::TO_STRING | names::HASH_CODE | names::EQUALS)
+                        && !is_ext
+                        && self.syms.sym(p).kind == SymKind::Def
+                        && self.any_member_agreement(p) == Agreement::Params;
+                    named_root |= overridden && (alternative || meets_inherited || named || beside_any);
                     let inherited = self.syms.sym(p);
                     overloads_inherited |= !overridden && inherited.kind == SymKind::Def && !is_ext;
                     if !inherited.alternative && !is_ext {
@@ -5003,6 +5196,11 @@ impl<'a> Worker<'a> {
             let Owner::Class(pb) = s.owner else { return false };
             (s.kind, s.mods, s.mods & mods::LAZY != 0, pb)
         };
+        // An object over an inherited object is the namer's error (E069), a class definition
+        // that cannot be overridden.
+        if self.is_member_object(m) && self.is_member_object(p) {
+            return true;
+        }
         // A deferred given is checked as a concrete member but for its finality (dotty's
         // `RefChecks`, 533-546).
         let p_deferred = self.is_deferred_given(p);
@@ -5072,8 +5270,12 @@ impl<'a> Worker<'a> {
             return !own || self.check_target_names(m, p);
         };
         let m_class = m_owner.and_then(|t| self.class_of(t));
+        // An object is shown without its type (`infoString` of a module).
+        let object = self.is_member_object(m);
+        let problem = if object { problem.replace("{m} of type {mt}", "{m}") } else { problem.to_string() };
+        let shown_m = if object { format!("object {}", self.name_str(self.syms.sym(m).name)) } else { self.member_description(m, m_class) };
         let msg = problem
-            .replace("{m}", &self.member_description(m, m_class))
+            .replace("{m}", &shown_m)
             .replace("{p}", &self.member_description(shown_p, Some(pb)))
             .replace("{mt}", &self.sig_string(m))
             .replace("{pt}", &self.sig_string(shown_p));
@@ -5189,6 +5391,17 @@ impl<'a> Worker<'a> {
         let own_name = self.syms.sym(m).name;
         let mut candidates: Vec<(ClassId, SymId, Name)> = Vec::new();
         if let Some(target) = self.declared_target_name(m) {
+            // A declaration renamed to a member the rule synthesizes meets it under that one name
+            // after erasure (`checkNoDoubleDeclaration` pairs the effective names): E120 where the
+            // two erase alike.
+            if target != own_name && self.record_synthesizes(c, target) {
+                if let Some(&(bit, _, param)) = synthetic::MEMBERS.iter().find(|&&(_, n, _)| n == target) {
+                    if self.erases_as_synthesized(m, target, param) {
+                        self.report_synthesized_double_definition(c, bit, m);
+                        return;
+                    }
+                }
+            }
             for j in 1..self.syms.class(c).base_types.len() {
                 let b = self.syms.class(c).base_types[j].0;
                 let bi = self.syms.class(b);
@@ -5336,35 +5549,77 @@ impl<'a> Worker<'a> {
     /// dotty's `SymDenotation.matchNullaryLoosely`: `s` or a member it overrides is Java's (the
     /// std's classes of `java.*` stand for the JDK's), `Any`'s (`toString()`, `hashCode()`),
     /// `Object.clone`, or a member of a Scala 2 class (scala-library's compiled from Scala 2's
-    /// sources, the std's standing for one, a Scala 2 jar's).
+    /// sources, the std's standing for one, a Scala 2 jar's), by where the symbol comes from and
+    /// never by its package's name: the one rule of an application's parentheses
+    /// (`takes_java_parens`), an override's and a member meet's loose match.
     pub(super) fn matches_nullary_loosely(&mut self, s: SymId) -> bool {
+        if s.0 == u32::MAX {
+            return false;
+        }
         let mut chain = vec![s];
         self.overridden_chain(s, 0, &mut chain);
-        chain.into_iter().any(|o| self.loose_nullary_symbol(o))
+        chain.into_iter().any(|o| self.nullary_provenance(o) != Nullary::Strict)
     }
 
-    fn loose_nullary_symbol(&mut self, s: SymId) -> bool {
+    /// What `matchNullaryLoosely`'s `test` finds of the one symbol `s` (`allOverriddenSymbols`
+    /// asks it of each it overrides).
+    pub(super) fn nullary_provenance(&mut self, s: SymId) -> Nullary {
         let info = self.syms.sym(s);
-        if info.java_defined || (self.is_std_member(s) && !self.is_std_scala_member(s)) {
-            return true;
+        // `JavaDefined`: a class file's, the std's standing for the JDK (its `java.*` classes,
+        // `@javaDefined`, its extensions on `String` standing for `java.lang.String`'s members,
+        // its ports of the test interfaces).
+        let (file, owner, name) = (info.file, info.owner, info.name);
+        if info.java_defined || (self.is_std_member(s) && !self.is_std_scala_member(s)) || self.string_member_of_std(s) || self.scala2_std_member(s) {
+            return Nullary::Java;
         }
-        // `Any.toString()`, `Any.hashCode()` and `Object.clone()`, which every class's member of
-        // that name and no parameters, type parameters included, overrides.
-        if matches!(info.name, names::TO_STRING | names::HASH_CODE | names::CLONE) {
-            let sig = self.sig_arc(s);
-            if sig.tparams.is_empty() && sig.clauses.iter().all(|cl| cl.params.is_empty() && !cl.is_using) && sig.clauses.len() <= 1 {
-                return true;
+        // A jar's class of a `java.*` package standing for the JDK's class of its name, which
+        // scalac typed the library against (scala-java-time's `java.time` under Scala.js): the
+        // member is Java's where the JDK's class declares it so (`Duration.isZero()`), the
+        // declaration's own, Scala's, otherwise: of a class of the package that is no JDK class's
+        // (`java.review.C`), and wherever no JDK is there to tell.
+        if self.in_jar(file) && self.under_java_package(s) {
+            let binary = self.jdk_binary_name(owner);
+            if binary.and_then(|binary| self.jdk_declares_nullary_method(&binary, &self.name_str(name))) == Some(true) {
+                return Nullary::Java;
             }
         }
-        match self.syms.sym(s).owner {
-            Owner::Class(c) => self.is_scala2_class(c) || self.is_std_scala2_class(c),
-            _ => false,
+        // `Any.toString()`, `Any.hashCode()` and `Object.clone()`, which a class's member of that
+        // name and no parameters, type parameters included, overrides; a local or top-level
+        // definition overrides nothing.
+        if matches!(name, names::TO_STRING | names::HASH_CODE | names::CLONE) && matches!(owner, Owner::Class(_)) {
+            let sig = self.sig_arc(s);
+            if sig.tparams.is_empty() && sig.clauses.iter().all(|cl| cl.params.is_empty() && !cl.is_using) && sig.clauses.len() <= 1 {
+                return Nullary::Java;
+            }
         }
+        if self.scala2_member(s) {
+            Nullary::Scala2
+        } else {
+            Nullary::Strict
+        }
+    }
+
+    /// The JDK binary name of the class owning a member (`java/time/Duration`, `java/util/Map$Entry`),
+    /// an object's the class's (the JDK's static members are its class's).
+    fn jdk_binary_name(&self, owner: Owner) -> Option<String> {
+        let Owner::Class(mut c) = owner else { return None };
+        let mut names = Vec::new();
+        let pkg = loop {
+            let info = self.syms.class(c);
+            names.push(self.name_str(info.name).trim_end_matches('$').to_string());
+            match info.owner {
+                Owner::Class(o) => c = o,
+                Owner::Package(p) => break p,
+                _ => return None,
+            }
+        };
+        names.reverse();
+        Some(format!("{}/{}", self.pkg_path(pkg).replace('.', "/"), names.join("$")))
     }
 
     /// Every member `m` overrides, down the linearisation: `root_declarations`' walk, keeping
     /// each step and not only the roots.
-    fn overridden_chain(&mut self, m: SymId, depth: u32, out: &mut Vec<SymId>) {
+    pub(super) fn overridden_chain(&mut self, m: SymId, depth: u32, out: &mut Vec<SymId>) {
         let (name, owner) = (self.syms.sym(m).name, self.syms.sym(m).owner);
         let (Owner::Class(c), true) = (owner, depth < 64) else { return };
         self.complete_class(c);
@@ -5524,6 +5779,11 @@ impl<'a> Worker<'a> {
     }
 
     /// "method f", "value x in trait T".
+    /// A member object: a static one's symbol, or the val of one nested in a class.
+    fn is_member_object(&self, m: SymId) -> bool {
+        matches!(self.syms.sym(m).kind, SymKind::Object(_)) || self.inner_object_of_sym(m).is_some()
+    }
+
     pub(super) fn member_description(&self, m: SymId, in_class: Option<ClassId>) -> String {
         let info = self.syms.sym(m);
         let kind = match info.kind {
@@ -5565,7 +5825,33 @@ impl<'a> Worker<'a> {
                     out.push_str(", ");
                 }
                 out.push_str(&self.name_str(self.syms.tparam(tp).name));
-                let (upper, lower) = (self.syms.tparam(tp).upper, self.syms.tparam(tp).lower);
+                let (upper, lower, arity) = (self.syms.tparam(tp).upper, self.syms.tparam(tp).lower, self.syms.tparam(tp).arity);
+                // A higher-kinded parameter shows its kind (`PlainPrinter.decomposeLambdas`): its
+                // lambda bound's parameters, or as many wildcards as it takes.
+                let upper = match self.types.get(upper) {
+                    Type::Lambda(ps, body) => {
+                        out.push('[');
+                        for (j, &q) in self.types.items(ps).to_vec().iter().enumerate() {
+                            if j > 0 {
+                                out.push(',');
+                            }
+                            self.show_param_binder(q, &mut out);
+                        }
+                        out.push(']');
+                        body
+                    }
+                    _ if arity > 0 => {
+                        out.push('[');
+                        out.push_str(&vec!["_"; arity as usize].join(","));
+                        out.push(']');
+                        upper
+                    }
+                    _ => upper,
+                };
+                let lower = match self.types.get(lower) {
+                    Type::Lambda(_, body) => body,
+                    _ => lower,
+                };
                 if lower != NOTHING {
                     let t = self.types.subst(lower, subst);
                     let _ = std::fmt::Write::write_fmt(&mut out, format_args!(" >: {}", self.show(t)));
@@ -6751,4 +7037,14 @@ impl BaseNames {
     pub(super) fn has(self, n: Name) -> bool {
         self.0 & crate::symbols::name_bit(n) != 0
     }
+}
+
+/// What dotty's `matchNullaryLoosely` finds of a symbol (`Worker::nullary_provenance`): Java's,
+/// `Any`'s or `Object.clone` (`JavaDefined`, the owner `Any`), a Scala 2 class's (`Scala2x`),
+/// or neither.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(super) enum Nullary {
+    Strict,
+    Java,
+    Scala2,
 }

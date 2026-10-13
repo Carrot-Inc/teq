@@ -94,7 +94,7 @@ impl<'a> Worker<'a> {
     /// class of that object, typed through its path (`B.E.Three`, dotty's `TypeRef(B.E, Three)`).
     pub fn is_inner_class(&self, c: ClassId) -> bool {
         let info = self.syms.class(c);
-        (matches!(info.kind, ClassKind::Class | ClassKind::Trait)
+        (matches!(info.kind, ClassKind::Class | ClassKind::Trait | ClassKind::Enum)
             || info.kind == ClassKind::EnumCase && info.singleton.is_none() && matches!(info.owner, Owner::Class(o) if self.syms.class(o).inner_object.is_some()))
             && info.mods & crate::ast::mods::JAVA_STATIC == 0
             && matches!(info.owner, Owner::Class(o) if !matches!(self.syms.class(o).kind, ClassKind::Object | ClassKind::Builtin))
@@ -425,7 +425,10 @@ impl<'a> Worker<'a> {
     /// application is what the companion's synthetic `apply` would make.
     pub fn needs_constructor_proxy(&self, k: ClassId) -> bool {
         let info = self.syms.class(k);
-        info.kind == ClassKind::Class && info.mods & crate::ast::mods::ABSTRACT == 0 && info.companion.is_none() && !self.is_opaque_path_class(k)
+        // A companion the typer made for a case class (`ClassInfo::made_companion`) declares no
+        // `apply`: the class's creation stands for it.
+        let companion = info.companion.filter(|&m| !(self.syms.class(m).made_companion && self.syms.class(m).def.is_none()));
+        info.kind == ClassKind::Class && info.mods & crate::ast::mods::ABSTRACT == 0 && companion.is_none() && !self.is_opaque_path_class(k)
     }
 
     /// The path a path stands for: a val declared with a singleton type (`val b: a.type`)

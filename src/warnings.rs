@@ -63,6 +63,7 @@ pub mod id {
     pub const EMPTY_CATCH_AND_FINALLY_BLOCK: u16 = 2;
     pub const PATTERN_MATCH_EXHAUSTIVITY: u16 = 29;
     pub const MATCH_CASE_UNREACHABLE: u16 = 30;
+    pub const MATCH_CASE_ONLY_NULL: u16 = 121;
     pub const UNCHECKED_TYPE_PATTERN: u16 = 92;
     pub const PURE_EXPRESSION_IN_STATEMENT_POSITION: u16 = 129;
     pub const VALUE_DISCARDING: u16 = 175;
@@ -524,6 +525,7 @@ mod tests {
         assert_eq!(ID_NAMES[id::PURE_EXPRESSION_IN_STATEMENT_POSITION as usize], "PureExpressionInStatementPositionID");
         assert_eq!(ID_NAMES[id::UNCHECKED_TYPE_PATTERN as usize], "UncheckedTypePatternID");
         assert_eq!(ID_NAMES[id::MATCH_CASE_UNREACHABLE as usize], "MatchCaseUnreachableID");
+        assert_eq!(ID_NAMES[id::MATCH_CASE_ONLY_NULL as usize], "MatchCaseOnlyNullWarningID");
     }
 
     #[test]

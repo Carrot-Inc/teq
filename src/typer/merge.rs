@@ -2568,6 +2568,7 @@ impl<'a> Worker<'a> {
         // before it reads.
         self.case_binders.clear();
         self.last_typed_pattern = None;
+        self.pattern_alternatives.clear();
         self.gadt.clear();
         self.enum_case_new = None;
         self.ascribed_constant = None;

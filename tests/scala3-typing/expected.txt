@@ -142,7 +142,7 @@ neg/context-bounds-migration-3.5.scala	same
 neg/context-bounds-migration-future.scala	same	
 neg/context-function-syntax.scala	syntax	expected {}, found {}
 neg/conversion-lang-import.scala	different	cannot resolve import
-neg/creative-gadt-constraints.scala	superset	+3 lines: type mismatch
+neg/creative-gadt-constraints.scala	same	
 neg/creator-ambiguous.scala	same	
 neg/creator-applys.scala	same	
 neg/creator-applys2.scala	same	
@@ -311,26 +311,26 @@ neg/floatlits.scala	syntax	expected identifier, found {}
 neg/foldinf-ill-kinded.scala	same	
 neg/function-arity-2.scala	same	
 neg/function-arity.scala	same	
-neg/gadt-alias-injectivity.scala	superset	+3 lines: this pattern of type Refl[Any] can never match a value of type EQ[Foo[X], Foo[Y]]
+neg/gadt-alias-injectivity.scala	superset	+3 lines: type mismatch
 neg/gadt-alt-expr1.scala	same	
 neg/gadt-alt-expr2.scala	same	
 neg/gadt-alt-expr3.scala	superset	+2 lines: type mismatch
 neg/gadt-alt-expr4.scala	same	
 neg/gadt-alt-expr5.scala	superset	+1 lines: type mismatch
 neg/gadt-alternatives.scala	same	
-neg/gadt-approximation-interaction.scala	superset	+24 lines: this pattern of type Refl[S$1] can never match a value of type SUB[T, Int]
+neg/gadt-approximation-interaction.scala	superset	+10 lines: value {} is not a member of {}
 neg/gadt-banal-nested.scala	same	
 neg/gadt-banal.scala	subset	2/3 lines
 neg/gadt-eval.scala	same	
 neg/gadt-i4075.scala	same	
-neg/gadt-injectivity-alt-2.scala	superset	+4 lines: this pattern of type Refl[S$1] can never match a value of type KSUB[F, Option]
-neg/gadt-injectivity-alt.scala	superset	+4 lines: this pattern of type Refl[S$1] can never match a value of type KSUB[F, Option]
+neg/gadt-injectivity-alt-2.scala	same	
+neg/gadt-injectivity-alt.scala	same	
 neg/gadt-injectivity.scala	superset	+4 lines: type mismatch
 neg/gadt-lhs-union.scala	superset	+1 lines: type mismatch
 neg/gadt-no-approx.scala	same	
-neg/gadt-sngl-refined.scala	superset	+1 lines: this pattern of type Refl[Any] can never match a value of type SUB[(foo : Foo), Foo{type A <: X}]
+neg/gadt-sngl-refined.scala	same	
 neg/gadt-uninjectivity.scala	same	
-neg/gadt-variant-hkt.scala	superset	+4 lines: this pattern of type Refl[Any] can never match a value of type SUB[F[String], Option[String]]
+neg/gadt-variant-hkt.scala	same	
 neg/genericNumbers.scala	syntax	number too large
 neg/genericTupleMembers.scala	same	
 neg/given-ambiguous-1.scala	same	
@@ -878,15 +878,15 @@ neg/i22440.scala	accepts
 neg/i22498.scala	accepts	
 neg/i22552.scala	superset	+1 lines: Context bounds are not allowed in this position
 neg/i22560.scala	subset	1/3 lines
-neg/i22560b.scala	subset	3/5 lines
-neg/i22560c	subset	3/5 lines
+neg/i22560b.scala	same	
+neg/i22560c	subset	4/5 lines
 neg/i22575.scala	same	
 neg/i22589.scala	same	
 neg/i22589b.scala	same	
 neg/i22589c.scala	same	
 neg/i22592.scala	accepts	
-neg/i22593a.scala	accepts	
-neg/i22593b	accepts	
+neg/i22593a.scala	subset	1/2 lines
+neg/i22593b	subset	1/2 lines
 neg/i22620.scala	same	
 neg/i22660.scala	same	
 neg/i22670	accepts	
@@ -950,7 +950,7 @@ neg/i2470.scala	same
 neg/i24711-java-nested-types.scala	same	
 neg/i2473.scala	subset	1/2 lines
 neg/i24745.scala	syntax	expected {}, found {}
-neg/i24789.scala	accepts	
+neg/i24789.scala	same	
 neg/i24825.scala	same	
 neg/i24825b.scala	same	
 neg/i24825c.scala	superset	+1 lines: modifier override is not allowed for this definition
@@ -1128,7 +1128,7 @@ neg/i4837.scala	same
 neg/i4863.scala	same	
 neg/i4922.scala	oos	extractors
 neg/i4934.scala	syntax	expected end of statement, found {}
-neg/i4935.scala	same	
+neg/i4935.scala	std	A
 neg/i4936.scala	same	
 neg/i4984.scala	oos	extractors
 neg/i4986a.scala	same	
@@ -1340,7 +1340,7 @@ neg/i8623.scala	oos	local-givens
 neg/i8623a.scala	different	type mismatch
 neg/i8632.scala	same	
 neg/i866.scala	same	
-neg/i8681.scala	subset	1/3 lines
+neg/i8681.scala	subset	2/3 lines
 neg/i871.scala	oos	abstract-def
 neg/i8711.scala	subset	2/3 lines
 neg/i8715.scala	same	
@@ -1702,7 +1702,7 @@ neg/partialApplications.scala	syntax	expected {}, found {}
 neg/patmat1.scala	same	
 neg/patmat2.scala	accepts	
 neg/patternUnsoundness.scala	std	App
-neg/patvars.scala	accepts	
+neg/patvars.scala	same	
 neg/points.scala	superset	+2 lines: class ColoredPoint has conflicting base types Comparable[Point] and Comparable[ColoredPoint]
 neg/poly-overloads.scala	different	type mismatch
 neg/poly-override.scala	subset	8/9 lines
@@ -1847,7 +1847,7 @@ neg/t1843-variances.scala	same
 neg/t2368.scala	same	
 neg/t2712-8.scala	std	App
 neg/t2994.scala	same	
-neg/t3137.scala	different	{} needs to be abstract
+neg/t3137.scala	same	
 neg/t3272.scala	same	
 neg/t3275.scala	same	
 neg/t3683-modified.scala	superset	+2 lines: cyclic reference involving type T
@@ -1873,7 +1873,7 @@ neg/t7239.scala	same
 neg/t7259.scala	accepts	
 neg/t7278.scala	subset	2/6 lines
 neg/t7292-removal.scala	subset	2/3 lines
-neg/t7294.scala	same	
+neg/t7294.scala	accepts	
 neg/t750	oos	java
 neg/t7868.scala	same	
 neg/t8002-nested-scope.scala	same	
@@ -1909,7 +1909,7 @@ neg/toplevel-doubledef	same
 neg/toplevel-opaque	same	
 neg/toplevel-overload	same	
 neg/toplevel-package	accepts	
-neg/toplevel-privates	accepts	
+neg/toplevel-privates	subset	2/3 lines
 neg/toplevel.scala	syntax	expected a definition, found {}
 neg/tracked.scala	syntax	expected {}, found {}
 neg/tracked2.scala	syntax	expected {}, found {}
@@ -2241,7 +2241,7 @@ pos/chang	oos	java
 pos/change-lambda.scala	std	x
 pos/checkInstantiable.scala	accepts	
 pos/class-dependent-extension-method.scala	accepts	
-pos/class-gadt	rejects	this pattern of type Refl[S$1] can never match a value of type SUB[T, Int]
+pos/class-gadt	rejects	type mismatch
 pos/class-refinement.scala	accepts	
 pos/classWithCompObj.scala	accepts	
 pos/classtag-typetest	accepts	
@@ -2265,7 +2265,7 @@ pos/conforms.scala	accepts
 pos/conformsWild.scala	accepts	
 pos/constants.scala	accepts	
 pos/constfold.scala	std	App
-pos/constr-proxy-shadowing.scala	rejects	missing argument for parameter {}
+pos/constr-proxy-shadowing.scala	accepts	
 pos/constraining-lub.scala	accepts	
 pos/constrs.scala	accepts	
 pos/constvalue-of-failed-match-type.scala	accepts	
@@ -2406,11 +2406,11 @@ pos/gadt-all-params.scala	accepts
 pos/gadt-alt-doc1.scala	accepts	
 pos/gadt-banal.scala	accepts	
 pos/gadt-cast-if.scala	accepts	
-pos/gadt-cast-singleton.scala	rejects	this pattern of type Refl[S$1] can never match a value of type SUB[T, L]
+pos/gadt-cast-singleton.scala	rejects	type mismatch
 pos/gadt-complexEQ.scala	rejects	type mismatch
 pos/gadt-eval.scala	accepts	
 pos/gadt-foo.scala	accepts	
-pos/gadt-hk-ordering.scala	rejects	this pattern of type Refl[S$1] can never match a value of type KSUB[Option, F]
+pos/gadt-hk-ordering.scala	rejects	type mismatch
 pos/gadt-hkt-hi-bounds.scala	rejects	type mismatch
 pos/gadt-hkt-lo-bounds.scala	rejects	type mismatch
 pos/gadt-hkt-ordering.scala	rejects	type mismatch
@@ -2421,7 +2421,7 @@ pos/gadt-param-unification.scala	accepts
 pos/gadt-simpleEQ.scala	rejects	type mismatch
 pos/gadt-strip-refinement.scala	accepts	
 pos/gadt-upcast.scala	rejects	type mismatch
-pos/gadt-variant-hkt.scala	rejects	this pattern of type Refl[S$1] can never match a value of type KSUB[F, Option]
+pos/gadt-variant-hkt.scala	rejects	type mismatch
 pos/gadts2.scala	accepts	
 pos/gen-traversable-methods.scala	accepts	
 pos/getset.scala	accepts	
@@ -2510,8 +2510,8 @@ pos/i10667.scala	rejects	type mismatch
 pos/i10693.scala	accepts	
 pos/i10715-java	oos	java
 pos/i10715-scala	rejects	value {} is not a member of {}
-pos/i10769.scala	oos	local-types
-pos/i10769b.scala	oos	local-types
+pos/i10769.scala	accepts	
+pos/i10769b.scala	accepts	
 pos/i10848a.scala	syntax	'erased' is not part of the supported Scala subset
 pos/i10848b.scala	syntax	'erased' is not part of the supported Scala subset
 pos/i10871.scala	syntax	expected identifier, found {}
@@ -2784,7 +2784,7 @@ pos/i13900.scala	rejects	{} is already defined
 pos/i13935.scala	accepts	
 pos/i13941.scala	accepts	
 pos/i13974.scala	accepts	
-pos/i13974a.scala	rejects	this pattern of type Refl[U$1] can never match a value of type SUB[A, (B, C)]
+pos/i13974a.scala	rejects	type mismatch
 pos/i13990.scala	accepts	
 pos/i13998.scala	syntax	expected {}, found {}
 pos/i1401.scala	accepts	
@@ -2826,7 +2826,7 @@ pos/i14494.scala	rejects	no given instance
 pos/i14544.scala	accepts	
 pos/i14575.scala	accepts	
 pos/i14587.hard-union-tuples.scala	accepts	
-pos/i14588.scala	rejects	this pattern of type (Any, Any, Any, Any, Any, Any, Any, Any, Any, Any, Any, Any, Any, Any, Any, Any, Any, Any, Any, Any, Any, Any, Any, Any) can never match a value of type (Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int)
+pos/i14588.scala	rejects	unreachable case: type (Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int, Int) is not a subclass of class Tuple24
 pos/i14626.scala	accepts	
 pos/i14637.scala	accepts	
 pos/i14642.scala	accepts	
@@ -2905,7 +2905,7 @@ pos/i15216.scala	accepts
 pos/i15264.scala	rejects	type mismatch
 pos/i15274.orig.scala	accepts	
 pos/i15274.scala	accepts	
-pos/i15289.scala	rejects	this pattern of type Bar[C$1] can never match a value of type Foo[X, String]
+pos/i15289.scala	accepts	
 pos/i15331.scala	syntax	expected {}, found {}
 pos/i15347.scala	accepts	
 pos/i15365.scala	accepts	
@@ -2945,7 +2945,7 @@ pos/i15715.scala	accepts
 pos/i15717.scala	std	Vector
 pos/i15738.scala	accepts	
 pos/i15743.gadt.scala	rejects	type argument T does not conform to upper bound Tuple
-pos/i15743.moregadt.scala	rejects	this pattern of type Refl[C$1] can never match a value of type SUB[T, Tuple]
+pos/i15743.moregadt.scala	rejects	type argument T does not conform to upper bound Tuple
 pos/i15743.pass.scala	rejects	too many type arguments
 pos/i15743.scala	rejects	too many type arguments
 pos/i15784.scala	syntax	expected {}, found {}
@@ -2958,7 +2958,7 @@ pos/i15827.scala	oos	inheritance
 pos/i15845	accepts	
 pos/i15850.scala	accepts	
 pos/i15864.scala	accepts	
-pos/i15867.scala	rejects	this pattern of type Refl[S$1] can never match a value of type SUB[T, List[Int]]
+pos/i15867.scala	rejects	value {} is not a member of {}
 pos/i15867.specs2.scala	accepts	
 pos/i15881	oos	java
 pos/i15893.scala	syntax	expected {}, found {}
@@ -3071,7 +3071,7 @@ pos/i16950.scala	accepts
 pos/i16954.scala	accepts	
 pos/i16994.scala	accepts	
 pos/i16997.min.scala	accepts	
-pos/i16997.scala	rejects	this pattern of type Leaf[<*>$1, T$1, F$1, A$1] can never match a value of type Tree[<*>, T, F, A]
+pos/i16997.scala	rejects	type mismatch
 pos/i17002.scala	accepts	
 pos/i17008.scala	accepts	
 pos/i1704.scala	rejects	AnyRef is a trait; it cannot be instantiated
@@ -3112,7 +3112,7 @@ pos/i17395-spec.scala	accepts
 pos/i17395.scala	accepts	
 pos/i17465.scala	rejects	type mismatch
 pos/i1747.scala	rejects	method toArray overrides nothing
-pos/i1751.scala	rejects	missing argument for parameter {}
+pos/i1751.scala	accepts	
 pos/i17525.scala	accepts	
 pos/i1753.scala	rejects	type mismatch
 pos/i1755.scala	accepts	
@@ -3469,7 +3469,7 @@ pos/i22456.scala	syntax	expected {}, found {}
 pos/i22468.scala	accepts	
 pos/i22470.scala	accepts	
 pos/i2250.scala	accepts	
-pos/i22513.scala	rejects	this pattern of type A can never match a value of type R[E]
+pos/i22513.scala	accepts	
 pos/i22518.scala	accepts	
 pos/i22527.scala	syntax	expected {}, found {}
 pos/i22528.scala	rejects	Baz is a trait; it cannot be instantiated
@@ -3625,7 +3625,7 @@ pos/i25417.scala	accepts
 pos/i25427.scala	accepts	
 pos/i25442.scala	accepts	
 pos/i25500.scala	accepts	
-pos/i2551	rejects	value {} is not a member of {}
+pos/i2551	accepts	
 pos/i25513.scala	accepts	
 pos/i2554.scala	syntax	expected {}, found {}
 pos/i25542.scala	accepts	
@@ -4058,7 +4058,7 @@ pos/i7403.scala	accepts
 pos/i7413.scala	rejects	value {} is not a member of {}
 pos/i7414.scala	accepts	
 pos/i7421.scala	syntax	expected end of statement, found {}
-pos/i7424.scala	rejects	this pattern of type Refl[C$1] can never match a value of type =:=[A, Option[B]]
+pos/i7424.scala	rejects	type mismatch
 pos/i7424b.scala	rejects	type mismatch
 pos/i7424c.scala	rejects	type mismatch
 pos/i7428.scala	accepts	
@@ -5386,7 +5386,7 @@ pos/t4853.scala	accepts
 pos/t4859.scala	accepts	
 pos/t4869.scala	syntax	expected {}, found {}
 pos/t4910.scala	accepts	
-pos/t4911.scala	rejects	this pattern of type Bar[Any] can never match a value of type M[T]
+pos/t4911.scala	accepts	
 pos/t4938.scala	accepts	
 pos/t4975.scala	rejects	no given instance
 pos/t5012.scala	accepts	
@@ -5527,7 +5527,7 @@ pos/t6595.scala	accepts
 pos/t6600.scala	std	ScalaNumericConversions
 pos/t661.scala	syntax	expected identifier, found {}
 pos/t6664.scala	accepts	
-pos/t6664b.scala	rejects	None of the overloaded alternatives of method A in object T with types
+pos/t6664b.scala	rejects	{} is already defined
 pos/t6675.scala	accepts	
 pos/t6712.scala	accepts	
 pos/t6722.scala	std	Dynamic
@@ -5577,7 +5577,7 @@ pos/t7322.scala	accepts
 pos/t7329.scala	accepts	
 pos/t7364	oos	java
 pos/t7369.scala	accepts	
-pos/t7377b.scala	rejects	a singleton type needs a val, a parameter or an object
+pos/t7377b.scala	accepts	
 pos/t7426.scala	accepts	
 pos/t7427.scala	accepts	
 pos/t7433.scala	accepts	

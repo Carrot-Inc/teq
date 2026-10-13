@@ -8,25 +8,16 @@ libraries compiled from their jars run against scalac's output. The remaining di
 
 ### Syntax and definitions
 
-- A constructor proxy's application that shadows a name with a method or an `apply` is taken, where scalac
-  reports the ambiguity (`ConstrProxyShadows`).
-- A case class nested in a class compares its fields alone: `a.Item(1) == b.Item(1)` is true where scalac's
-  `equals` tests the outer instance too, as its patterns do (and teq's); a match through a prefix that misses
-  another instance's class (`case b.Item(n)` on an `a.Item`) is not warned of as inexhaustive, its run failing
-  with a `MatchError` as scalac's does.
-- An overloaded `unapply` with an `AnyVal` alternative, matched on a scrutinee typed `Any`, is resolved as
-  if `Any` were no `AnyVal` (scalac's overloading takes the `AnyVal` alternative there).
+- On the lean standard library, whose `Predef` gives `->` and its like as extensions rather than value
+  classes, no view takes an `Any` to an `AnyVal`: an overloaded `unapply` with an `AnyVal` alternative,
+  matched on a scrutinee typed `Any`, has no alternative in either round of the resolution, where scalac's
+  `Predef.Ensuring` makes the `AnyVal` one applicable (as teq does on scala-library).
 
 ### Types and inference
 
-- The companion of a case class that has no object of its own is no value: `val o = F` is rejected, where
-  scalac's is an object (where a function is expected, `F` is `F.apply` as under scalac).
 - On a receiver typed `Tuple` or `X <: Tuple` the members of `Tuple` are typed by their bounds (`head: Any`,
   `tail: Tuple`), and a named tuple has only `toTuple` and `size` of `NamedTuple`'s members on JavaScript and
   in the interpreter.
-- A failed member call is retried as an extension or a conversion of the receiver, as scalac retries it,
-  except as a right-associative extension operator (`one() +: d` failing on `d`'s own `+:` is not taken by an
-  `extension (x: Int) def +:(d: D)`); the member's error then stands.
 
 ### Givens and implicits
 
@@ -39,10 +30,6 @@ libraries compiled from their jars run against scalac's output. The remaining di
 - A given object of a package or an object (`given t: T with ...`) is set once its body has run: a method its
   body calls that reads `t` gets `null` (the interpreter recurses), where scalac's module is set before its
   body runs; inside the body, `t` and a search for `T` are the instance, as in scalac.
-- The givens of an object nested in a trait are not found through an object extending the trait, the
-  implicit scope losing the prefix: `object dsl extends dsl` with `trait dsl { type ReadPref = ReadPref.type
-  => Pref; object ReadPref { given Conversion[ReadPref, Pref] } }` converts no `dsl.ReadPref` function, where
-  scalac sees the given from `dsl` (lila's `lila.db.dsl`).
 
 ### Macros, inline and derivation
 

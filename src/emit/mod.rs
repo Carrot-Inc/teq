@@ -2364,6 +2364,9 @@ impl<'a> Emitter<'a> {
         let body_above = in_hierarchy && self.body_above(tc.id);
         let defers_body = extended && self.has_body[tc.id.idx()];
         let runs_body = (body_above || defers_body) && info.mods & mods::ABSTRACT == 0;
+        // The val of a companion the typer made that nothing reads is no initialiser.
+        let unread_companion = |s: SymId| crate::tir::is_made_companion_val(self.syms, s) && !self.reach.fields_read[s.idx()] && !self.reach.init_read[s.idx()];
+        let initialised = tc.init.iter().any(|i| !matches!(*i, TInit::Field(s, _) if unread_companion(s)));
         let needs_ctor = if is_trait {
             tc.init.iter().any(|i| match i {
                 TInit::Stmt(_) => true,
@@ -2377,7 +2380,7 @@ impl<'a> Emitter<'a> {
                 || info.stateful
                 || callable
                 || !tc.ctor_params.is_empty()
-                || (!tc.init.is_empty() && !defers_body)
+                || (initialised && !defers_body)
                 || tc.parent_args.is_some()
         };
         if needs_ctor {
@@ -2639,6 +2642,10 @@ impl<'a> Emitter<'a> {
         for init in &tc.init {
             let TInit::Field(sym, e) = init else { continue };
             if self.syms.sym(*sym).mods & mods::LAZY == 0 {
+                continue;
+            }
+            // The val of a companion the typer made, which nothing reads (`is_made_companion_val`).
+            if crate::tir::is_made_companion_val(self.syms, *sym) && !self.reach.fields_read[sym.idx()] && !self.reach.init_read[sym.idx()] {
                 continue;
             }
             let field = self.field_name(*sym);
@@ -3321,6 +3328,14 @@ impl<'a> Emitter<'a> {
                 js_string(&n, &mut self.out);
             }
             self.out.push_str("];");
+        }
+        // The outer accessor the rule's `equals` compares by identity (`TClass::eq_outer`).
+        if let Some(accessor) = tc.eq_outer().filter(|_| tc.synthesized & synthetic::EQUALS != 0) {
+            let n = self.sym_name(accessor);
+            let _ = write!(self.out, " {}.prototype.$eqOuter = ", name);
+            js_string(&n, &mut self.out);
+            self.out.push(';');
+            let _ = write!(self.out, " {0}.prototype.equals = $outerEquals({0}, {0}.prototype.equals);", name);
         }
         // The field names `productElementName` answers, by their Scala names.
         if has_fields && self.reach.uses_element_names {

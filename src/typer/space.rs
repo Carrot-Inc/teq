@@ -185,6 +185,8 @@ struct Spaces<'t, 'a> {
     decompose_untouched: bool,
     /// The scrutinee as the match states it, with its prefixes, and as the spaces see it.
     prefixed: (TypeId, TypeId),
+    /// A wildcard case was warned of as unreachable except for `null` (`hadNullOnly`).
+    had_null_only: bool,
 }
 
 /// A match's check of its cases (`Worker::check_match`), kept until every body is typed: what
@@ -277,7 +279,7 @@ impl<'a> Worker<'a> {
         self.demand_match_hierarchy(scrut, cases);
         let mut sc = std::mem::take(&mut self.spaces);
         sc.clear();
-        let mut s = Spaces { t: self, sc, named, inexact: false, decompose_abstract: false, decompose_untouched: false, prefixed: (stated, scrut) };
+        let mut s = Spaces { t: self, sc, named, inexact: false, decompose_abstract: false, decompose_untouched: false, prefixed: (stated, scrut), had_null_only: false };
         s.check(scrut, cases, clauses, partial, span);
         let Spaces { sc, .. } = s;
         self.spaces = sc;
@@ -1291,7 +1293,30 @@ impl<'t, 'a> Spaces<'t, 'a> {
 
     fn unreachable(&mut self, clauses: &[CaseClause], i: usize) {
         let pat_span = self.t.cur_ast().pat_spans[clauses[i].pat.idx()];
+        // dotty's `checkReachability`: a wildcard on a nullable scrutinee, which a `null` the
+        // earlier cases leave reaches, is unreachable but for it (`MatchCaseOnlyNullWarning`),
+        // once per match.
+        if !self.had_null_only && self.null_only(clauses, i) {
+            self.had_null_only = true;
+            let msg = "Unreachable case except for null (if this is intentional, consider writing case null => instead).";
+            self.t.warn_as(pat_span, msg, crate::source::Warning::id(crate::warnings::id::MATCH_CASE_ONLY_NULL));
+            return;
+        }
         self.t.warn_as(pat_span, "unreachable case", crate::source::Warning::id(crate::warnings::id::MATCH_CASE_UNREACHABLE));
+    }
+
+    /// Whether the case `i` is a wildcard (`isWildcardArg`, a binder of one too) on a scrutinee of
+    /// a nullable class that no earlier case takes `null` from: its space and `null` is the
+    /// target's (`projectPat`'s `nullSpace`).
+    fn null_only(&mut self, clauses: &[CaseClause], i: usize) -> bool {
+        let wildcard = |t: &Worker, p: crate::ast::PatId| matches!(t.cur_ast().pat(p), crate::ast::Pat::Wildcard | crate::ast::Pat::Bind(_, None));
+        let takes_null = |t: &Worker, p: crate::ast::PatId| {
+            wildcard(t, p) || matches!(t.cur_ast().pat(p), crate::ast::Pat::Lit(e) if matches!(t.cur_ast().expr(e), crate::ast::Expr::NullLit))
+        };
+        if !wildcard(self.t, clauses[i].pat) || !self.t.scrutinee_may_be_null(self.prefixed.0) {
+            return false;
+        }
+        !clauses[..i].iter().any(|c| c.guard.is_none() && takes_null(self.t, c.pat))
     }
 
     // ---- projection ----
@@ -1648,6 +1673,28 @@ impl<'t, 'a> Spaces<'t, 'a> {
                 self.decompose(hi)
             }
             Type::Nothing => Some(self.seal(base)),
+            // A class through a prefix (`a.T`): its children through the same prefix (dotty's
+            // `TypeOps.childPrefix`), `a.I` of a sealed `T` nested in a class, each judged by
+            // its own prefix (`outer_implied`).
+            Type::Nested(prefix, inner) => {
+                let parent = self.t.types.named_class(inner);
+                let parts = self.decompose(inner)?;
+                let items: Vec<Space> = self.sc.arena[parts.range()].to_vec();
+                for item in items {
+                    let item = match item {
+                        Space::Typ(ct) => match self.t.types.get(ct) {
+                            Type::Class(k, _) if self.t.is_inner_class(k) => {
+                                let at = parent.and_then(|p| self.t.child_prefix(prefix, p, k)).unwrap_or(prefix);
+                                Space::Typ(self.t.nested_type(at, ct))
+                            }
+                            _ => Space::Typ(ct),
+                        },
+                        other => other,
+                    };
+                    self.sc.stack.push(item);
+                }
+                Some(self.seal(base))
+            }
             Type::Union(..) => {
                 let mut alts = std::mem::take(&mut self.sc.types);
                 alts.clear();
@@ -1707,7 +1754,12 @@ impl<'t, 'a> Spaces<'t, 'a> {
     /// sequence a sequence extractor gives (dotty's `signature` of an `unapplySeq`, `List[elem]`).
     fn as_prod(&mut self, t: TypeId) -> Option<Space> {
         let t = self.t.deref_alias(t);
-        let Type::Class(c, _) = self.t.types.get(t) else { return None };
+        // Through a prefix too, with the fields as seen from it (`field_types`).
+        let class = match self.t.types.get(t) {
+            Type::Nested(_, inner) => inner,
+            _ => t,
+        };
+        let Type::Class(c, _) = self.t.types.get(class) else { return None };
         if let Some(elem) = self.seq_element(t) {
             let (list, ..) = self.list_classes()?;
             let base = self.sc.stack.len();
@@ -1734,7 +1786,12 @@ impl<'t, 'a> Spaces<'t, 'a> {
     /// and a pattern below another covers nothing.
     fn outer_implied(&mut self, t: TypeId, sty: TypeId) -> bool {
         let (stated, scrut) = self.prefixed;
-        sty == scrut && self.t.prefix_agrees(t, stated)
+        if sty == scrut {
+            return self.t.prefix_agrees(t, stated);
+        }
+        // A space below another that keeps its prefix (a field's `a.T`, a child through
+        // `childPrefix`): that prefix decides.
+        matches!(self.t.types.get(sty), Type::Nested(..)) && self.t.prefix_agrees(t, sty)
     }
 
     /// Whether a type test compares the enclosing instance (`TypeTest::Outer`).
@@ -2072,7 +2129,14 @@ impl<'t, 'a> Spaces<'t, 'a> {
     /// The parts with each whole type that has cases taken as its cases (`Typ`'s `decompose`).
     fn decomposed_parts(&mut self, parts: Vec<Space>) -> Vec<Space> {
         let mut expanded = Vec::with_capacity(parts.len());
+        // The scrutinee left whole is shown as the match states it, with its prefix.
+        let (stated, scrut) = self.prefixed;
+        let stated_nested = matches!(self.t.types.get(stated), Type::Nested(..));
         for p in parts {
+            let p = match p {
+                Space::Typ(t) if t == scrut && stated_nested => Space::Typ(stated),
+                other => other,
+            };
             match p {
                 Space::Typ(t) => match self.decompose(t) {
                     Some(cases) if !cases.is_empty() => {
@@ -2180,6 +2244,14 @@ impl<'t, 'a> Spaces<'t, 'a> {
     }
 
     fn show_type_space(&mut self, t: TypeId) -> String {
+        // A class through a value's path, shown with it (`a.I(_)`), as dotty's `showType`.
+        if let Type::Nested(p, inner) = self.t.types.get(t) {
+            if matches!(self.t.types.get(p), Type::Term(_) | Type::Select(..)) {
+                let mut path = String::new();
+                self.t.show_path(p, &mut path);
+                return format!("{}.{}", path, self.show_type_space(inner));
+            }
+        }
         let Type::Class(c, _) = self.t.types.get(t) else { return self.t.show(t) };
         if self.is_singleton_type(t) {
             return self.t.name_str(self.t.syms.class(c).name);

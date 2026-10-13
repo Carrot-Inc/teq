@@ -6,7 +6,7 @@
 # `// teq: <flags>` line passes those flags to teq, a `// command: build` line builds the program
 # in the place of checking it (for what only a build rejects), a `// jars: <names>` line puts those jars on
 # the class path (tests/support/jars.sh); without one of them in the coursier cache the program
-# is skipped. Each program's exit and complete diagnostics go to out/errors-tests/<name>.out, and
+# is skipped. A `// jdk: none` line runs teq with no JDK to find (no JAVA_HOME, an empty PATH). Each program's exit and complete diagnostics go to out/errors-tests/<name>.out, and
 # the last line says whether every program was rejected as expected, with the counts of
 # tests/warnings/unused-imports.sh, tests/warnings/unused-kinds.sh, tests/warnings/matches.sh and
 # tests/warnings/policy.sh, which run after them.
@@ -28,7 +28,9 @@ for src in tests/errors/*.scala tests/errors/*/; do
   [ -n "$JARS_CP" ] && flags="$flags --classpath $JARS_CP"
   command=$(grep -h -o '^// command: .*' "$src" "$src"/*.scala 2>/dev/null | head -1 | sed 's|^// command: ||')
   [ "$command" = build ] && mkdir -p out && flags="$flags -o out/errors.js"
-  out=$(timeout 20 "$TEQ" compiler ${command:-check} "$src" $flags 2>&1)
+  nojdk=()
+  grep -q '^// jdk: none' "$src" "$src"/*.scala 2>/dev/null && nojdk=(env -u JAVA_HOME PATH=/nonexistent)
+  out=$(timeout 20 "${nojdk[@]}" "$TEQ" compiler ${command:-check} "$src" $flags 2>&1)
   code=$?
   printf 'exit %s\n%s\n' "$code" "$out" > "$records/$(basename "$src" .scala).out"
   if [ $code -ne 1 ]; then

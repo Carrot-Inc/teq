@@ -27,6 +27,9 @@ const JDK_ROOTS: &[&str] = &["java", "javax", "jdk", "sun", "com.sun", "org.w3c"
 const MAX_NESTING: u32 = 8;
 
 pub struct Java {
+    /// `ct.sym` for the questions of what the JDK declares, opened on the first one (`None` inside
+    /// where no JDK is found).
+    pub jdk_probe: Option<Option<Box<JdkProbe>>>,
     jdk: Option<Jdk>,
     pub release: Option<u32>,
     /// The pseudo file that stands for the JDK in diagnostics.
@@ -71,6 +74,14 @@ pub struct JavaStats {
     pub jdk_parse_time: Duration,
     pub classes_entered: usize,
     pub signatures_decoded: usize,
+}
+
+/// `ct.sym` opened apart from the loader's `Jdk` to answer what the JDK declares, which enters no
+/// package: `Worker::jdk_declares_nullary_method`.
+pub struct JdkProbe {
+    ct: CtSym,
+    release: u32,
+    answers: FxMap<(Box<str>, Box<str>), bool>,
 }
 
 struct Jdk {
@@ -141,6 +152,7 @@ impl Java {
             ctors_done: Default::default(),
             builtin_done: Default::default(),
             stats: JavaStats::default(),
+            jdk_probe: None,
         }
     }
 
@@ -451,6 +463,43 @@ impl<'a> Worker<'a> {
             jdk.names.insert(idx, names);
         }
         jdk.names[&idx].get(name).copied()
+    }
+
+    /// Whether the JDK's class `binary` (`java/time/Duration`) declares a method `name` without
+    /// parameters, as its class file in `ct.sym` has it, read through a handle of its own: the
+    /// loader's tables stay as they are, whatever the order of the questions. `None` without a
+    /// JDK.
+    pub(in crate::typer) fn jdk_declares_nullary_method(&mut self, binary: &str, name: &str) -> Option<bool> {
+        self.loaded.as_ref()?;
+        self.with_loader_for(crate::measure::Hold::JarEntry, |w| w.jdk_declares_nullary_method_unlocked(binary, name))
+    }
+
+    fn jdk_declares_nullary_method_unlocked(&mut self, binary: &str, name: &str) -> Option<bool> {
+        let java = &mut self.loaded_mut().java;
+        if java.jdk_probe.is_none() {
+            let release = java.release;
+            let opened = jdk::find_home().and_then(|home| CtSym::open(&jdk::ct_sym_path(&home).to_string_lossy()).ok()).and_then(|ct| {
+                let release = match release {
+                    Some(r) if ct.releases.contains(&r) => r,
+                    Some(_) => return None,
+                    None => ct.latest_release(),
+                };
+                Some(Box::new(JdkProbe { ct, release, answers: FxMap::default() }))
+            });
+            java.jdk_probe = Some(opened);
+        }
+        let probe = java.jdk_probe.as_mut()?.as_mut()?;
+        let key: (Box<str>, Box<str>) = (binary.into(), name.into());
+        if let Some(&known) = probe.answers.get(&key) {
+            return Some(known);
+        }
+        let package = binary.rfind('/').map_or("", |at| &binary[..at]);
+        let entry = probe.ct.package(probe.release, package).into_iter().find(|e| e.class == binary).map(|e| e.entry);
+        let declared = entry.and_then(|e| probe.ct.zip.read(e).ok()).and_then(|bytes| ClassFile::parse(&bytes).ok()).is_some_and(|cf| {
+            cf.methods.iter().any(|m| m.name == name && m.descriptor.starts_with("()"))
+        });
+        probe.answers.insert(key, declared);
+        Some(declared)
     }
 
     fn jdk_class_file(&mut self, entry: u32) -> Option<Arc<ClassFile>> {

@@ -1148,6 +1148,11 @@ impl<'a> Worker<'a> {
             .filter(|e| e.tag == tags::TYPEDEF && e.is_class && !tasty.is_object_class(e.name))
             .map(|e| (self.lname(&tasty, e.name), e.flags.has(tags::ENUM)))
             .collect();
+        let case_names: Vec<Name> = entries
+            .iter()
+            .filter(|e| e.tag == tags::TYPEDEF && e.is_class && !tasty.is_object_class(e.name) && e.flags.has(tags::CASE) && !e.flags.has(tags::ENUM))
+            .map(|e| self.lname(&tasty, e.name))
+            .collect();
         // Another module's enum case classes have no companion in teq's model of them, as the
         // program's own have none: the case is made by its constructor.
         let product = self.loaded.as_ref().map_or(false, |l| l.cp.is_products(l.file(file).cp));
@@ -1160,18 +1165,9 @@ impl<'a> Worker<'a> {
         } else {
             Vec::new()
         };
-        // So has a case class nested in a class: the program's own has no companion there, its
-        // instances made by its constructor (the JVM lays the companion out, `jvm/callable.rs`).
-        let instance_owner = matches!(owner, Owner::Class(o) if !matches!(self.syms.class(o).kind, ClassKind::Object | ClassKind::Builtin));
-        let nested_cases: Vec<Name> = if product && instance_owner {
-            entries
-                .iter()
-                .filter(|e| e.tag == tags::TYPEDEF && e.is_class && e.flags.has(tags::CASE) && !e.flags.has(tags::ENUM) && !tasty.is_object_class(e.name))
-                .map(|e| self.lname(&tasty, e.name))
-                .collect()
-        } else {
-            Vec::new()
-        };
+        // A case class nested in a class has its companion, as the program's own has (`Namer`'s,
+        // `Desugar.classDef`'s `companionDefs`).
+        let nested_cases: Vec<Name> = Vec::new();
         // A given with a body and no parameters is a given object in scalac's pickle; in teq's
         // model, which another module's classes are read as, a lazy given of a class of its own.
         let given_objects: Vec<Name> = if product {
@@ -1205,7 +1201,13 @@ impl<'a> Worker<'a> {
                     } else {
                         None
                     };
-                    self.enter_loaded_class(file, e, owner, companion);
+                    let entered = self.enter_loaded_class(file, e, owner, companion);
+                    // The companion a case class's pickle has synthesized (`Desugar.classDef`).
+                    if let Some(c) = entered.filter(|_| e.flags.has(tags::SYNTHETIC) && tasty.is_object_class(e.name)) {
+                        if case_names.contains(&self.lname(&tasty, e.name)) {
+                            self.syms.class_mut(c).made_companion = true;
+                        }
+                    }
                 } else {
                     self.enter_loaded_type(file, e, owner);
                 }

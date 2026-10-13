@@ -438,7 +438,7 @@ impl<'a> Worker<'a> {
     }
 
     /// Whether `c` is a package object, which a location leaves out.
-    fn is_package_object(&self, c: ClassId) -> bool {
+    pub(super) fn is_package_object(&self, c: ClassId) -> bool {
         let info = self.syms.class(c);
         info.kind == ClassKind::Object && (info.name == crate::names::PACKAGE || self.interner.get(info.name).ends_with("$package"))
     }

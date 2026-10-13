@@ -648,7 +648,7 @@ Failed to synthesize an instance of type {}:", shown, shown);
     /// the path it selects from), and the child's remaining owners, objects, are selected from
     /// it: `o.mid.T`'s child of `O` is seen through `o`, a child in `O`'s `object Kids` through
     /// `o.Kids`. None where no instance prefix comes of it (a static owner, a local value).
-    fn child_prefix(&mut self, pre: TypeId, parent: ClassId, child: ClassId) -> Option<TypeId> {
+    pub(super) fn child_prefix(&mut self, pre: TypeId, parent: ClassId, child: ClassId) -> Option<TypeId> {
         let chain = |w: &Self, c: ClassId| -> Vec<Owner> {
             let mut owners = Vec::new();
             let mut at = w.syms.class(c).owner;

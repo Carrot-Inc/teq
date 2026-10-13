@@ -4536,7 +4536,7 @@ impl<'c, 'a> Collector<'c, 'a> {
                 continue;
             }
             // The accessor of the outer instance, which scalac adds after the collector.
-            if self.is_module_val(s) || self.w.name_ref(self.w.syms.sym(s).name).starts_with("$outer") {
+            if self.is_module_val(s) || super::anon::is_outer_accessor_name(self.w.name_ref(self.w.syms.sym(s).name), self.w.syms.sym(s).def.is_some()) {
                 continue;
             }
             self.member(s);

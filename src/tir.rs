@@ -969,9 +969,18 @@ pub struct TClassLists {
     /// which a getter answers whatever the constructor has run (`Memoize`); a right side that is
     /// no literal stays in `init`, the constructor's work.
     pub constants: Vec<(SymId, TExprId)>,
+    /// The outer accessor of a case class nested in a class that its synthesized `equals`
+    /// compares by identity after the class test, before the fields and `canEqual`: dotty's
+    /// `equalsBody` tests `that` against `C`'s `this`-prefixed type, to which `PatternMatcher`
+    /// adds the outer test (`addOuterTest`, `x$0.$outer eq this.$outer`).
+    pub eq_outer: Option<SymId>,
 }
 
 impl TClass {
+    pub fn eq_outer(&self) -> Option<SymId> {
+        self.lists.as_deref().and_then(|l| l.eq_outer)
+    }
+
     pub fn equals_order(&self) -> &[u16] {
         self.lists.as_deref().map_or(&[], |l| &l.equals_order)
     }
@@ -2065,4 +2074,19 @@ mod tests {
         });
         assert!(refused.contains("before it escaped"), "the type read before the escape was not refused: {:?}", refused);
     }
+}
+
+/// Whether `s` is the lazy val of a companion the typer made for a case class nested in a class
+/// (`Namer`'s, `Desugar.classDef`'s `companionDefs`), which has no body to run: on JavaScript it is
+/// written, and the companion reached, only where something reads it.
+pub fn is_made_companion_val(syms: &crate::symbols::Symbols, s: SymId) -> bool {
+    use crate::symbols::{Owner, SymKind};
+    let info = syms.sym(s);
+    if info.kind != SymKind::Val || info.mods & crate::ast::mods::LAZY == 0 {
+        return false;
+    }
+    let Owner::Class(owner) = info.owner else { return false };
+    let Some(&k) = syms.class(owner).nested.get(&info.name) else { return false };
+    let companion = syms.class(k).companion;
+    syms.class(k).mods & crate::ast::mods::CASE != 0 && companion.is_some_and(|m| syms.class(m).inner_object == Some(s) && syms.class(m).made_companion)
 }

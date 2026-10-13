@@ -778,6 +778,14 @@ impl<'a> Cx<'a> {
         }
     }
 
+    /// The outer accessor the case class's `equals` compares (`TClass::eq_outer`).
+    pub fn eq_outer(&self, c: ClassId) -> Option<SymId> {
+        match self.tclass_of[c.idx()] {
+            u32::MAX => None,
+            i => self.input.prog.classes[i as usize].eq_outer(),
+        }
+    }
+
     /// The case class's fields in its `equals`'s order (`TClass::equals_order`): declaration order
     /// where the record holds none.
     pub fn equals_order(&self, c: ClassId, n: usize) -> Vec<usize> {
@@ -826,7 +834,8 @@ pub fn emit(input: Input, classpath: &mut crate::classpath::Classpath, kept: Opt
     // An anonymous class an inline expansion made for its caller is the caller's file's: with
     // `--own` it is written with the caller, not left to the inline body's build.
     for (i, tc) in prog.classes.iter().enumerate() {
-        if cx.emits(tc.id) && owned(syms.class(tc.id).module_file()) {
+        // The companion the typer made for a case class is written with the class.
+        if cx.emits(tc.id) && owned(syms.class(tc.id).module_file()) && !cx.made_case_companion(tc.id) {
             units.push(Unit::Class(i));
         }
     }

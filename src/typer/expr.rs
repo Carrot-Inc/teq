@@ -760,6 +760,12 @@ impl<'a> Worker<'a> {
             note_len = note.len();
             msg.push_str(&note);
         }
+        // No conversion was tried to `AnyVal` or `AnyRef` itself (`convert_to_typed`).
+        if exp == self.b.t_any_val || exp == self.b.t_any_ref {
+            let note = format!(". Note that implicit conversions were not tried because the result of an implicit conversion must be more specific than {}", self.show(expected));
+            note_len += note.len();
+            msg.push_str(&note);
+        }
         let at = self.diags.items.len();
         self.error_unless_unknown(span, msg.clone(), &[found, expected]);
         if self.logging > 0 {

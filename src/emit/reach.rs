@@ -1191,6 +1191,9 @@ impl<T: Copy> Links<T> {
 
 struct Walker {
     jvm: Option<JvmHelpers>,
+    /// The initialisers of the vals of companions the typer made for case classes nested in a
+    /// class (`is_made_companion_val`), walked when the val is first read.
+    deferred_companions: FxMap<SymId, TExprId>,
     /// Std classes reached, whose subclasses across the std's files the typer brings in.
     pending_extenders: Vec<ClassId>,
     /// Std classes the typer checked between two walks: reached on the second ask whether or
@@ -1321,6 +1324,7 @@ impl Walker {
         let n_files = layout.file_groups.iter().map(|(f, _)| f.0 as usize + 1).max().unwrap_or(0);
         let mut w = Walker {
             jvm: None,
+            deferred_companions: FxMap::default(),
             pending_extenders: Vec::new(),
             std_checked: FxMap::default(),
             runtime_exceptions_found: false,
@@ -1713,6 +1717,15 @@ impl Walker {
             if !self.pending_classes.contains(&c) {
                 self.pending_classes.push(c);
                 self.pending_extenders.push(c);
+            }
+            return;
+        }
+        // The companion the typer made for a case class (`ClassInfo::made_companion`), which
+        // nothing checks before it is reached: checked between two walks, and reached again then.
+        let made = cx.syms.class(c).made_companion && cx.syms.class(c).def.is_none() && !self.is_library_class(c) && !self.is_product_class(c);
+        if made && index(self.tclass_of[c.idx()]).is_none() && !self.std_checked.contains_key(&c) {
+            if !self.pending_classes.contains(&c) {
+                self.pending_classes.push(c);
             }
             return;
         }
@@ -2410,6 +2423,14 @@ impl Walker {
         for n in RUNTIME_CALLED {
             self.mark_dispatch(cx, c, n);
         }
+        // The rule's `equals` of a case class nested in a class reads the class's outer accessor
+        // on both instances (`$eqOuter`, `TClass::eq_outer`).
+        for &(b, _) in info.base_types.iter() {
+            let accessor = index(self.tclass_of[b.idx()]).and_then(|i| cx.prog.classes[i].eq_outer());
+            if let Some(a) = accessor {
+                self.mark_dispatch(cx, c, syms.sym(a).name);
+            }
+        }
         // On JavaScript a class reaches the parents a desugaring gives (`Product`, `Equals`,
         // `Serializable`, `Enum`) only through a member it takes from one (`mark_dispatch`): the
         // runtime's shapes stand for the rest of a case class's, the others are markers, and a
@@ -2537,6 +2558,14 @@ impl Walker {
                     if let Err(at) = self.reach.constant_vals.binary_search(&s) {
                         self.reach.constant_vals.insert(at, s);
                     }
+                }
+            }
+            // On JavaScript the companion the typer made for a case class nested here is reached
+            // where its val is read (`field`); the JVM writes it as scalac does.
+            if let TInit::Field(s, e) = *init {
+                if self.jvm.is_none() && crate::tir::is_made_companion_val(syms, s) && !self.reach.fields_read[s.idx()] && !self.reach.init_read[s.idx()] {
+                    self.deferred_companions.insert(s, e);
+                    continue;
                 }
             }
             // A lazy val runs as a getter, the rest as the constructor or `$body`.
@@ -3065,6 +3094,11 @@ impl Meet for Walker {
             self.reach.init_read[s.idx()] = true;
         } else {
             self.reach.fields_read[s.idx()] = true;
+        }
+        if let Some(e) = self.deferred_companions.remove(&s) {
+            let outer = std::mem::replace(&mut self.in_init, false);
+            self.walk(cx, e);
+            self.in_init = outer;
         }
         self.call_member(cx, s);
     }

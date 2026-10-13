@@ -510,6 +510,15 @@ function $productToString() {
   }
   return s + ")";
 }
+// The rule's `equals` `eq` of a case class `c` nested in a class, which first compares the
+// enclosing instances by identity through the class's outer accessor, `$eqOuter`
+// (`SyntheticMembers.equalsBody`, `PatternMatcher.addOuterTest` of the rule's `x$0 @ (_: C)`).
+function $outerEquals(c, eq) {
+  return function (that) {
+    if (this !== that && that instanceof c && this[this.$eqOuter]() !== that[this.$eqOuter]()) return false;
+    return eq.call(this, that);
+  };
+}
 // The fields compare in `$eqFields`' order where given (`SyntheticMembers.equalsBody`).
 function $caseEquals(that) {
   if (this === that) return true;

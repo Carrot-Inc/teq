@@ -1,6 +1,6 @@
 // expect: type mismatch: found 5, required Throwable
 // expect: type mismatch: found "text", required Throwable
-// expect: this pattern of type List[Any] can never match a value of type Throwable
+// expect: type mismatch: found Any, required Int
 // expect: A try without catch or finally is equivalent to putting its body in a block; no exceptions are handled.
 // expect: Discarded non-Unit value of type Int. Add `: Unit` to discard silently.
 // teq: --werror

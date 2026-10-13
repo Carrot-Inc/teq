@@ -379,9 +379,8 @@ impl<'a> Gen<'a> {
                 self.begin_method(false, false, &params, m.ret.clone(), &[body]);
                 self.code.line(cx.line_of(info.file, info.span.start));
                 self.method_body(fun.sym, &fun.params, body);
-                // A given class's outer accessor is scalac's, final and synthetic.
-                let given = self.this_class.map_or(false, |c| cx.given_class_classes.contains_key(&c) || cx.inner_given_object_classes.contains_key(&c));
-                let outer_accessor = given && info.def.is_none() && name.ends_with("$$$outer");
+                // An outer accessor is scalac's, final and synthetic (`Worker::outer_accessor`).
+                let outer_accessor = info.def.is_none() && info.mods & mods::FINAL != 0 && name.ends_with("$$$outer");
                 let access = if outer_accessor { ACC_PUBLIC | ACC_FINAL | ACC_SYNTHETIC } else { ACC_PUBLIC };
                 self.end_method(access, &m.name, &m.desc);
                 self.emit_bridges(fun.sym, &m);
@@ -894,7 +893,8 @@ impl<'a> Gen<'a> {
             }
             let mut module_fields: Vec<(u16, String, String)> = Vec::new();
             for (m, k) in nested {
-                if cx.input.reach.classes[k.idx()] {
+                // The companion the typer made for a case class is among those below.
+                if cx.input.reach.classes[k.idx()] && !cx.made_case_companion(k) {
                     module_fields.push((module_field_flags(syms, m), encode(cx.input.interner.get(syms.class(k).name)), format!("L{};", self.class_name(k))));
                 }
             }
@@ -902,7 +902,7 @@ impl<'a> Gen<'a> {
             // public as a synthesized companion is.
             let mut made: Vec<(u16, String, String)> = Vec::new();
             for &k in syms.class(c).nested.values() {
-                if syms.class(k).companion.is_none() && (cx.has_case_companion(k) || cx.has_value_companion(k) || cx.has_default_companion(k)) {
+                if syms.class(k).companion.map_or(true, |m| cx.made_case_companion(m)) && (cx.has_case_companion(k) || cx.has_value_companion(k) || cx.has_default_companion(k)) {
                     made.push((MODULE_FIELD, encode(cx.input.interner.get(syms.class(k).name)), format!("L{}$;", self.class_name(k))));
                 }
             }
@@ -3086,6 +3086,16 @@ impl<'a> Gen<'a> {
             self.load(1, &object);
             self.checkcast(&owner);
             let that = self.store_new(&this);
+            // The enclosing instances, by identity (`PatternMatcher.addOuterTest` of the rule's
+            // `x$0 @ (_: C)`, `TClass::eq_outer`).
+            if let Some(accessor) = cx.eq_outer(c) {
+                let m = self.mref(accessor);
+                for slot in [0, that] {
+                    self.load(slot, &this);
+                    self.invoke_desc(Invoke::Virtual, &owner, false, &m.name, &m.desc, 0, &m.ret);
+                }
+                self.jump_if(op::IF_ACMPNE, 2, no);
+            }
             let order = cx.equals_order(c, field_refs.len());
             for (name, ty) in order.iter().filter_map(|&i| field_refs.get(i)) {
                 self.load(0, &this);

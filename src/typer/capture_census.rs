@@ -222,7 +222,8 @@ impl<'w, 'a> Walk<'w, 'a> {
 
     /// An inner class's accessor of its enclosing instance: `C.this` of the class its result is.
     fn outer_accessor(&self, s: SymId) -> bool {
-        self.w.name_str(self.w.syms.sym(s).name).starts_with("$outer")
+        let info = self.w.syms.sym(s);
+        super::anon::is_outer_accessor_name(&self.w.name_str(info.name), info.def.is_some())
     }
 
     fn list(&mut self, l: crate::ast::ListRef, ctx: Ctx) {

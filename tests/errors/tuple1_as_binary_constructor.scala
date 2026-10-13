@@ -1,5 +1,5 @@
 // teq: --std=scala-library
-// expect: 7:17: error: type mismatch: found (Int), required ?0[A, B]
+// expect: 7:17: error: type mismatch: found (Int), required F[A, B]
 // `Tuple1[X]` has no base of two arguments: its base `X *: EmptyTuple` is itself.
 def arity[F[_, _], A, B](x: F[A, B]): String = "two"
 

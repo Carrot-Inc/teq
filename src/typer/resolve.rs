@@ -1251,7 +1251,7 @@ impl<'a> Worker<'a> {
             };
             e.term
                 .map(|s| Self::package_term(&self.syms, s))
-                .or(e.class.map(TermRef::Class))
+                .or(e.class.filter(|&c| !self.skip_proxy(c)).map(TermRef::Class))
                 .or(e.pkg.map(TermRef::Package))
                 .or(lone_extension)
         });
@@ -1403,15 +1403,21 @@ impl<'a> Worker<'a> {
     }
 
     /// A term that the object `c` defines, inherits or exports.
-    /// A protected member the object `c` inherits, which is in scope in the object's body as in
-    /// a class's, though no selection from outside finds it.
+    /// A protected or qualified private (`private[q]`) member the object `c` inherits, which is
+    /// in scope in the object's body as in a class's (dotty's `findRef` through the owner's
+    /// `thisType.member`, a qualified private member being inherited), though no selection from
+    /// outside finds it.
     fn inherited_protected(&mut self, c: ClassId, name: Name) -> Option<SymId> {
         self.complete_class(c);
         let self_ty = self.syms.this_type(c);
         let bare = std::mem::replace(&mut self.bare_lookup, true);
         let member = self.find_member(self_ty, name);
         self.bare_lookup = bare;
-        member.map(|(s, _)| s).filter(|&s| self.syms.sym(s).mods & crate::ast::mods::PROTECTED != 0)
+        member.map(|(s, _)| s).filter(|&s| {
+            let info = self.syms.sym(s);
+            info.mods & (crate::ast::mods::PROTECTED | crate::ast::mods::QUALIFIED) != 0
+                || info.mods & crate::ast::mods::PRIVATE != 0 && self.has_access_scope(info.file, info.span.start)
+        })
     }
 
     pub fn module_term(&mut self, c: ClassId, name: Name) -> Option<TermRef> {
@@ -1427,11 +1433,13 @@ impl<'a> Worker<'a> {
             };
         }
         if let Some(&n) = info.nested.get(&name) {
-            return Some(TermRef::Class(n));
+            if !self.skip_proxy(n) {
+                return Some(TermRef::Class(n));
+            }
         }
         // A proxy stands where no member of the name does (`NamerOps.addConstructorProxies`'s
         // `memberExists`), inherited ones included.
-        if let Some(n) = self.inherited_nested_class(c, name) {
+        if let Some(n) = self.inherited_nested_class(c, name).filter(|&n| !self.skip_proxy(n)) {
             let module_ty = self.types.class(c, &[]);
             if self.find_member(module_ty, name).is_none() {
                 return Some(if self.outer_class(n).is_some() { TermRef::ModuleClass(c, n) } else { TermRef::Class(n) });
@@ -1520,9 +1528,9 @@ impl<'a> Worker<'a> {
             if let (true, TermRef::Local(local)) = (self.unused.on(), r) {
                 self.mark_alias_read(local);
             }
-            // A constructor proxy outside an application gives way to a binding it shadows.
-            if let TermRef::ValueClass(_, c) = r {
-                return Some(self.proxy_or_shadowed(name, r, c));
+            // A class's name, or an application's head: a proxy or a made companion it may be.
+            if matches!(r, TermRef::Class(_) | TermRef::ValueClass(..) | TermRef::ModuleClass(..)) || (self.extension_call_head && !matches!(r, TermRef::Local(_))) {
+                return Some(self.found_term_proxy(name, r, span));
             }
             return Some(r);
         }
@@ -1534,17 +1542,146 @@ impl<'a> Worker<'a> {
         TermRef::root_package(self, name)
     }
 
-    /// A value import's constructor proxy, or the binding it shadows where it is no application's
-    /// head; apart from the lookup's path, which most names take without one.
+    /// What a found binding stands for where it may be a constructor proxy or a companion the
+    /// typer made, apart from the lookup's path, which most names take without either.
     #[cold]
     #[inline(never)]
-    fn proxy_or_shadowed(&mut self, name: Name, r: TermRef, c: ClassId) -> TermRef {
-        if !self.extension_call_head && self.syms.class(c).mods & mods::CASE == 0 {
-            if let Some(shadowed) = self.shadowed_by_proxy(name) {
-                return shadowed;
+    fn found_term_proxy(&mut self, name: Name, r: TermRef, span: Option<Span>) -> TermRef {
+        // A constructor proxy outside an application gives way to a binding it shadows.
+        if let TermRef::Class(c) | TermRef::ValueClass(_, c) | TermRef::ModuleClass(_, c) = r {
+            if self.is_constructor_proxy(c) {
+                return self.proxy_or_shadowed(name, r, c, span);
+            }
+        }
+        // The companion the typer made for a case class, applied: its synthesized `apply`, the
+        // class's creation (`Desugar.classDef`), taken as the class's.
+        if self.extension_call_head {
+            if let Some(k) = self.made_companion_case(r) {
+                // Through what named it: an object's member is the class's proxy on it, an
+                // imported value's on that value.
+                return match r {
+                    TermRef::ModuleMember(c, _) => TermRef::ModuleClass(c, k),
+                    TermRef::ValueMember(v, _) => TermRef::ValueClass(v, k),
+                    _ => TermRef::Class(k),
+                };
             }
         }
         r
+    }
+
+    /// The case class whose companion the typer made (`ClassInfo::made_companion`) that the
+    /// binding `r` names: the object, or the val of one nested in a class.
+    #[inline]
+    fn made_companion_case(&self, r: TermRef) -> Option<ClassId> {
+        // A local case class has no companion made for it: a local binding is none.
+        let s = match r {
+            TermRef::Global(s) | TermRef::ModuleMember(_, s) | TermRef::This(_, s) | TermRef::ValueMember(_, s) => s,
+            _ => return None,
+        };
+        let info = self.syms.sym(s);
+        let m = match info.kind {
+            SymKind::Object(m) => m,
+            // The val of a companion nested in a class: lazy, of no definition.
+            SymKind::Val if info.def.is_none() && info.mods & mods::LAZY != 0 => match self.types.get(self.types.strip_nested(info.sig.as_ref()?.ret)) {
+                Type::Class(m, _) if self.syms.class(m).inner_object == Some(s) => m,
+                _ => return None,
+            },
+            _ => return None,
+        };
+        let info = self.syms.class(m);
+        if !info.made_companion || self.syms.class(m).def.is_some() {
+            return None;
+        }
+        info.companion.filter(|&k| self.syms.class(k).kind == ClassKind::Class)
+    }
+
+    /// Whether the term `c` is named by is its constructor proxy (`NamerOps.addConstructorProxies`,
+    /// a `PhantomSymbol`): a class with no companion; a case class's synthetic companion is a
+    /// real object.
+    pub(super) fn is_constructor_proxy(&self, c: ClassId) -> bool {
+        self.needs_constructor_proxy(c) && self.syms.class(c).mods & mods::CASE == 0
+    }
+
+    /// A constructor proxy, or the binding it shadows (dotty's `Typer.checkNotShadowed`): where
+    /// the name is no application's head, the binding; at an application's head, the proxy, an
+    /// error where the binding has a method alternative that is no accessor or an `apply` such a
+    /// method (`ConstrProxyShadows`); apart from the lookup's path, which most names take without
+    /// one.
+    #[cold]
+    #[inline(never)]
+    fn proxy_or_shadowed(&mut self, name: Name, r: TermRef, c: ClassId, span: Option<Span>) -> TermRef {
+        // The lean std's own bodies take its classes' proxies: what a jar's package object adds
+        // to package `scala` (scala-library's `val Range`) is no scope they were written in.
+        if self.source(self.env.file).is_std {
+            return r;
+        }
+        let Some(shadowed) = self.shadowed_by_proxy(name) else { return r };
+        if !self.extension_call_head {
+            return shadowed;
+        }
+        if let Some(span) = span {
+            if let Some(what) = self.shadowed_applicable(shadowed) {
+                let owner = self.syms.class(c).owner;
+                let msg = format!(
+                    "Reference to constructor proxy for {}{}\nshadows outer reference to {}\n\nThe instance needs to be created with an explicit `new`.",
+                    self.class_description(c),
+                    self.located_in(owner),
+                    what
+                );
+                self.error(span, msg);
+            }
+        }
+        r
+    }
+
+    /// The binding a constructor proxy shadows, described as dotty's `showLocated` shows it,
+    /// where it has a method alternative that is no accessor (`hasAltWith(is(Method, butNot =
+    /// Accessor))`) or an `apply` member that is one; none otherwise (a plain `val`).
+    fn shadowed_applicable(&mut self, shadowed: TermRef) -> Option<String> {
+        let (word, name, owner, ty) = match shadowed {
+            TermRef::Class(k) | TermRef::ValueClass(_, k) | TermRef::ModuleClass(_, k) => {
+                let info = self.syms.class(k);
+                // A case class's synthetic companion has its `apply`.
+                if info.kind == ClassKind::Object || info.mods & mods::CASE != 0 {
+                    let ty = (info.kind == ClassKind::Object).then(|| self.types.class(k, &[]));
+                    ("object", info.name, info.owner, ty)
+                } else {
+                    return None;
+                }
+            }
+            _ => {
+                let s = shadowed.sym()?;
+                let method = |t: &Self, a: SymId| t.syms.sym(a).kind == SymKind::Def;
+                let is_method = method(self, s) || self.syms.alternatives(s).is_some_and(|alts| alts.iter().any(|&a| method(self, a)));
+                let info = self.syms.sym(s);
+                let (name, owner, kind) = (info.name, info.owner, info.kind);
+                if is_method {
+                    return Some(format!("method {}{}", self.name_str(name), self.located_in(owner)));
+                }
+                match kind {
+                    SymKind::Object(k) => ("object", name, owner, Some(self.types.class(k, &[]))),
+                    SymKind::Var => ("variable", name, owner, Some(self.sig_of(s).ret)),
+                    SymKind::Val | SymKind::Param | SymKind::Given | SymKind::EnumValue(_) => ("value", name, owner, Some(self.sig_of(s).ret)),
+                    _ => return None,
+                }
+            }
+        };
+        let has_apply = match ty {
+            None => true,
+            Some(t) => self.find_member(t, names::APPLY).is_some_and(|(m, _)| {
+                self.syms.sym(m).kind == SymKind::Def || self.syms.alternatives(m).is_some_and(|alts| alts.iter().any(|&a| self.syms.sym(a).kind == SymKind::Def))
+            }),
+        };
+        has_apply.then(|| format!("{} {}{}", word, self.name_str(name), self.located_in(owner)))
+    }
+
+    /// ` in <owner>` of dotty's `showLocated`, a class's or a package's.
+    fn located_in(&self, owner: Owner) -> String {
+        match owner {
+            Owner::Class(k) => format!(" in {}", self.class_description(k)),
+            Owner::Package(p) if p != ROOT_PKG => format!(" in package {}", self.package_display(p)),
+            _ => String::new(),
+        }
     }
 
     /// SLS 2: a definition of the scope beats its imports, a named import beats a wildcard of the
@@ -2409,13 +2546,14 @@ impl<'a> Worker<'a> {
 
     /// Whether the term a class nested in an imported value's class is named by is a constructor
     /// proxy (a plain class's; a case class's companion is a real one) that the lookup passes.
-    fn skip_proxy(&self, c: ClassId) -> bool {
-        self.skip_proxies && self.syms.class(c).mods & mods::CASE == 0
+    pub(super) fn skip_proxy(&self, c: ClassId) -> bool {
+        self.skip_proxies && self.is_constructor_proxy(c)
     }
 
     /// The binding a constructor proxy found for `name` shadows, which a name outside an
     /// application stands for instead (dotty's `Typer.checkNotShadowed`, through `findRef`
-    /// excluding `PhantomSymbol`): none of the empty package's.
+    /// excluding `PhantomSymbol`): none of the empty package's, a class or an object there; a
+    /// top-level `def` or `val` is its file's `$package` object's member in dotty.
     #[cold]
     #[inline(never)]
     fn shadowed_by_proxy(&mut self, name: Name) -> Option<TermRef> {
@@ -2425,9 +2563,43 @@ impl<'a> Worker<'a> {
         let owner = match found? {
             TermRef::Class(c) => self.syms.class(c).owner,
             TermRef::Package(_) | TermRef::SelfAlias(_) | TermRef::ValueClass(..) => return found,
-            other => self.syms.sym(other.sym()?).owner,
+            other => {
+                let s = other.sym()?;
+                // A binding the use cannot access (a private member a wildcard import brings) is
+                // none it shadows: dotty's `findRef` keeps the accessible denotations alone.
+                let accessible = match self.syms.alternatives(s) {
+                    Some(alts) => alts.to_vec().into_iter().any(|a| self.binding_accessible(other, a)),
+                    None => self.binding_accessible(other, s),
+                };
+                if !accessible {
+                    return None;
+                }
+                let info = self.syms.sym(s);
+                if !matches!(info.kind, SymKind::Object(_)) {
+                    return found;
+                }
+                info.owner
+            }
         };
         (owner != Owner::Package(ROOT_PKG)).then_some(found?)
+    }
+
+    /// Whether the member `s` a found binding `r` names is accessible where the lookup stands: its
+    /// private and qualified access, and a protected one's through the receiver the binding
+    /// selects it on (an imported object or value; `this` reaches it), as `isAccessibleFrom`.
+    fn binding_accessible(&mut self, r: TermRef, s: SymId) -> bool {
+        if !self.is_accessible(s) {
+            return false;
+        }
+        if self.syms.sym(s).mods & mods::PROTECTED == 0 {
+            return true;
+        }
+        let recv_ty = match r {
+            TermRef::ModuleMember(c, _) => self.types.class(c, &[]),
+            TermRef::ValueMember(v, _) => self.import_value_ret(v),
+            _ => return true,
+        };
+        self.protected_denied(s, false, recv_ty).is_none()
     }
 
     /// What the class of an imported value exports under `name`, its own clauses' and its
@@ -2904,6 +3076,15 @@ impl<'a> Worker<'a> {
                     return self.seen_from_receiver_paths(t);
                 }
                 let found = self.lookup_type_in_path(q, n);
+                if let Some(TypeRef::Class(c)) = found {
+                    if self.syms.class(c).mods & mods::PRIVATE != 0 {
+                        if let Some(TermRef::Package(p)) = self.resolve_type_path(q) {
+                            if let Some(msg) = self.package_member_denied(p, TermRef::Class(c)) {
+                                self.error(span, msg);
+                            }
+                        }
+                    }
+                }
                 if let (Some(r), true) = (found, self.index.is_some()) {
                     self.index_type(id, r);
                 }
@@ -6607,7 +6788,7 @@ impl Binding for TermRef {
                     SymKind::Object(_) => TermRef::Global(s),
                     _ => TermRef::Local(s),
                 })
-                .or_else(|| classes.iter().rev().find(|(n, _)| *n == name).map(|&(_, c)| TermRef::Class(c))),
+                .or_else(|| classes.iter().rev().find(|(n, _)| *n == name).map(|&(_, c)| c).filter(|&c| !t.skip_proxy(c)).map(TermRef::Class)),
             Frame::Class(c) => {
                 let c = *c;
                 if t.syms.class(c).self_alias == name {
@@ -6633,7 +6814,9 @@ impl Binding for TermRef {
                     return Some(TermRef::This(c, s));
                 }
                 if let Some(n) = t.syms.class(c).nested.get(&name).copied().or_else(|| t.inherited_nested_class(c, name)) {
-                    return Some(TermRef::Class(n));
+                    if !t.skip_proxy(n) {
+                        return Some(TermRef::Class(n));
+                    }
                 }
                 if kind == ClassKind::Enum {
                     let companion = t.syms.class(c).companion;
@@ -6663,7 +6846,8 @@ impl Binding for TermRef {
     fn via_import(t: &mut Worker, imp: ResolvedImport, name: Name) -> Option<TermRef> {
         match imp.target {
             ImportTarget::PkgMember(p, orig) if imp.name == Some(name) => t.pkg_term(p, orig),
-            ImportTarget::PkgAll(p) if imp.name.is_none() => t.pkg_term(p, name).filter(|&r| !t.is_given_ref(r)),
+            // A wildcard brings no member the site cannot access (`ImportInfo`'s `isAccessible`).
+            ImportTarget::PkgAll(p) if imp.name.is_none() => t.pkg_term(p, name).filter(|&r| !t.is_given_ref(r) && t.package_member_denied(p, r).is_none()),
             ImportTarget::PkgGivens(p) => t.pkg_term(p, name).filter(|&r| t.is_given_ref(r) && t.import_admits_ref(imp, r)),
             ImportTarget::ClassMember(c, orig) if imp.name == Some(name) => t.module_term(c, orig),
             ImportTarget::ClassAll(c) if imp.name.is_none() => {

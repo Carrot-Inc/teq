@@ -1,4 +1,4 @@
-// expect: warning: unreachable case
+// expect: warning: Unreachable case except for null (if this is intentional, consider writing case null => instead).
 // expect: 1 warning found, errors under --werror
 // teq: --werror
 // One pattern covers the whole product, however deep: the wildcard after it is reachable

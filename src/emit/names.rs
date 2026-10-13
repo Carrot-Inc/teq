@@ -354,7 +354,9 @@ impl Renames {
             for &m in info.member_order.iter().chain(info.ctor_syms.iter().flatten()) {
                 let sym = syms.sym(m);
                 // A concrete var's setter has no output: its call is the var's assignment.
-                if matches!(sym.kind, SymKind::Val | SymKind::Var | SymKind::Def | SymKind::Given) && sym.owner == Owner::Class(c) && !syms.product_synthetics.contains_key(&m) && !crate::typer::setters::is_concrete_setter(syms, m) {
+                // The val of a companion the typer made that nothing reads has no output either.
+                let unread_companion = crate::tir::is_made_companion_val(syms, m) && !reach.fields_read[m.idx()] && !reach.init_read[m.idx()];
+                if matches!(sym.kind, SymKind::Val | SymKind::Var | SymKind::Def | SymKind::Given) && sym.owner == Owner::Class(c) && !syms.product_synthetics.contains_key(&m) && !crate::typer::setters::is_concrete_setter(syms, m) && !unread_companion {
                     names.push(member_name(m));
                 }
             }

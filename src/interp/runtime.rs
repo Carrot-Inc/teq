@@ -297,6 +297,19 @@ impl<'a, 't> Interp<'a, 't> {
         if !related {
             return Ok(false);
         }
+        // The enclosing instances of a case class nested in a class are one, compared by
+        // identity before the fields (`PatternMatcher.addOuterTest` of the rule's `x$0 @ (_: C)`,
+        // `TClass::eq_outer`).
+        let accessor = self.case_class_of(x.class).and_then(|c| self.tclass_field(c, |tc| tc.eq_outer()).flatten());
+        if let Some(accessor) = accessor {
+            let name = self.syms().sym(accessor).name;
+            let (m, n) = (self.member(x.class, name), self.member(y.class, name));
+            let p = self.invoke_member(a.clone(), m, name, Vec::new())?;
+            let q = self.invoke_member(b.clone(), n, name, Vec::new())?;
+            if !p.same(&q) {
+                return Ok(false);
+            }
+        }
         for &key in fields.iter() {
             let (p, q) = (self.read_slot(a, key), self.read_slot(b, key));
             if !self.equal(&p, &q)? {
