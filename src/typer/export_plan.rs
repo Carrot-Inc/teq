@@ -133,6 +133,11 @@ impl Worker<'_> {
                                     }
                                     if matches!(self.syms.sym(sym).kind, SymKind::Object(_)) {
                                         objects.push((n, n, object_class(self, sym)));
+                                    } else if let Some(alts) = self.syms.alternatives(sym).filter(|alts| alts.iter().any(|&a| is_given(self, a))) {
+                                        // A wildcard forwards the alternatives that are no givens, the
+                                        // given selector the others (`Namer.addWildcardForwarders`).
+                                        let plain: Vec<SymId> = alts.iter().copied().filter(|&a| !is_given(self, a)).collect();
+                                        forwards.extend(plain.into_iter().map(|a| (n, a, n)));
                                     } else {
                                         forwards.push((n, sym, n));
                                     }
@@ -408,6 +413,11 @@ impl Worker<'_> {
 }
 
 /// What an exported name forwards to: the member and the object it is reached through.
+fn is_given(w: &Worker, s: SymId) -> bool {
+    let i = w.syms.sym(s);
+    i.kind == SymKind::Given || i.mods & (mods::GIVEN | mods::IMPLICIT) != 0
+}
+
 pub fn export_target(w: &Worker, scope: &ExportScope, n: Name) -> Option<(Option<ClassId>, SymId)> {
     let r = scope.terms.get(&n)?;
     let sym = r.sym()?;

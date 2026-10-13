@@ -232,7 +232,7 @@ impl<'a> Worker<'a> {
                         // The type of the name and the term (dotty's `addForwardersNamed` looks up
                         // `name` and `name.toTypeName`), in error only when neither is forwarded.
                         let typed = self.forward_type(c, &vp, n, alias, at);
-                        if let Err(why) = self.forward_member(c, &vp, n, alias, at, &mut targets) {
+                        if let Err(why) = self.forward_member(c, &vp, n, alias, at, &mut targets, None) {
                             if typed {
                                 targets.push(alias);
                                 continue;
@@ -250,7 +250,7 @@ impl<'a> Worker<'a> {
                         let at = self.selector_span(c, imp, None);
                         for n in self.forwardable_names(&vp, false) {
                             if !named.contains(&n) {
-                                let _ = self.forward_member(c, &vp, n, n, at, &mut targets);
+                                let _ = self.forward_member(c, &vp, n, n, at, &mut targets, Some(false));
                             }
                         }
                         for n in self.forwardable_type_names(&vp) {
@@ -263,7 +263,7 @@ impl<'a> Worker<'a> {
                         let at = self.selector_span(c, imp, None);
                         for n in self.forwardable_names(&vp, true) {
                             if !named.contains(&n) {
-                                let _ = self.forward_member(c, &vp, n, n, at, &mut targets);
+                                let _ = self.forward_member(c, &vp, n, n, at, &mut targets, Some(true));
                             }
                         }
                     }
@@ -520,10 +520,13 @@ impl<'a> Worker<'a> {
     /// already from the member's own owner, no second target of one name in the clause. A name the
     /// class defines itself takes the forwarders as further alternatives, which the check of
     /// double definitions tells apart by their erasure. Whether any was made.
-    fn forward_member(&mut self, c: ClassId, vp: &Arc<ValuePath>, name: Name, alias: Name, span: Span, targets: &mut Vec<Name>) -> Result<(), Option<String>> {
+    /// `givens`: a wildcard's filter of the alternatives, the given ones for a given selector and
+    /// the others for `*` (dotty's `addWildcardForwarders`: a given member forwarded alone, the
+    /// others through `memberBasedOnFlags(excluded = Given)`); a named selector forwards them all.
+    fn forward_member(&mut self, c: ClassId, vp: &Arc<ValuePath>, name: Name, alias: Name, span: Span, targets: &mut Vec<Name>, givens: Option<bool>) -> Result<(), Option<String>> {
         let q = self.widen_path(vp.path);
         let Some((found, _)) = self.find_member(q, name) else { return Err(None) };
-        if targets.contains(&alias) {
+        if givens.is_none() && targets.contains(&alias) {
             return Err(Some("clashes with another export in the same export clause".to_string()));
         }
         let path_class = self.class_of(q);
@@ -540,6 +543,9 @@ impl<'a> Worker<'a> {
                 (info.mods, info.name, info.kind, info.owner)
             };
             if m_name == crate::names::INIT || matches!(m_kind, SymKind::Object(_)) {
+                continue;
+            }
+            if givens.is_some_and(|g| g != (m_mods & mods::GIVEN != 0 || m_kind == SymKind::Given)) {
                 continue;
             }
             let Owner::Class(owner) = m_owner else { continue };

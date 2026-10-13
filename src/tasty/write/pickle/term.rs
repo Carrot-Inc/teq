@@ -2889,7 +2889,9 @@ impl<'w, 'a> P<'w, 'a> {
                             mirrored = Some(ty);
                         }
                     }
-                    t = parent;
+                    // `ProductOf[A] { type MirroredElemTypes = Elems }` refines the alias, whose own
+                    // refinement names the mirrored type (`fromProductTyped`'s using clause).
+                    t = self.w.deref_alias(parent);
                 }
                 Type::Class(k, _) => break k,
                 _ => return None,
@@ -4692,6 +4694,10 @@ impl<'w, 'a> P<'w, 'a> {
         if info.mods & mods::TRANSPARENT != 0 {
             flags.push(TRANSPARENT);
         }
+        // A local `inline given` (`Parsers.givenDef`'s `DefDef`).
+        if info.mods & mods::GIVEN != 0 {
+            flags.push(GIVEN);
+        }
         self.write_flags(&flags);
         self.buf.end_length(l);
     }
@@ -5896,6 +5902,25 @@ impl<'w, 'a> P<'w, 'a> {
     pub(super) fn inline_origin(&mut self, m: SymId) {
         let mut owner = self.w.syms.sym(m).owner;
         let mut top: Option<ClassId> = None;
+        // A local inline method's is the top-level class of the body defining it, the one written
+        // (`Symbol.topLevelClass`, `Inlines.inlineCallTrace`): an inline method's body defines none.
+        if owner == Owner::Local {
+            top = self.enclosing.first().copied();
+            if top.is_none() {
+                let Some((class_at, pk)) = self.package_members_this else { return self.fail("a local inline method outside a class or a file's definitions".to_string()) };
+                let file = self.w.syms.sym(m).file;
+                let stem = super::super::file_stem(&self.w.files.as_slice()[file.0 as usize].path);
+                let n = self.names.object_class(&format!("{}$package", stem));
+                self.term_at(None);
+                self.buf.byte(IDENTTPT);
+                self.buf.nat(n as u64);
+                self.placed = true;
+                self.buf.byte(TYPEREFSYMBOL);
+                self.buf.reference(class_at);
+                self.package_ref(pk);
+                return;
+            }
+        }
         while let Owner::Class(c) = owner {
             top = Some(c);
             owner = self.w.syms.class(c).owner;

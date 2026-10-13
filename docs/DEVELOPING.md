@@ -138,8 +138,8 @@ it holds gigabytes. The other diagnostics are `TEQ_*` environment variables, eac
 read (`git grep -n 'TEQ_[A-Z_]*'`).
 
 The scala3 harnesses (`tests/scala3/`, `tests/scala3-typing/`) run the Scala 3 compiler's own tests
-from a checkout in `$SCALA3` (by default `teq-ref/scala3` beside the main checkout) and skip without
-one; each directory has a README. The checkout is at scala3's `main`, not the 3.8.4 tag, so a test
+from a checkout in `$SCALA3` (by default `teq-ref/scala3` beside the main checkout, a linked worktree's
+found through the git common directory) and fail without one, or when a suite they run finds no test; each directory has a README. The checkout is at scala3's `main`, not the 3.8.4 tag, so a test
 `main` added is no difference from scalac 3.8.4. Running the output needs node (`Long` is a `BigInt`) and Java 21 or
 later for the JVM target (the runtime calls `MatchResult.group(String)`).
 

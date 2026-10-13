@@ -381,6 +381,7 @@ impl<'a> Worker<'a> {
                     self.path_seen_through(t)
                 }
                 Type::Match(..) | Type::Alias(..) => self.reduced_seen_through(t),
+                Type::Nested(_, inner) if self.is_static_opaque(inner) => Some(inner),
                 _ => None,
             };
             let Some(u) = next else { break };
@@ -557,6 +558,13 @@ impl<'a> Worker<'a> {
         ok
     }
 
+    /// `is_static_opaque` out of `is_sub`'s line, which a nested type alone reaches.
+    #[cold]
+    #[inline(never)]
+    fn nested_static_opaque(&self, inner: TypeId) -> bool {
+        self.is_static_opaque(inner)
+    }
+
     pub fn is_sub(&mut self, a: TypeId, b: TypeId) -> bool {
         let a = self.deref(a);
         let b = self.deref(b);
@@ -630,6 +638,12 @@ impl<'a> Worker<'a> {
             return holds;
         }
         match (ta, tb) {
+            // An external reference to an opaque type (`A.T`, `external_opaque_inner`) is compared
+            // as `A.this.T` where `T`'s definition is visible and as `T` elsewhere, as dotty's
+            // `TypeComparer.liftToThis` lifts it; only its implicit scope tells the two apart, so
+            // a variable's bound keeps it.
+            (Type::Nested(_, inner), _) if !matches!(tb, Type::Var(_) | Type::AppVar(..)) && self.nested_static_opaque(inner) => return self.is_sub(inner, b),
+            (_, Type::Nested(_, inner)) if !matches!(ta, Type::Var(_) | Type::AppVar(..)) && self.nested_static_opaque(inner) => return self.is_sub(a, inner),
             // A failed argument leaves no variable to solve to `Nothing` and report on again.
             (Type::Error, Type::Var(v)) | (Type::Var(v), Type::Error) => {
                 self.instantiate(v, ERROR);
@@ -2226,13 +2240,17 @@ impl<'a> Worker<'a> {
                 return Some(wa);
             }
         }
+        // The second dropped where it is below the first, then the first where it is below the
+        // second, as dotty's `mergedLub` drops or-factors (`dropIfSub(tp2, tp1)` first): of two
+        // types each below the other the first stays, a variable's lower bound the one it had
+        // (`A.T` before `A.this.T`, `ConstraintHandling.addOneBound`'s `lo | bound`).
         let mark = self.snapshot();
-        if self.is_sub(a, b) {
-            return Some(b);
-        }
-        self.rollback(mark);
         if self.is_sub(b, a) {
             return Some(a);
+        }
+        self.rollback(mark);
+        if self.is_sub(a, b) {
+            return Some(b);
         }
         self.rollback(mark);
         let ca = self.class_of(a)?;

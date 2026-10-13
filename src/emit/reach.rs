@@ -2122,9 +2122,10 @@ impl Walker {
         if !matches!(info.kind, SymKind::Def | SymKind::Given) && !abstract_var {
             return;
         }
-        // A private constructor parameter is read as itself: no definition of the name above
-        // or below answers for it (`Month.name` next to `java.lang.Enum.name()`).
-        if info.mods & mods::PRIVATE != 0 && owner.map_or(false, |c| is_ctor_param(cx.syms, c, s)) {
+        // A private is called as itself, statically (`JSCodeGen.genApplyMethodMaybeStatically`):
+        // no definition of the name above or below answers for it (`Month.name` next to
+        // `java.lang.Enum.name()`, a trait's private next to its subtrait's).
+        if info.mods & mods::PRIVATE != 0 && (!info.scoped_private || owner.map_or(false, |c| is_ctor_param(cx.syms, c, s))) {
             self.reach_fun_of(cx, s);
             return;
         }

@@ -522,7 +522,7 @@ impl Options {
 
 /// The usage of `teq compiler`: on stderr with exit 2 for a bad command line, on stdout with
 /// exit 0 for `--help`.
-const COMPILER_USAGE: &str = "usage: teq compiler <build|check|watch> <files or directories...> [--target js|jvm] [-o out.js | --split dir [--module-per-file pkg,...] [--hot] | --check] [--release] [--no-outline] [--exclude path]... [--own root]... [--all-mains] [--products dir] [--removed source]... [--sourceroot dir] [--classpath a.jar:b.jar] [--no-cache] [--std lean|scala-library] [--java-output-version N] [--main name] [--cacheable-state a.B]... [--no-known-caches] [--macro-state ordered|per-worker] [--dialect flags] [--strict-equality] [--kind-projector] [--language features] [--werror] [--wunused kinds] [--deprecation] [--feature] [--wtostring-interpolated] [--wconf rules]... [--threads n] [--time] [--profile[=file.json]] [--size-report]\n\
+const COMPILER_USAGE: &str = "usage: teq compiler <build|check|watch> <files or directories...> [--target js|jvm] [-o out.js | --split dir [--module-per-file pkg,...] [--hot] | --check] [--release] [--no-outline] [--exclude path]... [--own root]... [--all-mains] [--products dir] [--removed source]... [--sourceroot dir] [--classpath a.jar:b.jar] [--no-cache] [--std lean|scala-library] [--java-output-version N] [--main name] [--cacheable-state a.B]... [--no-known-caches] [--macro-state ordered|per-worker] [--dialect flags] [--strict-equality] [--kind-projector] [--source version] [--language features] [--werror] [--wunused kinds] [--deprecation] [--feature] [--wtostring-interpolated] [--wconf rules]... [--threads n] [--time] [--profile[=file.json]] [--size-report]\n\
          \n\
          @<file>  stands for the file's lines, one argument per line, anywhere before a `--` (what\n\
          \x20        follows one, on the line or from a file, is the program's as written; UTF-8,\n\
@@ -616,6 +616,8 @@ const COMPILER_USAGE: &str = "usage: teq compiler <build|check|watch> <files or 
          \x20         type lambda (`Either[String, *]` for `[X] =>> Either[String, X]`)\n\
          --max-inlines  scalac's -Xmax-inlines: how deep inline calls may nest (32 by default);\n\
          \x20         a `max-inlines = n` in the teq.toml sets it for a project\n\
+         --source  scalac's -source: the source version the parser reads (3.0-migration to 3.9,\n\
+                   future), 3.8 by default\n\
          --language  scalac's -language: the comma-separated features enabled for the program\n\
          \x20         (`implicitConversions`, `strictEquality`)\n\
          --werror  fails the build on warnings\n\
@@ -990,6 +992,11 @@ fn parse_file_options(command: &str, args: &[String]) -> Options {
                 None => usage_for(command),
             },
             _ if a.starts_with("--wconf=") => o.wconf.push(a["--wconf=".len()..].to_string()),
+            // scalac's `-source`: the version the parser reads (`3.0-migration` .. `3.9`, `future`).
+            "--source" => match args.next().as_deref().and_then(parser::SourceVersion::parse) {
+                Some(v) => o.syntax.source = v,
+                None => usage_for(command),
+            },
             "--language" => match args.next() {
                 Some(features) => {
                     for f in features.split(',').map(str::trim).filter(|f| !f.is_empty()) {

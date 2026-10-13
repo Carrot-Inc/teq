@@ -11,9 +11,59 @@ use crate::names;
 use crate::source::Span;
 use crate::token::{Tok, Token};
 
+/// scalac's source version (`-source`, dotty's `SourceVersion`): `3.0-migration` to `3.9`, then
+/// `future-migration` and `future`, in dotty's order, `3.8` by default (`defaultSourceVersion`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub struct SourceVersion(u8);
+
+impl Default for SourceVersion {
+    fn default() -> Self {
+        SourceVersion::of(8, false)
+    }
+}
+
+impl SourceVersion {
+    const FUTURE_MIGRATION: u8 = 100;
+
+    /// `3.<minor>`, or its `-migration`, which comes first.
+    const fn of(minor: u8, migration: bool) -> SourceVersion {
+        SourceVersion(minor * 2 + !migration as u8)
+    }
+
+    /// The version a `-source` setting or a language import names (`3.6`, `3.0-migration`,
+    /// `future`).
+    pub fn parse(text: &str) -> Option<SourceVersion> {
+        let (base, migration) = match text.strip_suffix("-migration") {
+            Some(b) => (b, true),
+            None => (text, false),
+        };
+        if base == "future" {
+            return Some(SourceVersion(Self::FUTURE_MIGRATION + !migration as u8));
+        }
+        let minor: u8 = base.strip_prefix("3.")?.parse().ok().filter(|&m| m <= 9)?;
+        Some(SourceVersion::of(minor, migration))
+    }
+
+    /// `SourceVersion.enablesNewGivens`: the givens of 3.6's syntax (`given t: (n: Int) => C`,
+    /// a body after a colon). A migration version is compared as its stable one
+    /// (`isAtLeast` over `stable`): `3.6-migration` has them.
+    pub fn enables_new_givens(self) -> bool {
+        SourceVersion(self.0 | 1) >= SourceVersion::of(6, false)
+    }
+
+    /// `Feature.migrateTo3`: `given` and `enum` are identifiers (`Scanners.toToken`'s
+    /// `handleMigration` over `scala3keywords`).
+    pub fn migrate_to_3(self) -> bool {
+        self == SourceVersion::of(0, true)
+    }
+}
+
 /// Syntax that a scalac option turns on.
 #[derive(Clone, Copy, Default)]
 pub struct Syntax {
+    /// `-source`: the version the parser reads where an import of a version's language does not
+    /// name another (`Feature.sourceVersion`).
+    pub source: SourceVersion,
     /// `-Xkind-projector`: a `*` among the arguments of a type application stands for a
     /// parameter of a type lambda around it (`Either[String, *]`).
     pub kind_projector: bool,
@@ -31,6 +81,9 @@ pub struct Syntax {
 }
 
 pub struct Parser<'a> {
+    /// The source version where the parser stands: the setting's, or the last import of a
+    /// version's language before it (`CompilationUnit.sourceVersion`).
+    source: SourceVersion,
     /// The lexer's tokens, one of which a single-line lambda's region replaces with its end
     /// while it is parsed (`Tok::EndLambda`), restored after.
     toks: &'a mut [Token],
@@ -112,7 +165,16 @@ pub struct Parsed {
 }
 
 pub fn parse(text: &str, lexed: &mut LexResult, closed: &[u32], interner: &Interner, syntax: Syntax) -> Parsed {
+    // Under `3.0-migration` the keywords Scala 3 added are identifiers, as dotty's scanner reads
+    // them (`Scanners.toToken`, `scala3keywords`).
+    if syntax.source.migrate_to_3() {
+        for t in lexed.tokens.iter_mut().filter(|t| matches!(t.kind, Tok::KwGiven | Tok::KwEnum)) {
+            t.name = interner.intern(if t.kind == Tok::KwGiven { "given" } else { "enum" });
+            t.kind = Tok::Ident;
+        }
+    }
     let mut p = Parser {
+        source: syntax.source,
         toks: &mut lexed.tokens,
         syntax,
         pos: 0,
@@ -1181,11 +1243,16 @@ impl<'a> Parser<'a> {
                 self.ast.strict_equality = true;
             } else if matches!(out[i].sel, ImportSel::Name(names::FUTURE, r) if r != Some(names::WILDCARD)) {
                 self.ast.source_future = true;
+                self.source = SourceVersion::parse("future").unwrap_or(self.source);
             } else if matches!(out[i].sel, ImportSel::Name(names::POSTFIX_OPS, _)) {
                 self.syntax.postfix_ops = true;
             } else if let ImportSel::Name(n, _) = out[i].sel {
                 if self.interner.get(n) == "relaxedLambdaSyntax" && out[i].path.last().map_or(false, |&q| self.interner.get(q) == "experimental") {
                     self.ast.relaxed_lambdas = true;
+                } else if let Some(v) = SourceVersion::parse(self.interner.get(n)) {
+                    // `import scala.language.`3.6``: the version from here on (`Feature.sourceVersion`
+                    // of the unit, which the language import sets).
+                    self.source = v;
                 }
             }
             self.language_scratch.push(out[i].clone());

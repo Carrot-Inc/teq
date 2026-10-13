@@ -296,6 +296,65 @@ impl<'a> Worker<'a> {
         })
     }
 
+    /// The element types and labels the target fixes, checked against the mirror's as dotty's
+    /// `Synthesizer.checkRefinement` checks them: the target's member of the name, an alias or
+    /// bounds, contains the mirror's (`Elems` of `fromProductTyped`'s using clause solved by it);
+    /// where it does not, the error is reported, and the mirror is the search's all the same.
+    /// Whether an error was reported.
+    pub fn check_mirror_refinements(&mut self, target: TypeId, mirror: TypeId, span: Span) -> bool {
+        let names = self.mirror_names();
+        let target = self.deref(target);
+        let wanted = self.refinements_through_aliases(target);
+        let mirror = self.deref(mirror);
+        let (_, own) = self.types.refinements_of(mirror);
+        let mut reported = false;
+        for name in [names.elem_types, names.elem_labels] {
+            let Some(expected) = own.iter().find_map(|&r| match self.types.refinement(r) {
+                Refinement::Alias(n, t) if n == name => Some(t),
+                _ => None,
+            }) else {
+                continue;
+            };
+            // The member as `findMember` meets the refinements of the name, the alias's under
+            // them first: an alias where one fixes it, else the bounds' union and intersection.
+            let mut alias = None;
+            let (mut lo, mut hi) = (NOTHING, ANY);
+            for &r in wanted.iter().rev() {
+                match self.types.refinement(r) {
+                    Refinement::Alias(n, t) if n == name => alias = Some(t),
+                    Refinement::Bounds(n, l, h) if n == name => {
+                        if l != NOTHING {
+                            lo = if lo == NOTHING { l } else { self.types.union(lo, l) };
+                        }
+                        if h != ANY {
+                            hi = if hi == ANY { h } else { self.types.inter(hi, h) };
+                        }
+                    }
+                    _ => {}
+                }
+            }
+            if alias.is_none() && lo == NOTHING && hi == ANY {
+                continue;
+            }
+            let (lo, hi) = alias.map_or((lo, hi), |t| (t, t));
+            let mark = self.snapshot();
+            if self.is_sub(lo, expected) && self.is_sub(expected, hi) {
+                continue;
+            }
+            self.rollback(mark);
+            let found = match alias {
+                Some(t) => format!(" = {}", self.show(t)),
+                None if lo == NOTHING => format!(" <: {}", self.show(hi)),
+                None => format!(" >: {} <: {}", self.show(lo), self.show(hi)),
+            };
+            let msg = format!("{} mismatch, expected: {}, found: {}.", self.name_str(name), self.show(expected), found);
+            // Where the search's argument stands, the end of what is applied (`tree.span.endPos`).
+            self.error(Span::new(span.end, span.end), msg);
+            reported = true;
+        }
+        reported
+    }
+
     pub fn scala_mirror_given(&mut self, class: ClassId, target: TypeId) -> Option<(TExprId, TypeId)> {
         let sm = self.derive.scala?;
         let wants = if class == sm.mirror {
@@ -308,13 +367,15 @@ impl<'a> Worker<'a> {
             return None;
         };
         let names = self.mirror_names();
-        let target = self.solve_bounded_in(target);
+        // The mirrored type solved, the target's other variables left to the refinements' check
+        // (`fromProductTyped`'s `Elems`, which `checkRefinement`'s `contains` constrains).
+        let target = self.zonk(target);
         let rs = self.refinements_through_aliases(target);
         let mirrored = rs.iter().find_map(|&r| match self.types.refinement(r) {
             Refinement::Alias(n, t) if n == names.mirrored => Some(t),
             _ => None,
         })?;
-        let mirrored = self.zonk(mirrored);
+        let mirrored = self.solve_bounded_in(mirrored);
         let mirrored = self.normalize(mirrored);
         if mirrored == ERROR || self.types.has_vars(mirrored) {
             return None;

@@ -1055,7 +1055,7 @@ impl<'a> Parser<'a> {
         let alias = Some(self.ast.add_expr(Expr::Derived, span));
         let name = format!("derived${}", self.interner.get(tc_name));
         let name = self.interner.intern(&name);
-        let given = GivenDef { tparams, clauses: Vec::new(), ty, alias, body: Vec::new(), self_alias: names::EMPTY };
+        let given = GivenDef { tparams, clauses: Vec::new(), ty, alias, parents: Vec::new(), body: Vec::new(), self_alias: names::EMPTY };
         // Lazy as in scalac, so that the instance may depend on givens defined after it.
         self.ast.add_def(Def { name, span, mods: mods::LAZY, annots: Vec::new(), kind: DefKind::Given(Box::new(given)) })
     }
@@ -1443,6 +1443,11 @@ impl<'a> Parser<'a> {
         let has_signature = named.is_some()
             || (matches!(self.kind(), Tok::LBracket | Tok::LParen)
                 && self.signature_followed_by_colon());
+        // dotty's `hasEmbeddedColon`: parameters before the colon, the syntax before 3.6, which
+        // turns 3.6's off for this given; and the source version's own rule (`newSyntaxAllowed`,
+        // `SourceVersion.enablesNewGivens`).
+        let old_syntax = if named.is_some() { matches!(self.kind(), Tok::LBracket | Tok::LParen) } else { has_signature };
+        let new_syntax = self.source.enables_new_givens() && !old_syntax;
         let mut tparams = Vec::new();
         let mut clauses = Vec::new();
         let mut region = None;
@@ -1481,9 +1486,39 @@ impl<'a> Parser<'a> {
                 }
             }
         }
-        let ty_start = self.span();
+        let mut ty_start = self.span();
         self.template_type = true;
-        let ty = self.parse_type();
+        let ty = if has_signature {
+            self.parse_type()
+        } else {
+            // dotty's `newTermParamssAndParents`: a type the parent position holds that `=>`
+            // follows is a using clause of that one parameter (`given I[B] => J[B]`, `x$N` as
+            // `typesToParams` names it), and so is a parameter group; the parent is what follows
+            // the last arrow, a type of no arrow at its top (`implemented`).
+            loop {
+                if self.at(Tok::LParen) && arrow_signature(self, 0) {
+                    let lead = clauses.iter().map(|c: &ParamClause| c.params.len()).sum();
+                    let mark = clauses.len();
+                    clauses.extend(self.parse_param_clauses(None, lead));
+                    for c in &mut clauses[mark..] {
+                        c.is_using = true;
+                    }
+                    self.expect(Tok::Arrow);
+                    ty_start = self.span();
+                    continue;
+                }
+                let t = if self.at(Tok::LBracket) || self.at(Tok::Arrow) { self.parse_type() } else { self.parse_union_type() };
+                if !self.at(Tok::Arrow) {
+                    break t;
+                }
+                let span = ty_start.to(self.prev_span());
+                self.bump();
+                let n = clauses.iter().map(|c: &ParamClause| c.params.len()).sum::<usize>() + 1;
+                let name = self.interner.intern(&format!("x${}", n));
+                clauses.push(ParamClause { params: vec![Param { name, span, ty: t, default: None, mods: 0, annots: ListRef::EMPTY }], is_using: true, is_implicit: false });
+                ty_start = self.span();
+            }
+        };
         self.template_type = false;
         let ty_span = ty_start.to(self.prev_span());
         let (name, span) = match named {
@@ -1493,6 +1528,7 @@ impl<'a> Parser<'a> {
         };
         let m = if self.error_events == mark { m } else { m | mods::INCOMPLETE };
         let mut alias = None;
+        let mut parents: Vec<Parent> = Vec::new();
         let mut body = Vec::new();
         let mut self_alias = names::EMPTY;
         // `given x: T` with nothing after the type is an old-style abstract given, an abstract
@@ -1505,24 +1541,84 @@ impl<'a> Parser<'a> {
         if abstract_decl {
             // Nothing follows the type.
         } else if self.at(Tok::LParen) {
-            // `given C(args)` is an instance of the class `C`, an anonymous one when a body follows.
+            // `given C(args)` is a structural instance whose parent is the constructor call, with
+            // or without a body (dotty's `Parsers.givenDef`, 4610-4623: a template over
+            // `constrApps`, a `ModuleDef` where the given has no parameters, a class beside a
+            // def where it has): the given's class of its own extends `C`, which may be a trait
+            // (`given QC()`), and the others the clause names.
             let mut args = Vec::new();
             while self.at(Tok::LParen) {
                 args.push(self.parse_args());
             }
-            let has_body = self.at(Tok::ColonEol) && self.kind_at(1) == Tok::Indent;
-            alias = Some(if has_body || self.at(Tok::KwWith) {
-                self.parse_anon_class(ty, args, ty_start)
+            parents.push(Parent { ty, args });
+            // More parents after a comma under 3.6's syntax, after `with` otherwise
+            // (`moreConstrApps`).
+            while new_syntax && self.eat(Tok::Comma) {
+                self.template_type = true;
+                let pty = self.parse_simple_type();
+                self.template_type = false;
+                let mut pargs = Vec::new();
+                while self.at(Tok::LParen) {
+                    pargs.push(self.parse_args());
+                }
+                parents.push(Parent { ty: pty, args: pargs });
+            }
+            while self.at(Tok::KwWith) && !matches!(self.kind_at(1), Tok::LBrace | Tok::Indent | Tok::Newline) {
+                self.bump();
+                self.template_type = true;
+                let pty = self.parse_simple_type();
+                self.template_type = false;
+                let mut pargs = Vec::new();
+                while self.at(Tok::LParen) {
+                    pargs.push(self.parse_args());
+                }
+                parents.push(Parent { ty: pty, args: pargs });
+            }
+            // The body after `with` where 3.6's syntax is off or the given has no parameters,
+            // after a colon or in braces otherwise (`Parsers.givenDef`'s `withTemplate` and
+            // `templateBodyOpt`).
+            let with_template = !new_syntax || (self.at(Tok::KwWith) && tparams.is_empty() && clauses.is_empty());
+            if with_template && !self.given_ends_here() {
+                if !self.eat(Tok::KwWith) {
+                    let msg = if self.at(Tok::ColonEol) { "'with' expected, but ':' found" } else { "'with' expected" };
+                    self.error_at(self.span(), msg);
+                } else if self.eat(Tok::Indent) {
+                    let (alias_indent, _, named) = self.parse_self_alias();
+                    self_alias = named;
+                    body = self.parse_given_body();
+                    if alias_indent {
+                        self.eat(Tok::Outdent);
+                    }
+                } else if self.at(Tok::LBrace) {
+                    let (stmts, exports, _, named) = self.parse_template_body(false);
+                    body = stmts;
+                    self_alias = named;
+                    if !exports.is_empty() {
+                        self.error_at(ty_start, "export clauses are not supported in a given");
+                    }
+                }
+            } else if self.at(Tok::KwWith) {
+                self.error_at(self.span(), "end of statement expected but 'with' found");
             } else {
-                let args = args.first().map_or(ListRef::EMPTY, |&(l, _)| l);
-                self.ast.add_expr(Expr::New(ty, args), ty_start.to(self.prev_span()))
-            });
+                let (stmts, exports, _, named) = self.parse_template_body(false);
+                body = stmts;
+                self_alias = named;
+                if !exports.is_empty() {
+                    self.error_at(ty_start, "export clauses are not supported in a given");
+                }
+            }
         } else if {
             self.annotation_before_eq(region);
             self.eat(Tok::Eq)
         } {
             alias = Some(self.parse_rhs(region));
-        } else if self.eat(Tok::KwWith) {
+        } else if self.at(Tok::KwWith) {
+            // `with` opens the body where 3.6's syntax is off or the given has no parameters
+            // (`Parsers.givenDef`'s `withTemplate`).
+            if new_syntax && !(tparams.is_empty() && clauses.is_empty()) {
+                self.error_at(self.span(), "end of statement expected but 'with' found");
+            }
+            self.bump();
             if self.eat(Tok::Indent) {
                 let (alias_indent, _, named) = self.parse_self_alias();
                 self_alias = named;
@@ -1532,6 +1628,10 @@ impl<'a> Parser<'a> {
                 }
             }
         } else if self.at(Tok::ColonEol) {
+            // A body after a colon is 3.6's syntax (`possibleTemplateStart`).
+            if !new_syntax {
+                self.error_at(self.span(), "'with' expected, but ':' found");
+            }
             let exports_at = self.span();
             let (stmts, exports, _, named) = self.parse_template_body(false);
             body = stmts;
@@ -1545,9 +1645,14 @@ impl<'a> Parser<'a> {
             let fun = FunDef { tparams, clauses, ret: Some(ty), body: None, ext_tparams: 0, ext_clauses: 0, is_extension: false, ext_group: 0 };
             return self.ast.add_def(Def { name, span, mods: m | mods::GIVEN, annots, kind: DefKind::Fun(Box::new(fun)) });
         }
-        let given = GivenDef { tparams, clauses, ty, alias, body, self_alias };
+        let given = GivenDef { tparams, clauses, ty, alias, parents, body, self_alias };
         let m = if named.is_none() { m | mods::ANONYMOUS } else { m };
         self.ast.add_def(Def { name, span, mods: m, annots, kind: DefKind::Given(Box::new(given)) })
+    }
+
+    /// Whether nothing of the given follows: a statement's end.
+    fn given_ends_here(&self) -> bool {
+        matches!(self.kind(), Tok::Newline | Tok::Semi | Tok::Outdent | Tok::RBrace | Tok::Eof)
     }
 
     fn parse_given_body(&mut self) -> Vec<Stmt> {

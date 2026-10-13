@@ -664,9 +664,11 @@ impl<'a> Worker<'a> {
         let inferring = self.inferring_depth != 0 && self.body_depth == self.inferring_depth;
         let open = self.attempts.open != 0 || (at == PlainExpansion::Item && !self.var_frames.is_empty()) || inferring;
         // A local inline method's call keeps its expansion here: what it checks at the call (a
-        // forward reference, scalac's E039 of the typer) is the typer's.
-        open && self.syms.sym(sym).mods & crate::ast::mods::TRANSPARENT == 0
-            && self.syms.sym(sym).owner != crate::symbols::Owner::Local
+        // forward reference, scalac's E039 of the typer) is the typer's. A local inline given is
+        // found by the search, as a member's is, and expanded as the member's.
+        let info = self.syms.sym(sym);
+        open && info.mods & crate::ast::mods::TRANSPARENT == 0
+            && (info.owner != crate::symbols::Owner::Local || info.mods & crate::ast::mods::GIVEN != 0)
             && self.intrinsic_of(sym).is_none()
     }
 

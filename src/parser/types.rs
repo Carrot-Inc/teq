@@ -291,7 +291,7 @@ impl<'a> Parser<'a> {
         id
     }
 
-    fn parse_union_type(&mut self) -> TyExprId {
+    pub(super) fn parse_union_type(&mut self) -> TyExprId {
         self.parse_infix_type(true)
     }
 

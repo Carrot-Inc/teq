@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Runs the executable tests of a scala/scala3 checkout (tests/run) through teq.
 
-The checkout is taken from $SCALA3 (default ../teq-ref/scala3); its test
+The checkout is taken from $SCALA3 (default teq-ref/scala3 beside the main working tree); its test
 sources stay where they are. Every single-file test and every directory test is compiled as one
 program, run with node, and compared with its .check file (a test without one has to exit 0).
 
@@ -24,7 +24,21 @@ import time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.dirname(os.path.dirname(HERE))
-DEFAULT_SCALA3 = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "..", "teq-ref", "scala3")
+
+
+def default_scala3():
+    """`teq-ref/scala3` beside the main working tree, which a linked worktree is not in: the parent
+    of the git common directory, as tests/all.sh resolves it."""
+    try:
+        common = subprocess.run(["git", "-C", HERE, "rev-parse", "--path-format=absolute", "--git-common-dir"],
+                                capture_output=True, text=True, timeout=10).stdout.strip()
+    except (OSError, subprocess.SubprocessError):
+        common = ""
+    main = os.path.dirname(common) if common else REPO
+    return os.path.join(main, "..", "teq-ref", "scala3")
+
+
+DEFAULT_SCALA3 = os.environ.get("SCALA3") or default_scala3()
 
 # Compile errors are bucketed by the first error: its message and the source line it points at.
 # Rules are tried in order; each is (bucket, topic, regex over the message, regex over the line),
@@ -121,7 +135,7 @@ def collect_tests(root):
     return [t if len(t) == 4 else t + (False,) for t in tests]
 
 
-SCALA3_ROOT = os.path.abspath(os.environ.get("SCALA3", DEFAULT_SCALA3))
+SCALA3_ROOT = os.path.abspath(DEFAULT_SCALA3)
 
 
 def relative_paths(text):
@@ -301,15 +315,20 @@ def main():
     ap.add_argument("--suite", default="run", choices=["run", "run-macros"], help="run-macros runs the quoted-macro tests; their allow-lists are tests/scala3/macros-passing.txt and macros-interp-passing.txt")
     args = ap.parse_args()
 
-    root = os.path.join(os.environ.get("SCALA3", DEFAULT_SCALA3), "tests", args.suite)
+    root = os.path.join(DEFAULT_SCALA3, "tests", args.suite)
     prefix = "" if args.suite == "run" else "macros-"
     if not os.path.isdir(root):
-        print(f"skipping: no scala3 checkout at {root} (set SCALA3)")
-        return 0
+        print(f"no scala3 checkout at {root} (set SCALA3)", file=sys.stderr)
+        return 2
     if not os.path.exists(args.teq):
         print(f"no teq binary at {args.teq}; build it with cargo build --release", file=sys.stderr)
         return 2
     tests = collect_tests(root)
+    # A run that finds no test proves nothing: an empty or moved checkout fails rather than
+    # passing with every test skipped.
+    if not tests:
+        print(f"no tests under {root}", file=sys.stderr)
+        return 2
     if args.no_dirs:
         tests = [t for t in tests if not (len(t[1]) > 1 or os.path.dirname(t[1][0]) != root)]
     if args.only:

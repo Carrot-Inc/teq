@@ -1,6 +1,7 @@
-// expect: 11:37: error: no given instance of type ProductOf[P]{type MirroredElemTypes >: (Any, String)} was found for parameter m
+// expect: 12:37: error: MirroredElemTypes mismatch, expected: (Int, String), found:  >: (Any, String) <: Tuple.
 // expect: 1 error found
-// A mirror whose element types miss the bounds of the refinement is no given; the bounds
+// A mirror whose element types miss the bounds of the refinement is reported as scalac's
+// `Synthesizer.checkRefinement` reports it, the member met with `Mirror`'s own `<: Tuple`; the bounds
 // `Mirror` declares for its members are met by every mirror.
 import scala.deriving.Mirror
 case class P(i: Int, s: String)

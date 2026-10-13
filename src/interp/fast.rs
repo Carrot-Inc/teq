@@ -60,7 +60,7 @@ impl<'a, 't> Interp<'a, 't> {
         }
     }
 
-    #[inline]
+    #[inline(always)]
     pub(super) fn take_vec(&mut self, cap: usize) -> Vec<Value> {
         match self.vec_pool.pop() {
             Some(mut v) => {

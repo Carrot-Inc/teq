@@ -494,6 +494,10 @@ pub struct Symbols {
     /// The classes of products no conversion places, each with its source and offset
     /// (`Loaded::product_class_places`).
     pub product_class_places: crate::intern::FxMap<ClassId, (u32, u32)>,
+    /// Per source file of top-level opaque types, the term standing for its `<file>$package`
+    /// object, the prefix of their external references (dotty's `TermRef(p, F$package)`), which
+    /// no package entry holds.
+    pub opaque_holders: crate::intern::FxMap<FileId, SymId>,
     /// The completion cells of the classes, symbols and aliases, and the body cells of the
     /// symbols, outside the records (`Cells`).
     pub class_cells: Cells,
@@ -690,6 +694,7 @@ impl Symbols {
             product_callee_sources: Default::default(),
             product_synthetics: Default::default(),
             product_class_places: Default::default(),
+            opaque_holders: Default::default(),
             class_cells: Cells::recycled(),
             sym_cells: Cells::recycled(),
             body_cells: Cells::recycled(),
@@ -722,6 +727,7 @@ impl Symbols {
             product_callee_sources: Default::default(),
             product_synthetics: Default::default(),
             product_class_places: Default::default(),
+            opaque_holders: self.opaque_holders.clone(),
             class_cells: self.class_cells.attach(worker),
             sym_cells: self.sym_cells.attach(worker),
             body_cells: self.body_cells.attach(worker),
@@ -1116,6 +1122,36 @@ impl Symbols {
         }
     }
 
+    /// The given whose one instance the class `c` is where that instance is a static module:
+    /// a given object (no parameters, a class of its own) of a package or of objects, which dotty
+    /// classifies as static (`LazyVals` 74-105) and makes as a module, published before its body
+    /// runs (`MODULE$` on the JVM, the module's instance on JavaScript). One of a class or trait
+    /// instance or of a block keeps the lazy semantics of its owner.
+    pub fn static_given_object(&self, c: ClassId) -> Option<SymId> {
+        let info = self.class(c);
+        if info.kind != ClassKind::GivenImpl {
+            return None;
+        }
+        let mut at = info.owner;
+        let given = match info.owner {
+            Owner::Package(p) => self.pkg(p).entries.get(&info.name).and_then(|e| e.term),
+            Owner::Class(o) => self.class(o).members.get(&info.name).copied(),
+            Owner::Local => None,
+        }?;
+        while let Owner::Class(o) = at {
+            if self.class(o).kind != ClassKind::Object {
+                return None;
+            }
+            at = self.class(o).owner;
+        }
+        if at == Owner::Local {
+            return None;
+        }
+        let g = self.sym(given);
+        let parameterless = g.sig.as_ref().map_or(false, |s| s.tparams.is_empty() && s.clauses.is_empty());
+        (g.kind == SymKind::Given && g.impl_class == Some(c) && parameterless).then_some(given)
+    }
+
     /// The alternatives `s` stands for when it is the entry of an overloaded name.
     #[inline]
     pub fn alternatives(&self, s: SymId) -> Option<&[SymId]> {
@@ -1207,9 +1243,14 @@ impl Symbols {
 
     /// Whether a private member `name` of `c` would share its run-time name with a member of a
     /// class or trait above `c` or of a class below it: all of them belong to the one instance,
-    /// so a backend names such a member apart.
+    /// so a backend names such a member apart. A trait's private is named apart always: the
+    /// classes mixing it in, and the traits beside it there, are no list kept (scalac's
+    /// `makeNotPrivate` names a trait's private it opens by its trait, `S$$h`).
     pub fn private_name_clashes(&self, c: ClassId, name: Name) -> bool {
         let info = self.class(c);
+        if info.kind == ClassKind::Trait {
+            return true;
+        }
         if info.base_types.len() <= 1 && info.subclasses.is_empty() {
             return false;
         }

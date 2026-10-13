@@ -2748,9 +2748,15 @@ impl<'a> Worker<'a> {
     fn join_value_and_method(&mut self, c: ClassId, sym: SymId) -> bool {
         let name = self.syms.sym(sym).name;
         let Some(&old) = self.syms.class(c).members.get(&name) else { return false };
-        let is_value = |t: &Self, s: SymId| matches!(t.syms.sym(s).kind, SymKind::Val | SymKind::Var);
+        // A given without parameters is a (lazy) val, the implementation of a deferred given
+        // beside a method of its name included.
+        let is_value = |t: &mut Self, s: SymId| match t.syms.sym(s).kind {
+            SymKind::Val | SymKind::Var => true,
+            SymKind::Given => t.loaded_sig(s).is_some_and(|sig| sig.tparams.is_empty() && sig.clauses.is_empty()),
+            _ => false,
+        };
         let is_method = |t: &Self, s: SymId| matches!(t.syms.sym(s).kind, SymKind::Def | SymKind::Overloaded(_));
-        if !((is_value(self, old) && is_method(self, sym)) || (is_method(self, old) && is_value(self, sym))) {
+        if !((is_method(self, sym) && is_value(self, old)) || (is_method(self, old) && is_value(self, sym))) {
             return false;
         }
         if let SymKind::Overloaded(i) = self.syms.sym(old).kind {
@@ -2821,14 +2827,14 @@ impl<'a> Worker<'a> {
             }
         }
         let mut tparams: Vec<TParamId> = Vec::new();
-        let mut pending_bounds: Vec<(TParamId, TType)> = Vec::new();
+        let mut pending_bounds: Vec<(usize, TParamId, TType)> = Vec::new();
         // A secondary constructor is pickled with a copy of the class's type parameters, which
         // it means: its parameters and body are typed under the class's.
         let class_tparams: Vec<TParamId> = match self.syms.sym(sym).owner {
             Owner::Class(c) if self.syms.sym(sym).name == names::INIT => self.syms.class(c).tparams.to_vec(),
             _ => Vec::new(),
         };
-        for clause in &clauses {
+        for (ci, clause) in clauses.iter().enumerate() {
             if let Clause::Types(ps) = clause {
                 for (i, tp) in ps.iter().enumerate() {
                     if let Some(&own) = class_tparams.get(i) {
@@ -2840,18 +2846,22 @@ impl<'a> Worker<'a> {
                     self.syms.tparams[id.idx()].arity = types::hk_arity(&tp.info);
                     self.loaded_mut().tables[ls.file as usize].tparams.insert(tp.addr, id);
                     tparams.push(id);
-                    pending_bounds.push((id, tp.info.clone()));
+                    pending_bounds.push((ci, id, tp.info.clone()));
                 }
             }
-        }
-        for (id, info) in pending_bounds {
-            self.set_tparam_bounds(&mut cx, id, &info);
         }
         if !class_tparams.is_empty() {
             tparams = class_tparams.clone();
         }
+        // A clause of type parameters is bounded where it stands, after the term clauses before
+        // it, whose parameters its bounds may name (an extension's `[Elems <:
+        // p.MirroredElemTypes]` after its receiver `p`, `Mirror.fromProductTyped`).
+        let mut bounds = pending_bounds.into_iter().peekable();
         let mut out = Vec::with_capacity(clauses.len());
-        for clause in &clauses {
+        for (ci, clause) in clauses.iter().enumerate() {
+            while let Some((_, id, info)) = bounds.next_if(|&(c, _, _)| c <= ci) {
+                self.set_tparam_bounds(&mut cx, id, &info);
+            }
             let Clause::Terms(ps) = clause else { continue };
             let is_using = is_using_clause(ps);
             let mut cs = ClauseSig { params: Vec::with_capacity(ps.len()), is_using, is_implicit: is_implicit_clause(ps) };
@@ -2905,10 +2915,12 @@ impl<'a> Worker<'a> {
                 ret
             }
         };
-        // A given class's def of another module's products as teq types the program's (the
-        // namer's `DefKind::Given`): its result is the type the given was declared with, the
-        // class's last parent, of the def's type parameters, where the pickle's is the class.
-        let ret = match self.syms.sym(sym).impl_class.filter(|_| product && self.syms.sym(sym).kind == SymKind::Given) {
+        // A given object of another module's products as teq types the program's (the namer's
+        // `DefKind::Given`): its result is the type the given was declared with, the class's last
+        // parent, where the pickle's is the module class. A given class's def answers the class,
+        // as the pickle has it (`Desugar.classDef`'s wrapper `def t(using ..): t`).
+        let given_object = tparams.is_empty() && out.iter().all(|c| c.params.is_empty());
+        let ret = match self.syms.sym(sym).impl_class.filter(|_| product && given_object && self.syms.sym(sym).kind == SymKind::Given) {
             Some(k) => self.given_class_declared(k, &tparams).unwrap_or(ret),
             None => ret,
         };

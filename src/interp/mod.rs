@@ -153,6 +153,19 @@ impl From<Failure> for Control {
     }
 }
 
+/// The native stack the interpreter's recursion may take, measured from where it started: the
+/// threads it runs on have a gigabyte (`main.rs`, `typer::thread`), so a program recursing without
+/// end gets its `StackOverflowError` whatever a frame of the build takes, as the JVM's bounded
+/// stack gives it, before the thread's stack runs out.
+pub(crate) const STACK_BUDGET: usize = 640 << 20;
+
+/// An address on the current thread's stack.
+#[inline(always)]
+pub(crate) fn stack_address() -> usize {
+    let marker = 0u8;
+    std::hint::black_box(&marker) as *const u8 as usize
+}
+
 pub struct Limits {
     pub steps: u64,
     pub depth: u32,
@@ -1241,6 +1254,15 @@ pub struct Interp<'a, 't> {
     /// whether one stopped the run.
     withheld_seen: u32,
     halted: bool,
+    /// The address of the stack where the interpreter started, against which `enter` measures
+    /// the native stack its recursion takes (`STACK_BUDGET`).
+    stack_base: usize,
+    /// Whether the `StackOverflowError` the budget threw is being made.
+    throwing_overflow: bool,
+    /// The modules being made whose superclass constructors have not returned: a read of one
+    /// is `null`, as `MODULE$` is on the JVM until the super call returns (`BCodeSkelBuilder`),
+    /// rather than a second instance made in a recursion.
+    unpublished: Vec<(ClassId, Rc<Object>)>,
     depth: u32,
     max_depth: u32,
     next_key: u64,
@@ -1380,6 +1402,9 @@ impl<'a, 't> Interp<'a, 't> {
             reserve: 0,
             withheld_seen,
             halted: false,
+            unpublished: Vec::new(),
+            stack_base: stack_address(),
+            throwing_overflow: false,
             depth: 0,
             max_depth: limits.depth,
             next_key: 1,

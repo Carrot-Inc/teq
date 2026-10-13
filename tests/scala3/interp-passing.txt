@@ -94,6 +94,7 @@ functionXXL
 genericTupleMembers
 gestalt-optional-inline
 getClassTest-valueClass
+given-eta
 given-triangle
 given-var
 groupby
@@ -116,6 +117,7 @@ i11008
 i11045
 i1140
 i1144
+i11542
 i11542a
 i11563
 i11676
@@ -364,6 +366,7 @@ i806
 i8064
 i8096
 i8314
+i8396
 i8398
 i8662
 i8726
@@ -470,6 +473,7 @@ sticky-extmethod
 streamWithFilter
 string-switch-defaults-null
 stringbuilder-drop
+structural-contextual
 summonAll
 supercalls-traits
 supercalls-traits-targetname

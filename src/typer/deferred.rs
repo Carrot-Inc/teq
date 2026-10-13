@@ -13,10 +13,12 @@
 //! added (`parent_args_of`, `deferred_impl_of`): neither the class's members nor the givens it
 //! inherits are candidates. A class whose superclass derives from the trait inherits the
 //! superclass's implementation; a parameterized deferred given is never implemented this way.
-//! The implementation is no member of the class's table, so that a lookup finds the trait's
-//! declaration whatever was typed first; the class's `TClass` holds it (`TClass::deferred_givens`)
-//! for the backends and the pickle, and the override checks find it from the classes' structure
-//! (`deferred_implemented_above`).
+//! The implementation is a declaration of the class (dotty's `dcl.copy(..).entered`, 3420-3423),
+//! entered when the class completes, before any lookup of its members, so that `c.x`, a method of
+//! its name with other parameters beside it and reflection's declarations see it whatever is
+//! typed first; its initialiser, the search, is the body check's. The class's `TClass` maps it
+//! to its declaration (`TClass::deferred_givens`) for the backends and the pickle, and the
+//! override checks find it from the classes' structure (`deferred_implemented_above`).
 
 use super::*;
 use crate::ast::{self, mods, DefKind};
@@ -60,6 +62,114 @@ impl<'a> Worker<'a> {
         self.static_ref(e).and_then(|r| r.sym()).is_some_and(|s| self.intrinsic_of(s) == Some(super::inline::Intrinsic::Deferred))
     }
 
+    /// Whether `s` is the implementation a program class was given for a deferred given
+    /// (`enter_deferred_implementations`): a given of the class without a definition.
+    pub(super) fn is_deferred_implementation(&self, s: SymId) -> bool {
+        let info = self.syms.sym(s);
+        info.kind == SymKind::Given
+            && info.def.is_none()
+            && info.mods & mods::OVERRIDE != 0
+            && matches!(info.owner, Owner::Class(c) if self.syms.class(c).def.is_some())
+    }
+
+    /// Enters the implementations of the deferred givens the program class `c` is the first to
+    /// inherit as its declarations, once its bases are known and before its members are looked
+    /// up: each a final overriding lazy given of the declaration's type as `c` sees it (dotty's
+    /// `Typer.implementDeferredGivens`, 3420-3423: `dcl.copy(cls, flags = .. | Final | Override,
+    /// info = target).entered`). A parameterized one is left to the body check's error.
+    pub(super) fn enter_deferred_implementations(&mut self, c: ClassId) {
+        let info = self.syms.class(c);
+        if info.kind == ClassKind::Trait || info.def.is_none() {
+            return;
+        }
+        if !info.base_types[1 + info.rule_prefix as usize..].iter().any(|&(b, _)| {
+            let base = self.syms.class(b);
+            base.kind == ClassKind::Trait && (!base.givens.is_empty() || self.syms.class_done(b).is_none())
+        }) {
+            return;
+        }
+        for (m, owner_ty) in self.deferred_givens_to_implement(c, None) {
+            let sig = self.sig_arc(m);
+            if !sig.tparams.is_empty() || !sig.clauses.is_empty() {
+                continue;
+            }
+            let s = self.new_deferred_implementation(c, m, owner_ty);
+            self.register_term(Owner::Class(c), s);
+            self.syms.class_mut(c).givens.push(s);
+        }
+    }
+
+    /// The deferred given the implementation `s` stands for, whose access and boundary it has
+    /// (dotty's `dcl.copy` keeps `privateWithin`): the first of its name the class's ancestors
+    /// declare. `s` itself where it is no implementation.
+    #[cold]
+    #[inline(never)]
+    pub(super) fn access_declaration_of(&self, s: SymId) -> SymId {
+        let info = self.syms.sym(s);
+        if info.kind != SymKind::Given || info.def.is_some() || !self.is_deferred_implementation(s) {
+            return s;
+        }
+        let (name, Owner::Class(c)) = (info.name, info.owner) else { return s };
+        for &(b, _) in self.syms.class(c).base_types.iter().skip(1) {
+            if let Some(&d) = self.syms.class(b).members.get(&name) {
+                let alts = match self.syms.alternatives(d) {
+                    Some(alts) => alts.to_vec(),
+                    None => vec![d],
+                };
+                if let Some(decl) = alts.into_iter().find(|&a| self.syms.sym(a).mods & mods::DEFERRED != 0) {
+                    return decl;
+                }
+            }
+        }
+        s
+    }
+
+    /// The implementation of `m` that `c`'s completion entered (`enter_deferred_implementations`).
+    fn entered_implementation(&self, c: ClassId, m: SymId) -> Option<SymId> {
+        let name = self.syms.sym(m).name;
+        let &entry = self.syms.class(c).members.get(&name)?;
+        let alts = match self.syms.alternatives(entry) {
+            Some(alts) => alts.to_vec(),
+            None => vec![entry],
+        };
+        alts.into_iter().find(|&a| self.syms.sym(a).owner == Owner::Class(c) && self.is_deferred_implementation(a))
+    }
+
+    /// The symbol of the implementation of `m` in `c`: the declaration's name, access and
+    /// boundary, as dotty's `dcl.copy` keeps them, its type the declaration's as `c` sees it.
+    fn new_deferred_implementation(&mut self, c: ClassId, m: SymId, owner_ty: TypeId) -> SymId {
+        let (name, kept, scoped_private) = {
+            let info = self.syms.sym(m);
+            // A declaration read from a pickle holds its boundary in the loader's table.
+            let loaded = (info.mods & mods::QUALIFIED != 0).then(|| self.loaded.as_ref()?.access_within.get(&m).map(|&(_, protected)| protected)).flatten();
+            let (protected, scoped) = match loaded {
+                Some(protected) => (protected, !protected),
+                None => (info.mods & mods::PROTECTED != 0, info.scoped_private),
+            };
+            let access = if protected { mods::PROTECTED } else if scoped { mods::PRIVATE } else { 0 };
+            (info.name, info.mods & mods::ANONYMOUS | access, scoped)
+        };
+        let (file, span) = {
+            let i = self.syms.class(c);
+            (i.file, i.span)
+        };
+        let target = self.deferred_target(c, m, owner_ty);
+        let s = self.syms.new_sym(name, SymKind::Given, mods::LAZY | mods::GIVEN | mods::FINAL | mods::OVERRIDE | kept, Owner::Class(c), file, None, span);
+        {
+            let mut info = self.syms.sym_mut(s);
+            info.sig = Some(Arc::new(MethodSig::value(target)));
+            info.scoped_private = scoped_private;
+            info.state().set(Completion::Done);
+        }
+        self.name_like(s, m);
+        // An implementation of a parameterless def as well (an old-style abstract given the
+        // deferred one overrides) is reached through a method, as `mark_accessors` gives a val.
+        if self.implements_parameterless_def(c, name) {
+            self.syms.sym_mut(s).needs_accessor = true;
+        }
+        s
+    }
+
     /// Implements the deferred givens `c` is the first class to inherit, into its body: each a
     /// final lazy given whose initialiser is the search, or scalac's error at the class.
     pub(super) fn implement_deferred_givens(&mut self, c: ClassId, tclass: &mut TClass) {
@@ -75,7 +185,7 @@ impl<'a> Worker<'a> {
         // What the rule reports stands at the class, once: scalac's reporter keeps one message per
         // position (`UniqueMessagePositions`), so a class missing several givens shows the first.
         let first = self.diags.items.len();
-        let todo = self.deferred_givens_to_implement(c, first);
+        let todo = self.deferred_givens_to_implement(c, Some(first));
         if todo.is_empty() {
             self.check_mixins_over_implementations(c, first);
             return;
@@ -90,9 +200,17 @@ impl<'a> Worker<'a> {
         self.with_env(env, |t| {
             let outer_args = t.parent_args_of.replace(c);
             let outer_impl = t.deferred_impl_of.replace(c);
+            // Each implementation as dotty enters it, after its own search: that one and those
+            // after it are no candidates of it.
+            let impls: Vec<SymId> = todo.iter().filter_map(|&(m, _)| t.entered_implementation(c, m)).collect();
+            let outer_unentered = std::mem::replace(&mut t.unentered_impls, impls);
             for (m, owner_ty) in todo {
                 t.outside_search(|t| t.implement_deferred_given(c, m, owner_ty, tclass, first));
+                if let Some(entered) = t.entered_implementation(c, m) {
+                    t.unentered_impls.retain(|&s| s != entered);
+                }
             }
+            t.unentered_impls = outer_unentered;
             t.deferred_impl_of = outer_impl;
             t.parent_args_of = outer_args;
         });
@@ -114,7 +232,9 @@ impl<'a> Worker<'a> {
     /// implements nor its superclass inherits (which implements them itself), each with the
     /// type of its trait as `c` sees it, by name: a trait further down redeclaring one is met
     /// first.
-    fn deferred_givens_to_implement(&mut self, c: ClassId, first: usize) -> Vec<(SymId, TypeId)> {
+    /// `first` is where the rule's reports stand, `None` for the class's completion, which
+    /// reports nothing (the body check reports).
+    fn deferred_givens_to_implement(&mut self, c: ClassId, first: Option<usize>) -> Vec<(SymId, TypeId)> {
         let superclass = self.extended_class(c);
         let bases: Vec<(ClassId, TypeId)> = self.syms.class(c).base_types.iter().skip(1).copied().collect();
         let mut out: Vec<(SymId, TypeId)> = Vec::new();
@@ -135,10 +255,9 @@ impl<'a> Worker<'a> {
                 // first met, the most derived: it has to conform to each other's, as scalac's
                 // `RefChecks` checks the member it synthesized.
                 if let Some(&(o, ot)) = out.iter().find(|&&(o, _)| self.syms.sym(o).name == name) {
-                    self.check_shared_implementation(c, (o, ot), (m, bt), first);
-                    continue;
-                }
-                if self.overloaded_beside(c, m, bt, first) {
+                    if let Some(first) = first {
+                        self.check_shared_implementation(c, (o, ot), (m, bt), first);
+                    }
                     continue;
                 }
                 out.push((m, bt));
@@ -189,7 +308,7 @@ impl<'a> Worker<'a> {
             let mut k = 0;
             while let Some(s) = self.inherited_member(b, name, false, k) {
                 k += 1;
-                if s == m || self.is_private(s) || self.is_deferred_given(s) || self.is_abstract_member(s) {
+                if s == m || self.is_private(s) || self.is_deferred_given(s) || self.is_abstract_member(s) || self.is_deferred_implementation(s) {
                     continue;
                 }
                 let ssig = self.sig_arc(s);
@@ -217,7 +336,7 @@ impl<'a> Worker<'a> {
             let mut k = 0;
             while let Some(s) = self.inherited_member(b, name, false, k) {
                 k += 1;
-                if self.syms.sym(s).owner != Owner::Class(b) || self.is_private(s) || self.is_deferred_given(s) {
+                if self.syms.sym(s).owner != Owner::Class(b) || self.is_private(s) || self.is_deferred_given(s) || self.is_deferred_implementation(s) {
                     continue;
                 }
                 let ssig = self.sig_arc(s);
@@ -238,52 +357,10 @@ impl<'a> Worker<'a> {
         }
     }
 
-    /// Whether a method of `c`'s linearization overloads the deferred given `m`, which would
-    /// stand beside its implementation, not in the class's table: teq's "a val beside a method of
-    /// its name is an alternative in a class only", reported at the class.
-    fn overloaded_beside(&mut self, c: ClassId, m: SymId, m_owner: TypeId, first: usize) -> bool {
-        let name = self.syms.sym(m).name;
-        let bases: Vec<(ClassId, TypeId)> = self.syms.class(c).base_types.clone();
-        for (i, &(b, bt)) in bases.iter().enumerate() {
-            let mut k = 0;
-            while let Some(s) = self.inherited_member(b, name, false, k) {
-                k += 1;
-                if s == m || self.syms.sym(s).kind != SymKind::Def || self.is_private(s) {
-                    continue;
-                }
-                let ssig = self.sig_arc(s);
-                if self.compare_sigs(c, ssig, (i > 0).then_some(bt), m, m_owner) == super::check::Agreement::Params {
-                    let msg = format!(
-                        "{} of type {} does not match {} of type {}; only methods can be overloaded",
-                        self.member_description(m, None),
-                        self.sig_string(m),
-                        self.member_description(s, Some(b)),
-                        self.sig_string(s)
-                    );
-                    self.report_at_class(c, first, msg);
-                    return true;
-                }
-            }
-        }
-        false
-    }
-
     fn implement_deferred_given(&mut self, c: ClassId, m: SymId, owner_ty: TypeId, tclass: &mut TClass, first: usize) {
         let Owner::Class(b) = self.syms.sym(m).owner else { return };
         let sig = self.sig_arc(m);
-        // The declaration's access, its boundary (`protected[p]`, `private[p]`, which the pickle
-        // reads off the declaration) and its name's origin, as dotty's `dcl.copy` keeps them.
-        let (name, kept, scoped_private) = {
-            let info = self.syms.sym(m);
-            // A declaration read from a pickle holds its boundary in the loader's table.
-            let loaded = (info.mods & mods::QUALIFIED != 0).then(|| self.loaded.as_ref()?.access_within.get(&m).map(|&(_, protected)| protected)).flatten();
-            let (protected, scoped) = match loaded {
-                Some(protected) => (protected, !protected),
-                None => (info.mods & mods::PROTECTED != 0, info.scoped_private),
-            };
-            let access = if protected { mods::PROTECTED } else if scoped { mods::PRIVATE } else { 0 };
-            (info.name, info.mods & mods::ANONYMOUS | access, scoped)
-        };
+        let name = self.syms.sym(m).name;
         let (file, span) = {
             let i = self.syms.class(c);
             (i.file, i.span)
@@ -316,19 +393,10 @@ impl<'a> Worker<'a> {
             self.report_at_class(c, first, msg);
             return;
         }
-        let s = self.syms.new_sym(name, SymKind::Given, mods::LAZY | mods::GIVEN | mods::FINAL | mods::OVERRIDE | kept, Owner::Class(c), file, None, span);
-        {
-            let mut info = self.syms.sym_mut(s);
-            info.sig = Some(Arc::new(MethodSig::value(target)));
-            info.scoped_private = scoped_private;
-            info.state().set(Completion::Done);
-        }
-        self.name_like(s, m);
-        // An implementation of a parameterless def as well (an old-style abstract given the
-        // deferred one overrides) is reached through a method, as `mark_accessors` gives a val.
-        if self.implements_parameterless_def(c, name) {
-            self.syms.sym_mut(s).needs_accessor = true;
-        }
+        let s = match self.entered_implementation(c, m) {
+            Some(s) => s,
+            None => self.new_deferred_implementation(c, m, owner_ty),
+        };
         tclass.init.push(TInit::Field(s, e));
         tclass.deferred_givens.push((m, s));
     }

@@ -114,6 +114,51 @@ impl<'a> Worker<'a> {
         self.link_local_companion(c, def.name);
     }
 
+    /// A local structural given without parameters: dotty's local module (`Parsers.givenDef`,
+    /// 4610-4623: `ModuleDef(name, templ)` where the given has no parameters), a local object
+    /// whose class extends the given's type and holds its body, its lazy val a given of the block.
+    fn enter_local_given_object(&mut self, file: FileId, d: ast::DefId) {
+        let ast = self.cur_ast();
+        let def = ast.def(d);
+        let DefKind::Given(g) = &def.kind else { return };
+        let c = self.syms.new_class(def.name, ClassKind::Class, mods::FINAL, Owner::Local, file, Some(d), def.span);
+        self.def_classes.insert(file.0 as usize, d, c);
+        self.record_self_alias(c);
+        self.enter_body(file, c, &g.body);
+        let ty = self.types.class(c, &[]);
+        let sym = self.new_local(def.name, SymKind::Val, ty, def.span);
+        self.syms.sym_mut(sym).mods |= mods::LAZY | mods::GIVEN | (def.mods & mods::ANONYMOUS);
+        self.def_syms.insert(file.0 as usize, d, sym);
+        self.syms.class_mut(c).local_module = Some(sym);
+        self.anon_envs.insert(c, Arc::new(self.env.clone()));
+        self.bind_local(def.name, sym);
+        self.bind_given(sym);
+    }
+
+    /// A local structural given with parameters: dotty's local class beside a given def that makes
+    /// one (`Parsers.givenDef`, 4610-4623: a `TypeDef` where the given has parameters), the
+    /// class taking the given's type parameters and using clauses, the given found by the search
+    /// and instantiated as the class (`TExpr::New`).
+    fn enter_local_given_class(&mut self, file: FileId, d: ast::DefId) {
+        let ast = self.cur_ast();
+        let def = ast.def(d);
+        let DefKind::Given(g) = &def.kind else { return };
+        let c = self.syms.new_class(def.name, ClassKind::Class, mods::FINAL, Owner::Local, file, Some(d), def.span);
+        self.def_classes.insert(file.0 as usize, d, c);
+        self.record_self_alias(c);
+        self.enter_ctor_params(file, c, &g.clauses);
+        self.enter_body(file, c, &g.body);
+        let sym = self.syms.new_sym(def.name, SymKind::Given, mods::GIVEN | (def.mods & mods::ANONYMOUS), Owner::Local, file, Some(d), def.span);
+        self.syms.sym_mut(sym).impl_class = Some(c);
+        if self.index.is_some() {
+            self.index_local(sym);
+        }
+        self.def_syms.insert(file.0 as usize, d, sym);
+        self.anon_envs.insert(c, Arc::new(self.env.clone()));
+        self.bind_local(def.name, sym);
+        self.bind_given(sym);
+    }
+
     /// A local enum: a local class, and a local object for its companion, the block's object of
     /// the name merged with the members the enum makes (its values, its class cases and their
     /// lookups) or one made for them, whose instance each run of the block makes on its first
@@ -4092,6 +4137,24 @@ impl<'a> Worker<'a> {
                     ast::ClassKind::EnumCase => {}
                 },
                 DefKind::TypeAlias { rhs, .. } if !rhs.map_or(false, |r| self.names_term_path(r)) => self.declare_local_alias(file, *d),
+                DefKind::Given(g) if g.alias.is_none() && (!g.tparams.is_empty() || !g.clauses.is_empty()) => {
+                    self.enter_local_given_class(file, *d);
+                    if let Some(&c) = self.def_classes.get(file.0 as usize, d) {
+                        classes.push(c);
+                        if stores {
+                            self.note_stored_class(c);
+                        }
+                    }
+                }
+                DefKind::Given(g) if g.alias.is_none() && g.tparams.is_empty() && g.clauses.is_empty() => {
+                    self.enter_local_given_object(file, *d);
+                    if let Some(&c) = self.def_classes.get(file.0 as usize, d) {
+                        classes.push(c);
+                        if stores {
+                            self.note_stored_class(c);
+                        }
+                    }
+                }
                 // A lazy val with a declared type may be named before its definition, by the
                 // lazy vals and methods above it.
                 DefKind::Val { pat: None, ty: Some(t), rhs: Some(_) } if def.mods & mods::LAZY != 0 => {
@@ -4491,26 +4554,48 @@ impl<'a> Worker<'a> {
             }
             DefKind::Given(g) => {
                 let Some(alias) = g.alias else {
-                    self.error(def.span, "local structural givens are not supported; use an alias given");
+                    // A structural one without parameters is a local object, entered with the block.
+                    // A local object, or a local class the given makes (`enter_local_given_class`).
+                    if let Some(&c) = self.def_classes.get(file.0 as usize, &d) {
+                        if self.deps.is_some() {
+                            self.deps_local_class(c);
+                        }
+                        // Its body sees the block as it stands here, as a local object's does.
+                        self.anon_envs.insert(c, Arc::new(self.env.clone()));
+                        let first = self.prog.exprs.len();
+                        self.check_class(c);
+                        self.finish_local_class(c, first);
+                        if let Some(sym) = self.syms.class(c).local_module {
+                            let init = self.new_instance(c, ast::ListRef::EMPTY, Span::default());
+                            out.push(TStmt::Val(sym, init));
+                        }
+                    }
                     return;
                 };
                 if !g.clauses.is_empty() || !g.tparams.is_empty() {
                     self.error(def.span, "local givens cannot take parameters");
                 }
                 let ty = self.resolve_type(g.ty);
-                // A `transparent inline given` is summoned at the type of its right-hand side,
-                // which its expansion at the use has (`TransformerConfiguration[?] =
-                // default.enableDefaultValues`); its value is the same wherever it is used.
-                let transparent = def.mods & mods::INLINE != 0 && def.mods & mods::TRANSPARENT != 0;
-                if transparent {
-                    let (init, rhs_ty) = self.type_expr(alias, Some(ty));
-                    let rhs_ty = self.solve_in(rhs_ty);
-                    let (init, precise) = if self.is_sub(rhs_ty, ty) { (init, rhs_ty) } else { (self.check_expr(alias, ty), ty) };
-                    let sym = self.new_local(def.name, SymKind::Val, precise, def.span);
-                    self.syms.sym_mut(sym).mods |= mods::LAZY | mods::GIVEN | (def.mods & mods::ANONYMOUS);
+                // An `inline given`, transparent or not, is an inline method (dotty's
+                // `Parsers.givenDef`, 4578-4588: a `DefDef` where the alias is inline, a given
+                // method), expanded at each use by the inliner as any local inline method is; it has
+                // no value of its own.
+                if def.mods & mods::INLINE != 0 {
+                    // As any inline method in an inline method's body (`PrepareInlineable.checkInlineMethod`).
+                    if self.checks_inline_definition() {
+                        self.error(def.span, "Implementation restriction: nested inline methods are not supported");
+                    }
+                    let sym = self.new_local(def.name, SymKind::Def, ty, def.span);
+                    {
+                        let mut info = self.syms.sym_mut(sym);
+                        info.mods |= mods::GIVEN | (def.mods & (mods::INLINE | mods::TRANSPARENT | mods::ANONYMOUS));
+                        info.def = Some(d);
+                    }
+                    // The block's definition, which its capture records for the products.
+                    self.def_syms.insert(self.env.file.0 as usize, d, sym);
                     self.bind_local(def.name, sym);
                     self.bind_given(sym);
-                    out.push(TStmt::Val(sym, init));
+                    self.check_local_inline_definition(sym);
                     return;
                 }
                 let sym = self.new_local(def.name, SymKind::Val, ty, def.span);

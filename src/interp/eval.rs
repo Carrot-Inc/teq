@@ -1186,11 +1186,28 @@ impl<'a, 't> Interp<'a, 't> {
         Ok(())
     }
 
+    #[inline]
     pub(super) fn enter(&mut self) -> R<()> {
-        if self.depth >= self.max_depth {
+        if self.depth >= self.max_depth || self.depth & 63 == 63 {
+            return self.enter_checked();
+        }
+        self.depth += 1;
+        Ok(())
+    }
+
+    /// `enter` at the depth limit or at a level whose native stack is checked: every 64 levels,
+    /// since a frame of a build without optimisations takes more than the depth limit allows for.
+    /// The exception's own construction goes past the budget unchecked (`throwing_overflow`).
+    #[cold]
+    #[inline(never)]
+    fn enter_checked(&mut self) -> R<()> {
+        let deep = self.depth & 63 == 63 && !self.throwing_overflow && self.stack_base.saturating_sub(super::stack_address()) > super::STACK_BUDGET;
+        if self.depth >= self.max_depth || deep {
             // The exception's constructor needs a few levels of its own.
             self.max_depth += 64;
+            let outer = std::mem::replace(&mut self.throwing_overflow, true);
             let e = self.throw_named::<Value>("StackOverflowError", "");
+            self.throwing_overflow = outer;
             self.max_depth -= 64;
             return match e {
                 Err(Control::Throw(v)) => Err(Control::Throw(v)),
