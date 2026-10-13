@@ -20,7 +20,8 @@
 # tests/support/typetest_lib.scala compiled the same way; predef-lib,
 # tests/support/predef_lib.scala compiled the same way; depfun-lib, tests/support/depfun_lib.scala
 # compiled the same way; inlinebodies-lib, tests/support/inline_bodies_lib.scala compiled the same way; view-lib, tests/support/view_lib.scala compiled the same way; nestedcompanion-lib,
-# tests/support/nestedcompanion_lib.scala compiled the same way; extend-lib,
+# tests/support/nestedcompanion_lib.scala compiled the same way; javareview-lib,
+# tests/support/javareview_lib.scala compiled the same way; extend-lib,
 # tests/support/extend_lib.scala compiled the same way; bundle-lib,
 # tests/support/bundle's properties file as a jar (a resource bundle); reflect-lib,
 # tests/support/reflect_lib.scala compiled the same way for Scala.js; erasure-lib,
@@ -391,6 +392,20 @@ nestedcompanion_lib_jar() {
   fi
   echo "$jar"
 }
+# tests/support/javareview_lib.scala compiled by scalac into a jar: a Scala 3 class of a `java.*`
+# package that is no JDK class's.
+javareview_lib_jar() {
+  local src=tests/support/javareview_lib.scala
+  local jar=$scratch-javareview-lib.jar
+  local dir=$scratch-javareview-lib.$$
+  if [ ! -f "$jar" ] || [ "$src" -nt "$jar" ]; then
+    mkdir -p "$dir" && cp "$src" "$dir/"
+    timeout 200 scala-cli --power package --library -S "${SCALA_VERSION:-3.8.4}" "$dir/javareview_lib.scala" --server=false -q -o "$jar.$$" -f > /dev/null 2>&1 \
+      && mv -f "$jar.$$" "$jar" || rm -f "$jar.$$" "$jar"
+    rm -rf "$dir"
+  fi
+  echo "$jar"
+}
 # tests/support/inline_bodies_lib.scala compiled by scalac into a jar: inline bodies expanded from the
 # definition's typing read from scalac's pickles.
 inline_bodies_lib_jar() {
@@ -601,6 +616,7 @@ jar_of() {
     ctorinit-lib) ctorinit_lib_jar ;;
     view-lib) view_lib_jar ;;
     nestedcompanion-lib) nestedcompanion_lib_jar ;;
+    javareview-lib) javareview_lib_jar ;;
     extend-lib) extend_lib_jar ;;
     state-lib) state_lib_jar ;;
     scala2-lib) scala2_lib_jar ;;

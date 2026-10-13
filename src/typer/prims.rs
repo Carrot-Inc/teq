@@ -2103,6 +2103,9 @@ impl<'a> Worker<'a> {
                 // The type arguments differ from case to case, which is `E[?]` in Scala.
                 let arity = self.class_arity(enum_class);
                 let enum_ty = self.types.class(enum_class, &vec![WILD; arity]);
+                // The enum through the companion's path (`a.E` of `a.E.fromOrdinal`), an enum
+                // nested in a class being one type per enclosing instance.
+                let enum_ty = self.as_seen_from(enum_ty, recv_ty, module);
                 let full = self.enum_full_name(enum_class);
                 let full = self.prog.add_str(&full);
                 let full = self.prog.add(TExpr::Str(full));

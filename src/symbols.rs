@@ -223,6 +223,9 @@ pub struct ClassInfo {
     /// completion, which a type application of the class asked for (dotty's `TypeParamsCompleter`):
     /// the completion takes them as they are.
     pub tparams_made: bool,
+    /// The companion `Desugar.classDef` makes for a case class the source writes none for
+    /// (`companionDefs`): the namer's, without a definition, or a pickle's synthesized one.
+    pub made_companion: bool,
     /// The forwarders of the class's export clauses whose qualifier is a value, each with the
     /// path it calls its member through (`typer::value_exports`), kept off the symbols: few
     /// classes have any.
@@ -1015,6 +1018,7 @@ impl Symbols {
             inherits_types: false,
             no_inherited_extensions: false,
             tparams_made: false,
+            made_companion: false,
             forwarders: Vec::new(),
         }))
     }

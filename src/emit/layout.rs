@@ -557,9 +557,18 @@ fn is_closure_shaped(prog: &Program, syms: &Symbols, interner: &Interner, reach:
 /// position with, and among those the name and the kind tell them apart. A tie is two definitions
 /// of one emitted name, kept in the program's order (`compare_classes`).
 pub fn compare_syms(syms: &Symbols, interner: &Interner, a: SymId, b: SymId) -> Ordering {
+    // A member no definition declares (an outer accessor, a forwarder) is placed at its class's
+    // definition, the same whether the class is the program's or read from a product.
     let key = |s: SymId| {
         let info = syms.sym(s);
-        let (rank, start) = syms.place(info.file, info.def, info.span.start);
+        let (file, def, start) = match (info.def, info.owner) {
+            (None, Owner::Class(c)) => {
+                let class = syms.class(c);
+                (class.file, class.def, class.span.start)
+            }
+            _ => (info.file, info.def, info.span.start),
+        };
+        let (rank, start) = syms.place(file, def, start);
         (rank, start, info.def.map_or(u32::MAX, |d| d.0))
     };
     let order = key(a)

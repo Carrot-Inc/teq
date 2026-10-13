@@ -1,4 +1,4 @@
-// expect: 9:39: error: no given instance of type Show[(Red : Color)] was found for parameter x
+// expect: 9:39: error: no given instance of type Show[(Color.Red : Color)] was found for parameter x
 // expect: 1 error found
 // `Color.Red.type` is the singleton type of the case, which a `Show[Color]` does not implement.
 enum Color:

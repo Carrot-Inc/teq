@@ -151,8 +151,9 @@ pub(crate) fn units_of(w: &Worker, file: FileId) -> Vec<Unit> {
                 }
                 continue;
             }
-            // An enum's companion is made by the typer: it goes with the enum.
-            let companion = info.companion.filter(|&k| w.syms.class(k).def.is_none() && w.syms.class(k).file == file);
+            // An enum's companion is made by the typer: it goes with the enum. A case class's the
+            // typer made is written as scalac's synthesized one, with the class.
+            let companion = info.companion.filter(|&k| w.syms.class(k).def.is_none() && w.syms.class(k).file == file && !w.syms.class(k).made_companion);
             let (class, module) = if is_object { (None, Some(c)) } else { (Some(c), companion) };
             units.push(Unit { file, kind: UnitKind::Class { class, module } });
             continue;

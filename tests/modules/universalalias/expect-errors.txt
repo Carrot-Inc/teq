@@ -1,7 +1,7 @@
-tests/modules/universalalias/b/Use.scala:5:41: error: type mismatch: found Aliased, required AnyRef
+tests/modules/universalalias/b/Use.scala:5:41: error: type mismatch: found Aliased, required AnyRef. Note that implicit conversions were not tried because the result of an implicit conversion must be more specific than AnyRef
     def aliased(x: uaa.Aliased): AnyRef = x
                                           ^
-tests/modules/universalalias/b/Use.scala:6:43: error: type mismatch: found Selected, required AnyRef
+tests/modules/universalalias/b/Use.scala:6:43: error: type mismatch: found Selected, required AnyRef. Note that implicit conversions were not tried because the result of an implicit conversion must be more specific than AnyRef
     def selected(x: uaa.Selected): AnyRef = x
                                             ^
 2 errors found

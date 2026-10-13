@@ -2230,8 +2230,11 @@ impl<'a> Worker<'a> {
             let name = info.inner_object.map_or(info.name, |v| self.syms.sym(v).name);
             (info.file, self.syms.class(o).name, name)
         };
-        // A given's class has scalac's, as its class file is scalac's layout (`jvm::static_given_objects`).
-        let name = if self.is_library_class(c) && !self.is_product_class(c) || self.syms.class(c).kind == ClassKind::GivenImpl {
+        // A given's class has scalac's, as its class file is scalac's layout (`jvm::static_given_objects`),
+        // and so has every class on the JVM, whose class files a scalac downstream calls the
+        // accessor of by `ExplicitOuter.outerAccName` (`p$O$I$$$outer`); JavaScript and the
+        // interpreter keep the shorter name.
+        let name = if self.jvm || self.is_library_class(c) && !self.is_product_class(c) || self.syms.class(c).kind == ClassKind::GivenImpl {
             self.scalac_outer_accessor_name(c)
         } else {
             format!("$outer${}${}", self.name_str(owner_name), self.name_str(name))
@@ -2444,4 +2447,11 @@ impl Missing {
     fn is_empty(&self) -> bool {
         self.classes.is_empty() && self.aliases.is_empty() && self.terms.is_empty()
     }
+}
+
+/// Whether a member named `name` is an outer accessor the typer made (`Worker::outer_accessor`), by
+/// teq's name (`$outer$O$I`) or by scalac's, which the JVM's carry (`p$O$I$$$outer`, a member of
+/// no definition).
+pub fn is_outer_accessor_name(name: &str, defined: bool) -> bool {
+    name.starts_with("$outer") || !defined && name.ends_with("$$$outer")
 }

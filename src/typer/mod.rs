@@ -1,5 +1,6 @@
 mod accessors;
 mod anon;
+pub use anon::is_outer_accessor_name;
 mod apply;
 mod arity;
 pub mod bundle;
@@ -1684,6 +1685,11 @@ pub struct Worker<'a> {
     /// The type the last typed pattern (`x: T`) gave its binder, which the enclosing `Bind`
     /// reads: the ascription with its wildcard arguments inferred from the scrutinee.
     pub last_typed_pattern: Option<(crate::ast::PatId, TypeId)>,
+    /// The body depths (`body_depth`) at which the pattern alternatives around the current pattern
+    /// are typed: a variable bound inside one, in that same body, is dotty's E024
+    /// (`Mode.InPatternAlternative`, refused at every `typedBind`); a definition the pattern makes
+    /// complete is typed one body deeper, in its own context (`Typer.typedAlternative`).
+    pub pattern_alternatives: Vec<u32>,
     /// A generator's pattern written without `case` is being typed: a type test of it that
     /// cannot be checked is a refutable part, which the irrefutability check reports as an error,
     /// before which scalac's pattern matcher, that warns of such a test, never runs.
@@ -2672,6 +2678,7 @@ impl<'a> Worker<'a> {
             local_blocks: Default::default(),
             local_alias_sites: Default::default(),
             last_typed_pattern: None,
+            pattern_alternatives: Vec::new(),
             refutable_is_error: false,
             applied_extension: None,
             quote: quoted::QuoteState::default(),
@@ -3025,6 +3032,7 @@ impl<'a> Worker<'a> {
             local_blocks: Default::default(),
             local_alias_sites: Default::default(),
             last_typed_pattern: Default::default(),
+            pattern_alternatives: Vec::new(),
             refutable_is_error: false,
             applied_extension: None,
             quote: self.quote.attach(),

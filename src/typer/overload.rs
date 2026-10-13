@@ -1138,7 +1138,7 @@ impl<'a> Worker<'a> {
         out
     }
 
-    fn erased_name(&mut self, t: TypeId, qualified: bool, depth: u32, out: &mut String) {
+    pub(super) fn erased_name(&mut self, t: TypeId, qualified: bool, depth: u32, out: &mut String) {
         let t = self.deref(t);
         if depth > 16 {
             out.push_str("Any");
@@ -1462,6 +1462,75 @@ impl<'a> Worker<'a> {
         };
         self.diags.error(file, span, msg);
         true
+    }
+
+    /// `report_double_definition` of a member the rule synthesizes (`bit` of `synthetic::MEMBERS`)
+    /// and `declared`, the class's own deferred declaration it is entered beside; the synthesized
+    /// one is shown as dotty's `syntheticDef` makes it, without a line.
+    pub(super) fn report_synthesized_double_definition(&mut self, c: ClassId, bit: u16, declared: SymId) {
+        use crate::tir::synthetic;
+        let synthesized = match bit {
+            synthetic::HASH_CODE => "hashCode(): Int",
+            synthetic::EQUALS => "equals(x$0: Any): Boolean",
+            synthetic::TO_STRING => "toString(): String",
+            synthetic::CAN_EQUAL => "canEqual(that: Any): Boolean",
+            synthetic::PRODUCT_ARITY => "productArity: Int",
+            synthetic::PRODUCT_PREFIX => "productPrefix: String",
+            synthetic::PRODUCT_ELEMENT => "productElement(n: Int): Any",
+            synthetic::PRODUCT_ELEMENT_NAME => "productElementName(n: Int): String",
+            _ => "ordinal: Int",
+        };
+        let info = self.syms.sym(declared);
+        let (file, span, name, overrides) = (info.file, info.span, info.name, info.mods & crate::ast::mods::OVERRIDE != 0);
+        let line = crate::source::locate(&self.source(file).text, span.start as usize).0;
+        let text = self.sig_string(declared);
+        let shown = if text.starts_with('(') || text.starts_with('[') { text } else { format!(": {}", text) };
+        let place = self.class_description(c);
+        // The declaration's erasure, its parameter lists joined and its names kept (`(o: Object):
+        // Boolean`).
+        let sig = self.parameters_arc(declared);
+        let mut erased = String::from("(");
+        for (i, p) in sig.clauses.iter().flat_map(|cl| cl.params.iter()).enumerate() {
+            if i > 0 {
+                erased.push_str(", ");
+            }
+            erased.push_str(&self.name_str(p.name));
+            erased.push_str(": ");
+            let piece = self.erased_shown(p.ty);
+            erased.push_str(&piece);
+        }
+        erased.push_str("): ");
+        let ret = self.sig_of(declared).ret;
+        let piece = self.erased_shown(ret);
+        erased.push_str(&piece);
+        // The hint is for a pair neither of which is renamed already.
+        let hint = if self.target_name_of(declared).is_some() {
+            ""
+        } else {
+            "\n\nConsider adding a @targetName annotation to one of the conflicting definitions\nfor disambiguation."
+        };
+        let msg = format!(
+            "Conflicting definitions:\noverride def {synthesized} in {place} and\n{}def {}{shown} in {place} at line {line}\nhave the same type {erased} after erasure.{hint}",
+            if overrides { "override " } else { "" },
+            self.name_str(name),
+        );
+        // Erasure's error (`checkNoDoubleDeclaration`), which a typer that reported one hides.
+        self.diags.late_error_of(file, span, msg, crate::source::PHASE_ERASURE);
+    }
+
+    /// A type's erasure as scalac shows it, its class by its simple name (`Object` for `Any`).
+    fn erased_shown(&mut self, t: TypeId) -> String {
+        match self.stable_erasure(t) {
+            Some(super::site::Erased::Of(c, dims)) => {
+                let base = if c == self.b.any_ref { "Object".to_string() } else { self.name_ref(self.syms.class(c).name).to_string() };
+                (0..dims).fold(base, |s, _| format!("Array[{s}]"))
+            }
+            _ => {
+                let mut out = String::new();
+                self.erased_name(t, false, 0, &mut out);
+                out
+            }
+        }
     }
 
     pub(super) fn identical_parameters(&mut self, a: SymId, b: SymId) -> bool {
@@ -1893,6 +1962,15 @@ impl<'a> Worker<'a> {
         let first_var = self.tvars.len();
         let spans_mark = self.overload_arg_spans.len();
         let mut alts = self.alternatives_of(set, recv_ty, ctor);
+        // The `apply` a pickle's synthesized companion declares is the constructor standing here,
+        // as a creator application of the program's own is typed (`new`).
+        if ctor.is_some() {
+            if let Some(l) = self.loaded.as_ref() {
+                if alts.iter().any(|a| a.ctor.is_some()) {
+                    alts.retain(|a| a.ctor.is_some() || !l.synthetic_members.contains_key(&a.sym));
+                }
+            }
+        }
         if let (Some(r), Some(rt)) = (recv, recv_ty) {
             self.see_alternatives_from(&mut alts, r, rt);
         }
@@ -2169,6 +2247,10 @@ impl<'a> Worker<'a> {
             .collect();
         let mut synthetic_at = None;
         if let Some((c, prefix)) = synthetic.filter(|&(c, _)| !self.synthetic_unapply_retracted(c)) {
+            // The `unapply` a pickle's synthesized companion declares is the one standing here.
+            if let Some(l) = self.loaded.as_ref() {
+                alts.retain(|a| !l.synthetic_members.contains_key(&a.sym));
+            }
             let (sym, sig) = self.synthetic_unapply(c);
             let sig = match prefix {
                 Some(p) => self.synthetic_unapply_through(sig, p, c),
@@ -2291,6 +2373,10 @@ impl<'a> Worker<'a> {
     fn synthetic_unapply_clashes(&mut self, c: ClassId) -> Option<bool> {
         self.settle_class(c);
         let companion = self.syms.class(c).companion?;
+        // The companion the typer made declares no extractor and inherits none.
+        if self.syms.class(companion).made_companion && self.syms.class(companion).def.is_none() {
+            return None;
+        }
         self.complete_class(companion);
         let repeated = self.syms.class(c).info.ctor.first().and_then(|cl| cl.params.last()).map_or(false, |p| p.repeated);
         let name = if repeated { names::UNAPPLY_SEQ } else { names::UNAPPLY };

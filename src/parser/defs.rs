@@ -1163,7 +1163,11 @@ impl<'a> Parser<'a> {
                 Some(t) => self.ast.add_expr(Expr::Typed(rhs, t), span),
                 None => rhs,
             };
+            let checked = !matches!(self.ast.expr(rhs), Expr::Unchecked(_));
             let scrutinee = self.ast.add_expr(Expr::Unchecked(typed), span);
+            if checked {
+                self.ast.patdef_scrutinees.insert(scrutinee);
+            }
             let result = match vars.as_slice() {
                 [] => self.ast.add_expr(Expr::UnitLit, span),
                 [(n, s)] => self.ast.add_expr(Expr::Ident(*n), *s),

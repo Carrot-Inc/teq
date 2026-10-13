@@ -848,6 +848,39 @@ impl<'a> Worker<'a> {
 
     /// The symbol under which the trait `tr` calls the `toString`, `hashCode` or `equals` that
     /// follows it in a linearisation; no ancestor of the trait declares one.
+    /// `Any`'s `toString()` or `hashCode()` beside a member of the name that does not match it
+    /// (`Denotation.matches`: `@targetName("s") def toString[A]: String`, `def toString(x: Int)`)
+    /// is an alternative of it (`computeMembersNamed`): `()`, which that member takes no list
+    /// for or needs arguments in, applies `Any`'s (`resolveOverloaded` keeps the applicable one).
+    #[cold]
+    #[allow(clippy::too_many_arguments)]
+    fn any_member_beside(
+        &mut self,
+        recv: TExprId,
+        recv_ty: TypeId,
+        sym: SymId,
+        name: Name,
+        targs: Option<ListRef>,
+        lists: &[ArgList],
+        span: Span,
+    ) -> Option<(TExprId, TypeId)> {
+        if targs.is_some() || lists.len() != 1 || !lists[0].args.is_empty() || lists[0].using || self.syms.sym(sym).kind != SymKind::Def {
+            return None;
+        }
+        if self.any_member_agreement(sym) != super::check::Agreement::Params {
+            return None;
+        }
+        let sig = self.sig_of(sym);
+        let takes_none = match sig.clauses.iter().find(|c| !c.is_using) {
+            None => true,
+            Some(c) => c.params.iter().any(|p| !p.has_default && !p.repeated),
+        };
+        if !takes_none {
+            return None;
+        }
+        self.universal_member(recv, recv_ty, name, None, lists, span)
+    }
+
     fn any_member_of(&mut self, tr: ClassId, name: Name, span: Span) -> SymId {
         self.with_loader(|w| w.any_member_of_unlocked(tr, name, span))
     }
@@ -1007,10 +1040,19 @@ impl<'a> Worker<'a> {
                 },
                 None => StaticPath::NotStatic,
             },
-            Some(r) => match self.term_callee(r, name, self.cur_ast().expr_span(q)) {
-                Some(callee) => StaticPath::Callee(callee),
-                None => StaticPath::NotStatic,
-            },
+            Some(r) => {
+                if let Some(msg) = self.package_member_denied(pkg, r) {
+                    let span = self.cur_ast().expr_span(q);
+                    self.error(span, msg);
+                }
+                let outer_head = std::mem::replace(&mut self.extension_call_head, applied);
+                let callee = self.term_callee(r, name, self.cur_ast().expr_span(q));
+                self.extension_call_head = outer_head;
+                match callee {
+                    Some(callee) => StaticPath::Callee(callee),
+                    None => StaticPath::NotStatic,
+                }
+            }
         }
     }
 
@@ -1750,6 +1792,109 @@ impl<'a> Worker<'a> {
             _ => false,
         });
         inside || self.in_access_scope(info.file, info.span.start, info.owner)
+    }
+
+    /// The package a member of `owner` is a member of: the package itself, or the one around a
+    /// package object (dotty's `skipWeakOwner`).
+    fn effective_package(&self, owner: Owner) -> Option<PkgId> {
+        match owner {
+            Owner::Package(p) => Some(p),
+            Owner::Class(c) if self.is_package_object(c) => match self.syms.class(c).owner {
+                Owner::Package(p) => Some(p),
+                _ => None,
+            },
+            _ => None,
+        }
+    }
+
+    /// Whether the site is inside the package `p` (`ctx.owner.isContainedIn(boundary)`).
+    fn site_in_package(&self, p: PkgId) -> bool {
+        let mut site = Some(self.file_pkgs[self.env.file.0 as usize]);
+        while let Some(sp) = site {
+            if sp == p {
+                return true;
+            }
+            site = self.syms.pkg(sp).parent;
+        }
+        false
+    }
+
+    /// dotty's `CannotBeAccessed` for a private member of the package `pre` selected through it
+    /// from outside its boundary: a `private` definition of a package (or of a package object)
+    /// is `private[p]` of that package (`Namer`: "widen private to private[p]"), a `private[q]`
+    /// one is reachable from inside `q` (`isAccessibleFrom`'s `accessWithin`). A member a jar
+    /// holds goes by `qualified_reachable`; library bodies and the std see every member.
+    pub(super) fn package_member_denied(&mut self, pre: PkgId, r: crate::typer::resolve::TermRef) -> Option<String> {
+        use crate::typer::resolve::TermRef;
+        let (mods, file, start, owner, word, name) = match r {
+            TermRef::Global(s) | TermRef::ModuleMember(_, s) => {
+                let info = self.syms.sym(s);
+                let word = match info.kind {
+                    SymKind::Object(_) => "object",
+                    SymKind::Def => "method",
+                    SymKind::Var => "variable",
+                    _ => "value",
+                };
+                (info.mods, info.file, info.span.start, info.owner, word, info.name)
+            }
+            TermRef::Class(c) => {
+                let info = self.syms.class(c);
+                let word = match info.kind {
+                    ClassKind::Trait => "trait",
+                    ClassKind::Object => "object",
+                    _ => "class",
+                };
+                (info.mods, info.file, info.span.start, info.owner, word, info.name)
+            }
+            _ => return None,
+        };
+        if mods & crate::ast::mods::PRIVATE == 0 || self.in_jar(file) {
+            return None;
+        }
+        let site = self.env.file;
+        if self.in_jar(site) || self.is_body_file(site) || self.source(site).is_std {
+            return None;
+        }
+        let home = self.effective_package(owner)?;
+        let scoped = self.has_access_scope(file, start);
+        if if scoped { self.in_access_scope(file, start, owner) } else { self.site_in_package(home) } {
+            return None;
+        }
+        let boundary = if scoped {
+            self.ast(file).access_scopes.iter().find(|&&(at, _)| at == start).map(|&(_, n)| self.name_str(n).to_string()).unwrap_or_default()
+        } else {
+            self.name_str(self.syms.pkg(home).name).to_string()
+        };
+        let shown = format!("{} {}", word, self.name_str(name));
+        // The member is shown with its place where its owner is no package: a package object's,
+        // as every top-level term but an object is in dotty (`<file>$package`).
+        let package_member = matches!(owner, Owner::Package(_)) && matches!(word, "object" | "class" | "trait");
+        let what = if package_member { shown.clone() } else { format!("{} in package {}", shown, self.package_full_name(home)) };
+        let from = self.this_class().map(|k| format!(" from {}", self.class_description(k))).unwrap_or_default();
+        Some(format!(
+            "{} cannot be accessed as a member of {}.type{}.\n  private[{}] {} can only be accessed from package {}.",
+            what,
+            self.package_full_name(pre),
+            from,
+            boundary,
+            shown,
+            if scoped { boundary.clone() } else { self.package_full_name(home) },
+        ))
+    }
+
+    /// A package's full name as scalac shows it (`a.b`).
+    fn package_full_name(&self, p: PkgId) -> String {
+        let mut parts = Vec::new();
+        let mut at = Some(p);
+        while let Some(q) = at {
+            if q == ROOT_PKG {
+                break;
+            }
+            parts.push(self.name_str(self.syms.pkg(q).name).to_string());
+            at = self.syms.pkg(q).parent;
+        }
+        parts.reverse();
+        parts.join(".")
     }
 
     /// The object of a jar that is the companion of its class `c` nested in a class, an inner
@@ -2940,6 +3085,13 @@ impl<'a> Worker<'a> {
                 let (recv, recv_ty) = self.import_value_ref(v, span)?;
                 let callee = self.member_callee(recv, recv_ty, m);
                 self.written_member(callee)
+            }
+            // A top-level case class's name as a value: its companion (`materialized_companion`).
+            TermRef::Class(c) if !self.extension_call_head && self.syms.class(c).mods & crate::ast::mods::CASE != 0 && matches!(self.syms.class(c).owner, Owner::Package(_)) => {
+                match self.materialized_companion(c).and_then(|m| self.syms.class(m).module_sym) {
+                    Some(s) => return self.term_callee(TermRef::Global(s), name, span),
+                    None => Callee::Ctor(c),
+                }
             }
             TermRef::Class(c) => Callee::Ctor(c),
             // The imported proxy applies as its selection on the value: `o.Inner(args)`.
@@ -6725,6 +6877,13 @@ impl<'a> Worker<'a> {
             Some(m) => Some(m),
             None => self.selection_member(recv, recv_ty, name).or_else(|| self.product_member(recv_ty, name)),
         };
+        // The `apply` a pickle's synthesized companion of a case class declares is the class's
+        // creation, as the program's own companion's (which declares none) is typed: its
+        // defaults the constructor's getters (`Applications.findDefaultGetter`); so is the
+        // application of a companion the typer made, named on an instance (`d.Cmd(2)(..)`).
+        if member.is_some() && (name == names::APPLY || !lists.is_empty()) && self.made_companion_member(member, name, !lists.is_empty()) {
+            member = None;
+        }
         // A product's getter, a member its class has where the whole program's has not, is
         // applied as the source's call has it.
         if member.is_some_and(|(sym, _)| self.loaded.as_ref().is_some_and(|l| !l.product_synthetics.is_empty() && l.product_synthetics.contains_key(&sym))) {
@@ -6810,6 +6969,11 @@ impl<'a> Worker<'a> {
             if name == names::APPLY && !declared && self.syms.sym(sym).kind == SymKind::Def && self.constructor_next_to_apply(recv_ty).is_some() {
                 return self.apply_overloaded_member(recv, recv_ty, sym, name, targs, lists, span, expected);
             }
+            if matches!(name, names::TO_STRING | names::HASH_CODE) {
+                if let Some(r) = self.any_member_beside(recv, recv_ty, sym, name, targs, &lists, span) {
+                    return r;
+                }
+            }
             self.check_access(sym, Some(recv_ty), span);
             let sym_mods = self.syms.sym(sym).mods;
             if sym_mods & crate::ast::mods::PRIVATE != 0 {
@@ -6863,91 +7027,14 @@ impl<'a> Worker<'a> {
                 }
             }
         }
-        if name == names::APPLY {
-            // `String(bytes, UTF_8)` is `new String(bytes, UTF_8)`, which the platform layer's
-            // `newString` implements; the std's `scala.String` object stands for the same statics.
-            if let Type::Class(c, _) = self.types.get(recv_ty) {
-                let info = self.syms.class(c);
-                let scala_string = info.name == names::STRING && info.kind == ClassKind::Object && info.owner == Owner::Package(self.b.scala_pkg);
-                let java_string = if info.name == names::STRING { self.java_lang_object("String") } else { None };
-                if let Some(j) = java_string.filter(|&j| j == c || scala_string) {
-                    let recv = self.prog.add(TExpr::Module(j));
-                    let recv_ty = self.types.class(j, &[]);
-                    let name = self.interner.intern("newString");
-                    return self.apply_member(recv, recv_ty, name, targs, lists, span, expected);
-                }
+        let lists = if name == names::APPLY {
+            match self.apply_on_object(recv, recv_ty, targs, lists, span, expected) {
+                Ok(r) => return r,
+                Err(lists) => lists,
             }
-            // `Point(1, 2)` with an explicit companion object that defines no `apply`, selected
-            // through a prefix too (`o.Cmd`, the object's class through `o`).
-            if let Type::Class(c, _) = self.types.get(self.types.strip_nested(recv_ty)) {
-                let info = self.syms.class(c);
-                let is_module = info.kind == ClassKind::Object || info.local_module.is_some() || info.inner_object.is_some();
-                let inner = info.inner_object;
-                if let (true, Some(companion)) = (is_module, info.companion) {
-                    if self.syms.class(companion).kind == ClassKind::Class {
-                        if let (Some(ta), true) = (targs, lists.is_empty()) {
-                            if let Some(r) = self.summon_type_application(companion, None, ta, span, expected) {
-                                return r;
-                            }
-                        }
-                        // The proxy `apply` a companion without one gets has the constructor's
-                        // access, protected for a protected class whose companion is not protected
-                        // itself, and the class's qualifier (`NamerOps.addConstructorApplies`): out of
-                        // reach, but inside the companion and its class, the object takes no
-                        // parameters (E050). A case class has no proxy: its companion's `apply` is the
-                        // synthesized member (`NamerOps.needsConstructorProxies`).
-                        let proxy = self.syms.class(companion).mods & crate::ast::mods::CASE == 0;
-                        if proxy && (!self.proxy_apply_accessible(companion, c) || !self.is_class_accessible(companion)) {
-                            let owner = match self.syms.class(c).owner {
-                                Owner::Class(o) => format!(" in {}", self.class_description(o)),
-                                Owner::Package(p) if p != crate::symbols::ROOT_PKG && self.syms.pkg(p).name != names::EMPTY => format!(" in package {}", self.name_str(self.syms.pkg(p).name)),
-                                _ => String::new(),
-                            };
-                            let msg = format!("object {}{} does not take parameters", self.name_str(self.syms.class(companion).name), owner);
-                            self.error(span, msg);
-                            self.type_args_for_errors(&lists);
-                            return (self.prog.add(TExpr::Unit), ERROR);
-                        }
-                        // The synthesized `apply` of a companion nested in a class constructs
-                        // inside it (`Desugar.classDef`): its enclosing instance is the one the
-                        // companion is selected on, `o` of `o.C(1)`, the prefix `newExpr` keeps.
-                        if inner.is_some() && self.outer_class(companion).is_some() {
-                            let Some(outer) = self.module_prefix(recv, c) else {
-                                let msg = format!("not supported yet: the companion of {}, a class nested in a class, applied through no path", self.name_str(self.syms.class(companion).name));
-                                self.error(span, msg);
-                                return (self.prog.add(TExpr::Unit), ERROR);
-                            };
-                            // The class is constructed through the companion's prefix, which is an
-                            // immutable path (dotty's `newExpr`, E083).
-                            if proxy && !self.is_stable_path(recv) {
-                                let prefix = match (self.types.get(recv_ty), self.prog.expr(recv)) {
-                                    (Type::Nested(p, _), _) => Some(p),
-                                    (_, TExpr::Field(q, _) | TExpr::CallMethod(q, _, _)) => self.prog.type_of(q),
-                                    _ => self.prog.type_of(outer),
-                                };
-                                let msg = format!("{} is not a valid class prefix, since it is not an immutable path", self.show(prefix.unwrap_or(recv_ty)));
-                                self.error(span, msg);
-                            }
-                            let outer_prefixed = std::mem::replace(&mut self.new_prefixed, true);
-                            let receiver_class = self.prog.type_of(outer).and_then(|t| self.class_of(t));
-                            let outer_creator = std::mem::replace(&mut self.creator_receiver, receiver_class.map(|r| (companion, r)));
-                            let r = self.apply_companion_apply(companion, targs, lists, span, expected);
-                            self.creator_receiver = outer_creator;
-                            self.new_prefixed = outer_prefixed;
-                            self.pass_outer_applied(r.0, outer);
-                            // The instance's type is the class through the companion's prefix
-                            // (`o.C`), its `apply`'s result seen from `o.C.type`.
-                            let ty = match (self.types.get(recv_ty), self.types.get(r.1)) {
-                                (Type::Nested(p, _), Type::Class(..)) => self.nested_type(p, r.1),
-                                _ => r.1,
-                            };
-                            return (r.0, ty);
-                        }
-                        return self.apply_companion_apply(companion, targs, lists, span, expected);
-                    }
-                }
-            }
-        }
+        } else {
+            lists
+        };
         if let Some(r) = self.universal_member(recv, recv_ty, name, targs, &lists, span) {
             return r;
         }
@@ -6960,7 +7047,13 @@ impl<'a> Worker<'a> {
                 return self.apply_member(array, array_ty, names::APPLY, None, lists, span, expected);
             }
         }
-        if let Some(c) = self.types.named_class(recv_ty) {
+        // Of an intersection, the part whose class has the class nested (dotty's member lookup
+        // of an `AndType`): `Parser.this.Cfg(..)` under `this: Base =>`, `this` a `Parser & Base`.
+        let receiver_class = match self.types.named_class(recv_ty) {
+            Some(c) => Some(c),
+            None => self.intersection_part_nesting(recv_ty, name),
+        };
+        if let Some(c) = receiver_class {
             let module = self.is_module_class(c) || self.syms.class(c).local_module.is_some();
             // A class nested in the receiver's class or in one it derives from applies through
             // its constructor proxy, a member of the class that declares it
@@ -7000,14 +7093,15 @@ impl<'a> Worker<'a> {
                     // `applyProxyResultType` gives the proxy's `new` the prefix's type.
                     if inner {
                         self.pass_outer(te, recv);
-                        // The class itself is seen from the receiver; an enum's case widened to
-                        // its enum keeps the enum's one type (`is_inner_class`).
+                        // The class itself is seen from the receiver, and so is an enum's case
+                        // widened to its enum, the enum through the companion's enclosing instance
+                        // (`a.E` of `a.E.K(1)`).
                         let ty = match self.types.get(ty) {
                             Type::Class(k, _) if k == nested && self.is_inner_class(nested) => {
                                 let prefix = self.path_of(recv).unwrap_or(recv_ty);
                                 self.nested_type(prefix, ty)
                             }
-                            _ => ty,
+                            _ => self.as_seen_from(ty, recv_ty, c),
                         };
                         return (te, ty);
                     }
@@ -7161,6 +7255,216 @@ impl<'a> Worker<'a> {
 
     /// The case class whose constructor `C(args)` and `C.apply` mean next to the `apply` methods
     /// of the companion object `recv_ty`.
+    /// The companion of the case class `k`: the written one, the one the namer or a pickle made,
+    /// or, for a top-level case class without one, the object `Desugar.classDef`'s `companionDefs`
+    /// gives it, made the first time a value names it (`ClassInfo::made_companion`): a program of
+    /// many case classes names few of their companions as values, its creations applying the class.
+    pub(super) fn materialized_companion(&mut self, k: ClassId) -> Option<ClassId> {
+        let info = self.syms.class(k);
+        if let Some(m) = info.companion {
+            return Some(m);
+        }
+        if info.kind != ClassKind::Class || info.mods & crate::ast::mods::CASE == 0 || !matches!(info.owner, Owner::Package(_)) || self.is_library_class(k) {
+            return None;
+        }
+        if self.shared_class(k) {
+            self.with_loader(|w| w.materialize_companion(k))
+        } else {
+            self.materialize_companion(k)
+        }
+    }
+
+    fn materialize_companion(&mut self, k: ClassId) -> Option<ClassId> {
+        if let Some(m) = self.syms.class(k).companion {
+            return Some(m);
+        }
+        let (name, owner, file, span) = {
+            let info = self.syms.class(k);
+            (info.name, info.owner, info.file, info.span)
+        };
+        let cid = self.syms.new_class(name, ClassKind::Object, crate::ast::mods::FINAL, owner, file, None, span);
+        let sym = self.syms.new_sym(name, SymKind::Object(cid), 0, owner, file, None, span);
+        let ty = self.types.class(cid, &[]);
+        {
+            let mut s = self.syms.sym_mut(sym);
+            s.sig = Some(std::sync::Arc::new(MethodSig::value(ty)));
+            s.state().set(crate::symbols::Completion::Done);
+        }
+        let mut info = self.syms.class_mut(cid);
+        info.module_sym = Some(sym);
+        info.companion = Some(k);
+        info.made_companion = true;
+        // Complete as a class without a definition completes (`complete_class_inner`).
+        info.base_types.push((cid, ty));
+        info.state().set(crate::symbols::Completion::Done);
+        self.syms.class_mut(k).companion = Some(cid);
+        self.made_companion_to_string(cid);
+        Some(cid)
+    }
+
+    /// `apply` on an object: `String(bytes, UTF_8)` as `new String`, and a companion object's
+    /// application as its class's creation, apart from `apply_member_of_class`'s path, which most
+    /// selections take without it. The argument lists back where neither applies.
+    #[inline(never)]
+    fn apply_on_object(
+        &mut self,
+        recv: TExprId,
+        recv_ty: TypeId,
+        targs: Option<ListRef>,
+        lists: Vec<ArgList>,
+        span: Span,
+        expected: Option<TypeId>,
+    ) -> Result<(TExprId, TypeId), Vec<ArgList>> {
+        // `String(bytes, UTF_8)` is `new String(bytes, UTF_8)`, which the platform layer's
+        // `newString` implements; the std's `scala.String` object stands for the same statics.
+        if let Type::Class(c, _) = self.types.get(recv_ty) {
+            let info = self.syms.class(c);
+            let scala_string = info.name == names::STRING && info.kind == ClassKind::Object && info.owner == Owner::Package(self.b.scala_pkg);
+            let java_string = if info.name == names::STRING { self.java_lang_object("String") } else { None };
+            if let Some(j) = java_string.filter(|&j| j == c || scala_string) {
+                let recv = self.prog.add(TExpr::Module(j));
+                let recv_ty = self.types.class(j, &[]);
+                let name = self.interner.intern("newString");
+                return Ok(self.apply_member(recv, recv_ty, name, targs, lists, span, expected));
+            }
+        }
+        // `Point(1, 2)` with an explicit companion object that defines no `apply`, selected
+        // through a prefix too (`o.Cmd`, the object's class through `o`).
+        if let Type::Class(c, _) = self.types.get(self.types.strip_nested(recv_ty)) {
+            let info = self.syms.class(c);
+            let is_module = info.kind == ClassKind::Object || info.local_module.is_some() || info.inner_object.is_some();
+            let inner = info.inner_object;
+            if let (true, Some(companion)) = (is_module, info.companion) {
+                if self.syms.class(companion).kind == ClassKind::Class {
+                    if let (Some(ta), true) = (targs, lists.is_empty()) {
+                        // `G[Int]` of a case class's companion: its `apply` with the type
+                        // arguments, expanded as a method that needs arguments is, as the
+                        // constructor's proxy is (`Callee::Ctor`).
+                        // A written companion's is a summoner's (`summon_type_application`).
+                        let cmods = self.syms.class(companion).mods;
+                        let case = cmods & crate::ast::mods::CASE != 0 && cmods & crate::ast::mods::ABSTRACT == 0 && self.syms.class(c).made_companion;
+                        if case && inner.is_none() && Self::required_arity(&self.syms.class(companion).ctor).is_some() {
+                            return Ok(self.apply_companion_apply(companion, targs, Vec::new(), span, expected));
+                        }
+                        if let Some(r) = self.summon_type_application(companion, None, ta, span, expected) {
+                            return Ok(r);
+                        }
+                    }
+                    // The proxy `apply` a companion without one gets has the constructor's
+                    // access, protected for a protected class whose companion is not protected
+                    // itself, and the class's qualifier (`NamerOps.addConstructorApplies`): out of
+                    // reach, but inside the companion and its class, the object takes no
+                    // parameters (E050). A case class has no proxy: its companion's `apply` is the
+                    // synthesized member (`NamerOps.needsConstructorProxies`).
+                    let proxy = self.syms.class(companion).mods & crate::ast::mods::CASE == 0;
+                    if proxy && (!self.proxy_apply_accessible(companion, c) || !self.is_class_accessible(companion)) {
+                        let owner = match self.syms.class(c).owner {
+                            Owner::Class(o) => format!(" in {}", self.class_description(o)),
+                            Owner::Package(p) if p != crate::symbols::ROOT_PKG && self.syms.pkg(p).name != names::EMPTY => format!(" in package {}", self.name_str(self.syms.pkg(p).name)),
+                            _ => String::new(),
+                        };
+                        let msg = format!("object {}{} does not take parameters", self.name_str(self.syms.class(companion).name), owner);
+                        self.error(span, msg);
+                        self.type_args_for_errors(&lists);
+                        return Ok((self.prog.add(TExpr::Unit), ERROR));
+                    }
+                    // The synthesized `apply` of a companion nested in a class constructs
+                    // inside it (`Desugar.classDef`): its enclosing instance is the one the
+                    // companion is selected on, `o` of `o.C(1)`, the prefix `newExpr` keeps.
+                    if inner.is_some() && self.outer_class(companion).is_some() {
+                        let Some(outer) = self.module_prefix(recv, c) else {
+                            let msg = format!("not supported yet: the companion of {}, a class nested in a class, applied through no path", self.name_str(self.syms.class(companion).name));
+                            self.error(span, msg);
+                            return Ok((self.prog.add(TExpr::Unit), ERROR));
+                        };
+                        // The class is constructed through the companion's prefix, which is an
+                        // immutable path (dotty's `newExpr`, E083).
+                        if proxy && !self.is_stable_path(recv) {
+                            let prefix = match (self.types.get(recv_ty), self.prog.expr(recv)) {
+                                (Type::Nested(p, _), _) => Some(p),
+                                (_, TExpr::Field(q, _) | TExpr::CallMethod(q, _, _)) => self.prog.type_of(q),
+                                _ => self.prog.type_of(outer),
+                            };
+                            let msg = format!("{} is not a valid class prefix, since it is not an immutable path", self.show(prefix.unwrap_or(recv_ty)));
+                            self.error(span, msg);
+                        }
+                        let outer_prefixed = std::mem::replace(&mut self.new_prefixed, true);
+                        let receiver_class = self.prog.type_of(outer).and_then(|t| self.class_of(t));
+                        let outer_creator = std::mem::replace(&mut self.creator_receiver, receiver_class.map(|r| (companion, r)));
+                        // The constructor seen from the companion's prefix (`g.I(7, "a")` of a
+                        // `g: O[Int]` takes an `Int`), as a creation through it is.
+                        let prefix = match self.types.get(recv_ty) {
+                            Type::Nested(p, _) => Some(p),
+                            _ => None,
+                        };
+                        let prefix = prefix.filter(|_| self.is_inner_class(companion));
+                        let outer_ctor_prefix = std::mem::replace(&mut self.ctor_prefix, prefix);
+                        let r = self.apply_companion_apply(companion, targs, lists, span, expected);
+                        self.ctor_prefix = outer_ctor_prefix;
+                        self.creator_receiver = outer_creator;
+                        self.new_prefixed = outer_prefixed;
+                        self.pass_outer_applied(r.0, outer);
+                        // The instance's type is the class through the companion's prefix
+                        // (`o.C`), its `apply`'s result seen from `o.C.type`.
+                        let ty = match (self.types.get(recv_ty), self.types.get(r.1)) {
+                            (Type::Nested(p, _), Type::Class(..)) => self.nested_type(p, r.1),
+                            _ => r.1,
+                        };
+                        return Ok((r.0, ty));
+                    }
+                    return Ok(self.apply_companion_apply(companion, targs, lists, span, expected));
+                }
+            }
+        }
+        Err(lists)
+    }
+
+    /// Whether `member`, applied, is a companion's creation rather than itself: the `apply` a
+    /// pickle's synthesized companion declares, or the val of a companion the typer made.
+    #[cold]
+    #[inline(never)]
+    fn made_companion_member(&mut self, member: Option<(SymId, TypeId)>, name: Name, applied: bool) -> bool {
+        let Some((sym, _)) = member else { return false };
+        (name == names::APPLY && self.is_made_companion_apply(sym)) || (applied && self.is_made_companion_val(sym))
+    }
+
+    /// The class of a part of the intersection `t` that has a class `name` nested, its own or
+    /// a base's.
+    #[cold]
+    #[inline(never)]
+    fn intersection_part_nesting(&mut self, t: TypeId, name: Name) -> Option<ClassId> {
+        let t = self.deref(t);
+        let Type::Inter(a, b) = self.types.get(t) else { return None };
+        for part in [a, b] {
+            let found = match self.types.named_class(part) {
+                Some(c) if self.syms.class(c).nested.contains_key(&name) || self.inherited_nested_class(c, name).is_some() => Some(c),
+                Some(_) => None,
+                None => self.intersection_part_nesting(part, name),
+            };
+            if found.is_some() {
+                return found;
+            }
+        }
+        None
+    }
+
+    /// Whether `s` is the val of a companion the typer made for a case class nested in a class
+    /// (`ClassInfo::made_companion`), which an application takes as the class's creation.
+    fn is_made_companion_val(&self, s: SymId) -> bool {
+        let info = self.syms.sym(s);
+        if info.kind != SymKind::Val || info.def.is_some() || info.mods & crate::ast::mods::LAZY == 0 {
+            return false;
+        }
+        crate::tir::is_made_companion_val(&self.syms, s)
+    }
+
+    /// Whether `s` is the synthesized `apply` of a case class's companion a pickle declares
+    /// (`ClassInfo::made_companion`).
+    fn is_made_companion_apply(&self, s: SymId) -> bool {
+        let Owner::Class(m) = self.syms.sym(s).owner else { return false };
+        self.syms.class(m).made_companion && self.loaded.as_ref().is_some_and(|l| l.synthetic_members.contains_key(&s))
+    }
+
     fn constructor_next_to_apply(&mut self, recv_ty: TypeId) -> Option<ClassId> {
         let o = self.class_of(recv_ty)?;
         if self.keeps_synthetic_apply(o) {
@@ -7545,26 +7849,20 @@ impl<'a> Worker<'a> {
         !sig.clauses.iter().skip(ext_clauses).any(|c| !c.is_using)
     }
 
-    pub(super) fn has_java_parens(&self, sym: SymId) -> bool {
-        let info = self.syms.sym(sym);
-        info.java_defined || matches!(info.name, names::TO_STRING | names::HASH_CODE | names::CLONE) || self.in_java_package(sym) || self.string_member_of_std(sym) || self.scala2_std_member(sym)
-    }
-
-    /// Whether `f()` calls a parameterless `f`: dotty's `matchNullaryLoosely` holds of the method
-    /// or of one it overrides (`allOverriddenSymbols`, the declarations `root_declarations` finds by
-    /// their parameters, as `auto_applied` asks them): scala-library's `StringBuilder.length` over
-    /// `CharSequence.length()`, called either way; a Java method of other parameters (`charAt(int)`
-    /// beside a nullary `charAt`) is none it overrides.
+    /// Whether `f()` calls a parameterless `f`: the method or one it overrides is Java's, `Any`'s
+    /// or `Object.clone` (`matchNullaryLoosely`'s test, `nullary_provenance`, a Scala 2 class's
+    /// member left out, which takes no `()`: `List(1).length()` is refused): scala-library's
+    /// `StringBuilder.length` over `CharSequence.length()`, called either way; a Java method of
+    /// other parameters (`charAt(int)` beside a nullary `charAt`) is none it overrides.
     pub(super) fn takes_java_parens(&mut self, sym: SymId) -> bool {
-        if self.has_java_parens(sym) {
-            return true;
-        }
-        if !matches!(self.syms.sym(sym).owner, Owner::Class(_)) {
+        if sym.0 == u32::MAX {
             return false;
         }
-        let mut roots = Vec::new();
-        self.root_declarations(sym, 0, &mut roots);
-        roots.into_iter().any(|r| r != sym && self.has_java_parens(r))
+        let mut chain = vec![sym];
+        if matches!(self.syms.sym(sym).owner, Owner::Class(_)) {
+            self.overridden_chain(sym, 0, &mut chain);
+        }
+        chain.into_iter().any(|s| self.nullary_provenance(s) == super::check::Nullary::Java)
     }
 
     /// The std's `println()`, which stands for scala-library's `Predef.println()`: a Scala 2
@@ -7577,14 +7875,14 @@ impl<'a> Worker<'a> {
     /// A member of the std's ports of Scala 2 artifacts (sbt's test interface, Scala.js's test
     /// bridge and JUnit classes), whose `def f()` a Scala 3 caller may call as `f`, as scalac lets
     /// it call the artifacts' own.
-    fn scala2_std_member(&self, sym: SymId) -> bool {
+    pub(super) fn scala2_std_member(&self, sym: SymId) -> bool {
         let source = self.source(self.syms.sym(sym).file);
         source.is_std && crate::TESTING_STD_FILES.contains(&source.path.as_str())
     }
 
     /// An extension of the std on `String` that stands for a member of `java.lang.String`
     /// (`getBytes()`), which takes the Java parentheses rule as the JDK's members do.
-    fn string_member_of_std(&self, sym: SymId) -> bool {
+    pub(super) fn string_member_of_std(&self, sym: SymId) -> bool {
         let info = self.syms.sym(sym);
         if !info.is_extension || !self.source(info.file).is_std {
             return false;
@@ -7613,10 +7911,15 @@ impl<'a> Worker<'a> {
         te
     }
 
-    /// Whether `sym` is a member of a class of a `java.*` package: a JDK class read from its
-    /// class file, the std's platform layer or a source stand-in for one, whose members all
-    /// take the Java parentheses rule, as scalac takes the JDK's own members.
-    fn in_java_package(&self, sym: SymId) -> bool {
+    /// Whether `sym` is a member of a class of a `java.*` package of the std, its platform layer
+    /// standing for the JDK, whose members take Java's rules (`JavaDefined`), as the JDK's own
+    /// read from their class files do; a program's source in such a package is Scala's.
+    pub(super) fn in_java_package(&self, sym: SymId) -> bool {
+        self.source(self.syms.sym(sym).file).is_std && self.under_java_package(sym)
+    }
+
+    /// Whether the top-level package of `sym`'s owner is `java`.
+    pub(super) fn under_java_package(&self, sym: SymId) -> bool {
         let mut owner = self.syms.sym(sym).owner;
         while let Owner::Class(c) = owner {
             owner = self.syms.class(c).owner;
@@ -7643,20 +7946,22 @@ impl<'a> Worker<'a> {
     /// one it overrides, a method of Java's, of `Any` or of a Scala 2 class; with the E100 warning
     /// (`warnScala2`) where one of them is Scala 2's and none it overrides is Java's or `Any`'s.
     fn auto_applied(&mut self, sym: SymId) -> AutoApply {
-        let mut roots = Vec::new();
+        let mut overridden = Vec::new();
         if matches!(self.syms.sym(sym).owner, Owner::Class(_)) {
-            self.root_declarations(sym, 0, &mut roots);
+            self.overridden_chain(sym, 0, &mut overridden);
         }
-        let overridden: Vec<SymId> = roots.into_iter().filter(|&r| r != sym).collect();
         // A member the std marks Java's (`@javaDefined`, `Math.random()` of the std's `Math`) is
         // no Scala 2 class's, and `clone()`, `toString()` and `hashCode()` override `Object`'s.
-        let own_java = self.has_java_parens(sym);
-        let mut scala2 = !own_java && self.scala2_member(sym);
+        let own = self.nullary_provenance(sym);
+        let own_java = own == super::check::Nullary::Java;
+        let mut scala2 = own == super::check::Nullary::Scala2;
         let mut java = matches!(self.syms.sym(sym).name, names::TO_STRING | names::HASH_CODE | names::CLONE);
         for &r in &overridden {
-            let r_java = self.has_java_parens(r);
-            scala2 |= !r_java && self.scala2_member(r);
-            java |= r_java;
+            match self.nullary_provenance(r) {
+                super::check::Nullary::Java => java = true,
+                super::check::Nullary::Scala2 => scala2 = true,
+                super::check::Nullary::Strict => {}
+            }
         }
         if scala2 && !java {
             AutoApply::Warned
@@ -7670,7 +7975,7 @@ impl<'a> Worker<'a> {
     /// A member of a Scala 2 class, which dotty flags `Scala2x`: of a Scala 2 library's
     /// (`Iterator.next()` of scala-library), or of the lean std's standing for one, `Predef`'s
     /// `println()` among them.
-    fn scala2_member(&self, sym: SymId) -> bool {
+    pub(super) fn scala2_member(&self, sym: SymId) -> bool {
         match self.syms.sym(sym).owner {
             Owner::Class(c) => self.is_scala2_class(c) || self.is_std_scala2_class(c),
             _ => self.predef_println(sym),
@@ -8798,6 +9103,8 @@ impl<'a> Worker<'a> {
     /// where none applies, or its application fails, the qualifier's conversion is tried as for
     /// a failed extension (`inferView`), never the receiver's reading. `None` where the selection
     /// is no such one; otherwise the extension's application, if one applied without errors.
+    /// `retry`: the member's retry on its qualifier (`retry_on_qualifier`), where the qualifier's
+    /// member of the name failed, the infix `a op q`'s operand `a` its argument (`Hoisted`).
     #[cold]
     #[inline(never)]
     #[allow(clippy::too_many_arguments)]
@@ -8810,11 +9117,12 @@ impl<'a> Worker<'a> {
         lists: &mut Option<Vec<ArgList>>,
         span: Span,
         expected: Option<TypeId>,
+        retry: bool,
     ) -> Option<Option<(TExprId, TypeId)>> {
         let written = lists.as_ref()?;
         let first = written.first().filter(|l| !l.using && l.args.len() == 1)?;
         let arg = first.args[0];
-        if !matches!(arg, ArgSrc::Ast(_) | ArgSrc::Typed(..)) || self.has_member_like(recv_ty, name) {
+        if !matches!(arg, ArgSrc::Ast(_) | ArgSrc::Typed(..) | ArgSrc::Hoisted(_)) || !retry && (matches!(arg, ArgSrc::Hoisted(_)) || self.has_member_like(recv_ty, name)) {
             return None;
         }
         let candidates = self.selection_swaps(name, recv_ty)?;
@@ -8859,6 +9167,7 @@ impl<'a> Worker<'a> {
                 Expr::NamedArg(..) => return None,
                 _ => arg,
             },
+            ArgSrc::Hoisted(e) if matches!(self.cur_ast().expr(e), Expr::NamedArg(..)) => return None,
             other => other,
         };
         let written = lists.take().unwrap();
@@ -8874,17 +9183,36 @@ impl<'a> Worker<'a> {
         if let (Some((te, ty)), Some(sym)) = (tried, selected) {
             if !self.attempt_failed(&attempt) || self.swapped_prefix_fits(sym, recv_ty) {
                 // The qualifier is evaluated before the argument where the selected overload takes
-                // it by value: bound ahead, the application made again over the binding.
+                // it by value: bound ahead, the application made again over the binding. The
+                // infix `a op q`'s operand `a` is evaluated before the qualifier where the
+                // selected overload's receiver takes it by value, as `typedInfixOp` lifts an
+                // impure argument of a parameter that is no by-name one (`LiftImpure.liftArgs`).
                 let ext_clauses = self.syms.sym(sym).ext_clauses as usize;
-                let strict = !self.sig_arc(sym).clauses[ext_clauses].params[0].by_name;
-                if !strict || self.is_stable(recv) {
+                let sig = self.sig_arc(sym);
+                let hoisted_arg = matches!(arg, ArgSrc::Hoisted(_));
+                let strict = if hoisted_arg {
+                    let at = (0..ext_clauses).find(|&k| !sig.clauses[k].is_using);
+                    !at.is_some_and(|k| sig.clauses[k].params[0].by_name)
+                } else {
+                    !sig.clauses[ext_clauses].params[0].by_name
+                };
+                // The operand's binding is made over again (`hoist` keeps a stable one as it is).
+                let stable = !hoisted_arg && self.is_stable(recv);
+                if !strict || stable {
                     self.close(attempt);
                     return Some(Some((self.wrap_hoisted(mark, te), ty)));
                 }
                 self.retract(attempt);
                 self.hoisted.truncate(mark);
                 let attempt = self.attempt();
-                let q = self.hoist(recv, recv_ty, span);
+                let (q, arg) = match arg {
+                    ArgSrc::Hoisted(e) => {
+                        let (ta, aty) = self.type_expr(e, expected_arg);
+                        let a = self.hoist(ta, aty, self.cur_ast().expr_span(e));
+                        (recv, ArgSrc::Typed(a, aty))
+                    }
+                    _ => (self.hoist(recv, recv_ty, span), arg),
+                };
                 if let Some((te, ty)) = self.swapped_application(q, recv_ty, arg, expected_arg, &written, name, targs, span, expected) {
                     self.close(attempt);
                     return Some(Some((self.wrap_hoisted(mark, te), ty)));
@@ -8950,7 +9278,7 @@ impl<'a> Worker<'a> {
         expected: Option<TypeId>,
     ) -> Option<(TExprId, TypeId)> {
         let (ta, aty) = match arg {
-            ArgSrc::Ast(e) => self.type_expr(e, expected_arg),
+            ArgSrc::Ast(e) | ArgSrc::Hoisted(e) => self.type_expr(e, expected_arg),
             ArgSrc::Typed(te, ty) => (te, ty),
             _ => return None,
         };
@@ -9018,7 +9346,7 @@ impl<'a> Worker<'a> {
     ) -> Option<(TExprId, TypeId)> {
         let without_args = lists.as_ref().map_or(true, |l| l.iter().all(|a| a.using));
         if !without_args && !converted && self.interner.get(name).ends_with(':') {
-            if let Some(r) = self.right_assoc_selection(recv, recv_ty, name, targs, lists, span, expected) {
+            if let Some(r) = self.right_assoc_selection(recv, recv_ty, name, targs, lists, span, expected, false) {
                 return r;
             }
         }
@@ -9166,7 +9494,16 @@ impl<'a> Worker<'a> {
             self.arg_cache_attempt(tried);
             let outer = self.lexical_selected.replace(false);
             let mut opt = Some(lists.clone());
-            let ext = self.try_extensions(recv, recv_ty, recv_ty, name, targs, &mut opt, span, expected);
+            // A right-associative extension whose method's clause comes before the receiver's
+            // takes the qualifier there (`op(q)(a)`, `Desugar.rightAssocParams`), as the infix
+            // `a op q` whose member failed is retried (`Typer.typedInfixOp`).
+            let ext = match self.interner.get(name).ends_with(':') {
+                true => match self.right_assoc_selection(recv, recv_ty, name, targs, &mut opt, span, expected, true) {
+                    Some(r) => r,
+                    None => self.try_extensions(recv, recv_ty, recv_ty, name, targs, &mut opt, span, expected),
+                },
+                false => self.try_extensions(recv, recv_ty, recv_ty, name, targs, &mut opt, span, expected),
+            };
             let selected = std::mem::replace(&mut self.lexical_selected, outer) == Some(true);
             // The extension applied to the list, whatever its using clauses and later lists give
             // after it (`retry_applied`): dotty's try is the list's application (`simpleApply` in

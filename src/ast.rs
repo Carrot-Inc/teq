@@ -572,6 +572,9 @@ pub struct Ast {
     /// The binders `case given T` and `given T <- ..` make, named as scalac names an anonymous
     /// given (`given_T`): each is a given where it is in scope.
     pub given_binds: std::collections::HashSet<PatId, crate::intern::FxBuild>,
+    /// The selectors of the matches a member's pattern definition makes (`val P = e`, dotty's
+    /// `makePatDef` with `MatchCheck.IrrefutablePatDef`), whose case is checked to be irrefutable.
+    pub patdef_scrutinees: std::collections::HashSet<ExprId, crate::intern::FxBuild>,
     /// The `new C()` written with an empty first argument list before further lists: the `()`
     /// is an argument list, never the place of a using clause.
     pub new_empty_first: Vec<ExprId>,
@@ -836,6 +839,7 @@ impl Ast {
             has_quotes: false,
             new_outers: crate::intern::FxMap::default(),
             given_binds: Default::default(),
+            patdef_scrutinees: Default::default(),
             new_empty_first: Vec::new(),
             inferred_type_lists: Vec::new(),
             js_alias_types: Vec::new(),

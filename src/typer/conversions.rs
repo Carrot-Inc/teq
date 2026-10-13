@@ -279,7 +279,12 @@ impl<'a> Worker<'a> {
                     out.by_member.entry(n).or_default().push(g);
                 }
             }
-            let bases: Vec<ClassId> = self.syms.class(c).base_types.iter().map(|&(b, _)| b).collect();
+            let mut bases: Vec<ClassId> = self.syms.class(c).base_types.iter().map(|&(b, _)| b).collect();
+            // A value class's base types leave `AnyVal` out, which its values conform to: a view
+            // to `AnyVal` is one to any of them (`Predef.Ensuring` from `Any`).
+            if (self.syms.class(c).value_class || self.is_primitive_class(c) || c == self.b.unit) && !bases.contains(&self.b.any_val) {
+                bases.push(self.b.any_val);
+            }
             for b in bases {
                 out.by_result.entry(b).or_default().push(g);
                 for i in 0..self.syms.class(b).member_order.len() {
@@ -1216,6 +1221,12 @@ impl<'a> Worker<'a> {
         }
         let target = self.deref(expected);
         if matches!(self.types.get(target), Type::Var(_) | Type::AppVar(..)) || target == ANY {
+            return None;
+        }
+        // An adaptation tries no conversion to `AnyVal` or `AnyRef` itself, whose result would be
+        // no more specific than the value (`Typer.adapt`'s `TooUnspecific`); a view to them is
+        // still explored where overloads are resolved (`viewExists`, which reports nothing).
+        if report && (target == self.b.t_any_val || target == self.b.t_any_ref) {
             return None;
         }
         let members;

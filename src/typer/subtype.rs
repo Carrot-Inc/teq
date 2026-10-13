@@ -236,6 +236,10 @@ impl<'a> Worker<'a> {
                     None => return t,
                 },
                 Type::AppVar(v, args) => match self.tvars[v].inst {
+                    // `Any` as a higher-kinded variable's instance is the top of its kind, the
+                    // `[_] =>> Any` its parameter declares without a bound, whose application
+                    // `TypeApplications.appliedTo` reduces to `Any`.
+                    Some(ANY) => return ANY,
                     Some(ctor) => {
                         let items: Vec<TypeId> = self.types.items(args).to_vec();
                         let ctor = self.deref(ctor);
@@ -3698,7 +3702,16 @@ impl<'a> Worker<'a> {
                     self.instantiate(v, ANY);
                 }
             }
-            Type::AppVar(_, args) | Type::Class(_, args) | Type::AppParam(_, args) => {
+            Type::AppVar(v, args) => {
+                let info = &self.tvars[v];
+                if info.inst.is_none() && info.lower.is_empty() && info.upper.is_empty() {
+                    self.instantiate(v, ANY);
+                }
+                for a in self.types.items(args).to_vec() {
+                    self.maximize_unbounded_vars(a);
+                }
+            }
+            Type::Class(_, args) | Type::AppParam(_, args) => {
                 for a in self.types.items(args).to_vec() {
                     self.maximize_unbounded_vars(a);
                 }
@@ -4908,10 +4921,12 @@ impl<'a> Worker<'a> {
             Some(score) => score,
             None => self.meet_score(bases, s1, s2),
         };
-        // `matchNullaryLoosely`: `()T` and `=> T` alike where either member is Java's, `Any`'s or
-        // a Scala 2 class's (teq's stand-in: the members a call takes with or without Java's
-        // parentheses, `has_java_parens`); a member without a symbol is none of them.
-        let loose = (score != -2 && self.has_java_parens(s1)) || (score != 2 && self.has_java_parens(s2));
+        // `matchNullaryLoosely`: `()T` and `=> T` alike where either member, or one it overrides,
+        // is Java's, `Any`'s or a Scala 2 class's; a member without a symbol is none of them.
+        // Asked of a nullary pair alone.
+        let empty = |i: &MethodSig| i.tparams.is_empty() && matches!(i.clauses.as_slice(), [c] if c.params.is_empty() && !c.is_using);
+        let loose = (empty(i1) || empty(i2))
+            && ((score != -2 && self.matches_nullary_loosely(s1)) || (score != 2 && self.matches_nullary_loosely(s2)));
         if score <= 0 && self.info_overrides_loosely(i2, i1, loose) {
             return Meet::Second;
         }

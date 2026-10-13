@@ -448,6 +448,9 @@ pub(in crate::typer) fn tclass<M: Mapping + ?Sized>(m: &M, tc: &mut TClass) {
         for (_, s) in &mut l.existing_defs {
             *s = m.sym(*s);
         }
+        if let Some(s) = &mut l.eq_outer {
+            *s = m.sym(*s);
+        }
         for (s, e) in &mut l.constants {
             *s = m.sym(*s);
             *e = m.expr(*e);

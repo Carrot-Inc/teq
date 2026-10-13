@@ -43,6 +43,11 @@ impl<'a> Worker<'a> {
         let mut body_types: Vec<TypeId> = Vec::with_capacity(clauses.len());
         let guide = if exp.is_none() { Some(self.branch_guide(expected)) } else { None };
         let mut caught_all = false;
+        // A member's pattern definition: its case irrefutable (`MatchCheck.IrrefutablePatDef`).
+        let patdef = ast.patdef_scrutinees.contains(&scrut).then(|| match ast.expr(scrut) {
+            Expr::Unchecked(e) => ast.expr_span(e),
+            _ => ast.expr_span(scrut),
+        });
         for c in &clauses {
             self.push_scope();
             let gadt_mark = self.gadt.len();
@@ -50,6 +55,9 @@ impl<'a> Worker<'a> {
             let was_open = std::mem::replace(&mut self.gadt_open, true);
             let was_dead = std::mem::replace(&mut self.dead_case, caught_all);
             let pat = self.type_pattern(c.pat, pty);
+            if let Some(rhs) = patdef {
+                self.check_irrefutable(pat, c.pat, sty, Some(rhs));
+            }
             self.dead_case = was_dead;
             caught_all |= c.guard.is_none() && self.catches_all(c.pat);
             self.gadt_open = was_open;
@@ -252,11 +260,21 @@ impl<'a> Worker<'a> {
                     // A case class's name imported from a value (`import b.I`): its companion,
                     // or the constructor proxy of a class with none.
                     Some(TermRef::ValueClass(_, c)) => Some(c),
-                    Some(TermRef::Global(s) | TermRef::ModuleMember(_, s) | TermRef::This(_, s) | TermRef::ValueMember(_, s)) => {
+                    Some(TermRef::Global(s) | TermRef::ModuleMember(_, s) | TermRef::This(_, s) | TermRef::ValueMember(_, s) | TermRef::Local(s)) => {
+                        let ret = self.syms.sym(s).sig.as_ref().map(|sig| sig.ret);
+                        let inner_object = ret.and_then(|t| match self.types.get(self.types.strip_nested(t)) {
+                            Type::Class(o, _) if self.syms.class(o).inner_object.is_some() => Some(o),
+                            _ => None,
+                        });
                         match self.syms.sym(s).kind {
                             SymKind::Object(o) => self.syms.class(o).companion,
-                            // `val :: : ::.type` of a package object stands for the object.
-                            SymKind::Val if self.in_jar(self.syms.sym(s).file) => {
+                            // A val of an object nested in a class, a companion: its own, or the
+                            // alias an import from a local value makes (`import b.I`).
+                            SymKind::Val if inner_object.is_some() => inner_object.and_then(|o| self.syms.class(o).companion),
+                            // A val of an object's type stands for the object (`val :: : ::.type`
+                            // of a package object, `val FooAlias: Foo.type = Foo`): the extractor
+                            // is the object's (`FooAlias.unapply`).
+                            SymKind::Val => {
                                 let ty = self.sig_of(s).ret;
                                 match self.types.get(ty) {
                                     Type::Class(o, _) if self.syms.class(o).kind == ClassKind::Object => self.syms.class(o).companion,
@@ -324,6 +342,15 @@ impl<'a> Worker<'a> {
         found
     }
 
+    /// A variable bound inside a pattern alternative, at any depth, is refused as dotty's
+    /// `typedBind` refuses it under `Mode.InPatternAlternative` (E024); the binder stays bound.
+    #[cold]
+    #[inline(never)]
+    fn check_alternative_binder(&mut self, name: crate::intern::Name, span: Span) {
+        let msg = format!("Illegal variable {} in pattern alternative", self.name_str(name));
+        self.error(span, msg);
+    }
+
     fn nested_in_bases(&mut self, c: ClassId, name: crate::intern::Name) -> Option<ClassId> {
         self.complete_class(c);
         let bases: Vec<ClassId> = self.syms.class(c).base_types.iter().map(|&(b, _)| b).collect();
@@ -383,6 +410,9 @@ impl<'a> Worker<'a> {
                 };
                 let sym = self.new_local(name, SymKind::Val, ty, span);
                 self.bind_local(name, sym);
+                if self.pattern_alternatives.last() == Some(&self.body_depth) {
+                    self.check_alternative_binder(name, span);
+                }
                 if ast.given_binds.contains(&p) {
                     self.syms.sym_mut(sym).mods |= mods::GIVEN;
                     self.bind_given(sym);
@@ -396,6 +426,9 @@ impl<'a> Worker<'a> {
                         Pat::Bind(name, None) => {
                             let sym = self.new_local(name, SymKind::Val, t, span);
                             self.bind_local(name, sym);
+                            if self.pattern_alternatives.last() == Some(&self.body_depth) {
+                    self.check_alternative_binder(name, span);
+                }
                             self.prog.add_pat(TPat::Bind(sym, Some(eq)))
                         }
                         _ => eq,
@@ -592,6 +625,7 @@ impl<'a> Worker<'a> {
                 // What every alternative establishes holds for the case.
                 let mut common: Option<Vec<(TParamId, TypeId, i8)>> = None;
                 let mut items = Vec::new();
+                self.pattern_alternatives.push(self.body_depth);
                 for &a in ast.pat_list(alts).to_vec().iter() {
                     items.push(self.type_pattern(a, sty));
                     let added: Vec<_> = self.gadt.drain(gadt_mark..).collect();
@@ -600,6 +634,7 @@ impl<'a> Worker<'a> {
                         Some(c) => c.into_iter().filter(|e| added.contains(e)).collect(),
                     });
                 }
+                self.pattern_alternatives.pop();
                 self.gadt.extend(common.unwrap_or_default());
                 let l = self.prog.pat_lists.push_slice(&items);
                 self.prog.add_pat(TPat::Alt(l))
@@ -621,23 +656,32 @@ impl<'a> Worker<'a> {
         }
     }
 
-    /// The field types of a case class or tuple instance.
+    /// The field types of a case class or tuple instance; of one through a prefix (`a.Nest.I`), as
+    /// seen from it (dotty's `Space.signature`, the extractor's result a member of the
+    /// scrutinee's type).
     pub(super) fn class_field_types(&mut self, t: TypeId) -> Option<Vec<TypeId>> {
+        let (prefix, t) = match self.types.get(t) {
+            Type::Nested(p, inner) => (Some(p), inner),
+            _ => (None, t),
+        };
         let Type::Class(c, args) = self.types.get(t) else { return None };
         self.complete_class(c);
         let info = self.syms.class(c);
         if info.mods & mods::CASE == 0 || info.kind == ClassKind::Object {
             return None;
         }
-        let params: Vec<TypeId> = info.ctor.first()?.params.iter().map(|p| p.ty).collect();
+        let mut params: Vec<TypeId> = info.ctor.first()?.params.iter().map(|p| p.ty).collect();
         if params.is_empty() {
             return None;
         }
-        if args == EMPTY_LIST {
-            return Some(params);
+        if args != EMPTY_LIST {
+            let subst: Subst = info.tparams.iter().copied().zip(self.types.items(args).iter().copied()).collect();
+            params = params.iter().map(|&p| self.types.subst(p, &subst)).collect();
         }
-        let subst: Subst = info.tparams.iter().copied().zip(self.types.items(args).iter().copied()).collect();
-        Some(params.iter().map(|&p| self.types.subst(p, &subst)).collect())
+        if let Some(prefix) = prefix {
+            params = params.iter().map(|&p| self.outer_seen_from(p, prefix, c)).collect();
+        }
+        Some(params)
     }
 
     /// A pattern that can fail against `sty` is an error in a generator written without `case`
@@ -651,18 +695,32 @@ impl<'a> Worker<'a> {
         }
         let sty = self.erased_named_tuple(sty);
         let at = self.cur_ast().pat_spans[pat.idx()];
-        let Some((pat_ty, part_sty, part_at)) = self.refutable_part(tp, sty, Some(pat), at) else { return };
-        let mark = self.snapshot();
-        let narrows = self.is_sub(pat_ty, part_sty);
-        self.rollback(mark);
-        let problem = if narrows { "is more specialized than" } else { "does not match" };
+        let Some((pat_ty, part_sty, part_at, extractor)) = self.refutable_part(tp, sty, Some(pat), at) else { return };
+        // dotty's `checkIrrefutable`: a refutable extractor, or a pattern whose type the right
+        // side's does not conform to, with the fix for a definition or a generator.
+        let message = match &extractor {
+            Some(name) if name.is_empty() => "pattern binding uses refutable extractor".to_string(),
+            Some(name) => format!("pattern binding uses refutable extractor `{}`", name),
+            None => {
+                let mark = self.snapshot();
+                let narrows = self.is_sub(pat_ty, part_sty);
+                self.rollback(mark);
+                let problem = if narrows { "is more specialized than" } else { "does not match" };
+                format!("pattern's type {} {} the right hand side expression's type {}", self.show(pat_ty), problem, self.show(part_sty))
+            }
+        };
+        let usage = if extractor.is_some() { "this usage" } else { "the narrowing" };
+        let (fix, addendum, version) = match rhs {
+            Some(_) => ("adding `.runtimeChecked` after the expression", "may result in a MatchError at runtime", "3.8-migration"),
+            None => ("adding the `case` keyword before the full pattern", "will result in a filtering for expression (using `withFilter`)", "3.2-migration"),
+        };
         let msg = format!(
-            "pattern's type {} {} the right hand side expression's type {}",
-            self.show(pat_ty),
-            problem,
-            self.show(part_sty)
+            "{}\n\nIf {} is intentional, this can be communicated by {},\nwhich {}.\nThis patch can be rewritten automatically under -rewrite -source {}.",
+            message, usage, fix, addendum, version
         );
         match rhs {
+            // A refutable extractor's warning spans the pattern and the right side.
+            Some(rhs) if extractor.is_some() => self.warn(Span { start: at.start, end: rhs.end.max(at.end) }, msg),
             Some(rhs) => self.warn(rhs, msg),
             None => self.error(part_at, msg),
         }
@@ -673,7 +731,7 @@ impl<'a> Worker<'a> {
     /// read off the written pattern `ast` where the typed one follows its shape (a binder, a
     /// typed pattern, whose type is its place, a tuple or a case class, alternatives), else the
     /// nearest enclosing one's place `at`.
-    fn refutable_part(&mut self, p: TPatId, sty: TypeId, ast: Option<PatId>, at: Span) -> Option<(TypeId, TypeId, Span)> {
+    fn refutable_part(&mut self, p: TPatId, sty: TypeId, ast: Option<PatId>, at: Span) -> Option<(TypeId, TypeId, Span, Option<String>)> {
         let conforms = |t: &mut Self, target: TypeId| {
             let mark = t.snapshot();
             let ok = t.is_sub(sty, target);
@@ -701,13 +759,13 @@ impl<'a> Worker<'a> {
                     _ => (None, at),
                 };
                 if !conforms(self, t) || matches!(self.prog.pats[inner.idx()], TPat::Seq(..)) {
-                    return Some((t, sty, test_at));
+                    return Some((t, sty, test_at, None));
                 }
                 self.refutable_part(inner, sty, written_inner, at)
             }
             TPat::Class(_, t, _, subs) => {
                 if !conforms(self, t) {
-                    return Some((t, sty, at));
+                    return Some((t, sty, at, None));
                 }
                 let subs = self.prog.pat_lists[subs.range()].to_vec();
                 let written: Vec<Option<PatId>> = match written {
@@ -738,6 +796,7 @@ impl<'a> Worker<'a> {
                 },
                 sty,
                 at,
+                None,
             )),
             TPat::Alt(items) => {
                 let items = self.prog.pat_lists[items.range()].to_vec();
@@ -766,7 +825,18 @@ impl<'a> Worker<'a> {
                 TPat::Class(_, result, _, _) => self.refutable_part(inner, result, None, at),
                 _ => None,
             },
-            TPat::Seq(..) | TPat::Unapply(..) => Some((sty, sty, at)),
+            // A refutable extractor (`checkIrrefutable`'s `RefutableExtractor`), by its qualifier as
+            // written (`E` of `E(x)`).
+            TPat::Seq(..) | TPat::Unapply(..) => {
+                let name = match written {
+                    Some(Pat::Ctor(path, _)) => {
+                        let ast = self.cur_ast();
+                        self.source_text(self.env.file, ast.expr_span(path)).to_string()
+                    }
+                    _ => String::new(),
+                };
+                Some((sty, sty, at, Some(name)))
+            }
         }
     }
 
@@ -1273,9 +1343,15 @@ impl<'a> Worker<'a> {
         let found = match self.base_type(sty, c).map(|b| self.types.get(b)) {
             Some(Type::Nested(p, _)) => Some(p),
             _ => match self.types.get(sty) {
+                // A child declared elsewhere than its sealed parent (`O.Nest.I` of `O.T`): its
+                // prefix through the scrutinee's, `TypeOps.childPrefix`'s walk (`a.Nest`).
                 Type::Nested(p, class) => {
                     let k = self.class_of(class)?;
-                    (self.syms.class(k).owner == Owner::Class(o)).then_some(p)
+                    if self.syms.class(k).owner == Owner::Class(o) {
+                        Some(p)
+                    } else {
+                        self.child_prefix(p, k, c)
+                    }
                 }
                 _ => None,
             },
@@ -1344,6 +1420,10 @@ impl<'a> Worker<'a> {
     /// members from, as dotty selects `unapply` on the qualifier (`trySelectUnapply`).
     fn companion_own_unapply(&mut self, c: ClassId, path: ExprId, sty: TypeId, span: Span) -> Option<Option<SymId>> {
         let Some(companion) = self.syms.class(c).companion else { return Some(None) };
+        // The companion the typer made declares no `unapply`: the synthetic one stands.
+        if self.syms.class(companion).made_companion && self.syms.class(companion).def.is_none() {
+            return Some(None);
+        }
         let companion_ty = self.types.class(companion, &[]);
         let Some((unapply, owner_ty)) = self.find_member(companion_ty, names::UNAPPLY) else { return Some(None) };
         let prefix = {
@@ -1361,46 +1441,23 @@ impl<'a> Worker<'a> {
         }
     }
 
-    /// Reports a pattern whose class is unrelated to the scrutinee type.
+    /// A class pattern's test of a scrutinee that does not conform to the class, judged as a
+    /// typed pattern's is (`check_sensical_test`): dotty's pattern matcher tests a constructor
+    /// pattern's class, which `TypeTestsCasts.checkSensical` judges at erasure, never the typer.
     fn check_related(&mut self, class_ty: TypeId, sty: TypeId, span: Span) {
-        if self.inline.lenient_match > 0 {
-            return;
-        }
-        let mark = self.snapshot();
-        let related = self.is_sub(class_ty, sty) || {
-            self.rollback(mark);
-            self.is_sub(sty, class_ty)
-        };
-        self.rollback(mark);
-        if related {
-            return;
-        }
-        // Another prefix of the class is no incompatibility: the outer test tells them apart
-        // at run time (`case b.I(n)` on an `a.I`), as dotty only warns of the case.
-        let scrut = self.deref(sty);
-        let (bare_class, bare_scrut) = (self.types.strip_nested(class_ty), self.types.strip_nested(scrut));
-        if (bare_class, bare_scrut) != (class_ty, scrut) {
-            let related = self.is_sub(bare_class, bare_scrut) || {
-                self.rollback(mark);
-                self.is_sub(bare_scrut, bare_class)
-            };
-            self.rollback(mark);
-            if related {
+        // The common pattern, a class deriving from the scrutinee's (a sealed parent's case):
+        // some value passes its test, whatever `checkSensical` would ask first.
+        let (scrut, tested) = (self.deref(sty), self.deref(class_ty));
+        if let (Type::Class(f, _), Type::Class(t, _)) = (self.types.get(scrut), self.types.get(tested)) {
+            if self.syms.class(f).kind != ClassKind::Opaque && self.derives_class(t, f) {
                 return;
             }
         }
-        let scrut = self.deref(sty);
-        let open_scrutinee = matches!(
-            self.types.get(scrut),
-            Type::Any | Type::Param(_) | Type::Union(..) | Type::Inter(..) | Type::Error
-        ) || self.class_of(scrut).map_or(false, |sc| self.syms.class(sc).kind == ClassKind::Trait);
-        if !open_scrutinee {
-            let msg = format!(
-                "this pattern of type {} can never match a value of type {}",
-                self.show(class_ty),
-                self.show(sty)
-            );
-            self.error(span, msg);
+        let mark = self.snapshot();
+        let conforms = self.is_sub(sty, class_ty);
+        self.rollback(mark);
+        if !conforms {
+            self.check_sensical_test(class_ty, sty, span);
         }
     }
 
@@ -1520,6 +1577,16 @@ impl<'a> Worker<'a> {
     /// 1926): the qualifier of `o.I(a, b)`, the value an import selects the name on (`import
     /// b.I; case I(n)` is `b.I`), or the `this` of the enclosing class the bare name is a member
     /// of (`case I(n)` inside `O` is `O.this.I`), whatever the scrutinee's prefix.
+    /// The prefix of the object nested in a class that the val `s` holds through a path: `b` of
+    /// a `b.I`.
+    fn companion_alias_prefix(&self, s: SymId) -> Option<TypeId> {
+        let ret = self.syms.sym(s).sig.as_ref()?.ret;
+        match self.types.get(ret) {
+            Type::Nested(p, k) if matches!(self.types.get(k), Type::Class(o, _) if self.syms.class(o).inner_object.is_some()) => Some(p),
+            _ => None,
+        }
+    }
+
     fn pattern_prefix(&mut self, path: ExprId, c: ClassId) -> Option<TypeId> {
         if !self.is_inner_class(c) {
             return None;
@@ -1535,6 +1602,9 @@ impl<'a> Worker<'a> {
             }
             Expr::Ident(name) => match self.lookup_term(name) {
                 Some(TermRef::ValueMember(v, _) | TermRef::ValueClass(v, _)) => self.import_value_type(v),
+                // The alias an import of a companion from a local value makes (`import b.I`),
+                // the companion through the value's path (`b.I`).
+                Some(TermRef::Local(s)) if self.companion_alias_prefix(s).is_some() => self.companion_alias_prefix(s)?,
                 _ => {
                     let frames: Vec<ClassId> = self.env.frames.iter().rev().filter_map(|f| match f {
                         super::Frame::Class(k) => Some(*k),
@@ -2105,7 +2175,7 @@ impl<'a> Worker<'a> {
     /// bound, a path the type it stands for, an opaque type its underlying type in its scope and
     /// its bound, `Any`, outside); an intersection may be `null` only if both parts may, a union
     /// if either may. Not `Null`'s conformance (`null_conforms`), which asks the lower bound.
-    fn scrutinee_may_be_null(&mut self, sty: TypeId) -> bool {
+    pub(super) fn scrutinee_may_be_null(&mut self, sty: TypeId) -> bool {
         self.may_be_null(sty, 0)
     }
 
@@ -2189,6 +2259,15 @@ impl<'a> Worker<'a> {
             }
             Type::Class(c, _) => c,
             _ => return,
+        };
+        // The tested type erases as the scrutinee's does, an opaque type to its alias's class.
+        let test = if self.syms.class(test).kind == ClassKind::Opaque {
+            match self.effective_class(t, 8) {
+                Some(c) => c,
+                None => return,
+            }
+        } else {
+            test
         };
         // scalac tests the generic tuple types and arrays otherwise (`isInstanceOfTuple`).
         let tuples = [self.b.tuple_trait, self.b.cons_tuple, self.b.non_empty_tuple, self.b.empty_tuple];
@@ -2289,6 +2368,15 @@ impl<'a> Worker<'a> {
             }
             Type::Match(..) | Type::Alias(..) | Type::This(_) | Type::Term(_) | Type::Select(..) | Type::Member(..) | Type::AppMember(..) | Type::Decl(_) | Type::Refined(..) | Type::Rec(_) => {
                 let under = self.dependent_underlying(t)?;
+                self.effective_class(under, depth)
+            }
+            // An opaque type is its alias by erasure (`ElimOpaque` runs before `TypeTestsCasts`).
+            Type::Class(c, args) if self.syms.class(c).kind == ClassKind::Opaque => {
+                self.complete_class(c);
+                let info = self.syms.class(c);
+                let Some(under) = info.underlying.filter(|&u| u != t) else { return self.class_of(t) };
+                let subst: Subst = info.tparams.iter().copied().zip(self.types.items(args).iter().copied()).collect();
+                let under = self.types.subst(under, &subst);
                 self.effective_class(under, depth)
             }
             _ => self.class_of(t),

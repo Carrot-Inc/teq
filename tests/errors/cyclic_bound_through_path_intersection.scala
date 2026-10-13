@@ -1,8 +1,8 @@
 // expect: 13:12: error: illegal cyclic type reference: upper bound T.this.b.M & U of type M refers back to the type itself
-// expect: 20:21: error: type mismatch: found (m1 : x.M), required x.b.M
-// expect: 21:23: error: type mismatch: found (m2 : x.b.M), required x.b.b.M
+// expect: 20:21: error: type mismatch: found (infpaths.m1 : infpaths.a.x.M), required infpaths.a.x.b.M
+// expect: 21:23: error: type mismatch: found (infpaths.m2 : infpaths.a.x.b.M), required infpaths.a.x.b.b.M
 // expect: 26:12: error: illegal cyclic type reference: upper bound T.this.b.M & U
-// expect: 33:21: error: type mismatch: found (m1 : x.M), required x.b.M
+// expect: 33:21: error: type mismatch: found (refined.m1 : refined.a.x.M), required refined.a.x.b.M
 // expect: 6 errors found
 // A bound naming its own member through a path is cyclic inside an intersection or a
 // refinement too, as under scalac; the lookup of `a.x.b.b...` used not to end.

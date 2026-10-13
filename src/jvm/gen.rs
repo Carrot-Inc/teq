@@ -4045,6 +4045,31 @@ impl<'a> Gen<'a> {
             }
             return;
         }
+        // A class nested in a class whose companion, an object of each enclosing instance reached
+        // by its getter, holds the getters (scalac's layout): another module's or a jar's, and the
+        // program's case class whose companion the backend writes (`emit_inner_companion`).
+        if let (None, Some(r), true) = (via, recv, !cx.emits(c) || cx.has_inner_case_companion(c)) {
+            if let Owner::Class(o) = cx.input.syms.class(c).owner {
+                if cx.input.syms.class(o).kind == ClassKind::Class {
+                    let clauses = cx.input.syms.class(c).ctor.clone();
+                    let (before, by_name) = clause_shape(&clauses, i);
+                    let outer_name = self.class_name(o);
+                    let outer = JType::L(outer_name.clone());
+                    self.expr(r, &outer);
+                    let module: Rc<str> = Rc::from(cx.companion_name(c));
+                    let getter = cx.input.interner.get(cx.input.syms.class(c).name).to_string();
+                    self.invoke(Invoke::Virtual, &outer_name, false, &getter, &[], &JType::L(module.clone()));
+                    let ret = match by_name {
+                        Some(t) => self.erase(t),
+                        None => types[i].clone(),
+                    };
+                    let desc = method_desc(&types[..before], &ret);
+                    self.getter_call(Invoke::Virtual, &module, false, format!("$lessinit$greater$default${}", i + 1), &desc, temps, &ret, false);
+                    self.adapt(&ret, &types[i]);
+                    return;
+                }
+            }
+        }
         let owner = self.class_name(c);
         let n = self.capture_count(c);
         if via.is_none() && n > 0 && cx.input.syms.class(c).kind != ClassKind::Anon {

@@ -723,8 +723,18 @@ impl<'w, 'a> P<'w, 'a> {
                 if let Some(c) = class {
                     self.collect_class(*c);
                     if module.is_none() && self.needs_synthetic_companion(*c) {
-                        self.local.insert(Key::SynthModule(*c), ());
-                        self.local.insert(Key::SynthModuleClass(*c), ());
+                        // The typer's companion of a case class is written under its own keys
+                        // (`synthetic_companion`).
+                        match self.w.syms.class(*c).companion.filter(|&co| self.w.syms.class(co).def.is_none() && self.lazily_made(co).is_none()) {
+                            Some(co) => {
+                                self.local.insert(Key::Module(co), ());
+                                self.local.insert(Key::Class(co), ());
+                            }
+                            None => {
+                                self.local.insert(Key::SynthModule(*c), ());
+                                self.local.insert(Key::SynthModuleClass(*c), ());
+                            }
+                        }
                     }
                 }
                 if let Some(m) = module {
@@ -1076,10 +1086,13 @@ impl<'w, 'a> P<'w, 'a> {
             return false;
         }
         let is_case = info.mods & mods::CASE != 0;
+        // The companion the source writes; the typer's for a case class, which has no
+        // definition, is the one scalac makes (`Desugar.classDef`), written here.
+        let written = info.companion.filter(|&co| self.w.syms.class(co).def.is_some());
         // A class nested in a class has its companion as an object of the class, which teq
         // holds as a class with a module val.
-        let nested_companion = info.companion.map_or(false, |co| self.w.syms.class(co).inner_object.is_some());
-        (is_case || info.value_class || defaults) && !nested_companion && info.companion.map_or(true, |co| self.w.syms.class(co).kind != ClassKind::Object)
+        let nested_companion = written.map_or(false, |co| self.w.syms.class(co).inner_object.is_some());
+        (is_case || info.value_class || defaults) && !nested_companion && written.map_or(true, |co| self.w.syms.class(co).kind != ClassKind::Object)
     }
 
     fn annotations_of_class(&mut self, c: ClassId, top: bool) {
@@ -2723,6 +2736,10 @@ impl<'w, 'a> P<'w, 'a> {
 
     fn member(&mut self, c: ClassId, s: SymId) {
         let info = self.sym_info(s);
+        // An outer accessor is `ExplicitOuter`'s, after the pickle.
+        if crate::typer::is_outer_accessor_name(self.w.interner.get(info.name), info.def.is_some()) {
+            return;
+        }
         match info.kind {
             SymKind::Object(o) => {
                 if !self.places.contains_key(&Key::Class(o)) {
@@ -3914,8 +3931,11 @@ impl<'w, 'a> P<'w, 'a> {
     /// constructor has defaults, where the source has none.
     fn synthetic_companion(&mut self, c: ClassId) {
         let info = self.class_info(c);
+        // The typer's companion of a case class, which references to it name, but one it made
+        // where a value named it (`lazily_made`), written by the class's keys.
+        let made = info.companion.filter(|&co| self.w.syms.class(co).def.is_none() && self.lazily_made(co).is_none());
         let obj = Obj {
-            class: None,
+            class: made,
             companion: Some(c),
             name: self.name(info.name),
             owner: info.owner,
@@ -3957,6 +3977,10 @@ impl<'w, 'a> P<'w, 'a> {
         self.define(vkey, vaddr);
         if let Some(ms) = obj.class.and_then(|o| self.w.syms.class(o).module_sym) {
             self.define(Key::Sym(ms), vaddr);
+        }
+        // The val of a companion nested in a class that the typer made (`synthetic_companion`).
+        if let Some(v) = obj.class.filter(|_| obj.synthetic).and_then(|o| self.w.syms.class(o).inner_object) {
+            self.define(Key::Sym(v), vaddr);
         }
         self.buf.byte(VALDEF);
         let vlen = self.buf.begin_length();
@@ -4151,7 +4175,9 @@ impl<'w, 'a> P<'w, 'a> {
         if case_object {
             self.case_object_members(obj.class);
         }
-        if let Some(o) = obj.class {
+        // A companion the typer made has the members written above, as scalac makes them; one
+        // the parser made for a `derives` clause holds the derived givens.
+        if let Some(o) = obj.class.filter(|&o| !self.w.syms.class(o).made_companion) {
             let info = self.class_info(o);
             let body = self.body_order(o, &info);
             let mut stmts = self.template_stmts(o);
@@ -5360,6 +5386,9 @@ impl<'w, 'a> P<'w, 'a> {
 
     /// The module class of an object: `TYPEREF X$ prefix`.
     fn module_class_typeref(&mut self, o: ClassId) {
+        if let Some(k) = self.lazily_made(o) {
+            return self.companion_class_ref(k);
+        }
         let info = self.class_head(o);
         if self.is_local(Key::Class(o)) {
             self.placed = true;
@@ -5409,7 +5438,19 @@ impl<'w, 'a> P<'w, 'a> {
     }
 
     /// An object's module val as a path: `TERMREF X prefix`.
+    /// The case class whose companion `o` is, where the typer made `o` the first time a value
+    /// named it (a top-level case class's, `Worker::materialized_companion`): written as the
+    /// companion scalac synthesizes whether or not a value named it, so that the pickle is one
+    /// however the program reads it.
+    pub(super) fn lazily_made(&self, o: ClassId) -> Option<ClassId> {
+        let info = self.w.syms.class(o);
+        (info.made_companion && info.def.is_none() && matches!(info.owner, Owner::Package(_)) && !self.w.in_jar(info.file)).then_some(info.companion).flatten()
+    }
+
     fn module_termref(&mut self, o: ClassId) {
+        if let Some(k) = self.lazily_made(o) {
+            return self.companion_path(k);
+        }
         let info = self.class_head(o);
         if self.is_local(Key::Module(o)) {
             self.placed = true;

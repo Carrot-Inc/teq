@@ -51,7 +51,7 @@ impl<'a, 't> Interp<'a, 't> {
             // synthesized companion, which holds its lookups, is checked as any.
             let info = self.syms().class(c);
             let enum_companion = info.companion.is_some_and(|e| self.syms().class(e).kind == ClassKind::Enum);
-            if (info.def.is_none() && !enum_companion) || info.owner == Owner::Local {
+            if (info.def.is_none() && !enum_companion && !info.made_companion) || info.owner == Owner::Local {
                 return None;
             }
             // A class the interpreter reaches is every worker's: checked under the loader's

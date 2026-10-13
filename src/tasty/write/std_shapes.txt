@@ -27748,6 +27748,12 @@ scala.util.control.NoStackTrace	setStackTrace	java.lang.StackTraceElement[]:scal
 scala.util.control.NoStackTrace	toString	:java.lang.String
 scala.util.control.NonFatal$	apply	java.lang.Throwable:scala.Boolean
 scala.util.control.NonFatal$	unapply	java.lang.Throwable:scala.Option
+scala.util.control.TailCalls$	Call	-:scala.util.control.TailCalls$.Call$
+scala.util.control.TailCalls$	Call	object
+scala.util.control.TailCalls$	Cont	-:scala.util.control.TailCalls$.Cont$
+scala.util.control.TailCalls$	Cont	object
+scala.util.control.TailCalls$	Done	-:scala.util.control.TailCalls$.Done$
+scala.util.control.TailCalls$	Done	object
 scala.util.control.TailCalls$	done	[1],java.lang.Object:scala.util.control.TailCalls$.TailRec
 scala.util.control.TailCalls$	tailcall	[1],scala.Function0:scala.util.control.TailCalls$.TailRec
 scala.util.control.TailCalls$.Call	<init>	[1],scala.Function0:scala.util.control.TailCalls$.Call

@@ -1,6 +1,6 @@
 // expect: 9:12: error: illegal cyclic type reference: upper bound T.this.b.M of type M refers back to the type itself
-// expect: 16:21: error: type mismatch: found (m1 : x.M), required x.b.M
-// expect: 17:23: error: type mismatch: found (m2 : x.b.M), required x.b.b.M
+// expect: 16:21: error: type mismatch: found (infpaths.m1 : infpaths.a.x.M), required infpaths.a.x.b.M
+// expect: 17:23: error: type mismatch: found (infpaths.m2 : infpaths.a.x.b.M), required infpaths.a.x.b.b.M
 // expect: 3 errors found
 // A bound naming its own member through a path of the member's class is cyclic, as under scalac.
 object infpaths {

@@ -1895,6 +1895,16 @@ impl<'a, 't> Interp<'a, 't> {
         }
     }
 
+    /// The module of the companion object `k` as a term (`Symbol.companionModule`): an object's
+    /// module symbol, or the val of an object nested in a class (a case class's made companion
+    /// there too), which `Ref` selects from the enclosing instance.
+    fn companion_module_sym(&self, k: ClassId) -> SymRef {
+        match (self.syms().class(k).module_sym, self.syms().class(k).inner_object) {
+            (None, Some(v)) => SymRef::Term(v),
+            _ => self.module_sym(k),
+        }
+    }
+
     /// The companion of a case class that declares none: scalac synthesizes one holding the
     /// default getters; teq keeps those on the class, which stands for it.
     fn implied_companion(&self, c: ClassId) -> SymRef {
@@ -2135,6 +2145,13 @@ impl<'a, 't> Interp<'a, 't> {
                         self.typer.prog.add(TExpr::Field(m, s))
                     }
                     (None, SymKind::Val | SymKind::Var | SymKind::Param, Owner::Local) => self.typer.prog.add(TExpr::Local(s)),
+                    // A member of a class read from its instance in scope, as `tpd.ref` makes a
+                    // class member's reference `This(owner).select(sym)` (an object nested in a
+                    // class, its companion's val).
+                    (None, SymKind::Val | SymKind::Var, Owner::Class(c)) if self.syms().class(c).kind != ClassKind::Object && !is_ext => {
+                        let this = self.typer.this_ref(c);
+                        self.typer.prog.add(TExpr::Field(this, s))
+                    }
                     (None, SymKind::Val | SymKind::Var, _) => self.typer.prog.add(TExpr::Static(s)),
                     (None, _, Owner::Class(c)) if !is_ext => {
                         let m = self.typer.prog.add(TExpr::Module(c));
@@ -7654,7 +7671,7 @@ fn install_symbols(it: &mut Table) {
                     it.module_sym(c)
                 } else {
                     match it.syms().class(c).companion {
-                        Some(k) => it.module_sym(k),
+                        Some(k) => it.companion_module_sym(k),
                         None => it.implied_companion(c),
                     }
                 }

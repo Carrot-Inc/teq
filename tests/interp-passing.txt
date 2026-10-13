@@ -1,3 +1,4 @@
+abstract_constructor_extractor
 abstract_function
 abstract_function_tupled
 abstract_member_type_test
@@ -6,6 +7,7 @@ access_qualifiers
 adt
 alias_tuple_exhaustivity
 alias_wildcard_refined_member
+alternative_mode_completion
 annotated_type_params
 annotations_ignored
 anon_class_bound_members
@@ -19,6 +21,8 @@ anon_members
 anon_parentless_prefixed
 anon_sites
 any_equals_method
+any_member_beside
+any_member_beside_override
 anyref_parent
 anyref_synchronized
 applied_param_reference
@@ -78,8 +82,10 @@ boxed_null_unboxing
 boxed_numeric_conversions
 boxed_operators
 boxed_widening
+brace_assign_update
 brace_first_line_statements
 brace_next_line
+brace_self_type_parent
 braces
 branch_var_bound_conversion
 bson_macros
@@ -132,12 +138,14 @@ case_class_hash_elements
 case_class_inherited_members
 case_class_join_union
 case_class_nested_hidden
+case_class_outer_equals
 case_class_own_unapply
 case_class_parents
 case_class_selectors
 case_class_synthesized_members
 case_class_tostring_overload
 case_companion_nested
+case_companion_value
 case_copy_clauses
 case_copy_nested
 case_empty_body
@@ -206,9 +214,12 @@ collection_map_hierarchy
 collection_partial_failure
 collections
 colon_lambda_relaxed
+companion_alias_extractor
+companion_apply_default_replace
 companion_apply_unqualified
 companion_as_function
 companion_init_order
+companion_ref_quoted_class
 comparable_boxes
 concat_order
 concat_order_boundary
@@ -235,6 +246,7 @@ constant_singleton_inferred
 constant_singleton_path
 constant_typed_literal
 constant_union_join
+constructor_proxy_shadowed_value
 context_bound_merge
 context_closure_written
 context_function_inferred
@@ -327,6 +339,7 @@ empty_args_given_apply
 empty_failures
 end_markers
 enum_case_defaults
+enum_case_given_through_object
 enum_cases
 enum_category
 enum_extends_class
@@ -336,6 +349,7 @@ enum_gadt
 enum_lookups
 enum_mixed_from_ordinal
 enum_nested
+enum_nested_prefix
 enum_nested_tuple_match
 enum_ordinal_dispatch
 enum_ordinal_null
@@ -503,6 +517,7 @@ given_import_empty_contexts
 given_import_file_contexts
 given_import_level_owner
 given_import_same_level
+given_in_alias_object_scope
 given_intersection
 given_intersection_bounds
 given_laziness
@@ -762,6 +777,7 @@ intersection_member_meet
 intersection_member_overload
 intersection_member_ranges
 intersection_member_receivers
+intersection_refinements_match
 irrefutable_extractor_exhaustive
 iterable_to_iterator
 iterator_laziness
@@ -1067,6 +1083,7 @@ null_basics
 null_cast_unboxing
 null_compare_hk_param
 null_equality_tparam
+nullary_object_override
 nullary_over_java_parens
 number_boxes
 numeric
@@ -1200,6 +1217,7 @@ primitive_stream_stages
 print_writer
 private_ctor
 private_param_reads
+private_qualified_inherited
 process_environment
 process_lifecycle
 process_redirects
@@ -1222,6 +1240,8 @@ prop_nan_bits
 prop_repeat_negative
 prop_string_index_unchecked
 prop_trim_control
+proxy_private_import
+proxy_protected_import
 qualified_private_trait_member
 qualified_this_outer_alias
 quote_tag_collision
@@ -1233,6 +1253,7 @@ receiver_type_args_from_expected
 refined_aux_givens
 refined_projection_patterns
 refinement_alias_meets_bounds
+refinement_intersection_part_member
 refinement_joint_members
 refinement_match_alias
 refinement_member_completer
@@ -1269,6 +1290,7 @@ return_stmt
 right_assoc_ext
 right_assoc_extension_calls
 right_assoc_extension_selected
+right_assoc_member_retry
 runtime_exception_caught
 runtime_objects
 sam_by_name_repeated
@@ -1415,6 +1437,7 @@ script_library
 script_lsp
 script_owned_children
 script_owned_signal
+sealed_child_owner_prefix
 secondary_constructors
 secondary_constructors_anon
 secondary_ctor_parent
@@ -1534,6 +1557,7 @@ symbol_name
 symbolic_type_selection
 syntax_extras
 syntax_gaps
+synthesized_target_name
 sys_exit_status
 sys_package
 system_properties

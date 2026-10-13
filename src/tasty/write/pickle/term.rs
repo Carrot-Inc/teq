@@ -159,7 +159,9 @@ pub(super) fn universal_sig(tps: usize, params: &[&str]) -> Vec<SigParam> {
 #[derive(Clone, Copy)]
 pub(super) enum Getter {
     Method(SymId, Option<Qual>),
-    Ctor(ClassId),
+    /// A constructor's, with the enclosing instance a creation of a class nested in a class
+    /// passes, on which its companion is selected.
+    Ctor(ClassId, Option<TExprId>),
     Forwarder(SymId, TExprId, Name),
 }
 
@@ -927,7 +929,7 @@ impl<'w, 'a> P<'w, 'a> {
                 let index = (at & !DEFAULT_RECEIVER) as usize;
                 let (recv, priors) = if at & DEFAULT_RECEIVER != 0 { (items.first().copied(), items[1..].to_vec()) } else { (None, items) };
                 let getter = match (of, self.default_forwarder) {
-                    (DefaultOf::Ctor(c), _) => Getter::Ctor(c),
+                    (DefaultOf::Ctor(c), _) => Getter::Ctor(c, recv),
                     (DefaultOf::Method(s), _) if self.w.syms.sym(s).name == crate::names::INIT => Getter::Method(s, None),
                     (DefaultOf::Method(s), Some((m, o, n))) if m == s && recv.is_some() => Getter::Forwarder(s, o, n),
                     (DefaultOf::Method(s), _) => Getter::Method(s, Some(recv.map_or(Qual::Owner, Qual::Expr))),
@@ -1346,8 +1348,11 @@ impl<'w, 'a> P<'w, 'a> {
         }
     }
 
+    /// An outer accessor the typer made (`Worker::outer_accessor`), by teq's name or by scalac's,
+    /// which the JVM's carry (`p$O$I$$$outer`).
     fn is_outer_accessor(&self, s: SymId) -> bool {
-        self.w.interner.get(self.w.syms.sym(s).name).starts_with("$outer")
+        let info = self.w.syms.sym(s);
+        crate::typer::is_outer_accessor_name(self.w.interner.get(info.name), info.def.is_some())
     }
 
     /// A top-level val, an object's val, an enum's value: its selection on its owner's path.
@@ -2058,7 +2063,7 @@ impl<'w, 'a> P<'w, 'a> {
                 let order = super::declared_clause_order(self.w, &info, &sig);
                 (name, sig.tparams.len(), sig.clauses, order, owner)
             }
-            Getter::Ctor(c) => {
+            Getter::Ctor(c, _) => {
                 self.w.complete_class(c);
                 let info = self.w.syms.class(c);
                 let n = info.ctor.len();
@@ -2094,7 +2099,7 @@ impl<'w, 'a> P<'w, 'a> {
                 (true, Some(o)) => Some(self.w.library_class_name(o, "")),
                 _ => None,
             },
-            Getter::Ctor(c) => self.is_std_class(c).then(|| format!("{}$", self.w.library_class_name(c, "").trim_end_matches('$'))),
+            Getter::Ctor(c, _) => self.is_std_class(c).then(|| format!("{}$", self.w.library_class_name(c, "").trim_end_matches('$'))),
             Getter::Forwarder(..) => None,
         };
         if let Some(owner) = std_owner {
@@ -2196,13 +2201,21 @@ impl<'w, 'a> P<'w, 'a> {
             Getter::Method(_, Some(Qual::Expr(r))) | Getter::Forwarder(_, r, _) => self.term(r),
             Getter::Method(m, Some(Qual::Owner)) => self.owner_path(m),
             Getter::Method(_, None) => self.this_ref(),
-            Getter::Ctor(c) => self.companion_path(c),
+            // A class nested in a class: its companion, an object of the instance, selected on it.
+            Getter::Ctor(c, Some(r)) if matches!(self.w.syms.class(c).owner, Owner::Class(o) if self.w.syms.class(o).kind != ClassKind::Object) => {
+                self.buf.byte(SELECT);
+                let n = self.simple_name(self.w.syms.class(c).name);
+                self.buf.nat(n as u64);
+                self.term_at(None);
+                self.term(r);
+            }
+            Getter::Ctor(c, _) => self.companion_path(c),
         }
     }
 
     fn getter_owner(&mut self, getter: Getter, owner: Option<ClassId>) {
         match (getter, owner) {
-            (Getter::Ctor(c), _) => self.companion_class_ref(c),
+            (Getter::Ctor(c, _), _) => self.companion_class_ref(c),
             (_, Some(o)) => self.owner_class_ref(o),
             // A top-level method's getter, a member of its file's `$package` object.
             (Getter::Method(m, _), None) if matches!(self.w.syms.sym(m).owner, Owner::Package(_)) => self.package_object_class_ref(m),
@@ -2214,7 +2227,7 @@ impl<'w, 'a> P<'w, 'a> {
     pub(super) fn companion_path(&mut self, c: ClassId) {
         self.term_at(None);
         let info = self.class_info(c);
-        match info.companion.filter(|&k| self.w.syms.class(k).kind == ClassKind::Object) {
+        match info.companion.filter(|&k| self.w.syms.class(k).kind == ClassKind::Object && !self.made_elsewhere(k)) {
             Some(co) => self.module_term(co),
             None if !self.static_owner(info.owner) => self.member_by_name(&self.name(info.name), info.owner),
             None if self.is_local(Key::SynthModule(c)) => self.def_termref(Key::SynthModule(c), info.owner),
@@ -2231,10 +2244,17 @@ impl<'w, 'a> P<'w, 'a> {
         }
     }
 
+    /// Whether `k` is a companion the typer made for a case class of another unit (`ClassInfo::
+    /// made_companion`): named as scalac's synthesized one is, by the class's place.
+    fn made_elsewhere(&self, k: ClassId) -> bool {
+        let info = self.w.syms.class(k);
+        info.made_companion && info.def.is_none() && (self.lazily_made(k).is_some() || !self.is_local(Key::Module(k)))
+    }
+
     /// The companion object's class of a class, as a type.
     pub(super) fn companion_class_ref(&mut self, c: ClassId) {
         let info = self.class_info(c);
-        match info.companion.filter(|&k| self.w.syms.class(k).kind == ClassKind::Object) {
+        match info.companion.filter(|&k| self.w.syms.class(k).kind == ClassKind::Object && !self.made_elsewhere(k)) {
             Some(co) => self.module_class_typeref(co),
             None if self.is_local(Key::SynthModuleClass(c)) => {
                 self.placed = true;
@@ -3864,6 +3884,7 @@ impl<'w, 'a> P<'w, 'a> {
         let skip = args.len().saturating_sub(total);
         // The enclosing instance of a class of a class: the prefix of the instance's type, as
         // `ExplicitOuter` takes it (`new o.I` is `new (o.type)#I`).
+        let mut derived_this: Option<ClassId> = None;
         let outer = match self.w.syms.class(c).owner {
             Owner::Class(o) if skip >= 1 && self.w.syms.class(o).kind != ClassKind::Object => {
                 // The enclosing instance itself: `this`, or its path from a class nested in it
@@ -3886,6 +3907,12 @@ impl<'w, 'a> P<'w, 'a> {
                 let path = !this && self.is_simple_path(args[0]);
                 if !this && !path && self.enclosing.contains(&o) {
                     return self.fail("an instance of a class of another instance of its enclosing class, through no path".to_string());
+                }
+                // `this` of a class deriving from the owner, which encloses the construction (an
+                // object constructing a class it inherits from a trait): the class through that
+                // `this`, `Derived.this.One`, as `Typer.newExpr` types it.
+                if this && matches!(self.w.prog.expr(args[0]), TExpr::This) {
+                    derived_this = self.enclosing.last().copied().filter(|&k| k != o && self.w.syms.class(k).base_types.iter().any(|&(b, _)| b == o));
                 }
                 path.then_some(args[0])
             }
@@ -3972,6 +3999,31 @@ impl<'w, 'a> P<'w, 'a> {
                 self.external_tpt("java.lang", "Object");
             }
             self.external_typeref("java.lang", "Object");
+        } else if let Some(k) = derived_this {
+            self.mark_tree();
+            let app = (!targs.is_empty()).then(|| {
+                self.buf.byte(APPLIEDTYPE);
+                self.buf.begin_length()
+            });
+            self.buf.byte(TYPEREF);
+            let n = self.simple_name(self.w.syms.class(c).name);
+            self.buf.nat(n as u64);
+            // An object's `this` inside it is its module class's `THIS`, as scalac writes it
+            // (`Derived.this.One`), apart from the module's path a selection names.
+            if self.w.syms.class(k).kind == ClassKind::Object {
+                self.buf.byte(THIS);
+                self.class_typeref(k);
+            } else {
+                let this_ty = self.w.types.mk(Type::This(k));
+                self.ty(this_ty);
+            }
+            if let Some(l) = app {
+                for &t in targs {
+                    self.ty(t);
+                }
+                self.buf.end_length(l);
+            }
+            self.class_typeref(c);
         } else if let Some(o) = outer {
             self.mark_tree();
             let app = (!targs.is_empty()).then(|| {
@@ -6482,7 +6534,17 @@ impl<'w, 'a> P<'w, 'a> {
         sig.push(SigParam::Type(cls.clone()));
         let n = self.names.signed("unapply", None, &sig, &result);
         self.buf.nat(n as u64);
-        self.companion_path(c);
+        // The companion selected on the pattern's prefix where that is a value's path (`case
+        // o.K(x, y)` of `o.K`, as `typedUnApply` selects `unapply` on the written qualifier).
+        match self.w.types.get(t) {
+            Type::Nested(p, _) if matches!(self.w.types.get(p), Type::Term(_) | Type::Select(..)) => {
+                self.buf.byte(TERMREF);
+                let name = self.simple_name(self.w.syms.class(c).name);
+                self.buf.nat(name as u64);
+                self.ty(p);
+            }
+            _ => self.companion_path(c),
+        }
         self.companion_class_ref(c);
         self.buf.end_length(sl);
         if let Some(x) = ta {

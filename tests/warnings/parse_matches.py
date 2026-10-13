@@ -2,7 +2,7 @@
 # matches for the file named as the second argument, one `line:col kind` per warning in source
 # order, as often as it is given (columns from 1, the start of the span the caret line marks):
 # `exhaustive` (scalac's E029, teq's `match may not be exhaustive`), `unreachable` (E030 and
-# E121, `unreachable case`) and `not-partial` (E211, `match expression in result of block will
+# E121, `unreachable case` and `Unreachable case except for null`) and `not-partial` (E211, `match expression in result of block will
 # not be used to synthesize partial function`), from scalac's `-- [E<n>] ... Warning:
 # <path>:<line>:<col>` blocks or teq's `<path>:<line>:<col>: warning: <message>` lines.
 import re, sys
@@ -24,7 +24,7 @@ if mode == "scalac":
                 found.append((int(m.group(3)), len(c.group(1)) + 1, kinds[m.group(1)]))
                 break
 else:
-    kinds = [("match may not be exhaustive", "exhaustive"), ("unreachable case", "unreachable"),
+    kinds = [("match may not be exhaustive", "exhaustive"), ("unreachable case", "unreachable"), ("Unreachable case except for null", "unreachable"),
              ("match expression in result of block will not be used", "not-partial")]
     head = re.compile(r"^(.*):(\d+):(\d+): warning: (.*)$")
     for line in lines:

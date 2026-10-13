@@ -287,7 +287,7 @@ expect "a nested class through a prefix: the first build" "$(field ok),$(count e
 sed -i.bak 's/a\.Item = new a\.Item/b.Item = new b.Item/' "$pdir/A.scala"
 build "$pdir/A.scala"
 expect "a nested class's prefix changed" "$(field ok),$(count error)" 'false,1'
-if has 'found b.Item, required a.Item'; then ok; else bad "a nested class's prefix changed: $RESULT"; fi
+if has 'found API.b.Item, required API.a.Item'; then ok; else bad "a nested class's prefix changed: $RESULT"; fi
 as_fresh "a nested class's prefix changed" "$pdir/A.scala" "$pdir/B.scala"
 mv "$pdir/A.scala.bak" "$pdir/A.scala"
 build "$pdir/A.scala"

@@ -1,5 +1,5 @@
 // expect: 15:29: error: type mismatch: found (b.R : R), required (O.this.R : R)
-// expect: 24:7: error: class C has conflicting base types a.I and b.I
+// expect: 24:7: error: class C has conflicting base types H.a.I and H.b.I
 // expect: 29:23: error: type mismatch: found o.Item, required o2.Item
 // expect: 31:25: error: type mismatch: found o.Item, required w.Item
 // expect: 33:26: error: type mismatch: found (joined : ((o : O) | (o2 : O))#Item), required o.Item

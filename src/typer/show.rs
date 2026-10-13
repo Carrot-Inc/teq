@@ -36,6 +36,61 @@ impl<'a> Worker<'a> {
         out.push(']');
     }
 
+    /// A binder with its bounds, a higher-kinded one with its kind as dotty's `decomposeLambdas`
+    /// prints it: a lambda bound's parameters in brackets after the name (`K[_]`), its result
+    /// the bound.
+    fn show_binder(&self, p: TypeId, lo: TypeId, hi: TypeId, out: &mut String) {
+        self.show_into(p, out, false);
+        let lo = match self.types.get(lo) {
+            Type::Lambda(_, body) => body,
+            _ => lo,
+        };
+        let hi = match self.types.get(hi) {
+            Type::Lambda(ps, body) => {
+                out.push('[');
+                for (i, &q) in self.types.items(ps).iter().enumerate() {
+                    if i > 0 {
+                        out.push(',');
+                    }
+                    self.show_param_binder(q, out);
+                }
+                out.push(']');
+                body
+            }
+            // Declared without a bound, the kind is the parameter's arity (`F[_]`).
+            _ => {
+                if let Type::Param(id) = self.types.get(p) {
+                    let arity = self.syms.tparam(id).arity as usize;
+                    if arity > 0 {
+                        out.push('[');
+                        out.push_str(&vec!["_"; arity].join(","));
+                        out.push(']');
+                    }
+                }
+                hi
+            }
+        };
+        if lo != NOTHING {
+            out.push_str(" >: ");
+            self.show_into(lo, out, false);
+        }
+        if hi != ANY {
+            out.push_str(" <: ");
+            self.show_into(hi, out, false);
+        }
+    }
+
+    /// A lambda's parameter as its binder shows it, with the bounds it declares.
+    pub(super) fn show_param_binder(&self, p: TypeId, out: &mut String) {
+        match self.types.get(p) {
+            Type::Param(id) => {
+                let info = self.syms.tparam(id);
+                self.show_binder(p, info.lower, info.upper, out);
+            }
+            _ => self.show_into(p, out, false),
+        }
+    }
+
     /// A type deeper than any a program writes is cut short: a cycle through a path's
     /// underlying type would otherwise never end.
     pub(super) fn show_into(&self, t: TypeId, out: &mut String, nested: bool) {
@@ -141,8 +196,14 @@ impl<'a> Worker<'a> {
             }
             Type::Ctor(c) => out.push_str(self.interner.get(self.syms.class(c).name)),
             Type::Lambda(ps, body) => {
-                self.show_args(ps, out);
-                out.push_str(" =>> ");
+                out.push('[');
+                for (i, &p) in self.types.items(ps).iter().enumerate() {
+                    if i > 0 {
+                        out.push_str(", ");
+                    }
+                    self.show_param_binder(p, out);
+                }
+                out.push_str("] =>> ");
                 self.show_into(body, out, false);
             }
             Type::Poly(ps, body) => {
@@ -153,16 +214,8 @@ impl<'a> Worker<'a> {
                     if i > 0 {
                         out.push_str(", ");
                     }
-                    self.show_into(p, out, false);
                     let (lo, hi) = (bounds.get(2 * i).copied().unwrap_or(NOTHING), bounds.get(2 * i + 1).copied().unwrap_or(ANY));
-                    if lo != NOTHING {
-                        out.push_str(" >: ");
-                        self.show_into(lo, out, false);
-                    }
-                    if hi != ANY {
-                        out.push_str(" <: ");
-                        self.show_into(hi, out, false);
-                    }
+                    self.show_binder(p, lo, hi, out);
                 }
                 out.push_str("] => ");
                 self.show_into(body, out, false);
@@ -172,7 +225,10 @@ impl<'a> Worker<'a> {
                 None => self.show_var(v, out),
             },
             Type::AppVar(v, args) => {
-                self.show_var(v, out);
+                match self.tvars[v].name {
+                    Some(n) => out.push_str(self.interner.get(n)),
+                    None => self.show_var(v, out),
+                }
                 self.show_args(args, out);
             }
             Type::Union(a, b, _) => {
@@ -363,9 +419,18 @@ impl<'a> Worker<'a> {
     }
 
     /// `x`, `x.y`, `C.this`.
-    fn show_path(&self, t: TypeId, out: &mut String) {
+    pub(super) fn show_path(&self, t: TypeId, out: &mut String) {
         match self.types.get(t) {
-            Type::Term(s) => out.push_str(self.interner.get(self.syms.sym(s).name)),
+            // A member of an object, by the object's path (`API.b`, the prefix dotty's
+            // `TermRef(API, b)` prints).
+            Type::Term(s) => {
+                if let Owner::Class(o) = self.syms.sym(s).owner {
+                    if self.show_object_path(o, out) {
+                        out.push('.');
+                    }
+                }
+                out.push_str(self.interner.get(self.syms.sym(s).name))
+            }
             Type::Select(p, s) => {
                 self.show_path(p, out);
                 out.push('.');
@@ -377,6 +442,24 @@ impl<'a> Worker<'a> {
             }
             _ => self.show_into(t, out, true),
         }
+    }
+
+    /// The path of the static object `o` (`API`, `P.O` of an object nested in one), a package
+    /// object's members standing at their package's level; false where `o` is no such object.
+    fn show_object_path(&self, o: ClassId, out: &mut String) -> bool {
+        let info = self.syms.class(o);
+        let name = self.interner.get(info.name);
+        if info.kind != ClassKind::Object || name == "package" || name.ends_with("$package") {
+            return false;
+        }
+        if let Owner::Class(p) = info.owner {
+            if !self.show_object_path(p, out) {
+                return false;
+            }
+            out.push('.');
+        }
+        out.push_str(name);
+        true
     }
 
     fn path_sym(&self, t: TypeId) -> SymId {
@@ -487,16 +570,7 @@ impl<'a> Worker<'a> {
                 if i > 0 {
                     out.push_str(", ");
                 }
-                out.push_str(self.interner.get(self.syms.tparam(t).name));
-                let (lo, hi) = (self.syms.tparam(t).lower, self.syms.tparam(t).upper);
-                if lo != NOTHING {
-                    out.push_str(" >: ");
-                    self.show_into(lo, &mut out, false);
-                }
-                if hi != ANY {
-                    out.push_str(" <: ");
-                    self.show_into(hi, &mut out, false);
-                }
+                self.show_param_binder(self.types.param(t), &mut out);
             }
             out.push(']');
         }

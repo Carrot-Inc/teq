@@ -814,6 +814,7 @@ impl<'a> Worker<'a> {
                     // its file; an object of another file with that name is another definition.
                     Some(existing) if self.syms.class(existing).def.is_none() && self.syms.class(existing).file == file => {
                         self.syms.class_mut(existing).def = Some(id);
+                        self.reset_made_companion(existing);
                         existing
                     }
                     _ => self.new_object(file, owner, def.name, def.mods, Some(id), def.span),
@@ -863,6 +864,28 @@ impl<'a> Worker<'a> {
                 if let Some(obj) = self.existing_object(owner, def.name) {
                     self.syms.class_mut(cid).companion = Some(obj);
                     self.syms.class_mut(obj).companion = Some(cid);
+                } else if kind == ClassKind::Class && def.mods & mods::CASE != 0 && matches!(owner, Owner::Class(_)) {
+                    // A case class's companion is an object whether or not the source writes one
+                    // (`Desugar.classDef`'s `companionDefs`): one of a class or an object made here
+                    // without a definition, as an enum's is, an object of its file of the name
+                    // written later taking its place (`enter_class`'s merge); a top-level one is
+                    // made where a value first names it (`Worker::materialized_companion`).
+                    let c = if matches!(owner, Owner::Class(o) if self.syms.class(o).kind != ClassKind::Object) {
+                        self.new_inner_companion_of(file, owner, def.name, def.span, true)
+                    } else {
+                        self.new_object(file, owner, def.name, 0, None, def.span)
+                    };
+                    self.syms.class_mut(cid).companion = Some(c);
+                    self.syms.class_mut(c).companion = Some(cid);
+                    self.syms.class_mut(c).made_companion = true;
+                    // Complete as a class without a definition completes (`complete_class_inner`);
+                    // an object of its file written later that takes its place starts afresh
+                    // (`reset_made_companion`).
+                    let self_ty = self.types.class(c, &[]);
+                    let mut info = self.syms.class_mut(c);
+                    info.base_types.push((c, self_ty));
+                    info.state().set(Completion::Done);
+                    self.made_companion_to_string(c);
                 }
                 if kind == ClassKind::Enum {
                     self.enter_enum_body(file, owner, cid, id);
@@ -908,6 +931,9 @@ impl<'a> Worker<'a> {
         if let Some(class) = self.existing_class(owner, def.name) {
             self.syms.class_mut(class).companion = Some(cid);
             self.syms.class_mut(cid).companion = Some(class);
+            if self.derives_companion(cid) {
+                self.made_companion_to_string(cid);
+            }
         }
         self.enter_body(file, cid, &cls.body);
     }
@@ -916,13 +942,19 @@ impl<'a> Worker<'a> {
     /// (`enter_inner_object`'s shape) without a definition, its val eager in a class as dotty's
     /// `LazyVals.transformSyntheticModule` makes a synthesized companion's, lazy in a trait.
     fn new_inner_companion(&mut self, file: FileId, owner: Owner, name: crate::intern::Name, span: crate::source::Span) -> ClassId {
+        self.new_inner_companion_of(file, owner, name, span, false)
+    }
+
+    /// `new_inner_companion`, its val lazy in a class too where `lazy`: a case class's companion,
+    /// which has no body to run, made on its first read as a written object nested there is.
+    fn new_inner_companion_of(&mut self, file: FileId, owner: Owner, name: crate::intern::Name, span: crate::source::Span, lazy: bool) -> ClassId {
         let cid = self.syms.new_class(name, ClassKind::Class, mods::FINAL, owner, file, None, span);
         // An object nested in a class, typed through the enclosing instance (`enter_inner_object`).
         self.mark_inner_class(cid);
         self.record_self_alias(cid);
         let ty = self.types.class(cid, &[]);
         let in_trait = matches!(owner, Owner::Class(o) if self.syms.class(o).kind == ClassKind::Trait);
-        let m = mods::FINAL | if in_trait { mods::LAZY } else { 0 };
+        let m = mods::FINAL | if in_trait || lazy { mods::LAZY } else { 0 };
         let sym = self.syms.new_sym(name, SymKind::Val, m, owner, file, None, span);
         {
             let mut s = self.syms.sym_mut(sym);
@@ -934,12 +966,29 @@ impl<'a> Worker<'a> {
         cid
     }
 
+    /// The companion the namer made for a case class, which an object the file writes takes the
+    /// place of: no longer made, and completed from its definition.
+    fn reset_made_companion(&mut self, k: ClassId) {
+        let mut info = self.syms.class_mut(k);
+        if info.made_companion {
+            info.made_companion = false;
+            info.base_types.clear();
+            info.state().set(Completion::NotStarted);
+            // Its `toString` the rule gave (`made_companion_to_string`), which a written object
+            // has not.
+            if let Some(s) = info.members.remove(&crate::names::TO_STRING) {
+                info.member_order.retain(|&m| m != s);
+            }
+        }
+    }
+
     /// The object of the class's body that the companion `k` an enum made stands for: `k`
     /// takes its definition and its body, and its val is lazy, as an object's is.
     fn define_inner_companion(&mut self, file: FileId, k: ClassId, id: DefId) {
         let def = self.ast(file).def(id);
         let DefKind::Class(cls) = &def.kind else { return };
         self.syms.class_mut(k).def = Some(id);
+        self.reset_made_companion(k);
         self.def_classes.insert(file.0 as usize, id, k);
         self.syms.class_mut(k).has_exports = !cls.exports.is_empty();
         self.enter_class_annots(file, def, k);
