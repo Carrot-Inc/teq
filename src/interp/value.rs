@@ -87,6 +87,14 @@ pub enum TreeRef {
     /// in an ascription to the repeated type as dotty's does (`Typed(SeqLiteral(args, elemtpt),
     /// TypeTree(T*))`, `Applications.makeVarArg`, `seqToRepeated`).
     SeqLiteral(TExprId),
+    /// The definition of an owner around a macro's site that has no typed tree yet, by the run
+    /// and its place in the site's owners (`SymRef::Site`): a lambda's `$anonfun`, as dotty's
+    /// `FromSymbol.definitionFromSym` makes a method's `DefDef` from its symbol, its
+    /// parameters and no right-hand side.
+    Site(u32, u32),
+    /// The val the splice of a run owns its expansion by, `Symbol.spliceOwner`'s tree: dotty's
+    /// `Splicer` makes a synthetic `val macro: Any` (`nme.MACROkw`) the owner of what it expands.
+    SpliceOwner(u32),
 }
 
 /// What a `quotes.reflect.Symbol` stands for.

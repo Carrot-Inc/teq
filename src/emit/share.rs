@@ -1416,11 +1416,6 @@ impl<'a> Enc<'a> {
                 self.fun(f);
             }
         }
-        self.tok(tc.forwarders.len() as u64);
-        for &(a, b) in &tc.forwarders {
-            self.sym(a);
-            self.sym(b);
-        }
         self.tok(tc.super_accessors.len() as u64);
         for acc in &tc.super_accessors {
             self.class(acc.of_trait);

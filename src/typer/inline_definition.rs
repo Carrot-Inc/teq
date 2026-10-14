@@ -492,25 +492,39 @@ impl<'a> Worker<'a> {
             let s = self.syms.sym(sym);
             (s.file, s.def)
         };
-        let Some(def_id) = def_id else { return };
+        // An inline member's export forwarder has no definition of the source: its body is the
+        // member's call on the path, checked and stored as a definition's is (dotty's
+        // `PrepareInlineable.registerInlineInfo` of the forwarder, `Namer.addForwarder`).
+        let forwarder = match def_id {
+            None if self.is_inline_forwarder(sym) => self.syms.forward_of(sym),
+            _ => None,
+        };
+        if def_id.is_none() && forwarder.is_none() {
+            return;
+        }
         // A library's body (`demand_library_definition`) is its producer's, which scalac typed:
         // what its check reports is teq's limit, never the program's diagnostic, and a body
         // with an error keeps the retype path (`library_entry`).
-        let library = self.library_inline(sym);
+        let library = forwarder.is_none() && self.library_inline(sym);
         if !library && (!self.program_file(file) || self.is_body_file(file)) {
             return;
         }
-        let def = self.ast(file).def(def_id);
-        let body = match &def.kind {
-            DefKind::Fun(f) => f.body,
-            DefKind::Given(g) => g.alias,
-            _ => None,
-        };
-        let Some(body) = body else { return };
         // What the definition spans, its header to the end of its body: where what the check
-        // reports belongs to the definition.
-        let body_span = self.ast(file).expr_span(body);
-        let def_span = Span { start: def.span.start.min(body_span.start), end: def.span.end.max(body_span.end) };
+        // reports belongs to the definition; a forwarder's, its selector.
+        let def_span = match def_id {
+            Some(def_id) => {
+                let def = self.ast(file).def(def_id);
+                let body = match &def.kind {
+                    DefKind::Fun(f) => f.body,
+                    DefKind::Given(g) => g.alias,
+                    _ => None,
+                };
+                let Some(body) = body else { return };
+                let body_span = self.ast(file).expr_span(body);
+                Span { start: def.span.start.min(body_span.start), end: def.span.end.max(body_span.end) }
+            }
+            None => self.syms.sym(sym).span,
+        };
         let sig = self.sig_arc(sym);
         let params: Vec<SymId> = sig.clauses.iter().flat_map(|c| c.params.iter().map(|p| p.sym)).collect();
         self.inline_definitions.insert(sym, Arc::new(InlineDefinition::in_progress(params.clone())));
@@ -538,7 +552,10 @@ impl<'a> Worker<'a> {
             t.outside_inline(|t| {
                 t.inline.checking += 1;
                 t.inline.notes.push(notes);
-                let typed = t.with_env(env, |t| t.type_inline_definition(sym, &sig));
+                let typed = t.with_env(env, |t| match &forwarder {
+                    Some(fwd) => t.inline_forwarder_body(sym, fwd, &sig),
+                    None => t.type_inline_definition(sym, &sig),
+                });
                 let notes = t.inline.notes.pop().expect("the notes of the body under the check");
                 t.inline.checking -= 1;
                 (typed, notes)

@@ -39,17 +39,16 @@ pub struct Digests {
     syms: u64,
     files: u64,
     /// The program's tables, per `WHOLE`.
-    whole: [u64; 6],
+    whole: [u64; 5],
 }
 
 /// Why nothing was kept when a part of the program's tables differs.
-const WHOLE: [&str; 6] = [
+const WHOLE: [&str; 5] = [
     "not kept: the linked and external classes differ",
     "not kept: the entry points differ",
     "not kept: the overrides differ",
     "not kept: the traits' super calls differ",
     "not kept: the jar members' target names differ",
-    "not kept: the export forwarders differ",
 ];
 
 impl Digests {
@@ -226,7 +225,7 @@ fn own(cx: &Cx, unit: Unit) -> u64 {
         h.write_u32(a.getter.map_or(u32::MAX, |i| i));
     }
     h.write_u8(0xff);
-    for &(a, b) in tc.forwarders.iter().chain(&tc.bridges) {
+    for &(a, b) in tc.bridges.iter() {
         sym_key(syms, a, &mut h);
         sym_key(syms, b, &mut h);
     }
@@ -388,7 +387,7 @@ fn facts(cx: &Cx, prev: &Snapshot) -> (Digests, Snapshot) {
                 sym_key(syms, prog.funs[f.idx()].sym, h);
             }
             h.write_u8(0xff);
-            for &(a, b) in tc.forwarders.iter().chain(&tc.bridges) {
+            for &(a, b) in tc.bridges.iter() {
                 sym_key(syms, a, h);
                 sym_key(syms, b, h);
             }
@@ -477,7 +476,7 @@ fn facts(cx: &Cx, prev: &Snapshot) -> (Digests, Snapshot) {
         v.sort_unstable();
         v
     };
-    let mut whole = [0u64; 6];
+    let mut whole = [0u64; 5];
     let mut h = FxHasher::default();
     sorted(reach.linked.iter().map(|c| c.0 as u64).collect()).hash(&mut h);
     sorted(reach.external_bodies.iter().map(|c| c.0 as u64).collect()).hash(&mut h);
@@ -527,28 +526,6 @@ fn facts(cx: &Cx, prev: &Snapshot) -> (Digests, Snapshot) {
         targets = targets.wrapping_add(e.finish());
     }
     whole[4] = targets;
-    // The export forwarders the plan gives each site, which name members of other files.
-    let mut exports = 0u64;
-    let sites = reach.exports.classes.iter().map(|(&c, l)| (c.0 as u64, l)).chain(reach.exports.files.iter().map(|(&f, l)| (1u64 << 40 | f.0 as u64, l)));
-    for (site, list) in sites {
-        let mut e = FxHasher::default();
-        site.hash(&mut e);
-        for f in list {
-            f.name.hash(&mut e);
-            f.selected.hash(&mut e);
-            f.relayed.hash(&mut e);
-            match f.q {
-                crate::typer::exports::ExportQualifier::Object(o) => (0u8, o.0).hash(&mut e),
-                crate::typer::exports::ExportQualifier::Package(p) => (1u8, p.0).hash(&mut e),
-            }
-            match f.target {
-                crate::typer::export_plan::JvmTarget::Object(k) => k.hash(&mut e),
-                crate::typer::export_plan::JvmTarget::Member(m) => sym_key(syms, m, &mut e),
-            }
-        }
-        exports = exports.wrapping_add(e.finish());
-    }
-    whole[5] = exports;
     // `prog.template_syms` stays out: a unit reads the entries of its own template strings alone,
     // and a retype of another file enters its new templates under new strings.
 

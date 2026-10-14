@@ -234,6 +234,19 @@ pub(in crate::typer) fn class<M: Mapping + ?Sized>(m: &M, c: &mut ClassInfo) {
     c.inner_object = c.inner_object.map(|s| m.sym(s));
     syms_in(m, &mut c.ctors);
     c.primary_ctor = c.primary_ctor.map(|s| m.sym(s));
+    forwarders(m, &mut c.forwarders);
+}
+
+/// The value forwarders of a class or a package (`value_exports`): each forwarder and the member it
+/// calls; the path is an index of the value imports every worker shares.
+fn forwarders<M: Mapping + ?Sized>(m: &M, fwds: &mut [(SymId, Arc<Forward>)]) {
+    for (s, fwd) in fwds.iter_mut() {
+        *s = m.sym(*s);
+        let target = m.sym(fwd.target);
+        if target != fwd.target {
+            *fwd = Arc::new(Forward { target, ..(**fwd).clone() });
+        }
+    }
 }
 
 pub(in crate::typer) fn alias<M: Mapping + ?Sized>(m: &M, a: &mut AliasInfo) {
@@ -268,6 +281,7 @@ pub(in crate::typer) fn package<M: Mapping + ?Sized>(m: &M, p: &mut PkgInfo, par
         syms_in(m, &mut e.extensions);
     }
     syms_in(m, &mut p.givens);
+    forwarders(m, &mut p.forwarders);
     p.package_object = p.package_object.map(|c| m.class(c));
     if parent {
         p.parent = p.parent.map(|q| m.pkg(q));
@@ -426,10 +440,6 @@ pub(in crate::typer) fn tclass<M: Mapping + ?Sized>(m: &M, tc: &mut TClass) {
     }
     for f in &mut tc.ctors {
         *f = m.fun(*f);
-    }
-    for (a, b) in &mut tc.forwarders {
-        *a = m.sym(*a);
-        *b = m.sym(*b);
     }
     for sa in &mut tc.super_accessors {
         sa.of_trait = m.class(sa.of_trait);

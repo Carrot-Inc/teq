@@ -5,12 +5,12 @@
 | class | tests |
 |---|---|
 | pass | 95 |
-| wrong-output | 55 |
+| wrong-output | 57 |
 | run-error | 14 |
 | run-timeout | 0 |
 | compile-crash | 0 |
 | compile-timeout | 0 |
-| compile-error | 158 |
+| compile-error | 156 |
 
 ## Compile errors by bucket
 
@@ -21,7 +21,7 @@
 | gap | other | 10 |
 | gap | named tuples and named patterns | 2 |
 | gap | syntax | 2 |
-| left out on purpose | inline/macro/compiletime | 74 |
+| left out on purpose | inline/macro/compiletime | 72 |
 | left out on purpose | extends App | 8 |
 | left out on purpose | Java | 6 |
 | left out on purpose | match / dependent / structural types | 2 |
@@ -58,9 +58,9 @@
 - 1 × `Parameter must be a known constant` (tasty-macro-const: `println(natConst(2))`)
 - 1 × `type argument a does not have the same kind as its bound [_]` (tasty-simplified: `case Wrap[Apply[a]] => F[a]`)
 
-## wrong-output (55)
+## wrong-output (57)
 
-Xmacro-settings-compileTimeEnv, expr-map-2, flops-rewrite, flops-rewrite-2, flops-rewrite-3, i12392, i14902, i15968, i17445, i18283, i20449, i22395, i4803, i4803b, i4803c, i4947e, i4947f, i5119b, i6765, i6765-b, i6765-c, i7898, i7987, i8007, i8514, i8514b, inline-beta-reduce-polyfunction, paramSymss, quote-and-splice, quote-impure-by-name, quote-inline-function, quote-match-poly-function-1, quote-match-poly-function-1-regression, quote-matcher-power, quote-matching-optimize-1, quote-matching-optimize-2, quote-matching-optimize-3, quote-matching-optimize-4, quote-matching-optimize-5, reflect-sourceCode, self, summonIgnoring, tasty-argument-tree-1, tasty-dealias, tasty-dealiasKeepOpaques, tasty-definitions-2, tasty-definitions-3, tasty-eval, tasty-extractors-3, tasty-extractors-owners, tasty-extractors-types, tasty-load-tree-1, tasty-load-tree-2, tasty-typeof, type-print
+Xmacro-settings-compileTimeEnv, exports, expr-map-2, flops-rewrite, flops-rewrite-2, flops-rewrite-3, i12392, i14902, i15968, i17445, i18283, i19732, i20449, i22395, i4803, i4803b, i4803c, i4947e, i4947f, i5119b, i6765, i6765-b, i6765-c, i7898, i7987, i8007, i8514, i8514b, inline-beta-reduce-polyfunction, paramSymss, quote-and-splice, quote-impure-by-name, quote-inline-function, quote-match-poly-function-1, quote-match-poly-function-1-regression, quote-matcher-power, quote-matching-optimize-1, quote-matching-optimize-2, quote-matching-optimize-3, quote-matching-optimize-4, quote-matching-optimize-5, reflect-sourceCode, self, summonIgnoring, tasty-argument-tree-1, tasty-dealias, tasty-dealiasKeepOpaques, tasty-definitions-2, tasty-definitions-3, tasty-eval, tasty-extractors-3, tasty-extractors-owners, tasty-extractors-types, tasty-load-tree-1, tasty-load-tree-2, tasty-typeof, type-print
 
 ## run-error (14)
 

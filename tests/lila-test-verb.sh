@@ -63,5 +63,16 @@ printf '%s\n' "$recorded" | grep -v 'subtracts' | transcript
 expect "a missing case" fail
 printf '%s\n' "$recorded" | sed 's|^alpha/test|gamma/test|' | transcript
 expect "a suite in another project" fail
+# The verbs' measurement counts the invocation's own process trees alone (the review's probe): an unrelated
+# process holding 64 MiB, which names the runner's class, adds nothing to an empty workload's peak, and a
+# command of the workload, which carries the token, is measured.
+if command -v python3 > /dev/null; then
+  if timeout 120 "$TEQ" interp tests/support/lila_measure.scala --main lilaMeasure -- "$work/measure" > "$work/measure.log" 2>&1; then
+    pass=$((pass + 1))
+  else
+    echo "FAIL the measurement's roots: $(tail -3 "$work/measure.log")"
+    fail=$((fail + 1))
+  fi
+fi
 echo "lila-test-verb: $pass passed, $fail failed"
 [ $fail = 0 ]

@@ -35,6 +35,18 @@ pub struct MacroCtx {
     /// The definitions around the call, outermost first, and the class around it.
     pub owners: Vec<SiteOwner>,
     pub owner_class: Option<ClassId>,
+    /// The parameters of each lambda among `owners`, by its place there: the locals of the scope
+    /// it opens, the outermost one of the depth below it (`Frame::Locals::owner`), where the
+    /// call stands.
+    pub lambda_params: FxMap<u32, Vec<SymId>>,
+    /// The typed lambdas among `owners`, by their place there, where the expansion runs after
+    /// their typing (`Worker::deferred_lambdas`): their definitions as typed, which `Symbol.tree`
+    /// gives as dotty's stored `DefDef` before any reconstruction from the symbol.
+    pub lambda_trees: FxMap<u32, TExprId>,
+    /// The result each lambda among `owners` is typed against, where its expected function type
+    /// gives one: its `$anonfun`'s known signature, which `Symbol.tree` keeps for a lambda still
+    /// being typed (`FromSymbol.definitionFromSym` from the symbol's info), its body absent.
+    pub lambda_results: FxMap<u32, TypeId>,
     /// The argument each proxy of the inline method's parameters stands for.
     pub params: FxMap<SymId, TExprId>,
     /// The argument each parameter of the inline methods under expansion, and its proxy, is bound
@@ -1290,6 +1302,8 @@ pub(super) enum View {
     Return(TreeRef),
     While(TreeRef, TreeRef),
     ValDef(SymId, Option<TreeRef>),
+    /// The splice's owner, `val macro: Any` (`TreeRef::SpliceOwner`).
+    MacroVal,
     DefDef(SymId, Vec<Vec<SymRef>>, Option<TreeRef>),
     ClassDef(ClassId),
     TypeDef(SymRef),
@@ -1814,6 +1828,8 @@ impl<'a, 't> Interp<'a, 't> {
                 let init = self.default_init(c, i)?;
                 View::DefDef(SymId(u32::MAX), Vec::new(), Some(TreeRef::Expr(init)))
             }
+            TreeRef::Site(run, i) => View::DefDef(SymId(u32::MAX), vec![self.site_lambda_params(run, i)], None),
+            TreeRef::SpliceOwner(_) => View::MacroVal,
             TreeRef::NamedArg(i) => {
                 let (name, arg) = self.named_arg_of(i)?;
                 View::NamedArg(name, arg)
@@ -2659,7 +2675,8 @@ impl<'a, 't> Interp<'a, 't> {
                 TPat::Alt(_) => "Alternatives",
             },
             TreeRef::Type(_) => "Inferred",
-            TreeRef::LambdaDef(_) | TreeRef::Ctor(_) | TreeRef::Default(..) => "DefDef",
+            TreeRef::LambdaDef(_) | TreeRef::Ctor(_) | TreeRef::Default(..) | TreeRef::Site(..) => "DefDef",
+            TreeRef::SpliceOwner(_) => "ValDef",
             TreeRef::LambdaClosure(_) => "Closure",
             TreeRef::LambdaRef(_) => "Ident",
             TreeRef::Alias(_) => "TypeDef",
@@ -2907,6 +2924,8 @@ impl<'a, 't> Interp<'a, 't> {
             TreeRef::Ctor(c) => SymRef::Ctor(c),
             TreeRef::Alias(a) => SymRef::Alias(a),
             TreeRef::Default(c, i) => SymRef::Default(c, i),
+            TreeRef::Site(run, i) => SymRef::Site(run, i),
+            TreeRef::SpliceOwner(run) => SymRef::Splice(run),
         })
     }
 
@@ -4384,6 +4403,10 @@ fn install_trees(it: &mut Table) {
                 let rhs = it.opt_tree(rhs)?;
                 it.make_tuple(vec![Value::string(name), Value::Tree(TreeRef::Type(ty)), rhs])
             }
+            View::MacroVal => {
+                let rhs = it.opt_tree(None)?;
+                it.make_tuple(vec![Value::string("macro".to_string()), Value::Tree(TreeRef::Type(ANY)), rhs])
+            }
             _ => it.unsupported("ValDef.unapply on a tree that is no val"),
         }
     });
@@ -4391,6 +4414,7 @@ fn install_trees(it: &mut Table) {
         let t = it.tree_arg(a, 0)?;
         match it.view(t)? {
             View::ValDef(s, _) => Ok(Value::Tree(TreeRef::Type(it.typer.sig_of(s).ret))),
+            View::MacroVal => Ok(Value::Tree(TreeRef::Type(ANY))),
             View::DefDef(..) => Ok(Value::Tree(TreeRef::Type(it.def_parts(t)?.2))),
             _ => it.unsupported("tpt of a tree that is no definition"),
         }
@@ -4399,6 +4423,7 @@ fn install_trees(it: &mut Table) {
         let t = it.tree_arg(a, 0)?;
         match it.view(t)? {
             View::ValDef(_, rhs) => it.opt_tree(rhs),
+            View::MacroVal => it.opt_tree(None),
             View::DefDef(..) => {
                 let rhs = it.def_parts(t)?.3;
                 it.opt_tree(rhs)
@@ -4732,6 +4757,14 @@ impl<'a, 't> Interp<'a, 't> {
             SymRef::TParam(p) => TreeRef::Type(self.typer.types.param(p)),
             SymRef::Alias(a) => TreeRef::Alias(a),
             SymRef::Default(c, i) => TreeRef::Default(c, i),
+            SymRef::Lambda(e) => TreeRef::LambdaDef(e),
+            SymRef::Splice(run) => TreeRef::SpliceOwner(run),
+            SymRef::Site(run, i) if matches!(self.site_entry(run, i as usize), Some(SiteOwner::Lambda(_))) => {
+                match self.macro_ctx.as_ref().filter(|c| c.run == run).and_then(|c| c.lambda_trees.get(&i).copied()) {
+                    Some(e) => TreeRef::LambdaDef(e),
+                    None => TreeRef::Site(run, i),
+                }
+            }
             _ => TreeRef::Type(ANY),
         }
     }
@@ -4801,6 +4834,8 @@ impl<'a, 't> Interp<'a, 't> {
                 let ret = self.tree_type(TreeRef::Expr(init))?;
                 Ok((format!("$lessinit$greater$default${}", i + 1), Vec::new(), ret, None))
             }
+            // A lambda around the site, its result not typed yet.
+            TreeRef::Site(run, i) => Ok(("$anonfun".to_string(), vec![self.site_lambda_params(run, i)], self.site_lambda_result(run, i), None)),
             _ => match self.view(t)? {
                 View::DefDef(s, clauses, body) if s != SymId(u32::MAX) => {
                     let name = self.symbol_name(SymRef::Term(s));
@@ -6433,6 +6468,7 @@ const F_CONTRAVARIANT: u64 = 1 << 4;
 const F_COVARIANT: u64 = 1 << 5;
 const F_DEFERRED: u64 = 1 << 6;
 const F_ENUM: u64 = 1 << 7;
+const F_EXPORTED: u64 = 1 << 9;
 const F_EXTENSION: u64 = 1 << 10;
 const F_FIELD_ACCESSOR: u64 = 1 << 11;
 const F_FINAL: u64 = 1 << 12;
@@ -6502,6 +6538,24 @@ impl<'a, 't> Interp<'a, 't> {
             return None;
         }
         ctx.owners.get(i).copied()
+    }
+
+    /// The parameters of the lambda at place `i` of the site's owners (`MacroCtx::lambda_params`).
+    fn site_lambda_params(&self, run: u32, i: u32) -> Vec<SymRef> {
+        if !self.is_current_run(run) {
+            return Vec::new();
+        }
+        let Some(ctx) = self.macro_ctx.as_ref() else { return Vec::new() };
+        ctx.lambda_params.get(&i).map_or_else(Vec::new, |ps| ps.iter().map(|&s| SymRef::Term(s)).collect())
+    }
+
+    /// The result a lambda among the run's owners is typed against, `Any` where its expected
+    /// function type gives none.
+    fn site_lambda_result(&self, run: u32, i: u32) -> TypeId {
+        if !self.is_current_run(run) {
+            return ANY;
+        }
+        self.macro_ctx.as_ref().and_then(|c| c.lambda_results.get(&i).copied()).unwrap_or(ANY)
     }
 
     fn site_ref(&self, i: usize) -> SymRef {
@@ -6815,6 +6869,10 @@ impl<'a, 't> Interp<'a, 't> {
                 if m & mods::ENUM != 0 { f |= F_ENUM }
                 if info.is_extension { f |= F_EXTENSION }
                 if info.java_defined { f |= F_JAVA_DEFINED }
+                // An export's forwarder (`Namer.addForwarder`'s `Exported | Final | Method`, a
+                // stable one `StableRealizable` too), the program's or a pickle's.
+                if self.syms().is_forwarder(sym) || self.typer.loaded.as_ref().is_some_and(|l| l.exported_members.contains_key(&sym)) { f |= F_EXPORTED }
+                if info.stable { f |= F_STABLE }
                 match info.kind {
                     SymKind::Given if m & mods::LAZY != 0 => f |= F_STABLE,
                     SymKind::Def | SymKind::Given => f |= F_METHOD,
@@ -6900,6 +6958,7 @@ impl<'a, 't> Interp<'a, 't> {
             }
             SymRef::Alias(a) => {
                 if self.typer.syms.aliases[a.idx()].is_abstract() { f |= F_DEFERRED }
+                if self.typer.syms.aliases[a.idx()].exported { f |= F_EXPORTED | F_FINAL }
             }
             SymRef::Ctor(_) | SymRef::Default(..) => f |= F_METHOD | F_SYNTHETIC,
             SymRef::Lambda(_) => f |= F_METHOD | F_SYNTHETIC,
@@ -7141,7 +7200,18 @@ impl<'a, 't> Interp<'a, 't> {
                     t.prog.set_type(te, ty);
                     return Some(te);
                 }
-                let is_class = matches!(class, Some(TypeRef::Class(c)) if t.syms.class(c).kind == ClassKind::Class);
+                let is_class = match class {
+                    Some(TypeRef::Class(c)) => t.syms.class(c).kind == ClassKind::Class,
+                    // An alias of the class, an export's type forwarder among them (`@tag` through
+                    // `export json.tag`): its instance, as dotty's `New` of an alias of a class.
+                    Some(TypeRef::Alias(a)) if t.syms.aliases[a.idx()].tparams.is_empty() => {
+                        t.complete_alias(a);
+                        let rhs = t.syms.aliases[a.idx()].rhs;
+                        let rhs = t.dealias(rhs);
+                        t.class_of(rhs).is_some_and(|c| t.syms.class(c).kind == ClassKind::Class)
+                    }
+                    _ => false,
+                };
                 if !is_class {
                     return None;
                 }
@@ -8272,6 +8342,7 @@ impl<'a, 't> Interp<'a, 't> {
                     self.show_tree_into(r, out, indent)?;
                 }
             }
+            View::MacroVal => out.push_str("val macro: scala.Any"),
             View::DefDef(..) => {
                 let (name, clauses, ret, body) = self.def_parts(t)?;
                 out.push_str("def ");
@@ -8545,6 +8616,7 @@ impl<'a, 't> Interp<'a, 't> {
                 }
                 out.push(')');
             }
+            View::MacroVal => out.push_str(&format!("ValDef(\"macro\", Inferred({}), None)", self.show_type_structure(ANY))),
             View::DefDef(..) => {
                 let (name, clauses, ret, body) = self.def_parts(t)?;
                 out.push_str(&format!("DefDef(\"{}\", List(", name));
@@ -8943,6 +9015,7 @@ fn install_definition_parts(it: &mut Table) {
         let t = it.tree_arg(a, 0)?;
         match it.view(t)? {
             View::ValDef(_, rhs) => it.opt_tree(rhs),
+            View::MacroVal => it.opt_tree(None),
             _ => it.unsupported("rhs of a tree that is no val"),
         }
     });

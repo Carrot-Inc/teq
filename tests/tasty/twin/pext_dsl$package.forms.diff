@@ -1,4 +1,6 @@
-3c3
+3,4c3,4
 <   import pext.inlined.{shout}
+<   <exported> final inline extension s def shout: String = fix.pext.inlined.pext_inlined$shout{(java.lang.String): java.lang.String}(s)
 ---
 >   import fix.pext.inlined.{shout}
+>   <exported> final inline extension s def shout: String = pext_inlined$shout{(java.lang.String): java.lang.String}(s)

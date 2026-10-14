@@ -1501,6 +1501,30 @@ impl<'a> Worker<'a> {
     /// state it touched watched, the inline calls its quotes bring expanded at the site where it
     /// gives a tree and dropped where it fails: the same on success, on an abort and on
     /// exhaustion.
+    /// The parameters of each lambda among a site's owners, by its place there: the locals the
+    /// lambda's scope binds, the outermost scope of the depth below it (`Frame::Locals::owner`)
+    /// where the call stands, which `Symbol.tree` of its `$anonfun` holds
+    /// (`FromSymbol.definitionFromSym`).
+    fn site_lambda_params(&self, owners: &[super::site::SiteOwner]) -> FxMap<u32, Vec<SymId>> {
+        let mut out = FxMap::default();
+        for (i, o) in owners.iter().enumerate() {
+            if !matches!(o, super::site::SiteOwner::Lambda(_)) {
+                continue;
+            }
+            // The call site's scopes: the outermost inline call's (`InlineState::site_env`), an
+            // inline body standing in its definition's scope.
+            let env = self.inline.site_env.as_deref().unwrap_or(&self.env);
+            let found = env.frames.iter().find_map(|f| match f {
+                super::Frame::Locals { names, owner, .. } if *owner as usize == i + 1 => Some(names.iter().map(|&(_, s)| s).collect::<Vec<SymId>>()),
+                _ => None,
+            });
+            if let Some(ps) = found {
+                out.insert(i as u32, ps);
+            }
+        }
+        out
+    }
+
     pub(super) fn run_macro(&mut self, run: MacroRun) -> (TExprId, TypeId) {
         // The classes the run's quotes make are fixed up when its deferred calls expand.
         self.settling_classes(|t| t.run_macro_settling(run))
@@ -1563,6 +1587,23 @@ impl<'a> Worker<'a> {
         let caches = crate::interp::take_caches();
         let deferred_mark = self.quote.copied_deferred.len();
         let class_mark = self.prog.classes.len();
+        let lambda_params = self.site_lambda_params(&owners);
+        let lambda_trees: FxMap<u32, TExprId> = owners
+            .iter()
+            .enumerate()
+            .filter_map(|(i, o)| match o {
+                super::site::SiteOwner::Lambda(span) => self.deferred_lambdas.get(&(site_file.0, span.start, span.end)).map(|&e| (i as u32, e)),
+                _ => None,
+            })
+            .collect();
+        let lambda_results: FxMap<u32, TypeId> = owners
+            .iter()
+            .enumerate()
+            .filter_map(|(i, o)| match o {
+                super::site::SiteOwner::Lambda(span) => self.lambda_results.get(&(site_file.0, span.start, span.end)).map(|&t| (i as u32, t)),
+                _ => None,
+            })
+            .collect();
         crate::measure::macro_run(1);
         let mut interp = Interp::new(self, Limits { steps: MACRO_STEPS, depth: MACRO_DEPTH });
         if let Some(c) = caches {
@@ -1571,7 +1612,7 @@ impl<'a> Worker<'a> {
         interp.pure = true;
         let run = interp.next_run();
         let infos = std::cell::Cell::new(0);
-        interp.macro_ctx = Some(std::rc::Rc::new(MacroCtx { run, site_file, site_span, expansion_file, expansion_span, unit_file, unit_span, owners, owner_class, params, bindings, inline_path, infos }));
+        interp.macro_ctx = Some(std::rc::Rc::new(MacroCtx { run, site_file, site_span, expansion_file, expansion_span, unit_file, unit_span, owners, owner_class, lambda_params, lambda_trees, lambda_results, params, bindings, inline_path, infos }));
         if prof.is_some() {
             interp.start_profile();
         }
@@ -2928,7 +2969,6 @@ impl<'c> Copier<'c> {
             init,
             methods,
             ctors,
-            forwarders: tc.forwarders.iter().map(|&(a, b)| (self.sym(a), self.sym(b))).collect(),
             super_accessors: tc.super_accessors.iter().map(|sa| SuperAccessor { of_trait: sa.of_trait, member: self.sym(sa.member), target: sa.target.map(|s| self.sym(s)), getter: sa.getter }).collect(),
             bridges: tc.bridges.iter().map(|&(a, b)| (self.sym(a), self.sym(b))).collect(),
             deferred_givens: tc.deferred_givens.iter().map(|&(a, b)| (self.sym(a), self.sym(b))).collect(),

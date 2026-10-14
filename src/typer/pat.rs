@@ -238,6 +238,26 @@ impl<'a> Worker<'a> {
         (t != ERROR).then_some(t)
     }
 
+    /// The class an export's type forwarder named `n` of class `c` (or of its bases) stands for:
+    /// a `FINAL EXPORTED` alias of a class is that class, as its companion is the class's
+    /// (`NamerOps.typeConstructorCompanion`).
+    fn exported_member_class(&mut self, c: ClassId, n: crate::intern::Name) -> Option<ClassId> {
+        let mut seen = Vec::new();
+        let mut stack = vec![c];
+        while let Some(k) = stack.pop() {
+            if seen.contains(&k) || seen.len() > 64 {
+                continue;
+            }
+            seen.push(k);
+            if let Some(&a) = self.syms.class(k).type_aliases.get(&n) {
+                return if self.syms.aliases[a.idx()].exported { self.exported_alias_class(a) } else { None };
+            }
+            let parents = self.syms.class(k).parents.clone();
+            stack.extend(parents.into_iter().rev().filter_map(|t| self.class_of(t)));
+        }
+        None
+    }
+
     /// Resolves the class named by a constructor pattern.
     pub(super) fn pattern_class(&mut self, path: ExprId, report: bool) -> Option<ClassId> {
         let ast = self.cur_ast();
@@ -249,9 +269,11 @@ impl<'a> Worker<'a> {
             },
             Expr::Ident(name) => match self.lookup_type(name) {
                 Some(TypeRef::Class(c)) => Some(c),
-                Some(TypeRef::Alias(a)) if self.loaded.is_some() => self.aliased_class(a),
+                Some(TypeRef::Alias(a)) if self.loaded.is_some() && self.aliased_class(a).is_some() => self.aliased_class(a),
                 // A class nested in a class that `c` inherits (`inherited_type_member`).
                 Some(TypeRef::Member(c, n)) if self.inherited_inner_class(c, n).is_some() => self.inherited_inner_class(c, n),
+                // An export's type forwarder a base trait holds: the class it forwards.
+                Some(TypeRef::Member(c, n)) if self.exported_member_class(c, n).is_some() => self.exported_member_class(c, n),
                 // A class nested in the class of a value an import opens (`case Match(q)` after
                 // `import fw.*`), the import's `fw.Match`.
                 Some(TypeRef::ValueMember(v, n)) if self.value_nested_class(v, n).is_some() => self.value_nested_class(v, n),
@@ -268,6 +290,10 @@ impl<'a> Worker<'a> {
                         });
                         match self.syms.sym(s).kind {
                             SymKind::Object(o) => self.syms.class(o).companion,
+                            // An export's stable forwarder of an object is a path to the object
+                            // (`StableRealizable`, `final def O: p.O.type`): its companion is the
+                            // case class (`NonEmptyList` exported by a trait an object extends).
+                            SymKind::Def if self.syms.sym(s).stable => self.forwarded_object(s).and_then(|o| self.syms.class(o).companion),
                             // A val of an object nested in a class, a companion: its own, or the
                             // alias an import from a local value makes (`import b.I`).
                             SymKind::Val if inner_object.is_some() => inner_object.and_then(|o| self.syms.class(o).companion),
@@ -313,7 +339,8 @@ impl<'a> Worker<'a> {
                     }
                     classes.into_iter().find_map(|o| match self.module_type(o, name) {
                         Some(TypeRef::Class(c)) => Some(c),
-                        Some(TypeRef::Alias(a)) if self.loaded.is_some() => self.aliased_class(a),
+                        Some(TypeRef::Alias(a)) if self.loaded.is_some() && self.aliased_class(a).is_some() => self.aliased_class(a),
+                        Some(TypeRef::Member(c, n)) if self.exported_member_class(c, n).is_some() => self.exported_member_class(c, n),
                         // A case class a base trait nests (`Enum` of `SealedHierarchies` from a
                         // trait whose self type mixes it in).
                         _ => self.nested_in_bases(o, name),

@@ -24,6 +24,65 @@ const MAX_DEPTH: u32 = 32;
 const MAX_STEPS: u32 = 4096;
 
 impl<'a> Worker<'a> {
+    /// The signature of the member `sym` as class `c` sees it, its own type parameters for its
+    /// parameters: a member of a generic base class (`object Strings extends Impl[String]`,
+    /// `trait Stack extends Parent[String]`) with the base's type parameters bound as `c`'s base
+    /// type binds them, as scalac's `asSeenFrom` gives a trait's super accessor
+    /// (`SuperAccessors`' `superInfo`).
+    pub fn member_sig_seen_from(&mut self, sym: SymId, c: ClassId) -> MethodSig {
+        let sig = self.sig_of(sym).clone();
+        let Owner::Class(k) = self.syms.sym(sym).owner else { return sig };
+        if k == c || self.syms.class(k).tparams.is_empty() {
+            return sig;
+        }
+        let own: Vec<TypeId> = self.syms.class(c).tparams.iter().map(|&p| self.types.param(p)).collect();
+        let this = self.types.class(c, &own);
+        let Some(base) = self.base_type(this, k) else { return sig };
+        let mut subst = self.owner_subst(base);
+        // The method's own type parameters get copies whose bounds are seen through the
+        // qualifier too (`narrow[B <: A]` of `Impl[String]` is `narrow[B <: String]`); the
+        // declaration's stay as they are.
+        let mut tparams = sig.tparams.clone();
+        let bounded = sig.tparams.iter().any(|&t| {
+            let info = self.syms.tparam(t);
+            self.types.subst(info.upper, &subst) != info.upper || self.types.subst(info.lower, &subst) != info.lower
+        });
+        if bounded {
+            let fresh: Vec<TParamId> = sig
+                .tparams
+                .iter()
+                .map(|&t| {
+                    let info = self.syms.tparam(t).clone();
+                    let n = self.syms.new_tparam(info.name, info.variance);
+                    self.syms.tparams[n.idx()] = info;
+                    n
+                })
+                .collect();
+            for (&old, &new) in sig.tparams.iter().zip(&fresh) {
+                subst.push((old, self.types.param(new)));
+            }
+            for &n in &fresh {
+                let (upper, lower) = (self.syms.tparam(n).upper, self.syms.tparam(n).lower);
+                let (upper, lower) = (self.types.subst(upper, &subst), self.types.subst(lower, &subst));
+                let info = &mut self.syms.tparams[n.idx()];
+                info.upper = upper;
+                info.lower = lower;
+            }
+            tparams = fresh;
+        }
+        let types = &self.types;
+        MethodSig {
+            tparams,
+            clauses: sig
+                .clauses
+                .iter()
+                .map(|cl| ClauseSig { params: cl.params.iter().map(|p| ParamSig { ty: types.subst(p.ty, &subst), ..p.clone() }).collect(), ..cl.clone() })
+                .collect(),
+            ret: types.subst(sig.ret, &subst),
+            declared: crate::tir::NO_TYPE,
+        }
+    }
+
     /// The prefix of the type members of `c` inside its body: `C.this`, or the object itself.
     /// Whether the alias `a` is declared private, unqualified, in the program.
     pub(super) fn private_alias(&self, a: AliasId) -> bool {
@@ -385,10 +444,13 @@ impl<'a> Worker<'a> {
         // A class a base declares (`Cache` of `TypeModule`, through the object `Type`); an
         // opaque type of a trait is the object's own copy of it.
         let bases: Vec<ClassId> = self.syms.class(c).base_types.iter().map(|&(b, _)| b).filter(|&b| b != c).collect();
-        let n = bases.into_iter().find_map(|b| {
+        let found = bases.into_iter().find_map(|b| {
             self.complete_class(b);
             self.syms.class(b).nested.get(&name).copied()
-        })?;
+        });
+        // An export's type forwarder of a class, the class's companion as a term of the class
+        // (`exported_alias_class`).
+        let Some(n) = found else { return self.class_exported_alias_term(c, name) };
         if self.is_opaque_path_class(n) && self.syms.class(c).kind == ClassKind::Object {
             return Some(self.derived_opaque(n, c));
         }
@@ -924,7 +986,7 @@ impl<'a> Worker<'a> {
         let rhs = self.alias_body(a);
         let d = AliasId(self.syms.aliases.len() as u32);
         let js = self.syms.aliases[a.idx()].js;
-        self.syms.aliases.push(AliasInfo { name, owner, file, def: None, tparams: Vec::new(), rhs: ERROR, bounds: None, deprecated, js, declared_rhs: crate::tir::NO_TYPE });
+        self.syms.aliases.push(AliasInfo { name, owner, file, def: None, tparams: Vec::new(), rhs: ERROR, bounds: None, deprecated, js, exported: false, declared_rhs: crate::tir::NO_TYPE });
         self.syms.alias_cells.set(d.0, Completion::Done);
         self.derived_aliases.insert((a, prefix), d);
         let seen = |t: &mut Self, ty: TypeId| -> TypeId {
@@ -1578,7 +1640,14 @@ impl<'a> Worker<'a> {
                         Type::Class(c, _) if self.syms.class(c).kind == ClassKind::Object => Some(c),
                         _ => None,
                     };
-                    match self.find_member(np, name) {
+                    // An alternative of an overloaded name stays itself, as dotty's `TermRef` of a
+                    // symbol keeps its denotation under a new prefix (`NamedType.withPrefix`): the
+                    // given alternative a given selector forwards alone (`export o.given`).
+                    let found = self.find_member(np, name).map(|(f, o)| match self.syms.alternatives(f) {
+                        Some(alts) if f != s && alts.contains(&s) => (s, o),
+                        _ => (f, o),
+                    });
+                    match found {
                         // A member read on an object is the path `member_path` gives it (`D2.M`,
                         // `B.U` of a trait's `U`).
                         Some((found, _)) if object.is_some() && matches!(self.syms.sym(found).kind, SymKind::Val | SymKind::Given | SymKind::EnumValue(_)) && !self.syms.sym(found).by_name => {
@@ -1944,6 +2013,13 @@ impl<'a> Worker<'a> {
                         _ => Err("a method"),
                     }
                 }
+                // An export's forwarder of a stable member is a path as the member is (dotty's
+                // `StableRealizable` forwarder `final def v: p.v.type`, `Namer.addForwarder`).
+                SymKind::Def if info.stable && info.sig.as_ref().map_or(false, |sig| sig.clauses.is_empty() && sig.tparams.is_empty()) => Ok(match prefix.map(|p| (p, t.types.get(p))) {
+                    Some((_, Type::Class(o, _))) if t.syms.class(o).kind == ClassKind::Object => t.object_member_path(o, s),
+                    Some((p, _)) => t.types.mk(Type::Select(p, s)),
+                    None => t.types.mk(Type::Term(s)),
+                }),
                 SymKind::Def | SymKind::Overloaded(_) => Err("a method"),
                 _ if info.by_name => Err("a by-name parameter"),
                 _ => Ok(match prefix.map(|p| (p, t.types.get(p))) {

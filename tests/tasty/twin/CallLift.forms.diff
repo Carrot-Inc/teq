@@ -28,7 +28,3 @@
 <       g{(Int, Int)}(a = a$3, b = b$1)
 ---
 >       g{(Int, Int): Int}(a = a$1, b = b$2)
-41c41
-<     LiftExports.sum{(Int, Int): Int}(a = 1, b = LiftExports.Defaults.unit)
----
->     LiftShapes.sum{(Int, Int): Int}(a = 1, b = LiftShapes.Defaults.unit)

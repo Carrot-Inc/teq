@@ -1,8 +1,8 @@
-// expect: cannot export nope: it is not a member of Source
+// expect: no eligible member nope at Source
 // expect: cannot resolve export: missing not found
 // expect: cannot resolve export: Inner not found
 // expect: an export needs a qualifier
-// expect: cyclic export of Cycle
+// absent: cyclic export
 // expect: no given instance of type Tag[Int]
 // expect: not found: secret
 // expect: not found: hiddenOne

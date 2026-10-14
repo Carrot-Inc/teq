@@ -1956,12 +1956,6 @@ impl<'a, 't> Interp<'a, 't> {
                     }
                 }
             }
-            let forwarders = self.prog().classes[ti].forwarders.clone();
-            for (member, target) in forwarders {
-                if self.syms().dispatch_name(member) == name {
-                    return Member::Static(target);
-                }
-            }
             // The implementation of a deferred given, which the class's table does not hold.
             let implemented = self.prog().classes[ti].deferred_givens.iter().find(|&&(_, s)| self.syms().dispatch_name(s) == name).map(|&(_, s)| s);
             if let Some(s) = implemented {
@@ -2238,13 +2232,6 @@ impl<'a, 't> Interp<'a, 't> {
                 v
             }
             Member::Module(c) => self.module(c),
-            Member::Static(t) => {
-                if self.syms().sym(t).kind == SymKind::Def {
-                    self.call_static(t, args)
-                } else {
-                    self.static_value(t)
-                }
-            }
             Member::CaseToString => Ok(Value::string(self.case_to_string(&recv)?)),
             Member::CaseEquals => {
                 let other = args.into_iter().next().unwrap_or(Value::Null);

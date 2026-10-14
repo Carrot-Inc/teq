@@ -307,21 +307,25 @@ impl<'a> Worker<'a> {
             if self.sig_of(s).ret != ERROR {
                 continue;
             }
-            // An override's, the member's it overrides; else the stored body's.
-            let sig = self.sig_of(s).clone();
-            let t = match self.inherited_result_type(s, &std::sync::Arc::new(sig)) {
-                Some(t) => t,
-                None => {
-                    let body = self.inline_definitions.get(&s).filter(|d| d.state == DefinitionState::Checked).and_then(|d| d.body);
-                    let Some(t) = body.and_then(|b| self.prog.type_of(b)).filter(|&t| t != ERROR) else { continue };
-                    let t = self.widen_path(t);
-                    let t = self.widen_lit(t);
-                    self.widen_or(t, &[])
-                }
-            };
-            if t != ERROR {
+            if let Some(t) = self.inferred_inline_result(s) {
                 self.inline_results.insert(s, t);
             }
         }
+    }
+
+    /// The result type scalac infers for the inline method `s` declared without one: an
+    /// override's, the member's it overrides; else the stored body's, widened
+    /// (`Namer.inferredResultType`). None where the body is not checked or in error.
+    pub(super) fn inferred_inline_result(&mut self, s: SymId) -> Option<TypeId> {
+        let sig = self.sig_of(s).clone();
+        if let Some(t) = self.inherited_result_type(s, &std::sync::Arc::new(sig)) {
+            return (t != ERROR).then_some(t);
+        }
+        // The record's type of the body, which a build keeping no node types still holds.
+        let t = self.inline_definitions.get(&s).filter(|d| d.state == DefinitionState::Checked && d.body.is_some()).map(|d| d.ty).filter(|&t| t != ERROR)?;
+        let t = self.widen_path(t);
+        let t = self.widen_lit(t);
+        let t = self.widen_or(t, &[]);
+        (t != ERROR).then_some(t)
     }
 }

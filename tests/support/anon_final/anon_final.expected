@@ -1,0 +1,12 @@
+anon(anonfinal/PlainId) <init>()V public
+anon(anonfinal/PlainId) name()Ljava/lang/String; public,final
+anon(anonfinal/PlainId) value(I)Ljava/lang/String; public,final
+anon(anonfinal/PlainId) value(Ljava/lang/Object;)Ljava/lang/String; public,bridge,synthetic
+anon(anonfinal/PlainId) wrap(Ljava/lang/String;)I public
+anon(anonfinal/PlainId) wrap(Ljava/lang/String;)Ljava/lang/Object; public,bridge,synthetic
+anon(anonfinal/QuotedId) <init>()V public
+anon(anonfinal/QuotedId) name()Ljava/lang/String; public,final
+anon(anonfinal/QuotedId) value(I)Ljava/lang/String; public
+anon(anonfinal/QuotedId) value(Ljava/lang/Object;)Ljava/lang/String; public,bridge,synthetic
+anon(anonfinal/QuotedId) wrap(Ljava/lang/String;)I public,final
+anon(anonfinal/QuotedId) wrap(Ljava/lang/String;)Ljava/lang/Object; public,bridge,synthetic

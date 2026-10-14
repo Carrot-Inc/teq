@@ -590,6 +590,19 @@ impl<'a> Worker<'a> {
 
     /// `target_name_of`, resolving only the annotations written under one of `only`'s names.
     fn target_name_among(&mut self, m: SymId, only: Option<&[Name]>) -> Option<Name> {
+        // An export's forwarder carries its member's annotations (`Namer.addForwarder`): another
+        // module's member compiled by teq has its `@targetName` among the products' names, which
+        // its class files name it by (`jvm::gen::target_name`).
+        if let Some(fwd) = self.syms.forward_of(m) {
+            let target = fwd.target;
+            if self.loaded.as_ref().map_or(false, |l| l.syms.contains_key(&target)) {
+                self.sig_of(target);
+                if let Some(n) = self.loaded.as_ref().and_then(|l| l.product_target_names.get(&target).copied()) {
+                    return Some(n);
+                }
+            }
+            return self.target_name_of(target);
+        }
         if self.loaded.as_ref().map_or(false, |l| l.syms.contains_key(&m)) {
             self.sig_of(m);
             return self.loaded.as_ref().unwrap().target_names.get(&m).copied();
@@ -655,6 +668,12 @@ impl<'a> Worker<'a> {
                 continue;
             }
             let (file, alternative) = (info.file, info.alternative || info.meets_inherited);
+            if info.def.is_none() && info.mods & crate::ast::mods::FINAL != 0 && self.syms.is_forwarder(s) {
+                if let Some(n) = self.target_name_of(s) {
+                    out.insert(s, n);
+                }
+                continue;
+            }
             let Some(d) = info.def else { continue };
             let ast = self.ast(file);
             if ast.def(d).annots.is_empty() || self.loaded.as_ref().map_or(false, |l| l.syms.contains_key(&s)) {
@@ -1223,6 +1242,16 @@ impl<'a> Worker<'a> {
                 let class = self.widen_lit(t);
                 self.erased_name(class, qualified, depth + 1, out)
             }
+            // A singleton path erases as what it stands for (dotty's erasure of a `TermRef`, its
+            // underlying type): a stable forwarder's result.
+            Type::Select(..) | Type::Term(_) => {
+                let under = self.widen_path(t);
+                if under != t {
+                    self.erased_name(under, qualified, depth + 1, out)
+                } else {
+                    out.push_str("Any")
+                }
+            }
             Type::Nothing => out.push_str("Nothing"),
             _ => out.push_str("Any"),
         }
@@ -1416,7 +1445,7 @@ impl<'a> Worker<'a> {
     pub(super) fn report_double_definition(&mut self, first: SymId, second: SymId) -> bool {
         // An export's forwarder is entered after the class's own definitions, so it is the second
         // of the two (dotty's `checkNoDoubleDeclaration` over the class's declarations in order).
-        let forwarder = |t: &Self, s: SymId| t.syms.forward_of(s).is_some();
+        let forwarder = |t: &Self, s: SymId| t.syms.is_forwarder(s);
         let (first, second) = match (forwarder(self, first), forwarder(self, second)) {
             (true, false) => (second, first),
             (false, true) => (first, second),
@@ -1447,6 +1476,13 @@ impl<'a> Worker<'a> {
             // A forwarder is final; a parameterless definition is `def x: T`.
             let fin = |t: &Self, s: SymId| if forwarder(t, s) { "final " } else { "" };
             let shown = |t: &mut Self, s: SymId| {
+                // A stable forwarder's singleton result shows as what it stands for, as scalac's
+                // message gives it (`final def color: String`).
+                let sig = t.sig_arc(s);
+                if forwarder(t, s) && sig.tparams.is_empty() && sig.clauses.is_empty() && matches!(t.types.get(sig.ret), Type::Select(..) | Type::Term(_)) {
+                    let under = t.widen_path(sig.ret);
+                    return format!(": {}", t.show(under));
+                }
                 let text = t.sig_string(s);
                 if text.starts_with('(') || text.starts_with('[') { text } else { format!(": {}", text) }
             };
@@ -2607,7 +2643,7 @@ impl<'a> Worker<'a> {
                     None => Err(Failure::NoneApplicable),
                 };
             }
-            infos[li] = Some(self.pretype_args(alts, &fitting, k, &mut lists[li], shapes, open));
+            infos[li] = Some(self.pretype_args(alts, &fitting, k, &mut lists[li], shapes, open, &explicit));
             if self.profile.on {
                 self.profile.fitting = fitting.len() as u32;
             }
@@ -3075,7 +3111,7 @@ impl<'a> Worker<'a> {
     /// once: against the parameter type where the candidates agree on it, on its own otherwise.
     /// A function literal is left to its shape unless the candidates agree on the types of its
     /// parameters: typed with those, its result tells the candidates apart.
-    fn pretype_args(&mut self, alts: &[Alt], cands: &[usize], k: usize, list: &mut ArgList, shapes: Vec<ArgShape>, open: bool) -> ListInfo {
+    fn pretype_args(&mut self, alts: &[Alt], cands: &[usize], k: usize, list: &mut ArgList, shapes: Vec<ArgShape>, open: bool, explicit: &[TypeId]) -> ListInfo {
         let mappings: Vec<Option<Mapping>> =
             cands.iter().map(|&i| alts[i].clause(k).and_then(|cl| Self::map_args(cl, &shapes))).collect();
         let mut types = vec![None; shapes.len()];
@@ -3109,7 +3145,14 @@ impl<'a> Worker<'a> {
                 let agreed = (|| {
                     let mapping = mappings[ci].as_ref()?;
                     let p = &alt.clause(k)?.params[mapping.param(j)];
-                    let pty = self.types.subst(p.ty, &alt.owner_subst);
+                    let mut pty = self.types.subst(p.ty, &alt.owner_subst);
+                    // Explicit type arguments are every alternative's (dotty's `PolyProto` case,
+                    // `resolveMapped` over `alt.widen.appliedTo(targs)`), and its formals are
+                    // compared with them applied.
+                    if !explicit.is_empty() && explicit.len() == alt.sig.tparams.len() {
+                        let targs: Subst = alt.sig.tparams.iter().copied().zip(explicit.iter().copied()).collect();
+                        pty = self.types.subst(pty, &targs);
+                    }
                     let (key, params) = if is_lambda {
                         let params = match self.as_partial_function(pty) {
                             Some((a, _)) => {

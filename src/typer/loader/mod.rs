@@ -181,6 +181,9 @@ pub struct Loaded {
     /// dotty's `PrivateOrSynthetic` does (`Namer.addWildcardForwarders`); kept apart from `Mods`,
     /// whose bits are all taken.
     pub synthetic_members: FxMap<SymId, ()>,
+    /// The members a pickle marks `EXPORTED`, an export's forwarders, scalac's or another module
+    /// of teq's, which reflection reports so (`Flags.Exported`), as the program's own.
+    pub exported_members: FxMap<SymId, ()>,
     /// The vals holding the mirrors of products' classes the program derived, each with its
     /// class: the val stands in the class's file once the class is converted.
     pub product_mirror_vals: Vec<(SymId, ClassId)>,
@@ -362,6 +365,7 @@ impl Loaded {
             product_synthetics: FxMap::default(),
             default_getters: FxMap::default(),
             synthetic_members: FxMap::default(),
+            exported_members: FxMap::default(),
             product_mirror_vals: Vec::new(),
             product_class_places: FxMap::default(),
         }
@@ -965,12 +969,6 @@ impl<'a> Worker<'a> {
         if stem == "package" {
             self.syms.pkgs[pkg.idx()].package_object = Some(obj);
         }
-        // Another module's top-level export clauses: their forwarders are the object's table,
-        // which the package's holds.
-        let exporting = self.syms.class(obj).has_exports && self.loaded.as_ref().unwrap().cp.is_products(f);
-        if exporting && !self.syms.pkg(pkg).export_objects.contains(&obj) {
-            self.syms.pkgs[pkg.idx()].export_objects.push(obj);
-        }
         let info = self.syms.class(obj);
         let members: Vec<SymId> = info.member_order.clone();
         let nested: Vec<(Name, ClassId)> = info.nested.iter().map(|(&n, &c)| (n, c)).collect();
@@ -1443,14 +1441,6 @@ impl<'a> Worker<'a> {
 
     /// A type alias or an opaque type of a class or package object.
     fn enter_loaded_type(&mut self, file: u32, e: &Entry, owner: Owner) {
-        // An export's type forwarder of another module's class is the name its clause gives the
-        // original, as a term forwarder is (`enter_loaded_member`): no type member of the class.
-        // Its alias stays, by its address, for an original the export table cannot name.
-        let product = self.loaded.as_ref().map_or(false, |l| l.cp.is_products(l.file(file).cp));
-        let forwarder = product && e.flags.has(tags::EXPORTED) && matches!(owner, Owner::Class(_));
-        if let (true, Owner::Class(c)) = (forwarder, owner) {
-            self.syms.class_mut(c).has_exports = true;
-        }
         let tasty = self.tasty(file);
         let name = self.lname(&tasty, e.name);
         let file_id = self.loaded.as_ref().unwrap().file(file).file_id;
@@ -1522,6 +1512,8 @@ impl<'a> Worker<'a> {
             deprecated: e.deprecated,
             js: false,
             declared_rhs: crate::tir::NO_TYPE,
+            // An export's type forwarder, of scalac's or of another module of teq's (`EXPORTED`).
+            exported: e.flags.has(tags::EXPORTED),
         });
         self.loaded_mut().aliases.insert(aid, LAlias { file, addr: e.addr });
         self.loaded_mut().tables[file as usize].aliases.insert(e.addr, aid);
@@ -1532,8 +1524,12 @@ impl<'a> Worker<'a> {
         }
         match owner {
             Owner::Package(p) => self.syms.pkgs[p.idx()].entries.entry(name).or_default().alias = Some(aid),
-            Owner::Class(_) if forwarder => {}
             Owner::Class(c) => {
+                // A type forwarder's class has exports, whose aliases a lookup of a class's
+                // companion as a term reads (`class_exported_alias_term`).
+                if e.flags.has(tags::EXPORTED) {
+                    self.syms.class_mut(c).has_exports = true;
+                }
                 self.syms.class_mut(c).type_aliases.insert(name, aid);
             }
             Owner::Local => {}
@@ -2319,13 +2315,7 @@ impl<'a> Worker<'a> {
         if f.has(tags::ARTIFACT) || f.has(tags::OBJECT) {
             return;
         }
-        // An export forwarder of another module's class is the name its clause gives the
-        // original, as the program's own export is (`Worker::product_exports`).
         let product = self.loaded.as_ref().map_or(false, |l| l.cp.is_products(l.file(file).cp));
-        if product && f.has(tags::EXPORTED) {
-            self.syms.class_mut(c).has_exports = true;
-            return;
-        }
         if tasty.simple(e.name) == Some("<init>") {
             self.enter_loaded_secondary_ctor(c, file, e);
             return;
@@ -2380,7 +2370,10 @@ impl<'a> Worker<'a> {
         let is_enum_case = e.tag == tags::VALDEF && f.has(tags::ENUM) && f.has(tags::CASE);
         // An old-style abstract given (`given x: T`) is a def in the program, as in its pickle.
         let abstract_given_def = e.tag == tags::DEFDEF && !e.has_body && !f.has(tags::HASDEFAULT);
-        let product_given = product && f.has(tags::GIVEN) && !is_enum_case && !abstract_given_def;
+        // An export's stable forwarder of a given is a def of the program, as teq makes it
+        // (`value_exports`), typed by its result, the given's singleton.
+        let stable_forwarder = e.tag == tags::DEFDEF && f.has(tags::STABLE);
+        let product_given = product && f.has(tags::GIVEN) && !is_enum_case && !abstract_given_def && !stable_forwarder;
         let kind = if product_given {
             SymKind::Given
         } else if is_enum_case {
@@ -2431,6 +2424,13 @@ impl<'a> Worker<'a> {
         }
         if f.has(tags::SYNTHETIC) {
             self.loaded_mut().synthetic_members.insert(sym, ());
+        }
+        if f.has(tags::EXPORTED) {
+            self.loaded_mut().exported_members.insert(sym, ());
+        }
+        // A def its pickle marks stable, an export's forwarder of a stable member: a path.
+        if f.has(tags::STABLE) && e.tag == tags::DEFDEF {
+            self.syms.sym_mut(sym).stable = true;
         }
         // What scalac adds to a class that teq's model of the class has not as members: the
         // default getters. A var's setter (`mods::SETTER`) is a member of the model too.
@@ -2947,155 +2947,6 @@ impl<'a> Worker<'a> {
 
     /// The Scala classes of the jars are compiled from their TASTy (`compile.rs`); a Java class
     /// that the std's platform layer does not define has no implementation on JavaScript.
-    /// The export table of another module's class, from its pickle: each forwarder's name,
-    /// which the `export` clause makes of a member of its qualifier, refers to that member,
-    /// as the program's own export clause's names do. Types are the qualifier's classes.
-    pub fn product_exports(&mut self, c: ClassId) -> Option<super::exports::ExportScope> {
-        use super::{TermRef, TypeRef};
-        self.complete_class(c);
-        let lc = self.loaded.as_ref()?.classes.get(&c).copied()?;
-        let tasty = self.tasty(lc.file);
-        let mut decoder = Decoder::new(&tasty);
-        let sig = decoder.class_sig(lc.addr);
-        let parents: Vec<ClassId> = self.syms.class(c).parents.clone().iter().filter_map(|&p| self.class_of(p)).collect();
-        // Each clause's forwarders follow it in the pickle.
-        let forwarders: Vec<(Addr, Name, bool, bool, bool)> = sig
-            .index
-            .members
-            .iter()
-            .filter(|m| m.flags.has(tags::EXPORTED))
-            .map(|m| (m.addr, self.lname(&tasty, m.name), m.tag == tags::TYPEDEF, m.flags.has(tags::EXTENSION), m.flags.has(tags::GIVEN)))
-            .collect();
-        let mut scope = super::exports::ExportScope::default();
-        // A class inherits its parents' exports, whose forwarders are their members.
-        for p in parents {
-            if let Some(inherited) = self.exports_of(p) {
-                scope.inherit(&inherited, &self.syms);
-            }
-        }
-        // The type forwarders' own aliases, by name, which the loader entered aside.
-        let forwarder_aliases: FxMap<Name, AliasId> = forwarders
-            .iter()
-            .filter(|f| f.2)
-            .filter_map(|&(at, n, ..)| self.file_tables(lc.file).aliases.get(&at).map(|&a| (n, a)))
-            .collect();
-        let clauses = sig.index.exports.clone();
-        for (i, &addr) in clauses.iter().enumerate() {
-            let next = clauses.get(i + 1).copied().unwrap_or(Addr::MAX);
-            let clause = Decoder::new(&tasty).export_sig(addr);
-            let selectors: Vec<(Name, Option<Name>)> = clause
-                .selectors
-                .iter()
-                .map(|&(n, r)| (self.lname(&tasty, n), r.map(|r| self.lname(&tasty, r))))
-                .collect();
-            let wildcard = self.interner.intern("_");
-            // A `given` selector is the empty name, which takes the clause's given forwarders.
-            let given_selector = self.interner.intern("");
-            let original_of = |fwd: Name, is_given: bool| {
-                selectors
-                    .iter()
-                    .find_map(|&(n, r)| match r {
-                        Some(to) if to == fwd => Some(n),
-                        None if n == fwd => Some(n),
-                        _ => None,
-                    })
-                    .or_else(|| selectors.iter().any(|&(n, _)| n == wildcard || is_given && n == given_selector).then_some(fwd))
-            };
-            let own: Vec<(Name, Name, bool, bool)> = forwarders
-                .iter()
-                .filter(|&&(at, ..)| at > addr && at < next)
-                .filter_map(|&(_, fwd, is_type, is_ext, is_given)| original_of(fwd, is_given).map(|o| (fwd, o, is_type, is_ext)))
-                .collect();
-            // An export from a package: its members are the package's entries.
-            if let Some(p) = self.product_package_of(&tasty, &clause.path) {
-                for (fwd, original, is_type, is_ext) in own {
-                    self.load_pkg_member(p, original);
-                    let Some(entry) = self.syms.pkg(p).entries.get(&original).cloned() else {
-                        // A type of the package's package object, of a jar's Scala 2 one.
-                        if let Some(&a) = forwarder_aliases.get(&fwd).filter(|_| is_type) {
-                            scope.types.insert(fwd, TypeRef::Alias(a));
-                        }
-                        continue;
-                    };
-                    if is_type {
-                        if let Some(k) = entry.class {
-                            scope.types.insert(fwd, TypeRef::Class(k));
-                        } else if let Some(a) = entry.alias {
-                            scope.types.insert(fwd, TypeRef::Alias(a));
-                        } else if let Some(&a) = forwarder_aliases.get(&fwd) {
-                            scope.types.insert(fwd, TypeRef::Alias(a));
-                        }
-                    } else if is_ext {
-                        scope.extensions.insert(fwd, entry.extensions.clone());
-                    } else if let Some(t) = entry.term {
-                        // A top-level definition read from TASTy is a member of its file's
-                        // package object, as a package lookup finds it.
-                        let r = match self.syms.sym(t).owner {
-                            Owner::Class(k) => TermRef::ModuleMember(k, t),
-                            _ => TermRef::Global(t),
-                        };
-                        scope.terms.insert(fwd, r);
-                        if self.syms.is_given(t) {
-                            scope.givens.push(t);
-                        }
-                    } else if let Some(k) = entry.class {
-                        scope.terms.insert(fwd, TermRef::Class(k));
-                    }
-                }
-                continue;
-            }
-            let mut cx = MapCx::new(lc.file);
-            let qualifier = self.map_type(&mut cx, &clause.path);
-            let Type::Class(obj, _) = self.types.get(qualifier) else { continue };
-            self.complete_class(obj);
-            // What the qualifier itself exports, which its members do not hold: a forwarder of a
-            // forwarder.
-            let exported = self.exports_of(obj);
-            for (fwd, original, is_type, is_ext) in own {
-                let info = (*self.syms.class(obj)).clone();
-                if is_type {
-                    if let Some(&k) = info.nested.get(&original) {
-                        scope.types.insert(fwd, TypeRef::Class(k));
-                    } else if let Some(&a) = info.type_aliases.get(&original) {
-                        scope.types.insert(fwd, TypeRef::Alias(a));
-                    } else if let Some(&t) = exported.as_ref().and_then(|e| e.types.get(&original)) {
-                        scope.types.insert(fwd, t);
-                    } else if let Some(t) = self.class_scope_type(obj, original) {
-                        scope.types.insert(fwd, t);
-                    } else if let Some(&a) = forwarder_aliases.get(&fwd) {
-                        scope.types.insert(fwd, TypeRef::Alias(a));
-                    }
-                    continue;
-                }
-                let found = if is_ext { None } else { info.members.get(&original).copied().or_else(|| self.find_member(qualifier, original).map(|(m, _)| m)) };
-                if let Some(m) = found {
-                    scope.terms.insert(fwd, TermRef::ModuleMember(obj, m));
-                    if self.syms.is_given(m) {
-                        scope.givens.push(m);
-                    }
-                    continue;
-                }
-                let ext: Vec<SymId> = info.extensions.iter().copied().filter(|&x| self.syms.sym(x).name == original).collect();
-                if !ext.is_empty() {
-                    scope.extensions.insert(fwd, ext);
-                    continue;
-                }
-                let Some(e) = exported.as_ref() else { continue };
-                if let Some(&r) = e.terms.get(&original) {
-                    scope.terms.insert(fwd, r);
-                    if let Some(g) = r.sym().filter(|&g| e.givens.contains(&g)) {
-                        scope.givens.push(g);
-                    }
-                }
-                if let Some(x) = e.extensions.get(&original) {
-                    scope.extensions.insert(fwd, x.clone());
-                }
-            }
-        }
-        let empty = scope.terms.is_empty() && scope.types.is_empty() && scope.extensions.is_empty() && scope.givens.is_empty();
-        (!empty).then_some(scope)
-    }
-
     pub fn report_reached_library(&mut self, reach: &crate::emit::reach::Reach) {
         let Some(loaded) = &self.loaded else { return };
         let mut java_reached: Vec<(FileId, String)> = Vec::new();
@@ -3421,17 +3272,6 @@ fn extension_shape(tasty: &TastyFile, sig: &DefSig) -> (usize, usize) {
 }
 
 impl<'a> Worker<'a> {
-    /// The package a product pickle's export clause names, `a.b` as a `TERMREFpkg`.
-    fn product_package_of(&mut self, tasty: &TastyFile, path: &TType) -> Option<PkgId> {
-        let TType::Package(n) = path else { return None };
-        let text = tasty.name(*n);
-        let mut pkg = ROOT_PKG;
-        for seg in text.split('.').filter(|s| !s.is_empty() && !matches!(*s, "_root_" | "<root>" | "<empty>")) {
-            let name = self.interner.intern(seg);
-            pkg = self.syms.pkg(pkg).entries.get(&name).and_then(|e| e.pkg)?;
-        }
-        Some(pkg)
-    }
 }
 
 /// A package's name from its directory's: a symbolic package is stored encoded (`$plus` for

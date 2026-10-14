@@ -767,7 +767,13 @@ impl<'t, 'a> Spaces<'t, 'a> {
                     self.sc.classes.push(c);
                     Some(Plain::Literal)
                 }
-                _ => Some(Plain::Literal),
+                _ => match self.singleton_case(e) {
+                    Some(c) => {
+                        self.sc.classes.push(c);
+                        Some(Plain::Covers)
+                    }
+                    None => Some(Plain::Literal),
+                },
             },
             TPat::Class(c, _, _, subs) => {
                 let subs = subs.range();
@@ -1480,7 +1486,32 @@ impl<'t, 'a> Spaces<'t, 'a> {
             TExpr::Char(c) => Space::Lit(Lit::Char(c)),
             TExpr::Str(s) => Space::Lit(Lit::Str(s)),
             TExpr::Unit => Space::Typ(self.t.b.t_unit),
-            _ => Space::Opaque,
+            _ => match self.singleton_case(e) {
+                Some(c) => Space::Typ(self.t.types.class(c, &[])),
+                None => Space::Opaque,
+            },
+        }
+    }
+
+    /// The case a stable path of another shape denotes, an export's forwarder of a stable member
+    /// among them: its singleton type's enum value or object, as dotty projects a stable
+    /// identifier pattern (`SpaceEngine.project`, `Typ(pat.tpe)`).
+    fn singleton_case(&self, e: TExprId) -> Option<ClassId> {
+        // The path's type: its node's, or a parameterless method's result, a stable forwarder's
+        // being the singleton of the member it forwards to (`ExprType(pathType.select(sym))`).
+        let ty = match self.t.prog.type_of(e) {
+            Some(t) => t,
+            None => match self.t.prog.expr(e) {
+                TExpr::CallMethod(_, f, args) | TExpr::CallStatic(f, args) if args.len == 0 && self.t.syms.is_forwarder(f) => self.t.syms.sym(f).sig.as_ref()?.ret,
+                _ => return None,
+            },
+        };
+        match self.t.types.get(ty) {
+            Type::Select(_, s) | Type::Term(s) => match self.t.syms.sym(s).kind {
+                SymKind::EnumValue(c) | SymKind::Object(c) => Some(c),
+                _ => None,
+            },
+            _ => None,
         }
     }
 

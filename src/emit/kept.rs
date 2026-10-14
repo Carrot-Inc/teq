@@ -379,13 +379,6 @@ impl<'c> Recorder<'c> {
                 }
             }
         }
-        self.events.push(Event::Part("forwarders"));
-        for &(a, b) in &tc.forwarders {
-            for s in [a, b] {
-                let id = self.sym(s);
-                self.events.push(Event::Sym(id));
-            }
-        }
         self.events.push(Event::Part("super accessors"));
         for a in &tc.super_accessors {
             let id = self.class(a.of_trait);

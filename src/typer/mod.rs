@@ -18,7 +18,6 @@ pub(crate) mod elaborate;
 mod exceptions;
 pub mod feature;
 pub mod exports;
-pub mod export_plan;
 mod expr;
 mod implicits;
 pub mod index;
@@ -68,7 +67,7 @@ mod tostring;
 pub mod unused;
 mod unused_defs;
 mod unused_edits;
-mod value_exports;
+pub mod value_exports;
 
 use crate::ast::{Ast, Asts, ListRef};
 use crate::intern::{FxMap, Interner, Name};
@@ -1741,6 +1740,44 @@ pub struct Worker<'a> {
     /// Whether the arenas have a shared region (the body phase of the parallel typer): the
     /// worker's own records carry `arena::LOCAL_BASE`, and a shared one changes under the lock.
     pub forked: bool,
+    /// Whether the forwarders of the program's export clauses through values are made (the
+    /// signature phase's end): a class completed later, a local or an anonymous class, makes its
+    /// own at its completion (`value_exports::late_value_forwarders`).
+    pub value_forwarders_made: bool,
+    /// The program's owners whose export clauses' forwarders are made (`true`) or being made
+    /// (`false`), by owner: a class, or a file's top level (`value_exports::ForwarderOwner`).
+    /// Completion-driven, as dotty's `Namer.processExports` of an owner a lookup completes.
+    pub forwarders_completion: FxMap<(u32, u32), bool>,
+    /// Per (package, file), the names the file's top-level export clauses may forward, `None`
+    /// for any (a value's path): a lookup of another name makes none of them
+    /// (`value_exports::complete_package_forwarders`).
+    pub forward_names: FxMap<(u32, u32), Option<Vec<Name>>>,
+    /// While those names are computed: a lookup the qualifiers' resolution makes completes no
+    /// package's forwarders.
+    pub probing_forward_names: bool,
+    /// Set from the eager part of the signature phase on (`check::complete_program`): a program
+    /// class makes its forwarders where its completion ends, a package its files' where a
+    /// lookup first reads its entries.
+    pub forwarders_on_completion: bool,
+    /// The typed lambdas whose bodies left an inline call for the later expansion, by their
+    /// file and span: a macro that call runs reads the enclosing lambda's definition as typed
+    /// (`Symbol.tree` of its `$anonfun`, dotty's stored `DefDef`), its site recording the span.
+    pub deferred_lambdas: FxMap<(u32, u32, u32), crate::tir::TExprId>,
+    /// The result each lambda is typed against where its expected function type gives one,
+    /// by its place as `deferred_lambdas`: its `$anonfun`'s known signature, which a macro its
+    /// body expands while the lambda is typed reads (`FromSymbol.definitionFromSym`).
+    pub lambda_results: FxMap<(u32, u32, u32), TypeId>,
+    /// Export clauses whose path's class was in the middle of its completion on this thread
+    /// when their owner made its forwarders, with the owner's clauses after them, by that
+    /// class: made where its completion ends (`value_exports::clauses_in_order`).
+    pub(in crate::typer) blocked_clauses: Vec<(ClassId, value_exports::Home, Vec<Vec<crate::ast::Import>>)>,
+    /// The files whose imports are being resolved (`resolve::resolve_file_imports`), whose top-level
+    /// forwarders a lookup of the imports' qualifiers does not make (`value_exports`).
+    pub(in crate::typer) importing_files: Vec<FileId>,
+    /// Set while the value forwarders' pass makes a clause's environment and decides its head
+    /// (`value_exports::export_scope`): the export table of a program class not complete yet is
+    /// none, rather than built, completing the class, inside the resolution of those imports.
+    pub making_value_forwarders: bool,
     /// Set while this worker maps a library signature (the loader's lock holder alone maps one):
     /// a class it names becomes a placeholder rather than a reason to open the JDK, and the std's
     /// files see the classpath (`sees_classpath`).
@@ -2206,6 +2243,7 @@ impl<'a> Typer<'a> {
                 }
                 w.complete_pending_sealed_files();
             }
+            w.define_top_value_forwarders();
             w.register_late_methods();
             w.settle_js_imports();
             w.run_deferred_matches();
@@ -2712,6 +2750,16 @@ impl<'a> Worker<'a> {
             inline_deps: FxMap::default(),
             lock: std::sync::Arc::new(crate::shared::ReentrantLock::new()),
             forked: false,
+            value_forwarders_made: false,
+            forwarders_completion: FxMap::default(),
+            forward_names: FxMap::default(),
+            probing_forward_names: false,
+            forwarders_on_completion: false,
+            deferred_lambdas: FxMap::default(),
+            lambda_results: FxMap::default(),
+            blocked_clauses: Vec::new(),
+            importing_files: Vec::new(),
+            making_value_forwarders: false,
             mapping_signature: false,
             merge_failed: false,
             serial: Default::default(),
@@ -3066,6 +3114,16 @@ impl<'a> Worker<'a> {
             macro_files: self.macro_files.clone(),
             lock: self.lock.clone(),
             forked: true,
+            value_forwarders_made: self.value_forwarders_made,
+            forwarders_completion: FxMap::default(),
+            forward_names: FxMap::default(),
+            probing_forward_names: false,
+            forwarders_on_completion: false,
+            deferred_lambdas: FxMap::default(),
+            lambda_results: FxMap::default(),
+            blocked_clauses: Vec::new(),
+            importing_files: Vec::new(),
+            making_value_forwarders: false,
             mapping_signature: false,
             merge_failed: false,
             serial: self.serial.clone(),

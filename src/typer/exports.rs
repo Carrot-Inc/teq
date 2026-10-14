@@ -91,6 +91,11 @@ impl<K: Copy + Eq + std::hash::Hash> ExportTables<K> {
         self.own.insert(k, v);
     }
 
+    /// The keys of this worker's own built tables, in no order.
+    pub fn ready_keys(&self) -> Vec<K> {
+        self.own.iter().filter(|(_, v)| matches!(v, ExportSlot::Ready(_))).map(|(&k, _)| k).collect()
+    }
+
     /// Forgets the slot of `k`: a slot the fork left reads unknown from here, as an absent one does.
     pub fn remove(&mut self, k: &K) {
         if self.prefix.as_ref().is_some_and(|p| p.contains_key(k)) {
@@ -292,11 +297,6 @@ impl ExportScope {
         found
     }
 
-    /// What a class inherits from a parent's table, as the program's own classes do.
-    pub(crate) fn inherit(&mut self, from: &ExportScope, syms: &Symbols) {
-        self.merge(from, Merge::Inherit, &[], syms);
-    }
-
     fn merge(&mut self, from: &ExportScope, mode: Merge, hidden: &[Name], syms: &Symbols) {
         let conflicts = self.conflicts.len();
         self.merge_entries(from, mode, hidden, syms);
@@ -460,15 +460,13 @@ impl<'a> Worker<'a> {
                 scope
             }
             Some(ExportSlot::Unknown) | None => {
-                // Another module's class exports what its pickle's clauses and forwarders say.
-                if self.loaded.as_ref().map_or(false, |l| l.is_product_class(c)) {
-                    // Read from the pickle, which maps its types into the loader's tables.
-                    let scope = self.with_loader(|w| w.product_exports(c)).map(Arc::new);
-                    *self.export_slot(ExportOwner::Class(c)) = match &scope {
-                        Some(s) => ExportSlot::Ready(s.clone()),
-                        None => ExportSlot::Empty,
-                    };
-                    return scope;
+                // While a clause's forwarders are made, the table of a program class not complete
+                // is none: building it would complete the class inside the lookups of the clause's
+                // environment, which its completion may read (`exports_blocked`). A complete
+                // class's table, an object's inherited members (`export Colors.red` beside a
+                // parent's `export lib.internal.Colors`), completes nothing more.
+                if self.making_value_forwarders && self.syms.class_done(c).is_none() {
+                    return None;
                 }
                 // Most classes have nothing to export or inherit, which is found out without a
                 // build and without the profile's row counting one.
@@ -764,17 +762,17 @@ impl<'a> Worker<'a> {
             self.enter_pkg_objects(p);
         }
         for file in self.syms.pkg(p).export_files.clone() {
+            // A program file's top-level clauses are its forwarders, top-level definitions of the
+            // file (`value_exports`, dotty's `Desugar.packageDef`).
+            if !self.in_jar(file) && self.std.slot_of(file).is_none() {
+                continue;
+            }
             build.file = file;
             let clauses: &'a [Import] = &self.ast(file).top_exports;
             let targets = self.resolve_export_paths(clauses, Env { file, frames: Vec::new(), imports: Vec::new() }, build);
             self.add_named_exports(clauses, &targets, build);
             self.add_wildcard_exports(clauses, &targets, build);
             self.add_pending_exports(clauses, build);
-        }
-        for obj in self.syms.pkg(p).export_objects.clone() {
-            if let Some(scope) = self.exports_of(obj) {
-                build.scope.inherit(&scope, &self.syms);
-            }
         }
     }
 
@@ -835,8 +833,12 @@ impl<'a> Worker<'a> {
         };
         build.file = file;
         build.scope.owner = Some(c);
+        // A program class's export clauses are its forwarders, members of the class
+        // (`value_exports`, dotty's `Namer.exportForwarders`): its table is what an object
+        // inherits and what the parents' tables give, no clause of its own.
+        let program = !self.in_jar(file) && self.std.slot_of(file).is_none();
         let clauses: &'a [Import] = match def.map(|d| &self.ast(file).def(d).kind) {
-            Some(DefKind::Class(cls)) => &self.ast(file).exports[cls.exports.range()],
+            Some(DefKind::Class(cls)) if !program => &self.ast(file).exports[cls.exports.range()],
             _ => &[],
         };
         let parents = self.direct_parents(c, build);
@@ -870,6 +872,100 @@ impl<'a> Worker<'a> {
             }
         }
         self.add_pending_exports(clauses, build);
+        self.drop_forwarded(c, &mut build.scope);
+    }
+
+    /// The program classes' tables built before the forwarders were made (a header's lookup
+    /// through an import of a class, in the middle of the signature phase): built again where
+    /// they are next read, the forwarders members of their classes and of the classes' parents.
+    pub(super) fn forget_tables_built_before_forwarders(&mut self) {
+        let mut built = self.class_exports.ready_keys();
+        built.sort();
+        for c in built {
+            let file = self.syms.class(c).file;
+            if self.in_jar(file) || self.std.slot_of(file).is_some() {
+                continue;
+            }
+            self.class_exports.remove(&c);
+        }
+        // The given indexes built over those tables (`build_class_given_index`) list what the
+        // forwarders now give, and are built again as the tables are.
+        self.class_given_indexes.clear();
+    }
+
+    pub(super) fn drop_forwarded_from_built(&mut self, c: ClassId) {
+        let Some(ExportSlot::Ready(scope)) = self.class_exports.get(&c) else { return };
+        let mut scope = (**scope).clone();
+        self.drop_forwarded(c, &mut scope);
+        *self.export_slot(ExportOwner::Class(c)) = ExportSlot::Ready(Arc::new(scope));
+        self.class_given_indexes.remove(&c);
+    }
+
+    /// The names the class has forwarders of (`value_exports`), members of its own, which its
+    /// table leaves to them: the term an object's export gave the name, the givens it named and
+    /// the extensions of the name. The class's members are what a lookup finds first, and its
+    /// givens and the forwarders its pickle and its JVM class get are read from them.
+    fn drop_forwarded(&mut self, c: ClassId, scope: &mut ExportScope) {
+        // The class's forwarders and its ancestors', which it inherits as members: a table that
+        // merges a parent's keeps none of what the parent forwards either.
+        let classes: Vec<ClassId> = self.syms.class(c).base_types.iter().map(|&(b, _)| b).collect();
+        let mut fwds: Vec<(SymId, SymId)> = Vec::new();
+        for &k in &classes {
+            fwds.extend(self.syms.class(k).forwarders.iter().map(|(s, fwd)| (*s, fwd.target)));
+        }
+        if fwds.is_empty() {
+            return;
+        }
+        let names: Vec<(Name, SymId)> = fwds.iter().map(|&(s, _)| (self.syms.sym(s).name, s)).collect();
+        // What the forwarders call: a given a `given` selector named is the table's under no name.
+        let mut dropped: Vec<SymId> = fwds.iter().map(|&(_, t)| t).collect();
+        // An entry that is a forwarder of the class or of an ancestor, an object's inherited
+        // member, stays: what goes is the alias of what a forwarder calls, another class's
+        // forwarder too when the export relays it.
+        let own = |t: &Self, a: SymId| {
+            matches!(t.syms.sym(a).owner, Owner::Class(k) if classes.contains(&k)) && t.syms.is_forwarder(a)
+        };
+        let forwarder = |t: &Self, s: SymId| match t.syms.alternatives(s) {
+            Some(alts) => alts.iter().all(|&a| own(t, a)),
+            None => own(t, s),
+        };
+        for (n, fwd) in names {
+            let entry = scope.terms.get(&n).copied();
+            let aliased = entry.and_then(|r| r.sym()).filter(|&s| !forwarder(self, s));
+            // An object's inherited member of the name (`add_inherited_members`), a member of an
+            // ancestor and none of what the forwarders call, is no alias to drop: lila's `UiEnv`
+            // meets `AssetHelper`'s abstract `safeJsonValue` (through `Helpers`) before
+            // `AssetFullHelper`, whose export implements it. Abstract, the object's member is the
+            // forwarder, as dotty's member lookup joins a deferred and a concrete denotation to the
+            // concrete one (`Denotation.meet`'s `mergeSingleDenot`, `isAsConcrete`); concrete, the
+            // entry stays as it is.
+            let inherited = aliased.filter(|&s| {
+                matches!(entry, Some(TermRef::ModuleMember(m, _)) if m == c)
+                    && self.syms.alternatives(s).is_none()
+                    && matches!(self.syms.sym(s).owner, Owner::Class(k) if k != c && classes.contains(&k))
+                    && !dropped.contains(&s)
+            });
+            if let Some(s) = inherited {
+                if let (true, Owner::Class(k)) = (self.is_abstract_member(s), self.syms.sym(fwd).owner) {
+                    let set = self.syms.class(k).members.get(&n).copied().unwrap_or(fwd);
+                    scope.terms.insert(n, TermRef::ModuleMember(c, set));
+                }
+            } else if let Some(s) = aliased {
+                scope.terms.remove(&n);
+                match self.syms.alternatives(s) {
+                    Some(alts) => dropped.extend_from_slice(alts),
+                    None => dropped.push(s),
+                }
+                dropped.push(s);
+            }
+            if let Some(exts) = scope.extensions.get_mut(&n) {
+                exts.retain(|&e| forwarder(self, e));
+                if exts.is_empty() {
+                    scope.extensions.remove(&n);
+                }
+            }
+        }
+        scope.givens.retain(|&g| !dropped.contains(&g) || forwarder(self, g));
     }
 
     /// A lookup made for the table under construction met a table being built.
@@ -908,7 +1004,7 @@ impl<'a> Worker<'a> {
                             match t.resolve_export_path(head, &imp.path) {
                                 Ok(target) => Some(target),
                                 // A value's members are the forwarders of `value_exports`.
-                                Err(_) if matches!(t.export_stack.last().map(|f| f.owner), Some(ExportOwner::Class(c)) if t.export_path_through_value(c, &imp.path)) => None,
+                                Err(_) if t.export_path_through_value(&imp.path) => None,
                                 Err(msg) => {
                                     build.error(imp.span, msg);
                                     None
@@ -993,12 +1089,6 @@ impl<'a> Worker<'a> {
         self.export_qualifier_at(file, Owner::Class(c), own, path)
     }
 
-    /// The qualifier of a top-level export clause of `file` in package `p`.
-    pub fn package_export_qualifier(&mut self, file: FileId, p: PkgId, path: &[Name]) -> Option<ExportQualifier> {
-        let own = self.pkg_exports_of(p);
-        self.export_qualifier_at(file, Owner::Package(p), own, path)
-    }
-
     fn export_qualifier_at(&mut self, file: FileId, owner: Owner, own: Option<Arc<ExportScope>>, path: &[Name]) -> Option<ExportQualifier> {
         let env = self.env_for(file, owner);
         self.with_env(env, |t| {
@@ -1052,7 +1142,17 @@ impl<'a> Worker<'a> {
     /// class defines or inherits concretely; a wildcard leaves such names out instead.
     fn check_export_clash(&mut self, alias: Name, span: Span, build: &mut Build) {
         let Some(c) = build.scope.owner else { return };
-        if self.syms.class(c).members.contains_key(&alias) {
+        if let Some(&m) = self.syms.class(c).members.get(&alias) {
+            // The class's forwarders of the name (`value_exports`) are the export's own members,
+            // which the check of double definitions tells apart from the class's own (dotty's
+            // `checkNoDoubleDeclaration`, E120).
+            let alts: Vec<SymId> = match self.syms.alternatives(m) {
+                Some(alts) => alts.to_vec(),
+                None => vec![m],
+            };
+            if alts.iter().any(|&a| self.syms.is_forwarder(a)) {
+                return;
+            }
             let msg = format!("{} is exported and defined in {}", self.name_str(alias), self.class_description(c));
             build.error(span, msg);
             return;

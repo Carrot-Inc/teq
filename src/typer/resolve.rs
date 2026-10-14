@@ -148,6 +148,7 @@ impl<'a> Worker<'a> {
         self.file_imports[file.0 as usize] = Some(std::sync::Arc::new(Vec::new()));
         let clauses = &self.ast(file).imports;
         let env = Env { file, frames: Vec::new(), imports: Vec::new() };
+        self.importing_files.push(file);
         self.once(|t| {
             t.with_env(env, |t| {
                 for imp in clauses {
@@ -161,6 +162,7 @@ impl<'a> Worker<'a> {
                 }
             })
         });
+        self.importing_files.pop();
     }
 
     /// Resolves the imports of a statement in the current environment and brings them into the
@@ -602,6 +604,16 @@ impl<'a> Worker<'a> {
     /// `quotes` is a given `Quotes`): the members are then selected on that type, and an object
     /// among them is what the import opens.
     fn resolve_import_path(&mut self, path: &[Name], span: Span) -> Option<ImportTarget> {
+        self.resolve_qualifier(path, span, false)
+    }
+
+    /// The qualifier of an import or an export clause, typed as a path where the clause stands
+    /// (dotty's `typedImportQualifier`, `Namer.exportForwarders`: `typedAheadExpr` in the clause's
+    /// context): packages and objects, then a stable value and the stable vals and objects selected
+    /// on it (`env.api.Nested`), a value reached as an import's `ValueAll`. `export` words the
+    /// errors as an export's and takes an object's own val read in its body as a value.
+    pub(super) fn resolve_qualifier(&mut self, path: &[Name], span: Span, export: bool) -> Option<ImportTarget> {
+        let word = if export { "export" } else { "import" };
         let mut target: Option<ImportTarget> = None;
         let mut value: Option<TypeId> = None;
         // The stable val of a package or an object the path has reached, whose type is read
@@ -610,13 +622,15 @@ impl<'a> Worker<'a> {
         let mut static_val: Option<(SymId, Option<ClassId>, Option<ValueImport>)> = None;
         for &seg in path {
             if let Some(reached) = static_val.take() {
-                let ty = self.sig_of(reached.0).ret;
+                let ty = self.import_entry_ret(reached);
                 value = Some(self.zonk(ty));
-                // An object nested in a class, selected on the stable value: the import reads
-                // its members through that value (`import o.R.*`, `import o.R.S.*`), which
-                // becomes an entry of its own.
+                // A member of the value may be one of its class's export forwarders.
+                self.complete_forwarders_of_type(ty);
+                // An object nested in a class, or a stable val, selected on the stable value: the
+                // import reads its members through that value (`import o.R.*`, `import o.R.S.*`,
+                // `import env.api.*`), which becomes an entry of its own.
                 if let Some((m, _)) = self.find_member(ty, seg) {
-                    if self.inner_object_of_sym(m).is_some() && self.is_accessible(m) {
+                    if (self.inner_object_of_sym(m).is_some() || self.is_stable_path_member(m)) && self.is_accessible(m) {
                         let prev = ValueImport(self.import_values.len() as u32);
                         self.import_values.push(reached);
                         static_val = Some((m, None, Some(prev)));
@@ -627,12 +641,19 @@ impl<'a> Worker<'a> {
             }
             let next = match (target, value) {
                 (_, Some(ty)) => self.import_step_value(ty, seg),
+                // An export's head that is the module val of an object nested in a class or a
+                // block is a value, the path the forwarders read (`Foo.this.MyEnum`), as dotty
+                // types the qualifier as an expression; an import opens the object.
+                (None, _) if export && self.module_val_head(seg).is_some() => {
+                    static_val = self.module_val_head(seg);
+                    continue;
+                }
                 (None, _) => match self.import_head(seg) {
                     Some(t) => Some(Ok(t)),
                     None => {
                         let head = self.lookup_term(seg);
                         if let Some(TermRef::This(c, s)) = head {
-                            if self.illegal_instance_prefix(c, s, span) {
+                            if self.illegal_instance_prefix(c, s, span, word) {
                                 return None;
                             }
                         }
@@ -679,7 +700,7 @@ impl<'a> Worker<'a> {
                     if let (None, Some(TermRef::Local(s))) = (target, self.lookup_term(seg)) {
                         if self.syms.sym(s).kind == SymKind::Var {
                             let ty = self.sig_of(s).ret;
-                            let msg = format!("({} : {}) is not a valid import prefix, since it is not an immutable path", self.name_str(seg), self.show(ty));
+                            let msg = format!("({} : {}) is not a valid {} prefix, since it is not an immutable path", self.name_str(seg), self.show(ty), word);
                             self.error(span, msg);
                             return None;
                         }
@@ -691,7 +712,7 @@ impl<'a> Worker<'a> {
                         _ => false,
                     };
                     let problem = if is_value { "is not an object or a package" } else { "not found" };
-                    let msg = format!("cannot resolve import: {} {}", self.name_str(seg), problem);
+                    let msg = format!("cannot resolve {}: {} {}", word, self.name_str(seg), problem);
                     self.error(span, msg);
                     return None;
                 }
@@ -704,12 +725,12 @@ impl<'a> Worker<'a> {
         if let Some(ty) = value {
             if let [seg] = path {
                 if self.lookup_term(*seg).and_then(|r| r.sym()).map_or(false, |s| self.is_given_with_clauses(s)) {
-                    let msg = format!("{} is not a valid import prefix, since it is not an immutable path", self.show(ty));
+                    let msg = format!("{} is not a valid {} prefix, since it is not an immutable path", self.show(ty), word);
                     self.error(span, msg);
                     return None;
                 }
             }
-            let msg = format!("cannot resolve import: {} is not an object or a package", self.name_str(*path.last().unwrap()));
+            let msg = format!("cannot resolve {}: {} is not an object or a package", word, self.name_str(*path.last().unwrap()));
             self.error(span, msg);
             return None;
         }
@@ -723,13 +744,17 @@ impl<'a> Worker<'a> {
         let (s, module) = match r {
             TermRef::Global(s) => (s, None),
             TermRef::ModuleMember(c, s) => (s, Some(c)),
-            // An object's own val read in its body stays the object's limitation.
-            TermRef::This(c, s) if self.syms.class(c).kind != ClassKind::Object => (s, Some(c)),
+            // A val of an enclosing class's instance or of an enclosing object, read on it
+            // (`page.this.ui`), as dotty types the qualifier.
+            TermRef::This(c, s) => (s, Some(c)),
             TermRef::Local(s) if matches!(self.syms.sym(s).kind, SymKind::Val | SymKind::Param | SymKind::Given) => (s, None),
+            // A stable member of an imported value: the path goes on through that value.
+            TermRef::ValueMember(v, s) => return self.is_stable_path_member(s).then_some((s, None, Some(v))),
             _ => return None,
         };
         let info = self.syms.sym(s);
         let stable = matches!(info.kind, SymKind::Val | SymKind::Param | SymKind::Given) && !info.by_name && info.mods & ast::mods::MUTABLE == 0;
+        let stable = stable || self.is_stable_forwarder(s);
         (stable && !self.is_given_with_clauses(s)).then_some((s, module, None))
     }
 
@@ -738,11 +763,11 @@ impl<'a> Worker<'a> {
     /// legal one (`Checking.checkLegalImportOrExportPath`, its realizability). The member's type
     /// is shown where reading it types no initialiser in the middle of a completion, which may
     /// be the completion of a class that initialiser makes.
-    fn illegal_instance_prefix(&mut self, c: ClassId, s: SymId, span: Span) -> bool {
+    fn illegal_instance_prefix(&mut self, c: ClassId, s: SymId, span: Span, word: &str) -> bool {
         let info = self.syms.sym(s);
         let (kind, mods) = (info.kind, info.mods);
         let known = info.sig.is_some() || self.completing == 0 || self.declares_type(s);
-        let parameterless = kind == SymKind::Def && (!known || self.sig_of(s).clauses.is_empty());
+        let parameterless = kind == SymKind::Def && (!known || self.sig_of(s).clauses.is_empty()) && !self.is_stable_forwarder(s);
         let final_member = mods & (mods::FINAL | mods::PRIVATE) != 0 || self.syms.class(c).kind == ClassKind::Object || self.syms.class(c).mods & mods::FINAL != 0;
         let lazy = kind == SymKind::Val && mods & mods::LAZY != 0 && !final_member;
         if kind != SymKind::Var && !parameterless && !lazy {
@@ -758,9 +783,63 @@ impl<'a> Worker<'a> {
         let path = format!("({}.this.{}{})", self.name_str(self.syms.class(c).name), self.name_str(self.syms.sym(s).name), shown);
         let msg = match lazy {
             true => format!("{} is not a legal path since it refers to nonfinal lazy value {}", path, self.name_str(self.syms.sym(s).name)),
-            false => format!("{} is not a valid import prefix, since it is not an immutable path", path),
+            false => format!("{} is not a valid {} prefix, since it is not an immutable path", path, word),
         };
         self.error(span, msg);
+        true
+    }
+
+    /// The value an export's head names where it is the module val of an object nested in a
+    /// class or a block (not an object's symbol of its own), read as the static vals are.
+    fn module_val_head(&mut self, seg: Name) -> Option<(SymId, Option<ClassId>, Option<ValueImport>)> {
+        let r = self.lookup_term(seg)?;
+        let s = r.sym()?;
+        if matches!(self.syms.sym(s).kind, SymKind::Object(_)) || (self.local_module_of_sym(s).is_none() && self.inner_object_of_sym(s).is_none()) {
+            return None;
+        }
+        self.static_import_val(r)
+    }
+
+    /// A member a path may go on through (dotty's `isStableMember`): a val that is no var, a
+    /// field of a constructor's parameter that is not by name, a given without parameters, an
+    /// enum's simple case, a stable export's forwarder.
+    pub(super) fn is_stable_path_member(&mut self, m: SymId) -> bool {
+        let info = self.syms.sym(m);
+        match info.kind {
+            SymKind::Val | SymKind::Param => !info.by_name && info.mods & ast::mods::MUTABLE == 0,
+            SymKind::Given => !self.is_given_with_clauses(m),
+            SymKind::Def => self.is_stable_forwarder(m),
+            // An enum's simple case, a stable val of its companion (dotty's `Enum` case value).
+            SymKind::EnumValue(_) => true,
+            _ => false,
+        }
+    }
+
+    /// Whether `s` is an export's forwarder of a stable public member, its path referring to no
+    /// private value: dotty gives such a forwarder `StableRealizable` and the type
+    /// `path.member.type` (`Namer.exportForwarders`: `isStableMember && isPublic &&
+    /// pathType.isStable && !refersToPrivate(pathType)`), so that it is a path itself (`export
+    /// metadata.tournamentId` then `export tournamentId.isDefined`). Every value path a forwarder
+    /// reads is stable.
+    pub(super) fn is_stable_forwarder(&mut self, s: SymId) -> bool {
+        // A forwarder made stable, or a library's def its pickle marks so.
+        if self.syms.sym(s).stable {
+            return true;
+        }
+        let Some(fwd) = self.syms.forward_of(s) else { return false };
+        let target = fwd.target;
+        if self.syms.sym(target).mods & (ast::mods::PRIVATE | ast::mods::PROTECTED) != 0 || !self.is_stable_path_member(target) {
+            return false;
+        }
+        // A package's member has no path to read (`Forward::STATIC`).
+        let mut v = (!fwd.is_static()).then_some(ValueImport(fwd.path));
+        while let Some(at) = v {
+            let (val, _, prev) = self.import_values[at.0 as usize];
+            if self.syms.sym(val).mods & ast::mods::PRIVATE != 0 {
+                return false;
+            }
+            v = prev;
+        }
         true
     }
 
@@ -813,6 +892,7 @@ impl<'a> Worker<'a> {
 
     /// The member `seg` of a value's type: an object opens the import, a value carries on.
     fn import_step_value(&mut self, ty: TypeId, seg: Name) -> Option<Result<ImportTarget, TypeId>> {
+        self.complete_forwarders_of_type(ty);
         let (sym, _) = self.find_member(ty, seg)?;
         let member_ty = self.sig_of(sym).ret;
         let member_ty = self.zonk(member_ty);
@@ -969,6 +1049,27 @@ impl<'a> Worker<'a> {
     }
 
     /// How the alias `a` of class `c` is named inside `c`: an abstract member through `this`.
+    /// Whether a wildcard import's type member is one the import selects where it is read:
+    /// dotty's import `selection` keeps the members `accessibleFrom` the reference, a private one
+    /// only inside its owner or the owner's companion.
+    fn wildcard_type_accessible(&self, r: TypeRef) -> bool {
+        match r {
+            TypeRef::Class(n) => self.is_class_accessible(n),
+            TypeRef::Alias(a) if self.private_alias(a) => {
+                let Owner::Class(owner) = self.syms.aliases[a.idx()].owner else { return true };
+                let companion = self.syms.class(owner).companion;
+                self.env.frames.iter().any(|f| matches!(f, Frame::Class(k) if *k == owner || Some(*k) == companion))
+            }
+            _ => true,
+        }
+    }
+
+    /// Whether a wildcard import's term member is one the import selects where it is read: a
+    /// private one only inside its owner or the owner's companion (`wildcard_type_accessible`).
+    fn wildcard_term_accessible(&self, r: TermRef) -> bool {
+        r.sym().map_or(true, |s| self.syms.sym(s).mods & crate::ast::mods::PRIVATE == 0 || self.is_accessible(s))
+    }
+
     fn alias_ref(&self, c: ClassId, a: AliasId) -> TypeRef {
         let info = &self.syms.aliases[a.idx()];
         if info.is_abstract() {
@@ -1087,6 +1188,10 @@ impl<'a> Worker<'a> {
         // class's members as far as they are entered, which the object's own are.
         if self.syms.class(c).state() == Completion::NotStarted && !self.completion_reaches_in_progress(c, &mut Vec::new()) {
             self.complete_class(c);
+            // Its export clauses' type forwarders, made at its completion, are its own members.
+            if let Some(&a) = self.syms.class(c).type_aliases.get(&name) {
+                return Some(self.alias_ref(c, a));
+            }
         }
         if self.syms.class(c).inherits_types {
             if let Some(r) = self.inherited_type_member(c, name) {
@@ -1113,6 +1218,7 @@ impl<'a> Worker<'a> {
 
     #[inline]
     pub fn pkg_type(&mut self, p: PkgId, name: Name) -> Option<TypeRef> {
+        self.complete_package_forwarders(p, name);
         let pkg = self.syms.pkg(p);
         let defined =
             pkg.entries.get(&name).and_then(|e| e.class.map(TypeRef::Class).or(e.alias.map(TypeRef::Alias)));
@@ -1260,19 +1366,28 @@ impl<'a> Worker<'a> {
     /// a bare reference finds it through its receiver, so that it takes no name from a
     /// companion's synthesized members and clashes with no import.
     pub fn pkg_term(&mut self, p: PkgId, name: Name) -> Option<TermRef> {
+        self.complete_package_forwarders(p, name);
         let lone_extension = self.extension_call_head || self.in_jar(self.env.file);
         let pkg = self.syms.pkg(p);
+        // The entry's alias, an export's type forwarder of a class standing for the class's
+        // companion where nothing else of the name is a term.
+        let mut alias = None;
         let defined = pkg.entries.get(&name).and_then(|e| {
             let lone_extension = match e.extensions.as_slice() {
                 [s] if lone_extension => Some(Self::package_term(&self.syms, *s)),
                 _ => None,
             };
+            alias = e.alias;
             e.term
                 .map(|s| Self::package_term(&self.syms, s))
                 .or(e.class.filter(|&c| !self.skip_proxy(c)).map(TermRef::Class))
                 .or(e.pkg.map(TermRef::Package))
                 .or(lone_extension)
         });
+        let defined = match (defined, alias) {
+            (None, Some(a)) if self.syms.aliases[a.idx()].exported => self.exported_alias_pkg_term(p, name, a),
+            (found, _) => found,
+        };
         if let Some(found) = defined {
             // A builtin class whose companion a std file holds (`Array`) enters it; one whose
             // companion the jars hold is looked up there once; a Java class a signature named
@@ -1296,7 +1411,7 @@ impl<'a> Worker<'a> {
             }
             return Some(found);
         }
-        if pkg.has_exports() {
+        if self.syms.pkg(p).has_exports() {
             if let Some(&r) = self.pkg_exports_of(p).as_ref().and_then(|e| e.terms.get(&name)) {
                 self.ref_exported = true;
                 return Some(r);
@@ -1358,6 +1473,25 @@ impl<'a> Worker<'a> {
         }
         let obj = self.syms.pkg(p).package_object?;
         self.module_term(obj, name).or_else(|| self.package_object_inherited(obj, name))
+    }
+
+    /// The term of package `p` named `name` where its entries hold an export's type forwarder `a`
+    /// of the name and no term: the package's own member of the name, which the jars may hold
+    /// unread yet, before the companion of the class `a` forwards. dotty's package members are
+    /// the package objects' and its own, every class file entered when the package completes
+    /// (`PackageClassDenotation.computeMembersNamed`, `PackageLoader.enterClasses`), and a
+    /// forwarder's companion is made at its owner's completion where no term of the name exists
+    /// (`NamerOps.addConstructorProxies`): reading the forwarder first completes it, and its right
+    /// side may name that member (`export HtmlTagOf.{Tag as HtmlTagOf}` beside `object
+    /// HtmlTagOf`), a lookup inside the forwarder's own completion.
+    fn exported_alias_pkg_term(&mut self, p: PkgId, name: Name, a: AliasId) -> Option<TermRef> {
+        if (self.sees_classpath() || self.std_bridges_into(p)) && (self.load_pkg_member(p, name) || self.forked) {
+            let own = self.syms.pkg(p).entries.get(&name).and_then(|e| e.term.map(|s| Self::package_term(&self.syms, s)).or(e.class.map(TermRef::Class)).or(e.pkg.map(TermRef::Package)));
+            if own.is_some() {
+                return own;
+            }
+        }
+        self.exported_alias_class(a).map(TermRef::Class)
     }
 
     /// A member the package object `obj` inherits, which is its package's as the object's own
@@ -1443,6 +1577,155 @@ impl<'a> Worker<'a> {
         })
     }
 
+    /// The class an export's type forwarder `a` names, whose companion it stands for as a term
+    /// where no term of its name forwards one: the alias's constructor companion (dotty's
+    /// `NamerOps.typeConstructorCompanion`, made for an `Exported` alias whose class has a
+    /// constructor proxy), a case class's synthetic companion as teq has it, the class.
+    pub(super) fn exported_alias_class(&mut self, a: AliasId) -> Option<ClassId> {
+        if !self.syms.aliases[a.idx()].exported {
+            return None;
+        }
+        // The class under the aliases it is forwarded through (`underlyingStableClassRef`).
+        let TypeRef::Class(k) = self.forwarded_type_target(TypeRef::Alias(a))? else { return None };
+        // An enum's class case has a synthetic companion as a case class has.
+        (self.needs_constructor_proxy(k) || self.syms.class(k).kind == ClassKind::EnumCase).then_some(k)
+    }
+
+    /// The class whose companion an export's type forwarder of class `c`, its own or a base's,
+    /// stands for under `name` (`exported_alias_class`): none for a class with no export clause
+    /// among its ancestors, the most, told by its flags.
+    #[inline]
+    pub(super) fn class_exported_alias_term(&mut self, c: ClassId, name: Name) -> Option<ClassId> {
+        let info = self.syms.class(c);
+        if !info.has_exports && !info.inherits_exports {
+            return None;
+        }
+        self.class_exported_alias_term_now(c, name)
+    }
+
+    /// A class not complete has no forwarders yet, nor its bases known: none, the lookup forcing
+    /// no completion.
+    #[inline(never)]
+    fn class_exported_alias_term_now(&mut self, c: ClassId, name: Name) -> Option<ClassId> {
+        let info = self.syms.class_done(c)?;
+        let bases: Vec<ClassId> = info.base_types.iter().map(|&(b, _)| b).collect();
+        let a = bases.into_iter().find_map(|b| self.syms.class(b).type_aliases.get(&name).copied())?;
+        self.exported_alias_class(a)
+    }
+
+    /// What a term reference names, followed through the stable forwarders it is, where the end
+    /// is an object or a top-level definition, whose path does not depend on the way to it.
+    pub(super) fn forwarded_term_target(&mut self, r: TermRef) -> Option<SymId> {
+        let mut s = r.sym()?;
+        for _ in 0..16 {
+            if !self.syms.sym(s).stable {
+                break;
+            }
+            match self.syms.forward_of(s) {
+                Some(fwd) => s = fwd.target,
+                None => match self.pickled_forward_target(s) {
+                    Some(target) => s = target,
+                    None => break,
+                },
+            }
+        }
+        let info = self.syms.sym(s);
+        let static_end = match info.owner {
+            Owner::Package(_) => true,
+            Owner::Class(k) => matches!(info.kind, SymKind::Object(_)) && self.syms.class(k).kind == ClassKind::Object && !self.is_inner_class(k),
+            Owner::Local => false,
+        };
+        static_end.then_some(s)
+    }
+
+    /// Whether `s` is another module's export forwarder, read from its pickle (`EXPORTED`).
+    pub(super) fn is_pickled_forwarder(&self, s: SymId) -> bool {
+        self.loaded.as_ref().is_some_and(|l| l.exported_members.contains_key(&s))
+    }
+
+    /// What another module's stable forwarder names, read from its pickle: the member its result's
+    /// singleton selects (dotty's `Namer.addForwarder`, `ExprType(path.tpe.select(sym))`), an
+    /// object by its module val.
+    fn pickled_forward_target(&mut self, s: SymId) -> Option<SymId> {
+        if !self.is_pickled_forwarder(s) {
+            return None;
+        }
+        let ret = self.sig_of(s).ret;
+        match self.types.get(ret) {
+            Type::Term(m) => Some(m),
+            Type::Class(k, _) if self.syms.class(k).kind == ClassKind::Object => self.syms.class(k).module_sym,
+            _ => None,
+        }
+    }
+
+    /// What a type reference names, followed through the aliases that are another type under a
+    /// new name (an export's type forwarder `type T = [X] =>> p.T[X]`, `type L[A] = List[A]`) to a
+    /// class or an alias by identity: dotty's `isSameRef` of two references each a subtype of the
+    /// other. A member through a class's `this` is its base's alias.
+    pub(super) fn forwarded_type_target(&mut self, r: TypeRef) -> Option<TypeRef> {
+        let mut r = r;
+        for _ in 0..16 {
+            let a = match r {
+                // A type member of an imported value's class (`import helpers.*`).
+                TypeRef::ValueMember(v, n) => {
+                    let ty = self.import_value_ret(v);
+                    let c = self.class_of(ty)?;
+                    let info = self.syms.class_done(c)?;
+                    info.base_types.iter().find_map(|&(b, _)| self.syms.class(b).type_aliases.get(&n).copied())?
+                }
+                TypeRef::Member(c, n) => {
+                    let info = self.syms.class_done(c)?;
+                    info.base_types.iter().find_map(|&(b, _)| self.syms.class(b).type_aliases.get(&n).copied())?
+                }
+                TypeRef::Alias(a) => a,
+                other => return Some(other),
+            };
+            self.complete_alias(a);
+            let info = &self.syms.aliases[a.idx()];
+            if info.bounds.is_some() {
+                return Some(TypeRef::Alias(a));
+            }
+            // The right side over the alias's parameters, or a forwarder's lambda over its own.
+            let own: Vec<TypeId> = info.tparams.iter().map(|&q| self.types.param(q)).collect();
+            let (body, params) = match self.types.get(info.rhs) {
+                Type::Lambda(ps, body) if own.is_empty() => (body, self.types.items(ps).to_vec()),
+                _ => (info.rhs, own),
+            };
+            let (head, args) = match self.types.get(body) {
+                Type::Alias(b, args) => (TypeRef::Alias(b), args),
+                Type::Class(k, args) => (TypeRef::Class(k), args),
+                Type::Ctor(k) if params.is_empty() => return Some(TypeRef::Class(k)),
+                _ => return Some(TypeRef::Alias(a)),
+            };
+            if self.types.items(args) != params.as_slice() {
+                return Some(TypeRef::Alias(a));
+            }
+            r = head;
+        }
+        None
+    }
+
+    /// The class whose companion an export's type forwarder of a class of `c`'s self type stands
+    /// for under `name`: a member of the self type, found through `this` (dotty's `findRef`;
+    /// lila's `AssetFullHelper`, `self: AssetHelper & I18nHelper =>`, applying the `Esm` that
+    /// `AssetHelper` exports).
+    fn self_type_exported_alias_term(&mut self, c: ClassId, name: Name) -> Option<ClassId> {
+        let declared = self.syms.class(c).declared_self?;
+        let mut parts: Vec<TypeId> = vec![declared];
+        while let Some(t) = parts.pop() {
+            match self.types.get(t) {
+                Type::Class(k, _) if k != c => {
+                    if let Some(found) = self.class_exported_alias_term(k, name) {
+                        return Some(found);
+                    }
+                }
+                Type::Inter(a, b) => parts.extend([b, a]),
+                _ => {}
+            }
+        }
+        None
+    }
+
     pub fn module_term(&mut self, c: ClassId, name: Name) -> Option<TermRef> {
         if let Some(r) = self.predef_std_term(c, name) {
             return Some(r);
@@ -1467,6 +1750,9 @@ impl<'a> Worker<'a> {
             if self.find_member(module_ty, name).is_none() {
                 return Some(if self.outer_class(n).is_some() { TermRef::ModuleClass(c, n) } else { TermRef::Class(n) });
             }
+        }
+        if let Some(k) = self.class_exported_alias_term(c, name) {
+            return Some(TermRef::Class(k));
         }
         if let Some(r) = self.exports_of(c).and_then(|e| e.terms.get(&name).copied()) {
             self.ref_exported = true;
@@ -2720,16 +3006,44 @@ impl<'a> Worker<'a> {
             TyExpr::Name(n) => self.lookup_term(n),
             TyExpr::Select(q, n) => match self.resolve_type_path(q)? {
                 TermRef::Package(p) => self.pkg_term(p, n),
-                TermRef::Global(s) | TermRef::ModuleMember(_, s) | TermRef::This(_, s) => {
-                    match self.syms.sym(s).kind {
-                        SymKind::Object(c) => self.module_term(c, n),
-                        _ => None,
-                    }
+                TermRef::Global(s) | TermRef::ModuleMember(_, s) | TermRef::This(_, s) | TermRef::ValueMember(_, s) => {
+                    let c = self.forwarded_object(s)?;
+                    self.module_term(c, n)
                 }
                 _ => None,
             },
             _ => None,
         }
+    }
+
+    /// The object a path's symbol names: the object, or an export's stable forwarder of one
+    /// (`final def O: p.O.type`), a path to it as dotty's `StableRealizable` forwarder is, through
+    /// the forwarders it relays.
+    pub(super) fn forwarded_object(&mut self, s: SymId) -> Option<ClassId> {
+        let mut s = s;
+        for _ in 0..16 {
+            match self.syms.sym(s).kind {
+                SymKind::Object(c) => return Some(c),
+                SymKind::Def if self.syms.sym(s).stable => match self.syms.forward_of(s) {
+                    Some(fwd) => s = fwd.target,
+                    // Another module's forwarder, read from its pickle: the object its result's
+                    // singleton names.
+                    None => {
+                        let ret = self.sig_of(s).ret;
+                        return match self.types.get(ret) {
+                            Type::Term(m) => match self.syms.sym(m).kind {
+                                SymKind::Object(c) => Some(c),
+                                _ => None,
+                            },
+                            Type::Class(k, _) if self.syms.class(k).kind == ClassKind::Object => Some(k),
+                            _ => None,
+                        };
+                    }
+                },
+                _ => return None,
+            }
+        }
+        None
     }
 
     /// Whether the written type's head names an alias of the std's `scala.scalajs.js` package
@@ -2804,11 +3118,9 @@ impl<'a> Worker<'a> {
     pub fn lookup_type_in_path(&mut self, q: TyExprId, n: Name) -> Option<TypeRef> {
         match self.resolve_type_path(q)? {
             TermRef::Package(p) => self.pkg_type(p, n),
-            TermRef::Global(s) | TermRef::ModuleMember(_, s) | TermRef::This(_, s) => {
-                match self.syms.sym(s).kind {
-                    SymKind::Object(c) => self.module_type(c, n),
-                    _ => None,
-                }
+            TermRef::Global(s) | TermRef::ModuleMember(_, s) | TermRef::This(_, s) | TermRef::ValueMember(_, s) => {
+                let c = self.forwarded_object(s)?;
+                self.module_type(c, n)
             }
             _ => None,
         }
@@ -2836,7 +3148,7 @@ impl<'a> Worker<'a> {
             }
             _ => match {
                 let r = self.resolve_type_path(q);
-                if r.map_or(false, |r| matches!(r, TermRef::Package(_)) || r.sym().map_or(false, |s| matches!(self.syms.sym(s).kind, SymKind::Object(_)))) {
+                if r.map_or(false, |r| matches!(r, TermRef::Package(_)) || r.sym().is_some_and(|s| self.forwarded_object(s).is_some())) {
                     return None;
                 }
                 self.type_path(q)?
@@ -4582,6 +4894,8 @@ impl<'a> Worker<'a> {
                     // An enum's value is a stable val of its companion (`DesugarEnums`), read on
                     // the companion's path.
                     SymKind::Val | SymKind::Given | SymKind::EnumValue(_) if !info.by_name => Ok(self.types.mk(Type::Select(p, s))),
+                    // An export's stable forwarder, a path as its member (`StableRealizable`).
+                    SymKind::Def if info.stable && info.sig.as_ref().map_or(false, |sig| sig.clauses.is_empty() && sig.tparams.is_empty()) => Ok(self.types.mk(Type::Select(p, s))),
                     SymKind::Object(c) => Ok(self.types.class(c, &[])),
                     _ => Err(s),
                 })
@@ -5011,6 +5325,7 @@ impl<'a> Worker<'a> {
             deprecated: def.mods & crate::ast::mods::DEPRECATED != 0,
             js: false,
             declared_rhs: crate::tir::NO_TYPE,
+            exported: false,
         });
         self.syms.alias_cells.set(a.0, Completion::NotStarted);
         if let Some(b) = self.local_blocks.last() {
@@ -5055,6 +5370,7 @@ impl<'a> Worker<'a> {
             deprecated: def.mods & crate::ast::mods::DEPRECATED != 0,
             js: false,
             declared_rhs: crate::tir::NO_TYPE,
+            exported: false,
         });
         self.syms.alias_cells.set(a.0, Completion::InProgress);
         let depth = self.env.frames.len();
@@ -5323,6 +5639,17 @@ impl<'a> Worker<'a> {
             let p = self.phase_split(super::profile::Phase::Complete, super::profile::Phase::LibraryComplete, |t| t.is_library_class(c));
             self.complete_class_now(c);
             self.phase_end(p);
+            if self.value_forwarders_made && self.syms.class(c).has_exports {
+                self.late_value_forwarders(c);
+            } else if self.forwarders_on_completion && self.syms.class(c).has_exports {
+                // A program class's forwarders are members it has once complete, as dotty's
+                // class completer enters them (`Namer.processExports`): a lookup that completes
+                // the class finds them, a header's included.
+                self.complete_class_forwarders(c);
+            }
+            if !self.blocked_clauses.is_empty() {
+                self.blocked_clauses_of(c);
+            }
             // The children of a sealed std class stand in its file: they complete with it, so
             // that the class knows them whenever it is complete. Once the outermost completion
             // is done, so that a child never meets its parent half complete.
@@ -6136,6 +6463,7 @@ impl<'a> Worker<'a> {
         let (base, conflicting, merged) = self.linearise(c, self_ty, linearisations, checked);
         // One pass over the bases: a native JS one, the types they bring, a declared self type.
         let (mut has_native_base, mut inherits_types, mut self_typed) = (false, false, false);
+        let mut inherits_exports = false;
         // `Product`, `Equals`, `Serializable` and `Enum` bring no native class, self type, type
         // member or nested class.
         let rule_prefix = self.rule_prefix_of(&base);
@@ -6148,6 +6476,7 @@ impl<'a> Worker<'a> {
             has_native_base |= bi.js == JsKind::Native;
             self_typed |= bi.declared_self.is_some();
             no_inherited_extensions &= bi.extensions.is_empty();
+            inherits_exports |= bi.has_exports || bi.inherits_exports;
             inherits_types = inherits_types
                 || !bi.type_aliases.is_empty()
                 || bi.inherits_types
@@ -6170,6 +6499,7 @@ impl<'a> Worker<'a> {
         info.rule_prefix = rule_prefix;
         info.superclass = superclass;
         info.inherits_types = inherits_types;
+        info.inherits_exports = inherits_exports;
         info.no_inherited_extensions = no_inherited_extensions;
         drop(info);
         self.note_meets(c, &merged);
@@ -7091,7 +7421,7 @@ trait Binding: Copy {
     /// A top-level package, visible from every file; the other members of the empty package are
     /// only visible to files without a package clause, through `in_pkg`.
     fn root_package(t: &mut Worker, name: Name) -> Option<Self>;
-    fn same(t: &Worker, a: Self, b: Self) -> bool;
+    fn same(t: &mut Worker, a: Self, b: Self) -> bool;
     /// The file of a definition, for the same-compilation-unit rule of package members.
     fn file(t: &Worker, r: Self) -> Option<FileId>;
     /// Whether a binding found in the class frame `frame` is a member the class inherits.
@@ -7155,6 +7485,9 @@ impl Binding for TermRef {
                         return Some(TermRef::Class(n));
                     }
                 }
+                if let Some(k) = t.class_exported_alias_term(c, name).or_else(|| t.self_type_exported_alias_term(c, name)) {
+                    return Some(TermRef::Class(k));
+                }
                 if kind == ClassKind::Enum {
                     let companion = t.syms.class(c).companion;
                     if let Some(r) = companion.and_then(|co| t.module_term(co, name)) {
@@ -7188,7 +7521,7 @@ impl Binding for TermRef {
             ImportTarget::PkgGivens(p) => t.pkg_term(p, name).filter(|&r| t.is_given_ref(r) && t.import_admits_ref(imp, r)),
             ImportTarget::ClassMember(c, orig) if imp.name == Some(name) => t.module_term(c, orig),
             ImportTarget::ClassAll(c) if imp.name.is_none() => {
-                t.module_term(c, name).filter(|&r| !t.is_given_ref(r))
+                t.module_term(c, name).filter(|&r| !t.is_given_ref(r) && t.wildcard_term_accessible(r))
             }
             ImportTarget::ClassGivens(c) => t.module_term(c, name).filter(|&r| t.is_given_ref(r) && t.import_admits_ref(imp, r)),
             ImportTarget::ValueGivens(_) => t.value_import_term(imp, name).filter(|&r| t.import_admits_ref(imp, r)),
@@ -7206,8 +7539,16 @@ impl Binding for TermRef {
         t.demand_pkg(ROOT_PKG, name).map(TermRef::Package)
     }
 
-    fn same(_: &Worker, a: TermRef, b: TermRef) -> bool {
-        super::exports::same_term(a, b)
+    /// dotty's `isSameRef`: a stable forwarder of an object or of a top-level definition is that
+    /// definition's path, a subtype of it and it of the forwarder (`trans` imported by name and
+    /// through a value whose class exports it), another module's forwarder read from its pickle
+    /// too (`zio.ZIO` beside a prelude's `export zio.ZIO`).
+    fn same(t: &mut Worker, a: TermRef, b: TermRef) -> bool {
+        if super::exports::same_term(a, b) {
+            return true;
+        }
+        let forwarder = |t: &Worker, r: TermRef| r.sym().is_some_and(|s| t.syms.sym(s).stable && (t.syms.is_forwarder(s) || t.is_pickled_forwarder(s)));
+        (forwarder(t, a) || forwarder(t, b)) && matches!((t.forwarded_term_target(a), t.forwarded_term_target(b)), (Some(x), Some(y)) if x == y)
     }
 
     fn file(t: &Worker, r: TermRef) -> Option<FileId> {
@@ -7258,7 +7599,7 @@ impl Binding for TypeRef {
             ImportTarget::PkgMember(p, orig) if imp.name == Some(name) => t.pkg_type(p, orig),
             ImportTarget::PkgAll(p) if imp.name.is_none() => t.pkg_type(p, name),
             ImportTarget::ClassMember(c, orig) if imp.name == Some(name) => t.module_type(c, orig),
-            ImportTarget::ClassAll(c) if imp.name.is_none() => t.module_type(c, name),
+            ImportTarget::ClassAll(c) if imp.name.is_none() => t.module_type(c, name).filter(|&r| t.wildcard_type_accessible(r)),
             ImportTarget::ValueMember(..) | ImportTarget::ValueAll(_) => t.value_import_type(imp, name),
             _ => None,
         }
@@ -7273,8 +7614,10 @@ impl Binding for TypeRef {
         None
     }
 
-    fn same(_: &Worker, a: TypeRef, b: TypeRef) -> bool {
-        a == b
+    /// dotty's `isSameRef`, the two references each other's subtypes: one type under two names,
+    /// an export's type forwarder and what it names among them, is one binding.
+    fn same(t: &mut Worker, a: TypeRef, b: TypeRef) -> bool {
+        a == b || matches!((t.forwarded_type_target(a), t.forwarded_type_target(b)), (Some(x), Some(y)) if x == y)
     }
 
     fn file(t: &Worker, r: TypeRef) -> Option<FileId> {

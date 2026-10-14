@@ -513,7 +513,9 @@ pub(super) struct BoundParam {
 /// What an inline method body is made of, wherever it comes from.
 pub(super) struct InlineBody {
     pub file: FileId,
-    pub body: ExprId,
+    /// The body as written; none for an inline export forwarder, whose body is its stored record
+    /// alone (`value_exports::inline_forwarder_body`).
+    pub body: Option<ExprId>,
     span: Span,
     pub transparent: bool,
     pub declared: bool,
@@ -672,6 +674,15 @@ impl<'a> Worker<'a> {
             let s = self.syms.sym(sym);
             (s.file, s.def)
         };
+        // An inline member's export forwarder: what its symbol says, its body the stored record's.
+        if def_id.is_none() && self.is_inline_forwarder(sym) {
+            let info = self.syms.sym(sym);
+            let (span, transparent) = (info.span, info.mods & mods::TRANSPARENT != 0);
+            let sig = self.sig_arc(sym);
+            let inline_params = sig.clauses.iter().flat_map(|c| c.params.iter().map(|p| self.syms.sym(p.sym).mods & mods::INLINE != 0)).collect();
+            let defaults = sig.clauses.iter().flat_map(|c| c.params.iter().map(|_| None)).collect();
+            return Some(InlineBody { file, body: None, span, transparent, declared: true, inline_params, defaults, ext_group: 0 });
+        }
         // A library method's body comes with its class's conversion, whose pseudo file
         // gives it and what it makes their positions, the same whatever asked for it first.
         let (file, def_id) = match def_id {
@@ -701,7 +712,7 @@ impl<'a> Worker<'a> {
         let inline_params = clauses.iter().flat_map(|c| c.params.iter().map(|p| p.mods & mods::INLINE != 0)).collect();
         let defaults = clauses.iter().flat_map(|c| c.params.iter().map(|p| p.default)).collect();
         let span = self.ast(file).expr_span(body);
-        Some(InlineBody { file, body, span, transparent, declared, inline_params, defaults, ext_group })
+        Some(InlineBody { file, body: Some(body), span, transparent, declared, inline_params, defaults, ext_group })
     }
 
     /// The expansion of a call of the inline method `call.sym` with its typed arguments, one
@@ -795,8 +806,12 @@ impl<'a> Worker<'a> {
         let body = self.inline_body(sym)?;
         self.restrict_inline_call(sym, span);
         self.inline.expansions += 1;
-        if body.file != self.env.file {
-            self.inline_deps.entry(body.file).or_default().insert(self.env.file, ());
+        // An inline forwarder's body is its export clause's, which an edit changes only through a
+        // full build (`shape`): the expansion depends on the body of the member it forwards to, not
+        // on the rest of the forwarder's file.
+        let def_file = self.inline_forwarded_file(sym).unwrap_or(body.file);
+        if def_file != self.env.file {
+            self.inline_deps.entry(def_file).or_default().insert(self.env.file, ());
         }
         let prof = self.prof(Kind::Inline, span, About::Sym(sym));
         let (owner, def_span) = {
@@ -850,6 +865,11 @@ impl<'a> Worker<'a> {
         // The body stands in its definition's scope, where the type variables of the patterns
         // around the call are not: its own patterns bind theirs afresh.
         let case_binders = std::mem::take(&mut self.case_binders);
+        // A body the source does not write has its stored record alone, no retype path.
+        if body.body.is_none() && (entry.is_err() || super::substitution::measures_copy()) {
+            self.case_binders = case_binders;
+            return None;
+        }
         let result = self.with_env(env, |t| match &entry {
             Ok(def) if super::substitution::measures_copy() => {
                 t.copy_for_measure(call.sym, def, subst, &call.owner_subst);
@@ -901,6 +921,19 @@ impl<'a> Worker<'a> {
         Some(result)
     }
 
+    /// The file of the member an inline forwarder `s` forwards to, through the forwarders it
+    /// relays; none for what is no inline forwarder.
+    fn inline_forwarded_file(&self, s: SymId) -> Option<FileId> {
+        let mut at = s;
+        for _ in 0..16 {
+            if !self.is_inline_forwarder(at) {
+                break;
+            }
+            at = self.syms.forward_of(at)?.target;
+        }
+        (at != s).then(|| self.syms.sym(at).file)
+    }
+
     /// The plain call of a method whose definition failed the check, of type `ty`, which depends
     /// on the definition as an expansion does: an edit that fixes it types the caller again
     /// (`Worker::inline_deps`).
@@ -923,17 +956,19 @@ impl<'a> Worker<'a> {
         span: Span,
         expected: Option<TypeId>,
     ) -> (TExprId, TypeId) {
+        // The retype path types the body as written, which every body it is taken for has.
+        let written = body.body.expect("the retype path for a body the source writes");
         let mut bound = self.bind_inline_call(call, sig, subst, args, body, ret_ty, span);
         let ret_ty = bound.ret_ty;
         let outer_return = self.return_to.take();
         let outer_returns = std::mem::take(&mut self.returns);
         let outer_partial = std::mem::replace(&mut self.partial_match, false);
         let (te, ty) = if body.transparent {
-            let (te, ty) = self.type_expr(body.body, expected);
+            let (te, ty) = self.type_expr(written, expected);
             // scalac folds the body to a constant of its literal type, which a transparent
             // method passes on to the call; a body that ends in an ascription (`(1: Any)`,
             // `(1: Int)`) has the type it was given, which the constant does not replace.
-            let result = self.result_expr(body.body);
+            let result = self.result_expr(written);
             let ascribed = matches!(self.cur_ast().expr(result), crate::ast::Expr::Typed(..)) || self.widened_constant(te);
             match self.fold_constant(te).filter(|_| !ascribed) {
                 Some(v) => {
@@ -943,7 +978,7 @@ impl<'a> Worker<'a> {
                 None => (te, ty),
             }
         } else if !body.declared {
-            let (te, ty) = self.type_expr(body.body, expected);
+            let (te, ty) = self.type_expr(written, expected);
             match self.inferred_call_result(call, subst, args) {
                 Some(inferred) => (te, inferred),
                 None => {
@@ -951,9 +986,9 @@ impl<'a> Worker<'a> {
                 }
             }
         } else if let Some(own) = self.body_result_type(call, sig, subst, &bound) {
-            (self.check_expr(body.body, own), ret_ty)
+            (self.check_expr(written, own), ret_ty)
         } else {
-            (self.check_expr(body.body, ret_ty), ret_ty)
+            (self.check_expr(written, ret_ty), ret_ty)
         };
         if !body.transparent {
             self.mark_widened_expansion(te, ty);
@@ -1074,7 +1109,7 @@ impl<'a> Worker<'a> {
         let mut receiver = None;
         // A macro sees the argument as written, folded no further than scalac folds a
         // constant expression.
-        let is_macro = self.is_macro_body(body.file, body.body);
+        let is_macro = body.body.map_or(false, |b| self.is_macro_body(body.file, b));
         for clause in &sig.clauses {
             for p in &clause.params {
                 let dependent_result = self.types.has_paths(sig.ret) && self.mentions_term(sig.ret, p.sym);

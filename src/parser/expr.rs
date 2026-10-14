@@ -61,10 +61,17 @@ impl<'a> Parser<'a> {
         e
     }
 
+    /// Whether `e` is the latest placeholder alone (dotty's `Parsers.isWildcard`), as
+    /// `is_placeholder` reads it.
+    fn is_wildcard(&self, e: ExprId) -> bool {
+        self.placeholders.last().is_some_and(|p| self.is_placeholder(e, p.name))
+    }
+
     fn is_placeholder(&self, e: ExprId, name: Name) -> bool {
         match self.ast.expr(e) {
             Expr::Ident(n) => n == name,
-            Expr::Typed(inner, _) | Expr::Parens(inner) => self.is_placeholder(inner, name),
+            // dotty's `isWildcard` passes over an annotation too (`Annotated`): `(_: @unchecked)`.
+            Expr::Typed(inner, _) | Expr::Unchecked(inner) | Expr::Parens(inner) => self.is_placeholder(inner, name),
             _ => false,
         }
     }
@@ -411,16 +418,27 @@ impl<'a> Parser<'a> {
                 Tok::Colon => {
                     self.bump();
                     let t = self.parse_type();
+                    self.ascribe_wildcard(e, t);
                     e = self.ast.add_expr(Expr::Typed(e, t), start.to(self.prev_span()));
                 }
                 // `(1:` with the type on the next line, which `colon_takes_argument` leaves.
                 Tok::ColonEol if self.at_colon_before_indent() && !self.colon_takes_argument() => {
                     let region = self.eat_annotation_colon().flatten();
                     let t = self.parse_type();
+                    self.ascribe_wildcard(e, t);
                     e = self.ast.add_expr(Expr::Typed(e, t), start.to(self.prev_span()));
                     self.end_annotation_region(region);
                 }
                 _ => return e,
+            }
+        }
+    }
+
+    /// `_: T` gives the placeholder's parameter the type (dotty's `ascription`).
+    fn ascribe_wildcard(&mut self, e: ExprId, t: crate::ast::TyExprId) {
+        if self.is_wildcard(e) {
+            if let Some(last) = self.placeholders.last_mut() {
+                last.ty = Some(t);
             }
         }
     }
@@ -1294,15 +1312,10 @@ impl<'a> Parser<'a> {
             1 => {
                 let only = self.expr_scratch[mark];
                 self.expr_scratch.truncate(mark);
-                // `(_: Int)` carries its ascription over to the placeholder parameter.
-                if let Expr::Typed(inner, ty) = self.ast.expr(only) {
-                    if let (Expr::Ident(n), Some(last)) =
-                        (self.ast.expr(inner), self.placeholders.last_mut())
-                    {
-                        if last.name == n {
-                            last.ty = Some(ty);
-                            return inner;
-                        }
+                // `(_: Int)`, whose ascription its placeholder's parameter carries, is that parameter.
+                if let Expr::Typed(inner, _) = self.ast.expr(only) {
+                    if matches!(self.ast.expr(inner), Expr::Ident(_)) && self.is_wildcard(inner) {
+                        return inner;
                     }
                 }
                 if matches!(self.ast.expr(only), Expr::Tuple(_)) {

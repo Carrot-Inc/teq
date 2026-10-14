@@ -10,8 +10,8 @@
 # two-case inventory, its passed case twice and its ignored case pending; a case the inventory records twice, run
 # twice; the review's two events, a case of another project's suite of the name qualifying none of this one's; a
 # suite of one name in two projects. And the preflight, which refuses a checkout whose directory sbt names Airstream's root project after
-# (tests/support/reference_preflight.scala), and the peak memory the verbs sample, which counts a node the script
-# starts (the test runner's), though it names no teq binary (tests/support/reference_sampler.scala).
+# (tests/support/reference_preflight.scala), and the peak memory the verbs sample, which counts a node the invocation
+# starts with its token (the test runner's), though it names no teq binary (tests/support/reference_sampler.scala).
 cd "$(dirname "$0")/.."
 TEQ=${TEQ:-./target/release/teq}
 work=$(mktemp -d)
@@ -110,7 +110,8 @@ else
   echo "FAIL a checkout whose directory renames the root project is refused at the preflight: $renamed / $named"
   fail=$((fail + 1))
 fi
-# The admission's memory: a node the verb starts, which names no teq binary, is in the sampled peak.
+# The admission's memory: a node the verb starts with the invocation's token, which names no teq binary, is in the
+# sampled peak.
 sampled=$(timeout 120 "$TEQ" interp tests/support/reference_sampler.scala --main referenceSampler -- "$work/out" 2>&1 | tail -1)
 child=${sampled% *}
 peak=${sampled#* }

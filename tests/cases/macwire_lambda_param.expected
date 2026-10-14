@@ -1,0 +1,3 @@
+api(users)
+index(games, api(users))
+List(api(posts))

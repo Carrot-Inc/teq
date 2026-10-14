@@ -1712,13 +1712,20 @@ impl<'a> Worker<'a> {
             // static field, which is stable as dotty's `ClassfileParser` reads a final one
             // (`TimeUnit.SECONDS.type` of scala-library's `duration.SECONDS`).
             SymKind::Def => {
-                let owner = info.owner;
+                let (owner, stable) = (info.owner, info.stable);
                 self.sig_of(sym);
                 let sig = self.syms.sig(sym);
                 let ret = sig.ret;
                 let plain = sig.tparams.is_empty() && sig.clauses.is_empty();
                 match self.types.get(ret) {
                     Type::Class(c, _) if plain && self.syms.class(c).kind == ClassKind::Object => Some(ret),
+                    // A def its pickle marks stable, an export's forwarder of a stable member
+                    // (dotty's `StableRealizable`): a path, as a val is.
+                    _ if plain && stable => Some(match (object, prefix) {
+                        (Some(o), _) => self.object_member_path(o, sym),
+                        (None, Some(p)) => self.types.mk(Type::Select(p, sym)),
+                        (None, None) => self.types.mk(Type::Term(sym)),
+                    }),
                     _ if plain && matches!(owner, Owner::Class(o) if self.syms.class(o).kind == ClassKind::Object && self.std_jvm_class(o).is_some()) => Some(match prefix {
                         Some(p) => self.types.mk(Type::Select(p, sym)),
                         None => self.types.mk(Type::Term(sym)),

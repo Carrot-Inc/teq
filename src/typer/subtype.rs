@@ -1195,7 +1195,13 @@ impl<'a> Worker<'a> {
             Type::Class(c, _) if self.syms.class(c).kind == ClassKind::Object => Some(t),
             Type::Term(v) => match self.declared_singleton(v) {
                 Some(u) => self.stable_path(u, depth + 1),
-                None => Some(t),
+                // A static object's module is the object, as its class type stands for it (dotty
+                // compares a module's `TermRef` and its class's `ThisType` as one prefix): the
+                // path an export's forwarders see the members through (`internal.JamConfig`).
+                None => match self.syms.sym(v).kind {
+                    SymKind::Object(c) if !self.is_inner_class(c) => Some(self.types.class(c, &[])),
+                    _ => Some(t),
+                },
             },
             Type::Select(p, v) => {
                 let np = self.stable_path(p, depth + 1)?;

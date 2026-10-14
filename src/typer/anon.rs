@@ -91,6 +91,13 @@ impl<'a> Worker<'a> {
         }
         self.set_parents(c, parents);
         self.syms.class_mut(c).state().set(Completion::Done);
+        // Its export clauses, completed where it is made as any class's at its completion
+        // (dotty's `Namer.processExports`): the forwarders of a value's members, and the table of
+        // an object's, which its check builds.
+        if cls.exports.len > 0 {
+            self.syms.class_mut(c).has_exports = true;
+            self.late_value_forwarders(c);
+        }
         // Its entries meeting inherited alternatives are named where it is made, as after
         // `complete_class` (a std body's class typed after the final passes).
         self.late_naming_done();
@@ -157,6 +164,10 @@ impl<'a> Worker<'a> {
         self.syms.class_mut(c).state().set(Completion::InProgress);
         self.set_parents(c, vec![(parent_ty, span)]);
         self.syms.class_mut(c).state().set(Completion::Done);
+        if cls.exports.len > 0 {
+            self.syms.class_mut(c).has_exports = true;
+            self.late_value_forwarders(c);
+        }
         let parent_args = class_parent
             .and_then(|k| self.type_parent_ctor(c, None, k, Some(parent_ty), true).map(|(call, _)| call))
             .filter(|call| !call.args.is_empty() || call.via.is_some());
@@ -1851,7 +1862,6 @@ impl<'a> Worker<'a> {
             lists: None,
             init: self.parent_inits(c, &mut Vec::new()),
             methods: vec![f],
-            forwarders: Vec::new(),
             bridges: Vec::new(),
             super_accessors: Vec::new(),
             deferred_givens: Vec::new(),

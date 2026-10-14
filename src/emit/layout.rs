@@ -525,7 +525,6 @@ fn is_closure_shaped(prog: &Program, syms: &Symbols, interner: &Interner, reach:
     let plain = tc.parent_args.is_none()
         && tc.init.is_empty()
         && tc.ctors.is_empty()
-        && tc.forwarders.is_empty()
         && tc.bridges.is_empty()
         && tc.super_accessors.is_empty()
         && tc.methods.len() == 1;
@@ -557,12 +556,14 @@ fn is_closure_shaped(prog: &Program, syms: &Symbols, interner: &Interner, reach:
 /// position with, and among those the name and the kind tell them apart. A tie is two definitions
 /// of one emitted name, kept in the program's order (`compare_classes`).
 pub fn compare_syms(syms: &Symbols, interner: &Interner, a: SymId, b: SymId) -> Ordering {
-    // A member no definition declares (an outer accessor, a forwarder) is placed at its class's
-    // definition, the same whether the class is the program's or read from a product.
+    // A member no definition declares (an outer accessor) is placed at its class's definition, the
+    // same whether the class is the program's or read from a product. An export's forwarder stands
+    // at its selector, the export's place in the body where dotty's `typedStats` enters it, which a
+    // product's pickle positions it at.
     let key = |s: SymId| {
         let info = syms.sym(s);
         let (file, def, start) = match (info.def, info.owner) {
-            (None, Owner::Class(c)) => {
+            (None, Owner::Class(c)) if !syms.is_forwarder(s) => {
                 let class = syms.class(c);
                 (class.file, class.def, class.span.start)
             }
@@ -708,7 +709,9 @@ pub fn runs_body(prog: &Program, syms: &Symbols, tc: &TClass) -> bool {
 /// member.
 pub fn initialises_file(syms: &Symbols, s: SymId, folded: bool) -> bool {
     let info = syms.sym(s);
-    if !matches!(info.owner, Owner::Package(_)) || info.def.is_none() {
+    // A top-level export's forwarder is a definition of the file's `<file>$package` as the file's
+    // own are (`Desugar.packageDef`): its access runs the initialiser first.
+    if !matches!(info.owner, Owner::Package(_)) || (info.def.is_none() && !syms.is_forwarder(s)) {
         return false;
     }
     match info.kind {

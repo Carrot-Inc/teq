@@ -1,6 +1,6 @@
-// expect: export_value_type_conflict.scala:11:10: error: T is already defined as type T
-// expect: export_value_type_conflict.scala:14:10: error: T is already defined as type T
-// expect: export_value_type_conflict.scala:16:10: error: T is already defined as type T
+// expect: export_value_type_conflict.scala:11:12: error: T is already defined as type T
+// expect: export_value_type_conflict.scala:14:12: error: T is already defined as type T
+// expect: export_value_type_conflict.scala:16:12: error: T is already defined as type T
 // expect: 3 errors found
 // A value export forwards a type member as an alias, which a type of the class's of the same
 // name, its own or an earlier clause's forwarder, conflicts with (dotty's `checkNoConflict`).

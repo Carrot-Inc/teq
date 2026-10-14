@@ -1953,6 +1953,16 @@ impl<'a> Worker<'a> {
     /// class or of an object) as an expression where the typer stands; none for a member of a
     /// class that is no enclosing one.
     pub(super) fn stable_path_expr(&mut self, s: SymId) -> Option<TExprId> {
+        // A static object's module val is the object: its module (`this` inside it), as dotty's
+        // `ref` of the module's `TermRef` loads it where an outer argument is rebuilt from a
+        // path (`ExplicitOuter.outerPrefix`, `singleton(prefix)`), not a top-level val of its
+        // file, which `Static` reads (`HtmlTagOf()` in the place of `HtmlTagOf$()`).
+        if let SymKind::Object(o) = self.syms.sym(s).kind {
+            if self.static_object(o) {
+                let enclosing = self.env.frames.iter().any(|f| matches!(f, Frame::Class(x) if *x == o));
+                return Some(if enclosing { self.this_ref(o) } else { self.prog.add(TExpr::Module(o)) });
+            }
+        }
         Some(match self.syms.sym(s).owner {
             Owner::Class(o) => {
                 let classes: Vec<ClassId> = self.env.frames.iter().rev().filter_map(|f| match f {
@@ -3006,7 +3016,13 @@ impl<'a> Worker<'a> {
                 return class;
             }
         }
-        self.sig_of(g).ret
+        let ret = self.sig_of(g).ret;
+        // A stable forwarder's singleton provides what the path stands for, through a chain of
+        // forwarders (`C.renamed: B.renamed.type`, `B.renamed: A.original.type`).
+        if self.syms.sym(g).stable && matches!(self.types.get(ret), Type::Term(_) | Type::Select(..)) {
+            return self.widen_path(ret);
+        }
+        ret
     }
 
     /// The classes of the parts of an intersection, or the class of the type itself, and whether
@@ -3056,7 +3072,7 @@ impl<'a> Worker<'a> {
     }
 
     /// An object whose enclosing classes are all objects, up to a package.
-    fn static_object(&self, m: ClassId) -> bool {
+    pub(super) fn static_object(&self, m: ClassId) -> bool {
         let mut c = m;
         loop {
             let info = self.syms.class(c);
@@ -3812,12 +3828,26 @@ impl<'a> Worker<'a> {
         if !sig.tparams.is_empty() || !sig.clauses.is_empty() || info.by_name || info.mods & crate::ast::mods::MUTABLE != 0 {
             return None;
         }
-        match info.kind {
+        let (kind, owner) = (info.kind, info.owner);
+        // A stable export's forwarder is the singleton of what it forwards to (dotty's
+        // `ExprType(pathType.select(sym))`): its result, seen from its site; a library's given its
+        // pickle marks `STABLE` among them.
+        if matches!(kind, SymKind::Def | SymKind::Given) && self.is_stable_forwarder(g) {
+            let ret = sig.ret;
+            return Some(match (owner, site) {
+                (Owner::Class(k), Some((site, _))) => {
+                    let prefix = self.site_prefix(site)?;
+                    self.as_seen_from(ret, prefix, k)
+                }
+                _ => ret,
+            });
+        }
+        match kind {
             SymKind::Object(c) => return Some(self.types.class(c, &[])),
             SymKind::Val | SymKind::Given => {}
             _ => return None,
         }
-        Some(match (info.owner, site) {
+        Some(match (owner, site) {
             // A member of a class or trait (`open_given_sig` gives it a site): through its receiver.
             (Owner::Class(_), Some((site, _))) => {
                 let prefix = self.site_prefix(site)?;

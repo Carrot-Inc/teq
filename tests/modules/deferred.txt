@@ -1,4 +1,3 @@
-ledgeroverride classes  scalac 3.8.4's inline rules, through a product: the split build's expansion of `member(O)` calls the definition's member (`loa/B.value()`), as the product's inline body is retyped, where the whole build's substitution names the argument's override (`loa/O$.value()`), scalac's; the runs print the same: deferred until the reading side keeps the stored form
 ledgerreceiver classes  an expansion of the upstream's inline methods over the products makes its anonymous classes and the upstream file's `$package` holder where the whole build places them otherwise (`$anon$<site>` names, `Lib$package` owned by a module that does not write it): the origins of an expansion's classes (kind 2), the products part's follow-up
 ledgerreceiver subset  the same
 ledgerreceiver bundle  the same
@@ -37,7 +36,6 @@ opaquename scalac-run  the same: scalac compiles no downstream to run
 macroliteral scalac-b  the same as macroquote: scalac's compilation of the downstream expands the upstream's interpolator by calling its implementation in teq's class files, which do not have it (`mla/Literals$EmailLiteral$` holds neither `validate` nor the inherited `apply`'s forwarder, and its constructor is private where scalac's of a nested object is public, which `Interpreter.loadModule` calls: `NoSuchMethodException: mla.Literals$EmailLiteral$.<init>()`), the JVM prerequisite
 macroliteral scalac-run  the same: scalac compiles no downstream to run
 macroliteral scalac-lean-b  the same as macropattern's: scalac runs the downstream's macro on the JVM and the Scala.js check build's products are TASTy alone
-ledgeroverride subset  the same as classes
 macrowithheldretry scalac-b  the same as macroquote: scalac's compilation of the downstream expands the upstream's interpolator by calling its implementation in teq's class files, which do not have it (`Could not find method mra.Mac$.addrImpl with parameters (class scala.quoted.Expr, interface scala.quoted.Quotes)`), the JVM prerequisite
 macrowithheldretry scalac-run  the same: scalac compiles no downstream to run
 macrowithheldretry scalac-lean-b  the same as macropattern's: scalac runs the downstream's macro on the JVM and the Scala.js check build's products are TASTy alone

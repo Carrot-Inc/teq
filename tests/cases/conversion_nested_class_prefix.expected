@@ -1,0 +1,3 @@
+div(seq(attr(active)))
+div(seq(),seq(attr(1),attr(2)))
+seq(attr(x))

@@ -2266,6 +2266,31 @@ impl<'a> Worker<'a> {
 
     /// `r.inline$..$x_=(v)` of a product, an inline accessor's setter: the assignment
     /// `r.x = v` it stands for.
+    /// The accessor dotty's `MakeInlineablePassing` gives a member of another class an inline
+    /// body reaches, `inline$m$i1(q)` with its receiver as the first argument (`def
+    /// inline$m$i1(x$0: Q) = x$0.m`, named by `UniqueInlineName`): the selection it stands for,
+    /// `q.m` (an inline body's pattern `inline$Submarine$i1(Handle)(e, Marker)`, cats-mtl's).
+    fn conv_passing_accessor(&mut self, cv: &mut Conv, f: &Term, args: &[Term]) -> Option<ExprId> {
+        let TermKind::Path(t) = &f.kind else { return None };
+        let [q] = args else { return None };
+        if !self.names_accessor(cv, t) {
+            return None;
+        }
+        let n = match t {
+            TType::TermRef(_, n) => *n,
+            TType::LocalTerm(addr, _) => Decoder::new(&cv.tasty).name_at(*addr)?,
+            _ => return None,
+        };
+        let text = cv.tasty.name(cv.tasty.source_name(n));
+        let (member, unique) = text.strip_prefix("inline$")?.rsplit_once("$i")?;
+        if member.is_empty() || unique.is_empty() || !unique.bytes().all(|b| b.is_ascii_digit()) {
+            return None;
+        }
+        let member = self.interner.intern(member);
+        let qe = self.conv_expr(cv, q);
+        Some(cv.expr(Expr::Select(qe, member)))
+    }
+
     fn conv_accessor_assign(&mut self, cv: &mut Conv, f: &Term, args: &[Term]) -> Option<ExprId> {
         let (TermKind::Select(q, n) | TermKind::SelectIn(q, n, ..)) = &f.kind else { return None };
         let [v] = args else { return None };
@@ -2690,7 +2715,12 @@ impl<'a> Worker<'a> {
                 self.adapted(cv, e, "Java's `()` the source did not write, left out");
                 e
             }
-            TermKind::Apply(f, args) => match self.conv_quoted(cv, f, args).or_else(|| self.conv_interpolation(cv, f, args)).or_else(|| self.conv_accessor_assign(cv, f, args)) {
+            TermKind::Apply(f, args) => match self
+                .conv_quoted(cv, f, args)
+                .or_else(|| self.conv_interpolation(cv, f, args))
+                .or_else(|| self.conv_accessor_assign(cv, f, args))
+                .or_else(|| self.conv_passing_accessor(cv, f, args))
+            {
                 Some(e) => e,
                 None => self.conv_apply(cv, f, args),
             },

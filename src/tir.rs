@@ -938,9 +938,6 @@ pub struct TClass {
     /// The secondary constructors: the body of each is a block whose one statement is the
     /// self constructor call (`New` or `NewVia`) and whose result runs after it.
     pub ctors: Vec<FunId>,
-    /// Abstract members of the parents that an `export` clause implements, with the definition
-    /// each one forwards to; the class gets a real member for these.
-    pub forwarders: Vec<(SymId, SymId)>,
     /// The targets of the `super` calls made by the traits this class is the first to mix in.
     pub super_accessors: Vec<SuperAccessor>,
     /// Inherited methods that implement an inherited declaration whose name in the JavaScript
