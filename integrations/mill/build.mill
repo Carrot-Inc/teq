@@ -57,18 +57,15 @@ object `package` extends ScalaModule, PublishModule {
   }
 
   /** The launchers an export writes beside teq.lock (sbt-teq's `Launchers`, which reads them here): teq's
-    * tools/launcher/teq and teq.cmd, the version their marker line names, and every version shipped before
-    * (tools/launcher/shipped/<version>/), as dev/teq/sbt/launcher/<version>/<name>, line ends \n, with `versions`
+    * tools/launcher/teq and teq.cmd, the current launcher, and every version shipped before
+    * (tools/launcher/shipped/<version>/, the current one above the highest), as dev/teq/sbt/launcher/<version>/<name>, line ends \n, with `versions`
     * listing them; sbt-teq's build makes the same resources. */
   def launchers = Task.Sources(moduleDir / os.up / os.up / "tools" / "launcher")
   def resources = Task {
     val dir = launchers().head.path
     val out = Task.dest / "dev" / "teq" / "sbt" / "launcher"
-    val marker = """(?m)^(?:#|rem) teq launcher (\d+):""".r
-    def versionOf(f: os.Path) = marker.findFirstMatchIn(os.read(f)).map(_.group(1).toInt).getOrElse(sys.error(s"$f has no `teq launcher <version>:` line"))
-    val current = versionOf(dir / "teq")
-    if versionOf(dir / "teq.cmd") != current then sys.error(s"${dir / "teq.cmd"} is not launcher $current, as ${dir / "teq"} is")
     val shipped = if os.isDir(dir / "shipped") then os.list(dir / "shipped").filter(os.isDir).map(d => d.last.toInt -> d) else Nil
+    val current = shipped.map(_._1).foldLeft(0)(_ max _) + 1
     val all = (shipped :+ (current -> dir)).sortBy(_._1)
     for (version, from) <- all; name <- Seq("teq", "teq.cmd") do
       os.write(out / version.toString / name, os.read(from / name).replace("\r\n", "\n"), createFolders = true)

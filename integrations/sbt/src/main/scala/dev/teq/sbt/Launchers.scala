@@ -8,11 +8,10 @@ import java.nio.file.Files
 /** The launchers `teqExportAll` writes beside `teq.lock` (docs/TARGETS.md, "The launchers"): `teq`
   * (POSIX sh) and `teq.cmd`, teq's `tools/launcher/`, which the plugin carries in every version it
   * has shipped. A launcher is written when absent and replaced by the current one only while it is
-  * one of those, unedited (line ends aside); any other (edited, without the marker, or a later
-  * plugin's) is kept and reported. */
+  * one of those, unedited (line ends aside); any other (edited, or a later plugin's) is kept and
+  * reported. The versions are the plugin's own ordering of the copies it carries, in no file. */
 private[teq] object Launchers {
   val Names = Seq("teq", "teq.cmd")
-  private val Marker = """(?m)^(?:#|rem) teq launcher (\d+):""".r
 
   /** The templates by version, oldest first, each launcher's text with `\n` line ends. */
   lazy val shipped: Seq[(Int, Map[String, String])] = {
@@ -35,7 +34,7 @@ private[teq] object Launchers {
   /** Writes or keeps each launcher at `root`, and says what it did: a report per launcher written,
     * replaced or kept, none for one already current. */
   def write(root: File, templates: Seq[(Int, Map[String, String])] = shipped): Seq[Report] = {
-    val (version, current) = templates.last
+    val current = templates.last._2
     Names.flatMap { name =>
       val file = new File(root, name)
       def place(): Unit = {
@@ -44,7 +43,7 @@ private[teq] object Launchers {
       }
       if (!file.isFile) {
         place()
-        Some(Report(false, s"wrote $file, launcher $version"))
+        Some(Report(false, s"wrote $file"))
       }
       else {
         val text = normalized(new String(Files.readAllBytes(file.toPath), UTF_8))
@@ -53,20 +52,15 @@ private[teq] object Launchers {
           None
         }
         else templates.find(_._2(name) == text) match {
-          case Some((old, _)) =>
+          case Some(_) =>
             place()
-            Some(Report(false, s"replaced $file, launcher $old, by launcher $version"))
+            Some(Report(false, s"replaced $file, an earlier launcher, by this plugin's"))
           case None =>
-            val theirs = Marker.findFirstMatchIn(text).map(_.group(1).toInt)
-            val why = theirs match {
-              case None => "it has no `teq launcher <version>:` line"
-              case Some(v) if v > version => s"it is launcher $v, a later sbt-teq's"
-              case Some(v) => s"it is launcher $v, edited"
-            }
+            val why = "it is edited, or a later sbt-teq's"
             val (ours, kept) = (current(name).linesIterator.toVector, text.linesIterator.toVector)
             val at = ours.indices.find(i => kept.lift(i) != Some(ours(i))).getOrElse(ours.size)
             val first = ours.lift(at).fold("(its end)")(line => s"`$line`")
-            Some(Report(true, s"kept $file, since $why: launcher $version differs from it first at line ${at + 1}, $first"))
+            Some(Report(true, s"kept $file, since $why: this plugin's differs from it first at line ${at + 1}, $first"))
         }
       }
     }

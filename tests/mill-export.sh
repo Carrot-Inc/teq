@@ -213,7 +213,7 @@ overlay["snapshots"] = True
 open(sys.argv[1], "w").write(json.dumps(overlay, indent=2) + "\n")
 PY
 if out=$(export_build "$d" 2>&1) && [ -f "$d/teq.lock" ] && [ ! -e "$d/target/teq/teq.lock" ] && [ -x "$d/teq" ] && [ -f "$d/teq.cmd" ] &&
-  cmp -s "$d/teq" tools/launcher/teq && [[ "$out" == *"wrote $d/teq, launcher "* ]]; then
+  cmp -s "$d/teq" tools/launcher/teq && [[ "$out" == *"wrote $d/teq"* ]]; then
   out=$(cd "$d" && TEQ=$TEQ timeout 300 ./teq --strict compile b 2>&1)
   if [ $? = 0 ] && [[ "$out" == "b/compile: "* ]]; then pass "the driver's mode: the lock at the root with the launchers, ./teq running it"; else fail "the driver's mode, ./teq: $out"; fi
   (cd "$d" && TEQ=$TEQ timeout 60 ./teq stop > /dev/null 2>&1)

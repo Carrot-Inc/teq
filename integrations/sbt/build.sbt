@@ -40,17 +40,14 @@ Compile / sourceGenerators += Def.task {
 Compile / packageBin / packageOptions += Package.ManifestAttributes("Teq-Compiler" -> compilerOf(baseDirectory.value))
 
 // The launchers teqExportAll writes beside teq.lock (Launchers.scala): teq's tools/launcher/teq and
-// teq.cmd, the launcher of the version their marker line names, and every version shipped before
-// (tools/launcher/shipped/<version>/), so that an unedited launcher of any is replaced. As
+// teq.cmd, the current launcher, and every version shipped before (tools/launcher/shipped/<version>/, the
+// current one above the highest), so that an unedited launcher of any is replaced. As
 // dev/teq/sbt/launcher/<version>/<name>, line ends \n, with `versions` listing them.
 Compile / resourceGenerators += Def.task {
   val launchers = baseDirectory.value / ".." / ".." / "tools" / "launcher"
   val out = (Compile / resourceManaged).value / "dev" / "teq" / "sbt" / "launcher"
-  val marker = """(?m)^(?:#|rem) teq launcher (\d+):""".r
-  def versionOf(f: File) = marker.findFirstMatchIn(IO.read(f)).map(_.group(1).toInt).getOrElse(sys.error(s"$f has no `teq launcher <version>:` line"))
-  val current = versionOf(launchers / "teq")
-  if versionOf(launchers / "teq.cmd") != current then sys.error(s"${launchers / "teq.cmd"} is not launcher $current, as ${launchers / "teq"} is")
   val shipped = Option((launchers / "shipped").listFiles).toSeq.flatten.filter(_.isDirectory).map(d => d.getName.toInt -> d)
+  val current = shipped.map(_._1).foldLeft(0)(_ max _) + 1
   val all = (shipped :+ (current -> launchers)).sortBy(_._1)
   IO.delete(out)
   val files = for (version, dir) <- all; name <- Seq("teq", "teq.cmd") yield
