@@ -1703,7 +1703,7 @@ neg/patmat1.scala	same
 neg/patmat2.scala	accepts	
 neg/patternUnsoundness.scala	std	App
 neg/patvars.scala	same	
-neg/points.scala	superset	+2 lines: class ColoredPoint has conflicting base types Comparable[Point] and Comparable[ColoredPoint]
+neg/points.scala	superset	+1 lines: class ColoredPoint has conflicting base types Comparable[Point] and Comparable[ColoredPoint]
 neg/poly-overloads.scala	different	type mismatch
 neg/poly-override.scala	subset	8/9 lines
 neg/polymorphic-erased-functions-types.scala	syntax	expected {}, found {}
