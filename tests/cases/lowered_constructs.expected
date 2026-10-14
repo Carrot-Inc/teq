@@ -1,0 +1,55 @@
+7 300 q 1099511627776 true 1 true 1 98
+5
+woof,meow,woof 12 8 3 2
+circle 6, square 1, unit-ish, dot
+zero, odd, negative, even 1
+empty, one 1, 1 1 +2
+false false true 134
+4 <Y1> y 11
+string 1
+300
+10 -1
+stopped at 1
+500500
+1,2,3
+42
+finally 1
+walked def 1 57 walked given 1 57
+131 one a one x no match
+7 300 q 1099511627776 true 2 true 2 99
+55
+woof-woof,meow-meow,woof-woof 13 10 6 2
+big circle 12, square 2, square 2, dot
+zero, even 1, even -1, even 2
+empty, one 2, 2 2 +2
+false true false 123
+4 <Z2> z 22
+not a string
+302
+20 -1
+stopped at 2
+2001000
+1,2,3
+42
+caught finally 3
+walked def 2 113 walked given 2 113
+171 one a x 2 no match
+7 300 q 1099511627776 true 3 true 3 100
+204
+woof-woof-woof,meow-meow-meow,woof-woof-woof 14 12 9 2
+big circle 18, square 3, rect 3, dot
+zero, odd, negative, even 3
+empty, one 3, 3 3 +2
+true true false 123
+4 <X3> x 33
+string 3
+306
+30 -1
+stopped at 3
+4501500
+1,2,3
+42
+finally 2
+walked def 3 171 walked given 3 171
+194 one a x 3 no match
+3

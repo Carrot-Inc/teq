@@ -547,6 +547,17 @@ done
 # runs after change (without, the counts restart on the other worker at two and sixteen).
 same_output bind_frame 2 run tests/workers/bind_frame --cacheable-state Cache --cacheable-state Other
 
+# A macro's code over the frames the interpreter opens, run by every expansion so that its execution units are
+# promoted and read their locals at the addresses of their layouts (src/interp/code.rs) on each worker: blocks,
+# lambdas, local defs, binding cases, defaults, a catch case, a lazy local, a local class and a case lambda over a
+# tuple, which change nothing other runs share and keep the build on the workers.
+same_output frame_layouts 2 run tests/workers/frame_layouts
+if TEQ_SERIAL_TRACE=1 timeout 120 "$TEQ" compiler build tests/workers/frame_layouts -o "$work/frame_layouts.js" --threads 16 2>&1 | grep -q 'typed again'; then
+  bad "frame_layouts: the macro's runs gave the build to one worker"
+else
+  ok
+fi
+
 # Identity hashes are their values' contents, the same on every
 # worker's heap, and give no build away: the hash of an array an object holds (`hash_array`), one an
 # object's initialiser keeps after the runs before it hashed on the heap (`init_hash`), every kind of

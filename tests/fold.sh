@@ -63,6 +63,40 @@ if [ ${#outputs[@]} = 4 ]; then
     if grep -qF -- "$text" "$js"; then bad "fold_targets folded $text"; else ok; fi
   done
 fi
+# An inline argument whose evaluation never ends (tests/fold/runaway.scala): the std's loop goes on in the
+# interpreter's lowered code (TEQ_INTERP_CODE_STATS counts the loop), the budget stops it at a loop's head
+# and the argument stays a computation.
+js=out/fold/runaway.js
+if ! TEQ_INTERP_CODE_STATS=1 timeout 20 "$TEQ" compiler build tests/fold/runaway.scala -o "$js" > out/fold/runaway.log 2>&1; then
+  bad "runaway: $(tail -1 out/fold/runaway.log)"
+elif ! grep -qF -- 'continually(() => 1).sum(' "$js"; then
+  bad "runaway: the output lacks the computation"
+elif ! grep -q 'lowered [0-9]* functions, [0-9]* lambdas, [1-9][0-9]* loops' out/fold/runaway.log; then
+  bad "runaway: no loop ran lowered ($(tail -1 out/fold/runaway.log))"
+else
+  ok
+fi
+# The statistics of the lowered code (TEQ_INTERP_CODE_STATS=1, tests/fold/code_stats.scala): two calls of a
+# function and ten lower it once each, and its runs and the calls that found its code are counted apart.
+for calls in 2 10; do
+  args=; [ $calls = 10 ] && args="-- ten"
+  TEQ_INTERP_CODE_STATS=1 timeout 20 "$TEQ" interp tests/fold/code_stats.scala $args > out/fold/code_stats.$calls.log 2>&1
+  case $calls in 2) want='runs 1 functions, 0 lambdas, 0 loops; 0 calls found their code' ;; *) want='runs 9 functions, 0 lambdas, 0 loops; 8 calls found their code' ;; esac
+  if grep -q 'lowered 1 functions, 0 lambdas, 0 loops' out/fold/code_stats.$calls.log && grep -qF -- "$want" out/fold/code_stats.$calls.log; then ok; else
+    bad "code_stats at $calls calls: $(grep 'interp code' out/fold/code_stats.$calls.log)"
+  fi
+done
+# The preflight declines a unit by the walker's own classification of a local trait's lifted member
+# (`lifted_arity`): a call of a member that captures nothing is lowered with its caller, alone or in
+# a loop, and a member that captures a local declines its caller, whose every call is counted.
+for c in local_trait_member_lowered local_trait_member_loop local_trait_member_lifted; do
+  TEQ_INTERP_LOWER=1 TEQ_INTERP_CODE_STATS=1 timeout 20 "$TEQ" interp tests/cases/$c.scala > out/fold/$c.log 2>&1
+  if [ $c = local_trait_member_lifted ]; then
+    if grep -qF 'interp code: declined to the walker: lifted member 1 (3 calls)' out/fold/$c.log; then ok; else bad "$c: $(grep 'interp code' out/fold/$c.log | tail -1)"; fi
+  elif grep -q 'interp code: .* lowered [1-9]' out/fold/$c.log && ! grep -q 'declined to the walker' out/fold/$c.log; then ok; else
+    bad "$c: $(grep 'interp code' out/fold/$c.log | tail -1)"
+  fi
+done
 # `!` of a constant is the constant, as scalac folds it: `LinkingInfo.developmentMode` under
 # --release is `false`, which a minifier's dead-code pass removes with its branch.
 js=out/fold/linking_info_release.js

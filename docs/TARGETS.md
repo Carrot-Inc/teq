@@ -180,7 +180,9 @@ as under scalac and writes none: its expansions run in parallel and may be retri
 would have no order. Everything else follows the JavaScript runtime, so where that layer
 is a Scala.js library's (`java.text` from scala-java-locales) the output is Scala.js's. The core-only
 benchmark runs faster end to end than under node or java, since nothing is emitted and no VM starts; a
-tight loop runs some 12 million operations a second, 35 times slower than node's whole process.
+tight loop runs some 20 million operations a second, ten times slower than node's whole process
+(`bench/interp.sh`): a body called again, and a loop turned a few times, runs as code lowered from the typed
+program rather than as a walk over it.
 
 ## Watch mode and the resident compiler
 

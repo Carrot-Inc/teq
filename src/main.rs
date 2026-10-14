@@ -1566,6 +1566,7 @@ fn main() {
     // bodies nest deeper than the default stack allows for.
     let compiler = std::thread::Builder::new().stack_size(1 << 30).spawn(compile).expect("cannot start the compiler thread");
     let code = compiler.join().unwrap_or(2);
+    interp::code_stats_report();
     std::process::exit(code);
 }
 
@@ -1933,6 +1934,7 @@ fn compile() -> i32 {
 /// freed one by one, 0.4 to 1.3% of a check's instructions, for memory the process gives back
 /// as a whole.
 fn leave(code: i32) -> ! {
+    interp::code_stats_report();
     std::process::exit(code)
 }
 
@@ -2007,6 +2009,7 @@ fn answer_extras() -> String {
 /// Ends a build that failed before its answer, with the failure answer under `--analysis-version`.
 fn exit_failed(opts: &Options, code: i32) -> ! {
     answer_failure(opts);
+    interp::code_stats_report();
     std::process::exit(code)
 }
 
@@ -2187,6 +2190,7 @@ fn exit_with_report(opts: &Options, report: &report::Report, code: i32) -> ! {
     if opts.timings && !report.is_empty() {
         eprintln!("{}", report.render());
     }
+    interp::code_stats_report();
     std::process::exit(code)
 }
 

@@ -1,3 +1,4 @@
+abandoned_operand_frames
 abstract_constructor_extractor
 abstract_function
 abstract_function_tupled
@@ -467,6 +468,7 @@ for_in_parens
 for_lazy_zip_untupled
 for_map_generator_overload
 for_trailing_map
+frame_layouts
 function_class_name_field
 function_conversions
 function_parent
@@ -891,6 +893,9 @@ local_objects
 local_trait_captures
 local_trait_dispatch
 local_trait_inline
+local_trait_member_lifted
+local_trait_member_loop
+local_trait_member_lowered
 local_trait_override
 local_trait_shapes
 local_traits
@@ -902,6 +907,13 @@ long_map
 long_range_boundaries
 long_range_overflow
 lower_bound_path
+lowered_adapter_layouts
+lowered_boundaries
+lowered_concat
+lowered_construction
+lowered_constructs
+lowered_semantic
+lowered_super_defaults
 lub_access
 lub_invariant_args
 macro_abstract_var_assign
@@ -1624,6 +1636,7 @@ transparent_given_local
 transparent_match_constant_branch
 transparent_widened_ascription
 try_collect_lazy_zip
+try_handler_finally
 try_without_handlers
 tuple_companion_api
 tuple_element_var_bound

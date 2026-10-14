@@ -1,0 +1,9 @@
+default for 1
+default for 1
+<BASE 1> | BASE 1 / <BASE 1> | a1:100:none | c1:100:set | 89 | 98 | 449 | 4 | 1 | 4
+default for 2
+default for 2
+<BASE 2> | BASE 2 / <BASE 2> | a2:100:none | c2:100:set | 88 | 97 | 448 | 8 | 2 | 8
+default for 3
+default for 3
+<BASE 3> | BASE 3 / <BASE 3> | a3:100:none | c3:100:set | 87 | 96 | 447 | 12 | 3 | 12
