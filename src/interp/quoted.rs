@@ -1470,6 +1470,13 @@ impl<'a, 't> Interp<'a, 't> {
     }
 
     pub(super) fn view(&mut self, t: TreeRef) -> R<View> {
+        // An erased result's unboxing, which only the lean targets make: the call itself, as the
+        // JVM's tree is (a macro's result may not depend on the target).
+        if let TreeRef::Expr(e) = t {
+            if let TExpr::Cast(inner, CastOp::Adapt(..), _) = self.prog().expr(e) {
+                return self.view(TreeRef::Expr(inner));
+            }
+        }
         Ok(match t {
             TreeRef::Expr(e) => match self.prog().expr(e) {
                 TExpr::Int(v) => View::Literal(match self.prog().type_of(e).map(|ty| self.typer.types.get(ty)) {
@@ -2595,6 +2602,11 @@ impl<'a, 't> Interp<'a, 't> {
 
     /// The name of the reflect API class a tree shows as.
     pub(super) fn tree_kind(&mut self, t: TreeRef) -> R<&'static str> {
+        if let TreeRef::Expr(e) = t {
+            if let TExpr::Cast(inner, CastOp::Adapt(..), _) = self.prog().expr(e) {
+                return self.tree_kind(TreeRef::Expr(inner));
+            }
+        }
         Ok(match t {
             TreeRef::Expr(e) => match self.prog().expr(e) {
                 TExpr::Int(_) | TExpr::Long(_) | TExpr::Double(_) | TExpr::Bool(_) | TExpr::Char(_) | TExpr::Str(_) | TExpr::Unit | TExpr::Null | TExpr::ClassOf(..) => "Literal",

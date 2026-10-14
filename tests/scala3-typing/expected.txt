@@ -215,7 +215,7 @@ neg/enumWithType.scala	oos	enum-extends
 neg/enums.scala	oos	enum-extends
 neg/enumsAccess.scala	subset	4/10 lines
 neg/enumsLabel-singleimpl.scala	accepts	
-neg/enumvalues.scala	superset	+2 lines: {} is not a member of the package
+neg/enumvalues.scala	superset	+1 lines: {} is not a member of the package
 neg/eql.scala	subset	6/8 lines
 neg/equality.scala	subset	13/28 lines
 neg/equality1.scala	same	
@@ -297,7 +297,7 @@ neg/extension-methods.scala	subset	4/5 lines
 neg/extension-specificity2.scala	oos	local-givens
 neg/extensions-can-only-have-defs.scala	same	
 neg/extensions-can-only-have-using.scala	superset	+1 lines: an extension needs exactly one receiver parameter
-neg/extmethod-overload.scala	superset	+1 lines: value {} is not a member of {}
+neg/extmethod-overload.scala	superset	+1 lines: ambiguous extension methods: both a and b provide |+| on Int
 neg/extmethod-override.scala	same	
 neg/f-interpolator-neg.scala	accepts	
 neg/f-interpolator-tests.scala	accepts	
@@ -1568,8 +1568,8 @@ neg/magic-offset-header-e.scala	same
 neg/magic-offset-header-e_wrapper.scala	same	
 neg/magic-offset-header-f.scala	same	
 neg/magic-offset-header-f_wrapper.scala	same	
-neg/main-annotation-by-name-param.scala	superset	+1 lines: a @main method takes no parameters or a single String*
-neg/main-functions-doubledef.scala	superset	+1 lines: a @main method takes no parameters or a single String*
+neg/main-annotation-by-name-param.scala	same	
+neg/main-functions-doubledef.scala	superset	+1 lines: {} is already defined
 neg/main-functions-nameclash.scala	same	
 neg/main-functions.scala	same	
 neg/main-functions2.scala	subset	4/5 lines
@@ -2488,7 +2488,7 @@ pos/i10347	oos	java
 pos/i1036.scala	accepts	
 pos/i10366.scala	rejects	cannot resolve import
 pos/i10369.scala	rejects	value {} is not a member of {}
-pos/i10383.scala	rejects	value {} is not a member of {}
+pos/i10383.scala	accepts	
 pos/i10389.scala	accepts	
 pos/i10430	accepts	
 pos/i10437.scala	rejects	None of the overloaded alternatives of method apply in class MyClass with types
@@ -4077,7 +4077,7 @@ pos/i7575.scala	std	Dynamic
 pos/i7586.scala	rejects	no given instance
 pos/i7602.scala	accepts	
 pos/i7648.scala	accepts	
-pos/i7650	rejects	{} is already defined
+pos/i7650	rejects	Test and Test produce classes that overwrite one another
 pos/i7653.scala	rejects	type mismatch
 pos/i7655.scala	accepts	
 pos/i7700.scala	accepts	
@@ -4551,8 +4551,8 @@ pos/looping-givens.scala	accepts
 pos/looping-jsig.scala	accepts	
 pos/macro-deprecate-dont-touch-backquotedidents.scala	accepts	
 pos/macro.scala	syntax	expected end of statement, found {}
-pos/main-method-scheme-class-based.scala	std	FromString
-pos/main-method-scheme.scala	std	FromString
+pos/main-method-scheme-class-based.scala	accepts	
+pos/main-method-scheme.scala	accepts	
 pos/main.scala	rejects	several entry points: List, main; choose one with --main
 pos/manifest-summoning.scala	std	optManifest
 pos/match-constant-type.scala	accepts	

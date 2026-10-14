@@ -67,7 +67,7 @@ package scala.collection.immutable:
     override def iterator: Iterator[(Long, T)] = Iterator.over(unsafeCast(entries))
     @jvmEvidence
     @jvm("rt $0 $1 rtcall arrayOf(Lscala/IterableOnce;Lscala/reflect/ClassTag;)Ljava/lang/Object; cast_result")
-    override def toArray[B >: (Long, T): scala.reflect.ClassTag]: Array[B] = unsafeCast(copyArray(entries))
+    override def toArray[B >: (Long, T): scala.reflect.ClassTag]: Array[B] = arrayByTag(scala.reflect.classTag[B], this, unsafeCast(copyArray(entries)))
     override def size: Int = entries.length
     override def knownSize: Int = entries.length
     override def isEmpty: Boolean = entries.length == 0

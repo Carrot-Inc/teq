@@ -403,6 +403,9 @@ impl<'a> Worker<'a> {
         if def.annots.is_empty() {
             return;
         }
+        if def.annots.iter().any(|a| a.name == names::OBJECT_FUNCTION) {
+            self.syms.class_mut(c).object_function = true;
+        }
         let annots = self.js_annots(file, &def.annots, def.span);
         let kind = self.syms.class(c).kind;
         if let Some(a) = def.annots.iter().find(|a| a.name == names::JS_IMPORT || a.name == names::JS_EXPORT) {

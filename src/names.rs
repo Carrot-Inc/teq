@@ -212,4 +212,8 @@ well_known! {
     CAN_EQUAL_METHOD = "canEqual",
     PRODUCT_ELEMENT_NAME = "productElementName",
     PRODUCT_ITERATOR = "productIterator",
+    // Names added since keep the ids of those above, which a name's bit in a class's mask
+    // (`symbols::name_bit`) is computed from.
+    NEW_ARRAY = "newArray",
+    OBJECT_FUNCTION = "objectFunction",
 }

@@ -202,6 +202,22 @@ function $reflectKeep(modules) {
     for (const [name, entry] of registry) if (!modules.includes(entry.owner)) registry.delete(name);
   }
 }
+// `Class.forName`'s classes, the program's by their binary names, each with the accessor of an
+// object's instance, which initialises its class (`$forNameClass`, registered where a call is reached).
+const $forNames = new Map();
+function $forNameClass(name, cls, load) { $forNames.set(name, { cls, load }); }
+function $forName(name, initialize) {
+  const entry = $forNames.get(name);
+  if (entry !== undefined) {
+    if (initialize && entry.load !== null) entry.load();
+    return entry.cls;
+  }
+  // An array class by a well-formed descriptor: of a primitive, or of a class the lookup finds, which it
+  // does not initialise.
+  const array = /^\[+(?:[ZBCSIJFD]|L([^;\[]+);)$/.exec(name);
+  if (array !== null && (array[1] === undefined || $forNames.has(array[1]))) return $classNamed(name);
+  $fail("ClassNotFoundException", name);
+}
 function $reflectClass(name, cls, ctors) { $reflectedClasses.set(name, { cls, ctors, owner: $reflectOwner }); }
 function $reflectModule(name, cls, load) { $reflectedModules.set(name, { cls, load, owner: $reflectOwner }); }
 // An instance of a class that is a function: the function takes the class's prototype, and the
@@ -266,6 +282,9 @@ function $cce(x, to) { $fail("ClassCastException", "class " + $classOf(x) + " ca
 function $as(x, c) { return x === null || x instanceof c ? x : $cce(x, $classOf(c.prototype)); }
 function $asA(x, n, to) { return x === null || $isA(x, n) ? x : $cce(x, to); }
 function $asT(x, ok, to) { return x === null || ok ? x : $cce(x, to); }
+// A cast to a function type: a JS function, or a value of a class that is a function through a trait alone
+// (`$fn` on its prototype), as it is.
+function $asFn(x, to) { return x === null || typeof x === "function" || (x !== undefined && x.$fn !== undefined) ? x : $cce(x, to); }
 function $asS(x) { return x === null || typeof x === "string" ? x : $cce(x, "java.lang.String"); }
 function $asNothing(x) { $fail("ClassCastException", "Cannot cast to scala.Nothing"); }
 // The unboxings of `x.asInstanceOf[Int]` and kin: `null` is the primitive's zero, a value of
@@ -731,16 +750,39 @@ function $parseIntRadix(s, radix) {
   const n = parseInt(s, radix);
   return n > 2147483647 || n < -2147483648 ? $numberFormat(s) : n;
 }
-function $arrayFill(n, thunk) {
-  const a = new Array(n);
+// The call of a function of one argument whose callee is not statically a JS function: a value of a class that is
+// a function through a trait alone (scala-library's collections, `@objectFunction`) is an object, called by its `apply`.
+function $ap(f, x) { return typeof f === "function" ? f(x) : f.apply(x); }
+// A function of one argument leaving for JavaScript's own code, a template's argument, as a JS function, as
+// Scala.js's `js.Any.fromFunction1` makes one.
+function $jsFn(f) { return typeof f === "function" || f == null ? f : (x) => f.apply(x); }
+// `new Array[T](n)`: a negative length refused, as the JVM's `newarray` refuses it.
+function $newArray(n, zero) {
+  if (n < 0) { const c = $exc.NegativeArraySizeException; throw c ? new c(String(n)) : new RangeError("NegativeArraySizeException: " + n); }
+  return new Array(n).fill(zero);
+}
+// Array.fill, tabulate, empty and ArrayOps.map: a tag passed (`null` for a standard one) makes the
+// array first, by its `newArray`, as scala-library's do; the elements then go into it. No length
+// is an empty array (scala-library's `if (n <= 0) empty[T]`).
+function $arrayFill(n, thunk, tag) {
+  if (n <= 0) return $arrayEmpty(tag);
+  const a = tag === null ? new Array(n) : tag.newArray(n);
   for (let i = 0; i < n; i++) a[i] = thunk();
   return a;
 }
-function $arrayTabulate(n, f) {
-  const a = new Array(n);
+function $arrayTabulate(n, f, tag) {
+  if (n <= 0) return $arrayEmpty(tag);
+  const a = tag === null ? new Array(n) : tag.newArray(n);
   for (let i = 0; i < n; i++) a[i] = f(i);
   return a;
 }
+function $arrayEmpty(tag) { return tag === null ? [] : tag.newArray(0); }
+function $arrayMap(a, f, tag) {
+  const out = tag === null ? new Array(a.length) : tag.newArray(a.length);
+  for (let i = 0; i < a.length; i++) out[i] = f(a[i]);
+  return out;
+}
+
 // Int.MinValue stays itself as on the JVM; the Double -2147483648.0 is taken for it.
 function $abs(x) {
   if (typeof x === "bigint") return BigInt.asIntN(64, x < 0n ? -x : x);
@@ -1035,9 +1077,10 @@ function $charAt(s, i) {
 }
 // String.split of Java: the separator is a regular expression, a leading empty string stays and
 // trailing ones go. A single character is always taken literally, as `split(Char)` needs.
-function $split(s, sep, limit) {
+// String.split's fast path; StringOps.split(c) is `literal`.
+function $split(s, sep, limit, literal) {
   if (limit === undefined) limit = 0;
-  if (sep.length > 1 && /[\\^$.|?*+()[\]{}]/.test(sep)) return $reSplit(sep, s, limit);
+  if (sep.length > 1 ? /[\\^$.|?*+()[\]{}]/.test(sep) : !literal && ".$|()[{^?*+\\".includes(sep)) return $reSplit(sep, s, limit);
   // A surrogate is split at as a character, so never inside a pair.
   if (sep.length === 0 || /[\ud800-\udfff]/.test(sep)) return $reSplit(sep, s, limit);
   if (s.indexOf(sep) < 0) return [s];
@@ -1564,7 +1607,7 @@ function $re(src, mode) {
     try {
       const [body, flags] = $reTranslate(src);
       re = new RegExp(mode.includes("f") ? "(?<![\\s\\S])(?:" + body + ")(?![\\s\\S])" : body, mode.replace("f", "") + flags);
-    } catch (e) { $fail("IllegalArgumentException", "PatternSyntaxException: " + e.message); }
+    } catch (e) { const c = $exc.PatternSyntaxException; throw c ? new c(e.message, src, -1) : new Error("PatternSyntaxException: " + e.message); }
     if ($reCache.size > 2000) $reCache.clear();
     $reCache.set(key, re);
   }

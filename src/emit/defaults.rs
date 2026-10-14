@@ -466,12 +466,14 @@ impl<'a> super::Emitter<'a> {
         if self.local_captures.contains_key(&c) {
             return self.emit_capture_args_omitting(c, args, &omitted);
         }
-        self.emit_args_omitting(args, &omitted);
+        self.emit_args_omitting(args, &omitted, 0);
     }
 
     /// The arguments of a call, those left to the callee's defaults written as `undefined`, or not
     /// at all after the last one written.
-    pub(super) fn emit_args_omitting(&mut self, args: ListRef, omitted: &[bool]) {
+    /// `evidence`: the positions of a `@jvmEvidence` member's evidence (`Program::evidence_args`), a
+    /// standard tag there written as `null` (`Program::is_standard_class_tag`).
+    pub(super) fn emit_args_omitting(&mut self, args: ListRef, omitted: &[bool], evidence: u64) {
         let items = self.prog.expr_list(args);
         let mut keep = items.len();
         while keep > 0 {
@@ -498,7 +500,11 @@ impl<'a> super::Emitter<'a> {
             for &item in inlined.unwrap_or(std::slice::from_ref(&a)) {
                 self.out.push_str(separator);
                 separator = ", ";
-                self.emit_value(item);
+                if k < 64 && evidence & 1 << k != 0 && self.prog.is_standard_class_tag(item, self.syms, self.interner) {
+                    self.out.push_str("null");
+                } else {
+                    self.emit_value(item);
+                }
             }
         }
         self.out.push(')');

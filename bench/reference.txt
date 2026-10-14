@@ -42,3 +42,5 @@ advance 748986910 2026-10-03 depth_1=1.0484 gview_1=1.0093 inl_1=1.0182 inl_4=1.
 # realistic-frontend's +1.9% is one reading of the noisiest row at a host load of 18, kept).
 reference 222ca7934 2026-10-04 ceiling 1.20 the reset after the given search's cuts and the module model; the sentinel line read 15 of 15 within the ceilings at a host load of 18
 advance 222ca7934 2026-10-04 depth_1=1.0280 gview_1=1.0209 realistic-frontend=1.0191 inl_1=1.0067 inl_4=1.0015 inl_16=1.0358 inlm_16=1.0363 mac_1=1.0292 mac_4=1.0053 mac_16=1.0168 macro-cls=1.0316
+advance 4720a283e 2026-10-14 depth_1=1.1418 gview_1=1.1273 core-only=1.2246 realistic-api=1.0902 realistic-frontend=1.0102 inl_1=1.0715 inl_4=1.0669 inl_16=1.0524 inlm_1=1.1253 inlm_4=1.0453 inlm_16=1.0865 mac_1=0.9962 mac_4=0.9883 mac_16=0.9419 macro-cls=0.9571
+reference e9304892a 2026-10-14 ceiling 1.20 the reset after the landings of 5 to 14 October (lila's, the lean std's, the reference projects', the interpreter's); the advance of 4720a283e had read core-only at 1.22 over the reference of the 4th by shape costs accepted part by part, closing its ceiling; the owner's decision of 2026-10-14

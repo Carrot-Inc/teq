@@ -52,6 +52,29 @@ extension [T](b: RawBuffer[T])
 @jvm("rt $0 $1 rtcall arrayOfTag(Ljava/util/ArrayList;Lscala/reflect/ClassTag;)Ljava/lang/Object; cast_result")
 def taggedArray[T: scala.reflect.ClassTag](b: RawBuffer[T]): Array[T] = unsafeCast(b)
 
+/** The array an `@jvmEvidence` member's builder made of the elements `run` adds: on the JVM by its tag. */
+@jvmEvidence
+def builtByTag[T](tag: scala.reflect.ClassTag[T])(run: (T => Unit, IterableOnce[T] => Unit) => Unit): Array[T] =
+  val out = emptyBuffer[T]
+  run(x => out.push(x), xs => xs.iterator.foreach(x => out.push(x)))
+  taggedArray(out)(using tag)
+
+/** `Array.from` by the tag: on the JVM its tag makes the array. */
+@jvmEvidence
+def fromByTag[T](tag: scala.reflect.ClassTag[T], source: IterableOnce[T]): Array[T] =
+  // The elements gathered by this file's own buffer: a std class a module's products write whole names no
+  // other std package's (`iterableToArray`'s), whose synthesized members another module's build adds.
+  val out = bufferOfCapacity[T](source.knownSize)
+  source.foreach(x => out.push(x))
+  taggedArray(out)(using tag)
+
+/** A collection's `toArray`: on the JVM by its tag. */
+inline def arrayByTag[T](tag: scala.reflect.ClassTag[T], source: IterableOnce[T], inline plain: Array[T]): Array[T] = fromByTag(tag, source)
+
+/** The array an `@jvmEvidence` member made: on the JVM its tag made it already. */
+@jvmEvidence
+def evidenced[T](tag: scala.reflect.ClassTag[T], items: Array[T]): Array[T] = items
+
 /** As an array of references, what scalac's untagged collections hold. */
 @jvm("$0 invokevirtual java/util/ArrayList.toArray()[Ljava/lang/Object;")
 def untaggedArray[T](b: RawBuffer[T]): Array[T] = unsafeCast(b)

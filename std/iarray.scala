@@ -8,22 +8,27 @@ opaque type IArray[+T] = Array[T]
 
 object IArray:
   def unsafeFromArray[T](s: Array[T]): IArray[T] = s
+  // scala-library's, each its `Array` member's (written here, this file standing over scala-library's
+  // `Array` too): `apply` copies the written elements' array, asking the tag nothing; `empty` is the
+  // tag's `newArray(0)`; `from` is the source's `toArray`; `tabulate` and `fill` make the array by the
+  // tag's `newArray(n)` and then each element (`std/buffer.scala`'s `evidenced`).
   @jvmEvidence
-  def apply[T: scala.reflect.ClassTag](xs: T*): IArray[T] = taggedArray(iterableToArray(xs))
+  def apply[T](xs: T*)(using tag: scala.reflect.ClassTag[T]): IArray[T] = taggedArray(iterableToArray(xs))
   @jvmEvidence
-  def empty[T: scala.reflect.ClassTag]: IArray[T] = taggedArray(emptyArray[T])
+  def empty[T](using tag: scala.reflect.ClassTag[T]): IArray[T] = if tag == null then taggedArray(emptyArray[T]) else tag.newArray(0)
   @jvmEvidence
-  def from[T: scala.reflect.ClassTag](source: IterableOnce[T]): IArray[T] = taggedArray(iterableToArray(source))
+  def from[T](source: IterableOnce[T])(using tag: scala.reflect.ClassTag[T]): IArray[T] =
+    fromByTag(tag, source)
   @jvmEvidence
-  def fill[T: scala.reflect.ClassTag](n: Int)(elem: => T): IArray[T] = tabulate(n)(_ => elem)
+  def fill[T](n: Int)(elem: => T)(using tag: scala.reflect.ClassTag[T]): IArray[T] = tabulate(n)(_ => elem)
   @jvmEvidence
-  def tabulate[T: scala.reflect.ClassTag](n: Int)(f: Int => T): IArray[T] =
-    val out = emptyArray[T]
+  def tabulate[T](n: Int)(f: Int => T)(using tag: scala.reflect.ClassTag[T]): IArray[T] =
+    val out = if tag == null then emptyArray[T] else tag.newArray(n)
     var i = 0
     while i < n do
-      out.push(f(i))
+      if tag == null then out.push(f(i)) else out(i) = f(i)
       i += 1
-    taggedArray(out)
+    if tag == null then taggedArray(out) else out
   implicit def genericWrapArray[T](arr: IArray[T]): ArraySeq[T] = ArraySeq.unsafeWrapArray(arr)
   implicit def wrapRefArray[T <: AnyRef](arr: IArray[T]): ArraySeq[T] = ArraySeq.unsafeWrapArray(arr)
 
@@ -57,15 +62,20 @@ object IArray:
     def toVector: Vector[T] = toList.toVector
     def toSet: Set[T] = toList.toSet
     @jvmEvidence
-    def map[U: scala.reflect.ClassTag](f: T => U): IArray[U] =
-      val out = emptyArray[U]
+    def map[U](f: T => U)(using tag: scala.reflect.ClassTag[U]): IArray[U] =
+      val out = if tag == null then emptyArray[U] else tag.newArray(length)
       var i = 0
       while i < length do
-        out.push(f(apply(i)))
+        if tag == null then out.push(f(apply(i))) else out(i) = f(apply(i))
         i += 1
-      taggedArray(out)
+      if tag == null then taggedArray(out) else out
     @jvmEvidence
-    def flatMap[U: scala.reflect.ClassTag](f: T => IterableOnce[U]): IArray[U] = taggedArray(iterableToArray(toList.flatMap(f)))
+    def flatMap[U](f: T => IterableOnce[U])(using tag: scala.reflect.ClassTag[U]): IArray[U] =
+      builtByTag(tag): (_, addAll) =>
+        var i = 0
+        while i < length do
+          addAll(f(apply(i)))
+          i += 1
     def filter(p: T => Boolean): IArray[T] =
       val out = emptyArray[T]
       var i = 0

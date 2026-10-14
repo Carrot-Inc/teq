@@ -53,15 +53,30 @@ def expm1(x: Double): Double
 @js("Math.random()")
 @jvm("invokestatic java/lang/Math.random()D")
 def random(): Double
+// scala-library's overloads of each primitive kind (`scala.math` package object), as the JDK's `Math` declares them.
 @js("$signum($0)")
-@jvm("rt $0:L rtcall numSignum(Ljava/lang/Object;)Ljava/lang/Object;")
-def signum[T <: Int | Long | Float | Double](x: T): T
-@js("$floorDiv($0, $1)")
-@jvm("rt $0:L $1:L rtcall numFloorDiv(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;")
-def floorDiv[T <: Int | Long](a: T, b: T): T
-@js("$floorMod($0, $1)")
-@jvm("rt $0:L $1:L rtcall numFloorMod(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;")
-def floorMod[T <: Int | Long](a: T, b: T): T
+@jvm("invokestatic java/lang/Integer.signum(I)I")
+def signum(x: Int): Int
+@js("$signum($0)")
+def signum(x: Long): Long = java.lang.Long.signum(x).toLong
+@js("$signum($0)")
+@jvm("invokestatic java/lang/Math.signum(F)F")
+def signum(x: Float): Float
+@js("$signum($0)")
+@jvm("invokestatic java/lang/Math.signum(D)D")
+def signum(x: Double): Double
+@js("$floorDivInt($0, $1)")
+@jvm("invokestatic java/lang/Math.floorDiv(II)I")
+def floorDiv(x: Int, y: Int): Int
+@js("$floorDivLong($0, $1)")
+@jvm("invokestatic java/lang/Math.floorDiv(JJ)J")
+def floorDiv(x: Long, y: Long): Long
+@js("$floorModInt($0, $1)")
+@jvm("invokestatic java/lang/Math.floorMod(II)I")
+def floorMod(x: Int, y: Int): Int
+@js("$floorModLong($0, $1)")
+@jvm("invokestatic java/lang/Math.floorMod(JJ)J")
+def floorMod(x: Long, y: Long): Long
 def toRadians(degrees: Double): Double = degrees / 180.0 * Pi
 def toDegrees(radians: Double): Double = radians * 180.0 / Pi
 @js("Math.sin($0)")
@@ -86,14 +101,41 @@ def log(x: Double): Double
 @jvm("invokestatic java/lang/Math.log10(D)D")
 def log10(x: Double): Double
 @js("$max($0, $1)")
-@jvm("rt $0:L $1:L rtcall numMax(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;")
-def max[T <: Int | Long | Float | Double](a: T, b: T): T
+@jvm("invokestatic java/lang/Math.max(II)I")
+def max(x: Int, y: Int): Int
+@js("$max($0, $1)")
+@jvm("invokestatic java/lang/Math.max(JJ)J")
+def max(x: Long, y: Long): Long
+@js("$max($0, $1)")
+@jvm("invokestatic java/lang/Math.max(FF)F")
+def max(x: Float, y: Float): Float
+@js("$max($0, $1)")
+@jvm("invokestatic java/lang/Math.max(DD)D")
+def max(x: Double, y: Double): Double
 @js("$min($0, $1)")
-@jvm("rt $0:L $1:L rtcall numMin(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;")
-def min[T <: Int | Long | Float | Double](a: T, b: T): T
+@jvm("invokestatic java/lang/Math.min(II)I")
+def min(x: Int, y: Int): Int
+@js("$min($0, $1)")
+@jvm("invokestatic java/lang/Math.min(JJ)J")
+def min(x: Long, y: Long): Long
+@js("$min($0, $1)")
+@jvm("invokestatic java/lang/Math.min(FF)F")
+def min(x: Float, y: Float): Float
+@js("$min($0, $1)")
+@jvm("invokestatic java/lang/Math.min(DD)D")
+def min(x: Double, y: Double): Double
 @js("$abs($0)")
-@jvm("rt $0:L rtcall numAbs(Ljava/lang/Object;)Ljava/lang/Object;")
-def abs[T <: Int | Long | Float | Double](x: T): T
+@jvm("invokestatic java/lang/Math.abs(I)I")
+def abs(x: Int): Int
+@js("$abs($0)")
+@jvm("invokestatic java/lang/Math.abs(J)J")
+def abs(x: Long): Long
+@js("$abs($0)")
+@jvm("invokestatic java/lang/Math.abs(F)F")
+def abs(x: Float): Float
+@js("$abs($0)")
+@jvm("invokestatic java/lang/Math.abs(D)D")
+def abs(x: Double): Double
 @js("$rint($0)")
 @jvm("invokestatic java/lang/Math.rint(D)D")
 def rint(x: Double): Double

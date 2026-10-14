@@ -760,6 +760,8 @@ impl<'w, 'a> Walk<'w, 'a> {
                 self.count("type test", status, Some(e), ctx);
                 self.expr(a, inner);
             }
+            // An erased result's unboxing, which the pickle reads through (`Worker::unbox_erased`).
+            TExpr::Cast(a, crate::tir::CastOp::Adapt(..), _) => self.expr(a, inner),
             // The pickle writes a cast from its record, else from the node's own type.
             TExpr::Cast(a, ..) => {
                 let status = if matches!(form, Some(Form::Cast(_))) { Status::Captured } else { Status::Derived };

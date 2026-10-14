@@ -46,7 +46,7 @@ origin	fix.rdecl.RdWrap	none: the pseudo files' tags and the converted text's of
 origin	fix.reader.RdCalls	none: the pseudo files' tags and the converted text's offsets
 origin	fix.reader.RdStart	none: the pseudo files' tags and the converted text's offsets
 origin	fix.rjava.RdSub	none: the pseudo files' tags and the converted text's offsets
-select	fix.reader.RdCalls	def arr	reader.scala:84:43	scala.collection.IterableOnceOps.toArray([1], scala.reflect.ClassTag): java.lang.Object	one member scala.IterableOps.toArray: Array[B]	: Array[Int]
+select	fix.reader.RdCalls	def arr	reader.scala:84:43	scala.collection.IterableOnceOps.toArray([1], scala.reflect.ClassTag): java.lang.Object	one member scala.IterableOps.toArray(ClassTag[B]): Array[B]	: Array[Int]
 select	fix.reader.RdCalls	def capturedArray	reader.scala:88:44	scala.Any.$asInstanceOf$([1]): java.lang.Object	by name (a builtin's member)	: Array[Any]
 select	fix.reader.RdCalls	def capturedArray	reader.scala:88:57	scala.Option.fold([1], scala.Function0, scala.Function1): java.lang.Object	one member scala.Option.fold(B)(A => B): B	: String
 select	fix.reader.RdCalls	def capturedArray	reader.scala:88:72	scala.Any.toString(): java.lang.String	by name (a builtin's member)	: String

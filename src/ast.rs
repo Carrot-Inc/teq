@@ -244,6 +244,10 @@ pub enum TyExpr {
     Lit(ExprId),
     /// A type the loader mapped already, in a library body.
     Resolved(TypeId),
+    /// The type of the `n`th parameter of the `@main` method `def` of the same tree, as its typed
+    /// signature has it (`parser::add_main_proxies`: dotty's `MainProxies` gives `parseArgument` the
+    /// formal parameter types).
+    MainParam(DefId, u32),
     /// A lowercase type argument of a pattern type (`case l: List[t]`): a type variable the
     /// case binds. An `inline match` binds it to what it matched, an ordinary match reads it
     /// as a wildcard.
@@ -623,6 +627,8 @@ pub struct Ast {
     /// ascriptions `@nowarn` suppresses the warnings of (`warnings.rs`), and the ascriptions
     /// and types so annotated (`e: @nowarn`, `T @nowarn`), each with its whole range.
     pub has_nowarn: bool,
+    /// The proxies `parser::add_main_proxies` made, each with the `@main` method it runs.
+    pub main_proxies: Vec<(DefId, DefId)>,
     pub nowarn_ascriptions: Vec<(Span, Annot)>,
     /// The tokens the parser skipped after a syntax error, each run with the construct whose
     /// recovery skipped it, in source order.
@@ -858,6 +864,7 @@ impl Ast {
             reader: None,
             inline_annots: Vec::new(),
             has_nowarn: false,
+            main_proxies: Vec::new(),
             nowarn_ascriptions: Vec::new(),
             recoveries: Vec::new(),
             cut_args: Vec::new(),

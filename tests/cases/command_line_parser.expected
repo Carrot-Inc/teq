@@ -1,0 +1,11 @@
+7
+true
+2.5
+Point(1,2)
+List(x, y)
+Some(12) None
+Illegal command line: java.lang.NumberFormatException: For input string: "a"
+Illegal command line after first argument: java.lang.NumberFormatException: For input string: "b"
+Illegal command line after 2 arguments: java.lang.NumberFormatException: For input string: "c"
+Illegal command line after 3 arguments: more arguments expected
+4 java.lang.IllegalArgumentException: no point: x

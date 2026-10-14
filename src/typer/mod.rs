@@ -129,6 +129,10 @@ pub struct Builtins {
     pub either: Option<ClassId>,
     pub set: Option<ClassId>,
     pub map: Option<ClassId>,
+    /// `scala.collection.Set` and `Map`, above the immutable and the mutable ones: what dotty's
+    /// `CanEqual` givens and scala-library's function ancestry name.
+    pub collection_set: Option<ClassId>,
+    pub collection_map: Option<ClassId>,
     pub can_equal: Option<ClassId>,
     pub value_of: Option<ClassId>,
     /// `scala.Selectable`, whose subclasses take structural calls.
@@ -173,6 +177,8 @@ pub struct Builtins {
     /// The numeric rank of the first type ids (`prims::R_BYTE` to `R_DOUBLE`), which the
     /// primitive types are among; `NO_RANK` for the others.
     pub num_rank: [u8; NUM_RANK_TABLE],
+    /// A bit per primitive class's type (`Int` to `Boolean`), each among the first 32 type ids.
+    pub primitive_ids: u32,
 }
 
 impl Builtins {
@@ -197,7 +203,7 @@ struct IdBytes {
 }
 
 impl IdBytes {
-    #[inline]
+    #[inline(always)]
     fn get(&self, id: u32) -> u8 {
         match crate::arena::worker_of(id) {
             None => self.base.get(id as usize).copied().unwrap_or(0),
@@ -244,7 +250,7 @@ impl IdBytes {
 pub struct SymMemo(IdBytes);
 
 impl SymMemo {
-    #[inline]
+    #[inline(always)]
     pub fn get(&self, s: SymId) -> Option<bool> {
         match self.0.get(s.0) {
             1 => Some(false),
@@ -327,6 +333,12 @@ pub const MARK_RETYPED: u8 = 16;
 /// is the ascription around it, no contextual closure (`isContextualClosure`), which a value
 /// expected of another type applies to the givens in scope as it applies any other.
 pub const MARK_ASCRIBED_CLOSURE: u8 = 32;
+/// An erased result (`Worker::is_erased_result`) in a place whose erasure is the type its open parameter is solved to (a
+/// varargs element, whose `SeqLiteral` erases to an array of the elements' type; a closure's
+/// result, whose method returns the body's type): unboxed in place once the parameter is
+/// solved to its own primitive type (`Worker::apply_pending_widenings`). A plain parameter of a
+/// type parameter's type erases to `Object` and keeps the box (`Option(m.get(k))` is `None`).
+pub const MARK_ERASED_SOLVED: u8 = 64;
 
 #[derive(Clone)]
 pub enum Frame {
@@ -889,6 +901,12 @@ pub struct Worker<'a> {
     pub lone_abstract_defs: SymMemo,
     /// Whether a member's complete signature names a path (`sig_names_paths`), read once per member.
     pub path_sigs: SymMemo,
+    /// Whether a member's call may be unboxed where its primitive is consumed (`unbox_candidate`),
+    /// read at every such place.
+    pub unbox_candidates: SymMemo,
+    /// Whether a member's declared result erases to a reference (`result_erases`), read where an
+    /// inline member's call is consumed as a primitive.
+    pub erased_results: SymMemo,
     /// Whether a class is a context function class, by class id, read once per class
     /// (`is_context_function_class_memo`).
     pub context_function_classes: SymMemo,
@@ -1090,6 +1108,15 @@ pub struct Worker<'a> {
     /// The tree being typed is a polymorphic method named without a parameter list, which dotty
     /// adapts without simplifying (`leave_vars_open`): its own interpolation is skipped.
     pub unsimplified: bool,
+    /// Set while an `inline val`'s initializer is typed, a constant no erasure reaches
+    /// (`Worker::unbox_erased`).
+    pub inline_val_rhs: bool,
+    /// Inline calls and expansions consumed as a primitive, each with the type it is consumed as:
+    /// unboxed once their expansions are placed (`Worker::apply_inline_unboxes`), as dotty's
+    /// erasure adapts an expansion after `Inlining`, so that typing reads no expansion's result.
+    pub inline_unboxes: Vec<(crate::tir::TExprId, TypeId)>,
+    /// Set while `apply_inline_unboxes` unboxes them.
+    pub unboxing_after: bool,
     /// Operands bound to temporaries so that they are evaluated once and in source order; the
     /// expression that caused them wraps the ones above its mark into a block (`Worker::hoist`).
     pub hoisted: Vec<TStmt>,
@@ -1329,6 +1356,9 @@ pub struct Worker<'a> {
     /// is typed, and a lambda body does not see the method it becomes: `enc` in
     /// `Codec(b => enc.enc(b))` is the outer field.
     pub sam_classes: FxMap<ClassId, ()>,
+    /// The packages asked for under a parent that no locked layer opens (`demand_std_package`): a
+    /// `scala.Long` of a std signature asks for `scala` under its own package each time.
+    pub std_package_misses: FxMap<(PkgId, Name), ()>,
     /// The accessor of each member an inline body reads or assigns through one, by the member
     /// and whether it is the setter, in a build that writes products (`add_inline_accessors`).
     pub inline_accessor_syms: FxMap<(ClassId, SymId, bool), SymId>,
@@ -2335,6 +2365,12 @@ impl<'a> Worker<'a> {
         ] {
             num_rank[types.class(c, &[]).idx()] = rank;
         }
+        let mut primitive_ids = 0u32;
+        for c in [byte, short, char, int, long, float, double, boolean] {
+            let i = types.class(c, &[]).idx();
+            assert!(i < 32, "the primitive types are among the first type ids");
+            primitive_ids |= 1 << i;
+        }
         let b = Builtins {
             int,
             long,
@@ -2379,6 +2415,8 @@ impl<'a> Worker<'a> {
             either: None,
             set: None,
             map: None,
+            collection_set: None,
+            collection_map: None,
             can_equal: None,
             value_of: None,
             selectable: None,
@@ -2402,6 +2440,7 @@ impl<'a> Worker<'a> {
             predef_names: Default::default(),
             scala_pkg,
             num_rank,
+            primitive_ids,
         };
         let n_files = asts.len();
         Worker {
@@ -2452,6 +2491,8 @@ impl<'a> Worker<'a> {
             inferring_depth: 0,
             lone_abstract_defs: SymMemo::default(),
             path_sigs: SymMemo::default(),
+            unbox_candidates: SymMemo::default(),
+            erased_results: SymMemo::default(),
             context_function_classes: SymMemo::default(),
             inner_chain_members: SymMemo::default(),
             plain_name_members: StampedSymMemo::default(),
@@ -2520,6 +2561,9 @@ impl<'a> Worker<'a> {
             open_vars: Vec::new(),
             opened: 0,
             unsimplified: false,
+            inline_val_rhs: false,
+            inline_unboxes: Vec::new(),
+            unboxing_after: false,
             hoisted: Vec::new(),
             tested: Vec::new(),
             lub_in_progress: Vec::new(),
@@ -2610,6 +2654,7 @@ impl<'a> Worker<'a> {
             deferred_impl_of: None,
             unentered_impls: Vec::new(),
             sam_classes: FxMap::default(),
+            std_package_misses: FxMap::default(),
             inline_accessor_syms: FxMap::default(),
             inline_results: FxMap::default(),
             expr_marks: FxMap::default(),
@@ -2827,6 +2872,8 @@ impl<'a> Worker<'a> {
             inferring_depth: 0,
             lone_abstract_defs: SymMemo::default(),
             path_sigs: SymMemo::default(),
+            unbox_candidates: SymMemo::default(),
+            erased_results: SymMemo::default(),
             context_function_classes: SymMemo::default(),
             inner_chain_members: SymMemo::default(),
             plain_name_members: StampedSymMemo::default(),
@@ -2895,6 +2942,9 @@ impl<'a> Worker<'a> {
             open_vars: Default::default(),
             opened: 0,
             unsimplified: false,
+            inline_val_rhs: false,
+            inline_unboxes: Vec::new(),
+            unboxing_after: false,
             hoisted: Default::default(),
             tested: Default::default(),
             lub_in_progress: Default::default(),
@@ -2972,6 +3022,7 @@ impl<'a> Worker<'a> {
             deferred_impl_of: None,
             unentered_impls: Vec::new(),
             sam_classes: self.sam_classes.clone(),
+            std_package_misses: self.std_package_misses.clone(),
             inline_accessor_syms: self.inline_accessor_syms.clone(),
             inline_results: self.inline_results.clone(),
             expr_marks: self.expr_marks.clone(),
@@ -3154,6 +3205,9 @@ impl<'a> Worker<'a> {
         // (`state::flush_pending_inline`).
         if frame == 1 && self.attempts.flushes_at_item_end() {
             self.flush_pending_inline();
+        }
+        if frame == 1 && !self.inline_unboxes.is_empty() && self.attempts.closed() {
+            self.apply_inline_unboxes();
         }
         self.var_frames.truncate(frame);
         let Some((start, _)) = self.var_frames.pop() else { return };
@@ -4208,6 +4262,8 @@ impl<'a> Worker<'a> {
         self.b.either = self.entered_std_class("Either");
         self.b.set = self.entered_std_class("Set");
         self.b.map = self.entered_std_class("Map");
+        self.b.collection_set = self.entered_class_at(&["scala", "collection", "Set"]);
+        self.b.collection_map = self.entered_class_at(&["scala", "collection", "Map"]);
         self.b.can_equal = self.entered_std_class("CanEqual");
         self.b.value_of = self.entered_std_class("ValueOf");
         self.b.selectable = self.entered_std_class("Selectable");
@@ -4832,6 +4888,8 @@ impl<'a> Worker<'a> {
     pub fn forget_local_memos(&mut self) {
         self.lone_abstract_defs.forget_local();
         self.path_sigs.forget_local();
+        self.unbox_candidates.forget_local();
+        self.erased_results.forget_local();
         self.context_function_classes.forget_local();
         self.inner_chain_members.forget_local();
         self.plain_name_members.forget_local();

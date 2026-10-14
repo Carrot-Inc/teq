@@ -21,6 +21,11 @@ package scala.math:
       (wrap(qr(0)), wrap(qr(1)))
     def quot(that: BigDecimal): BigDecimal = wrap(bigDecimal.divideToIntegralValue(that.bigDecimal, mc))
     def remainder(that: BigDecimal): BigDecimal = wrap(bigDecimal.remainder(that.bigDecimal, mc))
+    // scala-library's ranges: without a step a `Range.Partial`, which `by` completes.
+    def until(end: BigDecimal): Range.Partial[BigDecimal, NumericRange.Exclusive[BigDecimal]] = new Range.Partial(until(end, _))
+    def until(end: BigDecimal, step: BigDecimal): NumericRange.Exclusive[BigDecimal] = NumericRange(this, end, step)(using Numeric.BigDecimalAsIfIntegral)
+    def to(end: BigDecimal): Range.Partial[BigDecimal, NumericRange.Inclusive[BigDecimal]] = new Range.Partial(to(end, _))
+    def to(end: BigDecimal, step: BigDecimal): NumericRange.Inclusive[BigDecimal] = NumericRange.inclusive(this, end, step)(using Numeric.BigDecimalAsIfIntegral)
     def %(that: BigDecimal): BigDecimal = remainder(that)
     def pow(n: Int): BigDecimal = wrap(bigDecimal.pow(n, mc))
     def unary_- : BigDecimal = wrap(bigDecimal.negate(mc))
@@ -148,6 +153,8 @@ package scala.math:
 
     def decimal(d: Double, mc: MathContext): BigDecimal = new BigDecimal(BigDec.valueOf(d).round(mc), mc)
     def decimal(d: Double): BigDecimal = decimal(d, defaultMathContext)
+    def decimal(f: Float, mc: MathContext): BigDecimal = new BigDecimal(new BigDec(java.lang.Float.toString(f), mc), mc)
+    def decimal(f: Float): BigDecimal = decimal(f, defaultMathContext)
     def decimal(l: Long, mc: MathContext): BigDecimal = apply(l, mc)
     def decimal(l: Long): BigDecimal = apply(l)
     def decimal(bd: BigDec, mc: MathContext): BigDecimal = new BigDecimal(bd.round(mc), mc)
@@ -230,6 +237,9 @@ package scala.math:
     def ^(that: BigInt): BigInt = wrap(bigInteger.xor(that.bigInteger))
     def &~(that: BigInt): BigInt = wrap(bigInteger.andNot(that.bigInteger))
     def gcd(that: BigInt): BigInt = wrap(bigInteger.gcd(that.bigInteger))
+    // scala-library's `until` and `to`, by a step of one unless given.
+    def until(end: BigInt, step: BigInt = BigInt(1)): NumericRange.Exclusive[BigInt] = NumericRange(this, end, step)
+    def to(end: BigInt, step: BigInt = BigInt(1)): NumericRange.Inclusive[BigInt] = NumericRange.inclusive(this, end, step)
     def mod(that: BigInt): BigInt = wrap(bigInteger.mod(that.bigInteger))
     def modPow(exp: BigInt, m: BigInt): BigInt = wrap(bigInteger.modPow(exp.bigInteger, m.bigInteger))
     def modInverse(m: BigInt): BigInt = wrap(bigInteger.modInverse(m.bigInteger))

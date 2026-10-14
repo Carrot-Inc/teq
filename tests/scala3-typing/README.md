@@ -115,6 +115,28 @@ reference projects).
   `oos` (`i0248-inherit-refined`, `parent-refinement-access`) and `std` (`anykind1`). `Iter2` (from `superset`) and
   `i11018` (from `subset`) moved to `same`. `i4453` moved from `oos` to `syntax`: `var x0 == _ *` now reports
   scalac's "'=' expected" at the `==`.
+## Typed `@main` methods through dotty's `MainProxies` (2026-10-13)
+
+Three tests moved, and three details, when a `@main` method with parameters came to run through the proxy
+dotty's `MainProxies` makes (scala-library's `CommandLineParser` and `FromString`), a method of an object's too,
+with dotty's refusals, and only a method `scala.main` annotates got one:
+
+- `pos/main-method-scheme` and `pos/main-method-scheme-class-based` moved from `std` (`FromString`) to
+  `accepts`: their `@main` is the program's own `main` annotation class, which makes no proxy.
+- `neg/main-annotation-by-name-param` moved from `superset` to `same`: the proxy's argument of a by-name
+  parameter finds no `FromString[=> Int]`, scalac's error at the method.
+- Details: `neg/main-functions-doubledef` stays `superset`, its extra line now the proxy's double definition;
+  `pos/i7650` stays `rejects` (its two files compiled as one program), its first error now the proxy's clash
+  with `object Test`, dotty's backend refusal in one run; `neg/enumvalues` stays `superset`, one extra line
+  fewer.
+
+## The big numbers' ranges (2026-10-12)
+
+`pos/i10383` moved from `rejects` to `accepts` when `BigInt`'s and `BigDecimal`'s ranges came with scala-library's
+`NumericRange` (std-interp-4): `BigInt(1) to BigInt(3)` is a `NumericRange.Inclusive[BigInt]`. The other rows that
+part moved with its own binding of the std's definitions under scala-library's names in a program without a class
+path are the reference projects' part's, whose binding landed first and whose section records them.
+
 
 ## The successor's predecessor (2026-10-11, the last fold)
 

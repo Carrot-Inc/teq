@@ -316,7 +316,7 @@ pub struct Renames {
 const RUNTIME_CALLED: &[&str] = &[
     "toString", "equals", "hashCode", "foreach", "iterator", "hasNext", "next", "drop", "apply", "applyOrElse",
     "isDefinedAt", "_1", "_2", "constructor", "exception", "productArity", "productElement", "productPrefix",
-    "productElementName", "productIterator", "canEqual", "compareTo",
+    "productElementName", "productIterator", "canEqual", "compareTo", "newArray",
 ];
 
 /// Property names that the runtime and the emitter put on instances behind a `$`, which a short

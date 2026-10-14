@@ -3097,7 +3097,7 @@ impl<'a> Gen<'a> {
                 self.code.push(VT::Null);
                 return object;
             }
-            CastOp::Unbox(_, erased) => {
+            CastOp::Unbox(_, erased) | CastOp::Adapt(_, erased) => {
                 let prim = self.erase(erased);
                 self.expr(inner, &object);
                 self.adapt(&object, &prim);

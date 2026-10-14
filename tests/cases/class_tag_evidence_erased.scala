@@ -1,7 +1,6 @@
-// The `ClassTag` evidence of the std's array-making members is erased on JavaScript and in the
-// interpreter (`@jvmEvidence`): a tag passed to `Array.fill` is typed and not evaluated there, nor
-// is a program's tag asked for its array; a program's own evidence parameter is evaluated and
-// dispatched on every target. tests/lean-expected holds the lean targets' output.
+// The `ClassTag` evidence of the std's array-making members is evaluated where it is passed and makes
+// the array (`Array.fill` asks a program's tag for `newArray`), and a program's own evidence parameter
+// is evaluated and dispatched, on every target.
 import scala.reflect.ClassTag
 
 def tag: ClassTag[Int] = { println("evidence"); ClassTag.Int }

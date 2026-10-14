@@ -5,7 +5,8 @@ package scala.reflect
 /** scala-library's `ClassTag.GenericClassTag`, the tag `ClassTag.apply` makes of a class that is no
   * primitive's, `Object`'s, `Nothing`'s or `Null`'s.
   */
-final class GenericClassTag[T](val runtimeClass: Class[?]) extends ClassTag[T]
+final class GenericClassTag[T](val runtimeClass: Class[?]) extends ClassTag[T]:
+  override private[scala] def standardAllocation: Boolean = true
 
 /** scala-library's `AnyValManifest` (`ManifestFactory.IntManifest` and the others): the tag of a
   * primitive class, named by its Scala type, its values by their type test, its arrays filled with
@@ -13,17 +14,19 @@ final class GenericClassTag[T](val runtimeClass: Class[?]) extends ClassTag[T]
   */
 final class PrimitiveClassTag[T](val runtimeClass: Class[?], name: String, test: Any => Boolean, zero: Any) extends ClassTag[T]:
   override def newArray(len: Int): Array[T] = unsafeCast(scala.newArray[Any](len, zero))
+  override private[scala] def standardAllocation: Boolean = true
   override def unapply(x: Any): Option[T] = if test(x) then Some(unsafeCast(x)) else None
   override def canEqual(other: Any): Boolean = other.isInstanceOf[PrimitiveClassTag[?]]
   override def equals(that: Any): Boolean = this eq that.asInstanceOf[AnyRef]
   override def hashCode: Int = System.identityHashCode(this)
   override def toString: String = name
 
-/** scala-library's `PhantomManifest` (`Any`, `Object`, `AnyVal`; the std has no class of `Nothing`
-  * or `Null`, and so no tag of theirs): a class that stands for the type, named by the type, equal to
-  * itself alone.
+/** scala-library's `PhantomManifest` (`Any`, `Object`, `AnyVal`, `Nothing` and `Null`, of
+  * `scala.runtime.Nothing$` and `Null$`): a class that stands for the type, named by the type, equal
+  * to itself alone.
   */
 final class PhantomClassTag[T](val runtimeClass: Class[?], name: String) extends ClassTag[T]:
+  override private[scala] def standardAllocation: Boolean = true
   override def equals(that: Any): Boolean = this eq that.asInstanceOf[AnyRef]
   override def hashCode: Int = System.identityHashCode(this)
   override def toString: String = name

@@ -2,10 +2,16 @@
 // file of their own: every program over sequences enters it.
 package scala.collection
 
+// scala-library's `collection.Seq` is a partial function of its indices; its instances stay objects (`@objectFunction`).
 /** scala-library's `collection.Seq`: the sequences' common type, of which the std's `Seq` (scala-library's
   * `immutable.Seq`, the `Seq` package `scala` names) is one. A `collection.Seq` is no `Seq`: it takes no
   * immutable sequence's place and spreads into no repeated parameter. */
-trait Seq[+A] extends SeqOps[A, Seq, Seq[A]], Iterable[A]:
+@objectFunction
+trait Seq[+A] extends SeqOps[A, Seq, Seq[A]], Iterable[A], PartialFunction[Int, A]:
+  // `SeqOps`'s, which scala-library's linearisation of a sequence finds before `PartialFunction`'s. The
+  // std's sequences name `SeqOps` first, which keeps its type arguments theirs (`Worker::linearise`
+  // keeps a repeated base's last instantiation) and puts it after `PartialFunction`.
+  def apply(i: Int): A
   def equals(that: Any): Boolean = that match
     case other: Seq[?] => sameElements(other)
     case _ => false

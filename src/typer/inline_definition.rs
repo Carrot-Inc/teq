@@ -2055,7 +2055,7 @@ impl<'a> Worker<'a> {
         let mut pats: Vec<TPatId> = Vec::new();
         for e in self.prog.descendants(root) {
             match self.prog.expr(e) {
-                TExpr::TypeTest(_, t) | TExpr::Cast(_, CastOp::Check(t, _) | CastOp::Unbox(t, _), _) => tests.push(t),
+                TExpr::TypeTest(_, t) | TExpr::Cast(_, CastOp::Check(t, _) | CastOp::Unbox(t, _) | CastOp::Adapt(t, _), _) => tests.push(t),
                 TExpr::Match(_, cases) => pats.extend(self.prog.case_list(cases).iter().map(|c| c.pat)),
                 TExpr::Try(i) => pats.extend(self.prog.case_list(self.prog.tries[i as usize].cases).iter().map(|c| c.pat)),
                 TExpr::Block(stmts, _) => pats.extend(self.prog.stmt_list(stmts).iter().filter_map(|s| match *s {

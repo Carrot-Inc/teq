@@ -1180,6 +1180,33 @@ package java.lang:
     @js("(($charCode($1) & 0xfc00) === 0xdc00)")
     @jvm("invokestatic java/lang/Character.isLowSurrogate(C)Z")
     def isLowSurrogate(c: Char): scala.Boolean
+    // The JDK's code points: the basic plane's in one `Char`, a supplementary one's in a surrogate pair.
+    @jvm("invokestatic java/lang/Character.isBmpCodePoint(I)Z")
+    def isBmpCodePoint(codePoint: Int): scala.Boolean = (codePoint >>> 16) == 0
+    @jvm("invokestatic java/lang/Character.isValidCodePoint(I)Z")
+    def isValidCodePoint(codePoint: Int): scala.Boolean = (codePoint >>> 16) < 0x11
+    @jvm("invokestatic java/lang/Character.charCount(I)I")
+    def charCount(codePoint: Int): Int = if codePoint >= 0x10000 then 2 else 1
+    @jvm("invokestatic java/lang/Character.highSurrogate(I)C")
+    def highSurrogate(codePoint: Int): Char = ((codePoint >>> 10) + 0xd7c0).toChar
+    @jvm("invokestatic java/lang/Character.lowSurrogate(I)C")
+    def lowSurrogate(codePoint: Int): Char = ((codePoint & 0x3ff) + 0xdc00).toChar
+    @jvm("invokestatic java/lang/Character.toChars(I)[C")
+    def toChars(codePoint: Int): Array[Char] =
+      val result = new Array[Char](if isBmpCodePoint(codePoint) then 1 else 2)
+      toChars(codePoint, result, 0)
+      result
+    // The pair written low half first, so that a destination one short is left as it was.
+    @jvm("invokestatic java/lang/Character.toChars(I[CI)I")
+    def toChars(codePoint: Int, dst: Array[Char], dstIndex: Int): Int =
+      if isBmpCodePoint(codePoint) then
+        dst(dstIndex) = codePoint.toChar
+        1
+      else if isValidCodePoint(codePoint) then
+        dst(dstIndex + 1) = lowSurrogate(codePoint)
+        dst(dstIndex) = highSurrogate(codePoint)
+        2
+      else throw new IllegalArgumentException("Not a valid Unicode code point: 0x" + Integer.toHexString(codePoint).toUpperCase)
     @js("$1")
     @jvm("invokestatic java/lang/Character.valueOf(C)Ljava/lang/Character;")
     def valueOf(c: Char): Character
@@ -1193,15 +1220,43 @@ package java.lang:
   object Math:
     final val PI: 3.141592653589793 = 3.141592653589793
     final val E: 2.718281828459045 = 2.718281828459045
+    // The JDK's overloads of each primitive kind.
     @js("$max($1, $2)")
-    @jvm("rt $1:L $2:L rtcall numMax(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;")
-    def max[T <: Int | scala.Long | scala.Float | scala.Double](a: T, b: T): T
+    @jvm("invokestatic java/lang/Math.max(II)I")
+    def max(a: Int, b: Int): Int
+    @js("$max($1, $2)")
+    @jvm("invokestatic java/lang/Math.max(JJ)J")
+    def max(a: scala.Long, b: scala.Long): scala.Long
+    @js("$max($1, $2)")
+    @jvm("invokestatic java/lang/Math.max(FF)F")
+    def max(a: scala.Float, b: scala.Float): scala.Float
+    @js("$max($1, $2)")
+    @jvm("invokestatic java/lang/Math.max(DD)D")
+    def max(a: scala.Double, b: scala.Double): scala.Double
     @js("$min($1, $2)")
-    @jvm("rt $1:L $2:L rtcall numMin(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;")
-    def min[T <: Int | scala.Long | scala.Float | scala.Double](a: T, b: T): T
+    @jvm("invokestatic java/lang/Math.min(II)I")
+    def min(a: Int, b: Int): Int
+    @js("$min($1, $2)")
+    @jvm("invokestatic java/lang/Math.min(JJ)J")
+    def min(a: scala.Long, b: scala.Long): scala.Long
+    @js("$min($1, $2)")
+    @jvm("invokestatic java/lang/Math.min(FF)F")
+    def min(a: scala.Float, b: scala.Float): scala.Float
+    @js("$min($1, $2)")
+    @jvm("invokestatic java/lang/Math.min(DD)D")
+    def min(a: scala.Double, b: scala.Double): scala.Double
     @js("$abs($1)")
-    @jvm("rt $1:L rtcall numAbs(Ljava/lang/Object;)Ljava/lang/Object;")
-    def abs[T <: Int | scala.Long | scala.Float | scala.Double](x: T): T
+    @jvm("invokestatic java/lang/Math.abs(I)I")
+    def abs(a: Int): Int
+    @js("$abs($1)")
+    @jvm("invokestatic java/lang/Math.abs(J)J")
+    def abs(a: scala.Long): scala.Long
+    @js("$abs($1)")
+    @jvm("invokestatic java/lang/Math.abs(F)F")
+    def abs(a: scala.Float): scala.Float
+    @js("$abs($1)")
+    @jvm("invokestatic java/lang/Math.abs(D)D")
+    def abs(a: scala.Double): scala.Double
     @js("Math.sqrt($1)")
     @jvm("invokestatic java/lang/Math.sqrt(D)D")
     def sqrt(x: scala.Double): scala.Double
@@ -1253,6 +1308,9 @@ package java.lang:
     @js("$nextDown($1)")
     @jvm("invokestatic java/lang/Math.nextDown(D)D")
     def nextDown(d: scala.Double): scala.Double
+    @js("$signum($1)")
+    @jvm("invokestatic java/lang/Math.signum(F)F")
+    def signum(x: scala.Float): scala.Float
     @js("Math.sign($1)")
     @jvm("invokestatic java/lang/Math.signum(D)D")
     def signum(x: scala.Double): scala.Double
@@ -1618,12 +1676,21 @@ package java.lang.annotation:
 package java.lang.reflect:
   // What scala-library's `ensureAccessible` asks of a member it reflects on (its `Selectable`, which
   // a JVM build's macro runs): every member the interpreter finds is accessible. A JVM build's
-  // class is the JDK's, and so is `Field`, which the JDK's `ct.sym` gives every target.
+  // class is the JDK's.
   @javaDefined
   @jvmClass("java/lang/reflect/AccessibleObject")
   abstract class AccessibleObject:
     def isAccessible: scala.Boolean = true
     def setAccessible(flag: scala.Boolean): Unit = ()
+
+  // A public field `Class.getField` finds, which a class of the program never has on JavaScript and in
+  // the interpreter (its vals are private fields behind their getters): named in `Class`'s signature,
+  // which a build that keeps every member of `Class` reads.
+  @javaDefined
+  @jvmClass("java/lang/reflect/Field")
+  final class Field private (name: String) extends AccessibleObject:
+    @jvm("invokevirtual java/lang/reflect/Field.getName()Ljava/lang/String;")
+    def getName: String = name
 
   // A method `Class.getMethod` found, invoked on the receiver in the interpreter: by its name and
   // the classes of its parameters where the lookup named them, as the JDK's, else by its name.

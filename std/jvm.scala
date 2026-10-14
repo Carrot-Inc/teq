@@ -197,40 +197,6 @@ def floorModInt(a: Int, b: Int): Int
 @jvm("$0:J $1:J invokestatic java/lang/Math.floorMod(JJ)J")
 def floorModLong(a: Long, b: Long): Long
 
-// The generic `max`, `min`, `abs`, `signum`, `floorDiv` and `floorMod` of `Math` and
-// `scala.math`: the operands arrive boxed and the result has the class of the wider one.
-def numMax(a: Any, b: Any): Any =
-  if isBoxedFractional(a) || isBoxedFractional(b) then maxDouble(doubleValue(a), doubleValue(b))
-  else if isBoxedLong(a) || isBoxedLong(b) then maxLong(longValue(a), longValue(b))
-  else maxInt(intValue(a), intValue(b))
-
-def numMin(a: Any, b: Any): Any =
-  if isBoxedFractional(a) || isBoxedFractional(b) then minDouble(doubleValue(a), doubleValue(b))
-  else if isBoxedLong(a) || isBoxedLong(b) then minLong(longValue(a), longValue(b))
-  else minInt(intValue(a), intValue(b))
-
-def numAbs(a: Any): Any =
-  if isBoxedFractional(a) then absDouble(doubleValue(a))
-  else if isBoxedLong(a) then absLong(longValue(a))
-  else absInt(intValue(a))
-
-def numSignum(a: Any): Any =
-  if isBoxedFractional(a) then signumDouble(doubleValue(a))
-  else if isBoxedLong(a) then
-    val l = longValue(a)
-    if l > 0L then 1L else if l < 0L then -1L else 0L
-  else
-    val i = intValue(a)
-    if i > 0 then 1 else if i < 0 then -1 else 0
-
-def numFloorDiv(a: Any, b: Any): Any =
-  if isBoxedLong(a) || isBoxedLong(b) then floorDivLong(longValue(a), longValue(b))
-  else floorDivInt(intValue(a), intValue(b))
-
-def numFloorMod(a: Any, b: Any): Any =
-  if isBoxedLong(a) || isBoxedLong(b) then floorModLong(longValue(a), longValue(b))
-  else floorModInt(intValue(a), intValue(b))
-
 // ---- strings ----
 
 @jvm("$0 $1 $2:I invokevirtual java/lang/String.split(Ljava/lang/String;I)[Ljava/lang/String;")
@@ -251,12 +217,6 @@ def matchesRegex(s: String, regex: String): Boolean
 def formatString(format: String, args: Array[Any]): String
 @jvm("$0 invokevirtual java/lang/String.translateEscapes()Ljava/lang/String;")
 def translateEscapes(s: String): String
-
-// A single character is taken literally, as `split(Char)` needs; a longer separator is a
-// regular expression, as in Java.
-def separatorRegex(separator: Any): String =
-  val text = stringOf(separator)
-  if isCharacter(separator) || text.length == 1 then quoteRegex(text) else text
 
 def stripMarginOf(s: String, margin: Char): String =
   val lines = splitString(s, "\n", -1)

@@ -477,6 +477,10 @@ pub(super) fn install(it: &mut Table) {
         }
         Ok(Value::string(zone_name()))
     });
+    // `TimeZone.getDefault()`'s zone, the machine's by its name, in a JavaScript build's macro as
+    // in `teq interp` (the template is the engine's offset on JavaScript).
+    let zone = it["java.util.zip.zoneName"].clone();
+    it.insert("java.util.TimeZone.systemOffsetId".to_string(), zone);
 }
 
 #[cfg(unix)]

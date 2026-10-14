@@ -74,7 +74,7 @@ final class HashSet[A](index: TrieNode, entries: Vector[Any], dead: Int, private
     if dead == 0 then unsafeCast(entries.iterator) else unsafeCast(entries.iterator.filter(PersistentMap.live))
   @jvmEvidence
   @jvm("rt $0 $1 rtcall arrayOf(Lscala/IterableOnce;Lscala/reflect/ClassTag;)Ljava/lang/Object; cast_result")
-  override def toArray[B >: A: scala.reflect.ClassTag]: Array[B] = if dead == 0 then unsafeCast(entries.toArray) else unsafeCast(PersistentMap.without(entries, -1))
+  override def toArray[B >: A: scala.reflect.ClassTag]: Array[B] = arrayByTag(scala.reflect.classTag[B], this, if dead == 0 then unsafeCast(copyArray(entries.unsafeArray)) else unsafeCast(PersistentMap.without(entries, -1)))
   // A `HashSet` maps to a `HashSet`, as scala-library's does.
   override def map[B](f: A => B): HashSet[B] = HashSet.from(iterator.map(f))
   override def flatMap[B](f: A => IterableOnce[B]): HashSet[B] = HashSet.from(iterator.flatMap(f))
@@ -104,7 +104,7 @@ class SortedSet[A](private val items: RawBuffer[A], val ordering: Ordering[A]) e
   override def iterator: Iterator[A] = Iterator.over(items)
   @jvmEvidence
   @jvm("rt $0 $1 rtcall arrayOf(Lscala/IterableOnce;Lscala/reflect/ClassTag;)Ljava/lang/Object; cast_result")
-  override def toArray[B >: A: scala.reflect.ClassTag]: Array[B] = unsafeCast(copyArray(items))
+  override def toArray[B >: A: scala.reflect.ClassTag]: Array[B] = arrayByTag(scala.reflect.classTag[B], this, unsafeCast(copyArray(items)))
   override def size: Int = items.length
   override def knownSize: Int = items.length
   override def isEmpty: Boolean = items.length == 0
@@ -166,12 +166,16 @@ object SortedSet extends scala.collection.EvidenceIterableFactory[SortedSet, Ord
     if js.isUndefined(ord) then unsafeCast(Set.from(Vector.wrap(items))) else from(Vector.wrap(items))(using ord)
   def empty[A](implicit ord: Ordering[A]): SortedSet[A] = new TreeSet(emptyBuffer[A], ord)
   def apply[A](elems: A*)(implicit ord: Ordering[A]): SortedSet[A] = from(elems)
-  def from[A](elems: IterableOnce[A])(implicit ord: Ordering[A]): TreeSet[A] =
-    val sorted = iterableToArray(elems)
-    sortArray(sorted, (a, b) => ord.compare(a, b))
-    val out = emptyBuffer[A]
-    sorted.foreach(x => if out.length == 0 || ord.compare(out(out.length - 1), x) != 0 then out.push(x))
-    new TreeSet(out, ord)
+  // scala-library's `TreeSet.from`: a sorted set of the same ordering is the set itself, every sorted
+  // set being a `TreeSet` here.
+  def from[A](elems: IterableOnce[A])(implicit ord: Ordering[A]): TreeSet[A] = elems match
+    case ts: SortedSet[A] @unchecked if ord == ts.ordering => unsafeCast(ts)
+    case _ =>
+      val sorted = iterableToArray(elems)
+      sortArray(sorted, (a, b) => ord.compare(a, b))
+      val out = emptyBuffer[A]
+      sorted.foreach(x => if out.length == 0 || ord.compare(out(out.length - 1), x) != 0 then out.push(x))
+      new TreeSet(out, ord)
   def newBuilder[A](implicit ord: Ordering[A]): scala.collection.mutable.Builder[A, SortedSet[A]] =
     scala.collection.mutable.ArrayBuffer.empty[A].mapResult(items => from(items))
 
@@ -198,7 +202,7 @@ final class ListSet[A](private val items: RawBuffer[A]) extends SetOps[A, ListSe
   override def iterator: Iterator[A] = Iterator.over(items)
   @jvmEvidence
   @jvm("rt $0 $1 rtcall arrayOf(Lscala/IterableOnce;Lscala/reflect/ClassTag;)Ljava/lang/Object; cast_result")
-  override def toArray[B >: A: scala.reflect.ClassTag]: Array[B] = unsafeCast(copyArray(items))
+  override def toArray[B >: A: scala.reflect.ClassTag]: Array[B] = arrayByTag(scala.reflect.classTag[B], this, unsafeCast(copyArray(items)))
   override def size: Int = items.length
   override def knownSize: Int = items.length
   override def isEmpty: Boolean = items.length == 0
@@ -271,7 +275,7 @@ sealed class Queue[+A](private val items: RawBuffer[A]) extends SeqOps[A, Queue,
   def front: A = head
   @jvmEvidence
   @jvm("rt $0 $1 rtcall arrayOf(Lscala/IterableOnce;Lscala/reflect/ClassTag;)Ljava/lang/Object; cast_result")
-  override def toArray[B >: A: scala.reflect.ClassTag]: Array[B] = unsafeCast(copyArray(items))
+  override def toArray[B >: A: scala.reflect.ClassTag]: Array[B] = arrayByTag(scala.reflect.classTag[B], this, unsafeCast(copyArray(items)))
   override def collectionClassName: String = "Queue"
   override def toString: String = mkString("Queue(", ", ", ")")
 
@@ -339,13 +343,21 @@ object ListMap extends MapFactory[ListMap]:
     scala.collection.mutable.ArrayBuffer.empty[(K, V)].mapResult(from)
 
 // A sorted array of entries: lookups are binary searches, updates copy the array like SortedSet.
-class SortedMap[K, +V](private val entries: RawBuffer[(K, Any)], val ordering: Ordering[K]) extends IterableOps[(K, V), Iterable, SortedMap[K, V]], Iterable[(K, V)]:
+class SortedMap[K, +V](private val entries: RawBuffer[(K, Any)], val ordering: Ordering[K]) extends IterableOps[(K, V), Iterable, SortedMap[K, V]], scala.collection.Map[K, V]:
+  // `collection.Map`'s, of this map's kind: `IterableOps`'s bodies, written out rather than called
+  // through `super`, a call the reach answers with the member of that name of every class.
+  override def filter(p: ((K, V)) => Boolean): SortedMap[K, V] =
+    val out = emptyBuffer[(K, V)]
+    foreach(x => if p(x) then out.push(x))
+    buildC(out)
+  override def tail: SortedMap[K, V] =
+    if isEmpty then unsupportedOperation(null) else drop(1)
   def buildCC[B](items: RawBuffer[B]): Iterable[B] = fromArray(items)
   override def buildC(items: RawBuffer[(K, V)]): SortedMap[K, V] = SortedMap.from(Vector.wrap(items))(using ordering)
   override def iterator: Iterator[(K, V)] = Iterator.over(unsafeCast(entries))
   @jvmEvidence
   @jvm("rt $0 $1 rtcall arrayOf(Lscala/IterableOnce;Lscala/reflect/ClassTag;)Ljava/lang/Object; cast_result")
-  override def toArray[B >: (K, V): scala.reflect.ClassTag]: Array[B] = unsafeCast(copyArray(entries))
+  override def toArray[B >: (K, V): scala.reflect.ClassTag]: Array[B] = arrayByTag(scala.reflect.classTag[B], this, unsafeCast(copyArray(entries)))
   override def size: Int = entries.length
   override def knownSize: Int = entries.length
   override def isEmpty: Boolean = entries.length == 0
@@ -362,15 +374,15 @@ class SortedMap[K, +V](private val entries: RawBuffer[(K, Any)], val ordering: O
       else if c < 0 then lo = mid + 1
       else hi = mid - 1
     if found >= 0 then found else -lo - 1
-  def contains(key: K): Boolean = search(key) >= 0
-  def isDefinedAt(key: K): Boolean = contains(key)
+  override def contains(key: K): Boolean = search(key) >= 0
+  override def isDefinedAt(key: K): Boolean = contains(key)
   def get(key: K): Option[V] =
     val i = search(key)
     if i >= 0 then Some(unsafeCast(entries(i)._2)) else None
-  def apply(key: K): V = get(key) match
+  override def apply(key: K): V = get(key) match
     case Some(v) => v
     case None => noSuchElement("key not found: " + key.toString)
-  def getOrElse[V1 >: V](key: K, default: => V1): V1 = get(key).getOrElse(default)
+  override def getOrElse[V1 >: V](key: K, default: => V1): V1 = get(key).getOrElse(default)
   def updated[V1 >: V](key: K, value: V1): SortedMap[K, V1] =
     val i = search(key)
     val copy = copyArray(entries)
@@ -425,11 +437,6 @@ class SortedMap[K, +V](private val entries: RawBuffer[(K, Any)], val ordering: O
   override def toMap[K2, V2](implicit ev: ((K, V)) <:< (K2, V2)): scala.Map[K2, V2] = unsafeCast(scala.Map.from(this))
   override def mkString(start: String, sep: String, end: String): String =
     joinStrings(Vector.wrap(entries.map(e => e._1.toString + " -> " + e._2.toString)), start, sep, end)
-  def equals(that: Any): Boolean = that match
-    case m: SortedMap[?, ?] => scala.Map.from(this).equals(scala.Map.from(m))
-    case m: scala.Map[?, ?] => scala.Map.from(this).equals(m)
-    case _ => false
-  override def hashCode: Int = scala.Map.from(this).hashCode
   override def collectionClassName: String = "TreeMap"
   override def toString: String = mkString("TreeMap(", ", ", ")")
 
@@ -438,10 +445,14 @@ object SortedMap:
     if js.isUndefined(ord) then unsafeCast(scala.Map.from(Vector.wrap(entries))) else from(Vector.wrap(entries))(using ord)
   def empty[K, V](implicit ord: Ordering[K]): SortedMap[K, V] = new TreeMap(emptyBuffer[(K, Any)], ord)
   def apply[K, V](entries: (K, V)*)(implicit ord: Ordering[K]): SortedMap[K, V] = from(entries)
-  def from[K, V](entries: IterableOnce[(K, V)])(implicit ord: Ordering[K]): SortedMap[K, V] =
-    var out: SortedMap[K, V] = empty[K, V]
-    entries.foreach(e => out = out.updated(e._1, e._2))
-    out
+  // scala-library's `TreeMap.from`: a sorted map of the same ordering is the map itself, every sorted
+  // map being a `TreeMap` here.
+  def from[K, V](entries: IterableOnce[(K, V)])(implicit ord: Ordering[K]): SortedMap[K, V] = entries match
+    case sm: SortedMap[K, V] @unchecked if ord == sm.ordering => sm
+    case _ =>
+      var out: SortedMap[K, V] = empty[K, V]
+      entries.foreach(e => out = out.updated(e._1, e._2))
+      out
   def newBuilder[K, V](implicit ord: Ordering[K]): scala.collection.mutable.Builder[(K, V), SortedMap[K, V]] =
     scala.collection.mutable.ArrayBuffer.empty[(K, V)].mapResult(items => from(items))
 

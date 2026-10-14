@@ -2,6 +2,11 @@
 // class helpers, the failure of an inlined `assert`, the equality of boxed numbers.
 package scala.runtime
 
+/** scala-library's runtime classes of `Nothing` and `Null`, which `classOf[Nothing]`, `classOf[Null]` and
+  * their tags name (dotty's `TypeErasure` erases the two types to them). */
+sealed abstract class Nothing$ extends Throwable
+sealed abstract class Null$
+
 object ScalaRunTime:
   def _hashCode(x: Product): Int = scala.util.hashing.MurmurHash3.productHash(x)
   def _toString(x: Product): String = x.productIterator.mkString(x.productPrefix + "(", ",", ")")

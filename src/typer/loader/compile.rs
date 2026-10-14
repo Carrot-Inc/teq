@@ -857,8 +857,11 @@ impl<'a> Worker<'a> {
     /// erasure).
     pub fn type_class_of(&mut self, ty: TypeId, span: Span) -> (crate::tir::TExprId, TypeId) {
         let ty = self.dealias(ty);
+        // `Nothing` and `Null` erase to scala-library's runtime classes (`TypeErasure`).
         let c = match self.types.get(ty) {
             Type::Any => Some(self.b.any_ref),
+            Type::Nothing => self.class_at(&["scala", "runtime", "Nothing$"]),
+            Type::Class(c, _) if c == self.b.null => self.class_at(&["scala", "runtime", "Null$"]),
             _ => self.class_of(ty),
         };
         let c = c.map(|k| self.runtime_tuple_class(k));

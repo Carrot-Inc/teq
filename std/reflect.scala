@@ -62,6 +62,28 @@ package java.lang:
     @jvm("invokevirtual java/lang/Class.getComponentType()Ljava/lang/Class;")
     def getComponentType: Class[?]
 
+    // One loader holds every class on JavaScript and in the interpreter, the bootstrap loader, which
+    // the JDK gives as `null`.
+    @javaDefined
+    @js("null")
+    @jvm("invokevirtual java/lang/Class.getClassLoader()Ljava/lang/ClassLoader;")
+    def getClassLoader: ClassLoader
+
+  // `forName` finds a class of the program by its binary name, or an array class by its descriptor
+  // (`[I`), and initialises an object's class when asked, constructing the instance as the JVM's
+  // `<clinit>` does; a primitive's name, a class of the std's or none at all is a
+  // `ClassNotFoundException`. The program's classes are kept for it where a call is reached
+  // (`$forNameClass`).
+  @javaDefined
+  @jvmClass("java/lang/Class")
+  object Class:
+    @js("$forName($1, true)")
+    @jvm("invokestatic java/lang/Class.forName(Ljava/lang/String;)Ljava/lang/Class;")
+    def forName(className: String): Class[?]
+    @js("$forName($1, $2)")
+    @jvm("invokestatic java/lang/Class.forName(Ljava/lang/String;ZLjava/lang/ClassLoader;)Ljava/lang/Class;")
+    def forName(name: String, initialize: scala.Boolean, loader: ClassLoader): Class[?]
+
   // What `getStackTrace` would hold; nothing makes one, since the stack is not walked.
   final class StackTraceElement(declaringClass: String, methodName: String, fileName: String, lineNumber: Int):
     def getClassName: String = declaringClass

@@ -1,0 +1,13 @@
+41
+d83d de00
+2
+true
+2
+61 dbff dfff 64
+1
+61 dbff dfff e9
+Not a valid Unicode code point: 0xFFFFFFFF
+Not a valid Unicode code point: 0x110000
+List(true, false, true, false)
+List(1, 2)
+d83d de00

@@ -4158,6 +4158,7 @@ impl<'c, 'a> Collector<'c, 'a> {
     fn operand_type(&mut self, e: TExprId) -> Option<TypeId> {
         let form = self.w.prog.capture.as_deref().and_then(|c| c.forms.get(&e)).copied();
         match (self.w.prog.expr(e), form) {
+            (TExpr::Cast(inner, crate::tir::CastOp::Adapt(..), _), _) => self.operand_type(inner),
             (TExpr::Unary(_, inner), Some(Form::Promotion)) => self.operand_type(inner),
             _ => self.receiver_type(e),
         }

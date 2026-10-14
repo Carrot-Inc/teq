@@ -710,14 +710,14 @@ class ExportSuite extends munit.FunSuite {
   }
 
   test("the launchers: written when absent, an unedited one of any version replaced, any other kept and reported") {
-    val v1 = Map("teq" -> "#!/bin/sh\n# teq launcher 1: the first\nexec one\n", "teq.cmd" -> "@echo off\nrem teq launcher 1: the first\none\n")
-    val v2 = Map("teq" -> "#!/bin/sh\n# teq launcher 2: the second\nexec two\n", "teq.cmd" -> "@echo off\nrem teq launcher 2: the second\ntwo\n")
+    val v1 = Map("teq" -> "#!/bin/sh\n# teq launcher: the first\nexec one\n", "teq.cmd" -> "@echo off\nrem teq launcher: the first\none\n")
+    val v2 = Map("teq" -> "#!/bin/sh\n# teq launcher: the second\nexec two\n", "teq.cmd" -> "@echo off\nrem teq launcher: the second\ntwo\n")
     val templates = Seq(1 -> v1, 2 -> v2)
     withDirectory { root =>
       val (sh, cmd) = (new File(root, "teq"), new File(root, "teq.cmd"))
       def write() = Launchers.write(root, templates).map(r => (r.kept, r.message.replace(root.getPath + File.separator, "")))
       // Absent: written, the sh one executable, the cmd one with cmd's line ends.
-      assertEquals(write(), Seq(false -> "wrote teq, launcher 2", false -> "wrote teq.cmd, launcher 2"))
+      assertEquals(write(), Seq(false -> "wrote teq", false -> "wrote teq.cmd"))
       assertEquals((IO.read(sh), IO.read(cmd)), (v2("teq"), v2("teq.cmd").replace("\n", "\r\n")))
       assert(sh.canExecute)
       // Current: left alone, its execution bit set again.
@@ -727,26 +727,27 @@ class ExportSuite extends munit.FunSuite {
       // An unedited launcher 1, the cmd one checked out with \n alone: replaced.
       IO.write(sh, v1("teq"))
       IO.write(cmd, v1("teq.cmd"))
-      assertEquals(write(), Seq(false -> "replaced teq, launcher 1, by launcher 2", false -> "replaced teq.cmd, launcher 1, by launcher 2"))
+      assertEquals(write(), Seq(false -> "replaced teq, an earlier launcher, by this plugin's", false -> "replaced teq.cmd, an earlier launcher, by this plugin's"))
       // The current one checked out with \r\n: current.
       IO.write(sh, v2("teq").replace("\n", "\r\n"))
       assertEquals(write(), Nil)
-      // An edited launcher 1, one without the marker, one of a later plugin: kept, each said why, the update's first difference named.
+      // An edited launcher 1, one of the user's own, one of a later plugin: kept, the update's first difference named.
       IO.write(sh, v1("teq").replace("exec one", "export X=1\nexec one"))
       IO.write(cmd, "@echo off\nmine\n")
       assertEquals(write(), Seq(
-        true -> "kept teq, since it is launcher 1, edited: launcher 2 differs from it first at line 2, `# teq launcher 2: the second`",
-        true -> "kept teq.cmd, since it has no `teq launcher <version>:` line: launcher 2 differs from it first at line 2, `rem teq launcher 2: the second`",
+        true -> "kept teq, since it is edited, or a later sbt-teq's: this plugin's differs from it first at line 2, `# teq launcher: the second`",
+        true -> "kept teq.cmd, since it is edited, or a later sbt-teq's: this plugin's differs from it first at line 2, `rem teq launcher: the second`",
       ))
       assertEquals(IO.read(cmd), "@echo off\nmine\n")
-      IO.write(sh, "#!/bin/sh\n# teq launcher 3: the third\n")
-      assertEquals(write().head, true -> "kept teq, since it is launcher 3, a later sbt-teq's: launcher 2 differs from it first at line 2, `# teq launcher 2: the second`")
+      IO.write(sh, "#!/bin/sh\n# teq launcher: the third\n")
+      assertEquals(write().head, true -> "kept teq, since it is edited, or a later sbt-teq's: this plugin's differs from it first at line 2, `# teq launcher: the second`")
     }
   }
 
-  test("the launchers the plugin carries: teq's tools/launcher, the current one last") {
+  test("the launchers the plugin carries: teq's tools/launcher, the current one last, no version in its text") {
     val (version, current) = Launchers.shipped.last
-    for (name <- Launchers.Names) assert(current(name).contains(s"teq launcher $version:"), name)
+    assertEquals(version, Launchers.shipped.map(_._1).max)
+    for (name <- Launchers.Names) assert(current(name).startsWith(if (name == "teq") "#!/bin/sh\n# teq launcher:" else "@echo off\nrem teq launcher:"), name)
     assert(!current("teq.cmd").contains("\r"), "carried with \\n line ends")
   }
 

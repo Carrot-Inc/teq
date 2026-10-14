@@ -1,0 +1,21 @@
+java.util.regex.PatternSyntaxException [ true
+java.util.regex.PatternSyntaxException [ true
+java.util.regex.PatternSyntaxException [ true
+java.util.regex.PatternSyntaxException [ true
+java.util.regex.PatternSyntaxException ( true
+java.lang.NullPointerException
+[x|y|z]
+[a|b|c]
+[]
+[a|b|c]
+[a|||b|||c]
+[a|b|c]
+[a|b|c]
+[a|b|c]
+[a|b]
+[a|b||]
+[a|b,c]
+[a|b|c]
+[a|b|c]
+[a|b]
+java.util.regex.PatternSyntaxException [] true

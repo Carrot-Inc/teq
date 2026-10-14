@@ -23,6 +23,7 @@ Lazies1
 Lazies2
 LazyLists
 LazyValsLongs
+MultiArr
 Signals1
 Signals2
 StackMap
@@ -284,6 +285,7 @@ i24673
 i24826
 i24877
 i24926
+i24998
 i25000
 i25000b
 i25077
@@ -447,6 +449,7 @@ null-hash
 nullAsInstanceOf
 numeric-range
 opaque-inline2
+optimizer-array-load
 option-fold
 ordered
 outer-accessors
@@ -499,6 +502,7 @@ supercalls-traits-targetname
 synchronized-interface
 t0005
 t0048
+t0325
 t1005
 t10170
 t1048
@@ -517,6 +521,7 @@ t1697
 t1987
 t1987b
 t1994
+t2005
 t2027
 t2029
 t2087-and-2400
@@ -691,6 +696,7 @@ transparent-object
 transparentAccess
 transparentAssign
 transparentByName
+transparentForeach
 transparentPower
 transparentPrivates
 transpose

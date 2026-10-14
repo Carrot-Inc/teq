@@ -379,10 +379,14 @@ impl<'a> Worker<'a> {
     /// the package exists from then on. `None` for any other name.
     #[inline]
     pub fn demand_std_package(&mut self, parent: PkgId, name: Name) -> Option<PkgId> {
-        if self.std.scalajs_unlocked() || !self.std.locked_segments.contains_key(&name) {
+        if self.std.scalajs_unlocked() || !self.std.locked_segments.contains_key(&name) || self.std_package_misses.contains_key(&(parent, name)) {
             return None;
         }
-        self.unlock_std_package(parent, name)
+        let found = self.unlock_std_package(parent, name);
+        if found.is_none() {
+            self.std_package_misses.insert((parent, name), ());
+        }
+        found
     }
 
     #[cold]

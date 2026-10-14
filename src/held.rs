@@ -55,6 +55,7 @@ impl Program {
             main_object: _,
             overrides,
             partial_function: _,
+            class_tag_module: _,
             throwable: _,
             js_exception: _,
             js_imports,

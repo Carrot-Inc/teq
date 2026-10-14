@@ -106,7 +106,7 @@ final class ArrayBuffer[A](private val items: RawBuffer[A]) extends SeqOps[A, Ar
       i += 1
   @jvmEvidence
   @jvm("rt $0 $1 rtcall arrayOf(Lscala/IterableOnce;Lscala/reflect/ClassTag;)Ljava/lang/Object; cast_result")
-  override def toArray[B >: A: scala.reflect.ClassTag]: Array[B] = unsafeCast(copyArray(items))
+  override def toArray[B >: A: scala.reflect.ClassTag]: Array[B] = arrayByTag(scala.reflect.classTag[B], this, unsafeCast(copyArray(items)))
   override def toSeq: Seq[A] = toList
   override def map[B](f: A => B): ArrayBuffer[B] = new ArrayBuffer(items.map(f))
   override def filter(p: A => Boolean): ArrayBuffer[A] = new ArrayBuffer(items.filter(p))
@@ -307,14 +307,9 @@ class HashMap[K, V](private val raw: RawMap[K, V] = newRawMap[K, V]) extends Ite
   override def flatMap[B](f: ((K, V)) => IterableOnce[B]): Iterable[B] = fromArray(Vector.wrap(rawItems(this)).flatMap(f).unsafeArray)
   override def mkString(start: String, sep: String, end: String): String = scala.Map.from(this).mkString(start, sep, end)
   override def view: MapView[K, V] = new MapView(() => iterator, k => get(k))
-  def equals(that: Any): Boolean = that match
-    case m: scala.Map[?, ?] =>
-      val other: scala.Map[K, Any] = unsafeCast(m)
-      size == other.size && raw.rawKeys.forall(k => other.get(k) match
-        case Some(v) => v == raw.rawGet(k)
-        case None => false)
+  override def equals(that: Any): Boolean = that match
     case m: HashMap[?, ?] => rawMapEquals(unsafeCast(raw), unsafeCast(m.raw))
-    case _ => false
+    case _ => scala.collection.Map.sameEntries(this, that)
   override def hashCode: Int = rawMapHash(unsafeCast(raw))
   override def collectionClassName: String = "HashMap"
   override def toString: String = mkString("HashMap(", ", ", ")")
@@ -388,7 +383,7 @@ final class HashSet[A](private val raw: RawMap[A, Boolean]) extends IterableOps[
   def buildCC[B](items: RawBuffer[B]): HashSet[B] = HashSet.from(Vector.wrap(items))
   @jvmEvidence
   @jvm("rt $0 $1 rtcall arrayOf(Lscala/IterableOnce;Lscala/reflect/ClassTag;)Ljava/lang/Object; cast_result")
-  override def toArray[B >: A: scala.reflect.ClassTag]: Array[B] = unsafeCast(raw.rawKeys)
+  override def toArray[B >: A: scala.reflect.ClassTag]: Array[B] = arrayByTag(scala.reflect.classTag[B], this, unsafeCast(raw.rawKeys))
   override def size: Int = raw.rawSize
   override def knownSize: Int = raw.rawSize
   override def isEmpty: Boolean = raw.rawSize == 0
@@ -452,7 +447,7 @@ class SortedSet[A](private var items: RawBuffer[A], val ordering: Ordering[A]) e
   override def iterator: Iterator[A] = Iterator.over(copyArray(items))
   @jvmEvidence
   @jvm("rt $0 $1 rtcall arrayOf(Lscala/IterableOnce;Lscala/reflect/ClassTag;)Ljava/lang/Object; cast_result")
-  override def toArray[B >: A: scala.reflect.ClassTag]: Array[B] = unsafeCast(copyArray(items))
+  override def toArray[B >: A: scala.reflect.ClassTag]: Array[B] = arrayByTag(scala.reflect.classTag[B], this, unsafeCast(copyArray(items)))
   override def size: Int = items.length
   override def knownSize: Int = items.length
   override def isEmpty: Boolean = items.length == 0
@@ -574,7 +569,7 @@ final class PriorityQueue[A](implicit ord: Ordering[A]) extends IterableOps[A, I
   override def iterator: Iterator[A] = Iterator.over(arraySlice(heap, 1, heap.length))
   @jvmEvidence
   @jvm("rt $0 $1 rtcall arrayOf(Lscala/IterableOnce;Lscala/reflect/ClassTag;)Ljava/lang/Object; cast_result")
-  override def toArray[B >: A: scala.reflect.ClassTag]: Array[B] = unsafeCast(arraySlice(heap, 1, heap.length))
+  override def toArray[B >: A: scala.reflect.ClassTag]: Array[B] = arrayByTag(scala.reflect.classTag[B], this, unsafeCast(arraySlice(heap, 1, heap.length)))
   private def swap(i: Int, j: Int): Unit =
     val h = heap(i)
     heap(i) = heap(j)

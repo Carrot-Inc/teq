@@ -3412,7 +3412,7 @@ async function leanStd() {
     await inside("same file, in a body the app never calls (`Nil` in `List.empty`)", "def empty[A]: List[A] = Nil", 0, 24, "collections.scala", "case object Nil", 0, 12, 3)
     await inside("same file, in a signature (`List` in `List.empty`'s result)", "def empty[A]: List[A] = Nil", 0, 14, "collections.scala", "sealed trait List[+A]", 0, 13, 4)
     await inside("another std file (`toList` in `List.apply`'s body)", "elems.toList", 0, 6, "iterable.scala", "def toList: List[A] = fromArray", 0, 4, 6)
-    await inside("a parameter (`elems` in `List.apply`'s body)", "elems.toList", 0, 0, "collections.scala", "def apply[A](elems: A*)", 0, 13, 5)
+    await inside("a parameter (`elems` in `List.apply`'s body)", "elems.toList", 0, 0, "collections.scala", "def apply[A](elems: A*): List[A]", 0, 13, 5)
     const hovered = await c.result("textDocument/hover", at_(collections, "elems.toList", 0, 6))
     check("lean std, inside collections.scala: hover on a call", hovered?.contents?.value === "```scala\ndef scala.IterableOps.toList: List[A]\n```" && same(hovered.range, at(collections, "elems.toList", 0, 6, 6).range), hovered)
     // A std document completes as a program file: its first query (a completion here, before any

@@ -329,11 +329,9 @@ carries them (its build copies them into the plugin's resources under `dev/teq/s
 with every version shipped before from `tools/launcher/shipped/<version>/`), and `teqExportAll` writes
 them under `teqBuildTool` (without it the lock goes to `target/teq/teq.lock` and no launcher is written),
 replacing one only while it is an unedited version it carries. A change to a launcher is a new
-version: its marker line (`# teq launcher <n>:`, `rem teq launcher <n>:`) goes up and the version it
-replaces moves under `shipped/` (launcher 1 has, for launcher 2, which refuses a release before 0.1.7 and
-names `TEQ` and the release to pin for an empty table; launcher 2 has, for launcher 3, whose `teq.cmd` reads a
-valid lock under wine's `cmd` as under Windows', and whose two launchers find coursier's copy of a URL where
-coursier keeps it), so that applications committing the old one get the new one at their next export.
+version: the one it replaces moves under `shipped/<n>/` (the current launcher counts as one above the highest
+there), so that applications committing the old one get the new one at their next export; the files carry
+no version of their own, the plugin tells an unedited one by its text.
 `tools/launcher/.gitattributes` keeps `teq` LF and `teq.cmd` CRLF; an application needs the same lines (`teq text
 eol=lf`, `teq.cmd text eol=crlf`, `teq.lock text eol=lf`).
 `tests/task.sh` runs `teq` under each shell present and shellcheck where installed, and `teq.cmd` under wine's

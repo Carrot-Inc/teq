@@ -32,6 +32,9 @@ impl<'a> Worker<'a> {
             Some(t) => t,
             None => self.solve_in(sty),
         };
+        // A selector of a primitive type an erased call gave is the primitive, as dotty's
+        // selector val of that type holds it.
+        let ts = self.unbox_erased(ts, sty);
         let pty = self.selector_type(scrut, ts, sty);
         let clauses = ast.case_list(cases).to_vec();
         // A match whose cases are the expected match type's (dotty's `isMatchTypeShaped`): each
@@ -2592,25 +2595,12 @@ impl<'a> Worker<'a> {
                     self.warn_as(span, msg, crate::source::Warning::unchecked());
                 }
                 let boxed = self.box_test(c);
+                let primitive = self.primitive_test(c);
                 let b = &self.b;
-                if c == b.int {
-                    TypeTest::Int
-                } else if c == b.double {
-                    TypeTest::Number
-                } else if c == b.long {
-                    TypeTest::Long
-                } else if c == b.byte {
-                    TypeTest::Byte
-                } else if c == b.short {
-                    TypeTest::Short
-                } else if c == b.float {
-                    TypeTest::Float
-                } else if c == b.char && (self.jvm || self.interp) {
-                    TypeTest::Char
-                } else if c == b.string || c == b.char {
+                if let Some(test) = primitive {
+                    test
+                } else if c == b.string {
                     TypeTest::Str
-                } else if c == b.boolean {
-                    TypeTest::Bool
                 } else if c == b.unit {
                     TypeTest::Unit
                 } else if c == b.array {
@@ -2696,6 +2686,35 @@ impl<'a> Worker<'a> {
             }
         };
         self.prog.add_test(test)
+    }
+
+    /// The test of a primitive class's values (`Int` to `Boolean`): a `Char` is a string on
+    /// JavaScript, tested as `String` is.
+    pub(super) fn primitive_test(&self, c: ClassId) -> Option<TypeTest> {
+        let b = &self.b;
+        Some(if c == b.int {
+            TypeTest::Int
+        } else if c == b.double {
+            TypeTest::Number
+        } else if c == b.long {
+            TypeTest::Long
+        } else if c == b.byte {
+            TypeTest::Byte
+        } else if c == b.short {
+            TypeTest::Short
+        } else if c == b.float {
+            TypeTest::Float
+        } else if c == b.char {
+            if self.jvm || self.interp {
+                TypeTest::Char
+            } else {
+                TypeTest::Str
+            }
+        } else if c == b.boolean {
+            TypeTest::Bool
+        } else {
+            return None;
+        })
     }
 
     /// `test`, the class test of a pattern of type `t`, with the test of the instance's outer

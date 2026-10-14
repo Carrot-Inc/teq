@@ -1,0 +1,9 @@
+10
+List(2, 5)
+List(42, 43, 44, 45, 47, 49)
+List(true, false, true)
+List(true, true, true, true, true, true, false)
+List(true, true)
+List(0, true)
+List(0, true)
+List(List((3,c), (2,b), (1,a)), false)

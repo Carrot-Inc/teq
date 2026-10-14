@@ -889,6 +889,14 @@ impl<'a> Worker<'a> {
             }
         });
         self.case_binders = case_binders;
+        // A plain inline method's body is ascribed its declared result (dotty's
+        // `PrepareInlineable.wrapRHS`), to which erasure adapts it: an erased result at the
+        // expansion's root, of a primitive type there, is unboxed wherever the call's value goes
+        // (`println(get(m, k))` prints `0`); a transparent one's as its consumer has it.
+        // (The inliner's own ascription, noted, not read: `apply_inline_unboxes`.)
+        if !self.jvm && !body.transparent {
+            self.inline_unboxes.push((result.0, ret_ty));
+        }
         if self.records_expansions() {
             self.prog.note_expansion(result.0, Expansion { callee: sym });
         } else {

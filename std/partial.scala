@@ -5,7 +5,9 @@ package scala
 // makes, an instance of a class extending the trait (a program's, a library's, the combinations
 // below) one its constructor makes, as of any class with a function type among its parents.
 trait PartialFunction[-A, +B] extends Function1[A, B]:
-  @js("$0($1)")
+  // A partial function may be an object (`MapOps`): called by the calling convention
+  // (`Emitter::emit_function_call`).
+  @js("(typeof $0 === \"function\" ? $0 : $jsFn($0))($1)")
   @jvm("$0 $1:L invokeinterface scala/Function1.apply(Ljava/lang/Object;)Ljava/lang/Object;")
   def apply(x: A): B
   def isDefinedAt(x: A): Boolean

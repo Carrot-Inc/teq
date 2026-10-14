@@ -1,0 +1,24 @@
+7,7 1
+ints.newArray(2)
+elem
+elem
+List(1, 1)
+strings.newArray(2)
+f(0)
+f(1)
+List(0, 1)
+ints.newArray(0)
+0
+ints.newArray(3)
+map 1
+map 2
+map 3
+List(2, 4, 6)
+2
+List(a, b)
+List(a, b)
+List(List(0, 0, 0), List(0, 0, 0))
+2
+List(List(List(0, 0)))
+List(scala.runtime.Nothing$, scala.runtime.Null$)
+List(Nothing, Null, scala.runtime.Nothing$)

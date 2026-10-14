@@ -2136,10 +2136,10 @@ impl<'a, 't> Interp<'a, 't> {
         let test = match op {
             CastOp::Written => return Ok(v),
             CastOp::Nothing => return self.throw_named("ClassCastException", "Cannot cast to scala.Nothing"),
-            CastOp::Check(test, _) | CastOp::Unbox(test, _) => test,
+            CastOp::Check(test, _) | CastOp::Unbox(test, _) | CastOp::Adapt(test, _) => test,
         };
         if matches!(v, Value::Null) {
-            if let CastOp::Unbox(..) = op {
+            if let CastOp::Unbox(..) | CastOp::Adapt(..) = op {
                 return Ok(match self.prog().tests[test.idx()] {
                     TypeTest::Long => Value::Long(0),
                     TypeTest::Number => Value::Double(0.0),
@@ -2161,7 +2161,7 @@ impl<'a, 't> Interp<'a, 't> {
         // A `Char`'s unboxing in code typed for JavaScript, whose test is a string's, run here as
         // a macro's code: dotty runs a macro's class on the JVM (`quoted.Interpreter`), where the
         // unboxing (`Erasure.Boxing.unbox`, `Char.unbox`) takes a `Character`, this `Char`.
-        if let (CastOp::Unbox(..), TypeTest::Str, Value::Char(_)) = (op, &self.prog().tests[test.idx()], &v) {
+        if let (CastOp::Unbox(..) | CastOp::Adapt(..), TypeTest::Str, Value::Char(_)) = (op, &self.prog().tests[test.idx()], &v) {
             return Ok(v);
         }
         if self.type_test(&v, test, fr, cx)? {

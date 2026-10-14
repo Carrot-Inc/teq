@@ -87,6 +87,8 @@ impl<'a> Worker<'a> {
         // A member's body may come or go with the edit.
         self.lone_abstract_defs.clear();
         self.path_sigs.clear();
+        self.unbox_candidates.clear();
+        self.erased_results.clear();
         self.inner_chain_members.clear();
         self.plain_name_members.clear();
         self.java_members_exhausted.clear();

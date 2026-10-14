@@ -419,6 +419,21 @@ package java.util:
   @jvmClass("java/util/TimeZone")
   final class TimeZone(id: String):
     def getID(): String = id
+    // The zone's offset from UTC in seconds, at an instant and of a local date and time: the machine's
+    // own zone by its natives, `UTC`, `GMT` and a fixed offset (`GMT+05:00`) by arithmetic; teq interp
+    // has no rules of another region (`java.time`'s `ZoneId.of` refuses it alike).
+    private val fixedSeconds: Int = TimeZone.fixedOffset(id)
+    private[java] def offsetSeconds(epochSecond: Long): Int =
+      if fixedSeconds != TimeZone.NotFixed then fixedSeconds
+      else if id == java.util.zip.zoneName() then java.util.zip.localOffset(epochSecond)
+      else throw new UnsupportedOperationException("teq interp has the rules of the machine's own zone (" + java.util.zip.zoneName() + ") alone, not " + id)
+    private[java] def localSeconds(year: Int, month: Int, day: Int, hour: Int, minute: Int, second: Int): Long =
+      if fixedSeconds == TimeZone.NotFixed && id == java.util.zip.zoneName() then java.util.zip.localInstant(year, month, day, hour, minute, second)
+      else
+        val local = java.time.LocalDateTime.of(year, month, day, hour, minute, second).toEpochSecond(java.time.ZoneOffset.UTC)
+        local - offsetSeconds(local)
+    // The JDK's: the offset in milliseconds at an instant in milliseconds.
+    def getOffset(date: Long): Int = offsetSeconds(Math.floorDiv(date, 1000L)) * 1000
     // `java.time` is the JDK's on the JVM and scala-java-time's from its jar on JavaScript.
     def toZoneId(): java.time.ZoneId = java.time.ZoneId.of(id)
     def getDisplayName(): String = id
@@ -442,13 +457,33 @@ package java.util:
     // resolves without the tzdb, so `LocalDate.now()` reads the wall clock; a program that
     // registers the tzdb may `setDefault(getTimeZone("Europe/Paris"))` for the region's rules.
     @jvm("invokestatic java/util/TimeZone.getDefault()Ljava/util/TimeZone;")
-    def getDefault(): TimeZone =
-      if default == null then default = new TimeZone(systemOffsetId())
-      default
+    def getDefault(): TimeZone = if default == null then new TimeZone(systemOffsetId()) else default
     @jvm("invokestatic java/util/TimeZone.setDefault(Ljava/util/TimeZone;)V")
     def setDefault(zone: TimeZone): Unit = default = zone
+    // The machine's zone by its name in teq interp, as the JDK names it (`America/Los_Angeles`).
     @js("(() => { const m = -new Date().getTimezoneOffset(); if (m === 0) return \"Z\"; const a = Math.abs(m); return (m < 0 ? \"-\" : \"+\") + String(Math.floor(a / 60)).padStart(2, \"0\") + \":\" + String(a % 60).padStart(2, \"0\") })()")
-    private def systemOffsetId(): String = "Z"
+    private def systemOffsetId(): String = java.util.zip.zoneName()
+    private[util] final val NotFixed = Int.MinValue
+    // The offset in seconds of `UTC`, `GMT`, `UT`, `Z` and their offsets (`GMT+05:00`, `UTC-3`,
+    // `+01:30`), `NotFixed` for a region's id.
+    private[util] def fixedOffset(id: String): Int =
+      if id == "UTC" || id == "GMT" || id == "UT" || id == "Z" then 0
+      else
+        val rest =
+          if id.startsWith("UTC") || id.startsWith("GMT") then id.substring(3)
+          else if id.startsWith("UT") then id.substring(2)
+          else id
+        if rest.length < 2 || (rest.charAt(0) != '+' && rest.charAt(0) != '-') then NotFixed
+        else
+          val sign = if rest.charAt(0) == '-' then -1 else 1
+          val digits = rest.substring(1).replace(":", "")
+          if digits.isEmpty || digits.length > 6 || !digits.forall(c => c >= '0' && c <= '9') then NotFixed
+          else
+            val (h, m, sec) =
+              if digits.length <= 2 then (digits.toInt, 0, 0)
+              else if digits.length <= 4 then (digits.substring(0, digits.length - 2).toInt, digits.substring(digits.length - 2).toInt, 0)
+              else (digits.substring(0, digits.length - 4).toInt, digits.substring(digits.length - 4, digits.length - 2).toInt, digits.substring(digits.length - 2).toInt)
+            sign * (h * 3600 + m * 60 + sec)
 
   // A point in time in milliseconds; `java.time` is the JDK's on the JVM and scala-java-time's
   // from its jar on JavaScript.
@@ -478,54 +513,91 @@ package java.util.concurrent:
   @js("null")
   def absent[V]: V
 
-  // A hash map with Java's protocol: `null` for a missing key, `compute` over the old value. A
-  // `java.util.Map` as the JDK's is, so that its constructors take what the JDK's take; the key
-  // set, values and entries are copies where the JDK gives views.
+  // A hash map with Java's protocol: `null` for a missing key, `compute` over the old value, over a
+  // `java.util.HashMap`'s store; one thread runs, so nothing locks. Its key set, values and entries
+  // are the store's views, as the JDK's are: a removal through one, or through its iterator, is the
+  // map's, and a view taken earlier sees later changes.
   @jvmClass("java/util/concurrent/ConcurrentHashMap")
   final class ConcurrentHashMap[K, V]() extends java.util.AbstractMap[K, V]:
     def this(initialCapacity: Int) = this()
     def this(m: java.util.Map[? <: K, ? <: V]) =
       this()
       putAll(m)
-    private val entries = scala.collection.mutable.HashMap.empty[K, V]
-    def get(key: Any): V = entries.get(key.asInstanceOf[K]) match
-      case Some(v) => v
-      case None => absent[V]
-    def put(key: K, value: V): V =
-      val previous = get(key)
-      entries.update(key, value)
-      previous
-    override def putIfAbsent(key: K, value: V): V = entries.get(key) match
-      case Some(v) => v
-      case None =>
-        entries.update(key, value)
+    private val held = new java.util.HashMap[K, V]()
+    def get(key: Any): V = held.get(key)
+    def put(key: K, value: V): V = held.put(key, value)
+    override def putIfAbsent(key: K, value: V): V =
+      if held.containsKey(key) then held.get(key)
+      else
+        held.put(key, value)
         absent[V]
-    def containsKey(key: Any): Boolean = entries.contains(key.asInstanceOf[K])
-    override def getOrDefault(key: Any, default: V): V = entries.getOrElse(key.asInstanceOf[K], default)
-    def remove(key: Any): V =
-      val previous = get(key)
-      entries.remove(key.asInstanceOf[K])
-      previous
+    def containsKey(key: Any): Boolean = held.containsKey(key)
+    override def getOrDefault(key: Any, default: V): V = if held.containsKey(key) then held.get(key) else default
+    def remove(key: Any): V = held.remove(key)
     override def compute(key: K, remapping: java.util.function.BiFunction[? >: K, ? >: V, ? <: V]): V =
       val next: V = remapping.asInstanceOf[java.util.function.BiFunction[K, V, V]].apply(key, get(key))
-      if js.isNull(next) then entries.remove(key) else entries.update(key, next)
+      if js.isNull(next) then held.remove(key) else held.put(key, next)
       next
-    override def computeIfAbsent(key: K, mapping: java.util.function.Function[? >: K, ? <: V]): V = entries.get(key) match
-      case Some(v) => v
-      case None =>
+    override def computeIfAbsent(key: K, mapping: java.util.function.Function[? >: K, ? <: V]): V =
+      if held.containsKey(key) then held.get(key)
+      else
         val v: V = mapping.asInstanceOf[java.util.function.Function[K, V]].apply(key)
-        if !js.isNull(v) then entries.update(key, v)
+        if !js.isNull(v) then held.put(key, v)
         v
-    def size(): Int = entries.size
-    override def isEmpty(): Boolean = entries.isEmpty
-    def clear(): Unit = entries.clear()
-    def keySet(): java.util.Set[K] = copy.keySet()
-    def values(): java.util.Collection[V] = copy.values()
-    def entrySet(): java.util.Set[java.util.Map.Entry[K, V]] = copy.entrySet()
-    private def copy: java.util.HashMap[K, V] =
-      val out = new java.util.HashMap[K, V]()
-      entries.foreach((k, v) => out.put(k, v))
-      out
+    def size(): Int = held.size()
+    override def isEmpty(): Boolean = held.isEmpty()
+    def clear(): Unit = held.clear()
+    def keySet(): ConcurrentHashMap.KeySetView[K, V] = new ConcurrentHashMap.KeySetView(this, absent[V])
+    def keySet(mappedValue: V): ConcurrentHashMap.KeySetView[K, V] =
+      java.util.Objects.requireNonNull(mappedValue)
+      new ConcurrentHashMap.KeySetView(this, mappedValue)
+    def values(): java.util.Collection[V] = held.values()
+    def entrySet(): java.util.Set[java.util.Map.Entry[K, V]] = held.entrySet()
+    private[concurrent] def keys: java.util.Set[K] = held.keySet()
+
+  @jvmClass("java/util/concurrent/ConcurrentHashMap")
+  object ConcurrentHashMap:
+    def newKeySet[K](): KeySetView[K, java.lang.Boolean] = new KeySetView(new ConcurrentHashMap[K, java.lang.Boolean](), java.lang.Boolean.valueOf(true))
+    def newKeySet[K](initialCapacity: Int): KeySetView[K, java.lang.Boolean] = newKeySet[K]()
+    // The JDK's view of a map's keys (with its `CollectionView`'s members): a removal through it is the
+    // map's; `add` puts a key with the view's mapped value, which a plain `keySet()` has none of, so
+    // that it refuses to add. A `Set` alone among its parents, as the JDK's other parent is no public class.
+    @jvmClass("java/util/concurrent/ConcurrentHashMap$KeySetView")
+    final class KeySetView[K, V] private[concurrent] (map: ConcurrentHashMap[K, V], value: V) extends java.util.Set[K]:
+      def getMappedValue(): V = value
+      def getMap(): ConcurrentHashMap[K, V] = map
+      def size(): Int = map.size()
+      override def isEmpty(): Boolean = map.isEmpty()
+      override def clear(): Unit = map.clear()
+      override def contains(o: Any): Boolean = map.containsKey(o)
+      override def remove(o: Any): Boolean = !js.isNull(map.remove(o))
+      def iterator(): java.util.Iterator[K] = map.keys.iterator()
+      override def add(e: K): Boolean =
+        if js.isNull(value) then throw new UnsupportedOperationException()
+        js.isNull(map.putIfAbsent(e, value))
+      override def addAll(c: java.util.Collection[? <: K]): Boolean =
+        if js.isNull(value) then throw new UnsupportedOperationException()
+        var added = false
+        val it = c.iterator()
+        while it.hasNext do
+          if js.isNull(map.putIfAbsent(it.next(), value)) then added = true
+        added
+      override def hashCode: Int =
+        var h = 0
+        val it = iterator()
+        while it.hasNext do h += it.next().hashCode
+        h
+      override def equals(o: Any): Boolean = o match
+        case c: java.util.Set[?] => (c eq this) || (containsAll(c) && c.containsAll(this))
+        case _ => false
+      override def toString: String =
+        val sb = new java.lang.StringBuilder("[")
+        val it = iterator()
+        while it.hasNext do
+          val e = it.next()
+          sb.append(if e.asInstanceOf[AnyRef] eq this then "(this Collection)" else String.valueOf(e))
+          if it.hasNext then sb.append(", ")
+        sb.append(']').toString
 
   @javaDefined
   @jvmClass("java/util/concurrent/TimeUnit")

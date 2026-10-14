@@ -187,14 +187,205 @@ impl<'a> Worker<'a> {
     }
 
     /// Converts a numeric operand to the numeric type of the given rank.
-    #[inline]
+    #[inline(always)]
     pub fn convert_rank(&mut self, te: TExprId, from: TypeId, rank: u8) -> TExprId {
         let from_rank = self.is_numeric(from).unwrap_or(R_INT);
-        let mut te = te;
+        let mut te = self.unbox_erased(te, from);
         for &op in convert_ops(from_rank, rank) {
             te = self.prog.add(TExpr::Unary(op, te));
         }
         te
+    }
+
+    /// A value of a primitive type that a call with an erased result gave (`is_erased_result`: a
+    /// `java.util.HashMap[String, Int]`'s `get`, a type parameter's result), consumed as the
+    /// primitive: unboxed, as dotty's `Erasure.Boxing.adaptToType` unboxes a tree of a reference
+    /// type where a primitive is expected (`BoxesRunTime.unboxToInt`, `null` the zero). Where the
+    /// value is expected as `Any` (an argument of `println`, an interpolation) it stays as it is.
+    /// The JVM's backend erases for itself.
+    /// Whether `t` is one of the primitive classes' types as it stands, a test cheap enough for
+    /// every expected type.
+    #[inline]
+    pub(super) fn is_primitive_type_id(&self, t: TypeId) -> bool {
+        self.b.primitive_ids.checked_shr(t.0).is_some_and(|bits| bits & 1 != 0)
+    }
+
+    #[inline(always)]
+    pub(super) fn unbox_erased(&mut self, te: TExprId, ty: TypeId) -> TExprId {
+        if self.jvm {
+            return te;
+        }
+        match self.prog.expr(te) {
+            // Most calls' results erase as their types do, which a memo per member answers.
+            TExpr::CallMethod(_, s, _) | TExpr::CallStatic(s, _) | TExpr::Field(_, s) if self.unbox_candidates.get(s) == Some(false) => te,
+            TExpr::CallMethod(..) | TExpr::CallStatic(..) | TExpr::Field(..) | TExpr::Js(..) | TExpr::Block(..) | TExpr::If(_, _, Some(_)) => self.unbox_erased_call(te, ty),
+            _ => te,
+        }
+    }
+
+    /// Whether a call of `sym` may need unboxing where its primitive is consumed: its result erases
+    /// to a reference (`erases_to_reference`), or it is an inline method's, whose expansion's may;
+    /// kept per member once its signature is complete.
+    fn unbox_candidate(&mut self, sym: SymId) -> bool {
+        if let Some(v) = self.unbox_candidates.get(sym) {
+            return v;
+        }
+        let v = self.syms.sym(sym).mods & crate::ast::mods::INLINE != 0 || self.result_erases(sym);
+        if self.syms.sym_cells.get(sym.0) == crate::symbols::Completion::Done {
+            self.unbox_candidates.set(sym, v);
+        }
+        v
+    }
+
+    /// `erases_to_reference`, kept per member once its signature is complete.
+    fn result_erases(&mut self, sym: SymId) -> bool {
+        if let Some(v) = self.erased_results.get(sym) {
+            return v;
+        }
+        let v = self.erases_to_reference(sym);
+        if self.syms.sym_cells.get(sym.0) == crate::symbols::Completion::Done {
+            self.erased_results.set(sym, v);
+        }
+        v
+    }
+
+    #[inline(never)]
+    fn unbox_erased_call(&mut self, te: TExprId, ty: TypeId) -> TExprId {
+        if self.inline_val_rhs {
+            return te;
+        }
+        // An inline call's expansion, whose result typing does not read (the inlining phase's
+        // rule): its consumption noted, the expansion unboxed once placed (`apply_inline_unboxes`).
+        if !self.unboxing_after && self.prog.is_expansion(te) {
+            self.inline_unboxes.push((te, ty));
+            return te;
+        }
+        // A block's value is its result's, which dotty's `typedBlock` adapts, and a conditional's
+        // its branches', which `typedIf` adapts each.
+        let sym = match self.prog.expr(te) {
+            TExpr::Block(stmts, res) => {
+                let unboxed = self.unbox_erased(res, ty);
+                if unboxed != res {
+                    self.rewrite_expr(te, TExpr::Block(stmts, unboxed));
+                }
+                return te;
+            }
+            TExpr::If(c, a, Some(b)) => {
+                let (ua, ub) = (self.unbox_erased(a, ty), self.unbox_erased(b, ty));
+                if (ua, ub) != (a, b) {
+                    self.rewrite_expr(te, TExpr::If(c, ua, Some(ub)));
+                }
+                return te;
+            }
+            // `call_sym`'s.
+            TExpr::CallMethod(_, s, _) | TExpr::CallStatic(s, _) | TExpr::Field(_, s) => s,
+            TExpr::Js(t, _) => match self.prog.template_syms.get(&t) {
+                Some(&s) => s,
+                None => return te,
+            },
+            _ => return te,
+        };
+        if !self.unbox_candidate(sym) {
+            return te;
+        }
+        // A value of a constant type is the constant to scalac, which folds it before erasure
+        // (an inline expansion's `constValue`, a `lazy val b: T` at `T = true`).
+        if matches!(self.types.get(ty), Type::Lit(_)) {
+            return te;
+        }
+        // The node keeps the call's type (`n.type` of a selector `erasedValue[n.type]`, which a
+        // wildcard pattern takes), its primitive the unboxing's.
+        // A type parameter bounded by a primitive erases to it (`TypeErasure`), as an alias does.
+        let prim = if self.is_primitive_type_id(ty) { ty } else { self.erased_primitive(ty).unwrap_or_else(|| self.dealias(ty)) };
+        if !self.is_primitive(prim) || prim == self.b.t_unit {
+            return te;
+        }
+        if !self.result_erases(sym) {
+            // An inline call expanded later: its expansion, unboxed once it takes the call's node.
+            if !self.unboxing_after && self.syms.sym(sym).mods & crate::ast::mods::INLINE != 0 && self.is_pending_call(te) {
+                self.inline_unboxes.push((te, ty));
+            }
+            return te;
+        }
+        // `cast_lowering(Any, prim)`'s unboxing: the primitive's class test, as `test_for` makes it.
+        let Type::Class(c, _) = self.types.get(prim) else { return te };
+        let Some(test) = self.primitive_test(c) else { return te };
+        let test = self.prog.add_test(test);
+        // The erasure is the primitive's class, which takes no arguments: the primitive's own type.
+        let unboxed = self.prog.add(TExpr::Cast(te, CastOp::Adapt(test, prim), prim));
+        self.prog.set_type(unboxed, ty);
+        self.prog.copy_span(te, unboxed);
+        // No cast to scalac: its tree is the call, which a pickle writes and a macro sees.
+        if self.capturing() {
+            self.capture_form(unboxed, Form::Promotion);
+        }
+        unboxed
+    }
+
+    /// `unbox_erased` of the node `te` in place, for the nodes that refer to it: its value moved to
+    /// a copy, which keeps what the capture recorded of it, under the unboxing.
+    pub(super) fn unbox_erased_in_place(&mut self, te: TExprId, target: TypeId) -> bool {
+        if !self.unboxing_after && self.prog.is_expansion(te) {
+            self.inline_unboxes.push((te, target));
+            return false;
+        }
+        // A block's result and a conditional's branches, which `unbox_erased` unboxes in place; a node of
+        // another kind than a call's, a field's or a template's it leaves as it is (an expansion's literal,
+        // its operator).
+        match self.prog.expr(te) {
+            TExpr::Block(_, res) => {
+                self.unbox_erased(te, target);
+                return !matches!(self.prog.expr(te), TExpr::Block(_, r) if r == res);
+            }
+            TExpr::If(_, a, Some(b)) => {
+                self.unbox_erased(te, target);
+                return !matches!(self.prog.expr(te), TExpr::If(_, x, Some(y)) if x == a && y == b);
+            }
+            TExpr::CallMethod(..) | TExpr::CallStatic(..) | TExpr::Field(..) | TExpr::Js(..) => {}
+            _ => return false,
+        }
+        // Decided on the node as it stands, as on a copy of it, which is neither an expansion nor a pending
+        // call: its value moves to a copy only where it is unboxed.
+        let outer = std::mem::replace(&mut self.unboxing_after, true);
+        let unboxed = self.unbox_erased(te, target);
+        self.unboxing_after = outer;
+        if unboxed == te {
+            return false;
+        }
+        let TExpr::Cast(_, op, prim) = self.prog.expr(unboxed) else { return false };
+        let original_type = self.prog.type_of(te);
+        let original = self.prog.add(self.prog.expr(te));
+        if let Some(t) = original_type {
+            self.prog.set_type(original, t);
+        }
+        self.prog.copy_span(te, original);
+        self.rewrite_expr(te, TExpr::Cast(original, op, prim));
+        if self.capturing() {
+            self.capture_moved(te, original);
+            self.capture_form(te, Form::Promotion);
+        }
+        true
+    }
+
+    /// The inline calls and expansions consumed as a primitive (`inline_unboxes`) whose expansions are
+    /// placed, unboxed in place as an erased result is where it is consumed; a call still pending
+    /// waits for its expansion. Dotty's `Erasure` adapts an `Inlined` tree after `Inlining`: run
+    /// where the expansions are placed (an item's end, a unit's, an attempt's commit), it is no
+    /// reading of an expansion's result by typing.
+    pub(super) fn apply_inline_unboxes(&mut self) {
+        let entries = std::mem::take(&mut self.inline_unboxes);
+        let mut waiting = Vec::new();
+        let outer = std::mem::replace(&mut self.unboxing_after, true);
+        for (e, ty) in entries {
+            if self.is_pending_call(e) {
+                waiting.push((e, ty));
+                continue;
+            }
+            let ty = self.zonk(ty);
+            self.unbox_erased_in_place(e, ty);
+        }
+        self.unboxing_after = outer;
+        self.inline_unboxes.extend(waiting);
     }
 
     /// `te`, the typer's form of the call of the builtin member `name` of its receiver.
@@ -218,6 +409,7 @@ impl<'a> Worker<'a> {
     /// An operand of a builtin operator converted to the operator's rank. The conversions stay
     /// untyped, which tells them from a written `x.toLong` in a macro's view of the tree
     /// (`Interp::unpromoted`).
+    #[inline(always)]
     fn promote(&mut self, te: TExprId, from: TypeId, rank: u8) -> TExprId {
         let promoted = self.convert_rank(te, from, rank);
         if self.capturing() {
@@ -905,6 +1097,10 @@ impl<'a> Worker<'a> {
             self.mark_can_equal(lty, rty);
         }
         let numeric = (self.is_numeric(lty), self.is_numeric(rty));
+        if numeric.0.is_some() && numeric.1.is_some() {
+            tl = self.unbox_erased(tl, lty);
+            tr = self.unbox_erased(tr, rty);
+        }
         if numeric.0.is_none() {
             let op = if negate { names::NEQ } else { names::EQEQ };
             if self.declares_equality_for(lty, op, rty) {
@@ -1104,9 +1300,10 @@ impl<'a> Worker<'a> {
     /// The standard instances: `Option`, `Seq` and `Set` compare regardless of their elements
     /// unless equality is strict; `Either`, `Map` and tuples compare element by element.
     fn std_can_equal(&mut self, l: TypeId, r: TypeId, span: Span) -> Option<bool> {
+        // dotty's `CanEqual` givens, over `scala.collection.{Seq, Set, Map}`.
         let b = &self.b;
-        let loose = [b.option, b.seq, b.set];
-        let elementwise = [b.either, b.map];
+        let loose = [b.option, b.seq, b.collection_set.or(b.set)];
+        let elementwise = [b.either, b.collection_map.or(b.map)];
         for class in loose.into_iter().chain(elementwise).flatten() {
             let (Some(lb), Some(rb)) = (self.base_type(l, class), self.base_type(r, class)) else { continue };
             if !self.strict_equality() && loose.contains(&Some(class)) {
@@ -1139,7 +1336,7 @@ impl<'a> Worker<'a> {
             return true;
         }
         let b = &self.b;
-        let standard = [b.option, b.seq, b.set, b.map, b.either];
+        let standard = [b.option, b.seq, b.collection_set.or(b.set), b.collection_map.or(b.map), b.either];
         if standard.into_iter().flatten().any(|s| self.base_type(t, s).is_some()) {
             return true;
         }
@@ -1975,7 +2172,6 @@ impl<'a> Worker<'a> {
         let no_args = lists.is_empty() || (lists.len() == 1 && lists[0].args.is_empty());
         let one_arg = lists.len() == 1 && lists[0].args.len() == 1;
         let recv_class = self.dealias(recv_ty);
-        let fractional = matches!(self.is_numeric(recv_class), Some(R_DOUBLE | R_FLOAT));
         let arg = |i: usize| match lists[0].args[i] {
             ArgSrc::Ast(e) => Some(e),
             _ => None,
@@ -2007,15 +2203,10 @@ impl<'a> Worker<'a> {
                 let te = self.prog.add(TExpr::Js(s, l));
                 Some((self.builtin_member(te, name), self.b.t_int))
             }
-            names::EQUALS if one_arg && fractional => {
-                let (tr, _) = self.type_expr(arg(0)?, None);
-                let s = self.prog.add_str("$doubleEquals($0, $1)");
-                let l = self.prog.list(&[recv, tr]);
-                let te = self.prog.add(TExpr::Js(s, l));
-                Some((self.builtin_member(te, name), self.b.t_boolean))
-            }
             // The method, which a boxed number answers by its class and value and an object by
-            // its own `equals`, called even on itself; `==` is cooperative (`PrimOp::Eq`).
+            // its own `equals`, called even on itself; `==` is cooperative (`PrimOp::Eq`). A
+            // primitive receiver is boxed as its own type, a `Float` a `java.lang.Float` (dotty's
+            // `Erasure.Boxing.box` of the receiver, then `Object.equals`).
             names::EQUALS if one_arg => {
                 let (tr, _) = self.type_expr(arg(0)?, None);
                 let s = self.prog.add_str("$equals($0, $1)");
