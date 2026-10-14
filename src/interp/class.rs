@@ -639,12 +639,22 @@ impl<'a, 't> Interp<'a, 't> {
             let name = self.class_path(c);
             return self.unsupported(format!("{} has no constructor to run", name));
         };
+        let info = self.syms().class(c);
+        let (kind, superclass) = (info.kind, info.superclass.filter(|_| info.kind != ClassKind::Trait));
+        // A level whose construction does nothing but construct its superclass (no parameters, no
+        // parent arguments or prelude, no initialiser, no captures, no object's or anonymous class's
+        // own work): read off the class record as it stands at each construction, since a library
+        // class gains a field initialiser when a val of it is first demanded (`run_inits`).
+        if kind != ClassKind::Object && kind != ClassKind::Anon && self.trivial_level(ti, superclass.is_some()) {
+            return match superclass {
+                Some(sup) => self.construct(obj, sup, Vec::new()),
+                None => Ok(()),
+            };
+        }
         let (params, defaults, parent_args, parent_via, prelude, captures) = {
             let tc = &self.prog().classes[ti];
             (tc.ctor_params.clone(), tc.ctor_defaults.clone(), tc.parent_args, tc.parent_via, tc.parent_prelude, tc.captures)
         };
-        let info = self.syms().class(c);
-        let (kind, superclass) = (info.kind, info.superclass.filter(|_| info.kind != ClassKind::Trait));
         let is_anon = kind == ClassKind::Anon;
         let this = Value::Obj(obj.clone());
         let key = self.fresh_key();
@@ -862,6 +872,14 @@ impl<'a, 't> Interp<'a, 't> {
         Ok(())
     }
 
+    /// Whether the class body `ti` constructs nothing of its own: no parameters, no parent call's
+    /// prelude, arguments or secondary constructor (an empty argument list only where a superclass
+    /// takes it, an enum case's going to its enum), no captures, no initialiser.
+    fn trivial_level(&self, ti: usize, has_superclass: bool) -> bool {
+        let tc = &self.prog().classes[ti];
+        tc.ctor_params.is_empty() && tc.parent_via.is_none() && tc.parent_prelude.is_empty() && tc.parent_args.map_or(true, |l| l.is_empty() && has_superclass) && tc.captures == 0 && tc.init.is_empty()
+    }
+
     /// The body of a trait, run with what the class passes to its parameters.
     fn trait_init(&mut self, obj: &Rc<Object>, c: ClassId, tr: ClassId, call: ParentCall, frame: &Rc<Frame>, cx: &Ctx) -> R<()> {
         let ti = self.tclass_index(tr);
@@ -870,6 +888,11 @@ impl<'a, 't> Interp<'a, 't> {
             let name = self.class_path(tr);
             return self.unsupported(format!("{} has no body to run", name));
         };
+        // A trait without parameters or initialisers, passed nothing: its body does nothing, read
+        // off its record at each construction as a class's level is (`trivial_level`).
+        if call.prelude.is_empty() && call.args.is_empty() && call.via.is_none() && self.trivial_level(ti, false) {
+            return Ok(());
+        }
         let scope = self.exec_stmts(call.prelude, frame, cx)?;
         let vals = match call.via {
             Some(via) => self.eval_args(Some(via), call.args, &scope, cx)?,

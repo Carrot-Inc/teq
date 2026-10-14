@@ -8,7 +8,9 @@ mod bignum;
 mod builtins;
 mod char_tables;
 mod class;
+mod code;
 mod eval;
+pub use code::code_stats_report;
 mod fast;
 mod files;
 mod format;
@@ -47,15 +49,25 @@ pub struct Frame {
     pub(super) born: Cell<u32>,
     /// When the frame was made (`Object::made`).
     pub(super) made: Cell<u32>,
+    /// The id of the frame's descriptor when a lowered unit made it (`code::Descs`): the bindings
+    /// in their order and how many sit at known slots, which the adapter checks a hinted read of
+    /// the frame against. `0` for a frame the walker, a splice root (`Env`) or a default's
+    /// evaluation makes, and an id its table no longer holds for one older code made: the adapter
+    /// checks those by symbol.
+    desc: u32,
 }
 
 impl Frame {
     pub fn new(parent: Option<Rc<Frame>>) -> Rc<Frame> {
-        Rc::new(Frame { parent, vals: RefCell::new(Vec::new()), slot: Cell::new(0), born: Cell::new(0), made: Cell::new(made_now()) })
+        Self::made_as(parent, Vec::new(), 0)
     }
 
     pub fn with(parent: Option<Rc<Frame>>, vals: Vec<(SymId, Value)>) -> Rc<Frame> {
-        Rc::new(Frame { parent, vals: RefCell::new(vals), slot: Cell::new(0), born: Cell::new(0), made: Cell::new(made_now()) })
+        Self::made_as(parent, vals, 0)
+    }
+
+    fn made_as(parent: Option<Rc<Frame>>, vals: Vec<(SymId, Value)>, desc: u32) -> Rc<Frame> {
+        Rc::new(Frame { parent, vals: RefCell::new(vals), slot: Cell::new(0), born: Cell::new(0), made: Cell::new(made_now()), desc })
     }
 
     /// The value `sym` has in this frame or the nearest enclosing one that binds it.
@@ -771,6 +783,8 @@ pub fn inventory() -> Vec<(&'static str, usize)> {
     let registry = registry::stats();
     vec![
         ("interp caches", CACHES.with(|c| c.borrow().iter().filter(|s| s.is_some()).count())),
+        ("interp lowered units", CACHES.with(|c| c.borrow().iter().flatten().map(|s| s.codes.len()).sum())),
+        ("interp lowered bytes", CACHES.with(|c| c.borrow().iter().flatten().map(|s| s.code_bytes).sum())),
         ("interp partitioned", PARTITIONED.with(|p| p.get() as usize)),
         ("cacheable warnings pending", CACHEABLE_WARNINGS.with(|w| w.borrow().len())),
         ("cacheable modules told", WARNED_CACHEABLE.with(|w| w.borrow().len())),
@@ -1132,6 +1146,14 @@ pub struct InterpCaches {
     pat_slots: crate::arena::Dense<(u32, u32)>,
     block_facts: crate::arena::Dense<u8>,
     ctor_plans: crate::arena::Dense<Option<Option<Rc<[u32]>>>>,
+    units: crate::arena::Dense<u64>,
+    proxy_units: FxMap<(FunId, u64), u64>,
+    lambda_units: crate::arena::Dense<u64>,
+    loop_units: crate::arena::Dense<u64>,
+    codes: Vec<Rc<code::Code>>,
+    /// The descriptors of `codes`' frames by id (`Frame::desc`).
+    descs: code::Descs,
+    code_bytes: usize,
     macro_seen: crate::arena::Dense<bool>,
     macro_classes: crate::arena::Dense<bool>,
     frame_pool: Vec<Rc<Frame>>,
@@ -1207,6 +1229,13 @@ impl InterpCaches {
             pat_slots: _,
             block_facts: _,
             ctor_plans: _,
+            units: _,
+            proxy_units: _,
+            lambda_units: _,
+            loop_units: _,
+            codes: _,
+            descs: _,
+            code_bytes: _,
             macro_seen: _,
             macro_classes: _,
             frame_pool: _,
@@ -1354,6 +1383,27 @@ pub struct Interp<'a, 't> {
     block_facts: crate::arena::Dense<u8>,
     /// Per class the slots of a plain constructor, `Some(None)` where the constructor runs code.
     ctor_plans: crate::arena::Dense<Option<Option<Rc<[u32]>>>>,
+    /// Per function the state of its execution unit (`code.rs`): the calls counted towards its
+    /// promotion, and whether its layout is applied.
+    units: crate::arena::Dense<u64>,
+    /// Per function and incoming layout of a local trait's member called without some of its
+    /// proxies (`code::absent_proxies`), the state of its unit, as `units`.
+    proxy_units: FxMap<(FunId, u64), u64>,
+    /// Per lambda body the state of its unit, as `units`.
+    lambda_units: crate::arena::Dense<u64>,
+    /// Per `while` node of a walked body the state of its loop's code, as `units`.
+    loop_units: crate::arena::Dense<u64>,
+    /// Whether the lowering's statistics are counted (`TEQ_INTERP_CODE_STATS`).
+    code_stats: bool,
+    /// The lowered code of the promoted units, which `units` and `lambda_units` index, and its
+    /// bytes.
+    codes: Vec<Rc<code::Code>>,
+    /// The descriptors of `codes`' frames by id (`Frame::desc`).
+    descs: code::Descs,
+    code_bytes: usize,
+    /// The chains of `+` the lowered code under way builds (`Op::ConcatBegin`): each one's text and
+    /// the operands kept to render at their places.
+    concats: Vec<(String, Vec<(usize, Value)>)>,
     /// Per function whether a macro's run reached it, for `Worker::macro_files`.
     macro_seen: crate::arena::Dense<bool>,
     macro_classes: crate::arena::Dense<bool>,
@@ -1461,6 +1511,15 @@ impl<'a, 't> Interp<'a, 't> {
             pat_slots: crate::arena::Dense::new((u32::MAX, 0)),
             block_facts: crate::arena::Dense::new(0),
             ctor_plans: crate::arena::Dense::new(None),
+            units: crate::arena::Dense::new(0),
+            proxy_units: FxMap::default(),
+            lambda_units: crate::arena::Dense::new(0),
+            loop_units: crate::arena::Dense::new(0),
+            code_stats: code::stats_on(),
+            codes: Vec::new(),
+            descs: code::Descs::new(),
+            code_bytes: 0,
+            concats: Vec::new(),
             macro_seen: crate::arena::Dense::new(false),
             macro_classes: crate::arena::Dense::new(false),
             frame_pool: Vec::new(),
@@ -1527,6 +1586,13 @@ impl<'a, 't> Interp<'a, 't> {
             pat_slots: self.pat_slots,
             block_facts: self.block_facts,
             ctor_plans: self.ctor_plans,
+            units: self.units,
+            proxy_units: self.proxy_units,
+            lambda_units: self.lambda_units,
+            loop_units: self.loop_units,
+            codes: self.codes,
+            descs: self.descs,
+            code_bytes: self.code_bytes,
             macro_seen: self.macro_seen,
             macro_classes: self.macro_classes,
             frame_pool: self.frame_pool,
@@ -1589,6 +1655,13 @@ impl<'a, 't> Interp<'a, 't> {
         self.pat_slots = c.pat_slots;
         self.block_facts = c.block_facts;
         self.ctor_plans = c.ctor_plans;
+        self.units = c.units;
+        self.proxy_units = c.proxy_units;
+        self.lambda_units = c.lambda_units;
+        self.loop_units = c.loop_units;
+        self.codes = c.codes;
+        self.descs = c.descs;
+        self.code_bytes = c.code_bytes;
         self.macro_seen = c.macro_seen;
         self.macro_classes = c.macro_classes;
         self.frame_pool = c.frame_pool;
@@ -1608,6 +1681,7 @@ impl<'a, 't> Interp<'a, 't> {
         self.prof_state = c.prof_state;
         self.walk_hint = c.walk_hint;
         if c.shifts != self.typer.prog.shifts {
+            self.forget_units();
             self.forget_positions();
             self.records.next_build();
             self.forget_made();

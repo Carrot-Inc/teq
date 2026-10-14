@@ -30,6 +30,13 @@ impl<'a, 't> Interp<'a, 't> {
     /// (`registry.rs`).
     #[inline]
     pub(super) fn take_frame(&mut self, parent: Option<Rc<Frame>>, cap: usize) -> Rc<Frame> {
+        self.take_frame_as(parent, cap, 0)
+    }
+
+    /// A frame from the pool as `take_frame` gives it, carrying the descriptor id `desc`: one a
+    /// lowered unit opens (`code::Descs`), `0` for any other.
+    #[inline]
+    pub(super) fn take_frame_as(&mut self, parent: Option<Rc<Frame>>, cap: usize, desc: u32) -> Rc<Frame> {
         if let Some(mut fr) = self.frame_pool.pop() {
             if let Some(f) = Rc::get_mut(&mut fr) {
                 if f.slot.get() != 0 {
@@ -41,10 +48,11 @@ impl<'a, 't> Interp<'a, 't> {
                 f.vals.get_mut().reserve(cap);
                 f.born.set(0);
                 f.made.set(super::made_now());
+                f.desc = desc;
                 return fr;
             }
         }
-        Frame::with(parent, Vec::with_capacity(cap))
+        Frame::made_as(parent, Vec::with_capacity(cap), desc)
     }
 
     /// Returns a frame to the pool when nothing else refers to it: its values are dropped now,

@@ -664,7 +664,8 @@ impl<'a, 't> Interp<'a, 't> {
     fn call_lambda(&mut self, c: &Rc<Closure>, params: crate::ast::ListRef, body: TExprId, x: Value, y: Option<Value>) -> R {
         self.enter()?;
         self.prof_alloc(|a| a.frames += 1);
-        let frame = self.take_frame(Some(c.env.clone()), 2);
+        let code = self.lambda_call(params, body);
+        let frame = self.take_frame_as(Some(c.env.clone()), 2, code.as_ref().map_or(0, |c| c.entry_id));
         let p = self.prog().sym_lists[params.start as usize];
         frame.bind(p, if matches!(x, Value::Absent) { Value::Unit } else { x });
         if let Some(y) = y {
@@ -673,7 +674,10 @@ impl<'a, 't> Interp<'a, 't> {
         }
         let cx = Ctx { this: c.this.clone(), def_key: c.def_key, class: c.class, tail: None };
         let prof = self.prof_lambda(body);
-        let r = self.eval(body, &frame, &cx);
+        let r = match code {
+            Some(code) => self.exec(&code, 0, &frame, &cx, true),
+            None => self.eval(body, &frame, &cx),
+        };
         self.prof_exit(prof);
         self.release_frame(frame);
         self.depth -= 1;

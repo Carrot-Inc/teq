@@ -10,7 +10,7 @@ use crate::types::{Type, EMPTY_LIST};
 
 impl<'a, 't> Interp<'a, 't> {
     #[inline]
-    fn step(&mut self) -> R<()> {
+    pub(super) fn step(&mut self) -> R<()> {
         if self.steps == 0 {
             return self.steps_out();
         }
@@ -35,7 +35,7 @@ impl<'a, 't> Interp<'a, 't> {
     /// The numeric kind the static type of `e` asks for, where the typer left a widening
     /// implicit: `0` where the value is taken as it comes.
     #[inline]
-    fn coerce_kind(&mut self, e: TExprId) -> u8 {
+    pub(super) fn coerce_kind(&mut self, e: TExprId) -> u8 {
         match self.coerce.get(e.idx()) {
             Some(&k) if k != K_UNKNOWN => k,
             _ => self.compute_coerce(e),
@@ -87,7 +87,7 @@ impl<'a, 't> Interp<'a, 't> {
     /// Widens a value to the kind its static type has; a narrowing that would lose the value is
     /// left alone, since the type is then the coarser description.
     #[inline]
-    fn adapt(v: Value, kind: u8) -> Value {
+    pub(super) fn adapt(v: Value, kind: u8) -> Value {
         let from = v.kind();
         if from == 0 || from == kind {
             return v;
@@ -107,7 +107,7 @@ impl<'a, 't> Interp<'a, 't> {
 
     /// An integer literal the typer narrowed to the `Byte`, `Short` or `Char` expected keeps
     /// that width, so that boxing it gives the narrow class (`(1: Byte): Any` is a `java.lang.Byte`).
-    fn int_literal(&self, e: TExprId, v: i32) -> Value {
+    pub(super) fn int_literal(&self, e: TExprId, v: i32) -> Value {
         let b = &self.typer.b;
         match self.prog().type_of(e) {
             Some(t) if t == b.t_byte => Value::Byte(v as i8),
@@ -134,22 +134,7 @@ impl<'a, 't> Interp<'a, 't> {
             TExpr::ClassOf(c, dims) => Ok(self.class_literal(c, dims)),
             TExpr::Field(r, s) => {
                 let recv = self.eval(r, fr, cx)?;
-                if let Value::Obj(o) = &recv {
-                    let (class, slot) = self.field_slots[e.idx()];
-                    if class == o.class.0 {
-                        if let Some(v) = o.fields.borrow().get(slot as usize) {
-                            if !matches!(v, Value::Absent) {
-                                return Ok(v.clone());
-                            }
-                        }
-                    } else {
-                        let key = self.field_key(s);
-                        if let Some(slot) = self.slot_if_known(o.class, key) {
-                            self.field_slots[e.idx()] = (o.class.0, slot);
-                        }
-                    }
-                }
-                self.get_field(recv, s)
+                self.field_at(e, recv, s)
             }
             TExpr::CallStatic(s, args) => {
                 let info = self.syms().sym(s);
@@ -226,8 +211,13 @@ impl<'a, 't> Interp<'a, 't> {
                 }
             }
             TExpr::While(c, body) => {
+                let mut turns = 0u32;
                 while self.eval_bool(c, fr, cx)? {
                     self.eval(body, fr, cx)?;
+                    turns += 1;
+                    if let Some(code) = self.loop_turn(e, turns) {
+                        return self.exec(&code, 0, fr, cx, false);
+                    }
                 }
                 Ok(Value::Unit)
             }
@@ -288,14 +278,7 @@ impl<'a, 't> Interp<'a, 't> {
             }
             TExpr::Index(r, i) => {
                 let v = self.eval(r, fr, cx)?;
-                match v {
-                    Value::Array(a) => Ok(a.borrow().get(i as usize).cloned().unwrap_or(Value::Null)),
-                    Value::Match(m) => Ok(self.match_group(&m, i as usize)),
-                    other => {
-                        let shown = self.to_str(&other)?;
-                        self.unsupported(format!("an index into {}", shown))
-                    }
-                }
+                self.index_of(v, i)
             }
             TExpr::Return(v) => {
                 let value = self.eval(v, fr, cx)?;
@@ -303,24 +286,63 @@ impl<'a, 't> Interp<'a, 't> {
             }
             TExpr::Throw(inner, _) => {
                 let v = self.eval(inner, fr, cx)?;
-                match v {
-                    Value::Null => self.throw_named("NullPointerException", "Cannot throw exception because the value is null"),
-                    v => {
-                        if self.trace {
-                            let shown = match &v {
-                                Value::Obj(o) => self.runtime_class_name(o.class).to_string(),
-                                other => self.type_name(other).to_string(),
-                            };
-                            eprintln!("  throw {}", shown);
-                        }
-                        Err(Control::Throw(v))
-                    }
-                }
+                self.throw_value(v)
             }
             TExpr::Try(i) => self.eval_try(i, fr, cx, false),
             TExpr::Splice(_) => self.unsupported("a splice of an inline body typed at its definition runs at an expansion"),
             TExpr::JsImport(_) | TExpr::JsGlobal(..) | TExpr::JsSelect(..) | TExpr::ObjLit(_) | TExpr::Spread(_) => {
                 self.unsupported("JavaScript interop is not executable by the interpreter")
+            }
+        }
+    }
+
+    /// The field `s` of `recv` at expression `e`, read from the slot the last receiver of the same
+    /// class had it in (`field_slots`).
+    #[inline]
+    pub(super) fn field_at(&mut self, e: TExprId, recv: Value, s: SymId) -> R {
+        if let Value::Obj(o) = &recv {
+            let (class, slot) = self.field_slots[e.idx()];
+            if class == o.class.0 {
+                if let Some(v) = o.fields.borrow().get(slot as usize) {
+                    if !matches!(v, Value::Absent) {
+                        return Ok(v.clone());
+                    }
+                }
+            } else {
+                let key = self.field_key(s);
+                if let Some(slot) = self.slot_if_known(o.class, key) {
+                    self.field_slots[e.idx()] = (o.class.0, slot);
+                }
+            }
+        }
+        self.get_field(recv, s)
+    }
+
+    /// The item `i` of a raw array or a match's group (`TExpr::Index`).
+    pub(super) fn index_of(&mut self, v: Value, i: u32) -> R {
+        match v {
+            Value::Array(a) => Ok(a.borrow().get(i as usize).cloned().unwrap_or(Value::Null)),
+            Value::Match(m) => Ok(self.match_group(&m, i as usize)),
+            other => {
+                let shown = self.to_str(&other)?;
+                self.unsupported(format!("an index into {}", shown))
+            }
+        }
+    }
+
+    /// `throw v` (`TExpr::Throw`): `null` throws a `NullPointerException`.
+    pub(super) fn throw_value(&mut self, v: Value) -> R {
+        match v {
+            Value::Null => self.throw_named("NullPointerException", "Cannot throw exception because the value is null"),
+            v => {
+                if self.trace {
+                    let shown = match &v {
+                        Value::Obj(o) => self.runtime_class_name(o.class).to_string(),
+                        other => self.type_name(other).to_string(),
+                    };
+                    eprintln!("  throw {}", shown);
+                }
+                Err(Control::Throw(v))
             }
         }
     }
@@ -338,6 +360,12 @@ impl<'a, 't> Interp<'a, 't> {
     #[inline(never)]
     fn eval_to_str(&mut self, inner: TExprId, conv: StrConv, fr: &Rc<Frame>, cx: &Ctx) -> R {
         let v = self.eval(inner, fr, cx)?;
+        self.to_str_conv(v, conv)
+    }
+
+    /// The string of `v` a `TExpr::ToStr` makes.
+    #[inline(never)]
+    pub(super) fn to_str_conv(&mut self, v: Value, conv: StrConv) -> R {
         // The program's `x.toString` is a call, which `null` throws on, and whose result is what
         // the method returns, `null` included (dotty's `genApply`); a rendering writes `null`.
         if !conv.is_rendering() {
@@ -427,7 +455,7 @@ impl<'a, 't> Interp<'a, 't> {
         }
     }
 
-    fn render(&mut self, kind: StrKind, v: &Value, out: &mut String, late: &[(usize, Value)]) -> R<()> {
+    pub(super) fn render(&mut self, kind: StrKind, v: &Value, out: &mut String, late: &[(usize, Value)]) -> R<()> {
         match (kind, v) {
             (_, Value::Str(s)) => push_text(out, late, s),
             (_, Value::Char(c)) => push_text(out, late, crate::text::unit_char(*c).encode_utf8(&mut [0; 4])),
@@ -441,7 +469,7 @@ impl<'a, 't> Interp<'a, 't> {
 
     /// `text` with the operands in `late` rendered at their places, a pair cut by such a place
     /// joined again.
-    fn render_late(&mut self, text: &str, late: Vec<(usize, Value)>) -> R<String> {
+    pub(super) fn render_late(&mut self, text: &str, late: Vec<(usize, Value)>) -> R<String> {
         let mut out = String::with_capacity(text.len());
         let mut done = 0;
         for (at, v) in late {
@@ -479,14 +507,8 @@ impl<'a, 't> Interp<'a, 't> {
     /// receiver), with the receiver as `this` and the earlier clauses' arguments bound to their
     /// parameters; a constructor's in the scope of the `new`.
     fn default_arg(&mut self, of: DefaultOf, at: u32, args: ListRef, fr: &Rc<Frame>, cx: &Ctx) -> R {
-        let index = (at & !DEFAULT_RECEIVER) as usize;
         let items = self.prog().expr_list(args).to_vec();
         let (recv, priors) = if at & DEFAULT_RECEIVER != 0 { (Some(items[0]), &items[1..]) } else { (None, &items[..]) };
-        let on_super = recv.is_some_and(|r| matches!(self.prog().expr(r), TExpr::Super(_)));
-        let mixin = recv.and_then(|r| match self.prog().expr(r) {
-            TExpr::Super(SuperTarget::Mixin(tr)) => Some(tr),
-            _ => None,
-        });
         let recv = match recv {
             Some(r) => Some(self.eval(r, fr, cx)?),
             None => None,
@@ -495,6 +517,20 @@ impl<'a, 't> Interp<'a, 't> {
         for &p in priors {
             vals.push(self.eval(p, fr, cx)?);
         }
+        self.default_apply(of, at, args, recv, vals, fr, cx)
+    }
+
+    /// A default getter's application once its receiver and the earlier clauses' arguments are
+    /// evaluated (`default_arg`, and the lowered code's `DefaultArg`).
+    #[allow(clippy::too_many_arguments)]
+    pub(super) fn default_apply(&mut self, of: DefaultOf, at: u32, args: ListRef, recv: Option<Value>, vals: Vec<Value>, fr: &Rc<Frame>, cx: &Ctx) -> R {
+        let index = (at & !DEFAULT_RECEIVER) as usize;
+        let first = (at & DEFAULT_RECEIVER != 0).then(|| self.prog().expr_list(args)[0]);
+        let on_super = first.is_some_and(|r| matches!(self.prog().expr(r), TExpr::Super(_)));
+        let mixin = first.and_then(|r| match self.prog().expr(r) {
+            TExpr::Super(SuperTarget::Mixin(tr)) => Some(tr),
+            _ => None,
+        });
         let (f, from, this, parent, class) = match of {
             DefaultOf::Ctor(c) => {
                 let Some(ti) = self.tclass_index(c) else {
@@ -666,7 +702,7 @@ impl<'a, 't> Interp<'a, 't> {
     /// superclass. A captured local stays in the scope the class is created in, which its
     /// members read from (a lazy val is not forced by the capture); a capture that is no local,
     /// the enclosing `this`, is bound in a scope of its own.
-    fn anon_args(&mut self, c: ClassId, args: ListRef, fr: &Rc<Frame>, cx: &Ctx) -> R<(Rc<Frame>, Vec<Value>)> {
+    pub(super) fn anon_args(&mut self, c: ClassId, args: ListRef, fr: &Rc<Frame>, cx: &Ctx) -> R<(Rc<Frame>, Vec<Value>)> {
         let n = self.capture_count(c);
         let captures = self.tclass_field(c, |tc| tc.ctor_params[..n].to_vec()).unwrap_or_default();
         let mut vals = Vec::with_capacity(args.len as usize);
@@ -710,7 +746,7 @@ impl<'a, 't> Interp<'a, 't> {
 
     // ---- locals ----
 
-    fn local(&mut self, e: TExprId, s: SymId, fr: &Rc<Frame>, cx: &Ctx) -> R {
+    pub(super) fn local(&mut self, e: TExprId, s: SymId, fr: &Rc<Frame>, cx: &Ctx) -> R {
         let v = match self.lookup(e, s, fr) {
             Some(v) => v,
             None => {
@@ -936,7 +972,7 @@ impl<'a, 't> Interp<'a, 't> {
 
     /// A frame that holds local defs refers to itself through them; when nothing else kept it,
     /// the cycle is cut here.
-    fn leave_block(&mut self, inner: Rc<Frame>, outer: &Rc<Frame>) {
+    pub(super) fn leave_block(&mut self, inner: Rc<Frame>, outer: &Rc<Frame>) {
         if Rc::ptr_eq(&inner, outer) {
             return;
         }
@@ -966,19 +1002,7 @@ impl<'a, 't> Interp<'a, 't> {
 
     fn assign(&mut self, target: TExprId, v: Value, fr: &Rc<Frame>, cx: &Ctx) -> R<()> {
         match self.prog().expr(target) {
-            TExpr::Local(s) => {
-                if self.set_local(target, s, v.clone(), fr).is_ok() {
-                    return Ok(());
-                }
-                if let Value::Obj(_) = &cx.this {
-                    if let Some(key) = self.field_key_of_param(s) {
-                        self.write_slot(&cx.this, key, v);
-                        return Ok(());
-                    }
-                }
-                let name = self.name(self.syms().sym(s).name).to_string();
-                self.unsupported(format!("the local {} is not in scope for an assignment", name))
-            }
+            TExpr::Local(s) => self.assign_local(target, s, v, fr, cx),
             TExpr::Field(r, s) => {
                 let recv = self.eval(r, fr, cx)?;
                 self.set_field(recv, s, v)
@@ -986,6 +1010,22 @@ impl<'a, 't> Interp<'a, 't> {
             TExpr::Static(s) => self.set_static(s, v),
             _ => self.unsupported("an assignment to something that is no variable"),
         }
+    }
+
+    /// The assignment of `v` to the local `s` at expression `target`: in the frame that binds it, else
+    /// a constructor parameter's slot through `this`.
+    pub(super) fn assign_local(&mut self, target: TExprId, s: SymId, v: Value, fr: &Rc<Frame>, cx: &Ctx) -> R<()> {
+        if self.set_local(target, s, v.clone(), fr).is_ok() {
+            return Ok(());
+        }
+        if let Value::Obj(_) = &cx.this {
+            if let Some(key) = self.field_key_of_param(s) {
+                self.write_slot(&cx.this, key, v);
+                return Ok(());
+            }
+        }
+        let name = self.name(self.syms().sym(s).name).to_string();
+        self.unsupported(format!("the local {} is not in scope for an assignment", name))
     }
 
     // ---- calls ----
@@ -1034,7 +1074,7 @@ impl<'a, 't> Interp<'a, 't> {
         }
     }
 
-    fn tail_info(&mut self, f: FunId) -> Option<(SymId, u32)> {
+    pub(super) fn tail_info(&mut self, f: FunId) -> Option<(SymId, u32)> {
         let fun = &self.prog().funs[f.idx()];
         let (sym, arity) = (fun.sym, fun.params.len() as u32);
         match self.tail_of[f.idx()] {
@@ -1042,7 +1082,7 @@ impl<'a, 't> Interp<'a, 't> {
             2 => return Some((sym, arity)),
             _ => {}
         }
-        let loops = match fun.body {
+        let loops = match self.exec_body(f) {
             Some(body) if self.syms().is_effectively_final(sym) => self.prog().tail_self_calls(sym, arity as usize, body).0 > 0,
             _ => false,
         };
@@ -1062,7 +1102,7 @@ impl<'a, 't> Interp<'a, 't> {
             return self.withheld_reached();
         }
         self.halt_on_withheld()?;
-        let Some(body) = self.prog().funs[f.idx()].body else {
+        let Some(body) = self.exec_body(f) else {
             let sym = self.prog().funs[f.idx()].sym;
             let name = self.qualified_name(sym);
             return self.unsupported(format!("{} is abstract", name));
@@ -1090,16 +1130,29 @@ impl<'a, 't> Interp<'a, 't> {
             eprintln!("{}call {}", "  ".repeat(self.depth as usize), name);
         }
         let key = self.fresh_key();
-        let tail = self.tail_info(f);
+        // The unit's code for a call passing every proxy, else the incoming layout read off the
+        // arguments (the proxies a call of a local trait's member leaves absent) and its unit's.
+        let (mut code, tail, mut absent, proxied) = match self.unit_code(f, body, &args) {
+            Some(c) => {
+                let (tail, proxied) = (c.tail, c.proxies != 0);
+                (Some(c), tail, 0, proxied)
+            }
+            None => self.unit_miss(f, body, &args),
+        };
         let mut cx = Ctx { this, def_key: key, class, tail };
         let mut args = args;
         let prof = self.prof_fun(f);
         let result = loop {
-            let frame = match self.bind_params(f, args, parent.clone(), &cx) {
+            // The activation of lowered code carries its descriptor for the incoming layout.
+            let frame = match self.bind_params(f, args, parent.clone(), &cx, code.as_ref().map_or(0, |c| c.entry_id)) {
                 Ok(fr) => fr,
                 Err(e) => break Err(e),
             };
-            let r = self.eval_tail(body, &frame, &cx);
+            debug_assert!(self.binds_its_desc(&frame), "an activation bound off its incoming layout");
+            let r = match &code {
+                Some(c) => self.exec(c, 0, &frame, &cx, true),
+                None => self.eval_tail(body, &frame, &cx),
+            };
             self.release_frame(frame);
             match r {
                 Err(Control::Return(k, v)) if k == key => break Ok(v),
@@ -1107,6 +1160,13 @@ impl<'a, 't> Interp<'a, 't> {
                     args = next;
                     if let Some(t) = recv {
                         cx.this = t;
+                    }
+                    // The next activation's layout, where its arguments leave other proxies absent.
+                    if proxied {
+                        if let Some((next, layout)) = self.relayout(f, body, tail, &args, absent) {
+                            code = next;
+                            absent = layout;
+                        }
                     }
                 }
                 other => break other,
@@ -1117,17 +1177,37 @@ impl<'a, 't> Interp<'a, 't> {
         result
     }
 
-    fn bind_params(&mut self, f: FunId, mut args: Vec<Value>, parent: Option<Rc<Frame>>, cx: &Ctx) -> R<Rc<Frame>> {
+    fn bind_params(&mut self, f: FunId, mut args: Vec<Value>, parent: Option<Rc<Frame>>, cx: &Ctx, desc: u32) -> R<Rc<Frame>> {
         let n = self.prog().funs[f.idx()].params.len();
         self.prof_alloc(|a| a.frames += 1);
-        let frame = self.take_frame(parent, n);
+        let frame = self.take_frame_as(parent, n, desc);
         // A local trait's member reads a proxy its caller passes as absent where the caller reads
         // it (`call_super_proxied`).
         let proxies = self.prog().funs[f.idx()].captures as usize;
         let mut given = args.drain(..);
-        for i in 0..n {
+        // The arguments given bind in order off the function's record read once; from the first
+        // absent one (a default's, a proxy's) each goes the long way.
+        let mut at = 0;
+        let mut held = None;
+        {
+            let params = &self.typer.prog.funs[f.idx()].params;
+            while at < n && at >= proxies {
+                match given.next() {
+                    Some(v) if !matches!(v, Value::Absent) => frame.bind(params[at], v),
+                    other => {
+                        held = Some(other.unwrap_or(Value::Absent));
+                        break;
+                    }
+                }
+                at += 1;
+            }
+        }
+        for i in at..n {
             let p = self.prog().funs[f.idx()].params[i];
-            let mut v = given.next().unwrap_or(Value::Absent);
+            let mut v = match held.take() {
+                Some(v) => v,
+                None => given.next().unwrap_or(Value::Absent),
+            };
             if i < proxies && matches!(v, Value::Absent) {
                 continue;
             }
@@ -1160,7 +1240,7 @@ impl<'a, 't> Interp<'a, 't> {
     /// typed the body gave it up: the run stops there (`withheld_reached`) and says why.
     #[cold]
     #[inline(never)]
-    fn note_withheld_body(&mut self, e: TExprId) {
+    pub(super) fn note_withheld_body(&mut self, e: TExprId) {
         let Some(d) = self.typer.withheld_notes.get(&e) else { return };
         if !self.typer.diags.items.iter().any(|x| x.file == d.file && x.span == d.span && x.msg == d.msg) {
             let d = d.clone();
@@ -1241,7 +1321,9 @@ impl<'a, 't> Interp<'a, 't> {
                 self.enter()?;
                 let n = params.len as usize;
                 self.prof_alloc(|a| a.frames += 1);
-                let frame = self.take_frame(Some(c.env.clone()), n);
+                // The lambda's code, if it has some, whose descriptor its parameters' frame carries.
+                let code = self.lambda_call(*params, *body);
+                let frame = self.take_frame_as(Some(c.env.clone()), n, code.as_ref().map_or(0, |c| c.entry_id));
                 let mut args = args;
                 let mut given = args.drain(..);
                 for i in 0..n {
@@ -1256,7 +1338,10 @@ impl<'a, 't> Interp<'a, 't> {
                 self.recycle_vec(args);
                 let cx = Ctx { this: c.this.clone(), def_key: c.def_key, class: c.class, tail: None };
                 let prof = self.prof_lambda(*body);
-                let r = self.eval(*body, &frame, &cx);
+                let r = match code {
+                    Some(code) => self.exec(&code, 0, &frame, &cx, true),
+                    None => self.eval(*body, &frame, &cx),
+                };
                 self.prof_exit(prof);
                 self.release_frame(frame);
                 self.depth -= 1;
@@ -1308,11 +1393,20 @@ impl<'a, 't> Interp<'a, 't> {
     /// below the caller's, where it reads the values of the block, a `var` in its own place, as
     /// the caller reads them.
     fn call_super_class(&mut self, c: ClassId, s: SymId, args: ListRef, fr: &Rc<Frame>, cx: &Ctx) -> R {
-        let name = self.syms().dispatch_name(s);
-        let member = match self.own_member(c, name) {
-            Member::Missing => self.member(c, name),
-            m => m,
-        };
+        if let Some(v) = self.call_super_proxied(c, s, args, fr, cx)? {
+            return Ok(v);
+        }
+        let (member, name) = self.super_class_member(c, s);
+        let args = self.eval_args(Some(s), args, fr, cx)?;
+        self.invoke_member(cx.this.clone(), member, name, args)
+    }
+
+    /// `super[C].s(args)` when the member it names is a local trait's that takes proxies and the
+    /// arguments pass them, each the proxy itself as the caller reads it (`typer::proxies`): the
+    /// member run below the caller's frame on its own arguments, the proxies absent; `None` for any
+    /// other call, its member resolved and cached for it before its arguments run.
+    pub(super) fn call_super_proxied(&mut self, c: ClassId, s: SymId, args: ListRef, fr: &Rc<Frame>, cx: &Ctx) -> R<Option<Value>> {
+        let (member, _) = self.super_class_member(c, s);
         if let Member::Fun(f, owner) = member {
             let prog = self.prog();
             let fun = &prog.funs[f.idx()];
@@ -1326,16 +1420,25 @@ impl<'a, 't> Interp<'a, 't> {
                 let mut all = Vec::with_capacity(k + rest.len());
                 all.resize(k, Value::Absent);
                 all.extend(rest);
-                return self.call_fun(f, cx.this.clone(), all, Some(fr.clone()), Some(owner));
+                return self.call_fun(f, cx.this.clone(), all, Some(fr.clone()), Some(owner)).map(Some);
             }
         }
-        let args = self.eval_args(Some(s), args, fr, cx)?;
-        self.invoke_member(cx.this.clone(), member, name, args)
+        Ok(None)
+    }
+
+    /// The member `super[C].s` names: `C`'s own, else the one `C` inherits.
+    pub(super) fn super_class_member(&mut self, c: ClassId, s: SymId) -> (Member, Name) {
+        let name = self.syms().dispatch_name(s);
+        let member = match self.own_member(c, name) {
+            Member::Missing => self.member(c, name),
+            m => m,
+        };
+        (member, name)
     }
 
     /// How many proxies a call of `s` with `args` passes to its lifted method, when `s` is a local
     /// trait's lifted member called so (`TFun::lifted`).
-    fn lifted_arity(&self, s: SymId, args: ListRef) -> Option<u32> {
+    pub(super) fn lifted_arity(&self, s: SymId, args: ListRef) -> Option<u32> {
         // Only a member of a trait a body owns, or such a trait does, is lifted
         // (`Dependencies.isLocal`): any other call is told apart by its owner, before its function.
         let Owner::Class(t) = self.syms().sym(s).owner else { return None };
@@ -1348,7 +1451,7 @@ impl<'a, 't> Interp<'a, 't> {
     }
 
     /// Whether `t` is a trait owned by a body, or by such a trait (`Worker::dotty_local_trait`).
-    fn body_trait(&self, t: ClassId) -> bool {
+    pub(super) fn body_trait(&self, t: ClassId) -> bool {
         let info = self.syms().class(t);
         info.kind == ClassKind::Trait
             && match info.owner {
@@ -1395,7 +1498,7 @@ impl<'a, 't> Interp<'a, 't> {
         }
     }
 
-    fn call_super(&mut self, target: SuperTarget, s: SymId, mut args: Vec<Value>, cx: &Ctx) -> R {
+    pub(super) fn call_super(&mut self, target: SuperTarget, s: SymId, mut args: Vec<Value>, cx: &Ctx) -> R {
         let name = self.syms().dispatch_name(s);
         let this = cx.this.clone();
         // An accessor bound to a local trait's member that takes proxies passes them as read in
@@ -1734,40 +1837,70 @@ impl<'a, 't> Interp<'a, 't> {
     fn eval_try(&mut self, i: u32, fr: &Rc<Frame>, cx: &Ctx, tail: bool) -> R {
         let t = &self.prog().tries[i as usize];
         let (body, cases, finalizer, wraps) = (t.body, t.cases, t.finalizer, t.wraps);
-        let result = match self.eval(body, fr, cx) {
-            Err(Control::Throw(raw)) if !cases.is_empty() => {
-                let caught = if wraps { self.wrap_thrown(raw.clone())? } else { raw.clone() };
-                let mut handled = None;
-                for k in cases.range() {
-                    let case = self.prog().cases[k];
-                    let inner = Frame::new(Some(fr.clone()));
-                    if !self.match_pat(case.pat, &caught, &inner, cx)? {
-                        continue;
-                    }
-                    if let Some(g) = case.guard {
-                        if !self.eval_bool(g, &inner, cx)? {
-                            continue;
-                        }
-                    }
-                    handled = Some(if tail { self.eval_tail(case.body, &inner, cx) } else { self.eval(case.body, &inner, cx) });
-                    break;
-                }
-                handled.unwrap_or(Err(Control::Throw(raw)))
+        let pats: Vec<CatchCase> = self.prog().case_list(cases).iter().map(|c| (c.pat, c.guard.is_some(), 0)).collect();
+        self.try_protocol(&pats, wraps, finalizer.is_some(), fr, cx, &mut |it, part, scope| match part {
+            TryPart::Body => it.eval(body, scope, cx),
+            TryPart::Guard(k) => {
+                let g = it.prog().cases[cases.start as usize + k].guard.expect("a guard");
+                it.eval(g, scope, cx)
             }
+            TryPart::Case(k) => {
+                let b = it.prog().cases[cases.start as usize + k].body;
+                if tail { it.eval_tail(b, scope, cx) } else { it.eval(b, scope, cx) }
+            }
+            TryPart::Finalizer => it.eval(finalizer.expect("a finaliser"), scope, cx),
+        })
+    }
+
+    /// A `try` as both engines run it (`eval_try`, the lowered code's `run_try`), its parts run by
+    /// `run`: the protected expression; a value it throws matched against the catch cases in their
+    /// order (what a `catch` sees of it, `wrap_thrown`), each in a frame of its own, the first whose
+    /// pattern takes it and whose guard holds running its body; then the finaliser, after every
+    /// exit of any of these (a value, a throw, a `return`, from the protected expression, a pattern's
+    /// extractor, a guard or a case's body) but the interpreter's own failure, its own throw or
+    /// return replacing the exit pending. dotty protects the handlers with the finaliser as it does
+    /// the protected expression (`BCodeSyncAndTry.genLoadTry`, the cleanup registered around each
+    /// case handler).
+    pub(super) fn try_protocol(&mut self, cases: &[CatchCase], wraps: bool, finalizer: bool, fr: &Rc<Frame>, cx: &Ctx, run: &mut dyn FnMut(&mut Self, TryPart, &Rc<Frame>) -> R) -> R {
+        let result = match run(self, TryPart::Body, fr) {
+            Err(Control::Throw(raw)) if !cases.is_empty() => self.catch_cases(raw, cases, wraps, fr, cx, run),
             other => other,
         };
-        match finalizer {
-            Some(f) if !matches!(result, Err(Control::Fail(_))) => {
-                self.eval(f, fr, cx)?;
-                result
-            }
-            _ => result,
+        if finalizer && !matches!(result, Err(Control::Fail(_))) {
+            run(self, TryPart::Finalizer, fr)?;
         }
+        result
+    }
+
+    /// The catch cases of a `try` over the value `raw` its protected expression threw: the exit
+    /// of the case that takes it, of a pattern or a guard on the way, or `raw` thrown again.
+    fn catch_cases(&mut self, raw: Value, cases: &[CatchCase], wraps: bool, fr: &Rc<Frame>, cx: &Ctx, run: &mut dyn FnMut(&mut Self, TryPart, &Rc<Frame>) -> R) -> R {
+        let caught = if wraps { self.wrap_thrown(raw.clone())? } else { raw.clone() };
+        for (k, (pat, guarded, desc)) in cases.iter().enumerate() {
+            let (pat, guarded) = (*pat, *guarded);
+            let inner = Frame::made_as(Some(fr.clone()), Vec::new(), *desc);
+            if !self.match_pat(pat, &caught, &inner, cx)? {
+                continue;
+            }
+            if guarded {
+                let v = run(self, TryPart::Guard(k), &inner)?;
+                match v {
+                    Value::Bool(true) => {}
+                    Value::Bool(false) => continue,
+                    other => {
+                        let shown = self.to_str(&other)?;
+                        return self.unsupported(format!("a condition that is no Boolean: {}", shown));
+                    }
+                }
+            }
+            return run(self, TryPart::Case(k), &inner);
+        }
+        Err(Control::Throw(raw))
     }
 
     /// What a `catch` sees of a thrown value that is no `Throwable`: it wrapped in a
     /// `JavaScriptException`, when the program has that class.
-    fn wrap_thrown(&mut self, v: Value) -> R {
+    pub(super) fn wrap_thrown(&mut self, v: Value) -> R {
         if let Value::Obj(o) = &v {
             if let Some(t) = self.prog().throwable {
                 if self.is_subclass(o.class, t) {
@@ -1915,7 +2048,7 @@ impl<'a, 't> Interp<'a, 't> {
         })
     }
 
-    fn eval_unary(&mut self, op: UnOp, v: Value) -> R {
+    pub(super) fn eval_unary(&mut self, op: UnOp, v: Value) -> R {
         use UnOp::*;
         let bad = |it: &mut Self, v: &Value| -> R {
             let s = it.to_str(v)?;
@@ -1999,7 +2132,7 @@ impl<'a, 't> Interp<'a, 't> {
     /// the test of `T`'s erasure are the value, an unboxing's `null` the primitive's zero
     /// (`BoxesRunTime.unboxToInt`); any other value throws `ClassCastException` with the JVM's
     /// message.
-    fn cast(&mut self, v: Value, op: CastOp, fr: &Rc<Frame>, cx: &Ctx) -> R {
+    pub(super) fn cast(&mut self, v: Value, op: CastOp, fr: &Rc<Frame>, cx: &Ctx) -> R {
         let test = match op {
             CastOp::Written => return Ok(v),
             CastOp::Nothing => return self.throw_named("ClassCastException", "Cannot cast to scala.Nothing"),
@@ -2190,17 +2323,29 @@ impl<'a, 't> Interp<'a, 't> {
     fn template(&mut self, s: StrRef, args: ListRef, fr: &Rc<Frame>, cx: &Ctx) -> R {
         let resolved = self.resolve_template(s);
         self.halt_on_withheld()?;
+        self.template_resolved(s, resolved, args, fr, cx)
+    }
+
+    /// The trace's line of a builtin template's call.
+    #[cold]
+    #[inline(never)]
+    pub(super) fn trace_template(&mut self, s: StrRef) {
+        let name = match self.prog().template_syms.get(&s).copied() {
+            Some(sym) => self.qualified_name(sym).to_string(),
+            None => self.prog().strings[s.idx()].to_string(),
+        };
+        eprintln!("{}tmpl {}", "  ".repeat(self.depth as usize), name);
+    }
+
+    /// A template call once its template is resolved and no withheld body stopped the run.
+    pub(super) fn template_resolved(&mut self, s: StrRef, resolved: Template, args: ListRef, fr: &Rc<Frame>, cx: &Ctx) -> R {
         match resolved {
             Template::Builtin(b) => {
                 // A quote renames the locals of its body before its holes are evaluated, so
                 // that a quoted reference to one of them inside a hole names the same run.
                 let quote = self.prog().strings[s.idx()] == "$quote";
                 if self.trace && self.depth < self.trace_depth {
-                    let name = match self.prog().template_syms.get(&s).copied() {
-                        Some(sym) => self.qualified_name(sym).to_string(),
-                        None => self.prog().strings[s.idx()].to_string(),
-                    };
-                    eprintln!("{}tmpl {}", "  ".repeat(self.depth as usize), name);
+                    self.trace_template(s);
                 }
                 if quote {
                     self.enter_quote(args)?;
@@ -2288,7 +2433,7 @@ impl<'a, 't> Interp<'a, 't> {
         abstract_owner || self.typer.declared_without_body(sym)
     }
 
-    fn resolve_template(&mut self, s: StrRef) -> Template {
+    pub(super) fn resolve_template(&mut self, s: StrRef) -> Template {
         if let Some(t) = &self.template_cache[s.idx()] {
             crate::typer::bundle::cached_at(&self.typer.prog.strings, s.0);
             return t.clone();
@@ -2346,10 +2491,24 @@ impl<'a, 't> Interp<'a, 't> {
     }
 }
 
+/// The parts of a `try` its protocol runs (`Interp::try_protocol`): the protected expression, a
+/// catch case's guard and body by the case's place, the finaliser.
+/// A catch case as the `try` protocol takes it: its pattern, whether it has a guard, and the
+/// descriptor id its frame carries when lowered code runs the `try` (`0` for the walker's).
+pub(super) type CatchCase = (TPatId, bool, u32);
+
+#[derive(Clone, Copy)]
+pub(super) enum TryPart {
+    Body,
+    Guard(usize),
+    Case(usize),
+    Finalizer,
+}
+
 /// `text::push_str` into a chain's text, except at the place of an operand still to render, which
 /// comes between the two.
 #[inline]
-fn push_text(out: &mut String, late: &[(usize, Value)], part: &str) {
+pub(super) fn push_text(out: &mut String, late: &[(usize, Value)], part: &str) {
     if late.last().is_some_and(|&(at, _)| at == out.len()) {
         out.push_str(part);
     } else {
