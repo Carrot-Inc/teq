@@ -297,7 +297,7 @@ neg/extension-methods.scala	subset	4/5 lines
 neg/extension-specificity2.scala	oos	local-givens
 neg/extensions-can-only-have-defs.scala	same	
 neg/extensions-can-only-have-using.scala	superset	+1 lines: an extension needs exactly one receiver parameter
-neg/extmethod-overload.scala	superset	+1 lines: value {} is not a member of {}
+neg/extmethod-overload.scala	superset	+1 lines: ambiguous extension methods: both a and b provide |+| on Int
 neg/extmethod-override.scala	same	
 neg/f-interpolator-neg.scala	accepts	
 neg/f-interpolator-tests.scala	accepts	
