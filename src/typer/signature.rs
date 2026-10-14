@@ -876,7 +876,7 @@ impl<'a> Worker<'a> {
     /// earlier in it overrides passed over, each seen from `c`.
     fn super_signatures(&mut self, c: ClassId, qualifier: Option<&str>, n: crate::intern::Name) -> Vec<Shown> {
         self.complete_class(c);
-        let all: Vec<(ClassId, TypeId)> = self.syms.class(c).base_types.clone();
+        let all: Vec<(ClassId, TypeId)> = self.met_base_types(c);
         let mut bases: Vec<(ClassId, TypeId)> = all.iter().skip(1).copied().collect();
         if let Some(q) = qualifier {
             let parents = self.syms.class(c).parents.clone();

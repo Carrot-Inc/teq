@@ -10,6 +10,62 @@ impl<'a> Worker<'a> {
         out
     }
 
+    /// Two types a message sets side by side, a class by its qualified name where another class of either has its
+    /// plain name (`scala.collection.Seq[Int]` against `scala.Seq[Int]`), as dotty's messages disambiguate them.
+    pub fn show_pair(&mut self, a: TypeId, b: TypeId) -> (String, String) {
+        let (a, b) = (self.zonk(a), self.zonk(b));
+        let mut named = Vec::new();
+        self.classes_shown(a, &mut named, 0);
+        self.classes_shown(b, &mut named, 0);
+        named.sort_by_key(|c| c.0);
+        named.dedup();
+        let printed: Vec<String> = named.iter().map(|&c| self.printed_class_name(c)).collect();
+        let clashing: Vec<ClassId> = named
+            .iter()
+            .enumerate()
+            .filter(|&(i, _)| printed.iter().enumerate().any(|(j, p)| j != i && *p == printed[i]))
+            .map(|(_, &c)| c)
+            .collect();
+        if clashing.is_empty() {
+            return (self.show(a), self.show(b));
+        }
+        *self.show_qualified.borrow_mut() = clashing;
+        let pair = (self.show(a), self.show(b));
+        self.show_qualified.borrow_mut().clear();
+        pair
+    }
+
+    /// A class's name as `show` prints it: an object's copy of a trait's opaque type by its prefix.
+    fn printed_class_name(&self, c: ClassId) -> String {
+        let info = self.syms.class(c);
+        let name = self.interner.get(info.name);
+        if let (ClassKind::Opaque, Owner::Class(o)) = (info.kind, info.owner) {
+            if self.syms.class(o).nested.get(&info.name) != Some(&c) {
+                return format!("{}.{}", self.interner.get(self.syms.class(o).name), name);
+            }
+        }
+        name.to_string()
+    }
+
+    fn classes_shown(&self, t: TypeId, out: &mut Vec<ClassId>, depth: u32) {
+        if depth > 32 {
+            return;
+        }
+        match self.types.get(t) {
+            Type::Class(c, args) => {
+                out.push(c);
+                for &x in self.types.items(args) {
+                    self.classes_shown(x, out, depth + 1);
+                }
+            }
+            Type::Inter(x, y) | Type::Union(x, y, _) | Type::BoundedWild(x, y) | Type::Nested(x, y) => {
+                self.classes_shown(x, out, depth + 1);
+                self.classes_shown(y, out, depth + 1);
+            }
+            _ => {}
+        }
+    }
+
     /// An open variable without a name: `?` and its place in the typing that made it
     /// (`TVarInfo::shown`), which is the same whichever worker typed it; its index where none is
     /// kept.
@@ -177,15 +233,19 @@ impl<'a> Worker<'a> {
                 } else if Some(c) == self.b.named_tuple && self.show_named_tuple(&items, out) {
                 } else {
                     let info = self.syms.class(c);
-                    // An object's copy of a trait's opaque type is named by its prefix, as scalac's
-                    // `Html.Tag` is; the copy is not among the object's nested classes.
-                    if let (ClassKind::Opaque, Owner::Class(o)) = (info.kind, info.owner) {
-                        if self.syms.class(o).nested.get(&info.name) != Some(&c) {
-                            out.push_str(self.interner.get(self.syms.class(o).name));
-                            out.push('.');
+                    if self.show_qualified.borrow().contains(&c) {
+                        out.push_str(&self.class_path(c));
+                    } else {
+                        // An object's copy of a trait's opaque type is named by its prefix, as scalac's
+                        // `Html.Tag` is; the copy is not among the object's nested classes.
+                        if let (ClassKind::Opaque, Owner::Class(o)) = (info.kind, info.owner) {
+                            if self.syms.class(o).nested.get(&info.name) != Some(&c) {
+                                out.push_str(self.interner.get(self.syms.class(o).name));
+                                out.push('.');
+                            }
                         }
+                        out.push_str(self.interner.get(info.name));
                     }
-                    out.push_str(self.interner.get(info.name));
                     self.show_args(args, out);
                 }
             }

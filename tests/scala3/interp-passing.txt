@@ -14,11 +14,14 @@ Course-2002-06
 Course-2002-07
 Course-2002-08
 Course-2002-09
+Course-2002-10
+Course-2002-13
 HLists
 HLists-nonvariant
 HelloWorld
 Lazies1
 Lazies2
+LazyLists
 LazyValsLongs
 Signals1
 Signals2
@@ -48,6 +51,7 @@ caseClassHash
 case_class_equals_fields_sort
 classTags
 classof-object
+collections-toSelf
 collective-extensions
 concat-two-strings
 constValueTuple
@@ -81,6 +85,7 @@ eta-extension
 evaluation-order
 exceptions
 experimentalRun
+export-anyval
 extension-override
 extension-specificity
 final-var
@@ -114,6 +119,7 @@ i10857
 i10905
 i1099
 i11008
+i11043
 i11045
 i1140
 i1144
@@ -147,6 +153,7 @@ i13146a
 i13183
 i13215
 i13216
+i13228
 i13304
 i13334
 i13358
@@ -169,6 +176,7 @@ i14432a
 i14432b
 i14432c
 i14582
+i14587
 i14587.min
 i14587.opaques
 i1463
@@ -226,7 +234,9 @@ i18884
 i1915
 i19178
 i19396
+i19587
 i1960
+i19629
 i19711
 i19724
 i1991
@@ -306,6 +316,7 @@ i4410
 i4430
 i4451
 i4496a
+i4496b
 i4557a
 i4558
 i4559
@@ -383,11 +394,13 @@ implicitFunctionXXL
 implicits_poly
 imports
 indent
+indexedSeq
 inline-override
 inline-override-num
 inline-param-semantics
 innerClass
 innerObject
+instanceof-serializable
 invocation-receivers
 invocationReceivers1
 invocationReceivers2
@@ -395,6 +408,7 @@ irrefutable
 iterator-concat
 iterator-iterate-lazy
 iterator3444
+iterators
 lambda-sam-bridge
 lambda-unit
 lazy-implicit-lists
@@ -405,6 +419,7 @@ lazy-val-pattern-3
 lazyVals
 lazyVals_c3.0.0
 lazyVals_c3.1.0
+liftedTry
 list_map
 literals
 mapConserve
@@ -459,10 +474,13 @@ returns
 richWrapperEquals
 rooted_stringcontext
 run-bug4840
+runtime
 sammy_repeated
 scala_enum_testing
+scan
 selectable-new
 simpleClass
+singletons
 slice-strings
 spec-self
 stable-enum-hashcodes
@@ -471,6 +489,7 @@ static-module-method
 statics
 sticky-extmethod
 streamWithFilter
+string-switch
 string-switch-defaults-null
 stringbuilder-drop
 structural-contextual
@@ -480,6 +499,7 @@ supercalls-traits-targetname
 synchronized-interface
 t0005
 t0048
+t1005
 t10170
 t1048
 t10594
@@ -497,6 +517,7 @@ t1697
 t1987
 t1987b
 t1994
+t2027
 t2029
 t2087-and-2400
 t2127
@@ -522,16 +543,20 @@ t3088
 t3112
 t3199b
 t3232
+t3241
 t3242b
 t3269
+t3326
 t3395
 t3397
 t3452
 t3452c
+t3452f
 t3487
 t3496
 t3508
 t3509
+t3529
 t3563
 t3603
 t363
@@ -540,20 +565,25 @@ t3651
 t3699
 t3702
 t3714
+t3760
 t3761-overload-byname
 t3855
 t3877
 t3895
+t3923
 t3980
 t4013
 t4013b
 t4013c
 t4054
 t4062
+t408
 t4122
+t4288
 t429
 t4297
 t4351
+t4398
 t4400
 t4415
 t4482
@@ -564,6 +594,7 @@ t4582
 t4592
 t4601
 t4660
+t4709
 t4753
 t4770
 t4827
@@ -592,6 +623,7 @@ t601
 t603
 t6089
 t6126
+t6154
 t6188
 t6206
 t6260
@@ -604,8 +636,10 @@ t6385
 t6443-by-name
 t6443-varargs
 t6476
+t6506
 t6559
 t6646
+t6666a
 t6928-run
 t6957
 t6968
@@ -621,6 +655,7 @@ t7475b
 t7763
 t7859
 t8017
+t8100
 t8133
 t8133b
 t8233
@@ -636,6 +671,9 @@ t8738
 t8893
 t8893b
 t8933b
+t8933c
+t920
+t920_1
 t9516
 takeAndDrop
 targetName
@@ -651,6 +689,7 @@ traits-initialization
 transparent-implicits
 transparent-object
 transparentAccess
+transparentAssign
 transparentByName
 transparentPower
 transparentPrivates
@@ -672,7 +711,9 @@ tuple-underscore-syntax
 tuples-empty
 typable
 type-test-binding
+type-test-nat
 unapplyArray
+unittest_iterator
 unroll-inferredFinal
 value-class-partial-func-depmet
 valueclasses-nested-object
@@ -681,3 +722,4 @@ verify-ctor
 view-headoption
 whitebox-inline
 wildcard-vals
+withIndex

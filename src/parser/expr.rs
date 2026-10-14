@@ -47,11 +47,11 @@ impl<'a> Parser<'a> {
     }
 
     /// The expression `e` as the function its placeholders from `mark` on make, where it is more
-    /// than one of them alone.
+    /// than one of them alone, ascribed or not (dotty's `isWildcard`: `_`, `(_: T)`, which the
+    /// enclosing expression binds).
     fn placeholder_lambda(&mut self, mark: usize, start: Span, e: ExprId) -> ExprId {
         if self.placeholders.len() > mark {
-            let bare = self.placeholders.len() == mark + 1
-                && matches!(self.ast.expr(e), Expr::Ident(n) if n == self.placeholders[mark].name);
+            let bare = self.placeholders.len() == mark + 1 && self.is_placeholder(e, self.placeholders[mark].name);
             if !bare {
                 let params = push_list(&mut self.ast.lambda_params, &self.placeholders[mark..]);
                 self.placeholders.truncate(mark);
@@ -59,6 +59,14 @@ impl<'a> Parser<'a> {
             }
         }
         e
+    }
+
+    fn is_placeholder(&self, e: ExprId, name: Name) -> bool {
+        match self.ast.expr(e) {
+            Expr::Ident(n) => n == name,
+            Expr::Typed(inner, _) | Expr::Parens(inner) => self.is_placeholder(inner, name),
+            _ => false,
+        }
     }
 
     pub(super) fn parse_block_or_expr(&mut self) -> ExprId {
@@ -1588,10 +1596,20 @@ impl<'a> Parser<'a> {
         while !self.at(Tok::RParen) && !self.at(Tok::Eof) {
             let arg_start = self.span();
             let arg = if self.at(Tok::Ident) && self.kind_at(1) == Tok::Eq {
-                let name = self.bump().name;
+                let mark = self.placeholders.len();
+                let name_token = self.bump();
                 self.bump();
                 let value = self.parse_block_or_expr();
-                self.ast.add_expr(Expr::NamedArg(name, value), arg_start.to(self.prev_span()))
+                if self.placeholders.len() > mark {
+                    // `x = (_: T)`: the argument is an assignment its placeholder makes a function of, as
+                    // dotty's `argumentExpr` takes `x = e` for a named argument only where `expr()` left it
+                    // an `Assign` (`copy(text = (_: String))` assigns to `text`).
+                    let lhs = self.ast.add_expr(Expr::Ident(name_token.name), name_token.span);
+                    let assign = self.ast.add_expr(Expr::Assign(lhs, value), arg_start.to(self.prev_span()));
+                    self.placeholder_lambda(mark, arg_start, assign)
+                } else {
+                    self.ast.add_expr(Expr::NamedArg(name_token.name, value), arg_start.to(self.prev_span()))
+                }
             } else {
                 let value = self.parse_block_or_expr();
                 if self.at_op(names::STAR) {

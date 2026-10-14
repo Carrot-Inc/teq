@@ -248,7 +248,9 @@ impl<'a> Worker<'a> {
         for &p in &parents {
             let Type::Class(pc, _) = self.types.get(p) else { continue };
             let subst = self.owner_subst(p);
-            for (bc, bt) in self.syms.class(pc).base_types.clone() {
+            for i in 0..self.syms.class(pc).base_types.len() {
+                let bc = self.syms.class(pc).base_types[i].0;
+                let bt = self.base_instance_at(pc, i);
                 if !bases.iter().any(|&(c, _)| c == bc) {
                     bases.push((bc, self.types.subst(bt, &subst)));
                 }
@@ -1654,7 +1656,7 @@ impl<'a> Worker<'a> {
     /// the abstract alternative `m`.
     fn alternative_is_implemented(&mut self, c: ClassId, m: SymId) -> bool {
         let name = self.syms.sym(m).name;
-        let bases: Vec<(ClassId, TypeId)> = self.syms.class(c).base_types.clone();
+        let bases: Vec<(ClassId, TypeId)> = self.met_base_types(c);
         let Owner::Class(mc) = self.syms.sym(m).owner else { return false };
         let Some(&(_, m_owner)) = bases.iter().find(|&&(b, _)| b == mc) else { return false };
         for &(b, _) in &bases {

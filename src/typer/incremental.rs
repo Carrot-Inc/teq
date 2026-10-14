@@ -81,6 +81,7 @@ impl<'a> Worker<'a> {
         self.given_fast.clear();
         self.head_sigs.clear();
         self.base_type_cache.clear();
+        self.class_base_memo.clear();
         self.target_name_files.clear();
         self.package_levels.clear();
         // A member's body may come or go with the edit.

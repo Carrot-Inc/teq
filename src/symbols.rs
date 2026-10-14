@@ -219,6 +219,9 @@ pub struct ClassInfo {
     /// Whether no ancestor declares an extension method, as the completion found; false until
     /// then, where an instance's extensions are looked for along its ancestors.
     pub no_inherited_extensions: bool,
+    /// Whether a base of this class is met from several parents' instances, its own or an ancestor's: its
+    /// base types for them are `base_type_of`'s, not the linearisation's record.
+    pub meets_in_bases: bool,
     /// Whether the type parameters were made, with their first-order bounds, before the class's
     /// completion, which a type application of the class asked for (dotty's `TypeParamsCompleter`):
     /// the completion takes them as they are.
@@ -1023,6 +1026,7 @@ impl Symbols {
             this_type: None,
             inherits_types: false,
             no_inherited_extensions: false,
+            meets_in_bases: false,
             tparams_made: false,
             made_companion: false,
             forwarders: Vec::new(),

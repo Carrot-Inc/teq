@@ -1,0 +1,36 @@
+{
+ "repository": "https://github.com/raquo/Laminar.git",
+ "tag": "v18.0.0-M5",
+ "commit": "098433793be4e745fe9ac9a58a01fce545dc0bc2",
+ "date": "2026-02-26T23:22:26-08:00",
+ "java": 21,
+ "sbt": "1.12.0",
+ "scala": "3.8.4",
+ "rootProject": "laminar",
+ "projects": ["laminar"],
+ "plugins": {
+  "sbt-scalajs": "1.20.2, 1.22.0 under the overlay (sbt-teq's)",
+  "scalajs-env-jsdom-nodejs": "1.1.1"
+ },
+ "airstream": {
+  "jar": "com.raquo:airstream_sjs1_3:18.0.0-M5",
+  "sha1": "754f7024ec444399742746be78efa8fed477aec5",
+  "source": "bench/airstream/pin.json"
+ },
+ "domtypes": {
+  "jar": "com.raquo:domtypes_3:19.0.0"
+ },
+ "npm": {
+  "package-lock.json": "8cf1e05d2ae4a0d39dc22ee689729dac97caf8c8d951ec2343623030943384f0",
+  "jsdom": "27.4.0"
+ },
+ "tests": "tests.json",
+ "overlay": {
+  "LaminarTeq.scala": "bb07c7e032c1c4e3bba4f8cfde587b98b3e30762f8770db2dff32cfb12c0be16",
+  "plugins.sbt": "6e34164869bc9c6d20d495fb634db57a41c95c7a0237e5226815697866948163"
+ },
+ "head": {
+  "commit": "95c235917f3fe675eaaa0f5ec3d0d3511bd3fe70",
+  "blocked": "the head builds Scala 3.9.0, depends on ew 0.3.1, whose TASTy 28.9 scalac 3.8.4 refuses (TastyFormat.scala 380), and on Airstream 18.0.0-M5-SNAPSHOT, which no repository serves; v18.0.0-M5 is the last release on Scala 3.3 (ew 0.3.0, Airstream 18.0.0-M5)"
+ }
+}

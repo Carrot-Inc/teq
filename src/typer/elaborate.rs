@@ -280,7 +280,8 @@ impl<'a> Worker<'a> {
         self.complete_class(c);
         let msig = self.sig_arc(m);
         for j in 1..self.syms.class(c).base_types.len() {
-            let (b, bt) = self.syms.class(c).base_types[j];
+            let b = self.syms.class(c).base_types[j].0;
+            let bt = self.base_instance_at(c, j);
             let mut k = 0;
             while let Some(p) = self.inherited_member(b, name, false, k) {
                 k += 1;

@@ -52,6 +52,9 @@ assign_op_chains
 assign_op_extensions
 assign_op_type_applied
 assignop
+base_invariant_meet
+base_type_meet_deferred
+base_type_meet_of_parents
 bench_adts
 bench_boxing
 bench_closures
@@ -213,6 +216,7 @@ collection_as_function
 collection_class_name
 collection_map_hierarchy
 collection_partial_failure
+collection_seq_hierarchy
 collections
 colon_lambda_relaxed
 companion_alias_extractor
@@ -383,6 +387,7 @@ expected_last_list
 expected_result_path_param
 expected_type_instantiation
 expected_types
+export_forwarder_clash_preferred
 export_implements
 export_qualified_protected
 export_through_value_import
@@ -410,6 +415,7 @@ extension_byname_receiver
 extension_called_by_name
 extension_deepened_overload
 extension_direct_targs
+extension_given_type_args
 extension_import_alternatives_inherited
 extension_inherited_this_prefix
 extension_method_value
@@ -592,17 +598,20 @@ harmonize_literals
 harmonize_runtime
 hashing
 hashing_doubles
+hk_alias_lower_bound
 hk_base_conformance
 hk_bound_given
 hk_bound_members
 hk_bounded_params
 hk_branch_join
 hk_infer_base_type
+hk_var_exact_alias
 hkt
 iarray_ops
 immutable_hash_map
 immutable_queue
 implicit_class_default
+implicit_class_parameter
 implicit_lambda_params
 implicit_object_through_extending_object
 import_alias_of_trait_object
@@ -645,6 +654,7 @@ inference_leftovers_retired
 infix_and_or_method_clauses
 infix_args
 infix_line_end
+infix_pattern_alphanumeric
 infix_then_applied
 infix_types
 inherit_accounts
@@ -842,6 +852,7 @@ kind_projector
 lambda_discard_pinned_unit
 lambda_discard_to_unit_bound
 lambda_from_expected
+lambda_param_ordered_vars
 lambda_union_expected
 lambdas
 layout_mixed
@@ -1206,10 +1217,13 @@ param_clauses
 paren_pattern_types
 parser_combinators_regex
 parser_combinators_sequence
+partial_application_expected_function
 partial_application_once
+partial_application_using_clause
 partial_function_apply
 partial_function_classes
 partial_function_match_body
+partial_function_reflect_lambda
 partial_functions
 partial_sites
 partial_unification_fixed_args
@@ -1237,6 +1251,7 @@ pickled_inline_type_vars
 pkgobj_inherited_members
 placeholder_params
 placeholder_type_args
+placeholder_typed_operand
 poly_context_function
 poly_function_outer_bound
 poly_functions
@@ -1282,6 +1297,8 @@ proxy_private_import
 proxy_protected_import
 qualified_private_trait_member
 qualified_this_outer_alias
+quote_pattern_hole_inferred
+quote_pattern_hole_upper_bound
 quote_tag_collision
 random_subclass
 range_bounds_and_sum
@@ -1518,6 +1535,7 @@ sourcecode_names
 splice_conversion
 std_array_view
 std_byteswap
+std_collection_names
 std_collection_protocol
 std_console_valueof
 std_duration_parse
@@ -1673,6 +1691,7 @@ type_on_next_line
 type_op_open_variable
 type_operator_line_end
 type_pattern_lower_bounds
+type_projection_refinement_lambda
 type_test_bound_constituents
 type_test_class_pattern
 type_test_erased_bound
@@ -1773,6 +1792,7 @@ value_import_given_old_implicits
 value_import_given_shadows_own
 value_import_givens
 value_of
+value_of_inner_object
 value_of_singletons
 var_default_init
 var_setter_member
@@ -1800,9 +1820,12 @@ views
 widened_double_text
 wildcard_bounds
 wildcard_lower_bound
+wildcard_lower_bound_argument
 wildcard_param_bound
 wildcard_param_bound_generic
 wildcard_pattern_binders
+wildcard_underscore_bounds
+with_type_intersection
 yield_left_of_for
 zip_digest
 zip_entry_times

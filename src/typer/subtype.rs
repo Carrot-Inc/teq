@@ -615,15 +615,50 @@ impl<'a> Worker<'a> {
         }
         // `F[T]` against an alias applied beyond its parameters (`(Eq |: Derived)[A]`) takes
         // the alias application as `F` and the rest as `T`, before the alias reduces, as
-        // scalac unifies with the unreduced application.
+        // scalac unifies with the unreduced application; against an alias applied to as many
+        // arguments as it has parameters (`Id[A]` of `type Id[A] = A`), the alias itself bounds
+        // the variable, from below where the variable's application is above (from above where
+        // it is below), and the alias applied to the variable's arguments is compared with the
+        // other side: dotty's `compareAppliedTypeParamRef` at no fixed arguments, which only
+        // constrains one bound, so that a later operand widens it (`UIO[A]` then `RIO[R, B]`
+        // as `M[A]`, `M[B]` make `M` the join `[X] =>> RIO[R, X]`).
         if let (Type::AppVar(v, xs), Type::Alias(al, ys)) | (Type::Alias(al, ys), Type::AppVar(v, xs)) = (ta, tb) {
             let own = self.syms.aliases[al.idx()].tparams.len();
             let (xs, ys) = (self.types.items(xs).to_vec(), self.types.items(ys).to_vec());
-            if ys.len() == own + xs.len() && !xs.is_empty() && self.tvars[v].inst.is_none() {
-                let head = self.types.list(&ys[..own]);
-                let ctor = self.types.mk(Type::Alias(al, head));
-                self.instantiate(v, ctor);
-                return self.is_sub(a, b);
+            if (ys.len() == own + xs.len() || (ys.len() == xs.len() && own == xs.len())) && !xs.is_empty() && self.tvars[v].inst.is_none() {
+                // The alias as a written constructor is (`type_ref_to_type`): its lambda, where its
+                // parameters are of the variable's kind, types, and the arguments then agree
+                // (`isMatchingApply`); otherwise (`A[String]` against `OfString[B]` of
+                // `type OfString[G[_]] = G[String]`) the alias reduces as below.
+                let first_order = self.syms.aliases[al.idx()].tparams.iter().all(|&p| self.syms.tparam(p).arity == 0);
+                if ys.len() == xs.len() && !first_order {
+                    // Not of the variable's kind: compared reduced.
+                } else {
+                    let exact = ys.len() == xs.len();
+                    let ctor = if exact {
+                        let (tparams, rhs) = (self.syms.aliases[al.idx()].tparams.clone(), self.syms.aliases[al.idx()].rhs);
+                        let ps: Vec<TypeId> = tparams.iter().map(|&p| self.types.param(p)).collect();
+                        let l = self.types.list(&ps);
+                        self.types.mk(Type::Lambda(l, rhs))
+                    } else {
+                        let head = self.types.list(&ys[..own]);
+                        self.types.mk(Type::Alias(al, head))
+                    };
+                    let mut full = ys[..ys.len() - xs.len()].to_vec();
+                    full.extend_from_slice(&xs);
+                    let fl = self.types.list(&full);
+                    let applied = self.types.mk(Type::Alias(al, fl));
+                    let mark = self.snapshot();
+                    let holds = if matches!(ta, Type::AppVar(..)) {
+                        self.add_upper(v, ctor) && self.is_sub(applied, b)
+                    } else {
+                        self.add_lower(v, ctor) && self.is_sub(a, applied)
+                    };
+                    if holds || !exact {
+                        return holds;
+                    }
+                    self.rollback(mark);
+                }
             }
         }
         if self.types.head_reducible(ta) || self.types.head_reducible(tb) {
@@ -795,7 +830,7 @@ impl<'a> Worker<'a> {
                     self.rollback(mark);
                 }
                 let mark = self.snapshot();
-                if self.app_var_instance(a, b, v, c, cargs, n, var_below) {
+                if self.app_var_instance(a, b, v, c, cargs, n) {
                     return true;
                 }
                 self.rollback(mark);
@@ -809,7 +844,7 @@ impl<'a> Worker<'a> {
                 let bases: Vec<TypeId> = {
                     self.complete_class(c);
                     let subst: Subst = self.syms.class(c).tparams.iter().copied().zip(self.types.items(cargs).iter().copied()).collect();
-                    self.syms.class(c).base_types.iter().skip(1).map(|&(_, bt)| bt).collect::<Vec<_>>().into_iter().map(|bt| self.types.subst(bt, &subst)).collect()
+                    (1..self.syms.class(c).base_types.len()).map(|i| self.base_instance_at(c, i)).collect::<Vec<_>>().into_iter().map(|bt| self.types.subst(bt, &subst)).collect()
                 };
                 for base in bases {
                     let Type::Class(bc, bargs) = self.types.get(base) else { continue };
@@ -817,7 +852,7 @@ impl<'a> Worker<'a> {
                         continue;
                     }
                     let mark = self.snapshot();
-                    if self.app_var_instance(base, b, v, bc, bargs, n, false) {
+                    if self.app_var_instance(base, b, v, bc, bargs, n) {
                         return true;
                     }
                     self.rollback(mark);
@@ -870,6 +905,9 @@ impl<'a> Worker<'a> {
                 };
                 let args1 = match self.types.get(base) {
                     Type::Class(_, args1) => args1,
+                    // A base its parents give at invariant arguments that differ, their instances' intersection
+                    // (dotty's `glb`'s `AndType`): either instance conforming.
+                    Type::Inter(x, y) if base != a => return self.is_sub(x, b) || self.is_sub(y, b),
                     // `p.C` against the bare `C`, its type through its owner's `this`.
                     Type::Nested(p1, class1) => {
                         let (Type::Class(_, args1), Owner::Class(o)) = (self.types.get(class1), self.syms.class(c2).owner) else { return false };
@@ -1697,9 +1735,9 @@ impl<'a> Worker<'a> {
     /// in order.
     fn ctor_extends(&mut self, sub: ClassId, sup: ClassId) -> bool {
         self.complete_class(sub);
-        let info = self.syms.class(sub);
-        let Some(&(_, at_sup)) = info.base_types.iter().find(|&&(b, _)| b == sup) else { return false };
+        let Some(at_sup) = self.base_type_of(sub, sup) else { return false };
         let Type::Class(_, args) = self.types.get(at_sup) else { return false };
+        let info = self.syms.class(sub);
         let args = self.types.items(args);
         args.len() == info.tparams.len()
             && args.iter().zip(&info.tparams).all(|(&a, &p)| matches!(self.types.get(a), Type::Param(q) if q == p))
@@ -1825,7 +1863,7 @@ impl<'a> Worker<'a> {
     fn is_sub_through_base(&mut self, a: TypeId, c: ClassId, cargs: TList, b: TypeId, n: usize) -> bool {
         self.complete_class(c);
         let subst: Subst = self.syms.class(c).tparams.iter().copied().zip(self.types.items(cargs).iter().copied()).collect();
-        let bases: Vec<TypeId> = self.syms.class(c).base_types.iter().skip(1).map(|&(_, t)| t).collect();
+        let bases: Vec<TypeId> = (1..self.syms.class(c).base_types.len()).map(|i| self.base_instance_at(c, i)).collect();
         for bt in bases {
             let Type::Class(_, bargs) = self.types.get(bt) else { continue };
             if self.types.items(bargs).len() < n {
@@ -1908,7 +1946,7 @@ impl<'a> Worker<'a> {
 
     /// `base_type` of the class type `c[args]`, `c` complete.
     fn class_base_type(&mut self, c: ClassId, args: TList, target: ClassId) -> Option<TypeId> {
-        let found = self.syms.class(c).base_types.iter().find(|(bc, _)| *bc == target).map(|&(_, t)| t);
+        let found = self.base_type_of(c, target);
         let bt = match found {
             Some(bt) => bt,
             None if c == self.b.string => self.string_interface(target)?,
@@ -3922,7 +3960,7 @@ impl<'a> Worker<'a> {
     /// `n` arguments: `v` the constructor of `c` itself, or of `c` with its leftmost arguments
     /// fixed (partial unification), within the variable's higher-kinded bounds.
     #[allow(clippy::too_many_arguments)]
-    fn app_var_instance(&mut self, a: TypeId, b: TypeId, v: TVarId, c: ClassId, cargs: TList, n: usize, var_below: bool) -> bool {
+    fn app_var_instance(&mut self, a: TypeId, b: TypeId, v: TVarId, c: ClassId, cargs: TList, n: usize) -> bool {
         let m = self.types.items(cargs).len();
         let ctor = if n == m {
             self.types.mk(Type::Ctor(c))
@@ -3951,11 +3989,11 @@ impl<'a> Worker<'a> {
         if !uppers.into_iter().all(|u| self.is_sub(ctor, u)) {
             return false;
         }
-        if var_below {
-            let lowers: Vec<TypeId> = self.tvars[v].lower.clone();
-            if !lowers.into_iter().all(|l| self.is_sub(l, ctor)) {
-                return false;
-            }
+        // Its lower bounds (an alias an earlier operand gave, `UIO` before `RIO[R, B]`) are below
+        // it too, as dotty's constraint joins a constructor's lower bounds.
+        let lowers: Vec<TypeId> = self.tvars[v].lower.clone();
+        if !lowers.into_iter().all(|l| self.is_sub(l, ctor)) {
+            return false;
         }
         self.instantiate(v, ctor);
         self.is_sub(a, b)
@@ -4182,6 +4220,7 @@ impl<'a> Worker<'a> {
             }
         }
         let (bc, mut sym, bt) = match found {
+            Some((bc, sym, bt)) if bc != c && self.syms.class(c).meets_in_bases => (bc, sym, self.base_type_of(c, bc).unwrap_or(bt)),
             Some(f) => f,
             None => {
                 // A member of `Any` is `universal_member`'s: reading a Java class for it
@@ -5508,6 +5547,35 @@ impl<'a> Worker<'a> {
     /// of `p.C`, the enclosing classes' too, to the arguments of the prefix's base types.
     pub fn owner_subst(&mut self, owner_ty: TypeId) -> Subst {
         match self.types.get(owner_ty) {
+            // Two instances of one class, a base its parents give at invariant arguments that differ (`Holder[String]
+            // & Holder[Int]`): each parameter is dotty's `argForParam` over the `AndType`, the parts' arguments met,
+            // a covariant one's `&`, a contravariant one's `|` and an invariant one's bounds of both (`>: String |
+            // Int <: String & Int`), read by position.
+            Type::Inter(a, b) => match (self.types.get(a), self.types.get(b)) {
+                (Type::Class(ca, aargs), Type::Class(cb, bargs)) if ca == cb => {
+                    let tparams = self.syms.class(ca).tparams.clone();
+                    let (aargs, bargs) = (self.types.items(aargs).to_vec(), self.types.items(bargs).to_vec());
+                    tparams
+                        .iter()
+                        .zip(aargs.iter().zip(&bargs))
+                        .map(|(&p, (&x, &y))| {
+                            let arg = match self.syms.tparam(p).variance {
+                                1 => self.types.inter(x, y),
+                                -1 => self.types.soft_union(x, y),
+                                _ => {
+                                    let (xl, xh) = self.types.wild_bounds(x).unwrap_or((x, x));
+                                    let (yl, yh) = self.types.wild_bounds(y).unwrap_or((y, y));
+                                    let lo = self.types.soft_union(xl, yl);
+                                    let hi = self.types.inter(xh, yh);
+                                    self.types.bounded_wild(lo, hi)
+                                }
+                            };
+                            (p, arg)
+                        })
+                        .collect()
+                }
+                _ => self.owner_subst(a),
+            },
             Type::Nested(p, class) => {
                 let mut subst = self.owner_subst(class);
                 if let Type::Class(c, _) = self.types.get(class) {

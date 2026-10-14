@@ -31,6 +31,9 @@ extension [A](dict: js.Dictionary[A])
   def toList: List[(String, A)] = dict.keys.toList.map(key => (key, dict(key)))
   def toMap = dict.toList.toMap
   def foreach[U](f: ((String, A)) => U): Unit = dict.toList.foreach(f)
+  // Scala.js's through `js.Any.wrapDictionary`, the dictionary as a mutable map.
+  def filter(p: ((String, A)) => Boolean): scala.collection.mutable.Map[String, A] = js.Any.wrapDictionary(dict).filter(p)
+  def filterNot(p: ((String, A)) => Boolean): scala.collection.mutable.Map[String, A] = js.Any.wrapDictionary(dict).filterNot(p)
   def -=(key: String): js.Dictionary[A] =
     dict.delete(key)
     dict

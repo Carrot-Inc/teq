@@ -799,7 +799,8 @@ impl<'a> Worker<'a> {
             _ => actual,
         };
         let (shown_found, shown_expected, fbounded) = self.reported_mismatch(found, expected);
-        let mut msg = format!("type mismatch: found {}, required {}", self.show(shown_found), self.show(shown_expected));
+        let (found_text, expected_text) = self.show_pair(shown_found, shown_expected);
+        let mut msg = format!("type mismatch: found {}, required {}", found_text, expected_text);
         let mut note_len = 0;
         if let Some(note) = self.match_type_note(actual, expected) {
             note_len = note.len();
@@ -3940,7 +3941,7 @@ impl<'a> Worker<'a> {
 
     /// Instantiates the open variables of `t` that nothing bounds below to their upper bound,
     /// as dotty's `ForceDegree.flipBottom` maximizes them (`IfBottom.flip`).
-    fn maximize_bottom_vars(&mut self, t: TypeId) {
+    pub(super) fn maximize_bottom_vars(&mut self, t: TypeId) {
         let mut vars = Vec::new();
         self.collect_vars(t, &mut vars);
         self.maximize_bottom(vars);
@@ -3960,6 +3961,10 @@ impl<'a> Worker<'a> {
                 continue;
             }
             let uppers = info.upper.clone();
+            // A bound that is the variable itself, an ordering with one instantiated to it since (the lambda's
+            // `El2 >: El1` once `El2` is `El1`), bounds nothing: dotty's `replace` drops it.
+            let own = self.types.mk(Type::Var(w));
+            let uppers: Vec<TypeId> = uppers.into_iter().filter(|&u| self.deref(u) != own).collect();
             let top = uppers.into_iter().reduce(|a, b| self.types.inter(a, b)).unwrap_or(ANY);
             self.instantiate(w, top);
         }

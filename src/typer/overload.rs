@@ -241,7 +241,7 @@ impl<'a> Worker<'a> {
             None => vec![entry],
         };
         let mut all = own.clone();
-        let bases: Vec<(ClassId, TypeId)> = self.syms.class(c).base_types.clone();
+        let bases: Vec<(ClassId, TypeId)> = self.met_base_types(c);
         // A joined entry (`own` empty) takes a value of the name as an alternative next to the
         // methods, as a class of one's own does through `join_value_and_method`, and so does an
         // entry of methods: an inherited value their parameters do not match is overloaded by
@@ -889,7 +889,7 @@ impl<'a> Worker<'a> {
         let mut overrides = false;
         if let (Owner::Class(c), true) = (owner, depth < 64) {
             self.complete_class(c);
-            let bases: Vec<(ClassId, TypeId)> = self.syms.class(c).base_types.clone();
+            let bases: Vec<(ClassId, TypeId)> = self.met_base_types(c);
             for &(b, bt) in bases.iter().skip(1) {
                 let mut k = 0;
                 while let Some(p) = self.own_alternative(b, name, k) {
@@ -1009,7 +1009,7 @@ impl<'a> Worker<'a> {
     /// nothing.
     fn overridden_dispatch(&mut self, c: ClassId, m: SymId) -> Option<Option<Name>> {
         let name = self.syms.sym(m).name;
-        let bases: Vec<(ClassId, TypeId)> = self.syms.class(c).base_types.clone();
+        let bases: Vec<(ClassId, TypeId)> = self.met_base_types(c);
         let mut inherited: Option<Option<Name>> = None;
         for &(b, bt) in &bases[1..] {
             let mut k = 0;
@@ -1368,7 +1368,7 @@ impl<'a> Worker<'a> {
             .filter(|&k| k != owner && self.names_settled(k) && self.syms.class_raw(k).base_types.iter().any(|&(b, _)| b == owner))
             .collect();
         for k in below {
-            let bases = self.syms.class(k).base_types.clone();
+            let bases = self.met_base_types(k);
             let Some(&(_, owner_ty)) = bases.iter().find(|&&(b, _)| b == owner) else { continue };
             let mut i = 0;
             while let Some(p) = self.own_alternative(k, name, i) {
@@ -2195,7 +2195,7 @@ impl<'a> Worker<'a> {
         }
         // One method per parameter list, the first in the linearisation.
         let mut distinct: Vec<(SymId, TypeId)> = Vec::new();
-        let all_bases: Vec<(ClassId, TypeId)> = self.syms.class(c).base_types.clone();
+        let all_bases: Vec<(ClassId, TypeId)> = self.met_base_types(c);
         for &(b, bt) in bases {
             let mut k = 0;
             while let Some(m) = self.own_alternative(b, name, k) {
@@ -2391,7 +2391,7 @@ impl<'a> Worker<'a> {
                 }
             }
         }
-        let bases: Vec<(ClassId, TypeId)> = self.syms.class(companion).base_types.iter().skip(1).copied().collect();
+        let bases: Vec<(ClassId, TypeId)> = self.met_base_types(companion).into_iter().skip(1).collect();
         for (b, bt) in bases {
             let Some(&s) = self.syms.class(b).members.get(&name) else { continue };
             for m in alternatives(self, s) {
@@ -3579,6 +3579,24 @@ impl<'a> Worker<'a> {
             (false, true) => 1,
             (true, false) => -1,
             _ => 0,
+        }
+    }
+
+    /// Which of two members overloading resolution prefers by their signatures alone (SLS 6.26.3's
+    /// specificity, each against the other's parameter types): `Some(true)` for `a`, `Some(false)` for
+    /// `b`, `None` where neither is (export forwarders' clashes, `avoid_forwarder_clashes`).
+    pub(super) fn preferred_forwarder(&mut self, a: SymId, b: SymId) -> Option<bool> {
+        let alt = |t: &mut Self, s: SymId| Alt { sym: s, sig: t.sig_arc(s), owner_subst: Vec::new(), ctor: None, info: None, denoted: None, refined: None };
+        let (x, y) = (alt(self, a), alt(self, b));
+        let mark = self.snapshot();
+        let ab = self.is_as_specific(&x, &y, &[], None);
+        self.rollback(mark);
+        let ba = self.is_as_specific(&y, &x, &[], None);
+        self.rollback(mark);
+        match (ab, ba) {
+            (true, false) => Some(true),
+            (false, true) => Some(false),
+            _ => None,
         }
     }
 

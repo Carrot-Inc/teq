@@ -15,3 +15,8 @@ def strictEquals(x: scala.Any, y: scala.Any): Boolean
 
 @js("debugger")
 def debugger(): Unit
+
+// The value a `js.JavaScriptException` wraps, any other throwable itself: what a JavaScript `catch` would see.
+def unwrapFromThrowable(th: Throwable): scala.Any = th match
+  case _root_.js.JavaScriptException(e) => e
+  case _ => th

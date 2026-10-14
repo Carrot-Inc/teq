@@ -245,6 +245,7 @@ pub(crate) const STD_SOURCES: &[(&str, &str)] = &[
     ("<std>/control.scala", include_str!("../std/control.scala")),
     ("<std>/try.scala", include_str!("../std/try.scala")),
     ("<std>/hashing.scala", include_str!("../std/hashing.scala")),
+    ("<std>/collection_seq.scala", include_str!("../std/collection_seq.scala")),
     ("<std>/abstract_collections.scala", include_str!("../std/abstract_collections.scala")),
     ("<std>/collections_more.scala", include_str!("../std/collections_more.scala")),
     ("<std>/runtime.scala", include_str!("../std/runtime.scala")),

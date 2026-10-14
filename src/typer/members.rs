@@ -766,7 +766,7 @@ impl<'a> Worker<'a> {
         // The first definition in the linearisation, unless a later one is an alias where it
         // is abstract: an alias implements the abstract members of every trait mixed in.
         let mut found = None;
-        let bases: Vec<(ClassId, TypeId)> = self.syms.class(c).base_types.clone();
+        let bases: Vec<(ClassId, TypeId)> = self.met_base_types(c);
         for (b, bt) in bases {
             // A jar's class enters its members as it completes, a parent of a complete class
             // not necessarily so: completed here, as dotty's member lookup completes the

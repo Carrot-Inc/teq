@@ -781,6 +781,18 @@ struct Matcher<'m> {
 }
 
 impl<'m> Matcher<'m> {
+    /// The receivers of one member, the pattern's and the scrutinee's. `this` stands for a reference written
+    /// without a prefix, which dotty's `QuoteMatcher` matches by its symbol alone: the pattern's (`id($v)` in
+    /// object `M`) against any selection of the member (`M.id(..)`), the scrutinee's against a selection
+    /// through a path without a hole.
+    fn receiver(&mut self, it: &mut Interp, p: TExprId, s: TExprId) -> bool {
+        match (it.prog().expr(p), it.prog().expr(s)) {
+            (TExpr::This, _) => true,
+            (TExpr::Module(_) | TExpr::Static(_), TExpr::This) => true,
+            _ => self.expr(it, p, s),
+        }
+    }
+
     fn expr(&mut self, it: &mut Interp, p: TExprId, s: TExprId) -> bool {
         let prog = it.prog();
         let pe = prog.expr(p);
@@ -825,10 +837,10 @@ impl<'m> Matcher<'m> {
             (TExpr::Static(x), TExpr::Static(y)) => x == y,
             (TExpr::Module(x), TExpr::Module(y)) => x == y,
             (TExpr::Field(r1, s1), TExpr::Field(r2, s2)) | (TExpr::Field(r1, s1), TExpr::CallMethod(r2, s2, _)) | (TExpr::CallMethod(r1, s1, _), TExpr::Field(r2, s2)) => {
-                it.same_member(s1, s2) && self.expr(it, r1, r2)
+                it.same_member(s1, s2) && self.receiver(it, r1, r2)
             }
             (TExpr::CallStatic(s1, a1), TExpr::CallStatic(s2, a2)) => s1 == s2 && self.list(it, a1, a2),
-            (TExpr::CallMethod(r1, s1, a1), TExpr::CallMethod(r2, s2, a2)) => it.same_member(s1, s2) && self.expr(it, r1, r2) && self.list(it, a1, a2),
+            (TExpr::CallMethod(r1, s1, a1), TExpr::CallMethod(r2, s2, a2)) => it.same_member(s1, s2) && self.receiver(it, r1, r2) && self.list(it, a1, a2),
             (TExpr::CallClosure(f1, a1), TExpr::CallClosure(f2, a2)) => self.expr(it, f1, f2) && self.list(it, a1, a2),
             (TExpr::New(c1, a1), TExpr::New(c2, a2)) => c1 == c2 && self.list(it, a1, a2),
             (TExpr::NewVia(s1, a1), TExpr::NewVia(s2, a2)) => s1 == s2 && self.list(it, a1, a2),
@@ -1418,6 +1430,31 @@ impl<'a, 't> Interp<'a, 't> {
     }
 
     /// The view of a tree in the shapes of the reflect API.
+    /// The parameter, the scrutinee and the written cases of a partial function literal teq made
+    /// (`$pf(applyOrElse, isDefinedAt)`, `partial_function_literal`): its `applyOrElse` a closure of the
+    /// parameter and the default over a match whose last case, a wildcard calling the default with the
+    /// parameter, is teq's own; `None` for any other template.
+    fn partial_function_cases(&self, s: StrRef, args: crate::ast::ListRef) -> Option<(SymId, TExprId, Vec<TCase>)> {
+        if self.prog().strings[s.idx()] != "$pf($0, $1)" {
+            return None;
+        }
+        let &[total, _] = self.prog().expr_list(args) else { return None };
+        let TExpr::Lambda(params, body) = self.prog().expr(total) else { return None };
+        let &[param, default] = self.prog().sym_list(params) else { return None };
+        let TExpr::Match(scrut, cases) = self.prog().expr(body) else { return None };
+        let cases: Vec<TCase> = self.prog().cases[cases.range()].to_vec();
+        let last = cases.last()?;
+        let fallback = matches!(self.prog().pats[last.pat.idx()], TPat::Wildcard)
+            && last.guard.is_none()
+            && matches!(self.prog().expr(last.body), TExpr::CallClosure(f, a)
+                if matches!(self.prog().expr(f), TExpr::Local(d) if d == default)
+                && matches!(self.prog().expr_list(a), &[x] if matches!(self.prog().expr(x), TExpr::Local(p) if p == param)));
+        if !fallback {
+            return None;
+        }
+        Some((param, scrut, cases[..cases.len() - 1].to_vec()))
+    }
+
     pub(super) fn view(&mut self, t: TreeRef) -> R<View> {
         Ok(match t {
             TreeRef::Expr(e) => match self.prog().expr(e) {
@@ -1583,6 +1620,21 @@ impl<'a, 't> Interp<'a, 't> {
                     self.concat_view(&items)
                 }
                 TExpr::ToStr(x, _) => View::Select(TreeRef::Expr(x), SymRef::None, self.typer.interner.intern("toString")),
+                TExpr::Js(s, args) if self.partial_function_cases(s, args).is_some() => {
+                    // A partial function literal (`{ case .. }`), which teq makes of its cases with a fallback
+                    // (`partial_function_literal`), seen as the closure over its match that dotty's typed tree is
+                    // (`Block(DefDef($anonfun, .. Match), Closure)`, which `Lambda.unapply` takes apart).
+                    let (param, scrut, cases) = self.partial_function_cases(s, args).unwrap();
+                    let own = self.typer.prog.cases.push_slice(&cases);
+                    let m = self.typer.prog.add(TExpr::Match(scrut, own));
+                    if let Some(t) = self.prog().type_of(e).and_then(|ty| match self.typer.types.get(ty) {
+                        Type::Class(_, targs) => self.typer.types.items(targs).last().copied(),
+                        _ => None,
+                    }) {
+                        self.typer.prog.set_type(m, t);
+                    }
+                    View::Lambda(vec![param], TreeRef::Expr(m))
+                }
                 TExpr::Js(s, args) => {
                     let items: Vec<TreeRef> = self.prog().expr_list(args).iter().map(|&x| TreeRef::Expr(x)).collect();
                     match self.sym_of_template(s) {
@@ -2553,6 +2605,8 @@ impl<'a, 't> Interp<'a, 't> {
                         _ => "Apply",
                     }
                 }
+                // A partial function literal is the closure dotty's tree is (`view`).
+                TExpr::Js(s, args) if self.partial_function_cases(s, args).is_some() => "Block",
                 TExpr::Js(s, args) => match self.sym_of_template(s) {
                     Some(sym) => {
                         let info = self.syms().sym(sym);

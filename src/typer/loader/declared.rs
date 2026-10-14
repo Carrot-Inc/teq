@@ -250,7 +250,7 @@ impl<'a> Worker<'a> {
     /// A signature's parameter name as teq names the class: a class of scala-library the std
     /// defines in another package under the std's name (`scala.collection.immutable.List` as
     /// `scala.List`); `None` for scalac's placeholder of a type it could not erase.
-    fn pickled_sig_name(&mut self, pickled: &str) -> Option<String> {
+    pub(super) fn pickled_sig_name(&mut self, pickled: &str) -> Option<String> {
         if pickled.is_empty() || pickled == "?" || pickled.starts_with('<') {
             return None;
         }

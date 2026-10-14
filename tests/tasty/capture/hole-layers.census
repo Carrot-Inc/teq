@@ -9,9 +9,10 @@ local reference                            19          0        0            0  
 local val                                   3          0        0            0          0
 macro splice                                3          0        0            0          0
 method call                                 5          0        0            0          0
+module reference                            1          0        0            0          1
 named argument                              0          4        0            0          0
 quote                                       6          0        0            0          0
 splice in a quote                           3          0        0            0          0
-this                                        5          0        0            0          5
+this                                        4          0        0            0          4
 transparent inline expansion                0          3        0            0          0
 orphans 0, captured types with an unsolved variable 0

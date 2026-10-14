@@ -795,7 +795,9 @@ impl<'a> Worker<'a> {
                     }
                 }
                 self.enter_param_annots(file, p, sym);
-                if clause.is_using {
+                // A using clause's parameters, and a parameter marked `implicit` alone (an
+                // implicit member, `class C(x: A, implicit val y: B)`), are the body's givens.
+                if clause.is_using || p.mods & mods::IMPLICIT != 0 {
                     self.syms.class_mut(cid).givens.push(sym);
                 }
                 syms.push(sym);

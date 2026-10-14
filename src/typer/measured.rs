@@ -409,6 +409,7 @@ macro_rules! inventory_maps {
             $f!(w, given_fits),
             $f!(w, head_sigs),
             $f!(w, base_type_cache),
+            $f!(w, class_base_memo),
             $f!(w, target_name_files),
             $f!(w, rule_member_names),
             $f!(w, package_levels),

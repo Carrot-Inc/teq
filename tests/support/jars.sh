@@ -14,7 +14,7 @@
 # shouldmatchers, mustmatchers and compatible jars with scalactic (scalatest-<artifact>, scalactic), its Scala.js core
 # with scalactic and scala-xml 2.1.0 (scalatest-core-sjs, scalactic-sjs, scala-xml-sjs); junit 4.13.2; the JVM `_3` artifacts of the ZIO runtime's
 # set (zio-jvm, zio-stacktracer-jvm, zio-internal-macros-jvm, izumi-reflect-jvm,
-# izumi-reflect-boopickle-jvm, scala-collection-compat-jvm, zio-test-jvm), chimney-jvm and chimney-macro-commons-jvm, tapir-core-jvm (1.13.29) with magnolia123-jvm,
+# izumi-reflect-boopickle-jvm, scala-collection-compat-jvm, zio-test-jvm, zio-interop-cats-jvm, zio-interop-tracer-jvm), chimney-jvm and chimney-macro-commons-jvm, tapir-core-jvm (1.13.29) with magnolia123-jvm,
 # sttp-model-core-jvm, sttp-shared-core-jvm and sttp-shared-ws-jvm; abi-callbacks-lib,
 # tests/support/abi_callbacks_lib.scala compiled by scalac (scala-cli) into a jar; typetest-lib,
 # tests/support/typetest_lib.scala compiled the same way; predef-lib,
@@ -91,7 +91,7 @@ with zipfile.ZipFile(sys.argv[1], 'w', zipfile.ZIP_DEFLATED) as z:
         stem = f[:-len('.tasty')]
         if stem in rdecl:
             continue
-        pkg = 'fix/reader' if stem in reader else 'fix/icdef' if stem in icdef else 'fix/jargetter' if stem in jargetter else 'fix/casts' if stem in casts else pext[stem] if stem in pext else 'fix/q38' if stem == 'Quotes38' else 'fix/clash' if stem in clash else 'fix/hkb' if stem in hkb else 'fix/unmod' if stem in unmod else 'fix/depparams' if stem in depparams else 'fix/depbounds' if stem in depbounds else 'fix/polybounds' if stem in polybounds else 'fix/wave6' if stem in wave6 else 'fix/retain' if stem in retain else 'fix/shadow' if stem in shadow else 'fix/guard' if stem in guard else 'fix/overloads' if stem in overloads else 'fix/tname' if stem in tname else 'fix/facades' if stem in facades else 'fix/members' if stem in members else 'fix/runtime' if stem in runtime else 'fix/rassoc' if stem in ('RightAssoc', 'Vec') else 'fix/bodies' if stem in bodies else 'fix/cake' if stem in cake else 'fix/qpat' if stem in ('LayerBox', 'LayerMacros', 'QpFns', 'QpProbe') else 'fix/qp38' if stem == 'Qp38' else 'fix/shapes'
+        pkg = 'fix/overacc' if stem == 'AccAssertions' else 'fix/reader' if stem in reader else 'fix/icdef' if stem in icdef else 'fix/jargetter' if stem in jargetter else 'fix/casts' if stem in casts else pext[stem] if stem in pext else 'fix/q38' if stem == 'Quotes38' else 'fix/clash' if stem in clash else 'fix/hkb' if stem in hkb else 'fix/unmod' if stem in unmod else 'fix/depparams' if stem in depparams else 'fix/depbounds' if stem in depbounds else 'fix/polybounds' if stem in polybounds else 'fix/wave6' if stem in wave6 else 'fix/retain' if stem in retain else 'fix/shadow' if stem in shadow else 'fix/guard' if stem in guard else 'fix/overloads' if stem in overloads else 'fix/tname' if stem in tname else 'fix/facades' if stem in facades else 'fix/members' if stem in members else 'fix/runtime' if stem in runtime else 'fix/rassoc' if stem in ('RightAssoc', 'Vec') else 'fix/bodies' if stem in bodies else 'fix/cake' if stem in cake else 'fix/qpat' if stem in ('LayerBox', 'LayerMacros', 'QpFns', 'QpProbe') else 'fix/qp38' if stem == 'Qp38' else 'fix/shapes'
         z.write(os.path.join('tests/tasty/fixtures', f), pkg + '/' + f)
 PY
   echo "$jar"
@@ -130,7 +130,7 @@ PY
 # tests/classfile/fixtures' Java classes they reach. Built when missing or older than a source.
 fixtures_jvm_jar() {
   local jar=$scratch-fixtures-jvm.jar dir=$scratch-fixtures-jvm.$$ src=tests/tasty/src f stale=0
-  local main="cake.scala cake3.scala cake4.scala guard.scala retain.scala runtime.scala targetname.scala wave6.scala shadow.scala reader_decl.scala reader_java.scala casts.scala icdefaults.scala"
+  local main="cake.scala cake3.scala cake4.scala guard.scala retain.scala runtime.scala targetname.scala wave6.scala shadow.scala reader_decl.scala reader_java.scala casts.scala icdefaults.scala overacc.scala"
   [ -f "$jar" ] || stale=1
   for f in $main reader.scala reader_decl_v1.scala reader_java_v1.scala; do [ "$src/$f" -nt "$jar" ] && stale=1; done
   if [ $stale = 1 ]; then
@@ -658,6 +658,8 @@ jar_of() {
     zio-json) echo "$M2/dev/zio/zio-json_sjs1_3/0.9.2/zio-json_sjs1_3-0.9.2.jar" ;;
     zio-json-jvm) echo "$M2/dev/zio/zio-json_3/0.9.2/zio-json_3-0.9.2.jar" ;;
     zio-streams-jvm) echo "$M2/dev/zio/zio-streams_3/2.1.26/zio-streams_3-2.1.26.jar" ;;
+    zio-interop-cats-jvm) echo "$M2/dev/zio/zio-interop-cats_3/23.1.0.13/zio-interop-cats_3-23.1.0.13.jar" ;;
+    zio-interop-tracer-jvm) echo "$M2/dev/zio/zio-interop-tracer_3/23.1.0.13/zio-interop-tracer_3-23.1.0.13.jar" ;;
     zio-test-jvm) echo "$M2/dev/zio/zio-test_3/2.1.26/zio-test_3-2.1.26.jar" ;;
     magnolia-jvm) echo "$M2/com/softwaremill/magnolia1_3/magnolia_3/1.3.23/magnolia_3-1.3.23.jar" ;;
     pureconfig-core-jvm) echo "$M2/com/github/pureconfig/pureconfig-core_3/0.17.10/pureconfig-core_3-0.17.10.jar" ;;

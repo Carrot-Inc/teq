@@ -69,7 +69,7 @@ package scala.collection.convert:
     override def isEmpty(): Boolean = underlying.isEmpty
     def iterator(): java.util.Iterator[A] = new IteratorAsJava(underlying.iterator)
 
-  final class SeqAsJava[A](underlying: Seq[A]) extends java.util.List[A]:
+  final class SeqAsJava[A](underlying: scala.collection.Seq[A]) extends java.util.List[A]:
     def size(): Int = underlying.length
     def get(index: Int): A =
       if index < 0 || index >= underlying.length then throw new IndexOutOfBoundsException(index.toString)

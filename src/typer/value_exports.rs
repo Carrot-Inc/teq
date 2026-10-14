@@ -332,7 +332,7 @@ impl<'a> Worker<'a> {
         }
         let (name, Owner::Class(owner)) = (info.name, info.owner) else { return None };
         let this_ty = self.syms.this_type(c);
-        let bases: Vec<(ClassId, TypeId)> = self.syms.class(owner).base_types.clone();
+        let bases: Vec<(ClassId, TypeId)> = self.met_base_types(owner);
         for &(b, bt) in bases.iter().skip(1) {
             if self.base_type(this_ty, b).is_none() {
                 continue;
@@ -576,6 +576,7 @@ impl<'a> Worker<'a> {
         if made.is_empty() {
             return Err(reason);
         }
+        let made = self.avoid_forwarder_clashes(made);
         targets.push(alias);
         for s in made {
             match self.syms.class(c).members.get(&alias).copied() {
@@ -593,6 +594,34 @@ impl<'a> Worker<'a> {
             }
         }
         Ok(())
+    }
+
+    /// dotty's `avoidClashes` (Namer.scala, i14966): of two forwarders of one name that erase alike, the one
+    /// whose target overloading resolution would prefer is kept, the other dropped (an export taken as an
+    /// import whose use site's reference resolves); where neither is preferred, both stay, which the check of
+    /// double definitions reports.
+    fn avoid_forwarder_clashes(&mut self, made: Vec<SymId>) -> Vec<SymId> {
+        if made.len() < 2 {
+            return made;
+        }
+        let mut dropped = vec![false; made.len()];
+        for i in 0..made.len() {
+            for j in i + 1..made.len() {
+                if dropped[i] || dropped[j] {
+                    continue;
+                }
+                let (a, b) = (made[i], made[j]);
+                if self.erased_signature(a, true) != self.erased_signature(b, true) || self.erased_result(a, true) != self.erased_result(b, true) {
+                    continue;
+                }
+                match self.preferred_forwarder(a, b) {
+                    Some(true) => dropped[j] = true,
+                    Some(false) => dropped[i] = true,
+                    None => {}
+                }
+            }
+        }
+        made.into_iter().zip(dropped).filter(|&(_, d)| !d).map(|(s, _)| s).collect()
     }
 
     /// A forwarder of `m`, a member of `owner` the qualifier has, as the path sees it: the

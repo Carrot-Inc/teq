@@ -266,6 +266,8 @@ struct Accessor {
     def: Arc<TClassDef>,
     sig: DefSig,
     rhs: Option<Term>,
+    /// The name the body selects the accessor by, signed where it is overloaded.
+    selected: Option<u32>,
 }
 
 fn takes_terms(sig: &DefSig) -> bool {
@@ -3102,13 +3104,62 @@ impl<'a> Worker<'a> {
                 let mut terms = TermDecoder::new(&mut decoder);
                 terms.def_with_body(a)
             }
-            None => def.template.stats.iter().find_map(|s| match s {
-                // The same name is one entry of the file's name table.
-                Stat::Def(sig, rhs) if name.map(|n| tasty.source_name(n)) == Some(tasty.source_name(sig.name)) => Some((sig.clone(), rhs.clone())),
-                _ => None,
-            })?,
+            None => {
+                // The same name is one entry of the file's name table; of overloaded accessors (`inline$..$checkImpl`
+                // of two `checkImpl`), the one the selection's signature names.
+                let named: Vec<(DefSig, Option<Term>)> = def
+                    .template
+                    .stats
+                    .iter()
+                    .filter_map(|s| match s {
+                        Stat::Def(sig, rhs) if name.map(|n| tasty.source_name(n)) == Some(tasty.source_name(sig.name)) => Some((sig.clone(), rhs.clone())),
+                        _ => None,
+                    })
+                    .collect();
+                self.def_at_signature(cv, named, name)?
+            }
         };
-        Some(Accessor { class, def, sig, rhs })
+        Some(Accessor { class, def, sig, rhs, selected: name })
+    }
+
+    /// Of a template's definitions of one name, the one a signed name selects (dotty's `Denotation.atSignature`,
+    /// a `SELECTin` of an overloaded member): as many type and term parameters, each term parameter erasing to the
+    /// class the signature names where teq can tell it. The first of the name where the selection is not signed or
+    /// no one definition answers it.
+    fn def_at_signature(&mut self, cv: &mut Conv, defs: Vec<(DefSig, Option<Term>)>, selected: Option<u32>) -> Option<(DefSig, Option<Term>)> {
+        if defs.len() < 2 {
+            return defs.into_iter().next();
+        }
+        let params = match selected.and_then(|n| cv.tasty.names.get(n as usize)) {
+            Some(TName::Signed { params, .. }) => params.clone(),
+            _ => return defs.into_iter().next(),
+        };
+        let types: usize = params.iter().filter(|&&p| p < 0).map(|&p| (-p) as usize).sum();
+        let wanted: Vec<Option<String>> = params.iter().filter(|&&p| p >= 0).map(|&p| cv.tasty.name(p as u32)).map(|n| self.pickled_sig_name(&n)).collect();
+        let mut fitting = Vec::new();
+        for (i, (sig, _)) in defs.iter().enumerate() {
+            let tparams: usize = sig.clauses.iter().map(|c| if let Clause::Types(ps) = c { ps.len() } else { 0 }).sum();
+            let terms: Vec<TType> = sig.clauses.iter().flat_map(|c| if let Clause::Terms(ps) = c { ps.iter().map(|p| p.ty.clone()).collect() } else { Vec::new() }).collect();
+            if tparams != types || terms.len() != wanted.len() {
+                continue;
+            }
+            let mut cx = super::MapCx::new(cv.file);
+            let erases = terms.iter().zip(&wanted).all(|(t, want)| {
+                let mapped = self.map_type(&mut cx, t);
+                match (want, self.sig_name(mapped, false, 0, None)) {
+                    (Some(w), Some(have)) => *w == have,
+                    _ => true,
+                }
+            });
+            if erases {
+                fitting.push(i);
+            }
+        }
+        let at = match fitting.as_slice() {
+            [i] => *i,
+            _ => 0,
+        };
+        defs.into_iter().nth(at)
     }
 
     /// Whether a path names an `inline$x` accessor rather than a local or an entered member.
@@ -3176,10 +3227,19 @@ impl<'a> Worker<'a> {
                 (None, None) => return None,
             }
         };
-        let target_sig = acc.def.template.stats.iter().find_map(|s| match s {
-            Stat::Def(sig, _) | Stat::Val(sig, _) if tasty.name(tasty.source_name(sig.name)) == member => Some(sig.clone()),
-            _ => None,
-        })?;
+        // The member it forwards to, of its overloads the one of the accessor's signature (its parameters the
+        // member's).
+        let named: Vec<(DefSig, Option<Term>)> = acc
+            .def
+            .template
+            .stats
+            .iter()
+            .filter_map(|s| match s {
+                Stat::Def(sig, _) | Stat::Val(sig, _) if tasty.name(tasty.source_name(sig.name)) == member => Some((sig.clone(), None)),
+                _ => None,
+            })
+            .collect();
+        let (target_sig, _) = self.def_at_signature(cv, named, acc.selected)?;
         // In link mode the output runs beside the jar, whose private member the JVM keeps to
         // its class: the call goes through the accessor, public in the class file.
         let called = if self.link_mode() { &acc.sig } else { &target_sig };

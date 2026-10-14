@@ -2220,7 +2220,7 @@ impl<'a> Worker<'a> {
             self.retype_own_member(w, e, r, rt, s, owner, targs);
             return;
         }
-        let bases = self.syms.class(c).base_types.clone();
+        let bases = self.met_base_types(c);
         let Some(i) = self.implementation_of(c, &bases, s).filter(|&i| i != s) else {
             self.retype_own_member(w, e, r, rt, s, owner, targs);
             return;
@@ -2426,7 +2426,7 @@ impl<'a> Worker<'a> {
         let mut classes = Vec::new();
         self.own_classes(own, &mut classes);
         let implementation = classes.into_iter().find_map(|c| {
-            let bases = self.syms.class(c).base_types.clone();
+            let bases = self.met_base_types(c);
             self.implementation_of(c, &bases, d.sym).filter(|&i| i != d.sym)
         })?;
         let Owner::Class(owner) = self.syms.sym(implementation).owner else { return None };

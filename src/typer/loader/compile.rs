@@ -22,6 +22,7 @@ use crate::types::*;
 
 /// Library definitions the std defines under another package: (the library's package, the
 /// name, the std's package).
+
 pub(crate) const STD_BINDINGS: &[(&str, &str, &str)] = &[
     ("scala.collection.immutable", "List", "scala"),
     ("scala.collection.immutable", "::", "scala"),
@@ -38,8 +39,6 @@ pub(crate) const STD_BINDINGS: &[(&str, &str, &str)] = &[
     ("scala.collection.immutable", "ArraySeq", "scala"),
     ("scala.collection.immutable", "SeqOps", "scala"),
     ("scala.collection.immutable", "SetOps", "scala"),
-    ("scala.collection", "Seq", "scala"),
-    ("scala.collection", "IndexedSeq", "scala"),
     ("scala.collection", "Iterable", "scala"),
     ("scala.collection", "IterableOnce", "scala"),
     ("scala.collection", "IterableOps", "scala"),
@@ -118,14 +117,32 @@ impl<'a> Worker<'a> {
         self.jvm
     }
 
-    /// The std definition a library name in package `p` stands for, by `STD_BINDINGS`.
+    /// The std definition a library name in package `p` stands for, by `STD_BINDINGS`: under the std
+    /// of a class path, or of a program without one, whose std is the lean one.
     fn std_binding(&mut self, p: PkgId, name: Name) -> Option<(PkgId, Name)> {
-        if !self.std_binds() || p == ROOT_PKG {
+        if !(self.std_binds() || self.loaded.is_none()) || p == ROOT_PKG {
+            return None;
+        }
+        // The package's own name and the name rule most lookups out by one probe before any binding is read:
+        // every lookup that misses a package asks (`java.lang`'s of the root imports among them).
+        let own = self.syms.pkg(p).name;
+        if self.std_binding_keys.is_none() {
+            let keys: std::collections::HashSet<(Name, Name), crate::intern::FxBuild> = STD_BINDINGS
+                .iter()
+                .map(|&(from, n, _)| (self.interner.intern(from.rsplit('.').next().unwrap_or(from)), self.interner.intern(n)))
+                .collect();
+            let mut names = [0u64; 16];
+            for &(_, n) in &keys {
+                names[(n.0 as usize >> 6) & 15] |= 1 << (n.0 & 63);
+            }
+            self.std_binding_keys = Some(Box::new(keys));
+            self.std_binding_names = Some(Box::new(names));
+        }
+        if !self.std_binding_keys.as_ref().is_some_and(|keys| keys.contains(&(own, name))) {
             return None;
         }
         let text = self.interner.get(name);
-        let matches: Vec<&str> = STD_BINDINGS.iter().filter(|(_, n, _)| *n == text).map(|(from, _, to)| (*from, *to)).filter(|(from, _)| self.pkg_is(p, from)).map(|(_, to)| to).collect();
-        let to = *matches.first()?;
+        let to: &'static str = STD_BINDINGS.iter().find(|&&(from, n, _)| n == text && self.pkg_is(p, from)).map(|&(_, _, to)| to)?;
         let mut pkg = ROOT_PKG;
         for seg in to.split('.') {
             let n = self.interner.intern(seg);
@@ -149,6 +166,15 @@ impl<'a> Worker<'a> {
                 }
                 _ => return false,
             }
+        }
+    }
+
+    /// Whether `name` may be one `STD_BINDINGS` binds: the filter of its names, before the first lookup every name.
+    #[inline]
+    pub(in crate::typer) fn may_bind_std(&self, name: Name) -> bool {
+        match &self.std_binding_names {
+            Some(bits) => bits[(name.0 as usize >> 6) & 15] >> (name.0 & 63) & 1 != 0,
+            None => true,
         }
     }
 
@@ -907,3 +933,17 @@ const SCALA3_LIBRARY: &[(&str, &str)] = &[
     ("scala.util", "CommandLineParser"), ("scala.util", "FromDigits"), ("scala.util", "LowPriorityNotGiven"), ("scala.util", "NotGiven"),
     ("scala.util", "TupledFunction"), ("scala.util", "boundary"), ("scala.util.control", "NonLocalReturns"),
 ];
+
+#[cfg(test)]
+mod tests {
+    use super::STD_BINDINGS;
+
+    /// Every package a binding maps from is under `scala` or `java`, where a program without a class path asks
+    /// the bindings (`sees_std_bindings_alone`).
+    #[test]
+    fn the_bindings_map_from_packages_under_scala_or_java() {
+        for (from, name, _) in STD_BINDINGS {
+            assert!(from.starts_with("scala.") || from.starts_with("java."), "{}.{}", from, name);
+        }
+    }
+}

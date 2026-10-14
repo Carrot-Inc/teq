@@ -1957,7 +1957,8 @@ impl<'a> Worker<'a> {
         };
         let Owner::Class(c) = owner else { return None };
         for i in 1..self.syms.class(c).base_types.len() {
-            let (b, bt) = self.syms.class(c).base_types[i];
+            let b = self.syms.class(c).base_types[i].0;
+            let bt = self.base_instance_at(c, i);
             let mut k = 0;
             while let Some(p) = self.inherited_member(b, name, is_ext, k) {
                 k += 1;
@@ -3540,7 +3541,8 @@ impl<'a> Worker<'a> {
     fn existing_def_among(&mut self, c: ClassId, name: Name, param: synthetic::Param) -> Option<SymId> {
         let mut abstract_in: Vec<ClassId> = Vec::new();
         for i in 0..self.syms.class(c).base_types.len() {
-            let (b, bt) = self.syms.class(c).base_types[i];
+            let b = self.syms.class(c).base_types[i].0;
+            let bt = self.base_instance_at(c, i);
             let mut k = 0;
             while let Some(s) = self.own_alternative(b, name, k) {
                 k += 1;
@@ -3765,7 +3767,7 @@ impl<'a> Worker<'a> {
         if let Some(&call) = self.inferred_parent_args.get(&c) {
             return Some(call);
         }
-        let parent_ty = self.syms.class(c).base_types.iter().find(|&&(b, _)| b == superclass).map(|&(_, t)| t)?;
+        let parent_ty = self.base_type_of(c, superclass)?;
         let call = self.type_parent_ctor(c, clause, superclass, Some(parent_ty), false).map(|(call, _)| call)?;
         (!call.args.is_empty() || call.via.is_some()).then_some(call)
     }
@@ -3847,15 +3849,7 @@ impl<'a> Worker<'a> {
         let filler = enum_class.or(self.syms.class(c).superclass);
         let filled_above =
             |t: &Self, b: ClassId| filler.map_or(false, |e| t.syms.class(e).base_types.iter().any(|&(x, _)| x == b));
-        let bases: Vec<(ClassId, TypeId)> = self
-            .syms
-            .class(c)
-            .base_types
-            .iter()
-            .skip(1)
-            .copied()
-            .filter(|&(b, _)| self.has_trait_params(b))
-            .collect();
+        let bases: Vec<(ClassId, TypeId)> = self.met_base_types(c).into_iter().skip(1).filter(|&(b, _)| self.has_trait_params(b)).collect();
         let ast = self.ast(file);
         let mut by_trait = Vec::new();
         for (b, base_ty) in bases {
@@ -4699,7 +4693,8 @@ impl<'a> Worker<'a> {
             // A name none of the bases has meets nothing there (the bases' names gathered once).
             let named = inherited.get_or_insert_with(|| self.base_member_names(c)).has(name);
             for j in (1..self.syms.class(c).base_types.len()).filter(|_| named) {
-                let (b, bt) = self.syms.class(c).base_types[j];
+                let b = self.syms.class(c).base_types[j].0;
+                let bt = self.base_instance_at(c, j);
                 // A base that declares nothing (`java.io.Serializable`) has nothing to override.
                 let bi = self.syms.class(b);
                 if if is_ext { bi.extensions.is_empty() } else { bi.members.is_empty() } {
@@ -4869,7 +4864,7 @@ impl<'a> Worker<'a> {
     fn check_type_member_overrides(&mut self, c: ClassId) {
         let mut own: Vec<(Name, AliasId)> = self.syms.class(c).type_aliases.iter().map(|(&n, &a)| (n, a)).collect();
         own.sort_by_key(|&(_, a)| a);
-        let bases: Vec<(ClassId, TypeId)> = self.syms.class(c).base_types[1..].to_vec();
+        let bases: Vec<(ClassId, TypeId)> = self.met_base_types(c)[1..].to_vec();
         let this = self.this_prefix(c);
         for (name, m) in own {
             let Some((b, bt, p)) = bases.iter().find_map(|&(b, bt)| self.syms.class(b).type_aliases.get(&name).map(|&p| (b, bt, p))) else { continue };
@@ -5046,7 +5041,7 @@ impl<'a> Worker<'a> {
     #[cold]
     /// Asked where two parents' bases share a name (`bases_share_a_name`).
     fn check_inherited_pairs(&mut self, c: ClassId) {
-        let bases: Vec<(ClassId, TypeId)> = self.syms.class(c).base_types[1..].to_vec();
+        let bases: Vec<(ClassId, TypeId)> = self.met_base_types(c)[1..].to_vec();
         let direct: Vec<ClassId> = self.syms.class(c).parents.clone().iter().filter_map(|&p| self.class_of(p)).collect();
         let extends = |t: &Self, sub: ClassId, sup: ClassId| t.syms.class(sub).base_types.iter().any(|&(x, _)| x == sup);
         let mut seen: crate::intern::FxMap<Name, Vec<(SymId, ClassId, TypeId)>> = Default::default();
@@ -5098,7 +5093,7 @@ impl<'a> Worker<'a> {
     /// overriding both of two inherited members checks each against its own alone.
     fn overridden_before(&mut self, c: ClassId, s: SymId, b: ClassId, bt: TypeId) -> bool {
         let name = self.syms.sym(s).name;
-        let bases: Vec<(ClassId, TypeId)> = self.syms.class(c).base_types.clone();
+        let bases: Vec<(ClassId, TypeId)> = self.met_base_types(c);
         for (i, &(k, kt)) in bases.iter().enumerate() {
             if k == b {
                 return false;
@@ -5497,7 +5492,8 @@ impl<'a> Worker<'a> {
         // meets nothing there (their names masks).
         let mut earlier = self.syms.class(self.syms.class(c).base_types[1].0).names_mask;
         for j in 2..self.syms.class(c).base_types.len() {
-            let (b, bt) = self.syms.class(c).base_types[j];
+            let b = self.syms.class(c).base_types[j].0;
+            let bt = self.base_instance_at(c, j);
             let mask = self.syms.class(b).names_mask;
             let meets = mask & earlier != 0;
             earlier |= mask;
@@ -5518,7 +5514,8 @@ impl<'a> Worker<'a> {
             for p in finals {
                 let name = self.syms.sym(p).name;
                 for i in 1..j {
-                    let (a, at) = self.syms.class(c).base_types[i];
+                    let a = self.syms.class(c).base_types[i].0;
+                    let at = self.base_instance_at(c, i);
                     let Some(&m) = self.syms.class(a).members.get(&name) else { continue };
                     if self.syms.sym(m).owner != Owner::Class(a) || self.syms.alternatives(m).is_some() || self.syms.sym(m).kind != SymKind::Def {
                         continue;
@@ -5661,7 +5658,7 @@ impl<'a> Worker<'a> {
         let (name, owner) = (self.syms.sym(m).name, self.syms.sym(m).owner);
         let (Owner::Class(c), true) = (owner, depth < 64) else { return };
         self.complete_class(c);
-        let bases: Vec<(ClassId, TypeId)> = self.syms.class(c).base_types.clone();
+        let bases: Vec<(ClassId, TypeId)> = self.met_base_types(c);
         for &(b, bt) in bases.iter().skip(1) {
             let mut k = 0;
             while let Some(p) = self.own_alternative(b, name, k) {
@@ -5975,7 +5972,8 @@ impl<'a> Worker<'a> {
         // (`rule_prefix`) are passed over without a visit.
         let prefix = if completed_by_rule { 1 + self.syms.class(c).rule_prefix as usize } else { 1 };
         for j in ((1 - own)..1.min(self.syms.class(c).base_types.len())).chain(prefix..self.syms.class(c).base_types.len()) {
-            let (b, bt) = self.syms.class(c).base_types[j];
+            let b = self.syms.class(c).base_types[j].0;
+            let bt = self.base_instance_at(c, j);
             if completed_by_rule && self.is_desugared_parent(b) {
                 continue;
             }
@@ -6025,7 +6023,10 @@ impl<'a> Worker<'a> {
                 // The class's own member is the most derived: whatever of its name it inherits it
                 // overrides, which implements nothing of it (`class C extends T { override def x:
                 // Int }` over a concrete `T.x`).
-                let bases: &Vec<(ClassId, TypeId)> = copied.get_or_insert_with(|| self.syms.class(c).base_types.clone());
+                if copied.is_none() {
+                    copied = Some(self.met_base_types(c));
+                }
+                let bases: &Vec<(ClassId, TypeId)> = copied.as_ref().unwrap();
                 let implemented = bases.iter().enumerate().filter(|&(i, _)| b != c || i == 0).any(|(i, &(other, ot))| {
                     let mut k = 0;
                     while let Some(s) = self.inherited_member(other, name, is_ext, k) {
@@ -6083,7 +6084,10 @@ impl<'a> Worker<'a> {
             }
         }
         if !missing.is_empty() && self.link_mode() {
-            let bases = copied.take().unwrap_or_else(|| self.syms.class(c).base_types.clone());
+            let bases = match copied.take() {
+                Some(bases) => bases,
+                None => self.met_base_types(c),
+            };
             missing.retain(|&(_, m, bt)| !self.inherited_export_implements(c, &bases, m, bt));
         }
         if !missing.is_empty() {

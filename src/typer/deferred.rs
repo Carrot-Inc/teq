@@ -236,7 +236,7 @@ impl<'a> Worker<'a> {
     /// reports nothing (the body check reports).
     fn deferred_givens_to_implement(&mut self, c: ClassId, first: Option<usize>) -> Vec<(SymId, TypeId)> {
         let superclass = self.extended_class(c);
-        let bases: Vec<(ClassId, TypeId)> = self.syms.class(c).base_types.iter().skip(1).copied().collect();
+        let bases: Vec<(ClassId, TypeId)> = self.met_base_types(c).into_iter().skip(1).collect();
         let mut out: Vec<(SymId, TypeId)> = Vec::new();
         for (b, bt) in bases {
             if self.syms.class(b).kind != ClassKind::Trait || superclass.is_some_and(|s| self.derives_from(s, b)) {
@@ -302,7 +302,7 @@ impl<'a> Worker<'a> {
     /// deferred `given myc`).
     fn deferred_implemented(&mut self, c: ClassId, m: SymId) -> bool {
         let name = self.syms.sym(m).name;
-        let bases: Vec<(ClassId, TypeId)> = self.syms.class(c).base_types.clone();
+        let bases: Vec<(ClassId, TypeId)> = self.met_base_types(c);
         let Some(m_owner) = bases.iter().find(|&&(b, _)| Owner::Class(b) == self.syms.sym(m).owner).map(|&(_, t)| t) else { return false };
         bases.iter().enumerate().any(|(i, &(b, bt))| {
             let mut k = 0;
@@ -326,7 +326,7 @@ impl<'a> Worker<'a> {
     fn redeclared_below(&mut self, c: ClassId, m: SymId) -> bool {
         let Owner::Class(t) = self.syms.sym(m).owner else { return false };
         let name = self.syms.sym(m).name;
-        let bases: Vec<(ClassId, TypeId)> = self.syms.class(c).base_types.clone();
+        let bases: Vec<(ClassId, TypeId)> = self.met_base_types(c);
         let Some(m_owner) = bases.iter().find(|&&(b, _)| b == t).map(|&(_, ty)| ty) else { return false };
         bases.iter().enumerate().any(|(i, &(b, bt))| {
             if b == t || !self.derives_from(b, t) {

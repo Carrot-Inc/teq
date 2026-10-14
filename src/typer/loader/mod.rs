@@ -1094,6 +1094,7 @@ impl<'a> Worker<'a> {
         }
         // The builtin, complete before, meets more bases (`base_type_cache`).
         self.base_type_cache.clear();
+        self.class_base_memo.clear();
         self.syms.class_mut(c).base_types = bases;
         self.syms.class_mut(c).rule_prefix = 0;
         if self.syms.class(c).base_types.len() > 1 {
@@ -2091,6 +2092,7 @@ impl<'a> Worker<'a> {
     fn set_loaded_parents(&mut self, c: ClassId, parents: Vec<TypeId>) {
         if !self.syms.class(c).base_types.is_empty() {
             self.base_type_cache.clear();
+            self.class_base_memo.clear();
         }
         let targs: Vec<TypeId> = self.syms.class(c).tparams.clone().iter().map(|&p| self.types.param(p)).collect();
         let self_ty = self.types.class(c, &targs);
@@ -2153,8 +2155,7 @@ impl<'a> Worker<'a> {
             }
             linearisations.push(seen);
         }
-        let (mut base, _) = self.linearise(c, self_ty, linearisations.iter().cloned().map(super::resolve::ParentBases::Seen).collect(), false);
-        self.narrow_base_types(c, &mut base, &linearisations);
+        let (base, _, merged) = self.linearise(c, self_ty, linearisations.into_iter().map(super::resolve::ParentBases::Seen).collect(), false);
         if let Some(parent) = superclass {
             let subclasses = &mut self.syms.class_mut(parent).subclasses;
             if !subclasses.contains(&c) {
@@ -2184,107 +2185,8 @@ impl<'a> Worker<'a> {
         if let Some(declared) = info.declared_self {
             info.this_type = Some(self.types.inter(self_ty, declared));
         }
-    }
-
-    /// A library class inherits one ancestor at several instantiations that differ in variant
-    /// parameters (`List` has `IterableOps[A, Iterable, Iterable[A]]` through `AbstractSeq` and
-    /// `IterableOps[A, List, List[A]]` through `LinearSeqOps`), and scalac's base type is the
-    /// most specific of them. The linearisation keeps the first parent's; each covariant
-    /// argument is replaced by another instantiation's when that one's head class is nearer to
-    /// `c` in the linearisation, which is what the collections' `CC` and `C` parameters are.
-    fn narrow_base_types(&mut self, c: ClassId, base: &mut [(ClassId, TypeId)], linearisations: &[Vec<(ClassId, TypeId)>]) {
-        let order: Vec<ClassId> = base.iter().map(|&(b, _)| b).collect();
-        let rank = |t: &Self, ty: TypeId| -> Option<usize> {
-            let head = match t.types.get(ty) {
-                Type::Class(k, _) | Type::Ctor(k) => k,
-                Type::Lambda(_, body) => match t.types.get(body) {
-                    Type::Class(k, _) => k,
-                    _ => return None,
-                },
-                _ => return None,
-            };
-            if head == c {
-                return Some(0);
-            }
-            order.iter().position(|&b| b == head)
-        };
-        let parts = |t: &Self, ty: TypeId| {
-            let mut out = Vec::new();
-            let mut stack = vec![ty];
-            while let Some(x) = stack.pop() {
-                match t.types.get(x) {
-                    Type::Inter(a, b) => stack.extend([a, b]),
-                    _ if x == crate::types::ANY => {}
-                    _ => out.push(x),
-                }
-            }
-            out
-        };
-        let parts_within = |t: &Self, upper: TypeId, lower: TypeId| {
-            let within = parts(t, lower);
-            parts(t, upper).iter().all(|p| within.contains(p))
-        };
-        for i in 1..base.len() {
-            let (bc, bt) = base[i];
-            let from = |ty: TypeId| linearisations.iter().position(|l| l.iter().any(|&(x, t)| x == bc && t == ty));
-            let others: Vec<(Option<usize>, TypeId)> = linearisations
-                .iter()
-                .enumerate()
-                .flat_map(|(j, l)| l.iter().filter(|&&(x, t)| x == bc && t != bt).map(move |&(_, t)| (Some(j), t)))
-                .collect();
-            if others.is_empty() {
-                continue;
-            }
-            let mine_from = from(bt);
-            let Type::Class(_, args) = self.types.get(bt) else { continue };
-            let mut args: Vec<TypeId> = self.types.items(args).to_vec();
-            let tparams = self.syms.class(bc).tparams.clone();
-            let mut changed = false;
-            let mut decided_by: Vec<Option<usize>> = vec![mine_from; args.len()];
-            for (other_from, other) in others {
-                let Type::Class(_, oargs) = self.types.get(other) else { continue };
-                let oargs: Vec<TypeId> = self.types.items(oargs).to_vec();
-                for (k, &p) in tparams.iter().enumerate() {
-                    if self.syms.tparam(p).variance != 1 || k >= args.len() || k >= oargs.len() || args[k] == oargs[k] {
-                        continue;
-                    }
-                    // An intersection is below each of its parts, `Any` above everything:
-                    // the meet of the two is the narrower one (`GenericBackend[F, S &
-                    // WebSockets]` through the parent, `[F, WebSockets]` and `[F, Any]` above).
-                    match (parts_within(self, oargs[k], args[k]), parts_within(self, args[k], oargs[k])) {
-                        (true, _) => continue,
-                        (false, true) => {
-                            args[k] = oargs[k];
-                            decided_by[k] = other_from;
-                            changed = true;
-                            continue;
-                        }
-                        _ => {}
-                    }
-                    match (rank(self, args[k]), rank(self, oargs[k])) {
-                        (Some(mine), Some(theirs)) => {
-                            if theirs < mine {
-                                args[k] = oargs[k];
-                                decided_by[k] = other_from;
-                                changed = true;
-                            }
-                        }
-                        // What the ranks do not order, the linearisation does: the base
-                        // through the parent written last comes first in it.
-                        _ => {
-                            if other_from > decided_by[k] {
-                                args[k] = oargs[k];
-                                decided_by[k] = other_from;
-                                changed = true;
-                            }
-                        }
-                    }
-                }
-            }
-            if changed {
-                base[i].1 = self.types.class(bc, &args);
-            }
-        }
+        drop(info);
+        self.note_meets(c, &merged);
     }
 
     /// A jar class's private constructor is one for the program as a source class's is. A
