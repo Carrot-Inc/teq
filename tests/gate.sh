@@ -59,7 +59,15 @@
 # lila-compile (teq compile of every project and the generated inputs' digests against bench/lila/generated.json),
 # lila-test (the suites and cases against bench/lila/tests.json) and lila-run (the server over MongoDB and Redis,
 # LILA_MONGOD and LILA_REDIS, its home page and an asset), each bench/lila/lila.scala's verb under the binary; a
-# line without --lila, an export, a service or a suite fails, never skips. The paths of the lists and of
+# line without --lila, an export, a service or a suite fails, never skips. Three lines each over Airstream and Laminar,
+# the public reference projects of the JavaScript target, likewise run only when --only names them: with --airstream
+# and --laminar naming their checkouts at bench/airstream/pin.json's and bench/laminar/pin.json's commits (their npm
+# fixture installed, the verb checkout's), airstream-export and laminar-export (sbt ++3.8.4! teqExportAll with the
+# project's overlay, JAVA_HOME's JDK the pin's; an export that compiles the build or records a generator only sbt
+# runs fails), airstream-compile and laminar-compile (teq compile of the pin's projects, the generators' outputs
+# deleted first and written again with the pin's bytes) and airstream-test and laminar-test (teq test --verbose, the
+# suites and cases by outcome against the project's tests.json), each bench/<project>/<project>.scala's verb under
+# the binary; a line without its checkout, an export or an inventory fails, never skips. The paths of the lists and of
 # CHAIN_KNOWN and SCALAC_KNOWN are read from the caller's directory. --only limits the gate to the named lines.
 #
 # Each run's logs go to a new attempt directory, out/gate/<head>/<attempt>/: a suite's <name>.log, each machine's
@@ -73,7 +81,7 @@ cd "$(dirname "$0")/.."
 root=$PWD
 ra=${REMOTE_AGENT:-}
 usage() {
-  echo "usage: tests/gate.sh <worktree> [--master <binary>] [--master-rev <revision>] [--app <build.json>] [--export-manifest <file>] [--lila <checkout>] [--only <name,...>] [--record]" >&2
+  echo "usage: tests/gate.sh <worktree> [--master <binary>] [--master-rev <revision>] [--app <build.json>] [--export-manifest <file>] [--lila <checkout>] [--airstream <checkout>] [--laminar <checkout>] [--only <name,...>] [--record]" >&2
   exit 2
 }
 absolute() { case $1 in /*) echo "$1" ;; *) echo "$caller/$1" ;; esac; }
@@ -82,6 +90,8 @@ master=
 master_rev=
 app=
 lila=
+airstream=
+laminar=
 manifest=
 only=
 record=0
@@ -93,6 +103,8 @@ while [ $# -gt 0 ]; do
     --app) [ -n "$2" ] || usage; app=$(absolute "$2"); shift 2 ;;
     --export-manifest) [ -n "$2" ] || usage; manifest=$(absolute "$2"); shift 2 ;;
     --lila) [ -n "$2" ] || usage; lila=$(absolute "$2"); shift 2 ;;
+    --airstream) [ -n "$2" ] || usage; airstream=$(absolute "$2"); shift 2 ;;
+    --laminar) [ -n "$2" ] || usage; laminar=$(absolute "$2"); shift 2 ;;
     --only) [ -n "$2" ] || usage; only=" ${2//,/ } "; shift 2 ;;
     --record) record=1; shift ;;
     -*) usage ;;
@@ -144,10 +156,11 @@ machine=(
   "rust-warnings ./tests/rust-warnings.sh"
 )
 compare="budget runtime sentinel"
-local_lines="size instructions instructions-derive memory app-export app-export-accept app-api app-api-test app-chain app-cypress app-scalac lila-export lila-compile lila-test lila-run"
-# The lines run only when --only names them: the scalac oracle, at a release and nightly; lila's, until their
-# time and memory are measured within the gate's budget (docs/DEVELOPING.md, "lila").
-optional="app-scalac lila-export lila-compile lila-test lila-run"
+local_lines="size instructions instructions-derive memory app-export app-export-accept app-api app-api-test app-chain app-cypress app-scalac lila-export lila-compile lila-test lila-run airstream-export airstream-compile airstream-test laminar-export laminar-compile laminar-test"
+# The lines run only when --only names them: the scalac oracle, at a release and nightly; the reference projects',
+# until their time and memory are measured within the gate's budget (docs/DEVELOPING.md, "lila", "Airstream and
+# Laminar").
+optional="app-scalac lila-export lila-compile lila-test lila-run airstream-export airstream-compile airstream-test laminar-export laminar-compile laminar-test"
 names=" $compare $local_lines "
 for entry in "${machine[@]}"; do names="$names${entry%% *} "; done
 for name in $only; do
@@ -415,6 +428,26 @@ local_half() {
     code=$?
     find "$tmp/lila" -maxdepth 2 -name '*.log' -exec cp {} "$out/lila/" \;
     result "lila-$verb" local $(($(now) - s)) $code "$(grep -E '^(FAIL )?lila: ' "$out/lila-$verb.log" | tail -1)" "$file"
+  done
+  # Airstream and Laminar, the JavaScript target's reference projects (bench/<project>/<project>.scala over
+  # bench/reference/scalajs.scala): the export with the overlay, teq's compile and the inventory of teq's test run,
+  # each against the pin. Mandatory once named: a missing checkout, export or inventory fails the line.
+  for project in airstream laminar; do
+    for verb in export compile test; do
+      selected "$project-$verb" || continue
+      checkout=$airstream
+      [ $project = laminar ] && checkout=$laminar
+      if [ -z "$checkout" ]; then
+        result "$project-$verb" local 0 1 "needs --$project, the checkout at bench/$project/pin.json's commit" "$file"
+        continue
+      fi
+      s=$(now)
+      mkdir -p "$tmp/$project" "$out/$project"
+      (cd "$wt" && timeout 3600 "$bin" interp bench/$project/$project.scala -- "$verb" "$checkout" "$tmp/$project" --teq "$bin") > "$out/$project-$verb.log" 2>&1
+      code=$?
+      find "$tmp/$project" -maxdepth 1 -name '*.log' -exec cp {} "$out/$project/" \;
+      result "$project-$verb" local $(($(now) - s)) $code "$(grep -E "^(FAIL )?$project: " "$out/$project-$verb.log" | tail -1)" "$file"
+    done
   done
   now > "$out/local.ended"
 }

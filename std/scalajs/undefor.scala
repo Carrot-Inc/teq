@@ -21,6 +21,9 @@ package scala.scalajs.js:
     def orElse[B >: A](alternative: => UndefOr[B]): UndefOr[B] = if isEmpty then alternative else self
     def toOption: Option[A] = if isEmpty then None else Some(get)
     def toList: List[A] = if isEmpty then Nil else List(get)
+    // Scala.js's: one `applyOrElse`, so that a guard runs once.
+    def collect[B](pf: PartialFunction[A, B]): UndefOr[B] =
+      if isEmpty then undefined else pf.applyOrElse(get, (_: A) => undefined).asInstanceOf[UndefOr[B]]
 
 package scala.scalajs.js.internal:
 

@@ -178,7 +178,7 @@ object Ordering:
   object Implicits extends InfixOrderingOps:
     given infixOrderingOps: InfixOrderingOps = this
     // Lexicographic, a shorter prefix first, as scala-library's.
-    implicit def seqOrdering[CC[X] <: Seq[X], T](implicit ord: Ordering[T]): Ordering[CC[T]] =
+    implicit def seqOrdering[CC[X] <: scala.collection.Seq[X], T](implicit ord: Ordering[T]): Ordering[CC[T]] =
       new Ordering[CC[T]]:
         def compare(x: CC[T], y: CC[T]): Int =
           val xs = x.iterator

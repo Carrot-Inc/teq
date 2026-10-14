@@ -767,8 +767,27 @@ impl<'a> Worker<'a> {
                 self.prog.add(literal)
             }
             Type::Term(_) | Type::Select(..) | Type::This(_) => self.path_expr(arg)?,
-            // An object's singleton type, which is its module class's type here.
-            Type::Class(c, _) if self.syms.class(c).kind == ClassKind::Object => self.prog.add(TExpr::Module(c)),
+            // An object's singleton type, which is its module class's type here (dotty's `TypeRef` of a
+            // module class, made the module's reference through its prefix): a local object's lazy val,
+            // an object nested in a class (a class of its own here, with its instance's val) read on
+            // the enclosing instance, or on the prefix's path.
+            Type::Class(c, _) if self.syms.class(c).kind == ClassKind::Object || self.syms.class(c).inner_object.is_some() => match self.syms.class(c).inner_object {
+                Some(v) => self.inner_object_ref(v)?,
+                None => match self.syms.class(c).local_module {
+                    Some(v) => self.prog.add(TExpr::Local(v)),
+                    None => self.prog.add(TExpr::Module(c)),
+                },
+            },
+            Type::Nested(p, k) => match self.types.get(k) {
+                Type::Class(c, _) if self.syms.class(c).inner_object.is_some() => {
+                    let v = self.syms.class(c).inner_object?;
+                    match self.path_expr(p) {
+                        Some(recv) => self.prog.add(TExpr::Field(recv, v)),
+                        None => self.inner_object_ref(v)?,
+                    }
+                }
+                _ => return None,
+            },
             _ => return None,
         };
         let l = self.prog.list(&[value]);

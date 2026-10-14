@@ -77,7 +77,11 @@ On JavaScript a program compiles against one of two standard libraries, chosen w
 **The lean std** is the default. Its files enter on demand, a file parsed the first time a lookup
 asks for a name it defines, so hello world pays for nothing it does not name. Where the std defines
 a name a jar uses (`List`, `Vector`, `Map`, `Iterator`, `Ordering`, `Either`, ...), the std's
-definition is the binding for the jar's bodies too. A member of such a class that the std lacks is
+definition is the binding for the jar's bodies too. The std keeps scala-library's sequence hierarchy where a
+program names it: `scala.collection.Seq` and `scala.collection.IndexedSeq` are traits of their own above `Seq` and
+`IndexedSeq` (scala-library's immutable ones), as `scala.collection.Map` is above `Map`, so a `collection.Seq`
+takes no `Seq`'s place and spreads into no repeated parameter. `Iterable`, `Set` and the mutable collections are not
+split so: an `ArrayBuffer` is an `IndexedSeq`. A member of such a class that the std lacks is
 reported where a library body uses it, as
 `not supported yet: <member> of <class> (needed by <definition>)`. A definition of the program with
 a std definition's qualified name shadows it.

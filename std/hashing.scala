@@ -200,7 +200,7 @@ object MurmurHash3:
       h = mixLast(h, k)
     finalizeHash(h, data.length)
   def bytesHash(data: Array[Byte]): Int = bytesHash(data, arraySeed)
-  def seqHash(xs: Seq[?]): Int = xs match
+  def seqHash(xs: scala.collection.Seq[?]): Int = xs match
     case xs: IndexedSeq[?] => indexedSeqHash(xs, seqSeed)
     case xs: List[?] => listHash(xs, seqSeed)
     case xs => orderedHash(xs, seqSeed)

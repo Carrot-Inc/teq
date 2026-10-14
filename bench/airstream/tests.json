@@ -1,0 +1,628 @@
+{
+ "suites_count": 62,
+ "cases_count": 310,
+ "suites": {
+  "com.raquo.airstream.DebugSpec": {
+   "project": "airstream",
+   "cases": [
+    "EventBus.events and Var.signal display names",
+    "observable debugger error",
+    "observable debugger type inference",
+    "observable displayName",
+    "observer debugger error",
+    "observer displayName",
+    "observer spy debuggers",
+    "signal spy debuggers",
+    "stream spy debuggers"
+   ]
+  },
+  "com.raquo.airstream.combine.CombineSeqSignalSpec": {
+   "project": "airstream",
+   "cases": [
+    "should work as expected"
+   ]
+  },
+  "com.raquo.airstream.combine.CombineSeqStreamSpec": {
+   "project": "airstream",
+   "cases": [
+    "should work as expected"
+   ]
+  },
+  "com.raquo.airstream.combine.MergeStreamSpec": {
+   "project": "airstream",
+   "cases": [
+    "good behaviour when paired with combineWith",
+    "order of events follows toporank"
+   ]
+  },
+  "com.raquo.airstream.combine.SampleCombineSignal2Spec": {
+   "project": "airstream",
+   "cases": [
+    "gets current value of Signal"
+   ]
+  },
+  "com.raquo.airstream.combine.SampleCombineStream2Spec": {
+   "project": "airstream",
+   "cases": [
+    "gets current value of Signal"
+   ]
+  },
+  "com.raquo.airstream.combine.generated.CombineSignalsSpec": {
+   "project": "airstream",
+   "cases": [
+    "CombineSignal10 works",
+    "CombineSignal11 works",
+    "CombineSignal12 works",
+    "CombineSignal13 works",
+    "CombineSignal14 works",
+    "CombineSignal15 works",
+    "CombineSignal16 works",
+    "CombineSignal17 works",
+    "CombineSignal18 works",
+    "CombineSignal19 works",
+    "CombineSignal2 works",
+    "CombineSignal20 works",
+    "CombineSignal21 works",
+    "CombineSignal22 works",
+    "CombineSignal3 works",
+    "CombineSignal4 works",
+    "CombineSignal5 works",
+    "CombineSignal6 works",
+    "CombineSignal7 works",
+    "CombineSignal8 works",
+    "CombineSignal9 works"
+   ]
+  },
+  "com.raquo.airstream.combine.generated.CombineStreamsSpec": {
+   "project": "airstream",
+   "cases": [
+    "CombineStream10 works",
+    "CombineStream11 works",
+    "CombineStream12 works",
+    "CombineStream13 works",
+    "CombineStream14 works",
+    "CombineStream15 works",
+    "CombineStream16 works",
+    "CombineStream17 works",
+    "CombineStream18 works",
+    "CombineStream19 works",
+    "CombineStream2 works",
+    "CombineStream20 works",
+    "CombineStream21 works",
+    "CombineStream22 works",
+    "CombineStream3 works",
+    "CombineStream4 works",
+    "CombineStream5 works",
+    "CombineStream6 works",
+    "CombineStream7 works",
+    "CombineStream8 works",
+    "CombineStream9 works"
+   ]
+  },
+  "com.raquo.airstream.core.EventStreamSpec": {
+   "project": "airstream",
+   "cases": [
+    "EventStream.fromSeq emit on restart",
+    "EventStream.fromSeq.startWith emit on restart",
+    "collect",
+    "collectOpt",
+    "filter",
+    "filterNot"
+   ]
+  },
+  "com.raquo.airstream.core.GlitchSpec": {
+   "project": "airstream",
+   "cases": [
+    "Avoid redundant evaluation of signal's initial value in this weird case",
+    "Multi-level pending observables resolve in correct order",
+    "Nested split + flatMapSwitch",
+    "No glitch when double Var update - with EventStream.merge",
+    "No glitch when double Var update - with double Var.update in foreach",
+    "No glitch when double Var update \u2013 with Var.update and two subs",
+    "diamond case has no glitch (combineWith)",
+    "diamond case has no glitch (withCurrentValueOf)",
+    "diamond case with a merge produces events in correct order"
+   ],
+   "ignored": [
+    "deadlocked pending observables resolve by firing a soft synced observable"
+   ]
+  },
+  "com.raquo.airstream.core.PullResetSignalSpec": {
+   "project": "airstream",
+   "cases": [
+    "CombineEventStreamN",
+    "CombineSignalN",
+    "Flattened signals pull check",
+    "Flattened signals pull check 2",
+    "MapSignal pull",
+    "onStart shared transaction is resilient to exceptions",
+    "signal.changes & startWith",
+    "signal.changes / startWith potential glitch",
+    "signal.changes sync with multiple observers (Transaction.onStart.pendingCallbacks)"
+   ]
+  },
+  "com.raquo.airstream.core.SharedStartStreamSpec": {
+   "project": "airstream",
+   "cases": [
+    "EventStream.fromValue() / CustomStreamSource"
+   ]
+  },
+  "com.raquo.airstream.core.SignalSpec": {
+   "project": "airstream",
+   "cases": [
+    "EventStream.toSignal creates a properly wired Signal",
+    "MapSignal.now/onNext re-evaluates project/initialValue when restarting",
+    "Signal.changes lazily reflects the changes of underlying signal"
+   ]
+  },
+  "com.raquo.airstream.core.TransactionSpec": {
+   "project": "airstream",
+   "cases": [
+    "Errors in transaction code leave a recoverable state",
+    "Exceeding max depth",
+    "Nested transactions order and correctness",
+    "Stack safe (no overflow via breadth)",
+    "Stack safe (no overflow via depth)"
+   ]
+  },
+  "com.raquo.airstream.distinct.DistinctSpec": {
+   "project": "airstream",
+   "cases": [
+    "distinct errors",
+    "distinct signals",
+    "distinct streams"
+   ]
+  },
+  "com.raquo.airstream.errors.EventStreamErrorSpec": {
+   "project": "airstream",
+   "cases": [
+    "Error that is not handled by `recover` is unhandled",
+    "EventStream.fromTry",
+    "combined observable wraps errors",
+    "event bus propagates errors to its stream and observer",
+    "flatMap propagates error in parent observable",
+    "flatMap propagates error in parent signal's initial value",
+    "map function is guarded against exceptions",
+    "stream propagates errors to child streams and signals",
+    "stream recovers from errors"
+   ]
+  },
+  "com.raquo.airstream.errors.ObserverErrorSpec": {
+   "project": "airstream",
+   "cases": [
+    "contracollectOpt emits value only if transformation returns a Some",
+    "contracollectOpt handles thrown exception from transformation",
+    "contramapped observer passes errors upstream",
+    "observer can choose not to handle its own error",
+    "observer errors do not affect other observers",
+    "observer has a chance to handle its own error"
+   ]
+  },
+  "com.raquo.airstream.errors.SignalErrorSpec": {
+   "project": "airstream",
+   "cases": [
+    "flatMap propagates error in parent signal",
+    "flatMap propagates error in parent signal's initial value",
+    "fold perma-breaks on error (note: use foldRecover to handle it)",
+    "foldRecover recovers from error",
+    "initial value Failure()",
+    "initial value Failure() when .changes is the only consumer",
+    "initial value Success()",
+    "map function is guarded against exceptions"
+   ]
+  },
+  "com.raquo.airstream.eventbus.EventBusSpec": {
+   "project": "airstream",
+   "cases": [
+    "disallow duplicate event buses in EventBus.emit and EventBus.emitTry",
+    "disallow duplicate event buses in WriteBus.emit and WriteBus.emitTry",
+    "writer.addSource/removeSource fires observers",
+    "writer.onNext fires observers"
+   ]
+  },
+  "com.raquo.airstream.extensions.BooleanObservableSpec": {
+   "project": "airstream",
+   "cases": [
+    "BooleanObservable: invert",
+    "BooleanObservable: mapFalseToSome",
+    "BooleanObservable: mapTrueToSome",
+    "BooleanSignal: splitBoolean",
+    "BooleanStream: splitBoolean"
+   ]
+  },
+  "com.raquo.airstream.extensions.EitherObservableSpec": {
+   "project": "airstream",
+   "cases": [
+    "EitherObservable: mapLeft, mapRight, mapEither",
+    "EitherSignal: splitEither",
+    "EitherStream: collectRight",
+    "EitherStream: collectRight()",
+    "EitherStream: splitEither"
+   ]
+  },
+  "com.raquo.airstream.extensions.OptionObservableSpec": {
+   "project": "airstream",
+   "cases": [
+    "OptionObservable: mapSome",
+    "OptionStream: collectSome",
+    "OptionStream: collectSome { ... }"
+   ]
+  },
+  "com.raquo.airstream.extensions.SeqObservableSpec": {
+   "project": "airstream",
+   "cases": [
+    "seqOrElse"
+   ]
+  },
+  "com.raquo.airstream.extensions.StatusObservableSpec": {
+   "project": "airstream",
+   "cases": [
+    "StatusSignal: splitStatus",
+    "StatusStream: splitStatus"
+   ]
+  },
+  "com.raquo.airstream.extensions.TryObservableSpec": {
+   "project": "airstream",
+   "cases": [
+    "TryObservable: mapSuccess, mapFailure, mapTry",
+    "TryStream: collectSuccess, collectFailure",
+    "TryStream: splitTry"
+   ]
+  },
+  "com.raquo.airstream.flatten.EventStreamFlattenFutureSpec": {
+   "project": "airstream",
+   "cases": [
+    "EventStream.flatMap(EventStream.fromFuture)"
+   ]
+  },
+  "com.raquo.airstream.flatten.EventStreamFlattenSpec": {
+   "project": "airstream",
+   "cases": [
+    "ConcurrentEventStream (input=stream)",
+    "ConcurrentStream (input=signal)",
+    "from-future flatMapSwitch",
+    "from-future map-flatten",
+    "legacy flatMap and flatten methods",
+    "sync flatMapSwitch",
+    "sync map-flatten",
+    "sync map-flatten without fromSeq",
+    "sync three-level flatMapSwitch",
+    "sync three-level map-flatten",
+    "three-level from-future flatMapSwitch",
+    "three-level from-future map-flatten"
+   ]
+  },
+  "com.raquo.airstream.flatten.SignalFlattenFutureSpec": {
+   "project": "airstream",
+   "cases": [
+    "Signal.flatten initial already-resolved future results in an async event if resolved async-before stream creation",
+    "Signal.flatten initial future that is resolved sync-before the observer is added results in initial value of None",
+    "Signal.flatten initial unresolved future results in emitted default value and an async event"
+   ]
+  },
+  "com.raquo.airstream.flatten.SwitchSignalSpec": {
+   "project": "airstream",
+   "cases": [
+    "Signal: emitting the same inner signal does not cause it to stop and re-start",
+    "Switching between two signals does not cause their common ancestor to briefly stop",
+    "map parent inside flatMap",
+    "mirrors last emitted signal, but only if subscribed"
+   ]
+  },
+  "com.raquo.airstream.flatten.SwitchSignalStreamSpec": {
+   "project": "airstream",
+   "cases": [
+    "mirrors last emitted signal, but only if subscribed",
+    "start & restart event order"
+   ]
+  },
+  "com.raquo.airstream.flatten.SwitchStreamSpec": {
+   "project": "airstream",
+   "cases": [
+    "EventStream: emitting the same inner stream does not cause it to stop and re-start",
+    "EventStream: mirrors last emitted stream, but only if subscribed",
+    "Signal: emitting the same inner stream does not cause it to stop and re-start",
+    "Signal: mirrors last emitted stream, but only if subscribed",
+    "Switching between two streams does not cause their common ancestor to briefly stop",
+    "map parent inside flatMap"
+   ]
+  },
+  "com.raquo.airstream.javaflow.FlowPublisherStreamSpec": {
+   "project": "airstream",
+   "cases": [
+    "EventStream.fromPublisher"
+   ]
+  },
+  "com.raquo.airstream.misc.DropStreamSpec": {
+   "project": "airstream",
+   "cases": [
+    "Drop first N events",
+    "Drop first ZERO events",
+    "Drop until",
+    "Drop while"
+   ]
+  },
+  "com.raquo.airstream.misc.ScanLeftSignalSpec": {
+   "project": "airstream",
+   "cases": [
+    "ScanLeftSignal made with EventStream.scanLeft",
+    "ScanLeftSignal made with Signal.scanLeft"
+   ]
+  },
+  "com.raquo.airstream.misc.SplitVarSpec": {
+   "project": "airstream",
+   "cases": [
+    "child split signal re-syncs with parent signal",
+    "child split signal re-syncs with parent stream",
+    "split mutable array",
+    "split signal - raw semantics and lifecycle (1)",
+    "split signal - raw semantics and lifecycle (2)",
+    "split signal - raw semantics and lifecycle (3)",
+    "split signal - raw semantics and lifecycle (4)",
+    "splitByIndex var - quick check",
+    "splitOption var",
+    "unused child var behaviour"
+   ]
+  },
+  "com.raquo.airstream.misc.TakeStreamSpec": {
+   "project": "airstream",
+   "cases": [
+    "Take first N events",
+    "Take first ZERO events",
+    "Take until",
+    "Take while"
+   ]
+  },
+  "com.raquo.airstream.ownership.DynamicOwnerSpec": {
+   "project": "airstream",
+   "cases": [
+    "Dynamic owner activation and deactivation",
+    "[no-prepend] remove dyn sub during activation - baseline",
+    "[no-prepend] remove dyn sub during activation - remove already-iterated sub after it adds another sub",
+    "[no-prepend] remove dyn sub during activation - remove sub before adding another sub",
+    "[no-prepend] remove dyn sub during activation - remove yet-to-be-iterated sub after it adds another sub",
+    "[no-prepend] remove dyn sub during activation - removing sub that is being activated",
+    "[no-prepend] remove dyn sub during activation - removing sub that was already iterated over",
+    "[no-prepend] remove dyn sub during activation - removing sub that was not yet iterated over",
+    "[with-prepend] remove dyn sub during activation - baseline",
+    "[with-prepend] remove dyn sub during activation - remove already-iterated sub after it adds another sub",
+    "[with-prepend] remove dyn sub during activation - remove sub before adding another sub",
+    "[with-prepend] remove dyn sub during activation - remove yet-to-be-iterated sub after it adds another sub",
+    "[with-prepend] remove dyn sub during activation - removing sub that is being activated",
+    "[with-prepend] remove dyn sub during activation - removing sub that was already iterated over",
+    "[with-prepend] remove dyn sub during activation - removing sub that was not yet iterated over"
+   ]
+  },
+  "com.raquo.airstream.ownership.OwnerSpec": {
+   "project": "airstream",
+   "cases": [
+    "OneTimeOwner handles callbacks that throw",
+    "OneTimeOwner is unusable after it's killed",
+    "Owner kills all possessions when discarded and continues to function"
+   ]
+  },
+  "com.raquo.airstream.ownership.TransferableSubscriptionSpec": {
+   "project": "airstream",
+   "cases": [
+    "none -> p1.active -> p1.deactivate -> p1.activate -> none",
+    "none -> p1.active -> p2.active -> p2.deactivate -> p3.inactive -> none",
+    "none -> p1.active -> p2.inactive -> p3.active -> p3.deactivate -> none",
+    "none -> p1.inactive -> p1.activate -> p1.deactivate -> none"
+   ]
+  },
+  "com.raquo.airstream.split.SplitMatchOneSpec": {
+   "project": "airstream",
+   "cases": [
+    "100 cases can be compiled",
+    "split match signal",
+    "split match signal - with warning in compiler",
+    "split match stream",
+    "split match stream - with warning in compiler"
+   ]
+  },
+  "com.raquo.airstream.split.SplitMatchSeqSpec": {
+   "project": "airstream",
+   "cases": [
+    "split list / vector / set / js.array / immutable.seq / collection.seq / option compiles",
+    "split signal - duplicate keys",
+    "split signal - raw semantics",
+    "split signal - raw semantics and life cycle",
+    "split signal into signals",
+    "splits stream into signals"
+   ]
+  },
+  "com.raquo.airstream.split_other.SplitSignalSpec": {
+   "project": "airstream",
+   "cases": [
+    "LazyList should not break memoization",
+    "child split signal re-syncs with parent signal",
+    "child split signal re-syncs with parent stream",
+    "split child active while split signal is stopped",
+    "split list / vector / set / js.array / immutable.seq / collection.seq / option compiles",
+    "split mutable array",
+    "split signal - duplicate keys",
+    "split signal - raw semantics",
+    "split signal - raw semantics and lifecycle (1)",
+    "split signal - raw semantics and lifecycle (2)",
+    "split signal - raw semantics and lifecycle (3)",
+    "split signal - raw semantics and lifecycle (4)",
+    "split signal into signals",
+    "splitByIndex signal - quick check",
+    "splitOne signal",
+    "splitOne stream",
+    "splitOption signal",
+    "splits stream into signals"
+   ]
+  },
+  "com.raquo.airstream.split_other.SplitSomeSeqSpec": {
+   "project": "airstream",
+   "cases": [
+    "splitSomeSeq signal",
+    "splitSomeSeqByIndex signal"
+   ]
+  },
+  "com.raquo.airstream.state.BimapVarSpec": {
+   "project": "airstream",
+   "cases": [
+    "bimap",
+    "bimap-errors"
+   ]
+  },
+  "com.raquo.airstream.state.DerivedVarSpec": {
+   "project": "airstream",
+   "cases": [
+    "asymmetric derived vars",
+    "error handling",
+    "laziness, updates and errors",
+    "signal does not glitch",
+    "strict updates"
+   ]
+  },
+  "com.raquo.airstream.state.DistinctVarSpec": {
+   "project": "airstream",
+   "cases": [
+    "distinct"
+   ]
+  },
+  "com.raquo.airstream.state.LazyDerivedVarSpec": {
+   "project": "airstream",
+   "cases": [
+    "asymmetric derived vars",
+    "error handling",
+    "laziness, updates and errors",
+    "lazy eval",
+    "nested lazy + lazy",
+    "nested lazy + strict",
+    "nested strict + lazy",
+    "signal does not glitch"
+   ]
+  },
+  "com.raquo.airstream.state.LazyStrictSignalSpec": {
+   "project": "airstream",
+   "cases": [
+    "LazyStrictSignal can pull from parent LazyStrictSignal",
+    "LazyStrictSignal.apply",
+    "LazyStrictSignal.debug",
+    "LazyStrictSignal.distinct",
+    "LazyStrictSignal.mapRecover",
+    "LazyStrictSignal.scanLeft"
+   ]
+  },
+  "com.raquo.airstream.state.OwnedSignalSpec": {
+   "project": "airstream",
+   "cases": [
+    "OwnedSignal"
+   ]
+  },
+  "com.raquo.airstream.state.StrictSignalSpec": {
+   "project": "airstream",
+   "cases": [
+    "LazyStrictSignal: laziness and errors",
+    "LazyStrictSignal: lazy eval"
+   ]
+  },
+  "com.raquo.airstream.state.VarSpec": {
+   "project": "airstream",
+   "cases": [
+    "batch updates",
+    "batch updates are glitch-free",
+    "disallow duplicate vars in Var.set and such",
+    "error handling",
+    "flip",
+    "signal propagation",
+    "strict updates",
+    "throwing in Var update mods",
+    "tryUpdater",
+    "updater",
+    "updating Var which is in a failed state",
+    "updating Var with a failed value"
+   ]
+  },
+  "com.raquo.airstream.status.StatusSpec": {
+   "project": "airstream",
+   "cases": [
+    "delayWithStatus, mapOutput"
+   ]
+  },
+  "com.raquo.airstream.syntax.SyntaxSpec": {
+   "project": "airstream",
+   "cases": [
+    "CombinableStream & TupleStream",
+    "Legacy methods from the video",
+    "Replacement for ye olde SwitchFutureStrategy",
+    "toSignalIfStream / toStreamIfSignal",
+    "{EventStream$,Signal$}.{combine,combineWith)"
+   ]
+  },
+  "com.raquo.airstream.timing.DelayStreamSpec": {
+   "project": "airstream",
+   "cases": [
+    "events are delayed, and purged on stop"
+   ]
+  },
+  "com.raquo.airstream.timing.EventStreamFromFutureSpec": {
+   "project": "airstream",
+   "cases": [
+    "asynchronously emits a future value",
+    "asynchronously emits if observer added asynchronously after the future resolves",
+    "asynchronously emits if observer added synchronously right after the future resolves",
+    "does not emit to second observer if it was added asynchronously after the future resolved",
+    "future and promise args are evaluated lazily"
+   ]
+  },
+  "com.raquo.airstream.timing.PeriodicStreamSpec": {
+   "project": "airstream",
+   "cases": [
+    "dynamic interval",
+    "resetOnStop=false",
+    "resetOnStop=false + drop(1)",
+    "resetOnStop=true",
+    "resetOnStop=true + drop(1)"
+   ]
+  },
+  "com.raquo.airstream.timing.SignalFromFutureSpec": {
+   "project": "airstream",
+   "cases": [
+    "asynchronously emits a future value",
+    "asynchronously emits if observer added synchronously right after the future resolves",
+    "future and promise args are evaluated lazily",
+    "synchronously emits if observers added asynchronously after the future resolves and signal already emitted"
+   ]
+  },
+  "com.raquo.airstream.timing.SyncDelayStreamSpec": {
+   "project": "airstream",
+   "cases": [
+    "emits after designated stream",
+    "multi-level, nested, dependent sync observables"
+   ]
+  },
+  "com.raquo.airstream.timing.ThrottleStreamSpec": {
+   "project": "airstream",
+   "cases": [
+    "throttling with leading = false",
+    "throttling with leading = true"
+   ]
+  },
+  "com.raquo.airstream.util.JsPriorityQueueSpec": {
+   "project": "airstream",
+   "cases": [
+    "duplicate items edge case",
+    "queues items by priority",
+    "same-priority edge cases"
+   ]
+  },
+  "com.raquo.airstream.web.WebStorageVarSpec": {
+   "project": "airstream",
+   "cases": [
+    "localStorage basics",
+    "sessionStorage basics"
+   ]
+  },
+  "com.somebody.else.ExtensionSpec": {
+   "project": "airstream",
+   "cases": [
+    "Allow extension of observables including overriding and accessing all required methods"
+   ]
+  }
+ }
+}

@@ -1140,6 +1140,11 @@ impl<'a> Worker<'a> {
                 return Some(r);
             }
         }
+        if self.may_bind_std(name) && self.sees_std_bindings_alone(p) {
+            if let Some(bound) = self.std_bound_type(p, name) {
+                return Some(bound);
+            }
+        }
         if self.sees_classpath() || self.std_bridges_into(p) {
             if let Some(bound) = self.std_bound_type(p, name) {
                 return Some(bound);
@@ -1212,6 +1217,19 @@ impl<'a> Worker<'a> {
         let Some(loaded) = &self.loaded else { return false };
         let file = self.env.file;
         loaded.scala_library || self.mapping_signature || !self.source(file).is_std || loaded.is_jar(file)
+    }
+
+    /// A program's file without a class path, whose library names (`scala.collection.Seq`) are the
+    /// std's by `STD_BINDINGS` as a class path's would be, for a package under `scala` or `java`, where
+    /// every package the bindings map from is (a program's own package, the most asked, is none).
+    #[inline]
+    fn sees_std_bindings_alone(&self, p: PkgId) -> bool {
+        let mut top = p;
+        while let Some(parent) = self.syms.pkg(top).parent.filter(|&q| q != ROOT_PKG) {
+            top = parent;
+        }
+        let root = self.syms.pkg(top).name;
+        (root == crate::names::SCALA || root == crate::names::JAVA) && self.loaded.is_none() && !self.source(self.env.file).is_std
     }
 
     /// `sees_classpath` for a worker that does not hold the loader's lock, which a library
@@ -1308,6 +1326,11 @@ impl<'a> Worker<'a> {
         }
         if let Some(sub) = self.demand_std_package(p, name) {
             return Some(TermRef::Package(sub));
+        }
+        if self.may_bind_std(name) && self.sees_std_bindings_alone(p) {
+            if let Some(bound) = self.std_bound_term(p, name) {
+                return Some(bound);
+            }
         }
         if self.sees_classpath() || self.std_bridges_into(p) {
             if let Some(bound) = self.std_bound_term(p, name) {
@@ -4612,7 +4635,7 @@ impl<'a> Worker<'a> {
         self.complete_class(bc);
         let subst: Subst =
             self.syms.class(bc).tparams.iter().copied().zip(self.types.items(bargs).iter().copied()).collect();
-        let inherited: Vec<(ClassId, TypeId)> = self.syms.class(bc).base_types.clone();
+        let inherited: Vec<(ClassId, TypeId)> = self.met_base_types(bc);
         for (x, xt) in inherited {
             let t = self.types.subst(xt, &subst);
             self.syms.class_mut(c).base_types.push((x, t));
@@ -5952,6 +5975,7 @@ impl<'a> Worker<'a> {
         // class's `baseTypeCache` when its parents change).
         if !self.syms.class(c).base_types.is_empty() {
             self.base_type_cache.clear();
+            self.class_base_memo.clear();
         }
         let targs: Vec<TypeId> =
             self.syms.class(c).tparams.clone().iter().map(|&p| self.types.param(p)).collect();
@@ -6109,7 +6133,7 @@ impl<'a> Worker<'a> {
         }
         // The standard library picks the collection type of `SeqOps` through its first parent.
         let checked = linearisations.len() > 1 && !self.source(file).is_std;
-        let (base, conflicting) = self.linearise(c, self_ty, linearisations, checked);
+        let (base, conflicting, merged) = self.linearise(c, self_ty, linearisations, checked);
         // One pass over the bases: a native JS one, the types they bring, a declared self type.
         let (mut has_native_base, mut inherits_types, mut self_typed) = (false, false, false);
         // `Product`, `Equals`, `Serializable` and `Enum` bring no native class, self type, type
@@ -6147,6 +6171,9 @@ impl<'a> Worker<'a> {
         info.superclass = superclass;
         info.inherits_types = inherits_types;
         info.no_inherited_extensions = no_inherited_extensions;
+        drop(info);
+        self.note_meets(c, &merged);
+        let mut info = self.syms.class_mut(c);
         if has_native_base && info.js == JsKind::Scala {
             info.js = JsKind::Object;
         }
@@ -6188,7 +6215,7 @@ impl<'a> Worker<'a> {
             return;
         }
         let this = self.syms.this_type(c);
-        let bases: Vec<(ClassId, TypeId)> = self.syms.class(c).base_types[1..].to_vec();
+        let bases: Vec<(ClassId, TypeId)> = self.met_base_types(c)[1..].to_vec();
         for (b, bt) in bases {
             let Some(declared) = self.syms.class(b).declared_self else { continue };
             let subst = self.owner_subst(bt);
@@ -6376,7 +6403,7 @@ impl<'a> Worker<'a> {
         self_ty: TypeId,
         parents: Vec<ParentBases>,
         checked: bool,
-    ) -> (Vec<(ClassId, TypeId)>, bool) {
+    ) -> (Vec<(ClassId, TypeId)>, bool, Vec<(ClassId, TypeId)>) {
         let bases_of = |t: &Self, lin: &'_ ParentBases| -> usize {
             match lin {
                 ParentBases::Of(k) => t.syms.class(*k).base_types.len(),
@@ -6393,16 +6420,26 @@ impl<'a> Worker<'a> {
         }
         // The linearisation of a single parent names no class twice.
         if parents.len() < 2 {
-            return (base, false);
+            return (base, false, Vec::new());
         }
         let mut conflict = None;
+        // The instances of an ancestor the linearisation drops for another, which `merge_base_instances`
+        // meets with the one it keeps.
+        let mut merged = Vec::new();
         let mut i = 1;
         while i < base.len() {
             let (bc, bt) = base[i];
             match base[i + 1..].iter().find(|&&(x, _)| x == bc) {
                 Some(&(_, later)) => {
-                    if later != bt && conflict.is_none() && self.conflicting_instantiations(bc, bt, later) {
-                        conflict = Some((bt, later));
+                    if later != bt {
+                        // A conflict, which a class that is no trait may not have, is met too: the instances'
+                        // intersection (`base_type_of`).
+                        if self.conflicting_instantiations(bc, bt, later) {
+                            conflict.get_or_insert((bt, later));
+                        }
+                        if !merged.contains(&(bc, bt)) {
+                            merged.push((bc, bt));
+                        }
                     }
                     base.remove(i);
                 }
@@ -6410,7 +6447,7 @@ impl<'a> Worker<'a> {
             }
         }
         let Some((a, b)) = conflict.filter(|_| checked && self.syms.class(c).kind != ClassKind::Trait) else {
-            return (base, false);
+            return (base, false, merged);
         };
         if !self.types.contains_error(a) && !self.types.contains_error(b) {
             let (span, file) = (self.syms.class(c).span, self.syms.class(c).file);
@@ -6418,7 +6455,253 @@ impl<'a> Worker<'a> {
                 format!("{} has conflicting base types {} and {}", self.class_description(c), self.show(b), self.show(a));
             self.diags.error(file, span, msg);
         }
-        (base, true)
+        (base, true, merged)
+    }
+
+    /// Records whether a base of `c` is met from several parents' instances, its own (`merged`, what `linearise`
+    /// dropped for another instance) or a parent's: `base_type_of` folds those, the others are the record's.
+    pub(super) fn note_meets(&mut self, c: ClassId, merged: &[(ClassId, TypeId)]) {
+        // The parents as `set_parents` keeps them, dealiased: a class, or a class through a prefix.
+        let meets = !merged.is_empty()
+            || self.syms.class(c).parents.iter().any(|&p| {
+                let class = match self.types.get(p) {
+                    Type::Nested(_, x) => x,
+                    _ => p,
+                };
+                matches!(self.types.get(class), Type::Class(pc, _) if self.syms.class(pc).meets_in_bases)
+            });
+        if meets {
+            if self.shared_class(c) {
+                self.with_loader(|w| w.syms.class_mut(c).meets_in_bases = true);
+            } else {
+                self.syms.class_mut(c).meets_in_bases = true;
+            }
+        }
+    }
+
+    /// dotty's `baseTypeOf` of class `c` for its ancestor `bc`: the meet of what its parents give for it
+    /// (`foldGlb` over the parents, `meet_instances`), computed when asked and kept per class and ancestor
+    /// (`baseTypeCache`). A class none of whose bases is met (`meets_in_bases`) has the linearisation's record,
+    /// which is that meet. A meet that would compare classes under completion, from inside the completion of `c`
+    /// or of a class it names, is not made: the first parent's instance answers, kept by no one, and the next
+    /// ask after the completions meets them (dotty's completers give such a class its temporary info).
+    pub(super) fn base_type_of(&mut self, c: ClassId, bc: ClassId) -> Option<TypeId> {
+        let info = self.syms.class(c);
+        let i = info.base_types.iter().position(|&(b, _)| b == bc)?;
+        let recorded = info.base_types[i].1;
+        if i == 0 || !info.meets_in_bases {
+            return Some(recorded);
+        }
+        if let Some(&kept) = self.class_base_memo.get(&(c, bc)) {
+            return Some(kept);
+        }
+        let done = self.syms.class_cells.get(c.0) == Completion::Done;
+        let parents = self.syms.class(c).parents.clone();
+        let mut met: Option<TypeId> = None;
+        let mut settled = done;
+        for p in parents {
+            let Some(inst) = self.parent_base_instance(p, bc) else { continue };
+            met = Some(match met {
+                None => inst,
+                Some(m) if m == inst => m,
+                Some(m) => {
+                    if self.instances_settle(c, done, m) && self.instances_settle(c, done, inst) {
+                        self.meet_instances(bc, m, inst)
+                    } else {
+                        settled = false;
+                        m
+                    }
+                }
+            });
+        }
+        let t = met.unwrap_or(recorded);
+        if settled {
+            self.class_base_memo.insert((c, bc), t);
+        }
+        Some(t)
+    }
+
+    /// `c`'s linearisation with each base's instance as `base_type_of` gives it (the record where no base is met).
+    pub(super) fn met_base_types(&mut self, c: ClassId) -> Vec<(ClassId, TypeId)> {
+        let bases = self.syms.class(c).base_types.clone();
+        if !self.syms.class(c).meets_in_bases {
+            return bases;
+        }
+        (0..bases.len()).map(|i| (bases[i].0, self.base_instance_at(c, i))).collect()
+    }
+
+    /// `c`'s base type at index `i` of its linearisation: the record, or `base_type_of`'s where a base is met.
+    pub(super) fn base_instance_at(&mut self, c: ClassId, i: usize) -> TypeId {
+        let info = self.syms.class(c);
+        let (b, bt) = info.base_types[i];
+        if i == 0 || !info.meets_in_bases {
+            return bt;
+        }
+        self.base_type_of(c, b).unwrap_or(bt)
+    }
+
+    /// Whether the classes instance `t` names may be compared for a meet of `c`'s: each complete, or completed now
+    /// where `c` is (a subclass of `c` named in a parent's arguments completes after it), none under completion.
+    fn instances_settle(&mut self, c: ClassId, done: bool, t: TypeId) -> bool {
+        let mut named = Vec::new();
+        self.named_classes(t, &mut named);
+        for k in named {
+            if k == c {
+                continue;
+            }
+            if done && self.syms.class_cells.get(k.0) == Completion::NotStarted {
+                self.complete_class(k);
+            }
+            if self.syms.class_cells.get(k.0) != Completion::Done {
+                return false;
+            }
+        }
+        true
+    }
+
+    /// The classes `t` names, its arguments' included.
+    fn named_classes(&self, t: TypeId, out: &mut Vec<ClassId>) {
+        match self.types.get(t) {
+            Type::Class(k, args) => {
+                out.push(k);
+                for &a in self.types.items(args) {
+                    self.named_classes(a, out);
+                }
+            }
+            Type::Ctor(k) => out.push(k),
+            Type::Lambda(_, body) => self.named_classes(body, out),
+            Type::Inter(a, b) | Type::Union(a, b, _) | Type::Nested(a, b) | Type::BoundedWild(a, b) => {
+                self.named_classes(a, out);
+                self.named_classes(b, out);
+            }
+            _ => {}
+        }
+    }
+
+    /// A parent's base type for `bc` (dotty's `baseTypeOf` of the parent), seen through its arguments and its
+    /// prefix as `set_parents` sees them.
+    fn parent_base_instance(&mut self, p: TypeId, bc: ClassId) -> Option<TypeId> {
+        let p = self.deref_alias(p);
+        let (class_p, prefix) = match self.types.get(p) {
+            Type::Nested(q, x) => (x, Some(q)),
+            _ => (p, None),
+        };
+        let Type::Class(pc, pargs) = self.types.get(class_p) else { return None };
+        let entry = self.base_type_of(pc, bc)?;
+        let subst: Subst = self.syms.class(pc).tparams.iter().copied().zip(self.types.items(pargs).iter().copied()).collect();
+        let mut t = if subst.is_empty() { entry } else { self.types.subst(entry, &subst) };
+        if let Some(q) = prefix {
+            t = self.outer_seen_from(t, q, pc);
+        }
+        Some(t)
+    }
+
+    /// The meet of two instances `a` and `b` of class `bc` (dotty's `distributeAnd` and `glbArgs`): a covariant
+    /// argument their glb, a contravariant one their lub, an invariant one the same in both or, either a
+    /// wildcard, the bounds of both (`lo | lo`, `hi & hi`). An invariant argument that differs leaves no joint
+    /// instance (`glbArgs`'s `NoType`), and the meet is the two instances' intersection (`glb`'s `AndType`), which
+    /// `linearise` reports for a class that is no trait. Through one prefix, the meet of what it selects.
+    fn meet_instances(&mut self, bc: ClassId, a: TypeId, b: TypeId) -> TypeId {
+        if a == b {
+            return a;
+        }
+        match (self.types.get(a), self.types.get(b)) {
+            (Type::Nested(p, x), Type::Nested(q, y)) if p == q => {
+                let met = self.meet_instances(bc, x, y);
+                return if met == x { a } else { self.types.mk(Type::Nested(p, met)) };
+            }
+            (Type::Class(_, aargs), Type::Class(_, bargs)) => {
+                let mut args: Vec<TypeId> = self.types.items(aargs).to_vec();
+                let others: Vec<TypeId> = self.types.items(bargs).to_vec();
+                let tparams = self.syms.class(bc).tparams.clone();
+                let mut changed = false;
+                for (k, &p) in tparams.iter().enumerate() {
+                    if k >= args.len() || k >= others.len() || args[k] == others[k] {
+                        continue;
+                    }
+                    let (x, y) = (args[k], others[k]);
+                    let variance = self.syms.tparam(p).variance;
+                    let met = match variance {
+                        1 => self.glb_arg(x, y),
+                        -1 => self.lub_arg(x, y),
+                        _ if self.types.is_wild(x) || self.types.is_wild(y) => {
+                            let (xl, xh) = self.wild_bounds(x);
+                            let (yl, yh) = self.wild_bounds(y);
+                            let lo = self.types.soft_union(xl, yl);
+                            let hi = self.types.inter(xh, yh);
+                            self.types.bounded_wild(lo, hi)
+                        }
+                        _ if self.is_same(x, y) => x,
+                        _ => return self.types.inter(a, b),
+                    };
+                    if met != x {
+                        args[k] = met;
+                        changed = true;
+                    }
+                }
+                if changed { self.types.class(bc, &args) } else { a }
+            }
+            _ => a,
+        }
+    }
+
+    /// dotty's `glb` of two arguments: the one that conforms to the other (`dropIfSuper`), else their
+    /// intersection, which of two type constructors of one arity is the lambda over their applications'
+    /// (`liftIfHK`: `[X] =>> F[X] & G[X]`).
+    fn glb_arg(&mut self, x: TypeId, y: TypeId) -> TypeId {
+        if self.frozen_sub(x, y) {
+            return x;
+        }
+        if self.frozen_sub(y, x) {
+            return y;
+        }
+        match (self.ctor_arity(x), self.ctor_arity(y)) {
+            (None, None) => self.types.inter(x, y),
+            (Some(n), Some(m)) if n == m && n > 0 => {
+                let ps: Vec<TypeId> = (0..n)
+                    .map(|i| {
+                        let name = self.interner.intern(&format!("X{}", i));
+                        let p = self.syms.new_tparam(name, 0);
+                        self.types.param(p)
+                    })
+                    .collect();
+                let fx = self.types.apply_ctor(x, &ps);
+                let gy = self.types.apply_ctor(y, &ps);
+                let body = self.types.inter(fx, gy);
+                let l = self.types.list(&ps);
+                self.types.mk(Type::Lambda(l, body))
+            }
+            _ => x,
+        }
+    }
+
+    /// dotty's `lub` of two arguments: the one the other conforms to (`mergeIfSuper`), else their union.
+    fn lub_arg(&mut self, x: TypeId, y: TypeId) -> TypeId {
+        if self.frozen_sub(x, y) {
+            return y;
+        }
+        if self.frozen_sub(y, x) {
+            return x;
+        }
+        self.types.soft_union(x, y)
+    }
+
+    /// An argument's bounds: a wildcard's, a type's itself for both.
+    fn wild_bounds(&self, t: TypeId) -> (TypeId, TypeId) {
+        match self.types.get(t) {
+            Type::Wild => (NOTHING, ANY),
+            Type::BoundedWild(lo, hi) => (lo, hi),
+            _ => (t, t),
+        }
+    }
+
+    /// The parameters a type constructor takes; none for a proper type.
+    fn ctor_arity(&self, t: TypeId) -> Option<usize> {
+        match self.types.get(t) {
+            Type::Ctor(k) => Some(self.class_arity(k)),
+            Type::Lambda(ps, _) => Some(self.types.items(ps).len()),
+            _ => None,
+        }
     }
 
     /// Two instantiations of one generic ancestor conflict where an invariant parameter differs;

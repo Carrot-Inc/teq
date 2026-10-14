@@ -520,6 +520,11 @@ impl<'a> Parser<'a> {
                         }
                         Tok::KwOverride => pm |= mods::OVERRIDE,
                         Tok::KwFinal => pm |= mods::FINAL,
+                        // A class parameter's own `implicit` (`class C(x: A, implicit val y: B)`)
+                        // makes its accessor an implicit member, as dotty's `param` reads any
+                        // modifier of a class parameter (`modifiers()`); a clause's leading one
+                        // marks the clause.
+                        Tok::KwImplicit if class_params.is_some() => pm |= mods::IMPLICIT,
                         Tok::KwVal => pm |= mods::FIELD,
                         Tok::KwVar => pm |= mods::FIELD | mods::MUTABLE,
                         Tok::Ident if self.tok().name == names::INLINE && self.kind_at(1) == Tok::Ident => pm |= mods::INLINE,
@@ -529,6 +534,12 @@ impl<'a> Parser<'a> {
                         _ => break,
                     }
                     self.bump();
+                }
+                // dotty's `param` of a class: a modifier other than `inline` or `erased` asks for `val` or `var`, which
+                // alone set FIELD so far.
+                let modifiers = mods::PRIVATE | mods::PROTECTED | mods::OVERRIDE | mods::FINAL | mods::IMPLICIT;
+                if pm & modifiers != 0 && pm & mods::FIELD == 0 && class_params.is_some() {
+                    self.error_at(self.span(), "`val` or `var` expected");
                 }
                 if class_params == Some(true) && !clause.is_using && clauses.is_empty() {
                     pm |= mods::FIELD;

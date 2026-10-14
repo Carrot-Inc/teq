@@ -109,6 +109,9 @@ a JDK member as `not supported on JavaScript`. Beyond that:
   scalac's gives it a constant type. A cast between primitives that no conversion makes warns where it is
   written but not where an inline method's expansion makes one, so a build with `-Werror` passes here where
   scalac fails it.
+- The deprecated syntax scalac 3.8.4 reads with a migration warning is read here without one: `with` as a
+  type operator (`A with B`, `A & B`), `_` for a wildcard type argument (`List[_ <: A]`), and an alphanumeric
+  extractor written infix (`case a withKey b`) that is not declared `infix`.
 
 ## Known differences
 

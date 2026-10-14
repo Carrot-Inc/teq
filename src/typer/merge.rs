@@ -2550,6 +2550,7 @@ impl<'a> Worker<'a> {
         self.given_fits.clear();
         self.head_sigs.clear();
         self.base_type_cache.clear();
+        self.class_base_memo.clear();
         self.target_name_files.clear();
         self.given_preferences.clear();
         self.given_orders.clear();

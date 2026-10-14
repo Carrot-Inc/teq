@@ -1608,7 +1608,7 @@ impl<'a> Worker<'a> {
         let mut classes = Vec::new();
         self.own_classes(own, &mut classes);
         let implementation = classes.into_iter().find_map(|c| {
-            let bases = self.syms.class(c).base_types.clone();
+            let bases = self.met_base_types(c);
             self.implementation_of(c, &bases, m).filter(|&i| i != m)
         })?;
         let Owner::Class(owner) = self.syms.sym(implementation).owner else { return None };

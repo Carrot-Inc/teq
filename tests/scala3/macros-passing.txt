@@ -1,4 +1,6 @@
+enum-nat-macro
 f-interpolator
+from-type
 i10011
 i10043
 i10464
@@ -34,6 +36,7 @@ i6253-b
 i6622
 i6679
 i6772
+i6803
 i7008
 i7025
 i7025b
@@ -49,6 +52,7 @@ i8745b
 i8746b
 i8877
 i9475
+i9570
 inferred-repeated-result
 inline-macro-inner-object
 inline-macro-staged-interpreter
@@ -81,6 +85,7 @@ tasty-indexed-map
 tasty-linenumber
 tasty-linenumber-2
 tasty-location
+tasty-original-source
 tasty-subtyping
 tasty-unsafe-let
 whitebox-inline-macro

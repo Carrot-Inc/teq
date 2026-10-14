@@ -31,6 +31,91 @@ regression.
 - `proposed-cases/` are programs scalac accepts and teq rejects, with the output of
   `scala-cli run -S 3.8.4` as `.expected`, in the format of `tests/cases`.
 
+## The reference projects' part over the givens as dotty's (2026-10-13)
+
+Three tests moved when the reference projects' part was rebased onto master c4d061d3e (typer-givens-4). Each
+needs both sides' changes: neither the part on 6546f1d66 (a96039902's gate) nor master c4d061d3e's binary moves it
+alone.
+
+- `neg/i7045` moved from `syntax` to `same`.
+- `neg/infix` moved from `different` to `accepts`. The part reads an alphanumeric method used infix and given
+  `AnyRef`'s extension members are found now. The file's errors come from dotty's infix-declaration check
+  (`checkValidInfix`: `should not be used as infix operator`), an error under the file's `-source future` and a
+  migration warning otherwise, which teq does not implement (DIFFERENCES, "Diagnostics").
+- `neg/i17613b` moved from `different` to `accepts`. The anonymous given `given [A]: Typeclass[Int]()` and the
+  import across the two files type. The file's error is the `-Werror` of `-Wshadow:type-parameter-shadow`'s
+  warnings, a lint teq does not implement.
+
+`pos/i15331` (`syntax` to `accepts`) is the part's alone, not one of these: its refinement inside a type argument
+(`Composable[Arr1 {type Dom = A}, ..]`) parses as dotty's `typeArgs` read it (ee050806a), and the part recorded it
+with the Scala 2 syntax below. The rebase onto 6546f1d66 (da63dd046) took master's `syntax` for its row, which the
+re-record of a9413f08b restored.
+
+## The second code review's fold, the part's last (2026-10-13)
+
+Two tests moved, both to scalac's verdict, with `scala.collection.Seq` and `IndexedSeq` the lean std's own traits
+above the immutable ones, in a program without a class path too.
+
+- `neg/repeatedArgs213` moved from `accepts` to `same`: a `collection.Seq` spread into varargs is refused, which
+  want an `immutable.Seq`.
+- `pos/t6963c` moved from `rejects` to `accepts`: `import collection.Seq` finds the std's trait, which master
+  reported as no member of the package.
+
+In the exact 3.8.4 archive (the review's corpus, whose `neg/i4368.scala` is 162 lines longer than this checkout's),
+`neg/i4368` moves from `syntax` to `different`. Master stops at line 44's `with`; the parse of `with` as an
+intersection (`Parsers.withType`) reaches the typer, which reports 9 of scalac's 16 lines and 6 others.
+
+## The first code review's fold of the reference projects' part (2026-10-12)
+
+Thirteen tests moved, all with the library's names of the std's definitions bound in a program without a class
+path (`STD_BINDINGS`: `scala.collection.Seq`, `scala.collection.immutable.Nil`, `scala.collection.mutable.StringBuilder`
+and the others are the std's, as under a class path).
+
+- Nine `pos` tests moved from `std` to `accepts`: `hklub0`, `i17735`, `i17735a`, `i2198`, `i24696`, `inferred`,
+  `repeatedArgs213`, `t1203a` and `t6948`.
+- `pos/factory-conversion` moved from `std` to `rejects` (`type mismatch`): `scala.collection.Factory` resolves,
+  and the conversion it needs is missing. `pos/23056` stays in `rejects` with another first diagnostic (`type
+  mismatch` where `IterableFactory` was not found): the given `Conversion` from the companion is not applied.
+- `neg/publicInBinary` moved from `accepts` to `subset` (one of its ten lines reported).
+- `neg/repeatedArgs213` moved from `std` to `accepts`: teq's std makes `scala.collection.Seq` the std's `Seq`, so
+  spreading a `collection.Seq` into varargs, which scalac refuses (it wants an `immutable.Seq`), types.
+
+## Scala 2 syntax, base types' meet and the reference projects' fixes (2026-10-12)
+
+Eighty-one tests moved with the laminar-airstream part (Airstream and Laminar as the JavaScript target's
+reference projects).
+
+- Forty-two `pos` tests moved from `syntax` to `accepts` with dotty's parse of the Scala 2 syntax it reads:
+  `A with B` as an intersection (`withType`), `_` with bounds (`typeBounds()` after `_`), a refinement inside the
+  type arguments of a parent or of `new` (`({ type L[X] = .. })#L`), any identifier between two patterns
+  (`infixPattern`), and an ascribed placeholder bare (`isWildcard`): `erasure-array`, `escapingRefs`,
+  `extractor-types`, `hkRefAlias`, `i13998`, `i14151`, `i14151b`, `i14152`, `i14349.min`, `i14832`, `i14896`,
+  `i15331`, `i17222` (`.2` to `.5`, `.8` and itself), `i2554`, `i2732`, `i4188`, `i4375`, `i540`, `i6854`, `i8284`,
+  `t0095`, `t0654`, `t1048`, `t2435`, `t2613`, `t2635`, `t2712-5`, `t4869`, `t5240`, `t7983`,
+  `with-type-operator-3.3`.
+- Eight `pos` tests moved from `rejects` to `accepts`: `functions1`, `i1181b`, `i1181c`, `i11981`, `i13331`,
+  `i2201c`, `i3965a` and `t2421_delitedsl`. Their causes are a class's base type as the meet of its parents'
+  instances (`SymDenotations.baseTypeOf`'s `foldGlb`), a constructor variable bounded by an alias applied to
+  its arity (`compareAppliedTypeParamRef`), and a partial application related to a function type expected
+  (`ProtoTypes.normalize`).
+- Thirteen `pos` tests that did not parse now meet typer gaps (`syntax` to `rejects`): `26238` and `i7467`
+  (`cannot resolve import`), `approximateUnion`, `eff-compose`, `t5330c`, `wildcardBoundInference` and
+  `wildcardInInfixType` (`type mismatch`), `i536`, `named-tuples-ops-mirror` and `t2683` (`value .. is not a
+  member`), `implicit-lower-bound` (`no given instance`), `t2669` (`.. is not a member of the package`), and
+  `unchecked-a` (a bound check). `i20080` moved to `std` (`Append`) and `parent-refinement` to `oos`.
+- Six `neg` tests moved from `syntax` to `accepts`: their programs parse now, and the rule scalac rejects each with
+  is missing in teq. `unboundWildcard`: a wildcard type outside a type argument ("unbound wildcard type").
+  `wildbase`: a parent's wildcard argument ("type argument must be fully defined"). `i6047`: a covariant
+  parameter in a match type's case pattern. `i7078`: `transparent` without `inline` on a given.
+  `with-type-operator-future`: `with` as a type operator, an error under `language.future`, which teq does not
+  read. `with-type-operator`: its error is scala3 3.10's rule (`main`), not 3.8.4's, which warns; it is no
+  difference.
+- The other `neg` tests that did not parse moved to `same` (`4376`, `i13769`, `i4376`), `superset` (`6570`,
+  `parent-refinement`), `subset` (`i6047a`, `partialApplications`), `different` (`enum-tparams`, `infix`, `tate`),
+  `oos` (`i0248-inherit-refined`, `parent-refinement-access`) and `std` (`anykind1`). `Iter2` (from `superset`) and
+  `i11018` (from `subset`) moved to `same`. `i4453` moved from `oos` to `syntax`: `var x0 == _ *` now reports
+  scalac's "'=' expected" at the `==`.
+
 ## The successor's predecessor (2026-10-11, the last fold)
 
 One test moved with the second code review's findings:

@@ -890,7 +890,18 @@ impl<'a> Worker<'a> {
             self.error(span, "a pattern splice is only allowed inside a quote pattern");
             return (self.prog.add(TExpr::Unit), ERROR);
         }
-        let ty = expected.map(|t| self.zonk(t)).filter(|&t| !self.types.has_vars(t)).unwrap_or(ANY);
+        // What the position asks for, as dotty types a `SplicePattern` against its prototype once
+        // `isFullyDefined(pt, ForceDegree.flipBottom)` holds: a variable nothing bounds below is its upper bound
+        // (`String` for `id($v)` of `id[T <: String]`, `Any` for `f($y)` of `f[T](x: T)`), the others solved once
+        // the pattern is typed (`type_quote_pattern`), the hole of `MatchValueHandler.instance($v)` against a
+        // `MatchValueHandler[V]` a `V`.
+        let ty = match expected {
+            Some(t) => {
+                self.maximize_bottom_vars(t);
+                self.zonk(t)
+            }
+            None => ANY,
+        };
         let hole = self.fresh_local("hole", ty, span);
         if let Some(holes) = &mut self.quote.pattern {
             holes.holes.push((hole, p, ty));
@@ -949,6 +960,15 @@ impl<'a> Worker<'a> {
         let holes = self.quote.pattern.take().map_or(Vec::new(), |p| p.holes);
         let mut binders = Vec::new();
         for &(_, pat, ty) in &holes {
+            let ty = if self.types.has_vars(ty) {
+                // A variable nothing bounded below is its upper bound, a type argument the pattern leaves
+                // open matching any (`f($y)` of `f[T](x: T)`), as dotty's pattern type variables do.
+                self.maximize_bottom_vars(ty);
+                let solved = self.solve_in(ty);
+                if self.types.has_vars(solved) || solved == NOTHING { ANY } else { solved }
+            } else {
+                ty
+            };
             let bty = self.expr_type(ty);
             let tp = self.type_pattern(pat, bty);
             binders.push((tp, bty));
@@ -1417,6 +1437,24 @@ impl<'a> Worker<'a> {
         }
     }
 
+    /// The `this` of a static object in a macro's expansion, which a quote of the object's own code holds (`'{
+    /// power2($a, $x) }` in `object Macros`), is the module wherever the code expands: dotty pickles a static module
+    /// class's `ThisType` as a reference to the module.
+    fn static_this_as_module(&mut self, tree: TExprId) {
+        let nodes: Vec<TExprId> = self.prog.descendants(tree).filter(|&e| matches!(self.prog.expr(e), TExpr::This)).collect();
+        for node in nodes {
+            let Some(ty) = self.prog.type_of(node) else { continue };
+            let ty = self.zonk(ty);
+            let c = match self.types.get(ty) {
+                Type::This(c) | Type::Class(c, _) => c,
+                _ => continue,
+            };
+            if self.syms.class(c).kind == ClassKind::Object && self.syms.class(c).local_module.is_none() && self.is_static_owner(Owner::Class(c)) {
+                self.prog.exprs[node.idx()] = TExpr::Module(c);
+            }
+        }
+    }
+
     fn expand_macro_now(&mut self, e: ExprId, span: Span, expected: Option<TypeId>) -> (TExprId, TypeId) {
         let classes = self.quoted_classes();
         let Some(quotes) = classes.quotes else {
@@ -1618,6 +1656,7 @@ impl<'a> Worker<'a> {
         }
         match outcome {
             Ok(tree) => {
+                self.static_this_as_module(tree);
                 self.expand_deferred_inlines(tree, deferred_mark, class_mark, span);
                 let ty = self.prog.type_of(tree).unwrap_or(ret);
                 (tree, ty)

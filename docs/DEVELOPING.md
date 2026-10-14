@@ -258,6 +258,47 @@ inventory has to have run in its project with each of its cases passed (`tests/l
 them until their time and memory are measured within the gate's budget (two added minutes, 12 GB): the
 measurements of `lila.scala`'s `--runs 3` are the admission's record.
 
+### Airstream and Laminar
+
+Airstream and Laminar ([raquo/Airstream](https://github.com/raquo/Airstream),
+[raquo/Laminar](https://github.com/raquo/Laminar)) are the reference projects of the JavaScript target: sbt 1
+builds of Scala.js libraries (an FRP library and the UI library over it: observables, DOM construction, facades)
+whose ScalaTest suites run under jsdom. Each is pinned at its release `v18.0.0-M5`, the last before both moved to
+Scala 3.9 and to an `ew` whose TASTy scalac 3.8.4 refuses (`pin.json` says so), Laminar over Airstream's released
+jar of that version. `bench/airstream/` and `bench/laminar/` hold the pin (the upstream tag and commit, the JDK,
+sbt, the Scala axis the gate takes, the root project's name and the projects teq builds, the npm fixture's digest
+and jsdom's version, the overlay's digests; Airstream's build names no root project, so sbt names it after the
+checkout's directory, which every verb refuses where that is not `airstream`), the npm fixture
+(`package-lock.json`, jsdom, which the releases do not commit), the oracle's inventory (`tests.json`: every suite
+with its project and its cases, each under its status as the framework reported it, `cases` for a pass,
+`ignored`, `pending` and the others by their names, a case as many times as it ran), the overlay
+(`overlay/plugins.sbt` and the project's AutoPlugin, sbt 1's meta-build, Scala 2.12) and the generators teq runs in
+the place of sbt's: Airstream's `Compile` and `Test` source generators, its build's own `project/Generate*.scala`
+under `teq interp` (`generators.scala`, with the generators' base and sbt's `/` beside them), and Laminar's DOM
+definitions, which its build writes in `onLoad` with `project/DomDefsGenerator.scala` over Scala DOM Types
+(`domdefs.scala`, the library's Scala 3 jar retrieved by the overlay into `target/domtypes`). The overlay stages
+each script with the file it reads into the checkout's `target/teq-scripts` as the build loads, the command's
+inputs, so that teq's record of the generator hashes them and an edit to either runs it again. Both generators write
+checked-in files, which `compile` deletes first and holds to the pin's bytes after. The verbs are `bench/reference/scalajs.scala`'s, each project's script naming them:
+`checkout` (the pin, the npm fixture installed by `npm ci`), `oracle` (`++3.8.4! clean test` under sbt, sbt 1's
+`test` being the full run, with `bench/reference/oracle`'s listener, which records every event of the run as `teq
+test --events` records teq's; `--runs n`, `--record`, never from a run that executed nothing or failed), `export`
+(`++3.8.4! teqExportAll` with the overlay, failing on an export that compiled the build or recorded a generator
+only sbt runs), `compile` and `test` (`teq test --events`), and Airstream's `generators` (the staged script's arity
+bound edited, the generators run again; restored, the pin's bytes again). The inventories are compared by project
+and suite (a suite of one name in two projects is two), case and status, as many times as each side reports a
+case: a lost case, a status changed (an ignored case pending), a case run twice, a failed case, a case of another
+project's suite of the name and a run that did not end as it should fail (`tests/reference-test-verb.sh`, which also
+holds the sampled peak memory to the node a verb starts: the processes the script starts and those naming the
+binary, each with its descendants).
+
+The gate's lines `airstream-export`, `airstream-compile`, `airstream-test`, `laminar-export`, `laminar-compile`
+and `laminar-test` take the checkouts (`--airstream`, `--laminar`) and the binary under test, are mandatory once
+named, and run only when `--only` names them. teq does not compile either project yet: their tests use
+`scala.compiletime.testing.typeCheckErrors` (scalatest's `assertTypeError`), Airstream's macros a `Type` of a type
+constructor (`AnyKind`), and Laminar overloads methods on `scala.Array` and `js.Array`, which teq's std makes one
+type; the export lines pass.
+
 ## The timing lines on a machine
 
 The gate's `budget`, `runtime` and `sentinel` lines compare the head's plain release build with

@@ -1,4 +1,5 @@
 //> using file ../../tools/script
+//> using file ../reference/reference.scala
 // lila, lichess's server (github.com/lichess-org/lila), as teq's public reference project: the pinned
 // revision checked out, built and tested under scalac 3.8.4 by its own sbt build (the oracle), exported with
 // sbt-teq through the overlay, then compiled and tested by teq against the oracle's results. Run from the
@@ -164,7 +165,7 @@ object Lila:
       Log.stamped(s"lila: oracle run $i of $runs, sbt's log $log")
       val (r, wall, peak) = sbt(pin, dir, log, Seq(s"-Dsbt.global.localcache=$cache"), Seq("clean;compile;testFull;stage"))
       val steps = "\\[success\\] elapsed time: ([0-9]+) s".r.findAllMatchIn(Files.readString(log)).map(_.group(1)).toList
-      println(f"lila: oracle run $i: exit ${r.status}, $wall%.1f s, peak ${peak.fold("unmeasured")(k => f"${k / 1048576.0}%.2f GB")}, steps ${steps.mkString(" ")} s (load, compile, testFull, stage)")
+      println(f"lila: oracle run $i: exit ${r.status}, $wall%.1f s, peak ${Reference.gigabytes(peak)}, steps ${steps.mkString(" ")} s (load, compile, testFull, stage)")
       val found = Tests.fromReports(dir)
       Files.writeString(out.resolve(s"oracle-$i-tests.json"), Tests.write(found))
       if r.status != 0 then
@@ -192,7 +193,7 @@ object Lila:
       Log.die(s"lila: the export exits ${r.status}")
     val lock = dir.resolve("target/teq/teq.lock")
     Files.copy(lock, out.resolve("teq.lock"), java.nio.file.StandardCopyOption.REPLACE_EXISTING)
-    println(f"lila: exported ${Files.size(lock)} bytes in $wall%.1f s (peak ${peak.fold("unmeasured")(k => f"${k / 1048576.0}%.2f GB")}), copied to ${out.resolve("teq.lock")}")
+    println(f"lila: exported ${Files.size(lock)} bytes in $wall%.1f s (peak ${Reference.gigabytes(peak)}), copied to ${out.resolve("teq.lock")}")
     val refused = Files.readString(lock).linesIterator.count(_.trim == "kind: sbt")
     if refused > 0 then Log.die(s"lila: the lock records $refused generators only sbt runs")
 
@@ -210,17 +211,6 @@ object Lila:
     bin.toString
 
   def teqSeconds: Double = Option(System.getenv("LILA_TEQ_SECONDS")).filter(_.nonEmpty).map(_.toDouble).getOrElse(1800.0)
-
-  // The peak memory of teq's processes over the checkout while a command runs: sampled each second, the
-  // resident set sizes of the processes whose command line names the binary summed (the client, the daemon,
-  // its residents and test runners started from it).
-  def sampled[A](bin: String, out: Path)(body: => A): (A, Option[Long]) =
-    val file = out.resolve("peak.kb")
-    Files.deleteIfExists(file)
-    val script = "peak=0; while :; do n=$(ps -eo rss=,args= | awk -v b=\"$1\" 'index($0, b) && !/awk/ {s += $1} END {print s+0}'); [ \"$n\" -gt \"$peak\" ] && peak=$n && echo $peak > \"$2\"; sleep 1; done"
-    val sampler = Sh("sh", "-c", script, "sampler", bin, file.toString).timeout(teqSeconds + 600).spawn()
-    val a = try body finally sampler.kill()
-    (a, if Files.isRegularFile(file) then Files.readString(file).trim.toLongOption else None)
 
   // teq's outputs of the checkout but the lock, the generators' records and their outputs (the routers'
   // sources, the translations): what a cold compile writes again.
@@ -252,10 +242,10 @@ object Lila:
       val log = out.resolve(s"compile-$i.log")
       Log.stamped(s"lila: teq compile, run $i of $runs, its output $log")
       val started = System.nanoTime()
-      val (r, peak) = sampled(bin, out)(Sh(bin, "compile").in(dir).stdout(log).mergeErr.timeout(teqSeconds).check(false).run())
+      val (r, peak) = Reference.sampled(bin, out, teqSeconds + 600)(Sh(bin, "compile").in(dir).stdout(log).mergeErr.timeout(teqSeconds).check(false).run())
       val wall = (System.nanoTime() - started) / 1e9
       val errors = Files.readString(log).linesIterator.count(_.contains(" error: "))
-      println(f"lila: compile run $i: exit ${r.status}, $wall%.1f s, peak ${peak.fold("unmeasured")(k => f"${k / 1048576.0}%.2f GB")}, $errors errors")
+      println(f"lila: compile run $i: exit ${r.status}, $wall%.1f s, peak ${Reference.gigabytes(peak)}, $errors errors")
       if r.status != 0 then failed = true
     Sh(bin, "stop").in(dir).timeout(120).check(false).run()
     val digests = generatedDigests(dir)
@@ -284,12 +274,12 @@ object Lila:
       Log.stamped(s"lila: teq test, run $i of $runs, its output $log")
       val started = System.nanoTime()
       // Verbose, the runner names every test with its outcome: the transcript is the run's inventory.
-      val (r, peak) = sampled(bin, out)(Sh(bin, "test", "--verbose").in(dir).stdout(log).mergeErr.timeout(teqSeconds).check(false).run())
+      val (r, peak) = Reference.sampled(bin, out, teqSeconds + 600)(Sh(bin, "test", "--verbose").in(dir).stdout(log).mergeErr.timeout(teqSeconds).check(false).run())
       val wall = (System.nanoTime() - started) / 1e9
       val transcript = Files.readString(log)
       val counts = transcript.linesIterator.flatMap(l => Tests.summaryLine.findFirstMatchIn(l)).map(m => (m.group(2).toInt, m.group(3).toInt, m.group(4).toInt)).toVector
       val (suites, passed, failedCases) = (counts.map(_._1).sum, counts.map(_._2).sum, counts.map(_._3).sum)
-      println(f"lila: test run $i: exit ${r.status}, $wall%.1f s, peak ${peak.fold("unmeasured")(k => f"${k / 1048576.0}%.2f GB")}, $suites suites, $passed passed, $failedCases failed (tests.json: ${expected.suites.size} suites, ${expected.cases} cases)")
+      println(f"lila: test run $i: exit ${r.status}, $wall%.1f s, peak ${Reference.gigabytes(peak)}, $suites suites, $passed passed, $failedCases failed (tests.json: ${expected.suites.size} suites, ${expected.cases} cases)")
       val differences = Tests.compare(expected, Tests.fromTranscript(transcript, expected))
       if r.status != 0 || differences.nonEmpty then
         println(s"FAIL lila: test run $i: the run is not tests.json's: exit ${r.status}, ${differences.size} differences")
@@ -374,115 +364,3 @@ object Lila:
     cache.kill()
     mongo.kill()
     Script.exit(if failed then 1 else 0)
-
-// The suites and cases of a test run: by suite, its project and its cases' names and outcomes.
-final case class Suite(project: String, cases: Vector[(String, String)])
-final case class Tests(suites: Map[String, Suite]):
-  def cases: Int = suites.values.map(_.cases.size).sum
-
-object Tests:
-  // A test configuration's summary line: `<project>/test: N suites, P passed, F failed in ...`.
-  val summaryLine = "^([^ ]+)/test: ([0-9]+) suites?, ([0-9]+) passed, ([0-9]+) failed".r
-
-  def read(file: Path): Tests =
-    if !Files.isRegularFile(file) then Tests(Map.empty)
-    else
-      val j = Json.parse(Files.readString(file))
-      Tests(j("suites").members.map { (name, s) =>
-        name -> Suite(s("project").str, s("cases").elements.map(c => c.str -> "passed"))
-      }.toMap)
-
-  // Every suite with its project and its cases' names, sorted, the counts first: what passed.
-  def write(t: Tests): String =
-    val suites = t.suites.toVector.sortBy(_._1).map { (name, s) =>
-      name -> Json.obj("project" -> Json.str(s.project), "cases" -> Json.Arr(s.cases.map(_._1).sorted.map(Json.str)))
-    }
-    Json.write(Json.obj("suites_count" -> Json.num(t.suites.size), "cases_count" -> Json.num(t.cases), "suites" -> Json.Obj(suites)), indent = 1) + "\n"
-
-  private val suiteLine = "<testsuite [^>]*\\sname=\"([^\"]*)\"".r
-  private val caseTag = "(?s)<testcase\\s([^>]*?)(/>|>(.*?)</testcase>)".r
-  private val nameAttr = "\\sname=\"([^\"]*)\"".r
-
-  def unescape(s: String): String =
-    "&(#x[0-9a-fA-F]+|#[0-9]+|amp|lt|gt|quot|apos);".r.replaceAllIn(s, m =>
-      java.util.regex.Matcher.quoteReplacement(m.group(1) match
-        case "amp" => "&"
-        case "lt" => "<"
-        case "gt" => ">"
-        case "quot" => "\""
-        case "apos" => "'"
-        case n if n.startsWith("#x") => codePoint(Integer.parseInt(n.drop(2), 16))
-        case n => codePoint(n.drop(1).toInt)))
-
-  private def codePoint(cp: Int): String =
-    if cp < 0x10000 then cp.toChar.toString
-    else s"${(0xd800 + ((cp - 0x10000) >> 10)).toChar}${(0xdc00 + ((cp - 0x10000) & 0x3ff)).toChar}"
-
-  // sbt's JUnit reports under the checkout's target directories, `<project>/test-reports/TEST-<suite>.xml`.
-  def fromReports(dir: Path): Tests =
-    val reports = Files.walk(dir.resolve("target")).toArray.toList.map(_.asInstanceOf[Path])
-      .filter(p => p.getFileName.toString.startsWith("TEST-") && p.getFileName.toString.endsWith(".xml") && p.getParent.getFileName.toString == "test-reports")
-    Tests(reports.map { p =>
-      val text = Files.readString(p)
-      val name = suiteLine.findFirstMatchIn(text).map(m => unescape(m.group(1))).getOrElse(p.getFileName.toString.stripPrefix("TEST-").stripSuffix(".xml"))
-      val cases = caseTag.findAllMatchIn(text).map { m =>
-        val body = Option(m.group(3)).getOrElse("")
-        val outcome = if body.contains("<failure") then "failed" else if body.contains("<error") then "error" else if body.contains("<skipped") then "skipped" else "passed"
-        unescape(nameAttr.findFirstMatchIn(" " + m.group(1)).map(_.group(1)).getOrElse("?")) -> outcome
-      }.toVector
-      name -> Suite(p.getParent.getParent.getFileName.toString, cases)
-    }.toMap)
-
-  // A `teq test --verbose` transcript as the run's inventory: each project's section ends with its summary
-  // line (`<project>/test: N suites, ..`), and holds a line per test the run reports, its status
-  // (`[success]`, `[skipped]`, `[ignored]`, `[canceled]`, `[pending]`) or `[fail]` before the suite and the test
-  // (`task::events::report`). A test is matched to the inventory's suite
-  // whose name prefixes it, another suite is the line's first word.
-  def fromTranscript(transcript: String, expected: Tests): Tests =
-    val known = expected.suites.keys.toVector.sortBy(-_.length)
-    val outcome = "^\\[(success|skipped|ignored|canceled|pending|fail)\\] (.*)$".r
-    val suites = scala.collection.mutable.LinkedHashMap.empty[String, (String, Vector[(String, String)])]
-    var section = Vector.empty[(String, String, String)]
-    for line <- transcript.linesIterator do
-      summaryLine.findFirstMatchIn(line) match
-        case Some(m) =>
-          val project = m.group(1).stripSuffix("/test")
-          for (suite, test, result) <- section do
-            val (_, cases) = suites.getOrElse(suite, (project, Vector.empty))
-            suites(suite) = (project, cases :+ (test -> result))
-          section = Vector.empty
-        case None =>
-          line match
-            case outcome(kind, named) if !named.startsWith("  ") && !named.startsWith(" at ") =>
-              val suite = known.find(n => named == n || named.startsWith(n + " ")).getOrElse(named.takeWhile(_ != ' '))
-              val rest = named.drop(suite.length).stripPrefix(" ")
-              // A failure's line goes on with its throwable's first line after `: `.
-              val test = if kind == "fail" then known.find(_ == suite).flatMap(s => expected.suites(s).cases.map(_._1).filter(c => rest == c || rest.startsWith(c + ": ")).maxByOption(_.length)).getOrElse(rest.takeWhile(_ != ':')) else rest
-              val result = kind match
-                case "success" => "passed"
-                case "fail" => "failed"
-                case _ => "skipped"
-              section = section :+ (suite, test, result)
-            case _ => ()
-    Tests(suites.toMap.map((name, v) => name -> Suite(v._1, v._2)))
-
-  // What the expected inventory has that the run lacks or did not pass: each a line; a run's suite or case
-  // tests.json lacks is named too, since the pin moves with its inventory, and a suite run in another project.
-  def compare(expected: Tests, found: Tests): Vector[String] =
-    val out = Vector.newBuilder[String]
-    if expected.suites.isEmpty then out += "tests.json holds no suite"
-    if found.suites.isEmpty then out += "the run discovered no suite"
-    for (name, s) <- expected.suites.toVector.sortBy(_._1) do
-      found.suites.get(name) match
-        case None => out += s"suite $name (${s.project}) did not run"
-        case Some(f) =>
-          if f.project != s.project then out += s"suite $name ran in project ${f.project}, tests.json's is ${s.project}"
-          val outcomes = f.cases.toMap
-          for (c, _) <- s.cases do
-            outcomes.get(c) match
-              case None => out += s"$name: case \"$c\" did not run"
-              case Some("passed") => ()
-              case Some(o) => out += s"$name: case \"$c\" $o"
-          for (c, _) <- f.cases if !s.cases.exists(_._1 == c) do out += s"$name: case \"$c\" is not in tests.json"
-    for name <- found.suites.keys.toVector.sorted if !expected.suites.contains(name) do out += s"suite $name is not in tests.json"
-    out.result()

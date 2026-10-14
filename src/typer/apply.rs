@@ -782,7 +782,7 @@ impl<'a> Worker<'a> {
             return failed(self, &lists);
         }
         self.complete_class(c);
-        let mut bases: Vec<(ClassId, TypeId)> = self.syms.class(c).base_types[1..].to_vec();
+        let mut bases: Vec<(ClassId, TypeId)> = self.met_base_types(c)[1..].to_vec();
         let mut named_parent = None;
         if parent != names::EMPTY {
             let parents = self.syms.class(c).parents.clone();
@@ -4429,6 +4429,15 @@ impl<'a> Worker<'a> {
         if constrain_by_expected && explicit_lists <= 1 {
             open_expected = self.constrain_result_by_expected(&mut ret_ty, expected);
         }
+        // A partial application, whose clauses after the written ones eta-expansion makes a
+        // function of, relates that function type to what is expected once its last written clause
+        // is reached, as dotty's `constrainResult` compares a result that is a method type
+        // `normalize`d to a function type (`ProtoTypes.normalize`): `standardErrorsF { (a, b) => .. }`
+        // against a `(Try[P], Try[T]) => ..` fixes `P` and `T` before the lambda is typed.
+        let partial = explicit_lists >= 1 && explicit_lists < normal_clauses && !names_param && !dependent;
+        if partial && explicit_lists == 1 {
+            self.constrain_partial_by_expected(&sig, &subst, recv_clause, explicit_lists, ret_ty, expected);
+        }
 
         let mut call = call;
         // dotty types an application clause by clause, the innermost first (`realApply`,
@@ -4646,6 +4655,9 @@ impl<'a> Worker<'a> {
                     normal_seen += 1;
                     if constrain_by_expected && explicit_lists > 1 && normal_seen == normal_clauses {
                         open_expected = self.constrain_result_by_expected(&mut ret_ty, expected);
+                    }
+                    if partial && explicit_lists > 1 && normal_seen == explicit_lists {
+                        self.constrain_partial_by_expected(&sig, &subst, recv_clause, explicit_lists, ret_ty, expected);
                     }
                     given_site.end = list.span.end;
                     if self.index.is_some() && ctor.is_none() {
@@ -5049,7 +5061,8 @@ impl<'a> Worker<'a> {
         // not implement it.
         let plain_eta = expanded && eta_sam_mismatch.is_none() && eta_sam.is_none();
         if let Some((found, required)) = eta_sam_mismatch {
-            let msg = format!("type mismatch: found {}, required {}", self.show(found), self.show(required));
+            let (found_text, required_text) = self.show_pair(found, required);
+            let msg = format!("type mismatch: found {}, required {}", found_text, required_text);
             self.error_unless_unknown(span, msg, &[found, required]);
             ty = ERROR;
         } else if let Some((trait_ty, method, sam_sig, sam_subst)) = eta_sam {
@@ -5299,6 +5312,33 @@ impl<'a> Worker<'a> {
             }
         }
         self.pending_widenings.truncate(widen_mark);
+    }
+
+    /// The clauses of `sig` after its first `written` plain ones (the receiver's apart) as the curried
+    /// function type eta-expansion makes of them over `ret`, related to a function type expected
+    /// where that holds: dotty's `normalize` of a method type against a function prototype, which
+    /// skips an implicit method's clause for its result (`normalize(resultTypeApprox(mt))`). None
+    /// where a by-name or repeated parameter is among them, which eta-expansion treats otherwise.
+    fn constrain_partial_by_expected(&mut self, sig: &MethodSig, subst: &Subst, recv_clause: Option<usize>, written: usize, ret: TypeId, expected: Option<TypeId>) {
+        let Some(exp) = self.concrete_expected(expected) else { return };
+        if self.as_function(exp).is_none() {
+            return;
+        }
+        let plain: Vec<usize> = (0..sig.clauses.len()).filter(|&i| !sig.clauses[i].is_using && Some(i) != recv_clause).collect();
+        let Some(&last_written) = plain.get(written - 1) else { return };
+        let rest: Vec<&_> = sig.clauses[last_written + 1..].iter().filter(|c| !c.is_using).collect();
+        if rest.is_empty() || rest.iter().any(|c| c.params.iter().any(|p| p.by_name || p.repeated)) {
+            return;
+        }
+        let mut fun = ret;
+        for c in rest.iter().rev() {
+            let params: Vec<TypeId> = c.params.iter().map(|p| self.types.subst(p.ty, subst)).collect();
+            fun = self.fun_type(&params, fun);
+        }
+        let mark = self.snapshot();
+        if !self.is_sub(fun, exp) {
+            self.rollback(mark);
+        }
     }
 
     /// Relates the result type of an application to what is expected before its arguments are
@@ -6105,12 +6145,26 @@ impl<'a> Worker<'a> {
     }
 
     fn type_arg(&mut self, arg: ArgSrc, pty: TypeId, span: Span) -> TExprId {
+        let pty = self.captured_lower_bound(pty);
         if self.b.by_name.is_some() {
             if let Some(inner) = self.by_name_arg(pty) {
                 return self.type_by_name_arg(arg, inner, span);
             }
         }
         self.type_arg_as(arg, pty, span)
+    }
+
+    /// A parameter's type that is a wildcard argument of the receiver's type, captured
+    /// (`capture_wildcards`) with a lower bound (`add` of a `JList[? >: Integer]`): that bound, as
+    /// dotty's `asSeenFrom` approximates a wildcard argument in a parameter's contravariant position
+    /// (`AsSeenFromMap`'s ranges, their lower ends), so that the argument is typed, and converted,
+    /// against it (`add(1)`, `Int` converted to `Integer`), what conforms to it conforming to the
+    /// captured type too.
+    fn captured_lower_bound(&mut self, pty: TypeId) -> TypeId {
+        let t = self.deref(pty);
+        let Type::Param(p) = self.types.get(t) else { return pty };
+        let info = self.syms.tparam(p);
+        if info.name == crate::names::WILDCARD && info.lower != NOTHING { info.lower } else { pty }
     }
 
     /// An argument of a function's by-name parameter `=> A`, passed unevaluated.
@@ -8911,7 +8965,7 @@ impl<'a> Worker<'a> {
     fn class_extension(&mut self, recv_ty: TypeId, name: Name) -> Option<(SymId, TypeId)> {
         let c = self.class_of(recv_ty)?;
         self.complete_class(c);
-        let bases = self.syms.class(c).base_types.clone();
+        let bases = self.met_base_types(c);
         bases.into_iter().find_map(|(b, bt)| self.syms.class(b).extensions.iter().copied().find(|&x| self.syms.sym(x).name == name).map(|x| (x, bt)))
     }
 
@@ -10317,7 +10371,7 @@ impl<'a> Worker<'a> {
         // The givens in scope first, the implicit scope's where none provides the extension
         // (`bestImplicit`, Implicits.scala 1653 to 1681), each set ranked (`rank`).
         let in_scope: Vec<((super::implicits::GivenRef, TypeId), u32)> = givens[..contextual].iter().copied().zip(levels).collect();
-        match self.rank_extension_givens(&in_scope, name, recv, recv_ty, lists, expected, span) {
+        match self.rank_extension_givens(&in_scope, name, recv, recv_ty, targs, lists, expected, span) {
             Ranked::One(i, probe) => {
                 let ((given, given_ty), _) = in_scope[i];
                 if let Some(call) = self.given_extension_for(given, given_ty, name, recv, recv_ty, lists, expected, span, probe) {
@@ -10334,7 +10388,7 @@ impl<'a> Worker<'a> {
         }
         let from_companion = self.pick_extension(companions, recv, recv_ty, lists, true, expected);
         let beyond: Vec<((super::implicits::GivenRef, TypeId), u32)> = givens[contextual..].iter().map(|&g| (g, 0)).collect();
-        let from_given = match self.rank_extension_givens(&beyond, name, recv, recv_ty, lists, expected, span) {
+        let from_given = match self.rank_extension_givens(&beyond, name, recv, recv_ty, targs, lists, expected, span) {
             Ranked::One(i, probe) => Some((beyond[i].0, probe)),
             Ranked::Ambiguous(a, b) => {
                 let msg = self.ambiguous_givens_message(beyond[a].0 .0 .0, beyond[b].0 .0 .0, name, recv_ty);
@@ -10417,6 +10471,7 @@ impl<'a> Worker<'a> {
         name: Name,
         recv: TExprId,
         recv_ty: TypeId,
+        targs: Option<ListRef>,
         lists: &mut Option<Vec<ArgList>>,
         expected: Option<TypeId>,
         span: Span,
@@ -10448,8 +10503,10 @@ impl<'a> Worker<'a> {
             // overload resolution of `f(qual)` against the call's prototype; none chosen, it fails.
             let Some(call) = self.choose_given_extension(calls, recv, recv_ty, lists, expected) else { continue };
             // `f(qual)` applies the using clauses before the extension's own parameters
-            // (`tryExtension`): one without an instance passes the given over.
-            if !self.prefix_resolves(&call, recv_ty, None, lists, span, false) {
+            // (`tryExtension`): one without an instance passes the given over. Type arguments the
+            // call writes for the method's own type parameters leave its clauses to the
+            // application (`pf.asExprOf[X]`, whose `using Type[X]` the `[X]` fixes).
+            if !self.prefix_resolves(&call, recv_ty, targs, lists, span, false) {
                 continue;
             }
             let Some((b, best, best_aside)) = found.take() else {
@@ -11081,7 +11138,7 @@ impl<'a> Worker<'a> {
     ) -> Vec<MethodCall> {
         let Some(gc) = self.class_of(given_ty) else { return Vec::new() };
         self.complete_class(gc);
-        let bases: Vec<(ClassId, TypeId)> = self.syms.class(gc).base_types.clone();
+        let bases: Vec<(ClassId, TypeId)> = self.met_base_types(gc);
         for (b, _) in bases {
             let exts: Vec<SymId> =
                 self.syms.class(b).extensions.iter().copied().filter(|&s| self.syms.sym(s).name == name).collect();

@@ -1,0 +1,29 @@
+{
+ "repository": "https://github.com/raquo/Airstream.git",
+ "tag": "v18.0.0-M5",
+ "commit": "7bf3aee9b3fa53eaa1b48e6c778fd394ed7331da",
+ "date": "2026-02-26T18:12:24-08:00",
+ "java": 21,
+ "sbt": "1.12.0",
+ "scala": "3.8.4",
+ "rootProject": "airstream",
+ "rootProjectByDirectory": true,
+ "projects": ["airstream"],
+ "plugins": {
+  "sbt-scalajs": "1.20.2, 1.22.0 under the overlay (sbt-teq's)",
+  "scalajs-env-jsdom-nodejs": "1.1.1"
+ },
+ "npm": {
+  "package-lock.json": "8cf1e05d2ae4a0d39dc22ee689729dac97caf8c8d951ec2343623030943384f0",
+  "jsdom": "27.4.0"
+ },
+ "tests": "tests.json",
+ "overlay": {
+  "AirstreamTeq.scala": "a214441418e132f87767863b6c8e23e19b3be7a09cb9b4b34c8c70384883b705",
+  "plugins.sbt": "2bc2cff805e0bef2dde089b8ee6c3bbd538ad093f0e171345cdb7717367a9c33"
+ },
+ "head": {
+  "commit": "aa6818b7f523244f5abab29e4b56136fcc31183b",
+  "blocked": "the head builds Scala 3.9.0 and depends on ew 0.3.1, whose TASTy 28.9 scalac 3.8.4 refuses (TastyFormat.scala 380); v18.0.0-M5 is the last release on Scala 3.3 (ew 0.3.0), the tag v18.0.0-M4 a later commit (895fa2d, tuplez 0.5.0-M2) than M5's"
+ }
+}

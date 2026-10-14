@@ -1117,6 +1117,13 @@ pub struct Worker<'a> {
     /// once the outermost completion is done: settling them decodes the signatures of the
     /// overloaded members, which may name an alias whose right-hand side is being resolved.
     pub pending_library_names: Vec<ClassId>,
+    /// dotty's `baseTypeCache` per class: the base type of a class for an ancestor its parents give at several
+    /// instantiations, as `base_type_of` met them.
+    pub class_base_memo: FxMap<(ClassId, ClassId), TypeId>,
+    /// The keys of `STD_BINDINGS`, each package's last name with the name, interned once (`std_binding`), and
+    /// a filter of the names, 1024 bits by the name's index, which rules out most lookups before a call.
+    pub std_binding_keys: Option<Box<std::collections::HashSet<(Name, Name), crate::intern::FxBuild>>>,
+    pub std_binding_names: Option<Box<[u64; 16]>>,
     /// How many `name_library_members` runs are under way: none of the pending classes is
     /// named while one is, since a name being computed up the stack reads as none.
     pub naming_library: u32,
@@ -1613,6 +1620,9 @@ pub struct Worker<'a> {
     pub body_depth: u32,
     /// The nesting of the type printer, which cuts a type short past a depth.
     pub show_depth: std::cell::Cell<u32>,
+    /// The classes shown by their qualified names, those whose plain names two classes of a message share
+    /// (`show_pair`).
+    pub show_qualified: std::cell::RefCell<Vec<ClassId>>,
     /// The `Rec` binders the type being shown is inside, which name its `RecThis` (`z1`, `z2`).
     pub show_recs: std::cell::Cell<u32>,
     pub dep_budget: u32,
@@ -2480,6 +2490,9 @@ impl<'a> Worker<'a> {
             soft_lub: false,
             completing: 0,
             pending_library_names: Vec::new(),
+            class_base_memo: FxMap::default(),
+            std_binding_keys: None,
+            std_binding_names: None,
             naming_library: 0,
             poisoned: FxMap::default(),
             poisoned_withheld: FxMap::default(),
@@ -2657,6 +2670,7 @@ impl<'a> Worker<'a> {
             lookups: Vec::new(),
             body_depth: 0,
             show_depth: std::cell::Cell::new(0),
+            show_qualified: Default::default(),
             show_recs: std::cell::Cell::new(0),
             dep_budget: 0,
             dep_root: (ERROR, crate::names::EMPTY),
@@ -2841,6 +2855,9 @@ impl<'a> Worker<'a> {
             necessary_either: Default::default(),
             completing: Default::default(),
             pending_library_names: Default::default(),
+            class_base_memo: FxMap::default(),
+            std_binding_keys: None,
+            std_binding_names: None,
             naming_library: Default::default(),
             poisoned: self.poisoned.clone(),
             poisoned_withheld: self.poisoned_withheld.clone(),
@@ -3011,6 +3028,7 @@ impl<'a> Worker<'a> {
             dep_depth: Default::default(),
             body_depth: Default::default(),
             show_depth: Default::default(),
+            show_qualified: Default::default(),
             show_recs: Default::default(),
             dep_budget: self.dep_budget,
             dep_root: (ERROR, crate::names::EMPTY),

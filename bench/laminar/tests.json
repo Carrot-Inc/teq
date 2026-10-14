@@ -1,0 +1,405 @@
+{
+ "suites_count": 42,
+ "cases_count": 189,
+ "suites": {
+  "com.raquo.laminar.tests.ChildReceiverSpec": {
+   "project": "laminar",
+   "cases": [
+    "can move child from one receiver to another",
+    "split[Option] - caching elements to change tag type",
+    "updates one child",
+    "updates two children"
+   ]
+  },
+  "com.raquo.laminar.tests.ChildTextOptionReceiverSpec": {
+   "project": "laminar",
+   "cases": [
+    "multiple text <-- with stream",
+    "text.maybe <-- with stream"
+   ]
+  },
+  "com.raquo.laminar.tests.ChildTextReceiverSpec": {
+   "project": "laminar",
+   "cases": [
+    "multiple text <-- with stream",
+    "text <-- with stream"
+   ]
+  },
+  "com.raquo.laminar.tests.ChildrenCommandReceiverSpec": {
+   "project": "laminar",
+   "cases": [
+    "updates a list of children"
+   ]
+  },
+  "com.raquo.laminar.tests.ChildrenReceiverSpec": {
+   "project": "laminar",
+   "cases": [
+    "Supports Option-s as Seq-s",
+    "can move children from one dynamic list to another",
+    "raw split signal timing",
+    "raw split stream timing",
+    "split signal timing - with distinct",
+    "unmount stream",
+    "updates a list of children - JsVector",
+    "updates a list of children - List",
+    "updates a list of children - mutable js.Array"
+   ]
+  },
+  "com.raquo.laminar.tests.CompositeKeySpec": {
+   "project": "laminar",
+   "cases": [
+    "cls - fancy reactive modifiers",
+    "cls - fancy static modifiers",
+    "cls - no interference",
+    "cls - simple reactive modifiers",
+    "cls - simple static modifiers",
+    "cls - third party interference",
+    "cls - toggle - eventbus",
+    "cls - toggle - var",
+    "svg cls - simple static modifiers"
+   ]
+  },
+  "com.raquo.laminar.tests.DetachedRootSpec": {
+   "project": "laminar",
+   "cases": [
+    "node lifecycle - activateNow = false",
+    "node lifecycle - activateNow = true"
+   ]
+  },
+  "com.raquo.laminar.tests.DomApiSpec": {
+   "project": "laminar",
+   "cases": [
+    "HTML: fails on incorrect tag name when expected tag is provided",
+    "HTML: fails on multiple elements",
+    "HTML: parses",
+    "HTML: parses [div]",
+    "HTML: parses with extra newlines and spaces",
+    "SVG: fails on incorrect tag name when expected tag is provided",
+    "SVG: fails on multiple elements",
+    "SVG: parses CIRCLE tag",
+    "SVG: parses SVG tag",
+    "SVG: parses SVG tag with extra newlines and spaces",
+    "deletes html props checked & defaultChecked",
+    "deletes html props indeterminate",
+    "deletes html props select.value & option.selected",
+    "deletes html props value",
+    "jsTagName: matches case for both HTML and SVG elements"
+   ]
+  },
+  "com.raquo.laminar.tests.EnvSpec": {
+   "project": "laminar",
+   "cases": [
+    "handles click events",
+    "renders elements with attributes"
+   ]
+  },
+  "com.raquo.laminar.tests.EventProcessorSpec": {
+   "project": "laminar",
+   "cases": [
+    "adds and removes event listeners as instructed",
+    "handles click events on nested elements"
+   ]
+  },
+  "com.raquo.laminar.tests.HtmlAttrReceiverSpec": {
+   "project": "laminar",
+   "cases": [
+    "supports attr(value) syntax",
+    "supports multiple attr receivers on same node",
+    "supports multiple signals",
+    "updates attr",
+    "updates attr with Signal",
+    "updates two attrs subscribed to the same stream"
+   ]
+  },
+  "com.raquo.laminar.tests.InputSpec": {
+   "project": "laminar",
+   "cases": [
+    "checkbox + controlled + var",
+    "checkbox + defaultChecked + signal",
+    "checkbox + defaultChecked + stream",
+    "checkbox + stream"
+   ]
+  },
+  "com.raquo.laminar.tests.InsertHookSpec": {
+   "project": "laminar",
+   "cases": [
+    "Slot syntax compilation"
+   ]
+  },
+  "com.raquo.laminar.tests.KeyMaybeSpec": {
+   "project": "laminar",
+   "cases": [
+    "key(value) :=",
+    "key.value <--",
+    "maybe :=",
+    "maybe <--",
+    "maybe apply"
+   ]
+  },
+  "com.raquo.laminar.tests.LifecycleEventSpec": {
+   "project": "laminar",
+   "cases": [
+    "Changing parent on a node fires appropriate events",
+    "Nested lifecycle events",
+    "event timing - level 1",
+    "event timing - level 2 (nesting)"
+   ]
+  },
+  "com.raquo.laminar.tests.MathMlSpec": {
+   "project": "laminar",
+   "cases": [
+    "dynamic",
+    "quadratic formula"
+   ]
+  },
+  "com.raquo.laminar.tests.MountHooksSpec": {
+   "project": "laminar",
+   "cases": [
+    "Element lifecycle owners can not be used after unmount",
+    "children lifecycle events order",
+    "onFocusMount",
+    "onMountBind cancels previous dynamic subscriptions on unmount",
+    "onMountBind works and infers precise type",
+    "onMountCallback and onUnmountCallback work for repeated mounting",
+    "onMountCallback ignoreAlreadyMounted=true",
+    "onMountCallback infers precise type and provides implicit owner",
+    "onMountInsert child",
+    "onMountInsert child cancels previous dynamic subscriptions on unmount",
+    "onMountInsert children cancels previous dynamic subscriptions on unmount",
+    "onMountInsert lifecycle events order",
+    "onMountInsert switches between children and text <-- (streams)",
+    "onMountInsert switches between different types of inserters (signals)",
+    "onMountInsert switches between different types of inserters (streams)"
+   ]
+  },
+  "com.raquo.laminar.tests.RenderableSpec": {
+   "project": "laminar",
+   "cases": [
+    "Component rendering",
+    "Custom RenderableText implicits",
+    "Regular node rendering",
+    "RenderableText with child and text <--",
+    "RenderableText with child.maybe",
+    "RenderableText with static children"
+   ]
+  },
+  "com.raquo.laminar.tests.RenderableTextScala3Spec": {
+   "project": "laminar",
+   "cases": [
+    "simple text mod",
+    "text <-- stringOrInt"
+   ]
+  },
+  "com.raquo.laminar.tests.ShadowDomSpec": {
+   "project": "laminar",
+   "cases": [
+    "Laminar can render into shadow root"
+   ]
+  },
+  "com.raquo.laminar.tests.SignalChangesPullSpec": {
+   "project": "laminar",
+   "cases": [
+    "signal.changes adding child with multiple observers",
+    "signal.changes adding children with multiple observers",
+    "signal.changes adding multiple observers with .amend",
+    "signal.changes adding multiple observers with a single seqToModifier",
+    "signal.changes with multiple observers in tag.apply"
+   ]
+  },
+  "com.raquo.laminar.tests.SplitVarSpec": {
+   "project": "laminar",
+   "cases": [
+    "splitMutate: in-place updates of mutable collection Var",
+    "standard child Var behaviour",
+    "standard child Var behaviour for splitByIndex",
+    "standard child Var behaviour for splitOption",
+    "standard mutable collection Var",
+    "unused child var behaviour"
+   ]
+  },
+  "com.raquo.laminar.tests.StringLiteralTypeWideningSpec": {
+   "project": "laminar",
+   "cases": [
+    "EventStream with union types",
+    "Val (constant signal) with union types",
+    "chained signal transformations with union types",
+    "inline conditional map producing union type",
+    "mixed Int | String union types",
+    "string literal union types with := and apply methods",
+    "string literal union types with typed HtmlAttr"
+   ]
+  },
+  "com.raquo.laminar.tests.StyleReceiverSpec": {
+   "project": "laminar",
+   "cases": [
+    "scala.js union type inference numbers",
+    "scala.js union type inference strings",
+    "updates calc style",
+    "updates length style [double]",
+    "updates length style [int]",
+    "updates length style [string]",
+    "updates style",
+    "updates url style"
+   ]
+  },
+  "com.raquo.laminar.tests.SubscriptionLifecycleSpec": {
+   "project": "laminar",
+   "cases": [
+    "GRANDPARENT UNMOUNT: checked boolean property",
+    "GRANDPARENT UNMOUNT: color CSS rule",
+    "GRANDPARENT UNMOUNT: heightAttr integer attribute",
+    "GRANDPARENT UNMOUNT: title reflectedAttr",
+    "GRANDPARENT UNMOUNT: title reflectedAttr (two subscriptions for the same stream)",
+    "PARENT UNMOUNT [$CHILD]: title reflectedAttr",
+    "PARENT UNMOUNT: checked boolean property",
+    "PARENT UNMOUNT: color CSS rule",
+    "PARENT UNMOUNT: heightAttr integer attribute",
+    "PARENT UNMOUNT: title reflectedAttr"
+   ]
+  },
+  "com.raquo.laminar.tests.SvgSpec": {
+   "project": "laminar",
+   "cases": [
+    "correctly sets namespaces",
+    "renders el with class and svg with text",
+    "renders sample svg, sets attrs and CSS props, and responds to events"
+   ]
+  },
+  "com.raquo.laminar.tests.SyntaxKeySpec": {
+   "project": "laminar",
+   "cases": [
+    "xxx"
+   ]
+  },
+  "com.raquo.laminar.tests.SyntaxSpec": {
+   "project": "laminar",
+   "cases": [
+    "CSS types and values",
+    "Mod alias lets you get the base type",
+    "Sinks and Sources and assorted type inference",
+    "amend and amendThis on inlined element",
+    "amend with implicit setters syntax",
+    "apply methods of various Modifier aliases compile",
+    "bundle sanity check",
+    "compose syntax",
+    "inContext modifier infers precise type",
+    "onMountBind with implicit setters syntax",
+    "onMountInsert with implicit renderable syntax",
+    "onMountUnmountCallback infers precise type",
+    "seqToModifier, seqToNode implicit conversion works for both strings and nodes",
+    "unit-based binding syntax"
+   ]
+  },
+  "com.raquo.laminar.tests.WeirdCasesSpec": {
+   "project": "laminar",
+   "cases": [
+    "TransferableSubscription.setOwner but more elaborate",
+    "TransferableSubscription.setOwner does not break when changing owner to the same owner",
+    "nested, synchronously dependent observables work as expected (outer stream, inner signal)",
+    "nested, synchronously dependent observables work as expected for some reason",
+    "nested, synchronously dependent signals work as expected"
+   ]
+  },
+  "com.raquo.laminar.tests.WhenSpec": {
+   "project": "laminar",
+   "cases": [
+    "when evaluates arguments immediately & by-name",
+    "when keyword (more)"
+   ]
+  },
+  "com.raquo.laminar.tests.WhenVarArgSpec": {
+   "project": "laminar",
+   "cases": [
+    "when evaluates varargs immediately & by-name"
+   ]
+  },
+  "com.raquo.laminar.tests.basic.ElementSpec": {
+   "project": "laminar",
+   "cases": [
+    "renders a comment",
+    "renders elements with text Content",
+    "renders empty elements",
+    "renders foreign HTML elements",
+    "renders foreign SVG root elements",
+    "renders foreign SVG sub-elements",
+    "renders nested elements",
+    "renders two text nodes"
+   ]
+  },
+  "com.raquo.laminar.tests.basic.EnvSpec": {
+   "project": "laminar",
+   "cases": [
+    "handles click events",
+    "renders elements with attributes"
+   ]
+  },
+  "com.raquo.laminar.tests.basic.EventSpec": {
+   "project": "laminar",
+   "cases": [
+    "LockedEventKey - compose",
+    "LockedEventKey - flatMap",
+    "filter applies to observer and all subsequent transformations",
+    "filter works with stopImmediatePropagation"
+   ]
+  },
+  "com.raquo.laminar.tests.basic.HtmlAttrSpec": {
+   "project": "laminar",
+   "cases": [
+    "sets attrs",
+    "sets boolean attrs",
+    "sets integer attrs"
+   ]
+  },
+  "com.raquo.laminar.tests.basic.HtmlPropSpec": {
+   "project": "laminar",
+   "cases": [
+    "sets props"
+   ]
+  },
+  "com.raquo.laminar.tests.basic.ModSpec": {
+   "project": "laminar",
+   "cases": [
+    "modSeq type inference",
+    "modSeqWith",
+    "nodeSeq type inference"
+   ]
+  },
+  "com.raquo.laminar.tests.basic.RefSpec": {
+   "project": "laminar",
+   "cases": [
+    "creates ref right away"
+   ]
+  },
+  "com.raquo.laminar.tests.basic.ReflectedAttrSpec": {
+   "project": "laminar",
+   "cases": [
+    "order of modifiers does not matter",
+    "sets non-string reflected attrs",
+    "sets reflected attrs",
+    "sets reflected attrs in nested elements"
+   ]
+  },
+  "com.raquo.laminar.tests.basic.StyleSpec": {
+   "project": "laminar",
+   "cases": [
+    "encoding of CSS values",
+    "sets derived styles",
+    "sets static styles",
+    "type safety"
+   ]
+  },
+  "com.raquo.laminar.tests.basic.TreeSpec": {
+   "project": "laminar",
+   "cases": [
+    "DomApi.raw.isDescendantOf",
+    "DomApi.raw.isDescendantOf document"
+   ]
+  },
+  "com.raquo.laminar.tests.example.ToggleComponentSpec": {
+   "project": "laminar",
+   "cases": [
+    "renders"
+   ]
+  }
+ }
+}

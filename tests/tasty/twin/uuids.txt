@@ -71,6 +71,7 @@ members/fix/members/Container.tasty 00da16106c3cd8dd007735d8a918b48c
 members/fix/members/Holder.tasty 00183d087efee2c4002ff891073837ae
 members/fix/members/Registry.tasty 0084064e595f1cd800d640e5059e67e4
 members/fix/members/UsesRegistry.tasty 00a35bc18a8be2dc00c6f8b333e1cbc0
+overacc/fix/overacc/AccAssertions.tasty 003586c62ac665c4003602de59059374
 pext_inlined/fix/pext/dsl/pext_dsl$package.tasty 0007c233c263fddd00255a8061e6cc8e
 pext_inlined/fix/pext/inlined/pext_inlined$package.tasty 00e2a288b8ed59df00758d41b0a2f384
 pkgobjname/fix/ponapi/PonApi.tasty 006b2406183259da0075f3e5a8229196

@@ -1,5 +1,6 @@
 use super::{unescape, Parser};
 use crate::ast::*;
+use crate::intern::Name;
 use crate::names;
 use crate::source::Span;
 use crate::token::Tok;
@@ -103,18 +104,103 @@ impl<'a> Parser<'a> {
             }
             return self.ast.add_pat(Pat::Rest(lhs), start.to(self.prev_span()));
         }
-        if self.at(Tok::OpIdent) && self.tok().name != names::BAR {
+        // dotty's `infixPattern`: any identifier but `|` between two patterns is an extractor applied to
+        // both (`a :: rest`, `a withKey b`), the operators' precedence and associativity those of terms.
+        if !self.at_infix_pattern_op() {
+            return lhs;
+        }
+        let mut stack: Vec<(PatId, crate::token::Token, Span)> = Vec::new();
+        let mut top = lhs;
+        loop {
             let op = self.bump();
-            let rhs = self.parse_infix_pattern();
+            let (prec, right) = super::expr::op_precedence(self.interner.get(op.name));
+            top = self.reduce_pattern_ops(&mut stack, top, prec, !right, op.name);
+            stack.push((top, op, self.span()));
+            top = self.parse_simple_pattern();
             // `1 +` with its operand missing extracts nothing.
-            if matches!(self.ast.pat(rhs), Pat::Error) {
+            if matches!(self.ast.pat(top), Pat::Error) {
                 return self.ast.add_pat(Pat::Error, start.to(self.prev_span()));
             }
-            let path = self.ast.add_expr(Expr::Ident(op.name), op.span);
-            let l = push_list(&mut self.ast.pat_lists, &[lhs, rhs]);
-            return self.ast.add_pat(Pat::Ctor(path, l), start.to(self.prev_span()));
+            if !self.at_infix_pattern_op() {
+                break;
+            }
         }
-        lhs
+        self.reduce_pattern_ops(&mut stack, top, 0, true, names::EMPTY)
+    }
+
+    /// An infix pattern's operator: an identifier other than `|` followed on its line by what starts
+    /// a pattern (dotty's `isIdent && nextCanFollowOperator(canStartPatternTokens)`).
+    #[inline]
+    fn at_infix_pattern_op(&self) -> bool {
+        let named = match self.kind() {
+            Tok::OpIdent => self.tok().name != names::BAR,
+            Tok::Ident => true,
+            _ => return false,
+        };
+        named
+            && matches!(
+                self.kind_at(1),
+                Tok::Ident
+                    | Tok::OpIdent
+                    | Tok::Underscore
+                    | Tok::LParen
+                    | Tok::IntLit
+                    | Tok::LongLit
+                    | Tok::DoubleLit
+                    | Tok::FloatLit
+                    | Tok::CharLit
+                    | Tok::StringLit
+                    | Tok::KwTrue
+                    | Tok::KwFalse
+                    | Tok::KwNull
+                    | Tok::InterpStart
+                    | Tok::Quote
+                    | Tok::KwGiven
+            )
+    }
+
+    /// The operators on the stack whose precedence binds tighter than an operator of `prec` (or as
+    /// tight, for a left-associative one) applied to their operands, as `parse_infix_type` does; an
+    /// operator `op2` of the stacked one's precedence and the other associativity is refused (dotty's
+    /// `reduceStack` and `checkAssoc`).
+    fn reduce_pattern_ops(
+        &mut self,
+        stack: &mut Vec<(PatId, crate::token::Token, Span)>,
+        mut top: PatId,
+        prec: u8,
+        left: bool,
+        op2: Name,
+    ) -> PatId {
+        if let Some(&(_, op1, at)) = stack.last() {
+            let (prec1, right1) = super::expr::op_precedence(self.interner.get(op1.name));
+            if prec1 == prec && right1 == left {
+                self.mixed_associativity(op1.name, op2, left, at);
+            }
+        }
+        while let Some(&(lhs, op, _)) = stack.last() {
+            let (prec1, _) = super::expr::op_precedence(self.interner.get(op.name));
+            if !(prec < prec1 || left && prec == prec1) {
+                break;
+            }
+            stack.pop();
+            let span = self.ast.pat_spans[lhs.idx()].to(self.ast.pat_spans[top.idx()]);
+            let path = self.ast.add_expr(Expr::Ident(op.name), op.span);
+            let l = push_list(&mut self.ast.pat_lists, &[lhs, top]);
+            top = self.ast.add_pat(Pat::Ctor(path, l), span);
+        }
+        top
+    }
+
+    #[cold]
+    #[inline(never)]
+    fn mixed_associativity(&mut self, op1: Name, op2: Name, left: bool, at: Span) {
+        let (a1, a2) = if left { ("right", "left") } else { ("left", "right") };
+        let msg = format!(
+            "{} (which is {a1}-associative) and {} (which is {a2}-associative) have same precedence and may not be mixed",
+            self.interner.get(op1),
+            self.interner.get(op2),
+        );
+        self.error_at(at, msg);
     }
 
     fn is_backquoted(&self) -> bool {

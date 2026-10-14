@@ -915,7 +915,7 @@ impl<'a> Worker<'a> {
     fn wins_in(&mut self, k: ClassId, m: SymId) -> bool {
         let Owner::Class(t) = self.syms.sym(m).owner else { return false };
         let name = self.syms.sym(m).name;
-        let bases: Vec<(ClassId, TypeId)> = self.syms.class(k).base_types.clone();
+        let bases: Vec<(ClassId, TypeId)> = self.met_base_types(k);
         let Some(&(_, t_ty)) = bases.iter().find(|&&(b, _)| b == t) else { return false };
         for (i, &(b, bt)) in bases.iter().enumerate() {
             if b == t {

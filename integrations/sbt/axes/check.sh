@@ -13,7 +13,8 @@
 # is under each sbt's target, BuildInfo's sbtVersion the sbt that runs; each export is its committed lock
 # (order/teq.lock sbt 2's, order/teq.sbt1.lock sbt 1's).
 #
-# On each axis: the export runs (at the build's level, whose streams sbt 1 has under no ThisBuild task); the projects
+# On each axis: the export runs (at the build's level, whose streams sbt 1 has under no ThisBuild task) and compiles
+# nothing (sjs's Test configuration's module initializers, which sbt-scalajs computes over a compile, left unread); the projects
 # on every configuration's classpath are, in order, those of sbt's own fullClasspath, and its jars sbt's
 # externalDependencyClasspath (`check-export.py internal`, `classpaths`); the launchers written beside the lock are
 # teq's; the generators sbt alone runs are recorded and `teq compile` refuses gen, naming them, and exits 2 over
@@ -110,6 +111,14 @@ for version in $axes; do
       continue
     fi
     locks[$fixture-$version]=$dir/teq.lock
+    # The export compiles nothing: no class or IR file of a project, sjs's Test configuration among them, whose
+    # module initializers sbt-scalajs computes over its discovered main classes.
+    compiled=$(find "$dir" -path "$dir/project" -prune -o \( -name '*.class' -o -name '*.sjsir' -o -name '*.tasty' \) -print | head -3)
+    if [ -z "$compiled" ]; then
+      pass "$fixture on sbt $version: the export compiles nothing"
+    else
+      fail "$fixture on sbt $version: the export compiled $compiled"
+    fi
     full=() external=()
     for c in $(compare configurations "$dir/teq.lock"); do
       full+=("export $c/fullClasspath")
@@ -260,6 +269,23 @@ for version in $axes; do
     pass "sbt $version: a release the mirror does not serve named in a warning, the lock naming no binary"
   else
     fail "sbt $version: the absent release: $(head -12 "$dir/teq.lock") $(grep -a "error\|warn" "$work/absent-$version.log" | head -10)"
+  fi
+done
+
+# The module initializers of sjs's Test configuration, read from the settings on each axis and not from the task,
+# whose definition in sbt-scalajs compiles the configuration over its discovered main classes: one the build adds at
+# the project's level and one it sets in Test are refused by name in the lock's test block, the export still
+# compiling nothing.
+for version in $axes; do
+  dir=$(copy equal "$version" initializers)
+  if sbt_in "$dir" "$work/initializers-$version.log" 'set sjs / scalaJSModuleInitializers += org.scalajs.linker.interface.ModuleInitializer.mainMethod("sjs.Setup", "main")' \
+      'set sjs / Test / scalaJSModuleInitializers += org.scalajs.linker.interface.ModuleInitializer.mainMethod("sjs.TestSetup", "main")' teqExportAll &&
+    grep -q 'scalaJSModuleInitializers runs .*sjs.Setup.* before the tests' "$dir/teq.lock" &&
+    grep -q 'Test / scalaJSModuleInitializers is set at .* beside sbt-scalajs' "$dir/teq.lock" &&
+    [ -z "$(find "$dir" -path "$dir/project" -prune -o \( -name '*.class' -o -name '*.sjsir' -o -name '*.tasty' \) -print | head -1)" ]; then
+    pass "sbt $version: sjs's own module initializers, the project's and Test's, refused in the lock, the export compiling nothing"
+  else
+    fail "sbt $version: the module initializers' refusals: $(grep -a -A3 "refus" "$dir/teq.lock" | head -12) $(grep -a "error" "$work/initializers-$version.log" | head -5)"
   fi
 done
 

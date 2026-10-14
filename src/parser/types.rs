@@ -306,7 +306,7 @@ impl<'a> Parser<'a> {
     /// against the operator on top of the stack.
     fn parse_infix_type(&mut self, bar: bool) -> TyExprId {
         let mut stack: Vec<(TyExprId, Token, Span)> = Vec::new();
-        let mut top = self.parse_simple_type();
+        let mut top = self.parse_with_type();
         // An operator ending its line continues on the next when that line starts a type (dotc's
         // `newLineOptWhenFollowing(canStartInfixTypeTokens)`): `0 | 1 |` then `2 | 3`.
         let continued = |p: &Self| p.kind_at(1) == Tok::Newline && !p.blank_line_before(1) && p.can_start_type(2);
@@ -318,9 +318,24 @@ impl<'a> Parser<'a> {
             let (prec, right) = super::expr::op_precedence(self.interner.get(op.name));
             top = self.reduce_type_ops(&mut stack, top, prec, !right, op.name);
             stack.push((top, op, self.span()));
-            top = self.parse_simple_type();
+            top = self.parse_with_type();
         }
         self.reduce_type_ops(&mut stack, top, 0, true, names::EMPTY)
+    }
+
+    /// `A with B`, the deprecated intersection, an infix type's operand (dotty's `withType`: `with`
+    /// binds tighter than any type operator and associates to the right). A parent's `with` is
+    /// the template's (`constrApps`), and `with` before a brace or an indented region opens a body.
+    #[inline]
+    fn parse_with_type(&mut self) -> TyExprId {
+        let lhs = self.parse_simple_type();
+        if self.at(Tok::KwWith) && !self.template_type && !matches!(self.kind_at(1), Tok::LBrace | Tok::Indent | Tok::ColonEol) {
+            self.bump();
+            let rhs = self.parse_with_type();
+            let span = self.ast.ty_spans[lhs.idx()].to(self.ast.ty_spans[rhs.idx()]);
+            return self.ast.add_ty(TyExpr::Inter(lhs, rhs), span);
+        }
+        lhs
     }
 
     fn reduce_type_ops(
@@ -426,19 +441,12 @@ impl<'a> Parser<'a> {
                 self.bump();
                 self.ast.add_ty(TyExpr::Name(names::THIS), start)
             }
-            Tok::Underscore => {
+            // `?` or the deprecated `_`, either with bounds (dotty's `simpleType`: `typeBounds()` after
+            // either token, `[>: Type] [<: Type]`, each bound once and the lower first).
+            Tok::Underscore | Tok::OpIdent if self.kind() == Tok::Underscore || self.tok().name == names::QMARK => {
                 self.bump();
-                self.ast.add_ty(TyExpr::Wildcard, start)
-            }
-            Tok::OpIdent if self.tok().name == names::QMARK => {
-                self.bump();
-                let (mut lo, mut hi) = (None, None);
-                while matches!(self.kind(), Tok::Subtype | Tok::Supertype) {
-                    let upper = self.kind() == Tok::Subtype;
-                    self.bump();
-                    let b = self.parse_inter_type();
-                    if upper { hi = Some(b) } else { lo = Some(b) }
-                }
+                let lo = self.eat(Tok::Supertype).then(|| self.parse_type());
+                let hi = self.eat(Tok::Subtype).then(|| self.parse_type());
                 if lo.is_none() && hi.is_none() {
                     self.ast.add_ty(TyExpr::Wildcard, start)
                 } else {
@@ -480,6 +488,9 @@ impl<'a> Parser<'a> {
             }
             Tok::LParen => {
                 self.bump();
+                // The types inside are types wherever the parentheses stand: a `{` refines, `with`
+                // intersects, as in dotty's `argTypes` (a parent's restrictions are `constrApp`'s).
+                let template_type = std::mem::replace(&mut self.template_type, false);
                 let mark = self.ty_scratch.len();
                 // `(a: A, b: B)` is a named tuple, or the parameters of a dependent function type.
                 let mut names: Vec<Name> = Vec::new();
@@ -505,6 +516,7 @@ impl<'a> Parser<'a> {
                     }
                 }
                 self.expect(Tok::RParen);
+                self.template_type = template_type;
                 let is_fun_params = matches!(self.kind(), Tok::Arrow | Tok::CtxArrow);
                 if let (Some(arrow), false) = (by_name, is_fun_params) {
                     self.error_at(arrow, "a by-name type can only be the type of a parameter");
@@ -572,6 +584,7 @@ impl<'a> Parser<'a> {
                 }
                 Tok::LBracket => {
                     self.bump();
+                    let template_type = std::mem::replace(&mut self.template_type, false);
                     let mark = self.ty_scratch.len();
                     let mut cut = false;
                     loop {
@@ -582,6 +595,7 @@ impl<'a> Parser<'a> {
                         }
                     }
                     self.expect(Tok::RBracket);
+                    self.template_type = template_type;
                     let params = if self.syntax.kind_projector { self.kind_projector_params(mark) } else { Vec::new() };
                     let l = self.ty_list(mark);
                     t = self.ast.add_ty(TyExpr::Apply(t, l), start.to(self.prev_span()));

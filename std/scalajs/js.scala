@@ -112,6 +112,20 @@ private[js] def dictionaryEntries[A](dict: Dictionary[A]): scala.RawMap[String, 
 
 type UndefOr[+A] = A | Unit
 
+/** Scala.js's pseudo-union `js.|`, which a program imports to write `A | B` before Scala 3 had unions: Scala
+  * 3's union, as `UndefOr` is. */
+type |[A, B] = A | B
+
+/** Scala.js's dynamic import: `body` is evaluated in a later task, as Scala.js links it into a module the
+  * promise's `import()` loads, which teq's one file holds already; its result fulfils the promise, what it throws
+  * rejects it. */
+def dynamicImport[A](body: => A): Promise[A] =
+  new Promise[A]((resolve: Function1[A | Thenable[A], scala.Any], reject: Function1[scala.Any, scala.Any]) =>
+    timers.setTimeout(0) {
+      try resolve(body)
+      catch case th: Throwable => reject(special.unwrapFromThrowable(th))
+    }: Unit)
+
 /** A JavaScript function. teq's functions are JavaScript functions, and each conforms to it. */
 @js.native
 @JSGlobal("Function")
@@ -405,7 +419,9 @@ object Math extends Object:
   def atan(x: Double): Double = js.native
   def atan2(y: Double, x: Double): Double = js.native
   def hypot(values: Double*): Double = js.native
+  def max(value1: Int, values: Int*): Int = js.native
   def max(values: Double*): Double = js.native
+  def min(value1: Int, values: Int*): Int = js.native
   def min(values: Double*): Double = js.native
   def random(): Double = js.native
 
@@ -447,12 +463,49 @@ class FinalizationRegistry[-A, -B, -C](finalizationCallback: Function1[B, scala.
   def register(theObject: A, heldValue: B): Unit = js.native
   def unregister(unregistrationToken: C): Boolean = js.native
 
+// Scala.js's `JSStringOps`, through `import js.JSStringOps._`: a string's JavaScript methods, those whose names
+// Scala's `String` gives another meaning taking `js` before them (`jsSplit` for `split`).
+object JSStringOps:
+  implicit def enableJSStringOps(x: String): JSStringOps = new JSStringOps(x)
+
+final class JSStringOps(self: String):
+  def jsIndexOf(searchString: String, position: Int): Int = stringMethod2(self, "indexOf", searchString, position).asInstanceOf[Int]
+  def jsIndexOf(searchString: String): Int = stringMethod1(self, "indexOf", searchString).asInstanceOf[Int]
+  def jsLastIndexOf(searchString: String, position: Int): Int = stringMethod2(self, "lastIndexOf", searchString, position).asInstanceOf[Int]
+  def jsLastIndexOf(searchString: String): Int = stringMethod1(self, "lastIndexOf", searchString).asInstanceOf[Int]
+  def localeCompare(that: String): Int = stringMethod1(self, "localeCompare", that).asInstanceOf[Int]
+  def `match`(regexp: String): Array[String] = stringMethod1(self, "match", regexp).asInstanceOf[Array[String]]
+  def `match`(regexp: RegExp): Array[String] = stringMethod1(self, "match", regexp).asInstanceOf[Array[String]]
+  def jsReplace(searchValue: String, replaceValue: String): String = stringMethod2(self, "replace", searchValue, replaceValue).asInstanceOf[String]
+  def jsReplace(searchValue: RegExp, replaceValue: String): String = stringMethod2(self, "replace", searchValue, replaceValue).asInstanceOf[String]
+  def search(regexp: String): Int = stringMethod1(self, "search", regexp).asInstanceOf[Int]
+  def search(regexp: RegExp): Int = stringMethod1(self, "search", regexp).asInstanceOf[Int]
+  def jsSlice(start: Int, end: Int): String = stringMethod2(self, "slice", start, end).asInstanceOf[String]
+  def jsSlice(start: Int): String = stringMethod1(self, "slice", start).asInstanceOf[String]
+  def jsSplit(separator: String, limit: Int): Array[String] = stringMethod2(self, "split", separator, limit).asInstanceOf[Array[String]]
+  def jsSplit(separator: String): Array[String] = stringMethod1(self, "split", separator).asInstanceOf[Array[String]]
+  def jsSplit(separator: RegExp, limit: Int): Array[String] = stringMethod2(self, "split", separator, limit).asInstanceOf[Array[String]]
+  def jsSplit(separator: RegExp): Array[String] = stringMethod1(self, "split", separator).asInstanceOf[Array[String]]
+  def jsSubstring(start: Int, end: Int): String = stringMethod2(self, "substring", start, end).asInstanceOf[String]
+  def jsSubstring(start: Int): String = stringMethod1(self, "substring", start).asInstanceOf[String]
+  def toLocaleLowerCase(): String = stringMethod0(self, "toLocaleLowerCase").asInstanceOf[String]
+  def toLocaleUpperCase(): String = stringMethod0(self, "toLocaleUpperCase").asInstanceOf[String]
+  def normalize(): String = stringMethod0(self, "normalize").asInstanceOf[String]
+
+@js("$0[$1]()")
+private[js] def stringMethod0(s: String, name: String): scala.Any
+@js("$0[$1]($2)")
+private[js] def stringMethod1(s: String, name: String, a: scala.Any): scala.Any
+@js("$0[$1]($2, $3)")
+private[js] def stringMethod2(s: String, name: String, a: scala.Any, b: scala.Any): scala.Any
+
 @js.native
 @JSGlobal("RegExp")
-class RegExp(patternArg: String, flagsArg: String = js.native) extends Object:
+class RegExp(pattern: String, flags: String = js.native) extends Object:
   def test(text: String): Boolean = js.native
   def exec(text: String): Array[String] = js.native
   val source: String = js.native
-  val flags: String = js.native
   val global: Boolean = js.native
+  val ignoreCase: Boolean = js.native
+  val multiline: Boolean = js.native
   var lastIndex: Int = js.native

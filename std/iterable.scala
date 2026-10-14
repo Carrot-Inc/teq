@@ -590,19 +590,17 @@ def setHash(xs: IterableOnce[Any]): Int = scala.runtime.unorderedHash(xs)
 // in a loop: the equality of case classes would recurse once per element of a List.
 /** `case head +: tail` on a sequence: scala-library's `scala.collection.+:`. */
 object +: :
-  def unapply[A, CC[_] <: Seq[?], C <: SeqOps[A, CC, C]](t: C & SeqOps[A, CC, C]): Option[(A, C)] =
+  def unapply[A, CC[_] <: scala.collection.Seq[?], C <: SeqOps[A, CC, C]](t: C & SeqOps[A, CC, C]): Option[(A, C)] =
     if t.isEmpty then None else Some((t.head, t.tail))
 
 /** `case init :+ last` on a sequence: scala-library's `scala.collection.:+`. */
 object :+ :
-  def unapply[A, CC[_] <: Seq[?], C <: SeqOps[A, CC, C]](t: C & SeqOps[A, CC, C]): Option[(C, A)] =
+  def unapply[A, CC[_] <: scala.collection.Seq[?], C <: SeqOps[A, CC, C]](t: C & SeqOps[A, CC, C]): Option[(C, A)] =
     if t.isEmpty then None else Some((t.init, t.last))
 
-trait Seq[+A] extends SeqOps[A, Seq, Seq[A]], Iterable[A]:
-  def equals(that: Any): Boolean = that match
-    case other: Seq[?] => sameElements(other)
-    case _ => false
-  override def hashCode: Int = seqHash(this)
+// scala-library's `immutable.Seq`, which package `scala` names `Seq`: a `scala.collection.Seq` (its equality and
+// hash are that trait's), whose operations give a `Seq`.
+trait Seq[+A] extends scala.collection.Seq[A], SeqOps[A, Seq, Seq[A]]
 
 object Seq:
   // scala-library's companion is an `IterableFactory`, whose `iterableFactory` a library body
@@ -657,7 +655,7 @@ trait SeqFactory[+CC[_]] extends IterableFactory[CC]:
 trait StrictOptimizedSeqFactory[+CC[_]] extends SeqFactory[CC]
 
 // A library's class implements `apply` and `length`; the traversals follow from them.
-trait IndexedSeq[+A] extends SeqOps[A, IndexedSeq, IndexedSeq[A]], Seq[A]:
+trait IndexedSeq[+A] extends scala.collection.IndexedSeq[A], SeqOps[A, IndexedSeq, IndexedSeq[A]], Seq[A]:
   def foreach[U](f: A => U): Unit =
     var i = 0
     while i < length do

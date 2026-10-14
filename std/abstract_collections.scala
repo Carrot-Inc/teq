@@ -163,11 +163,11 @@ trait BuildFromLowPriority1 extends BuildFromLowPriority2:
       def fromSpecific(from: immutable.SortedSet[A0])(it: IterableOnce[A]): immutable.SortedSet[A] = immutable.SortedSet.from(it)
       def newBuilder(from: immutable.SortedSet[A0]): scala.collection.mutable.Builder[A, immutable.SortedSet[A]] = immutable.SortedSet.newBuilder[A]
 
-  implicit def fallbackStringCanBuildFrom[A]: BuildFrom[String, A, IndexedSeq[A]] =
-    new BuildFrom[String, A, IndexedSeq[A]]:
-      def fromSpecific(from: String)(it: IterableOnce[A]): IndexedSeq[A] = IndexedSeq.from(it)
-      def newBuilder(from: String): scala.collection.mutable.Builder[A, IndexedSeq[A]] =
-        scala.collection.mutable.ArrayBuffer.empty[A].mapResult(items => IndexedSeq.from(items))
+  implicit def fallbackStringCanBuildFrom[A]: BuildFrom[String, A, scala.IndexedSeq[A]] =
+    new BuildFrom[String, A, scala.IndexedSeq[A]]:
+      def fromSpecific(from: String)(it: IterableOnce[A]): scala.IndexedSeq[A] = scala.IndexedSeq.from(it)
+      def newBuilder(from: String): scala.collection.mutable.Builder[A, scala.IndexedSeq[A]] =
+        scala.collection.mutable.ArrayBuffer.empty[A].mapResult(items => scala.IndexedSeq.from(items))
 
 trait BuildFromLowPriority2:
   // A collection builds its own kind, which conforms to the static `CC` it was seen as: a `List`
@@ -210,7 +210,7 @@ trait SeqView[+A] extends SeqOps[A, View, View[A]], View[A]:
   override def view: SeqView[A] = this
   // A view is no sequence: its elements copied into one (`IterableOnceOps.toSeq`), as an adapter
   // extending a view class and `SeqView` would otherwise take the std's `SeqOps.toSeq`.
-  override def toSeq: Seq[A] = toList
+  override def toSeq: scala.Seq[A] = toList
   override def map[B](f: A => B): SeqView[B] = new SeqView.Map(this, f)
   override def appended[B >: A](elem: B): SeqView[B] = new SeqView.Appended(this, elem)
   override def prepended[B >: A](elem: B): SeqView[B] = new SeqView.Prepended(elem, this)
@@ -311,8 +311,8 @@ object SeqView:
     outer =>
     private var underlying: SeqOps[A, AnyConstr, ?] = underlying0
     private var evaluated = false
-    private lazy val sortedElems: Seq[A] =
-      val res: Seq[A] =
+    private lazy val sortedElems: scala.Seq[A] =
+      val res: scala.Seq[A] =
         if len == 0 then Nil
         else if len == 1 then List(underlying.head)
         else underlying.toList.sorted(unsafeCast[Ordering[B], Ordering[A]](ord))
