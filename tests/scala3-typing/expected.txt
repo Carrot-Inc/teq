@@ -297,7 +297,7 @@ neg/extension-methods.scala	subset	4/5 lines
 neg/extension-specificity2.scala	oos	local-givens
 neg/extensions-can-only-have-defs.scala	same	
 neg/extensions-can-only-have-using.scala	superset	+1 lines: an extension needs exactly one receiver parameter
-neg/extmethod-overload.scala	superset	+2 lines: ambiguous extension methods: both a and b provide |+| on Int
+neg/extmethod-overload.scala	superset	+1 lines: value {} is not a member of {}
 neg/extmethod-override.scala	same	
 neg/f-interpolator-neg.scala	accepts	
 neg/f-interpolator-tests.scala	accepts	
@@ -369,8 +369,8 @@ neg/i10552a.scala	same
 neg/i10552b.scala	different	no given instance
 neg/i10603a.scala	same	
 neg/i10603b.scala	same	
-neg/i10605.scala	same	
-neg/i10605b.scala	same	
+neg/i10605.scala	accepts	
+neg/i10605b.scala	accepts	
 neg/i10666.scala	same	
 neg/i10715a.scala	same	
 neg/i10715b.scala	same	
@@ -561,12 +561,12 @@ neg/i14659.scala	different	type mismatch
 neg/i14660.scala	accepts	
 neg/i14722.scala	superset	+1 lines: error overriding variable id in class HasId of type String;
 neg/i14783.scala	same	
-neg/i14818.scala	different	b is exported twice, for two different definitions
+neg/i14818.scala	same	
 neg/i14823.scala	same	
 neg/i14823a.scala	subset	2/4 lines
 neg/i14834.scala	different	illegal cyclic type reference: alias F of type F refers back to the type itself
 neg/i14842.scala	std	App
-neg/i14875.scala	accepts	
+neg/i14875.scala	same	
 neg/i14966.scala	superset	+1 lines: trait T inherits f as (x: List[Int]): Int and as (x: List[String]): A, which are both called f$List in the JavaScript output, since no ancestor declares the two together; declare the alternatives in one trait
 neg/i14966a.scala	same	
 neg/i14983.co-contra.scala	same	
@@ -597,7 +597,7 @@ neg/i15377.scala	accepts
 neg/i15381.scala	same	
 neg/i15414.scala	std	apply
 neg/i15448.scala	same	
-neg/i15468.scala	same	
+neg/i15468.scala	std	x
 neg/i15474b.scala	accepts	
 neg/i15507.scala	subset	6/10 lines
 neg/i15525.scala	std	element0
@@ -813,7 +813,7 @@ neg/i20071b	same
 neg/i20079	same	
 neg/i20105.scala	same	
 neg/i20127.scala	same	
-neg/i20245	different	recursive value unification needs type
+neg/i20245	different	{} is not a member of the package
 neg/i20265-1.scala	accepts	
 neg/i20265.scala	superset	+3 lines: X is not a legal path
 neg/i2030.scala	same	
@@ -840,7 +840,7 @@ neg/i2088.scala	subset	3/4 lines
 neg/i209.scala	same	
 neg/i20946	same	
 neg/i20946a	same	
-neg/i21071.scala	superset	+1 lines: export clauses are not supported in an anonymous class
+neg/i21071.scala	superset	+1 lines: Ambiguous overload. The overloaded alternatives of method foo in object MySuite with types
 neg/i2117.scala	syntax	expected identifier, found {}
 neg/i21207.scala	same	
 neg/i21212.scala	accepts	
@@ -1259,7 +1259,7 @@ neg/i7060.scala	syntax	expected {}, found {}
 neg/i7068-a.scala	same	
 neg/i7068-b.scala	same	
 neg/i7078.scala	accepts	
-neg/i7086.scala	std	App
+neg/i7086.scala	superset	+1 lines: no eligible member toString at B.this.a
 neg/i7092.scala	same	
 neg/i7107.scala	same	
 neg/i7137.scala	same	
@@ -1895,7 +1895,7 @@ neg/targetName-override.scala	same
 neg/targetName-override0	oos	java
 neg/targetName-override1	oos	java
 neg/targetName-refine.scala	same	
-neg/targetName-toplevel.scala	accepts	
+neg/targetName-toplevel.scala	subset	1/4 lines
 neg/tate.scala	different	type mismatch
 neg/tcpoly_overloaded.scala	same	
 neg/tcpoly_typealias.scala	accepts	
@@ -1950,7 +1950,7 @@ neg/type-projections.scala	accepts
 neg/type-qmark.scala	syntax	expected end of statement, found {}
 neg/type-test-syntesize.scala	same	
 neg/typeChecks.scala	different	cannot resolve import
-neg/typeclass-derivation2.scala	superset	+9 lines: cannot resolve import
+neg/typeclass-derivation2.scala	superset	+6 lines: type mismatch
 neg/typeclass-encoding2.scala	different	this type does not take type arguments
 neg/typedIdents	same	
 neg/typedapply.scala	subset	3/4 lines
@@ -2182,7 +2182,7 @@ pos/array-interfaces.scala	rejects	type mismatch
 pos/array-overload.scala	rejects	type mismatch
 pos/arrays2.scala	accepts	
 pos/arrays3.scala	rejects	value {} is not a member of {}
-pos/assignments.scala	rejects	cannot resolve import
+pos/assignments.scala	rejects	this expression cannot be assigned to
 pos/attributes.scala	accepts	
 pos/autoTuplingTest.scala	accepts	
 pos/automatic-tupling-of-function-parameters.scala	accepts	
@@ -2504,7 +2504,7 @@ pos/i10521.scala	accepts
 pos/i10542.scala	accepts	
 pos/i10567	oos	java
 pos/i1059.scala	syntax	expected {}, found {}
-pos/i10634	rejects	value {} is not a member of {}
+pos/i10634	accepts	
 pos/i10638.scala	accepts	
 pos/i10667.scala	rejects	type mismatch
 pos/i10693.scala	accepts	
@@ -2666,7 +2666,7 @@ pos/i12273.scala	accepts
 pos/i12277.scala	accepts	
 pos/i12286.scala	accepts	
 pos/i12299	accepts	
-pos/i12299.scala	rejects	Bar is exported and defined in object test3
+pos/i12299.scala	accepts	
 pos/i12299a.scala	accepts	
 pos/i12306.scala	rejects	type mismatch
 pos/i1235.scala	accepts	
@@ -2946,8 +2946,8 @@ pos/i15717.scala	std	Vector
 pos/i15738.scala	accepts	
 pos/i15743.gadt.scala	rejects	type argument T does not conform to upper bound Tuple
 pos/i15743.moregadt.scala	rejects	type argument T does not conform to upper bound Tuple
-pos/i15743.pass.scala	rejects	too many type arguments
-pos/i15743.scala	rejects	too many type arguments
+pos/i15743.pass.scala	rejects	value {} is not a member of {}
+pos/i15743.scala	rejects	value {} is not a member of {}
 pos/i15784.scala	syntax	expected {}, found {}
 pos/i15786.scala	accepts	
 pos/i15802.scala	accepts	
@@ -3534,12 +3534,12 @@ pos/i23459.scala	accepts
 pos/i23489.scala	rejects	a context bound needs a type constructor with one parameter
 pos/i23496	accepts	
 pos/i23526.scala	rejects	No ClassTag available for A
-pos/i23530.scala	rejects	cannot resolve import
+pos/i23530.scala	rejects	type mismatch
 pos/i23611.scala	rejects	type mismatch
 pos/i23611a.scala	rejects	type mismatch
 pos/i23616.scala	rejects	type mismatch
 pos/i23620.scala	accepts	
-pos/i23627.scala	rejects	cannot resolve import
+pos/i23627.scala	rejects	type mismatch
 pos/i2367.scala	accepts	
 pos/i23734.scala	accepts	
 pos/i23752.scala	accepts	
@@ -4038,7 +4038,7 @@ pos/i7103.scala	accepts
 pos/i7119.scala	accepts	
 pos/i7132.scala	rejects	value {} is not a member of {}
 pos/i7149.scala	accepts	
-pos/i7159.scala	rejects	cannot resolve import
+pos/i7159.scala	accepts	
 pos/i7175.scala	rejects	{} is not a member of the package
 pos/i7217.scala	accepts	
 pos/i7219.scala	accepts	
@@ -4111,7 +4111,7 @@ pos/i7888.scala	accepts
 pos/i7893.scala	accepts	
 pos/i7894.scala	accepts	
 pos/i7910.scala	syntax	expected an expression, found {}
-pos/i7920.scala	rejects	export clauses are not supported in an anonymous class
+pos/i7920.scala	rejects	value {} is not a member of {}
 pos/i7944.scala	accepts	
 pos/i7964.scala	rejects	cannot reduce inline match with
 pos/i7965.scala	accepts	
@@ -4338,7 +4338,7 @@ pos/indent4.scala	syntax	expected an expression, found {}
 pos/indented-parens.scala	rejects	operator {} cannot be applied
 pos/inf.scala	std	Traversable
 pos/infer-function-type-in-union.scala	rejects	missing parameter type
-pos/infer-tracked-1.scala	rejects	cannot resolve import
+pos/infer-tracked-1.scala	rejects	type mismatch
 pos/infer-tracked-explicit-witness.scala	std	is
 pos/infer-tracked-parent-refinements.scala	accepts	
 pos/infer-tracked-parsercombinators-expanded.scala	rejects	type mismatch
@@ -5148,7 +5148,7 @@ pos/t2119.scala	accepts
 pos/t2127.scala	accepts	
 pos/t2130-1.scala	accepts	
 pos/t2130-2.scala	accepts	
-pos/t2133.scala	rejects	reference to fn is ambiguous: it is both imported by import Foo2.bip.* and imported subsequently by import Foo.bar.*
+pos/t2133.scala	accepts	
 pos/t2168.scala	std	App
 pos/t2171.scala	accepts	
 pos/t2179.scala	accepts	
@@ -5301,7 +5301,7 @@ pos/t3777.scala	accepts
 pos/t3792.scala	accepts	
 pos/t3800.scala	accepts	
 pos/t3808.scala	accepts	
-pos/t3836.scala	rejects	reference to IOException is ambiguous: it is both imported by import java.io.* and imported subsequently by import foo.bar.*
+pos/t3836.scala	accepts	
 pos/t3837.scala	accepts	
 pos/t3859.scala	accepts	
 pos/t3861.scala	accepts	
@@ -5379,7 +5379,7 @@ pos/t4758.scala	accepts
 pos/t4760.scala	rejects	cannot resolve import
 pos/t4786.scala	std	App
 pos/t4812.scala	accepts	
-pos/t4831.scala	rejects	cannot resolve import
+pos/t4831.scala	accepts	
 pos/t4840.scala	accepts	
 pos/t4842.scala	accepts	
 pos/t4853.scala	accepts	
@@ -5413,7 +5413,7 @@ pos/t5240.scala	accepts
 pos/t5245.scala	accepts	
 pos/t530.scala	accepts	
 pos/t5305.scala	accepts	
-pos/t5313.scala	rejects	cannot resolve import
+pos/t5313.scala	accepts	
 pos/t5330.scala	accepts	
 pos/t5330b.scala	accepts	
 pos/t5330c.scala	rejects	type mismatch
@@ -5537,7 +5537,7 @@ pos/t6771.scala	accepts
 pos/t6780.scala	rejects	recursive value v1 needs type
 pos/t6797.scala	std	App
 pos/t6815.scala	accepts	
-pos/t6815_import.scala	rejects	cannot resolve import
+pos/t6815_import.scala	accepts	
 pos/t684.scala	accepts	
 pos/t6896.scala	accepts	
 pos/t690.scala	accepts	
@@ -5692,7 +5692,7 @@ pos/targetName-override.scala	accepts
 pos/targetName.scala	accepts	
 pos/tasty-named-arguments.scala	rejects	missing parameter type
 pos/tasty-parent-unapply.scala	accepts	
-pos/tasty-reflect-opaque-api-proto.scala	rejects	cannot resolve import
+pos/tasty-reflect-opaque-api-proto.scala	accepts	
 pos/tasty-tags-obscure.scala	syntax	expected {}, found {}
 pos/tcpoly_boundedmonad.scala	accepts	
 pos/tcpoly_bounds1.scala	accepts	

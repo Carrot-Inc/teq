@@ -25,7 +25,7 @@
 //           runs fails, and so does an export that compiled the build
 // compile   `teq compile` of pin.json's projects over the export (--teq <binary>, by default ./target/release/teq),
 //           the daemon stopped, teq's outputs removed and the generators' outputs the lock names deleted before each
-//           run (--runs n): each run's wall time and the peak memory of teq's processes (sampled); the generated
+//           run (--runs n): each run's wall time and the peak memory of its processes (`Reference.sampled`); the generated
 //           files back afterwards with the bytes the pin commits (`git status` of the checkout clean), the checkout
 //           put back at the pin where they are not
 // test      `teq test --verbose --events` of pin.json's projects: its suites and cases, each with its status and as
@@ -262,7 +262,7 @@ final class ScalaJsReference(val name: String):
       val log = out.resolve(s"compile-$i.log")
       Log.stamped(s"$name: teq compile ${pin.projects.mkString(" ")}, run $i of $runs, its output $log")
       val started = System.nanoTime()
-      val (r, peak) = Reference.sampled(bin, out, teqSeconds + 600)(Sh((bin +: "compile" +: pin.projects)*).in(dir).stdout(log).mergeErr.timeout(teqSeconds).check(false).run())
+      val (r, peak) = Reference.sampled(out, teqSeconds + 600)(mark => Sh((bin +: "compile" +: pin.projects)*).in(dir).withEnv(mark).stdout(log).mergeErr.timeout(teqSeconds).check(false).run())
       val wall = (System.nanoTime() - started) / 1e9
       val errors = Files.readString(log).linesIterator.count(_.contains(" error: "))
       println(f"$name: compile run $i: exit ${r.status}, $wall%.1f s, peak ${Reference.gigabytes(peak)}, $errors errors")
@@ -298,11 +298,13 @@ final class ScalaJsReference(val name: String):
       val log = out.resolve(s"test-$i.log")
       val events = out.resolve(s"test-$i-events.txt")
       Files.deleteIfExists(events)
+      // The daemon the run uses is the one it starts, which carries the run's token (`Reference.sampled`).
+      Sh(bin, "stop").in(dir).timeout(120).check(false).run()
       Log.stamped(s"$name: teq test ${pin.projects.mkString(" ")}, run $i of $runs, its output $log")
       val started = System.nanoTime()
       // The run's events (`--events`), each status as the framework reported it, are its inventory; verbose, the
       // transcript names every test with its outcome.
-      val (r, peak) = Reference.sampled(bin, out, teqSeconds + 600)(Sh((Seq(bin, "test", "--verbose", "--events", events.toString) ++ pin.projects)*).in(dir).stdout(log).mergeErr.timeout(teqSeconds).check(false).run())
+      val (r, peak) = Reference.sampled(out, teqSeconds + 600)(mark => Sh((Seq(bin, "test", "--verbose", "--events", events.toString) ++ pin.projects)*).in(dir).withEnv(mark).stdout(log).mergeErr.timeout(teqSeconds).check(false).run())
       val wall = (System.nanoTime() - started) / 1e9
       val transcript = Files.readString(log)
       val found = if Files.isRegularFile(events) then Tests.fromEvents(Files.readString(events)) else Tests(Map.empty)

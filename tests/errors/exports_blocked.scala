@@ -1,7 +1,7 @@
 // expect: type MissingTrait not found
 // expect: cannot resolve export: MissingObj not found
 // expect: cannot resolve export: Other not found
-// expect: cannot export nope: it is not a member of Inner
+// expect: no eligible member nope at Inner
 
 package util
 

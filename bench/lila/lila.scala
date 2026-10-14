@@ -26,8 +26,20 @@
 //           failed case (--runs n)
 // run       MongoDB and Redis (LILA_MONGOD and LILA_REDIS, else mongod and redis-server on the PATH) on lila's ports,
 //           `teq run lila` over the export, the home page within LILA_READY_SECONDS (default 600): its content
-//           (lila's title and an asset of the manifest) and that asset served; the start-up time to the home page.
-//           lila's assets are built by its ui/build (public/compiled/manifest.json): a checkout without them fails
+//           (lila's title and an asset of the manifest) and that asset served; the start-up time to the home page
+//           (--runs n). lila's assets are built by its ui/build (public/compiled/manifest.json): a checkout without
+//           them fails
+// measure   compile, test and run in turn (--runs n each), then the lines' admission: the three verbs' median
+//           wall times summed against the 120 s the gate may add, and the session's peak against 12 GB. The lines
+//           stay off in tests/gate.sh whatever this prints: admission takes successful runs on both machines
+//
+// Each run of compile, test and run measures the memory of the process trees it starts (`Reference.sampled`): the
+// processes whose environment carries the run's token (the client, the daemon it starts after the verb stopped the
+// last one, its residents, and the JVMs of teq's test runner, `java @<argfile> dev.teq.runner.Runner`), with every
+// descendant of theirs, their resident set sizes summed each second; another invocation or session counts for
+// nothing. A run without a measurement fails. Each verb prints the binary's version and build profile
+// (the directory of target/ it stands in) and the generators' state before and after (`kept`: their records
+// untouched), and the session's peak over its runs.
 //
 // Every verb checks that the checkout is at the pin and that the overlay's files are the bytes pin.json
 // records: the pin, the oracle's results (tests.json) and the overlay move together. <out> holds the logs,
@@ -38,7 +50,7 @@ import java.nio.file.{Files, Path, Paths}
 import java.security.MessageDigest
 
 @main def lila(argv: String*): Unit = Script.run {
-  val args = new Args(argv, "bench/lila/lila.scala <checkout|oracle|export|compile|test|run> <checkout> <out> [--runs n] [--record] [--teq <binary>]")
+  val args = new Args(argv, "bench/lila/lila.scala <checkout|oracle|export|compile|test|run|measure> <checkout> <out> [--runs n] [--record] [--teq <binary>]")
   val teq = args.teq("./target/release/teq")
   val runs = args.option("runs").map(_.toInt).getOrElse(1)
   val record = args.flag("record")
@@ -62,13 +74,16 @@ import java.security.MessageDigest
       Lila.exportLock(pin, here, checkout, out)
     case "compile" =>
       Lila.atPin(pin, checkout)
-      Lila.compile(pin, here, checkout, out, teq, runs, record)
+      Script.exit(if Lila.compile(pin, here, checkout, out, teq, runs, record).failed then 1 else 0)
     case "test" =>
       Lila.atPin(pin, checkout)
-      Lila.test(pin, here, checkout, out, teq, runs)
+      Script.exit(if Lila.test(pin, here, checkout, out, teq, runs).failed then 1 else 0)
     case "run" =>
       Lila.atPin(pin, checkout)
-      Lila.serve(pin, checkout, out, teq)
+      Script.exit(if Lila.serve(pin, checkout, out, teq, runs).failed then 1 else 0)
+    case "measure" =>
+      Lila.atPin(pin, checkout)
+      Script.exit(if Lila.measure(pin, here, checkout, out, teq, runs) then 0 else 1)
     case other => args.fail(s"no verb $other")
 }
 
@@ -212,6 +227,40 @@ object Lila:
 
   def teqSeconds: Double = Option(System.getenv("LILA_TEQ_SECONDS")).filter(_.nonEmpty).map(_.toDouble).getOrElse(1800.0)
 
+  // A verb's runs: each one's wall time (the home page's start-up time for run) and peak, and whether one failed.
+  final case class Measured(walls: Vector[Double], peaks: Vector[Option[Long]], failed: Boolean):
+    def median: Double = if walls.isEmpty then 0.0 else walls.sorted.apply(walls.size / 2)
+    def peak: Option[Long] = if peaks.isEmpty || peaks.exists(_.isEmpty) then None else peaks.flatten.maxOption
+
+  // The binary's version line and build profile, the directory of target/ it stands in (release, ship, fast).
+  def describe(bin: String): Unit =
+    val version = Sh(bin, "--version").timeout(30).check(false).run().out.trim
+    val parent = Paths.get(bin).getParent
+    val profile = Option(parent).filter(p => Option(p.getParent).exists(_.getFileName.toString.startsWith("target"))).map(_.getFileName.toString).getOrElse("unknown")
+    println(s"lila: binary $bin: $version, profile $profile")
+
+  // The generators' records under target/teq/generators, by name with their modification times.
+  def generatorState(dir: Path): Map[String, Long] =
+    val root = dir.resolve("target/teq/generators")
+    if !Files.isDirectory(root) then Map.empty
+    else Files.list(root).toArray.toList.map(_.asInstanceOf[Path]).map(p => p.getFileName.toString -> Files.getLastModifiedTime(p).toMillis).toMap
+
+  def tellGenerators(before: Map[String, Long], after: Map[String, Long]): Unit =
+    val names = (before.keySet ++ after.keySet).toVector.sorted
+    val state = names.map(n => s"$n ${if before.get(n) == after.get(n) && before.contains(n) then "kept" else if before.contains(n) then "ran" else "made"}")
+    println(s"lila: generators: ${if state.isEmpty then "none" else state.mkString(", ")}")
+
+  // A run's line, failing on a missing measurement: no sample, or none above zero over a run of two seconds or
+  // more (the sampler samples each second, the first at the start).
+  def measuredLine(what: String, peak: Option[Long], wall: Double): (String, Boolean) = peak.filter(k => k > 0 || wall < 2.0) match
+    case Some(k) => (s"peak ${Reference.gigabytes(Some(k))}", false)
+    case None =>
+      println(s"FAIL lila: $what: no memory measurement")
+      ("peak unmeasured", true)
+
+  def sessionPeak(verb: String, m: Measured): Unit =
+    println(s"lila: $verb: the session's peak ${Reference.gigabytes(m.peak)} over ${m.walls.size} runs, the median wall time ${f"${m.median}%.1f"} s")
+
   // teq's outputs of the checkout but the lock, the generators' records and their outputs (the routers'
   // sources, the translations): what a cold compile writes again.
   def coldOutputs(dir: Path): Unit =
@@ -232,21 +281,28 @@ object Lila:
       o -> Pin.sha256(listing.getBytes(java.nio.charset.StandardCharsets.UTF_8))
     }.toMap
 
-  def compile(pin: Pin, here: Path, dir: Path, out: Path, teq: String, runs: Int, record: Boolean): Unit =
+  def compile(pin: Pin, here: Path, dir: Path, out: Path, teq: String, runs: Int, record: Boolean): Measured =
     exported(dir)
     val bin = binary(teq)
+    describe(bin)
     var failed = false
+    val (walls, peaks) = (Vector.newBuilder[Double], Vector.newBuilder[Option[Long]])
+    val generatorsBefore = generatorState(dir)
     for i <- 1 to runs do
       Sh(bin, "stop").in(dir).timeout(120).check(false).run()
       coldOutputs(dir)
       val log = out.resolve(s"compile-$i.log")
       Log.stamped(s"lila: teq compile, run $i of $runs, its output $log")
       val started = System.nanoTime()
-      val (r, peak) = Reference.sampled(bin, out, teqSeconds + 600)(Sh(bin, "compile").in(dir).stdout(log).mergeErr.timeout(teqSeconds).check(false).run())
+      val (r, peak) = Reference.sampled(out, teqSeconds + 600)(mark => Sh(bin, "compile").in(dir).withEnv(mark).stdout(log).mergeErr.timeout(teqSeconds).check(false).run())
       val wall = (System.nanoTime() - started) / 1e9
       val errors = Files.readString(log).linesIterator.count(_.contains(" error: "))
-      println(f"lila: compile run $i: exit ${r.status}, $wall%.1f s, peak ${Reference.gigabytes(peak)}, $errors errors")
-      if r.status != 0 then failed = true
+      val (shown, unmeasured) = measuredLine(s"compile run $i", peak, wall)
+      println(f"lila: compile run $i: exit ${r.status}, $wall%.1f s, $shown, $errors errors")
+      walls += wall
+      peaks += peak
+      if r.status != 0 || unmeasured then failed = true
+    tellGenerators(generatorsBefore, generatorState(dir))
     Sh(bin, "stop").in(dir).timeout(120).check(false).run()
     val digests = generatedDigests(dir)
     if record then
@@ -257,12 +313,17 @@ object Lila:
       for (k, v) <- digests.toVector.sortBy(_._1) if !recorded.get(k).contains(v) do
         println(s"FAIL lila: the generated $k differs from generated.json's")
         failed = true
-    Script.exit(if failed then 1 else 0)
+    val m = Measured(walls.result(), peaks.result(), failed)
+    sessionPeak("compile", m)
+    m
 
 
-  def test(pin: Pin, here: Path, dir: Path, out: Path, teq: String, runs: Int): Unit =
+  def test(pin: Pin, here: Path, dir: Path, out: Path, teq: String, runs: Int): Measured =
     exported(dir)
     val bin = binary(teq)
+    describe(bin)
+    val (walls, peaks) = (Vector.newBuilder[Double], Vector.newBuilder[Option[Long]])
+    val generatorsBefore = generatorState(dir)
     // The oracle's inventory, which the run is held to: without one nothing would be checked.
     val inventory = here.resolve("tests.json")
     if !Files.isRegularFile(inventory) then Log.die(s"no inventory at $inventory: record it with the oracle (oracle --record)")
@@ -271,22 +332,31 @@ object Lila:
     var failed = false
     for i <- 1 to runs do
       val log = out.resolve(s"test-$i.log")
+      // The daemon the run uses is the one it starts, which carries the run's token (`Reference.sampled`).
+      Sh(bin, "stop").in(dir).timeout(120).check(false).run()
       Log.stamped(s"lila: teq test, run $i of $runs, its output $log")
       val started = System.nanoTime()
       // Verbose, the runner names every test with its outcome: the transcript is the run's inventory.
-      val (r, peak) = Reference.sampled(bin, out, teqSeconds + 600)(Sh(bin, "test", "--verbose").in(dir).stdout(log).mergeErr.timeout(teqSeconds).check(false).run())
+      val (r, peak) = Reference.sampled(out, teqSeconds + 600)(mark => Sh(bin, "test", "--verbose").in(dir).withEnv(mark).stdout(log).mergeErr.timeout(teqSeconds).check(false).run())
       val wall = (System.nanoTime() - started) / 1e9
       val transcript = Files.readString(log)
       val counts = transcript.linesIterator.flatMap(l => Tests.summaryLine.findFirstMatchIn(l)).map(m => (m.group(2).toInt, m.group(3).toInt, m.group(4).toInt)).toVector
       val (suites, passed, failedCases) = (counts.map(_._1).sum, counts.map(_._2).sum, counts.map(_._3).sum)
-      println(f"lila: test run $i: exit ${r.status}, $wall%.1f s, peak ${Reference.gigabytes(peak)}, $suites suites, $passed passed, $failedCases failed (tests.json: ${expected.suites.size} suites, ${expected.cases} cases)")
+      val (shown, unmeasured) = measuredLine(s"test run $i", peak, wall)
+      println(f"lila: test run $i: exit ${r.status}, $wall%.1f s, $shown, $suites suites, $passed passed, $failedCases failed (tests.json: ${expected.suites.size} suites, ${expected.cases} cases)")
+      walls += wall
+      peaks += peak
+      if unmeasured then failed = true
       val differences = Tests.compare(expected, Tests.fromTranscript(transcript, expected))
       if r.status != 0 || differences.nonEmpty then
         println(s"FAIL lila: test run $i: the run is not tests.json's: exit ${r.status}, ${differences.size} differences")
         differences.take(40).foreach(d => println(s"  $d"))
         failed = true
     Sh(bin, "stop").in(dir).timeout(120).check(false).run()
-    Script.exit(if failed then 1 else 0)
+    tellGenerators(generatorsBefore, generatorState(dir))
+    val m = Measured(walls.result(), peaks.result(), failed)
+    sessionPeak("test", m)
+    m
 
   def readySeconds: Double = Option(System.getenv("LILA_READY_SECONDS")).filter(_.nonEmpty).map(_.toDouble).getOrElse(600.0)
 
@@ -312,9 +382,10 @@ object Lila:
     val r = Sh("curl", "-s", "-o", body.toString, "-w", "%{http_code}", "--max-time", "60", url).timeout(90).check(false).run()
     r.out.trim.toIntOption.getOrElse(0)
 
-  def serve(pin: Pin, dir: Path, out: Path, teq: String): Unit =
+  def serve(pin: Pin, dir: Path, out: Path, teq: String, runs: Int): Measured =
     exported(dir)
     val bin = binary(teq)
+    describe(bin)
     val manifest = dir.resolve("public/compiled/manifest.json")
     if !Files.isRegularFile(manifest) || !Files.readString(manifest).contains("\"js\"") then
       Log.die(s"no built assets at $manifest: build lila's ui (ui/build) in the checkout first")
@@ -323,16 +394,38 @@ object Lila:
     val data = out.resolve("mongo-data")
     Sh.remove(data)
     Files.createDirectories(data)
-    val mongo = Sh(mongod, "--dbpath", data.toString, "--port", "27017", "--bind_ip", "127.0.0.1", "--quiet").stdout(out.resolve("mongod.log")).mergeErr.timeout(readySeconds + 1200).spawn()
+    val mongo = Sh(mongod, "--dbpath", data.toString, "--port", "27017", "--bind_ip", "127.0.0.1", "--quiet").stdout(out.resolve("mongod.log")).mergeErr.timeout(runs * (readySeconds + 600) + 600).spawn()
     // Redis refuses a locale the machine lacks: the C locale.
-    val cache = Sh(redis, "--port", "6379", "--bind", "127.0.0.1", "--save", "", "--appendonly", "no").withEnv("LC_ALL" -> "C").stdout(out.resolve("redis.log")).mergeErr.timeout(readySeconds + 1200).spawn()
+    val cache = Sh(redis, "--port", "6379", "--bind", "127.0.0.1", "--save", "", "--appendonly", "no").withEnv("LC_ALL" -> "C").stdout(out.resolve("redis.log")).mergeErr.timeout(runs * (readySeconds + 600) + 600).spawn()
     waitPort(27017, 60, "MongoDB")
     waitPort(6379, 30, "Redis")
-    val log = out.resolve("run.log")
-    Log.stamped(s"lila: teq run lila, its output $log")
+    var failed = false
+    val (walls, peaks) = (Vector.newBuilder[Double], Vector.newBuilder[Option[Long]])
+    val generatorsBefore = generatorState(dir)
+    for i <- 1 to runs do
+      val log = out.resolve(s"run-$i.log")
+      Log.stamped(s"lila: teq run lila, run $i of $runs, its output $log")
+      Sh(bin, "stop").in(dir).timeout(120).check(false).run()
+      val ((ok, ready), peak) = Reference.sampled(out, teqSeconds + 600)(mark => serveOnce(bin, dir, out, log, mark))
+      val (shown, unmeasured) = measuredLine(s"run $i", peak, ready)
+      println(f"lila: run $i: ${if ok then "served" else "failed"}, the home page in $ready%.1f s, $shown")
+      walls += ready
+      peaks += peak
+      if !ok || unmeasured then failed = true
+    cache.kill()
+    mongo.kill()
+    tellGenerators(generatorsBefore, generatorState(dir))
+    val m = Measured(walls.result(), peaks.result(), failed)
+    sessionPeak("run", m)
+    m
+
+  // One `teq run lila`: the home page within LILA_READY_SECONDS, lila's title on it and its first asset served;
+  // whether all held and the start-up time to the home page. The server and teq's daemon stopped after.
+  private def serveOnce(bin: String, dir: Path, out: Path, log: Path, mark: (String, String)): (Boolean, Double) =
     val started = System.nanoTime()
-    val server = Sh(bin, "run", "lila").in(dir).stdout(log).mergeErr.timeout(readySeconds + 600).spawn()
+    val server = Sh(bin, "run", "lila").in(dir).withEnv(mark).stdout(log).mergeErr.timeout(readySeconds + 600).spawn()
     val home = out.resolve("home.html")
+    Files.deleteIfExists(home)
     var status = 0
     while status != 200 && server.alive && (System.nanoTime() - started) / 1e9 < readySeconds do
       Thread.sleep(1000)
@@ -361,6 +454,19 @@ object Lila:
           else println(f"lila: the home page in $ready%.1f s, with lila's title and the asset $a ($size bytes)")
     Sh(bin, "stop").in(dir).timeout(120).check(false).run()
     server.kill()
-    cache.kill()
-    mongo.kill()
-    Script.exit(if failed then 1 else 0)
+    (!failed, ready)
+
+  // The three verbs in turn and the lines' admission: the median wall times summed against the 120 s the gate may
+  // add, the session's peak against 12 GB. Whether every run passed, was measured and fits.
+  def measure(pin: Pin, here: Path, dir: Path, out: Path, teq: String, runs: Int): Boolean =
+    val c = compile(pin, here, dir, out, teq, runs, record = false)
+    val t = test(pin, here, dir, out, teq, runs)
+    val r = serve(pin, dir, out, teq, runs)
+    val added = c.median + t.median + r.median
+    val peak = Seq(c.peak, t.peak, r.peak)
+    val session = if peak.exists(_.isEmpty) then None else peak.flatten.maxOption
+    val fits = added <= 120.0 && session.exists(_ <= 12L * 1048576L)
+    println(f"lila: measured: compile ${c.median}%.1f s, test ${t.median}%.1f s, run ${r.median}%.1f s: $added%.1f s added against 120 s; the session's peak ${Reference.gigabytes(session)} against 12 GB")
+    val passed = !c.failed && !t.failed && !r.failed
+    println(s"lila: the lines: ${if passed && fits then "within the budget on this machine" else if passed then "over the budget" else "not admissible: a run failed"}; they stay off until runs on both machines establish admission")
+    passed && fits

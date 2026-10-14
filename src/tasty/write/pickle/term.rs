@@ -3641,6 +3641,10 @@ impl<'w, 'a> P<'w, 'a> {
         if let Some(t) = self.w.loaded.as_ref().and_then(|l| l.target_names.get(&s).copied().or_else(|| l.product_target_names.get(&s).copied())) {
             return Some(self.w.interner.get(t).to_string());
         }
+        // An export's forwarder carries its member's (`Namer.addForwarder`).
+        if let Some(fwd) = self.w.syms.forward_of(s) {
+            return self.target_name(fwd.target);
+        }
         let info = self.w.syms.sym(s);
         let d = info.def?;
         let ast = self.w.ast(info.file);

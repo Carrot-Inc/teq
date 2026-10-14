@@ -1,27 +1,29 @@
 // What the scripts of teq's public reference projects share (bench/lila/lila.scala, bench/airstream/airstream.scala,
 // bench/laminar/laminar.scala): the inventory of a test run, read from an oracle's JUnit reports or from a
-// `teq test --verbose` transcript and held to the pinned one (tests.json), and the peak memory of teq's processes
-// while a command runs.
+// `teq test --verbose` transcript and held to the pinned one (tests.json), and the peak memory of the processes one
+// invocation starts while it runs.
 import java.nio.file.{Files, Path}
 
 object Reference:
-  // The peak memory of a command's processes while it runs: sampled each second, the resident set sizes summed over
-  // the processes the script starts (the children of its own process, the sampler's parent, the sampler apart) and
-  // the processes whose command line names the binary (the client, the daemon and its residents, which outlive the
-  // client), each with all its descendants (the test runners: node, the JVM), the sampler's own processes apart. The
-  // sampler ends with the body, or after `seconds`.
-  def sampled[A](bin: String, out: Path, seconds: Double)(body: => A): (A, Option[Long]) =
+  // The peak memory of the process trees one invocation starts, sampled each second: the processes whose environment
+  // carries the invocation's token (`TEQ_MEASURE`, which `body` gives the commands it runs, the client hands to the
+  // daemon it starts and the daemon to its residents and test runners, node's and the JVM's), with all their
+  // descendants, their resident set sizes summed. Nothing another invocation or session started counts, a process
+  // that names the binary or the test runner's class among them. A verb stops teq's daemon before each run, so that
+  // the daemon a run uses is the one it started. The sampler writes 0 at its start, so that a run whose processes it
+  // never saw reads as measured to nothing, and ends with the body, or after `seconds`.
+  def sampled[A](out: Path, seconds: Double)(body: ((String, String)) => A): (A, Option[Long]) =
     val file = out.resolve("peak.kb")
     Files.deleteIfExists(file)
-    val tree = "ps -eo pid=,ppid=,rss=,args= | awk -v b=\"$1\" -v root=\"$PPID\" -v me=\"$$\" '" +
-      "{ pid = $1; parent[pid] = $2; rss[pid] = $3; $1 = $2 = $3 = \"\"; args[pid] = $0 } " +
-      "END { mine[me] = 1; grown = 1; while (grown) { grown = 0; for (p in parent) if (!(p in mine) && (parent[p] in mine)) { mine[p] = 1; grown = 1 } } " +
-      "for (p in parent) if (!(p in mine) && p != root && (parent[p] == root || index(args[p], b))) seen[p] = 1; " +
-      "grown = 1; while (grown) { grown = 0; for (p in parent) if (!(p in seen) && !(p in mine) && (parent[p] in seen)) { seen[p] = 1; grown = 1 } } " +
-      "for (p in seen) s += rss[p]; print s + 0 }'"
-    val script = s"peak=0; while :; do n=$$($tree); [ \"$$n\" -gt \"$$peak\" ] && peak=$$n && echo $$peak > \"$$2\"; sleep 1; done"
-    val sampler = Sh("sh", "-c", script, "sampler", bin, file.toString).timeout(seconds).spawn()
-    val a = try body finally sampler.kill()
+    val token = java.util.UUID.randomUUID.toString
+    val roots = "grep -lz \"^TEQ_MEASURE=$1\\$\" /proc/[0-9]*/environ 2>/dev/null | cut -d/ -f3 | tr '\\n' ' '"
+    val tree = "ps -eo pid=,ppid=,rss= | awk -v r=\"$r\" 'BEGIN { n = split(r, rs, \" \"); for (k = 1; k <= n; k++) mine[rs[k]] = 1 } " +
+      "{ pid[NR] = $1; ppid[NR] = $2; rss[NR] = $3; root[NR] = ($1 in mine) } " +
+      "END { do { more = 0; for (i = 1; i <= NR; i++) if (!root[i]) for (j = 1; j <= NR; j++) if (root[j] && ppid[i] == pid[j]) { root[i] = 1; more = 1; break } } while (more); " +
+      "for (i = 1; i <= NR; i++) if (root[i]) s += rss[i]; print s + 0 }'"
+    val script = s"peak=0; echo 0 > \"$$2\"; while :; do r=$$($roots); n=$$($tree); [ \"$$n\" -gt \"$$peak\" ] && peak=$$n && echo $$peak > \"$$2\"; sleep 1; done"
+    val sampler = Sh("sh", "-c", script, "sampler", token, file.toString).timeout(seconds).spawn()
+    val a = try body("TEQ_MEASURE" -> token) finally sampler.kill()
     (a, if Files.isRegularFile(file) then Files.readString(file).trim.toLongOption else None)
 
   def gigabytes(peak: Option[Long]): String = peak.fold("unmeasured")(k => f"${k / 1048576.0}%.2f GB")

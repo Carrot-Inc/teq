@@ -22,7 +22,6 @@ elided: unstated the std's values, whose scala-library result is wider than the 
 enum ordinal                                                7
 enum value                                                 11
 equals                                                     22
-export forwarder                                            8
 fromOrdinal                                                 7
 fromProduct                                                20
 given instance                                              2
@@ -40,7 +39,7 @@ productElementName                                         25
 productPrefix                                              25
 secondary constructor                                       1
 setter stub                                                 4
-source body                                               239
+source body                                               247
 template statement                                          4
 toString                                                   42
 trait parent call with arguments                            1

@@ -958,9 +958,6 @@ impl<'a> Parser<'a> {
     /// The template of an anonymous class with these parents, none for `new:` or `new { ... }`.
     pub(super) fn parse_anon_class_with(&mut self, parents: Vec<Parent>, start: Span) -> ExprId {
         let (body, exports, self_type, self_alias) = self.parse_template_body(false);
-        if !exports.is_empty() {
-            self.error_at(start, "export clauses are not supported in an anonymous class");
-        }
         let span = start.to(self.prev_span());
         let class = ClassDef { kind: ClassKind::Class, tparams: Vec::new(), clauses: Vec::new(), parents, body, exports, self_type, self_alias };
         let def = self.ast.add_def(Def {

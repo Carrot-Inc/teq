@@ -1,8 +1,8 @@
-// expect: exports_cycle_alone.scala:9:10: error: cyclic export of B, which exports A
-// Two objects that export each other, nothing importing either: whichever table is demanded
-// first (the order of the completions, TEQ_DEMAND_ORDER=reversed among them), the cycle is
-// reported once, at the export of the object that comes first in the file. scalac rejects
-// the program too, as E120 (the members exported back conflict with the objects' own).
+// expect: exports_cycle_alone.scala:9:12: error: Conflicting definitions:
+// Two objects that export each other, nothing importing either: the first one's forwarders,
+// made first whatever the order of the completions (TEQ_DEMAND_ORDER=reversed among them),
+// read the second one's, which forward the first one's own member back: E120 at the first
+// one's export, as scalac reports it.
 package cyc
 
 object A:

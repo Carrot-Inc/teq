@@ -259,8 +259,9 @@ impl<'a> Worker<'a> {
             return self.library_entry(sym);
         }
         let info = self.syms.sym(sym);
-        let (file, local) = (info.file, info.owner == Owner::Local);
-        if info.def.is_none() || !self.program_file(file) || self.is_body_file(file) {
+        let (file, local, def) = (info.file, info.owner == Owner::Local, info.def);
+        // An inline member's forwarder has its record as a definition of the program has.
+        if (def.is_none() && !self.is_inline_forwarder(sym)) || !self.program_file(file) || self.is_body_file(file) {
             return Err(Fallback::Library);
         }
         self.demand_definition(sym);
@@ -691,8 +692,8 @@ impl<'a> Worker<'a> {
         let ty = if walk.failed {
             ERROR
         } else if body.transparent {
-            let result = self.result_expr(body.body);
-            let ascribed = matches!(self.ast(body.file).expr(result), crate::ast::Expr::Typed(..)) || self.widened_constant(te);
+            // A forwarder's body is the member's call, no ascription.
+            let ascribed = body.body.map_or(false, |b| matches!(self.ast(body.file).expr(self.result_expr(b)), crate::ast::Expr::Typed(..))) || self.widened_constant(te);
             match self.fold_constant(te).filter(|_| !ascribed) {
                 Some(v) => {
                     let walked = self.walked_type(&walk, te);

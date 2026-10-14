@@ -714,7 +714,7 @@ impl<'a> Worker<'a> {
                     }
                     let funs: Vec<FunId> = tc.methods.iter().chain(tc.ctors.iter()).copied().collect();
                     work.extend(funs.iter().map(|f| Node::Fun(f.0)));
-                    for &(a, b) in tc.forwarders.iter().chain(tc.bridges.iter()).chain(tc.deferred_givens.iter()) {
+                    for &(a, b) in tc.bridges.iter().chain(tc.deferred_givens.iter()) {
                         work.push(Node::Sym(a.0));
                         work.push(Node::Sym(b.0));
                     }

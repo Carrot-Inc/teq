@@ -478,7 +478,18 @@ pub fn emit(
             let info = syms.class(c);
             matches!(interner.get(info.name), "CharSequence" | "Number") && matches!(info.owner, Owner::Package(p) if interner.get(syms.pkg(p).name) == "lang")
         };
-        Renames::compute(syms, reach, |s| e.member_name(s), |c| e.extension_names(c), primitive_trait)
+        let companion_names = |c: ClassId| -> Vec<String> {
+            let info = syms.class(c);
+            if !info.has_exports {
+                return Vec::new();
+            }
+            info.type_aliases
+                .values()
+                .filter(|&&a| syms.aliases[a.idx()].owner == Owner::Class(c) && crate::typer::value_exports::exported_companion(syms, types, a).is_some())
+                .map(|&a| sanitize(interner.get(syms.aliases[a.idx()].name)))
+                .collect()
+        };
+        Renames::compute(syms, reach, |s| e.member_name(s), |c| e.extension_names(c), companion_names, primitive_trait)
     });
     let new_emitter = || {
         let mut e = Emitter::new(prog, shared, types, interner, &simple_cache, array_seq, &layout, reach, &naming, outline, renderable);
@@ -2719,7 +2730,6 @@ impl<'a> Emitter<'a> {
         }
         self.emit_ctor_getters(idx);
         self.emit_object_members(tc.id);
-        self.emit_forwarders(tc);
         self.emit_bridges(tc);
         self.emit_reflective_proxies(tc);
         self.emit_super_accessors(tc);
@@ -2881,30 +2891,6 @@ impl<'a> Emitter<'a> {
             }
             self.line();
             let _ = write!(self.out, "{}({}) {{ return {}; }}", p.name, names.join(", "), call);
-        }
-    }
-
-    /// The members an export clause makes, each a call of its target; a top-level target's
-    /// access runs its file's initialiser first, after the forwarder's arguments, as the
-    /// forwarder of scalac's does.
-    fn emit_forwarders(&mut self, tc: &TClass) {
-        for &(member, target) in &tc.forwarders {
-            let name = self.sym_name(member);
-            let value = self.static_ref(target);
-            let member_is_def = self.syms.sym(member).kind == SymKind::Def;
-            let target_is_def = self.syms.sym(target).kind == SymKind::Def;
-            let check = match is_eager_top_val(self.syms, target, self.const_vals) {
-                true => None,
-                false => self.needs_init(target, None).and_then(|file| self.file_init(file)),
-            };
-            let check = check.map_or(String::new(), |init| format!("{}(); ", init));
-            self.line();
-            let _ = match (member_is_def, target_is_def) {
-                (true, true) => write!(self.out, "{}(...$a) {{ {}return {}(...$a); }}", name, check, value),
-                (true, false) => write!(self.out, "{}() {{ {}return {}; }}", name, check, value),
-                (false, true) => write!(self.out, "get {}() {{ {}return {}(); }}", name, check, value),
-                (false, false) => write!(self.out, "get {}() {{ {}return {}; }}", name, check, value),
-            };
         }
     }
 
@@ -3131,22 +3117,6 @@ impl<'a> Emitter<'a> {
                 let class = self.class_name(owner);
                 let _ = write!(self.out, "{}(...$a) {{ return {}.prototype.{}.call(this, ...$a); }}", name, class, target);
             }
-        }
-    }
-
-    /// The JS expression of a definition reached by its path: a member of an object, or a
-    /// top-level one. A def is named, not called.
-    fn static_ref(&mut self, s: SymId) -> String {
-        let info = self.syms.sym(s);
-        let n = self.sym_name(s);
-        match info.owner {
-            Owner::Class(a) => {
-                let accessor = self.module_accessor(a);
-                let read = if info.kind != SymKind::Def && info.needs_accessor { "()" } else { "" };
-                format!("{}().{}{}", accessor, n, read)
-            }
-            _ if info.kind == SymKind::Def || self.const_vals[s.idx()] => n.to_string(),
-            _ => format!("{}()", n),
         }
     }
 

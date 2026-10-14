@@ -145,9 +145,6 @@ pub struct Reach {
     pub reflective: Vec<(ClassId, TExprId)>,
     /// Whether a lookup of `Reflect` is reached, registrations or none.
     pub reflective_reached: bool,
-    /// In link mode, the forwarders of the program's `export` clauses, which the JVM writes as
-    /// methods (`typer::export_plan`), made before the walk, whose roots their targets are.
-    pub exports: std::sync::Arc<crate::typer::export_plan::JvmExports>,
     /// The default getters the JavaScript output calls (a `TExpr::Default` it does not leave to
     /// the callee's parameter default, an override's parameter default an overridden member
     /// declares): of the class members of a name, the defs, the constructors, each with the
@@ -202,7 +199,6 @@ impl Reach {
             interpolators: Vec::new(),
             reflective: Vec::new(),
             reflective_reached: false,
-            exports: Default::default(),
         }
     }
 
@@ -266,8 +262,6 @@ pub struct Setup {
     /// The symbols the reflective registrations made, which every walk that reaches a lookup
     /// makes anew.
     registered_syms: usize,
-    /// In link mode, the program's export forwarders, whose targets and qualifiers are roots.
-    exports: std::sync::Arc<crate::typer::export_plan::JvmExports>,
 }
 
 impl Setup {
@@ -668,15 +662,7 @@ fn compute_now(typer: &mut Worker, array_seq: Option<ClassId>, js_visible: bool,
     let thrown = if typer.jvm { runtime_exceptions(typer) } else { Vec::new() };
     // Found first: finding them may enter a std file of the runtime.
     let helpers = if typer.jvm { Some(JvmHelpers::find(typer)) } else { None };
-    // The forwarders of the program's exports, which the JVM writes and whose targets the walk
-    // keeps: a scalac downstream calls them.
-    let exports = if typer.link_mode() {
-        let std_files: Vec<bool> = typer.files.as_slice().iter().map(|f| f.is_std).collect();
-        std::sync::Arc::new(typer.plan_jvm_exports(&std_files))
-    } else {
-        Default::default()
-    };
-    let mut setup = Setup { array_seq, js_visible, thrown, helpers, exported: Vec::new(), found_array_seq: None, found_runtime_exceptions: None, registered_syms: 0, exports };
+    let mut setup = Setup { array_seq, js_visible, thrown, helpers, exported: Vec::new(), found_array_seq: None, found_runtime_exceptions: None, registered_syms: 0 };
     let w = Walker::begin(typer, &setup);
     lap.done("setup", 0);
     // JavaScript may call any member of a class an exported definition takes or returns.
@@ -714,7 +700,6 @@ fn rounds<'a, T: Typing<'a>>(t: &mut T, mut w: Walker, setup: &mut Setup, lap: &
         (w.link_root_members, w.link_root_funs) = link_root_members(t.w(), &w.std_files, w.products);
         lap.done("open-world roots", w.link_root_members.len() + w.link_root_funs.len());
     }
-    w.reach.exports = setup.exports.clone();
     w.roots(Cx::of(t.w()));
     // Called on any receiver by the name each has as this walk runs (`+$Any` for `Set.+`).
     for &s in &setup.exported {
@@ -1565,20 +1550,6 @@ impl Walker {
     fn link_roots(&mut self, cx: Cx) {
         for s in std::mem::take(&mut self.link_root_funs) {
             self.reach_static(cx, s);
-        }
-        // What the export forwarders call: the qualifier's module, the member through it.
-        let exports = self.reach.exports.clone();
-        for f in exports.classes.values().chain(exports.files.values()).flatten() {
-            if let crate::typer::exports::ExportQualifier::Object(o) = f.q {
-                self.reach_class(cx, o);
-            }
-            match f.target {
-                crate::typer::export_plan::JvmTarget::Object(k) => self.reach_class(cx, k),
-                crate::typer::export_plan::JvmTarget::Member(s) => {
-                    self.call_member(cx, s);
-                    self.call_static(cx, s);
-                }
-            }
         }
         for (c, members) in std::mem::take(&mut self.link_root_members) {
             self.reach_class(cx, c);
@@ -2585,9 +2556,6 @@ impl Walker {
             }
         }
         self.in_init = false;
-        for &(_, target) in &tc.forwarders {
-            self.reach_static(cx, target);
-        }
         for a in &tc.super_accessors {
             // A getter's accessor calls the getter alone (`reach_getter`).
             match (a.target, a.getter) {

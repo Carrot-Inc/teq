@@ -462,7 +462,7 @@ impl<'a> Worker<'a> {
         let typed = match alternative {
             Some(a) => {
                 let typed = self.type_application_now(a, expected);
-                self.pass_new_outer(e, typed.0);
+                self.pass_new_outer(e, typed.0, typed.1);
                 typed
             }
             None => type_it(self, e, expected),
@@ -1640,10 +1640,10 @@ impl<'a> Worker<'a> {
             Expr::SymRef(s) => Some(self.sym_ref_term(s)),
             Expr::Select(q, n) => match self.static_ref(q)? {
                 TermRef::Package(p) => self.pkg_term(p, n),
-                r => match self.syms.sym(r.sym()?).kind {
-                    SymKind::Object(c) => self.module_term(c, n),
-                    _ => None,
-                },
+                r => {
+                    let c = self.forwarded_object(r.sym()?)?;
+                    self.module_term(c, n)
+                }
             },
             _ => None,
         }
@@ -3281,8 +3281,28 @@ impl<'a> Worker<'a> {
     /// the enclosing class it is read on where it is that class's (an inherited `val value: X`
     /// of a `trait W[A] extends E[(A, A)]` is an `(A, A)`).
     pub(super) fn import_value_ret(&mut self, value: super::ValueImport) -> TypeId {
-        let (v, module, through) = self.import_values[value.0 as usize];
+        let entry = self.import_values[value.0 as usize];
+        self.import_entry_ret(entry)
+    }
+
+    /// `import_value_ret` of an entry: a val selected on the value before it is seen from that
+    /// value's type (`env.api` of an `Env[A]`), as a member selected on a path is.
+    pub(super) fn import_entry_ret(&mut self, entry: (SymId, Option<ClassId>, Option<super::ValueImport>)) -> TypeId {
+        let (v, module, through) = entry;
         let ret = self.sig_of(v).ret;
+        if let Some(prev) = through {
+            if !matches!(self.syms.sym(v).kind, SymKind::Object(_)) {
+                let pre = self.import_value_ret(prev);
+                let name = self.syms.sym(v).name;
+                if let Some((s, owner_ty)) = self.find_member(pre, name) {
+                    if s == v {
+                        let subst = self.owner_subst(owner_ty);
+                        return self.types.subst(ret, &subst);
+                    }
+                }
+            }
+            return ret;
+        }
         if let (None, Some(c)) = (through, module) {
             if self.syms.class(c).kind != ClassKind::Object {
                 let this = self.this_prefix(c);
@@ -4080,6 +4100,22 @@ impl<'a> Worker<'a> {
         r
     }
 
+    /// Type arguments of a member that takes none (an export's forwarder of an object, `final def
+    /// O: p.O.type`) are its result's `apply`'s: `O[T]` is `O.apply[T]`, as dotty's
+    /// `typedTypeApply` inserts the `apply` of a value that is no polymorphic method
+    /// (`tryInsertApplyOrImplicit`).
+    /// None where the member is no method or is an extension's.
+    #[cold]
+    #[inline(never)]
+    #[allow(clippy::too_many_arguments)]
+    fn apply_result_targs(&mut self, call: &MethodCall, targs: Option<ListRef>, lists: &[ArgList], span: Span, expected: Option<TypeId>, trial: bool) -> Option<Option<(TExprId, TypeId)>> {
+        if call.ext_recv.is_some() || targs.is_none() || !self.is_method_sym(call.sym) {
+            return None;
+        }
+        let Some((te, ty)) = self.apply_method(call.clone(), None, None, Vec::new(), span, None, trial) else { return Some(None) };
+        Some(Some(self.apply_member(te, ty, names::APPLY, targs, lists.to_vec(), span, expected)))
+    }
+
     /// The interpolation the call `sym` on `recv` with `lists` is, where the parts of one were
     /// noted (`interpolation_call`).
     #[cold]
@@ -4307,6 +4343,12 @@ impl<'a> Worker<'a> {
             subst.push((tp, t));
         }
         if explicit.len() > sig.tparams.len().saturating_sub(explicit_from) {
+            // A member that takes no parameters at all applies its result's `apply`.
+            if ctor.is_none() && sig.tparams.is_empty() && sig.clauses.is_empty() {
+                if let Some(r) = self.apply_result_targs(&call, targs, &lists, span, expected, trial) {
+                    return r;
+                }
+            }
             self.error(span, "too many type arguments");
         }
         // A bound of a clause after the extension's receiver may name it (`Elems <:
@@ -5102,7 +5144,7 @@ impl<'a> Worker<'a> {
                     let alts: Vec<SymId> = self.syms.alternatives(s).map_or_else(|| vec![s], |a| a.to_vec());
                     alts.iter().all(|&a| self.sig_of(a).clauses.iter().all(|c| c.is_using))
                 });
-            if loops || (empty_parens && next_apply.is_none()) {
+            if loops || (empty_parens && next_apply.is_none() && !self.has_companion_apply(ty, call.sym)) {
                 if empty_parens && rest.len() == 1 && self.takes_java_parens(call.sym) {
                     return Some((te, ty));
                 }
@@ -5620,6 +5662,12 @@ impl<'a> Worker<'a> {
             TExpr::Local(s) => self.syms.sym(s).kind != SymKind::Var,
             // A given's reference still pending is the call its expansion makes, not a path.
             TExpr::Static(s) => self.syms.sym(s).kind != SymKind::Var && !self.is_pending_call(te),
+            // An object's val read through its module, as a product's package member is: the
+            // path `Static` gives the same member (`o.v`, dotty's stable `TermRef`).
+            TExpr::Field(r, s) => {
+                let info = self.syms.sym(s);
+                matches!(self.prog.expr(r), TExpr::Module(_)) && info.kind == SymKind::Val && info.mods & (crate::ast::mods::MUTABLE | crate::ast::mods::LAZY) == 0
+            }
             _ => false,
         }
     }
@@ -6624,14 +6672,20 @@ impl<'a> Worker<'a> {
             self.error(span, "cannot infer the element type of this generator");
         }
         let ret_expected = self.concrete_expected(Some(ret));
-        self.for_bases.push(self.env.frames.len());
-        self.push_scope();
         let ast = self.cur_ast();
         let lambda_span = match binder {
             ForBinder::Pat(p) | ForBinder::CasePat(p) => ast.pat_spans[p.idx()],
             ForBinder::Unpack(_) => span,
         };
+        if let Some(r) = ret_expected {
+            self.lambda_results.insert((self.env.file.0, lambda_span.start, lambda_span.end), r);
+        }
+        // The closure owns its parameters (`Desugar.makeFor`'s lambda, its `$anonfun`): the
+        // scope opens below its owner, as a written lambda's does.
         self.sites.owners.push(super::site::SiteOwner::Lambda(lambda_span));
+        let pending = self.attempts.pending_len();
+        self.for_bases.push(self.env.frames.len());
+        self.push_scope();
         let result = match binder {
             ForBinder::Unpack(id) => {
                 let sym = self.fresh_local("u", ANY, span);
@@ -6716,9 +6770,9 @@ impl<'a> Worker<'a> {
                 }
             },
         };
-        self.sites.owners.pop();
         self.for_bases.pop();
         self.pop_scope();
+        self.sites.owners.pop();
         let (sym, tb, bty) = result;
         // A yield's value, not typed against the call's result where that is a variable, whose
         // bounds may expect a function of it: what a completion of a name there reads.
@@ -6743,7 +6797,12 @@ impl<'a> Worker<'a> {
         }
         let params = self.prog.syms(&[sym]);
         let ty = self.fun_type(&[elem], bty);
-        (self.prog.add(TExpr::Lambda(params, tb)), ty)
+        let lambda = self.prog.add(TExpr::Lambda(params, tb));
+        // A macro its body defers reads the generator's closure as typed (`deferred_lambdas`).
+        if self.attempts.pending_len() > pending {
+            self.deferred_lambdas.insert((self.env.file.0, lambda_span.start, lambda_span.end), lambda);
+        }
+        (lambda, ty)
     }
 
     pub fn apply_member(
@@ -7259,6 +7318,21 @@ impl<'a> Worker<'a> {
                 Some(&n) => Some(n),
                 None => self.inherited_nested_class(c, name),
             };
+            // An export's type forwarder of a class applies as the class's companion, a member of
+            // the class (`NamerOps.typeConstructorCompanion`, `exported_alias_class`): the class's
+            // own creator, the receiver only evaluated.
+            if let Some(k) = nested.is_none().then(|| self.class_exported_alias_term(c, name)).flatten() {
+                let (te, ty) = self.apply_callee(Callee::Ctor(k), targs, lists, span, expected);
+                let case = self.syms.class(k).mods & crate::ast::mods::CASE != 0 || self.syms.class(k).kind == ClassKind::EnumCase;
+                if self.deps.is_some() && case {
+                    self.deps_node(te, super::deps::Node::Apply(k));
+                }
+                if self.is_path(recv) {
+                    return (te, ty);
+                }
+                let stmts = self.prog.stmts.push_slice(&[TStmt::Expr(recv)]);
+                return (self.prog.add(TExpr::Block(stmts, te)), ty);
+            }
             if module || nested.is_some_and(|n| self.outer_class(n).is_some() && self.needs_constructor_proxy(n)) {
                 if let Some(nested) = nested {
                     // A class nested in an object nested in a class or in a local object takes the
@@ -8341,6 +8415,23 @@ impl<'a> Worker<'a> {
             _ => true,
         });
         none.then(|| alts[0])
+    }
+
+    /// Whether the object of type `ty`, the result of `f`, has the `apply` its companion class gives
+    /// it, which an application types as the class's creation (`apply_on_object`) rather than as a
+    /// member, and which dotty's `tryInsertApplyOrImplicit` inserts after `f`: a case class's
+    /// synthesized one (`Desugar.classDef`'s `companionDefs`) after any `f`, an export's forwarder of
+    /// the object (`PgnDump.WithFlags()`) among them; a constructor proxy
+    /// (`NamerOps.addConstructorApplies`) only where `f` names the object, its export's forwarder
+    /// (dotty's pos `i12299`), not after a method's result (neg `i16095`).
+    fn has_companion_apply(&self, ty: TypeId, f: SymId) -> bool {
+        let Type::Class(c, _) = self.types.get(self.types.strip_nested(ty)) else { return false };
+        let info = self.syms.class(c);
+        let is_module = info.kind == ClassKind::Object || info.local_module.is_some() || info.inner_object.is_some();
+        let Some(k) = info.companion.filter(|&k| is_module && self.syms.class(k).kind == ClassKind::Class) else { return false };
+        let m = self.syms.class(k).mods;
+        let case = m & crate::ast::mods::CASE != 0 && m & crate::ast::mods::ABSTRACT == 0;
+        case || self.syms.is_forwarder(f) || self.is_pickled_forwarder(f)
     }
 
     /// `x.f()` where `f` is declared without a parameter list.

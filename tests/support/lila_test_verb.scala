@@ -5,5 +5,6 @@ import java.nio.file.Paths
 
 @main def lilaTestVerb(argv: String*): Unit = Script.run {
   val Seq(here, dir, out, bin) = argv: @unchecked
-  Lila.test(Pin.read(Paths.get("bench/lila")), Paths.get(here), Paths.get(dir), Paths.get(out), bin, 1)
+  val m = Lila.test(Pin.read(Paths.get("bench/lila")), Paths.get(here), Paths.get(dir), Paths.get(out), bin, 1)
+  Script.exit(if m.failed then 1 else 0)
 }

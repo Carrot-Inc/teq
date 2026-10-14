@@ -386,7 +386,9 @@ impl<'a> Gen<'a> {
                 self.method_body(fun.sym, &fun.params, body);
                 // An outer accessor is scalac's, final and synthetic (`Worker::outer_accessor`).
                 let outer_accessor = info.def.is_none() && info.mods & mods::FINAL != 0 && name.ends_with("$$$outer");
-                let access = if outer_accessor { ACC_PUBLIC | ACC_FINAL | ACC_SYNTHETIC } else { ACC_PUBLIC };
+                // A final method outside a trait is final in its class file (dotty's `javaFlags`).
+                let fin = info.mods & mods::FINAL != 0 && !self.is_interface;
+                let access = if outer_accessor { ACC_PUBLIC | ACC_FINAL | ACC_SYNTHETIC } else if fin { ACC_PUBLIC | ACC_FINAL } else { ACC_PUBLIC };
                 self.end_method(access, &m.name, &m.desc);
                 self.emit_bridges(fun.sym, &m);
                 if self.is_interface && (info.mods & mods::PRIVATE == 0 || info.scoped_private) {
@@ -418,7 +420,11 @@ impl<'a> Gen<'a> {
             self.default_value(d, shape.by_name, &ret);
             self.return_value(&ret);
             let desc = method_desc(&m.params[..before], &ret);
-            self.end_method(ACC_PUBLIC, &getter, &desc);
+            // A forwarder's getters are forwarders of the member's, final as it is
+            // (`Namer.foreachDefaultGetterOf`); a method's own take its access alone
+            // (`Desugar.defaultGetters`).
+            let fin = !self.is_interface && cx.input.syms.is_forwarder(fun.sym);
+            self.end_method(if fin { ACC_PUBLIC | ACC_FINAL } else { ACC_PUBLIC }, &getter, &desc);
             if self.is_interface {
                 self.trait_static_forwarder(&getter, &m.params[..before], &ret);
             }
@@ -633,10 +639,6 @@ impl<'a> Gen<'a> {
     /// signature differs (`compare(Int, Int)` for `compare(T, T)`) a bridge forwards to it.
     fn emit_bridges(&mut self, sym: SymId, m: &MRef) {
         self.emit_bridges_as(sym, self.cx.input.syms.sym(sym).name, m);
-    }
-
-    pub fn emit_bridges_as_pub(&mut self, sym: SymId, name: Name, m: &MRef) {
-        self.emit_bridges_as(sym, name, m);
     }
 
     /// The bridges of `m`, which `sym` defines under the member name `name`: a var's setter is
@@ -997,8 +999,10 @@ impl<'a> Gen<'a> {
                 self.emit_fun(m);
             }
         }
-        if let Some(list) = cx.input.reach.exports.classes.get(&c) {
-            self.export_forwarders(list);
+        if syms.class(c).has_exports {
+            let mut aliases: Vec<crate::types::AliasId> = syms.class(c).type_aliases.values().copied().filter(|&a| syms.aliases[a.idx()].owner == Owner::Class(c)).collect();
+            aliases.sort();
+            self.companion_forwarders(&aliases);
         }
         self.given_class_defs(Owner::Class(c), None);
         if is_trait || is_enum || is_abstract {
@@ -1006,8 +1010,7 @@ impl<'a> Gen<'a> {
         }
         if !is_trait {
             self.super_accessors(tc);
-            self.inherited_export_bridges(c);
-            self.emit_forwarders(tc);
+            self.implemented_nested_objects(tc);
             self.emit_inherited_bridges(tc);
             // A case value class's product members are its companion's (`value_class_members`).
             if !(info.value_class && cx.vc_on_companion(c)) {
@@ -2540,42 +2543,10 @@ impl<'a> Gen<'a> {
         }
     }
 
-    /// Members that an export clause or a nested object implements for a parent trait.
-    fn emit_forwarders(&mut self, tc: &TClass) {
-        let cx = self.cx;
-        let syms = cx.input.syms;
-        for &(member, target) in &tc.forwarders {
-            let m = self.mref(member);
-            let target_is_def = syms.sym(target).kind == SymKind::Def;
-            let params: Vec<(Option<SymId>, JType)> = m.params.iter().map(|t| (None, t.clone())).collect();
-            self.begin_method(false, false, &params, m.ret.clone(), &[]);
-            let t = if target_is_def {
-                let tm = self.mref(target);
-                match syms.sym(target).owner {
-                    Owner::Class(o) => {
-                        self.load_module(o);
-                    }
-                    _ => {
-                        let module = cx.file_modules[syms.sym(target).file.0 as usize].clone();
-                        self.getstatic(&module, "MODULE$", &JType::L(Rc::from(module.as_str())));
-                    }
-                }
-                let mut slot = 1u16;
-                for (from, to) in m.params.iter().zip(&tm.params) {
-                    self.load(slot, from);
-                    self.adapt(from, to);
-                    slot += if from.wide() { 2 } else { 1 };
-                }
-                self.invoke_mref(&tm);
-                tm.ret.clone()
-            } else {
-                self.static_value(target)
-            };
-            self.adapt(&t, &m.ret);
-            self.return_value(&m.ret);
-            self.end_method(ACC_PUBLIC, &m.name, &m.desc);
-        }
-        for (declared, nested) in crate::emit::implemented_nested_objects(syms, tc.id) {
+    /// The members of a parent trait that nested objects of the class implement: each an
+    /// accessor answering the object's module (`object t extends T` for `val t: T`).
+    fn implemented_nested_objects(&mut self, tc: &TClass) {
+        for (declared, nested) in crate::emit::implemented_nested_objects(self.cx.input.syms, tc.id) {
             let m = self.mref(declared);
             self.begin_method(false, false, &[], m.ret.clone(), &[]);
             let t = self.load_module(nested);
@@ -2672,7 +2643,9 @@ impl<'a> Gen<'a> {
         self.invoke_desc(Invoke::Special, &im.owner, true, &im.name, &im.desc, im.params.len(), &im.ret);
         self.adapt(&im.ret, &m.ret);
         self.return_value(&m.ret);
-        self.end_method(ACC_PUBLIC | ACC_SYNTHETIC, &m.name, &m.desc);
+        // Of another erased signature than the default's, the method is erasure's bridge.
+        let bridge = if m.desc != im.desc { ACC_BRIDGE } else { 0 };
+        self.end_method(ACC_PUBLIC | ACC_SYNTHETIC | bridge, &m.name, &m.desc);
     }
 
     /// A method of a superclass wins over the default method of an interface, where Scala takes
@@ -3405,10 +3378,11 @@ impl<'a> Gen<'a> {
         for f in funs {
             self.emit_fun(f);
         }
-        if let Some(list) = reach.exports.files.get(&file) {
-            self.export_forwarders(list);
-        }
-        self.given_class_defs(Owner::Package(cx.input.file_pkgs[file.0 as usize]), Some(file));
+        let pkg = cx.input.file_pkgs[file.0 as usize];
+        let mut aliases: Vec<crate::types::AliasId> = syms.pkg(pkg).entries.values().filter_map(|e| e.alias).filter(|&a| syms.aliases[a.idx()].file == file && syms.aliases[a.idx()].owner == Owner::Package(pkg)).collect();
+        aliases.sort();
+        self.companion_forwarders(&aliases);
+        self.given_class_defs(Owner::Package(pkg), Some(file));
         self.drain_pending();
         self.finish_class(&name)
     }

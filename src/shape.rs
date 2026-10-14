@@ -24,6 +24,9 @@ pub struct Remap {
     /// comparison lets through inside one (spaces, a line break, a comment, backticks) moves
     /// its end.
     pub moved: FxMap<Span, Span>,
+    /// Old → new span of every export selector's clause outside bodies (`Import::span`), which a
+    /// retype moves the forwarders of the clause by (`typer::incremental`).
+    pub exports: Vec<(Span, Span)>,
     /// Old → new of the `T @uncheckedVariance` outside bodies, which the typer keeps what each
     /// resolved to by.
     pub unchecked: FxMap<TyExprId, TyExprId>,
@@ -73,6 +76,7 @@ impl<'a> Cmp<'a> {
         if !self.imports_eq(&o.top_exports, &n.top_exports) {
             return differ("export clauses");
         }
+        self.remap.exports.extend(o.top_exports.iter().zip(&n.top_exports).map(|(x, y)| (x.span, y.span)));
         if o.top_level.len() != n.top_level.len() {
             return differ("top-level definitions added or removed");
         }
@@ -141,6 +145,10 @@ impl<'a> Cmp<'a> {
                 }
                 if !self.imports_eq(&old_ast.exports[ca.exports.range()], &new_ast.exports[cb.exports.range()]) {
                     return what(self, "export clauses changed");
+                }
+                if record {
+                    let pairs = old_ast.exports[ca.exports.range()].iter().zip(&new_ast.exports[cb.exports.range()]);
+                    self.remap.exports.extend(pairs.map(|(x, y)| (x.span, y.span)));
                 }
                 self.body_sig(&ca.body, &cb.body, record).map_err(|e| format!("{}.{}", self.name(da.name), e))?;
             }
@@ -248,6 +256,8 @@ impl<'a> Cmp<'a> {
             let names = |ast: &'a Ast, span: Span| ast.import_names.iter().find(|(s, _)| *s == span).map(|(_, n)| n.as_slice()).unwrap_or(&[]);
             for (x, y) in a.iter().zip(b) {
                 self.remap.moved.insert(x.span, y.span);
+                // An export's forwarders and reports stand at its selector (`value_exports::selector_span`).
+                self.remap.moved.insert(x.selector_span, y.selector_span);
                 for (p, q) in names(self.old, x.span).iter().zip(names(self.new, y.span)) {
                     self.remap.moved.insert(*p, *q);
                 }

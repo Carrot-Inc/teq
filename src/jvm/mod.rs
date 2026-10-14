@@ -852,7 +852,9 @@ pub fn emit(input: Input, classpath: &mut crate::classpath::Classpath, kept: Opt
         };
         // A file of top-level `export` clauses has its forwarders in its `<file>$package`, and a
         // file's top-level given class its def there.
-        let has_exports = reach.exports.files.contains_key(&FileId(f as u32));
+        let pkg = cx.input.file_pkgs[f];
+        let has_exports = syms.pkg(pkg).export_files.contains(&FileId(f as u32))
+            && syms.pkg(pkg).entries.values().filter_map(|e| e.alias).any(|a| syms.aliases[a.idx()].file == FileId(f as u32) && crate::typer::value_exports::exported_companion(syms, cx.input.types, a).is_some());
         let has_given_classes = cx.given_classes.iter().any(|(&g, &k)| syms.sym(g).file.0 as usize == f && matches!(syms.sym(g).owner, Owner::Package(_)) && cx.emits(k));
         // A top-level opaque type's companion is nested in the `<file>$package` object, whose
         // mirror class carries the file's `$package` TASTy, as scalac's does.

@@ -2202,7 +2202,7 @@ impl<'w, 'a> P<'w, 'a> {
         }
         self.statements_before(c, &mut stmts, None);
         if info.has_exports {
-            self.export_forwarders(c);
+            self.class_export_trees(c);
         }
         // The implementations of the deferred givens the class inherits, after its body, as
         // dotty's `implementDeferredGivens` appends them.
@@ -2306,39 +2306,54 @@ impl<'w, 'a> P<'w, 'a> {
         self.names.get(NK::Expanded(prefix, member))
     }
 
-    /// The forwarders an `export` clause makes, and the clause itself: a type as a final alias,
-    /// a val or an object as a stable final def of its singleton type, a def as a final def of
-    /// the same signature, all marked exported.
-    fn export_forwarders(&mut self, c: ClassId) {
-        let plans = self.w.class_export_plans(c);
-        self.export_clauses(plans);
+    /// The export clauses of class `c`, each as the `EXPORT` tree the typed body keeps where the
+    /// clause stands (dotty's `typedStats`: the `Export`, then its forwarders, which
+    /// `value_forwarder_defs` writes after the members, as the class's own definitions).
+    fn class_export_trees(&mut self, c: ClassId) {
+        let info = self.w.syms.class(c);
+        let (file, def) = (info.file, info.def);
+        let Some(d) = def else { return };
+        let DefKind::Class(cls) = &self.w.ast(file).def(d).kind else { return };
+        let clauses: Vec<crate::ast::Import> = self.w.ast(file).exports[cls.exports.range()].to_vec();
+        let fwds: Vec<std::sync::Arc<Forward>> = self.w.syms.class(c).forwarders.iter().map(|(_, f)| f.clone()).collect();
+        self.export_trees(&clauses, &fwds);
     }
 
-    /// The forwarders of a file's top-level `export` clauses in package `pkg`, members of its
-    /// `<file>$package` object as scalac makes them.
-    fn package_export_forwarders(&mut self, pkg: PkgId) {
-        let plans = self.w.package_export_plans(self.file, pkg);
-        self.export_clauses(plans);
+    /// The top-level export clauses of the file, in package `pkg`: trees of its `<file>$package`.
+    fn file_export_trees(&mut self, pkg: PkgId) {
+        let file = self.file;
+        let clauses: Vec<crate::ast::Import> = self.w.ast(file).top_exports.clone();
+        if clauses.is_empty() {
+            return;
+        }
+        let fwds: Vec<std::sync::Arc<Forward>> = self.w.syms.pkg(pkg).forwarders.iter().filter(|(s, _)| self.w.syms.sym(*s).file == file).map(|(_, f)| f.clone()).collect();
+        self.export_trees(&clauses, &fwds);
     }
 
-    /// The export clauses of a class or a file's package, with the forwarders each makes, as
-    /// the typer's plan selects them (`typer::export_plan`), which the JVM writes too.
-    fn export_clauses(&mut self, plans: Vec<crate::typer::export_plan::ClausePlan>) {
-        for plan in plans {
-            let crate::typer::export_plan::ClausePlan { path, sels, q, types, objects, forwards } = plan;
-            let Some(q) = q else {
-                let path: Vec<String> = path.iter().map(|&n| self.name(n)).collect();
-                self.fail(format!("an export whose qualifier is neither an object nor a package ({})", path.join(".")));
-                continue;
-            };
-            // The clause.
+    /// Each clause's `EXPORT` tree, its qualifier the object or the package its forwarders reach
+    /// their members through; a clause through a value, or one that forwards no term, has none.
+    fn export_trees(&mut self, clauses: &[crate::ast::Import], fwds: &[std::sync::Arc<Forward>]) {
+        let mut i = 0;
+        while i < clauses.len() {
+            let start = clauses[i].span.start;
+            let mut j = i;
+            while j < clauses.len() && clauses[j].span.start == start && clauses[j].path == clauses[i].path {
+                j += 1;
+            }
+            let clause = &clauses[i..j];
+            i = j;
+            let Some(q) = fwds.iter().find(|f| f.clause.start == start).and_then(|f| self.export_qualifier(f)) else { continue };
+            // A package's clause stays the package where its forwarders reach a member of its
+            // package object, read from another module's products (dotty's `Export` keeps the
+            // typed qualifier, `lib` of `export lib.Eq`), as the whole program's build has it.
+            let q = self.written_package_qualifier(q, &clause[0].path);
             self.mark_tree();
             self.buf.byte(EXPORT);
             let len = self.buf.begin_length();
             self.mark_tree();
             self.export_qualifier_ref(q);
-            for sel in &sels {
-                match sel {
+            for imp in clause {
+                match &imp.sel {
                     crate::ast::ImportSel::Name(n, rename) => {
                         let nn = self.simple_name(*n);
                         self.mark_tree();
@@ -2366,178 +2381,36 @@ impl<'w, 'a> P<'w, 'a> {
                 }
             }
             self.buf.end_length(len);
-            for (n, t) in types {
-                let addr = self.buf.addr();
-                self.buf.byte(TYPEDEF);
-                let l = self.buf.begin_length();
-                let nn = self.simple_name(n);
-                self.buf.nat(nn as u64);
-                self.mark_tree();
-                self.buf.byte(TYPEBOUNDS);
-                let b = self.buf.begin_length();
-                self.exported_type(n, t);
-                self.buf.end_length(b);
-                self.write_flags(&[FINAL, EXPORTED]);
-                self.synthetic_position(addr);
-                self.buf.end_length(l);
-            }
-            for (n, original, _) in objects {
-                self.export_object_forwarder(n, original, q);
-            }
-            for (n, sym, selected) in forwards {
-                self.export_forwarder(n, sym, q, selected);
-                self.export_default_forwarders(n, sym, q, selected);
-            }
         }
     }
 
-    /// The forwarder of an object, `final def n: q.original.type = q.original`, stable, as scalac
-    /// writes it for an object and for a case class's companion.
-    fn export_object_forwarder(&mut self, n: Name, original: Name, q: crate::typer::exports::ExportQualifier) {
-        let addr = self.buf.addr();
-        self.buf.byte(DEFDEF);
-        let len = self.buf.begin_length();
-        let nn = self.simple_name(n);
-        self.buf.nat(nn as u64);
-        let on = self.simple_name(original);
-        self.mark_tree();
-        self.buf.byte(TERMREF);
-        self.buf.nat(on as u64);
-        self.export_qualifier_ref(q);
-        self.term_at(None);
-        self.buf.byte(SELECT);
-        self.buf.nat(on as u64);
-        self.export_qualifier_term(q);
-        self.count_body(Producer::Forwarder);
-        self.write_flags(&[FINAL, EXPORTED, STABLE]);
-        self.synthetic_position(addr);
-        self.buf.end_length(len);
-    }
-
-    /// The qualifier of an export as a term: the object, or the package.
-    fn export_qualifier_term(&mut self, q: crate::typer::exports::ExportQualifier) {
+    /// The object or the package a forwarder reaches its member through: a package's member's
+    /// owner, or a path that is an object's module alone.
+    fn export_qualifier(&self, fwd: &Forward) -> Option<crate::typer::exports::ExportQualifier> {
         use crate::typer::exports::ExportQualifier;
-        self.term_at(None);
-        match q {
-            ExportQualifier::Object(o) => self.module_term(o),
-            ExportQualifier::Package(p) => self.package_ref(p),
+        if fwd.is_static() {
+            return match self.w.syms.sym(fwd.target).owner {
+                Owner::Package(p) => Some(ExportQualifier::Package(p)),
+                _ => None,
+            };
+        }
+        let (v, _, prev) = self.w.import_values[fwd.path as usize];
+        match (self.w.syms.sym(v).kind, prev) {
+            (SymKind::Object(o), None) => Some(ExportQualifier::Object(o)),
+            _ => None,
         }
     }
 
-    /// The forwarders of the default getters of the exported method `sym`, as scalac writes them
-    /// after its forwarder: `final def n$default$i: T @uncheckedVariance = q.m$default$i`.
-    fn export_default_forwarders(&mut self, n: Name, sym: SymId, q: crate::typer::exports::ExportQualifier, selected: Name) {
-        // An overloaded name forwards every alternative's getters.
-        if let Some(alts) = self.w.syms.alternatives(sym).map(|a| a.to_vec()) {
-            for a in alts {
-                self.export_default_forwarders(n, a, q, selected);
-            }
-            return;
-        }
-        let info = self.sym_info(sym);
-        if info.kind != SymKind::Def {
-            return;
-        }
-        let sig = self.seen_through(sym, q);
-        if !sig.clauses.iter().any(|c| c.params.iter().any(|p| p.has_default)) {
-            return;
-        }
-        let (fwd, original) = (self.name(n), self.name(selected));
-        let order = declared_clause_order(self.w, &info, &sig);
-        let declared: Vec<ClauseSig> = order.iter().map(|&i| sig.clauses[i].clone()).collect();
-        let mut index = 0u32;
-        for (pos, &ci) in order.iter().enumerate() {
-            for p in sig.clauses[ci].params.clone() {
-                if p.has_default {
-                    self.export_default_forwarder(&fwd, &original, index, &sig.tparams, &declared[..pos], p.ty, q);
-                }
-                index += 1;
-            }
-        }
-    }
-
-    #[allow(clippy::too_many_arguments)]
-    fn export_default_forwarder(&mut self, fwd: &str, original: &str, index: u32, tparams: &[TParamId], before: &[ClauseSig], ty: TypeId, q: crate::typer::exports::ExportQualifier) {
-        let addr = self.buf.addr();
-        self.buf.byte(DEFDEF);
-        let len = self.buf.begin_length();
-        let n = self.names.default_getter(fwd, index);
-        self.buf.nat(n as u64);
-        let tmark = self.tparams.len();
-        let pmark = self.params.len();
-        self.synthetic_params = true;
-        self.def_params(tparams, before, None);
-        self.synthetic_params = false;
-        self.mark_tree();
-        self.unchecked_variance(ty);
-        let mark = self.body_begin();
-        if tparams.is_empty() && before.is_empty() {
-            self.term_at(None);
-            self.buf.byte(SELECT);
-            let g = self.names.default_getter(original, index);
-            self.buf.nat(g as u64);
-            self.export_qualifier_term(q);
-        } else {
-            self.fail("a default getter's forwarder that takes parameters".to_string());
-        }
-        match self.body_end(mark) {
-            Ok(()) => self.count_body(Producer::Forwarder),
-            Err(reason) => {
-                self.count_withheld(&reason);
-                self.elided(ty);
-            }
-        }
-        self.tparams.truncate(tmark);
-        self.params.truncate(pmark);
-        self.write_flags(&[FINAL, EXPORTED]);
-        self.synthetic_position(addr);
-        self.buf.end_length(len);
-    }
-
-    /// What an exported type forwarder aliases: the class, an alias as the reference to it
-    /// (`Kinds.T`), a parameterized alias as the lambda of its right-hand side, as scalac writes
-    /// them.
-    fn exported_type(&mut self, n: Name, t: crate::typer::TypeRef) {
-        use crate::typer::TypeRef;
-        // An alias the qualifier inherits, read through its `this` (`TypeRef(Vocab.this, Label)`):
-        // the forwarder refers to the alias it names, as for one the qualifier declares.
-        let t = match t {
-            TypeRef::Member(c, m) => {
-                let bases: Vec<ClassId> = self.w.syms.class(c).base_types.iter().map(|&(b, _)| b).collect();
-                bases.into_iter().find_map(|b| self.w.syms.class(b).type_aliases.get(&m).copied()).map_or(t, TypeRef::Alias)
-            }
-            _ => t,
-        };
-        match t {
-            TypeRef::Class(k) => {
-                let ty = if self.w.syms.class(k).tparams.is_empty() { self.w.types.class(k, &[]) } else { self.w.types.mk(Type::Ctor(k)) };
-                self.ty(ty);
-            }
-            TypeRef::Alias(a) => {
-                self.w.complete_alias(a);
-                let info = self.alias_info(a);
-                if info.tparams.is_empty() {
-                    self.alias_ref(a);
-                } else {
-                    let params: Vec<TypeId> = info.tparams.iter().map(|&p| self.w.types.mk(Type::Param(p))).collect();
-                    self.lambda_type(TYPELAMBDATYPE, &params, info.rhs);
-                }
-            }
-            _ => {
-                let name = self.name(n);
-                self.fail(format!("the exported type {}, a member of a value", name));
-                self.ty(ANY);
-            }
-        }
-    }
-
-    /// Whether a definition of `owner` is a member an export from `q` reaches: a member of the
-    /// object or of one of its base classes, or a top-level definition of the package (in its
-    /// own right or in one of its files' package objects).
-    /// Whether the name is one the object an export takes members from exports itself: a
-    /// forwarder of a forwarder, which scalac writes to the qualifier's own.
-    pub(super) fn qualifier_has(&self, q: crate::typer::exports::ExportQualifier, owner: Owner) -> bool {
-        self.w.qualifier_has(q, owner)
+    /// The package an object qualifier stands for where the clause's path names the package and
+    /// the object is its package object (`package` or a file's `<file>$package`).
+    fn written_package_qualifier(&self, q: crate::typer::exports::ExportQualifier, path: &[crate::intern::Name]) -> crate::typer::exports::ExportQualifier {
+        use crate::typer::exports::ExportQualifier;
+        let ExportQualifier::Object(o) = q else { return q };
+        let info = self.w.syms.class(o);
+        let Owner::Package(p) = info.owner else { return q };
+        let package_object = info.kind == ClassKind::Object && (info.name == crate::names::PACKAGE || self.w.interner.get(info.name).ends_with("$package"));
+        let names_package = path.last().is_some_and(|&n| n == self.w.syms.pkg(p).name);
+        if package_object && names_package { ExportQualifier::Package(p) } else { q }
     }
 
     fn export_qualifier_ref(&mut self, q: crate::typer::exports::ExportQualifier) {
@@ -2546,110 +2419,6 @@ impl<'w, 'a> P<'w, 'a> {
             ExportQualifier::Object(o) => self.module_termref(o),
             ExportQualifier::Package(p) => self.package_ref(p),
         }
-    }
-
-    /// The forwarder `n` of `sym`, which the qualifier `q` has under the name `selected`: its own
-    /// member's, or the name another export of `q` forwards it under.
-    fn export_forwarder(&mut self, n: Name, sym: SymId, q: crate::typer::exports::ExportQualifier, selected: Name) {
-        // An overloaded name forwards every alternative.
-        if let Some(alts) = self.w.syms.alternatives(sym).map(|a| a.to_vec()) {
-            for a in alts {
-                self.export_forwarder(n, a, q, selected);
-            }
-            return;
-        }
-        let info = self.sym_info(sym);
-        let addr = self.buf.addr();
-        self.buf.byte(DEFDEF);
-        let len = self.buf.begin_length();
-        let nn = self.simple_name(n);
-        self.buf.nat(nn as u64);
-        // A given object (`given x: T with {...}`) is an object, its forwarder's result its singleton.
-        let given_object = info.kind == SymKind::Given && info.impl_class.is_some() && {
-            let sig = self.w.sig_of(sym);
-            sig.tparams.is_empty() && sig.clauses.is_empty()
-        };
-        let stable = matches!(info.kind, SymKind::Val | SymKind::Object(_)) && info.mods & mods::LAZY == 0 || matches!(info.kind, SymKind::Object(_)) || given_object;
-        let mut flags = vec![FINAL, EXPORTED];
-        // An inline member's forwarder is inline, a transparent one's transparent, as scalac's
-        // `Exporter` makes it.
-        if info.mods & mods::INLINE != 0 {
-            flags.push(INLINE);
-        }
-        if info.mods & mods::TRANSPARENT != 0 {
-            flags.push(TRANSPARENT);
-        }
-        // A given's forwarder is a given, as scalac's export keeps it, which an import of the
-        // object's givens takes.
-        if self.w.syms.is_scala3_given(sym) {
-            flags.push(GIVEN);
-        } else if info.mods & mods::IMPLICIT != 0 {
-            flags.push(IMPLICIT);
-        }
-        if stable {
-            // `x.type` of the member through the object.
-            self.mark_tree();
-            let at = self.buf.addr();
-            self.buf.byte(TERMREF);
-            let m = self.simple_name(selected);
-            self.buf.nat(m as u64);
-            self.export_qualifier_ref(q);
-            // `qualifier.x`, the singleton's term; the outline's right-hand side has its type.
-            let mark = self.body_begin();
-            self.forwarder_body(sym, q, &[], &[], selected);
-            match self.body_end(mark) {
-                Ok(()) => self.count_body(Producer::Forwarder),
-                Err(reason) => {
-                    self.count_withheld(&reason);
-                    self.elided_bodies += 1;
-                    self.mark_tree();
-                    self.elided_byte();
-                    self.shared_type_at(at);
-                }
-            }
-            flags.push(STABLE);
-        } else {
-            let sig = self.seen_through(sym, q);
-            let tmark = self.tparams.len();
-            let pmark = self.params.len();
-            if matches!(info.kind, SymKind::Def | SymKind::Given) {
-                self.synthetic_params = true;
-                self.method_params(&info, &sig);
-                self.synthetic_params = false;
-            }
-            self.tpt(sig.ret);
-            let tps: Vec<TypeId> = sig.tparams.iter().map(|&tp| self.w.types.param(tp)).collect();
-            let clauses = self.param_addrs(pmark, &sig.clauses);
-            let mark = self.body_begin();
-            self.forwarder_body(sym, q, &tps, &clauses, selected);
-            match self.body_end(mark) {
-                Ok(()) => self.count_body(Producer::Forwarder),
-                Err(reason) => {
-                    self.count_withheld(&reason);
-                    self.elided(sig.ret);
-                }
-            }
-            self.tparams.truncate(tmark);
-            self.params.truncate(pmark);
-            if info.is_extension {
-                flags.push(EXTENSION);
-            }
-        }
-        self.write_flags(&flags);
-        // The member's `@targetName`, which scalac's `addForwarder` copies with its other
-        // annotations: the forwarder keeps the export's name, the class files the target's. Read
-        // alike from a source and from products, so a split build writes the whole build's.
-        if let Some(target) = self.target_name(sym) {
-            self.target_name_annotation(&target);
-        }
-        self.synthetic_position(addr);
-        self.buf.end_length(len);
-    }
-
-    /// A member's signature as the object it is exported from sees it: a member of a generic
-    /// parent (`object Strings extends Impl[String]`) with the parent's type parameters bound.
-    fn seen_through(&mut self, sym: SymId, q: crate::typer::exports::ExportQualifier) -> MethodSig {
-        self.w.export_seen_through(sym, q)
     }
 
     /// The body's definitions in source order, as the AST lists them.
@@ -2817,7 +2586,11 @@ impl<'w, 'a> P<'w, 'a> {
             let tree = info.def.and_then(|d| self.w.loaded.as_ref()?.product_def_trees.get(&(info.file, d)).copied());
             self.param_places = tree.map_or(Vec::new(), |(f, a)| self.w.pickled_param_places(f, a));
             self.param_place_next = 0;
+            // A forwarder's parameters are the copies `Namer.addForwarder` makes of the member's:
+            // positioned at the forwarder, an inline one's type annotated `@InlineParam`.
+            let outer = std::mem::replace(&mut self.synthetic_params, self.w.syms.is_forwarder(s));
             self.method_params(&info, &sig);
+            self.synthetic_params = outer;
             self.param_places.clear();
         }
         let ret = if is_def { sig.ret } else { self.constant_type(s, sig.ret).unwrap_or(sig.ret) };
@@ -3137,21 +2910,11 @@ impl<'w, 'a> P<'w, 'a> {
 
     /// The accessors of the class's inline bodies (`typer::accessors`), after its members as
     /// scalac's `PrepareInlineable` appends them, each `<synthetic>`.
-    /// The forwarders of the class's value exports (`typer::value_exports`), after its members, as
-    /// final methods: another module's build reads them as members, where an object's export is
-    /// the name of its clause (`Exported` would send them there).
+    /// The forwarders of the class's exports (`typer::value_exports`), after its members and its
+    /// clauses: `FINAL EXPORTED` methods, then the type forwarders, `FINAL EXPORTED` aliases, which
+    /// another module's build reads as members (dotty's `Namer.addForwarder`).
     fn value_forwarder_defs(&mut self, c: ClassId) {
-        let fwds: Vec<SymId> = self
-            .w
-            .syms
-            .class(c)
-            .member_order
-            .iter()
-            .copied()
-            .filter(|&s| {
-                self.w.syms.sym(s).owner == Owner::Class(c) && self.w.syms.forward_of(s).is_some()
-            })
-            .collect();
+        let fwds: Vec<SymId> = self.w.syms.class(c).forwarders.iter().map(|&(s, _)| s).filter(|&s| self.w.syms.sym(s).owner == Owner::Class(c)).collect();
         // In the order the class's methods are emitted (`layout::compare_syms`), which a build
         // over this pickle keeps.
         let mut fwds = fwds;
@@ -3159,6 +2922,79 @@ impl<'w, 'a> P<'w, 'a> {
         for s in fwds {
             self.value_or_method(s, &[]);
         }
+        let mut aliases: Vec<crate::types::AliasId> = self
+            .w
+            .syms
+            .class(c)
+            .type_aliases
+            .values()
+            .copied()
+            .filter(|&a| {
+                let info = &self.w.syms.aliases[a.idx()];
+                info.exported && info.def.is_none() && info.owner == Owner::Class(c)
+            })
+            .collect();
+        aliases.sort();
+        for &a in &aliases {
+            self.alias_def(a);
+        }
+        self.companion_forwarders(&aliases);
+    }
+
+    /// The term forwarders of the synthetic companions of the case classes the type forwarders
+    /// `aliases` name (`typer::value_exports::exported_companion`): `final def N: q.N.type = q.N`,
+    /// exported and stable, as scalac writes the companion's forwarder.
+    fn companion_forwarders(&mut self, aliases: &[crate::types::AliasId]) {
+        for &a in aliases {
+            let Some(k) = crate::typer::value_exports::exported_companion(&self.w.syms, &self.w.types, a) else { continue };
+            let name = self.w.syms.aliases[a.idx()].name;
+            let addr = self.buf.addr();
+            self.buf.byte(DEFDEF);
+            let len = self.buf.begin_length();
+            let nn = self.simple_name(name);
+            self.buf.nat(nn as u64);
+            self.mark_tree();
+            self.module_termref(k);
+            self.term_at(None);
+            self.module_termref(k);
+            self.count_body(Producer::Forwarder);
+            self.write_flags(&[FINAL, EXPORTED, STABLE]);
+            self.synthetic_position(addr);
+            self.buf.end_length(len);
+        }
+    }
+
+    /// The forwarders of the file's top-level value exports (`typer::value_exports`), top-level
+    /// definitions of the file and so members of its `<source>$package`, as dotty's
+    /// `Desugar.packageDef` puts the clause there: the methods in the order a class's are
+    /// emitted, then the type forwarders.
+    fn top_value_forwarder_defs(&mut self, pkg: PkgId) {
+        let file = self.file;
+        if !self.w.syms.pkg(pkg).export_files.contains(&file) {
+            return;
+        }
+        let mut fwds: Vec<SymId> = self.w.syms.pkg(pkg).forwarders.iter().map(|&(s, _)| s).filter(|&s| self.w.syms.sym(s).file == file).collect();
+        fwds.sort_by(|&a, &b| crate::emit::layout::compare_syms(&self.w.syms, &self.w.interner, a, b));
+        for s in fwds {
+            self.value_or_method(s, &[]);
+        }
+        let mut aliases: Vec<crate::types::AliasId> = self
+            .w
+            .syms
+            .pkg(pkg)
+            .entries
+            .values()
+            .filter_map(|e| e.alias)
+            .filter(|&a| {
+                let info = &self.w.syms.aliases[a.idx()];
+                info.exported && info.file == file && info.def.is_none() && info.owner == Owner::Package(pkg)
+            })
+            .collect();
+        aliases.sort();
+        for &a in &aliases {
+            self.alias_def(a);
+        }
+        self.companion_forwarders(&aliases);
     }
 
     fn inline_accessor_defs(&mut self, c: ClassId) {
@@ -3303,13 +3139,14 @@ impl<'w, 'a> P<'w, 'a> {
 
     /// An inline method's body as the definition check stored it, before any expansion: its
     /// reducible nodes unreduced with their markers, the calls it keeps calls, the whole
-    /// ascribed the result's tree unless the method is transparent (`PrepareInlineable.wrapRHS`).
+    /// ascribed the result's tree unless the method is transparent (`PrepareInlineable.wrapRHS`)
+    /// or an export's forwarder, whose body `Namer.addForwarder` builds unascribed.
     fn inline_rhs(&mut self, s: SymId, t: TypeId, p: Producer) {
         let record = self.w.inline_definitions.get(&s).cloned();
         let Some((record, body)) = record.and_then(|d| d.body.map(|b| (d, b))) else {
             return self.rhs(Producer::Elided(Withheld::InlineMethod), t);
         };
-        let transparent = self.w.syms.sym(s).mods & mods::TRANSPARENT != 0;
+        let unascribed = self.w.syms.sym(s).mods & mods::TRANSPARENT != 0 || self.w.syms.is_forwarder(s);
         let result = self.result_tpt;
         let mark = self.body_begin();
         let outer = self.inline_body.replace(record);
@@ -3317,7 +3154,7 @@ impl<'w, 'a> P<'w, 'a> {
             Owner::Class(c) => Some(c),
             _ => None,
         });
-        match result.filter(|_| !transparent) {
+        match result.filter(|_| !unascribed) {
             Some(at) => {
                 self.buf.byte(TYPED);
                 let l = self.buf.begin_length();
@@ -3371,6 +3208,10 @@ impl<'w, 'a> P<'w, 'a> {
         if m & mods::FINAL != 0 && !matches!(info.kind, SymKind::Object(_)) {
             out.push(FINAL);
         }
+        // An export's forwarder (dotty's `Exported | Final | Method`, `Namer.addForwarder`).
+        if is_def && self.w.syms.is_forwarder(s) {
+            out.push(EXPORTED);
+        }
         if m & (mods::ABSTRACT | mods::OVERRIDE) == mods::ABSTRACT | mods::OVERRIDE {
             out.push(ABSTRACT_OVERRIDE);
         } else if m & mods::OVERRIDE != 0 {
@@ -3408,6 +3249,10 @@ impl<'w, 'a> P<'w, 'a> {
         if info.is_extension {
             out.push(EXTENSION);
         }
+        // A stable forwarder of an export, a path (dotty's `StableRealizable`).
+        if info.stable && is_def {
+            out.push(STABLE);
+        }
         out
     }
 
@@ -3427,6 +3272,11 @@ impl<'w, 'a> P<'w, 'a> {
                 (false, _) => annot::Dest::Field,
             };
             self.source_annotations(info.file, &annots, dest, &mut |p, a| p.target_name_fallback(info.file, a));
+        } else if is_def && self.w.syms.is_forwarder(s) {
+            // An export's forwarder carries its member's `@targetName` (`Namer.addForwarder`).
+            if let Some(target) = self.target_name(s) {
+                self.target_name_annotation(&target);
+            }
         }
     }
 
@@ -3602,9 +3452,15 @@ impl<'w, 'a> P<'w, 'a> {
             _ => Producer::Default,
         };
         // The defaults as the typer typed them, parallel to the parameters.
+        // An inline method's function holds its ordinary getters, its record every getter's tree,
+        // an inline parameter's included.
+        let stored: Vec<Option<crate::tir::TExprId>> = self.w.inline_definitions.get(&s).map(|d| d.defaults.clone()).unwrap_or_default();
         let typed: Vec<Option<crate::tir::TExprId>> = match self.w.fun_of_sym.get(&s) {
-            Some(&f) => self.w.prog.funs[f.idx()].defaults.clone(),
-            None => self.w.inline_definitions.get(&s).map(|d| d.defaults.clone()).unwrap_or_default(),
+            Some(&f) => {
+                let own = &self.w.prog.funs[f.idx()].defaults;
+                (0..own.len().max(stored.len())).map(|i| own.get(i).copied().flatten().or(stored.get(i).copied().flatten())).collect()
+            }
+            None => stored,
         };
         // In the declaration's order of the clauses (a right-associative extension's first own
         // clause before its receiver's): the getter's index and earlier clauses are those.
@@ -3615,12 +3471,16 @@ impl<'w, 'a> P<'w, 'a> {
             *acc += c.params.len();
             Some(at)
         }).collect();
+        // A forwarder's getters forward the member's (`Exported | Final`, dotty's `exportForwarders`).
+        let exported = self.w.syms.is_forwarder(s);
         let mut index = 0u32;
         for (pos, &ci) in order.iter().enumerate() {
             for (k, p) in sig.clauses[ci].params.iter().enumerate() {
                 if p.has_default {
                     let default = typed.get(starts[ci] + k).copied().flatten();
-                    self.default_getter(&name, index, &sig.tparams, &declared[..pos], p.ty, info.mods & mods::PRIVATE != 0, false, producer, default);
+                    // A getter is inline where its parameter is (`Desugar.defaultGetters`).
+                    let inline = self.w.syms.sym(p.sym).mods & mods::INLINE != 0;
+                    self.default_getter(&name, index, &sig.tparams, &declared[..pos], p.ty, info.mods & mods::PRIVATE != 0, false, exported, inline, producer, default);
                 }
                 index += 1;
             }
@@ -3628,7 +3488,7 @@ impl<'w, 'a> P<'w, 'a> {
     }
 
     #[allow(clippy::too_many_arguments)]
-    fn default_getter(&mut self, method: &str, index: u32, tparams: &[TParamId], before: &[ClauseSig], ty: TypeId, private: bool, synthetic: bool, producer: Producer, default: Option<crate::tir::TExprId>) {
+    fn default_getter(&mut self, method: &str, index: u32, tparams: &[TParamId], before: &[ClauseSig], ty: TypeId, private: bool, synthetic: bool, exported: bool, inline: bool, producer: Producer, default: Option<crate::tir::TExprId>) {
         let addr = self.buf.addr();
         self.buf.byte(DEFDEF);
         let len = self.buf.begin_length();
@@ -3676,6 +3536,12 @@ impl<'w, 'a> P<'w, 'a> {
         }
         if synthetic {
             flags.push(SYNTHETIC);
+        }
+        if exported {
+            flags.extend([FINAL, EXPORTED]);
+        }
+        if inline {
+            flags.push(INLINE);
         }
         self.write_flags(&flags);
         self.synthetic_position(addr);
@@ -3790,6 +3656,10 @@ impl<'w, 'a> P<'w, 'a> {
             if m & mods::OVERRIDE != 0 {
                 flags.push(OVERRIDE);
             }
+        }
+        // An export's type forwarder (dotty's `Exported | Final` alias, `Namer.addForwarder`).
+        if info.exported {
+            flags.extend([FINAL, EXPORTED]);
         }
         if info.bounds.is_some() && matches!(info.owner, Owner::Class(_)) {
             // An abstract member is deferred by having bounds; no flag says so.
@@ -3997,7 +3867,12 @@ impl<'w, 'a> P<'w, 'a> {
         self.def_ref(ckey);
         self.owner_prefix(obj.owner);
         self.new_module(&obj.name, obj.owner, tpt, tref);
-        let qualified = obj.class.and_then(|o| self.class_access_qualifier(&self.w.syms.class(o).clone()));
+        // A companion the source does not write takes its class's boundary with its access, as
+        // `Desugar`'s `companionMods` keeps the class's `privateWithin` (`private[p] enum`).
+        let qualified = obj.class.and_then(|o| self.class_access_qualifier(&self.w.syms.class(o).clone())).or_else(|| match obj.companion {
+            Some(k) if obj.synthetic && obj.mods & (mods::PRIVATE | mods::PROTECTED) != 0 => self.class_access_qualifier(&self.w.syms.class(k).clone()),
+            _ => None,
+        });
         let mut vflags = Vec::new();
         if qualified.is_none() {
             self.access_flags(obj.mods, &mut vflags);
@@ -4191,7 +4066,7 @@ impl<'w, 'a> P<'w, 'a> {
             }
             self.statements_before(o, &mut stmts, None);
             if info.has_exports {
-                self.export_forwarders(o);
+                self.class_export_trees(o);
             }
         }
         if let Some(k) = obj.companion {
@@ -4209,6 +4084,7 @@ impl<'w, 'a> P<'w, 'a> {
         }
         if let Some(o) = obj.class {
             self.inline_accessor_defs(o);
+            self.value_forwarder_defs(o);
             self.enclosing.pop();
         }
         self.buf.end_length(len);
@@ -4278,7 +4154,7 @@ impl<'w, 'a> P<'w, 'a> {
             for p in &clause.params {
                 if p.has_default {
                     let default = typed.get(index as usize).copied().flatten();
-                    self.default_getter("<init>", index, &tparams, &clauses[..ci], p.ty, false, false, Producer::Default, default);
+                    self.default_getter("<init>", index, &tparams, &clauses[..ci], p.ty, false, false, false, false, Producer::Default, default);
                 }
                 index += 1;
             }
@@ -5209,7 +5085,8 @@ impl<'w, 'a> P<'w, 'a> {
                 self.alias_def(a);
             }
         }
-        self.package_export_forwarders(pkg);
+        self.file_export_trees(pkg);
+        self.top_value_forwarder_defs(pkg);
         self.in_package_object = false;
         self.buf.end_length(tl);
         let mut flags = vec![OBJECT];
@@ -5311,6 +5188,20 @@ impl<'w, 'a> P<'w, 'a> {
             Type::Term(s) if matches!(self.w.syms.sym(s).kind, SymKind::Object(_)) => {
                 let SymKind::Object(o) = self.w.syms.sym(s).kind else { unreachable!() };
                 self.module_termref(o)
+            }
+            _ => self.path_prefix(prefix),
+        }
+    }
+
+    /// The prefix of a selection: an object's type is its module val's `TermRef`, as scalac
+    /// pickles `B.U` (`TERMREF U (TERMREF B)`) and `O.C` (`TYPEREF C (TERMREF O)`), not a
+    /// projection from its module class (`TYPEREF C (TYPEREF O$)`, which scalac's reader takes
+    /// for no stable prefix: "is not a valid class prefix", "does not have a constructor").
+    fn path_prefix(&mut self, prefix: TypeId) {
+        match self.w.types.get(prefix) {
+            Type::Class(o, _) if self.w.syms.class(o).kind == ClassKind::Object => {
+                let this = self.w.types.mk(Type::This(o));
+                self.ty(this);
             }
             _ => self.ty(prefix),
         }
@@ -5786,22 +5677,14 @@ impl<'w, 'a> P<'w, 'a> {
                     self.buf.byte(TERMREF);
                     self.buf.nat(n as u64);
                 }
-                // A member an object inherits is read on the object's module val, as scalac
-                // pickles `B.U` (`TERMREF U (TERMREF B)`), not on its module class.
-                match self.w.types.get(prefix) {
-                    Type::Class(o, _) if self.w.syms.class(o).kind == ClassKind::Object => {
-                        let this = self.w.types.mk(Type::This(o));
-                        self.ty(this);
-                    }
-                    _ => self.ty(prefix),
-                }
+                self.path_prefix(prefix);
             }
             Type::Member(prefix, name) => {
                 self.placed = true;
                 let n = self.simple_name(name);
                 self.buf.byte(TYPEREF);
                 self.buf.nat(n as u64);
-                self.ty(prefix);
+                self.path_prefix(prefix);
             }
             // `TYPEREF C p`, its own arguments applied, as scalac pickles `p.C[Ts]`: an opaque
             // type's external reference `TYPEREF T (TERMREF A)` too.
@@ -5991,6 +5874,11 @@ impl<'w, 'a> P<'w, 'a> {
                 let stem = super::file_stem(&self.w.files.as_slice()[info.file.0 as usize].path);
                 return self.file_package_term(p, stem);
             }
+        }
+        // A top-level object's module val is the object's `TermRef` (`TERMREF O p`), a member of
+        // its package, not of its file's `$package` object as a top-level val is.
+        if let (SymKind::Object(o), Owner::Package(_)) = (info.kind, info.owner) {
+            return self.module_termref(o);
         }
         match info.owner {
             // A local written before the type, a case's binder (`s.MirroredElemTypes`).

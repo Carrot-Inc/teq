@@ -168,6 +168,8 @@ impl Naming {
             let accessor = !info.is_extension && matches!(info.kind, SymKind::Val | SymKind::Var | SymKind::Given) && !const_vals[s.idx()];
             // A val's accessor is `name$`, which a top-level object's accessor is too
             // (`experimental.RequestRedirect` next to `dom.RequestRedirect`): both are keyed alike.
+            // A def is `name`, as a top-level class is (an export's forwarder of an object beside
+            // the class it imports, `JsonCodec`): keyed alike too.
             let mut h = FxHasher::default();
             let text = interner.get(syms.dispatch_name(s));
             if accessor {
@@ -175,7 +177,9 @@ impl Naming {
                 h.write(text.as_bytes());
                 h.write_u8(1);
             } else {
-                h.write_u8(5);
+                if info.is_extension {
+                    h.write_u8(5);
+                }
                 h.write_u32(text.len() as u32);
                 h.write(text.as_bytes());
             }
@@ -325,6 +329,7 @@ impl Renames {
         reach: &super::reach::Reach,
         member_name: impl Fn(SymId) -> String,
         extension_names: impl Fn(ClassId) -> Vec<(SymId, String)>,
+        companion_names: impl Fn(ClassId) -> Vec<String>,
         primitive_trait: impl Fn(ClassId) -> bool,
     ) -> Renames {
         let mut kept: FxMap<String, ()> = FxMap::default();
@@ -363,6 +368,9 @@ impl Renames {
             for (_, n) in extension_names(c) {
                 names.push(n);
             }
+            // The forwarders of the synthetic companions the class exports, which a build over its
+            // products reads as members (`typer::value_exports::exported_companion`).
+            names.extend(companion_names(c));
         }
         names.sort_unstable();
         names.dedup();

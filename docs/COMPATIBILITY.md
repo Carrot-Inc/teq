@@ -172,7 +172,6 @@ a JDK member as `not supported on JavaScript`. Beyond that:
 
 ## Left out on purpose
 
-- `C.super`; name-based extractors (`isEmpty`/`get`); an export path whose head is no member of the exporting
-  class (an imported or an enclosing scope's val); overloaded methods in a non-native JS class (Scala.js chooses
-  between the alternatives at run time); `erased`, rejected wherever it appears; `AnyKind`;
+- `C.super`; name-based extractors (`isEmpty`/`get`); overloaded methods in a non-native JS class (Scala.js
+  chooses between the alternatives at run time); `erased`, rejected wherever it appears; `AnyKind`;
   `scala.compiletime.testing.typeChecks`. `transparent trait` and `@throws` are accepted and change nothing.

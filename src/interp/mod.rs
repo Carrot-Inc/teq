@@ -227,7 +227,6 @@ pub enum Member {
     SetField(FieldKey),
     Lazy(FieldKey, TExprId, ClassId),
     Module(ClassId),
-    Static(SymId),
     CaseToString,
     CaseEquals,
     CaseHash,

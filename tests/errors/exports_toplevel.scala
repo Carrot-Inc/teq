@@ -1,4 +1,4 @@
-// expect: cannot export nothing: it is not a member of Source
+// expect: no eligible member nothing at demo.Source
 // expect: cannot resolve export: nowhere not found
 
 package demo

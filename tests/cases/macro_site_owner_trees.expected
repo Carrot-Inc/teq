@@ -1,0 +1,3 @@
+macro:false:ValDef;$anonfun:true:DefDef;mk:true:DefDef
+$anonfun(coll: Coll, n: scala.Int) < mk()
+List($anonfun(c: Coll) < viaFor())

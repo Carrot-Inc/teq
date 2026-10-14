@@ -121,6 +121,11 @@ pub(super) struct Shape {
 /// A conversion and what it is called on.
 type ConvRef = (SymId, Via);
 
+/// The binding precedences `shadow_conversions` compares (dotty's `BindingPrec`).
+const PREC_WILD_IMPORT: u8 = 1;
+const PREC_NAMED_IMPORT: u8 = 2;
+const PREC_DEFINITION: u8 = 3;
+
 /// What `Worker::conversion_site` answers.
 struct ConversionSite {
     site: Option<(super::exports::TraitMemberSite, ClassId)>,
@@ -384,6 +389,40 @@ impl<'a> Worker<'a> {
         out.extend(found.into_iter().map(|g| (g, Via::Value(v))));
     }
 
+    /// dotty's `ContextualImplicits.combineEligibles` within a level: the conversions `added` of one
+    /// more binding of precedence `prec` (an import inside the definitions of its scope) beside
+    /// those of the bindings before it, by name: where an earlier binding of a higher precedence
+    /// has the name (a definition over an import, a named import over a wildcard), the new ones
+    /// of the name go; else the earlier ones of the name go, a later import of the same
+    /// precedence being the inner one. One binding's own alternatives all stay. An export's
+    /// forwarder and what it forwards, of one name, are so one candidate as scalac has them.
+    fn shadow_conversions(&self, scope: &mut Vec<(ConvRef, u8)>, values: &mut Vec<(ConvRef, u8)>, mut added: Vec<ConvRef>, prec: u8, to_values: bool) {
+        if added.is_empty() {
+            return;
+        }
+        // The level's first binding shadows nothing.
+        if scope.is_empty() && values.is_empty() {
+            let into = if to_values { values } else { scope };
+            into.extend(added.into_iter().map(|r| (r, prec)));
+            return;
+        }
+        let mut names: Vec<Name> = added.iter().map(|&(g, _)| self.syms.sym(g).name).collect();
+        names.sort_by_key(|n| n.0);
+        names.dedup();
+        for n in names {
+            let named = |&((g, _), _): &(ConvRef, u8)| self.syms.sym(g).name == n;
+            let higher = scope.iter().chain(values.iter()).any(|e| named(e) && e.1 > prec);
+            if higher {
+                added.retain(|&(g, _)| self.syms.sym(g).name != n);
+            } else {
+                scope.retain(|e| !named(e));
+                values.retain(|e| !named(e));
+            }
+        }
+        let into = if to_values { values } else { scope };
+        into.extend(added.into_iter().map(|r| (r, prec)));
+    }
+
     /// The candidate conversions level by level, as the given search orders its levels: the
     /// enclosing blocks and classes from the inside out with their imports, the package
     /// clauses, and last the implicit scopes of `scope_tys`: the argument's type, widened, and
@@ -413,17 +452,30 @@ impl<'a> Worker<'a> {
                 }
             }
             let depth = frame as u32 + 1;
+            // A level without imports has its definitions alone, which shadow nothing.
+            if !self.env.imports.iter().any(|imp| imp.depth == depth) {
+                if !level.is_empty() {
+                    levels.push(scoped(&mut level));
+                }
+                continue;
+            }
+            let mut scope: Vec<(ConvRef, u8)> = level.drain(..).map(|g| ((g, Via::Scope), PREC_DEFINITION)).collect();
+            let mut values: Vec<(ConvRef, u8)> = Vec::new();
             let mut from_values = Vec::new();
             for i in 0..self.env.imports.len() {
                 let imp = self.env.imports[i];
                 if imp.depth == depth {
+                    let prec = if imp.name.is_some() { PREC_NAMED_IMPORT } else { PREC_WILD_IMPORT };
                     self.import_conversions(imp, pick, &mut level);
+                    let added: Vec<ConvRef> = scoped(&mut level);
+                    self.shadow_conversions(&mut scope, &mut values, added, prec, false);
                     self.value_import_conversions(imp, pick, &mut from_values);
+                    let added: Vec<ConvRef> = std::mem::take(&mut from_values);
+                    self.shadow_conversions(&mut scope, &mut values, added, prec, true);
                 }
             }
-            if !level.is_empty() || !from_values.is_empty() {
-                let mut refs = scoped(&mut level);
-                refs.append(&mut from_values);
+            if !scope.is_empty() || !values.is_empty() {
+                let refs: Vec<ConvRef> = scope.into_iter().chain(values).map(|(r, _)| r).collect();
                 levels.push(refs);
             }
         }
@@ -436,13 +488,19 @@ impl<'a> Worker<'a> {
                 level.retain(|&g| !self.b.predef_names.contains(&self.syms.sym(g).name));
             }
             if i == 0 {
+                let mut scope: Vec<(ConvRef, u8)> = level.drain(..).map(|g| ((g, Via::Scope), PREC_DEFINITION)).collect();
+                let mut values: Vec<(ConvRef, u8)> = Vec::new();
                 let n = self.import_count();
                 for k in 0..n {
                     let imp = self.import_at(k);
                     if imp.depth == 0 {
+                        let prec = if imp.name.is_some() { PREC_NAMED_IMPORT } else { PREC_WILD_IMPORT };
                         self.import_conversions(imp, pick, &mut level);
+                        let added: Vec<ConvRef> = scoped(&mut level);
+                        self.shadow_conversions(&mut scope, &mut values, added, prec, false);
                     }
                 }
+                level.extend(scope.into_iter().map(|((g, _), _)| g));
             }
             if !level.is_empty() {
                 levels.push(scoped(&mut level));
@@ -551,6 +609,10 @@ impl<'a> Worker<'a> {
             // `ParsersBase` conversion in a subclass is the subclass's).
             Via::Scope => match site {
                 Some((super::exports::TraitMemberSite::This(Some(k)), _)) => Some(self.this_prefix(k)),
+                // One an imported object inherits is seen from that object, as its member is
+                // (`all.SeqNode[A]` of a `Util[Builder]`'s conversion, the class nested in the
+                // trait taking the object's arguments).
+                Some((super::exports::TraitMemberSite::Module(m), _)) => Some(self.types.class(m, &[])),
                 _ => None,
             },
         };

@@ -197,8 +197,24 @@ impl<'a> Worker<'a> {
             // first read running the initialiser.
             TExpr::CallStatic(s, l) if l.len == 0 && self.lazy_accessor(s) => Purity::IDEMPOTENT,
             TExpr::CallMethod(r, s, l) if l.len == 0 && self.lazy_accessor(s) => self.expr_purity(r).min(Purity::IDEMPOTENT),
+            // A stable member's reference, an export's forwarder of an object or of a val
+            // (`final def O: p.O.type`, `isStableMember`): a path (`refPurity`).
+            TExpr::CallStatic(s, l) if l.len == 0 && self.stable_member_def(s) => {
+                let owner = match self.syms.sym(s).owner {
+                    Owner::Class(o) => self.module_purity(o),
+                    _ => Purity::PURE_PATH,
+                };
+                owner.min(Purity::PURE_PATH)
+            }
+            TExpr::CallMethod(r, s, l) if l.len == 0 && self.stable_member_def(s) => self.expr_purity(r).min(Purity::PURE_PATH),
             _ => Purity::IMPURE,
         }
+    }
+
+    /// A method that is a stable member (`StableRealizable`): an export's forwarder of a stable path.
+    fn stable_member_def(&self, s: SymId) -> bool {
+        let info = self.syms.sym(s);
+        info.kind == SymKind::Def && info.stable
     }
 
     /// dotty's `TreeInfo.statPurity`: a local method is pure, an immutable val its value's purity
@@ -431,8 +447,11 @@ impl<'a> Worker<'a> {
     /// parameter's getter application among its arguments is inline (`Desugar.addDefaultGetters`)
     /// and expanded here, where the call's binding does not see it.
     fn expand_lifted_inline_getters(&mut self, plan: &CallPlan, e: TExprId, span: Span) -> TExprId {
-        let Some(DefaultOf::Method(m)) = plan.of else { return e };
-        if !matches!(self.prog.expr(e), TExpr::Default(DefaultOf::Method(x), ..) if x == m) || !self.is_inline_callee(m) {
+        let Some(DefaultOf::Method(callee)) = plan.of else { return e };
+        let TExpr::Default(DefaultOf::Method(m), ..) = self.prog.expr(e) else { return e };
+        // The callee's own getter, or the forwarded member's an inline forwarder's stands for.
+        let own = m == callee || (self.is_inline_forwarder(callee) && self.syms.forward_of(callee).is_some_and(|f| f.target == m));
+        if !own || !self.is_inline_callee(m) {
             return e;
         }
         let Some(body) = self.inline_body(m) else { return e };
@@ -630,12 +649,39 @@ impl<'a> Worker<'a> {
     /// clauses) to the receiver and the arguments of the clauses before it (`spliceMeth`): each
     /// a fresh node, a by-name one a fresh copy of its tree.
     pub(super) fn default_application(&mut self, plan: &mut CallPlan, recv: Option<TExprId>, earlier: &[TExprId], index: usize, ty: TypeId) -> TExprId {
-        let of = plan.of.expect("a callee with defaults");
+        let mut of = plan.of.expect("a callee with defaults");
         let mut items = Vec::with_capacity(earlier.len() + 1);
         let mut at = index as u32;
-        if let Some(r) = recv {
-            items.push(self.prior_copy(r));
-            at |= DEFAULT_RECEIVER;
+        // An inline forwarder's getter is the forwarded member's on the forwarder's path, through
+        // the inline forwarders it relays where each path stands anywhere (`Chain.f` of
+        // `export Facade.f` of `export Lib.f`), as their getters forward one another.
+        let mut forwarded = match of {
+            DefaultOf::Method(m) => self.forwarded_default(m),
+            DefaultOf::Ctor(_) => None,
+        };
+        while let Some((DefaultOf::Method(t), path)) = forwarded {
+            if !self.is_inline_forwarder(t) || !path.map_or(true, |p| self.context_free_path(p)) {
+                break;
+            }
+            match self.forwarded_default(t) {
+                Some(next) if next.1.map_or(true, |p| self.context_free_path(p)) => forwarded = Some(next),
+                _ => break,
+            }
+        }
+        match forwarded {
+            Some((member, path)) => {
+                of = member;
+                if let Some(p) = path {
+                    items.push(p);
+                    at |= DEFAULT_RECEIVER;
+                }
+            }
+            None => {
+                if let Some(r) = recv {
+                    items.push(self.prior_copy(r));
+                    at |= DEFAULT_RECEIVER;
+                }
+            }
         }
         for &a in earlier {
             items.push(self.prior_copy(a));
@@ -646,6 +692,16 @@ impl<'a> Worker<'a> {
         self.prog.set_type(d, ty);
         plan.defaults.push(d);
         d
+    }
+
+    /// A path that means the same wherever it stands: an object, a top-level definition, a val
+    /// selected on such a path.
+    fn context_free_path(&self, e: TExprId) -> bool {
+        match self.prog.expr(e) {
+            TExpr::Module(_) | TExpr::Static(_) => true,
+            TExpr::Field(r, _) => self.context_free_path(r),
+            _ => false,
+        }
     }
 
     /// A getter selected on `super` inside a trait goes through an accessor of its own, which

@@ -146,18 +146,18 @@ retype_facade_errors() {
   export prov.Provider.missing/' "$src/facade.scala"
   build "$src/facade.scala"
   expect "facade errors: an export of nothing added" "$(field ok),$(field incremental)" 'false,false'
-  if has 'cannot export missing: it is not a member of Provider'; then ok; else bad "facade errors: an export of nothing added: $RESULT"; fi
+  if has 'no eligible member missing at prov.Provider'; then ok; else bad "facade errors: an export of nothing added: $RESULT"; fi
   as_fresh "facade errors: an export of nothing added" "$src" "$@"
   sed -i.bak 's/^object Facade:$/\/\/ moved\
 object Facade:/' "$src/facade.scala"
   build "$src/facade.scala"
   expect "facade errors: the clauses moved down a line" "$(field ok),$(field incremental)" 'false,true'
-  if has '"line":6,' && has 'cannot export missing'; then ok; else bad "facade errors: the clauses moved down a line: $RESULT"; fi
+  if has '"line":6,' && has 'no eligible member missing'; then ok; else bad "facade errors: the clauses moved down a line: $RESULT"; fi
   as_fresh "facade errors: the clauses moved down a line" "$src" "$@"
   sed -i.bak 's/"facade"/"facade1"/' "$src/facade.scala"
   build "$src/facade.scala"
   expect "facade errors: the body edited beside the error" "$(field ok),$(field incremental)" 'false,true'
-  if has 'cannot export missing'; then ok; else bad "facade errors: the body edited beside the error: $RESULT"; fi
+  if has 'no eligible member missing'; then ok; else bad "facade errors: the body edited beside the error: $RESULT"; fi
   as_fresh "facade errors: the body edited beside the error" "$src" "$@"
   sed -i.bak '/export prov.Provider.missing/d' "$src/facade.scala"
   build "$src/facade.scala"

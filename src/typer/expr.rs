@@ -746,7 +746,10 @@ impl<'a> Worker<'a> {
                 self.rollback(inner);
             }
         }
-        let act = self.deref(actual);
+        // A path's singleton, an export's stable forwarder of a val among them (`Facade.n` of
+        // type `Impl.n.type`), widens to its underlying type first, as dotty's adaptation reads
+        // `tree.tpe.widen` before the numeric widening.
+        let act = self.widen_path(actual);
         let act = self.widen_lit(act);
         let exp_shape = self.deref_alias(exp);
         let target = match self.types.get(exp_shape) {
@@ -1753,8 +1756,12 @@ impl<'a> Worker<'a> {
             Expr::Lambda(params, body) => {
                 let part = self.body_part(super::profile::Part::Closure);
                 self.sites.owners.push(SiteOwner::Lambda(span));
+                let pending = self.attempts.pending_len();
                 let typed = self.type_lambda(params, body, span, expected);
                 self.sites.owners.pop();
+                if self.attempts.pending_len() > pending {
+                    self.deferred_lambdas.insert((self.env.file.0, span.start, span.end), typed.0);
+                }
                 self.part_end(part);
                 typed
             }
@@ -1988,7 +1995,7 @@ impl<'a> Worker<'a> {
     /// the place of the capture the constructor takes first.
     #[cold]
     #[inline(never)]
-    pub(super) fn pass_new_outer(&mut self, e: ExprId, te: TExprId) {
+    pub(super) fn pass_new_outer(&mut self, e: ExprId, te: TExprId, ty: TypeId) {
         let Some(&outer) = self.cur_ast().new_outers.get(&e) else { return };
         let mut at = te;
         while let TExpr::Block(_, value) = self.prog.expr(at) {
@@ -2002,10 +2009,25 @@ impl<'a> Worker<'a> {
             },
             _ => return,
         };
-        if self.outer_class(c).is_none() || args.len == 0 {
+        let Some(k) = self.outer_class(c) else { return };
+        if args.len == 0 {
             return;
         }
-        let (outer_te, _) = self.type_expr(outer, None);
+        let (outer_te, outer_ty) = self.type_expr(outer, None);
+        // The written prefix names the class through an alias whose expansion carries its own
+        // prefix (`new API.Tag` of an export's `type Tag = HtmlTagOf.Tag`): a value of no class
+        // the made one is nested in. The enclosing instance is the class type's prefix, as
+        // dotty's `ExplicitOuter.outerPrefix` dealiases `tpt.tpe` and passes `singleton(prefix)`
+        // (an object's module, `prefix_value`).
+        if let Type::Nested(p, _) = self.types.get(ty) {
+            let written = self.class_of(outer_ty);
+            if written.is_some_and(|w| w != k && !self.derives_from(w, k)) {
+                if let Some(v) = self.prefix_value(p) {
+                    self.pass_outer(te, v);
+                    return;
+                }
+            }
+        }
         self.pass_outer(te, outer_te);
     }
 
@@ -2425,7 +2447,7 @@ impl<'a> Worker<'a> {
     /// type's (dotty's outer argument from `tpt.tpe.prefix`).
     pub(super) fn new_enclosing_instance(&mut self, e: ExprId, typed: (TExprId, TypeId), prefixed: bool) {
         if prefixed {
-            self.pass_new_outer(e, typed.0);
+            self.pass_new_outer(e, typed.0, typed.1);
         } else if let Type::Nested(p, _) = self.types.get(typed.1) {
             self.prefix_outer(typed.0, p);
         }
@@ -3091,6 +3113,9 @@ impl<'a> Worker<'a> {
                 fun.1 = self.instantiate_named(f, &paths);
             }
             let ret_expected = exp_fn.as_ref().and_then(|&(_, r)| self.concrete_expected(Some(r)));
+            if let Some(r) = ret_expected {
+                self.lambda_results.insert((self.env.file.0, span.start, span.end), r);
+            }
             let mut body_own = None;
             let body_mark = self.tvars.len();
             let (tb, bty) = match ret_expected {
@@ -3204,6 +3229,9 @@ impl<'a> Worker<'a> {
             fun.1 = self.instantiate_named(f, &paths);
         }
         let ret_expected = exp_fn.as_ref().and_then(|&(_, r)| self.concrete_expected(Some(r)));
+        if let Some(r) = ret_expected {
+            self.lambda_results.insert((self.env.file.0, span.start, span.end), r);
+        }
         // The cases of a partial function literal: `{ case ... }` or `x => x match { case ... }`.
         // A lambda whose body is a match, under an expected partial function, is one: its
         // cases decide `isDefinedAt`, whatever the scrutinee (`x => (x.a, x.b) match { .. }`
@@ -4548,7 +4576,20 @@ impl<'a> Worker<'a> {
                 let sig = self.sig_arc(sym);
                 if !self.fun_of_sym.contains_key(&sym) && !self.is_inline_callee(sym) {
                     let ret = sig.ret;
+                    // A local def in the body of a member whose type is inferred is typed with
+                    // that body: its plain inline calls wait for the member's expansion once the
+                    // member's type is set, as the body's own calls and an inferred local def's do
+                    // (`infer_body_then_expand`). dotty inlines no plain call in typer
+                    // (`Inlines.needsInlining`), so a macro walking the class (macwire's eligible
+                    // values) reads the member's type, not the recursion. The def's declared
+                    // result type is what the member's inference reads of it, which no expansion
+                    // in its body changes.
+                    let outer = self.inferring_depth;
+                    if outer != 0 && outer == self.body_depth {
+                        self.inferring_depth = self.body_depth + 1;
+                    }
                     self.type_body(sym, &sig, Some(ret));
+                    self.inferring_depth = outer;
                 } else if self.is_inline_callee(sym) {
                     self.check_local_inline_definition(sym);
                     self.type_local_inline_getters(sym, &sig);

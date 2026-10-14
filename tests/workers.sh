@@ -869,5 +869,25 @@ rm -rf "$work/withheld_upstream"
 timeout 120 "$TEQ" compiler check --products "$work/withheld_upstream" --sourceroot "$withheld" "$withheld"/a/*.scala --threads 1 > /dev/null 2>&1
 same_output withheld_place 2 compiler check --sourceroot "$withheld" --classpath "$work/withheld_upstream" "$withheld"/b/*.scala
 
+# Every export case's products at one, two, eight and sixteen workers, byte for byte: forwarders
+# are members made where their owners complete, on whichever worker completes them, and the merge
+# keeps each one (before, an anonymous class's late forwarders vanished above one worker, `Env.tasty`
+# of export_anonymous_value 966 bytes at one and 753 at two). A case reading jars is left out.
+saved_counts=$COUNTS
+COUNTS="2 8 16"
+for src in tests/cases/*export* tests/modules/*export*; do
+  case "$src" in *.expected) continue ;; esac
+  name=$(basename "$src" .scala)
+  if [ -d "$src" ]; then
+    files=$(find "$src" -name '*.scala' | sort)
+  else
+    files=$src
+  fi
+  grep -q '^// jars:' $files && continue
+  if [ -d "$src" ]; then root=$src; else root=tests/cases; fi
+  same_products "export_$name" "$root" $files
+done
+COUNTS=$saved_counts
+
 echo "workers: $pass passed, $fail failed, $known known"
 [ $fail = 0 ]

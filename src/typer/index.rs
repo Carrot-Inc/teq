@@ -561,7 +561,20 @@ impl<'a> Worker<'a> {
         if span.end <= span.start || !self.indexed(file) {
             return;
         }
-        let target = self.normal_target(target);
+        let mut target = self.normal_target(target);
+        // A use of an export's forwarder is a use of the member it forwards to, as the export
+        // table's alias was: what a definition, a reference and a rename of the member find.
+        if kind != Kind::Def {
+            let mut seen = 0;
+            while let Target::Sym(s) = target {
+                let Some(fwd) = self.syms.forward_of(s) else { break };
+                target = self.normal_target(Target::Sym(fwd.target));
+                seen += 1;
+                if seen > 8 {
+                    break;
+                }
+            }
+        }
         if let Target::Sym(s) = target {
             if self.name_ref(self.syms.sym(s).name).contains('$') {
                 return;
@@ -1538,13 +1551,21 @@ impl<'a> Worker<'a> {
     #[cold]
     #[inline(never)]
     pub(super) fn index_import(&mut self, imp: &ast::Import, target: super::ImportTarget) {
+        let file = self.env.file;
+        self.index_import_in(file, imp, target);
+    }
+
+    /// `index_import` of a clause of `file`, wherever the typer stands: an export's forwarders
+    /// are made where a lookup first needs them (`value_exports`).
+    #[cold]
+    #[inline(never)]
+    pub(super) fn index_import_in(&mut self, file: FileId, imp: &ast::Import, target: super::ImportTarget) {
         let target = match (target, &imp.sel) {
             (super::ImportTarget::PkgAll(p), ast::ImportSel::Name(n, _)) => super::ImportTarget::PkgMember(p, *n),
             (super::ImportTarget::ClassAll(c), ast::ImportSel::Name(n, _)) => super::ImportTarget::ClassMember(c, *n),
             (t, _) => t,
         };
-        let file = self.env.file;
-        let ast = self.cur_ast();
+        let ast = self.ast(file);
         let Some((_, names)) = ast.import_names.iter().find(|(s, _)| *s == imp.span) else { return };
         let names = names.clone();
         let n = imp.path.len();

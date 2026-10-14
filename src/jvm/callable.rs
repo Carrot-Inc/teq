@@ -515,9 +515,15 @@ impl<'a> Gen<'a> {
             if cx.tclass_of[b.idx()] == u32::MAX {
                 continue;
             }
-            // Its export forwarders, which its class file holds as methods.
-            if let Some(list) = cx.input.reach.exports.classes.get(&b) {
-                out.extend(self.export_forwarder_descs(list));
+            // Its companions' forwarders (`companion_forwarders`), which its class file holds as
+            // methods, its other forwarders being members.
+            if syms.class(b).has_exports {
+                for &a in syms.class(b).type_aliases.values() {
+                    if let Some(k) = crate::typer::value_exports::exported_companion(syms, cx.input.types, a) {
+                        let t = JType::L(Rc::from(cx.companion_name(k)));
+                        out.push((encode(cx.input.interner.get(syms.aliases[a.idx()].name)), method_desc(&[], &t)));
+                    }
+                }
             }
             for m in cx.members_in_order(b) {
                 let info = syms.sym(m);
@@ -1679,218 +1685,24 @@ impl<'a> Gen<'a> {
         self.end_method(ACC_PUBLIC | ACC_BRIDGE | ACC_SYNTHETIC, "fromProduct", &method_desc(&[product], &object));
     }
 
-    /// The forwarders of the export clauses of the class or file being written, scalac's
-    /// `final def n(ps): R = q.m(ps)` as methods: an exported object's, `n()` answering its
-    /// module; a member's, of its signature as the qualifier sees it, calling the member on the
-    /// qualifier, or the qualifier's own forwarder of it where the qualifier exports it (a
-    /// relay); with the forwarders of its defaults' getters, `n$default$i`, and the bridges an
-    /// inherited member of the name needs. Public and final, a trait's a default method with its
-    /// static `n$`. teq's own references go to the original (`typer::exports`).
-    pub fn export_forwarders(&mut self, list: &[crate::typer::export_plan::JvmForwarder]) {
-        use crate::typer::export_plan::JvmTarget;
-        use crate::typer::exports::ExportQualifier;
+    /// The term forwarders of the synthetic companions of the case classes the class or file being
+    /// written exports by its type forwarders `aliases` (`typer::value_exports::exported_companion`):
+    /// scalac's `final def N: q.N.type`, answering the companion's module, public and final, a
+    /// trait's a default method with its static `N$`.
+    pub fn companion_forwarders(&mut self, aliases: &[crate::types::AliasId]) {
         let cx = self.cx;
-        let syms = cx.input.syms;
         let access = if self.is_interface { ACC_PUBLIC } else { ACC_PUBLIC | ACC_FINAL };
-        for f in list {
-            let name = encode(cx.input.interner.get(f.name));
-            // A given object's forwarder answers its module, as an object's does.
-            let target = match f.target {
-                JvmTarget::Member(s) if cx.given_objects.contains_key(&s) => JvmTarget::Object(cx.given_objects[&s]),
-                t => t,
-            };
-            let s = match target {
-                JvmTarget::Object(k) => {
-                    // An object's module, a case class's companion's for a case class.
-                    let module: Rc<str> = match syms.class(k).kind {
-                        ClassKind::Object | ClassKind::GivenImpl => self.class_name(k),
-                        _ => Rc::from(cx.companion_name(k)),
-                    };
-                    let t = JType::L(module.clone());
-                    self.begin_method(false, false, &[], t.clone(), &[]);
-                    self.getstatic(&module, "MODULE$", &t);
-                    self.return_value(&t);
-                    self.end_method(access, &name, &method_desc(&[], &t));
-                    if self.is_interface {
-                        self.trait_static_forwarder(&name, &[], &t);
-                    }
-                    continue;
-                }
-                JvmTarget::Member(s) => s,
-            };
-            let Some(sig) = f.sig.clone() else { continue };
-            let (params, ret) = self.erase_export_sig(s, &sig);
-            let m = self.mref(s);
-            // The member's `@targetName` is the forwarder's name too, renamed or not, as
-            // scalac's; the getters' forwarders keep the forwarder's source name.
-            let source = name.clone();
-            let name = self.target_name(s).unwrap_or(name);
-            // What the forwarder calls: the member, or the qualifier's forwarder of it.
-            let (owner, kind, iface, callee, desc, callee_params, callee_ret): (Rc<str>, Invoke, bool, String, String, Vec<JType>, JType) = match (f.relayed, f.q) {
-                (true, ExportQualifier::Object(o)) => {
-                    let qn = self.class_name(o);
-                    let selected = self.target_name(s).unwrap_or_else(|| encode(cx.input.interner.get(f.selected)));
-                    (qn, Invoke::Virtual, false, selected, method_desc(&params, &ret), params.clone(), ret.clone())
-                }
-                _ => (m.owner.clone(), m.kind, m.owner_is_interface, m.name.clone(), m.desc.clone(), m.params.clone(), m.ret.clone()),
-            };
-            let typed: Vec<(Option<SymId>, JType)> = params.iter().map(|t| (None, t.clone())).collect();
-            self.begin_method(false, false, &typed, ret.clone(), &[]);
-            if kind != Invoke::Static {
-                self.export_receiver(f, s);
-            }
-            let mut slot = 1u16;
-            for (from, to) in params.iter().zip(&callee_params) {
-                self.load(slot, from);
-                self.adapt(from, to);
-                slot += if from.wide() { 2 } else { 1 };
-            }
-            self.invoke_desc(kind, &owner, iface, &callee, &desc, callee_params.len(), &callee_ret);
-            self.adapt(&callee_ret, &ret);
-            self.return_value(&ret);
-            let fdesc = method_desc(&params, &ret);
-            self.end_method(access, &name, &fdesc);
+        for &a in aliases {
+            let Some(k) = crate::typer::value_exports::exported_companion(cx.input.syms, cx.input.types, a) else { continue };
+            let name = encode(cx.input.interner.get(cx.input.syms.aliases[a.idx()].name));
+            let module: Rc<str> = Rc::from(cx.companion_name(k));
+            let t = JType::L(module.clone());
+            self.begin_method(false, false, &[], t.clone(), &[]);
+            self.getstatic(&module, "MODULE$", &t);
+            self.return_value(&t);
+            self.end_method(access, &name, &method_desc(&[], &t));
             if self.is_interface {
-                self.trait_static_forwarder(&name, &params, &ret);
-            }
-            let fm = MRef { owner: self.this_name.clone(), owner_is_interface: self.is_interface, name: name.clone(), params: params.clone(), ret: ret.clone(), desc: fdesc, kind: if self.is_interface { Invoke::Interface } else { Invoke::Virtual } };
-            self.emit_bridges_as_pub(s, f.name, &fm);
-            // The forwarders of the defaults' getters, after the method's, as scalac writes them.
-            if syms.sym(s).kind != SymKind::Def || self.jvm_param_order(s).is_some() {
-                continue;
-            }
-            let mut start = 0usize;
-            for cl in &sig.clauses {
-                for (k, p) in cl.params.iter().enumerate() {
-                    let i = start + k;
-                    if !p.has_default {
-                        continue;
-                    }
-                    let gret = if p.by_name { self.erase(p.ty) } else { params[i].clone() };
-                    let gparams = params[..start].to_vec();
-                    let (gowner, gkind, giface, gname, gdesc) = match (f.relayed, f.q) {
-                        (true, ExportQualifier::Object(o)) => {
-                            let qn = self.class_name(o);
-                            let selected = encode(cx.input.interner.get(f.selected));
-                            (qn, Invoke::Virtual, false, format!("{}$default${}", selected, i + 1), method_desc(&gparams, &gret))
-                        }
-                        _ => {
-                            let (n, d) = self.default_getter_ref(s, i, &gparams);
-                            (m.owner.clone(), m.kind, m.owner_is_interface, n, d)
-                        }
-                    };
-                    let (cparams, cret) = parse_method_desc(&gdesc);
-                    let typed: Vec<(Option<SymId>, JType)> = gparams.iter().map(|t| (None, t.clone())).collect();
-                    self.begin_method(false, false, &typed, gret.clone(), &[]);
-                    if gkind != Invoke::Static {
-                        self.export_receiver(f, s);
-                    }
-                    let mut slot = 1u16;
-                    for (from, to) in gparams.iter().zip(&cparams) {
-                        self.load(slot, from);
-                        self.adapt(from, to);
-                        slot += if from.wide() { 2 } else { 1 };
-                    }
-                    self.invoke_desc(gkind, &gowner, giface, &gname, &gdesc, cparams.len(), &cret);
-                    self.adapt(&cret, &gret);
-                    self.return_value(&gret);
-                    let fname = format!("{}$default${}", source, i + 1);
-                    self.end_method(access, &fname, &method_desc(&gparams, &gret));
-                    if self.is_interface {
-                        self.trait_static_forwarder(&fname, &gparams, &gret);
-                    }
-                }
-                start += cl.params.len();
-            }
-        }
-    }
-
-    /// The bridges class `c` needs for the export forwarders of a trait it newly mixes in: a
-    /// forwarder implementing another parent's member under another erasure (`f(String)` of
-    /// `trait Parent { export Impl.f }` for `API[String].f(Object)`) is bridged in the class, as
-    /// scalac's mixin bridges it; a superclass's forwarders were bridged in the superclass.
-    pub fn inherited_export_bridges(&mut self, c: ClassId) {
-        use crate::typer::export_plan::JvmTarget;
-        let cx = self.cx;
-        let syms = cx.input.syms;
-        let above: Vec<ClassId> = syms.class(c).superclass.map_or(Vec::new(), |s| syms.class(s).base_types.iter().map(|&(b, _)| b).collect());
-        let traits: Vec<ClassId> = syms.class(c).base_types.iter().skip(1).map(|&(b, _)| b).filter(|b| syms.class(*b).kind == ClassKind::Trait && !above.contains(b)).collect();
-        for b in traits {
-            let Some(list) = cx.input.reach.exports.classes.get(&b) else { continue };
-            for f in list {
-                let JvmTarget::Member(s) = f.target else { continue };
-                if cx.given_objects.contains_key(&s) {
-                    continue;
-                }
-                let Some(sig) = f.sig.clone() else { continue };
-                let (params, ret) = self.erase_export_sig(s, &sig);
-                let desc = method_desc(&params, &ret);
-                let name = self.target_name(s).unwrap_or_else(|| encode(cx.input.interner.get(f.name)));
-                let fm = MRef { owner: self.this_name.clone(), owner_is_interface: false, name, params, ret, desc, kind: Invoke::Virtual };
-                self.emit_bridges_as_pub(s, f.name, &fm);
-            }
-        }
-    }
-
-    /// The names and descriptors of the methods `export_forwarders` writes for `list`.
-    fn export_forwarder_descs(&mut self, list: &[crate::typer::export_plan::JvmForwarder]) -> Vec<(String, String)> {
-        use crate::typer::export_plan::JvmTarget;
-        let cx = self.cx;
-        let mut out = Vec::new();
-        for f in list {
-            let name = encode(cx.input.interner.get(f.name));
-            let target = match f.target {
-                JvmTarget::Member(s) if cx.given_objects.contains_key(&s) => JvmTarget::Object(cx.given_objects[&s]),
-                t => t,
-            };
-            let s = match target {
-                JvmTarget::Object(k) => {
-                    let module: Rc<str> = match cx.input.syms.class(k).kind {
-                        ClassKind::Object | ClassKind::GivenImpl => self.class_name(k),
-                        _ => Rc::from(cx.companion_name(k)),
-                    };
-                    out.push((name, method_desc(&[], &JType::L(module))));
-                    continue;
-                }
-                JvmTarget::Member(s) => s,
-            };
-            let Some(sig) = f.sig.clone() else { continue };
-            let (params, ret) = self.erase_export_sig(s, &sig);
-            out.push((self.target_name(s).unwrap_or_else(|| name.clone()), method_desc(&params, &ret)));
-            if cx.input.syms.sym(s).kind != SymKind::Def || self.jvm_param_order(s).is_some() {
-                continue;
-            }
-            let mut start = 0usize;
-            for cl in &sig.clauses {
-                for (k, p) in cl.params.iter().enumerate() {
-                    let i = start + k;
-                    if p.has_default {
-                        let gret = if p.by_name { self.erase(p.ty) } else { params[i].clone() };
-                        out.push((format!("{}$default${}", name, i + 1), method_desc(&params[..start], &gret)));
-                    }
-                }
-                start += cl.params.len();
-            }
-        }
-        out
-    }
-
-    /// The receiver of what export forwarder `f` calls of member `s`: the qualifier's module, or
-    /// for a package's member the object of its file or class.
-    fn export_receiver(&mut self, f: &crate::typer::export_plan::JvmForwarder, s: SymId) {
-        use crate::typer::exports::ExportQualifier;
-        let cx = self.cx;
-        match (f.q, cx.input.syms.sym(s).owner) {
-            (ExportQualifier::Object(o), _) => {
-                let name = self.class_name(o);
-                self.getstatic(&name, "MODULE$", &JType::L(name.clone()));
-            }
-            (ExportQualifier::Package(_), Owner::Class(c)) => {
-                let name = self.class_name(c);
-                self.getstatic(&name, "MODULE$", &JType::L(name.clone()));
-            }
-            (ExportQualifier::Package(_), _) => {
-                self.load_file_module(cx.input.syms.sym(s).file);
+                self.trait_static_forwarder(&name, &[], &t);
             }
         }
     }
@@ -1898,7 +1710,7 @@ impl<'a> Gen<'a> {
     /// The erased parameters and result of an export forwarder of member `s` whose signature the
     /// qualifier sees as `sig`: the member's own where nothing of it was substituted (a jar's as
     /// its class file has it), else the erasure of the substituted types.
-    fn erase_export_sig(&mut self, s: SymId, sig: &MethodSig) -> (Vec<JType>, JType) {
+    fn erase_seen_sig(&mut self, s: SymId, sig: &MethodSig) -> (Vec<JType>, JType) {
         let cx = self.cx;
         let info = cx.input.syms.sym(s);
         let same = info.sig.as_ref().map_or(false, |o| {
@@ -1984,7 +1796,7 @@ impl<'a> Gen<'a> {
             ret: types.subst(sig.ret, &subst),
             declared: crate::tir::NO_TYPE,
         };
-        let (params, ret) = self.erase_export_sig(member, &seen);
+        let (params, ret) = self.erase_seen_sig(member, &seen);
         accessor.desc = method_desc(&params, &ret);
         accessor.params = params;
         accessor.ret = ret;

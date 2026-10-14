@@ -246,6 +246,16 @@ impl<'a> Worker<'a> {
     /// The eager part of the signature phase: the completion of every class and alias of the
     /// program's files, and the export tables of the packages.
     pub fn complete_program(&mut self) {
+        self.forwarders_on_completion = true;
+        // The classes with export clauses first, in the order of the files and their places, as
+        // dotty's typer meets them: where their forwarders read each other's (a cycle of two
+        // objects exporting each other), what each gets does not depend on the demand order.
+        for i in 0..self.syms.classes.len() {
+            let info = &self.syms.classes[i];
+            if info.has_exports && !self.in_jar(info.file) && self.std.slot_of(info.file).is_none() {
+                self.complete_class(ClassId(i as u32));
+            }
+        }
         // What a jar or the std holds completes when the program reaches it.
         for i in demand_order(self.syms.classes.len()) {
             let file = self.syms.classes[i].file;
@@ -263,7 +273,8 @@ impl<'a> Worker<'a> {
         for i in 0..self.syms.pkgs.len() {
             self.pkg_exports_of(PkgId(i as u32));
         }
-        // Value exports make members, once every class they read is complete.
+        // Value exports make members, once every class they read is complete, before the
+        // classes' export tables (`build_scope_tables`), which read them.
         self.add_value_forwarders();
     }
 
@@ -1152,7 +1163,7 @@ impl<'a> Worker<'a> {
 
     /// A top-level function is registered once, whichever of the program's check, a std file's
     /// or the reach pass (a macro's run in the interpreter among them) gets to it first.
-    fn register_top_fun(&mut self, f: FunId) {
+    pub(super) fn register_top_fun(&mut self, f: FunId) {
         if !self.prog_index.has_top_fun(&self.prog, f) {
             self.prog.top_funs.push(f);
         }
@@ -1700,7 +1711,14 @@ impl<'a> Worker<'a> {
             if inferred != ERROR {
                 self.set_partial_sig(sym, sig_of(inferred));
             }
-            self.flush_pending_since(pending);
+            // A local definition inferred inside another member's inference leaves its calls to
+            // that member's expansion, once the member's own type is set: dotty inlines after
+            // typer, every type of the unit known (`Inlining`), so an expansion that reads the
+            // enclosing `val` (macwire's eligible values) finds its type, not the recursion.
+            let nested_local = outer != 0 && self.syms.sym(sym).owner == Owner::Local;
+            if !nested_local {
+                self.flush_pending_since(pending);
+            }
         }
         inferred
     }
@@ -2942,7 +2960,6 @@ impl<'a> Worker<'a> {
             init: Vec::new(),
             methods: Vec::new(),
             ctors: Vec::new(),
-            forwarders: Vec::new(),
             bridges: Vec::new(),
             super_accessors: Vec::new(),
             deferred_givens: Vec::new(),
@@ -3121,7 +3138,7 @@ impl<'a> Worker<'a> {
         self.check_variances(c);
         if !matches!(kind, ClassKind::Trait | ClassKind::Enum) && def.mods & mods::ABSTRACT == 0 && !self.is_body_file(file) && !self.syms.class(c).parent_failed {
             let implemented = tclass.synthesized | self.enum_value_parent_members(c) | self.inherited_synthesized(c);
-            tclass.forwarders = self.check_implements_all(c, Abstracts::Declared, implemented);
+            self.check_implements_all(c, Abstracts::Declared, implemented);
         }
         if js == JsKind::Object {
             // scalac checked a jar's trait, whose vars come with their setters.
@@ -5485,8 +5502,8 @@ impl<'a> Worker<'a> {
         }
     }
 
-    /// scalac's check along the linearisation: what an earlier ancestor defines cannot override
-    /// a final member of a later one.
+    /// scalac's check along the linearisation: what an earlier ancestor defines concretely cannot
+    /// override a final member of a later one.
     fn check_final_overrides(&mut self, c: ClassId) {
         // The names of the bases before the one at hand: a final member no earlier base names
         // meets nothing there (their names masks).
@@ -5518,6 +5535,12 @@ impl<'a> Worker<'a> {
                     let at = self.base_instance_at(c, i);
                     let Some(&m) = self.syms.class(a).members.get(&name) else { continue };
                     if self.syms.sym(m).owner != Owner::Class(a) || self.syms.alternatives(m).is_some() || self.syms.sym(m).kind != SymKind::Def {
+                        continue;
+                    }
+                    // An abstract member is implemented by the final one, not overriding it: dotty's
+                    // overriding pairs take the concrete of the two as the overriding member
+                    // (`OverridingPairsChecker.checkAll`, "concrete overrides abstract").
+                    if self.is_abstract_member(m) {
                         continue;
                     }
                     let msig = self.sig_arc(m);
@@ -5945,9 +5968,10 @@ impl<'a> Worker<'a> {
         }
     }
 
-    /// Returns the abstract members that an export clause of `c` implements, with their targets.
-    /// A member of `synthesized` (`TClass::synthesized`) is implemented by rule.
-    fn check_implements_all(&mut self, c: ClassId, which: Abstracts, synthesized: u16) -> Vec<(SymId, SymId)> {
+    /// Reports the abstract members `c` leaves unimplemented, an export's forwarders implementing
+    /// what they forward as the class's members do. A member of `synthesized`
+    /// (`TClass::synthesized`) is implemented by rule.
+    fn check_implements_all(&mut self, c: ClassId, which: Abstracts, synthesized: u16) {
         // The base types as a list of the check's own, made where an abstract member is to be
         // matched: most classes inherit none.
         let mut copied: Option<Vec<(ClassId, TypeId)>> = None;
@@ -5955,7 +5979,6 @@ impl<'a> Worker<'a> {
         // A member left unimplemented beside an incomplete definition of its name, whose body
         // is unknown rather than missing.
         let mut unknown = false;
-        let mut forwarders = Vec::new();
         // The class's own deferred declarations of what the rule gives it.
         let mut own_deferred: Vec<SymId> = Vec::new();
         // A concrete class's own members without a body too (`class C { given x: Int }`), as
@@ -6067,28 +6090,8 @@ impl<'a> Worker<'a> {
                         false
                     });
                 }
-                let exported = (!is_ext && self.syms.class(c).has_exports)
-                    .then(|| self.exports_of(c))
-                    .flatten()
-                    .and_then(|e| e.terms.get(&name).copied())
-                    .and_then(|r| r.sym())
-                    .filter(|&s| s != m && !self.is_abstract_member(s))
-                    .filter(|&s| {
-                        let ssig = self.sig_arc(s);
-                        self.compare_sigs(c, ssig, None, m, bt) != Agreement::Params
-                    });
-                match exported {
-                    Some(target) => forwarders.push((m, target)),
-                    None => missing.push((self.name_str(name).to_string(), m, bt)),
-                }
+                missing.push((self.name_str(name).to_string(), m, bt));
             }
-        }
-        if !missing.is_empty() && self.link_mode() {
-            let bases = match copied.take() {
-                Some(bases) => bases,
-                None => self.met_base_types(c),
-            };
-            missing.retain(|&(_, m, bt)| !self.inherited_export_implements(c, &bases, m, bt));
         }
         if !missing.is_empty() {
             // An abstract var left undefined is one member, its getter and setter together.
@@ -6100,7 +6103,6 @@ impl<'a> Worker<'a> {
         } else if !own_deferred.is_empty() {
             self.report_deferred_declarations(c, &own_deferred);
         }
-        forwarders
     }
 
     /// dotty's `RefChecks.checkNoAbstractDecls`, which runs where every member is implemented: a
@@ -6124,32 +6126,6 @@ impl<'a> Worker<'a> {
         // dotty's `abstractErrorMessage`.
         let msg = if errors.len() <= 2 { errors.join(" ") } else { format!("{}:\n{}", errors[0], errors[1..].join("\n")) };
         self.diags.error(file, span, msg);
-    }
-
-    /// Whether an export of a class above `c` implements the abstract member `m`, which nothing else
-    /// implements, `c` inheriting its forwarder as scalac writes it (`class Child extends Car`): on the
-    /// JVM alone, whose class files carry the forwarders, JavaScript having none to inherit; and only
-    /// where its result conforms, one that does not being no implementation, as scalac's "has
-    /// incompatible type" has it.
-    #[cold]
-    #[inline(never)]
-    fn inherited_export_implements(&mut self, c: ClassId, bases: &[(ClassId, TypeId)], m: SymId, bt: TypeId) -> bool {
-        let (name, is_ext) = {
-            let info = self.syms.sym(m);
-            (info.name, info.is_extension)
-        };
-        !is_ext && bases.iter().skip(1).any(|&(other, _)| {
-            self.syms.class(other).has_exports
-                && self
-                    .exports_of(other)
-                    .and_then(|e| e.terms.get(&name).copied())
-                    .and_then(|r| r.sym())
-                    .filter(|&s| s != m && !self.is_abstract_member(s))
-                    .is_some_and(|s| {
-                        let ssig = self.sig_arc(s);
-                        self.compare_sigs(c, ssig, None, m, bt) == Agreement::Same
-                    })
-        })
     }
 
     /// Whether a var that `c` has implements the abstract setter `m` (`def x_=(v: T): Unit`):

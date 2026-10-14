@@ -35,7 +35,9 @@
 # tests/support/forwarders/forwarders.scala against forwarders.expected, javap's of scalac's
 # class file (left out without javap). And a class's constructor calls the `$init$` of the traits it mixes in anew in
 # scalac's order: tests/support/trait_inits/list.sh's listing of trait_inits.scala against trait_inits.expected,
-# listed from scalac's class files (left out without javap). And each program of tests/support/abi, built as a module's
+# listed from scalac's class files (left out without javap). And an anonymous class's methods have the flags
+# scalac gives them, a `final def` final, the class's own and a quote's copy at an expansion's site:
+# tests/support/anon_final/list.sh's listing against anon_final.expected, listed from scalac's class files. And each program of tests/support/abi, built as a module's
 # products, has scalac's layout of the members its `// abi:` line names: the names, descriptors and
 # flags tests/support/abi/listing.py reads from its class files against <name>.expected, which
 # tests/support/abi/expected.sh writes from scalac 3.8.4's.
@@ -199,6 +201,21 @@ forwarder_order() {
     return 1
   fi
 }
+anon_final() {
+  command -v python3 > /dev/null || return 0
+  local work=$out/anon_final
+  rm -rf "$work"
+  if ! timeout 60 "$TEQ" compiler build tests/support/anon_final/Mac.scala tests/support/anon_final/Use.scala --target jvm --products "$work" --classpath "$M2/org/scala-lang/scala-library/3.8.4/scala-library-3.8.4.jar" > "$work.log" 2>&1; then
+    echo "ANON FINAL: the fixture does not build (see $work.log)"
+    return 1
+  fi
+  bash tests/support/anon_final/list.sh "$work" > "$work.txt"
+  if ! diff tests/support/anon_final/anon_final.expected "$work.txt" > "$work.diff"; then
+    echo "ANON FINAL: an anonymous class's methods, plain or a quote's copy, do not have scalac's flags"
+    head -10 "$work.diff"
+    return 1
+  fi
+}
 trait_inits() {
   command -v javap > /dev/null || return 0
   local work=$out/trait_inits
@@ -239,6 +256,7 @@ if [ -z "$VERSION" ]; then
   same_jars || status=1
   forwarder_order || status=1
   trait_inits || status=1
+  anon_final || status=1
   abi_layout || status=1
 fi
 count() { grep -c "^$1 " "$out/results.txt"; }

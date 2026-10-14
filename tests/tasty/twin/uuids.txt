@@ -2,8 +2,8 @@ bodies/fix/bodies/Base.tasty 0015f1e5d307cdd2003cc94795b3f991
 bodies/fix/bodies/Bodies.tasty 0013922b3bd01cb6003c31301efdbff5
 bodies/fix/bodies/Point.tasty 001a65b4fda50a92004694affdc6e1d0
 bodies/fix/bodies/Pretty.tasty 00ac072766647bec0074c2b833c9e9ca
-calllift/fix/calllift/CallLift.tasty 004f5cd4f8b548b8001effbb083af0f2
-calllift/fix/calllift/LiftExports.tasty 00889a6bed7b49c5008986e1ba9f19d3
+calllift/fix/calllift/CallLift.tasty 0089a1d4ccfafab900442fa5848627f3
+calllift/fix/calllift/LiftExports.tasty 006a07a21bbc44c40067768a30e5cff1
 calllift/fix/calllift/LiftShapes.tasty 004dd62878200ec9002a5718bc4bd3b4
 canequal/fix/canequal/CanEqualCalls.tasty 004a4907f60f34da00188cb79caa29a3
 canequal/fix/canequal/CanEqualOpen.tasty 007a49622ef6269100115451d0096dd3
@@ -55,7 +55,7 @@ hkbounds/fix/hkb/HkTarget.tasty 00a70a870534a3e90070bee923b8d7ab
 hkbounds/fix/hkb/hkbounds$package.tasty 0065fa2467ad4bda00a59a09f1fc8591
 icdefaults/fix/icdef/IcDefaults.tasty 00c7fbf70fc070a600d4014ffa263adb
 inlforms/fix/inlforms/IfEqv.tasty 008f02b5b952fcd10062304b77a16bfa
-inlforms/fix/inlforms/IfFacade.tasty 00b8ebddf844b7c8008382327da7e4a9
+inlforms/fix/inlforms/IfFacade.tasty 00b8ebddf844b7c800eddaddfd0254cf
 inlforms/fix/inlforms/IfImpl.tasty 00f1557a57ae75c50020fd94d2a456ed
 inlres/fix/inlres/InlD.tasty 00fc97d834c883c1009111d8b8883ae0
 inlres/fix/inlres/InlRes.tasty 005026245ac732b0003480a79c84e4a8
@@ -72,7 +72,7 @@ members/fix/members/Holder.tasty 00183d087efee2c4002ff891073837ae
 members/fix/members/Registry.tasty 0084064e595f1cd800d640e5059e67e4
 members/fix/members/UsesRegistry.tasty 00a35bc18a8be2dc00c6f8b333e1cbc0
 overacc/fix/overacc/AccAssertions.tasty 003586c62ac665c4003602de59059374
-pext_inlined/fix/pext/dsl/pext_dsl$package.tasty 0007c233c263fddd00255a8061e6cc8e
+pext_inlined/fix/pext/dsl/pext_dsl$package.tasty 0007c233c163fddd001feadc02914aa0
 pext_inlined/fix/pext/inlined/pext_inlined$package.tasty 00e2a288b8ed59df00758d41b0a2f384
 pkgobjname/fix/ponapi/PonApi.tasty 006b2406183259da0075f3e5a8229196
 pkgobjname/fix/ponforeign/Token$package.tasty 00af0f7d3eba9dd400dbe5ebbe5654a1
@@ -110,7 +110,7 @@ reader_decl/fix/rdecl/RdTraces.tasty 00d656e29fd44bd6009618f2b5a2e38a
 reader_decl/fix/rdecl/RdWrap.tasty 00c8d7d1a2af8cdc00c3e6e00cef80f4
 recrefine/fix/recrefine/RrBox.tasty 00f9377ea50f7cef001d2e457a66238a
 recrefine/fix/recrefine/RrShapes.tasty 000d1e7515ba76c000b4e0fe1f5d148d
-reflect38/fix/r38/Reflect38.tasty 0055ede8b91d85be0077f042bf8168e1
+reflect38/fix/r38/Reflect38.tasty 0055ede8b91d85be00fd3b753d68d5e1
 retain/fix/retain/Fmt.tasty 00a13032ba2bb4eb00fd340b15cb03aa
 retain/fix/retain/Grid.tasty 008f2c1e3698b2af0081523ddccff5d7
 retain/fix/retain/Grids.tasty 00a7f69f9af861ea00728d7e084890b2

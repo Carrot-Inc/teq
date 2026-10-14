@@ -9,7 +9,7 @@
 use super::Worker;
 use crate::ast::DefId;
 use crate::shape::Remap;
-use crate::source::FileId;
+use crate::source::{FileId, Span};
 use crate::symbols::*;
 use crate::types::*;
 use std::sync::Arc;
@@ -110,6 +110,7 @@ impl<'a> Worker<'a> {
                     }
                 }
             }
+            self.move_forwarders(change.file, change.remap);
             self.forget_typing(change.file, change.remap);
             inferred.extend(self.open_inferred(change.file, &moved).into_iter().map(|(sym, sig)| (change.file, sym, sig)));
         }
@@ -120,6 +121,9 @@ impl<'a> Worker<'a> {
             self.check_file(change.file);
         }
         self.complete_pending_sealed_files();
+        // The files' top-level value forwarders, forgotten with their typing: made again as the
+        // full path makes them once the bodies are typed.
+        self.define_top_value_forwarders();
         self.run_deferred_matches();
         let files: Vec<FileId> = changes.iter().map(|c| c.file).collect();
         self.check_outer_accessors_implemented(Some(&files));
@@ -170,6 +174,50 @@ impl<'a> Worker<'a> {
         Ok(restored)
     }
 
+
+    /// Gives the value forwarders of the file's export clauses the positions a build of the new
+    /// text gives them: the selector found again in its clause, the alternative's offset kept
+    /// (`value_exports::selector_span`).
+    fn move_forwarders(&mut self, file: FileId, remap: &Remap) {
+        if remap.exports.is_empty() {
+            return;
+        }
+        let ast = self.ast(file);
+        let moved = |t: &Self, fwd: &Forward| -> Option<(Span, Span)> {
+            let &(_, clause) = remap.exports.iter().find(|(old, _)| *old == fwd.clause)?;
+            let imp = ast.exports.iter().chain(&ast.top_exports).find(|i| i.span == clause)?;
+            let at = t.selector_span(imp);
+            Some((Span { start: at.start + fwd.alt.min(at.end.saturating_sub(at.start)), end: at.end }, clause))
+        };
+        let classes: Vec<ClassId> = (0..self.syms.classes.len() as u32).map(ClassId).filter(|&c| self.syms.class(c).file == file && !self.syms.class(c).forwarders.is_empty()).collect();
+        for c in classes {
+            let mut fwds = self.syms.class(c).forwarders.clone();
+            for (s, fwd) in fwds.iter_mut() {
+                if let Some((span, clause)) = moved(self, fwd) {
+                    self.syms.sym_mut(*s).span = span;
+                    *fwd = std::sync::Arc::new(Forward { clause, ..(**fwd).clone() });
+                }
+            }
+            self.syms.class_mut(c).forwarders = fwds;
+        }
+        for i in 0..self.syms.pkgs.len() as u32 {
+            let p = PkgId(i);
+            if !self.syms.pkg(p).forwarders.iter().any(|&(s, _)| self.syms.sym(s).file == file) {
+                continue;
+            }
+            let mut fwds = self.syms.pkg(p).forwarders.clone();
+            for (s, fwd) in fwds.iter_mut() {
+                if self.syms.sym(*s).file != file {
+                    continue;
+                }
+                if let Some((span, clause)) = moved(self, fwd) {
+                    self.syms.sym_mut(*s).span = span;
+                    *fwd = std::sync::Arc::new(Forward { clause, ..(**fwd).clone() });
+                }
+            }
+            self.syms.pkgs[p.idx()].forwarders = fwds;
+        }
+    }
 
     /// Points the symbols of the file at their definitions in the new AST and gives them the
     /// positions they have there, and returns the symbols with a definition among them. A

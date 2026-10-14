@@ -190,6 +190,9 @@ pub struct ClassInfo {
     pub stateful: bool,
     /// Whether the body has `export` clauses.
     pub has_exports: bool,
+    /// Whether its export clauses' forwarders are made, which a class makes once (dotty's
+    /// `processExports` in its completer), whatever typing reaches its definition again.
+    pub forwarders_made: bool,
     /// The name of the body's `self =>` alias, or `EMPTY`.
     pub self_alias: Name,
     pub has_imports: bool,
@@ -216,6 +219,9 @@ pub struct ClassInfo {
     pub this_type: Option<TypeId>,
     /// Whether an ancestor declares a type member, which a lookup in the body then walks to.
     pub inherits_types: bool,
+    /// Whether an ancestor has export clauses (`has_exports`), whose type forwarders a lookup of
+    /// a class's companion as a term reads (`Worker::class_exported_alias_term`).
+    pub inherits_exports: bool,
     /// Whether no ancestor declares an extension method, as the completion found; false until
     /// then, where an instance's extensions are looked for along its ancestors.
     pub no_inherited_extensions: bool,
@@ -312,6 +318,10 @@ pub struct SymInfo {
     /// Set for a val with an initialiser that a constructor parameter of a subclass overrides:
     /// the parameter is set first and keeps the field.
     pub overridden_by_param: bool,
+    /// Whether a parameterless def is a stable path (dotty's `StableRealizable` on a def): an
+    /// export's forwarder of a stable member, whose result is that member's singleton, or a
+    /// library's def its pickle marks `STABLE`.
+    pub stable: bool,
     /// The type alias a case class's field is declared as (`n: Count` with `type Count = Long`),
     /// through `declared_alias`: dotty's `info.typeSymbol` is the alias, no primitive class, so
     /// `SyntheticMembers.equalsBody` compares it with the references (`tir::equals_order`), while
@@ -347,20 +357,28 @@ pub struct SymInfo {
     pub dispatch: Dispatch,
 }
 
-/// What a value export's forwarder reaches: the qualifier's steps and the member it calls.
+/// What a value export's forwarder reaches: its qualifier, the path the clause's qualifier is
+/// typed as (an index of the typer's value imports, `ValueImport`, or `Forward::STATIC`), and the
+/// member it calls.
 #[derive(Clone, Debug)]
 pub struct Forward {
-    pub steps: Vec<ForwardStep>,
+    pub path: u32,
     pub target: SymId,
+    /// The span of the export selector's clause (`Import::span`) and the forwarder's place among
+    /// the member's alternatives, which give its position in the clause as a build computes it
+    /// (`value_exports::selector_span`): a body edit moves it with the clause.
+    pub clause: crate::source::Span,
+    pub alt: u32,
 }
 
-/// A step of a value export's qualifier: a member of the class's `this`, an object, or a member
-/// of what the steps before reached.
-#[derive(Clone, Copy, Debug)]
-pub enum ForwardStep {
-    This(SymId),
-    Module(ClassId),
-    Member(SymId),
+impl Forward {
+    /// The path of a package's member (`export lib.internal.{Version, show}`): no value, the
+    /// member named statically, as dotty's forwarder selects it on the package's `TermRef`.
+    pub const STATIC: u32 = u32::MAX;
+
+    pub fn is_static(&self) -> bool {
+        self.path == Self::STATIC
+    }
 }
 
 impl SymInfo {
@@ -421,6 +439,10 @@ pub struct AliasInfo {
     /// type twice, a reference to such an alias; of an abstract member, its upper bound so;
     /// `NO_TYPE` elsewhere.
     pub declared_rhs: TypeId,
+    /// An export's type forwarder (dotty's `Exported`): `FINAL EXPORTED` in the pickle, and, where
+    /// it names a class whose companion no term of the name forwards, that class's companion as
+    /// a term of its owner (`NamerOps.typeConstructorCompanion`).
+    pub exported: bool,
 }
 
 impl AliasInfo {
@@ -447,9 +469,12 @@ pub struct PkgInfo {
     pub givens: Vec<SymId>,
     /// Files of this package that have top-level `export` clauses.
     pub export_files: Vec<FileId>,
-    /// Another module's `<file>$package` objects of this package whose pickles hold export
-    /// forwarders: their tables are the package's, as the program's top-level clauses are.
-    pub export_objects: Vec<ClassId>,
+    /// Whether every one of those files has made its forwarders (`value_exports`).
+    pub forwarders_done: bool,
+    /// The forwarders of the program's top-level export clauses through a value, top-level
+    /// definitions of their files (the members of each file's `<source>$package`), with what each
+    /// reaches (`ClassInfo::forwarders`).
+    pub forwarders: Vec<(SymId, Arc<Forward>)>,
     /// The `object package` of a `package object p extends ...`: what the package's own
     /// entries lack is looked up among its members, the inherited ones included.
     pub package_object: Option<ClassId>,
@@ -459,7 +484,7 @@ impl PkgInfo {
     /// Whether top-level export clauses add names to the package, the program's or another
     /// module's.
     pub fn has_exports(&self) -> bool {
-        !self.export_files.is_empty() || !self.export_objects.is_empty()
+        !self.export_files.is_empty()
     }
 }
 
@@ -679,7 +704,8 @@ impl Symbols {
             entries: FxMap::default(),
             givens: Vec::new(),
             export_files: Vec::new(),
-            export_objects: Vec::new(),
+            forwarders_done: false,
+            forwarders: Vec::new(),
             package_object: None,
         };
         Symbols {
@@ -848,8 +874,32 @@ impl Symbols {
     /// The path a value export's forwarder `s` calls its member through, `None` for any other
     /// symbol (`ClassInfo::forwarders`).
     pub fn forward_of(&self, s: SymId) -> Option<Arc<Forward>> {
-        let Owner::Class(c) = self.sym(s).owner else { return None };
-        self.class(c).forwarders.iter().find(|&&(f, _)| f == s).map(|(_, fwd)| fwd.clone())
+        // A written definition is no forwarder, which has none.
+        let info = self.sym(s);
+        if info.def.is_some() {
+            return None;
+        }
+        let forwarders = match info.owner {
+            Owner::Class(c) => &self.class(c).forwarders,
+            Owner::Package(p) => &self.pkg(p).forwarders,
+            Owner::Local => return None,
+        };
+        forwarders.iter().find(|&&(f, _)| f == s).map(|(_, fwd)| fwd.clone())
+    }
+
+    /// Whether `s` is a value export's forwarder (`forward_of` without the record).
+    #[inline]
+    pub fn is_forwarder(&self, s: SymId) -> bool {
+        let info = self.sym(s);
+        if info.def.is_some() {
+            return false;
+        }
+        let forwarders = match info.owner {
+            Owner::Class(c) => &self.class(c).forwarders,
+            Owner::Package(p) => &self.pkg(p).forwarders,
+            Owner::Local => return false,
+        };
+        forwarders.iter().any(|&(f, _)| f == s)
     }
 
     pub fn sym(&self, s: SymId) -> SymRef<'_> {
@@ -956,7 +1006,8 @@ impl Symbols {
             entries: FxMap::default(),
             givens: Vec::new(),
             export_files: Vec::new(),
-            export_objects: Vec::new(),
+            forwarders_done: false,
+            forwarders: Vec::new(),
             package_object: None,
         }));
         self.pkgs[parent.idx()].entries.entry(name).or_default().pkg = Some(id);
@@ -1010,6 +1061,7 @@ impl Symbols {
             rule_prefix: 0,
             parent_failed: false,
             has_exports: false,
+            forwarders_made: false,
             self_alias: crate::names::EMPTY,
             has_imports: false,
             has_statements: false,
@@ -1025,6 +1077,7 @@ impl Symbols {
             declared_self: None,
             this_type: None,
             inherits_types: false,
+            inherits_exports: false,
             no_inherited_extensions: false,
             meets_in_bases: false,
             tparams_made: false,
@@ -1065,6 +1118,7 @@ impl Symbols {
             needs_setter: false,
             scoped_private: false,
             overridden_by_param: false,
+            stable: false,
             declared_alias_id: 0,
             is_main: false,
             impl_class: None,
@@ -1616,7 +1670,7 @@ mod tests {
             let c = syms.new_class(Name(1), ClassKind::Class, 0, Owner::Package(ROOT_PKG), FileId(0), None, Span::default());
             let p = syms.new_tparam(Name(2), 0);
             let s = syms.new_sym(Name(5), SymKind::Def, 0, Owner::Package(ROOT_PKG), FileId(0), None, Span::default());
-            let a = AliasId(syms.aliases.push(AliasInfo { name: Name(6), owner: Owner::Package(ROOT_PKG), file: FileId(0), def: None, tparams: Vec::new(), rhs: ERROR, bounds: None, deprecated: false, js: false, declared_rhs: NO_TYPE }));
+            let a = AliasId(syms.aliases.push(AliasInfo { name: Name(6), owner: Owner::Package(ROOT_PKG), file: FileId(0), def: None, tparams: Vec::new(), rhs: ERROR, bounds: None, deprecated: false, js: false, exported: false, declared_rhs: crate::tir::NO_TYPE }));
             syms.syms.fork();
             syms.classes.fork();
             syms.tparams.fork();
