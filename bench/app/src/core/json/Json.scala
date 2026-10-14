@@ -144,7 +144,20 @@ object Json:
                     pos += 4
                     out.append(Integer.parseInt(code, 16).toChar)
                   case other => error = Some(s"invalid escape '\\$other'")
-              case other => out.append(other)
+              case other =>
+                // The run of plain characters up to the next quote or backslash, appended at once:
+                // the search bounded by the next quote, so that a long string is read in one pass.
+                val start = pos - 1
+                val quote = text.indexOf('"', start)
+                val end = if quote < 0 then text.length else quote
+                val chunk = text.substring(start, end)
+                val slash = chunk.indexOf('\\')
+                if slash < 0 then
+                  out.append(chunk)
+                  pos = end
+                else
+                  out.append(chunk.substring(0, slash))
+                  pos = start + slash
         error.toLeft(out.toString)
       }
 

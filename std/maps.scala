@@ -359,14 +359,6 @@ abstract class Map[K, +V] extends IterableOps[(K, V), Iterable, Map[K, V]], scal
   override def mkString(start: String, sep: String, end: String): String =
     joinStrings(Vector.wrap(rawItems(this).map(e => "" + e._1 + " -> " + e._2)), start, sep, end)
 
-  def equals(that: Any): Boolean = that match
-    case m: Map[?, ?] =>
-      val other: Map[K, Any] = unsafeCast(m)
-      size == other.size && forall(e => other.get(e._1) match
-        case Some(v) => v == e._2
-        case None => false)
-    case _ => false
-  override def hashCode: Int = scala.util.hashing.MurmurHash3.mapHash(this)
   override def collectionClassName: String = if size <= 4 then "Map" else "HashMap"
   override def toString: String = mkString("Map(", ", ", ")")
 
@@ -456,7 +448,7 @@ final class PersistentMap[K, +V](index: TrieNode, entries: Vector[Any], dead: In
     if dead == 0 then unsafeCast(entries.iterator) else unsafeCast(entries.iterator.filter(PersistentMap.live))
   @jvmEvidence
   @jvm("rt $0 $1 rtcall arrayOf(Lscala/IterableOnce;Lscala/reflect/ClassTag;)Ljava/lang/Object; cast_result")
-  override def toArray[B >: (K, V): scala.reflect.ClassTag]: Array[B] = if dead == 0 then unsafeCast(entries.toArray) else unsafeCast(PersistentMap.without(entries, -1))
+  override def toArray[B >: (K, V): scala.reflect.ClassTag]: Array[B] = arrayByTag(scala.reflect.classTag[B], this, if dead == 0 then unsafeCast(copyArray(entries.unsafeArray)) else unsafeCast(PersistentMap.without(entries, -1)))
   private def parts[B](first: Boolean): RawBuffer[B] =
     val out = emptyBuffer[B]
     foreach(e => out.push(unsafeCast(if first then e._1 else e._2)))
@@ -511,7 +503,7 @@ object PersistentMap:
     out
   def of[K, V](m: Map[K, V]): PersistentMap[K, V] = m match
     case p: PersistentMap[?, ?] => unsafeCast(p)
-    case _ => unsafeCast(Map.from(m.toArray))
+    case _ => unsafeCast(Map.from(untaggedArray(iterableToArray(m))))
   // A map over entries whose keys are distinct.
   def fromEntries[K, V](entries: RawBuffer[(K, V)]): Map[K, V] =
     if entries.length == 0 then Map.empty

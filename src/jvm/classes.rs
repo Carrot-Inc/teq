@@ -3403,6 +3403,8 @@ impl<'a> Gen<'a> {
     /// `static main(String[])` calling the entry point `main` of the program.
     pub fn entry_main(&mut self, main: SymId, object: Option<ClassId>) {
         let cx = self.cx;
+        // A typed `@main` method runs through its proxy, which parses the command line.
+        let main = cx.input.syms.main_adapter(cx.input.interner, main).unwrap_or(main);
         let info = cx.input.syms.sym(main);
         let args_type = JType::L(Rc::from("[Ljava/lang/String;"));
         self.begin_method(true, false, &[(None, args_type.clone())], JType::V, &[]);

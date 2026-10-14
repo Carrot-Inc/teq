@@ -87,9 +87,11 @@ trait IterableOps[+A, +CC[_], +C] extends IterableOnce[A]:
   // reflection (munit prints a collection so).
   def collectionClassName: String = className
 
+  // A member classes of libraries override (zio's `Chunk`): its evidence stays erased outside the
+  // JVM (`Worker::erases_evidence_of`).
   @jvmEvidence
   @jvm("rt $0 $1 rtcall arrayOf(Lscala/IterableOnce;Lscala/reflect/ClassTag;)Ljava/lang/Object; cast_result")
-  def toArray[B >: A: scala.reflect.ClassTag]: Array[B] = unsafeCast(iterableToArray(this))
+  def toArray[B >: A: scala.reflect.ClassTag]: Array[B] = arrayByTag(scala.reflect.classTag[B], this, unsafeCast(iterableToArray(this)))
   def copyToArray[B >: A](dest: Array[B]): Int = copyToArray(dest, 0, Int.MaxValue)
   def copyToArray[B >: A](dest: Array[B], start: Int): Int = copyToArray(dest, start, Int.MaxValue)
   def copyToArray[B >: A](dest: Array[B], start: Int, len: Int): Int =
@@ -457,7 +459,7 @@ trait SeqOps[+A, +CC[_], +C] extends IterableOps[A, CC, C]:
     if n < len then -1 else if n > len then 1 else 0
   def isDefinedAt(i: Int): Boolean = i >= 0 && i < length
   def lift(i: Int): Option[A] = if isDefinedAt(i) then Some(apply(i)) else None
-  def indices: Range = Range(0, length, 1)
+  def indices: Range = new Range(0, length, 1)
 
   def contains[B >: A](elem: B): Boolean = exists(x => x == elem)
   def indexWhere(p: A => Boolean, from: Int = 0): Int =
@@ -671,7 +673,7 @@ object IndexedSeq:
   def from[A](source: IterableOnce[A]): IndexedSeq[A] = Vector.from(source)
   def fill[A](n: Int)(elem: => A): IndexedSeq[A] = Vector.fill(n)(elem)
   def tabulate[A](n: Int)(f: Int => A): IndexedSeq[A] = Vector.tabulate(n)(f)
-  def range(start: Int, end: Int): IndexedSeq[Int] = Range(start, end, 1).toVector
+  def range(start: Int, end: Int): IndexedSeq[Int] = new Range(start, end, 1).toVector
   def newBuilder[A]: scala.collection.mutable.Builder[A, IndexedSeq[A]] = Vector.newBuilder[A]
 
 // `hasNext` and `next()` are the core, which a library's iterator class implements; the std's
@@ -944,7 +946,7 @@ object Iterator:
   def continually[A](elem: => A): Iterator[A] = new FnIterator(() => true, () => elem)
   def fill[A](n: Int)(elem: => A): Iterator[A] = continually(elem).take(n)
   def tabulate[A](n: Int)(f: Int => A): Iterator[A] = from(0).take(n).map(f)
-  def range(start: Int, end: Int, step: Int = 1): Iterator[Int] = Range(start, end, step).iterator
+  def range(start: Int, end: Int, step: Int = 1): Iterator[Int] = new Range(start, end, step).iterator
   def unfold[A, S](init: S)(f: S => Option[(A, S)]): Iterator[A] =
     var state = init
     var pending: Option[(A, S)] = None
@@ -1062,7 +1064,7 @@ object LazyList extends SeqFactory[LazyList]:
   def continually[A](elem: => A): LazyList[A] = cons(elem, continually(elem))
   override def fill[A](n: Int)(elem: => A): LazyList[A] = continually(elem).take(n)
   override def tabulate[A](n: Int)(f: Int => A): LazyList[A] = iterate(0)(_ + 1).take(n).map(f)
-  def range(start: Int, end: Int, step: Int = 1): LazyList[Int] = fromIterator(Range(start, end, step).iterator)
+  def range(start: Int, end: Int, step: Int = 1): LazyList[Int] = fromIterator(new Range(start, end, step).iterator)
   override def unfold[A, S](init: S)(f: S => Option[(A, S)]): LazyList[A] = new LazyList(() => f(init).map((a, s) => (a, unfold(s)(f))))
 
 extension [A, CC[_]](xss: IterableOps[Iterable[A], CC, Any])

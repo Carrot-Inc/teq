@@ -44,13 +44,14 @@ package java.util.zip:
   @js("$fail(\"UnsupportedOperationException\", \"the time zone is not available on JavaScript\")")
   def zoneName(): String
 
-  // `ZipUtils`: an instant's local date and time in the machine's zone, its DOS time (the year's
+  // `ZipUtils`: an instant's local date and time in the default `TimeZone` (the JDK's
+  // `ZoneId.systemDefault()`, which `TimeZone.setDefault` moves), its DOS time (the year's
   // bits overflowing past 2107 as the JDK's int arithmetic does), the extended DOS time that keeps
   // the milliseconds a DOS time drops in its high half, 1980-01-01 for an earlier year; and back.
   private[zip] final class Local(val year: Int, val month: Int, val day: Int, val hour: Int, val minute: Int, val second: Int)
   private[zip] def local(millis: Long): Local =
     val seconds = Math.floorDiv(millis, 1000L)
-    val at = seconds + localOffset(seconds)
+    val at = seconds + java.util.TimeZone.getDefault().offsetSeconds(seconds)
     val days = Math.floorDiv(at, 86400L)
     val rest = Math.floorMod(at, 86400L).toInt
     // Days to the civil date (Howard Hinnant's algorithm).
@@ -75,7 +76,7 @@ package java.util.zip:
       ((((l.year - 1980) << 25) | (l.month << 21) | (l.day << 16) | (l.hour << 11) | (l.minute << 5) | (l.second >> 1)).toLong & 0xffffffffL) + ((time % 2000) << 32)
     else DOSTIME_BEFORE_1980
   private[zip] def dosToJavaTime(dos: Long): Long =
-    localInstant(((dos >> 25) & 0x7f).toInt + 1980, ((dos >> 21) & 0x0f).toInt, ((dos >> 16) & 0x1f).toInt, ((dos >> 11) & 0x1f).toInt, ((dos >> 5) & 0x3f).toInt, ((dos << 1) & 0x3e).toInt) * 1000L
+    java.util.TimeZone.getDefault().localSeconds(((dos >> 25) & 0x7f).toInt + 1980, ((dos >> 21) & 0x0f).toInt, ((dos >> 16) & 0x1f).toInt, ((dos >> 11) & 0x1f).toInt, ((dos >> 5) & 0x3f).toInt, ((dos << 1) & 0x3e).toInt) * 1000L
   private[zip] def extendedDosToJavaTime(xdostime: Long): Long = dosToJavaTime(xdostime & 0xffffffffL) + (xdostime >> 32)
   private[zip] def fileTimeToUnixTime(t: java.nio.file.attribute.FileTime): Long = t.to(java.util.concurrent.TimeUnit.SECONDS)
   private[zip] def fileTimeToWinTime(t: java.nio.file.attribute.FileTime): Long = (t.to(java.util.concurrent.TimeUnit.MICROSECONDS) - WINDOWS_EPOCH_IN_MICROSECONDS) * 10

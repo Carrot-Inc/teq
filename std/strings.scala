@@ -172,7 +172,7 @@ extension (s: String)
   def zip[B](that: IterableOnce[B]): IndexedSeq[(Char, B)] = Vector.wrap(buffered(s.toCharArray)).zip(that)
   def intersect(that: String): String = Vector.wrap(buffered(s.toCharArray)).intersect(Vector.wrap(buffered(that.toCharArray))).mkString
   def diff(that: String): String = Vector.wrap(buffered(s.toCharArray)).diff(Vector.wrap(buffered(that.toCharArray))).mkString
-  def indices: Range = Range(0, s.length, 1)
+  def indices: Range = new Range(0, s.length, 1)
   def toIntOption: Option[Int] = Option(intOrNull(s))
   def toLongOption: Option[Long] = Option(longOrNull(s))
   def toDoubleOption: Option[Double] = Option(doubleOrNull(s))

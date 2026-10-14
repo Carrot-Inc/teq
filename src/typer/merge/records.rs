@@ -337,6 +337,7 @@ pub(in crate::typer) fn texpr<M: Mapping + ?Sized>(m: &M, e: &mut TExpr) {
             match op {
                 CastOp::Check(test, erased) => CastOp::Check(m.test(test), m.ty(erased)),
                 CastOp::Unbox(test, erased) => CastOp::Unbox(m.test(test), m.ty(erased)),
+                CastOp::Adapt(test, erased) => CastOp::Adapt(m.test(test), m.ty(erased)),
                 CastOp::Written | CastOp::Nothing => op,
             },
             m.ty(t),

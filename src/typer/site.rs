@@ -72,6 +72,7 @@ impl<'a> Worker<'a> {
     pub fn find_site_classes(&mut self) {
         self.sites.not_given_class = self.entered_class_at(&["scala", "util", "NotGiven"]);
         self.sites.class_tag = self.entered_class_at(&["scala", "reflect", "ClassTag"]);
+        self.prog.class_tag_module = self.sites.class_tag.and_then(|c| self.syms.class(c).companion);
     }
 
     /// The class or object at a path of packages, then of classes nested in one another,
@@ -81,7 +82,7 @@ impl<'a> Worker<'a> {
     }
 
     /// `class_at` among what is entered.
-    fn entered_class_at(&mut self, path: &[&str]) -> Option<ClassId> {
+    pub(super) fn entered_class_at(&mut self, path: &[&str]) -> Option<ClassId> {
         self.class_at_path(path, false)
     }
 
@@ -295,10 +296,11 @@ impl<'a> Worker<'a> {
         self.sites.class_tag == Some(c)
     }
 
-    /// Where the evidence of a `@jvmEvidence` definition is erased: nothing is evaluated for
-    /// it and nothing passed, and the definition has no parameter for it.
-    pub fn erases_evidence(&self) -> bool {
-        !self.jvm
+    /// Whether the typer stands in a body whose missing `ClassTag` evidence of a `@jvmEvidence`
+    /// member is taken on trust: the std's and a jar's (`Worker::erased_evidence` before).
+    pub(super) fn evidence_on_trust(&self) -> bool {
+        let file = self.env.file;
+        self.source(file).is_std || self.in_jar(file) || self.is_body_file(file)
     }
 
     /// The `ClassTag` evidence of the `@jvmEvidence` definition `sym` where it is erased. It is
@@ -327,6 +329,21 @@ impl<'a> Worker<'a> {
                 ParamSig { name: names::EMPTY, ty: self.types.class(tag_class, &[of]), by_name: false, repeated: false, has_default: false, sym }
             })
             .collect();
+        self.search_tags(params, sig, subst, written, erroneous_arg, site, span)
+    }
+
+    /// The `ClassTag`s of the using clause of a `@jvmEvidence` member that a call whose first clause
+    /// failed leaves unapplied, searched for their errors alone (`erased_evidence`'s).
+    pub(super) fn unapplied_tags(&mut self, sig: &MethodSig, subst: &Subst, erroneous_arg: bool, site: Span, span: Span) {
+        let Some(clause) = sig.clauses.last().filter(|c| c.is_using) else { return };
+        let params: Vec<ParamSig> = clause.params.iter().filter(|p| self.is_class_tag(p.ty)).cloned().collect();
+        if !params.is_empty() {
+            self.search_tags(params, sig, subst, None, erroneous_arg, site, span);
+        }
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn search_tags(&mut self, params: Vec<ParamSig>, sig: &MethodSig, subst: &Subst, written: Option<super::apply::ArgList>, erroneous_arg: bool, site: Span, span: Span) -> Vec<TExprId> {
         let count = params.len();
         if let Some(list) = written {
             let clause = ClauseSig { params, is_using: true, is_implicit: false };

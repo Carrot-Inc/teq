@@ -632,40 +632,25 @@ impl<'a> Worker<'a> {
         }
     }
 
-    /// A collection where a function of one argument is expected, as scala-library declares
-    /// them (`Set[A] <: A => Boolean`, `Map[K, V] <: K => V`, `Seq[A] <: Int => A`): the std's
-    /// collections are no functions at run time, so the value's `apply` is wrapped in one.
-    fn collection_as_function(&mut self, te: TExprId, actual: TypeId, exp: TypeId, span: Span) -> Option<(TExprId, TypeId)> {
-        let (params, ret) = self.as_function(exp)?;
-        if params.len() != 1 {
-            return None;
+    /// Whether `t` is a type parameter whose bound erases to a primitive (`A <: Int`), which `TypeErasure`
+    /// erases to that primitive: a value expected as it is consumed as the primitive.
+    #[inline]
+    fn param_erases_to_primitive(&mut self, t: TypeId) -> bool {
+        match self.types.get(t) {
+            Type::Param(p) => {
+                let upper = self.syms.tparam(p).upper;
+                upper != crate::types::ANY && self.erased_primitive(upper).is_some()
+            }
+            _ => false,
         }
-        let c = self.class_of(actual)?;
-        let bases = [self.b.set, self.b.map, self.b.seq, self.class_at(&["scala", "collection", "Set"])];
-        if !bases.iter().flatten().any(|&k| c == k || self.derives_from(c, k)) {
-            return None;
-        }
-        let mark = self.hoisted.len();
-        let recv = self.hoist(te, actual, span);
-        let x = self.indexed_local("elem", 1, params[0], span);
-        let arg = self.prog.add(TExpr::Local(x));
-        let list = super::apply::ArgList { args: vec![super::apply::ArgSrc::Typed(arg, params[0])], using: false, span };
-        let (body, body_ty) = self.apply_member(recv, actual, names::APPLY, None, vec![list], span, Some(ret));
-        if body_ty == ERROR {
-            self.hoisted.truncate(mark);
-            return None;
-        }
-        let l = self.prog.syms(&[x]);
-        let lambda = self.prog.add(TExpr::Lambda(l, body));
-        let ty = self.fun_type(&[params[0]], body_ty);
-        self.prog.set_type(lambda, ty);
-        Some((self.wrap_hoisted(mark, lambda), ty))
     }
 
     /// The value adapted to the expected type, with the type it has then: its own where it
     /// conforms as it stands by subtyping, the expected one where an adaptation gave it that.
     pub fn adapt_typed(&mut self, te: TExprId, actual: TypeId, expected: TypeId, span: Span) -> (TExprId, TypeId) {
         let exp = self.deref(expected);
+        // An argument typed before its parameter was known, of the parameter's primitive type.
+        let te = if self.is_primitive_type_id(exp) || self.param_erases_to_primitive(exp) { self.unbox_erased(te, actual) } else { te };
         if exp == self.b.t_unit {
             let act = self.deref(actual);
             if act == self.b.t_unit || act == NOTHING {
@@ -718,16 +703,6 @@ impl<'a> Worker<'a> {
             return (te, expected);
         }
         self.rollback(mark);
-        // The collection wrapped in a function is an attempt: where its `apply` fails or the
-        // function does not fit, what it wrote goes.
-        let attempt = self.attempt();
-        if let Some((wrapped, ty)) = self.collection_as_function(te, actual, exp, span) {
-            if self.is_sub(ty, expected) {
-                self.close(attempt);
-                return (wrapped, expected);
-            }
-        }
-        self.retract(attempt);
         // An eta-expansion typed ahead of the trait with a single abstract method expected of
         // it (an argument typed for overload resolution, `map(f)` for a `SAM[Int, T]`) still
         // implements the trait, and so does a function literal an attempt adapts as an earlier
@@ -3410,7 +3385,9 @@ impl<'a> Worker<'a> {
     /// `Option[Long]` maps an `Int` field to a `Long`; and converts into a class bound the
     /// variable has, as scalac adapts the body: `one(x => "s")` against a `Shown`.
     pub(in crate::typer) fn widen_lambda_result(&mut self, te: TExprId, ty: TypeId, expected: Option<TypeId>, span: Span) -> (TExprId, TypeId) {
-        let Some(exp) = expected else { return (te, ty) };
+        // The closure's result is the body's primitive type: an erased result is unboxed there,
+        // as its method's (`(x: String): Int`) is.
+        let Some(exp) = expected else { return (self.unbox_erased(te, ty), ty) };
         let head = self.deref(exp);
         let Type::Var(v) = self.types.get(head) else { return self.convert_lambda_result(te, ty, exp, span) };
         let act = self.deref(ty);
@@ -3419,6 +3396,10 @@ impl<'a> Worker<'a> {
         let fits = self.is_sub(ty, exp);
         self.rollback(mark);
         if fits {
+            if !self.jvm && self.is_primitive_type_id(act) && self.is_erased_result(te) {
+                *self.expr_marks.entry(te).or_default() |= super::MARK_ERASED_SOLVED;
+                self.pending_widenings.push((te, act, exp));
+            }
             return (te, ty);
         }
         if self.is_numeric(act).is_some() {
@@ -4519,6 +4500,7 @@ impl<'a> Worker<'a> {
                     sym
                 }) };
                 let inferred = ty.filter(|t| self.in_converted_body() && pat.is_none() && early.is_none() && ast.inferred_types.binary_search(&t.0).is_ok());
+                let outer_inline_val = std::mem::replace(&mut self.inline_val_rhs, def.mods & mods::INLINE != 0);
                 let (init, mut ity) = match declared {
                     Some(t) if inferred.is_some() => {
                         let (init, ity) = self.type_inferred_val(rhs, t);
@@ -4535,9 +4517,12 @@ impl<'a> Worker<'a> {
                     None => {
                         let (te, t) = self.type_expr(rhs, None);
                         let (te, t) = self.apply_inferred_context(rhs, te, t);
-                        (te, self.solve_inferred(t))
+                        let t = self.solve_inferred(t);
+                        // A val of a primitive type its erased initializer gave holds the primitive.
+                        (self.unbox_erased(te, t), t)
                     }
                 };
+                self.inline_val_rhs = outer_inline_val;
                 if def.mods & mods::INLINE != 0 {
                     ity = self.check_inline_val(init, ity, declared.is_some(), rhs);
                     // One whose value is no constant at the definition is the expansion's to
@@ -4699,9 +4684,11 @@ impl<'a> Worker<'a> {
         self.sites.owners.push(SiteOwner::Binder(name, span));
         let (init, ity) = match declared {
             Some(t) => (self.check_expr(rhs, t), t),
+            // A val of a primitive type its erased initializer gave holds the primitive, as a plain val does.
             None => {
                 let (te, t) = self.type_expr(rhs, None);
-                (te, self.solve_inferred(t))
+                let t = self.solve_inferred(t);
+                (self.unbox_erased(te, t), t)
             }
         };
         self.sites.owners.pop();
@@ -4829,6 +4816,9 @@ impl<'a> Worker<'a> {
                 e = self.prog.add(TExpr::Field(e, field));
             }
             self.prog.set_type(e, ty);
+            // The element's field erases to `Object` (`Tuple2._2: T2`): read as the variable's primitive,
+            // unboxed, as `Erasure.Boxing.adaptToType` adapts the definition's right-hand side.
+            let e = self.unbox_erased(e, ty);
             let at = self.syms.sym(b).span;
             define(self, name, ty, at, e, out);
         }

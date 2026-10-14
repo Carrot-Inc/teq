@@ -290,6 +290,9 @@ pub(crate) const STD_SOURCES: &[(&str, &str)] = &[
     ("<std>/javalib/concurrent.scala", include_str!("../std/javalib/concurrent.scala")),
     ("<std>/jdk.scala", include_str!("../std/jdk.scala")),
     ("<std>/buffer.scala", include_str!("../std/buffer.scala")),
+    ("<std>/numeric_range.scala", include_str!("../std/numeric_range.scala")),
+    ("<std>/array_dims.scala", include_str!("../std/array_dims.scala")),
+    ("<std>/command_line.scala", include_str!("../std/command_line.scala")),
 ];
 
 /// The Scala.js facade layer, `scala.scalajs.js` and `org.scalajs.dom` in teq's facade syntax:
@@ -384,6 +387,7 @@ pub(crate) const SCALA_LIBRARY_LAYER: &[(&str, &str)] = &[
     ("<std>/library/mirrors.scala", include_str!("../std/library/mirrors.scala")),
     ("<std>/library/product.scala", include_str!("../std/library/product.scala")),
     ("<std>/buffer.scala", include_str!("../std/buffer.scala")),
+    ("<std>/array_dims.scala", include_str!("../std/array_dims.scala")),
 ];
 
 /// Which standard library a build compiles against: teq's own, written for JavaScript, or

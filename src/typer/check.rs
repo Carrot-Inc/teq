@@ -965,8 +965,15 @@ impl<'a> Worker<'a> {
             && sig.ret == self.b.t_unit
     }
 
-    /// A `@main` method runs with the command line: without parameters, or with them as `String*`.
+    /// A `@main` method runs with the command line: without parameters, with them as `String*`, or
+    /// through its proxy (dotty's `MainProxies`, `parser::add_main_proxies`), which parses them into
+    /// the parameters' types (`CommandLineParser`); dotty's refusals of the others.
     fn enter_main_method(&mut self, sym: SymId) {
+        // dotty's `MainProxies` takes the methods `scala.main` annotates (`defn.MainAnnot`): an annotation
+        // class of the program's own of that name makes none.
+        if !self.annotated_scala_main(sym) {
+            return;
+        }
         let sig = self.sig_arc(sym);
         let params: Vec<&ParamSig> = sig.clauses.iter().flat_map(|c| c.params.iter()).collect();
         let takes_strings = match params.as_slice() {
@@ -974,15 +981,91 @@ impl<'a> Worker<'a> {
             [p] => p.repeated && !p.by_name && p.ty == self.b.t_string,
             _ => false,
         };
-        if !takes_strings || sig.clauses.iter().any(|c| c.is_using) {
+        let refusal = if !sig.tparams.is_empty() {
+            Some("@main method cannot have type parameters".to_string())
+        } else if sig.clauses.iter().any(|c| c.is_using) {
+            Some("@main method cannot have implicit parameters".to_string())
+        } else if params.iter().rev().skip(1).any(|p| p.repeated) {
+            Some("varargs parameter of @main method must come last".to_string())
+        } else if let Some(p) = params.iter().find(|p| p.by_name) {
+            // The proxy parses a by-name parameter as its by-name type, which has no `FromString`.
+            Some(format!("No given instance of type scala.util.CommandLineParser.FromString[=> {}] was found for parameter fs of method parseArgument in object CommandLineParser", self.show(p.ty)))
+        } else if let Some(clash) = self.main_proxy_clash(sym) {
+            Some(clash)
+        } else if !takes_strings && self.syms.main_adapter(self.interner, sym).is_none() {
+            Some("@main method cannot be run: its proxy is missing".to_string())
+        } else {
+            None
+        };
+        if let Some(msg) = refusal {
             let (file, span) = {
                 let s = self.syms.sym(sym);
                 (s.file, s.span)
             };
-            self.diags.error(file, span, "a @main method takes no parameters or a single String*");
+            self.diags.error(file, span, msg);
             return;
         }
         self.entry_points.push((sym, None));
+    }
+
+    /// The `n`th parameter's type of the `@main` method `def` of the file being typed, as its signature has it:
+    /// a repeated one's element type (`TyExpr::MainParam`, dotty's `MainProxies`' formal types).
+    pub(super) fn main_param_type(&mut self, def: DefId, n: u32) -> TypeId {
+        let file = self.env.file;
+        let Some(&sym) = self.def_syms.get(file.0 as usize, &def) else { return crate::types::ERROR };
+        let sig = self.sig_arc(sym);
+        sig.clauses.iter().flat_map(|c| c.params.iter()).nth(n as usize).map_or(crate::types::ERROR, |p| p.ty)
+    }
+
+    /// Whether the proxy `id` of the file is one of a method `scala.main` does not annotate, which dotty's
+    /// `MainProxies` makes none of: it is left untyped and runs nowhere.
+    fn idle_main_proxy(&mut self, file: FileId, id: DefId) -> bool {
+        let Some(main) = self.ast(file).main_proxies.iter().find(|&&(p, _)| p == id).map(|&(_, m)| m) else { return false };
+        match self.def_syms.get(file.0 as usize, &main) {
+            Some(&sym) => !self.annotated_scala_main(sym),
+            None => true,
+        }
+    }
+
+    /// Whether the `@main` of `sym` is `scala.main` as its type resolves where the method is defined, not a
+    /// class of the program that takes its name.
+    fn annotated_scala_main(&mut self, sym: SymId) -> bool {
+        let info = self.syms.sym(sym);
+        let (Some(d), file, owner, at) = (info.def, info.file, info.owner, info.span.start) else { return true };
+        let Some(target) = self.std_class("main") else { return true };
+        let ast = self.ast(file);
+        let env = self.env_at(file, owner, at);
+        self.with_env(env, |t| {
+            let mark = t.diags.items.len();
+            let found = ast.def(d).annots.iter().filter(|a| a.name == names::MAIN).any(|a| match ast.annot_new(a) {
+                Some((ty, _)) => {
+                    let resolved = t.resolve_type_ctor(ty);
+                    matches!(t.types.get(resolved), Type::Class(k, _) | Type::Ctor(k) if k == target)
+                }
+                None => true,
+            });
+            t.drop_reported_since(mark);
+            found
+        })
+    }
+
+    /// dotty's proxy of a `@main` method is a class of the method's name in the package of its outermost
+    /// object (`MainProxies`): a class of that name there is defined twice, an object's mirror class
+    /// overwritten (the backend's refusals).
+    fn main_proxy_clash(&self, sym: SymId) -> Option<String> {
+        let info = self.syms.sym(sym);
+        let mut owner = info.owner;
+        while let Owner::Class(c) = owner {
+            owner = self.syms.class(c).owner;
+        }
+        let Owner::Package(p) = owner else { return None };
+        let entry = self.syms.pkg(p).entries.get(&info.name)?;
+        let n = self.name_str(info.name);
+        match (entry.class, entry.term.map(|t| self.syms.sym(t).kind)) {
+            (Some(c), _) if self.syms.class(c).kind != ClassKind::Object => Some(format!("{n} is already defined as class {n}")),
+            (Some(_), _) | (None, Some(SymKind::Object(_))) => Some(format!("{n} and {n} produce classes that overwrite one another")),
+            _ => None,
+        }
     }
 
     pub(super) fn check_top_def(&mut self, file: FileId, owner: Owner, id: DefId) {
@@ -992,7 +1075,8 @@ impl<'a> Worker<'a> {
             self.mark_annotations(file, id);
             self.mark_module_prefixes(file, id, owner, true);
         }
-        let def = self.ast(file).def(id);
+        let ast = self.ast(file);
+        let def = ast.def(id);
         let lacks_body = match &def.kind {
             DefKind::Val { rhs, .. } => rhs.is_none(),
             DefKind::Fun(f) => f.body.is_none() && !def.annots.iter().any(|a| a.name == names::JS || (a.name == names::JVM && self.jvm)),
@@ -1024,6 +1108,9 @@ impl<'a> Worker<'a> {
             }
             DefKind::Fun(_) => {
                 if let Some(&sym) = self.def_syms.get(file.0 as usize, &id) {
+                    if !ast.main_proxies.is_empty() && self.idle_main_proxy(file, id) {
+                        return;
+                    }
                     if !self.defers_body(sym) {
                         self.walk_body(sym);
                     }
@@ -1727,12 +1814,11 @@ impl<'a> Worker<'a> {
     /// bounds before the clauses, those after them, once the parameters are bound.
     #[cold]
     #[inline(never)]
-    fn compute_dependent_bounds_sig(&mut self, sym: SymId, f: &'a ast::FunDef, ids: &[(Name, TParamId)]) -> Vec<ClauseSig> {
+    fn compute_dependent_bounds_sig(&mut self, f: &'a ast::FunDef, ids: &[(Name, TParamId)]) -> Vec<ClauseSig> {
         let ast = self.cur_ast();
         let is_param = |n: Name| f.clauses.iter().any(|c| c.params.iter().any(|p| p.name == n));
         let dependent = |tp: &ast::TypeParam| [tp.upper, tp.lower].into_iter().flatten().any(|b| super::resolve::ty_selects_from(ast, b, &is_param));
         self.resolve_tparam_bounds_of(&f.tparams, ids, |tp| !dependent(tp));
-        self.erased_tags = (self.syms.sym(sym).jvm_evidence && self.erases_evidence()).then_some(0);
         let clauses = self.resolve_clauses(&f.clauses, None, &f.tparams, ids, None);
         self.resolve_tparam_bounds_of(&f.tparams, ids, dependent);
         clauses
@@ -1780,10 +1866,9 @@ impl<'a> Worker<'a> {
                 let dependent_bounds = !f.clauses.is_empty()
                     && f.tparams.iter().any(|tp| [tp.upper, tp.lower].into_iter().flatten().any(|b| super::resolve::ty_selects_from(ast, b, &is_param)));
                 let clauses = if dependent_bounds {
-                    t.compute_dependent_bounds_sig(sym, f, &ids)
+                    t.compute_dependent_bounds_sig(f, &ids)
                 } else {
                     t.resolve_tparam_bounds(&f.tparams, &ids);
-                    t.erased_tags = (t.syms.sym(sym).jvm_evidence && t.erases_evidence()).then_some(0);
                     t.resolve_clauses(&f.clauses, None, &f.tparams, &ids, None)
                 };
                 if let Some(tags) = t.erased_tags.take() {
@@ -2676,6 +2761,7 @@ impl<'a> Worker<'a> {
         let mut result_ty = expected.unwrap_or(ERROR);
         // The body's own type, before its adaptation to the declared result (`rhs.tpe`).
         let mut body_ty = None;
+        let outer_inline_val = std::mem::replace(&mut self.inline_val_rhs, def.mods & mods::INLINE != 0 && matches!(def.kind, DefKind::Val { .. }));
         let typed = match body {
             Some(b) if !has_intrinsic => Some(match expected {
                 Some(t) if t == self.b.t_unit => {
@@ -2732,11 +2818,13 @@ impl<'a> Worker<'a> {
                         let widened = self.widen_path(result_ty);
                         result_ty = self.widen_lit(widened);
                     }
-                    e
+                    // A result of a primitive type an erased call gave is the primitive.
+                    self.unbox_erased(e, result_ty)
                 }
             }),
             _ => None,
         };
+        self.inline_val_rhs = outer_inline_val;
         if let (true, Some(e)) = (def.mods & mods::INLINE != 0 && matches!(def.kind, DefKind::Val { .. }), typed) {
             result_ty = self.check_inline_val(e, result_ty, expected.is_some(), body.unwrap());
         }

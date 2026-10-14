@@ -68,10 +68,12 @@ def formatInterpolation(parts: Array[String], args: Array[Any]): String = scala.
 @jvm("new java/util/ArrayList dup invokespecial java/util/ArrayList.<init>()V")
 def emptyArray[T]: RawBuffer[T]
 
-/** `new Array[T](length)`: `length` copies of the zero of `T`. */
-@js("new Array($0).fill($1)")
+/** `new Array[T](length)`: `length` copies of the zero of `T`; a negative length refused as the JVM's
+  * `newarray` refuses it, by `NegativeArraySizeException`. */
+@js("$newArray($0, $1)")
 @jvm("$0:I array_new")
 def newArray[T](length: Int, zero: T): Array[T] =
+  if length < 0 then throw new NegativeArraySizeException(length.toString)
   val out = emptyArray[T]
   var i = 0
   while i < length do

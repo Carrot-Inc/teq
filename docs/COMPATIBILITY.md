@@ -43,18 +43,19 @@ On JavaScript and in the interpreter a program and the libraries it loads run on
 (`--std=scala-library` compiles the real one instead); a member it lacks is reported rather than emulated,
 a JDK member as `not supported on JavaScript`. Beyond that:
 
-- `BigDecimal` and `BigInt` have no `until`/`to` ranges.
 - `Locale` has no locale data: its display names are English, for the languages and regions its constants
-  name, another code being its own name; the system zone is the engine's offset (the interpreter's `Z`) where
-  the JVM names a region; in the interpreter a region zone id is not found, scala-java-time-tzdb building its
-  data as JavaScript objects, which the interpreter does not run.
-- `BigDecimal` and `BigInt` have no `until`/`to` ranges, no construction from a `Float` or an `Array[Char]`,
-  no `BigInt.probablePrime` or random constructors; `new java.lang.Integer(1)` is rejected.
+  name, another code being its own name; on JavaScript the system zone is the engine's offset where the JVM
+  names a region (the interpreter names the machine's zone, its `TimeZone` and `ZoneId` alike); in the
+  interpreter a region zone id other than the machine's is not found, scala-java-time-tzdb building its data
+  as JavaScript objects, which the interpreter does not run.
+- `Class.forName` finds the program's own classes, by their binary names, which a reached call keeps in the
+  output (a closed world: a class of the standard library or of a jar is not found), and array classes by their
+  descriptors, whose component the same lookup finds; every class is the bootstrap loader's, so
+  `getClassLoader` is `null` and a lookup through the `null` loader finds the program's classes, which the
+  JVM's bootstrap loader does not.
 - `java.time` comes from scala-java-time's jar on the classpath, region zone ids from its tzdb jar, and the
   system zone is the engine's offset; without the jar a build types the part of `java.time` the interpreter
   has (`docs/CLI.md`), which throws `UnsupportedOperationException` when run, as the file system does.
-- `Ordering` covers tuples up to 5. The `ClassTag` evidence of the std's array-making members is erased: a
-  tag passed to `Array.fill` is typed and not evaluated, a program's own tag dispatched.
 - A reflective call reaches the method whose parameters erase to the classes it gives, through the
   reflective proxy Scala.js names by them (a value class's argument and result its underlying value, as
   the JVM's method takes and gives it), and a missing one throws `NoSuchMethodException`; a receiver of a
@@ -64,12 +65,11 @@ a JDK member as `not supported on JavaScript`. Beyond that:
 - Regular expressions run on the JS engine behind a translator of Java's syntax, which has no possessive
   quantifiers, atomic groups, flags switched inside a pattern (`a(?i)b`), `UNICODE_CHARACTER_CLASS` (`(?U)`),
   the POSIX classes but `\p{Lower}`, `\p{Upper}` and `\p{Alpha}`, Java's own property names
-  (`\p{javaLowerCase}`, `\p{IsAlphabetic}`) or `\G`. An invalid pattern given to
-  `String`'s `matches`, `split` or `replaceAll` throws `IllegalArgumentException` where the JDK throws its
-  subclass `PatternSyntaxException`.
-- A `null` from an erased Java result of type `Int` (a missing key of a `java.util.HashMap[String, Int]`) stays
-  `null` where `Int` is demanded: `val i: Int = m.get(k)` prints `null` (scalac `0`), and the interpreter's
-  arithmetic on it fails.
+  (`\p{javaLowerCase}`, `\p{IsAlphabetic}`) or `\G`.
+- A `null` from an erased Java result of type `Int` (a missing key of a `java.util.HashMap[String, Int]`) is
+  unboxed to `0` where an `Int` is consumed, as scalac unboxes it, but as the result of an inline method's
+  expansion; `toString` and `hashCode` called on it give `"null"` and `0` (the interpreter's `toString`
+  throws, as scalac's) where scalac throws `NullPointerException`.
 - Nothing blocks or runs in parallel: `Await.result` of an incomplete future throws `TimeoutException` at
   once, `synchronized` takes no monitor on any target, recursion has node's stack of about 10,000 frames
   (50,000 under Scala.js), there is no reflection, and `getStackTrace` is empty.
@@ -125,22 +125,18 @@ a JDK member as `not supported on JavaScript`. Beyond that:
 - `hashCode` is `MurmurHash3` with Scala.js's hash of a `Double`; the unit is `()` in a concatenation and
   as `toString`, where Scala.js has `undefined`, which `println` and `print` show as Scala.js does;
   `(1: Any).isInstanceOf[AnyRef]` is false; `Option(x)` is `None` for `undefined` as for `null`; the bare
-  term `String` is accepted, `String` and `Integer` being objects; `Math.max` and its kind are one
-  definition over `Int | Long | Double`; on JavaScript a value class is never unboxed, equal as its field,
-  and there and in the interpreter a cast to one tests the value where its result is dropped or widened
-  too (scalac: where it is read as the class).
+  term `String` is accepted, `String` and `Integer` being objects; on JavaScript a value class is never
+  unboxed, equal as its field, and there and in the interpreter a cast to one tests the value where its
+  result is dropped or widened too (scalac: where it is read as the class).
 - `Map` and `Set` keep insertion order (scalac's `HashMap` orders by hash), and so do `java.util.HashMap` and
   `HashSet`, which a `toMap`, `groupingBy` or `toSet` result prints in; a `parallel` stream runs sequentially,
   JavaScript having one thread, and a stream of the file system fails on JavaScript, which has none; `TreeSet`
   and `TreeMap` are the classes of every sorted set and map; `x #:: xs` evaluates `xs` first (a self-referring
-  `LazyList` is written `LazyList.cons(x, xs)`); `"abc".toSeq` is a `Vector[Char]`; `"a.b".split(".")` splits
-  on the character, a `Char` and a one-character `String` being one value; a test or a cast against
-  `Array[Int]` takes every array; a `Map`, a `Set` or a `Seq` is no function at run time (one is wrapped where
-  a function is expected), so a type test of a function type is false for it and a cast to one fails; a cast
-  of a function type takes a function of any arity (a type test asks for the arity), since a JavaScript
-  function's `length` is not its Scala arity and Scala.js's `js.FunctionN` are scala's function types here,
-  where a cast to one is unchecked under Scala.js (a cast written to `js.FunctionN` is unchecked whatever its
-  source).
+  `LazyList` is written `LazyList.cons(x, xs)`); `"abc".toSeq` is a `Vector[Char]`; a test or a cast against
+  `Array[Int]` takes every array; a cast of a function type takes a function of any arity (a type test asks for
+  the arity), since a JavaScript function's `length` is not its Scala arity and Scala.js's `js.FunctionN` are
+  scala's function types here, where a cast to one is unchecked under Scala.js (a cast written to `js.FunctionN`
+  is unchecked whatever its source).
 - `java.time` is scala-java-time's, from its jar on the class path, and the region zone ids its tzdb jar's,
   as a Scala.js build takes them, rather than a copy of the JDK's in the standard library.
 - `Throwable` extends the native `Error`, and a value JavaScript throws reaches a `catch` as

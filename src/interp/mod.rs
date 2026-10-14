@@ -1919,6 +1919,8 @@ impl<'a, 't> Interp<'a, 't> {
         let Some(main) = self.prog().main else {
             return Err(Failure::Unsupported("the program has no entry point".to_string()));
         };
+        // A typed `@main` method runs through its proxy, which parses the command line.
+        let main = self.syms().main_adapter(self.typer.interner, main).unwrap_or(main);
         let info = self.syms().sym(main);
         let owner = match self.prog().main_object {
             Some(c) => Owner::Class(c),

@@ -222,6 +222,36 @@ trait Fractional[T] extends Numeric[T]:
 object Numeric:
   def apply[T](implicit num: Numeric[T]): Numeric[T] = num
 
+  given CharIsIntegral: Integral[Char] with
+    def zero: Char = 0.toChar
+    def one: Char = 1.toChar
+    def plus(a: Char, b: Char): Char = (a + b).toChar
+    def minus(a: Char, b: Char): Char = (a - b).toChar
+    def times(a: Char, b: Char): Char = (a * b).toChar
+    def quot(a: Char, b: Char): Char = (a / b).toChar
+    def rem(a: Char, b: Char): Char = (a % b).toChar
+    def fromInt(x: Int): Char = x.toChar
+    def toInt(x: Char): Int = x.toInt
+    def toLong(x: Char): Long = x.toLong
+    def toDouble(x: Char): Double = x.toDouble
+    def compare(a: Char, b: Char): Int = a.toInt - b.toInt
+
+  // scala-library's: a `BigDecimal` as an integral type, `quot` its integral quotient, which its
+  // ranges count with.
+  object BigDecimalAsIfIntegral extends Integral[BigDecimal]:
+    def zero: BigDecimal = BigDecimal(0)
+    def one: BigDecimal = BigDecimal(1)
+    def plus(a: BigDecimal, b: BigDecimal): BigDecimal = a + b
+    def minus(a: BigDecimal, b: BigDecimal): BigDecimal = a - b
+    def times(a: BigDecimal, b: BigDecimal): BigDecimal = a * b
+    def quot(a: BigDecimal, b: BigDecimal): BigDecimal = a.quot(b)
+    def rem(a: BigDecimal, b: BigDecimal): BigDecimal = a.remainder(b)
+    def fromInt(x: Int): BigDecimal = BigDecimal(x)
+    def toInt(x: BigDecimal): Int = x.intValue
+    def toLong(x: BigDecimal): Long = x.longValue
+    def toDouble(x: BigDecimal): Double = x.doubleValue
+    def compare(a: BigDecimal, b: BigDecimal): Int = a.compare(b)
+
   given IntIsIntegral: Integral[Int] with
     def zero: Int = 0
     def one: Int = 1

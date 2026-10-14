@@ -758,6 +758,8 @@ fn install_core(it: &mut Table) {
         let n = it.typer.interner.intern(&name);
         it.call_named(arg(a, 0), n, args)
     });
+    // One loader, the bootstrap loader, which the JDK gives as `null` (`std/reflect.scala`).
+    reg!(it, "java.lang.Class.getClassLoader", |_it, _a| Ok(Value::Null));
     reg!(it, "java.lang.Class.getSimpleName", |_it, a| match arg(a, 0) {
         Value::Class(c) => Ok(Value::string(Interp::simple_class_name(&c.qname))),
         _ => Ok(Value::Null),
@@ -990,9 +992,11 @@ fn install_strings(it: &mut Table) {
     reg!(it, "scala.String.nonEmpty", |it, a| Ok(Value::Bool(!text(it, a, 0)?.is_empty())));
     reg!(it, "scala.String.split", |it, a| {
         let s = text(it, a, 0)?;
+        // `split(Char)` is scala-library's, its character escaped: taken as text.
+        let literal = matches!(arg(a, 1), Value::Char(_));
         let sep = text(it, a, 1)?;
         let limit = if a.len() > 2 { int(it, a, 2)? } else { 0 };
-        let parts = it.split_string(&s, &sep, limit)?;
+        let parts = it.split_string(&s, &sep, limit, literal)?;
         Ok(Value::array(parts.into_iter().map(Value::string).collect()))
     });
     reg!(it, "scala.String.replaceAll", |it, a| {
@@ -1323,14 +1327,14 @@ fn install_numbers(it: &mut Table) {
 
 fn install_collections(it: &mut Table) {
     reg!(it, "scala.emptyArray", |_it, _a| Ok(Value::array(Vec::new())));
-    reg!(it, "scala.Array.empty", |_it, _a| Ok(Value::array(Vec::new())));
+    reg!(it, "scala.Array.emptyUntagged", |_it, _a| Ok(Value::array(Vec::new())));
     reg!(it, "scala.Array.apply", |it, a| {
         let arr = array(it, a, 0)?;
         let i = int(it, a, 1)?;
         let v = arr.borrow().get(i.max(0) as usize).cloned();
         match v {
             Some(v) if i >= 0 => Ok(v),
-            _ => it.throw_named("IndexOutOfBoundsException", &format!("Index {} out of bounds for length {}", i, arr.borrow().len())),
+            _ => it.throw_named("ArrayIndexOutOfBoundsException", &format!("Index {} out of bounds for length {}", i, arr.borrow().len())),
         }
     });
     reg!(it, "scala.Array.update", |it, a| {
@@ -1338,7 +1342,7 @@ fn install_collections(it: &mut Table) {
         let i = int(it, a, 1)?;
         let len = arr.borrow().len();
         if i < 0 || i as usize >= len {
-            return it.throw_named("IndexOutOfBoundsException", &format!("Index {} out of bounds for length {}", i, len));
+            return it.throw_named("ArrayIndexOutOfBoundsException", &format!("Index {} out of bounds for length {}", i, len));
         }
         arr.write()[i as usize] = arg(a, 2);
         Ok(Value::Unit)
@@ -1349,7 +1353,82 @@ fn install_collections(it: &mut Table) {
     for name in ["scala.Array.clone", "scala.copyArray"] {
         reg!(it, name, |it, a| Ok(Value::array(array(it, a, 0)?.borrow().clone())));
     }
+    // `Array.fill`, `tabulate`, `empty` and an array's `map` with the tag a call passed: `null` (a
+    // standard tag, the std's own call) the plain array, else the tag's `newArray(n)`, then each
+    // element written into it, as the members' Scala bodies do.
+    fn tagged_array(it: &mut Interp<'_, '_>, tag: &Value, n: i32) -> R<Option<Rc<super::value::ArrayCell>>> {
+        if matches!(tag, Value::Null) {
+            return Ok(None);
+        }
+        match it.call_named(tag.clone(), crate::names::NEW_ARRAY, vec![Value::Int(n)])? {
+            Value::Array(a) => Ok(Some(a)),
+            other => {
+                let shown = it.to_str(&other)?;
+                it.unsupported(format!("newArray gave {}", shown))
+            }
+        }
+    }
+    // scala-library's `ArrayOps.map`, `Array.fill` and `tabulate`: the result's array first, then each
+    // element computed and written into it in turn, a source element read when its turn comes.
+    fn written(target: &Option<Rc<super::value::ArrayCell>>, out: &mut Vec<Value>, i: usize, x: Value) {
+        match target {
+            Some(t) => {
+                let mut w = t.write();
+                if i < w.len() {
+                    w[i] = x;
+                }
+            }
+            None => out.push(x),
+        }
+    }
+    fn result(target: Option<Rc<super::value::ArrayCell>>, out: Vec<Value>) -> Value {
+        match target {
+            Some(t) => Value::Array(t),
+            None => Value::array(out),
+        }
+    }
     reg!(it, "scala.Array.map", |it, a| {
+        let src = array(it, a, 0)?;
+        let n = src.borrow().len();
+        let f = arg(a, 1);
+        let target = tagged_array(it, &arg(a, 2), n as i32)?;
+        let mut out = Vec::with_capacity(if target.is_some() { 0 } else { n });
+        for i in 0..n {
+            let x = src.borrow().get(i).cloned().unwrap_or(Value::Null);
+            let y = it.apply_value(f.clone(), vec![x])?;
+            written(&target, &mut out, i, y);
+        }
+        Ok(result(target, out))
+    });
+    reg!(it, "scala.Array.fill", |it, a| {
+        let n = int(it, a, 1)?.max(0);
+        let thunk = arg(a, 2);
+        let target = tagged_array(it, &arg(a, 3), n)?;
+        let mut out = Vec::with_capacity(if target.is_some() { 0 } else { n as usize });
+        for i in 0..n {
+            let x = it.apply_value(thunk.clone(), Vec::new())?;
+            written(&target, &mut out, i as usize, x);
+        }
+        Ok(result(target, out))
+    });
+    reg!(it, "scala.Array.tabulate", |it, a| {
+        let n = int(it, a, 1)?.max(0);
+        let f = arg(a, 2);
+        let target = tagged_array(it, &arg(a, 3), n)?;
+        let mut out = Vec::with_capacity(if target.is_some() { 0 } else { n as usize });
+        for i in 0..n {
+            let x = it.apply_value(f.clone(), vec![Value::Int(i)])?;
+            written(&target, &mut out, i as usize, x);
+        }
+        Ok(result(target, out))
+    });
+    reg!(it, "scala.Array.empty", |it, a| Ok(fill_target(tagged_array(it, &arg(a, 1), 0)?, Vec::new())));
+    reg!(it, "scala.copiedInto", |it, a| {
+        let out = array(it, a, 0)?;
+        let items = array(it, a, 1)?.borrow().clone();
+        Ok(fill_target(Some(out), items))
+    });
+    reg!(it, "scala.Array.mapUntagged", |it, a| {
         let items = array(it, a, 0)?.borrow().clone();
         let f = arg(a, 1);
         let mut out = Vec::with_capacity(items.len());
@@ -1376,10 +1455,13 @@ fn install_collections(it: &mut Table) {
         Ok(Value::Int(n as i32))
     });
     reg!(it, "scala.newArray", |it, a| {
-        let n = int(it, a, 0)?.max(0);
+        let n = int(it, a, 0)?;
+        if n < 0 {
+            return it.throw_named("NegativeArraySizeException", &n.to_string());
+        }
         Ok(Value::array(vec![arg(a, 1); n as usize]))
     });
-    reg!(it, "scala.Array.fill", |it, a| {
+    reg!(it, "scala.Array.fillUntagged", |it, a| {
         let n = int(it, a, 1)?.max(0);
         let thunk = arg(a, 2);
         let mut out = Vec::with_capacity(n as usize);
@@ -1388,7 +1470,7 @@ fn install_collections(it: &mut Table) {
         }
         Ok(Value::array(out))
     });
-    reg!(it, "scala.Array.tabulate", |it, a| {
+    reg!(it, "scala.Array.tabulateUntagged", |it, a| {
         let n = int(it, a, 1)?.max(0);
         let f = arg(a, 2);
         let mut out = Vec::with_capacity(n as usize);
@@ -2252,6 +2334,10 @@ fn install_regex(it: &mut Table) {
 /// Scala.js's reflective instantiation (`std/scalajs/reflect.scala`): the registrations run when a
 /// lookup first asks, as a JavaScript module runs them when it loads.
 fn install_reflective(it: &mut Table) {
+    reg!(it, "java.lang.Class.forName", |it, a| {
+        let initialize = a.len() < 3 || boolean(it, a, 2)?;
+        it.for_name(a, initialize)
+    });
     reg!(it, "$reflectClass($0, $1, $2)", |it, a| it.register_reflective(0, a));
     reg!(it, "$reflectModule($0, $1, $2)", |it, a| it.register_reflective(1, a));
     reg!(it, "java.lang.giveCause", |it, a| {
@@ -2325,10 +2411,38 @@ impl Interp<'_, '_> {
         Ok(Value::Unit)
     }
 
+    /// `Class.forName` (`$forName` in rt.js): a class of the program by its binary name, an object's
+    /// initialised when asked, a top-level object's mirror class, or an array class by its descriptor, of a
+    /// primitive or of a class the same lookup finds (`[I`, `[LPresent;`).
+    fn for_name(&mut self, a: A, initialize: bool) -> R {
+        let name = text(self, a, 1)?;
+        match self.typer.class_for_name(&name) {
+            Some((_, true)) => return Ok(self.class_value_named(&name)),
+            Some((c, false)) => {
+                if initialize && self.typer.initialised_by_name(c) {
+                    self.module(c)?;
+                }
+                return Ok(self.class_value_of(c));
+            }
+            None => {}
+        }
+        let element = name.trim_start_matches('[');
+        let array = element.len() < name.len()
+            && match element.strip_prefix('L').and_then(|e| e.strip_suffix(';')) {
+                // The component found by the same lookup, not initialised.
+                Some(class) => !class.is_empty() && !class.contains(['[', ';']) && self.typer.class_for_name(class).is_some(),
+                None => matches!(element, "Z" | "B" | "C" | "S" | "I" | "J" | "F" | "D"),
+            };
+        if array {
+            return Ok(self.class_value_named(&name));
+        }
+        self.throw_named("ClassNotFoundException", &name)
+    }
+
     fn reflective_entry(&mut self, kind: usize, a: A) -> R {
         if self.reflective.is_none() {
             self.reflective = Some(Box::new([FxMap::default(), FxMap::default()]));
-            for (_, e) in self.typer.reflective_registrations() {
+            for (_, e) in self.typer.reflective_registrations(true, false) {
                 self.eval(e, &Frame::new(None), &Ctx::plain())?;
             }
         }
@@ -2390,19 +2504,30 @@ fn install_regex_engine(it: &mut Table) {
     }
 }
 
+/// The elements written into the array a tag made, or an array of them where none did.
+fn fill_target(target: Option<Rc<super::value::ArrayCell>>, items: Vec<Value>) -> Value {
+    match target {
+        Some(arr) => {
+            {
+                let mut w = arr.write();
+                for (i, x) in items.into_iter().enumerate() {
+                    if i < w.len() {
+                        w[i] = x;
+                    }
+                }
+            }
+            Value::Array(arr)
+        }
+        None => Value::array(items),
+    }
+}
+
 fn install_typer_templates(it: &mut Table) {
     reg!(it, crate::typer::WITHHELD_TEMPLATE, |it, _a| it.withheld_reached());
     reg!(it, "$hashCode($0)", |it, a| Ok(Value::Int(it.hash_code(&arg(a, 0))?)));
     reg!(it, "$identityHash($0)", |it, a| Ok(Value::Int(it.identity_hash_of(&arg(a, 0)))));
     reg!(it, "$anyStr($0)", |it, a| Ok(Value::string(it.any_to_string(&arg(a, 0)))));
     reg!(it, "$equals($0, $1)", |it, a| Ok(Value::Bool(it.equals_method(&arg(a, 0), &arg(a, 1))?)));
-    reg!(it, "$doubleEquals($0, $1)", |_it, a| {
-        let (x, y) = (arg(a, 0), arg(a, 1));
-        Ok(Value::Bool(match (x.as_f64(), y.as_f64()) {
-            (Some(p), Some(q)) => p.to_bits() == q.to_bits() || (p.is_nan() && q.is_nan()),
-            _ => x.same(&y),
-        }))
-    });
     reg!(it, "$getClass($0)", |it, a| Ok(it.class_of_value(&arg(a, 0))));
     reg!(it, "$productPrefix($0)", |it, a| Ok(Value::string(it.product_prefix(&arg(a, 0))?)));
     reg!(it, "$productArity($0)", |it, a| Ok(Value::Int(it.product_arity(&arg(a, 0))?)));
@@ -2508,8 +2633,22 @@ impl<'a, 't> Interp<'a, 't> {
                 self.regex_cache.insert(src.to_string(), re.clone());
                 Ok(re)
             }
-            Err(msg) => self.throw_named("IllegalArgumentException", &format!("PatternSyntaxException: {}", msg)),
+            Err(msg) => self.pattern_syntax(src, &msg),
         }
+    }
+
+    /// The JDK's `PatternSyntaxException` of an invalid pattern, as `Pattern.compile` throws it (the std's
+    /// `Pattern.checked`): the engine's description and the index it stopped at.
+    fn pattern_syntax<T>(&mut self, src: &str, msg: &str) -> R<T> {
+        let (desc, index) = match msg.find(" near index ") {
+            Some(at) => {
+                let rest = &msg[at + 12..];
+                let digits = rest.split('\n').next().unwrap_or("");
+                (&msg[..at], digits.trim().parse::<i32>().unwrap_or(-1))
+            }
+            None => (msg, -1),
+        };
+        self.throw_new(&["java", "util", "regex", "PatternSyntaxException"], vec![Value::str(desc), Value::str(src), Value::Int(index)])
     }
 
     fn match_value(re: &regex::Regex, found: &regex::Found, bytes: &Rc<[u32]>, source: &Rc<str>) -> Rc<MatchValue> {
@@ -2704,14 +2843,16 @@ impl<'a, 't> Interp<'a, 't> {
         parts
     }
 
-    /// `String.split(separator)`: a single character is taken literally, a longer separator is a
-    /// regular expression.
-    pub(super) fn split_string(&mut self, s: &str, sep: &str, limit: i32) -> R<Vec<String>> {
+    /// `String.split(regex, limit)`: one character but a metacharacter is split at as text, as the
+    /// JDK's fast path does, any other pattern compiled; `literal`, `StringOps.split(c)`, takes its
+    /// character as text.
+    pub(super) fn split_string(&mut self, s: &str, sep: &str, limit: i32, literal: bool) -> R<Vec<String>> {
         let regex_chars = |t: &str| t.chars().any(|c| "\\^$.|?*+()[]{}".contains(c));
         if sep == "\\s+" && limit == 0 {
             return Ok(Self::split_whitespace_runs(s));
         }
-        if sep.chars().count() > 1 && regex_chars(sep) || sep.is_empty() {
+        let one = sep.chars().count() == 1;
+        if if one { !literal && ".$|()[{^?*+\\".contains(sep) } else { regex_chars(sep) || sep.is_empty() } {
             return self.regex_split(sep, s, limit);
         }
         if !s.contains(sep) {

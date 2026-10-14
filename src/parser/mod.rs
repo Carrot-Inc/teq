@@ -109,6 +109,8 @@ pub struct Parser<'a> {
     language_open: Vec<usize>,
     /// Classes with a `derives` clause whose enclosing body is still being parsed.
     pending_derives: Vec<PendingDerives>,
+    /// Whether an annotation named `main` was read, whose methods `add_main_proxies` looks for.
+    main_annotated: bool,
     /// The `self =>` alias of the template body being parsed, EMPTY without one; a nested body
     /// hides it, as `Outer.this` is not in the subset either.
     /// One AST per `package p:` block, each read by the typer as a file of its own in that
@@ -194,6 +196,7 @@ pub fn parse(text: &str, lexed: &mut LexResult, closed: &[u32], interner: &Inter
         language_scratch: Vec::new(),
         language_open: Vec::new(),
         pending_derives: Vec::new(),
+        main_annotated: false,
         package_blocks: Vec::new(),
         template_type: false,
         quote_level: 0,
@@ -951,6 +954,151 @@ impl<'a> Parser<'a> {
             self.skip_token(RecoverySite::Indentation);
         }
         self.add_top_level_derived_givens();
+        self.add_main_proxies();
+    }
+
+    /// dotty's `MainProxies`: for each `@main` method of the unit or of its objects that takes parameters,
+    /// but for the one `String*` the entry point passes the arguments to as they are, the proxy
+    ///
+    /// ```scala
+    /// private def f$main(args: Array[String]): Unit =
+    ///   try f(CommandLineParser.parseArgument[S](args, 0), CommandLineParser.parseRemainingArguments[T](args, 1)*)
+    ///   catch case error: CommandLineParser.ParseError => CommandLineParser.showError(error)
+    /// ```
+    ///
+    /// of `@main def f(x: S, ys: T*)`, in its package, `S` and `T` the formal parameter types of the
+    /// method's typed signature (`TyExpr::MainParam`); the typer types it only where the annotation is
+    /// `scala.main` (`Ast::main_proxies`) and runs it as the entry point in the method's place
+    /// (`Symbols::main_adapter`). dotty's proxy is a class `f` with a static `main`.
+    fn add_main_proxies(&mut self) {
+        if !self.main_annotated {
+            return;
+        }
+        let mut mains = Vec::new();
+        let defs = self.ast.top_level.clone();
+        self.main_methods(&defs, &mut Vec::new(), &mut mains);
+        for (d, path) in mains {
+            let def = self.ast.def(d);
+            let DefKind::Fun(f) = &def.kind else { continue };
+            let (name, span) = (def.name, def.span);
+            if !f.tparams.is_empty() || f.clauses.iter().any(|c| c.is_using || c.is_implicit) {
+                continue;
+            }
+            let clauses: Vec<Vec<TyExprId>> = f.clauses.iter().map(|c| c.params.iter().map(|p| p.ty).collect()).collect();
+            let all: Vec<TyExprId> = clauses.iter().flatten().copied().collect();
+            let strings = match all.as_slice() {
+                [] => true,
+                [t] => matches!(self.ast.ty(*t), TyExpr::Repeated(inner) if matches!(self.ast.ty(inner), TyExpr::Name(n) if n == names::STRING)),
+                _ => false,
+            };
+            if strings {
+                continue;
+            }
+            let parser_path = |p: &mut Self| {
+                let root = p.ast.add_expr(Expr::Ident(names::ROOT), span);
+                let scala = p.ast.add_expr(Expr::Select(root, names::SCALA), span);
+                let util = p.ast.add_expr(Expr::Select(scala, names::UTIL), span);
+                p.ast.add_expr(Expr::Select(util, p.interner.intern("CommandLineParser")), span)
+            };
+            let args_name = self.interner.intern("args");
+            // A method of an object is called through the object's path.
+            let mut call = match path.split_first() {
+                None => self.ast.add_expr(Expr::Ident(name), span),
+                Some((&first, rest)) => {
+                    let mut q = self.ast.add_expr(Expr::Ident(first), span);
+                    for &n in rest {
+                        q = self.ast.add_expr(Expr::Select(q, n), span);
+                    }
+                    self.ast.add_expr(Expr::Select(q, name), span)
+                }
+            };
+            let mut index = 0i64;
+            for clause in &clauses {
+                let mut items = Vec::with_capacity(clause.len());
+                for &t in clause {
+                    let (method, repeated) = match self.ast.ty(t) {
+                        TyExpr::Repeated(_) => ("parseRemainingArguments", true),
+                        _ => ("parseArgument", false),
+                    };
+                    // The parameter's type as the method's typed signature has it, in its scope.
+                    let elem = self.ast.add_ty(TyExpr::MainParam(d, index as u32), span);
+                    let clp = parser_path(self);
+                    let m = self.ast.add_expr(Expr::Select(clp, self.interner.intern(method)), span);
+                    let targs = push_list(&mut self.ast.ty_lists, &[elem]);
+                    let m = self.ast.add_expr(Expr::TypeApply(m, targs), span);
+                    let args = self.ast.add_expr(Expr::Ident(args_name), span);
+                    let n = self.ast.add_expr(Expr::IntLit(index), span);
+                    let l = push_list(&mut self.ast.expr_lists, &[args, n]);
+                    let mut arg = self.ast.add_expr(Expr::Apply(m, l), span);
+                    if repeated {
+                        let wild = self.ast.add_ty(TyExpr::Wildcard, span);
+                        let rep = self.ast.add_ty(TyExpr::Repeated(wild), span);
+                        arg = self.ast.add_expr(Expr::Typed(arg, rep), span);
+                    }
+                    items.push(arg);
+                    index += 1;
+                }
+                let l = push_list(&mut self.ast.expr_lists, &items);
+                call = self.ast.add_expr(Expr::Apply(call, l), span);
+            }
+            // catch case error: CommandLineParser.ParseError => CommandLineParser.showError(error)
+            let error = self.interner.intern("error");
+            let bind = self.ast.add_pat(Pat::Bind(error, None), span);
+            let root = self.ast.add_ty(TyExpr::Name(names::ROOT), span);
+            let scala = self.ast.add_ty(TyExpr::Select(root, names::SCALA), span);
+            let util = self.ast.add_ty(TyExpr::Select(scala, names::UTIL), span);
+            let clp = self.ast.add_ty(TyExpr::Select(util, self.interner.intern("CommandLineParser")), span);
+            let parse_error = self.ast.add_ty(TyExpr::Select(clp, self.interner.intern("ParseError")), span);
+            let pat = self.ast.add_pat(Pat::Typed(bind, parse_error), span);
+            let clp = parser_path(self);
+            let show = self.ast.add_expr(Expr::Select(clp, self.interner.intern("showError")), span);
+            let err = self.ast.add_expr(Expr::Ident(error), span);
+            let l = push_list(&mut self.ast.expr_lists, &[err]);
+            let handled = self.ast.add_expr(Expr::Apply(show, l), span);
+            let cases = push_list(&mut self.ast.cases, &[CaseClause { pat, guard: None, body: handled }]);
+            let at = self.ast.tries.len() as u32;
+            self.ast.tries.push(TryExpr { body: call, cases, handler: None, finalizer: None });
+            let body = self.ast.add_expr(Expr::Try(at), span);
+            // (args: Array[String]): Unit
+            let array = self.ast.add_ty(TyExpr::Name(names::ARRAY), span);
+            let string = self.ast.add_ty(TyExpr::Name(names::STRING), span);
+            let targs = push_list(&mut self.ast.ty_lists, &[string]);
+            let array_of_string = self.ast.add_ty(TyExpr::Apply(array, targs), span);
+            let unit = self.ast.add_ty(TyExpr::Name(names::UNIT), span);
+            let param = Param { name: args_name, span, ty: array_of_string, default: None, mods: 0, annots: ListRef::EMPTY };
+            let fun = FunDef {
+                tparams: Vec::new(),
+                clauses: vec![ParamClause { params: vec![param], is_using: false, is_implicit: false }],
+                ret: Some(unit),
+                body: Some(body),
+                ext_tparams: 0,
+                ext_clauses: 0,
+                is_extension: false,
+                ext_group: 0,
+            };
+            let proxy_name = self.interner.intern(&format!("{}$main", self.interner.get(name)));
+            let proxy = self.ast.add_def(Def { name: proxy_name, span, mods: mods::PRIVATE, annots: Vec::new(), kind: DefKind::Fun(Box::new(fun)) });
+            self.ast.top_level.push(proxy);
+            self.ast.main_proxies.push((proxy, d));
+        }
+    }
+
+    /// The `@main` methods among `defs` and in the objects among them, at any depth of objects, with the
+    /// path of objects to each, as dotty's `MainProxies.mainMethods` collects them.
+    fn main_methods(&self, defs: &[DefId], path: &mut Vec<Name>, out: &mut Vec<(DefId, Vec<Name>)>) {
+        for &d in defs {
+            let def = self.ast.def(d);
+            match &def.kind {
+                DefKind::Fun(_) if def.annots.iter().any(|a| a.name == names::MAIN) => out.push((d, path.clone())),
+                DefKind::Class(c) if c.kind == ClassKind::Object => {
+                    let inner: Vec<DefId> = c.body.iter().filter_map(|s| if let Stmt::Def(d) = s { Some(*d) } else { None }).collect();
+                    path.push(def.name);
+                    self.main_methods(&inner, path, out);
+                    path.pop();
+                }
+                _ => {}
+            }
+        }
     }
 
     fn add_top_level_derived_givens(&mut self) {
@@ -993,6 +1141,7 @@ impl<'a> Parser<'a> {
 
     fn close_package_block(&mut self, outer: Ast) {
         self.add_top_level_derived_givens();
+        self.add_main_proxies();
         let block = std::mem::replace(&mut self.ast, outer);
         self.package_blocks.push(block);
     }

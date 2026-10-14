@@ -80,10 +80,23 @@ package scala:
     @javaDefined @js("($0.length === 0)")
     @jvm("invokevirtual java/lang/String.isEmpty()Z")
     def isEmpty: Boolean
+    // The JDK's `split(regex)`: a pattern, but for one character outside the metacharacters, which its
+    // fast path splits at as text; an invalid pattern throws `PatternSyntaxException`.
     @js("$split($0, $1)")
-    def split(separator: String | Char): Array[String] = scala.runtime.splitString(s, scala.runtime.separatorRegex(separator), 0)
+    def split(regex: String): Array[String] = scala.runtime.splitString(s, regex, 0)
     @js("$split($0, $1, $2)")
-    def split(separator: String | Char, limit: Int): Array[String] = scala.runtime.splitString(s, scala.runtime.separatorRegex(separator), limit)
+    def split(regex: String, limit: Int): Array[String] = scala.runtime.splitString(s, regex, limit)
+    // scala-library's `StringOps.split(separator: Char)` and `split(separators: Array[Char])`: the
+    // characters escaped, then `split(regex)`.
+    @js("$split($0, $1, 0, true)")
+    def split(separator: Char): Array[String] = split(escapeSeparator(separator))
+    def split(separators: Array[Char]): Array[String] =
+      val re = new java.lang.StringBuilder("[")
+      var i = 0
+      while i < separators.length do
+        re.append(escapeSeparator(separators(i)))
+        i += 1
+      split(re.append(']').toString)
     @js("$reReplace($1, $0, $2, true)")
     @jvm("invokevirtual java/lang/String.replaceAll(Ljava/lang/String;Ljava/lang/String;)Ljava/lang/String;")
     def replaceAll(regex: String, replacement: String): String
@@ -142,6 +155,12 @@ package scala:
     @js("$compareStrings($0, $1)")
     @jvm("invokevirtual java/lang/String.compareTo(Ljava/lang/String;)I")
     def compareTo(that: String): Int
+
+  // scala-library's `StringOps.escape`, a separator character for `split`: an ASCII letter or digit as
+  // it is, any other after a backslash.
+  private[scala] def escapeSeparator(ch: Char): String =
+    if (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9') then ch.toString
+    else "\\" + ch
 
 package java.lang:
   // The statics of `java.lang.String`; what is missing here is read from the JDK's class file.

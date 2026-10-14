@@ -145,6 +145,9 @@ pub struct Reach {
     pub reflective: Vec<(ClassId, TExprId)>,
     /// Whether a lookup of `Reflect` is reached, registrations or none.
     pub reflective_reached: bool,
+    /// Whether a partial function value is made (`$pf`), which takes the trait's prototype
+    /// (`$pfInit`); the trait reached as a base of a collection alone makes none.
+    pub partial_values: bool,
     /// The default getters the JavaScript output calls (a `TExpr::Default` it does not leave to
     /// the callee's parameter default, an override's parameter default an overridden member
     /// declares): of the class members of a name, the defs, the constructors, each with the
@@ -199,6 +202,7 @@ impl Reach {
             interpolators: Vec::new(),
             reflective: Vec::new(),
             reflective_reached: false,
+            partial_values: false,
         }
     }
 
@@ -303,7 +307,7 @@ trait Typing<'a> {
     fn settle_dispatch_pending(&mut self);
     /// The roots renamed since the last walk, with their names now.
     fn renamed_roots(&mut self) -> Vec<(SymId, Name)>;
-    fn reflective_registrations(&mut self) -> Vec<(ClassId, TExprId)>;
+    fn reflective_registrations(&mut self, reflect: bool, for_name: bool) -> Vec<(ClassId, TExprId)>;
     fn complete_erased_jar_classes(&mut self);
     /// The reflective signatures of members a reflective call's name meets.
     fn reflective_sigs(&mut self, members: &[SymId]) -> Vec<Option<crate::typer::ReflectiveSig>>;
@@ -362,8 +366,8 @@ impl<'a> Typing<'a> for Worker<'a> {
         std::mem::take(&mut self.renamed_roots).into_iter().map(|r| (r, self.output_name_of(r))).collect()
     }
 
-    fn reflective_registrations(&mut self) -> Vec<(ClassId, TExprId)> {
-        Worker::reflective_registrations(self)
+    fn reflective_registrations(&mut self, reflect: bool, for_name: bool) -> Vec<(ClassId, TExprId)> {
+        Worker::reflective_registrations(self, reflect, for_name)
     }
 
     fn complete_erased_jar_classes(&mut self) {
@@ -448,7 +452,7 @@ impl<'w, 'a> Typing<'a> for Unchanged<'w, 'a> {
         Vec::new()
     }
 
-    fn reflective_registrations(&mut self) -> Vec<(ClassId, TExprId)> {
+    fn reflective_registrations(&mut self, _: bool, _: bool) -> Vec<(ClassId, TExprId)> {
         self.kept.reflective.clone()
     }
 
@@ -629,6 +633,7 @@ fn differences(typer: &Worker, kept: &Reach, fresh: &Reach, out: &mut Vec<String
     same("the uses of isAssignableFrom", kept.uses_assignable_from == fresh.uses_assignable_from);
     same("interpolators", kept.interpolators == fresh.interpolators);
     same("registrations", kept.reflective.iter().map(|&(c, e)| (c, e)).eq(fresh.reflective.iter().copied()) && kept.reflective_reached == fresh.reflective_reached);
+    same("partial function values", kept.partial_values == fresh.partial_values);
     let set = |v: &[ClassId]| -> Vec<ClassId> {
         let mut v = v.to_vec();
         v.sort_unstable();
@@ -850,10 +855,11 @@ fn rounds<'a, T: Typing<'a>>(t: &mut T, mut w: Walker, setup: &mut Setup, lap: &
             w.recall_renamed(Cx::of(t.w()), r, renamed);
         }
         lap.done("walk", 0);
-        if w.wants_reflect && !w.reflect_found {
-            w.reflect_found = true;
+        let wanted = (w.wants_reflect, w.wants_for_name);
+        if wanted != w.registered {
+            w.registered = wanted;
             let syms = t.w().syms.syms.len();
-            let registrations = t.reflective_registrations();
+            let registrations = t.reflective_registrations(wanted.0, wanted.1);
             setup.registered_syms = t.w().syms.syms.len() - syms;
             lap.done("reflective registrations", registrations.len());
             w.grow(Cx::of(t.w()));
@@ -863,7 +869,7 @@ fn rounds<'a, T: Typing<'a>>(t: &mut T, mut w: Walker, setup: &mut Setup, lap: &
             w.reach.reflective = registrations;
             w.reach.reflective_reached = true;
         }
-        if w.work.is_empty() && w.pending.is_empty() && w.pending_getters.is_empty() && w.pending_classes.is_empty() && w.pending_extenders.is_empty() && w.pending_packages.is_empty() && w.pending_sigs.is_empty() && !(w.wants_runtime_exceptions && !w.runtime_exceptions_found) && !(w.wants_reflect && !w.reflect_found) {
+        if w.work.is_empty() && w.pending.is_empty() && w.pending_getters.is_empty() && w.pending_classes.is_empty() && w.pending_extenders.is_empty() && w.pending_packages.is_empty() && w.pending_sigs.is_empty() && !(w.wants_runtime_exceptions && !w.runtime_exceptions_found) && (w.wants_reflect, w.wants_for_name) == w.registered {
             w.reach.js_names.sort_unstable();
             w.reach.js_names.dedup();
             w.reach.globals.sort_unstable();
@@ -996,6 +1002,16 @@ pub const RUNTIME_THROWN: [&str; 16] = [
     "ClassCastException",
 ];
 
+/// The exceptions the runtime's helpers throw, each linked only where a template calling its helper
+/// is reached: an invalid pattern given to a template of `String` (`$re` in `rt.js`), a negative
+/// length given to `$newArray`, as the JVM's `newarray` refuses it, and a name `$forName` finds no
+/// class by. By package, name and the helpers' calls.
+pub const TEMPLATE_FAILURES: [(&[&str], &str, &[&str]); 3] = [
+    (&["java", "util", "regex"], "PatternSyntaxException", &["$reExec(", "$reAll(", "$reReplace(", "$reSplit(", "$split("]),
+    (&["java", "lang"], "NegativeArraySizeException", &["$newArray("]),
+    (&["java", "lang"], "ClassNotFoundException", &["$forName("]),
+];
+
 fn runtime_exceptions(typer: &mut Worker) -> Vec<ClassId> {
     let mut out = Vec::with_capacity(RUNTIME_THROWN.len());
     let js = typer.syms.pkg(ROOT_PKG).entries.get(&names::JS).and_then(|e| e.pkg);
@@ -1012,6 +1028,10 @@ fn runtime_exceptions(typer: &mut Worker) -> Vec<ClassId> {
                 break;
             }
         }
+    }
+    for (pkg, name, _) in TEMPLATE_FAILURES {
+        let path: Vec<&str> = pkg.iter().copied().chain([name]).collect();
+        out.extend(typer.class_at(&path));
     }
     out
 }
@@ -1194,11 +1214,15 @@ struct Walker {
     runtime_exceptions_reached: bool,
     /// Whether a cast that tests its value is reached, whose failure the runtime throws.
     casts_reached: bool,
-    /// A lookup of `Reflect` was met, and whether the registrations it needs were made.
+    /// Whether a template calling the helpers of each of `TEMPLATE_FAILURES` is reached.
+    failures_reached: [bool; TEMPLATE_FAILURES.len()],
+    /// A lookup of `Reflect` was met, a call of `Class.forName`, and which of the two the
+    /// registrations made cover.
     wants_reflect: bool,
+    wants_for_name: bool,
+    registered: (bool, bool),
     /// The templates of `Reach::templates`, by bit.
     templates_seen: Vec<u64>,
-    reflect_found: bool,
     /// Inside a registration, where a parameter's `classOf` is class data only.
     class_data_only: bool,
     reach: Reach,
@@ -1315,13 +1339,15 @@ impl Walker {
             runtime_exceptions_found: false,
             wants_runtime_exceptions: false,
             wants_reflect: false,
+            wants_for_name: false,
+            registered: (false, false),
             templates_seen: Vec::new(),
-            reflect_found: false,
             class_data_only: false,
             wants_array_seq: false,
             runtime_exceptions: Vec::new(),
             runtime_exceptions_reached: false,
             casts_reached: false,
+            failures_reached: [false; TEMPLATE_FAILURES.len()],
             reach: Reach { files: vec![false; n_files], ..Reach::empty() },
             place: None,
             local_places: FxMap::default(),
@@ -1518,6 +1544,8 @@ impl Walker {
             }
         }
         if let Some(main) = cx.prog.main {
+            // A typed `@main` method runs through its proxy (`Symbols::main_adapter`).
+            let main = cx.syms.main_adapter(cx.interner, main).unwrap_or(main);
             let info = cx.syms.sym(main);
             self.reach_static(cx, main);
             if let Some(object) = cx.prog.main_object {
@@ -2446,6 +2474,8 @@ impl Walker {
                 self.reach.desugared.insert(at, b);
             }
         }
+        // A callable class's function calls its `apply`, and on JavaScript so does the calling convention of
+        // one whose instances are objects (`super::is_callable_class`: `$ap`, `$jsFn`).
         let callable = !matches!(info.kind, ClassKind::Trait | ClassKind::Enum)
             && info.base_types.iter().skip(1).any(|&(b, _)| super::is_function_class(syms, cx.interner, b));
         if callable {
@@ -2608,10 +2638,17 @@ impl Walker {
         }
         self.runtime_exceptions_reached = true;
         for &c in &self.runtime_exceptions.clone() {
-            if self.casts_reached || !self.is_cast_failure(cx, c) {
+            if (self.casts_reached || !self.is_cast_failure(cx, c)) && self.template_failure(cx, c).map_or(true, |i| self.failures_reached[i]) {
                 self.reach_class(cx, c);
             }
         }
+    }
+
+    /// Which of `TEMPLATE_FAILURES` `c` is, which only a program reaching its helpers meets from the
+    /// runtime.
+    fn template_failure(&self, cx: Cx, c: ClassId) -> Option<usize> {
+        let name = cx.interner.get(cx.syms.class(c).name);
+        TEMPLATE_FAILURES.iter().position(|&(_, n, _)| n == name)
     }
 
     /// `ClassCastException`, which only a program with casts to test meets from the runtime.
@@ -2757,8 +2794,11 @@ pub(super) fn defaults_of(cx: Cx<'_>) -> super::defaults::Defaults<'_> {
 /// default computes being no call of the getter.
 fn visit_args<M: Meet>(m: &mut M, cx: Cx, call: TExprId, l: ListRef) {
     let lowering = defaults_of(cx).lower(&[], call);
+    // A standard tag a `@jvmEvidence` member is passed is written `null` (`emit_args_omitting`).
+    let evidence = cx.prog.evidence_args(call, cx.syms);
     for (k, &a) in cx.prog.expr_list(l).iter().enumerate() {
         match cx.prog.expr(a) {
+            _ if k < 64 && evidence & 1 << k != 0 && cx.prog.is_standard_class_tag(a, cx.syms, cx.interner) => {}
             TExpr::Default(_, _, args) if lowering.as_ref().is_some_and(|l| l.omits(k)) => visit_list(m, cx, args),
             _ => visit(m, cx, a),
         }
@@ -2907,11 +2947,19 @@ pub(super) fn visit<M: Meet>(m: &mut M, cx: Cx, e: TExprId) {
         }
         TExpr::Js(template, args) => {
             // A reflective call's class literals name its proxy where it is compiled
-            // (`Reach::reflective_calls`); the output does not write them.
+            // (`Reach::reflective_calls`); the output does not write them, nor a standard tag a
+            // `@jvmEvidence` member is passed (`emit_args_omitting`).
             let list = prog.expr_list(args);
             if reflective_literals(prog, template, list) {
                 for (k, &a) in list.iter().enumerate() {
                     if k != 2 {
+                        visit(m, cx, a);
+                    }
+                }
+            } else if prog.evidence_args(e, cx.syms) != 0 {
+                let evidence = prog.evidence_args(e, cx.syms);
+                for (k, &a) in list.iter().enumerate() {
+                    if !(k < 64 && evidence & 1 << k != 0 && prog.is_standard_class_tag(a, cx.syms, cx.interner)) {
                         visit(m, cx, a);
                     }
                 }
@@ -2928,9 +2976,10 @@ pub(super) fn visit<M: Meet>(m: &mut M, cx: Cx, e: TExprId) {
             visit(m, cx, inner);
             match op {
                 CastOp::Check(test, _) | CastOp::Unbox(test, _) => visit_test(m, cx, test),
+                CastOp::Adapt(..) => {}
                 CastOp::Written | CastOp::Nothing => {}
             }
-            if op != CastOp::Written {
+            if !matches!(op, CastOp::Written | CastOp::Adapt(..)) {
                 m.cast(cx);
             }
         }
@@ -3147,11 +3196,23 @@ impl Meet for Walker {
         if word >= self.templates_seen.len() {
             self.templates_seen.resize(word + 1, 0);
         }
+        let text = &prog.strings[template.idx()];
         if self.templates_seen[word] & bit == 0 {
             self.templates_seen[word] |= bit;
             self.reach.templates.push(template);
+            for (i, &(_, _, helpers)) in TEMPLATE_FAILURES.iter().enumerate() {
+                if !self.failures_reached[i] && helpers.iter().any(|h| text.contains(h)) {
+                    self.failures_reached[i] = true;
+                    if self.runtime_exceptions_reached {
+                        for &c in &self.runtime_exceptions.clone() {
+                            if self.template_failure(cx, c) == Some(i) {
+                                self.reach_class(cx, c);
+                            }
+                        }
+                    }
+                }
+            }
         }
-        let text = &prog.strings[template.idx()];
         if self.std_templates.is_some() {
             if !self.is_std_template(cx, text) {
                 self.template_names(text);
@@ -3165,11 +3226,16 @@ impl Meet for Walker {
                 }
             }
         }
-        // The array sorts call `compare` on the comparator they are given.
+        // The array sorts call `compare` on the comparator they are given; the arrays of a
+        // `@jvmEvidence` member's templates are made by the tag's `newArray` where one is passed.
         if text.contains("$sortArray(") || text.contains("$sortRange(") {
             self.call_name(cx, names::COMPARE, None);
         }
+        if ["$arrayFill(", "$arrayTabulate(", "$arrayEmpty(", "$arrayMap("].iter().any(|h| text.contains(h)) {
+            self.call_name(cx, names::NEW_ARRAY, None);
+        }
         if text.contains("$pf(") {
+            self.reach.partial_values = true;
             if let Some(c) = prog.partial_function {
                 self.reach_class(cx, c);
             }
@@ -3182,6 +3248,9 @@ impl Meet for Walker {
         }
         if text.starts_with("$reflected") {
             self.wants_reflect = true;
+        }
+        if text.starts_with("$forName(") {
+            self.wants_for_name = true;
         }
         // The runtime's `$withCause` puts `getCause` on an instance under that name.
         if text.starts_with("$withCause") {

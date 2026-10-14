@@ -205,7 +205,7 @@ object MurmurHash3:
     case xs: List[?] => listHash(xs, seqSeed)
     case xs => orderedHash(xs, seqSeed)
   def setHash(xs: Set[?]): Int = unorderedHash(xs, setSeed)
-  def mapHash(xs: Map[?, ?]): Int =
+  def mapHash(xs: scala.collection.Map[?, ?]): Int =
     if xs.isEmpty then emptyMapHash
     else
       var a = 0

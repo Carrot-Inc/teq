@@ -90,7 +90,7 @@ sealed class Vector[+A](root: RawBuffer[Any], depth: Int, offset: Int, trieLengt
   override def toIndexedSeq: IndexedSeq[A] = this
   @jvmEvidence
   @jvm("rt $0 $1 rtcall arrayOf(Lscala/IterableOnce;Lscala/reflect/ClassTag;)Ljava/lang/Object; cast_result")
-  override def toArray[B >: A: scala.reflect.ClassTag]: Array[B] = unsafeCast(if root == null then arraySlice(items, 0, itemCount) else unsafeArray)
+  override def toArray[B >: A: scala.reflect.ClassTag]: Array[B] = arrayByTag(scala.reflect.classTag[B], this, unsafeCast(if root == null then arraySlice(items, 0, itemCount) else unsafeArray))
 
   def map[B](f: A => B): Vector[B] =
     val src = unsafeArray

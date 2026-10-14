@@ -4540,6 +4540,8 @@ impl<'a> Worker<'a> {
                         }
                     }
                 }
+                // A receiver of a primitive parameter's type (`extension (i: Int)`) is the primitive.
+                let recv = if !self.jvm && self.is_primitive_type_id(clause.params[0].ty) { self.unbox_erased(recv, recv_ty) } else { recv };
                 // A by-name receiver (`extension (n: => Int)`) is passed as its thunk, each use
                 // evaluating it.
                 args_out.push(if clause.params[0].by_name { self.by_name_thunk(recv) } else { recv });
@@ -4656,8 +4658,27 @@ impl<'a> Worker<'a> {
                                 defaulted.push(k);
                                 args_out.push(self.prog.add(TExpr::Unit));
                             }
+                            // The tag of a std member's `@jvmEvidence` that the std's own bodies and a
+                            // jar's find none of is taken on trust: `null`, the standard allocation
+                            // (`std/buffer.scala`'s `evidenced`); for a member a class outside the std
+                            // may override (zio's `Chunk.toArray`), which asks the tag itself, the tag
+                            // of `AnyRef`, the array an erased element makes.
+                            None if ctor.is_none() && self.syms.sym(call.sym).jvm_evidence && self.syms.sym(call.sym).erased_tags == 0 && self.is_class_tag(target) && self.evidence_on_trust() => {
+                                self.failed_givens.clear();
+                                self.given_ambiguity = None;
+                                let any_ref = match self.sites.class_tag.filter(|_| self.overridable_member(call.sym)) {
+                                    Some(tag_class) => self.any_ref_class_tag(tag_class),
+                                    None => None,
+                                };
+                                let tag = any_ref.unwrap_or_else(|| self.prog.add(TExpr::Null));
+                                self.prog.set_type(tag, target);
+                                args_out.push(tag);
+                            }
                             None => {
                                 let missing_tag = self.missing_tag(p.ty, target, open_tag);
+                                // A `@jvmEvidence` member's tag that no search finds is scalac's E172 of
+                                // the array's construction, at the call where it stands.
+                                let tag_at_call = missing_tag.is_some() && ctor.is_none() && self.syms.sym(call.sym).jvm_evidence;
                                 let target = self.solve_bounded_in(target);
                                 let msg = self.given_ambiguity.take().or(missing_tag);
                                 let msg = msg.or_else(|| self.param_not_found_message(call.sym, ctor.as_ref().map(|&(c, _)| c), p.sym, p.name, &subst));
@@ -4676,7 +4697,8 @@ impl<'a> Worker<'a> {
                                     Some(_) if given_site.end != span.end => given_site.end,
                                     Some(_) => span.start,
                                 };
-                                self.given_failure_error(Span::new(at, at), msg, target);
+                                let at = if tag_at_call { span } else { Span::new(at, at) };
+                                self.given_failure_error(at, msg, target);
                                 args_out.push(self.prog.add(TExpr::Unit));
                             }
                         }
@@ -4951,6 +4973,12 @@ impl<'a> Worker<'a> {
             }
             let erroneous_arg = self.erroneous_args[erroneous_mark..].contains(&self.app_depth);
             evidence = self.erased_evidence(call.sym, &sig, &subst, written, erroneous_arg, given_site, span);
+        } else if stopped && ctor.is_none() && self.syms.sym(call.sym).jvm_evidence {
+            // A first clause that failed leaves the using clause unsearched, but for the array's
+            // `ClassTag`, which scalac reports beside the argument's error (its E172 of the array's
+            // construction), as the erased evidence's search does.
+            let erroneous_arg = self.erroneous_args[erroneous_mark..].contains(&self.app_depth);
+            self.unapplied_tags(&sig, &subst, erroneous_arg, given_site, span);
         }
         self.param_paths.truncate(paths_mark);
         if let Some(v) = open_expected {
@@ -4974,6 +5002,7 @@ impl<'a> Worker<'a> {
         }
         self.solve_application_vars(first_var, widen_mark, ret_ty, expected, span);
         let ret_ty = self.zonk(ret_ty);
+        let known_dims = ctor.is_none() && self.of_dim_standard_tag(call.sym, &sig, &subst, &mut args_out);
         let l = self.prog.list(&args_out);
         let mut ty = ret_ty;
         self.inline.record_args = outer_recording;
@@ -5072,6 +5101,9 @@ impl<'a> Worker<'a> {
         }
         if self.capturing() && !evidence.is_empty() && !(inline_callee && !self.keeps_inline_calls()) {
             self.capture_evidence(te, evidence);
+        }
+        if known_dims {
+            self.of_dim_known(te, call.sym);
         }
         if let Some(parameter) = summon_names {
             self.inline.copies.push((te, parameter));
@@ -5336,6 +5368,14 @@ impl<'a> Worker<'a> {
                 (Some(f), Some(t)) if super::prims::widens(f, t) => super::prims::convert_ops(f, t),
                 _ => &[],
             };
+            if ops.is_empty() && !self.jvm && self.expr_marks.get(&te).is_some_and(|m| m & super::MARK_ERASED_SOLVED != 0) && self.deref(actual) == self.deref(target) {
+                // An erased result the parameter is solved to as it stands (`List(m.get(k))`, a
+                // lambda's `x => m.get(x)`): unboxed in place, as `unbox_erased` unboxes it where
+                // the primitive is expected as written.
+                if self.unbox_erased_in_place(te, target) {
+                    self.expr_marks.entry(te).and_modify(|m| *m &= !super::MARK_ERASED_SOLVED);
+                }
+            }
             if !ops.is_empty() {
                 // The argument node is rewritten in place, so whatever refers to it sees the
                 // widened value, and typed as the parameter: the backend boxes the widened
@@ -5498,6 +5538,154 @@ impl<'a> Worker<'a> {
         let printed = self.deref(ty);
         if is_print && matches!(self.is_numeric(printed), Some(super::prims::R_DOUBLE | super::prims::R_FLOAT)) {
             args[0] = self.prog.rendering(args[0], StrKind::Double);
+        }
+    }
+
+    /// `Array.ofDim[T](dims)` of a `T` whose erasure the type says is an array of that class, its tag
+    /// unasked: dotty's `ArrayConstructors` makes it so and drops the evidence passed, unevaluated. The
+    /// standard tag of `T` takes the evidence's place, which allocates as that array (`Program::
+    /// is_standard_class_tag`).
+    /// Whether the call is `Array.ofDim` of an element type whose erasure is known (`of_dim_known`).
+    fn of_dim_standard_tag(&mut self, sym: SymId, sig: &MethodSig, subst: &Subst, args: &mut [TExprId]) -> bool {
+        if sig.tparams.len() != 1 || args.is_empty() {
+            return false;
+        }
+        let info = self.syms.sym(sym);
+        if self.interner.get(info.name) != "ofDim" {
+            return false;
+        }
+        let Owner::Class(owner) = info.owner else { return false };
+        if self.syms.class(owner).name != names::ARRAY || !matches!(self.syms.class(owner).owner, Owner::Package(p) if p == self.b.scala_pkg) {
+            return false;
+        }
+        let Some(&tp) = sig.tparams.first() else { return false };
+        let Some(elem) = subst.iter().find(|&&(p, _)| p == tp).map(|&(_, t)| self.zonk(t)) else { return false };
+        if self.stable_erasure(elem).is_none() {
+            return false;
+        }
+        // A standard tag found by the search (`ClassTag.Int`, `ClassTag(classOf[C])`) stands as it is,
+        // the tree scalac pickles before `ArrayConstructors` runs.
+        if self.prog.is_standard_class_tag(*args.last().unwrap(), &self.syms, self.interner) {
+            return true;
+        }
+        let Some(tag_class) = self.sites.class_tag else { return true };
+        let target = self.types.class(tag_class, &[elem]);
+        if let Some(tag) = self.class_tag_given(tag_class, target) {
+            *args.last_mut().unwrap() = tag;
+        }
+        true
+    }
+
+    /// dotty's `ArrayConstructors` over `Array.ofDim` of two dimensions or more of an element type
+    /// whose erasure is known: `Array.newInstance` over every dimension, a negative one refused before
+    /// any array is made. The std's `ofDimKnown` of as many dimensions takes the call's place, the
+    /// receiver its first argument; the pickle writes the call as written (`Form::Member`).
+    fn of_dim_known(&mut self, te: TExprId, of_dim: SymId) {
+        let (recv, args) = match self.prog.expr(te) {
+            TExpr::CallMethod(r, _, args) => (r, self.prog.expr_list(args).to_vec()),
+            TExpr::CallStatic(_, args) => {
+                let Owner::Class(c) = self.syms.sym(of_dim).owner else { return };
+                let module = self.prog.add(TExpr::Module(c));
+                (module, self.prog.expr_list(args).to_vec())
+            }
+            _ => return,
+        };
+        if args.len() < 3 {
+            return;
+        }
+        let name = self.interner.intern("ofDimKnown");
+        let scala = self.b.scala_pkg;
+        self.demand_std(scala, name, crate::stdindex::TERM);
+        let Some(first) = self.syms.pkg(scala).entries.get(&name).and_then(|e| e.term) else { return };
+        let alternatives = self.syms.alternatives(first).map_or(vec![first], |a| a.to_vec());
+        let Some(helper) = alternatives.into_iter().find(|&a| self.sig_of(a).clauses.iter().map(|c| c.params.len()).sum::<usize>() == args.len() + 1) else { return };
+        let mut items = vec![recv];
+        items.extend(args);
+        let l = self.prog.list(&items);
+        self.rewrite_expr(te, TExpr::CallStatic(helper, l));
+        if self.capturing() {
+            self.capture_form(te, crate::tir::capture::Form::Member(of_dim));
+        }
+    }
+
+    /// Whether `sym` is a member a class outside the std may override: a class's or a trait's, neither
+    /// final, no extension (`Program::evidence_args`'s rule).
+    fn overridable_member(&self, sym: SymId) -> bool {
+        let info = self.syms.sym(sym);
+        !info.is_extension
+            && info.mods & crate::ast::mods::FINAL == 0
+            && match info.owner {
+                Owner::Class(c) => {
+                    let class = self.syms.class(c);
+                    class.kind != ClassKind::Object && class.mods & crate::ast::mods::FINAL == 0
+                }
+                _ => false,
+            }
+    }
+
+    /// Whether `te` is a call or a field read whose declared result erases to a reference
+    /// (`erases_to_reference`): of a primitive type, its value may be `null`.
+    pub(super) fn is_erased_result(&mut self, te: TExprId) -> bool {
+        self.call_sym(te).is_some_and(|s| self.erases_to_reference(s))
+    }
+
+    /// The method or val a call or a field read `te` names.
+    #[inline]
+    pub(super) fn call_sym(&self, te: TExprId) -> Option<SymId> {
+        match self.prog.expr(te) {
+            TExpr::CallMethod(_, s, _) | TExpr::CallStatic(s, _) | TExpr::Field(_, s) => Some(s),
+            TExpr::Js(t, _) => self.prog.template_syms.get(&t).copied(),
+            _ => None,
+        }
+    }
+
+    /// Whether the method's declared result is a type parameter or an abstract type member, which
+    /// dotty's `TypeErasure` erases to `Object` whatever a call instantiates it to; an array's own
+    /// `apply` erases with its array, a primitive one's to the primitive (`Array[Int]` is `int[]`).
+    pub(super) fn erases_to_reference(&mut self, sym: SymId) -> bool {
+        let ret = self.sig_of(sym).ret;
+        // A type parameter or an abstract type member erases as its upper bound (`TypeErasure`):
+        // to the primitive where the bound erases to one, else to `Object`.
+        let upper = match self.types.get(ret) {
+            Type::Param(p) => self.syms.tparam(p).upper,
+            Type::Member(..) => self.member_bounds(ret).1,
+            _ => return false,
+        };
+        if self.erased_primitive(upper).is_some() {
+            return false;
+        }
+        let info = self.syms.sym(sym);
+        // The std's `unsafeCast`, a template that is its argument itself: the value as it is,
+        // reinterpreted, no call whose result erases; an inline method's call, which is its
+        // expansion before any erasure (`constValue` the constant it folds to), its own calls
+        // erasing as they are.
+        if info.intrinsic.as_deref() == Some("$0") || info.mods & crate::ast::mods::INLINE != 0 {
+            return false;
+        }
+        // A deferred given is called through the implementation the class below gets, of the type
+        // that class gives it (`Typer.implementDeferredGivens`), which a pickle names and a lookup
+        // of the trait's declaration here does not.
+        let array_apply = info.is_extension && info.name == names::APPLY && matches!(info.owner, Owner::Package(p) if p == self.b.scala_pkg);
+        !array_apply && !self.is_deferred_given(sym)
+    }
+
+    /// The primitive class a type erases to, if one (`TypeErasure`): a primitive class's type or a
+    /// constant of one, a type parameter's bound's, and a union's where both sides erase to the same
+    /// primitive; a union of two (`Int | Long`) erases to `Object`, the erased lub of its sides
+    /// (`TypeComparer.orType` with `isErased`, `TypeErasure.erasedLub`).
+    pub(super) fn erased_primitive(&mut self, t: TypeId) -> Option<TypeId> {
+        let t = self.dealias(t);
+        match self.types.get(t) {
+            Type::Union(a, b, _) => {
+                let (x, y) = (self.erased_primitive(a), self.erased_primitive(b));
+                x.filter(|_| x == y)
+            }
+            Type::Lit(_) => self.erased_primitive(self.widen_lit(t)),
+            Type::Param(p) => {
+                let upper = self.syms.tparam(p).upper;
+                self.erased_primitive(upper)
+            }
+            _ => self.is_primitive_type_id(t).then_some(t),
         }
     }
 
@@ -5886,6 +6074,13 @@ impl<'a> Worker<'a> {
                     };
                     let items: Vec<TExprId> =
                         slots[i].clone().iter().map(|&a| self.type_arg(a, pty, list.span)).collect();
+                    if !self.jvm {
+                        for &item in &items {
+                            if self.is_erased_result(item) {
+                                *self.expr_marks.entry(item).or_default() |= super::MARK_ERASED_SOLVED;
+                            }
+                        }
+                    }
                     self.harmonize_varargs(&items, pty, lower_mark);
                     let l = self.prog.list(&items);
                     let seq = self.prog.add(TExpr::SeqLit(l));
@@ -6414,7 +6609,8 @@ impl<'a> Worker<'a> {
             self.inline.arg_types.push((te, own));
         }
         // A numeric argument for a still-open type parameter may need widening once the
-        // parameter is solved: Math.min(someLong, 1) infers Long and widens the 1.
+        // parameter is solved: Math.min(someLong, 1) infers Long and widens the 1; a varargs
+        // element of an erased result, unboxing (`MARK_ERASED_SOLVED`).
         if matches!(self.types.get(pty), Type::Var(_)) {
             let open = self.deref(pty);
             if matches!(self.types.get(open), Type::Var(_)) {

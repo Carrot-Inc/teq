@@ -19,8 +19,96 @@ use crate::types::*;
 const ANNOTATION: &str = "EnableReflectiveInstantiation";
 
 impl<'a> Worker<'a> {
-    /// The registrations of the program, by class, in the order of the classes.
-    pub fn reflective_registrations(&mut self) -> Vec<(ClassId, crate::tir::TExprId)> {
+    /// The registrations of the program, by class, in the order of the classes: for `Reflect`'s
+    /// lookups, and for `Class.forName`'s.
+    pub fn reflective_registrations(&mut self, reflect: bool, for_name: bool) -> Vec<(ClassId, crate::tir::TExprId)> {
+        let mut out = if reflect { self.reflect_registrations() } else { Vec::new() };
+        if for_name {
+            out.extend(self.for_name_registrations());
+            // A class's for `Reflect` first: the sort is stable.
+            out.sort_by_key(|&(c, _)| c);
+        }
+        out
+    }
+
+    /// `Class.forName`'s closed world (`$forName` in rt.js): every class of the program under its
+    /// binary name, an object's with the accessor of its instance, which a lookup that initialises
+    /// calls, as the JVM's `<clinit>` constructs `MODULE$`. Of a class nested in a class, the class
+    /// alone: its instance needs the outer one.
+    fn for_name_registrations(&mut self) -> Vec<(ClassId, crate::tir::TExprId)> {
+        let mut out = Vec::new();
+        for c in 0..self.syms.classes.len() as u32 {
+            let c = ClassId(c);
+            if !self.found_by_name(c) {
+                continue;
+            }
+            let load = if self.initialised_by_name(c) {
+                let module = self.prog.add(TExpr::Module(c));
+                let none = self.prog.syms(&[]);
+                self.prog.add(TExpr::Lambda(none, module))
+            } else {
+                self.prog.add(TExpr::Null)
+            };
+            let name = self.binary_name(c);
+            out.push((c, self.register_call("$forNameClass($0, $1, $2)", &name, c, load)));
+            // The class of static forwarders scalac gives a top-level object without a companion class,
+            // which initialises nothing.
+            if let Some(mirror) = self.mirror_name(c) {
+                let class = self.prog.add_str(&format!("$classNamed({:?})", mirror));
+                let class = self.prog.add(TExpr::Js(class, crate::ast::ListRef::EMPTY));
+                let template = self.prog.add_str("$forNameClass($0, $1, $2)");
+                let name = self.prog.add_str(&mirror);
+                let name = self.prog.add(TExpr::Str(name));
+                let none = self.prog.add(TExpr::Null);
+                let args = self.prog.list(&[name, class, none]);
+                out.push((c, self.prog.add(TExpr::Js(template, args))));
+            }
+        }
+        out
+    }
+
+    /// The name of the mirror class scalac's backend gives a top-level object without a companion
+    /// class: the object's own, holding its members' static forwarders.
+    pub(crate) fn mirror_name(&self, c: ClassId) -> Option<String> {
+        let info = self.syms.class(c);
+        let alone = info.companion.map_or(true, |k| k == c || self.syms.class(k).kind == ClassKind::Object);
+        (info.kind == ClassKind::Object && matches!(info.owner, Owner::Package(_)) && alone).then(|| self.binary_name(c).trim_end_matches('$').to_string())
+    }
+
+    /// Whether `Class.forName` finds `c`: a class, trait or object of the program a path names.
+    fn found_by_name(&self, c: ClassId) -> bool {
+        let info = self.syms.class(c);
+        info.def.is_some()
+            && self.is_program_file(info.file)
+            && !self.is_library_class(c)
+            && info.js == JsKind::Scala
+            && info.local_module.is_none()
+            && matches!(info.kind, ClassKind::Class | ClassKind::Trait | ClassKind::Object | ClassKind::Enum | ClassKind::EnumCase)
+            && info.singleton.is_none()
+            && self.is_member_owner(info.owner)
+    }
+
+    /// Whether the class `Class.forName` finds is an object's, whose initialisation makes the instance.
+    pub(crate) fn initialised_by_name(&self, c: ClassId) -> bool {
+        let info = self.syms.class(c);
+        info.kind == ClassKind::Object && self.is_static_owner(info.owner)
+    }
+
+    /// The class of the program `Class.forName` finds by its binary name (the interpreter's lookup),
+    /// and whether the name is its object's mirror class's (`mirror_name`).
+    pub(crate) fn class_for_name(&self, name: &str) -> Option<(ClassId, bool)> {
+        (0..self.syms.classes.len() as u32).map(ClassId).filter(|&c| self.found_by_name(c)).find_map(|c| {
+            if self.binary_name(c) == name {
+                Some((c, false))
+            } else {
+                self.mirror_name(c).filter(|m| m == name).map(|_| (c, true))
+            }
+        })
+    }
+
+    /// `Reflect`'s: the classes of the program, of the std and of Scala.js's jars that carry or
+    /// inherit `@EnableReflectiveInstantiation`.
+    fn reflect_registrations(&mut self) -> Vec<(ClassId, crate::tir::TExprId)> {
         let mut candidates: Vec<ClassId> = (0..self.syms.classes.len() as u32)
             .map(ClassId)
             .filter(|&c| {

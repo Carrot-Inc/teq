@@ -1,0 +1,11 @@
+[ => syntax
+\q => syntax
+a{ => syntax
+a{2,1} => syntax
+(?<x>a)(?<x>b) => syntax
+(?<=a)b => false
+\p{L} => false
+(?x)a # hi~b => true
+a{2,} => false
+(?<x1>a)b => true
+null npe

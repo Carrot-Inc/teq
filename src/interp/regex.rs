@@ -396,6 +396,10 @@ impl<'a> Parser<'a> {
                         if !self.eat('}') {
                             return self.error("Unclosed counted closure");
                         }
+                        // JDK 21's `Pattern.closure`: a maximum below the minimum.
+                        if m.is_some_and(|m| m < min) {
+                            return self.error("Illegal repetition range");
+                        }
                         m
                     }
                     _ => return self.error("Unclosed counted closure"),
@@ -477,12 +481,21 @@ impl<'a> Parser<'a> {
                         let span = span(&node);
                         return Ok(Some(Node::Look { ahead: false, negative, node: Box::new(node), span }));
                     }
+                    // JDK 21's `Pattern.groupname`: a Latin letter, then letters and digits, then `>`;
+                    // a name defined once (`Pattern.group0`).
                     let mut name = String::new();
-                    while let Some(c) = self.next() {
-                        if c == '>' {
-                            break;
-                        }
+                    if !self.peek().is_some_and(|c| c.is_ascii_alphabetic()) {
+                        return self.error("capturing group name does not start with a Latin letter");
+                    }
+                    while let Some(c) = self.peek().filter(|c| c.is_ascii_alphanumeric()) {
                         name.push(c);
+                        self.at += 1;
+                    }
+                    if !self.eat('>') {
+                        return self.error("named capturing group is missing trailing '>'");
+                    }
+                    if self.names.iter().any(|(n, _)| *n == name) {
+                        return self.error(&format!("Named capturing group <{}> is already defined", name));
                     }
                     self.groups += 1;
                     let idx = self.groups;

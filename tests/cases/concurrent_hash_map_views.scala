@@ -1,0 +1,46 @@
+// `ConcurrentHashMap`'s key set, values and entries are views of the map, as the JDK's are: a view taken
+// before an insertion sees it, a removal through a view or its iterator is the map's, a clear through one
+// empties it. `keySet()` is a `KeySetView`, which adds no key, `keySet(v)` one that adds with `v`, and
+// `newKeySet` a set over a fresh map.
+import java.util.concurrent.ConcurrentHashMap
+
+object Main:
+  def main(args: Array[String]): Unit =
+    val m = new ConcurrentHashMap[String, String]()
+    m.put("a", "A")
+    val keys = m.keySet()
+    val values = m.values()
+    val entries = m.entrySet()
+    m.put("b", "B")
+    m.put("c", "C")
+    println(List(keys.contains("b"), keys.size(), values.contains("C"), entries.size()))
+    println(values.remove("A"))
+    println(m.containsKey("a"))
+    val it = keys.iterator()
+    while it.hasNext do if it.next() == "b" then it.remove()
+    println(m)
+    val vit = values.iterator()
+    vit.next()
+    vit.remove()
+    println(List(m.size(), m.isEmpty()))
+    m.put("d", "D")
+    m.put("e", "E")
+    println(keys.remove("d"))
+    println(m)
+    println(m.keySet().getMap() eq m)
+    println(m.keySet().getMappedValue())
+    try m.keySet().add("z") catch case e: UnsupportedOperationException => println("add refused")
+    val withValue = m.keySet("V")
+    println(List(withValue.add("x"), withValue.add("x"), m.get("x"), withValue.getMappedValue()))
+    println(List(m.keySet(), m.keySet().hashCode == "e".hashCode + "x".hashCode, keys.equals(m.keySet())))
+    entries.clear()
+    println(List(m.size(), keys.isEmpty(), values.isEmpty()))
+    val set = ConcurrentHashMap.newKeySet[Int]()
+    println(List(set.add(1), set.add(2), set.add(1), set.contains(2), set.size()))
+    println(List(set.remove(1), set.contains(1), set.getMap().get(2)))
+    val plain = new java.util.HashMap[String, Int]()
+    plain.put("k", 1)
+    val copy = new ConcurrentHashMap[String, Int](plain)
+    val ks = new java.util.HashSet[String]()
+    ks.add("k")
+    println(List(copy.equals(plain), plain.equals(copy), copy.keySet().equals(ks), ks.equals(copy.keySet())))

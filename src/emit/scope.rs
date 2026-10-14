@@ -1841,7 +1841,7 @@ impl<'a> Emitter<'a> {
             }
             TExpr::Cast(inner, op, _) => {
                 match op {
-                    CastOp::Written => {}
+                    CastOp::Written | CastOp::Adapt(..) => {}
                     CastOp::Nothing => w.name("$asNothing"),
                     CastOp::Unbox(test, _) => w.name(super::expr::unbox_helper(prog.js_test(test))),
                     CastOp::Check(test, _) => match prog.js_test(test) {

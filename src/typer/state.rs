@@ -194,6 +194,12 @@ impl Attempts {
     pub fn flushes_at_item_end(&self) -> bool {
         self.open == 0 && !self.pending.is_empty()
     }
+
+    /// Whether no attempt is open.
+    #[inline]
+    pub fn closed(&self) -> bool {
+        self.open == 0
+    }
 }
 
 struct Open {
@@ -792,6 +798,8 @@ impl<'a> Worker<'a> {
     pub(super) fn flush_pending_since(&mut self, start: usize) {
         if self.attempts.pending.len() > start {
             self.flush_pending_from(start);
+        } else if !self.inline_unboxes.is_empty() && self.attempts.open == 0 {
+            self.apply_inline_unboxes();
         }
     }
 
@@ -803,6 +811,9 @@ impl<'a> Worker<'a> {
         self.attempts.flushing -= 1;
         self.fold_conditions_later();
         self.fold_indexes_later();
+        if !self.inline_unboxes.is_empty() && self.attempts.open == 0 {
+            self.apply_inline_unboxes();
+        }
     }
 
     fn flush_pending_now(&mut self, start: usize) {
@@ -1171,6 +1182,13 @@ impl<'a> Worker<'a> {
                 self.prog.copy_chain_marks(expanded, node);
                 if self.capturing() {
                     self.capture_moved(expanded, node);
+                }
+                // What was noted of the expansion's root (`inline_unboxes`) is of the call's node,
+                // where its value stands now.
+                if changed.is_none() {
+                    for entry in self.inline_unboxes.iter_mut().filter(|e| e.0 == expanded) {
+                        entry.0 = node;
+                    }
                 }
             }
         }

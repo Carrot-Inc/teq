@@ -173,6 +173,10 @@ pub struct ClassInfo {
     /// alias of a Scala type (`opaque type O = js.Array[Int]`), which `underlying` no longer
     /// tells, as `AliasInfo::js` of an alias.
     pub underlying_js: bool,
+    /// `@objectFunction`, of the std's traits that make a collection a function (scala-library's
+    /// `collection.Map`, `Seq` and `Set`): the instances of a class that is a function through one of
+    /// them stay objects (`emit::is_callable_class`).
+    pub object_function: bool,
     pub extensions: Vec<SymId>,
     pub givens: Vec<SymId>,
     /// For enum cases without parameters: the value symbol in the enum companion.
@@ -1051,6 +1055,7 @@ impl Symbols {
             ordinal: 0,
             underlying: None,
             underlying_js: false,
+            object_function: false,
             extensions: Vec::new(),
             givens: Vec::new(),
             singleton: None,
@@ -1178,6 +1183,24 @@ impl Symbols {
             }
             Owner::Local => own,
         }
+    }
+
+    /// The proxy dotty's `MainProxies` makes of a `@main` method that takes parameters other than one
+    /// `String*` (`parser::add_main_proxies`): `<name>$main(args: Array[String])` in its package, which runs
+    /// in the method's place as the entry point.
+    pub fn main_adapter(&self, interner: &crate::intern::Interner, main: SymId) -> Option<SymId> {
+        let info = self.sym(main);
+        if !info.is_main {
+            return None;
+        }
+        // A method of an object has its proxy at the level of the object's package.
+        let mut owner = info.owner;
+        while let Owner::Class(c) = owner {
+            owner = self.class(c).owner;
+        }
+        let Owner::Package(p) = owner else { return None };
+        let name = interner.lookup(&format!("{}$main", interner.get(info.name)))?;
+        self.pkg(p).entries.get(&name).and_then(|e| e.term)
     }
 
     /// The given whose one instance the class `c` is where that instance is a static module:

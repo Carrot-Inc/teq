@@ -728,7 +728,57 @@ pub(super) fn array_class_name(element: &str, dims: u8) -> String {
     s
 }
 
-pub(super) fn is_function_class(syms: &Symbols, interner: &Interner, c: ClassId) -> bool {
+/// Whether instances of the class `c` are JS functions: where a function type (a `FunctionN`, or
+/// `PartialFunction`) is among its bases, but for a class that is a function through one of the std's
+/// `@objectFunction` traits alone (scala-library's collections, through `collection.Map`, `Seq` and
+/// `Set`), with no function type among its own parent clauses, no function trait among its bases but
+/// `Function1`, `PartialFunction` and those below an `@objectFunction` trait, and a superclass whose
+/// instances are none: that one keeps the object representation, called through a function type by
+/// the calling convention (`Emitter::emit_function_call`), leaving for JavaScript's own code as a JS
+/// function (`$jsFn`), its prototype saying its arity for a type test (`$fn`).
+pub(crate) fn is_callable_class(syms: &Symbols, types: &TypeStore, interner: &Interner, c: ClassId) -> bool {
+    let info = syms.class(c);
+    if info.kind == ClassKind::Trait || function_arity(syms, interner, c).is_none() {
+        return false;
+    }
+    let below_object_function = |b: ClassId| syms.class(b).base_types.iter().any(|&(a, _)| syms.class(a).object_function);
+    // A trait of the program's below a function type (`trait F extends (Int => Int)`) whose value is
+    // called as a JS function.
+    let own_function = |b: ClassId| {
+        let name = interner.get(syms.class(b).name);
+        (function_arity(syms, interner, b).is_some() || (is_function_class(syms, interner, b) && (syms.class(b).tparams.len() != 2 || name.starts_with("Context"))))
+            && !is_partial_function_class(syms, interner, b)
+            && !below_object_function(b)
+    };
+    !below_object_function(c)
+        || info.parents.iter().any(|&p| types.named_class(p).is_some_and(|b| is_function_class(syms, interner, b) || is_partial_function_class(syms, interner, b)))
+        || info.base_types.iter().skip(1).any(|&(b, _)| own_function(b))
+        || info.superclass.is_some_and(|s| is_callable_class(syms, types, interner, s))
+}
+
+/// Whether a value of the class or trait `c` may be an object where its type is a function's: `c` is a
+/// function through an `@objectFunction` trait and its instances are no JS functions
+/// (`is_callable_class`); a value of another trait below a function type (`Conversion`) is a JS function,
+/// a lambda or an instance of a callable class.
+pub(crate) fn has_object_instances(syms: &Symbols, types: &TypeStore, interner: &Interner, c: ClassId) -> bool {
+    function_arity(syms, interner, c).is_some()
+        && syms.class(c).base_types.iter().any(|&(b, _)| syms.class(b).object_function)
+        && !is_callable_class(syms, types, interner, c)
+}
+
+/// Whether `c` is scala's `PartialFunction`.
+pub(crate) fn is_partial_function_class(syms: &Symbols, interner: &Interner, c: ClassId) -> bool {
+    let info = syms.class(c);
+    matches!(info.owner, Owner::Package(p) if interner.get(syms.pkg(p).name) == "scala" && syms.pkg(p).parent == Some(crate::symbols::ROOT_PKG))
+        && interner.get(info.name) == "PartialFunction"
+}
+
+/// The arity of the function type a class's instances are, where it has one among its bases.
+pub(crate) fn function_arity(syms: &Symbols, interner: &Interner, c: ClassId) -> Option<usize> {
+    syms.class(c).base_types.iter().skip(1).find(|&&(b, _)| is_function_class(syms, interner, b)).map(|&(b, _)| syms.class(b).tparams.len() - 1)
+}
+
+pub(crate) fn is_function_class(syms: &Symbols, interner: &Interner, c: ClassId) -> bool {
     let info = syms.class(c);
     let Owner::Package(p) = info.owner else { return false };
     let name = interner.get(info.name);
@@ -1485,6 +1535,8 @@ impl<'a> Emitter<'a> {
     /// the instance, and the command line reaches `main(args: Array[String])` as a JS array and a
     /// `@main def f(args: String*)` as a sequence.
     fn emit_entry_point(&mut self, main: SymId, object: Option<ClassId>) {
+        // A typed `@main` method runs through its proxy, which parses the command line.
+        let main = self.syms.main_adapter(self.interner, main).unwrap_or(main);
         let name = self.sym_name(main);
         let info = self.syms.sym(main);
         let owner = match (object, info.owner) {
@@ -2357,18 +2409,12 @@ impl<'a> Emitter<'a> {
         // Instances of a class with a function type among its parents are JS functions: the
         // constructor builds one that forwards to `apply`, gives it the class prototype and
         // returns it in place of `this`.
-        let function_arity = info
-            .base_types
-            .iter()
-            .skip(1)
-            .find(|&&(b, _)| self.is_function_class(b))
-            .map(|&(b, _)| self.syms.class(b).tparams.len() - 1);
-        let callable = !matches!(info.kind, ClassKind::Trait | ClassKind::Enum) && function_arity.is_some();
+        let function_arity = function_arity(self.syms, self.interner, tc.id);
+        let callable = !matches!(info.kind, ClassKind::Trait | ClassKind::Enum) && is_callable_class(self.syms, self.types, self.interner, tc.id);
         // The first callable class of a chain makes the function; a subclass continues with
-        // the one its superclass constructor returned.
+        // the one its superclass constructor returned (an enum's case makes its own).
         let super_callable = superclass.map_or(false, |s| {
-            let si = self.syms.class(s);
-            !matches!(si.kind, ClassKind::Trait | ClassKind::Enum) && si.base_types.iter().skip(1).any(|&(b, _)| self.is_function_class(b))
+            !matches!(self.syms.class(s).kind, ClassKind::Trait | ClassKind::Enum) && is_callable_class(self.syms, self.types, self.interner, s)
         });
         let makes_function = callable && !super_callable;
         self.ctor_texts.clear();
@@ -3321,10 +3367,20 @@ impl<'a> Emitter<'a> {
                 let _ = write!(self.out, " {0}.prototype.equals = $subEquals({0});", name);
             }
         }
+        // A class that is a function says its arity, which a test of a function type reads: an instance
+        // that is an object is no JS function (`is_callable_class`), and a JS function's `length` may be
+        // a member's (`$callable`), a sequence's.
+        if !matches!(info.kind, ClassKind::Trait | ClassKind::Enum) {
+            if let Some(n) = function_arity(self.syms, self.interner, tc.id) {
+                let _ = write!(self.out, " {}.prototype.$fn = {};", name, n);
+            }
+        }
         // A partial function value takes the trait's prototype, and with it, where a test asks for
         // the trait, its number.
         if prog.partial_function == Some(tc.id) {
-            let _ = write!(self.out, " $pfInit({});", name);
+            if self.reach.partial_values {
+                let _ = write!(self.out, " $pfInit({});", name);
+            }
             if let Some(n) = self.partial_function_number {
                 let _ = write!(self.out, " {}.prototype.$i{} = true;", name, n);
             }
@@ -3383,8 +3439,13 @@ impl<'a> Emitter<'a> {
                 let _ = write!(self.out, " $exc.{} = {};", self.interner.get(info.name), name);
             }
         }
-        if let Ok(i) = self.reach.reflective.binary_search_by_key(&tc.id, |&(c, _)| c) {
-            let e = self.reach.reflective[i].1;
+        // A class's registrations for `Reflect` and for `Class.forName`, in that order.
+        let from = self.reach.reflective.partition_point(|&(c, _)| c < tc.id);
+        for i in from..self.reach.reflective.len() {
+            let (c, e) = self.reach.reflective[i];
+            if c != tc.id {
+                break;
+            }
             self.out.push(' ');
             self.emit_value(e);
             self.out.push(';');
@@ -3493,8 +3554,9 @@ impl<'a> Emitter<'a> {
         let info = self.syms.class(c);
         let Owner::Package(p) = info.owner else { return false };
         let pkg = self.interner.get(self.syms.pkg(p).name);
-        matches!(pkg, "lang" | "scala" | "js" | "util")
-            && reach::RUNTIME_THROWN.contains(&self.interner.get(info.name))
+        let name = self.interner.get(info.name);
+        (matches!(pkg, "lang" | "scala" | "js" | "util") && reach::RUNTIME_THROWN.contains(&name))
+            || reach::TEMPLATE_FAILURES.iter().any(|&(path, n, _)| path.last() == Some(&pkg) && n == name)
     }
 
     /// Whether a base of `c` other than the classes whose declarations the rule implements

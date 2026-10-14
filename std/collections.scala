@@ -21,7 +21,7 @@ sealed class ArraySeq[+A](private val items: Array[A]) extends SeqOps[A, ArraySe
     acc
   @jvmEvidence
   @jvm("rt $0 $1 rtcall arrayOf(Lscala/IterableOnce;Lscala/reflect/ClassTag;)Ljava/lang/Object; cast_result")
-  override def toArray[B >: A: scala.reflect.ClassTag]: Array[B] = unsafeCast(items.clone())
+  override def toArray[B >: A: scala.reflect.ClassTag]: Array[B] = arrayByTag(scala.reflect.classTag[B], this, unsafeCast(items.clone()))
   // scala-library's view of the array itself and its element tag (`unsafeArray` and `elemTag`
   // on the immutable one, `array` on the mutable one); the tag is the reference one, arrays
   // being untyped here.
@@ -33,11 +33,11 @@ sealed class ArraySeq[+A](private val items: Array[A]) extends SeqOps[A, ArraySe
 
 object ArraySeq:
   @jvmEvidence
-  def apply[A: scala.reflect.ClassTag](elems: A*): ArraySeq[A] = new ArraySeq(taggedArray(iterableToArray(elems)))
+  def apply[A](elems: A*)(using tag: scala.reflect.ClassTag[A]): ArraySeq[A] = new ArraySeq(evidenced(tag, taggedArray(iterableToArray(elems))))
   @jvmEvidence
-  def empty[A: scala.reflect.ClassTag]: ArraySeq[A] = new ArraySeq(taggedArray(emptyBuffer[A]))
+  def empty[A](using tag: scala.reflect.ClassTag[A]): ArraySeq[A] = new ArraySeq(evidenced(tag, taggedArray(emptyBuffer[A])))
   @jvmEvidence
-  def from[A: scala.reflect.ClassTag](source: IterableOnce[A]): ArraySeq[A] = new ArraySeq(taggedArray(iterableToArray(source)))
+  def from[A](source: IterableOnce[A])(using tag: scala.reflect.ClassTag[A]): ArraySeq[A] = new ArraySeq(fromByTag(tag, source))
   def unsafeWrapArray[A](x: Array[A]): ArraySeq[A] = new ArraySeq(x)
   // scala-library's companion is a `ClassTagSeqFactory`, whose evidence factory a library body
   // names as the implicit `Factory` it resolved (izumi-reflect's picklers).
@@ -539,7 +539,7 @@ object List:
       acc = f(i) :: acc
       i += 1
     acc.reverse
-  def range(start: Int, end: Int, step: Int = 1): List[Int] = Range(start, end, step).toList
+  def range(start: Int, end: Int, step: Int = 1): List[Int] = new Range(start, end, step).toList
 
 // scala-library's `ArrayOps.WithFilter`: the elements that pass, each tested as the operation
 // after it reaches it, so that a guard of a for comprehension runs interleaved with its body.
@@ -547,22 +547,20 @@ final class ArrayWithFilter[T](a: Array[T], p: T => Boolean):
   @jvmEvidence
   // `map` and `foreach` read each element once, before the guard runs, and pass that value on;
   // `flatMap` reads it again after the guard, as scala-library's does.
-  def map[B: scala.reflect.ClassTag](f: T => B): Array[B] =
-    val out = emptyBuffer[B]
-    var i = 0
-    while i < a.length do
-      val x = a(i)
-      if p(x) then out.push(f(x))
-      i += 1
-    taggedArray(out)
+  def map[B](f: T => B)(using tag: scala.reflect.ClassTag[B]): Array[B] =
+    builtByTag(tag): (add, _) =>
+      var i = 0
+      while i < a.length do
+        val x = a(i)
+        if p(x) then add(f(x))
+        i += 1
   @jvmEvidence
-  def flatMap[B: scala.reflect.ClassTag](f: T => IterableOnce[B]): Array[B] =
-    val out = emptyBuffer[B]
-    var i = 0
-    while i < a.length do
-      if p(a(i)) then f(a(i)).iterator.foreach(y => out.push(y))
-      i += 1
-    taggedArray(out)
+  def flatMap[B](f: T => IterableOnce[B])(using tag: scala.reflect.ClassTag[B]): Array[B] =
+    builtByTag(tag): (_, addAll) =>
+      var i = 0
+      while i < a.length do
+        if p(a(i)) then addAll(f(a(i)))
+        i += 1
   def foreach[U](f: T => U): Unit =
     var i = 0
     while i < a.length do
@@ -581,15 +579,26 @@ extension [T](a: Array[T])
       f(a(i))
       i += 1
   def toList: List[T] = fromArray(buffered(a))
+  // scala-library's: the array of the result's length, then each element mapped into it.
   @jvmEvidence
+  @js("$arrayMap($0, $1, $2)")
+  def map[B](f: T => B)(using tag: scala.reflect.ClassTag[B]): Array[B] =
+    if tag == null then a.mapUntagged(f)
+    else
+      val out = tag.newArray(a.length)
+      var i = 0
+      while i < a.length do
+        out(i) = f(a(i))
+        i += 1
+      out
   @js("$0.map((x) => $1(x))")
-  def map[B: scala.reflect.ClassTag](f: T => B): Array[B] =
+  private[scala] def mapUntagged[B](f: T => B): Array[B] =
     val out = emptyBuffer[B]
     var i = 0
     while i < a.length do
       out.push(f(a(i)))
       i += 1
-    taggedArray(out)
+    untaggedArray(out)
   @js("$0.filter((x) => $1(x))")
   def filter(p: T => Boolean): Array[T] =
     val out = emptyBuffer[T]
@@ -599,7 +608,13 @@ extension [T](a: Array[T])
       i += 1
     arrayLike(out, a)
   @jvmEvidence
-  def collect[B: scala.reflect.ClassTag](pf: PartialFunction[T, B]): Array[B] = taggedArray(Vector.wrap(buffered(a)).collect(pf).unsafeArray)
+  def collect[B](pf: PartialFunction[T, B])(using tag: scala.reflect.ClassTag[B]): Array[B] =
+    builtByTag(tag): (add, _) =>
+      var i = 0
+      while i < a.length do
+        val v = pf.applyOrElse(a(i), partialMiss[T, B])
+        if !isPartialMiss(v) then add(v)
+        i += 1
   def collectFirst[B](pf: PartialFunction[T, B]): Option[B] = Vector.wrap(buffered(a)).collectFirst(pf)
   def find(p: T => Boolean): Option[T] =
     var i = 0
@@ -638,7 +653,7 @@ extension [T](a: Array[T])
   def toArray: Array[T] = a.clone()
   def iterator: Iterator[T] = arrayIterator(a)
   def view: scala.collection.IndexedSeqView[T] = new scala.collection.ArrayView(a)
-  def indices: Range = Range(0, a.length, 1)
+  def indices: Range = new Range(0, a.length, 1)
   def mkString(start: String, sep: String, end: String): String = joinStrings(Vector.wrap(buffered(a)), start, sep, end)
   def mkString(sep: String): String = joinStrings(Vector.wrap(buffered(a)), "", sep, "")
   def mkString: String = joinStrings(Vector.wrap(buffered(a)), "", "", "")
@@ -654,7 +669,12 @@ extension [T](a: Array[T])
   def filterNot(p: T => Boolean): Array[T] = a.filter(x => !p(x))
   def withFilter(p: T => Boolean): ArrayWithFilter[T] = new ArrayWithFilter(a, p)
   @jvmEvidence
-  def flatMap[B: scala.reflect.ClassTag](f: T => IterableOnce[B]): Array[B] = taggedArray(Vector.wrap(buffered(a)).flatMap(f).unsafeArray)
+  def flatMap[B](f: T => IterableOnce[B])(using tag: scala.reflect.ClassTag[B]): Array[B] =
+    builtByTag(tag): (_, addAll) =>
+      var i = 0
+      while i < a.length do
+        addAll(f(a(i)))
+        i += 1
   def zip[B](that: IterableOnce[B]): Array[(T, B)] = taggedArray(Vector.wrap(buffered(a)).zip(that).unsafeArray)
   def zipWithIndex: Array[(T, Int)] = taggedArray(Vector.wrap(buffered(a)).zipWithIndex.unsafeArray)
   def reverse: Array[T] = arrayLike(Vector.wrap(buffered(a)).reverse.unsafeArray, a)
@@ -694,19 +714,21 @@ extension [T](a: Array[T])
   def sameElements(that: IterableOnce[T]): Boolean = Vector.wrap(buffered(a)).sameElements(that)
   def updated(index: Int, elem: T): Array[T] = arrayLike(Vector.wrap(buffered(a)).updated(index, elem).unsafeArray, a)
   @jvmEvidence
-  def appended[B >: T: scala.reflect.ClassTag](elem: B): Array[B] =
+  def appended[B >: T](elem: B)(using tag: scala.reflect.ClassTag[B]): Array[B] =
     val out = copyArray[T, B](buffered(a))
     out.push(elem)
     taggedArray(out)
   @jvmEvidence
-  def prepended[B >: T: scala.reflect.ClassTag](elem: B): Array[B] = taggedArray(Vector.wrap(buffered(a)).prepended(elem).unsafeArray)
+  def prepended[B >: T](elem: B)(using tag: scala.reflect.ClassTag[B]): Array[B] = taggedArray(Vector.wrap(buffered(a)).prepended(elem).unsafeArray)
   @jvmEvidence
   def :+[B >: T: scala.reflect.ClassTag](elem: B): Array[B] = a.appended(elem)
   @jvmEvidence
   def +:[B >: T: scala.reflect.ClassTag](elem: B): Array[B] = a.prepended(elem)
+  // scala-library's copies of the array, which its class makes (`Array.copyAs`), not the tag: every
+  // array is of one class here.
   @jvmEvidence
   @js("$0.concat($1)")
-  def ++[B >: T: scala.reflect.ClassTag](that: Array[B]): Array[B] =
+  def ++[B >: T](that: Array[B])(using tag: scala.reflect.ClassTag[B]): Array[B] =
     val out = copyArray[T, B](buffered(a))
     var i = 0
     while i < that.length do
@@ -714,7 +736,7 @@ extension [T](a: Array[T])
       i += 1
     taggedArray(out)
   @jvmEvidence
-  def ++[B >: T: scala.reflect.ClassTag](xs: IterableOnce[B]): Array[B] =
+  def ++[B >: T](xs: IterableOnce[B])(using tag: scala.reflect.ClassTag[B]): Array[B] =
     val out = copyArray[T, B](buffered(a))
     xs.foreach(x => out.push(x))
     taggedArray(out)
@@ -750,7 +772,11 @@ inline def arrayOf[T: scala.reflect.ClassTag](inline head: T, inline rest: T*): 
 
 object Array:
   @jvmEvidence
-  def apply[T: scala.reflect.ClassTag](elems: T*): Array[T] = taggedArray(iterableToArray(elems))
+  // scala-library's: the varargs' own array cloned where it is of the elements' class, as a call's
+  // written elements are, else an array of their number filled.
+  def apply[T](elems: T*)(using tag: scala.reflect.ClassTag[T]): Array[T] = elems match
+    case _: scala.collection.immutable.ArraySeq[?] => taggedArray(iterableToArray(elems))
+    case _ => evidenced(tag, taggedArray(iterableToArray(elems)))
   // scalac's overloads for the primitives, which take no tag and to whose element type the
   // arguments are converted (`Array(1, 2L)` is an `Array[Long]`).
   inline def apply(inline x: Boolean, inline xs: Boolean*): Array[Boolean] = arrayOf(x, xs*)
@@ -778,6 +804,21 @@ object Array:
       i += 1
     arrayLike(out, original)
   def ofDim[T](n: Int)(implicit ct: scala.reflect.ClassTag[T]): Array[T] = ct.newArray(n)
+  // scala-library's: the outer array by the tag of the element's array (`wrap`), each inner one by
+  // the element's, the deeper ones by `tabulate`.
+  def ofDim[T](n1: Int, n2: Int)(implicit ct: scala.reflect.ClassTag[T]): Array[Array[T]] =
+    val arr = ct.wrap.newArray(n1)
+    var i = 0
+    while i < n1 do
+      arr(i) = ct.newArray(n2)
+      i += 1
+    arr
+  def ofDim[T](n1: Int, n2: Int, n3: Int)(implicit ct: scala.reflect.ClassTag[T]): Array[Array[Array[T]]] =
+    tabulate(n1)(_ => ofDim[T](n2, n3))
+  def ofDim[T](n1: Int, n2: Int, n3: Int, n4: Int)(implicit ct: scala.reflect.ClassTag[T]): Array[Array[Array[Array[T]]]] =
+    tabulate(n1)(_ => ofDim[T](n2, n3, n4))
+  def ofDim[T](n1: Int, n2: Int, n3: Int, n4: Int, n5: Int)(implicit ct: scala.reflect.ClassTag[T]): Array[Array[Array[Array[Array[T]]]]] =
+    tabulate(n1)(_ => ofDim[T](n2, n3, n4, n5))
   @jvm("rt $1 rtcall taggedBuilder(Lscala/reflect/ClassTag;)Ljava/lang/Object; cast_result")
   def newBuilder[T](implicit ct: scala.reflect.ClassTag[T]): scala.collection.mutable.ArrayBuilder[T] =
     new scala.collection.mutable.ArrayBuilder[T]
@@ -793,28 +834,62 @@ object Array:
       def fromSpecific(it: IterableOnce[A]): Array[A] = taggedArray(iterableToArray(it))
       def newBuilder: scala.collection.mutable.Builder[A, Array[A]] = scala.collection.mutable.ArrayBuffer.empty[A].mapResult(_.toArray)
   @jvmEvidence
-  @js("[]")
+  @js("$arrayEmpty($1)")
   @jvm("rt $1 iconst_0 rtcall newArrayOfTag(Lscala/reflect/ClassTag;I)Ljava/lang/Object; cast_result")
-  def empty[T: scala.reflect.ClassTag]: Array[T]
+  def empty[T](using tag: scala.reflect.ClassTag[T]): Array[T] =
+    if tag == null then emptyUntagged[T] else tag.newArray(0)
+  @js("[]")
+  private[scala] def emptyUntagged[T]: Array[T] = untaggedArray(emptyBuffer[T])
+  // scala-library's: the array of `n` elements, then each element evaluated into it.
   @jvmEvidence
+  @js("$arrayFill($1, $2, $3)")
+  def fill[T](n: Int)(elem: => T)(using tag: scala.reflect.ClassTag[T]): Array[T] =
+    if tag == null then fillUntagged(n)(elem)
+    else
+      val out = tag.newArray(n)
+      var i = 0
+      while i < n do
+        out(i) = elem
+        i += 1
+      out
   @js("$arrayFill($1, $2)")
-  def fill[T: scala.reflect.ClassTag](n: Int)(elem: => T): Array[T] =
+  private[scala] def fillUntagged[T](n: Int)(elem: => T): Array[T] =
     val out = emptyBuffer[T]
     var i = 0
     while i < n do
       out.push(elem)
       i += 1
-    taggedArray(out)
+    untaggedArray(out)
   @jvmEvidence
+  @js("$arrayTabulate($1, $2, $3)")
+  def tabulate[T](n: Int)(f: Int => T)(using tag: scala.reflect.ClassTag[T]): Array[T] =
+    if tag == null then tabulateUntagged(n)(f)
+    else
+      val out = tag.newArray(n)
+      var i = 0
+      while i < n do
+        out(i) = f(i)
+        i += 1
+      out
   @js("$arrayTabulate($1, $2)")
-  def tabulate[T: scala.reflect.ClassTag](n: Int)(f: Int => T): Array[T] =
+  private[scala] def tabulateUntagged[T](n: Int)(f: Int => T): Array[T] =
     val out = emptyBuffer[T]
     var i = 0
     while i < n do
       out.push(f(i))
       i += 1
-    taggedArray(out)
-  def range(start: Int, end: Int, step: Int = 1): Array[Int] = Range(start, end, step).toArray
+    untaggedArray(out)
+  def range(start: Int, end: Int, step: Int = 1): Array[Int] = new Range(start, end, step).toArray
+
+object Range:
+  def apply(start: Int, end: Int): Range = new Range(start, end, 1)
+  def apply(start: Int, end: Int, step: Int): Range = new Range(start, end, step)
+  def inclusive(start: Int, end: Int): Range = new Range(start, end, 1, true)
+  def inclusive(start: Int, end: Int, step: Int): Range = new Range(start, end, step, true)
+  /** scala-library's: a range that awaits its step (`BigDecimal(1) to BigDecimal(2) by x`). */
+  final class Partial[T, U](private val f: T => U) extends AnyVal:
+    def by(x: T): U = f(x)
+    override def toString: String = "Range requires step"
 
 final class Range(val start: Int, val end: Int, val step: Int, val isInclusive: Boolean = false) extends SeqOps[Int, IndexedSeq, IndexedSeq[Int]], IndexedSeq[Int]:
   override def collectionClassName: String = "Range"
@@ -934,7 +1009,7 @@ final class Range(val start: Int, val end: Int, val step: Int, val isInclusive: 
       (if step == 1 then "" else " by " + step.toString)
 
 extension (x: Int)
-  def until(end: Int): Range = Range(x, end, 1)
+  def until(end: Int): Range = new Range(x, end, 1)
   def to(end: Int): Range = new Range(x, end, 1, true)
   def max(y: Int): Int = if x > y then x else y
   def min(y: Int): Int = if x < y then x else y
@@ -953,53 +1028,19 @@ extension (x: Int)
   def toBinaryString: String
 
 extension (c: Char)
-  def to(end: Char): NumericRange[Char] = new NumericRange(c.toLong, end.toLong, 1L, true, i => i.toInt.toChar)
-  def until(end: Char): NumericRange[Char] = new NumericRange(c.toLong, end.toLong, 1L, false, i => i.toInt.toChar)
+  def to(end: Char): NumericRange.Inclusive[Char] = NumericRange.inclusive(c, end, 1.toChar)
+  def to(end: Char, step: Char): NumericRange.Inclusive[Char] = NumericRange.inclusive(c, end, step)
+  def until(end: Char): NumericRange.Exclusive[Char] = NumericRange(c, end, 1.toChar)
+  def until(end: Char, step: Char): NumericRange.Exclusive[Char] = NumericRange(c, end, step)
   def compare(that: Char): Int = c.toInt - that.toInt
   def max(that: Char): Char = if c.toInt >= that.toInt then c else that
   def min(that: Char): Char = if c.toInt <= that.toInt then c else that
 
-// The ranges of Long and Char: the bounds are Longs that `elem` turns into elements.
-final class NumericRange[A](val startIndex: Long, val endIndex: Long, val step: Long, val isInclusive: Boolean, elem: Long => A) extends SeqOps[A, IndexedSeq, IndexedSeq[A]], IndexedSeq[A]:
-  def buildCC[B](items: RawBuffer[B]): IndexedSeq[B] = Vector.wrap(items)
-  def start: A = elem(startIndex)
-  def end: A = elem(endIndex)
-  def by(newStep: Long): NumericRange[A] = new NumericRange(startIndex, endIndex, newStep, isInclusive, elem)
-  def inclusive: NumericRange[A] = new NumericRange(startIndex, endIndex, step, true, elem)
-  private def limit: Long = if !isInclusive then endIndex else if step > 0L then endIndex + 1L else endIndex - 1L
-  override def isEmpty: Boolean = if step > 0L then startIndex >= limit else startIndex <= limit
-  def length: Int =
-    if isEmpty then 0
-    else if step > 0L then ((limit - startIndex + step - 1L) / step).toInt
-    else ((startIndex - limit - step - 1L) / (-step)).toInt
-  def apply(i: Int): A =
-    if i < 0 || i >= length then indexOutOfBounds(i.toString)
-    else elem(startIndex + i.toLong * step)
-  def foreach[U](f: A => U): Unit =
-    var i = startIndex
-    val stop = limit
-    if step > 0L then
-      while i < stop do
-        f(elem(i))
-        i += step
-    else
-      while i > stop do
-        f(elem(i))
-        i += step
-  override def iterator: Iterator[A] =
-    var i = startIndex
-    val stop = limit
-    def next(): A =
-      i += step
-      elem(i - step)
-    new FnIterator(() => if step > 0L then i < stop else i > stop, () => next())
-  override def toString: String =
-    (if isEmpty then "empty " else "") + "NumericRange " + start.toString + (if isInclusive then " to " else " until ") +
-      end.toString + (if step == 1L then "" else " by " + elem(step).toString)
-
 extension (x: Long)
-  def until(end: Long): NumericRange[Long] = new NumericRange(x, end, 1L, false, i => i)
-  def to(end: Long): NumericRange[Long] = new NumericRange(x, end, 1L, true, i => i)
+  def until(end: Long): NumericRange.Exclusive[Long] = NumericRange(x, end, 1L)
+  def until(end: Long, step: Long): NumericRange.Exclusive[Long] = NumericRange(x, end, step)
+  def to(end: Long): NumericRange.Inclusive[Long] = NumericRange.inclusive(x, end, 1L)
+  def to(end: Long, step: Long): NumericRange.Inclusive[Long] = NumericRange.inclusive(x, end, step)
   def max(y: Long): Long = if x > y then x else y
   def min(y: Long): Long = if x < y then x else y
   def abs: Long = if x < 0L then -x else x
@@ -1062,15 +1103,43 @@ extension (x: Double)
 object Math:
   final val PI: 3.141592653589793 = 3.141592653589793
   final val E: 2.718281828459045 = 2.718281828459045
+  // The JDK's overloads of each primitive kind.
   @js("$max($1, $2)")
-  @jvm("rt $1:L $2:L rtcall numMax(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;")
-  def max[T <: Int | Long | Double](a: T, b: T): T
+  @jvm("invokestatic java/lang/Math.max(II)I")
+  def max(a: Int, b: Int): Int
+  @js("$max($1, $2)")
+  @jvm("invokestatic java/lang/Math.max(JJ)J")
+  def max(a: Long, b: Long): Long
+  @js("$max($1, $2)")
+  @jvm("invokestatic java/lang/Math.max(FF)F")
+  def max(a: Float, b: Float): Float
+  @js("$max($1, $2)")
+  @jvm("invokestatic java/lang/Math.max(DD)D")
+  def max(a: Double, b: Double): Double
   @js("$min($1, $2)")
-  @jvm("rt $1:L $2:L rtcall numMin(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;")
-  def min[T <: Int | Long | Double](a: T, b: T): T
+  @jvm("invokestatic java/lang/Math.min(II)I")
+  def min(a: Int, b: Int): Int
+  @js("$min($1, $2)")
+  @jvm("invokestatic java/lang/Math.min(JJ)J")
+  def min(a: Long, b: Long): Long
+  @js("$min($1, $2)")
+  @jvm("invokestatic java/lang/Math.min(FF)F")
+  def min(a: Float, b: Float): Float
+  @js("$min($1, $2)")
+  @jvm("invokestatic java/lang/Math.min(DD)D")
+  def min(a: Double, b: Double): Double
   @js("$abs($1)")
-  @jvm("rt $1:L rtcall numAbs(Ljava/lang/Object;)Ljava/lang/Object;")
-  def abs[T <: Int | Long | Double](x: T): T
+  @jvm("invokestatic java/lang/Math.abs(I)I")
+  def abs(a: Int): Int
+  @js("$abs($1)")
+  @jvm("invokestatic java/lang/Math.abs(J)J")
+  def abs(a: Long): Long
+  @js("$abs($1)")
+  @jvm("invokestatic java/lang/Math.abs(F)F")
+  def abs(a: Float): Float
+  @js("$abs($1)")
+  @jvm("invokestatic java/lang/Math.abs(D)D")
+  def abs(a: Double): Double
   @js("Math.sqrt($1)")
   @jvm("invokestatic java/lang/Math.sqrt(D)D")
   def sqrt(x: Double): Double
@@ -1119,12 +1188,18 @@ object Math:
   @js("$signum($1)")
   @jvm("invokestatic java/lang/Math.signum(D)D")
   def signum(x: Double): Double
-  @js("$floorDiv($1, $2)")
-  @jvm("rt $1:L $2:L rtcall numFloorDiv(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;")
-  def floorDiv[T <: Int | Long](a: T, b: T): T
-  @js("$floorMod($1, $2)")
-  @jvm("rt $1:L $2:L rtcall numFloorMod(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;")
-  def floorMod[T <: Int | Long](a: T, b: T): T
+  @js("$floorDivInt($1, $2)")
+  @jvm("invokestatic java/lang/Math.floorDiv(II)I")
+  def floorDiv(a: Int, b: Int): Int
+  @js("$floorDivLong($1, $2)")
+  @jvm("invokestatic java/lang/Math.floorDiv(JJ)J")
+  def floorDiv(a: Long, b: Long): Long
+  @js("$floorModInt($1, $2)")
+  @jvm("invokestatic java/lang/Math.floorMod(II)I")
+  def floorMod(a: Int, b: Int): Int
+  @js("$floorModLong($1, $2)")
+  @jvm("invokestatic java/lang/Math.floorMod(JJ)J")
+  def floorMod(a: Long, b: Long): Long
   @js("$rint($1)")
   @jvm("invokestatic java/lang/Math.rint(D)D")
   def rint(x: Double): Double

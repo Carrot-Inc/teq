@@ -130,14 +130,6 @@ impl<'a> Gen<'a> {
                 self.invoke(Invoke::Virtual, OBJECT, false, "equals", &[object], &JType::Z);
                 return JType::Z;
             }
-            "$doubleEquals($0, $1)" => {
-                let double = JType::L(Rc::from("java/lang/Double"));
-                self.expr(args[0], &JType::D);
-                self.adapt(&JType::D, &double);
-                self.expr(args[1], &object);
-                self.invoke(Invoke::Virtual, OBJECT, false, "equals", &[object], &JType::Z);
-                return JType::Z;
-            }
             // The lookups of an enum's companion (`prims.rs`): its own `values`, `valueOf` and
             // `fromOrdinal`, scalac's (`enum_companion_members`).
             "$enumValues($0)" | "$enumValueOf($0, $1, $2, $3, $4)" | "$enumFromOrdinal($0, $1, $2)" | "$enumCaseOfOrdinal($0, $1, $2, $3, $4)" => {

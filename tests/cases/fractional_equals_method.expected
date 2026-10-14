@@ -1,0 +1,7 @@
+List(false, true, true, true, true)
+List(true, false, false, true)
+List(false, true, true, true)
+List(true, false)
+List(true, true, true, true, true)
+List(true, true, true, true, false, false)
+List(true, true, true, true)

@@ -171,7 +171,8 @@ package java.time:
     override def toString: String = getId
 
   object ZoneId:
-    def systemDefault(): ZoneId = SystemZone.zone
+    // The JDK's: the default `TimeZone`'s zone, which `TimeZone.setDefault` moves.
+    def systemDefault(): ZoneId = java.util.TimeZone.getDefault().toZoneId()
     // `UTC`, `GMT`, `Z`, an offset, or the machine's own zone by its name.
     def of(zoneId: String): ZoneId =
       if zoneId == null then throw new NullPointerException("zoneId")

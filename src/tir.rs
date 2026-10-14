@@ -305,6 +305,12 @@ pub enum CastOp {
     /// primitive's zero, a value that fails the test throws `ClassCastException`. The type is
     /// the primitive's.
     Unbox(TestId, TypeId),
+    /// The erasure's unboxing of a value a call with an erased result gave, where its primitive
+    /// type is consumed (`Worker::unbox_erased`, dotty's `Erasure.Boxing.adaptToType`): `null` is
+    /// the primitive's zero, as `Unbox`; on JavaScript any other value is taken as it is
+    /// (unchecked, as Scala.js's production unboxing), a field read before its assignment
+    /// (`undefined`) the zero too, which the JVM reads there. Typed as `Unbox` is.
+    Adapt(TestId, TypeId),
     /// A cast to `Nothing`, which throws `ClassCastException` whatever the value, `null` included.
     Nothing,
 }
@@ -1030,6 +1036,9 @@ pub struct Program {
     pub overrides: crate::arena::Layered<SymId, Vec<SymId>>,
     /// The trait whose methods the runtime gives to partial function values.
     pub partial_function: Option<ClassId>,
+    /// `scala.reflect.ClassTag`'s companion, whose tags a `@jvmEvidence` member is passed as
+    /// `null` outside the JVM (`Program::is_standard_class_tag`).
+    pub class_tag_module: Option<ClassId>,
     /// `java.lang.Throwable` and `js.JavaScriptException`, which a catch that wraps refers to.
     pub throwable: Option<ClassId>,
     pub js_exception: Option<ClassId>,
@@ -1150,6 +1159,71 @@ pub struct Expansion {
 }
 
 impl Program {
+    /// A tag as scalac's `Synthesizer` makes it, and as a program or a library body may write it:
+    /// a val of `ClassTag`'s companion (`ClassTag.Int`), `ClassTag.apply(classOf[C])`, or such a
+    /// tag's `wrap`. Pure, and its `newArray` is the standard allocation, so that a `@jvmEvidence`
+    /// member of the std is passed `null` for it outside the JVM, which leaves its array as it is
+    /// (`std/buffer.scala`'s `evidenced`).
+    pub fn is_standard_class_tag(&self, te: TExprId, syms: &crate::symbols::Symbols, interner: &crate::intern::Interner) -> bool {
+        let Some(m) = self.class_tag_module else { return false };
+        match self.expr(te) {
+            TExpr::Field(r, _) => matches!(self.expr(r), TExpr::Module(c) if c == m),
+            TExpr::CallMethod(r, s, args) => {
+                let name = interner.get(syms.sym(s).name);
+                match self.expr(r) {
+                    TExpr::Module(c) if c == m => name == "apply" && matches!(self.expr_list(args), [a] if matches!(self.expr(*a), TExpr::ClassOf(..))),
+                    _ => name == "wrap" && args.is_empty() && self.is_standard_class_tag(r, syms, interner),
+                }
+            }
+            _ => false,
+        }
+    }
+
+    /// The arguments of `call` that are evidence of a `@jvmEvidence` member, a bit per position in
+    /// the call's argument list, whose standard tags the JavaScript output passes as `null`
+    /// (`is_standard_class_tag`): the parameters of its implicit clauses, the tag scala-library's
+    /// member is passed as evidence, and no ordinary argument (`appended(ClassTag.Int)` keeps its
+    /// element). Only of a member nothing outside the std overrides, which reads the `null` as a
+    /// standard tag: an extension, a top-level definition, an object's or a final class's member;
+    /// a class of a library that overrides `toArray` (zio's `Chunk`) is passed the tag itself.
+    pub fn evidence_args(&self, call: TExprId, syms: &crate::symbols::Symbols) -> u64 {
+        let (s, n) = match self.expr(call) {
+            TExpr::CallMethod(_, s, args) | TExpr::CallStatic(s, args) => (s, args.len as usize),
+            TExpr::Js(t, args) => match self.template_syms.get(&t) {
+                Some(&s) => (s, args.len as usize),
+                None => return 0,
+            },
+            _ => return 0,
+        };
+        let info = syms.sym(s);
+        let overridable = !info.is_extension
+            && match info.owner {
+                crate::symbols::Owner::Class(c) => {
+                    let class = syms.class(c);
+                    class.kind != crate::symbols::ClassKind::Object && class.mods & crate::ast::mods::FINAL == 0
+                }
+                _ => false,
+            };
+        if !info.jvm_evidence || overridable {
+            return 0;
+        }
+        let Some(sig) = info.info.sig.as_deref() else { return 0 };
+        let params = sig.clauses.iter().map(|c| c.params.len()).sum::<usize>();
+        // A template's arguments begin with its receiver where the member has one.
+        let Some(offset) = n.checked_sub(params) else { return 0 };
+        let mut mask = 0u64;
+        let mut k = offset;
+        for clause in &sig.clauses {
+            for _ in &clause.params {
+                if (clause.is_using || clause.is_implicit) && k < 64 {
+                    mask |= 1 << k;
+                }
+                k += 1;
+            }
+        }
+        mask
+    }
+
     /// Whether a function is a local trait's lifted member (`lifted_funs`).
     #[inline]
     pub fn has_lifted_funs(&self) -> bool {
@@ -1266,6 +1340,7 @@ impl Program {
             main_object: None,
             overrides: self.overrides.attach(),
             partial_function: self.partial_function,
+            class_tag_module: self.class_tag_module,
             throwable: self.throwable,
             js_exception: self.js_exception,
             js_imports: Vec::new(),
@@ -1366,6 +1441,7 @@ impl Default for Program {
             main_object: None,
             overrides: Default::default(),
             partial_function: None,
+            class_tag_module: None,
             throwable: None,
             js_exception: None,
             js_imports: Vec::new(),
@@ -1964,7 +2040,7 @@ impl<'a> Iterator for Descendants<'a> {
             | TExpr::JsSelect(r, _) | TExpr::Return(r) | TExpr::Throw(r, _) | TExpr::Lambda(_, r) | TExpr::Splice(r) => {
                 self.exprs.push(r)
             }
-            TExpr::TypeTest(r, test) | TExpr::Cast(r, CastOp::Check(test, _) | CastOp::Unbox(test, _), _) => {
+            TExpr::TypeTest(r, test) | TExpr::Cast(r, CastOp::Check(test, _) | CastOp::Unbox(test, _) | CastOp::Adapt(test, _), _) => {
                 self.exprs.push(r);
                 self.tests.push(test);
             }

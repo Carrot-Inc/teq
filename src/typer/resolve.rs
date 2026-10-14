@@ -3732,6 +3732,7 @@ impl<'a> Worker<'a> {
             }
             TyExpr::Match(scrut, cases) => self.match_type_expr(scrut, cases),
             TyExpr::MatchCase(..) => ERROR,
+            TyExpr::MainParam(def, n) => self.main_param_type(def, n),
             TyExpr::Resolved(t) => {
                 // A type the loader mapped into a library body, the base's: in the reader's view.
                 let t = self.types.import(t);
@@ -7670,7 +7671,7 @@ pub(super) fn ty_mentions(ast: &ast::Ast, ty: TyExprId, name: Name) -> bool {
         TyExpr::Project(t, _) | TyExpr::Refined(t, _) => ty_mentions(ast, t, name),
         TyExpr::Match(s, cases) => ty_mentions(ast, s, name) || any(cases),
         TyExpr::MatchCase(p, b) => ty_mentions(ast, p, name) || ty_mentions(ast, b, name),
-        TyExpr::Select(..) | TyExpr::Singleton(_) | TyExpr::Wildcard | TyExpr::Lit(_) | TyExpr::TypeVar(_) | TyExpr::Resolved(_) | TyExpr::Error => {
+        TyExpr::Select(..) | TyExpr::Singleton(_) | TyExpr::Wildcard | TyExpr::Lit(_) | TyExpr::TypeVar(_) | TyExpr::Resolved(_) | TyExpr::MainParam(..) | TyExpr::Error => {
             false
         }
     }

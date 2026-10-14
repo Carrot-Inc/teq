@@ -3384,6 +3384,7 @@ impl<'c> Copier<'c> {
                 let op = match op {
                     CastOp::Check(test, erased) => CastOp::Check(self.test(t, test), self.ty(t, erased)),
                     CastOp::Unbox(test, erased) => CastOp::Unbox(self.test(t, test), self.ty(t, erased)),
+                    CastOp::Adapt(test, erased) => CastOp::Adapt(self.test(t, test), self.ty(t, erased)),
                     CastOp::Written | CastOp::Nothing => op,
                 };
                 // A quote's cast is decided where the quote runs, its holes filled (a stored

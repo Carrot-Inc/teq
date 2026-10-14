@@ -1,0 +1,32 @@
+val typed 0
+val inferred 0
+var assigned 0
+arg Int 0
+arg Any null
+interp null
+null
+concat null
+plus 1
+eq0 true
+if zero
+match zero
+def typed 0
+def inferred 0
+lambda List(0)
+lambda typed List(0)
+tuple 1
+option -1 1
+generic array 1
+id 0
+max 3
+list List(0)
+array 0
+getOrDefault 8
+if inferred 0
+inline expansion 1
+inline inferred 1
+transparent 6
+0
+0
+transparent typed 1
+null

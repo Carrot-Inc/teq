@@ -221,10 +221,15 @@ impl<'w, 'a> P<'w, 'a> {
         let spanned = e.and_then(|e| self.w.prog.span_of(e));
         let own = spanned.filter(|&(f, _)| self.w.files.as_slice().get(f.0 as usize).map_or(false, |src| !src.is_std) && !self.w.in_jar(f));
         // A node of a body converted from a pickle (an upstream product's, a library's): the
-        // place that pickle gives its tree, as scalac's pickle keeps an inlined body's.
-        let pickled = if own.is_none() { e.and_then(|e| self.pickled_place_of(e)) } else { None };
+        // place that pickle gives its tree, as scalac's pickle keeps an inlined body's; an
+        // unboxing's, its call's.
+        let tree = e.map(|e| match self.w.prog.expr(e) {
+            TExpr::Cast(a, crate::tir::CastOp::Adapt(..), _) => a,
+            _ => e,
+        });
+        let pickled = if own.is_none() { tree.and_then(|e| self.pickled_place_of(e)) } else { None };
         if pickled.is_some() {
-            self.placed_tree = e.and_then(|e| self.records(e).tree).map(|t| (self.buf.addr(), t));
+            self.placed_tree = tree.and_then(|e| self.records(e).tree).map(|t| (self.buf.addr(), t));
         }
         let own = own.or(pickled.map(|(f, s, _)| (f, s)));
         // The expansion of an upstream product's inline call, spanned in the product's body,
@@ -431,6 +436,12 @@ impl<'w, 'a> P<'w, 'a> {
     }
 
     pub(super) fn term(&mut self, e: TExprId) {
+        // An erased result's unboxing, which no other target makes: the call it unboxes, written,
+        // placed and noted as an expansion's leaf as it is.
+        let unboxed = self.unboxed_call(e);
+        if unboxed != e {
+            return self.term(unboxed);
+        }
         // A tree an expansion took from its call site in another source: in an `INLINED` without
         // a call, in the expansion's source, as scalac writes an argument it puts for a
         // parameter, which gives the tree it stands in a span of that source.
@@ -446,6 +457,16 @@ impl<'w, 'a> P<'w, 'a> {
                 self.buf.end_length(l);
             }
             None => self.term_node(e),
+        }
+    }
+
+    /// The call an unboxing of its erased result holds (`Worker::unbox_erased`), else `e`: an
+    /// unboxing that has an inline call's records (`Worker::expand_inline`'s of a plain inline
+    /// method's expansion) stands for the call.
+    pub(super) fn unboxed_call(&self, e: TExprId) -> TExprId {
+        match self.w.prog.expr(e) {
+            TExpr::Cast(inner, crate::tir::CastOp::Adapt(..), _) if self.records(e).inline_calls.is_empty() => inner,
+            _ => e,
         }
     }
 
@@ -1093,6 +1114,12 @@ impl<'w, 'a> P<'w, 'a> {
                 Some(Form::Test(t)) => self.universal("isInstanceOf", |p| p.term(a), &[t], &[]),
                 _ => self.fail("a type test without its type".to_string()),
             },
+            // An expansion's unboxed result, which has the expansion's records: the result at
+            // the place the expansion's writing gave the unboxing.
+            TExpr::Cast(a, crate::tir::CastOp::Adapt(..), _) => {
+                let own = self.records(a);
+                self.node(a, &own)
+            }
             TExpr::Cast(a, _, to) => match form {
                 Some(Form::Cast(t)) => self.cast_to(t, |p| p.term(a)),
                 None => self.cast_to(to, |p| p.term(a)),
@@ -1914,6 +1941,7 @@ impl<'w, 'a> P<'w, 'a> {
         if scopes.is_empty() {
             return None;
         }
+        let res = self.unboxed_call(res);
         let (m, args) = match self.w.prog.expr(res) {
             TExpr::CallMethod(r, m, args) if matches!(self.w.prog.expr(r), TExpr::Module(_)) => (m, self.w.prog.expr_list(args).to_vec()),
             TExpr::CallStatic(m, args) => (m, self.w.prog.expr_list(args).to_vec()),
@@ -5582,7 +5610,7 @@ impl<'w, 'a> P<'w, 'a> {
     fn unpromoted(&self, x: TExprId) -> TExprId {
         match (self.w.prog.expr(x), self.records(x).form) {
             (TExpr::Unary(_, inner), Some(Form::Promotion)) => inner,
-            _ => x,
+            _ => self.unboxed_call(x),
         }
     }
 

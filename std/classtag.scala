@@ -19,6 +19,9 @@ trait ClassTag[T]:
   @jvm("rt $0 rtcall wrappedTag(Lscala/reflect/ClassTag;)Lscala/reflect/ClassTag;")
   @jvmLink("$0 invokeinterface scala/reflect/ClassTag.wrap()Lscala/reflect/ClassTag;")
   def wrap: ClassTag[Array[T]] = ClassTag(arrayClassOf(runtimeClass))
+  /** Whether `newArray` is the plain array of the class (the std's own tags), which an `@jvmEvidence`
+    * member may leave unasked, nothing seeing the allocation (`std/buffer.scala`'s `evidenced`). */
+  private[scala] def standardAllocation: Boolean = false
   def canEqual(x: Any): Boolean = x.isInstanceOf[ClassTag[?]]
   override def equals(x: Any): Boolean = x.isInstanceOf[ClassTag[?]] && this.runtimeClass == x.asInstanceOf[ClassTag[?]].runtimeClass
   override def hashCode: Int = runtimeClass.##
@@ -41,6 +44,8 @@ object ClassTag:
   val Object: ClassTag[Object] = new PhantomClassTag(classOf[Object], "Object")
   val AnyVal: ClassTag[AnyVal] = new PhantomClassTag(classOf[Object], "AnyVal")
   val AnyRef: ClassTag[AnyRef] = Object
+  val Nothing: ClassTag[Nothing] = new PhantomClassTag(classOf[scala.runtime.Nothing$], "Nothing")
+  val Null: ClassTag[Null] = new PhantomClassTag(classOf[scala.runtime.Null$], "Null")
 
   /** scala-library's `apply`: a primitive's and `Object`'s class give their tags, any other a
     * `GenericClassTag`.

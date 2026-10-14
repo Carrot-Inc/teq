@@ -1268,6 +1268,10 @@ impl<'a> Enc<'a> {
                         self.tok(3);
                         self.test(t);
                     }
+                    CastOp::Adapt(t, _) => {
+                        self.tok(4);
+                        self.test(t);
+                    }
                 }
             }
             TExpr::ClassOf(c, dims) => {
@@ -1718,7 +1722,7 @@ impl<'a> Enc<'a> {
                 out.bound.extend_from_slice(prog.sym_list(ps));
                 self.scan(body, out);
             }
-            TExpr::TypeTest(r, t) | TExpr::Cast(r, CastOp::Check(t, _) | CastOp::Unbox(t, _), _) => {
+            TExpr::TypeTest(r, t) | TExpr::Cast(r, CastOp::Check(t, _) | CastOp::Unbox(t, _) | CastOp::Adapt(t, _), _) => {
                 self.scan(r, out);
                 self.scan_test(t, out);
             }

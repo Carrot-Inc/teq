@@ -1029,8 +1029,15 @@ impl<'a> Worker<'a> {
     fn overridden_dispatch(&mut self, c: ClassId, m: SymId) -> Option<Option<Name>> {
         let name = self.syms.sym(m).name;
         let bases: Vec<(ClassId, TypeId)> = self.met_base_types(c);
+        // A class under an `@objectFunction` trait is called as a function by the calling convention
+        // (`Emitter::emit_function_call`), which calls its `apply` as it is named: what a function
+        // type's members are called in the output is no name of its.
+        let object_function = bases.iter().any(|&(b, _)| self.syms.class(b).object_function);
         let mut inherited: Option<Option<Name>> = None;
         for &(b, bt) in &bases[1..] {
+            if object_function && (self.is_function_class(b) || self.is_partial_function(b)) {
+                continue;
+            }
             let mut k = 0;
             while let Some(p) = self.own_alternative(b, name, k) {
                 k += 1;

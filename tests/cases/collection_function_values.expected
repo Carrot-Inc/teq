@@ -1,0 +1,20 @@
+one
+one
+one
+lambda 2
+two
+twotwo
+Vector(b, y)
+Some((true,false))
+List(30, 4)
+List(p, r, q)
+List(7, 8, 9)
+List(a, b, c)
+List(a)
+List((true,Some(m),None), (false,None,Some(case)))
+List(default 3, default 3)
+List(m, case)
+ONE
+cast
+a function: cast
+List(one, none)

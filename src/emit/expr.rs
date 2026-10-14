@@ -73,7 +73,8 @@ impl<'a> Emitter<'a> {
     /// computes left out (`defaults::Lowering`).
     pub(super) fn emit_call_args(&mut self, e: TExprId, args: ListRef) {
         let omitted = self.omitted_args(e);
-        self.emit_args_omitting(args, &omitted);
+        let evidence = self.prog.evidence_args(e, self.syms);
+        self.emit_args_omitting(args, &omitted, evidence);
     }
 
     /// The arguments after an opening parenthesis that may hold one already, and the closing one.
@@ -159,9 +160,96 @@ impl<'a> Emitter<'a> {
         self.emit_args(args);
     }
 
+    /// The call of a function value's `apply` (`is_function_apply`): a JS call, but of a function of one argument
+    /// whose callee is not statically a JS function (`callee_is_function`), which may be an instance of a class
+    /// that is a function through an `@objectFunction` trait alone (scala-library's collections: `MapOps`
+    /// extends `PartialFunction`), an object: such a call goes by the calling convention that calls a JS function
+    /// and an object's `apply`. A callee read again as it stands (a local, `this`, a field of one) is tested in
+    /// place, `(typeof f === "function" ? f : $jsFn(f))(x)`, which keeps the call site's own call; another is
+    /// evaluated once, by `$ap`. Where the callee's function type is known (the `apply` called is a member of
+    /// `owner`), one no object is of (`ContextFunction1`, a trait of the program's) is called as it is; the
+    /// typer's application of a function value (`CallClosure`) names none.
+    fn emit_function_call(&mut self, f: TExprId, args: ListRef, owner: Option<ClassId>) {
+        if args.len != 1 || self.callee_is_function(f) || owner.is_some_and(|c| !self.may_be_object(c)) {
+            return self.emit_closure_call(f, args);
+        }
+        let reread = match self.peek(f) {
+            TExpr::Local(_) | TExpr::This => true,
+            TExpr::Field(r, _) => matches!(self.peek(r), TExpr::Local(_) | TExpr::This),
+            _ => false,
+        };
+        if reread {
+            self.note_text("$jsFn");
+            self.out.push_str("(typeof ");
+            self.emit_value(f);
+            self.out.push_str(" === \"function\" ? ");
+            self.emit_value(f);
+            self.out.push_str(" : $jsFn(");
+            self.emit_value(f);
+            self.out.push_str("))");
+            self.emit_args(args);
+        } else {
+            self.note_text("$ap");
+            self.out.push_str("$ap(");
+            self.emit_value(f);
+            self.emit_more_args(args, ", ");
+        }
+    }
+
+    /// The arguments of the template call `template(args)` that leave Scala for JavaScript's own code as functions
+    /// of one argument, by bit: those given for a parameter of a function type of one argument (Scala.js's
+    /// `js.Function1` is `scala.Function1` here) whose value is not statically a JS function (`callee_is_function`).
+    fn leaving_functions(&self, template: StrRef, args: &[TExprId]) -> u64 {
+        let Some(&s) = self.prog.template_syms.get(&template) else { return 0 };
+        let Some(sig) = self.syms.sym(s).info.sig.as_deref() else { return 0 };
+        let params: usize = sig.clauses.iter().map(|c| c.params.len()).sum();
+        // A template's arguments begin with its receiver where the member has one.
+        let Some(offset) = args.len().checked_sub(params) else { return 0 };
+        let mut leaving = 0u64;
+        for (i, p) in sig.clauses.iter().flat_map(|c| c.params.iter()).enumerate() {
+            let k = offset + i;
+            let function1 = self.types.named_class(p.ty).is_some_and(|c| {
+                self.is_function_class(c) && self.syms.class(c).tparams.len() == 2 && !self.interner.get(self.syms.class(c).name).starts_with("Context")
+            });
+            if k < 64 && function1 && !self.callee_is_function(args[k]) {
+                leaving |= 1 << k;
+            }
+        }
+        leaving
+    }
+
+    /// A function of one argument leaving for JavaScript's own code (`leaving_functions`): as a JS function,
+    /// which a value whose instances are objects becomes (`$jsFn`), as Scala.js's `js.Any.fromFunction1`
+    /// makes one.
+    fn emit_leaving_function(&mut self, a: TExprId) {
+        self.note_text("$jsFn");
+        self.out.push_str("$jsFn(");
+        self.emit_value(a);
+        self.out.push(')');
+    }
+
+    /// Whether a function value is statically a JS function, as its expression says, whatever types a build
+    /// recorded: a lambda, a lowered anonymous class, a value of JavaScript's.
+    pub(super) fn callee_is_function(&self, f: TExprId) -> bool {
+        matches!(self.peek(f), TExpr::Lambda(..) | TExpr::JsImport(_) | TExpr::JsGlobal(..) | TExpr::JsSelect(..)) || self.is_closure(f)
+    }
+
+    /// Whether a value of the function class or trait `c` may be an object: `Function1` and `PartialFunction`,
+    /// which the collections are below, and a class or trait whose instances may be objects
+    /// (`super::has_object_instances`); not `ContextFunction1`, another arity's, nor a trait of the program's,
+    /// whose classes' instances are JS functions (`super::is_callable_class`).
+    fn may_be_object(&self, c: ClassId) -> bool {
+        let info = self.syms.class(c);
+        (self.is_function_class(c) && info.tparams.len() == 2 && !self.interner.get(info.name).starts_with("Context"))
+            || super::is_partial_function_class(self.syms, self.interner, c)
+            || super::has_object_instances(self.syms, self.types, self.interner, c)
+    }
+
     /// The `apply` of a function class (`scala.Function1`), or its abstract redeclaration in a
-    /// trait below one, which every value of the trait answers as the function it is. An
-    /// overloaded `apply` of a trait is a member of its own.
+    /// trait below one, which every value of the trait answers as the function it is (an object by the
+    /// calling convention, `emit_function_call`), but an `@objectFunction` trait's, whose classes' instances
+    /// are objects (`super::is_callable_class`), called as their member. An overloaded `apply` of a trait
+    /// is a member of its own.
     fn is_function_apply(&self, s: SymId) -> bool {
         let info = self.syms.sym(s);
         if info.name != crate::names::APPLY {
@@ -177,6 +265,7 @@ impl<'a> Emitter<'a> {
             && !info.alternative
             && self.reach.is_abstract(self.syms, s)
             && owner.base_types.iter().skip(1).any(|&(b, _)| self.is_function_class(b) && self.syms.class(b).tparams.len() == params + 1)
+            && !owner.base_types.iter().any(|&(b, _)| self.syms.class(b).object_function)
     }
 
     /// An arrow function only stands on its own as a whole argument or element; next to an
@@ -387,6 +476,7 @@ impl<'a> Emitter<'a> {
             TExpr::Cast(r, op, _) => match op {
                 CastOp::Written | CastOp::Nothing => self.arg_purity(r),
                 CastOp::Check(..) | CastOp::Unbox(..) => self.arg_purity(r).min(Purity::Idempotent),
+                CastOp::Adapt(..) => self.arg_purity(r),
             },
             _ if self.is_closure(e) => Purity::Pure,
             _ => Purity::Impure,
@@ -739,8 +829,15 @@ impl<'a> Emitter<'a> {
                 self.emit_args(args);
             }
             // A function value is a JS function, whether a lambda, a lowered anonymous class
-            // or an instance of a callable class: the `apply` of its function type is a call.
-            TExpr::CallMethod(f, s, args) if self.is_function_apply(s) => self.emit_closure_call(f, args),
+            // or an instance of a callable class, or an object (`emit_function_call`): the `apply`
+            // of its function type is a call.
+            TExpr::CallMethod(f, s, args) if self.is_function_apply(s) => {
+                let owner = match self.syms.sym(s).owner {
+                    Owner::Class(k) => Some(k),
+                    _ => None,
+                };
+                self.emit_function_call(f, args, owner)
+            }
             // A call of a local trait's lifted member: its lifted method, the proxies first.
             TExpr::CallMethod(r, s, args) if self.lifted_call(s, args).is_some() => {
                 let k = self.lifted_call(s, args).unwrap_or(0) as usize;
@@ -758,7 +855,8 @@ impl<'a> Emitter<'a> {
                 self.out.push_str(&n);
                 self.emit_call_args(e, args);
             }
-            TExpr::CallClosure(f, args) => self.emit_closure_call(f, args),
+            // The application of a function value, by the calling convention where it may be an object.
+            TExpr::CallClosure(f, args) => self.emit_function_call(f, args, None),
             TExpr::New(c, args) if self.closure_anons.contains_key(&c) => {
                 let idx = self.closure_anons[&c];
                 self.emit_closure(e, idx, args);
@@ -932,6 +1030,8 @@ impl<'a> Emitter<'a> {
                     }
                     self.out.push_str(") => ");
                 }
+                let evidence = self.prog.evidence_args(e, self.syms);
+                let leaving = self.leaving_functions(template, args);
                 let compound = matches!(template_shape(t), Shape::Compound { .. });
                 let wrap = if binds != 0 { compound || t.trim_start().starts_with('{') } else { !bare && compound };
                 if wrap {
@@ -959,6 +1059,9 @@ impl<'a> Emitter<'a> {
                         } else {
                             self.out.push_str(&t[start..i]);
                             match args.get(idx) {
+                                // A standard tag a `@jvmEvidence` member is passed (`emit_args_omitting`).
+                                Some(&a) if idx < 64 && evidence & 1 << idx != 0 && self.prog.is_standard_class_tag(a, self.syms, self.interner) => self.out.push_str("null"),
+                                Some(&a) if leaving & 1 << idx != 0 => self.emit_leaving_function(a),
                                 Some(&a) if self.arrow_needs_parens(a, &t[..i], &t[i + 2..]) => {
                                     self.out.push('(');
                                     self.emit_expr(a);
@@ -990,7 +1093,11 @@ impl<'a> Emitter<'a> {
                             self.out.push_str(", ");
                         }
                         self.enter_cond();
-                        self.emit_value(args[k]);
+                        if leaving & 1 << k != 0 {
+                            self.emit_leaving_function(args[k]);
+                        } else {
+                            self.emit_value(args[k]);
+                        }
                         self.leave_cond();
                     }
                     self.out.push(')');
@@ -1290,6 +1397,23 @@ impl<'a> Emitter<'a> {
             CastOp::Written => return self.emit_expr_as(inner, bare),
             CastOp::Nothing => return self.emit_helper_call("$asNothing", inner),
             CastOp::Unbox(test, _) => return self.emit_helper_call(unbox_helper(prog.js_test(test)), inner),
+            // `null`, or a field read before its assignment, the zero; a template's text in
+            // parentheses, as whatever operator it ends with binds tighter.
+            CastOp::Adapt(test, _) => {
+                let zero = match prog.js_test(test) {
+                    TypeTest::Long => "0n",
+                    TypeTest::Bool => "false",
+                    TypeTest::Str | TypeTest::Char => "\"\\0\"",
+                    _ => "0",
+                };
+                let template = matches!(prog.expr(inner), TExpr::Js(..));
+                self.out.push_str(if template { "((" } else { "(" });
+                self.emit_value(inner);
+                self.out.push_str(if template { ") ?? " } else { " ?? " });
+                self.out.push_str(zero);
+                self.out.push(')');
+                return;
+            }
             CastOp::Check(test, _) => test,
         };
         match prog.js_test(test) {
@@ -1314,28 +1438,29 @@ impl<'a> Emitter<'a> {
                 self.out.push(')');
             }
             _ => {
-                self.note_text("$asT");
                 let name = self.cast_target_name(test);
                 // A cast to a function type asks for a function of any arity, where a type test asks for the
                 // arity: a function's `length` is not its Scala arity (a bound or a rest-parameter function, a
                 // JavaScript function converted to a Scala one), and Scala.js's `js.FunctionN` are scala's
-                // function types here, whose cast Scala.js leaves unchecked (docs/COMPATIBILITY.md).
-                let any_function = matches!(self.prog.js_test(test), TypeTest::Function(_));
+                // function types here, whose cast Scala.js leaves unchecked (docs/COMPATIBILITY.md). A value
+                // of a class that is a function through a trait alone is no JS function (`$asFn`).
+                if matches!(self.prog.js_test(test), TypeTest::Function(_)) {
+                    self.note_text("$asFn");
+                    self.out.push_str("$asFn(");
+                    self.emit_value(inner);
+                    self.out.push_str(", ");
+                    js_string(&name, &mut self.out);
+                    self.out.push(')');
+                    return;
+                }
+                self.note_text("$asT");
                 if let TExpr::Local(s) = self.peek(inner) {
                     let n = self.local_ref(s);
                     let _ = write!(self.out, "$asT({}, ", n);
-                    if any_function {
-                        let _ = write!(self.out, "typeof {} === \"function\"", n);
-                    } else {
-                        self.emit_test_as(test, &n, true);
-                    }
+                    self.emit_test_as(test, &n, true);
                 } else {
                     self.out.push_str("(($v) => $asT($v, ");
-                    if any_function {
-                        self.out.push_str("typeof $v === \"function\"");
-                    } else {
-                        self.emit_test_as(test, "$v", true);
-                    }
+                    self.emit_test_as(test, "$v", true);
                 }
                 self.out.push_str(", ");
                 js_string(&name, &mut self.out);
@@ -2794,7 +2919,9 @@ pub(super) fn test_text(t: TypeTest) -> Option<(&'static str, bool)> {
         TypeTest::Unit => ("$0 === undefined", true),
         // Past 22 parameters every function is one erased class, `FunctionXXL`.
         TypeTest::Function(n) if n > 22 => ("typeof $0 === \"function\" && $0.length > 22", true),
-        TypeTest::Function(_) => ("typeof $0 === \"function\" && $0.length === $1", true),
+        // A value of a class that is a function says its arity on its prototype, an object's
+        // (`is_callable_class`) and a JS function's whose `length` is a member's (`$callable`).
+        TypeTest::Function(_) => ("((typeof $0 === \"function\" ? $0.$fn ?? $0.length : $0 != null && $0.$fn) === $1)", true),
         TypeTest::Null => ("$0 === null", true),
         TypeTest::AnyRef => ("$isRef($0)", false),
         TypeTest::AnyVal => ("($0 !== null)", false),

@@ -6,8 +6,10 @@ abstract class AbstractIterable[+A] extends Iterable[A]
 abstract class AbstractIterator[+A] extends Iterator[A]
 abstract class AbstractSeq[+A] extends Seq[A]
 
-/** scala-library's `collection.Map`: what the immutable `Map` and the mutable `HashMap` share. */
-trait Map[K, +V] extends Iterable[(K, V)]:
+/** scala-library's `collection.Map`: what the immutable `Map` and the mutable `HashMap` share, a partial
+  * function of its keys (`MapOps`), whose instances stay objects (`@objectFunction`). */
+@objectFunction
+trait Map[K, +V] extends Iterable[(K, V)], PartialFunction[K, V]:
   def get(key: K): Option[V]
   // Of the map's kind, as scala-library's `MapOps` has them (scalactic's `GenMapDiffer` walks a
   // `collection.Map` by them); each map class has them as its own.
@@ -21,16 +23,31 @@ trait Map[K, +V] extends Iterable[(K, V)]:
   def getOrElse[V1 >: V](key: K, default: => V1): V1 = get(key) match
     case Some(v) => v
     case None => default
+  // scala-library's: a map equals a map of the same entries, of whatever kind (immutable or mutable,
+  // sorted or not), and hashes by its entries alone.
+  override def equals(that: Any): Boolean = Map.sameEntries(this, that)
+  override def hashCode: Int = scala.util.hashing.MurmurHash3.mapHash(this)
 
 object Map:
+  // `collection.Map.equals`: the same size, and each entry's key mapped to an equal value there.
+  private[scala] def sameEntries[K, V](m: Map[K, V], that: Any): Boolean =
+    (m.asInstanceOf[AnyRef] eq that.asInstanceOf[AnyRef]) || (that match
+      case other: Map[?, ?] =>
+        val o: Map[K, Any] = unsafeCast(other)
+        m.size == o.size && m.forall(e => o.get(e._1) match
+          case Some(v) => v == e._2
+          case None => false)
+      case _ => false)
   def empty[K, V]: scala.Map[K, V] = scala.Map.empty[K, V]
   def apply[K, V](entries: (K, V)*): scala.Map[K, V] = scala.Map.from(entries)
   def from[K, V](entries: IterableOnce[(K, V)]): scala.Map[K, V] = scala.Map.from(entries)
 
 // scala-library's `collection.Set`, above the immutable `Set` and the mutable `HashSet`: what a
 // library's signature says of a set it builds either way (izumi-reflect's `breakRefinement`
-// gives a `mutable.LinkedHashSet` as one).
-trait Set[A] extends Iterable[A]:
+// gives a `mutable.LinkedHashSet` as one); a function of its elements whose instances stay objects
+// (`@objectFunction`).
+@objectFunction
+trait Set[A] extends Iterable[A], (A => Boolean):
   def contains(elem: A): Boolean
   def apply(elem: A): Boolean = contains(elem)
   def subsetOf(that: Set[A]): Boolean = forall(that.contains)

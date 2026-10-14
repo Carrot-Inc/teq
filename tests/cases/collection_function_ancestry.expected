@@ -1,0 +1,14 @@
+true false
+List(one)
+List(b, a)
+List(one)
+Some(two) None
+3
+other
+List(1, 2)
+List(x, y)
+None
+true true
+one
+none
+42 List(2, 4) 11

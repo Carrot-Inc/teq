@@ -372,7 +372,7 @@ impl<'w, 'a> P<'w, 'a> {
     /// How many `ClassTag`s of the lean std's `@jvmEvidence` member `s` its signature leaves out
     /// here, which scala-library's takes in its last clause.
     pub(super) fn erased_tag_count(&self, s: SymId) -> usize {
-        if self.w.erases_evidence() && self.is_std_sym(s) {
+        if self.is_std_sym(s) {
             self.w.syms.sym(s).erased_tags.count_ones() as usize
         } else {
             0

@@ -157,6 +157,7 @@ impl<'a> Parser<'a> {
                 instance = self.ast.add_expr(Expr::Apply(instance, more), start.to(self.prev_span()));
             }
             self.ast.has_nowarn |= name == crate::names::NOWARN;
+            self.main_annotated |= name == crate::names::MAIN;
             annots.push(Annot { name, args, instance });
             self.eat(Tok::Newline);
         }
