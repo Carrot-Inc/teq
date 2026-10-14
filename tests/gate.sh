@@ -169,10 +169,11 @@ done
 selected() { if [ -z "$only" ]; then [[ " $optional " != *" $1 "* ]]; else [[ "$only" == *" $1 "* ]]; fi; }
 # A suite that skips for want of something the machine or the reference machine should hold (a jar, node, javap, the scala3
 # checkout, esbuild) says so in one of these lines and exits 0; the gate fails it. The tests whose expectations come
-# from Scala.js are skipped by design on the JVM and in the interpreter, and so is a memory session whose budget is
-# another platform's alone (tests/watch-memory.sh).
+# from Scala.js are skipped by design on the JVM and in the interpreter, and so are a memory session whose budget is
+# another platform's alone (tests/watch-memory.sh), the JVM platform's programs in the JavaScript run (tests/run.sh),
+# another system's programs and, in the interpreter, another std's (tests/run_jvm.sh, tests/run_interp.sh).
 skips='^skip|skipped, |counted as passed|not in the coursier cache|esbuild not found'
-allowed='^skipped \((expectations from Scala\.js|a budget of one platform)\)'
+allowed="^skipped \\((expectations from Scala\\.js|a budget of one platform|another system's|another std's)\\)|^skip [^ ]+: the JVM's platform\$"
 # lacking <log>: the first line of the log that says it skipped for want of something, nothing when none does.
 lacking() { grep -E "$skips" "$1" 2> /dev/null | grep -v -E "$allowed" | head -1; }
 script_of() {
