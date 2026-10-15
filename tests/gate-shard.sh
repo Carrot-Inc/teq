@@ -1,15 +1,21 @@
 #!/bin/bash
 # One shard of tests/gate.sh, on a remote machine: the gate copies this file into out/gate/ of its mirror of the
 # landing worktree and starts it there under nohup with the shard's list (one suite a line: its name, then its
-# command, run from the mirror's root as tests/all.sh runs it). It builds the release binary, and beside it what
+# command, run from the mirror's root as tests/all.sh runs it). It takes the head's binary, and beside it builds what
 # the list needs (the unit tests' build for cargo-test; for split-determinism, master's binary from the mirror
-# GATE_REF names, when the gate has synced one), then runs the suites one after another, each under TEQ=that build
-# and a bound of GATE_SUITE_SECONDS (default 1800), its output in out/gate/<name>.log; a suite that exits 0 but
-# says it skipped for want of something (a line matching GATE_SKIPS and not GATE_ALLOWED) fails. Each step appends
-# "<name> <exit> <seconds> <its last line>" to out/gate/status, and "done" ends it; the gate polls that file. The
-# build is the timing lines' (build_teq of tests/support/build-manifest.sh): stamped with the head's revision,
-# GATE_REVISION, checked to name it, and described in out/gate/build.manifest (GATE_SOURCE the hash of its
-# sources), since the gate's comparison machine may measure this very binary.
+# GATE_REF names, when the gate has synced one), then runs the suites one after another, each under TEQ=the head's
+# binary and a bound of GATE_SUITE_SECONDS (default 1800), its output in out/gate/<name>.log; a suite that exits 0
+# but says it skipped for want of something (a line matching GATE_SKIPS and not GATE_ALLOWED) fails. Each step
+# appends "<name> <exit> <seconds> <its last line>" to out/gate/status, and "done" ends it; the gate polls that file.
+# The head's binary is built once for the gate, by the machine it names the builder (GATE_BUILD=1, or any machine
+# when GATE_HEAD_DIR is unset), as the timing lines build (build_teq of tests/support/build-manifest.sh): stamped
+# with the head's revision, GATE_REVISION, checked to name it, and described in out/gate/build.manifest (GATE_SOURCE
+# the hash of its sources, the binary's digest), since the gate ships it to the other machines and its comparison
+# machine may measure it. Elsewhere it is the builder's binary the gate mirrors to GATE_HEAD_DIR (../teq-head) and
+# announces in its ready file ("<builder> <digest>") within GATE_HEAD_WAIT seconds (default 1800): used as it is
+# once it has that digest, the manifest's revision and source, and runs here as a plain build of the head
+# (`received`); built here instead when the gate writes build-here there (the builder's build failed) or the
+# shipped binary fails a check, which the build step says.
 cd "$(dirname "$0")/../.."
 list=$1
 gate=out/gate
@@ -30,9 +36,39 @@ if [ -n "$GATE_REF" ] && grep -q '^split-determinism ' "$list"; then
   ref_build=$!
 fi
 . tests/support/build-manifest.sh
-build_teq . "$GATE_REVISION" > $gate/build.log 2>&1
-code=$?
-[ $code != 0 ] || manifest . "$GATE_REVISION" "$GATE_SOURCE" > $gate/build.manifest
+build_here() {
+  build_teq . "$GATE_REVISION" >> $gate/build.log 2>&1 && manifest . "$GATE_REVISION" "$GATE_SOURCE" > $gate/build.manifest
+}
+: > $gate/build.log
+if [ -n "$GATE_HEAD_DIR" ] && [ "$GATE_BUILD" != 1 ]; then
+  for i in $(seq 1 $(( ${GATE_HEAD_WAIT:-1800} / 5 ))); do
+    [ -e "$GATE_HEAD_DIR/ready" ] || [ -e "$GATE_HEAD_DIR/build-here" ] && break
+    sleep 5
+  done
+  if [ -e "$GATE_HEAD_DIR/ready" ]; then
+    read -r from digest < "$GATE_HEAD_DIR/ready"
+    if why=$(received "$GATE_HEAD_DIR" "$GATE_REVISION" "$GATE_SOURCE" "$digest"); then
+      export TEQ=$(cd "$GATE_HEAD_DIR" && pwd)/teq
+      cp "$GATE_HEAD_DIR/manifest" $gate/build.manifest
+      echo "the head's binary from $from after $(($(now) - started))s, its digest $digest, glibc here $(ldd --version 2>&1 | head -1 | awk '{print $NF}')" >> $gate/build.log
+      code=0
+    else
+      build_here
+      code=$?
+      echo "$([ $code = 0 ] && echo built || echo "the build failed") here, the head's binary from $from refused: $why" >> $gate/build.log
+    fi
+  elif [ -e "$GATE_HEAD_DIR/build-here" ]; then
+    build_here
+    code=$?
+    echo "$([ $code = 0 ] && echo built || echo "the build failed") here: $(cat "$GATE_HEAD_DIR/build-here")" >> $gate/build.log
+  else
+    echo "no head's binary after ${GATE_HEAD_WAIT:-1800}s" >> $gate/build.log
+    code=1
+  fi
+else
+  build_here
+  code=$?
+fi
 step build $code $started $gate/build.log
 if [ $code != 0 ]; then
   echo done >> $status

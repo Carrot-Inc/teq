@@ -91,6 +91,7 @@ suite scala3-macros-interp tests/scala3/run.sh --suite run-macros --target inter
 suite scala3-typing python3 tests/scala3-typing/harness.py
 suite rust-warnings ./tests/rust-warnings.sh
 suite gate-coverage ./tests/gate-coverage.sh
+suite gate-scripts  ./tests/gate-scripts.sh
 # Outside the groups the gate runs: it needs the crates of proptests/ fetched once, and skips
 # without them.
 suite prop          ./tests/prop.sh

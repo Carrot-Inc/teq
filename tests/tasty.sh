@@ -521,9 +521,9 @@ if [ "$1" != "--update" ]; then
       insp_units=(inspector)
       printf 'read\tinspector\t%s\t%s\n' "$insp_read:$insp_jar" "$(find "$insp_read" -name '*.tasty' | LC_ALL=C sort | tr '\n' '\t' | sed 's/\t$//')" >> "$twin/fromtasty.jobs"
     fi
-    root=$PWD
-    (cd "$twin" && COURSIER_MODE=offline timeout 300 scala-cli --power run -S 3.8.4 --jvm system --server=false --offline -q \
-      "$root/tests/tasty/fromtasty/Gate.scala" --dep org.scala-lang:scala3-compiler_3:3.8.4 -- fromtasty.jobs > fromtasty.out 2> fromtasty.err)
+    . tests/support/gate-reader.sh
+    reader=$(gate_reader "$twin/reader" 2> "$twin/fromtasty.err") &&
+      (cd "$twin" && timeout 300 java -cp "$reader" gate fromtasty.jobs > fromtasty.out 2>> fromtasty.err)
     for name in "${twin_units[@]}" "${js_units[@]}" "${extra_units[@]}" "${insp_units[@]}"; do
       if grep -qxF "ok $name" "$twin/fromtasty.out"; then
         pass=$((pass + 1))

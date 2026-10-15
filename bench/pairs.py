@@ -9,7 +9,8 @@ on a remote machine (tests/gate.sh, docs/DEVELOPING.md "The timing lines on a ma
       the quick size of bench/runtime.sh built by each binary (teq-dev under node, teq-jvm linked
       against scala-library and under java beside its jar, with bench/runtime.sh's flags), wall and steady-state time, the rows of
       bench/runtime-budgets.txt, every output checked against tests/cases; node and java are
-      checked first against bench/runtime-machine.txt
+      bench/runtime-machine.txt's, run by the paths it records whatever the PATH's order and checked
+      first to be there with its versions
   judge <runs.jsonl> [options]
       the verdicts of recorded runs again, under other settings
   advance <runs.jsonl>
@@ -437,9 +438,10 @@ def quick_sizes():
     return {f[0]: (f[1], f[2]) for f in (l.split() for l in block.group(1).splitlines()) if len(f) == 5}
 
 
-def tool_identity(name):
-    path = shutil.which(name)
-    if not path:
+def tool_identity(name, path=None):
+    """`<name> <resolved path> <version>` of the tool at `path`, else of the one the PATH finds; None without one."""
+    path = path or shutil.which(name)
+    if not path or not os.access(path, os.X_OK):
         return None
     real = os.path.realpath(path)
     if name == "node":
@@ -449,18 +451,23 @@ def tool_identity(name):
     return f"{name} {real} {version}"
 
 
-def check_runtimes(opts):
-    pinned = os.path.join(ROOT, "bench/runtime-machine.txt")
-    have = [tool_identity("node"), tool_identity("java")]
-    if None in have:
-        fail_setup("pairs: no node or no java on this machine")
+def check_runtimes(opts, pinned=None):
+    """The node and java the runtime line runs, their identities: the ones bench/runtime-machine.txt records, by
+    their recorded paths, whatever the PATH leads to (a machine's PATH may lead to another node for other ends), each
+    there with its recorded version; with --unpinned, else the PATH's."""
+    pinned = pinned or os.path.join(ROOT, "bench/runtime-machine.txt")
     want = [l.strip() for l in open(pinned) if l.strip() and not l.startswith("#")] if os.path.exists(pinned) else []
+    recorded = {l.split()[0]: l.split()[1] for l in want if len(l.split()) > 1}
+    have = [tool_identity(name, recorded.get(name)) for name in ("node", "java")]
     if have != want:
-        message = "pairs: node and java here are not bench/runtime-machine.txt's:\n  here: " + "\n        ".join(have) + \
-                  "\n  recorded: " + "\n            ".join(want)
+        message = "pairs: node and java here are not bench/runtime-machine.txt's:\n  here: " + \
+                  "\n        ".join(h or "nothing at the recorded path" for h in have) + "\n  recorded: " + "\n            ".join(want)
         if not opts["unpinned"]:
             fail_setup(message)
         print(message.replace("pairs:", "pairs: unpinned,", 1))
+        have = [tool_identity("node"), tool_identity("java")]
+    if None in have:
+        fail_setup("pairs: no node or no java on this machine")
     return have
 
 
@@ -534,10 +541,12 @@ def runtime_line(teqs, opts):
     scratch = os.path.join(out_dir, "run")
     os.makedirs(scratch, exist_ok=True)
 
+    node, java = (t.split(" ")[1] for t in tools)
+
     def run_one(side, cell):
         p, toolchain = cell.split(".")
         artifact = artifacts[(side, p, toolchain)]
-        cmd = ["node", artifact] if toolchain == "teq-dev" else ["java"] + flags + ["-cp", artifact + os.pathsep + scala_library, "TeqMain"]
+        cmd = [node, artifact] if toolchain == "teq-dev" else [java] + flags + ["-cp", artifact + os.pathsep + scala_library, "TeqMain"]
         out_path, err_path = os.path.join(scratch, "out"), os.path.join(scratch, "err")
         wall, code, _ = harness.run_once(cmd, RUN_TIMEOUT, out_path, err_path)
         if code != 0:

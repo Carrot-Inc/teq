@@ -1,35 +1,46 @@
-# How long each suite of tests/gate.sh takes on a remote machine, in seconds, as its last run with --record measured
-# them; the gate deals the suites out to the machines by these times, longest first, so that the machines end
-# together. A suite missing here counts as 120.
-cases 129
-errors 35
+# How long each suite of tests/gate.sh and each of its comparison lines takes on a remote machine, in seconds, as
+# its last run with --record whose every line passed measured them; the gate deals the suites out to the machines by
+# these times, longest first, so that the machines end together, and spreads the comparison lines by them. A suite
+# or line missing here counts as 120.
+cases 227
+errors 154
 parser 3
-interop 4
-dce 1
-split 181
-split-watch 157
-check-watch 57
-jvm-watch 198
-lsp 75
-watch-memory 61
-tasty 67
-modules 129
-tasty-exec 37
-analysis-bytes 24
-classfile 12
-classpath 63
-stdlib 194
-app 12
-jvm 26
-jvm-21 26
-interp 13
+interop 3
+dce 2
+split 288
+split-watch 286
+check-watch 53
+jvm-watch 329
+lsp 912
+watch-memory 187
+tasty 124
+modules 392
+tasty-exec 57
+analysis-bytes 220
+classfile 3
+classpath 97
+stdlib 344
+app 23
+jvm 51
+jvm-21 45
+interp 24
 fold 1
-workers 54
-split-determinism 42
-scala3-run 10
-planted 8
+workers 131
+split-determinism 45
+scala3-run 12
+planted 2
 scala3-interp 42
-scala3-macros 0
+scala3-macros 2
 scala3-macros-interp 1
-scala3-typing 7
+scala3-typing 9
 cargo-test 0
+budget 275
+runtime 131
+sentinel 149
+rust-warnings 0
+task 167
+runner-classes 1
+lila-test-verb 7
+reference-test-verb 6
+gate-coverage 0
+gate-scripts 85

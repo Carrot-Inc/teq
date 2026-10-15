@@ -6,8 +6,13 @@
 # .cargo/config.toml is part of its sources, so a branch that changes it is compared as it builds).
 #   build_teq <tree> <revision>        builds <tree>/target/release/teq stamped with <revision> and checks that the
 #                                      executable names it and is a plain build; the build's output on stdout
-#   manifest <tree> <revision> <source hash>  prints the manifest of that build
+#   manifest <tree> <revision> <source hash>  prints the manifest of that build: with the toolchain, the binary's
+#                                      digest and what it needs of a machine to run (its libraries, the newest
+#                                      glibc symbol it links)
 #   same_build <manifest> <manifest>   whether two manifests agree on everything but the revision and the source
+#   received <dir> <revision> <source hash> <digest>  whether <dir>/teq, shipped from the build <dir>/manifest
+#                                      describes, is that build of <revision> with that digest and runs here as a
+#                                      plain build naming <revision>; why not on stdout
 #   toolchain_key <tree>               the toolchain and configuration part of an artifact's key under ~/teq-bin
 build_env_problem() {
   env | grep -E '^(RUSTFLAGS|RUSTDOCFLAGS|RUSTC|RUSTC_WRAPPER|RUSTC_WORKSPACE_WRAPPER|CARGO_ENCODED_RUSTFLAGS|CARGO_INCREMENTAL|CARGO_BUILD_[A-Z0-9_]*|CARGO_PROFILE_[A-Z0-9_]*|CARGO_TARGET_[A-Z0-9_]*|CARGO_UNSTABLE_[A-Z0-9_]*)=' |
@@ -51,10 +56,22 @@ manifest() {
   echo "kind plain"
   echo "flags none"
   echo "config $(config_hash "$1")"
+  echo "sha256 $(sha256sum "$1/target/release/teq" | cut -d' ' -f1)"
+  echo "needs $(ldd "$1/target/release/teq" 2> /dev/null | awk '{print $1}' | LC_ALL=C sort | tr '\n' ' ')glibc $(objdump -T "$1/target/release/teq" 2> /dev/null | grep -o 'GLIBC_[0-9.]*' | sort -u -V | tail -1 | sed 's/GLIBC_//')"
   echo "built $(date -u +%Y-%m-%dT%H:%MZ) on $(hostname)"
 }
 same_build() {
   [ "$(grep -E '^(rustc|cargo|target|profile|kind|flags|config) ' "$1")" = "$(grep -E '^(rustc|cargo|target|profile|kind|flags|config) ' "$2")" ]
+}
+received() {
+  local v
+  [ -x "$1/teq" ] && [ -f "$1/manifest" ] || { echo "no binary or no manifest in $1"; return 1; }
+  [ "$(sha256sum "$1/teq" | cut -d' ' -f1)" = "$4" ] || { echo "its digest is not the builder's $4"; return 1; }
+  grep -q -x "sha256 $4" "$1/manifest" && grep -q -x "revision $2" "$1/manifest" && grep -q -x "source $3" "$1/manifest" ||
+    { echo "its manifest is not the build of $2 ($3) with the digest $4"; return 1; }
+  v=$("$1/teq" --version 2>&1 | head -1)
+  [ "$(echo "$v" | awk '{print $3}')" = "$2" ] && [ -z "$(echo "$v" | awk '{print $4}')" ] ||
+    { echo "it does not run here as a plain build of $2: ${v:-no output} (this machine: $(ldd --version 2>&1 | head -1))"; return 1; }
 }
 toolchain_key() {
   local v

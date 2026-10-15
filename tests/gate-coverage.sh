@@ -3,12 +3,14 @@
 # select (a matrix row's `suites:` line, a step's `tests/all.sh <suites>`) and the ones its `# excluded: <suite>
 # <reason>` lines leave out, against the names of tests/all.sh's `suite` lines. A suite of tests/all.sh neither
 # selected nor excluded fails, and so does a name either side lacks, a suite selected twice or selected and
-# excluded, and an exclusion without its reason. Reads the two files alone.
+# excluded, and an exclusion without its reason. And the same of the landing gate, tests/gate.sh: its lines (the
+# machines' suites, the comparison's and the local ones) and its own `# excluded: <suite> <reason>` lines against
+# tests/all.sh's suites. Reads the three files alone.
 cd "$(dirname "$0")/.." || exit 1
-python3 - tests/all.sh .github/workflows/gate.yml <<'PY'
+python3 - tests/all.sh .github/workflows/gate.yml tests/gate.sh <<'PY'
 import re, sys
 
-all_sh, workflow = (open(p, encoding="utf-8").read() for p in sys.argv[1:3])
+all_sh, workflow, gate = (open(p, encoding="utf-8").read() for p in sys.argv[1:4])
 suites = []
 for m in re.finditer(r"^suite\s+(\S+)", all_sh, re.M):
     if m.group(1) not in suites:
@@ -37,8 +39,31 @@ for name in suites:
 for name in sorted(set(selected) | set(excluded)):
     if name not in suites:
         fails.append(f"{name}: no suite of tests/all.sh")
+# The landing gate's lines: the machines' suites (`  "<name> <command>"` in its `machine` list), the comparison's
+# and the local lines (`compare="..."`, `local_lines="..."`).
+listed = re.search(r"^machine=\(\n(.*?)^\)", gate, re.M | re.S)
+lines = re.findall(r'^\s*"(\S+) ', listed.group(1), re.M) if listed else []
+for var in ("compare", "local_lines"):
+    m = re.search(rf'^{var}="([^"]*)"', gate, re.M)
+    lines += m.group(1).split() if m else []
+gate_excluded = {}
+for m in re.finditer(r"^#\s*excluded:\s*(\S+)[ \t]*(.*)$", gate, re.M):
+    if not m.group(2).strip():
+        fails.append(f"tests/gate.sh: {m.group(1)} is excluded without a reason")
+    gate_excluded[m.group(1)] = m.group(2).strip()
+for name in suites:
+    n = lines.count(name)
+    if n == 0 and name not in gate_excluded:
+        fails.append(f"tests/gate.sh: {name} neither a line nor excluded")
+    elif n > 1:
+        fails.append(f"tests/gate.sh: {name} a line {n} times")
+    elif n == 1 and name in gate_excluded:
+        fails.append(f"tests/gate.sh: {name} a line and excluded")
+for name in sorted(gate_excluded):
+    if name not in suites:
+        fails.append(f"tests/gate.sh: {name} is excluded and no suite of tests/all.sh")
 for f in fails:
     print(f"FAIL {f}")
-print(f"gate-coverage: {len(suites)} suites of tests/all.sh, {len(set(selected) & set(suites))} run by the workflow, {len(excluded)} excluded, {len(fails)} failed")
+print(f"gate-coverage: {len(suites)} suites of tests/all.sh, {len(set(selected) & set(suites))} run by the workflow, {len(excluded)} excluded; {len(set(lines) & set(suites))} lines of tests/gate.sh, {len(gate_excluded)} excluded; {len(fails)} failed")
 sys.exit(1 if fails else 0)
 PY

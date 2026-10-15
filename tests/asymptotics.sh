@@ -6,8 +6,12 @@
 # ASYMPTOTICS_BASE overrides the size. They ran under java too while the JVM had the lean std; its
 # collections are scala-library's since. Each build and run is bounded by `timeout`. Last, a probe of
 # the interpreter's retention, the peak memory of tests/asymptotics/frame_cycle.scala at two counts.
+# The bounds are met on node 22, the GitHub workflow's: on node 25.9.0 the map's lookups and the set's membership
+# grow past theirs, whichever binary built them. NODE names the node the probes run under, else the PATH's, so that a
+# machine whose PATH leads to another node for other ends names its node 22 here; the summary names the node.
 cd "$(dirname "$0")/.."
 TEQ=${TEQ:-./target/release/teq}
+NODE=${NODE:-node}
 base=${ASYMPTOTICS_BASE:-10000}
 mkdir -p out/asymptotics
 pass=0
@@ -17,7 +21,7 @@ for src in tests/asymptotics/*_probe.scala; do
   for target in js interp; do
     out=out/asymptotics/$name-$target
     case $target in
-      js) timeout 60 "$TEQ" compiler build "$src" tests/asymptotics/probe.scala -o "$out.js" > "$out.log" 2>&1 && timeout 300 node "$out.js" "$base" > "$out.out" 2>&1 ;;
+      js) timeout 60 "$TEQ" compiler build "$src" tests/asymptotics/probe.scala -o "$out.js" > "$out.log" 2>&1 && timeout 300 "$NODE" "$out.js" "$base" > "$out.out" 2>&1 ;;
       interp) timeout 300 "$TEQ" interp "$src" tests/asymptotics/probe.scala -- $((base / 100)) > "$out.out" 2>&1 ;;
     esac
     code=$?
@@ -50,5 +54,5 @@ else
   echo "FAIL frame_cycle under interp: peak ${small} KB after 20 iterations, ${large} KB after 200"
   fail=$((fail + 1))
 fi
-echo "$pass passed, $fail failed"
+echo "$pass passed, $fail failed (node $("$NODE" --version 2> /dev/null || echo "missing: $NODE"))"
 [ $fail = 0 ]

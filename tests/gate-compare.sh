@@ -6,12 +6,13 @@
 # built from their trees on first use (build_teq: stamped with their revision, the executable checked to name it
 # before it is kept) and checked at use; takes the head's binary, built here when GATE_HEAD_FROM=here or when the
 # gate writes out/compare/build-head, otherwise the one a shard built that the gate mirrors to ../teq-head and
-# announces with out/compare/head-ready (built here instead when its manifest is not master's build); checks every
-# pair it is about to compare for one build configuration, refusing a line whose pair differs; then runs the lines
-# GATE_LINES names one after another (bench/pairs.py: budget and runtime against master, sentinel against the
-# reference). Each step appends
-# "<name> <exit> <seconds> <its last line>" to out/compare/status, "head-wanted" says it waits for the head, and
-# "done" ends it; the logs, the raw runs and the manifests go to out/compare/logs.
+# announces with out/compare/head-ready ("<builder> <digest>"; built here instead when the binary is not that build of
+# the head with that digest, `received`, or its manifest is not master's build); checks every pair it is about to
+# compare for one build configuration, refusing a line whose pair differs; then runs the lines of GATE_LINES the gate
+# deals it one after another (bench/pairs.py: budget and runtime against master, sentinel against the reference),
+# once the gate says the suites on the other machines have ended (GATE_MEASURE_AFTER). Each step appends "<name> <exit> <seconds>
+# <its last line>" to out/compare/status, "head-wanted" says it waits for the head, "measure-wanted" for the other
+# machines' suites, and "done" ends it; the logs, the raw runs and the manifests go to out/compare/logs.
 cd "$(dirname "$0")/../.." || exit 1
 out=out/compare
 logs=$out/logs
@@ -94,9 +95,11 @@ else
     sleep 5
   done
   if [ -e $out/head-ready ]; then
-    from=$(cat $out/head-ready)
+    read -r from digest < $out/head-ready
     chmod +x ../teq-head/teq 2> /dev/null
-    if [ -z "$master" ] || same_build ../teq-head/manifest "$master/manifest"; then
+    if ! why=$(received ../teq-head "$GATE_HEAD" "$GATE_HEAD_SOURCE" "$digest"); then
+      build_head "$from's build is refused here: $why" || finish 1
+    elif [ -z "$master" ] || same_build ../teq-head/manifest "$master/manifest"; then
       head=$(cd ../teq-head && pwd)/teq
       cp ../teq-head/manifest "$logs/head.manifest"
       step head 0 $s "copied from $from after $(($(now) - s))s"
@@ -140,6 +143,31 @@ run_line() {
   cp out/compare-runs/$name/line.json "$logs/$name.line.json" 2> /dev/null
   step "$name" $code $s "$logs/$name.log"
 }
+# The lines measure once the gate's suites on the other machines have ended (GATE_MEASURE_AFTER=1: the gate writes
+# out/compare/measure then, naming the lines of GATE_LINES this machine measures, or none, the others measuring on
+# other machines), since those machines share this one's host, its memory bandwidth and its scheduler, and the
+# pairs' bands widen with their load; the wait is bounded by GATE_MEASURE_WAIT seconds (default 3000), past which
+# the lines are not run.
+if [ "$GATE_MEASURE_AFTER" = 1 ]; then
+  s=$(now)
+  echo "measure-wanted 0 0 waiting for the suites on the other machines to end" >> $status
+  for i in $(seq 1 $(( ${GATE_MEASURE_WAIT:-3000} / 5 ))); do
+    [ -e $out/measure ] && break
+    sleep 5
+  done
+  if [ ! -e $out/measure ]; then
+    for line in budget runtime sentinel; do
+      [[ "$lines" == *" $line "* ]] && step "$line" 1 $s "not run: the suites on the other machines had not ended after ${GATE_MEASURE_WAIT:-3000}s"
+    done
+    finish 1
+  fi
+  dealt=$(cat $out/measure)
+  case $dealt in
+    none) lines=" " ;;
+    *[a-z]*) lines=" $dealt " ;;
+  esac
+  step quiet 0 $s "measured after the suites on the other machines: waited $(($(now) - s))s, host load $(cut -d' ' -f1 /proc/loadavg 2> /dev/null); here:${lines% }"
+fi
 rm -rf out/compare-runs
 for line in budget runtime sentinel; do
   [[ "$lines" == *" $line "* ]] || continue
