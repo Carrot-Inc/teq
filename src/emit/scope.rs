@@ -1592,9 +1592,15 @@ impl<'a> Emitter<'a> {
                     DefaultOf::Method(s) => self.walk_ref(w, s),
                     DefaultOf::Ctor(c) => {
                         self.walk_class(w, c);
+                        // A local class's receiver is its local companion, read first where its
+                        // reading has an effect (`emit_default`).
+                        let local = self.defaults().on_local_companion(c);
+                        if let Some(r) = recv.filter(|_| local && !self.defaults().quiet_companion(c)) {
+                            self.walk(w, r);
+                        }
                         for (k, s) in self.ctor_captures(c).into_iter().enumerate() {
                             match recv {
-                                Some(r) if k == 0 => self.walk(w, r),
+                                Some(r) if k == 0 && !local => self.walk(w, r),
                                 _ => self.walk_capture_ref(w, s),
                             }
                         }

@@ -74,6 +74,19 @@ impl<'a> Defaults<'a> {
         }
     }
 
+    /// Whether the receiver of a constructor default of class `c` is its local companion, which
+    /// the getter is selected on (`Worker::local_companion_ref`), rather than the enclosing
+    /// instance one of its captures stands for.
+    pub fn on_local_companion(&self, c: ClassId) -> bool {
+        self.syms.class(c).owner == Owner::Local
+    }
+
+    /// Whether reading the local companion of `c` has no effect: the one `Desugar.classDef` makes,
+    /// holding what it derives alone.
+    pub fn quiet_companion(&self, c: ClassId) -> bool {
+        self.syms.class(c).companion.is_some_and(|m| self.syms.class(m).synthetic_companion)
+    }
+
     /// The parameter `i`, counted across the clauses, of what `of` names.
     pub fn param(&self, of: DefaultOf, i: usize) -> Option<ParamSig> {
         match of {
@@ -222,6 +235,8 @@ impl<'a> Defaults<'a> {
             (None, None) => {}
             // A constructor's getter on the enclosing instance the creation passes first.
             (Some(a), None) if matches!(c.of, DefaultOf::Ctor(_)) && c.skip > 0 && args.first().is_some_and(|&o| self.same_value(a, o)) => {}
+            // A local class's on its local companion, whose reading has no effect.
+            (Some(_), None) if matches!(c.of, DefaultOf::Ctor(k) if self.on_local_companion(k) && self.quiet_companion(k)) => {}
             _ => return false,
         }
         priors.len() <= index && priors.iter().enumerate().all(|(j, &p)| args.get(c.skip + j).is_some_and(|&a| self.same_value(p, a)))
@@ -514,6 +529,16 @@ impl<'a> super::Emitter<'a> {
 impl<'a> super::Emitter<'a> {
     /// The captures of the local class `c` its constructor takes before its parameters, which
     /// its getters take too.
+    /// The parameters a secondary constructor `s` takes before its declared ones: the enclosing
+    /// instance of a class nested in a class (`type_secondary_ctor`).
+    fn via_captures(&self, s: SymId) -> Vec<SymId> {
+        let declared = self.syms.sym(s).sig.as_ref().map_or(0, |sig| sig.clauses.iter().map(|c| c.params.len()).sum());
+        match self.prog.funs.iter().find(|f| f.sym == s) {
+            Some(f) => f.params[..f.params.len().saturating_sub(declared)].to_vec(),
+            None => Vec::new(),
+        }
+    }
+
     pub(super) fn ctor_captures(&self, c: ClassId) -> Vec<SymId> {
         match self.local_captures.get(&c) {
             Some(&n) => self.prog.classes.iter().find(|tc| tc.id == c).map_or(Vec::new(), |tc| tc.ctor_params[..n as usize].to_vec()),
@@ -604,15 +629,31 @@ impl<'a> super::Emitter<'a> {
                 self.out.push_str("undefined");
                 return;
             }
+            // A local class's on its local companion: read first for its initialiser, where it has
+            // one, the class's static getter taking the captures.
+            DefaultOf::Ctor(c) if recv.is_some() && self.defaults().on_local_companion(c) => {
+                let quiet = self.defaults().quiet_companion(c);
+                if let Some(r) = recv.filter(|_| !quiet) {
+                    init = true;
+                    self.out.push('(');
+                    self.emit_value(r);
+                    self.out.push_str(", ");
+                }
+                let cn = self.class_name(c);
+                let _ = write!(self.out, "{}.$default${}", cn, index + 1);
+            }
             DefaultOf::Ctor(c) => {
                 let cn = self.class_name(c);
                 let _ = write!(self.out, "{}.$default${}", cn, index + 1);
             }
         }
+        let recv = recv.filter(|_| !matches!(of, DefaultOf::Ctor(c) if self.defaults().on_local_companion(c)));
         self.out.push('(');
-        // A local class's getter takes its captures first, as its constructor does.
+        // A local class's getter takes its captures first, as its constructor does, and a
+        // secondary constructor's of a class nested in a class its enclosing instance.
         let captured = match of {
             DefaultOf::Ctor(c) => self.ctor_captures(c),
+            DefaultOf::Method(s) if self.syms.sym(s).name == crate::names::INIT => self.via_captures(s),
             DefaultOf::Method(_) => Vec::new(),
         };
         for (k, &s) in captured.iter().enumerate() {
@@ -651,7 +692,7 @@ impl<'a> super::Emitter<'a> {
     /// as its constructor's parameters (`captures`).
     fn emit_getter_rest(&mut self, root: super::scope::Root, params: &[SymId], captures: usize, d: TExprId, by_name: bool, arrow: bool) {
         self.enter_scope(root);
-        let mark = self.emit_params_after_captures(captures, params, &[]);
+        let mark = self.emit_params_after_captures(captures, 0, params, &[]);
         let before_super = self.before_super;
         self.before_super = before_super || captures > 0;
         self.out.push_str(if arrow { " => " } else { " " });
@@ -773,7 +814,10 @@ impl<'a> super::Emitter<'a> {
                     continue;
                 }
                 let by_name = sig.clauses.iter().flat_map(|c| c.params.iter()).nth(i).is_some_and(|p| p.by_name);
-                let params = Self::getter_params(&sig.clauses, &fun.params, 0, i);
+                // The enclosing instance first, which the constructor takes before its own.
+                let lead = fun.params.len().saturating_sub(sig.clauses.iter().map(|c| c.params.len()).sum());
+                let mut params = fun.params[..lead].to_vec();
+                params.extend(Self::getter_params(&sig.clauses, &fun.params, lead, i));
                 self.line();
                 let _ = write!(self.out, "static $default${}", i + 1);
                 self.emit_getter_rest(super::scope::Root::Fun(f), &params, 0, d, by_name, false);

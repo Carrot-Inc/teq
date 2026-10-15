@@ -1087,7 +1087,8 @@ impl<'w, 'a> P<'w, 'a> {
     /// companion in the source, has one in scalac's.
     fn needs_synthetic_companion(&self, c: ClassId) -> bool {
         let info = self.w.syms.class(c);
-        let defaults = info.ctor.iter().any(|cl| cl.params.iter().any(|p| p.has_default));
+        // Every constructor's defaults, a secondary one's too (`Desugar.classDef`).
+        let defaults = info.ctor.iter().any(|cl| cl.params.iter().any(|p| p.has_default)) || self.secondary_defaults(c);
         // A trait's parameters' defaults are its companion's, as a class's are.
         if info.kind != ClassKind::Class && !(info.kind == ClassKind::Trait && defaults) {
             return false;
@@ -4232,6 +4233,31 @@ impl<'w, 'a> P<'w, 'a> {
                 index += 1;
             }
         }
+        // A secondary constructor's, numbered over its own parameters (`Desugar.classDef` collects
+        // every constructor's; only one may have defaults), its typed defaults its declared
+        // parameters' (`type_secondary_ctor`).
+        for s in info.ctors.clone() {
+            let Some(sig) = self.w.syms.sym(s).sig.clone() else { continue };
+            if !sig.clauses.iter().any(|cl| cl.params.iter().any(|p| p.has_default)) {
+                continue;
+            }
+            let typed: Vec<Option<crate::tir::TExprId>> = self.w.fun_of_sym.get(&s).map(|&f| self.w.prog.funs[f.idx()].defaults.clone()).unwrap_or_default();
+            let mut index = 0u32;
+            for (ci, clause) in sig.clauses.iter().enumerate() {
+                for p in &clause.params {
+                    if p.has_default {
+                        let default = typed.get(index as usize).copied().flatten();
+                        self.default_getter("<init>", index, &tparams, &sig.clauses[..ci], p.ty, false, false, false, false, Producer::Default, default);
+                    }
+                    index += 1;
+                }
+            }
+        }
+    }
+
+    /// Whether a secondary constructor of `c` has a default.
+    fn secondary_defaults(&self, c: ClassId) -> bool {
+        self.w.syms.class(c).ctors.iter().any(|&s| self.w.syms.sym(s).sig.as_ref().is_some_and(|sig| sig.clauses.iter().any(|cl| cl.params.iter().any(|p| p.has_default))))
     }
 
     /// An enum's cases in its companion: a value case as a `case` val, a class case as a final
@@ -5396,8 +5422,13 @@ impl<'w, 'a> P<'w, 'a> {
         match pkg {
             Some(pkg) => self.external_typeref(&pkg, &name),
             None => {
-                // A class nested in another class or object outside the file.
-                let n = self.names.simple(&name);
+                // A class nested in another class or object outside the file; an object nested in
+                // a class by its module class's name, an object class name as dotty's
+                // (`ModuleClassName`), which a simple `Item$` is not.
+                let n = match name.strip_suffix('$').filter(|_| self.w.syms.class(c).inner_object.is_some()) {
+                    Some(base) => self.names.object_class(base),
+                    None => self.names.simple(&name),
+                };
                 self.buf.byte(TYPEREF);
                 self.buf.nat(n as u64);
                 match self.java_static_nested_companion(c) {

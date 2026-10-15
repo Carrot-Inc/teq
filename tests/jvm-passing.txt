@@ -79,6 +79,7 @@ block_alias_context
 block_import_alias
 block_infix_argument
 block_lambda_stmts
+block_statement_lambda
 block_then_select
 boolean_assign_ops
 boolean_strict_operators
@@ -712,6 +713,7 @@ immutable_hash_map
 immutable_queue
 implicit_class_default
 implicit_class_parameter
+implicit_lambda_function
 implicit_lambda_params
 implicit_object_through_extending_object
 import_alias_of_trait_object
@@ -1016,6 +1018,8 @@ local_alias_path
 local_case_classes
 local_case_companion
 local_class_capture_body
+local_class_companion_defaults
+local_class_defaults
 local_class_trait_capture
 local_class_trait_reads
 local_classes
@@ -1251,7 +1255,9 @@ negative_literal_space
 nested_accessor_temps
 nested_case_companion_value
 nested_case_object_identity
+nested_case_written_companion_defaults
 nested_class_ctor_defaults
+nested_class_default_shapes
 nested_class_inherited
 nested_class_overloads
 nested_class_prefix

@@ -2446,19 +2446,23 @@ impl<'a> Worker<'a> {
         };
         let frame = self.env.frames.len();
         self.env.frames.push(Frame::Locals { names: Vec::new(), tparams: Vec::new(), givens: Vec::new(), classes: Vec::new(), aliases: Vec::new(), owner: self.sites.owners.len() as u32 });
-        let default_exprs: Vec<Option<ast::ExprId>> = f.clauses.iter().flat_map(|cl| cl.params.iter().map(|p| p.default)).collect();
-        let defaults = self.enter_params(&sig, &default_exprs, frame);
-        let mut params: Vec<SymId> = sig.clauses.iter().flat_map(|cl| cl.params.iter().map(|p| p.sym)).collect();
         // A class nested in a class takes the enclosing instance as every constructor's first
         // parameter, which stands for that instance's `this` in the body and is passed on to the
-        // constructor called first (dotty's `ExplicitOuter`, `OuterOps.args` of a `This`).
+        // constructor called first (dotty's `ExplicitOuter`, `OuterOps.args` of a `This`), and in
+        // the defaults, whose getters are the companion's (`Desugar.classDef`), read with no
+        // instance of the class.
         let outer_param = self.outer_class(c).map(|o| {
             let name = self.interner.intern("$outer");
             let p = self.new_local(name, SymKind::Param, self.syms.this_type(o), span);
-            params.insert(0, p);
             (o, p)
         });
         let outer_ctor = std::mem::replace(&mut self.ctor_outer, outer_param);
+        let default_exprs: Vec<Option<ast::ExprId>> = f.clauses.iter().flat_map(|cl| cl.params.iter().map(|p| p.default)).collect();
+        let defaults = self.enter_params(&sig, &default_exprs, frame);
+        let mut params: Vec<SymId> = sig.clauses.iter().flat_map(|cl| cl.params.iter().map(|p| p.sym)).collect();
+        if let Some((_, p)) = outer_param {
+            params.insert(0, p);
+        }
         let outer_return = self.return_to.take();
         let outer_returns = std::mem::take(&mut self.returns);
         let outer_excluded = self.excluded_ctor.replace(sym);

@@ -1,0 +1,12 @@
+receiver
+companion
+argument
+default
+10
+10
+receiver
+trait companion
+argument
+default
+0
+1

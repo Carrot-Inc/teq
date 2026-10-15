@@ -469,7 +469,19 @@ impl<'a> Worker<'a> {
         for a in scoped {
             cv.locals.remove(&a);
         }
+        // A secondary constructor's defaults are getters of the companion, as the primary's are
+        // (`Desugar.classDef` collects every constructor's; only one may have defaults): its body
+        // takes them as a method takes its own (`member_defaults`, named `<init>`).
+        let secondary = ctor_defaults.is_empty() && self.syms.class(c).ctors.iter().any(|&k| self.syms.sym(k).sig.as_ref().is_some_and(|sig| sig.clauses.iter().any(|cl| cl.params.iter().any(|p| p.has_default))));
+        let companion_stats: Vec<Stat> = if secondary { self.companion_stats(cv, c) } else { Vec::new() };
         let mut member_defaults: FxMap<(Name, usize), (&DefSig, &Term)> = FxMap::default();
+        for s in &companion_stats {
+            if let Stat::Def(sig, Some(rhs)) = s {
+                if let Some((names::INIT, index)) = self.default_getter(cv, sig.name) {
+                    member_defaults.insert((names::INIT, index), (sig, rhs));
+                }
+            }
+        }
         // Every member has its symbol before any body refers to it: a private one is entered here.
         for s in &cd.template.stats {
             match s {
@@ -540,6 +552,16 @@ impl<'a> Worker<'a> {
         d
     }
 
+    /// The statements of the companion of `c` in the pickle being read, where it has one there.
+    fn companion_stats(&mut self, cv: &Conv, c: ClassId) -> Vec<Stat> {
+        let Some(companion) = self.syms.class(c).companion else { return Vec::new() };
+        let Some(lc) = self.loaded.as_ref().unwrap().classes.get(&companion).copied() else { return Vec::new() };
+        if lc.file != cv.file {
+            return Vec::new();
+        }
+        self.decoded_class(lc.file, lc.addr).template.stats.clone()
+    }
+
     /// `<init>$default$N` of the companion object: the default of the N-th constructor
     /// parameter, converted where it stands.
     fn ctor_defaults(&mut self, cv: &mut Conv, c: ClassId, cd: &TClassDef) -> FxMap<usize, ExprId> {
@@ -564,12 +586,23 @@ impl<'a> Worker<'a> {
             if let Stat::Def(sig, Some(rhs)) = s {
                 if let Some((owner, index)) = self.default_getter(cv, sig.name) {
                     if owner == names::INIT {
-                        // The getter repeats the class's type parameters as its own.
+                        // The getter repeats the class's type parameters as its own, and the
+                        // constructor's clauses before the parameter's, under their names
+                        // (`Desugar.addDefaultGetters`' `getterParamss`): its default names them
+                        // as the constructor's (`z: Int = x * 2`).
                         for clause in &sig.clauses {
-                            if let Clause::Types(ps) = clause {
-                                for (tp, &own) in ps.iter().zip(&class_tparams) {
-                                    let n = self.syms.tparam(own).name;
-                                    cv.local_types.insert(tp.addr, n);
+                            match clause {
+                                Clause::Types(ps) => {
+                                    for (tp, &own) in ps.iter().zip(&class_tparams) {
+                                        let n = self.syms.tparam(own).name;
+                                        cv.local_types.insert(tp.addr, n);
+                                    }
+                                }
+                                Clause::Terms(ps) => {
+                                    for p in ps {
+                                        let n = self.conv_name(cv, p.name);
+                                        cv.locals.insert(p.addr, n);
+                                    }
                                 }
                             }
                         }

@@ -4049,21 +4049,69 @@ impl<'a> Gen<'a> {
             }
             return;
         }
+        // A local class's getters are its local companion's, the receiver the typer selects them on.
+        if cx.ctor_defaults_on_local_companion(c) {
+            let m = cx.input.syms.class(c).companion.expect("a local companion");
+            let module = self.class_name(m);
+            let mt = JType::L(module.clone());
+            match recv {
+                Some(r) => self.expr(r, &mt),
+                None => {
+                    let v = cx.input.syms.class(m).local_module.expect("a local module");
+                    let t = self.load_local(v);
+                    self.adapt(&t, &mt);
+                }
+            }
+            let clauses = match via {
+                Some(s) => cx.input.syms.sym(s).sig.as_ref().map_or(Vec::new(), |sig| sig.clauses.clone()),
+                None => cx.input.syms.class(c).ctor.clone(),
+            };
+            let (before, by_name) = clause_shape(&clauses, i);
+            let ret = match by_name {
+                Some(t) => self.erase(t),
+                None => types[i].clone(),
+            };
+            let desc = method_desc(&types[..before], &ret);
+            self.getter_call(Invoke::Virtual, &module, false, format!("$lessinit$greater$default${}", i + 1), &desc, temps, &ret, false);
+            self.adapt(&ret, &types[i]);
+            return;
+        }
         // A class nested in a class whose companion, an object of each enclosing instance reached
         // by its getter, holds the getters (scalac's layout): another module's or a jar's, and the
-        // program's case class whose companion the backend writes (`emit_inner_companion`) or
-        // completes (`inner_written_companion_members`).
-        if let (None, Some(r), true) = (via, recv, !cx.emits(c) || cx.has_inner_case_companion(c) || cx.has_inner_written_case_companion(c)) {
+        // program's (`ctor_defaults_on_inner_companion`), and a written companion's that forwards to
+        // the class's (`inner_written_companion_members`), on the creation's enclosing instance or,
+        // where a parent's call passes none, on the one the class captures.
+        let on_companion = cx.ctor_defaults_on_inner_companion(c);
+        if recv.is_some() && (!cx.emits(c) || via.is_none() && cx.has_inner_written_case_companion(c)) || on_companion {
             if let Owner::Class(o) = cx.input.syms.class(c).owner {
-                if cx.input.syms.class(o).kind == ClassKind::Class {
-                    let clauses = cx.input.syms.class(c).ctor.clone();
+                let trait_owner = cx.input.syms.class(o).kind == ClassKind::Trait;
+                if cx.input.syms.class(o).kind == ClassKind::Class || trait_owner {
+                    let clauses = match via {
+                        Some(s) => cx.input.syms.sym(s).sig.as_ref().map_or(Vec::new(), |sig| sig.clauses.clone()),
+                        None => cx.input.syms.class(c).ctor.clone(),
+                    };
                     let (before, by_name) = clause_shape(&clauses, i);
                     let outer_name = self.class_name(o);
                     let outer = JType::L(outer_name.clone());
-                    self.expr(r, &outer);
+                    match recv {
+                        Some(r) => self.expr(r, &outer),
+                        None => {
+                            let first = self.class_captured(c).first().copied();
+                            match first {
+                                Some(s) => {
+                                    let t = self.load_capture(s);
+                                    self.adapt(&t, &outer);
+                                }
+                                None => self.load_class_captures(c),
+                            }
+                        }
+                    }
                     let module: Rc<str> = Rc::from(cx.companion_name(c));
                     let getter = cx.input.interner.get(cx.input.syms.class(c).name).to_string();
-                    self.invoke(Invoke::Virtual, &outer_name, false, &getter, &[], &JType::L(module.clone()));
+                    // A trait's companion is reached through the interface's accessor, which the
+                    // classes mixing it in implement.
+                    let kind = if trait_owner { Invoke::Interface } else { Invoke::Virtual };
+                    self.invoke(kind, &outer_name, trait_owner, &getter, &[], &JType::L(module.clone()));
                     let ret = match by_name {
                         Some(t) => self.erase(t),
                         None => types[i].clone(),
@@ -4244,7 +4292,7 @@ impl<'a> Gen<'a> {
                 };
                 let types = self.param_types(s);
                 let temps = self.default_priors(&priors, &types);
-                self.ctor_default(c, Some(s), None, index, &temps, &types);
+                self.ctor_default(c, Some(s), recv, index, &temps, &types);
                 types.get(index).cloned().unwrap_or_else(JType::object)
             }
             DefaultOf::Method(s) => self.method_default(s, index, recv, &priors),

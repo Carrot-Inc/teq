@@ -2024,7 +2024,7 @@ impl<'a> Emitter<'a> {
     /// Emits the parameter list and enters its names into `scope_names`; `leave_params` restores
     /// the names once the body is emitted.
     fn emit_params(&mut self, params: &[SymId], defaults: &[Option<TExprId>]) -> usize {
-        self.emit_params_after_captures(0, params, defaults)
+        self.emit_params_after_captures(0, 0, params, defaults)
     }
 
     /// `emit_params` of the function of a method or a constructor `of`, whose JavaScript parameter
@@ -2033,14 +2033,14 @@ impl<'a> Emitter<'a> {
     /// member it overrides declares.
     fn emit_params_of(&mut self, of: DefaultOf, captures: usize, params: &[SymId], defaults: &[Option<TExprId>]) -> usize {
         let outer = std::mem::replace(&mut self.params_of, Some(of));
-        let mark = self.emit_params_after_captures(captures, params, defaults);
+        let mark = self.emit_params_after_captures(captures, 0, params, defaults);
         self.params_of = outer;
         mark
     }
 
     /// The parameter list of a constructor whose first `captures` parameters are the locals a
     /// lifted class captures, `$c0, $c1, ...`, followed by the declared ones.
-    fn emit_params_after_captures(&mut self, captures: usize, params: &[SymId], defaults: &[Option<TExprId>]) -> usize {
+    fn emit_params_after_captures(&mut self, captures: usize, lead: usize, params: &[SymId], defaults: &[Option<TExprId>]) -> usize {
         let mark = self.scope_names.len();
         // The method's or constructor's own parameters: a closure in one of their defaults has
         // no getter of theirs (`Desugar.addDefaultGetters` gives the method alone getters).
@@ -2067,11 +2067,19 @@ impl<'a> Emitter<'a> {
                 _ => self.name_ctor_param(p, n),
             };
             self.out.push_str(&n);
+            // The parameters `lead` before the declared ones (a secondary constructor's enclosing
+            // instance) take no default; the defaults are the declared parameters'.
+            if i < captures + lead {
+                continue;
+            }
+            let at = i - captures - lead;
+            let defaults = &defaults[lead.min(defaults.len())..];
+            let i = i - lead;
             // A default the loader gives a parameter that declares none (a jar override's evidence
             // the std erases, `default_erased_evidence`) is the parameter's own: no call omits it.
             let given = defaults.get(i).copied().flatten().is_some();
             let initializer = match of {
-                Some(of) => self.defaults().initializer(of, i - captures) || (given && self.defaults().param(of, i - captures).is_some_and(|p| !p.has_default)),
+                Some(of) => self.defaults().initializer(of, at) || (given && self.defaults().param(of, at).is_some_and(|p| !p.has_default)),
                 None => true,
             };
             if let (None, Some(DefaultOf::Method(m)), true) = (defaults.get(i).copied().flatten(), of, initializer) {
@@ -3136,7 +3144,14 @@ impl<'a> Emitter<'a> {
             if has_after {
                 self.declare_fixed("$t");
             }
-            let mark = self.emit_params_of(DefaultOf::Method(fun.sym), 0, &params, &defaults);
+            // A class nested in a class's secondary constructor takes the enclosing instance before
+            // the declared parameters, whose defaults `defaults` holds (`type_secondary_ctor`).
+            let declared: usize = self.syms.sym(fun.sym).sig.as_ref().map_or(0, |sig| sig.clauses.iter().map(|c| c.params.len()).sum());
+            let lead = params.len().saturating_sub(declared);
+            let defaults: Vec<Option<TExprId>> = std::iter::repeat(None).take(lead).chain(defaults).collect();
+            let outer = std::mem::replace(&mut self.params_of, Some(DefaultOf::Method(fun.sym)));
+            let mark = self.emit_params_after_captures(0, lead, &params, &defaults);
+            self.params_of = outer;
             self.out.push(' ');
             self.open("{");
             self.emit_block_stmts(ListRef { start: stmts.start, len: stmts.len - 1 });

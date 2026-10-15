@@ -170,6 +170,7 @@ impl<'a> Parser<'a> {
     fn parse_block_rest_scoped(&mut self, start: Span) -> ExprId {
         let derives_mark = self.pending_derives.len();
         let cases_mark = self.pending_cases.len();
+        let block_defaults_mark = self.pending_defaults.len();
         let placeholders_mark = self.placeholders.len();
         // `{ x => a; b }`: the lambda's body is the rest of the block, as under scalac.
         let lambda = self.at_lambda_start().then(|| (self.span(), self.parse_lambda_params()));
@@ -181,13 +182,14 @@ impl<'a> Parser<'a> {
         // A block's case classes and `derives` clauses have their companions in the block, each
         // right after its class (`Desugar.classDef`'s `companionDefs`, a local object of the
         // block); none reaches an outer body.
-        if self.pending_derives.len() > derives_mark || self.pending_cases.len() > cases_mark {
+        if self.pending_derives.len() > derives_mark || self.pending_cases.len() > cases_mark || self.pending_defaults.len() > block_defaults_mark {
             let defs: Vec<DefId> = stmts.iter().filter_map(|s| if let Stmt::Def(d) = s { Some(*d) } else { None }).collect();
-            let companions = self.add_derived_givens(derives_mark, cases_mark, &defs);
+            let companions = self.add_derived_givens(derives_mark, cases_mark, block_defaults_mark, &defs);
             self.place_companions(&mut stmts, companions, |s| if let Stmt::Def(d) = s { Some(*d) } else { None }, Stmt::Def);
         }
         self.pending_derives.truncate(derives_mark);
         self.pending_cases.truncate(cases_mark);
+        self.pending_defaults.truncate(block_defaults_mark);
         // A statement that is a placeholder alone binds it to no function: scalac's
         // `checkNoEscapingPlaceholders` around a block's statements (`{ _ } + 10`).
         if let Some(p) = self.placeholders.get(placeholders_mark) {
@@ -228,13 +230,39 @@ impl<'a> Parser<'a> {
             let mark = self.export_scratch.len();
             self.parse_export();
             self.export_scratch.truncate(mark);
+        } else if self.at(Tok::KwImplicit) && self.at_lambda_start() {
+            let e = self.parse_block_lambda();
+            out.push(Stmt::Expr(e));
         } else if self.at_def_start() {
             let mut defs = Vec::new();
             self.parse_def(&mut defs);
             out.extend(defs.into_iter().map(Stmt::Def));
         } else {
+            // A lambda the statement starts takes the rest of the block (`parse_lambda`).
+            self.block_lambda_at = self.pos;
             let e = self.parse_expr();
             out.push(Stmt::Expr(e));
+        }
+    }
+
+    /// The statements of a lambda's body that a block's statement starts, up to where the
+    /// enclosing statements end: the end of the region, or a `case` that starts no definition,
+    /// the next case of a match (dotty's `blockStatSeq` stops at either).
+    fn block_lambda_body(&mut self, out: &mut Vec<Stmt>) {
+        loop {
+            self.skip_separators();
+            match self.kind() {
+                Tok::Eof | Tok::Outdent => return,
+                Tok::KwCase if !matches!(self.kind_at(1), Tok::KwClass | Tok::KwObject) => return,
+                _ => {}
+            }
+            let before = self.pos;
+            self.parse_block_stmt(out);
+            if self.pos == before {
+                self.skip_one(RecoverySite::Block);
+            } else {
+                self.statement_end();
+            }
         }
     }
 
@@ -294,9 +322,32 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_lambda(&mut self) -> ExprId {
+        if self.block_lambda_at == self.pos {
+            return self.parse_block_lambda();
+        }
         let start = self.span();
         let params = self.parse_lambda_params();
         let body = self.parse_block_or_expr();
+        self.ast.add_expr(Expr::Lambda(params, body), start.to(self.prev_span()))
+    }
+
+    /// `{ a; x => b; c }`: a lambda a block's statement starts takes the rest of the block as its
+    /// body, as one at the block's start does (dotty's `blockStatSeq`, `closureRest` reading a body
+    /// in `Location.InBlock`), an `implicit` one's too (`implicitClosure`): the body of
+    /// `{ implicit u => implicit v => .. }` is the inner lambda.
+    fn parse_block_lambda(&mut self) -> ExprId {
+        let start = self.span();
+        let params = self.parse_lambda_params();
+        let body_start = self.span();
+        let mut stmts: Vec<Stmt> = Vec::new();
+        self.block_lambda_body(&mut stmts);
+        let body = match stmts[..] {
+            [Stmt::Expr(e)] => e,
+            _ => {
+                let l = push_list(&mut self.ast.stmts, &stmts);
+                self.ast.add_expr(Expr::Block(l), body_start.to(self.prev_span()))
+            }
+        };
         self.ast.add_expr(Expr::Lambda(params, body), start.to(self.prev_span()))
     }
 

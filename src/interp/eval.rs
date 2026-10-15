@@ -547,12 +547,39 @@ impl<'a, 't> Interp<'a, 't> {
                 };
                 let mut bound: Vec<(SymId, Value)> = params[captures..].iter().copied().zip(vals).collect();
                 // The enclosing instance the creation passes, the getter's receiver, for the
-                // capture that stands for it (`Worker::retarget_defaults`).
-                if let (Some(r), true) = (recv, captures > 0) {
+                // capture that stands for it (`Worker::retarget_defaults`); a local class's receiver
+                // is its local companion, read for its initialiser alone.
+                if let (Some(r), true) = (recv, captures > 0 && self.syms().class(c).owner != Owner::Local) {
                     bound.push((params[0], r));
                 }
                 let by_name = self.syms().class(c).ctor.iter().flat_map(|cl| cl.params.iter()).nth(index).is_some_and(|p| p.by_name);
                 return self.eval_default(d, by_name, bound, Some(fr.clone()), cx.this.clone(), cx.class);
+            }
+            // A secondary constructor's, as the primary's: its declared parameters after the
+            // enclosing instance a class nested in a class takes first (`type_secondary_ctor`),
+            // which the creation passes as the getter's receiver.
+            DefaultOf::Method(s) if self.syms().sym(s).name == crate::names::INIT => {
+                let Some(f) = self.fun_of(s) else { return self.unsupported("a constructor without a body".to_string()) };
+                let declared: usize = self.syms().sym(s).sig.as_ref().map_or(0, |sig| sig.clauses.iter().map(|c| c.params.len()).sum());
+                let (params, default) = {
+                    let fun = &self.prog().funs[f.idx()];
+                    (fun.params.clone(), fun.defaults.get(index).copied().flatten())
+                };
+                let Some(d) = default else {
+                    let name = self.qualified_name(s);
+                    return self.unsupported(format!("{} has no default for its parameter {}", name, index + 1));
+                };
+                let lead = params.len().saturating_sub(declared);
+                let mut bound: Vec<(SymId, Value)> = params[lead..].iter().copied().zip(vals).collect();
+                if let (Some(r), true) = (recv, lead > 0) {
+                    bound.push((params[0], r));
+                }
+                let by_name = self.syms().sym(s).sig.as_ref().and_then(|sig| sig.clauses.iter().flat_map(|cl| cl.params.iter()).nth(index).map(|p| p.by_name)).unwrap_or(false);
+                let class = match self.syms().sym(s).owner {
+                    Owner::Class(c) => Some(c),
+                    _ => None,
+                };
+                return self.eval_default(d, by_name, bound, Some(fr.clone()), cx.this.clone(), class);
             }
             // A getter selected on `super` inside a trait: the getter of the member after the
             // trait in the instance's linearisation, as the trait's `super` call runs it.

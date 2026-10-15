@@ -1010,6 +1010,11 @@ pub struct Worker<'a> {
     /// In a secondary constructor of a class nested in a class: that class and the
     /// constructor's outer parameter, which stands for its `this` there (`outer_this_sym`).
     pub ctor_outer: Option<(ClassId, SymId)>,
+    /// The class a creation being typed makes and the enclosing instance it takes, known before its
+    /// arguments are typed (the companion's prefix, a `new`'s): the receiver its constructor's
+    /// defaults are selected on from the start (`default_application`), which every copy of a
+    /// by-name argument a later getter takes then carries (`Applications.spliceMeth`).
+    pub creation_outer: Option<(ClassId, TExprId)>,
     /// A case class's `copy` applied as dotty's synthesized method: a constructor call that
     /// eta-expands over a missing list as a method does.
     pub copy_application: bool,
@@ -2561,6 +2566,7 @@ impl<'a> Worker<'a> {
             ctor_prefix: None,
             sig_bound_names: None,
             ctor_outer: None,
+            creation_outer: None,
             copy_application: false,
             case_scrutinee: None,
             apply_seen_from: None,
@@ -2951,6 +2957,7 @@ impl<'a> Worker<'a> {
             ctor_prefix: None,
             sig_bound_names: None,
             ctor_outer: None,
+            creation_outer: None,
             copy_application: false,
             case_scrutinee: None,
             apply_seen_from: None,

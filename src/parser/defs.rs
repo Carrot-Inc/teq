@@ -944,6 +944,8 @@ impl<'a> Parser<'a> {
         }
         if kind == ClassKind::Class && m & mods::CASE != 0 {
             self.pending_cases.push((name, span));
+        } else if matches!(kind, ClassKind::Class | ClassKind::Trait) && self.constructor_has_default(&clauses, &body) {
+            self.pending_defaults.push((name, span));
         }
         let class = ClassDef { kind, tparams, clauses, parents, body, exports, self_type, self_alias };
         self.ast.add_def(Def { name, span, mods: m, annots, kind: DefKind::Class(Box::new(class)) })
@@ -1014,7 +1016,7 @@ impl<'a> Parser<'a> {
     /// `defs` are the definitions of the body that holds the classes recorded since `mark` and
     /// `cases_mark`; a companion that the body lacks is made, synthetic
     /// (`Ast::synthetic_companions`), and returned for the caller to add.
-    pub(super) fn add_derived_givens(&mut self, mark: usize, cases_mark: usize, defs: &[DefId]) -> Vec<DefId> {
+    pub(super) fn add_derived_givens(&mut self, mark: usize, cases_mark: usize, defaults_mark: usize, defs: &[DefId]) -> Vec<DefId> {
         let mut companions = Vec::new();
         let mut objects: FxMap<Name, DefId> = FxMap::default();
         // A method of the class's name beside it does not keep the companion away: the namer holds
@@ -1052,7 +1054,8 @@ impl<'a> Parser<'a> {
                 }
             }
         }
-        for (class, span) in self.pending_cases.split_off(cases_mark) {
+        let defaults = self.pending_defaults.split_off(defaults_mark.min(self.pending_defaults.len()));
+        for (class, span) in self.pending_cases.split_off(cases_mark).into_iter().chain(defaults) {
             if !objects.contains_key(&class) {
                 let range = class_ranges.get(&class).copied().unwrap_or(span);
                 let companion = self.synthetic_companion(class, span, range, Vec::new());
@@ -1061,6 +1064,20 @@ impl<'a> Parser<'a> {
             }
         }
         companions
+    }
+
+    /// Whether a constructor of a class, its primary one (`clauses`) or a secondary one of its
+    /// `body`, has a parameter with a default.
+    fn constructor_has_default(&self, clauses: &[ParamClause], body: &[Stmt]) -> bool {
+        let defaulted = |cls: &[ParamClause]| cls.iter().any(|cl| cl.params.iter().any(|p| p.default.is_some()));
+        defaulted(clauses)
+            || body.iter().any(|s| match s {
+                Stmt::Def(d) => {
+                    let def = self.ast.def(*d);
+                    def.name == names::INIT && matches!(&def.kind, DefKind::Fun(f) if defaulted(&f.clauses))
+                }
+                _ => false,
+            })
     }
 
     /// The companion object `Desugar.classDef` makes for a class that has none written, at the
@@ -1172,6 +1189,7 @@ impl<'a> Parser<'a> {
         let exports_mark = self.export_scratch.len();
         let derives_mark = self.pending_derives.len();
         let cases_mark = self.pending_cases.len();
+        let defaults_mark = self.pending_defaults.len();
         let (alias_indent, self_type, alias) = self.parse_self_alias();
         let language = self.language_open.len();
         self.statements(RecoverySite::TemplateBody, |p| {
@@ -1206,11 +1224,12 @@ impl<'a> Parser<'a> {
         // each instance (`Desugar.classDef`); an enum's cases are the enum's.
         if is_enum {
             self.pending_cases.truncate(cases_mark);
+            self.pending_defaults.truncate(defaults_mark);
         }
-        if self.pending_derives.len() > derives_mark || self.pending_cases.len() > cases_mark {
+        if self.pending_derives.len() > derives_mark || self.pending_cases.len() > cases_mark || self.pending_defaults.len() > defaults_mark {
             let defs: Vec<DefId> =
                 body.iter().filter_map(|s| if let Stmt::Def(d) = s { Some(*d) } else { None }).collect();
-            let companions = self.add_derived_givens(derives_mark, cases_mark, &defs);
+            let companions = self.add_derived_givens(derives_mark, cases_mark, defaults_mark, &defs);
             self.place_companions(&mut body, companions, |s| if let Stmt::Def(d) = s { Some(*d) } else { None }, Stmt::Def);
         }
         (body, self.export_list(exports_mark), self_type, alias)

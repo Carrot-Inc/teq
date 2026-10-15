@@ -471,6 +471,12 @@ impl<'a> Worker<'a> {
         let own = self.prog.type_of(e).or_else(|| match self.prog.expr(e) {
             TExpr::Module(c) => Some(self.types.class(c, &[])),
             TExpr::Local(s) | TExpr::Static(s) => self.syms.sym(s).sig.as_ref().map(|sig| sig.ret),
+            // An object nested in a class selected on its prefix, a companion whose `apply` the
+            // call applies: its module's type, which its members are found on.
+            TExpr::Field(_, s) | TExpr::CallMethod(_, s, _) if receiver => {
+                let ret = self.syms.sym(s).sig.as_ref().map(|sig| sig.ret)?;
+                self.class_of(ret).is_some_and(|m| self.syms.class(m).inner_object == Some(s)).then_some(ret)
+            }
             _ => None,
         });
         let ty = match own {
@@ -603,7 +609,7 @@ impl<'a> Worker<'a> {
                 }),
                 _ => Some(a),
             };
-            let Some(d) = d else { continue };
+            let Some(d) = d.map(|d| self.passed_default(d)) else { continue };
             let TExpr::Default(x, at, priors) = self.prog.expr(d) else { continue };
             if x != of || at & DEFAULT_RECEIVER != 0 {
                 continue;
@@ -615,33 +621,51 @@ impl<'a> Worker<'a> {
         }
     }
 
-    /// The receivers `retarget_defaults` gave the getters of the constructor of `c` in the
-    /// creation `te` (among its arguments, or bound before it in the blocks around it) made
-    /// copies of `outer`: the prefix's value that takes the outer placeholder's place
-    /// (`pass_outer`).
-    pub(super) fn pass_outer_to_defaults(&mut self, te: TExprId, c: ClassId, outer: TExprId) {
+    /// The receivers `retarget_defaults` gave the getters of the constructor `of` (a class's
+    /// primary, or a secondary one) in the creation `te` (among its arguments, or bound before it
+    /// in the blocks around it) made copies of `outer`: the prefix's value that takes the outer
+    /// placeholder's place (`pass_outer`).
+    pub(super) fn pass_outer_to_defaults(&mut self, te: TExprId, of: DefaultOf, outer: TExprId) {
         let mut found = Vec::new();
         let mut at = te;
-        while let TExpr::Block(stmts, value) = self.prog.expr(at) {
-            for st in self.prog.stmt_list(stmts).to_vec() {
-                if let TStmt::Val(_, init) = st {
-                    found.push(init);
+        loop {
+            match self.prog.expr(at) {
+                TExpr::Block(stmts, value) => {
+                    for st in self.prog.stmt_list(stmts).to_vec() {
+                        if let TStmt::Val(_, init) = st {
+                            found.push(init);
+                        }
+                    }
+                    at = value;
                 }
+                // The closure of an application eta-expanded over a missing clause
+                // (`pass_outer_applied`).
+                TExpr::Lambda(_, body) => at = body,
+                _ => break,
             }
-            at = value;
         }
-        if let TExpr::New(_, args) = self.prog.expr(at) {
+        if let TExpr::New(_, args) | TExpr::NewVia(_, args) = self.prog.expr(at) {
             found.extend_from_slice(self.prog.expr_list(args));
         }
         for d in found {
-            let TExpr::Default(DefaultOf::Ctor(x), at, l) = self.prog.expr(d) else { continue };
-            if x != c || at & DEFAULT_RECEIVER == 0 {
+            let d = self.passed_default(d);
+            let TExpr::Default(x, at, l) = self.prog.expr(d) else { continue };
+            if x != of || at & DEFAULT_RECEIVER == 0 {
                 continue;
             }
             let mut items = self.prog.expr_list(l).to_vec();
             items[0] = self.prior_copy(outer);
             let l = self.prog.list(&items);
-            self.prog.exprs[d.idx()] = TExpr::Default(DefaultOf::Ctor(x), at, l);
+            self.prog.exprs[d.idx()] = TExpr::Default(x, at, l);
+        }
+    }
+
+    /// The getter's application an argument passes: itself, or a by-name parameter's, under the
+    /// thunk that passes it (a `Lambda` without parameters).
+    pub(super) fn passed_default(&self, a: TExprId) -> TExprId {
+        match self.prog.expr(a) {
+            TExpr::Lambda(params, body) if params.len == 0 && matches!(self.prog.expr(body), TExpr::Default(..)) => body,
+            _ => a,
         }
     }
 
@@ -650,6 +674,21 @@ impl<'a> Worker<'a> {
     /// a fresh node, a by-name one a fresh copy of its tree.
     pub(super) fn default_application(&mut self, plan: &mut CallPlan, recv: Option<TExprId>, earlier: &[TExprId], index: usize, ty: TypeId) -> TExprId {
         let mut of = plan.of.expect("a callee with defaults");
+        let mut recv = recv;
+        if let Some((k, outer)) = self.synthetic_apply_class(of, recv) {
+            of = DefaultOf::Ctor(k);
+            recv = outer;
+        }
+        // A constructor's default of a class nested in a class is selected on the companion of the
+        // creation's prefix (`Applications.findDefaultGetter`), its receiver from the start: the
+        // enclosing instance the creation was given before its arguments (`creation_outer`), or
+        // `O.this` where the code stands in `O`; a local class's on its local companion.
+        if let (DefaultOf::Ctor(c), None) = (of, recv) {
+            recv = match self.creation_outer.filter(|&(k, _)| k == c) {
+                Some((_, o)) => Some(o),
+                None => self.enclosing_outer_of(c).or_else(|| self.local_companion_ref(c)),
+            };
+        }
         let mut items = Vec::with_capacity(earlier.len() + 1);
         let mut at = index as u32;
         // An inline forwarder's getter is the forwarded member's on the forwarder's path, through
@@ -692,6 +731,39 @@ impl<'a> Worker<'a> {
         self.prog.set_type(d, ty);
         plan.defaults.push(d);
         d
+    }
+
+    /// The class whose constructor's getters stand for the defaults of `of`, a jar's companion's
+    /// `apply` its pickle marks synthesized, which the call applies (`constructor_next_to_apply`):
+    /// dotty names the getter of a synthesized `apply` after the constructor, selected on the
+    /// call's receiver (`Applications.findDefaultGetter`), which for a companion nested in a class
+    /// is the companion of the enclosing instance it is selected on (`module_prefix`).
+    fn synthetic_apply_class(&mut self, of: DefaultOf, recv: Option<TExprId>) -> Option<(ClassId, Option<TExprId>)> {
+        let DefaultOf::Method(m) = of else { return None };
+        if self.syms.sym(m).name != crate::names::APPLY || !self.loaded.as_ref().is_some_and(|l| l.synthetic_members.contains_key(&m)) {
+            return None;
+        }
+        let Owner::Class(o) = self.syms.sym(m).owner else { return None };
+        let k = self.syms.class(o).companion?;
+        if self.syms.class(o).inner_object.is_none() {
+            return (self.syms.class(o).kind == ClassKind::Object).then_some((k, None));
+        }
+        let outer = self.module_prefix(recv?, o)?;
+        Some((k, Some(outer)))
+    }
+
+    /// The local object beside the local class `c`, written or made for its defaults
+    /// (`Desugar.classDef`), which its constructor's default getters are selected on: its lazy val.
+    fn local_companion_ref(&mut self, c: ClassId) -> Option<TExprId> {
+        if self.syms.class(c).owner != Owner::Local {
+            return None;
+        }
+        let m = self.syms.class(c).companion?;
+        let v = self.syms.class(m).local_module?;
+        let r = self.prog.add(TExpr::Local(v));
+        let ty = self.types.class(m, &[]);
+        self.prog.set_type(r, ty);
+        Some(r)
     }
 
     /// A path that means the same wherever it stands: an object, a top-level definition, a val

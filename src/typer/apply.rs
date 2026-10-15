@@ -1708,12 +1708,152 @@ impl<'a> Worker<'a> {
         Err(self.apply_member(tq, qty, name, None, Vec::new(), span, None))
     }
 
+    /// The application of the synthesized `apply` of `module`, a companion nested in a class, of the
+    /// class `companion`, which constructs inside it (`Desugar.classDef`): its enclosing instance
+    /// is the one the companion is selected on, `o` of `o.C(1)`, the prefix `newExpr` keeps. The
+    /// constructor stands for the member, whichever way the application reached it, an overload
+    /// resolved to it included (`try_overloaded`), so that every one passes the prefix
+    /// (`pass_outer_applied`).
+    #[allow(clippy::too_many_arguments)]
+    pub(super) fn nested_companion_apply(
+        &mut self,
+        recv: TExprId,
+        recv_ty: TypeId,
+        module: ClassId,
+        companion: ClassId,
+        proxy: bool,
+        targs: Option<ListRef>,
+        lists: Vec<ArgList>,
+        span: Span,
+        expected: Option<TypeId>,
+    ) -> (TExprId, TypeId) {
+        let Some(written_outer) = self.module_prefix(recv, module) else {
+            let msg = format!("not supported yet: the companion of {}, a class nested in a class, applied through no path", self.name_str(self.syms.class(companion).name));
+            self.error(span, msg);
+            return (self.prog.add(TExpr::Unit), ERROR);
+        };
+        // The class is constructed through the companion's prefix, which is an immutable path
+        // (dotty's `newExpr`, E083).
+        if proxy && !self.is_stable_path(recv) {
+            let prefix = match (self.types.get(recv_ty), self.prog.expr(recv)) {
+                (Type::Nested(p, _), _) => Some(p),
+                (_, TExpr::Field(q, _) | TExpr::CallMethod(q, _, _)) => self.prog.type_of(q),
+                _ => self.prog.type_of(written_outer),
+            };
+            let msg = format!("{} is not a valid class prefix, since it is not an immutable path", self.show(prefix.unwrap_or(recv_ty)));
+            self.error(span, msg);
+        }
+        // The companion is the receiver of its `apply` (`EtaExpansion.liftApp`): bound before the
+        // arguments where it is not idempotent (`Lifter.liftPrefix`), else evaluated first, as the
+        // call's qualifier is, which runs a companion's initialiser before the arguments; the
+        // enclosing instance the creation takes is the saved companion's.
+        let (recv, before) = self.companion_receiver(recv, module, span);
+        let outer = if before.iter().any(|st| matches!(st, TStmt::Val(..))) {
+            self.module_prefix(recv, module).unwrap_or(written_outer)
+        } else {
+            written_outer
+        };
+        let outer_prefixed = std::mem::replace(&mut self.new_prefixed, true);
+        // The receiver's class, which the class's members are seen from (a private alias of a
+        // base is none of a subclass's): the companion's prefix's (`d` of `d.Cmd(..)`), its node
+        // typed or its type's prefix.
+        let outer_ty = self.prog.type_of(outer).or(match self.types.get(recv_ty) {
+            Type::Nested(p, _) => Some(p),
+            _ => None,
+        });
+        let receiver_class = outer_ty.and_then(|t| self.class_of(t));
+        let outer_creator = std::mem::replace(&mut self.creator_receiver, receiver_class.map(|r| (companion, r)));
+        // The constructor seen from the companion's prefix (`g.I(7, "a")` of a `g: O[Int]` takes
+        // an `Int`), as a creation through it is.
+        let prefix = match self.types.get(recv_ty) {
+            Type::Nested(p, _) => Some(p),
+            _ => None,
+        };
+        let prefix = prefix.filter(|_| self.is_inner_class(companion));
+        let outer_ctor_prefix = std::mem::replace(&mut self.ctor_prefix, prefix);
+        let outer_creation = std::mem::replace(&mut self.creation_outer, Some((companion, outer)));
+        let r = self.apply_companion_apply(companion, targs, lists, span, expected);
+        self.creation_outer = outer_creation;
+        self.ctor_prefix = outer_ctor_prefix;
+        self.creator_receiver = outer_creator;
+        self.new_prefixed = outer_prefixed;
+        self.pass_outer_applied(r.0, outer);
+        let r = (self.bind_prefix(r.0, before), r.1);
+        // The instance's type is the class through the companion's prefix (`o.C`), its `apply`'s
+        // result seen from `o.C.type`; an enum's class case widened to its enum, the enum's base
+        // type of that (`o.E` of `o.E.K(1)`, the case's companion through the enum's).
+        let ty = match (self.types.get(recv_ty), self.types.get(r.1)) {
+            (Type::Nested(p, _), Type::Class(k, _)) if k != companion && self.syms.class(companion).kind == ClassKind::EnumCase => {
+                let case_ty = self.prog.type_of(r.0).filter(|&t| self.class_of(t) == Some(companion)).unwrap_or_else(|| self.types.class(companion, &[]));
+                let precise = self.nested_type(p, case_ty);
+                self.base_type(precise, k).unwrap_or(r.1)
+            }
+            (Type::Nested(p, _), Type::Class(..)) => self.nested_type(p, r.1),
+            _ => r.1,
+        };
+        (r.0, ty)
+    }
+
+    /// The receiver of a companion's `apply`, the companion `module`, and the statements that
+    /// evaluate it before the arguments: one that is not idempotent bound to a temporary of the
+    /// companion's type (`Lifter.liftPrefix`, `EtaExpansion.liftApp`); an idempotent one kept, and
+    /// evaluated first where the companion has initialisation (dotty's `NoInits`, `no_inits`), the
+    /// one case its evaluation as the call's qualifier is told apart.
+    fn companion_receiver(&mut self, recv: TExprId, module: ClassId, span: Span) -> (TExprId, Vec<TStmt>) {
+        use super::elaborate::Purity;
+        if self.expr_purity(recv).at_least(Purity::IDEMPOTENT) {
+            if self.no_inits(module) {
+                return (recv, Vec::new());
+            }
+            let first = self.prior_copy(recv);
+            return (recv, vec![TStmt::Expr(first)]);
+        }
+        self.bound_once(recv, span)
+    }
+
+    /// `e` bound to a fresh temporary before what follows, of its type (an object nested in a
+    /// class selected on its prefix, of its module's), and the reference to it.
+    fn bound_once(&mut self, e: TExprId, span: Span) -> (TExprId, Vec<TStmt>) {
+        let own = self.prog.type_of(e).or_else(|| match self.prog.expr(e) {
+            TExpr::Field(_, s) | TExpr::CallMethod(_, s, _) => self.syms.sym(s).sig.as_ref().map(|sig| sig.ret),
+            _ => None,
+        });
+        let ty = own.unwrap_or(ANY);
+        let tmp = self.fresh_local("prefix", ty, span);
+        let r = self.prog.add(TExpr::Local(tmp));
+        self.prog.set_type(r, ty);
+        (r, vec![TStmt::Val(tmp, e)])
+    }
+
+    /// The creation `te` under the statements `companion_receiver` made, which come before the
+    /// temporaries of the arguments.
+    fn bind_prefix(&mut self, te: TExprId, before: Vec<TStmt>) -> TExprId {
+        if before.is_empty() {
+            return te;
+        }
+        let mut stmts = before;
+        let value = match self.prog.expr(te) {
+            TExpr::Block(inner, v) => {
+                stmts.extend_from_slice(self.prog.stmt_list(inner));
+                v
+            }
+            _ => te,
+        };
+        let ty = self.prog.type_of(te);
+        let stmts = self.prog.stmts.push_slice(&stmts);
+        let b = self.prog.add(TExpr::Block(stmts, value));
+        if let Some(t) = ty {
+            self.prog.set_type(b, t);
+        }
+        b
+    }
+
     /// The enclosing instance of the companion object `module` nested in a class, which its
     /// synthesized `apply` constructs with (`Desugar.classDef`): the instance the companion is
     /// selected on (`o` of `o.C`, its member found through that instance's class, `findRef`);
     /// inside the companion itself (`C.this`, as a pickle writes `C(..)` there) its own
     /// enclosing instance; on another value holding the companion, that value's outer instance.
-    fn module_prefix(&mut self, recv: TExprId, module: ClassId) -> Option<TExprId> {
+    pub(super) fn module_prefix(&mut self, recv: TExprId, module: ClassId) -> Option<TExprId> {
         let own = self.syms.class(module).inner_object;
         match self.prog.expr(recv) {
             TExpr::Field(q, s) if Some(s) == own => return Some(q),
@@ -1730,14 +1870,6 @@ impl<'a> Worker<'a> {
         let ty = self.sig_of(accessor).ret;
         self.prog.set_type(call, ty);
         Some(call)
-    }
-
-    /// Whether the companion object `o` holds its case class's synthesized `apply` as a member, as
-    /// the loader keeps it: a library's companion nested in a class, whose `apply` constructs with
-    /// the companion's own enclosing instance (`Desugar.classDef`), which a jar's bodies call on
-    /// the companion. The constructor does not stand for it then (`constructor_next_to_apply`).
-    pub(in crate::typer) fn keeps_synthetic_apply(&self, o: ClassId) -> bool {
-        self.syms.class(o).inner_object.is_some() && self.is_library_class(o) && !self.is_product_class(o)
     }
 
     pub(super) fn companion_class(&self, object: ClassId) -> Option<ClassId> {
@@ -5983,6 +6115,10 @@ impl<'a> Worker<'a> {
                     Some(o) => {
                         let at = self.syms.sym(call.sym).span;
                         let outer = self.new_outer_arg(c, o, at);
+                        // A default the creation leaves to the constructor's getter takes the
+                        // enclosing instance, its receiver, as the primary's do (`new_instance`).
+                        let of = DefaultOf::Method(call.sym);
+                        self.retarget_defaults(args, of, of, |w| w.prior_copy(outer));
                         let items: Vec<TExprId> = std::iter::once(outer).chain(self.prog.expr_list(args).iter().copied()).collect();
                         self.prog.list(&items)
                     }
@@ -7765,7 +7901,16 @@ impl<'a> Worker<'a> {
                         self.ctor_prefix = Some(self.path_of(recv).unwrap_or(recv_ty));
                     }
                     let outer_creator = std::mem::replace(&mut self.creator_receiver, Some((nested, c)));
+                    // The enclosing instance, the receiver, known before the arguments: bound
+                    // first where it is not idempotent (`Lifter.liftPrefix`).
+                    let (outer, before) = if !inner || self.expr_purity(recv).at_least(super::elaborate::Purity::IDEMPOTENT) {
+                        (recv, Vec::new())
+                    } else {
+                        self.bound_once(recv, span)
+                    };
+                    let outer_creation = std::mem::replace(&mut self.creation_outer, inner.then_some((nested, outer)));
                     let (te, ty) = self.apply_callee(Callee::Ctor(nested), targs, lists, span, expected);
+                    self.creation_outer = outer_creation;
                     self.ctor_prefix = None;
                     self.new_prefixed = outer_prefixed;
                     self.creator_receiver = outer_creator;
@@ -7776,7 +7921,8 @@ impl<'a> Worker<'a> {
                     // The instance's type is the class through the receiver, as dotty's
                     // `applyProxyResultType` gives the proxy's `new` the prefix's type.
                     if inner {
-                        self.pass_outer(te, recv);
+                        self.pass_outer(te, outer);
+                        let te = self.bind_prefix(te, before);
                         // The class itself is seen from the receiver, and so is an enum's case
                         // widened to its enum, the enum through the companion's enclosing instance
                         // (`a.E` of `a.E.K(1)`).
@@ -8089,62 +8235,9 @@ impl<'a> Worker<'a> {
                         return Ok((self.prog.add(TExpr::Unit), ERROR));
                     }
                     // The synthesized `apply` of a companion nested in a class constructs
-                    // inside it (`Desugar.classDef`): its enclosing instance is the one the
-                    // companion is selected on, `o` of `o.C(1)`, the prefix `newExpr` keeps.
+                    // inside it (`Desugar.classDef`).
                     if inner.is_some() && self.outer_class(companion).is_some() {
-                        let Some(outer) = self.module_prefix(recv, c) else {
-                            let msg = format!("not supported yet: the companion of {}, a class nested in a class, applied through no path", self.name_str(self.syms.class(companion).name));
-                            self.error(span, msg);
-                            return Ok((self.prog.add(TExpr::Unit), ERROR));
-                        };
-                        // The class is constructed through the companion's prefix, which is an
-                        // immutable path (dotty's `newExpr`, E083).
-                        if proxy && !self.is_stable_path(recv) {
-                            let prefix = match (self.types.get(recv_ty), self.prog.expr(recv)) {
-                                (Type::Nested(p, _), _) => Some(p),
-                                (_, TExpr::Field(q, _) | TExpr::CallMethod(q, _, _)) => self.prog.type_of(q),
-                                _ => self.prog.type_of(outer),
-                            };
-                            let msg = format!("{} is not a valid class prefix, since it is not an immutable path", self.show(prefix.unwrap_or(recv_ty)));
-                            self.error(span, msg);
-                        }
-                        let outer_prefixed = std::mem::replace(&mut self.new_prefixed, true);
-                        // The receiver's class, which the class's members are seen from (a private
-                        // alias of a base is none of a subclass's): the companion's prefix's (`d` of
-                        // `d.Cmd(..)`), its node typed or its type's prefix.
-                        let outer_ty = self.prog.type_of(outer).or(match self.types.get(recv_ty) {
-                            Type::Nested(p, _) => Some(p),
-                            _ => None,
-                        });
-                        let receiver_class = outer_ty.and_then(|t| self.class_of(t));
-                        let outer_creator = std::mem::replace(&mut self.creator_receiver, receiver_class.map(|r| (companion, r)));
-                        // The constructor seen from the companion's prefix (`g.I(7, "a")` of a
-                        // `g: O[Int]` takes an `Int`), as a creation through it is.
-                        let prefix = match self.types.get(recv_ty) {
-                            Type::Nested(p, _) => Some(p),
-                            _ => None,
-                        };
-                        let prefix = prefix.filter(|_| self.is_inner_class(companion));
-                        let outer_ctor_prefix = std::mem::replace(&mut self.ctor_prefix, prefix);
-                        let r = self.apply_companion_apply(companion, targs, lists, span, expected);
-                        self.ctor_prefix = outer_ctor_prefix;
-                        self.creator_receiver = outer_creator;
-                        self.new_prefixed = outer_prefixed;
-                        self.pass_outer_applied(r.0, outer);
-                        // The instance's type is the class through the companion's prefix
-                        // (`o.C`), its `apply`'s result seen from `o.C.type`; an enum's class
-                        // case widened to its enum, the enum's base type of that (`o.E` of
-                        // `o.E.K(1)`, the case's companion through the enum's).
-                        let ty = match (self.types.get(recv_ty), self.types.get(r.1)) {
-                            (Type::Nested(p, _), Type::Class(k, _)) if k != companion && self.syms.class(companion).kind == ClassKind::EnumCase => {
-                                let case_ty = self.prog.type_of(r.0).filter(|&t| self.class_of(t) == Some(companion)).unwrap_or_else(|| self.types.class(companion, &[]));
-                                let precise = self.nested_type(p, case_ty);
-                                self.base_type(precise, k).unwrap_or(r.1)
-                            }
-                            (Type::Nested(p, _), Type::Class(..)) => self.nested_type(p, r.1),
-                            _ => r.1,
-                        };
-                        return Ok((r.0, ty));
+                        return Ok(self.nested_companion_apply(recv, recv_ty, c, companion, proxy, targs, lists, span, expected));
                     }
                     return Ok(self.apply_companion_apply(companion, targs, lists, span, expected));
                 }
@@ -8159,7 +8252,20 @@ impl<'a> Worker<'a> {
     #[inline(never)]
     fn made_companion_member(&mut self, member: Option<(SymId, TypeId)>, name: Name, applied: bool) -> bool {
         let Some((sym, _)) = member else { return false };
-        (name == names::APPLY && self.is_made_companion_apply(sym)) || (applied && self.is_made_companion_val(sym))
+        (name == names::APPLY && (self.is_made_companion_apply(sym) || self.is_synthesized_case_apply(sym))) || (applied && self.is_made_companion_val(sym))
+    }
+
+    /// Whether `s` is the synthesized `apply` a pickle declares in a case class's companion, a
+    /// product's or a library's alike (`Desugar.classDef`), which the constructor stands for; a
+    /// jar's companion nested in a class has its member called (`jar_nested_companion`).
+    pub(super) fn is_synthesized_case_apply(&self, s: SymId) -> bool {
+        let Owner::Class(m) = self.syms.sym(s).owner else { return false };
+        !self.jar_nested_companion(m)
+            && self.loaded.as_ref().is_some_and(|l| l.synthetic_members.contains_key(&s))
+            && self.syms.class(m).companion.is_some_and(|c| {
+                let ci = self.syms.class(c);
+                ci.mods & crate::ast::mods::CASE != 0 && ci.mods & crate::ast::mods::ABSTRACT == 0 && (ci.kind == ClassKind::Class || ci.kind == ClassKind::EnumCase && ci.singleton.is_none())
+            })
     }
 
     /// The class of a part of the intersection `t` that has a class `name` nested, its own or
@@ -8199,21 +8305,36 @@ impl<'a> Worker<'a> {
         self.syms.class(m).made_companion && self.loaded.as_ref().is_some_and(|l| l.synthetic_members.contains_key(&s))
     }
 
+    /// Whether the object `o` is a jar's companion nested in a class, whose synthesized `apply` the
+    /// typer calls as the member it is (`constructor_next_to_apply`).
+    fn jar_nested_companion(&self, o: ClassId) -> bool {
+        self.syms.class(o).inner_object.is_some() && self.is_library_class(o) && !self.is_product_class(o)
+    }
+
+    /// The case class whose constructor stands for its companion's synthesized `apply`, the
+    /// companion the program's or a product's, nested or not, a static library's, an enum's class
+    /// case's too: every application of it is a creation through the one path
+    /// (`nested_companion_apply`, `apply_companion_apply`), the companion its receiver. A jar's
+    /// companion nested in a class keeps its member called, as dotty calls it, its defaults the
+    /// constructor's getters (`synthetic_apply_class`): the interpreter runs a jar's bodies, whose
+    /// nested classes it constructs only as their own companions do (chimney's `TargetPath`).
     pub(super) fn constructor_next_to_apply(&mut self, recv_ty: TypeId) -> Option<ClassId> {
         let o = self.class_of(recv_ty)?;
-        if self.keeps_synthetic_apply(o) {
+        if self.jar_nested_companion(o) {
             return None;
         }
+        let info = self.syms.class(o);
+        let is_module = info.kind == ClassKind::Object || info.local_module.is_some() || info.inner_object.is_some();
+        let c = info.companion.filter(|_| is_module)?;
+        let ci = self.syms.class(c);
         // A class case of an enum is a case class as `DesugarEnums` writes it, its companion an
         // object of the enum's (`enum Layer { case Content(..) }` beside `object Content`).
-        let enum_case = self.syms.class(o).companion.filter(|&c| self.syms.class(o).kind == ClassKind::Object && self.syms.class(c).kind == ClassKind::EnumCase);
-        let c = match enum_case {
-            Some(c) => c,
-            None => self.companion_class(o)?,
+        let case = match ci.kind {
+            ClassKind::Class => ci.mods & crate::ast::mods::CASE != 0,
+            ClassKind::EnumCase => ci.singleton.is_none(),
+            _ => false,
         };
-        let info = self.syms.class(c);
-        let case = info.mods & crate::ast::mods::CASE != 0 || info.kind == ClassKind::EnumCase;
-        (case && info.mods & crate::ast::mods::ABSTRACT == 0).then_some(c)
+        (case && ci.mods & crate::ast::mods::ABSTRACT == 0).then_some(c)
     }
 
     /// An overloaded member: an alternative that applies wins, and the extension methods of

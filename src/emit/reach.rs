@@ -2845,9 +2845,19 @@ fn visit_args<M: Meet>(m: &mut M, cx: Cx, call: TExprId, l: ListRef) {
     for (k, &a) in cx.prog.expr_list(l).iter().enumerate() {
         match cx.prog.expr(a) {
             _ if k < 64 && evidence & 1 << k != 0 && cx.prog.is_standard_class_tag(a, cx.syms, cx.interner) => {}
-            TExpr::Default(_, _, args) if lowering.as_ref().is_some_and(|l| l.omits(k)) => visit_list(m, cx, args),
+            TExpr::Default(of, at, args) if lowering.as_ref().is_some_and(|l| l.omits(k)) => visit_default_items(m, cx, of, at, args),
             _ => visit(m, cx, a),
         }
+    }
+}
+
+/// The receiver and the arguments of a getter's application, but a local class's local companion
+/// the output does not read, its reading having no effect (`Defaults::quiet_companion`).
+fn visit_default_items<M: Meet>(m: &mut M, cx: Cx, of: DefaultOf, at: u32, args: ListRef) {
+    let d = defaults_of(cx);
+    let quiet = at & DEFAULT_RECEIVER != 0 && matches!(of, DefaultOf::Ctor(c) if d.on_local_companion(c) && d.quiet_companion(c));
+    for &e in &cx.prog.expr_list(args)[usize::from(quiet)..] {
+        visit(m, cx, e);
     }
 }
 
@@ -2916,7 +2926,7 @@ pub(super) fn visit<M: Meet>(m: &mut M, cx: Cx, e: TExprId) {
             m.new_via(cx, s);
         }
         TExpr::Default(of, at, args) => {
-            visit_list(m, cx, args);
+            visit_default_items(m, cx, of, at, args);
             m.default_getter(cx, of, at & !DEFAULT_RECEIVER);
         }
         TExpr::Lambda(params, body) => {
@@ -2945,8 +2955,8 @@ pub(super) fn visit<M: Meet>(m: &mut M, cx: Cx, e: TExprId) {
             for s in &prog.stmts[stmts.range()] {
                 if let TStmt::Val(t, x) = *s {
                     if dropped.contains(&t) {
-                        if let TExpr::Default(_, _, args) = prog.expr(x) {
-                            visit_list(m, cx, args);
+                        if let TExpr::Default(of, at, args) = prog.expr(x) {
+                            visit_default_items(m, cx, of, at, args);
                             continue;
                         }
                     }
@@ -3422,6 +3432,13 @@ impl Meet for Walker {
             DefaultOf::Ctor(c) => {
                 self.reach.getter_ctors.insert((c, index), ());
                 self.reach_class(cx, c);
+                // On the JVM the getters of a class nested in a class are its companion's, an
+                // object of each enclosing instance, a written one too (`Desugar.classDef`).
+                if let (true, Owner::Class(_), Some(m)) = (cx.typer.jvm, cx.syms.class(c).owner, cx.syms.class(c).companion) {
+                    if cx.syms.class(m).inner_object.is_some() {
+                        self.reach_class(cx, m);
+                    }
+                }
             }
             // A secondary constructor's, a static getter of its class.
             DefaultOf::Method(s) if cx.syms.sym(s).name == names::INIT => {

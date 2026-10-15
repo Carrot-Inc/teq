@@ -2021,12 +2021,19 @@ impl<'a> Worker<'a> {
         while let TExpr::Block(_, value) = self.prog.expr(at) {
             at = value;
         }
+        self.pass_outer_from(te, at, outer);
+    }
+
+    /// `pass_outer` of the construction `at` under `te`, the defaults bound on the way included.
+    fn pass_outer_from(&mut self, te: TExprId, at: TExprId, outer: TExprId) {
         let (TExpr::New(_, args) | TExpr::NewVia(_, args)) = self.prog.expr(at) else { return };
         if args.len == 0 {
             return;
         }
-        if let TExpr::New(c, _) = self.prog.expr(at) {
-            self.pass_outer_to_defaults(te, c, outer);
+        match self.prog.expr(at) {
+            TExpr::New(c, _) => self.pass_outer_to_defaults(te, DefaultOf::Ctor(c), outer),
+            TExpr::NewVia(s, _) => self.pass_outer_to_defaults(te, DefaultOf::Method(s), outer),
+            _ => {}
         }
         let mut items = self.prog.expr_list(args).to_vec();
         items[0] = outer;
@@ -2050,7 +2057,10 @@ impl<'a> Worker<'a> {
                 _ => break,
             }
         }
-        self.pass_outer(at, outer);
+        // Every default of the call is selected on the companion of the creation's prefix
+        // (`Applications.findDefaultGetter`), one lifted out of the construction for a later
+        // clause's default included (`liftFun`), bound in the blocks above it.
+        self.pass_outer_from(te, at, outer);
     }
 
     /// The construction `te` of a class through the prefix `p` of its type where the `new` writes
@@ -2491,7 +2501,19 @@ impl<'a> Worker<'a> {
         }
         let outer_prefixed = std::mem::replace(&mut self.new_prefixed, true);
         self.ctor_prefix = Some(prefix);
+        // The enclosing instance the prefix gives, known before the arguments (`creation_outer`).
+        let class = match self.types.get(ctor) {
+            Type::Ctor(c) | Type::Class(c, _) => Some(c),
+            _ => None,
+        };
+        let early = match class {
+            Some(c) if self.outer_class(c).is_some() => self.prefix_value(prefix).map(|o| (c, o)),
+            _ => None,
+        };
+        let outer_creation = self.creation_outer;
+        self.creation_outer = early.or(outer_creation);
         let (te, t) = self.type_new_class(ctor, head, targs, args, first_written, span, expected);
+        self.creation_outer = outer_creation;
         self.ctor_prefix = None;
         self.new_prefixed = outer_prefixed;
         if t == ERROR {
