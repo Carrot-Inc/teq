@@ -18,6 +18,26 @@ package scala.util.control:
   trait NoStackTrace extends Throwable:
     override def fillInStackTrace(): Throwable = this
 
+  // scala-library's `Breaks`, which a lean build's class path leaves out with scala-library: `break()`
+  // throws the instance's own exception, which its `breakable` around the block catches; another
+  // instance's passes through; `tryBreakable(..).catchBreak(..)` gives the block's value or the handler's.
+  class Breaks:
+    private val breakException = new BreakControl
+    def breakable(op: => Unit): Unit =
+      try op
+      catch
+        case ex: BreakControl if ex eq breakException => ()
+    sealed trait TryBlock[T]:
+      def catchBreak(onBreak: => T): T
+    def tryBreakable[T](op: => T): TryBlock[T] = new TryBlock[T]:
+      def catchBreak(onBreak: => T): T =
+        try op
+        catch
+          case ex: BreakControl if ex eq breakException => onBreak
+    def break(): Nothing = throw breakException
+  object Breaks extends Breaks
+  private class BreakControl extends ControlThrowable with NoStackTrace
+
   object NonFatal:
     def apply(t: Throwable): Boolean = t match
       case _: VirtualMachineError | _: InterruptedException | _: LinkageError | _: ControlThrowable => false

@@ -731,9 +731,13 @@ impl<'a> Worker<'a> {
         let act = self.widen_path(actual);
         let act = self.widen_lit(act);
         let exp_shape = self.deref_alias(exp);
+        // An opaque type its scope sees through (`opaque type Volume = Double` in its companion)
+        // takes the literal its alias takes, as the alias is the type there.
+        let seen_through = self.opaque_underlying(exp_shape).map(|u| self.deref_alias(u));
+        let exp_shape = seen_through.unwrap_or(exp_shape);
         let target = match self.types.get(exp_shape) {
             Type::Union(..) => self.numeric_member(exp_shape).unwrap_or(exp),
-            _ => exp,
+            _ => seen_through.unwrap_or(exp),
         };
         if let Some(widened) = self.widen_numeric(te, act, target) {
             return (widened, expected);
@@ -2593,19 +2597,6 @@ impl<'a> Worker<'a> {
                 if let [len] = ast.expr_list(*l) {
                     return self.new_array(targs, *len, span, expected);
                 }
-                // Scala.js's `new js.Array[A]()`, an empty JavaScript array (`js.Array[A]` being
-                // `Array[A]`, whose own constructor takes a length).
-                if l.is_empty() && self.names_js_array(head) {
-                    let elem = match targs.map(|ta| self.cur_ast().ty_list(ta).to_vec()) {
-                        Some(ts) if ts.len() == 1 => self.resolve_type(ts[0]),
-                        _ => ANY,
-                    };
-                    let empty = self.prog.list(&[]);
-                    let te = self.prog.add(TExpr::ArrayLit(empty));
-                    let ty = self.types.class(self.b.array, &[elem]);
-                    self.prog.set_type(te, ty);
-                    return (te, ty);
-                }
             }
         }
         // `new C` before the lists of a constructor whose first clause is a using clause
@@ -2642,18 +2633,6 @@ impl<'a> Worker<'a> {
             }
         }
         self.apply_callee(super::apply::Callee::Ctor(class), targs, lists, span, expected)
-    }
-
-    /// Whether the type written for a `new` is Scala.js's `js.Array`, the alias of `Array`.
-    fn names_js_array(&mut self, head: TyExprId) -> bool {
-        let found = match self.cur_ast().ty(head) {
-            TyExpr::Name(n) => self.lookup_type(n),
-            TyExpr::Select(q, n) => self.lookup_type_in_path(q, n),
-            _ => None,
-        };
-        let Some(super::resolve::TypeRef::Alias(a)) = found else { return false };
-        let info = &self.syms.aliases[a.idx()];
-        info.name == names::ARRAY && matches!(info.owner, Owner::Package(p) if self.pkg_is(p, "scala.scalajs.js"))
     }
 
     /// The simple name of a class of `java.lang` whose values are primitives: the builtin string

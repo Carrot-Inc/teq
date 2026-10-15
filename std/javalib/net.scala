@@ -50,6 +50,51 @@ package java.net:
             out.append("0123456789ABCDEF".charAt(v & 0xf))
       out.toString
 
+  // Scala.js's javalib's (https://www.scala-js.org/, Copyright EPFL, Apache License 2.0), which tyrian's
+  // `LocationDetails` decodes its query by: `+` a space, each run of `%XX` escapes the bytes the charset
+  // decodes, one message for a malformed escape and for bytes the charset does not decode exactly (where
+  // the JDK names the pattern's fault, or writes U+FFFD); `decode(s)` in the default charset, UTF-8.
+  @jvmClass("java/net/URLDecoder")
+  object URLDecoder:
+    @deprecated("use decode(s, charset)", "")
+    def decode(s: String): String = decode(s, java.nio.charset.Charset.defaultCharset())
+
+    def decode(s: String, enc: String): String =
+      if !java.nio.charset.Charset.isSupported(enc) then throw new java.io.UnsupportedEncodingException(enc)
+      decode(s, java.nio.charset.Charset.forName(enc))
+
+    private def illegalHex(): Nothing =
+      throw new IllegalArgumentException("URLDecoder: Illegal hex characters in escape (%) pattern")
+
+    def decode(s: String, charset: java.nio.charset.Charset): String =
+      val len = s.length
+      val out = new java.lang.StringBuilder()
+      var i = 0
+      while i < len do
+        val c = s.charAt(i)
+        if c == '+' then
+          out.append(' ')
+          i += 1
+        else if c == '%' then
+          if i + 3 > len then illegalHex()
+          val bytes = new Array[Byte](len / 3)
+          var pos = 0
+          while i + 3 <= len && s.charAt(i) == '%' do
+            val c1 = Character.digit(s.charAt(i + 1), 16)
+            val c2 = Character.digit(s.charAt(i + 2), 16)
+            if c1 < 0 || c2 < 0 then illegalHex()
+            bytes(pos) = ((c1 << 4) + c2).toByte
+            pos += 1
+            i += 3
+          // The std's decoding reads a malformed sequence as U+FFFD, which a reporting decoder refuses.
+          val decoded = new String(bytes, 0, pos, charset)
+          if !decoded.getBytes(charset).sameElements(bytes.take(pos)) then illegalHex()
+          out.append(decoded)
+        else
+          out.append(c)
+          i += 1
+      out.toString
+
   @jvmClass("java/net/URISyntaxException")
   class URISyntaxException(input: String, reason: String, index: Int) extends Exception(null):
     def this(input: String, reason: String) = this(input, reason, -1)

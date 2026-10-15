@@ -135,6 +135,12 @@ impl<'a> Emitter<'a> {
 
     fn emit_exported_value(&mut self, sym: SymId) {
         let info = self.syms.sym(sym);
+        // An exported object is its instance, made when the module loads, as Scala.js's are.
+        if let SymKind::Object(c) = info.kind {
+            let accessor = self.module_accessor(c);
+            let _ = write!(self.out, "{}()", accessor);
+            return;
+        }
         if let Some(import) = info.js_import {
             let binding = self.js_import(import);
             self.out.push_str(&binding);

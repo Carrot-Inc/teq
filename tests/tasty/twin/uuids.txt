@@ -35,7 +35,7 @@ depparams/fix/depparams/DpTypes.tasty 00c45ef3946e12dc0009fb0a22f6e3a3
 facades/fix/facades/Date.tasty 002428caf16c7cd000a2c8ac9e6f24d0
 facades/fix/facades/JsArr.tasty 00ebec1bc43807df00a887f987a474a0
 facades/fix/facades/JsBindings.tasty 0049ea1fdf0c73ca006ac0ba5ffcacc6
-facades/fix/facades/JsCasts.tasty 00dd7f4f6ecb38c400a511df291d09ea
+facades/fix/facades/JsCasts.tasty 00dd02026ecb38c400a511df291d09ea
 facades/fix/facades/JsEmitter.tasty 00ed36fd845a0fde00f7b943d0b557a9
 facades/fix/facades/JsGlobals.tasty 0010802c1cdd92d800154dc50b409cc5
 facades/fix/facades/JsMap.tasty 007d2c131b962cc6006a6fa49438f0ff
@@ -111,6 +111,7 @@ reader_decl/fix/rdecl/RdWrap.tasty 00c8d7d1a2af8cdc00c3e6e00cef80f4
 recrefine/fix/recrefine/RrBox.tasty 00f9377ea50f7cef001d2e457a66238a
 recrefine/fix/recrefine/RrShapes.tasty 000d1e7515ba76c000b4e0fe1f5d148d
 reflect38/fix/r38/Reflect38.tasty 0055ede8b91d85be000dbf6007c939e1
+reflectstats/fix/rstats/StatementKinds.tasty 00b6422b179b5fe50075e6d4732d98c7
 retain/fix/retain/Fmt.tasty 00a13032ba2bb4eb00fd340b15cb03aa
 retain/fix/retain/Grid.tasty 008f2c1e3698b2af0043efc9e4f970d7
 retain/fix/retain/Grids.tasty 00a7f69f9af861ea00728d7e084890b2

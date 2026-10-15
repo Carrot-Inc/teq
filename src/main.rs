@@ -103,7 +103,8 @@ pub(crate) fn std_layout(opts: &Options, cp: Option<&classpath::Classpath>) -> V
         .iter()
         .copied()
         .filter(|(path, _)| !(dom_from_jar && path.starts_with(DOM_STD_FILES)))
-        .filter(|(path, _)| !opts.jvm || !TESTING_STD_FILES.contains(path));
+        .filter(|(path, _)| !opts.jvm || !TESTING_STD_FILES.contains(path))
+        .filter(|(path, _)| !opts.jvm || !JDK_FACADE_FILES.contains(path));
     let input = |(path, text): (&'static str, &'static str), layer| {
         let index = stdindex::std_file_index(path).unwrap_or_else(|| panic!("{} is missing from the std index", path));
         frontend::StdInput { index, text, layer }
@@ -171,6 +172,10 @@ const DOM_PACKAGE: &str = "org/scalajs/dom";
 pub(crate) const TESTING_STD_FILES: [&str; 3] = ["<std>/scalajs/junit.scala", "<std>/scalajs/test_bridge.scala", "<std>/scalajs/testing.scala"];
 const DOM_STD_FILES: &str = "<std>/scalajs/dom";
 
+/// The JDK classes the Scala.js layer declares for what JavaScript reaches of them (`Field`, which
+/// `Class.getField` declares): the JVM takes the JDK's own from `ct.sym`, which this one would hide.
+const JDK_FACADE_FILES: [&str; 1] = ["<std>/scalajs/javalib_reflect.scala"];
+
 /// Whether a Scala.js jar is on the classpath, which unlocks the facades layer.
 fn scalajs_jar(classpath: &[String]) -> bool {
     classpath.iter().any(|p| p.contains("_sjs1_"))
@@ -231,6 +236,7 @@ pub(crate) const STD_SOURCES: &[(&str, &str)] = &[
     ("<std>/vector.scala", include_str!("../std/vector.scala")),
     ("<std>/maps.scala", include_str!("../std/maps.scala")),
     ("<std>/immutable.scala", include_str!("../std/immutable.scala")),
+    ("<std>/stream.scala", include_str!("../std/stream.scala")),
     ("<std>/mutable.scala", include_str!("../std/mutable.scala")),
     ("<std>/math.scala", include_str!("../std/math.scala")),
     ("<std>/bignum.scala", include_str!("../std/bignum.scala")),
@@ -268,6 +274,7 @@ pub(crate) const STD_SOURCES: &[(&str, &str)] = &[
     ("<std>/namedtuple.scala", include_str!("../std/namedtuple.scala")),
     ("<std>/javalib/lang.scala", include_str!("../std/javalib/lang.scala")),
     ("<std>/javalib/serializable.scala", include_str!("../std/javalib/serializable.scala")),
+    ("<std>/javalib/comparator.scala", include_str!("../std/javalib/comparator.scala")),
     ("<std>/javalib/util.scala", include_str!("../std/javalib/util.scala")),
     ("<std>/javalib/util_more.scala", include_str!("../std/javalib/util_more.scala")),
     ("<std>/javalib/sorted.scala", include_str!("../std/javalib/sorted.scala")),
@@ -302,6 +309,7 @@ pub(crate) const SCALAJS_SOURCES: &[(&str, &str)] = &[
     ("<std>/scalajs/annotation.scala", include_str!("../std/scalajs/annotation.scala")),
     ("<std>/scalajs/concurrent.scala", include_str!("../std/scalajs/concurrent.scala")),
     ("<std>/scalajs/converters.scala", include_str!("../std/scalajs/converters.scala")),
+    ("<std>/scalajs/javalib_reflect.scala", include_str!("../std/scalajs/javalib_reflect.scala")),
     ("<std>/scalajs/dom.scala", include_str!("../std/scalajs/dom.scala")),
     ("<std>/scalajs/dom_compat.scala", include_str!("../std/scalajs/dom_compat.scala")),
     ("<std>/scalajs/dom_elements.scala", include_str!("../std/scalajs/dom_elements.scala")),
@@ -371,6 +379,7 @@ pub(crate) const SCALA_LIBRARY_LAYER: &[(&str, &str)] = &[
     ("<std>/js.scala", include_str!("../std/js.scala")),
     ("<std>/javalib/lang.scala", include_str!("../std/javalib/lang.scala")),
     ("<std>/javalib/serializable.scala", include_str!("../std/javalib/serializable.scala")),
+    ("<std>/javalib/comparator.scala", include_str!("../std/javalib/comparator.scala")),
     ("<std>/javalib/util.scala", include_str!("../std/javalib/util.scala")),
     ("<std>/javalib/util_more.scala", include_str!("../std/javalib/util_more.scala")),
     ("<std>/javalib/sorted.scala", include_str!("../std/javalib/sorted.scala")),

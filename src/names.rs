@@ -173,6 +173,7 @@ well_known! {
     JS_NAME = "JSName",
     JS_BRACKET_ACCESS = "JSBracketAccess",
     JS_EXPORT_TOP_LEVEL = "JSExportTopLevel",
+    JS_EXPORT_MEMBER = "JSExport",
     DEFAULT = "Default",
     NAMESPACE = "Namespace",
     LITERAL = "literal",

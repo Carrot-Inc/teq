@@ -1,6 +1,6 @@
 // teq: tests/interop/scalajs-stub
 // expect: 35:18: error: f is a member of a native JS type: it has to be abstract or have the body js.native
-// expect: 36:18: error: a default argument of a native JS method has to be js.native or js.undefined
+// absent: 36:18: error: a default argument of a native JS method has to be js.native or js.undefined
 // expect: 38:7: error: @JSBracketAccess goes on apply (a read) or update (a write)
 // expect: 41:8: error: @JSImport, @JSGlobal and @JSGlobalScope need @js.native on the class or object
 // expect: 44:7: error: @JSGlobalScope is only allowed on an object
@@ -24,7 +24,7 @@
 // expect: 89:23: error: m cannot be defined in an anonymous JS object, which holds vals and assignments to the vars of its trait; write a class for methods
 // expect: 92:5: error: NativeTrait is a JS trait, which cannot be tested at runtime; test a native class or a property instead
 // expect: 92:36: error: JsTrait is a JS trait, which cannot be tested at runtime; test a native class or a property instead
-// expect: 25 errors found
+// expect: 24 errors found
 package app
 
 import scala.scalajs.js

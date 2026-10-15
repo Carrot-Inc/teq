@@ -1,0 +1,6 @@
+{
+ "target/teq/tyrian-htmx.js/compile/src_managed": "07479ec3977ec748b4456e32fcf2bd84372bc6afcb5a25358d7aaa0c1e03c22b",
+ "target/teq/tyrian-htmx.jvm/compile/src_managed": "07479ec3977ec748b4456e32fcf2bd84372bc6afcb5a25358d7aaa0c1e03c22b",
+ "target/teq/tyrian-tags.js/compile/src_managed": "a207b9167bab13ce645bda8d36675c3170c93ddba8c10b2ba3a2e21d50abb476",
+ "target/teq/tyrian-tags.jvm/compile/src_managed": "a207b9167bab13ce645bda8d36675c3170c93ddba8c10b2ba3a2e21d50abb476"
+}

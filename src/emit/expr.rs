@@ -150,11 +150,17 @@ impl<'a> Emitter<'a> {
                 | TExpr::JsSelect(..)
                 | TExpr::Module(_)
         );
-        if !plain {
+        // A function read off an object (a field holding `queueMicrotask`, cats-effect's
+        // `BatchingMacrotaskExecutor`) is called without it as `this`, as Scala.js calls a
+        // function value: `(o.f)(x)` would pass `o`, which a native function refuses.
+        let detached = matches!(self.peek(f), TExpr::Field(..) | TExpr::Static(_));
+        if detached {
+            self.out.push_str("(0, ");
+        } else if !plain {
             self.out.push('(');
         }
         self.emit_expr(f);
-        if !plain {
+        if !plain || detached {
             self.out.push(')');
         }
         self.emit_args(args);

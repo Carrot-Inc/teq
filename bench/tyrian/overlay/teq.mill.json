@@ -1,0 +1,87 @@
+{
+  "inputs": [
+    ".tyrian-version"
+  ],
+  "modules": {
+    "tyrian-tags.js": {
+      "generators": [
+        {
+          "run": [
+            "teq",
+            "interp",
+            "teq-overlay/generate.scala",
+            "teq-overlay/os.scala",
+            "tyrian-tags/AttributeGen.mill",
+            "tyrian-tags/CSSGen.mill",
+            "tyrian-tags/CompleteHtmlEntityLists.mill",
+            "tyrian-tags/HtmlEntityGen.mill",
+            "tyrian-tags/TagGen.mill",
+            "tyrian-htmx/HtmxAttributes.mill",
+            "--",
+            "tags"
+          ]
+        }
+      ]
+    },
+    "tyrian-tags.jvm": {
+      "generators": [
+        {
+          "run": [
+            "teq",
+            "interp",
+            "teq-overlay/generate.scala",
+            "teq-overlay/os.scala",
+            "tyrian-tags/AttributeGen.mill",
+            "tyrian-tags/CSSGen.mill",
+            "tyrian-tags/CompleteHtmlEntityLists.mill",
+            "tyrian-tags/HtmlEntityGen.mill",
+            "tyrian-tags/TagGen.mill",
+            "tyrian-htmx/HtmxAttributes.mill",
+            "--",
+            "tags"
+          ]
+        }
+      ]
+    },
+    "tyrian-htmx.js": {
+      "generators": [
+        {
+          "run": [
+            "teq",
+            "interp",
+            "teq-overlay/generate.scala",
+            "teq-overlay/os.scala",
+            "tyrian-tags/AttributeGen.mill",
+            "tyrian-tags/CSSGen.mill",
+            "tyrian-tags/CompleteHtmlEntityLists.mill",
+            "tyrian-tags/HtmlEntityGen.mill",
+            "tyrian-tags/TagGen.mill",
+            "tyrian-htmx/HtmxAttributes.mill",
+            "--",
+            "htmx"
+          ]
+        }
+      ]
+    },
+    "tyrian-htmx.jvm": {
+      "generators": [
+        {
+          "run": [
+            "teq",
+            "interp",
+            "teq-overlay/generate.scala",
+            "teq-overlay/os.scala",
+            "tyrian-tags/AttributeGen.mill",
+            "tyrian-tags/CSSGen.mill",
+            "tyrian-tags/CompleteHtmlEntityLists.mill",
+            "tyrian-tags/HtmlEntityGen.mill",
+            "tyrian-tags/TagGen.mill",
+            "tyrian-htmx/HtmxAttributes.mill",
+            "--",
+            "htmx"
+          ]
+        }
+      ]
+    }
+  }
+}

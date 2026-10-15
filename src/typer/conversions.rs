@@ -154,6 +154,53 @@ struct Candidate {
 }
 
 impl<'a> Worker<'a> {
+    /// Whether an open variable's bounds meet in one type, which then is its value: a lower bound
+    /// that is also one of its upper bounds.
+    #[inline(never)]
+    fn fixed_by_bounds(&mut self, v: TVarId) -> bool {
+        let info = &self.tvars[v];
+        if info.inst.is_some() || info.lower.is_empty() || info.upper.is_empty() {
+            return false;
+        }
+        for i in 0..self.tvars[v].lower.len() {
+            let l = self.tvars[v].lower[i];
+            let l = self.zonk(l);
+            for j in 0..self.tvars[v].upper.len() {
+                let u = self.tvars[v].upper[j];
+                if self.zonk(u) == l {
+                    return true;
+                }
+            }
+        }
+        false
+    }
+
+    /// The type parameters the conversion's declared result `declared` holds nonvariantly, read off
+    /// `to`, that result over the conversion's variables (`subst`'s, made in `made`); kept by
+    /// `declared` where every one of them was open, so that the variances are the parameters'.
+    #[inline(never)]
+    fn nonvariant_params(&mut self, declared: TypeId, to: TypeId, subst: &Subst, made: &std::ops::Range<usize>) -> std::sync::Arc<[TParamId]> {
+        if let Some(ps) = self.conversion_nonvariant.get(&declared) {
+            return ps.clone();
+        }
+        let open = made.clone().all(|v| self.tvars[self.tvars.id(v)].inst.is_none());
+        let to_now = self.zonk(to);
+        let mut ps: Vec<TParamId> = Vec::new();
+        for (w, s) in self.var_variances(to_now) {
+            if s != 0 {
+                continue;
+            }
+            if let Some(&(p, _)) = subst.iter().find(|&&(_, t)| matches!(self.types.get(t), Type::Var(x) if x == w)) {
+                ps.push(p);
+            }
+        }
+        let ps: std::sync::Arc<[TParamId]> = ps.into();
+        if open && !self.types.has_vars(declared) {
+            self.conversion_nonvariant.insert(declared, ps.clone());
+        }
+        ps
+    }
+
     /// `implicit def f[..](a: A)(implicit ..): B`: a Scala 2 implicit def whose first clause has
     /// one plain parameter. Such a def is a conversion and no given.
     pub fn is_conversion_def(&mut self, g: SymId) -> bool {
@@ -712,6 +759,7 @@ impl<'a> Worker<'a> {
             self.rollback(mark);
             return None;
         };
+        let declared_to = to;
         let from = self.types.subst(from, &subst);
         // A conversion from a singleton type takes a stable receiver of that type, which the
         // receiver's widened type does not show (`Ok("body")` for http4s's `Ok.type` syntax).
@@ -790,13 +838,37 @@ impl<'a> Worker<'a> {
         // As scalac interpolates the conversion's result: a variable it holds covariantly and
         // only open variables bound from above is `Nothing` (`stringToNode[M](s): Node[M]`
         // against a `Document[?M]`), not the outer variable.
+        // A variable the result holds nonvariantly stays open for what follows when the conversion
+        // gives a member its receiver (dotty's `interpolateTypeVars`: "no interpolation for
+        // nonvariant" variables): cats' `catsSyntaxApplicativeId(NoFile(..))` is an
+        // `ApplicativeIdOps[?A]`, whose `pure[F]` the expected `F[Result[A]]` then fixes.
+        // One the receiver bounds from both sides (an invariant `Box[A]` taking a `Box[String]`)
+        // is fixed by its constraint, and instantiated as dotty instantiates it at the end. Only the
+        // conversion's own variables qualify (`interpolateTypeVars`' owned variables, an enclosing
+        // application's locked): none where the conversion made none.
+        let made = first_var..self.tvars.len();
+        let open_from = self.conversion_open_vars.len();
+        if !to_type && !made.is_empty() {
+            let params = self.nonvariant_params(declared_to, to, &subst, &made);
+            for &p in params.iter() {
+                let Some(&(_, t)) = subst.iter().find(|&&(q, _)| q == p) else { continue };
+                let t = self.deref(t);
+                let Type::Var(w) = self.types.get(t) else { continue };
+                if made.clone().any(|v| self.tvars.id(v) == w) && !self.fixed_by_bounds(w) {
+                    self.conversion_open_vars.push(w);
+                }
+            }
+        }
         for v in first_var..self.tvars.len() {
-            self.solve_var_directed(self.tvars.id(v), Some(to));
+            let id = self.tvars.id(v);
+            if !self.conversion_open_vars[open_from..].contains(&id) {
+                self.solve_var_directed(id, Some(to));
+            }
         }
         let mut given_result = None;
         let te = if is_def {
             let l = self.prog.list(&args);
-            match self.syms.sym(g).owner {
+            let call = match self.syms.sym(g).owner {
                 Owner::Class(c) if self.syms.class(c).kind == ClassKind::Object => {
                     let m = self.prog.add(TExpr::Module(c));
                     if self.syms.sym(g).intrinsic.is_some() {
@@ -830,6 +902,11 @@ impl<'a> Worker<'a> {
                     self.prog.add(TExpr::CallMethod(r, g, l))
                 }
                 Owner::Package(_) | Owner::Local => self.prog.add(TExpr::CallStatic(g, l)),
+            };
+            if self.is_inline_callee(g) {
+                self.inline_conversion(call, g, &sig, &subst, &args, span)
+            } else {
+                call
             }
         } else {
             // The receiver and the result the caller accepted fix the given's parameters before
@@ -906,6 +983,39 @@ impl<'a> Worker<'a> {
         Some((te, ty))
     }
 
+    /// The call `te` of an `implicit inline def` conversion, expanded where it is inserted as an
+    /// inline method's call is (dotty's `Inlines.needsInlining` of the adapted tree, the conversion
+    /// typed as an application of its reference): a macro among them runs there, a plain one in the
+    /// later phase; quoted code and the definition check keep the call, as for an inline given.
+    #[cold]
+    #[inline(never)]
+    fn inline_conversion(&mut self, te: TExprId, g: SymId, sig: &Arc<MethodSig>, subst: &Subst, args: &[TExprId], span: Span) -> TExprId {
+        let recv = match self.prog.expr(te) {
+            TExpr::CallMethod(r, _, _) => Some(r),
+            _ => None,
+        };
+        let call = super::apply::MethodCall { recv, sym: g, owner_subst: Vec::new(), ext_recv: None, prefix: None, refined: None };
+        let ret_ty = self.types.subst(sig.ret, subst);
+        let ret_ty = self.zonk(ret_ty);
+        let kept = match self.prog.expr(te) {
+            TExpr::CallMethod(..) => self.keeps_inline_calls(),
+            _ => self.checks_inline_definition(),
+        };
+        if kept {
+            self.defer_inline(&call, sig, subst, te, ret_ty, span, Some(ret_ty));
+            self.quote.deferred_at_end(te);
+            return te;
+        }
+        if self.defers_plain_inline(g) && !self.types.contains_error(ret_ty) && !self.eager_inline_conversion {
+            self.defer_plain_inline(te, &call, sig, subst, args, Vec::new(), ret_ty, ret_ty, span, Some(ret_ty));
+            return te;
+        }
+        match self.expand_inline(&call, sig, subst, args, ret_ty, span, Some(ret_ty)) {
+            Some((e, _)) => e,
+            None => te,
+        }
+    }
+
     /// The conversion method `given` applied to `arg`, where its result conforms to `to`; the
     /// given search's candidate of a function type.
     pub(super) fn conversion_method_body(&mut self, (g, scope): super::implicits::GivenRef, arg: TExprId, from: TypeId, to: TypeId, span: Span) -> Option<TExprId> {
@@ -916,7 +1026,25 @@ impl<'a> Worker<'a> {
             GivenScope::Path(p) => Via::Path(p),
         };
         let mut accept = |t: &mut Self, result: TypeId| t.is_sub(result, to);
-        self.try_conversion((g, via), arg, from, span, &mut accept, true).map(|(te, _)| te)
+        // A candidate is typed as dotty's search types it, exploring: one whose application fails
+        // where it is typed, an inline conversion's expansion reporting `compiletime.error` among
+        // them, is no candidate (`uhOh` of i19862 gives way to `$conforms`).
+        let mark = self.attempt();
+        // Expanded here, not in the later phase: the candidate's expansion is its typing, as dotty
+        // inlines in the typer.
+        let outer = std::mem::replace(&mut self.eager_inline_conversion, true);
+        let tried = self.try_conversion((g, via), arg, from, span, &mut accept, true);
+        self.eager_inline_conversion = outer;
+        match tried {
+            Some((te, _)) if !self.attempt_failed(&mark) => {
+                self.close(mark);
+                Some(te)
+            }
+            _ => {
+                self.retract(mark);
+                None
+            }
+        }
     }
 
     /// The conversion of the first level with an applicable one, the most specific where

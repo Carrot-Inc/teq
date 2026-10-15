@@ -1258,6 +1258,8 @@ fn install_numbers(it: &mut Table) {
         ("tanh", f64::tanh),
         ("log1p", f64::ln_1p),
         ("expm1", f64::exp_m1),
+        ("toDegrees", f64::to_degrees),
+        ("toRadians", f64::to_radians),
         ("rint", rint),
     ];
     for &(name, f) in unary {

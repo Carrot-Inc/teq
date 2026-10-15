@@ -1655,8 +1655,12 @@ object Reflect:
       @js("$quoted") def expr: Term
       @js("$quoted") def selectors: List[Selector]
   export ImportMethods.*
+  object ImportTypeTest:
+    def unapply(x: Tree): Option[Import] = if x.isInstanceOf[Import] then Some(x.asInstanceOf[Import]) else None
   object Export:
     @js("$quoted") def unapply(tree: Export): (Term, List[Selector])
+  object ExportTypeTest:
+    def unapply(x: Tree): Option[Export] = if x.isInstanceOf[Export] then Some(x.asInstanceOf[Export]) else None
   class Selector extends Tree
   object PackageClauseMethods:
     extension (self: PackageClause)

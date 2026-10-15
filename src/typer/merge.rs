@@ -1146,6 +1146,7 @@ impl Remap {
         }
         self.walked += (w.syms.overloads.len() - base) as u64;
         self.map(&mut w.syms.dispatch_names.local, |r, s| r.sym(s), |_, _| {});
+        self.map(&mut w.syms.js_export_names.local, |r, s| r.sym(s), |_, _| {});
     }
 
     fn program(&mut self, w: &mut Worker) {
@@ -2045,6 +2046,7 @@ impl<'a> Worker<'a> {
         self.arity_classes.absorb(o.arity_classes.take_local());
         self.derive.absorb(&mut o.derive);
         self.syms.dispatch_names.absorb(o.syms.dispatch_names.take_local());
+        self.syms.js_export_names.absorb(o.syms.js_export_names.take_local());
         self.quote.absorb(&mut o.quote);
         fn union<K: Copy + Eq + std::hash::Hash, V>(mine: &mut FxMap<K, V>, theirs: &mut FxMap<K, V>) {
             for (k, v) in std::mem::take(theirs) {
@@ -2480,6 +2482,7 @@ impl<'a> Worker<'a> {
         self.quote.merge_own();
         self.derive.merge_own();
         self.syms.dispatch_names.merge_own();
+        self.syms.js_export_names.merge_own();
         if let Some(r) = self.js_registry.take() {
             let r = std::sync::Arc::try_unwrap(r).unwrap_or_else(|_| panic!("the JS registry is still shared"));
             self.prog.js_imports = r.list.into_vec();

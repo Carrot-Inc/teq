@@ -255,7 +255,7 @@ impl<'a> Worker<'a> {
                 if !(kind == SymKind::Def || (values_too && matches!(kind, SymKind::Val | SymKind::Var | SymKind::Given))) || self.is_private(p) {
                     continue;
                 }
-                let overridden = all.iter().any(|&m| self.same_parameters(c, &bases, m, p, bt));
+                let overridden = all.iter().any(|&m| self.same_parameters(c, &bases, m, p, bt) && self.same_target_name(m, p));
                 if !overridden {
                     all.push(p);
                 }
@@ -510,11 +510,11 @@ impl<'a> Worker<'a> {
             Dispatch::Plain | Dispatch::InProgress => return None,
             Dispatch::Unknown => {}
         }
-        let (name, owner, overloadable) = {
+        let (name, owner, overloadable, value_alternative) = {
             let info = self.syms.sym(m);
-            (info.name, info.owner, info.kind == SymKind::Def && !info.is_extension)
+            (info.name, info.owner, info.kind == SymKind::Def && !info.is_extension, info.kind == SymKind::Val && info.alternative)
         };
-        if !overloadable || self.nameless_inline(m) {
+        if !(overloadable || value_alternative) || self.nameless_inline(m) {
             self.syms.sym_mut(m).dispatch = Dispatch::Plain;
             return None;
         }
@@ -522,6 +522,8 @@ impl<'a> Worker<'a> {
         let named = match owner {
             Owner::Local => None,
             _ if self.target_name(m).is_some() && self.overrides_nothing(m) => self.target_name(m),
+            // A value beside another of its name goes by its target name, one without by its own.
+            _ if value_alternative => None,
             Owner::Package(p) => {
                 let entry = self.syms.pkg(p).entries.get(&name).and_then(|e| e.term);
                 let overloaded = entry.map_or(false, |e| self.syms.alternatives(e).is_some());
@@ -664,7 +666,9 @@ impl<'a> Worker<'a> {
         for i in 0..self.syms.syms.len() {
             let s = SymId(i as u32);
             let info = self.syms.sym(s);
-            if info.kind != SymKind::Def {
+            // A value beside another of its name goes by its target name too: its field, its
+            // getter and a trait's setter (`T$_setter_$cols$minusInt_$eq`), as scalac names them.
+            if info.kind != SymKind::Def && !(info.kind == SymKind::Val && info.alternative) {
                 continue;
             }
             let (file, alternative) = (info.file, info.alternative || info.meets_inherited);
@@ -1260,6 +1264,15 @@ impl<'a> Worker<'a> {
                 }
             }
             Type::Nothing => out.push_str("Nothing"),
+            // A class through a path (`ShaderDSLOps.this.vec2`, ultraviolet's) erases to the class,
+            // an abstract member to its bound's, as dotty's `TypeErasure` erases them.
+            Type::Nested(..) | Type::Member(..) => match self.class_of(t) {
+                Some(c) => {
+                    let class = self.types.class(c, &[]);
+                    self.erased_name(class, qualified, depth + 1, out)
+                }
+                None => out.push_str("Any"),
+            },
             _ => out.push_str("Any"),
         }
     }
@@ -1335,6 +1348,15 @@ impl<'a> Worker<'a> {
                     continue;
                 }
                 let name = self.syms.sym(alts[i]).name;
+                // Two of the class's own that one target name gives one output name, which their
+                // erasures tell apart (dotty's `matches` holds of neither pair: tyrian's
+                // `@targetName("button-no_attrs-list")` on `button[M](children: List[Elem[M]])` and
+                // on `button[M]`): the later one is named apart by its erased signature.
+                if both_own && !library {
+                    let later = if self.syms.sym(alts[i]).span.start <= self.syms.sym(alts[j]).span.start { j } else { i };
+                    names[later] = Some(self.name_apart(alts[later], set));
+                    continue;
+                }
                 // A library's diamond is named apart: each of the two methods takes its erased
                 // signature as its suffix, as the alternatives of one declaration do. Where one
                 // of the two is declared below the other, or in a jar where the other is the
@@ -1464,7 +1486,9 @@ impl<'a> Worker<'a> {
         if !identical && (a != b || self.erased_result(first, true) != self.erased_result(second, true)) {
             return false;
         }
-        if !identical && self.target_name(first) != self.target_name(second) {
+        // Declarations of distinct target names are never one declaration twice (dotty's
+        // `Denotation.matches`), parameters alike or not.
+        if self.target_name(first) != self.target_name(second) {
             return true;
         }
         let name = self.syms.sym(first).name;
@@ -1806,12 +1830,28 @@ impl<'a> Worker<'a> {
                 if !(kind == SymKind::Def || value) || self.is_abstract_member(s) || self.is_private(s) {
                     continue;
                 }
-                if s == m || value || self.same_parameters(c, bases, s, m, m_owner) {
+                if s == m || value || (self.same_parameters(c, bases, s, m, m_owner) && self.same_target_name(s, m)) {
                     return Some(s);
                 }
             }
         }
         None
+    }
+
+    /// Whether `a` and `b` go by one target name, the condition dotty's `Denotation.matches` puts
+    /// before the signatures: `@targetName("twice-String") def twice(x: Int)` is no
+    /// implementation of `@targetName("twice-Int") def twice(x: Int)`. Read only where a source
+    /// of the two declares a target name, or a jar's may.
+    pub(super) fn same_target_name(&mut self, a: SymId, b: SymId) -> bool {
+        let declares = |t: &mut Self, s: SymId| {
+            let f = t.syms.sym(s).file;
+            t.in_jar(f) || t.file_declares_target_name(f)
+        };
+        if !declares(self, a) && !declares(self, b) {
+            return true;
+        }
+        let (na, nb) = (self.syms.sym(a).name, self.syms.sym(b).name);
+        self.target_name_of(a).unwrap_or(na) == self.target_name_of(b).unwrap_or(nb)
     }
 
     // ---- resolution ----
@@ -1885,23 +1925,65 @@ impl<'a> Worker<'a> {
                 Alt { sym, sig, owner_subst, ctor: None, info, denoted: from_meet.then_some(k as u32), refined: None }
             })
             .collect();
+        // An object among the alternatives is applied through its `apply` (dotty's applicability of
+        // a value, which selects `apply` on its type): scalacheck's `Seed.apply(a, b, c, d)`, the
+        // companion of its private `case class apply`, beside `def apply(s: Long)`.
+        if alts.iter().any(|a| matches!(self.syms.sym(a.sym).kind, SymKind::Object(_))) {
+            let mut expanded = Vec::with_capacity(alts.len() + 1);
+            for a in alts {
+                let SymKind::Object(oc) = self.syms.sym(a.sym).kind else {
+                    expanded.push(a);
+                    continue;
+                };
+                self.complete_class(oc);
+                let oty = self.types.class(oc, &[]);
+                let Some((m, apply_owner)) = self.find_member(oty, names::APPLY) else {
+                    // A case class's companion whose synthesized `apply` the constructor stands
+                    // for (`constructor_next_to_apply`): applied as the constructor.
+                    let case_class = self.companion_class(oc).filter(|&k| {
+                        let mods = self.syms.class(k).mods;
+                        mods & crate::ast::mods::CASE != 0 && mods & crate::ast::mods::ABSTRACT == 0
+                    });
+                    match case_class {
+                        Some(k) => {
+                            self.complete_class(k);
+                            let info = self.syms.class(k);
+                            let sig = Arc::new(MethodSig { tparams: info.tparams.clone(), clauses: info.ctor.clone(), ret: info.base_types[0].1, declared: crate::tir::NO_TYPE });
+                            expanded.push(Alt { sym: a.sym, sig, owner_subst: Vec::new(), ctor: Some(k), info: None, denoted: a.denoted, refined: None });
+                        }
+                        None => expanded.push(a),
+                    }
+                    continue;
+                };
+                let applies: Vec<SymId> = self.syms.alternatives(m).map_or_else(|| vec![m], |alts| alts.to_vec());
+                let owner_subst = self.owner_subst(apply_owner);
+                for apply in applies {
+                    let sig = self.sig_arc(apply);
+                    expanded.push(Alt { sym: a.sym, sig, owner_subst: owner_subst.clone(), ctor: None, info: None, denoted: a.denoted, refined: None });
+                }
+            }
+            alts = expanded;
+        }
         if let Some(c) = ctor {
             self.complete_class(c);
             let info = self.syms.class(c);
             let sig = Arc::new(MethodSig { tparams: info.tparams.clone(), clauses: info.ctor.clone(), ret: info.base_types[0].1, declared: crate::tir::NO_TYPE });
             // An `apply` with the parameters of the constructor takes its place, as the one
             // scalac would synthesize for a case class is not made then; a library's synthetic
-            // `apply` has them under type parameters of its own.
-            let types = |sig: &MethodSig| -> Vec<TypeId> { sig.clauses.iter().flat_map(|cl| cl.params.iter().map(|p| p.ty)).collect() };
-            let ctor_types = types(&sig);
+            // `apply` has them under type parameters of its own. Its parameters match clause by
+            // clause, the using ones included (dotty's `Type.matchesLoosely` in
+            // `Namer.invalidateIfClashingSynthetic`): a curried `apply(task)(toMessage)` leaves the
+            // synthetic `apply(task, toMsg)` in place.
+            let clauses = |sig: &MethodSig| -> Vec<Vec<TypeId>> { sig.clauses.iter().map(|cl| cl.params.iter().map(|p| p.ty).collect()).collect() };
+            let ctor_clauses = clauses(&sig);
             let mut replaced = false;
             for a in &alts {
                 if a.sig.tparams.len() != sig.tparams.len() {
                     continue;
                 }
                 let subst: Subst = a.sig.tparams.iter().zip(&sig.tparams).map(|(&x, &y)| (x, self.types.param(y))).collect();
-                let a_types: Vec<TypeId> = types(&a.sig).iter().map(|&t| self.types.subst(t, &subst)).collect();
-                if a_types == ctor_types {
+                let a_clauses: Vec<Vec<TypeId>> = clauses(&a.sig).iter().map(|cl| cl.iter().map(|&t| self.types.subst(t, &subst)).collect()).collect();
+                if a_clauses == ctor_clauses {
                     replaced = true;
                     break;
                 }
@@ -1972,7 +2054,14 @@ impl<'a> Worker<'a> {
         span: Span,
         expected: Option<TypeId>,
     ) -> (TExprId, TypeId) {
-        match self.try_overloaded(recv, recv_ty, set, None, false, targs, lists, span, expected) {
+        // `apply(..)` written bare inside a case class's companion: the class's synthetic `apply`
+        // is among the alternatives, as for `C.apply(..)` (`Desugar.classDef` adds it to the
+        // companion beside the ones written there).
+        let ctor = match recv_ty {
+            Some(t) if self.syms.sym(set).name == names::APPLY => self.constructor_next_to_apply(t),
+            _ => None,
+        };
+        match self.try_overloaded(recv, recv_ty, set, ctor, false, targs, lists, span, expected) {
             Ok(r) => r,
             Err(failed) => self.report_unresolved(failed, span),
         }
@@ -2607,7 +2696,10 @@ impl<'a> Worker<'a> {
             if let Some(name) = selection {
                 return self.resolve_selected(alts, &cands, &explicit, name);
             }
-            let compatible = self.narrow_by_expected(alts, &cands, &explicit, expected);
+            let mut compatible = self.narrow_by_expected(alts, &cands, &explicit, expected);
+            if compatible.is_empty() {
+                compatible = self.narrow_by_function_params(alts, &cands, &explicit, expected);
+            }
             // dotc's `tryParameterless`: where no alternative or no single one fits, a reference
             // without arguments means the one that takes none, or else one declared with `()`.
             return self.pick(alts, compatible, &explicit).or_else(|failure| {
@@ -2924,6 +3016,41 @@ impl<'a> Worker<'a> {
                 let subst = self.alt_subst(&alts[i], explicit);
                 let value = self.value_type(&alts[i], &subst, 0, Norm::Expected(exp));
                 let ok = self.is_sub(value, exp);
+                self.rollback(mark);
+                ok
+            })
+            .collect()
+    }
+
+    /// dotty's `resolveOverloaded` where a function type is expected and no alternative is
+    /// compatible with it as a whole: those that apply to its parameter types, its result
+    /// disregarded when it is `Unit` (`narrowByTypes`, `ProtoTypes.constrainResult`'s
+    /// `disregardProto`): `foreach(queue.enqueue)` takes `enqueue(elem)`, whose `this.type` result
+    /// a `Unit` function discards.
+    fn narrow_by_function_params(&mut self, alts: &[Alt], cands: &[usize], explicit: &[TypeId], expected: Option<TypeId>) -> Vec<usize> {
+        let Some(expected) = expected else { return Vec::new() };
+        let expected = self.deref(expected);
+        let Some((params, result)) = self.as_function(expected) else { return Vec::new() };
+        let result = self.deref(result);
+        cands
+            .iter()
+            .copied()
+            .filter(|&i| {
+                let Some(clause) = alts[i].explicit_clauses().next() else { return false };
+                if clause.params.len() != params.len() || clause.params.iter().any(|p| p.repeated || p.by_name) {
+                    return false;
+                }
+                let mark = self.snapshot();
+                let subst = self.alt_subst(&alts[i], explicit);
+                let formals: Vec<TypeId> = clause.params.iter().map(|p| p.ty).collect();
+                let mut ok = params.iter().zip(&formals).all(|(&arg, &formal)| {
+                    let formal = self.types.subst(formal, &subst);
+                    self.is_sub(arg, formal)
+                });
+                if ok && result != self.b.t_unit && !matches!(self.types.get(result), Type::Var(_)) {
+                    let value = self.value_type(&alts[i], &subst, 1, Norm::Applied);
+                    ok = self.is_sub(value, result);
+                }
                 self.rollback(mark);
                 ok
             })
@@ -3433,7 +3560,22 @@ impl<'a> Worker<'a> {
             None if open => Some(self.fresh_var()),
             None => None,
         };
+        let vars_before = self.tvars.len();
         let (te, ty) = self.type_expr(value, expected);
+        // The argument typed alone is interpolated as dotty adapts it (`FunProto.typedArg`,
+        // `interpolateTypeVars`): a variable its typing made that its type holds in one
+        // direction is instantiated by that direction, before the alternatives are compared
+        // and the chosen one bounds it the other way (tyrian's `div(div(br))`, whose `br`'s
+        // `Html[?M]` is `Html[Nothing]`).
+        if self.tvars.len() > vars_before {
+            let made: Vec<TVarId> = (vars_before..self.tvars.len()).map(|i| self.tvars.id(i)).collect();
+            let typed = self.zonk(ty);
+            for (v, sign) in self.var_variances(typed) {
+                if sign != 0 && made.contains(&v) {
+                    self.solve_var_directed(v, Some(typed));
+                }
+            }
+        }
         let written = matches!(self.cur_ast().expr(value), Expr::IntLit(_) | Expr::LongLit(_) | Expr::DoubleLit(_) | Expr::BoolLit(_) | Expr::CharLit(_) | Expr::StringLit(_));
         let literal = match (agreed, written) {
             (false, true) => self.fold_constant(te).map(|v| self.types.lit(v)).filter(|&lit| lit != ty),

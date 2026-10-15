@@ -3369,7 +3369,7 @@ async function leanStd() {
       check(`lean std: definition of ${label} from the app, into ${file}`, r?.length === 1 && stdFile(r[0]) === file && existsSync(d) && same(r[0], at(d, decl, n, delta, length)), r)
       return d
     }
-    const collections = await into("List", "List(1", "collections.scala", "object List:", 0, 7, 4)
+    const collections = await into("List", "List(1", "collections.scala", "object List extends IterableFactory", 0, 7, 4)
     // Answered after the first build: a clean file has nothing published, or an empty list.
     check("lean std: the app checks clean under --wunused imports --werror", same(c.latestDiagnostics(uriOf(app)), []), c.diagnosticsSince(0))
     await into("a method of List", "map(_", "collections.scala", "def map[B](f: A => B): List[B] =", 0, 4, 3)
@@ -3382,7 +3382,7 @@ async function leanStd() {
       check(`lean std: ${file}'s document is the embedded text, read-only`, !!written && readFileSync(d, "utf-8") === readFileSync(join(std, file), "utf-8") && (written.mode & 0o222) === 0, d)
     }
     const hover = await c.result("textDocument/hover", at_(app, "List(1"))
-    check("lean std: hover on a std object from the app", hover?.contents?.value === "```scala\nobject scala.List\n```", hover)
+    check("lean std: hover on a std object from the app", hover?.contents?.value === "```scala\nobject scala.List extends IterableFactory[List]\n```", hover)
     if (!collections || !prelude || !lang) throw new Error("no std documents to go into")
     // A cached document truncated or altered since it was written: made the embedded text again,
     // read-only, before a location is answered in it, and the location declined where it cannot be.
@@ -3390,7 +3390,7 @@ async function leanStd() {
     chmodSync(collections, 0o644)
     writeFileSync(collections, "package scala\n")
     const afterTruncation = await c.result("textDocument/definition", at_(app, "List(1"))
-    check("lean std: a truncated std document is made whole before a location into it", whole(collections, "collections.scala") && sameLocs(afterTruncation, [at(collections, "object List:", 0, 7, 4)]), afterTruncation)
+    check("lean std: a truncated std document is made whole before a location into it", whole(collections, "collections.scala") && sameLocs(afterTruncation, [at(collections, "object List extends IterableFactory", 0, 7, 4)]), afterTruncation)
     chmodSync(prelude, 0o644)
     writeFileSync(prelude, readFileSync(prelude, "utf-8").replace("def println(", "def printlx("))
     const afterAlteration = await c.result("textDocument/definition", at_(app, "println("))
@@ -3523,15 +3523,15 @@ async function leanStd() {
     const ascHover = await c.result("textDocument/hover", at_(app, "-(Obj: Base)"))
     const ascDef = await c.result("textDocument/definition", at_(app, "-(Obj: Base)"))
     check("lean std: a prefix operator on an ascribed object, the parent's method", ascHover?.contents?.value === "```scala\ndef L.Base.unary_-: Int\n```" && sameLocs(ascDef, [at(app, "def unary_- : Int = 1", 0, 4, 7)]), { ascHover, ascDef })
-    const listRefs = await c.result("textDocument/references", { ...at_(collections, "object List:", 0, 7), context: { includeDeclaration: true } })
+    const listRefs = await c.result("textDocument/references", { ...at_(collections, "object List extends IterableFactory", 0, 7), context: { includeDeclaration: true } })
     const appList = at(app, "List(1", 0, 0, 4)
     check(
       "lean std, inside collections.scala: references of a std object hold the declaration, the std's uses and the app's",
-      listRefs?.some((l) => same(l, at(collections, "object List:", 0, 7, 4))) && listRefs.some((l) => same(l, appList)) && listRefs.some((l) => same(l, at(collections, "List.from(suffix)", 0, 0, 4))),
+      listRefs?.some((l) => same(l, at(collections, "object List extends IterableFactory", 0, 7, 4))) && listRefs.some((l) => same(l, appList)) && listRefs.some((l) => same(l, at(collections, "List.from(suffix)", 0, 0, 4))),
       listRefs,
     )
     const fromApp = await c.result("textDocument/references", { ...at_(app, "List(1"), context: { includeDeclaration: false } })
-    check("lean std: references of a std object from the app hold its uses in every std file, as inside its document", sameLocs(fromApp, listRefs.filter((l) => !same(l, at(collections, "object List:", 0, 7, 4)))), fromApp)
+    check("lean std: references of a std object from the app hold its uses in every std file, as inside its document", sameLocs(fromApp, listRefs.filter((l) => !same(l, at(collections, "object List extends IterableFactory", 0, 7, 4)))), fromApp)
     const mapRefs = await c.result("textDocument/references", { ...at_(collections, "def map[B](f: A => B): List[B] =", 0, 4), context: { includeDeclaration: false } })
     check("lean std, inside collections.scala: references of a std method hold the app's call", mapRefs?.some((l) => same(l, at(app, "map(_", 0, 0, 3))), mapRefs)
     const applyItem = await c.result("textDocument/prepareCallHierarchy", at_(collections, "def apply[A](elems: A*): List[A]", 0, 4))
@@ -3614,7 +3614,7 @@ async function leanStd() {
     check("lean std: after the std documents' demands, an edit of the app checks clean", c.diagnosticsSince(0).every((p) => p.diagnostics.length === 0), c.diagnosticsSince(0))
     check("lean std, inside collections.scala: the answer after an edit of the app", again?.length === 1 && stdFile(again[0]) === "iterable.scala", again)
     const outline = await c.result("textDocument/documentSymbol", doc(collections))
-    check("lean std: the outline of a std document", outline?.some((s) => s.name === "List" && same(s.selectionRange, at(collections, "object List:", 0, 7, 4).range)), outline?.length)
+    check("lean std: the outline of a std document", outline?.some((s) => s.name === "List" && same(s.selectionRange, at(collections, "object List extends IterableFactory", 0, 7, 4).range)), outline?.length)
     // The document edited in the editor: its positions are no longer those the session typed.
     const edited = "// edited\n" + readFileSync(collections, "utf-8")
     c.notify("textDocument/didChange", { textDocument: { uri: uriOf(collections), version: 2 }, contentChanges: [{ text: edited }] })

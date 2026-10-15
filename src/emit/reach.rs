@@ -670,12 +670,14 @@ fn compute_now(typer: &mut Worker, array_seq: Option<ClassId>, js_visible: bool,
     let thrown = if typer.jvm { runtime_exceptions(typer) } else { Vec::new() };
     // Found first: finding them may enter a std file of the runtime.
     let helpers = if typer.jvm { Some(JvmHelpers::find(typer)) } else { None };
-    let mut setup = Setup { array_seq, js_visible, thrown, helpers, exported: Vec::new(), found_array_seq: None, found_runtime_exceptions: None, registered_syms: 0 };
+    // JavaScript may call any member of a class an exported definition takes or returns: found
+    // before the walker sizes its tables over the symbols, since completing their signatures may
+    // enter a std file with new ones.
+    let exported = exported_members(typer);
+    lap.done("exported members", exported.len());
+    let mut setup = Setup { array_seq, js_visible, thrown, helpers, exported, found_array_seq: None, found_runtime_exceptions: None, registered_syms: 0 };
     let w = Walker::begin(typer, &setup);
     lap.done("setup", 0);
-    // JavaScript may call any member of a class an exported definition takes or returns.
-    setup.exported = exported_members(typer);
-    lap.done("exported members", setup.exported.len());
     let (reach, w) = rounds(typer, w, &mut setup, &mut lap, stop)?;
     lap.count("rounds", lap.round as usize);
     lap.count("diagnostics added", typer.diags.items.len() - diags_before);
@@ -709,6 +711,7 @@ fn rounds<'a, T: Typing<'a>>(t: &mut T, mut w: Walker, setup: &mut Setup, lap: &
         (w.link_root_members, w.link_root_funs) = link_root_members(t.w(), &w.std_files, w.products);
         lap.done("open-world roots", w.link_root_members.len() + w.link_root_funs.len());
     }
+    debug_assert_eq!(w.fun_of.len(), t.w().syms.syms.len(), "the walker's tables cover the typer's symbols at its first walk");
     w.roots(Cx::of(t.w()));
     // Called on any receiver by the name each has as this walk runs (`+$Any` for `Set.+`).
     for &s in &setup.exported {
@@ -771,7 +774,7 @@ fn rounds<'a, T: Typing<'a>>(t: &mut T, mut w: Walker, setup: &mut Setup, lap: &
         // A product's top-level definition reached: checked with its file (an eager val with
         // the file's group), then reached again as the whole program's.
         let packages = std::mem::take(&mut w.pending_packages);
-        let bodies: Vec<(SymId, Option<DeferredBody>)> = packages.iter().map(|&(_, s)| (s, t.deferred_body(s))).collect();
+        let bodies: Vec<(SymId, Option<DeferredBody>)> = packages.iter().map(|&s| (s, t.deferred_body(s))).collect();
         lap.done("product definitions typed", packages.len());
         if !packages.is_empty() {
             w.grow(Cx::of(t.w()));
@@ -1144,6 +1147,24 @@ fn index(s: Slot) -> Option<usize> {
 /// The std files of teq's JVM runtime, which a directory of products holds whole.
 const RUNTIME_FILES: [&str; 6] = ["<std>/jvm.scala", "<std>/jvm_scala_library.scala", "<std>/jvm_buffer.scala", "<std>/library/product.scala", "<std>/library/mirrors.scala", "<std>/javalib/string.scala"];
 
+/// The members class `c` declares that `@JSExport` exports, in declaration order.
+pub(super) fn js_exported_members(syms: &Symbols, c: ClassId) -> Vec<SymId> {
+    let mut out: Vec<SymId> = Vec::new();
+    for &m in &syms.class(c).member_order {
+        let alts: Vec<SymId> = match syms.alternatives(m) {
+            Some(a) => a.to_vec(),
+            None => vec![m],
+        };
+        for a in alts {
+            let s = syms.sym(a);
+            if syms.js_export_names.get(&a).is_some() && s.owner == Owner::Class(c) && !out.contains(&a) {
+                out.push(a);
+            }
+        }
+    }
+    out
+}
+
 /// The members the runtime calls on values of any class.
 /// What the runtime's `toString` and `equals` of a case class call on an instance where it has a
 /// definition (`$caseToString`, `$caseEquals`).
@@ -1293,7 +1314,7 @@ struct Walker {
     pending_classes: Vec<ClassId>,
     /// The products' files of top-level definitions the walk reached a definition of, before
     /// the typer converted them (`Worker::check_product_package`), each with the definition.
-    pending_packages: Vec<(ClassId, SymId)>,
+    pending_packages: Vec<SymId>,
     /// Whether classes of the classpath are compiled, which the JavaScript target does.
     library: bool,
     /// Link mode (`Worker::link_mode`): a jar class is never compiled, its members are the jar's.
@@ -2045,17 +2066,17 @@ impl Walker {
     /// A definition reached by its path: a top-level def or val, a member of an object, an enum
     /// value or an object itself.
     fn reach_static(&mut self, cx: Cx, sym: SymId) {
-        // A product's top-level definition the typer has not checked yet: asked for between two
-        // walks, then reached again.
-        if let Some(l) = cx.loaded.filter(|l| !l.product_package_members.is_empty()) {
-            if let Some(&obj) = l.product_package_members.get(&sym) {
-                let checked = index(self.top_val_of[sym.idx()]).is_some() || index(self.fun_of[sym.idx()]).is_some();
-                if !checked {
-                    if !std::mem::replace(&mut self.asked[sym.idx()], true) {
-                        self.pending_packages.push((obj, sym));
-                    }
-                    return;
+        // A product's top-level definition the typer has not checked yet, and a std val no reader
+        // typed yet (`Worker::defers_top_val`): asked for between two walks, then reached again.
+        let product = cx.loaded.filter(|l| !l.product_package_members.is_empty()).is_some_and(|l| l.product_package_members.contains_key(&sym));
+        let std_val = cx.typer.defers_top_val(sym);
+        if product || std_val {
+            let checked = index(self.top_val_of[sym.idx()]).is_some() || index(self.fun_of[sym.idx()]).is_some();
+            if !checked {
+                if !std::mem::replace(&mut self.asked[sym.idx()], true) {
+                    self.pending_packages.push(sym);
                 }
+                return;
             }
         }
         if std::mem::replace(&mut self.seen[sym.idx()], true) {
@@ -2443,6 +2464,17 @@ impl Walker {
             let accessor = index(self.tclass_of[b.idx()]).and_then(|i| cx.prog.classes[i].eq_outer());
             if let Some(a) = accessor {
                 self.mark_dispatch(cx, c, syms.sym(a).name);
+            }
+        }
+        // JavaScript calls a member exported to it (`@JSExport`) on an instance by its name, the
+        // exporter the definition the instance takes.
+        for i in from..info.base_types.len() {
+            let b = info.base_types[i].0;
+            if syms.class(b).js_exports {
+                for a in js_exported_members(syms, b) {
+                    let n = syms.dispatch_name(a);
+                    self.mark_dispatch(cx, c, n);
+                }
             }
         }
         // On JavaScript a class reaches the parents a desugaring gives (`Product`, `Equals`,
@@ -3546,6 +3578,11 @@ fn exported_members(typer: &mut Worker) -> Vec<SymId> {
         for m in members {
             let sym = typer.syms.sym(m);
             if sym.mods & mods::PRIVATE != 0 {
+                continue;
+            }
+            // An outer accessor is the compiler's, which no JavaScript names: a walk reaches it
+            // through its callers alone, whether or not a check of its class made it before.
+            if typer.is_outer_accessor(m) {
                 continue;
             }
             // Its dispatch name resolved before any walk roots it, so that every walk calls the

@@ -1296,6 +1296,36 @@ package java.lang:
     @js("Math.tan($1)")
     @jvm("invokestatic java/lang/Math.tan(D)D")
     def tan(x: scala.Double): scala.Double
+    @js("Math.asin($1)")
+    @jvm("invokestatic java/lang/Math.asin(D)D")
+    def asin(x: scala.Double): scala.Double
+    @js("Math.acos($1)")
+    @jvm("invokestatic java/lang/Math.acos(D)D")
+    def acos(x: scala.Double): scala.Double
+    @js("Math.atan($1)")
+    @jvm("invokestatic java/lang/Math.atan(D)D")
+    def atan(x: scala.Double): scala.Double
+    @js("Math.sinh($1)")
+    @jvm("invokestatic java/lang/Math.sinh(D)D")
+    def sinh(x: scala.Double): scala.Double
+    @js("Math.cosh($1)")
+    @jvm("invokestatic java/lang/Math.cosh(D)D")
+    def cosh(x: scala.Double): scala.Double
+    @js("Math.tanh($1)")
+    @jvm("invokestatic java/lang/Math.tanh(D)D")
+    def tanh(x: scala.Double): scala.Double
+    @js("Math.expm1($1)")
+    @jvm("invokestatic java/lang/Math.expm1(D)D")
+    def expm1(x: scala.Double): scala.Double
+    @js("Math.log1p($1)")
+    @jvm("invokestatic java/lang/Math.log1p(D)D")
+    def log1p(x: scala.Double): scala.Double
+    @js("($1 * 180 / Math.PI)")
+    @jvm("invokestatic java/lang/Math.toDegrees(D)D")
+    def toDegrees(x: scala.Double): scala.Double
+    @js("($1 / 180 * Math.PI)")
+    @jvm("invokestatic java/lang/Math.toRadians(D)D")
+    def toRadians(x: scala.Double): scala.Double
     @js("Math.atan2($1, $2)")
     @jvm("invokestatic java/lang/Math.atan2(DD)D")
     def atan2(y: scala.Double, x: scala.Double): scala.Double

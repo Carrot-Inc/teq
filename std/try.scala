@@ -108,6 +108,25 @@ class Random(val self: java.util.Random):
       var n = nextInt()
       while n < minInclusive || n >= maxExclusive do n = nextInt()
       n
+  def between(minInclusive: Long, maxExclusive: Long): Long =
+    require(minInclusive < maxExclusive, "Invalid bounds")
+    val difference = maxExclusive - minInclusive
+    if difference >= 0 then nextLong(difference) + minInclusive
+    else
+      var n = nextLong()
+      while n < minInclusive || n >= maxExclusive do n = nextLong()
+      n
+  def between(minInclusive: Double, maxExclusive: Double): Double =
+    require(minInclusive < maxExclusive, "Invalid bounds")
+    val next = nextDouble() * (maxExclusive - minInclusive) + minInclusive
+    if next < maxExclusive then next else java.lang.Math.nextDown(maxExclusive)
+  def between(minInclusive: Float, maxExclusive: Float): Float =
+    require(minInclusive < maxExclusive, "Invalid bounds")
+    val next = nextFloat() * (maxExclusive - minInclusive) + minInclusive
+    if next < maxExclusive then next
+    // scala-library's `Math.nextAfter(maxExclusive, Float.NegativeInfinity)`: the float below.
+    else if maxExclusive == 0.0f then -java.lang.Float.MIN_VALUE
+    else java.lang.Float.intBitsToFloat(java.lang.Float.floatToIntBits(maxExclusive) + (if maxExclusive > 0.0f then -1 else 1))
   def nextLong(): Long = self.nextLong()
   def nextLong(n: Long): Long =
     require(n > 0, "n must be positive")
@@ -121,6 +140,18 @@ class Random(val self: java.util.Random):
       rest = next
     offset + nextInt(rest.toInt)
   def nextPrintableChar(): Char = (self.nextInt(127 - 33) + 33).toChar
+  /** scala-library's: `length` characters, each drawn from the surrogate-free range as `nextString` draws them. */
+  def nextString(length: Int): String =
+    val sb = new StringBuilder
+    var i = 0
+    while i < length do
+      sb.append((self.nextInt(0xD800 - 1) + 1).toChar)
+      i += 1
+    sb.toString
+  /** scala-library's: an endless stream of letters and digits, each drawn as it is read. */
+  def alphanumeric: LazyList[Char] =
+    val chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"
+    LazyList.continually(chars.charAt(self.nextInt(chars.length)))
   def setSeed(seed: Long): Unit = self.setSeed(seed)
   def shuffle[A, CC[_]](xs: IterableOps[A, CC, Any]): CC[A] =
     val items = rawItems(xs)
@@ -148,3 +179,17 @@ object Sorting:
     }
   def stableSort[K](a: Array[K], lt: (K, K) => Boolean): Unit = stableSort(a)(Ordering.fromLessThan(lt))
   def quickSort[K](a: Array[K])(implicit ord: Ordering[K]): Unit = stableSort(a)(ord)
+
+// scala-library's: a value bound for the extent of a thunk, kept in a thread-local, whose one slot
+// on JavaScript is the program's one thread's.
+class DynamicVariable[T](init: T):
+  private val tl = new InheritableThreadLocal[T]:
+    override protected def initialValue(): T = init
+  def value: T = tl.get()
+  def withValue[S](newval: T)(thunk: => S): S =
+    val oldval = value
+    tl.set(newval)
+    try thunk
+    finally tl.set(oldval)
+  def value_=(newval: T): Unit = tl.set(newval)
+  override def toString: String = "DynamicVariable(" + value + ")"

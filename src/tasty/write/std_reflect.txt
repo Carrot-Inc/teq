@@ -130,6 +130,8 @@ scala.quoted.Reflect$	DoubleConstant	object	DoubleConstant	scala.quoted.Quotes.r
 scala.quoted.Reflect$	DoubleConstantTypeTest	object	DoubleConstantTypeTest	scala.reflect.TypeTest	object
 scala.quoted.Reflect$	Export	-:scala.quoted.Reflect$.Export$	-	scala.quoted.Quotes.reflectModule	-
 scala.quoted.Reflect$	Export	object	Export	scala.quoted.Quotes.reflectModule.ExportModule	object
+scala.quoted.Reflect$	ExportTypeTest	-:scala.quoted.Reflect$.ExportTypeTest$	-	scala.quoted.Quotes.reflectModule	-
+scala.quoted.Reflect$	ExportTypeTest	object	ExportTypeTest	scala.reflect.TypeTest	object
 scala.quoted.Reflect$	Flags	-:scala.quoted.Reflect$.Flags$	-	scala.quoted.Quotes.reflectModule	-
 scala.quoted.Reflect$	Flags	object	Flags	scala.quoted.Quotes.reflectModule.FlagsModule	object
 scala.quoted.Reflect$	FlagsMethods	-:scala.quoted.Reflect$.FlagsMethods$	-	scala.quoted.Quotes.reflectModule	-
@@ -169,6 +171,8 @@ scala.quoted.Reflect$	Import	-:scala.quoted.Reflect$.Import$	-	scala.quoted.Quot
 scala.quoted.Reflect$	Import	object	Import	scala.quoted.Quotes.reflectModule.ImportModule	object
 scala.quoted.Reflect$	ImportMethods	-:scala.quoted.Reflect$.ImportMethods$	-	scala.quoted.Quotes.reflectModule	-
 scala.quoted.Reflect$	ImportMethods	object	ImportMethods	scala.quoted.Quotes.reflectModule.ImportMethods	object
+scala.quoted.Reflect$	ImportTypeTest	-:scala.quoted.Reflect$.ImportTypeTest$	-	scala.quoted.Quotes.reflectModule	-
+scala.quoted.Reflect$	ImportTypeTest	object	ImportTypeTest	scala.reflect.TypeTest	object
 scala.quoted.Reflect$	Inferred	-:scala.quoted.Reflect$.Inferred$	-	scala.quoted.Quotes.reflectModule	-
 scala.quoted.Reflect$	Inferred	object	Inferred	scala.quoted.Quotes.reflectModule.InferredModule	object
 scala.quoted.Reflect$	InferredTypeTest	-:scala.quoted.Reflect$.InferredTypeTest$	-	scala.quoted.Quotes.reflectModule	-
@@ -684,6 +688,7 @@ scala.quoted.Reflect$.DefinitionTypeTest$	unapply	scala.quoted.Reflect$.Tree:sca
 scala.quoted.Reflect$.DoubleConstant$	apply	scala.Double:scala.quoted.Reflect$.Constant	DoubleConstant	scala.quoted.Quotes.reflectModule.DoubleConstantModule	scala.Double:java.lang.Object
 scala.quoted.Reflect$.DoubleConstant$	unapply	scala.quoted.Reflect$.Constant:scala.Option	DoubleConstant	scala.quoted.Quotes.reflectModule.DoubleConstantModule	java.lang.Object:scala.Some
 scala.quoted.Reflect$.Export$	unapply	scala.quoted.Reflect$.Export:scala.Tuple2	Export	scala.quoted.Quotes.reflectModule.ExportModule	java.lang.Object:scala.Tuple2
+scala.quoted.Reflect$.ExportTypeTest$	unapply	scala.quoted.Reflect$.Tree:scala.Option	ExportTypeTest	scala.reflect.TypeTest	java.lang.Object:scala.Option
 scala.quoted.Reflect$.Flags$	AbsOverride	-:scala.quoted.Reflect$.Flags	Flags	scala.quoted.Quotes.reflectModule.FlagsModule	-
 scala.quoted.Reflect$.Flags$	Abstract	-:scala.quoted.Reflect$.Flags	Flags	scala.quoted.Quotes.reflectModule.FlagsModule	-
 scala.quoted.Reflect$.Flags$	Artifact	-:scala.quoted.Reflect$.Flags	Flags	scala.quoted.Quotes.reflectModule.FlagsModule	-
@@ -766,6 +771,7 @@ scala.quoted.Reflect$.Import$	copy	scala.quoted.Reflect$.Tree,scala.quoted.Refle
 scala.quoted.Reflect$.Import$	unapply	scala.quoted.Reflect$.Import:scala.Tuple2	Import	scala.quoted.Quotes.reflectModule.ImportModule	java.lang.Object:scala.Tuple2
 scala.quoted.Reflect$.ImportMethods$	expr	scala.quoted.Reflect$.Import:scala.quoted.Reflect$.Term	ImportMethods	scala.quoted.Quotes.reflectModule.ImportMethods	java.lang.Object:java.lang.Object
 scala.quoted.Reflect$.ImportMethods$	selectors	scala.quoted.Reflect$.Import:scala.collection.immutable.List	ImportMethods	scala.quoted.Quotes.reflectModule.ImportMethods	java.lang.Object:scala.collection.immutable.List
+scala.quoted.Reflect$.ImportTypeTest$	unapply	scala.quoted.Reflect$.Tree:scala.Option	ImportTypeTest	scala.reflect.TypeTest	java.lang.Object:scala.Option
 scala.quoted.Reflect$.Inferred$	apply	scala.quoted.Reflect$.TypeRepr:scala.quoted.Reflect$.Inferred	Inferred	scala.quoted.Quotes.reflectModule.InferredModule	java.lang.Object:java.lang.Object
 scala.quoted.Reflect$.Inferred$	unapply	scala.quoted.Reflect$.Inferred:scala.Boolean	Inferred	scala.quoted.Quotes.reflectModule.InferredModule	java.lang.Object:scala.Boolean
 scala.quoted.Reflect$.InferredTypeTest$	unapply	scala.quoted.Reflect$.Tree:scala.Option	InferredTypeTest	scala.reflect.TypeTest	java.lang.Object:scala.Option

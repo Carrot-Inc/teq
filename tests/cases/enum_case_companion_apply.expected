@@ -1,0 +1,5 @@
+Content(List(1, 2),None)
+Content(List(),None)
+Content(List(3),Some(x))
+Branch(4,4)
+Branch(5,6)

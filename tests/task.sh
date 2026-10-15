@@ -2018,9 +2018,9 @@ out=$(cd "$mb" && timeout 120 "$TEQ" compile leak 2>&1)
 code=$?
 test_out=$(cd "$mb" && timeout 120 "$TEQ" test leak 2>&1)
 test_code=$?
-if [ $code = 1 ] && [[ "$out" == *"leak/src/leak/Leak.scala:4:33: error: type FunSuite not found"* ]] && [[ "$out" == *"leak/compile: 2 errors"* ]] && [ $test_code = 2 ] &&
-  [[ "$test_out" == *"leak/compile is typed inside leak/test, whose class path holds org.scalameta:munit_3:"*"which leak/compile's does not name"* ]]; then
-  pass "mill: a module's compile is typed alone, never inside its test's resident (whose class path adds munit), and its test, which would show it munit, refused"
+if [ $code = 1 ] && [[ "$out" == *"leak/src/leak/Leak.scala:4:33: error: type FunSuite not found"* ]] && [[ "$out" == *"leak/compile: 2 errors"* ]] && [ $test_code = 0 ] &&
+  [[ "$test_out" == *"leak/test: 1 suite, 1 passed, 0 failed"* ]]; then
+  pass "mill: a module's compile is typed alone, never inside its test's resident (whose class path adds munit), and its test, typed there, sees munit as an sbt configuration sees its dependent's union"
 else
   fail "mill, a compile typed inside its test: compile ($code) $out; test ($test_code) $test_out"
 fi
@@ -2028,9 +2028,9 @@ out=$(cd "$mb" && timeout 300 "$TEQ" test 2>&1)
 code=$?
 again=$(cd "$mb" && timeout 300 "$TEQ" test core 2>&1)
 again_code=$?
-if [ $code = 2 ] && [[ "$out" == *"core/test: 1 suite, 1 passed, 0 failed"* ]] && [[ "$out" == *"teq: test left out leak, which needs what mill alone runs"* ]] && [[ "$out" == *"teq: test left out web is a Scala.js project, whose suites (linked as CommonJSModule, run under node with jsdom) teq does not run yet"* ]] &&
+if [ $code = 2 ] && [[ "$out" == *"core/test: 1 suite, 1 passed, 0 failed"* ]] && [[ "$out" == *"leak/test: 1 suite, 1 passed, 0 failed"* ]] && [[ "$out" == *"teq: test left out web, which needs what mill alone runs:"*"web: its suites run under jsdom, and the build's root holds no lockfile of npm, yarn or pnpm that installs jsdom"* ]] &&
   [ $again_code = 0 ] && [[ "$again" == *"core/test: 1 suite, 1 passed, 0 failed"* ]] && [ -f "$mb/target/teq/core/test/sandbox/left-by-the-run.txt" ]; then
-  pass "mill: the suites run in a sandbox emptied for each run, with Mill's variables and the run classpath; a Scala.js project's named left out, the run exiting 2"
+  pass "mill: the suites run in a sandbox emptied for each run, with Mill's variables and the run classpath; a Scala.js project whose jsdom no lockfile installs named left out, the run exiting 2"
 else
   fail "mill, the test run: ($code) $out; again ($again_code): $again"
 fi
@@ -2289,7 +2289,7 @@ else
   fail "scalajs tests: a missing framework: $out"
 fi
 out=$(jstest domesm)
-if [ $? = 2 ] && [[ "$out" == *"Test / jsEnv is JSDOMNodeJSEnv, which runs a script alone, and the test link is a ESModule"* ]]; then
+if [ $? = 2 ] && [[ "$out" == *"domesm: its suites run under JSDOMNodeJSEnv, which runs a script alone, and the test link is a ESModule (sbt-scalajs refuses the pair too)"* ]]; then
   pass "scalajs tests: jsdom under an ES module is refused, as sbt-scalajs refuses it"
 else
   fail "scalajs tests: jsdom and ESModule: $out"

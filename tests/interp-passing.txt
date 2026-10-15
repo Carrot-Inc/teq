@@ -175,6 +175,7 @@ case_clause_nested_guard_block
 case_clause_trailing_bar
 case_clause_union_type_in_parens
 case_companion_nested
+case_companion_package_path
 case_companion_value
 case_companion_written_or_not
 case_copy_clauses
@@ -315,6 +316,7 @@ conversion_method_java_supertype
 conversion_method_null
 conversion_method_scope
 conversion_nested_class_prefix
+conversion_open_var_case_join
 conversion_prefix_and_expected_member
 conversion_private_member
 conversion_receivers
@@ -439,6 +441,7 @@ expected_result_path_param
 expected_type_instantiation
 expected_types
 export_alias_outer_instance
+export_alias_singleton_path
 export_anonymous_value
 export_by_name_param
 export_companion_apply_empty
@@ -995,6 +998,7 @@ lexical_extension_ranked_receiver
 lexical_extension_retry_leading
 list_fill_order
 list_map_conserve
+list_range_last_element
 list_reverse_prepend
 literal_constant_types
 literal_overload_constant
@@ -1173,6 +1177,7 @@ map_key_contract
 map_store_callbacks
 maps
 marker_traits
+match_abstract_member_type
 match_nested_bound
 match_type_case_and_line
 match_type_case_trailing_and
@@ -1274,6 +1279,9 @@ nullary_over_java_parens
 number_boxes
 numeric
 numeric_companion_constants
+numeric_ordering_equiv
+numeric_range_conversion_order
+numeric_range_factory
 object_inherited_member_prefix
 object_inherited_protected
 object_member
@@ -1736,7 +1744,9 @@ std_surface
 std_try
 stdextras
 stdin_lines
+stream_abstract_seq_parent
 stream_descriptors
+stream_iterator_lazy_tail
 stream_ops
 stream_spread_and_collector_protocol
 streams_jdk_semantics

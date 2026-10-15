@@ -75,7 +75,14 @@ def joinStrings(xs: IterableOnce[Any], start: String, sep: String, end: String):
 // and `buildCC`. Traversals that may stop early go through `iterator`.
 trait IterableOps[+A, +CC[_], +C] extends IterableOnce[A]:
   def buildCC[B](items: RawBuffer[B]): CC[B]
+  // scala-library's `IterableOnceOps.foreach`, over the iterator: a library's collection class
+  // (scalajs-dom's `DOMListSeq`) defines `iterator` alone.
+  def foreach[U](f: A => U): Unit =
+    val it = iterator
+    while it.hasNext do f(it.next())
   def buildC(items: RawBuffer[A]): C = unsafeCast(buildCC(items))
+  @deprecated("Use .to(LazyList) instead of .toStream", "2.13.0")
+  def toStream: scala.collection.immutable.Stream[A] = scala.collection.immutable.Stream.from(this)
   // The protocol of scala-library's `IterableOps`, which a library's collection class reaches
   // through the bodies of its own traits: the collection as `C`, a builder of it, its name.
   def coll: C = unsafeCast(this)
@@ -642,8 +649,9 @@ trait IterableFactory[+CC[_]]:
   def iterate[A](start: A, len: Int)(f: A => A): CC[A] = from(Iterator.iterate(start)(f).take(len))
   def unfold[A, S](init: S)(f: S => Option[(A, S)]): CC[A] = from(Iterator.unfold(init)(f))
   def concat[A](xss: Iterable[A]*): CC[A] = from(xss.iterator.flatMap(_.iterator))
-  def range[A](start: A, end: A)(using i: Integral[A]): CC[A] = from(NumericRange(start, end, i.one)(using i))
-  def range[A](start: A, end: A, step: A)(using i: Integral[A]): CC[A] = from(NumericRange(start, end, step)(using i))
+  def range[A](start: A, end: A)(using i: Integral[A]): CC[A] = range(start, end, i.one)
+  // `NumericRange.Exclusive`'s elements: from `start` by `step` up to `end`, which it leaves out.
+  def range[A](start: A, end: A, step: A)(using i: Integral[A]): CC[A] = from(scala.collection.immutable.NumericRange(start, end, step))
   implicit def iterableFactory[A]: Factory[A, CC[A]] = IterableFactory.toFactory(this)
 
 object IterableFactory:
@@ -684,6 +692,12 @@ abstract class Iterator[+A] extends IterableOps[A, Iterator, Iterator[A]]:
   def hasNext: Boolean
   def next(): A
   def foreach[U](f: A => U): Unit = while hasNext do f(next())
+  // scala-library's `Iterator.sameElements`: the two in step, ending together.
+  def sameElements[B >: A](that: IterableOnce[B]): Boolean =
+    val other = that.iterator
+    var same = true
+    while same && hasNext && other.hasNext do same = next() == other.next()
+    same && !hasNext && !other.hasNext
   override def hasDefiniteSize: Boolean = !hasNext
   // scala-library's: the iterator whose next element `head` reads without taking it.
   def buffered: scala.collection.BufferedIterator[A] =

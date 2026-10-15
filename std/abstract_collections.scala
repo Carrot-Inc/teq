@@ -217,6 +217,9 @@ object EvidenceIterableFactory:
       def newBuilder: scala.collection.mutable.Builder[A, CC[A]] = factory.newBuilder[A]
 
 type View[+A] = scala.View[A]
+// scala-library's `IterableFactory` and `SeqFactory` are of this package; the std keeps them in `scala`.
+type IterableFactory[+CC[_]] = scala.IterableFactory[CC]
+type SeqFactory[+CC[_]] = scala.SeqFactory[CC]
 
 // scala-library's `SeqView` and `IndexedSeqView`, the views of a sequence and of an indexed one:
 // an element is read by its index from the source (`apply` and `length` abstract, an indexed view's

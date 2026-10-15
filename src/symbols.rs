@@ -54,6 +54,44 @@ pub enum JsBinding {
     GlobalScope,
 }
 
+/// The generation of all the classes' nested classes and type aliases at once, advanced where every
+/// one may have changed (a retype): what a class's bases were searched for by name is of one such
+/// generation (`members::InheritedNamed`).
+pub static TYPE_MEMBERS_GENERATION: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
+/// The order of the writes to the classes' nested classes and type aliases (`type_member_written`).
+static TYPE_MEMBER_WRITES: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
+/// The place in that order of the last write of a name of each bucket (a name's number modulo the
+/// buckets): what was read of the tables before it is to be read again for that name alone, as dotty's
+/// `invalidateMemberCaches` drops the cached members of the name entered (`myMemberCache.remove`).
+static TYPE_MEMBER_NAME_WRITES: [std::sync::atomic::AtomicU64; 256] = [const { std::sync::atomic::AtomicU64::new(0) }; 256];
+
+/// Every class's nested classes and type aliases may have changed (`TYPE_MEMBERS_GENERATION`).
+#[inline]
+pub fn type_members_changed() {
+    TYPE_MEMBERS_GENERATION.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+}
+
+/// A nested class or a type alias named `name` was entered or replaced, its table holding it already.
+#[inline]
+pub fn type_member_written(name: Name) {
+    let at = TYPE_MEMBER_WRITES.fetch_add(1, std::sync::atomic::Ordering::AcqRel) + 1;
+    TYPE_MEMBER_NAME_WRITES[name.0 as usize % 256].fetch_max(at, std::sync::atomic::Ordering::AcqRel);
+}
+
+/// The place in the order of writes now, taken before the tables are read.
+#[inline]
+pub fn type_member_stamp() -> u64 {
+    TYPE_MEMBER_WRITES.load(std::sync::atomic::Ordering::Acquire)
+}
+
+/// Whether a nested class or a type alias of `name`'s bucket was written after `stamp`.
+#[inline]
+pub fn type_member_written_since(name: Name, stamp: u64) -> bool {
+    TYPE_MEMBER_NAME_WRITES[name.0 as usize % 256].load(std::sync::atomic::Ordering::Acquire) > stamp
+}
+
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Completion {
     NotStarted,
@@ -198,6 +236,8 @@ pub struct ClassInfo {
     /// For enums with constructor parameters or initialisers: every case runs them through
     /// `$init`, and the values are created when the companion is initialised.
     pub stateful: bool,
+    /// A member of the class is exported to JavaScript (`Symbols::js_export_names`).
+    pub js_exports: bool,
     /// Whether the body has `export` clauses.
     pub has_exports: bool,
     /// Whether its export clauses' forwarders are made, which a class makes once (dotty's
@@ -329,7 +369,9 @@ pub struct SymInfo {
     /// Set for a val that implements a parameterless def of a parent trait.
     pub needs_accessor: bool,
     /// Set for a var that implements an abstract setter (an abstract var's, or a declared
-    /// `def x_=`): its JavaScript class writes the setter method beside the getter.
+    /// `def x_=`): its JavaScript class writes the setter method beside the getter; and for a val
+    /// of a jar's class read through a getter (`check_member`), whose setter takes the value a
+    /// subclass's overriding val assigns.
     pub needs_setter: bool,
     /// `private[scope]`: unlike a plain private member it is inherited and can be overridden.
     pub scoped_private: bool,
@@ -518,6 +560,10 @@ pub struct Symbols {
     pub overloads: Arena<(SymId, Vec<SymId>)>,
     /// The names in the output of the methods whose `dispatch` is `Named`.
     pub dispatch_names: crate::arena::Layered<SymId, Name>,
+    /// `@JSExport` on a member of a Scala class: the name JavaScript calls it by on an instance,
+    /// where an exporter (`PrepJSExports.genExportDefs`) dispatches among the alternatives of one
+    /// name. Few members have one, and the symbols' records are read by every lookup.
+    pub js_export_names: crate::arena::Layered<SymId, Name>,
     /// Per file its place in the canonical order: a program file's id, and for the pseudo files
     /// of library bodies, which are made in the order they are demanded, the order of their
     /// keys (`Worker::rank_files`). Empty until the typer is done: what orders the output by file
@@ -734,6 +780,7 @@ impl Symbols {
             pkgs: Arena::from_vec(vec![root]),
             overloads: Arena::new(),
             dispatch_names: Default::default(),
+            js_export_names: Default::default(),
             file_ranks: Vec::new(),
             product_places: Default::default(),
             product_sources: Vec::new(),
@@ -767,6 +814,7 @@ impl Symbols {
             pkgs: Arena::attach(self.pkgs.shared_arc(), worker),
             overloads: Arena::attach(self.overloads.shared_arc(), worker),
             dispatch_names: self.dispatch_names.attach(),
+            js_export_names: self.js_export_names.attach(),
             file_ranks: Vec::new(),
             product_places: Default::default(),
             product_sources: Vec::new(),
@@ -1076,6 +1124,7 @@ impl Symbols {
             local_module: None,
             inner_object: None,
             stateful: false,
+            js_exports: false,
             desugared_parents: 0,
             rule_prefix: 0,
             post_typer_bases: 0,

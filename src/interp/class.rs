@@ -232,8 +232,11 @@ impl<'a, 't> Interp<'a, 't> {
         for &s in &defined {
             if self.top_val(s).is_none() && self.typer.program_file(file) {
                 self.typer.ensure_body(s);
+            } else if self.top_val(s).is_none() && self.typer.defers_top_val(s) {
+                self.typer.std_val_body(s);
             }
         }
+        self.refresh_top_vals();
         let mut vals: Vec<(SymId, TExprId)> = self.prog().top_vals.all().filter(|&(s, _)| self.syms().sym(s).file == file).collect();
         for s in defined {
             if !vals.iter().any(|&(v, _)| v == s) {
@@ -415,6 +418,11 @@ impl<'a, 't> Interp<'a, 't> {
                 // typed here or waited for, as a file's initialiser has its vals (`file_vals`).
                 if self.top_val(s).is_none() && self.typer.program_file(file) {
                     self.typer.ensure_body(s);
+                }
+                // A std val is typed by its first reader (`Worker::std_val_body`).
+                if self.top_val(s).is_none() && self.typer.defers_top_val(s) {
+                    self.typer.std_val_body(s);
+                    self.refresh_top_vals();
                 }
                 if self.is_eager_top_val(s) {
                     self.run_file_init(file)?;

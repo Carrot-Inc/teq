@@ -35,7 +35,6 @@ pub(crate) const STD_BINDINGS: &[(&str, &str, &str)] = &[
     ("scala.collection.immutable", "Iterable", "scala"),
     ("scala.collection.immutable", "LazyList", "scala"),
     ("scala.collection.immutable", "Range", "scala"),
-    ("scala.collection.immutable", "NumericRange", "scala"),
     ("scala.collection.immutable", "ArraySeq", "scala"),
     ("scala.collection.immutable", "SeqOps", "scala"),
     ("scala.collection.immutable", "SetOps", "scala"),

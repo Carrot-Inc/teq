@@ -1,4 +1,4 @@
-$OUT/macrowithheld/jsl-a!a/Lib.scala:10:7: error: the body of mwa.Jobs.make is withheld from the products of $OUT/macrowithheld/jsl-a (elided: unstated the std's List.range, which scala-library has under another shape): the TASTy writer's queue of the shapes it withholds writes it (in the body of mwa.Jobs.make)
+$OUT/macrowithheld/jsl-a!a/Lib.scala:10:7: error: the body of mwa.Jobs.make is withheld from the products of $OUT/macrowithheld/jsl-a (elided: unstated the std's IndexedSeq.range, which scala-library has under another shape): the TASTy writer's queue of the shapes it withholds writes it (in the body of mwa.Jobs.make)
   body: {
       <synthetic> final class $anon() extends Object(), Job {
         def run(): Int = <elided: Int>

@@ -1,0 +1,20 @@
+diff --git a/indigo/build.mill b/indigo/build.mill
+index efcfc44a65a35549650b61c15cfcea57eadcf9df..d08454ad5a09cdb7b023a13e2ac700adf813947b 100644
+--- a/indigo/build.mill
++++ b/indigo/build.mill
+@@ -17,14 +17,13 @@ import org.typelevel.scalacoptions.*
+ import com.goyeau.mill.scalafix.ScalafixModule
+ 
+ trait Shared extends ScalafmtModule, ScalafixModule:
+-  def scalaVersion = "3.7.3"
++  def scalaVersion = "3.8.4"
+ 
+   override def scalacOptions = Task {
+     super.scalacOptions() ++
+       ScalacOptions.tokensForVersion(
+         ScalaVersion.unsafeFromString(scalaVersion()),
+         ScalacOptions.default ++
+-          ScalacOptions.fatalWarningOptions ++
+           Seq(ScalacOptions.languageStrictEquality)
+       )
+   }

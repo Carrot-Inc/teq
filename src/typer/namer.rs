@@ -188,15 +188,29 @@ impl<'a> Worker<'a> {
 
     /// Whether the def `sym` is a further alternative of what its name stands for so far. The
     /// top-level definitions of one file can be overloaded, those of two files cannot.
-    fn overloads(&self, old: SymId, sym: SymId) -> bool {
+    fn overloads(&mut self, old: SymId, sym: SymId) -> bool {
         let (o, s) = (self.syms.sym(old), self.syms.sym(sym));
         let is_method = |k: SymKind| matches!(k, SymKind::Def | SymKind::Overloaded(_));
         if s.kind == SymKind::Def && is_method(o.kind) {
             return o.file == s.file || !matches!(s.owner, Owner::Package(_));
         }
         // A val (a given without parameters is one) next to a method of its name in a class:
-        // alternatives of one name, as scalac keeps them.
-        matches!(s.owner, Owner::Class(_)) && ((is_method(o.kind) && self.is_value_def(sym)) || (self.is_value_def(old) && s.kind == SymKind::Def))
+        // alternatives of one name, as scalac keeps them; an object is such a value (dotty's module
+        // val), scalacheck's private `case class apply`'s companion beside `def apply(s: Long)` in
+        // `object Seed`.
+        if !matches!(s.owner, Owner::Class(_)) {
+            return false;
+        }
+        let is_value = |t: &Self, x: SymId| t.is_value_def(x) || matches!(t.syms.sym(x).kind, SymKind::Object(_));
+        if (is_method(o.kind) && is_value(self, sym)) || (is_value(self, old) && s.kind == SymKind::Def) {
+            return true;
+        }
+        // Two values of one name in a class are two declarations where their target names differ,
+        // since a double definition is one of the same target name (dotty's `Denotation.matches`
+        // in `Checking.checkNoDoubleDeclaration`; the Namer checks no class's terms): tyrian's
+        // `@targetName("cols-Int") val cols` beside its `@targetName("cols-String") val cols`.
+        let (old_name, name) = (o.name, s.name);
+        o.kind == SymKind::Val && s.kind == SymKind::Val && self.declared_target_name(old).unwrap_or(old_name) != self.declared_target_name(sym).unwrap_or(name)
     }
 
     /// A val, a var, or a given without type or term parameters, which dotty makes a (lazy) val.
@@ -326,7 +340,9 @@ impl<'a> Worker<'a> {
             }
             Owner::Class(c) => {
                 let mut info = self.syms.class_mut(c);
-                info.nested.insert(name, cid).is_some() || info.type_aliases.contains_key(&name)
+                let clash = info.nested.insert(name, cid).is_some() || info.type_aliases.contains_key(&name);
+                crate::symbols::type_member_written(name);
+                clash
             }
             Owner::Local => false,
         };
@@ -554,7 +570,9 @@ impl<'a> Worker<'a> {
                         }
                         Owner::Class(c) => {
                             let mut info = self.syms.class_mut(c);
-                            info.type_aliases.insert(def.name, aid).is_some() || info.nested.contains_key(&def.name)
+                            let clash = info.type_aliases.insert(def.name, aid).is_some() || info.nested.contains_key(&def.name);
+                            crate::symbols::type_member_written(def.name);
+                            clash
                         }
                         Owner::Local => {
                             self.error(def.span, "local type aliases are not supported");

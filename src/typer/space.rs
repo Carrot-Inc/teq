@@ -1386,7 +1386,7 @@ impl<'t, 'a> Spaces<'t, 'a> {
                 Space::Or(self.seal(base))
             }
             TPat::Seq(items, rest) => self.project_seq(items, rest, Space::Typ(sty)),
-            TPat::Unapply(_, _, inner) if self.t.irrefutable_pats.contains_key(&p) => self.project_irrefutable(inner, sty),
+            TPat::Unapply(_, call, inner) if self.t.irrefutable_pats.contains_key(&p) => self.project_irrefutable(call, inner, sty),
             TPat::Unapply(..) => Space::Opaque,
         }
     }
@@ -1446,13 +1446,38 @@ impl<'t, 'a> Spaces<'t, 'a> {
 
     /// An extractor typed as a `Some` (`->`) covers its scrutinee where the pattern matched
     /// against its result covers that result, as scalac's irrefutable unapply.
-    fn project_irrefutable(&mut self, inner: TPatId, sty: TypeId) -> Space {
-        let TPat::Class(_, result, _, _) = self.t.prog.pats[inner.idx()] else { return Space::Opaque };
-        let space = self.project(inner, result);
+    /// So does an `unapplySeq` whose result is a sequence, where the elements' pattern covers
+    /// every length.
+    fn project_irrefutable(&mut self, call: TExprId, inner: TPatId, sty: TypeId) -> Space {
+        let (result, space) = match self.t.prog.pats[inner.idx()] {
+            TPat::Class(_, result, _, _) => (result, self.project(inner, result)),
+            // The elements' space is `projectSeq`'s, of `::` and `Nil`, which covers the
+            // sequence where it covers `List[elem]`.
+            TPat::Seq(items, rest) => {
+                let elem = self.extractor_result(call).and_then(|t| self.seq_element(t));
+                let (Some(elem), Some((list, ..))) = (elem, self.list_classes()) else { return Space::Opaque };
+                let Some(space) = self.seq_space(items, rest, elem) else { return Space::Opaque };
+                (self.t.types.class(list, &[elem]), space)
+            }
+            _ => return Space::Opaque,
+        };
         match self.minus(Space::Typ(result), space).map(|left| self.simplify(left)) {
             Some(Space::Empty) => Space::Typ(sty),
             _ => Space::Opaque,
         }
+    }
+
+    /// The result type the extractor a pattern calls declares.
+    fn extractor_result(&self, call: TExprId) -> Option<TypeId> {
+        let mut call = call;
+        for _ in 0..8 {
+            match self.t.prog.expr(call) {
+                TExpr::Block(_, r) => call = r,
+                TExpr::CallStatic(m, _) | TExpr::CallMethod(_, m, _) => return self.t.syms.sym(m).sig.as_ref().map(|sig| sig.ret),
+                _ => return None,
+            }
+        }
+        None
     }
 
     fn project_value(&mut self, e: TExprId) -> Space {
@@ -1622,6 +1647,16 @@ impl<'t, 'a> Spaces<'t, 'a> {
             }
             (Type::Param(p), _) => {
                 let upper = self.t.syms.tparam(p).upper;
+                upper != t1 && self.disjoint(upper, t2)
+            }
+            // An abstract type member through its upper bound, as `decompose` takes it
+            // (Space.scala 747, `isUpperBoundedAbstract`).
+            (_, Type::Member(..) | Type::AppMember(..) | Type::Decl(_)) => {
+                let (_, upper) = self.t.member_bounds(t2);
+                upper != t2 && self.disjoint(t1, upper)
+            }
+            (Type::Member(..) | Type::AppMember(..) | Type::Decl(_), _) => {
+                let (_, upper) = self.t.member_bounds(t1);
                 upper != t1 && self.disjoint(upper, t2)
             }
             (Type::Class(c1, _), Type::Class(c2, _)) => !self.xxl_tuple_of(c1, c2) && !self.xxl_tuple_of(c2, c1) && self.classes_disjoint(c1, c2),
@@ -1958,9 +1993,12 @@ impl<'t, 'a> Spaces<'t, 'a> {
                     self.narrow(pt, other)
                 }
             }
+            // dotty's `intersect` of a constant type: itself below the other side, nothing when
+            // the two are provably disjoint, and their intersection, which the literal stands
+            // for here, otherwise (a `p.Out` bounded by `Any` keeps `true`).
             Space::Lit(l) => {
                 let lt = self.lit_type(l);
-                if self.sub(lt, other) {
+                if self.sub(lt, other) || !self.disjoint(lt, other) {
                     part
                 } else {
                     Space::Empty

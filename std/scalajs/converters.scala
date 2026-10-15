@@ -14,7 +14,7 @@ object JSConverters:
     @js("Array.from($0)")
     def toJSIterable: Iterable[A]
 
-  extension [A](self: Map[String, A])
+  extension [A](self: scala.collection.Map[String, A])
     def toJSDictionary: Dictionary[A] = Dictionary(self.toList*)
 
   extension [A](self: scala.concurrent.Future[A])
@@ -34,7 +34,7 @@ object JSConverters:
       def toJSIterable: Iterable[A]
 
   object JSRichMapOps:
-    extension [A](self: Map[String, A])
+    extension [A](self: scala.collection.Map[String, A])
       def toJSDictionary: Dictionary[A] = Dictionary(self.toList*)
 
   // Scala.js's `JSRichFutureNonThenable`: a promise the future completes, its failure's value unwrapped.

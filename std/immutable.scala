@@ -1,5 +1,9 @@
 package scala.collection.immutable
 
+// scala-library's `immutable.LinearSeq`: a sequence whose operations go through `head` and `tail`, as
+// `Stream` is one.
+trait LinearSeq[+A] extends Seq[A]
+
 // The std's set: the trie index from an element to the ordinal of its entry, the elements in
 // insertion order with a tombstone where one was removed, and the count of the tombstones, as
 // `PersistentMap` keeps its entries. The empty set is one shared instance, as in Scala, and
@@ -245,6 +249,8 @@ export scala.Map
 // The std's `ArraySeq` under the name scala-library gives it, for the files that serve both
 // standard libraries (`IArray`).
 type ArraySeq[+A] = scala.ArraySeq[A]
+// scala-library's `immutable.Iterable`, the std's `Iterable` (`Future.foldLeft` takes one).
+type Iterable[+A] = scala.Iterable[A]
 
 object ArraySeq:
   def apply[A](elems: A*): scala.ArraySeq[A] = scala.ArraySeq(elems*)
@@ -279,10 +285,12 @@ sealed class Queue[+A](private val items: RawBuffer[A]) extends SeqOps[A, Queue,
   override def collectionClassName: String = "Queue"
   override def toString: String = mkString("Queue(", ", ", ")")
 
-object Queue:
-  def apply[A](elems: A*): Queue[A] = new Queue(iterableToArray(elems))
+object Queue extends IterableFactory[Queue]:
+  override def apply[A](elems: A*): Queue[A] = new Queue(iterableToArray(elems))
   def empty[A]: Queue[A] = new Queue(emptyBuffer[A])
   def from[A](source: IterableOnce[A]): Queue[A] = new Queue(iterableToArray(source))
+  def newBuilder[A]: scala.collection.mutable.Builder[A, Queue[A]] =
+    scala.collection.mutable.ArrayBuffer.empty[A].mapResult(items => from(items))
 
 // ListMap is a class of its own over the std's insertion-ordered Map: a library's givens per
 // map class (zio-json's `map` and `listMap`) need the two types distinct.
@@ -465,11 +473,18 @@ final class TreeMap[K, +V](entries: RawBuffer[(K, Any)], ordering: Ordering[K]) 
   override def ++[V1 >: V](that: IterableOnce[(K, V1)]): TreeMap[K, V1] = unsafeCast(super.++(that))
   override def concat[V1 >: V](that: IterableOnce[(K, V1)]): TreeMap[K, V1] = unsafeCast(super.concat(that))
   override def --(keys: IterableOnce[K]): TreeMap[K, V] = unsafeCast(super.--(keys))
+  // scala-library's `TreeMap` is a `SortedMapOps[K, V, TreeMap, TreeMap[K, V]]`: what it maps
+  // to pairs is a `TreeMap`.
+  override def map[K2, V2](f: ((K, V)) => (K2, V2))(implicit ord: Ordering[K2]): TreeMap[K2, V2] = unsafeCast(super.map(f)(using ord))
+  override def collect[K2, V2](pf: PartialFunction[(K, V), (K2, V2)])(implicit ord: Ordering[K2]): TreeMap[K2, V2] = unsafeCast(super.collect(pf)(using ord))
+  override def flatMap[K2, V2](f: ((K, V)) => IterableOnce[(K2, V2)])(implicit ord: Ordering[K2]): TreeMap[K2, V2] = unsafeCast(super.flatMap(f)(using ord))
 
 object TreeMap:
   def empty[K, V](implicit ord: Ordering[K]): TreeMap[K, V] = new TreeMap(emptyBuffer[(K, Any)], ord)
   def apply[K, V](entries: (K, V)*)(implicit ord: Ordering[K]): TreeMap[K, V] = from(entries)
   def from[K, V](entries: IterableOnce[(K, V)])(implicit ord: Ordering[K]): TreeMap[K, V] = unsafeCast(SortedMap.from(entries))
+  def newBuilder[K, V](implicit ord: Ordering[K]): scala.collection.mutable.Builder[(K, V), TreeMap[K, V]] =
+    scala.collection.mutable.ArrayBuffer.empty[(K, V)].mapResult(entries => from(entries))
 
 // IntMap is a Map keyed by Int and prints as one.
 type IntMap[+V] = scala.Map[Int, V]

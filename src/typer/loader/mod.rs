@@ -1388,6 +1388,7 @@ impl<'a> Worker<'a> {
                 Owner::Class(_) if inner_object && companion_class => {}
                 Owner::Class(c) => {
                     self.syms.class_mut(c).nested.insert(name, cid);
+                    crate::symbols::type_member_written(name);
                 }
                 Owner::Local => {}
             }
@@ -1485,6 +1486,7 @@ impl<'a> Worker<'a> {
                 Owner::Package(p) => self.syms.pkgs[p.idx()].entries.entry(name).or_default().class = Some(cid),
                 Owner::Class(c) => {
                     self.syms.class_mut(c).nested.insert(name, cid);
+                    crate::symbols::type_member_written(name);
                 }
                 Owner::Local => {}
             }
@@ -1524,6 +1526,7 @@ impl<'a> Worker<'a> {
                     self.syms.class_mut(c).has_exports = true;
                 }
                 self.syms.class_mut(c).type_aliases.insert(name, aid);
+                crate::symbols::type_member_written(name);
             }
             Owner::Local => {}
         }
@@ -2174,11 +2177,14 @@ impl<'a> Worker<'a> {
         // pickler): no rule prefix of it (`ClassInfo::post_typer_bases`).
         let rule_prefix = base.iter().skip(1).take(4).take_while(|&&(b, _)| self.is_desugared_parent(b) && !self.is_mirror_class(b)).count() as u8;
         debug_assert!(base[1..1 + rule_prefix as usize].iter().all(|&(b, _)| self.brings_walks_nothing(b)), "a class Desugar.classDef gives brings {} what a walk passing over it misses", self.class_path(c));
+        // As a source class's (`Worker::complete_class`): a trait or class holding member classes
+        // gives them too, ultraviolet's `vec4` of `ShaderDSLTypes` to `object syntax`.
         let inherits_types = base.iter().skip(1).any(|&(b, _)| {
             let bi = self.syms.class(b);
             !bi.type_aliases.is_empty()
                 || bi.inherits_types
                 || bi.nested.values().any(|&n| self.is_opaque_path_class(n))
+                || (bi.kind != ClassKind::Object && !bi.nested.is_empty())
         });
         let has_native_base = base.iter().skip(1).any(|&(b, _)| self.syms.class(b).js == JsKind::Native);
         let no_inherited_extensions = base.iter().skip(1).all(|&(b, _)| self.syms.class(b).extensions.is_empty());
@@ -2417,8 +2423,10 @@ impl<'a> Worker<'a> {
             return;
         }
         // An implicit class brings a conversion method and an object of its name: the method
-        // is what the name means.
+        // is what the name means. Any other method and an object of its name are alternatives of
+        // one name (`join_value_and_method`).
         let shadows_object = kind == SymKind::Def
+            && m & mods::IMPLICIT != 0
             && self.syms.class(c).members.get(&name).map_or(false, |&o| matches!(self.syms.sym(o).kind, SymKind::Object(_)));
         if shadows_object {
             let mut info = self.syms.class_mut(c);
@@ -2476,6 +2484,11 @@ impl<'a> Worker<'a> {
         if e.js_annotated {
             let annots = self.loaded_js_annots(file, e);
             self.mark_js_member(sym, &annots);
+            if let (Some(export), Owner::Class(c)) = (annots.member_export, self.syms.sym(sym).owner) {
+                let own = self.syms.sym(sym).name;
+                self.syms.js_export_names.insert(sym, export.unwrap_or(own));
+                self.syms.class_mut(c).js_exports = true;
+            }
         }
         if f.has(tags::EXTENSION) && e.tag == tags::DEFDEF {
             let mut decoder = Decoder::new(&tasty);
@@ -2524,6 +2537,8 @@ impl<'a> Worker<'a> {
                     arg => out.js_name = string(self, arg),
                 },
                 Some("JSExportTopLevel") => out.export = string(self, a.args.first()),
+                // `@JSExport` without its name: the argument is the default getter's call.
+                Some("JSExport") => out.member_export = Some(string(self, a.args.first())),
                 Some("JSImport") => {
                     let Some(module) = string(self, a.args.first()) else { continue };
                     let name = match a.args.get(1) {
@@ -2662,14 +2677,16 @@ impl<'a> Worker<'a> {
     }
 
     /// A val next to a method of its name (`val start: Int` with `def start(i: Int)` in
-    /// `Regex.Match`), which the library may have: they become alternatives of one name.
+    /// `Regex.Match`), which the library may have: they become alternatives of one name. An object
+    /// is such a value (dotty's module val): scalacheck's `Seed` holds the companion of its private
+    /// `case class apply` beside `def apply(s: Long)`, which its bodies select as `Seed.apply.apply`.
     fn join_value_and_method(&mut self, c: ClassId, sym: SymId) -> bool {
         let name = self.syms.sym(sym).name;
         let Some(&old) = self.syms.class(c).members.get(&name) else { return false };
         // A given without parameters is a (lazy) val, the implementation of a deferred given
-        // beside a method of its name included.
+        // beside a method of its name included; an object is one too (dotty's module val).
         let is_value = |t: &mut Self, s: SymId| match t.syms.sym(s).kind {
-            SymKind::Val | SymKind::Var => true,
+            SymKind::Val | SymKind::Var | SymKind::Object(_) => true,
             SymKind::Given => t.loaded_sig(s).is_some_and(|sig| sig.tparams.is_empty() && sig.clauses.is_empty()),
             _ => false,
         };

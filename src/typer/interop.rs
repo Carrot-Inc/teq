@@ -102,6 +102,8 @@ pub struct JsAnnots {
     pub js_symbol: bool,
     pub bracket: bool,
     pub export: Option<Name>,
+    /// `@JSExport` on a member, with the name when one is given.
+    pub member_export: Option<Option<Name>>,
     /// `@JSType`, which scalac puts on every JS type, native or not.
     pub js_type: bool,
 }
@@ -159,6 +161,11 @@ impl<'a> Worker<'a> {
                 names::JS_EXPORT_TOP_LEVEL => match strings.as_slice() {
                     [s] if is_js_identifier(s) => out.export = Some(self.interner.intern(s)),
                     _ => self.diags.error(file, span, "@JSExportTopLevel needs a valid JS identifier: @JSExportTopLevel(\"name\")"),
+                },
+                names::JS_EXPORT_MEMBER => match strings.as_slice() {
+                    [] => out.member_export = Some(None),
+                    [s] if !s.is_empty() => out.member_export = Some(Some(self.interner.intern(s))),
+                    _ => self.diags.error(file, span, "@JSExport takes the exported name as a string literal, or nothing"),
                 },
                 _ => {}
             }
@@ -309,6 +316,7 @@ impl<'a> Worker<'a> {
                     | names::JS_NAME
                     | names::JS_BRACKET_ACCESS
                     | names::JS_EXPORT_TOP_LEVEL
+                    | names::JS_EXPORT_MEMBER
             )
         };
         if !def.annots.iter().any(scalajs) {
@@ -349,6 +357,12 @@ impl<'a> Worker<'a> {
             Some("@JSExportTopLevel is only allowed on a top-level definition or a member of an object".to_string())
         } else if annots.export.is_some() && !shape.has_body {
             Some("a @JSExportTopLevel definition needs a body".to_string())
+        } else if annots.member_export.is_some() && matches!(owner, Owner::Package(_)) {
+            Some("@JSExport is forbidden on top-level definitions. Use @JSExportTopLevel instead.".to_string())
+        } else if annots.member_export.is_some() && in_js_class {
+            Some("You may not export a member of a subclass of js.Any".to_string())
+        } else if annots.member_export.is_some() && def.mods & mods::PRIVATE != 0 {
+            Some("You may only export public and protected definitions".to_string())
         } else {
             None
         };
@@ -359,6 +373,10 @@ impl<'a> Worker<'a> {
         self.mark_js_member(sym, &annots);
         if let Some(name) = annots.export {
             self.register_js_export(sym, name, def.span);
+        }
+        if let (Some(name), Owner::Class(c)) = (annots.member_export, owner) {
+            self.syms.js_export_names.insert(sym, name.unwrap_or(def.name));
+            self.syms.class_mut(c).js_exports = true;
         }
     }
 
@@ -418,7 +436,17 @@ impl<'a> Worker<'a> {
             self.error(def.span, "a class or object can only have one of @JSImport, @JSGlobal and @JSGlobalScope");
         }
         let binding = self.js_class_binding(&annots, def.name);
-        let problem = if annots.js_name.is_some() || annots.bracket || annots.export.is_some() {
+        // PrepJSExports: an object is exported as its instance, which a static one alone has.
+        let exported_object = annots.export.is_some() && kind == ClassKind::Object && self.is_static_owner(self.syms.class(c).owner);
+        let problem = if annots.member_export.is_some() {
+            Some("@JSExport is forbidden on objects and classes. Use @JSExportTopLevel instead.")
+        } else if annots.export.is_some() && kind == ClassKind::Trait {
+            Some("You may not export a trait")
+        } else if annots.export.is_some() && kind == ClassKind::Object && !exported_object {
+            Some("Only static objects may export their members to the top level")
+        } else if annots.export.is_some() && annots.native {
+            Some("You may not export a native JS definition")
+        } else if annots.js_name.is_some() || annots.bracket || (annots.export.is_some() && !exported_object) {
             Some("@JSName, @JSBracketAccess and @JSExportTopLevel go on a def or a val")
         } else if binding.is_some() && !annots.native {
             Some("@JSImport, @JSGlobal and @JSGlobalScope need @js.native on the class or object")
@@ -440,7 +468,13 @@ impl<'a> Worker<'a> {
             info.js = JsKind::Native;
             info.js_binding = binding;
         }
+        if let (Some(name), true) = (annots.export, exported_object) {
+            if let Some(module) = self.syms.class(c).module_sym {
+                self.register_js_export(module, name, def.span);
+            }
+        }
     }
+
 
     /// `@JSName` on a constructor parameter of a JS class.
     pub fn enter_param_annots(&mut self, file: FileId, p: &ast::Param, sym: SymId) {
@@ -502,20 +536,23 @@ impl<'a> Worker<'a> {
                     continue;
                 }
             };
+            // dotty's `PrepJSInterop`: a secondary constructor may only call the primary one, and
+            // the default values of parameters are no members it checks (JavaScript's call leaves a
+            // defaulted argument out, never evaluating it).
+            let _ = defaults;
             if let Some(b) = body.filter(|&b| !is_js_native(ast, b)) {
-                let msg = format!(
-                    "{} is a member of a native JS type: it has to be abstract or have the body js.native",
-                    self.name_str(member.name)
-                );
-                self.diags.error(file, ast.expr_span(b), msg);
-            }
-            for d in defaults {
-                if !is_js_default(ast, d) {
-                    self.diags.error(
-                        file,
-                        ast.expr_span(d),
-                        "a default argument of a native JS method has to be js.native or js.undefined",
+                if member.name == names::INIT {
+                    let primary_arity = cls.clauses.first().map_or(0, |c| c.params.len());
+                    let calls_primary = matches!(ast.expr(b), Expr::Apply(f, args) if matches!(ast.expr(f), Expr::This) && ast.expr_list(args).len() == primary_arity);
+                    if !calls_primary {
+                        self.diags.error(file, ast.expr_span(b), "A secondary constructor of a native JS class may only call the primary constructor");
+                    }
+                } else {
+                    let msg = format!(
+                        "{} is a member of a native JS type: it has to be abstract or have the body js.native",
+                        self.name_str(member.name)
                     );
+                    self.diags.error(file, ast.expr_span(b), msg);
                 }
             }
             if let Some(&sym) = self.def_syms.get(file.0 as usize, &d) {

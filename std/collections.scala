@@ -507,39 +507,38 @@ def fromArray[A](arr: RawBuffer[A]): List[A] =
     i -= 1
   acc
 
-object List:
-  // scala-library's companion is an `IterableFactory`, whose `iterableFactory` a library body
-  // names as the implicit `Factory` it resolved.
-  implicit def iterableFactory[A]: Factory[A, List[A]] =
+// scala-library's companion is an `IterableFactory` (`to(List)` passes it), whose
+// `iterableFactory` a library body names as the implicit `Factory` it resolved.
+object List extends IterableFactory[List]:
+  implicit override def iterableFactory[A]: Factory[A, List[A]] =
     new Factory[A, List[A]]:
       def fromSpecific(it: IterableOnce[A]): List[A] = from(it)
       def newBuilder: scala.collection.mutable.Builder[A, List[A]] = List.newBuilder[A]
-  def apply[A](elems: A*): List[A] = elems.toList
+  override def apply[A](elems: A*): List[A] = elems.toList
   def empty[A]: List[A] = Nil
   def newBuilder[A]: scala.collection.mutable.Builder[A, List[A]] = scala.collection.mutable.ArrayBuffer.empty[A].mapResult(_.toList)
   def from[A](source: IterableOnce[A]): List[A] = source match
     case xs: List[?] => unsafeCast(xs)
     case _ => fromArray(iterableToArray(source))
   def concat[A](xss: IterableOnce[A]*): List[A] = xss.toList.flatMap(xs => xs)
-  def iterate[A](start: A, len: Int)(f: A => A): List[A] = Iterator.iterate(start)(f).take(len).toList
-  def unfold[A, S](init: S)(f: S => Option[(A, S)]): List[A] = Iterator.unfold(init)(f).toList
+  override def iterate[A](start: A, len: Int)(f: A => A): List[A] = Iterator.iterate(start)(f).take(len).toList
+  override def unfold[A, S](init: S)(f: S => Option[(A, S)]): List[A] = Iterator.unfold(init)(f).toList
   // The element computed n times in order, front to back (`View.Fill`): one that reads a stream
   // reads it in the list's order.
-  def fill[A](n: Int)(elem: => A): List[A] =
+  override def fill[A](n: Int)(elem: => A): List[A] =
     var acc: List[A] = Nil
     var i = 0
     while i < n do
       acc = elem :: acc
       i += 1
     acc.reverse
-  def tabulate[A](n: Int)(f: Int => A): List[A] =
+  override def tabulate[A](n: Int)(f: Int => A): List[A] =
     var acc: List[A] = Nil
     var i = 0
     while i < n do
       acc = f(i) :: acc
       i += 1
     acc.reverse
-  def range(start: Int, end: Int, step: Int = 1): List[Int] = new Range(start, end, step).toList
 
 // scala-library's `ArrayOps.WithFilter`: the elements that pass, each tested as the operation
 // after it reaches it, so that a guard of a for comprehension runs interleaved with its body.
@@ -675,6 +674,35 @@ extension [T](a: Array[T])
       while i < a.length do
         addAll(f(a(i)))
         i += 1
+  // scala-library's `ArrayOps.flatten`: an array of the elements' elements, of the kind the tag names.
+  @jvmEvidence
+  def flatten[B](implicit asIterable: T => IterableOnce[B], m: scala.reflect.ClassTag[B]): Array[B] =
+    builtByTag(m): (_, addAll) =>
+      var i = 0
+      while i < a.length do
+        addAll(asIterable(a(i)))
+        i += 1
+  // scala-library's `ArrayOps.transpose`: the columns as rows of the kind of the first row, in an array of the
+  // array's own kind.
+  def transpose[B](implicit asArray: T => Array[B]): Array[Array[B]] =
+    val rows = emptyBuffer[Array[B]]
+    if a.length > 0 then
+      val first = asArray(a(0))
+      val columns = emptyBuffer[RawBuffer[B]]
+      var j = 0
+      while j < first.length do
+        columns.push(emptyBuffer[B])
+        j += 1
+      var i = 0
+      while i < a.length do
+        val row = asArray(a(i))
+        var k = 0
+        while k < row.length do
+          columns(k).push(row(k))
+          k += 1
+        i += 1
+      columns.foreach(c => rows.push(arrayLike(c, first)))
+    arrayLike(rows, a)
   def zip[B](that: IterableOnce[B]): Array[(T, B)] = taggedArray(Vector.wrap(buffered(a)).zip(that).unsafeArray)
   def zipWithIndex: Array[(T, Int)] = taggedArray(Vector.wrap(buffered(a)).zipWithIndex.unsafeArray)
   def reverse: Array[T] = arrayLike(Vector.wrap(buffered(a)).reverse.unsafeArray, a)
@@ -711,7 +739,7 @@ extension [T](a: Array[T])
   inline def sliding(size: Int, step: Int = 1): Iterator[Array[T]] = Vector.wrap(buffered(a)).sliding(size, step).map(w => arrayLike(w.unsafeArray, a))
   inline def grouped(size: Int): Iterator[Array[T]] = Vector.wrap(buffered(a)).grouped(size).map(g => arrayLike(g.unsafeArray, a))
   def findLast(p: T => Boolean): Option[T] = Vector.wrap(buffered(a)).findLast(p)
-  def sameElements(that: IterableOnce[T]): Boolean = Vector.wrap(buffered(a)).sameElements(that)
+  def sameElements[B >: T](that: IterableOnce[B]): Boolean = Vector.wrap(buffered(a)).sameElements(that)
   def updated(index: Int, elem: T): Array[T] = arrayLike(Vector.wrap(buffered(a)).updated(index, elem).unsafeArray, a)
   @jvmEvidence
   def appended[B >: T](elem: B)(using tag: scala.reflect.ClassTag[B]): Array[B] =
@@ -1028,19 +1056,21 @@ extension (x: Int)
   def toBinaryString: String
 
 extension (c: Char)
-  def to(end: Char): NumericRange.Inclusive[Char] = NumericRange.inclusive(c, end, 1.toChar)
-  def to(end: Char, step: Char): NumericRange.Inclusive[Char] = NumericRange.inclusive(c, end, step)
-  def until(end: Char): NumericRange.Exclusive[Char] = NumericRange(c, end, 1.toChar)
-  def until(end: Char, step: Char): NumericRange.Exclusive[Char] = NumericRange(c, end, step)
+  // scala-library's `RichChar`, its `Integral[Char]` the range's (`NumericRange`, as `IntegralProxy`).
+  def to(end: Char): scala.collection.immutable.NumericRange.Inclusive[Char] = scala.collection.immutable.NumericRange.inclusive(c, end, 1.toChar)
+  def to(end: Char, step: Char): scala.collection.immutable.NumericRange.Inclusive[Char] = scala.collection.immutable.NumericRange.inclusive(c, end, step)
+  def until(end: Char): scala.collection.immutable.NumericRange.Exclusive[Char] = scala.collection.immutable.NumericRange(c, end, 1.toChar)
+  def until(end: Char, step: Char): scala.collection.immutable.NumericRange.Exclusive[Char] = scala.collection.immutable.NumericRange(c, end, step)
   def compare(that: Char): Int = c.toInt - that.toInt
   def max(that: Char): Char = if c.toInt >= that.toInt then c else that
   def min(that: Char): Char = if c.toInt <= that.toInt then c else that
 
 extension (x: Long)
-  def until(end: Long): NumericRange.Exclusive[Long] = NumericRange(x, end, 1L)
-  def until(end: Long, step: Long): NumericRange.Exclusive[Long] = NumericRange(x, end, step)
-  def to(end: Long): NumericRange.Inclusive[Long] = NumericRange.inclusive(x, end, 1L)
-  def to(end: Long, step: Long): NumericRange.Inclusive[Long] = NumericRange.inclusive(x, end, step)
+  // scala-library's `RichLong`, through its `Integral[Long]` (`NumericRange`, as `IntegralProxy`).
+  def until(end: Long): scala.collection.immutable.NumericRange.Exclusive[Long] = scala.collection.immutable.NumericRange(x, end, 1L)
+  def until(end: Long, step: Long): scala.collection.immutable.NumericRange.Exclusive[Long] = scala.collection.immutable.NumericRange(x, end, step)
+  def to(end: Long): scala.collection.immutable.NumericRange.Inclusive[Long] = scala.collection.immutable.NumericRange.inclusive(x, end, 1L)
+  def to(end: Long, step: Long): scala.collection.immutable.NumericRange.Inclusive[Long] = scala.collection.immutable.NumericRange.inclusive(x, end, step)
   def max(y: Long): Long = if x > y then x else y
   def min(y: Long): Long = if x < y then x else y
   def abs: Long = if x < 0L then -x else x
@@ -1173,6 +1203,36 @@ object Math:
   @js("Math.tan($1)")
   @jvm("invokestatic java/lang/Math.tan(D)D")
   def tan(x: Double): Double
+  @js("Math.asin($1)")
+  @jvm("invokestatic java/lang/Math.asin(D)D")
+  def asin(x: Double): Double
+  @js("Math.acos($1)")
+  @jvm("invokestatic java/lang/Math.acos(D)D")
+  def acos(x: Double): Double
+  @js("Math.atan($1)")
+  @jvm("invokestatic java/lang/Math.atan(D)D")
+  def atan(x: Double): Double
+  @js("Math.sinh($1)")
+  @jvm("invokestatic java/lang/Math.sinh(D)D")
+  def sinh(x: Double): Double
+  @js("Math.cosh($1)")
+  @jvm("invokestatic java/lang/Math.cosh(D)D")
+  def cosh(x: Double): Double
+  @js("Math.tanh($1)")
+  @jvm("invokestatic java/lang/Math.tanh(D)D")
+  def tanh(x: Double): Double
+  @js("Math.expm1($1)")
+  @jvm("invokestatic java/lang/Math.expm1(D)D")
+  def expm1(x: Double): Double
+  @js("Math.log1p($1)")
+  @jvm("invokestatic java/lang/Math.log1p(D)D")
+  def log1p(x: Double): Double
+  @js("($1 * 180 / Math.PI)")
+  @jvm("invokestatic java/lang/Math.toDegrees(D)D")
+  def toDegrees(x: Double): Double
+  @js("($1 / 180 * Math.PI)")
+  @jvm("invokestatic java/lang/Math.toRadians(D)D")
+  def toRadians(x: Double): Double
   @js("Math.atan2($1, $2)")
   @jvm("invokestatic java/lang/Math.atan2(DD)D")
   def atan2(y: Double, x: Double): Double

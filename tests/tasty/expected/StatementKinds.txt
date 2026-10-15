@@ -1,0 +1,8 @@
+// tests/tasty/fixtures/StatementKinds.tasty (TASTy 28.8, 3138 bytes)
+package fix.rstats
+@SourceFile object StatementKinds extends Object {
+  <synthetic> private def writeReplace(): AnyRef = ...
+  <macro> inline def kinds(inline body: Any): package.List[Predef.String] = <body@124>
+  def kindsImpl(body: Expr[Any])(using x$2: Quotes): Expr[package.List[Predef.String]] = ...
+}
+

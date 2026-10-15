@@ -768,6 +768,7 @@ impl<'a> Worker<'a> {
                     if let Some(oc) = self.syms.class(o).companion {
                         self.syms.class_mut(oc).nested.insert(name, c);
                     }
+                    crate::symbols::type_member_written(name);
                 }
                 Owner::Local => {}
             }

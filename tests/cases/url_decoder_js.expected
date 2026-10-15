@@ -1,0 +1,8 @@
+a b cé+d
+q=hello world&x=€
+π / ü?&
+%zz: URLDecoder: Illegal hex characters in escape (%) pattern
+%4: URLDecoder: Illegal hex characters in escape (%) pattern
+abc%: URLDecoder: Illegal hex characters in escape (%) pattern
+%C3: URLDecoder: Illegal hex characters in escape (%) pattern
+NO-SUCH

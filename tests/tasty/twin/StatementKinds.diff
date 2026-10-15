@@ -1,0 +1,6 @@
+4,5c4,5
+<   <macro> inline def kinds(inline body: Any): package.List[Predef.String] = <body>
+<   def kindsImpl(body: Expr[Any])(using x$2: Quotes): Expr[package.List[Predef.String]] = ...
+---
+>   <macro> inline def kinds(inline body: Any): List[String] = <body>
+>   def kindsImpl(body: Expr[Any])(using x$2: Quotes): Expr[List[String]] = ...

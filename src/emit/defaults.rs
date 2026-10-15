@@ -598,6 +598,12 @@ impl<'a> super::Emitter<'a> {
                     let _ = write!(self.out, "{}.$default${}", f, index + 1);
                 }
             },
+            // A native class's constructor default is no value JavaScript's call is given: the
+            // argument is left out, as Scala.js leaves it (`undefined`), whatever its default says.
+            DefaultOf::Ctor(c) if self.syms.class(c).js == JsKind::Native => {
+                self.out.push_str("undefined");
+                return;
+            }
             DefaultOf::Ctor(c) => {
                 let cn = self.class_name(c);
                 let _ = write!(self.out, "{}.$default${}", cn, index + 1);

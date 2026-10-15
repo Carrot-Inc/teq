@@ -1099,9 +1099,14 @@ impl<'a> Worker<'a> {
         match &def.kind {
             DefKind::Val { .. } => {
                 if let Some(&sym) = self.def_syms.get(file.0 as usize, &id) {
-                    self.walk_body(sym);
-                    if let Some(init) = self.readable_init(sym) {
-                        self.prog.top_vals.push((sym, init));
+                    // A std val is typed where the program names it (`std_val_body`), as dotty's
+                    // package lookup completes a member by its name: the prelude's `Stream`
+                    // enters no file of a program that does not name it.
+                    if !self.defers_top_val(sym) {
+                        self.walk_body(sym);
+                        if let Some(init) = self.readable_init(sym) {
+                            self.prog.top_vals.push((sym, init));
+                        }
                     }
                 }
             }
@@ -1216,6 +1221,34 @@ impl<'a> Worker<'a> {
         self.in_std(sym) && !local && self.is_method_sym(sym)
     }
 
+    /// Whether `sym` is a top-level val of the standard library, which its first reader types
+    /// (`std_val_body`) rather than the walk over its file.
+    pub fn defers_top_val(&self, sym: SymId) -> bool {
+        let info = self.syms.sym(sym);
+        // teq's own `std/` alone: a library's pseudo files of bodies, marked std too, are checked
+        // with their files as before (a product's top-level vals among them).
+        info.kind == SymKind::Val && matches!(info.owner, Owner::Package(_)) && self.std_source(info.file)
+    }
+
+    /// A top-level val of the standard library a reader names, typed then with the other vals of
+    /// its file, which its initialiser runs together, and registered with the program's top-level
+    /// values once, as the walk registers a program's.
+    pub fn std_val_body(&mut self, sym: SymId) -> Option<TExprId> {
+        let file = self.syms.sym(sym).file;
+        self.with_loader_for(crate::measure::Hold::Body, |w| {
+            for s in w.top_level_vals(file) {
+                if !w.defers_top_val(s) || w.prog.top_vals.all().any(|(v, _)| v == s) {
+                    continue;
+                }
+                w.ensure_body(s);
+                if let Some(init) = w.readable_init(s) {
+                    w.prog.top_vals.push((s, init));
+                }
+            }
+            w.readable_init(sym)
+        })
+    }
+
     /// The body of a definition the reach pass asked for: a method of the standard library, or
     /// a method or val of a library on the classpath, whose class is compiled from its TASTy
     /// first.
@@ -1236,6 +1269,8 @@ impl<'a> Worker<'a> {
             } else {
                 self.library_body(sym)
             }
+        } else if self.defers_top_val(sym) {
+            self.std_val_body(sym).map(DeferredBody::Val)
         } else {
             let outer = std::mem::replace(&mut self.for_interpreter, self.jvm);
             let body = self.std_body(sym).map(DeferredBody::Fun);
@@ -4325,8 +4360,15 @@ impl<'a> Worker<'a> {
                 // implements a def of an ancestor is an accessor instead and stays eager. A
                 // product's class is another module's program and initialises as the whole
                 // program does.
+                // A subclass's val that overrides it assigns the field its getter stands for, which a
+                // setter beside the getter takes (scalacheck's `Test.Parameters.useLegacyShrinking`
+                // overridden in `cpy`'s anonymous class).
                 if rhs.is_some() && self.is_library_class(tclass.id) && !self.is_product_class(tclass.id) && self.syms.sym(sym).kind == SymKind::Val && !self.jvm && !self.implements_def(tclass.id, sym) {
-                    self.with_loader(|w| w.syms.sym_mut(sym).mods |= mods::LAZY);
+                    self.with_loader(|w| {
+                        let mut info = w.syms.sym_mut(sym);
+                        info.mods |= mods::LAZY;
+                        info.needs_setter = true;
+                    });
                     return;
                 }
                 self.class_member_body(sym);
@@ -5358,7 +5400,9 @@ impl<'a> Worker<'a> {
         let (p_kind, p_mods, p_lazy, mut pb) = {
             let s = self.syms.sym(p);
             let Owner::Class(pb) = s.owner else { return false };
-            (s.kind, s.mods, s.mods & mods::LAZY != 0, pb)
+            // A jar's val that teq reads through a getter is lazy by teq's own mark, which a session
+            // keeps from one build to the next: its pickle declares no `lazy` (`needs_setter`).
+            (s.kind, s.mods, s.mods & mods::LAZY != 0 && !s.needs_setter, pb)
         };
         // An object over an inherited object is the namer's error (E069), a class definition
         // that cannot be overridden.
@@ -5382,10 +5426,12 @@ impl<'a> Worker<'a> {
             agreement => agreement,
         };
         // A val next to the alternatives of an overloaded name other than the one it implements,
-        // and a method beside a value whose parameters it does not take: no pair (dotty's
-        // `matches` of their signatures fails, so neither overrides the other).
+        // a method beside a value whose parameters it does not take, and a value beside a method
+        // that takes parameters: no pair (dotty's `matches` of their signatures fails,
+        // `Signature.matchDegree`'s `NoMatch`, so neither overrides the other).
         let overloads = (p_kind == SymKind::Def && (m_kind == SymKind::Def || self.syms.sym(p).alternative))
-            || (m_kind == SymKind::Def && matches!(p_kind, SymKind::Val | SymKind::Var | SymKind::Given));
+            || (m_kind == SymKind::Def && matches!(p_kind, SymKind::Val | SymKind::Var | SymKind::Given))
+            || (matches!(m_kind, SymKind::Val | SymKind::Var) && p_kind == SymKind::Def);
         if agreement == Agreement::Params && (p_abstract || overloads) {
             return false;
         }
@@ -5543,7 +5589,7 @@ impl<'a> Worker<'a> {
         declares
     }
 
-    fn declared_target_name(&mut self, m: SymId) -> Option<Name> {
+    pub(super) fn declared_target_name(&mut self, m: SymId) -> Option<Name> {
         let info = self.syms.sym(m);
         let ast = self.ast(info.file);
         let annot = ast.def(info.def?).annots.iter().find(|a| self.interner.get(a.name) == "targetName")?;

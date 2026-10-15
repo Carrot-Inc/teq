@@ -14,9 +14,11 @@
 # of every project refuses c, which a compile-only dependency of its dependency would show what Mill hides, gen,
 # whose generator is the build's own, and computed, whose sources the build computes; harness's suites run in a
 # sandbox of their own, emptied before each run, with Mill's variables and harness's run class path; core's
-# test, whose class path adds munit that core's sources would see typed inside it, and tested's are refused, and so
-# is downstream's compile, whose class path lacks upstream's compileMvnDeps; a test of every project runs harness's
-# and names the others left out; tool's generator is the overlay's command; d, which runs on r's products alone, is
+# test, whose class path adds munit that core's sources see typed inside it as an sbt configuration's do, runs, while
+# tested's is refused, and so is downstream's compile, whose class path lacks upstream's compileMvnDeps; a test of
+# every project runs harness's, core's and matrix's and names the others left out, web's (a Scala.js project under
+# jsdom with no lockfile to install it) among them; tool's generator is the overlay's command; d, which runs on r's
+# products alone, is
 # refused its run; an edited package.mill, a package added (a package.mill and a package.mill.yaml) and a declared
 # input removed make the lock stale; under Mill 1.1 a build allowing nested build files (its header YAML, with a
 # comment) is refused. Then the driver's mode (`"buildTool": true`): the lock at the root with the launchers, an
@@ -149,17 +151,17 @@ for v in $versions; do
   core_code=$?
   tested=$(teq_in "$b" test tested)
   tested_code=$?
-  if [ $core_code = 2 ] && [[ "$core" == *"core/compile is typed inside core/test, whose class path holds "*"which core/compile's does not name"* ]] &&
+  if [ $core_code = 0 ] && [[ "$core" == *"core/test: 1 suite, 1 passed, 0 failed"* ]] &&
     [ $tested_code = 2 ] && [[ "$tested" == *"tested: its test module tested.test: its sources hold a Java file, which teq does not compile"* ]]; then
-    pass "Mill $v: core's test, which would show core's sources munit, and tested's, whose test module holds Java sources, refused"
+    pass "Mill $v: core's test, which shows core's sources munit as sbt's does, runs; tested's, whose test module holds Java sources, refused"
   else
-    fail "Mill $v: the refused tests: core ($core_code) $core // tested ($tested_code) $tested"
+    fail "Mill $v: the tests of core ($core_code) $core // tested ($tested_code) $tested"
   fi
   out=$(teq_in "$b" test)
   code=$?
-  if [ $code = 2 ] && [[ "$out" == *"harness/test: 1 suite, 2 passed"* ]] && [[ "$out" == *"teq: test left out core, which needs"* ]] && [[ "$out" == *"teq: test left out matrix[3.8.4], which needs"* ]] &&
-    [[ "$out" == *"teq: test left out tested, which needs"* ]] &&
-    [[ "$out" == *"teq: test left out web is a Scala.js project, whose suites (linked as CommonJSModule, run under node with jsdom) teq does not run yet"* ]]; then
+  if [ $code = 2 ] && [[ "$out" == *"harness/test: 1 suite, 2 passed"* ]] && [[ "$out" == *"core/test: 1 suite, 1 passed, 0 failed"* ]] &&
+    [[ "$out" == *"matrix[3.8.4]/test: 1 suite, 1 passed, 0 failed"* ]] && [[ "$out" == *"teq: test left out tested, which needs"* ]] &&
+    [[ "$out" == *"web: its suites run under jsdom, and the build's root holds no lockfile of npm, yarn or pnpm that installs jsdom"* ]]; then
     pass "Mill $v: a test of every project runs the JVM suites it may and names the others left out, exiting 2"
   else
     fail "Mill $v: the test of every project ($code): $out"

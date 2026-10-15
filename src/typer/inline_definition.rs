@@ -800,6 +800,27 @@ impl<'a> Worker<'a> {
         Some(self.inferred_at_call(call, subst, args, &record))
     }
 
+    /// The result type of an inline method declared without one, as its checked definition
+    /// infers it and `Namer.inferredResultType` widens it (`infer_inline_results`): the program's
+    /// definition checked on demand, as an expansion demands it (`substitution_entry`); none
+    /// while it is in progress, failed, or names its parameters' paths.
+    #[cold]
+    #[inline(never)]
+    pub(super) fn inline_inferred_result(&mut self, sym: SymId) -> Option<TypeId> {
+        let info = self.syms.sym(sym);
+        if info.def.is_some() && self.program_file(info.file) && !self.is_body_file(info.file) && !self.library_inline(sym) {
+            self.demand_definition(sym);
+        }
+        let record = self.inline_definitions.get(&sym)?;
+        if record.state != DefinitionState::Checked || self.types.contains_error(record.ty) || self.types.has_paths(record.ty) {
+            return None;
+        }
+        let t = record.ty;
+        let t = self.widen_path(t);
+        let t = self.widen_lit(t);
+        Some(self.widen_or(t, &[]))
+    }
+
     /// The type the check inferred, instantiated with the call's type arguments and its
     /// arguments' paths, reduced (`ToString[7]` the `"7"` it is).
     fn inferred_at_call(&mut self, call: &super::apply::MethodCall, subst: &Subst, args: &[TExprId], record: &InlineDefinition) -> TypeId {

@@ -271,9 +271,12 @@ The modules map onto teq's projects as sbt's projects do:
   `compileModuleDeps` seen by their dependent alone, so the classpath's products and jars are the whole of what its
   sources see. teq types a configuration in a resident of its own (its compile never inside its test's), with every
   configuration it builds on as one program, whose sources and class path are one union: the verbs refuse where a
-  configuration of that program would see a configuration or a jar its own class path does not name, never
-  flattening. A test whose class path adds a jar its module's does not name (its framework, unless the module's own
-  dependencies name it) is refused so, until configurations have compilation scopes of their own;
+  configuration of that program would see a configuration its class path does not name (a prerequisite of one it
+  names), or would lack a module of its own class path that the union does not name at any version (an upstream's
+  `compileMvnDeps`), never flattening, until configurations have compilation scopes of their own. What an sbt
+  configuration typed in its dependent's resident sees too, a Mill one sees: a configuration of the union none it
+  names builds on (a sibling), the union's jars its own class path does not name (a dependent's libraries, a test's
+  framework) and a module the union names at another version (the dependent's resolution evicting the upstream's);
 - a `generatedSources` the build defines is never run: a command of the overlay stands for it, which teq runs
   as for an sbt build, else it is recorded as Mill's (a generator of kind `mill`), the task's directory under
   Mill's `out/` (`out/<module>/generatedSources.dest`, whatever Mill last wrote there) the editor's root, and the
@@ -388,9 +391,9 @@ export's refusals. The test link's module split and ES features shape the linker
 teq's link is one file of ES2015 whatever they say. sbt-scalajs's `Test / jsEnvInput` is the project's own
 `jsEnvInput` followed by the link, which teq supplies itself: the inputs a build adds at the project's level are
 named in the refusal, and a definition of `Test / jsEnvInput` of the build's own by where it stands, since only
-linking would give its inputs. A Mill build's Scala.js projects are not run yet: naming
-one is refused, naming its link's module kind and JavaScript environment, and a run of every project names
-each such project left out and exits 2.
+linking would give its inputs. A Mill build's Scala.js projects run the same way, the export's `moduleKind` and
+`jsEnv` being Mill's (`moduleKind`, `jsEnvConfig`), which Mill's Scala.js worker runs through the same test
+adapter.
 
 Suites are found as sbt's `definedTests` finds them (`--list` prints them), against the fingerprints the
 frameworks give, and the patterns applied as `testOnly` applies them; `--changed` keeps the suites whose

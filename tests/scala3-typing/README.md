@@ -31,6 +31,38 @@ regression.
 - `proposed-cases/` are programs scalac accepts and teq rejects, with the output of
   `scala-cli run -S 3.8.4` as `.expected`, in the format of `tests/cases`.
 
+## Tyrian's and Indigo's fixes (2026-10-12)
+
+Thirty-two tests moved, against master's record, with the tyrian-indigo branch:
+
+- Twenty-four positive tests moved to `accepts` (twelve from `std`, seven from `rejects`, five from `oos`):
+  the std's members the branch adds (the collection companions as `IterableFactory`s, `Stream`,
+  `mutable.Queue`, `Array.transpose`, `Random.between`, `Math`'s trigonometry) and its typer's rules
+  (`Desugar.classDef`'s synthetic companion of a case class, `TypeComparer.isSameRef` between bindings, a
+  conversion's open variable instantiated where a using clause names it, an overloaded reference narrowed by
+  an expected function's parameters): `pos/hkrange`, `pos/i10769`, `pos/i10769b`, `pos/i12180a`, `pos/i12180b`,
+  `pos/i1751`, `pos/i20344`, `pos/i2200`, `pos/i2551`, `pos/i3343`, `pos/i6849a`, `pos/i6849b`, `pos/i8530`,
+  `pos/inf`, `pos/ops`, `pos/t1279a`, `pos/t3343`, `pos/t3836`, `pos/t6123-explaintypes-implicits`, `pos/t6208`,
+  `pos/t6311`, `pos/t6335`, `pos/t8230a`, `pos/depmet_implicit_chaining_zw`.
+- `pos/i16451.default` (`syntax` to `std`) and `pos/kind-projector` (`syntax` to `rejects`) parse since pattern
+  alternatives go on over a line's end (`Scanners.handleNewLine` inserts no newline in an `InCase` region);
+  the first stops at a std member, the second at a type it does not find.
+- `pos/Iterable` and `pos/depmet_implicit_norm_ret` moved from `std` to `rejects`: the std member they lacked
+  is there, and the typer refuses them further on (a member not found, a mismatch).
+- `pos/t7377b` moved from `rejects` to `oos`: past the rejection it stops at an extractor form out of scope.
+  (Master's typer-givens-4 accepts it since; the union of the two records keeps master's `accepts`.)
+- After the rebase onto typer-givens-4 (2026-10-14), `pos/t6664b` moved from `rejects` to `accepts`: master
+  makes `object T`'s case class `A` its companion and reports it already defined beside `def A(s: String)` and
+  `def A(i: Int)`; the branch keeps an object and a method of one name as alternatives (dotty's module val
+  beside the methods, `Applications.resolveOverloaded` applying the object through its `apply`).
+- With the second code review's fold and the rebase onto std-interp-4 (2026-10-14), `pos/range` stays in
+  `rejects` with another first diagnostic: scala-library's `NumericRange` is the std's in
+  `scala.collection.immutable` now, which its import names, and std-interp-4's `Range.Partial` types; the test
+  stops at `Range.BigDecimal` ("value BigDecimal is not a member of Range"), scala-library's factory the lean std
+  has not (master: `NumericRange` not a member of the package).
+- `neg/ambiref` and `neg/i1672` moved from `superset` to `same` and `neg/i22423` from `std` to `same`: their
+  errors are now exactly scalac's (the bindings of one class or object taken as one, the std member present).
+
 ## The reference projects' part over the givens as dotty's (2026-10-13)
 
 Three tests moved when the reference projects' part was rebased onto master c4d061d3e (typer-givens-4). Each
@@ -136,6 +168,8 @@ with dotty's refusals, and only a method `scala.main` annotates got one:
 `NumericRange` (std-interp-4): `BigInt(1) to BigInt(3)` is a `NumericRange.Inclusive[BigInt]`. The other rows that
 part moved with its own binding of the std's definitions under scala-library's names in a program without a class
 path are the reference projects' part's, whose binding landed first and whose section records them.
+
+
 
 
 ## The case region (2026-10-13)

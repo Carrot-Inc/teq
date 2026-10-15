@@ -1,0 +1,8 @@
+{
+ "physics/assets/generated/PixelatedFont.png": "d3f4e58abb51d66b0be43053d7b6bab1866ab0208b18cd24265b95d61cd29627",
+ "sandbox/assets/generated/TestFont.png": "5033e7372178110c726e4ed0a846942d6a4e643b44dad19ac248a8b4241676c6",
+ "target/teq/perf.js/compile/src_managed": "4a5ee27ec0dbecaa6a8c7568237da2adf527b08f9ce8a163c350e4e15f0b9e95",
+ "target/teq/physics.js/compile/src_managed": "2265403a4d4d487855bf24e73211fd3a204fca88f00a3981e970f0aaa4a2c4ec",
+ "target/teq/sandbox.js/compile/src_managed": "98485f64a8d47ded98ab3af79ec35e80a0876fb4e5533e906672ba30e46d181c",
+ "target/teq/shader.js/compile/src_managed": "2a6b6c308870b72e54df715b5dcca92734a5ee32fc82473ab1d6705543215c89"
+}

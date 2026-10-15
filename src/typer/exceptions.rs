@@ -467,6 +467,15 @@ impl<'a> Worker<'a> {
                 let yes = self.prog.add(TExpr::Bool(true));
                 self.prog.add_pat(TPat::Equals(yes, true))
             }
+            // An `unapplySeq` whose result is itself a sequence matches its elements, as dotty's
+            // `unapplyArgs` takes one (`unapplySeqTypeElemTp`) before a `get` match.
+            _ if name == names::UNAPPLY_SEQ && self.seq_class().is_some_and(|seq| self.base_type(rty, seq).is_some()) => {
+                let elements = self.seq_elements_pattern(rty, subs);
+                if self.capturing() {
+                    self.capture_pat(elements, crate::tir::capture::PatForm::Elements);
+                }
+                elements
+            }
             // An irrefutable extractor: a product (a tuple or a case class) whose fields are
             // matched, as Scala 3's product match has it.
             _ if self.product_result(rty).is_some() => {
@@ -502,9 +511,10 @@ impl<'a> Worker<'a> {
         // tuple or a case class): the pattern is irrefutable where the sub-patterns are, over
         // what passed the test of its input.
         let some = self.std_class("Some");
+        // So is an `unapplySeq` whose result is a sequence (`SpaceEngine.isIrrefutable`).
         let irrefutable = match option {
             Some(_) => some.is_some() && self.class_of(rty) == some,
-            None => self.product_result(rty).is_some(),
+            None => self.product_result(rty).is_some() || (name == names::UNAPPLY_SEQ && self.seq_class().is_some_and(|seq| self.base_type(rty, seq).is_some())),
         };
         if irrefutable {
             self.irrefutable_pats.insert(pat, ());
