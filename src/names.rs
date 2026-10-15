@@ -3,6 +3,9 @@ use crate::intern::{Interner, Name};
 /// The members of `Any` and `AnyRef`, which every type has: a lookup that misses one is answered
 /// by them, never by a Java class's members.
 pub const ANY_MEMBERS: &[&str] = &["==", "!=", "equals", "hashCode", "toString", "##", "getClass", "isInstanceOf", "asInstanceOf", "eq", "ne", "synchronized"];
+/// The members scala-library's Array.scala declares on `Array`, which std/core.scala gives as extensions
+/// beside the JavaScript array's that `Array` lacks.
+pub const ARRAY_MEMBERS: &[&str] = &["length", "apply", "update", "clone"];
 
 macro_rules! well_known {
     ($($id:ident = $s:expr),* $(,)?) => {

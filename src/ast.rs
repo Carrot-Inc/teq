@@ -640,9 +640,11 @@ pub struct Ast {
     /// The cases, by their index in `cases`, ascending, whose pattern or guard reported a syntax
     /// error: a match's coverage over them is unknown.
     pub broken_cases: Vec<u32>,
-    /// The expressions written alone in braces (`{ e }`), ascending, which the parser reads as
-    /// `e`: scalac's tree is a block whose expression it types and adapts inside it.
-    pub braced: Vec<ExprId>,
+    /// The expressions written alone in braces (`{ e }`), which the parser reads as `e`: scalac's
+    /// tree is a block whose expression it types and adapts inside it. A bit per expression, by
+    /// its id, set by the parser (`mark_braced`): the mark dotty's `Block` node is, read where a
+    /// node is typed.
+    pub braced: Vec<u64>,
 }
 
 /// What the converter of a library body keeps beside the AST it makes: the declaration each
@@ -980,8 +982,19 @@ impl Ast {
     }
 
     /// Whether `e` was written alone in braces (`braced`).
+    #[inline]
     pub fn is_braced(&self, e: ExprId) -> bool {
-        self.braced.binary_search(&e).is_ok()
+        let i = e.idx();
+        self.braced.get(i / 64).is_some_and(|w| w >> (i % 64) & 1 != 0)
+    }
+
+    /// `e` was written alone in braces.
+    pub fn mark_braced(&mut self, e: ExprId) {
+        let i = e.idx();
+        if self.braced.len() <= i / 64 {
+            self.braced.resize(i / 64 + 1, 0);
+        }
+        self.braced[i / 64] |= 1 << (i % 64);
     }
 
     /// Whether a case of the list has a malformed pattern or guard (`broken_cases`).

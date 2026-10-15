@@ -1952,7 +1952,7 @@ impl<'a> Worker<'a> {
             let outer_base = std::mem::replace(&mut self.app_base, self.tvars.len() as u32);
             let mut infos = Vec::new();
             let spans_mark = self.overload_arg_spans.len();
-            let choice = self.resolve_overloaded(&alts, None, lists, &mut infos, None, false, true);
+            let choice = self.resolve_overloaded(&alts, None, lists, &mut infos, None, false, true, None);
             self.overload_arg_spans.truncate(spans_mark);
             self.app_base = outer_base;
             choice.ok()?
@@ -2065,10 +2065,15 @@ impl<'a> Worker<'a> {
         let written: Option<Vec<Vec<ArgSrc>>> = self.index.is_some().then(|| lists.iter().map(|l| l.args.clone()).collect());
         let (diag_mark, match_mark) = (self.diags.items.len(), self.deferred_matches.len());
         let prof = self.prof(Kind::Overload, span, About::Sym(set));
+        // The reference is the qualifier of a selection (`Selection`), unapplied.
+        let selection = match (lists.is_empty() && expected.is_none()).then(|| self.selections.len().checked_sub(1)).flatten().and_then(|i| self.selection_at(i)) {
+            Some(s) if s.span == span => Some(s.name),
+            _ => None,
+        };
         let choice = if targs.is_some() && alts.len() == 1 {
             Ok(0)
         } else {
-            self.resolve_overloaded(&alts, targs, &mut lists, &mut infos, expected, strict, true)
+            self.resolve_overloaded(&alts, targs, &mut lists, &mut infos, expected, strict, true, selection)
         };
         if let Some(p) = prof {
             self.profile.exit_counted(p, overload_outcome(&choice));
@@ -2127,7 +2132,7 @@ impl<'a> Worker<'a> {
                 if let Some(written) = written {
                     self.index_failed_args(&written, &lists);
                 }
-                let msg = self.overload_failure(set, &alts, &failure, &lists, &infos, expected);
+                let msg = self.overload_failure(set, &alts, &failure, &lists, &infos, expected, selection);
                 Err(Unresolved { msg, lists, none_applicable: matches!(failure, Failure::NoneApplicable), dependent: left_out })
             }
         };
@@ -2182,7 +2187,7 @@ impl<'a> Worker<'a> {
         let (diag_mark, match_mark) = (self.diags.items.len(), self.deferred_matches.len());
         let prof = self.prof(Kind::Overload, span, alts.first().map_or(About::Class(c), |a| About::Sym(a.sym)));
         let spans_mark = self.overload_arg_spans.len();
-        let choice = self.resolve_overloaded(&alts, targs, &mut lists, &mut infos, expected, false, true);
+        let choice = self.resolve_overloaded(&alts, targs, &mut lists, &mut infos, expected, false, true, None);
         if let Some(p) = prof {
             self.profile.exit_counted(p, overload_outcome(&choice));
         }
@@ -2211,7 +2216,7 @@ impl<'a> Worker<'a> {
             Err(failure) => {
                 self.type_plain_args(&mut lists);
                 let first = alts.first().map_or(SymId(u32::MAX), |a| a.sym);
-                let msg = self.overload_failure(first, &alts, &failure, &lists, &infos, expected);
+                let msg = self.overload_failure(first, &alts, &failure, &lists, &infos, expected, None);
                 self.report_unresolved(Unresolved { msg, lists, none_applicable: false, dependent: false }, span)
             }
         };
@@ -2260,7 +2265,7 @@ impl<'a> Worker<'a> {
             .collect();
         let mut infos = Vec::new();
         let spans_mark = self.overload_arg_spans.len();
-        let choice = self.resolve_overloaded(&alts, targs, lists, &mut infos, expected, false, false);
+        let choice = self.resolve_overloaded(&alts, targs, lists, &mut infos, expected, false, false, None);
         self.overload_arg_spans.truncate(spans_mark);
         choice.ok().map(|i| alts[i].sym)
     }
@@ -2319,7 +2324,7 @@ impl<'a> Worker<'a> {
             self.prog.set_type(dummy, arg);
             let mut lists = vec![ArgList { args: vec![ArgSrc::Typed(dummy, arg)], using: false, span }];
             let spans_mark = self.overload_arg_spans.len();
-            let choice = self.resolve_overloaded(&alts, None, &mut lists, &mut Vec::new(), None, true, false);
+            let choice = self.resolve_overloaded(&alts, None, &mut lists, &mut Vec::new(), None, true, false, None);
             self.overload_arg_spans.truncate(spans_mark);
             self.drop_reported_since(reported);
             self.rollback(mark);
@@ -2333,7 +2338,7 @@ impl<'a> Worker<'a> {
         let failure = first_failure.unwrap_or(Failure::NoneApplicable);
         let dummy = self.prog.add(TExpr::Unit);
         let lists = vec![ArgList { args: vec![ArgSrc::Typed(dummy, sty)], using: false, span }];
-        let msg = self.overload_failure(set, &alts, &failure, &lists, &[], None);
+        let msg = self.overload_failure(set, &alts, &failure, &lists, &[], None, None);
         self.error(span, msg);
         None
     }
@@ -2512,14 +2517,14 @@ impl<'a> Worker<'a> {
         lists.insert(0, ArgList { args: vec![ArgSrc::Typed(recv, recv_ty)], using: false, span });
         let mut infos = Vec::new();
         let spans_mark = self.overload_arg_spans.len();
-        let choice = self.resolve_overloaded(&alts, targs, lists, &mut infos, expected, false, false);
+        let choice = self.resolve_overloaded(&alts, targs, lists, &mut infos, expected, false, false, None);
         self.overload_arg_spans.truncate(spans_mark);
         let result = match choice {
             Ok(i) => Ok(i),
             Err(failure) => {
                 self.type_plain_args(lists);
                 let set = alts[0].sym;
-                Err(self.overload_failure(set, &alts, &failure, lists, &infos, expected))
+                Err(self.overload_failure(set, &alts, &failure, lists, &infos, expected, None))
             }
         };
         lists.remove(0);
@@ -2541,8 +2546,9 @@ impl<'a> Worker<'a> {
         expected: Option<TypeId>,
         strict: bool,
         open: bool,
+        selection: Option<Name>,
     ) -> Result<usize, Failure> {
-        let choice = self.resolve_choice(alts, targs, lists, infos, expected, strict, open);
+        let choice = self.resolve_choice(alts, targs, lists, infos, expected, strict, open, selection);
         if self.index.is_some() {
             let remaining: Option<&[usize]> = match &choice {
                 Ok(i) => Some(std::slice::from_ref(i)),
@@ -2570,6 +2576,7 @@ impl<'a> Worker<'a> {
         expected: Option<TypeId>,
         strict: bool,
         open: bool,
+        selection: Option<Name>,
     ) -> Result<usize, Failure> {
         let mut cands: Vec<usize> = (0..alts.len()).collect();
         let explicit: Vec<TypeId> = match targs {
@@ -2597,6 +2604,9 @@ impl<'a> Worker<'a> {
         infos.resize_with(lists.len(), || None);
         let explicit_lists: Vec<usize> = (0..lists.len()).filter(|&i| !lists[i].using).collect();
         if explicit_lists.is_empty() {
+            if let Some(name) = selection {
+                return self.resolve_selected(alts, &cands, &explicit, name);
+            }
             let compatible = self.narrow_by_expected(alts, &cands, &explicit, expected);
             // dotc's `tryParameterless`: where no alternative or no single one fits, a reference
             // without arguments means the one that takes none, or else one declared with `()`.
@@ -2769,7 +2779,7 @@ impl<'a> Worker<'a> {
                 let mark = self.snapshot();
                 let subst = self.alt_subst(&alts[i], explicit);
                 let ok = self.is_applicable_in(&alts[i], &subst, lists, k) && {
-                    let value = self.value_type(&alts[i], &subst, applied);
+                    let value = self.value_type(&alts[i], &subst, applied, Norm::Applied);
                     self.is_compatible(value, exp)
                 };
                 self.rollback(mark);
@@ -2819,6 +2829,82 @@ impl<'a> Worker<'a> {
         }
     }
 
+    /// dotty's resolution of a reference without arguments under the `SelectionProto` of the
+    /// member selected on it (`resolveOverloaded`, Applications.scala 2418): `resolve_selected_in`
+    /// without views, and again with them where that finds none (`resolve`'s two passes, 2474);
+    /// none or several left, the alternative without parameters (`tryParameterless`, Typer.scala
+    /// 4430).
+    fn resolve_selected(&mut self, alts: &[Alt], cands: &[usize], explicit: &[TypeId], name: Name) -> Result<usize, Failure> {
+        let choice = match self.resolve_selected_in(alts, cands, explicit, name, false, 0) {
+            Err(Failure::NoneApplicable) => self.resolve_selected_in(alts, cands, explicit, name, true, 0),
+            choice => choice,
+        };
+        // `isParameterless` looks past type parameters (`stripPoly`): `def foo[A]: Int` takes none.
+        choice.or_else(|failure| {
+            let parameterless: Vec<usize> = (0..alts.len()).filter(|&i| alts[i].sig.clauses.is_empty()).collect();
+            let empty_parens = (0..alts.len()).find(|&i| matches!(alts[i].sig.clauses.as_slice(), [c] if !c.is_using && c.params.is_empty()));
+            match (parameterless.as_slice(), empty_parens) {
+                ([one], _) => Ok(*one),
+                (_, Some(i)) => Ok(i),
+                _ => Err(failure),
+            }
+        })
+    }
+
+    /// `resolveOverloaded1` of the alternatives `pool` under the selection of `name` (2676): those
+    /// whose value, normalized (`ProtoTypes.normalize`, 928: a using clause gives way to its
+    /// result, an explicit one becomes the function type it expands to, `value_type`), has the
+    /// member (`SelectionProto.isMatchedBy`, ProtoTypes.scala 257), through a view where `views`
+    /// (`viewExists`), or under the `deep` selection whose member applies to its arguments; where
+    /// none does, the one alternative that is no method once normalized, which a view may still
+    /// convert (2691). Of several, the most specific; where several are, those that take no
+    /// further list, then those that declare no defaults, resolved again where they narrow
+    /// (`noCurried`, `noDefaults`, 2748); else the selection deepened past its ignored member
+    /// prototype (`deepPt`, 2764).
+    fn resolve_selected_in(&mut self, alts: &[Alt], pool: &[usize], explicit: &[TypeId], name: Name, views: bool, depth: u8) -> Result<usize, Failure> {
+        let top = self.selections.len() - 1;
+        let mut found: Vec<usize> = Vec::new();
+        for &i in pool {
+            let mark = self.snapshot();
+            let subst = self.alt_subst(&alts[i], explicit);
+            let value = self.value_type(&alts[i], &subst, 0, Norm::Selected(name));
+            let ok = match depth {
+                0 => self.selection_matches(value, name, views),
+                _ => self.selection_deep(value, top, depth, views),
+            };
+            self.rollback(mark);
+            if ok {
+                found.push(i);
+            }
+        }
+        if found.is_empty() {
+            let convertible: Vec<usize> = pool.iter().copied().filter(|&i| alts[i].explicit_clauses().next().is_none()).collect();
+            if let [one] = convertible.as_slice() {
+                found.push(*one);
+            }
+        }
+        if found.is_empty() {
+            return Err(Failure::NoneApplicable);
+        }
+        let best = self.narrow_most_specific(alts, found, explicit, None);
+        if let [one] = best.as_slice() {
+            return Ok(*one);
+        }
+        let uncurried: Vec<usize> = pool.iter().copied().filter(|&i| alts[i].explicit_clauses().count() <= 1).collect();
+        let no_defaults: Vec<usize> = pool.iter().copied().filter(|&i| !alts[i].has_defaults()).collect();
+        for narrower in [uncurried, no_defaults] {
+            match narrower.as_slice() {
+                [one] => return Ok(*one),
+                n if n.len() > 1 && n.len() < pool.len() => return self.resolve_selected_in(alts, &narrower, explicit, name, views, depth),
+                _ => {}
+            }
+        }
+        if depth < self.selection_levels(top) {
+            return self.resolve_selected_in(alts, pool, explicit, name, views, depth + 1);
+        }
+        Err(Failure::Ambiguous(best))
+    }
+
     /// A reference without arguments: the alternatives whose type as a value fits what is
     /// expected, a method counting as the function it expands to.
     fn narrow_by_expected(&mut self, alts: &[Alt], cands: &[usize], explicit: &[TypeId], expected: Option<TypeId>) -> Vec<usize> {
@@ -2836,7 +2922,7 @@ impl<'a> Worker<'a> {
                 }
                 let mark = self.snapshot();
                 let subst = self.alt_subst(&alts[i], explicit);
-                let value = self.value_type(&alts[i], &subst, 0);
+                let value = self.value_type(&alts[i], &subst, 0, Norm::Expected(exp));
                 let ok = self.is_sub(value, exp);
                 self.rollback(mark);
                 ok
@@ -2844,10 +2930,26 @@ impl<'a> Worker<'a> {
             .collect()
     }
 
-    /// The type an alternative has as a value once `applied` of its argument lists are given.
-    fn value_type(&mut self, alt: &Alt, subst: &Subst, applied: usize) -> TypeId {
+    /// The type an alternative has as a value once `applied` of its argument lists are given:
+    /// dotty's `ProtoTypes.normalize` (928) under the prototype `norm`, a using clause giving way to
+    /// its result and an explicit one becoming the function type it expands to. Against an
+    /// expected type or a selection, a context function result gives way to its own result
+    /// (`asContextFunctionType`, 951), and a clause without parameters stays a function only
+    /// where that function fits the prototype (`ft frozen_<:< pt`, 946), else its result.
+    fn value_type(&mut self, alt: &Alt, subst: &Subst, applied: usize, norm: Norm) -> TypeId {
         let clauses: Vec<&ClauseSig> = alt.explicit_clauses().skip(applied).collect();
         let mut ty = self.types.subst(alt.sig.ret, subst);
+        let follows = match norm {
+            Norm::Applied => false,
+            Norm::Selected(_) => true,
+            Norm::Expected(exp) => self.as_context_function(exp).is_none(),
+        };
+        if follows {
+            for _ in 0..8 {
+                let Some((_, result)) = self.as_context_function(ty) else { break };
+                ty = result;
+            }
+        }
         for clause in clauses.into_iter().rev() {
             let params: Vec<TypeId> = clause
                 .params
@@ -2860,7 +2962,25 @@ impl<'a> Worker<'a> {
                     }
                 })
                 .collect();
-            ty = self.fun_type(&params, ty);
+            let function = self.fun_type(&params, ty);
+            ty = match norm {
+                _ if !params.is_empty() => function,
+                Norm::Applied => function,
+                Norm::Expected(exp) => {
+                    if self.is_sub(function, exp) {
+                        function
+                    } else {
+                        ty
+                    }
+                }
+                Norm::Selected(name) => {
+                    if self.selection_matches(function, name, false) {
+                        function
+                    } else {
+                        ty
+                    }
+                }
+            };
         }
         ty
     }
@@ -3257,31 +3377,10 @@ impl<'a> Worker<'a> {
             // ahead (`FunProto.typedArgs`), such a name stays overloaded. One with a parameterless
             // alternative is typed ahead as that alternative, which `isAsSpecific` prefers to
             // every method.
-            if common.is_none() && self.names_overloaded_method(value) {
-                continue;
-            }
-            let agreed = common.is_some();
-            let expected = match common {
-                Some((t, _)) => Some(t),
-                None if open => Some(self.fresh_var()),
-                None => None,
-            };
-            let (te, ty) = self.type_expr(value, expected);
-            // A literal written as the argument is of its literal type too (dotty's
-            // `ConstantType`, which teq's typing without an expected type widens): what the
-            // applicability test and the chosen alternative take where a parameter takes the
-            // literal and not its class (`f("k")` beside `f(k: "k")` and `f(k: "v")`,
-            // `pass_typed_literals`). A constant an expansion folded is no literal (`(1: Any)` of a
-            // transparent method stays `Any`).
-            let written = matches!(self.cur_ast().expr(value), Expr::IntLit(_) | Expr::LongLit(_) | Expr::DoubleLit(_) | Expr::BoolLit(_) | Expr::CharLit(_) | Expr::StringLit(_));
-            if !agreed && written {
-                if let Some(v) = self.fold_constant(te) {
-                    let lit = self.types.lit(v);
-                    if lit != ty {
-                        literals.resize(shapes.len(), None);
-                        literals[j] = Some(lit);
-                    }
-                }
+            let Some((te, ty, literal)) = self.pretype_value(value, common.map(|(t, _)| t), open) else { continue };
+            if let Some(lit) = literal {
+                literals.resize(shapes.len(), None);
+                literals[j] = Some(lit);
             }
             if !takers.is_empty() {
                 function_names.extend(names.iter().map(|&n| (n, te, takers.clone())));
@@ -3308,6 +3407,39 @@ impl<'a> Worker<'a> {
             types[j] = Some(self.proxy_declared(te).unwrap_or(ty));
         }
         ListInfo { shapes, types, literals, lambdas, function_names }
+    }
+
+    /// An argument's value typed before an alternative is chosen, once (dotty's
+    /// `FunProto.typedArgs`, ProtoTypes.scala 508: `typer.typed`, a transparent call expanded as
+    /// it types one): against `common` where the candidates agree on its parameter's type, against
+    /// an open variable where `open`, alone otherwise; with its literal type where it is a literal
+    /// written as the argument and nothing was agreed (dotty's `ConstantType`, which teq's typing
+    /// without an expected type widens), what the applicability test takes where a parameter takes
+    /// the literal and not its class (`f("k")` beside `f(k: "k")` and `f(k: "v")`,
+    /// `pass_typed_literals`; a constant an expansion folded is no literal: `(1: Any)` of a
+    /// transparent method stays `Any`). `None` for a name of an overloaded method whose
+    /// alternatives all take parameters, left for the alternative chosen to type against its
+    /// parameter, which picks among them: typed ahead, such a name stays overloaded; one with a
+    /// parameterless alternative is typed ahead as that alternative, which `isAsSpecific` prefers
+    /// to every method. The overloaded application's arguments (`pretype_args`) and a deeper
+    /// selection's (`selection_arg_type`) are typed by it.
+    pub(super) fn pretype_value(&mut self, value: crate::ast::ExprId, common: Option<TypeId>, open: bool) -> Option<(TExprId, TypeId, Option<TypeId>)> {
+        if common.is_none() && self.names_overloaded_method(value) {
+            return None;
+        }
+        let agreed = common.is_some();
+        let expected = match common {
+            Some(t) => Some(t),
+            None if open => Some(self.fresh_var()),
+            None => None,
+        };
+        let (te, ty) = self.type_expr(value, expected);
+        let written = matches!(self.cur_ast().expr(value), Expr::IntLit(_) | Expr::LongLit(_) | Expr::DoubleLit(_) | Expr::BoolLit(_) | Expr::CharLit(_) | Expr::StringLit(_));
+        let literal = match (agreed, written) {
+            (false, true) => self.fold_constant(te).map(|v| self.types.lit(v)).filter(|&lit| lit != ty),
+            _ => None,
+        };
+        Some((te, ty, literal))
     }
 
     /// Whether an argument is a bare name of an overloaded method none of whose alternatives
@@ -3714,7 +3846,7 @@ impl<'a> Worker<'a> {
         let conforms = |t: &mut Self, i: usize| {
             let mark = t.snapshot();
             let subst = t.alt_subst(&alts[i], explicit);
-            let value = t.value_type(&alts[i], &subst, applied);
+            let value = t.value_type(&alts[i], &subst, applied, Norm::Applied);
             let ok = t.is_compatible(value, exp);
             t.rollback(mark);
             ok
@@ -3807,6 +3939,7 @@ impl<'a> Worker<'a> {
         lists: &[ArgList],
         infos: &[Option<ListInfo>],
         expected: Option<TypeId>,
+        selection: Option<Name>,
     ) -> String {
         let listed: Vec<usize> = match failure {
             Failure::NoneApplicable => (0..alts.len()).collect(),
@@ -3871,9 +4004,15 @@ impl<'a> Worker<'a> {
                 out.push_str(&format!("arguments ({})", described.join(", ")));
             }
             None => {
-                let exp = match self.concrete_expected(expected) {
-                    Some(t) => self.show(t),
-                    None => "Any".to_string(),
+                let exp = match (self.concrete_expected(expected), selection) {
+                    (Some(t), _) => self.show(t),
+                    // A `SelectionProto` as dotty shows it, its ignored member prototype a `?`.
+                    (None, Some(name)) => {
+                        let name = self.name_str(name).to_string();
+                        let gap = if name.ends_with(|c: char| c.is_alphanumeric() || c == '_') { "" } else { " " };
+                        format!("?{{ {}{}: ? }}", name, gap)
+                    }
+                    (None, None) => "Any".to_string(),
                 };
                 out.push_str(&format!("expected type {}", exp));
             }
@@ -3971,4 +4110,14 @@ impl SubclassIndex {
         self.incomplete = incomplete;
         out
     }
+}
+
+/// The prototype `value_type` normalizes an alternative under (`ProtoTypes.normalize`'s `pt`): an
+/// expected type, the selection of a member, or an application's result (no normalization past
+/// the applied lists).
+#[derive(Clone, Copy)]
+enum Norm {
+    Expected(TypeId),
+    Selected(Name),
+    Applied,
 }

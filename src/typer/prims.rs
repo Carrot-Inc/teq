@@ -1,4 +1,4 @@
-use super::apply::{ArgList, ArgSrc};
+use super::apply::{ArgList, ArgSrc, FrameKind, SelectionFrame};
 use super::Worker;
 use crate::ast::{Expr, ExprId, ListRef};
 use crate::intern::Name;
@@ -493,31 +493,24 @@ impl<'a> Worker<'a> {
         (te, ty)
     }
 
-    pub fn type_infix(
-        &mut self,
-        l: ExprId,
-        op: Name,
-        r: ExprId,
-        span: Span,
-        expected: Option<TypeId>,
-    ) -> (TExprId, TypeId) {
+    pub fn type_infix(&mut self, l: ExprId, op: Name, r: ExprId, span: Span, expected: Option<TypeId>) -> (TExprId, TypeId) {
+        // The operands a deeper selection of the operator typed are the operation's alone.
+        let typed = self.type_infix_now(l, op, r, span, expected);
+        // A right-associative operator's selection is on its right operand.
+        if !self.selection_typed.is_empty() {
+            for operand in [l, r] {
+                let owner = self.qualifier_span(operand);
+                self.drop_selection_typed(owner);
+            }
+        }
+        typed
+    }
+
+    #[inline(always)]
+    fn type_infix_now(&mut self, l: ExprId, op: Name, r: ExprId, span: Span, expected: Option<TypeId>) -> (TExprId, TypeId) {
         // A library body's operator's declaration (`type_declared_infix`), this operator's
         // alone: taken before its operands are typed.
         let declared = self.infix_declared.take();
-        let t_bool = self.b.t_boolean;
-        if op == names::AMPAMP || op == names::BARBAR {
-            // The short-circuit operators of a Boolean; on anything else `&&` is a method.
-            let (tl, lty) = self.type_expr(l, Some(t_bool));
-            let lty = self.solve_in(lty);
-            if self.dealias(lty) != t_bool && self.primitive_side(lty) != Some(t_bool) {
-                let lists = vec![ArgList { args: self.infix_args(r), using: false, span }];
-                return self.apply_member(tl, lty, op, None, lists, span, expected);
-            }
-            let tr = self.check_right_operand(op, tl, r);
-            let prim = if op == names::AMPAMP { PrimOp::BoolAnd } else { PrimOp::BoolOr };
-            let te = self.prog.add(TExpr::Prim(prim, tl, tr));
-            return (te, self.const_folded(te, t_bool, tl, lty));
-        }
         if op == names::EQEQ || op == names::NEQ {
             return self.type_equality(l, r, op == names::NEQ, span);
         }
@@ -542,7 +535,13 @@ impl<'a> Worker<'a> {
         }
         let outer_target = std::mem::replace(&mut self.assign_op_target, base.map(|_| l));
         self.assign_op_receiver = None;
-        let (tl, lty) = self.type_expr(l, None);
+        // The left operand is the qualifier of the operator (dotty's `typedInfixOp` through
+        // `Desugar.binop`), `&&` and `||` alike: their short circuit is a `Boolean`'s
+        // (`binop_or_member`), on anything else they are methods. An assignment operator is the
+        // member's application first (`typedApply`'s `realApply` before `typedOpAssign`), its
+        // left operand typed under the selection as well.
+        let frame = SelectionFrame { file: self.env.file, q: l, name: op, at: r, app: span, expected, kind: FrameKind::Operand { more: false } };
+        let (tl, lty) = self.type_selected(l, frame);
         self.assign_op_target = outer_target;
         let receiver = match self.assign_op_receiver.take() {
             None if base.is_some() && matches!(self.cur_ast().expr(l), Expr::Ident(_)) => self.this_receiver(tl),
@@ -572,7 +571,7 @@ impl<'a> Worker<'a> {
     /// The type whose builtin operators a left operand of type `widened` has: its own where it is
     /// a primitive (most operands), a numeric opaque type's bound outside its scope, the primitive
     /// side of an intersection or a union, a type parameter's primitive bound.
-    fn operator_type(&mut self, widened: TypeId) -> TypeId {
+    pub(super) fn operator_type(&mut self, widened: TypeId) -> TypeId {
         if self.is_primitive(widened) {
             return widened;
         }
@@ -583,6 +582,27 @@ impl<'a> Worker<'a> {
     /// operator method after its first (an implicit clause passed explicitly), or apply what a
     /// builtin operator gives. None for an operator the typer reads apart from a method call.
     pub(super) fn type_infix_applied(
+        &mut self,
+        l: ExprId,
+        op: Name,
+        r: ExprId,
+        lists: Vec<ArgList>,
+        span: Span,
+        expected: Option<TypeId>,
+    ) -> Option<(TExprId, TypeId)> {
+        let typed = self.type_infix_applied_now(l, op, r, lists, span, expected);
+        // A right-associative operator's selection is on its right operand.
+        if !self.selection_typed.is_empty() {
+            for operand in [l, r] {
+                let owner = self.qualifier_span(operand);
+                self.drop_selection_typed(owner);
+            }
+        }
+        typed
+    }
+
+    #[inline(always)]
+    fn type_infix_applied_now(
         &mut self,
         l: ExprId,
         op: Name,
@@ -602,28 +622,22 @@ impl<'a> Worker<'a> {
         if op_text.ends_with(':') {
             return Some(self.type_right_assoc(l, op, r, lists, span, expected));
         }
-        // `(l && r)(ev)`: on anything but a Boolean `&&` is a method, whose further clauses the
-        // lists fill (zio-test's `TestTrace.&&` takes `A <:< Boolean`); a Boolean's result is
-        // applied to them as a value.
-        if op == names::AMPAMP || op == names::BARBAR {
-            let t_bool = self.b.t_boolean;
-            let (tl, lty) = self.type_expr(l, Some(t_bool));
-            let lty = self.solve_in(lty);
-            if self.dealias(lty) != t_bool && self.primitive_side(lty) != Some(t_bool) {
-                let mut all = vec![ArgList { args: self.infix_args(r), using: false, span }];
-                all.extend(lists);
-                return Some(self.apply_member(tl, lty, op, None, all, span, expected));
-            }
-            let tr = self.check_right_operand(op, tl, r);
-            let prim = if op == names::AMPAMP { PrimOp::BoolAnd } else { PrimOp::BoolOr };
-            let te = self.prog.add(TExpr::Prim(prim, tl, tr));
-            return Some(self.apply_callee(super::apply::Callee::Value(te, t_bool), None, lists, span, expected));
-        }
-        let (tl, lty) = self.type_expr(l, None);
+        let more = lists.iter().any(|l| !l.using);
+        let frame = SelectionFrame { file: self.env.file, q: l, name: op, at: r, app: span, expected, kind: FrameKind::Operand { more } };
+        let (tl, lty) = self.type_selected(l, frame);
         let solved = self.solve_in(lty);
         let solved = self.instantiate_receiver_var(solved);
         let widened = self.dealias(solved);
         let prim_lty = self.operator_type(widened);
+        // `(l && r)(ev)`: a Boolean's `&&` short-circuits and its result is applied to the lists
+        // as a value; on anything else `&&` is a method, whose further clauses the lists fill
+        // (zio-test's `TestTrace.&&` takes `A <:< Boolean`).
+        if matches!(op, names::AMPAMP | names::BARBAR) && self.dealias(prim_lty) == self.b.t_boolean {
+            let tr = self.check_right_operand(op, tl, r);
+            let prim = if op == names::AMPAMP { PrimOp::BoolAnd } else { PrimOp::BoolOr };
+            let te = self.prog.add(TExpr::Prim(prim, tl, tr));
+            return Some(self.apply_callee(super::apply::Callee::Value(te, self.b.t_boolean), None, lists, span, expected));
+        }
         if (self.is_primitive(prim_lty) || prim_lty == self.b.t_string) && classify(op).is_some() {
             let (te, ty) = self.binop_or_member(op, tl, prim_lty, widened, r, span, None);
             let ty = self.const_folded(te, ty, tl, lty);
@@ -889,7 +903,10 @@ impl<'a> Worker<'a> {
         expected: Option<TypeId>,
     ) -> (TExprId, TypeId) {
         let mark = self.hoisted.len();
-        let (tr, rty) = self.type_expr(r, None);
+        // The right operand is the qualifier of the operator (`Desugar.binop`'s `r.op(l)`).
+        let further = more.iter().any(|l| !l.using);
+        let frame = SelectionFrame { file: self.env.file, q: r, name: op, at: l, app: span, expected, kind: FrameKind::Operand { more: further } };
+        let (tr, rty) = self.type_selected(r, frame);
         // The receiver's variables that have bounds are solved, as a selection's receiver's are
         // (`type_receiver`); one nothing bounds yet stays open, so that the body of
         // `foldLeft(Nil)((acc, x) => x :: acc)` settles the element of the improved `acc:
@@ -1017,7 +1034,7 @@ impl<'a> Worker<'a> {
     /// is `a.op(b, c)`. Which tuple they were is kept (`Worker::infix_tuples`) for a member's
     /// retry, where dotty applies a unary member to the tuple as written (`ApplyKind.InfixTuple`,
     /// Desugar.scala 1780; `needsTupledDual`, Applications.scala 1671).
-    fn infix_args(&mut self, operand: ExprId) -> Vec<ArgSrc> {
+    pub(super) fn infix_args(&mut self, operand: ExprId) -> Vec<ArgSrc> {
         let ast = self.cur_ast();
         match ast.expr(operand) {
             Expr::Tuple(elems) => {
@@ -1382,14 +1399,14 @@ impl<'a> Worker<'a> {
         let b_bool = self.b.t_boolean;
         if lty == b_string {
             if op == names::PLUS {
-                let (tr, rty) = self.type_expr(r, None);
+                let (tr, rty) = self.typed_operand(r, None);
                 let rty = self.solve_in(rty);
                 let rs = self.to_str(tr, rty);
                 let l = self.prog.list(&[tl, rs]);
                 return Binop::Done(self.prog.add(TExpr::StrConcat(l)), b_string);
             }
             if classify(op) == Some(OpClass::Compare) {
-                let tr = self.check_expr(r, b_string);
+                let tr = self.checked_operand(r, b_string);
                 return Binop::Done(self.prog.add(TExpr::Prim(compare_op(op), tl, tr)), b_bool);
             }
             return Binop::NotBuiltin;
@@ -1401,12 +1418,12 @@ impl<'a> Worker<'a> {
                 names::CARET => PrimOp::BoolXor,
                 _ => return Binop::NotBuiltin,
             };
-            let tr = self.check_expr(r, b_bool);
+            let tr = self.checked_operand(r, b_bool);
             return Binop::Done(self.prog.add(TExpr::Prim(prim, tl, tr)), b_bool);
         }
         let (Some(lrank), Some(class)) = (self.is_numeric(lty), classify(op)) else { return Binop::NotBuiltin };
         let literal_hint = if self.is_const_expr(r) && lrank >= R_LONG { Some(lty) } else { None };
-        let (tr, operand_ty) = self.type_expr(r, literal_hint);
+        let (tr, operand_ty) = self.typed_operand(r, literal_hint);
         self.prim_binop_typed(op, tl, lty, lrank, class, tr, operand_ty, span)
     }
 
@@ -1823,9 +1840,50 @@ impl<'a> Worker<'a> {
     /// (`that.isInstanceOf[C] && that.asInstanceOf[C].x == x`).
     fn check_right_operand(&mut self, op: Name, left: TExprId, r: ExprId) -> TExprId {
         let mark = if op == names::AMPAMP { self.push_tested(left) } else { self.tested.len() };
-        let tr = self.check_expr(r, self.b.t_boolean);
+        let tr = self.checked_operand(r, self.b.t_boolean);
         self.pop_tested(mark);
         tr
+    }
+
+    /// The right operand `r` of a builtin operator, typed with `hint`, or as the deeper selection
+    /// typed it (`apply::SelectionTyped`), which a deeper round alone has done.
+    #[inline(always)]
+    fn typed_operand(&mut self, r: ExprId, hint: Option<TypeId>) -> (TExprId, TypeId) {
+        if self.selection_typed.is_empty() {
+            return self.type_expr(r, hint);
+        }
+        self.typed_operand_cached(r, hint)
+    }
+
+    #[cold]
+    #[inline(never)]
+    fn typed_operand_cached(&mut self, r: ExprId, hint: Option<TypeId>) -> (TExprId, TypeId) {
+        match self.selection_typed_of(r).flatten() {
+            Some(typed) => typed,
+            None => self.type_expr(r, hint),
+        }
+    }
+
+    /// The right operand `r` of a builtin operator checked against `expected`, the deeper
+    /// selection's typing of it adapted (`typedArg` of a cached typing).
+    #[inline(always)]
+    fn checked_operand(&mut self, r: ExprId, expected: TypeId) -> TExprId {
+        if self.selection_typed.is_empty() {
+            return self.check_expr(r, expected);
+        }
+        self.checked_operand_cached(r, expected)
+    }
+
+    #[cold]
+    #[inline(never)]
+    fn checked_operand_cached(&mut self, r: ExprId, expected: TypeId) -> TExprId {
+        match self.selection_typed_of(r).flatten() {
+            Some((te, ty)) => {
+                let span = self.cur_ast().expr_span(r);
+                self.adapt(te, ty, expected, span)
+            }
+            None => self.check_expr(r, expected),
+        }
     }
 
     /// A cast that the condition around it proved, a test of the same stable local for the same
