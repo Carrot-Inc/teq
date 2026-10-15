@@ -182,6 +182,8 @@ impl Collector<'_, '_> {
                         let free = self.an.of_fun(self.cx, s);
                         self.merge(&free);
                     }
+                    // A local class's getter is its companion's, the receiver among the arguments.
+                    DefaultOf::Ctor(c) if self.cx.ctor_defaults_on_local_companion(c) => {}
                     DefaultOf::Ctor(c) => {
                         let idx = self.cx.tclass_of.get(c.idx()).copied().unwrap_or(u32::MAX);
                         if idx != u32::MAX && self.cx.input.syms.class(c).kind != ClassKind::Anon {
@@ -418,6 +420,7 @@ impl CellWalk<'_, '_> {
             TExpr::Default(of, at, args) => {
                 match of {
                     DefaultOf::Method(s) => self.reference(s),
+                    DefaultOf::Ctor(c) if self.cx.ctor_defaults_on_local_companion(c) => {}
                     DefaultOf::Ctor(c) => {
                         let idx = self.cx.tclass_of.get(c.idx()).copied().unwrap_or(u32::MAX);
                         if idx != u32::MAX && self.cx.input.syms.class(c).kind != ClassKind::Anon {

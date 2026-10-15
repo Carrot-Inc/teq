@@ -173,7 +173,8 @@ pub struct Loaded {
     /// TASTy file and address), whose place a pickle holding an expansion of it writes.
     pub product_def_trees: FxMap<(FileId, crate::ast::DefId), (u32, Addr)>,
     /// The members of products' classes that scalac adds and teq's model of the class has not:
-    /// the default getters and the vars' setters, which the release renaming leaves out.
+    /// the default getters, the vars' setters and a case companion's synthesized `apply`, which
+    /// the release renaming leaves out.
     pub product_synthetics: FxMap<SymId, ()>,
     /// The members a pickle names by a default getter's name (dotty's `DefaultGetterName`), which
     /// a wildcard export leaves with their methods (`Namer.addWildcardForwarders`).
@@ -1568,14 +1569,14 @@ impl<'a> Worker<'a> {
             if let Some(sym) = inner {
                 self.loaded_mut().syms.insert(sym, LSym { file, addr: e.addr, conversion: false });
                 self.loaded_mut().tables[file as usize].terms.insert(e.addr, sym);
-                // The companion an enum or a case class of a class made is eager, as the program's
-                // own is (dotty's `LazyVals.transformSyntheticModule`, after the pickler, which
-                // writes it lazy); a written one or a trait's lazy.
+                // The companion `Desugar.classDef` made of a class, an enum's, a case class's or one
+                // for a constructor's default getters, is eager, as the program's own is (dotty's
+                // `LazyVals.transformSyntheticModule` of every synthetic module, after the pickler,
+                // which writes it lazy); a written one or a trait's lazy.
                 let companion = self.nested_object_of(o, name).and_then(|c| self.syms.class(c).companion.map(|k| (c, k)));
-                let made = e.flags.has(tags::SYNTHETIC)
-                    && companion.is_some_and(|(_, k)| self.syms.class(k).kind == ClassKind::Enum || self.syms.class(k).mods & mods::CASE != 0);
+                let made = e.flags.has(tags::SYNTHETIC) && companion.is_some();
                 if let (true, Some((c, k))) = (made, companion) {
-                    if self.syms.class(k).mods & mods::CASE != 0 {
+                    if self.syms.class(k).kind != ClassKind::Enum {
                         self.syms.class_mut(c).synthetic_companion = true;
                     }
                     if self.syms.class(o).kind != ClassKind::Trait {
@@ -1602,9 +1603,10 @@ impl<'a> Worker<'a> {
             return;
         }
         self.loaded_mut().tables[file as usize].terms.insert(e.addr, sym);
-        // The companion `Desugar.classDef` made for a case class, whose module val the pickle
-        // flags synthetic: the program's own made one (`ClassInfo::synthetic_companion`).
-        if e.flags.has(tags::SYNTHETIC) && self.syms.class(obj).companion.is_some_and(|k| self.syms.class(k).mods & mods::CASE != 0) {
+        // The companion `Desugar.classDef` made for a case class or a constructor's default getters,
+        // whose module val the pickle flags synthetic: the program's own made one
+        // (`ClassInfo::synthetic_companion`).
+        if e.flags.has(tags::SYNTHETIC) && self.syms.class(obj).companion.is_some_and(|k| self.syms.class(k).kind != ClassKind::Enum) {
             self.syms.class_mut(obj).synthetic_companion = true;
         }
         let m = flag_mods(e.flags) & (mods::IMPLICIT | mods::GIVEN | mods::LAZY);
@@ -1812,6 +1814,12 @@ impl<'a> Worker<'a> {
         if let Some(ctor) = &sig.ctor {
             self.enter_loaded_ctor(c, &mut cx, ctor, &sig.accessors);
             self.enter_loaded_ctor_access(c, &ctor.mods);
+        }
+        // A statement of the template, which a construction runs: the class has initialisation,
+        // as dotty's `indexStats` clears `NoInits` for one (`no_inits`), as the namer marks a
+        // source class's.
+        if sig.index.statements {
+            self.syms.class_mut(c).has_statements = true;
         }
         // As in source (`resolve.rs`): the values of an enum with parameters, a superclass or an
         // initialiser in its body (a val with a right side, a statement), or of a class's enum,
@@ -2356,7 +2364,9 @@ impl<'a> Worker<'a> {
         // its `this` included.
         if f.has(tags::SYNTHETIC) && !f.has(tags::CASEACCESSOR) {
             let supplied = match tasty.simple(e.name) {
-                Some("apply") => (self.is_plain_case_companion(c) && !explicit_apply && !self.keeps_synthetic_apply(c)) || product,
+                // A product's is a member of its companion, as `Desugar.classDef` makes it; a
+                // library's static case companion's stands for the constructor, as before.
+                Some("apply") => !product && self.is_plain_case_companion(c) && !explicit_apply && self.syms.class(c).inner_object.is_none(),
                 Some(n) => supplied_synthetic(n),
                 // A derived name is one teq derives itself (a default getter from its parameter's
                 // default, a super accessor), but an inline accessor's and a pattern field's.
@@ -2459,9 +2469,12 @@ impl<'a> Worker<'a> {
         // What scalac adds to a class that teq's model of the class has not as members: the
         // default getters. A var's setter (`mods::SETTER`) is a member of the model too.
         if product && e.tag == tags::DEFDEF {
-            // And the accessors teq's writer gives a class for its inline bodies.
+            // And the accessors teq's writer gives a class for its inline bodies, and a case
+            // companion's synthesized `apply`, a member the products keep (`Desugar.classDef`)
+            // where the program's own companion has the constructor stand for it.
             let accessor = tasty.is_inline_accessor(e.name);
-            if default_getter || accessor {
+            let synthesized_apply = f.has(tags::SYNTHETIC) && tasty.simple(e.name) == Some("apply");
+            if default_getter || accessor || synthesized_apply {
                 self.loaded_mut().product_synthetics.insert(sym, ());
             }
         }

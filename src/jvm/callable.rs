@@ -145,7 +145,7 @@ impl<'a> Cx<'a> {
         self.is_case_class(c)
             && info.kind == ClassKind::Class
             && info.companion.map_or(true, |m| self.made_case_companion(m))
-            && self.input.syms.class(o).kind == ClassKind::Class
+            && matches!(self.input.syms.class(o).kind, ClassKind::Class | ClassKind::Trait)
             && i != u32::MAX
             && self.input.prog.classes[i as usize].captures == 1
             && self.emits(c)
@@ -172,6 +172,62 @@ impl<'a> Cx<'a> {
             && self.input.prog.classes[i as usize].captures == 1
     }
 
+    /// Whether the getters of the defaults of the primary constructor of the program's class `c`,
+    /// nested in a class, are members of its companion, an object of each enclosing instance
+    /// (`O$C$`, which `O.C()` holds): `Desugar.classDef` places them among the companion's
+    /// members, a written companion's or the one it makes for a case class or for a class whose
+    /// constructor has defaults (`companionDefs`), numbered over the declared parameters, and
+    /// `ExplicitOuter` gives them no outer parameter: the companion's enclosing instance is the
+    /// class's.
+    pub fn ctor_defaults_on_inner_companion(&self, c: ClassId) -> bool {
+        let syms = self.input.syms;
+        let info = syms.class(c);
+        let Owner::Class(o) = info.owner else { return false };
+        let i = self.tclass_of[c.idx()];
+        // A class of a trait has its companion as a class's has, which the classes mixing the trait
+        // in hold.
+        let owner = syms.class(o).kind;
+        info.kind == ClassKind::Class
+            && matches!(owner, ClassKind::Class | ClassKind::Trait)
+            && i != u32::MAX
+            && self.input.prog.classes[i as usize].captures >= 1
+            && self.has_ctor_defaults(c)
+            && self.emits(c)
+            && self.emits(o)
+            && info.companion.map_or(true, |m| self.made_case_companion(m) || (syms.class(m).inner_object.is_some() && self.emits(m)))
+            && self.companion_holds_default_captures(c)
+    }
+
+    /// Whether the companion of `c`, a class nested in a class of a block that captures more than
+    /// its enclosing instance, captures what its constructors' defaults read of those, as the
+    /// typer has it capture them before the capture lowering (`Worker::companion_default_reads`).
+    fn companion_holds_default_captures(&self, c: ClassId) -> bool {
+        let prog = &self.input.prog;
+        let tc = &prog.classes[self.tclass_of[c.idx()] as usize];
+        let captured = &tc.ctor_params[1.min(tc.captures)..tc.captures];
+        if captured.is_empty() {
+            return true;
+        }
+        let held: &[SymId] = match self.input.syms.class(c).companion.map(|m| self.tclass_of[m.idx()]).filter(|&j| j != u32::MAX) {
+            Some(j) => {
+                let mc = &prog.classes[j as usize];
+                &mc.ctor_params[..mc.captures]
+            }
+            None => &[],
+        };
+        let roots = tc.ctor_defaults.iter().flatten().copied().chain(tc.ctors.iter().flat_map(|&f| prog.funs[f.idx()].defaults.iter().flatten().copied()));
+        for root in roots {
+            for e in prog.descendants(root) {
+                if let crate::tir::TExpr::Local(s) | crate::tir::TExpr::CallStatic(s, _) = prog.expr(e) {
+                    if captured.contains(&s) && !held.contains(&s) {
+                        return false;
+                    }
+                }
+            }
+        }
+        true
+    }
+
     /// Whether a constructor of program class `c`, its primary one or a secondary one the output
     /// keeps, has a default.
     pub fn has_ctor_defaults(&self, c: ClassId) -> bool {
@@ -196,6 +252,20 @@ impl<'a> Cx<'a> {
             && self.statically_placed(c)
             && self.input.prog.classes[self.tclass_of[c.idx()] as usize].captures == 0
             && self.has_ctor_defaults(c)
+    }
+
+    /// A local class whose constructors' defaults are instance getters of its local companion,
+    /// the object written beside it or the one `Desugar.classDef` makes for them (`companionDefs`),
+    /// which captures what they read (`Worker::companion_default_reads`) and which a creation's
+    /// getter is selected on (`Applications.findDefaultGetter`), as scalac's lifted companion
+    /// holds them.
+    pub fn ctor_defaults_on_local_companion(&self, c: ClassId) -> bool {
+        let info = self.input.syms.class(c);
+        info.owner == Owner::Local
+            && info.kind == ClassKind::Class
+            && info.companion.is_some_and(|m| self.input.syms.class(m).local_module.is_some())
+            && self.has_ctor_defaults(c)
+            && self.emits(c)
     }
 
     /// A plain class or a trait without a companion object whose companion module class the
@@ -721,8 +791,9 @@ impl<'a> Gen<'a> {
             self.return_value(&object_type);
             self.end_method(ACC_PUBLIC | ACC_BRIDGE | ACC_SYNTHETIC, "fromProduct", &method_desc(&[product], &object_type));
         }
-        self.inner_companion_default_getters(c, tc, &outer, |g| {
-            g.load(0, &this);
+        self.inner_companion_default_getters(c, &outer, &|g: &mut Self| {
+            let name = g.this_name.clone();
+            g.load(0, &JType::L(name.clone()));
             g.getfield(&name, "$outer", &outer);
         });
         // The outer accessor under scalac's name, which a downstream of either compiler calls
@@ -737,11 +808,66 @@ impl<'a> Gen<'a> {
         self.finish_class(&name)
     }
 
-    /// The getters of the constructor's defaults of `c`, a case class nested in a class, on its
+    /// The getters of the defaults of the primary constructor of `k` in its companion being
+    /// written, an object of each instance of the class `k` is nested in
+    /// (`ctor_defaults_on_inner_companion`): scalac's `$lessinit$greater$default$N`, numbered over
+    /// the declared parameters and taking those of the clauses before the default's
+    /// (`Desugar.addDefaultGetters`), each default read with the companion's enclosing instance,
+    /// which `load_outer` leaves on the stack, where the class's stands; a by-name
+    /// parameter's returning the value, as a companion's getter does (`companion_default_getters`).
+    fn inner_companion_default_getters(&mut self, k: ClassId, outer: &JType, load_outer: &dyn Fn(&mut Self)) {
+        let cx = self.cx;
+        let syms = cx.input.syms;
+        let tc = &cx.input.prog.classes[cx.tclass_of[k.idx()] as usize];
+        // The primary constructor's, whose defaults stand by its parameters after the enclosing
+        // instance, and a secondary one's (`Desugar.classDef` collects every constructor's), whose
+        // parameters follow its own enclosing instance and whose defaults are its declared
+        // parameters' (`type_secondary_ctor`); only one constructor may have defaults.
+        // The captures after the enclosing instance are the companion's own fields.
+        let clauses = syms.class(k).ctor.clone();
+        let n = tc.captures;
+        self.inner_getters_of(tc.ctor_params[0], &tc.ctor_params[n..], &tc.ctor_defaults[n..], &clauses, outer, load_outer);
+        for &f in &tc.ctors {
+            let fun = &cx.input.prog.funs[f.idx()];
+            if !cx.input.reach.funs[f.idx()] || fun.defaults.iter().all(Option::is_none) || fun.params.is_empty() {
+                continue;
+            }
+            let clauses: Vec<ClauseSig> = syms.sym(fun.sym).sig.as_ref().map_or(Vec::new(), |sig| sig.clauses.clone());
+            let declared: usize = clauses.iter().map(|cl| cl.params.len()).sum();
+            let lead = fun.params.len().saturating_sub(declared).max(1);
+            self.inner_getters_of(fun.params[0], &fun.params[lead..], &fun.defaults, &clauses, outer, load_outer);
+        }
+    }
+
+    /// `inner_companion_default_getters` of one constructor: its enclosing instance `outer_sym`, its
+    /// declared parameters and their defaults, parallel.
+    fn inner_getters_of(&mut self, outer_sym: SymId, params: &[SymId], defaults: &[Option<crate::tir::TExprId>], clauses: &[ClauseSig], outer: &JType, load_outer: &dyn Fn(&mut Self)) {
+        let mut start = 0;
+        for cl in clauses {
+            let before: Vec<(Option<SymId>, JType)> = params[..start.min(params.len())].iter().map(|&p| (Some(p), self.sym_type(p))).collect();
+            let before_types: Vec<JType> = before.iter().map(|p| p.1.clone()).collect();
+            for (j, p) in cl.params.iter().enumerate() {
+                let i = start + j;
+                let Some(d) = defaults.get(i).copied().flatten() else { continue };
+                let ret = if p.by_name { self.erase(p.ty) } else { self.sym_type(params[i]) };
+                self.begin_method(false, false, &before, ret.clone(), &[d]);
+                load_outer(self);
+                let slot = self.store_new(outer);
+                self.m.locals.insert(outer_sym, Local { slot, ty: outer.clone(), cell: false });
+                self.default_value(d, p.by_name, &ret);
+                self.return_value(&ret);
+                self.end_method(ACC_PUBLIC, &format!("$lessinit$greater$default${}", i + 1), &method_desc(&before_types, &ret));
+            }
+            start += cl.params.len();
+        }
+    }
+
+    /// The getters of the constructor's defaults of `c`, a case class nested in a class whose
+    /// getters stay the class's (a block's, `ctor_defaults_on_inner_companion` false), on its
     /// companion: scalac's `$lessinit$greater$default$N` (`Desugar.defaultGetters`), each taking the
     /// parameters of the clauses before its own and calling the class's static getter, which takes
     /// the enclosing instance first (`ctor_default_getters`), which `load_outer` loads.
-    fn inner_companion_default_getters(&mut self, c: ClassId, tc: &crate::tir::TClass, outer: &JType, load_outer: impl Fn(&mut Self)) {
+    fn forwarding_default_getters(&mut self, c: ClassId, tc: &crate::tir::TClass, outer: &JType, load_outer: impl Fn(&mut Self)) {
         let case_name = self.class_name(c);
         let clauses = self.cx.input.syms.class(c).ctor.clone();
         let mut start = 0;
@@ -777,24 +903,27 @@ impl<'a> Gen<'a> {
     /// In the written companion object `c` of the program's case class `k` nested in a class (an
     /// inner module, `O$E$`), what scalac's `Desugar` gives it beside its own members: `apply`
     /// constructing `k` with the companion's enclosing instance (teq's outer accessor of the
-    /// module), the identity `unapply` unless withdrawn, and scalac's outer accessor.
+    /// module), the identity `unapply` unless withdrawn, and scalac's outer accessor; and the
+    /// getters of the defaults of the constructor of `k`, a plain class's too
+    /// (`inner_companion_default_getters`).
     pub fn inner_written_companion_members(&mut self, k: ClassId, c: ClassId) {
         let cx = self.cx;
         let syms = cx.input.syms;
         let info = syms.class(k);
         let (Owner::Class(_), Some(_)) = (info.owner, syms.class(c).inner_object) else { return };
         let i = cx.tclass_of[k.idx()];
-        // A case class's, and a local enum's class case's (`has_inner_written_case_companion`).
+        // A case class's, and a local enum's class case's (`has_inner_written_case_companion`); a
+        // plain class's written companion holds its constructor's getters alone.
         let case = match info.kind {
             ClassKind::Class => cx.is_case_class(k),
             ClassKind::EnumCase => info.singleton.is_none() && cx.in_a_block(k),
             _ => false,
         };
-        if i == u32::MAX || !case {
+        if i == u32::MAX || !case && !(info.kind == ClassKind::Class && cx.ctor_defaults_on_inner_companion(k)) {
             return;
         }
         let tc = &cx.input.prog.classes[i as usize];
-        if tc.captures != 1 {
+        if tc.captures == 0 {
             return;
         }
         let name = self.this_name.clone();
@@ -804,6 +933,14 @@ impl<'a> Gen<'a> {
         // companion of a class of a block's object has none, its enclosing instance a capture.
         let accessor = format!("{}$$$outer", name.replace('/', "$"));
         let captured = if self.cw.has_method(&accessor, &method_desc(&[], &outer)) { None } else { self.class_captures.first().map(|c| (c.1.clone(), c.2.clone())) };
+        // A case class's companion members here take its enclosing instance alone; the getters
+        // read what else the defaults read from the companion's own captures.
+        if !case || tc.captures != 1 {
+            if cx.ctor_defaults_on_inner_companion(k) {
+                self.inner_companion_default_getters(k, &outer, &|g: &mut Self| g.load_companion_outer(&this, &name, &accessor, &outer, &captured));
+            }
+            return;
+        }
         let case_name = self.class_name(k);
         let case_type = JType::L(case_name.clone());
         let params: Vec<(Option<SymId>, JType)> = tc.ctor_params[1..].iter().map(|&p| (Some(p), self.sym_type(p))).collect();
@@ -877,9 +1014,15 @@ impl<'a> Gen<'a> {
             self.return_value(&object_type);
             self.end_method(ACC_PUBLIC | ACC_BRIDGE | ACC_SYNTHETIC, "fromProduct", &method_desc(&[product], &object_type));
         }
-        self.inner_companion_default_getters(k, tc, &outer, |g| {
-            g.load_companion_outer(&this, &name, &accessor, &outer, &captured);
-        });
+        // The companion's own getters where the class's are its companion's
+        // (`ctor_defaults_on_inner_companion`), else ones that forward to the class's.
+        if cx.ctor_defaults_on_inner_companion(k) {
+            self.inner_companion_default_getters(k, &outer, &|g: &mut Self| g.load_companion_outer(&this, &name, &accessor, &outer, &captured));
+        } else {
+            self.forwarding_default_getters(k, tc, &outer, |g| {
+                g.load_companion_outer(&this, &name, &accessor, &outer, &captured);
+            });
+        }
         let scalac_accessor = format!("{}$$$outer", name.replace('/', "$"));
         let desc = method_desc(&[], &outer);
         if !self.cw.has_method(&scalac_accessor, &desc) {
@@ -900,13 +1043,17 @@ impl<'a> Gen<'a> {
         }
     }
 
-    /// In the class `c` being written, per case class nested in it with the companion
-    /// `has_inner_case_companion` gives it, the lazy getter `C()` of that module, over the
-    /// holder `C$lzy`, as an object nested in a class has its own.
+    /// In the class `c` being written, per class nested in it with the companion
+    /// `has_inner_case_companion` gives it, the lazy getter `C()`
+    /// of that module, over the holder `C$lzy`, as an object nested in a class has its own.
     pub fn inner_case_companion_getters(&mut self, c: ClassId) {
         let cx = self.cx;
         let mut nested: Vec<(crate::intern::Name, ClassId)> = cx.input.syms.class(c).nested.iter().map(|(&n, &k)| (n, k)).collect();
         nested.sort_by(|a, b| cx.input.interner.get(a.0).cmp(cx.input.interner.get(b.0)));
+        // A trait holds none: the classes mixing it in hold its companions' (`mixin`).
+        if cx.input.syms.class(c).kind == ClassKind::Trait {
+            return;
+        }
         for (n, k) in nested {
             if !cx.has_inner_case_companion(k) {
                 continue;
@@ -1115,14 +1262,18 @@ impl<'a> Gen<'a> {
         let syms = cx.input.syms;
         let tc = &cx.input.prog.classes[cx.tclass_of[c.idx()] as usize];
         let clauses = syms.class(c).ctor.clone();
-        self.companion_default_getters(&tc.ctor_params, &tc.ctor_defaults, &clauses);
+        // A local class's captures lead its parameters: its companion holds them as its own.
+        let n = tc.captures;
+        self.companion_default_getters(&tc.ctor_params[n..], &tc.ctor_defaults[n..], &clauses);
         for &f in &tc.ctors {
             let fun = &cx.input.prog.funs[f.idx()];
             if !cx.input.reach.funs[f.idx()] || fun.defaults.iter().all(Option::is_none) {
                 continue;
             }
             let clauses: Vec<ClauseSig> = syms.sym(fun.sym).sig.as_ref().map_or(Vec::new(), |sig| sig.clauses.clone());
-            self.companion_default_getters(&fun.params, &fun.defaults, &clauses);
+            let declared: usize = clauses.iter().map(|cl| cl.params.len()).sum();
+            let lead = fun.params.len().saturating_sub(declared);
+            self.companion_default_getters(&fun.params[lead..], &fun.defaults, &clauses);
         }
     }
 

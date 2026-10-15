@@ -89,6 +89,9 @@ pub struct Parser<'a> {
     toks: &'a mut [Token],
     syntax: Syntax,
     pos: usize,
+    /// The token a block's expression statement starts at: a lambda there takes the rest of the
+    /// block as its body (`parse_lambda`, dotty's `closureRest` in `Location.InBlock`).
+    block_lambda_at: usize,
     text: &'a str,
     end_markers: &'a [Span],
     pub ast: Ast,
@@ -114,6 +117,11 @@ pub struct Parser<'a> {
     /// The case classes of the bodies being parsed, each of which has a companion (`Desugar
     /// .classDef`'s `companionDefs`): one the body does not write is made (`add_derived_givens`).
     pending_cases: Vec<(Name, Span)>,
+    /// The classes and traits of a class's or trait's body being parsed whose constructors have a
+    /// default, each of which has a companion holding the getters (`Desugar.classDef`'s
+    /// `companionDefs` of `defaultGetters`): one the body does not write is made
+    /// (`add_derived_givens`).
+    pending_defaults: Vec<(Name, Span)>,
     /// The `self =>` alias of the template body being parsed, EMPTY without one; a nested body
     /// hides it, as `Outer.this` is not in the subset either.
     /// One AST per `package p:` block, each read by the typer as a file of its own in that
@@ -185,6 +193,7 @@ pub fn parse(text: &str, lexed: &mut LexResult, closed: &[u32], interner: &Inter
         toks: &mut lexed.tokens,
         syntax,
         pos: 0,
+        block_lambda_at: usize::MAX,
         text,
         end_markers: &lexed.end_markers,
         ast: Ast::new(text.len()),
@@ -203,6 +212,7 @@ pub fn parse(text: &str, lexed: &mut LexResult, closed: &[u32], interner: &Inter
         pending_derives: Vec::new(),
         main_annotated: false,
         pending_cases: Vec::new(),
+        pending_defaults: Vec::new(),
         package_blocks: Vec::new(),
         template_type: false,
         quote_level: 0,
@@ -1119,9 +1129,11 @@ impl<'a> Parser<'a> {
     }
 
     fn add_top_level_derived_givens(&mut self) {
+        // A top-level class's getters are its companion's as the backends write it already.
+        self.pending_defaults.clear();
         if !self.pending_derives.is_empty() || !self.pending_cases.is_empty() {
             let defs = self.ast.top_level.clone();
-            let companions = self.add_derived_givens(0, 0, &defs);
+            let companions = self.add_derived_givens(0, 0, 0, &defs);
             let mut top = std::mem::take(&mut self.ast.top_level);
             self.place_companions(&mut top, companions, |&d| Some(d), |d| d);
             self.ast.top_level = top;

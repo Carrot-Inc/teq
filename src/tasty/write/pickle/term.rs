@@ -160,8 +160,9 @@ pub(super) fn universal_sig(tps: usize, params: &[&str]) -> Vec<SigParam> {
 pub(super) enum Getter {
     Method(SymId, Option<Qual>),
     /// A constructor's, with the enclosing instance a creation of a class nested in a class
-    /// passes, on which its companion is selected.
-    Ctor(ClassId, Option<TExprId>),
+    /// passes, on which its companion is selected; a secondary constructor's names it, its
+    /// getters numbered over its own clauses (`Desugar.classDef`).
+    Ctor(ClassId, Option<SymId>, Option<TExprId>),
     Forwarder(SymId, TExprId, Name),
 }
 
@@ -961,8 +962,13 @@ impl<'w, 'a> P<'w, 'a> {
                 let index = (at & !DEFAULT_RECEIVER) as usize;
                 let (recv, priors) = if at & DEFAULT_RECEIVER != 0 { (items.first().copied(), items[1..].to_vec()) } else { (None, items) };
                 let getter = match (of, self.default_forwarder) {
-                    (DefaultOf::Ctor(c), _) => Getter::Ctor(c, recv),
-                    (DefaultOf::Method(s), _) if self.w.syms.sym(s).name == crate::names::INIT => Getter::Method(s, None),
+                    (DefaultOf::Ctor(c), _) => Getter::Ctor(c, None, recv),
+                    // A secondary constructor's, its class's companion's as the primary's
+                    // (`Applications.findDefaultGetter` finds a constructor's there).
+                    (DefaultOf::Method(s), _) if self.w.syms.sym(s).name == crate::names::INIT => match self.w.syms.sym(s).owner {
+                        Owner::Class(c) => Getter::Ctor(c, Some(s), recv),
+                        _ => Getter::Method(s, None),
+                    },
                     (DefaultOf::Method(s), Some((m, o, n))) if m == s && recv.is_some() => Getter::Forwarder(s, o, n),
                     (DefaultOf::Method(s), _) => Getter::Method(s, Some(recv.map_or(Qual::Owner, Qual::Expr))),
                 };
@@ -1331,11 +1337,17 @@ impl<'w, 'a> P<'w, 'a> {
             return self.qual_this(c);
         }
         let name = self.w.interner.get(self.w.syms.sym(s).name).to_string();
-        if name.starts_with("$this") {
+        // The local that stands for an enclosing class's `this`, and a secondary constructor's
+        // enclosing instance (`type_secondary_ctor`'s `$outer`), which its body and its defaults
+        // read where the source writes `C.this`.
+        if name.starts_with("$this") || name == "$outer" && self.w.syms.sym(s).kind == SymKind::Param {
             let t = self.w.sig_of(s).ret;
             let t = self.w.zonk(t);
-            if let Type::This(c) = self.w.types.get(t) {
-                return self.qual_this(c);
+            match self.w.types.get(t) {
+                Type::This(c) => return self.qual_this(c),
+                // The secondary constructor's parameter is of the enclosing class's type.
+                Type::Class(c, _) if name == "$outer" => return self.qual_this(c),
+                _ => {}
             }
             return self.fail(format!("the outer this {}", name));
         }
@@ -2102,11 +2114,14 @@ impl<'w, 'a> P<'w, 'a> {
                 let order = super::declared_clause_order(self.w, &info, &sig);
                 (name, sig.tparams.len(), sig.clauses, order, owner)
             }
-            Getter::Ctor(c, _) => {
+            Getter::Ctor(c, via, _) => {
                 self.w.complete_class(c);
-                let info = self.w.syms.class(c);
-                let n = info.ctor.len();
-                ("<init>".to_string(), info.tparams.len(), info.ctor.clone(), (0..n).collect(), None)
+                let clauses = match via {
+                    Some(s) => self.w.sig_of(s).clauses.clone(),
+                    None => self.w.syms.class(c).ctor.clone(),
+                };
+                let n = clauses.len();
+                ("<init>".to_string(), self.w.syms.class(c).tparams.len(), clauses, (0..n).collect(), None)
             }
         };
         // The clauses in the declaration's order (a right-associative extension's swapped), the
@@ -2138,7 +2153,7 @@ impl<'w, 'a> P<'w, 'a> {
                 (true, Some(o)) => Some(self.w.library_class_name(o, "")),
                 _ => None,
             },
-            Getter::Ctor(c, _) => self.is_std_class(c).then(|| format!("{}$", self.w.library_class_name(c, "").trim_end_matches('$'))),
+            Getter::Ctor(c, ..) => self.is_std_class(c).then(|| format!("{}$", self.w.library_class_name(c, "").trim_end_matches('$'))),
             Getter::Forwarder(..) => None,
         };
         if let Some(owner) = std_owner {
@@ -2240,21 +2255,36 @@ impl<'w, 'a> P<'w, 'a> {
             Getter::Method(_, Some(Qual::Expr(r))) | Getter::Forwarder(_, r, _) => self.term(r),
             Getter::Method(m, Some(Qual::Owner)) => self.owner_path(m),
             Getter::Method(_, None) => self.this_ref(),
+            // A companion bound before the call (a library's synthesized `apply` on a receiver the
+            // call lifts), whose enclosing instance the typer reaches through its outer accessor:
+            // the getter on the companion itself (`Applications.findDefaultGetter` on the receiver).
+            Getter::Ctor(c, _, Some(r)) if self.companion_of_outer(c, r).is_some() => {
+                let q = self.companion_of_outer(c, r).unwrap();
+                self.term(q);
+            }
             // A class nested in a class: its companion, an object of the instance, selected on it.
-            Getter::Ctor(c, Some(r)) if matches!(self.w.syms.class(c).owner, Owner::Class(o) if self.w.syms.class(o).kind != ClassKind::Object) => {
+            Getter::Ctor(c, _, Some(r)) if matches!(self.w.syms.class(c).owner, Owner::Class(o) if self.w.syms.class(o).kind != ClassKind::Object) => {
                 self.buf.byte(SELECT);
                 let n = self.simple_name(self.w.syms.class(c).name);
                 self.buf.nat(n as u64);
                 self.term_at(None);
                 self.term(r);
             }
-            Getter::Ctor(c, _) => self.companion_path(c),
+            Getter::Ctor(c, ..) => self.companion_path(c),
         }
+    }
+
+    /// The companion of `c` that `r`, the enclosing instance a constructor's getter is selected
+    /// through, reads its outer accessor on: `x` of `x.$outer` where `x` is that companion.
+    fn companion_of_outer(&self, c: ClassId, r: TExprId) -> Option<TExprId> {
+        let TExpr::CallMethod(q, s, l) = self.w.prog.expr(r) else { return None };
+        let companion = self.w.syms.class(c).companion?;
+        (l.len == 0 && self.is_outer_accessor(s) && self.w.syms.sym(s).owner == Owner::Class(companion)).then_some(q)
     }
 
     fn getter_owner(&mut self, getter: Getter, owner: Option<ClassId>) {
         match (getter, owner) {
-            (Getter::Ctor(c, _), _) => self.companion_class_ref(c),
+            (Getter::Ctor(c, ..), _) => self.companion_class_ref(c),
             (_, Some(o)) => self.owner_class_ref(o),
             // A top-level method's getter, a member of its file's `$package` object.
             (Getter::Method(m, _), None) if matches!(self.w.syms.sym(m).owner, Owner::Package(_)) => self.package_object_class_ref(m),

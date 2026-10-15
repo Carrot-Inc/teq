@@ -843,6 +843,16 @@ impl<'a> Worker<'a> {
         }
     }
 
+    /// The enclosing instance a creation of `c`, a class nested in a class, takes where the code
+    /// being typed stands inside that class's holder and outside `c`: `O.this` (`new_outer_arg`),
+    /// known before the creation's arguments.
+    pub(super) fn enclosing_outer_of(&mut self, c: ClassId) -> Option<TExprId> {
+        let o = self.outer_class(c)?;
+        let holder = self.holder_of(o);
+        let enclosed = self.env.frames.iter().any(|f| matches!(f, Frame::Class(k) if *k == holder));
+        (enclosed && !self.inside_class(c)).then(|| self.this_ref(holder))
+    }
+
     /// The enclosing instance an instance of `c`, a class nested in the class `o`, is made
     /// with, its constructors' first argument (dotty's `ExplicitOuter.OuterOps.args`): `this` of
     /// the enclosing instance deriving from `o`, the outer instance inside `c` itself (the outer
@@ -868,6 +878,13 @@ impl<'a> Worker<'a> {
     pub(super) fn finish_local_class(&mut self, c: ClassId, first: usize) {
         let mut captures = self.captured_by(c, first);
         self.add_accessor_captures(c, &mut captures);
+        // A local companion holds its class's default getters (`Desugar.classDef`'s
+        // `companionDefs`): it captures what they read, before the capture lowering.
+        let reads = self.companion_default_reads(c);
+        if !reads.is_empty() {
+            let visible = self.visible_to_class(c);
+            captures.extend(reads.into_iter().filter(|s| visible.contains(s) && !captures.contains(s)).collect::<Vec<_>>());
+        }
         // A class mixing in a local trait of the block not checked yet forwards to the trait's
         // members once it is, with what they read (`finish_deferred_classes`).
         if self.waits_for_local_trait(c) {
@@ -899,6 +916,31 @@ impl<'a> Worker<'a> {
             self.prog.exprs[e.idx()] = TExpr::New(c, l);
         }
         self.capture_through_nested(c, &captures);
+    }
+
+    /// What the defaults of the constructors of the class whose companion is the object `m` read:
+    /// the getters `Desugar.classDef` makes members of the companion (`companionDefs`).
+    pub(super) fn companion_default_reads(&mut self, m: ClassId) -> Vec<SymId> {
+        let mut found = Vec::new();
+        let info = self.syms.class(m);
+        if info.local_module.is_none() && info.inner_object.is_none() {
+            return found;
+        }
+        let Some(k) = info.companion else { return found };
+        let Some(index) = self.prog_index.class(&self.prog, k) else { return found };
+        let tc = &self.prog.classes[index];
+        let roots: Vec<TExprId> =
+            tc.ctor_defaults.iter().flatten().copied().chain(tc.ctors.iter().flat_map(|&f| self.prog.funs[f.idx()].defaults.iter().flatten().copied())).collect();
+        for root in roots {
+            for e in self.prog.descendants(root) {
+                if let TExpr::Local(s) | TExpr::CallStatic(s, _) = self.prog.expr(e) {
+                    if !found.contains(&s) {
+                        found.push(s);
+                    }
+                }
+            }
+        }
+        found
     }
 
     /// The lifted class `l` captures `captures`: a class nested in it, a member of it or of one of
@@ -963,6 +1005,13 @@ impl<'a> Worker<'a> {
                 continue;
             };
             let tc = self.prog.classes[index].clone();
+            // A companion's walk takes its class's defaults, whose getters it holds.
+            let held: Vec<SymId> = self.companion_default_reads(k).into_iter().filter(|s| captures.contains(s)).collect();
+            for s in held {
+                if !names[i].contains(&s) {
+                    names[i].push(s);
+                }
+            }
             for root in self.class_roots(std::slice::from_ref(&tc)) {
                 let found: Vec<TExprId> = self.prog.descendants(root).collect();
                 for e in found {

@@ -1039,7 +1039,9 @@ impl<'a> Gen<'a> {
             if let Some(k) = case_companion {
                 self.companion_members(k, Some(c));
             }
-            if let Some(k) = info.companion.filter(|&k| is_object && !cx.has_case_companion(k) && cx.ctor_defaults_on_companion(k)) {
+            if let Some(k) = info.companion.filter(|&k| {
+                is_object && !cx.has_case_companion(k) && cx.ctor_defaults_on_companion(k) || info.local_module.is_some() && cx.ctor_defaults_on_local_companion(k)
+            }) {
                 self.ctor_default_getters_of(k);
             }
             if let Some(v) = info.companion.filter(|&v| is_object && cx.has_value_companion(v)) {
@@ -1593,7 +1595,7 @@ impl<'a> Gen<'a> {
         let ctor_access = if is_object && cx.statically_placed(tc.id) && cx.input.syms.class(tc.id).local_module.is_none() { ACC_PRIVATE } else { ACC_PUBLIC };
         self.end_method(ctor_access, "<init>", &method_desc(&types, &JType::V));
 
-        if !cx.ctor_defaults_on_companion(tc.id) {
+        if !cx.ctor_defaults_on_companion(tc.id) && !cx.ctor_defaults_on_inner_companion(tc.id) && !cx.ctor_defaults_on_local_companion(tc.id) {
             let clauses = cx.input.syms.class(tc.id).ctor.clone();
             self.ctor_default_getters(Some(tc.id), &tc.ctor_params, &tc.ctor_defaults, &clauses);
         }
@@ -1639,7 +1641,7 @@ impl<'a> Gen<'a> {
         self.return_value(&JType::V);
         let types: Vec<JType> = params.iter().map(|p| p.1.clone()).collect();
         self.end_method(ACC_PUBLIC, "<init>", &method_desc(&types, &JType::V));
-        if !self.this_class.map_or(false, |c| cx.ctor_defaults_on_companion(c)) {
+        if !self.this_class.map_or(false, |c| cx.ctor_defaults_on_companion(c) || cx.ctor_defaults_on_inner_companion(c) || cx.ctor_defaults_on_local_companion(c)) {
             let clauses: Vec<ClauseSig> = cx.input.syms.sym(fun.sym).sig.as_ref().map_or(Vec::new(), |sig| sig.clauses.clone());
             self.ctor_default_getters(None, &fun.params, &fun.defaults, &clauses);
         }

@@ -868,7 +868,8 @@ impl<'a> Worker<'a> {
     }
 
     /// Whether the alternatives of `m`'s name in its class, but `m` itself, are none that is
-    /// written out: a nameless inline method or a concrete var's setter is not.
+    /// written out: a nameless inline method, a concrete var's setter or a pickle's synthesized
+    /// case `apply`, which the constructor stands for, is not.
     fn alternatives_leave_plain_name(&mut self, m: SymId) -> bool {
         let (name, Owner::Class(c)) = (self.syms.sym(m).name, self.syms.sym(m).owner) else { return true };
         let Some(entry) = self.settled_entry(c, name) else { return true };
@@ -878,7 +879,7 @@ impl<'a> Worker<'a> {
         let mut written = 0;
         for i in 0..n {
             let a = self.syms.alternatives(entry).map_or(m, |alts| alts[i]);
-            if a == m || (!self.nameless_inline(a) && !super::setters::is_concrete_setter(&self.syms, a)) {
+            if a == m || (!self.nameless_inline(a) && !super::setters::is_concrete_setter(&self.syms, a) && !self.is_synthesized_case_apply(a)) {
                 written += 1;
             }
         }
@@ -1977,8 +1978,10 @@ impl<'a> Worker<'a> {
             let clauses = |sig: &MethodSig| -> Vec<Vec<TypeId>> { sig.clauses.iter().map(|cl| cl.params.iter().map(|p| p.ty).collect()).collect() };
             let ctor_clauses = clauses(&sig);
             let mut replaced = false;
+            let synthesized = |t: &Self, s: SymId| t.loaded.as_ref().is_some_and(|l| l.synthetic_members.contains_key(&s));
             for a in &alts {
-                if a.sig.tparams.len() != sig.tparams.len() {
+                // The synthesized `apply` a pickle keeps is the one the constructor stands for.
+                if a.sig.tparams.len() != sig.tparams.len() || synthesized(self, a.sym) {
                     continue;
                 }
                 let subst: Subst = a.sig.tparams.iter().zip(&sig.tparams).map(|(&x, &y)| (x, self.types.param(y))).collect();
@@ -2173,7 +2176,15 @@ impl<'a> Worker<'a> {
                 self.pass_typed_literals(alt, targs, &mut lists, &infos);
                 let retyped = self.pass_typed_lambdas(alt, &mut lists, &infos);
                 let r = match alt.ctor {
-                    Some(c) => self.apply_companion_apply(c, targs, lists, span, expected),
+                    // The constructor standing for the synthesized `apply` of a companion nested in
+                    // a class: its creation through the companion's prefix, as the `apply` the
+                    // overload is not makes it (`nested_companion_apply`).
+                    Some(c) => match (recv, recv_ty.and_then(|t| self.class_of(t))) {
+                        (Some(r), Some(m)) if self.syms.class(m).inner_object.is_some() && self.outer_class(c).is_some() => {
+                            self.nested_companion_apply(r, recv_ty.unwrap(), m, c, false, targs, lists, span, expected)
+                        }
+                        _ => self.apply_companion_apply(c, targs, lists, span, expected),
+                    },
                     None => {
                         self.check_access(alt.sym, None, span);
                         if let (Some(r), Some(rt)) = (recv, recv_ty) {
