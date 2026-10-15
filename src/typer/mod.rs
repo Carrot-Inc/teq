@@ -1381,6 +1381,13 @@ pub struct Worker<'a> {
     /// Set while the qualifier of an explicit `.apply` is typed: `Box[Int].apply` names the
     /// `apply` of `Box`, which no summoner sugar replaces.
     pub apply_selected: bool,
+    /// The members selected on the qualifiers being typed, innermost last, dotty's
+    /// `SelectionProto`s of their typings: frames, each selection derived where it is read
+    /// (`apply::SelectionFrame`, `selection_at`).
+    pub selections: Vec<apply::SelectionFrame>,
+    /// The operands a deeper selection typed alone, for its candidates and the member's
+    /// application (`apply::SelectionTyped`).
+    pub selection_typed: Vec<apply::SelectionTyped>,
     /// What the patterns of the enclosing match cases tell about type parameters in scope:
     /// (parameter, type, variance of the position that related them). Variance 0 is equality,
     /// 1 makes the type a lower bound and -1 an upper bound.
@@ -2662,6 +2669,8 @@ impl<'a> Worker<'a> {
             folded_paths: FxMap::default(),
             folded_deprecated: false,
             apply_selected: false,
+            selections: Vec::new(),
+            selection_typed: Vec::new(),
             gadt: Vec::new(),
             wildcards_used: std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false)),
             captured_locals: Default::default(),
@@ -3030,6 +3039,8 @@ impl<'a> Worker<'a> {
             folded_paths: self.folded_paths.clone(),
             folded_deprecated: self.folded_deprecated,
             apply_selected: Default::default(),
+            selections: Vec::new(),
+            selection_typed: Vec::new(),
             gadt: Default::default(),
             wildcards_used: self.wildcards_used.clone(),
             captured_locals: self.captured_locals.clone(),

@@ -138,6 +138,19 @@ part moved with its own binding of the std's definitions under scala-library's n
 path are the reference projects' part's, whose binding landed first and whose section records them.
 
 
+## The case region (2026-10-13)
+
+Two tests moved with the case region (a case's pattern and guard lexed in one region where no line break
+separates, as dotty's `Parsers.caseClause` wraps them in `InCase`), both compiled by scalac 3.8.4:
+
+- `pos/i16451.default` moved from `syntax` to `std`: its alternatives continue after a trailing `|` on the
+  next lines (`case _: InvocationTargetException |` ...), which teq refused ("expected a pattern, found new
+  line"); it now stops at `java.lang.reflect.InvocationTargetException`, which the lean std lacks.
+- `pos/i25002` moved from `syntax` to `accepts`: a guard indented after its `if` (`case i if` and `(i > 27) =>`
+  on the next line) opened an indented region the `=>` did not close, so teq read `(i > 27) => -1` as a
+  lambda; the region opened inside a case now closes before its `=>` (`Scanners.postProcessToken`'s `ARROW`
+  case), and the guard's colon arguments (`case s: String if g:` ... `=> s`) parse as scalac's.
+
 ## The successor's predecessor (2026-10-11, the last fold)
 
 One test moved with the second code review's findings:

@@ -45,6 +45,99 @@ pub enum ArgSrc {
 }
 
 
+/// dotty's `SelectionProto` of a qualifier's typing (`Typer.typedSelect`'s `shallowSelectionProto`,
+/// Typer.scala 1081; an infix operation's left operand is one through `typedInfixOp`'s
+/// `Desugar.binop`, 3707): the member `name` selected on the qualifier written at `span`, applied
+/// to `args`. An overloaded reference at that span of that file without arguments is resolved
+/// by it (`resolve_selected`, `resolveOverloaded1`).
+#[derive(Clone, Copy)]
+pub struct Selection {
+    pub span: Span,
+    pub name: Name,
+    pub args: SelectionArgs,
+    pub result: SelectionResult,
+}
+
+/// What a qualifier is typed under, its `SelectionProto` (`Worker::selections`): the values at
+/// hand where the member is selected, from which a reader of the selection, the resolution of an
+/// unapplied overloaded reference or a deeper round of it, derives the selection itself
+/// (`Worker::selection_at`). Most qualifiers' selections are never read, and a frame costs their
+/// typing no reading of the tree.
+#[derive(Clone, Copy)]
+pub struct SelectionFrame {
+    pub file: FileId,
+    /// The qualifier as written, its parentheses and braces read where the selection is.
+    pub q: ExprId,
+    pub name: Name,
+    /// The application whose member is selected (`Member`), or the operation's other operand.
+    pub at: ExprId,
+    /// The span of the application or operation, which a selection on its result names.
+    pub app: Span,
+    pub expected: Option<TypeId>,
+    pub kind: FrameKind,
+}
+
+#[derive(Clone, Copy, PartialEq)]
+pub enum FrameKind {
+    /// A member selected on `q`, applied to the lists of the application `at`.
+    Member,
+    /// An operator on `q`, its operand `at`; `more` where further plain lists apply it.
+    Operand { more: bool },
+    /// A member selected for its declared type, nothing expected of it.
+    Bare,
+}
+
+/// What is expected of the selected member applied to its first argument list, or of the member
+/// itself without one: dotty's `IgnoredProto(pt)` inside the member prototype, revealed by a later
+/// round of the resolution (`deepenProto`).
+/// One alternative of a member a deeper selection tests that has no symbol of its own
+/// (`Worker::sig_alt`).
+pub struct SigAlt {
+    params: Option<Vec<Option<TypeId>>>,
+    repeated: bool,
+    result: Option<TypeId>,
+}
+
+#[derive(Clone, Copy)]
+pub enum SelectionResult {
+    /// Nothing, or what a second argument list applies: dotty's result prototype there tells no
+    /// alternatives apart (`FunProto`'s `resultType` is no value type).
+    Ignored,
+    /// The expected type of the member's application.
+    Type(TypeId),
+    /// A selection on the member's result: the selection beneath this one on `Worker::selections`.
+    Selected,
+}
+
+/// The arguments of the member a qualifier is selected for, which the resolution's deeper pass
+/// reads (`deepenProto` of the `SelectionProto`'s `FunProto`).
+#[derive(Clone, Copy)]
+pub enum SelectionArgs {
+    None,
+    /// An infix operation's right operand.
+    Operand(ExprId),
+    /// The member's first list of plain arguments as written.
+    List(ListRef),
+}
+
+/// An operand of a selected member that the deeper selection typed alone, as `FunProto.typedArgs`
+/// types its arguments (ProtoTypes.scala 508, `typer.typed`): its typing, `None` where the typing
+/// reported an error (`errorArgs`, not cached). Every candidate's test reads it, and the member's
+/// application takes it from its argument cache (`arg_cache_open_member`) as `typedArg` takes a
+/// cached typing (556), adapted to its formal: the operand is typed once.
+#[derive(Clone, Copy)]
+pub struct SelectionTyped {
+    pub file: FileId,
+    /// The span of the qualifier whose selection's operand it is (`Selection::span`), whose
+    /// typing drops it once the member is applied (`drop_selection_typed`).
+    pub owner: Span,
+    pub expr: ExprId,
+    pub typed: Option<(TExprId, TypeId)>,
+    /// The literal type of a literal written as the operand, which the candidates' test reads
+    /// (`pretype_value`).
+    pub literal: Option<TypeId>,
+}
+
 /// How a bare `f` of a `def f()` is taken (`auto_applied`).
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum AutoApply {
@@ -364,11 +457,11 @@ impl<'a> Worker<'a> {
         }
     }
 
-    /// The receiver a member is selected on.
-    #[inline]
-    pub(in crate::typer) fn type_receiver(&mut self, q: ExprId, selected: bool) -> (TExprId, TypeId) {
+    /// The receiver a member is selected on, typed under its selection.
+    #[inline(always)]
+    pub(in crate::typer) fn type_receiver(&mut self, q: ExprId, selected: bool, selection: SelectionFrame) -> (TExprId, TypeId) {
         let outer = std::mem::replace(&mut self.apply_selected, selected);
-        let (tq, qty) = self.type_expr(q, None);
+        let (tq, qty) = self.type_selected(q, selection);
         self.apply_selected = outer;
         // A variable of the receiver's type stays open through the selection where the
         // receiver's interpolation left it so (its type holds it nonvariantly, or a polymorphic
@@ -386,6 +479,86 @@ impl<'a> Worker<'a> {
             _ => qty,
         };
         (tq, qty)
+    }
+
+    /// `q` typed as the qualifier of the selection, with no expected type but the selection's.
+    #[inline(always)]
+    pub(in crate::typer) fn type_selected(&mut self, q: ExprId, selection: SelectionFrame) -> (TExprId, TypeId) {
+        self.selections.push(selection);
+        let typed = self.type_expr(q, None);
+        self.selections.pop();
+        typed
+    }
+
+    /// The span an overloaded reference resolved by a selection on the qualifier `q` has: the
+    /// qualifier's own, inside any parentheses, which its typing passes through. None where a
+    /// block holds it: dotty types a block's expression with `pt.dropIfProto` (`Typer.typedBlock`),
+    /// a single expression in braces included.
+    pub(in crate::typer) fn qualifier_span(&self, q: ExprId) -> Option<Span> {
+        let ast = self.cur_ast();
+        let mut q = q;
+        loop {
+            if ast.is_braced(q) {
+                return None;
+            }
+            match ast.expr(q) {
+                Expr::Parens(inner) => q = inner,
+                _ => break,
+            }
+        }
+        Some(ast.expr_span(q))
+    }
+
+    /// The selection the frame at `i` of `Worker::selections` stands for, derived where it is read:
+    /// the qualifier's span (`qualifier_span`), the member's first list of plain arguments or the
+    /// operand, and what is expected of the member: nothing past a second plain list, the selection
+    /// beneath where the member's application is itself its qualifier, else the expected type.
+    /// None for a frame of another file or a qualifier in braces.
+    pub(in crate::typer) fn selection_at(&self, i: usize) -> Option<Selection> {
+        let f = self.selections[i];
+        if f.file != self.env.file {
+            return None;
+        }
+        let span = self.qualifier_span(f.q)?;
+        let (args, plain) = match f.kind {
+            FrameKind::Member => {
+                let ast = self.cur_ast();
+                let (mut first, mut plain, mut app) = (None, 0, f.at);
+                loop {
+                    match ast.expr(app) {
+                        Expr::Apply(g, l) => {
+                            first = Some(l);
+                            plain += 1;
+                            app = g;
+                        }
+                        Expr::UsingApply(g, _) => app = g,
+                        _ => break,
+                    }
+                }
+                (first.map_or(SelectionArgs::None, SelectionArgs::List), plain)
+            }
+            FrameKind::Operand { more } => (SelectionArgs::Operand(f.at), 1 + usize::from(more)),
+            FrameKind::Bare => {
+                return Some(Selection { span, name: f.name, args: SelectionArgs::None, result: SelectionResult::Ignored });
+            }
+        };
+        let result = if plain > 1 {
+            SelectionResult::Ignored
+        } else if i > 0 && self.selection_at(i - 1).is_some_and(|s| s.span == f.app) {
+            SelectionResult::Selected
+        } else {
+            match f.expected {
+                Some(t) if t != ANY && t != self.b.t_unit && !matches!(self.types.get(t), Type::Var(_)) => SelectionResult::Type(t),
+                _ => SelectionResult::Ignored,
+            }
+        };
+        Some(Selection { span, name: f.name, args, result })
+    }
+
+    /// The selection at `i`, which a deeper round reads where the resolution found it
+    /// (`selection_at`); a frame no selection derives from reads as one revealing nothing.
+    pub(super) fn sel(&self, i: usize) -> Selection {
+        self.selection_at(i).unwrap_or(Selection { span: Span::new(0, 0), name: Name(0), args: SelectionArgs::None, result: SelectionResult::Ignored })
     }
 
     /// The type argument list scalac inferred for the application `e` of a library body, or for
@@ -721,7 +894,8 @@ impl<'a> Worker<'a> {
                 }
                 let receiver = ast.expr(q);
                 let selected = name == names::APPLY && matches!(receiver, Expr::TypeApply(..));
-                let (tq, qty) = self.type_receiver(q, selected);
+                let frame = SelectionFrame { file: self.env.file, q, name, at: e, app: span, expected, kind: FrameKind::Member };
+                let (tq, qty) = self.type_receiver(q, selected, frame);
                 // The qualifier's type as the written tree gives it (`written_prefix`), the prefix
                 // its members are selected through: read once, here, and only of a tree whose type
                 // `TypeAssigner` gives otherwise than teq's typing does (an `if`, a match, a block
@@ -736,6 +910,10 @@ impl<'a> Worker<'a> {
                 } else {
                     self.apply_member(tq, qty, name, targs, lists, span, expected)
                 };
+                if !self.selection_typed.is_empty() {
+                    let owner = self.qualifier_span(q);
+                    self.drop_selection_typed(owner);
+                }
                 if self.assign_op_target == Some(e) {
                     self.assign_op_receiver = Some((tq, qty));
                 }
@@ -9426,6 +9604,52 @@ impl<'a> Worker<'a> {
         }
     }
 
+    /// Whether the builtin type `t` has the member `name` as dotty's `member` finds it on the class
+    /// the builtin stands for: of a `String`, a method the JDK's `java.lang.String` declares
+    /// (`jdk_string_alternatives`); else a std extension that is the JDK's (`@javaDefined`) or one
+    /// of std/core.scala's (the builtin classes' own members no TASTy file defines), of an `Array`
+    /// those Array.scala declares
+    /// (`names::ARRAY_MEMBERS`, not the JavaScript array's beside them). The std's other
+    /// extensions of a builtin stand for Predef's views (`augmentString`, `intWrapper`), which a
+    /// selection meets through a view.
+    pub(super) fn builtin_member_like(&mut self, t: TypeId, name: Name) -> bool {
+        if self.stands_for_string(t) {
+            return self.jdk_string_alternatives(name).is_some();
+        }
+        let candidates = self.builtin_member_candidates(t, name);
+        candidates.into_iter().any(|sym| self.is_builtin_member(sym, t))
+    }
+
+    /// The std's extensions named `name` that may be the builtin `t`'s own member
+    /// (`builtin_member_like`), before their receivers are tested.
+    fn builtin_member_candidates(&mut self, t: TypeId, name: Name) -> Vec<SymId> {
+        // A function type is a builtin too: its `andThen` and `compose` are std/core.scala's.
+        if !self.is_builtin_type(t) && self.as_function(t).is_none() {
+            return Vec::new();
+        }
+        if self.class_of(t) == Some(self.b.array) && !crate::names::ARRAY_MEMBERS.contains(&self.interner.get(name)) {
+            return Vec::new();
+        }
+        let scala_pkg = self.b.scala_pkg;
+        self.demand_std(scala_pkg, name, crate::stdindex::TERM);
+        self.syms.pkg(scala_pkg).entries.get(&name).map(|e| e.extensions.clone()).unwrap_or_default()
+    }
+
+    /// Whether the std extension `sym` is the builtin `t`'s own member: the JDK's or one of
+    /// std/core.scala's, taking `t` as its receiver.
+    fn is_builtin_member(&mut self, sym: SymId, t: TypeId) -> bool {
+        let info = self.syms.sym(sym);
+        let own = info.java_defined || self.source(info.file).path.ends_with("core.scala");
+        if !own {
+            return false;
+        }
+        let mark = self.snapshot();
+        let call = MethodCall { recv: None, sym, owner_subst: Vec::new(), ext_recv: None, prefix: None, refined: None };
+        let ok = self.extension_applicable(&call, t);
+        self.rollback(mark);
+        ok
+    }
+
     /// True if `name` is a declared member of `t`, or a std extension applicable to a builtin `t`.
     pub(super) fn has_member_like(&mut self, t: TypeId, name: Name) -> bool {
         if self.find_member(t, name).is_some() {
@@ -10508,6 +10732,705 @@ impl<'a> Worker<'a> {
         self.close(m);
         self.member_arg_put(e, (te, ty));
         Some(ty)
+    }
+
+    /// `SelectionProto.isMatchedBy` of the member `name` under an ignored member prototype
+    /// (ProtoTypes.scala 257), for an overloaded qualifier's normalized alternative of type `t`
+    /// (`resolve_selected_in`): `t` has such a member the selection can access, a builtin's operator
+    /// counting as one, or members unknown (`hasUnknownMembers`: a variable, `Nothing`); with `views`, a view gives a
+    /// type that has it (`viewExists`), the std's extensions of a builtin being Predef's views. An
+    /// extension method counts in neither.
+    pub(super) fn selection_matches(&mut self, t: TypeId, name: Name, views: bool) -> bool {
+        let t = self.deref(t);
+        if matches!(self.types.get(t), Type::Var(_)) || t == NOTHING {
+            return true;
+        }
+        // A member the selection could not access is none (`isAccessibleFrom`).
+        let member = match self.find_member(t, name) {
+            Some((sym, _)) => match self.syms.alternatives(sym) {
+                Some(alts) => alts.to_vec().into_iter().any(|a| self.is_accessible(a)),
+                None => self.is_accessible(sym),
+            },
+            None => false,
+        };
+        if member
+            || self.universal_selection(t, name)
+            || self.prim_op_applies(t, name)
+            || self.function_class_member(t, name)
+            || self.builtin_member_like(t, name)
+        {
+            return true;
+        }
+        if !views {
+            return false;
+        }
+        if self.has_member_like(t, name) {
+            return true;
+        }
+        // A view to a type with the member, unambiguous (`viewExists`): the deeper round's probe
+        // (`view_selects`), which leaves the selection's application of a conversion its one
+        // caller.
+        let span = self.selections.len().checked_sub(1).and_then(|i| self.selection_at(i)).map_or(Span::new(0, 0), |s| s.span);
+        let mark = self.attempt();
+        let found = self.view_selects(t, name, span, &mut |_, _| true);
+        self.retract(mark);
+        found
+    }
+
+    /// The arguments of the member the selection at `i` (`Worker::selections`) applies, as written.
+    fn selection_list(&mut self, i: usize) -> Option<ArgList> {
+        let sel = self.sel(i);
+        match sel.args {
+            SelectionArgs::None => None,
+            SelectionArgs::Operand(r) => Some(ArgList { args: self.infix_args(r), using: false, span: sel.span }),
+            SelectionArgs::List(l) => {
+                Some(ArgList { args: self.cur_ast().expr_list(l).iter().map(|&a| ArgSrc::Ast(a)).collect(), using: false, span: sel.span })
+            }
+        }
+    }
+
+    /// How many layers the selection at `i` holds past its member's name, which the resolution
+    /// reveals one at a time (`deepenProto`): its arguments, then its expectation, the selection
+    /// on its result with its own layers.
+    pub(super) fn selection_levels(&self, i: usize) -> u8 {
+        let sel = self.sel(i);
+        let own = u8::from(!matches!(sel.args, SelectionArgs::None));
+        own + match sel.result {
+            SelectionResult::Ignored => 0,
+            SelectionResult::Type(_) => 1,
+            SelectionResult::Selected if i > 0 => 1 + self.selection_levels(i - 1).min(4),
+            SelectionResult::Selected => 0,
+        }
+    }
+
+    /// `isCompatible` of `t` with the selection at `i` revealed `depth` layers (`depth` at least
+    /// 1; ProtoTypes.scala 44): the selection matches it (`selection_matched`), or, where `views`
+    /// (the resolution's pass with implicits, Applications.scala 2475), a view converts it to a
+    /// type the selection matches (`viewExists`, `selection_view`).
+    pub(super) fn selection_deep(&mut self, t: TypeId, i: usize, depth: u8, views: bool) -> bool {
+        self.selection_matched(t, i, depth, views) || (views && self.selection_view(t, i, depth))
+    }
+
+    /// `viewExists` of `t` to the selection at `i` revealed `depth` layers (Implicits.scala 885):
+    /// a conversion whose result the selection matches. The search's attempts are taken back, so
+    /// the operands are typed before it (`prime_selection_operands`) and it reads their typing.
+    #[cold]
+    fn selection_view(&mut self, t: TypeId, i: usize, depth: u8) -> bool {
+        self.prime_selection_operands(i, depth);
+        let (name, span) = (self.sel(i).name, self.sel(i).span);
+        let (typed, hoisted) = (self.selection_typed.len(), self.hoisted.len());
+        let mark = self.attempt();
+        let found = self.view_selects(t, name, span, &mut |w, to| w.selection_matched(to, i, depth, true));
+        self.retract(mark);
+        self.selection_typed.truncate(typed);
+        self.hoisted.truncate(hoisted);
+        found
+    }
+
+    /// The operands of the selection at `i`, and of the selections its result reveals within
+    /// `depth` layers, typed once as `selection_matched` types them (`selection_arg_type`), a
+    /// named argument's value for it and a function literal without parameter types left.
+    fn prime_selection_operands(&mut self, i: usize, depth: u8) {
+        let owner = self.sel(i).span;
+        let mut layers = depth;
+        if let Some(list) = self.selection_list(i) {
+            layers -= 1;
+            let ast = self.cur_ast();
+            let values: Vec<ExprId> = list
+                .args
+                .iter()
+                .filter_map(|a| match *a {
+                    ArgSrc::Ast(e) | ArgSrc::Hoisted(e) => Some(match ast.expr(e) {
+                        crate::ast::Expr::NamedArg(_, v) => v,
+                        _ => e,
+                    }),
+                    _ => None,
+                })
+                .collect();
+            for v in values {
+                if self.function_shape(v).is_none() {
+                    self.selection_arg_type(v, owner);
+                }
+            }
+        }
+        if layers >= 2 && i > 0 && matches!(self.sel(i).result, SelectionResult::Selected) {
+            self.prime_selection_operands(i - 1, layers - 1);
+        }
+    }
+
+    /// `SelectionProto.isMatchedBy` of the selection at `i` revealed `depth` layers (`depth` at
+    /// least 1; ProtoTypes.scala 257, its member prototype `FunProto(args, IgnoredProto(pt))`
+    /// deepened): some accessible alternative of the member of `t`, compatible with them
+    /// (`hasAltWith`, `normalizedCompatible`): taking the arguments, each typed alone once
+    /// (`selection_arg_type`), its result, once revealed, fitting the member's expectation or
+    /// matching the selection on it, through a view where `views`. A method is tested by its first
+    /// explicit clause, a value of a function type by its `apply`, another value by its `apply`
+    /// members, a builtin operator by the operand types its overloads take.
+    fn selection_matched(&mut self, t: TypeId, i: usize, depth: u8, views: bool) -> bool {
+        let t = self.deref(t);
+        if matches!(self.types.get(t), Type::Var(_)) || t == NOTHING {
+            return true;
+        }
+        let name = self.sel(i).name;
+        let list = self.selection_list(i);
+        let owner = self.sel(i).span;
+        // The layers left for the result once the arguments took one.
+        let after_args = if list.is_some() { depth - 1 } else { depth };
+        // A member without a symbol of its own: a builtin operator's overloads, `Any`'s members, a
+        // function's `apply`, `tupled` and `curried`, each tested as an ordinary member is.
+        let alts = if self.prim_op_applies(t, name) {
+            Some(self.builtin_operator_alternatives(t, name))
+        } else if self.universal_selection(t, name) {
+            Some(self.universal_alternatives(name))
+        } else if self.function_class_member(t, name) {
+            self.function_member_alternatives(t, name)
+        } else {
+            None
+        };
+        // A `String`'s own members are the JDK's (dotty selects on `java.lang.String`), whatever
+        // signatures the std's implementations of them take.
+        let alts = match alts {
+            None if self.stands_for_string(t) => Some(self.jdk_string_alternatives(name).unwrap_or_default()),
+            alts => alts,
+        };
+        if let Some(alts) = alts {
+            return alts.iter().any(|a| self.sig_alt_matches(a, i, list.as_ref(), after_args, views));
+        }
+        let Some((sym, _)) = self.find_member(t, name) else { return self.builtin_extension_matched(t, i, list.as_ref(), after_args, views) };
+        let members: Vec<SymId> = match self.syms.alternatives(sym) {
+            Some(alts) => alts.to_vec(),
+            None => vec![sym],
+        };
+        members.into_iter().any(|m| {
+            if !self.is_accessible(m) {
+                return false;
+            }
+            let result = match &list {
+                Some(l) => {
+                    if !self.member_applies(m, t, l, owner) {
+                        return false;
+                    }
+                    if after_args == 0 {
+                        return true;
+                    }
+                    self.member_result(m, t, true)
+                }
+                None => self.member_result(m, t, false),
+            };
+            match result {
+                Some(r) => self.result_matches(r, i, after_args, views),
+                None => true,
+            }
+        })
+    }
+
+    /// Whether the result `r` of the selection at `i`'s member fits what is expected of it, its
+    /// expectation revealed `layers` deep (at least 1): an expected type it is compatible with, or
+    /// the selection on it, matched at the depth left, through a view where `views`.
+    fn result_matches(&mut self, r: TypeId, i: usize, layers: u8, views: bool) -> bool {
+        match self.sel(i).result {
+            SelectionResult::Ignored => true,
+            SelectionResult::Type(expected) => {
+                let mark = self.snapshot();
+                let ok = self.is_compatible(r, expected);
+                self.rollback(mark);
+                ok
+            }
+            SelectionResult::Selected if i > 0 => match layers {
+                1 => {
+                    let name = self.sel(i - 1).name;
+                    self.selection_matches(r, name, views)
+                }
+                _ => self.selection_deep(r, i - 1, layers - 1, views),
+            },
+            SelectionResult::Selected => true,
+        }
+    }
+
+    /// Whether the member `m` of `t` takes the arguments of `list`: a method by its first explicit
+    /// clause, a value by its type's `apply`.
+    fn member_applies(&mut self, m: SymId, t: TypeId, list: &ArgList, owner: Span) -> bool {
+        if self.syms.sym(m).kind == SymKind::Def {
+            return self.method_applies(m, t, list, owner);
+        }
+        let value = self.member_value_type(m, t);
+        self.value_applies(value, list, owner)
+    }
+
+    /// The type of the value member `m` seen from `t`.
+    fn member_value_type(&mut self, m: SymId, t: TypeId) -> TypeId {
+        let sig = self.sig_arc(m);
+        let owner_ty = match self.syms.sym(m).owner {
+            Owner::Class(c) => self.base_type(t, c).unwrap_or(t),
+            _ => t,
+        };
+        let subst = self.owner_subst(owner_ty);
+        self.types.subst(sig.ret, &subst)
+    }
+
+    /// The member `m` of `t` as the deeper selection compares it with its expectation, `applied`
+    /// to its first explicit clause or not: a method's result past that clause, or its normalized
+    /// value (`ProtoTypes.normalize`: a using clause gives way to its result, an explicit clause
+    /// with parameters becomes its function type, a context function gives way to its result); a
+    /// value's type, or its function's result where applied. `None` where it is not known.
+    fn member_result(&mut self, m: SymId, t: TypeId, applied: bool) -> Option<TypeId> {
+        if self.syms.sym(m).kind != SymKind::Def {
+            let value = self.member_value_type(m, t);
+            if !applied {
+                return Some(value);
+            }
+            return self.as_function(value).map(|(_, r)| r);
+        }
+        let sig = self.sig_arc(m);
+        let owner_ty = match self.syms.sym(m).owner {
+            Owner::Class(c) => self.base_type(t, c).unwrap_or(t),
+            _ => t,
+        };
+        let subst = self.boundary_vars(&sig, owner_ty);
+        let explicit: Vec<&ClauseSig> = sig.clauses.iter().filter(|c| !c.is_using).skip(usize::from(applied)).collect();
+        Some(self.clauses_result(&sig, &explicit, &subst))
+    }
+
+    /// The result of `sig` past its clauses but `explicit`, normalized as `member_result` has it:
+    /// a context function's result followed, each explicit clause with parameters a function.
+    fn clauses_result(&mut self, sig: &MethodSig, explicit: &[&ClauseSig], subst: &Subst) -> TypeId {
+        let mut ty = self.types.subst(sig.ret, subst);
+        for _ in 0..8 {
+            let Some((_, result)) = self.as_context_function(ty) else { break };
+            ty = result;
+        }
+        for clause in explicit.iter().rev() {
+            if clause.params.is_empty() {
+                continue;
+            }
+            let params: Vec<TypeId> = clause.params.iter().map(|p| self.types.subst(p.ty, subst)).collect();
+            ty = self.fun_type(&params, ty);
+        }
+        ty
+    }
+
+    /// `isMatchedBy` of a builtin's member that the std gives as an extension (`builtin_member_like`:
+    /// `Array.update`, a `String`'s JDK method) at the selection at `i`, as of a class's own
+    /// member: the receiver bound to `t`, the extension's first explicit clause past the
+    /// receiver's taking the arguments of `list`, and its result, past the layers they took,
+    /// matching what is revealed of the member's (`result_matches`).
+    fn builtin_extension_matched(&mut self, t: TypeId, i: usize, list: Option<&ArgList>, after_args: u8, views: bool) -> bool {
+        let name = self.sel(i).name;
+        let owner = self.sel(i).span;
+        let candidates = self.builtin_member_candidates(t, name);
+        for sym in candidates {
+            if !self.is_builtin_member(sym, t) {
+                continue;
+            }
+            let sig = self.sig_arc(sym);
+            let ext = self.syms.sym(sym).ext_clauses as usize;
+            let Some(recv) = sig.clauses.iter().take(ext).find(|c| !c.is_using).and_then(|c| c.params.first()).map(|p| p.ty) else { continue };
+            let mark = self.snapshot();
+            let subst = self.boundary_vars(&sig, t);
+            let recv = self.types.subst(recv, &subst);
+            let own: Vec<&ClauseSig> = sig.clauses.iter().skip(ext).filter(|c| !c.is_using).collect();
+            let ok = self.is_sub(t, recv)
+                && match list {
+                    Some(l) => match own.first() {
+                        Some(clause) => match self.boundary_args(clause, l) {
+                            Some((args, true, _)) => {
+                                let types = self.selection_arg_types(&args, owner);
+                                self.applicable_to_types(clause, &args, &types, &subst) && (after_args == 0 || {
+                                    let r = self.clauses_result(&sig, &own[1..], &subst);
+                                    self.result_matches(r, i, after_args, views)
+                                })
+                            }
+                            _ => false,
+                        },
+                        None => false,
+                    },
+                    None => {
+                        let r = self.clauses_result(&sig, &own, &subst);
+                        self.result_matches(r, i, after_args, views)
+                    }
+                };
+            self.rollback(mark);
+            if ok {
+                return true;
+            }
+        }
+        false
+    }
+
+    /// Whether the method `m`, a member of `t`, applies to the arguments of `list` by its first
+    /// explicit clause, the arguments typed once for the selection at `owner`
+    /// (`applicable_to_types`).
+    fn method_applies(&mut self, m: SymId, t: TypeId, list: &ArgList, owner: Span) -> bool {
+        let sig = self.sig_arc(m);
+        let Some(clause) = sig.clauses.iter().find(|c| !c.is_using) else { return false };
+        let Some((args, matched, _)) = self.boundary_args(clause, list) else { return false };
+        if !matched {
+            return false;
+        }
+        let types = self.selection_arg_types(&args, owner);
+        let owner_ty = match self.syms.sym(m).owner {
+            Owner::Class(c) => self.base_type(t, c).unwrap_or(t),
+            _ => t,
+        };
+        let mark = self.snapshot();
+        let subst = self.boundary_vars(&sig, owner_ty);
+        let ok = self.applicable_to_types(clause, &args, &types, &subst);
+        self.rollback(mark);
+        ok
+    }
+
+    /// The types of the selection's arguments `args`, typed once for the selection at `owner`: a
+    /// function literal without parameter types by its shape (`FunProto.typedArgs` leaves it so).
+    fn selection_arg_types(&mut self, args: &[BoundaryArg], owner: Span) -> Vec<Option<TypeId>> {
+        args.iter()
+            .map(|a| match (a.pretyped, a.value) {
+                (Some((_, ty)), _) => Some(ty),
+                (None, Some(value)) => self.function_shape(value).or_else(|| self.selection_arg_type(value, owner)),
+                (None, None) => None,
+            })
+            .collect()
+    }
+
+    /// Whether a value of type `t` applies to the arguments of `list`: a function by its
+    /// parameters, another value by an accessible `apply` member that does.
+    fn value_applies(&mut self, t: TypeId, list: &ArgList, owner: Span) -> bool {
+        if let Some((params, _)) = self.as_function(t) {
+            return self.function_takes(&params, list, owner);
+        }
+        let Some((sym, _)) = self.find_member(t, names::APPLY) else { return false };
+        let members: Vec<SymId> = match self.syms.alternatives(sym) {
+            Some(alts) => alts.to_vec(),
+            None => vec![sym],
+        };
+        members.into_iter().any(|m| self.is_accessible(m) && self.syms.sym(m).kind == SymKind::Def && self.method_applies(m, t, list, owner))
+    }
+
+    /// Whether a function of the parameters `params` takes the positional arguments of `list`
+    /// (`sig_alt_takes`).
+    fn function_takes(&mut self, params: &[TypeId], list: &ArgList, owner: Span) -> bool {
+        let params: Vec<Option<TypeId>> = params.iter().copied().map(Some).collect();
+        self.sig_alt_takes(&params, false, list, owner)
+    }
+
+    /// One alternative of a member that has no symbol of its own (`selection_matched`): a builtin
+    /// operator's overload as scala's `Int.scala` declares it (`+(x: Long): Long`), a member of
+    /// `Any`, a function's `apply`, a method of the JDK's `String`. The types of its one clause's
+    /// parameters, `None` where it takes no list, each `None` where it is not known, whether the
+    /// last is repeated, and its result, `None` where it is not known.
+    pub(super) fn sig_alt(params: Option<Vec<Option<TypeId>>>, repeated: bool, result: Option<TypeId>) -> SigAlt {
+        SigAlt { params, repeated, result }
+    }
+
+    /// `normalizedCompatible` of the alternative `alt` with the selection at `i` revealed past its
+    /// name (`selection_matched`): the arguments of `list`, typed once (`selection_arg_type`), fit
+    /// its parameters, and its result, once the layers the arguments took are revealed, fits what
+    /// is expected of the member (`result_matches`). Unapplied, a member with parameters is the
+    /// function it expands to, one with an empty clause its result unless that function fits
+    /// (`ProtoTypes.normalize`); applied without a list of its own, its result's `apply` takes it.
+    fn sig_alt_matches(&mut self, alt: &SigAlt, i: usize, list: Option<&ArgList>, after_args: u8, views: bool) -> bool {
+        let owner = self.sel(i).span;
+        match (list, &alt.params) {
+            (Some(l), Some(params)) => {
+                self.sig_alt_takes(params, alt.repeated, l, owner)
+                    && (after_args == 0 || alt.result.map_or(true, |r| self.result_matches(r, i, after_args, views)))
+            }
+            (Some(l), None) => {
+                let Some(r) = alt.result else { return true };
+                match self.as_function(r) {
+                    Some((params, result)) => {
+                        let params: Vec<Option<TypeId>> = params.into_iter().map(Some).collect();
+                        self.sig_alt_takes(&params, false, l, owner) && (after_args == 0 || self.result_matches(result, i, after_args, views))
+                    }
+                    None => self.value_applies(r, l, owner),
+                }
+            }
+            (None, params) => {
+                let Some(r) = alt.result else { return true };
+                match params {
+                    None => self.result_matches(r, i, after_args, views),
+                    Some(params) if params.is_empty() => {
+                        self.result_matches(r, i, after_args, views) || {
+                            let f = self.fun_type(&[], r);
+                            self.result_matches(f, i, after_args, views)
+                        }
+                    }
+                    Some(params) => match params.iter().copied().collect::<Option<Vec<TypeId>>>() {
+                        Some(params) if !alt.repeated => {
+                            let f = self.fun_type(&params, r);
+                            self.result_matches(f, i, after_args, views)
+                        }
+                        _ => true,
+                    },
+                }
+            }
+        }
+    }
+
+    /// Whether the parameters `params` (`SigAlt`) take the positional arguments of `list`, typed
+    /// once for the selection at `owner`, the last repeated where `repeated`; a parameter or an
+    /// argument whose type is not known takes or is taken.
+    fn sig_alt_takes(&mut self, params: &[Option<TypeId>], repeated: bool, list: &ArgList, owner: Span) -> bool {
+        let fixed = if repeated { params.len() - 1 } else { params.len() };
+        if list.args.len() < fixed || (!repeated && list.args.len() > fixed) {
+            return false;
+        }
+        let exprs: Vec<Option<ExprId>> = list.args.iter().map(|a| match *a {
+            ArgSrc::Ast(e) | ArgSrc::Hoisted(e) => Some(e),
+            _ => None,
+        }).collect();
+        for (k, e) in exprs.into_iter().enumerate() {
+            let Some(e) = e else { return false };
+            let Some(p) = params[k.min(params.len() - 1)] else { continue };
+            let ty = match self.function_shape(e) {
+                Some(shape) => shape,
+                None => match self.selection_arg_type(e, owner) {
+                    Some(ty) => ty,
+                    None => continue,
+                },
+            };
+            let mark = self.snapshot();
+            let fits = self.fits_boundary(ty, p);
+            self.rollback(mark);
+            if !fits {
+                return false;
+            }
+        }
+        true
+    }
+
+    /// The overloads of the builtin operator `name` of the primitive or `String` type `t`, as
+    /// scala's `Int.scala` and its siblings declare them: a number's arithmetic one per numeric
+    /// operand type, the result the wider of the two and `Int` at least, its `+` a `String`'s too,
+    /// its comparisons a `Boolean`, its bit operators one per integral operand type, its shifts an
+    /// `Int`'s and a `Long`'s, the result the receiver's promoted type, its prefix operators and
+    /// conversions none; a `Boolean`'s operators a `Boolean`'s; a `String`'s `+` anything, its
+    /// comparisons a `String`.
+    fn builtin_operator_alternatives(&mut self, t: TypeId, name: Name) -> Vec<SigAlt> {
+        use super::prims::{R_BYTE, R_CHAR, R_DOUBLE, R_INT, R_LONG, R_SHORT};
+        let own = self.dealias(t);
+        let own = self.operator_type(own);
+        let own = self.dealias(own);
+        let (b_bool, b_string) = (self.b.t_boolean, self.b.t_string);
+        let unary = |r: TypeId| vec![Self::sig_alt(None, false, Some(r))];
+        let binary = |p: TypeId, r: TypeId| Self::sig_alt(Some(vec![Some(p)]), false, Some(r));
+        if own == b_bool {
+            return match name {
+                names::UNARY_BANG => unary(b_bool),
+                _ => vec![binary(b_bool, b_bool)],
+            };
+        }
+        if own == b_string {
+            return match name {
+                names::PLUS => vec![binary(ANY, b_string)],
+                _ => vec![binary(b_string, b_bool)],
+            };
+        }
+        let Some(rank) = self.is_numeric(own) else { return Vec::new() };
+        let promoted = self.rank_type(rank.max(R_INT));
+        let text = self.name_ref(name).to_string();
+        if let Some(at) = super::prims::NUMERIC_CONVERSIONS.iter().position(|&c| c == text) {
+            let to = [R_BYTE, R_SHORT, R_CHAR, R_INT, R_LONG, super::prims::R_FLOAT, R_DOUBLE][at];
+            return unary(self.rank_type(to));
+        }
+        let ranks = |upto: u8| (R_BYTE..=upto).collect::<Vec<u8>>();
+        match name {
+            names::UNARY_MINUS | names::UNARY_PLUS | names::UNARY_TILDE => unary(promoted),
+            names::LT | names::LE | names::GT | names::GE => ranks(R_DOUBLE).into_iter().map(|p| binary(self.rank_type(p), b_bool)).collect(),
+            names::AMP | names::BAR | names::CARET => ranks(R_LONG).into_iter().map(|p| binary(self.rank_type(p), self.rank_type(rank.max(p).max(R_INT)))).collect(),
+            names::SHL | names::SHR | names::USHR => [R_INT, R_LONG].into_iter().map(|p| binary(self.rank_type(p), promoted)).collect(),
+            _ => {
+                let mut alts: Vec<SigAlt> = ranks(R_DOUBLE).into_iter().map(|p| binary(self.rank_type(p), self.rank_type(rank.max(p).max(R_INT)))).collect();
+                if name == names::PLUS {
+                    alts.push(binary(b_string, b_string));
+                }
+                alts
+            }
+        }
+    }
+
+    /// The members of `Any` and `AnyRef` (`universal_selection`) as `Any.scala` and `Object`
+    /// declare them: `==`, `!=` and `equals` take an `Any`, `eq` and `ne` an `AnyRef`, each a
+    /// `Boolean`; `hashCode()` and `##` an `Int`, `toString()` a `String`; the others, whose
+    /// signatures take a type argument (`isInstanceOf`, `asInstanceOf`, `synchronized`) or name
+    /// a class (`getClass`), of a result not known.
+    fn universal_alternatives(&mut self, name: Name) -> Vec<SigAlt> {
+        let (b_bool, b_int, b_string, any_ref) = (self.b.t_boolean, self.b.t_int, self.b.t_string, self.b.t_any_ref);
+        vec![match self.name_ref(name) {
+            "==" | "!=" | "equals" => Self::sig_alt(Some(vec![Some(ANY)]), false, Some(b_bool)),
+            "eq" | "ne" => Self::sig_alt(Some(vec![Some(any_ref)]), false, Some(b_bool)),
+            "hashCode" => Self::sig_alt(Some(Vec::new()), false, Some(b_int)),
+            "##" => Self::sig_alt(None, false, Some(b_int)),
+            "toString" => Self::sig_alt(Some(Vec::new()), false, Some(b_string)),
+            "getClass" => Self::sig_alt(Some(Vec::new()), false, None),
+            _ => Self::sig_alt(None, false, None),
+        }]
+    }
+
+    /// The members of the function type `t` that `FunctionN` declares and teq's typer gives
+    /// (`function_class_member`): `apply` of its parameters and result, `tupled` a function of
+    /// their tuple, `curried` a function per parameter; `None` for `andThen` and `compose`, which
+    /// std/core.scala gives as extensions (`builtin_extension_matched`).
+    fn function_member_alternatives(&mut self, t: TypeId, name: Name) -> Option<Vec<SigAlt>> {
+        let (params, result) = self.as_function(t)?;
+        Some(vec![match name {
+            names::APPLY => Self::sig_alt(Some(params.into_iter().map(Some).collect()), false, Some(result)),
+            names::TUPLED => {
+                let tuple = self.tuple_type(&params);
+                Self::sig_alt(None, false, Some(self.fun_type(&[tuple], result)))
+            }
+            names::CURRIED => {
+                let curried = params.iter().rev().fold(result, |r, &p| self.fun_type(&[p], r));
+                Self::sig_alt(None, false, Some(curried))
+            }
+            _ => return None,
+        }])
+    }
+
+    /// The public instance methods `name` of the JDK's `java.lang.String`
+    /// (`loader::javaclass::jdk_string_class`) as a selection on a `String` tests them (`SigAlt`):
+    /// dotty selects on the receiver's own class and checks its alternatives (Typer.scala 1081,
+    /// ProtoTypes.scala 262), whose signatures are the JDK's (`contains(CharSequence)`, `trim()`),
+    /// where the std's implementations may take wider ones (`contains(String | Char)`,
+    /// `trim(Unit = ())`). A type the JDK names that teq does not know is taken as not known.
+    /// `None` where the class declares no such method.
+    fn jdk_string_alternatives(&mut self, name: Name) -> Option<Vec<SigAlt>> {
+        use crate::classfile::{ACC_PUBLIC, ACC_STATIC, ACC_VARARGS};
+        let cf = super::loader::javaclass::jdk_string_class()?;
+        let text = self.name_ref(name).to_string();
+        let mut alts = Vec::new();
+        for m in cf.methods.iter().filter(|m| m.name == text && m.access & ACC_PUBLIC != 0 && m.access & ACC_STATIC == 0) {
+            let Ok(sig) = crate::classfile::sig::method_sig(m) else { continue };
+            let repeated = m.access & ACC_VARARGS != 0 && !sig.params.is_empty();
+            let count = sig.params.len();
+            let params = sig
+                .params
+                .iter()
+                .enumerate()
+                .map(|(k, p)| match (repeated && k + 1 == count, p) {
+                    (true, crate::classfile::sig::JType::Array(elem)) => self.jdk_type(elem),
+                    _ => self.jdk_type(p),
+                })
+                .collect();
+            let result = self.jdk_type(&sig.ret);
+            alts.push(Self::sig_alt(Some(params), repeated, result));
+        }
+        (!alts.is_empty()).then_some(alts)
+    }
+
+    /// The type of a JDK signature's type `j` as Scala reads a Java member's (`map_jtype`): a
+    /// primitive the builtin, `void` `Unit`, `String` the builtin, `Object` `Any`, an array an
+    /// `Array`, another class without type arguments the one of its path; `None` for a type
+    /// variable, a class with arguments or one teq does not have.
+    fn jdk_type(&mut self, j: &crate::classfile::sig::JType) -> Option<TypeId> {
+        use crate::classfile::sig::{JType, Prim};
+        Some(match j {
+            JType::Prim(p) => match p {
+                Prim::Byte => self.b.t_byte,
+                Prim::Char => self.b.t_char,
+                Prim::Double => self.b.t_double,
+                Prim::Float => self.b.t_float,
+                Prim::Int => self.b.t_int,
+                Prim::Long => self.b.t_long,
+                Prim::Short => self.b.t_short,
+                Prim::Boolean => self.b.t_boolean,
+            },
+            JType::Void => self.b.t_unit,
+            JType::Array(elem) => {
+                let elem = self.jdk_type(elem)?;
+                self.types.class(self.b.array, &[elem])
+            }
+            JType::Class(c) if c.args.is_empty() && c.outer.is_none() => match c.name.as_str() {
+                "java/lang/String" => self.b.t_string,
+                "java/lang/Object" => ANY,
+                path => {
+                    let parts: Vec<&str> = path.split('/').collect();
+                    let class = self.class_at(&parts)?;
+                    if !self.syms.class(class).tparams.is_empty() {
+                        return None;
+                    }
+                    self.types.class(class, &[])
+                }
+            },
+            _ => return None,
+        })
+    }
+
+    /// Whether `name` is a member every value of type `t` has: `Any`'s, and `AnyRef`'s but on a
+    /// primitive, which teq gives through `universal_member` rather than as members a lookup finds
+    /// (`names::ANY_MEMBERS`); dotty's `member` finds them on any type through `Any` and `Object`.
+    fn universal_selection(&mut self, t: TypeId, name: Name) -> bool {
+        let text = self.interner.get(name);
+        let any_ref = matches!(text, "eq" | "ne" | "synchronized");
+        if !crate::names::ANY_MEMBERS.contains(&text) {
+            return false;
+        }
+        if !any_ref {
+            return true;
+        }
+        let t = self.dealias(t);
+        !self.is_primitive(t)
+    }
+
+    /// Whether `name` is a member scala-library's `FunctionN` declares beside `Any`'s, for the
+    /// function type `t`: `apply`, `Function1`'s `andThen` and `compose`, the `tupled` and
+    /// `curried` of two to 22 parameters. teq's std gives a function value those as builtins of
+    /// the typer (`apply`, `tupled`, `curried`, `apply_member`) and as extensions (`andThen` and
+    /// `compose`, std/core.scala), a function being a JavaScript function, so no member lookup
+    /// finds them.
+    fn function_class_member(&mut self, t: TypeId, name: Name) -> bool {
+        let Some((params, _)) = self.as_function(t) else { return false };
+        match name {
+            names::APPLY => true,
+            names::TUPLED | names::CURRIED => (2..=22).contains(&params.len()),
+            _ => params.len() == 1 && matches!(self.name_ref(name), "andThen" | "compose"),
+        }
+    }
+
+    /// The deeper selection's typing of the operand `e` (`SelectionTyped`), if it typed it.
+    pub(super) fn selection_typed_of(&self, e: ExprId) -> Option<Option<(TExprId, TypeId)>> {
+        if self.selection_typed.is_empty() {
+            return None;
+        }
+        let file = self.env.file;
+        self.selection_typed.iter().rev().find(|s| s.file == file && s.expr == e).map(|s| s.typed)
+    }
+
+    /// The type the candidates of the deeper selection test the operand `e` by, typed once as an
+    /// overloaded application types its arguments before an alternative is chosen
+    /// (`pretype_value`: a written literal by its literal type) and kept for the member's
+    /// application (`SelectionTyped`); `None` where the typing reported an error, which is
+    /// retracted, or where the operand is a name of an overloaded method, left for the member's
+    /// application.
+    fn selection_arg_type(&mut self, e: ExprId, owner: Span) -> Option<TypeId> {
+        if let Some(s) = self.selection_typed.iter().rev().find(|s| s.file == self.env.file && s.expr == e) {
+            return s.typed.map(|(_, ty)| s.literal.unwrap_or(ty));
+        }
+        let hoisted = self.hoisted.len();
+        let m = self.attempt();
+        let pretyped = self.pretype_value(e, None, false);
+        let (typed, literal) = match pretyped {
+            Some((te, ty, literal)) if !self.attempt_failed(&m) && !self.types.contains_error(ty) => {
+                self.close(m);
+                (Some((te, ty)), literal)
+            }
+            _ => {
+                self.retract(m);
+                self.hoisted.truncate(hoisted);
+                (None, None)
+            }
+        };
+        self.selection_typed.push(SelectionTyped { file: self.env.file, owner, expr: e, typed, literal });
+        typed.map(|(_, ty)| literal.unwrap_or(ty))
+    }
+
+    /// The member of the selection on the qualifier at `owner` is applied: the operands its
+    /// deeper selection typed are gone.
+    #[inline]
+    pub(super) fn drop_selection_typed(&mut self, owner: Option<Span>) {
+        if let (Some(owner), false) = (owner, self.selection_typed.is_empty()) {
+            let file = self.env.file;
+            self.selection_typed.retain(|t| t.file != file || t.owner != owner);
+        }
     }
 
     /// `Seq[T]`, or `Array[T]`, of a repeated parameter's element `T`.

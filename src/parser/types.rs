@@ -109,7 +109,10 @@ impl<'a> Parser<'a> {
             let start = self.bump().span;
             let pat = self.parse_inter_type();
             self.bind_case_variables(pat);
-            self.expect(Tok::Arrow);
+            let at = self.span().start;
+            if !self.expect(Tok::Arrow) {
+                self.case_without_arrow(start.start, at);
+            }
             let body = if self.eat(Tok::Indent) {
                 let body = self.parse_type();
                 self.skip_separators();

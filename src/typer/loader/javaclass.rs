@@ -105,6 +105,14 @@ pub enum JSource {
 const STRING_SIG: &[u8] = include_bytes!("../../../std/java/String.sig");
 const OBJECT_SIG: &[u8] = include_bytes!("../../../std/java/Object.sig");
 
+/// The JDK's `java.lang.String` as std/java/String.sig records it, parsed once: the members a
+/// selection on a `String` tests (`Worker::jdk_string_alternatives`) in either std, where the
+/// lean std's methods of std/javalib/string.scala are its implementations.
+pub fn jdk_string_class() -> Option<&'static ClassFile> {
+    static PARSED: std::sync::OnceLock<Option<ClassFile>> = std::sync::OnceLock::new();
+    PARSED.get_or_init(|| ClassFile::parse(STRING_SIG).ok()).as_ref()
+}
+
 pub struct JClass {
     pub source: JSource,
     pub cf: Arc<ClassFile>,

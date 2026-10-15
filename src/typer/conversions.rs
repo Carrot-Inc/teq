@@ -1229,6 +1229,28 @@ impl<'a> Worker<'a> {
         picked.map(|r| r.map(|(_, te, ty)| (te, ty)))
     }
 
+    /// Whether a conversion of `recv_ty` gives a type with the member `name` that `accept` takes:
+    /// dotty's `viewExists` to a deeper selection's prototype (Implicits.scala 885), `inferView`
+    /// testing each conversion's result against it, an ambiguity being no view. What the search
+    /// does is the caller's to take back.
+    pub(super) fn view_selects(&mut self, recv_ty: TypeId, name: Name, span: Span, accept: &mut dyn FnMut(&mut Self, TypeId) -> bool) -> bool {
+        if recv_ty == ERROR || self.types.contains_error(recv_ty) {
+            return false;
+        }
+        let levels = self.conversion_levels(&[recv_ty], Pick::Member(name));
+        if levels.is_empty() {
+            return false;
+        }
+        let probe = self.prog.add(TExpr::Unit);
+        let wanted = |t: &mut Self| format!("?{{ {}: ? }}", t.name_str(name));
+        let provided = |t: &mut Self| format!("an extension method `{}` on {}", t.name_str(name), t.show(recv_ty));
+        let mut deep = |t: &mut Self, to: TypeId| t.result_has_member(to, name, &[], None) && accept(t, to);
+        self.blocked_conversion = None;
+        let picked = self.pick_conversion(levels, probe, recv_ty, span, false, &wanted, &provided, &mut deep, false);
+        self.blocked_conversion = None;
+        matches!(picked, Some(Ok(_)))
+    }
+
     /// `te` converted to `expected`, when a conversion in scope or in the implicit scopes of
     /// the two types takes it there; dotc's `inferView`.
     /// A view is never applied to `null` or to an expression of type `Nothing`, as under scalac.

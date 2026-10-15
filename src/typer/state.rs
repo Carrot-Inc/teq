@@ -404,7 +404,10 @@ impl<'a> Worker<'a> {
                     Expr::Typed(inner, t) if matches!(ast.ty(t), TyExpr::Repeated(_)) => (inner, false),
                     _ => (e, false),
                 };
-                args.push(CachedArg { key, written: e, named, typed: None, error: false });
+                // An argument the deeper selection of this member typed alone, a named one's value
+                // included, is cached as `typedArgs` left it (`apply::SelectionTyped`).
+                let typed = self.selection_typed_of(key).flatten();
+                args.push(CachedArg { key, written: e, named, typed, error: false });
             }
         }
         self.attempt_caches.push(ArgCache { seq: self.attempts.seq, file: self.env.file, depth: UNCLAIMED, args, dual: Dual::None, attempt: None });

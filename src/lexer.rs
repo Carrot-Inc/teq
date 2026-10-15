@@ -14,6 +14,12 @@ enum Region {
     /// statement line, unknown until then.
     Braces(Option<u32>),
     InterpBrace { triple: bool },
+    /// The pattern and guard of a case clause, from its `case` to its `=>`: dotty's `InCase`
+    /// (`Parsers.caseClause` and `typeCaseClause` parse them inside it), where a line break
+    /// separates nothing, as inside parentheses (`Scanners.handleNewLine`: a region neither
+    /// indented nor braces). Its width is that of the line of its `case`, at `at`
+    /// (`proposeKnownWidth`); `guard` once its guard's `if` is lexed.
+    Case { width: u32, at: u32, guard: bool },
 }
 
 pub struct LexResult {
@@ -27,6 +33,11 @@ pub struct LexResult {
     /// of that region and the file is lexed again with the delimiters closed before it
     /// (`lex_closing`).
     pub boundaries: Vec<u32>,
+    /// The lines a case region held, by the offsets of its `case` and of their first token, in
+    /// order: where a case lacks its `=>`, the parser names the first of its own from the token
+    /// its pattern or guard ended at, before which the file is lexed again with the region closed
+    /// (`lex_closing`), as dotty's parser leaves `InCase` where the pattern or guard ends.
+    pub case_lines: Vec<(u32, u32)>,
 }
 
 /// How many times the lexer reads a file again to close the delimiters an error left open.
@@ -74,6 +85,16 @@ struct Lexer<'a> {
     /// Per indentation region, by its depth in `regions`, the index of the token it opened at;
     /// an entry is set when a region is pushed at its depth.
     indent_starts: Vec<u32>,
+    /// Per indentation or brace region, by its depth, set when it is pushed: the region holds
+    /// an enum's cases or a for's enumerators, whose `case` starts no case clause (dotty's
+    /// `enumCase` and `generator` parse theirs outside `InCase`).
+    no_case_clauses: Vec<bool>,
+    /// The indentation of the line being lexed.
+    line_width: u32,
+    case_lines: Vec<(u32, u32)>,
+    /// One past the index of the last `enum` token, 0 before any: `enum_header_before` scans
+    /// no further back.
+    last_enum: usize,
 }
 
 /// A brace block, while the lexer looks for a missing `}`.
@@ -127,6 +148,10 @@ pub fn lex_closing(text: &str, interner: &Interner, close_parens: &[u32]) -> Lex
             brace_blocks: Vec::new(),
             open_blocks: Vec::new(),
             indent_starts: vec![0],
+            no_case_clauses: vec![false],
+            line_width: 0,
+            case_lines: Vec::new(),
+            last_enum: 0,
         };
         lx.run();
         let unbalanced = lx.brace_left_open || lx.closer_unmatched;
@@ -147,7 +172,15 @@ pub fn lex_closing(text: &str, interner: &Interner, close_parens: &[u32]) -> Lex
                 close_braces.push(line);
                 close_braces.sort_unstable();
             }
-            _ => return LexResult { tokens: lx.tokens, errors: lx.errors, end_markers: lx.end_markers, boundaries: lx.boundaries },
+            _ => {
+                return LexResult {
+                    tokens: lx.tokens,
+                    errors: lx.errors,
+                    end_markers: lx.end_markers,
+                    boundaries: lx.boundaries,
+                    case_lines: lx.case_lines,
+                }
+            }
         }
     }
 }
@@ -354,6 +387,7 @@ impl<'a> Lexer<'a> {
                 continue;
             }
             if let Some(width) = line_break {
+                self.line_width = width;
                 let start = self.pos;
                 if self.relexing {
                     self.close_at_line(width, start);
@@ -414,6 +448,7 @@ impl<'a> Lexer<'a> {
         }
         if self.close_parens.binary_search(&(start as u32)).is_ok() {
             self.close_enclosed(width, start);
+            self.close_case_before(start);
         }
     }
 
@@ -646,6 +681,9 @@ impl<'a> Lexer<'a> {
                 }
             }
             Region::InterpBrace { .. } => {}
+            // dotty's `handleNewLine` in `InCase`: no separator and no dedent; an indented region
+            // opens where the line goes further in than the case's and the token before opens one.
+            Region::Case { width: w, at: case_at, .. } => self.case_line_break(width, w, case_at, opens_indent, pos),
             Region::Braces(None) if !opens_indent => {
                 *self.regions.last_mut().unwrap() = Region::Braces(Some(width));
                 if self.diagnose {
@@ -712,6 +750,17 @@ impl<'a> Lexer<'a> {
         }
     }
 
+    /// A line break in a case region (`line_break`'s arm), recorded among its lines.
+    #[cold]
+    #[inline(never)]
+    fn case_line_break(&mut self, width: u32, case_width: u32, case_at: u32, opens_indent: bool, pos: usize) {
+        self.case_lines.push((case_at, pos as u32));
+        if width > case_width && opens_indent {
+            self.push_indent(width);
+            self.push(Tok::Indent, pos, pos);
+        }
+    }
+
     /// While diagnosing, a line of the top brace block indented less than its statements.
     #[cold]
     #[inline(never)]
@@ -730,6 +779,9 @@ impl<'a> Lexer<'a> {
     #[inline(always)]
     fn push_indent(&mut self, width: u32) {
         let depth = self.regions.len();
+        let last = self.tokens.last().map_or(Tok::Eof, |t| t.kind);
+        let enumerations = last == Tok::KwFor || (last == Tok::ColonEol && self.enum_header_before(self.tokens.len() - 1));
+        self.set_no_case_clauses(depth, enumerations);
         self.regions.push(Region::Indent(width));
         let at = self.tokens.len() as u32;
         if self.indent_starts.len() <= depth {
@@ -805,7 +857,7 @@ impl<'a> Lexer<'a> {
             .iter()
             .rev()
             .find_map(|r| match *r {
-                Region::Indent(w) | Region::Braces(Some(w)) | Region::Enclosed(_, Some(w)) => Some(w),
+                Region::Indent(w) | Region::Braces(Some(w)) | Region::Enclosed(_, Some(w)) | Region::Case { width: w, .. } => Some(w),
                 _ => None,
             })
             .unwrap_or(0)
@@ -842,11 +894,14 @@ impl<'a> Lexer<'a> {
         // After an operator the brace is a block argument (`a + { .. }`), unless the operator
         // names the class or object whose header this is (`object *: { .. }`).
         let header_name = last == Tok::OpIdent && self.template_header_open();
+        let mut enumerations = last == Tok::KwFor;
         if last.can_end_statement() && (!matches!(last, Tok::KwReturn | Tok::OpIdent) || header_name) {
+            enumerations = self.enum_header_before(self.tokens.len());
             self.push(Tok::ColonEol, p, p + 1);
         }
         self.push(Tok::Indent, p, p + 1);
         self.pos += 1;
+        self.set_no_case_clauses(self.regions.len(), enumerations);
         self.regions.push(Region::Braces(None));
         if self.diagnose {
             let open_width = self.line_indent(p);
@@ -872,6 +927,177 @@ impl<'a> Lexer<'a> {
         let rest = self.text[p..].strip_prefix("case").unwrap_or("");
         let word = rest.trim_start_matches([' ', '\t']);
         rest.len() > word.len() && (word.starts_with("class") || word.starts_with("object"))
+    }
+
+    /// The `case` just pushed, at `at`, opens the region of a case clause's pattern and guard
+    /// (`Region::Case`) unless it starts a case class or object, an enum's case or a for's
+    /// generator, or stands inside parentheses, where no line break separates anyway. A case
+    /// region still open is that of a case without its `=>`, which the new case ends.
+    #[inline(never)]
+    fn open_case(&mut self, at: usize) {
+        if matches!(self.regions.last(), Some(Region::Case { .. })) {
+            self.regions.pop();
+        }
+        let depth = self.regions.len() - 1;
+        let before = self.tokens.len().checked_sub(2).map_or(Tok::Eof, |i| self.tokens[i].kind);
+        let clause = match self.regions[depth] {
+            Region::Indent(_) | Region::Braces(_) => {
+                before == Tok::KwCatch
+                    || (before != Tok::KwFor && !self.no_case_clauses.get(depth).copied().unwrap_or(false))
+            }
+            _ => false,
+        };
+        if clause && !self.case_definition_follows(at + 4) {
+            self.regions.push(Region::Case { width: self.line_width, at: at as u32, guard: false });
+        }
+    }
+
+    /// Whether the token after the `case` that ends at `end` is `class` or `object`, past trivia
+    /// and the characters that start no token: dotty's scanner makes `CASECLASS` or
+    /// `CASEOBJECT` of the two (`Scanners.postProcessToken`).
+    fn case_definition_follows(&mut self, end: usize) -> bool {
+        // A word on the line, the common case, is read as it stands.
+        let rest = &self.src[end.min(self.src.len())..];
+        let word = &rest[rest.iter().position(|&b| b != b' ' && b != b'\t').unwrap_or(rest.len())..];
+        if word.first().is_some_and(|&b| b.is_ascii() && b != b'/' && b != b'\n' && b != b'\r') {
+            let keyword = |k: &[u8]| word.starts_with(k) && !word.get(k.len()).is_some_and(|&b| is_ident_part(b));
+            return keyword(b"class") || keyword(b"object");
+        }
+        let (pos, errors, blank) = (self.pos, self.errors.len(), self.blank_line);
+        self.pos = end;
+        loop {
+            self.skip_trivia();
+            match self.text[self.pos..].chars().next() {
+                Some(c) if illegal_start(c) => self.pos += c.len_utf8(),
+                _ => break,
+            }
+        }
+        let (kind, _) = self.peek_kind();
+        (self.pos, self.blank_line) = (pos, blank);
+        self.errors.truncate(errors);
+        matches!(kind, Tok::KwClass | Tok::KwObject)
+    }
+
+    /// A case's `=>` at `at` ends its case region, an indented region opened inside the pattern
+    /// or guard closing before it (dotty's `postProcessToken` at an `ARROW`: an `Indented` region
+    /// whose outer one is `InCase`). A `<-` ends the region of a generator's `case` on a line of
+    /// its own, whose for the region around it does not show.
+    #[inline(never)]
+    fn close_case(&mut self, at: usize) {
+        let n = self.regions.len();
+        if n >= 2 && matches!(self.regions[n - 1], Region::Indent(_)) && matches!(self.regions[n - 2], Region::Case { .. }) {
+            self.regions.pop();
+            self.push(Tok::Outdent, at, at);
+        }
+        if matches!(self.regions.last(), Some(Region::Case { .. })) {
+            self.regions.pop();
+        }
+    }
+
+    /// Whether the `=>` just lexed, its case region on top, is a colon lambda's in the case's
+    /// guard (`exists: x =>`): dotty's parser takes a `:` after an expression, an identifier, `_`
+    /// or a parenthesised list, then `=>` before a line indented further than the case's, or the
+    /// end of the file, for a lambda whose body is that indented region (`followingIsLambdaAfterColon`,
+    /// `isArrowIndent`), its arrow inside `InCase` no end of the case. A pattern takes no colon
+    /// argument: the guard's `if` comes first.
+    #[cold]
+    #[inline(never)]
+    fn colon_lambda_arrow(&mut self) -> bool {
+        let Some(&Region::Case { width, guard: true, .. }) = self.regions.last() else { return false };
+        let n = self.tokens.len();
+        let params_start = match self.tokens.last().map(|t| t.kind) {
+            Some(Tok::Ident | Tok::Underscore) => n - 1,
+            Some(close @ (Tok::RParen | Tok::RBracket)) => {
+                let open = if close == Tok::RParen { Tok::LParen } else { Tok::LBracket };
+                let mut depth = 0u32;
+                let mut at = None;
+                for i in (0..n).rev() {
+                    let k = self.tokens[i].kind;
+                    if k == close {
+                        depth += 1;
+                    } else if k == open {
+                        depth -= 1;
+                        if depth == 0 {
+                            at = Some(i);
+                            break;
+                        }
+                    }
+                }
+                match at {
+                    Some(i) => i,
+                    None => return false,
+                }
+            }
+            _ => return false,
+        };
+        if params_start == 0 || self.tokens[params_start - 1].kind != Tok::Colon {
+            return false;
+        }
+        let (pos, errors, blank) = (self.pos, self.errors.len(), self.blank_line);
+        let line = self.skip_trivia();
+        let at_end = self.pos >= self.src.len();
+        (self.pos, self.blank_line) = (pos, blank);
+        self.errors.truncate(errors);
+        at_end || line.is_some_and(|w| w > width)
+    }
+
+    /// In a file lexed again, the case region open around the line at `start`, with the indented
+    /// regions opened inside it, closes before the line: the case lacks its `=>`, and the parser's
+    /// grammar for its pattern or guard ended before the line (`LexResult::case_lines`).
+    #[cold]
+    #[inline(never)]
+    fn close_case_before(&mut self, start: usize) {
+        let Some(c) = self.regions.iter().rposition(|r| matches!(r, Region::Case { .. })) else { return };
+        if self.regions[c + 1..].iter().any(|r| !matches!(r, Region::Indent(_))) {
+            return;
+        }
+        while self.regions.len() > c + 1 {
+            self.regions.pop();
+            self.push(Tok::Outdent, start, start);
+        }
+        self.regions.pop();
+    }
+
+    #[inline]
+    fn set_no_case_clauses(&mut self, depth: usize, enumerations: bool) {
+        if self.no_case_clauses.len() <= depth {
+            self.no_case_clauses.resize(depth + 1, false);
+        }
+        self.no_case_clauses[depth] = enumerations;
+    }
+
+    /// Whether the statement before the token at `end` is an enum's header: its `enum` stands
+    /// past its parameters' and type parameters' delimiters, before anything that ends a
+    /// statement or starts another definition.
+    #[inline]
+    fn enum_header_before(&self, end: usize) -> bool {
+        if self.last_enum == 0 || self.last_enum > end {
+            return false;
+        }
+        self.enum_header_scan(end)
+    }
+
+    #[cold]
+    #[inline(never)]
+    fn enum_header_scan(&self, end: usize) -> bool {
+        let mut nested = 0u32;
+        for t in self.tokens[self.last_enum - 1..end].iter().rev() {
+            match t.kind {
+                Tok::RParen | Tok::RBracket => nested += 1,
+                Tok::LParen | Tok::LBracket => {
+                    if nested == 0 {
+                        return false;
+                    }
+                    nested -= 1;
+                }
+                _ if nested > 0 => {}
+                Tok::KwEnum => return true,
+                Tok::KwClass | Tok::KwTrait | Tok::KwObject | Tok::KwGiven | Tok::KwCase | Tok::KwDef | Tok::Eq
+                | Tok::Newline | Tok::Semi | Tok::Indent | Tok::Outdent | Tok::ColonEol | Tok::LBrace | Tok::RBrace => return false,
+                _ => {}
+            }
+        }
+        false
     }
 
     /// A character outside ASCII at the cursor that starts no token is reported and passed over.
@@ -948,14 +1174,14 @@ impl<'a> Lexer<'a> {
     fn close_past(&mut self, kind: Tok, close: u8) {
         let p = self.pos;
         let target = self.regions.iter().rposition(|r| match *r {
-            Region::Indent(_) => false,
+            Region::Indent(_) | Region::Case { .. } => false,
             Region::Enclosed(c, _) => c == close,
             Region::Braces(_) | Region::InterpBrace { .. } => true,
         });
         let closes = target.is_some_and(|t| match self.regions[t] {
             Region::Enclosed(c, _) => c == close,
             Region::Braces(_) | Region::InterpBrace { .. } => close == b'}',
-            Region::Indent(_) => false,
+            Region::Indent(_) | Region::Case { .. } => false,
         });
         if !closes || (close == b'}' && self.drop_closers.binary_search(&(p as u32)).is_ok()) {
             self.closer_unmatched |= close == b'}' && !closes;
@@ -1119,6 +1345,16 @@ impl<'a> Lexer<'a> {
                 self.extension_line = false;
             }
             self.push(kw, start, self.pos);
+            match kw {
+                Tok::KwCase => self.open_case(start),
+                Tok::KwEnum => self.last_enum = self.tokens.len(),
+                Tok::KwIf => {
+                    if let Some(Region::Case { guard, .. }) = self.regions.last_mut() {
+                        *guard = true;
+                    }
+                }
+                _ => {}
+            }
             return;
         }
         let name = self.interner.intern(s);
@@ -1164,6 +1400,13 @@ impl<'a> Lexer<'a> {
                 name,
             });
         } else {
+            // A case region is on top, or under the indented region opened inside it.
+            if matches!(kind, Tok::Arrow | Tok::LArrow)
+                && self.regions.iter().rev().take(2).any(|r| matches!(r, Region::Case { .. }))
+                && !(kind == Tok::Arrow && self.colon_lambda_arrow())
+            {
+                self.close_case(start);
+            }
             self.push(kind, start, self.pos);
         }
     }

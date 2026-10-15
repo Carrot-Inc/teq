@@ -1046,7 +1046,8 @@ impl<'a> Worker<'a> {
                 }
                 let receiver = self.cur_ast().expr(q);
                 let selected = name == names::APPLY && matches!(receiver, Expr::TypeApply(..));
-                let (tq, qty) = self.type_receiver(q, selected);
+                let frame = super::super::apply::SelectionFrame { file: self.env.file, q, name, at: q, app: span, expected, kind: super::super::apply::FrameKind::Bare };
+                let (tq, qty) = self.type_receiver(q, selected, frame);
                 let outer = self.declared_call.replace((tq, name, d));
                 let typed = self.apply_member(tq, qty, name, targs, lists, span, expected);
                 self.declared_call = outer;

@@ -3025,7 +3025,7 @@ pos/i16437	accepts
 pos/i16443	accepts	
 pos/i16451.CanForward.scala	accepts	
 pos/i16451.DiffUtil.scala	accepts	
-pos/i16451.default.scala	syntax	expected a pattern, found {}
+pos/i16451.default.scala	std	InvocationTargetException
 pos/i16464.scala	rejects	operator {} cannot be applied
 pos/i16469.scala	accepts	
 pos/i16474.scala	accepts	
@@ -3606,7 +3606,7 @@ pos/i24894b	accepts
 pos/i24894c	oos	java
 pos/i24917.scala	accepts	
 pos/i24936	accepts	
-pos/i25002.scala	syntax	expected {}, found {}
+pos/i25002.scala	accepts	
 pos/i25091.scala	accepts	
 pos/i25091b.scala	accepts	
 pos/i25133.scala	accepts	

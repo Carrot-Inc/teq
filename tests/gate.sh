@@ -424,7 +424,7 @@ local_line() {
       elif [ -z "$app" ] || [ -z "$master" ] || [ -z "$manifest" ]; then
         result app-export-accept local 0 skip "needs --app, --master and --export-manifest" "$file"
       else
-        timeout 900 "$root/bench/app/export-accept.sh" "$manifest" "$app" "$bin" "$master" "$out/app-export-accept" > "$out/app-export-accept.log" 2>&1
+        timeout 900 "$root/bench/app/export-accept.sh" "$manifest" "$app" "$bin" "$master" "$out/app-export-accept" "$wt" > "$out/app-export-accept.log" 2>&1
         code=$?
         result app-export-accept local $(($(now) - s)) $code "$(tail -1 "$out/app-export-accept.log")" "$file"
       fi

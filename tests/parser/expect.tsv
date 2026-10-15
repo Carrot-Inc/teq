@@ -3,13 +3,15 @@
 # import-trunc's errors hold two that the recording before them did not, m0516's and m0541's "value println is not a member of Dsl" (Defs): the truncated `import d.` takes the next line's `println` as its selector, which teq's check of a value's selectors (scalac's E008 in a program without a syntax error) reports, where scalac's recovery drops the import (typed-after-skip); case-arrow's one fewer, m0307's, whose `case (n, s)` without its `=>` before a line break now gives "expected '=>', found new line" alone, the block after it its body
 # def-eq's errors hold eleven that the recording before them did not: "Declaration of method ... not allowed here" (E067) of a def whose `=` the mutation deleted after its result type, in an object or a block (m0005, m0009, m0010, m0023, m0026, m0027, m0029, m0030, m0031, m0041, m0042), each scalac's own at its line: dotty's parser leaves such a def a declaration (`Parsers.defDefOrDcl`'s `EmptyTree`), which raises the cascade by five; one whose header did not parse has an error body there instead and reports none
 # rbracket's and case-arrow's errors hold thirteen that the recording before them did not, each mutant nearer scalac's list: an identifier between two patterns is an infix extractor (dotty's `infixPattern`), so a case whose `=>` the mutation deleted reports scalac's "expected '=>', found identifier" at its place (m0300, m0311, m0314, m0337, m0344), and a brace inside a type argument list of a parent or of `new` is a refinement (dotty's `simpleType1` under `typeArgs`), as scalac reads m0187's
+# case-arrow's errors hold one that the recording before them did not, m0309's: its guard without the `=>` (`case (len, vs) if len > 1  (len, vs.size)`) runs on over the lines after it, which the case's region holds as dotty's `InCase` does (`Parsers.caseClause`; `Scanners.handleNewLine` separates no line inside it), to the end of the block, where the missing `=>` is reported, and the guard's types fail on the way; the other mutants of the operator keep their counts, each `=>` now missing at the token the pattern or guard ended at (`'val'`, `'case'`), scalac's wording, where the line break was named
+# del-token's errors hold one fewer than the recording before them, the count master ff1a176b7's binary gives: master recorded 97, its binary reports 96 (a count below the recording passes), and the case region moves none of its mutants; case-arrow's is master's 80 and m0309's one above it
 def-eq	217	167	224	181	240	190
 def-result-type	55	5	53	3	90	40
 rparen	99	49	132	82	116	66
 rbracket	79	29	124	74	109	59
 rbrace	76	26	185	150	168	118
 case-pattern	80	30	81	31	100	50
-case-arrow	80	30	82	32	363	313
+case-arrow	81	31	82	32	363	313
 class-name	283	233	391	341	271	221
 class-parent	122	72	152	102	208	158
 enum-comma	42	0	150	108	144	102
@@ -21,7 +23,7 @@ indent-minus	50	0	525	482	521	472
 end-rename	0	0	0	0	4	0
 colon-to-brace	50	0	809	772	567	517
 brace-to-colon	50	0	173	123	129	79
-del-token	97	48	217	168	106	58
+del-token	96	47	217	168	106	58
 str-unterminated	170	120	152	102	228	178
 backquote	50	0	220	170	199	149
 bad-escape	50	0	50	0	51	1

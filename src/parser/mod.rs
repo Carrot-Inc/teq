@@ -127,6 +127,8 @@ pub struct Parser<'a> {
     /// was found at, where the file is lexed again with the delimiters around it closed.
     boundaries: &'a [u32],
     pub boundary: Option<u32>,
+    /// The lines the lexer's case regions held (`LexResult::case_lines`).
+    case_lines: &'a [(u32, u32)],
     /// The boundaries the delimiters were closed at, where the lexer's layout stands in front
     /// of a line's first token that scalac's scanner reads with no layout before it.
     closed: &'a [u32],
@@ -203,6 +205,7 @@ pub fn parse(text: &str, lexed: &mut LexResult, closed: &[u32], interner: &Inter
         quote_pattern: false,
         boundaries: &lexed.boundaries,
         boundary: None,
+        case_lines: &lexed.case_lines,
         closed,
         error_events: 0,
         quiet: false,
@@ -214,10 +217,6 @@ pub fn parse(text: &str, lexed: &mut LexResult, closed: &[u32], interner: &Inter
     p.parse_file();
     let mut asts = vec![p.ast];
     asts.extend(p.package_blocks);
-    for a in asts.iter_mut() {
-        a.braced.sort_unstable();
-        a.braced.dedup();
-    }
     Parsed { asts, errors: p.errors, boundary: p.boundary }
 }
 
@@ -299,6 +298,20 @@ impl<'a> Parser<'a> {
             }
         }
         false
+    }
+
+    /// The case at `case_at` lacks its `=>`, its pattern or guard having ended at the token at
+    /// `at`: the first line its case region held from there on is the boundary before which the
+    /// region closes when the file is lexed again, as dotty's parser leaves `InCase` where the
+    /// pattern or guard ends (`Parsers.caseClause`).
+    fn case_without_arrow(&mut self, case_at: u32, at: u32) {
+        if self.boundary.is_some() {
+            return;
+        }
+        let from = self.case_lines.partition_point(|&(_, line)| line < at);
+        if let Some(&(_, line)) = self.case_lines[from..].iter().find(|&&(c, _)| c == case_at) {
+            self.boundary = Some(line);
+        }
     }
 
     fn error_at(&mut self, span: Span, msg: impl Into<String>) {

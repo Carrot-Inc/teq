@@ -20,7 +20,8 @@ tied to the correction that makes it:
 
 `only-master <path>` takes a `before` line and `only-landing <path>` an `after` line and the added file's lines, each
 `+`, with their evidence. Every entry needs an `evidence` line whose first word is a file under tests/ or docs/ of the
-repository: the case or the probe that shows scalac's answer. The hashes bind an entry to the files it approves,
+landing's tree (the repository root given, which holds the cases the landing adds): the case or the probe that shows
+scalac's answer. The hashes bind an entry to the files it approves,
 byte for byte (an edit in another place, a changed line ending); the hunks, a unified diff with three lines of
 context, are what a reader reads, and they have to be the builds' own. The check passes when the builds'
 differences are exactly the manifest's: every differing file listed with both hashes and its hunks, and no listed

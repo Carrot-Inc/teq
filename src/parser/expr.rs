@@ -188,7 +188,7 @@ impl<'a> Parser<'a> {
         }
         let body = match stmts[..] {
             [Stmt::Expr(e)] => {
-                self.ast.braced.push(e);
+                self.ast.mark_braced(e);
                 e
             }
             _ => {
@@ -607,17 +607,18 @@ impl<'a> Parser<'a> {
                 }
                 break;
             }
-            self.bump();
+            let case_at = self.bump().span.start;
             let mark = self.error_events;
             let pat = self.parse_pattern();
-            if self.at(Tok::Newline) && self.kind_at(1) == Tok::KwIf {
-                self.bump();
-            }
             let guard = if self.eat(Tok::KwIf) { Some(self.parse_infix_expr()) } else { None };
             if self.error_events != mark {
                 broken.push(cases.len() as u32);
             }
+            let at = self.span().start;
             let arrow = self.expect(Tok::Arrow);
+            if !arrow {
+                self.case_without_arrow(case_at, at);
+            }
             // Without its `=>`, the lines after the case up to the next one are its body: the
             // lexer opened no region for them.
             let body = if !arrow && self.at(Tok::Newline) && !matches!(self.kind_at(1), Tok::KwCase | Tok::Outdent | Tok::Eof) {
@@ -1481,12 +1482,16 @@ impl<'a> Parser<'a> {
     fn parse_single_case_lambda(&mut self) -> ExprId {
         let start = self.span();
         let mut region = self.enter_single_line();
+        let case_at = self.span().start;
         self.expect(Tok::KwCase);
         let mark = self.error_events;
         let pat = self.parse_pattern();
         let guard = if self.eat(Tok::KwIf) { Some(self.parse_infix_expr()) } else { None };
         let broken = self.error_events != mark;
-        self.expect(Tok::Arrow);
+        let at = self.span().start;
+        if !self.expect(Tok::Arrow) {
+            self.case_without_arrow(case_at, at);
+        }
         // The region's end right after the arrow before an indented body is that indent
         // (`caseClause(exprOnly)`): the body is the block, past the region.
         let indented = region.is_some_and(|(stop, saved)| stop == self.pos && saved.kind == Tok::Indent && saved.span.start == saved.span.end);

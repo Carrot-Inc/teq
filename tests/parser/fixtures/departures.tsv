@@ -21,11 +21,9 @@ broken-result	teq	broken-result.scala:4: error: not found: build	typed-after-ski
 broken-type	scalac	broken-type.scala:4: error: Declaration of value u not allowed here: only classes can have declared but undefined members	dependent
 broken-type	teq	broken-type.scala:5: error: type mismatch	typed-after-skip
 case-arrow	scalac	case-arrow.scala:4: error: type mismatch	scalac-tree
-case-arrow	scalac	case-arrow.scala:5: error: '=>' expected, but 'val' found	wording
 case-arrow	scalac	case-arrow.scala:6: error: not found: m	scalac-tree
 case-arrow	scalac	case-arrow.scala:7: error: Expected start of definition	scalac-tree
 case-arrow	scalac	case-arrow.scala:9: error: eof expected, but end of indented block found	scalac-tree
-case-arrow	teq	case-arrow.scala:5: error: '=>' expected, but new line found	wording
 class-header	scalac	Use.scala:2: error: too many arguments for constructor C in class C	dependent
 ctor-cut-list	scalac	ctor-cut-list.scala:4: error: too many arguments for constructor C in class C: (a: Int, b: Int)(c: Int): C	wording
 ctor-cut-list	teq	ctor-cut-list.scala:4: error: too many arguments: expected 2	wording
